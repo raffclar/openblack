@@ -107,6 +107,7 @@ public:
 	void SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus) override;
 	bool ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target, std::optional<entt::entity> with) override;
 	[[nodiscard]] bool HasPlayed(entt::entity creature) const override;
+	void ClearAfterPlayed(entt::entity creature) override;
 	[[nodiscard]] float GetInteractionMagnitude(entt::entity creature) const override;
 	void ClearInteractionMagnitude(entt::entity creature) override;
 	[[nodiscard]] uint32_t GetActionCount(entt::entity creature, uint32_t action) const override;

@@ -227,6 +227,9 @@ struct PlannerState
 	/// The action of the plan carried out, else of the last plan. It stays after the plan stops, until the creature
 	/// starts a new plan. Another creature reads the desire that it shows from this action.
 	uint32_t lastAction {0};
+	/// The plan carried out has no steps, because a script stopped them. Its priority is 0, so any valid plan can
+	/// replace it, the same plan too.
+	bool currentHasNoSteps {false};
 };
 /// The next desires to plan this turn, going round those that may be planned
 [[nodiscard]] std::vector<creature_desires::Desire> NextGoals(PlannerState& state,

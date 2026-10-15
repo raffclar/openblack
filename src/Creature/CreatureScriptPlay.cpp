@@ -56,3 +56,15 @@ bool creature_script_play::Played(const creature_mind::IdleMind& mind)
 {
 	return mind.activity == creature_mind::Activity::BeIdle || mind.step >= mind.agenda.size();
 }
+
+void creature_script_play::ClearAfterPlayed(creature_mind::IdleMind& mind)
+{
+	if (mind.step >= mind.agenda.size())
+	{
+		return;
+	}
+	mind.step = mind.agenda.size();
+	mind.stepStarted = false;
+	mind.gaveUp = true;
+	mind.stoppedByScript = true;
+}

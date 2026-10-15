@@ -555,6 +555,11 @@ struct IdleMind
 	uint32_t serial {0};
 	/// The agenda was given up before its end, as a step it needed couldn't be done
 	bool gaveUp {false};
+	/// A script asked if the creature played and so stopped the agenda. The plan stays, with no steps, until the
+	/// creature chooses a new plan or a script gives it a new order.
+	bool stoppedByScript {false};
+	/// The mind of a creature free to think saw the stopped plan in a turn before this one
+	bool stoppedSeen {false};
 	/// The thing in its hand that a step of this agenda used up before the last step, which the agenda does not lose
 	std::optional<uint32_t> usedUpHeld;
 	/// A cast step: whether its miracle has been cast, and the turns it is held for yet

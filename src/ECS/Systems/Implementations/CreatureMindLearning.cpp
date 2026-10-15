@@ -1268,7 +1268,23 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	}
 	const auto* tables = GetTables();
 	auto& idle = mind.idle;
-	if (mind.planActive && (idle.serial != mind.planSerial || idle.step >= idle.agenda.size()))
+	// A plan whose steps a script stopped is not over: it stays with no steps. A creature free to think makes its choice
+	// in the first turn after the stop against the plan as it was. After that turn, the plan is not forced and has
+	// priority 0, so the next choice replaces it. Under a script's control, the plan stays as it is until the script gives
+	// an order or lets the creature go.
+	const bool keptWithNoSteps = mind.planActive && idle.serial == mind.planSerial && idle.step >= idle.agenda.size() &&
+	                             idle.stoppedByScript && mind.planner.current.has_value();
+	if (keptWithNoSteps && !Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature))
+	{
+		if (idle.stoppedSeen)
+		{
+			mind.planner.current->priority = 0.0f;
+			mind.planForced = false;
+			mind.forcedPlanCounts = false;
+		}
+		idle.stoppedSeen = true;
+	}
+	if (mind.planActive && !keptWithNoSteps && (idle.serial != mind.planSerial || idle.step >= idle.agenda.size()))
 	{
 		// The plan is over. Carried out to its end, its body pays for the action and it counts towards satisfying the
 		// urge of the desire it served, unless one of its steps saw to that already; cut short by something else
@@ -2879,6 +2895,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	{
 		return;
 	}
+	mind.planner.currentHasNoSteps = mind.planActive && mind.idle.stoppedByScript && mind.idle.serial == mind.planSerial &&
+	                                 mind.idle.step >= mind.idle.agenda.size();
 	const auto choice = creature_planner::Choose(mind.planner);
 	if (choice.has_value() && !Adopt(creature, mind, *choice, situation))
 	{
@@ -3494,6 +3512,15 @@ bool CreatureMindSystem::HasPlayed(entt::entity creature) const
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
 	return mind == nullptr || creature_script_play::Played(mind->idle);
+}
+
+void CreatureMindSystem::ClearAfterPlayed(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr; mind != nullptr)
+	{
+		creature_script_play::ClearAfterPlayed(mind->idle);
+	}
 }
 
 std::optional<Desire> CreatureMindSystem::DesireForShownThing(entt::entity creature, CreatureMindState& mind,

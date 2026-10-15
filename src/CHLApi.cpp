@@ -3722,7 +3722,19 @@ void Played() // 064 PLAYED
 	}
 	if (Locator::entitiesRegistry::value().AllOf<ecs::components::Creature>(object))
 	{
-		Pushb(!Locator::creatureMindSystem::has_value() || Locator::creatureMindSystem::value().HasPlayed(object));
+		if (!Locator::creatureMindSystem::has_value())
+		{
+			Pushb(true);
+			return;
+		}
+		// The answer yes also stops the remaining steps of the agenda, as an idle creature has steps that remain
+		auto& minds = Locator::creatureMindSystem::value();
+		const bool played = minds.HasPlayed(object);
+		if (played)
+		{
+			minds.ClearAfterPlayed(object);
+		}
+		Pushb(played);
 		return;
 	}
 	if (const auto* animal = Locator::entitiesRegistry::value().TryGet<const ecs::components::Animal>(object))

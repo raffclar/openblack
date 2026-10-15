@@ -2421,6 +2421,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::wakeWanted>("wakeWanted")
 	    .Field<&openblack::creature_mind::IdleMind::serial>("serial")
 	    .Field<&openblack::creature_mind::IdleMind::gaveUp>("gaveUp")
+	    .Field<&openblack::creature_mind::IdleMind::stoppedByScript>("stoppedByScript")
+	    .Field<&openblack::creature_mind::IdleMind::stoppedSeen>("stoppedSeen")
 	    .Field<&openblack::creature_mind::IdleMind::usedUpHeld>("usedUpHeld")
 	    .Field<&openblack::creature_mind::IdleMind::castDone>("castDone")
 	    .Field<&openblack::creature_mind::IdleMind::castTurns>("castTurns")
@@ -2535,7 +2537,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_planner::PlannerState::nextGoal>("nextGoal")
 	    .Field<&openblack::creature_planner::PlannerState::current>("current")
 	    .Field<&openblack::creature_planner::PlannerState::lastObject>("lastObject")
-	    .Field<&openblack::creature_planner::PlannerState::lastAction>("lastAction");
+	    .Field<&openblack::creature_planner::PlannerState::lastAction>("lastAction")
+	    .Field<&openblack::creature_planner::PlannerState::currentHasNoSteps>("currentHasNoSteps");
 	Reflect<openblack::creature_player_attention::HandSpeed>(context, ValueOnly {})
 	    .Field<&openblack::creature_player_attention::HandSpeed::velocity>("velocity");
 	Reflect<openblack::creature_route::Circle>(context, ValueOnly {})
