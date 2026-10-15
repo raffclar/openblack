@@ -2481,6 +2481,165 @@ void AddObjects(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 4.0f, .action = "PlayThrowingGameWithPlayer", .with = 0}},
 	});
 
+	// The actions with which a creature gets its player's attention, or tells the player what it thinks of the player
+	all.push_back({
+	    .id = "mind.go_to_hand",
+	    .name = "Going to the player's hand",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands to one side of the land in view. Keep the hand still on the land far from "
+	                   "it, more than an eighth of the view across. A script tells it to go to the hand after two seconds.",
+	    .expected = "It walks to the hand, looking at it, and stops four metres past its own radius from the hand. It "
+	                "follows the hand when the hand moves, for thirty seconds at most. One time in two it then jumps for "
+	                "joy. With the hand near it the action can not start.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {-60.0f, 0.0f}, 90.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "GoToHand"}},
+	});
+	all.push_back({
+	    .id = "mind.point_at_hand",
+	    .name = "Pointing at the player's hand",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands side on to the camera. Keep the hand on the land beside it. A script tells "
+	                   "it to point at the hand after two seconds and again after eight seconds.",
+	    .expected = "Each time it turns to the camera, looking at it, then points for a second at where the hand was as it "
+	                "began, looking at that place, amazed.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 90.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "PointAtHand"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 6.0f, .action = "PointAtHand"}},
+	});
+	all.push_back({
+	    .id = "mind.follow_player",
+	    .name = "Following the player when the camera looks away",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands in the middle of the map. The camera stands to its north and looks further "
+	                   "north, away from it. A script tells it to follow the player after two seconds.",
+	    .expected = "It walks to where the camera looks, looking at the camera, until it is near that place or thirty "
+	                "seconds go by. It turns to the camera and plays the clip that asks the player to look at it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 150.0f}, .look = {0.0f, 0.0f, 400.0f}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 0.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "FollowPlayer"}},
+	});
+	all.push_back({
+	    .id = "mind.go_to_middle_of_screen",
+	    .name = "Going to the middle of the screen",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands near the edge of the view, the camera looking at the land beside it. A "
+	                   "script tells it to go to the middle of the screen after two seconds.",
+	    .expected = "It walks to where the camera looks, looking at the camera, then turns to the camera.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -120.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .creatures = {Content(CreatureType::Tiger, {35.0f, 10.0f}, 0.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "GoToMiddleOfScreen"}},
+	});
+	all.push_back({
+	    .id = "mind.be_cross",
+	    .name = "Being cross with the player",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger is slapped four times, so that its attitude to the player falls below minus a "
+	                   "tenth. A script then tells it to be cross with the player.",
+	    .expected = "It walks to where the camera looks, looking at the camera, turns to the camera, then one time in two "
+	                "makes a rude sign, else taunts the player.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
+	    .commands = {{.kind = Kind::Slap, .delaySeconds = 0.5f},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "BeCrossWithPlayer"}},
+	});
+	all.push_back({
+	    .id = "mind.show_how_nice",
+	    .name = "Showing the player how nice it thinks the player is",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger is stroked, and a script tells it to show the player how nice it thinks the player "
+	                   "is. Then it is slapped four times and told again.",
+	    .expected = "The first time it turns to the camera and waves. The second time it turns to the camera and plays the "
+	                "sad clip. It looks at the camera all the time.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
+	    .commands = {{.kind = Kind::Stroke, .delaySeconds = 0.5f},
+	                 {.kind = Kind::DoAction, .delaySeconds = 1.5f, .action = "ShowPlayerHowNiceYouThinkHeIs"},
+	                 {.kind = Kind::Slap, .delaySeconds = 8.0f},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
+	                 {.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "ShowPlayerHowNiceYouThinkHeIs"}},
+	});
+	all.push_back({
+	    .id = "mind.pray_to_player",
+	    .name = "Praying to the player",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands facing away from the camera. A script tells it to pray to the player after "
+	                   "two seconds.",
+	    .expected = "It turns to the camera, looking at it, then kneels and prays.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "PrayToPlayer"}},
+	});
+	all.push_back({
+	    .id = "mind.be_silly",
+	    .name = "Being silly with the player",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger stands facing away from the camera. A script tells it to be silly with the player "
+	                   "after two seconds.",
+	    .expected = "Four times: it turns to the camera and talks, fluttering its eyelids; three times in four it shows that "
+	                "it feels playful; one time in two it laughs and talks again; then it pulls a silly face for five "
+	                "seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    // A script action needs a thing to act on, though these actions do not use it
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-15.0f, 25.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "BeSillyWithPlayer"}},
+	});
+	all.push_back({
+	    .id = "mind.throw_at_camera",
+	    .name = "Throwing a thing at the camera",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger with a toy ball in front of it. A script tells it to throw the ball at the camera.",
+	    .expected = "It picks the ball up, looking at it, then throws it at the camera, looking at the camera.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 4.0f, .action = "ThrowAtCamera", .with = 0}},
+	});
+	all.push_back({
+	    .id = "mind.show_player_object",
+	    .name = "Showing the player a thing",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger with a toy ball in front of it, the camera looking away from it. A script tells it "
+	                   "to show the player the ball.",
+	    .expected = "It picks the ball up, walks to where the camera looks, looking at the camera, turns to the camera and "
+	                "puts the ball down. Its face shows its attitude to the player as it turns and puts the ball down.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 150.0f}, .look = {0.0f, 0.0f, 400.0f}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 4.0f, .action = "ShowPlayerAnObject", .with = 0}},
+	});
+
 	auto stoner = Content(CreatureType::Tiger, {0.0f, 0.0f});
 	stoner.desires = {{.desire = creature_desires::Desire::GetHigh, .fraction = 1.0f}};
 	all.push_back({

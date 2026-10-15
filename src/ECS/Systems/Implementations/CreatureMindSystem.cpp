@@ -35,6 +35,7 @@
 #include "3D/MapCoords.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesireSources.h"
@@ -52,6 +53,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
+#include "Creature/CreaturePlayerAttention.h"
 #include "Creature/CreatureReach.h"
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureRoute.h"
@@ -681,6 +683,16 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 	{
 		return NearestHand(registry, creature);
 	}
+	if (gaze.player)
+	{
+		// The hand when it moved much lately, else the camera
+		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+		if (mind != nullptr && mind->playerInterest.handMovement > creature_player_attention::k_WatchHandMovement)
+		{
+			return NearestHand(registry, creature);
+		}
+		return Locator::camera::has_value() ? std::optional(Locator::camera::value().GetOrigin()) : std::nullopt;
+	}
 	if (!gaze.object.has_value())
 	{
 		return gaze.point;
@@ -929,6 +941,87 @@ std::optional<creature_mind::Senses::CameraView> HandViewOf(const ecs::Registry&
 	    .point = point,
 	    .turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading),
 	};
+}
+
+/// The player's hand as a creature that follows the hand sees it, only while its step follows the hand. If the hand is off
+/// the land, the last position of the hand counts.
+std::optional<creature_player_attention::FollowHandView> FollowHandViewOf(const ecs::Registry& registry, entt::entity creature,
+                                                                          const CreatureMindState& mind, bool bodyPlaying)
+{
+	const auto& idle = mind.idle;
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::FollowHand)
+	{
+		return std::nullopt;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto* self = registry.TryGet<const CreatureLocomotion>(creature);
+	auto hand = NearestHand(registry, creature);
+	if (!hand.has_value())
+	{
+		hand = mind.playerInterest.lastHand;
+	}
+	creature_player_attention::FollowHandView view;
+	if (body == nullptr || body->owner == PlayerNames::NEUTRAL || !hand.has_value() || transform == nullptr || self == nullptr)
+	{
+		return view;
+	}
+	view.hasPlayer = true;
+	const map_coords::MapCoords handAt {.x = map_coords::ToFixed(hand->x), .z = map_coords::ToFixed(hand->z)};
+	const map_coords::MapCoords at {.x = map_coords::ToFixed(transform->position.x),
+	                                .z = map_coords::ToFixed(transform->position.z)};
+	view.handInMap = map_coords::InBounds(handAt);
+	view.hand = {hand->x, hand->z};
+	view.distance = gutils::GetDistanceInMetres(at, handAt);
+	view.reach = creature_player_attention::FollowHandReach(object_measures::TwoDRadius(registry, creature));
+	view.bodyPlaying = bodyPlaying;
+	view.directionClose = creature_player_attention::IsDirectionClose(
+	    at, handAt, creature_player_attention::GameAngleOf(creature_locomotion::DirectionOf(self->heading)));
+	return view;
+}
+
+/// The player as a creature that watches it sees it, only while its step watches the player
+std::optional<creature_player_attention::WatchPlayerView>
+WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const CreatureMindState& mind, bool bodyPlaying)
+{
+	const auto& idle = mind.idle;
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WatchPlayer)
+	{
+		return std::nullopt;
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto* self = registry.TryGet<const CreatureLocomotion>(creature);
+	creature_player_attention::WatchPlayerView view {
+	    // TODO(creature-attention-actions): after a leash order to a place, the game makes the creature wait for orders for
+	    // fifteen seconds. The creature decides nothing in that time. openblack does not have that wait yet. Thus the watch
+	    // ends at once, as in the game at all other times.
+	    .waitingForOrders = false,
+	    .hasPlayer = body != nullptr && body->owner != PlayerNames::NEUTRAL,
+	    .bodyPlaying = bodyPlaying,
+	    .handMovement = mind.playerInterest.handMovement,
+	};
+	if (transform == nullptr || self == nullptr)
+	{
+		return view;
+	}
+	const auto targetOf = [transform, self](glm::vec3 point) {
+		const auto offset = glm::vec2(point.x, point.z) - glm::vec2(transform->position.x, transform->position.z);
+		return creature_player_attention::WatchPlayerView::Target {
+		    .point = {point.x, point.z},
+		    .distance = glm::distance(point, transform->position),
+		    .turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading),
+		};
+	};
+	if (const auto hand = NearestHand(registry, creature); hand.has_value())
+	{
+		view.hand = targetOf(*hand);
+	}
+	if (Locator::camera::has_value())
+	{
+		view.camera = targetOf(Locator::camera::value().GetOrigin());
+	}
+	return view;
 }
 
 /// Lets go of the miracle the creature holds, as it stops what it was doing
@@ -1565,8 +1658,14 @@ void CreatureMindSystem::ProcessTurn()
 		    ++mind.turn;
 		    // What scripts set its sources to since the last turn lasts: what each source follows takes the value
 		    TakeWrittenSources(entity, mind);
-		    // How interesting it finds its player follows the hand, also while the hand holds it
+		    // How interesting it finds its player follows the hand, also while the hand holds it. The speed of the hand
+		    // follows the movement of the hand in the turn.
+		    const auto handBefore = mind.playerInterest.lastHand;
 		    creature_desire_sources::UpdateInterest(mind.playerInterest, PlayerInterestNow(creature, mind));
+		    const auto handMovement = handBefore.has_value() && mind.playerInterest.lastHand.has_value()
+		                                  ? *mind.playerInterest.lastHand - *handBefore
+		                                  : glm::vec3(0.0f);
+		    creature_player_attention::UpdateHandSpeed(mind.handSpeed, handMovement, k_TurnsPerSecond);
 		    // What it thinks its player wants fades
 		    creature_perceived_desires::Fade(mind.perceivedDesires);
 		    if (mind.learnt.has_value())
@@ -1770,6 +1869,8 @@ void CreatureMindSystem::ProcessTurn()
 		        .followed = FollowedViewOf(registry, transform.position, mind),
 		        .cameraFocus = cameraFocus,
 		        .cameraFocusAhead = cameraFocusAhead,
+		        .followHand = FollowHandViewOf(registry, entity, mind, creature_layers::IsPlaying(animation.body)),
+		        .watchPlayer = WatchPlayerViewOf(registry, entity, mind, creature_layers::IsPlaying(animation.body)),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    if (commands.communicated.has_value())

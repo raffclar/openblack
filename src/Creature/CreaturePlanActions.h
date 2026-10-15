@@ -249,6 +249,21 @@ enum class Build : uint8_t
 	CastOneShotInHand,
 	/// Picking up the one-shot miracle that it uses, unless its hand holds something, and casting it at the thing
 	PickUpAndCastOneShot,
+	/// The actions with its player: go to the hand, point at the hand, show the player how nice the creature thinks the
+	/// player is, pray to the player, throw a thing at the camera and watch the player
+	GoToHand,
+	PointAtHand,
+	ShowHowNice,
+	PrayToPlayer,
+	ThrowAtCamera,
+	WatchPlayer,
+	/// The actions with its player that first follow the camera: go to the middle of the screen, follow the player, be
+	/// cross with the player and show the player a thing. Also the action to be silly with the player.
+	GoToMiddleOfScreen,
+	FollowPlayer,
+	BeCrossWithPlayer,
+	ShowPlayerAnObject,
+	BeSillyWithPlayer,
 	/// Resting to get better where it is, or at home after it goes there; healing itself with the heal miracle; resting on
 	/// the spot a while
 	RestToGetBetter,
@@ -420,6 +435,11 @@ struct Situation
 	std::optional<glm::vec2> danceArea;
 	uint32_t fewestDancers {0};
 	uint32_t danceBeats {0};
+	/// Whether it is away from its player's hand, and whether that hand moves (its attitude to its player is below)
+	bool awayFromHand {false};
+	bool handMoving {false};
+	/// Whether the camera of its player looks at it
+	bool lookedAt {false};
 	/// How far its home is, in metres, none without a home; and whether its player has a temple
 	std::optional<float> homeDistance;
 	bool hasTemple {false};
