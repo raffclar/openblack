@@ -38,6 +38,8 @@ enum class FollowUp : uint8_t
 	/// It learnt to eat what it holds when it was stroked. When the meal is done, it does again what it was stroked for,
 	/// to the most useful thing of the same kind.
 	DoLessonAgain,
+	/// It cleared a thing out of its way, and walks on to where it went
+	WalkOn,
 };
 
 /// The creature eats a magic mushroom: it becomes high only when nothing else waits

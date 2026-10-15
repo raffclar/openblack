@@ -321,6 +321,9 @@ enum class Effect : uint8_t
 	Stomped,
 	/// Gets up from a faint with four tenths of its life
 	Revived,
+	/// Has stopped a run away from a thing (the effect's object) or from the player's hand. When it is far enough from
+	/// it, the run sees to the desire of the plan.
+	RanAway,
 };
 
 /// How the eyes should look

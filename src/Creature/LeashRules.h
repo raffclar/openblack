@@ -109,6 +109,8 @@ struct Confinement
 	/// The distance from the place that the creature walks back to, to the centre of the area. It is empty when the
 	/// creature does not walk back.
 	std::optional<float> returnToCentre;
+	/// The creature clears a thing out of its way
+	bool clearingWay {false};
 };
 /// When the creature walks back already, it walks back again only if the centre is this far from the place that it
 /// walks to: half the radius, but not less than 5
@@ -117,6 +119,7 @@ constexpr float k_ReturnLeast = 5.0f;
 /// The creature walks back when it is further than the radius from the centre, unless one of these is true:
 /// - the area does not hold it, or it wears a leash that does not work
 /// - it does an order of the leash, it copies the player, a script controls it, or it uses a teleport stone
+/// - it clears a thing out of its way
 /// - a creature cannot walk on the land at the centre
 /// - it walks back already, to a place near the centre
 [[nodiscard]] bool WalksBack(const Confinement& confinement);

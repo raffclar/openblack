@@ -27,6 +27,7 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureGiving.h"
@@ -60,6 +61,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -89,12 +91,6 @@ using creature_desires::Desire;
 using Kind = creature_mind::Movement::Kind;
 
 constexpr float k_TurnsPerSecond = 10.0f;
-/// Going near something, it looks every this many turns whether it has got anywhere, and gives up when it has moved
-/// less than this since
-constexpr uint32_t k_StuckTurns = 50;
-constexpr float k_StuckDistance = 0.01f;
-/// Getting stuck holds back the desire it went for this many seconds
-constexpr float k_StuckSuppressSeconds = 10.0f;
 /// It sets off again only for somewhere further than this from where it set off for
 constexpr float k_SameDestination = 0.1f;
 /// It heads for what it goes near within this share of a whole turn, measured in the game's 2048 to a turn
@@ -853,20 +849,26 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 				break;
 			}
 		}
-		// It gives up when it has got nowhere for a while, and wants what it went for less for a while
+		// It gives up when it has got nowhere for a while, and wants what it went for less for a while. A creature
+		// under the control of a script does not give up.
 		auto* mindState = registry.TryGet<CreatureMindState>(creature);
 		const uint32_t count = mindState != nullptr ? mindState->stepTurns : casting->turns;
-		if (count % k_StuckTurns == 0)
+		const auto stall =
+		    cast_moves::CheckStall(count,
+		                           gutils::GetDistanceInMetres(glm::vec3(here.x, 0.0f, here.y),
+		                                                       glm::vec3(casting->stuckCheck.x, 0.0f, casting->stuckCheck.y)),
+		                           registry.AllOf<ScriptControlled>(creature));
+		if (stall == cast_moves::Stall::Note)
 		{
 			casting->stuckCheck = here;
 		}
-		else if (count % k_StuckTurns == k_StuckTurns - 1 && glm::distance(here, casting->stuckCheck) < k_StuckDistance)
+		else if (stall == cast_moves::Stall::GiveUp)
 		{
 			if (mindState != nullptr && mindState->desires.has_value() && mindState->planActive &&
 			    mindState->planner.current.has_value())
 			{
-				creature_desires::Suppress(*mindState->desires, mindState->planner.current->desire, k_StuckSuppressSeconds,
-				                           k_TurnsPerSecond);
+				creature_desires::Suppress(*mindState->desires, mindState->planner.current->desire,
+				                           cast_moves::k_StallHoldBackSeconds, k_TurnsPerSecond);
 			}
 			fail();
 		}

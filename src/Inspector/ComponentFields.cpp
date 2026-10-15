@@ -756,6 +756,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLocomotion::firstSearchTurn>("firstSearchTurn")
 	    .Field<&components::CreatureLocomotion::routeReady>("routeReady")
 	    .Field<&components::CreatureLocomotion::failed>("failed")
+	    .Field<&components::CreatureLocomotion::gaveUp>("gaveUp")
+	    .Field<&components::CreatureLocomotion::clearingWay>("clearingWay")
 	    .Field<&components::CreatureLocomotion::facingOnly>("facingOnly")
 	    .Field<&components::CreatureLocomotion::following>("following")
 	    .Field<&components::CreatureLocomotion::followDistance>("followDistance")
@@ -848,7 +850,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::copiedKind>("copiedKind")
 	    .Field<&components::CreatureMindState::followUp>("followUp")
 	    .Field<&components::CreatureMindState::plantedBy>("plantedBy")
-	    .Field<&components::CreatureMindState::observedDeed>("observedDeed");
+	    .Field<&components::CreatureMindState::observedDeed>("observedDeed")
+	    .Field<&components::CreatureMindState::clearingWaySerial>("clearingWaySerial")
+	    .Field<&components::CreatureMindState::walkOnTo>("walkOnTo");
 	Reflect<components::CreatureNeeds>(context)
 	    .Field<&components::CreatureNeeds::started>("started")
 	    .Field<&components::CreatureNeeds::needs>("needs")
@@ -2699,6 +2703,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::components::CreatureLeash::Worn::HeldRopes>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::HeldRopes::toCollar>("toCollar")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::HeldRopes::toTied>("toTied");
+	Reflect<openblack::ecs::components::CreatureLocomotion::GaveUp>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureLocomotion::GaveUp::destination>("destination")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::GaveUp::met>("met");
 	Reflect<openblack::ecs::components::CreatureLocomotion::Move>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::animations>("animations")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::timeMs>("timeMs")
