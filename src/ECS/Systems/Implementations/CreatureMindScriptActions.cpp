@@ -76,6 +76,8 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	{
 		return false;
 	}
+	// The order of a script counts at the end of the plan, as the creature's own plans do
+	mind.forcedPlanCounts = true;
 	// Falling dead, those about it react to the death
 	if (name == k_DeadForeverAction && Locator::reactionSystem::has_value())
 	{

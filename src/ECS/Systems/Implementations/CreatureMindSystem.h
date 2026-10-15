@@ -139,6 +139,12 @@ private:
 	           const creature_plan_actions::Situation& situation);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
+	/// The creature stops the plan with no success, then starts the agenda of the same plan again from its first step
+	void StartPlanAgain(entt::entity creature, components::CreatureMindState& mind);
+	/// The turn rules that come after the hand lets go and before the creature decides: the desires of its body before
+	/// the first stage, the plan that starts again after a hold, and the copy timeout
+	void TurnBeforeDecision(entt::entity creature, const components::Creature& body, components::CreatureMindState& mind,
+	                        bool scripted);
 	/// The creature heals a thing at once, as a stroke heals it
 	void Heal(entt::entity creature, entt::entity thing);
 	/// Copying the player, the creature does what the player did: to the player's thing, else to the nearest thing of the

@@ -62,6 +62,7 @@
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureThrow.h"
 #include "Creature/CreatureTownHelp.h"
+#include "Creature/CreatureTurnOrder.h"
 #include "CreatureMindSystemDetail.h"
 #include "CreatureMindTownHelp.h"
 #include "ECS/Archetypes/PotArchetype.h"
@@ -253,6 +254,22 @@ std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> Setup
 		}
 	}
 	return setup;
+}
+
+/// The desires of the body, from the game's table of desires
+std::array<bool, creature_desires::k_DesireCount> BodyDesires()
+{
+	std::array<bool, creature_desires::k_DesireCount> body {};
+	if (!Locator::infoConstants::has_value())
+	{
+		return body;
+	}
+	const auto& info = Locator::infoConstants::value();
+	for (size_t d = 0; d < body.size(); ++d)
+	{
+		body.at(d) = info.creatureInitialDesire.at(d).field0x34 != 0;
+	}
+	return body;
 }
 
 creature_desire_sources::InnateTraits InnateTraitsOf(CreatureType species)
@@ -1000,9 +1017,8 @@ WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const Cr
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	const auto* self = registry.TryGet<const CreatureLocomotion>(creature);
 	creature_player_attention::WatchPlayerView view {
-	    // TODO(creature-attention-actions): after a leash order to a place, the game makes the creature wait for orders for
-	    // fifteen seconds. The creature decides nothing in that time. openblack does not have that wait yet. Thus the watch
-	    // ends at once, as in the game at all other times.
+	    // The game has a wait for orders of fifteen seconds, but no input of the player starts it. Thus the creature never
+	    // waits, and the watch ends at once, as in the game.
 	    .waitingForOrders = false,
 	    .hasPlayer = body != nullptr && body->owner != PlayerNames::NEUTRAL,
 	    .bodyPlaying = bodyPlaying,
@@ -1744,6 +1760,7 @@ void CreatureMindSystem::ProcessTurn()
 		    // player
 		    if (held)
 		    {
+			    mind.heldSinceRestart = true;
 			    if (mind.showDesireOnHold)
 			    {
 				    ShowDesireOnHold(entity, mind, animation);
@@ -1754,6 +1771,7 @@ void CreatureMindSystem::ProcessTurn()
 		    // Under a script's control its desires stand still and it chooses nothing for itself: it only carries out
 		    // what it is given, and stands about once that is done
 		    const bool scripted = registry.AllOf<ScriptControlled>(entity);
+		    TurnBeforeDecision(entity, creature, mind, scripted);
 		    // The other creature in a fight obeys the creature that started it: its desires stand still until the fight
 		    // is over, or until it wins by a knock-out
 		    const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
@@ -2281,6 +2299,88 @@ void CreatureMindSystem::UpdateAttitudeFromFeedback(entt::entity creature, float
 	mind->attitudeToPlayer = creature_feedback::AttitudeAfter(mind->attitudeToPlayer, feedback);
 	// The average of the feedback is one for all creatures
 	_averageFeedback = creature_feedback::AverageAfter(_averageFeedback, feedback);
+}
+
+void CreatureMindSystem::TurnBeforeDecision(entt::entity creature, const Creature& body, CreatureMindState& mind, bool scripted)
+{
+	// Before the first stage, the desires of its body stay at 0
+	if (mind.desires.has_value())
+	{
+		creature_turn_order::HoldBodyDesires(*mind.desires, BodyDesires(), mind.developmentPhase);
+	}
+	const auto planHasSteps = [&mind]() {
+		return mind.planActive && mind.planner.current.has_value() && mind.idle.serial == mind.planSerial &&
+		       mind.idle.step < mind.idle.agenda.size();
+	};
+	// After a hold, the first plan that has steps to do starts again from its first step
+	if (creature_turn_order::RestartsAfterHold(mind.heldSinceRestart, planHasSteps()))
+	{
+		mind.heldSinceRestart = false;
+		StartPlanAgain(creature, mind);
+	}
+	if (planHasSteps() && creature_turn_order::OwnPlanRuns(true, mind.planner.current->desire))
+	{
+		mind.ownPlanSinceStop = true;
+	}
+	// The copy timeout applies only to the creature of a player that is not the computer, and not under a script
+	const bool computer = Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(body.owner);
+	if (body.owner == PlayerNames::NEUTRAL || computer || scripted)
+	{
+		return;
+	}
+	if (creature_turn_order::StepCopyTimeout(mind.turnsWithoutOwnPlan, mind.ownPlanSinceStop, k_WholeTurnsPerSecond))
+	{
+		// It stops copying the player, the plan is no longer forced, and it does not follow the player for a time
+		if (mind.learnt.has_value())
+		{
+			mind.learnt->mimicry.reset();
+		}
+		mind.planForced = false;
+		if (mind.desires.has_value())
+		{
+			creature_desires::Suppress(*mind.desires, Desire::FollowPlayerDesire,
+			                           creature_turn_order::k_NoFollowAfterCopyTimeoutSeconds, k_TurnsPerSecond);
+		}
+	}
+}
+
+void CreatureMindSystem::StartPlanAgain(entt::entity creature, CreatureMindState& mind)
+{
+	const auto plan = *mind.planner.current;
+	// The context of the plan stays as it was for the player's feedback
+	const bool contextRunning =
+	    mind.learnt.has_value() && !mind.learnt->contexts.empty() && mind.learnt->contexts.back().running;
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
+	creature_plan_actions::Situation situation {.instrument = plan.instrument, .activity = plan.activityObject};
+	Situate(creature, situation);
+	auto built = PlanAgenda(creature, plan.action, plan.object, situation);
+	if (!built.has_value())
+	{
+		// With no agenda, the plan stops and the creature decides again
+		Abandon(mind);
+		return;
+	}
+	auto& [executor, agenda] = *built;
+	if (!Replan(creature, executor->activity, std::move(agenda)))
+	{
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} starts {} again after the hand let go", entt::to_integral(creature),
+	                   plan.action);
+	mind.planner.current = plan;
+	mind.planActive = true;
+	mind.planSerial = mind.idle.serial;
+	mind.agendaSeen = mind.idle.serial;
+	mind.satisfiedByEffect = false;
+	mind.desireSeenTo = false;
+	if (contextRunning)
+	{
+		mind.learnt->contexts.back().running = true;
+	}
 }
 
 void CreatureMindSystem::NoteLeashOrder(entt::entity creature)
@@ -2904,6 +3004,7 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	    .instrument = situation.instrument,
 	};
 	mind->planActive = true;
+	mind->planForced = true;
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
 	mind->satisfiedByEffect = false;
