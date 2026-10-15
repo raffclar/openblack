@@ -67,6 +67,18 @@ void testbed_scenarios::AddRewardScenarios(std::vector<Scenario>& all)
 	    .rewards = {{.type = RewardObjectInfo::RewardObjectToyBall, .offset = {0.0f, 0.0f}, .fromSky = false}},
 	});
 	all.push_back({
+	    .id = "story.reward_chest_opened_once",
+	    .name = "An opened reward chest drawn once",
+	    .facet = Facet::Miracles,
+	    .description = "A water seed reward chest stands on the land close in front of the camera, seen from its side, and "
+	                   "opens at once. The water globe floats above it, so nothing hides the chest.",
+	    .expected = "Only the opened chest shows: its lid stands open behind it and its blue light shines up. No closed lid "
+	                "shows on top of the open chest, from any side. Turn the camera round the chest to look.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-6.0f, 3.0f, 0.0f}, .look = {0.0f, 0.6f, 0.0f}},
+	    .rewards = {{.type = RewardObjectInfo::SpellSeedWater, .offset = {0.0f, 0.0f}, .fromSky = false, .opened = true}},
+	});
+	all.push_back({
 	    .id = "story.reward_town_seed",
 	    .name = "A town learning a miracle from a reward chest",
 	    .facet = Facet::Miracles,
