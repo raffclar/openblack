@@ -1775,10 +1775,11 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    // Held by the player's hand its mind stands still, but for showing what it wants once it has turned to the
 		    // player
-		    if (held)
+		    if (const auto heldTurn = creature_turn_order::WhileHeld(held, mind.showDesireOnHold);
+		        heldTurn != creature_turn_order::HeldTurn::Think)
 		    {
 			    mind.heldSinceRestart = true;
-			    if (mind.showDesireOnHold)
+			    if (heldTurn == creature_turn_order::HeldTurn::ShowDesire)
 			    {
 				    ShowDesireOnHold(entity, mind, animation);
 			    }

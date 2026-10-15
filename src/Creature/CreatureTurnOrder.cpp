@@ -29,6 +29,15 @@ void creature_turn_order::HoldBodyDesires(creature_desires::Desires& desires,
 	}
 }
 
+creature_turn_order::HeldTurn creature_turn_order::WhileHeld(bool held, bool showDesireOnHold)
+{
+	if (!held)
+	{
+		return HeldTurn::Think;
+	}
+	return showDesireOnHold ? HeldTurn::ShowDesire : HeldTurn::StandStill;
+}
+
 bool creature_turn_order::RestartsAfterHold(bool heldSinceRestart, bool planHasSteps)
 {
 	return heldSinceRestart && planHasSteps;
