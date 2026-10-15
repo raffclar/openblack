@@ -1109,6 +1109,72 @@ void AddOgreLair(std::vector<Scenario>& all)
 	});
 }
 
+/// The last lesson of the first land's guide. The game's own script runs at the same map positions as on the first land.
+/// The player's Tiger waits where the script makes it watch the guide. The scenario sets the flag of the Ogre quest, thus
+/// the script does not show the Ogre's place.
+void AddGuideStorm(std::vector<Scenario>& all)
+{
+	// The positions on the first land, from the middle of the map: the place where the guide wakes, the place where the
+	// creature watches it, and the top of the mountain
+	constexpr glm::vec2 k_GuideWakes {-271.88f, 251.481f};
+	constexpr glm::vec2 k_CreatureWatches {-245.011f, 266.323f};
+	constexpr glm::vec2 k_MountainTop {-241.71f, -46.942f};
+	// Near enough to the top for the storm to start, then near enough for the last words of the guide
+	constexpr glm::vec2 k_StormStarts = k_MountainTop + glm::vec2 {0.0f, 60.0f};
+	constexpr glm::vec2 k_LastWords = k_MountainTop + glm::vec2 {0.0f, 25.0f};
+	const Command runStorm {
+	    .kind = Kind::RunScript,
+	    .delaySeconds = 0.5f,
+	    .script = "TheStorm",
+	    .scriptGlobals = {{"CreatureGuardianInitiated", {.number = 1.0f}}},
+	};
+	// The guide sleeps for five minutes of game time, then walks to the framed place. The pointer clicks the middle of
+	// the screen with the Action button three times, a minute apart, because the five minutes take longer in a slow
+	// build. Later the Tiger walks up the mountain, first for the storm and then for the last words. The script moves
+	// the Tiger back during the storm's film, thus it walks up again.
+	const Command click {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3};
+	const Command letGo {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3};
+	const std::vector<Command> commands {
+	    runStorm,
+	    {.kind = Kind::PointerTo, .delaySeconds = 330.0f, .point = {0.5f, 0.5f}},
+	    click,
+	    letGo,
+	    {.kind = Kind::PointerTo, .delaySeconds = 60.0f, .point = {0.5f, 0.5f}},
+	    click,
+	    letGo,
+	    {.kind = Kind::PointerTo, .delaySeconds = 60.0f, .point = {0.5f, 0.5f}},
+	    click,
+	    letGo,
+	    Go(Kind::WalkTo, 0, k_StormStarts, 60.0f, false),
+	    Go(Kind::WalkTo, 0, k_LastWords, 120.0f, false),
+	    Go(Kind::WalkTo, 0, k_LastWords, 60.0f, false),
+	    Go(Kind::WalkTo, 0, k_LastWords, 120.0f, false),
+	};
+	auto tiger = Content(CreatureType::Tiger, k_CreatureWatches, 0.0f, "player's tiger");
+	tiger.hold = false;
+	all.push_back({
+	    .id = "story.guide_storm",
+	    .name = "The guide's last lesson, Nemesis's storm and the death of the guide",
+	    .facet = Facet::Story,
+	    .description = "The first land's TheStorm script runs on the flat testbed. The script makes the guide (a lion for "
+	                   "the Tiger). The guide walks to the fight clearing and stays there for five minutes under a gold "
+	                   "scroll. Then it walks to the framed place. From 330 seconds the pointer clicks the middle of the "
+	                   "screen three times, a minute apart. Later the Tiger walks up to the mountain top. Click the lines "
+	                   "that wait for a click.",
+	    .expected = "The guide's music plays while the guide talks and walks to the mountain top. A rain storm forms and "
+	                "comes to the top with Nemesis's music, Nemesis talks and the guide answers. Six lightning bolts and "
+	                "an explosion from the storm hit the guide, the evil advisor holds on to the screen edge, and the "
+	                "guide falls dead and stays down. Then the storm moves away towards the player's village. On the flat "
+	                "land, the camera places of the script and the mountain top are above the ground.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_GuideWakes.x + 30.0f, 40.0f, k_GuideWakes.y + 50.0f},
+	                .look = {k_GuideWakes.x, 0.0f, k_GuideWakes.y}},
+	    .creatures = {tiger},
+	    .commands = commands,
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -1191,6 +1257,7 @@ void AddStory(std::vector<Scenario>& all)
 	});
 	AddBreederOffers(all);
 	AddOgreLair(all);
+	AddGuideStorm(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)
