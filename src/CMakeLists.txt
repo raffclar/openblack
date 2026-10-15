@@ -151,6 +151,7 @@ target_link_libraries(
           sas
           gestures
           rawimage
+          helpstats
           imgui::imgui
           imgui_user
           ScriptLibrary

@@ -18,6 +18,8 @@ namespace openblack::ecs
 Registry::Registry()
 {
 	_registry.ctx().emplace<RegistryContext>();
+	// Each entity made is counted as it is made, however it is made
+	_registry.on_construct<entt::entity>().connect<&Registry::EntityMade>(*this);
 }
 
 void Registry::Release(entt::entity entity)
@@ -48,6 +50,7 @@ void Registry::Reset()
 	_registry.clear();
 	_registry.ctx().erase<RegistryContext>();
 	_registry.ctx().emplace<RegistryContext>();
+	_entitiesMade = 0;
 };
 
 void Registry::SetDirty()

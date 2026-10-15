@@ -26,6 +26,7 @@
 #include <glm/vec4.hpp>
 
 #include "InstanceDesc.h"
+#include "InterfaceCreatures.h"
 #include "RenderPass.h"
 #include "ScreenshotCapture.h"
 
@@ -303,6 +304,10 @@ public:
 	virtual void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept = 0;
 	// TODO: Should shader manager be available through Locator as a service?
 	[[nodiscard]] virtual graphics::ShaderManager& GetShaderManager() const noexcept = 0;
+
+	/// The creatures that the interface shows over itself. The interface asks for them each frame that it shows them,
+	/// as it draws itself, and the next frame of the scene draws them.
+	virtual void ShowInterfaceCreatures(interface_creatures::Request request) noexcept = 0;
 };
 
 } // namespace openblack::graphics

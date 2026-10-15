@@ -9,15 +9,21 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "Creature/CreatureMeals.h"
 
 namespace openblack::ecs::components
 {
 
-/// On a creature after its first meal: the counts of what it ate
+/// What a creature counts of its life: what it ate and killed, its poos and the mushrooms it ate. Its fights and wins
+/// are in its fight record. Its player's statistics and the creature's scroll in the temple show them.
 struct CreatureTallies
 {
 	creature_meals::Tallies meals;
+	uint32_t poos {0};
+	/// The magic mushrooms and toadstools that it ate
+	uint32_t mushroomsEaten {0};
 };
 
 } // namespace openblack::ecs::components

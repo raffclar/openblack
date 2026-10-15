@@ -191,7 +191,7 @@ void DialogPainter::DrawBackground(const DialogRect& rect, glm::vec3 tint, bool 
 }
 
 void DialogPainter::DrawTab(const DialogRect& rect, std::u16string_view label, bool selected, bool first, bool last,
-                            bool hovered) const
+                            bool hovered, int textSize) const
 {
 	const auto alpha = _alpha;
 	_alpha *= k_SeeThroughAlpha;
@@ -237,10 +237,10 @@ void DialogPainter::DrawTab(const DialogRect& rect, std::u16string_view label, b
 		DrawLine({max.x - 10, lineY}, {max.x - 10, max.y - 4}, white);
 		DrawLine({min.x + 10, lineY}, {min.x + 10, max.y - 4}, white);
 
-		// A tab's label at the mid text size, smaller if it doesn't fit, in the middle of the tab. The
+		// A tab's label at its text size, smaller if it doesn't fit, in the middle of the tab. The
 		// size and the centring are as the original draws them.
 		const DialogRect labelRect {.min = {min.x + 8, min.y + 7}, .max = {max.x - 8, max.y + 1}};
-		auto size = k_MidTextSize;
+		auto size = textSize;
 		while (size > k_SmallTextSize / 2 &&
 		       GetTextHeight(labelRect.Width(), label, size) > static_cast<float>(labelRect.Height() - 6))
 		{

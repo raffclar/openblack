@@ -82,6 +82,26 @@ float EventCount::PerSecond(uint32_t clock)
 	return static_cast<float>((_kept - 1) * 1000) / static_cast<float>(since);
 }
 
+EventCount::Kept EventCount::GetKept() const
+{
+	return {.total = _total,
+	        .smoothedRate = _smoothedRate,
+	        .head = _head,
+	        .kept = _kept,
+	        .triggeredThisTurn = _triggeredThisTurn,
+	        .times = _times};
+}
+
+void EventCount::SetKept(const Kept& kept)
+{
+	_total = kept.total;
+	_smoothedRate = kept.smoothedRate;
+	_head = kept.head % k_TimesKept;
+	_kept = std::min(kept.kept, k_TimesKept);
+	_triggeredThisTurn = kept.triggeredThisTurn;
+	_times = kept.times;
+}
+
 std::vector<uint32_t> CameraViewEvents(const WorldCameraView& view)
 {
 	if (!view.centreDistance.has_value())

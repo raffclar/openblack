@@ -113,6 +113,8 @@ private:
 	void PlaceBirds(const Scenario& scenario, glm::vec2 middle);
 	/// The scenario's town's worship site is put up built and its totem raised to the share
 	static void SetUpWorship(float share);
+	/// The first player's statistics and their creature's tallies, as the scenario gives them
+	static void SetUpStatistics(const Scenario& scenario);
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);
 	/// Spawns the next batch of the crowd
 	void SpawnCrowd();

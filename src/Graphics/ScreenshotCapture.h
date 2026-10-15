@@ -132,6 +132,7 @@ public:
 	                                              RenderPass::CinemaBars,
 	                                              RenderPass::Advisors,
 	                                              RenderPass::Interface,
+	                                              RenderPass::InterfaceCreatures,
 	                                              RenderPass::ImGui,
 	                                              RenderPass::Cursor};
 

@@ -619,4 +619,12 @@ constexpr float k_DepthPerSize = 7.5f;
 [[nodiscard]] std::string_view Name(Opponent opponent);
 [[nodiscard]] std::string_view Name(Choice::Kind kind);
 [[nodiscard]] std::string_view Name(RecoilDirection direction);
+
+/// The event of the help record that the move at the front of the queue gives, each time the player's creature looks at
+/// it from its stance with its opponent in range: a block, an attack (a blow, also while it waits to be let go, or the
+/// special move), a miracle, or a step or another animation
+[[nodiscard]] uint32_t HelpEventOf(Move::Kind kind);
+/// The player's creature counts its moves in the help record only from its stance, with a move in its queue and its
+/// opponent in range. A creature that blocks ends its block with the next move, and that counts nothing.
+[[nodiscard]] bool CountsHelpEvent(State state, bool inRange, bool queued);
 } // namespace openblack::creature_fight

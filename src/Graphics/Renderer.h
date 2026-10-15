@@ -14,6 +14,7 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -95,6 +96,7 @@ public:
 	void WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void PrepareCreatureSkins(size_t count) const noexcept final;
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
+	void ShowInterfaceCreatures(interface_creatures::Request request) noexcept final;
 	void Frame() noexcept final;
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;
 	[[nodiscard]] std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept final;
@@ -417,6 +419,13 @@ private:
 	                      const L3DMeshSubmitDesc& bodyDesc, float fizz, float freeze, uint32_t fizzSortDepth) const;
 	/// A creature's strands of hair, as ribbons facing the camera blended over the scene, lit from where the creature is
 	void DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin) const;
+	/// Draws the body of a creature that the interface shows: its mesh, its instance among those of the interface's
+	/// creatures, its pose, its shape and its eyes
+	using InterfaceCreatureBody =
+	    std::function<void(entt::id_type mesh, uint32_t instance, std::span<const glm::mat4> bones,
+	                       const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes)>;
+	/// The creatures that the interface asked to show last, each moved to its place before the interface's camera
+	void DrawInterfaceCreatures(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
 	/// The columns of light over the village centres and temples of the players whose borders show
 	void DrawLightColumns(const DrawSceneDesc& desc) const;
 	/// The beams of light the started scrolls stand in
@@ -613,6 +622,10 @@ private:
 		std::optional<glm::vec3> light;
 	};
 	mutable std::vector<DrawnCreature> _drawnCreatures;
+	/// The creatures that the interface asked to show, which the next frame of the scene draws, and the instances that
+	/// place them
+	mutable std::optional<interface_creatures::Request> _interfaceCreatures;
+	mutable std::optional<DynamicVertexBufferHandle> _interfaceCreatureInstances;
 	mutable bool _warnedCreatureCap {false};
 	/// Found by trial in a debug build, whose backends check the uploads: Vulkan overflowed with 65 creatures drawn and
 	/// Direct3D 12 with 850, and both held with 50 and 600

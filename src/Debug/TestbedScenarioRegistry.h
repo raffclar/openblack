@@ -30,9 +30,15 @@
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreatureTattoo.h"
 #include "ECS/CreatureAttitudeRules.h"
+#include "ECS/StatisticsRules.h"
 #include "Enums.h"
 #include "Particles/ParticleDrawPath.h"
 #include "TestbedCrowd.h"
+
+namespace openblack::ecs::components
+{
+struct PlayerStatistics;
+}
 
 /// The testbed's scenarios: ready-made set ups of the flat testbed that show one facet of the creatures at a time, such
 /// as a thirsty creature finding water or a lineup of bodies. Each is plain data: the land, time of day and weather,
@@ -958,6 +964,10 @@ struct Scenario
 	std::optional<float> worshipShare;
 	/// The debug window opened as the scenario starts, by its name; none when empty
 	std::string_view debugWindow;
+	/// The first player's statistics as the scenario starts, for the Game Statistics box and the temple's scrolls
+	std::function<void(ecs::components::PlayerStatistics&)> playerStatistics;
+	/// What the first player's creature has counted of its life
+	std::optional<statistics::CreatureTallies> creatureTallies;
 };
 
 /// A town centre's totem
