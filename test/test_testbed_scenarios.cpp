@@ -172,7 +172,7 @@ TEST(TestbedScenarios, NothingStartsOnTheLakesOpenWater)
 TEST(TestbedScenarios, CoversObjectsTheHandAndLeashes)
 {
 	for (const auto* id :
-	     {"objects.reach", "objects.examine", "objects.throw_lob", "objects.eat_held", "objects.knock_down_trees",
+	     {"objects.reach", "objects.examine", "objects.throw_put_down_toss", "objects.eat_held", "objects.knock_down_trees",
 	      "objects.point", "objects.curious", "objects.playful", "objects.angry", "hand.stroke", "hand.slap",
 	      "hand.status_panel", "leash.types", "leash.pull_to_hand", "leash.tied", "leash.home"})
 	{
@@ -213,9 +213,9 @@ TEST(TestbedScenarios, CoversObjectsTheHandAndLeashes)
 		}
 	}
 	EXPECT_EQ(ways.size(), 4u);
-	for (const auto kind : {Command::Kind::ThrowAt, Command::Kind::Lob, Command::Kind::Discard})
+	for (const auto kind : {Command::Kind::ThrowAt, Command::Kind::PutDown, Command::Kind::Discard})
 	{
-		EXPECT_TRUE(commandsOf("objects.throw_lob").contains(kind));
+		EXPECT_TRUE(commandsOf("objects.throw_put_down_toss").contains(kind));
 	}
 	EXPECT_TRUE(commandsOf("objects.eat_held").contains(Command::Kind::EatHeld));
 	EXPECT_TRUE(commandsOf("objects.knock_down_trees").contains(Command::Kind::KnockDown));

@@ -894,9 +894,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreatureHeldObject>(context)
 	    .Field<&components::CreatureHeldObject::object>("object")
 	    .Field<&components::CreatureHeldObject::mirrored>("mirrored")
-	    .Field<&components::CreatureHeldObject::bone>("bone")
-	    .Field<&components::CreatureHeldObject::rotation>("rotation")
-	    .Field<&components::CreatureHeldObject::middle>("middle");
+	    .Field<&components::CreatureHeldObject::bone>("bone");
 	Reflect<components::PendingCatch>(context).Field<&components::PendingCatch::object>("object");
 	Reflect<components::CatchHands>(context).Field<&components::CatchHands::hands>("hands");
 	Reflect<components::PickUpReach>(context).Field<&components::PickUpReach::straightReach>("straightReach");

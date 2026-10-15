@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 
@@ -35,7 +37,6 @@ public:
 	bool PutDown(entt::entity creature) override;
 	bool Discard(entt::entity creature) override;
 	bool DiscardWith(entt::entity creature, size_t animation) override;
-	bool Lob(entt::entity creature) override;
 	bool EatHeld(entt::entity creature) override;
 	bool Keep(entt::entity creature, size_t animation) override;
 	bool Throw(entt::entity creature, const glm::vec3& target) override;
@@ -77,8 +78,14 @@ private:
 	void StartPendingCatches();
 	/// Starts an action on the creature in place of any it was doing, or records why it can't
 	bool Start(entt::entity creature, components::CreatureObjectAction action);
+	/// Where a released thing starts: where it hangs in the hand, or with its origin at the finger ends as a throw does
+	enum class ReleaseFrom : uint8_t
+	{
+		Hanging,
+		FingerEnds,
+	};
 	/// Lets go of the held object, which flies off with a velocity
-	void Release(entt::entity creature, const glm::vec3& position, const glm::vec3& velocity);
+	void Release(entt::entity creature, const glm::vec3& velocity, ReleaseFrom from = ReleaseFrom::Hanging);
 	/// A held thing goes into the physics as the creature lets it go
 	void LetGo(entt::entity creature, entt::entity object, const glm::vec3& velocity);
 };

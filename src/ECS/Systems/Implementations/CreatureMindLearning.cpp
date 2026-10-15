@@ -1160,7 +1160,7 @@ void CreatureMindSystem::SetUpLearning(entt::entity creature, CreatureMindState&
 	}
 }
 
-void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mind)
+void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mind, FileBase base)
 {
 	const auto file = std::move(mind.pendingFile);
 	mind.pendingFile.reset();
@@ -1174,9 +1174,17 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 	{
 		body->name = file->name;
 	}
+	const auto* tables = GetTables();
+	// Over its own mind, the creature keeps what the file does not hold, and the examples of the file come after its
+	// own examples
+	if (base == FileBase::Own)
+	{
+		Abandon(mind);
+		ApplyLoaded(creature, mind, creature_mind_model::FromFile(*file, *mind.desires, *mind.learnt), *file);
+		return;
+	}
 	const auto fresh =
 	    creature_desires::Create(SetupFor(body->species), [](float low, float high) { return 0.5f * (low + high); });
-	const auto* tables = GetTables();
 	auto knowledge = tables != nullptr ? creature_watching::StartKnowledge(tables->skills, tables->miracles)
 	                                   : creature_watching::Knowledge {};
 	auto freshLearnt = creature_mind_model::Fresh(
@@ -1188,8 +1196,13 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 	}
 	freshLearnt.turnsSinceDone =
 	    creature_action_history::Fresh(freshLearnt.opinions.size(), [this](uint32_t range) { return Random(range); });
-	auto loaded = creature_mind_model::FromFile(*file, fresh, freshLearnt);
-	if (tables != nullptr)
+	ApplyLoaded(creature, mind, creature_mind_model::FromFile(*file, fresh, freshLearnt), *file);
+}
+
+void CreatureMindSystem::ApplyLoaded(entt::entity creature, CreatureMindState& mind, creature_mind_model::LoadedMind loaded,
+                                     const creaturemind::MindFileData& file)
+{
+	if (const auto* tables = GetTables(); tables != nullptr)
 	{
 		creature_mind_model::RebuildTrees(loaded.learnt, tables->attributes);
 	}
@@ -1203,7 +1216,7 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 	mind.attitudeToPlayer = loaded.attitudeToPlayer;
 	mind.turnsLookedAt = loaded.turnsLookedAt;
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} took up a mind file: version {}, stage {}",
-	                   entt::to_integral(creature), file->version, mind.developmentPhase);
+	                   entt::to_integral(creature), file.version, mind.developmentPhase);
 }
 
 void CreatureMindSystem::Abandon(CreatureMindState& mind)
