@@ -916,7 +916,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSwap::other>("other")
 	    .Field<&components::CreatureSwap::target>("target")
 	    .Field<&components::CreatureSwap::beam>("beam");
-	Reflect<components::CreatureTallies>(context).Field<&components::CreatureTallies::meals>("meals");
+	Reflect<components::CreatureTallies>(context)
+	    .Field<&components::CreatureTallies::meals>("meals")
+	    .Field<&components::CreatureTallies::poos>("poos")
+	    .Field<&components::CreatureTallies::mushroomsEaten>("mushroomsEaten");
 	Reflect<components::DanceMove>(context)
 	    .Field<&components::DanceMove::action>("action")
 	    .Field<&components::DanceMove::first>("first")

@@ -38,6 +38,12 @@ constexpr uint32_t k_CameraDrag = 33;
 /// The hand tapped a scroll or sign with a challenge or tip, or one without
 constexpr uint32_t k_TapWithText = 34;
 constexpr uint32_t k_TapWithoutText = 35;
+/// The player's creature starts a move in a fight from its stance: a block, an attack (a blow or the special move, also
+/// each turn that a blow waits to be let go), a miracle, or a step or other animation
+constexpr uint32_t k_FightBlock = 36;
+constexpr uint32_t k_FightAttack = 37;
+constexpr uint32_t k_FightCast = 38;
+constexpr uint32_t k_FightStep = 39;
 /// The world camera's view, which the help counts each turn: the land shows at the middle of the screen, the land
 /// shows near and the camera looks steeply down at it, and no land shows and the camera looks up at the sky
 constexpr uint32_t k_CameraSeesLand = 44;
@@ -76,6 +82,21 @@ public:
 	/// How many times a second it happened, over the times kept: the gaps between them over the time since the oldest.
 	/// 0 with fewer than two kept or none of the clock passed since the oldest; a clock behind its times as above.
 	[[nodiscard]] float PerSecond(uint32_t clock);
+
+	/// All that the count keeps, as a player's profile stores it
+	struct Kept
+	{
+		uint32_t total {0};
+		float smoothedRate {0.0f};
+		/// The slot of the next time to keep, and how many slots have a time
+		uint32_t head {0};
+		uint32_t kept {0};
+		bool triggeredThisTurn {false};
+		std::array<uint32_t, k_TimesKept> times {};
+	};
+	[[nodiscard]] Kept GetKept() const;
+	/// The count as a profile stored it. A slot or a number of times past the last is kept to the slots there are.
+	void SetKept(const Kept& kept);
 
 private:
 	void PullTimesBackTo(uint32_t clock);
