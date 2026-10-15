@@ -30,10 +30,9 @@ enum class Kind : uint8_t
 {
 	/// Walking up to something and reaching for it with the four reaching animations blended
 	PickUp,
-	/// Letting go of what it holds: setting it down where the hand is, tossing it away, or lobbing it gently
+	/// Letting go of what it holds: setting it down where the hand is, or tossing it away
 	PutDown,
 	Discard,
-	Lob,
 	/// Eating what it holds
 	Eat,
 	/// Stroking, shaking, smelling or examining what it holds, which it keeps hold of

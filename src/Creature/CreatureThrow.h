@@ -28,18 +28,36 @@ namespace openblack::creature_throw
 constexpr float k_Gravity = 9.81f;
 
 /// The throwing animations, flat and high, blended by how high the target is; and those that let go of what is held:
-/// tossing it away, eating it, putting it down and lobbing it gently
+/// tossing it away, eating it and putting it down. The species also have a gentle lob animation, but the game never
+/// plays it.
 constexpr size_t k_HurlFlat = 91;
 constexpr size_t k_HurlHigh = 92;
 constexpr size_t k_Discard = 95;
 constexpr size_t k_Eat = 96;
 constexpr size_t k_PutDown = 97;
-constexpr size_t k_GentleLob = 98;
 
-/// The animation that puts a thing down lets go of it at rest, at the moment of the put-down. Other animations toss it.
-[[nodiscard]] constexpr bool PutsDownStill(size_t animation)
+/// How an animation that lets go of a held thing releases it
+enum class LetGo : uint8_t
 {
-	return animation == k_PutDown;
+	/// It tosses the thing away at the moment of the toss, with a share of the speed of the hand
+	Toss,
+	/// It puts the thing down at rest at the moment of the put-down
+	PutDownStill,
+	/// It does not release the thing: the thing stays in the hand
+	Keep,
+};
+/// How an animation releases the held thing. Only the toss animation and the put-down animation release it.
+[[nodiscard]] constexpr LetGo LetGoOf(size_t animation)
+{
+	switch (animation)
+	{
+	case k_Discard:
+		return LetGo::Toss;
+	case k_PutDown:
+		return LetGo::PutDownStill;
+	default:
+		return LetGo::Keep;
+	}
 }
 
 /// Tossing something away, it leaves with this share of the hand's own speed at that moment
@@ -67,10 +85,24 @@ constexpr float k_HeightAtSizeOne = 15.0f;
 /// before
 [[nodiscard]] glm::vec3 HandVelocity(const glm::vec3& atRelease, const glm::vec3& before, float spanMs);
 
-/// The bones whose middle is the point the hand tosses from: the bones at the ends of the skeleton's branches that
-/// start at the hand and at each bone after it under the same parent. In the creatures' skeletons the bones under one
-/// parent follow each other in the order of their numbers.
+/// The bones whose middle is the point where the hand holds a thing and lets go of it: the bones at the ends of the skeleton's
+/// branches that start at the hand and at each bone after it under the same parent. In the creatures' skeletons the bones under
+/// one parent follow each other in the order of their numbers.
 [[nodiscard]] std::vector<uint32_t> TossPointBones(std::span<const uint32_t> parents, uint32_t hand);
+
+/// Where a held thing is in the world and how it turns, from the hand
+struct HeldPose
+{
+	glm::mat3 rotation {1.0f};
+	glm::vec3 position {0.0f};
+};
+/// How a held thing sits in the hand of a creature. The thing turns with the hand bone, which is in the world:
+/// - Its side axis is the opposite of the hand's first axis.
+/// - Its up axis is the hand's third axis, and its forward axis is the opposite of the hand's second axis.
+/// - In the other hand, its up axis and its forward axis change their direction.
+/// Its origin is the hang distance below the middle of the finger ends, along its up axis. A negative hang puts it
+/// above.
+[[nodiscard]] HeldPose HeldPlacement(const glm::mat3& hand, const glm::vec3& fingerEnds, bool mirrored, float hang);
 
 /// The velocity something tossed away leaves with: a share of the hand's own, measured in the creature's space, flipped
 /// to the other side when tossed by the other hand and turned with the creature

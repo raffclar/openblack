@@ -16,7 +16,6 @@
 #include <string>
 
 #include <entt/entity/entity.hpp>
-#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureObjectActions.h"
@@ -102,11 +101,8 @@ struct CreatureHeldObject
 	entt::entity object {entt::null};
 	/// Held in the left hand, having reached for it with the animations mirrored
 	bool mirrored {false};
-	/// The bone it rides on, and how it is turned against the creature
+	/// The hand bone that holds it. It turns with this bone and hangs below the finger ends of the bone.
 	uint32_t bone {0};
-	glm::mat3 rotation {1.0f};
-	/// Where its middle is from where it stands, in its own space at the world's scale, so it is held by its middle
-	glm::vec3 middle {0.0f};
 };
 
 /// A catch the creature is to make once what its body is doing is over

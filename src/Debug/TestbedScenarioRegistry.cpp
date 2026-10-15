@@ -2257,19 +2257,19 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
-	    .id = "objects.throw_lob",
-	    .name = "Throwing at a target, lobbing and tossing away",
+	    .id = "objects.throw_put_down_toss",
+	    .name = "Throwing at a target, putting down and tossing away",
 	    .facet = Facet::Objects,
-	    .description = "A tiger picks up a ball and throws it at a pillar of rock 60 units east, fetches it and lobs it, "
-	                   "fetches it again and tosses it away.",
-	    .expected = "The throw flies flat and hard towards the pillar; the lob goes up high and comes down near; the "
-	                "toss drops it aside. Each comes to rest where it lands.",
+	    .description = "A tiger picks up a ball and throws it at a pillar of rock 60 units east, fetches it and puts it "
+	                   "down, fetches it again and tosses it away.",
+	    .expected = "The throw flies flat and hard towards the pillar. The put-down lets go of the ball at rest at the "
+	                "finger ends. The toss drops it aside. Each comes to rest where it lands.",
 	    .framing = {.shot = Shot::Overview, .include = {{60.0f, 30.0f}, {-30.0f, -30.0f}}},
 	    .creatures = {Posed(CreatureType::Tiger, {-20.0f, 0.0f}, 270.0f)},
 	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {-20.0f, -k_Reach}},
 	                {.type = FeatureInfo::FatPilarChalk, .offset = {60.0f, 0.0f}}},
 	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Go(Kind::ThrowAt, 0, {60.0f, 0.0f}, 0.5f),
-	                 OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::Lob, 0, 0.5f, true), OnObject(Kind::PickUp, 0, 0, 1.0f),
+	                 OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::PutDown, 0, 0.5f, true), OnObject(Kind::PickUp, 0, 0, 1.0f),
 	                 Act(Kind::Discard, 0, 0.5f, true), Go(Kind::WalkTo, 0, {-20.0f, 0.0f}, 1.0f)},
 	    .repeatFrom = 0,
 	});
@@ -2287,6 +2287,21 @@ void AddObjects(std::vector<Scenario>& all)
 	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {0.0f, -k_Reach}}},
 	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::Discard, 0, 0.5f, true),
 	                 Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 1.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "objects.held_in_fingers",
+	    .name = "A ball held in the fingers, close up",
+	    .facet = Facet::Objects,
+	    .description = "A tiger picks up a ball in front of it, looks it over four ways and puts it down, again and "
+	                   "again, seen close up.",
+	    .expected = "The ball hangs below the middle of the finger ends and turns with the hand. The put-down lets go "
+	                "of the ball at rest where the finger ends are.",
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {0.0f, -k_Reach}}},
+	    .commands = examining,
 	    .repeatFrom = 0,
 	});
 
@@ -5854,7 +5869,6 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "pick up",
 	    "put down",
 	    "toss away",
-	    "lob",
 	    "eat it",
 	    "look it over",
 	    "throw at",

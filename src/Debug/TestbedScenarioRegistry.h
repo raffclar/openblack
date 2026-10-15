@@ -542,12 +542,11 @@ struct Command
 		/// The hour of the day jumps, for every creature
 		SetHour,
 		/// Walking up to the scenario's object and picking it up; then, with what it holds, putting it down, tossing it
-		/// away, lobbing it, eating it, or looking it over with one of its four ways of doing so (stroking, shaking,
+		/// away, eating it, or looking it over with one of its four ways of doing so (stroking, shaking,
 		/// smelling, examining); throwing it at the point
 		PickUp,
 		PutDown,
 		Discard,
-		Lob,
 		EatHeld,
 		Examine,
 		ThrowAt,

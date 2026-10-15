@@ -14,6 +14,7 @@
 #include <optional>
 
 #include <glm/geometric.hpp>
+#include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/ScreenPick.h"
@@ -319,10 +320,36 @@ TEST(CreatureTouch, TheMeshsWayOutComesFromTheOrderOfTheTrianglesCorners)
 	EXPECT_EQ(back->windingNormal, winding);
 }
 
-TEST(CreatureTouch, ThePutDownAnimationLetsGoAtRest)
+TEST(CreatureTouch, OnlyTheTossAndThePutDownAnimationsLetGo)
 {
-	EXPECT_TRUE(creature_throw::PutsDownStill(creature_throw::k_PutDown));
-	EXPECT_FALSE(creature_throw::PutsDownStill(creature_throw::k_Discard));
+	using creature_throw::LetGo;
+	EXPECT_EQ(creature_throw::LetGoOf(creature_throw::k_PutDown), LetGo::PutDownStill);
+	EXPECT_EQ(creature_throw::LetGoOf(creature_throw::k_Discard), LetGo::Toss);
+	// The eat animation, the unused gentle lob and any other animation keep the thing in the hand
+	EXPECT_EQ(creature_throw::LetGoOf(creature_throw::k_Eat), LetGo::Keep);
+	EXPECT_EQ(creature_throw::LetGoOf(98), LetGo::Keep);
+	EXPECT_EQ(creature_throw::LetGoOf(0), LetGo::Keep);
+}
+
+TEST(CreatureTouch, AHeldThingTurnsWithTheHandAndHangsBelowTheFingerEnds)
+{
+	// A hand bone at twice the size, with its axes along x, y and z
+	const glm::mat3 hand(glm::vec3(2.0f, 0.0f, 0.0f), glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(0.0f, 0.0f, 2.0f));
+	const glm::vec3 fingerEnds(1.0f, 10.0f, 3.0f);
+	const auto right = creature_throw::HeldPlacement(hand, fingerEnds, false, 4.0f);
+	EXPECT_EQ(right.rotation[0], glm::vec3(-1.0f, 0.0f, 0.0f));
+	EXPECT_EQ(right.rotation[1], glm::vec3(0.0f, 0.0f, 1.0f));
+	EXPECT_EQ(right.rotation[2], glm::vec3(0.0f, -1.0f, 0.0f));
+	EXPECT_EQ(right.position, glm::vec3(1.0f, 10.0f, -1.0f));
+	// In the other hand the up and forward axes change direction
+	const auto left = creature_throw::HeldPlacement(hand, fingerEnds, true, 4.0f);
+	EXPECT_EQ(left.rotation[0], glm::vec3(-1.0f, 0.0f, 0.0f));
+	EXPECT_EQ(left.rotation[1], glm::vec3(0.0f, 0.0f, -1.0f));
+	EXPECT_EQ(left.rotation[2], glm::vec3(0.0f, 1.0f, 0.0f));
+	EXPECT_EQ(left.position, glm::vec3(1.0f, 10.0f, 7.0f));
+	// A negative hang puts the thing above the finger ends, and no hang puts its origin on them
+	EXPECT_EQ(creature_throw::HeldPlacement(hand, fingerEnds, false, -1.0f).position, glm::vec3(1.0f, 10.0f, 4.0f));
+	EXPECT_EQ(creature_throw::HeldPlacement(hand, fingerEnds, false, 0.0f).position, fingerEnds);
 }
 
 TEST(CreatureTouch, HeldTheCreatureLooksAtTheHandOrAtTheCameraWithTheHandNearItsMiddle)

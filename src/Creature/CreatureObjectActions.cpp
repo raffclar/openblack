@@ -26,8 +26,6 @@ std::string_view creature_object_actions::Name(Kind kind)
 		return "Putting down";
 	case Kind::Discard:
 		return "Tossing away";
-	case Kind::Lob:
-		return "Lobbing";
 	case Kind::Eat:
 		return "Eating what it holds";
 	case Kind::Keep:
@@ -54,7 +52,6 @@ Hands creature_object_actions::HandsFor(Kind kind)
 	{
 	case Kind::PutDown:
 	case Kind::Discard:
-	case Kind::Lob:
 	case Kind::Eat:
 	case Kind::Keep:
 	case Kind::Throw:
@@ -101,7 +98,6 @@ TownAttitude creature_object_actions::AttitudeTo(Kind kind, bool targetIsVillage
 	case Kind::PickUp:
 	case Kind::PutDown:
 	case Kind::Discard:
-	case Kind::Lob:
 	case Kind::Keep:
 	case Kind::Point:
 	case Kind::Catch:

@@ -1403,8 +1403,6 @@ std::string Runner::GiveObjectCommand(entt::entity creature, const Command& comm
 		return std::string(Started(hands.PutDown(creature)));
 	case Kind::Discard:
 		return std::string(Started(hands.Discard(creature)));
-	case Kind::Lob:
-		return std::string(Started(hands.Lob(creature)));
 	case Kind::EatHeld:
 		return std::string(Started(hands.EatHeld(creature)));
 	case Kind::Examine:
@@ -2319,7 +2317,6 @@ void Runner::Give(const Command& command)
 	case Kind::PickUp:
 	case Kind::PutDown:
 	case Kind::Discard:
-	case Kind::Lob:
 	case Kind::EatHeld:
 	case Kind::Examine:
 	case Kind::ThrowAt:
