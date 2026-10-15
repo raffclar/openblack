@@ -804,6 +804,8 @@ struct Commands
 	std::optional<uint32_t> effectObject;
 	/// The step that finished this turn is the last step of the agenda
 	bool lastStep {false};
+	/// The step that finished this turn lets the end of the plan decrease the desire of the plan
+	bool seesToDesire {false};
 	/// What to do with a thing
 	std::optional<ObjectOrder> object;
 	/// The creature lets go of the thing that it holds, because the next step needs empty hands

@@ -2035,11 +2035,20 @@ void CreatureMindSystem::ProcessTurn()
 				    GiveUp(mind.idle);
 			    }
 		    }
-		    // A building mended by a fifth of its life, and the tree used up mending it gone
+		    // A building mended by a fifth of its life, and the tree used up mending it gone. When the building gets all of
+		    // its life again, the end of the plan can decrease its desire.
 		    if (commands.repair.has_value() && registry.Valid(static_cast<entt::entity>(*commands.repair)))
 		    {
-			    static_cast<void>(
-			        ecs::world_objects::IncreaseLife(static_cast<entt::entity>(*commands.repair), creature_mind::k_RepairLife));
+			    const auto repaired = static_cast<entt::entity>(*commands.repair);
+			    static_cast<void>(ecs::world_objects::IncreaseLife(repaired, creature_mind::k_RepairLife));
+			    if (creature_mind::RepairedToFullLife(ecs::world_objects::LifeOf(repaired)))
+			    {
+				    mind.desireSeenTo = true;
+			    }
+		    }
+		    if (commands.seesToDesire)
+		    {
+			    mind.desireSeenTo = true;
 		    }
 		    if (commands.heal.has_value())
 		    {
