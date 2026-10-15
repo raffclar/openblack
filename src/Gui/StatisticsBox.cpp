@@ -18,6 +18,10 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/MachineClock.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "Graphics/RendererInterface.h"
+#include "Locator.h"
 #include "TextDatabase.h"
 
 namespace openblack::gui
@@ -387,12 +391,52 @@ public:
 			const auto colour = glm::vec4(glm::vec3(colours[i]), 0.5f);
 			FillBox(painter, glm::vec2(boxes[i].first), glm::vec2(boxes[i].second), colour, colour);
 		}
-		// TODO(raffclar): draw each player's creature in 3D in its box, and turn it
+		ShowCreatures(painter, boxes);
 	}
 	[[nodiscard]] bool IsInteractive() const override { return false; }
 	[[nodiscard]] bool IsOnTop() const override { return true; }
 
 	std::vector<glm::vec4> colours;
+	/// The players whose creatures show, in the order of their boxes
+	std::vector<PlayerNames> players;
+
+private:
+	/// Each player's primary creature shows over its box, turning with the machine's clock. The renderer draws them
+	/// over the interface.
+	void ShowCreatures(const DialogPainter& painter, const std::vector<std::pair<glm::ivec2, glm::ivec2>>& boxes) const
+	{
+		if (!Locator::rendererInterface::has_value() || !Locator::playerSystem::has_value())
+		{
+			return;
+		}
+		// The creatures are placed and sized in the interface's space, as on the game's default screen, and drawn over
+		// its place on the window
+		const auto origin = glm::vec2(painter.ToScreenPoint({0, 0}));
+		const auto corner = glm::vec2(painter.ToScreenPoint(glm::ivec2(graphics::interface_creatures::k_Space)));
+		graphics::interface_creatures::Request request {
+		    .creatures = {},
+		    .turn = CreatureTurn(machine_clock::Ticks()),
+		    .viewOrigin = origin,
+		    .viewSize = corner - origin,
+		};
+		for (size_t i = 0; i < boxes.size() && i < players.size(); ++i)
+		{
+			const auto creature = Locator::playerSystem::value().GetPrimaryCreature(players[i]);
+			if (!creature.has_value())
+			{
+				continue;
+			}
+			const auto& [min, max] = boxes[i];
+			// The feet stand nine tenths of the way down the box, in the middle across it
+			const auto width = max.x - min.x;
+			const auto height = max.y - min.y;
+			const glm::vec2 anchor {min.x + (width / 2),
+			                        static_cast<int>((static_cast<float>(height) * 0.9f) + static_cast<float>(min.y))};
+			const int size = std::max(std::min(width, height), graphics::interface_creatures::k_SmallestSize);
+			request.creatures.push_back({.creature = *creature, .anchor = anchor, .size = size});
+		}
+		Locator::rendererInterface::value().ShowInterfaceCreatures(std::move(request));
+	}
 };
 
 } // namespace statistics_box
@@ -541,6 +585,11 @@ void StatisticsBox::SetTab(Tab tab)
 	_influence->SetLines(std::move(influence), colours);
 	_population->SetLines(std::move(population), colours);
 	_creatures->colours = std::move(colours);
+	_creatures->players.clear();
+	for (const auto& player : _figures.players)
+	{
+		_creatures->players.push_back(player.player);
+	}
 }
 
 void StatisticsBox::Fill(Graph graph, std::optional<size_t> row)

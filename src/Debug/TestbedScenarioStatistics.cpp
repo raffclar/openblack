@@ -189,4 +189,20 @@ void openblack::testbed_scenarios::AddStatisticsScenarios(std::vector<Scenario>&
 	    .townBeliefInPlayer = k_TownBelief,
 	});
 	AddBoxScenarios(all);
+	all.push_back({
+	    .id = "statistics.creature_view",
+	    .name = "The player's creature on the Creature Stats tab",
+	    .facet = Facet::Objects,
+	    .description = "The player's tiger, and the town of statistics.box. Push Escape for the menu, pick its "
+	                   "Statistics tab and then the Creature Stats tab.",
+	    .expected = "Over the red box at the left of the tab, the tiger stands with its feet near the bottom of the box "
+	                "and its body in the middle across it. It turns round once in about 8.2 seconds, also while the "
+	                "game is paused, and it fills about the same part of the box at all sizes of the tiger.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Centre, k_Hut, k_PlannedHut}, .distance = 0.6f},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = {40.0f, 40.0f}}},
+	    .objects = KnownTown(),
+	    .townBeliefInPlayer = k_TownBelief,
+	    .creatureTallies = k_KnownTallies,
+	});
 }

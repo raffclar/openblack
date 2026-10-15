@@ -999,3 +999,7 @@ openblack_setup_and_add_test(test_posed_draws graphics/test_posed_draws.cpp)
 openblack_setup_and_add_test(
   test_creature_alignment_motes test_creature_alignment_motes.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_stats_records test_creature_stats_records.cpp
+)
+target_link_libraries(test_creature_stats_records PRIVATE helpstats)

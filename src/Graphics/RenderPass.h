@@ -61,6 +61,9 @@ enum class RenderPass : uint8_t
 	/// The advisors near the screen, drawn over the whole scene with its depth cleared
 	Advisors,
 	Interface,
+	/// The creatures that the interface shows over itself, each player's creature on the statistics box's creature tab,
+	/// with the depth cleared
+	InterfaceCreatures,
 	ImGui,
 	/// The game's pointer, over the debug windows too
 	Cursor,
@@ -93,6 +96,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Cinema Bars Pass",            //
     "Advisors Pass",               //
     "Interface Pass",              //
+    "Interface Creatures Pass",    //
     "ImGui Pass",                  //
     "Cursor Pass",                 //
     "Mesh Viewer Pass",            //
