@@ -25,6 +25,7 @@
 #include "Components/Stream.h"
 #include "Components/Town.h"
 #include "Components/VillageLight.h"
+#include "Creature/CreatureExplorationMap.h"
 #include "Enums.h"
 
 namespace openblack::ecs
@@ -78,5 +79,7 @@ struct RegistryContext
 	/// The game turn on which any creature last cast each of the miracles that impress, in the order of
 	/// creature_mind::k_ImpressiveMiracles. A new land starts with all at 0.
 	std::array<uint32_t, 4> impressiveMiracleCastTurn {};
+	/// The regions of the land that creatures find places in, made when the land and its towns are ready
+	std::optional<creature_exploration::RegionMap> explorationMap;
 };
 } // namespace openblack::ecs
