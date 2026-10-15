@@ -61,6 +61,8 @@ struct Belief
 	/// What the creature knew of the thing when the belief was new. Some attributes keep these values (see
 	/// creature_tree::KeptFromFirstSight).
 	std::optional<creature_tree::Belief> firstSight;
+	/// The game turn on which seeing the thing last stirred the creature's desire sources
+	uint32_t sourcesTurn {0};
 };
 
 /// After the creature finds no way to a thing, it does not choose the thing for a time: 10 seconds for a thing that

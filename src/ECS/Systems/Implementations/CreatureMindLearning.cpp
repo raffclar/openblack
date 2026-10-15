@@ -32,7 +32,9 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Camera/Camera.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureActionHistory.h"
@@ -53,6 +55,7 @@
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMode.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreaturePlayerAttention.h"
@@ -95,6 +98,7 @@
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/LearningMarker.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
@@ -173,6 +177,10 @@ constexpr float k_StrokeSadnessSeconds = 90.0f;
 /// The source of the desire to copy the player, and how much a stroke while copying adds to it
 constexpr uint32_t k_FollowPlayerSource = 54;
 constexpr float k_MimicStrokeBoost = 0.3f;
+/// Noticing a deed it may copy adds this much to the first source of the desire behind the deed, and this much to its
+/// wish to follow the player
+constexpr float k_NoticedDeedSource = 0.1f;
+constexpr float k_NoticedDeedFollow = 0.3f;
 /// Forgiven for running away, the threshold of its wish to run raises this much
 constexpr float k_RunAwayThresholdStep = 0.1f;
 /// A thing to use is learnt about at most this strongly for poo
@@ -234,6 +242,19 @@ std::string_view ActionForActivity(creature_mind::Activity activity)
 	default:
 		return {};
 	}
+}
+
+/// How pressing the reaction a creature holds is, by the game's reaction table; 0 when it holds none
+float ReactionPriorityOf(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* reaction = registry.TryGet<const LivingReaction>(creature);
+	if (reaction == nullptr || reaction->type == Reaction::None || !Locator::infoConstants::has_value())
+	{
+		return 0.0f;
+	}
+	const auto& table = Locator::infoConstants::value().reaction;
+	const auto row = static_cast<size_t>(reaction->type);
+	return row < table.size() ? static_cast<float>(table.at(row).priority) : 0.0f;
 }
 
 std::optional<glm::vec2> PointOf(const ecs::Registry& registry, entt::entity entity)
@@ -1338,6 +1359,12 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 					Lessen(creature, *mind.desires, action.name);
 				}
 			}
+		}
+		// After the urge, the desire the plan served changes as the game's rule for that desire says
+		if (carriedOut)
+		{
+			creature_learning::AfterPlanCarriedOut(*mind.desires, plan.desire, mind_detail::DesireFloorOf(creature),
+			                                       k_TurnsPerSecond);
 		}
 		if (carriedOut && plan.desire == Desire::Compassion && plan.about.has_value() && tables != nullptr)
 		{
@@ -3561,7 +3588,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	if (feedback > 0.0f && context != nullptr && context->desire == Desire::RunAwayFromPlayer)
 	{
 		auto& runAway = desires[Desire::RunAwayFromPlayer];
-		creature_learning::MakeLeastDominant(desires, Desire::RunAwayFromPlayer, creature_learning::k_LeastDominantFactor);
+		creature_learning::MakeLeastDominant(desires, Desire::RunAwayFromPlayer, creature_learning::k_LeastDominantFactor,
+		                                     mind_detail::DesireFloorOf(creature));
 		for (auto& source : runAway.sources)
 		{
 			if (source.type == sources::k_RunAwayFromPlayer)
@@ -3671,7 +3699,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		// Slapped for it, it gives it up and wants it least of all
 		if (context->running)
 		{
-			creature_learning::MakeLeastDominant(desires, desire, creature_learning::k_LeastDominantFactor);
+			creature_learning::MakeLeastDominant(desires, desire, creature_learning::k_LeastDominantFactor,
+			                                     mind_detail::DesireFloorOf(creature));
 			for (auto& state : desires.desires)
 			{
 				state.suppressedTurns = 0;
@@ -4387,40 +4416,63 @@ void CreatureMindSystem::PlayerDid(size_t deed, const glm::vec3& point, std::opt
 		return;
 	}
 	std::vector<entt::entity> noticed;
-	registry.Each<const Creature, CreatureMindState, const Transform>(
-	    [&](entt::entity entity, const Creature& creature, CreatureMindState& mind, const Transform& at) {
-		    if (!mind.learnt.has_value() || (player.has_value() && (creature.owner != *player || !creature.leashable)))
-		    {
-			    return;
-		    }
-		    const creature_watching::MimicConditions conditions {
-		        .phase = mind.developmentPhase,
-		        .learningLeashInHand = mind.leash.learningInHand,
-		        .reactionPriority = 0.0f,
-		        .canSee = glm::distance(at.position, point) <= k_ViewDistance,
-		    };
-		    const auto target = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt;
-		    if (creature_watching::StartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions, target, mind.turn,
-		                                        [this](uint32_t range) { return Random(range); }))
-		    {
-			    // When the player is angry with a thing of the player, the creature that copies the player can be angry
-			    // with the things of its player from now on
-			    if (object.has_value() && tables->mimics.at(deed).desire == static_cast<uint32_t>(Desire::Anger) &&
-			        PlayerOfThing(registry, *object, BelongsTo(*object)) == creature.owner)
-			    {
-				    mind.mayAttackOwnPlayer = true;
-			    }
-			    if (const auto copied = object.has_value() ? PointOf(registry, *object) : std::nullopt)
-			    {
-				    mind.copiedAt = *copied;
-			    }
-			    if (object.has_value() && registry.Valid(*object))
-			    {
-				    mind.copiedKind = MimicKindOf(registry, *object);
-			    }
-			    noticed.push_back(entity);
-		    }
-	    });
+	registry.Each<const Creature, CreatureMindState, const Transform>([&](entt::entity entity, const Creature& creature,
+	                                                                      CreatureMindState& mind, const Transform& at) {
+		if (!mind.learnt.has_value() || (player.has_value() && (creature.owner != *player || !creature.leashable)))
+		{
+			return;
+		}
+		// It must see where the thing is, or the point when there is no thing, and be near enough to it
+		const glm::vec2 here(at.position.x, at.position.z);
+		const auto seen =
+		    object.has_value() ? PointOf(registry, *object).value_or(glm::vec2(point.x, point.z)) : glm::vec2(point.x, point.z);
+		const auto* animation = registry.TryGet<const CreatureAnimation>(entity);
+		const auto from = map_coords::FromMetres(here);
+		const auto to = map_coords::FromMetres(seen);
+		const auto looking = LookingAngle(at, animation != nullptr ? animation->lookAt : std::nullopt);
+		const bool inView = creature_object_beliefs::CanSee(looking, gutils::GetAngleFromXZ(from, to),
+		                                                    map_coords::Cell(from) == map_coords::Cell(to));
+		const bool nearEnough = creature_watching::WithinCopyReach(gutils::GetDistanceInMetres(to, from),
+		                                                           creature_object_beliefs::SweepCells(ShownSize(creature)));
+		const creature_watching::MimicConditions conditions {
+		    .phase = mind.developmentPhase,
+		    .learningLeashInHand = mind.leash.learningInHand,
+		    .reactionPriority = ReactionPriorityOf(registry, entity),
+		    .canSee = inView && nearEnough,
+		};
+		const auto target = object.has_value() ? std::optional(entt::to_integral(*object)) : std::nullopt;
+		if (creature_watching::StartMimicry(mind.learnt->mimicry, deed, tables->mimics, conditions, target, mind.turn,
+		                                    [this](uint32_t range) { return Random(range); }))
+		{
+			// When the player is angry with a thing of the player, the creature that copies the player can be angry
+			// with the things of its player from now on
+			if (object.has_value() && tables->mimics.at(deed).desire == static_cast<uint32_t>(Desire::Anger) &&
+			    PlayerOfThing(registry, *object, BelongsTo(*object)) == creature.owner)
+			{
+				mind.mayAttackOwnPlayer = true;
+			}
+			if (const auto copied = object.has_value() ? PointOf(registry, *object) : std::nullopt)
+			{
+				mind.copiedAt = *copied;
+			}
+			if (object.has_value() && registry.Valid(*object))
+			{
+				mind.copiedKind = MimicKindOf(registry, *object);
+			}
+			// Seeing the deed stirs the first source of the desire behind it, and its wish to follow the player
+			const auto desire = tables->mimics.at(deed).desire;
+			if (mind.desires.has_value() && desire < creature_desires::k_DesireCount)
+			{
+				const auto& sources = (*mind.desires)[static_cast<Desire>(desire)].sources;
+				if (!sources.empty())
+				{
+					creature_desires::ChangeSource(*mind.desires, sources.front().type, k_NoticedDeedSource);
+				}
+				creature_desires::ChangeSource(*mind.desires, k_FollowPlayerSource, k_NoticedDeedFollow);
+			}
+			noticed.push_back(entity);
+		}
+	});
 	// What it was doing stops as a failure. With no plan, it then notices the deed (see ProcessMimicry).
 	for (const auto entity : noticed)
 	{

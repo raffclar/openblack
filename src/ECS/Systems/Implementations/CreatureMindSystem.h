@@ -20,6 +20,7 @@
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
 #include "ECS/Components/Creature.h"
@@ -213,6 +214,9 @@ private:
 	/// does when that teaches a skill it does not know, and goes after the villager to watch it. A villager of another
 	/// player's village, or of a village of no player, also makes it want to impress more.
 	void WatchVillager(entt::entity creature, components::CreatureMindState& mind, entt::entity villager);
+	/// Seeing a thing again that it believes in stirs some of its desire sources
+	void StirSourcesOnSighting(entt::entity creature, components::CreatureMindState& mind,
+	                           creature_object_beliefs::Belief& belief);
 	/// The skill a villager seen again shows the creature, if it does not know it yet
 	void WatchVillagerSkill(entt::entity creature, components::CreatureMindState& mind, entt::entity villager);
 	/// A sighting that moves the learning meter shows it over the creature's head, at most every so many turns

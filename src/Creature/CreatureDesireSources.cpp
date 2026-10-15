@@ -257,6 +257,12 @@ void creature_desire_sources::Write(uint32_t type, float value, const Written& w
 	}
 }
 
+bool creature_desire_sources::SightingStirsSources(uint32_t turn, uint32_t lastTurn)
+{
+	constexpr uint32_t k_SightingSourceTurns = 200;
+	return turn - lastTurn > k_SightingSourceTurns;
+}
+
 float creature_desire_sources::ImpressAfterSighting(float impress)
 {
 	return Clamp01(impress + k_ImpressPerSighting);

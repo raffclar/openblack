@@ -27,6 +27,7 @@
 #include "Camera/Camera.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureHelp.h"
+#include "Creature/CreatureLearning.h"
 #include "Creature/CreatureSpellCasting.h"
 #include "Creature/CreatureSpellMind.h"
 #include "ECS/Components/Creature.h"
@@ -462,7 +463,8 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 		if (desire.has_value() && desires != nullptr)
 		{
 			// What it wanted most it now wants least of all; the moods let the other desires go, the needs don't
-			creature_spell_mind::MakeLeastDominant(*desires, *desire);
+			creature_learning::MakeLeastDominant(*desires, *desire, creature_spell_mind::k_LeastDominantFactor,
+			                                     DesireFloorOf(entity));
 			if (mood)
 			{
 				ClearCheat(entity, component, *desires);

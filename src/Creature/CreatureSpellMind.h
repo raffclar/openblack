@@ -29,7 +29,7 @@ namespace openblack::creature_spell_mind
 
 /// The cheat lasts this many seconds, and holds the other desires down as long
 inline constexpr float k_CheatSeconds = 20000.0f;
-/// As a spell wears off its desire drops this far below the weakest of the others
+/// As a spell wears off, its desire becomes the weakest active desire divided by this
 inline constexpr float k_LeastDominantFactor = 1.3f;
 
 /// A desire made dominant over the others for a while
@@ -69,8 +69,5 @@ void ClearCheatDominance(creature_desires::Desires& desires);
 /// The desire, if active, is wanted as much as it can be and every other desire as little as any can be, the species'
 /// floor; it is let go of first, active or not
 void MakeFullyDominantOverOthers(creature_desires::Desires& desires, creature_desires::Desire desire, float floor);
-/// The desire is wanted less than any other: the weakest of the others' value over the factor, no more than its maximum
-void MakeLeastDominant(creature_desires::Desires& desires, creature_desires::Desire desire,
-                       float factor = k_LeastDominantFactor);
 
 } // namespace openblack::creature_spell_mind

@@ -221,6 +221,8 @@ void LessenAfterAction(DesireState& desire, float multiplier, float floor);
 
 /// Every source of a type, in all the desires, goes up or down by an amount, staying from 0 to 1, as events push them
 void ChangeSource(Desires& desires, uint32_t type, float amount);
+/// The first desire that grows from a source of a type, none when no desire does
+[[nodiscard]] std::optional<Desire> DesireOfSource(const Desires& desires, uint32_t type);
 /// Every source of a kind is set to a value, kept from 0 to 1
 void SetSource(Desires& desires, uint32_t type, float value);
 

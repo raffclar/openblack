@@ -18,6 +18,7 @@
 #include "ECS/BuildingSiteRules.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
@@ -143,6 +144,18 @@ BuildingSite* construction::BroughtWoodSite(entt::entity building)
 	auto& registry = Entities();
 	auto* sites = registry.Valid(building) ? registry.TryGet<BuildingSites>(building) : nullptr;
 	return sites != nullptr ? building_site_list::TakingBroughtWood(*sites) : nullptr;
+}
+
+bool construction::IsBeingBuilt(entt::entity thing)
+{
+	const auto& registry = Entities();
+	if (!registry.Valid(thing))
+	{
+		return false;
+	}
+	const auto* progress = registry.TryGet<const BuildProgress>(thing);
+	return (progress != nullptr && progress->built < 1.0f) ||
+	       (registry.AllOf<RepairSite>(thing) && world_objects::LifeOf(thing) < 1.0f);
 }
 
 bool construction::IsSiteValid(entt::entity town, entt::entity building)
