@@ -5128,6 +5128,26 @@ void AddMind(std::vector<Scenario>& all)
 	                 {.kind = Kind::PlayerDidOn, .creature = 0, .delaySeconds = 4.0f, .value = k_PlayWithToy, .object = 2}},
 	});
 
+	all.push_back({
+	    .id = "mind.copy_broken_rock",
+	    .name = "Copy a broken rock",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger on the learning leash faces a chalk rock 30 m ahead. Two more chalk rocks are to "
+	                   "its left and right. The hand taps the rock ahead and breaks it. Then the leash comes off.",
+	    .expected = "The tiger sees the deed: the log shows \"I saw you: Break rocks\" and it learns that rocks are good to "
+	                "play with. The broken rock is gone, so it does not walk to it. When its wish to follow the player wins, "
+	                "or after 3 minutes, it copies the deed: it picks up a rock of the same kind and breaks it. The log "
+	                "shows \"I'm copying you: BreakRock\".",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content()}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, -30.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = {-15.0f, -20.0f}},
+	                {.type = MobileStaticInfo::RockChalk, .offset = {15.0f, -20.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f),
+	                 {.kind = Kind::HandTapObject, .delaySeconds = 2.0f, .object = 0},
+	                 Act(Kind::TakeOffLeash, 0, 2.0f)},
+	});
+
 	// The creature's happy action, played once as a script asks
 	constexpr uint32_t k_HappyAction = 55;
 	all.push_back({

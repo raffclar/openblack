@@ -64,6 +64,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -79,6 +80,7 @@
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -98,6 +100,7 @@
 #include "EngineConfig.h"
 #include "Hand/HandGrabRules.h"
 #include "Hand/HandReach.h"
+#include "Help/HelpProfile.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
@@ -536,9 +539,18 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 
 bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
 {
+	const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
+	// The help counts each tap of this computer's hand on a thing that takes the tap, before the thing answers it
+	const auto countTap = [ownHand]() {
+		if (ownHand && Locator::helpProfileSystem::has_value())
+		{
+			Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+		}
+	};
 	// A rock tall enough breaks when tapped
 	if (object_physics::CanTapRock(object) && Locator::dynamicsSystem::has_value())
 	{
+		countTap();
 		object_physics::TapRock(Locator::dynamicsSystem::value(), object, handPoint, player);
 		return true;
 	}
@@ -546,23 +558,32 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	// creature's leash, which takes the tap to send the creature there
 	if (Entities().AnyOf<Abode, SpellDispenser>(object) && Locator::abodeKnockSystem::has_value() && !HoldsLeash(player))
 	{
-		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
+		countTap();
 		return Locator::abodeKnockSystem::value().Tap(object, handPoint, ownHand);
 	}
 	// A script's scroll or sign answers the tap itself
-	if (Entities().AllOf<ScriptHighlight>(object) && Locator::scriptHighlightSystem::has_value())
+	if (const auto* highlight = Entities().TryGet<const ScriptHighlight>(object);
+	    highlight != nullptr && Locator::scriptHighlightSystem::has_value())
 	{
-		const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
+		if (script_highlights::ValidToTap(highlight->kind, highlight->scriptId, highlight->active))
+		{
+			countTap();
+		}
 		return Locator::scriptHighlightSystem::value().Tap(object, ownHand);
 	}
 	// A one-shot miracle's globe gives the hand its miracle
 	if (Entities().AllOf<OneOffSpellSeed>(object) && Locator::magicSystem::has_value())
 	{
+		countTap();
 		return Locator::magicSystem::value().TapGlobe(object);
 	}
-	// A reward chest is opened by its player's tap
-	if (Entities().AllOf<Reward>(object) && Locator::rewardSystem::has_value())
+	// A reward chest is opened by its player's tap, until it is open
+	if (const auto* reward = Entities().TryGet<const Reward>(object); reward != nullptr && Locator::rewardSystem::has_value())
 	{
+		if (reward->player == player && reward->state != Reward::State::Opened)
+		{
+			countTap();
+		}
 		return Locator::rewardSystem::value().Tap(object, player);
 	}
 	// A stone hand on a village centre, or a worship site's icon, charges its miracle for the hand

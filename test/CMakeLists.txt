@@ -1033,3 +1033,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_emergencies test_creature_emergencies.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_copy_actions test_creature_copy_actions.cpp
+)

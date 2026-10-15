@@ -119,6 +119,7 @@
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
@@ -1777,6 +1778,15 @@ std::string Runner::HandTapObject(size_t index)
 	const auto hand =
 	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	const auto* transform = registry.TryGet<const Transform>(hand);
+	// A rock tall enough breaks under the tap of this computer's player's hand
+	if (ecs::object_physics::CanTapRock(*object) && Locator::dynamicsSystem::has_value())
+	{
+		const auto player =
+		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+		ecs::object_physics::TapRock(Locator::dynamicsSystem::value(), *object,
+		                             transform != nullptr ? transform->position : glm::vec3(0.0f), player);
+		return "broke the rock";
+	}
 	const bool took =
 	    Locator::abodeKnockSystem::value().Tap(*object, transform != nullptr ? transform->position : glm::vec3(0.0f), true);
 	return took ? "knocked" : "it takes no knock";
