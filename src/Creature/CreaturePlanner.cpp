@@ -372,8 +372,9 @@ std::optional<Plan> creature_planner::Choose(const PlannerState& state)
 		return std::nullopt;
 	}
 	const auto current = state.current.has_value() ? state.current->priority : 0.0f;
-	if (state.current.has_value() && state.current->desire == best->desire && state.current->action == best->action &&
-	    state.current->object == best->object)
+	// The same plan again does nothing, but a plan with no steps can start again from its first step
+	if (state.current.has_value() && !state.currentHasNoSteps && state.current->desire == best->desire &&
+	    state.current->action == best->action && state.current->object == best->object)
 	{
 		return std::nullopt;
 	}

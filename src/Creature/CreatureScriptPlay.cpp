@@ -66,4 +66,5 @@ void creature_script_play::ClearAfterPlayed(creature_mind::IdleMind& mind)
 	mind.step = mind.agenda.size();
 	mind.stepStarted = false;
 	mind.gaveUp = true;
+	mind.stoppedByScript = true;
 }

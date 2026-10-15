@@ -134,7 +134,11 @@ TEST(CreatureScriptPlay, AYesStopsTheStepsThatRemain)
 	EXPECT_EQ(mind.step, mind.agenda.size());
 	EXPECT_FALSE(mind.stepStarted);
 	EXPECT_TRUE(mind.gaveUp);
+	EXPECT_TRUE(mind.stoppedByScript);
 	EXPECT_TRUE(Played(mind));
+	// A new agenda is not stopped
+	creature_mind::Plan(mind, creature_mind::Activity::Told, Agenda({.animation = 63, .plays = 1}));
+	EXPECT_FALSE(mind.stoppedByScript);
 }
 
 // An agenda at its end does not change, so that the creature completes it as usual
@@ -147,4 +151,5 @@ TEST(CreatureScriptPlay, AYesDoesNotChangeAnAgendaAtItsEnd)
 	ClearAfterPlayed(mind);
 	EXPECT_EQ(mind.step, mind.agenda.size());
 	EXPECT_FALSE(mind.gaveUp);
+	EXPECT_FALSE(mind.stoppedByScript);
 }

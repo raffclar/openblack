@@ -605,6 +605,23 @@ TEST(CreaturePlanner, AnyPlanWorthMoreThanNothingIsChosen)
 	EXPECT_FALSE(creature_planner::Choose(state).has_value());
 }
 
+// A plan that a script stopped has no steps and priority 0: the same plan can start again from its first step
+TEST(CreaturePlanner, APlanWithNoStepsCanStartAgain)
+{
+	creature_planner::PlannerState state;
+	const auto idle = creature_planner::Plan {.desire = Desire::IdleWithPlayer, .action = 3, .priority = 0.5f};
+	state.best.at(static_cast<size_t>(Desire::IdleWithPlayer)) = idle;
+	state.current = idle;
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
+	state.current->priority = 0.0f;
+	EXPECT_FALSE(creature_planner::Choose(state).has_value());
+	state.currentHasNoSteps = true;
+	const auto chosen = creature_planner::Choose(state);
+	ASSERT_TRUE(chosen.has_value());
+	EXPECT_EQ(chosen->action, 3u);
+	EXPECT_FLOAT_EQ(chosen->priority, 0.5f);
+}
+
 TEST(CreaturePlanner, NothingReplacesAForcedPlan)
 {
 	creature_planner::PlannerState state;
