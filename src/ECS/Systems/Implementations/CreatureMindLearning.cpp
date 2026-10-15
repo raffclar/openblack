@@ -925,7 +925,7 @@ void SetKindAttributes(const ecs::Registry& registry, entt::entity entity, const
 	using creature_tree::Attribute;
 	namespace types = creature_tree::belief_types;
 	const auto onFire = [&registry, entity]() -> uint32_t {
-		return Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity) ? 1 : 0;
+		return creature_tree::OnFireValue(Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity));
 	};
 	switch (belief.type)
 	{
@@ -1087,10 +1087,15 @@ void CreatureMindSystem::SetUpMind(entt::entity creature, const Creature& body, 
 void CreatureMindSystem::SetUpLearning(entt::entity creature, CreatureMindState& mind)
 {
 	const auto* tables = GetTables();
-	const auto actionCount = tables != nullptr ? tables->actions.size() : 0;
+	const auto opinions = tables != nullptr ? creature_mind_tables::StartingOpinions(*tables) : std::vector<float> {};
+	const auto actionCount = opinions.size();
 	auto knowledge = tables != nullptr ? creature_watching::StartKnowledge(tables->skills, tables->miracles)
 	                                   : creature_watching::Knowledge {};
-	mind.learnt = creature_mind_model::Fresh(*mind.desires, actionCount, std::move(knowledge));
+	mind.learnt = creature_mind_model::Fresh(*mind.desires, opinions, std::move(knowledge));
+	if (tables != nullptr)
+	{
+		creature_mind_model::TeachStartingLesson(*mind.learnt, tables->attributes.at(static_cast<size_t>(Desire::Hunger)));
+	}
 	mind.learnt->turnsSinceDone = creature_action_history::Fresh(actionCount, [this](uint32_t range) { return Random(range); });
 	// A new mind did each action a short time ago, picked at random for each
 	for (auto& turns : mind.learnt->turnsSinceDone)
@@ -1139,7 +1144,13 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 	const auto* tables = GetTables();
 	auto knowledge = tables != nullptr ? creature_watching::StartKnowledge(tables->skills, tables->miracles)
 	                                   : creature_watching::Knowledge {};
-	auto freshLearnt = creature_mind_model::Fresh(fresh, mind.learnt->opinions.size(), std::move(knowledge));
+	auto freshLearnt = creature_mind_model::Fresh(
+	    fresh, tables != nullptr ? creature_mind_tables::StartingOpinions(*tables) : mind.learnt->opinions,
+	    std::move(knowledge));
+	if (tables != nullptr)
+	{
+		creature_mind_model::TeachStartingLesson(freshLearnt, tables->attributes.at(static_cast<size_t>(Desire::Hunger)));
+	}
 	freshLearnt.turnsSinceDone =
 	    creature_action_history::Fresh(freshLearnt.opinions.size(), [this](uint32_t range) { return Random(range); });
 	auto loaded = creature_mind_model::FromFile(*file, fresh, freshLearnt);
@@ -3497,7 +3508,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		if (const auto held = Locator::creatureObjectActionSystem::value().GetHeld(creature);
 		    held.has_value() && FoodValueOf(*held).has_value())
 		{
-			creature_learning::MakeFullyDominant(desires, Desire::Hunger);
+			creature_learning::MakeFullyDominant(desires, Desire::Hunger, mind_detail::DesireFloorOf(creature));
 			if (const auto belief = BeliefOf(registry, *held, creature); belief.has_value() && tables != nullptr)
 			{
 				creature_mind_model::Learn(learnt, TreeKind::Use, Desire::Hunger, {.belief = *belief, .feedback = 1.0f},

@@ -161,6 +161,8 @@ struct CommonFacts
 [[nodiscard]] uint32_t CreatureHeight(float shownSize);
 /// The value of the life attribute of a villager or a building: high above a fifth of its life, else low
 [[nodiscard]] uint32_t LifeValue(float life);
+/// The value of the "on fire" attribute: 0 when the thing burns, 1 when it does not
+[[nodiscard]] uint32_t OnFireValue(bool onFire);
 /// The value of the "being built" attribute of a building: 0 while it goes up, 1 when it is built
 [[nodiscard]] uint32_t BeingBuiltValue(bool built);
 /// The desire that another creature shows: the desire that the action of its plan shows, at most the last desire value

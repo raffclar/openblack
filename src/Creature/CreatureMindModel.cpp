@@ -10,6 +10,8 @@
 #include "CreatureMindModel.h"
 
 #include <algorithm>
+#include <array>
+#include <span>
 #include <string_view>
 
 #include "Creature/CreaturePlanner.h"
@@ -97,12 +99,12 @@ void Sightings(const std::vector<creature_watching::Sighting>& sightings, std::v
 }
 } // namespace
 
-Learnt creature_mind_model::Fresh(const creature_desires::Desires& desires, size_t actionCount,
+Learnt creature_mind_model::Fresh(const creature_desires::Desires& desires, std::span<const float> startingOpinions,
                                   creature_watching::Knowledge knowledge)
 {
 	Learnt learnt {
-	    .opinions = std::vector<float>(actionCount, 0.0f),
-	    .turnsSinceDone = std::vector<uint32_t>(actionCount, creature_planner::k_NoveltyTurns),
+	    .opinions = {startingOpinions.begin(), startingOpinions.end()},
+	    .turnsSinceDone = std::vector<uint32_t>(startingOpinions.size(), creature_planner::k_NoveltyTurns),
 	    .knowledge = std::move(knowledge),
 	};
 	for (size_t d = 0; d < k_DesireCount; ++d)
@@ -113,6 +115,32 @@ Learnt creature_mind_model::Fresh(const creature_desires::Desires& desires, size
 		}
 	}
 	return learnt;
+}
+
+creature_tree::Episode creature_mind_model::StartingLesson()
+{
+	using namespace creature_tree;
+	// The values in the order of the attributes of a villager: an enemy, natural, not alive, player 0, not harder than
+	// the creature, no creature type, a villager, male, job 0, high life, not on fire
+	constexpr std::array<uint32_t, 11> k_Slots {
+	    allegiance::k_Enemy, origin::k_Natural, 0, 0, 0, 0, belief_types::k_Villager, 0, 0, 1, 1,
+	};
+	// The example is of the lesson kind 2. A mind file keeps it with no action and no place.
+	constexpr int32_t k_LessonKind = 2;
+	return {
+	    .belief = FromSlots(belief_types::k_Villager, k_Slots),
+	    .feedback = k_StartingLessonFeedback,
+	    .saved = {k_LessonKind, 0, 0, 0},
+	};
+}
+
+void creature_mind_model::TeachStartingLesson(Learnt& learnt, std::span<const creature_tree::Attribute> hungerAllowed)
+{
+	const auto& episodes = learnt.episodes.at(static_cast<size_t>(TreeKind::ActOn)).at(static_cast<size_t>(Desire::Hunger));
+	if (episodes.empty())
+	{
+		Learn(learnt, TreeKind::ActOn, Desire::Hunger, StartingLesson(), hungerAllowed);
+	}
 }
 
 void creature_mind_model::Think(Learnt& learnt, std::string thought)

@@ -219,7 +219,7 @@ TEST(CreatureMindFile, ModelKeepsAFileItWasLoadedFrom)
 	    .skillsKnown = std::vector<bool>(1, false),
 	    .miraclesKnown = std::vector<bool>(2, false),
 	};
-	const auto freshLearnt = creature_mind_model::Fresh(fresh, 3, knowledge);
+	const auto freshLearnt = creature_mind_model::Fresh(fresh, std::vector<float>(3, 0.0f), knowledge);
 	const auto loaded = creature_mind_model::FromFile(mind, fresh, freshLearnt);
 	EXPECT_EQ(loaded.learnt.name, u"Tester");
 	EXPECT_EQ(loaded.developmentPhase, 13u);
@@ -236,7 +236,7 @@ TEST(CreatureMindFile, ModelKeepsAFileItWasLoadedFrom)
 TEST(CreatureMindFile, FreshMindWritesACurrentFile)
 {
 	creature_desires::Desires desires;
-	const auto learnt = creature_mind_model::Fresh(desires, 328, {});
+	const auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(328, 0.0f), {});
 	const auto file = creature_mind_model::ToFile(desires, learnt, 2, 0.0f, 0, 3);
 	const auto bytes = Write(file);
 	MindFileData read;

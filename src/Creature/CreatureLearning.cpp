@@ -231,21 +231,17 @@ void creature_learning::MakeLeastDominant(creature_desires::Desires& desires, De
 	}
 }
 
-void creature_learning::MakeFullyDominant(creature_desires::Desires& desires, Desire desire)
+void creature_learning::MakeFullyDominant(creature_desires::Desires& desires, Desire desire, float floor)
 {
-	float strongest = 0.0f;
+	if (!desires[desire].activated)
+	{
+		return;
+	}
 	for (size_t i = 0; i < k_DesireCount; ++i)
 	{
-		const auto& other = desires.desires.at(i);
-		if (i != static_cast<size_t>(desire) && other.activated)
-		{
-			strongest = std::max(strongest, other.value);
-		}
+		auto& state = desires.desires.at(i);
+		state.value = i == static_cast<size_t>(desire) ? state.max : floor;
 	}
-	auto& state = desires[desire];
-	state.activated = true;
-	state.suppressedTurns = 0;
-	state.value = std::max(state.max, strongest * k_LeastDominantFactor);
 }
 
 void creature_learning::AfterPlanCarriedOut(creature_desires::Desires& desires, Desire desire, float floor,

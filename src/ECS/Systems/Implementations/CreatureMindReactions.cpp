@@ -322,7 +322,7 @@ bool CreatureMindSystem::ForceDesireAbout(entt::entity creature, CreatureMindSta
 		Locator::magicSystem::value().ReleaseCreatureCast(creature);
 	}
 	creature_mind::Plan(mind.idle, creature_mind::Activity::None, {});
-	creature_learning::MakeFullyDominant(*mind.desires, desire);
+	creature_learning::MakeFullyDominant(*mind.desires, desire, mind_detail::DesireFloorOf(creature));
 	mind.leash.actOn = {entt::to_integral(thing)};
 	mind.plannedTurn = mind.turn + 1;
 	PlanCreature(creature, mind, false, desire);

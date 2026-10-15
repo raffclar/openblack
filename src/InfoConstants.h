@@ -1969,7 +1969,8 @@ struct CreatureActionInfo
 	uint32_t field0xc8;
 	float field0xcc;
 	float field0xd0;
-	float field0xd4;
+	/// The opinion of the action that a new creature starts with, from -1 to 1
+	float startingOpinion;
 	uint32_t field0xd8;
 	uint32_t field0xdc;
 	uint32_t field0xe0;
@@ -1982,6 +1983,7 @@ struct CreatureActionInfo
 	uint32_t field0xf8;
 };
 static_assert(offsetof(CreatureActionInfo, desire) == 0x98);
+static_assert(offsetof(CreatureActionInfo, startingOpinion) == 0xd4);
 static_assert(offsetof(CreatureActionInfo, skillsNeeded) == 0x9c);
 static_assert(offsetof(CreatureActionInfo, desireMultiplier) == 0xc0);
 static_assert(offsetof(CreatureActionInfo, magicType) == 0xa4);

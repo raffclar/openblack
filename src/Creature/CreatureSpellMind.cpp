@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <vector>
 
+#include "Creature/CreatureLearning.h"
+
 using namespace openblack;
 using openblack::creature_desires::Desire;
 
@@ -104,18 +106,6 @@ void creature_spell_mind::ClearCheatDominance(creature_desires::Desires& desires
 
 void creature_spell_mind::MakeFullyDominantOverOthers(creature_desires::Desires& desires, Desire desire, float floor)
 {
-	auto& state = desires[desire];
-	state.suppressedTurns = 0;
-	if (!state.activated)
-	{
-		return;
-	}
-	state.value = state.max;
-	for (size_t i = 0; i < creature_desires::k_DesireCount; ++i)
-	{
-		if (i != static_cast<size_t>(desire))
-		{
-			desires.desires.at(i).value = floor;
-		}
-	}
+	desires[desire].suppressedTurns = 0;
+	creature_learning::MakeFullyDominant(desires, desire, floor);
 }

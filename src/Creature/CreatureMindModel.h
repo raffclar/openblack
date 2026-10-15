@@ -15,6 +15,7 @@
 #include <array>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -65,9 +66,17 @@ struct Learnt
 	std::shared_ptr<const creaturemind::MindFileData> file;
 };
 
-/// A fresh mind's learning: no opinions, nothing seen but what is known from the start
-[[nodiscard]] Learnt Fresh(const creature_desires::Desires& desires, size_t actionCount,
+/// A fresh mind's learning: each action's opinion as the action table starts it, nothing seen but what is known from
+/// the start
+[[nodiscard]] Learnt Fresh(const creature_desires::Desires& desires, std::span<const float> startingOpinions,
                            creature_watching::Knowledge knowledge);
+/// The example that every new creature starts with: an enemy villager that is alive and not on fire is good to eat
+[[nodiscard]] creature_tree::Episode StartingLesson();
+/// The feedback of the starting example
+constexpr float k_StartingLessonFeedback = 0.8f;
+/// A new creature learns the starting example for its hunger, only when it knows nothing yet about what to eat. The
+/// tree grows again with the attributes allowed.
+void TeachStartingLesson(Learnt& learnt, std::span<const creature_tree::Attribute> hungerAllowed);
 /// Adds a thought, forgetting the oldest
 void Think(Learnt& learnt, std::string thought);
 /// Adds an example to a desire's tree and grows the tree again, testing the attributes allowed
