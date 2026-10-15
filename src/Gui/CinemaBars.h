@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <limits>
+
 namespace openblack::gui
 {
 
@@ -37,8 +39,8 @@ private:
 	[[nodiscard]] float Fraction() const;
 
 	bool _on {false};
-	/// Game time since they started sliding, in milliseconds
-	float _timer {0.0f};
+	/// Game time since they started sliding, in milliseconds. A new game resets the bars to off at once, with no slide.
+	float _timer {-std::numeric_limits<float>::max()};
 	float _transitionSeconds {0.0f};
 	float _fraction {0.0f};
 };
