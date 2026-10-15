@@ -610,6 +610,8 @@ struct Command
 		/// Being knocked out, as a fight's loser is, and brought round again
 		KnockOut,
 		BringRound,
+		/// The debug tools stop the fight of the creature with no knock-out: each fighter finishes, then is happy or sad
+		FightAbort,
 		/// Tying the leash it wears to the other creature, which has it fight that creature
 		TieLeashToCreature,
 		/// A desire (by value) is set to a fraction (amount) of its maximum; the creature grows up to a stage (by value)

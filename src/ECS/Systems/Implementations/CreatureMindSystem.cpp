@@ -761,15 +761,16 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 }
 
 /// The point that the head of a creature in a fight or knocked out looks at, each turn. Before the duel, it looks at the
-/// top of its opponent. In the duel and after it, it looks at what it watches, or ahead. In the duel, the fight stance turns
-/// the head to the head of the opponent, and the moves keep the head straight.
+/// top of its opponent, but not while it taunts or points at the arena. Then, in the duel and after it, it looks at what
+/// it watches, or ahead. In the duel, the fight stance turns the head to the head of the opponent, and the moves keep the
+/// head straight.
 glm::vec3 FightLook(const ecs::Registry& registry, entt::entity entity, const Creature& creature, const Transform& transform,
                     const CreatureMindState& mind)
 {
 	using Stage = CreatureFighting::Stage;
 	if (const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
-	    fighting != nullptr && registry.Valid(fighting->opponent) &&
-	    (fighting->stage == Stage::Approach || fighting->stage == Stage::Taunt || fighting->stage == Stage::Ready))
+	    fighting != nullptr && registry.Valid(fighting->opponent) && IsLeadIn(fighting->stage) &&
+	    fighting->stage != Stage::Taunt && fighting->stage != Stage::Point)
 	{
 		if (const auto top = GazePoint(registry, entity, {.object = entt::to_integral(fighting->opponent)}, /*moving=*/false);
 		    top.has_value())
@@ -3056,6 +3057,13 @@ void CreatureMindSystem::AbandonAction(entt::entity creature)
 		Abandon(*mind);
 	}
 	ReleaseCast(creature);
+}
+
+bool CreatureMindSystem::ForceDesireOn(entt::entity creature, creature_desires::Desire desire, entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	return mind != nullptr && registry.Valid(thing) && ForceDesireAbout(creature, *mind, desire, thing);
 }
 
 void CreatureMindSystem::ChangeDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change)
