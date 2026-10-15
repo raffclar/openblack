@@ -1027,3 +1027,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_bring_home test_creature_bring_home.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_sacrifice test_creature_sacrifice.cpp
+)
