@@ -1165,13 +1165,15 @@ void CreatureLocomotionSystem::ProcessTurn()
 				    }
 				    break;
 			    case route::Follower::Outcome::GaveUp:
-				    // It is shut in: the mind can clear one of the things that the search met, then walk on
+				    // It is shut in. It stands where it is, and its walk ends as if it arrived. The mind can clear one of
+				    // the things that the search met, then walk on.
 				    if (self.destination.has_value())
 				    {
 					    self.gaveUp =
 					        CreatureLocomotion::GaveUp {.destination = *self.destination, .met = self.follower.GetMet()};
 				    }
-				    [[fallthrough]];
+				    ClearWalk(self);
+				    break;
 			    case route::Follower::Outcome::Failed:
 				    // No way there: it stands where it is
 				    ClearWalk(self);

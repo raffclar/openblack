@@ -73,6 +73,23 @@ inline constexpr float k_ClearOfThings = 5.0f;
 [[nodiscard]] float RoutePlanRadius(float radius, float height, bool tree, float creatureHeight, float creatureRadius);
 /// Whether a creature walking up to a thing, so far away on the ground, has arrived
 [[nodiscard]] bool Arrived(float distance, float creatureRadius, float routeRadius, float keep);
+/// Going near a thing, the creature notes where it is every k_StallTurns turns of the step. On the last turn of each
+/// such span, it gives up when it moved less than k_StallDistance since the note. It then wants what it went for less
+/// for k_StallHoldBackSeconds. A creature under the control of a script never gives up.
+constexpr uint32_t k_StallTurns = 50;
+constexpr float k_StallDistance = 0.01f;
+constexpr float k_StallHoldBackSeconds = 10.0f;
+enum class Stall : uint8_t
+{
+	None,
+	/// Note where the creature is now
+	Note,
+	/// Give up the step, and hold back the desire of the plan
+	GiveUp,
+};
+/// What a creature that goes near a thing does about a stall, by the turns of the step, how far it moved since the
+/// last note and whether a script controls it
+[[nodiscard]] Stall CheckStall(uint32_t turns, float moved, bool scripted);
 
 /// How far from a thing a creature getting away from it must be
 [[nodiscard]] float GetAwayDistance(float keep, std::optional<float> thingRadius);

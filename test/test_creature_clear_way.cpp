@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureClearWay.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureEmoteAgendas.h"
@@ -161,4 +162,18 @@ TEST(CreatureClearWay, AFirstSearchThatGivesUpNotesTheThingsThatItMet)
 		EXPECT_GE(thing, 100u);
 		EXPECT_LT(thing, 100u + k_Things);
 	}
+}
+
+TEST(CreatureClearWay, AWalkNearAThingThatGetsNowhereForFiftyTurnsGivesUp)
+{
+	using creature_cast_moves::CheckStall;
+	using creature_cast_moves::Stall;
+	EXPECT_EQ(CheckStall(0, 0.0f, false), Stall::Note);
+	EXPECT_EQ(CheckStall(50, 0.0f, false), Stall::Note);
+	EXPECT_EQ(CheckStall(10, 0.0f, false), Stall::None);
+	EXPECT_EQ(CheckStall(49, 0.0f, false), Stall::GiveUp);
+	EXPECT_EQ(CheckStall(99, 0.005f, false), Stall::GiveUp);
+	EXPECT_EQ(CheckStall(49, 0.01f, false), Stall::None);
+	// A creature under the control of a script does not give up
+	EXPECT_EQ(CheckStall(49, 0.0f, true), Stall::None);
 }

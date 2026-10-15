@@ -195,3 +195,16 @@ bool creature_cast_moves::BlocksCell(const CollideCircle& circle, int32_t x, int
 	                        static_cast<float>(z) * k_CellSize + k_CellSize * 0.5f};
 	return glm::distance(middle, circle.centre) - circle.radius < k_ClearOfThings;
 }
+
+creature_cast_moves::Stall creature_cast_moves::CheckStall(uint32_t turns, float moved, bool scripted)
+{
+	if (turns % k_StallTurns == 0)
+	{
+		return Stall::Note;
+	}
+	if (turns % k_StallTurns == k_StallTurns - 1 && !scripted && moved < k_StallDistance)
+	{
+		return Stall::GiveUp;
+	}
+	return Stall::None;
+}

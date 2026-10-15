@@ -76,7 +76,8 @@ struct CreatureLocomotion
 	/// Whether the last move failed: nowhere to stand there, or no way there
 	bool failed {false};
 	/// The first turn of the search stopped far short of the destination: the destination, and the things that the
-	/// search met in the order that it met them. None after any other end of a move.
+	/// search met in the order that it met them. The walk does not fail: it ends where the creature stands. None after
+	/// any other end of a move.
 	struct GaveUp
 	{
 		glm::vec2 destination {0.0f};

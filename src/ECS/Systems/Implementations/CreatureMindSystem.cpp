@@ -1902,8 +1902,9 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    WeighWatchedCreature(entity, mind, static_cast<entt::entity>(*mind.idle.agenda[mind.idle.step].object));
 		    }
-		    // It finds no way to where it goes. Shut in, it clears a thing out of its way and walks on. Else it gives up
-		    // what it does, makes a sound of refusal, and leaves the thing that it went to alone for a time.
+		    // Shut in, the creature clears a thing out of its way and walks on. With nothing to clear, its walk ends where
+		    // it stands. When the search finds no route at all, the creature gives up what it does and makes a sound of
+		    // refusal. It also leaves the thing that it went to alone for a time.
 		    StepClearingWay(entity, mind);
 		    if (mind.idle.step < mind.idle.agenda.size())
 		    {
@@ -1916,7 +1917,7 @@ void CreatureMindSystem::ProcessTurn()
 			    const bool walkToObject = (step.kind == creature_mind::Step::Kind::Move ||
 			                               (step.kind == creature_mind::Step::Kind::FollowWatching && mind.idle.followMoved)) &&
 			                              step.movement.object.has_value();
-			    // Any walk that gives up on its first turn can clear the way, one time for each give-up
+			    // Any walk that stops on the first turn of its search can clear the way, one time for each stop
 			    const bool anyWalk = step.kind == creature_mind::Step::Kind::Move || walkToObject;
 			    std::optional<CreatureLocomotion::GaveUp> gaveUp;
 			    if (walk != nullptr && mind.idle.stepStarted && anyWalk)
