@@ -110,6 +110,16 @@ TEST(HandToolTips, HoldingAThingTheHandOffersToDropOrPlantItThenToThrowIt)
 	EXPECT_EQ(Holding(true, HeldUse::Give, false)->size(), 1u);
 }
 
+TEST(HandToolTips, OverAnAltarThatTakesTheHeldThingTheHandOffersToSacrificeIt)
+{
+	const auto offers = Holding(true, HeldUse::Sacrifice, true);
+	ASSERT_TRUE(offers.has_value());
+	ASSERT_EQ(offers->size(), 1u);
+	EXPECT_EQ((*offers)[0].index, k_Sacrifice);
+	EXPECT_EQ((*offers)[0].action, ToolTipAction::Apply);
+	EXPECT_FALSE(Holding(false, HeldUse::Sacrifice, false).has_value());
+}
+
 TEST(HandToolTips, OutsideTheInfluenceAHeldThingOffersWhatTheLandOffers)
 {
 	EXPECT_FALSE(Holding(false, HeldUse::Give, false).has_value());

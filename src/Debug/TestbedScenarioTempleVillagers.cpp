@@ -41,6 +41,9 @@ constexpr size_t k_MainRoom = 3;
 /// The town's first woman and first man, by their place in the scenario's objects
 constexpr size_t k_Woman = 3;
 constexpr size_t k_Man = 4;
+/// A sheep and a birch beside the site, after the town in the scenario's objects
+constexpr size_t k_Sheep = 11;
+constexpr size_t k_Birch = 12;
 /// The Action button is the mouse's right button
 constexpr size_t k_ActionButton = 3;
 
@@ -138,21 +141,28 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 		                             {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = k_ActionButton}};
 	};
 	auto commands = offer(k_Man, 3.0f);
-	std::ranges::copy(offer(k_Woman, 4.0f), std::back_inserter(commands));
+	for (const auto thing : {k_Woman, k_Sheep, k_Birch})
+	{
+		std::ranges::copy(offer(thing, 4.0f), std::back_inserter(commands));
+	}
+	auto objects = Town();
+	objects.push_back({.type = AnimalInfo::Sheep, .offset = {14.0f, 8.0f}});
+	objects.push_back({.type = TreeInfo::Birch, .offset = {-14.0f, 8.0f}});
 	all.push_back({
 	    .id = "hand.sacrifice_at_altar",
-	    .name = "The hand sacrifices villagers at the altar",
+	    .name = "The hand sacrifices villagers, an animal and a tree at the altar",
 	    .facet = Facet::Hand,
 	    .description = "The same town and temple, the town's worship site put up built and nobody sent to worship. The "
 	                   "player's hand takes a man of the town, moves onto the site's altar and presses the Action "
-	                   "button; then it does the same with a woman.",
+	                   "button; then it does the same with a woman, a sheep and a birch.",
 	    .expected = "Each villager goes from the hand at once, with no throw. The sacrifice sound plays where the hand is, "
-	                "and the man screams, then the woman. A light rises from the top of the altar. A red number, the "
-	                "prayer power stored at the site, floats up from the altar.",
+	                "and the man screams, then the woman. For each villager a light rises from the top of the altar. A red "
+	                "number, the prayer power stored at the site, floats up from the altar for each of the four. The "
+	                "sheep and the birch make no cry and no light; the birch leaves a ghost that flickers out.",
 	    .environment = {.dispenserGrid = false},
 	    // Close on the altar, which shows right of the middle of the screen, clear of the testbed's window
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, 35.0f}, .look = {10.0f, 0.0f, -2.0f}},
-	    .objects = Town(),
+	    .objects = objects,
 	    .temples = {{.offset = k_Temple}},
 	    .commands = commands,
 	    .townBeliefInPlayer = k_TownBelief,

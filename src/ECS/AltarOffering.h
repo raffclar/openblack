@@ -47,6 +47,9 @@ struct Giver
 
 /// Whether an object is a worship site's altar
 [[nodiscard]] bool IsAltar(entt::entity object);
+/// Whether an altar takes a held thing of its kind: a villager, an animal, a tree or a dead tree. The altar can still
+/// refuse it when it is given.
+[[nodiscard]] bool Takes(entt::entity altar, entt::entity held);
 
 /// The held thing is given to the altar. Taken, its prayer power goes into the altar's site; it is out of the hand and
 /// gone from the world.

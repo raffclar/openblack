@@ -89,6 +89,19 @@ std::optional<altar_sacrifice::Offering> OfferingOf(const ecs::Registry& registr
 	return std::nullopt;
 }
 
+/// The sacrifice value of a thing's kind in the game's tables: an animal's by its species, anything else's by its own row
+float TableValueOf(const ecs::Registry& registry, entt::entity held)
+{
+	if (const auto* animal = registry.TryGet<const Animal>(held); animal != nullptr && Locator::infoConstants::has_value())
+	{
+		const auto& rows = Locator::infoConstants::value().animal;
+		const auto row = static_cast<size_t>(animal->type);
+		return row < rows.size() ? rows[row].sacrificeValue : 0.0f;
+	}
+	const auto* info = world_objects::InfoOf(held);
+	return info != nullptr ? info->sacrificeValue : 0.0f;
+}
+
 /// An animal sacrificed counts for its sacrificer, and moves the sacrificer's alignment as an animal's death does
 void CountAnimal(ecs::Registry& registry, PlayerNames player)
 {
@@ -125,6 +138,12 @@ bool altar_offering::IsAltar(entt::entity object)
 	return registry.Valid(object) && registry.AllOf<WorshipAltar>(object);
 }
 
+bool altar_offering::Takes(entt::entity altar, entt::entity held)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	return IsAltar(altar) && registry.Valid(held) && OfferingOf(registry, held).has_value();
+}
+
 altar_offering::Answer altar_offering::Offer(entt::entity altar, entt::entity held, const Giver& giver)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -141,12 +160,11 @@ altar_offering::Answer altar_offering::Offer(entt::entity altar, entt::entity he
 	}
 
 	const auto* person = registry.TryGet<const Villager>(held);
-	const auto* info = world_objects::InfoOf(held);
 	const float life = world_objects::LifeOf(held);
 	const auto sacrifice = altar_sacrifice::Judge({
 	    .kind = *kind,
 	    .life = life,
-	    .tableValue = info != nullptr ? info->sacrificeValue : 0.0f,
+	    .tableValue = TableValueOf(registry, held),
 	    .child = person != nullptr && person->lifeStage == Villager::LifeStage::Child,
 	    .indestructible = registry.AllOf<Indestructible>(held),
 	    .siteBuilt = Locator::worshipSiteSystem::has_value() && Locator::worshipSiteSystem::value().IsBuilt(site),
