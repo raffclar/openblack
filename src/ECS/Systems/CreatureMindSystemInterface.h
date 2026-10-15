@@ -109,6 +109,9 @@ public:
 	/// stops what it was doing if slapped, warms or cools to the player, and shows its pleasure or sorrow next. Feedback
 	/// too slight to count only has it look at the player.
 	virtual void ReceiveFeedback(entt::entity creature, float feedback) = 0;
+	/// The hand let go of the creature, and sends the feedback to the mind. The feedback arrives after the first turn
+	/// in which the creature is free.
+	virtual void SendReleaseFeedback(entt::entity creature, float feedback) { ReceiveFeedback(creature, feedback); }
 	/// The player's hand took hold of the creature: its mind stands still while held, it turns to face the player, and
 	/// once its body is free it shows what it wants
 	virtual void HandTookHold(entt::entity /*creature*/) {}

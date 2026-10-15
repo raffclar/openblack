@@ -99,26 +99,52 @@ TEST(CreatureBringHome, StopsWithinFiveMetresOrItsHeight)
 
 TEST(CreatureBringHome, BringHomePicksUpWalksHomeAndPutsDown)
 {
-	const auto agenda = bring::BringHome(7u, k_Home, 12.0f);
+	const auto agenda = bring::BringHome(7u, 7u, false, k_Home, 12.0f);
 	ASSERT_EQ(agenda.size(), 3u);
 	ExpectPickUp(agenda[0], 7u);
 	ExpectWalkHome(agenda[1], k_Home, 5.0f);
 	ExpectPutDown(agenda[2]);
 
 	// With a full hand it brings home what it holds
-	const auto holding = bring::BringHome(std::nullopt, k_Home, 12.0f);
+	const auto holding = bring::BringHome(std::nullopt, 7u, false, k_Home, 12.0f);
 	ASSERT_EQ(holding.size(), 2u);
 	ExpectWalkHome(holding[0], k_Home, 5.0f);
 }
 
 TEST(CreatureBringHome, BringFoodHomeWalksWithinItsHeight)
 {
-	const auto agenda = bring::BringFoodHome(9u, k_Home, 12.0f);
+	const auto agenda = bring::BringFoodHome(9u, false, k_Home, 12.0f);
 	ASSERT_EQ(agenda.size(), 3u);
 	ExpectPickUp(agenda[0], 9u);
 	ExpectWalkHome(agenda[1], k_Home, 12.0f);
 	ExpectPutDown(agenda[2]);
-	EXPECT_EQ(bring::BringFoodHome(std::nullopt, k_Home, 12.0f).size(), 2u);
+	EXPECT_EQ(bring::BringFoodHome(std::nullopt, false, k_Home, 12.0f).size(), 2u);
+}
+
+TEST(CreatureBringHome, ALivingThingIsMadeStillAfterThePutDown)
+{
+	const auto agenda = bring::BringHome(7u, 7u, true, k_Home, 12.0f);
+	ASSERT_EQ(agenda.size(), 4u);
+	ExpectPutDown(agenda[2]);
+	EXPECT_EQ(agenda[3].kind, Step::Kind::RenderImmobile);
+	EXPECT_EQ(agenda[3].object, std::optional<uint32_t>(7u));
+	// With the thing in its hand already, the step still acts on the thing of the plan
+	const auto holding = bring::BringHome(std::nullopt, 7u, true, k_Home, 12.0f);
+	ASSERT_EQ(holding.size(), 3u);
+	EXPECT_EQ(holding[2].kind, Step::Kind::RenderImmobile);
+}
+
+TEST(CreatureBringHome, LivingFoodIsMadeStillAfterThePickUp)
+{
+	const auto agenda = bring::BringFoodHome(9u, true, k_Home, 12.0f);
+	ASSERT_EQ(agenda.size(), 4u);
+	ExpectPickUp(agenda[0], 9u);
+	EXPECT_EQ(agenda[1].kind, Step::Kind::RenderImmobile);
+	EXPECT_EQ(agenda[1].object, std::optional<uint32_t>(9u));
+	ExpectWalkHome(agenda[2], k_Home, 12.0f);
+	ExpectPutDown(agenda[3]);
+	// Food in the hand already is not picked up, and nothing is made still
+	EXPECT_EQ(bring::BringFoodHome(std::nullopt, true, k_Home, 12.0f).size(), 2u);
 }
 
 TEST(CreatureBringHome, TakeFoodFromFieldHomeTakesWheat)
@@ -163,4 +189,27 @@ TEST(CreatureBringHome, PlanActionsNeedAHome)
 	EXPECT_EQ(plan_actions::Agenda(bringHome, 7u, {}, situation, First)->size(), 2u);
 	situation.handFull = false;
 	EXPECT_EQ(plan_actions::Agenda(bringHome, 7u, {}, situation, First)->size(), 3u);
+}
+
+TEST(CreatureBringHome, TheStillStepWaitsWhileTheThingFlies)
+{
+	const auto never = [](uint32_t /*range*/) { return 1u; };
+	IdleMind mind;
+	Plan(mind, Activity::Planned, {{.kind = Step::Kind::RenderImmobile, .object = 5}});
+	// While the thing flies, nothing happens and the step goes on
+	auto commands = Think(mind, {.seconds = 0.1f, .objectFlying = true}, never);
+	EXPECT_FALSE(commands.renderImmobile.has_value());
+	EXPECT_EQ(mind.step, 0u);
+	commands = Think(mind, {.seconds = 0.1f, .objectFlying = true}, never);
+	EXPECT_FALSE(commands.renderImmobile.has_value());
+	EXPECT_EQ(mind.step, 0u);
+	// Down again, the thing starts to die and the step ends
+	commands = Think(mind, {.seconds = 0.1f}, never);
+	EXPECT_EQ(commands.renderImmobile, std::optional<uint32_t>(5u));
+	EXPECT_EQ(mind.step, 1u);
+}
+
+TEST(CreatureBringHome, TheStillStepNeedsNoHand)
+{
+	EXPECT_EQ(HandsNeededFor(Step {.kind = Step::Kind::RenderImmobile}), HandsNeed::Any);
 }

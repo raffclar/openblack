@@ -792,6 +792,17 @@ void WatchPlayer(IdleMind& mind, const Senses& senses, Commands& commands)
 	}
 }
 
+/// Makes the step's object still: the step waits while the object flies, then the object starts to die and the step ends
+void RenderImmobile(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands)
+{
+	if (senses.objectFlying)
+	{
+		return;
+	}
+	commands.renderImmobile = step.object;
+	FinishStep(mind);
+}
+
 void WatchFlying(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	const auto limit =
@@ -881,6 +892,7 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::Heal:
 	case Step::Kind::FollowHand:
 	case Step::Kind::WatchPlayer:
+	case Step::Kind::RenderImmobile:
 		break;
 	}
 	return HandsNeed::Any;
@@ -1348,6 +1360,9 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		case Step::Kind::WatchPlayer:
 			WatchPlayer(mind, senses, commands);
 			break;
+		case Step::Kind::RenderImmobile:
+			RenderImmobile(mind, step, senses, commands);
+			break;
 		case Step::Kind::Fight:
 			commands.startFight = step.object;
 			break;
@@ -1610,6 +1625,9 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	case Step::Kind::WatchPlayer:
 		WatchPlayer(mind, senses, commands);
+		break;
+	case Step::Kind::RenderImmobile:
+		RenderImmobile(mind, step, senses, commands);
 		break;
 	case Step::Kind::PracticeDance:
 		if (mind.danceTurns > 0)

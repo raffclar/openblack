@@ -15,6 +15,8 @@
 
 #include <numbers>
 #include <optional>
+#include <utility>
+#include <vector>
 
 #include <glm/vec2.hpp>
 
@@ -24,6 +26,7 @@
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureDrawnFeet.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
@@ -51,6 +54,36 @@ std::pair<int, int> Today()
 #endif
 	return {local.tm_mon + 1, local.tm_mday};
 }
+/// The feet of a creature in the world as its body is posed now, the right foot first; none for a creature without
+/// feet
+std::optional<CreatureDrawnFeet> FeetNow(const ecs::Registry& registry, entt::entity creature)
+{
+	if (!registry.Valid(creature) || !registry.AllOf<Creature, CreatureAnimation, Transform>(creature))
+	{
+		return std::nullopt;
+	}
+	const auto& component = registry.Get<const Creature>(creature);
+	const auto& animation = registry.Get<const CreatureAnimation>(creature);
+	const auto& transform = registry.Get<const Transform>(creature);
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(component.species);
+	if (!rigs.Contains(rigId))
+	{
+		return std::nullopt;
+	}
+	const auto& points = rigs.Handle(rigId)->actionPoints;
+	if (!points.has_value() || points->rightFoot >= animation.boneMatrices.size())
+	{
+		return std::nullopt;
+	}
+	const auto rightBone = points->rightFoot;
+	const auto leftBone = rightBone < animation.mirror.size() ? animation.mirror[rightBone] : rightBone;
+	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	return CreatureDrawnFeet {
+	    .right = creature::PosedBone(rightBone, animation.boneMatrices, placement),
+	    .left = creature::PosedBone(leftBone, animation.boneMatrices, placement),
+	};
+}
 } // namespace
 
 void FootprintSystem::Update(std::chrono::duration<float, std::milli> gameTime, bool landDrawn)
@@ -61,36 +94,38 @@ void FootprintSystem::Update(std::chrono::duration<float, std::milli> gameTime, 
 		return;
 	}
 	creature_footprints::Fade(_trail, gameTime.count());
+	// The pose that this frame draws is the pose from which the footsteps of the next frame lay their prints
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<std::pair<entt::entity, CreatureDrawnFeet>> drawn;
+	registry.Each<const Creature>([&registry, &drawn](entt::entity entity, const Creature&) {
+		if (const auto feet = FeetNow(registry, entity); feet.has_value())
+		{
+			drawn.emplace_back(entity, *feet);
+		}
+	});
+	for (const auto& [entity, feet] : drawn)
+	{
+		registry.AssignOrReplace<CreatureDrawnFeet>(entity, feet);
+	}
 }
 
 void FootprintSystem::Step(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(creature) || !registry.AllOf<Creature, CreatureAnimation, Transform>(creature) ||
-	    !Locator::terrainSystem::has_value())
+	if (!registry.Valid(creature) || !registry.AllOf<Creature>(creature) || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	// The print comes from the pose of the last frame that drew the land. A creature not yet drawn uses its pose now.
+	const auto* drawn = registry.TryGet<const CreatureDrawnFeet>(creature);
+	const auto feet = drawn != nullptr ? std::optional(*drawn) : FeetNow(registry, creature);
+	if (!feet.has_value())
 	{
 		return;
 	}
 	const auto& component = registry.Get<const Creature>(creature);
-	const auto& animation = registry.Get<const CreatureAnimation>(creature);
-	const auto& transform = registry.Get<const Transform>(creature);
-	const auto& rigs = Locator::resources::value().GetCreatureRigs();
-	const auto rigId = creature::GetRigId(component.species);
-	if (!rigs.Contains(rigId))
-	{
-		return;
-	}
-	const auto& points = rigs.Handle(rigId)->actionPoints;
-	if (!points.has_value() || points->rightFoot >= animation.boneMatrices.size())
-	{
-		return;
-	}
-	const std::optional<uint32_t> rightBone = points->rightFoot;
-	const auto leftBone = *rightBone < animation.mirror.size() ? animation.mirror[*rightBone] : *rightBone;
-
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-	const auto right = creature_footprints::FootOf(creature::PosedBone(*rightBone, animation.boneMatrices, placement));
-	const auto left = creature_footprints::FootOf(creature::PosedBone(leftBone, animation.boneMatrices, placement));
+	const auto right = creature_footprints::FootOf(feet->right);
+	const auto left = creature_footprints::FootOf(feet->left);
 	const bool onLeft = creature_footprints::LeftIsLower(right, left);
 	const auto& foot = onLeft ? left : right;
 

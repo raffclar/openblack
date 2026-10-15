@@ -129,6 +129,9 @@ struct CreatureMindState
 	bool showDesireOnHold {false};
 	/// The hand held it since the last time a plan started again after a hold
 	bool heldSinceRestart {false};
+	/// The feedback of the last release of the hand, which reaches the mind after the turns that are left
+	std::optional<float> releaseFeedback;
+	uint32_t releaseFeedbackTurns {0};
 	/// A plan of its own ran since it last stopped what it did, and the turns of the copy timeout with no such plan
 	bool ownPlanSinceStop {false};
 	uint32_t turnsWithoutOwnPlan {0};
