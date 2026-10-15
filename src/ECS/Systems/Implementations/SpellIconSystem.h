@@ -38,6 +38,7 @@ public:
 	void TownLeftSite(entt::entity site, entt::entity town) override;
 	void SiteRemoved(entt::entity site) override;
 
+	[[nodiscard]] bool ValidToTap(entt::entity icon, PlayerNames player) const override;
 	bool Tap(entt::entity icon, PlayerNames player) override;
 	[[nodiscard]] bool HasIconFor(PlayerNames player, SpellSeedType seed) const override;
 	[[nodiscard]] bool IsIcon(entt::entity entity) const override;

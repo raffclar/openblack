@@ -51,6 +51,8 @@ public:
 	/// each, in a hand or cast, goes too. The village centres' hands stay with their towns.
 	virtual void SiteRemoved(entt::entity site) = 0;
 
+	/// Whether a player's hand may tap an icon or a stone hand: the tap counts for the help, whatever it then does
+	[[nodiscard]] virtual bool ValidToTap(entt::entity icon, PlayerNames player) const = 0;
 	/// The hand taps an icon: whether the tap counted
 	virtual bool Tap(entt::entity icon, PlayerNames player) = 0;
 	/// Whether a player has an icon for a seed at any of their worship sites

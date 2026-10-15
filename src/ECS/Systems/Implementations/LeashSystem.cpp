@@ -79,12 +79,14 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/Texture2D.h"
+#include "Help/HelpProfile.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -1579,6 +1581,11 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 		const auto* post = picked.has_value() && registry.Valid(*picked) ? registry.TryGet<const LeashPost>(*picked) : nullptr;
 		if (post != nullptr && post->owner == player && post->hung)
 		{
+			// The help counts the tap of this computer's hand on its own leash
+			if (Locator::helpProfileSystem::has_value())
+			{
+				Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+			}
 			TapPost(*picked);
 			return;
 		}
