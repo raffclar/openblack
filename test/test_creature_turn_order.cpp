@@ -1,0 +1,125 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#include <cstddef>
+#include <cstdint>
+
+#include <array>
+#include <initializer_list>
+
+#include <gtest/gtest.h>
+
+#include "Creature/CreatureDesires.h"
+#include "Creature/CreatureTurnOrder.h"
+
+using namespace openblack;
+using creature_desires::Desire;
+namespace turn = openblack::creature_turn_order;
+
+namespace
+{
+constexpr uint32_t k_TurnsPerSecond = 10;
+
+std::array<bool, creature_desires::k_DesireCount> BodyOnly(std::initializer_list<Desire> desires)
+{
+	std::array<bool, creature_desires::k_DesireCount> body {};
+	for (const auto desire : desires)
+	{
+		body.at(static_cast<size_t>(desire)) = true;
+	}
+	return body;
+}
+
+creature_desires::Desires AllAt(float value)
+{
+	creature_desires::Desires desires;
+	for (auto& desire : desires.desires)
+	{
+		desire.value = value;
+	}
+	return desires;
+}
+} // namespace
+
+TEST(CreatureTurnOrder, BodyDesiresStayAtZeroBeforeTheFirstStage)
+{
+	auto desires = AllAt(0.7f);
+	turn::HoldBodyDesires(desires, BodyOnly({Desire::Fear, Desire::Tiredness, Desire::Rest}), 0);
+	EXPECT_EQ(desires[Desire::Fear].value, 0.0f);
+	EXPECT_EQ(desires[Desire::Tiredness].value, 0.0f);
+	EXPECT_EQ(desires[Desire::Rest].value, 0.0f);
+	EXPECT_EQ(desires[Desire::Curiosity].value, 0.7f);
+}
+
+TEST(CreatureTurnOrder, BodyDesiresGrowFromTheFirstStage)
+{
+	auto desires = AllAt(0.7f);
+	turn::HoldBodyDesires(desires, BodyOnly({Desire::Fear}), 1);
+	EXPECT_EQ(desires[Desire::Fear].value, 0.7f);
+}
+
+TEST(CreatureTurnOrder, PlanStartsAgainOnlyAfterAHoldAndWithStepsToDo)
+{
+	EXPECT_TRUE(turn::RestartsAfterHold(true, true));
+	EXPECT_FALSE(turn::RestartsAfterHold(true, false));
+	EXPECT_FALSE(turn::RestartsAfterHold(false, true));
+}
+
+TEST(CreatureTurnOrder, FollowingThePlayerIsNotAPlanOfItsOwn)
+{
+	EXPECT_TRUE(turn::OwnPlanRuns(true, Desire::Hunger));
+	EXPECT_FALSE(turn::OwnPlanRuns(true, Desire::FollowPlayerDesire));
+	EXPECT_FALSE(turn::OwnPlanRuns(false, Desire::Hunger));
+}
+
+TEST(CreatureTurnOrder, CopyTimeoutOccursOnTheTurnAfterFifteenSeconds)
+{
+	uint32_t turns = 0;
+	for (uint32_t i = 0; i < 150; ++i)
+	{
+		EXPECT_FALSE(turn::StepCopyTimeout(turns, false, k_TurnsPerSecond));
+	}
+	EXPECT_EQ(turns, 150u);
+	EXPECT_TRUE(turn::StepCopyTimeout(turns, false, k_TurnsPerSecond));
+	EXPECT_EQ(turns, 0u);
+}
+
+TEST(CreatureTurnOrder, CopyTimeoutCountKeepsItsValueWhileAPlanOfItsOwnRan)
+{
+	uint32_t turns = 40;
+	EXPECT_FALSE(turn::StepCopyTimeout(turns, true, k_TurnsPerSecond));
+	EXPECT_EQ(turns, 40u);
+}
+
+TEST(CreatureTurnOrder, ForcedPlanCountsOnlyWhenTheOrderSaysSo)
+{
+	EXPECT_TRUE(turn::CompletionOf(Desire::Hunger, false, false, false, 1.0f).counts);
+	EXPECT_FALSE(turn::CompletionOf(Desire::Hunger, true, false, false, 1.0f).counts);
+	EXPECT_TRUE(turn::CompletionOf(Desire::Hunger, true, true, false, 1.0f).counts);
+	const auto forced = turn::CompletionOf(Desire::RestoreHealth, true, false, true, 0.2f);
+	EXPECT_FALSE(forced.life.has_value());
+	EXPECT_FALSE(forced.climateTemperature);
+}
+
+TEST(CreatureTurnOrder, RestoreHealthAddsHalfLifeAboveFull)
+{
+	const auto completion = turn::CompletionOf(Desire::RestoreHealth, false, false, false, 0.8f);
+	ASSERT_TRUE(completion.life.has_value());
+	EXPECT_FLOAT_EQ(*completion.life, 1.3f);
+	EXPECT_FALSE(completion.climateTemperature);
+}
+
+TEST(CreatureTurnOrder, FullRecoveryGivesFullLifeAndTheClimateTemperature)
+{
+	const auto completion = turn::CompletionOf(Desire::RestoreHealth, false, false, true, 0.2f);
+	ASSERT_TRUE(completion.life.has_value());
+	EXPECT_EQ(*completion.life, 1.0f);
+	EXPECT_TRUE(completion.climateTemperature);
+	EXPECT_FALSE(turn::CompletionOf(Desire::Hunger, false, false, false, 0.2f).life.has_value());
+}

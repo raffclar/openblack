@@ -2751,6 +2751,29 @@ void AddObjects(std::vector<Scenario>& all)
 	                 {.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "BeCrossWithPlayer"}},
 	});
 	all.push_back({
+	    .id = "mind.restart_after_hold",
+	    .name = "A plan starts again after a hold",
+	    .facet = Facet::Mind,
+	    .description = "The hand holds a player's tiger, strokes its head and lets go. The tiger then chooses a new plan.",
+	    .expected = "On the turn after it starts the new plan, it stops the plan and starts the agenda of the same plan "
+	                "again from the first step. The log shows this one time only.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    .commands = {Stroke(0, creature_feedback::BodyPart::Head, 1.0f), Act(Kind::HandLetGo, 0, 1.0f, true)},
+	});
+	all.push_back({
+	    .id = "mind.stage_zero_body_desires",
+	    .name = "The desires of the body before the first stage",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger goes back to the first stage of its growth, stage 0.",
+	    .expected = "Its desires of fear, tiredness and rest stay at 0 or almost 0, and it does not act on them.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    .commands = {{.kind = Kind::SetPhase, .creature = 0, .delaySeconds = 0.5f, .value = 0}},
+	});
+	all.push_back({
 	    .id = "mind.show_how_nice",
 	    .name = "Showing the player how nice it thinks the player is",
 	    .facet = Facet::Mind,
