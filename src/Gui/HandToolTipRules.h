@@ -42,6 +42,8 @@ constexpr uint32_t k_Reminder = 45;
 constexpr uint32_t k_Give = 20;
 /// "Zoom Out", with the camera near the land and pointed down
 constexpr uint32_t k_ZoomOut = 24;
+/// "Sacrifice", while the hand holds a thing that the worship site altar under it takes
+constexpr uint32_t k_Sacrifice = 26;
 /// "Supply", while the hand holds a thing that the store under it takes
 constexpr uint32_t k_Supply = 27;
 /// "Drop" and "Plant", what the hand does when it lets go of a thing; a tree is planted
@@ -139,11 +141,14 @@ enum class HeldUse : uint8_t
 	Give,
 	/// Put it into the store under the pointer
 	Supply,
+	/// Sacrifice it at the worship site altar under the pointer
+	Sacrifice,
 };
 
 /// What the hand offers while it holds a thing. Outside the player's influence it offers nothing of its own: the hand
 /// then shows the tooltips that it shows over the land. Over a creature that can take the thing, "Give"; over a store
-/// of its resource, "Supply". In all other places "Drop" (or "Plant" for a tree) and "Throw", which take turns.
+/// of its resource, "Supply"; over a worship site altar that takes the thing, "Sacrifice". In all other places "Drop" (or
+/// "Plant" for a tree) and "Throw", which take turns.
 [[nodiscard]] std::optional<std::vector<Offer>> Holding(bool handInInfluence, HeldUse use, bool tree);
 
 /// Whether the hand shows "Wood Required" and "Building Completed" over a building. The hand shows them over a

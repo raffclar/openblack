@@ -758,6 +758,9 @@ struct Command
 		/// The player's hand takes hold of the totem of the scenario's object, a town centre, and then lets go. Needs no
 		/// creature
 		HandGripTotem,
+		/// The pointer moves onto the middle of the foot of the scenario's town's worship site altar on the screen, as the
+		/// mouse moves it. Needs no creature
+		PointerOnAltar,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

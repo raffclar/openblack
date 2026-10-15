@@ -30,6 +30,8 @@ inline constexpr uint32_t k_ThrowInTheSea = 21;
 inline constexpr uint32_t k_TakeObjectHome = 32;
 inline constexpr uint32_t k_StealObjectAndPutInTown = 35;
 inline constexpr uint32_t k_StealObjectAndPutByTemple = 36;
+/// A villager or an animal sacrificed at a worship site's altar
+inline constexpr uint32_t k_Sacrifice = 40;
 inline constexpr uint32_t k_PlayWithToy = 41;
 inline constexpr uint32_t k_StealFoodFromFarm = 43;
 inline constexpr uint32_t k_StealFoodFromStoragePit = 44;

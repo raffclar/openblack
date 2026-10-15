@@ -10,7 +10,9 @@
 // The testbed's scenarios of the villagers around the player's temple, with their debug window open, and of the
 // town's worship site going up
 
+#include <algorithm>
 #include <array>
+#include <iterator>
 #include <vector>
 
 #include "TempleVillagers.h"
@@ -36,6 +38,14 @@ constexpr glm::vec2 k_BeyondTheSite {-21.0f, -1.0f};
 constexpr size_t k_Handful = 300;
 /// The main room of the temple, by the temple's rooms
 constexpr size_t k_MainRoom = 3;
+/// The town's first woman and first man, by their place in the scenario's objects
+constexpr size_t k_Woman = 3;
+constexpr size_t k_Man = 4;
+/// A sheep and a birch beside the site, after the town in the scenario's objects
+constexpr size_t k_Sheep = 11;
+constexpr size_t k_Birch = 12;
+/// The Action button is the mouse's right button
+constexpr size_t k_ActionButton = 3;
 
 /// Where the town centre stands for the sacrifice, far enough north of the temple for a long walk to its altar
 constexpr glm::vec2 k_FarCentre {0.0f, 90.0f};
@@ -141,6 +151,45 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .objects = Town(k_FarCentre),
 	    .temples = {{.offset = k_Temple}},
 	    .commands = {{.kind = Command::Kind::DoAction, .delaySeconds = 3.0f, .object = k_FirstVillager, .action = "Sacrifice"}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
+
+	// The hand takes a man, then a woman, of the town and gives each to the altar with the Action button
+	using Kind = Command::Kind;
+	const auto offer = [](size_t villager, float delay) {
+		// The hand is first put on the altar, inside the player's influence, where it can take the villager
+		return std::vector<Command> {{.kind = Kind::PointerOnAltar, .delaySeconds = delay},
+		                             {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = villager},
+		                             {.kind = Kind::PointerOnAltar, .delaySeconds = 1.0f},
+		                             {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = k_ActionButton},
+		                             {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = k_ActionButton}};
+	};
+	auto commands = offer(k_Man, 3.0f);
+	for (const auto thing : {k_Woman, k_Sheep, k_Birch})
+	{
+		std::ranges::copy(offer(thing, 4.0f), std::back_inserter(commands));
+	}
+	auto objects = Town();
+	objects.push_back({.type = AnimalInfo::Sheep, .offset = {14.0f, 8.0f}});
+	objects.push_back({.type = TreeInfo::Birch, .offset = {-14.0f, 8.0f}});
+	all.push_back({
+	    .id = "hand.sacrifice_at_altar",
+	    .name = "The hand sacrifices villagers, an animal and a tree at the altar",
+	    .facet = Facet::Hand,
+	    .description = "The same town and temple, the town's worship site put up built and nobody sent to worship. The "
+	                   "player's hand takes a man of the town, moves onto the site's altar and presses the Action "
+	                   "button; then it does the same with a woman, a sheep and a birch.",
+	    .expected = "Each villager goes from the hand at once, with no throw. The sacrifice sound plays where the hand is, "
+	                "and the man screams, then the woman. For each villager a light rises from the top of the altar. A red "
+	                "number, the prayer power stored at the site, floats up from the altar for each of the four. The "
+	                "sheep and the birch make no cry and no light; the birch leaves a ghost that flickers out.",
+	    .environment = {.dispenserGrid = false},
+	    // Close on the altar, which shows right of the middle of the screen, clear of the testbed's window
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, 35.0f}, .look = {10.0f, 0.0f, -2.0f}},
+	    .objects = objects,
+	    .temples = {{.offset = k_Temple}},
+	    .commands = commands,
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 0.0f,
 	});

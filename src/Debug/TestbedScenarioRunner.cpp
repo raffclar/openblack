@@ -119,6 +119,7 @@
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -2488,6 +2489,7 @@ void Runner::Give(const Command& command)
 	case Kind::WheelTurn:
 	case Kind::PointerOnOpponent:
 	case Kind::PointerOnCaveCreature:
+	case Kind::PointerOnAltar:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:
@@ -3550,6 +3552,31 @@ std::optional<glm::ivec2> Runner::OpponentOnScreen(size_t creature, glm::vec2 si
 	return glm::ivec2(glm::round(glm::vec2(screen)));
 }
 
+std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size) const
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(k_ScenarioTownId);
+	if (found == towns.end() || !registry.Valid(found->second) || !Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto site = registry.Get<const ecs::components::Town>(found->second).worshipSite;
+	const auto* worship = registry.Valid(site) ? registry.TryGet<const ecs::components::WorshipSite>(site) : nullptr;
+	if (worship == nullptr || !registry.Valid(worship->altar))
+	{
+		return std::nullopt;
+	}
+	// The middle of the altar's foot: the line from the camera to it meets the altar's low top first
+	const auto& foot = registry.Get<const ecs::components::Transform>(worship->altar).position;
+	glm::vec3 screen;
+	if (!Locator::camera::value().ProjectWorldToScreen(foot, {0.0f, 0.0f, size.x, size.y}, screen))
+	{
+		return std::nullopt;
+	}
+	return glm::ivec2(glm::round(glm::vec2(screen)));
+}
+
 std::optional<glm::ivec2> Runner::CaveCreatureOnScreen(glm::vec2 size)
 {
 	if (!Locator::creatureCaveSystem::has_value() || !Locator::camera::has_value())
@@ -3644,6 +3671,20 @@ std::string Runner::GivePointerCommand(const Command& command)
 		}
 		const auto moved = *to - pointer.position;
 		pointer.position = *to;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerOnAltar:
+	{
+		const auto to = AltarOnScreen(size);
+		if (!to.has_value())
+		{
+			return "no altar on the screen";
+		}
+		const auto moved = *to - pointer.position;
+		pointer.position = *to;
+		_framesSincePointerMoved = 0;
 		actions.SetScriptedPointer(pointer);
 		PushMotion(pointer, moved);
 		break;
