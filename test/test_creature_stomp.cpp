@@ -296,3 +296,25 @@ TEST(CreatureStomp, AStompKillCounts)
 	EXPECT_EQ(tallies.creaturesKilled, 0u);
 	EXPECT_TRUE(tallies.keptDown.empty());
 }
+
+// The creature walks near the other creature, faces it, points one time in two, taunts, and is angry one time in two
+TEST(CreatureStomp, ShowingAnotherCreatureHate)
+{
+	const auto* action = plan_actions::For("ShowCreatureYouHateHim");
+	ASSERT_NE(action, nullptr);
+	EXPECT_EQ(action->target, plan_actions::Target::Creature);
+	const auto all = plan_actions::Agenda(*action, 3, {0.0f, 0.0f}, {.height = 15.0f, .thingHeight = 20.0f}, StompFirst);
+	ASSERT_TRUE(all.has_value());
+	ASSERT_EQ(all->size(), 5);
+	EXPECT_EQ((*all)[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ((*all)[0].movement.maxDistance, 50.0f);
+	EXPECT_FLOAT_EQ((*all)[1].seconds, 2.0f);
+	EXPECT_EQ((*all)[2].order.kind, ObjectOrder::Kind::PointAt);
+	EXPECT_EQ((*all)[3].animation, 70u);
+	EXPECT_EQ((*all)[4].animation, 53u);
+	const auto least = plan_actions::Agenda(*action, 3, {0.0f, 0.0f}, {.height = 15.0f, .thingHeight = 2.0f}, StompLast);
+	ASSERT_TRUE(least.has_value());
+	ASSERT_EQ(least->size(), 3);
+	EXPECT_FLOAT_EQ((*least)[0].movement.maxDistance, 37.5f);
+	EXPECT_EQ((*least)[2].animation, 222u);
+}

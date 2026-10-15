@@ -156,6 +156,18 @@ constexpr float k_AfterPointingOutSeconds = 2.0f;
 /// 4. It picks up the thing, and eats what it holds.
 [[nodiscard]] std::vector<Step> StoneAndEat(uint32_t rock, uint32_t thing, glm::vec2 thingPoint, float height,
                                             bool holdingRock);
+/// The creature shows another creature that it hates it. The agenda has these steps:
+/// 1. It goes near the other creature, to two and a half times the height of the taller of the two, with an angry face.
+/// 2. It turns to face the other creature and holds still for two seconds, with an angry face.
+/// 3. One time in two, it points at the other creature for two seconds, with a grimace.
+/// 4. It plays one of two taunts, in equal shares.
+/// 5. One time in two, it plays its angry animation.
+[[nodiscard]] std::vector<Step> ShowCreatureYouHateHim(uint32_t other, float height, float otherHeight, const Random& random);
+constexpr float k_HateDistanceHeights = 2.5f;
+constexpr float k_HateFaceSeconds = 2.0f;
+constexpr float k_HatePointSeconds = 2.0f;
+constexpr uint32_t k_HateLots = 2;
+constexpr size_t k_HateTaunt = 222;
 /// The creature kicks a thing: it goes near the thing, turns to face it, and kicks it
 [[nodiscard]] std::vector<Step> KickThing(uint32_t thing);
 /// The creature turns to face a thing to kick for this time before it kicks

@@ -137,6 +137,7 @@ enum class Build : uint8_t
 	StompAndEat,
 	StoneAndEat,
 	Kick,
+	ShowHate,
 	SitDown,
 	BeIdle,
 	HangAround,

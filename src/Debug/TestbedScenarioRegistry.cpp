@@ -2347,7 +2347,7 @@ void AddObjects(std::vector<Scenario>& all)
 	    .expected = "It walks up to the hut, faces it and kicks it: the kick makes a sound and breaks two pieces off the "
 	                "hut, which fly off.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 10.0f}, {0.0f, -40.0f}}},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 10.0f})},
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, -25.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "Kick"}},
@@ -2360,19 +2360,19 @@ void AddObjects(std::vector<Scenario>& all)
 	    .description = "A grown tiger near a birch. A script tells it to kick the tree.",
 	    .expected = "It walks up to the tree, faces it and kicks it: the tree creaks and flies off ahead of the tiger.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 10.0f}, {0.0f, -80.0f}}},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 10.0f})},
 	    .objects = {{.type = TreeInfo::Birch, .offset = {0.0f, -20.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "KickTree"}},
 	});
 
 	{
-		// Villagers, sheep and carts close round a big ape that lies down to sleep
+		// Villagers, sheep and carts close round a tiger that lies down to sleep
 		std::vector<ObjectSetup> round;
 		for (int i = 0; i < 8; ++i)
 		{
 			const auto angle = static_cast<float>(i) * std::numbers::pi_v<float> / 4.0f;
-			const glm::vec2 at {std::sin(angle) * 9.0f, std::cos(angle) * 9.0f};
+			const glm::vec2 at {std::sin(angle) * 6.0f, std::cos(angle) * 6.0f};
 			if (i % 3 == 0)
 			{
 				round.push_back({.type = MobileObjectInfo::Cart, .offset = at});
@@ -2390,15 +2390,14 @@ void AddObjects(std::vector<Scenario>& all)
 		    .id = "objects.trample_lying_down",
 		    .name = "Knocking things about as it lies down",
 		    .facet = Facet::Objects,
-		    .description = "A grown giant ape with villagers, sheep and carts close round it. A script tells it to sleep "
+		    .description = "A grown tiger with villagers, sheep and carts close round it. A script tells it to sleep "
 		                   "where it stands.",
 		    .expected = "As it lies down, its hands, feet, head and body knock the villagers, sheep and carts that they "
 		                "pass near through the air. Nothing is knocked while it sleeps. As it gets up, it knocks things "
 		                "again.",
 		    .environment = {.dispenserGrid = false},
-		    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -25.0f}, {25.0f, 25.0f}}},
-		    .creatures = {CreatureSetup {
-		        .species = CreatureType::GiantApe, .offset = {0.0f, 0.0f}, .size = 2.0f, .needs = Content(), .hold = true}},
+		    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
 		    .objects = round,
 		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "SleepOnTheSpot"}},
 		});

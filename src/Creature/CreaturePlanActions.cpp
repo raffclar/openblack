@@ -152,6 +152,7 @@ constexpr std::array k_Executors {
               .activity = Activity::Hurl},
     Executor {.action = "Stomp", .target = Target::Stompable, .build = Build::Stomp},
     Executor {.action = "Kick", .target = Target::Kickable, .build = Build::Kick},
+    Executor {.action = "ShowCreatureYouHateHim", .target = Target::Creature, .build = Build::ShowHate},
     Executor {.action = "SitDown", .build = Build::SitDown, .activity = Activity::Sit},
     Executor {.action = "BeIdle", .build = Build::BeIdle, .activity = Activity::BeIdle},
     Executor {.action = "HangAroundAtHome", .build = Build::HangAround, .activity = Activity::HangAround},
@@ -257,8 +258,10 @@ constexpr std::array k_Executors {
     Executor {
         .action = "WaterTreeForTown", .target = Target::Anything, .use = Target::AnyTree, .build = Build::WaterTreeForTown},
     // The power-up of watering a tree for a town asks the creature to know the water power-up, but casts plain water
-    Executor {
-        .action = "WaterTreePU1ForTown", .target = Target::Anything, .use = Target::AnyTree, .build = Build::WaterTreeForTown},
+    Executor {.action = "WaterTreePU1ForTown",
+              .target = Target::Anything,
+              .use = Target::AnyTree,
+              .build = Build::WaterTreeForTown},
     // The one-shot miracles that it casts: the one in its hand, or one that it picks up first. The game's data cuts
     // some of these names short.
     Executor {.action = "CastOneOffSpellInHandAggressive",
@@ -643,6 +646,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::StoneAndEat(*situation.instrument, *object, objectPoint, situation.height, situation.holdingRock);
 	case Build::Kick:
 		return creature_mind::KickThing(*object);
+	case Build::ShowHate:
+		return creature_mind::ShowCreatureYouHateHim(*object, situation.height, situation.thingHeight, random);
 	case Build::SitDown:
 		// Told by a script where to sit, it goes there; otherwise it sits where it is
 		// TODO(creature-mind): left to itself the game first looks for a clear area about four times its radius around

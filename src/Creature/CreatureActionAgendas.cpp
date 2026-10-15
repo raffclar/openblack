@@ -126,6 +126,29 @@ std::vector<Step> creature_mind::StoneAndEat(uint32_t rock, uint32_t thing, glm:
 	return agenda;
 }
 
+std::vector<Step> creature_mind::ShowCreatureYouHateHim(uint32_t other, float height, float otherHeight, const Random& random)
+{
+	const Gaze watch {.object = other};
+	std::vector<Step> agenda {
+	    GoNear(other, std::max(height * k_HateDistanceHeights, otherHeight * k_HateDistanceHeights), creature_face::Cue::Anger,
+	           Gaze {.object = other, .whileGoing = true}),
+	    FaceThing(other, k_HateFaceSeconds, creature_face::Cue::Anger, watch),
+	};
+	if (random(k_HateLots) == 0)
+	{
+		agenda.push_back({.kind = Step::Kind::Object,
+		                  .order = {.kind = ObjectOrder::Kind::PointAt, .object = other, .seconds = k_HatePointSeconds},
+		                  .face = creature_face::Cue::Grimace,
+		                  .gaze = watch});
+	}
+	agenda.push_back(PlayOnce(random(k_HateLots) != 0 ? k_HateTaunt : animations::k_Taunt));
+	if (random(k_HateLots) == 0)
+	{
+		agenda.push_back(PlayOnce(animations::k_Angry));
+	}
+	return agenda;
+}
+
 std::vector<Step> creature_mind::KickThing(uint32_t thing)
 {
 	const Gaze watch {.object = thing};
