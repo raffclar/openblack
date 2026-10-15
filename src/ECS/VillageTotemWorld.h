@@ -56,6 +56,8 @@ public:
 	virtual void ReactToHandUsingTotem(entt::entity totem, PlayerNames player, glm::vec3 position) = 0;
 	/// The player's creature, if it can see the totem, takes it the player wants to impress, by half
 	virtual void EmpathiseWithPlayer(PlayerNames player, glm::vec3 position) = 0;
+	/// The hand takes hold of a player's totem: when the player's creature sees the hand, it wants to impress faster
+	virtual void SeeHandTakeTotem(PlayerNames /*player*/) {}
 	/// A number floats up from a point, in a colour (0xAARRGGBB)
 	virtual void FloatNumber(glm::vec3 position, float value, uint32_t colour) = 0;
 	/// A town's worship share has just been set: it sends people to worship, or calls them back, to match it

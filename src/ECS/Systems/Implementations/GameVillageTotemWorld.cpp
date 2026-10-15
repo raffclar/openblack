@@ -138,6 +138,11 @@ void GameVillageTotemWorld::EmpathiseWithPlayer(PlayerNames player, glm::vec3 po
 	creature_sight::EmpathiseWithPlayer(player, CreatureDesires::ToImpress, 0.5f, position);
 }
 
+void GameVillageTotemWorld::SeeHandTakeTotem(PlayerNames player)
+{
+	creature_sight::SeePlayerAction(player, creature_desires::Desire::Impress);
+}
+
 void GameVillageTotemWorld::FloatNumber(glm::vec3 position, float value, uint32_t colour)
 {
 	archetypes::FloatingNumberArchetype::Create(position, value, colour);

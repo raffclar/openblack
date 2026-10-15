@@ -70,3 +70,33 @@ std::vector<Step> creature_follow_up::ShowSlapFeeling(const Feelings& feelings, 
 	}
 	}
 }
+
+std::string_view creature_follow_up::ActionToDoAgain(std::string_view stroked)
+{
+	return stroked == "EatObjectInHand" ? std::string_view("EatAlive") : stroked;
+}
+
+bool creature_follow_up::MayDoAgain(std::optional<uint32_t> actedOn, uint32_t self, bool copying)
+{
+	return actedOn.has_value() && *actedOn != self && !copying;
+}
+
+std::optional<uint32_t> creature_follow_up::ThingToDoAgainTo(bool actsOnThing, uint32_t self,
+                                                             std::span<const creature_planner::ObjectCandidate> sameKind)
+{
+	if (!actsOnThing)
+	{
+		return self;
+	}
+	std::optional<uint32_t> best;
+	float bestUsefulness = 0.0f;
+	for (const auto& thing : sameKind)
+	{
+		if (thing.usefulness > bestUsefulness)
+		{
+			best = thing.id;
+			bestUsefulness = thing.usefulness;
+		}
+	}
+	return best;
+}

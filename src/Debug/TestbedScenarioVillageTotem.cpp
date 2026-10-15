@@ -91,6 +91,28 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	                 .joinTown = true}},
 	    .temples = {{.offset = k_Temple}},
 	});
+	// The creature stands under the hand, so that it sees the hand, and the camera follows it
+	const glm::vec2 watcher = k_Centre + glm::vec2(0.0f, -20.0f);
+	all.push_back({
+	    .id = "mind.totem_grip_seen",
+	    .name = "The creature sees the hand take the totem",
+	    .facet = Facet::Mind,
+	    .description = "The player's tiger stands under the hand near the player's town centre. Two times, the hand takes "
+	                   "hold of the totem and lets go.",
+	    .expected = "Each time, the tiger sees the hand take the totem, and its wish to impress grows 2.5 times faster. "
+	                "The log shows the time that Impress takes to grow by 1: it falls to a 2.5th each time.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = watcher, .pauseMind = true}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_Centre + glm::vec2(10.0f, -10.0f),
+	                 .joinTown = true}},
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::HandGripTotem, .delaySeconds = 10.0f, .object = 0},
+	                 {.kind = Command::Kind::HandGripTotem, .delaySeconds = 2.0f, .object = 0}},
+	    .hand = HandHold {.offset = watcher, .height = 12.0f},
+	    .townBeliefInPlayer = 1.0f,
+	});
 
 	for (const auto& carving : k_Carvings)
 	{

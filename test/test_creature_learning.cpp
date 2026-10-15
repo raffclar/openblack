@@ -1657,3 +1657,21 @@ TEST(CreatureWatching, AnActionNeedsItsSkillsAndMiracleKnown)
 	// A need past the lists is never known
 	EXPECT_FALSE(creature_watching::KnowsWhatItNeeds(knowledge, {.skills = {9, std::nullopt}}));
 }
+
+TEST(CreatureLearning, SeeingTheHandMakesADesireGrowFaster)
+{
+	creature_desires::DesireState state;
+	state.increaseSeconds = 100.0f;
+	creature_learning::SpeedUpAfterSeeingPlayer(state, 2.5f, 1.0f, 1200.0f);
+	EXPECT_FLOAT_EQ(state.increaseSeconds, 40.0f);
+	// Each time it sees the hand, the desire grows faster again, but never faster than the least time
+	creature_learning::SpeedUpAfterSeeingPlayer(state, 2.5f, 1.0f, 1200.0f);
+	EXPECT_FLOAT_EQ(state.increaseSeconds, 16.0f);
+	state.increaseSeconds = 2.0f;
+	creature_learning::SpeedUpAfterSeeingPlayer(state, 2.5f, 1.0f, 1200.0f);
+	EXPECT_FLOAT_EQ(state.increaseSeconds, 1.0f);
+	// A speed-up below 1 makes it slower, but never slower than the most time
+	state.increaseSeconds = 1000.0f;
+	creature_learning::SpeedUpAfterSeeingPlayer(state, 0.5f, 1.0f, 1200.0f);
+	EXPECT_FLOAT_EQ(state.increaseSeconds, 1200.0f);
+}
