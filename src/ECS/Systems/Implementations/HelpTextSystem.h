@@ -53,8 +53,12 @@ public:
 	[[nodiscard]] help::AdvisorVoices& GetVoices() override { return _voices; }
 	[[nodiscard]] const help::AdvisorVoices& GetVoices() const override { return _voices; }
 	[[nodiscard]] const help::DialogueText* GetDialogue() const override { return _dialogue.get(); }
+	[[nodiscard]] const help::StoryHistory& GetStoryHistory() const override { return _storyHistory; }
 
 private:
+	/// Keeps a help text that a script showed in the story history, an invalid text as the first text
+	void RecordStoryLine(uint32_t text, int32_t withInteraction, float number);
+
 	/// The voices' sounds and clock, from the game's audio
 	[[nodiscard]] help::AdvisorVoices::Audio VoiceAudio();
 	/// The voices' gestures, given to the advisors' bodies
@@ -68,6 +72,7 @@ private:
 	const gui::TextDatabase* _texts {nullptr};
 	help::AdvisorVoices _voices;
 	std::unique_ptr<help::DialogueText> _dialogue;
+	help::StoryHistory _storyHistory;
 	TextChoices _textChoices;
 	/// The sound saying the advisors' line
 	entt::entity _advisorLine {entt::null};

@@ -190,7 +190,7 @@ void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 	}
 	const bool textInFront = _focusedText && _focused.has_value() && &_scrolls[*_focused] == &scroll;
 	std::vector<uint16_t> texels(static_cast<size_t>(TempleScrollTexture::k_Size) * TempleScrollTexture::k_Size);
-	if (const auto text = Write(scroll.content, _texts, _font, facts); text.has_value())
+	if (const auto text = Write(scroll.content, _texts, _font, facts, _historyStart); text.has_value())
 	{
 		scroll.textHeight =
 		    TempleScrollTexture::Draw(texels, _parchment, *text, static_cast<uint32_t>(scroll.position), _font, !textInFront);
@@ -204,6 +204,44 @@ void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 	bgfx::updateTexture2D(graphics::toBgfx(*scroll.texture), 0, 0, 0, 0, TempleScrollTexture::k_Size,
 	                      TempleScrollTexture::k_Size,
 	                      bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
+}
+
+TempleScrolls::Focus TempleScrolls::LookAt(size_t index, const Facts& facts)
+{
+	// The room's camera looks at the middle of the scroll's box from 30 units back along its frame's x axis
+	if (_focused != index)
+	{
+		if (_focused.has_value() && _focusedText)
+		{
+			// The scroll looked at before is written on its texture again
+			_focusedText = false;
+			Redraw(_scrolls[*_focused], facts);
+		}
+		_focused = index;
+	}
+	const auto& scroll = _scrolls[index];
+	const auto middle = (scroll.min + scroll.max) * 0.5f;
+	return {
+	    .position = glm::vec3(scroll.frame * glm::vec4(middle + glm::vec3(-30.0f, 0.0f, 0.0f), 1.0f)),
+	    .lookAt = glm::vec3(scroll.frame * glm::vec4(middle, 1.0f)),
+	};
+}
+
+std::optional<TempleScrolls::Focus> TempleScrolls::LookAt(TempleRoom room, size_t place, const Facts& facts)
+{
+	size_t found = 0;
+	for (size_t i = 0; i < _scrolls.size(); ++i)
+	{
+		if (_scrolls[i].room != room || !_scrolls[i].texture)
+		{
+			continue;
+		}
+		if (found++ == place)
+		{
+			return LookAt(i, facts);
+		}
+	}
+	return std::nullopt;
 }
 
 bool TempleScrolls::Hold(bool pressed, float mouseY, const std::optional<TempleCursorHit>& hit, const Facts& facts,
@@ -221,23 +259,7 @@ bool TempleScrolls::Hold(bool pressed, float mouseY, const std::optional<TempleC
 				_held = i;
 				_heldMouseY = mouseY;
 				_squeaked = false;
-				// Pressing a scroll has the room's camera look at the middle of the scroll's box from 30 units back
-				// along its frame's x axis.
-				if (_focused != i)
-				{
-					if (_focused.has_value() && _focusedText)
-					{
-						// The scroll looked at before is written on its texture again
-						_focusedText = false;
-						Redraw(_scrolls[*_focused], facts);
-					}
-					_focused = i;
-				}
-				const auto middle = (scroll.min + scroll.max) * 0.5f;
-				focus = Focus {
-				    .position = glm::vec3(scroll.frame * glm::vec4(middle + glm::vec3(-30.0f, 0.0f, 0.0f), 1.0f)),
-				    .lookAt = glm::vec3(scroll.frame * glm::vec4(middle, 1.0f)),
-				};
+				focus = LookAt(i, facts);
 				break;
 			}
 		}
@@ -286,6 +308,11 @@ void TempleScrolls::SetFocus(float zoom, const Facts& facts)
 	// In the creature's room and the main room, the text goes in front of the scroll once the camera is over half way
 	// to it, and back on the texture when it is back under half way, when the camera no longer looks at it
 	const bool textInFront = zoom > 0.5f;
+	// While the camera is close to the story history, its first line stays between the newest and the oldest line
+	if (textInFront && _scrolls[*_focused].content == Content::LibraryHistory)
+	{
+		_historyStart = help::ClampStoryStart(_historyStart, facts.history != nullptr ? facts.history->Count() : 0);
+	}
 	if (textInFront != _focusedText)
 	{
 		_focusedText = textInFront;
@@ -295,6 +322,23 @@ void TempleScrolls::SetFocus(float zoom, const Facts& facts)
 			_focused.reset();
 		}
 	}
+}
+
+void TempleScrolls::TurnHistory(help::StoryTurn turn, const Facts& facts)
+{
+	switch (turn)
+	{
+	case help::StoryTurn::Previous:
+		++_historyStart;
+		break;
+	case help::StoryTurn::Next:
+		--_historyStart;
+		break;
+	case help::StoryTurn::Latest:
+		_historyStart = 0;
+		break;
+	}
+	_historyStart = help::ClampStoryStart(_historyStart, facts.history != nullptr ? facts.history->Count() : 0);
 }
 
 bool TempleScrolls::IsWrittenInFront(Content content) const
@@ -346,7 +390,7 @@ void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices,
 		return;
 	}
 	const auto& scroll = _scrolls[*_focused];
-	const auto text = Write(scroll.content, _texts, _font, facts);
+	const auto text = Write(scroll.content, _texts, _font, facts, _historyStart);
 	if (!text.has_value())
 	{
 		return;
@@ -393,19 +437,12 @@ void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices,
 
 TempleScrolls::Facts TempleScrolls::Facts::Mock()
 {
-	// TODO(raffclar): Made up until openblack keeps the player's saved games and the help it has shown; the world's
-	// statistics, the challenges and the creature are filled in by the temple from the game
+	// TODO(raffclar): The saved games are made up until openblack keeps them. The temple fills in the other facts
+	// from the game: the statistics of the world, the challenges, the creature, the tips and the story history.
 	Facts facts;
 	facts.saveCount = 4;
 	facts.loadCount = 2;
 	facts.savedGames = {{u"04/10/2026 21:14", u"Land 1"}, {u"03/10/2026 18:02", u""}};
-	facts.libraryHelp = {
-	    std::vector<std::string_view> {"HELP_TEXT_DYK_01"},
-	    std::vector<std::string_view> {"HELP_TEXT_DYK_02"},
-	    std::vector<std::string_view> {"HELP_TEXT_DYK_03"},
-	    std::vector<std::string_view> {},
-	    std::vector<std::string_view> {"HELP_TEXT_DYK_01", "HELP_TEXT_DYK_02", "HELP_TEXT_DYK_03"},
-	};
 	CreatureFacts creature;
 	creature.name = u"Ape";
 	creature.age = 3;
@@ -439,7 +476,7 @@ TempleScrolls::Facts TempleScrolls::Facts::Mock()
 }
 
 std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::TextDatabase& texts, const gui::GameFont& font,
-                                                   const Facts& facts)
+                                                   const Facts& facts, int32_t historyStart)
 {
 	TempleScrollText text(font);
 	const auto get = [&texts](std::string_view name) { return texts.Get(name); };
@@ -673,7 +710,7 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 		text.AddNewLine();
 		for (const auto help : facts.libraryHelp.at(kind))
 		{
-			text.Add(get(help));
+			text.Add(helpText(help));
 			text.AddNewLine();
 		}
 		text.End();
@@ -682,7 +719,26 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 	case Content::LibraryHistory: // The story so far
 		text.Add(get("HELP_TEXT_LIBRARY_ROOM_07"));
 		text.AddNewLine();
-		// TODO(raffclar): Up to five entries of the story so far, each its caption and text and two blank lines
+		// Five lines from the first line. A line before the newest line tells how many lines ago it was said. Then
+		// comes who said it, the words without their number, and two blank lines.
+		for (int32_t i = 0; i < k_HistoryLinesShown && facts.history != nullptr; ++i)
+		{
+			const auto back = historyStart + i;
+			const auto line = facts.history->Back(back);
+			if (!line.has_value())
+			{
+				continue;
+			}
+			if (back > 0)
+			{
+				text.Add(Format(get("HELP_TEXT_DIALOG_ADDITION_06"), {back}));
+			}
+			text.Add(get(help::StoryCaption(line->narrator)));
+			text.AddNewLine();
+			text.Add(helpText(line->text));
+			text.AddNewLine();
+			text.AddNewLine();
+		}
 		text.End();
 		break;
 	}

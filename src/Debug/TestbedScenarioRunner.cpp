@@ -2091,6 +2091,32 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: temple {} {}", _seconds, command.value, known ? "starts being destroyed" : "isn't there"));
 		return;
 	}
+	if (command.kind == Kind::LookAtTempleScroll)
+	{
+		if (Locator::temple::has_value())
+		{
+			Locator::temple::value().LookAtScroll(command.value);
+		}
+		Log(fmt::format("{:.1f}s: the temple's camera looks at scroll {}", _seconds, command.value));
+		return;
+	}
+	if (command.kind == Kind::ReadTip)
+	{
+		// A sign far under the land, tapped once by the player
+		const auto text = static_cast<uint32_t>(command.value);
+		const auto category = static_cast<uint32_t>(std::lround(command.amount));
+		const bool read = Locator::scriptHighlightSystem::has_value();
+		if (read)
+		{
+			auto& highlights = Locator::scriptHighlightSystem::value();
+			const auto sign =
+			    highlights.Create(static_cast<uint32_t>(HighlightInfo::DidYouKnowSign), {0.0f, -1000.0f, 0.0f}, 0);
+			highlights.SetProperties(sign, text, category);
+			highlights.Tap(sign, true);
+		}
+		Log(fmt::format("{:.1f}s: tip {} of category {} {}", _seconds, text, category, read ? "read" : "not read"));
+		return;
+	}
 	if (command.kind == Kind::RunText)
 	{
 		// Not alone on its line and not waiting for a click, as the lessons' texts are shown
@@ -2363,6 +2389,8 @@ void Runner::Give(const Command& command)
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
 	case Kind::RunText:
+	case Kind::ReadTip:
+	case Kind::LookAtTempleScroll:
 	case Kind::PlayHandDemo:
 	case Kind::Reframe:
 	case Kind::RecordChallenge:
