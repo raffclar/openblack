@@ -131,7 +131,8 @@ TEST(TestbedScenarios, CoversTheCreatureFeatures)
 	{
 		species.insert(creature.species);
 	}
-	EXPECT_EQ(species.size(), static_cast<size_t>(CreatureType::_COUNT) - 1);
+	// Every vanilla species: the experimental undead cow is left out
+	EXPECT_EQ(species.size(), static_cast<size_t>(CreatureType::UndeadCow) - 1);
 	// Thirst needs water to find: the testbed's lake within the creature's search for it, 30 cells round it
 	const auto lake = flat_land::k_LakeCentre - flat_land::k_MapMiddle;
 	const auto* thirst = Find("needs.thirst");

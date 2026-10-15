@@ -51,6 +51,18 @@ entt::id_type GetIdFromType(CreatureType species, CreatureBody::Appearance appea
 /// The species' row in the game's creature tables, which start with the Giant Ape and then follow the species in order
 [[nodiscard]] constexpr size_t InfoRow(CreatureType species)
 {
+	if (species == CreatureType::UndeadCow)
+	{
+		// EXPERIMENT: the undead cow uses the cow's row of every species table
+		return static_cast<size_t>(CreatureType::Cow);
+	}
 	return species == CreatureType::GiantApe ? 0 : static_cast<size_t>(species);
+}
+
+/// EXPERIMENT: whether a species' body changes with its alignment, fatness and strength. The undead cow is a skeleton
+/// with one mesh: it always shows that mesh as it is.
+[[nodiscard]] constexpr bool HasBodyMorph(CreatureType species)
+{
+	return species != CreatureType::UndeadCow;
 }
 } // namespace openblack::creature

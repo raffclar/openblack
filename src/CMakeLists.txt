@@ -123,6 +123,16 @@ target_include_directories(
          ${CMAKE_BINARY_DIR}/include # For shaders and other bin2c
          ${Stb_INCLUDE_DIR} ${DRLIBS_INCLUDE_DIRS}
 )
+# EXPERIMENT: the folder the imported test creature (undead_cow.glb and undead_cow_texture.png) is read from
+set(OPENBLACK_EXPERIMENT_CREATURE_DIR
+    "E:/openblack/experiments/undead_cow"
+    CACHE PATH "Folder of the experimental undead cow creature"
+)
+target_compile_definitions(
+  openblack_lib
+  PUBLIC
+    OPENBLACK_EXPERIMENT_CREATURE_DIR="${OPENBLACK_EXPERIMENT_CREATURE_DIR}"
+)
 # The game's videos: the container is always read, so that a build without the decoder keeps their timing
 target_link_libraries(openblack_lib PUBLIC bink)
 # Videos decode their frames on a thread of their own
@@ -145,6 +155,7 @@ target_link_libraries(
           anm
           glw
           morph
+          glb
           helpdude
           psys
           physconst

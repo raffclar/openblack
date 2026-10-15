@@ -896,6 +896,21 @@ L3DResult L3DFile::ReadFile(std::istream& stream) noexcept
 		stream.clear();
 	}
 
+	BuildSpans();
+
+	_isLoaded = true;
+
+	return L3DResult::Success;
+}
+
+void L3DFile::BuildSpans() noexcept
+{
+	_primitiveSpans.clear();
+	_boneSpans.clear();
+	_vertexSpans.clear();
+	_indexSpans.clear();
+	_vertexGroupSpans.clear();
+	_blendSpans.clear();
 	// Create spans per submesh
 	_primitiveSpans.reserve(_submeshHeaders.size());
 	_boneSpans.reserve(_submeshHeaders.size());
@@ -949,10 +964,25 @@ L3DResult L3DFile::ReadFile(std::istream& stream) noexcept
 			blendStart += std::min<uint32_t>(blendLength, static_cast<uint32_t>(_blends.size()) - blendStart);
 		}
 	}
+}
 
+void L3DFile::Assemble(Parts parts) noexcept
+{
+	_header = {};
+	_header.magic = k_Magic;
+	_header.flags = parts.flags;
+	_header.submeshCount = static_cast<uint32_t>(parts.submeshes.size());
+	_header.skinCount = static_cast<uint32_t>(parts.skins.size());
+	_submeshHeaders = std::move(parts.submeshes);
+	_primitiveHeaders = std::move(parts.primitives);
+	_vertices = std::move(parts.vertices);
+	_indices = std::move(parts.indices);
+	_vertexGroups = std::move(parts.vertexGroups);
+	_blends = std::move(parts.blends);
+	_bones = std::move(parts.bones);
+	_skins = std::move(parts.skins);
+	BuildSpans();
 	_isLoaded = true;
-
-	return L3DResult::Success;
 }
 
 L3DResult L3DFile::WriteFile(std::ostream& stream) const noexcept

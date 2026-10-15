@@ -104,8 +104,25 @@ std::vector<std::string> MiracleNames(const InfoConstants& info)
 constexpr float k_BubbleHeight = 3.0f;
 
 constexpr std::array<std::string_view, static_cast<size_t>(CreatureType::_COUNT)> k_SpeciesNames {
-    "Unknown",    "Cow",        "Tiger", "Leopard", "Wolf", "Lion",     "Horse", "Tortoise", "Zebra",
-    "Brown Bear", "Polar Bear", "Sheep", "Chimp",   "Ogre", "Mandrill", "Rhino", "Gorilla",  "Giant Ape",
+    "Unknown",
+    "Cow",
+    "Tiger",
+    "Leopard",
+    "Wolf",
+    "Lion",
+    "Horse",
+    "Tortoise",
+    "Zebra",
+    "Brown Bear",
+    "Polar Bear",
+    "Sheep",
+    "Chimp",
+    "Ogre",
+    "Mandrill",
+    "Rhino",
+    "Gorilla",
+    "Giant Ape",
+    "Undead Cow (experiment)",
 };
 
 std::optional<AbodeInfo> AbodeInfoOfMesh(entt::id_type meshId)

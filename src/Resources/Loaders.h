@@ -39,6 +39,11 @@ class L3DMesh;
 class Texture2D;
 } // namespace openblack::graphics
 
+namespace openblack::glb
+{
+struct Model;
+} // namespace openblack::glb
+
 namespace openblack::l3d
 {
 class L3DFile;
@@ -126,6 +131,11 @@ struct L3DLoader final: BaseLoader<graphics::L3DMesh>
 	[[nodiscard]] result_type operator()(FromBufferTag, const std::string& debugName, const std::vector<uint8_t>& data) const;
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 	[[nodiscard]] result_type operator()(FromDynamicFileTag, const std::string& debugName, const l3d::L3DFile& file) const;
+	/// EXPERIMENT: from a file made in memory, as one converted from another format
+	struct FromFileTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromFileTag, const std::string& debugName, const l3d::L3DFile& file) const;
 	/// Made while the game runs from triangles of another model, drawn with its skins (a broken building's)
 	struct FromMadeTag
 	{
@@ -234,6 +244,16 @@ struct CreatureRigLoader final: BaseLoader<creature::CreatureRig>
 	[[nodiscard]] result_type operator()(FromBufferTag, const std::vector<uint8_t>& block,
 	                                     const std::filesystem::path& specDirectory,
 	                                     const std::filesystem::path& meshDirectory) const;
+
+	/// EXPERIMENT: a rig with the settings of another species' rig (its sounds, action points and the timing of each
+	/// animation) and the animations of a glTF model, matched to the species' by name. An animation the model lacks
+	/// becomes the model's stand. The rig has no other meshes to blend to, no eyes, no hair and no tattoo sites.
+	struct FromGlbTag
+	{
+	};
+	[[nodiscard]] result_type operator()(FromGlbTag, const creature::CreatureRig& like, const glb::Model& model,
+	                                     std::span<const uint32_t> bones, const skeletal_animation::Skeleton& skeleton,
+	                                     const std::string& meshName) const;
 };
 
 /// What creatures' tattoos and marks are painted with, read from raw images: the tattoo designs from the atlas of

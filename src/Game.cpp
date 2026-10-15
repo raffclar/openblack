@@ -81,6 +81,7 @@
 #include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
+#include "Creature/ExperimentCreature.h"
 #include "Creature/LeashOrders.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FightAutopilotInterface.h"
@@ -3671,6 +3672,8 @@ bool Game::Initialize() noexcept
 		_startupTimer->Step("hand animations");
 		LoadCreatureRigs();
 		_startupTimer->Step("creature rigs");
+		experiment_creature::Load();
+		_startupTimer->Step("experiment creature");
 		Locator::advisorSystem::value().Load();
 		const auto registerMesh = [&meshManager](auto id, const std::filesystem::path& path) {
 			RegisterFile(meshManager, id, path, LFromDiskTag {}, path);

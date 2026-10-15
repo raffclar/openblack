@@ -139,7 +139,8 @@ TEST(TestbedCrowd, CreaturesMixSpeciesAndOwnersAndKeepApart)
 			EXPECT_GT(glm::distance(creature.offset, creatures[i - 1].offset), 0.3f * k_CreatureSpacing);
 		}
 	}
-	EXPECT_EQ(species.size(), static_cast<size_t>(CreatureType::_COUNT) - 1);
+	// Every vanilla species: the experimental undead cow is left out of crowds
+	EXPECT_EQ(species.size(), static_cast<size_t>(CreatureType::UndeadCow) - 1);
 	EXPECT_EQ(owners.size(), k_CrowdOwners.size());
 	EXPECT_EQ(species.count(CreatureType::Unknown), 0u);
 }

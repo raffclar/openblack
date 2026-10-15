@@ -45,6 +45,13 @@ constexpr float k_UnknownSpeciesStrength = 0.5f;
 
 [[nodiscard]] float ClampScale(float scale);
 
+/// EXPERIMENT: the body a species shows: a species without a body morph (creature::HasBodyMorph) always shows its base
+/// mesh as it is, so its alignment, fatness and strength do not change it
+[[nodiscard]] constexpr Morph ForSpecies(CreatureType species, const Morph& morph)
+{
+	return creature::HasBodyMorph(species) ? morph : Morph {};
+}
+
 /// The game draws a creature of size 1 this tall, by the height of its rest pose's bones
 constexpr float k_HeightAtSizeOne = 15.0f;
 /// How far the bones of a rest pose reach up and down from the mesh's origin, in the form L3DMesh::GetBoneMatrices gives

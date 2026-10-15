@@ -68,7 +68,7 @@ namespace
 // Indexed by species, from the cow
 constexpr std::array<std::string_view, static_cast<size_t>(CreatureType::_COUNT) - 1> k_SpeciesNames {
     "Cow",        "Tiger", "Leopard", "Wolf", "Lion",     "Horse", "Tortoise", "Zebra",     "Brown Bear",
-    "Polar Bear", "Sheep", "Chimp",   "Ogre", "Mandrill", "Rhino", "Gorilla",  "Giant Ape",
+    "Polar Bear", "Sheep", "Chimp",   "Ogre", "Mandrill", "Rhino", "Gorilla",  "Giant Ape", "Undead Cow (experiment)",
 };
 
 constexpr std::array<std::string_view, static_cast<size_t>(PlayerNames::_COUNT)> k_OwnerNames {
@@ -254,8 +254,9 @@ void CreatureSpawner::DrawSettings() noexcept
 	}
 
 	const auto* info = SpeciesInfo(_species);
-	const auto morph = creature_morph::FromAttributes(
-	    _alignment, _fatness, _strength, info != nullptr ? info->strength : creature_morph::k_UnknownSpeciesStrength);
+	const auto morph = creature_morph::ForSpecies(
+	    _species, creature_morph::FromAttributes(_alignment, _fatness, _strength,
+	                                             info != nullptr ? info->strength : creature_morph::k_UnknownSpeciesStrength));
 	ImGui::Text("Evil-good %+.2f, thin-fat %+.2f, weak-strong %+.2f", static_cast<double>(morph.evilGood),
 	            static_cast<double>(morph.thinFat), static_cast<double>(morph.weakStrong));
 	if (ImGui::IsItemHovered())

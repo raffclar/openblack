@@ -410,6 +410,9 @@ protected:
 	/// Write file to the input source
 	L3DResult WriteFile(std::ostream& stream) const noexcept;
 
+	/// Makes each submesh's spans over the file's data
+	void BuildSpans() noexcept;
+
 public:
 	L3DFile() noexcept;
 	virtual ~L3DFile() noexcept;
@@ -485,6 +488,22 @@ public:
 		return submeshIndex < _blendSpans.size() ? std::span<const L3DBlend>(_blendSpans[submeshIndex])
 		                                         : std::span<const L3DBlend> {};
 	}
+
+	/// The data of a file made in memory rather than read, as a converter from another format gives it
+	struct Parts
+	{
+		L3DMeshFlags flags;
+		std::vector<L3DSubmeshHeader> submeshes;
+		std::vector<L3DPrimitiveHeader> primitives;
+		std::vector<L3DVertex> vertices;
+		std::vector<uint16_t> indices;
+		std::vector<L3DVertexGroup> vertexGroups;
+		std::vector<L3DBlend> blends;
+		std::vector<L3DBone> bones;
+		std::vector<L3DTexture> skins;
+	};
+	/// Makes the file from parts made in memory
+	void Assemble(Parts parts) noexcept;
 
 	void AddSubmesh(const L3DSubmeshHeader& header) noexcept;
 	void AddPrimitives(const std::vector<L3DPrimitiveHeader>& headers) noexcept;

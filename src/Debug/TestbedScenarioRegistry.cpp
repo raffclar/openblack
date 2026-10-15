@@ -971,7 +971,8 @@ void AddGrowth(std::vector<Scenario>& all)
 	});
 
 	std::vector<CreatureSetup> parade;
-	constexpr size_t k_Species = static_cast<size_t>(CreatureType::_COUNT) - 1;
+	// The experimental undead cow is left out of the parade
+	constexpr size_t k_Species = static_cast<size_t>(CreatureType::UndeadCow) - 1;
 	constexpr size_t k_FrontRow = 9;
 	std::vector<Command> parading;
 	for (size_t i = 0; i < k_Species; ++i)
@@ -1952,6 +1953,30 @@ void AddMovement(std::vector<Scenario>& all)
 	                "walker that has had its trial (turns to spare each way, and whether it was turned round).",
 	    .framing = {.shot = Shot::Overview, .include = {k_Pen + glm::vec2(-30.0f, -30.0f), k_Pen + glm::vec2(30.0f, 30.0f)}},
 	    .objects = pen,
+	});
+}
+
+void AddExperimentUndeadCow(std::vector<Scenario>& all)
+{
+	// EXPERIMENT: the undead cow imported from a glTF file, beside a cow to compare. No part of the original game.
+	std::vector<Command> walks;
+	walks.push_back(Go(Kind::WalkTo, 0, {-60.0f, 15.0f}, 2.0f, false));
+	walks.push_back(Go(Kind::WalkTo, 1, {-60.0f, -15.0f}, 0.0f, false));
+	walks.push_back(Go(Kind::WalkTo, 0, {60.0f, 15.0f}, 0.0f, true));
+	walks.push_back(Go(Kind::WalkTo, 1, {60.0f, -15.0f}, 0.0f, true));
+	all.push_back({
+	    .id = "experiment.undead_cow_walk",
+	    .name = "EXPERIMENT: undead cow walks beside a cow",
+	    .facet = Facet::Movement,
+	    .description = "The undead cow, a skeleton imported from undead_cow.glb with the cow's mind and settings, stands "
+	                   "beside a cow. After two seconds both walk across the testbed and back.",
+	    .expected = "The undead cow shows its one mesh with the placeholder texture, never fatter, thinner or more evil "
+	                "or good. It stands, then walks with the glTF walk animation, as the cow does with its own.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .creature = 0, .distance = 0.9f},
+	    .creatures = {Posed(CreatureType::UndeadCow, {60.0f, 15.0f}, 90.0f), Posed(CreatureType::Cow, {60.0f, -15.0f}, 90.0f)},
+	    .commands = walks,
+	    .repeatFrom = 0,
 	});
 }
 
@@ -6096,6 +6121,7 @@ std::vector<Scenario> Build()
 	AddLight(all);
 	AddMovement(all);
 	AddFootprints(all);
+	AddExperimentUndeadCow(all);
 	AddAudio(all);
 	AddObjects(all);
 	AddHand(all);

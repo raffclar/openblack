@@ -256,6 +256,7 @@ std::string creature_audio::VoiceBank(std::string_view rigBankName, CreatureType
 		switch (species)
 		{
 		case CreatureType::Cow:
+		case CreatureType::UndeadCow:
 			name = "bcow";
 			break;
 		case CreatureType::Tiger:

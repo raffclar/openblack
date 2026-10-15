@@ -94,7 +94,8 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 	const auto morph =
-	    creature_morph::FromAttributes(body.alignment, body.fatness, body.strength, SpeciesStrength(creatureType));
+	    creature_morph::ForSpecies(creatureType, creature_morph::FromAttributes(body.alignment, body.fatness, body.strength,
+	                                                                            SpeciesStrength(creatureType)));
 	registry.Assign<Creature>(entity, Creature {.owner = playerName,
 	                                            .leashable = false,
 	                                            .species = creatureType,

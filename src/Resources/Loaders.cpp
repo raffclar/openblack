@@ -25,6 +25,7 @@
 #include <EXCFile.h>
 #include <GLWFile.h>
 #include <GestureFile.h>
+#include <GlbFile.h>
 #include <HNDFile.h>
 #include <HelpDudeFile.h>
 #include <L3DFile.h>
@@ -47,6 +48,7 @@
 #include "Common/Bitmap16B.h"
 #include "Common/StringUtils.h"
 #include "Common/Zip.h"
+#include "Creature/GltfCreature.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Help/AdvisorModel.h"
@@ -109,6 +111,16 @@ L3DLoader::result_type L3DLoader::operator()(FromDiskTag, const std::filesystem:
 L3DLoader::result_type L3DLoader::operator()(FromDynamicFileTag, const std::string& debugName, const l3d::L3DFile& file) const
 {
 	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, true);
+	if (!mesh->Load(file))
+	{
+		throw std::runtime_error("Unable to load mesh");
+	}
+	return mesh;
+}
+
+L3DLoader::result_type L3DLoader::operator()(FromFileTag, const std::string& debugName, const l3d::L3DFile& file) const
+{
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName);
 	if (!mesh->Load(file))
 	{
 		throw std::runtime_error("Unable to load mesh");
@@ -553,6 +565,71 @@ std::vector<CreatureRig::HairGroup> LoadHair(std::span<const morph::HairGroup> g
 }
 } // namespace
 
+CreatureRigLoader::result_type CreatureRigLoader::operator()(FromGlbTag, const CreatureRig& like, const glb::Model& model,
+                                                             std::span<const uint32_t> bones,
+                                                             const skeletal_animation::Skeleton& skeleton,
+                                                             const std::string& meshName) const
+{
+	auto rig = std::make_shared<CreatureRig>(like);
+	rig->baseMeshName = meshName;
+	rig->meshNames = {};
+	rig->meshNames.front() = meshName;
+	rig->hasMesh = {};
+	rig->hasMesh.front() = true;
+	rig->eyes.reset();
+	rig->hairGroups.clear();
+	rig->tattooSites.reset();
+
+	const auto& likeAnimations = like.animations.front();
+	const auto count = likeAnimations.size();
+	for (auto& animations : rig->animations)
+	{
+		animations.assign(count, std::nullopt);
+	}
+	const auto matches = gltf_creature::MatchClips(like.animationNames, model.animations);
+	// The model's own stand stands in for the animations it lacks
+	const auto stand = matches.empty() ? std::nullopt : matches.front();
+	size_t matched = 0;
+	for (size_t i = 0; i < count && i < matches.size(); ++i)
+	{
+		const auto source = matches[i].has_value() ? matches[i] : stand;
+		if (!source.has_value())
+		{
+			continue;
+		}
+		const auto& animation = model.animations.at(*source);
+		gltf_creature::ClipTiming timing {};
+		if (const auto& own = likeAnimations[i]; own.has_value())
+		{
+			timing = {.durationMs = own->duration,
+			          .frames = own->frames.size(),
+			          .looping = own->looping,
+			          .displacement = own->displacement};
+		}
+		else
+		{
+			constexpr float k_FramesPerSecond = 30.0f;
+			const auto seconds = animation.Duration();
+			timing = {.durationMs = static_cast<uint32_t>(std::lround(seconds * 1000.0f)),
+			          .frames = static_cast<size_t>(std::lround(seconds * k_FramesPerSecond)) + 1,
+			          .looping = false};
+		}
+		rig->animations.front().at(i) = gltf_creature::ToAnimation(model, animation, bones, skeleton, timing);
+		matched += matches[i].has_value() ? 1 : 0;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Experiment creature {}: {} of {} animations matched by name, the rest stand",
+	                   meshName, matched, count);
+	for (size_t i = 0; i < count && i < matches.size(); ++i)
+	{
+		if (!matches[i].has_value())
+		{
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Experiment creature {}: no animation {}", meshName,
+			                    like.animationNames[i]);
+		}
+	}
+	return rig;
+}
+
 CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, const std::vector<uint8_t>& block,
                                                              const std::filesystem::path& specDirectory,
                                                              const std::filesystem::path& meshDirectory) const
@@ -580,6 +657,10 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 	for (const auto& set : file.GetAnimationSpecs().animationSets)
 	{
 		animationCount += set.animations.size();
+		for (const auto& animation : set.animations)
+		{
+			rig->animationNames.push_back(set.name + "/" + animation.name);
+		}
 	}
 	for (size_t mesh = 0; mesh < CreatureRig::k_AnimatedMeshCount; ++mesh)
 	{

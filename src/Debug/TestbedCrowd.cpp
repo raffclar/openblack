@@ -182,7 +182,8 @@ std::vector<CrowdCreature> testbed_scenarios::LayOutCreatures(size_t count, uint
 	CrowdRandom random(seed);
 	// Creatures are big: keep the lake's bank clear of them by a creature's stride
 	const auto points = SpreadPoints(count, k_CreatureSpacing, k_CreatureSpacing, 0.3f, random);
-	constexpr auto k_Species = static_cast<size_t>(CreatureType::_COUNT) - 1;
+	// The experimental undead cow is left out of crowds
+	constexpr auto k_Species = static_cast<size_t>(CreatureType::UndeadCow) - 1;
 	std::vector<CrowdCreature> creatures;
 	creatures.reserve(points.size());
 	for (const auto& point : points)

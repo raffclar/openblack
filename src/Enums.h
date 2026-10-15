@@ -3404,8 +3404,10 @@ enum class CreatureType : int32_t
 	Rhino = 15,
 	Gorilla = 16,
 	GiantApe = 17,
+	/// EXPERIMENT: a cow's mind and settings with a body imported from a glTF file, no part of the original game
+	UndeadCow = 18,
 
-	_COUNT = 18
+	_COUNT = 19
 };
 
 } // namespace openblack

@@ -1037,3 +1037,5 @@ openblack_setup_and_add_test(
   test_creature_copy_actions test_creature_copy_actions.cpp
 )
 openblack_setup_and_add_test(test_altar_sacrifice test_altar_sacrifice.cpp)
+openblack_setup_and_add_test(test_gltf_creature test_gltf_creature.cpp)
+target_link_libraries(test_gltf_creature PRIVATE glb l3d)
