@@ -163,6 +163,34 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 14.0f}, .yawDegrees = 180.0f}},
 	});
 
+	// Five couples sent to make love from different starts, to see that each pair stands face to face to kiss
+	all.push_back({
+	    .id = "villagers.kissing_couples",
+	    .name = "Couples lining up to kiss",
+	    .facet = Facet::Objects,
+	    .description = "Five grown couples on open land, twenty metres between couples. The man of each is sent to make love "
+	                   "with his woman a second in. Couple 1 stands eight metres apart. In couple 2 the woman carries food. "
+	                   "Couple 3 stands one metre apart. In couple 4 the woman walks away before the man calls her. Couple 5 "
+	                   "stands six metres apart, the man with his back to the woman.",
+	    .expected = "Each pair walk to points a little apart, turn to face each other, and kiss face to face, the woman's "
+	                "lean reaching the man, whoever gets there first.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-44.0f, -4.0f}, {44.0f, 16.0f}}, .distance = 0.6f},
+	    .objects = {{.type = VillagerInfo::CelticForesterMale, .offset = {-44.0f, 0.0f}, .mateWith = 1},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-36.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-24.0f, 0.0f}, .mateWith = 3},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-16.0f, 0.0f}, .foodHeld = 300},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-4.0f, 0.0f}, .mateWith = 5},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-3.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {16.0f, 0.0f}, .mateWith = 7},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {20.0f, 0.0f},
+	                 .walkTo = {{20.0f, 14.0f}},
+	                 .walkAfterSeconds = 0.2f},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {36.0f, 0.0f}, .yawDegrees = 180.0f, .mateWith = 9},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {36.0f, 6.0f}}},
+	});
+
 	// A town's people come across a creature standing still on the edge of their village
 	all.push_back({
 	    .id = "villagers.creature_curious",
