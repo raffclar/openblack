@@ -173,6 +173,8 @@ public:
 	[[nodiscard]] float GetEstimate() const { return _estimate; }
 	/// The route found
 	[[nodiscard]] const std::vector<Leg>& GetBest() const;
+	/// Where the route that the last step chose as the best has got to, if that route is still searched
+	[[nodiscard]] std::optional<glm::vec2> GetBestHead() const;
 	[[nodiscard]] std::vector<Leg> TakeBest();
 	[[nodiscard]] size_t GetRouteCount() const { return _routes.size(); }
 	[[nodiscard]] glm::vec2 GetStart() const { return _start.point; }

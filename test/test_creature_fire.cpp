@@ -235,3 +235,19 @@ TEST(CreatureFire, EveryExecutorsTargetIsCountedAmongTheKinds)
 		EXPECT_LT(static_cast<size_t>(executor.target), creature_plan_actions::k_TargetCount) << executor.action;
 	}
 }
+
+TEST(CreatureFire, SettingFireTurnsAngryFlutteringThenSmilesAsItThrows)
+{
+	using creature_face::Cue;
+	const auto agenda = SetFireTo(7, 3u, false);
+	ASSERT_TRUE(agenda.has_value());
+	ASSERT_EQ(agenda->size(), 6u);
+	EXPECT_EQ((*agenda)[0].gaze->object, 3u);
+	EXPECT_EQ((*agenda)[1].gaze->object, 7u);
+	EXPECT_EQ((*agenda)[2].face, Cue::Anger);
+	EXPECT_TRUE((*agenda)[2].flutterEyelids);
+	EXPECT_EQ((*agenda)[2].gaze->object, 7u);
+	EXPECT_EQ((*agenda)[3].face, Cue::Smile);
+	EXPECT_EQ((*agenda)[4].gaze->object, 3u);
+	EXPECT_EQ((*agenda)[5].face, Cue::Anger);
+}

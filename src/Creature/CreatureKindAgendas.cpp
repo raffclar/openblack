@@ -40,12 +40,14 @@ std::vector<Step> creature_mind::GiveWoodToStore(const std::optional<TreeToTake>
 	}
 	agenda.push_back({.kind = Step::Kind::Move,
 	                  .movement = {.kind = Movement::Kind::ToThrowPosition, .object = store, .maxDistance = height},
-	                  .face = creature_face::Cue::Compassion});
+	                  .face = creature_face::Cue::Compassion,
+	                  .gaze = Gaze {.object = store}});
 	agenda.push_back({.kind = Step::Kind::Move,
 	                  .seconds = k_FaceStoreForWoodSeconds,
 	                  .movement = {.kind = Movement::Kind::TurnToFaceObject, .object = store},
 	                  .effect = Effect::Completed,
-	                  .face = creature_face::Cue::Compassion});
+	                  .face = creature_face::Cue::Compassion,
+	                  .gaze = Gaze {.object = store}});
 	agenda.push_back({.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::ThrowInStore, .object = store}});
 	return agenda;
 }
@@ -188,7 +190,7 @@ std::vector<Step> creature_mind::KickBallAround(uint32_t ball, const Random& ran
 	const Gaze watch {.object = ball};
 	const Step goNear {.kind = Step::Kind::Move,
 	                   .movement = {.kind = Movement::Kind::GoNearObject, .object = ball, .maxDistance = 0.0f},
-	                   .gaze = watch};
+	                   .gaze = Gaze {.object = ball, .whileGoing = true}};
 	std::vector<Step> agenda;
 	uint32_t kicks = 0;
 	// The count to reach is drawn afresh after every kick
@@ -206,6 +208,7 @@ std::vector<Step> creature_mind::KickBallAround(uint32_t ball, const Random& ran
 		{
 			agenda.push_back({.kind = Step::Kind::Object,
 			                  .order = {.kind = ObjectOrder::Kind::PointAt, .object = ball, .seconds = k_PointAtBallSeconds},
+			                  .face = creature_face::Cue::Smile,
 			                  .gaze = watch});
 		}
 		else
@@ -294,9 +297,12 @@ std::vector<Step> creature_mind::PlantTreeBy(std::optional<uint32_t> tree, uint3
 	{
 		agenda.push_back(PickUp(*tree));
 	}
-	agenda.push_back(
-	    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::GoNearObject, .object = by, .maxDistance = 0.0f}});
-	agenda.push_back({.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::TurnToFaceObject, .object = by}});
+	agenda.push_back({.kind = Step::Kind::Move,
+	                  .movement = {.kind = Movement::Kind::GoNearObject, .object = by, .maxDistance = 0.0f},
+	                  .gaze = Gaze {.object = by, .whileGoing = true}});
+	agenda.push_back({.kind = Step::Kind::Move,
+	                  .movement = {.kind = Movement::Kind::TurnToFaceObject, .object = by},
+	                  .gaze = Gaze {.object = by}});
 	agenda.push_back(
 	    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Discard, .animation = creature_throw::k_PutDown}});
 	return agenda;

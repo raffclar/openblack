@@ -137,3 +137,22 @@ TEST(CreatureHeadLook, HeadClipsPlayWhenTurnedOrWithALookPoint)
 	EXPECT_FALSE(PlaysHeadClip(0.0f, false));
 	EXPECT_FALSE(PlaysHeadClip(5e-5f, false));
 }
+
+TEST(CreatureHeadLook, WaitingForItsRouteItLooksAheadAlongTheSearch)
+{
+	const auto ground = [](glm::vec2 at) { return at.x * 0.5f; };
+	// A new walk looks at once: with no search route yet, at the destination's first coordinate on both axes
+	auto look = StepRouteLook(RouteLook {}, 16, {.destination = {100.0f, 300.0f}}, ground);
+	EXPECT_EQ(look.countdownMs, k_RouteLookMs);
+	EXPECT_FLOAT_EQ(look.point.x, 100.0f);
+	EXPECT_FLOAT_EQ(look.point.z, 100.0f);
+	EXPECT_FLOAT_EQ(look.point.y, 50.0f);
+	// The point holds until its time is up, then moves to where the search has got to
+	look = StepRouteLook(look, 2000, {.searchHead = glm::vec2(40.0f, 60.0f)}, ground);
+	EXPECT_FLOAT_EQ(look.point.x, 100.0f);
+	EXPECT_EQ(look.countdownMs, 0);
+	look = StepRouteLook(look, 1, {.searchHead = glm::vec2(40.0f, 60.0f)}, ground);
+	EXPECT_FLOAT_EQ(look.point.x, 40.0f);
+	EXPECT_FLOAT_EQ(look.point.z, 60.0f);
+	EXPECT_FLOAT_EQ(look.point.y, 20.0f);
+}
