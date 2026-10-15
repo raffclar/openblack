@@ -2790,6 +2790,36 @@ void AddObjects(std::vector<Scenario>& all)
 		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
 		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "TakeToyHome"}},
 		});
+		all.push_back({
+		    .id = "objects.take_wheat_home",
+		    .name = "Taking wheat from a field home",
+		    .facet = Facet::Objects,
+		    .description = "A grown tiger of the player's, whose temple stands far to the west, with a ripe wheat field in "
+		                   "front of it. A script tells it to take food from the field to its home.",
+		    .expected = "It walks to the field and faces it, pulls a handful of wheat from it, then walks home with the "
+		                "wheat in its hand and looks ahead. At its home, the pen before the temple, it puts the wheat down.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+		    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {0.0f, -40.0f}, .ripeCrop = true}},
+		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "TakeFoodFromFieldToHome"}},
+		});
+		all.push_back({
+		    .id = "objects.bring_thing_home",
+		    .name = "Bringing a thing home",
+		    .facet = Facet::Objects,
+		    .description = "A grown tiger of the player's, whose temple stands far to the west, with a rock in front of it. "
+		                   "A script tells it to bring the rock home.",
+		    .expected = "It picks the rock up, walks home and looks ahead, and puts the rock down within five metres of "
+		                "its home, the pen before the temple.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+		    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, -k_Reach}}},
+		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BringHome"}},
+		});
 	}
 
 	all.push_back({

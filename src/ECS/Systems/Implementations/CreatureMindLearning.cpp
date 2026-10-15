@@ -40,6 +40,7 @@
 #include "Creature/CreatureActionHistory.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureAttention.h"
+#include "Creature/CreatureBringHome.h"
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
@@ -546,6 +547,19 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		const auto at = PointOf(registry, entity);
 		return registry.AllOf<MobileStatic>(entity) && ToyOf(registry, entity).has_value() && home.has_value() &&
 		       at.has_value() && gutils::GetDistanceInMetres(*home, glm::vec3(at->x, home->y, at->y)) > k_ToyAwayFromHome;
+	}
+	case Target::BringableHome:
+	{
+		// The distance to the home of the creature is across the land, as for a toy
+		const auto home = ecs::creature_home::HomeOf(registry, self);
+		const auto at = PointOf(registry, entity);
+		if (heldByOther || hands == nullptr || !home.has_value() || !at.has_value())
+		{
+			return false;
+		}
+		const auto metres = gutils::GetDistanceInMetres(*home, glm::vec3(at->x, home->y, at->y));
+		return creature_bring_home::CanBeBroughtHome(metres, creature_object_actions::IsLiving(hands->KindOf(entity).thing),
+		                                             hands->CanPickUp(self, entity));
 	}
 	case Target::OneShotRestoreHealth:
 	{
