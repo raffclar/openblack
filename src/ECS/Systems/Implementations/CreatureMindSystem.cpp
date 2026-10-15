@@ -1039,9 +1039,20 @@ void ReleaseCast(entt::entity creature)
 
 void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation, CreatureEyes* eyes)
 {
-	if (commands.endSit)
+	if (commands.endSit || commands.endStaticLoop)
 	{
 		animation.body = creature_layers::EndLoop(animation.body);
+	}
+	if (commands.endDance)
+	{
+		animation.body = creature_layers::EndDance(animation.body);
+	}
+	if (commands.startDance.has_value())
+	{
+		if (auto body = creature_layers::PlayDance(animation.body, *commands.startDance))
+		{
+			animation.body = *body;
+		}
 	}
 	if (commands.playOnce.has_value())
 	{
@@ -1786,7 +1797,7 @@ void CreatureMindSystem::ProcessTurn()
 				    Locator::creatureLocomotionSystem::value().Stop(entity);
 			    }
 			    // As with any change of plan, a pose ends and an action plays out before it drops
-			    animation.body = creature_layers::EndLoop(animation.body);
+			    animation.body = creature_layers::EndDance(creature_layers::EndLoop(animation.body));
 			    TellFainting(entity);
 			    creature_mind::Plan(mind.idle, creature_mind::Activity::Faint, creature_mind::Faint(ShownSize(creature)));
 			    needs->faint.reset();
@@ -1876,6 +1887,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .seconds = k_TurnSeconds,
 		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
 		        .bodyLooping = creature_layers::IsLooping(animation.body),
+		        .bodyDancing = creature_layers::IsDancing(animation.body),
 		        .moving = moving,
 		        .subMove = SubMoveOf(entity),
 		        .position = glm::vec2(transform.position.x, transform.position.z),
@@ -2341,6 +2353,10 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	    body != nullptr && body->body.kind == creature_layers::BodyAction::Kind::Sequence)
 	{
 		body->body = creature_layers::EndLoop(body->body);
+	}
+	if (auto* body = registry.TryGet<CreatureAnimation>(creature); body != nullptr)
+	{
+		body->body = creature_layers::EndDance(body->body);
 	}
 	// Too slight to count, it only looks at the player
 	if (std::abs(feedback) <= creature_feedback::k_SlightFeedback)

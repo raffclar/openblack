@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <numbers>
 #include <tuple>
 
@@ -335,7 +336,8 @@ struct HeadLook
 /// The body posed for this frame: its action or breathing, or its slots blended, then the head turned, the face and
 /// any gesture on top
 void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creature_morph::Morph& morph,
-              const Transform& transform, float size, float milliseconds, float seconds, const HeadLook& look)
+              const Transform& transform, float size, float milliseconds, float seconds, const HeadLook& look,
+              const std::function<uint32_t(uint32_t)>& random)
 {
 	const auto* stand = AnimationOf(animation, rig, morph, creature_layers::animations::k_Stand);
 	if (stand == nullptr)
@@ -345,8 +347,24 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 	const auto playbackMs = milliseconds * creature_layers::PlaybackRate(size);
 	const auto animationOf = [&](size_t index) { return AnimationOf(animation, rig, morph, index); };
 
-	animation.body = creature_layers::AdvanceBody(animation.body, playbackMs,
-	                                              DurationOf(animationOf(creature_layers::CurrentAnimation(animation.body))));
+	// A species without the start, the first move or the finish of the dance does not dance
+	if (animation.body.kind == creature_layers::BodyAction::Kind::Dance &&
+	    (animationOf(creature_layers::animations::k_DanceStart) == nullptr ||
+	     animationOf(creature_layers::animations::k_FirstDanceMove) == nullptr ||
+	     animationOf(creature_layers::animations::k_DanceFinish) == nullptr))
+	{
+		animation.body = {};
+	}
+	animation.body = creature_layers::AdvanceBody(
+	    animation.body, playbackMs, DurationOf(animationOf(creature_layers::CurrentAnimation(animation.body))), milliseconds);
+	// A dance that needs its next move chooses one of the moves that the species has
+	if (animation.body.chooseDanceMove)
+	{
+		const auto move = creature_layers::ChooseDanceMove(animation.body.firstDanceMove, random,
+		                                                   [&](size_t index) { return animationOf(index) != nullptr; });
+		animation.body.animations[1] = move.value_or(creature_layers::animations::k_Stand);
+		animation.body.chooseDanceMove = false;
+	}
 	animation.face = creature_layers::AdvanceFace(
 	    animation.face, milliseconds,
 	    DurationOf(animation.face.current.has_value() ? animationOf(*animation.face.current) : nullptr));
@@ -389,7 +407,8 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 	                                  : nullptr;
 	         played != nullptr)
 	{
-		poses = skeletal_animation::SampleCycle(*played, *stand, static_cast<uint32_t>(std::max(animation.body.timeMs, 0.0f)),
+		const auto time = creature_layers::DanceMoveTime(animation.body, played->duration);
+		poses = skeletal_animation::SampleCycle(*played, *stand, static_cast<uint32_t>(std::max(time, 0.0f)),
 		                                        animation.skeleton, mirror);
 	}
 	else
@@ -728,7 +747,9 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    {
 			    const auto look = HeadLookOf(registry, entity, animation, rig, morph.drawn, transform, creature);
 			    PoseBody(animation, *rig, morph.drawn, transform, ShownSize(creature), gameTime.count() * scale,
-			             seconds * scale, look);
+			             seconds * scale, look, [this](uint32_t range) {
+				             return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
+			             });
 		    }
 		    if (animation.boneMatrices.size() != base->GetBoneMatrices().size())
 		    {
@@ -804,7 +825,9 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	if (rig != nullptr)
 	{
 		PoseBody(*animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
-		         HeadLookOfCopy(*animation, *transform, creature->species, self->size));
+		         HeadLookOfCopy(*animation, *transform, creature->species, self->size), [this](uint32_t range) {
+			         return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
+		         });
 	}
 	if (animation->boneMatrices.size() != base->GetBoneMatrices().size())
 	{

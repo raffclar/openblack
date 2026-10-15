@@ -11,6 +11,7 @@
 
 #include <array>
 #include <numbers>
+#include <optional>
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -445,4 +446,81 @@ TEST(SkeletalLayers, AMirroredAnimationMovesTheOtherSide)
 	EXPECT_NEAR(mirrored[0].translation.x, -2.0f, k_Tolerance);
 	EXPECT_NEAR(mirrored[0].translation.y, 1.0f, k_Tolerance);
 	EXPECT_NEAR(mirrored[0].translation.z, 3.0f, k_Tolerance);
+}
+
+TEST(CreatureLayers, ADanceStartsThenChoosesItsFirstMoveFromAllSeven)
+{
+	using creature_layers::BodyAction;
+	auto body = creature_layers::PlayDance({}, 800.0f);
+	ASSERT_TRUE(body.has_value());
+	EXPECT_EQ(creature_layers::CurrentAnimation(*body), creature_layers::animations::k_DanceStart);
+	EXPECT_FALSE(creature_layers::PlayDance(*body, 800.0f).has_value());
+	auto next = creature_layers::AdvanceBody(*body, 600.0f, 500U);
+	EXPECT_EQ(next.phase, BodyAction::Phase::Loop);
+	EXPECT_TRUE(next.chooseDanceMove);
+	EXPECT_TRUE(next.firstDanceMove);
+	uint32_t asked = 0;
+	const auto move = creature_layers::ChooseDanceMove(
+	    true,
+	    [&](uint32_t range) {
+		    asked = range;
+		    return 6U;
+	    },
+	    [](size_t) { return true; });
+	EXPECT_EQ(asked, 7U);
+	EXPECT_EQ(move, std::optional<size_t> {153});
+}
+
+TEST(CreatureLayers, ALaterDanceMoveComesFromTheFirstFiveAndTheBodyChoosesAgainForAMissingMove)
+{
+	std::vector<uint32_t> draws {4, 1};
+	size_t at = 0;
+	uint32_t asked = 0;
+	const auto move = creature_layers::ChooseDanceMove(
+	    false,
+	    [&](uint32_t range) {
+		    asked = range;
+		    return draws.at(at++);
+	    },
+	    [](size_t index) { return index != 151; });
+	EXPECT_EQ(asked, 5U);
+	EXPECT_EQ(move, std::optional<size_t> {148});
+	EXPECT_FALSE(creature_layers::ChooseDanceMove(false, [](uint32_t) { return 0U; }, [](size_t) { return false; }));
+}
+
+TEST(CreatureLayers, EachDanceMoveLastsItsRealTimeAndTheLeftOverTimeCarries)
+{
+	using creature_layers::BodyAction;
+	BodyAction body {.kind = BodyAction::Kind::Dance,
+	                 .phase = BodyAction::Phase::Loop,
+	                 .animations = {145, 148, 146},
+	                 .timeMs = 700.0f,
+	                 .danceMoveMs = 800.0f};
+	// The playback time does not count, only the real time
+	auto next = creature_layers::AdvanceBody(body, 1000.0f, 2000U, 150.0f);
+	EXPECT_TRUE(next.chooseDanceMove);
+	EXPECT_FALSE(next.firstDanceMove);
+	EXPECT_FLOAT_EQ(next.timeMs, 50.0f);
+	// The animation stretches to the length of the move
+	body.timeMs = 400.0f;
+	EXPECT_FLOAT_EQ(creature_layers::DanceMoveTime(body, 2000U), 1000.0f);
+}
+
+TEST(CreatureLayers, AStopOfTheDancePlaysTheFinishAtOnceOrAfterTheStart)
+{
+	using creature_layers::BodyAction;
+	BodyAction moving {.kind = BodyAction::Kind::Dance, .phase = BodyAction::Phase::Loop, .animations = {145, 150, 146}};
+	const auto stopped = creature_layers::EndDance(moving);
+	EXPECT_EQ(creature_layers::CurrentAnimation(stopped), creature_layers::animations::k_DanceFinish);
+	EXPECT_FALSE(creature_layers::IsDancing(stopped));
+
+	auto starting = *creature_layers::PlayDance({}, 1000.0f);
+	starting = creature_layers::EndDance(starting);
+	EXPECT_EQ(creature_layers::CurrentAnimation(starting), creature_layers::animations::k_DanceStart);
+	const auto after = creature_layers::AdvanceBody(starting, 600.0f, 500U);
+	EXPECT_EQ(after.phase, BodyAction::Phase::End);
+	EXPECT_FALSE(after.chooseDanceMove);
+	// A static pose does not stop for a stop of the dance
+	BodyAction sitting {.kind = BodyAction::Kind::Sequence, .phase = BodyAction::Phase::Loop, .animations = {37, 38, 39}};
+	EXPECT_FALSE(creature_layers::EndDance(sitting).endWanted);
 }
