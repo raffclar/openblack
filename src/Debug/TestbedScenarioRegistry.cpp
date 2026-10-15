@@ -2937,6 +2937,19 @@ void AddHand(std::vector<Scenario>& all)
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
 	});
 
+	all.push_back({
+	    .id = "hand.mesh_contact",
+	    .name = "The hand on the body",
+	    .facet = Facet::Hand,
+	    .description = "A tiger faces the camera and the hand is free. Hold the action button on the tiger. Move the hand "
+	                   "slowly over its head, its arms and its belly, then off the body and back.",
+	    .expected = "The hand stays under the cursor and rests just in front of the skin, also on thin parts. It eases "
+	                "back to the skin in a short time and never goes into the body. Off the body, it stays in front of "
+	                "the tiger and stands upright.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	});
+
 	auto worn = Posed(CreatureType::Tiger, {0.0f, 0.0f});
 	worn.needs = {.energy = 0.595f, .exhaustion = 0.325f, .life = 0.745f};
 	all.push_back({

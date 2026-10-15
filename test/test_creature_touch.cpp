@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
 #include <chrono>
 #include <optional>
@@ -14,6 +16,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/ScreenPick.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureInteractCameraModel.h"
 #include "Common/Zoomer.h"
@@ -243,18 +246,75 @@ TEST(CreatureTouch, TheHandsUpEasesRoundOverItsTime)
 	EXPECT_NEAR(up.GetValue().z, 0.0f, k_Tolerance);
 }
 
-TEST(CreatureTouch, TheBodysSurfaceFacesOutFromTheNearestCapsule)
+TEST(CreatureTouch, TakingHoldTheHandStartsALittleShortOfTheCreature)
 {
-	const std::array<feedback::Capsule, 2> body {
-	    feedback::Capsule {.from = glm::vec3(0.0f), .to = glm::vec3(0.0f, 10.0f, 0.0f), .radius = 1.0f},
-	    feedback::Capsule {.from = glm::vec3(5.0f, 0.0f, 0.0f), .to = glm::vec3(5.0f, 10.0f, 0.0f), .radius = 1.0f},
-	};
-	const auto normal = feedback::SurfaceNormal(glm::vec3(0.0f, 5.0f, -1.0f), body);
-	EXPECT_NEAR(normal.z, -1.0f, k_Tolerance);
-	const auto other = feedback::SurfaceNormal(glm::vec3(6.0f, 5.0f, 0.0f), body);
-	EXPECT_NEAR(other.x, 1.0f, k_Tolerance);
-	// On a capsule's own line there is no way out: straight up
-	EXPECT_EQ(feedback::SurfaceNormal(glm::vec3(0.0f, 5.0f, 0.0f), body), glm::vec3(0.0f, 1.0f, 0.0f));
+	// The gap is 0.825 for each unit of size
+	EXPECT_NEAR(feedback::HandStartDistance(100.0f, 2.0f), 98.35f, k_Tolerance);
+}
+
+TEST(CreatureTouch, TheHandStaysNearerTheCameraThanTheCreaturesMiddleByAQuarterOfItsHeight)
+{
+	Zoomer distance(100.0f);
+	feedback::KeepHandBack(distance, 50.0f, k_Height);
+	// A hand that is farther jumps there at once
+	EXPECT_NEAR(distance.GetValue(), 46.25f, k_Tolerance);
+	EXPECT_TRUE(distance.HasArrived());
+	Zoomer nearer(30.0f);
+	feedback::KeepHandBack(nearer, 50.0f, k_Height);
+	EXPECT_NEAR(nearer.GetValue(), 30.0f, k_Tolerance);
+}
+
+TEST(CreatureTouch, OnTheBodyTheHandEasesToALittleShortOfTheMesh)
+{
+	// Nearer to the camera than its rest, the hand eases out to the rest in three tenths of a second
+	Zoomer distance(30.0f);
+	feedback::RestHandOnBody(distance, 40.0f, k_Height);
+	EXPECT_NEAR(distance.GetValue(), 30.0f, k_Tolerance);
+	EXPECT_NEAR(distance.GetDestination(), 40.0f - (0.055f * k_Height), k_Tolerance);
+	distance.Update(0.15f);
+	EXPECT_GT(distance.GetValue(), 30.0f);
+	EXPECT_LT(distance.GetValue(), 40.0f - (0.055f * k_Height));
+	distance.Update(0.15f);
+	EXPECT_NEAR(distance.GetValue(), 40.0f - (0.055f * k_Height), k_Tolerance);
+}
+
+TEST(CreatureTouch, TooDeepTheHandJumpsShortOfItsRestAndEasesBack)
+{
+	Zoomer distance(45.0f);
+	feedback::RestHandOnBody(distance, 40.0f, k_Height);
+	const auto rest = 40.0f - (0.055f * k_Height);
+	EXPECT_NEAR(distance.GetValue(), rest - (0.03f * k_Height), k_Tolerance);
+	EXPECT_NEAR(distance.GetDestination(), rest, k_Tolerance);
+	distance.Update(0.3f);
+	EXPECT_NEAR(distance.GetValue(), rest, k_Tolerance);
+}
+
+TEST(CreatureTouch, TheHandComesNoNearerTheCameraThanTwo)
+{
+	EXPECT_NEAR(feedback::HandDistanceFromCamera(Zoomer(0.5f)), 2.0f, k_Tolerance);
+	EXPECT_NEAR(feedback::HandDistanceFromCamera(Zoomer(12.0f)), 12.0f, k_Tolerance);
+}
+
+TEST(CreatureTouch, TheSecondLineGoesThroughTheMiddleOfTheCursorsLastTwoPlacesRoundedDown)
+{
+	EXPECT_EQ(feedback::SecondTryCursor(glm::ivec2(101, 50), glm::ivec2(100, 51)), glm::ivec2(100, 50));
+	EXPECT_EQ(feedback::SecondTryCursor(glm::ivec2(-3, 4), glm::ivec2(0, 4)), glm::ivec2(-2, 4));
+}
+
+TEST(CreatureTouch, TheMeshsWayOutComesFromTheOrderOfTheTrianglesCorners)
+{
+	const std::array<glm::vec3, 3> corners {glm::vec3(0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)};
+	const std::array<uint16_t, 3> indices {0, 1, 2};
+	const auto winding = glm::cross(corners[1] - corners[0], corners[2] - corners[0]);
+	// From either side, the line meets the same triangle with the same way out
+	const auto front =
+	    screen_pick::NearestSkinIntersection(corners, indices, glm::vec3(0.2f, 0.2f, 5.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+	const auto back =
+	    screen_pick::NearestSkinIntersection(corners, indices, glm::vec3(0.2f, 0.2f, -5.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ASSERT_TRUE(front.has_value());
+	ASSERT_TRUE(back.has_value());
+	EXPECT_EQ(front->windingNormal, winding);
+	EXPECT_EQ(back->windingNormal, winding);
 }
 
 TEST(CreatureTouch, HeldTheCreatureLooksAtTheHandOrAtTheCameraWithTheHandNearItsMiddle)
