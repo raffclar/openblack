@@ -39,11 +39,11 @@ namespace
 namespace cast_moves = openblack::creature_cast_moves;
 
 /// How far a species' bones reach from its middle, in the first frame of its first animation on its base model
-float BoneReachOf(CreatureType species)
+std::optional<float> MeasureBoneReach(CreatureType species)
 {
 	if (!Locator::resources::has_value())
 	{
-		return 0.0f;
+		return std::nullopt;
 	}
 	auto& resources = Locator::resources::value();
 	const auto& meshes = resources.GetMeshes();
@@ -52,16 +52,33 @@ float BoneReachOf(CreatureType species)
 	const auto rigId = creature::GetRigId(species);
 	if (!meshes.Contains(meshId) || !rigs.Contains(rigId))
 	{
-		return 0.0f;
+		return std::nullopt;
 	}
 	const auto mesh = meshes.Handle(meshId);
 	const auto* animation = rigs.Handle(rigId)->GetAnimation(creature::CreatureRig::Mesh::Base, 0);
 	if (animation == nullptr)
 	{
-		return 0.0f;
+		return std::nullopt;
 	}
 	const auto skeleton = skeletal_animation::Skeleton::FromRestMatrices(mesh->GetBoneParents(), mesh->GetBoneMatrices());
 	return cast_moves::BoneReach(*animation, skeleton);
+}
+
+/// The bone reach of a species. The first request measures it and keeps it in the context of the registry. If the
+/// resources have no model or animation of the species yet, the reach is 0, and the next request measures again.
+float BoneReachOf(const ecs::Registry& registry, CreatureType species)
+{
+	const auto row = static_cast<size_t>(species);
+	auto& kept = registry.Context().creatureBoneReach;
+	if (row >= kept.size())
+	{
+		return MeasureBoneReach(species).value_or(0.0f);
+	}
+	if (!kept.at(row).has_value())
+	{
+		kept.at(row) = MeasureBoneReach(species);
+	}
+	return kept.at(row).value_or(0.0f);
 }
 
 /// A model's half width, height and length, times the thing's scale
@@ -92,7 +109,8 @@ float object_measures::TwoDRadius(const Registry& registry, entt::entity entity)
 	if (const auto* creature = registry.TryGet<const Creature>(entity))
 	{
 		const auto* transform = registry.TryGet<const Transform>(entity);
-		return cast_moves::CreatureRadius(transform != nullptr ? transform->scale.x : 0.0f, BoneReachOf(creature->species));
+		return cast_moves::CreatureRadius(transform != nullptr ? transform->scale.x : 0.0f,
+		                                  BoneReachOf(registry, creature->species));
 	}
 	if (registry.AllOf<Field>(entity))
 	{
