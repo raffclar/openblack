@@ -156,6 +156,7 @@
 #include "Graphics/Moon.h"
 #include "Graphics/ObjectShadows.h"
 #include "Graphics/PipelineCache.h"
+#include "Graphics/PosedDraws.h"
 #include "Graphics/Primitive.h"
 #include "Graphics/ScreenshotCapture.h"
 #include "Graphics/SeaReflection.h"
@@ -6442,13 +6443,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				});
 			};
 			// The gates and other scenery the scripts open and close, each posed by its own clip: those fading out in the
-			// distance with the blended things
-			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance, bool fading) {
+			// distance and those that blend by their materials (an opened reward chest) with the blended things
+			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance, bool blended) {
 				const auto* still = desc.entities.TryGet<const ecs::components::AnimatedStaticPose>(entity);
-				if (still == nullptr || fadingHolds(instance) != fading)
+				if (still == nullptr)
 				{
 					return;
 				}
+				const bool fading = fadingHolds(instance);
 				// The sea mirrors none of the explorers' boat film this way, even one sharing its model with things it
 				// mirrors
 				const bool reflection = desc.viewId == RenderPass::Reflection;
@@ -6463,6 +6465,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					return;
 				}
 				const auto& [meshId, placers] = *holding;
+				if (graphics::posed_draws::PosedThingIsBlended(
+				        fading, {.translucent = placers->translucent, .perEntity = placers->perEntity}) != blended)
+				{
+					return;
+				}
 				const auto model = meshManager.Handle(meshId);
 				const bool posed = still->bones.size() == model->GetBoneMatrices().size();
 				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(still->bones)
@@ -6586,7 +6593,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				for (const auto& [entity, instance] : renderCtx.entityDraws)
 				{
-					if (fadingHolds(instance))
+					if (instance < renderCtx.instanceUniforms.size())
 					{
 						submitDesc.sortDepth =
 						    zsort::Depth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
@@ -6615,9 +6622,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.objectLook.reset();
 				}
 			}
+			// Each thing that is posed by itself (an animal, a villager or posed scenery) is drawn above, in its own pose.
+			// It is not drawn here, because it would show again in the model's own pose.
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 			{
-				if (placers.translucent && !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+				if (graphics::posed_draws::BlendedPassDrawsAllPlaced(
+				        {.translucent = placers.translucent, .perEntity = placers.perEntity}) &&
+				    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
 				{
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{

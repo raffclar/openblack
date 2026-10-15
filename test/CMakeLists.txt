@@ -980,3 +980,4 @@ openblack_setup_and_add_test(test_creature_follow_up test_creature_follow_up.cpp
 openblack_setup_and_add_test(
   test_creature_rest_and_home test_creature_rest_and_home.cpp
 )
+openblack_setup_and_add_test(test_posed_draws graphics/test_posed_draws.cpp)
