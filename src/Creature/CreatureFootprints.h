@@ -56,7 +56,8 @@ struct SpeciesPrint
 /// By the species' row in the game's creature tables (creature::InfoRow): hands for the apes, the chimp, the ogre, the
 /// mandrill and the gorilla, the ape's twice as big; cat paws for the tiger, leopard, wolf and lion; cloven hooves for
 /// the cow, sheep and rhino; a horseshoe for the horse; bear paws for both bears; the tortoise's foot; a round hoof for
-/// the zebra; the smiley face; and the crocodile's, which the game leaves with no size at all
+/// the zebra; and the smiley face. The game accepts one more row than its table has. No species uses that row. The game
+/// reads it from the data after the table, which gives it no size.
 constexpr std::array<SpeciesPrint, 19> k_SpeciesPrints = {{
     {.cell = 0, .scale = 2.0f}, // ape
     {.cell = 2, .scale = 1.0f}, // cow
@@ -76,7 +77,7 @@ constexpr std::array<SpeciesPrint, 19> k_SpeciesPrints = {{
     {.cell = 2, .scale = 1.0f}, // rhino
     {.cell = 0, .scale = 1.0f}, // gorilla
     {.cell = k_SmileyCell, .scale = 1.0f},
-    {.cell = 0, .scale = 0.0f}, // crocodile
+    {.cell = 0, .scale = 0.0f}, // past the end of the table
 }};
 
 /// The print a species leaves, the smiley face on the first of April but as big as the species' own
@@ -131,13 +132,14 @@ using AltitudeAt = std::function<float(float x, float z)>;
 struct Trail
 {
 	std::vector<Footprint> prints;
-	/// The game time since they last faded
+	/// The game time since they last faded, counted only while there are prints
 	float sinceFadeMs {0.0f};
 };
 
 /// Adds a print, unless the trail is full. Whether it was added.
 bool Add(Trail& trail, const Footprint& print);
 /// Fades the prints as the game time passes: once at least k_FadeIntervalMs have gone by since the last fade, each
-/// print loses k_FadePerMs for every millisecond of them, and those faded out are taken away, the rest kept in order
+/// print loses k_FadePerMs for every millisecond of them, and those faded out are taken away, the rest kept in order.
+/// The time does not count while there are no prints.
 void Fade(Trail& trail, float elapsedMs);
 } // namespace openblack::creature_footprints

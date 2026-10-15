@@ -849,6 +849,43 @@ void AddGrowth(std::vector<Scenario>& all)
 	    .creatures = lineup,
 	});
 
+	// A young and an adult of two species, each young one to the left of its adult
+	struct Pair
+	{
+		CreatureType species;
+		std::string_view young;
+		std::string_view adult;
+	};
+	constexpr std::array<Pair, 2> k_Pairs {{
+	    {CreatureType::Tiger, "young tiger", "adult tiger"},
+	    {CreatureType::GiantApe, "young ape", "adult ape"},
+	}};
+	constexpr float k_YoungSize = 0.4f;
+	constexpr float k_AdultSize = 2.0f;
+	std::vector<CreatureSetup> ages;
+	for (size_t i = 0; i < k_Pairs.size(); ++i)
+	{
+		const auto& pair = k_Pairs.at(i);
+		auto young = Posed(pair.species, {RowX(i * 2, k_Pairs.size() * 2, 40.0f), 0.0f}, 0.0f, pair.young);
+		young.size = k_YoungSize;
+		ages.push_back(young);
+		auto adult = Posed(pair.species, {RowX((i * 2) + 1, k_Pairs.size() * 2, 40.0f), 0.0f}, 0.0f, pair.adult);
+		adult.size = k_AdultSize;
+		ages.push_back(adult);
+	}
+	all.push_back({
+	    .id = "growth.young_proportions",
+	    .name = "Young and adult proportions",
+	    .facet = Facet::Growth,
+	    .description = "Left to right: a young tiger of size 0.4, a tiger of size 2, a young giant ape of size 0.4 and a "
+	                   "giant ape of size 2. They stand still and breathe.",
+	    .expected = "Each young creature is not a small adult. Its head is about 1.6 times as large for its size, its "
+	                "hands and feet 1.4 times and its eyes 1.3 times. Each adult has a head 0.8 times as large and normal "
+	                "hands, feet and eyes.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = ages,
+	});
+
 	std::vector<CreatureSetup> parade;
 	constexpr size_t k_Species = static_cast<size_t>(CreatureType::_COUNT) - 1;
 	constexpr size_t k_FrontRow = 9;
@@ -1354,6 +1391,59 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .creatures = {goodTiger, evilTiger},
 	});
 
+	// The hair close up while the head moves: the tiger's whiskers, and the wolf's tufts, which use the same material
+	std::vector<Command> headMoves;
+	for (size_t i = 0; i < animations::k_GestureCount; ++i)
+	{
+		headMoves.push_back(Play(Kind::PlayGesture, 0, animations::k_FirstGesture + i, 3.0f, false));
+	}
+	const auto hairClose = [&all, &headMoves](std::string_view id, std::string_view name, CreatureType species,
+	                                          std::string_view description, std::string_view expected, float distance) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Appearance,
+		    .description = description,
+		    .expected = expected,
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Head, .distance = distance},
+		    .creatures = {CreatureSetup {.species = species, .needs = Content(), .hold = true, .pauseMind = true}},
+		    .commands = headMoves,
+		    .repeatFrom = 0,
+		});
+	};
+	hairClose("appearance.tiger_whiskers", "Tiger whiskers close up", CreatureType::Tiger,
+	          "Close up, a neutral tiger with a paused mind faces the camera. It nods, shakes its head and does its "
+	          "other gestures.",
+	          "The whiskers are thin white lines with sharp edges and no pale blur. A neutral tiger's whiskers do not "
+	          "swing: they only follow the head. The face does not show through them.",
+	          0.6f);
+	hairClose("appearance.ape_hair", "Giant ape hair close up", CreatureType::GiantApe,
+	          "A neutral giant ape with a paused mind faces the camera. It nods, shakes its head and does its other "
+	          "gestures.",
+	          "The ten strands of hair have sharp edges and no pale blur. They swing when the ape moves.", 1.5f);
+	hairClose("appearance.chimp_hair", "Chimp hair close up", CreatureType::Chimp,
+	          "A neutral chimp with a paused mind faces the camera. It nods, shakes its head and does its other "
+	          "gestures.",
+	          "The two tufts of hair (ten strands and two strands) have sharp edges and no pale blur. They swing when "
+	          "the chimp moves.",
+	          1.5f);
+	hairClose("appearance.horse_hair", "Horse hair close up", CreatureType::Horse,
+	          "A neutral horse with a paused mind faces the camera. It nods, shakes its head and does its other "
+	          "gestures.",
+	          "The two tufts of hair (four strands and thirteen strands) have sharp edges and no pale blur. They "
+	          "swing when the horse moves.",
+	          1.5f);
+	hairClose("appearance.mandrill_hair", "Mandrill hair close up", CreatureType::Mandrill,
+	          "A neutral mandrill with a paused mind faces the camera. It nods, shakes its head and does its other "
+	          "gestures.",
+	          "The three tufts of hair (eight, four and six strands) have sharp edges and no pale blur. They swing "
+	          "when the mandrill moves.",
+	          1.5f);
+	hairClose("appearance.wolf_hair", "Wolf hair close up", CreatureType::Wolf,
+	          "A neutral wolf with a paused mind faces the camera. It nods, shakes its head and does its other gestures.",
+	          "The tufts of hair at the hips have sharp edges and no pale blur. They swing when the wolf moves.", 1.5f);
+
 	auto tattooed = Posed(CreatureType::Tiger, {0.0f, 0.0f}, 30.0f, "tattooed");
 	constexpr std::array<glm::u8vec3, 8> k_Colours {{
 	    {220, 40, 40},
@@ -1796,6 +1886,20 @@ void AddFootprints(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {Posed(CreatureType::Tiger, {50.0f, 0.0f}, 180.0f)},
 	    .commands = circling,
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "footprints.walk_and_run_close",
+	    .name = "Footprints close up, walking and running",
+	    .facet = Facet::Footprints,
+	    .description = "The camera keeps close behind a tiger. It walks across the testbed, then runs back.",
+	    .expected = "Each footstep, walking or running, lays one dark paw print under the lower foot, turned the way "
+	                "the foot points, the left foot's print a mirror of the right. The prints fade in small steps and "
+	                "go after about five seconds. The sea does not show them.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.4f},
+	    .creatures = {Posed(CreatureType::Tiger, {110.0f, 0.0f}, 90.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {-110.0f, 0.0f}, 0.5f, true), Go(Kind::RunTo, 0, {110.0f, 0.0f}, 0.0f, true)},
 	    .repeatFrom = 0,
 	});
 }

@@ -131,6 +131,9 @@ struct RibbonVertex
 };
 /// How far across the hair texture a ribbon reaches, its length running the width of the texture
 constexpr float k_RibbonTextureHeight = 0.25f;
+/// The game draws all hair with one material. A texel of a strand with an alpha below this value, 0 to 255, is not
+/// drawn. The other texels write their depth and blend over the scene by their alpha.
+constexpr float k_AlphaCutOff = 50.0f;
 
 /// A strand's ribbon facing an eye: two corners at each point, either side of the strand by halfWidth, across the
 /// segment before the point (the first point takes the first segment's). Two corners for each of points into out.

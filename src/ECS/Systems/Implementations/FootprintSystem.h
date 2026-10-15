@@ -21,7 +21,7 @@ namespace openblack::ecs::systems
 class FootprintSystem final: public FootprintSystemInterface
 {
 public:
-	void Update(std::chrono::duration<float, std::milli> gameTime) override;
+	void Update(std::chrono::duration<float, std::milli> gameTime, bool landDrawn) override;
 	void Step(entt::entity creature) override;
 	void Reset() override;
 	[[nodiscard]] std::span<const creature_footprints::Footprint> GetPrints() const override { return _trail.prints; }
