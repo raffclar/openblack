@@ -253,7 +253,9 @@ public:
 	void SetSelection(std::optional<size_t> selection) noexcept { _selection = selection; }
 	[[nodiscard]] float GetScroll() const noexcept { return _scroll; }
 	/// Width of the scroll bar, beside the box
-	[[nodiscard]] int GetScrollBarWidth() const noexcept { return _size - 2; }
+	[[nodiscard]] static constexpr int GetScrollBarWidth() noexcept { return k_ScrollBarWidth; }
+	/// The scroll bar of every list is 24 units wide, for all sizes of text
+	static constexpr int k_ScrollBarWidth = 24;
 	/// Right of the box the items are in, left of the scroll bar
 	[[nodiscard]] int GetBoxRight() const;
 	/// Drawn over each item the list shows, after its text: the item, its top and bottom, the right of the box the

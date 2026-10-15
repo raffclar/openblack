@@ -111,6 +111,28 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "statistics.help_gestures",
+	    .name = "The help record counts the gestures and the hand",
+	    .facet = Facet::Miracles,
+	    .description = "A storm seed comes from the player's worship into the hand. The hand draws the inverse spiral, "
+	                   "then a scribble, then a second scribble. Then pick up a thing with the hand and throw it. Read "
+	                   "the counts with the inspector (help.profile), or open the Tech Stats tab of the Game Statistics "
+	                   "box.",
+	    .expected = "The spiral powers the storm up and counts one power-up (event 18). The first scribble takes the "
+	                "seed back to its plain storm, keeps it in the hand and counts event 20. The second scribble drops "
+	                "the seed and counts event 22. Each gesture also counts in Gestures Done (event 24). Each pick-up "
+	                "counts one in Total Things Picked Up, and each throw or drop one in Total Objects Thrown.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::SummonSeed,
+	                  .delaySeconds = k_DrawSeconds,
+	                  .value = static_cast<size_t>(SpellSeedType::Storm)},
+	                 Draw(GestureType::InverseSpiral, 1.0f),
+	                 Draw(GestureType::Scribble),
+	                 Draw(GestureType::Scribble)},
+	});
+
+	all.push_back({
 	    .id = "miracles.gesture_sounds",
 	    .name = "The sounds of drawing gestures",
 	    .facet = Facet::Miracles,
