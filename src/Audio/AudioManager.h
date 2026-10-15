@@ -39,6 +39,11 @@ namespace openblack
 class Game;
 }
 
+namespace openblack::ecs::components
+{
+struct AudioEmitter;
+}
+
 namespace openblack::audio
 {
 
@@ -125,7 +130,9 @@ private:
 	/// A source for a voice of a loaded sound, decoding the sound first if needed
 	SourceId CreateSource(Sound& sound, const VoiceStart& start);
 	/// Places a source in LHAudio's listener frame, or centres it
-	void PositionSource(SourceId source, std::optional<glm::vec3> listenerPosition, float distanceScale);
+	void PositionSource(SourceId source, std::optional<glm::vec3> listenerPosition);
+	/// The volume of an emitter's source: its gain with the volume settings, or none past its maximum distance
+	[[nodiscard]] float EmitterVolume(const ecs::components::AudioEmitter& emitter) const;
 	/// LHSamplePlay's play parameters for a sample, with the bank header overriding LH_SamplePlayOptions' defaults
 	[[nodiscard]] static VoiceStart MakeVoiceStart(const Sound& sound, std::optional<glm::vec3> worldPosition,
 	                                               PlayType playType);

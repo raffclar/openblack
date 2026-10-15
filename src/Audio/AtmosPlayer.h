@@ -43,8 +43,8 @@ struct VoiceStart
 	bool positional;
 	/// LHAudio listener frame: x right, y forward, z up
 	glm::vec3 position;
-	/// QSound distance mapping: full volume up to minDistance, then attenuated by minDistance / distance up to
-	/// maxDistance, with distances multiplied by distanceScale
+	/// The game's distance mapping: full volume up to minDistance, then minDistance / (minDistance + distanceScale *
+	/// (distance - minDistance)) up to maxDistance, and silent past it (see DistanceGain)
 	float minDistance;
 	float maxDistance;
 	float distanceScale;

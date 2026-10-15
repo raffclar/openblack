@@ -33,6 +33,37 @@ namespace openblack::audio
 	return distance <= range;
 }
 
+/// The distances that a bank header gives a placed voice. The scale is the roll-off: how fast the volume falls past
+/// the minimum distance.
+struct DistanceSettings
+{
+	float minDistance;
+	float maxDistance;
+	float rolloff;
+};
+
+/// The part of a placed voice's volume that its distance from the listener gives. The voice has full volume up to its
+/// minimum distance (and everywhere when the roll-off is 0). Between the minimum and the maximum distance the volume
+/// is minimum / (minimum + roll-off * (distance - minimum)). Past the maximum distance the voice is silent.
+[[nodiscard]] constexpr float DistanceGain(float distance, const DistanceSettings& settings)
+{
+	if (distance > settings.maxDistance)
+	{
+		return 0.0f;
+	}
+	if (distance <= settings.minDistance || settings.rolloff == 0.0f)
+	{
+		return 1.0f;
+	}
+	return settings.minDistance / ((distance - settings.minDistance) * settings.rolloff + settings.minDistance);
+}
+
+/// Whether a placed voice this far from the listener is silent
+[[nodiscard]] constexpr bool IsBeyondMaxDistance(float distance, float maxDistance)
+{
+	return distance > maxDistance;
+}
+
 /// Whether a placed sound that plays and is attached to a thing plays on this turn. The game stops it when the camera
 /// is at or beyond the maximum distance of its voice.
 [[nodiscard]] constexpr bool IsWithinPlayRange(float distance, float voiceMaxDistance)

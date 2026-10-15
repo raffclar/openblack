@@ -247,11 +247,13 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	    .id = "audio.vortex_hum_stops_far_away",
 	    .name = "The hum of a vortex stops far away",
 	    .facet = Facet::Audio,
-	    .description = "A way out of a land opens on the flat plane after a second, seen from 370 m away. Its hum can be "
-	                   "heard from no more than 400 m.",
-	    .expected = "The hum starts quietly as the vortex opens. Move the camera back past 400 m from the vortex: the hum "
-	                "stops at once. Move the camera nearer than 400 m again: the hum starts again on the next turn. The "
-	                "debug log (audio) says when the hum stops and why.",
+	    .description = "A way out of a land opens on the flat plane after a second, seen from 370 m away. Its hum has full "
+	                   "volume up to 200 m. From 200 m to 400 m it is 200 / (200 + 2 * (distance - 200)) of full volume. "
+	                   "Past 400 m it is silent.",
+	    .expected = "The hum starts at 0.37 of its full volume as the vortex opens, and is louder as the camera comes "
+	                "nearer: full volume at 200 m and nearer, half at 300 m. Move the camera back past 400 m from the "
+	                "vortex: the hum stops at once and the debug log (audio) says why. As in the game, the hum does not "
+	                "start again when the camera comes back, until the particle that carries it is made again.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_OnThePlane.x, 120.0f, k_OnThePlane.y - 355.0f},

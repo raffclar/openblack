@@ -293,8 +293,9 @@ void MusicStreamBackend::SetPlacement(Stream stream, const std::optional<MusicPl
 	found->second.placement = placement;
 	if (placement)
 	{
-		// QSound's distance mapping is OpenAL's inverse clamped model on positions stretched by the distance scale
-		_player.SetDistanceAttenuation(found->second.source, placement->minDistance, placement->maxDistance, 1.0f);
+		// The game's distance mapping is OpenAL's inverse clamped model with the scale as the roll-off
+		_player.SetDistanceAttenuation(found->second.source, placement->minDistance, placement->maxDistance,
+		                               placement->distanceScale);
 	}
 	else
 	{

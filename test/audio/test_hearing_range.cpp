@@ -55,3 +55,28 @@ TEST(HearingRange, PlayingSoundStopsAtItsVoiceMaximumDistance)
 	// A voice that keeps the default maximum plays on from far away
 	EXPECT_TRUE(IsWithinPlayRange(1200.0f, k_VoiceDefault));
 }
+
+TEST(HearingRange, DistanceGainFollowsTheGamesMapping)
+{
+	// The vortex's hum: full volume to 200 m, roll-off 2, silent past 400 m
+	const DistanceSettings hum {.minDistance = 200.0f, .maxDistance = 400.0f, .rolloff = 2.0f};
+	EXPECT_FLOAT_EQ(DistanceGain(100.0f, hum), 1.0f);
+	EXPECT_FLOAT_EQ(DistanceGain(150.0f, hum), 1.0f);
+	EXPECT_FLOAT_EQ(DistanceGain(200.0f, hum), 1.0f);
+	EXPECT_FLOAT_EQ(DistanceGain(250.0f, hum), 200.0f / 300.0f);
+	EXPECT_FLOAT_EQ(DistanceGain(300.0f, hum), 0.5f);
+	EXPECT_FLOAT_EQ(DistanceGain(400.0f, hum), 200.0f / 600.0f);
+	EXPECT_FLOAT_EQ(DistanceGain(400.5f, hum), 0.0f);
+	EXPECT_TRUE(IsBeyondMaxDistance(400.5f, hum.maxDistance));
+	EXPECT_FALSE(IsBeyondMaxDistance(400.0f, hum.maxDistance));
+}
+
+TEST(HearingRange, DistanceGainWithoutRolloffOrWithRolloffOne)
+{
+	// No roll-off: full volume up to the maximum distance
+	EXPECT_FLOAT_EQ(DistanceGain(300.0f, {.minDistance = 10.0f, .maxDistance = 400.0f, .rolloff = 0.0f}), 1.0f);
+	// A roll-off of 1: the minimum over the distance
+	EXPECT_FLOAT_EQ(DistanceGain(40.0f, {.minDistance = 10.0f, .maxDistance = 400.0f, .rolloff = 1.0f}), 0.25f);
+	// The default voice: 1 m, roll-off 0.3, 9999 m
+	EXPECT_FLOAT_EQ(DistanceGain(101.0f, {.minDistance = 1.0f, .maxDistance = 9999.0f, .rolloff = 0.3f}), 1.0f / 31.0f);
+}
