@@ -346,34 +346,6 @@ std::vector<Step> creature_mind::TakeFishTo(const std::optional<FishingTrip>& tr
 	return agenda;
 }
 
-std::vector<Step> creature_mind::Drink(glm::vec2 shore, glm::vec2 water)
-{
-	auto drink = Action(animations::k_Drink, false);
-	drink.effect = Effect::Drink;
-	return {{.kind = Step::Kind::Move,
-	         .seconds = 0.0f,
-	         .animation = 0,
-	         .sleepyEyes = false,
-	         .movement = {.kind = Movement::Kind::ToPoint,
-	                      .point = shore,
-	                      .object = std::nullopt,
-	                      .run = false,
-	                      .minDistance = 0.0f,
-	                      .maxDistance = k_DrinkReach},
-	         .gaze = GoingLook()},
-	        {.kind = Step::Kind::Move,
-	         .seconds = 0.0f,
-	         .animation = 0,
-	         .sleepyEyes = false,
-	         .movement = {.kind = Movement::Kind::TurnToFace,
-	                      .point = water,
-	                      .object = std::nullopt,
-	                      .run = false,
-	                      .minDistance = 0.0f,
-	                      .maxDistance = 0.0f}},
-	        drink};
-}
-
 std::vector<Step> creature_mind::Poo(const Random& random, std::optional<PooBy> by)
 {
 	std::vector<Step> agenda;
@@ -748,8 +720,10 @@ void FollowHand(IdleMind& mind, const Senses& senses, Commands& commands)
 		mind.gaveUp = true;
 		break;
 	case creature_player_attention::FollowHandAction::WalkToHand:
-		commands.move = Movement {
-		    .kind = Movement::Kind::ToPoint, .point = senses.followHand->hand, .maxDistance = senses.followHand->reach};
+		commands.move = Movement {.kind = Movement::Kind::ToPoint,
+		                          .point = senses.followHand->hand,
+		                          .maxDistance = senses.followHand->reach,
+		                          .giveUpIfUnreachable = false};
 		break;
 	case creature_player_attention::FollowHandAction::Continue:
 		break;
@@ -805,7 +779,11 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::HealItself:
 	case Step::Kind::RaiseTotem:
 	case Step::Kind::LowerTotem:
+	case Step::Kind::Fight:
 		return HandsNeed::Free;
+	case Step::Kind::MakeDisciple:
+	case Step::Kind::UseUpHeld:
+		return HandsNeed::Held;
 	case Step::Kind::Object:
 		switch (step.order.kind)
 		{
@@ -816,15 +794,16 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 		case ObjectOrder::Kind::TakeFromPile:
 		case ObjectOrder::Kind::TakeFromHand:
 			return HandsNeed::Free;
-		case ObjectOrder::Kind::PutDown:
 		case ObjectOrder::Kind::Discard:
 		case ObjectOrder::Kind::Eat:
 		case ObjectOrder::Kind::Keep:
 		case ObjectOrder::Kind::Throw:
 		case ObjectOrder::Kind::ThrowNearby:
+		case ObjectOrder::Kind::ThrowInStore:
+			return HandsNeed::Held;
+		case ObjectOrder::Kind::PutDown:
 		case ObjectOrder::Kind::Destroy:
 		case ObjectOrder::Kind::PointAt:
-		case ObjectOrder::Kind::ThrowInStore:
 		case ObjectOrder::Kind::Kick:
 			break;
 		}
@@ -835,8 +814,6 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 		                                                                                                : HandsNeed::Any;
 	case Step::Kind::StopMoving:
 	case Step::Kind::FollowWatching:
-	case Step::Kind::Fight:
-	case Step::Kind::MakeDisciple:
 	case Step::Kind::Kiss:
 	case Step::Kind::PracticeDance:
 	case Step::Kind::Wait:
@@ -986,8 +963,10 @@ void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Comma
 	}
 	if (turn.walkTo.has_value())
 	{
-		commands.move =
-		    Movement {.kind = Movement::Kind::ToPoint, .point = *turn.walkTo, .maxDistance = creature_dance::k_NearPlace};
+		commands.move = Movement {.kind = Movement::Kind::ToPoint,
+		                          .point = *turn.walkTo,
+		                          .maxDistance = creature_dance::k_NearPlace,
+		                          .giveUpIfUnreachable = false};
 	}
 	--mind.danceTurns;
 	if (mind.danceTurns == 0)
@@ -1032,7 +1011,8 @@ void FollowCamera(IdleMind& mind, const Step& step, const Senses& senses, Comman
 	case creature_emote::FollowCameraAction::MoveAgain:
 		commands.move = Movement {.kind = Movement::Kind::ToPoint,
 		                          .point = {senses.cameraFocus->x, senses.cameraFocus->z},
-		                          .maxDistance = reach - creature_emote::k_FollowCameraStopShort};
+		                          .maxDistance = reach - creature_emote::k_FollowCameraStopShort,
+		                          .giveUpIfUnreachable = false};
 		break;
 	case creature_emote::FollowCameraAction::Continue:
 		break;
@@ -1077,8 +1057,18 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	if (!mind.stepStarted)
 	{
 		commands.lookAbout = step.kind == Step::Kind::Wait && !step.gaze.has_value();
+		const auto need = HandsNeededFor(step);
+		// A step that needs a thing in the hand stops the rest of the agenda when the hand is empty
+		if (need == HandsNeed::Held)
+		{
+			if (!senses.held.has_value())
+			{
+				GiveUpAgenda(mind);
+				return commands;
+			}
+		}
 		// A step that needs empty hands waits while the creature lets go of the thing that it holds
-		if (const auto need = HandsNeededFor(step); need != HandsNeed::Any && senses.held.has_value())
+		else if (need != HandsNeed::Any && senses.held.has_value())
 		{
 			if (need == HandsNeed::FreeOrTarget && step.order.object == senses.held)
 			{

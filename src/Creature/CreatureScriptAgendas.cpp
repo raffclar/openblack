@@ -176,9 +176,10 @@ std::vector<Step> openblack::creature_mind::MoveForScript(glm::vec2 from, glm::v
 		second = height;
 	}
 	const auto leg = [&to, &point](float within) {
-		return Step {.kind = Step::Kind::Move,
-		             .movement = {.kind = Movement::Kind::ToPoint, .point = to, .maxDistance = within},
-		             .gaze = Gaze {.point = point}};
+		return Step {
+		    .kind = Step::Kind::Move,
+		    .movement = {.kind = Movement::Kind::ToPoint, .point = to, .maxDistance = within, .giveUpIfUnreachable = false},
+		    .gaze = Gaze {.point = point}};
 	};
 	return {leg(first), leg(second)};
 }

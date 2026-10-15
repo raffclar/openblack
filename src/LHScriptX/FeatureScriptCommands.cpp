@@ -34,6 +34,7 @@
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/DeadTreeArchetype.h"
+#include "ECS/Archetypes/DrinkWaypointArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
 #include "ECS/Archetypes/FishFarmArchetype.h"
@@ -1183,10 +1184,9 @@ void FeatureScriptCommands::SetLandBalance(const std::string&, int32_t, float)
 	// __func__);
 }
 
-void FeatureScriptCommands::CreateDrinkWaypoint([[maybe_unused]] glm::vec3 position)
+void FeatureScriptCommands::CreateDrinkWaypoint(glm::vec3 position)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	DrinkWaypointArchetype::Create(position);
 }
 
 void FeatureScriptCommands::SetTownInfluenceMultiplier(float multiplier)

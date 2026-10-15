@@ -1013,3 +1013,4 @@ openblack_setup_and_add_test(
   test_creature_stats_records test_creature_stats_records.cpp
 )
 target_link_libraries(test_creature_stats_records PRIVATE helpstats)
+openblack_setup_and_add_test(test_creature_drink test_creature_drink.cpp)

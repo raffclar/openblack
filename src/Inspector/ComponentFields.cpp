@@ -119,6 +119,7 @@
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/DrinkWaypoint.h"
 #include "ECS/Components/DrinkingWater.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
@@ -1011,6 +1012,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::DiscipleMark>(context)
 	    .Field<&components::DiscipleMark::villager>("villager")
 	    .Field<&components::DiscipleMark::symbol>("symbol");
+	Reflect<components::DrinkWaypoint>(context).Field<&components::DrinkWaypoint::number>("number");
 	Reflect<components::DrinkingWater>(context).Field<&components::DrinkingWater::place>("place");
 	Reflect<components::DropsRoots> {context};
 	Reflect<components::FallingRoots>(context)
@@ -2433,7 +2435,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::ObjectOrder::animation>("animation")
 	    .Field<&openblack::creature_mind::ObjectOrder::pointHeight>("pointHeight")
 	    .Field<&openblack::creature_mind::ObjectOrder::seconds>("seconds")
-	    .Field<&openblack::creature_mind::ObjectOrder::mirrored>("mirrored");
+	    .Field<&openblack::creature_mind::ObjectOrder::mirrored>("mirrored")
+	    .Field<&openblack::creature_mind::ObjectOrder::atObject>("atObject");
 	Reflect<openblack::creature_mind::Step>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Step::kind>("kind")
 	    .Field<&openblack::creature_mind::Step::seconds>("seconds")

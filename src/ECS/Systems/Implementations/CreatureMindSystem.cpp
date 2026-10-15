@@ -50,6 +50,7 @@
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMeals.h"
+#include "Creature/CreatureMode.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureOddAgendas.h"
 #include "Creature/CreaturePhysiology.h"
@@ -1502,6 +1503,14 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		break;
 	case Kind::Throw:
 	case Kind::ThrowNearby:
+		// At the place of the object as the throw starts, when the order says so
+		if (const auto* at = order.atObject && object.has_value() && registry.Valid(*object)
+		                         ? registry.TryGet<const Transform>(*object)
+		                         : nullptr)
+		{
+			hands.Throw(creature, at->position);
+			break;
+		}
 		// At a point in the air when it has a height, as the player's camera; otherwise at the ground there
 		hands.Throw(creature, {point.x, order.pointHeight.value_or(point.y), point.z});
 		break;
@@ -2506,9 +2515,11 @@ bool CreatureMindSystem::Drink(entt::entity creature)
 	{
 		return false;
 	}
-	const auto water = NearestWater(glm::vec2(transform->position.x, transform->position.z));
-	return water.has_value() &&
-	       Replan(creature, creature_mind::Activity::Drink, creature_mind::Drink(water->shore, water->water));
+	const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+	const auto place = DrinkPlaceOf(creature);
+	return body != nullptr && place.has_value() &&
+	       Replan(creature, creature_mind::Activity::Drink,
+	              creature_drink::Drink(*place, creature_mode::CreatureHeight(ShownSize(*body))));
 }
 
 bool CreatureMindSystem::Poo(entt::entity creature)

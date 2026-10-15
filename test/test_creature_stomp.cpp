@@ -110,7 +110,9 @@ TEST(CreatureStomp, StoneAndEatThrowsARockThenEats)
 	EXPECT_FLOAT_EQ((*agenda)[1].movement.maxDistance, 15.0f);
 	EXPECT_EQ((*agenda)[1].face, creature_face::Cue::Anger);
 	EXPECT_EQ((*agenda)[2].order.kind, ObjectOrder::Kind::Throw);
-	EXPECT_EQ((*agenda)[2].order.object, 8u);
+	// The game aims the throw at the rock in the hand, not at the thing
+	EXPECT_EQ((*agenda)[2].order.object, 30u);
+	EXPECT_TRUE((*agenda)[2].order.atObject);
 	EXPECT_EQ((*agenda)[3].order.kind, ObjectOrder::Kind::PickUp);
 	EXPECT_EQ((*agenda)[3].order.object, 8u);
 	EXPECT_EQ((*agenda)[4].order.kind, ObjectOrder::Kind::Eat);
