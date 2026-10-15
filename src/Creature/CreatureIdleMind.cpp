@@ -230,8 +230,11 @@ std::vector<Step> creature_mind::Sleep(const Random& random)
 	sleep.closedEyes = true;
 	sleep.effect = Effect::Slept;
 	agenda.push_back(sleep);
-	agenda.push_back(Action(animations::k_Confused, true));
-	return WithFace(std::move(agenda), creature_face::Cue::Grimace);
+	// Only the dazed look as it wakes pulls a face
+	auto dazed = Action(animations::k_Confused, true);
+	dazed.face = creature_face::Cue::Grimace;
+	agenda.push_back(dazed);
+	return agenda;
 }
 
 std::vector<Step> creature_mind::Eat(uint32_t food, bool holdingEatable)
@@ -373,9 +376,10 @@ std::vector<Step> creature_mind::Poo(const Random& random, std::optional<PooBy> 
 	{
 		Step goNear {.kind = Step::Kind::Move};
 		goNear.movement = {.kind = Movement::Kind::GoNearObject, .object = by->object, .maxDistance = 0.0f};
+		// Going up to itself, the look comes to nothing and it looks about
 		if (!by->itself)
 		{
-			goNear.gaze = Gaze {.object = by->object};
+			goNear.gaze = Gaze {.object = by->object, .whileGoing = true};
 		}
 		agenda.push_back(goNear);
 		Step turnAway {.kind = Step::Kind::Move};
@@ -384,8 +388,10 @@ std::vector<Step> creature_mind::Poo(const Random& random, std::optional<PooBy> 
 	}
 	auto poo = Static({animations::k_StartPoo, animations::k_Poo, animations::k_EndPoo}, k_PooSeconds);
 	poo.effect = Effect::Poo;
+	// Only the squat pulls a face
+	poo.face = creature_face::Cue::Smile;
 	agenda.push_back(poo);
-	return WithFace(std::move(agenda), creature_face::Cue::Smile);
+	return agenda;
 }
 
 std::vector<Step> creature_mind::Fart(const Random& random, std::optional<PooBy> by)
@@ -430,9 +436,10 @@ std::vector<Step> creature_mind::TakeFromHand(uint32_t object, glm::vec2 camera,
 	turn.movement = {.kind = Movement::Kind::TurnToFace, .point = camera};
 	auto take = Object({.kind = ObjectOrder::Kind::TakeFromHand, .object = object, .mirrored = leftHand}, Effect::TookFromHand);
 	std::vector<Step> agenda {turn, take};
+	// Its head looks at the player's hand as it turns and as it takes the thing
 	for (auto& step : agenda)
 	{
-		step.gaze = Gaze {.object = object};
+		step.gaze = Gaze {.hand = true};
 	}
 	return WithFace(std::move(agenda), creature_face::Cue::Curiosity);
 }
@@ -460,7 +467,7 @@ std::vector<Step> creature_mind::ThrowGiven(glm::vec3 camera)
 
 std::vector<Step> creature_mind::Emote(size_t animation)
 {
-	return WithFace({Action(animation, false)}, creature_face::Cue::AttitudeToPlayer);
+	return {Action(animation, false)};
 }
 
 std::vector<Step> creature_mind::Communicate(glm::vec2 camera)

@@ -381,7 +381,7 @@ TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
 	using creature_face::Cue;
 	const auto sleep = creature_mind::Sleep(Always(0));
 	ASSERT_EQ(sleep.size(), 3u);
-	EXPECT_EQ(sleep[0].face, Cue::Grimace);
+	EXPECT_EQ(sleep[0].face, Cue::None);
 	// Asleep with its eyes closed it pulls no face
 	EXPECT_EQ(sleep[1].face, Cue::None);
 	EXPECT_EQ(sleep[2].face, Cue::Grimace);
@@ -396,7 +396,7 @@ TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
 	EXPECT_EQ(creature_mind::ThrowAbout(1, Always(0)).back().face, Cue::Playfulness);
 	EXPECT_EQ(creature_mind::Poo(Always(1), std::nullopt).back().face, Cue::Smile);
 	EXPECT_EQ(creature_mind::Puke().back().face, Cue::Grimace);
-	EXPECT_EQ(creature_mind::Emote(animations::k_Happy).back().face, Cue::AttitudeToPlayer);
+	EXPECT_EQ(creature_mind::Emote(animations::k_Happy).back().face, Cue::None);
 	EXPECT_EQ(creature_mind::HangAround({}, k_Turn, Always(0))[1].face, Cue::Idle);
 	EXPECT_EQ(creature_mind::LookAt({}, 1.0f).back().face, Cue::Amazed);
 	EXPECT_EQ(creature_mind::PutDownHeld().back().face, Cue::None);

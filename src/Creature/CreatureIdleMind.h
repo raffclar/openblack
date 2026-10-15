@@ -916,7 +916,7 @@ struct PooBy
 	bool itself {false};
 };
 /// A poo, a third of the time showing it needs one first. With a thing to poo by, it goes up to the thing and looks at it,
-/// then turns its back to it. It does not look at itself
+/// then turns its back to it. It does not look at itself. Only the squat pulls a face.
 [[nodiscard]] std::vector<Step> Poo(const Random& random, std::optional<PooBy> by);
 /// A fart: the creature does the same steps as for a poo, but it makes a cloud, not a lump
 [[nodiscard]] std::vector<Step> Fart(const Random& random, std::optional<PooBy> by);
