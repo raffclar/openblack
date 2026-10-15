@@ -1924,6 +1924,39 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.library_history",
+	    .name = "The temple's library with tips read and a story history",
+	    .facet = Facet::Story,
+	    .description = "Scripts show seven help texts of different speakers: the big voice, a man, Khazar, a woman and "
+	                   "the two advisors. The player reads four tips on signs: two of village life, one of the creature "
+	                   "and one of did you know. Then the player goes through the temple's main room into the library. "
+	                   "After four seconds the camera looks at the last scroll (Story History), as a press on it does.",
+	    .expected = "The village life scroll lists its two tips in the order read, the creature scroll and the did you "
+	                "know scroll one tip each, the other help scrolls only their titles. Close to the Story History "
+	                "scroll, its text shows the five newest lines, the newest first: who said each line, then the line. "
+	                "Each line after the first starts with how many lines ago it was. The buttons Previous Line (left "
+	                "arrow, bottom left), Latest Line (bottom middle) and Next Line (right arrow, bottom right) fade "
+	                "in. Previous Line shows one older line first, Next Line one newer line, and Latest Line the newest "
+	                "line. The temple keeps the menu's click silent. The buttons fade out as the camera goes back.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::RunText, .delaySeconds = 0.5f, .value = 4411},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 1250},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 1717},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 1240},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 6675},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 6676},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.2f, .value = 4411},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4119, .amount = 2.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4120, .amount = 2.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4121, .amount = 1.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4122, .amount = 4.0f},
+	                 // The other rooms open after the temple draws the main room. Thus the player enters through it.
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 6}},
+	});
+
+	all.push_back({
 	    .id = "temple.map_markers",
 	    .name = "The temple's map showing the miracles cast and the influence",
 	    .facet = Facet::Story,
@@ -5556,7 +5589,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
-	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || IsPointerCommand(kind);
+	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
+	       kind == Kind::LookAtTempleScroll || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -5583,7 +5617,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 119> k_Names {
+	constexpr std::array<std::string_view, 121> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -5703,6 +5737,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "do action",
 	    "make friends",
 	    "remove object",
+	    "read tip",
+	    "look at temple scroll",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

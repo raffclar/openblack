@@ -18,6 +18,7 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/TempleInteriorInterface.h"
 #include "Creature/CreatureIdleMind.h"
 #include "CreatureSpawner.h"
 #include "DebugGuiInterface.h"
@@ -128,7 +129,10 @@ void TestbedScenarios::UpdateAlways() noexcept
 	float seconds = 0.0f;
 	if (Locator::time::has_value())
 	{
-		seconds = std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count();
+		// The world stops in the temple. Scenarios that go from room to room continue in real time there.
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const auto& time = Locator::time::value();
+		seconds = std::chrono::duration<float>(inTemple ? time.GetFrameRealTime() : time.GetFrameGameTime()).count();
 	}
 	RunRequested();
 	_runner.Update(seconds);

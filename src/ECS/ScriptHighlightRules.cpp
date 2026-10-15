@@ -191,6 +191,11 @@ void TipsRead::Add(uint32_t text, uint32_t category)
 	texts.push_back(text);
 }
 
+std::span<const uint32_t> TipsRead::In(uint32_t category) const
+{
+	return category < k_Categories ? std::span<const uint32_t>(_texts.at(category)) : std::span<const uint32_t> {};
+}
+
 bool TipsRead::Empty() const
 {
 	return std::ranges::all_of(_texts, [](const auto& texts) { return texts.empty(); });

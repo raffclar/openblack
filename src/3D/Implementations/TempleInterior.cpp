@@ -58,11 +58,13 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -256,6 +258,21 @@ TempleScrolls::Facts GatherScrollFacts()
 	{
 		const auto snapshot = Locator::creatureCaveSystem::value().Snapshot();
 		facts.creature = snapshot.has_value() ? std::optional(creature_cave::FactsOf(*snapshot)) : std::nullopt;
+	}
+	// The library's help scrolls list the tips that the player read on the signs, by their categories
+	if (Locator::scriptHighlightSystem::has_value())
+	{
+		const auto& tips = Locator::scriptHighlightSystem::value().GetTipsRead();
+		for (uint32_t category = 0; category < facts.libraryHelp.size(); ++category)
+		{
+			const auto read = tips.In(category);
+			facts.libraryHelp.at(category).assign(read.begin(), read.end());
+		}
+	}
+	// The library's last scroll shows the help texts that the scripts showed
+	if (Locator::helpTextSystem::has_value())
+	{
+		facts.history = &Locator::helpTextSystem::value().GetStoryHistory();
 	}
 	return facts;
 }
@@ -1071,6 +1088,11 @@ void TempleInterior::SetCurrentRoom(TempleRoom room)
 		{
 			_challengeRoom->Enter();
 		}
+		// Coming into the library, the story history shows its newest line first
+		if (room == TempleRoom::Credits && _scrolls != nullptr)
+		{
+			_scrolls->ShowLatestHistory();
+		}
 		temple_help::GameScripts scripts;
 		temple_help::EnterRoom(scripts, room, temple_help::HelpSystemOn());
 	}
@@ -1115,6 +1137,18 @@ void TempleInterior::EnterRoom(TempleRoom room)
 	if (_active && _cameraModel != nullptr && !_cameraModel->GoThroughDoorTo(room))
 	{
 		GoToRoom(room);
+	}
+}
+
+void TempleInterior::LookAtScroll(size_t place)
+{
+	if (!_active || _scrolls == nullptr || _cameraModel == nullptr)
+	{
+		return;
+	}
+	if (const auto focus = _scrolls->LookAt(_currentRoom, place, GatherScrollFacts()); focus.has_value())
+	{
+		_cameraModel->LookAtSubMesh(focus->position, focus->lookAt);
 	}
 }
 
@@ -1264,6 +1298,16 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		{
 			const auto facts = GatherScrollFacts();
 			_scrolls->SetFocus(_cameraModel->GetSubMeshZoom(), facts);
+			// While the camera is close to the story history, its buttons show, and a press turns its first line
+			if (_interface != nullptr)
+			{
+				auto& historyBox = _interface->GetStoryHistoryBox();
+				historyBox.SetShown(_scrolls->IsHistoryOpen());
+				if (const auto turn = historyBox.TakeTurn(); turn.has_value())
+				{
+					_scrolls->TurnHistory(*turn, facts);
+				}
+			}
 			_scrolls->AppendFocusedText(_text, facts);
 		}
 		if (_signs != nullptr)
@@ -1453,6 +1497,11 @@ void TempleInterior::Deactivate()
 	if (!_active)
 	{
 		return;
+	}
+	// The story history's buttons go with the temple
+	if (_interface != nullptr)
+	{
+		_interface->GetStoryHistoryBox().SetShown(false);
 	}
 	// Leaving the room the player was kept in ends the game: the screen goes black rather than out to the island
 	if (_lock.GetRoom().has_value())

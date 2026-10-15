@@ -21,6 +21,7 @@
 #include <3D/TempleSigns.h>
 #include <Gui/GameFont.h>
 #include <Gui/TextDatabase.h>
+#include <Help/StoryHistory.h>
 #include <gtest/gtest.h>
 
 using namespace openblack;
@@ -281,4 +282,68 @@ TEST(TempleScrolls, TheCreaturesMindListsItsDesires)
 	// Without the player's creature the room leaves the scroll unwritten
 	facts.creature.reset();
 	EXPECT_FALSE(TempleScrolls::Write(TempleScrolls::Content::CreatureMind, texts, font, facts).has_value());
+}
+
+TEST(TempleScrolls, TheStoryHistoryShowsFiveLinesFromItsFirstLine)
+{
+	const auto font = LoadFont();
+	gui::TextDatabase texts;
+	const std::u16string script = u"ADD_TEXT(1, NONE, \"HELP_TEXT_NONE\", \"None\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_LIBRARY_ROOM_07\", \"Story\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_DIALOG_ADDITION_06\", \"%d ago.\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_DIALOG_ADDITION_131\", \"Good:\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_DIALOG_ADDITION_135\", \"Said:\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_FIRST\", \"First\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_SECOND\", \"Second\")\n";
+	std::vector<uint8_t> bytes;
+	for (const auto c : script)
+	{
+		bytes.push_back(static_cast<uint8_t>(c & 0xFF));
+		bytes.push_back(static_cast<uint8_t>(c >> 8));
+	}
+	texts.AddHelpScript(bytes);
+	help::StoryHistory history;
+	history.Add({.text = 5, .interaction = 0, .number = 0.0f, .narrator = 1});
+	history.Add({.text = 6, .interaction = 0, .number = 0.0f, .narrator = 2});
+	auto facts = TempleScrolls::Facts::Mock();
+	facts.history = &history;
+
+	// The newest line first, with no count; the line before it tells how many lines ago it was said
+	const auto newest = TempleScrolls::Write(TempleScrolls::Content::LibraryHistory, texts, font, facts);
+	ASSERT_TRUE(newest.has_value());
+	const std::u16string_view expected = u"Story<N><N><N>"
+	                                     u"Good:<N><N><N>Second<N><N><N><N>"
+	                                     u"1 ago.<N><N>Said:<N><N><N>First<N><N><N><N><E>";
+	EXPECT_EQ(*newest, expected);
+
+	// From the line before the newest line, the newest line is not shown
+	const auto older = TempleScrolls::Write(TempleScrolls::Content::LibraryHistory, texts, font, facts, 1);
+	ASSERT_TRUE(older.has_value());
+	EXPECT_EQ(older->find(u"Second"), std::u16string::npos);
+	EXPECT_NE(older->find(u"1 ago.<N><N>Said:"), std::u16string::npos);
+
+	// Without a history only the title is written
+	facts.history = nullptr;
+	EXPECT_EQ(*TempleScrolls::Write(TempleScrolls::Content::LibraryHistory, texts, font, facts), u"Story<N><N><N><E>");
+}
+
+TEST(TempleScrolls, TheLibrarysHelpScrollsListTheTipsRead)
+{
+	const auto font = LoadFont();
+	gui::TextDatabase texts;
+	const std::u16string script = u"ADD_TEXT(1, NONE, \"HELP_TEXT_NONE\", \"None\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_LIBRARY_ROOM_03\", \"Creature\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_DYK_01\", \"Tip\")\n";
+	std::vector<uint8_t> bytes;
+	for (const auto c : script)
+	{
+		bytes.push_back(static_cast<uint8_t>(c & 0xFF));
+		bytes.push_back(static_cast<uint8_t>(c >> 8));
+	}
+	texts.AddHelpScript(bytes);
+	auto facts = TempleScrolls::Facts::Mock();
+	facts.libraryHelp.at(1) = {2};
+	const auto creature = TempleScrolls::Write(TempleScrolls::Content::LibraryCreature, texts, font, facts);
+	ASSERT_TRUE(creature.has_value());
+	EXPECT_EQ(*creature, u"Creature<N><N><N>Tip<N><N><N><E>");
 }

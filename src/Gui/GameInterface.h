@@ -33,6 +33,7 @@
 #include "NewPlayerBox.h"
 #include "ScreenFade.h"
 #include "SkipBox.h"
+#include "StoryHistoryBox.h"
 #include "TattooEditorDialog.h"
 #include "TextDatabase.h"
 #include "ToolTips.h"
@@ -110,6 +111,9 @@ public:
 	}
 	/// The start-of-game question's box, up or not
 	[[nodiscard]] const SkipBox& GetSkipBox() const noexcept { return *_skipBox; }
+	/// The buttons of the story history in the temple's library
+	[[nodiscard]] StoryHistoryBox& GetStoryHistoryBox() noexcept { return *_storyHistoryBox; }
+	[[nodiscard]] const StoryHistoryBox& GetStoryHistoryBox() const noexcept { return *_storyHistoryBox; }
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
 	[[nodiscard]] bool IsDialogOpen() const noexcept { return _menu->IsOpen() || _skipBox->IsActive(); }
 
@@ -238,6 +242,8 @@ private:
 
 	/// Every mouse event and key press goes to the start-of-game question while it is up
 	bool ProcessSkipBoxEvent(const SDL_Event& event);
+	/// The story history's buttons take the mouse only over a button; true when they took the event
+	bool ProcessStoryHistoryEvent(const SDL_Event& event);
 	/// While the tattoo editor is open its dialog takes the mouse and keyboard
 	bool ProcessTattooEditorEvent(const SDL_Event& event);
 	/// Opens the tattoo editor's dialog as the editor opens, and moves it on
@@ -320,6 +326,7 @@ private:
 	/// Made once and kept, so that the answer picked stays picked
 	std::unique_ptr<SkipBox> _skipBox;
 	std::optional<new_game_choice::Choice> _skipBoxAnswer;
+	std::unique_ptr<StoryHistoryBox> _storyHistoryBox;
 	std::unique_ptr<TattooEditorDialog> _tattooEditor;
 	std::unique_ptr<NewPlayerBox> _newPlayerBox;
 	/// The front end's backdrop: its texture, repeating, its swirls and the two layers' texture coordinates

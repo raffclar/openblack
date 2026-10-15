@@ -278,6 +278,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _painter(_canvas, _font, *_atlas, *_fontTexture)
     , _menu(std::make_unique<GameMenu>(_texts, _font, playerName, std::move(settings)))
     , _skipBox(std::make_unique<SkipBox>(_texts, _font, DialogPainter::k_MidTextSize))
+    , _storyHistoryBox(std::make_unique<StoryHistoryBox>(_texts, _font))
     , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
     , _newPlayerBox(std::make_unique<NewPlayerBox>(_texts, _font))
     , _toolTips(ReadToolTipsInfo())
@@ -468,6 +469,37 @@ bool GameInterface::ProcessSkipBoxEvent(const SDL_Event& event)
 	}
 }
 
+bool GameInterface::ProcessStoryHistoryEvent(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+	// The game also sees the pointer move
+	case SDL_MOUSEMOTION:
+		_storyHistoryBox->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return false;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button != SDL_BUTTON_LEFT || !_storyHistoryBox->WantsMouse())
+		{
+			return false;
+		}
+		_storyHistoryBox->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		if (event.button.button != SDL_BUTTON_LEFT || !_storyHistoryBox->WantsMouse())
+		{
+			return false;
+		}
+		// The button clicks as it acts
+		if (_storyHistoryBox->MouseUp(_painter.ToDialog({event.button.x, event.button.y})))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	default:
+		return false;
+	}
+}
+
 void GameInterface::OpenMenu()
 {
 	_menu->Open();
@@ -499,7 +531,7 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	// Escape opening the menu is the game's to decide (OpenMenu)
 	if (!_menu->IsOpen())
 	{
-		return false;
+		return _storyHistoryBox->IsActive() && ProcessStoryHistoryEvent(event);
 	}
 	if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
 	{
@@ -604,6 +636,7 @@ void GameInterface::Update(float deltaSeconds)
 {
 	_menu->Update(deltaSeconds);
 	_skipBox->Update(deltaSeconds);
+	_storyHistoryBox->Update(deltaSeconds);
 	_newPlayerBox->Update(deltaSeconds);
 	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
@@ -713,6 +746,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	}
 	else
 	{
+		_storyHistoryBox->Draw(_painter);
 		if (_menu->IsVisible())
 		{
 			_menu->Draw(_painter);

@@ -57,6 +57,7 @@ public:
 	void SetTransitionRoom(std::optional<TempleRoom> room) override { _transitionRoom = room; }
 	void GoToRoom(TempleRoom room) override;
 	void EnterRoom(TempleRoom room) override;
+	void LookAtScroll(size_t place) override;
 	[[nodiscard]] bool IsRoomDrawn(TempleRoom room) const override;
 	[[nodiscard]] bool IsRoomAvailable(TempleRoom room) const override;
 	void TellRoomNotAvailable() override;

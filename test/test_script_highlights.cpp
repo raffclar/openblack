@@ -303,6 +303,23 @@ TEST(ScriptHighlightRules, TipsAreKeptByCategoryUpToFortyEight)
 	EXPECT_FALSE(tips.Has(48, 0));
 }
 
+TEST(ScriptHighlightRules, TheLibraryListsTheTipsOfACategoryInTheOrderTheyWereRead)
+{
+	TipsRead tips;
+	tips.Add(4130, 1);
+	tips.Add(4120, 1);
+	tips.Add(4130, 1);
+	tips.Add(4125, 2);
+	const auto creature = tips.In(1);
+	ASSERT_EQ(creature.size(), 2u);
+	EXPECT_EQ(creature[0], 4130u);
+	EXPECT_EQ(creature[1], 4120u);
+	EXPECT_EQ(tips.In(2).size(), 1u);
+	EXPECT_TRUE(tips.In(0).empty());
+	// No category after the fifth
+	EXPECT_TRUE(tips.In(5).empty());
+}
+
 TEST(ScriptHighlightRules, AHighlightStandsOnTheHighestStillThingItOverlaps)
 {
 	const std::vector<ThingBelow> things {

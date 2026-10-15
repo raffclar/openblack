@@ -224,6 +224,8 @@ void HelpTextSystem::SetTextChoices(const TextChoices& choices)
 
 void HelpTextSystem::Reset()
 {
+	// The story history starts again when the scripts start again
+	_storyHistory.Clear();
 	if (_dialogue)
 	{
 		_dialogue->ClearAllText();
@@ -292,13 +294,22 @@ void HelpTextSystem::Update(const Frame& frame)
 	_dialogue->AdvanceControlIcons(static_cast<float>(frame.realMs) * 0.001f);
 }
 
+void HelpTextSystem::RecordStoryLine(uint32_t text, int32_t withInteraction, float number)
+{
+	const auto valid = text < help::k_HelpTextCount ? text : 0u;
+	_storyHistory.Add({.text = valid, .interaction = withInteraction, .number = number, .narrator = GetNarrator(valid)});
+}
+
 bool HelpTextSystem::RunText(bool singleLine, uint32_t text, int32_t withInteraction)
 {
+	// The story history keeps every text that a script shows, also before the dialogue starts
+	RecordStoryLine(text, withInteraction, 0.0f);
 	return _dialogue ? _dialogue->RunText(singleLine, text, withInteraction) : false;
 }
 
 bool HelpTextSystem::RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction)
 {
+	RecordStoryLine(text, withInteraction, number);
 	return _dialogue ? _dialogue->RunText(singleLine, text, withInteraction, number) : false;
 }
 

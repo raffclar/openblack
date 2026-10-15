@@ -735,6 +735,12 @@ struct Command
 		/// The scenario's object goes from the world at once, as when something other than the creature removes it.
 		/// Needs no creature
 		RemoveObject,
+		/// The player reads a "did you know" tip (value, by the scripts' number) of a category (amount, rounded) on a
+		/// sign, as when the hand taps the sign. The library lists the tip. Needs no creature
+		ReadTip,
+		/// The temple's camera looks at a scroll of the room the player is in (value: its place among the room's
+		/// scrolls), as when the player presses the scroll. Needs no creature
+		LookAtTempleScroll,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

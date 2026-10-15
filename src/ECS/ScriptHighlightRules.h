@@ -150,6 +150,8 @@ public:
 	void Add(uint32_t text, uint32_t category);
 	[[nodiscard]] bool Empty() const;
 	void Clear();
+	/// The tips of a category, in the order that the player read them; none for a category past the last
+	[[nodiscard]] std::span<const uint32_t> In(uint32_t category) const;
 
 private:
 	std::array<std::vector<uint32_t>, k_Categories> _texts;
