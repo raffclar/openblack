@@ -1218,8 +1218,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandOnCreature::clocks>("clocks")
 	    .Field<&components::HandOnCreature::lastPart>("lastPart")
 	    .Field<&components::HandOnCreature::sinceStepMs>("sinceStepMs")
-	    .Field<&components::HandOnCreature::lastPoint>("lastPoint")
 	    .Field<&components::HandOnCreature::lastCursor>("lastCursor")
+	    .Field<&components::HandOnCreature::lastPoint>("lastPoint")
 	    .Field<&components::HandOnCreature::wasOnBody>("wasOnBody")
 	    .Field<&components::HandOnCreature::speed>("speed")
 	    .Field<&components::HandOnCreature::hardSlaps>("hardSlaps")
@@ -1229,7 +1229,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandOnCreature::strokedOrSlapped>("strokedOrSlapped")
 	    .Field<&components::HandOnCreature::up>("up")
 	    .Field<&components::HandOnCreature::upStarted>("upStarted")
-	    .Field<&components::HandOnCreature::frameCursorX>("frameCursorX");
+	    .Field<&components::HandOnCreature::frameCursor>("frameCursor")
+	    .Field<&components::HandOnCreature::distance>("distance")
+	    .Field<&components::HandOnCreature::distanceStarted>("distanceStarted")
+	    .Field<&components::HandOnCreature::shownAt>("shownAt");
 	Reflect<components::HandLastFeedback>(context).Field<&components::HandLastFeedback::sum>("sum");
 	Reflect<components::HandStillness>(context)
 	    .Field<&components::HandStillness::stillTurns>("stillTurns")

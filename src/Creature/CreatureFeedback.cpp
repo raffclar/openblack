@@ -258,26 +258,40 @@ float creature_feedback::DistanceOutside(const glm::vec3& point, std::span<const
 	return best;
 }
 
-glm::vec3 creature_feedback::SurfaceNormal(const glm::vec3& point, std::span<const Capsule> capsules)
+float creature_feedback::HandStartDistance(float cameraToCreature, float size)
 {
-	constexpr auto k_Up = glm::vec3(0.0f, 1.0f, 0.0f);
-	std::optional<glm::vec3> out;
-	float nearest = std::numeric_limits<float>::max();
-	for (const auto& capsule : capsules)
+	return cameraToCreature - (size * k_HandStartsShortPerSize);
+}
+
+void creature_feedback::KeepHandBack(Zoomer& distance, float cameraToMiddle, float height)
+{
+	const auto limit = cameraToMiddle - (height * k_HandKeepsBackShare);
+	if (limit < distance.GetValue())
 	{
-		const auto axis = capsule.to - capsule.from;
-		const auto axisSquared = glm::dot(axis, axis);
-		const auto along =
-		    axisSquared > 0.0f ? std::clamp(glm::dot(point - capsule.from, axis) / axisSquared, 0.0f, 1.0f) : 0.0f;
-		const auto away = point - (capsule.from + (axis * along));
-		const auto outside = glm::length(away) - capsule.radius;
-		if (outside < nearest)
-		{
-			nearest = outside;
-			out = away;
-		}
+		distance.Reset(limit);
 	}
-	return out.has_value() && glm::length(*out) > 0.0f ? glm::normalize(*out) : k_Up;
+}
+
+void creature_feedback::RestHandOnBody(Zoomer& distance, float cameraToTouch, float height)
+{
+	const auto rest = cameraToTouch - (height * k_HandRestsShortShare);
+	const auto jump = rest - (height * k_HandJumpsShortShare);
+	if (jump < distance.GetValue())
+	{
+		distance.Reset(jump);
+	}
+	distance.SetDestination(rest, k_HandRestSeconds);
+}
+
+float creature_feedback::HandDistanceFromCamera(const Zoomer& distance)
+{
+	return std::max(distance.GetValue(), k_HandNearestToCamera);
+}
+
+glm::ivec2 creature_feedback::SecondTryCursor(glm::ivec2 cursor, glm::ivec2 lastCursor)
+{
+	// A shift halves the sum and rounds it down
+	return {(cursor.x + lastCursor.x) >> 1, (cursor.y + lastCursor.y) >> 1};
 }
 
 glm::vec3 creature_feedback::HandUpOnTakingHold(const glm::vec3& creaturePosition, const glm::vec3& camera)

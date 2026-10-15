@@ -56,8 +56,12 @@ private:
 	/// What a step of the hand on the creature goes on
 	struct StepInput
 	{
-		/// Where the hand is beside the body, and where it touches the body if it does
-		glm::vec3 point;
+		/// Where the hand showed at the last frame, which gives the height of a slap
+		glm::vec3 shownAt;
+		/// The places at the hand's distance on the lines through the cursor now and at the last step
+		glm::vec3 here;
+		glm::vec3 before;
+		/// Where the line of sight touches the body, if it does
 		std::optional<glm::vec3> touch;
 		glm::vec2 cursor;
 		float screenWidth;
@@ -65,8 +69,8 @@ private:
 		glm::vec3 rayOrigin;
 		glm::vec3 rayDirection;
 	};
-	/// A step of stroking and slapping
-	void Step(components::HandOnCreature& contact, const StepInput& input);
+	/// A step of stroking and slapping, which tells whether the hand slapped
+	bool Step(components::HandOnCreature& contact, const StepInput& input);
 	/// The hand's up this frame, easing as the hand rests on the body or leaves it
 	static glm::vec3 TurnHand(components::HandOnCreature& contact, bool onBody, bool cursorMovedAcross, const glm::vec3& normal,
 	                          const glm::vec3& creaturePosition, float seconds);

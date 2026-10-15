@@ -18,8 +18,10 @@
 #include <vector>
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/Zoomer.h"
 #include "Creature/CreatureFace.h"
 
 /// How the player's hand rewards and punishes a creature. The hand can't pick a creature up: clicking one holds the
@@ -210,8 +212,31 @@ constexpr float k_BodyRadiusShare = 0.12f;
 /// Where a line of sight first touches the body, as how many of the direction's lengths along it, if it does
 [[nodiscard]] std::optional<float> RayHit(const glm::vec3& origin, const glm::vec3& direction,
                                           std::span<const Capsule> capsules);
-/// The way out of the body at a point on it: from the nearest capsule's line, or straight up if the point is on it
-[[nodiscard]] glm::vec3 SurfaceNormal(const glm::vec3& point, std::span<const Capsule> capsules);
+
+/// Held to a creature, the hand stays on the line of sight through the cursor. Its distance from the camera eases to a
+/// point a little short of the place where the line meets the creature's posed mesh.
+/// The hand stays nearer to the camera than the creature's middle by this share of the creature's height
+constexpr float k_HandKeepsBackShare = 0.25f;
+/// On the body, the hand rests short of the mesh by this share of the height, and it eases there in this time
+constexpr float k_HandRestsShortShare = 0.055f;
+constexpr float k_HandRestSeconds = 0.3f;
+/// When the hand is deeper than this share of the height before its rest, it jumps to that place
+constexpr float k_HandJumpsShortShare = 0.03f;
+/// When the hand takes hold, it is short of the creature's position by this distance for each unit of size
+constexpr float k_HandStartsShortPerSize = 0.825f;
+/// The hand comes no nearer to the camera than this distance
+constexpr float k_HandNearestToCamera = 2.0f;
+/// The distance of the hand from the camera when it takes hold of a creature
+[[nodiscard]] float HandStartDistance(float cameraToCreature, float size);
+/// Keep the hand nearer to the camera than the creature's middle. A hand that is farther jumps there at once.
+void KeepHandBack(Zoomer& distance, float cameraToMiddle, float height);
+/// Send the hand to its rest a little short of the body. A hand that is too deep first jumps nearer to the camera.
+void RestHandOnBody(Zoomer& distance, float cameraToTouch, float height);
+/// The distance at which the hand shows on the line of sight
+[[nodiscard]] float HandDistanceFromCamera(const Zoomer& distance);
+/// When the line through the cursor does not touch the body, the hand tries again through the middle of the cursor's
+/// places in this frame and in the last frame, in whole pixels
+[[nodiscard]] glm::ivec2 SecondTryCursor(glm::ivec2 cursor, glm::ivec2 lastCursor);
 
 /// Held to a creature, the hand's up eases round: taking hold it starts pointing from the creature towards the camera; on
 /// the body, as the cursor moves across the screen, it turns to the body's surface tipped towards the camera over 0.9
