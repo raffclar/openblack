@@ -80,9 +80,9 @@ ShaderProgram::~ShaderProgram()
 	}
 }
 
-void ShaderProgram::Bind(uint8_t bindPoint, UniformHandle sampler, TextureHandle texture) const
+void ShaderProgram::Bind(uint8_t bindPoint, UniformHandle sampler, TextureHandle texture, uint32_t samplerFlags) const
 {
-	bgfx::setTexture(bindPoint, toBgfx(sampler), toBgfx(texture));
+	bgfx::setTexture(bindPoint, toBgfx(sampler), toBgfx(texture), samplerFlags);
 	_samplerDefaults.Set(bindPoint);
 	if (_tally != nullptr)
 	{
@@ -110,6 +110,12 @@ void ShaderProgram::SetTextureSampler(const char* samplerName, uint8_t bindPoint
 void ShaderProgram::SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const Texture2D& texture) const
 {
 	Bind(bindPoint, sampler, texture.GetNativeHandle());
+}
+
+void ShaderProgram::SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const Texture2D& texture,
+                                      uint32_t samplerFlags) const
+{
+	Bind(bindPoint, sampler, texture.GetNativeHandle(), samplerFlags);
 }
 
 void ShaderProgram::SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const graphics::TextureHandle& texture) const

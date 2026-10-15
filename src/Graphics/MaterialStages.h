@@ -39,6 +39,10 @@ inline constexpr std::array<EnvironmentStage, 8> k_EnvironmentStages = {
     EnvironmentStage::Modulated2, EnvironmentStage::Map,  EnvironmentStage::Off,   EnvironmentStage::Off,
 };
 
+/// A material whose flags have this bit repeats its texture past the edges of the texture. Without the bit, the
+/// texture stops at its edge texels.
+inline constexpr uint8_t k_RepeatsTexture = 0x04;
+
 /// A material whose flags have this bit keeps its texture still while the model's skin slides
 inline constexpr uint8_t k_KeepsTextureStill = 0x10;
 
@@ -53,6 +57,13 @@ inline constexpr uint8_t k_KeepsTextureStill = 0x10;
 [[nodiscard]] constexpr bool TextureSlides(uint8_t materialFlags, bool environmentMapped)
 {
 	return !environmentMapped && (materialFlags & k_KeepsTextureStill) == 0;
+}
+
+/// Whether a primitive repeats its texture past the edges: when its material's flags tell it to, or when the whole
+/// model is set to repeat its textures
+[[nodiscard]] constexpr bool TextureRepeats(uint8_t materialFlags, bool modelRepeats)
+{
+	return modelRepeats || (materialFlags & k_RepeatsTexture) != 0;
 }
 
 } // namespace openblack::graphics::material_stages

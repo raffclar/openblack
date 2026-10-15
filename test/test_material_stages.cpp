@@ -39,3 +39,14 @@ TEST(MaterialStages, ASkinSlidesWhereTheMaterialLetsItAndNeverWithTheEnvironment
 	EXPECT_TRUE(TextureSlides(0x04, false));
 	EXPECT_TRUE(TextureSlides(0x00, false));
 }
+
+TEST(MaterialStages, ATextureRepeatsWhereTheMaterialTellsItOrTheModelRepeatsAll)
+{
+	// A lion's body (0x04) and mane (0x05) repeat their skins. Parts of the horse and the cow (0x00) do not.
+	EXPECT_TRUE(TextureRepeats(0x04, false));
+	EXPECT_TRUE(TextureRepeats(0x05, false));
+	EXPECT_FALSE(TextureRepeats(0x00, false));
+	EXPECT_FALSE(TextureRepeats(0x01, false));
+	// A model set to repeat all its textures repeats them whatever the material tells
+	EXPECT_TRUE(TextureRepeats(0x00, true));
+}

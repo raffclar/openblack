@@ -1256,7 +1256,18 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				}
 				else if (texture != nullptr)
 				{
-					setSampler(MeshUniform::Diffuse, 0, *texture);
+					const auto diffuse =
+					    desc.useMaterialAddressing && !material_stages::TextureRepeats(prim.materialFlags, false)
+					        ? program->FindUniform("s_diffuse")
+					        : std::nullopt;
+					if (diffuse.has_value())
+					{
+						program->SetTextureSampler(*diffuse, 0, *texture, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+					}
+					else
+					{
+						setSampler(MeshUniform::Diffuse, 0, *texture);
+					}
 					bindings.diffuse = toBgfx(texture->GetNativeHandle()).idx;
 				}
 				else if (!desc.isSky && _whiteTexture)
@@ -5907,7 +5918,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				auto mesh = meshManager.Handle(meshId);
 
-				submitDesc.useMaterialBlending = useMaterialBlending;
+				// The materials of a creature's body set its blending and culling. Thus the edges of the lion's mane
+				// strands blend, and only the strands show their back faces. The passes of a fizzing creature keep
+				// their own blending and culling.
+				const bool creatureMaterials = drawingCreatures && !submitDesc.fizz.has_value();
+				submitDesc.useMaterialBlending = useMaterialBlending || creatureMaterials;
 				submitDesc.alphaTexturedAdditive = placers.alphaTexturedAdditive;
 				submitDesc.shineColour = placers.shineColour;
 				submitDesc.additiveShare = placers.additiveShare;
@@ -5977,8 +5992,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.isSky = false;
 				submitDesc.onlyJoints = placers.onlyJoints;
 				submitDesc.hideShutJoints = placers.hideShutJoints;
-				// The temple's meshes, which are drawn as their materials say
-				submitDesc.useMaterialCulling = placers.materialBlending;
+				// The temple's meshes and the creatures, which are drawn as their materials say
+				submitDesc.useMaterialCulling = placers.materialBlending || creatureMaterials;
+				submitDesc.useMaterialAddressing = creatureMaterials;
 				submitDesc.mirrored = desc.cullBack;
 				submitDesc.uvOffset = placers.uvOffset;
 				submitDesc.subMeshTextures = placers.subMeshTextures;

@@ -117,6 +117,9 @@ public:
 		/// Culls the back faces of the primitives whose materials aren't two-sided, which the mirrored reflection pass
 		/// sees from the other side
 		bool useMaterialCulling;
+		/// Repeats each primitive's texture past its edges only when the primitive's material tells it to, and stops
+		/// the texture at its edge texels for the other primitives. Otherwise every texture repeats.
+		bool useMaterialAddressing {false};
 		bool mirrored;
 		/// The fraction of its depth the mesh is pushed back by
 		float depthBias;
