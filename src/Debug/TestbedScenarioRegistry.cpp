@@ -1354,6 +1354,37 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .creatures = {goodTiger, evilTiger},
 	});
 
+	// The hair close up while the head moves: the tiger's whiskers, and the wolf's tufts, which use the same material
+	std::vector<Command> headMoves;
+	for (size_t i = 0; i < animations::k_GestureCount; ++i)
+	{
+		headMoves.push_back(Play(Kind::PlayGesture, 0, animations::k_FirstGesture + i, 3.0f, false));
+	}
+	const auto hairClose = [&all, &headMoves](std::string_view id, std::string_view name, CreatureType species,
+	                                          std::string_view description, std::string_view expected, float distance) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Appearance,
+		    .description = description,
+		    .expected = expected,
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Head, .distance = distance},
+		    .creatures = {CreatureSetup {.species = species, .needs = Content(), .hold = true, .pauseMind = true}},
+		    .commands = headMoves,
+		    .repeatFrom = 0,
+		});
+	};
+	hairClose("appearance.tiger_whiskers", "Tiger whiskers close up", CreatureType::Tiger,
+	          "Close up, a neutral tiger with a paused mind faces the camera. It nods, shakes its head and does its "
+	          "other gestures.",
+	          "The whiskers are thin white lines with sharp edges and no pale blur. A neutral tiger's whiskers do not "
+	          "swing: they only follow the head. The face does not show through them.",
+	          0.6f);
+	hairClose("appearance.wolf_hair", "Wolf hair close up", CreatureType::Wolf,
+	          "A neutral wolf with a paused mind faces the camera. It nods, shakes its head and does its other gestures.",
+	          "The tufts of hair at the hips have sharp edges and no pale blur. They swing when the wolf moves.", 1.5f);
+
 	auto tattooed = Posed(CreatureType::Tiger, {0.0f, 0.0f}, 30.0f, "tattooed");
 	constexpr std::array<glm::u8vec3, 8> k_Colours {{
 	    {220, 40, 40},
