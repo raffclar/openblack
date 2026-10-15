@@ -1193,14 +1193,14 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		// An action that ends well on a creature makes the creature find that creature nicer or nastier, as the game's
 		// table says for the action. An action on no thing acts on the creature itself, so it also changes how nice the
 		// creature finds itself (a quirk of the game).
-		if (carriedOut && plan.object.has_value() && tables != nullptr && plan.action < tables->actions.size())
+		if (carriedOut && tables != nullptr && plan.action < tables->actions.size())
 		{
 			const auto change = tables->actions[plan.action].creatureNicenessChange;
 			const auto& registry = Locator::entitiesRegistry::value();
-			const auto other = static_cast<entt::entity>(*plan.object);
+			const auto other = plan.object.has_value() ? static_cast<entt::entity>(*plan.object) : creature;
 			if (change != 0.0f && registry.Valid(other) && registry.AllOf<Creature>(other))
 			{
-				mind.leash.attitudes.push_back({.creature = *plan.object, .change = change});
+				mind.leash.attitudes.push_back({.creature = entt::to_integral(other), .change = change});
 			}
 		}
 		if (carriedOut && plan.desire == Desire::Compassion && plan.about.has_value() && tables != nullptr)
