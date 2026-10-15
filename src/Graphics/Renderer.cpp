@@ -2020,16 +2020,6 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components
 
 void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin) const
 {
-	DrawCreatureHair(desc, hair,
-	                 HairPlace {.view = TranslucentPassOf(desc.viewId),
-	                            .eye = desc.camera->GetOrigin(),
-	                            .offset = glm::vec3(0.0f),
-	                            .origin = origin});
-}
-
-void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair,
-                                const HairPlace& place) const
-{
 	using ecs::components::CreatureHair;
 	const auto& textures = Locator::resources::value().GetTextures();
 	struct Vertex
@@ -2048,9 +2038,8 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 		return layout;
 	}();
 	const bool hasTexture = textures.Contains(CreatureHair::k_TextureId) && textures.Contains(CreatureHair::k_AlphaTextureId);
-	// The ribbons are made where the strands hang, facing the eye as it is from there, then moved
-	const auto eye = place.eye - place.offset;
-	const auto viewId = static_cast<bgfx::ViewId>(place.view);
+	const auto eye = desc.camera->GetOrigin();
+	const auto viewId = static_cast<bgfx::ViewId>(TranslucentPassOf(desc.viewId));
 	const auto* program = _shaderManager->GetShader("CreatureHair");
 	// The hair takes the land's light and colour under the creature, and the haze at it, as its body does
 	const auto extent = Locator::terrainSystem::value().GetExtent();
@@ -2058,7 +2047,7 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	const bool landLit = !inTemple && _landLightTexture.has_value();
 	const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, CreatureLandLightScale(desc.viewId), 0.0f, 0.0f};
-	const glm::vec4 u_hairOrigin {place.origin, 0.0f};
+	const glm::vec4 u_hairOrigin {origin, 0.0f};
 	const auto u_haze = inTemple ? glm::vec4(0.0f) : _haze[0];
 	std::vector<creature_hair::RibbonVertex> ribbon;
 	for (const auto& group : hair.groups)
@@ -2106,7 +2095,7 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 			const auto first = static_cast<uint16_t>(vertex);
 			for (const auto& corner : ribbon)
 			{
-				vertices[vertex++] = {corner.position + place.offset, corner.uv, abgr};
+				vertices[vertex++] = {corner.position, corner.uv, abgr};
 			}
 			for (uint16_t i = 0; i + 1 < static_cast<uint16_t>(strand.positions.size()); ++i)
 			{
@@ -2143,7 +2132,7 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 		// Blended over what is behind by the texture's alpha, both sides, tested against depth but leaving none
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
 		               BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA));
-		program->Submit(viewId, zsort::Depth(middle + place.offset, place.eye));
+		program->Submit(viewId, zsort::Depth(middle, eye));
 	}
 }
 

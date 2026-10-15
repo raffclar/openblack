@@ -211,10 +211,9 @@ void openblack::testbed_scenarios::AddStatisticsScenarios(std::vector<Scenario>&
 	    .facet = Facet::Objects,
 	    .description = "The player's ape, which has hair, and the town of statistics.box. Push Escape for the menu, pick "
 	                   "its Statistics tab and then the Creature Stats tab. Then close the menu.",
-	    .expected = "Over the red box the ape turns with the hair on its head and body, as in the world: the strands "
-	                "hang from the body and face the camera as it goes round. The ape shows in the same frame as the "
-	                "box: when the tab opens or the menu closes, no frame shows the box without the ape or the ape "
-	                "without the box.",
+	    .expected = "Over the red box the ape turns with no hair, as in vanilla: its hair stays on the ape in the world. "
+	                "The ape shows in the same frame as the box: when the tab opens or the menu closes, no frame shows "
+	                "the box without the ape or the ape without the box.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_Centre, k_Hut, k_PlannedHut}, .distance = 0.6f},
 	    .creatures = {{.species = CreatureType::GiantApe, .offset = {40.0f, 40.0f}}},

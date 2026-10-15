@@ -22,11 +22,9 @@
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
-#include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "EngineConfig.h"
 #include "Graphics/FrameBuffer.h"
@@ -89,10 +87,6 @@ void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const Interface
 		std::span<const glm::mat4> bones;
 		std::optional<L3DMeshSubmitDesc::MorphTargets> targets;
 		std::optional<ecs::components::CreatureEyes> eyes;
-		const ecs::components::CreatureHair* hair;
-		/// How far the creature moves from where it is in the world, and where it then is
-		glm::vec3 offset;
-		glm::vec3 origin;
 	};
 	std::vector<Body> bodies;
 	for (const auto& shown : request.creatures)
@@ -123,17 +117,11 @@ void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const Interface
 		const auto point =
 		    interface_creatures::PointFromScreen(view, projection, interface_creatures::k_Space, shown.anchor, depth);
 		const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-		const auto offset = interface_creatures::MoveToPoint(point, model, bones, transform->position.y);
-		const auto move = glm::translate(glm::mat4(1.0f), offset);
+		const auto move =
+		    glm::translate(glm::mat4(1.0f), interface_creatures::MoveToPoint(point, model, bones, transform->position.y));
 		instances.push_back({.model = move * model});
 
-		Body drawn {.mesh = mesh->id,
-		            .bones = bones,
-		            .targets = std::nullopt,
-		            .eyes = std::nullopt,
-		            .hair = desc.entities.TryGet<const ecs::components::CreatureHair>(shown.creature),
-		            .offset = offset,
-		            .origin = transform->position + offset};
+		Body drawn {.mesh = mesh->id, .bones = bones, .targets = std::nullopt, .eyes = std::nullopt};
 		if (const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(shown.creature); morph != nullptr)
 		{
 			const auto ids = creature_morph::MeshesOf(creature->species, morph->drawn,
@@ -173,21 +161,13 @@ void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const Interface
 	}
 	bgfx::update(toBgfx(*_interfaceCreatureInstances), 0,
 	             bgfx::copy(instances.data(), static_cast<uint32_t>(instances.size() * sizeof(instances.front()))));
-	// Each body with its eyes, then its hair, which hangs from it as in the world and faces the interface's camera
-	const bool hairShown = Locator::creatureHairSystem::has_value() && Locator::creatureHairSystem::value().IsShown();
+	// Each body with its eyes and with no hair. The hair stays where the creature is in the world, so it is not on the
+	// body in the box.
 	for (size_t i = 0; i < bodies.size(); ++i)
 	{
 		const auto& body = bodies.at(i);
 		drawBody(body.mesh, static_cast<uint32_t>(i), body.bones, body.targets.has_value() ? &*body.targets : nullptr,
 		         body.eyes.has_value() ? &*body.eyes : nullptr);
-		if (hairShown && body.hair != nullptr)
-		{
-			DrawCreatureHair(desc, *body.hair,
-			                 HairPlace {.view = RenderPass::InterfaceCreatures,
-			                            .eye = interface_creatures::Eye(request.turn),
-			                            .offset = body.offset,
-			                            .origin = body.origin});
-		}
 	}
 }
 
