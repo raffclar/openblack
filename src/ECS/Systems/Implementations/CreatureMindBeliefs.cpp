@@ -57,12 +57,14 @@
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -361,6 +363,17 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 	if (registry.AllOf<Ball>(thing) && Locator::infoConstants::has_value())
 	{
 		return KindOfLooseThing(Locator::infoConstants::value().ball.mobileType);
+	}
+	// A miracle's seed and a puff of mist are of one kind
+	if (registry.AnyOf<SpellSeed, Mist>(thing))
+	{
+		return kinds::k_SpellSeed;
+	}
+	// A one-shot globe is a loose thing of the kind of its row of the loose things
+	if (registry.AllOf<OneOffSpellSeed>(thing) && Locator::infoConstants::has_value())
+	{
+		return KindOfLooseThing(
+		    Locator::infoConstants::value().mobileObject.at(static_cast<size_t>(MobileObjectInfo::OneOffSpellSeed)).mobileType);
 	}
 	// A stone hand on a village centre is the icon of a miracle
 	if (registry.AllOf<TownCentreIcon>(thing))

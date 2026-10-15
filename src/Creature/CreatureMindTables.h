@@ -56,6 +56,10 @@ struct ActionInfo
 	/// The action acts on a thing, and it never acts on the thing that the creature holds
 	bool actsOnThing {false};
 	bool notOnWhatItHolds {false};
+	/// The desire that another creature takes the action to show
+	uint32_t shownDesire {0};
+	/// When the action ends well on another creature, how much nicer the creature finds the other creature
+	float creatureNicenessChange {0.0f};
 	/// What the creature must know to choose it
 	creature_watching::ActionNeeds needs;
 };

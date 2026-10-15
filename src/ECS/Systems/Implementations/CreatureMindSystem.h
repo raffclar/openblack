@@ -52,6 +52,7 @@ public:
 	void PlayerDid(size_t deed, const glm::vec3& point, std::optional<entt::entity> object,
 	               std::optional<PlayerNames> player) override;
 	[[nodiscard]] const creature_mind_tables::Tables* GetTables() override;
+	[[nodiscard]] std::optional<creature_tree::Belief> BeliefAbout(entt::entity creature, entt::entity thing) const override;
 
 	bool PlayAction(entt::entity creature, size_t animation) override;
 	bool PlayGesture(entt::entity creature, size_t animation) override;

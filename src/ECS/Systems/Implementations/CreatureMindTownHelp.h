@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include <functional>
 #include <optional>
 
 #include <entt/entity/fwd.hpp>
@@ -25,10 +24,6 @@ namespace openblack::ecs
 {
 class Registry;
 }
-namespace openblack::ecs::components
-{
-struct Transform;
-}
 
 /// The world's side of the actions with which a creature helps a town or plays with its people (see creature_town_help):
 /// the things that the actions are done to, what the agendas need to know, and the totem and breeder steps
@@ -38,10 +33,6 @@ namespace openblack::ecs::systems::mind_town_help
 /// heldByOther is true.
 [[nodiscard]] bool Accepts(const ecs::Registry& registry, creature_plan_actions::Target target, entt::entity thing,
                            entt::entity self, bool heldByOther);
-
-/// Looks at each thing that can suit one of the targets of the town help actions
-void Gather(ecs::Registry& registry, creature_plan_actions::Target target,
-            const std::function<void(entt::entity, const components::Transform&)>& consider);
 
 /// Puts in the situation what a town help action needs: what the creature holds, where a worship site keeps its food,
 /// and the home of a villager

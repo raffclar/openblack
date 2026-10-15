@@ -159,6 +159,18 @@ struct CommonFacts
 [[nodiscard]] uint32_t ForestSize(size_t trees);
 /// The height of a creature by the size it shows: under 0.25, under 0.75, under 1.25, or bigger
 [[nodiscard]] uint32_t CreatureHeight(float shownSize);
+/// The value of the life attribute of a villager or a building: high above a fifth of its life, else low
+[[nodiscard]] uint32_t LifeValue(float life);
+/// The value of the "being built" attribute of a building: 0 while it goes up, 1 when it is built
+[[nodiscard]] uint32_t BeingBuiltValue(bool built);
+/// The desire that another creature shows: the desire that the action of its plan shows, at most the last desire value
+[[nodiscard]] uint32_t DominantDesireValue(uint32_t shownDesire);
+/// The miracle knowledge of another creature: how many miracles it knows, at most the last value
+[[nodiscard]] uint32_t SpellKnowledgeValue(size_t miraclesKnown);
+/// The object type that the carrying attribute keeps when the creature carries no thing
+constexpr uint32_t k_CarriesNothing = 29;
+/// What another creature carries: the object type of the thing in its hand, or k_CarriesNothing, at most the last value
+[[nodiscard]] uint32_t CarryingValue(std::optional<uint32_t> objectType);
 
 /// Whether a belief keeps the value of an attribute from the first time the creature saw the thing. The kind of thing,
 /// its origin, whether it lives, its player number, the job, sex and tribe of a villager, the size of a town and the
