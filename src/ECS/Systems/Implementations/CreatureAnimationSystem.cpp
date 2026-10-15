@@ -34,6 +34,7 @@
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMorph.h"
+#include "Creature/CreatureProportions.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSway.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -333,6 +334,18 @@ struct HeadLook
 	float acceleration {k_DefaultHeadTurnRate};
 };
 
+/// The bones of a species that change with its size, as its file names them
+creature_proportions::Bones ProportionBonesOf(const CreatureRig& rig)
+{
+	creature_proportions::Bones bones {.head = rig.leashBone, .rightEye = rig.rightEye};
+	if (rig.actionPoints.has_value())
+	{
+		bones.rightHand = rig.actionPoints->rightHand;
+		bones.rightFoot = rig.actionPoints->rightFoot;
+	}
+	return bones;
+}
+
 /// The body posed for this frame: its action or breathing, or its slots blended, then the head turned, the face and
 /// any gesture on top
 void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creature_morph::Morph& morph,
@@ -455,6 +468,8 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 			                             animation.skeleton, mirror);
 		}
 	}
+	// A small creature has a large head, large hands and feet and large eyes for its size
+	creature_proportions::Apply(poses, creature_proportions::ScaledBones(ProportionBonesOf(rig), animation.mirror, size));
 	animation.boneMatrices = skeletal_animation::ComposeBoneMatrices(poses, animation.skeleton.parents);
 }
 /// The pose of a body that plays an action, a start, loop and end, or nothing
