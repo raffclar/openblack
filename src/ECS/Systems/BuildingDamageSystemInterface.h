@@ -10,8 +10,11 @@
 #pragma once
 
 #include <optional>
+#include <span>
 
 #include <entt/entity/fwd.hpp>
+
+#include "Creature/CreatureStomp.h"
 
 namespace openblack::ecs
 {
@@ -39,6 +42,13 @@ public:
 	                                   const ImpactInfo& impact) = 0;
 	/// A creature's blow on a building breaks it about where it stands, as far round as the creature is big
 	virtual void Smash(entt::entity building, entt::entity creature, float creatureSize) = 0;
+	/// The blows of a creature on a building in one moment, such as the two blows of a kick or a blow of a part of its
+	/// body: each breaks the building where it lands. The building takes the harm once, after the last blow, and makes
+	/// no sound of a stomp.
+	virtual void CreatureBlows(entt::entity /*building*/, entt::entity /*creature*/,
+	                           std::span<const creature_stomp::Blow> /*blows*/)
+	{
+	}
 	/// A piece comes to rest: a big one goes back into its building as rubble, the rest lie where they are. The object that
 	/// stays, none when it went into its building.
 	virtual entt::entity PieceAtRest(DynamicsSystemInterface& dynamics, PhysicsEntry* entry, entt::entity piece,

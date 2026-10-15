@@ -105,6 +105,14 @@ constexpr std::array k_Executors {
         .action = "BreakRock", .target = Target::PickableRock, .build = Build::BreakRock, .activity = Activity::PlayWithObject},
     // Stamping on a rock, which breaks in two
     Executor {.action = "SmashStoneInHalf", .target = Target::Rock, .build = Build::Destroy},
+    // Stomping on a thing and eating it, and knocking a living thing down with a rock and eating it
+    Executor {.action = "StompAndEat", .target = Target::Stompable, .build = Build::StompAndEat, .activity = Activity::Eat},
+    Executor {.action = "StoneAndEat",
+              .target = Target::StonableAndPickable,
+              .use = Target::ThrowingDamage,
+              .notWhatItHolds = true,
+              .build = Build::StoneAndEat,
+              .activity = Activity::Eat},
     // Toys: stroking a cuddly one, taking one home, throwing a die
     // The game's data names stroking a toy "StrokToy"
     Executor {.action = "StrokToy", .target = Target::CuddlyToy, .build = Build::StrokeToy},
@@ -135,7 +143,7 @@ constexpr std::array k_Executors {
               .notWhatItHolds = true,
               .build = Build::Hurl,
               .activity = Activity::Hurl},
-    Executor {.action = "KickTree", .target = Target::Tree, .build = Build::Destroy},
+    Executor {.action = "KickTree", .target = Target::Tree, .build = Build::Kick},
     Executor {.action = "PullSillyFaces", .target = Target::Villager, .build = Build::PullSillyFaces},
     Executor {.action = "Hurl",
               .target = Target::Stonable,
@@ -143,8 +151,9 @@ constexpr std::array k_Executors {
               .notWhatItHolds = true,
               .build = Build::Hurl,
               .activity = Activity::Hurl},
-    Executor {.action = "Stomp", .target = Target::Destroyable, .build = Build::Destroy},
-    Executor {.action = "Kick", .target = Target::Destroyable, .build = Build::Destroy},
+    Executor {.action = "Stomp", .target = Target::Stompable, .build = Build::Stomp},
+    Executor {.action = "Kick", .target = Target::Kickable, .build = Build::Kick},
+    Executor {.action = "ShowCreatureYouHateHim", .target = Target::Creature, .build = Build::ShowHate},
     Executor {.action = "SitDown",
               .target = Target::Anything,
               .build = Build::SitDown,
@@ -256,8 +265,10 @@ constexpr std::array k_Executors {
     Executor {
         .action = "WaterTreeForTown", .target = Target::Anything, .use = Target::AnyTree, .build = Build::WaterTreeForTown},
     // The power-up of watering a tree for a town asks the creature to know the water power-up, but casts plain water
-    Executor {
-        .action = "WaterTreePU1ForTown", .target = Target::Anything, .use = Target::AnyTree, .build = Build::WaterTreeForTown},
+    Executor {.action = "WaterTreePU1ForTown",
+              .target = Target::Anything,
+              .use = Target::AnyTree,
+              .build = Build::WaterTreeForTown},
     // The one-shot miracles that it casts: the one in its hand, or one that it picks up first. The game's data cuts
     // some of these names short.
     Executor {.action = "CastOneOffSpellInHandAggressive",
@@ -720,6 +731,21 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	}
 	case Build::Destroy:
 		return creature_mind::DestroyThing(*object);
+	case Build::Stomp:
+		return creature_mind::Stomp(*object, random);
+	case Build::StompAndEat:
+		return creature_mind::StompAndEat(*object, situation.holdingEatable);
+	case Build::StoneAndEat:
+		// With nothing to throw, it can't
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::StoneAndEat(*situation.instrument, *object, objectPoint, situation.height, situation.holdingRock);
+	case Build::Kick:
+		return creature_mind::KickThing(*object);
+	case Build::ShowHate:
+		return creature_mind::ShowCreatureYouHateHim(*object, situation.height, situation.thingHeight, random);
 	case Build::SitDown:
 		// Told by a script where to sit, it goes to the thing itself. Left to itself, it sits at a clear place about the
 		// thing, and gives up when there is none.

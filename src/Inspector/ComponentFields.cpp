@@ -59,6 +59,7 @@
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureSpells.h"
+#include "Creature/CreatureStomp.h"
 #include "Creature/CreatureSwap.h"
 #include "Creature/CreatureSway.h"
 #include "Creature/CreatureTattoo.h"
@@ -95,6 +96,7 @@
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureDance.h"
+#include "ECS/Components/CreatureDestruction.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureFriends.h"
@@ -662,6 +664,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureDance::lastPlaces>("lastPlaces")
 	    .Field<&components::CreatureDance::lastImpressiveTurn>("lastImpressiveTurn")
 	    .Field<&components::CreatureDance::lastImpressiveType>("lastImpressiveType");
+	Reflect<components::CreatureDestruction>(context)
+	    .Field<&components::CreatureDestruction::on>("on")
+	    .Field<&components::CreatureDestruction::last>("last")
+	    .Field<&components::CreatureDestruction::radius>("radius")
+	    .Field<&components::CreatureDestruction::seen>("seen");
 	Reflect<components::CreatureFighting>(context)
 	    .Field<&components::CreatureFighting::stage>("stage")
 	    .Field<&components::CreatureFighting::opponent>("opponent")
@@ -2529,6 +2536,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_spells::Waiting::spell>("spell")
 	    .Field<&openblack::creature_spells::Waiting::holdTurns>("holdTurns")
 	    .Field<&openblack::creature_spells::Waiting::miracle>("miracle");
+	Reflect<openblack::creature_stomp::BodyStart>(context, ValueOnly {})
+	    .Field<&openblack::creature_stomp::BodyStart::stands>("stands")
+	    .Field<&openblack::creature_stomp::BodyStart::animation>("animation")
+	    .Field<&openblack::creature_stomp::BodyStart::phase>("phase");
 	Reflect<openblack::creature_swap::Shape>(context, ValueOnly {})
 	    .Field<&openblack::creature_swap::Shape::size>("size")
 	    .Field<&openblack::creature_swap::Shape::alignment>("alignment");

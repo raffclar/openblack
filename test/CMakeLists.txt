@@ -990,3 +990,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_rest_and_home test_creature_rest_and_home.cpp
 )
+openblack_setup_and_add_test(test_creature_stomp test_creature_stomp.cpp)
