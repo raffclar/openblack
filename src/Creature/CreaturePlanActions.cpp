@@ -21,6 +21,7 @@
 #include "Creature/CreatureFireAgenda.h"
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureOddAgendas.h"
 #include "Creature/CreaturePlayerAgendas.h"
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureScriptAgendas.h"
@@ -390,6 +391,11 @@ constexpr std::array k_Executors {
     Executor {.action = "PlayfullyFrightenVillagers", .target = Target::Villager, .build = Build::FrightenVillagers},
     Executor {.action = "PlayfullyInteractWithVillager", .target = Target::Villager, .build = Build::PlayWithVillager},
     Executor {.action = "PlayfullyKissVillager", .target = Target::Villager, .build = Build::KissVillager},
+    // The odd actions. The desire to behave strangely chooses the last action. Nothing in the game chooses the other two,
+    // but a script can.
+    Executor {.action = "ShowLearntLesson", .build = Build::ShowLearntLesson},
+    Executor {.action = "LookConfused", .build = Build::LookConfused},
+    Executor {.action = "BehaveStrangely", .build = Build::BehaveStrangely},
 };
 
 /// The actions of the game's table that need a thing to use, by their names there
@@ -1179,6 +1185,12 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::PlayWithVillager:
 	case Build::KissVillager:
 		return TownHelpAgenda(executor, object, objectPoint, situation, random);
+	case Build::ShowLearntLesson:
+		return creature_odd::ShowLearntLesson();
+	case Build::LookConfused:
+		return creature_odd::LookConfused(situation.camera);
+	case Build::BehaveStrangely:
+		return creature_odd::BehaveStrangely(situation.turnsPerSecond, random);
 	case Build::Never:
 		return std::nullopt;
 	}

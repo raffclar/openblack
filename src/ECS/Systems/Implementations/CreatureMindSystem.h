@@ -110,6 +110,7 @@ public:
 	void ChangeDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change) override;
 	void SetAgendaPriority(entt::entity creature, float priority) override;
 	void MoveToStage(entt::entity creature, uint32_t stage) override;
+	void ForceFinish(entt::entity creature) override;
 	bool PointOutHighlight(entt::entity creature) override;
 
 	/// What a thing belongs to, as a creature sees it: a building's, villager's or field's town, a tree's forest (or else

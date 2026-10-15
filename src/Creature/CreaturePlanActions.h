@@ -325,6 +325,10 @@ enum class Build : uint8_t
 	FrightenVillagers,
 	PlayWithVillager,
 	KissVillager,
+	/// The odd actions: showing a lesson that it learnt, looking confused, behaving strangely
+	ShowLearntLesson,
+	LookConfused,
+	BehaveStrangely,
 	/// An action whose agenda can never be made
 	Never,
 };

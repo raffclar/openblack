@@ -271,6 +271,9 @@ public:
 	/// The story moves the creature to a stage of growing up: its desires become the ones its stages so far bring, none
 	/// stays held back, and it drops the plan it was carrying out
 	virtual void MoveToStage(entt::entity /*creature*/, uint32_t /*stage*/) {}
+	/// A script makes the creature stop what it does at once, as a failure. The action that its body plays ends at two
+	/// times the usual speed, and the creature stops where it is.
+	virtual void ForceFinish(entt::entity /*creature*/) {}
 };
 
 } // namespace openblack::ecs::systems

@@ -51,6 +51,7 @@
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureOddAgendas.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreaturePlayerAttention.h"
@@ -1307,6 +1308,9 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 	case Effect::CameRound:
 		physiology.WakeFromFaint(creature);
 		break;
+	case Effect::Revived:
+		magic_living::SetLife(creature, creature_odd::k_StrangeReviveLife);
+		break;
 	case Effect::Completed:
 	case Effect::Observed:
 	case Effect::Inspected:
@@ -2003,6 +2007,12 @@ void CreatureMindSystem::ProcessTurn()
 		    if (commands.healItself)
 		    {
 			    HealItself(registry, entity);
+		    }
+		    // It faints, and those near it react as to a death
+		    if (commands.fainted && Locator::reactionSystem::has_value())
+		    {
+			    Locator::reactionSystem::value().Create(
+			        {.initiator = entity, .type = Reaction::ReactToDeath, .position = transform.position});
 		    }
 		    if (commands.douse.has_value())
 		    {

@@ -316,6 +316,8 @@ enum class Effect : uint8_t
 	/// Has stomped on a thing (the effect's object). When the stomp is the last step of the agenda and the thing is
 	/// dead, the creature counts the kill, and the action sees to its desire.
 	Stomped,
+	/// Gets up from a faint with four tenths of its life
+	Revived,
 };
 
 /// How the eyes should look
@@ -515,6 +517,9 @@ struct Step
 	bool flutterEyelids {false};
 	/// What a dance step does
 	DanceOrder dance {};
+	/// A static step in which the creature faints. As it starts, those near it react as to a death. The step's seconds
+	/// count from the turn that it lies still.
+	bool faint {false};
 };
 
 struct IdleMind
@@ -824,6 +829,8 @@ struct Commands
 	std::optional<TotemShare> totem;
 	/// A villager to make a breeder at once, by its entity's number
 	std::optional<uint32_t> makeDisciple;
+	/// The creature faints this turn, so those near it react as to a death
+	bool fainted {false};
 };
 
 /// random(n) is a whole number from 0 to n - 1
