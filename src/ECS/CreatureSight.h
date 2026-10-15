@@ -11,6 +11,7 @@
 
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureDesires.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -29,5 +30,9 @@ namespace openblack::ecs::creature_sight
 /// The player's creature, if it can see where the player did something, feels with the player: it takes it the player
 /// wants more of one of its desires, by an amount, kept between none and all
 void EmpathiseWithPlayer(PlayerNames player, CreatureDesires desire, float amount, glm::vec3 point);
+
+/// The player's hand does something that shows a desire. The player's creature sees the hand when the player's camera
+/// looks at the creature and the creature looks towards the hand. Then the desire grows faster for all time.
+void SeePlayerAction(PlayerNames player, creature_desires::Desire desire);
 
 } // namespace openblack::ecs::creature_sight

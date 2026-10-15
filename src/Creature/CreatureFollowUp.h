@@ -13,10 +13,12 @@
 
 #include <functional>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreaturePlanner.h"
 
 /// The creature keeps one thing to do when it completes its current work, in place of the next decision. A magic
 /// mushroom, a stroke and a slap each put a thing there.
@@ -33,6 +35,9 @@ enum class FollowUp : uint8_t
 	FrightenedOfPlayer,
 	/// It was slapped, and shows how the slap made it feel
 	ShowSlapFeeling,
+	/// It learnt to eat what it holds when it was stroked. When the meal is done, it does again what it was stroked for,
+	/// to the most useful thing of the same kind.
+	DoLessonAgain,
 };
 
 /// The creature eats a magic mushroom: it becomes high only when nothing else waits
@@ -74,5 +79,18 @@ struct Feelings
 [[nodiscard]] std::vector<creature_mind::Step> ShowSlapFeeling(const Feelings& feelings,
                                                                const std::function<uint32_t(uint32_t)>& random, float chance,
                                                                uint32_t turnsPerSecond);
+
+/// The action that the creature does again after the meal: the action that it was stroked for, but it eats a thing alive
+/// in place of a thing that it holds in its hand
+[[nodiscard]] std::string_view ActionToDoAgain(std::string_view stroked);
+
+/// Whether the creature can do an action again: the action had a thing that was not the creature itself, and the
+/// creature does not copy the player. The thing can be gone.
+[[nodiscard]] bool MayDoAgain(std::optional<uint32_t> actedOn, uint32_t self, bool copying);
+
+/// The thing to do the action again to: the creature itself for an action that acts on nothing, else the most useful
+/// thing of the same kind, the first of equals, and only a thing that is worth more than nothing
+[[nodiscard]] std::optional<uint32_t> ThingToDoAgainTo(bool actsOnThing, uint32_t self,
+                                                       std::span<const creature_planner::ObjectCandidate> sameKind);
 
 } // namespace openblack::creature_follow_up

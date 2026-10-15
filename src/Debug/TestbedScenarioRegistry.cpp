@@ -3193,6 +3193,46 @@ void AddObjects(std::vector<Scenario>& all)
 	    .hand = offering,
 	});
 
+	// A hungry grown-up tiger that thinks for itself, with villagers about it
+	auto eater = Content(CreatureType::Tiger, {0.0f, 0.0f});
+	eater.phase = 13;
+	eater.hold = false;
+	// It becomes hungry as the hand gives, so that it eats what it is given and not the villagers about it
+	const Command hungryNow {.kind = Kind::SetDesire,
+	                         .creature = 0,
+	                         .delaySeconds = 1.4f,
+	                         .value = static_cast<size_t>(Desire::Hunger),
+	                         .amount = 0.9f};
+	auto giveNow = giving[1];
+	giveNow.delaySeconds = 0.1f;
+	// The hand strokes it as soon as the meal lets it: a stroke too early in the meal does nothing
+	std::vector<Command> eatAgain {giving[0], hungryNow, giveNow};
+	for (int i = 0; i < 12; ++i)
+	{
+		auto stroke = Stroke(0, creature_feedback::BodyPart::Head, i == 0 ? 2.5f : 0.3f);
+		stroke.waitUntilFree = false;
+		eatAgain.push_back(stroke);
+	}
+	eatAgain.push_back(Act(Kind::HandLetGo, 0, 0.5f, false));
+	all.push_back({
+	    .id = "mind.stroked_eat_again",
+	    .name = "Stroked while it eats from the hand",
+	    .facet = Facet::Mind,
+	    .description = "The player's hand gives a villager to a hungry grown-up tiger. As the tiger starts to eat her, the "
+	                   "hand strokes it. Two more villagers of the same kind stand near.",
+	    .expected = "The hand strokes the tiger while it eats. When the hand lets go, the tiger learns to eat what it is "
+	                "given and eats the villager. When the meal is done, it tries to do the lesson again on a different "
+	                "villager. The log shows the try. The villager that it ate is gone, so it does what it wants next.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {eater},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {30.0f, 25.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-35.0f, 30.0f}}},
+	    .commands = eatAgain,
+	    .hand = offering,
+	});
+
 	all.push_back({
 	    .id = "objects.knock_down_trees",
 	    .name = "Knocking down trees",
@@ -6030,7 +6070,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
-	       kind == Kind::LookAtTempleScroll || IsPointerCommand(kind);
+	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -6057,7 +6097,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 123> k_Names {
+	constexpr std::array<std::string_view, 124> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -6181,6 +6221,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "read tip",
 	    "look at temple scroll",
 	    "set alight",
+	    "hand grips totem",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

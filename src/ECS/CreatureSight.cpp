@@ -9,16 +9,25 @@
 
 #include "CreatureSight.h"
 
+#include <spdlog/spdlog.h>
+
+#include "3D/CreatureBody.h"
 #include "3D/MapCoords.h"
+#include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
+#include "Creature/CreatureAttention.h"
+#include "Creature/CreatureLearning.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/PerceivedDesires.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -74,4 +83,51 @@ void creature_sight::EmpathiseWithPlayer(PlayerNames player, CreatureDesires des
 	{
 		creature_perceived_desires::Increase(mind->perceivedDesires, static_cast<size_t>(desire), amount);
 	}
+}
+
+void creature_sight::SeePlayerAction(PlayerNames player, creature_desires::Desire desire)
+{
+	using Side = systems::HandSystemInterface::Side;
+	if (!Locator::entitiesRegistry::has_value() || !Locator::leashSystem::has_value() || !Locator::handSystem::has_value() ||
+	    !Locator::camera::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto hand = Locator::handSystem::value().GetPlayerHandPositions().at(static_cast<size_t>(Side::Left));
+	const auto creature = Locator::leashSystem::value().PlayersCreature(player);
+	if (!hand.has_value() || !creature.has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(*creature) ? registry.TryGet<const Creature>(*creature) : nullptr;
+	const auto* at = body != nullptr ? registry.TryGet<const Transform>(*creature) : nullptr;
+	if (at == nullptr)
+	{
+		return;
+	}
+	// The player must look at the creature, and the creature must look towards the hand
+	const auto& camera = Locator::camera::value();
+	if (!creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), at->position))
+	{
+		return;
+	}
+	auto* mind = MindSeeing(player, *hand);
+	if (mind == nullptr || !mind->desires.has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto row = creature::InfoRow(body->species);
+	const auto index = static_cast<size_t>(desire);
+	if (row >= info.creature.size() || index >= info.creatureInitialDesire.size())
+	{
+		return;
+	}
+	const auto& species = info.creature.at(row);
+	const auto speedUp = info.creatureInitialDesire.at(index).seenPlayerActionSpeedUp * species.seenPlayerActionSpeedUp;
+	creature_learning::SpeedUpAfterSeeingPlayer((*mind->desires)[desire], speedUp, species.minDesireIncreaseSeconds,
+	                                            species.maxDesireIncreaseSeconds);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} saw the hand: desire {} now grows in {} seconds",
+	                    entt::to_integral(*creature), index, (*mind->desires)[desire].increaseSeconds);
 }

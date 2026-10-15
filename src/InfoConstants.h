@@ -365,7 +365,8 @@ struct CreatureInitialDesireInfo
 	/// The change that a plan for this desire adds to the alignment of the creature on each game turn
 	float alignmentChange;
 	float field0x4c;
-	float field0x50;
+	/// When the creature sees the hand do something that shows this desire, the desire grows this many times faster
+	float seenPlayerActionSpeedUp;
 	float field0x54;
 	float field0x58;
 	uint32_t field0x5c;
@@ -918,7 +919,13 @@ struct GCreatureInfo: GLivingInfo
 	std::array<uint8_t, 0x14> field0x250;
 	/// The least any of its desires can be
 	float desireFloor;
-	std::array<uint8_t, 0x1c> field0x268;
+	std::array<uint8_t, 0x4> field0x268;
+	/// The least and the most seconds that one of its desires can take to grow by 1
+	float minDesireIncreaseSeconds;
+	float maxDesireIncreaseSeconds;
+	std::array<uint8_t, 0xc> field0x274;
+	/// When the creature sees the hand do something, the desire that the action shows grows this many times faster
+	float seenPlayerActionSpeedUp;
 	/// A creature casting a miracle pays for it with its energy: it has this many chants for each of its size and strength
 	/// above its energy's floor, below which it can't pay
 	float chantsPerEnergy;
@@ -986,6 +993,9 @@ struct GCreatureInfo: GLivingInfo
 };
 static_assert(sizeof(GCreatureInfo) == 0x384);
 static_assert(offsetof(GCreatureInfo, chantsPerEnergy) == 0x284);
+static_assert(offsetof(GCreatureInfo, minDesireIncreaseSeconds) == 0x26c);
+static_assert(offsetof(GCreatureInfo, maxDesireIncreaseSeconds) == 0x270);
+static_assert(offsetof(GCreatureInfo, seenPlayerActionSpeedUp) == 0x280);
 static_assert(offsetof(GCreatureInfo, desireFloor) == 0x264);
 static_assert(offsetof(GCreatureInfo, spellSizeFactor) == 0x380);
 static_assert(offsetof(GCreatureInfo, totemIcon) == 0x334);

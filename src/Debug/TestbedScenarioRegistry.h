@@ -754,6 +754,9 @@ struct Command
 		/// The creature catches fire, and burns as at the start of a fire. With a value of 1, the scenario's object catches
 		/// fire in place of the creature.
 		SetAlight,
+		/// The player's hand takes hold of the totem of the scenario's object, a town centre, and then lets go. Needs no
+		/// creature
+		HandGripTotem,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
