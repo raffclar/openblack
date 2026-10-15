@@ -253,14 +253,20 @@ std::vector<Step> creature_mind::EatAlive(uint32_t food, bool holdingEatable, co
 	return agenda;
 }
 
-std::vector<Step> creature_mind::ExamineByPickingUp(uint32_t object, const Random& random)
+std::vector<Step> creature_mind::ExamineByPickingUp(uint32_t object, bool handFull, const Random& random)
 {
+	std::vector<Step> agenda;
+	// It picks the thing up only when its hand is empty
+	if (!handFull)
+	{
+		agenda.push_back(PickUp(object));
+	}
 	const auto keep = creature_object_actions::k_FirstKeepAnimation +
 	                  random(static_cast<uint32_t>(creature_object_actions::k_KeepAnimationCount));
 	const auto letGo = random(k_PutDownLots) >= k_TossLots ? ObjectOrder::Kind::PutDown : ObjectOrder::Kind::Discard;
-	return WithFace({PickUp(object), Object({.kind = ObjectOrder::Kind::Keep, .animation = keep}, Effect::Examined),
-	                 Object({.kind = letGo})},
-	                creature_face::Cue::Curiosity);
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::Keep, .animation = keep}, Effect::Examined));
+	agenda.push_back(Object({.kind = letGo}));
+	return WithFace(std::move(agenda), creature_face::Cue::Curiosity);
 }
 
 std::vector<Step> creature_mind::ThrowAbout(uint32_t object, const Random& random)

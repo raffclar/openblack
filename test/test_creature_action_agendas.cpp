@@ -482,7 +482,7 @@ TEST(CreatureActionAgendas, SleepingByAThingGoesToItsClearPlaceFirst)
 	EXPECT_EQ(SleepByObject({}, 6.0f, NeverFirst).size(), 4);
 }
 
-// Only scripts make it sleep by a thing for now; without a clear place it sleeps at home, and without either it can't
+// Without a clear place by the thing it sleeps at home, and without either it can't
 TEST(CreatureActionAgendas, SleepingByAThingFallsBackToHome)
 {
 	const auto* sleep = plan_actions::For("SleepByObject");
@@ -497,8 +497,66 @@ TEST(CreatureActionAgendas, SleepingByAThingFallsBackToHome)
 	const auto byThing = plan_actions::Agenda(*sleep, 3, {}, situation, NeverFirst);
 	ASSERT_TRUE(byThing.has_value());
 	EXPECT_EQ(byThing->front().movement.point, glm::vec2(10.0f, 20.0f));
-	situation.controlledByScript = false;
-	EXPECT_FALSE(plan_actions::Possible(*sleep, situation));
+}
+
+// Left to itself, it sleeps by a thing only on the leash or far from home, with nothing frightening near it
+TEST(CreatureActionAgendas, SleepingByAThingIsPlannedOnTheLeashOrFarFromHome)
+{
+	const auto* sleep = plan_actions::For("SleepByObject");
+	ASSERT_NE(sleep, nullptr);
+	plan_actions::Situation situation {.homeDistance = 10.0f};
+	EXPECT_TRUE(plan_actions::Possible(*sleep, situation));
+	EXPECT_FALSE(plan_actions::Allowed(*sleep, situation));
+	situation.leashed = true;
+	EXPECT_TRUE(plan_actions::Allowed(*sleep, situation));
+	situation.nothingFrighteningNear = false;
+	EXPECT_FALSE(plan_actions::Allowed(*sleep, situation));
+	situation.leashed = false;
+	situation.nothingFrighteningNear = true;
+	situation.homeDistance = std::nullopt;
+	EXPECT_TRUE(plan_actions::Allowed(*sleep, situation));
+}
+
+// A fart is done by the thing that the planner gives: the creature goes to it and turns its back to it
+TEST(CreatureActionAgendas, AFartIsDoneByTheThingThatThePlannerGives)
+{
+	const auto* fart = plan_actions::For("Fart");
+	ASSERT_NE(fart, nullptr);
+	const auto byThing = plan_actions::Agenda(*fart, 9, {}, {.self = 2}, NeverFirst);
+	ASSERT_TRUE(byThing.has_value());
+	ASSERT_EQ(byThing->size(), 3);
+	EXPECT_EQ((*byThing)[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_EQ((*byThing)[0].movement.object, 9u);
+	ASSERT_TRUE((*byThing)[0].gaze.has_value());
+	EXPECT_EQ((*byThing)[1].movement.kind, Movement::Kind::TurnToFaceAwayFromObject);
+	EXPECT_EQ((*byThing)[1].movement.object, 9u);
+	EXPECT_EQ((*byThing)[2].effect, Effect::Fart);
+	// On itself it does not look at itself
+	const auto byItself = plan_actions::Agenda(*fart, 2, {}, {.self = 2}, NeverFirst);
+	ASSERT_TRUE(byItself.has_value());
+	EXPECT_EQ((*byItself)[0].movement.object, 2u);
+	EXPECT_FALSE((*byItself)[0].gaze.has_value());
+}
+
+// With something in its hand, it examines what it holds and does not pick the thing up
+TEST(CreatureActionAgendas, ExaminingByPickingUpKeepsWhatItHolds)
+{
+	const auto empty = ExamineByPickingUp(4, false, NeverFirst);
+	ASSERT_EQ(empty.size(), 3);
+	EXPECT_EQ(empty[0].order.kind, ObjectOrder::Kind::PickUp);
+	EXPECT_EQ(empty[0].order.object, 4u);
+	const auto holding = ExamineByPickingUp(4, true, NeverFirst);
+	ASSERT_EQ(holding.size(), 2);
+	EXPECT_EQ(holding[0].order.kind, ObjectOrder::Kind::Keep);
+	EXPECT_EQ(holding[0].effect, Effect::Examined);
+}
+
+// Examining by looking is done to things that are not creatures, fields or fish farms; by following, to a villager
+// whose work is of interest
+TEST(CreatureActionAgendas, ExaminingActionsHaveTheirOwnFilters)
+{
+	EXPECT_EQ(plan_actions::For("ExamineByLooking")->target, plan_actions::Target::Examinable);
+	EXPECT_EQ(plan_actions::For("ExamineByFollowing")->target, plan_actions::Target::InterestingVillager);
 }
 
 // "force CreatureGuardian CREATURE_EAT_FROM_MAGIC_FOOD_PILE FoodFound": it walks up to the pile, faces it, takes a

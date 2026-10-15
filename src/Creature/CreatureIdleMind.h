@@ -880,8 +880,8 @@ constexpr float k_WatchFlyingExtraSeconds = 2.0f;
 /// when it can eat that, with no pick-up.
 [[nodiscard]] std::vector<Step> EatAlive(uint32_t food, bool holdingEatable, const Random& random);
 /// Picking something up, stroking, shaking, smelling or examining it, then mostly putting it down and sometimes tossing it
-/// away
-[[nodiscard]] std::vector<Step> ExamineByPickingUp(uint32_t object, const Random& random);
+/// away. When its hand holds something, it does not pick the thing up: it examines what it holds.
+[[nodiscard]] std::vector<Step> ExamineByPickingUp(uint32_t object, bool handFull, const Random& random);
 /// Picking something up and throwing it about, 30 to 50 units away in a random direction
 [[nodiscard]] std::vector<Step> ThrowAbout(uint32_t object, const Random& random);
 /// A sixth of the time showing its anger, then picking something up and hurling it at a point

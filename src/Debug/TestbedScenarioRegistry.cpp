@@ -434,6 +434,23 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.fart_by_hut",
+	    .name = "Creature farts by a hut",
+	    .facet = Facet::Needs,
+	    .description = "A tiger that needs a poo, with a hut on the land in front of it. Its opinions of the poo and "
+	                   "the fart are the same, so the fart, the later of the two in its list, wins.",
+	    .expected = "It walks up to the hut and looks at it, turns its back to the hut, then squats and farts there, "
+	                "not where it stood.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.9f},
+	        .desires = {{.desire = Desire::Poo, .fraction = 1.0f}},
+	    }},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {30.0f, -60.0f}}},
+	});
+
+	all.push_back({
 	    .id = "needs.eats_animals",
 	    .name = "Hungry creature eats an animal",
 	    .facet = Facet::Needs,

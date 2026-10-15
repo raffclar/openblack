@@ -382,6 +382,44 @@ TEST(CreaturePlanner, TriesTheNextActionWhenNoThingIsFound)
 	                 .has_value());
 }
 
+TEST(CreaturePlanner, AnActionNotOnAThingActsOnTheCreatureItself)
+{
+	// With the action first, an action that does not act on a thing gets the creature itself, with the default
+	// usefulness, and no thing is looked for
+	const std::vector<creature_planner::ActionCandidate> actions {{.action = 7}};
+	int asked = 0;
+	const auto plan = creature_planner::PlanDesire({
+	    .desire = Desire::Poo,
+	    .strength = 1.0f,
+	    .actions = actions,
+	    .findObject = [&](const creature_planner::ActionCandidate&) -> std::optional<creature_planner::ObjectCandidate> {
+		    ++asked;
+		    return std::nullopt;
+	    },
+	    .findUsed = {},
+	    .itself = 42,
+	});
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->action, 7u);
+	EXPECT_EQ(plan->object, 42u);
+	EXPECT_EQ(asked, 0);
+	EXPECT_FLOAT_EQ(plan->goalUsefulness, creature_planner::k_DefaultUsefulness);
+	EXPECT_FLOAT_EQ(plan->priority, creature_planner::Priority(1.0f, std::nullopt, plan->actionPriority,
+	                                                           creature_planner::k_DefaultUsefulness, std::nullopt));
+	// An action that acts on a thing and finds none is not planned, even when the creature is given
+	const std::vector<creature_planner::ActionCandidate> onThing {{.action = 8, .needsObject = true}};
+	EXPECT_FALSE(creature_planner::PlanDesire({.desire = Desire::Poo,
+	                                           .strength = 1.0f,
+	                                           .actions = onThing,
+	                                           .findObject =
+	                                               [](const creature_planner::ActionCandidate&) {
+		                                               return std::optional<creature_planner::ObjectCandidate> {};
+	                                               },
+	                                           .findUsed = {},
+	                                           .itself = 42})
+	                 .has_value());
+}
+
 TEST(CreaturePlanner, AnActionThatFailsIsNotTriedAgainInAnotherPlace)
 {
 	// An action can be in the list of a desire twice. The later entry wins the tie, and when it fails, the earlier entry

@@ -93,8 +93,8 @@ constexpr std::array k_Executors {
               .target = Target::Pickable,
               .build = Build::ExamineByPickingUp,
               .activity = Activity::Examine},
-    Executor {.action = "ExamineByLooking", .target = Target::Anything, .build = Build::ExamineByLooking},
-    Executor {.action = "ExamineByFollowing", .target = Target::Living, .build = Build::ExamineByFollowing},
+    Executor {.action = "ExamineByLooking", .target = Target::Examinable, .build = Build::ExamineByLooking},
+    Executor {.action = "ExamineByFollowing", .target = Target::InterestingVillager, .build = Build::ExamineByFollowing},
     Executor {.action = "ThrowBallAtObject",
               .target = Target::Anything,
               .use = Target::Toy,
@@ -725,9 +725,8 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 		return situation.home.has_value() &&
 		       !(glm::distance(situation.position, *situation.home) > creature_mind::k_NearHomeToPoo);
 	case Build::SleepByObject:
-		// TODO(creature-actions-3): left to itself the game only does this leashed or far from home, with nothing
-		// frightening near; until that is ported only scripts make a creature do it
-		return situation.controlledByScript && (situation.clearArea.has_value() || situation.home.has_value());
+		// Told by a script, it needs a clear place by the thing or a home. Left to itself, the conditions are below.
+		return !situation.controlledByScript || situation.clearArea.has_value() || situation.home.has_value();
 	case Build::FaceCameraEmote:
 	case Build::ShowDesire:
 	case Build::Howl:
@@ -775,6 +774,11 @@ bool creature_plan_actions::Allowed(const Executor& executor, const Situation& s
 		return creature_emote::NotTooFarFromHome(situation.homeDistance);
 	case Build::Sleep:
 		return creature_emote::LeashedOrTooFarFromHome(situation.leashed, situation.homeDistance);
+	case Build::SleepByObject:
+		// Only on the leash or far from home, and the thing must have nothing frightening near it. The game measures
+		// that from the creature, not from the thing, so the test does not depend on the thing.
+		return creature_emote::LeashedOrTooFarFromHome(situation.leashed, situation.homeDistance) &&
+		       situation.nothingFrighteningNear;
 	case Build::RunFromPlayer:
 		return creature_emote::PlayerNearbyAndFrightening(situation.handDistance, situation.attitudeToPlayer);
 	default:
@@ -928,8 +932,9 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::Poo(random,
 		                          object.has_value() ? std::optional(creature_mind::PooBy {.object = *object}) : std::nullopt);
 	case Build::Fart:
-		// A fart is not done to a thing, so the creature does it by itself
-		return creature_mind::Fart(random, creature_mind::PooBy {.object = situation.self, .itself = true});
+		// The creature farts by the thing that the planner gives it, as for a poo. Without a thing, it farts by itself.
+		return creature_mind::Fart(random, creature_mind::PooBy {.object = object.value_or(situation.self),
+		                                                         .itself = object.value_or(situation.self) == situation.self});
 	case Build::Puke:
 		return creature_mind::Puke();
 	case Build::Drink:
@@ -945,7 +950,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::TakeFishHome:
 		return creature_mind::TakeFishTo(TripFor(*situation.fishing), *situation.home, situation.fishing->height);
 	case Build::ExamineByPickingUp:
-		return creature_mind::ExamineByPickingUp(*object, random);
+		return creature_mind::ExamineByPickingUp(*object, situation.handFull, random);
 	case Build::ExamineByLooking:
 		return creature_mind::ExamineByLooking(*object, situation.height, situation.thingHeight);
 	case Build::ExamineByFollowing:
@@ -968,6 +973,10 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		if (situation.clearArea.has_value())
 		{
 			return creature_mind::SleepByObject(*situation.clearArea, situation.radius, random);
+		}
+		if (!situation.home.has_value())
+		{
+			return std::nullopt;
 		}
 		return creature_mind::SleepAtHome(*situation.home, situation.height, random);
 	case Build::SmileAt:

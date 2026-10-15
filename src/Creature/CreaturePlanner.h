@@ -86,7 +86,8 @@ struct ObjectCandidate
 struct ActionCandidate
 {
 	uint32_t action {0};
-	/// Whether it acts on a thing, so needs a goal
+	/// Whether it acts on a thing, so needs a goal. When the action comes first, an action that does not act on a thing
+	/// acts on the creature itself (see DesirePlanning::itself).
 	bool needsObject {false};
 	/// Whether it uses a thing (a rock to throw, a tree to give), so needs one
 	bool usesThing {false};
@@ -151,6 +152,9 @@ struct DesirePlanning
 	std::function<std::optional<ObjectCandidate>(const ActionCandidate&)> findObject;
 	/// The thing that an action uses, other than the thing that it acts on; none when there is none
 	std::function<std::optional<UsedChoice>(const ActionCandidate&, std::optional<uint32_t> object)> findUsed;
+	/// The creature itself, by its entity's number. When the action comes first, an action that does not act on a thing
+	/// acts on the creature itself, with the default usefulness. With none, such an action acts on nothing.
+	std::optional<uint32_t> itself;
 };
 
 /// The plan for a desire: the action, the thing that it acts on, and the thing that it uses. None when no action can be

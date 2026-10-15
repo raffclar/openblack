@@ -388,7 +388,7 @@ TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
 	EXPECT_EQ(creature_mind::Hurl(1, {}, Always(1)).back().face, Cue::Anger);
 	EXPECT_EQ(creature_mind::DestroyThing(1).back().face, Cue::Anger);
 	EXPECT_EQ(creature_mind::RunFrom({}).back().face, Cue::Fear);
-	EXPECT_EQ(creature_mind::ExamineByPickingUp(1, Always(0)).back().face, Cue::Curiosity);
+	EXPECT_EQ(creature_mind::ExamineByPickingUp(1, false, Always(0)).back().face, Cue::Curiosity);
 	EXPECT_EQ(creature_mind::ThrowAbout(1, Always(0)).back().face, Cue::Playfulness);
 	EXPECT_EQ(creature_mind::Poo(Always(1), std::nullopt).back().face, Cue::Smile);
 	EXPECT_EQ(creature_mind::Puke().back().face, Cue::Grimace);

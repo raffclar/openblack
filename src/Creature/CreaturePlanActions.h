@@ -50,6 +50,12 @@ enum class Target : uint8_t
 	Frightening,
 	/// Anything at all it can see
 	Anything,
+	/// A thing it can look over: a thing that lives, grows, lies about or is set into the land, but not a creature, a
+	/// field or a fish farm. Never a miracle or a whole thing.
+	Examinable,
+	/// A villager that does something that the creature finds interesting: its work teaches a skill that the creature
+	/// does not know
+	InterestingVillager,
 	/// Anything on fire, or anything not on fire
 	Burning,
 	Unburnt,

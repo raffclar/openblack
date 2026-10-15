@@ -683,7 +683,7 @@ TEST(CreatureObjectActions, AMealWithTooLittleFoodComesBackUp)
 TEST(CreatureIdleMind, AnObjectStepWaitsForTheHandsAndGivesUpWhenTheyFail)
 {
 	creature_mind::IdleMind mind;
-	creature_mind::Plan(mind, creature_mind::Activity::Examine, creature_mind::ExamineByPickingUp(4u, First));
+	creature_mind::Plan(mind, creature_mind::Activity::Examine, creature_mind::ExamineByPickingUp(4u, false, First));
 	creature_mind::Senses senses {.seconds = 0.1f};
 	auto commands = creature_mind::Think(mind, senses, First);
 	ASSERT_TRUE(commands.object.has_value());
