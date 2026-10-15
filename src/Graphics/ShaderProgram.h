@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <limits>
 #include <optional>
 #include <set>
 #include <string>
@@ -61,6 +62,8 @@ public:
 	/// The same as by name, with a handle of this program's from FindUniform
 	void SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const Texture2D& texture) const;
 	void SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const graphics::TextureHandle& texture) const;
+	/// The same, with sampler flags that replace the texture's own, such as how it wraps
+	void SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const Texture2D& texture, uint32_t samplerFlags) const;
 	void SetUniformValue(UniformHandle uniform, const void* value) const;
 
 	/// Draws with this program in the given view. Each sampler it declares that no texture was set for since the
@@ -74,7 +77,8 @@ public:
 
 private:
 	void WarnMissing(std::string_view name) const;
-	void Bind(uint8_t bindPoint, UniformHandle sampler, TextureHandle texture) const;
+	void Bind(uint8_t bindPoint, UniformHandle sampler, TextureHandle texture,
+	          uint32_t samplerFlags = std::numeric_limits<uint32_t>::max()) const;
 
 	std::string _name;
 	ProgramHandle _program;
