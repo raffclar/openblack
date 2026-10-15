@@ -174,9 +174,9 @@ void AudioManager::Update()
 		}
 		if (emitter.spatial)
 		{
-			PositionSource(emitter.sourceId, ToListenerFrame(emitter.position), emitter.distanceScale);
+			PositionSource(emitter.sourceId, ToListenerFrame(emitter.position));
 		}
-		_audioPlayer->SetVolume(emitter.sourceId, emitter.gain * _globalVolume * (emitter.music ? _musicVolume : _sfxVolume));
+		_audioPlayer->SetVolume(emitter.sourceId, EmitterVolume(emitter));
 	});
 
 	// The music thread's work: streams are fed and fade every tick
@@ -186,13 +186,43 @@ void AudioManager::Update()
 	_lastMusicUpdate = now;
 	// Positional music, like 3D emitters, is heard from where it is placed as the listener moves
 	_musicStreams->ForEachPlaced([this](SourceId source, const MusicPlacement& placement) {
-		PositionSource(source, ToListenerFrame(placement.position), placement.distanceScale);
+		PositionSource(source, ToListenerFrame(placement.position));
 	});
 
 	// Atmosphere voices are positioned relative to the listener and only follow the volume settings here
 	for (const auto& [handle, voice] : _atmosVoices)
 	{
 		_audioPlayer->SetVolume(voice.source, voice.gain * _globalVolume * _sfxVolume);
+	}
+}
+
+float AudioManager::EmitterVolume(const AudioEmitter& emitter) const
+{
+	// A placed voice past its maximum distance is silent
+	if (emitter.spatial && IsBeyondMaxDistance(ListenerDistance(emitter.position), emitter.maxDistance))
+	{
+		return 0.0f;
+	}
+	return emitter.gain * _globalVolume * (emitter.music ? _musicVolume : _sfxVolume);
+}
+
+void AudioManager::StopOutOfRangeEmitters()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> outOfRange;
+	registry.Each<const AudioEmitter>([&outOfRange](entt::entity entity, const AudioEmitter& emitter) {
+		if (emitter.spatial && emitter.owner != entt::null && emitter.state != AudioStatus::Stopped &&
+		    !IsWithinPlayRange(ListenerDistance(emitter.position), emitter.maxDistance))
+		{
+			outOfRange.push_back(entity);
+		}
+	});
+	for (const auto entity : outOfRange)
+	{
+		[[maybe_unused]] const auto& emitter = registry.Get<const AudioEmitter>(entity);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stops: {}", DescribeEmitter(entity, emitter),
+		                    TooFar(emitter.position, emitter.maxDistance));
+		DestroyEmitter(entity);
 	}
 }
 
@@ -206,7 +236,7 @@ void AudioManager::PlayEmitter(entt::entity emitter)
 	auto& registry = Locator::entitiesRegistry::value();
 	assert(registry.AnyOf<AudioEmitter>(emitter));
 	auto& component = registry.Get<AudioEmitter>(emitter);
-	_audioPlayer->SetVolume(component.sourceId, component.gain * _globalVolume * (component.music ? _musicVolume : _sfxVolume));
+	_audioPlayer->SetVolume(component.sourceId, EmitterVolume(component));
 	_audioPlayer->StartSource(component.sourceId);
 	component.state = AudioStatus::Playing;
 }
@@ -534,7 +564,7 @@ void AudioManager::SetEmitterVolume(entt::entity emitter, uint32_t volume)
 	                    component.volume, std::min<uint32_t>(volume, k_MaxVolume));
 	component.volume = std::min<uint32_t>(volume, k_MaxVolume);
 	component.gain = _atmos->VolumeToGain(component.volume);
-	_audioPlayer->SetVolume(component.sourceId, component.gain * _globalVolume * (component.music ? _musicVolume : _sfxVolume));
+	_audioPlayer->SetVolume(component.sourceId, EmitterVolume(component));
 }
 
 void AudioManager::SetEmitterPitch(entt::entity emitter, uint32_t pitchPercent)
@@ -949,20 +979,20 @@ SourceId AudioManager::CreateSource(Sound& sound, const VoiceStart& start)
 	_audioPlayer->SetLooping(source, loop);
 	if (start.positional)
 	{
-		// QSound attenuates by minDistance / (distance * scale) beyond minDistance, up to maxDistance, which is
-		// OpenAL's inverse clamped model on scaled positions
-		_audioPlayer->SetDistanceAttenuation(source, start.minDistance, start.maxDistance, 1.0f);
-		PositionSource(source, start.position, start.distanceScale);
+		// Up to the maximum distance, the game's distance gain is OpenAL's inverse clamped model with the scale as
+		// the roll-off. Past it, the voice is silenced with its volume.
+		_audioPlayer->SetDistanceAttenuation(source, start.minDistance, start.maxDistance, start.distanceScale);
+		PositionSource(source, start.position);
 	}
 	else
 	{
 		_audioPlayer->SetDistanceAttenuation(source, 1.0f, 1.0f, 0.0f);
-		PositionSource(source, std::nullopt, start.distanceScale);
+		PositionSource(source, std::nullopt);
 	}
 	return source;
 }
 
-void AudioManager::PositionSource(SourceId source, std::optional<glm::vec3> listenerPosition, float distanceScale)
+void AudioManager::PositionSource(SourceId source, std::optional<glm::vec3> listenerPosition)
 {
 	if (!listenerPosition)
 	{
@@ -971,7 +1001,7 @@ void AudioManager::PositionSource(SourceId source, std::optional<glm::vec3> list
 	}
 	// The game's listener frame is x right, y forward, z up; OpenAL's is x right, y up, -z forward
 	const auto& position = *listenerPosition;
-	_audioPlayer->SetPosition(source, glm::vec3(position.x, position.z, -position.y) * distanceScale);
+	_audioPlayer->SetPosition(source, glm::vec3(position.x, position.z, -position.y));
 }
 
 glm::vec3 AudioManager::ToListenerFrame(glm::vec3 worldPosition)

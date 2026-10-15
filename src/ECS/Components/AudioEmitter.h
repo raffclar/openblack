@@ -38,8 +38,8 @@ struct AudioEmitter
 	uint32_t volume = 127;
 	/// Playback rate in percent, after the random deviation
 	uint32_t pitchPercent = 100;
-	/// QSound distance mapping: full volume up to minDistance, then attenuated by minDistance / distance up to
-	/// maxDistance, with distances multiplied by distanceScale
+	/// The game's distance mapping: full volume up to minDistance, then minDistance / (minDistance + distanceScale *
+	/// (distance - minDistance)) up to maxDistance, and silent past it (see DistanceGain)
 	float minDistance = 1.0f;
 	float maxDistance = 9999.0f;
 	float distanceScale = 0.3f;

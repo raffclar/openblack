@@ -184,6 +184,7 @@ void AtmosAudio::ContinueTurn(const TurnInputs& inputs)
 	auto& audio = Locator::audio::value();
 	CopyTargets(inputs.inCitadel);
 	ProcessAtmosBanks();
+	audio.StopOutOfRangeEmitters();
 	if (!inputs.videoPlaying)
 	{
 		audio.AtmosProcess(true);

@@ -59,6 +59,7 @@ public:
 
 	void Stop() override {}
 	void Update() override {}
+	void StopOutOfRangeEmitters() override {}
 	audio::BufferId CreateBuffer(audio::ChannelLayout, const std::vector<int16_t>&, int) override { return {}; }
 	void CreateBuffer(audio::Sound&) override {}
 	void PlayEmitter(entt::entity emitter) override { emitters.at(emitter).played = true; }
