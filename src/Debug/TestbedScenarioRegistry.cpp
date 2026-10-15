@@ -849,6 +849,43 @@ void AddGrowth(std::vector<Scenario>& all)
 	    .creatures = lineup,
 	});
 
+	// A young and an adult of two species, each young one to the left of its adult
+	struct Pair
+	{
+		CreatureType species;
+		std::string_view young;
+		std::string_view adult;
+	};
+	constexpr std::array<Pair, 2> k_Pairs {{
+	    {CreatureType::Tiger, "young tiger", "adult tiger"},
+	    {CreatureType::GiantApe, "young ape", "adult ape"},
+	}};
+	constexpr float k_YoungSize = 0.4f;
+	constexpr float k_AdultSize = 2.0f;
+	std::vector<CreatureSetup> ages;
+	for (size_t i = 0; i < k_Pairs.size(); ++i)
+	{
+		const auto& pair = k_Pairs.at(i);
+		auto young = Posed(pair.species, {RowX(i * 2, k_Pairs.size() * 2, 40.0f), 0.0f}, 0.0f, pair.young);
+		young.size = k_YoungSize;
+		ages.push_back(young);
+		auto adult = Posed(pair.species, {RowX((i * 2) + 1, k_Pairs.size() * 2, 40.0f), 0.0f}, 0.0f, pair.adult);
+		adult.size = k_AdultSize;
+		ages.push_back(adult);
+	}
+	all.push_back({
+	    .id = "growth.young_proportions",
+	    .name = "Young and adult proportions",
+	    .facet = Facet::Growth,
+	    .description = "Left to right: a young tiger of size 0.4, a tiger of size 2, a young giant ape of size 0.4 and a "
+	                   "giant ape of size 2. They stand still and breathe.",
+	    .expected = "Each young creature is not a small adult. Its head is about 1.6 times as large for its size, its "
+	                "hands and feet 1.4 times and its eyes 1.3 times. Each adult has a head 0.8 times as large and normal "
+	                "hands, feet and eyes.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = ages,
+	});
+
 	std::vector<CreatureSetup> parade;
 	constexpr size_t k_Species = static_cast<size_t>(CreatureType::_COUNT) - 1;
 	constexpr size_t k_FrontRow = 9;

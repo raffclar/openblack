@@ -1021,3 +1021,6 @@ openblack_setup_and_add_test(
   test_creature_turn_order test_creature_turn_order.cpp
 )
 openblack_setup_and_add_test(test_creature_drink test_creature_drink.cpp)
+openblack_setup_and_add_test(
+  test_creature_proportions test_creature_proportions.cpp
+)
