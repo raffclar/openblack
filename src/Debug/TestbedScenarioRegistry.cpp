@@ -1201,6 +1201,25 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .creatures = skins,
 	});
 
+	auto goodTiger = Content(CreatureType::Tiger, {-12.0f, 0.0f}, 0.0f, "good");
+	goodTiger.alignment = 1.0f;
+	goodTiger.pauseMind = true;
+	auto evilTiger = Content(CreatureType::Tiger, {12.0f, 0.0f}, 0.0f, "evil");
+	evilTiger.alignment = -1.0f;
+	evilTiger.pauseMind = true;
+	all.push_back({
+	    .id = "appearance.alignment_motes",
+	    .name = "Good motes and evil smoke",
+	    .facet = Facet::Appearance,
+	    .description = "Close up, a good tiger on the left and an evil tiger on the right stand side by side.",
+	    .expected = "Pale motes of six colours twinkle all over the good tiger, three new ones each game turn; they "
+	                "pulse, flicker and fade in two seconds. Dark smoke rises off the evil tiger and fades in two "
+	                "seconds. A paused game makes no new motes or smoke.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -15.0f}, {30.0f, 15.0f}}, .distance = 1.0f},
+	    .creatures = {goodTiger, evilTiger},
+	});
+
 	auto tattooed = Posed(CreatureType::Tiger, {0.0f, 0.0f}, 30.0f, "tattooed");
 	constexpr std::array<glm::u8vec3, 8> k_Colours {{
 	    {220, 40, 40},

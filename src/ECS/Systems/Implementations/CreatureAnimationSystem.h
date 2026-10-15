@@ -34,6 +34,9 @@ public:
 	void KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point) override;
 
 private:
+	/// Each creature whose body looks good or evil adds its motes or its smoke for this game turn
+	static void AddAlignmentMotes();
+
 	/// The eyes blink at random, apart from the game's own random numbers
 	RandomStreamSource _random {RandomStream::CreatureAnimation};
 };

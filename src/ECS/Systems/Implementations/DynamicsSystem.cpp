@@ -101,6 +101,15 @@ particles::Creator MakeDustCreator()
 	return dust;
 }
 
+/// The motes' sprites: the dust's sheet, added to what is behind them
+particles::Creator MakeMoteCreator()
+{
+	auto mote = MakeDustCreator();
+	mote.className = "CreatureMote";
+	mote.additive = true;
+	return mote;
+}
+
 /// Upright axes with the same heading across the ground as the given ones
 glm::mat3 UprightAxes(const glm::mat3& axes)
 {
@@ -162,6 +171,7 @@ DynamicsSystem::DynamicsSystem(std::unique_ptr<dynamics::World> world)
     : _world(std::move(world))
     , _hooks(std::make_unique<PhysicsClassHooks>())
     , _dustCreator(MakeDustCreator())
+    , _moteCreator(MakeMoteCreator())
 {
 }
 
@@ -1371,6 +1381,11 @@ void DynamicsSystem::AttemptCollisionSound(PhysicsEntry& entry)
 
 void DynamicsSystem::AddPuff(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb)
 {
+	AddPuff(position, velocity, size, argb, turn::PuffKind::Dust);
+}
+
+void DynamicsSystem::AddPuff(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb, turn::PuffKind kind)
+{
 	// Only a puff there is room for is made, and only then is its look drawn
 	if (_dust.size() >= turn::k_MostPuffs)
 	{
@@ -1378,7 +1393,7 @@ void DynamicsSystem::AddPuff(glm::vec3 position, glm::vec3 velocity, float size,
 	}
 	auto* random = _world->Random();
 	const auto variant = random != nullptr ? random->CrtRand() & 15 : 0;
-	_dust.push_back({.position = position, .velocity = velocity, .size = size, .variant = variant, .argb = argb});
+	_dust.push_back({.position = position, .velocity = velocity, .size = size, .variant = variant, .argb = argb, .kind = kind});
 }
 
 void DynamicsSystem::AddLandingDust(glm::vec3 centre, float radius, uint32_t argb)
@@ -1484,7 +1499,7 @@ void DynamicsSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 	{
 		walk.steps.push_back({.chain = false, .index = static_cast<uint32_t>(walk.atoms.size())});
 		walk.atoms.push_back({
-		    .creator = &_dustCreator,
+		    .creator = turn::IsAdditive(puff.kind) ? &_moteCreator : &_dustCreator,
 		    .position = puff.position,
 		    .rotation = glm::mat3(1.0f),
 		    .scale = turn::DustPuffSize(puff),
