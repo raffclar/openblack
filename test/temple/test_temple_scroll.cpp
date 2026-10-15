@@ -282,3 +282,37 @@ TEST(TempleScrolls, TheCreaturesMindListsItsDesires)
 	facts.creature.reset();
 	EXPECT_FALSE(TempleScrolls::Write(TempleScrolls::Content::CreatureMind, texts, font, facts).has_value());
 }
+
+TEST(TempleScrolls, WithoutACreatureTheCreatureRoomWritesOnlyItsTitles)
+{
+	const auto font = LoadFont();
+	gui::TextDatabase texts;
+	const std::u16string script = u"ADD_TEXT(1, NONE, \"HELP_TEXT_ROOM_CREATURE_SCROLL_TITLE\", \"A\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_ROOM_MAGIC_SCROLL_TITLE\", \"AA\")\n";
+	std::vector<uint8_t> bytes;
+	for (const auto c : script)
+	{
+		bytes.push_back(static_cast<uint8_t>(c & 0xFF));
+		bytes.push_back(static_cast<uint8_t>(c >> 8));
+	}
+	texts.AddScript(bytes);
+	auto facts = TempleScrolls::Facts::Mock();
+	facts.creature.reset();
+
+	// The attributes scroll keeps its title, then it has only blank lines in the place of its facts
+	std::u16string attributes = u"A<N><N>";
+	for (int i = 0; i < 23; ++i)
+	{
+		attributes += u"<N>";
+	}
+	attributes += u"<E>";
+	EXPECT_EQ(TempleScrolls::Write(TempleScrolls::Content::CreatureAttributes, texts, font, facts), attributes);
+
+	// The actions scroll and the mind scroll stay as the bare parchment
+	EXPECT_FALSE(TempleScrolls::Write(TempleScrolls::Content::CreatureActions, texts, font, facts).has_value());
+	EXPECT_FALSE(TempleScrolls::Write(TempleScrolls::Content::CreatureMind, texts, font, facts).has_value());
+
+	// The magic scroll keeps only its title
+	EXPECT_EQ(TempleScrolls::Write(TempleScrolls::Content::CreatureMiracles, texts, font, facts),
+	          std::u16string(u"AA<N><N><N><E>"));
+}

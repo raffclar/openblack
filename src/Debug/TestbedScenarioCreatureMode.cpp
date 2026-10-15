@@ -12,6 +12,7 @@
 
 #include "3D/TempleInteriorInterface.h"
 #include "Creature/CreatureCave.h"
+#include "Input/BindableActions.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -239,6 +240,37 @@ void AddCaveTattooOnBody(std::vector<Scenario>& all)
 	});
 }
 
+/// The player looks at a scroll of the Creature Cave and then leaves it. The points are for a screen of 1600 by 900.
+void AddCaveScrollZoom(std::vector<Scenario>& all)
+{
+	const auto at = [](float x, float y, float delay) {
+		return Command {.kind = Kind::PointerTo, .delaySeconds = delay, .point = {x / 1600.0f, y / 900.0f}};
+	};
+	const auto press = [](float delay) { return Command {.kind = Kind::PointerPress, .delaySeconds = delay, .value = 1}; };
+	const auto release = [](float delay) { return Command {.kind = Kind::PointerRelease, .delaySeconds = delay, .value = 1}; };
+	all.push_back({
+	    .id = "creature_mode.cave_scroll_zoom",
+	    .name = "A scroll of the creature cave, looked at and left",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player goes into the temple and its Creature Cave. The player clicks the Creature Mind scroll, "
+	                   "waits, then presses the key that turns the camera to the left.",
+	    .expected = "The camera moves along a curve to the front of the scroll in about 1.3 seconds. At half way the "
+	                "text moves from the scroll to a plane in front of it, sharp. The help of the scroll starts. The "
+	                "key stops the help, and the camera goes back in about 1.4 seconds. At half way the "
+	                "text moves back onto the scroll.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 at(940.0f, 300.0f, 10.0f),
+	                 press(0.5f),
+	                 release(0.2f),
+	                 Command {.kind = Kind::PressKey,
+	                          .delaySeconds = 6.0f,
+	                          .value = static_cast<size_t>(input::BindableActionMap::MOVE_LEFT)}},
+	});
+}
+
 /// The Creature Cave's trophies for creatures of different histories: the belts on the attack dummies for how each leans
 /// in its fights, the medals on the magic plinths and the seeds hovering by them for the miracles it has learnt
 void AddCaveTrophies(std::vector<Scenario>& all)
@@ -310,5 +342,6 @@ void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 	AddCreatureMode(all);
 	AddCave(all);
 	AddCaveTattooOnBody(all);
+	AddCaveScrollZoom(all);
 	AddCaveTrophies(all);
 }
