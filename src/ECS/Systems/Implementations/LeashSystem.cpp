@@ -369,8 +369,10 @@ bool TravelsByTeleport(const Registry& registry, entt::entity creature)
 }
 
 using ForcedPlan = CreatureMindSystemInterface::ForcedPlan;
-bool Force(entt::entity creature, const ForcedPlan& plan)
+/// An order on the leash: the player makes the creature do the plan
+bool Force(entt::entity creature, ForcedPlan plan)
 {
+	plan.ordered = true;
 	return Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().ForcePlan(creature, plan);
 }
 

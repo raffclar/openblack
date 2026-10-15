@@ -72,7 +72,8 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	{
 		return FightForScript(creature, target);
 	}
-	if (!ForcePlan(creature, {.desire = Desire::ObeyPlayer, .action = name, .object = target, .instrument = with}))
+	if (!ForcePlan(creature,
+	               {.desire = Desire::ObeyPlayer, .action = name, .object = target, .instrument = with, .ordered = true}))
 	{
 		return false;
 	}

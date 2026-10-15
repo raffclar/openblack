@@ -1301,6 +1301,11 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		    needs != nullptr ? needs->needs.life : creature_turn_order::k_FullLife);
 		if (carriedOut)
 		{
+			// The newest action it remembers for feedback is done, unless a script controls it
+			if (!Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature))
+			{
+				MarkNewestActionDone(mind);
+			}
 			NoteDone(mind, plan.action);
 			creature_training::CountCarriedOut(mind.actionCounts, plan.action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
@@ -1370,6 +1375,10 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 		EndUnderway(mind);
 		if (!idle.gaveUp)
 		{
+			if (!Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature))
+			{
+				MarkNewestActionDone(mind);
+			}
 			NoteDone(mind, mind.underway->action);
 			creature_training::CountCarriedOut(mind.actionCounts, mind.underway->action,
 			                                   Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
@@ -1432,24 +1441,24 @@ void CreatureMindSystem::FollowAgenda(entt::entity creature, CreatureMindState& 
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& info = tables->actions[*action];
 	const auto activity = LessonActivity(*tables, static_cast<Desire>(info.desire), object, std::nullopt);
-	creature_learning::Remember(
-	    mind.learnt->contexts,
-	    {
-	        .action = *action,
-	        .desire = static_cast<Desire>(info.desire),
-	        .object = object,
-	        .belief =
-	            object.has_value() ? ActedOnBeliefOf(registry, static_cast<entt::entity>(*object), creature) : std::nullopt,
-	        .activity = activity,
-	        .activityBelief =
-	            activity.has_value() ? BeliefOf(registry, static_cast<entt::entity>(*activity), creature) : std::nullopt,
-	        .learnable = info.learnable,
-	        .windowSeconds = info.learningWindowSeconds,
-	        .source = mind.desires.has_value()
-	                      ? creature_learning::PlanSource((*mind.desires)[static_cast<Desire>(info.desire)])
-	                            .value_or(creature_learning::k_NoTellingSource)
-	                      : creature_learning::k_NoTellingSource,
-	    });
+	RememberAction(creature, mind,
+	               {
+	                   .action = *action,
+	                   .desire = static_cast<Desire>(info.desire),
+	                   .object = object,
+	                   .belief = object.has_value() ? ActedOnBeliefOf(registry, static_cast<entt::entity>(*object), creature)
+	                                                : std::nullopt,
+	                   .activity = activity,
+	                   .activityBelief = activity.has_value()
+	                                         ? BeliefOf(registry, static_cast<entt::entity>(*activity), creature)
+	                                         : std::nullopt,
+	                   .learnable = info.learnable,
+	                   .windowSeconds = info.learningWindowSeconds,
+	                   .source = mind.desires.has_value()
+	                                 ? creature_learning::PlanSource((*mind.desires)[static_cast<Desire>(info.desire)])
+	                                       .value_or(creature_learning::k_NoTellingSource)
+	                                 : creature_learning::k_NoTellingSource,
+	               });
 	mind.underway = CreatureMindState::ActionUnderway {.serial = idle.serial, .action = *action};
 }
 
@@ -1571,13 +1580,15 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		CopyObservedDeedAgain(creature, mind);
 		if (const auto source = creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]); source.has_value())
 		{
-			creature_learning::Remember(mind.learnt->contexts, {
-			                                                       .action = plan.action,
-			                                                       .desire = plan.desire,
-			                                                       .learnable = info.learnable,
-			                                                       .windowSeconds = info.learningWindowSeconds,
-			                                                       .source = *source,
-			                                                   });
+			RememberAction(creature, mind,
+			               {
+			                   .action = plan.action,
+			                   .desire = plan.desire,
+			                   .learnable = info.learnable,
+			                   .windowSeconds = info.learningWindowSeconds,
+			                   .source = *source,
+			                   .ordered = _orderedPlanFor == creature,
+			               });
 		}
 		creature_learning::SuppressOpposed(*mind.desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
 		return false;
@@ -1623,7 +1634,6 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} sets about {} on {} ({} steps)", entt::to_integral(creature),
 	                    info.name, plan.object.value_or(0), mind.idle.agenda.size());
-	auto& learnt = *mind.learnt;
 	mind.planner.current = chosen;
 	mind.planActive = true;
 	mind.planSerial = mind.idle.serial;
@@ -1636,8 +1646,8 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	if (const auto source = creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]); source.has_value())
 	{
 		const auto activity = LessonActivity(*tables, plan.desire, plan.object, plan.about);
-		creature_learning::Remember(
-		    learnt.contexts,
+		RememberAction(
+		    creature, mind,
 		    {
 		        .action = plan.action,
 		        .desire = plan.desire,
@@ -1650,6 +1660,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		        .learnable = info.learnable,
 		        .windowSeconds = info.learningWindowSeconds,
 		        .source = *source,
+		        .ordered = _orderedPlanFor == creature,
 		    });
 	}
 	creature_learning::SuppressOpposed(*mind.desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
@@ -3133,7 +3144,6 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	mind->satisfiedByEffect = false;
 	mind->desireSeenTo = false;
 	mind->planActions = tables->desireActions.at(static_cast<size_t>(plan.desire));
-	auto& learnt = *mind->learnt;
 	const auto& info = tables->actions[*action];
 	// TODO(usefulness-use-tree): the game's forced plans each name what their desire is about; only the give passes it
 	// here yet, and the rest count as the planner's own plans do
@@ -3142,21 +3152,21 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	// It is remembered for the player's feedback, unless nothing says why it wants what the plan serves
 	if (const auto source = creature_learning::PlanSource((*mind->desires)[plan.desire]); source.has_value())
 	{
-		creature_learning::Remember(
-		    learnt.contexts,
-		    {
-		        .action = *action,
-		        .desire = plan.desire,
-		        .object = object,
-		        .belief = plan.object.has_value() ? ActedOnBeliefOf(registry, *plan.object, creature) : std::nullopt,
-		        .activity = lessonActivity,
-		        .activityBelief = lessonActivity.has_value()
-		                              ? BeliefOf(registry, static_cast<entt::entity>(*lessonActivity), creature)
-		                              : std::nullopt,
-		        .learnable = info.learnable,
-		        .windowSeconds = info.learningWindowSeconds,
-		        .source = *source,
-		    });
+		RememberAction(creature, *mind,
+		               {
+		                   .action = *action,
+		                   .desire = plan.desire,
+		                   .object = object,
+		                   .belief = plan.object.has_value() ? ActedOnBeliefOf(registry, *plan.object, creature) : std::nullopt,
+		                   .activity = lessonActivity,
+		                   .activityBelief = lessonActivity.has_value()
+		                                         ? BeliefOf(registry, static_cast<entt::entity>(*lessonActivity), creature)
+		                                         : std::nullopt,
+		                   .learnable = info.learnable,
+		                   .windowSeconds = info.learningWindowSeconds,
+		                   .source = *source,
+		                   .ordered = plan.ordered,
+		               });
 	}
 	creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
 	return true;
@@ -3594,7 +3604,10 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 		}
 		mind->leash.actOn = {entt::to_integral(object)};
 		mind->plannedTurn = mind->turn + 1;
+		// The plan that it makes is one that the player made it make
+		_orderedPlanFor = creature;
 		PlanCreature(creature, *mind, false, desire);
+		_orderedPlanFor.reset();
 		mind->leash.actOn.clear();
 		if (mind->planActive && mind->planner.current.has_value() && mind->planner.current->desire == *desire)
 		{
@@ -4754,8 +4767,12 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} does its action again: {} on {}", entt::to_integral(creature), action,
 	                    entt::to_integral(object));
-	static_cast<void>(ForcePlan(
-	    creature, {.desire = desire, .action = action, .object = object, .instrument = instrument, .activityObject = whole}));
+	static_cast<void>(ForcePlan(creature, {.desire = desire,
+	                                       .action = action,
+	                                       .object = object,
+	                                       .instrument = instrument,
+	                                       .activityObject = whole,
+	                                       .ordered = true}));
 }
 
 void CreatureMindSystem::LearnFromDeedSeen(entt::entity creature, CreatureMindState& mind, size_t deed, entt::entity thing,
@@ -4853,4 +4870,65 @@ void CreatureMindSystem::CopyObservedDeedAgain([[maybe_unused]] entt::entity cre
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} copies the player's {} again", entt::to_integral(creature),
 	                    tables->mimics.at(observed.rule).name);
 	creature_mind_model::Think(*mind.learnt, fmt::format("I'll copy you again: {}", tables->mimics.at(observed.rule).name));
+}
+
+void CreatureMindSystem::RememberAction(entt::entity creature, CreatureMindState& mind, creature_learning::Context context)
+{
+	const auto* tables = GetTables();
+	if (!mind.learnt.has_value())
+	{
+		return;
+	}
+	auto& learnt = *mind.learnt;
+	const auto forgotten = creature_learning::Remember(learnt.contexts, std::move(context));
+	if (!forgotten.has_value() || tables == nullptr)
+	{
+		return;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} forgets action {} (ordered {}, done {})", entt::to_integral(creature),
+	                    forgotten->action, forgotten->ordered, forgotten->done);
+	// An action that the player made it do teaches approval when the creature forgets it, as a small stroke would
+	// teach it about the whole thing and the thing that it acted on. It learns nothing about the desire or the action.
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& species = Locator::infoConstants::value().creature;
+	const auto row = creature::InfoRow(body->species);
+	const auto desire = forgotten->desire;
+	const auto approval = creature_learning::ForgottenOrderApproval(
+	    *forgotten, tables->rules.at(static_cast<size_t>(desire)), row < species.size() ? species.at(row).orderApproval : 0.0f);
+	if (!approval.has_value())
+	{
+		return;
+	}
+	const auto lessons = creature_learning::ThingLessonsFor(*forgotten, entt::to_integral(creature));
+	const auto teach = [&](TreeKind kind, const creature_tree::Belief& belief, float feedback) {
+		for (const auto& [other, share] : creature_learning::Spread(desire, feedback, tables->dependencies))
+		{
+			creature_mind_model::Learn(learnt, kind, other, {.belief = belief, .feedback = std::clamp(share, -1.0f, 1.0f)},
+			                           tables->attributes.at(static_cast<size_t>(other)));
+		}
+	};
+	if (lessons.activity)
+	{
+		teach(TreeKind::ActOn, *forgotten->activityBelief, *approval);
+	}
+	if (lessons.actedOn)
+	{
+		teach(TreeKind::Use, *forgotten->belief,
+		      desire == Desire::Poo ? std::clamp(*approval, -k_PooUseFeedback, k_PooUseFeedback) : *approval);
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} forgets action {} that it was made to do and approves it by {}",
+	                    entt::to_integral(creature), forgotten->action, *approval);
+}
+
+void CreatureMindSystem::MarkNewestActionDone(CreatureMindState& mind)
+{
+	if (mind.learnt.has_value() && !mind.learnt->contexts.empty())
+	{
+		mind.learnt->contexts.back().done = true;
+	}
 }

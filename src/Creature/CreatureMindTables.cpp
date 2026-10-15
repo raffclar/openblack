@@ -105,6 +105,7 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		    .learnable = initial.field0x28 != 0,
 		    .distanceWeight = initial.field0x58,
 		    .aboutSomething = initial.field0x20 != 0,
+		    .approvesOrders = initial.field0x2c != 0,
 		};
 		tables.texts.at(d) = {
 		    .desire = Text(initial.field0xb0),

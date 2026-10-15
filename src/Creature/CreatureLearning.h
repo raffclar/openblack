@@ -76,6 +76,8 @@ struct DesireRules
 	/// Whether the desire is about something in itself (a town to help, a creature to befriend), which its plan chooses
 	/// by what the creature has learnt of such things, rather than by what it has learnt of acting on them
 	bool aboutSomething {false};
+	/// Whether an action that the player made it do for this desire teaches approval when the creature forgets it
+	bool approvesOrders {false};
 };
 using AllDesireRules = std::array<DesireRules, k_DesireCount>;
 
@@ -118,6 +120,11 @@ struct Context
 	std::optional<float> credited;
 	/// The source of the desire that says why it did it, which its lessons tell of; k_NoTellingSource when none does
 	uint32_t source {61};
+	/// The player made it do this: by an order on the leash, by a thing given to it, by a script, or by a stroke that
+	/// makes it do its action again
+	bool ordered {false};
+	/// It carried the action out to its end
+	bool done {false};
 };
 /// What a plan's desire was about, for the lessons feedback teaches: what the plan says it was about, else for a desire
 /// about something in itself the thing it acted on, else nothing
@@ -137,7 +144,13 @@ struct ThingLessons
 /// The context feedback is credited to, if any counts; of two that count the same, the newer
 [[nodiscard]] std::optional<size_t> BestContext(std::span<const Context> contexts);
 /// Remembers a new action, the newest last, forgetting the oldest beyond the most kept
-void Remember(std::vector<Context>& contexts, Context context);
+/// The newest action is replaced instead when it was not carried out to its end. Returns the action that is forgotten to
+/// make room, if any.
+std::optional<Context> Remember(std::vector<Context>& contexts, Context context);
+/// The approval that a forgotten action teaches: an action that the player made it do teaches the approval about the
+/// thing it acted on and the whole thing, when its desire learns from orders. Feedback from the player does not stop
+/// this.
+[[nodiscard]] std::optional<float> ForgottenOrderApproval(const Context& forgotten, const DesireRules& rules, float approval);
 /// Time passes for the contexts that have finished
 void Age(std::vector<Context>& contexts, float seconds);
 

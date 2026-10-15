@@ -2320,7 +2320,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_learning::Context::learnable>("learnable")
 	    .Field<&openblack::creature_learning::Context::windowSeconds>("windowSeconds")
 	    .Field<&openblack::creature_learning::Context::credited>("credited")
-	    .Field<&openblack::creature_learning::Context::source>("source");
+	    .Field<&openblack::creature_learning::Context::source>("source")
+	    .Field<&openblack::creature_learning::Context::ordered>("ordered")
+	    .Field<&openblack::creature_learning::Context::done>("done");
 	Reflect<openblack::creature_learning::CreatureAttitude>(context, ValueOnly {})
 	    .Field<&openblack::creature_learning::CreatureAttitude::creature>("creature")
 	    .Field<&openblack::creature_learning::CreatureAttitude::howNice>("howNice")

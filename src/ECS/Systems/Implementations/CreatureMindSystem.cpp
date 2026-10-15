@@ -3028,22 +3028,22 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	if (const auto source = creature_learning::PlanSource(desire); source.has_value())
 	{
 		const auto& info = tables->actions[*action];
-		creature_learning::Remember(
-		    mind->learnt->contexts,
-		    {
-		        .action = *action,
-		        .desire = forced.desire,
-		        .object = actionObject,
-		        .belief = actionObject.has_value()
-		                      ? ActedOnBeliefOf(registry, static_cast<entt::entity>(*actionObject), creature)
-		                      : std::nullopt,
-		        .activity = toNumber(forced.activityObject),
-		        .activityBelief =
-		            forced.activityObject.has_value() ? BeliefOf(registry, *forced.activityObject, creature) : std::nullopt,
-		        .learnable = info.learnable,
-		        .windowSeconds = info.learningWindowSeconds,
-		        .source = *source,
-		    });
+		RememberAction(creature, *mind,
+		               {
+		                   .action = *action,
+		                   .desire = forced.desire,
+		                   .object = actionObject,
+		                   .belief = actionObject.has_value()
+		                                 ? ActedOnBeliefOf(registry, static_cast<entt::entity>(*actionObject), creature)
+		                                 : std::nullopt,
+		                   .activity = toNumber(forced.activityObject),
+		                   .activityBelief = forced.activityObject.has_value()
+		                                         ? BeliefOf(registry, *forced.activityObject, creature)
+		                                         : std::nullopt,
+		                   .learnable = info.learnable,
+		                   .windowSeconds = info.learningWindowSeconds,
+		                   .source = *source,
+		               });
 	}
 	creature_learning::SuppressOpposed(*mind->desires, forced.desire, tables->dependencies, k_TurnsPerSecond);
 	return true;
