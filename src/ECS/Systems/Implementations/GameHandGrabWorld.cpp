@@ -79,6 +79,7 @@
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -415,6 +416,14 @@ void GameHandGrabWorld::CatchFirefly(entt::entity object)
 		return;
 	}
 	Locator::fireflySystem::value().Catch(map_coords::FromWorld(Locator::terrainSystem::value(), transform->position));
+}
+
+void GameHandGrabWorld::CountHelpEvent(uint32_t event)
+{
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(event);
+	}
 }
 
 void GameHandGrabWorld::HeatHeld(entt::entity object)

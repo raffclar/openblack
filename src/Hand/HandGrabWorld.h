@@ -112,6 +112,8 @@ public:
 	virtual void FireStartedMoving(entt::entity object, bool inHand) = 0;
 	/// A thing goes into the hand from where it stood: a firefly hiding exactly there is caught, for its reward
 	virtual void CatchFirefly(entt::entity object) = 0;
+	/// The help counts an event of the hand of the local player (see help::profile)
+	virtual void CountHelpEvent(uint32_t event) = 0;
 	/// A held thing catches from the fires in its cell
 	virtual void HeatHeld(entt::entity object) = 0;
 	/// A sound of the in-game bank where something is

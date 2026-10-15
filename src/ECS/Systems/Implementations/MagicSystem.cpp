@@ -91,6 +91,8 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
+#include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -107,6 +109,7 @@
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Hand/HandGrabRules.h"
+#include "Help/HelpProfile.h"
 #include "Help/VillageVoices.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -2262,6 +2265,21 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 			return entt::null;
 		}
 		point = *_hand.point;
+	}
+	// The help counts a cast of a miracle with a power-up, before the miracle starts
+	if (Locator::helpProfileSystem::has_value())
+	{
+		const auto last =
+		    Locator::gestureSystem::has_value() ? Locator::gestureSystem::value().GetLastRecognised() : std::nullopt;
+		const gesture::HandContext::Seed facts {.ready = seed.ready,
+		                                        .cast = seed.hasCast,
+		                                        .sizingGesture = seedInfo.sizingGesture,
+		                                        .powerUp = seed.powerUp,
+		                                        .canPowerUp = seed.hasIcon};
+		if (gesture::CountsPoweredUpCast(facts, last.has_value() ? last->request.gesture : GestureType::None))
+		{
+			Locator::helpProfileSystem::value().Trigger(help::profile::k_GestureCastPoweredUp);
+		}
 	}
 	auto cast = magic::SeedCastData(Info(), type, seed.seedType, seed.castMultiplier, size);
 	cast.maxObjectsToCreate = seed.storedMaxObjects;
