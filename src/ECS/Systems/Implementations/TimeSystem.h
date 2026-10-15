@@ -72,6 +72,8 @@ public:
 
 	void SetPaused(bool paused) override;
 	[[nodiscard]] bool IsPaused() const override { return _paused; }
+	void SetHeld(bool held) override;
+	[[nodiscard]] bool IsHeld() const override { return _held; }
 	void SetSpeed(float speed) override;
 	[[nodiscard]] float GetSpeed() const override { return _speed; }
 
@@ -89,6 +91,10 @@ private:
 	/// The tick count the clock goes by: the tick source's, or while frames take a fixed time, one moved on by that
 	/// time each frame
 	[[nodiscard]] uint32_t Ticks() const;
+	/// True while a pause or a hold stops the clock
+	[[nodiscard]] bool Stopped() const { return _paused || _held; }
+	/// Stops or starts the timer when a change of the pause or the hold changes whether the clock is stopped
+	void FollowStop(bool wasStopped);
 
 	TickSource _ticks;
 	std::optional<std::chrono::milliseconds> _fixedFrameTime;
@@ -106,6 +112,7 @@ private:
 	GameTimer _timer;
 	uint32_t _turn {0};
 	bool _paused {true};
+	bool _held {false};
 	float _speed {1.0f};
 	uint32_t _turnsThisFrame {0};
 	// The frame clock: the timer at the last frame, the turn then, and the time past that turn
