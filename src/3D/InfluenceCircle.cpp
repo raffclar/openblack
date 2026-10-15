@@ -228,6 +228,11 @@ std::optional<uint8_t> CurtainAlpha(float cameraHeight)
 	return static_cast<uint8_t>(Cut((cameraHeight - k_HiddenBelow) * 0.01f * static_cast<float>(k_WholeAlpha)));
 }
 
+bool CurtainScrolls(bool inTemple, bool mapShowsInfluence, float cameraHeight)
+{
+	return inTemple ? mapShowsInfluence : CurtainAlpha(cameraHeight).has_value();
+}
+
 glm::vec2 ScrollOffset(int32_t milliseconds)
 {
 	const auto wrapped = milliseconds % k_ScrollWrap;

@@ -23,9 +23,11 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "Camera/Camera.h"
 #include "Camera/CameraZones.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -519,10 +521,17 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 
 void InfluenceSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
-	_scrollRemainder += gameTime.count();
-	const auto step = static_cast<int32_t>(_scrollRemainder);
-	_scrollRemainder -= static_cast<float>(step);
-	_scrollClock = (_scrollClock + step) % influence::k_ScrollWrap;
+	// The border's texture scrolls only in the frames the border is drawn
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool mapShowsInfluence = inTemple && Locator::temple::value().GetMapInfluence().has_value();
+	const float cameraHeight = Locator::camera::has_value() ? Locator::camera::value().GetOrigin().y : 0.0f;
+	if (influence::CurtainScrolls(inTemple, mapShowsInfluence, cameraHeight))
+	{
+		_scrollRemainder += gameTime.count();
+		const auto step = static_cast<int32_t>(_scrollRemainder);
+		_scrollRemainder -= static_cast<float>(step);
+		_scrollClock = (_scrollClock + step) % influence::k_ScrollWrap;
+	}
 
 	std::erase_if(_ripples,
 	              [&gameTime](influence::Ripple& ripple) { return !influence::AdvanceRipple(ripple, gameTime.count()); });

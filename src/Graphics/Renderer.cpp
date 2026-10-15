@@ -6257,10 +6257,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				submitDesc.modelLight.reset();
 				// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all
-				// TODO(raffclar): a copy's hair isn't drawn: the creature's hangs from the creature where it is in the world
-				const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(entity);
-				const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(entity);
-				if (!copy && creature_fizz_look::HairShown(fizz, freeze) && hair != nullptr && transform != nullptr &&
+				// A copy draws the hair of its own, which hangs from its own pose
+				const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(poser);
+				const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(poser);
+				if (creature_fizz_look::HairShown(fizz, freeze) && hair != nullptr && transform != nullptr &&
 				    Locator::creatureHairSystem::value().IsShown())
 				{
 					DrawCreatureHair(desc, *hair, transform->position);

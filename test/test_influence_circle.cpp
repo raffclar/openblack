@@ -195,3 +195,13 @@ TEST(InfluenceCircle, BorderStaysForTheRestOfTheLand)
 	EXPECT_TRUE(influence::BorderShows(true, std::nullopt));
 	EXPECT_TRUE(influence::BorderShows(true, 0.2f));
 }
+
+TEST(InfluenceCircle, ScrollsOnlyWhileTheBorderIsDrawn)
+{
+	// Outside, the texture scrolls only above the height where the border shows
+	EXPECT_FALSE(influence::CurtainScrolls(false, false, 100.0f));
+	EXPECT_TRUE(influence::CurtainScrolls(false, false, 100.5f));
+	// In the temple, only while the map shows the influence, whatever the camera's height
+	EXPECT_FALSE(influence::CurtainScrolls(true, false, 5000.0f));
+	EXPECT_TRUE(influence::CurtainScrolls(true, true, 0.0f));
+}

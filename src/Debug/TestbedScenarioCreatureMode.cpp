@@ -271,6 +271,25 @@ void AddCaveScrollZoom(std::vector<Scenario>& all)
 	});
 }
 
+/// The copy of the player's ape in the Creature Cave, which has hair of its own
+void AddCaveCopyHair(std::vector<Scenario>& all)
+{
+	auto ape = Player({0.0f, 40.0f}, "yours");
+	ape.species = CreatureType::GiantApe;
+	all.push_back({
+	    .id = "creature_mode.cave_copy_hair",
+	    .name = "The hair of the creature in the cave",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player has an ape. The player goes into the temple and its Creature Cave, and stays there.",
+	    .expected = "The ape sits or sleeps by the fire with its hair on, as in the world. The hair starts straight out "
+	                "from the roots, falls, and then swings as the ape moves, while the world stays paused.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {ape},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f}},
+	});
+}
+
 /// The Creature Cave's trophies for creatures of different histories: the belts on the attack dummies for how each leans
 /// in its fights, the medals on the magic plinths and the seeds hovering by them for the miracles it has learnt
 void AddCaveTrophies(std::vector<Scenario>& all)
@@ -343,5 +362,6 @@ void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 	AddCave(all);
 	AddCaveTattooOnBody(all);
 	AddCaveScrollZoom(all);
+	AddCaveCopyHair(all);
 	AddCaveTrophies(all);
 }
