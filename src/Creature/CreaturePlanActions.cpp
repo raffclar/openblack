@@ -185,6 +185,29 @@ constexpr std::array k_Executors {
               .target = Target::DanceVillager,
               .build = Build::DanceWithVillagers,
               .danceType = creature_dance::k_ImpressDanceType},
+    // The other dances with villagers. The playful dance with them and the story need a villager near the creature,
+    // as the dance to impress does. The table keeps only the first 32 letters of a name.
+    Executor {.action = "DancePlayfullyWithVillagersParti",
+              .target = Target::DanceVillager,
+              .build = Build::DanceWithVillagers,
+              .danceType = creature_dance::k_PlayfulDanceType},
+    Executor {.action = "TellVillagersAStory",
+              .target = Target::DanceVillager,
+              .build = Build::DanceWithVillagers,
+              .danceType = creature_dance::k_StoryDanceType},
+    Executor {.action = "PlayGameWithVillagers",
+              .target = Target::Villager,
+              .build = Build::DanceWithVillagers,
+              .danceType = creature_dance::k_GameDanceType},
+    Executor {.action = "DancePlayfullyWithVillagersWatch",
+              .target = Target::Villager,
+              .build = Build::DanceWithVillagers,
+              .danceType = creature_dance::k_WatchedDanceType},
+    Executor {.action = "DanceAmorouslyWithVillagers",
+              .target = Target::Villager,
+              .build = Build::DanceWithVillagers,
+              .danceType = creature_dance::k_AmorousDanceType},
+    Executor {.action = "PracticeDance", .build = Build::PracticeDance},
     Executor {.action = "Stroke", .target = Target::Strokeable, .build = Build::StrokeAndHeal},
     Executor {.action = "SmileAtFriend", .target = Target::Creature, .build = Build::SmileAt},
     Executor {.action = "InspectCreature", .target = Target::Creature, .build = Build::InspectCreature},
@@ -265,8 +288,10 @@ constexpr std::array k_Executors {
     Executor {.action = "SprinkleMagicWaterPU1OnCrops", .target = Target::Waterable, .build = Build::CastWater},
     Executor {.action = "WaterTree", .target = Target::AnyTree, .build = Build::CastWater},
     Executor {.action = "WaterField", .target = Target::DryField, .build = Build::CastWater},
-    Executor {
-        .action = "WaterTreeForTown", .target = Target::Anything, .use = Target::AnyTree, .build = Build::WaterTreeForTown},
+    Executor {.action = "WaterTreeForTown",
+              .target = Target::Anything,
+              .use = Target::AnyTree,
+              .build = Build::WaterTreeForTown},
     // The power-up of watering a tree for a town asks the creature to know the water power-up, but casts plain water
     Executor {.action = "WaterTreePU1ForTown",
               .target = Target::Anything,
@@ -946,6 +971,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		                               .fewestDancers = situation.fewestDancers,
 		                               .beats = situation.danceBeats,
 		                               .height = situation.height});
+	case Build::PracticeDance:
+		return creature_dance::PracticeDance();
 	case Build::RunFromObject:
 		return creature_emote::RunAway({.point = objectPoint, .object = object}, random);
 	case Build::RunFromPlayer:

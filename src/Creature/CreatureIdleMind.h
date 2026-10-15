@@ -472,6 +472,10 @@ struct Step
 		MakeDisciple,
 		/// Kissing: once its body plays no action, it plays the step's animation once, with whatever its hand holds
 		Kiss,
+		/// Dancing alone: as it starts, once its body plays no action, the creature starts a dance with moves of one
+		/// second each. The step lasts for the step's seconds counted in whole turns. The dance stops when the step
+		/// ends, or when the creature does something else.
+		PracticeDance,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -640,6 +644,8 @@ struct Senses
 	/// Whether the body plays an action or is on the move, and whether it is in the loop of an action, such as sitting
 	bool bodyBusy {false};
 	bool bodyLooping {false};
+	/// Whether the body dances and does not play the finish of the dance yet
+	bool bodyDancing {false};
 	/// Whether it is on its way somewhere or turning, and where it stands
 	bool moving {false};
 	/// How going near, getting away from or turning to face an object, or drawing a gesture, is going, by the
@@ -702,6 +708,8 @@ struct Senses
 		float second {0.0f};
 		/// The way the dance faces (radians), the middle of the creature's group, and its own place in the group
 		float danceAngle {0.0f};
+		/// How many times their keyed speed the groups of the dance move at
+		float danceRate {1.0f};
 		glm::vec2 groupCentre {0.0f};
 		glm::vec2 place {0.0f};
 		/// How far it is from its place, in metres, and the way it faces (radians, as its movement measures it)
@@ -756,6 +764,10 @@ struct Commands
 	std::optional<std::array<size_t, 3>> startSequence;
 	bool holdLoop {false};
 	bool endSit {false};
+	/// A dance to start, with the milliseconds of each move; the dance to stop; only a start, loop and end to stop
+	std::optional<float> startDance;
+	bool endDance {false};
+	bool endStaticLoop {false};
 	/// A face to pull, or to relax the face pulled
 	std::optional<creature_face::Request> face;
 	bool relaxFace {false};

@@ -2706,7 +2706,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			        creature_plan_actions::DoneTooRecently(*executor, learnt.turnsSinceDone.at(action),
 			                                               action < mind.lastDoneTurn.size() ? mind.lastDoneTurn.at(action) : 0,
 			                                               TurnNow(), static_cast<uint32_t>(k_TurnsPerSecond)) ||
-			        (executor->build == creature_plan_actions::Build::DanceWithVillagers && !MayDanceToImpress(creature)) ||
+			        (executor->build == creature_plan_actions::Build::DanceWithVillagers &&
+			         !MayDanceAgain(creature, executor->danceType)) ||
 			        !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs) ||
 			        (creature_plan_actions::IsCast(*executor) &&
 			         !MayCast(creature, mind, action, IsPowerUpCast(tables->actions.at(action).name))),

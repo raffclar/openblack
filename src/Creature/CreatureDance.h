@@ -52,9 +52,37 @@ constexpr uint32_t k_CreatureDanceType = 1;
 constexpr float k_FarFromPlace = 0.2f;
 constexpr float k_NearPlace = 0.1f;
 
+/// The rows of the dance table for the other dances of a creature with villagers: a playful dance with them, a story,
+/// a game, a playful dance that they watch, and a dance of love
+constexpr uint32_t k_PlayfulDanceType = 1;
+constexpr uint32_t k_StoryDanceType = 9;
+constexpr uint32_t k_GameDanceType = 10;
+constexpr uint32_t k_WatchedDanceType = 11;
+constexpr uint32_t k_AmorousDanceType = 13;
+/// A creature does the playful dance with villagers again only this many turns after it last planned one, and a
+/// story only this many turns after the last story
+constexpr uint32_t k_TurnsBetweenPlayfulDances = 300;
+constexpr uint32_t k_TurnsBetweenStories = 450;
+
+/// The turns that must go by before a creature does a dance of a row again, for the rows that it notes as it plans
+/// them, and none for the other rows
+[[nodiscard]] std::optional<uint32_t> TurnsBetween(uint32_t type);
+
+/// Whether a creature may do a dance of a row again: its last noted dance was of another row, and more than the turns
+/// of the row ago. A row that the creature does not note is always possible.
+[[nodiscard]] bool MayDanceAgain(uint32_t type, uint32_t lastType, uint32_t lastTurn, uint32_t turn);
+
 /// Whether a creature may dance to impress villagers: its last such dance was of another kind, and more than 200
 /// turns ago
 [[nodiscard]] bool MayDanceToImpress(uint32_t lastType, uint32_t lastTurn, uint32_t turn);
+
+/// A dance alone lasts this many seconds, and each move of it lasts this many milliseconds. The game has ten turns in
+/// a second.
+constexpr float k_PracticeSeconds = 20.0f;
+constexpr float k_PracticeMoveMs = 1000.0f;
+constexpr uint32_t k_TurnsPerSecond = 10;
+/// The agenda of a dance alone: the creature dances where it stands, with a smile
+[[nodiscard]] std::vector<creature_mind::Step> PracticeDance();
 
 /// How wide a clear place the dance needs for a creature of a radius on the ground
 [[nodiscard]] float AreaWidth(float radius);
@@ -102,6 +130,16 @@ struct DanceTurn
 	std::optional<size_t> overlay;
 	/// The place to walk back to, when it is too far from its place
 	std::optional<glm::vec2> walkTo;
+	/// A dance to start, with the milliseconds of each dance move
+	std::optional<float> danceMoveMs;
+	/// A pose to start: the loop, with the animations before and after it as its start and end
+	std::optional<size_t> pose;
+	/// A face to pull, by its animation, and for how many milliseconds
+	std::optional<size_t> face;
+	float faceMs {0.0f};
+	/// Whether the move stops a pose, and a dance, that the body plays
+	bool endPose {false};
+	bool endDance {false};
 };
 /// The turn of a creature in its dance
 [[nodiscard]] DanceTurn Turn(const creature_mind::Senses::DanceView& view, glm::vec2 position);
