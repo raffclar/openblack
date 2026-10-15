@@ -16,6 +16,7 @@
 #include "Camera/Camera.h"
 #include "Camera/CameraDrag.h"
 #include "Camera/ScriptCameraModel.h"
+#include "ECS/AltarOffering.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
@@ -206,6 +207,11 @@ HeldUse UseAt(entt::entity held, std::optional<entt::entity> target)
 	if (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().CreatureTakesHeld(*target))
 	{
 		return HeldUse::Give;
+	}
+	// A worship site altar takes a villager, an animal, a tree or a dead tree, though it can refuse it when given
+	if (ecs::altar_offering::Takes(*target, held))
+	{
+		return HeldUse::Sacrifice;
 	}
 	if (!Locator::resourceStoreSystem::has_value())
 	{

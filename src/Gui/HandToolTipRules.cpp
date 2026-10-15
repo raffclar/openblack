@@ -98,6 +98,8 @@ std::optional<std::vector<Offer>> Holding(bool handInInfluence, HeldUse use, boo
 		return std::vector<Offer> {{.index = k_Give, .action = ToolTipAction::Apply}};
 	case HeldUse::Supply:
 		return std::vector<Offer> {{.index = k_Supply, .action = ToolTipAction::Apply}};
+	case HeldUse::Sacrifice:
+		return std::vector<Offer> {{.index = k_Sacrifice, .action = ToolTipAction::Apply}};
 	case HeldUse::None:
 		break;
 	}

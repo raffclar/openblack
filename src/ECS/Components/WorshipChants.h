@@ -28,6 +28,8 @@ struct WorshipChants
 	float strain {0.0f};          ///< how far demand outstrips the dancers: (requested - capacity) / capacity
 	bool infinite {false};        ///< a cheat: the site never runs dry
 	bool freeMaintenance {false}; ///< a cheat: maintaining miracles costs nothing
+	/// All the prayer power that things sacrificed at its altar have stored, which scripts can read
+	float sacrificed {0.0f};
 };
 
 } // namespace openblack::ecs::components

@@ -129,6 +129,7 @@
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/WorshipChants.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/CreatureRemoval.h"
 #include "ECS/CreatureScars.h"
@@ -9156,10 +9157,11 @@ void DetachSoundTag() // 448 DETACH_SOUND_TAG
 
 void GetSacrificeTotal() // 449 GET_SACRIFICE_TOTAL
 {
-	// const auto worshipSite = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// All the prayer power that sacrifices at a worship site's altar have stored there; 0 for anything but a site
+	const auto site = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* chants = registry.Valid(site) ? registry.TryGet<const ecs::components::WorshipChants>(site) : nullptr;
+	Pushf(chants != nullptr ? chants->sacrificed : 0.0f);
 }
 
 void GameSoundPlaying() // 450 GAME_SOUND_PLAYING
