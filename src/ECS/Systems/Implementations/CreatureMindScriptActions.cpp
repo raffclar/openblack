@@ -14,15 +14,20 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMindTables.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "Locator.h"
 
@@ -106,4 +111,35 @@ bool CreatureMindSystem::FightForScript(entt::entity creature, entt::entity oppo
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} picks a fight with creature {}: {}", entt::to_integral(creature),
 	                    entt::to_integral(opponent), static_cast<int>(started));
 	return true;
+}
+
+void CreatureMindSystem::ForceFinish(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr)
+	{
+		return;
+	}
+	// The action that its body plays ends at two times the usual speed
+	if (auto* body = registry.TryGet<CreatureAnimation>(creature))
+	{
+		body->body = creature_layers::Hurry(body->body);
+	}
+	// What it was doing stops as a failure: it stops where it is, drops what it does with a thing, and forgets its agenda
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		Locator::creatureLocomotionSystem::value().Stop(creature);
+	}
+	Abandon(*mind);
+	if (Locator::magicSystem::has_value())
+	{
+		Locator::magicSystem::value().ReleaseCreatureCast(creature);
+	}
+	creature_mind::Plan(mind->idle, creature_mind::Activity::None, {});
 }

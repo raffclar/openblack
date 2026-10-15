@@ -60,6 +60,7 @@
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
+#include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureSwap.h"
@@ -130,6 +131,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/CreatureRemoval.h"
+#include "ECS/CreatureScars.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
 #include "ECS/DiscipleRules.h"
@@ -3955,11 +3957,18 @@ void CreatureSetAgendaPriority() // 072 CREATURE_SET_AGENDA_PRIORITY
 	}
 }
 
+static void ChangeScriptCreatureDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change);
+
 void CreatureTurnOffAllDesires() // 073 CREATURE_TURN_OFF_ALL_DESIRES
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Every desire of the creature stops
+	const auto creature = PopObject();
+	ChangeScriptCreatureDesires(creature, [](creature_desires::Desires& desires) {
+		for (auto& state : desires.desires)
+		{
+			state.activated = false;
+		}
+	});
 }
 
 void CreatureLearnDistinctionAboutActivityObject() // 074 CREATURE_LEARN_DISTINCTION_ABOUT_ACTIVITY_OBJECT
@@ -4429,9 +4438,18 @@ void GetObjectDestination() // 101 GET_OBJECT_DESTINATION
 
 void CreatureForceFinish() // 102 CREATURE_FORCE_FINISH
 {
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature stops what it does at once, as a failure
+	const auto creature = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature) || !registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("Force finish not implemented on non creatures");
+		return;
+	}
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().ForceFinish(creature);
+	}
 }
 
 void HideCountdownTimer() // 103 HIDE_COUNTDOWN_TIMER
@@ -6372,11 +6390,29 @@ void CreatureSpellReversion() // 233 CREATURE_SPELL_REVERSION
 
 void GetDesire() // 234 GET_DESIRE
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// How much a town wants one of its desires, without the boost that scripts give. It gives 0 for a desire number out
+	// of range, for an object that is gone and for an object that is not a town.
+	const auto desire = Pop().intVal;
+	if (desire < 0 || desire >= static_cast<int32_t>(ecs::town_desire::k_Count))
+	{
+		ScriptMessage("Invalid desire");
+		Pushf(0.0f);
+		return;
+	}
+	const auto town = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (town == entt::null || !registry.Valid(town))
+	{
+		ScriptMessage("Object no longer valid");
+		Pushf(0.0f);
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Town>(town) || !Locator::townDesireSystem::has_value())
+	{
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(Locator::townDesireSystem::value().GetRawDesire(town, static_cast<TownDesireInfo>(desire)));
 }
 
 /// The help profile's count of an event the script asks about, none (with an error) for a number it may not ask about
@@ -6899,14 +6935,30 @@ void IsPlayingHandDemo() // 267 IS_PLAYING_HAND_DEMO
 	Pushb(!Locator::handDemoSystem::value().IsPlaying(0));
 }
 
+/// Where a bone of a creature is as its body is posed now, or where any other thing stands. It gives the origin for
+/// an object that is gone.
+void PushBodyPointOf(const std::function<std::optional<glm::vec3>(entt::entity)>& creaturePoint)
+{
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	glm::vec3 position(0.0f);
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing not found!");
+	}
+	else
+	{
+		const auto* transform = registry.TryGet<const Transform>(object);
+		const auto standing = transform != nullptr ? transform->position : glm::vec3(0.0f);
+		position = registry.AllOf<ecs::components::Creature>(object) ? creaturePoint(object).value_or(standing) : standing;
+	}
+	PushVec(position);
+}
+
 void GetArsePosition() // 268 GET_ARSE_POSITION
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	// The creature's groin bone, where its poo comes from
+	PushBodyPointOf(ecs::creature_scars::GroinOf);
 }
 
 void IsLeashedToObject() // 269 IS_LEASHED_TO_OBJECT
@@ -7836,12 +7888,7 @@ void HandDemoTrigger() // 336 HAND_DEMO_TRIGGER
 
 void GetBellyPosition() // 337 GET_BELLY_POSITION
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	PushBodyPointOf(ecs::creature_scars::BellyOf);
 }
 
 void SetCreatureCreedProperties() // 338 SET_CREATURE_CREED_PROPERTIES
@@ -8995,10 +9042,15 @@ void SetObjectCarrying() // 440 SET_OBJECT_CARRYING
 
 void PosValidForCreature() // 441 POS_VALID_FOR_CREATURE
 {
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// Whether a creature can walk to the position: the test that a creature's walk does for its destination
+	const auto position = PopVec();
+	if (!Locator::creatureLocomotionSystem::has_value())
+	{
+		Pushb(false);
+		return;
+	}
+	const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+	Pushb(land.IsValid({position.x, position.z}, creature_route::k_DestinationClearance));
 }
 
 void GetTimeSinceObjectAttacked() // 442 GET_TIME_SINCE_OBJECT_ATTACKED

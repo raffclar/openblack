@@ -33,6 +33,9 @@ namespace
 constexpr uint32_t k_FractionSteps = 1000;
 /// A face is due again once its wait is within this much of over, so that the turns' rounding doesn't delay it
 constexpr float k_FaceDue = 1e-3f;
+/// The turns between when a fainted creature lies still and when its wait starts, plus the turn between the end of
+/// the wait and the start of the get-up
+constexpr float k_FaintWaitTurnsLate = 3.0f;
 
 float RandomFraction(const Random& random)
 {
@@ -1142,6 +1145,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		case Step::Kind::Static:
 			commands.startSequence = step.sequence;
 			commands.holdLoop = step.holdLoop;
+			commands.fainted = step.faint;
 			// The turn that the rest starts is its first turn
 			mind.restTurns = 1;
 			if (step.mirrorAtRandom)
@@ -1363,6 +1367,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Static:
 	{
 		commands.lookAbout = senses.bodyLooping && !step.closedEyes;
+		// A faint counts its time only from when the creature lies still. Its wait starts on the turn after the creature
+		// lies still, and the creature gets up on the turn after the wait ends.
+		if (step.faint && !senses.bodyLooping && !mind.sitEnding)
+		{
+			mind.stepSeconds = -k_FaintWaitTurnsLate * senses.seconds;
+		}
 		// Sitting rests it a little every turn until it is told to get up
 		commands.restSitting = !mind.sitEnding && step.sequence[1] == animations::k_Sit;
 		// Each turn of the rest its fire stops, until it starts to get up
