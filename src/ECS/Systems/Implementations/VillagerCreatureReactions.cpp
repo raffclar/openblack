@@ -586,6 +586,9 @@ uint32_t villager_creature::FleeingFromCreatureReaction(LivingAction& action)
 		MoveTowards(action, to, VillagerStates::FleeingFromCreatureReaction);
 		return 0;
 	}
+	// While the creature means to act on nothing, the villager only gets its fleeing speed and does not move. The game
+	// does the same, and openblack keeps it (see docs/vanilla-bugs.md). The villager stays in the fright pose until the
+	// town's fear lapses and its time with the reaction ends.
 	villager_reactions::SetSpeed(villager, fleeing);
 	return 0;
 }
