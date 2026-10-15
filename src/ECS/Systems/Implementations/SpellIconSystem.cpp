@@ -618,6 +618,27 @@ icons::TapResult SpellIconSystem::TapSiteIcon(entt::entity icon, PlayerNames pla
 	return result;
 }
 
+bool SpellIconSystem::ValidToTap(entt::entity icon, PlayerNames player) const
+{
+	const auto& registry = Entities();
+	if (!registry.Valid(icon))
+	{
+		return false;
+	}
+	// A stone hand is its town's player's, a worship site's icon its site's player's
+	if (const auto* centreHand = registry.TryGet<const TownCentreIcon>(icon))
+	{
+		const auto* town = registry.Valid(centreHand->town) ? registry.TryGet<const Town>(centreHand->town) : nullptr;
+		return town != nullptr && icons::ValidToTap(town->owner, player);
+	}
+	if (const auto* worshipIcon = registry.TryGet<const WorshipIcon>(icon))
+	{
+		const auto* site = registry.Valid(worshipIcon->site) ? registry.TryGet<const WorshipSite>(worshipIcon->site) : nullptr;
+		return site != nullptr && icons::ValidToTap(site->player, player);
+	}
+	return false;
+}
+
 bool SpellIconSystem::Tap(entt::entity icon, PlayerNames player)
 {
 	auto& registry = Entities();

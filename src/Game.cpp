@@ -451,6 +451,13 @@ bool HandInInfluence()
 }
 
 /// Whether the thing picked under the cursor is an entrance of the local player's own temple
+/// Whether a temple's entrance is picked under the cursor, whoever's temple it is
+bool IsTempleEntrance(std::optional<entt::entity> picked)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	return picked.has_value() && registry.Valid(*picked) && registry.AllOf<ecs::components::TempleEntrance>(*picked);
+}
+
 bool IsOwnTempleEntrance(std::optional<entt::entity> picked)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -2567,8 +2574,13 @@ bool Game::Update() noexcept
 					    !Locator::magicSystem::value().IsHandBusy() && actions.GetChanged(input::BindableActionMap::ACTION) &&
 					    actions.Get(input::BindableActionMap::ACTION))
 					{
-						enterTemple =
-						    IsOwnTempleEntrance(Locator::pickingSystem::value().GetPick().object) && HandInInfluence();
+						const auto picked = Locator::pickingSystem::value().GetPick().object;
+						// The help counts the tap on any temple's entrance; only the player's own entrance takes them inside
+						if (IsTempleEntrance(picked) && HandInInfluence() && Locator::helpProfileSystem::has_value())
+						{
+							Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+						}
+						enterTemple = IsOwnTempleEntrance(picked) && HandInInfluence();
 					}
 					// The leash keys, and the Action button tapping leash posts, and with the leash held giving orders and
 					// tying the leash to things.
