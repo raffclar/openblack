@@ -59,7 +59,9 @@
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureThrow.h"
+#include "Creature/CreatureTownHelp.h"
 #include "CreatureMindSystemDetail.h"
+#include "CreatureMindTownHelp.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -1405,7 +1407,7 @@ std::optional<entt::entity> FoodFromPile(ecs::Registry& registry, entt::entity c
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const float size = body != nullptr ? body->size : 1.0f;
-	const auto kind = handful == creature_mind::ObjectOrder::Handful::Fruit ? PotInfo::TreeFruitInHand : PotInfo::WheatInHand;
+	const auto kind = creature_town_help::HandfulPot(handful);
 	const auto held = Locator::resourceStoreSystem::value().GetResource(pile, ResourceTypeOf(kind));
 	const auto amount = creature_meals::HandfulAmount(size, held);
 	// The handful appears on the ground beside the creature, most of its reach towards the pile, at the creature's own
@@ -1897,6 +1899,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .followHand = FollowHandViewOf(registry, entity, mind, creature_layers::IsPlaying(animation.body)),
 		        .watchPlayer = WatchPlayerViewOf(registry, entity, mind, creature_layers::IsPlaying(animation.body)),
 		        .fighting = registry.AllOf<CreatureFighting>(entity),
+		        .totemShare = mind_town_help::TotemShareOf(registry, mind.idle),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
 		    if (commands.communicated.has_value())
@@ -1974,6 +1977,7 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    Heal(entity, static_cast<entt::entity>(*commands.heal));
 		    }
+		    mind_town_help::Apply(registry, commands);
 		    if (commands.useUp.has_value() && registry.Valid(static_cast<entt::entity>(*commands.useUp)))
 		    {
 			    ecs::world_objects::Remove(static_cast<entt::entity>(*commands.useUp));

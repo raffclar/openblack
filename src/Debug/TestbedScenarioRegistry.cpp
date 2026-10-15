@@ -501,6 +501,53 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "EatFromTree"}},
 	});
 
+	all.push_back({
+	    .id = "objects.field_food_to_store",
+	    .name = "Creature gives food from a field to a storage pit",
+	    .facet = Facet::Objects,
+	    .description = "A tiger with a storage pit in front of it and a ripe wheat field to one side. A script tells it to "
+	                   "give food from the field to the pit, as a town's need for food makes it.",
+	    .expected = "It walks to the field, faces it and pulls a handful of wheat from it. It goes to where it can throw "
+	                "into the pit, faces the pit with a look of compassion and throws the wheat in. The handful holds no "
+	                "food, as in the game, so the pit's food stays as it was.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -75.0f}, {55.0f, 10.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, -60.0f}, .storedFood = 2000, .storedWood = 0},
+	                {.type = FieldTypeInfo::Wheat, .offset = {40.0f, -20.0f}, .ripeCrop = true}},
+	    .commands =
+	        {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "GiveFoodFromFieldToStoragePit", .with = 1}},
+	});
+
+	all.push_back({
+	    .id = "objects.cow_to_store",
+	    .name = "Creature drops a cow in a storage pit",
+	    .facet = Facet::Objects,
+	    .description = "A tiger with a storage pit in front of it and a cow to one side. A script tells it to drop the cow "
+	                   "in the pit.",
+	    .expected = "It walks to the cow and picks it up, faces the pit, goes to where it can throw into the pit with a "
+	                "look of compassion and throws the cow in. The pit takes the cow as food.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -75.0f}, {40.0f, 10.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, -60.0f}, .storedFood = 2000, .storedWood = 0},
+	                {.type = AnimalInfo::Cow, .offset = {25.0f, -10.0f}, .living = true}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "DropCowInStoragePit", .with = 1}},
+	});
+
+	all.push_back({
+	    .id = "objects.kiss_villager",
+	    .name = "Creature kisses a villager in play",
+	    .facet = Facet::Objects,
+	    .description = "A tiger with a villager in front of it. A script tells it to kiss the villager in play.",
+	    .expected = "It walks to two times its height from the villager, faces it and plays the kiss.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -45.0f}, {15.0f, 10.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -40.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "PlayfullyKissVillager"}},
+	});
+
 	// A tiger that stands still between two cows: the left one a script made and holds, as Land 1 holds the leash
 	// lesson's cow, and the right one free
 	all.push_back({

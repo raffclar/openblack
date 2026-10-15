@@ -995,3 +995,6 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_creature_stomp test_creature_stomp.cpp)
 openblack_setup_and_add_test(test_posed_draws graphics/test_posed_draws.cpp)
+openblack_setup_and_add_test(
+  test_creature_town_help test_creature_town_help.cpp
+)

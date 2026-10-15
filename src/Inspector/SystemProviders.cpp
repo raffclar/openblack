@@ -190,6 +190,14 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "heal";
 	case Kind::Fight:
 		return "fight";
+	case Kind::RaiseTotem:
+		return "raise_totem";
+	case Kind::LowerTotem:
+		return "lower_totem";
+	case Kind::MakeDisciple:
+		return "make_disciple";
+	case Kind::Kiss:
+		return "kiss";
 	case Kind::Communicate:
 		return "communicate";
 	}

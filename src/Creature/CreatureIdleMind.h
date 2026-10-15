@@ -165,11 +165,15 @@ struct ObjectOrder
 		/// Kicking the object, which flies off ahead of it
 		Kick,
 	};
-	/// The look of a handful from a thing: wheat, or fruit from a tree
+	/// The look of a handful from a thing: wheat, or fruit from a tree; or wood from a pile of wood, as an evergreen
+	/// branch, a hardwood branch or logs
 	enum class Handful : uint8_t
 	{
 		Wheat,
 		Fruit,
+		EvergreenBranch,
+		HardwoodBranch,
+		Logs,
 	};
 	Kind kind {Kind::PickUp};
 	Handful handful {Handful::Wheat};
@@ -459,6 +463,15 @@ struct Step
 		/// Fighting another creature (the step's object): as it starts, it asks that creature to fight. If the other
 		/// creature does not agree, the rest of the agenda is given up. Else the step lasts until the fight has ended.
 		Fight,
+		/// Raising or lowering the step's object, a town's totem: from the next turn, each turn the share of the town's
+		/// people at worship moves by a step, until the totem is all the way up or down. If the totem has no town that
+		/// can worship, the rest of the agenda is given up.
+		RaiseTotem,
+		LowerTotem,
+		/// Making the step's object, a villager, a breeder at once
+		MakeDisciple,
+		/// Kissing: once its body plays no action, it plays the step's animation once, with whatever its hand holds
+		Kiss,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -713,6 +726,9 @@ struct Senses
 	std::optional<creature_player_attention::WatchPlayerView> watchPlayer;
 	/// Whether it is in a fight now
 	bool fighting {false};
+	/// The share of the town's people at worship, while a step moves the town's totem; none when the totem has no town
+	/// that can worship
+	std::optional<float> totemShare;
 };
 
 /// Watching the camera ends once it is this far away, or this near along the ground; it turns to the camera when it is
@@ -799,6 +815,15 @@ struct Commands
 	std::optional<DanceOrder> dance;
 	/// A thing to heal at once, by its entity's number
 	std::optional<uint32_t> heal;
+	/// The share of the town's people at worship that a totem (by its entity's number) is set to this turn
+	struct TotemShare
+	{
+		uint32_t totem {0};
+		float share {0.0f};
+	};
+	std::optional<TotemShare> totem;
+	/// A villager to make a breeder at once, by its entity's number
+	std::optional<uint32_t> makeDisciple;
 };
 
 /// random(n) is a whole number from 0 to n - 1
