@@ -276,6 +276,18 @@ void creature_desires::ChangeSource(Desires& desires, uint32_t type, float amoun
 	}
 }
 
+std::optional<Desire> creature_desires::DesireOfSource(const Desires& desires, uint32_t type)
+{
+	for (size_t i = 0; i < desires.desires.size(); ++i)
+	{
+		if (std::ranges::find(desires.desires.at(i).sources, type, &Source::type) != desires.desires.at(i).sources.end())
+		{
+			return static_cast<Desire>(i);
+		}
+	}
+	return std::nullopt;
+}
+
 std::optional<float> creature_desires::SourceValue(const DesireState& desire, uint32_t type)
 {
 	const auto found = std::ranges::find(desire.sources, type, &Source::type);

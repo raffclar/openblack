@@ -4645,6 +4645,26 @@ void AddMind(std::vector<Scenario>& all)
 	                 deedOn(k_DamageByThrowing, 20.0f), deedOn(k_StealObjectToTown, 20.0f), deedOn(k_PlayWithToy, 20.0f)},
 	});
 
+	all.push_back({
+	    .id = "mind.deed_sight",
+	    .name = "Copy only a deed it can see",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger faces a rock 40 m ahead. Another rock is 40 m behind it "
+	                   "and a third 400 m ahead. The player plays with a toy at the rock behind it, then at the far "
+	                   "rock, then at the near rock ahead.",
+	    .expected = "The tiger does not copy the deeds behind it and far away. It copies only the deed at the near rock: "
+	                "the log shows \"I saw you\" one time. The Desires panel shows the first source of the desire to "
+	                "play 0.1 higher and the wish to follow the player 0.3 higher after that deed.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content()}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 40.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {0.0f, -400.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {0.0f, -40.0f}}},
+	    .commands = {{.kind = Kind::PlayerDidOn, .creature = 0, .delaySeconds = 2.0f, .value = k_PlayWithToy, .object = 0},
+	                 {.kind = Kind::PlayerDidOn, .creature = 0, .delaySeconds = 4.0f, .value = k_PlayWithToy, .object = 1},
+	                 {.kind = Kind::PlayerDidOn, .creature = 0, .delaySeconds = 4.0f, .value = k_PlayWithToy, .object = 2}},
+	});
+
 	// The creature's happy action, played once as a script asks
 	constexpr uint32_t k_HappyAction = 55;
 	all.push_back({

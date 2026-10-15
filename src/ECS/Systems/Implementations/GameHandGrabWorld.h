@@ -90,6 +90,8 @@ public:
 	uint32_t TakeFromPile(entt::entity pile, uint32_t amount) override;
 	[[nodiscard]] std::optional<FieldFacts> FieldFactsOf(entt::entity field) const override;
 	void TakeFromField(entt::entity field, uint32_t amount) override;
+	void NoteTakenAt(glm::vec3 point) override;
+	void NoteTakenFromOwnerOf(entt::entity thing) override;
 	[[nodiscard]] std::optional<fish_farm::Type> FishFarmOf(entt::entity farm) const override;
 	uint32_t TakeFromFishFarm(entt::entity farm, uint32_t amount) override;
 	void ResizePot(entt::entity pot) override;
@@ -115,7 +117,8 @@ public:
 	void DropDrag(entt::entity object) override;
 
 private:
-	/// The piles and stores what is poured out of a pot goes into, as the miracles' food and wood do
+	/// Where the resource in the local player's hand came from
+	void SetHandTookFrom(PlayerNames from);
 };
 
 } // namespace openblack::ecs::systems

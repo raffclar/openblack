@@ -145,9 +145,14 @@ void Age(std::vector<Context>& contexts, float seconds);
 void SuppressOpposed(creature_desires::Desires& desires, Desire desire, const Dependencies& dependencies, float turnsPerSecond);
 /// Having done an action, the desire it serves is multiplied down, if active
 void AfterAction(creature_desires::Desires& desires, Desire desire, float multiplier);
-/// The desire becomes weaker than every other active desire by a factor, or stronger than every one up to its maximum
-void MakeLeastDominant(creature_desires::Desires& desires, Desire desire, float factor);
+/// The desire becomes the weakest active desire (itself included) divided by a factor, held between the species' floor
+/// and its own maximum. The floor wins when the maximum is below it.
+void MakeLeastDominant(creature_desires::Desires& desires, Desire desire, float factor, float floor);
 void MakeFullyDominant(creature_desires::Desires& desires, Desire desire);
+/// A plan carried out to its end changes the desire it served: the desire to poo and to get attention stop for 60
+/// seconds, to idle with the player and to get warmer or colder for 120 seconds, and tiredness becomes the least
+/// dominant desire. The other desires do not change here.
+void AfterPlanCarriedOut(creature_desires::Desires& desires, Desire desire, float floor, float turnsPerSecond);
 /// The source that has driven a desire most since it was last decided on
 [[nodiscard]] std::optional<size_t> DominantSource(const creature_desires::DesireState& desire);
 /// Source types past this say nothing of why the creature wants something; the first of them stands for no source

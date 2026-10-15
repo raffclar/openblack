@@ -54,6 +54,7 @@
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -894,6 +895,48 @@ std::optional<hand_grab::HandGrabWorldInterface::FieldFacts> GameHandGrabWorld::
 	                   .ripe = data->crop.age >= type.ageRecolt};
 }
 
+void GameHandGrabWorld::NoteTakenAt(glm::vec3 point)
+{
+	auto& registry = Entities();
+	std::vector<influence_rules::PlayerInfluenceAt> players;
+	registry.Each<const Player>([&players, point](entt::entity, const Player& player) {
+		const float influence = Locator::influenceSystem::has_value()
+		                            ? Locator::influenceSystem::value().PlayerInfluence(player.name, point)
+		                            : 0.0f;
+		players.push_back({.player = player.name, .influence = influence});
+	});
+	// The players are asked in the order of their numbers
+	std::ranges::sort(players, {}, &influence_rules::PlayerInfluenceAt::player);
+	SetHandTookFrom(influence_rules::MostInfluentialPlayer(players));
+}
+
+void GameHandGrabWorld::NoteTakenFromOwnerOf(entt::entity thing)
+{
+	auto& registry = Entities();
+	entt::entity town = entt::null;
+	if (const auto* pot = registry.TryGet<const Pot>(thing))
+	{
+		town = pot->town;
+	}
+	else if (const auto* farm = registry.TryGet<const FishFarm>(thing))
+	{
+		town = farm->town;
+	}
+	const auto* owner = registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr;
+	SetHandTookFrom(owner != nullptr ? owner->owner : PlayerNames::NEUTRAL);
+}
+
+void GameHandGrabWorld::SetHandTookFrom(PlayerNames from)
+{
+	const auto hand = HandPlayer();
+	Entities().Each<Player>([hand, from](entt::entity, Player& player) {
+		if (player.name == hand)
+		{
+			player.handTookFrom = from;
+		}
+	});
+}
+
 void GameHandGrabWorld::TakeFromField(entt::entity field, uint32_t amount)
 {
 	if (!Locator::entitiesRegistry::value().AllOf<Field>(field) || !Locator::fieldSystem::has_value())
@@ -1021,10 +1064,18 @@ bool GameHandGrabWorld::StoresResource(entt::entity store, ResourceType resource
 
 uint32_t GameHandGrabWorld::AddToStore(entt::entity store, ResourceType resource, uint32_t amount, bool poisoned)
 {
-	return Locator::resourceStoreSystem::has_value()
-	           ? Locator::resourceStoreSystem::value().AddToStore(store, resource, amount, HandPlayer(), poisoned,
-	                                                              PoseOf(Hand()).origin)
-	           : 0;
+	if (!Locator::resourceStoreSystem::has_value())
+	{
+		return 0;
+	}
+	auto& stores = Locator::resourceStoreSystem::value();
+	const auto added = stores.AddToStore(store, resource, amount, HandPlayer(), poisoned, PoseOf(Hand()).origin);
+	// The player's creature may see the gift again, as the hand gave the whole pot
+	if (added != 0)
+	{
+		stores.ReportGift(store, resource, HandPlayer());
+	}
+	return added;
 }
 
 bool GameHandGrabWorld::TakeIntoStore(entt::entity store, entt::entity object)

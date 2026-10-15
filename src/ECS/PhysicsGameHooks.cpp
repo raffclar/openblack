@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -25,9 +26,11 @@
 #include "3D/MapCoords.h"
 #include "3D/ModelSurface.h"
 #include "Animals/GrazerRules.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureCatch.h"
+#include "Creature/CreatureDeeds.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureMindTables.h"
 #include "ECS/Components/Abode.h"
@@ -66,6 +69,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TempleHeartTowns.h"
+#include "ECS/TownHomes.h"
 #include "Magic/MagicWorldInterface.h"
 #include "Magic/SpellRules.h"
 #include "Physics/Body.h"
@@ -689,6 +693,75 @@ void PhysicsGameHooks::LetGoByHand(entt::entity object, std::optional<PlayerName
 void PhysicsGameHooks::PutDownByHand(entt::entity object, std::optional<PlayerNames> player)
 {
 	villager_disciple::PutDown(object, player);
+}
+
+void PhysicsGameHooks::ConsiderMimickingLanding(entt::entity object, std::optional<PlayerNames> player)
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(object))
+	{
+		return;
+	}
+	// A thing that came to rest after it flew is the deed of the player who dropped it last
+	if (!player.has_value())
+	{
+		player = villager_physics::DropperOf(registry, object, _world->LocalPlayer());
+	}
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (!player.has_value() || transform == nullptr)
+	{
+		return;
+	}
+	const auto here = map_coords::FromMetres(glm::vec2(transform->position.x, transform->position.z));
+	const auto distanceTo = [&registry, &here](entt::entity thing) {
+		const auto& at = registry.Get<const Transform>(thing).position;
+		return gutils::GetDistanceInMetres(map_coords::FromMetres(glm::vec2(at.x, at.z)), here);
+	};
+	creature_deeds::Landing landing {.player = *player};
+	registry.Each<const Temple, const Transform>([&](entt::entity temple, const Temple& owner, const Transform&) {
+		if (owner.owner == *player && distanceTo(temple) < creature_deeds::k_TempleReach)
+		{
+			landing.nearOwnTemple = true;
+		}
+	});
+	// The town of the thing: a villager's, a pot's or a building's
+	entt::entity town = entt::null;
+	if (const auto* villager = registry.TryGet<const Villager>(object))
+	{
+		town = villager->town;
+	}
+	else if (const auto* pot = registry.TryGet<const Pot>(object))
+	{
+		town = pot->town;
+	}
+	else if (registry.AllOf<Abode>(object))
+	{
+		town = ecs::town_homes::TownOfAbode(registry, object);
+	}
+	if (registry.Valid(town) && registry.AllOf<Town>(town))
+	{
+		landing.thingsTown = registry.Get<const Town>(town).owner;
+	}
+	// The nearest town, the first of equals
+	float nearest = std::numeric_limits<float>::max();
+	registry.Each<const Town, const Transform>([&](entt::entity candidate, const Town& owner, const Transform&) {
+		const float distance = distanceTo(candidate);
+		if (distance < nearest)
+		{
+			nearest = distance;
+			landing.nearestTown = owner.owner;
+		}
+	});
+	if (const auto deed = creature_deeds::LandingDeed(landing))
+	{
+		_world->PlayerDid(*deed, transform->position, object, *player);
+	}
+}
+
+void PhysicsGameHooks::ConsiderMimickingToyPlay(entt::entity toy, PlayerNames player)
+{
+	const auto* transform = _world->Entities().TryGet<const Transform>(toy);
+	_world->PlayerDid(creature_deeds::k_PlayWithToy, transform != nullptr ? transform->position : glm::vec3(0.0f), toy, player);
 }
 
 void PhysicsGameHooks::NotPutDownByHand(entt::entity object)

@@ -216,6 +216,10 @@ public:
 	[[nodiscard]] virtual std::optional<FieldFacts> FieldFactsOf(entt::entity field) const = 0;
 	/// Food is taken out of a field by the hand
 	virtual void TakeFromField(entt::entity field, uint32_t amount) = 0;
+	/// The hand took a thing at a point: the player of most influence there is where the hand's resource came from
+	virtual void NoteTakenAt(glm::vec3 /*point*/) {}
+	/// The hand scooped from a pile or a fish farm: the player of its town is where the hand's resource came from
+	virtual void NoteTakenFromOwnerOf(entt::entity /*thing*/) {}
 	/// What a fish farm's table says of its fish, for the hand scooping them
 	[[nodiscard]] virtual std::optional<fish_farm::Type> FishFarmOf(entt::entity farm) const = 0;
 	/// Fish are taken out of a fish farm by the hand: no more than it has. What was taken.

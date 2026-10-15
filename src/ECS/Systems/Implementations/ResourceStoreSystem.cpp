@@ -34,7 +34,9 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Creature/CreatureDeeds.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
@@ -48,6 +50,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourceLastTaken.h"
 #include "ECS/Components/ResourcePile.h"
@@ -65,6 +68,7 @@
 #include "ECS/Registry.h"
 #include "ECS/StoreRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -568,7 +572,7 @@ uint32_t ResourceStoreSystem::AddToStore(entt::entity store, ResourceType type, 
 	{
 		magic::town_belief::Add(impression->belief, *giver, value * townInfo.multiplierForAddingResourceToTown);
 	}
-	// TODO(stores): the giver's creature may copy the giving; openblack's creature has no copying of gifts yet
+	ReportGift(store, type, *giver);
 	return added;
 }
 
@@ -692,6 +696,45 @@ uint32_t ResourceStoreSystem::TakeFromPile(entt::entity pile, ResourceType type,
 	return taken;
 }
 
+void ResourceStoreSystem::ReportGift(entt::entity store, ResourceType type, PlayerNames giver)
+{
+	auto& registry = Entities();
+	if (const auto structure = registry.AllOf<Pot>(store) ? StoreOf(store) : std::nullopt)
+	{
+		store = *structure;
+	}
+	if (!registry.Valid(store) || !Locator::creatureMindSystem::has_value())
+	{
+		return;
+	}
+	auto receiver = creature_deeds::Receiver::Other;
+	if (registry.AllOf<StoragePit>(store))
+	{
+		receiver = creature_deeds::Receiver::StoragePit;
+	}
+	else if (IsWorshipSite(store))
+	{
+		receiver = creature_deeds::Receiver::WorshipSite;
+	}
+	// The gift is of the giver's own resource when the giver's hand last took it where the giver had the most influence
+	bool own = false;
+	registry.Each<const Player>([giver, &own](entt::entity, const Player& player) {
+		if (player.name == giver)
+		{
+			own = player.handTookFrom == giver;
+		}
+	});
+	const auto deed = creature_deeds::GiftDeed(
+	    {.receiver = receiver, .goingUp = ecs::construction::IsBeingBuilt(store), .resource = type, .ownResource = own},
+	    [](uint32_t range) { return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : 0u; });
+	if (deed.has_value())
+	{
+		const auto* transform = registry.TryGet<const Transform>(store);
+		Locator::creatureMindSystem::value().PlayerDid(*deed, transform != nullptr ? transform->position : glm::vec3(0.0f),
+		                                               store, giver);
+	}
+}
+
 bool ResourceStoreSystem::TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver)
 {
 	auto& registry = Entities();
@@ -709,8 +752,12 @@ bool ResourceStoreSystem::TakeObject(entt::entity store, entt::entity object, st
 	const auto* transform = registry.TryGet<const Transform>(object);
 	const auto at = transform != nullptr ? transform->position : glm::vec3(0.0f);
 	const auto added = AddToStore(store, resource.type, resource.amount, giver, resource.poisoned, at);
+	// The giver's creature may see the gift again, as the store took the thing whole
+	if (added != 0 && giver.has_value())
+	{
+		ReportGift(store, resource.type, *giver);
+	}
 	// TODO(stores): the advisor's resource-drop sound for the local player; openblack has no advisor yet
-	static_cast<void>(added);
 	// Wood that isn't a pot mulches as it goes in
 	if (resource.type == ResourceType::Wood && !registry.AllOf<Pot>(object))
 	{

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <array>
 #include <optional>
 #include <string_view>
@@ -35,7 +37,8 @@ class Registry;
 namespace openblack::ecs::components
 {
 struct CreatureMindState;
-}
+struct Transform;
+} // namespace openblack::ecs::components
 namespace openblack::creature_mind_tables
 {
 struct Tables;
@@ -104,4 +107,6 @@ void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::s
 /// standing in its way there (nor anything living, when asked), inside any area it is kept within. None without one.
 [[nodiscard]] std::optional<glm::vec2> ClearAreaFor(const ecs::Registry& registry, entt::entity creature, glm::vec2 point,
                                                     float width, bool livingBlocks);
+/// The way a creature looks, as a game angle: towards what its head is turned to, or else the way its body faces
+[[nodiscard]] uint16_t LookingAngle(const components::Transform& transform, const std::optional<glm::vec3>& lookAt);
 } // namespace openblack::ecs::systems::mind_detail

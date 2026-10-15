@@ -54,6 +54,8 @@ public:
 	/// A store takes a thing whole, for all the resource it is worth, and the thing goes; whether it took it. Thrown by a
 	/// player, the giving is that player's.
 	virtual bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) = 0;
+	/// A player's gift of a resource to a thing, by hand or by a miracle: the player's creature may see a deed to copy
+	virtual void ReportGift(entt::entity /*store*/, ResourceType /*type*/, PlayerNames /*giver*/) {}
 	/// A resource poured at a point goes to the stores and piles of it about the point, each taking what it will; what is
 	/// left makes a new pile of the player's unless the point is in the water. A power-up's food sparkles over its new
 	/// pile. A poisoned pour poisons every pile it goes into or makes. Whether anything was taken or made.

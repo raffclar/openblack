@@ -20,6 +20,7 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindModel.h"
+#include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureTownCompassion.h"
@@ -777,12 +778,68 @@ TEST(CreatureLearning, DecidingSuppressesOpposedDesires)
 TEST(CreatureLearning, DominanceAndActions)
 {
 	auto desires = TwoDesires();
-	creature_learning::MakeLeastDominant(desires, Desire::Hunger, 1.3f);
+	creature_learning::MakeLeastDominant(desires, Desire::Hunger, 1.3f, 0.0f);
 	EXPECT_NEAR(desires[Desire::Hunger].value, 0.2f / 1.3f, 1e-6f);
 	creature_learning::MakeFullyDominant(desires, Desire::Hunger);
 	EXPECT_FLOAT_EQ(desires[Desire::Hunger].value, 2.0f);
 	creature_learning::AfterAction(desires, Desire::Hunger, 0.3f);
 	EXPECT_FLOAT_EQ(desires[Desire::Hunger].value, 0.6f);
+}
+
+TEST(CreatureLearning, LeastDominantCountsItselfAndHoldsBetweenFloorAndMaximum)
+{
+	auto desires = TwoDesires();
+	// The weakest active desire is the desire itself
+	desires[Desire::Hunger].value = 0.1f;
+	creature_learning::MakeLeastDominant(desires, Desire::Hunger, 2.0f, 0.0f);
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].value, 0.05f);
+	// The species' floor holds it up
+	desires[Desire::Hunger].value = 0.1f;
+	creature_learning::MakeLeastDominant(desires, Desire::Hunger, 2.0f, 0.08f);
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].value, 0.08f);
+	// Its maximum holds it down
+	desires[Desire::Hunger].value = 1.8f;
+	desires[Desire::Anger].value = 1.5f;
+	desires[Desire::Hunger].max = 0.4f;
+	creature_learning::MakeLeastDominant(desires, Desire::Hunger, 1.0f, 0.0f);
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].value, 0.4f);
+	// The floor wins over a maximum below it
+	creature_learning::MakeLeastDominant(desires, Desire::Hunger, 1.0f, 0.6f);
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].value, 0.6f);
+}
+
+TEST(CreatureLearning, LeastDominantWithNoneBelowTwoReadsTheFirstDesire)
+{
+	creature_desires::Desires desires;
+	for (auto& desire : desires.desires)
+	{
+		desire.activated = false;
+		desire.max = 4.0f;
+	}
+	desires[Desire::Impress].value = 0.9f;
+	auto& hunger = desires[Desire::Hunger];
+	hunger.activated = true;
+	hunger.value = 3.0f;
+	creature_learning::MakeLeastDominant(desires, Desire::Hunger, 1.5f, 0.0f);
+	EXPECT_FLOAT_EQ(hunger.value, 0.6f);
+}
+
+TEST(CreatureLearning, ACarriedOutPlanStopsSomeDesiresAndMakesTirednessLeast)
+{
+	auto desires = TwoDesires();
+	auto& tiredness = desires[Desire::Tiredness];
+	tiredness.activated = true;
+	tiredness.value = 0.9f;
+	tiredness.max = 1.0f;
+	creature_learning::AfterPlanCarriedOut(desires, Desire::Tiredness, 0.0f, 10.0f);
+	EXPECT_NEAR(tiredness.value, 0.2f / creature_learning::k_LeastDominantFactor, 1e-6f);
+	creature_learning::AfterPlanCarriedOut(desires, Desire::AttractAttention, 0.0f, 10.0f);
+	EXPECT_EQ(desires[Desire::AttractAttention].suppressedTurns, 600u);
+	creature_learning::AfterPlanCarriedOut(desires, Desire::GetColder, 0.0f, 10.0f);
+	EXPECT_EQ(desires[Desire::GetColder].suppressedTurns, 1200u);
+	creature_learning::AfterPlanCarriedOut(desires, Desire::Hunger, 0.0f, 10.0f);
+	EXPECT_EQ(desires[Desire::Hunger].suppressedTurns, 0u);
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].value, 0.5f);
 }
 
 TEST(CreatureLearning, DominantSourceFollowsDrive)
@@ -1059,6 +1116,24 @@ TEST(CreatureWatching, MimicChanceIsARankNotARoll)
 	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 2, rules, grown, std::nullopt, 0, noExtra));
 	EXPECT_EQ(mimicry->rule, 2u);
 	EXPECT_EQ(mimicry->stage, creature_watching::MimicStage::Notice);
+}
+
+TEST(CreatureWatching, CopyingNeedsAFreeMindAndADeedWithinReach)
+{
+	const std::vector<creature_watching::MimicRule> rules {
+	    {.name = "Deed", .chance = 0.5f, .needsLearningLeash = false, .stageSteps = 1},
+	};
+	std::optional<creature_watching::Mimicry> mimicry;
+	const auto noExtra = [](uint32_t) { return 0u; };
+	// A reaction of priority 150 or more keeps it from copying
+	EXPECT_FALSE(
+	    creature_watching::StartMimicry(mimicry, 0, rules, {.phase = 3, .reactionPriority = 150.0f}, std::nullopt, 0, noExtra));
+	EXPECT_TRUE(
+	    creature_watching::StartMimicry(mimicry, 0, rules, {.phase = 3, .reactionPriority = 149.0f}, std::nullopt, 0, noExtra));
+	// The reach is the count of cells the eyes sweep, taken as metres: 225 cells for a creature of size 1
+	EXPECT_EQ(creature_object_beliefs::SweepCells(1.0f), 225u);
+	EXPECT_TRUE(creature_watching::WithinCopyReach(224.9f, 225u));
+	EXPECT_FALSE(creature_watching::WithinCopyReach(225.0f, 225u));
 }
 
 TEST(CreatureWatching, ThingsAreCopiedOnByTheirKind)
