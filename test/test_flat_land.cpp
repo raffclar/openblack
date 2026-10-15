@@ -156,6 +156,8 @@ TEST(FlatLand, ShallowsRingTheOpenWaterAtSeaLevel)
 	EXPECT_EQ(flat_land::KindOf(flat_land::k_LakeMinX - 3, flat_land::k_LakeMinZ + 5), flat_land::CellKind::Shore);
 	EXPECT_EQ(shore.properties.hasWater, 0);
 	EXPECT_EQ(shore.flags, flat_land::k_CoastalSoundFlags);
+	EXPECT_EQ(shore.properties.coastLine, 1);
+	EXPECT_EQ(flat_land::CellAt(flat_land::k_LakeMinX - 4, flat_land::k_LakeMinZ + 5).properties.coastLine, 0);
 	EXPECT_EQ(flat_land::KindOf(flat_land::k_LakeMinX - 4, flat_land::k_LakeMinZ + 5), flat_land::CellKind::Land);
 	EXPECT_EQ(flat_land::Altitude(flat_land::k_LakeMinX - flat_land::k_ShoreCells, flat_land::k_LakeMinZ),
 	          flat_land::k_Altitude);

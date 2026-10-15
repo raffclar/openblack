@@ -339,6 +339,8 @@ enum class Build : uint8_t
 	LookAtMountains,
 	LookOutToSea,
 	ThrowInTheSea,
+	/// The creature goes to the nearest coast, turns to the nearest sea and dances alone there
+	DanceByTheSea,
 	/// The odd actions: showing a lesson that it learnt, looking confused, behaving strangely
 	ShowLearntLesson,
 	LookConfused,

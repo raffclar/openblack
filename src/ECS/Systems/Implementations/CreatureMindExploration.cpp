@@ -63,6 +63,8 @@ void CreatureMindSystem::SituateExploration(entt::entity creature, const creatur
 		situation.exploreSea = situation.explorePlace.has_value() ? nearest(Kind::Sea, *situation.explorePlace) : std::nullopt;
 		break;
 	case Build::ThrowInTheSea:
+	case Build::DanceByTheSea:
+		// The coast and the sea that are nearest to the creature
 		situation.explorePlace = nearest(Kind::Coast, from).value_or(k_Corner);
 		situation.exploreSea = nearest(Kind::Sea, from).value_or(k_Corner);
 		break;
