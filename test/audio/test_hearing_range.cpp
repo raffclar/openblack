@@ -45,3 +45,13 @@ TEST(HearingRange, AnimEffectHasNoFallback)
 	EXPECT_TRUE(IsWithinStartRange(0.0f, AnimEffectStartRange(0.0f)));
 	EXPECT_FALSE(IsWithinStartRange(1.0f, AnimEffectStartRange(0.0f)));
 }
+
+TEST(HearingRange, PlayingSoundStopsAtItsVoiceMaximumDistance)
+{
+	// The vortex's hum: a voice maximum of 400 m
+	EXPECT_TRUE(IsWithinPlayRange(399.9f, 400.0f));
+	EXPECT_FALSE(IsWithinPlayRange(400.0f, 400.0f));
+	EXPECT_FALSE(IsWithinPlayRange(1200.0f, 400.0f));
+	// A voice that keeps the default maximum plays on from far away
+	EXPECT_TRUE(IsWithinPlayRange(1200.0f, k_VoiceDefault));
+}

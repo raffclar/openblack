@@ -33,4 +33,11 @@ namespace openblack::audio
 	return distance <= range;
 }
 
+/// Whether a placed sound that plays and is attached to a thing plays on this turn. The game stops it when the camera
+/// is at or beyond the maximum distance of its voice.
+[[nodiscard]] constexpr bool IsWithinPlayRange(float distance, float voiceMaxDistance)
+{
+	return distance < voiceMaxDistance;
+}
+
 } // namespace openblack::audio

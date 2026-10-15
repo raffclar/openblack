@@ -196,6 +196,26 @@ void AudioManager::Update()
 	}
 }
 
+void AudioManager::StopOutOfRangeEmitters()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> outOfRange;
+	registry.Each<const AudioEmitter>([&outOfRange](entt::entity entity, const AudioEmitter& emitter) {
+		if (emitter.spatial && emitter.owner != entt::null && emitter.state != AudioStatus::Stopped &&
+		    !IsWithinPlayRange(ListenerDistance(emitter.position), emitter.maxDistance))
+		{
+			outOfRange.push_back(entity);
+		}
+	});
+	for (const auto entity : outOfRange)
+	{
+		[[maybe_unused]] const auto& emitter = registry.Get<const AudioEmitter>(entity);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stops: {}", DescribeEmitter(entity, emitter),
+		                    TooFar(emitter.position, emitter.maxDistance));
+		DestroyEmitter(entity);
+	}
+}
+
 BufferId AudioManager::CreateBuffer(ChannelLayout layout, const std::vector<int16_t>& buffer, int sampleRate)
 {
 	return _audioPlayer->CreateBuffer(layout, buffer, sampleRate);

@@ -99,6 +99,9 @@ public:
 	[[nodiscard]] virtual bool IsInstalled() const = 0;
 	virtual void Stop() = 0;
 	virtual void Update() = 0;
+	/// The game's audio turn: a placed sound attached to a thing stops when the camera is at or beyond the maximum
+	/// distance of its voice
+	virtual void StopOutOfRangeEmitters() = 0;
 	virtual BufferId CreateBuffer(ChannelLayout layout, const std::vector<int16_t>& buffer, int sampleRate) = 0;
 	virtual void CreateBuffer(Sound& sound) = 0;
 	virtual void PlayEmitter(entt::entity emitter) = 0;

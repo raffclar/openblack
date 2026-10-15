@@ -92,6 +92,7 @@ public:
 	[[nodiscard]] float GetMusicVolume() override { return _musicVolume; }
 	void Stop() override;
 	void Update() override;
+	void StopOutOfRangeEmitters() override;
 	[[nodiscard]] Listener GetListener() const override { return _listenerOverride.value_or(CameraListener()); }
 	void SetListenerOverride(std::optional<Listener> listener) override { _listenerOverride = listener; }
 	void CreateSoundGroup(const std::string& name) override;
