@@ -609,6 +609,10 @@ Renderer::~Renderer() noexcept
 	{
 		bgfx::destroy(toBgfx(*_warmUpInstances));
 	}
+	if (_interfaceCreatureInstances.has_value())
+	{
+		bgfx::destroy(toBgfx(*_interfaceCreatureInstances));
+	}
 	for (auto& query : _glareQueries)
 	{
 		if (bgfx::isValid(query))
@@ -6261,6 +6265,29 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					DrawCreatureHair(desc, *hair, transform->position);
 				}
+			}
+			// The creatures that the interface shows over itself, each moved for its draw to its place before the
+			// interface's own camera, in a view of their own
+			if (desc.viewId == RenderPass::Main && _interfaceCreatures.has_value())
+			{
+				DrawInterfaceCreatures(desc, [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
+				                                 const L3DMeshSubmitDesc::MorphTargets* targets,
+				                                 const ecs::components::CreatureEyes* eyes) {
+					const auto placers = renderCtx.instancedDrawDescs.find(meshId);
+					if (placers == renderCtx.instancedDrawDescs.end())
+					{
+						return;
+					}
+					const EntityPose pose {.bones = bones, .morphTargets = targets};
+					submitDesc.viewId = RenderPass::InterfaceCreatures;
+					drawInstances(meshId, placers->second, placers->second.materialBlending, instance, 1, &pose, nullptr,
+					              _interfaceCreatureInstances);
+					if (eyes != nullptr)
+					{
+						DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
+					}
+					submitDesc.viewId = desc.viewId;
+				});
 			}
 			// A warm-up draws a body of each species that is loaded, with its eyes and hair, as the first frame of a creature
 			// draws them. They are drawn at no size, and cover no pixel.

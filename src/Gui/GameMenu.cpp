@@ -18,6 +18,7 @@
 #include <SDL_keycode.h>
 
 #include "GameFont.h"
+#include "StatisticsBox.h"
 #include "TextDatabase.h"
 
 using namespace openblack::gui;
@@ -265,6 +266,8 @@ GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16stri
 	BuildPlayers(texts);
 	BuildAdvanced(texts);
 	BuildControls(texts);
+	// The Game Statistics box's first tab and its Back arrow return to the main menu
+	_statistics = std::make_unique<StatisticsBox>(texts, font, [this] { ShowPage(Page::Main); });
 }
 
 GameMenu::~GameMenu() = default;
@@ -300,8 +303,7 @@ void GameMenu::BuildMain(const TextDatabase& texts)
 	// The main menu's tabs: the third, Multiplayer, only has a label in a multiplayer game
 	std::vector<Dialog::Tab> tabs {
 	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_ADDITION_88")), .onSelect = {}},
-	    // TODO(raffclar): the statistics page
-	    {.label = std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_151")), .onSelect = [this] { Settle(Action::Statistics); }},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_151")), .onSelect = [this] { OpenStatistics(); }},
 	};
 	auto& page = *(_pages[static_cast<size_t>(Page::Main)] = std::make_unique<Dialog>(std::move(tabs), 0));
 
@@ -803,6 +805,19 @@ void GameMenu::Settle(Action action)
 	_answered = _question.has_value();
 }
 
+Dialog& GameMenu::CurrentDialog() const
+{
+	return _page == Page::Statistics ? _statistics->GetDialog() : *_pages.at(static_cast<size_t>(_page));
+}
+
+void GameMenu::OpenStatistics()
+{
+	auto [figures, local] =
+	    _statisticsSource ? _statisticsSource() : std::pair<statistics::BoxFigures, PlayerNames> {{}, PlayerNames::PLAYER_ONE};
+	_statistics->Open(std::move(figures), local, false);
+	ShowPage(Page::Statistics);
+}
+
 void GameMenu::ShowPage(Page page)
 {
 	CurrentDialog().Reset();
@@ -878,6 +893,7 @@ void GameMenu::Close()
 void GameMenu::Update(float deltaSeconds)
 {
 	_fade.Update(deltaSeconds);
+	_statistics->Update(deltaSeconds);
 	if (_question)
 	{
 		_question->fade.Update(deltaSeconds);

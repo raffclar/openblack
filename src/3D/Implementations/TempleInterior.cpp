@@ -256,6 +256,18 @@ TempleScrolls::Facts GatherScrollFacts()
 	{
 		const auto snapshot = Locator::creatureCaveSystem::value().Snapshot();
 		facts.creature = snapshot.has_value() ? std::optional(creature_cave::FactsOf(*snapshot)) : std::nullopt;
+		// What the creature counts of its life: the people, animals and creatures it killed, its fights and the fights it
+		// won, its poos and the mushrooms it ate
+		if (facts.creature.has_value())
+		{
+			const auto tallies = player_statistics::CreatureTalliesOf(local);
+			facts.creature->tallies = {
+			    static_cast<int32_t>(tallies.peopleKilled),    static_cast<int32_t>(tallies.animalsKilled),
+			    static_cast<int32_t>(tallies.creaturesKilled), static_cast<int32_t>(tallies.battlesFought),
+			    static_cast<int32_t>(tallies.battlesWon),      static_cast<int32_t>(tallies.poos),
+			    static_cast<int32_t>(tallies.mushroomsEaten),
+			};
+		}
 	}
 	return facts;
 }

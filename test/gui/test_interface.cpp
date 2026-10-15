@@ -20,6 +20,7 @@
 
 #include <Gui/GameFont.h>
 #include <Gui/GameMenu.h>
+#include <Gui/StatisticsBox.h>
 #include <Gui/TextDatabase.h>
 #include <SDL_keycode.h>
 #include <gtest/gtest.h>
@@ -353,13 +354,50 @@ TEST(GameMenu, FadesInAndOut)
 	EXPECT_FALSE(menu.IsVisible());
 }
 
+TEST(StatisticsBoxLayout, ABoxWithTabsIsFortyDeeperBelowTheMiddle)
+{
+	// 780 by 500: from 250 above the middle of the dialog space to 290 below it
+	EXPECT_EQ(TabbedBox({780, 500}).min, glm::ivec2(10, 50));
+	EXPECT_EQ(TabbedBox({780, 500}).max, glm::ivec2(790, 590));
+	EXPECT_EQ(StatisticsBox::k_Box.min, Dialog::k_Box.min);
+	EXPECT_EQ(StatisticsBox::k_Box.max, Dialog::k_Box.max);
+}
+
+TEST(StatisticsBoxLayout, EveryControlIsInsideTheBoxAndTheTabsOnItsTop)
+{
+	MenuFixture f;
+	f.menu.OpenStatistics();
+	ASSERT_EQ(f.menu.GetPage(), Page::Statistics);
+	const auto box = StatisticsBox::k_Box;
+	const auto controls = f.menu.GetNamedControls();
+	ASSERT_FALSE(controls.empty());
+	for (const auto& control : controls)
+	{
+		if (control.kind == "tab")
+		{
+			EXPECT_EQ(control.rect.max.y, box.min.y);
+			EXPECT_GE(control.rect.min.x, box.min.x);
+			EXPECT_LE(control.rect.max.x, box.max.x);
+			continue;
+		}
+		EXPECT_GE(control.rect.min.x, box.min.x) << control.kind;
+		EXPECT_GE(control.rect.min.y, box.min.y) << control.kind;
+		EXPECT_LE(control.rect.max.x, box.max.x) << control.kind;
+		EXPECT_LE(control.rect.max.y, box.max.y) << control.kind;
+	}
+}
+
 TEST(GameMenu, ButtonsActWhenLetGoOverTheOneTheyWentDownOn)
 {
 	MenuFixture f;
 	EXPECT_EQ(Click(f.menu, ButtonCentre(0)), Action::Continue);
 	EXPECT_EQ(Click(f.menu, ButtonCentre(1)), Action::StartSkirmish);
 	EXPECT_EQ(Click(f.menu, ButtonCentre(2)), Action::JoinOnline);
-	EXPECT_EQ(Click(f.menu, TabCentre(1)), Action::Statistics);
+	// The Statistics tab opens the Game Statistics box over the menu, and its first tab returns to the menu
+	EXPECT_EQ(Click(f.menu, TabCentre(1)), Action::None);
+	EXPECT_EQ(f.menu.GetPage(), Page::Statistics);
+	EXPECT_EQ(Click(f.menu, {75, 30}), Action::None);
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
 	// Tabs without a label take no clicks
 	EXPECT_EQ(Click(f.menu, TabCentre(3)), Action::None);
 	// Between the buttons

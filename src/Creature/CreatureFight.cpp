@@ -17,6 +17,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Help/HelpProfile.h"
+
 using namespace openblack;
 using namespace openblack::creature_fight;
 
@@ -1078,4 +1080,28 @@ std::string_view creature_fight::Name(RecoilDirection direction)
 {
 	static constexpr std::array<std::string_view, 5> k_Names {"plain", "right", "left", "top", "bottom"};
 	return NameIn(k_Names, direction);
+}
+
+uint32_t creature_fight::HelpEventOf(Move::Kind kind)
+{
+	switch (kind)
+	{
+	case Move::Kind::Block:
+		return help::profile::k_FightBlock;
+	case Move::Kind::Spell:
+		return help::profile::k_FightCast;
+	case Move::Kind::Animation:
+		return help::profile::k_FightStep;
+	case Move::Kind::High:
+	case Move::Kind::Mid:
+	case Move::Kind::Low:
+	case Move::Kind::Special:
+		break;
+	}
+	return help::profile::k_FightAttack;
+}
+
+bool creature_fight::CountsHelpEvent(State state, bool inRange, bool queued)
+{
+	return state == State::Stance && inRange && queued;
 }

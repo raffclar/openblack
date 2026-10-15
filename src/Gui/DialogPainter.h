@@ -132,7 +132,8 @@ public:
 	void DrawBackground(const DialogRect& rect, glm::vec3 tint, bool opaque, uint8_t edges) const;
 	/// A tab button with its label: a tab on top of a dialog, open onto it when selected, or
 	/// just the line along the bottom of a tab without a label
-	void DrawTab(const DialogRect& rect, std::u16string_view label, bool selected, bool first, bool last, bool hovered) const;
+	void DrawTab(const DialogRect& rect, std::u16string_view label, bool selected, bool first, bool last, bool hovered,
+	             int textSize = k_MidTextSize) const;
 	/// A big arrow button: an arrow size pixels square with its shadow, orange when hovered and nearer its shadow
 	/// when pressed
 	void DrawArrow(glm::ivec2 position, int size, Arrow arrow, bool hovered, bool pressed) const;

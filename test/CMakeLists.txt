@@ -1008,3 +1008,8 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_odd_agendas test_creature_odd_agendas.cpp
 )
+openblack_setup_and_add_test(test_statistics_box test_statistics_box.cpp)
+openblack_setup_and_add_test(
+  test_creature_stats_records test_creature_stats_records.cpp
+)
+target_link_libraries(test_creature_stats_records PRIVATE helpstats)

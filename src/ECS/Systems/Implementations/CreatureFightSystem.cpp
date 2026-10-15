@@ -89,6 +89,7 @@
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -2335,6 +2336,12 @@ void CreatureFightSystem::CheckQueue(entt::entity creature)
 	auto& fighter = fighting.fighter;
 	const auto front = fighter.queue.Front();
 	const bool inRange = fight::WithinRange(fighting.arena, opponentAt);
+	// The help record counts the moves of the player's creature
+	if (fight::CountsHelpEvent(fighter.state, inRange, front.has_value()) &&
+	    registry.Get<const Creature>(creature).owner == k_LocalPlayer && Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(fight::HelpEventOf(front->move.kind));
+	}
 	const auto order = fight::TakeOrder(fighter, inRange);
 	if (!order.has_value())
 	{

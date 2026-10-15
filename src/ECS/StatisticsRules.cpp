@@ -273,4 +273,82 @@ WorldFigures World(const WorldInputs& inputs)
 	return figures;
 }
 
+void FrameRateMeter::Frame(uint32_t milliseconds, uint32_t frames)
+{
+	if (!_started)
+	{
+		_started = true;
+		_since = milliseconds;
+	}
+	const auto elapsed = milliseconds - _since;
+	if (elapsed < k_LeastMilliseconds)
+	{
+		return;
+	}
+	// The frames are first noted once the first three seconds have gone, so the first rate comes later
+	if (!_framesNoted)
+	{
+		_framesNoted = true;
+		_framesSince = frames;
+	}
+	const auto drawn = frames - _framesSince;
+	if (drawn < k_LeastFrames)
+	{
+		return;
+	}
+	const auto rate = static_cast<int32_t>((static_cast<int64_t>(drawn) * 1000) / static_cast<int64_t>(elapsed));
+	if (rate < k_LeastRate)
+	{
+		return;
+	}
+	_rate = rate;
+	_since = milliseconds;
+	_framesSince = frames;
+}
+
+uint32_t LinesOfCodeStep(uint32_t townsAtStart, const LocalRandom& random)
+{
+	constexpr double k_LinesPerTown = 10130.0;
+	constexpr double k_RandomShare = 0.2;
+	const double lines = static_cast<double>(townsAtStart) * k_LinesPerTown;
+	const auto extra = random(static_cast<int32_t>(static_cast<int64_t>(lines * k_RandomShare)));
+	// Cut towards nothing, and kept to the low 32 bits as the game adds it
+	return static_cast<uint32_t>(static_cast<int64_t>(static_cast<double>(extra) + lines));
+}
+
+void StepGlobalFigures(GlobalFigures& figures, int32_t frameRate, const LocalRandom& random)
+{
+	figures.linesOfCode += LinesOfCodeStep(figures.townsAtStart, random);
+	const auto rate = static_cast<float>(frameRate);
+	if (rate > figures.maxFrameRate)
+	{
+		figures.maxFrameRate = rate;
+	}
+	else if (rate < figures.minFrameRate)
+	{
+		figures.minFrameRate = rate;
+	}
+}
+
+HelpFigures HelpFiguresFrom(const std::function<uint32_t(HelpEvent)>& count)
+{
+	constexpr float k_DraggedPerCount = 3.0f;
+	constexpr float k_ZoomsPerCount = 9.0f;
+	return {
+	    .distanceDragged = static_cast<uint32_t>(static_cast<float>(count(HelpEvent::Dragging)) * k_DraggedPerCount),
+	    .timeLookingAtSky = count(HelpEvent::LookingAtSky),
+	    .timeLookingAtGround = count(HelpEvent::LookingAtGround),
+	    .gestures = count(HelpEvent::Gestures),
+	    .zooms = static_cast<uint32_t>(static_cast<float>(count(HelpEvent::Zooms)) * k_ZoomsPerCount),
+	    .rotations = count(HelpEvent::Rotations),
+	    .pitches = count(HelpEvent::Pitches),
+	    .interfaceActions = count(HelpEvent::InterfaceActions),
+	    .thrown = count(HelpEvent::Thrown),
+	    .pickedUp = count(HelpEvent::PickedUp),
+	    .fightAttacks = count(HelpEvent::FightAttacks),
+	    .fightBlocks = count(HelpEvent::FightBlocks),
+	    .fightSteps = count(HelpEvent::FightSteps),
+	};
+}
+
 } // namespace openblack::statistics

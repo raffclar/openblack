@@ -13,9 +13,11 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include "Enums.h"
 
@@ -206,5 +208,190 @@ struct WorldInputs
 	uint32_t sacrifices {0};
 };
 [[nodiscard]] WorldFigures World(const WorldInputs& inputs);
+
+/// The game's own frame rate for its statistics: the frames drawn over at least three seconds. It is measured again only
+/// once at least four frames have been drawn in that time and the rate is five or more; until then the time continues.
+class FrameRateMeter
+{
+public:
+	static constexpr uint32_t k_LeastMilliseconds = 3000;
+	static constexpr uint32_t k_LeastFrames = 4;
+	static constexpr int32_t k_LeastRate = 5;
+
+	/// A frame is drawn: the clock in milliseconds and the frames drawn so far
+	void Frame(uint32_t milliseconds, uint32_t frames);
+	[[nodiscard]] int32_t Rate() const noexcept { return _rate; }
+
+private:
+	int32_t _rate {k_LeastRate};
+	bool _started {false};
+	bool _framesNoted {false};
+	uint32_t _since {0};
+	uint32_t _framesSince {0};
+};
+
+/// The figures the game keeps once for everyone: an invented count of lines of code run, the most and fewest frames a
+/// second and the towns the land started with. A new land starts them again.
+struct GlobalFigures
+{
+	uint32_t linesOfCode {0};
+	float maxFrameRate {0.0f};
+	/// Starts at nothing and is tested only when no new highest is set, so it stays at nothing
+	float minFrameRate {0.0f};
+	/// The towns on the land as it started, and whether they have been counted
+	uint32_t townsAtStart {0};
+	bool townsCounted {false};
+};
+/// Every this many game turns the global figures change
+inline constexpr uint32_t k_GlobalFiguresEvery = 10;
+/// A random number below a bound, from the game's local random numbers
+using LocalRandom = std::function<uint32_t(int32_t)>;
+/// The invented lines of code a step adds: the towns at the start times 10,130, and a random part of a fifth of that
+/// again
+[[nodiscard]] uint32_t LinesOfCodeStep(uint32_t townsAtStart, const LocalRandom& random);
+/// The global figures change: more lines of code, and the frame rate checked for its highest and lowest
+void StepGlobalFigures(GlobalFigures& figures, int32_t frameRate, const LocalRandom& random);
+
+/// The help record's events that the Tech Stats figures count
+enum class HelpEvent : uint32_t
+{
+	PickedUp = 2,
+	Thrown = 4,
+	Gestures = 24,
+	Rotations = 25,
+	Pitches = 28,
+	Zooms = 29,
+	Dragging = 33,
+	FightBlocks = 36,
+	FightAttacks = 37,
+	FightSteps = 39,
+	InterfaceActions = 43,
+	LookingAtGround = 44,
+	LookingAtSky = 46,
+};
+/// The Tech Stats figures from the player's help record: the game turns each kind of event happened on
+struct HelpFigures
+{
+	uint32_t distanceDragged {0};
+	uint32_t timeLookingAtSky {0};
+	uint32_t timeLookingAtGround {0};
+	uint32_t gestures {0};
+	uint32_t zooms {0};
+	uint32_t rotations {0};
+	uint32_t pitches {0};
+	uint32_t interfaceActions {0};
+	uint32_t thrown {0};
+	uint32_t pickedUp {0};
+	uint32_t fightAttacks {0};
+	uint32_t fightBlocks {0};
+	uint32_t fightSteps {0};
+};
+/// The figures from the help record's count of each event. The distance dragged is its count times 3, the zooms their
+/// count times 9.
+[[nodiscard]] HelpFigures HelpFiguresFrom(const std::function<uint32_t(HelpEvent)>& count);
+
+/// The number of figures the game says it keeps
+inline constexpr uint32_t k_StatisticsCount = 113;
+
+/// What a creature counts of its life for its player's statistics
+struct CreatureTallies
+{
+	uint32_t peopleKilled {0};
+	uint32_t animalsKilled {0};
+	uint32_t creaturesKilled {0};
+	uint32_t battlesFought {0};
+	uint32_t battlesWon {0};
+	uint32_t poos {0};
+	uint32_t mushroomsEaten {0};
+};
+
+/// One player's figures in the Game Statistics box, taken as the box opens
+struct PlayerFigures
+{
+	PlayerNames player {PlayerNames::PLAYER_ONE};
+
+	float influence {0.0f};
+	uint32_t godsDefeated {0};
+	float alignmentChange {0.0f};
+	uint32_t peopleKilled {0};
+	/// The belief in the player summed over every town, times 1000, now and at its most and least
+	float belief {0.0f};
+	float maxBelief {0.0f};
+	float minBelief {0.0f};
+	uint32_t artefacts {0};
+	float creatureGrowth {0.0f};
+	float creatureAlignmentChange {0.0f};
+	uint32_t buildingsDestroyed {0};
+
+	/// The creature's damage, hunger and tiredness, each out of 100
+	float creatureDamage {0.0f};
+	float creatureHunger {0.0f};
+	float creatureTiredness {0.0f};
+	uint32_t creatureAge {0};
+	float creatureAlignment {0.0f};
+	CreatureTallies creature;
+
+	uint32_t births {0};
+	uint32_t deaths {0};
+	uint32_t population {0};
+	uint32_t men {0};
+	uint32_t women {0};
+	uint32_t capacity {0};
+	Extremes<uint32_t> populationExtremes;
+	Extremes<uint32_t> menExtremes;
+	Extremes<uint32_t> womenExtremes;
+	uint32_t converted {0};
+	float satisfaction {0.0f};
+	uint32_t towns {0};
+	uint32_t totalBuildings {0};
+	uint32_t abodes {0};
+	uint32_t civic {0};
+	uint32_t wonders {0};
+	BuildingsBuilt built;
+	DisciplesMade disciplesMade {};
+	uint32_t foodUsed {0};
+	uint32_t woodUsed {0};
+
+	std::array<uint32_t, 42> castsOfType {};
+	float chantsUsed {0.0f};
+	uint32_t sacrifices {0};
+
+	/// The finished points of the player's influence and population histories, oldest first
+	std::vector<float> influenceHistory;
+	std::vector<float> populationHistory;
+};
+
+/// The figures the game keeps once, for the Tech Stats tab
+struct TechFigures
+{
+	uint32_t linesOfCode {0};
+	float maxFrameRate {0.0f};
+	float minFrameRate {0.0f};
+	uint32_t objectsCreated {0};
+	/// Game turns over 10
+	uint32_t timePlayed {0};
+	uint32_t scriptInstructions {0};
+	uint32_t statisticsCount {k_StatisticsCount};
+	HelpFigures help;
+};
+
+/// Everything the Game Statistics box shows, taken as it opens
+struct BoxFigures
+{
+	/// The first four human and computer players, in player order
+	std::vector<PlayerFigures> players;
+	/// The human and computer players among the first four places
+	uint32_t playersInGame {0};
+	/// The land, which gives some players another colour
+	int32_t landNumber {0};
+	TechFigures tech;
+};
+/// At most this many players are shown
+inline constexpr size_t k_BoxPlayers = 4;
+/// The game time played that the box shows: game turns over 10
+[[nodiscard]] constexpr uint32_t TimePlayed(uint32_t turn)
+{
+	return turn / 10;
+}
 
 } // namespace openblack::statistics
