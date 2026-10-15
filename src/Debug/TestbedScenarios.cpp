@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 
+#include <fmt/core.h>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
@@ -162,6 +163,8 @@ void TestbedScenarios::RunRequested() noexcept
 			ids += fmt::format(" {}", each.id);
 		}
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "No testbed scenario {}; there are:{}", request->id, ids);
+		// The log file is easy to miss when a run ends at once, so the console is told too
+		fmt::print(stderr, "No testbed scenario {}; there are:{}\n", request->id, ids);
 		game->RequestQuit();
 		return;
 	}
