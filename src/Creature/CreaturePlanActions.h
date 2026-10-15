@@ -603,4 +603,8 @@ struct CastInfo
                                                                      const creature_mind::Random& random,
                                                                      const std::optional<CastInfo>& cast = std::nullopt);
 
+/// Whether a creature can poo by a thing. The thing must not be alive and must not be a field or a fish farm. It must
+/// also be taller than k_PooedOnTallerThan.
+[[nodiscard]] bool CanPooBy(bool alive, bool fieldOrFishFarm, float height);
+
 } // namespace openblack::creature_plan_actions

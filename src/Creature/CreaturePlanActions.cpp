@@ -1383,3 +1383,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	}
 	return std::nullopt;
 }
+
+bool creature_plan_actions::CanPooBy(bool alive, bool fieldOrFishFarm, float height)
+{
+	return !alive && !fieldOrFishFarm && height > k_PooedOnTallerThan;
+}
