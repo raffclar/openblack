@@ -855,3 +855,15 @@ TEST(CreatureActionAgendas, DrinkingIsAlwaysPossibleButNeedsAPlaceToBeMade)
 	ASSERT_TRUE(agenda.has_value());
 	EXPECT_EQ(agenda->size(), 2);
 }
+
+TEST(CreatureActionAgendas, ItPoosOnlyByATallThingThatIsNotAliveNorAFieldOrFishFarm)
+{
+	// A tree or a building taller than 1.5 m
+	EXPECT_TRUE(plan_actions::CanPooBy(false, false, 6.0f));
+	// Exactly 1.5 m is not tall enough
+	EXPECT_FALSE(plan_actions::CanPooBy(false, false, plan_actions::k_PooedOnTallerThan));
+	EXPECT_TRUE(plan_actions::CanPooBy(false, false, plan_actions::k_PooedOnTallerThan + 0.01f));
+	// Never by a living thing, a field or a fish farm, however tall
+	EXPECT_FALSE(plan_actions::CanPooBy(true, false, 6.0f));
+	EXPECT_FALSE(plan_actions::CanPooBy(false, true, 6.0f));
+}
