@@ -261,6 +261,8 @@ public:
 	}
 	/// Whether the creature has played what it was doing, as scripts ask: its agenda is over or it is only idle
 	[[nodiscard]] virtual bool HasPlayed(entt::entity /*creature*/) const { return true; }
+	/// A script asked and the creature has played: it stops the remaining steps of its agenda
+	virtual void ClearAfterPlayed(entt::entity /*creature*/) {}
 
 	/// How strongly the player last rewarded or punished the creature, and setting it back to 0
 	[[nodiscard]] virtual float GetInteractionMagnitude(entt::entity /*creature*/) const { return 0.0f; }
