@@ -3995,16 +3995,18 @@ void AddLeash(std::vector<Scenario>& all)
 	    .id = "mind.step_looks_reflection",
 	    .name = "Looks at its reflection with the faces of each step",
 	    .facet = Facet::Mind,
-	    .description = "A tiger that is not thirsty, on the learning leash, is told with the Action button to go to the "
-	                   "lake.",
-	    .expected = "It walks to the water, its head on the place. Then it looks down at the water four metres in front "
-	                "of its feet, puzzled, plays its dazed clip with an amazed face, and looks down again, puzzled. It "
-	                "walks to the shore with an amazed face, looks down with a curious face, plays its dazed clip, walks "
-	                "back to the water amazed, and looks down, first curious and then amazed.",
-	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 20.0f}, {0.0f, k_NearShallows}}},
-	    .creatures = {Content(CreatureType::Tiger, {0.0f, 20.0f})},
+	    .description = "A tiger that is not thirsty, on the learning leash, away from the lake, is told with the Action "
+	                   "button to go to the lake.",
+	    .expected = "It walks to the water of the nearest region of sea on its map of the land, its head on the place. "
+	                "Then it looks down at the water four metres in front of its feet, puzzled, plays its dazed clip "
+	                "with an amazed face, and looks down again, puzzled. It walks to the nearest coast with an amazed "
+	                "face, looks down with a curious face, plays its dazed clip, walks back to the water amazed, and "
+	                "looks down, first curious and then amazed. The coast and the water are near each other, so these "
+	                "two walks are short or stop at once.",
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, -60.0f}, {0.0f, k_NearShallows}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, -60.0f})},
 	    .commands = {Leash(0, LeashType::Rope, 1.0f), Go(Kind::LeashOrderAt, 0, {0.0f, k_NearShallows + 10.0f}, 2.0f, false),
-	                 Act(Kind::TakeOffLeash, 0, 30.0f)},
+	                 Act(Kind::TakeOffLeash, 0, 45.0f)},
 	});
 
 	all.push_back({

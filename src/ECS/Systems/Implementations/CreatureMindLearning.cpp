@@ -125,6 +125,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureBodyFile.h"
+#include "ECS/CreatureExplorationLand.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/LearningMarker.h"
@@ -3003,11 +3004,13 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		}
 		else if (plan.action == creature_leash_orders::k_ReflectionAction)
 		{
-			const auto water = NearestWater(position);
-			if (water.has_value())
-			{
-				agenda = creature_leash_orders::LookAtReflection(water->water, water->shore, height, k_TurnsPerSecond);
-			}
+			// The sea and the coast that are nearest to the creature on its map of the land. Where the map has no such
+			// place, the creature uses the low corner of the map, as in the game.
+			namespace land = openblack::ecs::creature_exploration_land;
+			constexpr glm::vec2 k_Corner {0.0f};
+			const auto sea = land::FindPlace(creature, creature_exploration::Kind::Sea, position, false).value_or(k_Corner);
+			const auto coast = land::FindPlace(creature, creature_exploration::Kind::Coast, position, false).value_or(k_Corner);
+			agenda = creature_leash_orders::LookAtReflection(sea, coast, height, k_TurnsPerSecond);
 		}
 		else if (plan.action == creature_leash_orders::k_SleepAction && plan.point.has_value())
 		{

@@ -53,7 +53,6 @@ namespace openblack::ecs::systems::mind_detail
 /// The personality a species is born with, from the game's creature table, before it is spread for a creature
 [[nodiscard]] creature_desire_sources::InnateTraits InnateTraitsOf(CreatureType species);
 [[nodiscard]] std::optional<float> FoodValueOf(entt::entity entity);
-[[nodiscard]] std::optional<creature_mind::WaterSpot> NearestWater(glm::vec2 from);
 /// Where a creature drinks from the sea: by the nearest water point that the land marks, else at the nearest coast of
 /// its map of the land. None when it finds no place where it can stand to drink.
 [[nodiscard]] std::optional<creature_drink::Place> DrinkPlaceOf(entt::entity creature);

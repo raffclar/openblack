@@ -163,9 +163,6 @@ constexpr float k_ToldFaceMs = 3000.0f;
 
 /// A creature looks for food and water this far away at most
 constexpr float k_FoodSearchDistance = 200.0f;
-constexpr int32_t k_WaterSearchCells = 30;
-/// Where it stands to drink is found this far at most from the water
-constexpr float k_ShoreSearchDistance = 60.0f;
 /// Food further than this from its mouth, for its size, has got away by the time it eats
 constexpr float k_EatReach = 15.0f;
 /// Having drunk, it does not want water for a while
@@ -1201,56 +1198,6 @@ std::optional<std::pair<entt::entity, glm::vec2>> NearestFood(ecs::Registry& reg
 	registry.Each<const Pot, const Transform>(
 	    [&](entt::entity entity, const Pot&, const Transform& at) { consider(entity, at); });
 	return nearest;
-}
-
-/// The nearest water to a point, searching the cells round it: shallow water it can wade into or open sea, and where it
-/// can stand at its edge
-std::optional<creature_mind::WaterSpot> NearestWater(glm::vec2 from)
-{
-	if (!Locator::creatureLocomotionSystem::has_value() || !Locator::terrainSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
-	const auto& terrain = Locator::terrainSystem::value();
-	const auto cellX = static_cast<int32_t>(std::floor(from.x / creature_route::k_CellSize));
-	const auto cellZ = static_cast<int32_t>(std::floor(from.y / creature_route::k_CellSize));
-	std::optional<glm::vec2> nearest;
-	float best = std::numeric_limits<float>::max();
-	for (int32_t x = cellX - k_WaterSearchCells; x <= cellX + k_WaterSearchCells; ++x)
-	{
-		for (int32_t z = cellZ - k_WaterSearchCells; z <= cellZ + k_WaterSearchCells; ++z)
-		{
-			if (x < 0 || z < 0 || x >= creature_route::k_CellsPerSide || z >= creature_route::k_CellsPerSide)
-			{
-				continue;
-			}
-			const auto centre = (glm::vec2(static_cast<float>(x), static_cast<float>(z)) + 0.5f) * creature_route::k_CellSize;
-			const auto ground = land.At(x, z);
-			const bool sea = ground == creature_route::Ground::Blocked && terrain.GetHeightAt(centre) <= 0.0f;
-			if (ground != creature_route::Ground::Water && !sea)
-			{
-				continue;
-			}
-			const auto distance = glm::distance(centre, from);
-			if (distance < best)
-			{
-				best = distance;
-				nearest = centre;
-			}
-		}
-	}
-	if (!nearest.has_value())
-	{
-		return std::nullopt;
-	}
-	// It stands at the edge of the water on its own side, or in the shallows
-	const auto shore = land.NearestValid(*nearest, creature_route::k_DestinationClearance, k_ShoreSearchDistance);
-	if (!shore.has_value())
-	{
-		return std::nullopt;
-	}
-	return creature_mind::WaterSpot {.shore = *shore, .water = *nearest};
 }
 
 /// The least a creature's desires are lessened to by its actions, by its species

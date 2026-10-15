@@ -583,13 +583,6 @@ struct IdleMind
 	uint32_t followCameraTurns {0};
 };
 
-/// The nearest water, and where the creature can stand at its edge to drink
-struct WaterSpot
-{
-	glm::vec2 shore;
-	glm::vec2 water;
-};
-
 /// How what its hands were told to do is going
 enum class HandsState : uint8_t
 {
