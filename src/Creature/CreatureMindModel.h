@@ -101,7 +101,8 @@ struct LoadedMind
 	std::optional<std::vector<uint8_t>> tattoo;
 };
 /// The mind a file holds, over a fresh mind of its species for what the file doesn't keep (how desires fade, how fast
-/// sources fade, and so on)
+/// sources fade, and so on). The examples of the file's trees come after the examples of the fresh mind, up to the
+/// most that a tree keeps.
 [[nodiscard]] LoadedMind FromFile(const creaturemind::MindFileData& file, const creature_desires::Desires& fresh,
                                   const Learnt& freshLearnt);
 /// A mind written as a file of the current version, over the file it was loaded from when there was one, so that

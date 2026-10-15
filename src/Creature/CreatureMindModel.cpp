@@ -207,16 +207,20 @@ LoadedMind creature_mind_model::FromFile(const creaturemind::MindFileData& file,
 		{
 			continue;
 		}
+		// The file's examples come after the examples that the fresh mind has, such as the starting lesson. When the tree
+		// is full, the remaining examples of the file are lost.
 		auto& episodes = mind.learnt.episodes.at(static_cast<size_t>(tree.type)).at(static_cast<size_t>(tree.desire));
-		episodes.clear();
 		for (const auto& saved : tree.episodes)
 		{
-			creature_tree::AddEpisode(episodes,
-			                          {
-			                              .belief = creature_tree::FromSlots(saved.belief.type, saved.belief.attributes),
-			                              .feedback = saved.feedback,
-			                              .saved = {saved.kind, saved.action, saved.belief.x, saved.belief.z},
-			                          });
+			if (episodes.size() >= creature_tree::k_MaxEpisodes)
+			{
+				break;
+			}
+			episodes.push_back({
+			    .belief = creature_tree::FromSlots(saved.belief.type, saved.belief.attributes),
+			    .feedback = saved.feedback,
+			    .saved = {saved.kind, saved.action, saved.belief.x, saved.belief.z},
+			});
 		}
 	}
 	if (file.opinions.has_value())
