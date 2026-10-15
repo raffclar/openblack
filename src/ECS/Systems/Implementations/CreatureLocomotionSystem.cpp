@@ -900,6 +900,8 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 	self.destination = point;
 	self.fidgetMs = k_FidgetMs;
 	self.fidgeted = false;
+	// The head looks ahead along the new search at once
+	self.routeLook.countdownMs = 0;
 	self.follower.SetDestination({.point = point,
 	                              .stopShort = self.ring.min,
 	                              .arriveWithin = self.ring.max,

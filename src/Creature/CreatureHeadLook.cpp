@@ -99,3 +99,17 @@ bool creature_head_look::PlaysHeadClip(float angle, bool hasLookPoint)
 {
 	return std::abs(angle) > k_Hair || hasLookPoint;
 }
+
+RouteLook creature_head_look::StepRouteLook(RouteLook look, int32_t stepMs, const RouteLookFacts& facts,
+                                            const std::function<float(glm::vec2)>& groundAt)
+{
+	look.countdownMs -= stepMs;
+	if (look.countdownMs >= 0)
+	{
+		return look;
+	}
+	const auto at = facts.searchHead.value_or(glm::vec2(facts.destination.x, facts.destination.x));
+	look.point = glm::vec3(at.x, groundAt(at), at.y);
+	look.countdownMs = k_RouteLookMs;
+	return look;
+}
