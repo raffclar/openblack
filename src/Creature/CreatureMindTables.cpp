@@ -12,6 +12,8 @@
 #include <cstring>
 
 #include <algorithm>
+#include <iterator>
+#include <vector>
 
 #include "InfoConstants.h"
 
@@ -70,6 +72,7 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 		    .notOnWhatItHolds = row.field0xa8 != 0,
 		    .shownDesire = row.shownDesire,
 		    .creatureNicenessChange = row.creatureNicenessChange,
+		    .startingOpinion = row.startingOpinion,
 		    .needs = {.skills = {SkillNeeded(row.skillsNeeded[0]), SkillNeeded(row.skillsNeeded[1])},
 		              .miracle = row.magicType != k_NoMiracle ? std::optional<size_t>(row.magicType) : std::nullopt},
 		});
@@ -183,6 +186,14 @@ std::optional<uint32_t> creature_mind_tables::FindAction(const Tables& tables, s
 		return std::nullopt;
 	}
 	return static_cast<uint32_t>(std::distance(tables.actions.begin(), found));
+}
+
+std::vector<float> creature_mind_tables::StartingOpinions(const Tables& tables)
+{
+	std::vector<float> opinions;
+	opinions.reserve(tables.actions.size());
+	std::ranges::transform(tables.actions, std::back_inserter(opinions), &ActionInfo::startingOpinion);
+	return opinions;
 }
 
 float creature_mind_tables::MiracleMultiplier(size_t speciesRow)

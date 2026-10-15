@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -18,6 +19,7 @@
 #include <MindFile.h>
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureMindModel.h"
 
 using namespace openblack;
@@ -219,7 +221,7 @@ TEST(CreatureMindFile, ModelKeepsAFileItWasLoadedFrom)
 	    .skillsKnown = std::vector<bool>(1, false),
 	    .miraclesKnown = std::vector<bool>(2, false),
 	};
-	const auto freshLearnt = creature_mind_model::Fresh(fresh, 3, knowledge);
+	const auto freshLearnt = creature_mind_model::Fresh(fresh, std::vector<float>(3, 0.0f), knowledge);
 	const auto loaded = creature_mind_model::FromFile(mind, fresh, freshLearnt);
 	EXPECT_EQ(loaded.learnt.name, u"Tester");
 	EXPECT_EQ(loaded.developmentPhase, 13u);
@@ -233,10 +235,33 @@ TEST(CreatureMindFile, ModelKeepsAFileItWasLoadedFrom)
 	EXPECT_EQ(Write(saved), Write(mind));
 }
 
+TEST(CreatureMindFile, FileExamplesComeAfterTheStartingLesson)
+{
+	// A creature made from a file has the starting lesson first; the file's examples come after it, up to 16
+	MindFileData mind;
+	mind.trees.push_back({.type = 0, .desire = 4, .desireAgain = 4});
+	for (int32_t i = 0; i < 20; ++i)
+	{
+		mind.trees[0].episodes.push_back(
+		    {.desire = 4, .belief = {.type = 7, .attributes = {0, 0, 1, 0, 0, 0, 7}}, .feedback = -0.5f});
+	}
+	creature_desires::Desires fresh;
+	auto freshLearnt = creature_mind_model::Fresh(fresh, std::vector<float>(3, 0.0f), {});
+	const std::array k_Allowed {creature_tree::Attribute::Type};
+	creature_mind_model::TeachStartingLesson(freshLearnt, k_Allowed);
+	const auto loaded = creature_mind_model::FromFile(mind, fresh, freshLearnt);
+	const auto& episodes = loaded.learnt.episodes[0][4];
+	ASSERT_EQ(episodes.size(), creature_tree::k_MaxEpisodes);
+	EXPECT_EQ(episodes[0].belief.type, creature_tree::belief_types::k_Villager);
+	EXPECT_FLOAT_EQ(episodes[0].feedback, 0.8f);
+	EXPECT_EQ(episodes[1].belief.type, 7u);
+	EXPECT_FLOAT_EQ(episodes.back().feedback, -0.5f);
+}
+
 TEST(CreatureMindFile, FreshMindWritesACurrentFile)
 {
 	creature_desires::Desires desires;
-	const auto learnt = creature_mind_model::Fresh(desires, 328, {});
+	const auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(328, 0.0f), {});
 	const auto file = creature_mind_model::ToFile(desires, learnt, 2, 0.0f, 0, 3);
 	const auto bytes = Write(file);
 	MindFileData read;

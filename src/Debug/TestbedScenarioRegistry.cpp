@@ -450,6 +450,25 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.fresh_eats_villager",
+	    .name = "Hungry new creature eats a villager",
+	    .facet = Facet::Needs,
+	    .description = "A new hungry tiger that has learnt nothing, with two villagers of no player in front of it, and "
+	                   "no other food. Every new creature knows that an enemy villager is good to eat.",
+	    .expected = "It walks up to a villager, picks it up and eats it; its energy fills up and the hunger desire falls. "
+	                "Its first example for hunger is an enemy villager with feedback 0.8.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -60.0f}, {20.0f, 10.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 0.9f}},
+	    }},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -40.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {15.0f, -50.0f}}},
+	});
+
+	all.push_back({
 	    .id = "needs.eats_from_field",
 	    .name = "Hungry creature eats from a field",
 	    .facet = Facet::Needs,

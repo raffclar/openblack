@@ -148,7 +148,9 @@ void AfterAction(creature_desires::Desires& desires, Desire desire, float multip
 /// The desire becomes the weakest active desire (itself included) divided by a factor, held between the species' floor
 /// and its own maximum. The floor wins when the maximum is below it.
 void MakeLeastDominant(creature_desires::Desires& desires, Desire desire, float factor, float floor);
-void MakeFullyDominant(creature_desires::Desires& desires, Desire desire);
+/// The desire, if it is active, goes to its maximum and every other desire, active or not, goes down to the species'
+/// floor. An inactive desire changes nothing.
+void MakeFullyDominant(creature_desires::Desires& desires, Desire desire, float floor);
 /// A plan carried out to its end changes the desire it served: the desire to poo and to get attention stop for 60
 /// seconds, to idle with the player and to get warmer or colder for 120 seconds, and tiredness becomes the least
 /// dominant desire. The other desires do not change here.
