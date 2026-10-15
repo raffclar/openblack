@@ -220,6 +220,9 @@ struct PlannerState
 	std::optional<Plan> current;
 	/// The thing that the last plan acted on. It stays after the plan stops, until the creature starts a new plan.
 	std::optional<uint32_t> lastObject;
+	/// The action of the plan carried out, else of the last plan. It stays after the plan stops, until the creature
+	/// starts a new plan. Another creature reads the desire that it shows from this action.
+	uint32_t lastAction {0};
 };
 /// The next desires to plan this turn, going round those that may be planned
 [[nodiscard]] std::vector<creature_desires::Desire> NextGoals(PlannerState& state,

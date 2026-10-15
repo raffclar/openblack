@@ -244,6 +244,35 @@ uint32_t creature_tree::CreatureHeight(float shownSize)
 	return static_cast<uint32_t>(taller);
 }
 
+uint32_t creature_tree::LifeValue(float life)
+{
+	constexpr float k_LowLife = 0.2f;
+	return life > k_LowLife ? 1 : 0;
+}
+
+uint32_t creature_tree::BeingBuiltValue(bool built)
+{
+	return built ? 1 : 0;
+}
+
+uint32_t creature_tree::DominantDesireValue(uint32_t shownDesire)
+{
+	constexpr uint32_t k_LastDesireValue = 40;
+	return std::min(shownDesire, k_LastDesireValue);
+}
+
+uint32_t creature_tree::SpellKnowledgeValue(size_t miraclesKnown)
+{
+	constexpr size_t k_LastKnowledgeValue = 42;
+	return static_cast<uint32_t>(std::min(miraclesKnown, k_LastKnowledgeValue));
+}
+
+uint32_t creature_tree::CarryingValue(std::optional<uint32_t> objectType)
+{
+	constexpr uint32_t k_LastObjectType = 44;
+	return std::min(objectType.value_or(k_CarriesNothing), k_LastObjectType);
+}
+
 void creature_tree::AddEpisode(std::vector<Episode>& episodes, Episode episode)
 {
 	if (episodes.size() >= k_MaxEpisodes)

@@ -3405,6 +3405,10 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	    .tables = []() -> const creature_mind_tables::Tables* {
 		    return Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
 	    },
+	    .beliefAbout = [](entt::entity creature, entt::entity thing) -> std::optional<creature_tree::Belief> {
+		    return Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().BeliefAbout(creature, thing)
+		                                                    : std::nullopt;
+	    },
 	}));
 	inspector.Add(MakeMapProvider({
 	    .world = World(),

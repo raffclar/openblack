@@ -20,6 +20,7 @@
 #include <InspectorQuery.h>
 
 #include "Audio/Sound.h"
+#include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureMindTables.h"
@@ -504,6 +505,66 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		                               {"skills", std::move(skills)},
 		                               {"miracles", std::move(miracles)},
 		                               {"pending_teaching", mind.pendingTeaching.size()}});
+	    });
+	provider->Add(
+	    Query("beliefs",
+	          "A creature's beliefs about things: kind, last place, the whole thing, the attributes its decision trees test; "
+	          "and how nice it finds other creatures",
+	          {id, Parameter("kind", "integer", "Only beliefs of this kind (the game's belief type, 0 to 23)", false)}),
+	    [sources](const QueryContext& context) {
+		    const auto* registry = Registry(sources.world);
+		    if (registry == nullptr)
+		    {
+			    return QueryResult::Error(std::string(k_NoRegistry));
+		    }
+		    const auto creature = CreatureParam(*registry, context.params);
+		    if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		    {
+			    return QueryResult::Error(*problem);
+		    }
+		    const auto entity = std::get<entt::entity>(creature);
+		    const auto& mind = registry->Get<const CreatureMindState>(entity);
+		    const auto kind = NumberMember(context.params, "kind");
+		    auto counts = Json::object();
+		    auto beliefs = Json::array();
+		    for (const auto& belief : mind.beliefs.InListOrder())
+		    {
+			    const auto name = std::string(creature_tree::BeliefName(belief.kind));
+			    counts[name] = counts.value(name, 0) + 1;
+			    if (kind.has_value() && static_cast<uint32_t>(*kind) != belief.kind)
+			    {
+				    continue;
+			    }
+			    auto attributes = Json::object();
+			    const auto now = sources.beliefAbout ? sources.beliefAbout(entity, belief.thing) : std::nullopt;
+			    if (now.has_value())
+			    {
+				    for (const auto attribute : creature_tree::SlotsFor(now->type))
+				    {
+					    const auto value = now->Value(attribute);
+					    attributes[creature_tree::Name(attribute)] = value.has_value() ? Json(*value) : Json(nullptr);
+				    }
+			    }
+			    beliefs.push_back({{"thing", ToId(belief.thing)},
+			                       {"kind", belief.kind},
+			                       {"kind_name", name},
+			                       {"place", {belief.place.x, belief.place.z}},
+			                       {"part_of", belief.partOf.has_value() ? Json(ToId(*belief.partOf)) : Json(nullptr)},
+			                       {"attributes", std::move(attributes)}});
+		    }
+		    auto attitudes = Json::array();
+		    if (mind.learnt.has_value())
+		    {
+			    for (const auto& attitude : mind.learnt->creatures)
+			    {
+				    attitudes.push_back({{"creature", attitude.creature}, {"how_nice", attitude.howNice}});
+			    }
+		    }
+		    return QueryResult::Value({{"id", ToId(entity)},
+		                               {"count", mind.beliefs.Size()},
+		                               {"counts", std::move(counts)},
+		                               {"beliefs", std::move(beliefs)},
+		                               {"attitudes", std::move(attitudes)}});
 	    });
 	provider->Add(Query("plan", "A creature's plan (desire, action, object, priority), activity and next agenda steps", {id}),
 	              [sources](const QueryContext& context) {

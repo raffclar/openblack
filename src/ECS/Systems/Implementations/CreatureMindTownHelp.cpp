@@ -161,29 +161,6 @@ bool ecs::systems::mind_town_help::Accepts(const ecs::Registry& registry, Target
 	}
 }
 
-void ecs::systems::mind_town_help::Gather(ecs::Registry& registry, Target target,
-                                          const std::function<void(entt::entity, const Transform&)>& consider)
-{
-	switch (target)
-	{
-	case Target::MagicWoodPile:
-		registry.Each<const Pot, const Transform>(
-		    [&](entt::entity entity, const Pot& /*unused*/, const Transform& at) { consider(entity, at); });
-		break;
-	case Target::Cow:
-		registry.Each<const Animal, const Transform>(
-		    [&](entt::entity entity, const Animal& /*unused*/, const Transform& at) { consider(entity, at); });
-		break;
-	case Target::PlayerTotem:
-		registry.Each<const VillageTotem, const Transform>(
-		    [&](entt::entity entity, const VillageTotem& /*unused*/, const Transform& at) { consider(entity, at); });
-		break;
-	default:
-		// The villagers are always looked at
-		break;
-	}
-}
-
 void ecs::systems::mind_town_help::Situate(const ecs::Registry& registry, entt::entity creature,
                                            const creature_plan_actions::Executor& executor, std::optional<uint32_t> object,
                                            creature_plan_actions::Situation& situation)
