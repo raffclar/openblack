@@ -2264,6 +2264,8 @@ void Runner::Give(const Command& command)
 	if (command.kind == Kind::OpenTattooMenu)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenTattooMenu()));
+		return;
+	}
 	if (command.kind == Kind::ShowCustomMusicControls)
 	{
 		auto* game = Game::Instance();
