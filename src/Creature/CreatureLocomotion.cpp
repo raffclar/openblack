@@ -59,6 +59,11 @@ float creature_locomotion::TargetSpeed(float fraction, float runSpeed)
 	return std::clamp(fraction, 0.0f, 1.0f) * runSpeed * k_TopSpeedMargin;
 }
 
+float creature_locomotion::KeptFraction(float kept, float walkFraction)
+{
+	return kept > 0.0f ? kept : walkFraction;
+}
+
 float creature_locomotion::RequiredFraction(float wanted, float slowFraction, float exhaustion)
 {
 	return exhaustion >= k_ExhaustedAt ? slowFraction : wanted;

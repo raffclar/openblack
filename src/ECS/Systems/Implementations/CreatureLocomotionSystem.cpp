@@ -171,6 +171,21 @@ Fractions FractionsOf(CreatureType species)
 	        .runAway = k_DefaultRunAwayDistance};
 }
 
+/// The fraction of its top speed for a walk at a pace. The kept pace is the speed that the creature got last.
+float PaceFraction(CreatureLocomotionSystemInterface::Pace pace, float kept, const Fractions& fractions)
+{
+	switch (pace)
+	{
+	case CreatureLocomotionSystemInterface::Pace::Run:
+		return fractions.run;
+	case CreatureLocomotionSystemInterface::Pace::Keep:
+		return locomotion::KeptFraction(kept, fractions.walk);
+	case CreatureLocomotionSystemInterface::Pace::Walk:
+		break;
+	}
+	return fractions.walk;
+}
+
 /// The species' animations, as its base mesh has them: the blends follow the base's lengths and moves
 struct Moves
 {
@@ -962,8 +977,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveTo(entt::enti
 	}
 	self->following.reset();
 	const auto fractions = FractionsOf(body->species);
-	return StartMove(creature, *self, point, pace == Pace::Run ? fractions.run : fractions.walk, minDistance, maxDistance,
-	                 true);
+	return StartMove(creature, *self, point, PaceFraction(pace, self->fraction, fractions), minDistance, maxDistance, true);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::LeadTo(entt::entity creature, glm::vec2 point, float extraSpeed,
@@ -1000,8 +1014,8 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveToObject(entt
 	const auto ring = locomotion::ObjectRing(self->radius, ReachOf(registry, target, walker), extra);
 	self->following.reset();
 	const auto fractions = FractionsOf(body->species);
-	return StartMove(creature, *self, glm::xz(at->position), pace == Pace::Run ? fractions.run : fractions.walk, ring.min,
-	                 ring.max, false);
+	return StartMove(creature, *self, glm::xz(at->position), PaceFraction(pace, self->fraction, fractions), ring.min, ring.max,
+	                 false);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::Follow(entt::entity creature, entt::entity target,
@@ -1111,6 +1125,17 @@ void CreatureLocomotionSystem::Stop(entt::entity creature)
 	}
 }
 
+void CreatureLocomotionSystem::ResetPace(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* self = registry.TryGet<CreatureLocomotion>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (self != nullptr && body != nullptr)
+	{
+		self->fraction = FractionsOf(body->species).walk;
+	}
+}
+
 bool CreatureLocomotionSystem::IsMoving(entt::entity creature) const
 {
 	const auto* self = Locator::entitiesRegistry::value().TryGet<const CreatureLocomotion>(creature);
@@ -1147,11 +1172,9 @@ void CreatureLocomotionSystem::ProcessTurn()
 	});
 	for (const auto& [entity, target] : retarget)
 	{
-		const auto& self = registry.Get<CreatureLocomotion>(entity);
-		const auto& body = registry.Get<Creature>(entity);
-		const auto distance = self.followDistance;
-		const auto fractions = FractionsOf(body.species);
-		Follow(entity, target, distance, self.fraction >= fractions.run ? Pace::Run : Pace::Walk);
+		const auto distance = registry.Get<CreatureLocomotion>(entity).followDistance;
+		// The walk that it points anew keeps the speed that it got last
+		Follow(entity, target, distance, Pace::Keep);
 	}
 
 	std::vector<entt::entity> stopped;

@@ -72,6 +72,8 @@ struct Speeds
 
 /// The speed a creature heads for when asked for a fraction of its top speed
 [[nodiscard]] float TargetSpeed(float fraction, float runSpeed);
+/// The fraction of its top speed for a walk at the speed that it got last. A creature with no speed yet walks.
+[[nodiscard]] float KeptFraction(float kept, float walkFraction);
 /// The fraction of its top speed it goes at: what is wanted, or only its slow fraction once exhausted
 [[nodiscard]] float RequiredFraction(float wanted, float slowFraction, float exhaustion);
 

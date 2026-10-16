@@ -48,6 +48,8 @@ struct CreatureCasting
 	/// The distance it keeps, and the turns it holds still once facing
 	float keep {0.0f};
 	float settleSeconds {0.0f};
+	/// The move asks for the run speed. Else it keeps the speed that the creature got last.
+	bool run {false};
 	/// The stage of the move, the turns it has gone on, and the turns it has yet to hold still
 	uint8_t phase {0};
 	uint32_t turns {0};

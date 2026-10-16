@@ -44,6 +44,11 @@ Command Do(std::string_view action, size_t object, float delay)
 	return {.kind = Kind::DoAction, .delaySeconds = delay, .object = object, .action = action};
 }
 
+Command RunTo(size_t creature, glm::vec2 point, bool wait)
+{
+	return {.kind = Kind::RunTo, .creature = creature, .delaySeconds = 0.5f, .waitUntilFree = wait, .point = point};
+}
+
 CreatureSetup Caster(glm::vec2 offset, std::string_view label, float exhaustion = 0.0f)
 {
 	return {.label = label,
@@ -419,6 +424,35 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	    .dispensers = {{.type = MagicType::Heal, .offset = {-15.0f, 15.0f}, .bubbleHeight = 0.0f}},
 	    .commands = giveGlobe,
 	    .hand = offering,
+	});
+
+	// Two tigers run a short way, then each is told to cast the itchy spell at a cow far ahead. The wild tiger keeps the
+	// run speed on its way to the cow. The player's tiger stops what it did, so it walks.
+	CreatureSetup wild = Caster({-120.0f, 0.0f}, "wild caster");
+	wild.owner = PlayerNames::NEUTRAL;
+	constexpr auto k_Itchy = static_cast<size_t>(MagicType::CreatureSpellItchy);
+	std::vector<Command> paces {
+	    {.kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 0.5f, .value = k_Itchy},
+	    {.kind = Kind::KnowMiracle, .creature = 1, .delaySeconds = 0.0f, .value = k_Itchy},
+	    RunTo(0, {-120.0f, 30.0f}, false),
+	    RunTo(1, {120.0f, 30.0f}, true),
+	    {.kind = Kind::CastMiracle, .creature = 0, .delaySeconds = 0.0f, .value = k_Itchy, .atCreature = 2},
+	    {.kind = Kind::CastMiracle, .creature = 1, .delaySeconds = 0.0f, .value = k_Itchy, .atCreature = 3},
+	};
+	all.push_back({
+	    .id = "movement.kept_pace_cast_walk",
+	    .name = "Creature casting: the walk keeps the speed it got last",
+	    .facet = Facet::Movement,
+	    .description = "A wild tiger and the player's tiger run thirty metres. Then each is told to cast the itchy spell "
+	                   "at a cow far ahead.",
+	    .expected = "Both tigers run. On the way to its cow the wild tiger keeps the run speed. The player's tiger goes "
+	                "back to its walk speed, because it stopped what it did. Each stops within about 75 metres of its cow "
+	                "and casts the spell.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-140.0f, -10.0f}, {140.0f, 170.0f}}},
+	    .creatures = {wild, Caster({120.0f, 0.0f}, "player caster"), Other({-120.0f, 160.0f}, "wild target"),
+	                  Other({120.0f, 160.0f}, "player target")},
+	    .commands = paces,
 	});
 
 	all.push_back({
