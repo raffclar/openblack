@@ -1082,3 +1082,6 @@ target_link_libraries(test_voice_pool PRIVATE pack)
 openblack_setup_and_add_test(test_creature_steal test_creature_steal.cpp)
 openblack_setup_and_add_test(test_tattoo_menu test_tattoo_menu.cpp)
 target_link_libraries(test_tattoo_menu PRIVATE creaturemind)
+openblack_setup_and_add_test(
+  test_creature_town_theft test_creature_town_theft.cpp
+)

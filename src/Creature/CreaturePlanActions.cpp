@@ -31,6 +31,7 @@
 #include "Creature/CreatureSteal.h"
 #include "Creature/CreatureTempleDance.h"
 #include "Creature/CreatureTownHelp.h"
+#include "Creature/CreatureTownTheft.h"
 #include "Enums.h"
 
 using namespace openblack;
@@ -443,12 +444,28 @@ constexpr std::array k_Executors {
     Executor {.action = "BehaveStrangely", .build = Build::BehaveStrangely},
     // The sacrifice: no desire chooses it, but a script or a copy of the player can make the creature do it
     Executor {.action = "Sacrifice", .target = Target::AnyLiving, .build = Build::Sacrifice},
-    // The desire to steal: the creature takes a thing that it can steal to its temple
-    Executor {.action = "StealObjectAndTakeToCitadel", .target = Target::Stealable, .build = Build::StealAndPutByTemple},
     // The dance outside a worship site goes to the heart of the creature's own temple; the dance around a thing goes to
     // any thing
     Executor {.action = "DanceOutsideWorshipSite", .target = Target::WorshipSite, .build = Build::DanceOutsideTemple},
     Executor {.action = "DanceAroundArtefact", .target = Target::Anything, .build = Build::DanceAroundThing},
+    // The desire to steal: the creature takes a thing that it can steal to its temple
+    Executor {.action = "StealObjectAndTakeToCitadel", .target = Target::Stealable, .build = Build::StealAndPutByTemple},
+    // The thefts that only a copy of the player starts: a stolen thing to a town of its player, and food or wood from a
+    // farm or a store of another player into a store of its player. The theft from a farm makes the agenda of the gift
+    // of food from a field.
+    Executor {.action = "StealObjectAndTakeToTown", .target = Target::Stealable, .build = Build::StealAndPutInTown},
+    Executor {.action = "StealFoodFromFarm",
+              .target = Target::OwnStoragePit,
+              .use = Target::OthersField,
+              .build = Build::GiveFieldFoodToStore},
+    Executor {.action = "StealFoodFromStoragePit",
+              .target = Target::OwnStoragePit,
+              .use = Target::OthersStoragePit,
+              .build = Build::StealFoodFromStore},
+    Executor {.action = "StealWoodFromStoragePit",
+              .target = Target::OwnStoragePit,
+              .use = Target::OthersStoragePit,
+              .build = Build::StealWoodFromStore},
 };
 
 /// The actions of the game's table that need a thing to use, by their names there
@@ -1395,14 +1412,6 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		}
 		return creature_sacrifice::Sacrifice(situation.holdingLiving ? std::nullopt : object, *situation.sacrificeAltar,
 		                                     situation.height);
-	case Build::StealAndPutByTemple:
-		if (!situation.home.has_value())
-		{
-			return std::nullopt;
-		}
-		// It picks up the thing only when its hand is empty
-		return creature_steal::StealAndPutByTemple(situation.handFull ? std::nullopt : object, *situation.home,
-		                                           situation.height);
 	case Build::DanceOutsideTemple:
 		// Without the heart of its player's temple, the action fails
 		if (!situation.templeHeart.has_value())
@@ -1413,6 +1422,34 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		                                                 situation.turnsPerSecond);
 	case Build::DanceAroundThing:
 		return creature_temple_dance::DanceAroundThing(*object, situation.height, situation.turnsPerSecond);
+	case Build::StealAndPutByTemple:
+		if (!situation.home.has_value())
+		{
+			return std::nullopt;
+		}
+		// It picks up the thing only when its hand is empty
+		return creature_steal::StealAndPutByTemple(situation.handFull ? std::nullopt : object, *situation.home,
+		                                           situation.height);
+	case Build::StealAndPutInTown:
+		// Without a storage pit in a town of its player, the agenda has no steps
+		if (!situation.ownTownPit.has_value())
+		{
+			return std::nullopt;
+		}
+		// It picks up the thing only when its hand is empty
+		return creature_town_theft::StealAndPutInTown(situation.handFull ? std::nullopt : object, *situation.ownTownPit,
+		                                              situation.height);
+	case Build::StealFoodFromStore:
+	case Build::StealWoodFromStore:
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_town_theft::StealFromStore(*situation.instrument, *object,
+		                                           executor.build == Build::StealWoodFromStore
+		                                               ? creature_mind::ObjectOrder::Handful::Logs
+		                                               : creature_mind::ObjectOrder::Handful::Wheat,
+		                                           situation.height);
 	case Build::Never:
 	case Build::MimicPlayer:
 		return std::nullopt;
