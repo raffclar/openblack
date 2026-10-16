@@ -22,6 +22,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "Graphics/FizzDrawOrder.h"
 #include "Graphics/GraphicsHandle.h"
 #include "Graphics/Mesh.h"
 
@@ -104,6 +105,9 @@ struct RenderContext
 		std::vector<std::pair<uint32_t, glm::vec3>> subMeshOffsets;
 		/// Submeshes left undrawn: the temple's buttons draw one of each of their pairs
 		std::vector<uint32_t> hiddenSubMeshes;
+		/// Where the placed instances of each segment after the first start, from the first instance (see
+		/// graphics::fizz_draw_order). Empty when all of them are in the first segment.
+		std::vector<uint32_t> segmentStarts;
 	};
 
 	/// A list of cpu-side uniforms which is refilled at every \ref PrepareDraw.
@@ -157,8 +161,12 @@ struct RenderContext
 		bool fading {false};
 		/// Not drawn at all
 		bool gone {false};
+		/// The segment of the land's draw list that the trees are drawn in (see graphics::fizz_draw_order)
+		uint32_t segment {0};
 	};
 	std::vector<TreeRun> treeRuns;
+	/// The creatures that fizz in the land's draw list this frame, and the segment of each listed thing
+	graphics::fizz_draw_order::Order fizzOrder;
 
 	/// Stores information for rendering which is prepared at \ref PrepareDraw.
 	std::map<entt::id_type, InstancedDrawDesc> instancedDrawDescs;
@@ -266,6 +274,8 @@ struct RenderContext
 		std::optional<float> innerWallInset;
 		/// A standing graveyard's graves: those of its model's parts numbered one up to this are drawn over the rest
 		std::optional<uint32_t> gravesShown;
+		/// The segment of the land's draw list that it is drawn in (see graphics::fizz_draw_order)
+		uint32_t segment {0};
 		/// It is fading out in the distance: blended by the alpha in its instances' looks, with the blended things
 		bool fading {false};
 	};

@@ -147,6 +147,38 @@ void AddCreatureMode(std::vector<Scenario>& all)
 	});
 }
 
+/// A tiger that fizzes half out of sight in front of houses and trees, which stand further from the camera. The camera
+/// looks over the tiger at them.
+void AddFizzInFront(std::vector<Scenario>& all)
+{
+	std::vector<ObjectSetup> behind;
+	for (int i = -2; i <= 2; ++i)
+	{
+		behind.push_back({.type = AbodeInfo::CelticHut, .offset = {static_cast<float>(i) * 14.0f, 30.0f}});
+		behind.push_back({.type = TreeInfo::Conifer, .offset = {(static_cast<float>(i) * 14.0f) + 7.0f, 40.0f}, .scale = 1.5f});
+	}
+	all.push_back({
+	    .id = "creature_mode.fizz_in_front",
+	    .name = "A fizzing creature in front of houses and trees",
+	    .facet = Facet::CreatureMode,
+	    .description =
+	        "The player's tiger stands in front of a row of houses and conifers. It fizzes a third of the way out of sight "
+	        "over two seconds, and stays there.",
+	    .expected = "Where the static shows the tiger, the houses and trees behind it do not show through its body. The "
+	                "land behind the tiger shows through. The houses and trees show where the static has holes. The "
+	                "static moves over the tiger.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.label = "yours",
+	                                 .species = CreatureType::Tiger,
+	                                 .offset = {0.0f, 10.0f},
+	                                 .facingDegrees = 90.0f,
+	                                 .owner = PlayerNames::PLAYER_ONE,
+	                                 .needs = {.energy = 0.8f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f}}},
+	    .objects = behind,
+	    .commands = {{.kind = Kind::SetFizz, .creature = 0, .delaySeconds = 1.0f, .value = 2000, .amount = 0.3f}},
+	});
+}
+
 void AddCave(std::vector<Scenario>& all)
 {
 	auto tattoo = [](Kind kind, size_t design, size_t site, float delay) {
@@ -360,6 +392,7 @@ void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 {
 	AddCreatureMode(all);
 	AddCave(all);
+	AddFizzInFront(all);
 	AddCaveTattooOnBody(all);
 	AddCaveScrollZoom(all);
 	AddCaveCopyHair(all);

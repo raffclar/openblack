@@ -29,6 +29,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/PhysicsDrawMatrix.h"
 #include "Camera/Camera.h"
+#include "Creature/CreatureFizzLook.h"
 #include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -182,6 +183,28 @@ bool IsPaper(const openblack::ecs::Registry& registry, entt::entity entity)
 entt::id_type RootsMesh()
 {
 	return openblack::resources::HashIdentifier(openblack::MeshId::TreeRoots);
+}
+
+/// The passes over the things that the land's draw list divides into segments (see graphics::fizz_draw_order)
+struct SegmentPasses
+{
+	const openblack::ecs::Registry& registry;
+	/// The segment that the pass places. Each pass increases it.
+	uint32_t& placed;
+	/// The last segment that a thing is in, found by the first pass
+	const uint32_t& last;
+};
+
+/// Call `place` for each entity with the components: in the first pass, then again in a pass for each later segment.
+/// `place` places only the things of the segment that the pass places.
+template <typename... Components, typename Place>
+void EachBySegment(const Place& place, SegmentPasses passes)
+{
+	using namespace openblack::ecs::components;
+	do
+	{
+		passes.registry.Each<Components...>(place, entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState>);
+	} while (passes.placed++ < passes.last);
 }
 } // namespace
 
@@ -471,10 +494,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	{
 		slots.filled = 0;
 		slots.gone = 0;
+		slots.segmentStarts.clear();
 	}
 	for (auto& [meshId, slots] : _fadingSlots)
 	{
 		slots.filled = 0;
+		slots.segmentStarts.clear();
 	}
 	_renderContext.farVillagers.clear();
 	_fadingThings.clear();
@@ -497,9 +522,27 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
 	bool fits = true;
-	registry.Each<const Mesh, const Transform>(
-	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, drawBoundingBox, camera, modelDetail,
-	     drawList](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	// The creatures that fizz divide the land's draw list into segments. The things of each segment come after the
+	// passes of the creature before them.
+	_renderContext.fizzOrder = drawList != nullptr
+	                               ? graphics::fizz_draw_order::Order::Of(drawList->GetList(),
+	                                                                      [&registry, drawList](entt::entity entity) {
+		                                                                      return FizzesInList(registry, *drawList, entity);
+	                                                                      })
+	                               : graphics::fizz_draw_order::Order {};
+	const auto& fizzOrder = _renderContext.fizzOrder;
+	// The instances of each mesh go in the order of their segments. Each pass places the things of one segment.
+	uint32_t segmentPlaced = 0;
+	uint32_t lastSegment = 0;
+	EachBySegment<const Mesh, const Transform>(
+	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, &fizzOrder, &segmentPlaced, &lastSegment,
+	     drawBoundingBox, camera, modelDetail, drawList](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+		    const auto segment = fizzOrder.SegmentOf(entity);
+		    lastSegment = std::max(lastSegment, segment);
+		    if (segment != segmentPlaced)
+		    {
+			    return;
+		    }
 		    // A villager is drawn gliding between its turns and turning after the way it faces; one held by the opening's
 		    // hand is drawn in its grip
 		    const auto* villagerPose = registry.TryGet<const VillagerPose>(entity);
@@ -667,6 +710,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    fits = false;
 			    return;
 		    }
+		    graphics::fizz_draw_order::NoteSegment(slots->second.segmentStarts, slots->second.filled, segment);
 		    // A building drawn only as far up as it stands keeps its place in the lists, not drawn there, so the lists
 		    // needn't be made again as it comes to stand whole
 		    if (!DrawnWhole(entity))
@@ -981,7 +1025,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    ++slots->second.filled;
 	    },
-	    entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState>);
+	    SegmentPasses {.registry = registry, .placed = segmentPlaced, .last = lastSegment});
 
 	// The roots under a tree out of the land, at its base, turned and stretched as the tree is placed
 	const auto rootsSlots = _instanceSlots.find(RootsMesh());
@@ -1030,6 +1074,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		const auto slots = _instanceSlots.find(meshId);
 		desc.filled = slots != _instanceSlots.end() ? slots->second.filled : 0;
 		desc.gone = slots != _instanceSlots.end() ? slots->second.gone : 0;
+		if (slots != _instanceSlots.end())
+		{
+			desc.segmentStarts = slots->second.segmentStarts;
+		}
+		else
+		{
+			desc.segmentStarts.clear();
+		}
 	}
 	for (auto& [meshId, desc] : _renderContext.fadingDrawDescs)
 	{
@@ -1202,6 +1254,7 @@ void RenderingSystem::UploadPartialBuilds()
 		draw.scaffoldInstance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size());
 		_renderContext.partialBuildInstances.push_back(
 		    {.model = glm::translate(glm::mat4(1.0f), -up * build.scaffoldSink) * matrix, .look = look});
+		draw.segment = _renderContext.fizzOrder.SegmentOf(entity);
 		_renderContext.partialBuilds.push_back(draw);
 	});
 	// A standing building shows its model's numbered parts up to a number over its model drawn with the others; one going
@@ -1218,6 +1271,7 @@ void RenderingSystem::UploadPartialBuilds()
 		    .morphWithTerrain = registry.AllOf<MorphWithTerrain>(entity),
 		    .instance = static_cast<uint32_t>(_renderContext.partialBuildInstances.size()),
 		    .gravesShown = parts,
+		    .segment = _renderContext.fizzOrder.SegmentOf(entity),
 		    .fading = fading != _fadingThings.end(),
 		});
 		_renderContext.partialBuildInstances.push_back(
@@ -1399,20 +1453,36 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    _placedTrees.push_back({.mesh = mesh.id,
 		                            .slots = &slots->second,
 		                            .group = group,
+		                            .segment = _renderContext.fizzOrder.SegmentOf(entity),
 		                            .data = {.modelMatrix = drawnMatrix, .burning = burning},
 		                            .box = boxMatrix});
 	    });
 
 	// Laid out within each mesh's instances by detail, each run drawn in its own: counted by mesh and detail first, then
-	// each tree put in its place
+	// each tree put in its place. The solid trees of each later segment of the land's draw list have runs of their own,
+	// after the first five groups.
 	constexpr size_t k_Groups = static_cast<size_t>(Group::Gone) + 1;
+	constexpr size_t k_SolidGroups = static_cast<size_t>(Group::Fading);
+	const auto groupOf = [](const PlacedTree& tree) {
+		const auto group = static_cast<size_t>(tree.group);
+		if (tree.segment == 0 || group >= k_SolidGroups)
+		{
+			return group;
+		}
+		return k_Groups + ((tree.segment - 1) * k_SolidGroups) + group;
+	};
 	for (auto& [meshId, slots] : _treeSlots)
 	{
-		slots.treeGroups = {};
+		slots.treeGroups.assign(k_Groups, 0);
 	}
 	for (const auto& tree : _placedTrees)
 	{
-		++tree.slots->treeGroups.at(static_cast<size_t>(tree.group));
+		const auto group = groupOf(tree);
+		if (tree.slots->treeGroups.size() <= group)
+		{
+			tree.slots->treeGroups.resize(group + 1, 0);
+		}
+		++tree.slots->treeGroups.at(group);
 	}
 	_renderContext.treeRuns.clear();
 	bool fits = true;
@@ -1421,7 +1491,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 	{
 		slots.filled = 0;
 		uint32_t first = slots.offset;
-		for (size_t group = 0; group < k_Groups; ++group)
+		for (size_t group = 0; group < slots.treeGroups.size(); ++group)
 		{
 			const auto count = slots.treeGroups.at(group);
 			slots.treeGroups.at(group) = first;
@@ -1429,13 +1499,21 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			{
 				continue;
 			}
-			const auto drawn = static_cast<Group>(group);
+			const bool laterSegment = group >= k_Groups;
+			const auto detail = laterSegment ? (group - k_Groups) % k_SolidGroups : group;
+			const auto segment = laterSegment ? static_cast<uint32_t>(((group - k_Groups) / k_SolidGroups) + 1) : 0u;
+			const auto drawn = static_cast<Group>(detail);
 			const bool fading = drawn == Group::Fading;
 			const bool gone = drawn == Group::Gone;
 			const auto level =
-			    fading || gone ? low : graphics::mesh_detail::LevelBit(static_cast<graphics::mesh_detail::Mesh>(group));
-			_renderContext.treeRuns.push_back(
-			    {.mesh = meshId, .first = first, .count = count, .level = level, .fading = fading, .gone = gone});
+			    fading || gone ? low : graphics::mesh_detail::LevelBit(static_cast<graphics::mesh_detail::Mesh>(detail));
+			_renderContext.treeRuns.push_back({.mesh = meshId,
+			                                   .first = first,
+			                                   .count = count,
+			                                   .level = level,
+			                                   .fading = fading,
+			                                   .gone = gone,
+			                                   .segment = segment});
 			first += count;
 			slots.filled += count;
 		}
@@ -1447,7 +1525,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		{
 			break;
 		}
-		const uint32_t idx = tree.slots->treeGroups.at(static_cast<size_t>(tree.group))++;
+		const uint32_t idx = tree.slots->treeGroups.at(groupOf(tree))++;
 		_renderContext.treeInstanceData[idx] = tree.data;
 		if (drawBoundingBox && idx + _renderContext.treeInstanceData.size() / 2 < _renderContext.treeInstanceData.size())
 		{
@@ -1467,6 +1545,13 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		             bgfx::copy(_renderContext.treeInstanceData.data(), size));
 	}
 	return fits;
+}
+
+bool RenderingSystem::FizzesInList(const Registry& registry, const ObjectDrawListSystemInterface& drawList, entt::entity entity)
+{
+	const auto* spells = registry.TryGet<const CreatureSpells>(entity);
+	return spells != nullptr && creature_fizz_look::Fizzing(spells->fizz) && registry.AllOf<CreatureMorph>(entity) &&
+	       drawList.Drawn(registry, entity);
 }
 
 void RenderingSystem::NoteKept(ObjectDrawListSystemInterface& drawList, const Registry& registry, entt::entity entity,
