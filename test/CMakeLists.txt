@@ -1054,3 +1054,4 @@ target_link_libraries(test_profile_folder PRIVATE helpstats)
 openblack_setup_and_add_test(
   test_fizz_draw_order graphics/test_fizz_draw_order.cpp
 )
+openblack_setup_and_add_test(test_creature_steal test_creature_steal.cpp)

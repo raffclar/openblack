@@ -37,6 +37,7 @@
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureLostThing.h"
 #include "Creature/CreatureObjectBeliefs.h"
+#include "Creature/CreatureSteal.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/BuildingSites.h"
@@ -82,6 +83,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -471,6 +473,31 @@ void CreatureMindSystem::StirSourcesOnSighting(entt::entity creature, components
 		creature_desires::ChangeSource(desires, creature_desires::sources::k_PlayFromWatchingPlayer,
 		                               creature_desire_sources::k_ToySightingAmount);
 	}
+	// A thing that it can steal stirs its wish to steal
+	if (CanSteal(creature, belief.thing))
+	{
+		creature_desires::ChangeSource(desires, creature_steal::k_StealSource, creature_steal::k_StealableSightingAmount);
+	}
+}
+
+bool CreatureMindSystem::CanSteal(entt::entity creature, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* transform = registry.Valid(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
+	if (body == nullptr || transform == nullptr || !Locator::infoConstants::has_value() ||
+	    !Locator::creatureObjectActionSystem::has_value() || !Locator::influenceSystem::has_value())
+	{
+		return false;
+	}
+	return creature_steal::IsStealable({
+	    .toy = ecs::physics_classes::IsToy(registry, thing, Locator::infoConstants::value()),
+	    // openblack has no scaffolds yet
+	    .scaffold = false,
+	    .oneShot = registry.AllOf<OneOffSpellSeed>(thing),
+	    .canPickUp = Locator::creatureObjectActionSystem::value().CanPickUp(creature, thing),
+	    .ownInfluence = Locator::influenceSystem::value().PlayerRawInfluence(body->owner, transform->position),
+	});
 }
 
 std::optional<glm::vec3> CreatureMindSystem::BelievedPlace(const components::CreatureMindState& mind, entt::entity thing)

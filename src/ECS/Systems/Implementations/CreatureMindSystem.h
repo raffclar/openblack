@@ -128,6 +128,9 @@ public:
 	/// the nearest forest with trees), an animal's flock, a creature itself; nothing for anything else
 	[[nodiscard]] static std::optional<entt::entity> BelongsTo(entt::entity thing);
 
+	/// Whether the creature can steal the thing (see creature_steal::IsStealable)
+	[[nodiscard]] static bool CanSteal(entt::entity creature, entt::entity thing);
+
 private:
 	/// Gives a creature its desires and what it has learnt, if it has none yet: the first time its mind thinks, or
 	/// sooner when it is told to do something before then
