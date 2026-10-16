@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include "Magic/SpellRules.h"
+
 // How long a running miracle lives, apart from its particle effect. A miracle closes down when its time runs out, its
 // strength falls to nothing, its caster goes or something stops it; it goes once whatever keeps it has gone. A miracle
 // with a particle effect lives while the effect does, so it goes once its effect has died away after closing down. A
@@ -51,16 +53,24 @@ enum class SpellFate : uint8_t
 /// What becomes of the seed in the hand once its miracle is cast
 enum class SeedAfterCast : uint8_t
 {
-	/// It stays in the hand to cast again: lightning, water, food and wood
+	/// It stays in the hand, linked to its miracle: lightning, water, food and wood, and the creature spells' phials
 	StaysInHand,
-	/// It goes: the fireball, the heal, teleport, the flocks, the beam explosion, the creature spells
-	Deleted,
+	/// It leaves the hand, out of sight, and stays linked to its miracle until the miracle goes: the fireball, the heal,
+	/// teleport, the flocks, the beam explosion
+	LinkedToSpell,
 	/// It leaves the hand bound to its miracle and goes with it: the storms and both shields, and the forest
 	FollowsSpell,
 };
 
-/// From the seed's record: whether it is kept in the hand, deleted once cast, or follows its miracle. Deleted wins over
-/// kept, as for the creature spells' phials, which are marked both.
-[[nodiscard]] SeedAfterCast SeedAfterCastOf(bool keptInHand, bool deletedOnceCast, bool followsSpell);
+/// From the seed's record: whether it is kept in the hand or follows its miracle. A kept seed stays in the hand, linked
+/// to its miracle; a seed that is not kept leaves the hand linked to its miracle. The mark to delete a seed once cast
+/// has no effect on the cast.
+[[nodiscard]] SeedAfterCast SeedAfterCastOf(bool keptInHand, bool followsSpell);
+
+/// A creature spell's phial stays in the hand, linked to its miracle, until the miracle is older than this many seconds
+inline constexpr float k_CreatureSeedInHandSeconds = 4.0f;
+/// Whether the seed in the hand leaves it, still linked to its miracle: only a creature spell's, once the miracle is
+/// older than k_CreatureSeedInHandSeconds
+[[nodiscard]] bool SeedLeavesHandWithSpell(SpellClass spellClass, float spellAge);
 
 } // namespace openblack::magic

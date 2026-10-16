@@ -216,6 +216,18 @@ TEST(LeashKeys, TheLeashKeyTakesTheLeashOffHoweverManyItKnows)
 	          (KeyCommand {.kind = Kind::TakeOff}));
 }
 
+TEST(CreatureHand, ALeashedCreatureIsHeldAsUsual)
+{
+	using creature_hand::CreaturePress;
+	using creature_hand::PressOn;
+	// The leash on its own creature does not stop the hand taking hold of it
+	EXPECT_EQ(PressOn(true, true), CreaturePress::Hold);
+	EXPECT_EQ(PressOn(true, false), CreaturePress::Hold);
+	// With the leash on, a press on another creature ties the leash to it
+	EXPECT_EQ(PressOn(false, true), CreaturePress::Leash);
+	EXPECT_EQ(PressOn(false, false), CreaturePress::Hold);
+}
+
 TEST(CreatureHand, TheHandHoldsOnlyItsOwnPlayersCreature)
 {
 	using creature_hand::MayHold;

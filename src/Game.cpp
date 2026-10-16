@@ -79,6 +79,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Creature/CreatureFightHud.h"
+#include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
 #include "Creature/LeashOrders.h"
@@ -756,7 +757,9 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			const auto& leashes = Locator::leashSystem::value();
 			const auto own = leashes.PlayersCreature(PlayerNames::PLAYER_ONE);
 			const auto under = creatureHand.CreatureUnderCursor();
-			const bool tying = under.has_value() && own.has_value() && *under != *own && leashes.IsLeashed(*own);
+			const bool tying =
+			    under.has_value() && own.has_value() &&
+			    creature_hand::PressOn(*under == *own, leashes.IsLeashed(*own)) == creature_hand::CreaturePress::Leash;
 			if (!_actionPressTaken && under.has_value() && !tying)
 			{
 				_actionPressTaken = true;
