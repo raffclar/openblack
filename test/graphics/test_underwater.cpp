@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <array>
 #include <numbers>
 #include <vector>
 
@@ -20,6 +21,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/Seabed.h"
+#include "3D/SeabedTiles.h"
 #include "Graphics/Underwater.h"
 
 namespace underwater = openblack::graphics::underwater;
@@ -374,4 +376,27 @@ TEST(Underwater, TheSprayNoiseTilesAndFillsItsRange)
 		// The edge is no harder a step than the middle: the volume repeats with no seam
 		EXPECT_LT(across, inside * 2.0 + 1.0) << channel;
 	}
+}
+
+TEST(Underwater, AFarTileNextToABlockIsFine)
+{
+	const auto blockAtOrigin = [](int x, int z) { return x == 0 && z == 0; };
+	EXPECT_TRUE(seabed::FarTileIsFine(1, 0, blockAtOrigin));
+	EXPECT_TRUE(seabed::FarTileIsFine(1, 1, blockAtOrigin));
+	EXPECT_FALSE(seabed::FarTileIsFine(2, 0, blockAtOrigin));
+}
+
+TEST(Underwater, AFineTileSideOnACoarseTileLiesOnTheCoarseSide)
+{
+	const std::array<bool, 4> coarseAtXEnd {false, true, false, false};
+	// Between the coarse tile's corners at z 4 and 8
+	const auto [from, to] = seabed::FarCornerSpan({16, 5}, coarseAtXEnd);
+	EXPECT_EQ(from, glm::ivec2(16, 4));
+	EXPECT_EQ(to, glm::ivec2(16, 8));
+	// On a coarse corner, or on a side next to a block or a fine tile, the corner is its own
+	const auto [onFrom, onTo] = seabed::FarCornerSpan({16, 8}, coarseAtXEnd);
+	EXPECT_EQ(onFrom, onTo);
+	const auto [freeFrom, freeTo] = seabed::FarCornerSpan({0, 5}, coarseAtXEnd);
+	EXPECT_EQ(freeFrom, glm::ivec2(0, 5));
+	EXPECT_EQ(freeTo, glm::ivec2(0, 5));
 }

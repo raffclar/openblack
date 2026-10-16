@@ -32,6 +32,8 @@ SAMPLER2D(s12_snowNoise, 12);
 SAMPLER2D(s7_landLight, 7);
 // EXPERIMENT (not for merge): while the experiment's water is on, s12_snowNoise holds the sand texture
 #define SEABED_SAND_TEXTURE s12_snowNoise
+#define SEABED_FLOOR_TEXTURE s0_blockTextures
+#define SEABED_SHORE_TEXTURE s_snowDepth
 #include "seabed_sand.sh"
 // The ring an open vortex lays over the land around its hole
 SAMPLER2D(s13_vortexRing, 13);
@@ -338,6 +340,9 @@ void main()
 		ring = texture2D(s13_vortexRing, vortexUv);
 	}
 
+	// EXPERIMENT (not for merge): the land's colour before its light, for the ground under the sea
+	vec3 painted = col.rgb;
+	float paintedAlpha = block.a;
 	col.rgb = col.rgb * v_lightColour * v_haze.a;
 
 	// The small bump detail is a second layer over the lit land, its colour unlit, blended by its alpha whatever the
@@ -357,30 +362,23 @@ void main()
 	// the shore, and the land is opaque everywhere: the sea bed is under the water
 	if (u_uwParams.x > 0.5f)
 	{
-		vec3 surfaceNormal = SeabedSurfaceNormal(v_world);
-		// The sand comes in over a band of height at the shore, and keeps off steep ground, where the land's own rock goes
-		// on down under the water
-		float steepness = 1.0f - surfaceNormal.y;
-		float sandShare = (1.0f - smoothstep(-1.5f, 2.4f, v_world.y)) * (1.0f - smoothstep(0.25f, 0.55f, steepness));
+		vec3 normal = SeabedNormal(v_world);
 		// Under the surface the water's own fog takes the place of the haze
 		land = u_uwEye.w > 0.5f ? col.rgb : land;
-		if (sandShare > 0.0f)
+		// The ground under the sea comes in over a band of height at the shore. Near the sea's level it keeps off steep
+		// ground, where the land's own rock stays as the land draws it; deeper down it covers all, as past the blocks.
+		float steepRock = smoothstep(0.25f, 0.55f, 1.0f - normal.y) * smoothstep(-3.0f, 0.0f, v_world.y);
+		float seabedShare = (1.0f - smoothstep(-1.5f, 2.4f, v_world.y)) * (1.0f - steepRock);
+		if (seabedShare > 0.0f)
 		{
-			// Under the sea the sand takes the same light as the sea bed past the land's blocks, so the two match
+			// Under the sea the ground takes the same light as the sea bed past the land's blocks, so the two match
 			vec3 seaLight = texture2DLod(s7_landLight, vec2(150.5f / 256.0f, 0.5f), 0.0f).rgb;
-			vec3 sandLight = mix(v_lightColour, seaLight, smoothstep(0.5f, 3.0f, -v_world.y));
-			land = mix(land, SeabedSand(v_world, sandLight, surfaceNormal), sandShare);
-			// The sand is wet and darker below the highest run of the waves up the beach: wettest where the water just
-			// was, drier further up. The beach that the tide leaves is damp.
-			float level = u_uwParams.z;
-			vec4 shore = texture2DLod(s_snowDepth, UwShoreUv(v_world.xz), 0.0f);
-			float face;
-			float runUp = level + UwShoreWave(shore.x, v_world.xz, u_uwParams.y, UwShoreCliff(shore), face);
-			float wetTop = level + u_uwWaves.w * 1.4f + 0.15f;
-			float wet = 1.0f - smoothstep(runUp, wetTop, v_world.y);
-			wet = max(wet, 0.45f * (1.0f - smoothstep(-0.3f, 0.05f, v_world.y)));
-			land = mix(land, land * 0.6f, wet * sandShare);
-			bumpAlpha *= 1.0f - sandShare;
+			vec3 groundLight = mix(v_lightColour, seaLight, smoothstep(0.5f, 3.0f, -v_world.y));
+			// The land's own texture, faded by its coast alpha into the sea floor of the land's material
+			vec3 ground = mix(SeabedFloorAlbedo(v_world.xz), painted, paintedAlpha);
+			float sandShare;
+			land = mix(land, SeabedGround(v_world, ground, groundLight, normal, sandShare), seabedShare);
+			bumpAlpha *= 1.0f - seabedShare;
 		}
 		block.a = 1.0f;
 	}

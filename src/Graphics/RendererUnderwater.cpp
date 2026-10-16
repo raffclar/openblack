@@ -279,6 +279,12 @@ void Renderer::SetTerrainUnderwater(const ShaderProgram& program, bool active) c
 	program.SetUniformValue("u_snow", &noSnow);
 	const auto& system = Locator::underwaterSystem::value();
 	program.SetTextureSampler("s_snowDepth", 11, _underwater->Seabed(system.GetSeabed(), system.GetSeabedRevision()));
+	// The ground under the sea is the block textures' layer after the blocks' own
+	if (Locator::terrainSystem::has_value())
+	{
+		const glm::vec4 seaFloor {static_cast<float>(Locator::terrainSystem::value().GetBlocks().size()), 0.0f, 0.0f, 0.0f};
+		program.SetUniformValue("u_uwSeaFloor", &seaFloor);
+	}
 	const auto& textures = Locator::resources::value().GetTextures();
 	if (textures.Contains(underwater::k_SandTextureId.value()))
 	{
@@ -324,6 +330,12 @@ void Renderer::DrawFarSeabed(RenderPass landViewId) const
 	program->SetUniformValue("u_uwWaves", &frame.waves);
 	program->SetTextureSampler("s_sand", 0, *textures.Handle(underwater::k_SandTextureId.value()));
 	program->SetTextureSampler("s_landLight", 1, GetLandLightTexture());
+	// The same shore map and sea floor texture as the land's blocks, so the two match where they meet
+	program->SetTextureSampler("s_shore", 2, _underwater->Seabed(system.GetSeabed(), system.GetSeabedRevision()));
+	const auto& island = Locator::terrainSystem::value();
+	program->SetTextureSampler("s_floor", 3, island.GetBlockTextures());
+	const glm::vec4 seaFloor {static_cast<float>(island.GetBlocks().size()), 0.0f, 0.0f, 0.0f};
+	program->SetUniformValue("u_uwSeaFloor", &seaFloor);
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
 	               BGFX_STATE_MSAA);
 	// After every block of the land, which is drawn the nearest first

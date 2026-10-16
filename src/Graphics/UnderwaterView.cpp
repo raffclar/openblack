@@ -27,6 +27,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "3D/SeabedTiles.h"
 #include "GraphicsHandleBgfx.h"
 #include "Underwater.h"
 
@@ -176,10 +177,13 @@ void UnderwaterView::BindMotes() const
 
 namespace
 {
+/// A corner of the sea bed past the blocks: where it is (y how far it hangs down), and the two corners of the map whose
+/// heights its height is between (the same corner twice for most)
 struct FarVertex
 {
 	glm::vec3 position;
-	glm::vec3 normal;
+	glm::vec2 from;
+	glm::vec2 to;
 };
 
 /// The blocks along a side of the map, and the cells along a side of a block
@@ -210,26 +214,25 @@ bool UnderwaterView::BindFarSeabed(const seabed::Seabed& seabed, uint32_t revisi
 		{
 			return false;
 		}
-		const auto depthAt = [&](int x, int z) {
-			x = std::clamp(x, 0, corners.x - 1);
-			z = std::clamp(z, 0, corners.y - 1);
-			return seabed.depth[static_cast<size_t>(z) * static_cast<size_t>(corners.x) + static_cast<size_t>(x)];
-		};
 		const auto isPresent = [&](int x, int z) {
 			return x >= 0 && z >= 0 && x < k_MapBlocks && z < k_MapBlocks &&
 			       present[static_cast<size_t>(x) * k_MapBlocks + static_cast<size_t>(z)];
 		};
 		std::vector<FarVertex> vertices;
 		std::vector<uint32_t> indices;
-		const auto vertexAt = [&](int x, int z, float drop) {
-			// The normal from the depths either side of the corner
-			const float dx = depthAt(x + 1, z) - depthAt(x - 1, z);
-			const float dz = depthAt(x, z + 1) - depthAt(x, z - 1);
-			const auto normal = glm::normalize(glm::vec3(dx, 2.0f * seabed.spacing, dz));
-			const glm::vec3 position {static_cast<float>(x) * seabed.spacing, -depthAt(x, z) - drop,
-			                          static_cast<float>(z) * seabed.spacing};
-			vertices.push_back({position, normal});
+		// The vertex shader takes each corner's height from the shore map, as the land's blocks do
+		const auto vertexAt = [&](glm::ivec2 corner, float drop, glm::ivec2 from, glm::ivec2 to) {
+			const glm::vec3 position {static_cast<float>(corner.x) * seabed.spacing, drop,
+			                          static_cast<float>(corner.y) * seabed.spacing};
+			vertices.push_back({position, glm::vec2(from), glm::vec2(to)});
 			return static_cast<uint32_t>(vertices.size() - 1);
+		};
+		const auto isFine = [&](int x, int z) {
+			if (x < 0 || z < 0 || x >= k_MapBlocks || z >= k_MapBlocks || isPresent(x, z))
+			{
+				return false;
+			}
+			return seabed::FarTileIsFine(x, z, isPresent);
 		};
 		for (int bx = 0; bx < k_MapBlocks; ++bx)
 		{
@@ -239,24 +242,30 @@ bool UnderwaterView::BindFarSeabed(const seabed::Seabed& seabed, uint32_t revisi
 				{
 					continue;
 				}
-				bool nearBlock = false;
-				for (int ox = -1; ox <= 1; ++ox)
-				{
-					for (int oz = -1; oz <= 1; ++oz)
-					{
-						nearBlock = nearBlock || isPresent(bx + ox, bz + oz);
-					}
-				}
-				const int quads = nearBlock ? 16 : 4;
+				const bool fine = isFine(bx, bz);
+				const int quads = fine ? k_BlockCells : k_BlockCells / seabed::k_CoarseStep;
 				const int step = k_BlockCells / quads;
 				const int x0 = bx * k_BlockCells;
 				const int z0 = bz * k_BlockCells;
+				// Which sides of a fine tile meet a coarse tile: x - 1, x + 1, z - 1, z + 1
+				const std::array<bool, 4> coarseSide {
+				    fine && !isPresent(bx - 1, bz) && !isFine(bx - 1, bz) && bx > 0,
+				    fine && !isPresent(bx + 1, bz) && !isFine(bx + 1, bz) && bx + 1 < k_MapBlocks,
+				    fine && !isPresent(bx, bz - 1) && !isFine(bx, bz - 1) && bz > 0,
+				    fine && !isPresent(bx, bz + 1) && !isFine(bx, bz + 1) && bz + 1 < k_MapBlocks,
+				};
+				// A corner and the two corners of the map its height is between
+				const auto placed = [&](int x, int z, float drop) {
+					const glm::ivec2 corner {x, z};
+					const auto [from, to] = seabed::FarCornerSpan(corner - glm::ivec2(x0, z0), coarseSide);
+					return vertexAt(corner, drop, from + glm::ivec2(x0, z0), to + glm::ivec2(x0, z0));
+				};
 				const auto first = static_cast<uint32_t>(vertices.size());
 				for (int j = 0; j <= quads; ++j)
 				{
 					for (int i = 0; i <= quads; ++i)
 					{
-						vertexAt(x0 + i * step, z0 + j * step, 0.0f);
+						placed(x0 + i * step, z0 + j * step, 0.0f);
 					}
 				}
 				const auto row = static_cast<uint32_t>(quads + 1);
@@ -274,10 +283,10 @@ bool UnderwaterView::BindFarSeabed(const seabed::Seabed& seabed, uint32_t revisi
 					{
 						const auto [ax, az] = cornerOf(k);
 						const auto [bx2, bz2] = cornerOf(k + 1);
-						const auto top0 = vertexAt(ax, az, 0.0f);
-						const auto top1 = vertexAt(bx2, bz2, 0.0f);
-						const auto low0 = vertexAt(ax, az, k_SkirtDepth);
-						const auto low1 = vertexAt(bx2, bz2, k_SkirtDepth);
+						const auto top0 = placed(ax, az, 0.0f);
+						const auto top1 = placed(bx2, bz2, 0.0f);
+						const auto low0 = placed(ax, az, k_SkirtDepth);
+						const auto low1 = placed(bx2, bz2, k_SkirtDepth);
 						indices.insert(indices.end(), {top0, low0, top1, top1, low0, low1});
 					}
 				};
@@ -294,7 +303,8 @@ bool UnderwaterView::BindFarSeabed(const seabed::Seabed& seabed, uint32_t revisi
 		bgfx::VertexLayout layout;
 		layout.begin()
 		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-		    .add(bgfx::Attrib::Normal, 3, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord1, 2, bgfx::AttribType::Float)
 		    .end();
 		_farVertices = bgfx::createVertexBuffer(
 		    bgfx::copy(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(FarVertex))), layout);

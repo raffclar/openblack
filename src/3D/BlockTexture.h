@@ -73,5 +73,13 @@ void BuildBlock(std::span<const lnd::LNDCell> cells, const Sources& sources, std
 /// that part of the block's texture
 void PaintCells(std::span<const lnd::LNDCell> cells, const Sources& sources, glm::ivec2 firstCell, glm::ivec2 cellCount,
                 std::span<uint8_t> rgba);
+/// EXPERIMENT (not for merge): paints the ground under the sea with the land's own material, so the sea bed past the
+/// land's blocks has the same texture as the land. Every texel takes the country's materials at the lowest painted
+/// height, lifted by the noise and shaded by the bump map as on the land, and is opaque. The result is k_BlockBytes long
+/// in the layout of BuildBlock, and repeats from block to block as the materials, the noise and the bump map do.
+void PaintSeaFloor(const lnd::LNDCountry& country, const Sources& sources, std::span<uint8_t> rgba);
+/// EXPERIMENT (not for merge): the country that most of the cells at sea level are in, from the cells of all the
+/// blocks (17 by 17 a block, one block after another); 0 if there are none
+[[nodiscard]] uint8_t SeaFloorCountry(std::span<const lnd::LNDCell> cells);
 } // namespace block_texture
 } // namespace openblack
