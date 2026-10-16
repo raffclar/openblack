@@ -317,8 +317,9 @@ bool AnimalSystem::SetScriptState(entt::entity entity, LivingStates state)
 	{
 		return true;
 	}
-	// The state starts afresh, a land bird choosing its flying clip again
+	// The state starts afresh, a land bird choosing its flying clip again, and its count of turns starts at none
 	SetTopState(*animal, next);
+	animal->turnsUntilStateChange = 0;
 	return true;
 }
 
@@ -941,7 +942,7 @@ void AnimalSystem::Wolf(entt::entity entity, Animal& animal)
 	if (run.food != entt::null && !registry.Valid(run.food))
 	{
 		run.food = entt::null;
-		run.eatCount = 0;
+		animal.turnsUntilStateChange = 0;
 		SetTopState(animal, AnimalState::DecideWhatToDo);
 		return;
 	}
@@ -968,7 +969,7 @@ void AnimalSystem::Wolf(entt::entity entity, Animal& animal)
 		break;
 	case AnimalState::StartToEat:
 		// So many mouthfuls, once its settling down has played
-		run.eatCount = static_cast<int>(RandomWhole(k_MouthfulsRange) + k_MouthfulsMin);
+		animal.turnsUntilStateChange = static_cast<int16_t>(RandomWhole(k_MouthfulsRange) + k_MouthfulsMin);
 		WaitForClip(animal, AnimalState::Eat);
 		break;
 	case AnimalState::WaitForClip:
@@ -1309,13 +1310,14 @@ void AnimalSystem::Downed(Animal& animal)
 {
 	// The fall started when the hunter brought it down. After the fall, the hunter eats it for a number of turns
 	WaitForClipOfState(animal, AnimalState::BeingEaten);
-	animal.eatenTurnsLeft = being_eaten_rules::k_BeingEatenTurns;
+	animal.turnsUntilStateChange = static_cast<int16_t>(being_eaten_rules::k_BeingEatenTurns);
 }
 
 void AnimalSystem::BeingEatenTurn(entt::entity entity, Animal& animal)
 {
-	const auto step = being_eaten_rules::BeingEatenTurn(animal.eatenTurnsLeft, EntityRegistry().AllOf<Indestructible>(entity));
-	animal.eatenTurnsLeft = step.turnsLeft;
+	const auto step = being_eaten_rules::BeingEatenTurn(static_cast<uint16_t>(animal.turnsUntilStateChange),
+	                                                    EntityRegistry().AllOf<Indestructible>(entity));
+	animal.turnsUntilStateChange = static_cast<int16_t>(step.turnsLeft);
 	switch (step.result)
 	{
 	case being_eaten_rules::EatenTurn::Eaten:
@@ -1328,7 +1330,6 @@ void AnimalSystem::BeingEatenTurn(entt::entity entity, Animal& animal)
 		// It dies, and its body lies dead for the turns that are left
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} eaten", static_cast<uint32_t>(entity));
 		ecs::world_objects::SetLife(entity, 0.0f);
-		animal.deadTurns = step.turnsLeft;
 		WaitForClip(animal, AnimalState::Dead);
 		break;
 	}
@@ -1401,7 +1402,7 @@ void AnimalSystem::FinishPouncing(entt::entity wolf, Animal& animal, entt::entit
 void AnimalSystem::Eat(entt::entity wolf, Animal& animal)
 {
 	auto& run = EntityRegistry().Get<SpellWolf>(wolf);
-	if (--run.eatCount != 0)
+	if (--animal.turnsUntilStateChange != 0)
 	{
 		// Another mouthful, for as long as its eating plays
 		WaitForClip(animal, AnimalState::Eat);
@@ -1567,7 +1568,8 @@ void AnimalSystem::StartDyingWithoutDeath(entt::entity entity)
 		return;
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} starts to die without a death", static_cast<uint32_t>(entity));
-	// Only its state changes. It plays its fall again even when it was dying or dead already.
+	// Only its state changes. It plays its fall again even when it was dying or dead already. Its count of turns stays,
+	// so that its body lies dead for the turns that its earlier states left.
 	animal->state = AnimalState::Dying;
 	animal->turnsInState = 0;
 	if (const auto clip = animals::DyingClip(animal->type))
@@ -1589,7 +1591,7 @@ void AnimalSystem::SetDying(entt::entity entity)
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} killed", static_cast<uint32_t>(entity));
 	// It has no life left and falls dying; its body lies its time once dead. A bird falls out of the sky through the
 	// physics while it dies. Killed again, its body only lies its full time afresh
-	animal->deadTurns = animals::k_TurnsToDieOver;
+	animal->turnsUntilStateChange = animals::k_TurnsToDieOver;
 	if (animal->state == AnimalState::Dying || animal->state == AnimalState::Dead)
 	{
 		return;
@@ -1655,7 +1657,7 @@ void AnimalSystem::ProcessDeath(entt::entity entity, Animal& animal)
 		animal.clipPlace = 0;
 	}
 	// Its time up, it goes in a puff of grey smoke; a body a script controls lies there until the script lets it go
-	if (animals::DeadBodyGoes(animal.deadTurns, EntityRegistry().AllOf<ScriptControlled>(entity)))
+	if (animals::DeadBodyGoes(animal.turnsUntilStateChange, EntityRegistry().AllOf<ScriptControlled>(entity)))
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Animals: #{} dead body goes", static_cast<uint32_t>(entity));
 		LeaveSmoke(entity, animal);
@@ -1727,7 +1729,7 @@ void AnimalSystem::SendToSlaughter(entt::entity entity, glm::vec2 goal)
 		return;
 	}
 	// Its body goes the moment it lies dead
-	animal->deadTurns = 0;
+	animal->turnsUntilStateChange = 0;
 	SetupMoveTo(*animal, goal, 0.0f, AnimalState::Dead);
 }
 

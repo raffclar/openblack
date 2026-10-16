@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <limits>
 #include <numbers>
 #include <vector>
 
@@ -168,15 +169,26 @@ TEST(BirdRules, ACreatureStampsOnlyOnABirdLowerThanAQuarterOfItsOwnHeight)
 
 TEST(BirdRules, ADeadBodyLiesItsTurnsAndOneMoreUnlessAScriptControlsIt)
 {
-	int32_t left = 2;
+	int16_t left = 2;
 	EXPECT_FALSE(animals::DeadBodyGoes(left, false));
 	EXPECT_FALSE(animals::DeadBodyGoes(left, false));
 	EXPECT_TRUE(animals::DeadBodyGoes(left, false));
 	// Under a script's control its turns don't count down
-	int32_t held = 0;
+	int16_t held = 0;
 	EXPECT_FALSE(animals::DeadBodyGoes(held, true));
 	EXPECT_EQ(held, 0);
 	EXPECT_TRUE(animals::DeadBodyGoes(held, false));
+}
+
+TEST(BirdRules, ADeadBodyWithACountBelowNoneLiesUntilTheCountComesRound)
+{
+	// The count goes from its lowest value round to its highest value, then down to none
+	int16_t left = -1;
+	EXPECT_FALSE(animals::DeadBodyGoes(left, false));
+	EXPECT_EQ(left, -2);
+	left = std::numeric_limits<int16_t>::min();
+	EXPECT_FALSE(animals::DeadBodyGoes(left, false));
+	EXPECT_EQ(left, std::numeric_limits<int16_t>::max());
 }
 
 TEST(BirdRules, ADeadBodysSmokeRisesHalfItsHeightOutTheWayItFaces)
