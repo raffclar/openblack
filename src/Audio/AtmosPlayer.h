@@ -103,6 +103,9 @@ public:
 	[[nodiscard]] uint32_t GetBankVolume(BankId id) const;
 	/// LHAtmosSetGroup
 	void SetGroup(BankId id, uint32_t group);
+	/// EXPERIMENT (not for merge): plays a sample of a bank once, at a volume (0 to 127) and a place in the listener's
+	/// frame, as the atmosphere plays its one-shots. It stops by itself at its end.
+	void PlayOnce(BankId id, int32_t sampleId, uint32_t volume, glm::vec3 position);
 
 	/// LHSampleSetMasterVolume
 	void SetMasterVolume(uint32_t volume) { _masterVolume = volume; }

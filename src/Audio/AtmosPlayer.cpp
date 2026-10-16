@@ -252,6 +252,26 @@ void AtmosPlayer::SetBankVolume(BankId id, int32_t volume)
 	}
 }
 
+void AtmosPlayer::PlayOnce(BankId id, int32_t sampleId, uint32_t volume, glm::vec3 position)
+{
+	auto* bank = FindBank(id);
+	if (bank == nullptr)
+	{
+		return;
+	}
+	const auto header = std::ranges::find_if(bank->headers, [sampleId](const auto& sample) { return sample.id == sampleId; });
+	if (header == bank->headers.end())
+	{
+		return;
+	}
+	PlayOptions options;
+	options.playType = PlayType::Overlap;
+	options.volume = volume;
+	options.positional = true;
+	options.position = position;
+	[[maybe_unused]] const auto handle = PlaySample(*bank, *header, options);
+}
+
 uint32_t AtmosPlayer::GetBankVolume(BankId id) const
 {
 	const auto* bank = FindBank(id);

@@ -400,3 +400,71 @@ TEST(Underwater, AFineTileSideOnACoarseTileLiesOnTheCoarseSide)
 	EXPECT_EQ(freeFrom, glm::ivec2(0, 5));
 	EXPECT_EQ(freeTo, glm::ivec2(0, 5));
 }
+
+TEST(Underwater, NoiseMatchesTheShaderAtItsCorners)
+{
+	// At a whole point the noise is the hash there; between points it stays inside 0 to 1
+	EXPECT_FLOAT_EQ(underwater::Noise({3.0f, 7.0f}), underwater::Hash({3.0f, 7.0f}));
+	for (float x = 0.0f; x < 20.0f; x += 0.37f)
+	{
+		const float value = underwater::Noise({x, x * 0.7f + 2.0f});
+		EXPECT_GE(value, 0.0f);
+		EXPECT_LE(value, 1.0f);
+	}
+}
+
+TEST(Underwater, CliffCrashesComeOnceAWave)
+{
+	const auto waves = underwater::WavesFor(0.0f, 0.0f);
+	const glm::vec2 foot {3020.0f, 2110.0f};
+	// A calm sea: omega 1.1, so a crash about every 5.7 seconds
+	int starts = 0;
+	auto before = underwater::CliffCrashAt(foot, 0.0f, waves, 0.0f, 1.0f);
+	for (float t = 0.01f; t <= 57.2f; t += 0.01f)
+	{
+		const auto now = underwater::CliffCrashAt(foot, t, waves, 0.0f, 1.0f);
+		EXPECT_GE(now.since, 0.0f);
+		starts += underwater::CrashStarts(before, now) ? 1 : 0;
+		before = now;
+	}
+	EXPECT_EQ(starts, 10);
+}
+
+TEST(Underwater, CliffCrashesAreStrongerAtHighTideAndAtCliffs)
+{
+	const auto waves = underwater::WavesFor(0.0f, 0.0f);
+	const glm::vec2 foot {3020.0f, 2110.0f};
+	const auto high = underwater::CliffCrashAt(foot, 10.0f, waves, 0.0f, 1.0f);
+	const auto low = underwater::CliffCrashAt(foot, 10.0f, waves, -underwater::k_LowestTide, 1.0f);
+	const auto flat = underwater::CliffCrashAt(foot, 10.0f, waves, 0.0f, 0.0f);
+	EXPECT_GT(high.power, low.power);
+	EXPECT_NEAR(low.power / high.power, 0.7f, 1e-4f);
+	EXPECT_FLOAT_EQ(flat.power, 0.0f);
+	EXPECT_GT(high.power, 0.0f);
+}
+
+TEST(Underwater, OnlyNearAndSpreadCliffFeetAreHeard)
+{
+	const std::vector<glm::vec4> feet {
+	    {0.0f, 0.0f, 1.0f, 0.0f},   {10.0f, 0.0f, 1.0f, 0.0f},  {100.0f, 0.0f, 1.0f, 0.0f},
+	    {200.0f, 0.0f, 1.0f, 0.0f}, {300.0f, 0.0f, 1.0f, 0.0f}, {900.0f, 0.0f, 1.0f, 0.0f},
+	};
+	const auto heard = underwater::HeardCliffFeet(feet, {0.0f, 0.0f}, 3, 60.0f, 400.0f);
+	// The foot 10 away is too near the first; the foot 900 away is too far
+	EXPECT_EQ(heard, (std::vector<size_t> {0, 2, 3}));
+	EXPECT_TRUE(underwater::HeardCliffFeet(feet, {5000.0f, 0.0f}, 3, 60.0f, 400.0f).empty());
+}
+
+TEST(Underwater, ShoreIsBlendedBetweenCorners)
+{
+	const std::vector<glm::vec4> shore {
+	    {0.0f, 1.0f, 0.0f, 0.0f}, {10.0f, 1.0f, 0.0f, 0.0f}, {20.0f, 0.0f, 0.0f, 0.0f}, {30.0f, 0.0f, 0.0f, 0.0f}};
+	const std::vector<float> cliff {0.0f, 1.0f, 0.0f, 0.0f};
+	const auto middle = underwater::ShoreAt(shore, cliff, {2, 2}, 10.0f, {5.0f, 5.0f});
+	EXPECT_FLOAT_EQ(middle.x, 15.0f);
+	// The second corner is at the foot of a cliff: its direction is half as long
+	EXPECT_FLOAT_EQ(middle.y, 0.375f);
+	// No direction to the coast is the foot of a cliff, a full one a beach
+	EXPECT_FLOAT_EQ(underwater::ShoreCliff({0.0f, 0.0f, 0.0f, 0.0f}), 1.0f);
+	EXPECT_FLOAT_EQ(underwater::ShoreCliff({0.0f, 1.0f, 0.0f, 0.0f}), 0.0f);
+}

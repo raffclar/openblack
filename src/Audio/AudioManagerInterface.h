@@ -206,6 +206,9 @@ public:
 	/// EXPERIMENT (not for merge): how much the land's sounds and the music are turned down while the camera is under
 	/// the sea, 1 for none. The atmosphere is not turned down here: its banks fade by themselves.
 	virtual void SetUnderwaterDuck(float /*gain*/) {}
+	/// EXPERIMENT (not for merge): plays a sample of an atmosphere bank once, at a volume (0 to 127) and a place in the
+	/// listener's frame (x right, y forward, z up)
+	virtual void AtmosPlayOnce(uint32_t /*bank*/, int32_t /*sampleId*/, uint32_t /*volume*/, glm::vec3 /*position*/) {}
 };
 
 /// The listener at the camera, as the camera is now; a listener at the world's origin when there is no camera

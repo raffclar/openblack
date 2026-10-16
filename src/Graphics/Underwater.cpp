@@ -15,6 +15,9 @@
 #include <algorithm>
 #include <array>
 #include <numbers>
+#include <span>
+#include <utility>
+#include <vector>
 
 #include <glm/common.hpp>
 #include <glm/exponential.hpp>
@@ -405,4 +408,128 @@ std::vector<uint8_t> underwater::SprayNoiseVolume()
 		}
 	}
 	return texels;
+}
+
+namespace
+{
+// The fraction of a value, as the shaders' fract
+float Fract(float value)
+{
+	return value - std::floor(value);
+}
+
+// The hash of the shaders (UwHash in underwater.sh)
+float NoiseHash(glm::vec2 p)
+{
+	glm::vec3 q {Fract(p.x * 0.1031f), Fract(p.y * 0.1031f), Fract(p.x * 0.1031f)};
+	const float add = glm::dot(q, glm::vec3(q.y, q.z, q.x) + 33.33f);
+	q += add;
+	return Fract((q.x + q.y) * q.z);
+}
+} // namespace
+
+float underwater::Noise(glm::vec2 point)
+{
+	const glm::vec2 i = glm::floor(point);
+	const glm::vec2 f = point - i;
+	const glm::vec2 u = f * f * (3.0f - 2.0f * f);
+	const float a = NoiseHash(i);
+	const float b = NoiseHash(i + glm::vec2(1.0f, 0.0f));
+	const float c = NoiseHash(i + glm::vec2(0.0f, 1.0f));
+	const float d = NoiseHash(i + glm::vec2(1.0f, 1.0f));
+	return glm::mix(glm::mix(a, b, u.x), glm::mix(c, d, u.x), u.y);
+}
+
+float underwater::Hash(glm::vec2 point)
+{
+	return NoiseHash(point);
+}
+
+glm::vec4 underwater::ShoreTexel(glm::vec4 shore, float cliff)
+{
+	const float shorten = 1.0f - 0.5f * cliff;
+	return {shore.x, shore.y * shorten, shore.z * shorten, shore.w};
+}
+
+glm::vec4 underwater::ShoreAt(std::span<const glm::vec4> shore, std::span<const float> cliff, glm::ivec2 size, float spacing,
+                              glm::vec2 point)
+{
+	if (size.x <= 0 || size.y <= 0 || shore.size() < static_cast<size_t>(size.x) * static_cast<size_t>(size.y))
+	{
+		return {1000.0f, 0.0f, 0.0f, 0.0f};
+	}
+	const glm::vec2 cell = glm::clamp(point / spacing, glm::vec2(0.0f), glm::vec2(size - 1));
+	const glm::ivec2 low = glm::min(glm::ivec2(glm::floor(cell)), size - 2);
+	const glm::vec2 share = cell - glm::vec2(low);
+	const auto at = [&](int x, int z) {
+		const auto i = static_cast<size_t>(z) * static_cast<size_t>(size.x) + static_cast<size_t>(x);
+		return ShoreTexel(shore[i], i < cliff.size() ? cliff[i] : 0.0f);
+	};
+	const auto nearRow = glm::mix(at(low.x, low.y), at(low.x + 1, low.y), share.x);
+	const auto farRow = glm::mix(at(low.x, low.y + 1), at(low.x + 1, low.y + 1), share.x);
+	return glm::mix(nearRow, farRow, share.y);
+}
+
+float underwater::ShoreCliff(glm::vec4 shore)
+{
+	return std::clamp((1.0f - glm::length(glm::vec2(shore.y, shore.z))) * 2.0f, 0.0f, 1.0f);
+}
+
+underwater::CliffCrash underwater::CliffCrashAt(glm::vec2 foot, float seconds, const WaveState& waves, float seaLevel,
+                                                float cliff)
+{
+	constexpr float k_Turn = 2.0f * std::numbers::pi_v<float>;
+	// The same steps as UwCliffCrash in underwater.sh: when the shore wave reaches the coast here, and which crash it is
+	const float omega = glm::mix(1.1f, 1.5f, waves.storm);
+	const float theta = omega * seconds + Noise(foot * 0.008f) * 1.2f;
+	const float period = k_Turn / omega;
+	const float number = std::floor(theta / k_Turn);
+	// Each crash has its own strength, the sets make some crashes stronger, and some parts of a cliff take more
+	const float own = 0.6f + 0.8f * NoiseHash({number, 17.0f});
+	const float sets = 0.55f + 0.45f * std::sin(number * 0.9f);
+	const float along = 0.6f + 0.8f * Noise(foot * 0.012f + glm::vec2(3.0f, 7.0f));
+	const float strength = own * sets * along;
+	const float tide = std::clamp((seaLevel + k_LowestTide) / k_LowestTide, 0.0f, 1.0f);
+	return {
+	    .number = number,
+	    .since = Fract(theta / k_Turn) * period,
+	    .power = waves.swash * cliff * (0.7f + 0.3f * tide) * strength / 0.55f,
+	    .seed = number * 3.7f + glm::dot(foot, glm::vec2(0.0173f, 0.0291f)),
+	};
+}
+
+bool underwater::CrashStarts(const CliffCrash& before, const CliffCrash& now)
+{
+	return now.number != before.number;
+}
+
+std::vector<size_t> underwater::HeardCliffFeet(std::span<const glm::vec4> feet, glm::vec2 eye, size_t count, float spacing,
+                                               float range)
+{
+	std::vector<std::pair<float, size_t>> inRange;
+	for (size_t i = 0; i < feet.size(); ++i)
+	{
+		const float distance = glm::distance(glm::vec2(feet[i]), eye);
+		if (distance <= range)
+		{
+			inRange.emplace_back(distance, i);
+		}
+	}
+	std::ranges::sort(inRange);
+	std::vector<size_t> heard;
+	for (const auto& [distance, index] : inRange)
+	{
+		if (heard.size() >= count)
+		{
+			break;
+		}
+		const glm::vec2 foot {feet[index]};
+		const bool apart =
+		    std::ranges::none_of(heard, [&](size_t other) { return glm::distance(glm::vec2(feet[other]), foot) < spacing; });
+		if (apart)
+		{
+			heard.push_back(index);
+		}
+	}
+	return heard;
 }

@@ -14,6 +14,7 @@
 
 #include <array>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -235,5 +236,48 @@ inline constexpr uint16_t k_SprayNoiseSide = 32;
 /// edge) for lumps of water, b: finer smooth noise, a: ridges of the smooth noise for thin strands. The spray reads it
 /// as if it were a cloud of water, moving through it over time.
 [[nodiscard]] std::vector<uint8_t> SprayNoiseVolume();
+/// The value noise of the shaders (UwNoise in underwater.sh), 0 to 1, on the processor
+[[nodiscard]] float Noise(glm::vec2 point);
+
+/// The hash of the shaders (UwHash in underwater.sh), 0 to 1
+[[nodiscard]] float Hash(glm::vec2 point);
+
+/// A texel of the shore map from a corner's shore and how much it is at the foot of a cliff: the direction to the coast
+/// is shortened by up to a half at the foot of a cliff
+[[nodiscard]] glm::vec4 ShoreTexel(glm::vec4 shore, float cliff);
+
+/// The shore map's value at a point across the ground, blended between the four corners round it (as the shaders read
+/// the shore map): x the distance to the coast, yz the shortened direction to the coast, w the ground's height. The
+/// first corner is at the origin.
+[[nodiscard]] glm::vec4 ShoreAt(std::span<const glm::vec4> shore, std::span<const float> cliff, glm::ivec2 size, float spacing,
+                                glm::vec2 point);
+
+/// How much a point is at the foot of a cliff, 0 to 1, from its shore value (UwShoreCliff in underwater.sh)
+[[nodiscard]] float ShoreCliff(glm::vec4 shore);
+
+/// One crash of a wave at a point along the foot of a cliff
+struct CliffCrash
+{
+	/// Which crash it is: it goes up by one with each wave
+	float number;
+	/// The time since this crash started, in seconds
+	float since;
+	/// How hard the wave hits, as the spray's power: 0 for no crash, about 0.25 for a usual crash of a calm sea
+	float power;
+	/// A number for this crash at this point, to pick a different sound each time
+	float seed;
+};
+
+/// The crash at a foot of a cliff now. It is the same timing and strength as UwCliffCrash in underwater.sh and the
+/// spray's power in vs_underwater_spray.sc: change them together. `cliff` is ShoreCliff at the foot.
+[[nodiscard]] CliffCrash CliffCrashAt(glm::vec2 foot, float seconds, const WaveState& waves, float seaLevel, float cliff);
+
+/// Whether a crash starts between two times of the same foot
+[[nodiscard]] bool CrashStarts(const CliffCrash& before, const CliffCrash& now);
+
+/// The feet of the cliffs to hear a crash from: at most `count`, the nearest to the eye inside `range` first, each at
+/// least `spacing` from the others, so that one crash along a cliff is heard once
+[[nodiscard]] std::vector<size_t> HeardCliffFeet(std::span<const glm::vec4> feet, glm::vec2 eye, size_t count, float spacing,
+                                                 float range);
 
 } // namespace openblack::graphics::underwater
