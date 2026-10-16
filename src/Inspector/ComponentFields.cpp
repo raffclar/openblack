@@ -102,6 +102,7 @@
 #include "ECS/Components/CreatureDrawnFeet.h"
 #include "ECS/Components/CreatureExploration.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureFileSave.h"
 #include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureHair.h"
@@ -715,6 +716,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureKnockedOut::permanent>("permanent")
 	    .Field<&components::CreatureKnockedOut::home>("home")
 	    .Field<&components::CreatureKnockedOut::fizzTurns>("fizzTurns");
+	Reflect<components::CreatureFileSave>(context).Field<&components::CreatureFileSave::turnsSeen>("turnsSeen");
 	Reflect<components::CreatureFizz>(context).Field<&components::CreatureFizz::fizz>("fizz");
 	Reflect<components::CreatureFriends>(context).Field<&components::CreatureFriends::friends>("friends");
 	Reflect<components::CreatureHair>(context)

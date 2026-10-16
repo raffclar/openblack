@@ -337,3 +337,22 @@ TEST(PlayerProfiles, AProfilesFolderIsNamedByItsKey)
 	EXPECT_EQ(ProfileKey(std::u16string(200, u'a')).size(), k_LongestKey);
 	EXPECT_EQ(ProfileKey(std::u16string(1, u'a') + std::u16string(100, u'.')).size(), 254u);
 }
+
+TEST(PlayerProfileSystem, DeletingAProfileDeletesItsCreaturesMindFileButNotItsPhysique)
+{
+	const ProfilesFolder folder("player_profiles_delete_creature");
+	const auto store = StoreIn(folder.Path());
+	ecs::systems::PlayerProfileSystem system(store, FakeMachine());
+	system.CreateProfile(u"Ann", 0);
+	const auto file = system.CreatureFile();
+	ASSERT_TRUE(file.has_value());
+	std::filesystem::create_directories(*store.creatureMinds);
+	const auto mind = *store.creatureMinds / *file;
+	const auto physique = *store.creatureMinds / ("Physique" + *file);
+	std::ofstream(mind) << "mind";
+	std::ofstream(physique) << "physique";
+
+	EXPECT_TRUE(system.DeleteProfile(u"Ann"));
+	EXPECT_FALSE(std::filesystem::exists(mind));
+	EXPECT_TRUE(std::filesystem::exists(physique));
+}

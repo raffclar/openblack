@@ -14,6 +14,7 @@
 #include <chrono>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include <MindFile.h>
 #include <PhysiqueFile.h>
@@ -26,6 +27,8 @@
 #include "Creature/CreatureSpells.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureFileSave.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
@@ -237,8 +240,45 @@ std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::ve
 	return creature;
 }
 
+void CreatureCarryOverSystem::SaveAsTheyLive()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto local = LocalPlayer();
+	std::vector<entt::entity> due;
+	registry.Each<const Creature, const CreatureNeeds>(
+	    [&registry, &due, local](entt::entity entity, const Creature& creature, const CreatureNeeds& needs) {
+		    if (creature.owner != local)
+		    {
+			    return;
+		    }
+		    const auto turns = needs.needs.turns;
+		    auto* save = registry.TryGet<CreatureFileSave>(entity);
+		    if (save == nullptr)
+		    {
+			    // A creature first looked at now is written only once it gets to the next multiple of 600 turns
+			    registry.Assign<CreatureFileSave>(entity, turns);
+			    return;
+		    }
+		    if (creature_carry_over::SavesAsItLives(save->turnsSeen, turns))
+		    {
+			    due.push_back(entity);
+		    }
+		    save->turnsSeen = turns;
+	    });
+	for (const auto creature : due)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player's creature {} has lived another {} turns",
+		                   entt::to_integral(creature), creature_carry_over::k_SaveEveryTurns);
+		KeepCreature(creature);
+	}
+}
+
 void CreatureCarryOverSystem::ProcessTurn()
 {
+	if (_landKeepsCreatures)
+	{
+		SaveAsTheyLive();
+	}
 	if (_arriving.empty())
 	{
 		return;
@@ -259,6 +299,19 @@ void CreatureCarryOverSystem::ProcessTurn()
 void CreatureCarryOverSystem::Reset()
 {
 	_arriving.clear();
+}
+
+void CreatureCarryOverSystem::SetLandKeepsCreatures(bool keeps)
+{
+	_landKeepsCreatures = keeps;
+}
+
+void CreatureCarryOverSystem::EndGame()
+{
+	if (_landKeepsCreatures)
+	{
+		KeepPlayersCreature();
+	}
 }
 
 void CreatureCarryOverSystem::StartGame()

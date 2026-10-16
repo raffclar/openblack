@@ -48,8 +48,15 @@ public:
 	/// with the sound of sparkling and sparkles into sight over three seconds.
 	virtual std::optional<entt::entity> LoadPlayersCreature(glm::vec2 place) = 0;
 
-	/// Once a game turn: the creatures loaded sparkle into sight
+	/// Once a game turn: the creatures loaded sparkle into sight. A creature of the player's own is written to the
+	/// player's creature files each time it has lived 600 more turns, when the land keeps creatures
 	virtual void ProcessTurn() = 0;
+	/// Whether the land played now keeps the player's creature in the player's files as it lives and when the game ends.
+	/// The testbed doesn't, so that its creatures never replace the player's own
+	virtual void SetLandKeepsCreatures(bool keeps) = 0;
+	/// The game ends: the player's creature, if they have one, is written to their files as it is now, when the land
+	/// keeps creatures
+	virtual void EndGame() = 0;
 	/// The land is cleared: the creatures still sparkling into sight go with it; what was kept stays
 	virtual void Reset() = 0;
 	/// A new game starts, after the last game's creature was kept: from now until the next new game the creature is
