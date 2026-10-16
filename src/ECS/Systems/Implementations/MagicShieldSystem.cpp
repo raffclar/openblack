@@ -146,7 +146,7 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 	}
 	auto& dome = registry.Assign<ShieldDome>(object);
 	dome.shape = shield::MakeDomeShape(*info, miracle.magnitude, miracle.processInfo.spin);
-	dome.mesh = resources::HashIdentifier(MeshId::SpellSolidShield);
+	dome.mesh = resources::HashIdentifier(ShieldDome::k_MeshId);
 	if (Locator::resources::has_value())
 	{
 		const auto& meshes = Locator::resources::value().GetMeshes();

@@ -244,6 +244,7 @@
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/TexelDepth.h"
+#include "Gui/Canvas.h"
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/GameInterface.h"
 #include "Gui/HandToolTips.h"
@@ -976,8 +977,11 @@ void Game::WarmUpFirstFrame()
 		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams);
 	}
 	const auto start = std::chrono::steady_clock::now();
-	const bool shown = RenderLoadingFrame(
-	    true, [&renderer, &config, this]() { renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn())); });
+	const bool shown = RenderLoadingFrame(true, [&renderer, &config, this]() {
+		renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn()));
+		// The interface draws over the scene too, and the cinema bars are its first draw
+		gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
+	});
 	// The first frame makes the draw lists again from what the game's first update changed
 	if (config.drawEntities)
 	{
@@ -4257,19 +4261,7 @@ bool Game::Run() noexcept
 	// Everything the map made goes into the map's cells, in the order it was made
 	Locator::entitiesMap::value().Sync();
 
-	if (Locator::windowing::has_value())
-	{
-		const auto size = static_cast<glm::u16vec2>(Locator::windowing::value().GetSize());
-		Locator::rendererInterface::value().ConfigureView(graphics::RenderPass::Main, size, 0x274659ff);
-		Locator::oceanSystem::value().ResizeReflectionFramebuffer(size);
-	}
-
-	{
-		uint16_t width;
-		uint16_t height;
-		Locator::oceanSystem::value().GetReflectionFramebuffer().GetSize(width, height);
-		Locator::rendererInterface::value().ConfigureView(graphics::RenderPass::Reflection, {width, height}, 0x274659ff);
-	}
+	SizeSceneToWindow();
 
 	Game::SetTime(config.timeOfDay);
 	Locator::time::value().Start();
@@ -4565,7 +4557,6 @@ void Game::LoadTestbed() noexcept
 	InitializeLevel(flat_land::Build());
 	SetUpLandscape();
 	RenderLoadingFrame();
-	EndLoadingScreen();
 
 	// Looking down over the middle of the map, from the south, a little to its east
 	const auto& land = Locator::terrainSystem::value();
@@ -4575,8 +4566,6 @@ void Game::LoadTestbed() noexcept
 	Locator::camera::value()
 	    .SetOrigin({x, ground + flat_land::k_CameraHeight, middle.y - flat_land::k_CameraBack})
 	    .SetFocus({x, ground, middle.y});
-
-	StartNewLand(land_change::Kind::Testbed);
 
 	// The testbed has no temple to give its player influence, so a source of influence over its middle gives them the
 	// reach a citadel would: the miracles cast only in influence may be cast there, and nowhere beyond. Their worship
@@ -4594,6 +4583,11 @@ void Game::LoadTestbed() noexcept
 		}
 	});
 	testbed_dispensers::PlaceGrid(middle);
+	// The loading screen ends with the camera and the testbed's things in place, so that the first frame drawn behind
+	// it draws what the game's first frames draw
+	EndLoadingScreen();
+
+	StartNewLand(land_change::Kind::Testbed);
 
 	// The testbed comes with its window of scenarios to try out on it
 	if (Locator::debugGui::has_value() && _testbedWindow)
@@ -5262,6 +5256,24 @@ void Game::SetUpLandscape()
 void Game::SetTime(float time) noexcept
 {
 	Locator::skySystem::value().SetTime(time);
+}
+
+void Game::SizeSceneToWindow()
+{
+	if (!Locator::rendererInterface::has_value() || !Locator::oceanSystem::has_value())
+	{
+		return;
+	}
+	if (Locator::windowing::has_value())
+	{
+		const auto size = static_cast<glm::u16vec2>(Locator::windowing::value().GetSize());
+		Locator::rendererInterface::value().ConfigureView(graphics::RenderPass::Main, size, 0x274659ff);
+		Locator::oceanSystem::value().ResizeReflectionFramebuffer(size);
+	}
+	uint16_t width = 0;
+	uint16_t height = 0;
+	Locator::oceanSystem::value().GetReflectionFramebuffer().GetSize(width, height);
+	Locator::rendererInterface::value().ConfigureView(graphics::RenderPass::Reflection, {width, height}, 0x274659ff);
 }
 
 void Game::FollowWindowSize()

@@ -23,6 +23,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/RenderModes.h"
@@ -30,6 +31,7 @@
 #include "Graphics/ZSort.h"
 #include "Locator.h"
 #include "Renderer.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -43,7 +45,15 @@ void Renderer::DrawShieldDomes(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	const auto domes = Locator::magicShieldSystem::value().GetDomes(Locator::time::value().GetTurnFraction());
+	auto domes = Locator::magicShieldSystem::value().GetDomes(Locator::time::value().GetTurnFraction());
+	// A warm-up draws a dome at no size, as the first dome draws
+	if (_warmingUp)
+	{
+		domes = {{.mesh = resources::HashIdentifier(ecs::components::ShieldDome::k_MeshId),
+		          .position = glm::vec3(0.0f),
+		          .angle = 0.0f,
+		          .scale = 0.0f}};
+	}
 	if (domes.empty())
 	{
 		return;

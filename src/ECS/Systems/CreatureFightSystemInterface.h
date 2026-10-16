@@ -56,6 +56,8 @@ public:
 	/// A new land: it forgets the press it held, the fight the camera watched and how long it looked at an arena, and
 	/// lets the player leave fights again; the creatures and their fights went with the old land
 	virtual void Reset() = 0;
+	/// While the land loads: works out where creatures may go on it, so that the first fight does not have to
+	virtual void PrepareLand() {}
 	/// Once a frame, by the game time, before the creatures are placed: the fight animations play, blows land and the
 	/// fighters move as their animations carry them
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;

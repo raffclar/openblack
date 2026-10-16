@@ -25,6 +25,7 @@
 #include "Common/UserData.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
@@ -460,6 +461,8 @@ void Game::FinishLoadingBehindScreen()
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 	const auto loaded = std::chrono::steady_clock::now();
+	// The first frame draws into targets of the window's size. Thus the warm-up draws into the same targets.
+	SizeSceneToWindow();
 	PrepareFirstFrames();
 	WarmUpFirstFrame();
 	// The renderer makes the last resources in one more loading frame, so that the first frame of the game does not
@@ -506,6 +509,11 @@ void Game::PrepareFirstFrames()
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
 		[[maybe_unused]] const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+	}
+	// The first fight finds where creatures may go on the whole land
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().PrepareLand();
 	}
 	// The first start of each effect reads its file, its models and its light maps
 	if (Locator::particleSystem::has_value())
