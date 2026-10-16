@@ -139,7 +139,9 @@ void PaintWound(std::span<uint16_t> skin, const DamageArt& art, const Mark& woun
 
 /// Blood is red when fresh, browner as it dries, and covers three quarters of the skin under it
 [[nodiscard]] glm::u8vec3 BloodColour(uint8_t age);
-constexpr uint8_t k_BloodAlpha = 191;
+/// A texel of the skin with blood over it: each channel is the skin's 4 bits widened to 8, a quarter of it added to
+/// three quarters of the blood's channel, rounded down and cut back to the top 4 bits; opaque
+[[nodiscard]] uint16_t BloodTexel(uint16_t skin, const glm::u8vec3& colour);
 /// A drop of blood painted onto a skin of 256 by 256 texels
 void PaintBlood(std::span<uint16_t> skin, const Mark& blood);
 } // namespace openblack::creature_marks

@@ -127,8 +127,18 @@ TEST(CreatureMarks, BloodDarkensAsItDries)
 	std::vector<uint16_t> skin(k_SkinTexels, 0x0FFF);
 	PaintBlood(skin, {.u = 3, .v = 2, .skin = 0, .age = 0, .type = 0, .column = 0});
 	// Three quarters red over white
-	EXPECT_EQ(skin.at((2 * 256) + 3), BlendTexel(0x0FFF, {150, 0, 20}, k_BloodAlpha));
+	EXPECT_EQ(skin.at((2 * 256) + 3), BloodTexel(0x0FFF, {150, 0, 20}));
 	EXPECT_EQ(skin.at((2 * 256) + 4), 0x0FFF);
+}
+
+TEST(CreatureMarks, BloodCoversThreeQuartersRoundedDown)
+{
+	// White under fresh blood: (240 + 3 x 150) / 4 = 172 -> 10; (240 + 0) / 4 = 60 -> 3; (240 + 60) / 4 = 75 -> 4
+	EXPECT_EQ(BloodTexel(0x0FFF, {150, 0, 20}), 0xFA34);
+	// A quarter of 16 and three quarters of 80 make 64 exactly, which keeps 4 and not 3
+	EXPECT_EQ(BloodTexel(0x0111, {80, 80, 80}), 0xF444);
+	// Black under the oldest blood: 60 -> 3, 30 -> 1, 0 -> 0
+	EXPECT_EQ(BloodTexel(0x0000, {80, 40, 0}), 0xF310);
 }
 
 TEST(CreatureMarks, SkinsArePaintedTattoosThenWoundsThenBlood)
@@ -163,7 +173,7 @@ TEST(CreatureMarks, SkinsArePaintedTattoosThenWoundsThenBlood)
 	EXPECT_EQ(at(5, 5), 0x0FFF);
 	EXPECT_EQ(at(100, 100), 0xFFFF);
 	EXPECT_EQ(at(120, 120), 0xF000);
-	EXPECT_EQ(at(128, 128), BlendTexel(0xF000, BloodColour(0), k_BloodAlpha));
+	EXPECT_EQ(at(128, 128), BloodTexel(0xF000, BloodColour(0)));
 	EXPECT_EQ(at(10, 10), 0x0FFF);
 
 	// Without the art, the blend alone
