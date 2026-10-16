@@ -216,7 +216,7 @@ bool posed_model::IsDrawn(const graphics::L3DSubMesh& subMesh)
 
 std::optional<posed_model::SkinHit> posed_model::NearestSkinHit(const ecs::Registry& registry, entt::entity entity,
                                                                 const graphics::L3DMesh& mesh, const glm::mat4& model,
-                                                                glm::vec3 origin, glm::vec3 direction)
+                                                                glm::vec3 origin, glm::vec3 direction, bool behindAllowed)
 {
 	std::optional<SkinHit> nearest;
 	std::vector<glm::vec3> placed;
@@ -231,7 +231,7 @@ std::optional<posed_model::SkinHit> posed_model::NearestSkinHit(const ecs::Regis
 		}
 		Place(registry, entity, mesh, s, model, placed);
 		const auto& geometry = subMesh.GetBodyGeometry();
-		const auto hit = screen_pick::NearestSkinIntersection(placed, geometry.indices, origin, direction);
+		const auto hit = screen_pick::NearestSkinIntersection(placed, geometry.indices, origin, direction, behindAllowed);
 		if (!hit.has_value() || (nearest.has_value() && !(hit->distance < nearest->hit.distance)))
 		{
 			continue;

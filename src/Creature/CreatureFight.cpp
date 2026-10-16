@@ -543,19 +543,103 @@ Hit creature_fight::ResolveBlow(const Blow& blow, RecoilDirection direction)
 	return {.band = band, .damage = damage, .recoil = plain + RecoilOffset(direction), .plainRecoil = plain};
 }
 
-RecoilDirection creature_fight::RecoilDirectionOf(glm::vec2 offset)
+RecoilDirection creature_fight::RecoilDirectionOf(const glm::vec3& swing)
 {
-	const auto sideways = std::abs(offset.x);
-	const auto upright = std::abs(offset.y);
-	if (sideways < k_PlainRecoilWithin && upright < k_PlainRecoilWithin)
+	if (-swing.z >= std::sqrt((swing.x * swing.x) + (swing.y * swing.y)))
 	{
 		return RecoilDirection::Plain;
 	}
-	if (sideways >= upright)
+	const auto upright = std::abs(swing.y);
+	if (swing.x >= upright)
 	{
-		return offset.x > 0.0f ? RecoilDirection::Right : RecoilDirection::Left;
+		return RecoilDirection::Left;
 	}
-	return offset.y > 0.0f ? RecoilDirection::Top : RecoilDirection::Bottom;
+	if (-swing.x >= upright)
+	{
+		return RecoilDirection::Right;
+	}
+	return std::abs(swing.x) > swing.y ? RecoilDirection::Top : RecoilDirection::Bottom;
+}
+
+BlowShape creature_fight::ShapeOfBlow(const glm::vec3& boneAtLand, const glm::vec3& boneBefore, float landMs, float durationMs,
+                                      float rootTravel)
+{
+	const auto travel = durationMs > 0.0f ? landMs * rootTravel / durationMs : 0.0f;
+	return {
+	    .point = glm::vec3(0.0f, boneAtLand.y, boneAtLand.z + travel),
+	    .swing = (boneAtLand - boneBefore) * k_SwingPerSecond,
+	};
+}
+
+float creature_fight::HeightShareOf(float blowHeight, float headHeight)
+{
+	return headHeight > 0.0f ? blowHeight / headHeight : 1.0f;
+}
+
+int32_t creature_fight::TestSpanMs(float turnMs, float size)
+{
+	return static_cast<int32_t>(turnMs * (1.6f - (size * 0.5f * 0.85f)));
+}
+
+int32_t creature_fight::TestWindowMs(int32_t spanMs)
+{
+	return static_cast<int32_t>(static_cast<float>(spanMs) * 0.6f);
+}
+
+std::vector<int32_t> creature_fight::BlowTestTimes(int32_t fromMs, int32_t spanMs, int32_t landMs)
+{
+	const auto step = spanMs / k_BlowTests;
+	const auto window = TestWindowMs(spanMs);
+	std::vector<int32_t> times;
+	auto time = fromMs;
+	for (int32_t i = 0; i < k_BlowTests; ++i)
+	{
+		time += step;
+		if (time >= landMs - window && time <= landMs + window)
+		{
+			times.push_back(time);
+		}
+	}
+	return times;
+}
+
+std::array<glm::vec3, 5> creature_fight::BlowTestPoints(const glm::vec3& bone, const glm::vec3& boneBefore, float reach)
+{
+	const auto swing = bone - boneBefore;
+	// Across the swing on the level, then across both
+	const glm::vec3 across(swing.z, 0.0f, -swing.x);
+	const glm::vec3 over(swing.x * swing.y, -((swing.x * swing.x) + (swing.z * swing.z)), swing.y * swing.z);
+	std::array<glm::vec3, 5> points {swing, across, over, -across, -over};
+	for (auto& point : points)
+	{
+		if (point != glm::vec3(0.0f))
+		{
+			point *= reach / glm::length(point);
+		}
+		point += bone;
+	}
+	return points;
+}
+
+float creature_fight::BlowTestReach(float attackerSize, bool special)
+{
+	return (special ? 2.0f : 1.0f) * attackerSize * 0.2f * 15.0f;
+}
+
+float creature_fight::SwingPuffSize(float attackerSize, bool special)
+{
+	const auto size = (special ? 2.0f : 1.0f) * attackerSize;
+	return size + size;
+}
+
+float creature_fight::BloodSpreadStep(const glm::vec3& blowVector)
+{
+	return glm::length(blowVector) * k_BloodSpreadShare;
+}
+
+glm::vec3 creature_fight::SprayVelocity(const glm::vec3& vector, float step, const glm::ivec3& draws)
+{
+	return (glm::vec3(draws - 25) * step) + vector;
 }
 
 std::optional<Step> creature_fight::StepOf(size_t animation)
@@ -798,7 +882,6 @@ void creature_fight::Enter(Fighter& fighter, State state, std::optional<size_t> 
 	fighter.timeMs = 0.0f;
 	fighter.stateMs = 0.0f;
 	fighter.speed = speed;
-	fighter.landed = false;
 	fighter.special = state == State::Action && IsSpecialAttack(fighter.animation);
 	if (state == State::Action || state == State::BlockRecoil)
 	{

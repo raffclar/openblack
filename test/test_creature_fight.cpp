@@ -351,13 +351,78 @@ TEST(CreatureFight, RecoilsByHeightAndDirection)
 	const auto low = ResolveBlow({.heightShare = 0.1f}, RecoilDirection::Bottom);
 	EXPECT_EQ(low.recoil, animations::k_RecoilLow + 4);
 	EXPECT_EQ(low.plainRecoil, animations::k_RecoilLow);
-	EXPECT_EQ(RecoilDirectionOf({0.1f, 0.1f}), RecoilDirection::Plain);
-	EXPECT_EQ(RecoilDirectionOf({0.8f, 0.2f}), RecoilDirection::Right);
-	EXPECT_EQ(RecoilDirectionOf({-0.8f, 0.2f}), RecoilDirection::Left);
-	EXPECT_EQ(RecoilDirectionOf({0.1f, 0.9f}), RecoilDirection::Top);
-	EXPECT_EQ(RecoilDirectionOf({0.1f, -0.9f}), RecoilDirection::Bottom);
+	// By the swing of the striking bone, ahead being -z
+	EXPECT_EQ(RecoilDirectionOf({0.1f, 0.1f, -1.0f}), RecoilDirection::Plain);
+	EXPECT_EQ(RecoilDirectionOf({-0.8f, 0.2f, -0.1f}), RecoilDirection::Right);
+	EXPECT_EQ(RecoilDirectionOf({0.8f, 0.2f, -0.1f}), RecoilDirection::Left);
+	EXPECT_EQ(RecoilDirectionOf({0.1f, -0.9f, 0.0f}), RecoilDirection::Top);
+	EXPECT_EQ(RecoilDirectionOf({0.1f, 0.9f, 0.0f}), RecoilDirection::Bottom);
+	// A swing back towards the attacker reels the body too; an even swing ahead and across throws it straight back
+	EXPECT_EQ(RecoilDirectionOf({0.0f, 0.5f, 1.0f}), RecoilDirection::Bottom);
+	EXPECT_EQ(RecoilDirectionOf({1.0f, 0.0f, -1.0f}), RecoilDirection::Plain);
+	// No swing at all throws it straight back, and a swing equally across and up reels it to the left or right
+	EXPECT_EQ(RecoilDirectionOf({0.0f, 0.0f, 0.0f}), RecoilDirection::Plain);
+	EXPECT_EQ(RecoilDirectionOf({1.0f, 1.0f, 0.0f}), RecoilDirection::Left);
+	EXPECT_EQ(RecoilDirectionOf({-1.0f, 1.0f, 0.0f}), RecoilDirection::Right);
 	EXPECT_EQ(WobbleAnimation(Band::High, true), animations::k_WobbleHighSide);
 	EXPECT_EQ(WobbleAnimation(Band::Low, false), animations::k_WobbleLowFrontBack);
+}
+
+TEST(CreatureFight, BlowsTakeTheirShapeFromTheStrikingBone)
+{
+	// A blow lands 400 ms into a 1000 ms animation that carries the root 10 units along -z
+	const auto shape = ShapeOfBlow({3.0f, 8.0f, -6.0f}, {3.0f, 7.0f, -4.0f}, 400.0f, 1000.0f, -10.0f);
+	EXPECT_FLOAT_EQ(shape.point.x, 0.0f);
+	EXPECT_FLOAT_EQ(shape.point.y, 8.0f);
+	EXPECT_FLOAT_EQ(shape.point.z, -10.0f);
+	EXPECT_FLOAT_EQ(shape.swing.y, 20.0f);
+	EXPECT_FLOAT_EQ(shape.swing.z, -40.0f);
+	EXPECT_FLOAT_EQ(HeightShareOf(9.0f, 12.0f), 0.75f);
+}
+
+TEST(CreatureFight, BlowsAreTestedThirtyTimesATurnNearTheirLanding)
+{
+	// A creature of size 1: a turn of 100 ms gives a span of 117 ms, tests 3 ms apart, within 70 ms of the land time
+	EXPECT_EQ(TestSpanMs(100.0f, 1.0f), 117);
+	EXPECT_EQ(TestWindowMs(117), 70);
+	const auto times = BlowTestTimes(200, 117, 300);
+	ASSERT_FALSE(times.empty());
+	EXPECT_EQ(times.front(), 230);
+	EXPECT_EQ(times.back(), 290);
+	EXPECT_EQ(times.size(), 21u);
+	EXPECT_TRUE(BlowTestTimes(0, 117, 600).empty());
+	// A span shorter than thirty milliseconds tests thirty times at the same moment
+	const auto still = BlowTestTimes(100, 29, 110);
+	EXPECT_EQ(still.size(), 30u);
+	EXPECT_EQ(still.front(), 100);
+}
+
+TEST(CreatureFight, BlowsAreTestedAlongFiveLines)
+{
+	const auto points = BlowTestPoints({0.0f, 10.0f, 0.0f}, {0.0f, 10.0f, 2.0f}, 3.0f);
+	// Moved on along the swing, then to either side and above and below
+	EXPECT_EQ(points[0], glm::vec3(0.0f, 10.0f, -3.0f));
+	EXPECT_EQ(points[1], glm::vec3(-3.0f, 10.0f, 0.0f));
+	EXPECT_EQ(points[2], glm::vec3(0.0f, 7.0f, 0.0f));
+	EXPECT_EQ(points[3], glm::vec3(3.0f, 10.0f, 0.0f));
+	EXPECT_EQ(points[4], glm::vec3(0.0f, 13.0f, 0.0f));
+	// With no swing, every line goes to the bone
+	for (const auto& point : BlowTestPoints({1.0f, 2.0f, 3.0f}, {1.0f, 2.0f, 3.0f}, 3.0f))
+	{
+		EXPECT_EQ(point, glm::vec3(1.0f, 2.0f, 3.0f));
+	}
+	EXPECT_FLOAT_EQ(BlowTestReach(2.0f, false), 6.0f);
+	EXPECT_FLOAT_EQ(BlowTestReach(2.0f, true), 12.0f);
+	EXPECT_FLOAT_EQ(SwingPuffSize(1.5f, false), 3.0f);
+	EXPECT_FLOAT_EQ(SwingPuffSize(1.5f, true), 6.0f);
+}
+
+TEST(CreatureFight, BloodAndDustFlyAlongTheBlow)
+{
+	const glm::vec3 vector(30.0f, 0.0f, 40.0f);
+	EXPECT_FLOAT_EQ(BloodSpreadStep(vector), 0.5f);
+	EXPECT_EQ(SprayVelocity(vector, 0.5f, {25, 25, 25}), vector);
+	EXPECT_EQ(SprayVelocity(vector, 0.5f, {0, 50, 35}), glm::vec3(17.5f, 12.5f, 45.0f));
 }
 
 TEST(CreatureFight, WoundsByTheBlow)

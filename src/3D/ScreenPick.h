@@ -191,9 +191,10 @@ struct MeshHit
                                                          glm::vec3 origin, glm::vec3 direction, bool behindAllowed);
 /// The same line test as a mark is laid on a creature's skin: where on the triangle is worked out across x and y alone,
 /// and a triangle counts only when that works out within it. One whose sides are too nearly upright to work it out, or
-/// where it falls outside, takes no mark and hides none behind it
+/// where it falls outside, takes no mark and hides none behind it. With behind allowed, the whole line counts and the
+/// hit furthest back along it is taken.
 [[nodiscard]] std::optional<MeshHit> NearestSkinIntersection(std::span<const glm::vec3> corners,
                                                              std::span<const uint16_t> indices, glm::vec3 origin,
-                                                             glm::vec3 direction);
+                                                             glm::vec3 direction, bool behindAllowed = false);
 
 } // namespace openblack::screen_pick

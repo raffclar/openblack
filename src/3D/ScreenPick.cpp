@@ -597,7 +597,7 @@ std::optional<MeshHit> NearestIntersection(std::span<const glm::vec3> corners, s
 }
 
 std::optional<MeshHit> NearestSkinIntersection(std::span<const glm::vec3> corners, std::span<const uint16_t> indices,
-                                               glm::vec3 origin, glm::vec3 direction)
+                                               glm::vec3 origin, glm::vec3 direction, bool behindAllowed)
 {
 	constexpr float k_SideOn = 0.005f;
 	std::optional<MeshHit> nearest;
@@ -621,7 +621,7 @@ std::optional<MeshHit> NearestSkinIntersection(std::span<const glm::vec3> corner
 			continue;
 		}
 		const float distance = (glm::dot(v0, normal) - glm::dot(origin, normal)) / facing;
-		if (!(distance > 0.0f))
+		if (!behindAllowed && !(distance > 0.0f))
 		{
 			continue;
 		}

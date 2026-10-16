@@ -624,6 +624,10 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 	{
 		auto& types = rig->blowWoundTypes.emplace();
 		std::ranges::transform(*blows, types.begin(), [](const morph::CreatureBlow& blow) { return blow.woundType; });
+		auto& strikes = rig->blowStrikes.emplace();
+		std::ranges::transform(*blows, strikes.begin(), [](const morph::CreatureBlow& blow) {
+			return CreatureRig::BlowStrike {.landMs = blow.landTime, .bone = blow.strikingBone};
+		});
 	}
 	rig->fileTail = file.GetCreatureTail();
 	rig->creatureVersion = file.GetCreatureVersion();
