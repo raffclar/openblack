@@ -74,8 +74,9 @@ struct Speeds
 [[nodiscard]] float TargetSpeed(float fraction, float runSpeed);
 /// The fraction of its top speed for a walk at the speed that it got last. A creature with no speed yet walks.
 [[nodiscard]] float KeptFraction(float kept, float walkFraction);
-/// The fraction of its top speed it goes at: what is wanted, or only its slow fraction once exhausted
-[[nodiscard]] float RequiredFraction(float wanted, float slowFraction, float exhaustion);
+/// The fraction of its top speed that the creature keeps after its turn. An exhausted creature that is not held gets
+/// its slow fraction. It keeps that fraction after it recovers, until a new action or a run sets a different speed.
+[[nodiscard]] float RequiredFraction(float kept, float slowFraction, float exhaustion, bool held);
 
 /// The fastest it may go so as to stop in the distance left
 [[nodiscard]] float StopCap(float remaining);
