@@ -121,6 +121,9 @@ public:
 	void DrawSymbol(const DialogRect& rect, int index, glm::vec4 tint) const;
 	/// One of the 16 mice of data/textures/mousehelp.raw, 4 to a row, mirrored to show the left button
 	void DrawMouse(const DialogRect& rect, int cell, bool mirrored) const;
+	/// A part of a texture, tinted by a colour, its alpha times the painter's
+	void DrawPicture(const DialogRect& rect, const graphics::Texture2D& texture, glm::vec2 uvMin, glm::vec2 uvMax,
+	                 glm::vec4 colour) const;
 	/// The textures of the symbols and the mice, which DrawSymbol and DrawMouse leave out without
 	void SetPictures(const graphics::Texture2D* symbols, const graphics::Texture2D* mice) noexcept
 	{
