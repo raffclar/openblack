@@ -916,6 +916,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureTownAttitude::secondsLeft>("secondsLeft");
 	Reflect<components::CreatureTattoos>(context)
 	    .Field<&components::CreatureTattoos::slots>("slots")
+	    .Field<&components::CreatureTattoos::pictures>("pictures")
 	    .Field<&components::CreatureTattoos::revision>("revision");
 	Reflect<components::CreatureMarks>(context)
 	    .Field<&components::CreatureMarks::marks>("marks")

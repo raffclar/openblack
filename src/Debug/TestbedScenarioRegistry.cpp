@@ -6562,7 +6562,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
-	       IsPointerCommand(kind);
+	       kind == Kind::OwnTattooPicture || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -6589,7 +6589,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 127> k_Names {
+	constexpr std::array<std::string_view, 128> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -6717,6 +6717,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "pointer on altar",
 	    "set fizz",
 	    "check the profile folder",
+	    "give the player a picture of their own",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

@@ -249,6 +249,10 @@ struct CreatureSkinArtLoader final: BaseLoader<creature_skin::Art>
 		std::filesystem::path oldDamage;
 		std::filesystem::path oldDamageAlpha;
 		std::filesystem::path palette;
+		/// The player's own pictures, which take the places of their designs
+		creature_tattoo::Pictures pictures;
+		/// At the lowest detail levels the game keeps the designs from an atlas at half its size
+		bool lowDetail {false};
 	};
 	[[nodiscard]] result_type operator()(FromDiskTag, const Paths& paths) const;
 };

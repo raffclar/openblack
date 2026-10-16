@@ -548,6 +548,8 @@ private:
 	void PlayerProfileChanged();
 	/// The player's creature takes the name the profile played gives it
 	void NameCreatureAfterProfile();
+	/// Reads the current profile's own pictures for the designs of the symbols and the tattoos into the tattoo editor
+	void ReadTattooPictures();
 	/// The new player's box over the game, from the Players page
 	void AskForAnotherPlayer(bool canCancel);
 	/// The game starts again as the profile played

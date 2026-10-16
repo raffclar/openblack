@@ -25,6 +25,7 @@
 #include "Canvas.h"
 #include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureStatusPanel.h"
+#include "Creature/CreatureTattoo.h"
 #include "DialogPainter.h"
 #include "GameFont.h"
 #include "GameMenu.h"
@@ -76,8 +77,9 @@ namespace openblack::gui
 class GameInterface
 {
 public:
-	/// Null when the game's files for it are missing
-	static std::unique_ptr<GameInterface> Create(std::u16string_view playerName, MenuSettings settings);
+	/// Null when the game's files for it are missing. The player's own pictures take the places of their symbols.
+	static std::unique_ptr<GameInterface> Create(std::u16string_view playerName, MenuSettings settings,
+	                                             const creature_tattoo::Pictures& pictures);
 	~GameInterface();
 
 	/// Takes every key press and mouse event while the menu or a dialog is open. True when the event was taken.

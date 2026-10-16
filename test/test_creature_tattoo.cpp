@@ -11,11 +11,15 @@
 
 #include <algorithm>
 #include <array>
+#include <map>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureTattoo.h"
+#include "Creature/TattooPictures.h"
 
 using namespace openblack;
 using namespace openblack::creature_tattoo;
@@ -67,7 +71,7 @@ Design Solid(uint8_t level)
 TEST(CreatureTattoo, DesignsComeFromTheBlueOfTheirCells)
 {
 	const auto atlas = FakeAtlas();
-	const auto design = DesignFromAtlas(atlas, k_AtlasSize, 6);
+	const auto design = DesignFromAtlas(atlas, k_AtlasSize, 6, false);
 	ASSERT_EQ(design.front().size, k_DesignSize);
 	EXPECT_EQ(design.front().At(0, 0), 6);
 	EXPECT_EQ(design.front().At(63, 63), 6);
@@ -83,7 +87,7 @@ TEST(CreatureTattoo, SmallerMasksAverageSquaresOfFourRoundingDown)
 	// The first design's top left square of four: 15, 0, 0 and 2, which average 4.25
 	atlas[0] = {0, 0, 0xF0};
 	atlas[k_AtlasSize + 1] = {0, 0, 0x20};
-	const auto design = DesignFromAtlas(atlas, k_AtlasSize, 0);
+	const auto design = DesignFromAtlas(atlas, k_AtlasSize, 0, false);
 	EXPECT_EQ(design.at(1).At(0, 0), 4);
 }
 
@@ -184,4 +188,184 @@ TEST(CreatureTattoo, DesignsGoInTheSlotAsTheEditorPutsThem)
 	slots[1].site = 2;
 	// Nowhere for it when every slot holds another site's tattoo
 	EXPECT_FALSE(SlotFor(slots, 1, 9).has_value());
+}
+
+TEST(CreatureTattoo, AtLowDetailOddRowsReadAnotherDesign)
+{
+	const auto atlas = FakeAtlas();
+	// The even rows read the design itself, at half its size
+	const auto fifth = DesignFromAtlas(atlas, k_AtlasSize, 4, true);
+	EXPECT_EQ(fifth.front().At(0, 0), 4);
+	EXPECT_EQ(fifth.front().At(63, 62), 4);
+	// The odd rows read 64 texels further on in the half atlas: two designs to the right
+	EXPECT_EQ(fifth.front().At(0, 1), 6);
+	// From the third column on, the odd rows go on to the next row of the half atlas: two designs to the left
+	EXPECT_EQ(DesignFromAtlas(atlas, k_AtlasSize, 6, true).front().At(0, 1), 4);
+	// The last row of the last two designs is after the end of the half atlas
+	const auto last = DesignFromAtlas(atlas, k_AtlasSize, 15, true);
+	EXPECT_EQ(last.front().At(0, 62), 15);
+	EXPECT_EQ(last.front().At(0, 63), 0);
+	EXPECT_EQ(DesignFromAtlas(atlas, k_AtlasSize, 14, true).front().At(10, 63), 0);
+	EXPECT_EQ(DesignFromAtlas(atlas, k_AtlasSize, 13, true).front().At(10, 63), 15);
+}
+
+TEST(CreatureTattoo, AtLowDetailEachTexelOfTheHalfAtlasShowsTwoTimes)
+{
+	std::vector<std::array<uint8_t, 3>> atlas(static_cast<size_t>(k_AtlasSize) * k_AtlasSize, {0, 0, 0});
+	// The half atlas keeps the even texels of the even rows only
+	atlas[2] = {0, 0, 0x30};
+	atlas[3] = {0, 0, 0xF0};
+	atlas[k_AtlasSize + 2] = {0, 0, 0xF0};
+	const auto design = DesignFromAtlas(atlas, k_AtlasSize, 0, true);
+	EXPECT_EQ(design.front().At(1, 0), 0);
+	EXPECT_EQ(design.front().At(2, 0), 3);
+	EXPECT_EQ(design.front().At(3, 0), 3);
+	EXPECT_EQ(design.front().At(4, 0), 0);
+}
+
+TEST(CreatureTattoo, APictureTakesTheGreyNearestToEachColour)
+{
+	const std::vector<std::array<uint8_t, 3>> image {{255, 0, 0}, {0, 0, 0}, {128, 128, 129}, {100, 50, 200}};
+	const auto picture = PictureFromImage(image, 2, 2);
+	// Each channel goes to the middle of its step of eight, then the grey is the mean, rounded
+	EXPECT_EQ(picture.at(0), 87);
+	EXPECT_EQ(picture.at(1), 4);
+	EXPECT_EQ(picture.at(k_DesignSize), 132);
+	EXPECT_EQ(picture.at(k_DesignSize + 1), 119);
+	// The texels that the image does not have are black
+	EXPECT_EQ(picture.at(2), 0);
+	EXPECT_EQ(picture.at(2 * k_DesignSize), 0);
+}
+
+TEST(CreatureTattoo, APictureTakesTheTopLeftOfALargerImage)
+{
+	std::vector<std::array<uint8_t, 3>> image(100 * 80, {0, 0, 0});
+	image[(63 * 100) + 63] = {255, 255, 255};
+	image[64] = {255, 255, 255};
+	const auto picture = PictureFromImage(image, 100, 80);
+	EXPECT_EQ(picture.back(), 252);
+	EXPECT_EQ(picture.at(63), 4);
+}
+
+TEST(CreatureTattoo, APictureTakesThePlaceOfItsDesign)
+{
+	auto atlas = FakeAtlas();
+	Picture picture {};
+	picture.fill(0x90);
+	PutPicture(atlas, k_AtlasSize, 5, picture);
+	EXPECT_EQ(DesignFromAtlas(atlas, k_AtlasSize, 5, false).front().At(10, 10), 9);
+	EXPECT_EQ(DesignFromAtlas(atlas, k_AtlasSize, 4, false).front().At(10, 10), 4);
+}
+
+TEST(CreatureTattoo, TheBlockKeepsEachPictureThatATattooUsesOneTime)
+{
+	Pictures pictures {};
+	Picture three {};
+	for (size_t i = 0; i < three.size(); ++i)
+	{
+		three.at(i) = static_cast<uint8_t>(i);
+	}
+	pictures.at(3) = three;
+	pictures.at(9) = Picture {};
+	Slots slots {};
+	slots.at(0) = {.design = 3, .site = 1, .colour = {}};
+	slots.at(2) = {.design = 3, .site = 5, .colour = {}};
+	slots.at(4) = {.design = 7, .site = 0, .colour = {}};
+	// An empty slot uses no picture
+	slots.at(5) = {.design = 9, .site = k_NoSite, .colour = {}};
+	const auto block = PicturesBlock(slots, pictures);
+	ASSERT_EQ(block.size(), 0x828u);
+	EXPECT_EQ(block.at(0), 0x28);
+	EXPECT_EQ(block.at(1), 0x08);
+	EXPECT_EQ(block.at(4), 1);
+	EXPECT_EQ(block.at(5), 0b101);
+	EXPECT_EQ(block.at(8), 0x28);
+	EXPECT_EQ(block.at(16), 0x28);
+	// Two levels to a byte, the first in the low four bits
+	EXPECT_EQ(block.at(0x28 + 8), 0x11);
+	const auto design = DesignInBlock(block, 2);
+	ASSERT_TRUE(design.has_value());
+	EXPECT_EQ(design->front().At(16, 0), 1);
+	EXPECT_EQ(design->front().At(17, 0), 1);
+	EXPECT_EQ(design->front().At(0, 1), 4);
+	EXPECT_FALSE(DesignInBlock(block, 4).has_value());
+	EXPECT_FALSE(DesignInBlock(block, 5).has_value());
+}
+
+TEST(CreatureTattoo, ABlockWithoutPicturesHasItsHeadOnly)
+{
+	const auto block = PicturesBlock(Slots {}, Pictures {});
+	ASSERT_EQ(block.size(), 0x28u);
+	EXPECT_EQ(block.at(4), 0);
+	EXPECT_EQ(block.at(5), 0);
+	EXPECT_FALSE(DesignInBlock(block, 0).has_value());
+	// A block too short for the picture at its offset gives none
+	auto broken = PicturesBlock(Slots {}, Pictures {});
+	broken.at(5) = 1;
+	broken.at(8) = 0x28;
+	EXPECT_FALSE(DesignInBlock(broken, 0).has_value());
+}
+
+namespace
+{
+/// A bitmap file of 64 by 64 texels, 24 bits a texel, black but for its top left texel
+std::vector<uint8_t> Bitmap(std::array<uint8_t, 3> topLeft)
+{
+	constexpr uint32_t k_Side = 64;
+	constexpr uint32_t k_Header = 54;
+	const uint32_t size = k_Header + (k_Side * k_Side * 3);
+	std::vector<uint8_t> bytes(size, 0);
+	const auto word = [&bytes](size_t at, uint32_t value, size_t length) {
+		for (size_t i = 0; i < length; ++i)
+		{
+			bytes.at(at + i) = static_cast<uint8_t>(value >> (8 * i));
+		}
+	};
+	bytes.at(0) = 'B';
+	bytes.at(1) = 'M';
+	word(2, size, 4);
+	word(10, k_Header, 4);
+	word(14, 40, 4);
+	word(18, k_Side, 4);
+	word(22, k_Side, 4);
+	word(26, 1, 2);
+	word(28, 24, 2);
+	// The rows go from the bottom up, and each texel is blue, green, red
+	const size_t top = k_Header + ((k_Side - 1) * k_Side * 3);
+	bytes.at(top) = topLeft[2];
+	bytes.at(top + 1) = topLeft[1];
+	bytes.at(top + 2) = topLeft[0];
+	return bytes;
+}
+} // namespace
+
+TEST(TattooPictures, ABitmapGivesAPicture)
+{
+	const auto picture = tattoo_pictures::FromBitmap(Bitmap({255, 255, 255}));
+	ASSERT_TRUE(picture.has_value());
+	EXPECT_EQ(picture->at(0), 252);
+	EXPECT_EQ(picture->at(1), 4);
+	// A small file is not a picture
+	EXPECT_FALSE(tattoo_pictures::FromBitmap(std::vector<uint8_t>(100, 0)).has_value());
+	EXPECT_FALSE(tattoo_pictures::FromBitmap(std::vector<uint8_t>(5000, 0)).has_value());
+}
+
+TEST(TattooPictures, ADesignWithoutAFileKeepsThePictureItHad)
+{
+	EXPECT_EQ(tattoo_pictures::FileName(0), "Symbol1.bmp");
+	EXPECT_EQ(tattoo_pictures::FileName(15), "Symbol16.bmp");
+	Pictures pictures {};
+	Picture old {};
+	old.fill(7);
+	pictures.at(4) = old;
+	const std::map<std::string, std::vector<uint8_t>> files {{"Symbol2.bmp", Bitmap({255, 255, 255})}};
+	tattoo_pictures::Read(pictures, [&files](const std::string& file) -> std::optional<std::vector<uint8_t>> {
+		const auto found = files.find(file);
+		return found != files.end() ? std::optional(found->second) : std::nullopt;
+	});
+	ASSERT_TRUE(pictures.at(1).has_value());
+	EXPECT_EQ(pictures.at(1)->at(0), 252);
+	ASSERT_TRUE(pictures.at(4).has_value());
+	EXPECT_EQ(pictures.at(4)->at(0), 7);
+	EXPECT_FALSE(pictures.at(0).has_value());
 }

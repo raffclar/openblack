@@ -556,6 +556,33 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 }
 
 /// The game writes the help record of the player to their folder in the profile folder, then reads it again
+/// The player has grey rings of their own for a design, which the tattoo editor puts in the creature's block of
+/// pictures when a tattoo is dropped
+std::string GiveOwnTattooPicture(size_t design)
+{
+	if (!Locator::tattooEditorSystem::has_value() || design >= creature_tattoo::k_DesignCount)
+	{
+		return "no tattoo editor or no such design";
+	}
+	creature_tattoo::Picture rings {};
+	constexpr int k_Middle = static_cast<int>(creature_tattoo::k_DesignSize) / 2;
+	for (int y = 0; y < static_cast<int>(creature_tattoo::k_DesignSize); ++y)
+	{
+		for (int x = 0; x < static_cast<int>(creature_tattoo::k_DesignSize); ++x)
+		{
+			const auto distance = static_cast<int>(
+			    std::sqrt(static_cast<float>(((x - k_Middle) * (x - k_Middle)) + ((y - k_Middle) * (y - k_Middle)))));
+			const auto index = static_cast<size_t>((y * static_cast<int>(creature_tattoo::k_DesignSize)) + x);
+			rings.at(index) = distance < k_Middle && (distance / 6) % 2 == 0 ? uint8_t {255} : uint8_t {0};
+		}
+	}
+	auto& editor = Locator::tattooEditorSystem::value();
+	auto pictures = editor.GetPictures();
+	pictures.at(design) = rings;
+	editor.SetPictures(pictures);
+	return fmt::format("design {} has the player's own picture", design + 1);
+}
+
 std::string CheckProfileFolder()
 {
 	if (!Locator::profileFolderSystem::has_value() || !Locator::helpProfileSystem::has_value() ||
@@ -2144,6 +2171,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
 		return;
 	}
+	if (command.kind == Kind::OwnTattooPicture)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), GiveOwnTattooPicture(command.value)));
+		return;
+	}
 	if (command.kind == Kind::ProfileFolderCheck)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), CheckProfileFolder()));
@@ -2531,6 +2563,7 @@ void Runner::Give(const Command& command)
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
 	case Kind::ProfileFolderCheck:
+	case Kind::OwnTattooPicture:
 	case Kind::RunText:
 	case Kind::ReadTip:
 	case Kind::LookAtTempleScroll:

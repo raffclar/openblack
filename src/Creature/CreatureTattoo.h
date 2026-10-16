@@ -84,7 +84,39 @@ using Design = std::array<Mask, k_MaskLevels>;
 
 /// A design cut from the atlas of designs, an image of red, green and blue a row at a time: its level at each texel is
 /// the top four bits of the blue. Each smaller mask averages squares of four of the one before, rounded down.
-[[nodiscard]] Design DesignFromAtlas(std::span<const std::array<uint8_t, 3>> atlas, uint32_t atlasWidth, uint32_t design);
+///
+/// At the two lowest detail levels the game keeps the atlas at half its size, with every second texel of every second
+/// row. It then reads the largest mask with a mistake: an even row of the mask reads a row of the design at half size,
+/// each texel two times. An odd row reads the same row, but 64 texels to the right in the half atlas, so it shows a part
+/// of another design. A texel after the end of the half atlas is skin.
+[[nodiscard]] Design DesignFromAtlas(std::span<const std::array<uint8_t, 3>> atlas, uint32_t atlasWidth, uint32_t design,
+                                     bool lowDetail);
+
+/// A design from the levels of its largest mask, 64 by 64, a row at a time. The smaller masks average squares of four.
+[[nodiscard]] Design DesignFromLevels(std::span<const uint8_t> levels);
+
+/// A picture of the player's own, 64 by 64 grey values, a row at a time from the top. The player puts it in their
+/// profile's folder as an image, and it takes the place of one of the sixteen designs.
+using Picture = std::array<uint8_t, static_cast<size_t>(k_DesignSize) * k_DesignSize>;
+using Pictures = std::array<std::optional<Picture>, k_DesignCount>;
+
+/// The picture made from an image of red, green and blue, a row at a time from the top. The picture takes the top left
+/// 64 by 64 texels of the image, and texels that the image does not have are black. Each colour becomes the grey nearest
+/// to it, after each channel goes to the middle of its step of eight, as Windows changes a colour to a grey.
+[[nodiscard]] Picture PictureFromImage(std::span<const std::array<uint8_t, 3>> image, uint32_t width, uint32_t height);
+
+/// Puts the picture in the cell of a design in the atlas of designs, the same grey in the red, the green and the blue
+void PutPicture(std::span<std::array<uint8_t, 3>> atlas, uint32_t atlasWidth, uint32_t design, const Picture& picture);
+
+/// The block of pictures that a creature keeps with its tattoos, which its saved file also keeps. The block has each
+/// picture of the player's own that a tattoo on a site uses, so the creature keeps the tattoo when the player has the
+/// picture no longer. The block starts with its size in bytes, the number of pictures and a bit for each slot that uses
+/// a picture. Then come eight offsets, one for each slot. Each picture follows at its offset, two levels to a byte with
+/// the first level in the low four bits.
+[[nodiscard]] std::vector<uint8_t> PicturesBlock(const Slots& slots, const Pictures& pictures);
+
+/// The design that a slot paints from the block of pictures, when the slot's bit is set and the block holds the picture
+[[nodiscard]] std::optional<Design> DesignInBlock(std::span<const uint8_t> block, size_t slot);
 
 /// Which of a design's masks a tattoo of a size is painted from: the largest for a quarter of the skin's width or more,
 /// smaller for smaller tattoos

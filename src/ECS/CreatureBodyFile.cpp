@@ -9,6 +9,8 @@
 
 #include "CreatureBodyFile.h"
 
+#include <vector>
+
 #include <glm/vec3.hpp>
 
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -53,6 +55,7 @@ creature_mind_body::Body creature_body_file::Capture(const Registry& registry, e
 	if (const auto* tattoos = registry.TryGet<const CreatureTattoos>(creature))
 	{
 		body.tattoos = tattoos->slots;
+		body.tattooPictures = tattoos->pictures;
 	}
 	if (const auto* marks = registry.TryGet<const CreatureMarks>(creature))
 	{
@@ -101,6 +104,7 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 	if (auto* tattoos = registry.TryGet<CreatureTattoos>(creature); tattoos != nullptr && body.tattoos.has_value())
 	{
 		tattoos->slots = *body.tattoos;
+		tattoos->pictures = body.tattooPictures.value_or(std::vector<uint8_t> {});
 		++tattoos->revision;
 	}
 	if (auto* marks = registry.TryGet<CreatureMarks>(creature))

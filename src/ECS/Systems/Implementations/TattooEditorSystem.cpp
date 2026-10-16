@@ -44,6 +44,13 @@ public:
 			Locator::creatureSkinSystem::value().SetTattoo(creature, slot, tattoo);
 		}
 	}
+	void WritePictures(entt::entity creature, std::vector<uint8_t> pictures) override
+	{
+		if (Locator::creatureSkinSystem::has_value())
+		{
+			Locator::creatureSkinSystem::value().SetTattooPictures(creature, std::move(pictures));
+		}
+	}
 };
 } // namespace
 
@@ -106,6 +113,11 @@ bool TattooEditorSystem::Drop(uint8_t design, const glm::u8vec3& colour)
 	}
 	const auto putOn = creature_tattoo_editor::Drop(_session, design, colour, _hovered);
 	Write(_session.slots);
+	// Each drop makes the creature's block of pictures again from its tattoos. Cancel does not make it again.
+	if (_creature.has_value())
+	{
+		_skin->WritePictures(*_creature, creature_tattoo::PicturesBlock(_session.slots, _pictures));
+	}
 	if (putOn)
 	{
 		_face = creature_tattoo_editor::k_PutOnFace;

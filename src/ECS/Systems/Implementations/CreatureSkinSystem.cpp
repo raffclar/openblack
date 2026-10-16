@@ -133,7 +133,8 @@ void Paint(CreatureSkin& skin, const SkinSources& sources, uint8_t weight, const
 		                        .tattoos = tattoos.slots,
 		                        .sites = rig.tattooSites,
 		                        .marks = marks.marks,
-		                        .art = art});
+		                        .art = art,
+		                        .pictures = tattoos.pictures});
 	}
 	++skin.revision;
 }
@@ -198,6 +199,17 @@ void CreatureSkinSystem::SetTattoo(entt::entity creature, size_t slot, const cre
 		return;
 	}
 	tattoos->slots.at(slot) = tattoo;
+	++tattoos->revision;
+}
+
+void CreatureSkinSystem::SetTattooPictures(entt::entity creature, std::vector<uint8_t> pictures)
+{
+	auto* tattoos = Locator::entitiesRegistry::value().TryGet<CreatureTattoos>(creature);
+	if (tattoos == nullptr || tattoos->pictures == pictures)
+	{
+		return;
+	}
+	tattoos->pictures = std::move(pictures);
 	++tattoos->revision;
 }
 

@@ -772,6 +772,9 @@ struct Command
 		/// makes the folder if it is missing. Then the game reads the file again, and the log tells if the record is the
 		/// same. Needs no creature
 		ProfileFolderCheck,
+		/// The player has a picture of their own for a design (value), as from a Symbol file in their profile's folder:
+		/// grey rings. Needs no creature
+		OwnTattooPicture,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
