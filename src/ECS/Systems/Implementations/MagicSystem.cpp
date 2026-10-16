@@ -1910,6 +1910,12 @@ entt::entity MagicSystem::GiveSeedToHand(PlayerNames player, SpellSeedType seedT
 	seed.power = magic::SeedPower(seed.chantStore, magic::GetChantsRequiredToCreate(Info(), type));
 	_held = entity;
 	_input = {};
+	// The help counts the new seed in the hand, then the hand that took a thing
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(help::profile::k_SeedInHand);
+		Locator::helpProfileSystem::value().Trigger(help::profile::k_PickUp);
+	}
 	// The hand takes hold of it afresh, its pour at rest; a tribe's power behind it rings the hand with its name
 	_pour = {};
 	StartHandEffect(entity);
@@ -2485,8 +2491,19 @@ bool MagicSystem::PressFireBall(uint32_t nowMs, uint32_t turn)
 	{
 		return false;
 	}
-	// The press starts taking it: a quick release taps it, and held as long as a tap may last the hand takes it, which
-	// catches it the same way (a fireball is never held as a thing)
+	// The player's own fireball cannot go into the hand, so the press taps it at once: the help counts the tap, and the
+	// ball slips through the hand
+	const auto& fireBall = EntityRegistry().Get<const MagicFireBall>(*ball);
+	if (fireBall.hasPlayer && fireBall.player == PlayerNames::PLAYER_ONE)
+	{
+		if (Locator::helpProfileSystem::has_value())
+		{
+			Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+		}
+		return true;
+	}
+	// The press starts to take another's fireball: a quick release taps it, and the help counts that tap. Held as long
+	// as a tap can last, the hand takes it, which catches it the same way, but the help counts no tap.
 	_fireBallPress = FireBallPress {.ball = *ball, .pressMs = nowMs, .pressTurn = turn};
 	return true;
 }
@@ -2520,7 +2537,7 @@ void MagicSystem::ReleaseFireBall(uint32_t nowMs, uint32_t turn)
 	{
 		return;
 	}
-	// Another player's fireball is caught; the player's own slips through. The help counts the tap either way.
+	// The quick tap catches another player's fireball, and the help counts the tap first
 	if (EntityRegistry().AllOf<MagicFireBall>(press.ball))
 	{
 		if (Locator::helpProfileSystem::has_value())

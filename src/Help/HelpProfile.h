@@ -26,6 +26,8 @@ constexpr uint32_t k_EventCount = 49;
 /// The hand takes a thing into it. The hand lets go of a thing that it holds: a throw, a drop or a pour.
 constexpr uint32_t k_PickUp = 2;
 constexpr uint32_t k_Throw = 4;
+/// A new miracle seed goes into the hand of this computer's player, before the hand counts it as a thing it took
+constexpr uint32_t k_SeedInHand = 12;
 /// The gestures that the help counts. All of them also count as the event for any gesture.
 /// - The hand powers up the miracle that it holds.
 /// - The player calls the special move of the creature in a fight.

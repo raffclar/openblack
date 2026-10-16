@@ -177,7 +177,21 @@ TEST(SpellIcons, TheAnnouncerNamesTheChargedMiracle)
 
 TEST(SpellIcons, OnlyTheOwnersHandTapsAnIcon)
 {
-	EXPECT_TRUE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
-	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
-	EXPECT_FALSE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, true));
+	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE, true));
+	EXPECT_FALSE(ValidToTap(PlayerNames::NEUTRAL, PlayerNames::PLAYER_ONE, true));
+}
+
+TEST(SpellIcons, AnIconThatDoesNotWorkTakesNoTap)
+{
+	EXPECT_FALSE(ValidToTap(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE, false));
+}
+
+TEST(SpellIcons, AnIconWorksWhenBuiltWithMoreThanThreeQuartersOfItsLife)
+{
+	EXPECT_TRUE(Functional(1.0f, true));
+	EXPECT_TRUE(Functional(0.76f, true));
+	EXPECT_FALSE(Functional(0.75f, true));
+	EXPECT_FALSE(Functional(0.5f, true));
+	EXPECT_FALSE(Functional(1.0f, false));
 }

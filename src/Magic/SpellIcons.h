@@ -116,8 +116,16 @@ enum class TapResult : uint8_t
 /// either on a worship site or with something stored
 [[nodiscard]] bool MayStartCharge(const IconCharge& icon, bool magicEnabled, bool onSite);
 
-/// Whether a tap on an icon or a stone hand is a valid tap of the hand: only the hand of the player that owns it
-[[nodiscard]] bool ValidToTap(PlayerNames iconPlayer, PlayerNames tapper);
+/// An icon or a stone hand works only when it has more than this part of its life
+constexpr float k_FunctionalLife = 0.75f;
+
+/// Whether an icon or a stone hand works: it is built and it has more than three quarters of its life. A worship site's
+/// icon is built when its site is built.
+[[nodiscard]] bool Functional(float life, bool built);
+
+/// Whether a tap on an icon or a stone hand is a valid tap of the hand: the icon works, and only the hand of the player
+/// that owns it taps it
+[[nodiscard]] bool ValidToTap(PlayerNames iconPlayer, PlayerNames tapper, bool functional);
 
 /// A tap on it: its charged miracle into the hand if it can go; else its charging called off if the tapping hand charges
 /// it; else, with the hand ready, its charging started
