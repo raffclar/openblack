@@ -1288,6 +1288,14 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 		{
 			LoadMindFile(entity, setup.mindFile);
 		}
+		if (Locator::creatureMindSystem::has_value())
+		{
+			for (const auto skill : setup.skills)
+			{
+				Locator::creatureMindSystem::value().SetKnowsAction(entity, CreatureActionLearningType::Normal,
+				                                                    static_cast<uint32_t>(skill), true);
+			}
+		}
 		if (Locator::leashSystem::has_value())
 		{
 			// Made for trying things out, it knows every leash, as creatures made by the original's debug tools do

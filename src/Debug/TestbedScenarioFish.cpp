@@ -288,6 +288,30 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.tap_fish_farm",
+	    .name = "Leash order on a fish farm",
+	    .facet = Facet::Leash,
+	    .description = "A tiger that knows how to fish and is not full, but does not want food, stands on the bank above the "
+	                   "lake, a fish farm on "
+	                   "the shore below it. The tiger gets the rope leash, then the player taps the fish farm with the "
+	                   "leash.",
+	    .expected = "The tiger does not nod. It walks down to within 15 m of the farm's shoal, a bundle of food appears "
+	                "at its feet out of the water, and it picks the food up and eats it.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {0.0f, 120.0f},
+	        .facingDegrees = 180.0f,
+	        .needs = {.energy = 0.6f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = creature_desires::Desire::Hunger, .fraction = 0.0f}},
+	        .skills = {CreatureActionKnownAbout::Fish},
+	    }},
+	    .objects = FarmAndTown(),
+	    .commands = {{.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope},
+	                 {.kind = Kind::LeashOrderOn, .creature = 0, .delaySeconds = 2.0f, .waitUntilFree = false, .object = 1}},
+	});
+
+	all.push_back({
 	    .id = "needs.fish_for_town",
 	    .name = "Compassionate creature fishes for its town",
 	    .facet = Facet::Needs,

@@ -336,6 +336,24 @@ void AddReactions(std::vector<Scenario>& all)
 	                  .byHand = true}},
 	});
 }
+
+void AddCreatureSpellWisps(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "miracles.creature_spell_wisps",
+	    .name = "Creature spell: the wisps",
+	    .facet = Facet::Miracles,
+	    .description = "The strong creature spell is cast on a tiger that stands still, from the hand above and in front "
+	                   "of it.",
+	    .expected = "Three wisps of light fly from the hand to the tiger over two seconds, fading in, then wind round its "
+	                "body inside the box of its bones, narrower above its middle, each with a trail of light. They fade "
+	                "out after the spell ends.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 40.0f}, .facingDegrees = 180.0f}},
+	    .miracles = {{.type = MagicType::CreatureSpellStrong, .target = Target::Creature, .creature = 0, .delaySeconds = 2.0f}},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddLifeLightScenarios(std::vector<Scenario>& all)
@@ -343,4 +361,5 @@ void testbed_scenarios::AddLifeLightScenarios(std::vector<Scenario>& all)
 	AddHeal(all);
 	AddLightning(all);
 	AddReactions(all);
+	AddCreatureSpellWisps(all);
 }
