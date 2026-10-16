@@ -667,6 +667,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CaveCreature::tattooSites>("tattooSites");
 	Reflect<components::CreatureDance>(context)
 	    .Field<&components::CreatureDance::dance>("dance")
+	    .Field<&components::CreatureDance::startedBy>("startedBy")
 	    .Field<&components::CreatureDance::dancers>("dancers")
 	    .Field<&components::CreatureDance::lastPlaces>("lastPlaces")
 	    .Field<&components::CreatureDance::lastImpressiveTurn>("lastImpressiveTurn")

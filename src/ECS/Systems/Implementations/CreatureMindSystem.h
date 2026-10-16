@@ -352,7 +352,8 @@ private:
 	                                                                                 const creature_mind::IdleMind& idle);
 	/// Carries out a stage of a dance with villagers that the mind ordered
 	static void CarryOutDance(entt::entity creature, creature_mind::IdleMind& idle, const creature_mind::DanceOrder& order);
-	/// The creature's dance stops when the creature stops dancing in it, as when it gives up its agenda
+	/// The creature's dance stops when the agenda that started it ends, when the creature gives it up, or when a new agenda
+	/// replaces it
 	static void KeepDanceWithAgenda(entt::entity creature, const creature_mind::IdleMind& idle);
 	/// The clear place of a dance with a villager, about the villager; none when there is none
 	[[nodiscard]] static std::optional<glm::vec2> DanceAreaFor(entt::entity creature, glm::vec2 villager);

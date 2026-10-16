@@ -184,4 +184,26 @@ void openblack::testbed_scenarios::AddCreatureDanceScenarios(std::vector<Scenari
 	    .commands =
 	        {{.kind = Command::Kind::DoAction, .delaySeconds = 1.0f, .action = "DanceOutsideWorshipSite", .onTemple = true}},
 	});
+	{
+		auto after = TownDance(
+		    "creatures.dance_temple_after_dance", "A creature that danced with villagers, told to dance at its temple",
+		    "DancePlayfullyWithVillagersParti",
+		    "The town of the playful dance, and the player's temple ninety metres south of it. One second in, the tiger "
+		    "is told to dance playfully with the villagers. 110 seconds later, after that dance, it is told to dance "
+		    "outside the temple's worship site. 100 seconds after that, it is told to dance around the first hut.",
+		    "First the playful dance with the villagers. Then the tiger walks towards the temple, stops six of its heights "
+		    "from the heart (never more than fifty metres) and faces the heart for two seconds. As in the original game, "
+		    "its old dance starts again from its first beat where it was made: the tiger goes back to its place in it and "
+		    "dances it again for sixty seconds, alone. It plays the start of its dance, then dance moves one after the "
+		    "other, pulls faces, plays its summon, wave and impress actions and sits down once. Then it walks towards the "
+		    "first hut, stops four of its heights from it and dances the same dance again in the same place. The people "
+		    "have gone home and do not come back.");
+		after.temples = {{.offset = {0.0f, -90.0f}}};
+		after.framing = {.shot = Shot::Overview, .include = {{-50.0f, -110.0f}, {50.0f, 70.0f}}, .distance = 0.8f};
+		after.commands.push_back(
+		    {.kind = Command::Kind::DoAction, .delaySeconds = 110.0f, .action = "DanceOutsideWorshipSite", .onTemple = true});
+		after.commands.push_back(
+		    {.kind = Command::Kind::DoAction, .delaySeconds = 100.0f, .object = 0, .action = "DanceAroundArtefact"});
+		all.push_back(std::move(after));
+	}
 }

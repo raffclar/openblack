@@ -986,7 +986,8 @@ void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Comma
 	}
 	commands.endStaticLoop = turn.endPose;
 	commands.endDance = turn.endDance;
-	if (turn.danceMoveMs.has_value() && !senses.bodyPlaying)
+	// The dance does not start while the creature walks or turns. It starts when the creature stands still.
+	if (turn.danceMoveMs.has_value() && !senses.bodyPlaying && !senses.moving)
 	{
 		commands.startDance = *turn.danceMoveMs;
 	}
