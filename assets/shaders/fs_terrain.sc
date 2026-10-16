@@ -324,7 +324,7 @@ float CliffWetness(vec3 world)
 	// The low rock that the waves reach each time
 	float damp = 0.5f * (1.0f - smoothstep(0.0f, 1.0f + 3.0f * u_uwWaves.w, above));
 	float fade = 1.0f - smoothstep(18.0f, 30.0f, inland);
-	return clamp(max(max(splash, streaks), damp) * cliff * fade, 0.0f, 1.0f);
+	return clamp(max(max(splash, streaks), damp * cliff) * fade, 0.0f, 1.0f);
 }
 
 void main()

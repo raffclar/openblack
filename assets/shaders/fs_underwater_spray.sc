@@ -31,12 +31,15 @@ vec3 SprayWorldAt(vec2 uv, float depth)
 float SheetDensity(vec3 p, float v, float breakup)
 {
 	float cloud = texture3DLod(s_sprayNoise, p, 0.0f).r;
-	float strands = texture3DLod(s_sprayNoise, vec3(p.x * 3.0f, p.y * 0.5f, p.z), 0.0f).a;
+	float strands = texture3DLod(s_sprayNoise, vec3(p.x * 2.0f, p.y * 0.5f, p.z), 0.0f).a;
 	float d = mix(cloud, strands, 0.25f + 0.6f * breakup * v);
 	float threshold = mix(0.2f, 0.62f, breakup) + 0.25f * v * breakup - 0.12f * (1.0f - v);
 	// The top edge is ragged: the strands reach up to different heights
 	float top = 0.6f + 0.4f * texture3DLod(s_sprayNoise, vec3(p.x * 2.0f, 0.3f, p.z), 0.0f).b;
-	return smoothstep(threshold, threshold + 0.2f, d) * (1.0f - smoothstep(top - 0.3f, top, v));
+	// The foot is ragged as well, where the sheet comes out of the broken water
+	float foot = 0.15f + 0.25f * texture3DLod(s_sprayNoise, vec3(p.x * 1.5f, 0.7f, p.z + 0.5f), 0.0f).g;
+	return smoothstep(threshold, threshold + 0.35f, d) * (1.0f - smoothstep(top - 0.3f, top, v)) *
+	       smoothstep(0.0f, foot, v);
 }
 
 // The density of a puff: lumps of round cells for the core, soft smooth noise for the mist and the haze
@@ -85,7 +88,6 @@ void main()
 		float v = corner.y * 0.5f + 0.5f;
 		shape = SheetDensity(uvw, v, breakup);
 		shape *= 1.0f - smoothstep(0.75f, 1.0f, abs(corner.x));
-		shape *= smoothstep(0.0f, 0.08f, v);
 		vec2 slope = vec2(SheetDensity(uvw + vec3(0.01f, 0.0f, 0.0f), v, breakup) - shape,
 		                  SheetDensity(uvw + vec3(0.0f, 0.01f, 0.0f), v, breakup) - shape) / 0.01f;
 		vec3 panelNormal = normalize(v_normal);
@@ -117,7 +119,9 @@ void main()
 	{
 		soft = clamp(length(SprayWorldAt(uv, sceneDepth) - v_world) / softRange, 0.0f, 1.0f);
 	}
-	soft *= smoothstep(u_uwParams.z - 0.3f, u_uwParams.z + softRange * 0.5f, v_world.y);
+	// The water's surface is not flat where the spray comes out of it, so the edge there is ragged
+	float ragged = texture3DLod(s_sprayNoise, vec3(v_world.xz * 0.15f, u_uwParams.y * 0.2f), 0.0f).r;
+	soft *= smoothstep(u_uwParams.z - 0.3f, u_uwParams.z + softRange * (0.3f + 0.9f * ragged), v_world.y);
 	float cover = clamp(shape * v_texcoord0.w * soft, 0.0f, 1.0f);
 	if (cover < 0.002f)
 	{
@@ -128,12 +132,14 @@ void main()
 	vec3 towards = u_uwAbove.xyz;
 	vec3 light = u_uwLightColour.rgb;
 	float diffuse = 0.3f + 0.7f * max(dot(normal, towards), 0.0f);
-	float thin = layer < 0.5f ? 0.7f : (layer < 1.5f ? 0.45f : (layer < 2.5f ? 0.3f : (layer < 3.5f ? 1.0f : 0.8f)));
+	float thin = layer < 0.5f ? 0.6f : (layer < 1.5f ? 0.4f : (layer < 2.5f ? 0.3f : (layer < 3.5f ? 0.55f : 0.45f)));
 	float through = pow(max(dot(-toEye, towards), 0.0f), 6.0f) * thin * (1.0f - 0.5f * shape);
 	float shine = layer < 0.5f ? 0.8f : (layer < 1.5f ? 0.3f : (layer < 2.5f ? 2.5f : 0.0f));
 	float glint = pow(max(dot(reflect(-towards, normal), toEye), 0.0f), 40.0f) * shine;
 	vec3 white = vec3_splat(0.93f);
 	vec3 colour = white * (v_color0.rgb + light * diffuse) + light * (through + glint);
+	// Thin water is a little darker than thick water, which scatters more of the light
+	colour *= 0.78f + 0.22f * shape;
 	colour = min(colour, vec3_splat(1.6f));
 	gl_FragColor = vec4(colour * cover, cover);
 }
