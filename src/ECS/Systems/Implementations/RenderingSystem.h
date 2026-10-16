@@ -70,8 +70,11 @@ private:
 		bool bonePalette {false};
 		/// How many, from the last back, are of things too far off to be drawn this frame
 		uint32_t gone {0};
-		/// The trees: how many are drawn in each detail this frame, then where the next of each goes
-		std::array<uint32_t, 5> treeGroups {};
+		/// The trees: how many are drawn in each detail this frame, then where the next of each goes. The groups of the
+		/// later segments of the land's draw list follow the first five.
+		std::vector<uint32_t> treeGroups;
+		/// Where the instances of each segment after the first start (see graphics::fizz_draw_order::NoteSegment)
+		std::vector<uint32_t> segmentStarts;
 	};
 	std::unordered_map<entt::id_type, InstanceSlots> _instanceSlots;
 	std::unordered_map<entt::id_type, InstanceSlots> _treeSlots;
@@ -103,6 +106,8 @@ private:
 		entt::id_type mesh;
 		InstanceSlots* slots;
 		Group group;
+		/// The segment of the land's draw list that it is drawn in
+		uint32_t segment {0};
 		RenderContext::TreeInstanceData data;
 		glm::mat4 box;
 	};
@@ -111,6 +116,9 @@ private:
 	std::unordered_map<entt::id_type, std::optional<AxisAlignedBoundingBox>> _meshBoxes;
 	/// The bounding box of a mesh, none when it isn't loaded
 	[[nodiscard]] const std::optional<AxisAlignedBoundingBox>& MeshBox(entt::id_type mesh);
+	/// The creature fizzes and the land's draw list draws it, so it divides the list (see graphics::fizz_draw_order)
+	[[nodiscard]] static bool FizzesInList(const Registry& registry, const ObjectDrawListSystemInterface& drawList,
+	                                       entt::entity entity);
 	/// Tell the land's draw list whether a listed thing stays drawn while the camera stands still. The thing's sphere
 	/// is the box of `boxMesh` with the model's place, turn and scale. `fadedOut` is true when the thing is too far
 	/// off to show.

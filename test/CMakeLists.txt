@@ -1051,3 +1051,6 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_profile_folder test_profile_folder.cpp)
 target_link_libraries(test_profile_folder PRIVATE helpstats)
+openblack_setup_and_add_test(
+  test_fizz_draw_order graphics/test_fizz_draw_order.cpp
+)
