@@ -61,6 +61,8 @@ struct CreatureObjectAction
 	float maxReach {0.0f};
 	/// How many times it has walked or turned to get in reach
 	uint32_t attempts {0};
+	/// Whether it has started a walk to get in reach
+	bool walked {false};
 	/// Throwing: how long the throw is to take to get there
 	float flightSeconds {0.0f};
 	/// Throwing: how long it was asked to take, none to take as long as it would to fall the distance to the target
@@ -87,6 +89,8 @@ struct CreatureObjectAction
 	float catchHeight {0.5f};
 	/// Why it gave up, when it did
 	std::string failure;
+	/// The cause of the failure that the mind acts on
+	creature_object_actions::Failure failureKind {creature_object_actions::Failure::Other};
 };
 
 /// What a creature holds in its hand, and which hand

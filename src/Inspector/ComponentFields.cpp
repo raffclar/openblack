@@ -890,6 +890,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureObjectAction::reach>("reach")
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
+	    .Field<&components::CreatureObjectAction::walked>("walked")
 	    .Field<&components::CreatureObjectAction::flightSeconds>("flightSeconds")
 	    .Field<&components::CreatureObjectAction::givenFlightSeconds>("givenFlightSeconds")
 	    .Field<&components::CreatureObjectAction::waitsForLanding>("waitsForLanding")
@@ -898,7 +899,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureObjectAction::catching>("catching")
 	    .Field<&components::CreatureObjectAction::catchTurned>("catchTurned")
 	    .Field<&components::CreatureObjectAction::catchHeight>("catchHeight")
-	    .Field<&components::CreatureObjectAction::failure>("failure");
+	    .Field<&components::CreatureObjectAction::failure>("failure")
+	    .Field<&components::CreatureObjectAction::failureKind>("failureKind");
 	Reflect<components::CreatureDroppedObject>(context).Field<&components::CreatureDroppedObject::object>("object");
 	Reflect<components::CreatureHeldObject>(context)
 	    .Field<&components::CreatureHeldObject::object>("object")

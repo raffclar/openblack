@@ -108,6 +108,16 @@ TownAttitude creature_object_actions::AttitudeTo(Kind kind, bool targetIsVillage
 	return TownAttitude::None;
 }
 
+bool creature_object_actions::LeavesThingAlone(bool pickingUp, Failure failure)
+{
+	return pickingUp && failure != Failure::Other;
+}
+
+bool creature_object_actions::RefusesAloud(Failure failure)
+{
+	return failure == Failure::NoRoute;
+}
+
 float creature_object_actions::AttitudeSeconds(TownAttitude attitude)
 {
 	switch (attitude)

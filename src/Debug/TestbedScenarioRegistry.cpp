@@ -5514,6 +5514,38 @@ void AddMind(std::vector<Scenario>& all)
 		});
 	}
 
+	{
+		// A tight ring of huts shuts a rock in, so that the tiger finds no way to it. A second rock lies in the open.
+		auto tiger = Content(CreatureType::Tiger, {0.0f, 0.0f});
+		tiger.phase = 13;
+		std::vector<ObjectSetup> objects {{.type = MobileStaticInfo::Rock, .offset = {0.0f, -60.0f}},
+		                                  {.type = MobileStaticInfo::Rock, .offset = {40.0f, 30.0f}}};
+		constexpr int k_Huts = 12;
+		constexpr float k_RingRadius = 9.0f;
+		for (int i = 0; i < k_Huts; ++i)
+		{
+			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
+			objects.push_back({.type = AbodeInfo::CelticHut,
+			                   .offset = {k_RingRadius * std::sin(angle), -60.0f + k_RingRadius * std::cos(angle)},
+			                   .yawDegrees = glm::degrees(angle)});
+		}
+		all.push_back({
+		    .id = "mind.pick_up_no_way",
+		    .name = "The creature stops when it finds no way to a thing",
+		    .facet = Facet::Mind,
+		    .description = "A grown-up tiger on the learning leash. A ring of huts shuts a rock in, and a second rock lies "
+		                   "in the open. The player tells it to act on the shut-in rock. Then the scenario removes the leash.",
+		    .expected = "The tiger walks to pick up the shut-in rock. When the search finds no route, it stops at once and "
+		                "makes a sound of refusal. Then it thinks for itself and does something different. For ten seconds "
+		                "it does not choose the shut-in rock again.",
+		    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+		    .creatures = {tiger},
+		    .objects = std::move(objects),
+		    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 2.0f, false),
+		                 Act(Kind::TakeOffLeash, 0, 3.0f)},
+		});
+	}
+
 	all.push_back({
 	    .id = "mind.mimic",
 	    .name = "Mimic the player",

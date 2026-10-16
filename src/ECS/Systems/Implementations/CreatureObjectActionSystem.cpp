@@ -751,10 +751,12 @@ bool BodyBusy(const CreatureObjectAction* doing)
 	       (doing->status == Status::Running || doing->status == Status::Contact);
 }
 
-void Fail(CreatureObjectAction& action, std::string reason)
+void Fail(CreatureObjectAction& action, std::string reason,
+          creature_object_actions::Failure kind = creature_object_actions::Failure::Other)
 {
 	action.status = Status::Failed;
 	action.failure = std::move(reason);
+	action.failureKind = kind;
 }
 
 /// The thing a creature catches is taken into its hand out of the air: it leaves the physics without going back on the
@@ -875,6 +877,15 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& locomotion = Locator::creatureLocomotionSystem::value();
+	// On each turn of the walk, a thing that it can no longer pick up stops the pick-up and the walk
+	if (action.kind == Kind::PickUp && action.target.has_value() && registry.Valid(*action.target) &&
+	    Locator::creatureObjectActionSystem::has_value() &&
+	    !Locator::creatureObjectActionSystem::value().CanPickUp(creature, *action.target))
+	{
+		locomotion.Stop(creature);
+		Fail(action, "it can't be picked up", creature_object_actions::Failure::NoWay);
+		return;
+	}
 	if (locomotion.IsMoving(creature))
 	{
 		return;
@@ -883,6 +894,13 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	if (points == nullptr)
 	{
 		Fail(action, "its species has nothing to act with");
+		return;
+	}
+	// The walk to the thing stopped because the search found no route: the action stops at once
+	if (const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
+	    walk != nullptr && walk->failed && action.walked)
+	{
+		Fail(action, "it found no route", creature_object_actions::Failure::NoRoute);
 		return;
 	}
 
@@ -969,8 +987,10 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	                                      ideal * k_ApproachNear, ideal * k_ApproachFar);
 	if (result != MoveResult::Started)
 	{
-		Fail(action, "navigation failed");
+		Fail(action, "navigation failed", creature_object_actions::Failure::NoWay);
+		return;
 	}
+	action.walked = true;
 }
 
 /// One of the three creaks of a tree a creature pulls from the ground, drawn from the local random numbers
@@ -1342,7 +1362,7 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		else if (action.kind == Kind::PickUp &&
 		         (!CanPickUp(creature, *action.target) || registry.AllOf<HeldByCreature>(*action.target)))
 		{
-			Fail(action, "it can't be picked up");
+			Fail(action, "it can't be picked up", creature_object_actions::Failure::NoWay);
 		}
 		else if (action.kind == Kind::Destroy &&
 		         (!registry.AllOf<MapCellResident>(*action.target) ||
@@ -1692,6 +1712,14 @@ CreatureObjectActionSystem::State CreatureObjectActionSystem::GetState(entt::ent
 		break;
 	}
 	return State::Failed;
+}
+
+creature_object_actions::Failure CreatureObjectActionSystem::GetFailure(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
+	return action != nullptr && action->status == Status::Failed ? action->failureKind
+	                                                             : creature_object_actions::Failure::Other;
 }
 
 bool CreatureObjectActionSystem::IsCatching(entt::entity creature) const
