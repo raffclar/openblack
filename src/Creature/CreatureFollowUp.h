@@ -40,6 +40,9 @@ enum class FollowUp : uint8_t
 	DoLessonAgain,
 	/// It cleared a thing out of its way, and walks on to where it went
 	WalkOn,
+	/// On the leash, it saw a nasty miracle that it knows. It casts that miracle at the thing that was nearest to the
+	/// hand.
+	CastOnLeash,
 };
 
 /// The creature eats a magic mushroom: it becomes high only when nothing else waits

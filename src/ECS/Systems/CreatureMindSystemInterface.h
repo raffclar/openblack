@@ -201,6 +201,9 @@ public:
 	/// A nasty miracle struck near the creature: it is frightened by it, and runs from where it struck, or goes to look
 	/// at it when it isn't afraid or is on the learning leash; it learns the miracle when it may
 	virtual void ReactToNastyMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
+	/// After it reacts to a nasty miracle, a creature on the leash that knows the miracle casts it. It casts at the first
+	/// thing near the hand, when its reaction ends.
+	virtual void CastOnLeashAfterReaction(entt::entity /*creature*/, size_t /*miracle*/) {}
 	/// A nice miracle of its own player's was cast near the creature: it goes to look at it, and learns it
 	virtual void ReactToNiceMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
 	/// The creature starts to react to a thing. It keeps the plan that it does now, before the reaction changes the plan.
@@ -253,6 +256,9 @@ public:
 		/// the plan does not count for its desire at its end. A script's order and the meal after a stroke are not
 		/// marked.
 		bool forced {true};
+		/// The priority of the plan against the plans that the creature finds for itself. With none, nothing that it wants
+		/// is more pressing.
+		std::optional<float> priority;
 	};
 	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is
 	/// about to already

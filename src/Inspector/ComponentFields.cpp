@@ -874,7 +874,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::plantedBy>("plantedBy")
 	    .Field<&components::CreatureMindState::observedDeed>("observedDeed")
 	    .Field<&components::CreatureMindState::clearingWaySerial>("clearingWaySerial")
-	    .Field<&components::CreatureMindState::walkOnTo>("walkOnTo");
+	    .Field<&components::CreatureMindState::walkOnTo>("walkOnTo")
+	    .Field<&components::CreatureMindState::leashCast>("leashCast");
 	Reflect<components::CreatureNeeds>(context)
 	    .Field<&components::CreatureNeeds::started>("started")
 	    .Field<&components::CreatureNeeds::needs>("needs")
@@ -2770,6 +2771,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::components::CreatureMindState::Feedback>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureMindState::Feedback::value>("value")
 	    .Field<&openblack::ecs::components::CreatureMindState::Feedback::activity>("activity");
+	Reflect<openblack::ecs::components::CreatureMindState::LeashCast>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureMindState::LeashCast::thing>("thing")
+	    .Field<&openblack::ecs::components::CreatureMindState::LeashCast::miracle>("miracle");
 	Reflect<openblack::ecs::components::CreatureMindState::Teaching>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::type>("type")
 	    .Field<&openblack::ecs::components::CreatureMindState::Teaching::action>("action")

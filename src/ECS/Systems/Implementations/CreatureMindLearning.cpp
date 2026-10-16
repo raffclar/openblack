@@ -2610,6 +2610,19 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		return;
 	}
 	mind.plannedTurn = mind.turn;
+	// Before the creature decides for itself, it stops a reaction when no agenda runs
+	const auto decisionState = [&registry, &mind, creature]() {
+		const auto* reaction = registry.TryGet<const LivingReaction>(creature);
+		return creature_turn_order::DecisionState {
+		    .planRuns = mind.idle.step < mind.idle.agenda.size(),
+		    .planForced = mind.planForced,
+		    .reacting = reaction != nullptr && reaction->reaction != 0,
+		};
+	};
+	if (!only.has_value() && creature_turn_order::StopsReactionBeforeDecision(decisionState()))
+	{
+		EndReaction(creature);
+	}
 	// Copying the player comes first. With no agenda, it does the action of the copy stage. While it notices the deed or
 	// copies the action, it does not choose a new plan when it has one.
 	if (!only.has_value() && mind.learnt->mimicry.has_value())
@@ -2624,6 +2637,18 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		{
 			return;
 		}
+	}
+	// A forced plan or a reaction keeps it from deciding. The thing that waits for the end of its work also waits.
+	if (!only.has_value() && creature_turn_order::SkipsDecision(decisionState()))
+	{
+		return;
+	}
+	// When the thing that the cast on the leash waits for is gone, the cast does not wait
+	if (mind.followUp == creature_follow_up::FollowUp::CastOnLeash &&
+	    !(mind.leashCast.has_value() && registry.Valid(mind.leashCast->thing)))
+	{
+		mind.followUp.reset();
+		mind.leashCast.reset();
 	}
 	// When it completes its work, the thing that waits replaces its next decision: it becomes high after a magic
 	// mushroom, or it reacts to a stroke or a slap
@@ -2965,6 +2990,9 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 	case FollowUp::WalkOn:
 		WalkOn(creature, mind);
 		return;
+	case FollowUp::CastOnLeash:
+		CastOnLeash(creature, mind);
+		return;
 	case FollowUp::ShowSlapFeeling:
 	{
 		const creature_follow_up::Feelings feelings {
@@ -3162,8 +3190,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		return true;
 	}
 	const auto object = plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt;
-	mind->planner.current = creature_planner::Plan {
-	    .desire = plan.desire, .action = *action, .object = object, .priority = std::numeric_limits<float>::max()};
+	mind->planner.current = creature_planner::Plan {.desire = plan.desire,
+	                                                .action = *action,
+	                                                .object = object,
+	                                                .priority = plan.priority.value_or(std::numeric_limits<float>::max())};
 	mind->planActive = true;
 	mind->planForced = plan.forced;
 	mind->planSerial = mind->idle.serial;

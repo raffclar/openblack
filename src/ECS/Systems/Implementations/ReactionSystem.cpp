@@ -1330,9 +1330,6 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} ignores miracle #{}: an icon made it and no seed holds it",
 		                    entt::to_integral(living), entt::to_integral(source.initiator));
 	}
-	// TODO(creature-reactions-2): on any leash, a creature seeing a nasty miracle it knows is also set to cast it at the
-	// first thing other than itself within 64 cells of the hand, carried out by the leash later; that needs the leash's
-	// waiting action, which isn't here yet. bw1-decomp docs/openblack/creature/creature_reactions.md
 	if (source.type == Reaction::FleeFromSpell)
 	{
 		const bool learnable =
@@ -1341,6 +1338,12 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		if (learnable && magic.has_value() && seed != nullptr)
 		{
 			seed->learnedFrom = true;
+		}
+		// On the leash, a creature that knows the miracle casts it after the reaction. A miracle that an icon made with
+		// no seed does not make it cast.
+		if (!iconWithoutSeed && magic.has_value())
+		{
+			minds.CastOnLeashAfterReaction(living, *magic);
 		}
 	}
 	else if ((nice || shield) && magic.has_value() && (byCreature || !computer) && !seedSpent && !iconWithoutSeed &&
