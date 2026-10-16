@@ -183,7 +183,8 @@ struct PlanPace
 /// The pace of the plan's action, by the action's name in the game's table; none for no plan
 [[nodiscard]] PlanPace PaceOfPlan(std::optional<std::string_view> action);
 
-/// One game turn of the body as time passes, before the stage of growing up from which the body changes nothing
+/// One game turn of the body as time passes. The turn always counts as a turn that the creature lived. Before the body
+/// stage of growing up, nothing else changes.
 void TickTurn(Needs& needs, Shape& shape, const Species& species, const Turn& turn);
 
 /// A creature a script scales to the player's creature: each turn its size goes halfway to that creature's size times

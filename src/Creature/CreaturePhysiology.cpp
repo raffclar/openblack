@@ -111,12 +111,13 @@ creature_physiology::PlanPace creature_physiology::PaceOfPlan(std::optional<std:
 
 void creature_physiology::TickTurn(Needs& needs, Shape& shape, const Species& species, const Turn& turn)
 {
+	// The creature lives each turn at all stages of growing up. Before the body stage, it does not age.
+	++needs.turns;
 	if (turn.phase < k_BodyPhase)
 	{
 		return;
 	}
 	// A year of its life goes by each so many seconds of game time
-	++needs.turns;
 	const auto agePeriod =
 	    static_cast<uint32_t>(std::lround(turn.turnsPerSecond * static_cast<float>(species.secondsPerAgeTick)));
 	if (agePeriod > 0 && needs.turns % agePeriod == 0)
