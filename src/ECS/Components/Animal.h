@@ -136,24 +136,22 @@ struct Animal
 	float life {1.0f};
 	/// The game turn it was born on: its age counts in years from it, as every living thing's does
 	uint32_t birthTurn {0};
-	/// Once killed, the turns its body lies dead before it goes
-	int32_t deadTurns {0};
-	/// The turns that a hunter eats it before it dies. The count changes only in the state "being eaten"
-	uint16_t eatenTurnsLeft {0};
+	/// One count of turns that some states use, and that a new state does not clear: the mouthfuls of a meal, the turns
+	/// that a hunter eats it, and the turns that its body lies dead. A state that does not set the count keeps what an
+	/// earlier state left in it.
+	int16_t turnsUntilStateChange {0};
 	/// How it lay when it last came down on the land. Its dead clip and its clip to get up use it
 	physics::living::LandingPose landingPose {physics::living::LandingPose::Feet};
 
 	[[nodiscard]] bool Dead() const { return !(life > 0.0f); }
 };
 
-/// A grazing animal's own life: its needs, its herd's sleeping place and what is left of its meal
+/// A grazing animal's own life: its needs and its herd's sleeping place
 struct Grazer
 {
 	animals::grazers::Needs needs;
 	/// The cell its herd's home was in when it was made, which it goes back to sleep at; none for none
 	std::optional<glm::ivec2> sleepingCell;
-	/// The grazing clips left of its meal
-	int16_t meals {0};
 };
 
 /// The doves or bats about a temple: its flock, made the first time it is seen to, and the look of the temple's model
@@ -188,9 +186,8 @@ struct SpellWolf
 	uint32_t huntStart {0};
 	/// Where the prey it last found was, which it goes to if it finds none
 	std::optional<glm::vec2> remembered;
-	/// What it is eating, and how many more mouthfuls
+	/// What it is eating. The mouthfuls left are the animal's count of turns.
 	entt::entity food {entt::null};
-	int eatCount {0};
 };
 
 /// How an animal is lit: by the land's light where it is, as most things are, or in a colour of its own

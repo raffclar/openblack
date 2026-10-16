@@ -552,12 +552,12 @@ void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& graze
 		// The common animal's meal is drawn and then its own, so many grazing clips once its head is down
 		(void)RandomWhole(grazers::k_CommonMealsRange);
 		SetGrazerSpeed(animal, SpeedStateOf(info, k_UsualSpeed));
-		grazer.meals = static_cast<int16_t>(RandomWhole(grazers::k_MealsRange) + grazers::k_MealsMin);
+		animal.turnsUntilStateChange = static_cast<int16_t>(RandomWhole(grazers::k_MealsRange) + grazers::k_MealsMin);
 		WaitForClip(animal, AnimalState::Eat);
 		break;
 	case AnimalState::Eat:
-		--grazer.meals;
-		if (grazer.meals == 0)
+		--animal.turnsUntilStateChange;
+		if (animal.turnsUntilStateChange == 0)
 		{
 			WaitForClip(animal, AnimalState::FinishEating);
 			grazer.needs.hunger = 0;

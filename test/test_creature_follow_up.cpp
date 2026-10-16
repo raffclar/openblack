@@ -140,3 +140,18 @@ TEST(CreatureFollowUp, ItDoesTheActionAgainToTheMostUsefulThingOfTheSameKind)
 	// An action that acts on nothing acts on the creature itself
 	EXPECT_EQ(creature_follow_up::ThingToDoAgainTo(false, k_Self, {}), std::optional<uint32_t>(k_Self));
 }
+
+TEST(CreatureFollowUp, AnActionWithNoTestIsDoneAgainToAnyThingOfTheSameKind)
+{
+	using creature_follow_up::SuitsDoAgain;
+	// An action with no test of its own, such as a fart, takes any thing of the kind
+	EXPECT_TRUE(SuitsDoAgain({.sameKind = true}));
+	EXPECT_FALSE(SuitsDoAgain({.sameKind = false}));
+	// An action with a test takes only a thing that passes it
+	EXPECT_TRUE(SuitsDoAgain({.sameKind = true, .passesTest = true}));
+	EXPECT_FALSE(SuitsDoAgain({.sameKind = true, .passesTest = false}));
+	// An action that must not act on what the creature holds does not take a thing in its hand
+	EXPECT_FALSE(SuitsDoAgain({.sameKind = true, .notWhatItHolds = true, .heldByItself = true}));
+	EXPECT_TRUE(SuitsDoAgain({.sameKind = true, .notWhatItHolds = true, .heldByItself = false}));
+	EXPECT_TRUE(SuitsDoAgain({.sameKind = true, .notWhatItHolds = false, .heldByItself = true}));
+}
