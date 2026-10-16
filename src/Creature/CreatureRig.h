@@ -26,6 +26,7 @@
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureHair.h"
+#include "Creature/CreatureHitShapes.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureTattoo.h"
 
@@ -108,6 +109,8 @@ struct CreatureRig
 	};
 	/// The species' hair, none for most
 	std::vector<HairGroup> hairGroups;
+	/// The box round the vertices of each bone of the base mesh, which fight blows strike
+	std::vector<creature_hit_shapes::Shape> hitShapes;
 
 	/// Where the species' tattoos go, for species that have places for them
 	std::optional<creature_tattoo::Sites> tattooSites;

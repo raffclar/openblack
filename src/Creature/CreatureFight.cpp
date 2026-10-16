@@ -32,6 +32,8 @@ constexpr uint32_t k_CounterLots = 5;
 constexpr uint32_t k_EndBlockLots = 8;
 /// A blow at a band asked for scores its steps; any other this
 constexpr int k_OutOfBandScore = 999;
+/// The depth that any blow that lands beats
+constexpr float k_NoDepthScore = 1000.0f;
 /// The tendency clamps here, and each move nudges it by this share
 constexpr float k_TendencyKeep = 0.98f;
 constexpr float k_TendencyNudge = 0.02f;
@@ -1053,60 +1055,80 @@ bool creature_fight::ComputerEndsBlock(const Random& random)
 	return random(k_EndBlockLots) == 1;
 }
 
-AttackChoice creature_fight::ChooseAttack(std::span<const Reach> reaches, Band band, float gap, float stepLength,
-                                          float attackerSize, float opponentHeight)
+std::pair<float, float> creature_fight::BandLimits(Band band, float headHeight)
 {
-	struct Best
+	switch (band)
 	{
-		size_t animation;
-		int steps;
-		int score;
-		float depth;
-	};
-	std::optional<Best> best;
-	const auto maxDepth = k_DepthPerSize * attackerSize;
-	const int maxSteps = stepLength > 0.0f ? k_MaxSteps : 0;
-	for (const auto& reach : reaches)
+	case Band::High:
+		return {headHeight * k_HighAbove, headHeight};
+	case Band::Mid:
+		return {headHeight * k_LowBelow, headHeight * k_HighAbove};
+	case Band::Low:
+		break;
+	}
+	return {0.0f, headHeight * k_LowBelow};
+}
+
+AttackChoice creature_fight::ChooseAttack(std::span<const BlowDepth> blows, Band band, float headHeight, StepLengths steps,
+                                          float attackerSize)
+{
+	const auto [lowest, highest] = BandLimits(band, headHeight);
+	const auto deepest = -k_DepthPerSize * attackerSize;
+	std::optional<size_t> bestBlow;
+	int bestSteps = 0;
+	int bestScore = 0;
+	float bestDepth = -k_NoDepthScore;
+	for (int count = -k_MaxSteps; count <= k_MaxSteps; ++count)
 	{
-		if (IsSpecialAttack(reach.animation) || reach.height > opponentHeight || opponentHeight <= 0.0f)
+		float moved = 0.0f;
+		if (count < 0)
 		{
-			continue;
+			moved = static_cast<float>(count) * steps.back;
 		}
-		const bool inBand = BandOf(reach.height / opponentHeight) == band;
-		// The fewest steps forward (more than 0) or back from which it lands
-		std::optional<std::pair<int, float>> landing;
-		for (int count = 0; count <= maxSteps && !landing.has_value(); ++count)
+		else if (count > 0)
 		{
-			for (const int steps : {count, -count})
+			moved = static_cast<float>(count) * steps.forward;
+		}
+		for (const auto& blow : blows)
+		{
+			if (blow.animation == animations::k_AttackSpecial || !blow.depth.has_value() || !(blow.height <= headHeight))
 			{
-				const auto depth = reach.reach - (gap - (static_cast<float>(steps) * stepLength));
-				if (depth > 0.0f && depth < maxDepth)
+				continue;
+			}
+			const auto depth = *blow.depth - moved;
+			if (!(depth < 0.0f) || !(depth > deepest))
+			{
+				continue;
+			}
+			const bool inBand = !(highest < blow.height || blow.height < lowest);
+			const auto score = inBand ? std::abs(count) : k_OutOfBandScore;
+			if (bestBlow.has_value() && score == bestScore)
+			{
+				// The same score: the blow that goes in less wins, with the steps found first
+				if (depth > bestDepth)
 				{
-					landing = std::pair(steps, depth);
-					break;
+					bestBlow = blow.animation;
+					bestDepth = depth;
 				}
 			}
-		}
-		if (!landing.has_value())
-		{
-			continue;
-		}
-		const auto score = inBand ? std::abs(landing->first) : k_OutOfBandScore;
-		if (!best.has_value() || score < best->score || (score == best->score && landing->second > best->depth))
-		{
-			best = Best {.animation = reach.animation, .steps = landing->first, .score = score, .depth = landing->second};
+			else if (!bestBlow.has_value() || score < bestScore)
+			{
+				bestBlow = blow.animation;
+				bestSteps = count;
+				bestScore = score;
+				bestDepth = depth;
+			}
 		}
 	}
-	if (!best.has_value())
+	if (!bestBlow.has_value())
 	{
-		// Nothing lands from anywhere near: close in, or back off when already on top of the opponent
-		return {.step = gap > 0.0f ? Step::Forward : Step::Back};
+		return {};
 	}
-	if (best->steps != 0)
+	if (bestSteps != 0)
 	{
-		return {.step = best->steps > 0 ? Step::Forward : Step::Back};
+		return {.step = bestSteps > 0 ? Step::Forward : Step::Back};
 	}
-	return {.animation = best->animation};
+	return {.animation = bestBlow};
 }
 
 bool creature_fight::WinnerPoos(float alignment)

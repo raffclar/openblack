@@ -17,6 +17,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -599,12 +600,13 @@ struct Choice
 
 // Choosing the blow
 
-/// One of the creature's blows as it lands: how far ahead of the creature it reaches and how high, in the world, and
-/// the swing of its striking bone in the creature's mesh space
+/// One of the creature's blows as it lands: where it lands in the creature's mesh space, how high it lands in the
+/// world, and the swing of its striking bone in the mesh space. A blow that the creature has but does not measure lands
+/// at the origin of the mesh, with no swing.
 struct Reach
 {
 	size_t animation;
-	float reach;
+	glm::vec3 point {0.0f};
 	float height;
 	glm::vec3 swing {0.0f};
 };
@@ -679,14 +681,34 @@ struct AttackChoice
 };
 /// Steps are tried this many each way
 constexpr int k_MaxSteps = 10;
-/// A blow lands well when it reaches this far into the opponent, at most, for each of the attacker's size
+/// A blow lands well when it reaches into the opponent by less than 7.5 units of the attacker's size
 constexpr float k_DepthPerSize = 7.5f;
-/// The blow at a band that lands from the fewest steps forward or back, of those that reach high enough. A blow lands
-/// when it reaches into the opponent, but not by more than 7.5 units of the attacker's size; blows at the band asked for
-/// beat all others, then the fewest steps, then the deepest. If the best needs steps, the creature steps once instead.
-/// gap is from the attacker to the opponent's near side.
-[[nodiscard]] AttackChoice ChooseAttack(std::span<const Reach> reaches, Band band, float gap, float stepLength,
-                                        float attackerSize, float opponentHeight);
+/// A blow as the creature thinks of it before it chooses: how high it lands in the world, and how far the opponent's
+/// body is ahead of where it lands. None when no line from the blow meets the body.
+struct BlowDepth
+{
+	size_t animation;
+	float height;
+	std::optional<float> depth;
+};
+/// How far one step forward and one step back carry the creature
+struct StepLengths
+{
+	float forward;
+	float back;
+};
+/// The lowest and the highest that a blow can land to be in a band, as heights over the land
+[[nodiscard]] std::pair<float, float> BandLimits(Band band, float headHeight);
+/// The blow to strike, or the step to take first. The special blow and blows higher than the opponent's head are not
+/// used. A blow lands after a number of steps when the opponent's body starts behind where it lands, but by less than
+/// 7.5 units of the attacker's size. The creature tries the steps from ten back to ten forward. For each, it tries the
+/// blows in turn:
+/// - a blow in the band asked for scores its number of steps, any other blow 999,
+/// - a lower score wins and takes its number of steps,
+/// - on the same score, the blow that goes in less wins but keeps the number of steps that it found first.
+/// If the best needs steps, the creature steps once instead. When no blow lands, the creature does nothing.
+[[nodiscard]] AttackChoice ChooseAttack(std::span<const BlowDepth> blows, Band band, float headHeight, StepLengths steps,
+                                        float attackerSize);
 
 // The fight's end
 

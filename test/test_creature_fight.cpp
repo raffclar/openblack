@@ -527,26 +527,54 @@ TEST(CreatureFight, OpponentStatesAsTheComputerSeesThem)
 
 TEST(CreatureFight, ABlowIsChosenThatLandsAtTheBand)
 {
-	// Reaches 12 ahead at the head, 10 at the belly, 8 at the knee
-	const std::array<Reach, 4> reaches {{
-	    {.animation = animations::k_AttackHigh, .reach = 12.0f, .height = 12.0f},
-	    {.animation = animations::k_AttackBelly, .reach = 10.0f, .height = 7.0f},
-	    {.animation = animations::k_AttackKnee, .reach = 8.0f, .height = 3.0f},
-	    {.animation = animations::k_AttackSpecial, .reach = 30.0f, .height = 7.0f},
-	}};
-	// In reach of everything, the band asked for wins
-	EXPECT_EQ(ChooseAttack(reaches, Band::Mid, 6.0f, 4.0f, 1.0f, 15.0f).animation, animations::k_AttackBelly);
-	EXPECT_EQ(ChooseAttack(reaches, Band::Low, 6.0f, 4.0f, 1.0f, 15.0f).animation, animations::k_AttackKnee);
-	EXPECT_EQ(ChooseAttack(reaches, Band::High, 6.0f, 4.0f, 1.0f, 15.0f).animation, animations::k_AttackHigh);
-	// Out of reach, it steps forward first
-	const auto far = ChooseAttack(reaches, Band::Low, 20.0f, 4.0f, 1.0f, 15.0f);
+	constexpr float k_Head = 15.0f;
+	constexpr StepLengths k_Steps {.forward = 4.0f, .back = 3.0f};
+	const auto blows = [](float high, float belly, float knee) {
+		return std::array<BlowDepth, 4> {{
+		    {.animation = animations::k_AttackHigh, .height = 12.0f, .depth = high},
+		    {.animation = animations::k_AttackBelly, .height = 7.0f, .depth = belly},
+		    {.animation = animations::k_AttackKnee, .height = 3.0f, .depth = knee},
+		    {.animation = animations::k_AttackSpecial, .height = 7.0f, .depth = -1.0f},
+		}};
+	};
+	// The body starts a little behind where each blow lands: the band asked for wins
+	const auto near = blows(-2.0f, -3.0f, -1.0f);
+	EXPECT_EQ(ChooseAttack(near, Band::Mid, k_Head, k_Steps, 1.0f).animation, animations::k_AttackBelly);
+	EXPECT_EQ(ChooseAttack(near, Band::Low, k_Head, k_Steps, 1.0f).animation, animations::k_AttackKnee);
+	EXPECT_EQ(ChooseAttack(near, Band::High, k_Head, k_Steps, 1.0f).animation, animations::k_AttackHigh);
+	// The body is far ahead: the creature steps forward first
+	const auto far = ChooseAttack(blows(20.0f, 20.0f, 20.0f), Band::Low, k_Head, k_Steps, 1.0f);
 	EXPECT_FALSE(far.animation.has_value());
 	EXPECT_EQ(far.step, Step::Forward);
-	// Too close for the knee to land well, it steps back
-	EXPECT_EQ(ChooseAttack(reaches, Band::Low, -2.0f, 4.0f, 1.0f, 15.0f).step, Step::Back);
-	// A blow too high for a small opponent isn't used, and nothing in reach of anything steps in
-	EXPECT_EQ(ChooseAttack(reaches, Band::High, 6.0f, 4.0f, 1.0f, 10.0f).animation, animations::k_AttackBelly);
-	EXPECT_EQ(ChooseAttack({}, Band::High, 6.0f, 4.0f, 1.0f, 10.0f).step, Step::Forward);
+	// The knee goes in too deep, so the creature steps back
+	EXPECT_EQ(ChooseAttack(blows(-2.0f, -3.0f, -9.0f), Band::Low, k_Head, k_Steps, 1.0f).step, Step::Back);
+	// A blow higher than the head is not used
+	EXPECT_EQ(ChooseAttack(near, Band::High, 10.0f, k_Steps, 1.0f).animation, animations::k_AttackBelly);
+	// When no blow lands from ten steps either way, the creature does nothing
+	const auto none = ChooseAttack(blows(80.0f, 80.0f, 80.0f), Band::Low, k_Head, k_Steps, 1.0f);
+	EXPECT_FALSE(none.animation.has_value());
+	EXPECT_FALSE(none.step.has_value());
+	EXPECT_FALSE(ChooseAttack({}, Band::High, k_Head, k_Steps, 1.0f).step.has_value());
+}
+
+TEST(CreatureFight, OnTheSameScoreTheBlowChangesButTheStepsStay)
+{
+	// No blow is low. The high blow lands first after three steps back, then the belly blow lands with no step and goes
+	// in less. The belly blow wins, but the creature keeps the three steps back.
+	const std::array<BlowDepth, 2> blows {{
+	    {.animation = animations::k_AttackHigh, .height = 12.0f, .depth = -10.0f},
+	    {.animation = animations::k_AttackBelly, .height = 7.0f, .depth = -0.5f},
+	}};
+	const auto choice = ChooseAttack(blows, Band::Low, 15.0f, {.forward = 4.0f, .back = 3.0f}, 1.0f);
+	EXPECT_FALSE(choice.animation.has_value());
+	EXPECT_EQ(choice.step, Step::Back);
+	// The bands share their limits
+	const auto [highLowest, highHighest] = BandLimits(Band::High, 10.0f);
+	EXPECT_FLOAT_EQ(highLowest, 6.6f);
+	EXPECT_FLOAT_EQ(highHighest, 10.0f);
+	const auto [lowLowest, lowHighest] = BandLimits(Band::Low, 10.0f);
+	EXPECT_FLOAT_EQ(lowLowest, 0.0f);
+	EXPECT_FLOAT_EQ(lowHighest, 3.3f);
 }
 
 TEST(CreatureFight, OutcomesAndStarting)
