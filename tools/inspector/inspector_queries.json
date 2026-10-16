@@ -978,6 +978,12 @@
   "query": "land.underwater"
  },
  {
+  "description": "EXPERIMENT (not for merge): the water's field of small waves: whether it is flat, its steps this frame, where it is, and the movers, rings, hulls and splashes in it",
+  "kind": "object",
+  "parameters": [],
+  "query": "land.wake"
+ },
+ {
   "description": "EXPERIMENT (not for merge): the sea bed under a point: the depth of the sea bed under the usual sea level, the lowest the camera goes there, the distance to the coast (out to sea positive) and how much it is a cliff's foot",
   "kind": "object",
   "parameters": [
@@ -989,12 +995,6 @@
    }
   ],
   "query": "land.underwater_at"
- },
- {
-  "description": "EXPERIMENT (not for merge): the water's field of small waves: whether it is flat, its steps this frame, where it is, and the movers, rings, hulls and splashes in it",
-  "kind": "object",
-  "parameters": [],
-  "query": "land.wake"
  },
  {
   "description": "The climate: whether it runs, its storms and the season",
