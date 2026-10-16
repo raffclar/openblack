@@ -64,9 +64,9 @@ float creature_locomotion::KeptFraction(float kept, float walkFraction)
 	return kept > 0.0f ? kept : walkFraction;
 }
 
-float creature_locomotion::RequiredFraction(float wanted, float slowFraction, float exhaustion)
+float creature_locomotion::RequiredFraction(float kept, float slowFraction, float exhaustion, bool held)
 {
-	return exhaustion >= k_ExhaustedAt ? slowFraction : wanted;
+	return !held && exhaustion >= k_ExhaustedAt ? slowFraction : kept;
 }
 
 float creature_locomotion::StopCap(float remaining)

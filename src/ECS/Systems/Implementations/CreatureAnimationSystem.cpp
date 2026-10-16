@@ -25,6 +25,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Common/FramePace.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAlignmentMotes.h"
 #include "Creature/CreatureAnimation.h"
@@ -673,11 +674,12 @@ void CreatureAnimationSystem::ProcessTurn()
 	registry.Each<const Creature, CreatureMorph>([](const Creature& creature, CreatureMorph& morph) {
 		morph.shownFatness = creature_morph::EaseFatness(morph.shownFatness, creature.fatness);
 	});
-	// Breathing settles towards the period it should be at a step a turn; standing, that is its resting period
-	constexpr auto k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
+	// Each game turn the breath goes back to the resting period of the size that the creature shows, before its mind
+	// starts a walk that makes it breathe faster
 	registry.Each<const Creature, CreatureAnimation>([](const Creature& creature, CreatureAnimation& animation) {
 		const auto resting = creature_animation::BreathPeriod(ShownSize(creature));
-		animation.breathPeriod = creature_animation::EaseBreathPeriod(animation.breathPeriod, resting, resting, k_TurnSeconds);
+		animation.breathPeriod = resting;
+		animation.breathTarget = resting;
 	});
 	AddAlignmentMotes();
 }
@@ -721,6 +723,9 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 	const auto& rigs = resources.GetCreatureRigs();
 	const auto seconds = std::chrono::duration<float>(gameTime).count();
 	const auto milliseconds = static_cast<int32_t>(std::lround(gameTime.count()));
+	// The breath moves towards its target period one step a frame, at most 60 times a second
+	const bool breathSteps = frame_pace::Due(_breathPace, std::chrono::milliseconds {milliseconds});
+	constexpr auto k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 
 	registry.Each<const Creature, CreatureMorph, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, CreatureMorph& morph, CreatureAnimation& animation,
@@ -763,9 +768,19 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 
 		    // Standing, the creature breathes in and out over its stand animation, from its first frame at its resting
 		    // period
+		    const auto resting = creature_animation::BreathPeriod(ShownSize(creature));
 		    if (animation.breathPeriod <= 0.0f)
 		    {
-			    animation.breathPeriod = creature_animation::BreathPeriod(ShownSize(creature));
+			    animation.breathPeriod = resting;
+		    }
+		    if (animation.breathTarget <= 0.0f)
+		    {
+			    animation.breathTarget = animation.breathPeriod;
+		    }
+		    if (breathSteps)
+		    {
+			    animation.breathPeriod = creature_animation::EaseBreathPeriod(animation.breathPeriod, animation.breathTarget,
+			                                                                  resting, k_TurnSeconds);
 		    }
 		    // A frozen creature plays slower, down to not at all
 		    const float scale = animation.playbackScale;

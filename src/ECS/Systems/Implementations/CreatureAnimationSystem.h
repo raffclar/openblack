@@ -12,6 +12,7 @@
 #include <random>
 #include <span>
 
+#include "Common/FramePace.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 
@@ -42,6 +43,8 @@ private:
 
 	/// The eyes blink at random, apart from the game's own random numbers
 	RandomStreamSource _random {RandomStream::CreatureAnimation};
+	/// When the breaths move towards their target periods
+	frame_pace::Pace _breathPace;
 };
 
 } // namespace openblack::ecs::systems

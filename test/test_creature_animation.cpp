@@ -158,16 +158,29 @@ TEST(CreatureAnimation, BreathingTakesFiveSecondsAtSizeOne)
 	EXPECT_EQ(creature_animation::BreathTime(1.0f, 2208), 2207u);
 }
 
+TEST(CreatureAnimation, AWalkThatStartsMakesTheCreatureBreatheFaster)
+{
+	EXPECT_FLOAT_EQ(creature_animation::WalkBreathPeriod(1.0f, false), 3.0f);
+	EXPECT_FLOAT_EQ(creature_animation::WalkBreathPeriod(1.0f, true), 1.4f);
+	EXPECT_FLOAT_EQ(creature_animation::WalkBreathPeriod(4.0f, false), 6.0f);
+	EXPECT_FLOAT_EQ(creature_animation::WalkBreathPeriod(4.0f, true), 2.8f);
+	// The faster target is not the resting period, so the breath takes it up quickly
+	const auto resting = creature_animation::BreathPeriod(1.0f);
+	EXPECT_FLOAT_EQ(
+	    creature_animation::EaseBreathPeriod(resting, creature_animation::WalkBreathPeriod(1.0f, false), resting, 0.1f),
+	    resting - ((resting - 3.0f) / 5.0f));
+}
+
 TEST(CreatureAnimation, TheBreathingPeriodEasesToItsTarget)
 {
 	constexpr float k_Turn = 0.1f;
 	constexpr float k_Resting = 5.0f;
 	// A creature not yet breathing starts at its target
 	EXPECT_FLOAT_EQ(creature_animation::EaseBreathPeriod(0.0f, k_Resting, k_Resting, k_Turn), k_Resting);
-	// Faster breathing is taken up over half a second: five turns, a fifth of the gap a turn
+	// Faster breathing closes a fifth of the gap each step: half a second's worth of turns
 	EXPECT_FLOAT_EQ(creature_animation::EaseBreathPeriod(k_Resting, 2.2f, k_Resting, k_Turn),
 	                k_Resting - ((k_Resting - 2.2f) / 5.0f));
-	// Back to resting over ten seconds: a hundred turns, a hundredth of the gap a turn
+	// Back to resting, it closes a hundredth of the gap each step: ten seconds' worth of turns
 	EXPECT_FLOAT_EQ(creature_animation::EaseBreathPeriod(2.0f, k_Resting, k_Resting, k_Turn),
 	                2.0f + ((k_Resting - 2.0f) / 100.0f));
 	// Turns longer than the time constant close the whole gap

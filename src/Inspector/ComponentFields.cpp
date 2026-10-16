@@ -627,6 +627,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureAnimation::playbackScale>("playbackScale")
 	    .Field<&components::CreatureAnimation::breathPhase>("breathPhase")
 	    .Field<&components::CreatureAnimation::breathPeriod>("breathPeriod")
+	    .Field<&components::CreatureAnimation::breathTarget>("breathTarget")
 	    .Field<&components::CreatureAnimation::builtRevision>("builtRevision")
 	    .Field<&components::CreatureAnimation::skeleton>("skeleton")
 	    .Field<&components::CreatureAnimation::animations>("animations")
