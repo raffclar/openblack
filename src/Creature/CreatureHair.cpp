@@ -152,17 +152,10 @@ glm::ivec3 creature_hair::StrandColour(const glm::ivec3& colour, const glm::ivec
 	return glm::min((glm::clamp(colour, 0, 255) * glm::clamp(light, 0, 255)) / 255 + glm::max(added, 0), glm::ivec3(255));
 }
 
-Strand creature_hair::Straight(const Root& root, const Physics& physics, uint32_t segmentCount)
+Strand creature_hair::FromZero(uint32_t segmentCount)
 {
-	Strand strand;
-	strand.positions.resize(segmentCount);
-	strand.velocities.assign(segmentCount, glm::vec3(0.0f));
-	const auto start = root.position + (root.inwardNormal * physics.rootDepth);
-	for (uint32_t i = 0; i < segmentCount; ++i)
-	{
-		strand.positions[i] = start + (root.direction * (physics.segmentLength * static_cast<float>(i)));
-	}
-	return strand;
+	return {.positions = std::vector<glm::vec3>(segmentCount, glm::vec3(0.0f)),
+	        .velocities = std::vector<glm::vec3>(segmentCount, glm::vec3(0.0f))};
 }
 
 void creature_hair::Step(Strand& strand, const Root& root, const Physics& physics, float seconds)

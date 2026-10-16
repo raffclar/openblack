@@ -112,7 +112,7 @@ void StepHair(const resources::CreatureRigManager& rigs, CreatureType species, c
 			auto& strand = group.strands[s];
 			if (!hair.started || strand.positions.size() != source.segmentCount)
 			{
-				strand = creature_hair::Straight(*root, physics, source.segmentCount);
+				strand = creature_hair::FromZero(source.segmentCount);
 			}
 			creature_hair::Step(strand, *root, physics, seconds);
 		}
