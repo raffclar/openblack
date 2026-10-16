@@ -5388,6 +5388,25 @@ void AddCombat(std::vector<Scenario>& all)
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
 	}
+
+	{
+		all.push_back({
+		    .id = "combat.bodies_apart",
+		    .name = "Fighters keep their bodies apart",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger starts a fight with the blue tiger to its east, and both fight by themselves. The "
+		                   "camera looks at the arena from the side.",
+		    .expected = "On the walk to their places, the two tigers go through each other, because the red tiger takes the "
+		                "east place. The original game does the same: a creature that walks does not keep clear of another "
+		                "creature that walks. In the duel, the bodies do not stay in each other. When a blow reaches into "
+		                "the other body, both tigers move apart at once. In the stance and in each step, each tiger turns "
+		                "straight to the other, and the two bodies move apart when they touch, also when the other tiger "
+		                "blocks or casts after a blow.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
 }
 
 void AddMind(std::vector<Scenario>& all)
