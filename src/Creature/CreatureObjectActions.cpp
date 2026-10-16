@@ -68,60 +68,6 @@ Hands creature_object_actions::HandsFor(Kind kind)
 	return Hands::Either;
 }
 
-std::string_view creature_object_actions::Name(TownAttitude attitude)
-{
-	switch (attitude)
-	{
-	case TownAttitude::Fear:
-		return "fear";
-	case TownAttitude::Respect:
-		return "respect";
-	case TownAttitude::None:
-		break;
-	}
-	return "nothing much";
-}
-
-TownAttitude creature_object_actions::AttitudeTo(Kind kind, bool targetIsVillager, bool holdingVillager)
-{
-	if (holdingVillager)
-	{
-		return TownAttitude::Fear;
-	}
-	switch (kind)
-	{
-	case Kind::Eat:
-		return targetIsVillager ? TownAttitude::Fear : TownAttitude::None;
-	case Kind::Throw:
-	case Kind::Destroy:
-		return TownAttitude::Fear;
-	case Kind::PickUp:
-	case Kind::PutDown:
-	case Kind::Discard:
-	case Kind::Keep:
-	case Kind::Point:
-	case Kind::Catch:
-	case Kind::TakeFromHand:
-	case Kind::Kick:
-		break;
-	}
-	return TownAttitude::None;
-}
-
-float creature_object_actions::AttitudeSeconds(TownAttitude attitude)
-{
-	switch (attitude)
-	{
-	case TownAttitude::Fear:
-		return 30.0f;
-	case TownAttitude::Respect:
-		return 10.0f;
-	case TownAttitude::None:
-		break;
-	}
-	return 0.0f;
-}
-
 glm::vec2 creature_object_actions::LeanOf(float plusX, float minusX, float plusZ, float minusZ, float radius)
 {
 	const auto across = radius + radius;

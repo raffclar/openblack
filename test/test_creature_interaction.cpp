@@ -573,18 +573,9 @@ TEST(CreatureFeedback, TheBodyIsACapsuleFromEachJointToItsParentsPlaced)
 	EXPECT_EQ(capsules[1].to, glm::vec3((placement * bones[1])[3]));
 }
 
-TEST(CreatureObjectActions, TheTownFearsThrowingAndEatingVillagers)
+TEST(CreatureObjectActions, TheHandsThatEachActionNeeds)
 {
-	using creature_object_actions::AttitudeTo;
 	using creature_object_actions::Kind;
-	using creature_object_actions::TownAttitude;
-	EXPECT_EQ(AttitudeTo(Kind::Throw, false, false), TownAttitude::Fear);
-	EXPECT_EQ(AttitudeTo(Kind::Eat, false, false), TownAttitude::None);
-	EXPECT_EQ(AttitudeTo(Kind::Eat, true, false), TownAttitude::Fear);
-	EXPECT_EQ(AttitudeTo(Kind::Keep, false, true), TownAttitude::Fear);
-	EXPECT_EQ(AttitudeTo(Kind::PickUp, false, false), TownAttitude::None);
-	EXPECT_FLOAT_EQ(creature_object_actions::AttitudeSeconds(TownAttitude::Fear), 30.0f);
-	EXPECT_FLOAT_EQ(creature_object_actions::AttitudeSeconds(TownAttitude::Respect), 10.0f);
 	EXPECT_EQ(creature_object_actions::HandsFor(Kind::PickUp), creature_object_actions::Hands::Empty);
 	EXPECT_EQ(creature_object_actions::HandsFor(Kind::Throw), creature_object_actions::Hands::Holding);
 }

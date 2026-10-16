@@ -77,20 +77,6 @@ enum class Hands : uint8_t
 };
 [[nodiscard]] Hands HandsFor(Kind kind);
 
-/// How the creature's town sees what it does, which its villagers react to: as nothing much, with fear, or with
-/// respect
-enum class TownAttitude : uint8_t
-{
-	None,
-	Fear,
-	Respect,
-};
-[[nodiscard]] std::string_view Name(TownAttitude attitude);
-/// How the town sees an action: eating is fearsome when it is a villager eaten, holding a villager always is
-[[nodiscard]] TownAttitude AttitudeTo(Kind kind, bool targetIsVillager, bool holdingVillager);
-/// How long the town keeps a view once the creature stops, in seconds: fear for thirty, respect for ten
-[[nodiscard]] float AttitudeSeconds(TownAttitude attitude);
-
 /// How an action is going
 enum class Status : uint8_t
 {

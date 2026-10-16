@@ -28,6 +28,7 @@
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureSacrifice.h"
 #include "Creature/CreatureScriptAgendas.h"
+#include "Creature/CreatureTempleDance.h"
 #include "Creature/CreatureTownHelp.h"
 #include "Enums.h"
 
@@ -439,6 +440,10 @@ constexpr std::array k_Executors {
     Executor {.action = "BehaveStrangely", .build = Build::BehaveStrangely},
     // The sacrifice: no desire chooses it, but a script or a copy of the player can make the creature do it
     Executor {.action = "Sacrifice", .target = Target::AnyLiving, .build = Build::Sacrifice},
+    // The dance outside a worship site goes to the heart of the creature's own temple; the dance around a thing goes to
+    // any thing
+    Executor {.action = "DanceOutsideWorshipSite", .target = Target::WorshipSite, .build = Build::DanceOutsideTemple},
+    Executor {.action = "DanceAroundArtefact", .target = Target::Anything, .build = Build::DanceAroundThing},
 };
 
 /// The actions of the game's table that need a thing to use, by their names there
@@ -1381,6 +1386,16 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		}
 		return creature_sacrifice::Sacrifice(situation.holdingLiving ? std::nullopt : object, *situation.sacrificeAltar,
 		                                     situation.height);
+	case Build::DanceOutsideTemple:
+		// Without the heart of its player's temple, the action fails
+		if (!situation.templeHeart.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_temple_dance::DanceOutsideTemple(situation.templeHeart->temple, situation.height,
+		                                                 situation.turnsPerSecond);
+	case Build::DanceAroundThing:
+		return creature_temple_dance::DanceAroundThing(*object, situation.height, situation.turnsPerSecond);
 	case Build::Never:
 	case Build::MimicPlayer:
 		return std::nullopt;

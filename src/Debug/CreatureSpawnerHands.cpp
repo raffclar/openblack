@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <array>
 #include <numbers>
 #include <string>
@@ -29,6 +30,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/TownCreatureAttitude.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -43,12 +45,30 @@ using namespace openblack::debug::gui;
 using openblack::ecs::components::Creature;
 using openblack::ecs::components::CreatureMindState;
 using openblack::ecs::components::CreatureObjectAction;
-using openblack::ecs::components::CreatureTownAttitude;
 using openblack::ecs::components::MobileObject;
+using openblack::ecs::components::TownCreatureAttitude;
 using openblack::ecs::components::Transform;
 
 namespace
 {
+/// The name of a town's feeling about a creature
+std::string_view AttitudeName(ecs::creature_attitude::Attitude attitude)
+{
+	using ecs::creature_attitude::Attitude;
+	switch (attitude)
+	{
+	case Attitude::Curious:
+		return "curious";
+	case Attitude::Indifferent:
+		return "indifferent";
+	case Attitude::Fear:
+		return "fear";
+	case Attitude::Respect:
+		return "respect";
+	}
+	return "nothing";
+}
+
 /// The things that can be put by a creature to pick up
 constexpr std::array<std::pair<MobileObjectInfo, std::string_view>, 6> k_Objects {{
     {MobileObjectInfo::Ball, "Ball"},
@@ -124,11 +144,14 @@ void CreatureSpawner::DrawHands(entt::entity entity) noexcept
 			ImGui::Text("Getting in reach, try %u, reaches %.1f", action->attempts, static_cast<double>(action->maxReach));
 		}
 	}
-	if (const auto* seen = registry.TryGet<const CreatureTownAttitude>(entity))
-	{
-		ImGui::Text("Its town sees it with %s, %.0f s more", creature_object_actions::Name(seen->attitude).data(),
-		            static_cast<double>(seen->secondsLeft));
-	}
+	// Each town that watches the creature, and how it feels about it
+	registry.Each<const TownCreatureAttitude>([&](entt::entity town, const TownCreatureAttitude& watching) {
+		const auto found = std::ranges::find(watching.creatures, entity, &TownCreatureAttitude::Watched::creature);
+		if (found != watching.creatures.end())
+		{
+			ImGui::Text("Town %u feels %s about it", entt::to_integral(town), AttitudeName(found->feeling.attitude).data());
+		}
+	});
 	if (const auto* mind = registry.TryGet<const CreatureMindState>(entity))
 	{
 		if (mind->lastFeedback.has_value())
