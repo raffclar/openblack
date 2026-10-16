@@ -226,7 +226,12 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 	const auto& terrain = Locator::terrainSystem::value();
 	const auto zones = CurrentZones();
 	// The floor and the ceiling are those over where the camera was at the start of the frame
-	const auto groundAtStart = terrain.GetHeightAt(glm::xz(originAtFrameStart));
+	const auto startPoint = glm::xz(originAtFrameStart);
+	const auto groundAtStart = terrain.GetHeightAt(startPoint);
+	// EXPERIMENT (not for merge): under the sea, the floor is the sea bed
+	const auto floorAtStart = Locator::underwaterSystem::has_value()
+	                              ? Locator::underwaterSystem::value().FloorAt(startPoint, groundAtStart)
+	                              : groundAtStart;
 	const auto nearby = camera_limits::NearbyExclusions(zones.exclusions, originAtFrameStart);
 	LimitsMoved moved;
 	const auto originBefore = _targetOrigin;
@@ -276,9 +281,9 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 	// Never below the clearance over the ground. Turning the camera about a point recomputes its height with a little
 	// rounding, so a camera resting on the floor is let be within a ten-thousandth of it.
 	constexpr float k_FloorRounding = 1e-4f;
-	if (_targetOrigin.y < groundAtStart + camera_limits::k_Clearance - k_FloorRounding)
+	if (_targetOrigin.y < floorAtStart + camera_limits::k_Clearance - k_FloorRounding)
 	{
-		_targetOrigin.y = groundAtStart + camera_limits::k_Clearance;
+		_targetOrigin.y = floorAtStart + camera_limits::k_Clearance;
 		moved.pushed = true;
 	}
 
