@@ -176,5 +176,12 @@ inline constexpr float k_SightingSourceAmount = 0.5f;
 [[nodiscard]] bool SightingStirsSources(uint32_t turn, uint32_t lastTurn);
 /// Seeing a toy again stirs the source of play from watching the player by a half
 inline constexpr float k_ToySightingAmount = 0.5f;
+/// Seeing again a town that wants something stirs compassion from seeing things that deserve it. The amount is one over
+/// the turns in twenty seconds. The sight does not stir the source while a script controls the creature.
+inline constexpr uint32_t k_TownSightingSource = 3;
+inline constexpr float k_TownSightingSeconds = 20.0f;
+[[nodiscard]] float TownSightingAmount(uint32_t turnsPerSecond);
+/// Whether seeing a town again stirs the source
+[[nodiscard]] bool TownSightingStirs(bool scriptControlled, bool townWantsSomething);
 
 } // namespace openblack::creature_desire_sources

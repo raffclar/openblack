@@ -3385,7 +3385,8 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 		                                                                .activityObject = loser,
 		                                                                .action = action,
 		                                                                .actionObject = loser,
-		                                                                .instrument = std::nullopt});
+		                                                                .instrument = std::nullopt,
+		                                                                .comeAcross = true});
 		fight_transcript::Note(
 		    winner, "forced_plan",
 		    [&] {

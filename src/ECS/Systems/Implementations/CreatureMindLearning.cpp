@@ -1022,9 +1022,20 @@ void SetKindAttributes(const ecs::Registry& registry, entt::entity entity, const
 }
 } // namespace
 
-/// What a creature knows of a thing: its kind and attributes, as far as the game's world here tells them
 std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                            entt::entity self)
+{
+	const auto* mind = registry.Valid(entity) ? registry.TryGet<const CreatureMindState>(self) : nullptr;
+	if (const auto* known = mind != nullptr ? mind->beliefs.Find(entity) : nullptr;
+	    known != nullptr && known->attributes.has_value())
+	{
+		return known->attributes;
+	}
+	return BeliefNowOf(registry, entity, self);
+}
+
+std::optional<creature_tree::Belief> mind_detail::BeliefNowOf(const ecs::Registry& registry, entt::entity entity,
+                                                              entt::entity self)
 {
 	if (!registry.Valid(entity))
 	{
@@ -1047,13 +1058,6 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 	    .creatureType = creature != nullptr ? static_cast<uint32_t>(creature::InfoRow(creature->species)) : 0,
 	});
 	SetKindAttributes(registry, entity, me, belief);
-	// The kind of thing and some attributes stay as the creature saw them first
-	const auto* mind = registry.TryGet<const CreatureMindState>(self);
-	const auto* known = mind != nullptr ? mind->beliefs.Find(entity) : nullptr;
-	if (known != nullptr && known->firstSight.has_value())
-	{
-		return creature_tree::WithFirstSight(*known->firstSight, belief);
-	}
 	return belief;
 }
 
@@ -3941,6 +3945,8 @@ void CreatureMindSystem::LearnTurn()
 		// What the player showed it on a leash: anger or compassion towards such things
 		for (const auto& shown : mind->leash.shown)
 		{
+			// It comes across the thing first, so the lesson has the thing as it is now
+			ComeAcross(creature, *mind, static_cast<entt::entity>(shown.object));
 			const auto belief = BeliefOf(registry, static_cast<entt::entity>(shown.object), creature);
 			if (!belief.has_value())
 			{
@@ -3962,6 +3968,8 @@ void CreatureMindSystem::LearnTurn()
 		{
 			auto& attitude = creature_learning::AttitudeTo(learnt.creatures, change.creature);
 			const auto lessons = creature_learning::ChangeHowNice(attitude, change.change);
+			// It comes across the other creature first, so the lessons have that creature as it is now
+			ComeAcross(creature, *mind, static_cast<entt::entity>(change.creature));
 			if (const auto belief = BeliefOf(registry, static_cast<entt::entity>(change.creature), creature))
 			{
 				for (const auto& [desire, amount] : lessons)

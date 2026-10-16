@@ -5976,6 +5976,23 @@ void AddMind(std::vector<Scenario>& all)
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-20.0f, 20.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {15.0f, 15.0f}}},
 	});
+	// The player's tiger looks north at a villager and a hut, which both catch fire after three seconds
+	all.push_back({
+	    .id = "mind.belief_attributes",
+	    .name = "A belief keeps what the creature took in, and a building keeps its first sight",
+	    .facet = Facet::Mind,
+	    .description = "The player's tiger, its mind paused, looks north at a villager and a hut. After three seconds both "
+	                   "catch fire. Read its beliefs with the inspector query creature.beliefs.",
+	    .expected = "Before the fire, both beliefs show OnFire 1 (not on fire). After the fire, the villager's belief shows "
+	                "OnFire 0 (on fire) once the eyes sweep over it again. The hut's belief still shows OnFire 1: a belief "
+	                "about a building keeps the attributes of the first sight.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "yours")},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {15.0f, 15.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {-20.0f, 20.0f}}},
+	    .commands = {{.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 3.0f, .value = 1, .object = 0},
+	                 {.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 0.0f, .value = 1, .object = 1}},
+	});
 	// A hungry tiger, its mind running, looks north at a villager some way off; a nearer one stands behind it, out of sight
 	auto peckish = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "yours");
 	peckish.needs = {.energy = 0.3f};

@@ -3121,6 +3121,10 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	{
 		return false;
 	}
+	if (forced.comeAcross && registry.Valid(forced.actionObject))
+	{
+		ComeAcross(creature, *mind, forced.actionObject);
+	}
 	// A forced plan first stops the reaction that the creature has
 	EndReaction(creature);
 	// The current action stops as a failure. This occurs also when the creature finds no new plan.

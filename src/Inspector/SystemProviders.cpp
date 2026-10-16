@@ -579,7 +579,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 	    });
 	provider->Add(
 	    Query("beliefs",
-	          "A creature's beliefs about things: kind, last place, the whole thing, the attributes its decision trees test; "
+	          "A creature's beliefs about things: kind, last place, the whole thing, the attributes it last took in, which its "
+	          "decision trees test; "
 	          "and how nice it finds other creatures",
 	          {id, Parameter("kind", "integer", "Only beliefs of this kind (the game's belief type, 0 to 23)", false)}),
 	    [sources](const QueryContext& context) {
@@ -607,12 +608,15 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 				    continue;
 			    }
 			    auto attributes = Json::object();
-			    const auto now = sources.beliefAbout ? sources.beliefAbout(entity, belief.thing) : std::nullopt;
-			    if (now.has_value())
+			    // The attributes that the creature last took in, else what the mind makes of the thing
+			    const auto held = belief.attributes.has_value()
+			                          ? belief.attributes
+			                          : (sources.beliefAbout ? sources.beliefAbout(entity, belief.thing) : std::nullopt);
+			    if (held.has_value())
 			    {
-				    for (const auto attribute : creature_tree::SlotsFor(now->type))
+				    for (const auto attribute : creature_tree::SlotsFor(held->type))
 				    {
-					    const auto value = now->Value(attribute);
+					    const auto value = held->Value(attribute);
 					    attributes[creature_tree::Name(attribute)] = value.has_value() ? Json(*value) : Json(nullptr);
 				    }
 			    }

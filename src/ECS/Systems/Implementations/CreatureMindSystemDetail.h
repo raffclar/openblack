@@ -62,9 +62,13 @@ namespace openblack::ecs::systems::mind_detail
 /// The kind of belief a creature keeps about a thing, by the game's belief types; none for the things it does not yet
 /// know the kind of here
 [[nodiscard]] std::optional<uint32_t> BeliefKindOf(const ecs::Registry& registry, entt::entity thing);
-/// What a creature knows of a thing, as far as the world here tells it
+/// What a creature knows of a thing. When the creature has a belief about the thing, these are the attributes that it
+/// last took in. Else they are the attributes of the thing now.
 [[nodiscard]] std::optional<creature_tree::Belief> BeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                             entt::entity self);
+/// What a creature finds of a thing now, as far as the world here tells it
+[[nodiscard]] std::optional<creature_tree::Belief> BeliefNowOf(const ecs::Registry& registry, entt::entity entity,
+                                                               entt::entity self);
 /// What a creature knows of a thing that it acts on. The temple here is one thing, which stands for its heart when a
 /// creature acts on it.
 [[nodiscard]] std::optional<creature_tree::Belief> ActedOnBeliefOf(const ecs::Registry& registry, entt::entity entity,

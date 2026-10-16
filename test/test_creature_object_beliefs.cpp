@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureObjectBeliefs.h"
 
 using namespace openblack::creature_object_beliefs;
@@ -355,4 +356,38 @@ TEST(CreatureObjectBeliefs, ItComesAcrossTheTwoNearestTownsInTurn)
 	// Of towns equally near, the first counts
 	const std::array<TownCell, 2> tie {TownCell {.id = 4, .cell = {2, 0}}, TownCell {.id = 5, .cell = {0, 2}}};
 	EXPECT_EQ(NearestOtherTown({0, 0}, tie, std::nullopt), 4u);
+}
+
+TEST(CreatureObjectBeliefs, ABeliefKeepsTheAttributesItLastTookIn)
+{
+	using openblack::creature_tree::Attribute;
+	namespace types = openblack::creature_tree::belief_types;
+	const auto villager = [](uint32_t sex, uint32_t onFire) {
+		openblack::creature_tree::Belief belief {.type = types::k_Villager};
+		belief.Set(Attribute::Sex, sex);
+		belief.Set(Attribute::OnFire, onFire);
+		return belief;
+	};
+	Belief belief {.kind = types::k_Villager};
+	// A new belief takes every attribute
+	TakeIn(belief, true, villager(0, 1));
+	ASSERT_TRUE(belief.attributes.has_value());
+	EXPECT_EQ(belief.attributes->Value(Attribute::OnFire), 1u);
+	// Seen again, it takes the attributes that change with the thing, and keeps the others from the first sight
+	TakeIn(belief, false, villager(1, 0));
+	EXPECT_EQ(belief.attributes->Value(Attribute::OnFire), 0u);
+	EXPECT_EQ(belief.attributes->Value(Attribute::Sex), 0u);
+	// A belief about a building keeps every attribute from the first sight
+	EXPECT_FALSE(TakesInAgain(types::k_Abode));
+	EXPECT_TRUE(TakesInAgain(types::k_Villager));
+	openblack::creature_tree::Belief hut {.type = types::k_Abode};
+	hut.Set(Attribute::OnFire, 1);
+	hut.Set(Attribute::AbodeBeingBuilt, 0);
+	Belief building {.kind = types::k_Abode};
+	TakeIn(building, true, hut);
+	hut.Set(Attribute::OnFire, 0);
+	hut.Set(Attribute::AbodeBeingBuilt, 1);
+	TakeIn(building, false, hut);
+	EXPECT_EQ(building.attributes->Value(Attribute::OnFire), 1u);
+	EXPECT_EQ(building.attributes->Value(Attribute::AbodeBeingBuilt), 0u);
 }

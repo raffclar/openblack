@@ -32,6 +32,8 @@
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureDecisionTree.h"
+#include "Creature/CreatureDesireSources.h"
+#include "Creature/CreatureDesires.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureLook.h"
@@ -64,11 +66,13 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -84,6 +88,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -183,6 +188,18 @@ float HeightOf(const ecs::Registry& registry, entt::entity thing)
 /// The game turns in one second
 constexpr uint32_t k_TurnsPerSecond =
     static_cast<uint32_t>(std::chrono::milliseconds(std::chrono::seconds(1)) / TimeSystemInterface::k_TurnDuration);
+
+/// Whether a building is the centre of a town
+bool IsTownCentre(const Abode& abode)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto& infos = Locator::infoConstants::value().abode;
+	const auto row = static_cast<size_t>(abode.info);
+	return row < infos.size() && infos.at(row).abodeType == AbodeType::TownCentre;
+}
 
 /// How much a thing catches a creature's eye, by what it is. The temple, fields, features and the other things that
 /// stand on the land are fixed things.
@@ -411,18 +428,17 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 		return;
 	}
 	const auto added = mind.beliefs.Add(thing, *kind, PlaceOf(registry, thing));
-	// Seen again, a villager may show the creature a skill
-	if (!added.isNew && *kind == kinds::k_Villager)
+	// The belief takes in the attributes of the thing now
+	if (added.belief != nullptr)
 	{
-		WatchVillager(creature, mind, thing);
-	}
-	if (added.isNew && added.belief != nullptr)
-	{
-		added.belief->firstSight = mind_detail::BeliefOf(registry, thing, creature);
+		if (const auto now = mind_detail::BeliefNowOf(registry, thing, creature))
+		{
+			beliefs::TakeIn(*added.belief, added.isNew, *now);
+		}
 	}
 	if (!added.isNew && added.belief != nullptr)
 	{
-		StirSourcesOnSighting(creature, mind, *added.belief);
+		SeeAgain(creature, mind, *added.belief);
 	}
 	// A new belief leads it on to what the thing belongs to, but for another creature, which is its own
 	if (!added.isNew || *kind == kinds::k_Creature)
@@ -436,6 +452,52 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 		if (mind.beliefs.Find(*owner) != nullptr)
 		{
 			mind.beliefs.JoinTo(thing, *owner);
+		}
+	}
+}
+
+void CreatureMindSystem::ComeAcrossWithWhole(entt::entity creature, components::CreatureMindState& mind, entt::entity thing)
+{
+	ComeAcross(creature, mind, thing);
+	if (const auto whole = BelongsTo(thing); whole.has_value() && *whole != thing)
+	{
+		ComeAcross(creature, mind, *whole);
+	}
+}
+
+void CreatureMindSystem::SeeAgain(entt::entity creature, components::CreatureMindState& mind, beliefs::Belief& belief)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	// A building seen again does not stir the desires. A seen village centre leads the creature on to its town.
+	if (!beliefs::TakesInAgain(belief.kind))
+	{
+		if (const auto* abode = registry.TryGet<const Abode>(belief.thing); abode != nullptr && IsTownCentre(*abode))
+		{
+			if (const auto town = BelongsTo(belief.thing); town.has_value() && *town != belief.thing)
+			{
+				ComeAcross(creature, mind, *town);
+			}
+		}
+		return;
+	}
+	// What it does next can come across other things, so it keeps what it needs of the belief first
+	const auto kind = belief.kind;
+	const auto thing = belief.thing;
+	StirSourcesOnSighting(creature, mind, belief);
+	// Seen again, a villager may show the creature a skill
+	if (kind == kinds::k_Villager)
+	{
+		WatchVillager(creature, mind, thing);
+	}
+	// A town that wants something stirs compassion
+	if (kind == kinds::k_Town && mind.desires.has_value())
+	{
+		const auto* wants = registry.TryGet<const TownDesire>(thing);
+		const bool wantsSomething = wants != nullptr && ecs::town_desire::GetMostSignificantRawDesire(*wants, 0.0f) != -1;
+		if (creature_desire_sources::TownSightingStirs(registry.AllOf<ScriptControlled>(creature), wantsSomething))
+		{
+			creature_desires::ChangeSource(*mind.desires, creature_desire_sources::k_TownSightingSource,
+			                               creature_desire_sources::TownSightingAmount(k_TurnsPerSecond));
 		}
 	}
 }
