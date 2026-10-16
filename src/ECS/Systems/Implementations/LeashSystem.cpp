@@ -760,9 +760,25 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 	worn.rope.maxLength = lengths.max;
 	worn.ropeStarted = false;
 
-	// The two tying sounds in turn
-	PlaySound(_secondAttachSound ? audio::SoundId::G_LeashAttach_01_2 : audio::SoundId::G_LeashAttach_01_1, std::nullopt);
+	// The two tying sounds play in turn. The local player hears the leash of their own creature without a place. The
+	// leash of each other creature makes its sound at the thing, and the sound belongs to the player of that creature.
+	const auto tieSound = _secondAttachSound ? audio::SoundId::G_LeashAttach_01_2 : audio::SoundId::G_LeashAttach_01_1;
 	_secondAttachSound = !_secondAttachSound;
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto owner = body != nullptr ? body->owner : k_LocalPlayer;
+	if (!leash::TieSoundIsPlaced(owner, k_LocalPlayer))
+	{
+		PlaySound(tieSound, std::nullopt);
+	}
+	else if (Locator::audio::has_value())
+	{
+		audio::StartGameSoundEffect(static_cast<entt::id_type>(tieSound),
+		                            {
+		                                .position = registry.Get<const Transform>(object).position,
+		                                .voiceOwner = audio::VoiceOwner::Number,
+		                                .ownerNumber = static_cast<uint32_t>(PlayerNumber(owner)),
+		                            });
+	}
 
 	// The creature learns that the player wants something done with what it is tied to
 	if (auto* mind = MindOf(registry, creature))
