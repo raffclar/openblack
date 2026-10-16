@@ -103,12 +103,16 @@ struct CreatureSources
 	std::function<const creature_mind_tables::Tables*()> tables;
 	/// What a creature believes about a thing now, with the attributes that its decision trees test
 	std::function<std::optional<creature_tree::Belief>(entt::entity creature, entt::entity thing)> beliefAbout;
+	/// A debug tool: the creature starts or stops to take notice of reactions; none when the inspector may not set it
+	std::function<void(entt::entity creature, bool notice)> setReactionNotice;
 };
 
 ///   creature.list                       the creatures, what each does and its strongest desire
 ///   creature.desires {id?, top?}        a creature's strongest desires
 ///   creature.beliefs {id?, kind?}       a creature's beliefs about things and its attitudes to creatures
 ///   creature.plan    {id?}              a creature's plan and agenda
+///   creature.reactions {id?}            whether a creature takes notice of reactions
+///   creature.set_reactions {id?, notice} a debug tool: the creature starts or stops to take notice of reactions
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeCreatureProvider(CreatureSources sources);
 
 // The map's cells

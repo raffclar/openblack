@@ -95,6 +95,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/CreatureReactionNotice.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -3500,6 +3501,10 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    return Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().BeliefAbout(creature, thing)
 		                                                    : std::nullopt;
 	    },
+	    .setReactionNotice =
+	        [](entt::entity creature, bool notice) {
+		        ecs::creature_reaction_notice::SetTakesNotice(Locator::entitiesRegistry::value(), creature, notice);
+	        },
 	}));
 	inspector.Add(MakeMapProvider({
 	    .world = World(),

@@ -798,6 +798,9 @@ struct Command
 		/// list (value 2), as the music button and the play list button show them. Value 0 hides them. Needs no
 		/// creature
 		ShowCustomMusicControls,
+		/// A script tells the creature to take notice of reactions (value 1) or to take no notice (value 0), as
+		/// a script's "enable ... reaction" and "disable ... reaction" do
+		ScriptReaction,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

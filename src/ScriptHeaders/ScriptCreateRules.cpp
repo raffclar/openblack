@@ -81,6 +81,11 @@ bool KeepsScriptHeight(ObjectType type)
 	return type == ObjectType::Marker || type == ObjectType::MobileStatic;
 }
 
+bool IgnoresReactions(ObjectType type)
+{
+	return type == ObjectType::Creature;
+}
+
 ScriptVillager ScriptVillagerOf(bool child, uint32_t grownUpAge)
 {
 	constexpr uint32_t k_ChildAge = 10;

@@ -132,6 +132,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/CreatureNaming.h"
+#include "ECS/CreatureReactionNotice.h"
 #include "ECS/CreatureRemoval.h"
 #include "ECS/CreatureScars.h"
 #include "ECS/DanceRules.h"
@@ -623,17 +624,23 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	{
 		// A creature of the species the scripts number, which belongs to no one and has its home where it is made. It
 		// stands on the ground, as big as its species starts, named from the four creature names of the help texts.
-		// TODO(opening-skip): the game also keeps it out of the land's reactions until a script lets it react; openblack
-		// doesn't yet
 		const auto species = script::property_rules::CreatureTypeFromScript(subtype);
 		if (!species.has_value())
 		{
 			break;
 		}
 		const auto ground = Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z));
-		return ecs::archetypes::CreatureArchetype::Create(
+		const auto created = ecs::archetypes::CreatureArchetype::Create(
 		    {position.x, ground, position.z}, PlayerNames::NEUTRAL, *species, 0, yAngleRadians,
 		    ecs::archetypes::CreatureArchetype::StartScale(*species), ecs::archetypes::CreatureArchetype::StartBody(*species));
+		// It takes no notice of reactions until a script tells it to, or until it gets a player's mind in a swap. This
+		// stays when it becomes the player's creature, so the creature that the player picks in the glade does not react
+		// on the first land.
+		if (script::create_rules::IgnoresReactions(type))
+		{
+			ecs::creature_reaction_notice::SetTakesNotice(Locator::entitiesRegistry::value(), created, false);
+		}
+		return created;
 	}
 	case ObjectType::Vortex:
 	{
@@ -7275,15 +7282,7 @@ void CreatureReaction() // 281 CREATURE_REACTION
 	{
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
-	if (enable)
-	{
-		registry.Remove<ecs::components::CreatureReactionsOff>(*creature);
-	}
-	else if (!registry.AllOf<ecs::components::CreatureReactionsOff>(*creature))
-	{
-		registry.Assign<ecs::components::CreatureReactionsOff>(*creature);
-	}
+	ecs::creature_reaction_notice::SetTakesNotice(Locator::entitiesRegistry::value(), *creature, enable);
 }
 
 void CreatureInDevScript() // 282 CREATURE_IN_DEV_SCRIPT

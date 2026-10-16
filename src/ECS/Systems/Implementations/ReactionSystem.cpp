@@ -787,6 +787,12 @@ bool ReactionSystem::HasReaction(entt::entity initiator) const
 	                           [initiator](const Active& reaction) { return reaction.source.initiator == initiator; });
 }
 
+bool ReactionSystem::IsAvailable(entt::entity living, Reaction type) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	return registry.Valid(living) && Available(registry, living, type);
+}
+
 uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living, const glm::vec3& at) const
 {
 	return PriorityTo(reaction, living, at, SpreadDistance(at, reaction.source.position));

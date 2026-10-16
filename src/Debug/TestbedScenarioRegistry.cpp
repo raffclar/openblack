@@ -7189,7 +7189,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 134> k_Names {
+	constexpr std::array<std::string_view, 135> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7324,6 +7324,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "open the tattoo editor from the menu",
 		    "play custom music",
 		    "show the custom music controls",
+		    "script reaction",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}
