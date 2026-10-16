@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <glm/gtx/rotate_vector.hpp>
 #include <gtest/gtest.h>
 
 #include "Creature/LeashOrders.h"
@@ -281,4 +282,20 @@ TEST(LeashOrders, TheMarker)
 	EXPECT_EQ(FootprintCell(6), 3);
 	EXPECT_EQ(FootprintCell(17), 7);
 	EXPECT_EQ(FootprintCell(18), 0);
+}
+
+TEST(LeashOrders, TheFootprintInTheMarker)
+{
+	// A ring 1.0 wide and 0.6 high, in half sizes
+	const glm::vec2 ring {1.0f, 0.6f};
+	const auto size = FootprintSize(ring);
+	EXPECT_NEAR(size.x, 0.42f, k_Tolerance);
+	EXPECT_NEAR(size.y, 0.49f, k_Tolerance);
+	// After the turn, the right edge of the picture is at the top and the top of the picture is at the left
+	const auto right = glm::rotate(glm::vec2(size.x, 0.0f), k_FootprintTurn);
+	const auto top = glm::rotate(glm::vec2(0.0f, size.y), k_FootprintTurn);
+	EXPECT_NEAR(right.x, 0.0f, k_Tolerance);
+	EXPECT_NEAR(right.y, 0.7f * ring.y, k_Tolerance);
+	EXPECT_NEAR(top.x, -0.49f * ring.x, k_Tolerance);
+	EXPECT_NEAR(top.y, 0.0f, k_Tolerance);
 }

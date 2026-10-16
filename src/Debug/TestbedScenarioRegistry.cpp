@@ -4243,6 +4243,24 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.marker_flat_and_slope",
+	    .name = "The marker of a leash order on flat land and on a slope",
+	    .facet = Facet::Leash,
+	    .description = "A tiger far away on the learning leash is told with the Action button to go to a point on the "
+	                   "flat land. Twenty seconds later it is told to go to a point halfway down the steep bank of the "
+	                   "lake.",
+	    .expected = "Each time a yellow ring hangs two metres above the point, with a paw print inside. The ring and the "
+	                "print always face the camera and do not lie along the land, also on the bank. The ring throbs, its "
+	                "width and its height a fifth of a second apart. The print stands on its side, with its top to the "
+	                "left, and it is narrower than the ring.",
+	    .framing = {.shot = Shot::Overview, .include = {{40.0f, -40.0f}, {0.0f, k_NearShallows - 28.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {-150.0f, -100.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), Go(Kind::LeashOrderAt, 0, {40.0f, -40.0f}, 1.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {0.0f, k_NearShallows - 28.0f}, 20.0f, false), Act(Kind::TakeOffLeash, 0, 30.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "mind.step_looks_reflection",
 	    .name = "Looks at its reflection with the faces of each step",
 	    .facet = Facet::Mind,
