@@ -83,6 +83,7 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
 #include "Creature/LeashOrders.h"
+#include "Creature/TattooPictures.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/FrameStatsLog.h"
@@ -99,6 +100,7 @@
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/FloatingNumber.h"
 #include "ECS/Components/Hand.h"
@@ -201,6 +203,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
@@ -3737,6 +3740,8 @@ bool Game::Initialize() noexcept
 	}
 
 	_startupTimer->Step("info tables");
+	// The current profile's own pictures take the places of their designs from the start
+	ReadTattooPictures();
 	// The game's menu, which greets the player by their profile's name and shows their creature's name and their
 	// symbol; before a first start's player has a profile, by the name they log in with
 	{
@@ -3759,7 +3764,8 @@ bool Game::Initialize() noexcept
 		settings.musicVolume = audio.GetMusicVolume();
 		settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
 		const auto kept = gui::ToProfileSettings(settings);
-		_interface = gui::GameInterface::Create(playerName, std::move(settings));
+		const auto& pictures = Locator::tattooEditorSystem::value().GetPictures();
+		_interface = gui::GameInterface::Create(playerName, std::move(settings), pictures);
 		ApplyPlayerSettings(kept);
 		RefreshPlayersPage();
 		if (!_interface)
@@ -4087,24 +4093,7 @@ bool Game::Initialize() noexcept
 	}
 
 	// What creatures' tattoos and marks are painted with
-	try
-	{
-		const auto data = fileSystem.GetPath<Path::Data>();
-		Locator::resources::value().GetCreatureSkinArt().Load(
-		    creature_skin::k_ArtId, resources::CreatureSkinArtLoader::FromDiskTag {},
-		    resources::CreatureSkinArtLoader::Paths {
-		        .symbols = fileSystem.GetPath<Path::Textures>() / "OriginalChooseSymbol.raw",
-		        .freshDamage = data / "damage_new256.raw",
-		        .freshDamageAlpha = data / "damage_new256A.raw",
-		        .oldDamage = data / "damage_old256.raw",
-		        .oldDamageAlpha = data / "damage_old256A.raw",
-		        .palette = data / "tattoocols.raw",
-		    });
-	}
-	catch (std::runtime_error& err)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-	}
+	LoadCreatureSkinArt();
 
 	// The noise that makes the snow's edges on the land ragged
 	try
@@ -4953,6 +4942,8 @@ void Game::HandleEscapeInPlay(uint16_t keyModifiers)
 		// The game keeps the help record of the player when Escape opens the menu
 		SaveHelpRecord();
 		_interface->OpenMenu();
+		// The menu reads the profile's own pictures again as it opens
+		ReadTattooPictures();
 		HandleInterfaceAction();
 		break;
 	case escape_key::Outcome::AskLeavePlayground:
@@ -5118,6 +5109,8 @@ void Game::PlayerProfileChanged()
 {
 	// The help record of the new player comes from their profile. Without their file, the record stays as it is
 	LoadHelpRecord();
+	// The pictures of the new player replace those of the designs that they have pictures for
+	ReadTattooPictures();
 	RefreshPlayersPage();
 	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
 	if (!profile.has_value() || !_interface)
@@ -5128,6 +5121,70 @@ void Game::PlayerProfileChanged()
 	_interface->GetMenu().ShowPlayer(gui::ToUtf16(profile->creatureName), profile->symbol, profile->settings);
 	ApplyPlayerSettings(profile->settings);
 	NameCreatureAfterProfile();
+}
+
+void Game::ReadTattooPictures()
+{
+	if (!Locator::tattooEditorSystem::has_value() || !Locator::profileFolderSystem::has_value() ||
+	    !Locator::playerProfileSystem::has_value())
+	{
+		return;
+	}
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	if (!profile.has_value())
+	{
+		return;
+	}
+	auto& editor = Locator::tattooEditorSystem::value();
+	auto pictures = editor.GetPictures();
+	const auto player = gui::ToUtf16(profile->name);
+	const auto& folder = Locator::profileFolderSystem::value();
+	tattoo_pictures::Read(pictures,
+	                      [&folder, &player](const std::string& file) { return folder.ReadPlayerFile(player, file); });
+	if (pictures == editor.GetPictures())
+	{
+		return;
+	}
+	editor.SetPictures(pictures);
+	// The symbols' picture and the tattoo designs change with the pictures. The game loads them one time only
+	// (vanilla-bugs 380), and openblack fixes this.
+	if (_interface)
+	{
+		_interface->SetSymbolPictures(pictures);
+	}
+	if (Locator::resources::value().GetCreatureSkinArt().Contains(creature_skin::k_ArtId))
+	{
+		LoadCreatureSkinArt();
+		Locator::entitiesRegistry::value().Each<ecs::components::CreatureTattoos>(
+		    [](ecs::components::CreatureTattoos& tattoos) { ++tattoos.revision; });
+	}
+}
+
+void Game::LoadCreatureSkinArt()
+{
+	using filesystem::Path;
+	auto& fileSystem = Locator::filesystem::value();
+	try
+	{
+		const auto data = fileSystem.GetPath<Path::Data>();
+		auto& arts = Locator::resources::value().GetCreatureSkinArt();
+		arts.Erase(creature_skin::k_ArtId);
+		arts.Load(creature_skin::k_ArtId, resources::CreatureSkinArtLoader::FromDiskTag {},
+		          resources::CreatureSkinArtLoader::Paths {
+		              .symbols = fileSystem.GetPath<Path::Textures>() / "OriginalChooseSymbol.raw",
+		              .freshDamage = data / "damage_new256.raw",
+		              .freshDamageAlpha = data / "damage_new256A.raw",
+		              .oldDamage = data / "damage_old256.raw",
+		              .oldDamageAlpha = data / "damage_old256A.raw",
+		              .palette = data / "tattoocols.raw",
+		              .pictures = Locator::tattooEditorSystem::value().GetPictures(),
+		              .lowDetail = graphics::detail_level::For(Locator::config::value().detailLevel).lowResTextures,
+		          });
+	}
+	catch (std::runtime_error& err)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+	}
 }
 
 void Game::NameCreatureAfterProfile()

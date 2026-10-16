@@ -12,6 +12,7 @@
 #include <cassert>
 
 #include <algorithm>
+#include <bit>
 
 using namespace openblack;
 using namespace openblack::creature_tattoo;
@@ -26,6 +27,14 @@ constexpr uint16_t k_Blue = 0x000F;
 constexpr uint16_t k_Green = 0x00F0;
 constexpr uint16_t k_Red = 0x0F00;
 constexpr uint16_t k_Opaque = 0xF000;
+/// A colour becomes a grey after each channel goes to the middle of its step of eight
+constexpr uint32_t k_StepMask = 0xF8;
+constexpr uint32_t k_StepMiddles = 3 * 4;
+/// The block of pictures: its size, the number of pictures, the slots' bits, two spare bytes, then eight offsets
+constexpr uint32_t k_OffsetsStart = 8;
+constexpr uint32_t k_BlockHeader = k_OffsetsStart + (4 * k_SlotCount);
+/// A picture in the block keeps two levels to a byte
+constexpr uint32_t k_PackedPicture = (k_DesignSize * k_DesignSize) / 2;
 
 Mask Halved(const Mask& mask)
 {
@@ -44,12 +53,88 @@ Mask Halved(const Mask& mask)
 }
 } // namespace
 
-Design creature_tattoo::DesignFromAtlas(std::span<const std::array<uint8_t, 3>> atlas, uint32_t atlasWidth, uint32_t design)
+Design creature_tattoo::DesignFromAtlas(std::span<const std::array<uint8_t, 3>> atlas, uint32_t atlasWidth, uint32_t design,
+                                        bool lowDetail)
+{
+	std::vector<uint8_t> levels(static_cast<size_t>(k_DesignSize) * k_DesignSize, 0);
+	const auto level = [&atlas, atlasWidth](uint32_t x, uint32_t y) -> uint8_t {
+		const auto index = (static_cast<size_t>(y) * atlasWidth) + x;
+		return x < atlasWidth && index < atlas.size() ? static_cast<uint8_t>(atlas[index][2] >> 4u) : uint8_t {0};
+	};
+	if (!lowDetail)
+	{
+		const auto left = (design % k_DesignsPerRow) * k_DesignSize;
+		const auto top = (design / k_DesignsPerRow) * k_DesignSize;
+		for (uint32_t y = 0; y < k_DesignSize; ++y)
+		{
+			for (uint32_t x = 0; x < k_DesignSize; ++x)
+			{
+				levels[(y * k_DesignSize) + x] = level(left + x, top + y);
+			}
+		}
+		return DesignFromLevels(levels);
+	}
+	// The half atlas keeps every second texel of every second row. The mask's rows step through it at half the width of a
+	// row, so each odd row of the mask reads half a row further on.
+	const auto halfWidth = atlasWidth / 2;
+	const auto halfHeight = atlasWidth > 0 ? static_cast<uint32_t>(atlas.size() / atlasWidth) / 2 : 0;
+	constexpr auto k_HalfCell = k_DesignSize / 2;
+	const auto start = ((design / k_DesignsPerRow) * k_HalfCell * halfWidth) + ((design % k_DesignsPerRow) * k_HalfCell);
+	for (uint32_t y = 0; y < k_DesignSize && halfWidth > 0; ++y)
+	{
+		for (uint32_t x = 0; x < k_DesignSize; ++x)
+		{
+			const auto at = start + (((halfWidth * y) + x) / 2);
+			const auto row = at / halfWidth;
+			if (row < halfHeight)
+			{
+				levels[(y * k_DesignSize) + x] = level((at % halfWidth) * 2, row * 2);
+			}
+		}
+	}
+	return DesignFromLevels(levels);
+}
+
+Design creature_tattoo::DesignFromLevels(std::span<const uint8_t> levels)
 {
 	Design result {};
 	auto& full = result.front();
 	full.size = k_DesignSize;
 	full.levels.assign(static_cast<size_t>(k_DesignSize) * k_DesignSize, 0);
+	std::copy_n(levels.begin(), std::min(levels.size(), full.levels.size()), full.levels.begin());
+	for (size_t level = 1; level < result.size(); ++level)
+	{
+		result.at(level) = Halved(result.at(level - 1));
+	}
+	return result;
+}
+
+Picture creature_tattoo::PictureFromImage(std::span<const std::array<uint8_t, 3>> image, uint32_t width, uint32_t height)
+{
+	Picture picture {};
+	const auto right = std::min(width, k_DesignSize);
+	const auto bottom = std::min(height, k_DesignSize);
+	for (uint32_t y = 0; y < bottom; ++y)
+	{
+		for (uint32_t x = 0; x < right; ++x)
+		{
+			const auto index = (static_cast<size_t>(y) * width) + x;
+			if (index >= image.size())
+			{
+				continue;
+			}
+			// Each channel goes to the middle of its step of eight, then to the nearest grey, which is the mean rounded
+			const auto& colour = image[index];
+			const auto sum = (colour[0] & k_StepMask) + (colour[1] & k_StepMask) + (colour[2] & k_StepMask) + k_StepMiddles;
+			picture.at((y * k_DesignSize) + x) = static_cast<uint8_t>((sum + 1) / 3);
+		}
+	}
+	return picture;
+}
+
+void creature_tattoo::PutPicture(std::span<std::array<uint8_t, 3>> atlas, uint32_t atlasWidth, uint32_t design,
+                                 const Picture& picture)
+{
 	const auto left = (design % k_DesignsPerRow) * k_DesignSize;
 	const auto top = (design / k_DesignsPerRow) * k_DesignSize;
 	for (uint32_t y = 0; y < k_DesignSize; ++y)
@@ -57,17 +142,91 @@ Design creature_tattoo::DesignFromAtlas(std::span<const std::array<uint8_t, 3>> 
 		for (uint32_t x = 0; x < k_DesignSize; ++x)
 		{
 			const auto index = (static_cast<size_t>(top + y) * atlasWidth) + left + x;
-			if (index < atlas.size() && left + x < atlasWidth)
+			if (left + x < atlasWidth && index < atlas.size())
 			{
-				full.levels[(y * k_DesignSize) + x] = static_cast<uint8_t>(atlas[index][2] >> 4u);
+				const auto grey = picture.at((y * k_DesignSize) + x);
+				atlas[index] = {grey, grey, grey};
 			}
 		}
 	}
-	for (size_t level = 1; level < result.size(); ++level)
+}
+
+std::vector<uint8_t> creature_tattoo::PicturesBlock(const Slots& slots, const Pictures& pictures)
+{
+	const auto usesPicture = [&pictures](const Slot& slot) {
+		return slot.site < k_SlotCount && slot.design < pictures.size() && pictures.at(slot.design).has_value();
+	};
+	uint32_t designs = 0;
+	for (const auto& slot : slots)
 	{
-		result.at(level) = Halved(result.at(level - 1));
+		if (usesPicture(slot))
+		{
+			designs |= 1u << slot.design;
+		}
 	}
-	return result;
+	const auto count = static_cast<uint32_t>(std::popcount(designs));
+	const auto size = (count * k_PackedPicture) + k_BlockHeader;
+	std::vector<uint8_t> block(size, 0);
+	const auto putWord = [&block](size_t at, uint32_t value) {
+		for (size_t i = 0; i < 4; ++i)
+		{
+			block.at(at + i) = static_cast<uint8_t>(value >> (8 * i));
+		}
+	};
+	putWord(0, size);
+	block.at(4) = static_cast<uint8_t>(count);
+	std::array<uint32_t, k_DesignCount> offsets {};
+	uint32_t next = k_BlockHeader;
+	for (size_t i = 0; i < slots.size(); ++i)
+	{
+		const auto& slot = slots.at(i);
+		if (!usesPicture(slot))
+		{
+			continue;
+		}
+		block.at(5) = static_cast<uint8_t>(block.at(5) | (1u << i));
+		auto& offset = offsets.at(slot.design);
+		if (offset == 0)
+		{
+			// The first slot with the picture puts it in the block, two levels to a byte
+			offset = next;
+			next += k_PackedPicture;
+			const auto& picture = *pictures.at(slot.design);
+			for (uint32_t byte = 0; byte < k_PackedPicture; ++byte)
+			{
+				block.at(offset + byte) =
+				    static_cast<uint8_t>((picture.at((byte * 2) + 1) & 0xF0u) | (picture.at(byte * 2) >> 4u));
+			}
+		}
+		putWord(k_OffsetsStart + (i * 4), offset);
+	}
+	return block;
+}
+
+std::optional<Design> creature_tattoo::DesignInBlock(std::span<const uint8_t> block, size_t slot)
+{
+	if (block.size() < k_BlockHeader || slot >= k_SlotCount || ((block[5] >> slot) & 1u) == 0)
+	{
+		return std::nullopt;
+	}
+	uint32_t offset = 0;
+	for (size_t i = 0; i < 4; ++i)
+	{
+		offset |= static_cast<uint32_t>(block[k_OffsetsStart + (slot * 4) + i]) << (8 * i);
+	}
+	// A block that does not hold all of the picture gives none
+	if (offset < k_BlockHeader || offset > block.size() || block.size() - offset < k_PackedPicture)
+	{
+		return std::nullopt;
+	}
+	std::vector<uint8_t> levels(static_cast<size_t>(k_DesignSize) * k_DesignSize);
+	for (uint32_t byte = 0; byte < k_PackedPicture; ++byte)
+	{
+		const auto packed = block[offset + byte];
+		levels.at(byte * 2) = packed & 0x0Fu;
+		levels.at((byte * 2) + 1) = packed >> 4u;
+	}
+	return DesignFromLevels(levels);
 }
 
 size_t creature_tattoo::MaskLevel(float size)

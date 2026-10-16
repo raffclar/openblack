@@ -67,6 +67,10 @@ public:
 	virtual void Answered() = 0;
 	/// Cancel: puts back the tattoos the creature had when the editor opened and closes it
 	virtual void Cancel() = 0;
+	/// The player's own pictures that take the places of designs. A tattoo that the player drops puts each picture that
+	/// the creature's tattoos use into the creature's block of pictures.
+	virtual void SetPictures(const creature_tattoo::Pictures& pictures) = 0;
+	[[nodiscard]] virtual const creature_tattoo::Pictures& GetPictures() const = 0;
 };
 
 } // namespace openblack::ecs::systems

@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 
@@ -31,6 +32,8 @@ public:
 		virtual ~Skin() = default;
 		[[nodiscard]] virtual std::optional<creature_tattoo::Slots> Read(entt::entity creature) const = 0;
 		virtual void Write(entt::entity creature, size_t slot, const creature_tattoo::Slot& tattoo) = 0;
+		/// The creature keeps the block of pictures that its tattoos use, in place of the block that it had
+		virtual void WritePictures(entt::entity creature, std::vector<uint8_t> pictures) = 0;
 	};
 
 	/// The creatures' skins in the registry
@@ -54,6 +57,8 @@ public:
 	creature_tattoo_editor::Accept Ok(bool networkGame) override;
 	void Answered() override { _session.changed = false; }
 	void Cancel() override;
+	void SetPictures(const creature_tattoo::Pictures& pictures) override { _pictures = pictures; }
+	[[nodiscard]] const creature_tattoo::Pictures& GetPictures() const override { return _pictures; }
 
 private:
 	/// The creature wears the tattoos as they are now
@@ -67,6 +72,7 @@ private:
 	std::optional<glm::ivec2> _hoveredPoint;
 	/// The face to pull after the last tattoo went on or came off
 	std::optional<creature_face::Face> _face;
+	creature_tattoo::Pictures _pictures {};
 };
 
 } // namespace openblack::ecs::systems

@@ -74,6 +74,8 @@ struct Layers
 	const creature_marks::Marks& marks;
 	/// None before the art is loaded, which leaves the tattoos and marks off
 	const Art* art;
+	/// The creature's block of pictures (see creature_tattoo::PicturesBlock), empty when it has none
+	std::span<const uint8_t> pictures;
 };
 
 /// One of a creature's skins, 256 by 256 texels: the base skin blended towards the variant's by weight (the base alone

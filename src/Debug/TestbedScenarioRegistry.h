@@ -781,6 +781,9 @@ struct Command
 		/// makes the folder if it is missing. Then the game reads the file again, and the log tells if the record is the
 		/// same. Needs no creature
 		ProfileFolderCheck,
+		/// The player has a picture of their own for a design (value), as from a Symbol file in their profile's folder:
+		/// grey rings. Needs no creature
+		OwnTattooPicture,
 		/// The custom music player plays the track of the custom music folder that the value gives, from 0, and the music
 		/// moods look at the music on this turn. The value k_StopCustomMusic stops the music. The game reads the folder again
 		/// first. Needs no creature
