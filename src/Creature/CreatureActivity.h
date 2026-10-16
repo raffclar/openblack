@@ -63,6 +63,10 @@ struct WholeFacts
 /// - The desires about other creatures are about a creature.
 [[nodiscard]] bool CanBeAbout(creature_desires::Desire desire, const WholeFacts& whole, bool mayAttackOwnPlayer);
 
+/// Whether compassion for a whole thing gives the creature actions to do. Only a town gives actions. Compassion for a
+/// creature gives no action.
+[[nodiscard]] bool CompassionHasActions(Whole kind);
+
 /// The kinds of thing that a creature can act on, by how the desires examine them
 enum class Thing : uint8_t
 {

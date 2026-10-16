@@ -75,6 +75,13 @@ TEST(CreatureActivity, CompassionAndTheDesiresAboutCreatures)
 	EXPECT_FALSE(CanBeAbout(Desire::Hunger, {.kind = Whole::Creature}, false));
 }
 
+// Compassion for a town gives actions; compassion for a creature gives none
+TEST(CreatureActivity, OnlyCompassionForATownGivesActions)
+{
+	EXPECT_TRUE(CompassionHasActions(Whole::Town));
+	EXPECT_FALSE(CompassionHasActions(Whole::Creature));
+}
+
 // To impress, it acts on a villager that does not dance
 TEST(CreatureActivity, ToImpressItActsOnAVillagerThatDoesNotDance)
 {
