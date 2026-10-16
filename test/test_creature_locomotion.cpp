@@ -249,3 +249,23 @@ TEST(CreatureLocomotion, RunsAwayFromTheThreat)
 	EXPECT_NEAR(point.y, 0.0f, k_Tolerance);
 	EXPECT_NEAR(glm::length(RunAwayPoint({3.0f, 3.0f}, {3.0f, 3.0f}, 20.0f) - glm::vec2(3.0f, 3.0f)), 20.0f, k_Tolerance);
 }
+
+TEST(CreatureLocomotion, ATurnOnTheSpotOfNoneUsesTheSpinsToTheRight)
+{
+	EXPECT_EQ(SpinSideOf(0.0f), Side::Right);
+	EXPECT_EQ(SpinSideOf(0.5f), Side::Right);
+	EXPECT_EQ(SpinSideOf(-0.5f), Side::Left);
+}
+
+TEST(CreatureLocomotion, ATurnWithoutSpinsClosesTheGapByTheShareOfTheTimeBeforeEachStep)
+{
+	// From 0 to 1 over 300 ms in steps of 100 ms: no change, then a third, then two thirds of what is left
+	auto heading = 0.0f;
+	heading = LerpHeading(heading, 1.0f, 0.0f, 300.0f);
+	EXPECT_NEAR(heading, 0.0f, k_Tolerance);
+	heading = LerpHeading(heading, 1.0f, 100.0f, 300.0f);
+	EXPECT_NEAR(heading, 1.0f / 3.0f, k_Tolerance);
+	heading = LerpHeading(heading, 1.0f, 200.0f, 300.0f);
+	EXPECT_NEAR(heading, (1.0f / 3.0f) + ((2.0f / 3.0f) * (2.0f / 3.0f)), k_Tolerance);
+	EXPECT_NEAR(LerpHeading(heading, 1.0f, 300.0f, 300.0f), 1.0f, k_Tolerance);
+}

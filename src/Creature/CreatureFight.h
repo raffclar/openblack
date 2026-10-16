@@ -114,8 +114,6 @@ struct Arena
 [[nodiscard]] float ArrivalDistance(float size);
 /// Whether a point is within the range moves are made in
 [[nodiscard]] bool WithinRange(const Arena& arena, glm::vec2 point);
-/// Fighters only make moves facing their opponents to within this many radians, turning to them first
-constexpr float k_FacingTolerance = 0.35f;
 /// Where a creature that reels back in its block goes in one frame: to the new point only when that point is inside the
 /// range, else it stays. Blows, steps and the reel from a blow move it with no limit.
 [[nodiscard]] glm::vec2 BlockRecoilTo(const Arena& arena, glm::vec2 from, glm::vec2 to);
@@ -495,8 +493,10 @@ constexpr float k_CastHoldMs = 2.0f;
 [[nodiscard]] bool IsBlocking(State state, float timeMs, float startBlockDurationMs);
 /// Whether a creature in a state can be told to make a move
 [[nodiscard]] bool TakesMoves(State state);
-/// Whether a creature in a state turns to face its opponent
-[[nodiscard]] bool FacesOpponent(State state);
+/// Whether a creature in a state turns at once to face its opponent on each game turn. It does this in its start after
+/// its first turn on the spot, in its stance, in its block and in its actions that are not blows. In all other states
+/// it keeps its heading.
+[[nodiscard]] bool FacesOpponentEachTurn(State state, size_t animation, bool turning);
 
 /// Who chooses the creature's moves
 enum class Control : uint8_t
@@ -522,6 +522,8 @@ struct Fighter
 	float stateMs {0.0f};
 	float speed {1.0f};
 	bool mirrored {false};
+	/// In its start, it turns on the spot to face its opponent before its start animation plays
+	bool turning {false};
 	/// The last action that it started: a blow, a step, a reel, the reel in a block, a block or a cast. It stays after
 	/// the action ends.
 	size_t lastAction {0};
