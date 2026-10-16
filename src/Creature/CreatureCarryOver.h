@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <filesystem>
 #include <string_view>
 
@@ -53,5 +55,11 @@ struct KeptFiles
 	std::filesystem::path physique;
 };
 [[nodiscard]] KeptFiles KeptFilesIn(const std::filesystem::path& folder, std::string_view profileFile);
+
+/// As it lives, the player's creature is written to its files each time it has lived this many more game turns
+constexpr uint32_t k_SaveEveryTurns = 600;
+/// Whether the creature is written to its files now that it has lived this many turns, from the number it had lived when
+/// it was last looked at: it is written each time its count gets to a multiple of 600 turns
+[[nodiscard]] bool SavesAsItLives(uint32_t turnsBefore, uint32_t turnsNow);
 
 } // namespace openblack::creature_carry_over

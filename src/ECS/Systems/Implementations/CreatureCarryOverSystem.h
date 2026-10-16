@@ -46,6 +46,8 @@ public:
 	[[nodiscard]] std::optional<std::filesystem::path> ProfilePhysique() const override;
 	std::optional<entt::entity> LoadPlayersCreature(glm::vec2 place) override;
 	void ProcessTurn() override;
+	void SetLandKeepsCreatures(bool keeps) override;
+	void EndGame() override;
 	void Reset() override;
 	void StartGame() override;
 
@@ -59,6 +61,8 @@ private:
 	/// The creature kept as written to its files, or read from them when none was kept since the game started
 	void Write(const creaturemind::MindFileData& mind, const creaturemind::PhysiqueFileData& physique) const;
 	void ReadIfNoneKept();
+	/// The player's creatures that have lived another 600 turns are written to the player's files
+	void SaveAsTheyLive();
 
 	/// The kept creature's two files, when there is a folder and a profile to keep them for
 	[[nodiscard]] std::optional<creature_carry_over::KeptFiles> Files() const;
@@ -69,6 +73,7 @@ private:
 	std::optional<std::string> _gameFile;
 	std::shared_ptr<const creaturemind::MindFileData> _kept;
 	std::vector<Arriving> _arriving;
+	bool _landKeepsCreatures {true};
 };
 
 } // namespace openblack::ecs::systems
