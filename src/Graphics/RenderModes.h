@@ -91,4 +91,11 @@ inline constexpr std::array<ModeDesc, k_ModeCount> k_Modes = {{
 	return k_Modes.at(static_cast<uint8_t>(mode));
 }
 
+/// Whether a material shows both faces of its triangles: the first bit of its cull byte set. Otherwise the back faces
+/// are not drawn.
+[[nodiscard]] constexpr bool DrawsBothSides(uint32_t cullByte)
+{
+	return (cullByte & 1U) != 0;
+}
+
 } // namespace openblack::graphics::render_modes

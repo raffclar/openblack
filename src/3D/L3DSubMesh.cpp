@@ -252,7 +252,7 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 		    mode.alphaModulate,
 		    mode.alphaTest,
 		    primitive.material.alphaCutoutThreshold / 255.0f,
-		    (primitive.material.cullMode & 1U) != 0,
+		    graphics::render_modes::DrawsBothSides(primitive.material.cullMode),
 		    static_cast<uint32_t>(primitive.material.type),
 		    primitive.material.cullMode,
 		});

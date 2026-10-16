@@ -249,6 +249,8 @@ struct CreatureSetup
 	/// A mind file it takes up as it starts: "game:NAME" for one of the game's Scripts/CreatureMind files, or
 	/// "chosen:NAME" for the one last opened with the spawner's file dialog, falling back to the game's file NAME
 	std::string_view mindFile;
+	/// The skills it knows as it starts, as a script teaches them
+	std::vector<CreatureActionKnownAbout> skills;
 };
 
 /// Something put on the land for the creatures: an object, a tree, a feature such as a pillar of rock, a villager, a pot

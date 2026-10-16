@@ -1046,3 +1046,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_script_creature_natives test_script_creature_natives.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_mane_material test_creature_mane_material.cpp
+)

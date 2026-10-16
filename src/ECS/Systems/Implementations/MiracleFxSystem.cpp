@@ -40,6 +40,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
@@ -65,6 +66,27 @@ int ReceiveTypeOf(const InfoConstants& info, SpellSeedType seed)
 	const auto type = magic::GetSpellSeedInfo(info, seed).magicTypes[0];
 	const auto* spell = magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, type);
 	return spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
+}
+
+/// Whether a globe shows on the screen this frame, as it is tested when it is drawn: its sphere, pulled towards the
+/// camera by its radius as it is drawn, must show on the screen. Its middle is the middle of its model's box.
+bool GlobeOnScreen(const Transform& transform, glm::vec3 middle, const graphics::L3DMesh& bubble, glm::vec3 eye)
+{
+	if (!Locator::objectDrawListSystem::has_value())
+	{
+		return true;
+	}
+	const auto& view = Locator::objectDrawListSystem::value().GetView();
+	if (!view.has_value())
+	{
+		return true;
+	}
+	const auto halfExtent = bubble.GetBoundingBox().Size() * 0.5f;
+	const float pull = std::max(halfExtent.x, halfExtent.z) * transform.scale.x;
+	const auto towards = eye - middle;
+	const auto push = glm::length(towards) > 0.0f ? glm::normalize(towards) * pull : glm::vec3(0.0f);
+	return object_draw_list::SphereOnScreen(*view, transform.position + push, middle + push,
+	                                        glm::length(halfExtent) * transform.scale.x);
 }
 
 HandMiracleFx* HandFx()
@@ -223,8 +245,10 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 		}
 		// The miracle's own effect in the globe steps as the globe is drawn, before the seed's model is placed for this
 		// frame, so its glints sparkle on where the model was last drawn
-		// TODO(raffclar): the game steps it only while the globe is drawn on screen
-		if (const auto stepped = _holderEffects.find(entity); stepped != _holderEffects.end() && particles != nullptr)
+		// It steps only while the globe shows on the screen
+		if (const auto stepped = _holderEffects.find(entity);
+		    stepped != _holderEffects.end() && particles != nullptr &&
+		    (!meshes.Contains(bubble) || GlobeOnScreen(transform, globe.middle, *meshes.Handle(bubble), eye)))
 		{
 			particles->ProcessByFrame(stepped->second, seconds);
 		}
