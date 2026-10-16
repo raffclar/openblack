@@ -1061,3 +1061,5 @@ openblack_setup_and_add_test(
   test_creature_hold_pose test_creature_hold_pose.cpp
 )
 openblack_setup_and_add_test(test_creature_gesture test_creature_gesture.cpp)
+# EXPERIMENT (not for merge): the view under the sea
+openblack_setup_and_add_test(test_underwater graphics/test_underwater.cpp)

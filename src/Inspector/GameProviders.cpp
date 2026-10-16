@@ -191,6 +191,7 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
@@ -288,6 +289,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"snowSystem", "land.snow"},
     LocatorCoverage {"snowfallSystem", "land.precipitation"},
     LocatorCoverage {"waterRingSystem", "particles.splash"},
+    LocatorCoverage {"underwaterSystem", "land.underwater"},
     LocatorCoverage {"creatureAnimationSystem", "creatures.status"},
     LocatorCoverage {"creatureMindSystem", "creature.desires"},
     LocatorCoverage {"creatureLocomotionSystem", "creatures.status"},
@@ -693,6 +695,16 @@ std::unique_ptr<ProviderInterface> LandProvider()
 	              Serve<Locator::oceanSystem>("the sea", [](const OceanInterface& ocean, const QueryContext& /*c*/) {
 		              return Json {{"texture", ocean.GetTexture()}};
 	              }));
+	provider->Add(
+	    Query("underwater", "EXPERIMENT (not for merge): the view under the sea: whether it is on, how deep the camera is, "
+	                        "the effect turned off to measure it, and the sea bed's grid"),
+	    Serve<Locator::underwaterSystem>("the view under the sea", [](const ecs::systems::UnderwaterSystemInterface& underwater,
+	                                                                  const QueryContext& /*c*/) {
+		    const auto& bed = underwater.GetSeabed();
+		    return Json {{"enabled", underwater.IsEnabled()},       {"eye_depth", underwater.GetEyeDepth()},
+		                 {"eye_under", underwater.IsEyeUnder()},    {"effect_off", static_cast<int>(underwater.GetEffectOff())},
+		                 {"seabed_size", {bed.size.x, bed.size.y}}, {"seabed_revision", underwater.GetSeabedRevision()}};
+	    }));
 	provider->Add(Query("weather", "The climate: whether it runs, its storms and the season"),
 	              Serve<Locator::weatherSystem>(
 	                  "the weather", [](const ecs::systems::WeatherSystemInterface& weather, const QueryContext& /*c*/) {

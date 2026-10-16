@@ -223,6 +223,7 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageLightSystemInterface.h"
@@ -244,6 +245,7 @@
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/TexelDepth.h"
+#include "Graphics/Underwater.h"
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/GameInterface.h"
 #include "Gui/HandToolTips.h"
@@ -876,6 +878,36 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			break;
 		case SDLK_p:
 			Locator::time::value().SetPaused(!IsPaused());
+			break;
+		// EXPERIMENT (not for merge): F9 puts the camera under the sea by the shore of the first land; shift and F9
+		// turn the experiment's water on or off; control and F9 turn off its effects one at a time, to measure them
+		case SDLK_F9:
+			if (Locator::underwaterSystem::has_value())
+			{
+				auto& underwater = Locator::underwaterSystem::value();
+				if ((event.key.keysym.mod & KMOD_SHIFT) != 0)
+				{
+					underwater.SetEnabled(!underwater.IsEnabled());
+				}
+				else if ((event.key.keysym.mod & KMOD_CTRL) != 0)
+				{
+					underwater.CycleEffectOff();
+				}
+				else if (underwater.IsEnabled())
+				{
+					camera.Place(graphics::underwater::k_ShoreEye, graphics::underwater::k_ShoreFocus);
+				}
+			}
+			break;
+		// EXPERIMENT (not for merge): F10 starts the camera's tour above and under the sea by the shore; shift and F10
+		// the tour out along the sea bed
+		case SDLK_F10:
+			if (Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled())
+			{
+				Locator::underwaterSystem::value().StartTour((event.key.keysym.mod & KMOD_SHIFT) != 0
+				                                                 ? graphics::underwater::Tour::FarSeabed
+				                                                 : graphics::underwater::Tour::Shore);
+			}
 			break;
 		// F1 is the game's Help key, so the renderer's statistics are on F11
 		case SDLK_F11:
@@ -2342,6 +2374,11 @@ bool Game::Update() noexcept
 	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+	// EXPERIMENT (not for merge): the sea bed of the open land, for the view under the sea
+	if (Locator::underwaterSystem::has_value())
+	{
+		Locator::underwaterSystem::value().Update(clock.GetFrameRealTime());
+	}
 	{
 		// The flames, steam and smoke of what burns move on
 		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);

@@ -181,7 +181,7 @@ void AudioManager::Update()
 
 	// The music thread's work: streams are fed and fade every tick
 	const auto now = std::chrono::steady_clock::now();
-	_musicStreams->SetOutputVolume(_globalVolume * _musicVolume);
+	_musicStreams->SetOutputVolume(_globalVolume * _musicVolume * _underwaterDuck);
 	_musicPlayer->Update(std::chrono::duration_cast<std::chrono::microseconds>(now - _lastMusicUpdate));
 	_lastMusicUpdate = now;
 	// Positional music, like 3D emitters, is heard from where it is placed as the listener moves
@@ -203,7 +203,7 @@ float AudioManager::EmitterVolume(const AudioEmitter& emitter) const
 	{
 		return 0.0f;
 	}
-	return emitter.gain * _globalVolume * (emitter.music ? _musicVolume : _sfxVolume);
+	return emitter.gain * _globalVolume * (emitter.music ? _musicVolume : _sfxVolume) * _underwaterDuck;
 }
 
 void AudioManager::StopOutOfRangeEmitters()

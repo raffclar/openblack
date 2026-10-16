@@ -622,6 +622,7 @@ Renderer::~Renderer() noexcept
 			query = BGFX_INVALID_HANDLE;
 		}
 	}
+	_underwater.reset();
 	_shaderManager.reset();
 	bgfx::frame();
 	bgfx::shutdown();
@@ -1692,6 +1693,7 @@ void Renderer::DrawTempleMapPass() const
 	// The map shows no vortex's hole
 	const glm::vec4 noVortex {0.0f, 0.0f, 0.0f, -1.0f};
 	terrainShader->SetUniformValue("u_vortexGround", &noVortex);
+	SetTerrainUnderwater(*terrainShader, false);
 	for (size_t i = 0; const auto& block : island.GetBlocks())
 	{
 		const glm::vec4 mapPositionAndSize = glm::vec4(block.GetMapPosition(), 160.0f, 160.0f);
@@ -5432,8 +5434,11 @@ void Renderer::WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept
 	_warmUpInFrame = true;
 }
 
-void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
+void Renderer::DrawScene(const DrawSceneDesc& requestedDesc) const noexcept
 {
+	// EXPERIMENT (not for merge): under the sea the scene is drawn into a target of its own, then through the water
+	DrawSceneDesc drawDesc = requestedDesc;
+	BeginUnderwater(drawDesc);
 	SelectDrawnCreatures(drawDesc);
 	// A warm-up gives no creature a skin texture: each creature gets them in its first frame
 	if (!_warmingUp)
@@ -5500,6 +5505,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::MainPass);
 		DrawPass(drawDesc);
 	}
+	EndUnderwater(drawDesc);
 }
 
 void Renderer::DrawPass(const DrawSceneDesc& desc) const
@@ -5777,6 +5783,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// The moving shadows fall on the land, not on its reflection
 				SetGroundShadowUniforms(*terrainShader, desc.viewId == RenderPass::Main);
 				setTerrainSnow();
+				// EXPERIMENT (not for merge): the sea bed and its sand under the sea
+				SetTerrainUnderwater(*terrainShader, desc.viewId == RenderPass::Main && _underwaterFrame.has_value());
 			};
 
 			// The game draws the land's blocks the nearest first, which bgfx keeps by their distance
@@ -5856,7 +5864,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				groundShadowBlockUniform.Set(&u_groundShadowBlock);
 				block.BindVertices();
 				// The game leaves out open sea only from blocks wholly before the first line
-				const bool dropOpenSea = detail.mesh == land_detail::Mesh::Full && detail.morph == land_detail::Morph::None;
+				// EXPERIMENT (not for merge): under the sea the open sea is the sea bed, so none is left out
+				const bool dropOpenSea = detail.mesh == land_detail::Mesh::Full && detail.morph == land_detail::Morph::None &&
+				                         !(desc.viewId == RenderPass::Main && _underwaterFrame.has_value());
 				const auto& triangles = block.GetTriangles(detail.mesh, coarserSides, dropOpenSea);
 				triangles.Bind(triangles.GetCount());
 				bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
@@ -5873,6 +5883,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					submitBlock(index);
 				}
+			}
+			// EXPERIMENT (not for merge): the sea bed out to the map's edge
+			if (desc.viewId == RenderPass::Main && _underwaterFrame.has_value())
+			{
+				DrawFarSeabed(landViewId);
 			}
 			_shaderManager->DiscardBindings();
 			DrawCreatureFootprints(desc);

@@ -20,6 +20,7 @@
 #include "CameraLimits.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "ReflectionXZCamera.h"
@@ -85,7 +86,14 @@ camera_drawn::Pose Camera::DrawnPose(Interpolation interpolation) const
 		pose = camera_drawn::Separate(pose);
 		if (_model != nullptr && _model->HeldInsideTheWorld() && Locator::terrainSystem::has_value())
 		{
-			pose = camera_drawn::AboveLand(pose, Locator::terrainSystem::value().GetHeightAt(glm::xz(pose.eye)));
+			// EXPERIMENT (not for merge): under the sea, above the sea bed
+			const auto point = glm::xz(pose.eye);
+			auto floor = Locator::terrainSystem::value().GetHeightAt(point);
+			if (Locator::underwaterSystem::has_value())
+			{
+				floor = Locator::underwaterSystem::value().FloorAt(point, floor);
+			}
+			pose = camera_drawn::AboveLand(pose, floor);
 		}
 	}
 	// The shake moves the eye and the focus after these limits

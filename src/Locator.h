@@ -118,6 +118,7 @@ class AnimalSystemInterface;
 class SnowSystemInterface;
 class SnowfallSystemInterface;
 class WaterRingSystemInterface;
+class UnderwaterSystemInterface;
 class CreatureAnimationSystemInterface;
 class CreatureMindSystemInterface;
 class CreatureLocomotionSystemInterface;
@@ -279,6 +280,8 @@ struct Locator
 	using snowSystem = entt::locator<ecs::systems::SnowSystemInterface>;
 	using snowfallSystem = entt::locator<ecs::systems::SnowfallSystemInterface>;
 	using waterRingSystem = entt::locator<ecs::systems::WaterRingSystemInterface>;
+	/// EXPERIMENT (not for merge): the view under the sea
+	using underwaterSystem = entt::locator<ecs::systems::UnderwaterSystemInterface>;
 	using creatureAnimationSystem = entt::locator<ecs::systems::CreatureAnimationSystemInterface>;
 	using creatureMindSystem = entt::locator<ecs::systems::CreatureMindSystemInterface>;
 	using creatureLocomotionSystem = entt::locator<ecs::systems::CreatureLocomotionSystemInterface>;

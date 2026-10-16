@@ -4,6 +4,7 @@ $output v_texcoord0, v_texcoord1, v_lightColour, v_smallBumpFade, v_shadowCoord,
 #include <bgfx_shader.sh>
 
 #include "haze.sh"
+#include "underwater.sh"
 
 uniform vec4 u_blockPositionAndSize;
 uniform vec4 u_islandExtent;
@@ -29,6 +30,9 @@ uniform vec4 u_landBands;
 // x: the block's layer of the block textures, y: how its corners morph (0 not, 1 to the half mesh, 2 to the quarter
 // mesh), z: its texture (0 full, 1 cross-faded, 2 coarse)
 uniform vec4 u_block;
+// EXPERIMENT (not for merge): with the experiment's water, the depth of the sea bed in units at each cell corner of the
+// whole map, 513 corners a side. The snow's depth is bound here at other times.
+SAMPLER2D(s_snowDepth, 11);
 
 // How far a point on the ground is before a detail line lying ahead units from the camera; negative beyond it
 float LandLineOffset(vec2 xz, float ahead)
@@ -89,6 +93,12 @@ void main()
 		altitude = MorphedAltitude(altitude, toHalf ? a_texcoord1.x : a_texcoord1.y, offset, u_landBands.x);
 		height = altitude <= 3.0f ? 0.0f : altitude * 0.67f;
 	}
+	// EXPERIMENT (not for merge): under the sea, the land at sea level goes down to the sea bed
+	if (u_uwParams.x > 0.5f && height <= 0.0f)
+	{
+		vec2 seabedCorner = floor((a_position.xz + blockPosition) / 10.0f + 0.5f);
+		height = -texture2DLod(s_snowDepth, (seabedCorner + 0.5f) / 513.0f, 0.0f).r;
+	}
 	vec3 transformedPosition = vec3(a_position.x + blockPosition.x, height, a_position.z + blockPosition.y);
 	// zw: where the vertex is along x and z, for the snow lying there
 	v_texcoord1 = vec4(blockStartUv, transformedPosition.xz);
@@ -137,7 +147,7 @@ void main()
 	// Land at sea level is drawn flat at height 0, in the plane of the ocean. Land is never under the sea, so win the
 	// tie: pull those vertices a fraction of their distance towards the camera along their line of sight, which keeps
 	// them where they are on screen and only brings their depth forward.
-	if (height <= 0.0f)
+	if (height == 0.0f)
 	{
 		cs_position.xyz *= 0.999f;
 	}

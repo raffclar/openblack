@@ -4,6 +4,7 @@ $input v_texcoord0, v_texcoord1, v_lightColour, v_smallBumpFade, v_shadowCoord, 
 
 #include "snow.sh"
 #include "vortex_ground.sh"
+#include "underwater.sh"
 
 #define M_PI 3.1415926535897932384626433832795
 
@@ -27,6 +28,9 @@ SAMPLER2D(s8_landAlpha, 8);
 
 // The noise that makes the snow's edges ragged, once across each land block of 160 units
 SAMPLER2D(s12_snowNoise, 12);
+// EXPERIMENT (not for merge): while the experiment's water is on, s12_snowNoise holds the sand texture
+#define SEABED_SAND_TEXTURE s12_snowNoise
+#include "seabed_sand.sh"
 // The ring an open vortex lays over the land around its hole
 SAMPLER2D(s13_vortexRing, 13);
 // The coarse texture pages the landscape file keeps, a layer each: the coarse land (detail level 0) draws from them
@@ -347,9 +351,24 @@ void main()
 		bumpAlpha = 0.0f;
 	}
 	vec3 land = min(col.rgb + v_haze.rgb, vec3_splat(1.0f));
+	// EXPERIMENT (not for merge): with the experiment's water, the land below and near sea level is sand, blended in at
+	// the shore, and the land is opaque everywhere: the sea bed is under the water
+	if (u_uwParams.x > 0.5f)
+	{
+		vec3 surfaceNormal = SeabedSurfaceNormal(v_world);
+		float sandShare = 1.0f - smoothstep(-0.4f, 2.4f, v_world.y);
+		// Under the surface the water's own fog takes the place of the haze
+		land = u_uwEye.w > 0.5f ? col.rgb : land;
+		if (sandShare > 0.0f)
+		{
+			land = mix(land, SeabedSand(v_world, v_lightColour, surfaceNormal), sandShare);
+			bumpAlpha *= 1.0f - sandShare;
+		}
+		block.a = 1.0f;
+	}
 	vec3 detail = min(smallBump + v_haze.rgb, vec3_splat(1.0f));
 	// The rivers' channels lower the coast alpha where they run, so the sea shows through as their water
-	float landAlpha = min(block.a, texture2D(s8_landAlpha, v_texcoord1.xy).r);
+	float landAlpha = u_uwParams.x > 0.5f ? 1.0f : min(block.a, texture2D(s8_landAlpha, v_texcoord1.xy).r);
 	vec4 premultiplied = vec4(land * landAlpha * (1.0f - bumpAlpha) + detail * bumpAlpha,
 	                          1.0f - (1.0f - landAlpha) * (1.0f - bumpAlpha));
 	if (vortex)

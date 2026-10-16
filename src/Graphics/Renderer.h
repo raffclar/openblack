@@ -42,6 +42,7 @@
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/SeaRows.h"
+#include "Graphics/UnderwaterView.h"
 #include "Graphics/VolumeGlowShell.h"
 #include "Particles/ParticleDrawFrame.h"
 
@@ -394,6 +395,15 @@ private:
 	/// Binds a cap's corners as the vertices of the next draw; false when there is no room for them this frame
 	[[nodiscard]] static bool BindCap(const std::vector<partial_build_cap::CapVertex>& cap);
 	void DrawPass(const DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): whether the view is under the sea this frame. When it is, the main scene is drawn into
+	/// the underwater target, with no sea, and the frame's underwater uniforms are kept.
+	bool BeginUnderwater(DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): the scene drawn through the water into the window, and the motes in the water
+	void EndUnderwater(const DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): the land's uniforms for the view under the sea, off unless `active`
+	void SetTerrainUnderwater(const ShaderProgram& program, bool active) const;
+	/// EXPERIMENT (not for merge): the sea bed past the land's blocks, in the land's pass of the main view
+	void DrawFarSeabed(RenderPass landViewId) const;
 	/// The beams of the temple's spot lights and the light its windows shed, which the game draws in its
 	/// rooms but not in the reflection of the main room
 	void DrawLightBeams(const DrawSceneDesc& desc) const;
@@ -570,6 +580,12 @@ private:
 	mutable std::optional<uint32_t> _snowRevision;
 	/// u_haze and u_hazeColour of the frame's distance haze, off until the land's light is built
 	mutable std::array<glm::vec4, 2> _haze {};
+	/// EXPERIMENT (not for merge): the view under the sea, its target, sea bed and motes, made when it first shows
+	mutable std::unique_ptr<UnderwaterView> _underwater;
+	/// EXPERIMENT (not for merge): the underwater uniforms of this frame, while the view is under the sea
+	mutable std::optional<UnderwaterUniforms> _underwaterFrame;
+	/// EXPERIMENT (not for merge): whether the scene's views are bound to the underwater target
+	mutable bool _underwaterBound {false};
 	/// The colours the sky's dome is drawn in this frame
 	mutable sky_dome::Tint _skyTint;
 	/// icons.raw with iconsa.raw's alpha, which the creature's room's belts and medals are drawn with, once loaded

@@ -203,6 +203,9 @@ public:
 	/// Puts the listener somewhere other than the camera (the inspector's view shown over the camera), or gives it back
 	/// to the camera with none
 	virtual void SetListenerOverride(std::optional<Listener> listener) = 0;
+	/// EXPERIMENT (not for merge): how much the land's sounds and the music are turned down while the camera is under
+	/// the sea, 1 for none. The atmosphere is not turned down here: its banks fade by themselves.
+	virtual void SetUnderwaterDuck(float /*gain*/) {}
 };
 
 /// The listener at the camera, as the camera is now; a listener at the world's origin when there is no camera

@@ -71,7 +71,13 @@ public:
 	/// One turn of a bank's fade towards its target: the new volume and what is sent to the bank (0-127)
 	[[nodiscard]] static std::pair<float, int32_t> StepBankVolume(float current, float target);
 
+	/// EXPERIMENT (not for merge): the volume of the sea's own loop now, 0 to 1
+	[[nodiscard]] float GetUnderwaterVolume() const { return _underwaterCurrent; }
+
 private:
+	/// EXPERIMENT (not for merge): the sea's own loop, a bank of one looping bed played while the camera is under
+	/// the sea. The land's banks fade out under the sea and back in above it.
+	void RegisterUnderwaterBank();
 	void CopyTargets(bool inCitadel);
 	void ProcessAtmosBanks();
 
@@ -81,6 +87,9 @@ private:
 	std::array<float, k_AtmosTypeCount> _current {};
 	float _alignment {0.0f};
 	bool _registered {false};
+	uint32_t _underwaterBank {0};
+	float _underwaterTarget {0.0f};
+	float _underwaterCurrent {0.0f};
 };
 
 } // namespace openblack::audio

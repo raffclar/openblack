@@ -9,15 +9,26 @@
 
 #include "AtmosAudio.h"
 
+#include <algorithm>
+#include <exception>
+#include <filesystem>
+#include <string>
+#include <string_view>
+#include <vector>
+
 #include <PackFile.h>
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
 #include "AudioManagerInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/Loaders.h"
+#include "Resources/ResourcesInterface.h"
 
 namespace openblack::audio
 {
@@ -38,6 +49,12 @@ constexpr float k_BankVolumeScale = 127.0f;
 
 constexpr uint32_t k_GoodGroup = 1;
 constexpr uint32_t k_EvilGroup = 2;
+/// EXPERIMENT (not for merge): the sea's own loop, a 16-bit copy of the experiment's sound
+constexpr std::string_view k_UnderwaterLoopPath = "E:/openblack/experiments/underwater/underwater_atmos_looped_s16.wav";
+constexpr std::string_view k_UnderwaterBankName = "underwater.sad";
+constexpr int32_t k_UnderwaterSample = 1;
+/// How loud the loop is just under the surface, of the bank's full volume
+constexpr float k_UnderwaterVolume = 0.8f;
 
 int32_t Ftol(double value)
 {
@@ -88,7 +105,45 @@ void AtmosAudio::Init()
 
 	_targets.fill(0.0f);
 	_current.fill(0.0f);
+	RegisterUnderwaterBank();
 	_registered = true;
+}
+
+void AtmosAudio::RegisterUnderwaterBank()
+{
+	_underwaterBank = 0;
+	_underwaterTarget = 0.0f;
+	_underwaterCurrent = 0.0f;
+	const std::filesystem::path path {k_UnderwaterLoopPath};
+	if (!std::filesystem::exists(path))
+	{
+		return;
+	}
+	// One looping bed in its own bank, of every group
+	pack::AudioBankSampleHeader header {};
+	const std::string_view name = "underwater_atmos_looped";
+	std::copy(name.begin(), name.end(), header.name.begin());
+	header.id = k_UnderwaterSample;
+	header.sampleRate = 48000;
+	header.atmosInterval = 0;
+	header.atmosGroup = 0;
+	auto& sounds = Locator::resources::value().GetSounds();
+	const auto id = entt::hashed_string(fmt::format("{}/{}", k_UnderwaterBankName, k_UnderwaterSample).c_str()).value();
+	if (!sounds.Contains(id))
+	{
+		try
+		{
+			auto bytes = Locator::filesystem::value().ReadAll(path);
+			sounds.Load(id, resources::SoundLoader::FromBufferTag {}, header,
+			            std::vector<std::vector<uint8_t>> {std::move(bytes)});
+		}
+		catch (const std::exception& error)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("audio"), "Unable to load the underwater loop: {}", error.what());
+			return;
+		}
+	}
+	_underwaterBank = Locator::audio::value().AtmosRegisterBank(std::string(k_UnderwaterBankName), {header}, 1);
 }
 
 void AtmosAudio::Release()
@@ -106,6 +161,11 @@ void AtmosAudio::Release()
 			audio.AtmosReleaseBank(bank);
 			bank = 0;
 		}
+	}
+	if (_underwaterBank != 0)
+	{
+		audio.AtmosReleaseBank(_underwaterBank);
+		_underwaterBank = 0;
 	}
 	_registered = false;
 }
@@ -194,7 +254,13 @@ void AtmosAudio::ContinueTurn(const TurnInputs& inputs)
 // The sound map's volumes, or none inside the temple
 void AtmosAudio::CopyTargets(bool inCitadel)
 {
-	if (inCitadel)
+	// EXPERIMENT (not for merge): under the sea the sea's own loop takes the place of the land's banks, a little
+	// louder deeper down
+	const bool underwater =
+	    !inCitadel && Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEyeUnder();
+	_underwaterTarget =
+	    underwater ? std::min(1.0f, k_UnderwaterVolume + Locator::underwaterSystem::value().GetEyeDepth() * 0.006f) : 0.0f;
+	if (inCitadel || underwater)
 	{
 		_targets.fill(0.0f);
 		return;
@@ -213,6 +279,12 @@ void AtmosAudio::ProcessAtmosBanks()
 		const auto [current, bankVolume] = StepBankVolume(_current.at(i), _targets.at(i));
 		_current.at(i) = current;
 		audio.AtmosSetBankVolume(_banks.at(i), bankVolume);
+	}
+	if (_underwaterBank != 0)
+	{
+		const auto [current, bankVolume] = StepBankVolume(_underwaterCurrent, _underwaterTarget);
+		_underwaterCurrent = current;
+		audio.AtmosSetBankVolume(_underwaterBank, bankVolume);
 	}
 }
 

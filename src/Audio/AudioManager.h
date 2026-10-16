@@ -100,6 +100,7 @@ public:
 	void StopOutOfRangeEmitters() override;
 	[[nodiscard]] Listener GetListener() const override { return _listenerOverride.value_or(CameraListener()); }
 	void SetListenerOverride(std::optional<Listener> listener) override { _listenerOverride = listener; }
+	void SetUnderwaterDuck(float gain) override { _underwaterDuck = gain; }
 	void CreateSoundGroup(const std::string& name) override;
 	void AddMusicEntry(const std::string& name) override;
 	[[nodiscard]] const std::vector<std::string>& GetMusicTracks() const override { return _music; }
@@ -155,6 +156,8 @@ private:
 	std::vector<std::string> _music;
 	float _globalVolume {1.0f};
 	float _musicVolume {1.0f};
+	/// EXPERIMENT (not for merge): the land's sounds and the music, turned down under the sea
+	float _underwaterDuck {1.0f};
 	float _sfxVolume {1.0f};
 	std::unique_ptr<MusicStreamBackend> _musicStreams;
 	std::unique_ptr<MusicPlayer> _musicPlayer;

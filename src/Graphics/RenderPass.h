@@ -50,6 +50,9 @@ enum class RenderPass : uint8_t
 	Main,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
+	/// EXPERIMENT (not for merge): the scene seen under the sea, from its own target to the window, with the motes in
+	/// the water over it
+	UnderwaterPost,
 	/// The collars of the leashes the gestures' hints offer, each in a view of its own over its hint's square
 	GestureHintCollar0,
 	GestureHintCollar1,
@@ -89,6 +92,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Land Pass",                   //
     "Main Pass",                   //
     "Translucent Pass",            //
+    "Underwater Post Pass",        //
     "Gesture Hint Collar 0 Pass",  //
     "Gesture Hint Collar 1 Pass",  //
     "Gesture Hint Collar 2 Pass",  //

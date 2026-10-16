@@ -128,6 +128,7 @@
 #include "ECS/Systems/Implementations/TownDesireSystem.h"
 #include "ECS/Systems/Implementations/TownSystem.h"
 #include "ECS/Systems/Implementations/TutorialSkipSystem.h"
+#include "ECS/Systems/Implementations/UnderwaterSystem.h"
 #include "ECS/Systems/Implementations/VegetationSystem.h"
 #include "ECS/Systems/Implementations/VideoSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
@@ -227,8 +228,8 @@ using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PickingSystem;
 using openblack::ecs::systems::PlayerProfileSystem;
-using openblack::ecs::systems::ProfileFolderSystem;
 using openblack::ecs::systems::PlayerSystem;
+using openblack::ecs::systems::ProfileFolderSystem;
 using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RenderingSystem;
@@ -249,6 +250,7 @@ using openblack::ecs::systems::TornadoSystem;
 using openblack::ecs::systems::TownDesireSystem;
 using openblack::ecs::systems::TownSystem;
 using openblack::ecs::systems::TutorialSkipSystem;
+using openblack::ecs::systems::UnderwaterSystem;
 using openblack::ecs::systems::VegetationSystem;
 using openblack::ecs::systems::VideoSystem;
 using openblack::ecs::systems::VillageLightSystem;
@@ -344,6 +346,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::snowSystem::emplace<SnowSystem>();
 	Locator::snowfallSystem::emplace<SnowfallSystem>();
 	Locator::waterRingSystem::emplace<WaterRingSystem>();
+	Locator::underwaterSystem::emplace<UnderwaterSystem>();
 	Locator::creatureAnimationSystem::emplace<CreatureAnimationSystem>();
 	Locator::creatureMindSystem::emplace<CreatureMindSystem>();
 	Locator::creaturePhysiologySystem::emplace<CreaturePhysiologySystem>();
@@ -548,6 +551,7 @@ void openblack::ShutDownServices()
 	Locator::rainSystem::reset();
 	Locator::snowfallSystem::reset();
 	Locator::waterRingSystem::reset();
+	Locator::underwaterSystem::reset();
 	Locator::tattooEditorSystem::reset();
 	Locator::creatureCaveSystem::reset();
 	Locator::creatureModeSystem::reset();

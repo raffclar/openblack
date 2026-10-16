@@ -35,6 +35,8 @@ public:
 	void Bind(RenderPass viewId) const;
 
 	[[nodiscard]] const Texture2D& GetColorAttachment() const { return _colorAttachment; }
+	/// The depth attachment, when the target was made with one
+	[[nodiscard]] const Texture2D& GetDepthStencilAttachment() const { return _depthStencilAttachment; }
 	void GetSize(uint16_t& width, uint16_t& height) const { width = _width, height = _height; }
 
 private:

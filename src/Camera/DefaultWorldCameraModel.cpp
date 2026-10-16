@@ -38,6 +38,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "Help/HelpProfile.h"
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
@@ -241,9 +242,13 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 		}
 	}
 
-	// Off the land and the domes round it
+	// Off the land and the domes round it. EXPERIMENT (not for merge): under the sea, off the sea bed.
 	const camera_limits::Ground ground {
-	    .height = [&terrain](glm::vec2 point) { return terrain.GetHeightAt(point); },
+	    .height =
+	        [&terrain](glm::vec2 point) {
+		        const float land = terrain.GetHeightAt(point);
+		        return Locator::underwaterSystem::has_value() ? Locator::underwaterSystem::value().FloorAt(point, land) : land;
+	        },
 	    .normal = [&terrain](glm::vec2 point) { return terrain.GetNormalAt(point); },
 	};
 	const auto push = camera_limits::PushOffTheGround(ground, nearby, zones.exclusionsOn, _targetOrigin, _targetFocus);
