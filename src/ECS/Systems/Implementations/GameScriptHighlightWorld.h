@@ -40,7 +40,7 @@ public:
 	void StepEffect(uint32_t effect, float seconds) override;
 	void MoveEffect(uint32_t effect, glm::vec3 to) override;
 	void DeleteEffect(uint32_t effect) override;
-	void PlaySound(uint32_t sample) override;
+	void PlaySound(uint32_t sample, entt::entity owner) override;
 	[[nodiscard]] std::optional<components::Sprite> GlowLook() const override;
 	[[nodiscard]] std::optional<components::Sprite> SparkLook(uint32_t picture) const override;
 	float LocalFloatRandom(float x) override;

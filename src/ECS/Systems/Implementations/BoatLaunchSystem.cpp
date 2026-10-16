@@ -14,6 +14,7 @@
 #include <exception>
 #include <string>
 
+#include <PackFile.h>
 #include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
@@ -21,6 +22,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Animals/AnimalAnimation.h"
+#include "Audio/AudioManagerInterface.h"
 #include "Audio/ScriptSoundEffect.h"
 #include "Blast/DustPuff.h"
 #include "CHLApi.h"
@@ -291,8 +293,9 @@ void BoatLaunchSystem::LaunchEffects()
 	{
 		for (const auto sample : rules::SoundsPassed(_clocks.previousBoatTime, _clocks.boatTime))
 		{
+			// A launch sound does not start again while it plays
 			Locator::chlapi::value().PlayBankSoundEffect(static_cast<int32_t>(audio::ScriptSoundBank::ScriptSfx), sample,
-			                                             std::nullopt);
+			                                             {.voicePlayType = pack::AudioBankLoop::Once});
 		}
 	}
 	if (!rules::TakeSpray(_clocks) || !_boat.has_value())

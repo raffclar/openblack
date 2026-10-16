@@ -96,11 +96,12 @@ constexpr std::array<audio::SoundId, 4> k_CreatureRockSmashes = {audio::SoundId:
 constexpr std::array<audio::SoundId, 3> k_TreePlantings = {audio::SoundId::G_PlantTree_01, audio::SoundId::G_PlantTree_02,
                                                            audio::SoundId::G_PlantTree_03};
 
-void PlaySound(audio::SoundId sound, glm::vec3 point)
+/// A sound at a point, played for what owns it
+void PlaySound(audio::SoundId sound, glm::vec3 point, entt::entity owner)
 {
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(static_cast<entt::id_type>(sound), point);
+		audio::StartGameSoundEffect(static_cast<entt::id_type>(sound), {.position = point, .owner = owner});
 	}
 }
 
@@ -395,7 +396,7 @@ void object_physics::TreeDropSound(entt::entity tree, uint64_t ticks)
 	}
 	// One of three planting sounds, chosen by the system clock
 	const auto& position = Entities().Get<const Transform>(tree).position;
-	PlaySound(k_TreePlantings.at(ticks % k_TreePlantings.size()), position);
+	PlaySound(k_TreePlantings.at(ticks % k_TreePlantings.size()), position, tree);
 }
 
 bool object_physics::IsBonfire(entt::entity object)
@@ -510,7 +511,7 @@ void object_physics::TapRock(systems::DynamicsSystemInterface& dynamics, entt::e
 		Locator::creatureMindSystem::value().PlayerDid(objects::k_DeedBreakRocks, point, rock, *player);
 	}
 	SplitRock(dynamics, rock);
-	PlaySound(NextInTurn(k_HandRockTaps, registry.Context().nextHandRockTap), handPoint);
+	PlaySound(NextInTurn(k_HandRockTaps, registry.Context().nextHandRockTap), handPoint, rock);
 	// The player's creature sees the player playing with the rock
 	if (player.has_value())
 	{
@@ -518,11 +519,11 @@ void object_physics::TapRock(systems::DynamicsSystemInterface& dynamics, entt::e
 	}
 }
 
-void object_physics::SmashRock(systems::DynamicsSystemInterface& dynamics, entt::entity rock)
+void object_physics::SmashRock(systems::DynamicsSystemInterface& dynamics, entt::entity rock, entt::entity creature)
 {
 	auto& registry = Entities();
 	const auto point = registry.Get<const Transform>(rock).position;
-	PlaySound(NextInTurn(k_CreatureRockSmashes, registry.Context().nextCreatureRockSmash), point);
+	PlaySound(NextInTurn(k_CreatureRockSmashes, registry.Context().nextCreatureRockSmash), point, creature);
 	SplitRock(dynamics, rock);
 }
 

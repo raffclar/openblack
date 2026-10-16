@@ -17,6 +17,7 @@
 #include <array>
 #include <unordered_map>
 
+#include <PackFile.h>
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -208,7 +209,16 @@ std::optional<glm::vec3> CreatureCaveFire()
 
 void PlayDoorSound(entt::id_type sound)
 {
-	// The game plays the doors' sounds without a place
+	// The game plays the doors' sounds without a place. A door sound does not start again while it plays.
+	if (Locator::audio::has_value())
+	{
+		audio::StartGameSoundEffect(sound, {.voicePlayType = pack::AudioBankLoop::Once});
+	}
+}
+
+void PlayToggleSound(entt::id_type sound)
+{
+	// The game plays the buttons' sounds without a place
 	if (Locator::audio::has_value())
 	{
 		audio::PlayGameSoundEffect(sound, std::nullopt);
@@ -218,7 +228,7 @@ void PlayDoorSound(entt::id_type sound)
 
 TempleInterior::TempleInterior()
     : _doors(PlayDoorSound)
-    , _toggles(PlayDoorSound)
+    , _toggles(PlayToggleSound)
 {
 }
 

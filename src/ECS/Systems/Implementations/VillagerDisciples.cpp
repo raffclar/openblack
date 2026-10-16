@@ -18,6 +18,7 @@
 #include <optional>
 #include <vector>
 
+#include <PackFile.h>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
@@ -776,7 +777,8 @@ void villager_disciple::PutDown(entt::entity villager, std::optional<PlayerNames
 	                    *sample, sound.has_value() ? "found" : "missing");
 	if (sound.has_value() && Locator::resources::value().GetSounds().Contains(*sound))
 	{
-		Locator::audio::value().StartSoundEffect(*sound, {.pitchPercent = k_MadePitch, .volume = k_MadeVolume});
+		Locator::audio::value().StartSoundEffect(
+		    *sound, {.pitchPercent = k_MadePitch, .volume = k_MadeVolume, .voicePlayType = pack::AudioBankLoop::Once});
 	}
 }
 

@@ -84,7 +84,8 @@ bool SoundTagSystem::Heard(entt::id_type sound) const
 	return audio::GameSoundEffectHeard(_conditions(), sound);
 }
 
-void SoundTagSystem::StartPointSound(SoundTag& tag, const glm::vec3& position, const glm::vec3& camera) const
+void SoundTagSystem::StartPointSound(entt::entity entity, SoundTag& tag, const glm::vec3& position,
+                                     const glm::vec3& camera) const
 {
 	const auto& sounds = Locator::resources::value().GetSounds();
 	if (!tag.active || !sounds.Contains(tag.sound) || !WithinReach(sounds.Handle(tag.sound)->maxDistance, position, camera) ||
@@ -93,7 +94,7 @@ void SoundTagSystem::StartPointSound(SoundTag& tag, const glm::vec3& position, c
 		return;
 	}
 	auto& audio = Locator::audio::value();
-	tag.emitter = audio.CreateEmitter(tag.sound, position, audio::PlayType::Once);
+	tag.emitter = audio.CreateEmitter(tag.sound, position, audio::PlayType::Once, entity);
 	if (tag.emitter != entt::null)
 	{
 		audio.PlayEmitter(tag.emitter);
@@ -133,7 +134,7 @@ void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 				    {
 					    return;
 				    }
-				    StartPointSound(tag, position, camera);
+				    StartPointSound(entity, tag, position, camera);
 				    tag.delayed = false;
 				    return;
 			    }
@@ -148,7 +149,7 @@ void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 			    return;
 		    }
 		    StopSound(tag);
-		    tag.emitter = audio.CreateEmitter(tag.sound, position, audio::PlayType::Repeat);
+		    tag.emitter = audio.CreateEmitter(tag.sound, position, audio::PlayType::Repeat, entity);
 		    if (tag.emitter != entt::null)
 		    {
 			    audio.PlayEmitter(tag.emitter);
@@ -193,7 +194,7 @@ entt::entity SoundTagSystem::CreatePointSound(entt::id_type sound, const glm::ve
 	// One not delayed sounds at once, where it is made
 	if (!delayed && Locator::audio::has_value() && Locator::resources::has_value())
 	{
-		StartPointSound(tag, position, Locator::audio::value().GetListener().origin);
+		StartPointSound(entity, tag, position, Locator::audio::value().GetListener().origin);
 	}
 	return entity;
 }

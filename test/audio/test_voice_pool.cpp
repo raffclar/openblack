@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Audio/VoiceOwner.h"
 #include "Audio/VoicePool.h"
 
 using namespace openblack::audio;
@@ -177,4 +178,49 @@ TEST(VoicePool, UnusedVoicesHavePriorityZero)
 	VoicePool pool;
 	pool.Occupy(0, Request(1, 400, AudioBankLoop::Overlap));
 	EXPECT_EQ(pool.Choose(Request(2, 1, AudioBankLoop::None)).slot, 1u);
+}
+
+TEST(VoicePool, CallerPlayTypeIsRestart)
+{
+	EXPECT_EQ(k_CallerPlayType, AudioBankLoop::Restart);
+}
+
+TEST(VoicePool, RestartOfTheSameSampleStopsItOnlyForTheSameOwner)
+{
+	VoicePool pool;
+	const auto first = VoiceOwnerKey(VoiceOwner::Entity, 4u, 0, 0);
+	const auto second = VoiceOwnerKey(VoiceOwner::Entity, 5u, 0, 0);
+	pool.Occupy(0, Request(9, 400, k_CallerPlayType, first));
+	EXPECT_EQ(pool.Choose(Request(9, 400, k_CallerPlayType, first)).slot, 0u);
+	EXPECT_EQ(pool.Choose(Request(9, 400, k_CallerPlayType, second)).slot, 1u);
+}
+
+TEST(VoiceOwnerKey, NoOwnerAndNumberZeroAreTheSame)
+{
+	EXPECT_EQ(VoiceOwnerKey(VoiceOwner::Entity, std::nullopt, 0, 0), 0u);
+	EXPECT_EQ(VoiceOwnerKey(VoiceOwner::Number, std::nullopt, 0, 0), 0u);
+}
+
+TEST(VoiceOwnerKey, KindsDoNotShareKeys)
+{
+	const auto entity = VoiceOwnerKey(VoiceOwner::Entity, 2u, 0, 0);
+	const auto number = VoiceOwnerKey(VoiceOwner::Number, std::nullopt, 3, 0);
+	const auto own = VoiceOwnerKey(VoiceOwner::OwnSound, std::nullopt, 0, 2);
+	EXPECT_NE(entity, number);
+	EXPECT_NE(entity, own);
+	EXPECT_NE(number, own);
+	EXPECT_EQ(number, VoiceOwnerKey(VoiceOwner::Number, 2u, 3, 9));
+}
+
+TEST(VoiceOwnerKey, EachOwnSoundHasItsOwnKey)
+{
+	VoicePool pool;
+	const auto first = VoiceOwnerKey(VoiceOwner::OwnSound, std::nullopt, 0, 0);
+	const auto second = VoiceOwnerKey(VoiceOwner::OwnSound, std::nullopt, 0, 1);
+	EXPECT_NE(first, second);
+	// A sample that plays once starts again for a sound of its own
+	pool.Occupy(0, Request(9, 400, AudioBankLoop::Once, first));
+	const auto choice = pool.Choose(Request(9, 400, AudioBankLoop::Once, second));
+	EXPECT_TRUE(choice.start);
+	EXPECT_EQ(choice.slot, 1u);
 }

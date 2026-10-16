@@ -16,6 +16,7 @@
 #include <limits>
 #include <vector>
 
+#include <PackFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -242,8 +243,9 @@ bool RewardSystem::Tap(entt::entity chest, PlayerNames player)
 	registry.SetDirty();
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(k_OpeningSound.value(), std::nullopt);
-		audio::PlayGameSoundEffect(k_LidSound.value(), std::nullopt);
+		// The opening sounds do not start again while they play
+		audio::StartGameSoundEffect(k_OpeningSound.value(), {.voicePlayType = pack::AudioBankLoop::Once});
+		audio::StartGameSoundEffect(k_LidSound.value(), {.voicePlayType = pack::AudioBankLoop::Once});
 	}
 	const auto contents = ContentsOf(reward->type);
 	GameRewardOpeningWorld world(chest);

@@ -51,11 +51,13 @@ namespace
 constexpr std::string_view k_GameBank = "InGame.sad";
 constexpr std::string_view k_CryBank = "editor.sad";
 
-void PlaySample(std::string_view bank, uint32_t sample, glm::vec3 position)
+/// A sample at a place, played for the thing that was offered
+void PlaySample(std::string_view bank, uint32_t sample, glm::vec3 position, entt::entity offered)
 {
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(entt::hashed_string(fmt::format("{}/{}", bank, sample).c_str()).value(), position);
+		audio::StartGameSoundEffect(entt::hashed_string(fmt::format("{}/{}", bank, sample).c_str()).value(),
+		                            {.position = position, .owner = offered});
 	}
 }
 
@@ -208,13 +210,13 @@ altar_offering::Answer altar_offering::Offer(entt::entity altar, entt::entity he
 	}
 
 	// The sacrifice is heard where the hand is; a man or a woman cries out
-	PlaySample(k_GameBank, altar_sacrifice::k_SacrificeSample, giver.hand);
+	PlaySample(k_GameBank, altar_sacrifice::k_SacrificeSample, giver.hand, held);
 	if (person != nullptr)
 	{
 		if (const auto cry =
 		        altar_sacrifice::CryOf(person->lifeStage == Villager::LifeStage::Child, person->sex == Villager::Sex::FEMALE))
 		{
-			PlaySample(k_CryBank, cry->first + LocalRandom(cry->count), giver.hand);
+			PlaySample(k_CryBank, cry->first + LocalRandom(cry->count), giver.hand, held);
 		}
 	}
 	if (sacrifice->number && giver.local && giver.pointed.has_value())

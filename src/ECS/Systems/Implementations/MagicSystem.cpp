@@ -2015,7 +2015,8 @@ bool MagicSystem::TapGlobe(entt::entity orb)
 	// The pop is heard where the hand took it
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellBubblePop_04), _hand.handPosition);
+		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellBubblePop_04),
+		                            {.position = _hand.handPosition, .owner = seed});
 	}
 	DestroyOrb(orb);
 	_lastHandResult = HandResult::TookMiracle;
@@ -2097,9 +2098,11 @@ void MagicSystem::StartHoldLoop()
 	StopHoldLoop();
 	if (Locator::audio::has_value() && _held.has_value())
 	{
-		_holdLoop =
-		    audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
-		                                {.position = _hand.handPosition, .playType = audio::PlayType::Repeat, .owner = *_held});
+		_holdLoop = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
+		                                        {.position = _hand.handPosition,
+		                                         .playType = audio::PlayType::Repeat,
+		                                         .owner = *_held,
+		                                         .voiceOwner = audio::VoiceOwner::OwnSound});
 	}
 }
 

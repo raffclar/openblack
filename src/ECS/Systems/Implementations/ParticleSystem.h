@@ -47,7 +47,7 @@ public:
 	[[nodiscard]] glm::vec3 CameraRight() const override;
 	[[nodiscard]] glm::vec3 CameraUp() const override;
 	[[nodiscard]] glm::vec3 CameraPosition() const override;
-	void PlayListenerSound(uint32_t inGameSample) override;
+	void PlayListenerSound(uint32_t inGameSample, bool playsOnce) override;
 	[[nodiscard]] std::optional<TargetInfo> Target(entt::entity target, bool centre) const override;
 	[[nodiscard]] bool IsTargetHeld(entt::entity target) const override;
 	[[nodiscard]] bool IsTargetClaimed(entt::entity target) const override { return _claimed.contains(target); }

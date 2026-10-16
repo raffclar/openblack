@@ -118,7 +118,7 @@ public:
 	void StepEffect(uint32_t effect, float /*seconds*/) override { stepped.push_back(effect); }
 	void MoveEffect(uint32_t /*effect*/, glm::vec3 /*to*/) override {}
 	void DeleteEffect(uint32_t effect) override { deleted.push_back(effect); }
-	void PlaySound(uint32_t sample) override { sounds.push_back(sample); }
+	void PlaySound(uint32_t sample, entt::entity /*owner*/) override { sounds.push_back(sample); }
 	[[nodiscard]] std::optional<Sprite> GlowLook() const override
 	{
 		return Sprite {.texture = {}, .uvMin = {}, .uvExtent = glm::vec2(0.125f), .tint = glm::vec4(1.0f)};

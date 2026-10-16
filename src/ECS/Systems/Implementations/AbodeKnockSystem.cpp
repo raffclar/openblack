@@ -53,8 +53,8 @@ bool AbodeKnockSystem::Tap(entt::entity abodeEntity, glm::vec3 handPoint, bool o
 			return false;
 		}
 		const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(dispenser->building));
-		return Knock(info.abodeType, 1.0f, registry.Valid(dispenser->town) ? dispenser->town : entt::null, {}, handPoint,
-		             ownHand);
+		return Knock(abodeEntity, info.abodeType, 1.0f, registry.Valid(dispenser->town) ? dispenser->town : entt::null, {},
+		             handPoint, ownHand);
 	}
 	const auto* abode = registry.TryGet<const Abode>(abodeEntity);
 	const auto* info = ecs::world_objects::AbodeInfoOf(abodeEntity);
@@ -67,13 +67,13 @@ bool AbodeKnockSystem::Tap(entt::entity abodeEntity, glm::vec3 handPoint, bool o
 	const auto town = towns.find(abode->townId);
 	// Copied, as the people coming out leave the building
 	const auto inhabitants = abode->inhabitants;
-	return Knock(info->abodeType, progress != nullptr ? progress->built : 1.0f,
+	return Knock(abodeEntity, info->abodeType, progress != nullptr ? progress->built : 1.0f,
 	             town != towns.end() && registry.Valid(town->second) ? town->second : entt::null, inhabitants, handPoint,
 	             ownHand);
 }
 
-bool AbodeKnockSystem::Knock(AbodeType type, float built, entt::entity town, std::span<const entt::entity> inhabitants,
-                             glm::vec3 handPoint, bool ownHand)
+bool AbodeKnockSystem::Knock(entt::entity building, AbodeType type, float built, entt::entity town,
+                             std::span<const entt::entity> inhabitants, glm::vec3 handPoint, bool ownHand)
 {
 	if (!ecs::abode_knock::IsTappable(type, built))
 	{
@@ -101,7 +101,8 @@ bool AbodeKnockSystem::Knock(AbodeType type, float built, entt::entity town, std
 	// Every player hears it, at the hand
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(static_cast<entt::id_type>(k_KnockSounds.at(_knockSound)), handPoint);
+		audio::StartGameSoundEffect(static_cast<entt::id_type>(k_KnockSounds.at(_knockSound)),
+		                            {.position = handPoint, .owner = building});
 	}
 	_knockSound = ecs::abode_knock::NextKnockSound(_knockSound);
 	return true;

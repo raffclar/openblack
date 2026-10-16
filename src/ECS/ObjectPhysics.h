@@ -57,7 +57,7 @@ void SplitRock(systems::DynamicsSystemInterface& dynamics, entt::entity rock);
 void TapRock(systems::DynamicsSystemInterface& dynamics, entt::entity rock, glm::vec3 handPoint,
              std::optional<PlayerNames> player);
 /// A creature's blow smashes a rock in two
-void SmashRock(systems::DynamicsSystemInterface& dynamics, entt::entity rock);
+void SmashRock(systems::DynamicsSystemInterface& dynamics, entt::entity rock, entt::entity creature);
 /// A rock, static or dead tree comes to rest put down gently from a player's hand: the nearest building within reach
 /// makes it its town's artefact
 void ConsiderArtefact(const PhysicsEntry* entry, entt::entity object, bool insert);

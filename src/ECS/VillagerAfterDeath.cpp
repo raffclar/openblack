@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <vector>
 
+#include <PackFile.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DAnim.h"
@@ -155,8 +156,9 @@ void PlayDeathLine(PlayerNames here)
 	                    sound.has_value() ? "found" : "missing");
 	if (sound.has_value() && Locator::resources::value().GetSounds().Contains(*sound))
 	{
-		Locator::audio::value().StartSoundEffect(
-		    *sound, {.pitchPercent = villager_death::k_DeathLinePitch, .volume = villager_death::k_DeathLineVolume});
+		Locator::audio::value().StartSoundEffect(*sound, {.pitchPercent = villager_death::k_DeathLinePitch,
+		                                                  .volume = villager_death::k_DeathLineVolume,
+		                                                  .voicePlayType = pack::AudioBankLoop::Once});
 	}
 }
 } // namespace

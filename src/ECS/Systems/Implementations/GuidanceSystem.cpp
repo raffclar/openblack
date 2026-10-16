@@ -13,6 +13,7 @@
 
 #include <ctime>
 
+#include <PackFile.h>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
@@ -295,6 +296,7 @@ void GuidanceSystem::TownAttackCry(entt::entity town, const guidance::TownAttack
 	                            {.position = position,
 	                             .pitchPercent = guidance::k_VoicePitch,
 	                             .volume = guidance::k_VoiceVolume,
+	                             .voicePlayType = pack::AudioBankLoop::Once,
 	                             .minDistance = reach * guidance::k_VoiceNearShare,
 	                             .maxDistance = reach});
 }
