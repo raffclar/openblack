@@ -11,12 +11,14 @@
 
 #include <cstdint>
 
+#include <array>
 #include <functional>
 #include <optional>
 #include <span>
 #include <vector>
 
 #include <glm/mat2x2.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -110,6 +112,36 @@ struct CollideCircle
 inline constexpr float k_TreeCollideRadius = 0.3f;
 /// Whether a circle comes within the reach of a cell's middle that makes the cell not clear
 [[nodiscard]] bool BlocksCell(const CollideCircle& circle, int32_t x, int32_t z);
+
+/// A ball a thing on the land keeps creatures off. Most are on the ground; a worship site's stand at their height in
+/// the world, and the cell test measures to them through the air from the cell's middle at the height of zero.
+struct CollideSphere
+{
+	glm::vec3 centre;
+	float radius;
+};
+/// Whether a ball comes within the reach of a cell's middle (at the height of zero) that makes the cell not clear
+[[nodiscard]] bool BlocksCell(const CollideSphere& sphere, int32_t x, int32_t z);
+/// The ten balls a worship site keeps creatures off: along the edges of its model, each at a height above the site
+/// given by the model and as wide as 1.3 times that height, placed by the site's place in the world, turn and scale
+inline constexpr size_t k_WorshipSiteSpheres = 10;
+[[nodiscard]] std::array<CollideSphere, k_WorshipSiteSpheres> WorshipSiteSpheres(const glm::vec3& position,
+                                                                                 const glm::mat3& rotation, float scale);
+
+/// What a thing in a cell of the land is to the test of whether the cell is clear for a creature
+struct ThingInCell
+{
+	/// A temple keeps every cell it stands in from being clear
+	bool temple;
+	/// Villagers, animals and creatures, which keep the cell from being clear only when the test asks for it
+	bool living;
+	/// Whether its balls are looked at: a tree or a field always, anything else when the creature must go round it
+	bool tested;
+	/// The balls it keeps creatures off; things that move about have none
+	std::vector<CollideSphere> spheres;
+};
+/// Whether a thing in a cell keeps the cell from being clear for a creature
+[[nodiscard]] bool BlocksCell(const ThingInCell& thing, int32_t x, int32_t z, bool livingBlocks);
 
 /// Whether a cell of the land, by its column and row, is clear
 using ClearCell = std::function<bool(int32_t x, int32_t z)>;

@@ -11,7 +11,9 @@
 #include <array>
 #include <optional>
 #include <string_view>
+#include <vector>
 
+#include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureCastAgenda.h"
@@ -568,6 +570,54 @@ TEST(CreatureCastMoves, AThingKeepsCirclesClear)
 	// A cell is blocked by a circle coming within 5 of its middle
 	EXPECT_TRUE(cast_moves::BlocksCell({.centre = {19.5f, 5.0f}, .radius = 1.0f}, 1, 0));
 	EXPECT_FALSE(cast_moves::BlocksCell({.centre = {5.0f, 5.0f}, .radius = 0.3f}, 1, 0));
+}
+
+TEST(CreatureCastMoves, ABallIsMeasuredThroughTheAirFromTheCellsMiddle)
+{
+	// On the ground a ball works as a circle does
+	EXPECT_TRUE(cast_moves::BlocksCell(cast_moves::CollideSphere {.centre = {19.5f, 0.0f, 5.0f}, .radius = 1.0f}, 1, 0));
+	// High up, the same ball is too far from the cell's middle
+	EXPECT_FALSE(cast_moves::BlocksCell(cast_moves::CollideSphere {.centre = {15.0f, 20.0f, 5.0f}, .radius = 3.0f}, 1, 0));
+	// Just within reach through the air: 6 up and 0 across, less a radius of 1.5, is less than 5
+	EXPECT_TRUE(cast_moves::BlocksCell(cast_moves::CollideSphere {.centre = {15.0f, 6.0f, 5.0f}, .radius = 1.5f}, 1, 0));
+}
+
+TEST(CreatureCastMoves, AWorshipSitesTenBallsStandAlongItsModelAtTheirHeights)
+{
+	const glm::mat3 still(1.0f);
+	const auto spheres = cast_moves::WorshipSiteSpheres({100.0f, 30.0f, 200.0f}, still, 1.0f);
+	ASSERT_EQ(spheres.size(), 10U);
+	EXPECT_FLOAT_EQ(spheres[0].centre.x, 102.448f);
+	EXPECT_FLOAT_EQ(spheres[0].centre.y, 31.4f);
+	EXPECT_FLOAT_EQ(spheres[0].centre.z, 200.0f - 34.171f);
+	EXPECT_FLOAT_EQ(spheres[0].radius, 1.3f * 1.4f);
+	EXPECT_FLOAT_EQ(spheres[9].centre.x, 126.905f);
+	EXPECT_FLOAT_EQ(spheres[9].radius, 1.3f * 3.0f);
+
+	// A site turned a quarter turn about the up axis, at twice the size: the balls turn and spread, but keep their widths
+	const glm::mat3 quarter(glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
+	const auto turned = cast_moves::WorshipSiteSpheres({0.0f, 0.0f, 0.0f}, quarter, 2.0f);
+	EXPECT_NEAR(turned[4].centre.x, 2.0f * 39.084f, 1e-4f);
+	EXPECT_NEAR(turned[4].centre.y, 4.0f, 1e-5f);
+	EXPECT_NEAR(turned[4].centre.z, 2.0f * 3.93f, 1e-4f);
+	EXPECT_FLOAT_EQ(turned[4].radius, 1.3f * 2.0f);
+}
+
+TEST(CreatureCastMoves, WhatAThingInACellDoesToTheCellTest)
+{
+	const std::vector<cast_moves::CollideSphere> onTheCell {{.centre = {15.0f, 0.0f, 5.0f}, .radius = 2.0f}};
+	const std::vector<cast_moves::CollideSphere> farAway {{.centre = {100.0f, 0.0f, 100.0f}, .radius = 2.0f}};
+	// The temple keeps every cell it is in from being clear, whatever its balls
+	EXPECT_TRUE(cast_moves::BlocksCell({.temple = true, .living = false, .tested = false, .spheres = {}}, 1, 0, false));
+	// A thing that is looked at blocks only by its balls
+	EXPECT_TRUE(cast_moves::BlocksCell({.temple = false, .living = false, .tested = true, .spheres = onTheCell}, 1, 0, false));
+	EXPECT_FALSE(cast_moves::BlocksCell({.temple = false, .living = false, .tested = true, .spheres = farAway}, 1, 0, false));
+	// A thing the creature need not go round is passed over, its balls or not
+	EXPECT_FALSE(
+	    cast_moves::BlocksCell({.temple = false, .living = false, .tested = false, .spheres = onTheCell}, 1, 0, false));
+	// Something living, which has no balls, blocks only when the test asks for it
+	EXPECT_FALSE(cast_moves::BlocksCell({.temple = false, .living = true, .tested = false, .spheres = {}}, 1, 0, false));
+	EXPECT_TRUE(cast_moves::BlocksCell({.temple = false, .living = true, .tested = false, .spheres = {}}, 1, 0, true));
 }
 
 TEST(CreatureCastAgenda, TheGiftsToAStoreGoOnlyToABuiltStoragePit)
