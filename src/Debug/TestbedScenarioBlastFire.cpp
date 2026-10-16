@@ -368,12 +368,15 @@ void AddFire(std::vector<Scenario>& all)
 	    .facet = Facet::Miracles,
 	    .description =
 	        "A tiger on the learning leash, tied to a tree, knows the lightning miracle. The hand casts "
-	        "lightning 45 m in front of the tiger, and a villager stands 10 m past the place where the bolts strike.",
-	    .expected = "The tiger goes to look at the place where the lightning strikes. When it finishes, it casts the "
-	                "lightning miracle at the first thing near the hand, the villager here. While it casts, it takes up no "
-	                "reaction.",
-	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Placed, .eye = glm::vec3(45.0f, 35.0f, 20.0f), .look = glm::vec3(0.0f, 5.0f, 70.0f)},
+	        "lightning 45 m in front of the tiger. A villager stands 10 m past the place where the bolts strike, under "
+	        "the cursor.",
+	    .expected =
+	        "The tiger goes to look at the place where the lightning strikes. When it finishes, it casts the "
+	        "lightning miracle at the first thing near the point under the cursor, the villager here. While it casts, it "
+	        "takes up no "
+	        "reaction.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Placed, .eye = glm::vec3(45.0f, 35.0f, 20.0f), .look = glm::vec3(0.0f, 0.0f, 95.0f)},
 	    .creatures = {{.label = "caster",
 	                   .species = CreatureType::Tiger,
 	                   .offset = {0.0f, 40.0f},

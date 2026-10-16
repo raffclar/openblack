@@ -48,9 +48,9 @@
 #include "ECS/NearestSearch.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
-#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -128,35 +128,34 @@ void CreatureMindSystem::CastOnLeashAfterReaction(entt::entity creature, size_t 
 	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
 	const auto* body = mind != nullptr ? registry.TryGet<const Creature>(creature) : nullptr;
 	if (body == nullptr || !mind->learnt.has_value() || !Locator::leashSystem::has_value() ||
-	    !Locator::handSystem::has_value() || !Locator::entitiesMap::has_value())
+	    !Locator::pickingSystem::has_value() || !Locator::entitiesMap::has_value())
 	{
 		return;
 	}
-	// A leash of its player must be on. The leash does not have to hold this creature.
+	// A leash of its player must be on, held or tied. The leash does not have to hold this creature.
 	const auto& leashes = Locator::leashSystem::value();
-	bool leashOn = false;
+	creature_reaction::LeashCastState state;
 	registry.Each<const Creature>([&](entt::entity other, const Creature& otherBody) {
-		leashOn = leashOn || (otherBody.owner == body->owner && leashes.IsLeashed(other));
+		if (otherBody.owner == body->owner && leashes.IsLeashed(other))
+		{
+			state.leashOn = true;
+			state.tied = state.tied || leashes.TiedTo(other).has_value();
+		}
 	});
-	if (!leashOn)
-	{
-		return;
-	}
-	// It must know the miracle
 	const auto& known = mind->learnt->knowledge.miraclesKnown;
-	if (miracle >= known.size() || !known.at(miracle))
+	state.knowsMiracle = miracle < known.size() && known.at(miracle);
+	if (const auto& picked = Locator::pickingSystem::value().GetPick().point; picked.has_value())
+	{
+		state.pickedPoint = glm::vec2(picked->x, picked->z);
+	}
+	const auto centre = creature_reaction::LeashCastCentre(state);
+	if (!centre.has_value())
 	{
 		return;
 	}
-	// It finds the first thing other than itself in a spiral of cells out from the hand
-	const auto hand =
-	    Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	if (!hand.has_value())
-	{
-		return;
-	}
+	// It finds the first thing other than itself in a spiral of cells out from the point that the interface picked
 	const auto& map = Locator::entitiesMap::value();
-	const auto thing = ecs::nearest_search::FindFirst(map_coords::FromMetres({hand->x, hand->z}), k_LeashCastCells, creature,
+	const auto thing = ecs::nearest_search::FindFirst(map_coords::FromMetres(*centre), k_LeashCastCells, creature,
 	                                                  [&map](glm::ivec2 cell) { return map.GetAllInCell(cell); });
 	if (thing == entt::null)
 	{

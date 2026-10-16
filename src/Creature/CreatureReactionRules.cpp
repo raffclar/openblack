@@ -266,3 +266,12 @@ bool creature_reaction::MadeByIconWithoutSeed(bool madeBySpellIcon, bool seedLin
 {
 	return madeBySpellIcon && !seedLinked;
 }
+
+std::optional<glm::vec2> creature_reaction::LeashCastCentre(const LeashCastState& state)
+{
+	if (!state.leashOn || !state.knowsMiracle)
+	{
+		return std::nullopt;
+	}
+	return state.pickedPoint;
+}
