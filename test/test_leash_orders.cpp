@@ -35,13 +35,13 @@ Leash TiedTo(uint32_t object)
 }
 } // namespace
 
-TEST(LeashOrders, ATapOnAThingGivesNoOrderWhileATeleportCarriesTheCreature)
+TEST(LeashOrders, ATapGivesNoOrderWhileATeleportCarriesTheCreature)
 {
 	auto carried = Held();
 	carried.carriedByTeleport = true;
 	EXPECT_EQ(OnTap(carried, {.object = k_Cow}), Tap::Normal);
-	// A tap on the land still gives an order
-	EXPECT_EQ(OnTap(carried, {}), Tap::OrderOnLand);
+	// A tap on the land is also a normal tap
+	EXPECT_EQ(OnTap(carried, {}), Tap::Normal);
 }
 
 TEST(LeashOrders, ASingleTapGivesAnOrderAndNeverTies)
@@ -56,10 +56,6 @@ TEST(LeashOrders, ASingleTapGivesAnOrderAndNeverTies)
 	EXPECT_EQ(OnTap(TiedTo(k_Tree), {.object = k_Tree}), Tap::Normal);
 	EXPECT_EQ(OnTap(TiedTo(k_Tree), {.object = k_Cow}), Tap::Normal);
 	EXPECT_EQ(OnTap({}, {.object = k_Cow}), Tap::Normal);
-	// Nor is a game with another creature broken into
-	auto playing = Held();
-	playing.playingGame = true;
-	EXPECT_EQ(OnTap(playing, {.object = k_Cow}), Tap::Normal);
 }
 
 TEST(LeashOrders, ADoubleTapTiesAndUnties)

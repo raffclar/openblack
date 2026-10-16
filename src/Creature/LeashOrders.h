@@ -55,9 +55,7 @@ struct Leash
 	std::optional<uint32_t> tiedTo;
 	/// The creature, by entity number
 	uint32_t creature {0};
-	/// The creature is in the middle of a game with another creature, which no order breaks into
-	bool playingGame {false};
-	/// A teleport stone carries the creature now. A tap on a thing gives no order then.
+	/// A teleport stone carries the creature now. A single tap gives no order then, on a thing or on the land.
 	bool carriedByTeleport {false};
 };
 
@@ -72,8 +70,9 @@ struct Tapped
 	bool miracleBubble {false};
 };
 
-/// What a single tap does. Held untied, the leash gives an order on a thing or on the land. The creature itself isn't
-/// ordered: its own taps put the leash on and take hold of it.
+/// What a single tap does. Held untied, the leash gives an order on a thing or on the land. The creature itself gets no
+/// order, because its own taps put the leash on and take hold of it. While a teleport stone carries the creature, the
+/// tap is a normal tap.
 [[nodiscard]] Tap OnTap(const Leash& leash, const Tapped& tapped);
 /// What the second tap of a double tap does. Tied, a double tap on what the leash is tied to, or on the creature,
 /// unties it, and on anything else does nothing. Untied, it ties the leash to the thing tapped; a miracle bubble that

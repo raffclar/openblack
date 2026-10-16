@@ -61,6 +61,7 @@ public:
 	bool PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
 	                 uint32_t milliseconds) override;
 	bool TapThing(PlayerNames player, entt::entity object) override;
+	[[nodiscard]] bool TakesTap(PlayerNames player, entt::entity object) const override;
 	[[nodiscard]] std::optional<float> RopeUnderCursor(PlayerNames player, const RopeFrame& frame) override;
 	void SetRopeHovered(PlayerNames player, bool hovered) override;
 	[[nodiscard]] leash_snap::Hand RopeHand(PlayerNames player) const override;

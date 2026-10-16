@@ -521,16 +521,9 @@ std::optional<entt::entity> GameHandGrabWorld::TreeFromBigForest(entt::entity bi
 	return Locator::forestSystem::value().TreeFromBigForest(bigForest);
 }
 
-bool GameHandGrabWorld::HoldsLeash(PlayerNames player)
+bool GameHandGrabWorld::LeashTakesTap(entt::entity object, PlayerNames player)
 {
-	if (!Locator::leashSystem::has_value())
-	{
-		return false;
-	}
-	const auto& leashes = Locator::leashSystem::value();
-	const auto creature = leashes.PlayersCreature(player);
-	return creature.has_value() && leashes.IsLeashed(*creature) && !leashes.TiedTo(*creature).has_value() &&
-	       leashes.HolderPoint(*creature).has_value();
+	return Locator::leashSystem::has_value() && Locator::leashSystem::value().TakesTap(player, object);
 }
 
 void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
@@ -569,9 +562,10 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		object_physics::TapRock(Locator::dynamicsSystem::value(), object, handPoint, player);
 		return true;
 	}
-	// A town's building, a miracle dispenser among them, is knocked on, whoever's town it is, unless the hand holds its
-	// creature's leash, which takes the tap to send the creature there
-	if (Entities().AnyOf<Abode, SpellDispenser>(object) && Locator::abodeKnockSystem::has_value() && !HoldsLeash(player))
+	// The hand knocks on a building of a town, whoever owns the town. A miracle dispenser is such a building. When the
+	// leash takes the tap as an order to the creature, the hand does not knock.
+	if (Entities().AnyOf<Abode, SpellDispenser>(object) && Locator::abodeKnockSystem::has_value() &&
+	    !LeashTakesTap(object, player))
 	{
 		countTap();
 		return Locator::abodeKnockSystem::value().Tap(object, handPoint, ownHand);
@@ -583,7 +577,7 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		const auto tap = openblack::temple::TapEntrance({
 		    .scriptLetsTap = Entities().Context().scriptLetsTempleBeEntered,
 		    .ownTemple = ownHand && heart != nullptr && heart->owner == player,
-		    .leashHeld = HoldsLeash(player),
+		    .leashHeld = LeashTakesTap(object, player),
 		});
 		if (tap.tapped)
 		{

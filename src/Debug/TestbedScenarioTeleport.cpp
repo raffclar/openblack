@@ -26,6 +26,10 @@ constexpr glm::vec2 k_Goal {46.0f, 74.0f};
 /// They set off once both stones are down, and turn back after this long
 constexpr float k_WalkAfter = 5.0f;
 constexpr float k_WalkRepeat = 30.0f;
+/// A creature that sets off at the walk time is in the stone this long after it sets off
+constexpr float k_TapWhileCarried = 3.0f;
+/// By this long after the tap in the stone, the creature is out of the far stone and walks on
+constexpr float k_TapAfterArrival = 8.0f;
 /// Two stones too far apart for a villager to walk between to worship
 constexpr glm::vec2 k_WorshipStoneA {-300.0f, 0.0f};
 constexpr glm::vec2 k_WorshipStoneB {300.0f, 0.0f};
@@ -144,5 +148,41 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	                  .handHeight = 12.0f,
 	                  .delaySeconds = 3.0f,
 	                  .byHand = true}},
+	});
+
+	all.push_back({
+	    .id = "leash.tap_while_teleported",
+	    .name = "A tap on a hut while a teleport carries the creature on the leash",
+	    .facet = Facet::Leash,
+	    .description = "The same two stones cast by hand, a hut beside the first. A tiger on the learning leash is told "
+	                   "to go to beside the second stone. While the stone carries it, the hand taps the hut. When it "
+	                   "is out of the far stone, the hand taps the hut again.",
+	    .expected = "The first tap is not an order: the hand knocks on the hut, and the tiger continues to the far "
+	                "stone. The second tap is an order, so the hand does not knock, and the tiger goes back to act on "
+	                "the hut. The debug log gives each result of the command.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_StoneA, k_StoneB, k_Start, k_Goal}, .distance = 0.8f},
+	    .creatures = {{.label = "traveller",
+	                   .species = CreatureType::Tiger,
+	                   .offset = k_Start + glm::vec2(-6.0f, 2.0f),
+	                   .facingDegrees = 180.0f,
+	                   .pauseMind = true}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_StoneA + glm::vec2(-14.0f, -12.0f)}},
+	    .miracles = {{.type = MagicType::Teleport,
+	                  .point = k_StoneA,
+	                  .handOffset = k_StoneA,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .byHand = true},
+	                 {.type = MagicType::Teleport,
+	                  .point = k_StoneB,
+	                  .handOffset = k_StoneB,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 3.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Command::Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope},
+	                 {.kind = Command::Kind::WalkTo, .creature = 0, .delaySeconds = k_WalkAfter - 1.0f, .point = k_Goal},
+	                 {.kind = Command::Kind::LeashTapBuilding, .creature = 0, .delaySeconds = k_TapWhileCarried},
+	                 {.kind = Command::Kind::LeashTapBuilding, .creature = 0, .delaySeconds = k_TapAfterArrival}},
 	});
 }
