@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <tuple>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <glm/fwd.hpp>
@@ -23,6 +24,7 @@
 #include <glm/vec3.hpp>
 
 #include "ECS/PhysicsEntry.h"
+#include "Physics/Body.h"
 
 namespace openblack
 {
@@ -253,6 +255,12 @@ public:
 	}
 	/// The land as the physics feels it, none without a land
 	[[nodiscard]] virtual const physics::Ground* GetGround() const { return nullptr; }
+	/// The creature's bones as the ellipsoids that thrown things and fight blows hit, posed as they are now. Each is the
+	/// box round the vertices that the bone moves in the species' base model.
+	[[nodiscard]] virtual std::vector<physics::Ellipsoid> CreatureSkeleton([[maybe_unused]] entt::entity creature)
+	{
+		return {};
+	}
 
 	/// The scripts' last thing hit and what hit it, each only while it still exists
 	virtual void RecordHit([[maybe_unused]] entt::entity hit, [[maybe_unused]] entt::entity hitter) {}
