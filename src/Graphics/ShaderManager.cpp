@@ -130,6 +130,11 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_underwater_spout
 #include "ShaderIncluder.h"
+// EXPERIMENT (not for merge): the field of the wakes and the splashes on the water
+#define SHADER_NAME fs_underwater_wake
+#include "ShaderIncluder.h"
+#define SHADER_NAME vs_underwater_splash
+#include "ShaderIncluder.h"
 #define SHADER_NAME vs_underwater_storm
 #include "ShaderIncluder.h"
 
@@ -242,7 +247,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 86> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 88> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -281,6 +286,8 @@ const std::array<bgfx::EmbeddedShader, 86> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_underwater_bubbles),
     BGFX_EMBEDDED_SHADER(vs_underwater_spout),
     BGFX_EMBEDDED_SHADER(fs_underwater_spout),
+    BGFX_EMBEDDED_SHADER(fs_underwater_wake),
+    BGFX_EMBEDDED_SHADER(vs_underwater_splash),
     BGFX_EMBEDDED_SHADER(vs_underwater_storm), //
     BGFX_EMBEDDED_SHADER(vs_sprite),
     BGFX_EMBEDDED_SHADER(fs_sprite), //
@@ -357,6 +364,8 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"UnderwaterSpray", "vs_underwater_spray", "fs_underwater_spray"},
     ShaderDefinition {"UnderwaterBubbles", "vs_underwater_bubbles", "fs_underwater_bubbles"},
     ShaderDefinition {"UnderwaterSpout", "vs_underwater_spout", "fs_underwater_spout"},
+    ShaderDefinition {"UnderwaterWake", "vs_water", "fs_underwater_wake"},
+    ShaderDefinition {"UnderwaterSplash", "vs_underwater_splash", "fs_underwater_spray"},
     ShaderDefinition {"UnderwaterStorm", "vs_underwater_storm", "fs_underwater_spout"},
     ShaderDefinition {"Sprite", "vs_sprite", "fs_sprite"},
     ShaderDefinition {"FootprintInstanced", "vs_footprint_paint_instanced", "fs_footprint"},

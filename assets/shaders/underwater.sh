@@ -322,6 +322,8 @@ float UwCliffBackwash(float distance, float t, float cliff)
 	return cliff * u_uwWaves.w * 0.6f * sin(k * distance - 1.3f * t) * exp(-max(distance, 0.0f) / 25.0f);
 }
 
+#include "underwater_wake.sh"
+
 // The rogue wave of a strong storm (see underwater::RogueWave). [0] xy: the middle of its crest line, z: its direction
 // in radians, w: its crest over the mean level (0 for no wave); [1] x: its length, y: half the length of its crest
 // line, z: how much its crest breaks, w: how far the ends of the crest line stay behind
@@ -403,12 +405,16 @@ float UwSurfaceFiltered(vec2 xz, float t, vec4 footprint, vec4 shore, out vec2 s
 	float length2 = dot(shore.yz, shore.yz);
 	vec2 towards = length2 > 1e-6f ? shore.yz / sqrt(length2) : vec2_splat(0.0f);
 	slope = deepSlope * deep + towards * ((nearer - wave) / 0.5f);
+	// The wakes and the rings of the things in the water, and the hulls that push the water down
+	vec2 wakeSlope;
+	float wake = UwWake(xz, wakeSlope);
+	slope += wakeSlope;
 	// The rogue wave of a strong storm, which dies before the coast
 	vec2 rogueSlope;
 	float rogueCrest;
 	float rogue = UwRogueWave(xz, shore.x, depth, rogueSlope, rogueCrest);
 	slope += rogueSlope;
-	return level + height + wave + rogue;
+	return level + height + wave + wake + rogue;
 }
 
 // The height of the sea's surface at a point, as UwSurfaceFiltered gives it for a round pixel at `range` from the eye

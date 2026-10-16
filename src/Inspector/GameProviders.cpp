@@ -200,6 +200,7 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
+#include "ECS/Systems/WaterWakeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "EditProviders.h"
 #include "Editor/EditorSelection.h"
@@ -291,6 +292,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"snowfallSystem", "land.precipitation"},
     LocatorCoverage {"waterRingSystem", "particles.splash"},
     LocatorCoverage {"underwaterSystem", "land.underwater"},
+    LocatorCoverage {"waterWakeSystem", "land.wake"},
     LocatorCoverage {"creatureAnimationSystem", "creatures.status"},
     LocatorCoverage {"creatureMindSystem", "creature.desires"},
     LocatorCoverage {"creatureLocomotionSystem", "creatures.status"},
@@ -759,6 +761,45 @@ std::unique_ptr<ProviderInterface> LandProvider()
 			                  return feet;
 		                  }()}};
 	    }));
+	provider->Add(
+	    Query("wake", "EXPERIMENT (not for merge): the water's field of small waves: whether it is flat, its steps this frame, "
+	                  "where it is, and the movers, rings, hulls and splashes in it"),
+	    Serve<Locator::waterWakeSystem>(
+	        "the water's wakes", [](const ecs::systems::WaterWakeSystemInterface& wakes, const QueryContext& /*c*/) {
+		        const auto frame = wakes.GetFrame();
+		        Json movers = Json::array();
+		        for (const auto& mover : frame.movers)
+		        {
+			        movers.push_back({{"at", {mover.position.x, mover.position.y}},
+			                          {"velocity", {mover.velocity.x, mover.velocity.y}},
+			                          {"radius", mover.radius},
+			                          {"depth", mover.depth},
+			                          {"foam", mover.foam}});
+		        }
+		        Json hulls = Json::array();
+		        for (const auto& hull : frame.hulls)
+		        {
+			        hulls.push_back({{"at", {hull.centre.x, hull.centre.y}},
+			                         {"forward", {hull.forward.x, hull.forward.y}},
+			                         {"half", {hull.half.x, hull.half.y}},
+			                         {"draft", hull.draft},
+			                         {"speed", hull.speed},
+			                         {"boat", hull.boat}});
+		        }
+		        Json splashes = Json::array();
+		        for (const auto& active : frame.splashes)
+		        {
+			        splashes.push_back({{"at", Point(active.position)},
+			                            {"start", active.start},
+			                            {"crown_height", active.splash.crownHeight},
+			                            {"crown_radius", active.splash.crownRadius},
+			                            {"drops", active.splash.drops}});
+		        }
+		        return Json {{"flat", frame.flat},          {"steps", frame.plan.steps},
+		                     {"reset", frame.plan.reset},   {"origin", {frame.origin.x, frame.origin.y}},
+		                     {"movers", std::move(movers)}, {"rings", frame.rings.size()},
+		                     {"hulls", std::move(hulls)},   {"splashes", std::move(splashes)}};
+	        }));
 	provider->Add(
 	    Query("underwater_at",
 	          "EXPERIMENT (not for merge): the sea bed under a point: the depth of the sea bed under the usual sea level, the "

@@ -43,6 +43,7 @@
 #include "Graphics/RendererInterface.h"
 #include "Graphics/SeaRows.h"
 #include "Graphics/UnderwaterView.h"
+#include "Graphics/UnderwaterWakeField.h"
 #include "Graphics/VolumeGlowShell.h"
 #include "Particles/ParticleDrawFrame.h"
 
@@ -409,6 +410,12 @@ private:
 	void DrawFarSeabed(RenderPass landViewId) const;
 	/// EXPERIMENT (not for merge): the reef's coral and plants, in the land's pass of the main view
 	void DrawReef(RenderPass landViewId) const;
+	/// EXPERIMENT (not for merge): the steps of the water's field of small waves this frame, before the water reads it
+	void StepWakeField() const;
+	/// EXPERIMENT (not for merge): the field of small waves and the hulls, for the water's pass
+	void BindWakeField(const ShaderProgram& program) const;
+	/// EXPERIMENT (not for merge): the splashes where things fall into the water, over the water
+	void DrawSplashes(const FrameBuffer& target) const;
 	/// The beams of the temple's spot lights and the light its windows shed, which the game draws in its
 	/// rooms but not in the reflection of the main room
 	void DrawLightBeams(const DrawSceneDesc& desc) const;
@@ -587,6 +594,8 @@ private:
 	mutable std::array<glm::vec4, 2> _haze {};
 	/// EXPERIMENT (not for merge): the view under the sea, its target, sea bed and motes, made when it first shows
 	mutable std::unique_ptr<UnderwaterView> _underwater;
+	/// EXPERIMENT (not for merge): the water's field of small waves and the splashes' mesh, made when they first show
+	mutable std::unique_ptr<UnderwaterWakeField> _wakeField;
 	/// EXPERIMENT (not for merge): the underwater uniforms of this frame, while the view is under the sea
 	mutable std::optional<UnderwaterUniforms> _underwaterFrame;
 	/// EXPERIMENT (not for merge): whether the scene's views are bound to the underwater target

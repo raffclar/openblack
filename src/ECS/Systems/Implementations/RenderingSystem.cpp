@@ -76,12 +76,14 @@
 #include "ECS/ObjectDetail.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowLevels.h"
+#include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/TreeRoots.h"
 #include "ECS/VillagerHeldObject.h"
@@ -556,6 +558,16 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (const auto* exact = registry.TryGet<const DrawnMatrix>(entity); exact != nullptr)
 		    {
 			    modelMatrix = exact->model;
+			    // EXPERIMENT (not for merge): the explorers' boat and all on it ride the experiment's waves and tide
+			    if (registry.AllOf<BoatFilmPart>(entity) && Locator::underwaterSystem::has_value() &&
+			        Locator::boatLaunchSystem::has_value())
+			    {
+				    if (const auto boat = Locator::boatLaunchSystem::value().GetState().boat; boat.has_value())
+				    {
+					    modelMatrix =
+					        Locator::underwaterSystem::value().FloatOnWaves(*boat) * glm::inverse(*boat) * modelMatrix;
+				    }
+			    }
 		    }
 		    // A body moving in the physics is drawn between its last two turns, and not at all once sunk under the sea
 		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
