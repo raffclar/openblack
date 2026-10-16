@@ -29,6 +29,7 @@
 #include "Creature/CreatureSacrifice.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureTempleDance.h"
+#include "Creature/CreatureSteal.h"
 #include "Creature/CreatureTownHelp.h"
 #include "Enums.h"
 
@@ -444,6 +445,8 @@ constexpr std::array k_Executors {
     // any thing
     Executor {.action = "DanceOutsideWorshipSite", .target = Target::WorshipSite, .build = Build::DanceOutsideTemple},
     Executor {.action = "DanceAroundArtefact", .target = Target::Anything, .build = Build::DanceAroundThing},
+    // The desire to steal: the creature takes a thing that it can steal to its temple
+    Executor {.action = "StealObjectAndTakeToCitadel", .target = Target::Stealable, .build = Build::StealAndPutByTemple},
 };
 
 /// The actions of the game's table that need a thing to use, by their names there
@@ -744,6 +747,7 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	switch (executor.build)
 	{
 	case Build::Sacrifice:
+	case Build::StealAndPutByTemple:
 		// Only a creature whose player has a temple
 		return situation.hasTemple;
 	case Build::Drink:
@@ -1396,6 +1400,14 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		                                                 situation.turnsPerSecond);
 	case Build::DanceAroundThing:
 		return creature_temple_dance::DanceAroundThing(*object, situation.height, situation.turnsPerSecond);
+	case Build::StealAndPutByTemple:
+		if (!situation.home.has_value())
+		{
+			return std::nullopt;
+		}
+		// It picks up the thing only when its hand is empty
+		return creature_steal::StealAndPutByTemple(situation.handFull ? std::nullopt : object, *situation.home,
+		                                           situation.height);
 	case Build::Never:
 	case Build::MimicPlayer:
 		return std::nullopt;

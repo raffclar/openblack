@@ -684,6 +684,17 @@ void ReactionSystem::SetInitiator(uint32_t id, entt::entity initiator)
 	}
 }
 
+void ReactionSystem::SetPlayerOfNewest(entt::entity initiator, PlayerNames player)
+{
+	// The reactions are in the order that they started, so the newest is the last
+	const auto newest = std::find_if(_reactions.rbegin(), _reactions.rend(),
+	                                 [initiator](const Active& reaction) { return reaction.source.initiator == initiator; });
+	if (newest != _reactions.rend())
+	{
+		newest->source.player = player;
+	}
+}
+
 void ReactionSystem::SetDance(uint32_t id, entt::entity dance)
 {
 	const auto found = std::ranges::find(_reactions, id, &Active::id);

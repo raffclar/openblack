@@ -106,6 +106,8 @@ public:
 	virtual void Remove(uint32_t id) = 0;
 	/// A reaction now comes from another object, as a fire's alarm follows the fire to what its object became
 	virtual void SetInitiator(uint32_t id, entt::entity initiator) = 0;
+	/// The newest reaction that an initiator made now belongs to another player, as when a creature becomes a player's
+	virtual void SetPlayerOfNewest(entt::entity /*initiator*/, PlayerNames /*player*/) {}
 	/// The dance villagers taking a reaction up dance in, which goes when the reaction goes
 	virtual void SetDance(uint32_t /*id*/, entt::entity /*dance*/) {}
 	/// Whether a reaction is still going

@@ -38,6 +38,7 @@ public:
 	void StopReacting(entt::entity living) override;
 	void TakeUp(uint32_t id, entt::entity living) override;
 	void SetInitiator(uint32_t id, entt::entity initiator) override;
+	void SetPlayerOfNewest(entt::entity initiator, PlayerNames player) override;
 	void SetDance(uint32_t id, entt::entity dance) override;
 	[[nodiscard]] bool IsActive(uint32_t id) const override;
 	[[nodiscard]] bool HasReaction(entt::entity initiator) const override;
