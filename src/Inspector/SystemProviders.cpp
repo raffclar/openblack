@@ -36,6 +36,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureReactionNotice.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 
@@ -459,6 +460,56 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		              return QueryResult::Value(
 		                  {{"id", ToId(entity)}, {"sum", mind.desires->sum}, {"desires", DesireItems(*mind.desires, top)}});
 	              });
+	provider->Add(Query("reactions",
+	                    "Whether a creature takes notice of reactions. A creature that a script makes takes no notice until a "
+	                    "script or a swap of minds tells it to: it reacts to nothing near it and catches nothing",
+	                    {id}),
+	              [sources](const QueryContext& context) {
+		              const auto* registry = Registry(sources.world);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              const auto creature = CreatureParam(*registry, context.params);
+		              if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		              {
+			              return QueryResult::Error(*problem);
+		              }
+		              const auto entity = std::get<entt::entity>(creature);
+		              return QueryResult::Value(
+		                  {{"id", ToId(entity)}, {"notice", ecs::creature_reaction_notice::TakesNotice(*registry, entity)}});
+	              });
+	auto setReactions =
+	    Query("set_reactions",
+	          "A debug tool, not a rule of the game: the creature starts (notice true) or stops (notice false) to take "
+	          "notice of reactions; answers what it now does",
+	          {id, Parameter("notice", "boolean", "Whether it takes notice of reactions", true)});
+	setReactions.writes = true;
+	provider->Add(std::move(setReactions), [sources](const QueryContext& context) {
+		const auto* registry = Registry(sources.world);
+		if (registry == nullptr)
+		{
+			return QueryResult::Error(std::string(k_NoRegistry));
+		}
+		if (!sources.setReactionNotice)
+		{
+			return QueryResult::Error("this game cannot set it");
+		}
+		const auto notice = context.params.find("notice");
+		if (notice == context.params.end() || !notice->is_boolean())
+		{
+			return QueryResult::Error("give notice as true or false");
+		}
+		const auto creature = CreatureParam(*registry, context.params);
+		if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		{
+			return QueryResult::Error(*problem);
+		}
+		const auto entity = std::get<entt::entity>(creature);
+		sources.setReactionNotice(entity, notice->get<bool>());
+		return QueryResult::Value(
+		    {{"id", ToId(entity)}, {"notice", ecs::creature_reaction_notice::TakesNotice(*registry, entity)}});
+	});
 	provider->Add(
 	    Query("known", "The ordinary skills and miracles a creature knows, and how often it has seen each miracle", {id}),
 	    [sources](const QueryContext& context) {

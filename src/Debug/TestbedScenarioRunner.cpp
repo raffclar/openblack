@@ -99,7 +99,6 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
-#include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/Mesh.h"
@@ -122,6 +121,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureReactionNotice.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -2379,20 +2379,9 @@ void Runner::Give(const Command& command)
 		}
 		break;
 	case Kind::ScriptReaction:
-	{
-		auto& registry = Locator::entitiesRegistry::value();
-		if (command.value != 0)
-		{
-			registry.Remove<ecs::components::CreatureReactionsOff>(*entity);
-			result = "takes notice";
-		}
-		else
-		{
-			registry.AssignOrReplace<ecs::components::CreatureReactionsOff>(*entity);
-			result = "takes no notice";
-		}
+		ecs::creature_reaction_notice::SetTakesNotice(Locator::entitiesRegistry::value(), *entity, command.value != 0);
+		result = command.value != 0 ? "takes notice" : "takes no notice";
 		break;
-	}
 	case Kind::SwapMinds:
 		if (const auto other = CreatureAt(command.value))
 		{

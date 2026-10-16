@@ -132,6 +132,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/CreatureNaming.h"
+#include "ECS/CreatureReactionNotice.h"
 #include "ECS/CreatureRemoval.h"
 #include "ECS/CreatureScars.h"
 #include "ECS/DanceRules.h"
@@ -637,7 +638,7 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		// on the first land.
 		if (script::create_rules::IgnoresReactions(type))
 		{
-			Locator::entitiesRegistry::value().AssignOrReplace<ecs::components::CreatureReactionsOff>(created);
+			ecs::creature_reaction_notice::SetTakesNotice(Locator::entitiesRegistry::value(), created, false);
 		}
 		return created;
 	}
@@ -7262,15 +7263,7 @@ void CreatureReaction() // 281 CREATURE_REACTION
 	{
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
-	if (enable)
-	{
-		registry.Remove<ecs::components::CreatureReactionsOff>(*creature);
-	}
-	else if (!registry.AllOf<ecs::components::CreatureReactionsOff>(*creature))
-	{
-		registry.Assign<ecs::components::CreatureReactionsOff>(*creature);
-	}
+	ecs::creature_reaction_notice::SetTakesNotice(Locator::entitiesRegistry::value(), *creature, enable);
 }
 
 void CreatureInDevScript() // 282 CREATURE_IN_DEV_SCRIPT
