@@ -155,8 +155,11 @@ public:
 	{
 		return false;
 	}
-	/// An animal's reaction ends: it forgets what it fled and decides what to do again
-	virtual void StopReaction([[maybe_unused]] entt::entity animal) {}
+	/// An animal that does not react now remembers its state before it takes up a reaction
+	virtual void RememberStateBeforeReaction([[maybe_unused]] entt::entity animal) {}
+	/// An animal's reaction ends, and the animal forgets what it fled. When `resetState` is true, the animal goes into
+	/// the state after the reaction. When it is false, the reaction is gone and the animal stays in its state.
+	virtual void StopReaction([[maybe_unused]] entt::entity animal, [[maybe_unused]] bool resetState) {}
 
 	/// Whether a creature is frightened of an animal: bats frighten creatures, doves don't
 	[[nodiscard]] virtual bool IsFrighteningToCreature(entt::entity animal) const = 0;

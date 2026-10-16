@@ -1218,6 +1218,12 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	// thing is near enough to flee
 	if (registry.AllOf<Animal>(living))
 	{
+		// An animal that does not react now remembers its state. An animal that changes to the new reaction keeps the
+		// state that it remembered before.
+		if (!takingOver && state.reaction == 0 && Locator::animalSystem::has_value())
+		{
+			Locator::animalSystem::value().RememberStateBeforeReaction(living);
+		}
 		const auto* entry =
 		    Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().Find(source.initiator) : nullptr;
 		const bool flees =
@@ -1355,7 +1361,7 @@ void ReactionSystem::Stop(entt::entity living, LivingReaction& state, bool reset
 	}
 	else if (registry.AllOf<Animal>(living) && Locator::animalSystem::has_value())
 	{
-		Locator::animalSystem::value().StopReaction(living);
+		Locator::animalSystem::value().StopReaction(living, resetState);
 	}
 	// A villager or an animal remembers the kind as now. Thus it waits its full time from the end of the reaction before
 	// it takes up that kind again. This also occurs when the reaction is gone.

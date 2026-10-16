@@ -25,6 +25,11 @@
 // How the animals are turned to face their way, and the places of a flock's birds about their leader. Pure functions,
 // tested on their own.
 
+namespace openblack
+{
+struct GAnimalStateTableInfo;
+} // namespace openblack
+
 namespace openblack::animals
 {
 
@@ -82,6 +87,11 @@ struct ReactionFacts
 {
 	return !facts.scriptControlled && !facts.outOfTheWorld && !facts.busyState;
 }
+
+/// The state that an animal goes into when its reaction ends, by its number in the game's animal state table. This is
+/// the resume state of the table row of the state that the animal was in when it took up the reaction. A number that
+/// is not in the table gives the empty state (0).
+[[nodiscard]] uint8_t StateAfterReacting(uint8_t stateBefore, std::span<const GAnimalStateTableInfo> table);
 
 /// A killed animal lies dead this many turns, and one more, before it goes
 inline constexpr int16_t k_TurnsToDieOver = 600;

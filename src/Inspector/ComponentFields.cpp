@@ -428,6 +428,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::state>("state")
 	    .Field<&components::Animal::finalState>("finalState")
 	    .Field<&components::Animal::afterClip>("afterClip")
+	    .Field<&components::Animal::stateBeforeReaction>("stateBeforeReaction")
 	    .Field<&components::Animal::turnsInState>("turnsInState")
 	    .Field<&components::Animal::move>("move")
 	    .Field<&components::Animal::goalHeight>("goalHeight")

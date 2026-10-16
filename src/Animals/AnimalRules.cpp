@@ -19,6 +19,7 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "InfoConstants.h"
 
 using namespace openblack;
 
@@ -179,4 +180,13 @@ glm::vec3 animals::DeadBodySmokePlace(const glm::vec3& position, float heading, 
 {
 	const float out = height * 0.5f;
 	return position + glm::vec3(std::cos(heading) * out, 0.0f, std::sin(heading) * out);
+}
+
+uint8_t animals::StateAfterReacting(uint8_t stateBefore, std::span<const GAnimalStateTableInfo> table)
+{
+	if (stateBefore >= table.size())
+	{
+		return 0;
+	}
+	return static_cast<uint8_t>(table[stateBefore].resumeState);
 }

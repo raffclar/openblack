@@ -1798,9 +1798,6 @@ bool AnimalSystem::SetupFleeFromPredator(entt::entity entity, entt::entity preda
 	{
 		return false;
 	}
-	// TODO(animals): the game remembers what it was doing when it takes up a reaction not already reacting, and once
-	// over goes back to that state's resume state; every state an animal of openblack's can be in resumes deciding
-	// again except one a script holds, which the game leaves in the empty state. openblack decides again.
 	animal->fleeing = predator;
 	animal->fleeReaction = Reaction::FleeFromPredator;
 	SetTopState(*animal, AnimalState::FleeingFromPredator);
@@ -1835,7 +1832,7 @@ void AnimalSystem::GiveUpReaction(entt::entity entity)
 	{
 		Locator::reactionSystem::value().StopReacting(entity);
 	}
-	StopReaction(entity);
+	StopReaction(entity, true);
 }
 
 void AnimalSystem::FleeFromPredator(entt::entity entity, Animal& animal)
@@ -1910,7 +1907,16 @@ bool AnimalSystem::SetupReactToFlyingObject(entt::entity entity, entt::entity ob
 	return true;
 }
 
-void AnimalSystem::StopReaction(entt::entity entity)
+void AnimalSystem::RememberStateBeforeReaction(entt::entity entity)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (const auto state = FinalGameStateOf(entity); animal != nullptr && state.has_value())
+	{
+		animal->stateBeforeReaction = *state;
+	}
+}
+
+void AnimalSystem::StopReaction(entt::entity entity, bool resetState)
 {
 	auto* animal = EntityRegistry().TryGet<Animal>(entity);
 	if (animal == nullptr)
@@ -1918,12 +1924,23 @@ void AnimalSystem::StopReaction(entt::entity entity)
 		return;
 	}
 	animal->fleeing = entt::null;
-	if (animal->state == AnimalState::FleeingFromObject || animal->state == AnimalState::FleeingAndLookingAtObject ||
-	    animal->state == AnimalState::FleeingFromPredator ||
-	    (animal->state == AnimalState::MoveToPos && (animal->finalState == AnimalState::FleeingAndLookingAtObject ||
-	                                                 animal->finalState == AnimalState::FleeingFromObject)))
+	if (!resetState)
 	{
-		SetState(*animal, AnimalState::DecideWhatToDo);
+		return;
+	}
+	// Every animal goes into the resume state of the state that it was in before the reaction, whatever it does now. The
+	// table gives deciding again for most states. It gives the empty state for a state that a script holds, and for the
+	// states of a reaction.
+	const auto next =
+	    animals::StateAfterReacting(animal->stateBeforeReaction, Locator::infoConstants::value().animalStateTable);
+	if (const auto state = AnimalStateOfGame(next))
+	{
+		SetTopState(*animal, *state);
+	}
+	else if (const auto logger = spdlog::get("game"); logger != nullptr)
+	{
+		SPDLOG_LOGGER_WARN(logger, "Reaction: animal {} has no state for the game's state {}", static_cast<uint32_t>(entity),
+		                   next);
 	}
 }
 
@@ -1940,14 +1957,6 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 		return false;
 	}
 	auto& registry = EntityRegistry();
-	const auto* at = registry.Valid(animal.fleeing) ? registry.TryGet<const Transform>(animal.fleeing) : nullptr;
-	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(animal.fleeReaction));
-	// With nothing left to flee it decides again
-	if (at == nullptr)
-	{
-		GiveUpReaction(entity);
-		return true;
-	}
 	// Running to where it flees, it gets there first
 	if (running)
 	{
@@ -1955,6 +1964,19 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 		{
 			SetState(animal, animal.finalState);
 		}
+		return true;
+	}
+	// With no thing to flee, because its reaction is gone, it stays in its state and does nothing
+	if (animal.fleeing == entt::null)
+	{
+		return true;
+	}
+	const auto* at = registry.Valid(animal.fleeing) ? registry.TryGet<const Transform>(animal.fleeing) : nullptr;
+	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(animal.fleeReaction));
+	// When the thing that it flees is gone, it gives up the reaction
+	if (at == nullptr)
+	{
+		GiveUpReaction(entity);
 		return true;
 	}
 	auto& transform = registry.Get<Transform>(entity);
