@@ -774,6 +774,9 @@ struct Command
 		/// makes the folder if it is missing. Then the game reads the file again, and the log tells if the record is the
 		/// same. Needs no creature
 		ProfileFolderCheck,
+		/// A script puts the creature at the point at once (from the middle of the map), as SET_POSITION does. Its walk,
+		/// body action, face and head look stop there.
+		ScriptPlace,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

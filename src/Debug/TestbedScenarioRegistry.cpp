@@ -237,6 +237,27 @@ void AddIdle(std::vector<Scenario>& all)
 	    .commands = hangAround,
 	    .repeatFrom = 0,
 	});
+
+	// A script puts the tiger somewhere else while it walks
+	const std::vector<Command> placed {
+	    Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 1.0f, false),
+	    Go(Kind::ScriptPlace, 0, {-40.0f, 0.0f}, 3.0f, false),
+	    Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 4.0f, false),
+	    Go(Kind::ScriptPlace, 0, {40.0f, 0.0f}, 3.0f, false),
+	};
+	all.push_back({
+	    .id = "movement.script_place_stops_walk",
+	    .name = "Script place stops the walk",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks north. After three seconds, a script puts it to one side at once, as SET_POSITION "
+	                   "does.",
+	    .expected = "It shows at the new place at once and stands there. It does not continue its walk, and its head "
+	                "looks straight ahead. Then it walks north again, and the script puts it on the other side.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -10.0f}, 0.0f)},
+	    .commands = placed,
+	    .repeatFrom = 0,
+	});
 }
 
 void AddExpressions(std::vector<Scenario>& all)
@@ -6737,7 +6758,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 128> k_Names {
+	constexpr std::array<std::string_view, 129> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -6866,6 +6887,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "pointer on altar",
 	    "set fizz",
 	    "check the profile folder",
+	    "script place",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

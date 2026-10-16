@@ -2418,6 +2418,9 @@ void Runner::Give(const Command& command)
 	case Kind::Stop:
 		locomotion.Stop(*entity);
 		break;
+	case Kind::ScriptPlace:
+		locomotion.PlaceWithoutWalking(*entity, {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y});
+		break;
 	case Kind::PlayAction:
 		result = minds.PlayAction(*entity, command.value) ? "playing" : "busy";
 		break;
