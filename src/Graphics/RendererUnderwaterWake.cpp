@@ -130,7 +130,7 @@ void Renderer::BindWakeField(const ShaderProgram& program) const
 		{
 			constexpr float k_Width = wake::k_FieldSide * wake::k_FieldSpacing;
 			wakeUniform = {frame.origin, 1.0f / k_Width, 1.0f};
-			program.SetTextureSampler("s_wake", 5, _wakeField->Latest().GetColorAttachment());
+			program.SetTextureSampler("s_wake", 8, _wakeField->Latest().GetColorAttachment());
 		}
 		const auto count = std::min(frame.hulls.size(), wake::k_MostHulls);
 		for (size_t i = 0; i < count; ++i)

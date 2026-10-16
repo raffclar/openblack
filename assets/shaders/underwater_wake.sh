@@ -7,7 +7,7 @@
 
 #ifdef UW_WAKE
 // The field (see underwater::wake): x the height of the water over the sea, y the height a step before, z the foam
-SAMPLER2D(s_wake, 5);
+SAMPLER2D(s_wake, 8);
 // xy: the low corner of the field across the ground; z: 1 over the field's width in units; w: 1 while the field shows
 uniform vec4 u_uwWake;
 // x: the space between two texels of the field in units; y: 1 over the field's side in texels; z: how many hulls

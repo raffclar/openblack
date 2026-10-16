@@ -304,6 +304,8 @@ TEST(Seabed, TheReefStaysUnderTheLowestTide)
 		const bool coral = plant.kind == seabed::ReefPlant::Kind::Coral;
 		EXPECT_GE(under, coral ? seabed::k_CoralTopUnderTide : seabed::k_PlantTopUnderTide);
 		EXPECT_LE(under, coral ? seabed::k_CoralBottomUnderTide : seabed::k_PlantBottomUnderTide);
+		// The top of each coral and plant stays under the water at the lowest tide
+		EXPECT_LE(plant.scale, under - seabed::k_ReefClearance + 1e-4f);
 	}
 	EXPECT_LE(seabed::PlaceReef(bed, underwater::k_LowestTide, 3, 4).size(), 7u);
 }
@@ -385,6 +387,36 @@ TEST(Seabed, OnlyWalkableCellsAreShallow)
 	// Too steep for a creature: more than ten units of rise across the cell
 	EXPECT_FALSE(seabed::Walkable(0, 0, 0, 30));
 	EXPECT_TRUE(seabed::Walkable(0, 0, 0, 14));
+}
+
+TEST(Seabed, ShallowSeaApartFromTheLandIsNotWalkable)
+{
+	// A land of altitude 6 and, apart from it across deep sea, a shallow patch of altitude 1
+	constexpr glm::ivec2 k_Size {40, 20};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Size.x * k_Size.y), 0);
+	const auto paint = [&](int x0, int x1, uint8_t altitude) {
+		for (int z = 5; z <= 14; ++z)
+		{
+			for (int x = x0; x <= x1; ++x)
+			{
+				altitudes[static_cast<size_t>(z * k_Size.x + x)] = altitude;
+			}
+		}
+	};
+	paint(2, 15, 6);
+	paint(25, 28, 1);
+	const auto walkable = seabed::WalkableCells(altitudes, k_Size);
+	ASSERT_EQ(walkable.size(), static_cast<size_t>((k_Size.x - 1) * (k_Size.y - 1)));
+	const auto at = [&](int x, int z) { return walkable[static_cast<size_t>(z * (k_Size.x - 1) + x)]; };
+	EXPECT_TRUE(at(8, 9));
+	// The cells round the edge of the land, with one corner on it, are walkable too
+	EXPECT_TRUE(at(1, 9));
+	EXPECT_FALSE(at(26, 9));
+	EXPECT_FALSE(at(20, 9));
+	// The patch's sea bed is not kept as shallow as the water a creature walks in
+	const auto bed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
+	EXPECT_LE(bed.DepthAt({85.0f, 95.0f}), 0.0f + 1e-4f);
+	EXPECT_GT(bed.DepthAt({235.0f, 95.0f}), seabed::k_WadeDepth);
 }
 
 TEST(Seabed, ABeachGoesOnDownGentlyUnderTheWater)
@@ -572,4 +604,139 @@ TEST(Seabed, TheShelfFromTheCoastHasNoSteps)
 	EXPECT_NEAR(seabed::ShelfFromCoastLine(seabed::k_ShallowsWidth, 0.1f), seabed::k_WadeDepth, 1e-4f);
 	// A cliff is deep at once
 	EXPECT_GT(seabed::ShelfFromCoastLine(5.0f, 6.0f), 20.0f);
+}
+
+TEST(Underwater, WaterspoutsComeOnlyInAStormAndStayAtSea)
+{
+	// The sea is everything past x = 0, the land the rest
+	const auto seaDistance = [](glm::vec2 point) { return point.x; };
+	EXPECT_TRUE(underwater::WaterspoutsAt(30.0f, 0.2f, {0.0f, 0.0f}, seaDistance).empty());
+	size_t seen = 0;
+	for (float seconds = 0.0f; seconds < 600.0f; seconds += 5.0f)
+	{
+		const auto spouts = underwater::WaterspoutsAt(seconds, 1.0f, {0.0f, 0.0f}, seaDistance);
+		EXPECT_LE(spouts.size(), underwater::k_MostWaterspouts);
+		for (const auto& spout : spouts)
+		{
+			EXPECT_GE(spout.position.x, underwater::k_WaterspoutSeaRoom);
+			EXPECT_GE(spout.strength, 0.0f);
+			EXPECT_LE(spout.strength, 1.0f);
+		}
+		seen += spouts.size();
+	}
+	EXPECT_GT(seen, 0u);
+}
+
+TEST(Underwater, AWaterspoutDriftsSlowly)
+{
+	const auto seaDistance = [](glm::vec2) { return 1000.0f; };
+	const auto before = underwater::WaterspoutsAt(20.0f, 1.0f, {0.0f, 0.0f}, seaDistance);
+	const auto after = underwater::WaterspoutsAt(20.5f, 1.0f, {0.0f, 0.0f}, seaDistance);
+	ASSERT_EQ(before.size(), after.size());
+	for (size_t i = 0; i < before.size(); ++i)
+	{
+		EXPECT_LT(glm::length(after[i].position - before[i].position), 2.0f);
+	}
+}
+
+// The far sea: the cube of the far scene, the long waves and the waves that each pixel shows
+
+TEST(UnderwaterFarSea, EnvironmentFacesSkipTheFaceThatLooksDown)
+{
+	std::array<int, underwater::k_EnvironmentFaces> drawn {};
+	uint8_t face = 0;
+	for (int i = 0; i < 50; ++i)
+	{
+		++drawn.at(face);
+		face = underwater::NextEnvironmentFace(face);
+	}
+	EXPECT_EQ(drawn.at(underwater::k_EnvironmentFaceDown), 0);
+	for (uint8_t i = 0; i < underwater::k_EnvironmentFaces; ++i)
+	{
+		if (i != underwater::k_EnvironmentFaceDown)
+		{
+			EXPECT_EQ(drawn.at(i), 10);
+		}
+	}
+}
+
+TEST(UnderwaterFarSea, EnvironmentFacesAreSquareToEachOther)
+{
+	for (uint8_t i = 0; i < underwater::k_EnvironmentFaces; ++i)
+	{
+		const auto axes = underwater::EnvironmentFaceAxesOf(i);
+		EXPECT_NEAR(glm::dot(axes.forward, axes.up), 0.0f, 1e-6f);
+		// Each face looks along its own axis, the positive one first
+		const int axis = i / 2;
+		EXPECT_NEAR(axes.forward[axis], i % 2 == 0 ? 1.0f : -1.0f, 1e-6f);
+	}
+	const auto centre = underwater::EnvironmentCentre({100.0f, 300.0f, 200.0f}, -1.8f);
+	EXPECT_FLOAT_EQ(centre.x, 100.0f);
+	EXPECT_FLOAT_EQ(centre.z, 200.0f);
+	EXPECT_GT(centre.y, -1.8f);
+	EXPECT_LT(centre.y, 2.0f);
+}
+
+TEST(UnderwaterFarSea, LongWavesAreGentleAndGrowInAStorm)
+{
+	const auto calm = underwater::FarWaveTable(underwater::WavesFor(0.0f, 0.5f));
+	const auto storm = underwater::FarWaveTable(underwater::WavesFor(1.0f, 0.5f));
+	const auto longestWind = underwater::WaveTable(underwater::WavesFor(0.0f, 0.5f)).at(2).y;
+	for (size_t i = 0; i < calm.size(); ++i)
+	{
+		EXPECT_GT(calm.at(i).y, longestWind);
+		// Gentle: the steepness of a calm long wave is under 0.02
+		EXPECT_LT(calm.at(i).z * 2.0f * std::numbers::pi_v<float> / calm.at(i).y, 0.02f);
+		EXPECT_GT(storm.at(i).z, calm.at(i).z * 3.0f);
+		EXPECT_GE(storm.at(i).y, calm.at(i).y);
+	}
+}
+
+TEST(UnderwaterFarSea, TheLongWavesAreInTheHeightOfTheSea)
+{
+	// The things that float ride the same surface as the shaders draw: the long waves add to the height
+	const auto waves = underwater::WavesFor(0.5f, 0.3f);
+	float lowest = 1e9f;
+	float highest = -1e9f;
+	for (int x = 0; x < 200; ++x)
+	{
+		const float height = underwater::WavesAt({static_cast<float>(x) * 7.0f, 40.0f}, 0.0f, waves).height;
+		lowest = std::min(lowest, height);
+		highest = std::max(highest, height);
+	}
+	float farOnly = 0.0f;
+	for (const auto& wave : underwater::FarWaveTable(waves))
+	{
+		farOnly += wave.z;
+	}
+	EXPECT_GT(highest - lowest, farOnly * 0.5f);
+}
+
+TEST(UnderwaterFarSea, APixelKeepsTheWavesItCanShow)
+{
+	// A wave of many pixels keeps all of its height and slope, and adds no roughness
+	const auto big = underwater::FilterWave(100.0f, 0.3f, 1.0f);
+	EXPECT_FLOAT_EQ(big.height, 1.0f);
+	EXPECT_FLOAT_EQ(big.slope, 1.0f);
+	EXPECT_FLOAT_EQ(big.variance, 0.0f);
+	// A wave under a pixel shows nothing, and all of its slope goes into the roughness
+	const auto small = underwater::FilterWave(1.0f, 0.02f, 2.0f);
+	EXPECT_FLOAT_EQ(small.height, 0.0f);
+	EXPECT_FLOAT_EQ(small.slope, 0.0f);
+	const float steepness = 0.02f * 2.0f * std::numbers::pi_v<float>;
+	EXPECT_NEAR(small.variance, 0.5f * steepness * steepness, 1e-6f);
+	// Between the two, the normal keeps the slope longer than the surface keeps the height
+	const auto middle = underwater::FilterWave(5.0f, 0.1f, 2.0f);
+	EXPECT_LT(middle.height, middle.slope);
+	EXPECT_GT(middle.variance, 0.0f);
+}
+
+TEST(UnderwaterFarSea, TheRoughnessGrowsWithTheWavesAPixelCannotShow)
+{
+	const float calm = underwater::FilteredRoughness(0.0f);
+	EXPECT_GT(calm, 0.0f);
+	EXPECT_LT(calm, 0.1f);
+	EXPECT_GT(underwater::FilteredRoughness(0.01f), calm);
+	EXPECT_GT(underwater::FilteredRoughness(0.1f), underwater::FilteredRoughness(0.01f));
+	EXPECT_LE(underwater::FilteredRoughness(10.0f), 1.0f);
 }

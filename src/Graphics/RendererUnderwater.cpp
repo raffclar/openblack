@@ -11,10 +11,16 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cmath>
+#include <cstdint>
+
 #include <array>
 #include <optional>
+#include <vector>
 
 #include <bgfx/bgfx.h>
+#include <glm/common.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/geometric.hpp>
 #include <glm/mat4x4.hpp>
 
@@ -149,6 +155,17 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 			wave.z = 0.0f;
 		}
 	}
+	// The far sea: the waves filtered for each pixel, the long waves and the reflection of the far scene
+	const float pixelAngle = 2.0f * std::tan(desc.camera->GetVerticalFieldOfView() * 0.5f) / static_cast<float>(size.y);
+	frame.sea = {on(Effect::Filtering), on(Effect::FarWaves), pixelAngle, 0.0f};
+	frame.farWaves = underwater::FarWaveTable(tableWaves);
+	if (off == Effect::FarWaves || off == Effect::Waves)
+	{
+		for (auto& wave : frame.farWaves)
+		{
+			wave.z = 0.0f;
+		}
+	}
 	const auto& current = system.GetCurrent();
 	const bool still = off == Effect::Current;
 	frame.current = still ? glm::vec4(0.0f) : glm::vec4(current.flow, current.swirl, current.gust);
@@ -221,6 +238,15 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	post->SetUniformValue("u_uwSky", &frame.sky);
 	post->SetUniformArray("u_uwWaveTable", frame.waveTable.data(), static_cast<uint16_t>(frame.waveTable.size()));
 	post->SetUniformArray("u_uwFloaters", frame.floaters.data(), static_cast<uint16_t>(frame.floaters.size()));
+	post->SetUniformValue("u_uwSea", &frame.sea);
+	post->SetUniformValue("u_uwEnvironment", &frame.environment);
+	post->SetUniformArray("u_uwFarWaves", frame.farWaves.data(), static_cast<uint16_t>(frame.farWaves.size()));
+	if (frame.sea.w > 0.5f)
+	{
+		post->SetTextureSampler("s_environment", 5, _underwater->EnvironmentColour());
+		post->SetTextureSampler("s_environmentDepth", 6, _underwater->EnvironmentDepth());
+		post->SetTextureSampler("s_environmentSky", 7, _underwater->EnvironmentSky());
+	}
 	post->SetTextureSampler("s_sceneColour", 0, target.GetColorAttachment());
 	post->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
 	const auto& system = Locator::underwaterSystem::value();
@@ -280,9 +306,120 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		spray->Submit(postView);
 	}
+	// The waterspouts over the open sea in a strong storm
+	if (const auto* spout = _shaderManager->GetShader("UnderwaterSpout");
+	    spout != nullptr && system.GetEffectOff() != underwater::Effect::Waterspouts)
+	{
+		const auto spouts = system.GetWaterspouts();
+		std::vector<glm::vec4> instances;
+		instances.reserve(spouts.size());
+		for (size_t i = 0; i < spouts.size(); ++i)
+		{
+			instances.emplace_back(spouts[i].position, spouts[i].strength, static_cast<float>(i));
+		}
+		if (_underwater->BindWaterspouts(instances))
+		{
+			setUniforms(*spout);
+			spout->SetUniformValue("u_uwSky", &frame.sky);
+			spout->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
+			spout->SetTextureSampler("s_sprayNoise", 3, _underwater->SprayNoise());
+			bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+			spout->Submit(postView);
+		}
+	}
+	// The air under the water at the foot of the cliffs
+	if (const auto* bubbles = _shaderManager->GetShader("UnderwaterBubbles");
+	    bubbles != nullptr && system.GetEffectOff() != underwater::Effect::Bubbles &&
+	    _underwater->BindBubbles(system.GetSeabed().cliffFoot, system.GetSeabedRevision()))
+	{
+		setUniforms(*bubbles);
+		bubbles->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
+		bubbles->SetTextureSampler("s_shore", 2, shoreMap);
+		bubbles->SetTextureSampler("s_sprayNoise", 3, _underwater->SprayNoise());
+		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+		bubbles->Submit(postView);
+	}
 
 	// The splashes where things fall into the water
 	DrawSplashes(target);
+}
+
+namespace
+{
+/// A camera that looks along one face of the cube of the far scene, from the cube's middle
+class EnvironmentCamera final: public Camera
+{
+public:
+	EnvironmentCamera(glm::vec3 centre, uint8_t face)
+	    : Camera(centre + underwater::EnvironmentFaceAxesOf(face).forward * 10.0f)
+	{
+		const auto axes = underwater::EnvironmentFaceAxesOf(face);
+		_view = glm::lookAt(centre, centre + axes.forward, axes.up);
+		SetOrigin(centre);
+		SetFocus(centre + axes.forward * 10.0f);
+		// A quarter turn across each face, so that the six faces meet with no gap
+		constexpr float k_FaceDegrees = 90.0f;
+		constexpr float k_Near = 1.0f;
+		SetProjectionMatrixPerspective(k_FaceDegrees, 1.0f, k_Near);
+	}
+
+	[[nodiscard]] glm::mat4 GetViewMatrix(Interpolation /*interpolation*/) const override { return _view; }
+
+private:
+	glm::mat4 _view {1.0f};
+};
+} // namespace
+
+void Renderer::DrawUnderwaterEnvironment(const DrawSceneDesc& desc) const
+{
+	if (!_underwaterFrame.has_value() || _underwater == nullptr || !Locator::underwaterSystem::has_value() ||
+	    Locator::underwaterSystem::value().GetEffectOff() == underwater::Effect::Environment)
+	{
+		return;
+	}
+	auto& frame = *_underwaterFrame;
+	const auto centre = underwater::EnvironmentCentre(glm::vec3(frame.eye), frame.params.z);
+	const uint8_t face = _underwater->NextEnvironmentFace();
+	const auto target = _underwater->EnvironmentFace(face);
+	const EnvironmentCamera camera(centre, face);
+
+	// The views of the cube: its sky first, cleared to the colour of the haze, then the scene over a copy of the sky
+	constexpr auto k_Size = underwater::k_EnvironmentSize;
+	const auto skyView = static_cast<bgfx::ViewId>(RenderPass::UnderwaterEnvironmentSky);
+	const auto sceneView = static_cast<bgfx::ViewId>(RenderPass::UnderwaterEnvironment);
+	bgfx::setViewFrameBuffer(skyView, _underwater->EnvironmentSkyFace(face));
+	bgfx::setViewFrameBuffer(sceneView, target);
+	for (const auto id : {skyView, sceneView})
+	{
+		bgfx::setViewRect(id, 0, 0, k_Size, k_Size);
+	}
+	// The sky goes into a cube of its own. The view of the scene copies it as the background of the scene.
+	bgfx::blit(sceneView, _underwater->EnvironmentColourTexture(), 0, 0, 0, face, _underwater->EnvironmentSkyTexture(), 0, 0, 0,
+	           face, k_Size, k_Size, 1);
+	const auto channel = [&frame](int i) {
+		return static_cast<uint32_t>(glm::clamp(frame.sky[i], 0.0f, 1.0f) * 255.0f + 0.5f);
+	};
+	const uint32_t clear = (channel(0) << 24u) | (channel(1) << 16u) | (channel(2) << 8u) | 0xffu;
+	bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::UnderwaterEnvironmentSky), BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH,
+	                   clear, 0.0f, 0);
+	// The scene's view clears the depth that the sky's dome wrote: the cube's depth then gives how far away the scene is,
+	// and none where the cube shows the sky
+	bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::UnderwaterEnvironment), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
+
+	DrawSceneDesc faceDesc = desc;
+	faceDesc.viewId = RenderPass::UnderwaterEnvironment;
+	faceDesc.camera = &camera;
+	faceDesc.frameBuffer = nullptr;
+	faceDesc.drawWater = false;
+	faceDesc.drawSprites = false;
+	faceDesc.drawBoundingBoxes = false;
+	faceDesc.wireframe = false;
+	faceDesc.drawHand = false;
+	faceDesc.smallBumpMapStrength = 0.0f;
+	DrawPass(faceDesc);
+
+	frame.environment = {centre, 0.0f};
+	frame.sea.w = _underwater->EnvironmentReady() ? 1.0f : 0.0f;
 }
 
 void Renderer::SetTerrainUnderwater(const ShaderProgram& program, bool active) const

@@ -22,6 +22,7 @@
 
 #include "3D/Seabed.h"
 #include "FrameBuffer.h"
+#include "Graphics/Underwater.h"
 #include "GraphicsHandle.h"
 #include "Texture2D.h"
 
@@ -68,8 +69,32 @@ public:
 	/// The puffs of spray there are at once at most
 	[[nodiscard]] uint32_t SprayCount() const { return _sprayCount * k_SprayPuffs; }
 	static constexpr uint32_t k_SprayPuffs = 128;
+	/// The air that the waves drive under the water at the cliffs: k_Bubbles particles for each point along the foot
+	/// of a cliff, on the same instances as the spray. Binds them; false when there are no cliffs.
+	bool BindBubbles(std::span<const glm::vec4> cliffFoot, uint32_t revision);
+	static constexpr uint32_t k_Bubbles = 96;
+	/// The waterspouts this frame: xy the foot, z the strength, w the waterspout's own number. Binds them with
+	/// k_SpoutPuffs particles each; false when there are none.
+	bool BindWaterspouts(std::span<const glm::vec4> spouts);
+	static constexpr uint32_t k_SpoutPuffs = 900;
 	/// The spray's noise volume (see underwater::SprayNoiseVolume), made the first time it is asked for
 	[[nodiscard]] TextureHandle SprayNoise();
+
+	/// The cube of the far scene round the eye, which the water reflects (see underwater::k_EnvironmentSize): the
+	/// target that draws into one face of its colour and its depth. The cube is made the first time a face is asked for.
+	[[nodiscard]] bgfx::FrameBufferHandle EnvironmentFace(uint8_t face);
+	/// The target that draws the sky alone into one face of a second cube. A ray that meets no scene takes the sky from
+	/// it, because the scene near the middle of the first cube can hide the sky there.
+	[[nodiscard]] bgfx::FrameBufferHandle EnvironmentSkyFace(uint8_t face) const;
+	[[nodiscard]] TextureHandle EnvironmentColour() const;
+	[[nodiscard]] TextureHandle EnvironmentDepth() const;
+	[[nodiscard]] TextureHandle EnvironmentSky() const;
+	[[nodiscard]] bgfx::TextureHandle EnvironmentColourTexture() const { return _environmentColour; }
+	[[nodiscard]] bgfx::TextureHandle EnvironmentSkyTexture() const { return _environmentSky; }
+	/// The face of the cube to draw this frame. Each call moves on to the next face.
+	[[nodiscard]] uint8_t NextEnvironmentFace();
+	/// Whether every face that the water reflects has been drawn once
+	[[nodiscard]] bool EnvironmentReady() const { return _environmentDrawn >= underwater::k_EnvironmentFaces - 1; }
 
 private:
 	std::unique_ptr<FrameBuffer> _target;
@@ -99,7 +124,19 @@ private:
 	uint32_t _sprayCount {0};
 	std::optional<uint32_t> _sprayRevision;
 	bgfx::TextureHandle _sprayNoise = BGFX_INVALID_HANDLE;
+	bgfx::VertexBufferHandle _bubbleMesh = BGFX_INVALID_HANDLE;
+	bgfx::IndexBufferHandle _bubbleIndices = BGFX_INVALID_HANDLE;
+	bgfx::VertexBufferHandle _spoutMesh = BGFX_INVALID_HANDLE;
+	bgfx::IndexBufferHandle _spoutIndices = BGFX_INVALID_HANDLE;
 	bgfx::IndexBufferHandle _moteIndices = BGFX_INVALID_HANDLE;
+	bgfx::TextureHandle _environmentColour = BGFX_INVALID_HANDLE;
+	bgfx::TextureHandle _environmentDepth = BGFX_INVALID_HANDLE;
+	bgfx::TextureHandle _environmentSky = BGFX_INVALID_HANDLE;
+	bgfx::TextureHandle _environmentSkyDepth = BGFX_INVALID_HANDLE;
+	std::array<bgfx::FrameBufferHandle, underwater::k_EnvironmentFaces> _environmentFaces {};
+	std::array<bgfx::FrameBufferHandle, underwater::k_EnvironmentFaces> _environmentSkyFaces {};
+	uint8_t _environmentFace {0};
+	uint32_t _environmentDrawn {0};
 };
 
 /// EXPERIMENT (not for merge): the uniforms of the view under the sea for one frame (see underwater.sh)
@@ -127,6 +164,13 @@ struct UnderwaterUniforms
 	std::array<glm::vec4, 14> waveTable {};
 	/// Where the things that float are, w 1 for each
 	std::array<glm::vec4, 8> floaters {};
+	/// The far sea: x 1 while the waves are filtered for each pixel, y 1 while the long waves show, z the angle one
+	/// pixel takes up on the screen (radians), w 1 while the water reflects the cube of the far scene
+	glm::vec4 sea {0.0f};
+	/// xyz: where the middle of the cube of the far scene is
+	glm::vec4 environment {0.0f};
+	/// The long waves of the open sea (see underwater::FarWaveTable)
+	std::array<glm::vec4, underwater::k_FarWaveCount> farWaves {};
 	/// Whether the motes show
 	bool motes {true};
 	/// Whether the eye is under the surface, or near enough to it that the surface can cut the view

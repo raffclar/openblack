@@ -14,7 +14,8 @@ uniform vec4 u_seaParams;
 // The screen rows (see sea_rows::Rows): x the first row's screen y, y how many, z one over the first row's view depth,
 // w its step from row to row
 uniform vec4 u_seaRows;
-// x: 1 for the still sea of the lowest detail level, y: 1 when the first row is nearly clear
+// x: 1 for the still sea of the lowest detail level, y: 1 when the first row is nearly clear, z: 1 for a flat magenta
+// sea (EXPERIMENT, not for merge)
 uniform vec4 u_seaMode;
 // xyz: the camera's position
 uniform vec4 u_seaCamera;
@@ -78,6 +79,12 @@ void main()
 	if (under.w < 0.5f)
 	{
 		discard;
+	}
+	// EXPERIMENT (not for merge): the sea in flat magenta, to compare its mask with the experiment's water
+	if (u_seaMode.z > 0.5f)
+	{
+		gl_FragColor = vec4(1.0f, 0.0f, 1.0f, 1.0f);
+		return;
 	}
 
 	vec2 uv;

@@ -50,6 +50,11 @@ enum class RenderPass : uint8_t
 	Main,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
+	/// EXPERIMENT (not for merge): the sky of one face of the cube of the far scene round the eye, which the water
+	/// reflects where the screen does not show the reflection
+	UnderwaterEnvironmentSky,
+	/// EXPERIMENT (not for merge): the land and what stands on it, in the same face of the cube
+	UnderwaterEnvironment,
 	/// EXPERIMENT (not for merge): the steps of the field of small waves on the water, at most two in a frame
 	UnderwaterWake0,
 	UnderwaterWake1,
@@ -95,6 +100,8 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Land Pass",                   //
     "Main Pass",                   //
     "Translucent Pass",            //
+    "Underwater Cube Sky Pass",    //
+    "Underwater Cube Pass",        //
     "Underwater Wake Pass 0",      //
     "Underwater Wake Pass 1",      //
     "Underwater Post Pass",        //
@@ -116,7 +123,7 @@ static_assert(std::ranges::none_of(k_RenderPassNames, &std::string_view::empty))
 /// Whether a pass draws a scene with its sky in a pass of its own before it
 [[nodiscard]] constexpr bool HasSkyPass(RenderPass pass)
 {
-	return pass == RenderPass::Main || pass == RenderPass::Reflection;
+	return pass == RenderPass::Main || pass == RenderPass::Reflection || pass == RenderPass::UnderwaterEnvironment;
 }
 
 /// The pass what blends in a scene is drawn in: the one after it, into the same target, or the scene's own if it has
@@ -149,6 +156,8 @@ static_assert(std::ranges::none_of(k_RenderPassNames, &std::string_view::empty))
 		return RenderPass::Sky;
 	case RenderPass::Reflection:
 		return RenderPass::ReflectionSky;
+	case RenderPass::UnderwaterEnvironment:
+		return RenderPass::UnderwaterEnvironmentSky;
 	default:
 		return pass;
 	}

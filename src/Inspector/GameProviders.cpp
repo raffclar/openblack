@@ -714,6 +714,15 @@ std::unique_ptr<ProviderInterface> LandProvider()
 		                     {"storm", underwater.GetWaves().storm},
 		                     {"reef", underwater.GetReef().size()},
 		                     {"cliff_feet", bed.cliffFoot.size()},
+		                     {"waterspouts",
+		                      [&underwater] {
+			                      Json spouts = Json::array();
+			                      for (const auto& spout : underwater.GetWaterspouts())
+			                      {
+				                      spouts.push_back({spout.position.x, spout.position.y, spout.strength});
+			                      }
+			                      return spouts;
+		                      }()},
 		                     {"some_cliff_feet", [&bed] {
 			                      Json feet = Json::array();
 			                      for (size_t i = 0; i < bed.cliffFoot.size() && i < 400; i += 40)

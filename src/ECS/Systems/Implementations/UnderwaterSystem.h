@@ -46,6 +46,7 @@ public:
 	[[nodiscard]] const seabed::Seabed& GetSeabed() const override { return _seabed; }
 	[[nodiscard]] uint32_t GetSeabedRevision() const override { return _revision; }
 	[[nodiscard]] std::span<const seabed::ReefPlant> GetReef() const override { return _reef; }
+	[[nodiscard]] std::span<const graphics::underwater::Waterspout> GetWaterspouts() const override { return _waterspouts; }
 	[[nodiscard]] const graphics::underwater::CurrentState& GetCurrent() const override { return _current; }
 	[[nodiscard]] float FloorAt(glm::vec2 point, float landHeight) const override;
 
@@ -69,6 +70,7 @@ private:
 	graphics::underwater::WaveState _waves;
 	std::vector<glm::vec3> _floaters;
 	std::vector<seabed::ReefPlant> _reef;
+	std::vector<graphics::underwater::Waterspout> _waterspouts;
 	graphics::underwater::CurrentState _current;
 	float _tideRate {0.0f};
 	/// How far the debug tour has gone, in seconds; none while it does not run

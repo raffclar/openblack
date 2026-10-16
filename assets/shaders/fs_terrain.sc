@@ -455,5 +455,11 @@ void main()
 	{
 		premultiplied.rgb = premultiplied.rgb * GroundShadowsOnLand(v_world, v_shadowCoord.w);
 	}
+	// EXPERIMENT (not for merge): with the experiment's water the land is opaque, and its alpha is a mark that the water
+	// pass reads (UW_LAND_MARK)
+	if (u_uwParams.x > 0.5f)
+	{
+		premultiplied.a = UW_LAND_MARK;
+	}
 	gl_FragColor = premultiplied;
 }
