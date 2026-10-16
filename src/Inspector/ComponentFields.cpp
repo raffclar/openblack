@@ -613,6 +613,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreatureMorph>(context)
 	    .Field<&components::CreatureMorph::shownFatness>("shownFatness")
 	    .Field<&components::CreatureMorph::drawn>("drawn")
+	    .Field<&components::CreatureMorph::weakStrongSet>("weakStrongSet")
 	    .Field<&components::CreatureMorph::revision>("revision");
 	Reflect<components::CreatureAnimation>(context)
 	    .Field<&components::CreatureAnimation::body>("body")
@@ -2511,6 +2512,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_morph::Morph::evilGood>("evilGood")
 	    .Field<&openblack::creature_morph::Morph::thinFat>("thinFat")
 	    .Field<&openblack::creature_morph::Morph::weakStrong>("weakStrong");
+	Reflect<openblack::creature_morph::WeakStrongSet>(context, ValueOnly {})
+	    .Field<&openblack::creature_morph::WeakStrongSet::value>("value")
+	    .Field<&openblack::creature_morph::WeakStrongSet::strength>("strength");
 	Reflect<openblack::creature_object_beliefs::Sweep>(context, ValueOnly {})
 	    .Field<&openblack::creature_object_beliefs::Sweep::left>("left")
 	    .Field<&openblack::creature_object_beliefs::Sweep::ring>("ring")

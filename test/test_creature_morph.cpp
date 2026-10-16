@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <optional>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
@@ -139,4 +140,22 @@ TEST(CreatureMorph, ACreatureOfSizeOneIsFifteenUnitsTall)
 	rest[1][3].y = 10.0f;
 	EXPECT_FLOAT_EQ(creature_morph::RestHeight(rest), 40.0f);
 	EXPECT_FLOAT_EQ(creature_morph::DrawnScale(2.0f, 0.0f), 2.0f);
+}
+
+TEST(CreatureMorph, ACopyLooksAsStrongAsTheOtherTimesTheScale)
+{
+	EXPECT_FLOAT_EQ(creature_morph::CopiedWeakStrong(0.4f, 1.5f), 0.6f);
+	// A strong look never goes past fully strong
+	EXPECT_FLOAT_EQ(creature_morph::CopiedWeakStrong(0.8f, 2.0f), 1.0f);
+	// A weak look is divided by the scale, and a copy never looks weak
+	EXPECT_FLOAT_EQ(creature_morph::CopiedWeakStrong(-0.5f, 2.0f), 0.0f);
+	EXPECT_FLOAT_EQ(creature_morph::CopiedWeakStrong(-0.5f, -2.0f), 0.25f);
+}
+
+TEST(CreatureMorph, AScriptLookStaysUntilTheStrengthChanges)
+{
+	const creature_morph::WeakStrongSet set {.value = 0.9f, .strength = 0.3f};
+	EXPECT_FLOAT_EQ(creature_morph::ShownWeakStrong(-0.2f, set, 0.3f), 0.9f);
+	EXPECT_FLOAT_EQ(creature_morph::ShownWeakStrong(-0.2f, set, 0.31f), -0.2f);
+	EXPECT_FLOAT_EQ(creature_morph::ShownWeakStrong(-0.2f, std::nullopt, 0.3f), -0.2f);
 }

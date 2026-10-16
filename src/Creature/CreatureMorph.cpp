@@ -34,6 +34,16 @@ creature_morph::Morph creature_morph::FromAttributes(float alignment, float fatn
 	};
 }
 
+float creature_morph::CopiedWeakStrong(float source, float scale)
+{
+	return std::clamp(source < 0.0f ? source / scale : source * scale, 0.0f, 1.0f);
+}
+
+float creature_morph::ShownWeakStrong(float fromStrength, const std::optional<WeakStrongSet>& set, float strength)
+{
+	return set.has_value() && set->strength == strength ? set->value : fromStrength;
+}
+
 float creature_morph::ClampScale(float scale)
 {
 	return std::clamp(scale, k_MinScale, k_MaxScale);

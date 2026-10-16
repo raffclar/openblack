@@ -38,6 +38,8 @@ struct CreatureMorph
 	float shownFatness {0.5f};
 	/// How far along each axis the body is drawn
 	creature_morph::Morph drawn {};
+	/// The weak to strong look that a script gave the creature, until its strength changes
+	std::optional<creature_morph::WeakStrongSet> weakStrongSet {};
 	/// Goes up each time the animations and rest pose have to follow the body anew
 	uint32_t revision {0};
 };

@@ -104,8 +104,10 @@ void Kick(const ecs::Registry& registry, entt::entity entity, CreatureAnimation&
 
 creature_morph::Morph TargetMorph(const Creature& creature, const CreatureMorph& morph)
 {
-	return creature_morph::FromAttributes(creature.alignment, morph.shownFatness, creature.strength,
-	                                      ecs::archetypes::CreatureArchetype::SpeciesStrength(creature.species));
+	auto target = creature_morph::FromAttributes(creature.alignment, morph.shownFatness, creature.strength,
+	                                             ecs::archetypes::CreatureArchetype::SpeciesStrength(creature.species));
+	target.weakStrong = creature_morph::ShownWeakStrong(target.weakStrong, morph.weakStrongSet, creature.strength);
+	return target;
 }
 
 CreatureRig::Mesh EvilGoodMesh(float value)
@@ -725,6 +727,11 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 	registry.Each<const Creature, CreatureMorph, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, CreatureMorph& morph, CreatureAnimation& animation,
 	        const Transform& transform) {
+		    // A new strength takes away the look that a script gave the body
+		    if (morph.weakStrongSet.has_value() && morph.weakStrongSet->strength != creature.strength)
+		    {
+			    morph.weakStrongSet.reset();
+		    }
 		    const auto refresh = creature_morph::RefreshDrawn(morph.drawn, TargetMorph(creature, morph));
 		    morph.drawn = refresh.drawn;
 		    if (refresh.animations)
