@@ -44,6 +44,7 @@
 #include <Inspector/LevelControl.h>
 #include <Inspector/RegistryProviders.h>
 #include <Inspector/RunControl.h>
+#include <Inspector/SimRecorder.h>
 #include <Inspector/SystemProviders.h>
 #include <Inspector/WorldProviders.h>
 #include <entt/meta/context.hpp>
@@ -362,6 +363,8 @@ TEST(InspectorCoverage, EveryLocatorServiceHasAQuery)
 	GameControlSet controls(input);
 	Inspector inspector;
 	AddGameProviders(inspector, reflection, run, world, controls.View());
+	// The inspector's system adds the run record's provider itself
+	inspector.Add(std::make_unique<SimProvider>(reflection));
 
 	std::set<std::string> covered;
 	for (const auto& [service, query] : CoveredServices())
@@ -427,6 +430,7 @@ TEST(InspectorCoverage, TheAdaptersCatalogueOfQueriesIsUpToDate)
 	AddGameProviders(inspector, reflection, run, world, controls.View());
 	inspector.Add(std::make_unique<ScreenshotProvider>(controls.screenshots, controls.camera));
 	inspector.Add(std::make_unique<InputProvider>(input));
+	inspector.Add(std::make_unique<SimProvider>(reflection));
 	const auto catalogue = inspector.Catalogue().dump(1) + "\n";
 
 	const auto path = SourceDir() + "/tools/inspector/inspector_queries.json";

@@ -31,6 +31,7 @@
 #include "Common/Zoomer.h"
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureFight.h"
+#include "Debug/SimRun.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
@@ -173,6 +174,8 @@ struct Arguments
 	/// The fight autopilot to start with the inspector, and the folder for the files of the fight transcript
 	std::optional<FightAutopilotRequest> fightAutopilot;
 	std::optional<std::filesystem::path> fightTranscriptFolder;
+	/// A tool run in the fast simulation mode, or with a run record; none for the usual game
+	std::optional<sim_run::Request> simulation;
 	/// Where the inspector keeps pictures by feature, with their catalogue; OPENBLACK_SCREENSHOT_ROOT's or
 	/// E:/openblack/screenshots when not given
 	std::optional<std::filesystem::path> screenshotRoot;
@@ -400,6 +403,7 @@ private:
 	std::optional<uint16_t> _inspectPort;
 	std::optional<FightAutopilotRequest> _fightAutopilot;
 	std::optional<std::filesystem::path> _fightTranscriptFolder;
+	std::optional<sim_run::Request> _simulation;
 	/// Where the players' profiles are kept instead of the game's own folder
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box

@@ -53,6 +53,8 @@ class AudioManager final: public AudioManagerInterface, private VoiceBackend
 {
 public:
 	AudioManager();
+	/// The manager plays its sounds through this player
+	explicit AudioManager(std::unique_ptr<AudioPlayerInterface> player);
 	~AudioManager();
 	BufferId CreateBuffer(ChannelLayout layout, const std::vector<int16_t>& buffer, int sampleRate) override;
 	void CreateBuffer(Sound& sound) override;

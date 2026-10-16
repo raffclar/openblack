@@ -11,6 +11,9 @@
 
 #include <cstdint>
 
+#include <filesystem>
+#include <optional>
+#include <string>
 #include <string_view>
 
 namespace openblack::fight_autopilot
@@ -51,6 +54,16 @@ public:
 	virtual void ShowOverrideToPointer() = 0;
 	/// The fight autopilot, which fights for the player with the inspector's input
 	[[nodiscard]] virtual fight_autopilot::AutopilotInterface* GetFightAutopilot() { return nullptr; }
+	/// Each land or scenario loaded from now on starts paused, before any of its frames, for a tool that steps it
+	virtual void PauseOnLoad([[maybe_unused]] bool pause) {}
+	/// Starts the run record of a simulation run in a file, with a record every so many turns, and with the hash of each
+	/// component when asked: an error, or none
+	[[nodiscard]] virtual std::optional<std::string>
+	StartSimRecord([[maybe_unused]] const std::filesystem::path& path, [[maybe_unused]] uint32_t every,
+	               [[maybe_unused]] const std::optional<std::filesystem::path>& limits, [[maybe_unused]] bool hashParts)
+	{
+		return "this inspector writes no run record";
+	}
 };
 
 } // namespace openblack::ecs::systems

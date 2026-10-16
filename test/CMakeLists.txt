@@ -1072,3 +1072,16 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_temple_entrance_tap temple/test_temple_entrance_tap.cpp
 )
+# The fast simulation mode's rules and the stability checks of its run record
+openblack_setup_and_add_test(test_sim_run test_sim_run.cpp)
+openblack_setup_and_add_test(test_sim_checks test_sim_checks.cpp)
+openblack_setup_and_add_test(
+  test_clocked_audio_player audio/test_clocked_audio_player.cpp
+)
+# The summary and the comparison of simulation runs that tools/sim makes
+if (Python3_Interpreter_FOUND)
+  add_test(NAME test_sim_report
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tools/sim/test_sim_report.py
+  )
+endif ()

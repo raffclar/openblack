@@ -36,6 +36,7 @@
 #include "Inspector/GameProviders.h"
 #include "Inspector/GameWorldEdit.h"
 #include "Inspector/RunControl.h"
+#include "Inspector/SimRecorder.h"
 #include "Locator.h"
 
 // The build's configuration, given by the build files
@@ -177,6 +178,9 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	auto screenshots = std::make_unique<inspector::ScreenshotProvider>(_controls->screenshots, _controls->camera);
 	_screenshots = screenshots.get();
 	_inspector.Add(std::move(screenshots));
+	auto sim = std::make_unique<inspector::SimProvider>(*_reflection);
+	_sim = sim.get();
+	_inspector.Add(std::move(sim));
 	auto input = std::make_unique<inspector::InputProvider>(*_inputTarget);
 	_input = input.get();
 	_inspector.Add(std::move(input));
@@ -373,6 +377,8 @@ void InspectorSystem::Service()
 		    Locator::time::has_value() ? static_cast<float>(Locator::time::value().GetFrameGameTime().count()) : 0.0f;
 		Locator::fightTranscript::value().Frame(_game->FrameNumber(), gameMs);
 	}
+	// The run record writes its record of the turns before this frame
+	_sim->Frame(_game->FrameNumber());
 	// The fight autopilot gives its input for this frame before the game reads its input
 	_autopilot->Frame(_game->FrameNumber());
 	// The input due this frame is made before the game reads its input
@@ -405,4 +411,16 @@ fight_autopilot::AutopilotInterface* InspectorSystem::GetFightAutopilot()
 uint16_t InspectorSystem::GetPort() const
 {
 	return _server->Port();
+}
+
+std::optional<std::string> InspectorSystem::StartSimRecord(const std::filesystem::path& path, uint32_t every,
+                                                           const std::optional<std::filesystem::path>& limits, bool hashParts)
+{
+	_sim->SetHashParts(hashParts);
+	return _sim->StartRecord(path, every, limits);
+}
+
+void InspectorSystem::PauseOnLoad(bool pause)
+{
+	_game->SetPauseOnLoad(pause);
 }

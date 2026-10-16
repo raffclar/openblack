@@ -226,6 +226,40 @@ TOOLS = [
         "params": ["speed"],
     },
     {
+        "name": "sim_state",
+        "description": "The fast simulation mode, the fixed frame time, and the run record that the game writes.",
+        "inputSchema": schema(),
+        "query": "sim.state",
+    },
+    {
+        "name": "sim_fast",
+        "description": "Turns the fast simulation mode on or off: the game plays its frames one after the other and "
+                       "draws none (or one in draw_every). Each frame takes the fixed frame_ms (20 by default), so the "
+                       "turns are the same at any speed. until_turn stops the game there.",
+        "inputSchema": schema({"on": {"type": "boolean"}, "draw_every": {"type": "integer"},
+                               "frame_ms": {"type": "integer"}, "until_turn": {"type": "integer"}}, ["on"]),
+        "query": "sim.fast",
+        "params": ["on", "draw_every", "frame_ms", "until_turn"],
+    },
+    {
+        "name": "sim_sample",
+        "description": "The run record of the game now: the player's creature (desires, plan, action, beliefs, "
+                       "opinions, body, alignment, reaction, leash, friends), the counts, the hashes, and the problems "
+                       "in its values.",
+        "inputSchema": schema(),
+        "query": "sim.sample",
+    },
+    {
+        "name": "sim_feedback",
+        "description": "The player's hand strokes or slaps the player's creature as the button would, or lets go "
+                       "(kind release, or release true); the creature learns from the sum as the hand lets go.",
+        "inputSchema": schema({"kind": {"type": "string"}, "id": {"type": "integer"}, "part": {"type": "integer"},
+                               "height": {"type": "number"}, "gentle": {"type": "boolean"},
+                               "release": {"type": "boolean"}}, ["kind"]),
+        "query": "sim.feedback",
+        "params": ["kind", "id", "part", "height", "gentle", "release"],
+    },
+    {
         "name": "game_scenarios",
         "description": "The testbed scenarios that can be loaded: id, name, facet, description.",
         "inputSchema": schema(SHAPING),
