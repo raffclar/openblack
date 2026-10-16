@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <numbers>
 #include <span>
 #include <vector>
@@ -39,6 +40,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreaturePointing.h"
 #include "Creature/CreatureReach.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
@@ -144,10 +146,6 @@ constexpr float k_ApproachFar = 1.0f;
 constexpr float k_ApproachNear = 0.6f;
 /// Near enough to reach once turned: within this share of the distance to the middle of its reach, either way
 constexpr float k_TurnInReachShare = 0.5f;
-/// Pointing, the high animation counts fully this far above level, in radians
-constexpr float k_PointHighRadians = std::numbers::pi_v<float> / 4.0f;
-/// Pointing, the hand is about this share of the creature's height up
-constexpr float k_PointFromHeightShare = 0.6f;
 /// Nothing smaller than this counts as a distance
 constexpr float k_Tiny = 1e-4f;
 
@@ -186,6 +184,19 @@ float BearingTo(const Transform& transform, const glm::vec3& target)
 		return 0.0f;
 	}
 	return std::acos(std::clamp(glm::dot(ahead, glm::normalize(towards)), -1.0f, 1.0f));
+}
+
+/// Where the creature's head bone is as posed now, or its position when its species has no head bone
+glm::vec3 HeadOf(entt::entity creature, const Transform& transform, const Creature& body)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* points = PointsOf(body);
+	if (animation == nullptr || points == nullptr || points->head >= animation->boneMatrices.size())
+	{
+		return transform.position;
+	}
+	return glm::vec3(creature::PosedBone(points->head, animation->boneMatrices, PlacementOf(transform))[3]);
 }
 
 /// The hand a creature acts with: the right, or its mirror
@@ -819,22 +830,21 @@ std::array<float, 2> ThrowWeights(entt::entity creature, const Transform& transf
 	return {1.0f - weight, weight};
 }
 
-/// Pointing: low and high to the side the target is on, or with the hand that is free, blended by how high it is
-void SetPointing(CreatureObjectAction& action, const Transform& transform, const Creature& body, const CreatureHeldObject* held)
+/// Pointing: the four pointing animations blended by where the point is across and up from the top of the creature.
+/// The arm is chosen as it starts to point, and stays the same until the point ends.
+void SetPointing(CreatureObjectAction& action, const Transform& transform, const Creature& body, const CreatureHeldObject* held,
+                 bool choosesArm)
 {
-	const auto local = ToLocal(transform, action.point);
-	// The left side is mirrored in the meshes' space: the right is +x
-	const bool right = held != nullptr ? held->mirrored : local.x >= 0.0f;
-	const auto height = creature_throw::k_HeightAtSizeOne * ShownSize(body) * k_PointFromHeightShare;
-	const auto elevation = std::atan2(local.y - height, std::max(glm::length(glm::vec2(local.x, local.z)), k_Tiny));
-	const auto high = std::clamp(elevation / k_PointHighRadians, 0.0f, 1.0f);
-	const std::array<size_t, 2> animations {
-	    creature_object_actions::k_PointAnimations.at(right ? 1 : 0),
-	    creature_object_actions::k_PointAnimations.at(right ? 3 : 2),
-	};
-	const std::array<float, 2> weights {1.0f - high, high};
-	SetSlots(action, animations, weights);
-	action.mirrored = false;
+	const auto origin = transform.position + glm::vec3(0.0f, creature_pointing::k_OriginHeightPerSize * ShownSize(body), 0.0f);
+	const auto facing = glm::xz(transform.rotation * (-k_MeshBack));
+	const auto aim = creature_pointing::AimAt(origin, facing, action.point);
+	if (choosesArm && action.pointTurned)
+	{
+		action.mirrored =
+		    creature_pointing::PointsWithLeftAfterTurn(aim, held != nullptr ? std::optional(held->mirrored) : std::nullopt);
+	}
+	const auto weights = creature_pointing::Weights(aim, action.mirrored);
+	SetSlots(action, creature_pointing::k_Animations, weights);
 }
 
 /// A vector along the ground turned by an angle
@@ -897,7 +907,25 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	{
 		const auto limit = action.kind == Kind::Throw ? creature_object_actions::k_ThrowTurnRadians
 		                                              : creature_object_actions::k_PointTurnRadians;
-		if (BearingTo(transform, action.point) > limit && action.attempts < k_TurnAttempts)
+		if (action.kind == Kind::Point)
+		{
+			// The arm points without a turn when the point is near enough ahead, as seen from the head
+			const auto facing = glm::xz(transform.rotation * (-k_MeshBack));
+			const auto turn = creature_pointing::TurnAngle(HeadOf(creature, transform, body), facing, action.point);
+			if (std::abs(turn) >= creature_pointing::k_TurnLimit && action.attempts < k_TurnAttempts)
+			{
+				++action.attempts;
+				action.pointTurned = true;
+				locomotion.TurnToFace(creature, glm::xz(action.point));
+				return;
+			}
+			if (!action.pointTurned)
+			{
+				action.mirrored =
+				    creature_pointing::PointsWithLeft(turn, held != nullptr ? std::optional(held->mirrored) : std::nullopt);
+			}
+		}
+		else if (BearingTo(transform, action.point) > limit && action.attempts < k_TurnAttempts)
 		{
 			++action.attempts;
 			locomotion.TurnToFace(creature, glm::xz(action.point));
@@ -915,10 +943,18 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		}
 		else
 		{
-			SetPointing(action, transform, body, held);
-			action.holdMs = action.pointSeconds.value_or(creature_object_actions::k_PointSeconds) * 1000.0f;
+			SetPointing(action, transform, body, held, true);
+			action.holdMs = action.pointsUntilTold
+			                    ? std::numeric_limits<float>::infinity()
+			                    : action.pointSeconds.value_or(creature_object_actions::k_PointSeconds) * 1000.0f;
+			action.pointMs = points->pointMs;
 		}
 		BeginPlaying(creature, action, animation);
+		if (action.kind == Kind::Point)
+		{
+			// The arm plays in the time of the first pointing animation
+			action.durationMs = DurationOf(creature, creature_pointing::k_Animations.front());
+		}
 		return;
 	}
 
@@ -1605,6 +1641,67 @@ bool CreatureObjectActionSystem::PointAtFor(entt::entity creature, const glm::ve
 	return Start(creature, {.kind = Kind::Point, .target = thing, .point = point, .pointSeconds = seconds});
 }
 
+bool CreatureObjectActionSystem::PointUntilTold(entt::entity creature, const glm::vec3& point)
+{
+	return Start(creature, {.kind = Kind::Point, .point = point, .pointsUntilTold = true});
+}
+
+void CreatureObjectActionSystem::MovePoint(entt::entity creature, const glm::vec3& point)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* action = registry.Valid(creature) ? registry.TryGet<CreatureObjectAction>(creature) : nullptr;
+	if (action != nullptr && action->kind == Kind::Point)
+	{
+		action->point = point;
+	}
+}
+
+void CreatureObjectActionSystem::EndPoint(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* action = registry.Valid(creature) ? registry.TryGet<CreatureObjectAction>(creature) : nullptr;
+	if (action == nullptr || action->kind != Kind::Point || action->status != Status::Running)
+	{
+		return;
+	}
+	if (action->phase != Phase::Playing)
+	{
+		// It has not started to point yet: it stops at once
+		action->status = Status::Done;
+		return;
+	}
+	action->holdMs = 0.0f;
+	action->pointEnding = true;
+}
+
+std::optional<glm::vec3> CreatureObjectActionSystem::GetPointingHand(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return std::nullopt;
+	}
+	const auto* action = registry.TryGet<const CreatureObjectAction>(creature);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (action == nullptr || animation == nullptr || transform == nullptr || action->kind != Kind::Point ||
+	    action->phase != Phase::Playing || action->status != Status::Running || action->pointEnding)
+	{
+		return std::nullopt;
+	}
+	const auto* points = PointsOf(registry.Get<const Creature>(creature));
+	if (points == nullptr || animation->boneMatrices.empty())
+	{
+		return std::nullopt;
+	}
+	const auto hand = HandBone(*points, *animation, action->mirrored);
+	if (hand >= animation->boneMatrices.size())
+	{
+		return std::nullopt;
+	}
+	return glm::vec3(creature::PosedBone(hand, animation->boneMatrices, PlacementOf(*transform))[3]);
+}
+
 void CreatureObjectActionSystem::Cancel(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -2219,7 +2316,9 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 			    }
 			    return;
 		    }
-		    action.timeMs += step;
+		    action.timeMs = action.kind == Kind::Point
+		                        ? creature_pointing::AdvanceTime(action.timeMs, step, action.pointMs, action.pointEnding)
+		                        : action.timeMs + step;
 
 		    // Until it has hold, the reach follows what it reaches for, and fails when it gets out of reach
 		    if ((action.kind == Kind::PickUp || action.kind == Kind::Destroy) && !action.eventDone && action.reach.has_value())
@@ -2245,19 +2344,28 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 			    action.weights = reach.weights;
 		    }
 
-		    if (action.holdMs > 0.0f)
+		    if (action.kind == Kind::Point)
 		    {
-			    // Pointing at a thing, it points wherever the thing has got to
-			    if (action.kind == Kind::Point && action.target.has_value() && registry.Valid(*action.target))
+			    // Pointing at a thing, it points wherever the thing has got to. The blend follows the point each frame.
+			    if (action.target.has_value() && registry.Valid(*action.target))
 			    {
 				    if (const auto* at = registry.TryGet<const Transform>(*action.target); at != nullptr)
 				    {
 					    action.point = at->position;
-					    SetPointing(action, transform, body, registry.TryGet<const CreatureHeldObject>(entity));
 				    }
 			    }
-			    action.holdMs -= gameTime.count();
-			    if (action.holdMs <= 0.0f)
+			    SetPointing(action, transform, body, registry.TryGet<const CreatureHeldObject>(entity), false);
+			    if (!action.pointEnding)
+			    {
+				    action.holdMs -= gameTime.count();
+				    if (action.holdMs <= 0.0f)
+				    {
+					    // The point ends, and the arm plays to the end of its animations
+					    action.holdMs = 0.0f;
+					    action.pointEnding = true;
+				    }
+			    }
+			    else if (action.timeMs >= action.durationMs)
 			    {
 				    action.status = Status::Done;
 			    }
@@ -2285,10 +2393,8 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 		    for (size_t i = 0; i < action.animationCount; ++i)
 		    {
 			    const auto duration = DurationOf(entity, action.animations.at(i));
-			    // Pointing loops; everything else holds its last frame
-			    const auto time = action.holdMs > 0.0f && duration > 0.0f
-			                          ? std::fmod(action.timeMs, duration)
-			                          : std::clamp(action.timeMs, 0.0f, std::max(duration - 1.0f, 0.0f));
+			    // Each animation holds its last frame
+			    const auto time = std::clamp(action.timeMs, 0.0f, std::max(duration - 1.0f, 0.0f));
 			    animation.slots.push_back({.animation = action.animations.at(i),
 			                               .timeMs = time,
 			                               .weight = action.weights.at(i),

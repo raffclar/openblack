@@ -46,6 +46,8 @@ enum class CreatureMove : uint32_t
 	Pose = 36,
 	/// Pull the face of the move's first argument for two seconds
 	Face = 38,
+	/// Draw the gesture of the move's first argument in the air, then dance
+	Gesture = 39,
 	/// Face a point 50 metres away along a game angle, the move's second argument
 	FaceAngle = 40,
 	/// Talk, or play its second action
@@ -191,6 +193,7 @@ DanceTurn creature_dance::Turn(const creature_mind::Senses::DanceView& view, glm
 	const auto move = static_cast<CreatureMove>(view.action);
 	turn.endPose = move != CreatureMove::Pose;
 	turn.endDance = move != CreatureMove::Dance && move != CreatureMove::Face;
+	turn.endPoint = move != CreatureMove::Gesture && move != CreatureMove::FaceAngle;
 	switch (move)
 	{
 	case CreatureMove::FaceCentre:
@@ -238,6 +241,9 @@ DanceTurn creature_dance::Turn(const creature_mind::Senses::DanceView& view, glm
 	case CreatureMove::FaceAngle:
 		turn.facePoint = AlongGameAngle(position, static_cast<uint16_t>(map_coords::FtoL(view.second)));
 		turn.turnWithin = k_FaceAngleWithin;
+		break;
+	case CreatureMove::Gesture:
+		turn.gesture = view.first;
 		break;
 	case CreatureMove::Talk:
 		turn.overlay = k_TalkAnimation;

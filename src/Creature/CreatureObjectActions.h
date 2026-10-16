@@ -63,8 +63,6 @@ constexpr size_t k_FirstKeepAnimation = 100;
 constexpr size_t k_KeepAnimationCount = 4;
 constexpr size_t k_StrokeObject = 100;
 constexpr size_t k_ExamineObject = 103;
-/// Pointing, low and high to the left and right
-constexpr std::array<size_t, 4> k_PointAnimations {208, 209, 210, 211};
 /// It points for this long, and turns to face what it points at first when it is more than this far round
 constexpr float k_PointSeconds = 5.0f;
 constexpr float k_PointTurnRadians = 0.4712f;

@@ -229,10 +229,10 @@ struct CreatureActionPoints
 	int32_t rightEye {-1};
 	/// When the reaching hand takes hold of what it picks up
 	int32_t pickUpTime {-1};
-	/// When the reaching hand takes what the player's hand gives it, and when the catching hand closes; then one whose use
-	/// isn't known
+	/// When the reaching hand takes what the player's hand gives it, and when the catching hand closes
 	std::array<int32_t, 2> catchTimes {-1, -1};
-	int32_t unknownTime {-1};
+	/// When the pointing arm gets to its point and holds there
+	int32_t pointTime {-1};
 	/// When a blow of a destroying animation lands
 	int32_t destroyTime {-1};
 	/// When what is held leaves the hand: tossed away, eaten, thrown and put down

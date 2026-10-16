@@ -45,6 +45,10 @@ public:
 	bool Kick(entt::entity creature, entt::entity target) override;
 	bool PointAt(entt::entity creature, const glm::vec3& point) override;
 	bool PointAtFor(entt::entity creature, const glm::vec3& point, float seconds, std::optional<entt::entity> thing) override;
+	bool PointUntilTold(entt::entity creature, const glm::vec3& point) override;
+	void MovePoint(entt::entity creature, const glm::vec3& point) override;
+	void EndPoint(entt::entity creature) override;
+	[[nodiscard]] std::optional<glm::vec3> GetPointingHand(entt::entity creature) const override;
 	bool Catch(entt::entity creature, entt::entity object) override;
 	bool TakeFromHand(entt::entity creature, entt::entity object, bool mirrored) override;
 	[[nodiscard]] std::optional<TakingFromHand> GetTakingFromHand(entt::entity creature) const override;

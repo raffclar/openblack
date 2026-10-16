@@ -62,6 +62,7 @@ public:
 	[[nodiscard]] const gesture_hints::Row& GetHints() const override { return _hints; }
 	void StepHints(float seconds, bool wordsShowing) override;
 	void ShowGestureOnLand(GestureType gesture, glm::vec3 corner, float size) override;
+	[[nodiscard]] std::optional<gesture::TrailSymbol> GetSymbol(GestureType gesture) const override;
 
 private:
 	/// What the hand holds and the player's creature, for the requests

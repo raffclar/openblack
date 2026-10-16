@@ -97,6 +97,8 @@ public:
 	virtual bool PlayAction(entt::entity creature, size_t animation) = 0;
 	/// Plays a gesture on top of the body, unless one already plays
 	virtual bool PlayGesture(entt::entity creature, size_t animation) = 0;
+	/// Draws a gesture in the air with the hand, by the gesture's number, unless it draws one already
+	virtual bool DrawGesture(entt::entity /*creature*/, uint32_t /*gesture*/) { return false; }
 	/// Pulls a face for a few seconds, as told to by hand
 	virtual void PullFace(entt::entity creature, size_t animation) = 0;
 	/// Pulls the face a feeling or what it is doing calls for, as the creature's mind would; returns the face pulled

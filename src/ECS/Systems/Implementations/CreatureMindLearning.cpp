@@ -4395,8 +4395,9 @@ uint32_t GameTurn()
 	return Locator::time::has_value() ? static_cast<uint32_t>(Locator::time::value().GetTurn()) : 0;
 }
 
-/// Where a creature's head is as posed this frame: its head bone, else its height over its feet
-glm::vec3 HeadPoint(const ecs::Registry& registry, entt::entity creature)
+} // namespace
+
+glm::vec3 mind_detail::HeadPoint(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto& transform = registry.Get<const Transform>(creature);
 	const auto& body = registry.Get<const Creature>(creature);
@@ -4416,7 +4417,6 @@ glm::vec3 HeadPoint(const ecs::Registry& registry, entt::entity creature)
 	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
 	return glm::vec3(creature::PosedBone(points->head, animation->boneMatrices, placement)[3]);
 }
-} // namespace
 
 void CreatureMindSystem::WatchSkill(entt::entity creature, size_t skill)
 {
