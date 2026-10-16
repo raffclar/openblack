@@ -158,6 +158,18 @@ private:
 	           const creature_plan_actions::Situation& situation);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
+	/// A joint action: the asker asks another creature to be its partner, and the two become partners when it agrees;
+	/// the partner takes an order of the asker, which it does and then waits; the asker makes the partner's mind stand
+	/// still or go free. The joint action stops for both when either takes up another agenda or comes to the end of its
+	/// agenda (see components::CreaturePartner).
+	bool RequestPartner(entt::entity asker, entt::entity asked, creature_friendship::RequestKind kind);
+	void TakeOrder(entt::entity partner, entt::entity asker, const creature_mind::Step& ordered);
+	static void SetDemobilised(entt::entity partner, bool demobilised);
+	void EndJointAction(entt::entity creature);
+	void KeepJointActions();
+	/// As a creature sees another creature again, the attention that the other creature gives it goes up when the other
+	/// creature does something with it in mind
+	void NoteAttention(entt::entity creature, components::CreatureMindState& mind, entt::entity other);
 	/// The creature stops the reaction that it has, if any, because a new plan is forced on it. The creature then waits
 	/// its full time before it takes a reaction of that kind again.
 	static void EndReaction(entt::entity creature);

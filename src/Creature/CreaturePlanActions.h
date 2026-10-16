@@ -46,6 +46,9 @@ enum class Target : uint8_t
 	Living,
 	/// A creature that is not dead or lying out cold, to fight
 	FightableCreature,
+	/// Another creature that has no partner in a joint action now, and one that has
+	CreatureFreeForJoint,
+	CreatureNotFreeForJoint,
 	/// What frightens creatures: other creatures, bats, vultures and lions, and miracles
 	Frightening,
 	/// Anything at all it can see
@@ -177,6 +180,11 @@ enum class Build : uint8_t
 	Emote,
 	FaceCameraEmote,
 	ApproachEmote,
+	/// The actions with a friend: waving at it (which it does too), howling at it, pining for it and looking for it
+	WaveAtFriend,
+	HowlAtFriend,
+	PineForFriend,
+	LookForFriend,
 	RunFromObject,
 	RunFromPlayer,
 	LookAbout,

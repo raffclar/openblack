@@ -111,6 +111,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/CreatureSquat.h"
@@ -913,6 +914,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::PickUpReach>(context).Field<&components::PickUpReach::straightReach>("straightReach");
 	Reflect<components::TossHandVelocity>(context).Field<&components::TossHandVelocity::velocity>("velocity");
 	Reflect<components::HeldByCreature>(context).Field<&components::HeldByCreature::creature>("creature");
+	Reflect<components::CreaturePartner>(context)
+	    .Field<&components::CreaturePartner::partner>("partner")
+	    .Field<&components::CreaturePartner::agenda>("agenda")
+	    .Field<&components::CreaturePartner::agendaRunning>("agendaRunning");
+	Reflect<components::CreatureDemobilised> {context};
 	Reflect<components::CreatureTattoos>(context)
 	    .Field<&components::CreatureTattoos::slots>("slots")
 	    .Field<&components::CreatureTattoos::revision>("revision");
@@ -2496,7 +2502,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::flutterEyelids>("flutterEyelids")
 	    .Field<&openblack::creature_mind::Step::dance>("dance")
 	    .Field<&openblack::creature_mind::Step::faint>("faint")
-	    .Field<&openblack::creature_mind::Step::main>("main");
+	    .Field<&openblack::creature_mind::Step::main>("main")
+	    .Field<&openblack::creature_mind::Step::request>("request")
+	    .Field<&openblack::creature_mind::Step::ordered>("ordered");
 	Reflect<openblack::creature_mind_model::Learnt>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind_model::Learnt::opinions>("opinions")
 	    .Field<&openblack::creature_mind_model::Learnt::turnsSinceDone>("turnsSinceDone")

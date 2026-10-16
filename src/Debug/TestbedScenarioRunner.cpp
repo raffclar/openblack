@@ -2356,6 +2356,18 @@ void Runner::Give(const Command& command)
 			result = "no such creature";
 		}
 		break;
+	case Kind::OnlyDesire:
+		if (command.value < creature_desires::k_DesireCount)
+		{
+			// For the seconds given (amount), as a script gives them
+			minds.SetOnlyDesire(*entity, static_cast<creature_desires::Desire>(command.value), command.amount);
+			result = fmt::format("only {}", creature_desires::Name(static_cast<creature_desires::Desire>(command.value)));
+		}
+		else
+		{
+			result = "no such desire";
+		}
+		break;
 	case Kind::SwapMinds:
 		if (const auto other = CreatureAt(command.value))
 		{

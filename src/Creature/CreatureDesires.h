@@ -111,6 +111,8 @@ constexpr uint32_t k_GetColder = 41;
 constexpr uint32_t k_Scratch = 42;
 constexpr uint32_t k_RunAwayFromPlayer = 43;
 constexpr uint32_t k_Sadness = 48;
+/// How much the creature misses the creatures it finds nice that give it little attention
+constexpr uint32_t k_MissedFriends = 58;
 } // namespace sources
 
 /// The game's sigmoid of how far a source's value is past its threshold, 0 to 1 by a table of 41 steps; 0 for a value

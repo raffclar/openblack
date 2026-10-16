@@ -43,6 +43,7 @@
 #include "Creature/CreatureEmergencies.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureFriendship.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureIdleMind.h"
@@ -77,6 +78,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
@@ -433,6 +435,8 @@ std::optional<float> ReadSource(uint32_t type, const creature_desires::Desires& 
 	case sources::k_HungerFromSadness:
 	case sources::k_TirednessFromSadness:
 		return creature_desires::SourceValue(desires[Desire::Sadness], sources::k_Sadness).value_or(0.0f);
+	case sources::k_MissedFriends:
+		return mind.learnt.has_value() ? creature_friendship::MissedFriends(mind.learnt->creatures) : 0.0f;
 	default:
 		return std::nullopt;
 	}
@@ -1832,6 +1836,9 @@ void CreatureMindSystem::ProcessTurn()
 		    // Under a script's control its desires stand still and it chooses nothing for itself: it only carries out
 		    // what it is given, and stands about once that is done
 		    const bool scripted = registry.AllOf<ScriptControlled>(entity);
+		    // The asker of a joint action can make its mind stand still: its desires and its feelings for other
+		    // creatures stand still, and it chooses nothing, but it carries out the orders of the asker
+		    const bool demobilised = registry.AllOf<CreatureDemobilised>(entity);
 		    TurnBeforeDecision(entity, creature, mind, scripted);
 		    StepEmergencies(entity, creature, mind, scripted);
 		    // The other creature in a fight obeys the creature that started it: its desires stand still until the fight
@@ -1842,7 +1849,12 @@ void CreatureMindSystem::ProcessTurn()
 		        .startedIt = fighting != nullptr && fighting->madeArena,
 		        .won = fighting != nullptr && fighting->stage == CreatureFighting::Stage::Celebrate,
 		    });
-		    if (!scripted && !obeysInFight)
+		    // How impressive it finds the other creatures, and the attention they gave it, fade each turn it thinks
+		    if (!scripted && !demobilised && mind.learnt.has_value())
+		    {
+			    creature_friendship::Fade(mind.learnt->creatures);
+		    }
+		    if (!scripted && !obeysInFight && !demobilised)
 		    {
 			    const auto body = needs != nullptr ? needs->needs : creature_physiology::Needs {};
 			    const auto state = SourceStateOf(entity, creature, mind, body.age);
@@ -1915,7 +1927,7 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    // When the creature is free to choose, it weighs the plans of every desire. When no plan is ready, it does
 		    // nothing.
-		    if (!scripted && !mind.planActive && mind.idle.step >= mind.idle.agenda.size() &&
+		    if (!scripted && !demobilised && !mind.planActive && mind.idle.step >= mind.idle.agenda.size() &&
 		        !(needs != nullptr && needs->faint.has_value()))
 		    {
 			    // A try at a miracle that fizzled is what it shows first
@@ -2100,6 +2112,21 @@ void CreatureMindSystem::ProcessTurn()
 			    mind.idle.step = mind.idle.agenda.size();
 			    mind.idle.stepStarted = false;
 			    mind.idle.gaveUp = true;
+		    }
+		    // A joint action: when the other creature refuses to be its partner, the rest of the agenda is no use
+		    if (commands.requestPartner.has_value() &&
+		        !RequestPartner(entity, static_cast<entt::entity>(commands.requestPartner->creature),
+		                        commands.requestPartner->kind))
+		    {
+			    GiveUp(mind.idle);
+		    }
+		    if (commands.order.has_value() && commands.order->step != nullptr)
+		    {
+			    TakeOrder(static_cast<entt::entity>(commands.order->partner), entity, *commands.order->step);
+		    }
+		    if (commands.demobilise.has_value())
+		    {
+			    SetDemobilised(static_cast<entt::entity>(commands.demobilise->first), commands.demobilise->second);
 		    }
 		    if (commands.letGo.has_value())
 		    {
@@ -2313,6 +2340,8 @@ void CreatureMindSystem::ProcessTurn()
 	{
 		Locator::creatureFightSystem::value().KnockOut(entity);
 	}
+	// A joint action stops for both creatures when either stops what it does for it
+	KeepJointActions();
 }
 
 bool CreatureMindSystem::PlayAction(entt::entity creature, size_t animation)
@@ -2884,6 +2913,9 @@ void CreatureMindSystem::FightStarted(entt::entity creature, entt::entity oppone
 	// the leash does that for creatures, the plan is to obey the player.
 	if (!planned)
 	{
+		// A fight forced on a creature, like any forced action, makes every free creature agree to joint actions from
+		// now on
+		registry.Context().partnersAlwaysAgree = true;
 		fightWith(creature, opponent,
 		          {.desire = Desire::ObeyPlayer, .action = k_FightAction, .object = opponent, .agenda = steps(opponent)});
 	}

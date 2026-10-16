@@ -471,6 +471,11 @@ void CreatureMindSystem::StirSourcesOnSighting(entt::entity creature, components
 		creature_desires::ChangeSource(desires, creature_desires::sources::k_PlayFromWatchingPlayer,
 		                               creature_desire_sources::k_ToySightingAmount);
 	}
+	// Another creature that does something with it in mind gives it attention
+	if (registry.AllOf<Creature>(belief.thing))
+	{
+		NoteAttention(creature, mind, belief.thing);
+	}
 }
 
 std::optional<glm::vec3> CreatureMindSystem::BelievedPlace(const components::CreatureMindState& mind, entt::entity thing)

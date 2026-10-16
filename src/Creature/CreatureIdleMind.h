@@ -13,9 +13,11 @@
 
 #include <array>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -23,6 +25,7 @@
 
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
+#include "Creature/CreatureFriendship.h"
 #include "Creature/CreaturePlayerAttention.h"
 
 /// What a creature does, decided once a game turn. It works through an agenda of steps: it waits while it looks about,
@@ -493,6 +496,16 @@ struct Step
 		/// Making the step's object still. While the object flies, the step waits. Then a living object starts to die at
 		/// once, without the work of a death, and the step ends. For an object that is not alive, the step ends at once.
 		RenderImmobile,
+		/// Asking another creature (the step's object) to be its partner in a joint action, for the step's request.
+		/// When the other creature agrees, the two are partners and the step is done at once. When it refuses, the rest
+		/// of the agenda is given up.
+		RequestPartner,
+		/// Telling the partner (the step's object) to do the step's order at once. The partner stops what it does, and
+		/// does the order and then waits, watching this creature. The step is done at once.
+		Order,
+		/// Making the partner (the step's object) stand still in its mind, or letting its mind go free again, at once
+		Demobilise,
+		Remobilise,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -542,6 +555,10 @@ struct Step
 	/// The main step of the agenda: the step that does what the action is for. The player sees the action only at or
 	/// after this step (see MainStep).
 	bool main {false};
+	/// What a step that asks for a partner asks the other creature to do
+	creature_friendship::RequestKind request {creature_friendship::RequestKind::Play};
+	/// The step that an order step tells the partner to do
+	std::shared_ptr<const Step> ordered;
 };
 
 struct IdleMind
@@ -875,6 +892,22 @@ struct Commands
 	std::optional<uint32_t> makeDisciple;
 	/// The creature faints this turn, so those near it react as to a death
 	bool fainted {false};
+	/// A creature to ask to be its partner, and what for
+	struct PartnerRequest
+	{
+		uint32_t creature {0};
+		creature_friendship::RequestKind kind {creature_friendship::RequestKind::Play};
+	};
+	std::optional<PartnerRequest> requestPartner;
+	/// An order to give the partner: the partner, by its entity's number, and the step it is to do
+	struct PartnerOrder
+	{
+		uint32_t partner {0};
+		std::shared_ptr<const Step> step;
+	};
+	std::optional<PartnerOrder> order;
+	/// The partner to make stand still in its mind (true) or to let go free again (false)
+	std::optional<std::pair<uint32_t, bool>> demobilise;
 };
 
 /// random(n) is a whole number from 0 to n - 1
