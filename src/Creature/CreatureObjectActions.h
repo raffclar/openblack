@@ -117,6 +117,19 @@ enum class Failure : uint8_t
 /// Whether the creature makes a sound of refusal when the action failed: only when the search found no route
 [[nodiscard]] bool RefusesAloud(Failure failure);
 
+/// What a creature that walks up to a thing to pick it up or stomp on it does on a turn when it stands still. It
+/// continues until the thing is in reach or the action fails: there is no limit to the walks.
+enum class ApproachStep : uint8_t
+{
+	/// The thing is in reach: the animations start
+	Begin,
+	/// Near enough, it only turns so that the thing lies where its reach is middling
+	Turn,
+	/// It walks again to the thing
+	Walk,
+};
+[[nodiscard]] ApproachStep NextApproachStep(bool inReach, bool nearEnoughToTurn);
+
 /// The kicking animation
 constexpr size_t k_KickAnimation = 117;
 /// A thing kicked flies off at this many times the creature's size

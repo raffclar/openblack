@@ -795,7 +795,7 @@ std::optional<creature_cast_moves::WalkStart> CreatureMindSystem::GoNear(entt::e
 	    creature, target, CreatureLocomotionSystemInterface::Pace::Walk, near, far);
 	using MoveResult = CreatureLocomotionSystemInterface::MoveResult;
 	const auto start =
-	    creature_cast_moves::GoNearWalkStart(result == MoveResult::Started, result != MoveResult::InvalidDestination);
+	    creature_cast_moves::WalkStartOf(result == MoveResult::Started, result != MoveResult::InvalidDestination);
 	if (start == creature_cast_moves::WalkStart::Walking)
 	{
 		casting.destination = target;

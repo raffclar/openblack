@@ -180,11 +180,11 @@ TEST(CreatureClearWay, AWalkNearAThingThatGetsNowhereForFiftyTurnsGivesUp)
 
 TEST(CreatureClearWay, AWalkNearAThingWhereItCannotStandLeavesTheThingAlone)
 {
-	using creature_cast_moves::GoNearWalkStart;
 	using creature_cast_moves::WalkStart;
-	EXPECT_EQ(GoNearWalkStart(true, true), WalkStart::Walking);
+	using creature_cast_moves::WalkStartOf;
+	EXPECT_EQ(WalkStartOf(true, true), WalkStart::Walking);
 	// A creature that cannot walk now asks again on the next turn
-	EXPECT_EQ(GoNearWalkStart(false, true), WalkStart::TryAgain);
+	EXPECT_EQ(WalkStartOf(false, true), WalkStart::TryAgain);
 	// No place to stand at the thing stops the step, and the creature does not choose the thing again for a time
-	EXPECT_EQ(GoNearWalkStart(false, false), WalkStart::NoWay);
+	EXPECT_EQ(WalkStartOf(false, false), WalkStart::NoWay);
 }

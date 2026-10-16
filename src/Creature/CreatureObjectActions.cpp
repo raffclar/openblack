@@ -114,6 +114,15 @@ bool creature_object_actions::LeavesThingAlone(Kind kind, Failure failure)
 	return walksToThing && failure != Failure::Other;
 }
 
+creature_object_actions::ApproachStep creature_object_actions::NextApproachStep(bool inReach, bool nearEnoughToTurn)
+{
+	if (inReach)
+	{
+		return ApproachStep::Begin;
+	}
+	return nearEnoughToTurn ? ApproachStep::Turn : ApproachStep::Walk;
+}
+
 bool creature_object_actions::RefusesAloud(Failure failure)
 {
 	return failure == Failure::NoRoute;

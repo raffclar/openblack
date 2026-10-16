@@ -370,3 +370,14 @@ TEST(CreatureObjectBeliefs, AStompOrAKickWithNoWayLeavesItsThingAlone)
 	EXPECT_TRUE(LeavesThingAlone(Kind::Kick, Failure::NoRoute));
 	EXPECT_FALSE(LeavesThingAlone(Kind::Kick, Failure::Other));
 }
+
+TEST(CreatureObjectBeliefs, AWalkUpToAThingContinuesUntilTheThingIsInReach)
+{
+	using openblack::creature_object_actions::ApproachStep;
+	using openblack::creature_object_actions::NextApproachStep;
+	EXPECT_EQ(NextApproachStep(true, false), ApproachStep::Begin);
+	EXPECT_EQ(NextApproachStep(true, true), ApproachStep::Begin);
+	EXPECT_EQ(NextApproachStep(false, true), ApproachStep::Turn);
+	// Out of reach, it walks again, however many times it walked before: there is no step that gives up
+	EXPECT_EQ(NextApproachStep(false, false), ApproachStep::Walk);
+}

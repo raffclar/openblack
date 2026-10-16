@@ -91,7 +91,8 @@ enum class Stall : uint8_t
 /// last note and whether a script controls it
 [[nodiscard]] Stall CheckStall(uint32_t turns, float moved, bool scripted);
 
-/// What a creature that goes near a thing does after it asks for a walk to the thing
+/// What a creature that walks to a thing does after it asks for the walk: a creature that goes near a thing, picks it
+/// up or stomps on it
 enum class WalkStart : uint8_t
 {
 	/// The walk started: it continues to the thing
@@ -101,8 +102,8 @@ enum class WalkStart : uint8_t
 	/// It cannot stand where the thing is: it stops the step, and it does not choose the thing again for a time
 	NoWay,
 };
-/// What a creature that goes near a thing does, by whether its walk started and whether it can stand at the thing
-[[nodiscard]] WalkStart GoNearWalkStart(bool started, bool destinationValid);
+/// What a creature that walks to a thing does, by whether its walk started and whether it can stand at the thing
+[[nodiscard]] WalkStart WalkStartOf(bool started, bool destinationValid);
 
 /// How far from a thing a creature getting away from it must be
 [[nodiscard]] float GetAwayDistance(float keep, std::optional<float> thingRadius);
