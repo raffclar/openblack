@@ -190,6 +190,11 @@ enum class Effect : uint8_t
 inline constexpr float k_NeapHighDrop = 0.6f;
 /// The lowest low tide, at a full or a new moon, under the usual height
 inline constexpr float k_LowestTide = 2.5f;
+/// Whether the moon moves the tides. Off (the user's decision): the sea stays at the original game's water height, the
+/// full moon's high tide, all the time. The tide rules stay for when it is on.
+inline constexpr bool k_MoonTides = false;
+/// How far under the usual height the sea goes at its lowest
+inline constexpr float k_LowestSea = k_MoonTides ? k_LowestTide : 0.0f;
 /// The low tide halfway between a full and a new moon is this share of the lowest
 inline constexpr float k_NeapLowShare = 0.6f;
 

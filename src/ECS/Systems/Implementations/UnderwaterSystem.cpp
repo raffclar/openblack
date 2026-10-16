@@ -138,7 +138,7 @@ void UnderwaterSystem::Update(std::chrono::milliseconds frameRealTime)
 	}
 	_seabed = seabed::Build(altitudes, size, glm::vec2(0.0f), LandIslandInterface::k_CellSize, beach);
 	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: {} corners of beach sand above the sea", beachCorners);
-	_reef = seabed::PlaceReef(_seabed, graphics::underwater::k_LowestTide, graphics::underwater::k_MostCoral,
+	_reef = seabed::PlaceReef(_seabed, graphics::underwater::k_LowestSea, graphics::underwater::k_MostCoral,
 	                          graphics::underwater::k_MostPlants);
 	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: {} coral and plants on the reef", _reef.size());
 	++_revision;
@@ -160,7 +160,7 @@ void UnderwaterSystem::UpdateSea(float frameSeconds)
 			phase = moon->phase;
 		}
 	}
-	const float tide = _enabled ? underwater::TideLevel(hour, phase) : underwater::k_SeaLevel;
+	const float tide = _enabled && underwater::k_MoonTides ? underwater::TideLevel(hour, phase) : underwater::k_SeaLevel;
 	// The tide moves slowly, so a jump of the clock does not jerk the sea
 	const float before = _seaLevel;
 	_seaLevel = underwater::EaseTowards(_seaLevel, tide, 0.4f, frameSeconds);
