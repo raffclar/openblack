@@ -211,6 +211,10 @@ public:
 	void SetValue(float value) noexcept;
 	std::function<void(float)> onChange;
 	std::u16string label;
+	/// The size of the label's text along the bar
+	int labelSize {DialogPainter::k_MidTextSize};
+	/// The label goes above a small knob in the lower half of the bar, at a size of half the bar's height and 2 more
+	bool labelAbove {false};
 
 private:
 	[[nodiscard]] int GetKnobLeft(float value) const;
@@ -252,6 +256,9 @@ public:
 	[[nodiscard]] std::optional<size_t> GetSelection() const noexcept { return _selection; }
 	void SetSelection(std::optional<size_t> selection) noexcept { _selection = selection; }
 	[[nodiscard]] float GetScroll() const noexcept { return _scroll; }
+	/// Scrolls the list so that the selected item shows, the least distance that is necessary. With no selection the
+	/// list scrolls to its end.
+	void ScrollToSelection();
 	/// Width of the scroll bar, beside the box
 	[[nodiscard]] static constexpr int GetScrollBarWidth() noexcept { return k_ScrollBarWidth; }
 	/// The scroll bar of every list is 24 units wide, for all sizes of text

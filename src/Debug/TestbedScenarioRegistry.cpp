@@ -2082,6 +2082,24 @@ void AddAudio(std::vector<Scenario>& all)
 	                 music(0, 2.0f), music(1, 45.0f), music(k_StopCustomMusic, 45.0f)},
 	});
 
+	// The controls of the custom music player, open with the play list, while the first track plays
+	all.push_back({
+	    .id = "audio.custom_music_controls",
+	    .name = "The custom music player's controls",
+	    .facet = Facet::Audio,
+	    .description = "Put two MP3 files in the custom_music folder of the profile folder (Profiles/custom_music in the "
+	                   "working folder of the game, Profiles/developer/custom_music on a developer run). The first track "
+	                   "plays, and the controls at the top right of the screen open with the play list. Click the "
+	                   "buttons, move the sliders and click a track of the list.",
+	    .expected = "The music button is at the top right, left of the corner. Below it are play, pause, stop, the last "
+	                "and next track, rewind and fast forward, then the volume slider with shuffle and repeat, then the "
+	                "position slider with the time above its knob and the play list button. The song name is to the left "
+	                "of the music button, and the play list below the controls. Each button clicks. Shuffle and repeat "
+	                "stay lit while they are on. Rewind and fast forward do nothing.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {music(0, 0.5f), Command {.kind = Kind::ShowCustomMusicControls, .delaySeconds = 0.5f, .value = 2}},
+	});
+
 	all.push_back({
 	    .id = "audio.snow",
 	    .name = "Footsteps in snow",
@@ -6564,7 +6582,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
-	       kind == Kind::PlayCustomMusic || IsPointerCommand(kind);
+	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -6591,7 +6609,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 127> k_Names {
+	constexpr std::array<std::string_view, 128> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -6719,6 +6737,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "pointer on altar",
 	    "check the profile folder",
 	    "play custom music",
+	    "show the custom music controls",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

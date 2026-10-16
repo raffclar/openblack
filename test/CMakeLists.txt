@@ -1059,3 +1059,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_music_reaction test_creature_music_reaction.cpp
 )
+# The custom music player's controls at the top right of the screen
+openblack_setup_and_add_test(
+  test_custom_music_controls gui/test_custom_music_controls.cpp
+)

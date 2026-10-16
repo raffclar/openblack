@@ -72,6 +72,7 @@ constexpr std::string_view k_Menu = "menu";
 constexpr std::string_view k_Cave = "cave";
 constexpr std::string_view k_SkipBox = "skip_box";
 constexpr std::string_view k_TattooEditor = "tattoo_editor";
+constexpr std::string_view k_MusicPlayer = "music_player";
 
 std::string Lower(std::string_view text)
 {
@@ -464,6 +465,15 @@ std::vector<WindowInfo> GameGui::Windows() const
 			editor.buttons.push_back(control.name);
 		}
 		windows.push_back(std::move(editor));
+
+		// The custom music controls at the top right of the screen, open while they show
+		const auto& music = game->GetInterface()->GetMusicControls();
+		WindowInfo player {.name = std::string(k_MusicPlayer), .kind = "game", .open = music.IsActive()};
+		for (const auto& control : DialogControls(music.GetNamedControls()))
+		{
+			player.buttons.push_back(control.name);
+		}
+		windows.push_back(std::move(player));
 	}
 	if (Locator::creatureCaveSystem::has_value())
 	{
@@ -646,6 +656,27 @@ std::string GameGui::Send(std::span<const InputEvent> events)
 std::string GameGui::Press(std::string_view window, const std::vector<ButtonPathStep>& path)
 {
 	const auto lower = Lower(window);
+	if (lower == k_MusicPlayer)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr)
+		{
+			return "the game's dialogs aren't made yet";
+		}
+		auto& interface = *game->GetInterface();
+		if (!interface.GetMusicControls().IsActive())
+		{
+			return "the custom music controls don't show now (a dialog, the temple, a video or a cut scene hides them)";
+		}
+		const auto controls = DialogControls(interface.GetMusicControls().GetNamedControls());
+		const auto found = FindDialogControl(controls, path);
+		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
+		{
+			return "the custom music controls: " + *why + "; gui.windows lists them";
+		}
+		const auto size = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(800, 600);
+		return Send(ClickAt(interface.FromMusicControls(std::get<glm::ivec2>(found), static_cast<glm::u16vec2>(size))));
+	}
 	if (lower == k_Menu || lower == k_SkipBox || lower == k_TattooEditor)
 	{
 		auto* game = Game::Instance();
