@@ -45,6 +45,20 @@ Root WallRoot(const glm::vec3& position)
 	return {.position = position, .inwardNormal = {-1.0f, 0.0f, 0.0f}, .direction = {1.0f, 0.0f, 0.0f}};
 }
 
+/// A strand laid straight out from its sunken root, at rest
+Strand Straight(const Root& root, const Physics& physics, uint32_t segmentCount)
+{
+	Strand strand;
+	strand.positions.resize(segmentCount);
+	strand.velocities.assign(segmentCount, glm::vec3(0.0f));
+	const auto start = root.position + (root.inwardNormal * physics.rootDepth);
+	for (uint32_t i = 0; i < segmentCount; ++i)
+	{
+		strand.positions[i] = start + (root.direction * (physics.segmentLength * static_cast<float>(i)));
+	}
+	return strand;
+}
+
 void ExpectNear(const glm::vec3& actual, const glm::vec3& expected, float tolerance = k_Tolerance)
 {
 	EXPECT_NEAR(actual.x, expected.x, tolerance);
@@ -119,6 +133,33 @@ TEST(CreatureHair, StraightStrandStartsFromItsSunkenRoot)
 	for (const auto& velocity : strand.velocities)
 	{
 		ExpectNear(velocity, glm::vec3(0.0f));
+	}
+}
+
+TEST(CreatureHair, NewStrandStartsFromZero)
+{
+	const auto strand = FromZero(5);
+	ASSERT_EQ(strand.positions.size(), 5u);
+	ASSERT_EQ(strand.velocities.size(), 5u);
+	for (size_t i = 0; i < 5; ++i)
+	{
+		ExpectNear(strand.positions[i], glm::vec3(0.0f));
+		ExpectNear(strand.velocities[i], glm::vec3(0.0f));
+	}
+}
+
+TEST(CreatureHair, ZeroStartStrandPointsFromItsRootTowardsTheOrigin)
+{
+	// A neutral strand keeps no speed and no pull, so it holds the direction its start gave it
+	const Physics physics {.segmentLength = 2.0f, .stiffness = 0.0f, .damping = 0.0f, .rootDepth = 0.0f, .halfWidth = 0.5f};
+	auto strand = FromZero(4);
+	Step(strand, WallRoot({10.0f, 0.0f, 0.0f}), physics, 0.02f);
+	ExpectNear(strand.positions[0], {10.0f, 0.0f, 0.0f});
+	for (size_t i = 1; i < 4; ++i)
+	{
+		EXPECT_NEAR(strand.positions[i].y, 0.0f, 0.1f);
+		EXPECT_NEAR(glm::length(strand.positions[i] - strand.positions[i - 1]), 2.0f, 1e-3f);
+		EXPECT_LT(strand.positions[i].x, strand.positions[i - 1].x);
 	}
 }
 
