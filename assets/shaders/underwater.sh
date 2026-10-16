@@ -36,6 +36,12 @@ uniform vec4 u_uwCurrent;
 #define UW_LOWEST_TIDE 2.5f
 
 #define UW_ABSORPTION vec3(0.085f, 0.032f, 0.018f)
+// The least distance of water that the light goes through where the original game shows its sea, in units
+#define UW_SHALLOWS_TINT 12.0f
+// The alpha that the land writes into the scene when the experiment's water is on. Other draws do not usually write it.
+#define UW_LAND_MARK (128.0f / 255.0f)
+// The highest land, in units, that can show the original sea through its coast alpha (altitude 4)
+#define UW_FILM_TOP 2.7f
 
 // The part of each colour that is left after the light goes this far through the water
 vec3 UwTransmittance(float range)

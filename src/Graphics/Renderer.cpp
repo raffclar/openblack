@@ -132,6 +132,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -165,6 +166,7 @@
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Sun.h"
 #include "Graphics/TreeBrightness.h"
+#include "Graphics/Underwater.h"
 #include "Graphics/VertexBuffer.h"
 #include "Graphics/WarmUpViews.h"
 #include "Graphics/ZSort.h"
@@ -2515,6 +2517,13 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 	glm::vec4 u_seaParams {still ? sea_rows::k_StillPeriod : sea_rows::Period(waterTiling), 0.0f, 0.0f, 0.0f};
 	glm::vec4 u_seaRows {0.0f};
 	glm::vec4 u_seaMode {still ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+	// EXPERIMENT (not for merge): the effect that draws the experiment's water in flat magenta also draws the original
+	// sea in flat magenta, so that the two masks can be compared
+	if (Locator::underwaterSystem::has_value() &&
+	    Locator::underwaterSystem::value().GetEffectOff() == graphics::underwater::Effect::WaterMask)
+	{
+		u_seaMode.z = 1.0f;
+	}
 	if (!still)
 	{
 		// The rows ripple along the camera's view across the ground, 0.9 units at most
@@ -5869,7 +5878,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				                         !(desc.viewId == RenderPass::Main && _underwaterFrame.has_value());
 				const auto& triangles = block.GetTriangles(detail.mesh, coarserSides, dropOpenSea);
 				triangles.Bind(triangles.GetCount());
-				bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
+				// EXPERIMENT (not for merge): with the experiment's water the land is opaque. It writes a mark in its
+				// alpha instead, so that the water pass knows which pixels show the land.
+				const auto blend = desc.viewId == RenderPass::Main && _underwaterFrame.has_value()
+				                       ? uint64_t {0}
+				                       : BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+				bgfx::setState((defaultState & ~BGFX_STATE_BLEND_MASK) | blend |
+				                   (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW),
+				               0);
 				terrainShader->Submit(static_cast<bgfx::ViewId>(landViewId), blockDepth(block), discard);
 			};
 			if (!blocks.empty())
