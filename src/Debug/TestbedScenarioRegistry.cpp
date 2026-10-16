@@ -5481,6 +5481,22 @@ void AddCombat(std::vector<Scenario>& all)
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
 	}
+
+	{
+		all.push_back({
+		    .id = "combat.start_turn",
+		    .name = "Fighters turn on the spot as the duel starts",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger starts a fight with the blue tiger to its east, and both fight by themselves. The "
+		                   "camera looks at the arena from the side.",
+		    .expected = "As the duel starts, each tiger first turns on the spot to the other with its turn animation. A very "
+		                "small turn also plays this animation. Then each tiger plays its start animation, and it faces the "
+		                "other at once on each game turn. As a tiger starts or ends a block, it does not turn.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
 }
 
 void AddMind(std::vector<Scenario>& all)

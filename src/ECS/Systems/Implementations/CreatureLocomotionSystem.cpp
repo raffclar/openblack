@@ -451,7 +451,8 @@ void TurnStep(CreatureLocomotion& self, const Moves& moves, float playbackRate)
 	}
 	else
 	{
-		self.heading = locomotion::LerpHeading(move.startHeading, self.targetHeading, move.timeMs, move.durationMs);
+		// On each game turn, the heading closes the part of the gap that the turn's time before this step gives
+		self.heading = locomotion::LerpHeading(self.heading, self.targetHeading, from, move.durationMs);
 	}
 	if (move.timeMs < move.durationMs)
 	{
@@ -1108,6 +1109,37 @@ bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point
 	                              .timeMs = 0.0f,
 	                              .durationMs = start.animations.has_value() ? moves.PairDuration(*start.animations)
 	                                                                         : moves.Duration(locomotion::animations::k_Stand),
+	                              .displacement = glm::vec2(0.0f),
+	                              .startHeading = self->heading,
+	                              .startRouteHeading = self->heading};
+	return true;
+}
+
+bool CreatureLocomotionSystem::TurnToHeading(entt::entity creature, float heading)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* self = registry.TryGet<CreatureLocomotion>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (self == nullptr || body == nullptr || !self->started)
+	{
+		return false;
+	}
+	ClearWalk(*self);
+	self->following.reset();
+	self->facingOnly = true;
+	self->targetHeading = locomotion::WrapAngle(heading);
+	const auto angle = locomotion::WrapAngle(self->targetHeading - self->heading);
+	const auto moves = MovesOf(body->species);
+	const auto firstSpin = locomotion::SpinSideOf(angle) == locomotion::Side::Right ? locomotion::animations::k_RightSpin
+	                                                                                : locomotion::animations::k_LeftSpin;
+	// With all three spins of the side, it plays their blend. Without them, it eases round over the stand's length.
+	const auto animations = moves.HasAll(firstSpin) ? std::optional(locomotion::PairFor(firstSpin, angle)) : std::nullopt;
+	self->motion = Motion::Turning;
+	self->move =
+	    CreatureLocomotion::Move {.animations = animations,
+	                              .timeMs = 0.0f,
+	                              .durationMs = animations.has_value() ? moves.PairDuration(*animations)
+	                                                                   : moves.Duration(locomotion::animations::k_Stand),
 	                              .displacement = glm::vec2(0.0f),
 	                              .startHeading = self->heading,
 	                              .startRouteHeading = self->heading};
