@@ -159,6 +159,26 @@ TEST(CustomMusicControls, StartGivesThePlayerFullVolumeNoShuffleNoRepeat)
 	EXPECT_EQ(player.volume, 7u);
 }
 
+TEST(CustomMusicControls, APlayerWithNoTrackAtTheStartWorksOnceItHasOne)
+{
+	FakePlayer player;
+	Panel panel;
+	Start(panel, player);
+	EXPECT_FALSE(panel.started);
+	EXPECT_EQ(player.volume, 100u);
+	player.tracks = TwoTracks().tracks;
+	Start(panel, player);
+	EXPECT_TRUE(panel.started);
+	EXPECT_EQ(player.volume, 255u);
+	EXPECT_FALSE(player.shuffle);
+	Click(panel, player, Button::Pause);
+	EXPECT_EQ(player.state, audio::CustomMusicPlayerInterface::PlayState::Paused);
+	Click(panel, player, Button::Shuffle);
+	EXPECT_TRUE(player.shuffle);
+	DragVolume(panel, player, 0.0f);
+	EXPECT_EQ(player.volume, 0u);
+}
+
 TEST(CustomMusicControls, ButtonsTellThePlayer)
 {
 	auto player = TwoTracks();

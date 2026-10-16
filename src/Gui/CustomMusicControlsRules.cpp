@@ -10,7 +10,6 @@
 #include "CustomMusicControlsRules.h"
 
 #include <algorithm>
-#include <utility>
 
 #include <fmt/format.h>
 
@@ -86,10 +85,12 @@ glm::vec2 custom_music_controls::Origin(glm::u16vec2 resolution) noexcept
 
 void custom_music_controls::Start(Panel& panel, audio::CustomMusicPlayerInterface& player)
 {
-	if (std::exchange(panel.started, true) || !player.IsRunning())
+	// The controls wait for a track: a player with no track at the start gets its settings when it has one
+	if (panel.started || !player.IsRunning())
 	{
 		return;
 	}
+	panel.started = true;
 	panel.volume = 255;
 	player.SetVolume(panel.volume);
 	player.SetShuffle(panel.shuffle);

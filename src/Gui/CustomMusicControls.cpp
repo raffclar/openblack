@@ -175,11 +175,11 @@ void CustomMusicControls::Update(audio::CustomMusicPlayerInterface* player, std:
 	{
 		_player = player;
 		_lastRefresh.reset();
-		if (_player != nullptr)
-		{
-			Start(_panel, *_player);
-		}
 		ShowParts();
+	}
+	if (_player != nullptr)
+	{
+		Start(_panel, *_player);
 	}
 	// The controls look at the player only while they show
 	if (_shown && (!_lastRefresh.has_value() || milliseconds > *_lastRefresh + k_RefreshMilliseconds))

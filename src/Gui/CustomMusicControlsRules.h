@@ -193,7 +193,8 @@ struct View
 	uint32_t musicColour {k_DefaultColour};
 };
 
-/// The first time: the controls give the player a volume of 255, no shuffle and no repeat, when the player works
+/// The first time that the player works: the controls give it a volume of 255, no shuffle and no repeat. All the
+/// controls work as soon as the player has a track, also when it had none at the start.
 void Start(Panel& panel, audio::CustomMusicPlayerInterface& player);
 /// A click on a button. It does nothing when the player does not work.
 void Click(Panel& panel, audio::CustomMusicPlayerInterface& player, Button button);
