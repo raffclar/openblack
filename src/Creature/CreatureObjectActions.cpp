@@ -93,6 +93,16 @@ Hands creature_object_actions::HandsFor(Kind kind)
 	return Hands::Either;
 }
 
+bool creature_object_actions::LeavesThingAlone(bool pickingUp, Failure failure)
+{
+	return pickingUp && failure != Failure::Other;
+}
+
+bool creature_object_actions::RefusesAloud(Failure failure)
+{
+	return failure == Failure::NoRoute;
+}
+
 glm::vec2 creature_object_actions::LeanOf(float plusX, float minusX, float plusZ, float minusZ, float radius)
 {
 	const auto across = radius + radius;
