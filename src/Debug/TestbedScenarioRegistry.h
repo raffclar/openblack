@@ -798,6 +798,10 @@ struct Command
 		/// list (value 2), as the music button and the play list button show them. Value 0 hides them. Needs no
 		/// creature
 		ShowCustomMusicControls,
+		/// The game saves into the slot (value), as the save game room saves into it. Needs no creature
+		SaveGame,
+		/// The game loads the creatures of the slot (value) into the land, as a load of the slot does. Needs no creature
+		LoadGame,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -60,6 +60,23 @@ public:
 	virtual void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) = 0;
 	/// The creature's mind as a mind file of the current version, over the file it was loaded from, if it has a mind
 	[[nodiscard]] virtual std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const = 0;
+	/// The plan that a saved game keeps for a creature: what it wants, what it does and to what, and the step of the
+	/// agenda that it did
+	struct RestoredPlan
+	{
+		creature_desires::Desire desire {creature_desires::Desire::ObeyPlayer};
+		uint32_t action {0};
+		std::optional<entt::entity> object;
+		std::optional<entt::entity> activityObject;
+		std::optional<entt::entity> instrument;
+		size_t step {0};
+	};
+	/// A load of a saved game gives the creature the fresh mind of the mind file at once. When the save kept a plan, the
+	/// creature then does the plan again from the start of the step that it did.
+	virtual void RestoreMind(entt::entity /*creature*/, std::shared_ptr<const creaturemind::MindFileData> /*mind*/,
+	                         const std::optional<RestoredPlan>& /*plan*/)
+	{
+	}
 	/// Swaps the minds of two creatures at once, as a script does: everything the mind file keeps (what each has learnt
 	/// and how it feels, its physique and tattoos) moves to the other body, while each keeps its name, size and alignment
 	/// for now; the creature the first belonged to now owns the second and the other way round, and both carry out the
