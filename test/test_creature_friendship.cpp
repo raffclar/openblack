@@ -222,3 +222,27 @@ TEST(CreatureFriendship, TheStepsOfAJointActionAreDoneAsTheyStart)
 	EXPECT_EQ(order.order->partner, k_Asked);
 	EXPECT_EQ(mind.step, 3U);
 }
+
+TEST(CreatureFriendship, AJointActionThatEndsWithAnOrderStopsOnTheNextTurn)
+{
+	const JointFacts running {
+	    .otherAgenda = false, .hadStepsLeft = true, .hasStepsLeft = true, .endedWithOrder = false, .endSeen = false};
+	EXPECT_EQ(JointTurnOf(running), JointTurn::Continues);
+	auto other = running;
+	other.otherAgenda = true;
+	EXPECT_EQ(JointTurnOf(other), JointTurn::Ends);
+	// The last step was not an order: the joint action stops at once
+	auto done = running;
+	done.hasStepsLeft = false;
+	EXPECT_EQ(JointTurnOf(done), JointTurn::Ends);
+	// The last step gave an order: the partner gets one turn to start it
+	done.endedWithOrder = true;
+	EXPECT_EQ(JointTurnOf(done), JointTurn::EndsNextTurn);
+	done.endSeen = true;
+	EXPECT_EQ(JointTurnOf(done), JointTurn::Ends);
+	// An agenda that had no steps left when the joint action noted it does not stop the joint action
+	auto empty = running;
+	empty.hadStepsLeft = false;
+	empty.hasStepsLeft = false;
+	EXPECT_EQ(JointTurnOf(empty), JointTurn::Continues);
+}

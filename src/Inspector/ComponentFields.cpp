@@ -917,7 +917,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreaturePartner>(context)
 	    .Field<&components::CreaturePartner::partner>("partner")
 	    .Field<&components::CreaturePartner::agenda>("agenda")
-	    .Field<&components::CreaturePartner::agendaRunning>("agendaRunning");
+	    .Field<&components::CreaturePartner::agendaRunning>("agendaRunning")
+	    .Field<&components::CreaturePartner::endSeen>("endSeen");
 	Reflect<components::CreatureDemobilised> {context};
 	Reflect<components::CreatureTattoos>(context)
 	    .Field<&components::CreatureTattoos::slots>("slots")

@@ -1449,7 +1449,14 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		}
 	}
 	const bool started = action.status == Status::Running;
-	registry.AssignOrReplace<CreatureObjectAction>(creature, std::move(action));
+	auto& kept = registry.AssignOrReplace<CreatureObjectAction>(creature, std::move(action));
+	// The creature starts its walk or its turn to the target on the turn that the action starts. Thus another creature
+	// that waits while this creature walks to a thing sees the walk at once.
+	if (started && kept.phase == Phase::Approach)
+	{
+		Approach(creature, kept, body, registry.Get<const Transform>(creature), registry.Get<CreatureAnimation>(creature),
+		         held);
+	}
 	return started;
 }
 

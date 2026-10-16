@@ -175,7 +175,9 @@ void testbed_scenarios::AddFriendActionScenarios(std::vector<Scenario>& all)
 	                   "script tells the lion to smile at the tiger, then tells the tiger to play a throwing game with "
 	                   "the lion, with the ball.",
 	    .expected = "The tiger asks the lion to play and holds the mind of the lion still. It picks up the ball and throws "
-	                "it at the lion. The lion picks the ball up and throws it back at the tiger.",
+	                "it at the lion. Three seconds later it tells the lion to pick the ball up, and waits while the "
+	                "lion walks to the ball. As the lion starts to pick it up, the tiger tells it to throw the ball back. "
+	                "The lion has nothing in its hand yet, so the game stops. The lion then holds the ball.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .distance = k_CloseUp},
 	    .creatures = {Asker(), Partner()},
