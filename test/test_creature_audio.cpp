@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Audio/ScriptSoundEffect.h"
 #include "Creature/CreatureAudio.h"
 
 using namespace openblack;
@@ -234,8 +235,7 @@ TEST(CreatureAudio, VoiceBank)
 
 TEST(CreatureAudio, Gate)
 {
-	const Gate open {
-	    .muted = false, .insideTemple = false, .wideScreen = false, .localPlayersCreature = false, .otherVoicesEnabled = false};
+	const Gate open {.muted = false, .localPlayersCreature = false, .otherVoicesEnabled = false};
 	// Another player's creature steps but does not roar, unless a script lets it
 	EXPECT_TRUE(IsHeard(EventKind::Generic, open));
 	EXPECT_FALSE(IsHeard(EventKind::Voice, open));
@@ -245,16 +245,42 @@ TEST(CreatureAudio, Gate)
 	gate = open;
 	gate.localPlayersCreature = true;
 	EXPECT_TRUE(IsHeard(EventKind::Voice, gate));
-	// Silent in cut scenes, inside the temple and when muted
-	for (auto silence : {&Gate::muted, &Gate::insideTemple, &Gate::wideScreen})
-	{
-		gate = open;
-		gate.localPlayersCreature = true;
-		gate.*silence = true;
-		EXPECT_FALSE(IsHeard(EventKind::Generic, gate));
-		EXPECT_FALSE(IsHeard(EventKind::Voice, gate));
-	}
+	// Silent when muted
+	gate.muted = true;
+	EXPECT_FALSE(IsHeard(EventKind::Generic, gate));
+	EXPECT_FALSE(IsHeard(EventKind::Voice, gate));
 	EXPECT_FALSE(IsHeard(EventKind::HairGroup, open));
+}
+
+TEST(CreatureAudio, SamplesHaveTheirSayAsEverySoundEffect)
+{
+	// Every sample of the creature banks has user parameter 0: heard in a cut scene and in fight controls, but not
+	// inside the temple or with the game's sound effects off
+	constexpr uint16_t k_CreatureSample = 0;
+	const audio::SoundEffectConditions cutScene {.scriptWideScreen = true};
+	EXPECT_TRUE(audio::SoundEffectHeard(cutScene, audio::ScriptSoundBank::CreatureGeneric, k_CreatureSample));
+	EXPECT_TRUE(audio::SoundEffectHeard(cutScene, audio::BankOfFile("btiger.sad"), k_CreatureSample));
+	const audio::SoundEffectConditions fight {.creatureFightControl = true};
+	EXPECT_TRUE(audio::SoundEffectHeard(fight, audio::ScriptSoundBank::CreatureGeneric, k_CreatureSample));
+	const audio::SoundEffectConditions temple {.insideTemple = true};
+	EXPECT_FALSE(audio::SoundEffectHeard(temple, audio::ScriptSoundBank::CreatureGeneric, k_CreatureSample));
+	const audio::SoundEffectConditions soundOff {.gameSoundOn = false};
+	EXPECT_FALSE(audio::SoundEffectHeard(soundOff, audio::ScriptSoundBank::CreatureGeneric, k_CreatureSample));
+	EXPECT_FALSE(audio::SoundEffectHeard(soundOff, audio::BankOfFile("bape.sad"), k_CreatureSample));
+}
+
+TEST(CreatureAudio, QueueTakesANewEventBeforeThoseAtTheSameFraction)
+{
+	std::vector<FiredEvent> queue;
+	Enqueue(queue, {.fraction = 0.5f, .event = Step(1)});
+	Enqueue(queue, {.fraction = 0.5f, .event = Step(2)});
+	Enqueue(queue, {.fraction = 0.25f, .event = Step(3)});
+	Enqueue(queue, {.fraction = 0.5f, .event = Step(4)});
+	ASSERT_EQ(queue.size(), 4u);
+	EXPECT_EQ(queue[0].event.timeMs, 3);
+	EXPECT_EQ(queue[1].event.timeMs, 4);
+	EXPECT_EQ(queue[2].event.timeMs, 2);
+	EXPECT_EQ(queue[3].event.timeMs, 1);
 }
 
 namespace

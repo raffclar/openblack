@@ -50,7 +50,7 @@ void creature_audio::Enqueue(std::vector<FiredEvent>& queue, const FiredEvent& f
 	{
 		return;
 	}
-	const auto at = std::ranges::upper_bound(queue, fired.fraction, {}, &FiredEvent::fraction);
+	const auto at = std::ranges::lower_bound(queue, fired.fraction, {}, &FiredEvent::fraction);
 	queue.insert(at, fired);
 }
 
@@ -303,7 +303,7 @@ std::string creature_audio::VoiceBank(std::string_view rigBankName, CreatureType
 
 bool creature_audio::IsHeard(EventKind kind, const Gate& gate)
 {
-	if (kind == EventKind::HairGroup || gate.muted || gate.insideTemple || gate.wideScreen)
+	if (kind == EventKind::HairGroup || gate.muted)
 	{
 		return false;
 	}

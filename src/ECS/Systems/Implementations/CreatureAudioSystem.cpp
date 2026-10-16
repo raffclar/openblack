@@ -24,8 +24,8 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
-#include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
@@ -40,9 +40,9 @@
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
 #include "ECS/SoundGround.h"
-#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -56,8 +56,16 @@ using openblack::creature::CreatureRig;
 
 namespace
 {
-/// The local player, whose creature is always heard in its own voice
-constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
+/// Whether a creature is the local player's own creature, which is always heard in its own voice
+bool IsLocalPlayersCreature(entt::entity entity)
+{
+	if (!Locator::playerSystem::has_value())
+	{
+		return false;
+	}
+	const auto& players = Locator::playerSystem::value();
+	return players.GetPrimaryCreature(players.GetLocalPlayer()) == entity;
+}
 
 const CreatureRig* RigOf(const Creature& creature)
 {
@@ -93,7 +101,9 @@ void Sound(entt::entity entity, const Creature& creature, const Transform& trans
 		}
 		else if (Locator::audio::has_value())
 		{
-			const auto result = Locator::audio::value().PlayAnimEffect(bank, keys.ToArray(), entity, transform.position);
+			// The sample has its say in when it is heard, as for every sound effect
+			const auto result = Locator::audio::value().PlayAnimEffect(bank, keys.ToArray(), entity, transform.position,
+			                                                           audio::CurrentSoundEffectConditions());
 			note.sample = result.sample;
 			note.played = result.outcome == AnimEffectPlay::Outcome::Played;
 			switch (result.outcome)
@@ -105,6 +115,9 @@ void Sound(entt::entity entity, const Creature& creature, const Transform& trans
 				break;
 			case AnimEffectPlay::Outcome::NotLoaded:
 				note.note = "sample not loaded";
+				break;
+			case AnimEffectPlay::Outcome::NotHeard:
+				note.note = "its sample may not be heard now";
 				break;
 			case AnimEffectPlay::Outcome::TooFar:
 				note.note = fmt::format("too far ({:.0f})",
@@ -126,6 +139,21 @@ void Sound(entt::entity entity, const Creature& creature, const Transform& trans
 	while (heard.recent.size() > CreatureAudio::k_RecentCount)
 	{
 		heard.recent.pop_front();
+	}
+}
+
+/// Plays an event's sound if the creature's rules ask for it. A sound not asked for is noted as silent, unless the
+/// creatures are muted
+void SoundIfAsked(entt::entity entity, const Creature& creature, const Transform& transform, const CreatureRig& rig,
+                  CreatureAudio& heard, const creature_audio::SoundEvent& event, const creature_audio::Gate& gate)
+{
+	if (creature_audio::IsHeard(event.kind, gate))
+	{
+		Sound(entity, creature, transform, rig, heard, event, {});
+	}
+	else if (!gate.muted && event.kind == creature_audio::EventKind::Voice)
+	{
+		Sound(entity, creature, transform, rig, heard, event, "another player's creature's voice");
 	}
 }
 
@@ -176,6 +204,15 @@ void FootstepPuffs(const Creature& creature, const Transform& transform, int32_t
 }
 } // namespace
 
+creature_audio::Gate CreatureAudioSystem::GateOf(entt::entity creature) const
+{
+	return {
+	    .muted = _muted,
+	    .localPlayersCreature = IsLocalPlayersCreature(creature),
+	    .otherVoicesEnabled = _otherVoices,
+	};
+}
+
 void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -189,15 +226,6 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 	{
 		registry.Assign<CreatureAudio>(entity);
 	}
-
-	const creature_audio::Gate gate {
-	    .muted = _muted,
-	    .insideTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
-	    .wideScreen =
-	        Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn(),
-	    .localPlayersCreature = false,
-	    .otherVoicesEnabled = _otherVoices,
-	};
 
 	registry.Each<const Creature, const CreatureAnimation, const Transform, CreatureAudio>(
 	    [&](entt::entity entity, const Creature& creature, const CreatureAnimation& animation, const Transform& transform,
@@ -226,8 +254,7 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		    // Every layer's events since the last frame, queued in order of when they fall within the frame
 		    const auto queue = creature_audio::FrameEvents(heard.last, layers, gameTime.count(), infoOf);
 
-		    auto creatureGate = gate;
-		    creatureGate.localPlayersCreature = creature.owner == k_LocalPlayer;
+		    const auto gate = GateOf(entity);
 		    for (const auto& fired : queue)
 		    {
 			    // Hair groups shown and hidden by animations are not drawn differently yet
@@ -240,17 +267,7 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 			    {
 				    Locator::footprintSystem::value().Step(entity);
 			    }
-			    if (creature_audio::IsHeard(fired.event.kind, creatureGate))
-			    {
-				    Sound(entity, creature, transform, *rig, heard, fired.event, {});
-			    }
-			    else if (!creatureGate.muted)
-			    {
-				    Sound(entity, creature, transform, *rig, heard, fired.event,
-				          creatureGate.insideTemple ? "inside the temple"
-				          : creatureGate.wideScreen ? "cut scene"
-				                                    : "another player's creature's voice");
-			    }
+			    SoundIfAsked(entity, creature, transform, *rig, heard, fired.event, gate);
 			    // After the sound, a footstep throws up dust, heard or not
 			    FootstepPuffs(creature, transform, creature_footstep_puffs::CountOf(fired.event.action));
 		    }
@@ -289,4 +306,25 @@ void CreatureAudioSystem::Play(entt::entity creature, const creature_audio::Soun
 		heard = &registry.Assign<CreatureAudio>(creature);
 	}
 	Sound(creature, component, registry.Get<const Transform>(creature), *rig, *heard, event, {});
+}
+
+void CreatureAudioSystem::PlayAction(entt::entity creature, const creature_audio::SoundEvent& event)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !registry.AllOf<Creature, Transform>(creature))
+	{
+		return;
+	}
+	const auto& component = registry.Get<const Creature>(creature);
+	const auto* rig = RigOf(component);
+	if (rig == nullptr)
+	{
+		return;
+	}
+	auto* heard = registry.TryGet<CreatureAudio>(creature);
+	if (heard == nullptr)
+	{
+		heard = &registry.Assign<CreatureAudio>(creature);
+	}
+	SoundIfAsked(creature, component, registry.Get<const Transform>(creature), *rig, *heard, event, GateOf(creature));
 }

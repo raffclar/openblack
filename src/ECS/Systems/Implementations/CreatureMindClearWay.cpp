@@ -173,7 +173,7 @@ void CreatureMindSystem::RefuseNoRoute(entt::entity creature)
 {
 	if (Locator::creatureAudioSystem::has_value())
 	{
-		Locator::creatureAudioSystem::value().Play(
+		Locator::creatureAudioSystem::value().PlayAction(
 		    creature,
 		    {.kind = creature_audio::EventKind::Voice, .timeMs = 0, .action = audio::SoundAction::Refusal, .mode = 0});
 	}

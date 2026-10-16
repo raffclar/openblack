@@ -63,7 +63,7 @@ struct FiredEvent
 /// A creature queues at most this many sounds at once; later ones are dropped while it is full
 constexpr size_t k_MaxQueued = 16;
 
-/// Puts an event in a queue kept in order of fraction, after those at the same fraction, unless the queue is full
+/// Puts an event in a queue kept in order of fraction, before those at the same fraction, unless the queue is full
 void Enqueue(std::vector<FiredEvent>& queue, const FiredEvent& fired);
 
 /// The events an animation passes playing from fromMs to toMs, a stretch of time that a looping animation may wrap
@@ -162,13 +162,13 @@ constexpr std::string_view k_GenericBank = "creature.sad";
 /// or the one each species' file names when it names none (a lion uses the tiger's, a zebra the horse's)
 [[nodiscard]] std::string VoiceBank(std::string_view rigBankName, CreatureType species);
 
-/// Whether an event's sound is heard: none while muted, inside the temple or with the cinema bars in; a voice only
-/// from the local player's creature unless a script lets every creature be heard
+/// Whether an event's sound is asked for: none while muted; a voice only from the local player's creature unless a
+/// script lets every creature be heard. The sample then has its own say, as every sound effect does (see
+/// audio::SoundEffectHeard): no creature sample is heard inside the temple or with the game's sound effects off, but
+/// all are heard in a cut scene.
 struct Gate
 {
 	bool muted;
-	bool insideTemple;
-	bool wideScreen;
 	bool localPlayersCreature;
 	bool otherVoicesEnabled;
 };
