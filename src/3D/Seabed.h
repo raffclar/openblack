@@ -113,6 +113,11 @@ inline constexpr float k_GentleMost = 0.3f;
 /// cell is not too steep (see creature_route::WalkableLand)
 [[nodiscard]] bool Walkable(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
 
+/// The cells where a creature can walk, for a grid of corner altitudes (x first along each row of z): (size.x - 1) by
+/// (size.y - 1) cells. A cell is walkable when it is Walkable and it joins the largest region of Walkable cells side by
+/// side, as the creature's own map of the land has it. A shallow patch of sea that does not join the land is not walkable.
+[[nodiscard]] std::vector<bool> WalkableCells(std::span<const uint8_t> altitudes, glm::ivec2 size);
+
 /// The sea bed for a grid of corner altitudes (x first along each row of z). Each corner of the sea goes down by its
 /// distance to the nearest land above the sea, as a shelf and then a slope, deeper towards the map's edge, with broad
 /// hills and dips over it. The grid is the whole map: past the land's blocks the sea goes on down to the map's edge.

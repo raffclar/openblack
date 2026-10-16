@@ -389,6 +389,36 @@ TEST(Seabed, OnlyWalkableCellsAreShallow)
 	EXPECT_TRUE(seabed::Walkable(0, 0, 0, 14));
 }
 
+TEST(Seabed, ShallowSeaApartFromTheLandIsNotWalkable)
+{
+	// A land of altitude 6 and, apart from it across deep sea, a shallow patch of altitude 1
+	constexpr glm::ivec2 k_Size {40, 20};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Size.x * k_Size.y), 0);
+	const auto paint = [&](int x0, int x1, uint8_t altitude) {
+		for (int z = 5; z <= 14; ++z)
+		{
+			for (int x = x0; x <= x1; ++x)
+			{
+				altitudes[static_cast<size_t>(z * k_Size.x + x)] = altitude;
+			}
+		}
+	};
+	paint(2, 15, 6);
+	paint(25, 28, 1);
+	const auto walkable = seabed::WalkableCells(altitudes, k_Size);
+	ASSERT_EQ(walkable.size(), static_cast<size_t>((k_Size.x - 1) * (k_Size.y - 1)));
+	const auto at = [&](int x, int z) { return walkable[static_cast<size_t>(z * (k_Size.x - 1) + x)]; };
+	EXPECT_TRUE(at(8, 9));
+	// The cells round the edge of the land, with one corner on it, are walkable too
+	EXPECT_TRUE(at(1, 9));
+	EXPECT_FALSE(at(26, 9));
+	EXPECT_FALSE(at(20, 9));
+	// The patch's sea bed is not kept as shallow as the water a creature walks in
+	const auto bed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
+	EXPECT_LE(bed.DepthAt({85.0f, 95.0f}), 0.0f + 1e-4f);
+	EXPECT_GT(bed.DepthAt({235.0f, 95.0f}), seabed::k_WadeDepth);
+}
+
 TEST(Seabed, ABeachGoesOnDownGentlyUnderTheWater)
 {
 	// The same low coast twice, one of them a beach of sand

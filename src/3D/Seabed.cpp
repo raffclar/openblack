@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <limits>
 #include <utility>
 
@@ -120,6 +121,77 @@ bool seabed::Walkable(uint8_t a, uint8_t b, uint8_t c, uint8_t d)
 	const auto [low, high] = std::minmax({a, b, c, d});
 	const float rise = static_cast<float>(high - low) * k_HeightUnit;
 	return high > 0 && rise <= creature_route::k_SteepRise;
+}
+
+std::vector<bool> seabed::WalkableCells(std::span<const uint8_t> altitudes, glm::ivec2 size)
+{
+	const glm::ivec2 cells = glm::max(size - 1, glm::ivec2(0));
+	const auto count = static_cast<size_t>(cells.x) * static_cast<size_t>(cells.y);
+	std::vector<bool> walkable(count, false);
+	if (count == 0 || altitudes.size() < static_cast<size_t>(size.x) * static_cast<size_t>(size.y))
+	{
+		return walkable;
+	}
+	const auto corner = [&](int x, int z) {
+		return altitudes[static_cast<size_t>(z) * static_cast<size_t>(size.x) + static_cast<size_t>(x)];
+	};
+	const auto cell = [&cells](int x, int z) {
+		return static_cast<size_t>(z) * static_cast<size_t>(cells.x) + static_cast<size_t>(x);
+	};
+	std::vector<bool> open(count, false);
+	for (int z = 0; z < cells.y; ++z)
+	{
+		for (int x = 0; x < cells.x; ++x)
+		{
+			open[cell(x, z)] = Walkable(corner(x, z), corner(x + 1, z), corner(x, z + 1), corner(x + 1, z + 1));
+		}
+	}
+	// The regions of open cells joined side by side; the largest is the land that a creature walks on
+	std::vector<int32_t> region(count, -1);
+	std::vector<size_t> sizes;
+	std::vector<size_t> stack;
+	for (size_t start = 0; start < count; ++start)
+	{
+		if (!open[start] || region[start] >= 0)
+		{
+			continue;
+		}
+		const auto label = static_cast<int32_t>(sizes.size());
+		size_t found = 0;
+		region[start] = label;
+		stack.push_back(start);
+		while (!stack.empty())
+		{
+			const auto at = stack.back();
+			stack.pop_back();
+			++found;
+			const auto x = static_cast<int>(at % static_cast<size_t>(cells.x));
+			const auto z = static_cast<int>(at / static_cast<size_t>(cells.x));
+			for (const auto& [dx, dz] : std::array<std::pair<int, int>, 4> {{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}})
+			{
+				const int nx = x + dx;
+				const int nz = z + dz;
+				if (nx < 0 || nz < 0 || nx >= cells.x || nz >= cells.y)
+				{
+					continue;
+				}
+				const auto next = cell(nx, nz);
+				if (open[next] && region[next] < 0)
+				{
+					region[next] = label;
+					stack.push_back(next);
+				}
+			}
+		}
+		sizes.push_back(found);
+	}
+	if (sizes.empty())
+	{
+		return walkable;
+	}
+	const auto largest = static_cast<int32_t>(std::distance(sizes.begin(), std::ranges::max_element(sizes)));
+	std::ranges::transform(region, walkable.begin(), [largest](int32_t label) { return label == largest; });
+	return walkable;
 }
 
 namespace
@@ -528,9 +600,7 @@ seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size
 	// cells. Where a creature can walk, the water only covers its feet.
 	const auto toCoastLine = DistanceToLine(altitudes, size, k_OriginalCoast);
 	std::vector<bool> wading(count, false);
-	const auto altitude = [&](int x, int z) {
-		return altitudes[at(std::clamp(x, 0, size.x - 1), std::clamp(z, 0, size.y - 1))];
-	};
+	const auto walkable = WalkableCells(altitudes, size);
 	for (int z = 0; z < size.y; ++z)
 	{
 		for (int x = 0; x < size.x; ++x)
@@ -553,7 +623,7 @@ seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size
 				for (int cx = x - 1; cx <= x && !wade; ++cx)
 				{
 					wade = cx >= 0 && cz >= 0 && cx + 1 < size.x && cz + 1 < size.y &&
-					       Walkable(altitude(cx, cz), altitude(cx + 1, cz), altitude(cx, cz + 1), altitude(cx + 1, cz + 1));
+					       walkable[static_cast<size_t>(cz) * static_cast<size_t>(size.x - 1) + static_cast<size_t>(cx)];
 				}
 			}
 			if (wade)
