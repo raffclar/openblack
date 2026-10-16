@@ -616,7 +616,7 @@ void main()
 			// The silt in the water under the surface, on the way to what the pixel shows
 			float siltMean;
 			vec3 siltStart = vec3(surfacePoint.x, min(surfacePoint.y, u_uwParams.z) - 0.05f, surfacePoint.z);
-			vec4 silt = UwSedimentAlong(siltStart, direction, min(path, 40.0f), t, jitter, 3, siltMean);
+			vec4 silt = UwSedimentAlong(siltStart, direction, min(path, 15.0f), t, jitter, 3, siltMean);
 			water = water * silt.a + silt.rgb;
 
 			// The reflection: of the scene where the screen has it, else of the sky
