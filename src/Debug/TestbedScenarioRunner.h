@@ -193,6 +193,8 @@ private:
 	void UpdateCamera();
 	[[nodiscard]] bool IsFree(size_t creature) const;
 	[[nodiscard]] std::optional<entt::entity> CreatureAt(size_t index) const;
+	/// Puts the pointer on the middle of a creature's body, where the interface picks it
+	void PointAtBody(entt::entity creature) const;
 	/// The scenario's objects by their place in it, while they are still about
 	[[nodiscard]] std::optional<entt::entity> ObjectAt(size_t index) const;
 	[[nodiscard]] std::optional<entt::entity> GlobeAt(size_t index) const;
