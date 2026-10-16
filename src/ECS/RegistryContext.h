@@ -56,6 +56,9 @@ struct RegistryContext
 	/// A skirmish: a playground land played rather than the story's. Losing a temple doesn't end it. openblack plays no
 	/// online games, which would be the same.
 	bool skirmish {false};
+	/// Once a script or the hand has forced an action on a creature, a free creature always agrees to play, to be friends
+	/// or to be shown something when another creature asks it, until the land changes
+	bool partnersAlwaysAgree {false};
 	/// The temple hearts' beam sounds go round in turn: the next of the five a beam plays
 	uint32_t nextHeartBeamSound {0};
 	/// The same five, for the beams of a hurt heart, which keep their own turn

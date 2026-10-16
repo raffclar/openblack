@@ -478,6 +478,11 @@ void CreatureMindSystem::StirSourcesOnSighting(entt::entity creature, components
 	{
 		creature_desires::ChangeSource(desires, creature_steal::k_StealSource, creature_steal::k_StealableSightingAmount);
 	}
+	// Another creature that does something with it in mind gives it attention
+	if (registry.AllOf<Creature>(belief.thing))
+	{
+		NoteAttention(creature, mind, belief.thing);
+	}
 }
 
 bool CreatureMindSystem::CanSteal(entt::entity creature, entt::entity thing)

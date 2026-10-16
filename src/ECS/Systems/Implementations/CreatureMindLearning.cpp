@@ -93,6 +93,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
@@ -434,6 +435,10 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return mind_town_help::Accepts(registry, target, entity, self, heldByOther);
 	case Target::Creature:
 		return registry.AllOf<Creature>(entity);
+	case Target::CreatureFreeForJoint:
+		return registry.AllOf<Creature>(entity) && !registry.AllOf<CreaturePartner>(entity);
+	case Target::CreatureNotFreeForJoint:
+		return registry.AllOf<Creature>(entity) && registry.AllOf<CreaturePartner>(entity);
 	case Target::FightableCreature:
 		// A dead creature, or one that lies out cold, is not fought
 		return registry.AllOf<Creature>(entity) && Locator::creatureMindSystem::has_value() &&
@@ -2653,8 +2658,10 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	const auto* tables = GetTables();
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* transform = registry.TryGet<const Transform>(creature);
+	// A partner of a joint action whose mind stands still chooses nothing
 	if (tables == nullptr || transform == nullptr || !mind.desires.has_value() || !mind.learnt.has_value() || mind.paused ||
-	    creature_mind::IsUnconscious(mind.idle) || !FightLetsChoose(registry, creature, mind))
+	    creature_mind::IsUnconscious(mind.idle) || !FightLetsChoose(registry, creature, mind) ||
+	    registry.AllOf<CreatureDemobilised>(creature))
 	{
 		return;
 	}

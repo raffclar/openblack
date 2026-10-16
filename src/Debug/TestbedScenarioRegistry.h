@@ -757,6 +757,8 @@ struct Command
 		DoAction,
 		/// The creature and the other creature (value) become friends, as a script's "force friends" command does
 		MakeFriends,
+		/// The creature wants only one desire (value) from now on, as a script's "only desire" command makes it
+		OnlyDesire,
 		/// The scenario's object goes from the world at once, as when something other than the creature removes it.
 		/// Needs no creature
 		RemoveObject,
