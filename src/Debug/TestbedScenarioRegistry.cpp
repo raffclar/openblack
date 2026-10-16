@@ -3515,6 +3515,33 @@ void AddHand(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// The real hand on the body: the pointer swept fast across the middle of the screen, at one height, four times
+	std::vector<Command> sweeps {{.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                             {.kind = Kind::PointerSweep, .delaySeconds = 1.0f, .point = {-0.1f, 0.0f}, .amount = 0.3f}};
+	for (int sweep = 0; sweep < 4; ++sweep)
+	{
+		const float across = sweep % 2 == 0 ? 0.2f : -0.2f;
+		sweeps.push_back({.kind = Kind::PointerSweep, .delaySeconds = 2.5f, .point = {across, 0.0f}, .amount = 0.01f});
+	}
+	sweeps.push_back({.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 3});
+	// Its life is not held, so that the hundredth a bruise takes stays off
+	auto slapped = Posed(CreatureType::Tiger, {0.0f, 0.0f});
+	slapped.needs.life.reset();
+	all.push_back({
+	    .id = "hand.bruise",
+	    .name = "Hard slaps bruise",
+	    .facet = Facet::Hand,
+	    .description = "The hand holds the player's tiger, which faces the camera, by its middle, and sweeps fast across "
+	                   "the middle of the screen four times at the same height, then lets go.",
+	    .expected = "Each sweep is a hard slap at the waist. The third hard slap in a row leaves a dark bruise on the "
+	                "skin where the line of sight through the hand meets the body, and the tiger's life falls by a "
+	                "hundredth. The fourth slap leaves no bruise.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {slapped},
+	    .commands = sweeps,
+	});
+
 	all.push_back({
 	    .id = "hand.slap_after_stroke",
 	    .name = "A slap soon after a stroke",

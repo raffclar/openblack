@@ -56,6 +56,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/Mesh.h"
@@ -1957,7 +1958,17 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	const auto height = CreatureHeight(body);
 	const auto type = TypeOf(creature);
 	const bool isCreature = registry.AllOf<Creature>(object);
+	// The creature fishes at a fish farm when its hunger is on, it knows how to fish and it is not full
+	const auto* thinking = registry.TryGet<const CreatureMindState>(creature);
+	const auto* needs = registry.TryGet<const CreatureNeeds>(creature);
+	const auto fishSkill = static_cast<size_t>(CreatureActionKnownAbout::Fish);
 	const auto attempts = orders::OnThing({
+	    .fishFarm = registry.AllOf<FishFarm>(object),
+	    .hungry = thinking != nullptr && thinking->desires.has_value() && (*thinking->desires)[Desire::Hunger].activated,
+	    .knowsFishing = thinking != nullptr && thinking->learnt.has_value() &&
+	                    fishSkill < thinking->learnt->knowledge.skillsKnown.size() &&
+	                    thinking->learnt->knowledge.skillsKnown[fishSkill],
+	    .energy = needs != nullptr ? needs->needs.energy : 1.0f,
 	    .carrying = HeldBy(creature).has_value(),
 	    .liftable = Locator::creatureObjectActionSystem::has_value() &&
 	                Locator::creatureObjectActionSystem::value().CanPickUp(creature, object),

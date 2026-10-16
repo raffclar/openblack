@@ -3066,6 +3066,11 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				situation.drink = DrinkPlaceOf(creature);
 			}
+			// Told to fish, it fishes at the fish farm nearest to itself, as when it chooses to fish
+			if (executor->build == creature_plan_actions::Build::FishAndEat)
+			{
+				situation.fishing = FishingFor(registry, creature, position);
+			}
 			if (Locator::camera::has_value())
 			{
 				const auto eye = Locator::camera::value().GetOrigin();
