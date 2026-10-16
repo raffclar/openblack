@@ -40,6 +40,9 @@ public:
 	/// Sounds an event on a creature at once, as its animation would, whoever it belongs to and whether or not the
 	/// creatures are muted, in a cut scene or the temple. For trying the sounds out.
 	virtual void Play(entt::entity creature, const creature_audio::SoundEvent& event) = 0;
+	/// Sounds an event on a creature at once under the same rules as the sounds of its animations, for the sounds that
+	/// its actions make: the acknowledgement of an order and the refusal when it has no way to go
+	virtual void PlayAction(entt::entity creature, const creature_audio::SoundEvent& event) = 0;
 };
 
 } // namespace openblack::ecs::systems

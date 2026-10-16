@@ -2147,6 +2147,28 @@ void AddAudio(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A tiger roars again and again while a script's cinema bars come in and go out
+	auto roaring = Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f, "tiger");
+	roaring.pauseMind = true;
+	all.push_back({
+	    .id = "audio.creature_cut_scene",
+	    .name = "A creature heard in a cut scene",
+	    .facet = Facet::Audio,
+	    .description = "A tiger is angry twice, then twice more while a script's cinema bars are up, and so on again "
+	                   "and again. Select it in the spawner to see its sound log.",
+	    .expected = "The tiger's growls and footsteps are heard all the time, also while the bars are up: no creature "
+	                "sound is kept quiet in a cut scene.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {roaring},
+	    .commands = {Play(Kind::PlayAction, 0, animations::k_Angry, 1.0f, true),
+	                 Play(Kind::PlayAction, 0, animations::k_Angry, 1.0f, true),
+	                 {.kind = Kind::WideScreen, .delaySeconds = 1.0f, .value = 1},
+	                 Play(Kind::PlayAction, 0, animations::k_Angry, 1.0f, true),
+	                 Play(Kind::PlayAction, 0, animations::k_Angry, 1.0f, true),
+	                 {.kind = Kind::WideScreen, .delaySeconds = 1.0f, .value = 0}},
+	    .repeatFrom = 0,
+	});
+
 	all.push_back({
 	    .id = "audio.alignment_music",
 	    .name = "The land's music following the alignment",
