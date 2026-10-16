@@ -54,3 +54,8 @@ TEST(CreatureFileLoad, TheCreatureGrowsUpFullyAtOnce)
 {
 	EXPECT_EQ(creature_file_load::k_LoadedStage, 13u);
 }
+
+TEST(CreatureFileLoad, TheCreatureFacesTheAngleOfANewObject)
+{
+	EXPECT_EQ(creature_file_load::k_StartYaw, 0.0f);
+}

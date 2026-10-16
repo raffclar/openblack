@@ -21,6 +21,9 @@ namespace openblack::creature_file_load
 
 /// The creature from the file grows up fully at once
 constexpr uint32_t k_LoadedStage = 13;
+/// The creature faces this angle about the vertical axis, in radians. The game gives it no angle, and no step of the
+/// load turns it: the angle of a new object is 0.
+constexpr float k_StartYaw = 0.0f;
 
 /// The script message when the player has a creature already. The new creature becomes the creature of the player.
 constexpr const char* k_OverwriteMessage = "Player has already his creature loaded, but I overwrite it";

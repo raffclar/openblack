@@ -91,9 +91,9 @@ Result Make(const Order& order)
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "{}", creature_file_load::k_OverwriteMessage);
 	}
 	const auto position = map_coords::ToWorld(Locator::terrainSystem::value(), coords);
-	const auto creature = archetypes::CreatureArchetype::Create(position, order.owner, *species, 0, 0.0f,
-	                                                            archetypes::CreatureArchetype::StartScale(*species),
-	                                                            archetypes::CreatureArchetype::StartBody(*species));
+	const auto creature = archetypes::CreatureArchetype::Create(
+	    position, order.owner, *species, 0, creature_file_load::k_StartYaw, archetypes::CreatureArchetype::StartScale(*species),
+	    archetypes::CreatureArchetype::StartBody(*species));
 	if (Locator::playerSystem::has_value())
 	{
 		Locator::playerSystem::value().MakePrimaryCreature(creature);
