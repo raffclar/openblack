@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureObjectBeliefs.h"
 
 using namespace openblack::creature_object_beliefs;
@@ -355,4 +356,32 @@ TEST(CreatureObjectBeliefs, ItComesAcrossTheTwoNearestTownsInTurn)
 	// Of towns equally near, the first counts
 	const std::array<TownCell, 2> tie {TownCell {.id = 4, .cell = {2, 0}}, TownCell {.id = 5, .cell = {0, 2}}};
 	EXPECT_EQ(NearestOtherTown({0, 0}, tie, std::nullopt), 4u);
+}
+
+TEST(CreatureObjectBeliefs, APickUpWithNoWayLeavesItsThingAloneAndOnlyNoRouteRefuses)
+{
+	using openblack::creature_object_actions::Failure;
+	using openblack::creature_object_actions::LeavesThingAlone;
+	using openblack::creature_object_actions::RefusesAloud;
+	EXPECT_TRUE(LeavesThingAlone(true, Failure::NoWay));
+	EXPECT_TRUE(LeavesThingAlone(true, Failure::NoRoute));
+	EXPECT_FALSE(LeavesThingAlone(true, Failure::Other));
+	EXPECT_FALSE(LeavesThingAlone(false, Failure::NoWay));
+	EXPECT_FALSE(LeavesThingAlone(false, Failure::NoRoute));
+	EXPECT_TRUE(RefusesAloud(Failure::NoRoute));
+	EXPECT_FALSE(RefusesAloud(Failure::NoWay));
+	EXPECT_FALSE(RefusesAloud(Failure::Other));
+
+	// After the failed pick-up, the creature does not choose the same thing for ten seconds. Then it can choose it again.
+	constexpr uint32_t k_Object = 1;
+	constexpr uint32_t k_FailedTurn = 400;
+	Store store;
+	store.Add(Thing(7), k_Object, {});
+	if (LeavesThingAlone(true, Failure::NoWay))
+	{
+		store.MarkBlocked(Thing(7), k_FailedTurn);
+	}
+	EXPECT_TRUE(BlockedRecently(*store.Find(Thing(7)), k_FailedTurn + 1, false));
+	EXPECT_TRUE(BlockedRecently(*store.Find(Thing(7)), k_FailedTurn + k_BlockedTurns, false));
+	EXPECT_FALSE(BlockedRecently(*store.Find(Thing(7)), k_FailedTurn + k_BlockedTurns + 1, false));
 }

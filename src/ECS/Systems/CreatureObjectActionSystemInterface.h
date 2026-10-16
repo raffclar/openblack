@@ -113,6 +113,11 @@ public:
 	virtual void Drop(entt::entity creature) = 0;
 
 	[[nodiscard]] virtual State GetState(entt::entity creature) const = 0;
+	/// The cause of the last action's failure, when it failed
+	[[nodiscard]] virtual creature_object_actions::Failure GetFailure(entt::entity /*creature*/) const
+	{
+		return creature_object_actions::Failure::Other;
+	}
 	/// Whether its body is taken up by a catch it has started: readying, stepping, reaching or bringing the hand back
 	[[nodiscard]] virtual bool IsCatching(entt::entity creature) const = 0;
 	/// How far through its animations the action is, 0 to 1, while it plays them

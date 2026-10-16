@@ -2002,6 +2002,22 @@ void CreatureMindSystem::ProcessTurn()
 				    mind.idle.gaveUp = true;
 				    RefuseNoRoute(entity);
 			    }
+			    // After a pick-up that found no way to its thing, the creature does not choose the thing again for a time
+			    else if (step.kind == creature_mind::Step::Kind::Object && mind.idle.stepStarted &&
+			             Locator::creatureObjectActionSystem::has_value() &&
+			             HandsOf(entity) == creature_mind::HandsState::Failed)
+			    {
+				    const auto failure = Locator::creatureObjectActionSystem::value().GetFailure(entity);
+				    const bool pickingUp = step.order.kind == creature_mind::ObjectOrder::Kind::PickUp;
+				    if (step.order.object.has_value() && creature_object_actions::LeavesThingAlone(pickingUp, failure))
+				    {
+					    mind.beliefs.MarkBlocked(static_cast<entt::entity>(*step.order.object), mind.turn);
+				    }
+				    if (creature_object_actions::RefusesAloud(failure))
+				    {
+					    RefuseNoRoute(entity);
+				    }
+			    }
 		    }
 		    const bool moving =
 		        Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity);

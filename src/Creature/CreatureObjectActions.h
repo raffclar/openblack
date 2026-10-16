@@ -91,6 +91,22 @@ enum class Status : uint8_t
 	Failed,
 };
 
+/// Why an action failed, to the extent that the mind must know
+enum class Failure : uint8_t
+{
+	/// It did not fail, or it failed for a different cause
+	Other,
+	/// It found no way to the thing: the creature cannot stand where the thing is, or it can no longer pick the thing up
+	NoWay,
+	/// On the walk to the thing, the search found no route
+	NoRoute,
+};
+/// Whether the creature does not choose the thing again for a time after the action failed. Only a pick-up that found
+/// no way to its thing does this.
+[[nodiscard]] bool LeavesThingAlone(bool pickingUp, Failure failure);
+/// Whether the creature makes a sound of refusal when the action failed: only when the search found no route
+[[nodiscard]] bool RefusesAloud(Failure failure);
+
 /// The kicking animation
 constexpr size_t k_KickAnimation = 117;
 /// A thing kicked flies off at this many times the creature's size
