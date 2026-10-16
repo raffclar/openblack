@@ -95,6 +95,9 @@ enum class Target : uint8_t
 	ToyAwayFromHome,
 	/// A thing that the creature can bring home: more than 50 m from its home, not alive, and a thing that it can pick up
 	BringableHome,
+	/// A thing that the creature can steal: a toy, a scaffold or a one-shot miracle that it can pick up, out of the
+	/// influence of its player
+	Stealable,
 	/// A thing still going up (a building, a worship site or the temple), or a building that its town repairs and that
 	/// is below its full life; or a house (any of a town's buildings) below its full life
 	BuildingBeingBuilt,
@@ -362,6 +365,8 @@ enum class Build : uint8_t
 	Never,
 	/// Taking a living thing to the altar of the first worship site of its temple, and putting it down there
 	Sacrifice,
+	/// Stealing a thing and putting it down near the home of the creature
+	StealAndPutByTemple,
 	/// Copying the player again: the creature makes no steps, but copies again the deed that it saw last
 	MimicPlayer,
 	/// Dancing outside its player's temple, and around a thing (see creature_temple_dance)

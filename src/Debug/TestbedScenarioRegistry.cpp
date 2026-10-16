@@ -3152,6 +3152,22 @@ void AddObjects(std::vector<Scenario>& all)
 		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BringHome"}},
 		});
 		all.push_back({
+		    .id = "objects.steal_toy",
+		    .name = "Stealing a toy",
+		    .facet = Facet::Objects,
+		    .description = "A grown tiger of the player's, whose temple stands far to the west, with a cuddly toy in front "
+		                   "of it, out of the influence of the player. A script tells it to steal the toy and take it to the "
+		                   "temple.",
+		    .expected = "It picks the toy up and looks at it, walks home and looks ahead, and puts the toy down within two "
+		                "times its height of its home, the pen before the temple.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+		    .objects = {{.type = MobileStaticInfo::ToyCuddly, .offset = {0.0f, -k_Reach}}},
+		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "StealObjectAndTakeToCitadel"}},
+		});
+		all.push_back({
 		    .id = "objects.bring_villager_home",
 		    .name = "Bringing a villager home",
 		    .facet = Facet::Objects,

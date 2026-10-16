@@ -585,6 +585,8 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return creature_bring_home::CanBeBroughtHome(metres, creature_object_actions::IsLiving(hands->KindOf(entity).thing),
 		                                             hands->CanPickUp(self, entity));
 	}
+	case Target::Stealable:
+		return CreatureMindSystem::CanSteal(self, entity);
 	case Target::OneShotRestoreHealth:
 	{
 		// A globe that lies about: the game asks only that its miracle restores health

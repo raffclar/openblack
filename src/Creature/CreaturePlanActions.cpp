@@ -28,6 +28,7 @@
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureSacrifice.h"
 #include "Creature/CreatureScriptAgendas.h"
+#include "Creature/CreatureSteal.h"
 #include "Creature/CreatureTempleDance.h"
 #include "Creature/CreatureTownHelp.h"
 #include "Enums.h"
@@ -440,6 +441,8 @@ constexpr std::array k_Executors {
     Executor {.action = "BehaveStrangely", .build = Build::BehaveStrangely},
     // The sacrifice: no desire chooses it, but a script or a copy of the player can make the creature do it
     Executor {.action = "Sacrifice", .target = Target::AnyLiving, .build = Build::Sacrifice},
+    // The desire to steal: the creature takes a thing that it can steal to its temple
+    Executor {.action = "StealObjectAndTakeToCitadel", .target = Target::Stealable, .build = Build::StealAndPutByTemple},
     // The dance outside a worship site goes to the heart of the creature's own temple; the dance around a thing goes to
     // any thing
     Executor {.action = "DanceOutsideWorshipSite", .target = Target::WorshipSite, .build = Build::DanceOutsideTemple},
@@ -744,6 +747,7 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	switch (executor.build)
 	{
 	case Build::Sacrifice:
+	case Build::StealAndPutByTemple:
 		// Only a creature whose player has a temple
 		return situation.hasTemple;
 	case Build::Drink:
@@ -1386,6 +1390,14 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		}
 		return creature_sacrifice::Sacrifice(situation.holdingLiving ? std::nullopt : object, *situation.sacrificeAltar,
 		                                     situation.height);
+	case Build::StealAndPutByTemple:
+		if (!situation.home.has_value())
+		{
+			return std::nullopt;
+		}
+		// It picks up the thing only when its hand is empty
+		return creature_steal::StealAndPutByTemple(situation.handFull ? std::nullopt : object, *situation.home,
+		                                           situation.height);
 	case Build::DanceOutsideTemple:
 		// Without the heart of its player's temple, the action fails
 		if (!situation.templeHeart.has_value())
