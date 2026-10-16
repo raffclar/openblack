@@ -41,8 +41,6 @@ glm::vec4 TextColour(bool hovered, bool focused)
 	return focused ? DialogPainter::k_FocusColour : DialogPainter::k_TextColour;
 }
 
-/// Big buttons' and sliders' labels are at the mid text size
-constexpr int k_LabelSize = DialogPainter::k_MidTextSize;
 /// How far a click on a slider beside the knob moves it
 constexpr float k_SliderStep = 0.1f;
 /// A list's gap below each item's text
@@ -276,9 +274,19 @@ void Slider::Draw(const DialogPainter& painter, bool hovered, bool focused, bool
 	}
 	painter.DrawBevelBox(rect, 1, DialogPainter::All, glm::vec4(1.0f));
 	const auto knob = GetKnobLeft(_value);
+	const auto colour = focused ? DialogPainter::k_FocusColour : DialogPainter::k_TextColour;
+	if (labelAbove)
+	{
+		// A small knob of the first style of box in the lower half of the bar, and the label at the top of the bar
+		const auto half = rect.Height() / 2;
+		painter.DrawBevelBox({.min = {knob, rect.min.y + half}, .max = {knob + rect.Height(), rect.max.y - 2}}, 0,
+		                     DialogPainter::All, glm::vec4(1.0f));
+		painter.DrawText({rect.Centre().x, rect.min.y + 2}, rect.Width(), Justify::Centre, label, half + 2, colour);
+		return;
+	}
 	painter.DrawSquare({knob + 3, rect.min.y + 3}, rect.Height() - 6, false, hovered || focused, true);
-	painter.DrawText({rect.Centre().x, rect.Centre().y - (k_LabelSize / 2)}, rect.Width(), Justify::Centre, label, k_LabelSize,
-	                 focused ? DialogPainter::k_FocusColour : DialogPainter::k_TextColour);
+	painter.DrawText({rect.Centre().x, rect.Centre().y - (labelSize / 2)}, rect.Width(), Justify::Centre, label, labelSize,
+	                 colour);
 }
 
 void Slider::MouseDown(glm::ivec2 point)
@@ -368,6 +376,31 @@ void List::ScrollTo(float scroll)
 {
 	const auto most = static_cast<float>(std::max(0, GetContentHeight() - rect.Height()));
 	_scroll = std::clamp(scroll, 0.0f, most);
+}
+
+void List::ScrollToSelection()
+{
+	// With no selection the list scrolls to its end
+	if (!_selection.has_value() || *_selection >= _heights.size())
+	{
+		ScrollTo(static_cast<float>(GetContentHeight()));
+		return;
+	}
+	// The top of the selected item, and the height in which the item's top shows with all of the item
+	int top = 0;
+	for (size_t i = 0; i < *_selection; ++i)
+	{
+		top += _heights[i];
+	}
+	const auto shown = rect.Height() - _heights[*_selection];
+	if (static_cast<float>(top) < _scroll)
+	{
+		ScrollTo(static_cast<float>(top));
+	}
+	else if (static_cast<float>(top) > _scroll + static_cast<float>(shown))
+	{
+		ScrollTo(static_cast<float>(top - shown));
+	}
 }
 
 void List::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /*pressed*/) const

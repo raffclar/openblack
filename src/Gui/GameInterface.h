@@ -25,6 +25,7 @@
 #include "Canvas.h"
 #include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureStatusPanel.h"
+#include "CustomMusicControls.h"
 #include "DialogPainter.h"
 #include "GameFont.h"
 #include "GameMenu.h"
@@ -114,6 +115,13 @@ public:
 	/// The buttons of the story history in the temple's library
 	[[nodiscard]] StoryHistoryBox& GetStoryHistoryBox() noexcept { return *_storyHistoryBox; }
 	[[nodiscard]] const StoryHistoryBox& GetStoryHistoryBox() const noexcept { return *_storyHistoryBox; }
+	/// The controls of the custom music player at the top right of the screen
+	[[nodiscard]] CustomMusicControls& GetMusicControls() noexcept { return *_musicControls; }
+	[[nodiscard]] const CustomMusicControls& GetMusicControls() const noexcept { return *_musicControls; }
+	/// The window's point on the custom music controls' layout
+	[[nodiscard]] glm::ivec2 ToMusicControls(glm::ivec2 screen, glm::u16vec2 resolution);
+	/// The custom music controls' point on the window
+	[[nodiscard]] glm::ivec2 FromMusicControls(glm::ivec2 layout, glm::u16vec2 resolution);
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
 	[[nodiscard]] bool IsDialogOpen() const noexcept { return _menu->IsOpen() || _skipBox->IsActive(); }
 
@@ -244,6 +252,9 @@ private:
 	bool ProcessSkipBoxEvent(const SDL_Event& event);
 	/// The story history's buttons take the mouse only over a button; true when they took the event
 	bool ProcessStoryHistoryEvent(const SDL_Event& event);
+	bool ProcessMusicControlsEvent(const SDL_Event& event, glm::u16vec2 resolution);
+	/// Shows the custom music controls when nothing that they must not show over is on the screen
+	void UpdateMusicControls(bool dialogOpen);
 	/// While the tattoo editor is open its dialog takes the mouse and keyboard
 	bool ProcessTattooEditorEvent(const SDL_Event& event);
 	/// Opens the tattoo editor's dialog as the editor opens, and moves it on
@@ -329,6 +340,7 @@ private:
 	std::unique_ptr<StoryHistoryBox> _storyHistoryBox;
 	std::unique_ptr<TattooEditorDialog> _tattooEditor;
 	std::unique_ptr<NewPlayerBox> _newPlayerBox;
+	std::unique_ptr<CustomMusicControls> _musicControls;
 	/// The front end's backdrop: its texture, repeating, its swirls and the two layers' texture coordinates
 	std::unique_ptr<graphics::Texture2D> _backdrop;
 	std::optional<menu_backdrop::Swirls> _backdropSwirls;

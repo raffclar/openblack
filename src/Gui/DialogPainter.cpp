@@ -331,6 +331,13 @@ void DialogPainter::DrawSymbol(const DialogRect& rect, int index, glm::vec4 tint
 	                 glm::vec4(glm::vec3(tint), tint.a * _alpha), _symbols);
 }
 
+void DialogPainter::DrawPicture(const DialogRect& rect, const graphics::Texture2D& texture, glm::vec2 uvMin, glm::vec2 uvMax,
+                                glm::vec4 colour) const
+{
+	_canvas.DrawQuad(ToScreen(rect.min), ToScreen(rect.max), uvMin, uvMax, glm::vec4(glm::vec3(colour), colour.a * _alpha),
+	                 &texture);
+}
+
 void DialogPainter::DrawMouse(const DialogRect& rect, int cell, bool mirrored) const
 {
 	if (_mice == nullptr)

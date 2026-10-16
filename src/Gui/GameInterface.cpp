@@ -37,7 +37,9 @@
 #include "ECS/FloatingNumber.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
@@ -281,6 +283,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _storyHistoryBox(std::make_unique<StoryHistoryBox>(_texts, _font))
     , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
     , _newPlayerBox(std::make_unique<NewPlayerBox>(_texts, _font))
+    , _musicControls(std::make_unique<CustomMusicControls>(_font, _atmos.get()))
     , _toolTips(ReadToolTipsInfo())
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
@@ -500,6 +503,84 @@ bool GameInterface::ProcessStoryHistoryEvent(const SDL_Event& event)
 	}
 }
 
+glm::ivec2 GameInterface::ToMusicControls(glm::ivec2 screen, glm::u16vec2 resolution)
+{
+	_painter.Begin(resolution);
+	return _painter.ToDialog(screen - glm::ivec2(custom_music_controls::Origin(resolution)));
+}
+
+glm::ivec2 GameInterface::FromMusicControls(glm::ivec2 layout, glm::u16vec2 resolution)
+{
+	_painter.Begin(resolution);
+	return _painter.ToScreenPoint(layout) + glm::ivec2(custom_music_controls::Origin(resolution));
+}
+
+bool GameInterface::ProcessMusicControlsEvent(const SDL_Event& event, glm::u16vec2 resolution)
+{
+	const auto mouseButtonDown = (SDL_GetMouseState(nullptr, nullptr) & (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK)) != 0;
+	switch (event.type)
+	{
+	// The game also sees the pointer move
+	case SDL_MOUSEMOTION:
+		_musicControls->MouseMove(ToMusicControls({event.motion.x, event.motion.y}, resolution));
+		return false;
+	case SDL_MOUSEBUTTONDOWN:
+		// The controls take a press over a control only when no other mouse button is down
+		if (event.button.button != SDL_BUTTON_LEFT || !_musicControls->WantsMouse(false))
+		{
+			return false;
+		}
+		_musicControls->MouseDown(ToMusicControls({event.button.x, event.button.y}, resolution));
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		if (event.button.button != SDL_BUTTON_LEFT || !_musicControls->WantsMouse(mouseButtonDown))
+		{
+			return false;
+		}
+		// The control clicks as it acts
+		if (_musicControls->MouseUp(ToMusicControls({event.button.x, event.button.y}, resolution)))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_MOUSEWHEEL:
+	{
+		if (!_musicControls->WantsMouse(mouseButtonDown))
+		{
+			return false;
+		}
+		glm::ivec2 mouse;
+		SDL_GetMouseState(&mouse.x, &mouse.y);
+		_musicControls->Wheel(ToMusicControls(mouse, resolution), event.wheel.y);
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+void GameInterface::UpdateMusicControls(bool dialogOpen)
+{
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool videoPlays = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
+	const bool wideScreen =
+	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
+	const bool creatureHeld =
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature().has_value();
+	_musicControls->SetShown(custom_music_controls::Shows({.inTemple = inTemple,
+	                                                       .videoPlays = videoPlays,
+	                                                       .wideScreen = wideScreen,
+	                                                       .creatureHeld = creatureHeld,
+	                                                       .dialogOpen = dialogOpen}));
+	auto* player = Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+	std::optional<music_mood::Emotion> emotion;
+	if (Locator::musicMoodSystem::has_value())
+	{
+		emotion = Locator::musicMoodSystem::value().GetCurrentEmotion();
+	}
+	_musicControls->Update(player, emotion, machine_clock::Ticks());
+}
+
 void GameInterface::OpenMenu()
 {
 	_menu->Open();
@@ -531,6 +612,10 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	// Escape opening the menu is the game's to decide (OpenMenu)
 	if (!_menu->IsOpen())
 	{
+		if (_musicControls->IsActive() && ProcessMusicControlsEvent(event, resolution))
+		{
+			return true;
+		}
 		return _storyHistoryBox->IsActive() && ProcessStoryHistoryEvent(event);
 	}
 	if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
@@ -681,6 +766,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	DrawGestureHints(resolution);
 	const bool menuOpen =
 	    (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() || _newPlayerBox->IsActive();
+	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value());
 	// A cut scene leaves some of the interface off the screen
 	const auto& cinema = Locator::cinematicDirectorSystem::value();
 	const cinema_hides::Bars cinemaBars {.in = cinema.IsWideScreenOn(), .heldByScript = cinema.GetWideScreenOwner() != 0};
@@ -746,6 +832,10 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	}
 	else
 	{
+		// The custom music controls go against the top right of the screen
+		_canvas.SetOrigin(custom_music_controls::Origin(resolution));
+		_musicControls->Draw(_painter);
+		_canvas.SetOrigin(glm::vec2(0.0f));
 		_storyHistoryBox->Draw(_painter);
 		if (_menu->IsVisible())
 		{

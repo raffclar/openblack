@@ -1072,3 +1072,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_temple_entrance_tap temple/test_temple_entrance_tap.cpp
 )
+openblack_setup_and_add_test(
+  test_custom_music_controls gui/test_custom_music_controls.cpp
+)

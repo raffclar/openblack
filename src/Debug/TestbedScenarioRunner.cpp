@@ -2217,6 +2217,21 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
 		return;
 	}
+	if (command.kind == Kind::ShowCustomMusicControls)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr)
+		{
+			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
+			return;
+		}
+		auto& controls = game->GetInterface()->GetMusicControls();
+		controls.ShowControls(command.value >= 1, command.value >= 2);
+		Log(fmt::format("{:.1f}s: {}: buttons {}, play list {}, the controls {}", _seconds, Name(command.kind),
+		                controls.GetPanel().controlsShown ? "shown" : "hidden",
+		                controls.GetPanel().playListShown ? "shown" : "hidden", controls.IsActive() ? "show" : "hide now"));
+		return;
+	}
 	if (command.kind == Kind::PlayCustomMusic)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PlayCustomMusic(command.value)));
@@ -2614,6 +2629,7 @@ void Runner::Give(const Command& command)
 	case Kind::EndGuidanceWaits:
 	case Kind::ProfileFolderCheck:
 	case Kind::PlayCustomMusic:
+	case Kind::ShowCustomMusicControls:
 	case Kind::RunText:
 	case Kind::ReadTip:
 	case Kind::LookAtTempleScroll:
