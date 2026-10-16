@@ -130,8 +130,6 @@ constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface
 constexpr float k_TurnMs = k_TurnSeconds * 1000.0f;
 constexpr auto k_TurnMilliseconds =
     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(TimeSystemInterface::k_TurnDuration).count());
-/// Fighters turn to face their opponents this fast, in radians a second
-constexpr float k_FaceTurnRate = 3.0f;
 /// A face is due again once its wait is within this much of over
 constexpr float k_FaceDue = 1e-3f;
 /// The stages before the duel give up waiting after this long
@@ -481,20 +479,6 @@ void StopCarryingHome(entt::entity creature, const CreatureKnockedOut& knockedOu
 	{
 		SetFizz(creature, 0.0f, 0.0f);
 	}
-}
-
-/// Whether a fighter faces its opponent closely enough to make a move
-bool FacesOpponent(const ecs::Registry& registry, entt::entity creature, entt::entity opponent)
-{
-	const auto* locomotion = registry.TryGet<const CreatureLocomotion>(creature);
-	if (locomotion == nullptr || !registry.Valid(opponent) || !registry.AllOf<Transform>(opponent))
-	{
-		return true;
-	}
-	const auto towards = Flat(registry.Get<const Transform>(opponent).position) - Flat(locomotion->toPosition);
-	return glm::length(towards) <= 0.0f ||
-	       std::abs(creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(towards) - locomotion->heading)) <=
-	           fight::k_FacingTolerance;
 }
 
 /// A fighter turns at once to face its opponent straight on
@@ -2458,6 +2442,18 @@ void CreatureFightSystem::BeginDuel(entt::entity creature)
 	}
 	MeasureBlows(creature);
 	fight::Enter(fighting.fighter, fight::State::Start);
+	// It first turns on the spot to the heading towards its opponent, however small the turn
+	const auto& opponent = fighting.opponent;
+	if (Locator::creatureLocomotionSystem::has_value() && registry.Valid(opponent) && registry.AllOf<Transform>(opponent))
+	{
+		const auto towards =
+		    Flat(registry.Get<const Transform>(opponent).position) - Flat(registry.Get<const Transform>(creature).position);
+		if (glm::length(towards) > 0.0f)
+		{
+			fighting.fighter.turning =
+			    Locator::creatureLocomotionSystem::value().TurnToHeading(creature, creature_locomotion::HeadingOf(towards));
+		}
+	}
 }
 
 void CreatureFightSystem::MeasureBlows(entt::entity creature)
@@ -2578,25 +2574,30 @@ void CreatureFightSystem::ProcessDuels()
 			}
 		}
 		const bool computer = fighter.control == fight::Control::Computer;
-		// In its stance, its block and its moves other than blows, it faces its opponent straight on each turn
+		// In its start, the turn on the spot ends before the start animation plays
+		if (fighter.state == fight::State::Start && fighter.turning &&
+		    !(Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity)))
+		{
+			fighter.turning = false;
+			fighter.timeMs = 0.0f;
+			fighter.stateMs = 0.0f;
+		}
 		const bool stance = fighter.state == fight::State::Stance;
 		const bool moving = fighter.state == fight::State::Action && !fight::IsAttack(fighter.animation);
-		if (stance || moving || fighter.state == fight::State::Block)
+		if (fight::FacesOpponentEachTurn(fighter.state, fighter.animation, fighter.turning))
 		{
 			FaceOpponentNow(registry, entity, opponent);
 		}
-		const bool facing = FacesOpponent(registry, entity, opponent);
 		// Near the edge of the arena, it makes no moves and steps back to the middle
-		const bool kept =
-		    facing && (stance || fighter.state == fight::State::Block) && KeepInArena(registry, entity, *fighting);
+		const bool kept = (stance || fighter.state == fight::State::Block) && KeepInArena(registry, entity, *fighting);
 		// Bodies that overlap move apart, in its stance and in its moves other than blows
 		if ((stance && !kept) || moving)
 		{
 			PullApartFighters(registry, entity, *fighting);
 		}
-		if (!facing || kept)
+		if (kept)
 		{
-			// It turns to its opponent first, or it keeps inside the arena
+			// It keeps inside the arena
 		}
 		else if (!fighter.queue.Empty())
 		{
@@ -2661,10 +2662,6 @@ void CreatureFightSystem::CheckQueue(entt::entity creature)
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& fighting = registry.Get<CreatureFighting>(creature);
 	if (fighting.stage != CreatureFighting::Stage::Duel || !registry.Valid(fighting.opponent))
-	{
-		return;
-	}
-	if (fighting.fighter.state == fight::State::Stance && !FacesOpponent(registry, creature, fighting.opponent))
 	{
 		return;
 	}
@@ -2902,6 +2899,11 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		auto& fighter = fighting->fighter;
 		const auto& body = registry.Get<const Creature>(entity);
 		const bool hasOpponent = fighting->stage == CreatureFighting::Stage::Duel && InDuel(registry, fighting->opponent);
+		// While it turns on the spot in its start, the turn's own animation plays, and the start animation waits
+		if (fighter.state == fight::State::Start && fighter.turning)
+		{
+			continue;
+		}
 		const auto duration = DurationOf(entity, fighter.animation);
 		fighter.timeMs += milliseconds * fight::PlaybackSpeed(fighter.animation, fighter.speed);
 		fighter.stateMs += milliseconds;
@@ -2925,16 +2927,6 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 			}
 		}
 		auto& current = fighting->fighter;
-		if (hasOpponent && fight::FacesOpponent(current.state) && registry.Valid(fighting->opponent))
-		{
-			const auto towards =
-			    Flat(registry.Get<const Transform>(fighting->opponent).position) - Flat(locomotion->toPosition);
-			if (glm::length(towards) > 0.0f)
-			{
-				TurnTowards(*locomotion, creature_locomotion::HeadingOf(towards), k_FaceTurnRate * milliseconds / 1000.0f);
-				moved = true;
-			}
-		}
 		const bool done = fight::StateDone(current.state, current.timeMs, duration, current.stateMs);
 		// Called off, it winds down: the move under way plays out, then it finishes and stands
 		if (current.stopping)

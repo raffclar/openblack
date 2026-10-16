@@ -972,3 +972,30 @@ TEST(CreatureFight, LifeLostInADuelComesOffTheFightHealth)
 	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.2f, 0.5f), 0.0f);
 	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.2f, 0.0f), 0.2f);
 }
+
+TEST(CreatureFight, OnlyTheStartAfterItsTurnTheStanceTheBlockAndStepsFaceTheOpponentEachTurn)
+{
+	// The start faces the opponent only after its turn on the spot
+	EXPECT_FALSE(FacesOpponentEachTurn(State::Start, animations::k_Start, true));
+	EXPECT_TRUE(FacesOpponentEachTurn(State::Start, animations::k_Start, false));
+	EXPECT_TRUE(FacesOpponentEachTurn(State::Stance, animations::k_Stance, false));
+	EXPECT_TRUE(FacesOpponentEachTurn(State::Block, animations::k_Start, false));
+	// A step faces the opponent, a blow keeps its heading
+	EXPECT_TRUE(FacesOpponentEachTurn(State::Action, animations::k_StepForward, false));
+	EXPECT_FALSE(FacesOpponentEachTurn(State::Action, animations::k_AttackHigh, false));
+	// The start and the end of a block, the reels, the casts and the finish keep their heading
+	for (const auto state : {State::BlockStart, State::BlockEnd, State::BlockRecoil, State::CastStart, State::Cast,
+	                         State::CastEnd, State::Finish, State::Faint, State::GetUp, State::Lying, State::Idle})
+	{
+		EXPECT_FALSE(FacesOpponentEachTurn(state, animations::k_Start, false)) << Name(state);
+	}
+}
+
+TEST(CreatureFight, EnteringAStateEndsTheTurnOfTheStart)
+{
+	Fighter fighter;
+	Enter(fighter, State::Start);
+	fighter.turning = true;
+	Enter(fighter, State::Stance);
+	EXPECT_FALSE(fighter.turning);
+}

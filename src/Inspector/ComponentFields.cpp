@@ -2275,6 +2275,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_fight::Fighter::stateMs>("stateMs")
 	    .Field<&openblack::creature_fight::Fighter::speed>("speed")
 	    .Field<&openblack::creature_fight::Fighter::mirrored>("mirrored")
+	    .Field<&openblack::creature_fight::Fighter::turning>("turning")
 	    .Field<&openblack::creature_fight::Fighter::lastAction>("lastAction")
 	    .Field<&openblack::creature_fight::Fighter::special>("special")
 	    .Field<&openblack::creature_fight::Fighter::spell>("spell")

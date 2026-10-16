@@ -872,10 +872,20 @@ bool creature_fight::TakesMoves(State state)
 	return state == State::Stance || state == State::Block;
 }
 
-bool creature_fight::FacesOpponent(State state)
+bool creature_fight::FacesOpponentEachTurn(State state, size_t animation, bool turning)
 {
-	return state == State::Start || state == State::Stance || state == State::Block || state == State::BlockStart ||
-	       state == State::BlockEnd;
+	switch (state)
+	{
+	case State::Start:
+		return !turning;
+	case State::Stance:
+	case State::Block:
+		return true;
+	case State::Action:
+		return !IsAttack(animation);
+	default:
+		return false;
+	}
 }
 
 void creature_fight::Enter(Fighter& fighter, State state, std::optional<size_t> animation, float speed)
@@ -885,6 +895,7 @@ void creature_fight::Enter(Fighter& fighter, State state, std::optional<size_t> 
 	fighter.timeMs = 0.0f;
 	fighter.stateMs = 0.0f;
 	fighter.speed = speed;
+	fighter.turning = false;
 	fighter.special = state == State::Action && IsSpecialAttack(fighter.animation);
 	// The last action counts every move that the fighter starts: a blow, a step, a reel, a block or a cast. A block
 	// counts as its hold and a cast as its loop.
