@@ -108,9 +108,10 @@ TownAttitude creature_object_actions::AttitudeTo(Kind kind, bool targetIsVillage
 	return TownAttitude::None;
 }
 
-bool creature_object_actions::LeavesThingAlone(bool pickingUp, Failure failure)
+bool creature_object_actions::LeavesThingAlone(Kind kind, Failure failure)
 {
-	return pickingUp && failure != Failure::Other;
+	const bool walksToThing = kind == Kind::PickUp || kind == Kind::Destroy || kind == Kind::Kick;
+	return walksToThing && failure != Failure::Other;
 }
 
 bool creature_object_actions::RefusesAloud(Failure failure)

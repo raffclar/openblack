@@ -20,6 +20,7 @@
 
 #include "Common/RandomNumberManager.h"
 #include "Creature/CreatureActivity.h"
+#include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
@@ -453,7 +454,9 @@ private:
 	/// Going near, getting away from or turning to face an object begins, and each turn it goes on
 	void StartSubMove(entt::entity creature, const creature_mind::Movement& movement, float seconds);
 	void StepSubMove(entt::entity creature, bool animating);
-	bool GoNear(entt::entity creature, components::CreatureCasting& casting, bool reissue);
+	/// It asks for a walk near the thing that it goes near, if the thing has a place
+	std::optional<creature_cast_moves::WalkStart> GoNear(entt::entity creature, components::CreatureCasting& casting,
+	                                                     bool reissue);
 	creature_mind::SubMove SubMoveOf(entt::entity creature);
 	/// The minds choose at random, apart from the game's own random numbers
 	RandomStreamSource _random {RandomStream::CreatureMind};

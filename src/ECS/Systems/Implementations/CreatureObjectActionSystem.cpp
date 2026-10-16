@@ -871,6 +871,13 @@ glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points
 	return from + best.value_or(towards);
 }
 
+/// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off
+bool OnTheMap(const ecs::Registry& registry, entt::entity thing)
+{
+	return registry.AllOf<MapCellResident>(thing) &&
+	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
+}
+
 /// One game turn of walking or turning up to what the creature acts on
 void Approach(entt::entity creature, CreatureObjectAction& action, const Creature& body, const Transform& transform,
               CreatureAnimation& animation, const CreatureHeldObject* held)
@@ -884,6 +891,14 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	{
 		locomotion.Stop(creature);
 		Fail(action, "it can't be picked up", creature_object_actions::Failure::NoWay);
+		return;
+	}
+	// On each turn of the walk, a thing that is no longer on the map stops the stomp and the walk
+	if (action.kind == Kind::Destroy && action.target.has_value() && registry.Valid(*action.target) &&
+	    !OnTheMap(registry, *action.target))
+	{
+		locomotion.Stop(creature);
+		Fail(action, "it is not on the map", creature_object_actions::Failure::NoWay);
 		return;
 	}
 	if (locomotion.IsMoving(creature))
@@ -1364,12 +1379,10 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		{
 			Fail(action, "it can't be picked up", creature_object_actions::Failure::NoWay);
 		}
-		else if (action.kind == Kind::Destroy &&
-		         (!registry.AllOf<MapCellResident>(*action.target) ||
-		          registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(*action.target)))
+		else if (action.kind == Kind::Destroy && !OnTheMap(registry, *action.target))
 		{
 			// A stomp needs the thing on the map
-			Fail(action, "it is not on the map");
+			Fail(action, "it is not on the map", creature_object_actions::Failure::NoWay);
 		}
 		else if (action.kind == Kind::Kick &&
 		         ((held != nullptr && held->object == *action.target) || registry.AllOf<InHand>(*action.target)))

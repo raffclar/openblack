@@ -5546,6 +5546,65 @@ void AddMind(std::vector<Scenario>& all)
 		});
 	}
 
+	{
+		// A tight ring of huts shuts a rock in, so that the tiger finds no way to it to stomp on it
+		auto tiger = Content(CreatureType::Tiger, {0.0f, 0.0f});
+		tiger.phase = 13;
+		std::vector<ObjectSetup> objects {{.type = MobileStaticInfo::Rock, .offset = {0.0f, -60.0f}}};
+		constexpr int k_Huts = 12;
+		constexpr float k_RingRadius = 9.0f;
+		for (int i = 0; i < k_Huts; ++i)
+		{
+			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
+			objects.push_back({.type = AbodeInfo::CelticHut,
+			                   .offset = {k_RingRadius * std::sin(angle), -60.0f + k_RingRadius * std::cos(angle)},
+			                   .yawDegrees = glm::degrees(angle)});
+		}
+		all.push_back({
+		    .id = "mind.stomp_no_way",
+		    .name = "The creature stops when it finds no way to a thing to stomp on",
+		    .facet = Facet::Mind,
+		    .description = "A grown-up tiger. A ring of huts shuts a rock in. The script tells the tiger to smash the rock.",
+		    .expected = "The tiger walks to stomp on the rock. When the search finds no route, it stops at once and makes "
+		                "a sound of refusal. For ten seconds it does not choose the rock again.",
+		    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+		    .creatures = {tiger},
+		    .objects = std::move(objects),
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .object = 0, .action = "SmashStoneInHalf"}},
+		});
+	}
+
+	{
+		// A ring of huts shuts the tiger in, with a rock outside it
+		auto shutIn = Content(CreatureType::Tiger, {0.0f, 0.0f});
+		shutIn.phase = 13;
+		std::vector<ObjectSetup> objects {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 60.0f}}};
+		constexpr int k_Huts = 24;
+		constexpr float k_RingRadius = 24.0f;
+		for (int i = 0; i < k_Huts; ++i)
+		{
+			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
+			objects.push_back({.type = AbodeInfo::CelticHut,
+			                   .offset = {k_RingRadius * std::sin(angle), k_RingRadius * std::cos(angle)},
+			                   .yawDegrees = glm::degrees(angle)});
+		}
+		all.push_back({
+		    .id = "mind.pick_up_shut_in",
+		    .name = "The creature clears its way out to pick up a thing",
+		    .facet = Facet::Mind,
+		    .description = "A grown-up tiger on the learning leash stands in a ring of huts. The player tells it to act on "
+		                   "a rock outside the ring.",
+		    .expected = "The tiger walks to pick up the rock and finds no way out. It stops the pick-up. It kicks one of "
+		                "the huts that the search met, or throws it when it can pick it up. Then it walks on to where it "
+		                "went.",
+		    .framing = {.shot = Shot::Overview},
+		    .creatures = {shutIn},
+		    .objects = std::move(objects),
+		    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 2.0f, false),
+		                 Act(Kind::TakeOffLeash, 0, 3.0f)},
+		});
+	}
+
 	all.push_back({
 	    .id = "mind.mimic",
 	    .name = "Mimic the player",

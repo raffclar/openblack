@@ -111,9 +111,9 @@ enum class Failure : uint8_t
 	/// On the walk to the thing, the search found no route
 	NoRoute,
 };
-/// Whether the creature does not choose the thing again for a time after the action failed. Only a pick-up that found
-/// no way to its thing does this.
-[[nodiscard]] bool LeavesThingAlone(bool pickingUp, Failure failure);
+/// Whether the creature does not choose the thing again for a time after the action failed. A pick-up, a stomp or a kick
+/// that found no way or no route to its thing does this.
+[[nodiscard]] bool LeavesThingAlone(Kind kind, Failure failure);
 /// Whether the creature makes a sound of refusal when the action failed: only when the search found no route
 [[nodiscard]] bool RefusesAloud(Failure failure);
 

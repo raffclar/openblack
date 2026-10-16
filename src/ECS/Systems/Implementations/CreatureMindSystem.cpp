@@ -148,6 +148,24 @@ bool HeldByHand(entt::entity creature)
 	return openblack::Locator::creatureHandSystem::has_value() &&
 	       openblack::Locator::creatureHandSystem::value().GetCreature() == creature;
 }
+
+/// The action of the hands that an order of the mind starts, for the orders that walk to a thing
+openblack::creature_object_actions::Kind HandsKindOf(openblack::creature_mind::ObjectOrder::Kind order)
+{
+	using Order = openblack::creature_mind::ObjectOrder::Kind;
+	using openblack::creature_object_actions::Kind;
+	switch (order)
+	{
+	case Order::PickUp:
+		return Kind::PickUp;
+	case Order::Destroy:
+		return Kind::Destroy;
+	case Order::Kick:
+		return Kind::Kick;
+	default:
+		return Kind::Keep;
+	}
+}
 } // namespace
 using creature_desires::Desire;
 
@@ -1934,8 +1952,10 @@ void CreatureMindSystem::ProcessTurn()
 			    const bool walkToObject = (step.kind == creature_mind::Step::Kind::Move ||
 			                               (step.kind == creature_mind::Step::Kind::FollowWatching && mind.idle.followMoved)) &&
 			                              step.movement.object.has_value();
-			    // Any walk that stops on the first turn of its search can clear the way, one time for each stop
-			    const bool anyWalk = step.kind == creature_mind::Step::Kind::Move || walkToObject;
+			    // Any walk that stops on the first turn of its search can clear the way, one time for each stop. This
+			    // includes the walk of the hands to a thing that they pick up, stomp on or kick.
+			    const bool handsStep = step.kind == creature_mind::Step::Kind::Object;
+			    const bool anyWalk = step.kind == creature_mind::Step::Kind::Move || walkToObject || handsStep;
 			    std::optional<CreatureLocomotion::GaveUp> gaveUp;
 			    if (walk != nullptr && mind.idle.stepStarted && anyWalk)
 			    {
@@ -1943,6 +1963,11 @@ void CreatureMindSystem::ProcessTurn()
 			    }
 			    if (gaveUp.has_value() && ClearWay(entity, mind, gaveUp->destination, gaveUp->met))
 			    {
+				    // The new plan stops what the hands did
+				    if (handsStep && Locator::creatureObjectActionSystem::has_value())
+				    {
+					    Locator::creatureObjectActionSystem::value().Cancel(entity);
+				    }
 				    StepClearingWay(entity, mind);
 			    }
 			    else if (walk != nullptr && walk->failed && mind.idle.stepStarted && (walkToPoint || walkToObject))
@@ -1957,14 +1982,15 @@ void CreatureMindSystem::ProcessTurn()
 				    mind.idle.gaveUp = true;
 				    RefuseNoRoute(entity);
 			    }
-			    // After a pick-up that found no way to its thing, the creature does not choose the thing again for a time
+			    // After a pick-up, a stomp or a kick that found no way to its thing, the creature does not choose the thing
+			    // again for a time
 			    else if (step.kind == creature_mind::Step::Kind::Object && mind.idle.stepStarted &&
 			             Locator::creatureObjectActionSystem::has_value() &&
 			             HandsOf(entity) == creature_mind::HandsState::Failed)
 			    {
 				    const auto failure = Locator::creatureObjectActionSystem::value().GetFailure(entity);
-				    const bool pickingUp = step.order.kind == creature_mind::ObjectOrder::Kind::PickUp;
-				    if (step.order.object.has_value() && creature_object_actions::LeavesThingAlone(pickingUp, failure))
+				    if (step.order.object.has_value() &&
+				        creature_object_actions::LeavesThingAlone(HandsKindOf(step.order.kind), failure))
 				    {
 					    mind.beliefs.MarkBlocked(static_cast<entt::entity>(*step.order.object), mind.turn);
 				    }
