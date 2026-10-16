@@ -1392,6 +1392,8 @@ void ReactionSystem::Stop(entt::entity living, LivingReaction& state, bool reset
 	{
 		return;
 	}
+	// Keep the kind, because a villager that lets go of its reaction clears it
+	const auto type = state.type;
 	if (registry.AllOf<Villager>(living))
 	{
 		villager_reactions::Stop(living, state, resetState);
@@ -1400,11 +1402,12 @@ void ReactionSystem::Stop(entt::entity living, LivingReaction& state, bool reset
 	{
 		Locator::animalSystem::value().StopReaction(living);
 	}
-	else if (registry.AllOf<Creature>(living))
+	// A creature, a villager or an animal remembers the kind as now. Thus it waits its full time from the end of the
+	// reaction before it takes up that kind again. This also occurs when the reaction is gone. The plan that a creature's
+	// reaction forced continues.
+	if (registry.AnyOf<Villager, Animal, Creature>(living))
 	{
-		// A creature has no state to go back to. Its memory of the kind comes up to now, so it waits its full time from
-		// the end of the reaction before it takes that kind again. The plan that the reaction forced continues.
-		MemoryOf(registry, living, state).Refresh(static_cast<uint32_t>(state.type), _turn);
+		MemoryOf(registry, living, state).Refresh(static_cast<uint32_t>(type), _turn);
 	}
 	state.reaction = 0;
 	state.type = Reaction::None;
