@@ -95,6 +95,7 @@ public:
 	void BakeLandShadows(bool drawVegetation) const noexcept final;
 	void WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void PrepareCreatureSkins(size_t count) const noexcept final;
+	void ReleaseGpuWorkMemory() noexcept final;
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
 	void ShowInterfaceCreatures(interface_creatures::Request request) noexcept final;
 	void Frame() noexcept final;
@@ -635,6 +636,10 @@ private:
 	[[nodiscard]] static size_t MaxCreaturesDrawn();
 	/// Sampled by the primitives without a skin, as Direct3D's texture stages read white with no texture set
 	std::optional<TextureHandle> _whiteTexture;
+	/// A texel that the renderer reads back to make a frame wait for the GPU; none if the backend cannot read textures
+	std::optional<TextureHandle> _readBackTexture;
+	/// Where the read-back texel goes
+	std::array<uint8_t, 4> _readBackTexel {};
 	/// u_modelLight: where the game's model light is this frame, and its ambient
 	mutable glm::vec4 _modelLight {0.0f};
 	/// What the land's light is scaled by for the trees this frame, of 1

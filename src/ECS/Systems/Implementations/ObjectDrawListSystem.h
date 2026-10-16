@@ -39,6 +39,7 @@ public:
 	ObjectDrawListSystem& operator=(ObjectDrawListSystem&&) = delete;
 
 	void Update(uint32_t turn) override;
+	void PrepareLand() override;
 	void RequestRebuild(uint32_t frames) override;
 	[[nodiscard]] object_draw_list::Frame GetFrame() const override { return _frame; }
 	[[nodiscard]] const std::optional<object_draw_list::View>& GetView() const override { return _view; }

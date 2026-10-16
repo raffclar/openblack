@@ -563,6 +563,13 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
 		                                               bgfx::copy(&k_White, sizeof(k_White))));
 		bgfx::setName(toBgfx(*_whiteTexture), "White");
 	}
+	if ((bgfx::getCaps()->supported & BGFX_CAPS_TEXTURE_READ_BACK) != 0)
+	{
+		_readBackTexture = fromBgfx(
+		    bgfx::createTexture2D(1, 1, false, 1, bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_READ_BACK | BGFX_SAMPLER_NONE,
+		                          bgfx::copy(_readBackTexel.data(), static_cast<uint32_t>(_readBackTexel.size()))));
+		bgfx::setName(toBgfx(*_readBackTexture), "Read Back");
+	}
 	// The moving shadows' data, grown as more are cast
 	_groundShadowData = std::make_unique<Texture2D>("Ground Shadow Data");
 	_groundShadowData->Create(k_GroundShadowDataWidth, 1, 1, TextureFormat::RGBA32F, Wrapping::ClampEdge, Filter::Nearest,
@@ -606,6 +613,10 @@ Renderer::~Renderer() noexcept
 	if (_whiteTexture)
 	{
 		bgfx::destroy(toBgfx(*_whiteTexture));
+	}
+	if (_readBackTexture)
+	{
+		bgfx::destroy(toBgfx(*_readBackTexture));
 	}
 	_landLuminosityFrameBuffer.reset();
 	_landShadeFrameBuffer.reset();
@@ -7155,6 +7166,16 @@ void Renderer::BakeLandShadows(bool drawVegetation) const noexcept
 uint32_t Renderer::GetPipelinesMade() const noexcept
 {
 	return _bgfxCallback->pipelinesMade.load();
+}
+
+void Renderer::ReleaseGpuWorkMemory() noexcept
+{
+	// The read of a texture waits until the GPU did all the work before it, and then the backend releases the memory
+	// of that work
+	if (_readBackTexture)
+	{
+		bgfx::readTexture(toBgfx(*_readBackTexture), _readBackTexel.data());
+	}
 }
 
 void Renderer::Frame() noexcept
