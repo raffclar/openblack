@@ -476,11 +476,13 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	constexpr glm::vec2 k_Creche {-14.0f, 12.0f};
 	constexpr glm::vec2 k_Workshop {14.0f, 12.0f};
 	constexpr glm::vec2 k_Lantern {-6.0f, 20.0f};
-	const auto civicTown = [&](float crecheLife, float lanternLife = 1.0f) {
+	// A lantern away from the town, for the lightning
+	constexpr glm::vec2 k_LoneLantern {0.0f, -20.0f};
+	const auto civicTown = [&](float crecheLife) {
 		auto objects = Town();
 		objects.push_back({.type = AbodeInfo::CelticCreche, .offset = k_Creche, .yawDegrees = 180.0f, .life = crecheLife});
 		objects.push_back({.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f});
-		objects.push_back({.type = MobileStaticInfo::StreetLantern, .offset = k_Lantern, .life = lanternLife});
+		objects.push_back({.type = MobileStaticInfo::StreetLantern, .offset = k_Lantern});
 		objects.push_back({.type = MobileStaticInfo::StreetLantern, .offset = {6.0f, 20.0f}});
 		objects.push_back({.type = MobileStaticInfo::CountryLantern, .offset = {0.0f, 4.0f}});
 		return objects;
@@ -517,18 +519,19 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .id = "miracles.lightning_lantern",
 	    .name = "Lightning at a street lantern at night",
 	    .facet = Facet::Miracles,
-	    .description = "The Celtic town at ten at night, with its crèche, workshop and lanterns, the west street lantern at "
-	                   "15 percent of its life. A lightning bolt is held from a hand above that lantern for four seconds "
-	                   "in every eight.",
+	    .description = "A street lantern at 15 percent of its life and a country lantern 6 m east of it, away from any "
+	                   "town, at ten at night. A lightning bolt is held from a hand above the street lantern for four "
+	                   "seconds in every eight.",
 	    .expected = "The bolts strike the lantern and it loses life. With no life left it goes at once, with no ghost, "
-	                "and its flames, glow, light and crackle go with it.",
+	                "and its flames, glow, light and crackle go with it. The country lantern stays.",
 	    .environment = {.hour = 22.0f, .clockRuns = false, .dispenserGrid = false},
-	    .framing = onCivic,
-	    .objects = civicTown(1.0f, 0.15f),
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, -36.0f}, .look = {3.0f, 2.0f, -20.0f}},
+	    .objects = {{.type = MobileStaticInfo::StreetLantern, .offset = k_LoneLantern, .life = 0.15f},
+	                {.type = MobileStaticInfo::CountryLantern, .offset = k_LoneLantern + glm::vec2(6.0f, 0.0f)}},
 	    .miracles = {{.type = MagicType::LightningBolt,
 	                  .target = MiracleCast::Target::Point,
-	                  .point = k_Lantern,
-	                  .handOffset = k_Lantern + glm::vec2(0.0f, -10.0f),
+	                  .point = k_LoneLantern,
+	                  .handOffset = k_LoneLantern + glm::vec2(0.0f, -10.0f),
 	                  .handHeight = 15.0f,
 	                  .delaySeconds = 4.0f,
 	                  .holdSeconds = 4.0f,
@@ -539,20 +542,20 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .id = "miracles.creche_destroyed_with_sign",
 	    .name = "A crèche destroyed with its tip sign",
 	    .facet = Facet::Miracles,
-	    .description = "The Celtic town with its crèche at 15 percent of its life. A lightning bolt is held from a hand "
-	                   "above the crèche for four seconds in every eight.",
+	    .description = "The Celtic town with its crèche at 40 percent of its life. After ten seconds, a lightning bolt is "
+	                   "held from a hand above the crèche for four seconds in every eight.",
 	    .expected = "The bolts take the last of the crèche's life. It flickers out as a ghost and goes, and its tip sign "
 	                "goes with it. The workshop keeps its sign. When the town puts the crèche up again, a new sign "
 	                "stands in front of the site.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = onCivic,
-	    .objects = civicTown(0.15f),
+	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 14.0f, -8.0f}, .look = {-14.0f, 0.0f, 12.0f}},
+	    .objects = civicTown(0.4f),
 	    .miracles = {{.type = MagicType::LightningBolt,
 	                  .target = MiracleCast::Target::Point,
 	                  .point = k_Creche,
 	                  .handOffset = k_Creche + glm::vec2(0.0f, -12.0f),
 	                  .handHeight = 18.0f,
-	                  .delaySeconds = 4.0f,
+	                  .delaySeconds = 10.0f,
 	                  .holdSeconds = 4.0f,
 	                  .repeatSeconds = 8.0f}},
 	    .townBeliefInPlayer = k_TownBelief,
