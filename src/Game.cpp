@@ -2023,6 +2023,11 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	    },
 	};
 	music.creatureDance = ecs::creature_dance_music::Heard(cameraPosition);
+	if (Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().FightMusicHeard(cameraPosition))
+	{
+		const auto& context = Locator::entitiesRegistry::value().Context();
+		music.creatureFight = audio::GameMusic::SelectFightType(context.mapScriptGlobals.landNumber, context.skirmish);
+	}
 	Locator::entitiesRegistry::value().Each<const ecs::components::Town, const Tribe, const ecs::components::Transform>(
 	    [&music](const ecs::components::Town& town, const Tribe tribe, const ecs::components::Transform& transform) {
 		    music.towns.push_back({

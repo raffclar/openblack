@@ -189,7 +189,8 @@ std::vector<Step> creature_town_help::MakeBreeder(uint32_t villager)
 	     .effect = Effect::Completed,
 	     .order = {.kind = ObjectOrder::Kind::Keep, .animation = k_StrokeAnimation},
 	     .face = Cue::Compassion,
-	     .gaze = Gaze {.object = villager}},
+	     .gaze = Gaze {.object = villager},
+	     .main = true},
 	    {.kind = Step::Kind::MakeDisciple, .object = villager},
 	    PutDown(),
 	};
@@ -270,7 +271,8 @@ std::vector<Step> creature_town_help::PlayWithVillager(uint32_t villager, float 
 	                  .effect = Effect::Completed,
 	                  .order = {.kind = ObjectOrder::Kind::PointAt, .object = villager, .seconds = k_PlayPointSeconds},
 	                  .face = Cue::Smile,
-	                  .gaze = Gaze {.object = villager}});
+	                  .gaze = Gaze {.object = villager},
+	                  .main = true});
 	agenda.push_back(PullFace(villager, random));
 	return agenda;
 }

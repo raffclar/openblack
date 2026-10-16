@@ -2328,7 +2328,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_learning::Context::credited>("credited")
 	    .Field<&openblack::creature_learning::Context::source>("source")
 	    .Field<&openblack::creature_learning::Context::ordered>("ordered")
-	    .Field<&openblack::creature_learning::Context::done>("done");
+	    .Field<&openblack::creature_learning::Context::done>("done")
+	    .Field<&openblack::creature_learning::Context::seen>("seen");
 	Reflect<openblack::creature_learning::CreatureAttitude>(context, ValueOnly {})
 	    .Field<&openblack::creature_learning::CreatureAttitude::creature>("creature")
 	    .Field<&openblack::creature_learning::CreatureAttitude::howNice>("howNice")
@@ -2444,7 +2445,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::danceTurns>("danceTurns")
 	    .Field<&openblack::creature_mind::IdleMind::danceEnding>("danceEnding")
 	    .Field<&openblack::creature_mind::IdleMind::danceSet>("danceSet")
-	    .Field<&openblack::creature_mind::IdleMind::followCameraTurns>("followCameraTurns");
+	    .Field<&openblack::creature_mind::IdleMind::followCameraTurns>("followCameraTurns")
+	    .Field<&openblack::creature_mind::IdleMind::movedOn>("movedOn");
 	Reflect<openblack::creature_mind::Movement>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Movement::kind>("kind")
 	    .Field<&openblack::creature_mind::Movement::point>("point")
@@ -2487,7 +2489,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::heldEyes>("heldEyes")
 	    .Field<&openblack::creature_mind::Step::flutterEyelids>("flutterEyelids")
 	    .Field<&openblack::creature_mind::Step::dance>("dance")
-	    .Field<&openblack::creature_mind::Step::faint>("faint");
+	    .Field<&openblack::creature_mind::Step::faint>("faint")
+	    .Field<&openblack::creature_mind::Step::main>("main");
 	Reflect<openblack::creature_mind_model::Learnt>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind_model::Learnt::opinions>("opinions")
 	    .Field<&openblack::creature_mind_model::Learnt::turnsSinceDone>("turnsSinceDone")

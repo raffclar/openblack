@@ -265,6 +265,19 @@ struct TattooSite
 /// A creature has eight places for tattoos
 using TattooSites = std::array<TattooSite, 8>;
 
+/// What the creature block of a .cbn file holds for each of a creature's twelve fight blows, in the order of the blow
+/// animations
+struct CreatureBlow
+{
+	/// When the blow lands, in milliseconds from the start of its animation
+	int32_t landTime {-1};
+	/// A number whose use isn't known
+	int32_t unknown {-1};
+	/// The type of wound the blow leaves, 0 to 2; -1 in files of a version that lacks it
+	int32_t woundType {-1};
+};
+using CreatureBlows = std::array<CreatureBlow, 12>;
+
 /**
   This class is used to read the Creature block of CBN and the Hand block of HBN files.
  */
@@ -292,6 +305,8 @@ protected:
 	std::optional<CreatureEyes> _creatureEyes;
 	/// Where the creature's tattoos go, in creature files from version 15 on
 	std::optional<TattooSites> _tattooSites;
+	/// What it holds for each fight blow, in creature files from version 15 on
+	std::optional<CreatureBlows> _creatureBlows;
 	/// The bones it acts with and the moments of its object animations, as many as the file's version has
 	std::optional<CreatureActionPoints> _creatureActionPoints;
 	std::vector<int32_t> _creatureTail;
@@ -351,6 +366,7 @@ public:
 	[[nodiscard]] const std::string& GetSoundBankName() const noexcept { return _soundBankName; }
 	[[nodiscard]] const std::optional<CreatureEyes>& GetCreatureEyes() const noexcept { return _creatureEyes; }
 	[[nodiscard]] const std::optional<TattooSites>& GetTattooSites() const noexcept { return _tattooSites; }
+	[[nodiscard]] const std::optional<CreatureBlows>& GetCreatureBlows() const noexcept { return _creatureBlows; }
 	[[nodiscard]] const std::optional<CreatureActionPoints>& GetCreatureActionPoints() const noexcept
 	{
 		return _creatureActionPoints;

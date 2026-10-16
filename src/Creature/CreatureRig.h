@@ -136,6 +136,9 @@ struct CreatureRig
 		float kickMs;
 	};
 	std::optional<ActionPoints> actionPoints;
+	/// The type of wound each of its twelve fight blows leaves, in the order of the blow animations, when its file gives
+	/// them
+	std::optional<std::array<int32_t, 12>> blowWoundTypes;
 
 	/// The sounds placed on moments of each animation of the base mesh, in the order of the creature spec file
 	std::vector<std::vector<creature_audio::SoundEvent>> soundEvents;

@@ -269,6 +269,7 @@ std::vector<Step> creature_leash_orders::Hold(uint32_t object, bool alreadyHeld,
 	}
 	Step face {.kind = Step::Kind::Move};
 	face.movement = {.kind = Movement::Kind::TurnToFace, .point = camera};
+	face.main = true;
 	agenda.push_back(face);
 	if (playWith.has_value())
 	{
@@ -287,23 +288,27 @@ std::vector<Step> creature_leash_orders::LookAtReflection(glm::vec2 water, glm::
 	constexpr float k_ShoreLook = 1.2f;
 	constexpr float k_LastLook = 1.1f;
 	using creature_face::Cue;
-	// Each look is at the water in front of its feet, with a puzzled, curious or amazed face
+	// Each look is at the water in front of its feet, with a puzzled, curious or amazed face. The second dazed look is the
+	// main step.
 	const auto look = [turnsPerSecond](float seconds, Cue face) {
 		auto step = Wait(WholeTurns(seconds, turnsPerSecond));
 		step.face = face;
 		step.gaze = creature_mind::Gaze {.feet = true};
 		return step;
 	};
-	const auto dazed = [] {
-		return Step {.kind = Step::Kind::Action, .animation = creature_layers::animations::k_Confused, .face = Cue::Amazed};
+	const auto dazed = [](bool main) {
+		return Step {.kind = Step::Kind::Action,
+		             .animation = creature_layers::animations::k_Confused,
+		             .face = Cue::Amazed,
+		             .main = main};
 	};
 	const auto walk = [height](glm::vec2 point, Cue face) {
 		auto step = Walk(point, 2.0f * height, false);
 		step.face = face;
 		return step;
 	};
-	return {walk(water, Cue::None),           look(k_FirstLook, Cue::Puzzled),   dazed(), look(k_LongLook, Cue::Puzzled),
-	        walk(shore, Cue::Amazed),         look(k_ShoreLook, Cue::Curiosity), dazed(), walk(water, Cue::Amazed),
+	return {walk(water, Cue::None),           look(k_FirstLook, Cue::Puzzled),   dazed(false), look(k_LongLook, Cue::Puzzled),
+	        walk(shore, Cue::Amazed),         look(k_ShoreLook, Cue::Curiosity), dazed(true),  walk(water, Cue::Amazed),
 	        look(k_LastLook, Cue::Curiosity), look(k_LongLook, Cue::Amazed)};
 }
 

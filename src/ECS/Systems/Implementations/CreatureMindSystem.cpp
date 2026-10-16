@@ -1780,10 +1780,11 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    // Held by the player's hand its mind stands still, but for showing what it wants once it has turned to the
 		    // player
-		    if (held)
+		    if (const auto heldTurn = creature_turn_order::WhileHeld(held, mind.showDesireOnHold);
+		        heldTurn != creature_turn_order::HeldTurn::Think)
 		    {
 			    mind.heldSinceRestart = true;
-			    if (mind.showDesireOnHold)
+			    if (heldTurn == creature_turn_order::HeldTurn::ShowDesire)
 			    {
 				    ShowDesireOnHold(entity, mind, animation);
 			    }
@@ -1827,6 +1828,17 @@ void CreatureMindSystem::ProcessTurn()
 		    // choose the point that the head looks at.
 		    if (mind.paused || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
 		    {
+			    // Exhausted, starved or out of life while it fights, it passes out: its fight is called off for both,
+			    // and nobody wins
+			    if (!mind.paused && Locator::creatureFightSystem::has_value() && registry.AllOf<CreatureFighting>(entity) &&
+			        needs != nullptr && needs->faint.has_value() && mind.turn > k_TurnsBeforePassingOut)
+			    {
+				    TellFainting(entity);
+				    needs->faint.reset();
+				    Locator::creatureFightSystem::value().CallOff(entity);
+				    passingOut.push_back(entity);
+				    return;
+			    }
 			    if (!mind.paused)
 			    {
 				    animation.lookAt = FightLook(registry, entity, creature, transform, mind);
@@ -1895,7 +1907,8 @@ void CreatureMindSystem::ProcessTurn()
 			    {
 				    ForcePlan(entity, {.desire = creature_desires::Desire::ObeyPlayer,
 				                       .action = creature_mind::k_CutSceneLookAction,
-				                       .object = entity});
+				                       .object = entity,
+				                       .ordered = true});
 			    }
 		    }
 		    // When the creature examines a different creature, it finds the desires of the two creatures each turn.
@@ -1997,6 +2010,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .totemShare = mind_town_help::TotemShareOf(registry, mind.idle),
 		    };
 		    const auto commands = creature_mind::Think(mind.idle, senses, random);
+		    NoteStepSeen(entity, mind);
 		    if (commands.communicated.has_value())
 		    {
 			    SPDLOG_LOGGER_DEBUG(
@@ -3002,14 +3016,16 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		                     .action = k_ExamineGivenAction,
 		                     .object = object,
 		                     .agenda = creature_mind::ExamineGiven(number),
-		                     .activityObject = owner});
+		                     .activityObject = owner,
+		                     .ordered = true});
 		break;
 	case creature_giving::Use::Eat:
 		ForcePlan(creature, {.desire = Desire::Hunger,
 		                     .action = k_EatGivenAction,
 		                     .object = object,
 		                     .agenda = creature_mind::EatGiven(),
-		                     .activityObject = owner});
+		                     .activityObject = owner,
+		                     .ordered = true});
 		break;
 	case creature_giving::Use::Throw:
 	{
@@ -3018,7 +3034,8 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		                     .action = k_ThrowGivenAction,
 		                     .object = object,
 		                     .agenda = creature_mind::ThrowGiven(eye),
-		                     .activityObject = owner});
+		                     .activityObject = owner,
+		                     .ordered = true});
 		break;
 	}
 	case creature_giving::Use::AsLed:
@@ -3119,6 +3136,7 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 		                   .learnable = info.learnable,
 		                   .windowSeconds = info.learningWindowSeconds,
 		                   .source = *source,
+		                   .ordered = forced.ordered,
 		               });
 	}
 	creature_learning::SuppressOpposed(*mind->desires, forced.desire, tables->dependencies, k_TurnsPerSecond);

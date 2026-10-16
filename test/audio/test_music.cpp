@@ -537,3 +537,15 @@ TEST(MusicCues, MusicWithoutAHandlerPassesNone)
 	music.Update(MusicPlayer::k_Tick);
 	EXPECT_EQ(music.GetChannels()[0].cueChecked, MusicCuePosition {});
 }
+
+TEST(GameMusic, FightsOnTheFirstLandsHaveTheirOwnMusicAndLaterOnesTheBigFight)
+{
+	EXPECT_EQ(GameMusic::SelectFightType(0, false), MusicType::CreatureFight);
+	EXPECT_EQ(GameMusic::SelectFightType(1, false), MusicType::CreatureFight);
+	EXPECT_EQ(GameMusic::SelectFightType(3, false), MusicType::CreatureFight);
+	EXPECT_EQ(GameMusic::SelectFightType(4, false), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(5, false), MusicType::CreatureBigFight);
+	// A negative land number counts as a later land
+	EXPECT_EQ(GameMusic::SelectFightType(-1, false), MusicType::CreatureBigFight);
+	EXPECT_EQ(GameMusic::SelectFightType(1, true), MusicType::CreatureBigFight);
+}

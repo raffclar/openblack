@@ -245,3 +245,8 @@ bool creature_reaction::IsDominant(uint32_t age, uint32_t otherAge, bool madeFir
 	const auto gap = age > otherAge ? age - otherAge : otherAge - age;
 	return gap > k_DominantYears ? otherAge < age : madeFirst;
 }
+
+bool creature_reaction::OfAnotherGod(PlayerNames caster, PlayerNames creatureOwner)
+{
+	return caster != PlayerNames::NEUTRAL && caster != creatureOwner;
+}

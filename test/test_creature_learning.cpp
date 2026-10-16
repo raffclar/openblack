@@ -807,9 +807,17 @@ TEST(CreatureLearning, SpreadsLessonsByDependency)
 
 TEST(CreatureLearning, CreditGoesToRecentActions)
 {
-	creature_learning::Context running {.action = 1, .running = true, .windowSeconds = 20.0f};
-	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(running), 1.0f);
-	creature_learning::Context finished {.action = 2, .running = false, .secondsSince = 5.0f, .windowSeconds = 20.0f};
+	// An action that did not end well counts fully, whether the player saw it or not
+	creature_learning::Context underway {.action = 1, .windowSeconds = 20.0f};
+	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(underway), 1.0f);
+	underway.running = false;
+	underway.secondsSince = 100.0f;
+	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(underway), 1.0f);
+	// An action that ended well counts only when the player saw it, less and less until its window closes
+	creature_learning::Context finished {
+	    .action = 2, .running = false, .secondsSince = 5.0f, .windowSeconds = 20.0f, .done = true};
+	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(finished), 0.0f);
+	finished.seen = true;
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(finished), 0.75f);
 	finished.secondsSince = 25.0f;
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(finished), 0.0f);
@@ -819,12 +827,12 @@ TEST(CreatureLearning, CreditGoesToRecentActions)
 	std::vector<creature_learning::Context> contexts;
 	static_cast<void>(creature_learning::Remember(contexts, {.action = 1, .windowSeconds = 20.0f}));
 	creature_learning::Age(contexts, 1.0f);
-	contexts.back().done = true;
+	creature_learning::MarkNewestDone(contexts, true);
 	static_cast<void>(creature_learning::Remember(contexts, {.action = 2, .windowSeconds = 10.0f}));
 	creature_learning::Age(contexts, 1.0f);
 	EXPECT_FALSE(contexts[0].running);
 	EXPECT_EQ(creature_learning::BestContext(contexts), 1u);
-	contexts[1].running = false;
+	creature_learning::MarkNewestDone(contexts, true);
 	creature_learning::Age(contexts, 9.0f);
 	// The older action's longer window now gives it the bigger share
 	EXPECT_EQ(creature_learning::BestContext(contexts), 0u);
@@ -837,9 +845,41 @@ TEST(CreatureLearning, CreditGoesToRecentActions)
 	EXPECT_EQ(contexts.back().action, 19u);
 	EXPECT_EQ(contexts.front().action, 15u);
 	// Of two that count the same, the newer takes the credit
-	contexts.front().running = true;
-	contexts.back().running = true;
 	EXPECT_EQ(creature_learning::BestContext(contexts), 4u);
+	contexts.back().done = true;
+	contexts.back().seen = true;
+	contexts.back().windowSeconds = 10.0f;
+	contexts.front().done = true;
+	contexts.front().seen = true;
+	contexts.front().windowSeconds = 10.0f;
+	EXPECT_EQ(creature_learning::BestContext(contexts), 4u);
+}
+
+TEST(CreatureLearning, ThePlayerMustSeeAnActionThatEndsWell)
+{
+	std::vector<creature_learning::Context> contexts;
+	static_cast<void>(creature_learning::Remember(contexts, {.action = 1, .windowSeconds = 10.0f}));
+	creature_learning::Age(contexts, 3.0f);
+	// Not seen as it ends: feedback does not go to it
+	creature_learning::MarkNewestDone(contexts, false);
+	EXPECT_TRUE(contexts.back().done);
+	EXPECT_FALSE(contexts.back().seen);
+	EXPECT_FLOAT_EQ(contexts.back().secondsSince, 0.0f);
+	EXPECT_EQ(creature_learning::BestContext(contexts), std::nullopt);
+
+	// Seen before it ends, at the main step: the window starts when it ends
+	static_cast<void>(creature_learning::Remember(contexts, {.action = 2, .windowSeconds = 10.0f}));
+	creature_learning::MarkNewestSeen(contexts);
+	creature_learning::Age(contexts, 4.0f);
+	creature_learning::MarkNewestDone(contexts, false);
+	EXPECT_TRUE(contexts.back().seen);
+	creature_learning::Age(contexts, 2.0f);
+	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(contexts.back()), 0.8f);
+	// A later sighting starts the window again
+	creature_learning::MarkNewestSeen(contexts);
+	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(contexts.back()), 1.0f);
+	creature_learning::Age(contexts, 10.0f);
+	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(contexts.back()), 0.0f);
 }
 
 TEST(CreatureLearning, DecidingSuppressesOpposedDesires)

@@ -620,6 +620,11 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 	{
 		rig->rightEye = static_cast<uint32_t>(points->rightEye);
 	}
+	if (const auto& blows = file.GetCreatureBlows(); blows.has_value())
+	{
+		auto& types = rig->blowWoundTypes.emplace();
+		std::ranges::transform(*blows, types.begin(), [](const morph::CreatureBlow& blow) { return blow.woundType; });
+	}
 	rig->fileTail = file.GetCreatureTail();
 	rig->creatureVersion = file.GetCreatureVersion();
 

@@ -420,7 +420,7 @@ void MorphFile::ReadTattooSites(std::istream& stream, uint32_t version) noexcept
 	}
 	const auto skip = [&stream](std::streamoff bytes) { stream.seekg(bytes, std::ios_base::cur); };
 	constexpr std::streamoff k_Field = sizeof(uint32_t);
-	// The sound bank's name, then seven sizes, then twelve pairs or triples of numbers
+	// The sound bank's name, then seven sizes, then a pair or triple of numbers for each of the twelve fight blows
 	if (version > 18)
 	{
 		std::array<char, 0x20> bank {};
@@ -428,7 +428,20 @@ void MorphFile::ReadTattooSites(std::istream& stream, uint32_t version) noexcept
 		_soundBankName.assign(bank.data(), strnlen(bank.data(), bank.size()));
 	}
 	skip((version < 11 ? 1 : 7) * k_Field);
-	skip(12 * (version > 12 ? 3 : 2) * k_Field);
+	CreatureBlows blows {};
+	for (auto& blow : blows)
+	{
+		stream.read(reinterpret_cast<char*>(&blow.landTime), sizeof(blow.landTime));
+		stream.read(reinterpret_cast<char*>(&blow.unknown), sizeof(blow.unknown));
+		if (version > 12)
+		{
+			stream.read(reinterpret_cast<char*>(&blow.woundType), sizeof(blow.woundType));
+		}
+	}
+	if (stream.good())
+	{
+		_creatureBlows = blows;
+	}
 
 	TattooSites sites {};
 	for (auto& site : sites)
