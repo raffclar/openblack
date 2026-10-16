@@ -48,6 +48,8 @@ UnderwaterView::UnderwaterView()
 {
 	_environmentFaces.fill(BGFX_INVALID_HANDLE);
 	_environmentSkyFaces.fill(BGFX_INVALID_HANDLE);
+	_foamTextures.fill(BGFX_INVALID_HANDLE);
+	_foamTargets.fill(BGFX_INVALID_HANDLE);
 	bgfx::VertexLayout layout;
 	layout.begin()
 	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
@@ -84,6 +86,20 @@ UnderwaterView::UnderwaterView()
 
 UnderwaterView::~UnderwaterView()
 {
+	for (auto& target : _foamTargets)
+	{
+		if (bgfx::isValid(target))
+		{
+			bgfx::destroy(target);
+		}
+	}
+	for (auto& texture : _foamTextures)
+	{
+		if (bgfx::isValid(texture))
+		{
+			bgfx::destroy(texture);
+		}
+	}
 	for (auto* faces : {&_environmentFaces, &_environmentSkyFaces})
 	{
 		for (auto& face : *faces)
@@ -694,4 +710,25 @@ uint8_t UnderwaterView::NextEnvironmentFace()
 	const uint8_t face = _environmentFace;
 	_environmentFace = underwater::NextEnvironmentFace(face);
 	return face;
+}
+
+bgfx::FrameBufferHandle UnderwaterView::FoamTarget(uint8_t target)
+{
+	if (!bgfx::isValid(_foamTextures.at(0)))
+	{
+		constexpr auto k_Side = underwater::k_FoamTexels;
+		constexpr uint64_t k_Flags = BGFX_TEXTURE_RT | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
+		for (size_t i = 0; i < _foamTextures.size(); ++i)
+		{
+			_foamTextures.at(i) = bgfx::createTexture2D(k_Side, k_Side, false, 1, bgfx::TextureFormat::RGBA16F, k_Flags);
+			bgfx::setName(_foamTextures.at(i), "Underwater Foam");
+			_foamTargets.at(i) = bgfx::createFrameBuffer(1, &_foamTextures.at(i), false);
+		}
+	}
+	return _foamTargets.at(target % _foamTargets.size());
+}
+
+TextureHandle UnderwaterView::FoamTexture(uint8_t target) const
+{
+	return fromBgfx(_foamTextures.at(target % _foamTextures.size()));
 }

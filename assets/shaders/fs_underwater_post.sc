@@ -34,6 +34,10 @@ uniform vec4 u_uwSky;
 // xyz: where the middle of the cube of the far scene is
 uniform vec4 u_uwEnvironment;
 
+// The foam with a thickness, and the silt in the water
+#include "underwater_foam_shade.sh"
+#include "underwater_sediment.sh"
+
 // Where a point of the screen (0 to 1, as the textures are read) is in the world, at a depth of the depth buffer
 vec3 WorldAt(vec2 uv, float depth)
 {
@@ -522,6 +526,10 @@ void main()
 				float window = smoothstep(0.0f, 0.25f, leaving.y);
 				surface = mix(mirror, through * (1.1f + 0.4f * ripple) + u_uwLightColour.rgb * ripple * 0.2f, window);
 			}
+			if (u_uwFlags.y > 0.5f)
+			{
+				surface = FoamUnderside(surface, surfacePoint, toSurface * u_uwSea.z, scatter);
+			}
 			colour = mix(scatter, surface, UwTransmittance(toSurface));
 		}
 		else
@@ -533,10 +541,15 @@ void main()
 			vec3 left = UwTransmittance(sceneDistance);
 			colour = litScene * left + scatter * (1.0f - left);
 		}
+		// The silt in the water between the eye and what it sees
+		float siltMean;
+		vec4 silt = UwSedimentAlong(eye, direction, min(sceneDistance, toSurface), t, jitter, 6, siltMean);
+		colour = colour * silt.a + silt.rgb;
 		// The shafts of light, broken by the moving surface; the jitter of each pixel hides the steps
 		if (u_uwFlags.w > 0.5f)
 		{
-			colour += Shafts(eye, direction, min(sceneDistance, toSurface), t, jitter) * u_uwLightColour.w;
+			colour += UwSedimentShafts(Shafts(eye, direction, min(sceneDistance, toSurface), t, jitter), siltMean, silt.a) *
+			          u_uwLightColour.w;
 		}
 
 		// The colour of the water: a little less red and more contrast, and the edge of the screen darker
@@ -596,6 +609,11 @@ void main()
 			float path = min(length(below - surfacePoint), 400.0f);
 			vec3 left = UwTransmittance(max(path + down * 0.6f, (1.0f - originalLand) * UW_SHALLOWS_TINT));
 			vec3 water = through * left + scatter * (1.0f - left);
+			// The silt in the water under the surface, on the way to what the pixel shows
+			float siltMean;
+			vec3 siltStart = vec3(surfacePoint.x, min(surfacePoint.y, u_uwParams.z) - 0.05f, surfacePoint.z);
+			vec4 silt = UwSedimentAlong(siltStart, direction, min(path, 40.0f), t, jitter, 3, siltMean);
+			water = water * silt.a + silt.rgb;
 
 			// The reflection: of the scene where the screen has it, else of the sky
 			vec3 reflected = reflect(direction, normal);
@@ -667,7 +685,17 @@ void main()
 				}
 				vec3 foamColour = u_uwLightColour.rgb * (0.4f + 0.6f * max(u_uwAbove.y, 0.0f)) + u_uwSky.rgb * 0.7f +
 				                  scatter * 0.5f;
-				colour = mix(colour, min(foamColour, vec3_splat(1.0f)), foam * 0.85f);
+				if (u_uwFoam.z > 0.5f)
+				{
+					vec2 foamShift;
+					UwCurrent(vec3(surfacePoint.x, u_uwParams.z, surfacePoint.z), t, foamShift);
+					colour = VolumeFoam(colour, min(foamColour, vec3_splat(1.0f)), surfacePoint, direction, foam, toSurface * u_uwSea.z,
+					                    foamShift + u_uwCurrent.xy * t, u_uwSky.rgb, scatter, jitter);
+				}
+				else
+				{
+					colour = mix(colour, min(foamColour, vec3_splat(1.0f)), foam * 0.85f);
+				}
 			}
 			// Where the original game shows its land over its sea, the land shows here too, as much as there
 			colour = u_uwFlags2.w > 0.5f ? vec3(1.0f, 0.0f, 1.0f) : colour;

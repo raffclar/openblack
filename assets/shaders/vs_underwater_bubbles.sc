@@ -4,6 +4,7 @@ $output v_texcoord0, v_texcoord1, v_color0, v_world
 #include <bgfx_shader.sh>
 
 #include "underwater.sh"
+#include "underwater_foam.sh"
 
 // EXPERIMENT (not for merge): the air that a wave drives under the water as it hits the foot of a cliff. Each instance
 // is a point at the foot of a cliff (i_data0: xy where it is across the ground, zw the direction out to sea) with 96
@@ -13,6 +14,21 @@ $output v_texcoord0, v_texcoord1, v_color0, v_world
 // water's fog.
 
 SAMPLER2D(s_shore, 2);
+// The foam field (see underwater_foam.sh)
+SAMPLER2D(s_foam, 4);
+
+// The foam over a point: x how thick it is, y how much air it holds. The bubbles rise into the foam and burst under
+// it, and the cloud of air under fresh foam is denser and larger.
+vec2 FoamOver(vec2 xz)
+{
+	vec2 uv = UwFoamUv(xz);
+	float inside = UwFoamInside(uv);
+	if (inside <= 0.0f)
+	{
+		return vec2_splat(0.0f);
+	}
+	return texture2DLod(s_foam, uv, 0.0f).xz * inside;
+}
 
 float BubbleHash(float n)
 {
@@ -72,7 +88,9 @@ void main()
 		world = start + vec3(flow.x, rise, flow.y) * max(age, 0.0f) +
 		        vec3(sin(age * 7.0f + seed), 0.0f, cos(age * 6.0f + seed)) * wobble;
 		size = radius;
-		float surfaced = world.y > level - radius ? 0.0f : 1.0f;
+		// A bubble bursts where it meets the surface, or the bottom of the foam over it
+		float foamBottom = FoamOver(world.xz).x * 0.15f;
+		float surfaced = world.y > level - radius - foamBottom ? 0.0f : 1.0f;
 		alpha = age > 0.0f ? surfaced * smoothstep(0.0f, 0.2f, age) : 0.0f;
 		alpha *= power > 0.03f ? 0.85f : 0.0f;
 	}
@@ -87,6 +105,10 @@ void main()
 		float life = 2.0f + 2.0f * power;
 		alpha = since < life ? (1.0f - since / life) * smoothstep(0.0f, 0.15f, since) : 0.0f;
 		alpha *= 0.45f * smoothstep(0.03f, 0.4f, power);
+		// Fresh foam over the cloud holds the air the crash drove down: the cloud is denser and larger there
+		float air = min(FoamOver(world.xz).y, 1.5f);
+		alpha *= 1.0f + 0.5f * air;
+		size *= 1.0f + 0.25f * air;
 		// From above, the water in front of it hides it more the deeper it is
 		alpha *= under ? 1.0f : 0.6f * exp(-depth * 0.8f);
 	}
