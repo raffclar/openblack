@@ -114,4 +114,6 @@ void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::s
 [[nodiscard]] uint16_t LookingAngle(const components::Transform& transform, const std::optional<glm::vec3>& lookAt);
 /// Whether the body of the creature can pay for a miracle of a type
 [[nodiscard]] bool CanPayForMiracle(entt::entity creature, MagicType type);
+/// Where a creature's head is as posed this frame: its head bone, else its height over its feet
+[[nodiscard]] glm::vec3 HeadPoint(const ecs::Registry& registry, entt::entity creature);
 } // namespace openblack::ecs::systems::mind_detail

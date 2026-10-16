@@ -333,7 +333,7 @@ void MorphFile::ReadCreatureBlock(std::istream& stream) noexcept
 	}
 	if (version > 9)
 	{
-		read(points.unknownTime);
+		read(points.pointTime);
 	}
 	read(points.destroyTime);
 	read(points.discardTime);

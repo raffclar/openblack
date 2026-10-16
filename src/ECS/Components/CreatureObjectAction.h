@@ -51,10 +51,16 @@ struct CreatureObjectAction
 	/// When it takes hold or lets go, in the animation's time, and whether that has happened
 	float eventMs {0.0f};
 	bool eventDone {false};
-	/// Pointing loops its animations for a while rather than playing them once: for the seconds it was asked to point,
-	/// or its usual while. Pointing at a thing (the target), it points wherever the thing goes.
+	/// Pointing holds the arm at its point for a while: for the seconds that it was asked to point, or its usual while.
+	/// Pointing at a thing (the target), it points wherever the thing goes.
 	float holdMs {0.0f};
 	std::optional<float> pointSeconds;
+	/// Pointing: the arm points until it is told to stop, as it does when it draws a gesture
+	bool pointsUntilTold {false};
+	/// Pointing: the point ends, and the arm plays to the end of its animations
+	bool pointEnding {false};
+	/// Pointing: the moment that the arm gets to its point, in the time of the animations
+	float pointMs {0.0f};
 
 	/// Where the hand gets to in the reaching animations, and how far the creature can reach, measured as it starts
 	std::optional<creature_reach::Points> reach;

@@ -72,6 +72,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureGestureDrawing.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -1770,6 +1771,12 @@ void CreatureMindSystem::ProcessTurn()
 		    // choose the point that the head looks at.
 		    if (mind.paused || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
 		    {
+			    // A paused body still draws a gesture that it was told to draw
+			    if (const auto* drawing = registry.TryGet<const CreatureGestureDrawing>(entity);
+			        mind.paused && drawing != nullptr && !drawing->inDance)
+			    {
+				    StepGesture(entity);
+			    }
 			    if (!mind.paused)
 			    {
 				    animation.lookAt = FightLook(registry, entity, creature, transform, mind);
@@ -1895,6 +1902,12 @@ void CreatureMindSystem::ProcessTurn()
 			    ++mind.stepTurns;
 		    }
 		    StepSubMove(entity, creature_layers::IsPlaying(animation.body));
+		    // A drawing that a step started continues each turn; a dance continues its own only on the turns of its move
+		    if (const auto* drawing = registry.TryGet<const CreatureGestureDrawing>(entity);
+		        drawing != nullptr && !drawing->inDance)
+		    {
+			    StepGesture(entity);
+		    }
 		    // A catch takes up the body until it is over, but the plan to catch is carried out as soon as the catch starts
 		    const bool catching = Locator::creatureObjectActionSystem::has_value() &&
 		                          Locator::creatureObjectActionSystem::value().IsCatching(entity);
@@ -1961,6 +1974,15 @@ void CreatureMindSystem::ProcessTurn()
 		    if (commands.move.has_value() && IsSubMove(commands.move->kind) && mind.idle.step < mind.idle.agenda.size())
 		    {
 			    StartSubMove(entity, *commands.move, mind.idle.agenda[mind.idle.step].seconds);
+		    }
+		    if (commands.gesture.has_value() && !StartGesture(entity, *commands.gesture, commands.gestureInDance) &&
+		        commands.gestureInDance)
+		    {
+			    StepGesture(entity);
+		    }
+		    if (commands.endPoint)
+		    {
+			    EndDanceGesturePoint(entity);
 		    }
 		    if (commands.releaseCast)
 		    {

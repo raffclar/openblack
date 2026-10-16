@@ -77,6 +77,15 @@ public:
 	{
 		return PointAt(creature, point);
 	}
+	/// Points at a point until it is told to stop, as it does when it draws a gesture in the air. It turns to face the
+	/// point first when it is far round.
+	virtual bool PointUntilTold(entt::entity /*creature*/, const glm::vec3& /*point*/) { return false; }
+	/// The point moves: the arm follows it
+	virtual void MovePoint(entt::entity /*creature*/, const glm::vec3& /*point*/) {}
+	/// The point ends: the arm plays to the end of its animations
+	virtual void EndPoint(entt::entity /*creature*/) {}
+	/// Where the pointing hand is, while the arm points and the point has not ended
+	[[nodiscard]] virtual std::optional<glm::vec3> GetPointingHand(entt::entity /*creature*/) const { return std::nullopt; }
 	/// Catches something flying at it, when it can still reach where it passes
 	virtual bool Catch(entt::entity creature, entt::entity object) = 0;
 	/// Reaches out to take a thing the player's hand gives it, with its left hand when mirrored: the thing leaves the

@@ -806,8 +806,12 @@ struct Commands
 	std::optional<ObjectOrder> object;
 	/// The creature lets go of the thing that it holds, because the next step needs empty hands
 	std::optional<LetGo> letGo;
-	/// A gesture to draw, by its number
+	/// A gesture to draw, by its number. A dance gives it each turn of its move, and the drawing continues only on these
+	/// turns.
 	std::optional<uint32_t> gesture;
+	bool gestureInDance {false};
+	/// The arm stops pointing, at a move of a dance that is not a gesture
+	bool endPoint {false};
 	/// An animation to play on top of the body
 	std::optional<size_t> playOverlay;
 	/// A miracle to cast, and whether to let go of the one it holds

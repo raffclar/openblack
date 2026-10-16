@@ -26,6 +26,7 @@
 #include "Gestures/GestureMatcher.h"
 #include "Gestures/GestureRecorder.h"
 #include "Gestures/GestureRequests.h"
+#include "Gestures/GestureTrailBuilder.h"
 
 namespace openblack::ecs::systems
 {
@@ -130,6 +131,8 @@ public:
 	/// reward showing the gesture of a power-up): its square, so many metres across, laid on the land from a corner
 	/// towards the east and south
 	virtual void ShowGestureOnLand(GestureType /*gesture*/, glm::vec3 /*corner*/, float /*size*/) {}
+	/// A gesture's shape from its symbol file, or the circle's shape when the gesture has no file
+	[[nodiscard]] virtual std::optional<gesture::TrailSymbol> GetSymbol(GestureType /*gesture*/) const { return std::nullopt; }
 };
 
 } // namespace openblack::ecs::systems

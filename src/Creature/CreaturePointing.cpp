@@ -1,0 +1,78 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#include "CreaturePointing.h"
+
+#include <cmath>
+
+#include <algorithm>
+#include <numbers>
+
+#include <glm/geometric.hpp>
+
+using namespace openblack;
+
+float creature_pointing::AngleOf(glm::vec2 direction)
+{
+	return std::atan2(direction.x, -direction.y);
+}
+
+float creature_pointing::Wrap(float angle)
+{
+	constexpr float k_HalfTurn = std::numbers::pi_v<float>;
+	constexpr float k_FullTurn = 2.0f * std::numbers::pi_v<float>;
+	if (angle > k_HalfTurn)
+	{
+		return angle - k_FullTurn;
+	}
+	if (angle < -k_HalfTurn)
+	{
+		return angle + k_FullTurn;
+	}
+	return angle;
+}
+
+creature_pointing::Aim creature_pointing::AimAt(glm::vec3 origin, glm::vec2 facing, glm::vec3 target)
+{
+	const auto offset = target - origin;
+	const auto distance = glm::length(offset);
+	if (distance < k_TooNear)
+	{
+		return {};
+	}
+	const auto across = Wrap(AngleOf(facing) - AngleOf({offset.x, offset.z}));
+	return {.across = std::clamp(across, -k_AcrossLimit, k_AcrossLimit),
+	        .rise = std::clamp(offset.y / distance, -k_RiseLimit, k_RiseLimit)};
+}
+
+bool creature_pointing::PointsWithLeft(const Aim& aim, std::optional<bool> heldInLeft)
+{
+	if (heldInLeft.has_value())
+	{
+		return !*heldInLeft;
+	}
+	return aim.across > 0.0f;
+}
+
+std::array<float, 4> creature_pointing::Weights(const Aim& aim, bool left)
+{
+	const auto across = left ? -aim.across : aim.across;
+	const auto right = (across + k_AcrossLimit) * k_AcrossScale;
+	const auto high = aim.rise + k_RiseLimit;
+	return {(1.0f - right) * (1.0f - high), right * (1.0f - high), (1.0f - right) * high, right * high};
+}
+
+float creature_pointing::AdvanceTime(float timeMs, float stepMs, float pointMs, bool ending)
+{
+	if (ending || timeMs < pointMs)
+	{
+		return timeMs + stepMs;
+	}
+	return timeMs;
+}

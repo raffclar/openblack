@@ -292,6 +292,30 @@ void AddExpressions(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// The creature draws gestures in the air: the spiral of the game with villagers, then the circle, the star and the
+	// heart, each a few seconds after the last
+	std::vector<Command> drawn;
+	for (const auto gesture : {GestureType::Spiral, GestureType::Circle, GestureType::Star, GestureType::Heart})
+	{
+		drawn.push_back(Play(Kind::CreatureDrawGesture, 0, static_cast<size_t>(gesture), 7.0f, true));
+	}
+	all.push_back({
+	    .id = "expressions.draw_gesture",
+	    .name = "Gestures drawn in the air",
+	    .facet = Facet::Expressions,
+	    .description = "A tiger whose mind is paused, seen from the front, draws four gestures in the air one after the "
+	                   "other: the spiral, the circle, the star and the heart. In the game only the data can start a "
+	                   "drawing (a miracle with a gesture, or a dance move), and no shipped data does.",
+	    .expected = "For each gesture the tiger raises an arm and points in front of its head. The point moves along the "
+	                "gesture's shape on an upright square to the arm's side, from the top, and a glowing chain in the "
+	                "player's colour follows the hand. A gesture as long as the circle takes three seconds. At the end of "
+	                "the shape the arm holds still for most of a second, then comes down, and the chain fades.",
+	    .framing = {.shot = Shot::Head, .distance = 3.0f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content(), .hold = true, .pauseMind = true}},
+	    .commands = drawn,
+	    .repeatFrom = 0,
+	});
+
 	// Each shows one feeling in its face as the game's minds do: as its activity starts and again every four seconds
 	struct Feeling
 	{
@@ -6361,7 +6385,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 125> k_Names {
+	constexpr std::array<std::string_view, 126> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -6372,6 +6396,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "play action",
 	    "gesture",
 	    "pull face",
+	    "draw a gesture",
 	    "show feeling",
 	    "sit down",
 	    "stand up",

@@ -524,6 +524,8 @@ struct Command
 		PlayAction,
 		PlayGesture,
 		PullFace,
+		/// Drawing a gesture in the air with the creature's hand, by the gesture's number (value)
+		CreatureDrawGesture,
 		/// Pulling the face its mind would for a feeling or what it does (value, by the face cues)
 		ShowFeeling,
 		SitDown,

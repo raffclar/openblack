@@ -40,6 +40,7 @@
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureFizz.h"
+#include "Creature/CreatureGesture.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureHair.h"
 #include "Creature/CreatureHeadLook.h"
@@ -103,6 +104,7 @@
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureFriends.h"
+#include "ECS/Components/CreatureGestureDrawing.h"
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -712,6 +714,16 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureKnockedOut::fizzTurns>("fizzTurns");
 	Reflect<components::CreatureFizz>(context).Field<&components::CreatureFizz::fizz>("fizz");
 	Reflect<components::CreatureFriends>(context).Field<&components::CreatureFriends::friends>("friends");
+	Reflect<components::CreatureGestureDrawing>(context)
+	    .Field<&components::CreatureGestureDrawing::stage>("stage")
+	    .Field<&components::CreatureGestureDrawing::outcome>("outcome")
+	    .Field<&components::CreatureGestureDrawing::gesture>("gesture")
+	    .Field<&components::CreatureGestureDrawing::inDance>("inDance")
+	    .Field<&components::CreatureGestureDrawing::shape>("shape")
+	    .Field<&components::CreatureGestureDrawing::sharePerTurn>("sharePerTurn")
+	    .Field<&components::CreatureGestureDrawing::drawing>("drawing")
+	    .Field<&components::CreatureGestureDrawing::countedTurn>("countedTurn")
+	    .Field<&components::CreatureGestureDrawing::chain>("chain");
 	Reflect<components::CreatureHair>(context)
 	    .Field<&components::CreatureHair::groups>("groups")
 	    .Field<&components::CreatureHair::started>("started");
@@ -882,6 +894,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureObjectAction::eventDone>("eventDone")
 	    .Field<&components::CreatureObjectAction::holdMs>("holdMs")
 	    .Field<&components::CreatureObjectAction::pointSeconds>("pointSeconds")
+	    .Field<&components::CreatureObjectAction::pointsUntilTold>("pointsUntilTold")
+	    .Field<&components::CreatureObjectAction::pointEnding>("pointEnding")
+	    .Field<&components::CreatureObjectAction::pointMs>("pointMs")
 	    .Field<&components::CreatureObjectAction::reach>("reach")
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
@@ -2267,6 +2282,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_fizz::Fizz::target>("target")
 	    .Field<&openblack::creature_fizz::Fizz::perSecond>("perSecond")
 	    .Field<&openblack::creature_fizz::Fizz::goesForGood>("goesForGood");
+	Reflect<openblack::creature_gesture::Drawing>(context, ValueOnly {})
+	    .Field<&openblack::creature_gesture::Drawing::drawn>("drawn")
+	    .Field<&openblack::creature_gesture::Drawing::turns>("turns");
 	Reflect<openblack::creature_giving::Offer>(context, ValueOnly {}).Field<&openblack::creature_giving::Offer::ms>("ms");
 	Reflect<openblack::creature_hair::Strand>(context, ValueOnly {})
 	    .Field<&openblack::creature_hair::Strand::positions>("positions")

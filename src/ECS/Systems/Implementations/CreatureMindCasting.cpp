@@ -50,6 +50,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureGestureDrawing.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -1073,6 +1074,23 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 
 creature_mind::SubMove CreatureMindSystem::SubMoveOf(entt::entity creature)
 {
+	// A step that draws a gesture goes as the drawing goes
+	const auto* mind = Entities().TryGet<const CreatureMindState>(creature);
+	const auto* drawing = Entities().TryGet<const CreatureGestureDrawing>(creature);
+	if (mind != nullptr && drawing != nullptr && !drawing->inDance && mind->idle.step < mind->idle.agenda.size() &&
+	    mind->idle.agenda[mind->idle.step].kind == creature_mind::Step::Kind::Gesture)
+	{
+		switch (drawing->outcome)
+		{
+		case CreatureGestureDrawing::Outcome::Done:
+			return creature_mind::SubMove::Done;
+		case CreatureGestureDrawing::Outcome::Failed:
+			return creature_mind::SubMove::Failed;
+		case CreatureGestureDrawing::Outcome::Running:
+			break;
+		}
+		return creature_mind::SubMove::Running;
+	}
 	const auto* casting = Entities().TryGet<const CreatureCasting>(creature);
 	if (casting == nullptr || casting->move == CreatureCasting::Move::None)
 	{
