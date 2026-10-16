@@ -14,9 +14,11 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <functional>
 #include <numbers>
+#include <optional>
 #include <span>
 #include <tuple>
 
@@ -36,6 +38,7 @@
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureMorph.h"
+#include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureProportions.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSway.h"
@@ -350,11 +353,49 @@ creature_proportions::Bones ProportionBonesOf(const CreatureRig& rig)
 	return bones;
 }
 
-/// The body posed for this frame: its action or breathing, or its slots blended, then the head turned, the face and
-/// any gesture on top
+/// The hand that holds a thing, and whether it is the left hand
+struct HoldingHand
+{
+	uint32_t bone;
+	bool mirrored;
+};
+
+/// The hand of a creature that shows the hold pose this frame: the hand that holds a thing, unless the body plays an
+/// action whose animation moves the held thing itself
+std::optional<HoldingHand> HoldingHandOf(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
+	if (held == nullptr)
+	{
+		return std::nullopt;
+	}
+	std::optional<creature_object_actions::Kind> playing;
+	if (const auto* action = registry.TryGet<const CreatureObjectAction>(creature);
+	    action != nullptr && action->phase == CreatureObjectAction::Phase::Playing &&
+	    (action->status == creature_object_actions::Status::Running ||
+	     action->status == creature_object_actions::Status::Contact))
+	{
+		// Getting ready to catch and stepping across play before the catch itself
+		const bool readyToCatch = action->kind == creature_object_actions::Kind::Catch &&
+		                          (action->catching == CreatureObjectAction::Catching::Ready ||
+		                           action->catching == CreatureObjectAction::Catching::Stepping);
+		if (!readyToCatch)
+		{
+			playing = action->kind;
+		}
+	}
+	if (!creature_object_actions::ShowsHoldPose(playing))
+	{
+		return std::nullopt;
+	}
+	return HoldingHand {.bone = held->bone, .mirrored = held->mirrored};
+}
+
+/// The body posed for this frame: its action or breathing, or its slots blended, then the arm that holds a thing, the
+/// head turned, the face and any gesture on top
 void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creature_morph::Morph& morph,
               const Transform& transform, float size, float milliseconds, float seconds, const HeadLook& look,
-              const std::function<uint32_t(uint32_t)>& random)
+              const std::function<uint32_t(uint32_t)>& random, std::optional<HoldingHand> holding = std::nullopt)
 {
 	const auto* stand = AnimationOf(animation, rig, morph, creature_layers::animations::k_Stand);
 	if (stand == nullptr)
@@ -434,6 +475,20 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 		poses = skeletal_animation::SampleCycle(*stand, *stand, time, animation.skeleton);
 	}
 
+	// A small creature has a large head, large hands and feet and large eyes for its size
+	creature_proportions::Apply(poses, creature_proportions::ScaledBones(ProportionBonesOf(rig), animation.mirror, size));
+	// The arm that holds a thing takes the last frame of the hold animation, on the side of the hand that holds it. The
+	// hand that holds the thing gets its size for the size of the creature again.
+	if (const auto* hold = holding.has_value() ? animationOf(creature_layers::animations::k_PickUpHold) : nullptr)
+	{
+		skeletal_animation::SetLayer(poses, *hold, hold->duration > 0 ? hold->duration - 1 : 0, animation.skeleton, nullptr,
+		                             holding->mirrored ? std::span<const uint32_t>(animation.mirror)
+		                                               : std::span<const uint32_t> {});
+		const std::array hand {creature_proportions::BoneScale {
+		    .bone = holding->bone, .factor = creature_proportions::Factor(creature_proportions::k_HandsAndFeet, size)}};
+		creature_proportions::Apply(poses, hand);
+	}
+
 	// During the start, the loop and the end of the sit, the head turns by the sitting versions. The head turns the other way
 	// when the body plays mirrored.
 	const bool sitting = creature_head_look::UsesSittingClips(look.pose);
@@ -472,8 +527,6 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 			                             animation.skeleton, mirror);
 		}
 	}
-	// A small creature has a large head, large hands and feet and large eyes for its size
-	creature_proportions::Apply(poses, creature_proportions::ScaledBones(ProportionBonesOf(rig), animation.mirror, size));
 	animation.boneMatrices = skeletal_animation::ComposeBoneMatrices(poses, animation.skeleton.parents);
 }
 /// The pose of a body that plays an action, a start, loop and end, or nothing
@@ -796,10 +849,13 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    if (rig != nullptr)
 		    {
 			    const auto look = HeadLookOf(registry, entity, animation, rig, morph.drawn, transform, creature, milliseconds);
-			    PoseBody(animation, *rig, morph.drawn, transform, ShownSize(creature), gameTime.count() * scale,
-			             seconds * scale, look, [this](uint32_t range) {
-				             return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-			             });
+			    PoseBody(
+			        animation, *rig, morph.drawn, transform, ShownSize(creature), gameTime.count() * scale, seconds * scale,
+			        look,
+			        [this](uint32_t range) {
+				        return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
+			        },
+			        HoldingHandOf(registry, entity));
 		    }
 		    if (animation.boneMatrices.size() != base->GetBoneMatrices().size())
 		    {

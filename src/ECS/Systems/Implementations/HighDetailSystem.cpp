@@ -218,9 +218,7 @@ void HighDetailSystem::PlaceEyes(uint32_t frameGameMs, const glm::mat4& viewProj
 		    const auto* pose = registry.TryGet<const VillagerPose>(entity);
 		    const auto drawnAt = rules::DrawnAt(detail.heldAt, DrawnPosition(transform.position, pose));
 		    const auto rotation = DrawnRotation(transform.rotation, pose);
-		    auto standing = glm::mat4(rotation);
-		    standing = glm::translate(standing, drawnAt * rotation);
-		    standing = glm::scale(standing, transform.scale);
+		    const auto standing = PlacedMatrix(drawnAt, rotation, transform.scale);
 		    const auto model = physics_draw::ModelMatrix(standing, registry.TryGet<const PhysicsDrawPose>(entity));
 		    const auto detailed = meshes.Handle(mesh.id);
 		    const auto& frames = detailed->GetBoneFrames();

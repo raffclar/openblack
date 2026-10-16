@@ -76,6 +76,8 @@ constexpr size_t k_LookRightLeft = 75;
 constexpr size_t k_LookDownUp = 76;
 constexpr size_t k_SitLookRightLeft = 77;
 constexpr size_t k_SitLookDownUp = 78;
+/// The arm that holds a thing: its last frame sets the bones of the arm while the creature holds something
+constexpr size_t k_PickUpHold = 85;
 /// Eating what it holds
 constexpr size_t k_Eat = 96;
 /// Fainting, and getting up again

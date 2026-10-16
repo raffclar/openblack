@@ -23,6 +23,7 @@
 #include "3D/L3DMesh.h"
 #include "Animals/AnimalAnimation.h"
 #include "ECS/ClipSoundPlayer.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LivingAction.h"
@@ -60,11 +61,12 @@ constexpr float k_SpeedUnitsPerMetrePerSecond = 655.36f;
 constexpr float k_ViewMargin = 2.0f;
 
 /// Where a villager is drawn this frame and the heading it is drawn with: between its last two turns' places while its
-/// clip carries it along, turning after the way it faces. One in the physics or in the hand is drawn where it is.
+/// clip carries it along, turning after the way it faces. One in the physics, in the god's hand or in the hand of a
+/// creature is drawn where it is, turned as it is.
 void PlaceDrawing(ecs::Registry& registry, entt::entity entity, const Transform& transform, VillagerPose& pose, bool glides,
                   float turnFraction, uint32_t elapsed)
 {
-	if (registry.AnyOf<InPhysics, InHand>(entity))
+	if (registry.AnyOf<InPhysics, InHand, HeldByCreature>(entity))
 	{
 		pose.drawnAt.reset();
 		pose.drawnHeading.reset();

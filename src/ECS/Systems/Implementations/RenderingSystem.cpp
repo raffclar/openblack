@@ -551,9 +551,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    const auto* highDetail = registry.TryGet<const HighDetail>(entity);
 		    const auto drawnAt =
 		        highDetail != nullptr ? openblack::ecs::high_detail_rules::DrawnAt(highDetail->heldAt, standsAt) : standsAt;
-		    auto modelMatrix = glm::mat4(rotation);
-		    modelMatrix = glm::translate(modelMatrix, drawnAt * rotation);
-		    modelMatrix = glm::scale(modelMatrix, transform.scale);
+		    auto modelMatrix = PlacedMatrix(drawnAt, rotation, transform.scale);
 		    // A thing a film moves by a whole matrix is drawn by it
 		    if (const auto* exact = registry.TryGet<const DrawnMatrix>(entity); exact != nullptr)
 		    {
@@ -1039,9 +1037,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    fits = false;
 			    return;
 		    }
-		    auto standing = glm::mat4(transform.rotation);
-		    standing = glm::translate(standing, transform.position * transform.rotation);
-		    standing = glm::scale(standing, transform.scale);
+		    const auto standing = PlacedMatrix(transform.position, transform.rotation, transform.scale);
 		    const auto placed = physics_draw::ModelMatrix(standing, registry.TryGet<const PhysicsDrawPose>(tree));
 		    const float halfWidth = meshes.Contains(mesh.id) ? meshes.Handle(mesh.id)->GetBoundingBox().Size().x * 0.5f : 0.0f;
 		    for (const float scale : scales)
@@ -1344,9 +1340,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    {
 			    return;
 		    }
-		    auto modelMatrix = glm::mat4(transform.rotation);
-		    modelMatrix = glm::translate(modelMatrix, transform.position * transform.rotation);
-		    modelMatrix = glm::scale(modelMatrix, transform.scale);
+		    auto modelMatrix = PlacedMatrix(transform.position, transform.rotation, transform.scale);
 		    // A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
 		    // all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
 		    // vertices out to the horizon
