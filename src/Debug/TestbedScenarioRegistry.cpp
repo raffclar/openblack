@@ -1013,6 +1013,26 @@ void AddGrowth(std::vector<Scenario>& all)
 	    }},
 	});
 
+	all.push_back({
+	    .id = "growth.first_stage_age",
+	    .name = "A creature in the first stage lives turns but does not age",
+	    .facet = Facet::Growth,
+	    .description = "A tiger at the first stage of growing up, stage 0, its body's time a thousand times as fast. "
+	                   "After 20 seconds it goes to stage 1.",
+	    .expected = "At stage 0 the count of the turns that it lived increases and its age stays 0. At stage 1 its age "
+	                "increases each time the count gets to a full tick of age.",
+	    .environment = {.bodyTimeScale = 1000.0f},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .phase = 0,
+	        .needs = Content(),
+	        .hold = true,
+	        .pauseMind = true,
+	    }},
+	    .commands = {{.kind = Kind::SetPhase, .creature = 0, .delaySeconds = 20.0f, .value = 1}},
+	});
+
 	struct Shape
 	{
 		std::string_view label;
