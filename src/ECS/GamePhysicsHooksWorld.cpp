@@ -16,6 +16,7 @@
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
@@ -33,6 +34,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/VillagerDroppedLog.h"
@@ -388,6 +390,19 @@ bool GamePhysicsHooksWorld::HasCreatureActions() const
 bool GamePhysicsHooksWorld::CanBeCaught(entt::entity object) const
 {
 	return Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().CanBeCaught(object);
+}
+
+bool GamePhysicsHooksWorld::FreeToCatch(entt::entity creature) const
+{
+	// The test is for the first kind of reaction
+	if (!Locator::reactionSystem::has_value() ||
+	    Locator::reactionSystem::value().IsAvailable(creature, Reaction::FleeFromObject))
+	{
+		return true;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* spells = registry.TryGet<const CreatureSpells>(creature);
+	return spells != nullptr && spells->cheat.has_value();
 }
 
 void GamePhysicsHooksWorld::Catch(entt::entity creature, entt::entity object)

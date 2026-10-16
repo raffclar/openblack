@@ -627,11 +627,11 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 	for (const auto creature : creatures)
 	{
 		// Not one the hand is holding, one that plans to fight or is fighting, one a script controls, nor one whose plan
-		// is a catch, a catch still waiting for its body included. (A creature under a script's only desire must also be
-		// free to react; openblack's scripts set no only desire.)
+		// is a catch, a catch still waiting for its body included. Also not one that may not take up a reaction now,
+		// unless a desire was made its only desire.
 		if (handHeld == creature || PlansToFightOrCatch(world, registry, creature) ||
 		    registry.AllOf<CreatureFighting>(creature) || registry.AllOf<ScriptControlled>(creature) ||
-		    registry.AllOf<PendingCatch>(creature))
+		    !world.FreeToCatch(creature) || registry.AllOf<PendingCatch>(creature))
 		{
 			continue;
 		}

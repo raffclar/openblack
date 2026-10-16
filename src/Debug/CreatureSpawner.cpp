@@ -41,6 +41,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureReactionNotice.h"
 #include "ECS/CreatureRemoval.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
@@ -518,6 +519,16 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	if (ImGui::IsItemHovered())
 	{
 		ImGui::SetTooltip("The mind leaves the body alone; the buttons below still work");
+	}
+	bool notice = ecs::creature_reaction_notice::TakesNotice(registry, entity);
+	if (ImGui::Checkbox("Takes notice of reactions", &notice))
+	{
+		ecs::creature_reaction_notice::SetTakesNotice(registry, entity, notice);
+	}
+	if (ImGui::IsItemHovered())
+	{
+		ImGui::SetTooltip("Debug only. A creature that a script makes takes no notice until a script or a swap tells "
+		                  "it to: it reacts to nothing near it and catches nothing");
 	}
 	if (Locator::infoConstants::has_value())
 	{

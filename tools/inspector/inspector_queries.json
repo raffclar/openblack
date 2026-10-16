@@ -371,6 +371,37 @@
   "query": "creature.desires"
  },
  {
+  "description": "Whether a creature takes notice of reactions. A creature that a script makes takes no notice until a script or a swap of minds tells it to: it reacts to nothing near it and catches nothing",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.reactions"
+ },
+ {
+  "description": "A debug tool, not a rule of the game: the creature starts (notice true) or stops (notice false) to take notice of reactions; answers what it now does",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "Whether it takes notice of reactions",
+    "name": "notice",
+    "required": true,
+    "type": "boolean"
+   }
+  ],
+  "query": "creature.set_reactions",
+  "writes": true
+ },
+ {
   "description": "The ordinary skills and miracles a creature knows, and how often it has seen each miracle",
   "kind": "object",
   "parameters": [
