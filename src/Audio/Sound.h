@@ -252,6 +252,10 @@ public:
 	pack::AudioBankLoop loopType;
 	/// Samples of a bank in the same voice group count as the same sample for loopType, 0 for none
 	uint16_t group;
+	/// The hashed file name of the bank of the sample, 0 for a sample not from a bank file
+	uint32_t bank {0};
+	/// The wave format tag of the sample data (0x50 for MPEG)
+	uint16_t waveFormat {0};
 	/// The first and last sample frames of the part it loops over while it loops, both -1 (or not in order) to loop all
 	/// of it; let go of, it plays on from there to its end
 	int32_t loopStart {-1};

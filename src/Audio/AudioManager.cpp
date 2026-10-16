@@ -146,6 +146,15 @@ void LogNotStarted([[maybe_unused]] const Sound& sound, [[maybe_unused]] const g
 	                    position.z, why);
 }
 
+/// The wave format tag of MPEG sample data
+constexpr uint16_t k_WaveFormatMpeg = 0x0050;
+
+/// Why a sample got no voice to start on
+[[nodiscard]] std::string_view NoVoiceReason(const VoiceChoice& choice)
+{
+	return choice.slot.has_value() ? "it plays once and is playing" : "all the voices play samples of higher priority";
+}
+
 float ListenerDistance(const glm::vec3& position)
 {
 	return glm::distance(Locator::audio::value().GetListener().origin, position);
@@ -196,6 +205,19 @@ void AudioManager::Update()
 		}
 		_audioPlayer->SetVolume(emitter.sourceId, EmitterVolume(emitter));
 	});
+
+	// A voice is free again when its sample stops, also when a system removes the emitter
+	for (size_t slot = 0; slot < _voiceOccupants.size(); ++slot)
+	{
+		const auto& occupant = _voiceOccupants.at(slot);
+		const bool emitterGone = occupant.emitter != entt::null && !EmitterExists(occupant.emitter);
+		const bool atmosStopped = occupant.atmos != k_InvalidHandle && !IsPlaying(occupant.atmos);
+		const bool empty = occupant.emitter == entt::null && occupant.atmos == k_InvalidHandle;
+		if (emitterGone || atmosStopped || (empty && _voicePool.Slots()[slot].playing))
+		{
+			ReleaseVoice(slot);
+		}
+	}
 
 	// The music thread's work: streams are fed and fade every tick
 	const auto now = std::chrono::steady_clock::now();
@@ -288,6 +310,10 @@ void AudioManager::DestroyEmitter(entt::entity emitter)
 	}
 	_audioPlayer->StopSource(component.sourceId);
 	_audioPlayer->DeleteSource(component.sourceId);
+	if (const auto slot = VoiceOf(emitter))
+	{
+		ReleaseVoice(*slot);
+	}
 	registry.Destroy(emitter);
 }
 
@@ -330,13 +356,27 @@ VoiceStart AudioManager::MakeVoiceStart(const Sound& sound, std::optional<glm::v
 
 entt::entity AudioManager::CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType)
 {
+	VoiceChoice choice;
+	return CreateVoiceEmitter(id, worldPosition, playType, entt::null, pack::AudioBankLoop::Overlap, choice);
+}
+
+entt::entity AudioManager::CreateVoiceEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
+                                              entt::entity owner, pack::AudioBankLoop callerPlayType, VoiceChoice& choice)
+{
 	auto& sounds = Locator::resources::value().GetSounds();
 	if (!sounds.Contains(id))
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("audio"), "Sound {} is not loaded", id);
+		choice = {};
 		return entt::null;
 	}
 	auto sound = sounds.Handle(id);
+	choice = AcquireVoice(*sound, OwnerKey(owner), callerPlayType);
+	if (!choice.start)
+	{
+		LogNotStarted(*sound, worldPosition.value_or(glm::zero<glm::vec3>()), NoVoiceReason(choice));
+		return entt::null;
+	}
 	const auto start = MakeVoiceStart(*sound, worldPosition, playType);
 	const auto source = CreateSource(*sound, start);
 
@@ -357,7 +397,11 @@ entt::entity AudioManager::CreateEmitter(entt::id_type id, std::optional<glm::ve
 	                                          .loop = start.loopCount < 0 ? PlayType::Repeat : PlayType::Once,
 	                                          .state = AudioStatus::Initial,
 	                                          .music = false,
+	                                          .owner = owner,
+	                                          .bank = sound->bank,
+	                                          .group = sound->group,
 	                                      });
+	BindVoice(*choice.slot, *sound, entity, k_InvalidHandle);
 	LogEmitterStart(entity, registry.Get<AudioEmitter>(entity));
 	return entity;
 }
@@ -457,21 +501,6 @@ void AudioManager::PlaySoundEffect(entt::id_type id, std::optional<glm::vec3> wo
 			LogNotStarted(*sound, *worldPosition, TooFar(*worldPosition, range));
 			return;
 		}
-		// Played with the play type of the bank header: a sound played once isn't played again while it plays,
-		// which lets the game ask for a sound every frame and hear it go on, and one that restarts starts over
-		if ((sound->overrideFlags & static_cast<uint32_t>(pack::AudioBankOverride::LoopType)) != 0)
-		{
-			const auto playing = FindPlaying(entt::null, 0, id, 0);
-			if (sound->loopType == pack::AudioBankLoop::Once && playing != entt::null)
-			{
-				LogNotStarted(*sound, worldPosition.value_or(glm::vec3(0.0f)), "it plays once and is playing");
-				return;
-			}
-			if (sound->loopType == pack::AudioBankLoop::Restart && playing != entt::null)
-			{
-				DestroyEmitter(playing);
-			}
-		}
 	}
 	const auto entity = CreateEmitter(id, worldPosition, PlayType::Once);
 	if (entity != entt::null)
@@ -482,7 +511,9 @@ void AudioManager::PlaySoundEffect(entt::id_type id, std::optional<glm::vec3> wo
 
 void AudioManager::StopSoundEffect(entt::id_type id)
 {
-	for (auto playing = FindPlaying(entt::null, 0, id, 0); playing != entt::null; playing = FindPlaying(entt::null, 0, id, 0))
+	const auto bank = BankOf(id);
+	for (auto playing = FindPlaying(entt::null, bank, id, 0); playing != entt::null;
+	     playing = FindPlaying(entt::null, bank, id, 0))
 	{
 		DestroyEmitter(playing);
 	}
@@ -490,7 +521,13 @@ void AudioManager::StopSoundEffect(entt::id_type id)
 
 bool AudioManager::IsSoundEffectPlaying(entt::id_type id) const
 {
-	return FindPlaying(entt::null, 0, id, 0) != entt::null;
+	return FindPlaying(entt::null, BankOf(id), id, 0) != entt::null;
+}
+
+uint32_t AudioManager::BankOf(entt::id_type id)
+{
+	auto& sounds = Locator::resources::value().GetSounds();
+	return sounds.Contains(id) ? sounds.Handle(id)->bank : 0;
 }
 
 entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectOptions& options)
@@ -506,6 +543,15 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 	if (options.position.has_value() && !IsWithinStartRange(ListenerDistance(*options.position), range))
 	{
 		LogNotStarted(*sound, *options.position, TooFar(*options.position, range));
+		return entt::null;
+	}
+	// The voice rules apply the play type of the bank header. A sound that plays once does not start again while it
+	// plays, and a sound that restarts starts again on its voice.
+	const auto choice =
+	    AcquireVoice(*sound, OwnerKey(options.owner), options.voicePlayType.value_or(pack::AudioBankLoop::Overlap));
+	if (!choice.start)
+	{
+		LogNotStarted(*sound, options.position.value_or(glm::zero<glm::vec3>()), NoVoiceReason(choice));
 		return entt::null;
 	}
 	auto start = MakeVoiceStart(*sound, options.position, options.playType);
@@ -539,7 +585,10 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 	                                          .state = AudioStatus::Initial,
 	                                          .music = false,
 	                                          .owner = options.owner,
+	                                          .bank = sound->bank,
+	                                          .group = sound->group,
 	                                      });
+	BindVoice(*choice.slot, *sound, entity, k_InvalidHandle);
 	LogEmitterStart(entity, registry.Get<AudioEmitter>(entity));
 	PlayEmitter(entity);
 	return entity;
@@ -685,38 +734,16 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 		return {.outcome = AnimEffectPlay::Outcome::TooFar, .emitter = entt::null, .sample = sample};
 	}
 
-	// Played with the play type of the bank header
-	const auto bank = entt::hashed_string(bankName.c_str()).value();
-	if ((sound->overrideFlags & static_cast<uint32_t>(pack::AudioBankOverride::LoopType)) != 0)
-	{
-		if (sound->loopType == pack::AudioBankLoop::Once && FindPlaying(owner, bank, id, sound->group) != entt::null)
-		{
-			LogNotStarted(*sound, position, "it plays once and is playing");
-			return {.outcome = AnimEffectPlay::Outcome::AlreadyPlaying, .emitter = entt::null, .sample = sample};
-		}
-		if (sound->loopType == pack::AudioBankLoop::Restart)
-		{
-			auto playing = FindPlaying(owner, bank, id, 0);
-			if (playing == entt::null)
-			{
-				playing = FindPlaying(owner, bank, 0, sound->group);
-			}
-			if (playing != entt::null)
-			{
-				DestroyEmitter(playing);
-			}
-		}
-	}
-
-	const auto entity = CreateEmitter(id, position, PlayType::Once);
+	// The library plays an animation effect with the restart play type, unless the bank header gives another
+	VoiceChoice choice;
+	const auto entity = CreateVoiceEmitter(id, position, PlayType::Once, owner, pack::AudioBankLoop::Restart, choice);
 	if (entity == entt::null)
 	{
-		return {.outcome = AnimEffectPlay::Outcome::NotLoaded, .emitter = entt::null, .sample = sample};
+		const auto outcome = choice.slot.has_value() ? AnimEffectPlay::Outcome::AlreadyPlaying
+		                     : sounds.Contains(id)   ? AnimEffectPlay::Outcome::NoVoice
+		                                             : AnimEffectPlay::Outcome::NotLoaded;
+		return {.outcome = outcome, .emitter = entt::null, .sample = sample};
 	}
-	auto& emitter = Locator::entitiesRegistry::value().Get<AudioEmitter>(entity);
-	emitter.owner = owner;
-	emitter.bank = bank;
-	emitter.group = sound->group;
 	PlayEmitter(entity);
 	return {.outcome = AnimEffectPlay::Outcome::Played, .emitter = entity, .sample = sample};
 }
@@ -966,13 +993,20 @@ VoiceBackend::Handle AudioManager::Start(const VoiceStart& start)
 		return k_InvalidHandle;
 	}
 	auto sound = sounds.Handle(id);
+	const auto choice = AcquireVoice(*sound, VoicePool::k_AtmosOwner, start.playType);
+	if (!choice.start)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Atmosphere sample {} not started: {}", stringId, NoVoiceReason(choice));
+		return k_InvalidHandle;
+	}
 	const auto source = CreateSource(*sound, start);
 	const auto gain = _atmos->VolumeToGain(start.volume);
 	_audioPlayer->SetVolume(source, gain * _globalVolume * _sfxVolume);
 	_audioPlayer->StartSource(source);
 
 	const auto handle = _nextAtmosVoice++;
-	_atmosVoices.emplace(handle, AtmosVoice {.source = source, .gain = gain});
+	_atmosVoices.emplace(handle, AtmosVoice {.source = source, .gain = gain, .slot = *choice.slot});
+	BindVoice(*choice.slot, *sound, entt::null, handle);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Atmosphere voice {}: {} volume {} pitch {}% at ({}, {})", handle, stringId,
 	                    start.volume, start.pitchPercent, start.position.x, start.position.y);
 	return handle;
@@ -1056,7 +1090,75 @@ void AudioManager::Stop(Handle handle)
 	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Atmosphere voice {} stopped", handle);
 	_audioPlayer->StopSource(iter->second.source);
 	_audioPlayer->DeleteSource(iter->second.source);
+	if (_voiceOccupants.at(iter->second.slot).atmos == handle)
+	{
+		ReleaseVoice(iter->second.slot);
+	}
 	_atmosVoices.erase(iter);
+}
+
+VoiceChoice AudioManager::AcquireVoice(const Sound& sound, uint64_t ownerKey, pack::AudioBankLoop callerPlayType)
+{
+	const bool headerPlayType = (sound.overrideFlags & static_cast<uint32_t>(pack::AudioBankOverride::LoopType)) != 0;
+	const VoiceRequest request {
+	    .owner = ownerKey,
+	    .bank = sound.bank,
+	    .sample = static_cast<uint32_t>(sound.id),
+	    .group = sound.group,
+	    .priority = static_cast<uint16_t>(sound.priority),
+	    .playType = headerPlayType ? sound.loopType : callerPlayType,
+	};
+	const auto choice = _voicePool.Choose(request);
+	if (!choice.start)
+	{
+		return choice;
+	}
+	// The new sample stops what played on the voice
+	const auto occupant = _voiceOccupants.at(*choice.slot);
+	if (occupant.emitter != entt::null && EmitterExists(occupant.emitter))
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Sound {} takes voice {} from emitter {}", sound.name, *choice.slot,
+		                    static_cast<uint32_t>(occupant.emitter));
+		DestroyEmitter(occupant.emitter);
+	}
+	else if (occupant.atmos != k_InvalidHandle)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Sound {} takes voice {} from atmosphere voice {}", sound.name, *choice.slot,
+		                    occupant.atmos);
+		Stop(occupant.atmos);
+	}
+	_voicePool.Occupy(*choice.slot, request);
+	return choice;
+}
+
+void AudioManager::BindVoice(size_t slot, const Sound& sound, entt::entity emitter, Handle atmos)
+{
+	_voiceOccupants.at(slot) = VoiceOccupant {
+	    .emitter = emitter,
+	    .atmos = atmos,
+	    .forgetSample = sound.waveFormat == k_WaveFormatMpeg,
+	};
+}
+
+void AudioManager::ReleaseVoice(size_t slot)
+{
+	_voicePool.Finish(slot, _voiceOccupants.at(slot).forgetSample);
+	_voiceOccupants.at(slot) = {};
+}
+
+std::optional<size_t> AudioManager::VoiceOf(entt::entity emitter) const
+{
+	const auto iter = std::ranges::find(_voiceOccupants, emitter, &VoiceOccupant::emitter);
+	if (iter == _voiceOccupants.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(std::distance(_voiceOccupants.begin(), iter));
+}
+
+uint64_t AudioManager::OwnerKey(entt::entity owner)
+{
+	return owner == entt::null ? 0 : static_cast<uint64_t>(entt::to_integral(owner)) + 1;
 }
 
 } // namespace openblack::audio

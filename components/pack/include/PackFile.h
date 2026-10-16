@@ -118,12 +118,17 @@ struct G3DTexture
 	std::vector<uint8_t> ddsData;
 };
 
+/// What playing a sample does about the voices that play already (the play type)
 enum class AudioBankLoop : uint16_t
 {
+	/// Take the voice of lowest priority, with no look for a free voice first
 	None,
-	Restart,
-	Once,
+	/// Take a free voice, or else the voice of lowest priority
 	Overlap,
+	/// Do nothing while the same sample, or another of its voice group, plays for the same owner
+	Once,
+	/// Start again in the voice of the same sample, or else of its voice group, for the same owner
+	Restart,
 };
 
 enum class ChannelLayout
@@ -147,7 +152,7 @@ struct AudioBankSampleHeader
 	int16_t atmosGroup;
 	int32_t unknown4;
 	int32_t unknown5;
-	int16_t unknown6a;
+	int16_t waveFormat; ///< The wave format tag of the sample data, 0x50 for MPEG
 	int16_t unknown6b;
 	uint32_t sampleRate;
 	int16_t unknownOthera;
