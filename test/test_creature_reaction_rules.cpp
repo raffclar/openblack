@@ -382,3 +382,13 @@ TEST(CreatureReactionRules, NoLifeTheHandOrATeleportKeepsAllReactionsOff)
 	EXPECT_FALSE(creature_reaction::BodyFree({.heldByHand = true}));
 	EXPECT_FALSE(creature_reaction::BodyFree({.teleporting = true}));
 }
+
+TEST(CreatureReactionRules, AnIconMiracleWithNoSeedTeachesNothing)
+{
+	// A miracle from a seed made at an icon counts while the seed is still linked to it
+	EXPECT_FALSE(creature_reaction::MadeByIconWithoutSeed(true, true));
+	EXPECT_TRUE(creature_reaction::MadeByIconWithoutSeed(true, false));
+	// A miracle that no icon made counts with or without a seed
+	EXPECT_FALSE(creature_reaction::MadeByIconWithoutSeed(false, false));
+	EXPECT_FALSE(creature_reaction::MadeByIconWithoutSeed(false, true));
+}

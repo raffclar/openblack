@@ -25,16 +25,16 @@ SpellFate openblack::magic::FateOf(const SpellLife& life)
 	return life.closedDown ? SpellFate::Delete : SpellFate::Continue;
 }
 
-SeedAfterCast openblack::magic::SeedAfterCastOf(bool keptInHand, bool deletedOnceCast, bool followsSpell)
+SeedAfterCast openblack::magic::SeedAfterCastOf(bool keptInHand, bool followsSpell)
 {
-	// The creature spells' phials are both kept and deleted: deleted wins
-	if (deletedOnceCast)
-	{
-		return SeedAfterCast::Deleted;
-	}
 	if (keptInHand)
 	{
 		return SeedAfterCast::StaysInHand;
 	}
-	return followsSpell ? SeedAfterCast::FollowsSpell : SeedAfterCast::Deleted;
+	return followsSpell ? SeedAfterCast::FollowsSpell : SeedAfterCast::LinkedToSpell;
+}
+
+bool openblack::magic::SeedLeavesHandWithSpell(SpellClass spellClass, float spellAge)
+{
+	return spellClass == SpellClass::Creature && spellAge > k_CreatureSeedInHandSeconds;
 }

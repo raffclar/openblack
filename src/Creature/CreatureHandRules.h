@@ -63,4 +63,16 @@ constexpr float k_ClickMaxMs = 450.0f;
 /// Whether a press of the right button on a creature was a click: let go quickly, having neither stroked nor slapped
 [[nodiscard]] bool IsClick(float heldMs, bool strokedOrSlapped);
 
+/// What a press of the right button on a creature does, before the hand's own rules (MayHold) apply
+enum class CreaturePress : uint8_t
+{
+	/// The hand tries to take hold of it
+	Hold,
+	/// The leash of the player's creature takes the press, to tie it to the creature
+	Leash,
+};
+/// The press on the player's own creature always goes to the hand, also while the leash is on: the leash stays on and
+/// the hand holds the creature as usual. With the leash on, a press on another creature goes to the leash.
+[[nodiscard]] CreaturePress PressOn(bool playersOwnCreature, bool leashOn);
+
 } // namespace openblack::creature_hand
