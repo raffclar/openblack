@@ -540,13 +540,17 @@ void AnimalSystem::ProcessTurn()
 		{
 			continue;
 		}
-		// Carried off by a tornado, it is the tornado's until it lets go; held in a hand, a creature's or the player's, or
-		// flying, the hand's or the physics'
-		if (registry.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
+		// Carried off by a tornado, it is the tornado's until it lets go; held in the player's hand or flying, the hand's
+		// or the physics'. In a creature's hand it still dies and lies dead.
+		auto& animal = registry.Get<Animal>(entity);
+		if (!animals::TakesOwnTurn({.tornado = registry.AllOf<CarriedByTornado>(entity),
+		                            .playersHand = registry.AllOf<InHand>(entity),
+		                            .creature = registry.AllOf<HeldByCreature>(entity),
+		                            .physics = registry.AllOf<InPhysics>(entity)},
+		                           animal.state == AnimalState::Dying || animal.state == AnimalState::Dead))
 		{
 			continue;
 		}
-		auto& animal = registry.Get<Animal>(entity);
 		animal.previousPosition = animal.position;
 		animal.previousHeading = animal.heading;
 		++animal.turnsInState;

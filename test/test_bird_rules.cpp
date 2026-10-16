@@ -202,3 +202,16 @@ TEST(BirdRules, ADeadBodysSmokeRisesHalfItsHeightOutTheWayItFaces)
 	EXPECT_NEAR(south.x, 10.0f, 1e-5f);
 	EXPECT_NEAR(south.z, 20.2f, 1e-5f);
 }
+
+TEST(BirdRules, AnAnimalInACreaturesHandTakesItsTurnOnlyWhileItDies)
+{
+	using animals::TakesOwnTurn;
+	EXPECT_TRUE(TakesOwnTurn({}, false));
+	// In a creature's hand it falls dying and lies dead, as a half-dead animal does
+	EXPECT_FALSE(TakesOwnTurn({.creature = true}, false));
+	EXPECT_TRUE(TakesOwnTurn({.creature = true}, true));
+	// A tornado, the player's hand or the physics moves it
+	EXPECT_FALSE(TakesOwnTurn({.tornado = true}, true));
+	EXPECT_FALSE(TakesOwnTurn({.playersHand = true}, true));
+	EXPECT_FALSE(TakesOwnTurn({.physics = true}, true));
+}

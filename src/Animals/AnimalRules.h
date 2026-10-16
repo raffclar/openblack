@@ -94,6 +94,18 @@ inline constexpr int16_t k_TurnsToDieOver = 600;
 /// which goes from its lowest value to its highest value: a body with a count below none lies until the count comes
 /// round to none.
 [[nodiscard]] bool DeadBodyGoes(int16_t& turnsLeft, bool scriptControlled);
+
+/// Who holds an animal or moves it this turn
+struct AnimalHolders
+{
+	bool tornado {false};
+	bool playersHand {false};
+	bool creature {false};
+	bool physics {false};
+};
+/// Whether an animal takes its own turn: not while a tornado, the player's hand or the physics moves it. In a creature's
+/// hand it takes its turn only while it dies or lies dead, so that it falls and its body goes there.
+[[nodiscard]] bool TakesOwnTurn(const AnimalHolders& holders, bool dyingOrDead);
 /// A body going leaves a grey puff of smoke this big, half its height out along the way it faces from where it lies
 inline constexpr float k_DeadBodySmokeSize = 1.0f;
 [[nodiscard]] glm::vec3 DeadBodySmokePlace(const glm::vec3& position, float heading, float height);

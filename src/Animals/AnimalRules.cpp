@@ -166,6 +166,15 @@ bool animals::DeadBodyGoes(int16_t& turnsLeft, bool scriptControlled)
 	return goes;
 }
 
+bool animals::TakesOwnTurn(const AnimalHolders& holders, bool dyingOrDead)
+{
+	if (holders.tornado || holders.playersHand || holders.physics)
+	{
+		return false;
+	}
+	return !holders.creature || dyingOrDead;
+}
+
 glm::vec3 animals::DeadBodySmokePlace(const glm::vec3& position, float heading, float height)
 {
 	const float out = height * 0.5f;

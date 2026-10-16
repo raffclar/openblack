@@ -3001,6 +3001,22 @@ void AddObjects(std::vector<Scenario>& all)
 		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
 		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BringHome"}},
 		});
+		all.push_back({
+		    .id = "objects.bring_live_food_home",
+		    .name = "Bringing a live pig home as food",
+		    .facet = Facet::Objects,
+		    .description = "A grown tiger of the player's, whose temple stands far to the west, with a live pig in front "
+		                   "of it. A script tells it to bring the pig home as food.",
+		    .expected = "It picks the pig up. In its hand the pig falls dead at once, and its body goes in a puff of smoke "
+		                "when the turns that its state still had to count are over: for a pig that grazed nothing, on "
+		                "the first turn that it lies dead. No death is counted.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+		    .objects = {{.type = AnimalInfo::Pig, .offset = {0.0f, -k_Reach}, .living = true}},
+		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BringFoodHome"}},
+		});
 	}
 
 	all.push_back({
