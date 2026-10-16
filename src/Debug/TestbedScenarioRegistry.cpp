@@ -2170,6 +2170,41 @@ void AddAudio(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// Twenty creatures call out at the same time, more voices than the sound player has
+	{
+		constexpr size_t k_Crowd = 20;
+		std::vector<CreatureSetup> crowd;
+		std::vector<Command> calls;
+		for (size_t i = 0; i < k_Crowd; ++i)
+		{
+			const auto offset = glm::vec2(static_cast<float>(i % 5) * 14.0f - 28.0f, static_cast<float>(i / 5) * 14.0f - 21.0f);
+			auto setup = Content(i % 2 == 0 ? CreatureType::Tiger : CreatureType::Cow, offset, 180.0f);
+			setup.pauseMind = true;
+			crowd.push_back(std::move(setup));
+		}
+		for (const auto action : {animations::k_Angry, animations::k_Taunt})
+		{
+			for (size_t creature = 0; creature < k_Crowd; ++creature)
+			{
+				calls.push_back(Play(Kind::PlayAction, creature, action, creature == 0 ? 3.0f : 0.0f, false));
+			}
+		}
+		all.push_back({
+		    .id = "audio.voice_limits",
+		    .name = "More voices than the sound player has",
+		    .facet = Facet::Audio,
+		    .description = "Ten tigers and ten cows are angry at the same time, then taunt at the same time, every "
+		                   "three seconds. The audio log gives each voice that a sound takes and each sound that gets "
+		                   "no voice.",
+		    .expected = "At most sixteen sounds play at once. A new sound takes a free voice, else the voice of a sound "
+		                "of lower priority; a sound with no such voice stays silent.",
+		    .framing = {.shot = Shot::Overview, .distance = 0.5f},
+		    .creatures = std::move(crowd),
+		    .commands = std::move(calls),
+		    .repeatFrom = 0,
+		});
+	}
+
 	// A tiger to the east roars, then a cow to the west moos, the camera looking north between them
 	auto east = Content(CreatureType::Tiger, {40.0f, 0.0f}, 180.0f, "tiger, east");
 	east.pauseMind = true;

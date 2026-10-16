@@ -542,6 +542,7 @@ VoiceBackend::Handle AtmosPlayer::PlaySample(Bank& bank, const pack::AudioBankSa
 	    .minDistance = minDistance,
 	    .maxDistance = maxDistance,
 	    .distanceScale = scale,
+	    .playType = static_cast<pack::AudioBankLoop>(playType),
 	};
 	const auto handle = _backend.Start(start);
 	if (handle != VoiceBackend::k_InvalidHandle)

@@ -36,6 +36,7 @@
 #include <SASFile.h>
 #include <StackedBitmap.h>
 #include <bgfx/bgfx.h>
+#include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
@@ -774,6 +775,7 @@ SoundLoader::result_type SoundLoader::operator()(BaseLoader<audio::Sound>::FromB
 	sound->loopStart = header.lStart;
 	sound->loopEnd = header.lEnd;
 	sound->group = static_cast<uint16_t>(header.group);
+	sound->waveFormat = static_cast<uint16_t>(header.waveFormat);
 	sound->buffer = buffer;
 	return sound;
 }
@@ -790,6 +792,7 @@ SoundLoader::result_type SoundLoader::operator()(FromBankFileTag, const std::fil
 		throw std::runtime_error(fmt::format("Unable to read sample {} of {}", header.id, bank.string()));
 	}
 	auto sound = (*this)(FromBufferTag {}, header, {});
+	sound->bank = entt::hashed_string(bank.filename().string().c_str()).value();
 	sound->buffer.push_back(std::move(bytes));
 	if (decode)
 	{

@@ -126,6 +126,9 @@ void Sound(entt::entity entity, const Creature& creature, const Transform& trans
 			case AnimEffectPlay::Outcome::AlreadyPlaying:
 				note.note = "already playing";
 				break;
+			case AnimEffectPlay::Outcome::NoVoice:
+				note.note = "no free voice";
+				break;
 			}
 		}
 	}

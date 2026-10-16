@@ -48,6 +48,8 @@ struct VoiceStart
 	float minDistance;
 	float maxDistance;
 	float distanceScale;
+	/// What the sample does about the voices that play already, after the bank header
+	pack::AudioBankLoop playType {pack::AudioBankLoop::Restart};
 };
 
 /// Where LHAudioDLL voices are actually played

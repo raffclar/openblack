@@ -1077,3 +1077,5 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_bitmap test_bitmap.cpp)
 target_link_libraries(test_bitmap PRIVATE rawimage)
+openblack_setup_and_add_test(test_voice_pool audio/test_voice_pool.cpp)
+target_link_libraries(test_voice_pool PRIVATE pack)
