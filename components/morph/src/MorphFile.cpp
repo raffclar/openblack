@@ -432,7 +432,7 @@ void MorphFile::ReadTattooSites(std::istream& stream, uint32_t version) noexcept
 	for (auto& blow : blows)
 	{
 		stream.read(reinterpret_cast<char*>(&blow.landTime), sizeof(blow.landTime));
-		stream.read(reinterpret_cast<char*>(&blow.unknown), sizeof(blow.unknown));
+		stream.read(reinterpret_cast<char*>(&blow.strikingBone), sizeof(blow.strikingBone));
 		if (version > 12)
 		{
 			stream.read(reinterpret_cast<char*>(&blow.woundType), sizeof(blow.woundType));

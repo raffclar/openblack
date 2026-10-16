@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -65,6 +66,23 @@ struct CreatureSkin
 	std::optional<Painted> painted;
 	/// Goes up each time the skins are painted, for the renderer to take them up
 	uint32_t revision {0};
+};
+
+/// Wounds that bleed send drips of blood down the skin, up to eight at once. Each drip is kept as a point on a triangle
+/// of the body: the submesh, the triangle by its first index, and how far along its first side (s) and third side (t).
+struct CreatureDrips
+{
+	/// A drip runs for this many milliseconds of game time; a place whose drip has run that long is free
+	static constexpr int32_t k_RunMs = 12000;
+	struct Drip
+	{
+		uint32_t subMesh {0};
+		uint32_t firstIndex {0};
+		float s {0.0f};
+		float t {0.0f};
+		int32_t ms {k_RunMs};
+	};
+	std::array<Drip, 8> drips {};
 };
 
 } // namespace openblack::ecs::components

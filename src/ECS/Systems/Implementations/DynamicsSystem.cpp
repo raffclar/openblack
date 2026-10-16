@@ -54,8 +54,10 @@
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "GameDynamicsWorld.h"
 #include "InfoConstants.h"
+#include "Locator.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleEffect.h"
 #include "Physics/BodyShapes.h"
@@ -108,6 +110,15 @@ particles::Creator MakeMoteCreator()
 	mote.className = "CreatureMote";
 	mote.additive = true;
 	return mote;
+}
+
+/// The blood's sprites: the dust's sheet, kept where its alpha passes the test, writing depth
+particles::Creator MakeBloodCreator()
+{
+	auto blood = MakeDustCreator();
+	blood.className = "BlowBlood";
+	blood.alphaTest = true;
+	return blood;
 }
 
 /// Upright axes with the same heading across the ground as the given ones
@@ -172,6 +183,7 @@ DynamicsSystem::DynamicsSystem(std::unique_ptr<dynamics::World> world)
     , _hooks(std::make_unique<PhysicsClassHooks>())
     , _dustCreator(MakeDustCreator())
     , _moteCreator(MakeMoteCreator())
+    , _bloodCreator(MakeBloodCreator())
 {
 }
 
@@ -1457,7 +1469,25 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 		registry.AssignOrReplace<PhysicsDrawPose>(entry->entity, PhysicsDrawPose {.axes = pose.axes, .origin = pose.origin});
 		drawn = true;
 	}
-	std::erase_if(_dust, [gameSeconds](turn::DustPuff& puff) { return !turn::AdvanceDustPuff(puff, gameSeconds); });
+	{
+		auto* random = _world->Random();
+		const auto draw = [random]() { return random != nullptr ? static_cast<int32_t>(random->CrtRand()) : 0; };
+		const auto landHeight = [this](glm::vec2 xz) { return _ground != nullptr ? _ground->HeightAt(xz) : 0.0f; };
+		// A drop of blood shows another of its frames at random each time the game drew it: at most 60 times a second
+		const bool redraw =
+		    Locator::time::has_value() && frame_pace::Due(_bloodPace, Locator::time::value().GetFrameRealTime());
+		std::erase_if(_dust, [&](turn::DustPuff& puff) {
+			if (puff.kind != turn::PuffKind::Blood)
+			{
+				return !turn::AdvanceDustPuff(puff, gameSeconds);
+			}
+			if (redraw)
+			{
+				puff.variant = draw();
+			}
+			return !turn::AdvanceBloodDrop(puff, gameSeconds, landHeight, draw);
+		});
+	}
 	// The collision sounds follow what made them while they play
 	{
 		std::erase_if(_followingSounds, [this, &registry](const FollowingSound& sound) {
@@ -1499,7 +1529,9 @@ void DynamicsSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 	{
 		walk.steps.push_back({.chain = false, .index = static_cast<uint32_t>(walk.atoms.size())});
 		walk.atoms.push_back({
-		    .creator = turn::IsAdditive(puff.kind) ? &_moteCreator : &_dustCreator,
+		    .creator = puff.kind == turn::PuffKind::Blood ? &_bloodCreator
+		               : turn::IsAdditive(puff.kind)      ? &_moteCreator
+		                                                  : &_dustCreator,
 		    .position = puff.position,
 		    .rotation = glm::mat3(1.0f),
 		    .scale = turn::DustPuffSize(puff),

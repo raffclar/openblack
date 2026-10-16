@@ -98,7 +98,18 @@ private:
 	void CastFightSpell(entt::entity creature, MagicType type, entt::entity opponent);
 	void AttemptBlow(entt::entity creature, creature_fight::Band band, float speed);
 	/// A fighter's action landing on its opponent this frame, if it does
-	void TestHit(entt::entity creature);
+	/// Each game turn: the blows that are landing are tested along their swing since the last turn
+	void ProcessBlows();
+	/// A blow tested from where its animation was at the last turn: it marks its swing and, where it meets the
+	/// opponent's body, lands there
+	void TestBlow(entt::entity creature, int32_t fromMs);
+	/// A blow that met the opponent's body at a point, with its vector there
+	void LandBlow(entt::entity creature, const glm::vec3& point, const glm::vec3& vector);
+	/// The wound a blow leaves where the line along its vector through the point first meets the skin, and the drip of
+	/// a wound that bleeds
+	void WoundSkin(entt::entity victim, const glm::vec3& point, const glm::vec3& vector, uint8_t kind, uint8_t column);
+	/// Each game turn the drips of blood run down the skins
+	void ProcessDrips();
 	/// One creature beat the other, by a blow or otherwise: the loser faints, and the winner is made to have a poo on
 	/// the loser or to show off
 	void Win(entt::entity winner, entt::entity loser, bool byBlow);

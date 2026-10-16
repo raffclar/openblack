@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Common/FramePace.h"
 #include "Common/MachineClock.h"
 #include "ECS/DynamicsWorld.h"
 #include "ECS/PhysicsClasses.h"
@@ -169,6 +170,8 @@ private:
 	particles::Creator _dustCreator;
 	/// What the motes are drawn as: the same sheet, added to what is behind them
 	particles::Creator _moteCreator;
+	particles::Creator _bloodCreator;
+	frame_pace::Pace _bloodPace;
 	entt::entity _hitObject {entt::null};
 	entt::entity _objectWhichHit {entt::null};
 };

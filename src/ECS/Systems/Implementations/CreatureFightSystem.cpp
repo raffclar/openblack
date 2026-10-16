@@ -40,6 +40,7 @@
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Camera/FightCameraModel.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureArena.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFizz.h"
@@ -62,6 +63,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Field.h"
@@ -87,6 +89,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -105,6 +108,7 @@
 #include "Magic/MagicTables.h"
 #include "MagicLiving.h"
 #include "Particles/LightSheet.h"
+#include "Physics/TurnRules.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -125,20 +129,12 @@ constexpr auto k_TurnMilliseconds =
     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(TimeSystemInterface::k_TurnDuration).count());
 /// Fighters turn to face their opponents this fast, in radians a second
 constexpr float k_FaceTurnRate = 3.0f;
-/// A blow lands on anything within this many units of its size of where it reaches, twice that for the special move
-constexpr float k_BlowReachPerSize = 0.2f * 15.0f;
-/// Each blow is measured at this many moments through it, for its two striking bones, the hand and the foot
-constexpr int k_MeasureSamples = 24;
 /// A face is due again once its wait is within this much of over
 constexpr float k_FaceDue = 1e-3f;
 /// The stages before the duel give up waiting after this long
 constexpr float k_ApproachSeconds = 30.0f;
 /// A press on the ground counts as a step within this many of the arena's radii of its middle
 constexpr float k_GroundClickRadii = 1.5f;
-/// A blow leaves a trail of this many drops of blood down the skin
-constexpr int k_BloodDrops = 12;
-/// Wounds are placed at random on the skin this far from its edges
-constexpr int k_WoundEdge = 16;
 
 float HeightOf(float size)
 {
@@ -339,6 +335,23 @@ std::vector<feedback::Capsule> BodyOf(const ecs::Registry& registry, entt::entit
 	return feedback::BodyCapsules(animation->skeleton.parents, animation->boneMatrices,
 	                              creature::PlacementMatrix(transform->position, transform->rotation, transform->scale),
 	                              feedback::k_BodyRadiusShare * HeightOf(ShownSize(*body)));
+}
+
+/// How high a creature's head is over the land under it, as its body is posed now; none without a posed head
+std::optional<float> HeadHeightOf(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto* rig = body != nullptr ? RigOf(body->species) : nullptr;
+	if (animation == nullptr || transform == nullptr || rig == nullptr || !rig->actionPoints.has_value() ||
+	    rig->actionPoints->head >= animation->boneMatrices.size())
+	{
+		return std::nullopt;
+	}
+	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const auto head = glm::vec3(creature::PosedBone(rig->actionPoints->head, animation->boneMatrices, placement)[3]);
+	return head.y - GroundAt(Flat(head));
 }
 
 /// The creature's mesh and the matrix it is drawn with, if it has a loaded mesh
@@ -1979,6 +1992,8 @@ void CreatureFightSystem::ProcessTurn()
 	StartFightsFromMinds();
 	ProcessStages();
 	ProcessDuels();
+	ProcessBlows();
+	ProcessDrips();
 	ProcessKnockedOut();
 	NoteActions();
 }
@@ -2375,45 +2390,39 @@ void CreatureFightSystem::MeasureBlows(entt::entity creature)
 	{
 		return;
 	}
+	if (!rig->blowStrikes.has_value())
+	{
+		return;
+	}
 	auto& animations = Locator::creatureAnimationSystem::value();
 	const auto scale = std::abs(registry.Get<const Transform>(creature).scale.x);
-	const std::array bones {rig->actionPoints->rightHand, rig->actionPoints->rightFoot};
 	fighting.reaches.clear();
 	for (size_t i = 0; i < fight::animations::k_AttackCount; ++i)
 	{
 		const auto animation = fight::animations::k_FirstAttack + i;
 		const auto duration = DurationOf(creature, animation);
-		if (duration <= 0.0f)
+		const auto& strike = rig->blowStrikes->at(i);
+		const auto landMs = static_cast<float>(strike.landMs);
+		if (duration <= 0.0f || landMs < fight::k_LeastLandMs || strike.bone < 0)
 		{
 			continue;
 		}
-		// The blow lands where its hand or foot reaches furthest ahead, the body carried along by its root as it goes
-		const auto rootAhead = -DisplacementOf(body.species, animation).y * scale;
-		std::optional<fight::Reach> best;
-		float bestTime = 0.0f;
-		for (int sample = 0; sample <= k_MeasureSamples; ++sample)
+		// The striking bone as the blow lands, and the land time before
+		const auto bone = static_cast<uint32_t>(strike.bone);
+		const auto atLand = animations.BoneInAnimation(creature, animation, landMs, bone, false);
+		const auto before = animations.BoneInAnimation(creature, animation, landMs - fight::k_LeastLandMs, bone, false);
+		if (!atLand.has_value() || !before.has_value())
 		{
-			const auto time = duration * static_cast<float>(sample) / static_cast<float>(k_MeasureSamples);
-			for (const auto bone : bones)
-			{
-				const auto point = animations.BoneInAnimation(creature, animation, time, bone, false);
-				if (!point.has_value())
-				{
-					continue;
-				}
-				const auto reach = (-point->z * scale) + (rootAhead * time / duration);
-				if (!best.has_value() || reach > best->reach)
-				{
-					best = fight::Reach {.animation = animation, .reach = reach, .height = point->y * scale};
-					bestTime = time;
-				}
-			}
+			continue;
 		}
-		if (best.has_value())
-		{
-			fighting.reaches.push_back(*best);
-			fighting.hitTimesMs.at(i) = bestTime;
-		}
+		const auto shape = fight::ShapeOfBlow(*atLand, *before, landMs, duration, DisplacementOf(body.species, animation).y);
+		fighting.reaches.push_back({
+		    .animation = animation,
+		    .reach = -shape.point.z * scale,
+		    .height = shape.point.y * scale,
+		    .swing = shape.swing,
+		});
+		fighting.hitTimesMs.at(i) = landMs;
 	}
 	fighting.measured = true;
 }
@@ -2760,7 +2769,6 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		const auto& body = registry.Get<const Creature>(entity);
 		const bool hasOpponent = fighting->stage == CreatureFighting::Stage::Duel && InDuel(registry, fighting->opponent);
 		const auto duration = DurationOf(entity, fighter.animation);
-		const auto before = fighter.timeMs;
 		fighter.timeMs += milliseconds * fight::PlaybackSpeed(fighter.animation, fighter.speed);
 		fighter.stateMs += milliseconds;
 
@@ -2784,22 +2792,6 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 			{
 				Shift(*locomotion, by);
 				moved = true;
-			}
-		}
-		// A blow lands as it reaches furthest, while the duel is on: a fight called off lands no more blows
-		if (hasOpponent && fighter.state == fight::State::Action && fight::IsAttack(fighter.animation) && !fighter.landed)
-		{
-			const auto hitTime = fighting->hitTimesMs.at(fighter.animation - fight::animations::k_FirstAttack);
-			if (before <= hitTime && fighter.timeMs > hitTime)
-			{
-				fighter.landed = true;
-				TestHit(entity);
-				// The hit may have ended the fight
-				fighting = registry.TryGet<CreatureFighting>(entity);
-				if (fighting == nullptr)
-				{
-					continue;
-				}
 			}
 		}
 		auto& current = fighting->fighter;
@@ -2881,7 +2873,124 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 	NoteActions();
 }
 
-void CreatureFightSystem::TestHit(entt::entity creature)
+void CreatureFightSystem::ProcessBlows()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<std::pair<entt::entity, int32_t>> blows;
+	registry.Each<CreatureFighting>([&registry, &blows](entt::entity entity, CreatureFighting& fighting) {
+		const auto& fighter = fighting.fighter;
+		const bool striking = fighting.stage == CreatureFighting::Stage::Duel && fighter.state == fight::State::Action &&
+		                      fight::IsAttack(fighter.animation) && InDuel(registry, fighting.opponent);
+		// The tests start where the animation was at the last turn, or at its start when it began since
+		const bool same = fighting.blowTestAnimation == fighter.animation && fighter.timeMs >= fighting.blowTestFromMs;
+		const auto from = same ? static_cast<int32_t>(fighting.blowTestFromMs) : 0;
+		fighting.blowTestFromMs = fighter.timeMs;
+		fighting.blowTestAnimation = fighter.animation;
+		if (striking)
+		{
+			blows.emplace_back(entity, from);
+		}
+	});
+	for (const auto& [entity, from] : blows)
+	{
+		if (registry.Valid(entity) && registry.AllOf<CreatureFighting>(entity))
+		{
+			TestBlow(entity, from);
+		}
+	}
+}
+
+void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::creatureAnimationSystem::has_value())
+	{
+		return;
+	}
+	const auto& fighting = registry.Get<const CreatureFighting>(creature);
+	const auto& attacker = fighting.fighter;
+	const auto opponent = fighting.opponent;
+	// An earlier blow this turn may have made it reel already
+	if (attacker.state != fight::State::Action || !fight::IsAttack(attacker.animation) || !InDuel(registry, opponent))
+	{
+		return;
+	}
+	const auto& body = registry.Get<const Creature>(creature);
+	const auto* rig = RigOf(body.species);
+	const auto blow = attacker.animation - fight::animations::k_FirstAttack;
+	if (rig == nullptr || !rig->blowStrikes.has_value() || !rig->actionPoints.has_value() ||
+	    rig->blowStrikes->at(blow).bone < 0)
+	{
+		return;
+	}
+	const auto bone = static_cast<uint32_t>(rig->blowStrikes->at(blow).bone);
+	const auto groin = rig->actionPoints->groin;
+	const auto size = ShownSize(body);
+	const bool special = attacker.animation == fight::animations::k_AttackSpecial;
+	const auto spanMs = fight::TestSpanMs(k_TurnMs, size);
+	const auto landMs = static_cast<int32_t>(fighting.hitTimesMs.at(blow));
+	const auto times = fight::BlowTestTimes(fromMs, spanMs, landMs);
+	if (times.empty())
+	{
+		return;
+	}
+	auto& animations = Locator::creatureAnimationSystem::value();
+	const auto& transform = registry.Get<const Transform>(creature);
+	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	const auto worldBone = [&](uint32_t which, int32_t timeMs) -> std::optional<glm::vec3> {
+		const auto point =
+		    animations.BoneInAnimation(creature, attacker.animation, static_cast<float>(timeMs), which, attacker.mirrored);
+		return point.has_value() ? std::optional(glm::vec3(placement * glm::vec4(*point, 1.0f))) : std::nullopt;
+	};
+	auto before = worldBone(bone, fromMs);
+	if (!before.has_value())
+	{
+		return;
+	}
+	// A victim that reels from a blow already, recoils in its block or faints takes no blow
+	const auto& victim = registry.Get<const CreatureFighting>(opponent).fighter;
+	const bool reeling = victim.state == fight::State::Action && victim.animation >= fight::animations::k_RecoilHigh &&
+	                     victim.animation < fight::animations::k_WobbleHighSide;
+	const bool open = !reeling && victim.state != fight::State::BlockRecoil && victim.state != fight::State::Faint;
+	const auto capsules = BodyOf(registry, opponent);
+	const auto reach = fight::BlowTestReach(size, special);
+	std::optional<std::pair<glm::vec3, glm::vec3>> landed;
+	for (const auto time : times)
+	{
+		const auto at = worldBone(bone, time);
+		if (!at.has_value())
+		{
+			continue;
+		}
+		if (Locator::dynamicsSystem::has_value())
+		{
+			Locator::dynamicsSystem::value().AddPuff(*at, glm::vec3(0.0f), fight::SwingPuffSize(size, special),
+			                                         fight::k_SwingPuffColour, physics::turn::PuffKind::Dust);
+		}
+		const auto from = worldBone(groin, time);
+		if (open && !landed.has_value() && from.has_value() && !capsules.empty())
+		{
+			// The capsules round the opponent's bones stand in for the shapes the game tests
+			for (const auto& target : fight::BlowTestPoints(*at, *before, reach))
+			{
+				const auto direction = target - *from;
+				const auto along = feedback::RayHit(*from, direction, capsules);
+				if (along.has_value() && *along > 0.0f && *along < 1.0f)
+				{
+					landed = std::pair {*from + (direction * *along), (*at - *before) * fight::k_BlowVectorScale};
+					break;
+				}
+			}
+		}
+		before = at;
+	}
+	if (landed.has_value())
+	{
+		LandBlow(creature, landed->first, landed->second);
+	}
+}
+
+void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point, const glm::vec3& vector)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& fighting = registry.Get<CreatureFighting>(creature);
@@ -2892,62 +3001,18 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	}
 	const auto& body = registry.Get<const Creature>(creature);
 	const auto& opponentBody = registry.Get<const Creature>(opponent);
-	const auto& transform = registry.Get<const Transform>(creature);
-	const auto& opponentTransform = registry.Get<const Transform>(opponent);
 	auto& opponentFighting = registry.Get<CreatureFighting>(opponent);
 	auto& victim = opponentFighting.fighter;
 	auto& attacker = fighting.fighter;
-
-	// Where the blow reaches, ahead of the attacker and up
 	const auto found = std::ranges::find_if(
 	    fighting.reaches, [&attacker](const fight::Reach& reach) { return reach.animation == attacker.animation; });
 	if (found == fighting.reaches.end())
 	{
 		return;
 	}
-	const auto heading = registry.Get<const CreatureLocomotion>(creature).heading;
-	const auto ahead = creature_locomotion::DirectionOf(heading);
-	// The root has already carried the body part of the way the blow reaches
-	const auto scale = std::abs(transform.scale.x);
-	const auto rootAhead = -DisplacementOf(body.species, attacker.animation).y * scale;
-	const auto reach = found->reach - (rootAhead * fighting.movedShare);
-	const auto& at = registry.Get<const CreatureLocomotion>(creature).toPosition;
-	const auto point = glm::vec3(at.x + (ahead.x * reach), at.y + found->height, at.z + (ahead.y * reach));
-	const auto tolerance = k_BlowReachPerSize * ShownSize(body) * (attacker.special ? 2.0f : 1.0f);
-	const auto opponentHeight = HeightOf(ShownSize(opponentBody));
-	const auto capsules = BodyOf(registry, opponent);
-	bool hit = false;
-	if (!capsules.empty())
-	{
-		hit = feedback::DistanceOutside(point, capsules) <= tolerance;
-	}
-	else
-	{
-		const auto* moves = registry.TryGet<const CreatureLocomotion>(opponent);
-		const auto radius = moves != nullptr ? moves->radius : 5.0f;
-		hit = glm::distance(Flat(point), Flat(opponentTransform.position)) <= radius + tolerance &&
-		      point.y - opponentTransform.position.y <= opponentHeight;
-	}
+	const bool special = attacker.animation == fight::animations::k_AttackSpecial;
 	// The blow follows from the action of the attacker that strikes it
 	const auto blowCause = fight_transcript::LastOf(creature, "action");
-	if (!hit)
-	{
-		fight_transcript::Note(
-		    creature, "blow",
-		    [&] {
-			    return fight_transcript::Fields {{"attacker", fight_transcript::Id(creature)},
-			                                     {"defender", fight_transcript::Id(opponent)},
-			                                     {"animation", static_cast<uint64_t>(attacker.animation)},
-			                                     {"outcome", "miss"},
-			                                     {"point_x", point.x},
-			                                     {"point_y", point.y},
-			                                     {"point_z", point.z},
-			                                     {"tolerance", tolerance},
-			                                     {"special", attacker.special}};
-		    },
-		    blowCause);
-		return;
-	}
 	// The victim remembers when it was struck, which the villagers watching cheer or despair at
 	auto& struck = registry.AllOf<CreatureFightRecord>(opponent) ? registry.Get<CreatureFightRecord>(opponent)
 	                                                             : registry.Assign<CreatureFightRecord>(opponent);
@@ -2960,14 +3025,62 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 		magic_living::AfterEffect(opponent, blowEffect, {.player = body.owner, .casterCreature = creature});
 	}
 
+	// Every blow that lands wounds the skin, blocked or not: the column is drawn first, then the kind by the wound type
+	// that the attacker's species gives the blow
+	{
+		const auto random = [this](uint32_t range) {
+			return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
+		};
+		const auto column = static_cast<uint8_t>(random(creature_marks::k_CellsPerRow));
+		const auto* attackerRig = RigOf(body.species);
+		const auto woundType = attackerRig != nullptr && attackerRig->blowWoundTypes.has_value()
+		                           ? fight::BlowWoundType(attacker.animation, *attackerRig->blowWoundTypes)
+		                           : -1;
+		const auto kind = fight::WoundKind(woundType, random);
+		WoundSkin(opponent, point, vector, kind, column);
+	}
 	const bool blocked = fight::IsBlocking(victim.state, victim.timeMs, DurationOf(opponent, fight::animations::k_StartBlock));
-	const auto heightShare = std::clamp((point.y - opponentTransform.position.y) / opponentHeight, 0.0f, 1.0f);
-	// Where it lands from the middle of the victim's body
-	const auto* opponentMoves = registry.TryGet<const CreatureLocomotion>(opponent);
-	const auto victimRadius = opponentMoves != nullptr ? std::max(opponentMoves->radius, 0.1f) : 5.0f;
-	const auto local =
-	    WorldToLocal(Flat(point) - Flat(opponentTransform.position), opponentMoves != nullptr ? opponentMoves->heading : 0.0f);
-	const auto direction = fight::RecoilDirectionOf({local.x / victimRadius, (heightShare - 0.5f) * 2.0f});
+	// Blood flies unless the victim blocks, then dust whether it blocks or not
+	if (Locator::dynamicsSystem::has_value())
+	{
+		auto& dynamics = Locator::dynamicsSystem::value();
+		const auto draw = [this](int32_t range) {
+			if (Locator::gameRandom::has_value())
+			{
+				return static_cast<int32_t>(Locator::gameRandom::value().LocalRand(range));
+			}
+			return std::uniform_int_distribution<int32_t>(0, range - 1)(_random);
+		};
+		// Each axis of the spread is drawn z first, then y, then x
+		const auto spray = [&draw](const glm::vec3& along, float step) {
+			const auto z = draw(51);
+			const auto y = draw(51);
+			const auto x = draw(51);
+			return fight::SprayVelocity(along, step, {x, y, z});
+		};
+		const auto step = fight::BloodSpreadStep(vector);
+		if (!blocked)
+		{
+			for (int32_t i = 0; i < fight::k_BloodDrops; ++i)
+			{
+				const auto velocity = spray(vector, step);
+				const auto colour = fight::k_BloodColours.at(static_cast<size_t>(draw(3)));
+				dynamics.AddPuff(point, velocity, ShownSize(opponentBody) * fight::k_BloodSizePerSize, colour,
+				                 physics::turn::PuffKind::Blood);
+			}
+		}
+		for (int32_t i = 0; i < fight::k_BlowDustPuffs; ++i)
+		{
+			const auto velocity = spray(vector * fight::k_DustVectorShare, step * fight::k_DustSpreadShare);
+			dynamics.AddPuff(point, velocity, ShownSize(body) * fight::k_BlowDustSizePerSize, fight::k_BlowDustColour,
+			                 physics::turn::PuffKind::Dust);
+		}
+	}
+
+	// How high it lands: how high the blow reaches over how high the victim's head is over the land under it
+	const auto heightShare =
+	    fight::HeightShareOf(found->height, HeadHeightOf(registry, opponent).value_or(HeightOf(ShownSize(opponentBody))));
+	const auto direction = fight::RecoilDirectionOf(found->swing);
 	const auto result = fight::ResolveBlow(
 	    {
 	        .attackerSize = ShownSize(body),
@@ -2975,7 +3088,7 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	        .attackerStrength = body.strength,
 	        .defenderStrength = opponentBody.strength,
 	        .speed = attacker.speed,
-	        .special = attacker.special,
+	        .special = special,
 	        .heightShare = heightShare,
 	        .blocked = blocked,
 	    },
@@ -2994,20 +3107,22 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 		                                     {"point_x", point.x},
 		                                     {"point_y", point.y},
 		                                     {"point_z", point.z},
-		                                     {"tolerance", tolerance},
+		                                     {"vector_x", vector.x},
+		                                     {"vector_y", vector.y},
+		                                     {"vector_z", vector.z},
 		                                     {"attacker_size", ShownSize(body)},
 		                                     {"defender_size", ShownSize(opponentBody)},
 		                                     {"attacker_strength", body.strength},
 		                                     {"defender_strength", opponentBody.strength},
 		                                     {"speed", attacker.speed},
-		                                     {"special", attacker.special},
+		                                     {"special", special},
 		                                     {"blocked", blocked},
 		                                     {"damage_factor", fight::DamageFactor({.attackerSize = ShownSize(body),
 		                                                                            .defenderSize = ShownSize(opponentBody),
 		                                                                            .attackerStrength = body.strength,
 		                                                                            .defenderStrength = opponentBody.strength,
 		                                                                            .speed = attacker.speed,
-		                                                                            .special = attacker.special,
+		                                                                            .special = special,
 		                                                                            .heightShare = heightShare,
 		                                                                            .blocked = blocked})},
 		                                     {"damage", result.damage},
@@ -3054,44 +3169,8 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 	                                                         direction == fight::RecoilDirection::Left),
 	    .timeMs = 0.0f,
 	};
-	// An unblocked blow wounds the skin, and some wounds bleed. Where on the skin isn't found from the body yet.
-	if (!blocked && Locator::creatureSkinSystem::has_value())
-	{
-		const auto random = [this](uint32_t range) {
-			return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-		};
-		auto& skins = Locator::creatureSkinSystem::value();
-		std::uniform_int_distribution<int> texel(k_WoundEdge, static_cast<int>(creature_marks::k_AtlasSize) - k_WoundEdge - 1);
-		const auto u = static_cast<uint8_t>(texel(_random));
-		const auto v = static_cast<uint8_t>(texel(_random));
-		// The column is drawn first, then the kind by the wound type the attacker's species gives the blow
-		const auto column = static_cast<uint8_t>(random(creature_marks::k_CellsPerRow));
-		const auto* attackerRig = RigOf(body.species);
-		const auto woundType = attackerRig != nullptr && attackerRig->blowWoundTypes.has_value()
-		                           ? fight::BlowWoundType(attacker.animation, *attackerRig->blowWoundTypes)
-		                           : -1;
-		creature_marks::Mark wound {
-		    .u = u,
-		    .v = v,
-		    .skin = 0,
-		    .age = 0,
-		    .type = fight::WoundKind(woundType, random),
-		    .column = column,
-		};
-		skins.AddWound(opponent, wound);
-		if (fight::Bleeds(wound.type))
-		{
-			auto drop = wound;
-			drop.type = 0;
-			drop.column = 0;
-			for (int i = 0; i < k_BloodDrops && drop.v < 255; ++i, ++drop.v)
-			{
-				skins.AddBlood(opponent, drop);
-			}
-		}
-	}
-
 	// Too close, the attacker is pushed back by half of how far they overlap
+	const auto* opponentMoves = registry.TryGet<const CreatureLocomotion>(opponent);
 	if (auto* moves = registry.TryGet<CreatureLocomotion>(creature); moves != nullptr && opponentMoves != nullptr)
 	{
 		const auto between = Flat(moves->toPosition) - Flat(opponentMoves->toPosition);
@@ -3131,6 +3210,93 @@ void CreatureFightSystem::TestHit(entt::entity creature)
 		fight::Enter(victim, fight::State::Action, Has(opponent, result.recoil) ? result.recoil : result.plainRecoil);
 		opponentFighting.movedShare = 0.0f;
 	}
+}
+
+void CreatureFightSystem::WoundSkin(entt::entity victim, const glm::vec3& point, const glm::vec3& vector, uint8_t kind,
+                                    uint8_t column)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// A blow with no movement points nowhere, and meets no skin
+	if (vector == glm::vec3(0.0f) || !Locator::creatureSkinSystem::has_value())
+	{
+		return;
+	}
+	const auto drawn = DrawnMeshOf(registry, victim);
+	if (!drawn.has_value())
+	{
+		return;
+	}
+	// The whole line along the blow counts: the wound goes where it first meets the skin
+	const auto hit =
+	    posed_model::NearestSkinHit(registry, victim, *drawn->first, drawn->second, point, glm::normalize(vector), true);
+	if (!hit.has_value())
+	{
+		return;
+	}
+	const auto texel = creature_marks::scar::TexelAt(hit->uvs, hit->hit.s, hit->hit.t);
+	Locator::creatureSkinSystem::value().AddWound(
+	    victim,
+	    {.u = texel.x, .v = texel.y, .skin = static_cast<uint8_t>(hit->skin & 3u), .age = 0, .type = kind, .column = column});
+	if (!fight::Bleeds(kind))
+	{
+		return;
+	}
+	// A wound that bleeds starts a drip in the first free place; with none free it starts none
+	auto& drips =
+	    registry.AllOf<CreatureDrips>(victim) ? registry.Get<CreatureDrips>(victim) : registry.Assign<CreatureDrips>(victim);
+	const auto free =
+	    std::ranges::find_if(drips.drips, [](const CreatureDrips::Drip& drip) { return drip.ms >= CreatureDrips::k_RunMs; });
+	if (free != drips.drips.end())
+	{
+		*free = {.subMesh = hit->subMesh, .firstIndex = hit->hit.firstIndex, .s = hit->hit.s, .t = hit->hit.t, .ms = 0};
+	}
+}
+
+void CreatureFightSystem::ProcessDrips()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::creatureSkinSystem::has_value())
+	{
+		return;
+	}
+	auto& skins = Locator::creatureSkinSystem::value();
+	registry.Each<CreatureDrips>([&registry, &skins](entt::entity creature, CreatureDrips& drips) {
+		const auto drawn = DrawnMeshOf(registry, creature);
+		for (auto& drip : drips.drips)
+		{
+			if (drip.ms >= CreatureDrips::k_RunMs)
+			{
+				continue;
+			}
+			drip.ms += static_cast<int32_t>(k_TurnMilliseconds);
+			const auto corners = drawn.has_value()
+			                         ? posed_model::CornersOnSkin(
+			                               registry, creature, *drawn->first, drawn->second,
+			                               posed_model::BonesOf(registry, creature, *drawn->first),
+			                               {.subMesh = drip.subMesh, .firstIndex = drip.firstIndex, .s = drip.s, .t = drip.t})
+			                         : std::nullopt;
+			if (!corners.has_value())
+			{
+				drip.ms = CreatureDrips::k_RunMs;
+				continue;
+			}
+			// The drip moves a little down, then back onto the skin across its triangle; it stops where it finds none
+			auto from = posed_model::SkinPointPosition(*corners, drip.s, drip.t);
+			from.y -= fight::k_DripFallPerTurn;
+			// Across the triangle, as long as twice its area: a triangle too small finds no skin
+			const auto across = glm::cross((*corners)[2] - (*corners)[0], (*corners)[1] - (*corners)[0]);
+			const auto hit = posed_model::NearestSkinHit(registry, creature, *drawn->first, drawn->second, from, across, true);
+			if (!hit.has_value())
+			{
+				drip.ms = CreatureDrips::k_RunMs;
+				continue;
+			}
+			drip = {
+			    .subMesh = hit->subMesh, .firstIndex = hit->hit.firstIndex, .s = hit->hit.s, .t = hit->hit.t, .ms = drip.ms};
+			const auto texel = creature_marks::scar::TexelAt(hit->uvs, hit->hit.s, hit->hit.t);
+			skins.AddBlood(creature, {.u = texel.x, .v = texel.y, .skin = static_cast<uint8_t>(hit->skin & 3u), .age = 0});
+		}
+	});
 }
 
 void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBlow)

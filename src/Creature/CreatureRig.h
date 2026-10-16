@@ -139,6 +139,14 @@ struct CreatureRig
 	/// The type of wound each of its twelve fight blows leaves, in the order of the blow animations, when its file gives
 	/// them
 	std::optional<std::array<int32_t, 12>> blowWoundTypes;
+	/// When each of its twelve fight blows lands, in milliseconds from the start of its animation, and the bone that
+	/// strikes it, counted in its meshes, when its file gives them
+	struct BlowStrike
+	{
+		int32_t landMs;
+		int32_t bone;
+	};
+	std::optional<std::array<BlowStrike, 12>> blowStrikes;
 
 	/// The sounds placed on moments of each animation of the base mesh, in the order of the creature spec file
 	std::vector<std::vector<creature_audio::SoundEvent>> soundEvents;

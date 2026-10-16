@@ -50,6 +50,10 @@ sprites::SpriteInstance sprites::InstanceOf(const Effect::DrawAtom& atom)
 
 render_modes::Mode sprites::RenderMode(const Creator& creator)
 {
+	if (creator.alphaTest)
+	{
+		return render_modes::Mode::TexturedChroma;
+	}
 	if (creator.additive)
 	{
 		return creator.writeDepth ? render_modes::Mode::AlphaTexturedAlphaAdditive

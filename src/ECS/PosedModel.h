@@ -68,9 +68,10 @@ struct SkinHit
 	/// The submesh the triangle is in
 	uint32_t subMesh {0};
 };
+/// With behind allowed, the whole line counts and the hit furthest back along it is taken.
 [[nodiscard]] std::optional<SkinHit> NearestSkinHit(const ecs::Registry& registry, entt::entity entity,
                                                     const graphics::L3DMesh& mesh, const glm::mat4& model, glm::vec3 origin,
-                                                    glm::vec3 direction);
+                                                    glm::vec3 direction, bool behindAllowed = false);
 /// A point kept on a model's skin, which moves with it as it is posed: a triangle of a submesh, by its first index, and
 /// how far along its first side (s) and third side (t) from its first corner
 struct SkinPoint

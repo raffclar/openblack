@@ -5068,6 +5068,28 @@ void AddCombat(std::vector<Scenario>& all)
 	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
 	                 Fight(Kind::FightView, 0, 0, 14.0f)},
 	});
+
+	{
+		// A horse's blows are of the wound type that bleeds, so its opponent bleeds where they land
+		auto horse = red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f);
+		horse.species = CreatureType::Horse;
+		all.push_back({
+		    .id = "combat.blow_blood",
+		    .name = "Blood and dust where blows land",
+		    .facet = Facet::Combat,
+		    .description = "A strong red horse and a weak blue tiger fight by themselves. The camera is near the middle "
+		                   "of the arena.",
+		    .expected = "Faint white puffs follow the striking hand or foot as each blow lands. Where a blow meets the "
+		                "body, a wound shows on the skin there, and puffs of sand-coloured dust fly along the blow. When "
+		                "the blow is not blocked, red and brown drops of blood fly along the blow, fall to the land and "
+		                "slide a little on it, then go. On the tiger, blood from many of the horse's wounds runs down the "
+		                "skin for some seconds. The body reels to the side, the top or the bottom by the swing of the "
+		                "blow, or straight back when the blow swings ahead.",
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, 0.0f}, .look = {0.0f, 8.0f, 40.0f}},
+		    .creatures = {horse, blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
 }
 
 void AddMind(std::vector<Scenario>& all)

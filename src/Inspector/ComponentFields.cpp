@@ -688,6 +688,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFighting::reaches>("reaches")
 	    .Field<&components::CreatureFighting::hitTimesMs>("hitTimesMs")
 	    .Field<&components::CreatureFighting::measured>("measured")
+	    .Field<&components::CreatureFighting::blowTestFromMs>("blowTestFromMs")
+	    .Field<&components::CreatureFighting::blowTestAnimation>("blowTestAnimation")
 	    .Field<&components::CreatureFighting::movedShare>("movedShare")
 	    .Field<&components::CreatureFighting::stageSeconds>("stageSeconds")
 	    .Field<&components::CreatureFighting::faceSeconds>("faceSeconds")
@@ -919,6 +921,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureSkin::skins>("skins")
 	    .Field<&components::CreatureSkin::painted>("painted")
 	    .Field<&components::CreatureSkin::revision>("revision");
+	Reflect<components::CreatureDrips>(context).Field<&components::CreatureDrips::drips>("drips");
 	Reflect<components::CreatureSpells>(context)
 	    .Field<&components::CreatureSpells::spells>("spells")
 	    .Field<&components::CreatureSpells::freeze>("freeze")
@@ -2235,7 +2238,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_fight::Fighter::mirrored>("mirrored")
 	    .Field<&openblack::creature_fight::Fighter::lastAction>("lastAction")
 	    .Field<&openblack::creature_fight::Fighter::special>("special")
-	    .Field<&openblack::creature_fight::Fighter::landed>("landed")
 	    .Field<&openblack::creature_fight::Fighter::spell>("spell")
 	    .Field<&openblack::creature_fight::Fighter::stopping>("stopping")
 	    .Field<&openblack::creature_fight::Fighter::queue>("queue")
@@ -2254,7 +2256,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_fight::Reach>(context, ValueOnly {})
 	    .Field<&openblack::creature_fight::Reach::animation>("animation")
 	    .Field<&openblack::creature_fight::Reach::reach>("reach")
-	    .Field<&openblack::creature_fight::Reach::height>("height");
+	    .Field<&openblack::creature_fight::Reach::height>("height")
+	    .Field<&openblack::creature_fight::Reach::swing>("swing");
 	Reflect<openblack::creature_fight::marks::Mark>(context, ValueOnly {})
 	    .Field<&openblack::creature_fight::marks::Mark::anchor>("anchor")
 	    .Field<&openblack::creature_fight::marks::Mark::subMesh>("subMesh")
@@ -2682,6 +2685,12 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::components::CreatureDance::Place>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureDance::Place::dancer>("dancer")
 	    .Field<&openblack::ecs::components::CreatureDance::Place::position>("position");
+	Reflect<openblack::ecs::components::CreatureDrips::Drip>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureDrips::Drip::subMesh>("subMesh")
+	    .Field<&openblack::ecs::components::CreatureDrips::Drip::firstIndex>("firstIndex")
+	    .Field<&openblack::ecs::components::CreatureDrips::Drip::s>("s")
+	    .Field<&openblack::ecs::components::CreatureDrips::Drip::t>("t")
+	    .Field<&openblack::ecs::components::CreatureDrips::Drip::ms>("ms");
 	Reflect<openblack::ecs::components::CreatureEyes::Eye>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureEyes::Eye::eyeball>("eyeball")
 	    .Field<&openblack::ecs::components::CreatureEyes::Eye::eyelid>("eyelid");

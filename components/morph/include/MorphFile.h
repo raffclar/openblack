@@ -271,8 +271,8 @@ struct CreatureBlow
 {
 	/// When the blow lands, in milliseconds from the start of its animation
 	int32_t landTime {-1};
-	/// A number whose use isn't known
-	int32_t unknown {-1};
+	/// The bone that strikes, counted in the creature's meshes
+	int32_t strikingBone {-1};
 	/// The type of wound the blow leaves, 0 to 2; -1 in files of a version that lacks it
 	int32_t woundType {-1};
 };
