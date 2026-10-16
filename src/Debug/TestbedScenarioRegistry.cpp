@@ -5829,6 +5829,35 @@ void AddMind(std::vector<Scenario>& all)
 	                  .value = static_cast<uint32_t>(Desire::BeFriends),
 	                  .amount = 600.0f}},
 	});
+	// The lion of no player asks the player's tiger, which wants only to sleep, as the guide does after the fight lesson
+	auto askingLion = guideLion({25.0f, 0.0f}, 270.0f);
+	askingLion.desires = OnlyDesire(Desire::BeFriends);
+	auto sleepyTiger = Content(CreatureType::Tiger, {-25.0f, 0.0f}, 90.0f, "refuses");
+	sleepyTiger.desires = OnlyDesire(Desire::Tiredness);
+	all.push_back({
+	    .id = "friends.refused",
+	    .name = "Another creature refuses to be friends",
+	    .facet = Facet::Mind,
+	    .description = "A lion of no player and your tiger stand 50 apart and face each other. The lion wants only to be "
+	                   "friends. Your tiger wants only to sleep. No script has made a creature do an action.",
+	    .expected = "The lion asks your tiger to play or to be friends. Your tiger wants neither more than it fears the "
+	                "lion or is angry with it, so it refuses. The lion stops that action, and your tiger tells you that "
+	                "it refused to play or to be friends. The log says that the lion stops because the tiger refused. "
+	                "When your tiger looks the lion over, its wish to be friends can grow. Then it can ask the lion, which "
+	                "agrees.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {sleepyTiger, askingLion},
+	    .commands = {{.kind = Kind::OnlyDesire,
+	                  .creature = 0,
+	                  .delaySeconds = 0.0f,
+	                  .value = static_cast<uint32_t>(Desire::Tiredness),
+	                  .amount = 600.0f},
+	                 {.kind = Kind::OnlyDesire,
+	                  .creature = 1,
+	                  .delaySeconds = 0.0f,
+	                  .value = static_cast<uint32_t>(Desire::BeFriends),
+	                  .amount = 600.0f}},
+	});
 	all.push_back({
 	    .id = "friends.side_by_side",
 	    .name = "Do things side by side with a friend",

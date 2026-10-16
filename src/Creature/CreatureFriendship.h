@@ -59,6 +59,9 @@ struct AvailabilityFacts
 	uint32_t asker {0};
 };
 [[nodiscard]] Availability AvailabilityOf(const AvailabilityFacts& facts);
+/// The partner of a creature now: the creature it does a joint action with, else the opponent of the fight it is in,
+/// else none
+[[nodiscard]] std::optional<uint32_t> PartnerNow(std::optional<uint32_t> jointPartner, std::optional<uint32_t> opponent);
 
 /// The answer of the asked creature
 struct Answer

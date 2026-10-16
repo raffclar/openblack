@@ -50,6 +50,11 @@ Availability creature_friendship::AvailabilityOf(const AvailabilityFacts& facts)
 	return facts.partner.has_value() ? Availability::Refuses : Availability::Free;
 }
 
+std::optional<uint32_t> creature_friendship::PartnerNow(std::optional<uint32_t> jointPartner, std::optional<uint32_t> opponent)
+{
+	return jointPartner.has_value() ? jointPartner : opponent;
+}
+
 Answer creature_friendship::AnswerOf(const AnswerFacts& facts)
 {
 	if (facts.kind == RequestKind::Fight)
