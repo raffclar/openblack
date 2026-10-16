@@ -93,6 +93,7 @@ public:
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
 	void ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
 	void ReactToNiceMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
+	void StartReacting(entt::entity creature) override;
 	void TakeUpReaction(entt::entity creature, entt::entity thing, const creature_reaction::Setup& setup) override;
 	[[nodiscard]] bool NoticeCreatureToInspect(entt::entity creature, entt::entity other, uint32_t turn,
 	                                           uint32_t waitTurns) override;
@@ -157,6 +158,9 @@ private:
 	           const creature_plan_actions::Situation& situation);
 	/// Gives up the plan carried out, if any
 	static void Abandon(components::CreatureMindState& mind);
+	/// The creature stops the reaction that it has, if any, because a new plan is forced on it. The creature then waits
+	/// its full time before it takes a reaction of that kind again.
+	static void EndReaction(entt::entity creature);
 	/// The creature stops the plan with no success, then starts the agenda of the same plan again from its first step
 	void StartPlanAgain(entt::entity creature, components::CreatureMindState& mind);
 	/// The turn rules that come after the hand lets go and before the creature decides: the desires of its body before

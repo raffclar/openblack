@@ -3059,8 +3059,9 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	{
 		return false;
 	}
-	// The current action stops as a failure. This occurs also when the creature finds no new plan.; a reaction it was in has
-	// been ended by whatever forces the plan
+	// A forced plan first stops the reaction that the creature has
+	EndReaction(creature);
+	// The current action stops as a failure. This occurs also when the creature finds no new plan.
 	// A catch is the body's own and carries on
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&

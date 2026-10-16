@@ -194,6 +194,8 @@ public:
 	virtual void ReactToNastyMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
 	/// A nice miracle of its own player's was cast near the creature: it goes to look at it, and learns it
 	virtual void ReactToNiceMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
+	/// The creature starts to react to a thing. It keeps the plan that it does now, before the reaction changes the plan.
+	virtual void StartReacting(entt::entity /*creature*/) {}
 	/// The creature takes up a reaction to a thing: it comes across the thing, drops what it was doing for the plan the
 	/// reaction makes (done to the thing or to itself), learns the skill it watches, and moves a source of its desires,
 	/// as the reaction's kind says

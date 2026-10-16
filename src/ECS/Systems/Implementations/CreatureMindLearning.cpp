@@ -3013,6 +3013,8 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	{
 		return false;
 	}
+	// A forced plan first stops the reaction that the creature has
+	EndReaction(creature);
 	// A creature told to do something as soon as it is made has a mind ready for it
 	SetUpMind(creature, *body, *mind);
 	const glm::vec2 position {transform->position.x, transform->position.z};
