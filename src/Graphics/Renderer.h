@@ -98,6 +98,7 @@ public:
 	void ReleaseGpuWorkMemory() noexcept final;
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
 	void ShowInterfaceCreatures(interface_creatures::Request request) noexcept final;
+	void ShowMenuCreature(interface_creatures::MenuCreature creature) noexcept final;
 	void Frame() noexcept final;
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;
 	[[nodiscard]] std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept final;
@@ -427,6 +428,8 @@ private:
 	                       const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes)>;
 	/// The creatures that the interface asked to show last, each moved to its place before the interface's camera
 	void DrawInterfaceCreatures(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
+	/// The creature that the main menu's tattoo editor asked to show last, in its view of its own
+	void DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
 	/// The columns of light over the village centres and temples of the players whose borders show
 	void DrawLightColumns(const DrawSceneDesc& desc) const;
 	/// The beams of light the started scrolls stand in
@@ -627,6 +630,8 @@ private:
 	/// place them
 	mutable std::optional<interface_creatures::Request> _interfaceCreatures;
 	mutable std::optional<DynamicVertexBufferHandle> _interfaceCreatureInstances;
+	mutable std::optional<interface_creatures::MenuCreature> _menuCreature;
+	mutable std::optional<DynamicVertexBufferHandle> _menuCreatureInstance;
 	mutable bool _warnedCreatureCap {false};
 	/// Found by trial in a debug build, whose backends check the uploads: Vulkan overflowed with 65 creatures drawn and
 	/// Direct3D 12 with 850, and both held with 50 and 600

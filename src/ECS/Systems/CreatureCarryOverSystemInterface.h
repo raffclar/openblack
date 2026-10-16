@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <memory>
 #include <optional>
 
@@ -42,6 +43,9 @@ public:
 	virtual void Keep(std::shared_ptr<const creaturemind::MindFileData> file) = 0;
 	/// The creature kept, if any
 	[[nodiscard]] virtual std::shared_ptr<const creaturemind::MindFileData> Kept() const = 0;
+	/// The physique file of the profile picked now, from which the main menu's tattoo editor shows the body of the
+	/// profile's creature. None without a profile or a folder for the files.
+	[[nodiscard]] virtual std::optional<std::filesystem::path> ProfilePhysique() const = 0;
 
 	/// A script loads the player's creature at a place on the land. Nothing happens when the player has a creature
 	/// already or none was kept. It is made standing on the ground in the middle of the place's cell, starts out of sight

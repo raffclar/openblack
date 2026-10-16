@@ -12,6 +12,7 @@
 #include "TattooEditorSystem.h"
 
 #include <algorithm>
+#include <vector>
 
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Registry.h"
@@ -66,16 +67,40 @@ TattooEditorSystem::TattooEditorSystem(std::unique_ptr<Skin> skin)
 
 void TattooEditorSystem::Open(entt::entity creature, const creature_tattoo_editor::Orbit& view)
 {
+	_open = true;
 	_creature = creature;
+	_shown.reset();
 	_session = creature_tattoo_editor::Open(_skin->Read(creature).value_or(creature_tattoo::Slots {}));
 	_view = view;
 	_hovered.reset();
 	_hoveredPoint.reset();
 }
 
+void TattooEditorSystem::OpenFromMenu(std::optional<entt::entity> playerCreature, entt::entity shown,
+                                      const creature_tattoo_editor::Orbit& view)
+{
+	_open = true;
+	_creature = playerCreature;
+	_shown = shown;
+	const auto slots = playerCreature.has_value() ? _skin->Read(*playerCreature) : std::nullopt;
+	_session = creature_tattoo_editor::Open(slots.value_or(creature_tattoo::Slots {}));
+	_view = view;
+	_hovered.reset();
+	_hoveredPoint.reset();
+	_face.reset();
+	// The creature that the menu shows wears the tattoos being edited from the start
+	for (size_t i = 0; i < _session.slots.size(); ++i)
+	{
+		_skin->Write(shown, i, _session.slots.at(i));
+	}
+	_skin->WritePictures(shown, creature_tattoo::PicturesBlock(_session.slots, _pictures));
+}
+
 void TattooEditorSystem::Close()
 {
+	_open = false;
 	_creature.reset();
+	_shown.reset();
 	_hovered.reset();
 	_hoveredPoint.reset();
 	_face.reset();
@@ -114,10 +139,7 @@ bool TattooEditorSystem::Drop(uint8_t design, const glm::u8vec3& colour)
 	const auto putOn = creature_tattoo_editor::Drop(_session, design, colour, _hovered);
 	Write(_session.slots);
 	// Each drop makes the creature's block of pictures again from its tattoos
-	if (_creature.has_value())
-	{
-		_skin->WritePictures(*_creature, creature_tattoo::PicturesBlock(_session.slots, _pictures));
-	}
+	WritePictures(_session.slots);
 	if (putOn)
 	{
 		_face = creature_tattoo_editor::k_PutOnFace;
@@ -156,19 +178,40 @@ void TattooEditorSystem::Cancel()
 	{
 		Write(_session.opened);
 		// The game does not make the block of pictures again here (vanilla-bugs 379), and openblack fixes this
-		_skin->WritePictures(*_creature, creature_tattoo::PicturesBlock(_session.opened, _pictures));
+		WritePictures(_session.opened);
 	}
 	Close();
 }
 
+std::vector<entt::entity> TattooEditorSystem::Wearers() const
+{
+	std::vector<entt::entity> wearers;
+	if (_creature.has_value())
+	{
+		wearers.push_back(*_creature);
+	}
+	if (_shown.has_value())
+	{
+		wearers.push_back(*_shown);
+	}
+	return wearers;
+}
+
 void TattooEditorSystem::Write(const creature_tattoo::Slots& slots)
 {
-	if (!_creature.has_value())
+	for (const auto creature : Wearers())
 	{
-		return;
+		for (size_t i = 0; i < slots.size(); ++i)
+		{
+			_skin->Write(creature, i, slots.at(i));
+		}
 	}
-	for (size_t i = 0; i < slots.size(); ++i)
+}
+
+void TattooEditorSystem::WritePictures(const creature_tattoo::Slots& slots)
+{
+	for (const auto creature : Wearers())
 	{
-		_skin->Write(*_creature, i, slots.at(i));
+		_skin->WritePictures(creature, creature_tattoo::PicturesBlock(slots, _pictures));
 	}
 }

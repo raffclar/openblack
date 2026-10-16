@@ -41,8 +41,12 @@ public:
 	explicit TattooEditorSystem(std::unique_ptr<Skin> skin);
 
 	void Open(entt::entity creature, const creature_tattoo_editor::Orbit& view) override;
+	void OpenFromMenu(std::optional<entt::entity> playerCreature, entt::entity shown,
+	                  const creature_tattoo_editor::Orbit& view) override;
+	[[nodiscard]] bool IsFromMenu() const override { return _shown.has_value(); }
+	[[nodiscard]] std::optional<entt::entity> GetShown() const override { return _shown; }
 	void Close() override;
-	[[nodiscard]] bool IsOpen() const override { return _creature.has_value(); }
+	[[nodiscard]] bool IsOpen() const override { return _open; }
 	[[nodiscard]] std::optional<entt::entity> GetCreature() const override { return _creature; }
 	[[nodiscard]] const creature_tattoo_editor::Orbit& GetView() const override { return _view; }
 	[[nodiscard]] const creature_tattoo_editor::Session& GetSession() const override { return _session; }
@@ -61,11 +65,17 @@ public:
 	[[nodiscard]] const creature_tattoo::Pictures& GetPictures() const override { return _pictures; }
 
 private:
-	/// The creature wears the tattoos as they are now
+	/// The creatures wear the tattoos as they are now
 	void Write(const creature_tattoo::Slots& slots);
+	/// The creatures keep the block of pictures that the tattoos use
+	void WritePictures(const creature_tattoo::Slots& slots);
+	/// The creatures that wear the tattoos: the player's, and the one the main menu shows
+	[[nodiscard]] std::vector<entt::entity> Wearers() const;
 
 	std::unique_ptr<Skin> _skin;
+	bool _open {false};
 	std::optional<entt::entity> _creature;
+	std::optional<entt::entity> _shown;
 	creature_tattoo_editor::Session _session;
 	creature_tattoo_editor::Orbit _view;
 	std::optional<uint8_t> _hovered;

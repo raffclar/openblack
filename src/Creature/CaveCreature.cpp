@@ -140,6 +140,28 @@ void cave_creature::StartIdle(State& state, const Random& random)
 	state.fidgets = 0;
 }
 
+void cave_creature::InEditor(State& state, Body& body, const Frame& frame, const Random& random)
+{
+	// A button held for under a second and a half has it look at the pointer
+	if (frame.buttonHeld)
+	{
+		state.heldMs = state.heldMs.has_value() ? *state.heldMs + frame.milliseconds : 0.0f;
+	}
+	else
+	{
+		state.heldMs.reset();
+	}
+	if (state.heldMs.has_value() && *state.heldMs < k_PointerLookMs)
+	{
+		body.lookAt = frame.pointer;
+	}
+	else
+	{
+		body.lookAt.reset();
+	}
+	Fidget(state, body, frame, random);
+}
+
 std::optional<float> cave_creature::Step(State& state, Body& body, const Frame& frame, const Random& random)
 {
 	if (!frame.zoomed)
@@ -168,24 +190,7 @@ std::optional<float> cave_creature::Step(State& state, Body& body, const Frame& 
 			body.body = creature_layers::EndLoop(body.body);
 			state.wantedHeading = HeadingTowards(frame.focus, frame.eye);
 		}
-		// A button held for under a second and a half has it look at the pointer
-		if (frame.buttonHeld)
-		{
-			state.heldMs = state.heldMs.has_value() ? *state.heldMs + frame.milliseconds : 0.0f;
-		}
-		else
-		{
-			state.heldMs.reset();
-		}
-		if (state.heldMs.has_value() && *state.heldMs < k_PointerLookMs)
-		{
-			body.lookAt = frame.pointer;
-		}
-		else
-		{
-			body.lookAt.reset();
-		}
-		Fidget(state, body, frame, random);
+		InEditor(state, body, frame, random);
 	}
 	state.zoomed = frame.zoomed;
 

@@ -48,6 +48,18 @@ struct Request
 	glm::vec2 viewSize {0.0f};
 };
 
+/// The creature that the main menu's tattoo editor shows: a copy posed at the world's origin, seen by the editor's own
+/// camera over the dialogs' space on the window, with a depth of its own
+struct MenuCreature
+{
+	entt::entity copy {entt::null};
+	glm::mat4 view {1.0f};
+	glm::mat4 projection {1.0f};
+	/// Where the dialogs' space is on the window, in pixels: its top left corner and its size
+	glm::vec2 viewOrigin {0.0f};
+	glm::vec2 viewSize {0.0f};
+};
+
 /// The size of the interface's space, which the creatures are placed and sized in as the game placed them on its
 /// default screen
 constexpr glm::vec2 k_Space {800.0f, 600.0f};

@@ -6982,7 +6982,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       IsPointerCommand(kind);
+	       kind == Kind::OpenTattooMenu || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -7009,7 +7009,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-		constexpr std::array<std::string_view, 132> k_Names {
+	constexpr std::array<std::string_view, 133> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7140,6 +7140,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "set fizz",
 		    "check the profile folder",
 		    "give the player a picture of their own",
+		    "open the tattoo editor from the menu",
 		    "play custom music",
 		    "show the custom music controls",
 		};

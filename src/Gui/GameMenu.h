@@ -173,6 +173,10 @@ public:
 	void ShowPlayer(std::u16string_view creatureName, int symbol, const player_profiles::Settings& settings);
 	/// Edit Tattoo shows only while the creature can have its tattoo edited
 	void SetTattooAvailable(bool available);
+	/// Another dialog over the menu, as the tattoo editor from the Players page: the menu fades out while it stays
+	/// open, and fades back in as the dialog goes
+	void SetCovered(bool covered);
+	[[nodiscard]] bool IsCovered() const noexcept { return _covered; }
 	[[nodiscard]] std::optional<size_t> GetPickedPlayer() const noexcept { return _pickedPlayer; }
 	[[nodiscard]] const std::u16string& GetPlayerToDelete() const noexcept { return _playerToDelete; }
 	/// The player has picked another profile or lost the one played, so leaving the page starts the game again
@@ -285,6 +289,7 @@ private:
 	/// The profile the game was started as was deleted: leaving the page starts the game again
 	bool _mustRestart {false};
 	bool _tattooAvailable {false};
+	bool _covered {false};
 	std::optional<size_t> _pickedPlayer;
 	std::u16string _playerToDelete;
 	std::optional<PlayerEdits> _playerEdits;

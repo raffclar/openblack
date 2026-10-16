@@ -218,6 +218,7 @@
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
+#include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
@@ -249,10 +250,12 @@
 #include "Graphics/RendererInterface.h"
 #include "Graphics/TexelDepth.h"
 #include "Gui/Canvas.h"
+#include "Gui/DialogPainter.h"
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/GameInterface.h"
 #include "Gui/HandToolTips.h"
 #include "Gui/LoadingScreen.h"
+#include "Gui/ScreenFit.h"
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandBlend.h"
 #include "Hand/HandFeel.h"
@@ -2302,6 +2305,7 @@ bool Game::Update() noexcept
 		                              : std::nullopt);
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
+		UpdateTattooMenu(std::chrono::duration<float, std::milli>(deltaTime).count());
 		if (std::exchange(_restartRequested, false))
 		{
 			RestartForProfile();
@@ -4287,6 +4291,7 @@ bool Game::Run() noexcept
 			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
 			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, machine_clock::Ticks(),
 			                 Locator::debugGui::value().IsMouseOverWindow());
+			ShowTattooMenuCreature();
 		}
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
@@ -5055,15 +5060,68 @@ void Game::HandleInterfaceAction()
 		_interface->GetMenu().Close();
 		_restartRequested = true;
 		break;
+	case Action::EditTattoo:
+		// The profile is kept first, then the editor shows the profile's creature over the menu
+		if (Locator::tattooMenuSystem::has_value())
+		{
+			Locator::tattooMenuSystem::value().Open();
+		}
+		break;
 	case Action::StartSkirmish:
 	case Action::JoinOnline:
-	case Action::EditTattoo:
 	case Action::RedefineControl:
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "This part of the menu is not available yet");
 		break;
 	case Action::Continue:
 	case Action::None:
 		break;
+	}
+}
+
+void Game::UpdateTattooMenu(float milliseconds)
+{
+	if (!Locator::tattooMenuSystem::has_value() || !_interface)
+	{
+		return;
+	}
+	auto& tattooMenu = Locator::tattooMenuSystem::value();
+	auto& menu = _interface->GetMenu();
+	if (menu.IsOpen())
+	{
+		menu.SetTattooAvailable(tattooMenu.IsButtonShown(menu.IsRestartPending()));
+	}
+	else if (tattooMenu.IsOpen())
+	{
+		// The creature goes with the menu
+		tattooMenu.Close();
+	}
+	if (!tattooMenu.IsOpen() || !Locator::windowing::has_value())
+	{
+		return;
+	}
+	// The editor's view is the dialogs' space on the window, as the dialog is laid out
+	const auto size = Locator::windowing::value().GetSize();
+	const auto space = gui::FrontEndSpace(static_cast<int32_t>(size.x), static_cast<int32_t>(size.y));
+	const auto origin = space.ToScreen(glm::vec2(0.0f));
+	const auto corner = space.ToScreen(glm::vec2(gui::DialogPainter::k_Size));
+	const auto pointer = Locator::gameActionSystem::value().GetPointerPosition();
+	tattooMenu.Update(milliseconds, pointer, _interface->IsTattooEditorButtonHeld(), _interface->IsTattooEditorLeftHeld(),
+	                  {.origin = origin, .size = corner - origin});
+}
+
+void Game::ShowTattooMenuCreature() const
+{
+	if (!Locator::tattooMenuSystem::has_value() || !Locator::rendererInterface::has_value())
+	{
+		return;
+	}
+	if (const auto shown = Locator::tattooMenuSystem::value().GetShown(); shown.has_value())
+	{
+		Locator::rendererInterface::value().ShowMenuCreature({.copy = shown->copy,
+		                                                      .view = shown->view,
+		                                                      .projection = shown->projection,
+		                                                      .viewOrigin = shown->viewport.origin,
+		                                                      .viewSize = shown->viewport.size});
 	}
 }
 

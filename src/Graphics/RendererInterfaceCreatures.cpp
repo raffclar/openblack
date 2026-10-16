@@ -22,6 +22,7 @@
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -169,6 +170,94 @@ void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const Interface
 		drawBody(body.mesh, static_cast<uint32_t>(i), body.bones, body.targets.has_value() ? &*body.targets : nullptr,
 		         body.eyes.has_value() ? &*body.eyes : nullptr);
 	}
+}
+
+} // namespace openblack::graphics
+
+namespace openblack::graphics
+{
+
+void Renderer::ShowMenuCreature(interface_creatures::MenuCreature creature) noexcept
+{
+	_menuCreature = creature;
+}
+
+void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const
+{
+	// Each request shows for one frame of the scene only
+	const auto shown = *_menuCreature;
+	_menuCreature.reset();
+	if (shown.viewSize.x <= 0.0f || shown.viewSize.y <= 0.0f || !desc.entities.Valid(shown.copy))
+	{
+		return;
+	}
+	const auto* copy = desc.entities.TryGet<const ecs::components::CreatureCopy>(shown.copy);
+	const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(shown.copy);
+	const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(shown.copy);
+	if (copy == nullptr || transform == nullptr || !desc.entities.Valid(copy->creature))
+	{
+		return;
+	}
+	const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(copy->creature);
+	const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(copy->creature);
+	const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(copy->creature);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (mesh == nullptr || creature == nullptr || !meshes.Contains(mesh->id))
+	{
+		return;
+	}
+	const auto body = meshes.Handle(mesh->id);
+	const bool posed = animation != nullptr && animation->boneMatrices.size() == body->GetBoneMatrices().size();
+	const auto bones =
+	    posed ? std::span<const glm::mat4>(animation->boneMatrices) : std::span<const glm::mat4>(body->GetBoneMatrices());
+	if (bones.empty())
+	{
+		return;
+	}
+
+	// The editor's camera over the dialogs' space, with the depth cleared: the creature is drawn over the dialog and
+	// in front of nothing else
+	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::MenuCreature);
+	bgfx::setViewClear(viewId, BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
+	bgfx::setViewRect(viewId, static_cast<uint16_t>(shown.viewOrigin.x), static_cast<uint16_t>(shown.viewOrigin.y),
+	                  static_cast<uint16_t>(shown.viewSize.x), static_cast<uint16_t>(shown.viewSize.y));
+	bgfx::setViewTransform(viewId, &shown.view, &shown.projection);
+	bgfx::touch(viewId);
+
+	if (!_menuCreatureInstance.has_value())
+	{
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::TexCoord7, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord6, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord5, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord4, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
+		    .end();
+		_menuCreatureInstance = fromBgfx(bgfx::createDynamicVertexBuffer(1, layout));
+	}
+	const ecs::systems::RenderContext::ObjectInstance instance {
+	    .model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale)};
+	bgfx::update(toBgfx(*_menuCreatureInstance), 0, bgfx::copy(&instance, sizeof(instance)));
+
+	std::optional<L3DMeshSubmitDesc::MorphTargets> targets;
+	if (morph != nullptr)
+	{
+		const auto ids = creature_morph::MeshesOf(creature->species, morph->drawn,
+		                                          [&meshes](entt::id_type id) { return meshes.Contains(id); });
+		targets = L3DMeshSubmitDesc::MorphTargets {
+		    .meshes = {&*meshes.Handle(ids.evilGood), &*meshes.Handle(ids.thinFat), &*meshes.Handle(ids.weakStrong)},
+		    .weights = glm::abs(glm::vec3(morph->drawn.evilGood, morph->drawn.thinFat, morph->drawn.weakStrong)),
+		    .skins = {},
+		    .blendSeams = Locator::config::value().blendCreatureSeams,
+		};
+		if (const auto skins = _creatureSkins.find(copy->creature); skins != _creatureSkins.end())
+		{
+			targets->skins = skins->second.drawn;
+		}
+	}
+	const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(shown.copy);
+	drawBody(mesh->id, 0, bones, targets.has_value() ? &*targets : nullptr, eyes);
 }
 
 } // namespace openblack::graphics

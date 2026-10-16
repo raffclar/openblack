@@ -274,7 +274,7 @@ void TattooEditorDialog::Update(float deltaSeconds, ecs::systems::TattooEditorSy
 	_editor = nullptr;
 }
 
-void TattooEditorDialog::Draw(const DialogPainter& painter, std::optional<glm::ivec2> marker, uint32_t milliseconds) const
+void TattooEditorDialog::Draw(const DialogPainter& painter, uint32_t milliseconds) const
 {
 	const auto fade = std::clamp(_fade.GetValue(), 0.0f, 1.0f);
 	if (fade <= 0.0f)
@@ -291,10 +291,28 @@ void TattooEditorDialog::Draw(const DialogPainter& painter, std::optional<glm::i
 		symbol->milliseconds = milliseconds;
 	}
 	_dialog.Draw(painter, _open);
+	painter.SetAlpha(1.0f);
+}
+
+void TattooEditorDialog::DrawOverCreature(const DialogPainter& painter, std::optional<glm::ivec2> marker) const
+{
+	const auto fade = std::clamp(_fade.GetValue(), 0.0f, 1.0f);
+	if (fade <= 0.0f)
+	{
+		return;
+	}
+	painter.SetAlpha(fade);
 	if (marker.has_value())
 	{
 		const auto half = k_MarkerSize / 2;
 		painter.DrawSquare(*marker - half, k_MarkerSize, false, false, true);
+	}
+	for (const auto* symbol : _symbols)
+	{
+		if (symbol->IsDragging())
+		{
+			symbol->Draw(painter, true, true, false);
+		}
 	}
 	painter.SetAlpha(1.0f);
 }

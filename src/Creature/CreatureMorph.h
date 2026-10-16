@@ -27,6 +27,8 @@ struct Morph
 	float evilGood {0.0f};
 	float thinFat {0.0f};
 	float weakStrong {0.0f};
+
+	bool operator==(const Morph&) const = default;
 };
 
 /// The smallest and largest a creature can be drawn, and the largest it grows to by itself
