@@ -625,8 +625,8 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return oneShot.has_value() && oneShot->Is(creature_plan_actions::OneShotKind::RestoreHealth);
 	}
 	case Target::TemplePart:
-		// The temple of any player, or a worship site of any town
-		return registry.AllOf<Temple>(entity) || registry.AllOf<WorshipSite>(entity);
+		// The temple of any player, a worship site of any town or the altar at the head of a worship site
+		return registry.AnyOf<Temple, WorshipSite, WorshipAltar>(entity);
 	case Target::OneShotAggressive:
 	case Target::OneShotCompassionate:
 	case Target::OneShotPlayful:
@@ -868,6 +868,12 @@ std::optional<uint32_t> BeliefPlayerOf(const ecs::Registry& registry, entt::enti
 	if (const auto* site = registry.TryGet<const WorshipSite>(thing))
 	{
 		return PlayerNumberOf(site->player);
+	}
+	// An altar is of the player of its site's temple
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(thing))
+	{
+		const auto* site = registry.Valid(altar->site) ? registry.TryGet<const WorshipSite>(altar->site) : nullptr;
+		return PlayerNumberOf(site != nullptr ? site->player : PlayerNames::NEUTRAL);
 	}
 	if (const auto* spell = registry.TryGet<const ecs::components::Spell>(thing))
 	{
@@ -2128,9 +2134,8 @@ const GTotemStatueInfo* TotemStatueInfo(const ecs::Registry& registry, entt::ent
 bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing)
 {
 	const auto* belief = mind.beliefs.Find(thing);
-	const bool fixed =
-	    registry.AnyOf<Abode, Tree, Feature, Field, FishFarm, AnimatedStatic, Flowers, Temple, WorshipSite, VillageTotem>(
-	        thing);
+	const bool fixed = registry.AnyOf<Abode, Tree, Feature, Field, FishFarm, AnimatedStatic, Flowers, Temple, WorshipSite,
+	                                  WorshipAltar, VillageTotem>(thing);
 	return belief != nullptr && creature_object_beliefs::BlockedRecently(*belief, mind.turn, fixed);
 }
 
@@ -2139,9 +2144,8 @@ constexpr float k_MostCompassionToEatFrom = 0.1f;
 
 /// Whether a creature can act on a thing at all. The living and miracles can always have an action. A whole thing, a
 /// worship site and a thing without data cannot. Any other thing lets a creature act on it when its data says so. The
-/// temple here is one thing, which stands for its heart: the data of the heart says if a creature can act on it.
-// TODO(creature-belief-types-in-trees): the game also has the creature pens of a temple as parts that a creature can act
-// on. Here the pens are not things of their own.
+/// temple here is one thing, which stands for its heart: the data of the heart says if a creature can act on it. The
+/// altar of a worship site has the data of its site. The shipped lands make no creature pen as a thing of its own.
 bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
 {
 	if (registry.AnyOf<Villager, Animal, Creature, ecs::components::Spell>(thing))
@@ -2152,6 +2156,11 @@ bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
 	{
 		return Locator::infoConstants::has_value() &&
 		       Locator::infoConstants::value().citadelHeart.canCreatureInteractWithMe != 0;
+	}
+	if (registry.AllOf<WorshipAltar>(thing))
+	{
+		const auto* info = mind_detail::AltarInfoOf(registry, thing);
+		return info != nullptr && info->canCreatureInteractWithMe != 0;
 	}
 	if (registry.AnyOf<WorshipSite, Town, Flock, ForestTurns>(thing))
 	{
@@ -2194,7 +2203,7 @@ bool Frightens(AnimalInfo type)
 }
 
 /// The data that tells if a creature can act on a thing. A field has the data of its town's field building, a village
-/// totem the data of its statue, and the temple the data of its heart.
+/// totem the data of its statue, the temple the data of its heart, and the altar of a worship site the data of its site.
 const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thing)
 {
 	if (!Locator::infoConstants::has_value())
@@ -2205,6 +2214,10 @@ const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thin
 	if (registry.AllOf<Temple>(thing))
 	{
 		return &info.citadelHeart;
+	}
+	if (registry.AllOf<WorshipAltar>(thing))
+	{
+		return mind_detail::AltarInfoOf(registry, thing);
 	}
 	if (registry.AllOf<Field>(thing))
 	{
@@ -2271,7 +2284,7 @@ creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity
 	{
 		return Thing::TotemStatue;
 	}
-	if (registry.AnyOf<Abode, Temple, WorshipSite, Feature, AnimatedStatic, Flowers, BigForest>(thing))
+	if (registry.AnyOf<Abode, Temple, WorshipSite, WorshipAltar, Feature, AnimatedStatic, Flowers, BigForest>(thing))
 	{
 		return Thing::Building;
 	}
@@ -4096,7 +4109,7 @@ creature_watching::MimicKind MimicKindOf(const ecs::Registry& registry, entt::en
 	{
 		facts.kind = Class::Creature;
 	}
-	else if (registry.AnyOf<WorshipSite, VillageTotem, FishFarm, Temple, Town>(thing))
+	else if (registry.AnyOf<WorshipSite, WorshipAltar, VillageTotem, FishFarm, Temple, Town>(thing))
 	{
 		facts.kind = Class::Other;
 	}
