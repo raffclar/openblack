@@ -155,13 +155,24 @@ glm::vec2 animals::FormationGoal(glm::vec2 leader, glm::vec2 follower, Formation
 	return {map_coords::ToMetres(map_coords::ToFixedGUtils(x)), map_coords::ToMetres(map_coords::ToFixedGUtils(z))};
 }
 
-bool animals::DeadBodyGoes(int32_t& turnsLeft, bool scriptControlled)
+bool animals::DeadBodyGoes(int16_t& turnsLeft, bool scriptControlled)
 {
 	if (scriptControlled)
 	{
 		return false;
 	}
-	return turnsLeft-- == 0;
+	const bool goes = turnsLeft == 0;
+	turnsLeft = static_cast<int16_t>(static_cast<uint16_t>(turnsLeft) - 1u);
+	return goes;
+}
+
+bool animals::TakesOwnTurn(const AnimalHolders& holders, bool dyingOrDead)
+{
+	if (holders.tornado || holders.playersHand || holders.physics)
+	{
+		return false;
+	}
+	return !holders.creature || dyingOrDead;
 }
 
 glm::vec3 animals::DeadBodySmokePlace(const glm::vec3& position, float heading, float height)

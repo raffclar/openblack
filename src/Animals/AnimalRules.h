@@ -84,14 +84,28 @@ struct ReactionFacts
 }
 
 /// A killed animal lies dead this many turns, and one more, before it goes
-inline constexpr int32_t k_TurnsToDieOver = 600;
+inline constexpr int16_t k_TurnsToDieOver = 600;
 /// The clip a kind of animal falls dead with, and the one it then lies dead in, once killed; none where its kind keeps
 /// the clip it had. A farm animal lies dead on its right side only when it last came down on its right side
 [[nodiscard]] std::optional<AnimId> DyingClip(AnimalInfo type);
 [[nodiscard]] std::optional<AnimId> DeadClip(AnimalInfo type, bool onRightSide);
 /// A turn of a body lying dead: whether it goes now. Its turns left count down to none, then it goes; a body a script
-/// controls never counts down and lies there until the script lets it go
-[[nodiscard]] bool DeadBodyGoes(int32_t& turnsLeft, bool scriptControlled);
+/// controls never counts down and lies there until the script lets it go. The count is the animal's count of turns,
+/// which goes from its lowest value to its highest value: a body with a count below none lies until the count comes
+/// round to none.
+[[nodiscard]] bool DeadBodyGoes(int16_t& turnsLeft, bool scriptControlled);
+
+/// Who holds an animal or moves it this turn
+struct AnimalHolders
+{
+	bool tornado {false};
+	bool playersHand {false};
+	bool creature {false};
+	bool physics {false};
+};
+/// Whether an animal takes its own turn: not while a tornado, the player's hand or the physics moves it. In a creature's
+/// hand it takes its turn only while it dies or lies dead, so that it falls and its body goes there.
+[[nodiscard]] bool TakesOwnTurn(const AnimalHolders& holders, bool dyingOrDead);
 /// A body going leaves a grey puff of smoke this big, half its height out along the way it faces from where it lies
 inline constexpr float k_DeadBodySmokeSize = 1.0f;
 [[nodiscard]] glm::vec3 DeadBodySmokePlace(const glm::vec3& position, float heading, float height);

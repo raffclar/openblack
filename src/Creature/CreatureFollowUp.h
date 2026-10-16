@@ -95,4 +95,21 @@ struct Feelings
 [[nodiscard]] std::optional<uint32_t> ThingToDoAgainTo(bool actsOnThing, uint32_t self,
                                                        std::span<const creature_planner::ObjectCandidate> sameKind);
 
+/// A thing that the creature believes in, as the creature looks for a thing to do an action again to
+struct DoAgainThing
+{
+	/// It is of the same kind as the thing that the creature acted on
+	bool sameKind {false};
+	/// The result of the action's own test of the thing; none when the action has no test
+	std::optional<bool> passesTest;
+	/// The action must not act on a thing that the creature holds
+	bool notWhatItHolds {false};
+	/// The creature holds the thing
+	bool heldByItself {false};
+};
+
+/// Whether the creature can do the action again to the thing: a thing of the same kind that the action's test accepts.
+/// An action with no test accepts all things of that kind.
+[[nodiscard]] bool SuitsDoAgain(const DoAgainThing& thing);
+
 } // namespace openblack::creature_follow_up
