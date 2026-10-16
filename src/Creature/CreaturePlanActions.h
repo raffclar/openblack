@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureDrink.h"
 #include "Creature/CreatureIdleMind.h"
 
@@ -46,6 +47,8 @@ enum class Target : uint8_t
 	Living,
 	/// A creature that is not dead or lying out cold, to fight
 	FightableCreature,
+	/// A creature that seems friendly, to amuse with a spell
+	FriendlyCreature,
 	/// What frightens creatures: other creatures, bats, vultures and lions, and miracles
 	Frightening,
 	/// Anything at all it can see
@@ -194,6 +197,8 @@ enum class Build : uint8_t
 	CastShield,
 	CastWaterOnItself,
 	CastToImpress,
+	/// The creature casts a spell that it picks at random to amuse another creature
+	CastAmusing,
 	/// The creature casts a forest at the place where a villager is when it makes the agenda
 	CastForest,
 	/// The creature casts water at the tree that it uses, for a town
@@ -582,6 +587,8 @@ struct CastInfo
 	std::optional<glm::vec2> clearArea;
 	/// Where the thing is at the time the creature makes the agenda, for a miracle that goes to a place
 	std::optional<glm::vec3> place;
+	/// To amuse another creature: the spells on creatures that it knows and can pay for, in the order of their types
+	std::vector<creature_mind::AmusingSpell> amusingSpells;
 };
 /// Whether an action casts a miracle
 [[nodiscard]] bool IsCast(const Executor& executor);

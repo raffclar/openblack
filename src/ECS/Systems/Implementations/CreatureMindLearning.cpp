@@ -433,6 +433,9 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		// A dead creature, or one that lies out cold, is not fought
 		return registry.AllOf<Creature>(entity) && Locator::creatureMindSystem::has_value() &&
 		       !Locator::creatureMindSystem::value().IsLyingDead(entity);
+	case Target::FriendlyCreature:
+		return registry.AllOf<Creature>(entity) && Locator::creatureMindSystem::has_value() &&
+		       Locator::creatureMindSystem::value().SeemsFriendly(self, entity);
 	case Target::Living:
 		return registry.AllOf<Villager>(entity) || registry.AllOf<Creature>(entity);
 	case Target::Frightening:
