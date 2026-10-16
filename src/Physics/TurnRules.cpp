@@ -149,6 +149,10 @@ turn::CellRange turn::WakeCells(glm::vec3 centre, glm::vec3 velocity, float radi
 
 float turn::DustPuffSize(const DustPuff& puff)
 {
+	if (puff.kind == PuffKind::Blood)
+	{
+		return puff.size;
+	}
 	const float life = PuffLife(puff.kind);
 	if (IsAdditive(puff.kind))
 	{
@@ -169,6 +173,10 @@ float turn::DustPuffSize(const DustPuff& puff)
 
 int32_t turn::DustPuffFrame(const DustPuff& puff)
 {
+	if (puff.kind == PuffKind::Blood)
+	{
+		return k_BloodFirstFrame + (puff.variant & 7);
+	}
 	if (IsAdditive(puff.kind))
 	{
 		const auto frame = (puff.variant + static_cast<int32_t>(puff.age * 8.0f)) & 15;
@@ -186,6 +194,39 @@ bool turn::AdvanceDustPuff(DustPuff& puff, float seconds)
 		return false;
 	}
 	puff.position += puff.velocity * seconds;
+	return true;
+}
+
+bool turn::AdvanceBloodDrop(DustPuff& drop, float seconds, const std::function<float(glm::vec2)>& landHeight,
+                            const std::function<int32_t()>& draw)
+{
+	drop.age += seconds;
+	if (drop.age > k_BloodLife)
+	{
+		return false;
+	}
+	if (drop.onLand)
+	{
+		drop.velocity *= std::pow(k_BloodSlideKeptPerSecond, seconds);
+		drop.position += drop.velocity * seconds;
+		drop.position.y = landHeight({drop.position.x, drop.position.z});
+		return true;
+	}
+	drop.velocity.y -= seconds * k_BloodGravity;
+	drop.position += drop.velocity * seconds;
+	const auto land = landHeight({drop.position.x, drop.position.z});
+	if (drop.position.y <= land)
+	{
+		// It starts to slide, and lives its full time again from now
+		const auto perDraw = drop.size * k_BloodSlidePerDraw;
+		const auto least = drop.size * k_BloodSlideLeast;
+		drop.velocity.x = static_cast<float>(draw() % 100) * perDraw - least;
+		drop.velocity.y = 0.0f;
+		drop.age = 0.0f;
+		drop.onLand = true;
+		drop.position.y = land;
+		drop.velocity.z = static_cast<float>(draw() % 100) * perDraw - least;
+	}
 	return true;
 }
 

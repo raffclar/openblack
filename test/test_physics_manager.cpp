@@ -487,6 +487,43 @@ TEST(PhysicsTurn, DustPuffsGrowThenShrinkOverASecond)
 	EXPECT_FLOAT_EQ(turn::LandingPuffSize(10.0f), 5.0f);
 }
 
+TEST(PhysicsTurn, BloodFallsThenSlidesOnTheLand)
+{
+	turn::DustPuff drop {
+	    .position = {0.0f, 1.0f, 0.0f}, .velocity = {2.0f, 0.0f, 0.0f}, .size = 0.5f, .kind = turn::PuffKind::Blood};
+	const auto land = [](glm::vec2 /*xz*/) { return 0.0f; };
+	int32_t draws = 0;
+	const auto draw = [&draws]() {
+		++draws;
+		return draws == 1 ? 150 : 20;
+	};
+	EXPECT_FLOAT_EQ(turn::DustPuffSize(drop), 0.5f);
+	drop.variant = 13;
+	EXPECT_EQ(turn::DustPuffFrame(drop), 32 + 5);
+	// It falls under gravity and stays in the air
+	EXPECT_TRUE(turn::AdvanceBloodDrop(drop, 0.1f, land, draw));
+	EXPECT_FLOAT_EQ(drop.velocity.y, -0.981f);
+	EXPECT_FLOAT_EQ(drop.position.x, 0.2f);
+	EXPECT_FALSE(drop.onLand);
+	EXPECT_EQ(draws, 0);
+	// It meets the land: it lies on it, lives anew and slides by two draws of 0 to 99
+	EXPECT_TRUE(turn::AdvanceBloodDrop(drop, 1.0f, land, draw));
+	EXPECT_TRUE(drop.onLand);
+	EXPECT_FLOAT_EQ(drop.position.y, 0.0f);
+	EXPECT_FLOAT_EQ(drop.age, 0.0f);
+	EXPECT_FLOAT_EQ(drop.velocity.x, 50.0f * 0.3f - 15.0f);
+	EXPECT_FLOAT_EQ(drop.velocity.z, 20.0f * 0.3f - 15.0f);
+	EXPECT_FLOAT_EQ(drop.velocity.y, 0.0f);
+	// On the land it keeps a quarter of its speed each second
+	const auto z = drop.position.z;
+	EXPECT_TRUE(turn::AdvanceBloodDrop(drop, 1.0f, land, draw));
+	EXPECT_FLOAT_EQ(drop.velocity.z, -9.0f * 0.25f);
+	EXPECT_FLOAT_EQ(drop.position.z, z - 2.25f);
+	// Three seconds after it met the land it is gone
+	EXPECT_TRUE(turn::AdvanceBloodDrop(drop, 2.0f, land, draw));
+	EXPECT_FALSE(turn::AdvanceBloodDrop(drop, 0.5f, land, draw));
+}
+
 TEST(PhysicsTurn, ColoursBlendTowardsAnotherKeepingTheirAlpha)
 {
 	EXPECT_EQ(turn::BlendColour(0x50806040u, 0xFFFFFFFFu, 0), 0x50806040u);

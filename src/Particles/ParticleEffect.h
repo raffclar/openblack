@@ -529,6 +529,8 @@ struct Creator
 	/// Adds to what is behind rather than blending over it
 	bool additive {true};
 	bool writeDepth {false};
+	/// Keeps only what passes the alpha test, of the texture's own alpha, and writes depth; it ignores the two above
+	bool alphaTest {false};
 	/// The drawn alpha is multiplied by this over 255
 	int scaleAlpha {255};
 	/// The height over the width

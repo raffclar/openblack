@@ -17,6 +17,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <vector>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -417,12 +418,11 @@ struct Hit
 	size_t plainRecoil;
 };
 [[nodiscard]] Hit ResolveBlow(const Blow& blow, RecoilDirection direction);
-/// A blow this near the middle of the body, in shares of its half width and half height, throws it straight back
-constexpr float k_PlainRecoilWithin = 0.25f;
-/// Which way a blow throws the body, by where it lands from the middle of the victim's body: x to its right as a share
-/// of its half width, y up as a share of its half height. Off to a side it reels right or left, high or low it reels
-/// by its top or bottom version; which of those the game means isn't known, so high is taken as top.
-[[nodiscard]] RecoilDirection RecoilDirectionOf(glm::vec2 offset);
+/// Which way a blow throws the body, by the swing of the attacker's striking bone as the blow lands, in the attacker's
+/// mesh space (ahead is -z). A swing that goes more ahead than across and up or down throws the body straight back. A
+/// swing that goes more across than up or down reels it: to -x gives the right reel, to +x the left reel. Else a swing
+/// down gives the top reel and a swing up the bottom reel.
+[[nodiscard]] RecoilDirection RecoilDirectionOf(const glm::vec3& swing);
 /// The wobble played on top of the body after a blow: high or low, side to side or front to back
 [[nodiscard]] size_t WobbleAnimation(Band band, bool sideways);
 /// Which step an animation is, if it is one
@@ -517,9 +517,8 @@ struct Fighter
 	bool mirrored {false};
 	/// The last action that it started: a blow, a step, a reel, or the reel in a block. It stays after the action ends.
 	size_t lastAction {0};
-	/// A blow that is the special move, and whether it has landed yet
+	/// A blow that is the special move
 	bool special {false};
-	bool landed {false};
 	/// The spell being cast
 	std::optional<uint32_t> spell;
 	/// Its fight was called off: it finishes the move under way, then finishes and stands
@@ -600,13 +599,78 @@ struct Choice
 
 // Choosing the blow
 
-/// One of the creature's blows as it lands: how far ahead of the creature it reaches and how high, in the world
+/// One of the creature's blows as it lands: how far ahead of the creature it reaches and how high, in the world, and
+/// the swing of its striking bone in the creature's mesh space
 struct Reach
 {
 	size_t animation;
 	float reach;
 	float height;
+	glm::vec3 swing {0.0f};
 };
+
+// How blows are measured and how they land
+
+/// A blow is measured only when it lands at least this late in its animation. Its swing is how far the striking bone
+/// moves over that time before it lands, times 20: its speed in units a second.
+constexpr float k_LeastLandMs = 50.0f;
+constexpr float k_SwingPerSecond = 20.0f;
+/// Where a blow lands and how it swings, in the attacker's mesh space with ahead being -z
+struct BlowShape
+{
+	/// The striking bone as the blow lands, carried ahead as far as the root travels until then and taken to the
+	/// middle, neither to the left nor to the right
+	glm::vec3 point;
+	glm::vec3 swing;
+};
+/// The shape of a blow from its striking bone as it lands and the land time before that. rootTravel is how far the
+/// whole animation carries the root along z.
+[[nodiscard]] BlowShape ShapeOfBlow(const glm::vec3& boneAtLand, const glm::vec3& boneBefore, float landMs, float durationMs,
+                                    float rootTravel);
+/// How high a blow lands as a share of the victim's height: how high the blow reaches over the attacker's feet over
+/// how high the victim's head is over the land under it
+[[nodiscard]] float HeightShareOf(float blowHeight, float headHeight);
+/// Each game turn a blow is tested at thirty times through a span of the animation from where it was at the turn
+/// before. The span is the turn's time scaled down for a bigger creature, (1.6 - 0.425 size) of it, in whole
+/// milliseconds.
+constexpr int32_t k_BlowTests = 30;
+[[nodiscard]] int32_t TestSpanMs(float turnMs, float size);
+/// Only the tests within 0.6 of that span of the blow's land time, either way, count, in whole milliseconds
+[[nodiscard]] int32_t TestWindowMs(int32_t spanMs);
+/// The animation times a blow is tested at in a turn, from the time at the turn before, that fall within the window
+[[nodiscard]] std::vector<int32_t> BlowTestTimes(int32_t fromMs, int32_t spanMs, int32_t landMs);
+/// At each test, five lines go from the attacker's groin. The first goes to the striking bone moved along its swing
+/// since the last test by the blow's reach, the others to points that far to either side of the bone and above and
+/// below it, across the swing. A swing of no length moves none of them.
+[[nodiscard]] std::array<glm::vec3, 5> BlowTestPoints(const glm::vec3& bone, const glm::vec3& boneBefore, float reach);
+/// The blow's reach about the bone: a fifth of the attacker's height, twice that for the special move
+[[nodiscard]] float BlowTestReach(float attackerSize, bool special);
+/// At each test a faint white puff marks the striking bone, still, twice the attacker's size across, four times for the
+/// special move. It lives as dust does.
+constexpr uint32_t k_SwingPuffColour = 0x30FFFFFFu;
+[[nodiscard]] float SwingPuffSize(float attackerSize, bool special);
+/// Where the blow meets the victim's body, its vector is the striking bone's movement since the last test, times 150
+constexpr float k_BlowVectorScale = 150.0f;
+/// Where a blow lands, 40 drops of blood fly unless the victim blocks, then 8 puffs of dust whether it blocks or not.
+/// Each one flies along the blow's vector, plus a spread along each axis of -25 to 25 of a step. The blood's step is a
+/// hundredth of the vector's length; the dust flies at a quarter of the vector, with 0.6 of the blood's step.
+constexpr int32_t k_BloodDrops = 40;
+constexpr int32_t k_BlowDustPuffs = 8;
+constexpr float k_BloodSpreadShare = 0.01f;
+constexpr float k_DustVectorShare = 0.25f;
+constexpr float k_DustSpreadShare = 0.6f;
+/// The blood is one of three colours at random, a tenth of the victim's size across; the dust is pale sand, seven
+/// times the attacker's size across
+constexpr std::array<uint32_t, 3> k_BloodColours {0xFF960014u, 0xFF781414u, 0xFF502800u};
+constexpr float k_BloodSizePerSize = 0.1f;
+constexpr uint32_t k_BlowDustColour = 0x30F0C070u;
+constexpr float k_BlowDustSizePerSize = 7.0f;
+/// Each game turn a drip of blood moves this far down, then back onto the skin
+constexpr float k_DripFallPerTurn = 0.012f;
+/// The spread step of the blood from the blow's vector
+[[nodiscard]] float BloodSpreadStep(const glm::vec3& blowVector);
+/// How one drop or puff flies: the vector plus, along each axis, a draw of 0 to 50 less 25, times the step
+[[nodiscard]] glm::vec3 SprayVelocity(const glm::vec3& vector, float step, const glm::ivec3& draws);
 /// The blow to strike, or the step to take first
 struct AttackChoice
 {
