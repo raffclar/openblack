@@ -66,6 +66,9 @@ struct CreatureLeash
 		std::optional<HeldRopes> held;
 	};
 	std::optional<Worn> worn;
+	/// Whether a leash put on makes the creature do anything, as scripts set. It is kept while no leash is on, and a
+	/// leash put on takes it.
+	bool leashWorks {true};
 	/// The leash picked to put on next, at the citadel or by the hotkeys
 	LeashType selected {LeashType::Rope};
 	/// The scripts' switch for the leashes, off while a script has the camera. It hides nothing alone: it lets the

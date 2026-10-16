@@ -105,6 +105,11 @@ std::optional<Desire> creature_leash::ForcedDesireFor(LeashType type)
 	return std::nullopt;
 }
 
+bool creature_leash::TakingOffEndsDominantDesire(LeashType chosen)
+{
+	return chosen != LeashType::Rope;
+}
+
 bool creature_leash::ImpressesTown(const TiedTown& town)
 {
 	if (town.leash == LeashType::Evil || town.impressing)

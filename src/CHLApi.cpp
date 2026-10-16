@@ -84,6 +84,7 @@
 #include "ECS/Components/ChallengePicture.h"
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -245,6 +246,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptCreateRules.h"
+#include "ScriptHeaders/ScriptCreatureRules.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptNameLists.h"
@@ -2238,6 +2240,13 @@ void SetPosition() // 024 SET_POSITION
 				return;
 			}
 			Locator::creatureLocomotionSystem::value().Place(object, position);
+			// Its head looks straight ahead again, at nothing
+			if (auto* animation = registry.TryGet<ecs::components::CreatureAnimation>(object))
+			{
+				animation->lookAt.reset();
+				animation->yaw = {};
+				animation->pitch = {};
+			}
 			return;
 		}
 		auto* transform = registry.TryGet<Transform>(object);
@@ -3877,8 +3886,10 @@ void CreatureCreateRelativeToCreature() // 069 CREATURE_CREATE_RELATIVE_TO_CREAT
 {
 	// A new creature of the species given, made from another: as big and as strong as that one times the scale, standing
 	// on the ground where the script says. It belongs to the first player who has no creature of their own.
-	// TODO(guide-and-ogre-natives): the game also keeps it out of the land's reactions until a script lets it react, and
-	// starts its body's strength from the other creature's look rather than its own species'; openblack keeps neither
+	// It takes no notice of reactions until a script tells it to.
+	// TODO(creature-script-natives): the game also starts how strong its body looks from how strong the other creature's
+	// body looks, times the scale (or divided by it when weak), from none to fully strong, until its strength next
+	// changes. openblack works out the look from the strength each time, so it can't keep that.
 	const auto type = Pop().intVal;
 	const auto position = PopVec();
 	const auto scale = Popf();
@@ -3916,6 +3927,10 @@ void CreatureCreateRelativeToCreature() // 069 CREATURE_CREATE_RELATIVE_TO_CREAT
 	const auto ground = Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z));
 	const auto created = ecs::archetypes::CreatureArchetype::Create({position.x, ground, position.z}, owner, *species, 0, 0.0f,
 	                                                                copied.size, body);
+	if (!registry.AllOf<ecs::components::CreatureReactionsOff>(created))
+	{
+		registry.Assign<ecs::components::CreatureReactionsOff>(created);
+	}
 	RegisterCreated(created);
 	PushObject(created);
 }
@@ -5628,13 +5643,39 @@ void AttachObjectLeashToHand() // 186 ATTACH_OBJECT_LEASH_TO_HAND
 
 void DetachObjectLeash() // 187 DETACH_OBJECT_LEASH
 {
+	// The creature's player lets go of the leash. With no leash on, the creature is still freed from the area it is kept
+	// in, and from a desire made dominant unless its player has chosen the learning leash.
 	const auto creature = PopObject();
-	if (!Locator::leashSystem::has_value())
+	auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature))
 	{
+		ScriptMessage("Thing for leash not found!");
 		return;
 	}
-	auto& leashes = Locator::leashSystem::value();
-	leashes.TakeOff(creature);
+	const auto* body = registry.TryGet<const ecs::components::Creature>(creature);
+	if (body == nullptr)
+	{
+		ScriptMessage("Thing for leash not creature!");
+		return;
+	}
+	if (body->owner == PlayerNames::NEUTRAL)
+	{
+		ScriptMessage("Creature no player!");
+		return;
+	}
+	if (Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(creature))
+	{
+		Locator::leashSystem::value().TakeOff(creature);
+		return;
+	}
+	if (auto* leash = registry.TryGet<ecs::components::CreatureLeash>(creature))
+	{
+		leash->confinementRadius = 0.0f;
+		if (creature_leash::TakingOffEndsDominantDesire(leash->selected) && Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().EndDominantDesire(creature);
+		}
+	}
 }
 
 /// The creature a creature native is given, if it is one; else the game's complaint
@@ -6216,8 +6257,9 @@ void GameSubType() // 221 GAME_SUB_TYPE
 
 void IsLeashed() // 222 IS_LEASHED
 {
-	const auto object = PopObject();
-	Pushb(Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(object));
+	// Whether its player's leash is on it; anything but a creature is not leashed
+	const auto creature = CreatureForNative(PopObject());
+	Pushb(creature.has_value() && Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(*creature));
 }
 
 void SetCreatureHome() // 223 SET_CREATURE_HOME
@@ -6677,14 +6719,14 @@ void GetHelp() // 248 GET_HELP
 
 void SetLeashWorks() // 249 SET_LEASH_WORKS
 {
-	const auto creature = PopObject();
+	// The switch is kept for the next leash put on when no leash is on now
+	const auto creature = CreatureForNative(PopObject());
 	const auto enable = Pop().intVal != 0;
-	if (!Locator::leashSystem::has_value())
+	if (!creature.has_value() || !Locator::leashSystem::has_value())
 	{
 		return;
 	}
-	auto& leashes = Locator::leashSystem::value();
-	leashes.SetWorks(creature, enable);
+	Locator::leashSystem::value().SetWorks(*creature, enable);
 }
 
 /// Debug quickstart: the Cow is made where the creature choice makes the chosen creature (its home in the glade), and
@@ -6976,9 +7018,36 @@ void GetArsePosition() // 268 GET_ARSE_POSITION
 
 void IsLeashedToObject() // 269 IS_LEASHED_TO_OBJECT
 {
+	// Whether the creature's leash is tied to the other thing. Either of the two may be the creature: the first given is
+	// taken when both are creatures.
 	const auto target = PopObject();
 	const auto object = PopObject();
-	Pushb(Locator::leashSystem::has_value() && Locator::leashSystem::value().TiedTo(object) == target);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto valid = [&registry](entt::entity thing) { return thing != entt::null && registry.Valid(thing); };
+	if (!valid(object) || !valid(target))
+	{
+		ScriptMessage("Thing not found!");
+		Pushb(false);
+		return;
+	}
+	using script::creature_rules::LeashedPair;
+	const auto pair = script::creature_rules::WhichIsLeashed(registry.AllOf<ecs::components::Creature>(object),
+	                                                         registry.AllOf<ecs::components::Creature>(target));
+	if (pair == LeashedPair::Neither)
+	{
+		ScriptMessage("Thing not creature!");
+		Pushb(false);
+		return;
+	}
+	const auto creature = pair == LeashedPair::FirstIsCreature ? object : target;
+	const auto other = pair == LeashedPair::FirstIsCreature ? target : object;
+	if (registry.Get<const ecs::components::Creature>(creature).owner == PlayerNames::NEUTRAL)
+	{
+		ScriptMessage("No player for leash");
+		Pushb(false);
+		return;
+	}
+	Pushb(Locator::leashSystem::has_value() && Locator::leashSystem::value().TiedTo(creature) == other);
 }
 
 void GetInteractionMagnitude() // 270 GET_INTERACTION_MAGNITUDE
@@ -7071,10 +7140,31 @@ void GetActionCount() // 274 GET_ACTION_COUNT
 
 void GetObjectLeashType() // 275 GET_OBJECT_LEASH_TYPE
 {
+	// The leash the creature's player has picked on the temple, whatever the creature wears: -1 when none is picked, and
+	// 0 when the player has no leashes on a temple
 	const auto object = PopObject();
-	// The scripts count no leash as 0
-	const auto type = Locator::leashSystem::has_value() ? Locator::leashSystem::value().TypeOf(object) : LeashType::None;
-	Pushi(type == LeashType::None ? 0 : static_cast<int32_t>(type));
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("No creature");
+		Pushi(0);
+		return;
+	}
+	const auto* body = registry.TryGet<const ecs::components::Creature>(object);
+	if (body == nullptr)
+	{
+		ScriptMessage("Not creature");
+		Pushi(0);
+		return;
+	}
+	std::vector<script::creature_rules::LeashPostState> posts;
+	registry.Each<const ecs::components::LeashPost>([&posts, body](const ecs::components::LeashPost& post) {
+		if (post.owner == body->owner)
+		{
+			posts.push_back({.type = post.type, .selected = post.selected});
+		}
+	});
+	Pushi(script::creature_rules::LeashTypeForScripts(posts));
 }
 
 /// The thing a following command is given, and the script's camera, each complained of when missing
@@ -7689,20 +7779,35 @@ void SetHurtByFire() // 321 SET_HURT_BY_FIRE
 
 void ConfinedObject() // 322 CONFINED_OBJECT
 {
-	// const auto unk4 = Pop().intVal;
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature is kept within the radius of the point, on the ground, while no working leash is on it
+	const auto radius = Popf();
+	const auto point = PopVec();
+	const auto creature = CreatureForNative(PopObject());
+	if (!creature.has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& leash = registry.TryGet<ecs::components::CreatureLeash>(*creature) != nullptr
+	                  ? registry.Get<ecs::components::CreatureLeash>(*creature)
+	                  : registry.Assign<ecs::components::CreatureLeash>(*creature);
+	const auto area = script::creature_rules::ConfinementFor(point, radius);
+	leash.confinementCentre = area.centre;
+	leash.confinementRadius = area.radius;
 }
 
 void ClearConfinedObject() // 323 CLEAR_CONFINED_OBJECT
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature is free of the area it is kept in
+	const auto creature = CreatureForNative(PopObject());
+	if (!creature.has_value())
+	{
+		return;
+	}
+	if (auto* leash = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureLeash>(*creature))
+	{
+		leash->confinementRadius = 0.0f;
+	}
 }
 
 void GetObjectFlock() // 324 GET_OBJECT_FLOCK
@@ -8014,9 +8119,15 @@ void EnableDisableComputerPlayer345() // 345 ENABLE_DISABLE_COMPUTER_PLAYER
 
 void ClearActorMind() // 346 CLEAR_ACTOR_MIND
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The game asks for a town here, but then clears what a villager keeps of a script's wander or animation, on any
+	// thing it gets (vanilla bugs 298). openblack keeps none of that apart from the villager's state, so nothing is
+	// cleared. A creature's mind is never touched.
+	const auto thing = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (thing == entt::null || !registry.Valid(thing) || !registry.AllOf<ecs::components::Town>(thing))
+	{
+		ScriptMessage("Thing not valid");
+	}
 }
 
 void EnterExitCitadel() // 347 ENTER_EXIT_CITADEL

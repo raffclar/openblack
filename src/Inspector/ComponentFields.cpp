@@ -723,6 +723,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreatureLeash>(context)
 	    .Field<&components::CreatureLeash::known>("known")
 	    .Field<&components::CreatureLeash::worn>("worn")
+	    .Field<&components::CreatureLeash::leashWorks>("leashWorks")
 	    .Field<&components::CreatureLeash::selected>("selected")
 	    .Field<&components::CreatureLeash::drawn>("drawn")
 	    .Field<&components::CreatureLeash::confinementCentre>("confinementCentre")
