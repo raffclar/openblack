@@ -18,6 +18,7 @@
 #include <limits>
 #include <numbers>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -34,6 +35,7 @@
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAnimation.h"
+#include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureGiving.h"
@@ -136,8 +138,6 @@ namespace
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 /// The meshes look back along their z axis: ahead is -z
 constexpr glm::vec3 k_MeshBack {0.0f, 0.0f, 1.0f};
-/// It walks or turns this many times to get something in reach before giving up
-constexpr uint32_t k_ReachAttempts = 4;
 /// Turning to face what it throws at or points at, it tries this many times
 constexpr uint32_t k_TurnAttempts = 2;
 /// Walking up to something it walks to within this share of the distance to the middle of its reach, and stops no
@@ -888,6 +888,13 @@ glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points
 	return from + best.value_or(towards);
 }
 
+/// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off
+bool OnTheMap(const ecs::Registry& registry, entt::entity thing)
+{
+	return registry.AllOf<MapCellResident>(thing) &&
+	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
+}
+
 /// One game turn of walking or turning up to what the creature acts on
 void Approach(entt::entity creature, CreatureObjectAction& action, const Creature& body, const Transform& transform,
               CreatureAnimation& animation, const CreatureHeldObject* held)
@@ -901,6 +908,14 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	{
 		locomotion.Stop(creature);
 		Fail(action, "it can't be picked up", creature_object_actions::Failure::NoWay);
+		return;
+	}
+	// On each turn of the walk, a thing that is no longer on the map stops the stomp and the walk
+	if (action.kind == Kind::Destroy && action.target.has_value() && registry.Valid(*action.target) &&
+	    !OnTheMap(registry, *action.target))
+	{
+		locomotion.Stop(creature);
+		Fail(action, "it is not on the map", creature_object_actions::Failure::NoWay);
 		return;
 	}
 	if (locomotion.IsMoving(creature))
@@ -920,6 +935,19 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		Fail(action, "it found no route", creature_object_actions::Failure::NoRoute);
 		return;
 	}
+	// The walk stopped because the creature is shut in. In the game, the creature clears the way at the moment that the
+	// walk stops, and the step starts a new walk only on its next turn. Here the mind finds the stop on its next turn,
+	// so the hands wait for that turn. Then the cleared way or the new walk starts on the same turn as in the game. When
+	// nothing takes the stop by then, the walk starts again.
+	if (auto* walk = registry.TryGet<CreatureLocomotion>(creature); walk != nullptr && walk->gaveUp.has_value())
+	{
+		if (!std::exchange(action.waitedForWay, true))
+		{
+			return;
+		}
+		walk->gaveUp.reset();
+	}
+	action.waitedForWay = false;
 
 	if (action.kind == Kind::Throw || action.kind == Kind::Point)
 	{
@@ -1001,7 +1029,14 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	}
 	const auto local = ToLocal(transform, at->position);
 	const auto reach = ReachFor(*action.reach, local);
-	if (reach.blend.inRange)
+	const auto centre = creature_reach::Centre(*action.reach);
+	const auto ideal = std::max(glm::length(glm::vec2(centre.x, centre.z)), k_Tiny);
+	const auto distance = glm::length(glm::vec2(local.x, local.z));
+	// It continues until the thing is in reach or the action fails, with no limit to its walks
+	switch (creature_object_actions::NextApproachStep(
+	    reach.blend.inRange, std::abs(distance - ideal) <= ideal * k_TurnInReachShare, action.turnedSinceWalk))
+	{
+	case creature_object_actions::ApproachStep::Begin:
 	{
 		const auto& animations =
 		    action.kind == Kind::PickUp ? creature_reach::k_PickUpAnimations : creature_reach::k_DestroyAnimations;
@@ -1010,26 +1045,27 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		BeginPlaying(creature, action, animation);
 		return;
 	}
-	if (action.attempts >= k_ReachAttempts)
-	{
-		Fail(action, "it couldn't get in reach");
-		return;
-	}
-	++action.attempts;
-	const auto centre = creature_reach::Centre(*action.reach);
-	const auto ideal = std::max(glm::length(glm::vec2(centre.x, centre.z)), k_Tiny);
-	const auto distance = glm::length(glm::vec2(local.x, local.z));
-	// Near enough, it only needs to turn so that it lies where its reach is middling
-	if (std::abs(distance - ideal) <= ideal * k_TurnInReachShare)
-	{
+	case creature_object_actions::ApproachStep::Turn:
+		++action.attempts;
+		action.turnedSinceWalk = true;
 		locomotion.TurnToFace(creature, FacingToReach(transform, *action.reach, at->position));
 		return;
+	case creature_object_actions::ApproachStep::Walk:
+		break;
 	}
+	++action.attempts;
 	using MoveResult = CreatureLocomotionSystemInterface::MoveResult;
 	const auto result = locomotion.MoveTo(creature, glm::xz(at->position), CreatureLocomotionSystemInterface::Pace::Walk,
 	                                      ideal * k_ApproachNear, ideal * k_ApproachFar);
-	if (result != MoveResult::Started)
+	switch (creature_cast_moves::WalkStartOf(result == MoveResult::Started, result != MoveResult::InvalidDestination))
 	{
+	case creature_cast_moves::WalkStart::Walking:
+		action.turnedSinceWalk = false;
+		break;
+	case creature_cast_moves::WalkStart::TryAgain:
+		// The creature cannot walk now: it asks again on the next turn
+		return;
+	case creature_cast_moves::WalkStart::NoWay:
 		Fail(action, "navigation failed", creature_object_actions::Failure::NoWay);
 		return;
 	}
@@ -1407,12 +1443,10 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		{
 			Fail(action, "it can't be picked up", creature_object_actions::Failure::NoWay);
 		}
-		else if (action.kind == Kind::Destroy &&
-		         (!registry.AllOf<MapCellResident>(*action.target) ||
-		          registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(*action.target)))
+		else if (action.kind == Kind::Destroy && !OnTheMap(registry, *action.target))
 		{
 			// A stomp needs the thing on the map
-			Fail(action, "it is not on the map");
+			Fail(action, "it is not on the map", creature_object_actions::Failure::NoWay);
 		}
 		else if (action.kind == Kind::Kick &&
 		         ((held != nullptr && held->object == *action.target) || registry.AllOf<InHand>(*action.target)))

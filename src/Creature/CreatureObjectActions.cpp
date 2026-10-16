@@ -93,9 +93,20 @@ Hands creature_object_actions::HandsFor(Kind kind)
 	return Hands::Either;
 }
 
-bool creature_object_actions::LeavesThingAlone(bool pickingUp, Failure failure)
+bool creature_object_actions::LeavesThingAlone(Kind kind, Failure failure)
 {
-	return pickingUp && failure != Failure::Other;
+	const bool walksToThing = kind == Kind::PickUp || kind == Kind::Destroy || kind == Kind::Kick;
+	return walksToThing && failure != Failure::Other;
+}
+
+creature_object_actions::ApproachStep creature_object_actions::NextApproachStep(bool inReach, bool nearEnoughToTurn,
+                                                                                bool turnedSinceWalk)
+{
+	if (inReach)
+	{
+		return ApproachStep::Begin;
+	}
+	return nearEnoughToTurn && !turnedSinceWalk ? ApproachStep::Turn : ApproachStep::Walk;
 }
 
 bool creature_object_actions::RefusesAloud(Failure failure)

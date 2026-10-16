@@ -208,3 +208,12 @@ creature_cast_moves::Stall creature_cast_moves::CheckStall(uint32_t turns, float
 	}
 	return Stall::None;
 }
+
+creature_cast_moves::WalkStart creature_cast_moves::WalkStartOf(bool started, bool destinationValid)
+{
+	if (!destinationValid)
+	{
+		return WalkStart::NoWay;
+	}
+	return started ? WalkStart::Walking : WalkStart::TryAgain;
+}

@@ -177,3 +177,14 @@ TEST(CreatureClearWay, AWalkNearAThingThatGetsNowhereForFiftyTurnsGivesUp)
 	// A creature under the control of a script does not give up
 	EXPECT_EQ(CheckStall(49, 0.0f, true), Stall::None);
 }
+
+TEST(CreatureClearWay, AWalkNearAThingWhereItCannotStandLeavesTheThingAlone)
+{
+	using creature_cast_moves::WalkStart;
+	using creature_cast_moves::WalkStartOf;
+	EXPECT_EQ(WalkStartOf(true, true), WalkStart::Walking);
+	// A creature that cannot walk now asks again on the next turn
+	EXPECT_EQ(WalkStartOf(false, true), WalkStart::TryAgain);
+	// No place to stand at the thing stops the step, and the creature does not choose the thing again for a time
+	EXPECT_EQ(WalkStartOf(false, false), WalkStart::NoWay);
+}
