@@ -2335,7 +2335,7 @@ bool Game::Update() noexcept
 	// The rain falls as the storm nearest the camera has it
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), clock.GetFrameRealTime(),
 	                                    camera.GetOrigin());
-	// The static the fizzing creatures are drawn through slides across them
+	// The static that the eyes of all the creatures fizz through continues to slide
 	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
@@ -3237,6 +3237,9 @@ bool Game::Update() noexcept
 					}
 				}
 				updateDrawnScenery();
+				// The static of each fizzing creature slides only when the frame draws its body on the screen
+				Locator::creatureFizzSystem::value().SlideDrawnStatic(
+				    std::chrono::duration<float>(clock.GetFrameGameTime()).count());
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				ShowInspectorCamera(false);

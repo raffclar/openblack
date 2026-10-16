@@ -11,19 +11,29 @@
 
 #include "CreatureFizzSystem.h"
 
+#include <cmath>
+
 #include <chrono>
 #include <vector>
 
+#include <glm/geometric.hpp>
+
+#include "3D/L3DMesh.h"
 #include "Audio/Sound.h"
 #include "Creature/CreatureFizzLook.h"
 #include "ECS/Components/CreatureFizz.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureRemoval.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
+#include "Resources/ResourceManager.h"
+#include "Resources/ResourcesInterface.h"
+#include "Scenery/ObjectDrawList.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -112,12 +122,39 @@ void CreatureFizzSystem::ProcessTurn()
 void CreatureFizzSystem::UpdateFrame(float seconds)
 {
 	_eyeStaticScroll = creature_fizz_look::Scroll(_eyeStaticScroll, seconds);
-	Locator::entitiesRegistry::value().Each<CreatureSpells>([seconds](CreatureSpells& spells) {
-		if (creature_fizz_look::Fizzing(spells.fizz))
-		{
-			spells.staticScroll = creature_fizz_look::Scroll(spells.staticScroll, seconds);
-		}
-	});
+}
+
+void CreatureFizzSystem::SlideDrawnStatic(float seconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	const auto* view = drawList != nullptr && drawList->GetView().has_value() ? &*drawList->GetView() : nullptr;
+	const auto* meshes = Locator::resources::has_value() ? &Locator::resources::value().GetMeshes() : nullptr;
+	registry.Each<CreatureSpells, const Transform, const Mesh>(
+	    [&](entt::entity entity, CreatureSpells& spells, const Transform& transform, const Mesh& mesh) {
+		    if (!creature_fizz_look::Fizzing(spells.fizz))
+		    {
+			    return;
+		    }
+		    // With no camera or land, the frame draws the body as it is
+		    bool onScreen = true;
+		    if (view != nullptr)
+		    {
+			    onScreen = drawList->Drawn(registry, entity);
+			    if (onScreen && meshes != nullptr && meshes->Contains(mesh.id))
+			    {
+				    // The sphere round the box of the body's model, at the place and size that the frame draws the body
+				    const auto box = meshes->Handle(mesh.id)->GetBoundingBox();
+				    const auto centre = transform.position + (transform.rotation * (transform.scale * box.Center()));
+				    const float radius = std::abs(transform.scale.x) * glm::length(box.Size() * 0.5f);
+				    onScreen = object_draw_list::SphereOnScreen(*view, transform.position, centre, radius);
+			    }
+		    }
+		    if (creature_fizz_look::StaticSlides(spells.fizz, onScreen))
+		    {
+			    spells.staticScroll = creature_fizz_look::Scroll(spells.staticScroll, seconds);
+		    }
+	    });
 }
 
 glm::vec2 CreatureFizzSystem::EyeStaticScroll() const

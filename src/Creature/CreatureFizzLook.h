@@ -40,6 +40,11 @@ namespace openblack::creature_fizz_look
 /// drawn, wrapping round. Each creature's own static starts unmoved.
 [[nodiscard]] glm::vec2 Scroll(glm::vec2 scroll, float seconds);
 
+/// Whether a creature's own static slides on this frame. The static slides only on a frame that draws the body
+/// through it. `bodyOnScreen` tells whether the land's draw list draws the body and its sphere is on the screen. The sea
+/// reflection does not move the static.
+[[nodiscard]] bool StaticSlides(float fizz, bool bodyOnScreen);
+
 /// Whether the creature's hair is drawn: only until it has fizzed or frozen a fifth of the way, and never through the
 /// static
 [[nodiscard]] bool HairShown(float fizz, float freeze);
