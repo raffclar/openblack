@@ -3021,11 +3021,12 @@ void AddObjects(std::vector<Scenario>& all)
 	    .id = "mind.point_at_hand",
 	    .name = "Pointing at the player's hand",
 	    .facet = Facet::Mind,
-	    .description = "A player's tiger stands side on to the camera. Keep the hand on the land beside it. A script tells "
-	                   "it to point at the hand after two seconds and again after eight seconds.",
+	    .description =
+	        "A player's tiger stands side on to the camera. The cursor puts the hand on the land beside it. A script tells "
+	        "it to point at the hand after two seconds and again after eight seconds.",
 	    .expected = "Each time it turns to the camera, looking at it, then points for a second at where the hand was as it "
 	                "began, looking at that place, amazed.",
-	    .environment = {.dispenserGrid = false},
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.7f, 0.75f)},
 	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 90.0f)},
 	    // A script action needs a thing to act on, though these actions do not use it
