@@ -424,6 +424,35 @@
   "query": "creature.plan"
  },
  {
+  "description": "The cells about a point that are not clear for a creature to go to (land it can't walk on, or things in its way), and the middle of the nearest clear area so wide, as its search for a place to cast, sit or get away finds it",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The point searched about, [x, z] or [x, y, z]",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   },
+   {
+    "description": "How wide the area must be, in metres",
+    "name": "width",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "description": "Whether anything living also keeps a cell from being clear",
+    "name": "living",
+    "type": "boolean"
+   }
+  ],
+  "query": "creature.clear_area"
+ },
+ {
   "description": "What stands in a map cell (10 by 10) as a search meets it: the things that stay put, then those that move",
   "kind": "list",
   "parameters": [

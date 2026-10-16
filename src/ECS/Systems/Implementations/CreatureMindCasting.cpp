@@ -299,6 +299,27 @@ std::optional<uint32_t> CreatureMindSystem::CastMagicOf(uint32_t action)
 	return magic;
 }
 
+bool mind_detail::CellClearFor(const ecs::Registry& registry, entt::entity creature, int32_t x, int32_t z, bool livingBlocks)
+{
+	if (!Locator::creatureLocomotionSystem::has_value())
+	{
+		return false;
+	}
+	const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+	return land.At(x, z) == creature_route::Ground::Open && !CellBlocked(registry, creature, x, z, livingBlocks);
+}
+
+bool CreatureMindSystem::IsCellClearFor(entt::entity creature, int32_t x, int32_t z, bool livingBlocks) const
+{
+	return mind_detail::CellClearFor(Entities(), creature, x, z, livingBlocks);
+}
+
+std::optional<glm::vec2> CreatureMindSystem::FindClearAreaFor(entt::entity creature, glm::vec2 point, float width,
+                                                              bool livingBlocks) const
+{
+	return mind_detail::ClearAreaFor(Entities(), creature, point, width, livingBlocks);
+}
+
 std::optional<glm::vec2> mind_detail::ClearAreaFor(const ecs::Registry& registry, entt::entity creature, glm::vec2 point,
                                                    float width, bool livingBlocks)
 {
@@ -306,10 +327,8 @@ std::optional<glm::vec2> mind_detail::ClearAreaFor(const ecs::Registry& registry
 	{
 		return std::nullopt;
 	}
-	const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
-	const auto found = cast_moves::FindClearArea(point, width, [&](int32_t x, int32_t z) {
-		return land.At(x, z) == creature_route::Ground::Open && !CellBlocked(registry, creature, x, z, livingBlocks);
-	});
+	const auto found = cast_moves::FindClearArea(
+	    point, width, [&](int32_t x, int32_t z) { return CellClearFor(registry, creature, x, z, livingBlocks); });
 	// Kept within an area, a place outside it is no use
 	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
 	if (found.has_value() && leashes != nullptr)

@@ -3451,6 +3451,16 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    return Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().BeliefAbout(creature, thing)
 		                                                    : std::nullopt;
 	    },
+	    .cellClear =
+	        [](entt::entity creature, int32_t x, int32_t z, bool livingBlocks) {
+		        return Locator::creatureMindSystem::has_value() &&
+		               Locator::creatureMindSystem::value().IsCellClearFor(creature, x, z, livingBlocks);
+	        },
+	    .clearArea = [](entt::entity creature, glm::vec2 point, float width, bool livingBlocks) -> std::optional<glm::vec2> {
+		    return Locator::creatureMindSystem::has_value()
+		               ? Locator::creatureMindSystem::value().FindClearAreaFor(creature, point, width, livingBlocks)
+		               : std::nullopt;
+	    },
 	}));
 	inspector.Add(MakeMapProvider({
 	    .world = World(),
