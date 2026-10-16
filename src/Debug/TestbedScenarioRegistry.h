@@ -782,6 +782,9 @@ struct Command
 		/// moods look at the music on this turn. The value k_StopCustomMusic stops the music. The game reads the folder again
 		/// first. Needs no creature
 		PlayCustomMusic,
+		/// The music of the music type that the value gives starts as a script's "start music" starts it. The value 0
+		/// stops it as "stop music" does. Needs no creature
+		StartScriptMusic,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

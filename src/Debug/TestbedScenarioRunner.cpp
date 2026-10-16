@@ -48,6 +48,7 @@
 #include "Animals/GrazerRules.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/CustomMusicPlayerInterface.h"
+#include "Audio/GameMusic.h"
 #include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
@@ -2199,6 +2200,22 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
 		return;
 	}
+	if (command.kind == Kind::StartScriptMusic)
+	{
+		if (command.value >= static_cast<size_t>(audio::MusicType::_COUNT))
+		{
+			Log(fmt::format("{:.1f}s: {}: no music type {}", _seconds, Name(command.kind), command.value));
+			return;
+		}
+		const auto type = static_cast<audio::MusicType>(command.value);
+		if (auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		{
+			game->GetGameMusic()->ResetMusicLyrics();
+			game->GetGameMusic()->StartScriptMusic(type);
+		}
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), audio::GetMusicTypeName(type)));
+		return;
+	}
 	if (command.kind == Kind::PlayCustomMusic)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PlayCustomMusic(command.value)));
@@ -2595,6 +2612,7 @@ void Runner::Give(const Command& command)
 	case Kind::EndGuidanceWaits:
 	case Kind::ProfileFolderCheck:
 	case Kind::PlayCustomMusic:
+	case Kind::StartScriptMusic:
 	case Kind::RunText:
 	case Kind::ReadTip:
 	case Kind::LookAtTempleScroll:
