@@ -314,11 +314,6 @@ float DurationOf(entt::entity creature, size_t animation)
 	return Locator::creatureAnimationSystem::value().AnimationDuration(creature, animation).value_or(0.0f);
 }
 
-bool IsVillager(const ecs::Registry& registry, std::optional<entt::entity> entity)
-{
-	return entity.has_value() && registry.Valid(*entity) && registry.AllOf<Villager>(*entity);
-}
-
 /// How heavy something is, from the game's tables
 std::optional<float> WeightOf(const ecs::Registry& registry, entt::entity entity)
 {
@@ -2183,38 +2178,6 @@ void CreatureObjectActionSystem::ProcessTurn()
 		if (weight.has_value() && own.has_value() && *own > 0.0f)
 		{
 			needs.carriedWeight = std::clamp(*weight / *own, 0.0f, 1.0f);
-		}
-	});
-
-	// The town sees what the creature does with fear or respect, and keeps that view a while after
-	registry.Each<const Creature>([&](entt::entity entity, const Creature&) {
-		const auto* action = registry.TryGet<const CreatureObjectAction>(entity);
-		const bool acting = action != nullptr && (action->status == Status::Running || action->status == Status::Contact);
-		const auto held = GetHeld(entity);
-		const bool holdingVillager = IsVillager(registry, held);
-		auto attitude = creature_object_actions::TownAttitude::None;
-		if (acting)
-		{
-			attitude = creature_object_actions::AttitudeTo(action->kind, IsVillager(registry, action->target), holdingVillager);
-		}
-		else if (holdingVillager)
-		{
-			attitude = creature_object_actions::TownAttitude::Fear;
-		}
-		auto* seen = registry.TryGet<CreatureTownAttitude>(entity);
-		if (attitude != creature_object_actions::TownAttitude::None)
-		{
-			registry.AssignOrReplace<CreatureTownAttitude>(
-			    entity,
-			    CreatureTownAttitude {.attitude = attitude, .secondsLeft = creature_object_actions::AttitudeSeconds(attitude)});
-		}
-		else if (seen != nullptr && seen->attitude != creature_object_actions::TownAttitude::None)
-		{
-			seen->secondsLeft -= k_TurnSeconds;
-			if (seen->secondsLeft <= 0.0f)
-			{
-				*seen = {};
-			}
 		}
 	});
 }

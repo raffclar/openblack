@@ -364,6 +364,9 @@ enum class Build : uint8_t
 	Sacrifice,
 	/// Copying the player again: the creature makes no steps, but copies again the deed that it saw last
 	MimicPlayer,
+	/// Dancing outside its player's temple, and around a thing (see creature_temple_dance)
+	DanceOutsideTemple,
+	DanceAroundThing,
 };
 
 /// What tells the planner that the creature did an action too recently to choose it again
