@@ -226,13 +226,6 @@ bool IsPowerUpCast(std::string_view action)
 	return action.ends_with("PU1") || action.ends_with("PU2");
 }
 
-/// While doing these, which it chose with nothing better to do, the creature changes to any plan good enough
-bool Interruptible(creature_mind::Activity activity)
-{
-	using enum creature_mind::Activity;
-	return activity == None || activity == BeIdle || activity == Sit || activity == HangAround;
-}
-
 /// A creature stroked for what it holds eats it as the action that eats a thing alive
 constexpr std::string_view k_EatHeldAction = "EatAlive";
 /// A creature that sees a villager do a skill it does not know follows the villager to watch it
@@ -2985,8 +2978,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		}
 		return;
 	}
-	// Doing something it chose for itself that isn't idling, it carries on
-	if (!mind.planActive && !Interruptible(mind.idle.activity) && mind.idle.step < mind.idle.agenda.size())
+	// An agenda that it was made to do continues to its end
+	if (!creature_planner::MayChoose(mind.planActive, mind.idle.step < mind.idle.agenda.size()))
 	{
 		return;
 	}

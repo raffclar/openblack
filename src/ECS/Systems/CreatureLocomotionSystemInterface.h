@@ -77,6 +77,9 @@ public:
 	virtual void ResetPace(entt::entity creature) = 0;
 	/// Puts it at a point at once, as something other than its walking moves it, such as a step towards a catch
 	virtual void Place(entt::entity creature, glm::vec3 position) = 0;
+	/// Puts it at a point at once, as a script does. Its walk, turn, body action, face and head look stop, and it stands
+	/// there. What it plans to do does not change.
+	virtual void PlaceWithoutWalking(entt::entity creature, glm::vec3 position) = 0;
 	/// Whether it is planning a route, turning or on its way
 	[[nodiscard]] virtual bool IsMoving(entt::entity creature) const = 0;
 

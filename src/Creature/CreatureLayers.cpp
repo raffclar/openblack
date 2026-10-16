@@ -344,6 +344,16 @@ FaceLayer creature_layers::RelaxFace(FaceLayer face)
 	return face;
 }
 
+FaceLayer creature_layers::DropFace(FaceLayer face)
+{
+	// The time that the wanted face had left stays. Without a wanted face, that time has no effect.
+	face.current.reset();
+	face.timeMs = 0.0f;
+	face.wanted.reset();
+	face.cue = creature_face::Cue::None;
+	return face;
+}
+
 FaceLayer creature_layers::AdvanceFace(FaceLayer face, float milliseconds, std::optional<uint32_t> duration)
 {
 	// The wanted face is let go of once its time is up
