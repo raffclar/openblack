@@ -132,6 +132,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -3277,9 +3278,11 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	{
 		situation.stage = mind->developmentPhase;
 	}
+	// Every agenda that faces the player can be made: also when a plan starts again after a hold, or is forced
 	if (Locator::camera::has_value())
 	{
 		situation.eye = Locator::camera::value().GetOrigin();
+		situation.camera = glm::vec2(situation.eye->x, situation.eye->z);
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
 	situation.hasPlayer = body != nullptr && body->owner != PlayerNames::NEUTRAL;
@@ -3708,9 +3711,12 @@ void CreatureMindSystem::PlanTurn()
 	std::vector<entt::entity> creatures;
 	registry.Each<const Creature, CreatureMindState>(
 	    [&creatures](entt::entity entity, const Creature&, CreatureMindState&) { creatures.push_back(entity); });
+	// While the player's hand holds a creature, it decides nothing: it keeps the plan that it had
+	const auto held =
+	    Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetCreature() : std::nullopt;
 	for (const auto entity : creatures)
 	{
-		if (auto* mind = registry.TryGet<CreatureMindState>(entity))
+		if (auto* mind = registry.TryGet<CreatureMindState>(entity); mind != nullptr && held != entity)
 		{
 			PlanCreature(entity, *mind);
 		}
@@ -4745,10 +4751,12 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	}
 	Situate(creature, situation);
 	const auto desire = context.desire;
-	// It finds the most useful thing of the same kind as the thing it acted on. An action that acts on nothing acts on
-	// the creature itself.
+	// It finds the most useful thing of the same kind as the thing it acted on, as the planner finds a thing for an
+	// action. An action that acts on nothing acts on the creature itself. An action that acts on a thing but has no test
+	// of its own takes any thing of that kind.
+	const bool actsOnThing = tables->actions.at(*actionIndex).actsOnThing;
 	std::vector<creature_planner::ObjectCandidate> sameKind;
-	if (executor->target != Target::None)
+	if (actsOnThing)
 	{
 		const auto* known = mind.beliefs.Find(actedOn);
 		if (known == nullptr && !context.belief.has_value())
@@ -4758,11 +4766,18 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 		const auto kind = known != nullptr ? known->kind : context.belief->type;
 		sameKind = BelievedThingsToActOn(creature, mind, desire, [&](entt::entity candidate) {
 			const auto* belief = mind.beliefs.Find(candidate);
-			return belief != nullptr && belief->kind == kind && Accepts(registry, executor->target, candidate, creature);
+			const auto* held = registry.TryGet<const HeldByCreature>(candidate);
+			return creature_follow_up::SuitsDoAgain({
+			    .sameKind = belief != nullptr && belief->kind == kind,
+			    .passesTest = executor->target == Target::None
+			                      ? std::nullopt
+			                      : std::optional(Accepts(registry, executor->target, candidate, creature)),
+			    .notWhatItHolds = executor->notWhatItHolds,
+			    .heldByItself = held != nullptr && held->creature == creature,
+			});
 		});
 	}
-	const auto chosen =
-	    creature_follow_up::ThingToDoAgainTo(executor->target != Target::None, entt::to_integral(creature), sameKind);
+	const auto chosen = creature_follow_up::ThingToDoAgainTo(actsOnThing, entt::to_integral(creature), sameKind);
 	if (!chosen.has_value())
 	{
 		return;

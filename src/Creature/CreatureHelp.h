@@ -128,7 +128,8 @@ struct KindInfo
 constexpr uint32_t k_TooBigToHandleText = 4322;
 /// The miscellaneous message of a thing too big for the creature to handle
 constexpr uint32_t k_TooBigToHandle = 7;
-/// Why it failed: it couldn't get where it was sent, and the leash pulled it away from what it was doing
+/// Why it failed: it couldn't get where it was sent, and the leash pulled it away from what it was doing. The game has
+/// the second text, but no code that runs tells it.
 constexpr uint32_t k_Inaccessible = 3;
 constexpr uint32_t k_PulledAway = 7;
 

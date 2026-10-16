@@ -443,13 +443,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Animal::heading>("heading")
 	    .Field<&components::Animal::life>("life")
 	    .Field<&components::Animal::birthTurn>("birthTurn")
-	    .Field<&components::Animal::deadTurns>("deadTurns")
-	    .Field<&components::Animal::eatenTurnsLeft>("eatenTurnsLeft")
+	    .Field<&components::Animal::turnsUntilStateChange>("turnsUntilStateChange")
 	    .Field<&components::Animal::landingPose>("landingPose");
-	Reflect<components::Grazer>(context)
-	    .Field<&components::Grazer::needs>("needs")
-	    .Field<&components::Grazer::sleepingCell>("sleepingCell")
-	    .Field<&components::Grazer::meals>("meals");
+	Reflect<components::Grazer>(context).Field<&components::Grazer::needs>("needs").Field<&components::Grazer::sleepingCell>(
+	    "sleepingCell");
 	Reflect<components::TempleBirds>(context)
 	    .Field<&components::TempleBirds::flock>("flock")
 	    .Field<&components::TempleBirds::look>("look");
@@ -463,8 +460,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SpellWolf::prey>("prey")
 	    .Field<&components::SpellWolf::huntStart>("huntStart")
 	    .Field<&components::SpellWolf::remembered>("remembered")
-	    .Field<&components::SpellWolf::food>("food")
-	    .Field<&components::SpellWolf::eatCount>("eatCount");
+	    .Field<&components::SpellWolf::food>("food");
 	Reflect<components::AnimalPose>(context)
 	    .Field<&components::AnimalPose::bones>("bones")
 	    .Field<&components::AnimalPose::light>("light")

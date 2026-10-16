@@ -973,45 +973,46 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              }));
-	provider->Add(Query("animal",
-	                    "An animal: its kind, state (and the game's number of the state it is in for itself), clip, flock "
-	                    "and town, its kind's radius, where it moves to, whether "
-	                    "a creature fears it, and a grazer's needs",
-	                    {IdParameter("The animal's entity id")}),
-	              Serve<Locator::animalSystem>(
-	                  "the animals", [](const ecs::systems::AnimalSystemInterface& animals, const QueryContext& context) {
-		                  const auto entity = EntityParam(context.params);
-		                  const auto* registry = Registry();
-		                  if (!entity.has_value() || registry == nullptr || !registry->AllOf<Animal>(*entity))
-		                  {
-			                  return QueryResult::Error("no animal with that id");
-		                  }
-		                  const auto& animal = registry->Get<const Animal>(*entity);
-		                  Json result = {{"id", ToId(*entity)},
-		                                 {"kind", static_cast<int>(animal.type)},
-		                                 {"state", static_cast<int>(animal.state)},
-		                                 {"final_game_state", animals.FinalGameStateOf(*entity).value_or(0)},
-		                                 {"turns_in_state", animal.turnsInState},
-		                                 {"birth_turn", animal.birthTurn},
-		                                 {"clip", static_cast<int>(animal.animation)},
-		                                 {"speed", animal.move.speed},
-		                                 {"flock", Id(animal.flock)},
-		                                 {"town", Id(animal.town)},
-		                                 {"radius", animals.RadiusOf(*entity)},
-		                                 {"movement", Point(animals.MovementOf(*entity))},
-		                                 {"goal", Point(animals.GoalOf(*entity))},
-		                                 {"frightening_to_creature", animals.IsFrighteningToCreature(*entity)},
-		                                 {"player_can_pick_up", animals.CanPlayerPickUp(*entity)}};
-		                  // A grazer's needs and meal
-		                  if (const auto* grazer = registry->TryGet<const Grazer>(*entity))
-		                  {
-			                  result["grazer"] = {{"hunger", grazer->needs.hunger},
-			                                      {"sleep", grazer->needs.sleep},
-			                                      {"breed", grazer->needs.breed},
-			                                      {"meals", grazer->meals}};
-		                  }
-		                  return QueryResult::Value(std::move(result));
-	                  }));
+	provider->Add(
+	    Query(
+	        "animal",
+	        "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, clip, flock "
+	        "and town, its kind's radius, where it moves to, whether "
+	        "a creature fears it, and a grazer's needs",
+	        {IdParameter("The animal's entity id")}),
+	    Serve<Locator::animalSystem>(
+	        "the animals", [](const ecs::systems::AnimalSystemInterface& animals, const QueryContext& context) {
+		        const auto entity = EntityParam(context.params);
+		        const auto* registry = Registry();
+		        if (!entity.has_value() || registry == nullptr || !registry->AllOf<Animal>(*entity))
+		        {
+			        return QueryResult::Error("no animal with that id");
+		        }
+		        const auto& animal = registry->Get<const Animal>(*entity);
+		        Json result = {{"id", ToId(*entity)},
+		                       {"kind", static_cast<int>(animal.type)},
+		                       {"state", static_cast<int>(animal.state)},
+		                       {"final_game_state", animals.FinalGameStateOf(*entity).value_or(0)},
+		                       {"turns_in_state", animal.turnsInState},
+		                       {"turns_until_state_change", animal.turnsUntilStateChange},
+		                       {"birth_turn", animal.birthTurn},
+		                       {"clip", static_cast<int>(animal.animation)},
+		                       {"speed", animal.move.speed},
+		                       {"flock", Id(animal.flock)},
+		                       {"town", Id(animal.town)},
+		                       {"radius", animals.RadiusOf(*entity)},
+		                       {"movement", Point(animals.MovementOf(*entity))},
+		                       {"goal", Point(animals.GoalOf(*entity))},
+		                       {"frightening_to_creature", animals.IsFrighteningToCreature(*entity)},
+		                       {"player_can_pick_up", animals.CanPlayerPickUp(*entity)}};
+		        // A grazer's needs; the grazing clips left of its meal are its count of turns
+		        if (const auto* grazer = registry->TryGet<const Grazer>(*entity))
+		        {
+			        result["grazer"] = {
+			            {"hunger", grazer->needs.hunger}, {"sleep", grazer->needs.sleep}, {"breed", grazer->needs.breed}};
+		        }
+		        return QueryResult::Value(std::move(result));
+	        }));
 	provider->Add(
 	    Query("villages", "Whether it is dark enough for the village lights, and how many there are"),
 	    Serve<Locator::villageLightSystem>(

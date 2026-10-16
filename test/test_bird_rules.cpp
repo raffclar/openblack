@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <limits>
 #include <numbers>
 #include <vector>
 
@@ -168,15 +169,26 @@ TEST(BirdRules, ACreatureStampsOnlyOnABirdLowerThanAQuarterOfItsOwnHeight)
 
 TEST(BirdRules, ADeadBodyLiesItsTurnsAndOneMoreUnlessAScriptControlsIt)
 {
-	int32_t left = 2;
+	int16_t left = 2;
 	EXPECT_FALSE(animals::DeadBodyGoes(left, false));
 	EXPECT_FALSE(animals::DeadBodyGoes(left, false));
 	EXPECT_TRUE(animals::DeadBodyGoes(left, false));
 	// Under a script's control its turns don't count down
-	int32_t held = 0;
+	int16_t held = 0;
 	EXPECT_FALSE(animals::DeadBodyGoes(held, true));
 	EXPECT_EQ(held, 0);
 	EXPECT_TRUE(animals::DeadBodyGoes(held, false));
+}
+
+TEST(BirdRules, ADeadBodyWithACountBelowNoneLiesUntilTheCountComesRound)
+{
+	// The count goes from its lowest value round to its highest value, then down to none
+	int16_t left = -1;
+	EXPECT_FALSE(animals::DeadBodyGoes(left, false));
+	EXPECT_EQ(left, -2);
+	left = std::numeric_limits<int16_t>::min();
+	EXPECT_FALSE(animals::DeadBodyGoes(left, false));
+	EXPECT_EQ(left, std::numeric_limits<int16_t>::max());
 }
 
 TEST(BirdRules, ADeadBodysSmokeRisesHalfItsHeightOutTheWayItFaces)
@@ -189,4 +201,17 @@ TEST(BirdRules, ADeadBodysSmokeRisesHalfItsHeightOutTheWayItFaces)
 	const auto south = animals::DeadBodySmokePlace(lying, std::numbers::pi_v<float> * 0.5f, 0.4f);
 	EXPECT_NEAR(south.x, 10.0f, 1e-5f);
 	EXPECT_NEAR(south.z, 20.2f, 1e-5f);
+}
+
+TEST(BirdRules, AnAnimalInACreaturesHandTakesItsTurnOnlyWhileItDies)
+{
+	using animals::TakesOwnTurn;
+	EXPECT_TRUE(TakesOwnTurn({}, false));
+	// In a creature's hand it falls dying and lies dead, as a half-dead animal does
+	EXPECT_FALSE(TakesOwnTurn({.creature = true}, false));
+	EXPECT_TRUE(TakesOwnTurn({.creature = true}, true));
+	// A tornado, the player's hand or the physics moves it
+	EXPECT_FALSE(TakesOwnTurn({.tornado = true}, true));
+	EXPECT_FALSE(TakesOwnTurn({.playersHand = true}, true));
+	EXPECT_FALSE(TakesOwnTurn({.physics = true}, true));
 }
