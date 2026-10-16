@@ -47,6 +47,11 @@ bool Fizzing(float fizz)
 	return fizz > 0.0f && Drawn(fizz);
 }
 
+bool StaticSlides(float fizz, bool bodyOnScreen)
+{
+	return bodyOnScreen && Fizzing(fizz);
+}
+
 uint8_t StaticThreshold(uint8_t level)
 {
 	return level > k_ThresholdBelowLevel ? static_cast<uint8_t>(level - k_ThresholdBelowLevel) : uint8_t {0};

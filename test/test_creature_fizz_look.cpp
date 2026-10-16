@@ -97,3 +97,15 @@ TEST(CreatureFizzLook, EyelidsGoWhiteOnlyWhenWhollyFrozen)
 	EXPECT_FALSE(EyelidsWhite(0.999f));
 	EXPECT_TRUE(EyelidsWhite(1.0f));
 }
+
+TEST(CreatureFizzLook, TheStaticSlidesOnlyWhileTheBodyIsDrawnOnScreen)
+{
+	EXPECT_TRUE(StaticSlides(0.5f, true));
+	// Off the screen, or out of the draw list, the static stays where it is
+	EXPECT_FALSE(StaticSlides(0.5f, false));
+	// In full sight the frame does not draw the body through the static
+	EXPECT_FALSE(StaticSlides(0.0f, true));
+	// At a level of 255 the frame draws nothing of the body
+	EXPECT_FALSE(StaticSlides(1.0f, true));
+	EXPECT_TRUE(StaticSlides(254.9f / 255.0f, true));
+}

@@ -145,6 +145,31 @@ void AddCreatureMode(std::vector<Scenario>& all)
 	                                 .needs = {.energy = 1.0f, .exhaustion = 1.0f, .dehydration = 0.0f, .poo = 0.0f}}},
 	    .commands = {Key(Kind::CreatureKey, 0.5f)},
 	});
+
+	all.push_back({
+	    .id = "creature_mode.fizz_static_off_screen",
+	    .name = "A fizzing creature's static holds still while off the screen",
+	    .facet = Facet::CreatureMode,
+	    .description = "Two tigers are knocked out at the same time. The camera looks north at the one in front of it. The "
+	                   "other lies behind the camera.",
+	    .expected = "Each tiger lies out cold, then fizzes out of sight through static over two seconds and back in at "
+	                "its home. In the inspector, the staticScroll of the tiger in view slides while it fizzes. The "
+	                "staticScroll of the tiger behind the camera stays where it was, as the game slides the static only "
+	                "on the frames that draw the body on the screen.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, 0.0f}, .look = {0.0f, 2.0f, 40.0f}},
+	    .creatures = {CreatureSetup {.label = "in view",
+	                                 .species = CreatureType::Tiger,
+	                                 .offset = {0.0f, 40.0f},
+	                                 .facingDegrees = 270.0f,
+	                                 .owner = PlayerNames::PLAYER_ONE},
+	                  CreatureSetup {.label = "behind",
+	                                 .species = CreatureType::Tiger,
+	                                 .offset = {0.0f, -60.0f},
+	                                 .facingDegrees = 90.0f,
+	                                 .owner = PlayerNames::PLAYER_TWO}},
+	    .commands = {Command {.kind = Kind::KnockOut, .creature = 0, .delaySeconds = 1.0f},
+	                 Command {.kind = Kind::KnockOut, .creature = 1, .delaySeconds = 0.0f}},
+	});
 }
 
 /// A tiger that fizzes half out of sight in front of houses and trees, which stand further from the camera. The camera

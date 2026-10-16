@@ -43,6 +43,15 @@ inline constexpr float k_WallsApart = 0.8975979f;
 /// A point's (x, z) as precisely as a map position keeps it
 [[nodiscard]] glm::vec2 MapPlace(glm::vec3 point);
 
+/// The home that a script gives a creature at a point: the point's (x, z) as precisely as a map position keeps it, on
+/// the ground there. The script's height for the point has no effect. `groundAt(x, z)` gives the height of the ground.
+template <typename GroundAt>
+[[nodiscard]] glm::vec3 ScriptHome(glm::vec3 point, GroundAt&& groundAt)
+{
+	const auto place = MapPlace(point);
+	return {place.x, groundAt(place), place.y};
+}
+
 /// Whether a point (x, z) is on the inner side of both of the pen's walls, for a temple whose heart is at `heart` and
 /// turned by `heartYAngle`. A point on a wall is inside
 [[nodiscard]] bool BetweenWalls(glm::vec2 heart, float heartYAngle, glm::vec2 point);

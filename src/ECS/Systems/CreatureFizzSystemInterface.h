@@ -26,9 +26,11 @@ public:
 	virtual void SetFizz(entt::entity creature, float target, float seconds, bool goesForGood) = 0;
 	/// Once a game turn, after the creatures have acted: every fizz moves on
 	virtual void ProcessTurn() = 0;
-	/// Each frame, by the frame's game time: the static every creature is drawn fizzing through slides across its skin,
-	/// and the static its eyes share slides on
+	/// Each frame, by the frame's game time: the static that the eyes of all the creatures share continues to slide
 	virtual void UpdateFrame(float seconds) = 0;
+	/// Each frame after the game makes the land's draw list, by the frame's game time: the own static of each fizzing creature
+	/// slides across its skin, but only when the frame draws its body on the screen
+	virtual void SlideDrawnStatic(float seconds) = 0;
 	/// How far the one static all the creatures' eyes fizz through has slid: from the start of the game, every frame,
 	/// whether or not any creature is fizzing
 	[[nodiscard]] virtual glm::vec2 EyeStaticScroll() const = 0;

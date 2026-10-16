@@ -104,6 +104,21 @@ TEST(TemplePen, MapPlaceTruncatesTowardsZero)
 	EXPECT_FLOAT_EQ(MapPlace({-4.0f, 0.0f, 4.0f}).y, 26214.0f * 10.0f / 65536.0f);
 }
 
+TEST(TemplePen, AScriptHomeIsAMapPlaceOnTheGround)
+{
+	glm::vec2 asked {0.0f};
+	const auto home = ScriptHome({-4.0f, 50.0f, 4.0f}, [&asked](glm::vec2 place) {
+		asked = place;
+		return 7.5f;
+	});
+	// The ground height comes from the map place, and the script's height has no effect
+	EXPECT_FLOAT_EQ(asked.x, -26214.0f * 10.0f / 65536.0f);
+	EXPECT_FLOAT_EQ(asked.y, 26214.0f * 10.0f / 65536.0f);
+	EXPECT_FLOAT_EQ(home.x, asked.x);
+	EXPECT_FLOAT_EQ(home.y, 7.5f);
+	EXPECT_FLOAT_EQ(home.z, asked.y);
+}
+
 namespace
 {
 class CreaturePenSystemTest: public ::testing::Test
