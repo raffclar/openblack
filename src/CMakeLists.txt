@@ -165,6 +165,8 @@ target_link_libraries(
   PUBLIC spdlog::spdlog
          # The mind file's types are part of the creature mind component
          creaturemind
+         # The saved game's files are part of the saved game component
+         gamesave
 )
 target_include_directories(openblack_lib PRIVATE ${CXXOPTS_INCLUDE_DIRS})
 
