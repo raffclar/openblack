@@ -193,6 +193,9 @@ struct ObjectOrder
 	bool mirrored {false};
 	/// Throwing: the creature aims at the place of the object as the throw starts, not at the point
 	bool atObject {false};
+	/// Eating: the creature swallows what it eats. A creature told only to eat, with no thing given, takes in the food
+	/// of what it holds without a swallow, and then the step fails.
+	bool swallows {true};
 };
 
 /// Going somewhere, or turning to face something

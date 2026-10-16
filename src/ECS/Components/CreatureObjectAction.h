@@ -85,6 +85,10 @@ struct CreatureObjectAction
 	bool catchTurned {false};
 	/// How high the thing was against the hand at the last frame it was still in the physics
 	float catchHeight {0.5f};
+	/// Eating: it swallows what it eats. Then it counts the meal, it can bring the meal back up, and its hunger falls.
+	/// When it is told only to eat, with no thing given, it takes in the food of what it holds and does none of these.
+	/// Then the eat fails when the animation ends.
+	bool swallows {true};
 	/// Why it gave up, when it did
 	std::string failure;
 };

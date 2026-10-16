@@ -418,6 +418,10 @@ TEST(CreatureJointActions, EatingFromAFieldWithAFriend)
 	EXPECT_EQ(agenda[6].order.object, 5U);
 	EXPECT_TRUE(agenda[8].main);
 	EXPECT_EQ(agenda[8].order.kind, creature_mind::ObjectOrder::Kind::Eat);
+	// Both are told only to eat, with no thing given: neither swallows its handful
+	EXPECT_FALSE(agenda[8].order.swallows);
+	EXPECT_EQ(Ordered(agenda[7]).order.kind, creature_mind::ObjectOrder::Kind::Eat);
+	EXPECT_FALSE(Ordered(agenda[7]).order.swallows);
 	EXPECT_EQ(agenda[11].kind, Step::Kind::Remobilise);
 }
 
