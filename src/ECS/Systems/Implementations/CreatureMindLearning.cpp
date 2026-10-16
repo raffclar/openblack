@@ -806,8 +806,7 @@ void FinishedHelpingTown(const ecs::Registry& registry, CreatureMindState& mind,
 
 namespace
 {
-std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::entity thing,
-                                        std::optional<entt::entity> belongsTo);
+std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::entity thing);
 
 /// The player number of a town, none when there is no town
 std::optional<uint32_t> PlayerOfTown(const ecs::Registry& registry, std::optional<entt::entity> town)
@@ -863,7 +862,7 @@ std::optional<uint32_t> BeliefPlayerOf(const ecs::Registry& registry, entt::enti
 	// the neutral player
 	if (registry.AnyOf<Villager, Abode, Field, FishFarm, VillageTotem, Pot>(thing))
 	{
-		if (const auto player = PlayerOfTown(registry, TownOfThing(registry, thing, CreatureMindSystem::BelongsTo(thing))))
+		if (const auto player = PlayerOfTown(registry, TownOfThing(registry, thing)))
 		{
 			return player;
 		}
@@ -2295,15 +2294,16 @@ creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::
 }
 
 /// The town of a thing: the town of a villager, a building, a field or a fish farm, of a pile in a storage pit, or of
-/// a village totem. None for any other thing.
-std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::entity thing,
-                                        std::optional<entt::entity> belongsTo)
+/// a village totem. None for any other thing. It finds what the thing belongs to only for a villager, a building or a
+/// field, because for a tree that search goes through the forests of the land.
+std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::entity thing)
 {
 	const auto town = [&registry](entt::entity found) {
 		return registry.Valid(found) && registry.AllOf<Town>(found) ? std::optional(found) : std::nullopt;
 	};
 	if (registry.AnyOf<Villager, Abode, Field>(thing) && !registry.AllOf<WorshipSite>(thing))
 	{
+		const auto belongsTo = CreatureMindSystem::BelongsTo(thing);
 		return belongsTo.has_value() ? town(*belongsTo) : std::nullopt;
 	}
 	if (const auto* farm = registry.TryGet<const FishFarm>(thing))
@@ -2417,7 +2417,7 @@ bool CreatureMindSystem::SuitsDesire(entt::entity creature, CreatureMindState& m
 	}
 	if (desire == Desire::Hunger)
 	{
-		if (const auto town = TownOfThing(registry, thing, BelongsTo(thing)))
+		if (const auto town = TownOfThing(registry, thing))
 		{
 			ComeAcross(creature, mind, *town);
 			if (ActivityUsefulness(creature, mind, Desire::Compassion, *town) > k_MostCompassionToEatFrom)
