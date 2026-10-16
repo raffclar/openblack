@@ -1088,4 +1088,9 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_friendship test_creature_friendship.cpp
 )
-openblack_setup_and_add_test(test_creature_file_load test_creature_file_load.cpp)
+openblack_setup_and_add_test(
+  test_computer_player_start test_computer_player_start.cpp
+)
+openblack_setup_and_add_test(
+  test_creature_file_load test_creature_file_load.cpp
+)

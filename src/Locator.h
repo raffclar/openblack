@@ -171,6 +171,7 @@ class ProfileFolderSystemInterface;
 class MusicMoodSystemInterface;
 class TempleExteriorSystemInterface;
 class TempleDestructionSystemInterface;
+class ComputerPlayerSystemInterface;
 class PlayerSystemInterface;
 class RenderingSystemInterface;
 class TownSystemInterface;
@@ -263,6 +264,7 @@ struct Locator
 	using musicMoodSystem = entt::locator<ecs::systems::MusicMoodSystemInterface>;
 	using templeExteriorSystem = entt::locator<ecs::systems::TempleExteriorSystemInterface>;
 	using templeDestructionSystem = entt::locator<ecs::systems::TempleDestructionSystemInterface>;
+	using computerPlayerSystem = entt::locator<ecs::systems::ComputerPlayerSystemInterface>;
 	using handSystem = entt::locator<ecs::systems::HandSystemInterface>;
 	using handGrabSystem = entt::locator<ecs::systems::HandGrabSystemInterface>;
 	using temple = entt::locator<TempleInteriorInterface>;

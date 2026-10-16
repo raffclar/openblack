@@ -1,0 +1,110 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#pragma once
+
+#include <cstdint>
+
+#include <array>
+#include <optional>
+#include <vector>
+
+#include <entt/entity/fwd.hpp>
+#include <glm/vec3.hpp>
+
+#include "ECS/Components/ComputerPlayer.h"
+#include "ECS/Components/Player.h"
+#include "Enums.h"
+
+/// The rules of a computer player's start on a land: the creature it gets when it has none, the size of its creature and
+/// the miracles that its creature knows.
+namespace openblack::computer_player
+{
+
+/// The mind file of the creature that a computer player gets when it has none
+inline constexpr const char* k_CreatureMindFile = "ComputerControlledCreature";
+/// The number of species that the game chooses from for that creature, by the species number from 0
+constexpr uint32_t k_SpeciesChoices = 17;
+/// The smallest size of the creature, as a share of the size of the local player's creature
+constexpr float k_SmallestShareOfSize = 0.9f;
+/// The most that a random value adds to that share
+constexpr float k_MostAddedShare = 0.3f;
+/// The miracles that the creature always knows, also when its player cannot cast them
+constexpr std::array<MagicType, 4> k_AlwaysKnown {MagicType::Heal, MagicType::Food, MagicType::Wood, MagicType::Water};
+
+/// A land script switches the mind on or off. Switched on, the mind also marks the player as a computer player.
+void SwitchOn(ecs::components::ComputerPlayer& player, bool on);
+
+/// The mind starts at its first turn while it is switched on, one time on each land
+[[nodiscard]] bool DueToStart(const ecs::components::ComputerPlayer& player);
+
+/// What the start of the mind looks at
+struct StartFacts
+{
+	/// The player is the local player
+	bool local {false};
+	/// The player has a temple
+	bool temple {false};
+	/// The temple of the player has a pen for the creature
+	bool pen {false};
+	/// The player has a creature
+	bool creature {false};
+	/// The land is a skirmish
+	bool skirmish {false};
+	/// The game is a network game
+	bool network {false};
+	/// The local player has a creature
+	bool localCreature {false};
+};
+
+/// In a skirmish that is not a network game, a player with a temple and a pen but no creature gets a creature
+[[nodiscard]] bool GetsCreature(const StartFacts& facts);
+/// The creature of a player that is not the local player gets a size from the local player's creature. This occurs
+/// only when a land script named a player for it and the local player has a creature.
+[[nodiscard]] bool TakesSize(const ecs::components::ComputerPlayer& player, const StartFacts& facts);
+/// The creature of a marked computer player that is not the local player learns its player's miracles
+[[nodiscard]] bool LearnsMiracles(const ecs::components::ComputerPlayer& player, const StartFacts& facts);
+
+/// The species of the creature for a random value below k_SpeciesChoices
+[[nodiscard]] CreatureType SpeciesFor(uint32_t roll);
+/// The size of the creature: the shown size of the local player's creature times 0.9 plus the random share added
+[[nodiscard]] float SizeLike(float localShownSize, float addedShare);
+/// The miracles that the creature learns, in the order of the magic types. The player must have a temple. Then the
+/// creature learns each miracle that the player can cast, and the miracles that it always knows.
+[[nodiscard]] std::vector<MagicType> MiraclesToLearn(const ecs::components::Player::Miracles& miracles, bool temple);
+
+/// What the start of a computer mind reads and changes in the game
+class World
+{
+public:
+	virtual ~World() = default;
+
+	[[nodiscard]] virtual PlayerNames LocalPlayer() const = 0;
+	/// The first creature of the player that is still the player's
+	[[nodiscard]] virtual std::optional<entt::entity> Creature(PlayerNames player) const = 0;
+	/// The size that the creature shows
+	[[nodiscard]] virtual float ShownSize(entt::entity creature) const = 0;
+	/// The creature gets the size at once, and shows it
+	virtual void SetSize(entt::entity creature, float size) = 0;
+	[[nodiscard]] virtual bool HasTemple(PlayerNames player) const = 0;
+	/// The place of the creature's pen at the temple of the player, on the land
+	[[nodiscard]] virtual std::optional<glm::vec3> Pen(PlayerNames player) const = 0;
+	[[nodiscard]] virtual bool Skirmish() const = 0;
+	[[nodiscard]] virtual ecs::components::Player::Miracles Miracles(PlayerNames player) const = 0;
+	virtual void MakeCreature(PlayerNames player, CreatureType species, const glm::vec3& position) = 0;
+	/// The creature learns the miracle as a script teaches it
+	virtual void Teach(entt::entity creature, MagicType miracle) = 0;
+	virtual uint32_t GameRand(uint32_t range) = 0;
+	virtual float GameFloatRand(float most) = 0;
+};
+
+/// The start of a computer mind on the land, in the order of the game
+void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state);
+
+} // namespace openblack::computer_player

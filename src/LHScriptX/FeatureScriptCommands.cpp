@@ -60,6 +60,7 @@
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -1015,15 +1016,22 @@ void FeatureScriptCommands::SetInteractDesire(float)
 	// __func__);
 }
 
-void FeatureScriptCommands::ToggleComputerPlayer(const std::string& affiliation, int32_t)
+void FeatureScriptCommands::ToggleComputerPlayer(const std::string& affiliation, int32_t toggle)
 {
-	PlayerArchetype::Create(GetPlayerName(affiliation));
+	// Any value but 0 switches the computer mind of the player on, and 0 switches it off
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SwitchOn(GetPlayerName(affiliation), toggle != 0);
+	}
 }
 
-void FeatureScriptCommands::SetComputerPlayerCreatureLike(const std::string&, const std::string&)
+void FeatureScriptCommands::SetComputerPlayerCreatureLike(const std::string& affiliation, const std::string& like)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The computer mind keeps the name, which starts the size change of its creature at the start of the mind
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetCreatureLike(GetPlayerName(affiliation), GetPlayerName(like));
+	}
 }
 
 void FeatureScriptCommands::MultiplayerDebug(int32_t, int32_t)

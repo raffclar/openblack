@@ -144,6 +144,7 @@
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -1704,6 +1705,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::templeDestructionSystem::has_value())
 	{
 		Locator::templeDestructionSystem::value().ProcessTurn();
+	}
+	// In the turn of the players, each computer mind that a land script switched on starts on the land
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().ProcessTurn();
 	}
 	// The sharks' turns start where they are, then the things the scripts walk along tracks go on, before the living
 	Locator::sharkSystem::value().ProcessTurn();
