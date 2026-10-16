@@ -2143,9 +2143,12 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    SetDemobilised(static_cast<entt::entity>(commands.demobilise->first), commands.demobilise->second);
 		    }
-		    // A joint action with a town ends in a desire about the town: its plan takes the place of the agenda
+		    // A joint action with a town ends in a desire about the town: its plan takes the place of the agenda. The
+		    // action stops as a failure, and so the joint action stops at once for the partner too, before the partner
+		    // takes up the desire of its own step.
 		    if (commands.applyDesire.has_value())
 		    {
+			    EndJointAction(entity);
 			    ForceDesireOn(entity, commands.applyDesire->desire, static_cast<entt::entity>(commands.applyDesire->thing));
 		    }
 		    if (commands.letGo.has_value())

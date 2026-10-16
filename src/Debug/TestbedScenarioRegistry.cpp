@@ -5852,6 +5852,97 @@ void AddMind(std::vector<Scenario>& all)
 	                  .value = static_cast<uint32_t>(Desire::BeFriends),
 	                  .amount = 600.0f}},
 	});
+	// One joint action with the lion, which a script tells the tiger to do. The lion first smiles at the tiger by a
+	// script too, so that a script controls both and the lion agrees.
+	struct JointScene
+	{
+		std::string_view id;
+		std::string_view name;
+		std::string_view action;
+		bool town {false};
+		std::optional<Desire> desire;
+		std::string_view expected;
+	};
+	for (const auto& scene : {
+	         JointScene {.id = "friends.happy_together",
+	                     .name = "Be happy with a friend",
+	                     .action = "BeHappyWithFriend",
+	                     .expected = "Both go to places side by side and the tiger waits until the lion stops. Both turn "
+	                                 "to face each other and play the happy action."},
+	         JointScene {.id = "friends.sit_together",
+	                     .name = "Sit with a friend",
+	                     .action = "SitWithFriend",
+	                     .expected = "Both go to the two sides of a clear place, turn to face each other and sit for 10 "
+	                                 "to 15 seconds. Then the tiger plays the happy action."},
+	         JointScene {.id = "friends.sleep_together",
+	                     .name = "Sleep with a friend",
+	                     .action = "SleepWithFriend",
+	                     .desire = Desire::Tiredness,
+	                     .expected = "Both go to the two sides of a clear place, turn to face each other and sleep for 17 "
+	                                 "seconds. Then the tiger wakes with a confused look."},
+	         JointScene {.id = "friends.drink_together",
+	                     .name = "Drink with a friend",
+	                     .action = "DrinkWithFriend",
+	                     .desire = Desire::Water,
+	                     .expected = "Both go to the nearest coast, side by side, turn to face the sea and drink. Then "
+	                                 "the tiger turns to the lion with a smile."},
+	         JointScene {.id = "friends.poo_together",
+	                     .name = "Have a poo with a friend",
+	                     .action = "PooWithFriend",
+	                     .desire = Desire::Poo,
+	                     .expected = "Both go to places side by side, squat for four seconds and have a poo. Then the "
+	                                 "tiger turns to the lion with a smile and plays the happy action."},
+	         JointScene {.id = "friends.help_town_together",
+	                     .name = "Help a town with a friend",
+	                     .action = "HelpTownWithFriend",
+	                     .town = true,
+	                     .expected = "The tiger turns to the lion, plays the happy action and points at the town. Both go "
+	                                 "near the storage pit and turn to face each other. Then the first of the two to take "
+	                                 "up the wish to help the town does so, and the other one stops."},
+	         JointScene {.id = "friends.attack_town_together",
+	                     .name = "Attack a town with a friend",
+	                     .action = "AttackWithFriend",
+	                     .town = true,
+	                     .desire = Desire::Anger,
+	                     .expected = "The script's action fails: a creature that has learnt nothing finds the town more "
+	                                 "useful to its compassion than to its anger, so it cannot attack the town. A creature "
+	                                 "taught to be angry with towns attacks it as helping a town with a friend."},
+	     })
+	{
+		auto tiger = Content(CreatureType::Tiger, {-25.0f, 0.0f}, 90.0f, "asks");
+		if (scene.desire.has_value())
+		{
+			tiger.desires = {{.desire = *scene.desire, .fraction = 0.6f}};
+			tiger.hold = true;
+		}
+		Scenario scenario {
+		    .id = scene.id,
+		    .name = scene.name,
+		    .facet = Facet::Mind,
+		    .description = "A tiger and a lion of no player stand 50 apart and face each other. A script tells the lion "
+		                   "to smile at the tiger, then tells the tiger to do a joint action with the lion.",
+		    .expected = scene.expected,
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Overview},
+		    .creatures = {tiger, guideLion({25.0f, 0.0f}, 270.0f)},
+		    .commands = {{.kind = Kind::DoAction,
+		                  .creature = 1,
+		                  .delaySeconds = 0.5f,
+		                  .action = "SmileAtFriend",
+		                  .atCreature = size_t {0}},
+		                 {.kind = Kind::DoAction,
+		                  .creature = 0,
+		                  .delaySeconds = 4.0f,
+		                  .action = scene.action,
+		                  .atCreature = size_t {1}}},
+		};
+		if (scene.town)
+		{
+			scenario.objects = {
+			    {.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, -70.0f}, .storedFood = 2000, .storedWood = 0}};
+		}
+		all.push_back(std::move(scenario));
+	}
 	auto missing = Content(CreatureType::Tiger, {-60.0f, 0.0f}, 90.0f, "misses its friend");
 	missing.desires = OnlyDesire(Desire::MissFriend);
 	all.push_back({
