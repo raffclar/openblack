@@ -42,6 +42,11 @@ SpeciesPrint PrintOf(CreatureType species, bool aprilFools)
 	return print;
 }
 
+std::optional<Feet> FeetForPrint(const std::optional<Feet>& drawn, const std::optional<Feet>& now)
+{
+	return drawn.has_value() ? drawn : now;
+}
+
 Foot FootOf(const glm::mat4& world)
 {
 	// The game's matrices are the transposes of these. Its yaw, of a turn about y then x then z, comes from what the

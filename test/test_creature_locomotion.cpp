@@ -61,6 +61,16 @@ TEST(CreatureLocomotion, ExhaustedCreaturesGoSlowly)
 	EXPECT_NEAR(RequiredFraction(0.9f, 0.5f, 0.8f), 0.5f, k_Tolerance);
 }
 
+TEST(CreatureLocomotion, AWalkKeepsTheSpeedThatTheCreatureGotLast)
+{
+	// After a run, a walk that asks for no speed goes on at the run speed
+	EXPECT_NEAR(KeptFraction(0.9f, 0.6f), 0.9f, k_Tolerance);
+	// A pull on the leash gave it more than its run speed, and it keeps that too
+	EXPECT_NEAR(KeptFraction(1.4f, 0.6f), 1.4f, k_Tolerance);
+	// A creature that got no speed yet walks
+	EXPECT_NEAR(KeptFraction(0.0f, 0.6f), 0.6f, k_Tolerance);
+}
+
 TEST(CreatureLocomotion, AcceleratesAtTwelveUnitsASecondEachSecond)
 {
 	EXPECT_NEAR(Accelerate(0.0f, 10.0f, 0.1f), 1.2f, k_Tolerance);
