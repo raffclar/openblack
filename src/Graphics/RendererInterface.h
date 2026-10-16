@@ -284,8 +284,9 @@ public:
 	virtual void PrepareCreatureSkins(size_t count) const noexcept = 0;
 	/// Draws a scene as DrawScene does, but only so that the renderer makes its pipelines and render targets: the next
 	/// frame shows none of it, and nothing that later frames draw changes. Call it behind the loading screen, before
-	/// the draws of the loading frame, so that the first frames of the game do not make them.
-	virtual void WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept = 0;
+	/// the draws of the loading frame, so that the first frames of the game do not make them. Some renderers divide the
+	/// draws between some frames: call it with part 0, then with the next part in each frame while it gives true.
+	[[nodiscard]] virtual bool WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept = 0;
 	/// Makes the next frame wait until the GPU did all the work that the renderer sent before it. Then the renderer
 	/// releases all the memory that it kept for that work. Without this, some backends keep that memory for hundreds of
 	/// command lists and then release all of it in one frame of the game. Call it behind the loading screen.

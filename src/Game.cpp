@@ -972,11 +972,18 @@ void Game::WarmUpFirstFrame()
 		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams);
 	}
 	const auto start = std::chrono::steady_clock::now();
-	const bool shown = RenderLoadingFrame(true, [&renderer, &config, this]() {
-		renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn()));
-		// The interface draws over the scene too, and the cinema bars are its first draw
-		gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
-	});
+	// Some renderers divide the warm-up between some frames, each with a part of the draws
+	bool shown = false;
+	bool partsLeft = true;
+	for (uint32_t part = 0; partsLeft; ++part)
+	{
+		partsLeft = false;
+		shown = RenderLoadingFrame(true, [&renderer, &config, &partsLeft, part, this]() {
+			partsLeft = renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn()), part);
+			// The interface draws over the scene too, and the cinema bars are its first draw
+			gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
+		});
+	}
 	// The first frame makes the draw lists again from what the game's first update changed
 	if (config.drawEntities)
 	{
