@@ -41,6 +41,7 @@ public:
 	void SetDance(uint32_t id, entt::entity dance) override;
 	[[nodiscard]] bool IsActive(uint32_t id) const override;
 	[[nodiscard]] bool HasReaction(entt::entity initiator) const override;
+	[[nodiscard]] bool IsAvailable(entt::entity living, Reaction type) const override;
 	void ProcessTurn() override;
 	[[nodiscard]] uint32_t CurrentTurn() const override { return _turn; }
 	void Reset() override;

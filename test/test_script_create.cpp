@@ -167,3 +167,11 @@ TEST(ScriptCreate, AWeatherThingBringsASmallStormOfItsKindsWeather)
 	EXPECT_EQ(storm.effect.windX, 5);
 	EXPECT_EQ(storm.effect.windZ, -3);
 }
+
+TEST(ScriptCreate, OnlyACreatureTakesNoNoticeOfReactionsWhenAScriptMakesIt)
+{
+	EXPECT_TRUE(IgnoresReactions(ScriptType::Creature));
+	EXPECT_FALSE(IgnoresReactions(ScriptType::Villager));
+	EXPECT_FALSE(IgnoresReactions(ScriptType::Marker));
+	EXPECT_FALSE(IgnoresReactions(ScriptType::MobileStatic));
+}

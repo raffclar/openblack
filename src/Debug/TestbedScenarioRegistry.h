@@ -774,6 +774,9 @@ struct Command
 		/// makes the folder if it is missing. Then the game reads the file again, and the log tells if the record is the
 		/// same. Needs no creature
 		ProfileFolderCheck,
+		/// A script tells the creature to take notice of reactions (value 1) or to take no notice (value 0), as
+		/// a script's "enable ... reaction" and "disable ... reaction" do
+		ScriptReaction,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

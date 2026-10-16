@@ -118,6 +118,9 @@ public:
 	virtual void TakeUp(uint32_t /*id*/, entt::entity /*living*/) {}
 	/// Whether an initiator has a reaction going
 	[[nodiscard]] virtual bool HasReaction(entt::entity initiator) const = 0;
+	/// Whether a living thing may take up a kind of reaction now. A creature also catches a flying thing only when it may
+	/// take up a reaction, unless a desire was made its only desire.
+	[[nodiscard]] virtual bool IsAvailable(entt::entity /*living*/, Reaction /*type*/) const { return true; }
 	/// Once a game turn: the reactions age, and impress who is in their reach
 	virtual void ProcessTurn() = 0;
 	/// The turns the reactions have aged on this land, the clock everything that waits between reactions counts by

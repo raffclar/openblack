@@ -261,6 +261,36 @@ void AddCreatureCatch(std::vector<Scenario>& all)
 	});
 }
 
+void AddCreatureIgnoringReactions(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "physics.creature_ignoring_reactions_catches_nothing",
+	    .name = "A creature that takes no notice of reactions",
+	    .facet = Facet::Physics,
+	    .description = "A script tells a tiger to take no notice of reactions, as every creature that a script makes "
+	                   "starts. This includes the creature that the player picks in the glade on the first land. A "
+	                   "villager is thrown straight at the tiger every ten seconds. At 25 seconds a script tells the "
+	                   "tiger to take notice again.",
+	    .expected = "The tiger does not turn to the first villagers and does not catch them: they fly past it or land "
+	                "at its feet. After 25 seconds it turns to each villager that flies at it and catches it in its "
+	                "hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = glm::vec3(k_Field.x + 45.0f, 18.0f, k_Field.y + 4.0f),
+	                .look = glm::vec3(k_Field.x, 10.0f, k_Field.y + 12.0f)},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Field, .facingDegrees = 180.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = k_Field + glm::vec2 {-10.0f, 34.0f}}},
+	    .commands = {{.kind = Command::Kind::ScriptReaction, .creature = 0, .delaySeconds = 0.0f, .value = 0},
+	                 {.kind = Command::Kind::ScriptReaction, .creature = 0, .delaySeconds = 25.0f, .value = 1}},
+	    .throws = {{.object = 0,
+	                .from = k_Field + glm::vec2 {0.0f, 20.0f},
+	                .height = 14.0f,
+	                .velocity = {0.0f, 4.0f, -22.0f},
+	                .delaySeconds = 3.0f,
+	                .repeatSeconds = 10.0f}},
+	});
+}
+
 void AddSinking(std::vector<Scenario>& all)
 {
 	// One of each kind the physics treats differently in the water, dropped side by side into the lake's open water
@@ -355,6 +385,7 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddRockSplit(all);
 	AddCreatureHit(all);
 	AddCreatureCatch(all);
+	AddCreatureIgnoringReactions(all);
 	AddSinking(all);
 	AddTempleStruck(all);
 }

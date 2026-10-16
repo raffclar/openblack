@@ -99,6 +99,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/Mesh.h"
@@ -2377,6 +2378,21 @@ void Runner::Give(const Command& command)
 			result = "no such creature";
 		}
 		break;
+	case Kind::ScriptReaction:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		if (command.value != 0)
+		{
+			registry.Remove<ecs::components::CreatureReactionsOff>(*entity);
+			result = "takes notice";
+		}
+		else
+		{
+			registry.AssignOrReplace<ecs::components::CreatureReactionsOff>(*entity);
+			result = "takes no notice";
+		}
+		break;
+	}
 	case Kind::SwapMinds:
 		if (const auto other = CreatureAt(command.value))
 		{

@@ -213,21 +213,26 @@ public:
 	{
 		desireSources.emplace_back(source, amount);
 	}
-	bool ForceCatch(entt::entity /*creature*/, entt::entity /*object*/) override { return true; }
+	bool ForceCatch(entt::entity creature, entt::entity object) override
+	{
+		catches.emplace_back(creature, object);
+		return true;
+	}
 	[[nodiscard]] bool HasCreatureBodies() const override { return true; }
 	void KickSway(entt::entity creature, glm::vec3 /*force*/, glm::vec3 point) override { sways.emplace_back(creature, point); }
 	[[nodiscard]] std::optional<float> AnimationDuration(entt::entity /*creature*/, size_t /*animation*/) override
 	{
-		return std::nullopt;
+		return stepMs;
 	}
 	[[nodiscard]] std::optional<glm::vec3> AnimationTravel(entt::entity /*creature*/, size_t /*animation*/) override
 	{
-		return std::nullopt;
+		return stepTravel;
 	}
-	[[nodiscard]] std::optional<float> CatchMs(entt::entity /*creature*/) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<float> CatchMs(entt::entity /*creature*/) const override { return catchMs; }
 	[[nodiscard]] std::optional<entt::entity> HandHeldCreature() const override { return std::nullopt; }
 	[[nodiscard]] bool HasCreatureActions() const override { return true; }
 	[[nodiscard]] bool CanBeCaught(entt::entity /*object*/) const override { return true; }
+	[[nodiscard]] bool FreeToCatch(entt::entity /*creature*/) const override { return freeToCatch; }
 	void Catch(entt::entity /*creature*/, entt::entity /*object*/) override {}
 	void StopCreature(entt::entity /*creature*/) override {}
 	void DropCarriedLog(systems::DynamicsSystemInterface& /*dynamics*/, entt::entity villager,
@@ -266,6 +271,12 @@ public:
 	std::vector<float> feedbacks;
 	std::vector<std::pair<uint32_t, float>> desireSources;
 	std::vector<std::pair<entt::entity, glm::vec3>> sways;
+	/// How a creature's catch is timed; none until a test gives them
+	std::optional<float> catchMs;
+	std::optional<float> stepMs;
+	std::optional<glm::vec3> stepTravel;
+	bool freeToCatch {true};
+	std::vector<std::pair<entt::entity, entt::entity>> catches;
 };
 
 struct Fixture
@@ -574,4 +585,32 @@ TEST(PhysicsGameHooks, ThePlayersCreatureLearnsFromWhatTheHandThrewOnlyWhenItIsA
 	PhysicsEntry potEntry {.entity = pot, .player = PlayerNames::PLAYER_ONE, .flags = PhysicsEntry::k_FromHand};
 	f.hooks->ImpactFeedback(f.dynamics, potEntry, true);
 	EXPECT_EQ(f.world->deeds.size(), 2U);
+}
+
+// A creature catches a rock that flies to it only when it may take up a reaction now. A creature that takes no notice of
+// reactions, as one a script made does, lets the rock fly past.
+TEST(PhysicsGameHooks, ACreatureThatTakesNoNoticeOfReactionsCatchesNothing)
+{
+	Fixture fixture;
+	auto& world = *fixture.world;
+	ListedRandom random({}, {});
+	world.random = &random;
+	world.catchMs = 0.0f;
+	world.stepMs = 1000.0f;
+	world.stepTravel = glm::vec3(-100.0f, 0.0f, 0.0f);
+	const auto creature = world.registry.Create();
+	world.registry.Assign<Creature>(creature);
+	world.registry.Assign<Transform>(creature, glm::vec3(5.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	// The rock flies straight at the creature and passes it in half a second
+	const auto rock = world.registry.Create();
+	auto& entry = fixture.dynamics.AddRock(rock, glm::vec3(0.0f, 0.0f, -10.0f), std::nullopt);
+
+	world.freeToCatch = false;
+	fixture.hooks->OfferToCatchingCreatures(rock, entry);
+	EXPECT_TRUE(world.catches.empty());
+
+	world.freeToCatch = true;
+	fixture.hooks->OfferToCatchingCreatures(rock, entry);
+	ASSERT_EQ(world.catches.size(), 1U);
+	EXPECT_EQ(world.catches.front(), std::make_pair(creature, rock));
 }

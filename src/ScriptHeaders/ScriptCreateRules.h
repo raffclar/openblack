@@ -40,6 +40,10 @@ inline constexpr int32_t k_LastCreateType = static_cast<int32_t>(ObjectType::Ani
 /// static do; everything else is made standing on the land under that place, whatever height the script gave.
 [[nodiscard]] bool KeepsScriptHeight(ObjectType type);
 
+/// Whether a thing a script creates takes no notice of reactions until a script tells it to. Only a creature does: it
+/// does not react to what happens near it, and it does not catch what flies to it.
+[[nodiscard]] bool IgnoresReactions(ObjectType type);
+
 /// CREATE_WITH_ANGLE_AND_SCALE gives its angle in degrees; things are turned in radians
 [[nodiscard]] float AngleFromDegrees(float degrees);
 
