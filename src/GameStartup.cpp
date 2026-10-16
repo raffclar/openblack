@@ -27,10 +27,12 @@
 #include "Creature/CreatureSkin.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
+#include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -123,7 +125,7 @@ bool Game::HasPlayerProfiles() noexcept
 player_profiles::Store Game::ProfileStore() const
 {
 	auto store = player_profiles::StoreFor(
-	    {.profileFolder = _profileFolder, .userFolder = user_data::Folder(), .automated = _automatedRun});
+	    {.profileFolder = _profileFolder, .userFolder = user_data::ProfileFolder(), .automated = _automatedRun});
 	if (store.developer)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "A developer's run: playing as the profile \"{}\", its creature kept in {}",
@@ -135,6 +137,40 @@ player_profiles::Store Game::ProfileStore() const
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The players' profiles are kept in {}", store.folder->generic_string());
 	}
 	return store;
+}
+
+std::optional<std::u16string> Game::PlayerForProfileFiles() const
+{
+	if (_developerProfile || !Locator::playerProfileSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	if (!profile.has_value())
+	{
+		return std::nullopt;
+	}
+	return gui::ToUtf16(profile->name);
+}
+
+void Game::LoadHelpRecord()
+{
+	const auto player = PlayerForProfileFiles();
+	if (!player.has_value() || !Locator::profileFolderSystem::has_value() || !Locator::helpProfileSystem::has_value())
+	{
+		return;
+	}
+	Locator::helpProfileSystem::value().LoadRecord(Locator::profileFolderSystem::value(), *player);
+}
+
+void Game::SaveHelpRecord()
+{
+	const auto player = PlayerForProfileFiles();
+	if (!player.has_value() || !Locator::profileFolderSystem::has_value() || !Locator::helpProfileSystem::has_value())
+	{
+		return;
+	}
+	Locator::helpProfileSystem::value().SaveRecord(Locator::profileFolderSystem::value(), *player);
 }
 
 bool Game::AskForNewPlayer()

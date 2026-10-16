@@ -16,6 +16,7 @@
 #include <functional>
 #include <iosfwd>
 #include <memory>
+#include <span>
 #include <vector>
 
 #include "Stream.h"
@@ -125,6 +126,15 @@ public:
 	virtual std::vector<uint8_t> ReadAll(const std::filesystem::path& path) = 0;
 	virtual void Iterate(const std::filesystem::path& path, bool recursive,
 	                     const std::function<void(const std::filesystem::path&)>& function) const = 0;
+
+	/// Makes the folder at the exact path, and each folder above it that is missing. The game only reads its own
+	/// folder, thus this makes nothing there. Returns true when the folder is there after the call.
+	virtual bool MakeFolder(const std::filesystem::path& path);
+	/// Writes the bytes to the file at the exact path, in place of its contents. The game only reads its own folder,
+	/// thus this writes nothing there. Returns true when it wrote all the bytes.
+	virtual bool WriteAll(const std::filesystem::path& path, std::span<const uint8_t> bytes);
+	/// True when the path is in the game's folder
+	[[nodiscard]] bool InGameFolder(const std::filesystem::path& path) const;
 };
 
 } // namespace openblack::filesystem

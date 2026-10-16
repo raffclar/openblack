@@ -124,8 +124,8 @@ std::optional<std::filesystem::path> PlayerProfileSystem::SavedGamesFolder() con
 	{
 		return std::nullopt;
 	}
-	// Each profile keeps its own, under the profiles' folder by its name made safe for a folder's
-	return *_store.folder / "Profiles" / player_profiles::ProfileKey(gui::ToUtf16(profile->name)) / "Saved Games";
+	// Each player has a folder in the profile folder, with the name that the game makes from the name of the profile
+	return *_store.folder / player_profiles::ProfileKey(gui::ToUtf16(profile->name)) / "Saved Games";
 }
 
 player_profiles::NameCheck PlayerProfileSystem::CheckNewName(std::u16string_view name) const

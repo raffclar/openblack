@@ -24,6 +24,8 @@ class HelpProfileSystem final: public HelpProfileSystemInterface
 public:
 	void Trigger(uint32_t event) override;
 	void ProcessTurn(bool frontEndBoxShows, const std::optional<help::profile::WorldCameraView>& worldCamera) override;
+	void LoadRecord(const ProfileFolderSystemInterface& folder, std::u16string_view player) override;
+	bool SaveRecord(ProfileFolderSystemInterface& folder, std::u16string_view player) const override;
 
 	[[nodiscard]] const help::profile::HelpProfile& Get() const override { return _profile; }
 	[[nodiscard]] help::profile::HelpProfile& Get() override { return _profile; }
