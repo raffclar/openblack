@@ -280,6 +280,7 @@ void CreatureMindSystem::CarryOutDance(entt::entity creature, creature_mind::Idl
 			data.state = Dance::State::Dancing;
 			data.startTurn = Turn();
 			data.clock = 0.0f;
+			record.startedBy = idle.serial;
 		}
 		creature_mind::DanceOrderDone(idle, true);
 		break;
@@ -329,14 +330,10 @@ void CreatureMindSystem::KeepDanceWithAgenda(entt::entity creature, const creatu
 	{
 		return;
 	}
-	// The dance goes on while the agenda tells the people to dance, or while the creature dances
-	if (idle.step < idle.agenda.size() && idle.agenda[idle.step].kind == creature_mind::Step::Kind::Dance)
+	// The dance continues through all the steps of the agenda that started it, also the steps between the start and the
+	// dance, such as the turn to the temple. It stops when that agenda ends or another replaces it.
+	if (!creature_dance::DanceGoesOn(record->startedBy, idle.serial, idle.step < idle.agenda.size()))
 	{
-		const auto stage = idle.agenda[idle.step].dance.kind;
-		if (stage == DanceOrder::Kind::TellToDance || stage == DanceOrder::Kind::Dance)
-		{
-			return;
-		}
+		registry.Get<Dance>(dance).state = Dance::State::Stopped;
 	}
-	registry.Get<Dance>(dance).state = Dance::State::Stopped;
 }

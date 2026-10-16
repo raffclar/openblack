@@ -259,6 +259,24 @@ TEST(CreatureDance, TheCreatureDancesItsTurnsThenStopsTheDance)
 	EXPECT_EQ(mind.step, 1U);
 }
 
+// The dance move does not start the dance while the creature walks or turns, only when it stands still
+TEST(CreatureDance, TheDanceMoveWaitsUntilTheCreatureStandsStill)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Planned,
+	                    {{.kind = Step::Kind::Dance, .dance = {.kind = DanceOrder::Kind::Dance, .count = 10}}});
+	auto senses = Free();
+	senses.dance = creature_mind::Senses::DanceView {.exists = true, .inGroup = true, .action = 34, .danceRate = 0.8f};
+	// The turn it joins the dance
+	static_cast<void>(creature_mind::Think(mind, senses, NoRandom()));
+	auto walking = senses;
+	walking.moving = true;
+	EXPECT_FALSE(creature_mind::Think(mind, walking, NoRandom()).startDance.has_value());
+	const auto still = creature_mind::Think(mind, senses, NoRandom());
+	ASSERT_TRUE(still.startDance.has_value());
+	EXPECT_FLOAT_EQ(*still.startDance, 800.0f);
+}
+
 TEST(CreatureDance, ItWaitsUntilNoDancerMovesAndGivesUpWithoutADance)
 {
 	creature_mind::IdleMind mind;

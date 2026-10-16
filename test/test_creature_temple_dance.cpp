@@ -7,8 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
+
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureDance.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreatureTempleDance.h"
@@ -100,4 +103,20 @@ TEST(CreatureTempleDance, TheTempleDanceGoesToItsOwnTemple)
 	const auto steps = plan_actions::Agenda(action, 3u, {}, situation, First);
 	ASSERT_TRUE(steps.has_value());
 	EXPECT_EQ(steps->front().movement.object, 11u);
+}
+
+// The dance that the agenda started continues through the turn to the temple between the start and the dance
+TEST(CreatureTempleDance, TheDanceContinuesThroughTheStepsOfItsAgenda)
+{
+	constexpr uint32_t k_Agenda = 7;
+	EXPECT_TRUE(creature_dance::DanceGoesOn(k_Agenda, k_Agenda, true));
+}
+
+// The dance stops when its agenda ends, when a new agenda replaces it, or when no agenda started it
+TEST(CreatureTempleDance, TheDanceStopsWithItsAgenda)
+{
+	constexpr uint32_t k_Agenda = 7;
+	EXPECT_FALSE(creature_dance::DanceGoesOn(k_Agenda, k_Agenda, false));
+	EXPECT_FALSE(creature_dance::DanceGoesOn(k_Agenda, k_Agenda + 1, true));
+	EXPECT_FALSE(creature_dance::DanceGoesOn(std::nullopt, k_Agenda, true));
 }
