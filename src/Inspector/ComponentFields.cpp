@@ -1599,7 +1599,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SpellCaster::player>("player")
 	    .Field<&components::SpellCaster::entity>("entity")
 	    .Field<&components::SpellCaster::withoutIcon>("withoutIcon")
-	    .Field<&components::SpellCaster::worshipSite>("worshipSite");
+	    .Field<&components::SpellCaster::worshipSite>("worshipSite")
+	    .Field<&components::SpellCaster::madeBySpellIcon>("madeBySpellIcon");
 	Reflect<components::Spell>(context)
 	    .Field<&components::Spell::magicType>("magicType")
 	    .Field<&components::Spell::spellClass>("spellClass")

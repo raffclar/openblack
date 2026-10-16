@@ -372,3 +372,13 @@ TEST(CreatureReactionRules, ANiceMiracleOfAnotherGodTeachesNothing)
 	EXPECT_TRUE(creature_reaction::OfAnotherGod(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
 	EXPECT_TRUE(creature_reaction::OfAnotherGod(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO));
 }
+
+TEST(CreatureReactionRules, AnIconMiracleWithNoSeedTeachesNothing)
+{
+	// A miracle from a seed made at an icon counts while the seed is still linked to it
+	EXPECT_FALSE(creature_reaction::MadeByIconWithoutSeed(true, true));
+	EXPECT_TRUE(creature_reaction::MadeByIconWithoutSeed(true, false));
+	// A miracle that no icon made counts with or without a seed
+	EXPECT_FALSE(creature_reaction::MadeByIconWithoutSeed(false, false));
+	EXPECT_FALSE(creature_reaction::MadeByIconWithoutSeed(false, true));
+}

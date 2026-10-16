@@ -5461,6 +5461,31 @@ void AddMind(std::vector<Scenario>& all)
 	                 Act(Kind::TakeOffLeash, 0, 60.0f)},
 	});
 
+	auto iconWatcher = Content(CreatureType::Tiger, {0.0f, 0.0f});
+	iconWatcher.phase = 13;
+	auto healed = Content(CreatureType::Cow, {0.0f, 30.0f}, 180.0f, "hurt");
+	healed.needs.life = 0.3f;
+	all.push_back({
+	    .id = "learning.icon_miracle_without_seed",
+	    .name = "A miracle with no seed teaches nothing",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger stands near a hurt cow. A heal seed from the player's worship (made at an icon) "
+	                   "is pressed on the cow: the seed goes once it casts.",
+	    .expected = "When the tiger takes up its reaction to the heal (some seconds later), the log tells that it "
+	                "ignores the miracle: an icon made it and no seed holds it now. The tiger does not go to look at the "
+	                "heal, and its knowledge of the heal miracle does not change.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 0.0f}, {0.0f, 30.0f}}, .distance = 0.6f},
+	    .creatures = {iconWatcher, healed},
+	    .miracles = {{.type = MagicType::Heal,
+	                  .target = MiracleCast::Target::Creature,
+	                  .creature = 1,
+	                  .handOffset = {0.0f, 30.0f},
+	                  .delaySeconds = 2.0f,
+	                  .byHand = true,
+	                  .fromWorship = true}},
+	});
+
 	{
 		// A ring of huts shuts the tiger in, with a cow outside it
 		auto shutIn = Content(CreatureType::Tiger, {0.0f, 0.0f});

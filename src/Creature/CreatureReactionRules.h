@@ -189,4 +189,9 @@ inline constexpr float k_SadnessAtDeath = 1.0f;
 /// and does not learn it. Gods are never allies in openblack, so every other god counts. A miracle of no god does not.
 [[nodiscard]] bool OfAnotherGod(PlayerNames caster, PlayerNames creatureOwner);
 
+/// Whether a creature ignores a miracle because a spell icon made it and no seed is linked to it now. This occurs when
+/// the seed that cast the miracle is gone or let it go. The creature does not look at a nice miracle of this kind, and it
+/// learns no miracle of this kind. A nasty miracle of this kind still makes it run or look.
+[[nodiscard]] bool MadeByIconWithoutSeed(bool madeBySpellIcon, bool seedLinked);
+
 } // namespace openblack::creature_reaction

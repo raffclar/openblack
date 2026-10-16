@@ -250,3 +250,8 @@ bool creature_reaction::OfAnotherGod(PlayerNames caster, PlayerNames creatureOwn
 {
 	return caster != PlayerNames::NEUTRAL && caster != creatureOwner;
 }
+
+bool creature_reaction::MadeByIconWithoutSeed(bool madeBySpellIcon, bool seedLinked)
+{
+	return madeBySpellIcon && !seedLinked;
+}

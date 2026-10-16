@@ -47,6 +47,9 @@ struct SpellCaster
 	bool withoutIcon {false};
 	/// A player's miracle from a seed made at a worship site's icon: the site tops it up
 	entt::entity worshipSite {entt::null};
+	/// A spell icon made the miracle: a seed that an icon made cast it. A creature does not learn such a miracle when no
+	/// seed is linked to it.
+	bool madeBySpellIcon {false};
 };
 
 /// A running miracle. Positions are points of the world.

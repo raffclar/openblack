@@ -2294,7 +2294,8 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 	                          .player = seed.player,
 	                          .entity = entt::null,
 	                          .withoutIcon = !seed.hasIcon,
-	                          .worshipSite = seed.worshipSite};
+	                          .worshipSite = seed.worshipSite,
+	                          .madeBySpellIcon = seed.hasIcon};
 	const auto spellEntity =
 	    object.has_value() ? CastOn(type, caster, *object, cast, HandInfo()) : Cast(type, caster, point, cast, HandInfo());
 	if (spellEntity == entt::null)
