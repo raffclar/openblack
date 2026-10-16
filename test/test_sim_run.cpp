@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
 #include <chrono>
 #include <optional>
 
@@ -73,4 +74,17 @@ TEST(SimRun, TimingsGiveAveragesAndTheLongest)
 	EXPECT_FLOAT_EQ(timings.TurnAverageMs(), 3.0f);
 	EXPECT_FLOAT_EQ(timings.turnLongestMs, 4.0f);
 	EXPECT_FLOAT_EQ(timings.FrameAverageMs(), 1.0f);
+}
+
+TEST(SimRun, TimingsAddTheStagesOfEachFrame)
+{
+	Timings timings;
+	const std::array<float, 3> first {1.0f, 0.0f, 2.0f};
+	const std::array<float, 2> second {0.5f, 1.5f};
+	timings.AddStages(first);
+	timings.AddStages(second);
+	ASSERT_EQ(timings.stageTotalMs.size(), 3u);
+	EXPECT_FLOAT_EQ(timings.stageTotalMs[0], 1.5f);
+	EXPECT_FLOAT_EQ(timings.stageTotalMs[1], 1.5f);
+	EXPECT_FLOAT_EQ(timings.stageTotalMs[2], 2.0f);
 }

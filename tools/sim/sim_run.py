@@ -18,8 +18,9 @@ fixed turns, so that a style gives the same run each time:
     neglect   the hand stays far from the creature, and does nothing
     good      the hand strokes the creature each time some turns go by
     evil      the hand slaps the creature each time some turns go by
-    training  the hand strokes the creature after the actions of TRAINING_REWARD and slaps it after those of
-              TRAINING_PUNISH, as a player trains a creature
+    training  the hand trains the creature to be good, as a player does: after each thing it did that it can learn
+              from, a stroke when the thing moves the creature to good and a slap when it moves it to evil (see
+              training_feedback)
 
 With --stages, the run starts the creature at the first stage of growing up and moves it on one stage at a time, as
 the story's lessons do, up to the last; the run then continues as the creature grows old.
@@ -50,9 +51,14 @@ DEFAULT_FRAME_MS = 20
 # How long the driver waits for the game to start, and for a step to end, in seconds
 START_TIMEOUT = 300.0
 STEP_TIMEOUT = 600.0
-# The actions after which the training style rewards or punishes the creature, by the names of the game's table
-TRAINING_REWARD = ("Eat", "Drink", "Sleep", "Help", "Water", "Play", "Dance", "Heal", "Gather", "Build")
-TRAINING_PUNISH = ("Poo", "Destroy", "Throw", "Kick", "Kill", "Steal", "Attack", "Smash", "Fart")
+# The training style judges what the creature did as the game's alignment does: a plan for a desire that the game's
+# table of desires (info.dat, the alignment change of each desire) says moves the creature to good is stroked, and one
+# it says moves the creature to evil is slapped. In the game's data these are Compassion, Be friends and Educate friend
+# (good), and Anger and Steal (evil). A hunger plan that eats a villager moves it to evil too (the alignment table).
+# All other plans move nothing, so the style gives them no feedback.
+TRAINING_EATS = "Hunger"
+# The game's belief type of a villager
+VILLAGER_BELIEF = 6
 STYLES = ("none", "neglect", "good", "evil", "training")
 # The script native that moves a creature to a stage of growing up, as the story's lessons do
 STAGE_NATIVE = "SET_CREATURE_DEV_STAGE"
@@ -215,10 +221,6 @@ def park_hand(game):
     game.step_frames(2)
 
 
-def matches(action, names):
-    return isinstance(action, str) and any(name.lower() in action.lower() for name in names)
-
-
 def act(game, style, state):
     """The style's input after a step"""
     creature = creature_of(game)
@@ -233,14 +235,31 @@ def act(game, style, state):
         return "slap" if slap(game, creature) else None
     if style == "training":
         record = game.call("sim.sample").get("creature") or {}
-        done = record.get("last_action_done")
-        if done == state.get("last_done"):
+        context = record.get("context")
+        key = (record.get("plan_serial"), json.dumps(context, sort_keys=True))
+        if context is None or key == state.get("last_context"):
             return None
-        state["last_done"] = done
-        if matches(done, TRAINING_REWARD):
+        state["last_context"] = key
+        feedback = training_feedback(context)
+        if feedback == "stroke":
             return "stroke" if stroke(game, creature) else None
-        if matches(done, TRAINING_PUNISH):
+        if feedback == "slap":
             return "slap" if slap(game, creature) else None
+    return None
+
+
+def training_feedback(context):
+    """What the training style gives for the newest thing the creature did: "stroke", "slap" or None. Only a thing it can
+    learn from, and that is over, gets feedback."""
+    if not context or not context.get("learnable") or context.get("running"):
+        return None
+    if context.get("desire") == TRAINING_EATS and context.get("object_kind") == VILLAGER_BELIEF:
+        return "slap"
+    change = context.get("alignment_change") or 0.0
+    if change > 0.0:
+        return "stroke"
+    if change < 0.0:
+        return "slap"
     return None
 
 

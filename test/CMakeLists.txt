@@ -1085,3 +1085,10 @@ if (Python3_Interpreter_FOUND)
                    ${CMAKE_SOURCE_DIR}/tools/sim/test_sim_report.py
   )
 endif ()
+# The feedback of the training style of the simulation driver
+if (Python3_Interpreter_FOUND)
+  add_test(NAME test_sim_run_training
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tools/sim/test_sim_run.py
+  )
+endif ()
