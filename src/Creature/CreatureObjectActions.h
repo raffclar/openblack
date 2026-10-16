@@ -52,6 +52,12 @@ enum class Kind : uint8_t
 };
 [[nodiscard]] std::string_view Name(Kind kind);
 
+/// Whether the arm that holds a thing shows the hold pose over the body, while the body plays the animation of an
+/// action, or no action (none). The animations that move the held thing themselves replace the hold pose: picking up,
+/// letting go or eating, stroking, shaking, smelling or examining, the throw itself, catching and taking from the god's
+/// hand. Walking or turning to the thing first, knocking down, kicking and pointing keep it.
+[[nodiscard]] bool ShowsHoldPose(std::optional<Kind> playing);
+
 /// The animations of what it does to what it holds while keeping it: stroke, shake, smell, examine
 constexpr size_t k_FirstKeepAnimation = 100;
 constexpr size_t k_KeepAnimationCount = 4;
