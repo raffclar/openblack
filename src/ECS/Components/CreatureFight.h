@@ -94,9 +94,12 @@ struct CreatureFighting
 /// What a creature has learnt of fighting, kept between fights
 struct CreatureFightRecord
 {
-	/// How it leans in fights, from -1 (defensive) to 1 (aggressive), which the temple's belts show
+	/// How it leans in fights, from -1 (defensive) to 1 (aggressive), which the temple's belts show. Its moves change it
+	/// as they are made.
 	float tendency {0.0f};
-	bool foughtBefore {false};
+	/// The lean that the computer chooses its moves by in its fights: 0 for a new creature, then the learnt lean as it
+	/// was when the creature last started a fight. A fight that another creature started keeps it as it is.
+	float choosingTendency {0.0f};
 	uint32_t fights {0};
 	uint32_t wins {0};
 	/// Who chose its moves when its last fight ended, or as a script last set it; nobody before its first fight. Each

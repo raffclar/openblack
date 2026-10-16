@@ -272,6 +272,26 @@ TEST(CreatureFight, PlayerMovesTakeBackControlAndTeach)
 	EXPECT_FLOAT_EQ(FirstTendency(-0.7f), 0.7f);
 }
 
+TEST(CreatureFight, StepsTeachEveryCreatureAndOtherMovesOnlyTheHumanPlayers)
+{
+	EXPECT_TRUE(LearnsFromMove(Move::Kind::Animation, false));
+	EXPECT_TRUE(LearnsFromMove(Move::Kind::Animation, true));
+	EXPECT_FALSE(LearnsFromMove(Move::Kind::Block, false));
+	EXPECT_FALSE(LearnsFromMove(Move::Kind::High, false));
+	EXPECT_TRUE(LearnsFromMove(Move::Kind::Block, true));
+	EXPECT_TRUE(LearnsFromMove(Move::Kind::Special, true));
+}
+
+TEST(CreatureFight, TheLeanIsSetAgainstItsAlignmentUntilAFightIsCompleted)
+{
+	// No completed fight: the alignment sets the learnt lean again
+	EXPECT_FLOAT_EQ(TendencyAtStart(0, 0.4f, 0.6f), -0.6f);
+	EXPECT_FLOAT_EQ(TendencyAtStart(0, -0.9f, -0.3f), 0.3f);
+	// After a completed fight, the creature keeps the lean that it learnt
+	EXPECT_FLOAT_EQ(TendencyAtStart(1, 0.4f, 0.6f), 0.4f);
+	EXPECT_FLOAT_EQ(TendencyAtStart(7, -0.25f, -1.0f), -0.25f);
+}
+
 TEST(CreatureFight, ABlockQueuedWhileBlockingEndsTheBlock)
 {
 	Fighter fighter;
