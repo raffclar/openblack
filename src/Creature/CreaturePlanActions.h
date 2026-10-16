@@ -98,6 +98,11 @@ enum class Target : uint8_t
 	/// A thing that the creature can steal: a toy, a scaffold or a one-shot miracle that it can pick up, out of the
 	/// influence of its player
 	Stealable,
+	/// A built storage pit of the player of the creature; a built storage pit of another player, or of no player; a
+	/// field of another player, or of no player (see creature_town_theft)
+	OwnStoragePit,
+	OthersStoragePit,
+	OthersField,
 	/// A thing still going up (a building, a worship site or the temple), or a building that its town repairs and that
 	/// is below its full life; or a house (any of a town's buildings) below its full life
 	BuildingBeingBuilt,
@@ -372,6 +377,11 @@ enum class Build : uint8_t
 	/// Dancing outside its player's temple, and around a thing (see creature_temple_dance)
 	DanceOutsideTemple,
 	DanceAroundThing,
+	/// The thefts: a thing to a town of its player, and food or wood from a store of another player (see
+	/// creature_town_theft)
+	StealAndPutInTown,
+	StealFoodFromStore,
+	StealWoodFromStore,
 };
 
 /// What tells the planner that the creature did an action too recently to choose it again
@@ -571,6 +581,9 @@ struct Situation
 	/// temple stands, on the ground. The altar is none when the temple has no worship site.
 	bool holdingLiving {false};
 	std::optional<glm::vec3> sacrificeAltar;
+	/// For the theft that takes a thing to a town: the storage pit of the nearest town of its player, by its entity's
+	/// number. None when the player has no town, or that town has no storage pit.
+	std::optional<uint32_t> ownTownPit;
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo

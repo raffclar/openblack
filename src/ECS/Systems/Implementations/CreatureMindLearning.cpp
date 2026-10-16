@@ -69,6 +69,7 @@
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureTownCompassion.h"
+#include "Creature/CreatureTownTheft.h"
 #include "Creature/CreatureTraining.h"
 #include "Creature/CreatureTurnOrder.h"
 #include "Creature/CreatureWatching.h"
@@ -363,6 +364,7 @@ bool Strokeable(const ecs::Registry& registry, entt::entity entity, entt::entity
 }
 
 creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity thing);
+std::optional<uint32_t> BeliefPlayerOf(const ecs::Registry& registry, entt::entity thing);
 bool DoingSomethingInteresting(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity object);
 
 bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, entt::entity self)
@@ -584,6 +586,27 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	}
 	case Target::Stealable:
 		return CreatureMindSystem::CanSteal(self, entity);
+	case Target::OwnStoragePit:
+	case Target::OthersStoragePit:
+	{
+		const auto* progress = registry.TryGet<const BuildProgress>(entity);
+		const auto* me = registry.TryGet<const Creature>(self);
+		if (!registry.AllOf<StoragePit>(entity) || me == nullptr)
+		{
+			return false;
+		}
+		const bool built = progress == nullptr || !(progress->built < 1.0f);
+		const auto pitPlayer = BeliefPlayerOf(registry, entity);
+		const auto creaturePlayer = std::optional(PlayerNumberOf(me->owner));
+		return target == Target::OwnStoragePit ? creature_town_theft::IsOwnStoragePit(built, pitPlayer, creaturePlayer)
+		                                       : creature_town_theft::IsOthersStoragePit(built, pitPlayer, creaturePlayer);
+	}
+	case Target::OthersField:
+	{
+		const auto* me = registry.TryGet<const Creature>(self);
+		return registry.AllOf<Field>(entity) && me != nullptr &&
+		       creature_town_theft::IsOthersField(BeliefPlayerOf(registry, entity), PlayerNumberOf(me->owner));
+	}
 	case Target::OneShotRestoreHealth:
 	{
 		// A globe that lies about: the game asks only that its miracle restores health
@@ -3277,6 +3300,24 @@ std::optional<glm::vec3> SacrificeAltarOf(const ecs::Registry& registry, PlayerN
 	});
 	return altar;
 }
+
+/// The storage pit of the nearest town of a player to a place, by the distance across the land. None when the player
+/// has no town, or when the nearest town has no storage pit.
+std::optional<uint32_t> OwnTownPitOf(const ecs::Registry& registry, PlayerNames player, glm::vec3 from)
+{
+	std::vector<entt::entity> towns;
+	std::vector<float> metres;
+	registry.Each<const Town, const Transform>([&](entt::entity town, const Town& data, const Transform& at) {
+		if (data.owner == player)
+		{
+			towns.push_back(town);
+			metres.push_back(gutils::GetDistanceInMetres(at.position, from));
+		}
+	});
+	const auto nearest = creature_town_theft::NearestTown(metres);
+	const auto pit = nearest.has_value() ? ecs::construction::StoragePitOf(towns.at(*nearest)) : std::nullopt;
+	return pit.has_value() ? std::optional(entt::to_integral(*pit)) : std::nullopt;
+}
 } // namespace
 
 void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::Situation& situation)
@@ -3350,6 +3391,10 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	if (body != nullptr)
 	{
 		situation.sacrificeAltar = SacrificeAltarOf(registry, body->owner);
+		if (const auto* at = registry.TryGet<const Transform>(creature))
+		{
+			situation.ownTownPit = OwnTownPitOf(registry, body->owner, at->position);
+		}
 	}
 }
 
@@ -3458,14 +3503,22 @@ void CreatureMindSystem::EndUnderway(CreatureMindState& mind)
 void CreatureMindSystem::BelieveInTempleToEnter(entt::entity creature, const creature_plan_actions::Executor& executor,
                                                 const creature_plan_actions::Situation& situation)
 {
-	// As it sets off into its temple, the creature comes to believe in the temple's heart
+	// As it sets off into its temple, the creature comes to believe in the temple's heart. As it sets off to take a
+	// stolen thing to a town, it comes to believe in the storage pit of that town.
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.TryGet<CreatureMindState>(creature);
-	if (executor.build != creature_plan_actions::Build::EnterTemple || !situation.templeHeart.has_value() || mind == nullptr)
+	if (mind == nullptr)
 	{
 		return;
 	}
-	ComeAcross(creature, *mind, static_cast<entt::entity>(situation.templeHeart->temple));
+	if (executor.build == creature_plan_actions::Build::EnterTemple && situation.templeHeart.has_value())
+	{
+		ComeAcross(creature, *mind, static_cast<entt::entity>(situation.templeHeart->temple));
+	}
+	else if (executor.build == creature_plan_actions::Build::StealAndPutInTown && situation.ownTownPit.has_value())
+	{
+		ComeAcross(creature, *mind, static_cast<entt::entity>(*situation.ownTownPit));
+	}
 }
 
 void CreatureMindSystem::SituateHome(entt::entity creature, creature_plan_actions::Situation& situation)

@@ -668,6 +668,59 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.steal_food_from_store",
+	    .name = "Creature steals food from a storage pit",
+	    .facet = Facet::Objects,
+	    .description = "A tiger with an empty storage pit in front of it and a second pit full of food to one side. A "
+	                   "script tells it to steal food from the second pit for the first, as a copy of the player's theft "
+	                   "makes it.",
+	    .expected = "It goes to the full pit, looking at it, faces it and takes a handful of wheat. It goes to where it can "
+	                "throw into the empty pit with a look of compassion, faces the pit and throws the wheat in. The empty "
+	                "pit gets the food, and the full pit keeps all of its food, as in the game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -80.0f}, {85.0f, 50.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, -60.0f}, .storedFood = 0, .storedWood = 0},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {70.0f, 30.0f}, .storedFood = 5000, .storedWood = 0}},
+	    .commands =
+	        {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "StealFoodFromStoragePit", .with = 1}},
+	});
+
+	all.push_back({
+	    .id = "objects.steal_wood_from_store",
+	    .name = "Creature steals wood from a storage pit",
+	    .facet = Facet::Objects,
+	    .description = "A tiger with a storage pit with no wood in front of it and a second pit full of wood to one side. "
+	                   "A script tells it to steal wood from the second pit for the first.",
+	    .expected = "It goes to the full pit, faces it and takes a handful of logs. It goes to where it can throw into the "
+	                "first pit with a look of compassion, faces the pit and throws the logs in. The first pit gets the "
+	                "wood, and the full pit keeps all of its wood, as in the game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -80.0f}, {85.0f, 50.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, -60.0f}, .storedFood = 0, .storedWood = 0},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {70.0f, 30.0f}, .storedFood = 0, .storedWood = 5000}},
+	    .commands =
+	        {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "StealWoodFromStoragePit", .with = 1}},
+	});
+
+	all.push_back({
+	    .id = "objects.steal_toy_to_town",
+	    .name = "Creature steals a toy and takes it to a town",
+	    .facet = Facet::Objects,
+	    .description = "A tiger with a cuddly toy in front of it, and the storage pit of the player's town far behind it. "
+	                   "A script tells it to steal the toy and take it to the town.",
+	    .expected = "It picks the toy up, looking at it. It goes near the storage pit of the town, to within three times its "
+	                "height, looking at the pit, and puts the toy down there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, 150.0f}, .storedFood = 0, .storedWood = 0},
+	                {.type = MobileStaticInfo::ToyCuddly, .offset = {0.0f, -20.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "StealObjectAndTakeToTown"}},
+	});
+
+	all.push_back({
 	    .id = "objects.kiss_villager",
 	    .name = "Creature kisses a villager in play",
 	    .facet = Facet::Objects,
