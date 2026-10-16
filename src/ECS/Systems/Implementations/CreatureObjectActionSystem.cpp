@@ -40,6 +40,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureOwner.h"
 #include "Creature/CreaturePointing.h"
 #include "Creature/CreatureReach.h"
 #include "Creature/CreatureRig.h"
@@ -655,9 +656,12 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 			entry->body->velocity = velocity;
 			return;
 		}
-		auto* entry =
-		    dynamics.InitialisePhysics(target, {.velocity = velocity, .thrower = creature, .player = body.owner, .add = true})
-		        .entry;
+		auto* entry = dynamics
+		                  .InitialisePhysics(target, {.velocity = velocity,
+		                                              .thrower = creature,
+		                                              .player = creature_owner::CreditedPlayer(body.owner),
+		                                              .add = true})
+		                  .entry;
 		if (entry == nullptr)
 		{
 			return;
@@ -1761,15 +1765,16 @@ void CreatureObjectActionSystem::LetGo(entt::entity creature, entt::entity objec
 		return;
 	}
 	// It leaves the hand into the physics as a god's hand lets things go, put down or thrown, turning a little about
-	// the up axis (the game's turning is the other way round from the physics' own), credited to the creature's player
+	// the up axis (the game's turning is the other way round from the physics' own), credited to the creature's player. A
+	// creature of no player gives the credit to no player.
 	constexpr glm::vec3 k_ReleaseTurn {0.0f, -1.0f, 0.0f};
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* owner = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
-	Locator::dynamicsSystem::value().LetGoFromHand(object,
-	                                               {.velocity = velocity,
-	                                                .angularMomentum = k_ReleaseTurn,
-	                                                .player = owner != nullptr ? std::optional(owner->owner) : std::nullopt,
-	                                                .creature = registry.Valid(creature) ? creature : entt::null});
+	Locator::dynamicsSystem::value().LetGoFromHand(
+	    object, {.velocity = velocity,
+	             .angularMomentum = k_ReleaseTurn,
+	             .player = owner != nullptr ? creature_owner::CreditedPlayer(owner->owner) : std::nullopt,
+	             .creature = registry.Valid(creature) ? creature : entt::null});
 	// The creature remembers it as the last thing it dropped
 	if (registry.Valid(creature))
 	{
@@ -2534,9 +2539,11 @@ void KnockAbout(ecs::Registry& registry, entt::entity creature, const Creature& 
 		                    entt::to_integral(thing));
 		if (Locator::dynamicsSystem::has_value())
 		{
-			static_cast<void>(Locator::dynamicsSystem::value().InitialisePhysics(
-			    thing,
-			    {.velocity = creature_stomp::KnockVelocity(move), .thrower = creature, .player = body.owner, .add = true}));
+			static_cast<void>(
+			    Locator::dynamicsSystem::value().InitialisePhysics(thing, {.velocity = creature_stomp::KnockVelocity(move),
+			                                                               .thrower = creature,
+			                                                               .player = creature_owner::CreditedPlayer(body.owner),
+			                                                               .add = true}));
 		}
 	}
 }

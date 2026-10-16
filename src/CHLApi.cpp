@@ -2231,8 +2231,7 @@ void SetPosition() // 024 SET_POSITION
 			registry.SetDirty();
 			return;
 		}
-		// A creature is put there at once, without walking: where its walk goes from and to moves with it, so that the
-		// walk carries on from the new place rather than drawing it back
+		// A creature goes there at once, without a walk. Its walk stops, and the plan continues from the new place.
 		if (registry.AllOf<ecs::components::Creature>(object) && Locator::creatureLocomotionSystem::has_value())
 		{
 			if (registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics>(object))
@@ -2240,14 +2239,7 @@ void SetPosition() // 024 SET_POSITION
 				ScriptMessage("Trying to set position. Object is in the hand or flying");
 				return;
 			}
-			Locator::creatureLocomotionSystem::value().Place(object, position);
-			// Its head looks straight ahead again, at nothing
-			if (auto* animation = registry.TryGet<ecs::components::CreatureAnimation>(object))
-			{
-				animation->lookAt.reset();
-				animation->yaw = {};
-				animation->pitch = {};
-			}
+			Locator::creatureLocomotionSystem::value().PlaceWithoutWalking(object, position);
 			return;
 		}
 		auto* transform = registry.TryGet<Transform>(object);
@@ -3913,13 +3905,22 @@ void CreatureCreateRelativeToCreature() // 069 CREATURE_CREATE_RELATIVE_TO_CREAT
 		PushObject(entt::null);
 		return;
 	}
-	std::array<bool, 7> haveCreatures {};
-	for (size_t i = 0; i < haveCreatures.size(); ++i)
+	// Only a player that plays can get the copy. On a land with one player who has a creature, the copy belongs to no
+	// player.
+	std::array<script::property_rules::PlayerPlace, 7> places {};
+	registry.Each<const ecs::components::Player>([&places](entt::entity, const ecs::components::Player& player) {
+		const auto place = static_cast<size_t>(player.name);
+		if (place < places.size())
+		{
+			places.at(place).plays = true;
+		}
+	});
+	for (size_t i = 0; i < places.size(); ++i)
 	{
-		haveCreatures.at(i) = Locator::playerSystem::has_value() &&
-		                      Locator::playerSystem::value().GetPrimaryCreature(static_cast<PlayerNames>(i)).has_value();
+		places.at(i).hasCreature = Locator::playerSystem::has_value() &&
+		                           Locator::playerSystem::value().GetPrimaryCreature(static_cast<PlayerNames>(i)).has_value();
 	}
-	const auto owner = script::property_rules::OwnerOfCopy(haveCreatures).value_or(PlayerNames::NEUTRAL);
+	const auto owner = script::property_rules::OwnerOfCopy(places).value_or(PlayerNames::NEUTRAL);
 	const auto copied = script::property_rules::CopyBody(from->size, from->strength, scale);
 	auto body = ecs::archetypes::CreatureArchetype::StartBody(*species);
 	body.strength = copied.strength;

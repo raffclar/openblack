@@ -206,6 +206,8 @@ struct FaceLayer
                                  creature_face::Cue cue = creature_face::Cue::None);
 /// No face is wanted any more: the current one relaxes
 [[nodiscard]] FaceLayer RelaxFace(FaceLayer face);
+/// No face shows at once, as when a script puts the creature in a new place. The current face does not relax.
+[[nodiscard]] FaceLayer DropFace(FaceLayer face);
 [[nodiscard]] FaceLayer AdvanceFace(FaceLayer face, float milliseconds, std::optional<uint32_t> duration);
 
 /// A gesture played once on top of the body, such as a nod or a yawn

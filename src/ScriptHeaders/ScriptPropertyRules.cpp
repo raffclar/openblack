@@ -185,12 +185,12 @@ CopiedBody CopyBody(float size, float strength, float scale)
 	return {.size = size * scale, .strength = strength * scale};
 }
 
-std::optional<PlayerNames> OwnerOfCopy(std::span<const bool> playersHaveCreatures)
+std::optional<PlayerNames> OwnerOfCopy(std::span<const PlayerPlace> places)
 {
 	constexpr size_t k_Players = 7;
-	for (size_t i = 0; i < k_Players && i < playersHaveCreatures.size(); ++i)
+	for (size_t i = 0; i < k_Players && i < places.size(); ++i)
 	{
-		if (!playersHaveCreatures[i])
+		if (places[i].plays && !places[i].hasCreature)
 		{
 			return static_cast<PlayerNames>(i);
 		}

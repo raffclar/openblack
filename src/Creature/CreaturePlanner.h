@@ -62,6 +62,9 @@ constexpr size_t k_CreaturesForFewerGoals = 3;
                              std::optional<float> usedUsefulness);
 /// Whether a plan is pressing enough to change to: more than twice the priority of what the creature carries out
 [[nodiscard]] bool ShouldSwitch(float best, float current);
+/// Whether the creature chooses among its plans this turn. An agenda that no plan gave, such as an order, a follow-up or
+/// an emergency, runs to its end without a choice. The kind of the agenda does not change this rule.
+[[nodiscard]] bool MayChoose(bool planActive, bool agendaLeft);
 
 /// Something a desire could be satisfied with
 struct ObjectCandidate
