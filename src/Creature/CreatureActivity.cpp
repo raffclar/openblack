@@ -79,6 +79,11 @@ bool creature_activity::CanBeAbout(Desire desire, const WholeFacts& whole, bool 
 	}
 }
 
+bool creature_activity::CompassionHasActions(Whole kind)
+{
+	return kind == Whole::Town;
+}
+
 bool creature_activity::ThingSuits(Desire desire, const ThingFacts& thing)
 {
 	if (!thing.canActOn)

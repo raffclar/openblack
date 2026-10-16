@@ -2730,9 +2730,9 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		if (aboutSomething && (!leashTarget.has_value() || desire == Desire::Compassion))
 		{
 			activity = ChooseActivity(creature, mind, desire);
-			// Compassion does what the town desire that it helps with asks for
-			// TODO(creature-activity-object): find what compassion does for a creature that it is about
-			if (desire == Desire::Compassion && activity.has_value() && activity->kind != creature_activity::Whole::Town)
+			// Compassion does what the town desire that it helps with asks for. Compassion for a creature has no action
+			if (desire == Desire::Compassion && activity.has_value() &&
+			    !creature_activity::CompassionHasActions(activity->kind))
 			{
 				activity.reset();
 			}
