@@ -432,7 +432,9 @@ void main()
 			// near the coast, round the things that float, and in a storm on the crests and in streaks along the wind
 			if (u_uwFlags.y > 0.5f)
 			{
-				float foam = Foam(surfacePoint.xz, max(min(thickness, waterDepth), 0.0f), t);
+				// The foam of the shallows is less where the original game shows its land, so that the edge of the water
+				// does not draw a line that the original coast does not have
+				float foam = Foam(surfacePoint.xz, max(min(thickness, waterDepth), 0.0f), t) * (1.0f - originalLand);
 				float crest = lift / max(UwWaveTop(), 1e-3f);
 				// The shore wave breaks on its face as it comes in, from 20 units out to the edge of the water
 				float breaking = face * (1.0f - smoothstep(2.0f, 20.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth) *
