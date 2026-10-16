@@ -339,6 +339,8 @@ private:
 	/// Draws at the window's size from this frame on if it changed: the back buffer, the views over the whole screen,
 	/// the sea's reflection and the camera's shape follow it, on whichever screen is up
 	void FollowWindowSize();
+	/// Sets the scene's view and the sea's reflection to the window's size, as the game's frames draw them
+	void SizeSceneToWindow();
 	/// Whether the player has a profile. A first start has none: the pre-intro plays, the tips start from the first, the
 	/// intro can't be skipped and the new player's box asks for a name before the first land
 	[[nodiscard]] static bool HasPlayerProfiles() noexcept;

@@ -66,6 +66,9 @@ public:
 	void DrawLine(glm::ivec2 from, glm::ivec2 to, glm::vec4 colour);
 	/// Submits the frame's interface
 	void End();
+	/// Makes the renderer's pipelines for a canvas in a view before the canvas first draws there: a draw that covers no
+	/// pixel for each way that a canvas blends
+	static void WarmUp(graphics::RenderPass view);
 
 	[[nodiscard]] glm::u16vec2 GetResolution() const noexcept { return _resolution; }
 

@@ -277,6 +277,15 @@ const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<ui
 	return texture.get();
 }
 
+/// How a sprite of the land's things draws: tested against depth, added by its alpha or blended over what is behind
+constexpr uint64_t SpriteState(bool additive)
+{
+	const auto blend = additive ? BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE)
+	                            : BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+	return BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | blend |
+	       BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_ADD);
+}
+
 } // namespace
 
 RenderPass Renderer::TranslucentView(RenderPass scene)
@@ -2851,7 +2860,9 @@ void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& footprints = Locator::footprintSystem::value();
-	if (!footprints.IsShown() || footprints.GetPrints().empty())
+	// A warm-up draws a print of no size when there is none, as the first print draws
+	const bool warmUp = _warmingUp && footprints.GetPrints().empty();
+	if (!footprints.IsShown() || (footprints.GetPrints().empty() && !warmUp))
 	{
 		return;
 	}
@@ -2879,6 +2890,10 @@ void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
 		{
 			vertices.push_back({print.corners.at(corner), print.uvs.at(corner), colour});
 		}
+	}
+	if (warmUp)
+	{
+		vertices.resize(prints::k_Indices.size(), Vertex {.position = glm::vec3(0.0f), .uv = glm::vec2(0.0f), .colour = 0});
 	}
 	if (vertices.empty())
 	{
@@ -6099,7 +6114,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			// A broken or unfinished building's whole model, as far up as it stands, from both sides and with its inner
 			// walls, and its scaffold sunk into the land or cut down from the top
 			// One fading out in the distance is drawn with the blended things, by its alpha
-			const auto drawPartialBuild = [&](const RenderContext::PartialBuildDraw& build) {
+			// A warm-up draws it with an instance of its own at no size
+			const auto drawPartialBuild = [&](const RenderContext::PartialBuildDraw& build,
+			                                  std::optional<graphics::DynamicVertexBufferHandle> hidden = std::nullopt) {
 				if (!meshManager.Contains(build.meshId))
 				{
 					return;
@@ -6116,8 +6133,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.innerWalls = innerWalls;
 					submitDesc.innerWallInset = build.innerWallInset;
 					submitDesc.onlyStatus = status;
-					drawInstances(build.meshId, placers, false, instance, 1, nullptr, nullptr,
-					              renderCtx.partialBuildInstanceBuffer);
+					drawInstances(build.meshId, placers, false, hidden.has_value() ? 0 : instance, 1, nullptr, nullptr,
+					              hidden.value_or(renderCtx.partialBuildInstanceBuffer));
 					submitDesc.cutAbove.reset();
 					submitDesc.modelCutHeight.reset();
 					submitDesc.twoSided = false;
@@ -6147,8 +6164,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				if (build.gravesShown.has_value())
 				{
 					submitDesc.statusesUpTo = build.gravesShown;
-					drawInstances(build.meshId, placers, false, build.instance, 1, nullptr, nullptr,
-					              renderCtx.partialBuildInstanceBuffer);
+					drawInstances(build.meshId, placers, false, hidden.has_value() ? 0 : build.instance, 1, nullptr, nullptr,
+					              hidden.value_or(renderCtx.partialBuildInstanceBuffer));
 					submitDesc.statusesUpTo.reset();
 				}
 			};
@@ -6687,6 +6704,46 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					drawAnimal(entity, instance, true);
 				}
 			}
+			// A warm-up draws each model of the land once in each way that the frames draw it: solid as it is placed, blended
+			// by its materials and fading by its alpha. It draws them at no size, and covers no pixel. Thus a model that
+			// comes into sight or fades out later makes no pipeline then.
+			if (_warmingUp && _warmUpInstances.has_value())
+			{
+				const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
+				const auto warmUpModel = [&](entt::id_type meshId, RenderContext::InstancedDrawDesc placers) {
+					if (meshId == ecs::components::Hand::k_MeshId || !meshManager.Contains(meshId) ||
+					    (desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+					{
+						return;
+					}
+					const auto* pose = placers.bonePalette ? &palettePose : nullptr;
+					placers.instanceAlpha = false;
+					submitDesc.viewId = desc.viewId;
+					drawInstances(meshId, placers, placers.materialBlending, 0, 1, pose, nullptr, *_warmUpInstances);
+					submitDesc.viewId = translucentViewId;
+					drawInstances(meshId, placers, true, 0, 1, pose, nullptr, *_warmUpInstances);
+					placers.instanceAlpha = true;
+					drawInstances(meshId, placers, false, 0, 1, pose, nullptr, *_warmUpInstances);
+				};
+				for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
+				{
+					warmUpModel(meshId, placers);
+				}
+				for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
+				{
+					warmUpModel(meshId, placers);
+				}
+				// And each building part built, both standing and fading
+				for (auto build : renderCtx.partialBuilds)
+				{
+					for (const bool fading : {false, true})
+					{
+						build.fading = fading;
+						submitDesc.viewId = fading ? translucentViewId : desc.viewId;
+						drawPartialBuild(build, *_warmUpInstances);
+					}
+				}
+			}
 			submitDesc.viewId = desc.viewId;
 			submitDesc.sortDepth = 0;
 			// The main room's pool, the map over it and its markers, ahead of the hand, whose faded wrist they show
@@ -6748,9 +6805,20 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// The game lights the hand as it poses it, with the posed models' rule rather than the usual model light
 				submitDesc.posedModelLight = true;
 				// The inside does not write depth so the outside is never hidden behind it
-				submitDesc.state = (opaqueState & ~(BGFX_STATE_CULL_MASK | BGFX_STATE_WRITE_Z)) | cullFront;
+				const auto insideState = [opaqueState](uint64_t cull) {
+					return (opaqueState & ~(BGFX_STATE_CULL_MASK | BGFX_STATE_WRITE_Z)) | cull;
+				};
+				const auto outsideState = [opaqueState](uint64_t cull) { return (opaqueState & ~BGFX_STATE_CULL_MASK) | cull; };
+				// The glow is added over the hand without writing depth
+				const auto glowState = [opaqueState](uint64_t cull) {
+					constexpr uint64_t k_Kept = ~(BGFX_STATE_CULL_MASK | BGFX_STATE_WRITE_Z | BGFX_STATE_WRITE_A |
+					                              BGFX_STATE_DEPTH_TEST_MASK | BGFX_STATE_BLEND_MASK);
+					return (opaqueState & k_Kept) | BGFX_STATE_DEPTH_TEST_GEQUAL |
+					       BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | cull;
+				};
+				submitDesc.state = insideState(cullFront);
 				drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);
-				submitDesc.state = (opaqueState & ~BGFX_STATE_CULL_MASK) | cullBack;
+				submitDesc.state = outsideState(cullBack);
 				drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);
 				// Holding a miracle, the game draws the hand once more over itself: the same hand at the same depth, in the
 				// flow's sheet and its player's colour, shaded as it is posed and added over it without writing depth
@@ -6760,10 +6828,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					glowPlacers.uvOffset = glow->uvOffset;
 					glowPlacers.additiveShare.reset();
 					glowPlacers.instanceAlpha = false;
-					constexpr uint64_t k_Kept = ~(BGFX_STATE_CULL_MASK | BGFX_STATE_WRITE_Z | BGFX_STATE_WRITE_A |
-					                              BGFX_STATE_DEPTH_TEST_MASK | BGFX_STATE_BLEND_MASK);
-					submitDesc.state = (opaqueState & k_Kept) | BGFX_STATE_DEPTH_TEST_GEQUAL |
-					                   BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | cullBack;
+					submitDesc.state = glowState(cullBack);
 					// Just after the hand in the sort
 					submitDesc.sortDepth = submitDesc.sortDepth > 0 ? submitDesc.sortDepth - 1 : 0;
 					submitDesc.skinTexture = &glow->flow->GetNativeHandle();
@@ -6776,6 +6841,23 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.objectLook.reset();
 					submitDesc.uvScale = 1.0f;
 					submitDesc.skinTexture = nullptr;
+				}
+				// A warm-up draws the hand again at no size in each other way that the frames draw it: turned round, as a
+				// mirrored hand is, and glowing with a miracle
+				if (_warmingUp && _warmUpInstances.has_value())
+				{
+					auto hidden = hand->second;
+					hidden.additiveShare.reset();
+					hidden.instanceAlpha = false;
+					submitDesc.state = insideState(cullBack);
+					drawInstances(hand->first, hidden, true, 0, 1, nullptr, morph, *_warmUpInstances);
+					submitDesc.state = outsideState(cullFront);
+					drawInstances(hand->first, hidden, true, 0, 1, nullptr, morph, *_warmUpInstances);
+					for (const auto cull : {cullBack, cullFront})
+					{
+						submitDesc.state = glowState(cull);
+						drawInstances(hand->first, hidden, false, 0, 1, nullptr, morph, *_warmUpInstances);
+					}
 				}
 				submitDesc.posedModelLight = false;
 				submitDesc.state = opaqueState;
@@ -6904,6 +6986,18 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				    (!Locator::cameraBookmarkSystem::has_value() || Locator::cameraBookmarkSystem::value().IsEnabled()) &&
 				    (!Locator::cinematicDirectorSystem::has_value() ||
 				     Locator::cinematicDirectorSystem::value().IsInterfaceActive());
+				// A warm-up draws a sprite of no size for each way that sprites blend, as the first sprites draw
+				if (_warmingUp)
+				{
+					const auto hidden = glm::mat4(0.0f);
+					for (const bool additive : {false, true})
+					{
+						bgfx::setTransform(glm::value_ptr(hidden));
+						_plane->GetVertexBuffer().Bind();
+						bgfx::setState(SpriteState(additive));
+						spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId));
+					}
+				}
 				registry.Each<const Sprite, const Transform>(
 				    [this, &spriteShader, &desc, translucentViewId, cameraOrigin, &registry,
 				     bookmarksShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
@@ -6948,11 +7042,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 
 					    _plane->GetVertexBuffer().Bind();
 
-					    const auto blend = sprite.additive
-					                           ? BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE)
-					                           : BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
-					    bgfx::setState(0 | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | blend |
-					                   BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_ADD));
+					    bgfx::setState(SpriteState(sprite.additive));
 
 					    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
 					                         zsort::Depth(transform.position, cameraOrigin));

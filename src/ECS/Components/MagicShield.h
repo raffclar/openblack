@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/AllMeshes.h"
 #include "Enums.h"
 #include "Magic/ShieldRules.h"
 #include "Magic/VillagerReactionRules.h"
@@ -51,6 +52,9 @@ struct MagicShield
 /// thrown at it
 struct ShieldDome
 {
+	/// The model that every dome is drawn with
+	static constexpr MeshId k_MeshId = MeshId::SpellSolidShield;
+
 	magic::shield::DomeShape shape;
 	magic::shield::DomeState state;
 	/// This turn's pose and the last, drawn between
