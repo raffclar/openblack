@@ -98,8 +98,28 @@ TEST(CreaturePhysiology, NothingChangesBeforeTheBodyStage)
 	turn.phase = 0;
 	TickTurn(needs, shape, Fake(), turn);
 	EXPECT_FLOAT_EQ(needs.energy, 1.0f);
-	EXPECT_EQ(needs.turns, 0u);
+	EXPECT_EQ(needs.turns, 1u);
+	EXPECT_EQ(needs.age, 0u);
 	EXPECT_FLOAT_EQ(shape.size, 1.0f);
+}
+
+TEST(CreaturePhysiology, TheFirstStageCountsTurnsLivedButDoesNotAge)
+{
+	auto needs = Start(Fake());
+	Shape shape;
+	auto first = Standing();
+	first.phase = 0;
+	// One tick of age is 100 turns. The first stage lives 199 turns and does not age.
+	for (int i = 0; i < 199; ++i)
+	{
+		TickTurn(needs, shape, Fake(), first);
+	}
+	EXPECT_EQ(needs.turns, 199u);
+	EXPECT_EQ(needs.age, 0u);
+	// At the body stage, the age follows the turns that the creature lived, also in the first stage
+	TickTurn(needs, shape, Fake(), Standing());
+	EXPECT_EQ(needs.turns, 200u);
+	EXPECT_EQ(needs.age, 1u);
 }
 
 TEST(CreaturePhysiology, YoungCreaturesGrowFastThenSlowly)

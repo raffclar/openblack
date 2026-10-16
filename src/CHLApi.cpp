@@ -1686,7 +1686,13 @@ void GetProperty() // 021 GET_PROPERTY
 			Pushf(static_cast<float>(ecs::villager_age::AgeNow(*person)));
 			return;
 		}
-		// TODO(opening): the ages of creatures and animals; other things have none ("not used on non living objects")
+		// A creature has the age of its body
+		if (const auto* needs = CreatureNeedsOf(object); needs != nullptr)
+		{
+			Pushf(static_cast<float>(needs->age));
+			return;
+		}
+		// TODO(opening): the ages of animals; other things have none ("not used on non living objects")
 		NotImplemented(static_cast<int32_t>(prop));
 		Pushf(0.0f);
 		return;
@@ -2119,7 +2125,13 @@ void SetProperty() // 022 SET_PROPERTY
 			Locator::livingActionSystem::value().VillagerSetAge(object, static_cast<uint32_t>(static_cast<int32_t>(value)));
 			return;
 		}
-		// TODO(opening): the ages of creatures and animals; other things take none
+		// A creature's body takes the age as it is, and nothing else changes
+		if (auto* needs = CreatureNeedsOf(object); needs != nullptr)
+		{
+			needs->age = static_cast<uint32_t>(static_cast<int32_t>(value));
+			return;
+		}
+		// TODO(opening): the ages of animals; other things take none
 		NotImplemented(static_cast<int32_t>(prop));
 		return;
 	case script::ObjectPropertyType::Speed:
