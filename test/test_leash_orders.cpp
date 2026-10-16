@@ -299,3 +299,13 @@ TEST(LeashOrders, TheFootprintInTheMarker)
 	EXPECT_NEAR(top.x, -0.49f * ring.x, k_Tolerance);
 	EXPECT_NEAR(top.y, 0.0f, k_Tolerance);
 }
+
+TEST(LeashOrders, TheMarkerShowsOnlyWithTheLand)
+{
+	EXPECT_TRUE(MarkerShown(false, false));
+	// Not in the temple
+	EXPECT_FALSE(MarkerShown(true, false));
+	// Not under a video that covers the screen, or behind the falling spell's film
+	EXPECT_FALSE(MarkerShown(false, true));
+	EXPECT_FALSE(MarkerShown(true, true));
+}

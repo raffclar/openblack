@@ -75,6 +75,7 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSkin.h"
 #include "Creature/CreatureSpells.h"
+#include "Creature/LeashOrders.h"
 #include "ECS/AbodeKnock.h"
 #include "ECS/BoatLaunchRules.h"
 #include "ECS/Components/Abode.h"
@@ -88,6 +89,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DestructionGhost.h"
@@ -132,6 +134,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -7047,6 +7050,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				    (!Locator::cameraBookmarkSystem::has_value() || Locator::cameraBookmarkSystem::value().IsEnabled()) &&
 				    (!Locator::cinematicDirectorSystem::has_value() ||
 				     Locator::cinematicDirectorSystem::value().IsInterfaceActive());
+				// The markers of leash orders show only while the land shows
+				const bool leashMarkersShown = creature_leash_orders::MarkerShown(
+				    Locator::temple::has_value() && Locator::temple::value().Active(),
+				    Locator::videoSystem::has_value() &&
+				        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld()));
 				// A warm-up draws a sprite of no size for each way that sprites blend, as the first sprites draw
 				if (_warmingUp)
 				{
@@ -7060,9 +7068,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 				}
 				registry.Each<const Sprite, const Transform>(
-				    [this, &spriteShader, &desc, translucentViewId, cameraOrigin, &registry,
-				     bookmarksShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+				    [this, &spriteShader, &desc, translucentViewId, cameraOrigin, &registry, bookmarksShown,
+				     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
 					    if (!bookmarksShown && registry.AllOf<CameraBookmark>(entity))
+					    {
+						    return;
+					    }
+					    if (!leashMarkersShown && registry.AllOf<LeashMarker>(entity))
 					    {
 						    return;
 					    }
