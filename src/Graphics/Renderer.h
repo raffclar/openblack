@@ -406,6 +406,12 @@ private:
 	void DrawUnderwaterEnvironment(const DrawSceneDesc& desc) const;
 	/// EXPERIMENT (not for merge): the land's uniforms for the view under the sea, off unless `active`
 	void SetTerrainUnderwater(const ShaderProgram& program, bool active) const;
+	/// EXPERIMENT (not for merge): one step of the foam that builds up on the water and decays, when the foam field
+	/// moves on this frame (see underwater::FoamClock)
+	void StepUnderwaterFoam(const DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): the foam field and the silt for one of the water's programs. The foam field goes in
+	/// sampler stage `foamStage`, and the silt's noise in `noiseStage` when it is given.
+	void BindUnderwaterDepth(const ShaderProgram& program, uint8_t foamStage, std::optional<uint8_t> noiseStage) const;
 	/// EXPERIMENT (not for merge): the sea bed past the land's blocks, in the land's pass of the main view
 	void DrawFarSeabed(RenderPass landViewId) const;
 	/// EXPERIMENT (not for merge): the reef's coral and plants, in the land's pass of the main view

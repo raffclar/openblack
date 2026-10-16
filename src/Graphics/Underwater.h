@@ -176,6 +176,10 @@ enum class Effect : uint8_t
 	RogueWaves,
 	/// The lightning on the sea: its flash in the water, its glint, and the ring and the steam where it hits the sea
 	LightningOnWater,
+	/// The foam's thickness: the foam that builds up where the waves break and decays, its light and its bubbles
+	FoamVolume,
+	/// The silt in the water, which gives the water its colour and takes the view away sooner
+	Sediment,
 	/// Not an effect: the water is drawn as a flat colour where it shows, to compare it with the original sea
 	WaterMask,
 	_Count

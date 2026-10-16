@@ -50,6 +50,8 @@ enum class RenderPass : uint8_t
 	Main,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
+	/// EXPERIMENT (not for merge): one step of the foam that builds up on the water and decays
+	UnderwaterFoam,
 	/// EXPERIMENT (not for merge): the sky of one face of the cube of the far scene round the eye, which the water
 	/// reflects where the screen does not show the reflection
 	UnderwaterEnvironmentSky,
@@ -100,6 +102,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Land Pass",                   //
     "Main Pass",                   //
     "Translucent Pass",            //
+    "Underwater Foam Pass",        //
     "Underwater Cube Sky Pass",    //
     "Underwater Cube Pass",        //
     "Underwater Wake Pass 0",      //

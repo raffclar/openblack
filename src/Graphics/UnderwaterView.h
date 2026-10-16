@@ -23,6 +23,7 @@
 #include "3D/Seabed.h"
 #include "FrameBuffer.h"
 #include "Graphics/Underwater.h"
+#include "Graphics/UnderwaterFoam.h"
 #include "GraphicsHandle.h"
 #include "Texture2D.h"
 
@@ -100,6 +101,15 @@ public:
 	/// Whether every face that the water reflects has been drawn once
 	[[nodiscard]] bool EnvironmentReady() const { return _environmentDrawn >= underwater::k_EnvironmentFaces - 1; }
 
+	/// The foam field (see underwater::FoamClock): the target that one step writes, 0 or 1. The two targets are made
+	/// the first time one is asked for.
+	[[nodiscard]] bgfx::FrameBufferHandle FoamTarget(uint8_t target);
+	/// The texture of a target of the foam field, or an invalid handle before the targets are made
+	[[nodiscard]] TextureHandle FoamTexture(uint8_t target) const;
+	/// When the foam field moves on, and where it is
+	[[nodiscard]] underwater::FoamClock& Foam() { return _foamClock; }
+	[[nodiscard]] const underwater::FoamClock& Foam() const { return _foamClock; }
+
 private:
 	std::unique_ptr<FrameBuffer> _target;
 	glm::u16vec2 _targetSize {0, 0};
@@ -143,6 +153,9 @@ private:
 	std::array<bgfx::FrameBufferHandle, underwater::k_EnvironmentFaces> _environmentSkyFaces {};
 	uint8_t _environmentFace {0};
 	uint32_t _environmentDrawn {0};
+	std::array<bgfx::TextureHandle, 2> _foamTextures {};
+	std::array<bgfx::FrameBufferHandle, 2> _foamTargets {};
+	underwater::FoamClock _foamClock;
 };
 
 /// EXPERIMENT (not for merge): the uniforms of the view under the sea for one frame (see underwater.sh)

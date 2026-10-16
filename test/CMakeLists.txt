@@ -1066,3 +1066,5 @@ openblack_setup_and_add_test(test_underwater graphics/test_underwater.cpp)
 target_link_libraries(test_underwater PRIVATE lnd)
 # EXPERIMENT (not for merge): the wakes, rings and splashes on the experiment's water
 openblack_setup_and_add_test(test_underwater_wake graphics/test_underwater_wake.cpp)
+# EXPERIMENT (not for merge): the foam that builds up on the water and the silt in it
+openblack_setup_and_add_test(test_underwater_foam graphics/test_underwater_foam.cpp)

@@ -209,6 +209,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		}
 		return;
 	}
+	StepUnderwaterFoam(desc);
 	// What is drawn over the scene goes into the window
 	for (const auto view : k_OverViews)
 	{
@@ -284,6 +285,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		post->SetTextureSampler("s_blockLayers", 4, _underwater->BlockLayers(layers, system.GetSeabedRevision()));
 	}
 	BindWakeField(*post);
+	BindUnderwaterDepth(*post, 9, 10);
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 	post->Submit(postView);
 
@@ -375,6 +377,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		bubbles->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
 		bubbles->SetTextureSampler("s_shore", 2, shoreMap);
 		bubbles->SetTextureSampler("s_sprayNoise", 3, _underwater->SprayNoise());
+		BindUnderwaterDepth(*bubbles, 4, std::nullopt);
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		bubbles->Submit(postView);
 	}
