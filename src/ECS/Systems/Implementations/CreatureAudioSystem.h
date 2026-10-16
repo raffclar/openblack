@@ -27,8 +27,12 @@ public:
 	[[nodiscard]] bool AreOtherVoicesEnabled() const override { return _otherVoices; }
 	void SetOtherVoicesEnabled(bool enabled) override { _otherVoices = enabled; }
 	void Play(entt::entity creature, const creature_audio::SoundEvent& event) override;
+	void PlayAction(entt::entity creature, const creature_audio::SoundEvent& event) override;
 
 private:
+	/// The rules that decide whether the creature's sounds are asked for
+	[[nodiscard]] creature_audio::Gate GateOf(entt::entity creature) const;
+
 	bool _muted {false};
 	bool _otherVoices {true};
 };
