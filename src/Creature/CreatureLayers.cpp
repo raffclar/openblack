@@ -252,6 +252,21 @@ BodyAction creature_layers::Hurry(BodyAction body)
 	return body;
 }
 
+bool creature_layers::ReachesActionMoment(const BodyAction& body, float milliseconds, std::optional<uint32_t> duration,
+                                          uint32_t kissMs)
+{
+	if (body.kind != BodyAction::Kind::Once || body.timedByPlayer)
+	{
+		return false;
+	}
+	if (body.hurried)
+	{
+		milliseconds *= k_HurriedRate;
+	}
+	const auto moment = static_cast<float>(body.animations[0] == animations::k_Kiss ? kissMs : duration.value_or(0) / 2);
+	return body.timeMs <= moment && body.timeMs + milliseconds > moment;
+}
+
 BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration,
                                         std::optional<float> realMilliseconds)
 {

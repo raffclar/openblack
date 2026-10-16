@@ -242,8 +242,8 @@ struct CreatureActionPoints
 	int32_t putDownTime {-1};
 	/// When the foot meets what it kicks
 	int32_t kickTime {-1};
-	/// One more moment whose use isn't known
-	int32_t unknownTime2 {-1};
+	/// The moment of the kiss
+	int32_t kissTime {-1};
 };
 
 /// A place on a creature's body a tattoo can be painted, from the creature block of a .cbn file

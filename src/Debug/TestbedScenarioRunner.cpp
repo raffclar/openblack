@@ -143,6 +143,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -2668,6 +2669,17 @@ void Runner::Give(const Command& command)
 	case Kind::RemoveTattoo:
 	case Kind::OpenTattooEditor:
 		result = GiveCreatureModeCommand(*entity, command);
+		break;
+	case Kind::WriteWebPage:
+		if (Locator::creatureWebPageSystem::has_value())
+		{
+			Locator::creatureWebPageSystem::value().WritePage(*entity);
+			result = "written";
+		}
+		else
+		{
+			result = "no web page system";
+		}
 		break;
 	case Kind::HandGive:
 		result = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GiveHeldTo(*entity)

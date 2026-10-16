@@ -61,6 +61,7 @@
 #include "ECS/Systems/Implementations/CreaturePenSystem.h"
 #include "ECS/Systems/Implementations/CreaturePhysiologySystem.h"
 #include "ECS/Systems/Implementations/CreatureSkinSystem.h"
+#include "ECS/Systems/Implementations/CreatureWebPageSystem.h"
 #include "ECS/Systems/Implementations/DialogueControlSystem.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
 #include "ECS/Systems/Implementations/EditorSystem.h"
@@ -141,6 +142,7 @@
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "Graphics/RendererInterface.h"
+#include "Gui/TextDatabase.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
 #include "Profiler.h"
@@ -195,6 +197,7 @@ using openblack::ecs::systems::CreatureObjectActionSystem;
 using openblack::ecs::systems::CreaturePenSystem;
 using openblack::ecs::systems::CreaturePhysiologySystem;
 using openblack::ecs::systems::CreatureSkinSystem;
+using openblack::ecs::systems::CreatureWebPageSystem;
 using openblack::ecs::systems::DanceSystem;
 using openblack::ecs::systems::DialogueControlSystem;
 using openblack::ecs::systems::DynamicsSystem;
@@ -399,6 +402,15 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	// The player's creature is kept under their profile's file
 	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(
 	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); });
+	// The creature's web page and its pictures go to the folder of the profile picked now
+	Locator::creatureWebPageSystem::emplace<CreatureWebPageSystem>([]() -> std::optional<std::u16string> {
+		if (!Locator::playerProfileSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+		return profile.has_value() ? std::optional(gui::ToUtf16(profile->name)) : std::nullopt;
+	});
 	Locator::tornadoSystem::emplace<TornadoSystem>();
 	Locator::magicShieldSystem::emplace<MagicShieldSystem>();
 	Locator::forestSystem::emplace<ForestSystem>();
@@ -594,6 +606,7 @@ void openblack::ShutDownServices()
 	Locator::teleportSystem::reset();
 	Locator::vortexSystem::reset();
 	Locator::creatureFizzSystem::reset();
+	Locator::creatureWebPageSystem::reset();
 	Locator::creatureCarryOverSystem::reset();
 	Locator::tornadoSystem::reset();
 	Locator::magicShieldSystem::reset();

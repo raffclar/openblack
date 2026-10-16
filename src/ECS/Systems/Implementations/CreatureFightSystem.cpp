@@ -3147,6 +3147,11 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	auto& struck = registry.AllOf<CreatureFightRecord>(opponent) ? registry.Get<CreatureFightRecord>(opponent)
 	                                                             : registry.Assign<CreatureFightRecord>(opponent);
 	struck.struckTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u;
+	// A blow that hits is the moment of the attacker's action, which a picture for its web page waits for
+	if (auto* moment = registry.TryGet<CreatureAnimation>(creature))
+	{
+		moment->actionMoment = true;
+	}
 	// A blow that lands, blocked or not, is a small hit from the attacker: it changes how nice the victim finds the
 	// attacker, no more often than once a minute. It takes nothing from the victim's life.
 	{

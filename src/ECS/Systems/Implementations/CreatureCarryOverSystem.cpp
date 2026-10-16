@@ -33,6 +33,7 @@
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -280,6 +281,11 @@ void CreatureCarryOverSystem::SaveAsTheyLive()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player's creature {} has lived another {} turns",
 		                   entt::to_integral(creature), creature_carry_over::k_SaveEveryTurns);
 		KeepCreature(creature);
+		// The game writes the web page with the files of a creature that lives on, but not when a land keeps it
+		if (Locator::creatureWebPageSystem::has_value())
+		{
+			Locator::creatureWebPageSystem::value().WritePage(creature);
+		}
 	}
 }
 

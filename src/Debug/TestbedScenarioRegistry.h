@@ -798,6 +798,9 @@ struct Command
 		/// list (value 2), as the music button and the play list button show them. Value 0 hides them. Needs no
 		/// creature
 		ShowCustomMusicControls,
+		/// The game writes the web page of the creature into the player's profile folder, as it does each 600 turns of
+		/// the creature's life
+		WriteWebPage,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

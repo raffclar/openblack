@@ -621,6 +621,10 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 	{
 		rig->rightEye = static_cast<uint32_t>(points->rightEye);
 	}
+	if (const auto& points = file.GetCreatureActionPoints(); points.has_value() && points->kissTime > 0)
+	{
+		rig->kissMs = static_cast<uint32_t>(points->kissTime);
+	}
 	if (const auto& blows = file.GetCreatureBlows(); blows.has_value())
 	{
 		auto& types = rig->blowWoundTypes.emplace();

@@ -3604,6 +3604,23 @@ void AddObjects(std::vector<Scenario>& all)
 	    .hand = offering,
 	});
 
+	// The pictures for the creature's web page: the camera looks at the tiger, and each action played once has its
+	// moment halfway through. The first picture can come once more than ten seconds of the game went by.
+	all.push_back({
+	    .id = "creature.web_page",
+	    .name = "The creature's web page",
+	    .facet = Facet::Objects,
+	    .description = "The camera looks at a tiger that plays the impress action after twelve seconds; then the game "
+	                   "writes the tiger's web page from Scripts/creature_html.tmpl into the profile folder.",
+	    .expected = "Halfway through the impress action the game takes a picture of the screen: creatureshot_0.jpg, 400 "
+	                "by 300, in the player's profile folder. Then html/<the tiger's name>.html shows its values and "
+	                "the picture.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Play(Kind::PlayAction, 0, animations::k_Impress, 12.0f, true),
+	                 Command {.kind = Kind::WriteWebPage, .delaySeconds = 4.0f, .waitUntilFree = true}},
+	});
+
 	auto ogre = hungryThinking;
 	ogre.species = CreatureType::Ogre;
 	all.push_back({
@@ -7172,7 +7189,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 134> k_Names {
+	constexpr std::array<std::string_view, 135> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7307,6 +7324,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "open the tattoo editor from the menu",
 		    "play custom music",
 		    "show the custom music controls",
+		    "write the web page",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

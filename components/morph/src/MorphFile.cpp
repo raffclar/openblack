@@ -346,7 +346,7 @@ void MorphFile::ReadCreatureBlock(std::istream& stream) noexcept
 	}
 	if (version > 7)
 	{
-		read(points.unknownTime2);
+		read(points.kissTime);
 	}
 	if (stream.good())
 	{

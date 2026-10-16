@@ -1088,3 +1088,5 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_friendship test_creature_friendship.cpp
 )
+openblack_setup_and_add_test(test_creature_web_page test_creature_web_page.cpp)
+target_link_libraries(test_creature_web_page PRIVATE creaturehtml)

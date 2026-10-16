@@ -131,6 +131,7 @@
 #include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -331,6 +332,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"creatureCarryOverSystem", "creatures.systems"},
     LocatorCoverage {"creaturePenSystem", "creatures.systems"},
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
+    LocatorCoverage {"creatureWebPageSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tattooMenuSystem", "creatures.systems"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
@@ -2649,7 +2651,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("creatures");
 	provider->Add(Query("systems", "The creature systems' own state: the creature followed or in the cave, the hand on a "
-	                               "creature, the hair, voices, footprints, physiology and the mind kept between lands"),
+	                               "creature, the hair, voices, footprints, physiology, the mind kept between lands and the "
+	                               "web page"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
 		              if (Locator::creatureModeSystem::has_value())
@@ -2731,6 +2734,18 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              if (Locator::creatureCarryOverSystem::has_value())
 		              {
 			              result["mind_kept"] = Locator::creatureCarryOverSystem::value().Kept() != nullptr;
+		              }
+		              // The web page: the captions of the five slots of pictures, and whether a picture waits for its frame
+		              if (Locator::creatureWebPageSystem::has_value())
+		              {
+			              const auto& page = Locator::creatureWebPageSystem::value();
+			              auto captions = Json::array();
+			              for (const auto& caption : page.GetCaptions())
+			              {
+				              captions.push_back(gui::ToUtf8(caption));
+			              }
+			              result["web_page_captions"] = captions;
+			              result["web_page_picture_waiting"] = page.AnyPictureWaiting();
 		              }
 		              // The temples' pens: each creature's shrunk size there is its Creature component's penSize
 		              result["pens"] = Locator::creaturePenSystem::has_value();

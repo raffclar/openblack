@@ -68,6 +68,7 @@
 #include "Creature/CreatureTattoo.h"
 #include "Creature/CreatureTownCompassion.h"
 #include "Creature/CreatureWatching.h"
+#include "Creature/CreatureWebPage.h"
 #include "Creature/FightMarks.h"
 #include "Creature/LeashRope.h"
 #include "Creature/LeashRules.h"
@@ -115,6 +116,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreaturePartner.h"
+#include "ECS/Components/CreaturePictures.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/CreatureSquat.h"
@@ -623,6 +625,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMorph::revision>("revision");
 	Reflect<components::CreatureAnimation>(context)
 	    .Field<&components::CreatureAnimation::body>("body")
+	    .Field<&components::CreatureAnimation::actionMoment>("actionMoment")
 	    .Field<&components::CreatureAnimation::slots>("slots")
 	    .Field<&components::CreatureAnimation::face>("face")
 	    .Field<&components::CreatureAnimation::gesture>("gesture")
@@ -945,6 +948,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreaturePartner::agenda>("agenda")
 	    .Field<&components::CreaturePartner::agendaRunning>("agendaRunning");
 	Reflect<components::CreatureDemobilised> {context};
+	Reflect<components::CreaturePictures>(context)
+	    .Field<&components::CreaturePictures::pictures>("pictures")
+	    .Field<&components::CreaturePictures::lastTurn>("lastTurn");
 	Reflect<components::CreatureTattoos>(context)
 	    .Field<&components::CreatureTattoos::slots>("slots")
 	    .Field<&components::CreatureTattoos::pictures>("pictures")
@@ -2697,6 +2703,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_watching::Sighting>(context, ValueOnly {})
 	    .Field<&openblack::creature_watching::Sighting::count>("count")
 	    .Field<&openblack::creature_watching::Sighting::turn>("turn");
+	Reflect<openblack::creature_web_page::Picture>(context, ValueOnly {})
+	    .Field<&openblack::creature_web_page::Picture::score>("score")
+	    .Field<&openblack::creature_web_page::Picture::age>("age")
+	    .Field<&openblack::creature_web_page::Picture::action>("action");
 	Reflect<openblack::ecs::components::ChimneySmoke::Puff>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::position>("position")
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::velocity>("velocity")
