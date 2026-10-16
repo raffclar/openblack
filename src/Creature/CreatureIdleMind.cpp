@@ -1008,6 +1008,12 @@ void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Comma
 	}
 	commands.endStaticLoop = turn.endPose;
 	commands.endDance = turn.endDance;
+	commands.endPoint = turn.endPoint;
+	if (turn.gesture.has_value())
+	{
+		commands.gesture = *turn.gesture;
+		commands.gestureInDance = true;
+	}
 	if (turn.danceMoveMs.has_value() && !senses.bodyPlaying)
 	{
 		commands.startDance = *turn.danceMoveMs;

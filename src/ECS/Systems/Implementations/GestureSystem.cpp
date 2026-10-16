@@ -85,6 +85,11 @@ std::optional<gesture::TrailSymbol> TrailSymbolOf(GestureType gesture)
 } // namespace
 
 GestureSystem::GestureSystem() = default;
+
+std::optional<gesture::TrailSymbol> GestureSystem::GetSymbol(GestureType gesture) const
+{
+	return TrailSymbolOf(gesture);
+}
 GestureSystem::~GestureSystem() = default;
 
 std::vector<GestureEvent> GestureSystem::TakeEvents()

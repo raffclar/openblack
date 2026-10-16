@@ -61,6 +61,7 @@ public:
 
 	bool PlayAction(entt::entity creature, size_t animation) override;
 	bool PlayGesture(entt::entity creature, size_t animation) override;
+	bool DrawGesture(entt::entity creature, uint32_t gesture) override;
 	void PullFace(entt::entity creature, size_t animation) override;
 	std::optional<creature_face::Request> ShowFeeling(entt::entity creature, creature_face::Cue cue) override;
 	bool SitDown(entt::entity creature) override;
@@ -463,6 +464,13 @@ private:
 	void StepSubMove(entt::entity creature, bool animating);
 	bool GoNear(entt::entity creature, components::CreatureCasting& casting, bool reissue);
 	creature_mind::SubMove SubMoveOf(entt::entity creature);
+	/// A creature starts to draw a gesture in the air, as a step of its agenda or as a move of a dance
+	/// (CreatureMindGesture.cpp). It does nothing while it draws one already.
+	bool StartGesture(entt::entity creature, uint32_t gesture, bool inDance);
+	/// One turn of the drawing of a gesture
+	void StepGesture(entt::entity creature);
+	/// A move of a dance that is not a gesture ends the arm's point
+	void EndDanceGesturePoint(entt::entity creature);
 	/// The minds choose at random, apart from the game's own random numbers
 	RandomStreamSource _random {RandomStream::CreatureMind};
 	/// The average of the feedback given to all creatures

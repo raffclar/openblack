@@ -134,6 +134,8 @@ struct CreatureRig
 		float takeFromHandMs;
 		/// When the foot meets what it kicks
 		float kickMs;
+		/// When the pointing arm gets to its point and holds there
+		float pointMs {0.0f};
 	};
 	std::optional<ActionPoints> actionPoints;
 	/// The type of wound each of its twelve fight blows leaves, in the order of the blow animations, when its file gives

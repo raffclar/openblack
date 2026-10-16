@@ -137,10 +137,15 @@ struct DanceTurn
 	/// A face to pull, by its animation, and for how many milliseconds
 	std::optional<size_t> face;
 	float faceMs {0.0f};
-	/// Whether the move stops a pose, and a dance, that the body plays
+	/// A gesture to draw in the air, by its number. When the drawing is done, the move of the group becomes a dance.
+	std::optional<uint32_t> gesture;
+	/// Whether the move stops a pose, and a dance, that the body plays, and an arm that points
 	bool endPose {false};
 	bool endDance {false};
+	bool endPoint {false};
 };
+/// The move of a group that dances. When a creature finishes a gesture in a dance, the move of its group becomes this.
+inline constexpr uint32_t k_DanceMove = 34;
 /// The turn of a creature in its dance
 [[nodiscard]] DanceTurn Turn(const creature_mind::Senses::DanceView& view, glm::vec2 position);
 

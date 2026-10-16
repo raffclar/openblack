@@ -388,3 +388,20 @@ TEST(CreatureDance, ADanceThatNoStepWantsStops)
 	senses.bodyDancing = true;
 	EXPECT_TRUE(creature_mind::Think(mind, senses, NoRandom()).endDance);
 }
+
+// The gesture move draws the gesture of its first argument; the moves other than the gesture and the turn to an angle
+// stop the arm that points
+TEST(CreatureDance, TheGestureMoveDrawsItsGestureAndOtherMovesStopThePoint)
+{
+	const auto gesture = creature_dance::Turn({.exists = true, .inGroup = true, .action = 39, .first = 1}, {0.0f, 0.0f});
+	ASSERT_TRUE(gesture.gesture.has_value());
+	EXPECT_EQ(*gesture.gesture, 1U);
+	EXPECT_FALSE(gesture.endPoint);
+	EXPECT_TRUE(gesture.endDance);
+	EXPECT_TRUE(gesture.endPose);
+	const auto faceAngle = creature_dance::Turn({.exists = true, .inGroup = true, .action = 40}, {0.0f, 0.0f});
+	EXPECT_FALSE(faceAngle.endPoint);
+	const auto dance = creature_dance::Turn({.exists = true, .inGroup = true, .action = 34}, {0.0f, 0.0f});
+	EXPECT_TRUE(dance.endPoint);
+	EXPECT_FALSE(dance.gesture.has_value());
+}
