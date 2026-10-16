@@ -12,6 +12,8 @@
 #include "HelpProfileSystem.h"
 
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "Help/HelpProfileFile.h"
 #include "Locator.h"
 
 using namespace openblack::ecs::systems;
@@ -52,4 +54,17 @@ void HelpProfileSystem::ProcessTurn(bool frontEndBoxShows, const std::optional<h
 		}
 	}
 	_profile.EndTurn();
+}
+
+void HelpProfileSystem::LoadRecord(const ProfileFolderSystemInterface& folder, std::u16string_view player)
+{
+	if (const auto bytes = folder.ReadPlayerFile(player, help::profile::k_FileName); bytes.has_value())
+	{
+		help::profile::FromFileBytes(_profile, *bytes);
+	}
+}
+
+bool HelpProfileSystem::SaveRecord(ProfileFolderSystemInterface& folder, std::u16string_view player) const
+{
+	return folder.WritePlayerFile(player, help::profile::k_FileName, help::profile::ToFileBytes(_profile));
 }

@@ -765,6 +765,10 @@ struct Command
 		/// The pointer moves onto the middle of the foot of the scenario's town's worship site altar on the screen, as the
 		/// mouse moves it. Needs no creature
 		PointerOnAltar,
+		/// The game writes the help record of the player to helpstats.dat in their folder in the profile folder, and
+		/// makes the folder if it is missing. Then the game reads the file again, and the log tells if the record is the
+		/// same. Needs no creature
+		ProfileFolderCheck,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -10,6 +10,7 @@
 #include "UserData.h"
 
 #include <string>
+#include <system_error>
 
 #include <SDL.h>
 
@@ -26,12 +27,13 @@ std::optional<std::filesystem::path> openblack::user_data::Folder()
 	return std::filesystem::path(std::u8string(text.begin(), text.end()));
 }
 
-std::optional<std::filesystem::path> openblack::user_data::CreatureMindFolder()
+std::optional<std::filesystem::path> openblack::user_data::ProfileFolder()
 {
-	const auto folder = Folder();
-	if (!folder.has_value())
+	std::error_code error;
+	auto folder = std::filesystem::current_path(error);
+	if (error)
 	{
 		return std::nullopt;
 	}
-	return *folder / "Scripts" / "CreatureMind";
+	return folder / k_ProfileFolderName;
 }

@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <string_view>
 
 namespace openblack::help::profile
 {
@@ -21,6 +22,7 @@ struct WorldCameraView;
 
 namespace openblack::ecs::systems
 {
+class ProfileFolderSystemInterface;
 
 /// The help system's profile of what the player has done, kept for the whole session. Nothing is counted, and its clock
 /// stands still, while a script's cut scene has the cinema bars in. A turn also stops while a front-end box shows.
@@ -35,6 +37,13 @@ public:
 	/// while a front-end box shows (the game's menu, for example). The camera view is none when the player's world
 	/// camera does not show the world (a script, the temple or a creature has the camera).
 	virtual void ProcessTurn(bool frontEndBoxShows, const std::optional<help::profile::WorldCameraView>& worldCamera) = 0;
+
+	/// The game reads the count of each event from the file of the player in the profile folder. When the file is
+	/// missing, the counts stay as they are. The clock does not change.
+	virtual void LoadRecord(const ProfileFolderSystemInterface& folder, std::u16string_view player) = 0;
+	/// The game writes the count of each event to the file of the player in the profile folder. Returns true when it
+	/// wrote the file.
+	virtual bool SaveRecord(ProfileFolderSystemInterface& folder, std::u16string_view player) const = 0;
 
 	[[nodiscard]] virtual const help::profile::HelpProfile& Get() const = 0;
 	[[nodiscard]] virtual help::profile::HelpProfile& Get() = 0;

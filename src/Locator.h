@@ -166,6 +166,7 @@ class AlignmentSystemInterface;
 class CameraHelpSystemInterface;
 class TutorialSkipSystemInterface;
 class PlayerProfileSystemInterface;
+class ProfileFolderSystemInterface;
 class TempleExteriorSystemInterface;
 class TempleDestructionSystemInterface;
 class PlayerSystemInterface;
@@ -256,6 +257,7 @@ struct Locator
 	using cameraHelpSystem = entt::locator<ecs::systems::CameraHelpSystemInterface>;
 	using tutorialSkipSystem = entt::locator<ecs::systems::TutorialSkipSystemInterface>;
 	using playerProfileSystem = entt::locator<ecs::systems::PlayerProfileSystemInterface>;
+	using profileFolderSystem = entt::locator<ecs::systems::ProfileFolderSystemInterface>;
 	using templeExteriorSystem = entt::locator<ecs::systems::TempleExteriorSystemInterface>;
 	using templeDestructionSystem = entt::locator<ecs::systems::TempleDestructionSystemInterface>;
 	using handSystem = entt::locator<ecs::systems::HandSystemInterface>;

@@ -178,6 +178,19 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .framing = AdvisorsFraming(),
 	    .commands = {{.kind = Kind::RunHelpMessage, .delaySeconds = 0.5f, .value = k_TwoTextsMessage}},
 	});
+	all.push_back({
+	    .id = "advisors.profile_help_record",
+	    .name = "The help record in the profile folder",
+	    .facet = Facet::Advisors,
+	    .description = "After half a second the game writes the help record of the player to helpstats.dat in their "
+	                   "folder in the profile folder. The profile folder is in the working folder of the game. Then the "
+	                   "game reads the file again.",
+	    .expected = "The game makes the folders that are missing. The log line of the check starts with \"passed\", "
+	                "with the path of the file and its 13132 bytes. The game folder stays as it was.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = AdvisorsFraming(),
+	    .commands = {{.kind = Kind::ProfileFolderCheck, .delaySeconds = 0.5f}},
+	});
 
 	// A hut close in front of the camera, boulders thrown at it from the player's hand until it is wrecked
 	constexpr glm::vec2 k_Hut {0.0f, 10.0f};

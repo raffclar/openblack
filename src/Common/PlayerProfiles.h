@@ -158,7 +158,7 @@ struct RunOptions
 {
 	/// A folder given for the profiles
 	std::optional<std::filesystem::path> profileFolder;
-	/// The game's own folder for the player's data, none when it can't be had
+	/// The profile folder in the working folder of the game. There is no folder when the system cannot give it.
 	std::optional<std::filesystem::path> userFolder;
 	/// Started by a developer or a tool: on a level of its own, the testbed or a scenario, with the opening skipped, the
 	/// logos left out, the inspector on, a seed, a video or a number of frames to run
@@ -171,9 +171,11 @@ constexpr std::string_view k_DeveloperCreatureFile = "Player.erc";
 /// The folder, in the game's own, that a developer's run keeps its creature in
 constexpr std::string_view k_DeveloperFolder = "developer";
 
-/// A folder given keeps the profiles there, as a player's are, whatever started the game, so a first start can be had
-/// on a clean folder; a developer's or a tool's run has its own profile, kept apart from the player's; a player's are kept
-/// in the game's own folder
+/// Where the game keeps the profiles:
+/// - In a folder that the command line gives, as for a player, for all runs. Thus a clean folder gives a first start.
+/// - For a run of a developer or a tool, in a folder of its own in the profile folder, apart from the profiles of the
+///   players.
+/// - For a player, in the profile folder.
 [[nodiscard]] Store StoreFor(const RunOptions& options);
 
 } // namespace openblack::player_profiles

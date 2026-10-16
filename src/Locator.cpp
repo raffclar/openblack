@@ -105,6 +105,7 @@
 #include "ECS/Systems/Implementations/PickingSystem.h"
 #include "ECS/Systems/Implementations/PlayerProfileSystem.h"
 #include "ECS/Systems/Implementations/PlayerSystem.h"
+#include "ECS/Systems/Implementations/ProfileFolderSystem.h"
 #include "ECS/Systems/Implementations/RainSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
@@ -226,6 +227,7 @@ using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PickingSystem;
 using openblack::ecs::systems::PlayerProfileSystem;
+using openblack::ecs::systems::ProfileFolderSystem;
 using openblack::ecs::systems::PlayerSystem;
 using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
@@ -323,6 +325,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
 	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
 	Locator::playerProfileSystem::emplace<PlayerProfileSystem>(profiles);
+	Locator::profileFolderSystem::emplace<ProfileFolderSystem>(Locator::filesystem::value(), profiles.folder);
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
 	Locator::time::emplace<TimeSystem>();
@@ -533,6 +536,7 @@ void openblack::ShutDownServices()
 	Locator::videoSystem::reset();
 	Locator::helpTextSystem::reset();
 	Locator::helpProfileSystem::reset();
+	Locator::profileFolderSystem::reset();
 	Locator::creatureHelpSystem::reset();
 	Locator::guidanceSystem::reset();
 	Locator::helpMessageSystem::reset();
