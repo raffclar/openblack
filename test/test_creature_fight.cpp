@@ -587,6 +587,10 @@ TEST(CreatureFight, OutcomesAndStarting)
 	EXPECT_TRUE(FightWonIsSeen(true, true));
 	EXPECT_FALSE(FightWonIsSeen(false, true));
 	EXPECT_FALSE(FightWonIsSeen(true, false));
+	// The winner's plan is an order, forced only when a miracle or a loss of life knocked the loser out
+	EXPECT_FALSE(WinPlanForced(true));
+	EXPECT_TRUE(WinPlanForced(false));
+	EXPECT_FLOAT_EQ(k_WinPlanPriority, 1.0f);
 	EXPECT_EQ(Response(0.8f, 0.5f), animations::k_Happy);
 	EXPECT_EQ(Response(0.4f, 0.5f), animations::k_Sad);
 }
@@ -813,6 +817,11 @@ TEST(CreatureFight, AFighterOnTheEdgeOfTheRangeIsOutsideIt)
 
 TEST(CreatureFight, AFighterStepsBackToTheMiddle)
 {
+	// Both fighters inside the range: the arena lets them fight. Either one at the range or past it stops both.
+	const Arena ring {.centre = {0.0f, 0.0f}, .radius = 10.0f};
+	EXPECT_FALSE(KeepsInArena(ring, {7.99f, 0.0f}, {0.0f, -7.99f}));
+	EXPECT_TRUE(KeepsInArena(ring, {8.0f, 0.0f}, {0.0f, 0.0f}));
+	EXPECT_TRUE(KeepsInArena(ring, {0.0f, 0.0f}, {0.0f, -8.01f}));
 	// Within its body radius of the middle it takes no step
 	EXPECT_FALSE(StepToMiddle({0.0f, 2.0f}, 2.0f, 2.0f).has_value());
 	// Ahead or behind when the middle is 1.5 times farther that way than to the side

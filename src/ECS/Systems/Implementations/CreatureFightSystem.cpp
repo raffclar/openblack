@@ -52,6 +52,7 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMode.h"
+#include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/FightMarks.h"
@@ -861,15 +862,25 @@ void PushApartOnBlow(ecs::Registry& registry, entt::entity striker, entt::entity
 	});
 }
 
+/// Where the creature is at the end of this turn, as the fight rules see it. The drawn place moves to it during the turn.
+glm::vec3 FightPlaceOf(const ecs::Registry& registry, entt::entity creature)
+{
+	if (const auto* locomotion = registry.TryGet<const CreatureLocomotion>(creature))
+	{
+		return locomotion->toPosition;
+	}
+	return registry.Get<const Transform>(creature).position;
+}
+
 /// When either fighter is not inside the range of the arena, the fighter makes no moves. In its stance, it steps back to
-/// the middle when it is farther from the middle than its body radius. A block stops. Returns whether either fighter is
-/// not inside the range.
+/// the middle when it is farther from the middle than its body radius and its species has that step. A block stops.
+/// Returns whether either fighter is not inside the range.
 bool KeepInArena(ecs::Registry& registry, entt::entity creature, CreatureFighting& fighting)
 {
 	const auto& arena = fighting.arena;
-	const auto selfAt = registry.Get<const Transform>(creature).position;
-	const auto otherAt = registry.Get<const Transform>(fighting.opponent).position;
-	if (!fight::OutsideRange(arena, Flat(otherAt)) && !fight::OutsideRange(arena, Flat(selfAt)))
+	const auto selfAt = FightPlaceOf(registry, creature);
+	const auto otherAt = FightPlaceOf(registry, fighting.opponent);
+	if (!fight::KeepsInArena(arena, Flat(selfAt), Flat(otherAt)))
 	{
 		return false;
 	}
@@ -885,6 +896,11 @@ bool KeepInArena(ecs::Registry& registry, entt::entity creature, CreatureFightin
 		const glm::vec3 middle {arena.centre.x, GroundAt(arena.centre), arena.centre.y};
 		step = fight::StepToMiddle(WorldToLocal(arena.centre - Flat(selfAt), locomotion->heading),
 		                           glm::distance(middle, selfAt), locomotion->shownRadius);
+		// A species with no animation for the step stays in its stance
+		if (step.has_value() && !Has(creature, fight::StepAnimation(*step)))
+		{
+			step.reset();
+		}
 		if (step.has_value())
 		{
 			fight::Enter(fighter, fight::State::Action, fight::StepAnimation(*step));
@@ -1918,6 +1934,11 @@ void CreatureFightSystem::Faint(entt::entity creature)
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 		Locator::creatureObjectActionSystem::value().Drop(creature);
+	}
+	// The faint stops what its mind does as a failure, an emergency too. Until it gets up, it looks at no emergency.
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().AbandonAction(creature);
 	}
 	// Fainting drops the leash
 	if (Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(creature))
@@ -3387,23 +3408,34 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 		                                 {"loser_health", GetFightHealth(loser)}};
 	});
 	// The winner is made to do something to the loser at once: an evil winner has a poo on it, any other shows off. Its
-	// mind does it when the winner has left the fight. This plan counts for the feedback of the player.
+	// mind does it when the winner has left the fight. This plan counts for the feedback of the player, and it is an
+	// order. After a knock out by a blow the plan is not forced: it has the low priority of the order.
 	if (Locator::creatureMindSystem::has_value() && registry.Valid(loser))
 	{
 		const auto alignment = registry.Get<const Creature>(winner).alignment;
 		const std::string_view action = fight::WinnerPoos(alignment) ? "Poo" : "ShowImpressiveAnimation";
+		const bool forced = fight::WinPlanForced(byBlow);
+		const auto unforcedPriority =
+		    forced ? std::nullopt : std::optional(fight::k_WinPlanPriority * creature_planner::k_PriorityScale);
 		const bool planned =
 		    Locator::creatureMindSystem::value().ForceActivity(winner, {.desire = creature_desires::Desire::ObeyPlayer,
 		                                                                .activityObject = loser,
 		                                                                .action = action,
 		                                                                .actionObject = loser,
-		                                                                .instrument = std::nullopt});
+		                                                                .instrument = std::nullopt,
+		                                                                .ordered = true,
+		                                                                .unforcedPriority = unforcedPriority});
 		fight_transcript::Note(
 		    winner, "forced_plan",
 		    [&] {
-			    return fight_transcript::Fields {
-			        {"creature", fight_transcript::Id(winner)}, {"desire", "obey_player"}, {"action", action},
-			        {"object", fight_transcript::Id(loser)},    {"alignment", alignment},  {"planned", planned}};
+			    return fight_transcript::Fields {{"creature", fight_transcript::Id(winner)},
+			                                     {"desire", "obey_player"},
+			                                     {"action", action},
+			                                     {"object", fight_transcript::Id(loser)},
+			                                     {"alignment", alignment},
+			                                     {"planned", planned},
+			                                     {"ordered", true},
+			                                     {"forced", forced}};
 		    },
 		    winRecord);
 	}

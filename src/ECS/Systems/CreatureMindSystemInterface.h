@@ -170,6 +170,9 @@ public:
 		std::optional<entt::entity> instrument;
 		/// The plan counts as an order: when the creature forgets the plan, the plan can teach approval
 		bool ordered {false};
+		/// When this has a value, the plan is not forced and has this priority. The creature then changes to a plan that
+		/// is more than twice as pressing, it looks at its emergencies, and the plan counts for its desire at its end.
+		std::optional<float> unforcedPriority;
 	};
 	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
