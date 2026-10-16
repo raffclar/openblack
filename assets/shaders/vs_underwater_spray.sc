@@ -178,7 +178,7 @@ void main()
 			life = 3.5f + 2.0f * storm;
 			since -= 0.2f + 0.3f * h4;
 			size = 1.2f + 2.2f * max(since, 0.0f) * (0.5f + h3);
-			opacity = 0.22f * smoothstep(0.05f, 0.35f, local);
+			opacity = 0.15f * smoothstep(0.05f, 0.35f, local);
 		}
 		else
 		{
@@ -199,7 +199,7 @@ void main()
 			life = cycle;
 			size = 7.0f + 6.0f * p1 + 0.3f * since;
 			float average = u_uwWaves.w * cliff * (0.7f + 0.3f * tide);
-			opacity = (0.07f + 0.18f * storm) * smoothstep(0.1f, 0.5f, average);
+			opacity = (0.04f + 0.1f * storm) * smoothstep(0.1f, 0.5f, average);
 			h1 = p1;
 		}
 		world = base + velocity * since;
@@ -242,7 +242,7 @@ void main()
 
 	// The light that comes to the particle from all directions: the sky and the sea's colour. The direct light is
 	// added in the fragments.
-	vec3 ambient = u_uwSky.rgb * 1.15f + u_uwScatter.rgb * 0.3f + u_uwLightColour.rgb * 0.3f;
+	vec3 ambient = u_uwSky.rgb * 1.5f + u_uwScatter.rgb * 0.25f + u_uwLightColour.rgb * 0.3f;
 	v_texcoord0 = vec4(corner, layer, alpha);
 	v_color0 = vec4(ambient, age);
 	v_normal = normal;
