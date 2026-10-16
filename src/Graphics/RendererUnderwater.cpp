@@ -252,6 +252,8 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		spray->SetUniformValue("u_uwSky", &frame.sky);
 		spray->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
 		spray->SetTextureSampler("s_shore", 2, shoreMap);
+		spray->SetTextureSampler("s_sprayNoise", 3, _underwater->SprayNoise());
+		spray->SetUniformArray("u_uwWaveTable", frame.waveTable.data(), static_cast<uint16_t>(frame.waveTable.size()));
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		spray->Submit(postView);
 	}

@@ -293,3 +293,116 @@ float underwater::EyeDepth(float eyeHeight, float seaLevel)
 {
 	return std::max(seaLevel - eyeHeight, 0.0f);
 }
+
+namespace
+{
+
+// A hash of a lattice point to 0 to 1, the same each time
+float LatticeHash(int x, int y, int z)
+{
+	auto h = static_cast<uint32_t>(x) * 73856093u ^ static_cast<uint32_t>(y) * 19349663u ^ static_cast<uint32_t>(z) * 83492791u;
+	h ^= h >> 13u;
+	h *= 0x5bd1e995u;
+	h ^= h >> 15u;
+	return static_cast<float>(h & 0xffffffu) / static_cast<float>(0xffffffu);
+}
+
+int Wrap(int value, int period)
+{
+	return ((value % period) + period) % period;
+}
+
+// Smooth noise that repeats every `period` lattice cells
+float TiledValueNoise(glm::vec3 p, int period)
+{
+	const glm::vec3 cell = glm::floor(p);
+	const glm::vec3 f = p - cell;
+	const glm::vec3 u = f * f * (3.0f - 2.0f * f);
+	const auto x0 = static_cast<int>(cell.x);
+	const auto y0 = static_cast<int>(cell.y);
+	const auto z0 = static_cast<int>(cell.z);
+	auto at = [period](int x, int y, int z) { return LatticeHash(Wrap(x, period), Wrap(y, period), Wrap(z, period)); };
+	const float x00 = glm::mix(at(x0, y0, z0), at(x0 + 1, y0, z0), u.x);
+	const float x10 = glm::mix(at(x0, y0 + 1, z0), at(x0 + 1, y0 + 1, z0), u.x);
+	const float x01 = glm::mix(at(x0, y0, z0 + 1), at(x0 + 1, y0, z0 + 1), u.x);
+	const float x11 = glm::mix(at(x0, y0 + 1, z0 + 1), at(x0 + 1, y0 + 1, z0 + 1), u.x);
+	return glm::mix(glm::mix(x00, x10, u.y), glm::mix(x01, x11, u.y), u.z);
+}
+
+// Smooth noise in octaves, 0 to 1, that repeats over the unit cube
+float TiledFbm(glm::vec3 unit, int period, int octaves)
+{
+	float sum = 0.0f;
+	float weight = 0.5f;
+	float total = 0.0f;
+	for (int octave = 0; octave < octaves; ++octave)
+	{
+		sum += weight * TiledValueNoise(unit * static_cast<float>(period), period);
+		total += weight;
+		weight *= 0.5f;
+		period *= 2;
+	}
+	return sum / total;
+}
+
+// Round cells: 1 at the middle of the nearest cell, falling to 0 at its edge, repeating over the unit cube
+float TiledCells(glm::vec3 unit, int period)
+{
+	const glm::vec3 p = unit * static_cast<float>(period);
+	const glm::vec3 cell = glm::floor(p);
+	float nearest = 1e9f;
+	for (int dz = -1; dz <= 1; ++dz)
+	{
+		for (int dy = -1; dy <= 1; ++dy)
+		{
+			for (int dx = -1; dx <= 1; ++dx)
+			{
+				const auto cx = static_cast<int>(cell.x) + dx;
+				const auto cy = static_cast<int>(cell.y) + dy;
+				const auto cz = static_cast<int>(cell.z) + dz;
+				const int wx = Wrap(cx, period);
+				const int wy = Wrap(cy, period);
+				const int wz = Wrap(cz, period);
+				const glm::vec3 jitter {LatticeHash(wx, wy, wz + 101), LatticeHash(wx + 37, wy, wz),
+				                        LatticeHash(wx, wy + 59, wz)};
+				const glm::vec3 centre = glm::vec3(cx, cy, cz) + jitter;
+				nearest = std::min(nearest, glm::length(p - centre));
+			}
+		}
+	}
+	return std::clamp(1.0f - nearest, 0.0f, 1.0f);
+}
+
+uint8_t ToByte(float value)
+{
+	return static_cast<uint8_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f));
+}
+
+} // namespace
+
+std::vector<uint8_t> underwater::SprayNoiseVolume()
+{
+	constexpr int k_Side = k_SprayNoiseSide;
+	std::vector<uint8_t> texels(static_cast<size_t>(k_Side) * k_Side * k_Side * 4);
+	for (int z = 0; z < k_Side; ++z)
+	{
+		for (int y = 0; y < k_Side; ++y)
+		{
+			for (int x = 0; x < k_Side; ++x)
+			{
+				const glm::vec3 unit = (glm::vec3(x, y, z) + 0.5f) / static_cast<float>(k_Side);
+				const float smooth = TiledFbm(unit, 4, 3);
+				const float fine = TiledFbm(unit, 8, 2);
+				// Stretch the smooth noise out about its middle, so it reaches from 0 to 1
+				const float spread = std::clamp((smooth - 0.5f) * 2.2f + 0.5f, 0.0f, 1.0f);
+				const float ridge = 1.0f - std::abs(2.0f * TiledFbm(unit + glm::vec3(0.37f), 4, 3) - 1.0f);
+				const auto index = static_cast<size_t>((((z * k_Side) + y) * k_Side) + x) * 4;
+				texels[index + 0] = ToByte(spread);
+				texels[index + 1] = ToByte(TiledCells(unit, 4));
+				texels[index + 2] = ToByte((fine - 0.5f) * 2.0f + 0.5f);
+				texels[index + 3] = ToByte(ridge * ridge);
+			}
+		}
+	}
+	return texels;
+}

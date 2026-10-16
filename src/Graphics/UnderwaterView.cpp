@@ -28,6 +28,7 @@
 #include <glm/vec4.hpp>
 
 #include "GraphicsHandleBgfx.h"
+#include "Underwater.h"
 
 using namespace openblack::graphics;
 
@@ -80,6 +81,10 @@ UnderwaterView::UnderwaterView()
 
 UnderwaterView::~UnderwaterView()
 {
+	if (bgfx::isValid(_sprayNoise))
+	{
+		bgfx::destroy(_sprayNoise);
+	}
 	for (auto* buffer : {&_sprayMesh, &_sprayInstances})
 	{
 		if (bgfx::isValid(*buffer))
@@ -499,4 +504,17 @@ bool UnderwaterView::BindSpray(std::span<const glm::vec4> cliffFoot, uint32_t re
 	bgfx::setIndexBuffer(_sprayIndices);
 	bgfx::setInstanceDataBuffer(_sprayInstances, 0, _sprayCount);
 	return true;
+}
+
+TextureHandle UnderwaterView::SprayNoise()
+{
+	if (!bgfx::isValid(_sprayNoise))
+	{
+		const auto texels = underwater::SprayNoiseVolume();
+		constexpr auto k_Side = underwater::k_SprayNoiseSide;
+		_sprayNoise = bgfx::createTexture3D(k_Side, k_Side, k_Side, false, bgfx::TextureFormat::RGBA8, BGFX_SAMPLER_NONE,
+		                                    bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));
+		bgfx::setName(_sprayNoise, "Underwater Spray Noise");
+	}
+	return fromBgfx(_sprayNoise);
 }

@@ -223,6 +223,24 @@ float UwShoreWave(float distance, vec2 xz, float t, float cliff, out float face)
 	return u_uwWaves.w * 2.0f * reach * (1.0f - cliff) * own * sets * along * (profile - 0.3f);
 }
 
+// A crash of the shore wave on the foot of a cliff at a point of the coast: the same wave as UwShoreWave, that
+// reaches the coast there at its own time. It gives how strong the last wave to reach the coast there was, about 0.05
+// to 2 (0.55 for a usual wave): its own height, the height of its set and how big the breakers are at that place.
+// `since` is the time since it reached the coast, in seconds; `crash` is the number of the wave, for the hashes that
+// make each crash different; `period` is the time from one wave to the next.
+float UwCliffCrash(vec2 xz, float t, out float since, out float crash, out float period)
+{
+	float omega = mix(1.1f, 1.5f, u_uwWaves.y);
+	float theta = omega * t + UwNoise(xz * 0.008f) * 1.2f;
+	period = 6.2831853f / omega;
+	crash = floor(theta / 6.2831853f);
+	since = fract(theta / 6.2831853f) * period;
+	float own = 0.6f + 0.8f * UwHash(vec2(crash, 17.0f));
+	float sets = 0.55f + 0.45f * sin(crash * 0.9f);
+	float along = 0.6f + 0.8f * UwNoise(xz * 0.012f + vec2(3.0f, 7.0f));
+	return own * sets * along;
+}
+
 // The waves that go back out to sea from the foot of a cliff, in rings
 float UwCliffBackwash(float distance, float t, float cliff)
 {

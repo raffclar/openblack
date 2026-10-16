@@ -340,3 +340,38 @@ TEST(Seabed, TheShoreMapPointsToTheCoastAndFindsTheCliffs)
 		EXPECT_LT(foot.z, 0.0f);
 	}
 }
+
+TEST(Underwater, TheSprayNoiseTilesAndFillsItsRange)
+{
+	const auto texels = underwater::SprayNoiseVolume();
+	constexpr int k_Side = underwater::k_SprayNoiseSide;
+	ASSERT_EQ(texels.size(), static_cast<size_t>(k_Side) * k_Side * k_Side * 4);
+	auto at = [&](int x, int y, int z, int channel) {
+		return static_cast<int>(texels[(static_cast<size_t>((((z * k_Side) + y) * k_Side) + x) * 4) + channel]);
+	};
+	for (int channel = 0; channel < 4; ++channel)
+	{
+		int lowest = 255;
+		int highest = 0;
+		// The step from one texel to the next inside the cube, and across its edge from the last to the first
+		double inside = 0.0;
+		double across = 0.0;
+		for (int z = 0; z < k_Side; ++z)
+		{
+			for (int y = 0; y < k_Side; ++y)
+			{
+				for (int x = 0; x < k_Side; ++x)
+				{
+					lowest = std::min(lowest, at(x, y, z, channel));
+					highest = std::max(highest, at(x, y, z, channel));
+				}
+				inside += std::abs(at(k_Side / 2, y, z, channel) - at((k_Side / 2) - 1, y, z, channel));
+				across += std::abs(at(0, y, z, channel) - at(k_Side - 1, y, z, channel));
+			}
+		}
+		EXPECT_LT(lowest, 64) << channel;
+		EXPECT_GT(highest, 160) << channel;
+		// The edge is no harder a step than the middle: the volume repeats with no seam
+		EXPECT_LT(across, inside * 2.0 + 1.0) << channel;
+	}
+}

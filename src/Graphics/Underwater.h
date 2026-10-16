@@ -15,6 +15,7 @@
 #include <array>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #include <entt/core/hashed_string.hpp>
 #include <glm/vec2.hpp>
@@ -226,5 +227,13 @@ struct CurrentState
 
 /// How far under the surface the eye is; 0 above it
 [[nodiscard]] float EyeDepth(float eyeHeight, float seaLevel = k_SeaLevel);
+
+/// The side of the spray's noise volume, in texels
+inline constexpr uint16_t k_SprayNoiseSide = 32;
+/// The spray's noise volume: a cube of k_SprayNoiseSide texels a side that tiles in all three directions, 4 bytes a
+/// texel, x first, then y, then z. r: smooth noise in four octaves, g: round cells (1 at the middle of a cell, 0 at its
+/// edge) for lumps of water, b: finer smooth noise, a: ridges of the smooth noise for thin strands. The spray reads it
+/// as if it were a cloud of water, moving through it over time.
+[[nodiscard]] std::vector<uint8_t> SprayNoiseVolume();
 
 } // namespace openblack::graphics::underwater
