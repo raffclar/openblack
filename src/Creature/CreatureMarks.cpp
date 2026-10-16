@@ -185,11 +185,20 @@ glm::u8vec3 creature_marks::BloodColour(uint8_t age)
 	return age < k_BloodAges[1] ? k_BloodColours[1] : k_BloodColours[2];
 }
 
+uint16_t creature_marks::BloodTexel(uint16_t skin, const glm::u8vec3& colour)
+{
+	const auto channel = [skin](uint32_t shift, uint8_t value) {
+		const uint32_t from = ((skin >> shift) & 0xFu) << 4u;
+		return (((from + (3u * value)) / 4u) >> 4u) << shift;
+	};
+	return static_cast<uint16_t>(channel(8, colour.r) | channel(4, colour.g) | channel(0, colour.b) | k_Opaque);
+}
+
 void creature_marks::PaintBlood(std::span<uint16_t> skin, const Mark& blood)
 {
 	assert(skin.size() == static_cast<size_t>(k_SkinSize) * k_SkinSize);
 	auto& target = skin[(static_cast<size_t>(blood.v) * k_SkinSize) + blood.u];
-	target = BlendTexel(target, BloodColour(blood.age), k_BloodAlpha);
+	target = BloodTexel(target, BloodColour(blood.age));
 }
 
 uint8_t creature_marks::scar::BlowKind(float harm)
