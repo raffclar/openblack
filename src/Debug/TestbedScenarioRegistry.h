@@ -774,6 +774,9 @@ struct Command
 		/// makes the folder if it is missing. Then the game reads the file again, and the log tells if the record is the
 		/// same. Needs no creature
 		ProfileFolderCheck,
+		/// The game stops every task of a land's script (script, by its name), as a script's "stop script" does. The log
+		/// tells how many tasks stopped and if the scenario's object is still in a script. Needs no creature
+		StopScript,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

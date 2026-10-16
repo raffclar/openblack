@@ -1061,3 +1061,7 @@ openblack_setup_and_add_test(
   test_creature_hold_pose test_creature_hold_pose.cpp
 )
 openblack_setup_and_add_test(test_creature_gesture test_creature_gesture.cpp)
+openblack_setup_and_add_test(
+  test_script_task_release test_script_task_release.cpp
+)
+target_link_libraries(test_script_task_release PRIVATE ScriptLibrary)

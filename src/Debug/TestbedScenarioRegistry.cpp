@@ -6558,6 +6558,35 @@ void AddRestAndHome(std::vector<Scenario>& all)
 	});
 }
 
+/// A task of a land's script that stops gives back the objects that its variables hold. The objects stay in a script
+/// until the scripts' turn ends, and then they are in no script
+void AddScriptTaskRelease(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	const auto stop = [](float delaySeconds) {
+		return Command {.kind = Kind::StopScript, .delaySeconds = delaySeconds, .script = "CheckForCommentOnFoodItems"};
+	};
+	all.push_back({
+	    .id = "story.stopped_task_lets_go",
+	    .name = "A stopped script task lets go of the object that it holds",
+	    .facet = Facet::Story,
+	    .description = "The game's CheckForCommentOnFoodItems script runs with a food pot as its parameter, which it "
+	                   "keeps in a variable. One second later the scenario stops the script, and one second after that "
+	                   "it stops the script again.",
+	    .expected = "The log tells that the first stop stopped one task and that the pot is still in a script for "
+	                "the rest of that turn. The second stop stopped no task, and the pot is in no script.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .objects = {{.type = PotInfo::FoodPot, .offset = {0.0f, -20.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CheckForCommentOnFoodItems",
+	                  .scriptArguments = {{.kind = Argument::Kind::Object, .index = 0}}},
+	                 stop(1.0f),
+	                 stop(1.0f)},
+	});
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -6618,6 +6647,7 @@ std::vector<Scenario> Build()
 	AddWorldSoundScenarios(all);
 	AddTownMiracleScenarios(all);
 	AddCreatureExplorationScenarios(all);
+	AddScriptTaskRelease(all);
 	return all;
 }
 
@@ -6751,7 +6781,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
-	       IsPointerCommand(kind);
+	       kind == Kind::StopScript || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -6778,7 +6808,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 128> k_Names {
+	constexpr std::array<std::string_view, 129> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -6907,6 +6937,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "pointer on altar",
 	    "set fizz",
 	    "check the profile folder",
+	    "stop script",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
