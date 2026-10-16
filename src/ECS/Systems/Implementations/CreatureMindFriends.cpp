@@ -492,6 +492,12 @@ void CreatureMindSystem::SituateFriend(entt::entity creature, const creature_pla
 			if (lips.has_value() && friendLips.has_value())
 			{
 				situation.kissingDistance = creature_kiss::MeanKissingDistance(*lips, *friendLips);
+				SPDLOG_LOGGER_DEBUG(
+				    spdlog::get("game"),
+				    "Creature {} kisses creature {} from {:.2f} each side (lips {:.2f} {:.2f} {:.2f} and {:.2f} "
+				    "{:.2f} {:.2f})",
+				    entt::to_integral(creature), entt::to_integral(friendly), *situation.kissingDistance, lips->high.y,
+				    lips->low.y, lips->high.z, friendLips->high.y, friendLips->low.y, friendLips->high.z);
 			}
 		}
 		break;

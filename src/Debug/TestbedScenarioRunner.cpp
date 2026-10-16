@@ -2328,27 +2328,13 @@ void Runner::Give(const Command& command)
 		                    : command.atCreature.has_value()               ? CreatureAt(*command.atCreature)
 		                                                                   : ObjectAt(command.object);
 		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
+		                  : command.usesCreature.has_value()            ? CreatureAt(*command.usesCreature)
 		                  : command.with.has_value()                    ? ObjectAt(*command.with)
 		                                                                : std::nullopt;
 		result = !action.has_value()                                     ? "no such action"
 		         : !target.has_value()                                   ? "no such object"
 		         : minds.ScriptDoAction(*entity, *action, *target, with) ? fmt::format("doing {}", command.action)
 		                                                                 : "can't";
-		break;
-	}
-	case Kind::PlanAction:
-	{
-		const auto target = command.atCreature.has_value() ? CreatureAt(*command.atCreature) : ObjectAt(command.object);
-		const auto with = command.usesCreature.has_value() ? CreatureAt(*command.usesCreature)
-		                  : command.with.has_value()       ? ObjectAt(*command.with)
-		                                                   : std::nullopt;
-		result = !target.has_value() ? "no such object"
-		         : minds.ForcePlan(*entity, {.desire = static_cast<creature_desires::Desire>(command.value),
-		                                     .action = command.action,
-		                                     .object = *target,
-		                                     .instrument = with})
-		             ? fmt::format("planned {}", command.action)
-		             : "can't";
 		break;
 	}
 	case Kind::MakeFriends:

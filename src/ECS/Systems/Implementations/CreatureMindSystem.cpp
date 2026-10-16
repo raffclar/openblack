@@ -1208,9 +1208,13 @@ void StartKiss(entt::entity creature, const creature_mind::Commands::KissOrder& 
 		const auto weight = self.has_value() && other.has_value() ? creature_kiss::HighWeight(*self, *other) : std::nullopt;
 		if (!weight.has_value())
 		{
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} cannot kiss creature {}: the lips do not meet",
+			                    entt::to_integral(creature), *kiss.partner);
 			return;
 		}
 		highWeight = *weight;
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} kisses creature {} with the high kiss at {:.3f}",
+		                    entt::to_integral(creature), *kiss.partner, highWeight);
 	}
 	if (auto body = creature_layers::PlayOnce(animation.body, creature_kiss::k_LowKiss, false))
 	{

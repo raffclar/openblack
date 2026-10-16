@@ -774,10 +774,6 @@ struct Command
 		/// makes the folder if it is missing. Then the game reads the file again, and the log tells if the record is the
 		/// same. Needs no creature
 		ProfileFolderCheck,
-		/// The creature plans an action of the game's table (action, by its name) for a desire (value) at another
-		/// creature (atCreature), with the scenario's object (with) when given. The plan is as if the creature chose it:
-		/// no script takes control.
-		PlanAction,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -829,7 +825,7 @@ struct Command
 	/// The creature a miracle is cast at, or that a script's action is done to in place of the object, by its place in
 	/// the scenario's creatures
 	std::optional<size_t> atCreature;
-	/// The creature that a planned action uses, by its place in the scenario's creatures
+	/// The creature that a script's action uses, in place of the object (with), by its place in the scenario's creatures
 	std::optional<size_t> usesCreature;
 	/// The player's alignment jumped to, from -1 (evil) to 1 (good)
 	float alignment {0.0f};
