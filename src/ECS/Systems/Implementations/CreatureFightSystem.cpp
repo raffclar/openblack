@@ -981,6 +981,14 @@ fight_view::Fighter ViewedFighter(const ecs::Registry& registry, entt::entity cr
 }
 } // namespace
 
+void CreatureFightSystem::PrepareLand()
+{
+	if (Locator::entitiesRegistry::has_value())
+	{
+		[[maybe_unused]] const auto& avoid = LandAvoidOf(Locator::entitiesRegistry::value());
+	}
+}
+
 void CreatureFightSystem::Reset()
 {
 	_pressed.reset();

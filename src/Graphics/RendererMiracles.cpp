@@ -375,6 +375,25 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 	const auto eye = desc.camera->GetOrigin();
 	const auto* objectProgram = _shaderManager->GetShader("Object");
 	const auto translucent = TranslucentPassOf(desc.viewId);
+	// A warm-up draws the model of each kind of seed at no size, for a good and an evil player, as the first seeds of
+	// each kind draw them
+	if (_warmingUp)
+	{
+		for (int32_t seed = 0; seed <= static_cast<int32_t>(SpellSeedType::BeamExplosion); ++seed)
+		{
+			for (const float alignment : {-1.0f, 1.0f})
+			{
+				DrawSeedModel(desc, {.seed = static_cast<SpellSeedType>(seed),
+				                     .middle = glm::vec3(0.0f),
+				                     .scale = 0.0f,
+				                     .spin = 0.0f,
+				                     .phialPhase = 0.0f,
+				                     .phialFrame = 0.0f,
+				                     .phialAlpha = std::numeric_limits<uint8_t>::max(),
+				                     .ownerAlignment = alignment});
+			}
+		}
+	}
 	registry.Each<const IconSeed>([&](entt::entity icon, const IconSeed& shown) {
 		const auto player = ecs::world_objects::IconPlayer(registry, icon);
 		const float alignment = Locator::alignmentSystem::has_value() && player != PlayerNames::NEUTRAL

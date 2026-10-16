@@ -30,6 +30,7 @@ class CreatureFightSystem final: public CreatureFightSystemInterface
 public:
 	void ProcessTurn() override;
 	void Reset() override;
+	void PrepareLand() override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;

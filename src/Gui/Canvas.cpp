@@ -52,6 +52,17 @@ bgfx::VertexLayout& GetLayout()
 	}();
 	return layout;
 }
+
+/// The state of a canvas's draws that blend in a way
+constexpr uint64_t StateOf(Canvas::Blend blend)
+{
+	const auto mix = blend == Canvas::Blend::Additive
+	                     ? BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE,
+	                                                      BGFX_STATE_BLEND_ZERO, BGFX_STATE_BLEND_ONE)
+	                     : BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA,
+	                                                      BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+	return BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | mix;
+}
 } // namespace
 
 Canvas::Canvas(RenderPass view)
@@ -164,12 +175,29 @@ void Canvas::End()
 		std::copy_n(_vertices.begin() + batch.firstVertex, batch.vertexCount, reinterpret_cast<Vertex*>(vertices.data));
 		bgfx::setVertexBuffer(0, &vertices);
 		program->SetTextureSampler("s_texture", 0, *batch.texture);
-		const auto blend = batch.blend == Blend::Additive
-		                       ? BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE,
-		                                                        BGFX_STATE_BLEND_ZERO, BGFX_STATE_BLEND_ONE)
-		                       : BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA,
-		                                                        BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
-		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | blend);
+		bgfx::setState(StateOf(batch.blend));
 		program->Submit(view);
+	}
+}
+
+void Canvas::WarmUp(RenderPass view)
+{
+	// One triangle with its corners in one place, for each way to blend
+	constexpr std::array k_Blends {Blend::Alpha, Blend::Additive};
+	constexpr uint32_t k_Corners = 3;
+	const auto* program = Locator::rendererInterface::value().GetShaderManager().GetShader("Interface");
+	auto& layout = GetLayout();
+	for (const auto blend : k_Blends)
+	{
+		if (bgfx::getAvailTransientVertexBuffer(k_Corners, layout) < k_Corners)
+		{
+			return;
+		}
+		bgfx::TransientVertexBuffer vertices;
+		bgfx::allocTransientVertexBuffer(&vertices, k_Corners, layout);
+		std::fill_n(reinterpret_cast<Vertex*>(vertices.data), k_Corners, Vertex {});
+		bgfx::setVertexBuffer(0, &vertices);
+		bgfx::setState(StateOf(blend));
+		program->Submit(static_cast<bgfx::ViewId>(view));
 	}
 }
