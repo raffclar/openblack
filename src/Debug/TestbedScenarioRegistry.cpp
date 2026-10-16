@@ -4552,6 +4552,26 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "audio.leash_tie_placed",
+	    .name = "The tie sound of another player's leash",
+	    .facet = Facet::Audio,
+	    .description = "Your tiger on the left is tied to a tree. Then player two's lion on the right is tied to a "
+	                   "pillar of rock.",
+	    .expected = "The tie of your tiger's leash is heard in the middle, with no place. The tie of the lion's leash "
+	                "is heard from the rock on the right.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {-30.0f, 60.0f}),
+	                  [] {
+		                  auto lion = Content(CreatureType::Lion, {30.0f, 60.0f});
+		                  lion.owner = PlayerNames::PLAYER_TWO;
+		                  return lion;
+	                  }()},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-60.0f, 70.0f}},
+	                {.type = FeatureInfo::FatPilarChalk, .offset = {60.0f, 70.0f}}},
+	    .commands = {OnObject(Kind::TieLeash, 0, 0, 1.0f, false), OnObject(Kind::TieLeash, 1, 1, 3.0f, false)},
+	});
+
+	all.push_back({
 	    .id = "leash.someone_elses",
 	    .name = "Another player's creature refuses the leash",
 	    .facet = Facet::Leash,

@@ -203,3 +203,10 @@ TEST(LeashRules, LessonsOfWhatThePlayerShows)
 	EXPECT_FLOAT_EQ(good[1].change, 1.0f);
 	EXPECT_TRUE(LessonsFor(LeashType::Rope, false).empty());
 }
+
+TEST(LeashRules, OnlyTheLeashOfAnotherPlayersCreatureMakesItsTieSoundAtTheThing)
+{
+	EXPECT_FALSE(TieSoundIsPlaced(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(TieSoundIsPlaced(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(TieSoundIsPlaced(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO));
+}
