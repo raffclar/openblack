@@ -14,6 +14,7 @@
 #include <deque>
 #include <vector>
 
+#include <glm/ext/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureFight.h"
@@ -575,6 +576,48 @@ TEST(CreatureFight, OnTheSameScoreTheBlowChangesButTheStepsStay)
 	const auto [lowLowest, lowHighest] = BandLimits(Band::Low, 10.0f);
 	EXPECT_FLOAT_EQ(lowLowest, 0.0f);
 	EXPECT_FLOAT_EQ(lowHighest, 3.3f);
+}
+
+namespace
+{
+/// A bone whose ellipsoid has these half widths round a middle in the world
+openblack::physics::Ellipsoid Bone(const glm::vec3& middle, const glm::vec3& half)
+{
+	const auto toWorld = glm::translate(glm::mat4(1.0f), middle);
+	return {.boxMin = -half, .boxMax = half, .localToWorld = toWorld, .worldToLocal = glm::inverse(toWorld)};
+}
+} // namespace
+
+TEST(CreatureFight, ABlowLineTakesOnlyAPointAheadOfItsStart)
+{
+	// The bone behind the start of the line is the nearest, so the blow line refuses the point
+	const std::array bones {Bone({10.0f, 0.0f, 0.0f}, glm::vec3(1.0f)), Bone({-10.0f, 0.0f, 0.0f}, glm::vec3(1.0f))};
+	const glm::vec3 origin(0.0f);
+	const glm::vec3 direction(20.0f, 0.0f, 0.0f);
+	const auto hit = openblack::physics::EllipsoidHit(bones, origin, direction);
+	ASSERT_TRUE(hit.has_value());
+	EXPECT_NEAR(hit->first.point.x, -11.0f, 1e-4f);
+	EXPECT_FALSE(WithinBlowLine(hit->first.point, origin, direction));
+	EXPECT_TRUE(WithinBlowLine({9.0f, 0.0f, 0.0f}, origin, direction));
+	EXPECT_FALSE(WithinBlowLine({21.0f, 0.0f, 0.0f}, origin, direction));
+	EXPECT_FALSE(WithinBlowLine({1.0f, 0.0f, 0.0f}, origin, glm::vec3(0.0f)));
+}
+
+TEST(CreatureFight, TheDepthToTheBodyIsTheNearestOfARowOfLines)
+{
+	// A ball 10 ahead, and a ball 8 ahead and 2 to the side: the row 4.5 wide meets both
+	const std::array bones {Bone({10.0f, 0.0f, 0.0f}, glm::vec3(1.0f)), Bone({8.0f, 0.0f, 2.0f}, glm::vec3(1.0f))};
+	const auto depth = DepthToBody(bones, glm::vec3(0.0f), {1.0f, 0.0f, 0.0f}, 1.0f);
+	ASSERT_TRUE(depth.has_value());
+	// The line 1.8 to the side meets the side ball first, 0.2 from its middle
+	EXPECT_NEAR(*depth, 8.0f - std::sqrt(0.96f), 1e-3f);
+	// A ball outside the row is not found
+	const std::array wide {Bone({10.0f, 0.0f, 5.0f}, glm::vec3(1.0f))};
+	EXPECT_FALSE(DepthToBody(wide, glm::vec3(0.0f), {1.0f, 0.0f, 0.0f}, 1.0f).has_value());
+	// A point inside the body has a negative depth
+	const auto inside = DepthToBody(bones, {10.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 1.0f);
+	ASSERT_TRUE(inside.has_value());
+	EXPECT_LT(*inside, 0.0f);
 }
 
 TEST(CreatureFight, OutcomesAndStarting)

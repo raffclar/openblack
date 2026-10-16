@@ -497,49 +497,6 @@ std::optional<MeshTriangle> TriangleInMeshes(const morph::MeshIntersect& interse
 	return result;
 }
 
-/// The box round the vertices of each bone of a mesh, over all its submeshes and primitives
-std::vector<creature_hit_shapes::Shape> HitShapesOf(const l3d::L3DFile& file)
-{
-	namespace hit = creature_hit_shapes;
-	// A mesh with bones keeps the count of its bones in the low byte of its flags
-	constexpr uint32_t k_BoneCountMask = 0xFFu;
-	const auto flags = static_cast<uint32_t>(file.GetHeader().flags);
-	const bool boned = (flags & static_cast<uint32_t>(l3d::L3DMeshFlags::HasBones)) != 0;
-	std::vector<std::vector<glm::vec3>> positions;
-	std::vector<std::vector<hit::VertexGroup>> groups;
-	std::vector<hit::Primitive> primitives;
-	for (uint32_t submesh = 0; submesh < file.GetSubmeshHeaders().size(); ++submesh)
-	{
-		const auto vertices = file.GetVertexSpan(submesh);
-		const auto vertexGroups = file.GetVertexGroupSpan(submesh);
-		size_t vertexOffset = 0;
-		size_t groupOffset = 0;
-		for (const auto& primitive : file.GetPrimitiveSpan(submesh))
-		{
-			auto& placed = positions.emplace_back();
-			for (size_t i = 0; i < primitive.numVertices && vertexOffset + i < vertices.size(); ++i)
-			{
-				const auto& position = vertices[vertexOffset + i].position;
-				placed.emplace_back(position.x, position.y, position.z);
-			}
-			auto& byBone = groups.emplace_back();
-			for (size_t i = 0; i < primitive.numGroups && groupOffset + i < vertexGroups.size(); ++i)
-			{
-				const auto& group = vertexGroups[groupOffset + i];
-				byBone.push_back({.vertexCount = group.vertexCount, .bone = group.boneIndex});
-			}
-			vertexOffset += primitive.numVertices;
-			groupOffset += primitive.numGroups;
-		}
-	}
-	primitives.reserve(positions.size());
-	for (size_t i = 0; i < positions.size(); ++i)
-	{
-		primitives.push_back({.positions = positions.at(i), .groups = groups.at(i)});
-	}
-	return hit::ShapesOf(flags & k_BoneCountMask, boned, primitives);
-}
-
 std::vector<CreatureRig::HairGroup> LoadHair(std::span<const morph::HairGroup> groups,
                                              const std::array<std::optional<l3d::L3DFile>, CreatureRig::k_MeshCount>& meshes)
 {
@@ -722,33 +679,29 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 		}
 	}
 
-	auto& fileSystem = Locator::filesystem::value();
-	std::array<std::optional<l3d::L3DFile>, CreatureRig::k_MeshCount> meshes;
-	for (size_t i = 0; i < meshNames.size(); ++i)
-	{
-		const auto path = meshDirectory / (meshNames.at(i) + ".l3d");
-		if (meshNames.at(i).empty() || !fileSystem.Exists(path))
-		{
-			continue;
-		}
-		auto& mesh = meshes.at(i).emplace();
-		if (mesh.Open(fileSystem.ReadAll(path)) != l3d::L3DResult::Success)
-		{
-			meshes.at(i).reset();
-		}
-	}
-	// Fight blows strike the boxes round the bones of the base mesh
-	if (meshes.front().has_value())
-	{
-		rig->hitShapes = HitShapesOf(*meshes.front());
-	}
 	// The eyes and the hair sit on triangles of the meshes
-	if (const auto& eyes = file.GetCreatureEyes(); eyes.has_value())
+	const auto& eyes = file.GetCreatureEyes();
+	if (eyes.has_value() || !file.GetHairGroups().empty())
 	{
-		rig->eyes = LoadEyes(*eyes, meshes);
-	}
-	if (!file.GetHairGroups().empty())
-	{
+		auto& fileSystem = Locator::filesystem::value();
+		std::array<std::optional<l3d::L3DFile>, CreatureRig::k_MeshCount> meshes;
+		for (size_t i = 0; i < meshNames.size(); ++i)
+		{
+			const auto path = meshDirectory / (meshNames.at(i) + ".l3d");
+			if (meshNames.at(i).empty() || !fileSystem.Exists(path))
+			{
+				continue;
+			}
+			auto& mesh = meshes.at(i).emplace();
+			if (mesh.Open(fileSystem.ReadAll(path)) != l3d::L3DResult::Success)
+			{
+				meshes.at(i).reset();
+			}
+		}
+		if (eyes.has_value())
+		{
+			rig->eyes = LoadEyes(*eyes, meshes);
+		}
 		rig->hairGroups = LoadHair(file.GetHairGroups(), meshes);
 	}
 	return rig;

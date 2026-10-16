@@ -32,8 +32,6 @@ constexpr uint32_t k_CounterLots = 5;
 constexpr uint32_t k_EndBlockLots = 8;
 /// A blow at a band asked for scores its steps; any other this
 constexpr int k_OutOfBandScore = 999;
-/// The depth that any blow that lands beats
-constexpr float k_NoDepthScore = 1000.0f;
 /// The tendency clamps here, and each move nudges it by this share
 constexpr float k_TendencyKeep = 0.98f;
 constexpr float k_TendencyNudge = 0.02f;
@@ -1055,6 +1053,40 @@ bool creature_fight::ComputerEndsBlock(const Random& random)
 	return random(k_EndBlockLots) == 1;
 }
 
+std::optional<float> creature_fight::DepthToBody(std::span<const physics::Ellipsoid> bones, const glm::vec3& point,
+                                                 const glm::vec3& towards, float opponentSize)
+{
+	const auto width = static_cast<float>(static_cast<double>(opponentSize * k_DepthWidthPerSize) * k_DepthWidthShare);
+	const auto spacing = (width + width) * k_DepthSpacingShare;
+	// The row goes across the direction, flat on the land
+	const auto across = glm::vec3(towards.z, 0.0f, -towards.x);
+	const auto acrossLength = glm::length(across);
+	const auto unitAcross = acrossLength > 0.0f ? across / acrossLength : glm::vec3(0.0f);
+	auto origin = point - (unitAcross * width);
+	const auto next = unitAcross * spacing;
+	std::optional<float> depth;
+	for (int i = 0; i < k_DepthLines; ++i)
+	{
+		if (const auto hit = physics::EllipsoidHit(bones, origin, towards); hit.has_value())
+		{
+			depth = std::min(depth.value_or(k_NoDepth), glm::dot(hit->first.point - point, towards));
+		}
+		origin += next;
+	}
+	return depth;
+}
+
+bool creature_fight::WithinBlowLine(const glm::vec3& point, const glm::vec3& origin, const glm::vec3& direction)
+{
+	const auto length = glm::length(direction);
+	if (length <= 0.0f)
+	{
+		return false;
+	}
+	const auto ahead = glm::dot(point - origin, direction / length);
+	return ahead > 0.0f && ahead < length;
+}
+
 std::pair<float, float> creature_fight::BandLimits(Band band, float headHeight)
 {
 	switch (band)
@@ -1077,7 +1109,7 @@ AttackChoice creature_fight::ChooseAttack(std::span<const BlowDepth> blows, Band
 	std::optional<size_t> bestBlow;
 	int bestSteps = 0;
 	int bestScore = 0;
-	float bestDepth = -k_NoDepthScore;
+	float bestDepth = -k_NoDepth;
 	for (int count = -k_MaxSteps; count <= k_MaxSteps; ++count)
 	{
 		float moved = 0.0f;

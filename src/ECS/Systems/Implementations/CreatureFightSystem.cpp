@@ -45,7 +45,6 @@
 #include "Creature/CreatureArena.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFizz.h"
-#include "Creature/CreatureHitShapes.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
@@ -119,7 +118,6 @@ using namespace openblack::ecs::components;
 using openblack::creature::CreatureRig;
 namespace fight = openblack::creature_fight;
 namespace feedback = openblack::creature_feedback;
-namespace hit_shapes = openblack::creature_hit_shapes;
 namespace marks = openblack::creature_fight::marks;
 namespace posed_model = openblack::ecs::posed_model;
 using Pace = CreatureLocomotionSystemInterface::Pace;
@@ -326,23 +324,11 @@ void SetEyes(ecs::Registry& registry, entt::entity creature, creature_eyes::Mode
 	}
 }
 
-/// The boxes round the bones of a creature, which fight blows strike, as its body is posed now
-std::vector<hit_shapes::PlacedShape> HitShapesOf(const ecs::Registry& registry, entt::entity creature)
+/// The bones of a creature as the ellipsoids that fight blows strike, as its body is posed now
+std::vector<physics::Ellipsoid> BonesOf(entt::entity creature)
 {
-	const auto* body = registry.TryGet<const Creature>(creature);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	const auto* rig = body != nullptr ? RigOf(body->species) : nullptr;
-	if (animation == nullptr || transform == nullptr || rig == nullptr)
-	{
-		return {};
-	}
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	std::vector<glm::mat4> toWorld;
-	toWorld.reserve(animation->boneMatrices.size());
-	std::ranges::transform(animation->boneMatrices, std::back_inserter(toWorld),
-	                       [&placement](const glm::mat4& bone) { return placement * bone; });
-	return hit_shapes::Place(rig->hitShapes, toWorld);
+	return Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().CreatureSkeleton(creature)
+	                                            : std::vector<physics::Ellipsoid> {};
 }
 
 /// How high a creature's head is over the land under it, as its body is posed now; none without a posed head
@@ -2731,7 +2717,7 @@ void CreatureFightSystem::AttemptBlow(entt::entity creature, fight::Band band, f
 		return;
 	}
 	// Lines from where each blow lands, towards the opponent, find how far its body is ahead of the blow
-	const auto shapes = HitShapesOf(registry, opponent);
+	const auto bones = BonesOf(opponent);
 	const auto towards = opponentTransform.position - transform.position;
 	const auto unitTowards = glm::length(towards) > 0.0f ? glm::normalize(towards) : towards;
 	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
@@ -2744,7 +2730,7 @@ void CreatureFightSystem::AttemptBlow(entt::entity creature, fight::Band band, f
 		if (reach.animation != fight::animations::k_AttackSpecial && reach.height <= *headHeight)
 		{
 			const auto point = glm::vec3(placement * glm::vec4(0.0f, reach.point.y, reach.point.z, 1.0f));
-			blow.depth = hit_shapes::DepthToBody(shapes, point, unitTowards, opponentSize);
+			blow.depth = fight::DepthToBody(bones, point, unitTowards, opponentSize);
 		}
 		blows.push_back(blow);
 	}
@@ -2765,10 +2751,10 @@ void CreatureFightSystem::AttemptBlow(entt::entity creature, fight::Band band, f
 		        {"head_height", *headHeight},
 		        {"nearest_depth",
 		         [&blows] {
-			         float nearest = hit_shapes::k_NoDepth;
+			         float nearest = fight::k_NoDepth;
 			         for (const auto& blow : blows)
 			         {
-				         nearest = std::min(nearest, blow.depth.value_or(hit_shapes::k_NoDepth));
+				         nearest = std::min(nearest, blow.depth.value_or(fight::k_NoDepth));
 			         }
 			         return nearest;
 		         }()},
@@ -3010,7 +2996,7 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	const bool reeling = victim.state == fight::State::Action && victim.animation >= fight::animations::k_RecoilHigh &&
 	                     victim.animation < fight::animations::k_WobbleHighSide;
 	const bool open = !reeling && victim.state != fight::State::BlockRecoil && victim.state != fight::State::Faint;
-	const auto shapes = HitShapesOf(registry, opponent);
+	const auto bones = BonesOf(opponent);
 	const auto reach = fight::BlowTestReach(size, special);
 	std::optional<std::pair<glm::vec3, glm::vec3>> landed;
 	for (const auto time : times)
@@ -3026,16 +3012,16 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 			                                         fight::k_SwingPuffColour, physics::turn::PuffKind::Dust);
 		}
 		const auto from = worldBone(groin, time);
-		if (open && !landed.has_value() && from.has_value() && !shapes.empty())
+		if (open && !landed.has_value() && from.has_value() && !bones.empty())
 		{
 			// All five lines are tested, and the last line that meets the body within its length gives the point
 			for (const auto& target : fight::BlowTestPoints(*at, *before, reach))
 			{
 				const auto direction = target - *from;
-				const auto hit = hit_shapes::NearestHit(shapes, *from, direction);
-				if (hit.has_value() && hit_shapes::WithinLine(hit->point, *from, direction))
+				const auto hit = physics::EllipsoidHit(bones, *from, direction);
+				if (hit.has_value() && fight::WithinBlowLine(hit->first.point, *from, direction))
 				{
-					landed = std::pair {hit->point, (*at - *before) * fight::k_BlowVectorScale};
+					landed = std::pair {hit->first.point, (*at - *before) * fight::k_BlowVectorScale};
 				}
 			}
 		}

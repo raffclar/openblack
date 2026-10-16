@@ -24,6 +24,7 @@
 #include <glm/vec3.hpp>
 
 #include "FightMarks.h"
+#include "Physics/Body.h"
 
 /// Creature fights: two creatures duel inside a circular arena. Each plays a small set of fight states (starting,
 /// standing in its stance, acting, blocking, casting, reeling, fainting) fed by a queue of up to twelve moves. The
@@ -691,6 +692,21 @@ struct BlowDepth
 	float height;
 	std::optional<float> depth;
 };
+/// Before a creature chooses a blow, it finds how far the blow reaches into the opponent. Lines go from the point
+/// where the blow lands, towards the opponent, in a row across. The row has eleven lines, from 2.25 opponent sizes to
+/// one side (15 x 0.15) to as far to the other side, each 0.1 of that width from the last.
+constexpr int k_DepthLines = 11;
+constexpr float k_DepthWidthPerSize = 15.0f;
+constexpr double k_DepthWidthShare = 0.15;
+constexpr float k_DepthSpacingShare = 0.1f;
+/// The depth before a line meets the body: the most a blow can be from the body
+constexpr float k_NoDepth = 1000.0f;
+/// How far ahead of the point the body starts, along the direction to the opponent (a unit vector), as the nearest of
+/// the lines that meet the bones of the body. A negative value is a point inside the body. None when no line meets it.
+[[nodiscard]] std::optional<float> DepthToBody(std::span<const physics::Ellipsoid> bones, const glm::vec3& point,
+                                               const glm::vec3& towards, float opponentSize);
+/// Whether a point where a blow line meets a bone lies ahead of the start of the line and nearer than its end
+[[nodiscard]] bool WithinBlowLine(const glm::vec3& point, const glm::vec3& origin, const glm::vec3& direction);
 /// How far one step forward and one step back carry the creature
 struct StepLengths
 {
