@@ -2547,6 +2547,33 @@ void AddObjects(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	all.push_back({
+	    .id = "objects.pickup_hold",
+	    .name = "Holding a villager, a tree and a ball after the pick-up, close up",
+	    .facet = Facet::Objects,
+	    .description = "A tiger with, in front of it from left to right, a villager, a birch and a ball. It picks up the "
+	                   "villager, stands, walks a few steps and puts her down. Then it does the same with the birch and "
+	                   "with the ball, again and again, seen close up.",
+	    .expected = "When the pick-up ends, the arm stays up in the hold pose and the held thing stays in the hand. It does "
+	                "not jump away from the hand when the creature stands, walks or starts to put it down.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.8f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = {-6.0f, -k_Reach},
+	                 .indestructible = true,
+	                 .inScript = true},
+	                {.type = TreeInfo::Birch, .offset = {0.0f, -k_Reach}},
+	                {.type = MobileObjectInfo::Ball, .offset = {6.0f, -k_Reach}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.5f), Go(Kind::WalkTo, 0, {-6.0f, 10.0f}, 0.5f),
+	                 Act(Kind::PutDown, 0, 1.0f, true), Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 0.5f),
+	                 OnObject(Kind::PickUp, 0, 1, 1.5f), Go(Kind::WalkTo, 0, {0.0f, 10.0f}, 0.5f),
+	                 Act(Kind::PutDown, 0, 1.0f, true), Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 0.5f),
+	                 OnObject(Kind::PickUp, 0, 2, 1.5f), Go(Kind::WalkTo, 0, {6.0f, 10.0f}, 0.5f),
+	                 Act(Kind::PutDown, 0, 1.0f, true), Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 0.5f)},
+	    .repeatFrom = 0,
+	});
+
 	// A tiger a tenth of the size beside it, for whom a villager is too heavy
 	auto small = Posed(CreatureType::Tiger, {30.0f, 0.0f});
 	small.size = 0.1f;

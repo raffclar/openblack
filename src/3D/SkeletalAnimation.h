@@ -129,9 +129,10 @@ void AddLayer(std::vector<Pose>& poses, const Animation& layer, uint32_t timeMs,
 
 /// Sets the bones an animation moves to its pose at a time, in place. The bones it doesn't move keep their poses, or,
 /// given a fill animation, take its first frame where it moves them: the advisors' stand pose under the rest of their
-/// clips.
+/// clips. Given a mirror (see MirrorJoints), the animation plays left to right: each bone that it turns gives its turn to
+/// its mirror bone, reflected across the body. Then only turns are set, and no fill is used.
 void SetLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t timeMs, const Skeleton& skeleton,
-              const Animation* fill = nullptr);
+              const Animation* fill = nullptr, std::span<const uint32_t> mirror = {});
 
 /// Two animations set over the same poses, each without a fill, and blended by t in the mesh's space, every element of
 /// each bone's matrix moved from the first towards the second, then made relative to the parents again

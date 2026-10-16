@@ -362,9 +362,47 @@ std::vector<Pose> SampleCycle(const Animation& animation, const Animation& stand
 	return poses;
 }
 
-void SetLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t timeMs, const Skeleton& skeleton,
-              const Animation* fill)
+namespace
 {
+/// Sets the turns of the bones that an animation turns, played left to right: each bone's keyframes go to its mirror bone,
+/// reflected across the body. The bones that it does not turn keep their poses.
+void SetMirroredLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t timeMs, const Skeleton& skeleton,
+                      std::span<const uint32_t> mirror)
+{
+	const auto count = std::min(poses.size(), skeleton.parents.size());
+	if (animation.frames.empty() || count == 0)
+	{
+		return;
+	}
+	const auto [from, to, t] = FindFrames(animation, timeMs);
+	for (size_t slot = 0; slot < animation.rotatedJoints.size(); ++slot)
+	{
+		const auto destination = Destination(mirror, animation.rotatedJoints[slot]);
+		if (animation.rotatedJoints[slot] >= count || destination >= count)
+		{
+			continue;
+		}
+		const auto parent = skeleton.parents[destination];
+		auto rotation =
+		    Multiply(skeleton.restRotations[destination],
+		             BlendKeyframes(animation.frames[from].eulerAngles[slot], animation.frames[to].eulerAngles[slot], t, true));
+		if (destination != 0 && parent != k_NoParent && parent < count)
+		{
+			rotation = Multiply(rotation, skeleton.inverseRestRotations[parent]);
+		}
+		poses[destination].rotation = rotation;
+	}
+}
+} // namespace
+
+void SetLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t timeMs, const Skeleton& skeleton,
+              const Animation* fill, std::span<const uint32_t> mirror)
+{
+	if (!mirror.empty())
+	{
+		SetMirroredLayer(poses, animation, timeMs, skeleton, mirror);
+		return;
+	}
 	const auto count = std::min(poses.size(), skeleton.parents.size());
 	if (animation.frames.empty() || count == 0)
 	{
