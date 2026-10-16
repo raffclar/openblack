@@ -305,4 +305,24 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 0.0f,
 	});
+	all.push_back({
+	    .id = "movement.past_altar",
+	    .name = "A creature walks past the altar of a worship site",
+	    .facet = Facet::Movement,
+	    .description = "The same town and temple, the town's worship site put up built and nobody sent to worship. A grown "
+	                   "tiger of the player's stands west of the site's altar and faces it. Its mind does not run.",
+	    .expected = "The map_cell query of the altar's cell lists the altar in front of its site. Send the tiger east, past "
+	                "the altar, with the creatures.move query. It goes round the circles of the site's model, which hold "
+	                "the smaller circles of the altar, thus creatures.route keeps only the site's circles.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, 30.0f}, .look = {0.0f, 0.0f, -2.0f}},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = k_Altar + glm::vec2(-18.0f, 0.0f),
+	                   .facingDegrees = 90.0f,
+	                   .pauseMind = true}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
 }

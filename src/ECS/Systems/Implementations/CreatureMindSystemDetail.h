@@ -66,10 +66,6 @@ namespace openblack::ecs::systems::mind_detail
 /// The kind of belief a creature keeps about a thing, by the game's belief types; none for the things it does not yet
 /// know the kind of here
 [[nodiscard]] std::optional<uint32_t> BeliefKindOf(const ecs::Registry& registry, entt::entity thing);
-/// The model of a worship site's altar: its own once it shows, else the model of its site's tribe that it shows when
-/// its site is built. The altar stands on the map from when its site is made, so its size and its cells come from this
-/// model.
-[[nodiscard]] std::optional<entt::id_type> AltarMeshOf(const ecs::Registry& registry, entt::entity altar);
 /// The data of a worship site's altar: the data of the worship site of its site's tribe. None for another thing.
 [[nodiscard]] const GWorshipSiteInfo* AltarInfoOf(const ecs::Registry& registry, entt::entity altar);
 /// What a creature knows of a thing, as far as the world here tells it

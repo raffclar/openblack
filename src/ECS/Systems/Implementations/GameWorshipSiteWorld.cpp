@@ -24,6 +24,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "ECS/Archetypes/PotArchetype.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownArtefact.h"
@@ -142,6 +143,16 @@ entt::id_type GameWorshipSiteWorld::AltarMesh(Tribe tribe) const
 	const auto& sites = Locator::infoConstants::value().worshipSite;
 	const auto row = static_cast<size_t>(tribe);
 	return resources::HashIdentifier(row < sites.size() ? sites.at(row).meshType : MeshId::Dummy);
+}
+
+std::optional<std::pair<glm::vec2, float>> GameWorshipSiteWorld::FixedCircleOf(entt::id_type model,
+                                                                               const components::Transform& placed) const
+{
+	if (!Locator::resources::has_value())
+	{
+		return std::nullopt;
+	}
+	return ecs::archetypes::GetFixedObstacleBoundingCircle(model, placed);
 }
 
 float GameWorshipSiteWorld::LandHeightAt(glm::vec2 point) const
