@@ -109,6 +109,11 @@ void ObjectDrawListSystem::LoadBlocks()
 	}
 }
 
+void ObjectDrawListSystem::PrepareLand()
+{
+	LoadBlocks();
+}
+
 void ObjectDrawListSystem::Update(uint32_t turn)
 {
 	if (!Locator::camera::has_value() || !Locator::terrainSystem::has_value() || !Locator::entitiesMap::has_value() ||

@@ -58,6 +58,7 @@ public:
 	std::optional<object_draw_list::View> view {object_draw_list::View {}};
 
 	void Update(uint32_t /*unused*/) override {}
+	void PrepareLand() override {}
 	void RequestRebuild(uint32_t /*unused*/) override {}
 	[[nodiscard]] object_draw_list::Frame GetFrame() const override { return {}; }
 	[[nodiscard]] const std::optional<object_draw_list::View>& GetView() const override { return view; }

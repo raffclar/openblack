@@ -30,6 +30,7 @@
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
@@ -63,8 +64,9 @@ constexpr auto k_LongestFrameWait = std::chrono::seconds(25);
 /// The colour the screen is cleared to between the game's own frames, and the sky's while the game runs
 constexpr uint32_t k_StartupClearColour = 0x000000ff;
 constexpr uint32_t k_GameClearColour = 0x274659ff;
-/// The frames that the renderer can have in work on the GPU at one time (the bgfx default)
-constexpr uint32_t k_RendererFramesInFlight = 3;
+/// The renderer does the work of a frame on its own thread while the game makes the next frame. Thus the work that a
+/// frame asks for is complete when the frame after it ends.
+constexpr uint32_t k_FramesToReleaseGpuWorkMemory = 2;
 
 /// What the player did since the last frame
 struct StartupInput
@@ -430,10 +432,16 @@ void Game::FinishLoadingBehindScreen()
 	PrepareFirstFrames();
 	WarmUpFirstFrame();
 	// The renderer makes the last resources in one more loading frame, so that the first frame of the game does not
-	// make them. The renderer releases the memory that it used to send the resources to the GPU only when it uses the
-	// frame's command buffers again. Thus it draws more loading frames, one for each frame that the GPU can have in
-	// work. Else the first frames of the game release that memory, which can take hundreds of milliseconds.
-	for (uint32_t frame = 0; frame <= k_RendererFramesInFlight; ++frame)
+	// make them
+	RenderLoadingFrame(true);
+	// The renderer can keep the memory that it used to send the resources to the GPU for hundreds of command lists.
+	// Then one of the first frames of the game releases all of it, which can take a second. Thus the next loading
+	// frame waits for the GPU and releases that memory. The frame after it waits for the renderer to complete that.
+	if (Locator::rendererInterface::has_value())
+	{
+		Locator::rendererInterface::value().ReleaseGpuWorkMemory();
+	}
+	for (uint32_t frame = 0; frame < k_FramesToReleaseGpuWorkMemory; ++frame)
 	{
 		RenderLoadingFrame(true);
 	}
@@ -468,6 +476,11 @@ void Game::PrepareFirstFrames()
 			}
 		});
 		Locator::rendererInterface::value().PrepareCreatureSkins(skins);
+	}
+	// The first frame reads the blocks of the land for the list of things to draw
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		Locator::objectDrawListSystem::value().PrepareLand();
 	}
 	// A creature's first move finds where creatures can walk on the whole land
 	if (Locator::creatureLocomotionSystem::has_value())
