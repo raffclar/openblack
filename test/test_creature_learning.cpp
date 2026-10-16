@@ -1330,7 +1330,7 @@ TEST(CreaturePlanActions, BuildsAgendas)
 	ASSERT_NE(wave, nullptr);
 	creature_plan_actions::Situation situation {.camera = glm::vec2(0.0f, -100.0f)};
 	EXPECT_EQ(creature_plan_actions::Agenda(*wave, std::nullopt, {}, situation, random)->size(), 2u);
-	EXPECT_EQ(creature_plan_actions::For("CastAmusingSpellOnCreature"), nullptr);
+	EXPECT_EQ(creature_plan_actions::For("CastWarmingSpellOnCreature"), nullptr);
 }
 
 TEST(CreaturePlanActions, FishingWalksToTheShoalBringsFoodOutOfTheSeaAndEatsIt)

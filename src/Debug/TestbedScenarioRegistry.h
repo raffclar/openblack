@@ -752,7 +752,8 @@ struct Command
 		/// the middle of the map), pouring it there as a slow let-go does. Needs no creature
 		HandPour,
 		/// A script tells the creature to do an action of the game's table (action, by its name) to the scenario's object,
-		/// with another of the scenario's objects (with) when given, as a script's creature action command does
+		/// with another of the scenario's objects (with) when given, as a script's creature action command does. With
+		/// atCreature, the action is about that creature of the scenario.
 		DoAction,
 		/// The creature and the other creature (value) become friends, as a script's "force friends" command does
 		MakeFriends,

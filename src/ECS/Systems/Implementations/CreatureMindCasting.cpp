@@ -369,6 +369,11 @@ bool CreatureMindSystem::MayCast(entt::entity creature, const CreatureMindState&
 		});
 		return creature_mind::CanCastToImpress(states);
 	}
+	// To amuse, it needs a spell on creatures that it knows and can pay for
+	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastAmusing)
+	{
+		return !AmusingSpells(creature, mind).empty();
+	}
 	// It casts water on itself only while it burns
 	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastWaterOnItself &&
 	    !(Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(creature)))
@@ -415,6 +420,42 @@ std::optional<uint32_t> CreatureMindSystem::PickImpressiveMiracle(entt::entity c
 	return creature_mind::k_ImpressiveMiracles.at(*picked);
 }
 
+std::vector<creature_mind::AmusingSpell> CreatureMindSystem::AmusingSpells(entt::entity creature, const CreatureMindState& mind)
+{
+	std::vector<creature_mind::AmusingSpell> spells;
+	const auto* tables = GetTables();
+	const auto* body = Entities().TryGet<const Creature>(creature);
+	if (tables == nullptr || body == nullptr || !Locator::infoConstants::has_value())
+	{
+		return spells;
+	}
+	const auto& info = Locator::infoConstants::value();
+	for (auto type = creature_mind::k_FirstAmusingSpell; type <= creature_mind::k_LastAmusingSpell; ++type)
+	{
+		const auto sightings = SightingsOf(mind, *tables, body->species, type);
+		const auto magic = static_cast<MagicType>(type);
+		if (sightings.has_value() && sightings->known && CanPayFor(creature, magic))
+		{
+			spells.push_back(
+			    {.magicType = type, .gesture = static_cast<uint32_t>(magic::GetMagicInfo(info, magic).gestureType)});
+		}
+	}
+	return spells;
+}
+
+bool CreatureMindSystem::SeemsFriendly(entt::entity creature, entt::entity other)
+{
+	const auto& registry = Entities();
+	const auto* mine = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
+	const auto* theirs = registry.Valid(other) ? registry.TryGet<const CreatureMindState>(other) : nullptr;
+	if (mine == nullptr || theirs == nullptr)
+	{
+		return false;
+	}
+	return creature_mind::SeemsFriendly(DesireAboutCreature(creature, *mine, other, {}),
+	                                    DesireAboutCreature(other, *theirs, creature, {}));
+}
+
 std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(entt::entity creature, uint32_t action,
                                                                                std::optional<entt::entity> target)
 {
@@ -433,6 +474,14 @@ std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(e
 	{
 		return creature_plan_actions::CastInfo {.magicType = PickImpressiveMiracle(creature).value_or(0),
 		                                        .height = cast_moves::k_HeightOfSizeOne * ShownSize(*body)};
+	}
+	// To amuse, it picks the spell as it builds the agenda
+	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastAmusing)
+	{
+		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+		return creature_plan_actions::CastInfo {.height = cast_moves::k_HeightOfSizeOne * ShownSize(*body),
+		                                        .amusingSpells = mind != nullptr ? AmusingSpells(creature, *mind)
+		                                                                         : std::vector<creature_mind::AmusingSpell> {}};
 	}
 	auto magic = CastMagicOf(action);
 	if (!magic.has_value() && executor != nullptr)

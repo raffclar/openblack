@@ -131,6 +131,14 @@ Style StyleOf(CastStyle style, float height)
 		        .backOff = 2.0f * height};
 	case CastStyle::Playful:
 		break;
+	case CastStyle::Amusing:
+		// As a spell on a creature, but from nearer
+		return {.emote = animations::k_FeelPlayful,
+		        .emoteFace = creature_face::Cue::Playfulness,
+		        .feeling = creature_face::Cue::Playfulness,
+		        .facing = creature_face::Cue::Compassion,
+		        .goNear = k_AmusingCastHeights * height,
+		        .backOff = 2.0f * height};
 	}
 	// Playful going near, but kind as it turns to face the creature it casts on
 	return {.emote = animations::k_FeelPlayful,
@@ -155,6 +163,26 @@ std::vector<Step> creature_mind::CastAt(CastStyle style, uint32_t magicType, uin
 	agenda.push_back(GetAway(object, how.backOff));
 	TurnGestureAndCast(agenda, magicType, gesture, object, how.facing);
 	return agenda;
+}
+
+std::vector<Step> creature_mind::CastAmusingAt(std::span<const AmusingSpell> spells, uint32_t object, float height,
+                                               const Random& random)
+{
+	// With no spell to cast, it only shows that it feels playful
+	if (spells.empty())
+	{
+		const auto how = StyleOf(CastStyle::Amusing, height);
+		return {{.kind = Step::Kind::Action, .animation = how.emote, .face = how.emoteFace}};
+	}
+	// It picks the spell before it decides to show how it feels
+	const auto& spell = spells[random(static_cast<uint32_t>(spells.size()))];
+	return CastAt(CastStyle::Amusing, spell.magicType, spell.gesture, object, height, random);
+}
+
+bool creature_mind::SeemsFriendly(std::optional<creature_desires::Desire> mine, std::optional<creature_desires::Desire> theirs)
+{
+	using creature_desires::Desire;
+	return mine != Desire::Anger && mine != Desire::Fear && theirs != Desire::Anger;
 }
 
 std::vector<Step> creature_mind::CastFireballAt(uint32_t magicType, uint32_t gesture, uint32_t object, bool objectLiving,

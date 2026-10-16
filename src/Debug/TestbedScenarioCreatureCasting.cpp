@@ -84,6 +84,37 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.creature_casts_amusing_spell",
+	    .name = "Creature casting: a spell to amuse another creature",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the itchy and the fat spells is told to amuse a cow a hundred metres away.",
+	    .expected = "It picks one of the two spells at random. One time in five it shows that it feels playful first. It "
+	                "walks until it is within four times its height (about 60 metres) of the cow, backs off if nearer "
+	                "than twice its height, turns to face it and casts the spell from the casting pose. The cow scratches "
+	                "or grows fat.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 110.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster"), Other({0.0f, 100.0f}, "target")},
+	    .commands = {Know(MagicType::CreatureSpellItchy),
+	                 {.kind = Kind::KnowMiracle, .value = static_cast<size_t>(MagicType::CreatureSpellFat)},
+	                 {.kind = Kind::DoAction, .delaySeconds = 0.5f, .action = "CastAmusingSpellOnCreature", .atCreature = 1}},
+	});
+	all.push_back({
+	    .id = "miracles.script_casts_heal_power_up",
+	    .name = "Creature casting: a script tells it to cast the heal power-up",
+	    .facet = Facet::Miracles,
+	    .description = "A script tells a tiger that knows the heal power-up to cast it at a hurt villager sixty metres "
+	                   "away, as the guide of the first land tells the player's creature.",
+	    .expected = "The tiger walks up to within twice its height of the villager, faces it and casts the heal power-up "
+	                "from the casting pose. The life of the villager fills up.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 70.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 60.0f}, .life = 0.33f}},
+	    .commands = {Know(MagicType::HealPowerUpOne), Do("CastHealSpellPU1", 0, 0.5f)},
+	});
+
+	all.push_back({
 	    .id = "miracles.creature_casts_lightning",
 	    .name = "Creature casting: a lightning bolt at a rock",
 	    .facet = Facet::Miracles,
