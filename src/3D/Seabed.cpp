@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <utility>
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
@@ -62,13 +63,6 @@ float Hills(int x, int z)
 }
 } // namespace
 
-float seabed::BeachDepth(float cells)
-{
-	// A gentle slope down to below the lowest tide, then steeper out to the shelf
-	const float beyond = std::max(cells - 10.0f, 0.0f);
-	return k_BeachSlope * std::max(cells, 0.0f) + 0.15f * beyond * std::sqrt(beyond);
-}
-
 float seabed::DepthForDistance(float cells)
 {
 	if (cells <= 0.0f)
@@ -84,11 +78,12 @@ float seabed::DepthForDistance(float cells)
 namespace
 {
 /// The distance of each corner to the nearest source corner, in cells: a chamfer pass forwards, then backwards
-std::vector<float> DistanceTo(const std::vector<bool>& sources, glm::ivec2 size)
+std::vector<float> DistanceTo(const std::vector<bool>& sources, glm::ivec2 size, std::vector<int32_t>* nearest = nullptr)
 {
 	constexpr float k_Far = std::numeric_limits<float>::max() / 4.0f;
 	constexpr float k_Diagonal = 1.41421356f;
 	std::vector<float> distance(sources.size(), k_Far);
+	std::vector<int32_t> from(sources.size(), -1);
 	const auto at = [&size](int x, int z) {
 		return static_cast<size_t>(z) * static_cast<size_t>(size.x) + static_cast<size_t>(x);
 	};
@@ -97,6 +92,7 @@ std::vector<float> DistanceTo(const std::vector<bool>& sources, glm::ivec2 size)
 		if (sources[i])
 		{
 			distance[i] = 0.0f;
+			from[i] = static_cast<int32_t>(i);
 		}
 	}
 	const auto relax = [&](int x, int z, int dx, int dz, float step) {
@@ -104,7 +100,11 @@ std::vector<float> DistanceTo(const std::vector<bool>& sources, glm::ivec2 size)
 		const int nz = z + dz;
 		if (nx >= 0 && nz >= 0 && nx < size.x && nz < size.y)
 		{
-			distance[at(x, z)] = std::min(distance[at(x, z)], distance[at(nx, nz)] + step);
+			if (distance[at(nx, nz)] + step < distance[at(x, z)])
+			{
+				distance[at(x, z)] = distance[at(nx, nz)] + step;
+				from[at(x, z)] = from[at(nx, nz)];
+			}
 		}
 	};
 	for (int z = 0; z < size.y; ++z)
@@ -126,6 +126,10 @@ std::vector<float> DistanceTo(const std::vector<bool>& sources, glm::ivec2 size)
 			relax(x, z, 1, 1, k_Diagonal);
 			relax(x, z, -1, 1, k_Diagonal);
 		}
+	}
+	if (nearest != nullptr)
+	{
+		*nearest = std::move(from);
 	}
 	return distance;
 }
@@ -241,6 +245,41 @@ void BuildShore(seabed::Seabed& seabed, std::span<const uint8_t> altitudes, cons
 		}
 	}
 }
+/// A box blur of a field over the grid, `radius` corners each way, `passes` times, along x and then along z
+void SmoothField(std::vector<float>& field, glm::ivec2 size, int radius, int passes)
+{
+	std::vector<float> scratch(field.size());
+	const auto at = [&size](int x, int z) {
+		return static_cast<size_t>(z) * static_cast<size_t>(size.x) + static_cast<size_t>(x);
+	};
+	for (int pass = 0; pass < passes; ++pass)
+	{
+		for (int z = 0; z < size.y; ++z)
+		{
+			for (int x = 0; x < size.x; ++x)
+			{
+				float sum = 0.0f;
+				for (int k = -radius; k <= radius; ++k)
+				{
+					sum += field[at(std::clamp(x + k, 0, size.x - 1), z)];
+				}
+				scratch[at(x, z)] = sum / static_cast<float>(2 * radius + 1);
+			}
+		}
+		for (int z = 0; z < size.y; ++z)
+		{
+			for (int x = 0; x < size.x; ++x)
+			{
+				float sum = 0.0f;
+				for (int k = -radius; k <= radius; ++k)
+				{
+					sum += scratch[at(x, std::clamp(z + k, 0, size.y - 1))];
+				}
+				field[at(x, z)] = sum / static_cast<float>(2 * radius + 1);
+			}
+		}
+	}
+}
 } // namespace
 
 seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size, glm::vec2 origin, float spacing)
@@ -261,8 +300,11 @@ seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size
 	const auto at = [&size](int x, int z) {
 		return static_cast<size_t>(z) * static_cast<size_t>(size.x) + static_cast<size_t>(x);
 	};
-	// The coasts that slope gently: land next to the sea that rises little over the two cells round it
-	std::vector<bool> gentle(count, false);
+	// The coast: land next to the sea. Each coast corner keeps its height and how steeply the land falls to the sea
+	// there: across the land inland of it, or from its own height down to the waterline for a cliff.
+	std::vector<bool> coast(count, false);
+	std::vector<float> coastHeight(count, 0.0f);
+	std::vector<float> coastSlope(count, 0.0f);
 	for (int z = 0; z < size.y; ++z)
 	{
 		for (int x = 0; x < size.x; ++x)
@@ -271,22 +313,43 @@ seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size
 			{
 				continue;
 			}
-			bool coast = false;
-			uint8_t highest = 0;
+			bool nextToSea = false;
+			float highest = 0.0f;
 			for (int dz = -2; dz <= 2; ++dz)
 			{
 				for (int dx = -2; dx <= 2; ++dx)
 				{
 					const int nx = std::clamp(x + dx, 0, size.x - 1);
 					const int nz = std::clamp(z + dz, 0, size.y - 1);
-					highest = std::max(highest, altitudes[at(nx, nz)]);
-					coast = coast || (std::abs(dx) + std::abs(dz) == 1 && !land[at(nx, nz)]);
+					highest = std::max(highest, static_cast<float>(altitudes[at(nx, nz)]) * k_HeightUnit);
+					nextToSea = nextToSea || (std::abs(dx) + std::abs(dz) == 1 && !land[at(nx, nz)]);
 				}
 			}
-			gentle[at(x, z)] = coast && highest <= k_SeaLevelAltitude + k_GentleRise;
+			if (!nextToSea)
+			{
+				continue;
+			}
+			const auto i = at(x, z);
+			coast[i] = true;
+			coastHeight[i] = static_cast<float>(altitudes[i]) * k_HeightUnit;
+			const float inland = (highest - coastHeight[i]) / (2.0f * seabed.spacing);
+			const float face = (coastHeight[i] - k_LowestLandHeight) / seabed.spacing;
+			coastSlope[i] = std::clamp(std::max(inland, face), k_GentlestSlope, k_SteepestSlope);
 		}
 	}
-	const auto toGentle = DistanceTo(gentle, size);
+	std::vector<int32_t> nearestCoast;
+	const auto toCoast = DistanceTo(coast, size, &nearestCoast);
+	// The slope that each corner takes from its nearest coast, smoothed along the coast, so that the sea bed does not
+	// step where two stretches of coast of different slopes meet
+	std::vector<float> slopeOf(count, k_GentlestSlope);
+	for (size_t i = 0; i < count; ++i)
+	{
+		if (nearestCoast[i] >= 0)
+		{
+			slopeOf[i] = coastSlope[static_cast<size_t>(nearestCoast[i])];
+		}
+	}
+	SmoothField(slopeOf, size, 4, 3);
 	seabed.depth.resize(count);
 	for (int z = 0; z < size.y; ++z)
 	{
@@ -298,18 +361,39 @@ seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size
 				seabed.depth[at(x, z)] = 0.0f;
 				continue;
 			}
-			float depth = DepthForDistance(cells);
-			// Out from a gentle coast the land goes on under the water as a long beach, so the tide has room to move
-			const float beachShare = 1.0f - std::clamp((toGentle[at(x, z)] - cells - 1.0f) / 3.0f, 0.0f, 1.0f);
-			depth = glm::mix(depth, std::min(depth, BeachDepth(cells)), beachShare);
-			// Deeper again towards the map's edge, away from the coast
+			// The open sea: a shelf, deeper towards the map's edge, with broad hills and dips
+			float shelf = DepthForDistance(cells);
 			const auto edge = static_cast<float>(std::min(std::min(x, z), std::min(size.x - 1 - x, size.y - 1 - z)));
 			const float towardsEdge = 1.0f - std::clamp(edge / 80.0f, 0.0f, 1.0f);
-			depth += k_EdgeDepth * towardsEdge * towardsEdge * std::clamp((cells - 10.0f) / 30.0f, 0.0f, 1.0f);
-			// The hills and dips: none at the coast, and larger in deeper water
-			const float amplitude = std::min(cells / 4.0f, 1.0f) * (1.5f + depth * 0.1f) * (1.0f - beachShare * 0.7f);
-			depth += Hills(x, z) * amplitude;
-			seabed.depth[at(x, z)] = std::clamp(depth, 0.5f, k_MaxDepth);
+			shelf += k_EdgeDepth * towardsEdge * towardsEdge * std::clamp((cells - 10.0f) / 30.0f, 0.0f, 1.0f);
+			shelf += Hills(x, z) * (1.5f + shelf * 0.1f);
+			// Near the coast the land's own slope goes on down under the water from the waterline: a beach keeps its
+			// gentle grade and a cliff keeps falling. Further out it eases into the shelf: sooner for a cliff.
+			const auto source = nearestCoast[at(x, z)];
+			float depth = shelf;
+			if (source >= 0)
+			{
+				const float from = std::min(toCoast[at(x, z)], 1000.0f) * seabed.spacing;
+				const float slope = slopeOf[at(x, z)];
+				const float steep = std::clamp((slope - 0.15f) / 1.0f, 0.0f, 1.0f);
+				const float continued = slope * std::max(from - 0.5f * seabed.spacing, 0.0f);
+				const float capped = std::min(continued, std::max(shelf, 1.0f) + 30.0f * steep + 3.0f);
+				const float start = glm::mix(60.0f, 10.0f, steep);
+				const float end = glm::mix(260.0f, 90.0f, steep);
+				const float t = std::clamp((from - start) / (end - start), 0.0f, 1.0f);
+				depth = glm::mix(capped, shelf, t * t * (3.0f - 2.0f * t));
+			}
+			seabed.depth[at(x, z)] = std::clamp(depth, 0.15f, k_MaxDepth);
+		}
+	}
+	// One soft pass over the sea, so no crease shows where the coast's slope eases into the shelf; the land stays
+	auto softened = seabed.depth;
+	SmoothField(softened, size, 1, 1);
+	for (size_t i = 0; i < count; ++i)
+	{
+		if (!land[i] && seabed.depth[i] > 0.0f)
+		{
+			seabed.depth[i] = std::max(softened[i], 0.15f);
 		}
 	}
 	BuildShore(seabed, altitudes, land, toLand);

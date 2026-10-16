@@ -237,7 +237,7 @@ TEST(Seabed, GentleCoastsGoOnAsLongBeaches)
 	{
 		for (int x = 0; x < 5; ++x)
 		{
-			altitudes[static_cast<size_t>(z * k_Size.x + x)] = 6;
+			altitudes[static_cast<size_t>(z * k_Size.x + x)] = 4;
 		}
 		for (int x = 56; x < k_Size.x; ++x)
 		{
@@ -246,11 +246,11 @@ TEST(Seabed, GentleCoastsGoOnAsLongBeaches)
 	}
 	const auto bed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
 	const auto depth = [&bed](int x) { return bed.depth[static_cast<size_t>(bed.size.x + x)]; };
-	// Five cells out from the beach the water is shallow, under the lowest tide by eight cells
-	EXPECT_LT(depth(4 + 5), underwater::k_LowestTide);
+	// Four cells out from the beach the water is still shallow, and it is under the lowest tide by nine cells
+	EXPECT_LT(depth(4 + 4), underwater::k_LowestTide);
 	EXPECT_GT(depth(4 + 9), underwater::k_LowestTide - 0.5f);
 	// Five cells out from the cliff it is much deeper
-	EXPECT_GT(depth(56 - 5), depth(4 + 5) * 2.0f);
+	EXPECT_GT(depth(56 - 5), depth(4 + 4) * 2.0f);
 }
 
 TEST(Underwater, TheCurrentsSwirlsHaveNoSinks)

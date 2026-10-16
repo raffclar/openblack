@@ -63,18 +63,18 @@ struct Seabed
 /// The depth for a corner of the sea that is this many cells from the nearest land above the sea
 [[nodiscard]] float DepthForDistance(float cells);
 
-/// A coast slopes gently when the land within two cells of it is no higher than this over sea level, in altitude steps
-inline constexpr uint8_t k_GentleRise = 8;
-/// How much deeper a beach gets for each cell out from a gentle coast: it is under the lowest tide 8 cells out
-inline constexpr float k_BeachSlope = 0.35f;
+/// The height of a step of altitude, and the height of the lowest land above the sea (altitude 4)
+inline constexpr float k_HeightUnit = 0.67f;
+inline constexpr float k_LowestLandHeight = 4.0f * k_HeightUnit;
+/// The gentlest and the steepest slope a coast goes on down at under the water, in height for each unit across
+inline constexpr float k_GentlestSlope = 0.06f;
+inline constexpr float k_SteepestSlope = 6.0f;
 /// A coast is a cliff where the land within two cells of it rises this much over sea level, in altitude steps, to the
 /// full weight at the second
 inline constexpr float k_CliffRiseStart = 14.0f;
 inline constexpr float k_CliffRiseFull = 30.0f;
 /// How far out to sea a cliff's foot reaches, in cells
 inline constexpr float k_CliffReach = 6.0f;
-/// The depth out from a gentle coast, where the land goes on under the water as a beach
-[[nodiscard]] float BeachDepth(float cells);
 
 /// The sea bed for a grid of corner altitudes (x first along each row of z). Each corner of the sea goes down by its
 /// distance to the nearest land above the sea, as a shelf and then a slope, deeper towards the map's edge, with broad

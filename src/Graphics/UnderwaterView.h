@@ -57,12 +57,12 @@ public:
 	/// How many triangles one coral and one plant have, and how many of each the reef has
 	[[nodiscard]] uint32_t ReefTriangles(seabed::ReefPlant::Kind kind) const;
 	[[nodiscard]] uint32_t ReefCount(seabed::ReefPlant::Kind kind) const;
-	/// The spray at the foot of the cliffs: sixteen puffs for each point along a cliff's foot, made again when the sea
+	/// The spray at the foot of the cliffs: 64 particles for each point along the foot of a cliff, made again when the sea
 	/// bed changes. Binds them; false when there are no cliffs.
 	bool BindSpray(std::span<const glm::vec4> cliffFoot, uint32_t revision);
 	/// The puffs of spray there are at once at most
 	[[nodiscard]] uint32_t SprayCount() const { return _sprayCount * k_SprayPuffs; }
-	static constexpr uint32_t k_SprayPuffs = 16;
+	static constexpr uint32_t k_SprayPuffs = 64;
 
 private:
 	std::unique_ptr<FrameBuffer> _target;
@@ -111,6 +111,8 @@ struct UnderwaterUniforms
 	glm::vec4 flags2 {1.0f, 0.0f, 0.0f, 0.0f};
 	/// The sea's currents: xy the steady flow, z the swirls, w the gusts
 	glm::vec4 current {0.0f, 0.0f, 1.0f, 0.4f};
+	/// The waves of the sea (see underwater::WaveTable)
+	std::array<glm::vec4, 14> waveTable {};
 	/// Where the things that float are, w 1 for each
 	std::array<glm::vec4, 8> floaters {};
 	/// Whether the motes show

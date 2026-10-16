@@ -138,6 +138,16 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	frame.waves = {off == Effect::Waves ? 0.0f : waves.scale, waves.storm, waves.windAngle,
 	               off == Effect::Waves ? 0.0f : waves.swash};
 	frame.flags2 = {on(Effect::Whitecaps), on(Effect::Reef), 0.0f, 0.0f};
+	auto tableWaves = waves;
+	tableWaves.scale = off == Effect::Waves ? 0.0f : waves.scale;
+	frame.waveTable = underwater::WaveTable(tableWaves);
+	if (off == Effect::Waves)
+	{
+		for (auto& wave : frame.waveTable)
+		{
+			wave.z = 0.0f;
+		}
+	}
 	const auto& current = system.GetCurrent();
 	const bool still = off == Effect::Current;
 	frame.current = still ? glm::vec4(0.0f) : glm::vec4(current.flow, current.swirl, current.gust);
@@ -204,6 +214,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	mesh.GetVertexBuffer().Bind();
 	setUniforms(*post);
 	post->SetUniformValue("u_uwSky", &frame.sky);
+	post->SetUniformArray("u_uwWaveTable", frame.waveTable.data(), static_cast<uint16_t>(frame.waveTable.size()));
 	post->SetUniformArray("u_uwFloaters", frame.floaters.data(), static_cast<uint16_t>(frame.floaters.size()));
 	post->SetTextureSampler("s_sceneColour", 0, target.GetColorAttachment());
 	post->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());

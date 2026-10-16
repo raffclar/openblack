@@ -453,7 +453,7 @@ bool UnderwaterView::BindSpray(std::span<const glm::vec4> cliffFoot, uint32_t re
 {
 	if (!bgfx::isValid(_sprayMesh))
 	{
-		// Sixteen squares, each corner with the number of its puff
+		// A square for each particle, each corner with the number of its particle
 		std::vector<glm::vec3> vertices;
 		std::vector<uint16_t> indices;
 		constexpr std::array<glm::vec2, 4> k_Corners {{{-1.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, 1.0f}}};

@@ -120,6 +120,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_underwater_spray
 #include "ShaderIncluder.h"
+#define SHADER_NAME fs_underwater_spray
+#include "ShaderIncluder.h"
 
 #define SHADER_NAME vs_sprite
 #include "ShaderIncluder.h"
@@ -230,7 +232,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 80> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 81> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -264,6 +266,7 @@ const std::array<bgfx::EmbeddedShader, 80> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_reef),
     BGFX_EMBEDDED_SHADER(fs_reef), //
     BGFX_EMBEDDED_SHADER(vs_underwater_spray),
+    BGFX_EMBEDDED_SHADER(fs_underwater_spray), //
     BGFX_EMBEDDED_SHADER(vs_sprite),
     BGFX_EMBEDDED_SHADER(fs_sprite), //
     BGFX_EMBEDDED_SHADER(vs_footprint_instanced),
@@ -336,7 +339,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"UnderwaterMotes", "vs_underwater_motes", "fs_underwater_motes"},
     ShaderDefinition {"Seabed", "vs_seabed", "fs_seabed"},
     ShaderDefinition {"Reef", "vs_reef", "fs_reef"},
-    ShaderDefinition {"UnderwaterSpray", "vs_underwater_spray", "fs_underwater_motes"},
+    ShaderDefinition {"UnderwaterSpray", "vs_underwater_spray", "fs_underwater_spray"},
     ShaderDefinition {"Sprite", "vs_sprite", "fs_sprite"},
     ShaderDefinition {"FootprintInstanced", "vs_footprint_paint_instanced", "fs_footprint"},
     ShaderDefinition {"ParticleInstanced", "vs_particle_instanced", "fs_particle"},

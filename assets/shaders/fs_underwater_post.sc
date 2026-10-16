@@ -214,7 +214,7 @@ float Foam(vec2 p, float depth, float t)
 	}
 	// Two layers of noise that drift different ways, turned so that their cells do not line up
 	vec2 q = vec2(p.x * 0.8f - p.y * 0.6f, p.x * 0.6f + p.y * 0.8f);
-	float patches = UwNoise(q * 0.7f + vec2(t * 0.25f, -t * 0.18f)) * 0.6f + UwNoise(p * 1.9f - vec2(t * 0.4f, t * 0.31f)) * 0.4f;
+	float patches = UwFoamNoise(q * 0.7f + vec2(t * 0.25f, -t * 0.18f)) * 0.6f + UwFoamNoise(p * 1.9f - vec2(t * 0.4f, t * 0.31f)) * 0.4f;
 	float lines = 0.5f + 0.5f * sin(depth * 9.0f - t * 2.2f + UwNoise(p * 0.4f) * 4.0f);
 	float edge = 1.0f - smoothstep(0.0f, 0.18f, depth);
 	float foam = smoothstep(0.55f, 0.8f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
@@ -398,10 +398,26 @@ void main()
 				float breaking = face * (1.0f - smoothstep(2.0f, 20.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth) *
 				                 (1.0f - cliff);
 				foam = max(foam, breaking * (0.6f + 0.4f * UwNoise(surfacePoint.xz * 1.3f + t)));
-				// At the foot of a cliff the water boils white and spreads back out
-				float boil = cliff * (1.0f - smoothstep(0.0f, 14.0f, shore.x)) *
-				             smoothstep(0.35f, 0.7f, UwNoise(surfacePoint.xz * 0.9f - t * 0.6f) + face * 0.4f);
-				foam = max(foam, boil * (0.5f + 0.5f * u_uwWaves.y + 0.3f));
+				// At the foot of a cliff: a thick band of boiling white water against the rock, and broad sheets of foam
+				// that each crash pushes out and that break up into patches and streaks as the current carries them
+				// away. The foam builds up between the waves, so it never clears at a cliff.
+				if (cliff > 0.01f)
+				{
+					vec2 shift;
+					vec2 flow = UwCurrent(vec3(surfacePoint.x, u_uwParams.z, surfacePoint.z), t, shift);
+					vec2 carried = surfacePoint.xz - shift - u_uwCurrent.xy * t;
+					float boil = UwFoamNoise(carried * 0.7f - t * 0.5f);
+					float band = (1.0f - smoothstep(4.0f, 12.0f, shore.x)) * (0.75f + 0.25f * boil);
+					float omega = mix(1.1f, 1.5f, u_uwWaves.y);
+					float since = fract((omega * t + UwNoise(surfacePoint.xz * 0.008f) * 1.2f) / 6.2831853f);
+					float front = 6.0f + since * (40.0f + 40.0f * u_uwWaves.y);
+					float push = smoothstep(front - 25.0f, front, shore.x) * (1.0f - smoothstep(front, front + 4.0f, shore.x));
+					float spread = 1.0f - smoothstep(10.0f, 70.0f + 50.0f * u_uwWaves.y, shore.x);
+					float pieces = smoothstep(0.38f, 0.62f, UwFoamNoise(carried * 0.18f) * 0.7f + UwFoamNoise(carried * 0.6f) * 0.3f);
+					float sheets = spread * mix(pieces, 1.0f, push * 0.6f);
+					float strength = 0.7f + 0.3f * u_uwWaves.y + 0.15f * min(u_uwWaves.x, 2.0f);
+					foam = max(foam, clamp((band + sheets * 0.85f) * cliff * 1.4f, 0.0f, 1.0f) * strength + length(flow) * 0.0f);
+				}
 				foam = max(foam, ring.z * 0.6f);
 				if (u_uwFlags2.x > 0.5f && u_uwWaves.y > 0.05f)
 				{

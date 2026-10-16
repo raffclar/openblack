@@ -358,7 +358,10 @@ void main()
 	if (u_uwParams.x > 0.5f)
 	{
 		vec3 surfaceNormal = SeabedSurfaceNormal(v_world);
-		float sandShare = 1.0f - smoothstep(-0.4f, 2.4f, v_world.y);
+		// The sand comes in over a band of height at the shore, and keeps off steep ground, where the land's own rock goes
+		// on down under the water
+		float steepness = 1.0f - surfaceNormal.y;
+		float sandShare = (1.0f - smoothstep(-1.5f, 2.4f, v_world.y)) * (1.0f - smoothstep(0.25f, 0.55f, steepness));
 		// Under the surface the water's own fog takes the place of the haze
 		land = u_uwEye.w > 0.5f ? col.rgb : land;
 		if (sandShare > 0.0f)

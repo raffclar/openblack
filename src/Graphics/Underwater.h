@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <string_view>
 
@@ -183,6 +184,19 @@ struct WaveSample
 	glm::vec2 slope;
 };
 [[nodiscard]] WaveSample WavesAt(glm::vec2 point, float seconds, const WaveState& waves);
+
+/// The waves of the sea: a swell from far away and a wind sea of many waves with lengths over a wide range, their
+/// directions spread about the wind's, their heights from a spectrum and their speeds from the deep water's
+/// dispersion. The shaders take the same table as a uniform array (u_uwWaveTable).
+inline constexpr size_t k_WaveCount = 14;
+/// Where the swell comes from, in radians about the up axis
+inline constexpr float k_SwellAngle = 2.4f;
+/// For each wave, x: its direction (radians), y: its length, z: its height, w: its phase
+[[nodiscard]] std::array<glm::vec4, k_WaveCount> WaveTable(const WaveState& waves);
+
+/// How high the waves are at a point and time against their mean, about 0.4 to 1.6: the sets, a group of bigger waves
+/// every few waves, and calmer patches that drift over the sea. x for the wind sea, y for the swell.
+[[nodiscard]] glm::vec2 WaveSets(glm::vec2 point, float seconds, const WaveState& waves);
 
 /// The sea's currents this frame: one field that every moving thing in the water follows, the same on the processor and
 /// in the shaders (UwCurrent)

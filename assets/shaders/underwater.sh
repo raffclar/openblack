@@ -68,6 +68,15 @@ float UwNoise(vec2 p)
 	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
+// Noise for foam: three layers turned against each other, so no square cells of the noise show
+float UwFoamNoise(vec2 p)
+{
+	vec2 a = vec2(p.x * 0.8f - p.y * 0.6f, p.x * 0.6f + p.y * 0.8f);
+	vec2 b = vec2(p.x * 0.28f + p.y * 0.96f, p.y * 0.28f - p.x * 0.96f) * 2.1f + 5.3f;
+	vec2 c = vec2(p.x * -0.5f + p.y * 0.87f, p.x * 0.87f + p.y * 0.5f) * 4.3f + 1.7f;
+	return UwNoise(a) * 0.55f + UwNoise(b) * 0.3f + UwNoise(c) * 0.15f;
+}
+
 // One layer of caustics: the bright lines where the waves of the surface focus the light. Points that move in time make
 // cells, and the light is brightest along the edges between two cells.
 float UwCausticLayer(vec2 p, float t)
@@ -119,45 +128,55 @@ float UwSurfaceLight(vec2 p, float t)
 	return smoothstep(0.42f, 0.78f, n);
 }
 
-// One wave of the sea: its angle from the wind, its length, its height and its phase. Four long swells and two short
-// chops, the same as underwater::WavesAt.
-float UwWave(vec2 p, float t, float turn, float wavelength, float amplitude, float phase, float chop, inout vec2 slope)
+// The waves of the sea, the same table as underwater::WaveTable: x the direction, y the length, z the height, w the
+// phase. The first two are the swell, the rest the wind sea.
+uniform vec4 u_uwWaveTable[14];
+
+// How high the waves are here and now against their mean: x for the wind sea, y for the swell (underwater::WaveSets)
+vec2 UwWaveSets(vec2 p, float t)
 {
-	float storm = u_uwWaves.y;
-	float angle = u_uwWaves.z + turn;
-	vec2 along = vec2(cos(angle), sin(angle));
-	float k = 6.2831853f / (wavelength * (1.0f - 0.35f * storm));
-	float omega = sqrt(9.8f * k) * 0.8f;
-	float sharp = 1.0f + 1.5f * storm;
-	float a = amplitude * u_uwWaves.x * chop;
-	float theta = k * dot(along, p) - omega * t + phase;
-	float s = 0.5f + 0.5f * sin(theta);
-	slope += along * (a * sharp * pow(max(s, 1e-4f), sharp - 1.0f) * cos(theta) * k);
-	return a * (2.0f * pow(max(s, 0.0f), sharp) - 1.0f);
+	vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
+	float kWind = 6.2831853f / 440.0f;
+	float speedWind = 0.5f * sqrt(9.8f * 55.0f / 6.2831853f) * 0.8f;
+	float sets = 0.5f + 0.5f * sin(kWind * dot(wind, p) - kWind * speedWind * t);
+	float patches = 0.75f + 0.25f * sin(p.x * 0.004f + p.y * 0.0017f + t * 0.05f) * sin(p.y * 0.0031f - p.x * 0.0012f - t * 0.04f);
+	vec2 swell = vec2(cos(2.4f), sin(2.4f));
+	float kSwell = 6.2831853f / 840.0f;
+	float speedSwell = 0.5f * sqrt(9.8f * 120.0f / 6.2831853f) * 0.8f;
+	float swellSets = 0.5f + 0.5f * sin(kSwell * dot(swell, p) - kSwell * speedSwell * t + 1.3f);
+	return vec2((0.45f + 1.1f * sets * sets) * patches, 0.5f + 1.0f * swellSets);
 }
 
-// The height of the waves over the sea's level at a point, and the slope of the surface there. The short chop fades
-// far away, where it would be smaller than a pixel: `range` is how far the point is from the eye.
+// The height of the waves over the sea's level at a point, and the slope of the surface there. The short waves fade
+// far away, where they would be smaller than a pixel: `range` is how far the point is from the eye.
 float UwWaves(vec2 p, float t, float range, out vec2 slope)
 {
 	slope = vec2_splat(0.0f);
-	float chop = 1.0f + u_uwWaves.y * 2.5f;
-	float close = 1.0f - smoothstep(60.0f, 250.0f, range);
-	float height = UwWave(p, t, 0.0f, 61.0f, 0.30f, 0.0f, 1.0f, slope);
-	height += UwWave(p, t, 0.5f, 41.0f, 0.18f, 1.7f, 1.0f, slope);
-	height += UwWave(p, t, -0.4f, 27.0f, 0.12f, 4.1f, 1.0f, slope);
-	height += UwWave(p, t, 1.1f, 18.0f, 0.08f, 2.3f, 1.0f, slope);
-	vec2 chopSlope = vec2_splat(0.0f);
-	height += UwWave(p, t, 0.3f, 7.0f, 0.04f, 5.2f, chop, chopSlope) * close;
-	height += UwWave(p, t, -0.9f, 4.3f, 0.03f, 0.9f, chop, chopSlope) * close;
-	slope += chopSlope * close;
+	vec2 sets = UwWaveSets(p, t);
+	float sharp = 1.0f + 1.5f * u_uwWaves.y;
+	float height = 0.0f;
+	for (int i = 0; i < 14; i++)
+	{
+		vec4 wave = u_uwWaveTable[i];
+		vec2 along = vec2(cos(wave.x), sin(wave.x));
+		float k = 6.2831853f / wave.y;
+		float omega = sqrt(9.8f * k) * 0.8f;
+		// A wave shorter than about four pixels here fades out
+		float footprint = 0.0015f * max(range, 1.0f);
+		float shown = smoothstep(footprint * 4.0f, footprint * 8.0f, wave.y);
+		float a = wave.z * (i < 2 ? sets.y : sets.x) * shown;
+		float theta = k * dot(along, p) - omega * t + wave.w;
+		float s = 0.5f + 0.5f * sin(theta);
+		height += a * (2.0f * pow(max(s, 0.0f), sharp) - 1.0f);
+		slope += along * (a * sharp * pow(max(s, 1e-4f), sharp - 1.0f) * cos(theta) * k);
+	}
 	return height;
 }
 
 // How the highest of the waves is over the sea's level, for the crests' foam
 float UwWaveTop()
 {
-	return (0.30f + 0.18f + 0.12f + 0.08f) * u_uwWaves.x;
+	return 0.8f * u_uwWaves.x;
 }
 
 // The normal of the sea's surface from its slope
@@ -195,7 +214,13 @@ float UwShoreWave(float distance, vec2 xz, float t, float cliff, out float face)
 	float profile = smoothstep(0.0f, 0.1f, x) * pow(max(1.0f - x, 0.0f), 1.6f);
 	face = 1.0f - smoothstep(0.0f, 0.15f, x);
 	float reach = 1.0f - smoothstep(8.0f, 45.0f, distance);
-	return u_uwWaves.w * 2.0f * reach * (1.0f - cliff) * (profile - 0.3f);
+	// No two waves alike: each wave has its own height, the waves of a set are higher, and the breakers are larger in
+	// some places along the beach than in others
+	float wave = floor(theta / 6.2831853f);
+	float own = 0.6f + 0.8f * UwHash(vec2(wave, 17.0f));
+	float sets = 0.55f + 0.45f * sin(wave * 0.9f);
+	float along = 0.6f + 0.8f * UwNoise(xz * 0.012f + vec2(3.0f, 7.0f));
+	return u_uwWaves.w * 2.0f * reach * (1.0f - cliff) * own * sets * along * (profile - 0.3f);
 }
 
 // The waves that go back out to sea from the foot of a cliff, in rings

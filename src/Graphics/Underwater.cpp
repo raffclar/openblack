@@ -155,46 +155,65 @@ underwater::WaveState underwater::WavesFor(float storm, float windAngle)
 	return {.scale = 1.0f + storm * 3.5f, .storm = storm, .windAngle = windAngle, .swash = 0.25f + storm * 0.55f};
 }
 
-namespace
+std::array<glm::vec4, underwater::k_WaveCount> underwater::WaveTable(const WaveState& waves)
 {
-struct Wave
+	std::array<glm::vec4, k_WaveCount> table {};
+	// A storm makes the wind sea's waves shorter and higher, and its short chop much higher
+	const float shorter = 1.0f - 0.35f * waves.storm;
+	// The swell: two long waves from far away, a little higher in a storm
+	table.at(0) = {k_SwellAngle, 120.0f, 0.22f * (1.0f + 0.5f * waves.storm), 0.7f};
+	table.at(1) = {k_SwellAngle + 0.15f, 92.0f, 0.14f * (1.0f + 0.5f * waves.storm), 3.9f};
+	// The wind sea: lengths falling by a share each, directions spread about the wind's, wider for the shorter waves
+	constexpr std::array<float, 12> k_Spread {0.0f, 0.35f, -0.45f, 0.6f, -0.2f, 0.85f, -0.7f, 0.3f, -1.0f, 0.95f, -0.5f, 0.65f};
+	constexpr std::array<float, 12> k_Phase {0.0f, 1.7f, 4.1f, 2.3f, 5.2f, 0.9f, 3.3f, 6.0f, 1.2f, 4.6f, 2.8f, 5.7f};
+	for (size_t i = 0; i < 12; ++i)
+	{
+		const float length = 70.0f * std::pow(0.78f, static_cast<float>(i));
+		// The spectrum: height grows a little slower than length
+		float height = 0.0042f * std::pow(length, 0.9f) * waves.scale;
+		if (length < 12.0f)
+		{
+			height *= 1.0f + waves.storm * 2.5f;
+		}
+		table.at(i + 2) = {waves.windAngle + k_Spread.at(i), length * shorter, height, k_Phase.at(i)};
+	}
+	return table;
+}
+
+glm::vec2 underwater::WaveSets(glm::vec2 point, float seconds, const WaveState& waves)
 {
-	/// The angle from the wind
-	float turn;
-	float wavelength;
-	float amplitude;
-	float phase;
-};
-/// Four long swells and two short chops. The shaders have the same table (UwWaves).
-constexpr std::array<Wave, 6> k_Waves {{
-    {0.0f, 61.0f, 0.30f, 0.0f},
-    {0.5f, 41.0f, 0.18f, 1.7f},
-    {-0.4f, 27.0f, 0.12f, 4.1f},
-    {1.1f, 18.0f, 0.08f, 2.3f},
-    {0.3f, 7.0f, 0.04f, 5.2f},
-    {-0.9f, 4.3f, 0.03f, 0.9f},
-}};
-} // namespace
+	// A group of bigger waves comes in every eight waves of 55 units, at the group's speed, half the waves' own
+	const glm::vec2 wind {std::cos(waves.windAngle), std::sin(waves.windAngle)};
+	const float kWind = 2.0f * std::numbers::pi_v<float> / 440.0f;
+	const float speedWind = 0.5f * std::sqrt(9.8f * 55.0f / (2.0f * std::numbers::pi_v<float>)) * 0.8f;
+	const float sets = 0.5f + 0.5f * std::sin(kWind * glm::dot(wind, point) - kWind * speedWind * seconds);
+	// Calmer patches that drift slowly over the sea
+	const float patches = 0.75f + 0.25f * std::sin(point.x * 0.004f + point.y * 0.0017f + seconds * 0.05f) *
+	                                  std::sin(point.y * 0.0031f - point.x * 0.0012f - seconds * 0.04f);
+	// The swell's sets: every seven of its waves
+	const glm::vec2 swell {std::cos(k_SwellAngle), std::sin(k_SwellAngle)};
+	const float kSwell = 2.0f * std::numbers::pi_v<float> / 840.0f;
+	const float speedSwell = 0.5f * std::sqrt(9.8f * 120.0f / (2.0f * std::numbers::pi_v<float>)) * 0.8f;
+	const float swellSets = 0.5f + 0.5f * std::sin(kSwell * glm::dot(swell, point) - kSwell * speedSwell * seconds + 1.3f);
+	return {(0.45f + 1.1f * sets * sets) * patches, 0.5f + 1.0f * swellSets};
+}
 
 underwater::WaveSample underwater::WavesAt(glm::vec2 point, float seconds, const WaveState& waves)
 {
 	WaveSample sample {.height = 0.0f, .slope = {0.0f, 0.0f}};
-	// A storm makes the waves shorter and their crests sharper, and the chop higher
-	const float shorter = 1.0f - 0.35f * waves.storm;
+	const auto table = WaveTable(waves);
+	const auto sets = WaveSets(point, seconds, waves);
 	const float sharp = 1.0f + 1.5f * waves.storm;
-	for (size_t i = 0; i < k_Waves.size(); ++i)
+	for (size_t i = 0; i < table.size(); ++i)
 	{
-		const auto& wave = k_Waves.at(i);
-		const float angle = waves.windAngle + wave.turn;
-		const glm::vec2 along {std::cos(angle), std::sin(angle)};
-		const float k = 2.0f * std::numbers::pi_v<float> / (wave.wavelength * shorter);
+		const auto& wave = table.at(i);
+		const glm::vec2 along {std::cos(wave.x), std::sin(wave.x)};
+		const float k = 2.0f * std::numbers::pi_v<float> / wave.y;
 		const float omega = std::sqrt(9.8f * k) * 0.8f;
-		const float chop = i >= 4 ? 1.0f + waves.storm * 2.5f : 1.0f;
-		const float amplitude = wave.amplitude * waves.scale * chop;
-		const float theta = k * glm::dot(along, point) - omega * seconds + wave.phase;
+		const float amplitude = wave.z * (i < 2 ? sets.y : sets.x);
+		const float theta = k * glm::dot(along, point) - omega * seconds + wave.w;
 		const float s = 0.5f + 0.5f * std::sin(theta);
-		const float lifted = std::pow(s, sharp);
-		sample.height += amplitude * (2.0f * lifted - 1.0f);
+		sample.height += amplitude * (2.0f * std::pow(s, sharp) - 1.0f);
 		const float rise = amplitude * sharp * std::pow(std::max(s, 1e-4f), sharp - 1.0f) * std::cos(theta) * k;
 		sample.slope += along * rise;
 	}
