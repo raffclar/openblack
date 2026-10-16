@@ -165,10 +165,10 @@ constexpr float k_SitExtraSeconds = 5.0f;
 }
 /// It sleeps at home only when its player has a temple and it is less than 1000 from home
 constexpr float k_FurthestToSleepAtHome = 1000.0f;
-[[nodiscard]] bool NotTooFarFromHome(std::optional<float> homeDistance);
+[[nodiscard]] bool NotTooFarFromHome(bool hasTemple, std::optional<float> homeDistance);
 /// It sleeps on the spot or by a thing only on a leash, with no temple, or more than 140 from home
 constexpr float k_NearestToSleepAway = 140.0f;
-[[nodiscard]] bool LeashedOrTooFarFromHome(bool leashed, std::optional<float> homeDistance);
+[[nodiscard]] bool LeashedOrTooFarFromHome(bool leashed, bool hasTemple, std::optional<float> homeDistance);
 /// It runs from the player only when its player's hand is less than 10 from it and it dislikes its player
 constexpr float k_FrighteningHandDistance = 10.0f;
 [[nodiscard]] bool PlayerNearbyAndFrightening(std::optional<float> handDistance, float attitudeToPlayer);

@@ -826,13 +826,13 @@ bool creature_plan_actions::Allowed(const Executor& executor, const Situation& s
 	case Build::LookAtMoon:
 		return creature_emote::MoonVisible(situation.night);
 	case Build::SleepAtHome:
-		return creature_emote::NotTooFarFromHome(situation.homeDistance);
+		return creature_emote::NotTooFarFromHome(situation.hasTemple, situation.homeDistance);
 	case Build::Sleep:
-		return creature_emote::LeashedOrTooFarFromHome(situation.leashed, situation.homeDistance);
+		return creature_emote::LeashedOrTooFarFromHome(situation.leashed, situation.hasTemple, situation.homeDistance);
 	case Build::SleepByObject:
 		// Only on the leash or far from home, and the thing must have nothing frightening near it. The game measures
 		// that from the creature, not from the thing, so the test does not depend on the thing.
-		return creature_emote::LeashedOrTooFarFromHome(situation.leashed, situation.homeDistance) &&
+		return creature_emote::LeashedOrTooFarFromHome(situation.leashed, situation.hasTemple, situation.homeDistance) &&
 		       situation.nothingFrighteningNear;
 	case Build::RunFromPlayer:
 		return creature_emote::PlayerNearbyAndFrightening(situation.handDistance, situation.attitudeToPlayer);

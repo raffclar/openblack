@@ -103,11 +103,16 @@ std::optional<entt::entity> CreatureMindSystem::BelongsTo(entt::entity thing)
 	{
 		return thing;
 	}
-	// A worship site is a part of its temple. The temple here is its own heart; the creature pens are not things of their
-	// own.
+	// A worship site is a part of its temple, and so is the altar at its head. The temple here is its own heart; the
+	// shipped lands make no creature pen as a thing of its own.
 	if (const auto* site = registry.TryGet<const WorshipSite>(thing))
 	{
 		return registry.Valid(site->temple) ? std::optional(site->temple) : std::nullopt;
+	}
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(thing))
+	{
+		const auto* site = registry.Valid(altar->site) ? registry.TryGet<const WorshipSite>(altar->site) : nullptr;
+		return site != nullptr && registry.Valid(site->temple) ? std::optional(site->temple) : std::nullopt;
 	}
 	if (const auto* villager = registry.TryGet<const Villager>(thing))
 	{

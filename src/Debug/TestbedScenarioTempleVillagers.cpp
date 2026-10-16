@@ -288,4 +288,21 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 0.0f,
 	});
+	all.push_back({
+	    .id = "mind.altar_temple_part",
+	    .name = "The altar of a worship site is a part of the temple",
+	    .facet = Facet::Mind,
+	    .description = "The same town and temple, the town's worship site put up built and nobody sent to worship. A grown "
+	                   "tiger of the player's stands between the town and the site and faces the site. Its mind runs.",
+	    .expected = "Within a few seconds the tiger's beliefs (the Mind panel) have the site's altar as a temple part of "
+	                "the player, apart from the site, and both are parts of the temple. The altar is a thing that the "
+	                "tiger can act on, as the heart of the temple is.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, 35.0f}, .look = {10.0f, 0.0f, -2.0f}},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Watcher}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
 }
