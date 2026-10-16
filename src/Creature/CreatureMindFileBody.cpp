@@ -73,6 +73,10 @@ std::optional<Body> creature_mind_body::FromMindFile(const creaturemind::MindFil
 		std::ranges::transform(*file.tattooHeader, slots.begin(), creature_tattoo::FromWord);
 		body.tattoos = slots;
 	}
+	if (file.tattoo.has_value())
+	{
+		body.tattooPictures = *file.tattoo;
+	}
 	const auto& physique = file.physique;
 	const auto share = [&finite](float value, float otherwise) {
 		return finite(value) ? std::clamp(value, 0.0f, 1.0f) : otherwise;
@@ -126,6 +130,10 @@ void creature_mind_body::ToMindFile(const Body& body, creaturemind::MindFileData
 		std::array<uint32_t, creature_tattoo::k_SlotCount> words {};
 		std::ranges::transform(*body.tattoos, words.begin(), creature_tattoo::ToWord);
 		file.tattooHeader = words;
+	}
+	if (body.tattooPictures.has_value())
+	{
+		file.tattoo = *body.tattooPictures;
 	}
 	physique.wounds.clear();
 	std::ranges::transform(body.wounds, std::back_inserter(physique.wounds), creature_marks::WoundToWord);

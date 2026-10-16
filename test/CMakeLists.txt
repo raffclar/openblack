@@ -1075,3 +1075,5 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_custom_music_controls gui/test_custom_music_controls.cpp
 )
+openblack_setup_and_add_test(test_bitmap test_bitmap.cpp)
+target_link_libraries(test_bitmap PRIVATE rawimage)

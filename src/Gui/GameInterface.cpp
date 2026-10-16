@@ -125,16 +125,21 @@ namespace
 /// A texture of the game made of a colour file and an alpha file, 256 pixels square. Null when they are missing.
 std::unique_ptr<openblack::graphics::Texture2D>
 LoadTexture(const std::string& name, openblack::graphics::Wrapping wrapping = openblack::graphics::Wrapping::ClampEdge,
-            const std::function<uint8_t(uint8_t)>& level = {})
+            const std::function<uint8_t(uint8_t)>& level = {},
+            const std::function<void(std::span<uint8_t> colour, std::span<uint8_t> alpha)>& change = {})
 {
 	auto& fileSystem = Locator::filesystem::value();
-	const auto colour = ReadIfExists(fileSystem.GetPath<Path::Textures>() / (name + ".raw"));
-	const auto alpha = ReadIfExists(fileSystem.GetPath<Path::Textures>() / (name + "a.raw"));
+	auto colour = ReadIfExists(fileSystem.GetPath<Path::Textures>() / (name + ".raw"));
+	auto alpha = ReadIfExists(fileSystem.GetPath<Path::Textures>() / (name + "a.raw"));
 	constexpr size_t k_Pixels = static_cast<size_t>(k_AtlasSize) * k_AtlasSize;
 	if (colour.size() != k_Pixels * 3 || alpha.size() != k_Pixels)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unable to read the texture {}", name);
 		return nullptr;
+	}
+	if (change)
+	{
+		change(colour, alpha);
 	}
 	const auto* data = bgfx::alloc(static_cast<uint32_t>(k_Pixels * 4));
 	for (size_t i = 0; i < k_Pixels; ++i)
@@ -158,6 +163,40 @@ LoadTexture(const std::string& name, openblack::graphics::Wrapping wrapping = op
 	texture->Create(k_AtlasSize, k_AtlasSize, 1, openblack::graphics::TextureFormat::RGBA8, wrapping,
 	                openblack::graphics::Filter::Linear, data);
 	return texture;
+}
+
+/// Puts a picture of the player's own in the cell of a symbol, in a colour file and an alpha file 256 pixels square
+void PutSymbolPicture(std::span<uint8_t> colour, std::span<uint8_t> alpha, uint32_t design,
+                      const openblack::creature_tattoo::Picture& picture)
+{
+	using namespace openblack::creature_tattoo;
+	const auto left = (design % k_DesignsPerRow) * k_DesignSize;
+	const auto top = (design / k_DesignsPerRow) * k_DesignSize;
+	for (uint32_t y = 0; y < k_DesignSize; ++y)
+	{
+		for (uint32_t x = 0; x < k_DesignSize; ++x)
+		{
+			const auto pixel = (static_cast<size_t>(top + y) * k_AtlasSize) + left + x;
+			const auto grey = picture.at((y * k_DesignSize) + x);
+			std::fill_n(colour.begin() + static_cast<std::ptrdiff_t>(pixel * 3), 3, grey);
+			alpha[pixel] = grey;
+		}
+	}
+}
+
+/// The symbols the game ships with, each with the player's own picture in its place if they have one
+std::unique_ptr<openblack::graphics::Texture2D> LoadSymbols(const openblack::creature_tattoo::Pictures& pictures)
+{
+	return LoadTexture("OriginalChooseSymbol", openblack::graphics::Wrapping::ClampEdge, {},
+	                   [&pictures](std::span<uint8_t> colour, std::span<uint8_t> alpha) {
+		                   for (uint32_t design = 0; design < pictures.size(); ++design)
+		                   {
+			                   if (const auto& picture = pictures.at(design); picture.has_value())
+			                   {
+				                   PutSymbolPicture(colour, alpha, design, *picture);
+			                   }
+		                   }
+	                   });
 }
 
 /// The tooltips' priorities and times from the info script, or the most common of them without it
@@ -198,7 +237,8 @@ constexpr std::array k_ToolTipArrows = {
 constexpr int k_ToolTipMouseRow = 2;
 } // namespace
 
-std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerName, MenuSettings settings)
+std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerName, MenuSettings settings,
+                                                     const creature_tattoo::Pictures& pictures)
 {
 	auto& fileSystem = Locator::filesystem::value();
 
@@ -229,7 +269,9 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 	{
 		return nullptr;
 	}
-	auto symbols = LoadTexture("ChooseSymbol");
+	// The symbols the game ships with, each with the player's own picture in its place if they have one. The picture
+	// is grey, and its grey is also its alpha.
+	auto symbols = LoadSymbols(pictures);
 	auto mice = LoadTexture("mousehelp");
 	// The atmosphere texture's glows and the tooltips' arrows
 	auto atmos = LoadTexture("ATMOS");
@@ -579,6 +621,15 @@ void GameInterface::UpdateMusicControls(bool dialogOpen)
 		emotion = Locator::musicMoodSystem::value().GetCurrentEmotion();
 	}
 	_musicControls->Update(player, emotion, machine_clock::Ticks());
+}
+
+void GameInterface::SetSymbolPictures(const creature_tattoo::Pictures& pictures)
+{
+	if (auto symbols = LoadSymbols(pictures))
+	{
+		_symbols = std::move(symbols);
+		_painter.SetPictures(_symbols.get(), _mice.get());
+	}
 }
 
 void GameInterface::OpenMenu()

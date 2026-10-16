@@ -12,6 +12,7 @@
 #include <array>
 #include <map>
 #include <memory>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <gtest/gtest.h>
@@ -33,8 +34,9 @@ constexpr glm::u8vec3 k_Green {0, 200, 0};
 class FakeSkin final: public TattooEditorSystem::Skin
 {
 public:
-	explicit FakeSkin(std::map<entt::entity, Slots>& skins)
+	FakeSkin(std::map<entt::entity, Slots>& skins, std::map<entt::entity, std::vector<uint8_t>>& pictures)
 	    : _skins(skins)
+	    , _pictures(pictures)
 	{
 	}
 	[[nodiscard]] std::optional<Slots> Read(entt::entity creature) const override
@@ -43,15 +45,21 @@ public:
 		return found != _skins.end() ? std::optional(found->second) : std::nullopt;
 	}
 	void Write(entt::entity creature, size_t slot, const Slot& tattoo) override { _skins.at(creature).at(slot) = tattoo; }
+	void WritePictures(entt::entity creature, std::vector<uint8_t> pictures) override
+	{
+		_pictures[creature] = std::move(pictures);
+	}
 
 private:
 	std::map<entt::entity, Slots>& _skins;
+	std::map<entt::entity, std::vector<uint8_t>>& _pictures;
 };
 
 struct Fixture
 {
 	std::map<entt::entity, Slots> skins {{k_Creature, Slots {}}};
-	TattooEditorSystem editor {std::make_unique<FakeSkin>(skins)};
+	std::map<entt::entity, std::vector<uint8_t>> pictures;
+	TattooEditorSystem editor {std::make_unique<FakeSkin>(skins, pictures)};
 	/// One place, at the middle of the screen, facing the camera
 	std::array<SiteOnScreen, 1> sites {SiteOnScreen {.site = 4, .screen = {400, 300}, .facingCamera = 1.0f}};
 
@@ -158,4 +166,24 @@ TEST(TattooEditorSystem, TheCreatureSmilesWhenATattooGoesOnAndIsSadWhenItComesOf
 	ASSERT_TRUE(f.editor.Lift().has_value());
 	EXPECT_EQ(f.editor.TakeFace(), creature_face::Face::Sad);
 	EXPECT_EQ(creature_tattoo_editor::k_FaceMilliseconds, 1800.0f);
+}
+
+TEST(TattooEditorSystem, EachDropKeepsThePlayersPicturesThatTheTattoosUse)
+{
+	Fixture f;
+	creature_tattoo::Pictures pictures {};
+	pictures.at(9) = creature_tattoo::Picture {};
+	f.editor.SetPictures(pictures);
+	f.editor.Open(k_Creature, {});
+	f.OverThePlace();
+	EXPECT_TRUE(f.editor.Drop(9, k_Green));
+	ASSERT_TRUE(f.pictures.contains(k_Creature));
+	const auto& block = f.pictures.at(k_Creature);
+	ASSERT_EQ(block.size(), 0x828u);
+	EXPECT_EQ(block.at(5), 1);
+	// Cancel puts the tattoos back and makes the block again from them, so no slot keeps the picture
+	f.editor.Cancel();
+	EXPECT_TRUE(f.skins.at(k_Creature).at(0).Empty());
+	ASSERT_EQ(f.pictures.at(k_Creature).size(), 0x28u);
+	EXPECT_EQ(f.pictures.at(k_Creature).at(5), 0);
 }

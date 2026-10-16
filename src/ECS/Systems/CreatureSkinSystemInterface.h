@@ -35,6 +35,8 @@ public:
 
 	/// A tattoo put in one of a creature's slots, or an empty slot to take one off
 	virtual void SetTattoo(entt::entity creature, size_t slot, const creature_tattoo::Slot& tattoo) = 0;
+	/// The creature keeps a block of the player's own pictures for its tattoos (see creature_tattoo::PicturesBlock)
+	virtual void SetTattooPictures(entt::entity creature, std::vector<uint8_t> pictures) = 0;
 	/// A wound or burn, or a drop of blood, on a creature's skin
 	virtual void AddWound(entt::entity creature, const creature_marks::Mark& wound) = 0;
 	virtual void AddBlood(entt::entity creature, const creature_marks::Mark& blood) = 0;

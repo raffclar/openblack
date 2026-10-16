@@ -297,6 +297,43 @@ void AddCaveTattooOnBody(std::vector<Scenario>& all)
 	});
 }
 
+/// The player has a picture of their own for the heart and puts the heart on the creature in the Creature Cave. The
+/// points after the click on the creature are for a screen of 1600 by 900.
+void AddCaveOwnTattooPicture(std::vector<Scenario>& all)
+{
+	const auto at = [](float x, float y, float delay) {
+		return Command {.kind = Kind::PointerTo, .delaySeconds = delay, .point = {x / 1600.0f, y / 900.0f}};
+	};
+	const auto press = [](float delay) { return Command {.kind = Kind::PointerPress, .delaySeconds = delay, .value = 1}; };
+	const auto release = [](float delay) { return Command {.kind = Kind::PointerRelease, .delaySeconds = delay, .value = 1}; };
+	all.push_back({
+	    .id = "creature_mode.cave_own_tattoo_picture",
+	    .name = "A tattoo of the player's own picture",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player has a picture of their own for the eighth symbol, the heart, as from Symbol8.bmp in "
+	                   "the folder of their profile: grey rings. The player goes into the Creature Cave, clicks the "
+	                   "tiger, picks a blue and drags the heart onto the tiger's chest.",
+	    .expected = "The symbol in the editor still shows the heart, because the game loads the symbols' picture "
+	                "one time. The tattoo that goes into the skin of the chest is blue rings, not a heart.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {{.kind = Kind::OwnTattooPicture, .delaySeconds = 0.5f, .value = 7},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::PointerOnCaveCreature, .delaySeconds = 10.0f},
+	                 press(0.5f),
+	                 release(0.2f),
+	                 at(246.0f, 330.0f, 5.0f),
+	                 press(0.2f),
+	                 release(0.2f),
+	                 at(368.0f, 780.0f, 0.5f),
+	                 press(0.2f),
+	                 at(600.0f, 600.0f, 0.2f),
+	                 at(799.0f, 404.0f, 0.2f),
+	                 release(1.0f)},
+	});
+}
+
 /// The player looks at a scroll of the Creature Cave and then leaves it. The points are for a screen of 1600 by 900.
 void AddCaveScrollZoom(std::vector<Scenario>& all)
 {
@@ -419,6 +456,7 @@ void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 	AddCave(all);
 	AddFizzInFront(all);
 	AddCaveTattooOnBody(all);
+	AddCaveOwnTattooPicture(all);
 	AddCaveScrollZoom(all);
 	AddCaveCopyHair(all);
 	AddCaveTrophies(all);

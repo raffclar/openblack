@@ -27,6 +27,9 @@ namespace openblack::ecs::components
 struct CreatureTattoos
 {
 	creature_tattoo::Slots slots {};
+	/// The block of the player's own pictures that the slots use (see creature_tattoo::PicturesBlock), empty when the
+	/// creature has none
+	std::vector<uint8_t> pictures;
 	/// Goes up with each change, which paints the skins again
 	uint32_t revision {0};
 };

@@ -24,6 +24,7 @@ public:
 	void Update() override;
 	void ProcessTurn() override;
 	void SetTattoo(entt::entity creature, size_t slot, const creature_tattoo::Slot& tattoo) override;
+	void SetTattooPictures(entt::entity creature, std::vector<uint8_t> pictures) override;
 	void AddWound(entt::entity creature, const creature_marks::Mark& wound) override;
 	void AddBlood(entt::entity creature, const creature_marks::Mark& blood) override;
 	void Heal(entt::entity creature, uint32_t counts) override;

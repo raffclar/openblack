@@ -43,6 +43,8 @@ struct Body
 	float strength {0.5f};
 	std::optional<float> size;
 	std::optional<creature_tattoo::Slots> tattoos;
+	/// The block of the player's own pictures that its tattoos use (see creature_tattoo::PicturesBlock)
+	std::optional<std::vector<uint8_t>> tattooPictures;
 	/// Its fatness, 0 to 1, and the fatness its body shows, which follows it a little each turn
 	float fatness {0.5f};
 	float shownFatness {0.5f};
