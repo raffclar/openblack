@@ -337,6 +337,29 @@ TEST(PhysicsGameHooks, ACreatureStruckIsHurtAndItsOwnPlayersBlowMakesItThinkLess
 	EXPECT_EQ(f.world->desireSources, sources);
 }
 
+TEST(PhysicsGameHooks, AnotherPlayersBlowHurtsFrightensAndAngersACreatureButLeavesItsFeelingForItsOwnPlayer)
+{
+	Fixture f;
+	const auto creature = f.world->registry.Create();
+	auto& body = f.world->registry.Assign<Creature>(creature);
+	body.owner = PlayerNames::PLAYER_ONE;
+	body.size = 1.0f;
+	constexpr float k_Knock = 1.0e6f;
+	f.StrikeWithRock(creature, 100.0f, PlayerNames::PLAYER_TWO, k_Knock);
+	const auto crush = living::CreatureCrush(k_Knock, living::CreatureMass(1.0f, 0.0f, 0.0f));
+	ASSERT_TRUE(crush.has_value());
+
+	// The crush is put down to the other player
+	ASSERT_EQ(f.world->effects.size(), 1U);
+	EXPECT_FLOAT_EQ(f.world->effects[0].values[magic::EffectKind::Crush], *crush);
+	EXPECT_EQ(f.world->effects[0].source.player, PlayerNames::PLAYER_TWO);
+	// No feedback for its own player, but the blow frightens and angers it
+	EXPECT_TRUE(f.world->feedbacks.empty());
+	const std::vector<std::pair<uint32_t, float>> sources {{creature_desires::sources::k_FearFromDamage, *crush},
+	                                                       {creature_desires::sources::k_AngerFromDamage, *crush}};
+	EXPECT_EQ(f.world->desireSources, sources);
+}
+
 TEST(PhysicsGameHooks, AToyNeverHurtsACreatureNorDoesAnythingWhileAScriptControlsTheLocalOne)
 {
 	Fixture f;
