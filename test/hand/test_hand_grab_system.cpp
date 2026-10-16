@@ -623,6 +623,25 @@ TEST_F(HandGrabSystemWithWorld, ThingsOutOfTheInfluenceOrHeldByAScriptAreLeft)
 	EXPECT_EQ(world->tapped.front(), boulder);
 }
 
+// A hand that holds a thing does not tap the thing under it, as a temple's entrance: the press makes ready to throw
+TEST_F(HandGrabSystemWithWorld, AHandThatHoldsAThingTapsNothing)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	world->tapped.clear();
+	const auto boulder = world->AddRock({5.0f, 0.0f, 0.0f}, 4.0f);
+	world->underCursor = boulder;
+	EXPECT_TRUE(Press());
+	EXPECT_TRUE(world->tapped.empty());
+}
+
 // The influence is asked where the thing under the cursor stands, not where the hand rests on the land behind it
 TEST_F(HandGrabSystemWithWorld, ATakeAsksTheInfluenceWhereThePickedThingStands)
 {

@@ -453,26 +453,6 @@ bool HandInInfluence()
 	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, *point);
 }
 
-/// Whether the thing picked under the cursor is an entrance of the local player's own temple
-/// Whether a temple's entrance is picked under the cursor, whoever's temple it is
-bool IsTempleEntrance(std::optional<entt::entity> picked)
-{
-	const auto& registry = Locator::entitiesRegistry::value();
-	return picked.has_value() && registry.Valid(*picked) && registry.AllOf<ecs::components::TempleEntrance>(*picked);
-}
-
-bool IsOwnTempleEntrance(std::optional<entt::entity> picked)
-{
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* entrance = picked.has_value() && registry.Valid(*picked)
-	                           ? registry.TryGet<const ecs::components::TempleEntrance>(*picked)
-	                           : nullptr;
-	const auto* temple = entrance != nullptr && registry.Valid(entrance->temple)
-	                         ? registry.TryGet<const ecs::components::Temple>(entrance->temple)
-	                         : nullptr;
-	return temple != nullptr && temple->owner == PlayerNames::PLAYER_ONE;
-}
-
 /// How the game draws its scene into the window, from its camera
 graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& config, uint32_t time, bool drawHand)
 {
@@ -2550,7 +2530,6 @@ bool Game::Update() noexcept
 		// Upright where nothing is under the cursor
 		ecs::components::Transform intersectionTransform {
 		    .position = glm::vec3(0.0f), .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
-		bool enterTemple = false;
 		// The point the interface picks under the cursor, which the hand's influence is tested at
 		std::optional<map_coords::MapCoords> handPick;
 		{
@@ -2586,22 +2565,6 @@ bool Game::Update() noexcept
 				}
 				else if (!glm::any(glm::isnan(rayOrigin) || glm::isnan(rayDirection)))
 				{
-					// The Action button on the player's own temple's entrance, picked under the cursor, takes them inside,
-					// when the scripts let it and the hand is within the player's influence
-					const auto& actions = Locator::gameActionSystem::value();
-					if (Locator::entitiesRegistry::value().Context().scriptLetsTempleBeEntered &&
-					    Locator::cinematicDirectorSystem::value().IsInterfaceActive() &&
-					    !Locator::magicSystem::value().IsHandBusy() && actions.GetChanged(input::BindableActionMap::ACTION) &&
-					    actions.Get(input::BindableActionMap::ACTION))
-					{
-						const auto picked = Locator::pickingSystem::value().GetPick().object;
-						// The help counts the tap on any temple's entrance; only the player's own entrance takes them inside
-						if (IsTempleEntrance(picked) && HandInInfluence() && Locator::helpProfileSystem::has_value())
-						{
-							Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
-						}
-						enterTemple = IsOwnTempleEntrance(picked) && HandInInfluence();
-					}
 					// The leash keys, and the Action button tapping leash posts, and with the leash held giving orders and
 					// tying the leash to things.
 					// Not while the debug windows have the keyboard or mouse, as when typing in a text field: the controls
@@ -2712,11 +2675,6 @@ bool Game::Update() noexcept
 				}
 				intersectionTransform.scale = scale;
 			}
-		}
-
-		if (enterTemple && Locator::temple::has_value())
-		{
-			Locator::temple::value().Activate();
 		}
 
 		// The hand's debugging trace records this frame, starting from where the hand was left before it
