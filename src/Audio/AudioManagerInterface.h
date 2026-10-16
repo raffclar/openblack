@@ -56,6 +56,8 @@ struct AnimEffectPlay
 		AlreadyPlaying,
 		/// The sample the effect picked may not be heard in the conditions it was asked under
 		NotHeard,
+		/// All the voices play samples of the same or a higher priority
+		NoVoice,
 	};
 	Outcome outcome {Outcome::NoEffect};
 	/// The emitter playing it, null when nothing plays
@@ -75,6 +77,9 @@ struct SoundEffectOptions
 	std::optional<uint32_t> volume;
 	/// Repeat loops it until it is stopped or released; Once plays it the bank header's number of times
 	PlayType playType {PlayType::Once};
+	/// What it does about the voices that play already, unless its bank header gives another play type. Empty takes
+	/// a free voice.
+	std::optional<pack::AudioBankLoop> voicePlayType;
 	/// What it is played for: a loop tied to its owner is moved with SetEmitterPosition and stopped with
 	/// StopOwnedSounds
 	entt::entity owner {entt::null};

@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -29,6 +30,7 @@
 #include "MusicPlayer.h"
 #include "MusicStreamBackend.h"
 #include "SoundGroup.h"
+#include "VoicePool.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -125,7 +127,35 @@ private:
 	{
 		SourceId source;
 		float gain;
+		/// The voice of the pool that the sample plays on
+		size_t slot;
 	};
+
+	/// What plays on a voice of the pool
+	struct VoiceOccupant
+	{
+		entt::entity emitter {entt::null};
+		Handle atmos {k_InvalidHandle};
+		/// The voice forgets its sample when the sample stops
+		bool forgetSample {false};
+	};
+
+	/// The voice for a sample by the voice rules. When the sample starts, the voice stops the sample that played on it.
+	/// The bank header gives the play type when it overrides it, else the caller does.
+	[[nodiscard]] VoiceChoice AcquireVoice(const Sound& sound, uint64_t ownerKey, pack::AudioBankLoop callerPlayType);
+	/// Puts what plays now on the voice
+	void BindVoice(size_t slot, const Sound& sound, entt::entity emitter, Handle atmos);
+	/// Frees the voice of what stopped
+	void ReleaseVoice(size_t slot);
+	/// The voice of an emitter, empty when the emitter has no voice
+	[[nodiscard]] std::optional<size_t> VoiceOf(entt::entity emitter) const;
+	/// The key of an owner in the voice pool
+	[[nodiscard]] static uint64_t OwnerKey(entt::entity owner);
+	/// The bank of a loaded sound, 0 when the sound is not loaded
+	[[nodiscard]] static uint32_t BankOf(entt::id_type id);
+	/// An emitter for a sound on a voice of the pool, null when the sound does not start
+	entt::entity CreateVoiceEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
+	                                entt::entity owner, pack::AudioBankLoop callerPlayType, VoiceChoice& choice);
 
 	/// A source for a voice of a loaded sound, decoding the sound first if needed
 	SourceId CreateSource(Sound& sound, const VoiceStart& start);
@@ -166,6 +196,9 @@ private:
 	std::vector<BufferId> _decodedBuffers;
 	Handle _nextAtmosVoice {1};
 	std::unique_ptr<AtmosPlayer> _atmos;
+	/// The voices that all the bank samples share, and what plays on each voice
+	VoicePool _voicePool;
+	std::array<VoiceOccupant, VoicePool::k_VoiceCount> _voiceOccupants {};
 };
 
 } // namespace openblack::audio
