@@ -601,6 +601,8 @@ Game::~Game() noexcept
 	{
 		Locator::chlapi::value().LogStubCalls();
 	}
+	// The game keeps the help record of the player when it closes
+	SaveHelpRecord();
 	ShutDownServices();
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
@@ -3377,6 +3379,7 @@ bool Game::Initialize() noexcept
 	}
 
 	const auto profiles = ProfileStore();
+	_developerProfile = profiles.developer;
 	if (!InitializeGame(profiles))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
@@ -4279,6 +4282,10 @@ bool Game::Run() noexcept
 		Locator::videoSystem::value().Play(_playVideo);
 	}
 
+	// The game loop starts: the help record of the player comes from their profile, and the game writes it back at once
+	LoadHelpRecord();
+	SaveHelpRecord();
+
 	_frameCount = 0;
 	auto lastTime = std::chrono::high_resolution_clock::now();
 	auto& profiler = Locator::profiler::value();
@@ -4966,6 +4973,8 @@ void Game::HandleEscapeInPlay(uint16_t keyModifiers)
 	case escape_key::Outcome::Nothing:
 		break;
 	case escape_key::Outcome::OpenMenu:
+		// The game keeps the help record of the player when Escape opens the menu
+		SaveHelpRecord();
 		_interface->OpenMenu();
 		HandleInterfaceAction();
 		break;
@@ -4995,6 +5004,7 @@ void Game::HandleInterfaceAction()
 	{
 		Locator::playerProfileSystem::value().EditCurrentProfile(edits->creatureName, edits->symbol);
 		NameCreatureAfterProfile();
+		SaveHelpRecord();
 	}
 	// A profile made in the new player's box from the Players page is played from now on
 	if (auto& box = _interface->GetNewPlayerBox(); !box.IsActive())
@@ -5018,6 +5028,7 @@ void Game::HandleInterfaceAction()
 		ApplyPlayerSettings(kept);
 		// The player's options are kept with their profile
 		Locator::playerProfileSystem::value().SetCurrentSettings(kept);
+		SaveHelpRecord();
 	}
 
 	// The menu pauses the game while it is open
@@ -5128,6 +5139,8 @@ void Game::RefreshPlayersPage()
 
 void Game::PlayerProfileChanged()
 {
+	// The help record of the new player comes from their profile. Without their file, the record stays as it is
+	LoadHelpRecord();
 	RefreshPlayersPage();
 	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
 	if (!profile.has_value() || !_interface)

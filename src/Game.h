@@ -347,6 +347,13 @@ private:
 	/// A first start: the new player's box asks for the player's name before the first land loads. False when the
 	/// window was closed meanwhile
 	bool AskForNewPlayer();
+	/// The name of the profile played, for the files that the game keeps for its player. There is no name on a run of a
+	/// developer, which keeps no files for its player.
+	[[nodiscard]] std::optional<std::u16string> PlayerForProfileFiles() const;
+	/// The help record of the player comes from their folder in the profile folder
+	void LoadHelpRecord();
+	/// The game writes the help record of the player to their folder in the profile folder
+	void SaveHelpRecord();
 
 	/// Clears the last land for the next, keeping what the reason for the change keeps. The testbed is a workbench
 	/// outside the game: nothing is carried onto it or off it, so each testbed load starts as the first one after launch
@@ -395,6 +402,8 @@ private:
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box
 	bool _automatedRun {false};
+	/// A run of a developer plays as a profile that the game does not keep
+	bool _developerProfile {false};
 	std::optional<std::filesystem::path> _screenshotRoot;
 	std::optional<uint32_t> _seed;
 	input::LockMode _inspectInputLock {input::LockMode::Auto};

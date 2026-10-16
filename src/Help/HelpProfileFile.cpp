@@ -9,6 +9,8 @@
 
 #include "HelpProfileFile.h"
 
+#include <algorithm>
+
 namespace openblack::help::profile
 {
 
@@ -47,6 +49,21 @@ void FromHelpStats(HelpProfile& profile, const helpstats::HelpStats& stats)
 		    .triggeredThisTurn = record.triggeredThisTurn != 0,
 		    .times = record.times,
 		});
+	}
+}
+
+std::vector<uint8_t> ToFileBytes(const HelpProfile& profile)
+{
+	return helpstats::Write(ToHelpStats(profile));
+}
+
+void FromFileBytes(HelpProfile& profile, std::span<const uint8_t> bytes)
+{
+	auto record = ToFileBytes(profile);
+	std::ranges::copy(bytes.first(std::min(bytes.size(), record.size())), record.begin());
+	if (const auto stats = helpstats::Read(record); stats.has_value())
+	{
+		FromHelpStats(profile, *stats);
 	}
 }
 

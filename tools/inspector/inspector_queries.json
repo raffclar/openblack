@@ -1249,6 +1249,12 @@
   "query": "players.new_game"
  },
  {
+  "description": "The profile folder, the folder of the player played in it, and whether that folder holds the help record (helpstats.dat)",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.profile_folder"
+ },
+ {
   "description": "The players: their entities, primary creatures and alignment",
   "kind": "list",
   "parameters": [],

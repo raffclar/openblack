@@ -167,6 +167,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
@@ -354,6 +355,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
+    LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
@@ -1478,6 +1480,27 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 			              result["profiles"] = profiles.GetProfileCount();
 			              result["profile_has_creature"] = profiles.CurrentProfileHasCreature();
 		              }
+		              return QueryResult::Value(std::move(result));
+	              });
+	provider->Add(Query("profile_folder", "The profile folder, the folder of the player played in it, and whether that "
+	                                      "folder holds the help record (helpstats.dat)"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = Json::object();
+		              if (!Locator::profileFolderSystem::has_value())
+		              {
+			              return QueryResult::Value(std::move(result));
+		              }
+		              const auto& folder = Locator::profileFolderSystem::value();
+		              const auto root = folder.GetFolder();
+		              result["folder"] = root.has_value() ? Json(root->generic_string()) : Json(nullptr);
+		              const auto profile = Locator::playerProfileSystem::has_value()
+		                                       ? Locator::playerProfileSystem::value().GetCurrentProfile()
+		                                       : std::nullopt;
+		              const auto player = profile.has_value() ? gui::ToUtf16(profile->name) : std::u16string {};
+		              const auto playerFolder = folder.GetPlayerFolder(player);
+		              result["player_folder"] = playerFolder.has_value() ? Json(playerFolder->generic_string()) : Json(nullptr);
+		              const auto record = folder.ReadPlayerFile(player, "helpstats.dat");
+		              result["help_record_bytes"] = record.has_value() ? Json(record->size()) : Json(nullptr);
 		              return QueryResult::Value(std::move(result));
 	              });
 	provider->Add(Query("list", "The players: their entities, primary creatures and alignment", {}, ResultKind::List),

@@ -152,6 +152,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerBreeding.h"
 #include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
@@ -166,6 +167,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
@@ -189,6 +191,7 @@
 #include "Gestures/GesturePaths.h"
 #include "Gui/GameInterface.h"
 #include "Gui/TextDatabase.h"
+#include "Help/HelpProfileFile.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
@@ -549,6 +552,41 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	{
 		ecs::villager_disciple::SetType(entity, object.disciple);
 	}
+}
+
+/// The game writes the help record of the player to their folder in the profile folder, then reads it again
+std::string CheckProfileFolder()
+{
+	if (!Locator::profileFolderSystem::has_value() || !Locator::helpProfileSystem::has_value() ||
+	    !Locator::playerProfileSystem::has_value())
+	{
+		return "failed: no profile folder";
+	}
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	if (!profile.has_value())
+	{
+		return "failed: no player profile";
+	}
+	const auto player = gui::ToUtf16(profile->name);
+	auto& folder = Locator::profileFolderSystem::value();
+	auto& record = Locator::helpProfileSystem::value();
+	const auto written = help::profile::ToFileBytes(record.Get());
+	if (!record.SaveRecord(folder, player))
+	{
+		return "failed: the game could not write the help record";
+	}
+	const auto read = folder.ReadPlayerFile(player, help::profile::k_FileName);
+	const auto path = (*folder.GetPlayerFolder(player) / help::profile::k_FileName).generic_string();
+	if (!read.has_value() || *read != written)
+	{
+		return fmt::format("failed: {} does not hold the help record", path);
+	}
+	record.LoadRecord(folder, player);
+	if (help::profile::ToFileBytes(record.Get()) != written)
+	{
+		return "failed: the help record changed when the game read it again";
+	}
+	return fmt::format("passed: {} holds the help record ({} bytes) and reads back the same", path, read->size());
 }
 } // namespace
 
@@ -2105,6 +2143,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
 		return;
 	}
+	if (command.kind == Kind::ProfileFolderCheck)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), CheckProfileFolder()));
+		return;
+	}
 	if (command.kind == Kind::PlayBoatFilm)
 	{
 		Log(fmt::format("{:.1f}s: {}", _seconds, PlayBoatFilm(command)));
@@ -2486,6 +2529,7 @@ void Runner::Give(const Command& command)
 	case Kind::WideScreen:
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
+	case Kind::ProfileFolderCheck:
 	case Kind::RunText:
 	case Kind::ReadTip:
 	case Kind::LookAtTempleScroll:

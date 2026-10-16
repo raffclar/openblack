@@ -11,6 +11,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <string_view>
 
 /// openblack's own folder for what it writes for the player, apart from the game's folder, which it never writes to
 namespace openblack::user_data
@@ -19,7 +20,11 @@ namespace openblack::user_data
 /// The user's folder for openblack, made if it isn't there yet; none when the system has none to give
 [[nodiscard]] std::optional<std::filesystem::path> Folder();
 
-/// Where the player's creature is kept between lands, laid out as the game lays out its own folder
-[[nodiscard]] std::optional<std::filesystem::path> CreatureMindFolder();
+/// The name of the profile folder
+constexpr std::string_view k_ProfileFolderName = "Profiles";
+
+/// The profile folder, which keeps the files that the game writes for its players. It is in the working folder of the
+/// game. This does not make the folder. There is no folder when the system cannot give the working folder.
+[[nodiscard]] std::optional<std::filesystem::path> ProfileFolder();
 
 } // namespace openblack::user_data
