@@ -289,8 +289,9 @@ void AddMenuTattooEditor(std::vector<Scenario>& all)
 	                   "button.",
 	    .expected = "The menu fades out and the tattoo editor fades in with a white frame of its own. The profile's "
 	                "creature, or a Giant Ape when the profile keeps no creature, stands in the middle over the world, "
-	                "seen from in front and above. It fidgets now and then, looks at the pointer for a second and a half "
-	                "after a press, and the blue heart goes into the skin of its chest. The view turns round it. "
+	                "seen from in front and above. Its hair hangs from it and swings as it moves. It fidgets now and "
+	                "then, looks at the pointer for a second and a half after a press, and the blue heart goes into the skin "
+	                "of its chest. The view turns round it. "
 	                "Cancel takes the tattoo off again and the menu comes back.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {Player({0.0f, 40.0f}, "yours")},

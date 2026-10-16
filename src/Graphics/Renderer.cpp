@@ -2036,6 +2036,12 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components
 
 void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin) const
 {
+	DrawCreatureHair(desc, hair, origin, TranslucentPassOf(desc.viewId), desc.camera->GetOrigin());
+}
+
+void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin,
+                                RenderPass pass, glm::vec3 eye) const
+{
 	using ecs::components::CreatureHair;
 	const auto& textures = Locator::resources::value().GetTextures();
 	struct Vertex
@@ -2054,8 +2060,7 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 		return layout;
 	}();
 	const bool hasTexture = textures.Contains(CreatureHair::k_TextureId) && textures.Contains(CreatureHair::k_AlphaTextureId);
-	const auto eye = desc.camera->GetOrigin();
-	const auto viewId = static_cast<bgfx::ViewId>(TranslucentPassOf(desc.viewId));
+	const auto viewId = static_cast<bgfx::ViewId>(pass);
 	const auto* program = _shaderManager->GetShader("CreatureHair");
 	// The hair takes the land's light and colour under the creature, and the haze at it, as its body does
 	const auto extent = Locator::terrainSystem::value().GetExtent();
