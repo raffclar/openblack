@@ -123,12 +123,13 @@ enum class ApproachStep : uint8_t
 {
 	/// The thing is in reach: the animations start
 	Begin,
-	/// Near enough, it only turns so that the thing lies where its reach is middling
+	/// Near enough, it only turns so that the thing lies where its reach is middling. It turns one time after each
+	/// walk, then it walks again: the game never turns in place to get a thing in reach.
 	Turn,
 	/// It walks again to the thing
 	Walk,
 };
-[[nodiscard]] ApproachStep NextApproachStep(bool inReach, bool nearEnoughToTurn);
+[[nodiscard]] ApproachStep NextApproachStep(bool inReach, bool nearEnoughToTurn, bool turnedSinceWalk);
 
 /// The kicking animation
 constexpr size_t k_KickAnimation = 117;

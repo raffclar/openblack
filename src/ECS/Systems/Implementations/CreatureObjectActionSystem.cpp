@@ -918,8 +918,10 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		Fail(action, "it found no route", creature_object_actions::Failure::NoRoute);
 		return;
 	}
-	// The walk stopped because the creature is shut in. The mind clears the way first, so the walk starts again only on
-	// the next turn. When nothing takes the stop by then, the walk starts again.
+	// The walk stopped because the creature is shut in. In the game, the creature clears the way at the moment that the
+	// walk stops, and the step starts a new walk only on its next turn. Here the mind finds the stop on its next turn,
+	// so the hands wait for that turn. Then the cleared way or the new walk starts on the same turn as in the game. When
+	// nothing takes the stop by then, the walk starts again.
 	if (auto* walk = registry.TryGet<CreatureLocomotion>(creature); walk != nullptr && walk->gaveUp.has_value())
 	{
 		if (!std::exchange(action.waitedForWay, true))
@@ -988,8 +990,8 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	const auto ideal = std::max(glm::length(glm::vec2(centre.x, centre.z)), k_Tiny);
 	const auto distance = glm::length(glm::vec2(local.x, local.z));
 	// It continues until the thing is in reach or the action fails, with no limit to its walks
-	switch (creature_object_actions::NextApproachStep(reach.blend.inRange,
-	                                                  std::abs(distance - ideal) <= ideal * k_TurnInReachShare))
+	switch (creature_object_actions::NextApproachStep(
+	    reach.blend.inRange, std::abs(distance - ideal) <= ideal * k_TurnInReachShare, action.turnedSinceWalk))
 	{
 	case creature_object_actions::ApproachStep::Begin:
 	{
@@ -1002,6 +1004,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	}
 	case creature_object_actions::ApproachStep::Turn:
 		++action.attempts;
+		action.turnedSinceWalk = true;
 		locomotion.TurnToFace(creature, FacingToReach(transform, *action.reach, at->position));
 		return;
 	case creature_object_actions::ApproachStep::Walk:
@@ -1014,6 +1017,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	switch (creature_cast_moves::WalkStartOf(result == MoveResult::Started, result != MoveResult::InvalidDestination))
 	{
 	case creature_cast_moves::WalkStart::Walking:
+		action.turnedSinceWalk = false;
 		break;
 	case creature_cast_moves::WalkStart::TryAgain:
 		// The creature cannot walk now: it asks again on the next turn

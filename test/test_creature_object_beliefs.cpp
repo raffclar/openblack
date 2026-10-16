@@ -375,9 +375,11 @@ TEST(CreatureObjectBeliefs, AWalkUpToAThingContinuesUntilTheThingIsInReach)
 {
 	using openblack::creature_object_actions::ApproachStep;
 	using openblack::creature_object_actions::NextApproachStep;
-	EXPECT_EQ(NextApproachStep(true, false), ApproachStep::Begin);
-	EXPECT_EQ(NextApproachStep(true, true), ApproachStep::Begin);
-	EXPECT_EQ(NextApproachStep(false, true), ApproachStep::Turn);
+	EXPECT_EQ(NextApproachStep(true, false, false), ApproachStep::Begin);
+	EXPECT_EQ(NextApproachStep(true, true, true), ApproachStep::Begin);
+	EXPECT_EQ(NextApproachStep(false, true, false), ApproachStep::Turn);
+	// A turn that did not get the thing in reach is followed by a walk, never by a second turn
+	EXPECT_EQ(NextApproachStep(false, true, true), ApproachStep::Walk);
 	// Out of reach, it walks again, however many times it walked before: there is no step that gives up
-	EXPECT_EQ(NextApproachStep(false, false), ApproachStep::Walk);
+	EXPECT_EQ(NextApproachStep(false, false, false), ApproachStep::Walk);
 }
