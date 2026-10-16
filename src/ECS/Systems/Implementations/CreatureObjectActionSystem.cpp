@@ -86,6 +86,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Graveyards.h"
@@ -703,6 +704,16 @@ void StopWalking(ecs::Registry& registry, entt::entity entity)
 	                MoveStateFinalStepTag, MoveStateArrivedTag>(entity);
 }
 
+/// A person taken into the hand is drawn in the hand from this frame on, not where its drawing put it on the land
+void DrawInHand(ecs::Registry& registry, entt::entity entity)
+{
+	if (auto* pose = registry.TryGet<VillagerPose>(entity))
+	{
+		pose->drawnAt.reset();
+		pose->drawnHeading.reset();
+	}
+}
+
 /// The blend of the four reaching animations for a target now, mirrored when it lies to the creature's left
 struct Reach
 {
@@ -775,6 +786,7 @@ void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity obj
 	{
 		ecs::villager_physics::IntoHand(object);
 		StopWalking(registry, object);
+		DrawInHand(registry, object);
 	}
 	else if (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value())
 	{
@@ -2623,6 +2635,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			if (registry.AllOf<Villager>(object))
 			{
 				StopWalking(registry, object);
+				DrawInHand(registry, object);
 			}
 			action.status = Status::Contact;
 			break;

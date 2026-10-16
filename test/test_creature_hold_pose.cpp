@@ -13,11 +13,15 @@
 #include <optional>
 #include <vector>
 
+#include <glm/gtx/transform.hpp>
+#include <glm/mat3x3.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/SkeletalAnimation.h"
 #include "Creature/CreatureObjectActions.h"
+#include "ECS/Components/Transform.h"
 
 using namespace openblack;
 using creature_object_actions::Kind;
@@ -106,4 +110,32 @@ TEST(CreatureHoldPose, MirroredLayerTurnsTheMirrorBoneReflected)
 	ExpectNear(poses[1].rotation, sa::k_Identity);
 	ExpectNear(poses[0].rotation, sa::k_Identity);
 	EXPECT_EQ(poses[2].translation, glm::vec3(1.0f));
+}
+
+TEST(CreatureHoldPose, HeldThingIsDrawnAtItsPositionWhenTheTurnIsNotARotation)
+{
+	// A hand's turn after animations are blended: each axis has unit length, but the axes are not square to each other
+	const glm::mat3 skewed(glm::normalize(glm::vec3(1.0f, 0.3f, 0.0f)), glm::normalize(glm::vec3(0.2f, 1.0f, 0.1f)),
+	                       glm::vec3(0.0f, 0.0f, 1.0f));
+	const glm::vec3 position {2554.0f, 31.0f, 2550.0f};
+	const auto matrix = ecs::components::PlacedMatrix(position, skewed, glm::vec3(2.0f));
+	EXPECT_EQ(glm::vec3(matrix[3]), position);
+	EXPECT_EQ(glm::vec3(matrix[0]), skewed[0] * 2.0f);
+	EXPECT_EQ(glm::vec3(matrix[1]), skewed[1] * 2.0f);
+}
+
+TEST(CreatureHoldPose, PlacedMatrixScalesThenTurnsThenMoves)
+{
+	const auto turn = glm::mat3(glm::rotate(0.7f, glm::vec3(0.0f, 1.0f, 0.0f)));
+	const glm::vec3 position {10.0f, 2.0f, -4.0f};
+	const glm::vec3 scale {1.5f, 1.5f, 1.5f};
+	const auto expected = glm::translate(position) * glm::mat4(turn) * glm::scale(scale);
+	const auto matrix = ecs::components::PlacedMatrix(position, turn, scale);
+	for (glm::length_t c = 0; c < 4; ++c)
+	{
+		for (glm::length_t r = 0; r < 4; ++r)
+		{
+			EXPECT_NEAR(matrix[c][r], expected[c][r], 1e-5f);
+		}
+	}
 }
