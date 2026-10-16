@@ -400,6 +400,25 @@ void AddFoundation(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.creature_phial_in_hand",
+	    .name = "A creature spell's phial after its cast",
+	    .facet = Facet::Miracles,
+	    .description = "A freeze phial pressed onto a creature by hand, the button held for eight seconds.",
+	    .expected = "The phial casts on the creature and stays in the hand, linked to its spell, for four seconds; then "
+	                "it leaves the hand, out of sight (the log tells when), and goes with the spell.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {Subject(k_Spot, "spellbound")},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze,
+	                  .target = Target::Creature,
+	                  .creature = 0,
+	                  .handOffset = {0.0f, 25.0f},
+	                  .delaySeconds = 1.0f,
+	                  .holdSeconds = 8.0f,
+	                  .byHand = true}},
+	});
+
+	all.push_back({
 	    .id = "miracles.area_effect",
 	    .name = "A miracle's effect over everyone it reaches",
 	    .facet = Facet::Miracles,

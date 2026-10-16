@@ -1369,6 +1369,27 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 	}
 }
 
+void Runner::PointAtBody(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.TryGet<const ecs::components::Transform>(creature);
+	const auto* mesh = registry.TryGet<const ecs::components::Mesh>(creature);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id) || !Locator::windowing::has_value())
+	{
+		return;
+	}
+	// The middle of the body's bounding box, as it stands now
+	const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const auto middle = glm::vec3(model * glm::vec4(meshes.Handle(mesh->id)->GetBoundingBox().Center(), 1.0f));
+	const auto size = glm::vec2(Locator::windowing::value().GetSize());
+	glm::vec3 pixel;
+	if (Locator::camera::value().ProjectWorldToScreen(middle, {0.0f, 0.0f, size.x, size.y}, pixel))
+	{
+		Game::Instance()->SetMousePosition(glm::ivec2(glm::round(glm::vec2(pixel))));
+	}
+}
+
 std::optional<entt::entity> Runner::CreatureAt(size_t index) const
 {
 	if (index >= _creatures.size() || !Locator::entitiesRegistry::has_value())
@@ -3096,6 +3117,14 @@ void Runner::UpdateMiracles(float seconds)
 		const auto& setup = _scenario->miracles.at(i);
 		if (setup.byHand)
 		{
+			// A cast on a creature takes the creature under the pointer, so the pointer stays on the creature's body
+			if (setup.target == MiracleCast::Target::Creature && (miracle.pressAt.has_value() || miracle.releaseAt.has_value()))
+			{
+				if (const auto creature = CreatureAt(setup.creature))
+				{
+					PointAtBody(*creature);
+				}
+			}
 			// The button goes down once the hand is over the point, and comes up after the hold, the hand moving meanwhile
 			if (miracle.pressAt.has_value() && _seconds >= *miracle.pressAt)
 			{
