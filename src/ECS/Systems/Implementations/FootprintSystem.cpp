@@ -116,9 +116,14 @@ void FootprintSystem::Step(entt::entity creature)
 	{
 		return;
 	}
-	// The print comes from the pose of the last frame that drew the land. A creature not yet drawn uses its pose now.
+	// The print comes from the pose of the last frame that drew the land
 	const auto* drawn = registry.TryGet<const CreatureDrawnFeet>(creature);
-	const auto feet = drawn != nullptr ? std::optional(*drawn) : FeetNow(registry, creature);
+	const auto asFeet = [](const CreatureDrawnFeet& pose) {
+		return creature_footprints::Feet {.right = pose.right, .left = pose.left};
+	};
+	const auto now = FeetNow(registry, creature);
+	const auto feet = creature_footprints::FeetForPrint(drawn != nullptr ? std::optional(asFeet(*drawn)) : std::nullopt,
+	                                                    now.has_value() ? std::optional(asFeet(*now)) : std::nullopt);
 	if (!feet.has_value())
 	{
 		return;

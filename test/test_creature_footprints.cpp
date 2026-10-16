@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <numbers>
+#include <optional>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -108,6 +109,24 @@ TEST(CreatureFootprints, LowerFootGetsThePrint)
 	EXPECT_FALSE(LeftIsLower(right, highLeft));
 	// Level feet favour the right
 	EXPECT_FALSE(LeftIsLower(right, Foot {.position = {1.0f, 1.0f, 0.0f}, .yaw = 0.0f}));
+}
+
+TEST(CreatureFootprints, APrintComesFromThePoseThatTheLastFrameDrew)
+{
+	const auto pose = [](float height) {
+		return Feet {.right = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, height, 0.0f)),
+		             .left = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, height + 1.0f, 0.0f))};
+	};
+	// The pose of this turn moved the feet. The print still comes from the pose that the last frame drew.
+	const auto drawn = FeetForPrint(pose(2.0f), pose(5.0f));
+	ASSERT_TRUE(drawn.has_value());
+	ExpectNear(FootOf(drawn->right).position, {0.0f, 2.0f, 0.0f});
+	// No frame drew the creature yet: the print comes from its pose now
+	const auto now = FeetForPrint(std::nullopt, pose(5.0f));
+	ASSERT_TRUE(now.has_value());
+	ExpectNear(FootOf(now->right).position, {0.0f, 5.0f, 0.0f});
+	// A creature with no feet lays no print
+	EXPECT_FALSE(FeetForPrint(std::nullopt, std::nullopt).has_value());
 }
 
 TEST(CreatureFootprints, FootReadFromItsMatrix)

@@ -13,6 +13,7 @@
 
 #include <array>
 #include <functional>
+#include <optional>
 #include <vector>
 
 #include <glm/mat4x4.hpp>
@@ -97,6 +98,16 @@ struct Foot
 };
 /// A foot read from its bone's world matrix: the bone's origin, and its turn about the up axis
 [[nodiscard]] Foot FootOf(const glm::mat4& world);
+
+/// The world matrices of the two feet of a creature, the right foot first
+struct Feet
+{
+	glm::mat4 right {1.0f};
+	glm::mat4 left {1.0f};
+};
+/// The feet that a footstep lays its print from. The print comes from the pose that the last frame drew. A creature that
+/// no frame drew yet uses its pose now.
+[[nodiscard]] std::optional<Feet> FeetForPrint(const std::optional<Feet>& drawn, const std::optional<Feet>& now);
 
 /// Which foot a print goes under: the lower, the left only when it is lower than the right
 [[nodiscard]] constexpr bool LeftIsLower(const Foot& right, const Foot& left)
