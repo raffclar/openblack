@@ -57,6 +57,8 @@ constexpr float k_RowSpacing = 32.0f;
 constexpr float k_HoursPerDay = 24.0f;
 /// Offsets further from the middle of the map than this would be off it
 constexpr float k_MaxOffset = 2400.0f;
+/// A leash order can name a place off the map, as the player can, but no further than this from the middle
+constexpr float k_MaxOrderOffset = 2.0f * k_MaxOffset;
 /// A command that waits for its creature to be free first gives the last command this long to get it going
 constexpr float k_SettleSeconds = 0.5f;
 /// The last stage of growing up, and how many skills, miracles and deeds to copy the game's tables have
@@ -4918,10 +4920,11 @@ void AddCombat(std::vector<Scenario>& all)
 	    .name = "The leash pulls a creature out of its fight",
 	    .facet = Facet::Leash,
 	    .description = "The player's red tiger wears the learning leash held in the hand and fights a blue tiger, both "
-	                   "by themselves. Hold the hand near the red tiger, then move it well away so the rope pulls taut.",
-	    .expected = "With the hand near, the rope hangs slack and the duel goes on. Pulled taut, the red tiger is "
-	                "taken out of the fight: the fight is called off with no winner, the help says \"You pulled your "
-	                "Creature away from what he was trying to do.\" and the red tiger walks to the hand.",
+	                   "by themselves. Hold the hand near the red tiger, then move it further away than the full length of the "
+	                   "leash.",
+	    .expected = "With the hand near, the rope hangs slack and the duel goes on. With the hand further away than the "
+	                "full length of the leash, the red tiger is taken out of the fight: the fight is called off with "
+	                "no winner and the red tiger walks back to the hand. The help says nothing.",
 	    .framing = ringside,
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
 	    .commands = {Leash(0, LeashType::Rope, 0.5f), Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
@@ -5000,8 +5003,8 @@ void AddCombat(std::vector<Scenario>& all)
 	                   "the hand well away from the red tiger.",
 	    .expected = "The fight is called off with no winner: both tigers finish the move they are making, play their "
 	                "finish and stand, without celebrating or sulking; the ring of light goes. The red tiger then walks "
-	                "to the point. Pulled away by the leash instead, the help says \"You pulled your Creature away from "
-	                "what he was trying to do.\"",
+	                "to the point. Pulled further than the full length of the leash instead, the red tiger leaves the "
+	                "fight and walks back to the hand, and the help says nothing.",
 	    .framing = ringside,
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
 	    .commands = {Leash(0, LeashType::Rope, 0.5f), Fight(Kind::StartFight, 0, 1, 0.5f), Fight(Kind::FightAuto, 0, 1, 0.2f),
@@ -5359,6 +5362,32 @@ void AddMind(std::vector<Scenario>& all)
 	    .objects = {{.type = AnimalInfo::Cow, .offset = {30.0f, 60.0f}}},
 	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 2.0f, false),
 	                 OnObject(Kind::RemoveObject, 0, 0, 9.0f, false), Act(Kind::TakeOffLeash, 0, 8.0f)},
+	});
+
+	// The help explains why an order fails, says what the creature wants, and tells what a stroke taught it
+	all.push_back({
+	    .id = "mind.help_explanations",
+	    .name = "The help explains what the creature does and learns",
+	    .facet = Facet::Mind,
+	    .description = "The pointer goes high in the sky, away from the tiger. A grown-up tiger on the learning leash is "
+	                   "told with the Action button to go to a place off the land, then to act on a cow. The leash comes "
+	                   "off, and the player strokes it twice.",
+	    .expected = "The order off the land gets no acknowledge sound and no marker, and the help says: \"Your "
+	                "Creature wasn't able to get to his destination because it is inaccessible.\" Told to act on the "
+	                "cow, the help says what the tiger wants: \"Your Creature is feeling curious.\" After the strokes, "
+	                "the good advisor comes out, looks at the tiger and says what the stroke taught it about the source of "
+	                "what it did last, such as \"From now on, your Creature will want to look around more.\" or \"From "
+	                "now on, your Creature will pay more attention to you.\" Each line has its voice.",
+	    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+	    .creatures = {grown},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {30.0f, 60.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.9f, 0.1f}},
+	                 Leash(0, LeashType::Rope, 0.5f),
+	                 Go(Kind::LeashOrderAt, 0, {4800.0f, 4800.0f}, 2.0f, false),
+	                 OnObject(Kind::LeashOrderOn, 0, 0, 10.0f, false),
+	                 Act(Kind::TakeOffLeash, 0, 8.0f),
+	                 Act(Kind::Stroke, 0, 9.5f),
+	                 Act(Kind::Stroke, 0, 4.0f)},
 	});
 
 	auto curious = Content(CreatureType::Tiger, {0.0f, 20.0f});
@@ -6892,7 +6921,10 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		{
 			problems.push_back(fmt::format("{}: runs no script, or hands it what the scenario hasn't", what));
 		}
-		if (!ValidOffset(command.point) || command.delaySeconds < 0.0f || !InRange(command.hour, 0.0f, k_HoursPerDay))
+		const bool offMapOrder = command.kind == Kind::LeashOrderAt && std::abs(command.point.x) <= k_MaxOrderOffset &&
+		                         std::abs(command.point.y) <= k_MaxOrderOffset;
+		if ((!ValidOffset(command.point) && !offMapOrder) || command.delaySeconds < 0.0f ||
+		    !InRange(command.hour, 0.0f, k_HoursPerDay))
 		{
 			problems.push_back(fmt::format("{}: point, delay or hour out of range", what));
 		}
