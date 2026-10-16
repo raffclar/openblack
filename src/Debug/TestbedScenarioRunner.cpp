@@ -2519,7 +2519,6 @@ void Runner::Give(const Command& command)
 		auto* found = registry.TryGet<ecs::components::CreatureFightRecord>(*entity);
 		auto& record = found != nullptr ? *found : registry.Assign<ecs::components::CreatureFightRecord>(*entity);
 		record.tendency = command.amount;
-		record.foughtBefore = true;
 		result = fmt::format("leans {:+.2f}", record.tendency);
 		break;
 	}

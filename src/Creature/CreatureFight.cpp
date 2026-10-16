@@ -462,6 +462,16 @@ float creature_fight::FirstTendency(float alignment)
 	return std::clamp(-alignment, -1.0f, 1.0f);
 }
 
+bool creature_fight::LearnsFromMove(Move::Kind kind, bool humanPlayers)
+{
+	return kind == Move::Kind::Animation || humanPlayers;
+}
+
+float creature_fight::TendencyAtStart(uint32_t fightsCompleted, float learnt, float alignment)
+{
+	return fightsCompleted == 0 ? FirstTendency(alignment) : learnt;
+}
+
 float creature_fight::FightHealthAtStart(float life)
 {
 	return (life + 1.0f) * 0.5f;

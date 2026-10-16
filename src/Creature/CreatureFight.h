@@ -314,12 +314,18 @@ private:
 
 // Learning to fight
 
-/// How the creature leans in fights, from -1 (defensive) to 1 (aggressive). Each move a human player's creature makes
-/// nudges it as the move is made, whoever asked for it: a block or a step towards defence, a blow or the special move
-/// towards attack; a miracle leaves it be.
+/// How the creature leans in fights, from -1 (defensive) to 1 (aggressive). A move nudges it as the move is made,
+/// whoever asked for it: a block or a step towards defence, a blow or the special move towards attack; a miracle leaves
+/// it be. See LearnsFromMove for the creatures that learn.
 [[nodiscard]] float LearnTendency(float tendency, Move::Kind kind);
+/// Whether a move teaches a creature to lean: a step teaches every creature, the other moves teach only the human
+/// player's creature
+[[nodiscard]] bool LearnsFromMove(Move::Kind kind, bool humanPlayers);
 /// A creature's first fight starts it leaning against its alignment: evil creatures attack, good ones defend
 [[nodiscard]] float FirstTendency(float alignment);
+/// The lean a creature has learnt, as it starts a fight that it asked for. Until it completes a fight (a knock-out or a
+/// fight that a script controls does not count), each fight that it starts sets the lean against its alignment again.
+[[nodiscard]] float TendencyAtStart(uint32_t fightsCompleted, float learnt, float alignment);
 
 // Health, stamina and fainting
 
@@ -531,6 +537,7 @@ struct Fighter
 	float stamina {1.0f};
 	Control control {Control::Computer};
 	float computerWaitMs {k_ComputerWaitsAtStartMs};
+	/// The lean that the computer chooses its moves by. It does not change during the fight.
 	float tendency {0.0f};
 };
 /// Plays a state, with an action's animation and speed

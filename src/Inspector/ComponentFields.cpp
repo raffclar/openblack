@@ -696,7 +696,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFighting::ended>("ended");
 	Reflect<components::CreatureFightRecord>(context)
 	    .Field<&components::CreatureFightRecord::tendency>("tendency")
-	    .Field<&components::CreatureFightRecord::foughtBefore>("foughtBefore")
+	    .Field<&components::CreatureFightRecord::choosingTendency>("choosingTendency")
 	    .Field<&components::CreatureFightRecord::fights>("fights")
 	    .Field<&components::CreatureFightRecord::wins>("wins")
 	    .Field<&components::CreatureFightRecord::control>("control")
