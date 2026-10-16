@@ -46,6 +46,8 @@ struct MoteVertex
 
 UnderwaterView::UnderwaterView()
 {
+	_environmentFaces.fill(BGFX_INVALID_HANDLE);
+	_environmentSkyFaces.fill(BGFX_INVALID_HANDLE);
 	bgfx::VertexLayout layout;
 	layout.begin()
 	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
@@ -82,6 +84,23 @@ UnderwaterView::UnderwaterView()
 
 UnderwaterView::~UnderwaterView()
 {
+	for (auto* faces : {&_environmentFaces, &_environmentSkyFaces})
+	{
+		for (auto& face : *faces)
+		{
+			if (bgfx::isValid(face))
+			{
+				bgfx::destroy(face);
+			}
+		}
+	}
+	for (auto* texture : {&_environmentColour, &_environmentDepth, &_environmentSky, &_environmentSkyDepth})
+	{
+		if (bgfx::isValid(*texture))
+		{
+			bgfx::destroy(*texture);
+		}
+	}
 	if (bgfx::isValid(_sprayNoise))
 	{
 		bgfx::destroy(_sprayNoise);
@@ -615,4 +634,64 @@ bool UnderwaterView::BindWaterspouts(std::span<const glm::vec4> spouts)
 	bgfx::setIndexBuffer(_spoutIndices);
 	bgfx::setInstanceDataBuffer(&instances);
 	return true;
+}
+
+bgfx::FrameBufferHandle UnderwaterView::EnvironmentFace(uint8_t face)
+{
+	if (!bgfx::isValid(_environmentColour))
+	{
+		constexpr auto k_Size = underwater::k_EnvironmentSize;
+		constexpr uint64_t k_Sampled = BGFX_TEXTURE_RT | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP | BGFX_SAMPLER_W_CLAMP;
+		// The view of the scene copies the face of the sky into this cube before it draws the scene over it
+		_environmentColour =
+		    bgfx::createTextureCube(k_Size, false, 1, bgfx::TextureFormat::RGBA8, k_Sampled | BGFX_TEXTURE_BLIT_DST);
+		bgfx::setName(_environmentColour, "Underwater Environment");
+		_environmentSky = bgfx::createTextureCube(k_Size, false, 1, bgfx::TextureFormat::RGBA8, k_Sampled);
+		bgfx::setName(_environmentSky, "Underwater Environment Sky");
+		_environmentSkyDepth = bgfx::createTextureCube(k_Size, false, 1, bgfx::TextureFormat::D32F, BGFX_TEXTURE_RT_WRITE_ONLY);
+		// The depth is read too: it gives how far away each texel's scene is, for the reflection's parallax
+		_environmentDepth = bgfx::createTextureCube(k_Size, false, 1, bgfx::TextureFormat::D32F,
+		                                            k_Sampled | BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT);
+		bgfx::setName(_environmentDepth, "Underwater Environment Depth");
+		for (uint8_t i = 0; i < underwater::k_EnvironmentFaces; ++i)
+		{
+			std::array<bgfx::Attachment, 2> attachments {};
+			attachments.at(0).init(_environmentColour, bgfx::Access::Write, i, 1, 0, BGFX_RESOLVE_NONE);
+			attachments.at(1).init(_environmentDepth, bgfx::Access::Write, i, 1, 0, BGFX_RESOLVE_NONE);
+			_environmentFaces.at(i) = bgfx::createFrameBuffer(static_cast<uint8_t>(attachments.size()), attachments.data());
+			std::array<bgfx::Attachment, 2> sky {};
+			sky.at(0).init(_environmentSky, bgfx::Access::Write, i, 1, 0, BGFX_RESOLVE_NONE);
+			sky.at(1).init(_environmentSkyDepth, bgfx::Access::Write, i, 1, 0, BGFX_RESOLVE_NONE);
+			_environmentSkyFaces.at(i) = bgfx::createFrameBuffer(static_cast<uint8_t>(sky.size()), sky.data());
+		}
+	}
+	++_environmentDrawn;
+	return _environmentFaces.at(face % underwater::k_EnvironmentFaces);
+}
+
+TextureHandle UnderwaterView::EnvironmentColour() const
+{
+	return fromBgfx(_environmentColour);
+}
+
+TextureHandle UnderwaterView::EnvironmentDepth() const
+{
+	return fromBgfx(_environmentDepth);
+}
+
+TextureHandle UnderwaterView::EnvironmentSky() const
+{
+	return fromBgfx(_environmentSky);
+}
+
+bgfx::FrameBufferHandle UnderwaterView::EnvironmentSkyFace(uint8_t face) const
+{
+	return _environmentSkyFaces.at(face % underwater::k_EnvironmentFaces);
+}
+
+uint8_t UnderwaterView::NextEnvironmentFace()
+{
+	const uint8_t face = _environmentFace;
+	_environmentFace = underwater::NextEnvironmentFace(face);
+	return face;
 }

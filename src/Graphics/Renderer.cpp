@@ -5509,6 +5509,9 @@ void Renderer::DrawScene(const DrawSceneDesc& requestedDesc) const noexcept
 		}
 	}
 
+	// EXPERIMENT (not for merge): the far scene round the eye, which the water reflects
+	DrawUnderwaterEnvironment(drawDesc);
+
 	// Main Draw Pass
 	{
 		auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::MainPass);

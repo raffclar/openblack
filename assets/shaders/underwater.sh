@@ -156,11 +156,45 @@ vec2 UwWaveSets(vec2 p, float t)
 	return vec2((0.45f + 1.1f * sets * sets) * patches, 0.5f + 1.0f * swellSets);
 }
 
-// The height of the waves over the sea's level at a point, and the slope of the surface there. The short waves fade
-// far away, where they would be smaller than a pixel: `range` is how far the point is from the eye.
-float UwWaves(vec2 p, float t, float range, out vec2 slope)
+// The far sea. x: 1 while the waves are filtered for each pixel, y: 1 while the long waves show, z: the angle that one
+// pixel takes up on the screen (radians), w: 1 while the water reflects the cube of the far scene
+uniform vec4 u_uwSea;
+// The long waves of the open sea, the same table as underwater::FarWaveTable, as u_uwWaveTable keeps them
+uniform vec4 u_uwFarWaves[3];
+
+// The size of a pixel on the water, for the waves that it can show. x: the size across the view; yz: the direction of
+// the view along the ground; w: how many times longer the pixel is along the view than across it. This gives a round
+// pixel of the old size for a point at a distance from the eye.
+vec4 UwFootprint(float range)
+{
+	return vec4(0.0015f * max(range, 1.0f), 1.0f, 0.0f, 1.0f);
+}
+
+// The size of a pixel on the water along a direction
+float UwFootprintAlong(vec4 footprint, vec2 along)
+{
+	float lengthwise = dot(along, footprint.yz) * footprint.w;
+	float across = along.x * footprint.z - along.y * footprint.y;
+	return footprint.x * sqrt(lengthwise * lengthwise + across * across);
+}
+
+// The share of a wave that a pixel shows, the same as underwater::FilterWave. x: the share of its height, y: the share
+// of its slope. A wave shorter than about four pixels loses its height, and one shorter than about three pixels loses
+// its slope too. Without the filter both fade as the height does.
+vec2 UwWaveShown(float length, float pixel)
+{
+	float height = smoothstep(pixel * 4.0f, pixel * 8.0f, length);
+	float slope = u_uwSea.x > 0.5f ? smoothstep(pixel * 2.0f, pixel * 4.0f, length) : height;
+	return vec2(height, slope);
+}
+
+// The height of the waves over the sea's level at a point, and the slope of the surface there, as a pixel of the
+// size `footprint` (see UwFootprint) shows them. `variance` is the variance of the slope that the pixel cannot show,
+// which makes the surface rougher.
+float UwWavesFiltered(vec2 p, float t, vec4 footprint, out vec2 slope, out float variance)
 {
 	slope = vec2_splat(0.0f);
+	variance = 0.0f;
 	vec2 sets = UwWaveSets(p, t);
 	float sharp = 1.0f + 1.5f * u_uwWaves.y;
 	float height = 0.0f;
@@ -170,16 +204,47 @@ float UwWaves(vec2 p, float t, float range, out vec2 slope)
 		vec2 along = vec2(cos(wave.x), sin(wave.x));
 		float k = 6.2831853f / wave.y;
 		float omega = sqrt(9.8f * k) * 0.8f;
-		// A wave shorter than about four pixels here fades out
-		float footprint = 0.0015f * max(range, 1.0f);
-		float shown = smoothstep(footprint * 4.0f, footprint * 8.0f, wave.y);
-		float a = wave.z * (i < 2 ? sets.y : sets.x) * shown;
+		float pixel = u_uwSea.x > 0.5f ? UwFootprintAlong(footprint, along) : footprint.x;
+		// A sharp crest holds shorter waves than the wave's own length: the filter takes the length of the shortest
+		vec2 shown = UwWaveShown(u_uwSea.x > 0.5f ? wave.y / sharp : wave.y, pixel);
+		float a = wave.z * (i < 2 ? sets.y : sets.x);
 		float theta = k * dot(along, p) - omega * t + wave.w;
 		float s = 0.5f + 0.5f * sin(theta);
-		height += a * (2.0f * pow(max(s, 0.0f), sharp) - 1.0f);
-		slope += along * (a * sharp * pow(max(s, 1e-4f), sharp - 1.0f) * cos(theta) * k);
+		height += a * shown.x * (2.0f * pow(max(s, 0.0f), sharp) - 1.0f);
+		slope += along * (a * shown.y * sharp * pow(max(s, 1e-4f), sharp - 1.0f) * cos(theta) * k);
+		variance += (1.0f - shown.y * shown.y) * 0.5f * (a * k) * (a * k);
+	}
+	// The long waves of the open sea: plain sine waves that rise and fall with the swell's sets
+	for (int j = 0; j < 3; j++)
+	{
+		vec4 wave = u_uwFarWaves[j];
+		vec2 along = vec2(cos(wave.x), sin(wave.x));
+		float k = 6.2831853f / max(wave.y, 1.0f);
+		float omega = sqrt(9.8f * k) * 0.8f;
+		float pixel = u_uwSea.x > 0.5f ? UwFootprintAlong(footprint, along) : footprint.x;
+		vec2 shown = UwWaveShown(wave.y, pixel);
+		float a = wave.z * sets.y;
+		float theta = k * dot(along, p) - omega * t + wave.w;
+		height += a * shown.x * sin(theta);
+		slope += along * (a * shown.y * k * cos(theta));
+		variance += (1.0f - shown.y * shown.y) * 0.5f * (a * k) * (a * k);
 	}
 	return height;
+}
+
+// The height of the waves over the sea's level at a point, and the slope of the surface there. The short waves fade
+// far away, where they would be smaller than a pixel: `range` is how far the point is from the eye.
+float UwWaves(vec2 p, float t, float range, out vec2 slope)
+{
+	float variance;
+	return UwWavesFiltered(p, t, UwFootprint(range), slope, variance);
+}
+
+// The roughness (GGX alpha) of the water at a pixel, from the variance of the slopes that the pixel cannot show, the
+// same as underwater::FilteredRoughness
+float UwRoughness(float variance)
+{
+	return min(sqrt(0.06f * 0.06f + max(variance, 0.0f)), 1.0f);
 }
 
 // How the highest of the waves is over the sea's level, for the crests' foam
@@ -259,15 +324,17 @@ float UwCliffBackwash(float distance, float t, float cliff)
 
 // The height of the sea's surface at a point: the sea's level, the deep waves, faded out near the coast and where the
 // water is shallow, and the shore wave that rolls in to the coast. One height for each point, so the water is one
-// surface from the open sea to the edge of the run up the beach. `shore` is the shore map at the point, `range` how
-// far the point is from the eye; `slope` is the surface's slope, `face` the shore wave's face.
-float UwSurface(vec2 xz, float t, float range, vec4 shore, out vec2 slope, out float face)
+// surface from the open sea to the edge of the run up the beach. `shore` is the shore map at the point, `footprint`
+// the size of the pixel on the water (see UwFootprint); `slope` is the surface's slope, `face` the shore wave's face
+// and `variance` the variance of the slope that the pixel cannot show.
+float UwSurfaceFiltered(vec2 xz, float t, vec4 footprint, vec4 shore, out vec2 slope, out float face, out float variance)
 {
 	float level = u_uwParams.z;
 	float depth = level - shore.w;
 	float deep = smoothstep(5.0f, 40.0f, shore.x) * smoothstep(0.2f, 4.0f, depth);
 	vec2 deepSlope;
-	float height = UwWaves(xz, t, range, deepSlope) * deep;
+	float height = UwWavesFiltered(xz, t, footprint, deepSlope, variance) * deep;
+	variance *= deep * deep;
 	float cliff = UwShoreCliff(shore);
 	float faceNear;
 	float wave = UwShoreWave(shore.x, xz, t, cliff, face) + UwCliffBackwash(shore.x, t, cliff);
@@ -277,6 +344,13 @@ float UwSurface(vec2 xz, float t, float range, vec4 shore, out vec2 slope, out f
 	vec2 towards = length2 > 1e-6f ? shore.yz / sqrt(length2) : vec2_splat(0.0f);
 	slope = deepSlope * deep + towards * ((nearer - wave) / 0.5f);
 	return level + height + wave;
+}
+
+// The height of the sea's surface at a point, as UwSurfaceFiltered gives it for a round pixel at `range` from the eye
+float UwSurface(vec2 xz, float t, float range, vec4 shore, out vec2 slope, out float face)
+{
+	float variance;
+	return UwSurfaceFiltered(xz, t, UwFootprint(range), shore, slope, face, variance);
 }
 
 // One swirl of the currents: the flow is the curl of a sum of these, so the water has no sinks

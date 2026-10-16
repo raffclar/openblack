@@ -220,7 +220,75 @@ underwater::WaveSample underwater::WavesAt(glm::vec2 point, float seconds, const
 		const float rise = amplitude * sharp * std::pow(std::max(s, 1e-4f), sharp - 1.0f) * std::cos(theta) * k;
 		sample.slope += along * rise;
 	}
+	// The long waves of the open sea are plain sine waves, which rise and fall with the swell's sets
+	for (const auto& wave : FarWaveTable(waves))
+	{
+		const glm::vec2 along {std::cos(wave.x), std::sin(wave.x)};
+		const float k = 2.0f * std::numbers::pi_v<float> / wave.y;
+		const float omega = std::sqrt(9.8f * k) * 0.8f;
+		const float amplitude = wave.z * sets.y;
+		const float theta = k * glm::dot(along, point) - omega * seconds + wave.w;
+		sample.height += amplitude * std::sin(theta);
+		sample.slope += along * (amplitude * k * std::cos(theta));
+	}
 	return sample;
+}
+
+std::array<glm::vec4, underwater::k_FarWaveCount> underwater::FarWaveTable(const WaveState& waves)
+{
+	// A storm makes the long waves longer and much higher, so that the storm shows far out
+	const float longer = 1.0f + 0.3f * waves.storm;
+	const float higher = (1.0f + 6.0f * waves.storm) * std::min(waves.scale, 1.0f);
+	return {{
+	    {waves.windAngle + 0.2f, 170.0f * longer, 0.12f * higher, 2.1f},
+	    {waves.windAngle - 0.35f, 240.0f * longer, 0.15f * higher, 4.9f},
+	    {k_SwellAngle + 0.4f, 330.0f * longer, 0.16f * higher, 0.4f},
+	}};
+}
+
+underwater::EnvironmentFaceAxes underwater::EnvironmentFaceAxesOf(uint8_t face)
+{
+	// The axes of a cube texture's faces, for a world with the left hand's axes
+	constexpr std::array<EnvironmentFaceAxes, k_EnvironmentFaces> k_Axes {{
+	    {.forward = {1.0f, 0.0f, 0.0f}, .up = {0.0f, 1.0f, 0.0f}},
+	    {.forward = {-1.0f, 0.0f, 0.0f}, .up = {0.0f, 1.0f, 0.0f}},
+	    {.forward = {0.0f, 1.0f, 0.0f}, .up = {0.0f, 0.0f, -1.0f}},
+	    {.forward = {0.0f, -1.0f, 0.0f}, .up = {0.0f, 0.0f, 1.0f}},
+	    {.forward = {0.0f, 0.0f, 1.0f}, .up = {0.0f, 1.0f, 0.0f}},
+	    {.forward = {0.0f, 0.0f, -1.0f}, .up = {0.0f, 1.0f, 0.0f}},
+	}};
+	return k_Axes.at(face % k_EnvironmentFaces);
+}
+
+glm::vec3 underwater::EnvironmentCentre(glm::vec3 eye, float seaLevel)
+{
+	// A little over the water, so the waves near the middle do not cover the faces that look to the sides
+	constexpr float k_OverTheWater = 1.5f;
+	return {eye.x, seaLevel + k_OverTheWater, eye.z};
+}
+
+underwater::WaveFilter underwater::FilterWave(float length, float amplitude, float footprint)
+{
+	// The surface keeps the height of a wave that is longer than about eight pixels, and fades it out under four. The
+	// normal keeps the slope of a wave that is longer than four pixels, and fades it out under two: a
+	// shorter wave would flicker from one pixel to the next.
+	const float pixel = std::max(footprint, 1e-4f);
+	const auto share = [&](float from, float to) {
+		const float x = std::clamp((length - from * pixel) / ((to - from) * pixel), 0.0f, 1.0f);
+		return x * x * (3.0f - 2.0f * x);
+	};
+	const float height = share(4.0f, 8.0f);
+	const float slope = share(2.0f, 4.0f);
+	// The mean square slope of a sine wave is half of its steepness squared
+	const float steepness = amplitude * 2.0f * std::numbers::pi_v<float> / std::max(length, 1e-3f);
+	return {.height = height, .slope = slope, .variance = (1.0f - slope * slope) * 0.5f * steepness * steepness};
+}
+
+float underwater::FilteredRoughness(float variance)
+{
+	// The roughness of the water where every wave shows: the small ripples that no wave of the table has
+	constexpr float k_CalmRoughness = 0.06f;
+	return std::min(std::sqrt(k_CalmRoughness * k_CalmRoughness + std::max(variance, 0.0f)), 1.0f);
 }
 
 underwater::CurrentState underwater::CurrentFor(float tideRate, float windAngle, float storm)
