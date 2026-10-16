@@ -518,6 +518,32 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.fart_again_when_stroked",
+	    .name = "A creature stroked for a fart by a hut farts again by a hut",
+	    .facet = Facet::Mind,
+	    .description = "A tiger that needs a poo, with two huts on the land in front of it. When it has done its poo or "
+	                   "fart by a hut, the hand strokes it and lets go. Its opinions choose a poo or a fart; run it again "
+	                   "until it farts.",
+	    .expected = "After a fart, the log shows \"does its action again: Fart on N\", N a hut, and the tiger walks to "
+	                "that hut and farts there again.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.9f},
+	        .desires = {{.desire = Desire::Poo, .fraction = 1.0f}},
+	    }},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {30.0f, -60.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {-40.0f, -70.0f}}},
+	    // The first command only waits while the tiger starts to walk; the stroke then waits until the tiger is free
+	    .commands = {Act(Kind::HandLetGo, 0, 4.0f),
+	                 {.kind = Kind::HandStroke,
+	                  .delaySeconds = 0.5f,
+	                  .waitUntilFree = true,
+	                  .bodyPart = static_cast<size_t>(creature_feedback::BodyPart::Head)},
+	                 Act(Kind::HandLetGo, 0, 1.0f)},
+	});
+
+	all.push_back({
 	    .id = "needs.eats_animals",
 	    .name = "Hungry creature eats an animal",
 	    .facet = Facet::Needs,
@@ -3072,6 +3098,28 @@ void AddObjects(std::vector<Scenario>& all)
 	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
 	                 {.kind = Kind::Slap, .delaySeconds = 0.1f},
 	                 {.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "BeCrossWithPlayer"}},
+	});
+	all.push_back({
+	    .id = "mind.hold_keeps_plan",
+	    .name = "A creature keeps its plan during a hold",
+	    .facet = Facet::Mind,
+	    .description = "The hand holds a player's tiger, strokes its head and lets go. Soon after, the hand holds it, "
+	                   "strokes it and lets go again.",
+	    .expected = "During each hold the log shows no new plan (\"sets about\"). On the first turn after each release, "
+	                "the tiger starts the plan that it had during the hold again (\"starts N again after the hand let "
+	                "go\"). A plan to show the player how it feels (23) also starts again, and the tiger turns to the "
+	                "camera.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    .commands = {{.kind = Kind::HandStroke,
+	                  .delaySeconds = 0.5f,
+	                  .bodyPart = static_cast<size_t>(creature_feedback::BodyPart::Head)},
+	                 Act(Kind::HandLetGo, 0, 0.5f),
+	                 {.kind = Kind::HandStroke,
+	                  .delaySeconds = 0.4f,
+	                  .bodyPart = static_cast<size_t>(creature_feedback::BodyPart::Head)},
+	                 Act(Kind::HandLetGo, 0, 0.5f)},
 	});
 	all.push_back({
 	    .id = "mind.restart_after_hold",

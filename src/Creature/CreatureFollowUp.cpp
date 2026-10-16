@@ -100,3 +100,8 @@ std::optional<uint32_t> creature_follow_up::ThingToDoAgainTo(bool actsOnThing, u
 	}
 	return best;
 }
+
+bool creature_follow_up::SuitsDoAgain(const DoAgainThing& thing)
+{
+	return thing.sameKind && thing.passesTest.value_or(true) && !(thing.notWhatItHolds && thing.heldByItself);
+}
