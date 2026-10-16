@@ -346,7 +346,7 @@ void MorphFile::ReadCreatureBlock(std::istream& stream) noexcept
 	}
 	if (version > 7)
 	{
-		read(points.unknownTime2);
+		read(points.kissTime);
 	}
 	if (stream.good())
 	{
@@ -365,9 +365,20 @@ void MorphFile::ReadCreatureBlock(std::istream& stream) noexcept
 			skip(sizeof(MeshIntersect));
 		}
 	};
+	// The first point is the point that kisses
 	if (version > 7)
 	{
-		skipOptionalPoint();
+		uint32_t present = 0;
+		stream.read(reinterpret_cast<char*>(&present), sizeof(present));
+		if (present != 0)
+		{
+			MeshIntersect kiss {};
+			stream.read(reinterpret_cast<char*>(&kiss), sizeof(kiss));
+			if (stream.good())
+			{
+				_creatureKissPoint = kiss;
+			}
+		}
 	}
 	if (version > 17)
 	{

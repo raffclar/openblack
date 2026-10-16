@@ -1066,3 +1066,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_joint_actions test_creature_joint_actions.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_kiss test_creature_kiss.cpp
+)

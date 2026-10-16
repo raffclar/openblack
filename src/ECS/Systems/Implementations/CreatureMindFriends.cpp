@@ -19,27 +19,38 @@
 #include <string_view>
 #include <vector>
 
+#include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/CreatureBody.h"
+#include "3D/LandIslandInterface.h"
+#include "Common/GUtilsDistance.h"
+#include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureFriendship.h"
 #include "Creature/CreatureHelp.h"
+#include "Creature/CreatureKiss.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureReactionRules.h"
+#include "Creature/CreatureRig.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreaturePartner.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "Locator.h"
 #include "ObjectMeasures.h"
+#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -317,6 +328,60 @@ void CreatureMindSystem::NoteAttention(entt::entity creature, CreatureMindState&
 	}
 }
 
+namespace
+{
+/// The field nearest the creature, at any distance, that the creature believes in
+std::optional<creature_plan_actions::Situation::FoodPile> NearestBelievedField(const ecs::Registry& registry,
+                                                                               entt::entity creature, glm::vec3 from)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr)
+	{
+		return std::nullopt;
+	}
+	std::optional<creature_plan_actions::Situation::FoodPile> nearest;
+	float nearestDistance = std::numeric_limits<float>::max();
+	for (const auto& belief : mind->beliefs.InListOrder())
+	{
+		const auto thing = belief.thing;
+		const auto* at =
+		    registry.Valid(thing) && registry.AllOf<Field>(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
+		if (at == nullptr)
+		{
+			continue;
+		}
+		const float distance =
+		    gutils::GetDistanceInMetres(glm::vec2(from.x, from.z), glm::vec2(at->position.x, at->position.z));
+		if (distance < nearestDistance)
+		{
+			nearestDistance = distance;
+			nearest = {.pile = entt::to_integral(thing), .point = glm::vec2(at->position.x, at->position.z)};
+		}
+	}
+	return nearest;
+}
+
+/// Where the head bone of the creature is in the world, as its body is posed now
+std::optional<glm::vec3> HeadOf(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* self = registry.TryGet<const Creature>(creature);
+	const auto* body = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	if (self == nullptr || body == nullptr || transform == nullptr || !rigs.Contains(creature::GetRigId(self->species)))
+	{
+		return std::nullopt;
+	}
+	const auto& points = rigs.Handle(creature::GetRigId(self->species))->actionPoints;
+	if (!points.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	return glm::vec3(creature::PosedBone(points->head, body->boneMatrices, placement)[3]);
+}
+} // namespace
+
 void CreatureMindSystem::SituateFriends(entt::entity creature, creature_plan_actions::Situation& situation)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -360,6 +425,21 @@ void CreatureMindSystem::SituateFriend(entt::entity creature, const creature_pla
 	case Build::DrinkWithFriend:
 	case Build::HelpTownWithFriend:
 	case Build::AttackTownWithFriend:
+	case Build::KissFriend:
+	case Build::TalkToFriend:
+	case Build::TellFriendAJoke:
+	case Build::DanceWithFriend:
+	case Build::ArgueWithFriend:
+	case Build::MopeAboutWithFriend:
+	case Build::ShowOffToFriend:
+	case Build::GetAttentionFromFriend:
+	case Build::TellCreatureToSodOff:
+	case Build::ExamineOtherCreatureWithFriend:
+	case Build::SitOnTopOfHillWithFriend:
+	case Build::EatFromFieldWithFriend:
+	case Build::PlayThrowingGameWithFriend:
+	case Build::GiveFriendToy:
+	case Build::ShowFriendCitadel:
 		break;
 	default:
 		return;
@@ -375,8 +455,12 @@ void CreatureMindSystem::SituateFriend(entt::entity creature, const creature_pla
 	situation.friendly = creature_plan_actions::Situation::Friend {
 	    .point = glm::vec2(at->position.x, at->position.z),
 	    .height = k_FriendHeightOfSizeOne * ShownSize(*body),
+	    .position = at->position,
+	    .radius = object_measures::TwoDRadius(registry, friendly),
 	};
 	const auto selfPoint = glm::vec2(self->position.x, self->position.z);
+	// It sees the friend when the friend is near, or near for the height of the friend
+	situation.seesFriend = creature_mind::CanSee(glm::distance(self->position, at->position), situation.friendly->height);
 	switch (executor.build)
 	{
 	case Build::SitWithFriend:
@@ -397,6 +481,45 @@ void CreatureMindSystem::SituateFriend(entt::entity creature, const creature_pla
 		situation.exploreSea = situation.explorePlace.has_value()
 		                           ? land::FindPlace(creature, creature_exploration::Kind::Sea, *situation.explorePlace, false)
 		                           : std::nullopt;
+		break;
+	case Build::KissFriend:
+		// Each kisser stands the mean of the two kissing distances from the point halfway between them
+		if (Locator::creatureAnimationSystem::has_value())
+		{
+			auto& bodies = Locator::creatureAnimationSystem::value();
+			const auto lips = bodies.KissPointsOf(creature);
+			const auto friendLips = bodies.KissPointsOf(friendly);
+			if (lips.has_value() && friendLips.has_value())
+			{
+				situation.kissingDistance = creature_kiss::MeanKissingDistance(*lips, *friendLips);
+			}
+		}
+		break;
+	case Build::SitOnTopOfHillWithFriend:
+	{
+		// A clear place on the hill nearest the creature, by its map of the land, big enough for the two
+		const auto hill = land::FindPlace(creature, creature_exploration::Kind::Hill, selfPoint, false);
+		situation.clearArea = hill.has_value()
+		                          ? mind_detail::ClearAreaFor(
+		                                registry, creature, *hill,
+		                                creature_mind::HillTogetherRadius(situation.radius, situation.friendly->radius), false)
+		                          : std::nullopt;
+		break;
+	}
+	case Build::EatFromFieldWithFriend:
+		situation.friendsField = NearestBelievedField(registry, creature, self->position);
+		break;
+	case Build::ShowOffToFriend:
+		if (situation.home.has_value())
+		{
+			const float ground = Locator::terrainSystem::has_value()
+			                         ? Locator::terrainSystem::value().GetHeightAt(*situation.home)
+			                         : self->position.y;
+			situation.homePlace = glm::vec3(situation.home->x, ground, situation.home->y);
+		}
+		break;
+	case Build::ShowFriendCitadel:
+		situation.head = HeadOf(registry, creature);
 		break;
 	case Build::HelpTownWithFriend:
 	case Build::AttackTownWithFriend:

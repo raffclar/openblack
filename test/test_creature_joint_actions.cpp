@@ -7,8 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
+#include <memory>
 #include <string_view>
 #include <vector>
 
@@ -18,6 +21,7 @@
 #include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureFriendship.h"
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreatureKiss.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreaturePlanActions.h"
 
@@ -217,4 +221,270 @@ TEST(CreatureJointActions, WhatLetsEachJointActionStart)
 	situation.attackNearestTown = true;
 	EXPECT_FALSE(possible("HelpTownWithFriend", situation));
 	EXPECT_TRUE(possible("AttackWithFriend", situation));
+}
+
+namespace
+{
+/// A random source that gives the numbers in turn, and the last one again after them
+creature_mind::Random InTurn(std::vector<uint32_t> values)
+{
+	auto next = std::make_shared<size_t>(0);
+	return [values = std::move(values), next](uint32_t) {
+		const auto value = values.at(std::min(*next, values.size() - 1));
+		++*next;
+		return value;
+	};
+}
+
+std::vector<Step::Kind> KindsOf(const std::vector<Step>& agenda)
+{
+	std::vector<Step::Kind> kinds;
+	for (const auto& step : agenda)
+	{
+		kinds.push_back(step.kind);
+	}
+	return kinds;
+}
+
+size_t MainStep(const std::vector<Step>& agenda)
+{
+	for (size_t i = 0; i < agenda.size(); ++i)
+	{
+		if (agenda[i].main)
+		{
+			return i;
+		}
+	}
+	return agenda.size();
+}
+} // namespace
+
+TEST(CreatureJointActions, KissingAFriend)
+{
+	const auto friends = TwoFriends();
+	const auto agenda = creature_mind::KissFriend(friends, 2.0f, 5.0f, Always(1));
+	ASSERT_EQ(agenda.size(), 7);
+	EXPECT_EQ(agenda[0].request, creature_friendship::RequestKind::BeFriends);
+	// The friend goes to the far side of the middle, the creature to the near side, each two from the middle
+	const auto& friendGoes = Ordered(agenda[1]);
+	const auto [selfPlace, friendPlace] = creature_kiss::KissPlaces(friends.selfPoint, friends.friendPoint, 2.0f);
+	EXPECT_FLOAT_EQ(friendGoes.movement.point.x, friendPlace.x);
+	EXPECT_FLOAT_EQ(friendGoes.movement.maxDistance, creature_mind::k_KissPlaceWithin);
+	EXPECT_FLOAT_EQ(agenda[2].movement.point.y, selfPlace.y);
+	EXPECT_EQ(agenda[2].face, creature_face::Cue::Compassion);
+	EXPECT_FLOAT_EQ(agenda[2].gaze->point->y, 5.0f);
+	const auto& friendKisses = Ordered(agenda[5]);
+	EXPECT_EQ(friendKisses.kind, Step::Kind::Kiss);
+	EXPECT_EQ(friendKisses.object, k_Asker);
+	EXPECT_EQ(agenda[6].kind, Step::Kind::Kiss);
+	EXPECT_EQ(agenda[6].object, k_Friend);
+	EXPECT_TRUE(agenda[6].main);
+	// Half the time it smiles at the friend and is happy after
+	const auto after = creature_mind::KissFriend(friends, 2.0f, 5.0f, Always(0));
+	ASSERT_EQ(after.size(), 9);
+	EXPECT_FLOAT_EQ(after[7].seconds, creature_mind::k_FaceAfterKissSeconds);
+	EXPECT_EQ(after[8].animation, animations::k_Happy);
+}
+
+TEST(CreatureJointActions, TalkingAndTellingAJoke)
+{
+	const auto talk = creature_mind::TalkToFriend(k_Asker, k_Friend, 10.0f, Always(0));
+	ASSERT_EQ(talk.size(), 6);
+	EXPECT_FLOAT_EQ(talk[0].movement.maxDistance, 30.0f);
+	EXPECT_TRUE(talk[0].flutterEyelids);
+	EXPECT_TRUE(talk[1].main);
+	EXPECT_FLOAT_EQ(talk[1].seconds, 4.0f);
+	// The request comes only after it has turned to the friend
+	EXPECT_EQ(talk[2].kind, Step::Kind::RequestPartner);
+	EXPECT_FLOAT_EQ(Ordered(talk[3]).seconds, creature_mind::k_FriendFacesTalkerSeconds);
+	EXPECT_EQ(talk[4].kind, Step::Kind::Overlay);
+	EXPECT_EQ(talk[4].animation, animations::k_Talk);
+	EXPECT_EQ(Ordered(talk[5]).kind, Step::Kind::Overlay);
+	const auto joke = creature_mind::TellFriendAJoke(k_Asker, k_Friend, 10.0f, Always(0));
+	EXPECT_EQ(Ordered(joke[5]).kind, Step::Kind::Action);
+	EXPECT_EQ(Ordered(joke[5]).animation, creature_mind::k_Laugh);
+}
+
+TEST(CreatureJointActions, DancingWithAFriend)
+{
+	const auto agenda = creature_mind::DanceWithFriend(k_Asker, k_Friend, 10.0f);
+	const std::vector expected {
+	    Step::Kind::Move,  Step::Kind::Move,         Step::Kind::Action, Step::Kind::RequestPartner, Step::Kind::Demobilise,
+	    Step::Kind::Order, Step::Kind::WaitForStill, Step::Kind::Order,  Step::Kind::PracticeDance,  Step::Kind::Remobilise};
+	EXPECT_EQ(KindsOf(agenda), expected);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 20.0f);
+	EXPECT_EQ(Ordered(agenda[7]).kind, Step::Kind::PracticeDance);
+	EXPECT_FLOAT_EQ(agenda[8].seconds, creature_mind::k_DanceTogetherSeconds);
+	EXPECT_EQ(MainStep(agenda), 8u);
+}
+
+TEST(CreatureJointActions, ArguingMopingAndShowingOff)
+{
+	const auto argue = creature_mind::ArgueWithFriend(k_Asker, k_Friend, 10.0f, Always(0));
+	ASSERT_EQ(argue.size(), 16);
+	EXPECT_FLOAT_EQ(Ordered(argue[1]).movement.maxDistance, 30.0f);
+	EXPECT_EQ(Ordered(argue[1]).movement.object, k_Asker);
+	EXPECT_EQ(argue[6].face, creature_face::Cue::Anger);
+	EXPECT_EQ(argue[9].animation, animations::k_Angry);
+	EXPECT_FLOAT_EQ(argue[11].seconds, creature_mind::k_ArgueWaitSeconds);
+	EXPECT_EQ(MainStep(argue), 13u);
+	EXPECT_EQ(argue[15].animation, animations::k_Happy);
+
+	const auto mope = creature_mind::MopeAboutWithFriend(k_Asker, k_Friend, 10.0f, Always(1));
+	ASSERT_EQ(mope.size(), 7);
+	EXPECT_EQ(mope[2].face, creature_face::Cue::Sad);
+	EXPECT_EQ(MainStep(mope), 6u);
+	EXPECT_EQ(creature_mind::MopeAboutWithFriend(k_Asker, k_Friend, 10.0f, Always(0)).size(), 9);
+
+	const auto show = creature_mind::ShowOffToFriend(k_Asker, k_Friend, 10.0f, {50.0f, 3.0f, 60.0f}, Always(0));
+	ASSERT_EQ(show.size(), 11);
+	EXPECT_TRUE(show[5].main);
+	EXPECT_FLOAT_EQ(show[5].order.point.x, 50.0f);
+	EXPECT_FLOAT_EQ(*show[5].order.pointHeight, 3.0f);
+	EXPECT_EQ(show[5].face, creature_face::Cue::Grimace);
+	EXPECT_EQ(Ordered(show[6]).movement.kind, creature_mind::Movement::Kind::TurnToFace);
+	EXPECT_EQ(Ordered(show[8]).animation, animations::k_Confused);
+}
+
+TEST(CreatureJointActions, GettingTheAttentionOfAFriend)
+{
+	const auto all = creature_mind::GetAttentionFromFriend(k_Friend, Always(0));
+	ASSERT_EQ(all.size(), 6);
+	EXPECT_EQ(all[1].order.kind, creature_mind::ObjectOrder::Kind::PointAt);
+	EXPECT_EQ(all[2].animation, animations::k_FriendlyWave);
+	EXPECT_EQ(all[3].animation, creature_mind::k_LookAtMe);
+	EXPECT_TRUE(all[5].main);
+	EXPECT_EQ(all[5].animation, animations::k_Sad);
+	EXPECT_EQ(creature_mind::GetAttentionFromFriend(k_Friend, Always(1)).size(), 3);
+}
+
+TEST(CreatureJointActions, TellingACreatureToGoAway)
+{
+	const auto fight = creature_mind::TellCreatureToSodOff(k_Asker, k_Friend, {}, {}, 20.0f, Always(0));
+	ASSERT_EQ(fight.size(), 1);
+	EXPECT_EQ(fight[0].kind, Step::Kind::Fight);
+	const auto agenda =
+	    creature_mind::TellCreatureToSodOff(k_Asker, k_Friend, {0.0f, 1.0f, 0.0f}, {10.0f, 3.0f, 0.0f}, 20.0f, Always(1));
+	ASSERT_EQ(agenda.size(), 13);
+	EXPECT_EQ(agenda[0].request, creature_friendship::RequestKind::Fight);
+	// It points as far past the creature as the creature is from it
+	EXPECT_TRUE(agenda[5].main);
+	EXPECT_FLOAT_EQ(agenda[5].order.point.x, 20.0f);
+	EXPECT_FLOAT_EQ(*agenda[5].order.pointHeight, 5.0f);
+	EXPECT_FLOAT_EQ(Ordered(agenda[8]).movement.maxDistance, 40.0f);
+	EXPECT_EQ(agenda[12].kind, Step::Kind::Remobilise);
+}
+
+TEST(CreatureJointActions, ExaminingAnotherCreatureWithAFriend)
+{
+	const auto agenda = creature_mind::ExamineOtherCreatureWithFriend(k_Friend, 3, Always(0));
+	ASSERT_EQ(agenda.size(), 8);
+	EXPECT_EQ(agenda[0].request, creature_friendship::RequestKind::Play);
+	EXPECT_EQ(Ordered(agenda[4]).order.object, 3U);
+	// It never lets the mind of the friend go free
+	for (const auto& step : agenda)
+	{
+		EXPECT_NE(step.kind, Step::Kind::Remobilise);
+	}
+	EXPECT_EQ(creature_mind::ExamineOtherCreatureWithFriend(k_Friend, 3, Always(1)).size(), 6);
+}
+
+TEST(CreatureJointActions, SittingOnTopOfAHillWithAFriend)
+{
+	const auto friends = TwoFriends();
+	const float radius = creature_mind::HillTogetherRadius(4.0f, 2.0f);
+	EXPECT_FLOAT_EQ(radius, 24.0f);
+	const auto agenda = creature_mind::SitOnTopOfHillWithFriend(friends, {100.0f, 100.0f}, radius, true, Always(1));
+	ASSERT_EQ(agenda.size(), 9);
+	EXPECT_FLOAT_EQ(Ordered(agenda[2]).movement.point.x, 94.0f);
+	EXPECT_FLOAT_EQ(agenda[3].movement.point.x, 106.0f);
+	EXPECT_FLOAT_EQ(agenda[3].movement.maxDistance, 2.5f * friends.height);
+	EXPECT_EQ(Ordered(agenda[5]).movement.kind, creature_mind::Movement::Kind::FaceDownSlope);
+	EXPECT_EQ(agenda[7].movement.kind, creature_mind::Movement::Kind::FaceDownSlope);
+	EXPECT_TRUE(agenda[8].main);
+	EXPECT_EQ(agenda[8].kind, Step::Kind::Static);
+	// When it cannot see the friend it goes near it first, and half the time it is happy first
+	EXPECT_EQ(creature_mind::SitOnTopOfHillWithFriend(friends, {}, radius, false, Always(0)).size(), 11);
+}
+
+TEST(CreatureJointActions, EatingFromAFieldWithAFriend)
+{
+	const auto friends = TwoFriends();
+	const auto agenda = creature_mind::EatFromFieldWithFriend(friends, 5, {300.0f, 400.0f});
+	ASSERT_EQ(agenda.size(), 14);
+	EXPECT_FLOAT_EQ(Ordered(agenda[1]).movement.point.x, 290.0f);
+	EXPECT_FLOAT_EQ(agenda[2].movement.point.x, 310.0f);
+	EXPECT_EQ(Ordered(agenda[5]).order.kind, creature_mind::ObjectOrder::Kind::TakeFromPile);
+	EXPECT_EQ(agenda[6].order.object, 5U);
+	EXPECT_TRUE(agenda[8].main);
+	EXPECT_EQ(agenda[8].order.kind, creature_mind::ObjectOrder::Kind::Eat);
+	EXPECT_EQ(agenda[11].kind, Step::Kind::Remobilise);
+}
+
+TEST(CreatureJointActions, PlayingAThrowingGameWithAFriend)
+{
+	const auto friends = TwoFriends();
+	const auto agenda = creature_mind::PlayThrowingGameWithFriend(friends, 4, {0.0f, 1.0f, 0.0f}, {10.0f, 2.0f, 0.0f}, false);
+	ASSERT_EQ(agenda.size(), 15);
+	EXPECT_FLOAT_EQ(agenda[0].movement.maxDistance, 150.0f);
+	EXPECT_EQ(agenda[2].request, creature_friendship::RequestKind::Play);
+	EXPECT_EQ(agenda[7].order.kind, creature_mind::ObjectOrder::Kind::PickUp);
+	EXPECT_TRUE(agenda[8].main);
+	EXPECT_FLOAT_EQ(*agenda[8].order.pointHeight, 2.0f + 0.82f * friends.friendHeight);
+	EXPECT_FLOAT_EQ(*Ordered(agenda[12]).order.pointHeight, 1.0f + 0.82f * friends.height);
+	// It throws what it holds
+	EXPECT_EQ(creature_mind::PlayThrowingGameWithFriend(friends, 4, {}, {}, true).size(), 14);
+}
+
+TEST(CreatureJointActions, GivingAToyToAFriend)
+{
+	const auto agenda = creature_mind::GiveFriendToy(k_Asker, k_Friend, 4, false, Always(2));
+	ASSERT_EQ(agenda.size(), 12);
+	EXPECT_EQ(Ordered(agenda[1]).order.object, k_Asker);
+	EXPECT_TRUE(agenda[5].main);
+	EXPECT_EQ(agenda[5].order.kind, creature_mind::ObjectOrder::Kind::Discard);
+	EXPECT_EQ(agenda[6].kind, Step::Kind::WaitInMap);
+	EXPECT_EQ(agenda[10].kind, Step::Kind::WaitForFree);
+	EXPECT_EQ(agenda[10].turns, creature_mind::k_WaitForFreeTurns);
+	EXPECT_EQ(Ordered(agenda[11]).order.animation, 102u);
+}
+
+TEST(CreatureJointActions, ShowingACitadelToAFriend)
+{
+	const auto friends = TwoFriends();
+	const auto agenda = creature_mind::ShowFriendCitadel(friends, {.point = {50.0f, 2.0f, 50.0f}, .radius = 10.0f}, 3.0f, 2.0f,
+	                                                     {1.0f, 2.0f, 3.0f}, false, InTurn({0, 0}));
+	ASSERT_EQ(agenda.size(), 12);
+	EXPECT_EQ(agenda[2].request, creature_friendship::RequestKind::BeShown);
+	EXPECT_FLOAT_EQ(Ordered(agenda[3]).movement.maxDistance, 2.0f * 5.0f + 10.0f * 1.2f);
+	EXPECT_FLOAT_EQ(agenda[4].movement.maxDistance, 3.0f * 5.0f + 10.0f * 1.2f);
+	EXPECT_TRUE(agenda[6].main);
+	EXPECT_EQ(agenda[8].kind, Step::Kind::WaitForFree);
+	EXPECT_FLOAT_EQ(agenda[11].seconds, creature_mind::k_ShowCitadelWaitSeconds);
+	EXPECT_TRUE(agenda[11].gaze->feet);
+}
+
+TEST(CreatureJointActions, SeeingAnObject)
+{
+	EXPECT_TRUE(creature_mind::CanSee(9.0f, 0.0f));
+	EXPECT_FALSE(creature_mind::CanSee(10.0f, 0.0f));
+	EXPECT_TRUE(creature_mind::CanSee(400.0f, 10.0f));
+	EXPECT_FALSE(creature_mind::CanSee(500.0f, 10.0f));
+}
+
+TEST(CreatureJointActions, TheOtherJointActionsHaveNoCondition)
+{
+	creature_plan_actions::Situation situation;
+	for (const auto action : {"KissFriend", "TalkToFriend", "TellFriendAJoke", "DanceWithFriend", "ArgueWithFriend",
+	                          "MopeAboutWithFriend", "ShowOffToFriend", "GetAttentionFromFriend", "TellCreatureToSodOff",
+	                          "ExamineOtherCreatureWithFriend", "SitOnTopOfHillWithFriend", "EatFromFieldWithFriend",
+	                          "PlayThrowingGameWithFriend", "GiveFriendToy", "ShowFriendCitadel"})
+	{
+		const auto* executor = creature_plan_actions::For(action);
+		ASSERT_NE(executor, nullptr) << action;
+		EXPECT_TRUE(creature_plan_actions::Possible(*executor, situation)) << action;
+	}
+	EXPECT_EQ(creature_plan_actions::For("GetAttentionFromFriend")->target,
+	          creature_plan_actions::Target::CreatureNotFreeForJoint);
+	EXPECT_EQ(creature_plan_actions::For("GiveFriendToy")->use, creature_plan_actions::Target::Toy);
 }

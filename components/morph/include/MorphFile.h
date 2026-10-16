@@ -242,8 +242,8 @@ struct CreatureActionPoints
 	int32_t putDownTime {-1};
 	/// When the foot meets what it kicks
 	int32_t kickTime {-1};
-	/// One more moment whose use isn't known
-	int32_t unknownTime2 {-1};
+	/// The moment of a kiss in the high and the low kiss animations, where the lips meet
+	int32_t kissTime {-1};
 };
 
 /// A place on a creature's body a tattoo can be painted, from the creature block of a .cbn file
@@ -309,6 +309,8 @@ protected:
 	std::optional<CreatureBlows> _creatureBlows;
 	/// The bones it acts with and the moments of its object animations, as many as the file's version has
 	std::optional<CreatureActionPoints> _creatureActionPoints;
+	/// The point on the body that kisses, when the file has one
+	std::optional<MeshIntersect> _creatureKissPoint;
 	std::vector<int32_t> _creatureTail;
 	uint32_t _creatureVersion {0};
 
@@ -371,6 +373,8 @@ public:
 	{
 		return _creatureActionPoints;
 	}
+	/// The point on the body that kisses, when the file has one. Without it, the creature kisses with its head bone.
+	[[nodiscard]] const std::optional<MeshIntersect>& GetCreatureKissPoint() const noexcept { return _creatureKissPoint; }
 	/// The last numbers of the creature block, which end with each bone's mirror bone (the bone on the other side of
 	/// the body), as many as the mesh has bones; and the block's version
 	[[nodiscard]] const std::vector<int32_t>& GetCreatureTail() const noexcept { return _creatureTail; }

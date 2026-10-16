@@ -774,6 +774,10 @@ struct Command
 		/// makes the folder if it is missing. Then the game reads the file again, and the log tells if the record is the
 		/// same. Needs no creature
 		ProfileFolderCheck,
+		/// The creature plans an action of the game's table (action, by its name) for a desire (value) at another
+		/// creature (atCreature), with the scenario's object (with) when given. The plan is as if the creature chose it:
+		/// no script takes control.
+		PlanAction,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -825,6 +829,8 @@ struct Command
 	/// The creature a miracle is cast at, or that a script's action is done to in place of the object, by its place in
 	/// the scenario's creatures
 	std::optional<size_t> atCreature;
+	/// The creature that a planned action uses, by its place in the scenario's creatures
+	std::optional<size_t> usesCreature;
 	/// The player's alignment jumped to, from -1 (evil) to 1 (good)
 	float alignment {0.0f};
 	/// What an advisor is told: to come out of its corner, or to appear in a puff of smoke; to go home, or to vanish; to
@@ -1027,6 +1033,8 @@ void AddFirewaterScenarios(std::vector<Scenario>& all);
 void AddFishScenarios(std::vector<Scenario>& all);
 /// Creatures casting miracles
 void AddCreatureCastingScenarios(std::vector<Scenario>& all);
+/// The joint actions of two friends, each close up
+void AddFriendActionScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios
 void AddCreatureModeScenarios(std::vector<Scenario>& all);
 /// The gestures drawn with the hand: sizing and powering up miracles, scribbles, and the leash's gestures

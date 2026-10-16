@@ -29,8 +29,6 @@ namespace
 constexpr size_t k_PutDownAnimation = 97;
 /// The clip that strokes what it holds
 constexpr size_t k_StrokeAnimation = 100;
-/// The kiss clip
-constexpr size_t k_KissAnimation = 212;
 
 Step PickUp(uint32_t thing)
 {
@@ -279,8 +277,7 @@ std::vector<Step> creature_town_help::PlayWithVillager(uint32_t villager, float 
 
 std::vector<Step> creature_town_help::KissVillager(uint32_t villager, float height)
 {
-	return {GoNear(villager, k_PlayHeights * height), FaceThing(villager),
-	        Step {.kind = Step::Kind::Kiss, .animation = k_KissAnimation}};
+	return {GoNear(villager, k_PlayHeights * height), FaceThing(villager), Step {.kind = Step::Kind::Kiss}};
 }
 
 bool creature_town_help::IsCowKind(AnimalInfo type)
