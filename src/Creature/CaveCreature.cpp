@@ -129,6 +129,11 @@ bool cave_creature::MustTurn(float heading, float wanted)
 	return std::abs(wanted - heading) >= k_FacingWithin;
 }
 
+glm::vec3 cave_creature::PointerPoint(const glm::vec3& eye, const glm::vec3& onNearPlane, float nearDistance)
+{
+	return eye + ((onNearPlane - eye) * (k_PointerDepth / nearDistance));
+}
+
 bool cave_creature::Busy(const State& state, const Body& body)
 {
 	return creature_layers::IsPlaying(body.body) || state.turn.has_value();

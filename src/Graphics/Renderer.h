@@ -421,6 +421,9 @@ private:
 	                      const L3DMeshSubmitDesc& bodyDesc, float fizz, float freeze, uint32_t fizzSortDepth) const;
 	/// A creature's strands of hair, as ribbons facing the camera blended over the scene, lit from where the creature is
 	void DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin) const;
+	/// The same, in the given pass, with the ribbons turned to the given eye, for a creature in a view of its own
+	void DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin,
+	                      RenderPass pass, glm::vec3 eye) const;
 	/// Draws the body of a creature that the interface shows: its mesh, its instance among those of the interface's
 	/// creatures, its pose, its shape and its eyes
 	using InterfaceCreatureBody =

@@ -15,6 +15,7 @@
 
 #include <bgfx/bgfx.h>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/matrix.hpp>
 
 #include "3D/L3DMesh.h"
 #include "Camera/Camera.h"
@@ -23,13 +24,16 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
+#include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "EngineConfig.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
+#include "Graphics/ShaderManager.h"
 #include "Locator.h"
 #include "Renderer.h"
 #include "Resources/ResourcesInterface.h"
@@ -222,6 +226,8 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 	bgfx::setViewRect(viewId, static_cast<uint16_t>(shown.viewOrigin.x), static_cast<uint16_t>(shown.viewOrigin.y),
 	                  static_cast<uint16_t>(shown.viewSize.x), static_cast<uint16_t>(shown.viewSize.y));
 	bgfx::setViewTransform(viewId, &shown.view, &shown.projection);
+	// The body, its eyes and then its hair, in the order they are given, so the hair blends over the body
+	_shaderManager->SetViewOrder(RenderPass::MenuCreature, ViewOrder::Sequential);
 	bgfx::touch(viewId);
 
 	if (!_menuCreatureInstance.has_value())
@@ -258,6 +264,14 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 	}
 	const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(shown.copy);
 	drawBody(mesh->id, 0, bones, targets.has_value() ? &*targets : nullptr, eyes);
+
+	// Its own hair, which hangs from its own pose, faces the editor's eye
+	const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(shown.copy);
+	if (hair != nullptr && Locator::creatureHairSystem::value().IsShown())
+	{
+		const auto eye = glm::vec3(glm::inverse(shown.view)[3]);
+		DrawCreatureHair(desc, *hair, transform->position, RenderPass::MenuCreature, eye);
+	}
 }
 
 } // namespace openblack::graphics

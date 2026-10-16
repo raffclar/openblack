@@ -36,7 +36,8 @@ namespace openblack::tattoo_menu
 /// The creature's size, whatever the size kept in the file
 constexpr float k_Size = 1.0f;
 
-/// The creature looks at the point under the pointer this far into the screen
+/// The creature looks at the point under the pointer this far into the screen, along the camera's view. In the cave,
+/// the creature looks at a point that is nearer (see cave_creature::k_PointerDepth).
 constexpr float k_PointerDepth = 10.0f;
 
 /// The creature that the editor shows
