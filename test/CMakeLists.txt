@@ -1061,3 +1061,11 @@ openblack_setup_and_add_test(
   test_creature_hold_pose test_creature_hold_pose.cpp
 )
 openblack_setup_and_add_test(test_creature_gesture test_creature_gesture.cpp)
+openblack_setup_and_add_test(test_music_mood test_music_mood.cpp)
+target_link_libraries(test_music_mood PRIVATE creaturemind)
+openblack_setup_and_add_test(
+  test_custom_music_playlist test_custom_music_playlist.cpp
+)
+openblack_setup_and_add_test(
+  test_creature_music_reaction test_creature_music_reaction.cpp
+)

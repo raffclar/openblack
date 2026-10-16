@@ -35,7 +35,9 @@
 #include "3D/OceanInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/CustomMusicPlayerInterface.h"
 #include "Audio/GameMusic.h"
+#include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraZones.h"
@@ -161,6 +163,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
+#include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
@@ -356,6 +359,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
+    LocatorCoverage {"musicMoodSystem", "players.custom_music"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
@@ -1501,6 +1505,47 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		              result["player_folder"] = playerFolder.has_value() ? Json(playerFolder->generic_string()) : Json(nullptr);
 		              const auto record = folder.ReadPlayerFile(player, "helpstats.dat");
 		              result["help_record_bytes"] = record.has_value() ? Json(record->size()) : Json(nullptr);
+		              return QueryResult::Value(std::move(result));
+	              });
+	provider->Add(Query("custom_music", "The custom music player (its tracks, the track that plays, its state and "
+	                                    "position) and the music moods: the record of each track and the current feelings"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = Json::object();
+		              auto* player = Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+		              if (player != nullptr)
+		              {
+			              Json tracks = Json::array();
+			              for (const auto& track : player->GetTracks())
+			              {
+				              tracks.push_back(track.fileName);
+			              }
+			              result["tracks"] = std::move(tracks);
+			              const auto current = player->GetCurrentTrack();
+			              result["current"] = current.has_value() ? Json(*current) : Json(nullptr);
+			              result["song"] = player->GetSongName();
+			              result["state"] = static_cast<int>(player->GetPlayState());
+			              result["position_ms"] = player->GetPosition();
+			              result["length_ms"] = player->GetLength();
+			              result["volume"] = player->GetVolume();
+			              result["track_id"] = music_mood::TrackId(player->GetSongName());
+		              }
+		              if (Locator::musicMoodSystem::has_value())
+		              {
+			              const auto& moods = Locator::musicMoodSystem::value();
+			              Json records = Json::array();
+			              for (const auto& record : moods.GetRecords())
+			              {
+				              Json item = Json::object();
+				              item["id"] = record.id;
+				              item["time"] = record.time;
+				              item["mood"] = record.emotions.empty() ? 0.0f : record.emotions.front().mood;
+				              item["fear"] = record.emotions.empty() ? 0.0f : record.emotions.front().fear;
+				              records.push_back(std::move(item));
+			              }
+			              result["records"] = std::move(records);
+			              const auto emotion = moods.GetCurrentEmotion();
+			              result["current_mood"] = emotion.has_value() ? Json(emotion->mood) : Json(nullptr);
+		              }
 		              return QueryResult::Value(std::move(result));
 	              });
 	provider->Add(Query("list", "The players: their entities, primary creatures and alignment", {}, ResultKind::List),

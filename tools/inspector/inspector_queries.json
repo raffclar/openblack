@@ -1255,6 +1255,12 @@
   "query": "players.profile_folder"
  },
  {
+  "description": "The custom music player (its tracks, the track that plays, its state and position) and the music moods: the record of each track and the current feelings",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.custom_music"
+ },
+ {
   "description": "The players: their entities, primary creatures and alignment",
   "kind": "list",
   "parameters": [],
