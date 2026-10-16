@@ -708,16 +708,17 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .id = "objects.steal_toy_to_town",
 	    .name = "Creature steals a toy and takes it to a town",
 	    .facet = Facet::Objects,
-	    .description = "A tiger with a cuddly toy in front of it, and the storage pit of the player's town far behind it. "
+	    .description = "A tiger with a cuddly toy in front of it, and the storage pit of the player's town behind it. "
 	                   "A script tells it to steal the toy and take it to the town.",
 	    .expected = "It picks the toy up, looking at it. It goes near the storage pit of the town, to within three times its "
 	                "height, looking at the pit, and puts the toy down there.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
-	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, 150.0f}, .storedFood = 0, .storedWood = 0},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, 90.0f}, .storedFood = 0, .storedWood = 0},
 	                {.type = MobileStaticInfo::ToyCuddly, .offset = {0.0f, -20.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "StealObjectAndTakeToTown"}},
+	    .townBeliefInPlayer = 1000.0f,
 	});
 
 	all.push_back({
