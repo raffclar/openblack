@@ -282,6 +282,51 @@ vec4 CoarsePage(vec2 blockUv)
 	return mix(low, high, blend.y) / 15.0f;
 }
 
+// EXPERIMENT (not for merge): how wet the rock of a cliff is at a point, 0 to 1. Each wave that hits the foot of the
+// cliff throws water up the face as high as its spray goes. The rock is wet where the water came, streaks of water run
+// down the face, and the rock dries until the next wave. The low rock that each wave reaches stays damp.
+float CliffWetness(vec3 world)
+{
+	vec4 shore = texture2DLod(s_snowDepth, UwShoreUv(world.xz), 0.0f);
+	float inland = -shore.x;
+	float level = u_uwParams.z;
+	float above = world.y - level;
+	float towards = length(shore.yz);
+	if (inland < -2.0f || inland > 30.0f || above < -0.5f || towards < 1e-3f)
+	{
+		return 0.0f;
+	}
+	vec2 outward = shore.yz / towards;
+	vec2 foot = world.xz + outward * (max(inland, 0.0f) + 4.0f);
+	float cliff = UwShoreCliff(texture2DLod(s_snowDepth, UwShoreUv(foot), 0.0f));
+	if (cliff <= 0.0f)
+	{
+		return 0.0f;
+	}
+	float since;
+	float crash;
+	float period;
+	float strength = UwCliffCrash(foot, u_uwParams.y, since, crash, period);
+	float tide = clamp((level + UW_LOWEST_TIDE) / UW_LOWEST_TIDE, 0.0f, 1.0f);
+	float power = u_uwWaves.w * (0.7f + 0.3f * tide) * cliff * (strength / 0.55f);
+	// As high as the sheet of spray went, and the time the water took to come up to this height
+	float rise = 7.0f + 22.0f * power;
+	float reach = rise * rise / 19.6f;
+	float arrived = since - above / max(rise, 1.0f);
+	vec2 across = vec2(-outward.y, outward.x);
+	float along = dot(world.xz, across);
+	// The splash: the top edge of the wet rock is ragged
+	float edge = reach * (0.55f + 0.6f * UwNoise(vec2(along * 0.3f, crash * 1.7f)));
+	float splash = (1.0f - smoothstep(edge * 0.8f, edge, above)) * step(0.0f, arrived) * exp(-max(arrived, 0.0f) / 2.5f);
+	// The streaks: thin lines of water that run down the face from the splash, slowly, and dry last
+	float streaks = smoothstep(0.62f, 0.8f, UwNoise(vec2(along * 1.4f, above * 0.05f + max(arrived, 0.0f) * 0.35f)));
+	streaks *= (1.0f - smoothstep(edge * 0.6f, edge * 1.1f, above)) * exp(-max(arrived, 0.0f) / 6.0f);
+	// The low rock that the waves reach each time
+	float damp = 0.5f * (1.0f - smoothstep(0.0f, 1.0f + 3.0f * u_uwWaves.w, above));
+	float fade = 1.0f - smoothstep(18.0f, 30.0f, inland);
+	return clamp(max(max(splash, streaks), damp) * cliff * fade, 0.0f, 1.0f);
+}
+
 void main()
 {
 	// unpack uniforms
@@ -379,6 +424,14 @@ void main()
 			float sandShare;
 			land = mix(land, SeabedGround(v_world, ground, groundLight, normal, sandShare), seabedShare);
 			bumpAlpha *= 1.0f - seabedShare;
+		}
+		// The rock of a cliff after a wave hits it: darker, with a sheen of the light on the water
+		float wet = CliffWetness(v_world);
+		if (wet > 0.0f)
+		{
+			vec3 toEye = normalize(u_uwEye.xyz - v_world);
+			float sheen = pow(max(dot(reflect(-u_uwAbove.xyz, normal), toEye), 0.0f), 24.0f);
+			land = mix(land, land * 0.55f, wet) + u_uwLightColour.rgb * sheen * 0.35f * wet;
 		}
 		block.a = 1.0f;
 	}
