@@ -55,7 +55,8 @@ constexpr uint32_t k_YawnRange = 1000;
 constexpr uint32_t k_YawnDraw = 23;
 /// Zoomed onto it, a mouse button held for less than this long has it look at the pointer
 constexpr float k_PointerLookMs = 1500.0f;
-/// The point under the pointer it looks at lies this far into the screen
+/// The point under the pointer it looks at lies this far into the screen, along the camera's view. It is not the depth
+/// that the tattoo editor of the main menu uses.
 constexpr float k_PointerDepth = 3.0f;
 /// The pose moves on by no more than this much of a frame's time
 constexpr float k_MaxFrameMs = 200.0f;
@@ -76,6 +77,9 @@ constexpr uint32_t k_IdleFidgets = 10;
 [[nodiscard]] float HeadingTowards(const glm::vec3& from, const glm::vec3& to);
 /// Whether a heading is far enough off the one wanted to turn
 [[nodiscard]] bool MustTurn(float heading, float wanted);
+/// The point under the pointer that it looks at, from the camera's eye and the point under the pointer on the near
+/// plane, which is the near distance into the screen
+[[nodiscard]] glm::vec3 PointerPoint(const glm::vec3& eye, const glm::vec3& onNearPlane, float nearDistance);
 
 /// What the copy is doing, kept between frames
 struct State

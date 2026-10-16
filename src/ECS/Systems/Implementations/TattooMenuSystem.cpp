@@ -38,6 +38,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
+#include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/TattooMenuCreature.h"
@@ -46,6 +47,7 @@
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
@@ -119,6 +121,8 @@ void TattooMenuSystem::Open()
 	registry.Assign<CreatureCopy>(copy, body, tattoo_menu::k_Size);
 	registry.Assign<CreatureAnimation>(copy);
 	registry.Assign<CreatureEyes>(copy);
+	// It has hair of its own. The hair starts again each time that the editor opens.
+	registry.Assign<CreatureHair>(copy);
 	cave_creature::State state {.rest = cave_creature::Rest::Sit, .heading = 0.0f};
 	// It is shown from the start, so it does not turn round as the cave's creature does when the camera comes to it
 	state.zoomed = true;
@@ -229,6 +233,11 @@ void TattooMenuSystem::Update(float milliseconds, glm::ivec2 pointer, bool butto
 	if (Locator::creatureAnimationSystem::has_value())
 	{
 		Locator::creatureAnimationSystem::value().PoseCopy(*_copy, frameMs);
+	}
+	// Its hair swings from the new pose by the whole time of the frame, as the game is paused under the menu
+	if (Locator::creatureHairSystem::has_value())
+	{
+		Locator::creatureHairSystem::value().StepCopy(*_copy, std::chrono::duration<float, std::milli>(milliseconds));
 	}
 	HoverSites(pointer);
 }

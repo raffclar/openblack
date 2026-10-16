@@ -470,7 +470,7 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 			if (size.x > 0.0f && size.y > 0.0f && camera.GetNearClip() > 0.0f)
 			{
 				const auto [eye, near] = camera.OnNearPlane(glm::vec2(actions.GetMousePosition()) / size);
-				frame.pointer = eye + ((near - eye) * (cave_creature::k_PointerDepth / camera.GetNearClip()));
+				frame.pointer = cave_creature::PointerPoint(eye, near, camera.GetNearClip());
 			}
 		}
 	}

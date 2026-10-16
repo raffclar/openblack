@@ -175,6 +175,18 @@ TEST(CaveCreature, AButtonHeldBrieflyHasItLookAtThePointer)
 	EXPECT_FALSE(state.heldMs.has_value());
 }
 
+TEST(CaveCreature, ThePointerPointIsThreeIntoTheScreen)
+{
+	// A camera at (1, 2, 3) that looks along +z, with its near plane 0.5 in front of it
+	const glm::vec3 eye {1.0f, 2.0f, 3.0f};
+	const glm::vec3 onNearPlane = eye + glm::vec3(0.1f, -0.2f, 0.5f);
+	const auto point = PointerPoint(eye, onNearPlane, 0.5f);
+	EXPECT_NEAR(point.z - eye.z, k_PointerDepth, 1e-5f);
+	EXPECT_NEAR(point.x - eye.x, 0.6f, 1e-5f);
+	EXPECT_NEAR(point.y - eye.y, -1.2f, 1e-5f);
+	EXPECT_FLOAT_EQ(k_PointerDepth, 3.0f);
+}
+
 TEST(CaveCreature, ItYawnsNowAndThenWhileSitting)
 {
 	auto state = FacingTheFire();
