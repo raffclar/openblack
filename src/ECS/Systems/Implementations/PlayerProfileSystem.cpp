@@ -24,7 +24,9 @@
 
 #include <spdlog/spdlog.h>
 
+#include "ECS/Systems/ForceFeedbackSystemInterface.h"
 #include "Gui/TextDatabase.h"
+#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -38,6 +40,15 @@ player_profiles::Profile DeveloperProfile()
 	        .creatureFile = std::string(player_profiles::k_DeveloperCreatureFile),
 	        .creatureName = std::string(player_profiles::k_DeveloperName),
 	        .symbol = 0};
+}
+
+/// The force-feedback effects take the detail level of the profile played, as the game does when a profile is kept
+void ApplyForceFeedbackLevel(const player_profiles::Settings& settings)
+{
+	if (Locator::forceFeedbackSystem::has_value())
+	{
+		Locator::forceFeedbackSystem::value().SetLevel(settings.forceFeedback);
+	}
 }
 } // namespace
 
@@ -142,6 +153,7 @@ void PlayerProfileSystem::CreateProfile(std::u16string_view name, int symbol)
 	const auto& made = player_profiles::Add(_profiles, name, accountName, player_profiles::CreatureFileName(ticks), symbol);
 	// The profile made is the one played from now on
 	_profiles.current = made.name;
+	ApplyForceFeedbackLevel(made.settings);
 	if (const auto logger = spdlog::get("game"); logger != nullptr)
 	{
 		SPDLOG_LOGGER_INFO(logger, "Made the player profile \"{}\", its creature to be kept in {}", made.name,
@@ -165,6 +177,10 @@ bool PlayerProfileSystem::SelectProfile(std::u16string_view name)
 	if (const auto logger = spdlog::get("game"); logger != nullptr)
 	{
 		SPDLOG_LOGGER_INFO(logger, "Playing as the player profile \"{}\"", _profiles.current);
+	}
+	if (const auto* profile = CurrentProfile(); profile != nullptr)
+	{
+		ApplyForceFeedbackLevel(profile->settings);
 	}
 	Save();
 	return true;
@@ -216,6 +232,7 @@ void PlayerProfileSystem::SetCurrentSettings(const player_profiles::Settings& se
 		return;
 	}
 	profile->settings = settings;
+	ApplyForceFeedbackLevel(settings);
 	Save();
 }
 

@@ -25,7 +25,8 @@ namespace openblack::player_profiles
 
 /// What the player sets in the options, kept with their profile. A profile that has never kept a setting has the
 /// game's own: intelligent tooltips, the important texts shown, all but the least help, the creature's help on, reading
-/// at middle speed, the newest text at the top, the right hand, no push scrolling and the land saved automatically
+/// at middle speed, the newest text at the top, the right hand, no push scrolling, the land saved automatically and the middle
+/// detail of force feedback
 struct Settings
 {
 	/// None, minimum, intelligent or all
@@ -41,6 +42,8 @@ struct Settings
 	bool leftHanded {false};
 	bool pushScrolling {false};
 	bool autoSave {true};
+	/// The detail of the force-feedback effects, from 0 (only the most important effects) to 2 (all the effects)
+	int forceFeedback {1};
 
 	bool operator==(const Settings&) const = default;
 };

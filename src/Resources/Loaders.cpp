@@ -27,6 +27,7 @@
 #include <GestureFile.h>
 #include <HNDFile.h>
 #include <HelpDudeFile.h>
+#include <IFRFile.h>
 #include <L3DFile.h>
 #include <MorphFile.h>
 #include <PackFile.h>
@@ -888,6 +889,17 @@ HandDemoLoader::result_type HandDemoLoader::operator()(FromDiskTag, const std::f
 	{
 		throw std::runtime_error("Unable to load the hand demonstration " + path.string() + ": " +
 		                         std::string(hnd::ResultToStr(result)));
+	}
+	return file;
+}
+
+ForceFeedbackFileLoader::result_type ForceFeedbackFileLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	auto file = std::make_shared<ifr::IFRFile>();
+	if (const auto result = file->Open(Locator::filesystem::value().ReadAll(path)); result != ifr::IFRResult::Success)
+	{
+		throw std::runtime_error("Unable to load the force-feedback effects " + path.string() + ": " +
+		                         std::string(ifr::ResultToStr(result)));
 	}
 	return file;
 }

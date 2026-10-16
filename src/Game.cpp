@@ -171,6 +171,7 @@
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
+#include "ECS/Systems/ForceFeedbackSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
@@ -558,6 +559,7 @@ Game::Game(Arguments&& args) noexcept
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
+	config.forceFeedback = args.forceFeedback;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	config.resolution = {args.windowWidth, args.windowHeight};
@@ -2198,6 +2200,13 @@ bool Game::Update() noexcept
 	Locator::cameraPathSystem::value().Update(deltaTime);
 	// The numbers floating up from things rise and fade
 	UpdateFloatingNumbers(std::chrono::duration<float>(deltaTime).count());
+	// The force-feedback device plays on in real time, and feels the cursor move across the screen
+	if (Locator::forceFeedbackSystem::has_value())
+	{
+		const auto size = Locator::windowing::has_value() ? glm::vec2(Locator::windowing::value().GetSize()) : glm::vec2(0.0f);
+		const auto share = size.x > 0.0f && size.y > 0.0f ? glm::vec2(_mousePosition) / size : glm::vec2(0.0f);
+		Locator::forceFeedbackSystem::value().Update(std::chrono::duration<float>(deltaTime).count(), share);
+	}
 	// The marks over creatures that learn rise, blink and fade
 	UpdateLearningMarks(std::chrono::duration<float, std::milli>(deltaTime).count());
 

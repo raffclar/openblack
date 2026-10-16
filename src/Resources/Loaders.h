@@ -69,6 +69,10 @@ namespace openblack::hnd
 {
 struct HNDFile;
 } // namespace openblack::hnd
+namespace openblack::ifr
+{
+class IFRFile;
+} // namespace openblack::ifr
 namespace openblack::bink
 {
 class BinkFile;
@@ -333,6 +337,12 @@ struct DanceShapeLoader final: BaseLoader<dance::DanceShapeFile>
 
 /// A hand demonstration, from the files under Data/HandDemo
 struct HandDemoLoader final: BaseLoader<hnd::HNDFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// The effects of a force-feedback device, from the files under Data/Immersion
+struct ForceFeedbackFileLoader final: BaseLoader<ifr::IFRFile>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };

@@ -79,6 +79,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/ForceFeedbackSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
@@ -282,6 +283,25 @@ constexpr float k_SmokeCellsPerSide = 8.0f;
 
 /// The player at this computer, whose own creature's marker is drawn and who hears their orders acknowledged
 constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
+
+/// The force-feedback mouse of the local player pulls as the hand holds the leash. The pull starts as the hand takes the
+/// leash untied, and stops when the leash is tied or comes off.
+void FeelPull(PlayerNames holder, bool pulls)
+{
+	if (holder != k_LocalPlayer || !Locator::forceFeedbackSystem::has_value())
+	{
+		return;
+	}
+	auto& forceFeedback = Locator::forceFeedbackSystem::value();
+	if (pulls)
+	{
+		forceFeedback.Start(ImmersionEffectType::LeashPull);
+	}
+	else
+	{
+		forceFeedback.Stop(ImmersionEffectType::LeashPull);
+	}
+}
 
 /// Whether a point is in the sea: a cell of the land with water in it, or off the land
 bool IsWater(glm::vec2 point)
@@ -583,6 +603,7 @@ bool LeashSystem::PutOnFor(PlayerNames player, entt::entity creature, LeashType 
 	leashes->selected = type;
 	// The rope is laid afresh from the hand to the collar next frame
 	leashes->worn->ropeStarted = false;
+	FeelPull(leashes->worn->holder, !leashes->worn->tiedTo.has_value());
 	return true;
 }
 
@@ -596,6 +617,7 @@ void LeashSystem::TakeOff(entt::entity creature)
 	}
 	EndOrder(creature);
 	leashes = registry.TryGet<CreatureLeash>(creature);
+	FeelPull(leashes->worn->holder, false);
 	leashes->worn.reset();
 	leashes->confinementRadius = 0.0f;
 	if (auto* mind = MindOf(registry, creature))
@@ -759,6 +781,7 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 	worn.rope.slackLength = lengths.slack;
 	worn.rope.maxLength = lengths.max;
 	worn.ropeStarted = false;
+	FeelPull(worn.holder, false);
 
 	// The two tying sounds play in turn. The local player hears the leash of their own creature without a place. The
 	// leash of each other creature makes its sound at the thing, and the sound belongs to the player of that creature.
@@ -804,6 +827,7 @@ void LeashSystem::UntieToHand(entt::entity creature)
 	}
 	leashes->worn->tiedTo.reset();
 	leashes->worn->ropeStarted = false;
+	FeelPull(leashes->worn->holder, true);
 }
 
 void LeashSystem::SetWorks(entt::entity creature, bool works)
@@ -1349,6 +1373,7 @@ void LeashSystem::ProcessTurn()
 			{
 				worn.tiedTo.reset();
 				worn.ropeStarted = false;
+				FeelPull(worn.holder, true);
 			}
 			// The leash holds the creature within its full length of the hand, or of the thing that it is tied to
 			const auto hand = HandPoint();

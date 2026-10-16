@@ -17,6 +17,7 @@
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/ForceFeedbackSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -24,6 +25,15 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
+/// A force-feedback mouse gives a pulse as a tattoo goes on or comes off
+void Pulse()
+{
+	if (Locator::forceFeedbackSystem::has_value())
+	{
+		Locator::forceFeedbackSystem::value().Start(ImmersionEffectType::CommandSuccess);
+	}
+}
+
 /// The skins of the creatures in the registry, painted again by the skin system as their tattoos change
 class RegistrySkin final: public TattooEditorSystem::Skin
 {
@@ -143,6 +153,7 @@ bool TattooEditorSystem::Drop(uint8_t design, const glm::u8vec3& colour)
 	if (putOn)
 	{
 		_face = creature_tattoo_editor::k_PutOnFace;
+		Pulse();
 	}
 	return putOn;
 }
@@ -158,6 +169,7 @@ std::optional<creature_tattoo::Slot> TattooEditorSystem::Lift()
 	{
 		Write(_session.slots);
 		_face = creature_tattoo_editor::k_LiftFace;
+		Pulse();
 	}
 	return lifted;
 }

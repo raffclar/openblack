@@ -11,6 +11,7 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <IFRFile.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/Implementations/LandIsland.h"
@@ -93,6 +94,7 @@
 #include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/ArtefactSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
+#include "ECS/Systems/Implementations/ForceFeedbackSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -140,6 +142,7 @@
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "ForceFeedback/ForceFeedbackBackend.h"
 #include "Graphics/RendererInterface.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
@@ -203,6 +206,7 @@ using openblack::ecs::systems::FieldSystem;
 using openblack::ecs::systems::FireflySystem;
 using openblack::ecs::systems::FishFarmSystem;
 using openblack::ecs::systems::FootprintSystem;
+using openblack::ecs::systems::ForceFeedbackSystem;
 using openblack::ecs::systems::ForestSystem;
 using openblack::ecs::systems::GestureEventsInterface;
 using openblack::ecs::systems::GestureSystem;
@@ -312,6 +316,62 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	return true;
 }
 
+namespace
+{
+
+using openblack::Locator;
+
+/// The device that the run asks for, with the effect file of its kind, read through the resource cache. The detail
+/// level is the current profile's.
+void ConnectForceFeedback(ForceFeedbackSystem& system)
+{
+	if (Locator::playerProfileSystem::has_value())
+	{
+		if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
+		{
+			system.SetLevel(profile->settings.forceFeedback);
+		}
+	}
+	const auto choice = Locator::config::has_value() ? Locator::config::value().forceFeedback : std::string("off");
+	std::unique_ptr<openblack::force_feedback::Backend> backend;
+	if (choice == "sdl")
+	{
+		backend = openblack::force_feedback::MakeSdlHapticBackend();
+	}
+	else if (choice == "log")
+	{
+		backend = openblack::force_feedback::MakeLogBackend();
+	}
+	if (backend == nullptr)
+	{
+		if (choice != "off")
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "No force-feedback device for \"{}\": the effects play nowhere", choice);
+		}
+		return;
+	}
+	const auto file = std::string(openblack::force_feedback::FileFor(backend->Kind()));
+	auto& cache = Locator::resources::value().GetForceFeedbackFiles();
+	const auto id = entt::hashed_string(file.c_str()).value();
+	try
+	{
+		if (!cache.Contains(id))
+		{
+			const auto path = Locator::filesystem::value().GetPath<openblack::filesystem::Path::Data>() / "Immersion" / file;
+			cache.Load(id, openblack::resources::ForceFeedbackFileLoader::FromDiskTag {}, path);
+		}
+	}
+	catch (const std::runtime_error& error)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The force-feedback effects can't be read: {}", error.what());
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Force-feedback effects from {} go to the {} device", file, backend->Name());
+	system.Connect(std::move(backend), *cache.Handle(id).handle());
+}
+
+} // namespace
+
 bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 {
 	Locator::terrainSystem::emplace<UnloadedIsland>();
@@ -343,6 +403,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::spellIconSystem::emplace<SpellIconSystem>();
 	Locator::artefactSystem::emplace<ArtefactSystem>();
 	Locator::heartbeatSystem::emplace<HeartbeatSystem>();
+	ConnectForceFeedback(static_cast<ForceFeedbackSystem&>(Locator::forceFeedbackSystem::emplace<ForceFeedbackSystem>()));
 	Locator::fieldSystem::emplace<FieldSystem>();
 	Locator::fishFarmSystem::emplace<FishFarmSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
@@ -580,6 +641,7 @@ void openblack::ShutDownServices()
 	Locator::spellIconSystem::reset();
 	Locator::artefactSystem::reset();
 	Locator::heartbeatSystem::reset();
+	Locator::forceFeedbackSystem::reset();
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
 	Locator::fireSystem::reset();

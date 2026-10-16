@@ -171,6 +171,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/ForceFeedbackSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -7597,8 +7598,8 @@ void ReleaseObjectFocus() // 303 RELEASE_OBJECT_FOCUS
 
 void ImmersionExists() // 304 IMMERSION_EXISTS
 {
-	// openblack drives no force-feedback mouse, so there is never a device for the scripts' effects
-	Pushb(false);
+	// True only when a force-feedback device takes the effects
+	Pushb(Locator::forceFeedbackSystem::has_value() && Locator::forceFeedbackSystem::value().DeviceExists());
 }
 
 void SetDrawLeash() // 305 SET_DRAW_LEASH
@@ -9083,19 +9084,30 @@ void SetObjectBeliefScale() // 428 SET_OBJECT_BELIEF_SCALE
 void StartImmersion() // 429 START_IMMERSION
 {
 	// A force-feedback effect, which does nothing without the device (see IMMERSION_EXISTS)
-	Pop();
+	const auto effect = static_cast<ImmersionEffectType>(Pop().intVal);
+	if (Locator::forceFeedbackSystem::has_value())
+	{
+		Locator::forceFeedbackSystem::value().Start(effect);
+	}
 }
 
 void StopImmersion() // 430 STOP_IMMERSION
 {
-	// Stopping a force-feedback effect does nothing without the device either
-	Pop();
+	// The effect stops. Without the device this does nothing.
+	const auto effect = static_cast<ImmersionEffectType>(Pop().intVal);
+	if (Locator::forceFeedbackSystem::has_value())
+	{
+		Locator::forceFeedbackSystem::value().Stop(effect);
+	}
 }
 
 void StopAllImmersion() // 431 STOP_ALL_IMMERSION
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// All the force-feedback effects stop
+	if (Locator::forceFeedbackSystem::has_value())
+	{
+		Locator::forceFeedbackSystem::value().StopAll();
+	}
 }
 
 void SetCreatureInTemple() // 432 SET_CREATURE_IN_TEMPLE

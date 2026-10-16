@@ -44,6 +44,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/ForceFeedbackSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -542,10 +543,18 @@ void InfluenceSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 	{
 		return;
 	}
-	if (const auto hand = HandPosition(); hand.has_value() && CrossBorders(*hand) && Locator::soundTagSystem::has_value())
+	if (const auto hand = HandPosition(); hand.has_value() && CrossBorders(*hand))
 	{
-		Locator::soundTagSystem::value().CreatePointSound(static_cast<entt::id_type>(audio::SoundId::G_HandThroughInfluence_01),
-		                                                  *hand, false);
+		if (Locator::soundTagSystem::has_value())
+		{
+			Locator::soundTagSystem::value().CreatePointSound(
+			    static_cast<entt::id_type>(audio::SoundId::G_HandThroughInfluence_01), *hand, false);
+		}
+		// A force-feedback mouse feels the border
+		if (Locator::forceFeedbackSystem::has_value())
+		{
+			Locator::forceFeedbackSystem::value().Start(ImmersionEffectType::HandHitInfluence);
+		}
 	}
 }
 

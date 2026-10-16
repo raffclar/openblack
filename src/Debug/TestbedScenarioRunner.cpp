@@ -148,6 +148,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
+#include "ECS/Systems/ForceFeedbackSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
@@ -193,6 +194,7 @@
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "ForceFeedback/ForceFeedbackRules.h"
 #include "Game.h"
 #include "Gestures/GesturePaths.h"
 #include "Gui/GameInterface.h"
@@ -2325,6 +2327,17 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the camera is put back", _seconds));
 		return;
 	}
+	if (command.kind == Kind::ForceFeedback)
+	{
+		const auto effect = static_cast<ImmersionEffectType>(command.value);
+		const auto* entry = force_feedback::EntryFor(effect);
+		if (Locator::forceFeedbackSystem::has_value())
+		{
+			Locator::forceFeedbackSystem::value().Start(effect);
+		}
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), entry != nullptr ? entry->name : "no effect"));
+		return;
+	}
 	if (command.kind == Kind::SetHour)
 	{
 		if (Locator::skySystem::has_value())
@@ -2699,6 +2712,7 @@ void Runner::Give(const Command& command)
 	case Kind::OpenTattooMenu:
 	case Kind::PlayCustomMusic:
 	case Kind::ShowCustomMusicControls:
+	case Kind::ForceFeedback:
 	case Kind::RunText:
 	case Kind::ReadTip:
 	case Kind::LookAtTempleScroll:

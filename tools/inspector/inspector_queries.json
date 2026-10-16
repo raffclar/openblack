@@ -1273,6 +1273,12 @@
   "query": "players.heartbeat"
  },
  {
+  "description": "The force-feedback device: its name, the detail level, the vibration now, the effects that play and the newest starts and stops",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.force_feedback"
+ },
+ {
   "description": "This computer's hands: where they are, and what the hand holds or takes",
   "kind": "object",
   "parameters": [],

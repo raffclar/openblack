@@ -28,6 +28,7 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
+#include "ForceFeedback/ForceFeedbackRules.h"
 #include "Particles/ParticleTypes.h"
 #include "TestbedDispenserGrid.h"
 
@@ -4563,6 +4564,43 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "force_feedback.creature",
+	    .name = "Force feedback of the leash and the hand",
+	    .facet = Facet::Hand,
+	    .description = "A tiger gets the leash, is tied to a tree, untied back to the hand and let off the leash. Then the "
+	                   "hand slaps it gently, slaps it hard and lets it go. Run the game with --force-feedback log or sdl.",
+	    .expected = "The force-feedback device gets, in turn: the leash pull starts, stops at the tie, starts at the untie "
+	                "and stops as the leash comes off; the gentle slap and the hard slap give their jolts; letting go "
+	                "stops the fur. The inspector's players.force_feedback query lists each start and stop.",
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 10.0f}, {40.0f, 10.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 10.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 2.0f, false),
+	                 Act(Kind::UntieLeash, 0, 2.0f), Act(Kind::TakeOffLeash, 0, 2.0f), Slap(0, 0.5f, true, true, 2.0f),
+	                 Slap(0, 0.5f, false, false, 3.0f), Act(Kind::HandLetGo, 0, 3.0f)},
+	});
+
+	{
+		// Every effect of the game's table in turn, half a second apart
+		std::vector<Command> commands;
+		for (size_t effect = 0; effect < force_feedback::k_Effects.size(); ++effect)
+		{
+			commands.push_back({.kind = Kind::ForceFeedback, .delaySeconds = 0.5f, .value = effect});
+		}
+		all.push_back({
+		    .id = "force_feedback.every_effect",
+		    .name = "Every force-feedback effect",
+		    .facet = Facet::Hand,
+		    .description = "Each of the game's force-feedback effects starts in turn, half a second apart, as a script's "
+		                   "START_IMMERSION starts it. Run the game with --force-feedback log or sdl.",
+		    .expected = "The device gets each effect in the order of the game's table. At the profile's middle detail "
+		                "level the effects of the highest level do not play. The log names each effect as it starts.",
+		    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 0.0f}, {40.0f, 0.0f}}},
+		    .commands = std::move(commands),
+		});
+	}
+
+	all.push_back({
 	    .id = "leash.tied_thrown",
 	    .name = "Tied to a thrown rock",
 	    .facet = Facet::Leash,
@@ -7145,7 +7183,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || IsPointerCommand(kind);
+	       kind == Kind::OpenTattooMenu || kind == Kind::ForceFeedback || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -7172,7 +7210,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 134> k_Names {
+	constexpr std::array<std::string_view, 135> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7307,6 +7345,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "open the tattoo editor from the menu",
 		    "play custom music",
 		    "show the custom music controls",
+		    "start a force-feedback effect",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

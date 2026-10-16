@@ -13,6 +13,7 @@
 #include <array>
 #include <map>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -120,5 +121,8 @@ struct EngineConfig
 	/// Draw the first frame of a land once behind the loading screen, so that the renderer makes its pipelines and
 	/// render targets there and not in the first frames of the game
 	bool warmUpFirstFrame {true};
+	/// The device of the force-feedback effects: "off" for none, "sdl" for the first SDL haptic device that vibrates, "log"
+	/// for the game's log
+	std::string forceFeedback {"off"};
 };
 } // namespace openblack

@@ -42,6 +42,7 @@ public:
 	DanceFileManager& GetDanceFiles() override { return _danceFiles; }
 	DanceShapeManager& GetDanceShapes() override { return _danceShapes; }
 	HandDemoManager& GetHandDemos() override { return _handDemos; }
+	ForceFeedbackFileManager& GetForceFeedbackFiles() override { return _forceFeedbackFiles; }
 	ParticleFileManager& GetParticleFiles() override { return _particleFiles; }
 	ParticleBitmapManager& GetParticleBitmaps() override { return _particleBitmaps; }
 	GestureTemplatesManager& GetGestureTemplates() override { return _gestureTemplates; }
@@ -132,6 +133,7 @@ private:
 	DanceFileManager _danceFiles;
 	DanceShapeManager _danceShapes;
 	HandDemoManager _handDemos;
+	ForceFeedbackFileManager _forceFeedbackFiles;
 	ParticleFileManager _particleFiles;
 	ParticleBitmapManager _particleBitmaps;
 	GestureTemplatesManager _gestureTemplates;

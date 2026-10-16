@@ -24,6 +24,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
+#include "ECS/Systems/ForceFeedbackSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
@@ -79,6 +80,11 @@ void CameraZoneSystem::FenceHit(const glm::vec3& origin, const glm::vec3& listen
 	// The sound of going out of bounds, heard from where the camera is
 	audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_OutOfBounds),
 	                            {.position = listener, .voicePlayType = pack::AudioBankLoop::Once});
+	// A force-feedback mouse feels the fence
+	if (Locator::forceFeedbackSystem::has_value())
+	{
+		Locator::forceFeedbackSystem::value().Start(ImmersionEffectType::HitExclusion);
+	}
 	if (Locator::explosionSystem::has_value())
 	{
 		Locator::explosionSystem::value().AddShake(origin, k_ShakeRadius, k_ShakeStrength, k_ShakeSeconds, false);

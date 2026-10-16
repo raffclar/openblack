@@ -67,6 +67,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("screenshot-frame", "Request a screenshot of the backbuffer at a certain frame number.", cxxopts::value<uint32_t>())
 		("screenshot-path", "Path of the request a screenshot of the backbuffer.", cxxopts::value<std::filesystem::path>()->default_value("screenshot.png"))
 		("frame-stats", "Log the average and 95th percentile frame time and the profiler stages every so many frames (0 for never), and each frame of 10 ms or more with its stages.", cxxopts::value<uint32_t>()->default_value("0"))
+		("force-feedback", "Send the force-feedback effects to a device: off (none, as the game without a force-feedback mouse), sdl (the first SDL haptic device that vibrates) or log (the game log, for tests).", cxxopts::value<std::string>()->default_value("off"))
 		("frame-stats-views", "With --frame-stats, also profile and log the GPU time of each render view.")
 		("no-first-frame-warm-up", "Do not draw the first frame of a land behind the loading screen. Then the first frames of the game make the renderer's pipelines and render targets.")
 		("unlock-bonus-creatures", "Debug: take the Creature Breeder's bonus creatures as unlocked, which the game only had once an unlock from outside it was installed: all, or some of leopard, horse, mandrill, gorilla and rhino joined by commas. None by default, as on a normal install.", cxxopts::value<std::string>())
@@ -230,6 +231,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;
+		args.forceFeedback = result["force-feedback"].as<std::string>();
 		args.dynamicTreeShadows = result.count("dynamic-tree-shadows") != 0;
 		if (result.count("unlock-bonus-creatures") != 0)
 		{

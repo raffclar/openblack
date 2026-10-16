@@ -1088,3 +1088,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_friendship test_creature_friendship.cpp
 )
+openblack_setup_and_add_test(test_ifr_file test_ifr_file.cpp)
+target_link_libraries(test_ifr_file PRIVATE ifr)
+openblack_setup_and_add_test(test_force_feedback test_force_feedback.cpp)
+target_link_libraries(test_force_feedback PRIVATE ifr)

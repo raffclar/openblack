@@ -141,6 +141,7 @@
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
+#include "ECS/Systems/ForceFeedbackSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
@@ -207,6 +208,7 @@
 #include "EngineConfig.h"
 #include "FightProviders.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "ForceFeedback/ForceFeedbackRules.h"
 #include "Game.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
@@ -357,6 +359,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"spellIconSystem", "town.spells"},
     LocatorCoverage {"artefactSystem", "living.artefacts"},
     LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
+    LocatorCoverage {"forceFeedbackSystem", "players.force_feedback"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
@@ -1602,6 +1605,41 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		                  });
 		                  return items;
 	                  }));
+	provider->Add(
+	    Query("force_feedback",
+	          "The force-feedback device: its name, the detail level, the vibration now, the effects that play and the "
+	          "newest starts and stops"),
+	    Serve<Locator::forceFeedbackSystem>(
+	        "the force-feedback effects",
+	        [](const ecs::systems::ForceFeedbackSystemInterface& effects, const QueryContext& /*c*/) {
+		        Json playing = Json::array();
+		        for (const auto& entry : force_feedback::k_Effects)
+		        {
+			        if (effects.IsPlaying(entry.type))
+			        {
+				        playing.push_back({{"type", static_cast<int>(entry.type)}, {"name", entry.name}});
+			        }
+		        }
+		        Json events = Json::array();
+		        for (const auto& event : effects.Events())
+		        {
+			        const auto* entry = force_feedback::EntryFor(event.type);
+			        Json item = {{"seconds", event.seconds},
+			                     {"type", static_cast<int>(event.type)},
+			                     {"name", entry != nullptr ? entry->name : std::string_view {}},
+			                     {"start", event.start}};
+			        if (event.iterations.has_value())
+			        {
+				        item["iterations"] = *event.iterations;
+			        }
+			        events.push_back(std::move(item));
+		        }
+		        return Json {{"device", effects.DeviceExists() ? Json(effects.DeviceName()) : Json(nullptr)},
+		                     {"level", effects.Level()},
+		                     {"strength", effects.Strength()},
+		                     {"playing", std::move(playing)},
+		                     {"events", std::move(events)}};
+	        }));
 	provider->Add(
 	    Query("hand", "This computer's hands: where they are, and what the hand holds or takes"),
 	    Serve<Locator::handSystem>("the hands", [](const ecs::systems::HandSystemInterface& hands, const QueryContext& /*c*/) {

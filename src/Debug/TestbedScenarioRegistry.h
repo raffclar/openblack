@@ -798,6 +798,9 @@ struct Command
 		/// list (value 2), as the music button and the play list button show them. Value 0 hides them. Needs no
 		/// creature
 		ShowCustomMusicControls,
+		/// The force-feedback effect of the value starts on the device, as a script's START_IMMERSION starts it. Needs
+		/// no creature
+		ForceFeedback,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

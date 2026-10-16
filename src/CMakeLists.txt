@@ -140,6 +140,7 @@ target_link_libraries(
           exc
           dance
           hnd
+          ifr
           pack
           lnd
           anm

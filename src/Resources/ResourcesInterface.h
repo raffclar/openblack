@@ -37,6 +37,7 @@ using CameraZoneManager = ResourceManager<CameraZoneLoader>;
 using DanceFileManager = ResourceManager<DanceFileLoader>;
 using DanceShapeManager = ResourceManager<DanceShapeLoader>;
 using HandDemoManager = ResourceManager<HandDemoLoader>;
+using ForceFeedbackFileManager = ResourceManager<ForceFeedbackFileLoader>;
 using ParticleFileManager = ResourceManager<ParticleFileLoader>;
 using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
 using VideoManager = ResourceManager<VideoLoader>;
@@ -75,6 +76,8 @@ public:
 	virtual DanceShapeManager& GetDanceShapes() = 0;
 	/// The tutorial's hand demonstrations, read when a script first plays each
 	virtual HandDemoManager& GetHandDemos() = 0;
+	/// The force-feedback effect files of Data/Immersion, by their file names
+	virtual ForceFeedbackFileManager& GetForceFeedbackFiles() = 0;
 	/// The particle effect files, by particles::ParticleFileId of their names
 	virtual ParticleFileManager& GetParticleFiles() = 0;
 	/// The light maps the particle effects stamp on the land, by their paths

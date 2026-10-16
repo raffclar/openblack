@@ -48,6 +48,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/ForceFeedbackSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -225,6 +226,15 @@ std::optional<creature_hand::Holdable> HoldableOf(const ecs::Registry& registry,
 	    .frozen = spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Freeze),
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	};
+}
+
+/// A force-feedback mouse gives a jolt for a slap, a harder one for a hard slap
+void FeelSlap(bool gentle)
+{
+	if (Locator::forceFeedbackSystem::has_value())
+	{
+		Locator::forceFeedbackSystem::value().Start(gentle ? ImmersionEffectType::Slap : ImmersionEffectType::Hit);
+	}
 }
 } // namespace
 
@@ -474,6 +484,11 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	}
 	const bool onBody = hit.has_value();
 	const auto touch = onBody ? std::optional(hit->point) : std::nullopt;
+	// A force-feedback mouse feels the creature's fur where the hand touches the body
+	if (Locator::forceFeedbackSystem::has_value())
+	{
+		Locator::forceFeedbackSystem::value().TouchCreature(onBody);
+	}
 	contact->heldMs += ms;
 
 	// Strokes and slaps are weighed in steps at the screen's refresh rate, as the game weighed them once a frame
@@ -586,6 +601,7 @@ bool CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
 			feedback::Touched(clocks);
 			contact.sum = feedback::AfterSlap(contact.sum, slap->gentle);
 			contact.strokedOrSlapped = true;
+			FeelSlap(slap->gentle);
 		}
 		clocks.contact = 0.0f;
 	}
@@ -628,6 +644,11 @@ void CreatureHandSystem::Release()
 	if (!Locator::handSystem::has_value())
 	{
 		return;
+	}
+	// Letting go stops the feel of the fur
+	if (Locator::forceFeedbackSystem::has_value())
+	{
+		Locator::forceFeedbackSystem::value().Stop(ImmersionEffectType::Fur);
 	}
 	const auto hand = PlayerHand();
 	const auto* contact = registry.TryGet<const HandOnCreature>(hand);
@@ -732,6 +753,7 @@ bool CreatureHandSystem::Slap(entt::entity creature, float heightShare, bool gen
 	}
 	contact->sum = feedback::AfterSlap(contact->sum, slap->gentle);
 	feedback::Touched(contact->clocks);
+	FeelSlap(slap->gentle);
 	return true;
 }
 

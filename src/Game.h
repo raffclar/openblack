@@ -153,6 +153,8 @@ struct Arguments
 	bool frameStatsViews {false};
 	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
 	bool warmUpFirstFrame {true};
+	/// The device of the force-feedback effects: off, sdl or log
+	std::string forceFeedback {"off"};
 	bool dynamicTreeShadows {false};
 	/// Debug: the Creature Breeder's bonus creatures taken as unlocked (none by default, as on a normal install)
 	creature_swap::Unlocked unlockedBonusCreatures;
