@@ -322,6 +322,8 @@ float UwCliffBackwash(float distance, float t, float cliff)
 	return cliff * u_uwWaves.w * 0.6f * sin(k * distance - 1.3f * t) * exp(-max(distance, 0.0f) / 25.0f);
 }
 
+#include "underwater_wake.sh"
+
 // The height of the sea's surface at a point: the sea's level, the deep waves, faded out near the coast and where the
 // water is shallow, and the shore wave that rolls in to the coast. One height for each point, so the water is one
 // surface from the open sea to the edge of the run up the beach. `shore` is the shore map at the point, `footprint`
@@ -343,7 +345,11 @@ float UwSurfaceFiltered(vec2 xz, float t, vec4 footprint, vec4 shore, out vec2 s
 	float length2 = dot(shore.yz, shore.yz);
 	vec2 towards = length2 > 1e-6f ? shore.yz / sqrt(length2) : vec2_splat(0.0f);
 	slope = deepSlope * deep + towards * ((nearer - wave) / 0.5f);
-	return level + height + wave;
+	// The wakes and the rings of the things in the water, and the hulls that push the water down
+	vec2 wakeSlope;
+	float wake = UwWake(xz, wakeSlope);
+	slope += wakeSlope;
+	return level + height + wave + wake;
 }
 
 // The height of the sea's surface at a point, as UwSurfaceFiltered gives it for a round pixel at `range` from the eye

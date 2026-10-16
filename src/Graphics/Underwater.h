@@ -166,6 +166,12 @@ enum class Effect : uint8_t
 	Filtering,
 	/// The long waves of the open sea, which show out to the horizon
 	FarWaves,
+	/// The field of small waves that the things in the water write into: their wakes and rings
+	WakeField,
+	/// The splashes where things fall into the water
+	Splashes,
+	/// The hulls that push the water down, with no water inside a boat
+	HullMask,
 	/// The foam's thickness: the foam that builds up where the waves break and decays, its light and its bubbles
 	FoamVolume,
 	/// The silt in the water, which gives the water its colour and takes the view away sooner

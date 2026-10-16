@@ -8,7 +8,7 @@
 // x: 1 while the sediment shows; y: how strongly the waves stir the sea bed, 0 to about 2; zw: unused
 uniform vec4 u_uwSediment;
 // The spray's noise volume (see underwater::SprayNoiseVolume), for the clouds of silt
-SAMPLER3D(s_sedimentNoise, 9);
+SAMPLER3D(s_sedimentNoise, 10);
 
 // The colour of the silt and the sand
 #define UW_SILT vec3(0.58f, 0.52f, 0.38f)

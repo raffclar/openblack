@@ -8,7 +8,7 @@
 
 #include "underwater_foam.sh"
 
-SAMPLER2D(s_foam, 8);
+SAMPLER2D(s_foam, 9);
 
 // The highest that the foam stands on the water, for a thickness of 1, in units
 #define UW_FOAM_TALLEST 0.45f

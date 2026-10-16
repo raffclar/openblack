@@ -57,6 +57,9 @@ enum class RenderPass : uint8_t
 	UnderwaterEnvironmentSky,
 	/// EXPERIMENT (not for merge): the land and what stands on it, in the same face of the cube
 	UnderwaterEnvironment,
+	/// EXPERIMENT (not for merge): the steps of the field of small waves on the water, at most two in a frame
+	UnderwaterWake0,
+	UnderwaterWake1,
 	/// EXPERIMENT (not for merge): the scene seen under the sea, from its own target to the window, with the motes in
 	/// the water over it
 	UnderwaterPost,
@@ -102,6 +105,8 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Underwater Foam Pass",        //
     "Underwater Cube Sky Pass",    //
     "Underwater Cube Pass",        //
+    "Underwater Wake Pass 0",      //
+    "Underwater Wake Pass 1",      //
     "Underwater Post Pass",        //
     "Gesture Hint Collar 0 Pass",  //
     "Gesture Hint Collar 1 Pass",  //

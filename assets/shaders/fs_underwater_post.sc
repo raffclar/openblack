@@ -2,6 +2,8 @@ $input v_texcoord0, v_texcoord1
 
 #include <bgfx_shader.sh>
 
+// The water reads the field of the wakes and the hulls (see underwater_wake.sh)
+#define UW_WAKE
 #include "underwater.sh"
 
 // EXPERIMENT (not for merge): the experiment's water. The scene is drawn into its own target, with no sea, and this
@@ -573,9 +575,11 @@ void main()
 		float waterTop = eye.y + direction.y * toSurface;
 		float waterDepth = waterTop - shore.w;
 		float lift = waterTop - u_uwParams.z;
-		if (toSurface > 0.0f && (toSurface < sceneDistance || farFloor))
+		vec3 surfacePoint = eye + direction * toSurface;
+		// No water shows inside a boat's hull
+		float insideBoat = UwInsideBoat(surfacePoint.xz);
+		if (toSurface > 0.0f && (toSurface < sceneDistance || farFloor) && insideBoat < 0.999f)
 		{
-			vec3 surfacePoint = eye + direction * toSurface;
 			vec3 ring = FloaterRings(surfacePoint.xz, t);
 			// The filtered waves keep their slope far away: the roughness takes the waves that the pixel cannot show
 			vec2 shownSlope = surfaceSlope + ring.xy;
@@ -665,6 +669,8 @@ void main()
 					foam = max(foam, clamp((band + sheets * 0.85f) * cliff * 1.4f, 0.0f, 1.0f) * strength + length(flow) * 0.0f);
 				}
 				foam = max(foam, ring.z * 0.6f);
+				// The foam of the wakes and the splashes, and the water line on the hulls
+				foam = max(foam, max(UwWakeFoam(surfacePoint.xz, t), UwHullLine(surfacePoint.xz, t) * 0.6f));
 				if (u_uwFlags2.x > 0.5f && u_uwWaves.y > 0.05f)
 				{
 					vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
@@ -698,8 +704,8 @@ void main()
 				}
 			}
 			// Where the original game shows its land over its sea, the land shows here too, as much as there
-			colour = u_uwFlags2.w > 0.5f ? vec3(1.0f, 0.0f, 1.0f) : colour;
-			colour = mix(colour, scene, originalLand);
+			colour = u_uwFlags2.w > 0.5f ? UwWakeDebug(surfacePoint.xz) : colour;
+			colour = mix(colour, scene, max(originalLand, insideBoat));
 		}
 		else if (!sky && world.y < UW_FILM_TOP && (world.y > -0.05f || world.y < u_uwParams.z + 0.05f) &&
 		         abs(texture2DLod(s_sceneColour, sampleUv, 0.0f).a - UW_LAND_MARK) < 0.5f / 255.0f)
