@@ -3290,6 +3290,9 @@ void CreatureMindSystem::AbandonAction(entt::entity creature)
 	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr)
 	{
 		Abandon(*mind);
+		// The action stops as a failure, and its agenda ends with it. The creature then chooses a new plan.
+		mind->idle.step = mind->idle.agenda.size();
+		mind->idle.stepStarted = false;
 	}
 	ReleaseCast(creature);
 }

@@ -63,6 +63,11 @@ bool creature_planner::ShouldSwitch(float best, float current)
 	return best - current > current;
 }
 
+bool creature_planner::MayChoose(bool planActive, bool agendaLeft)
+{
+	return planActive || !agendaLeft;
+}
+
 bool creature_planner::CountsActedOn(Desire desire, bool aboutSomething)
 {
 	return !aboutSomething || desire == Desire::Anger;

@@ -46,6 +46,7 @@ public:
 	void Stop(entt::entity creature) override;
 	void ResetPace(entt::entity creature) override;
 	void Place(entt::entity creature, glm::vec3 position) override;
+	void PlaceWithoutWalking(entt::entity creature, glm::vec3 position) override;
 	[[nodiscard]] bool IsMoving(entt::entity creature) const override;
 	[[nodiscard]] const creature_route::WalkableLand& GetWalkableLand() override;
 	[[nodiscard]] std::vector<creature_route::Circle> ThingCirclesIn(entt::entity creature, glm::ivec2 cell) override;

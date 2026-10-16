@@ -1161,6 +1161,26 @@ void CreatureLocomotionSystem::Place(entt::entity creature, glm::vec3 position)
 	}
 }
 
+void CreatureLocomotionSystem::PlaceWithoutWalking(entt::entity creature, glm::vec3 position)
+{
+	Place(creature, position);
+	auto& registry = Locator::entitiesRegistry::value();
+	// The route starts again at the new place, and the walk or turn stops. A walk step of the plan is then complete.
+	if (auto* self = registry.TryGet<CreatureLocomotion>(creature))
+	{
+		ClearWalk(*self);
+	}
+	// The body stands, no face shows, and the head looks straight ahead at nothing
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+	{
+		animation->body = {};
+		animation->face = creature_layers::DropFace(animation->face);
+		animation->lookAt.reset();
+		animation->yaw = {};
+		animation->pitch = {};
+	}
+}
+
 void CreatureLocomotionSystem::Stop(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
