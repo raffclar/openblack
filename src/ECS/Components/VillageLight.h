@@ -37,6 +37,8 @@ struct VillageLight
 	glm::vec2 flicker;
 	/// The size of the glow about its flames
 	float glowSize;
+	/// The lantern it burns on, when it goes with one: it goes when its lantern goes
+	entt::entity owner {entt::null};
 };
 
 /// One of a village light's flames or its glow, a Sprite above the light

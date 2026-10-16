@@ -41,6 +41,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandGrab.h"
@@ -268,7 +269,7 @@ bool LightsLandWhenBurning(entt::entity object)
 	const auto& registry = Entities();
 	return !registry.AllOf<Field>(object) &&
 	       registry.AnyOf<Abode, StoragePit, SpellDispenser, Feature, AnimatedStatic, Flowers, BigForest, MobileStatic,
-	                      TeleportStone, TempleExterior, WorshipSite>(object);
+	                      TeleportStone, TempleExterior, WorshipSite, FishFarm>(object);
 }
 
 /// What an object's flames are sized for
@@ -505,7 +506,7 @@ Fire* FireSystem::FindOrCreate(entt::entity object, std::optional<PlayerNames> p
 	// What the living thought of it before it burned is forgotten while it burns; a magic tree stops drawing its
 	// caster's people to look at it
 	if (registry.AnyOf<Abode, Feature, Field, BigForest, MobileStatic, AnimatedStatic, DeadTree, Pot, Flowers, SpellDispenser,
-	                   WorshipSite, Temple>(object) &&
+	                   WorshipSite, Temple, FishFarm>(object) &&
 	    Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().RemoveFrom(object);

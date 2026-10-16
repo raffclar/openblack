@@ -37,7 +37,7 @@ entt::entity StreetLanternArchetype::Create(const glm::vec3& position, MobileSta
 	const bool country = info != MobileStaticInfo::StreetLantern;
 	const auto resourceId = resources::HashIdentifier(country ? MeshId::BuildingCampfire : MeshId::ObjectTownLight);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(1));
-	registry.Assign<StreetLantern>(entity, country);
+	registry.Assign<StreetLantern>(entity, StreetLantern {.country = country, .info = info});
 	// It crackles from its top while it is dark
 	float height = 0.0f;
 	if (const auto& meshes = Locator::resources::value().GetMeshes(); meshes.Contains(resourceId))
@@ -47,6 +47,6 @@ entt::entity StreetLanternArchetype::Create(const glm::vec3& position, MobileSta
 	registry.Assign<SoundTag>(entity, static_cast<entt::id_type>(audio::SoundId::G_Lantern_01), glm::vec3(0.0f, height, 0.0f),
 	                          Locator::villageLightSystem::value().IsDark());
 	// Its light lights the village around it at night
-	VillageLightArchetype::Create(position, country ? VillageLight::Kind::Country : VillageLight::Kind::Town);
+	VillageLightArchetype::Create(position, country ? VillageLight::Kind::Country : VillageLight::Kind::Town, entity);
 	return entity;
 }

@@ -1064,3 +1064,12 @@ openblack_setup_and_add_test(test_creature_gesture test_creature_gesture.cpp)
 openblack_setup_and_add_test(
   test_creature_temple_parts test_creature_temple_parts.cpp
 )
+openblack_setup_and_add_test(
+  test_abode_surroundings test_abode_surroundings.cpp
+)
+target_link_libraries(test_abode_surroundings PRIVATE l3d)
+openblack_setup_and_add_test(
+  test_l3d_effect_points l3d/test_l3d_effect_points.cpp
+)
+target_link_libraries(test_l3d_effect_points PRIVATE l3d)
+openblack_setup_and_add_test(test_effect_receivers test_effect_receivers.cpp)

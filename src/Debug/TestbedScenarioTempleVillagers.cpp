@@ -472,4 +472,115 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .miracles = {lightningAtCentre},
 	    .townBeliefInPlayer = k_TownBelief,
 	});
+	// The town with its crèche and workshop to the south, and lanterns along the way to them
+	constexpr glm::vec2 k_Creche {-14.0f, 12.0f};
+	constexpr glm::vec2 k_Workshop {14.0f, 12.0f};
+	constexpr glm::vec2 k_Lantern {-6.0f, 20.0f};
+	const auto civicTown = [&](float crecheLife, float lanternLife = 1.0f) {
+		auto objects = Town();
+		objects.push_back({.type = AbodeInfo::CelticCreche, .offset = k_Creche, .yawDegrees = 180.0f, .life = crecheLife});
+		objects.push_back({.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f});
+		objects.push_back({.type = MobileStaticInfo::StreetLantern, .offset = k_Lantern, .life = lanternLife});
+		objects.push_back({.type = MobileStaticInfo::StreetLantern, .offset = {6.0f, 20.0f}});
+		objects.push_back({.type = MobileStaticInfo::CountryLantern, .offset = {0.0f, 4.0f}});
+		return objects;
+	};
+	const Framing onCivic {.shot = Shot::Placed, .eye = {0.0f, 22.0f, -14.0f}, .look = {0.0f, 0.0f, 20.0f}};
+	all.push_back({
+	    .id = "advisors.building_tip_signs",
+	    .name = "Tip signs at a crèche and a workshop",
+	    .facet = Facet::Advisors,
+	    .description = "The Celtic town with its crèche and workshop south of the town centre, and three lanterns. It is "
+	                   "noon.",
+	    .expected = "A sign stands in front of the crèche and one in front of the workshop, at the corner of each "
+	                "building. Tap a sign and it gives the tip of its building. The town centre, the huts and the "
+	                "lanterns have no sign.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = onCivic,
+	    .objects = civicTown(1.0f),
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.lanterns_at_night",
+	    .name = "Street lanterns at night",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town with its crèche, workshop, two street lanterns and a country lantern. The clock "
+	                   "stands at ten at night.",
+	    .expected = "Each lantern burns with two flames in a glow, which flicker. The land round each lantern is lit. "
+	                "The lanterns crackle.",
+	    .environment = {.hour = 22.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = onCivic,
+	    .objects = civicTown(1.0f),
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.lightning_lantern",
+	    .name = "Lightning at a street lantern at night",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town at ten at night, with its crèche, workshop and lanterns, the west street lantern at "
+	                   "15 percent of its life. A lightning bolt is held from a hand above that lantern for four seconds "
+	                   "in every eight.",
+	    .expected = "The bolts strike the lantern and it loses life. With no life left it goes at once, with no ghost, "
+	                "and its flames, glow, light and crackle go with it.",
+	    .environment = {.hour = 22.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = onCivic,
+	    .objects = civicTown(1.0f, 0.15f),
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_Lantern,
+	                  .handOffset = k_Lantern + glm::vec2(0.0f, -10.0f),
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 4.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.creche_destroyed_with_sign",
+	    .name = "A crèche destroyed with its tip sign",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town with its crèche at 15 percent of its life. A lightning bolt is held from a hand "
+	                   "above the crèche for four seconds in every eight.",
+	    .expected = "The bolts take the last of the crèche's life. It flickers out as a ghost and goes, and its tip sign "
+	                "goes with it. The workshop keeps its sign. When the town puts the crèche up again, a new sign "
+	                "stands in front of the site.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = onCivic,
+	    .objects = civicTown(0.15f),
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_Creche,
+	                  .handOffset = k_Creche + glm::vec2(0.0f, -12.0f),
+	                  .handHeight = 18.0f,
+	                  .delaySeconds = 4.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.lightning_fish_farm",
+	    .name = "Lightning at a fish farm",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town and a fish farm of the town 30 m west of its town centre. A lightning bolt is held "
+	                   "from a hand above the farm for four seconds in every eight.",
+	    .expected = "The bolts that reach the farm take its life, and the town cries out at the attack. With no life left "
+	                "the farm goes, and the fishermen at it decide again what to do.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = closeOnCentre,
+	    .objects =
+	        [] {
+		        auto objects = Town();
+		        objects.push_back({.type = FishFarmInfo::Normal, .offset = k_Centre + glm::vec2(-30.0f, 0.0f)});
+		        return objects;
+	        }(),
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_Centre + glm::vec2(-30.0f, 0.0f),
+	                  .handOffset = k_Centre + glm::vec2(-30.0f, -10.0f),
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 4.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
 }

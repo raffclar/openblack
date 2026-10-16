@@ -78,6 +78,7 @@
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
+#include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
@@ -112,6 +113,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -497,6 +499,11 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 		if (auto* villager = registry.TryGet<ecs::components::Villager>(entity))
 		{
 			villager->life = std::clamp(*object.life, 0.0f, 1.0f);
+		}
+		// A street lantern starts with that much life
+		if (registry.AllOf<ecs::components::StreetLantern>(entity))
+		{
+			ecs::world_objects::SetLife(entity, std::clamp(*object.life, 0.0f, 1.0f));
 		}
 		// A building is hurt down to it, as anything that hurts it does, which opens a site for its repair
 		if (registry.AllOf<ecs::components::Abode>(entity))
@@ -1159,6 +1166,11 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, MobileStaticInfo>)
 			    {
+				    // A lantern is made as the land scripts make it, with its light
+				    if (type == MobileStaticInfo::StreetLantern || type == MobileStaticInfo::CountryLantern)
+				    {
+					    return ecs::archetypes::StreetLanternArchetype::Create(position, type);
+				    }
 				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f, 0.0f, yaw, 0.0f, object.scale);
 			    }
 			    else if constexpr (std::is_same_v<T, AnimatedStaticInfo>)

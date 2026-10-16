@@ -58,6 +58,7 @@
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TownCentreParts.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
 #include "Game.h"
@@ -270,14 +271,14 @@ void StartTownCentre(entt::entity building)
 {
 	auto& registry = Entities();
 	const auto* info = world_objects::AbodeInfoOf(building);
-	if (info == nullptr || info->abodeType != AbodeType::TownCentre)
+	if (info == nullptr)
 	{
 		return;
 	}
 	bool hasTotem = false;
 	registry.Each<const VillageTotem>(
 	    [&hasTotem, building](const VillageTotem& totem) { hasTotem = hasTotem || totem.townCentre == building; });
-	if (hasTotem)
+	if (!town_centre_parts::PartsWhenFinished(info->abodeType == AbodeType::TownCentre, hasTotem))
 	{
 		return;
 	}

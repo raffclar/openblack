@@ -19,8 +19,9 @@ namespace openblack::ecs::archetypes
 class VillageLightArchetype
 {
 public:
-	/// A village light standing at `position`, with its flames and glow above it
-	static entt::entity Create(const glm::vec3& position, components::VillageLight::Kind kind);
+	/// A village light standing at `position`, with its flames and glow above it. A light with an owner goes when its
+	/// owner goes.
+	static entt::entity Create(const glm::vec3& position, components::VillageLight::Kind kind, entt::entity owner = entt::null);
 	VillageLightArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes
