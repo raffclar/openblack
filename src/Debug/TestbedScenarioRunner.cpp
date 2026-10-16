@@ -2505,9 +2505,6 @@ void Runner::Give(const Command& command)
 			result = "no such creature";
 		}
 		break;
-	case Kind::ScriptReaction:
-		ecs::creature_reaction_notice::SetTakesNotice(Locator::entitiesRegistry::value(), *entity, command.value != 0);
-		result = command.value != 0 ? "takes notice" : "takes no notice";
 	case Kind::OnlyDesire:
 		if (command.value < creature_desires::k_DesireCount)
 		{
@@ -2519,6 +2516,10 @@ void Runner::Give(const Command& command)
 		{
 			result = "no such desire";
 		}
+		break;
+	case Kind::ScriptReaction:
+		ecs::creature_reaction_notice::SetTakesNotice(Locator::entitiesRegistry::value(), *entity, command.value != 0);
+		result = command.value != 0 ? "takes notice" : "takes no notice";
 		break;
 	case Kind::SwapMinds:
 		if (const auto other = CreatureAt(command.value))
