@@ -94,6 +94,7 @@ void CreatureMindSystem::ReactToNastyMagic(entt::entity creature, const glm::vec
 	{
 		return;
 	}
+	EndReaction(creature);
 	auto& desires = *mind->desires;
 	creature_desires::ChangeSource(desires, creature_desires::sources::k_FearFromScaryMagic, k_FearOfScaryMagic);
 	// Not afraid, or on the learning leash, it goes to look; otherwise it runs
@@ -119,12 +120,32 @@ void CreatureMindSystem::ReactToNiceMagic(entt::entity creature, const glm::vec3
 	{
 		return;
 	}
+	EndReaction(creature);
 	const auto random = [this](uint32_t range) { return Random(range); };
 	Replan(creature, creature_mind::Activity::Planned,
 	       creature_mind::ExamineMiracle({point.x, point.z}, ShownSize(*body) * k_HeightOfSizeOne, random));
 	if (learn.has_value())
 	{
 		WatchMiracle(creature, *learn);
+	}
+}
+
+void CreatureMindSystem::EndReaction(entt::entity creature)
+{
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().StopReacting(creature);
+	}
+}
+
+void CreatureMindSystem::StartReacting(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr)
+	{
+		// It keeps the plan that it does now, for all kinds of reaction. After it takes a thing from the hand, it can
+		// continue that plan.
+		mind->keptPlan = mind->planner.current;
 	}
 }
 
@@ -136,8 +157,6 @@ void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thin
 	{
 		return;
 	}
-	// It keeps the plan that it does now. After it takes a thing from the hand, it can continue that plan.
-	mind->keptPlan = mind->planner.current;
 	const bool there = thing != entt::null && registry.Valid(thing);
 	if (setup.comesAcross && there)
 	{

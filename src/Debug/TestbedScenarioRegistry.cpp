@@ -5189,15 +5189,33 @@ void AddMind(std::vector<Scenario>& all)
 	    .id = "mind.head_look_hand",
 	    .name = "An idle lion watches the hand",
 	    .facet = Facet::Mind,
-	    .description = "A player's lion stands side on to the camera. A script tells it to look at the hand every six "
-	                   "seconds. Move the hand from side to side over the land in front of it.",
+	    .description = "A player's lion stands side on to the camera, a birch far from it. A script tells it to look at "
+	                   "the hand every six seconds. Move the hand from side to side over the land in front of it.",
 	    .expected = "Its head turns to follow the hand, quickly at first and then easing to a stop on it. The head does "
 	                "not turn further than half a turn to either side or a quarter turn up or down.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Lion, {0.0f, 0.0f}, 90.0f)},
+	    // The script needs a thing to tell the creature about. The look itself is at the hand.
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-100.0f, 0.0f}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "LookAtHand"},
 	                 {.kind = Kind::DoAction, .delaySeconds = 6.0f, .object = 0, .action = "LookAtHand"}},
 	    .repeatFrom = 1,
+	});
+
+	all.push_back({
+	    .id = "creatures.reaction_cut_short",
+	    .name = "A forced action stops a reaction",
+	    .facet = Facet::Mind,
+	    .description = "A creature stands facing south, towards the camera. A cart 20 metres in front of it makes the "
+	                   "reaction of a thing crushed by the player. After four seconds, a script tells the creature to "
+	                   "look at the camera.",
+	    .expected = "The creature goes to look at the cart. When the script tells it to look at the camera, it stops the "
+	                "look at the cart at once and turns its face to the camera. It does not go back to the cart.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {35.0f, 12.0f, -10.0f}, .look = {0.0f, 6.0f, -10.0f}},
+	    .creatures = {{.offset = {0.0f, 0.0f}, .facingDegrees = 0.0f}},
+	    .objects = {{.type = MobileObjectInfo::Cart, .offset = {0.0f, -20.0f}, .reaction = Reaction::ReactToObjectCrushed}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 4.0f, .object = 0, .action = "LookAtCamera"}},
 	});
 
 	all.push_back({

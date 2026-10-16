@@ -246,6 +246,12 @@ bool creature_reaction::IsDominant(uint32_t age, uint32_t otherAge, bool madeFir
 	return gap > k_DominantYears ? otherAge < age : madeFirst;
 }
 
+bool creature_reaction::BodyFree(const BodyState& body)
+{
+	// Only a life of exactly zero counts as no life
+	return body.life != 0.0f && !body.heldByHand && !body.teleporting;
+}
+
 bool creature_reaction::OfAnotherGod(PlayerNames caster, PlayerNames creatureOwner)
 {
 	return caster != PlayerNames::NEUTRAL && caster != creatureOwner;

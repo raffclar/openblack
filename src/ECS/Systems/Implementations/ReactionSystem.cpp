@@ -44,6 +44,7 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Hand.h"
@@ -55,6 +56,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellSeed.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
@@ -68,6 +70,7 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -475,9 +478,17 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	}
 	// Nor does one a script has told to take no notice, or controls, one carrying out its player's order, one in a fight
 	// or whose opponent is, or one out cold in a faint
-	// TODO(creature-reactions-2): the game also keeps out a creature in the dance editor, one standing on a building,
-	// one being teleported, one dying, and one in two more states not mapped yet
 	if (registry.AnyOf<CreatureReactionsOff, ScriptControlled>(entity))
+	{
+		return false;
+	}
+	// Nor does one with no life left, one that the hand holds, or one that a teleport stone carries
+	const auto* needs = registry.TryGet<const CreatureNeeds>(entity);
+	const bool held =
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == std::optional(entity);
+	if (!creature_reaction::BodyFree({.life = needs != nullptr ? needs->needs.life : 1.0f,
+	                                  .heldByHand = held,
+	                                  .teleporting = registry.AllOf<TeleportTraveller>(entity)}))
 	{
 		return false;
 	}
@@ -1097,7 +1108,11 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 				Start(reaction, entity, *state, true);
 				continue;
 			}
-			Stop(entity, *state, false);
+			// A creature keeps the old reaction until a plan that the new reaction forces stops it
+			if (!registry.AllOf<Creature>(entity))
+			{
+				Stop(entity, *state, false);
+			}
 			Start(reaction, entity, *state, true);
 		}
 	}
@@ -1186,6 +1201,11 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	const bool shield = source.type == Reaction::ReactToMagicShield;
 	if (registry.AllOf<Creature>(living))
 	{
+		// It keeps the plan that it does now aside, whatever it does with the reaction
+		if (Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().StartReacting(living);
+		}
 		// It notes when it took up a flying or crushed thing's reaction, whether it keeps it or not
 		const auto setup = CreatureSetupOf(registry, reaction);
 		if (setup.has_value() && setup->notesFlying)
@@ -1203,13 +1223,15 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		}
 		if (setup.has_value())
 		{
-			state.reaction = reaction.id;
-			state.type = reaction.source.type;
-			state.startTurn = _turn;
+			// A plan that the reaction forces stops the reaction that the creature had before. Then the creature keeps
+			// the new reaction.
 			if (Locator::creatureMindSystem::has_value())
 			{
 				Locator::creatureMindSystem::value().TakeUpReaction(living, source.initiator, *setup);
 			}
+			state.reaction = reaction.id;
+			state.type = reaction.source.type;
+			state.startTurn = _turn;
 			Impress(reaction, living, registry.Get<const Transform>(living).position);
 			return;
 		}
@@ -1245,24 +1267,37 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		StartVillager(reaction, living, state, wasReacting);
 		return;
 	}
-	state.reaction = reaction.id;
-	state.type = reaction.source.type;
-	state.startTurn = _turn;
-	Impress(reaction, living, registry.Get<const Transform>(living).position);
-	// A creature goes to put out a fire or runs from it
-	if (source.type == Reaction::ReactToFire && registry.AllOf<Creature>(living) && Locator::creatureMindSystem::has_value())
+	// The plan that a creature's reaction forces comes first: it stops the reaction that the creature had before. Then
+	// the creature keeps the new reaction and the reaction impresses it.
+	const auto keep = [&]() {
+		state.reaction = reaction.id;
+		state.type = reaction.source.type;
+		state.startTurn = _turn;
+		Impress(reaction, living, registry.Get<const Transform>(living).position);
+	};
+	if (!registry.AllOf<Creature>(living))
 	{
-		Locator::creatureMindSystem::value().ReactToFire(living, source.initiator);
+		keep();
 		return;
 	}
-	// A creature turns aside into a teleport stone
-	if (source.type == Reaction::ReactToTeleport && registry.AllOf<Creature>(living) && Locator::teleportSystem::has_value())
+	// A creature goes to put out a fire or runs from it
+	if (source.type == Reaction::ReactToFire && Locator::creatureMindSystem::has_value())
 	{
+		Locator::creatureMindSystem::value().ReactToFire(living, source.initiator);
+		keep();
+		return;
+	}
+	// A creature turns aside into a teleport stone. This is a forced plan, so it stops the reaction that it had.
+	if (source.type == Reaction::ReactToTeleport && Locator::teleportSystem::has_value())
+	{
+		StopReacting(living);
+		keep();
 		Locator::teleportSystem::value().SetupReact(source.initiator, living);
 		return;
 	}
-	if (!registry.AllOf<Creature>(living) || !Locator::creatureMindSystem::has_value())
+	if (!Locator::creatureMindSystem::has_value())
 	{
+		keep();
 		return;
 	}
 	// A creature learns a miracle it reacts to: one another creature cast, or a player's, but not a computer player's, nor
@@ -1301,6 +1336,7 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 			seed->learnedFrom = true;
 		}
 	}
+	keep();
 }
 
 void ReactionSystem::StartVillager(const Active& reaction, entt::entity living, LivingReaction& state, bool wasReacting)
@@ -1354,6 +1390,12 @@ void ReactionSystem::Stop(entt::entity living, LivingReaction& state, bool reset
 	else if (registry.AllOf<Animal>(living) && Locator::animalSystem::has_value())
 	{
 		Locator::animalSystem::value().StopReaction(living);
+	}
+	else if (registry.AllOf<Creature>(living))
+	{
+		// A creature has no state to go back to. Its memory of the kind comes up to now, so it waits its full time from
+		// the end of the reaction before it takes that kind again. The plan that the reaction forced continues.
+		MemoryOf(registry, living, state).Refresh(static_cast<uint32_t>(state.type), _turn);
 	}
 	state.reaction = 0;
 	state.type = Reaction::None;

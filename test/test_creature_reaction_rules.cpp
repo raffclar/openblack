@@ -372,3 +372,13 @@ TEST(CreatureReactionRules, ANiceMiracleOfAnotherGodTeachesNothing)
 	EXPECT_TRUE(creature_reaction::OfAnotherGod(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
 	EXPECT_TRUE(creature_reaction::OfAnotherGod(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO));
 }
+
+TEST(CreatureReactionRules, NoLifeTheHandOrATeleportKeepsAllReactionsOff)
+{
+	EXPECT_TRUE(creature_reaction::BodyFree({}));
+	// Only a life of exactly zero keeps reactions off
+	EXPECT_TRUE(creature_reaction::BodyFree({.life = 0.001f}));
+	EXPECT_FALSE(creature_reaction::BodyFree({.life = 0.0f}));
+	EXPECT_FALSE(creature_reaction::BodyFree({.heldByHand = true}));
+	EXPECT_FALSE(creature_reaction::BodyFree({.teleporting = true}));
+}
