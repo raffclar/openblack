@@ -38,6 +38,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "FightView.h"
 #include "Help/HelpProfile.h"
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
@@ -1037,8 +1038,19 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	{
 		const auto& asked = _helpControls;
 		const bool keyMoving = asked.turn != 0.0f || asked.tilt != 0.0f || asked.zoom != 0.0f;
-		_controlsUsed = !_heldBack && (keyMoving || asked.move != glm::vec2() || gripping || rotateAroundMouse || twoButtons);
-		_landHeld = !_heldBack && gripping && !rotateAroundMouse && !keyMoving;
+		const bool directs = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().DirectsFight();
+		_landGripped = fight_view::GripsLand({
+		    .gripping = gripping,
+		    .directsFight = directs,
+		    .move = actionSystem.Get(input::BindableActionMap::MOVE),
+		    .action = actionSystem.Get(input::BindableActionMap::ACTION),
+		    .bothButtons = actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK),
+		    .rotateAroundMouse = rotateAroundMouse,
+		    .heldBack = _heldBack,
+		});
+		_controlsUsed =
+		    !_heldBack && (keyMoving || asked.move != glm::vec2() || _landGripped || rotateAroundMouse || twoButtons);
+		_landHeld = _landGripped && !keyMoving;
 		if (_heldBack)
 		{
 			_dragTurn = 0.0f;

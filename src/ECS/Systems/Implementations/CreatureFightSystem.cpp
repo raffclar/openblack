@@ -1203,7 +1203,7 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 
 bool CreatureFightSystem::DraggedAway(const FightCameraModel& model) const
 {
-	if (!_view.has_value() || !model.LandHeld())
+	if (!_view.has_value() || !model.LandGripped())
 	{
 		return false;
 	}
@@ -1221,7 +1221,7 @@ bool CreatureFightSystem::DraggedAway(const FightCameraModel& model) const
 		return false;
 	}
 	const auto eye = camera.GetOrigin(Camera::Interpolation::Target);
-	return fight_view::DraggedAway(model.GetSecondsSinceFlight(), model.LandHeld(), {eye.x, eye.z},
+	return fight_view::DraggedAway(model.GetSecondsSinceFlight(), model.LandGripped(), {eye.x, eye.z},
 	                               {looking->position.x, looking->position.z}, fighting->arena.centre, fighting->arena.radius);
 }
 

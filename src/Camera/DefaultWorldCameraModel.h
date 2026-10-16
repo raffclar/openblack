@@ -59,6 +59,7 @@ public:
 		        .tilt = _rotateAroundDelta.x,
 		        .zoom = _rotateAroundDelta.z,
 		        .controlsUsed = _controlsUsed,
+		        .landGripped = _landGripped,
 		        .landHeld = _landHeld,
 		        .dragTurn = _dragTurn,
 		        .dragTilt = _dragTilt};
@@ -212,6 +213,7 @@ private:
 	std::optional<float> _turnedThisFrame;
 	/// What the player did with the controls this frame, as GetAsked gives it
 	bool _controlsUsed {false};
+	bool _landGripped {false};
 	bool _landHeld {false};
 	float _dragTurn {0.0f};
 	float _dragTilt {0.0f};

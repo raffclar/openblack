@@ -327,3 +327,26 @@ TEST(FightView, DraggingFarFromTheArenaLeavesTheFightAfterTheFlight)
 	// Where it looks alone further than 6 x 0.75 radii is enough
 	EXPECT_TRUE(DraggedAway(10.0f, true, {0.0f, 0.0f}, {46.0f, 0.0f}, centre, k_Radius));
 }
+
+TEST(FightView, TheMoveButtonGripsTheLandAnywhereWhileTheHandDirectsTheFight)
+{
+	// Off the land the hand does not grip it, unless it directs the fight and the Move button is held
+	EXPECT_FALSE(GripsLand({.gripping = false, .directsFight = false, .move = true}));
+	EXPECT_TRUE(GripsLand({.gripping = false, .directsFight = true, .move = true}));
+	EXPECT_TRUE(GripsLand({.gripping = true}));
+	// While the hand directs the fight, only the Move button counts
+	EXPECT_FALSE(GripsLand({.gripping = true, .directsFight = true, .move = false}));
+	// Both buttons, the Action button, the button that turns round the hand, or a camera held back cancel the grip
+	EXPECT_FALSE(GripsLand({.directsFight = true, .move = true, .action = true}));
+	EXPECT_FALSE(GripsLand({.directsFight = true, .move = true, .bothButtons = true}));
+	EXPECT_FALSE(GripsLand({.gripping = true, .rotateAroundMouse = true}));
+	EXPECT_FALSE(GripsLand({.gripping = true, .heldBack = true}));
+}
+
+TEST(FightView, AGripWithTheKeysTurningStillLeavesTheFightWhenFar)
+{
+	// The leave test reads the grip of the land, also when a key turns the camera and the view still follows the fight
+	EXPECT_TRUE(DraggedAway(5.0f, GripsLand({.gripping = true}), {40.0f, 0.0f}, {35.0f, 0.0f}, {0.0f, 0.0f}, 10.0f));
+	EXPECT_FALSE(
+	    DraggedAway(5.0f, GripsLand({.gripping = true, .action = true}), {40.0f, 0.0f}, {35.0f, 0.0f}, {0.0f, 0.0f}, 10.0f));
+}

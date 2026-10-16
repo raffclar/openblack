@@ -259,10 +259,16 @@ Flight fight_view::PlanFlight(const glm::vec3& from, View to, float rise, const 
 	    .to = to, .way = WayPoint(from, to.origin, rise, ground), .woosh = glm::distance(from, to.origin) > k_WooshDistance};
 }
 
-bool fight_view::DraggedAway(float secondsSinceFlight, bool landHeld, glm::vec2 eye, glm::vec2 looking, glm::vec2 arenaCentre,
-                             float arenaRadius)
+bool fight_view::GripsLand(const GripInput& input)
 {
-	return k_DragLeaveSeconds < secondsSinceFlight && landHeld &&
+	const bool held = input.directsFight ? input.move : input.gripping;
+	return held && !input.action && !input.bothButtons && !input.rotateAroundMouse && !input.heldBack;
+}
+
+bool fight_view::DraggedAway(float secondsSinceFlight, bool landGripped, glm::vec2 eye, glm::vec2 looking,
+                             glm::vec2 arenaCentre, float arenaRadius)
+{
+	return k_DragLeaveSeconds < secondsSinceFlight && landGripped &&
 	       TooFar(eye, looking, arenaCentre, arenaRadius, k_DragLeaveScale);
 }
 

@@ -36,9 +36,11 @@ public:
 	[[nodiscard]] const fight_view::View& GetShown() const { return _chase.GetHeld(); }
 	/// Whether the player has zoomed out of the fight
 	[[nodiscard]] bool ZoomedOut() const { return _zoomedOut; }
-	/// Whether the player held the land in the last step, and the seconds since the last flight to the view started, or
+	/// Whether the player held the land in the last step (with no key that turns, tilts or zooms, or with one), and the
+	/// seconds since the last flight to the view started, or
 	/// started its last part
 	[[nodiscard]] bool LandHeld() const { return _landHeld; }
+	[[nodiscard]] bool LandGripped() const { return _asked.landGripped; }
 	[[nodiscard]] float GetSecondsSinceFlight() const { return _sinceFlight; }
 	/// The player's own camera, which it hands back
 	void SetPlayerModel(std::unique_ptr<CameraModel> model) { _playerModel = std::move(model); }

@@ -184,12 +184,31 @@ struct Flight
 [[nodiscard]] Flight PlanFlight(const glm::vec3& from, View to, float rise, const GroundHeight& ground,
                                 const KeepInside& keepInside);
 
+/// What decides whether the player grips the land for the camera this frame
+struct GripInput
+{
+	/// The hand grips the land with the Move button
+	bool gripping {false};
+	/// The hand directs the fight of the player's creature, and the Move button is held
+	bool directsFight {false};
+	bool move {false};
+	/// The Action button, both buttons, or the button that turns the camera round the hand is held
+	bool action {false};
+	bool bothButtons {false};
+	bool rotateAroundMouse {false};
+	/// The camera was put back inside the fence, and the controls count for nothing until they are all let go
+	bool heldBack {false};
+};
+/// Whether the player grips the land: with the hand on the land, or with the Move button anywhere while the hand directs
+/// the fight. Both buttons, the Action button or the button that turns round the hand cancel the grip.
+[[nodiscard]] bool GripsLand(const GripInput& input);
+
 /// While the player drags the land, the camera leaves the fight when it has strayed too far from the arena (by this
 /// scale of TooFar), once this long has gone since the last flight to the view started its last part
 constexpr float k_DragLeaveScale = 0.75f;
 constexpr float k_DragLeaveSeconds = 4.5f;
-[[nodiscard]] bool DraggedAway(float secondsSinceFlight, bool landHeld, glm::vec2 eye, glm::vec2 looking, glm::vec2 arenaCentre,
-                               float arenaRadius);
+[[nodiscard]] bool DraggedAway(float secondsSinceFlight, bool landGripped, glm::vec2 eye, glm::vec2 looking,
+                               glm::vec2 arenaCentre, float arenaRadius);
 
 /// The camera itself, chasing the view the fight wants: where it is and how fast it moves, as it flies to the view and then
 /// follows it

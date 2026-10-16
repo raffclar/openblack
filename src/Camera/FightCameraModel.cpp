@@ -20,8 +20,6 @@
 #include "CameraZones.h"
 #include "DefaultWorldCameraModel.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
-#include "ECS/Systems/CreatureFightSystemInterface.h"
-#include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -150,14 +148,6 @@ void FightCameraModel::HandleActions(std::chrono::microseconds dt)
 	_playerModel->HandleActions(dt);
 	const auto asked = _playerModel->GetAsked();
 	_asked = asked;
-	// While the hand directs the fight of the player's creature, the button that grips the land holds it wherever the
-	// hand is
-	if (Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().DirectsFight() &&
-	    Locator::gameActionSystem::has_value() && Locator::gameActionSystem::value().Get(input::BindableActionMap::MOVE))
-	{
-		_asked.controlsUsed = true;
-		_asked.landHeld = asked.turn == 0.0f && asked.tilt == 0.0f && asked.zoom == 0.0f;
-	}
 	_input.turn += asked.turn;
 	_input.tilt += asked.tilt;
 	_input.zoom += asked.zoom;
