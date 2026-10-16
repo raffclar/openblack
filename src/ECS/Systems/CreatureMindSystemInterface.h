@@ -175,6 +175,10 @@ public:
 		/// When this has a value, the plan is not forced and has this priority. The creature then changes to a plan that
 		/// is more than twice as pressing, it looks at its emergencies, and the plan counts for its desire at its end.
 		std::optional<float> unforcedPriority;
+		/// The plan is marked as forced until the creature stops it. Then the creature takes up no reaction and no
+		/// emergency, and the plan does not count for its desire at its end. The plans of reactions, of copying the
+		/// player and of watching a villager are not marked, but they also have the highest priority.
+		bool forced {true};
 	};
 	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
@@ -245,6 +249,10 @@ public:
 		/// The plan counts as an order: by an order on the leash, by a script, by a thing that the player gives, by what
 		/// the creature does after a stroke or a slap
 		bool ordered {false};
+		/// The plan is marked as forced until the creature stops it: it then takes up no reaction and no emergency, and
+		/// the plan does not count for its desire at its end. A script's order and the meal after a stroke are not
+		/// marked.
+		bool forced {true};
 	};
 	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is
 	/// about to already

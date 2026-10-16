@@ -86,9 +86,8 @@ struct Facts
 	/// The hand picking something up is its own player's and holds something
 	bool ownPlayersHand {false};
 	bool handHolds {false};
-	/// It carries out an order its player gave it with the leash, it has an opponent in a fight, or its plan's action is
-	/// done to the reaction's thing
-	bool orderedByPlayer {false};
+	/// Something forced its plan on it, it has an opponent in a fight, or its plan's action is done to the reaction's thing
+	bool planForced {false};
 	bool hasOpponent {false};
 	bool planActsOnThing {false};
 	/// The creature the reaction is about is due another look over: it never has looked it over, or not for long enough
@@ -99,7 +98,7 @@ struct Facts
 inline constexpr uint8_t k_InspectCreatureUrgency = 0xff;
 
 /// Whether a creature passes over another creature's reaction before even thinking of looking it over: the reaction is
-/// its own, or isn't a creature's, or it is busy with its player's order, a fight, or the creature already
+/// its own, or isn't a creature's, or it is busy with a forced plan, a fight, or the creature already
 [[nodiscard]] bool BlocksInspecting(const Facts& facts);
 /// Whether a creature last looked over at a turn (none for never) is due another look over now: only once more than
 /// the wait has gone by
@@ -146,6 +145,18 @@ struct BodyState
 };
 /// Whether the body of a creature lets it take a reaction now
 [[nodiscard]] bool BodyFree(const BodyState& body);
+
+/// What the plan of a creature is now, for the reactions it can take
+struct PlanState
+{
+	/// Something forced the plan on the creature, and the creature did not stop the plan since then
+	bool forced {false};
+	/// The leash leads the plan: an order on the leash, or a walk back into its area while the leash is on
+	bool ledByLeash {false};
+};
+/// Whether the plan of a creature lets it take a reaction now. A forced plan stops all reactions, but not when the leash
+/// leads it.
+[[nodiscard]] bool PlanFree(const PlanState& plan);
 
 /// How urgent a kind is to a creature before its distance counts, for the kinds a creature weighs its own way; none for
 /// the kinds it weighs as everything alive does. A draw below a range is asked for only where the rule draws one.

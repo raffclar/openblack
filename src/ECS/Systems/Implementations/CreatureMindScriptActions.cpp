@@ -72,8 +72,14 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	{
 		return FightForScript(creature, target);
 	}
-	if (!ForcePlan(creature,
-	               {.desire = Desire::ObeyPlayer, .action = name, .object = target, .instrument = with, .ordered = true}))
+	// The order of the script is not a forced plan. When the script lets the creature go, it can take up reactions while
+	// it does the order
+	if (!ForcePlan(creature, {.desire = Desire::ObeyPlayer,
+	                          .action = name,
+	                          .object = target,
+	                          .instrument = with,
+	                          .ordered = true,
+	                          .forced = false}))
 	{
 		return false;
 	}
