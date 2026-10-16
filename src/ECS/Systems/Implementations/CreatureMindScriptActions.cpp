@@ -53,6 +53,9 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	{
 		return false;
 	}
+	// From now on, every free creature agrees when another creature asks it to play, to be friends or to be shown
+	// something, until the land changes
+	registry.Context().partnersAlwaysAgree = true;
 	// The script takes control of it first, so the action's agenda is made for a creature under a script's control. It
 	// takes it from a fight or from lying knocked out too.
 	registry.AssignOrReplace<ScriptControlled>(creature);

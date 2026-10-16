@@ -898,6 +898,10 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::FollowHand:
 	case Step::Kind::WatchPlayer:
 	case Step::Kind::RenderImmobile:
+	case Step::Kind::RequestPartner:
+	case Step::Kind::Order:
+	case Step::Kind::Demobilise:
+	case Step::Kind::Remobilise:
 		break;
 	}
 	return HandsNeed::Any;
@@ -1384,6 +1388,30 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.effect = step.effect;
 			FinishStep(mind);
 			break;
+		// The steps of a joint action are done as they start. When the other creature refuses to be the partner, the
+		// mind's owner gives up the rest of the agenda.
+		case Step::Kind::RequestPartner:
+			if (step.object.has_value())
+			{
+				commands.requestPartner = Commands::PartnerRequest {.creature = *step.object, .kind = step.request};
+			}
+			FinishStep(mind);
+			break;
+		case Step::Kind::Order:
+			if (step.object.has_value() && step.ordered != nullptr)
+			{
+				commands.order = Commands::PartnerOrder {.partner = *step.object, .step = step.ordered};
+			}
+			FinishStep(mind);
+			break;
+		case Step::Kind::Demobilise:
+		case Step::Kind::Remobilise:
+			if (step.object.has_value())
+			{
+				commands.demobilise = std::pair {*step.object, step.kind == Step::Kind::Demobilise};
+			}
+			FinishStep(mind);
+			break;
 		case Step::Kind::Kiss:
 			commands.playOnce = step.animation;
 			break;
@@ -1672,6 +1700,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	}
 	case Step::Kind::MakeDisciple:
+	case Step::Kind::RequestPartner:
+	case Step::Kind::Order:
+	case Step::Kind::Demobilise:
+	case Step::Kind::Remobilise:
 		FinishStep(mind);
 		break;
 	case Step::Kind::Kiss:

@@ -1085,3 +1085,6 @@ target_link_libraries(test_tattoo_menu PRIVATE creaturemind)
 openblack_setup_and_add_test(
   test_creature_town_theft test_creature_town_theft.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_friendship test_creature_friendship.cpp
+)

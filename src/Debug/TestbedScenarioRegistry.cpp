@@ -6232,6 +6232,56 @@ void AddMind(std::vector<Scenario>& all)
 	                 Fight(Kind::KnockOut, 2, 0, 0.0f)},
 	});
 
+	// A tiger of the player and a lion of no player, as the guide is on the first land
+	const auto guideLion = [](glm::vec2 offset, float facing) {
+		auto lion = Content(CreatureType::Lion, offset, facing, "guide");
+		lion.owner = PlayerNames::NEUTRAL;
+		return lion;
+	};
+	auto befriender = Content(CreatureType::Tiger, {-25.0f, 0.0f}, 90.0f, "befriends");
+	befriender.desires = OnlyDesire(Desire::BeFriends);
+	all.push_back({
+	    .id = "friends.wave_with_guide",
+	    .name = "Make friends with the guide",
+	    .facet = Facet::Mind,
+	    .description = "A tiger and a lion of no player stand 50 apart and face each other. As a script of the first land "
+	                   "does, both want only to be friends.",
+	    .expected = "The tiger smiles, howls or waves at the lion. To wave, it asks the lion to play first; the lion agrees "
+	                "when it wants to be friends with the tiger more than it fears it or is angry with it. Then the lion "
+	                "stands still in its mind, turns to the tiger and waves back as the tiger waves, from where they "
+	                "stand. The inspector shows the partners while they wave.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {befriender, guideLion({25.0f, 0.0f}, 270.0f)},
+	    .commands = {{.kind = Kind::OnlyDesire,
+	                  .creature = 0,
+	                  .delaySeconds = 0.0f,
+	                  .value = static_cast<uint32_t>(Desire::BeFriends),
+	                  .amount = 600.0f},
+	                 {.kind = Kind::OnlyDesire,
+	                  .creature = 1,
+	                  .delaySeconds = 0.0f,
+	                  .value = static_cast<uint32_t>(Desire::BeFriends),
+	                  .amount = 600.0f}},
+	});
+	auto missing = Content(CreatureType::Tiger, {-60.0f, 0.0f}, 90.0f, "misses its friend");
+	missing.desires = OnlyDesire(Desire::MissFriend);
+	all.push_back({
+	    .id = "friends.miss_friend",
+	    .name = "Miss a friend",
+	    .facet = Facet::Mind,
+	    .description = "A tiger that wants only to see a friend it misses stands 120 from a lion of no player.",
+	    .expected = "The tiger pines for the lion: with a sad face it turns to it and points at it, then plays its sad "
+	                "action. Or it looks for the lion: it points at it and plays its sad action, then walks near it, to "
+	                "three times its own height.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {missing, guideLion({60.0f, 0.0f}, 270.0f)},
+	    .commands = {{.kind = Kind::OnlyDesire,
+	                  .creature = 0,
+	                  .delaySeconds = 0.0f,
+	                  .value = static_cast<uint32_t>(Desire::MissFriend),
+	                  .amount = 600.0f}},
+	});
+
 	all.push_back({
 	    .id = "mind.watch_skill",
 	    .name = "Learn a skill by watching",
@@ -7122,7 +7172,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 133> k_Names {
+	constexpr std::array<std::string_view, 134> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7244,6 +7294,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "hand pour",
 		    "do action",
 		    "make friends",
+		    "only desire",
 		    "remove object",
 		    "read tip",
 		    "look at temple scroll",

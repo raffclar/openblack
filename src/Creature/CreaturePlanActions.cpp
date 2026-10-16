@@ -21,6 +21,7 @@
 #include "Creature/CreatureEmoteAgendas.h"
 #include "Creature/CreatureExplorationAgendas.h"
 #include "Creature/CreatureFireAgenda.h"
+#include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureKindAgendas.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureOddAgendas.h"
@@ -218,14 +219,14 @@ constexpr std::array k_Executors {
               .danceType = creature_dance::k_AmorousDanceType},
     Executor {.action = "PracticeDance", .build = Build::PracticeDance},
     Executor {.action = "Stroke", .target = Target::Strokeable, .build = Build::StrokeAndHeal},
-    Executor {.action = "SmileAtFriend", .target = Target::Creature, .build = Build::SmileAt},
+    Executor {.action = "SmileAtFriend", .target = Target::CreatureFreeForJoint, .build = Build::SmileAt},
+    Executor {.action = "HowlAtFriend", .target = Target::Creature, .build = Build::HowlAtFriend},
+    Executor {.action = "PineForFriend", .target = Target::Creature, .build = Build::PineForFriend},
+    Executor {.action = "LookForFriend", .target = Target::Creature, .build = Build::LookForFriend},
     Executor {.action = "InspectCreature", .target = Target::Creature, .build = Build::InspectCreature},
     Executor {.action = "Fight", .target = Target::FightableCreature, .build = Build::Fight},
     Executor {.action = "LookAtFlyingObject", .target = Target::Anything, .build = Build::LookAtFlyingObject},
-    Executor {.action = "WaveAtFriend",
-              .target = Target::Creature,
-              .build = Build::ApproachEmote,
-              .animation = animations::k_FriendlyWave},
+    Executor {.action = "WaveAtFriend", .target = Target::CreatureFreeForJoint, .build = Build::WaveAtFriend},
     Executor {.action = "LookAtMountains", .build = Build::LookAtMountains},
     Executor {.action = "LookOutToSea", .build = Build::LookOutToSea, .leavesHome = true},
     // It dances alone on the nearest coast, by its map of the land
@@ -1138,6 +1139,14 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::FaceAndEmote(*situation.camera, executor.animation);
 	case Build::ApproachEmote:
 		return creature_mind::ApproachAndEmote(*object, executor.animation);
+	case Build::WaveAtFriend:
+		return creature_mind::WaveAtFriend(situation.self, *object);
+	case Build::HowlAtFriend:
+		return creature_mind::HowlAtFriend(*object);
+	case Build::PineForFriend:
+		return creature_mind::PineForFriend(*object);
+	case Build::LookForFriend:
+		return creature_mind::LookForFriend(*object, situation.height);
 	case Build::DanceWithVillagers:
 		// With no clear place about the villager the action fails
 		if (!situation.danceArea.has_value())
