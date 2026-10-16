@@ -446,6 +446,10 @@ TEST(CreatureKindActions, ThrowingADieWatchesItFlyThenJumpsOrSulks)
 	EXPECT_EQ(agenda[2].kind, Step::Kind::WatchFlying);
 	EXPECT_EQ(agenda[2].object, 6u);
 	EXPECT_EQ(agenda[2].face, creature_face::Cue::Amazed);
+	// Its eyes follow the die itself through the air
+	ASSERT_TRUE(agenda[2].gaze.has_value());
+	EXPECT_EQ(agenda[2].gaze->object, 6u);
+	EXPECT_TRUE(agenda[2].gaze->itself);
 	EXPECT_EQ(agenda[3].animation, creature_layers::animations::k_Happy);
 	const auto sulk = ThrowDie(std::nullopt, 6u, {0.0f, 0.0f}, 10.0f, KindActionsFirst);
 	ASSERT_EQ(sulk.size(), 3);
@@ -579,8 +583,7 @@ TEST(CreatureKindActions, TalkingWhenHighFluttersTheEyelidsUntilItTakesUpSomethi
 	mind.agenda = {{.kind = Step::Kind::Overlay, .animation = k_Talk, .flutterEyelids = true}};
 	const auto started = Think(mind, Senses {.seconds = 0.1f}, KindActionsFirst);
 	EXPECT_EQ(started.blinkIntervalMs, k_FlutterBlinkIntervalMs);
-	EXPECT_TRUE(mind.eyesHeld);
 	Plan(mind, Activity::BeIdle, {{.kind = Step::Kind::Wait, .seconds = 1.0f}});
 	const auto next = Think(mind, Senses {.seconds = 0.1f}, KindActionsFirst);
-	EXPECT_EQ(next.eyes, Eyes::Normal);
+	EXPECT_TRUE(next.restEyes);
 }

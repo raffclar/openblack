@@ -65,26 +65,63 @@ struct Candidate
 	float distance;
 };
 
-/// What the creature watches: the thing, its interest when the creature started to watch it, where the creature looks
-/// to see it, and for how many turns it has watched it
+/// What the creature can watch: a thing, or the mountains or the water that it finds on its map of the land as it moves
+enum class Sight : uint8_t
+{
+	Thing,
+	Mountains,
+	Water,
+};
+
+/// How much each kind of sight catches the eye of one creature
+struct Weights
+{
+	float things {0.0f};
+	float mountains {0.0f};
+	float water {0.0f};
+};
+[[nodiscard]] float WeightOf(const Weights& weights, Sight sight);
+
+/// The mountains and the water have this interest
+constexpr float k_LandInterest = 0.5f;
+
+/// What the creature watches: the thing, or the place of the mountains or the water; its interest when the creature
+/// started to watch it, where the creature looks to see it, and for how many turns it has watched it
 struct Target
 {
 	std::optional<uint32_t> id;
+	Sight sight {Sight::Thing};
+	/// The place on the land of the mountains or the water, along the ground
+	std::optional<glm::vec2> place;
 	float interest {0.0f};
 	glm::vec3 point {0.0f};
 	uint32_t watchedTurns {0};
 };
+/// Whether the creature watches something
+[[nodiscard]] bool Watches(const Target& target);
 
-/// How much what it watches holds the creature: the creature's weight for things, times the interest, times the
-/// distance factor at the distance now (held between 0 and the range). Nothing holds it when it watches nothing.
+/// How much what it watches holds the creature: the creature's weight for that kind of sight, times the interest, times
+/// the distance factor at the distance now (held between 0 and the range). Nothing holds it when it watches nothing.
 [[nodiscard]] float Hold(const Target& target, float distance, float range, float weight);
 /// A thing in view that the creature sees takes over what it watches, if it watches nothing or if the thing catches its
-/// eye more than what it watches holds it. A thing catches its eye by the weight, its interest and the distance factor,
-/// less as the whole seconds of watching go up to k_BoredSeconds. Returns whether the thing took over.
-bool Consider(Target& target, const Candidate& candidate, float watchedDistance, float range, float weight,
+/// eye more than what it watches holds it. A thing catches its eye by the weight for things, its interest and the
+/// distance factor, less as the whole seconds of watching go up to k_BoredSeconds. Returns whether the thing took over.
+bool Consider(Target& target, const Candidate& candidate, float watchedDistance, float range, const Weights& weights,
               uint32_t turnsPerSecond);
-/// One turn of watching: while the thing that the creature watches is in view, the creature watches it a turn longer.
-/// Else the creature watches nothing.
+
+/// The nearest mountains or water that the creature finds on its map as it moves, and how far they are along the ground
+struct LandCandidate
+{
+	Sight sight {Sight::Mountains};
+	glm::vec2 place {0.0f};
+	float distance {0.0f};
+};
+/// The mountains or the water take over what the creature watches by the same rule as a thing, with the weight for
+/// their kind and k_LandInterest. The creature does not have to see them. Returns whether they took over.
+bool ConsiderLand(Target& target, const LandCandidate& candidate, float watchedDistance, float range, const Weights& weights,
+                  uint32_t turnsPerSecond);
+/// One turn of watching: while what the creature watches is in view, the creature watches it a turn longer. Else the
+/// creature watches nothing.
 void Watch(Target& target, bool inView);
 
 /// The creature looking about

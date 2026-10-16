@@ -65,6 +65,11 @@ float creature_eyes::EyeSize(float size, float speciesEyeScale, float evilGood, 
 	return mode == Mode::Stoned ? eyeSize * k_StonedEyeSize : eyeSize;
 }
 
+float creature_eyes::RestedOpenness(float exhaustion)
+{
+	return std::clamp(1.0f - (exhaustion + exhaustion), k_RestedOpennessLeast, k_RestedOpennessMost);
+}
+
 float creature_eyes::LookSeconds(float openness, Mode mode)
 {
 	const auto seconds = k_LookSeconds / (openness + k_LookOpennessOffset);

@@ -5200,6 +5200,40 @@ void AddMind(std::vector<Scenario>& all)
 	    .repeatFrom = 1,
 	});
 
+	all.push_back({
+	    .id = "mind.look_at_land",
+	    .name = "An idle lion looks at the hills and the sea",
+	    .facet = Facet::Mind,
+	    .description = "A player's lion stands alone, with only a birch far from it, facing the nearest hill. A script "
+	                   "tells it to be idle every fifteen seconds.",
+	    .expected = "While it waits, nothing else catches its eye, so its head turns to the nearest hill or sea that it "
+	                "did not go to yet, at the ground there. When that place is no longer in front of it, it looks ahead "
+	                "again until the hill or the sea comes back into view.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Lion, {0.0f, 0.0f}, 180.0f)},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {100.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BeIdle"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 15.0f, .object = 0, .action = "BeIdle"}},
+	    .repeatFrom = 1,
+	});
+
+	all.push_back({
+	    .id = "mind.woken_eyes",
+	    .name = "Yawning droops the lids until the lion stops",
+	    .facet = Facet::Mind,
+	    .description = "A player's lion stands facing the camera. A script tells it to be idle every fifteen seconds: it "
+	                   "waits and yawns two times.",
+	    .expected = "With the first yawn its lids droop and it blinks slowly. The lids stay down through the wait and the "
+	                "second yawn. When it stops being idle, its lids open by how rested it is: nearly wide when it is "
+	                "fresh.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Lion, {0.0f, 0.0f}, 0.0f)},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {100.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BeIdle"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 15.0f, .object = 0, .action = "BeIdle"}},
+	    .repeatFrom = 1,
+	});
+
 	// The emotes: a script tells a player's lion to do one action again and again, with a villager beside it as the thing
 	// that the action is done to
 	const auto emote = [&all](std::string_view id, std::string_view name, std::string_view description,

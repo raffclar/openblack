@@ -19,6 +19,7 @@
 #include <chrono>
 #include <limits>
 #include <optional>
+#include <utility>
 
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
@@ -38,6 +39,7 @@
 #include "Creature/CreatureObjectBeliefs.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -74,6 +76,7 @@
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureExplorationLand.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
@@ -551,23 +554,92 @@ void CreatureMindSystem::ForgetGoneThings(entt::entity creature, components::Cre
 	}
 }
 
-void CreatureMindSystem::NoteNearestTemple(entt::entity creature, components::CreatureMindState& mind,
-                                           const Transform& transform)
+void CreatureMindSystem::LookFarAbout(entt::entity creature, CreatureMindState& mind, const Transform& transform)
 {
-	// Each time it goes into another cell it looks for the nearest temple, which it comes across if it is another than
-	// the last it found
-	const auto cell = map_coords::CellOf(transform.position);
-	if (mind.beliefCell == cell)
-	{
-		return;
-	}
-	mind.beliefCell = cell;
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto temple = NearestTemple(registry, map_coords::FromMetres(glm::xz(transform.position)));
+	const auto from = map_coords::FromMetres(glm::xz(transform.position));
+	// The nearest town but the one it came across last, and that town's storage pit
+	std::vector<creature_object_beliefs::TownCell> towns;
+	registry.Each<const Town, const Transform>([&](entt::entity town, const Town&, const Transform& at) {
+		towns.push_back(
+		    {.id = entt::to_integral(town), .cell = map_coords::Cell(map_coords::FromMetres(glm::xz(at.position)))});
+	});
+	const auto last = mind.lastTown != entt::null ? std::optional(entt::to_integral(mind.lastTown)) : std::nullopt;
+	if (const auto town = creature_object_beliefs::NearestOtherTown(map_coords::Cell(from), towns, last); town.has_value())
+	{
+		mind.lastTown = static_cast<entt::entity>(*town);
+		ComeAcross(creature, mind, mind.lastTown);
+		if (const auto pit = ecs::construction::StoragePitOf(mind.lastTown); pit.has_value())
+		{
+			ComeAcross(creature, mind, *pit);
+		}
+	}
+	// The nearest temple, if it is another than the last that it came across
+	const auto temple = NearestTemple(registry, from);
 	if (temple != entt::null && temple != mind.nearestTemple)
 	{
 		mind.nearestTemple = temple;
 		ComeAcross(creature, mind, temple);
+	}
+}
+
+namespace
+{
+/// The weights for what catches the eye of a creature, from its own traits
+creature_look::Weights LookWeightsOf(const CreatureMindState& mind)
+{
+	return {.things = mind.innate.objectsLookWeight,
+	        .mountains = mind.innate.mountainsLookWeight,
+	        .water = mind.innate.waterLookWeight};
+}
+
+/// Where along the ground the creature finds what it watches: the thing's place, or the place of the mountains or the
+/// water. None when it watches nothing, or a thing that is gone.
+std::optional<glm::vec2> WatchedPlace(const ecs::Registry& registry, const creature_look::Target& look)
+{
+	if (look.place.has_value())
+	{
+		return look.place;
+	}
+	if (!look.id.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto thing = static_cast<entt::entity>(*look.id);
+	if (!registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	return glm::xz(PlaceOf(registry, thing));
+}
+} // namespace
+
+void CreatureMindSystem::LookAtLand(entt::entity entity, const Creature& creature, CreatureMindState& mind,
+                                    const Transform& transform)
+{
+	if (!map_coords::InBounds(transform.position))
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec2 from = glm::xz(transform.position);
+	const auto range = creature_look::LookRange(ShownSize(creature));
+	const auto weights = LookWeightsOf(mind);
+	// Each turn that it moves it finds on its map the nearest mountains, then the nearest water, and prefers the regions
+	// that it did not go into yet. Each may take over what it watches.
+	for (const auto [sight, kind] : {std::pair {creature_look::Sight::Mountains, creature_exploration::Kind::Hill},
+	                                 std::pair {creature_look::Sight::Water, creature_exploration::Kind::Sea}})
+	{
+		const auto place = ecs::creature_exploration_land::FindPlace(entity, kind, from, true);
+		if (!place.has_value())
+		{
+			continue;
+		}
+		const auto watched = WatchedPlace(registry, mind.look);
+		const auto watchedDistance = watched.has_value() ? glm::distance(*watched, from) : 0.0f;
+		creature_look::ConsiderLand(mind.look,
+		                            {.sight = sight, .place = *place, .distance = gutils::GetDistanceInMetres(*place, from)},
+		                            watchedDistance, range, weights, k_TurnsPerSecond);
 	}
 }
 
@@ -585,16 +657,16 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 	const auto looking = mind_detail::LookingAngle(transform, animation.lookAt);
 	const auto facing = mind_detail::LookingAngle(transform, std::nullopt);
 	const auto range = creature_look::LookRange(ShownSize(creature));
-	// How much things on the land catch its own eye, which its personality spreads from its species' weight
-	const auto weight = mind.innate.objectsLookWeight;
-	// Whether a thing is in view, and how far it is along the ground
-	const auto view = [&](entt::entity thing) {
-		const auto at = PlaceOf(registry, thing);
-		const auto coords = map_coords::FromMetres(glm::xz(at));
+	// How much things, mountains and water catch its own eye, which its personality spreads from its species' weights
+	const auto weights = LookWeightsOf(mind);
+	// Whether a place is in view, and how far it is along the ground
+	const auto viewOf = [&](glm::vec2 at) {
+		const auto coords = map_coords::FromMetres(at);
 		const bool inView =
 		    creature_look::InView(looking, facing, gutils::GetAngleFromXZ(from, coords), map_coords::Cell(coords) == centre);
-		return std::pair {inView, glm::distance(glm::xz(at), glm::xz(transform.position))};
+		return std::pair {inView, glm::distance(at, glm::xz(transform.position))};
 	};
+	const auto view = [&](entt::entity thing) { return viewOf(glm::xz(PlaceOf(registry, thing))); };
 	for (const auto cell : beliefs::NextCells(mind.sweep, centre, ShownSize(creature)))
 	{
 		if (!map_coords::InBounds(cell))
@@ -620,11 +692,11 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 			{
 				continue;
 			}
-			const auto watched = mind.look.id.has_value() ? static_cast<entt::entity>(*mind.look.id) : entt::null;
-			const auto watchedDistance = registry.Valid(watched) ? view(watched).second : 0.0f;
+			const auto watched = WatchedPlace(registry, mind.look);
+			const auto watchedDistance = watched.has_value() ? viewOf(*watched).second : 0.0f;
 			creature_look::Consider(
 			    mind.look, {.id = entt::to_integral(thing), .kind = LookInterestOf(registry, thing), .distance = distance},
-			    watchedDistance, range, weight, k_TurnsPerSecond);
+			    watchedDistance, range, weights, k_TurnsPerSecond);
 		}
 	}
 	// Each turn it comes across what it carries
@@ -635,15 +707,25 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 			ComeAcross(entity, mind, *held);
 		}
 	}
-	// It watches what it watches a turn longer while the thing is there and in view
-	const auto watched = mind.look.id.has_value() ? static_cast<entt::entity>(*mind.look.id) : entt::null;
-	creature_look::Watch(mind.look, registry.Valid(watched) && view(watched).first);
-	if (mind.look.id.has_value())
+	// It watches what it watches a turn longer while it is there and in view
+	const auto watched = WatchedPlace(registry, mind.look);
+	creature_look::Watch(mind.look, watched.has_value() && viewOf(*watched).first);
+	if (!creature_look::Watches(mind.look))
 	{
-		// The head looks at the thing's place, as high above the ground as the thing is tall
-		const auto at = PlaceOf(registry, watched);
-		const auto ground =
-		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::xz(at)) : at.y;
-		mind.look.point = {at.x, ground + HeightOf(registry, watched), at.z};
+		return;
 	}
+	const auto ground = [](glm::vec3 at) {
+		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(glm::xz(at)) : at.y;
+	};
+	if (mind.look.place.has_value())
+	{
+		// The head looks at the ground there
+		const glm::vec3 at {mind.look.place->x, 0.0f, mind.look.place->y};
+		mind.look.point = {at.x, ground(at), at.z};
+		return;
+	}
+	// The head looks at the thing's place, as high above the ground as the thing is tall
+	const auto thing = static_cast<entt::entity>(*mind.look.id);
+	const auto at = PlaceOf(registry, thing);
+	mind.look.point = {at.x, ground(at) + HeightOf(registry, thing), at.z};
 }

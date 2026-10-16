@@ -441,7 +441,7 @@ std::optional<float> ReadSource(uint32_t type, const creature_desires::Desires& 
 /// One turn of looking about: the head turns to what the creature watches, or ahead
 glm::vec3 LookAbout(const Creature& creature, const Transform& transform, const CreatureMindState& mind)
 {
-	if (mind.look.id.has_value())
+	if (creature_look::Watches(mind.look))
 	{
 		return mind.look.point;
 	}
@@ -500,18 +500,18 @@ std::optional<glm::vec3> LookWhileGoing(entt::entity entity, const Creature& cre
 		const auto& noticed = *mind.noticedMover;
 		mover = glm::vec3(noticed.at.x, groundAt(noticed.at) + noticed.height, noticed.at.y);
 	}
-	const auto point =
-	    creature_look::LookWhileGoing(*mind.goingLook, info,
-	                                  {
-	                                      .position = glm::vec2(transform.position.x, transform.position.z),
-	                                      .heading = heading,
-	                                      .place = glm::vec2(place.x, place.z),
-	                                      .watched = mind.look.id.has_value() ? std::optional(mind.look.point) : std::nullopt,
-	                                      .mover = mover,
-	                                      .moverTurn = mind.noticedMover.has_value() ? mind.noticedMover->turn : 0,
-	                                      .turn = mind.turn,
-	                                      .turnsPerSecond = k_TurnsPerSecond,
-	                                  });
+	const auto point = creature_look::LookWhileGoing(
+	    *mind.goingLook, info,
+	    {
+	        .position = glm::vec2(transform.position.x, transform.position.z),
+	        .heading = heading,
+	        .place = glm::vec2(place.x, place.z),
+	        .watched = creature_look::Watches(mind.look) ? std::optional(mind.look.point) : std::nullopt,
+	        .mover = mover,
+	        .moverTurn = mind.noticedMover.has_value() ? mind.noticedMover->turn : 0,
+	        .turn = mind.turn,
+	        .turnsPerSecond = k_TurnsPerSecond,
+	    });
 	if (!point.has_value())
 	{
 		return std::nullopt;
@@ -525,18 +525,31 @@ void ApplyEyes(CreatureEyes* eyes, creature_mind::Eyes look)
 	{
 		return;
 	}
-	const bool sleepy = look == creature_mind::Eyes::Sleepy;
+	// Just woken up, only the lids and the blinking change
+	if (look == creature_mind::Eyes::Sleepy)
+	{
+		eyes->openness = k_SleepyOpenness;
+		eyes->blink.intervalMs = k_SleepyBlinkIntervalMs;
+		return;
+	}
+	// The other looks change only how the eyes look: the lids and the blinking stay as they were
 	eyes->mode = look == creature_mind::Eyes::Closed   ? creature_eyes::Mode::Closed
 	             : look == creature_mind::Eyes::Stoned ? creature_eyes::Mode::Stoned
 	             : look == creature_mind::Eyes::Wide   ? creature_eyes::Mode::Wide
 	                                                   : creature_eyes::Mode::Calm;
-	// Stoned or wide eyes only change how the eyes look: the lids and the blinking stay as they were
-	if (look == creature_mind::Eyes::Stoned || look == creature_mind::Eyes::Wide)
+}
+
+/// The creature stops what it does: its eyes go calm, blink as usual, and its lids open by how rested it is
+void RestEyes(const ecs::Registry& registry, entt::entity creature, CreatureEyes* eyes)
+{
+	if (eyes == nullptr)
 	{
 		return;
 	}
-	eyes->openness = sleepy ? k_SleepyOpenness : 0.0f;
-	eyes->blink.intervalMs = sleepy ? k_SleepyBlinkIntervalMs : creature_eyes::k_BlinkIntervalMs;
+	const auto* needs = registry.TryGet<const CreatureNeeds>(creature);
+	eyes->mode = creature_eyes::Mode::Calm;
+	eyes->blink.intervalMs = creature_eyes::k_BlinkIntervalMs;
+	eyes->openness = creature_eyes::RestedOpenness(needs != nullptr ? needs->needs.exhaustion : 0.0f);
 }
 
 /// Sends the creature where its mind wants it to go; whether it can't go there and gives up what it is doing
@@ -1778,15 +1791,17 @@ void CreatureMindSystem::ProcessTurn()
 			    creature_desires::ActivateForPhase(*mind.desires, Phases(), mind.developmentPhase);
 			    mind.desiresPhase = mind.developmentPhase;
 		    }
-		    // What it believed about things now gone is forgotten, and going into another cell it notes the nearest temple
+		    // What it believed about things now gone is forgotten
 		    ForgetGoneThings(entity, mind);
-		    NoteNearestTemple(entity, mind, transform);
 		    const bool held = HeldByHand(entity);
 		    // Only a creature's own player pays it attention, and not while the hand holds it; nor do its eyes sweep about
 		    // it then
 		    if (!held)
 		    {
-			    // It notes the region of the land where it stands, for its map of the places it went to
+			    // As it moves, the mountains and the water that it finds on its map can catch its eye. Then it notes the
+			    // region of the land where it stands, for its map of the places it went to.
+			    LookAtLand(entity, creature, mind, transform);
+			    LookFarAbout(entity, mind, transform);
 			    ecs::creature_exploration_land::Visit(entity, {transform.position.x, transform.position.z});
 			    const bool lookedAt = creature.owner == PlayerNames::PLAYER_ONE && view.has_value() &&
 			                          creature_attention::IsLookingAt(view->origin, view->focus, transform.position);
@@ -2049,6 +2064,10 @@ void CreatureMindSystem::ProcessTurn()
 		    }
 		    KeepDanceWithAgenda(entity, mind.idle);
 		    KeepPaceWithAgenda(entity, mind);
+		    if (commands.restEyes)
+		    {
+			    RestEyes(registry, entity, eyes);
+		    }
 		    Apply(commands, animation, eyes);
 		    if (Move(entity, commands))
 		    {
@@ -2700,10 +2719,7 @@ bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity a
 	// new agenda waits for the body to be free. It lets go of any miracle it holds.
 	body->body = creature_layers::EndLoop(body->body);
 	ReleaseCast(creature);
-	if (auto* eyes = registry.TryGet<CreatureEyes>(creature))
-	{
-		ApplyEyes(eyes, creature_mind::Eyes::Normal);
-	}
+	RestEyes(registry, creature, registry.TryGet<CreatureEyes>(creature));
 	Abandon(*mind);
 	creature_mind::Plan(mind->idle, activity, std::move(agenda));
 	return true;

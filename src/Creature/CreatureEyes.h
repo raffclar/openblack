@@ -46,6 +46,12 @@ constexpr int32_t k_BlinkMs = 200;
 constexpr int32_t k_FirstBlinkMs = 1000;
 constexpr int32_t k_BlinkIntervalMs = 5000;
 
+/// When the creature stops what it does, its lids open by how rested it is: one less twice its exhaustion, from fully
+/// down to a little short of wide
+constexpr float k_RestedOpennessLeast = -1.0f;
+constexpr float k_RestedOpennessMost = 0.73f;
+[[nodiscard]] float RestedOpenness(float exhaustion);
+
 struct Blink
 {
 	enum class State : uint8_t

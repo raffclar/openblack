@@ -144,3 +144,14 @@ TEST(CreatureEyes, TurningALidKeepsItsAxesSquare)
 	EXPECT_NEAR(glm::length(lid.y), 1.0f, k_Tolerance);
 	EXPECT_NEAR(LidPitch(lid, EyeballFrame({0, 0, 0}, lid.y)), 1.0f, k_Tolerance);
 }
+
+TEST(CreatureEyes, StoppingWhatItDoesTheLidsOpenByHowRestedItIs)
+{
+	// Fresh, the lids open nearly wide; at half its exhaustion they are as they start; worn out they are fully down
+	EXPECT_FLOAT_EQ(RestedOpenness(0.0f), k_RestedOpennessMost);
+	EXPECT_FLOAT_EQ(RestedOpenness(0.2f), 0.6f);
+	EXPECT_FLOAT_EQ(RestedOpenness(0.5f), 0.0f);
+	EXPECT_FLOAT_EQ(RestedOpenness(0.9f), -0.8f);
+	EXPECT_FLOAT_EQ(RestedOpenness(1.0f), -1.0f);
+	EXPECT_FLOAT_EQ(RestedOpenness(1.5f), k_RestedOpennessLeast);
+}

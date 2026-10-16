@@ -14,6 +14,7 @@
 
 #include <array>
 #include <optional>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -172,5 +173,19 @@ struct Sweep
 /// it looks (`looking`, a game angle), and anything in its own cell
 inline constexpr int32_t k_SightHalfAngle = 0x2AA;
 [[nodiscard]] bool CanSee(uint16_t looking, uint16_t direction, bool sameCell);
+
+/// A town of any player or of none, and the map cell where it stands
+struct TownCell
+{
+	uint32_t id;
+	glm::ivec2 cell;
+};
+/// How far apart two cells are for finding the nearest town: the longer of the two sides, and half the shorter
+[[nodiscard]] int32_t TownCellDistance(glm::ivec2 a, glm::ivec2 b);
+/// Each turn the creature comes across the nearest town that is not the town it came across last, and that town's
+/// storage pit. So with two towns or more it comes across the two nearest in turn. Of towns equally near, the first in
+/// the list counts. None when there is no other town.
+[[nodiscard]] std::optional<uint32_t> NearestOtherTown(glm::ivec2 from, std::span<const TownCell> towns,
+                                                       std::optional<uint32_t> last);
 
 } // namespace openblack::creature_object_beliefs

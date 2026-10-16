@@ -69,34 +69,85 @@ bool creature_look::InView(uint16_t looking, uint16_t facing, uint16_t direction
 	return creature_object_beliefs::CanSee(looking, direction, false) && apart < k_Circle / k_BodyViewParts;
 }
 
+float creature_look::WeightOf(const Weights& weights, Sight sight)
+{
+	switch (sight)
+	{
+	case Sight::Mountains:
+		return weights.mountains;
+	case Sight::Water:
+		return weights.water;
+	case Sight::Thing:
+	default:
+		return weights.things;
+	}
+}
+
+bool creature_look::Watches(const Target& target)
+{
+	return target.id.has_value() || target.place.has_value();
+}
+
 float creature_look::Hold(const Target& target, float distance, float range, float weight)
 {
-	if (!target.id.has_value())
+	if (!Watches(target))
 	{
 		return 0.0f;
 	}
 	return weight * target.interest * DistanceFactor(std::clamp(distance, 0.0f, std::max(range, 0.0f)), range);
 }
 
-bool creature_look::Consider(Target& target, const Candidate& candidate, float watchedDistance, float range, float weight,
-                             uint32_t turnsPerSecond)
+namespace
 {
-	const auto interest = InterestOf(candidate.kind);
+/// How much a new sight catches the eye: less as the whole seconds of watching go up to k_BoredSeconds
+float Catches(const Target& target, float weight, float interest, float distance, float range, uint32_t turnsPerSecond)
+{
 	const auto watchedSeconds = turnsPerSecond > 0 ? target.watchedTurns / turnsPerSecond : 0u;
 	const auto boredom =
 	    1.0f - (static_cast<float>(std::min(watchedSeconds, k_BoredSeconds)) / static_cast<float>(k_BoredSeconds));
-	const auto catches = boredom * weight * DistanceFactor(candidate.distance, range) * interest;
-	if (target.id.has_value() && !(Hold(target, watchedDistance, range, weight) < catches))
+	return boredom * weight * DistanceFactor(distance, range) * interest;
+}
+
+/// Whether a sight that catches the eye this much takes over what the creature watches
+bool TakesOver(const Target& target, float catches, float watchedDistance, float range, const Weights& weights)
+{
+	return !Watches(target) || Hold(target, watchedDistance, range, WeightOf(weights, target.sight)) < catches;
+}
+} // namespace
+
+bool creature_look::Consider(Target& target, const Candidate& candidate, float watchedDistance, float range,
+                             const Weights& weights, uint32_t turnsPerSecond)
+{
+	const auto interest = InterestOf(candidate.kind);
+	const auto catches = Catches(target, weights.things, interest, candidate.distance, range, turnsPerSecond);
+	if (!TakesOver(target, catches, watchedDistance, range, weights))
 	{
 		return false;
 	}
-	target = {.id = candidate.id, .interest = interest, .point = target.point, .watchedTurns = 0};
+	target = {.id = candidate.id, .sight = Sight::Thing, .interest = interest, .point = target.point, .watchedTurns = 0};
+	return true;
+}
+
+bool creature_look::ConsiderLand(Target& target, const LandCandidate& candidate, float watchedDistance, float range,
+                                 const Weights& weights, uint32_t turnsPerSecond)
+{
+	const auto catches =
+	    Catches(target, WeightOf(weights, candidate.sight), k_LandInterest, candidate.distance, range, turnsPerSecond);
+	if (!TakesOver(target, catches, watchedDistance, range, weights))
+	{
+		return false;
+	}
+	target = {.sight = candidate.sight,
+	          .place = candidate.place,
+	          .interest = k_LandInterest,
+	          .point = target.point,
+	          .watchedTurns = 0};
 	return true;
 }
 
 void creature_look::Watch(Target& target, bool inView)
 {
-	if (!target.id.has_value())
+	if (!Watches(target))
 	{
 		return;
 	}

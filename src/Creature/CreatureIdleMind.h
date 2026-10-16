@@ -331,8 +331,9 @@ enum class Effect : uint8_t
 enum class Eyes : uint8_t
 {
 	Unchanged,
-	/// Drooping and slowly blinking, as if just woken up
+	/// Drooping and slowly blinking, as if just woken up. The lids stay down until it stops what it does.
 	Sleepy,
+	/// Calm again, as after its eyes were closed. The lids and the blinking stay as they were.
 	Normal,
 	Closed,
 	/// Wide open and darting about
@@ -500,7 +501,7 @@ struct Step
 	/// Watching the camera for a set number of turns, rather than until the camera goes or the step's seconds are up
 	std::optional<uint32_t> turns;
 	size_t animation {0};
-	/// Played with drooping, slowly blinking eyes, as if just woken up
+	/// Played with drooping, slowly blinking eyes, as if just woken up. The eyes stay so until it stops what it does.
 	bool sleepyEyes {false};
 	Movement movement {};
 	/// A static step's start, loop and end
@@ -553,8 +554,7 @@ struct IdleMind
 	bool sitEnding {false};
 	/// Seconds until the step's face is pulled again, and the count that varies the faces it pulls
 	float faceSeconds {0.0f};
-	/// Its eyes look as a step held them, and look as usual again once it takes up something else to do
-	bool eyesHeld {false};
+	/// It stopped what it did: its eyes look as a rested creature's eyes do again (see Commands::restEyes)
 	bool eyesToClear {false};
 	uint32_t faceVariety {0};
 	/// The desire it showed last
@@ -801,6 +801,9 @@ struct Commands
 	/// A face to pull, or to relax the face pulled
 	std::optional<creature_face::Request> face;
 	bool relaxFace {false};
+	/// It stopped what it did: its eyes go calm, blink as usual and open by how rested it is (see
+	/// creature_eyes::RestedOpenness). This comes before the eyes of this turn.
+	bool restEyes {false};
 	Eyes eyes {Eyes::Unchanged};
 	/// Whether the head turns to whatever is interesting this turn
 	bool lookAbout {false};
