@@ -36,6 +36,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/CreatureSwap.h"
+#include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
@@ -279,6 +280,12 @@ bool CreatureMindSystem::SwapMinds(entt::entity from, entt::entity to)
 	if (leashFrom != nullptr && leashTo != nullptr)
 	{
 		std::swap(leashFrom->known, leashTo->known);
+	}
+	// The new body takes notice of reactions. The old body takes no notice of them until a script tells it to.
+	registry.Remove<CreatureReactionsOff>(to);
+	if (!registry.AllOf<CreatureReactionsOff>(from))
+	{
+		registry.Assign<CreatureReactionsOff>(from);
 	}
 
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creatures {} and {} swapped minds", entt::to_integral(from),
