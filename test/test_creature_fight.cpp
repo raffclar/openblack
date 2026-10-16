@@ -55,16 +55,24 @@ TEST(CreatureFight, ArenaIsSizedByTheBiggerCreatureAndCapped)
 	EXPECT_FLOAT_EQ(ArrivalDistance(1.0f), 22.5f);
 }
 
-TEST(CreatureFight, FightersNeverPassThroughEachOther)
+TEST(CreatureFight, ABlowPushesBothFightersApartByHalfTheOverlap)
 {
-	EXPECT_FLOAT_EQ(ClosestApart(6.0f, 5.0f), 8.0f);
-	// Moving in too close it stops on the circle; moving away or staying out it goes on
-	const auto stopped = KeepApart({20.0f, 0.0f}, {2.0f, 0.0f}, {0.0f, 0.0f}, 8.0f);
-	EXPECT_NEAR(stopped.x, 8.0f, 1e-4f);
-	EXPECT_EQ(KeepApart({20.0f, 0.0f}, {10.0f, 0.0f}, {0.0f, 0.0f}, 8.0f), glm::vec2(10.0f, 0.0f));
-	EXPECT_EQ(KeepApart({4.0f, 0.0f}, {6.0f, 0.0f}, {0.0f, 0.0f}, 8.0f), glm::vec2(6.0f, 0.0f));
-	// Passing right through, it stays on its own side
-	EXPECT_NEAR(KeepApart({20.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f}, 8.0f).x, 8.0f, 1e-4f);
+	// Reaches of 6 and 4 count as 6 + 2 = 8; 4 apart, each moves 2 along the striker's facing
+	const auto pushed = BlowPushOf({0.0f, 0.0f}, {0.0f, 4.0f}, {0.0f, 1.0f}, 6.0f, 4.0f);
+	ASSERT_TRUE(pushed.first.has_value());
+	ASSERT_TRUE(pushed.second.has_value());
+	EXPECT_FLOAT_EQ(pushed.first->y, -2.0f);
+	EXPECT_FLOAT_EQ(pushed.second->y, 6.0f);
+	// Only half of the opponent's reach counts: 8 apart is not an overlap, although the full reaches are 10
+	const auto apart = BlowPushOf({0.0f, 0.0f}, {0.0f, 8.0f}, {0.0f, 1.0f}, 6.0f, 4.0f);
+	EXPECT_FALSE(apart.first.has_value());
+	EXPECT_FALSE(apart.second.has_value());
+	// The push follows the striker's facing, not the line between them, and the range of the arena does not stop it
+	const auto sideways = BlowPushOf({100.0f, 0.0f}, {101.0f, 0.0f}, {0.0f, -1.0f}, 3.0f, 2.0f);
+	ASSERT_TRUE(sideways.first.has_value());
+	EXPECT_FLOAT_EQ(sideways.first->x, 100.0f);
+	EXPECT_FLOAT_EQ(sideways.first->y, 1.5f);
+	EXPECT_FLOAT_EQ(sideways.second->y, -1.5f);
 }
 
 TEST(CreatureFight, StepsBackOrSidewaysOnlyWithinRange)
@@ -579,6 +587,10 @@ TEST(CreatureFight, OutcomesAndStarting)
 	EXPECT_TRUE(FightWonIsSeen(true, true));
 	EXPECT_FALSE(FightWonIsSeen(false, true));
 	EXPECT_FALSE(FightWonIsSeen(true, false));
+	// The winner's plan is an order, forced only when a miracle or a loss of life knocked the loser out
+	EXPECT_FALSE(WinPlanForced(true));
+	EXPECT_TRUE(WinPlanForced(false));
+	EXPECT_FLOAT_EQ(k_WinPlanPriority, 1.0f);
 	EXPECT_EQ(Response(0.8f, 0.5f), animations::k_Happy);
 	EXPECT_EQ(Response(0.4f, 0.5f), animations::k_Sad);
 }
@@ -805,6 +817,11 @@ TEST(CreatureFight, AFighterOnTheEdgeOfTheRangeIsOutsideIt)
 
 TEST(CreatureFight, AFighterStepsBackToTheMiddle)
 {
+	// Both fighters inside the range: the arena lets them fight. Either one at the range or past it stops both.
+	const Arena ring {.centre = {0.0f, 0.0f}, .radius = 10.0f};
+	EXPECT_FALSE(KeepsInArena(ring, {7.99f, 0.0f}, {0.0f, -7.99f}));
+	EXPECT_TRUE(KeepsInArena(ring, {8.0f, 0.0f}, {0.0f, 0.0f}));
+	EXPECT_TRUE(KeepsInArena(ring, {0.0f, 0.0f}, {0.0f, -8.01f}));
 	// Within its body radius of the middle it takes no step
 	EXPECT_FALSE(StepToMiddle({0.0f, 2.0f}, 2.0f, 2.0f).has_value());
 	// Ahead or behind when the middle is 1.5 times farther that way than to the side
@@ -855,6 +872,23 @@ TEST(CreatureFight, AFighterKeepsItsLastActionAfterItEnds)
 	EXPECT_EQ(fighter.lastAction, animations::k_RecoilBlock);
 }
 
+TEST(CreatureFight, ABlockOrACastIsTheLastActionAfterABlow)
+{
+	Fighter fighter;
+	Enter(fighter, State::Action, animations::k_AttackHigh);
+	Enter(fighter, State::Stance);
+	Enter(fighter, State::BlockStart);
+	EXPECT_EQ(fighter.lastAction, animations::k_Block);
+	EXPECT_FALSE(IsAttack(fighter.lastAction));
+	Enter(fighter, State::Block);
+	Enter(fighter, State::BlockEnd);
+	EXPECT_EQ(fighter.lastAction, animations::k_Block);
+	Enter(fighter, State::Action, animations::k_AttackKnee);
+	Enter(fighter, State::CastStart);
+	EXPECT_EQ(fighter.lastAction, animations::k_Cast);
+	EXPECT_FALSE(IsAttack(fighter.lastAction));
+}
+
 TEST(CreatureFight, FightMusicIsHeardWhileTheHandDirectsTheFightOrNearItsArena)
 {
 	const glm::vec3 camera {0.0f, 50.0f, 0.0f};
@@ -875,4 +909,31 @@ TEST(CreatureFight, LifeLostInADuelComesOffTheFightHealth)
 	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.6f, 0.25f), 0.35f);
 	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.2f, 0.5f), 0.0f);
 	EXPECT_FLOAT_EQ(HealthAfterLifeLost(0.2f, 0.0f), 0.2f);
+}
+
+TEST(CreatureFight, OnlyTheStartAfterItsTurnTheStanceTheBlockAndStepsFaceTheOpponentEachTurn)
+{
+	// The start faces the opponent only after its turn on the spot
+	EXPECT_FALSE(FacesOpponentEachTurn(State::Start, animations::k_Start, true));
+	EXPECT_TRUE(FacesOpponentEachTurn(State::Start, animations::k_Start, false));
+	EXPECT_TRUE(FacesOpponentEachTurn(State::Stance, animations::k_Stance, false));
+	EXPECT_TRUE(FacesOpponentEachTurn(State::Block, animations::k_Start, false));
+	// A step faces the opponent, a blow keeps its heading
+	EXPECT_TRUE(FacesOpponentEachTurn(State::Action, animations::k_StepForward, false));
+	EXPECT_FALSE(FacesOpponentEachTurn(State::Action, animations::k_AttackHigh, false));
+	// The start and the end of a block, the reels, the casts and the finish keep their heading
+	for (const auto state : {State::BlockStart, State::BlockEnd, State::BlockRecoil, State::CastStart, State::Cast,
+	                         State::CastEnd, State::Finish, State::Faint, State::GetUp, State::Lying, State::Idle})
+	{
+		EXPECT_FALSE(FacesOpponentEachTurn(state, animations::k_Start, false)) << Name(state);
+	}
+}
+
+TEST(CreatureFight, EnteringAStateEndsTheTurnOfTheStart)
+{
+	Fighter fighter;
+	Enter(fighter, State::Start);
+	fighter.turning = true;
+	Enter(fighter, State::Stance);
+	EXPECT_FALSE(fighter.turning);
 }

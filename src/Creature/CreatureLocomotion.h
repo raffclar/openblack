@@ -137,6 +137,8 @@ enum class Side : uint8_t
 
 /// Which side a target is on: an angle turning towards the creature's right is positive
 [[nodiscard]] Side SideOf(float angle);
+/// The side of the spins for a turn on the spot to a heading. A turn of none uses the spins to the right.
+[[nodiscard]] Side SpinSideOf(float angle);
 
 /// Two of the three 0, 90 and 180 degree animations of a side, and how far to blend from the first to the second
 struct Pair

@@ -4858,6 +4858,26 @@ void AddCombat(std::vector<Scenario>& all)
 	                 Act(Kind::KnockOut, 0, 1.0f, true)},
 	});
 
+	{
+		constexpr float k_HurtLife = 0.3f;
+		auto hurt = Fighter({0.0f, 0.0f}, 0.0f, "hurt", PlayerNames::PLAYER_ONE, 0.5f, 0.0f);
+		hurt.hold = false;
+		hurt.needs.life = k_HurtLife;
+		all.push_back({
+		    .id = "combat.knocked_out_no_emergency",
+		    .name = "Knocked out, a hurt creature has no emergency until it gets up",
+		    .facet = Facet::Combat,
+		    .description = "A hurt tiger, life 0.3, is knocked out at once, as a fight's loser is. A life below 0.4 is an "
+		                   "emergency for a creature that is awake.",
+		    .expected = "It lies out cold, is taken home and rests. The emergency that its low life started stops when it "
+		                "faints. While it lies there, the mind starts no new emergency (inspector: emergencyRunning of "
+		                "CreatureMindState stays false). It can have an emergency again only after it gets up.",
+		    .framing = {.shot = Shot::Overview, .include = {{0.0f, 0.0f}}, .distance = 0.4f},
+		    .creatures = {hurt},
+		    .commands = {Act(Kind::KnockOut, 0, 0.0f, true)},
+		});
+	}
+
 	all.push_back({
 	    .id = "combat.leash",
 	    .name = "Leashed onto another creature",
@@ -5188,6 +5208,37 @@ void AddCombat(std::vector<Scenario>& all)
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
 	}
+
+	all.push_back({
+	    .id = "combat.bodies_apart",
+	    .name = "Fighters keep their bodies apart",
+	    .facet = Facet::Combat,
+	    .description = "The red tiger starts a fight with the blue tiger to its east, and both fight by themselves. The "
+	                   "camera looks at the arena from the side.",
+	    .expected = "On the walk to their places, the two tigers go through each other, because the red tiger takes the "
+	                "east place. The original game does the same: a creature that walks does not keep clear of another "
+	                "creature that walks. In the duel, the bodies do not stay in each other. When a blow reaches into "
+	                "the other body, both tigers move apart at once. In the stance and in each step, each tiger turns "
+	                "straight to the other, and the two bodies move apart when they touch, also when the other tiger "
+	                "blocks or casts after a blow.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
+	all.push_back({
+	    .id = "combat.start_turn",
+	    .name = "Fighters turn on the spot as the duel starts",
+	    .facet = Facet::Combat,
+	    .description = "The red tiger starts a fight with the blue tiger to its east, and both fight by themselves. The "
+	                   "camera looks at the arena from the side.",
+	    .expected = "As the duel starts, each tiger first turns on the spot to the other with its turn animation. A very "
+	                "small turn also plays this animation. Then each tiger plays its start animation, and it faces the "
+	                "other at once on each game turn. As a tiger starts or ends a block, it does not turn.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
 }
 
 void AddMind(std::vector<Scenario>& all)

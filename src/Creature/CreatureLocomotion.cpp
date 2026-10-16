@@ -172,6 +172,11 @@ Side creature_locomotion::SideOf(float angle)
 	return angle > 0.0f ? Side::Right : Side::Left;
 }
 
+Side creature_locomotion::SpinSideOf(float angle)
+{
+	return angle >= 0.0f ? Side::Right : Side::Left;
+}
+
 Pair creature_locomotion::PairFor(size_t first, float angle)
 {
 	const auto turn = std::min(std::abs(angle), k_Pi);

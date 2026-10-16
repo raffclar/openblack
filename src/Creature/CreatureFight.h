@@ -114,19 +114,14 @@ struct Arena
 [[nodiscard]] float ArrivalDistance(float size);
 /// Whether a point is within the range moves are made in
 [[nodiscard]] bool WithinRange(const Arena& arena, glm::vec2 point);
-/// Fighters keep at least half their own radius and all of their opponent's apart
-[[nodiscard]] float ClosestApart(float radius, float opponentRadius);
-/// Where a fighter moving from one point to another ends up without coming closer to its opponent than a distance:
-/// moving in that far, it stops on the circle round the opponent
-[[nodiscard]] glm::vec2 KeepApart(glm::vec2 from, glm::vec2 to, glm::vec2 opponent, float closest);
-/// Fighters only make moves facing their opponents to within this many radians, turning to them first
-constexpr float k_FacingTolerance = 0.35f;
 /// Where a creature that reels back in its block goes in one frame: to the new point only when that point is inside the
 /// range, else it stays. Blows, steps and the reel from a blow move it with no limit.
 [[nodiscard]] glm::vec2 BlockRecoilTo(const Arena& arena, glm::vec2 from, glm::vec2 to);
 /// Whether a point is not inside the range. When either fighter is not inside it, the fighters stop their moves and
 /// step back to the middle.
 [[nodiscard]] bool OutsideRange(const Arena& arena, glm::vec2 point);
+/// Whether the arena keeps the fighters from their moves: when either fighter is not inside the range
+[[nodiscard]] bool KeepsInArena(const Arena& arena, glm::vec2 self, glm::vec2 opponent);
 /// How far the body of a fighter reaches in front of its feet, from the points of its posed bones relative to its feet
 /// and the direction that it faces. It is never less than zero.
 [[nodiscard]] float ForwardExtent(std::span<const glm::vec2> bones, glm::vec2 forward);
@@ -139,6 +134,12 @@ struct PullApart
 };
 /// The two fighters stand at two points. The extents are the sum of how far their two bodies reach in front of them.
 [[nodiscard]] PullApart PullApartOf(const Arena& arena, glm::vec2 first, glm::vec2 second, glm::vec2 forward, float extents);
+/// Where a fighter that makes a blow and its opponent go when their bodies overlap. The overlap counts all of how far
+/// the striker's body reaches in front of it, but only half of how far the opponent's body reaches. Each one moves by
+/// half the overlap, along the direction that the striker faces: the striker moves back, the opponent moves away. The
+/// range of the arena does not stop these moves. When the bodies do not overlap, neither one moves.
+[[nodiscard]] PullApart BlowPushOf(glm::vec2 striker, glm::vec2 opponent, glm::vec2 forward, float strikerExtent,
+                                   float opponentExtent);
 
 // Bands of the body
 
@@ -494,8 +495,10 @@ constexpr float k_CastHoldMs = 2.0f;
 [[nodiscard]] bool IsBlocking(State state, float timeMs, float startBlockDurationMs);
 /// Whether a creature in a state can be told to make a move
 [[nodiscard]] bool TakesMoves(State state);
-/// Whether a creature in a state turns to face its opponent
-[[nodiscard]] bool FacesOpponent(State state);
+/// Whether a creature in a state turns at once to face its opponent on each game turn. It does this in its start after
+/// its first turn on the spot, in its stance, in its block and in its actions that are not blows. In all other states
+/// it keeps its heading.
+[[nodiscard]] bool FacesOpponentEachTurn(State state, size_t animation, bool turning);
 
 /// Who chooses the creature's moves
 enum class Control : uint8_t
@@ -521,7 +524,10 @@ struct Fighter
 	float stateMs {0.0f};
 	float speed {1.0f};
 	bool mirrored {false};
-	/// The last action that it started: a blow, a step, a reel, or the reel in a block. It stays after the action ends.
+	/// In its start, it turns on the spot to face its opponent before its start animation plays
+	bool turning {false};
+	/// The last action that it started: a blow, a step, a reel, the reel in a block, a block or a cast. It stays after
+	/// the action ends.
 	size_t lastAction {0};
 	/// A blow that is the special move
 	bool special {false};
@@ -702,6 +708,11 @@ constexpr float k_DepthPerSize = 7.5f;
 /// Whether the living around the winner see a fight won: only when a blow knocked the loser out and the winner has a
 /// player. A loser that a miracle or a loss of life knocked out gives no such sight.
 [[nodiscard]] bool FightWonIsSeen(bool byBlow, bool winnerHasPlayer);
+/// The priority of the winner's plan after a knock out, before the planner's scale
+constexpr float k_WinPlanPriority = 1.0f;
+/// Whether the winner's plan after a knock out is forced. It is not forced when a blow knocked the loser out, and it is
+/// forced when a miracle or a loss of life knocked the loser out. Both are orders.
+[[nodiscard]] bool WinPlanForced(bool byBlow);
 /// After a fight that ended otherwise, the creature with more life is happy and the other sad. When the two have the
 /// same life, both are sad.
 [[nodiscard]] size_t Response(float life, float otherLife);
