@@ -38,13 +38,6 @@ void tattoo_pictures::Read(creature_tattoo::Pictures& pictures,
 	for (uint32_t design = 0; design < pictures.size(); ++design)
 	{
 		const auto bytes = reader(FileName(design));
-		if (!bytes.has_value())
-		{
-			continue;
-		}
-		if (auto picture = FromBitmap(*bytes); picture.has_value())
-		{
-			pictures.at(design) = *picture;
-		}
+		pictures.at(design) = bytes.has_value() ? FromBitmap(*bytes) : std::nullopt;
 	}
 }

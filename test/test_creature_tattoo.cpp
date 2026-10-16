@@ -350,7 +350,7 @@ TEST(TattooPictures, ABitmapGivesAPicture)
 	EXPECT_FALSE(tattoo_pictures::FromBitmap(std::vector<uint8_t>(5000, 0)).has_value());
 }
 
-TEST(TattooPictures, ADesignWithoutAFileKeepsThePictureItHad)
+TEST(TattooPictures, ADesignWithoutAFileHasNoPicture)
 {
 	EXPECT_EQ(tattoo_pictures::FileName(0), "Symbol1.bmp");
 	EXPECT_EQ(tattoo_pictures::FileName(15), "Symbol16.bmp");
@@ -365,7 +365,7 @@ TEST(TattooPictures, ADesignWithoutAFileKeepsThePictureItHad)
 	});
 	ASSERT_TRUE(pictures.at(1).has_value());
 	EXPECT_EQ(pictures.at(1)->at(0), 252);
-	ASSERT_TRUE(pictures.at(4).has_value());
-	EXPECT_EQ(pictures.at(4)->at(0), 7);
+	// The picture of the last profile goes when the new profile has no file for it
+	EXPECT_FALSE(pictures.at(4).has_value());
 	EXPECT_FALSE(pictures.at(0).has_value());
 }

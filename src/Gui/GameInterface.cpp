@@ -182,6 +182,21 @@ void PutSymbolPicture(std::span<uint8_t> colour, std::span<uint8_t> alpha, uint3
 	}
 }
 
+/// The symbols the game ships with, each with the player's own picture in its place if they have one
+std::unique_ptr<openblack::graphics::Texture2D> LoadSymbols(const openblack::creature_tattoo::Pictures& pictures)
+{
+	return LoadTexture("OriginalChooseSymbol", openblack::graphics::Wrapping::ClampEdge, {},
+	                   [&pictures](std::span<uint8_t> colour, std::span<uint8_t> alpha) {
+		                   for (uint32_t design = 0; design < pictures.size(); ++design)
+		                   {
+			                   if (const auto& picture = pictures.at(design); picture.has_value())
+			                   {
+				                   PutSymbolPicture(colour, alpha, design, *picture);
+			                   }
+		                   }
+	                   });
+}
+
 /// The tooltips' priorities and times from the info script, or the most common of them without it
 std::array<ToolTipInfo, ToolTips::k_Count> ReadToolTipsInfo()
 {
@@ -254,16 +269,7 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 	}
 	// The symbols the game ships with, each with the player's own picture in its place if they have one. The picture
 	// is grey, and its grey is also its alpha.
-	auto symbols = LoadTexture("OriginalChooseSymbol", openblack::graphics::Wrapping::ClampEdge, {},
-	                           [&pictures](std::span<uint8_t> colour, std::span<uint8_t> alpha) {
-		                           for (uint32_t design = 0; design < pictures.size(); ++design)
-		                           {
-			                           if (const auto& picture = pictures.at(design); picture.has_value())
-			                           {
-				                           PutSymbolPicture(colour, alpha, design, *picture);
-			                           }
-		                           }
-	                           });
+	auto symbols = LoadSymbols(pictures);
 	auto mice = LoadTexture("mousehelp");
 	// The atmosphere texture's glows and the tooltips' arrows
 	auto atmos = LoadTexture("ATMOS");
@@ -533,6 +539,15 @@ bool GameInterface::ProcessStoryHistoryEvent(const SDL_Event& event)
 		return true;
 	default:
 		return false;
+	}
+}
+
+void GameInterface::SetSymbolPictures(const creature_tattoo::Pictures& pictures)
+{
+	if (auto symbols = LoadSymbols(pictures))
+	{
+		_symbols = std::move(symbols);
+		_painter.SetPictures(_symbols.get(), _mice.get());
 	}
 }
 

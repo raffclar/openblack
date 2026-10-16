@@ -99,6 +99,7 @@
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/FloatingNumber.h"
 #include "ECS/Components/Hand.h"
@@ -4110,26 +4111,7 @@ bool Game::Initialize() noexcept
 	}
 
 	// What creatures' tattoos and marks are painted with
-	try
-	{
-		const auto data = fileSystem.GetPath<Path::Data>();
-		Locator::resources::value().GetCreatureSkinArt().Load(
-		    creature_skin::k_ArtId, resources::CreatureSkinArtLoader::FromDiskTag {},
-		    resources::CreatureSkinArtLoader::Paths {
-		        .symbols = fileSystem.GetPath<Path::Textures>() / "OriginalChooseSymbol.raw",
-		        .freshDamage = data / "damage_new256.raw",
-		        .freshDamageAlpha = data / "damage_new256A.raw",
-		        .oldDamage = data / "damage_old256.raw",
-		        .oldDamageAlpha = data / "damage_old256A.raw",
-		        .palette = data / "tattoocols.raw",
-		        .pictures = Locator::tattooEditorSystem::value().GetPictures(),
-		        .lowDetail = graphics::detail_level::For(Locator::config::value().detailLevel).lowResTextures,
-		    });
-	}
-	catch (std::runtime_error& err)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-	}
+	LoadCreatureSkinArt();
 
 	// The noise that makes the snow's edges on the land ragged
 	try
@@ -5182,7 +5164,50 @@ void Game::ReadTattooPictures()
 	const auto& folder = Locator::profileFolderSystem::value();
 	tattoo_pictures::Read(pictures,
 	                      [&folder, &player](const std::string& file) { return folder.ReadPlayerFile(player, file); });
+	if (pictures == editor.GetPictures())
+	{
+		return;
+	}
 	editor.SetPictures(pictures);
+	// The symbols' picture and the tattoo designs change with the pictures. The game loads them one time only
+	// (vanilla-bugs 380), and openblack fixes this.
+	if (_interface)
+	{
+		_interface->SetSymbolPictures(pictures);
+	}
+	if (Locator::resources::value().GetCreatureSkinArt().Contains(creature_skin::k_ArtId))
+	{
+		LoadCreatureSkinArt();
+		Locator::entitiesRegistry::value().Each<ecs::components::CreatureTattoos>(
+		    [](ecs::components::CreatureTattoos& tattoos) { ++tattoos.revision; });
+	}
+}
+
+void Game::LoadCreatureSkinArt()
+{
+	using filesystem::Path;
+	auto& fileSystem = Locator::filesystem::value();
+	try
+	{
+		const auto data = fileSystem.GetPath<Path::Data>();
+		auto& arts = Locator::resources::value().GetCreatureSkinArt();
+		arts.Erase(creature_skin::k_ArtId);
+		arts.Load(creature_skin::k_ArtId, resources::CreatureSkinArtLoader::FromDiskTag {},
+		          resources::CreatureSkinArtLoader::Paths {
+		              .symbols = fileSystem.GetPath<Path::Textures>() / "OriginalChooseSymbol.raw",
+		              .freshDamage = data / "damage_new256.raw",
+		              .freshDamageAlpha = data / "damage_new256A.raw",
+		              .oldDamage = data / "damage_old256.raw",
+		              .oldDamageAlpha = data / "damage_old256A.raw",
+		              .palette = data / "tattoocols.raw",
+		              .pictures = Locator::tattooEditorSystem::value().GetPictures(),
+		              .lowDetail = graphics::detail_level::For(Locator::config::value().detailLevel).lowResTextures,
+		          });
+	}
+	catch (std::runtime_error& err)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+	}
 }
 
 void Game::NameCreatureAfterProfile()

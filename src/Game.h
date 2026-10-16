@@ -550,6 +550,8 @@ private:
 	void NameCreatureAfterProfile();
 	/// Reads the current profile's own pictures for the designs of the symbols and the tattoos into the tattoo editor
 	void ReadTattooPictures();
+	/// Loads what the creatures' tattoos and marks are painted with, in place of what the game loaded before
+	void LoadCreatureSkinArt();
 	/// The new player's box over the game, from the Players page
 	void AskForAnotherPlayer(bool canCancel);
 	/// The game starts again as the profile played

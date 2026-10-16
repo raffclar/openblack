@@ -86,6 +86,8 @@ public:
 	bool ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution);
 	/// The game's menu opens, as Escape in play opens it
 	void OpenMenu();
+	/// Makes the symbols' picture again, with the player's own pictures in the places of their symbols
+	void SetSymbolPictures(const creature_tattoo::Pictures& pictures);
 	/// What the player last chose in the menu, once
 	GameMenu::Action TakeAction();
 	/// Whether the menu's settings changed since last asked

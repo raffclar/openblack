@@ -113,7 +113,7 @@ bool TattooEditorSystem::Drop(uint8_t design, const glm::u8vec3& colour)
 	}
 	const auto putOn = creature_tattoo_editor::Drop(_session, design, colour, _hovered);
 	Write(_session.slots);
-	// Each drop makes the creature's block of pictures again from its tattoos. Cancel does not make it again.
+	// Each drop makes the creature's block of pictures again from its tattoos
 	if (_creature.has_value())
 	{
 		_skin->WritePictures(*_creature, creature_tattoo::PicturesBlock(_session.slots, _pictures));
@@ -155,6 +155,8 @@ void TattooEditorSystem::Cancel()
 	if (IsOpen())
 	{
 		Write(_session.opened);
+		// The game does not make the block of pictures again here (vanilla-bugs 379), and openblack fixes this
+		_skin->WritePictures(*_creature, creature_tattoo::PicturesBlock(_session.opened, _pictures));
 	}
 	Close();
 }

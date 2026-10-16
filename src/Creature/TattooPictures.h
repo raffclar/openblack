@@ -33,8 +33,8 @@ constexpr size_t k_SmallestFile = 4096;
 /// The picture in the bytes of a bitmap file, if the file is large enough and the game can read it
 [[nodiscard]] std::optional<creature_tattoo::Picture> FromBitmap(std::span<const uint8_t> bytes);
 
-/// Reads the picture of each design for which the reader finds a file. A design without a file keeps the picture that it
-/// had before, as the game does when it reads them again for another profile.
+/// Reads the picture of each design from its file. A design without a file, or with a file that is not a picture, has no
+/// picture. The game keeps the picture of the last profile there (vanilla-bugs 380), and openblack fixes this.
 void Read(creature_tattoo::Pictures& pictures,
           const std::function<std::optional<std::vector<uint8_t>>(const std::string& file)>& reader);
 } // namespace openblack::tattoo_pictures

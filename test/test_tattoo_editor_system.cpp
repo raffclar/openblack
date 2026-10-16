@@ -181,8 +181,9 @@ TEST(TattooEditorSystem, EachDropKeepsThePlayersPicturesThatTheTattoosUse)
 	const auto& block = f.pictures.at(k_Creature);
 	ASSERT_EQ(block.size(), 0x828u);
 	EXPECT_EQ(block.at(5), 1);
-	// Cancel puts the tattoos back but does not make the block again
+	// Cancel puts the tattoos back and makes the block again from them, so no slot keeps the picture
 	f.editor.Cancel();
-	EXPECT_EQ(f.pictures.at(k_Creature).at(5), 1);
 	EXPECT_TRUE(f.skins.at(k_Creature).at(0).Empty());
+	ASSERT_EQ(f.pictures.at(k_Creature).size(), 0x28u);
+	EXPECT_EQ(f.pictures.at(k_Creature).at(5), 0);
 }
