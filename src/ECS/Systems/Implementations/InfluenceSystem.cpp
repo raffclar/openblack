@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include <PackFile.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
@@ -514,7 +515,7 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 	if (!audio.EmitterExists(virtualInfluence.hum))
 	{
 		virtualInfluence.hum = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_VirtualInfluence_04),
-		                                                   {.pitchPercent = pitch});
+		                                                   {.pitchPercent = pitch, .voicePlayType = pack::AudioBankLoop::Once});
 	}
 	audio.SetEmitterPitch(virtualInfluence.hum, pitch);
 }

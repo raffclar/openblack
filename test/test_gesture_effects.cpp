@@ -50,7 +50,7 @@ public:
 	[[nodiscard]] glm::vec3 CameraRight() const override { return {1.0f, 0.0f, 0.0f}; }
 	[[nodiscard]] glm::vec3 CameraUp() const override { return {0.0f, 1.0f, 0.0f}; }
 	[[nodiscard]] glm::vec3 CameraPosition() const override { return {50.0f, 1000.0f, 50.0f}; }
-	void PlayListenerSound(uint32_t sample) override { sounds.push_back(sample); }
+	void PlayListenerSound(uint32_t sample, bool /*playsOnce*/) override { sounds.push_back(sample); }
 	[[nodiscard]] std::shared_ptr<GestureTrail> TakeGestureTrail() override
 	{
 		auto taken = std::move(waiting);

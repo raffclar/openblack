@@ -16,6 +16,7 @@
 
 #include <EnumHeader.h>
 #include <LNDFile.h>
+#include <PackFile.h>
 #include <ParticleFile.h>
 #include <StackedBitmap.h>
 #include <entt/core/hashed_string.hpp>
@@ -208,13 +209,13 @@ glm::vec3 GameParticleWorld::CameraPosition() const
 	return Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
 }
 
-void GameParticleWorld::PlayListenerSound(uint32_t inGameSample)
+void GameParticleWorld::PlayListenerSound(uint32_t inGameSample, bool playsOnce)
 {
 	if (Locator::audio::has_value())
 	{
 		const auto id = entt::hashed_string(fmt::format("InGame.sad/{}", inGameSample).c_str()).value();
-		// Played once: not started again while the same sample still plays
-		audio::PlayGameSoundEffect(id, std::nullopt);
+		const auto voicePlayType = playsOnce ? std::optional<pack::AudioBankLoop>(pack::AudioBankLoop::Once) : std::nullopt;
+		audio::StartGameSoundEffect(id, {.voicePlayType = voicePlayType});
 	}
 }
 

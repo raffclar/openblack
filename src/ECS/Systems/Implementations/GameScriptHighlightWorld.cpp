@@ -19,6 +19,7 @@
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Animal.h"
@@ -235,11 +236,11 @@ void GameScriptHighlightWorld::DeleteEffect(uint32_t effect)
 	}
 }
 
-void GameScriptHighlightWorld::PlaySound(uint32_t sample)
+void GameScriptHighlightWorld::PlaySound(uint32_t sample, entt::entity owner)
 {
 	if (Locator::chlapi::has_value())
 	{
-		Locator::chlapi::value().PlayBankSoundEffect(k_InGameBank, static_cast<int32_t>(sample), std::nullopt);
+		Locator::chlapi::value().PlayBankSoundEffect(k_InGameBank, static_cast<int32_t>(sample), {.owner = owner});
 	}
 }
 

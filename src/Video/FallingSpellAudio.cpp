@@ -113,6 +113,7 @@ void FallingSpellAudio::Play(FallingSpellCue cue)
 		audio.StopEmitter(it->second);
 	}
 	const auto name = fmt::format("{}/{}", sound->bank, sound->sample);
-	_playing[key] = openblack::audio::StartGameSoundEffect(entt::hashed_string(name.c_str()).value(),
-	                                                       {.pitchPercent = sound->pitchPercent});
+	_playing[key] = openblack::audio::StartGameSoundEffect(
+	    entt::hashed_string(name.c_str()).value(),
+	    {.pitchPercent = sound->pitchPercent, .voiceOwner = openblack::audio::VoiceOwner::Number, .ownerNumber = sound->owner});
 }

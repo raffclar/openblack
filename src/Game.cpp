@@ -1639,8 +1639,7 @@ void Game::ProcessTurnCheering()
 	};
 	if (const auto line = help::turn_cheer::ProcessTurn(help.turnCheering, help.turnSpeed, GetTurn(), draws))
 	{
-		Locator::chlapi::value().PlayBankSoundEffect(static_cast<int32_t>(audio::ScriptSoundBank::HelpSprites), *line,
-		                                             std::nullopt);
+		Locator::chlapi::value().PlayBankSoundEffect(static_cast<int32_t>(audio::ScriptSoundBank::HelpSprites), *line, {});
 	}
 }
 
@@ -6008,7 +6007,8 @@ void Game::PlayHandGrabSound()
 		// One of G_HandGrabLand_01 to _06, centred on the listener
 		const auto sample = 4 + Locator::rng::value().NextValue(0, 5);
 		const auto id = fmt::format("InGame.sad/{}", sample);
-		audio::PlayGameSoundEffect(entt::hashed_string(id.c_str()), std::nullopt);
+		// The grip is a sound of its own to the voice rules
+		audio::StartGameSoundEffect(entt::hashed_string(id.c_str()), {.voiceOwner = audio::VoiceOwner::OwnSound});
 	}
 	else
 	{

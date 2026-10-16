@@ -110,7 +110,7 @@ public:
 		{
 			auto& atom = effect.NewAtom(collection, pointCreator, nextGroups);
 			trails[&atom].trail = std::move(waiting);
-			world.PlayListenerSound(k_RecognisedSample);
+			world.PlayListenerSound(k_RecognisedSample, false);
 		}
 
 		// A trail ends when its atom has lived its time, and the hand's glow goes with it

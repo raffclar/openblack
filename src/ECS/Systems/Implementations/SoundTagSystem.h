@@ -42,8 +42,10 @@ public:
 private:
 	/// Whether a tag's sound is heard if it starts now
 	[[nodiscard]] bool Heard(entt::id_type sound) const;
-	/// Starts a point's sound once, if it is switched on, heard and the camera is within the sound's reach
-	void StartPointSound(components::SoundTag& tag, const glm::vec3& position, const glm::vec3& camera) const;
+	/// Starts a point's sound once, if it is switched on, heard and the camera is within the sound's reach. The tag
+	/// owns its sound, so the voice rules never find the voice of another sound for it.
+	void StartPointSound(entt::entity entity, components::SoundTag& tag, const glm::vec3& position,
+	                     const glm::vec3& camera) const;
 
 	ConditionsSource _conditions;
 };

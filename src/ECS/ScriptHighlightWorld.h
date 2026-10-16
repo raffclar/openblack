@@ -91,7 +91,7 @@ public:
 	virtual void DeleteEffect(uint32_t effect) = 0;
 
 	/// A sound of the game's own bank, for the player, not placed in the world, unless the game's sounds are off
-	virtual void PlaySound(uint32_t sample) = 0;
+	virtual void PlaySound(uint32_t sample, entt::entity owner) = 0;
 	/// The glow's sprite, none when it can't be drawn
 	[[nodiscard]] virtual std::optional<components::Sprite> GlowLook() const = 0;
 	/// A gold scroll's sparks' sprite, at a picture of their sheet; none when it can't be drawn

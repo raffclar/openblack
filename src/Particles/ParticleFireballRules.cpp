@@ -419,7 +419,8 @@ public:
 		                            effect.Services().world.CameraPosition()))
 		{
 			const auto milliseconds = openblack::machine_clock::Ticks();
-			effect.Services().world.PlayListenerSound(k_FirstPastSample + static_cast<uint32_t>(milliseconds) % k_PastSamples);
+			effect.Services().world.PlayListenerSound(k_FirstPastSample + static_cast<uint32_t>(milliseconds) % k_PastSamples,
+			                                          true);
 		}
 		return true;
 	}

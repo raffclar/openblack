@@ -20,6 +20,7 @@
 #include <optional>
 #include <utility>
 
+#include <PackFile.h>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -289,6 +290,7 @@ void BeliefVoiceOf(entt::entity source, entt::entity town, PlayerNames player, G
 	audio::StartGameSoundEffect(resources::HashIdentifier(fmt::format("Guidance.sad/{}", *sample)),
 	                            {.position = at,
 	                             .pitchPercent = k_VoicePitch,
+	                             .voicePlayType = pack::AudioBankLoop::Once,
 	                             .minDistance = k_VoiceReach * k_VoiceNearShare,
 	                             .maxDistance = k_VoiceReach});
 }

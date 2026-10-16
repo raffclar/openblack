@@ -459,7 +459,8 @@ void PlayDirectSound()
 {
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(k_DirectSound.value(), std::nullopt);
+		// Each click is a sound of its own to the voice rules
+		audio::StartGameSoundEffect(k_DirectSound.value(), {.voiceOwner = audio::VoiceOwner::OwnSound});
 	}
 }
 
@@ -700,7 +701,8 @@ void StartArenaFight(ecs::Registry& registry, entt::entity entity, entt::entity 
 	}
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(k_ArenaDrawnSound.value(), registry.Get<const Transform>(entity).position);
+		audio::StartGameSoundEffect(k_ArenaDrawnSound.value(),
+		                            {.position = registry.Get<const Transform>(entity).position, .owner = entity});
 	}
 }
 

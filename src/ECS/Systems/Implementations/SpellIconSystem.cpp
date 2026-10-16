@@ -17,6 +17,7 @@
 #include <array>
 #include <vector>
 
+#include <PackFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
@@ -762,7 +763,7 @@ void SpellIconSystem::ChargedAt(entt::entity site, std::span<const magic::Worshi
 			{
 				const auto voice = icons::FullyChargedVoice(component.seed);
 				audio::StartGameSoundEffect(entt::hashed_string(fmt::format("SpellDialogue.sad/{}", voice).c_str()).value(),
-				                            {});
+				                            {.voicePlayType = pack::AudioBankLoop::Once});
 			}
 		}
 		component.charging = false;
