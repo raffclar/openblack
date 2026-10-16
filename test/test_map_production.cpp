@@ -16,6 +16,7 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
@@ -68,4 +69,20 @@ TEST_F(MapProductionFiling, AHandfulRefiledAsItIsMadeIsOnTheMapAtOnceAndOnlyOnce
 	const auto cell = map_coords::CellOf(glm::vec3(500.0f, 0.0f, 500.0f));
 	const auto inCell = map.GetAllInCell(cell);
 	EXPECT_EQ(std::ranges::count(inCell, handful), 1);
+}
+
+TEST_F(MapProductionFiling, AStoneHandOfAVillageCentreIsNeverPutOnTheMap)
+{
+	// A village centre's stone hand is not put in the land's cells. Thus no search of the cells finds it, and no miracle,
+	// fire or heal that looks in the cells reaches it.
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const auto hand = registry.Create();
+	registry.Assign<Transform>(hand, glm::vec3(500.0f, 0.0f, 500.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<TownCentreIcon>(hand, TownCentreIcon {.hand = 0, .seed = SpellSeedType::Heal});
+	map.Sync();
+	map.Refile(hand);
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(hand));
+	const auto inCell = map.GetAllInCell(map_coords::CellOf(glm::vec3(500.0f, 0.0f, 500.0f)));
+	EXPECT_EQ(std::ranges::count(inCell, hand), 0);
 }
