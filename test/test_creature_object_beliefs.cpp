@@ -361,13 +361,14 @@ TEST(CreatureObjectBeliefs, ItComesAcrossTheTwoNearestTownsInTurn)
 TEST(CreatureObjectBeliefs, APickUpWithNoWayLeavesItsThingAloneAndOnlyNoRouteRefuses)
 {
 	using openblack::creature_object_actions::Failure;
+	using openblack::creature_object_actions::Kind;
 	using openblack::creature_object_actions::LeavesThingAlone;
 	using openblack::creature_object_actions::RefusesAloud;
-	EXPECT_TRUE(LeavesThingAlone(true, Failure::NoWay));
-	EXPECT_TRUE(LeavesThingAlone(true, Failure::NoRoute));
-	EXPECT_FALSE(LeavesThingAlone(true, Failure::Other));
-	EXPECT_FALSE(LeavesThingAlone(false, Failure::NoWay));
-	EXPECT_FALSE(LeavesThingAlone(false, Failure::NoRoute));
+	EXPECT_TRUE(LeavesThingAlone(Kind::PickUp, Failure::NoWay));
+	EXPECT_TRUE(LeavesThingAlone(Kind::PickUp, Failure::NoRoute));
+	EXPECT_FALSE(LeavesThingAlone(Kind::PickUp, Failure::Other));
+	EXPECT_FALSE(LeavesThingAlone(Kind::Throw, Failure::NoWay));
+	EXPECT_FALSE(LeavesThingAlone(Kind::Eat, Failure::NoRoute));
 	EXPECT_TRUE(RefusesAloud(Failure::NoRoute));
 	EXPECT_FALSE(RefusesAloud(Failure::NoWay));
 	EXPECT_FALSE(RefusesAloud(Failure::Other));
@@ -377,11 +378,39 @@ TEST(CreatureObjectBeliefs, APickUpWithNoWayLeavesItsThingAloneAndOnlyNoRouteRef
 	constexpr uint32_t k_FailedTurn = 400;
 	Store store;
 	store.Add(Thing(7), k_Object, {});
-	if (LeavesThingAlone(true, Failure::NoWay))
+	if (LeavesThingAlone(Kind::PickUp, Failure::NoWay))
 	{
 		store.MarkBlocked(Thing(7), k_FailedTurn);
 	}
 	EXPECT_TRUE(BlockedRecently(*store.Find(Thing(7)), k_FailedTurn + 1, false));
 	EXPECT_TRUE(BlockedRecently(*store.Find(Thing(7)), k_FailedTurn + k_BlockedTurns, false));
 	EXPECT_FALSE(BlockedRecently(*store.Find(Thing(7)), k_FailedTurn + k_BlockedTurns + 1, false));
+}
+
+TEST(CreatureObjectBeliefs, AStompOrAKickWithNoWayLeavesItsThingAlone)
+{
+	using openblack::creature_object_actions::Failure;
+	using openblack::creature_object_actions::Kind;
+	using openblack::creature_object_actions::LeavesThingAlone;
+	// A stomp on a thing that is not on the map, or with no place to stand, leaves the thing alone for a time
+	EXPECT_TRUE(LeavesThingAlone(Kind::Destroy, Failure::NoWay));
+	EXPECT_TRUE(LeavesThingAlone(Kind::Destroy, Failure::NoRoute));
+	EXPECT_FALSE(LeavesThingAlone(Kind::Destroy, Failure::Other));
+	// A kick does the same when its walk to the thing fails
+	EXPECT_TRUE(LeavesThingAlone(Kind::Kick, Failure::NoWay));
+	EXPECT_TRUE(LeavesThingAlone(Kind::Kick, Failure::NoRoute));
+	EXPECT_FALSE(LeavesThingAlone(Kind::Kick, Failure::Other));
+}
+
+TEST(CreatureObjectBeliefs, AWalkUpToAThingContinuesUntilTheThingIsInReach)
+{
+	using openblack::creature_object_actions::ApproachStep;
+	using openblack::creature_object_actions::NextApproachStep;
+	EXPECT_EQ(NextApproachStep(true, false, false), ApproachStep::Begin);
+	EXPECT_EQ(NextApproachStep(true, true, true), ApproachStep::Begin);
+	EXPECT_EQ(NextApproachStep(false, true, false), ApproachStep::Turn);
+	// A turn that did not get the thing in reach is followed by a walk, never by a second turn
+	EXPECT_EQ(NextApproachStep(false, true, true), ApproachStep::Walk);
+	// Out of reach, it walks again, however many times it walked before: there is no step that gives up
+	EXPECT_EQ(NextApproachStep(false, false, false), ApproachStep::Walk);
 }

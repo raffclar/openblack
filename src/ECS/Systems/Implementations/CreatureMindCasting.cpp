@@ -567,8 +567,17 @@ bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt:
 	// It is frustrated only when it hadn't the energy for the miracle or the miracle couldn't be cast at the target
 	if (magic.CastByCreature(creature, type, target))
 	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} cast miracle {}", entt::to_integral(creature),
-		                    static_cast<uint32_t>(type));
+		// A cast that a script ordered shows in every build, so that a check of the story can find it
+		if (registry.AllOf<ScriptControlled>(creature))
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} cast miracle {} at {} for a script",
+			                   entt::to_integral(creature), static_cast<uint32_t>(type), entt::to_integral(target));
+		}
+		else
+		{
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} cast miracle {}", entt::to_integral(creature),
+			                    static_cast<uint32_t>(type));
+		}
 		return true;
 	}
 	FrustrateAfterCast(creature, type);
@@ -767,14 +776,15 @@ void CreatureMindSystem::StartSubMove(entt::entity creature, const creature_mind
 	StepSubMove(creature, animation != nullptr && creature_layers::IsPlaying(animation->body));
 }
 
-bool CreatureMindSystem::GoNear(entt::entity creature, CreatureCasting& casting, bool reissue)
+std::optional<creature_cast_moves::WalkStart> CreatureMindSystem::GoNear(entt::entity creature, CreatureCasting& casting,
+                                                                         bool reissue)
 {
 	auto& registry = Entities();
 	const auto at = object_measures::PositionOf(registry, casting.target);
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	if (!at.has_value() || transform == nullptr || !Locator::creatureLocomotionSystem::has_value())
 	{
-		return false;
+		return std::nullopt;
 	}
 	// It stops short of the thing by what it keeps clear of and its own radius, and no further than the distance more
 	const float clear =
@@ -782,18 +792,20 @@ bool CreatureMindSystem::GoNear(entt::entity creature, CreatureCasting& casting,
 	const auto target = Flat(*at);
 	if (reissue && casting.destination.has_value() && glm::distance(*casting.destination, target) < k_SameDestination)
 	{
-		return true;
+		return creature_cast_moves::WalkStart::Walking;
 	}
 	const float distance = glm::distance(Flat(transform->position), target);
 	const float near = std::min(clear, distance - 0.05f);
 	const float far = std::max(casting.keep + clear, near + 0.001f);
 	const auto result = Locator::creatureLocomotionSystem::value().MoveTo(creature, target, KeptOrRun(casting), near, far);
-	if (result != CreatureLocomotionSystemInterface::MoveResult::Started)
+	using MoveResult = CreatureLocomotionSystemInterface::MoveResult;
+	const auto start =
+	    creature_cast_moves::WalkStartOf(result == MoveResult::Started, result != MoveResult::InvalidDestination);
+	if (start == creature_cast_moves::WalkStart::Walking)
 	{
-		return false;
+		casting.destination = target;
 	}
-	casting.destination = target;
-	return true;
+	return start;
 }
 
 void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
@@ -823,7 +835,7 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		if (start)
 		{
 			// A building or a tree it walks up to by its walk alone
-			if (itself && !GoNear(creature, *casting, false))
+			if (itself && GoNear(creature, *casting, false) != creature_cast_moves::WalkStart::Walking)
 			{
 				casting->destination.reset();
 			}
@@ -850,7 +862,17 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		}
 		if (!locomotion.IsMoving(creature) || !HeadingFor(*transform, target))
 		{
-			if (!GoNear(creature, *casting, locomotion.IsMoving(creature)))
+			const auto walk = GoNear(creature, *casting, locomotion.IsMoving(creature));
+			// Where it cannot stand at the thing, it does not choose the thing again for a time. When it cannot walk
+			// now, it asks again on the next turn.
+			if (walk == creature_cast_moves::WalkStart::NoWay)
+			{
+				if (auto* mindState = registry.TryGet<CreatureMindState>(creature))
+				{
+					mindState->beliefs.MarkBlocked(casting->target, mindState->turn);
+				}
+			}
+			if (!walk.has_value() || walk == creature_cast_moves::WalkStart::NoWay)
 			{
 				fail();
 				break;

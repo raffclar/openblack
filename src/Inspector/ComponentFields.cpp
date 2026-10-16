@@ -914,6 +914,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
 	    .Field<&components::CreatureObjectAction::walked>("walked")
+	    .Field<&components::CreatureObjectAction::turnedSinceWalk>("turnedSinceWalk")
+	    .Field<&components::CreatureObjectAction::waitedForWay>("waitedForWay")
 	    .Field<&components::CreatureObjectAction::flightSeconds>("flightSeconds")
 	    .Field<&components::CreatureObjectAction::givenFlightSeconds>("givenFlightSeconds")
 	    .Field<&components::CreatureObjectAction::waitsForLanding>("waitsForLanding")
