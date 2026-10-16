@@ -177,6 +177,7 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
+#include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -581,6 +582,22 @@ std::string GiveOwnTattooPicture(size_t design)
 	pictures.at(design) = rings;
 	editor.SetPictures(pictures);
 	return fmt::format("design {} has the player's own picture", design + 1);
+}
+
+/// The game's menu opens on its Players page, and the tattoo editor over it as the page's Edit Tattoo button opens it
+std::string OpenTattooMenu()
+{
+	auto* game = Game::Instance();
+	if (game == nullptr || game->GetInterface() == nullptr || !Locator::tattooMenuSystem::has_value())
+	{
+		return "failed: no menu";
+	}
+	auto& interface = *game->GetInterface();
+	interface.OpenMenu();
+	interface.GetMenu().ShowPage(gui::GameMenu::Page::Players);
+	Locator::tattooMenuSystem::value().Open();
+	return Locator::tattooMenuSystem::value().IsOpen() ? "the tattoo editor shows its creature over the menu"
+	                                                   : "failed: the editor did not open";
 }
 
 std::string CheckProfileFolder()
@@ -2171,6 +2188,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
 		return;
 	}
+	if (command.kind == Kind::OpenTattooMenu)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenTattooMenu()));
+		return;
+	}
 	if (command.kind == Kind::OwnTattooPicture)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), GiveOwnTattooPicture(command.value)));
@@ -2564,6 +2586,7 @@ void Runner::Give(const Command& command)
 	case Kind::EndGuidanceWaits:
 	case Kind::ProfileFolderCheck:
 	case Kind::OwnTattooPicture:
+	case Kind::OpenTattooMenu:
 	case Kind::RunText:
 	case Kind::ReadTip:
 	case Kind::LookAtTempleScroll:

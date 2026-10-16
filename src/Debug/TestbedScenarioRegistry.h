@@ -775,6 +775,9 @@ struct Command
 		/// The player has a picture of their own for a design (value), as from a Symbol file in their profile's folder:
 		/// grey rings. Needs no creature
 		OwnTattooPicture,
+		/// Opens the game's menu on its Players page, then the tattoo editor over it, as the page's Edit Tattoo button
+		/// does. Needs no creature
+		OpenTattooMenu,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

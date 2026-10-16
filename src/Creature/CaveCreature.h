@@ -140,6 +140,9 @@ using Random = std::function<uint32_t(uint32_t range)>;
 /// The editor's fidgets start again from the beginning as it opens, the next 20 to 40 seconds away
 void StartIdle(State& state, const Random& random);
 
+/// One frame of a creature that the tattoo editor shows: it looks at the pointer while a button has been held for under
+/// a second and a half, and fidgets now and then
+void InEditor(State& state, Body& body, const Frame& frame, const Random& random);
 /// One frame of the copy's life. Not zoomed onto, it faces the fire: when it does it rests (sitting looks into the
 /// fire), and when it doesn't its rest ends and it turns to face it. Zoomed onto, it gets up and turns to face the
 /// camera as the zoom starts, looks at the pointer while a button has been held for under a second and a half, and

@@ -143,6 +143,9 @@ public:
 
 	/// The tattoo editor's dialog, shown while the tattoo editor is open
 	[[nodiscard]] TattooEditorDialog& GetTattooEditor() noexcept { return *_tattooEditor; }
+	/// The mouse buttons held down while the tattoo editor takes the mouse: the left one, and any of them
+	[[nodiscard]] bool IsTattooEditorLeftHeld() const noexcept { return _leftButtonDown; }
+	[[nodiscard]] bool IsTattooEditorButtonHeld() const noexcept { return _leftButtonDown || _otherButtonsDown != 0; }
 	[[nodiscard]] const TextDatabase& GetTexts() const noexcept { return _texts; }
 	/// The dialogs' font, which the temple's scrolls are written in too
 	[[nodiscard]] const GameFont& GetFont() const noexcept { return _font; }
@@ -325,7 +328,10 @@ private:
 	Canvas _pointerCanvas {graphics::RenderPass::Cursor};
 	/// The cinema bars, under the advisors near the screen
 	Canvas _cinemaBarsCanvas {graphics::RenderPass::CinemaBars};
+	/// What the tattoo editor draws over the creature that it shows from the main menu
+	Canvas _menuCreatureCanvas {graphics::RenderPass::MenuCreatureOverlay};
 	DialogPainter _painter;
+	DialogPainter _menuCreaturePainter;
 	std::unique_ptr<GameMenu> _menu;
 	/// Made once and kept, so that the answer picked stays picked
 	std::unique_ptr<SkipBox> _skipBox;
@@ -344,6 +350,8 @@ private:
 	std::optional<menu_backdrop::Fade> _boxOverGameFade;
 	/// Whether the left mouse button is down, as the tattoo editor's dialog has seen it
 	bool _leftButtonDown {false};
+	/// The other mouse buttons held down while the tattoo editor takes the mouse, a bit each
+	uint32_t _otherButtonsDown {0};
 	std::optional<Message> _message;
 	std::optional<Caption> _caption;
 	void DrawCaption(glm::u16vec2 resolution);

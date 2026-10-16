@@ -272,6 +272,44 @@ void AddCaveTattooOnBody(std::vector<Scenario>& all)
 	});
 }
 
+/// The main menu's tattoo editor over the menu, with the creature it shows. The points are for a screen of 1600 by 900.
+void AddMenuTattooEditor(std::vector<Scenario>& all)
+{
+	const auto at = [](float x, float y, float delay) {
+		return Command {.kind = Kind::PointerTo, .delaySeconds = delay, .point = {x / 1600.0f, y / 900.0f}};
+	};
+	const auto press = [](float delay) { return Command {.kind = Kind::PointerPress, .delaySeconds = delay, .value = 1}; };
+	const auto release = [](float delay) { return Command {.kind = Kind::PointerRelease, .delaySeconds = delay, .value = 1}; };
+	all.push_back({
+	    .id = "creature_mode.menu_tattoo_editor",
+	    .name = "The tattoo editor from the main menu",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player opens the game's menu, goes to the Players page and clicks Edit Tattoo. The player "
+	                   "picks a blue and drags the heart onto the creature's chest, then turns the view with the round "
+	                   "button.",
+	    .expected = "The menu fades out and the tattoo editor fades in with a white frame of its own. The profile's "
+	                "creature, or a Giant Ape when the profile keeps no creature, stands in the middle over the world, "
+	                "seen from in front and above. It fidgets now and then, looks at the pointer for a second and a half "
+	                "after a press, and the blue heart goes into the skin of its chest. The view turns round it. "
+	                "Cancel takes the tattoo off again and the menu comes back.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {{.kind = Kind::OpenTattooMenu, .delaySeconds = 1.0f},
+	                 at(246.0f, 330.0f, 3.0f),
+	                 press(0.2f),
+	                 release(0.2f),
+	                 at(368.0f, 780.0f, 0.5f),
+	                 press(0.2f),
+	                 at(600.0f, 600.0f, 0.2f),
+	                 at(816.0f, 470.0f, 0.2f),
+	                 release(1.0f),
+	                 at(800.0f, 760.0f, 2.5f),
+	                 press(0.2f),
+	                 at(900.0f, 760.0f, 1.5f),
+	                 release(0.5f)},
+	});
+}
+
 /// The player has a picture of their own for the heart and puts the heart on the creature in the Creature Cave. The
 /// points after the click on the creature are for a screen of 1600 by 900.
 void AddCaveOwnTattooPicture(std::vector<Scenario>& all)
@@ -432,6 +470,7 @@ void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 	AddFizzInFront(all);
 	AddCaveTattooOnBody(all);
 	AddCaveOwnTattooPicture(all);
+	AddMenuTattooEditor(all);
 	AddCaveScrollZoom(all);
 	AddCaveCopyHair(all);
 	AddCaveTrophies(all);

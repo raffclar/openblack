@@ -1056,3 +1056,5 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_bitmap test_bitmap.cpp)
 target_link_libraries(test_bitmap PRIVATE rawimage)
+openblack_setup_and_add_test(test_tattoo_menu test_tattoo_menu.cpp)
+target_link_libraries(test_tattoo_menu PRIVATE creaturemind)

@@ -329,6 +329,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"creaturePenSystem", "creatures.systems"},
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
+    LocatorCoverage {"tattooMenuSystem", "creatures.systems"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
     LocatorCoverage {"vortexSystem", "magic.vortices"},
     LocatorCoverage {"magicShieldSystem", "magic.state"},
@@ -2699,6 +2700,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 			              const auto& editor = Locator::tattooEditorSystem::value();
 			              result["tattoo_editor"] = {{"open", editor.IsOpen()},
 			                                         {"creature", Id(editor.GetCreature())},
+			                                         {"from_menu", editor.IsFromMenu()},
+			                                         {"shown", Id(editor.GetShown())},
 			                                         {"hovered_site", Optional(editor.GetHoveredSite())}};
 		              }
 		              return QueryResult::Value(std::move(result));

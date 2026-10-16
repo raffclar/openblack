@@ -538,6 +538,10 @@ private:
 	/// developers' start), which leaves the land as it is rather than black at its start
 	bool AskNewGameChoice();
 	void HandleInterfaceAction();
+	/// The main menu's tattoo editor: its button shows while it may, and the creature it shows is posed each frame
+	void UpdateTattooMenu(float milliseconds);
+	/// The renderer draws the creature that the main menu's tattoo editor shows, in the next frame of the scene
+	void ShowTattooMenuCreature() const;
 	/// Closes the menu before a land change. The game then gets the pause that it had before the menu opened.
 	void CloseMenuForNewLand();
 	/// The options the player keeps with their profile take effect: the hand, the help, the texts and the tooltips

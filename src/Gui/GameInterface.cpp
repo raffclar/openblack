@@ -318,6 +318,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _mice(std::move(mice))
     , _atmos(std::move(atmos))
     , _painter(_canvas, _font, *_atlas, *_fontTexture)
+    , _menuCreaturePainter(_menuCreatureCanvas, _font, *_atlas, *_fontTexture)
     , _menu(std::make_unique<GameMenu>(_texts, _font, playerName, std::move(settings)))
     , _skipBox(std::make_unique<SkipBox>(_texts, _font, DialogPainter::k_MidTextSize))
     , _storyHistoryBox(std::make_unique<StoryHistoryBox>(_texts, _font))
@@ -326,8 +327,10 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _toolTips(ReadToolTipsInfo())
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
+	_menuCreaturePainter.SetPictures(_symbols.get(), _mice.get());
 	_fullFontTexture = MakeGlyphTexture(_font.GetFullAtlas(), _font.GetFullAtlasSize(), "Font full height");
 	_painter.SetFullGlyphs(_fullFontTexture.get());
+	_menuCreaturePainter.SetFullGlyphs(_fullFontTexture.get());
 }
 
 GameInterface::~GameInterface() = default;
@@ -548,6 +551,7 @@ void GameInterface::SetSymbolPictures(const creature_tattoo::Pictures& pictures)
 	{
 		_symbols = std::move(symbols);
 		_painter.SetPictures(_symbols.get(), _mice.get());
+		_menuCreaturePainter.SetPictures(_symbols.get(), _mice.get());
 	}
 }
 
@@ -655,11 +659,19 @@ bool GameInterface::ProcessTattooEditorEvent(const SDL_Event& event)
 			_leftButtonDown = true;
 			_tattooEditor->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
 		}
+		else
+		{
+			_otherButtonsDown |= SDL_BUTTON(event.button.button);
+		}
 		return true;
 	case SDL_MOUSEBUTTONUP:
 		if (event.button.button == SDL_BUTTON_LEFT)
 		{
 			_leftButtonDown = false;
+		}
+		else
+		{
+			_otherButtonsDown &= ~SDL_BUTTON(event.button.button);
 		}
 		if (event.button.button == SDL_BUTTON_LEFT &&
 		    _tattooEditor->MouseUp(_painter.ToDialog({event.button.x, event.button.y}), editor))
@@ -703,8 +715,9 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 	auto& editor = Locator::tattooEditorSystem::value();
 	if (editor.IsOpen() && !_tattooEditor->IsOpen())
 	{
-		// In the temple the dialog stands over the cave without a frame
-		_tattooEditor->Open(false);
+		// In the temple the dialog stands over the cave without a frame. From the main menu it has a frame of its own,
+		// and takes the menu's place until it closes.
+		_tattooEditor->Open(editor.IsFromMenu());
 	}
 	std::span<const std::array<uint8_t, 3>> palette;
 	auto& arts = Locator::resources::value().GetCreatureSkinArt();
@@ -715,15 +728,19 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 	if (!_tattooEditor->IsOpen())
 	{
 		_leftButtonDown = false;
+		_otherButtonsDown = 0;
 	}
 	_tattooEditor->Update(deltaSeconds, editor, palette, _leftButtonDown);
+	_menu->SetCovered(_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
 }
 
 void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow)
 {
 	_canvas.Begin(resolution);
 	_pointerCanvas.Begin(resolution);
+	_menuCreatureCanvas.Begin(resolution);
 	_painter.Begin(resolution);
+	_menuCreaturePainter.Begin(resolution);
 	// The villagers' labels and the tip bubble are part of the world's picture: under the interface, the cinema bars
 	// and the fades
 	DrawVillagerLabels(resolution);
@@ -770,7 +787,9 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 				marker = _painter.ToDialog(*point);
 			}
 		}
-		_tattooEditor->Draw(_painter, marker, milliseconds);
+		// From the main menu the creature is drawn over the dialog, and what goes over the creature over that
+		_tattooEditor->Draw(_painter, milliseconds);
+		_tattooEditor->DrawOverCreature(_tattooEditor->IsFramed() ? _menuCreaturePainter : _painter, marker);
 	}
 	// The new player's box from the Players page takes the screen as the first start's does: the front end's swirling
 	// backdrop on black, coming up from black and going back to black, the box and the pointer under the black too.
@@ -856,6 +875,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_canvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f), fade, nullptr);
 	}
 	_canvas.End();
+	_menuCreatureCanvas.End();
 	_pointerCanvas.End();
 }
 

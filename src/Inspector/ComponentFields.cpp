@@ -208,6 +208,7 @@
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Swayable.h"
+#include "ECS/Components/TattooMenuCreature.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/TempleExterior.h"
@@ -1715,6 +1716,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::StreamSegment> {context};
 	Reflect<components::StreetLantern>(context).Field<&components::StreetLantern::country>("country");
 	Reflect<components::Swayable>(context).Field<&components::Swayable::swaySlot>("swaySlot");
+	Reflect<components::TattooMenuCreature>(context)
+	    .Field<&components::TattooMenuCreature::state>("state")
+	    .Field<&components::TattooMenuCreature::tattooSites>("tattooSites");
 	Reflect<components::TeleportStone>(context)
 	    .Field<&components::TeleportStone::player>("player")
 	    .Field<&components::TeleportStone::spell>("spell")

@@ -120,6 +120,7 @@
 #include "ECS/Systems/Implementations/SoundTagSystem.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
 #include "ECS/Systems/Implementations/TattooEditorSystem.h"
+#include "ECS/Systems/Implementations/TattooMenuSystem.h"
 #include "ECS/Systems/Implementations/TeleportSystem.h"
 #include "ECS/Systems/Implementations/TempleDestructionSystem.h"
 #include "ECS/Systems/Implementations/TempleExteriorSystem.h"
@@ -227,8 +228,8 @@ using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PickingSystem;
 using openblack::ecs::systems::PlayerProfileSystem;
-using openblack::ecs::systems::ProfileFolderSystem;
 using openblack::ecs::systems::PlayerSystem;
+using openblack::ecs::systems::ProfileFolderSystem;
 using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RenderingSystem;
@@ -240,6 +241,7 @@ using openblack::ecs::systems::SnowSystem;
 using openblack::ecs::systems::SoundTagSystem;
 using openblack::ecs::systems::SpellIconSystem;
 using openblack::ecs::systems::TattooEditorSystem;
+using openblack::ecs::systems::TattooMenuSystem;
 using openblack::ecs::systems::TeleportSystem;
 using openblack::ecs::systems::TempleDestructionSystem;
 using openblack::ecs::systems::TempleExteriorSystem;
@@ -360,6 +362,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::creatureModeSystem::emplace<CreatureModeSystem>();
 	Locator::creatureCaveSystem::emplace<CreatureCaveSystem>();
 	Locator::tattooEditorSystem::emplace<TattooEditorSystem>();
+	Locator::tattooMenuSystem::emplace<TattooMenuSystem>();
 	Locator::cinematicDirectorSystem::emplace<CinematicDirectorSystem>();
 	Locator::scriptControlSystem::emplace<ScriptControlSystem>();
 	Locator::dialogueControlSystem::emplace<DialogueControlSystem>();
@@ -548,6 +551,7 @@ void openblack::ShutDownServices()
 	Locator::rainSystem::reset();
 	Locator::snowfallSystem::reset();
 	Locator::waterRingSystem::reset();
+	Locator::tattooMenuSystem::reset();
 	Locator::tattooEditorSystem::reset();
 	Locator::creatureCaveSystem::reset();
 	Locator::creatureModeSystem::reset();

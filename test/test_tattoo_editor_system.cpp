@@ -187,3 +187,50 @@ TEST(TattooEditorSystem, EachDropKeepsThePlayersPicturesThatTheTattoosUse)
 	ASSERT_EQ(f.pictures.at(k_Creature).size(), 0x28u);
 	EXPECT_EQ(f.pictures.at(k_Creature).at(5), 0);
 }
+
+TEST(TattooEditorSystem, FromTheMenuTheShownCreatureAndThePlayersCreatureWearTheTattoos)
+{
+	constexpr auto k_Shown = static_cast<entt::entity>(9);
+	Fixture f;
+	f.skins[k_Shown] = Slots {};
+	f.skins.at(k_Creature).at(1) = {.design = 5, .site = 2, .colour = k_Green};
+	f.editor.OpenFromMenu(k_Creature, k_Shown,
+	                      {.eye = creature_tattoo_editor::k_MenuEye, .focus = creature_tattoo_editor::k_MenuFocus});
+	EXPECT_TRUE(f.editor.IsOpen());
+	EXPECT_TRUE(f.editor.IsFromMenu());
+	EXPECT_EQ(f.editor.GetShown(), k_Shown);
+	EXPECT_EQ(f.editor.GetCreature(), k_Creature);
+	// The shown creature wears the player's creature's tattoos at once
+	EXPECT_EQ(f.skins.at(k_Shown), f.skins.at(k_Creature));
+	EXPECT_TRUE(f.pictures.contains(k_Shown));
+
+	f.OverThePlace();
+	EXPECT_TRUE(f.editor.Drop(3, k_Green));
+	EXPECT_EQ(f.skins.at(k_Shown), f.editor.GetSession().slots);
+	EXPECT_EQ(f.skins.at(k_Creature), f.editor.GetSession().slots);
+
+	// Cancel puts back the tattoos the player's creature had
+	const auto opened = f.editor.GetSession().opened;
+	f.editor.Cancel();
+	EXPECT_EQ(f.skins.at(k_Creature), opened);
+	EXPECT_FALSE(f.editor.IsOpen());
+	EXPECT_FALSE(f.editor.IsFromMenu());
+}
+
+TEST(TattooEditorSystem, FromTheMenuWithNoCreatureTheTattoosStartEmpty)
+{
+	constexpr auto k_Shown = static_cast<entt::entity>(9);
+	Fixture f;
+	f.skins[k_Shown] = Slots {};
+	f.skins.at(k_Shown).at(0) = {.design = 1, .site = 1, .colour = k_Green};
+	f.editor.OpenFromMenu(std::nullopt, k_Shown, {});
+	EXPECT_TRUE(f.editor.IsOpen());
+	EXPECT_FALSE(f.editor.GetCreature().has_value());
+	EXPECT_EQ(f.editor.GetSession().slots, Slots {});
+	EXPECT_EQ(f.skins.at(k_Shown), Slots {});
+	f.OverThePlace();
+	EXPECT_TRUE(f.editor.Drop(2, k_Green));
+	EXPECT_EQ(f.skins.at(k_Shown).at(0).design, 2);
+	EXPECT_EQ(f.editor.Ok(false), creature_tattoo_editor::Accept::Close);
+	EXPECT_FALSE(f.editor.IsOpen());
+}

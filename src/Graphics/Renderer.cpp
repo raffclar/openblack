@@ -614,6 +614,10 @@ Renderer::~Renderer() noexcept
 	{
 		bgfx::destroy(toBgfx(*_interfaceCreatureInstances));
 	}
+	if (_menuCreatureInstance.has_value())
+	{
+		bgfx::destroy(toBgfx(*_menuCreatureInstance));
+	}
 	for (auto& query : _glareQueries)
 	{
 		if (bgfx::isValid(query))
@@ -6331,6 +6335,28 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.viewId = RenderPass::InterfaceCreatures;
 					drawInstances(meshId, placers->second, placers->second.materialBlending, instance, 1, &pose, nullptr,
 					              _interfaceCreatureInstances);
+					if (eyes != nullptr)
+					{
+						DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
+					}
+					submitDesc.viewId = desc.viewId;
+				});
+			}
+			// The creature that the main menu's tattoo editor shows, in the editor's view of its own. Its mesh can be a
+			// mesh that the scene does not have, so it has an instance of its own.
+			if (desc.viewId == RenderPass::Main && _menuCreature.has_value())
+			{
+				DrawMenuCreature(desc, [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
+				                           const L3DMeshSubmitDesc::MorphTargets* targets,
+				                           const ecs::components::CreatureEyes* eyes) {
+					if (!meshManager.Contains(meshId) || !_menuCreatureInstance.has_value())
+					{
+						return;
+					}
+					const RenderContext::InstancedDrawDesc placers {0, 1, false};
+					const EntityPose pose {.bones = bones, .morphTargets = targets};
+					submitDesc.viewId = RenderPass::MenuCreature;
+					drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, _menuCreatureInstance);
 					if (eyes != nullptr)
 					{
 						DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);

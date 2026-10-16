@@ -311,6 +311,9 @@ public:
 	/// The creatures that the interface shows over itself. The interface asks for them each frame that it shows them,
 	/// as it draws itself, and the next frame of the scene draws them.
 	virtual void ShowInterfaceCreatures(interface_creatures::Request request) noexcept = 0;
+	/// The creature that the main menu's tattoo editor shows. The game asks for it each frame that the editor shows it,
+	/// and the next frame of the scene draws it.
+	virtual void ShowMenuCreature(interface_creatures::MenuCreature creature) noexcept = 0;
 };
 
 } // namespace openblack::graphics
