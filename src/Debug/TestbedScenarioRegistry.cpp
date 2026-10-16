@@ -5090,6 +5090,25 @@ void AddCombat(std::vector<Scenario>& all)
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
 	}
+
+	{
+		// Blows strike the shapes round the bones of the body: a tiger against a horse, which has a body of a different
+		// shape
+		auto horse = blue(PlayerNames::PLAYER_TWO, 0.6f, -0.45f);
+		horse.species = CreatureType::Horse;
+		all.push_back({
+		    .id = "combat.hit_shapes",
+		    .name = "Blows strike the shapes of the body",
+		    .facet = Facet::Combat,
+		    .description = "A red tiger and a blue horse fight by themselves. The camera is near the middle of the arena.",
+		    .expected = "Each creature steps until a blow reaches into the other's body, then strikes. A blow lands where its "
+		                "swing meets the body: on the long head and neck of the horse, on its back or on its legs. A blow "
+		                "that swings past the body does not land.",
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 16.0f, 18.0f}, .look = {0.0f, 8.0f, 40.0f}},
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.45f), horse},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
 }
 
 void AddMind(std::vector<Scenario>& all)
