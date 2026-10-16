@@ -2390,6 +2390,11 @@ bool Game::Update() noexcept
 	if (Locator::underwaterSystem::has_value())
 	{
 		Locator::underwaterSystem::value().Update(clock.GetFrameRealTime());
+		// The waves that crash at the cliffs near the camera are heard
+		if (_atmosAudio)
+		{
+			_atmosAudio->UpdateCliffCrashes();
+		}
 	}
 	{
 		// The flames, steam and smoke of what burns move on

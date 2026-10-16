@@ -28,6 +28,7 @@
 #include <glm/vec4.hpp>
 
 #include "GraphicsHandleBgfx.h"
+#include "Underwater.h"
 
 using namespace openblack::graphics;
 
@@ -146,13 +147,11 @@ const Texture2D& UnderwaterView::Seabed(const seabed::Seabed& seabed, uint32_t r
 		std::vector<uint16_t> texels(texelCount * 4, 0);
 		for (size_t i = 0; i < seabed.shore.size() && i < texelCount; ++i)
 		{
-			const auto& shore = seabed.shore[i];
-			const float cliff = i < seabed.cliff.size() ? seabed.cliff[i] : 0.0f;
-			const float shorten = 1.0f - 0.5f * cliff;
-			texels[i * 4 + 0] = bx::halfFromFloat(shore.x);
-			texels[i * 4 + 1] = bx::halfFromFloat(shore.y * shorten);
-			texels[i * 4 + 2] = bx::halfFromFloat(shore.z * shorten);
-			texels[i * 4 + 3] = bx::halfFromFloat(shore.w);
+			const auto texel = underwater::ShoreTexel(seabed.shore[i], i < seabed.cliff.size() ? seabed.cliff[i] : 0.0f);
+			texels[i * 4 + 0] = bx::halfFromFloat(texel.x);
+			texels[i * 4 + 1] = bx::halfFromFloat(texel.y);
+			texels[i * 4 + 2] = bx::halfFromFloat(texel.z);
+			texels[i * 4 + 3] = bx::halfFromFloat(texel.w);
 		}
 		_seabed = std::make_unique<Texture2D>("Underwater Shore Map");
 		_seabed->CreateWithinFrame(static_cast<uint16_t>(size.x), static_cast<uint16_t>(size.y), 1, TextureFormat::RGBA16F,

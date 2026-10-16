@@ -13,6 +13,7 @@
 
 #include <array>
 #include <utility>
+#include <vector>
 
 #include <glm/vec3.hpp>
 
@@ -71,6 +72,11 @@ public:
 	/// One turn of a bank's fade towards its target: the new volume and what is sent to the bank (0-127)
 	[[nodiscard]] static std::pair<float, int32_t> StepBankVolume(float current, float target);
 
+	/// EXPERIMENT (not for merge): once a frame, plays the crash of a wave on the rock when a wave hits the foot of a
+	/// cliff near the camera. A crash uses the coast's or the sea's atmosphere samples, at a volume from the strength of
+	/// the wave and its distance, and quieter while the camera is under the sea.
+	void UpdateCliffCrashes();
+
 	/// EXPERIMENT (not for merge): the volume of the sea's own loop now, 0 to 1
 	[[nodiscard]] float GetUnderwaterVolume() const { return _underwaterCurrent; }
 
@@ -90,6 +96,9 @@ private:
 	uint32_t _underwaterBank {0};
 	float _underwaterTarget {0.0f};
 	float _underwaterCurrent {0.0f};
+	/// EXPERIMENT (not for merge): the feet of the cliffs heard last frame, with the crash each was at
+	std::vector<std::pair<size_t, float>> _crashFeet;
+	float _crashSeconds {0.0f};
 };
 
 } // namespace openblack::audio
