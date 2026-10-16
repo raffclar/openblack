@@ -142,6 +142,11 @@ std::optional<LeashType> creature_save_state::LeashTypeFromNumber(uint32_t numbe
 	}
 }
 
+bool creature_save_state::ResolvesOnLoad(std::optional<size_t> mindFileSize)
+{
+	return mindFileSize.value_or(0) > 0;
+}
+
 gamesave::Agenda creature_save_state::AgendaAfterLoad(gamesave::Agenda agenda)
 {
 	agenda.word08 = 1;
