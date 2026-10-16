@@ -72,9 +72,13 @@ namespace openblack::ecs::systems::mind_detail
 [[nodiscard]] std::optional<entt::id_type> AltarMeshOf(const ecs::Registry& registry, entt::entity altar);
 /// The data of a worship site's altar: the data of the worship site of its site's tribe. None for another thing.
 [[nodiscard]] const GWorshipSiteInfo* AltarInfoOf(const ecs::Registry& registry, entt::entity altar);
-/// What a creature knows of a thing, as far as the world here tells it
+/// What a creature knows of a thing. When the creature has a belief about the thing, these are the attributes that it
+/// last took in. Else they are the attributes of the thing now.
 [[nodiscard]] std::optional<creature_tree::Belief> BeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                             entt::entity self);
+/// What a creature finds of a thing now, as far as the world here tells it
+[[nodiscard]] std::optional<creature_tree::Belief> BeliefNowOf(const ecs::Registry& registry, entt::entity entity,
+                                                               entt::entity self);
 /// What a creature knows of a thing that it acts on. The temple here is one thing, which stands for its heart when a
 /// creature acts on it.
 [[nodiscard]] std::optional<creature_tree::Belief> ActedOnBeliefOf(const ecs::Registry& registry, entt::entity entity,

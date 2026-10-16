@@ -298,6 +298,16 @@ TEST(CreatureDesireSources, SeeingAThingAgainStirsSourcesOnlyAfter200Turns)
 	EXPECT_TRUE(SightingStirsSources(501, 300));
 }
 
+TEST(CreatureDesireSources, ATownThatWantsSomethingStirsCompassionByOneTwoHundredth)
+{
+	// Ten turns each second, so the amount is one over two hundred turns
+	EXPECT_FLOAT_EQ(TownSightingAmount(10), 1.0f / 200.0f);
+	EXPECT_FLOAT_EQ(TownSightingAmount(0), 0.0f);
+	EXPECT_TRUE(TownSightingStirs(false, true));
+	EXPECT_FALSE(TownSightingStirs(true, true));
+	EXPECT_FALSE(TownSightingStirs(false, false));
+}
+
 TEST(CreatureDesireSources, ASourceBelongsToTheFirstDesireThatGrowsFromIt)
 {
 	creature_desires::Desires desires;

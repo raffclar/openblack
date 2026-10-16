@@ -26,6 +26,25 @@ bool openblack::creature_object_beliefs::InListOfWholeThings(uint32_t kind)
 	       kind == kinds::k_Flock;
 }
 
+bool openblack::creature_object_beliefs::TakesInAgain(uint32_t kind)
+{
+	return kind != creature_tree::belief_types::k_Abode;
+}
+
+void openblack::creature_object_beliefs::TakeIn(Belief& belief, bool isNew, const creature_tree::Belief& now)
+{
+	// A belief with no attributes yet takes all of them, as a new belief does
+	if (isNew || !belief.attributes.has_value())
+	{
+		belief.attributes = now;
+		return;
+	}
+	if (TakesInAgain(belief.kind))
+	{
+		belief.attributes = creature_tree::WithFirstSight(*belief.attributes, now);
+	}
+}
+
 bool openblack::creature_object_beliefs::BlockedRecently(const Belief& belief, uint32_t turn, bool fixed)
 {
 	return belief.blockedTurn.has_value() && turn - *belief.blockedTurn <= (fixed ? k_BlockedTurnsFixed : k_BlockedTurns);

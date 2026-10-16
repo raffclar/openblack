@@ -263,6 +263,18 @@ bool creature_desire_sources::SightingStirsSources(uint32_t turn, uint32_t lastT
 	return turn - lastTurn > k_SightingSourceTurns;
 }
 
+float creature_desire_sources::TownSightingAmount(uint32_t turnsPerSecond)
+{
+	// The game cuts the number of turns down to a whole number
+	const auto turns = static_cast<uint32_t>(static_cast<float>(turnsPerSecond) * k_TownSightingSeconds);
+	return turns > 0 ? 1.0f / static_cast<float>(turns) : 0.0f;
+}
+
+bool creature_desire_sources::TownSightingStirs(bool scriptControlled, bool townWantsSomething)
+{
+	return !scriptControlled && townWantsSomething;
+}
+
 float creature_desire_sources::ImpressAfterSighting(float impress)
 {
 	return Clamp01(impress + k_ImpressPerSighting);
