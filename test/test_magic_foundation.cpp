@@ -410,6 +410,23 @@ TEST(AreaEffect, TheCellsSearchedSpanTheSquareOfTheRadius)
 	EXPECT_EQ(EffectCellOf({-0.5f, 0.0f, 19.9f}), glm::ivec2(-1, 1));
 }
 
+TEST(AreaEffect, AnObjectWithAMiddleOfItsOwnIsReachedAcrossTheLandFromItsMiddle)
+{
+	EffectValues values;
+	values.radius = 3.0f;
+	// As a worship site: its middle is to one side of its position, with a radius of its own
+	EffectReceiver site {.entity = static_cast<entt::entity>(1),
+	                     .position = {0.0f, 0.0f, 0.0f},
+	                     .middle = glm::vec2(30.0f, 0.0f),
+	                     .radius = 14.0f,
+	                     .height = 5.0f};
+	EXPECT_TRUE(Reaches(values, {46.5f, 0.0f, 0.0f}, site));
+	EXPECT_FALSE(Reaches(values, {47.5f, 0.0f, 0.0f}, site));
+	EXPECT_FALSE(Reaches(values, {-10.0f, 0.0f, 0.0f}, site));
+	// Up and down it is still measured from its position
+	EXPECT_FALSE(Reaches(values, {30.0f, 8.5f, 0.0f}, site));
+}
+
 TEST(AreaEffect, EveryObjectInReachTakesItNotOnlyTheNearest)
 {
 	EffectValues values;

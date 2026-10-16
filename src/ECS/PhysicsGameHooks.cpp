@@ -68,7 +68,7 @@
 #include "ECS/Systems/Implementations/VillagerPhysics.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
-#include "ECS/TempleHeartTowns.h"
+#include "ECS/TempleHeartPassOn.h"
 #include "ECS/TownHomes.h"
 #include "Magic/MagicWorldInterface.h"
 #include "Magic/SpellRules.h"
@@ -84,12 +84,6 @@ namespace living = openblack::physics::living;
 
 namespace
 {
-/// A temple heart's five beam sounds, played in turn
-constexpr std::array<entt::hashed_string, 5> k_HeartBeamSounds {
-    entt::hashed_string("InGame.sad/206"), entt::hashed_string("InGame.sad/207"), entt::hashed_string("InGame.sad/208"),
-    entt::hashed_string("InGame.sad/209"), entt::hashed_string("InGame.sad/210")};
-static_assert(k_HeartBeamSounds.size() == physics::temple_heart::k_BeamSounds);
-
 using physics_hooks::World;
 
 /// Whether a blow can hurt a villager: not one hidden in its home or a building, nor one in a hand
@@ -197,119 +191,6 @@ void HurtCreature(World& world, DynamicsSystemInterface& dynamics, const Physics
 	world.ChangeDesireSource(creature, creature_desires::sources::k_AngerFromDamage, *crush);
 }
 
-/// The temple heart's player's towns as the heart passes a blow on over them: in the order the player gained them, each
-/// with its buildings and homeless people, the newest first
-// TODO(physics): a town's spell dispenser is one of its buildings the heart may pass a blow on to; openblack's dispensers
-// belong to no town yet
-std::vector<physics::temple_heart::Town> HeartTowns(World& world, PlayerNames owner)
-{
-	return temple_heart_towns::Gather(
-	    world.Entities(), owner,
-	    {
-	        .lifeOf = [&world](entt::entity abode) { return world.LifeOf(abode); },
-	        .footballPitch =
-	            [&world](entt::entity abode) {
-		            const auto* info = world.AbodeInfoOf(abode);
-		            return info != nullptr && info->abodeType == AbodeType::FootballPitch;
-	            },
-	        .dying = [&world](entt::entity villager) { return world.VillagerStateOf(villager, true) == VillagerStates::Dying; },
-	    });
-}
-
-/// The spot visual a temple's heart fires its beams from, made the first time it beams; tried again on a later beam when
-/// it couldn't be made
-std::optional<uint32_t> HeartBeamSource(World& world, entt::entity heart, Temple& temple)
-{
-	if (!temple.beamSource.has_value())
-	{
-		temple.beamSource = world.StartHeartBeamSource(world.Entities().Get<const Transform>(heart).position, temple.owner);
-	}
-	return temple.beamSource;
-}
-
-/// A point's place with an object's height added
-glm::vec3 TopOf(World& world, entt::entity object)
-{
-	auto top = world.Entities().Get<const Transform>(object).position;
-	top.y += world.HeightOf(object);
-	return top;
-}
-
-/// A temple's heart passing a blow that breaks buildings on to a target beams at it every two seconds, with one of its
-/// five beam sounds in turn
-void BeamAtTarget(World& world, entt::entity heart, Temple& temple, entt::entity target)
-{
-	namespace temple_heart = physics::temple_heart;
-	const auto interval = temple_heart::BeamInterval(static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count()));
-	temple_heart::Beam beam {.target = temple.beamTarget, .turn = temple.beamTurn};
-	const bool due = temple_heart::BeamAtTargetDue(beam, target, world.Turn(), interval);
-	temple.beamTarget = beam.target;
-	temple.beamTurn = beam.turn;
-	if (!due)
-	{
-		return;
-	}
-	const auto source = HeartBeamSource(world, heart, temple);
-	if (!source.has_value())
-	{
-		return;
-	}
-	const auto heartPosition = world.Entities().Get<const Transform>(heart).position;
-	// The beam sounds take their turns whether or not they can be heard
-	auto& next = world.Entities().Context().nextHeartBeamSound;
-	const auto sound = k_HeartBeamSounds.at(next);
-	next = (next + 1) % temple_heart::k_BeamSounds;
-	world.PlaySound(sound.value(), heartPosition, heart);
-	world.AddPlasma(*source, {
-	                             .start = TopOf(world, heart),
-	                             .end = TopOf(world, target),
-	                             .startTangent = particles::k_HeartPlasmaStartTangent,
-	                             .endTangent = particles::k_HeartPlasmaEndTangent,
-	                             .life = particles::k_HeartPlasmaLife,
-	                             .speed = particles::k_HeartPlasmaSpeed,
-	                             .alpha = particles::k_HeartPlasmaAlpha,
-	                         });
-}
-
-/// A temple's heart taking a blow that breaks buildings itself forgets what it beamed at, and on the same wait beams
-/// at a point on itself
-void BeamAtItself(World& world, entt::entity heart, Temple& temple)
-{
-	namespace temple_heart = physics::temple_heart;
-	const auto interval = temple_heart::BeamInterval(static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count()));
-	temple_heart::Beam beam {.target = temple.beamTarget, .turn = temple.beamTurn};
-	const bool due = temple_heart::BeamAtItselfDue(beam, world.Turn(), interval);
-	temple.beamTarget = beam.target;
-	temple.beamTurn = beam.turn;
-	if (!due)
-	{
-		return;
-	}
-	static_cast<void>(HeartBeamSource(world, heart, temple));
-	// The beam ends at a random point of the heart's model facing no more than a little downwards, arriving against the
-	// surface; the point is drawn even when there is nothing to fire the beam from
-	auto* random = world.Random();
-	if (random == nullptr)
-	{
-		return;
-	}
-	const auto triangles = world.DrawnTrianglesOf(heart);
-	const auto point = model_surface::RandomUpwardPoint(triangles, world.PlacementOf(heart), *random);
-	if (!temple.beamSource.has_value() || !point.has_value())
-	{
-		return;
-	}
-	world.AddPlasma(*temple.beamSource, {
-	                                        .start = TopOf(world, heart),
-	                                        .end = point->position,
-	                                        .startTangent = particles::k_HeartPlasmaStartTangent,
-	                                        .endTangent = -point->normal,
-	                                        .life = particles::k_HeartPlasmaLife,
-	                                        .speed = particles::k_HeartPlasmaSpeed,
-	                                        .alpha = particles::k_HeartPlasmaAlpha,
-	                                    });
-}
-
 /// Something thrown strikes a temple's heart: the heart passes the blow on to a building or a homeless villager of its
 /// player's towns, and only with none to take it is the heart itself harmed, by what breaks buildings
 void StrikeHeart(World& world, DynamicsSystemInterface& dynamics, PhysicsEntry& entry, const ImpactInfo& impact)
@@ -323,21 +204,9 @@ void StrikeHeart(World& world, DynamicsSystemInterface& dynamics, PhysicsEntry& 
 	}
 	const bool hitterAbout = registry.Valid(hitter);
 	const bool destroys = hitterAbout && dynamics.PhysicallyDestroysAbodes(hitter);
-	auto& temple = registry.Get<Temple>(heart);
-	const auto towns = HeartTowns(world, temple.owner);
-	const auto target = physics::temple_heart::Choose(towns);
 	// While what struck it breaks buildings, the heart beams at what takes the blow, or at a point on itself with none
-	if (destroys)
-	{
-		if (target.kind == physics::temple_heart::TargetKind::Heart)
-		{
-			BeamAtItself(world, heart, temple);
-		}
-		else
-		{
-			BeamAtTarget(world, heart, temple, target.entity);
-		}
-	}
+	const auto target = temple_heart_pass_on::PassOn(world, heart, destroys);
+	auto& temple = registry.Get<Temple>(heart);
 	switch (target.kind)
 	{
 	case physics::temple_heart::TargetKind::Building:

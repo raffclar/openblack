@@ -259,7 +259,7 @@ struct CreatureSetup
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo>
+	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo, FlowersInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};

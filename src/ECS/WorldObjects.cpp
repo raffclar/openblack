@@ -261,6 +261,38 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	return nullptr;
 }
 
+const GObjectInfo* world_objects::EffectInfoOf(entt::entity object)
+{
+	if (const auto* kind = InfoOf(object))
+	{
+		return kind;
+	}
+	if (!Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		return nullptr;
+	}
+	const auto& info = Locator::infoConstants::value();
+	if (const auto* flowers = registry.TryGet<const Flowers>(object))
+	{
+		return Row(info.flowers, flowers->type);
+	}
+	// A worship site has the row of its tribe
+	if (const auto* site = registry.TryGet<const WorshipSite>(object))
+	{
+		return Row(info.worshipSite, site->tribe);
+	}
+	if (registry.AllOf<Temple>(object))
+	{
+		return &info.citadelHeart;
+	}
+	return nullptr;
+}
+
 std::vector<model_surface::Triangle> world_objects::DrawnTrianglesOf(entt::entity object)
 {
 	const auto* mesh = Locator::entitiesRegistry::value().TryGet<const Mesh>(object);
@@ -522,9 +554,10 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 		needs->needs.life = std::max(needs->needs.life - damage, 0.0f);
 		return needs->needs.life;
 	}
-	// A building not yet built loses what is built of it rather than life, and all its life once nothing is
+	// A building, a worship site or a temple not yet built loses what is built of it rather than life, and all its life
+	// once nothing is
 	if (auto* progress = registry.TryGet<BuildProgress>(object);
-	    progress != nullptr && progress->built < 1.0f && registry.AnyOf<Abode, SpellDispenser>(object))
+	    progress != nullptr && progress->built < 1.0f && registry.AnyOf<Abode, SpellDispenser, WorshipSite, Temple>(object))
 	{
 		progress->built = progress->built - damage <= 0.0f ? 0.0f : progress->built - damage;
 		if (progress->built != 0.0f)
@@ -661,6 +694,11 @@ void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& de
 		}
 		return;
 	}
+	// A worship site with no life left stays as it is
+	if (registry.AllOf<WorshipSite>(object))
+	{
+		return;
+	}
 	if (registry.AnyOf<Abode, SpellDispenser>(object))
 	{
 		// A ghost of it flickers out where it stood, and it goes
@@ -768,6 +806,12 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 		town = *pileTown;
 		kind = InfoOf(object);
 	}
+	else if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object))
+	{
+		// A miracle dispenser is a building of its town, by its own row
+		town = dispenser->town;
+		kind = AbodeInfoOf(object);
+	}
 	else if (const auto* abode = registry.TryGet<const Abode>(object))
 	{
 		town = TownOfAbode(*abode);
@@ -861,7 +905,7 @@ bool world_objects::CanBeCrushed(entt::entity object)
 		return false;
 	}
 	return registry.AnyOf<Villager, Creature, Animal, Abode, Tree, DeadTree, Feature, Field, AnimatedStatic, BigForest,
-	                      MobileStatic, Flowers>(object);
+	                      MobileStatic, Flowers, SpellDispenser, WorshipSite, Temple>(object);
 }
 
 PlayerNames world_objects::IconPlayer(const Registry& registry, entt::entity icon)
@@ -932,6 +976,11 @@ std::optional<PlayerNames> world_objects::PlayerOf(entt::entity object)
 	if (const auto* temple = registry.TryGet<const Temple>(object))
 	{
 		return temple->owner;
+	}
+	// A worship site is its temple's player's
+	if (const auto* site = registry.TryGet<const WorshipSite>(object))
+	{
+		return site->player;
 	}
 	if (const auto* magic = registry.TryGet<const MagicTree>(object))
 	{

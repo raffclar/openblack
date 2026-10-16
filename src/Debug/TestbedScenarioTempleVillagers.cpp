@@ -348,4 +348,69 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	                  .repeatSeconds = 8.0f}},
 	    .townBeliefInPlayer = k_TownBelief,
 	});
+	all.push_back({
+	    .id = "miracles.lightning_temple_town",
+	    .name = "Lightning at a temple whose player has a town",
+	    .facet = Facet::Miracles,
+	    .description = "The same town and temple, the town's worship site put up built. A lightning bolt is held from a "
+	                   "hand above the temple's heart, looking at it, for four seconds in every eight.",
+	    .expected = "The bolts that strike the temple and its worship site do not harm them. The heart gives the harm to "
+	                "a building of the town. A beam goes from the top of the temple to the top of that building, at most "
+	                "once every two seconds, with a sound. The building loses life and can catch fire.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {40.0f, 45.0f, 60.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_Temple,
+	                  .handOffset = k_Temple + glm::vec2(0.0f, 20.0f),
+	                  .handHeight = 25.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
+	all.push_back({
+	    .id = "miracles.lightning_temple_alone",
+	    .name = "Lightning at a temple whose player has no town",
+	    .facet = Facet::Miracles,
+	    .description = "A temple of the player alone, with no town. A lightning bolt is held from a hand above the "
+	                   "temple's heart, looking at it, for four seconds in every eight.",
+	    .expected = "The heart has nothing to give the harm to, thus it takes the harm itself and loses some life. A beam "
+	                "goes from the top of the temple to a point on its own walls, at most once every two seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {40.0f, 45.0f, 30.0f}, .look = {0.0f, 0.0f, -30.0f}},
+	    .temples = {{.offset = k_Temple}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_Temple,
+	                  .handOffset = k_Temple + glm::vec2(0.0f, 20.0f),
+	                  .handHeight = 25.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	});
+	all.push_back({
+	    .id = "miracles.lightning_flowers_dispenser",
+	    .name = "Lightning at flowers and a miracle dispenser",
+	    .facet = Facet::Miracles,
+	    .description = "Two patches of flowers and a water dispenser of the player's town, 8 m apart. A lightning bolt "
+	                   "is held from a hand above them, looking between them, for four seconds in every eight.",
+	    .expected = "The flowers take no harm and stay. The dispenser loses life to the bolts that reach it. Its town "
+	                "sends builders to mend it, and with no life left it goes as a ghost.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 20.0f, 25.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	                {.type = FlowersInfo::WhiteOne, .offset = {-4.0f, 0.0f}},
+	                {.type = FlowersInfo::Pink, .offset = {-4.0f, 4.0f}}},
+	    .dispensers = {{.type = MagicType::Water, .offset = {4.0f, 0.0f}, .reward = true}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = {0.0f, 1.0f},
+	                  .handOffset = {0.0f, 12.0f},
+	                  .handHeight = 15.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
 }
