@@ -244,7 +244,7 @@ void Physique(Stream& stream, MindPhysique& body, uint32_t version)
 	stream.Counted<uint32_t>(body.wounds, [&stream](uint32_t& value) { stream.Value(value); });
 }
 
-/// The database is a list ended by an id of 0, each entry's pairs a list ended by a number of 0
+/// The music records are a list ended by an id of 0, each record's feelings a list ended by a number of 0
 void Database(Stream& stream, std::vector<MindDatabaseEntry>& entries)
 {
 	if (stream.Reading())
@@ -260,8 +260,8 @@ void Database(Stream& stream, std::vector<MindDatabaseEntry>& entries)
 			}
 			auto& entry = entries.emplace_back();
 			entry.id = id;
-			stream.Value(entry.unknown);
-			stream.Value(entry.size);
+			stream.Value(entry.time);
+			stream.Value(entry.count);
 			while (stream.Ok())
 			{
 				int32_t number = 0;
@@ -272,8 +272,8 @@ void Database(Stream& stream, std::vector<MindDatabaseEntry>& entries)
 				}
 				auto& pair = entry.pairs.emplace_back();
 				pair.number = number;
-				stream.Value(pair.a);
-				stream.Value(pair.b);
+				stream.Value(pair.mood);
+				stream.Value(pair.fear);
 			}
 			if (entries.size() > k_MaxCount)
 			{
@@ -285,13 +285,13 @@ void Database(Stream& stream, std::vector<MindDatabaseEntry>& entries)
 	for (auto& entry : entries)
 	{
 		stream.Value(entry.id);
-		stream.Value(entry.unknown);
-		stream.Value(entry.size);
+		stream.Value(entry.time);
+		stream.Value(entry.count);
 		for (auto& pair : entry.pairs)
 		{
 			stream.Value(pair.number);
-			stream.Value(pair.a);
-			stream.Value(pair.b);
+			stream.Value(pair.mood);
+			stream.Value(pair.fear);
 		}
 		int32_t end = 0;
 		stream.Value(end);

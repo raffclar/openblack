@@ -193,6 +193,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
+#include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
@@ -1981,6 +1982,11 @@ bool Game::GameLogicLoop() noexcept
 	}
 
 	ProcessMusicTurn(cameraPosition, false);
+	// The music moods look at the custom music that plays
+	if (Locator::musicMoodSystem::has_value())
+	{
+		Locator::musicMoodSystem::value().UpdateOnGameTurn(false);
+	}
 	Locator::influenceSystem::value().SetInGameTurn(false);
 
 	_lastGameLoopTime = currentTime;
@@ -4282,6 +4288,11 @@ bool Game::Run() noexcept
 		Locator::videoSystem::value().Play(_playVideo);
 	}
 
+	// The custom music player gets the tracks of the custom music folder in the profile folder
+	if (Locator::musicMoodSystem::has_value())
+	{
+		Locator::musicMoodSystem::value().LoadFolder();
+	}
 	// The game loop starts: the help record of the player comes from their profile, and the game writes it back at once
 	LoadHelpRecord();
 	SaveHelpRecord();

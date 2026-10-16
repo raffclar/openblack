@@ -1,0 +1,153 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#define LOCATOR_IMPLEMENTATIONS
+
+#include "MusicMoodSystem.h"
+
+#include <filesystem>
+#include <vector>
+
+#include <spdlog/spdlog.h>
+
+#include "Audio/AudioManagerInterface.h"
+#include "Audio/CustomMusicPlayerInterface.h"
+#include "Common/MachineClock.h"
+#include "ECS/Components/CreatureMind.h"
+#include "ECS/Registry.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "FileSystem/FileSystemInterface.h"
+#include "Locator.h"
+
+using namespace openblack;
+using namespace openblack::ecs::systems;
+
+namespace
+{
+/// The folder of the custom music, in the profile folder
+constexpr std::string_view k_CustomMusicFolder = "custom_music";
+
+audio::CustomMusicPlayerInterface* Player()
+{
+	return Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+}
+} // namespace
+
+void MusicMoodSystem::LoadFolder()
+{
+	auto* player = Player();
+	if (player == nullptr || !Locator::profileFolderSystem::has_value() || !Locator::filesystem::has_value())
+	{
+		return;
+	}
+	const auto folder = Locator::profileFolderSystem::value().MakeFolder(k_CustomMusicFolder);
+	std::vector<std::filesystem::path> files;
+	if (folder.has_value())
+	{
+		Locator::filesystem::value().Iterate(*folder, false,
+		                                     [&files](const std::filesystem::path& file) { files.push_back(file); });
+	}
+	player->SetFiles(files);
+	if (const auto logger = spdlog::get("audio"); logger != nullptr)
+	{
+		logger->info("Custom music: {} tracks in {}", player->GetTracks().size(),
+		             folder.has_value() ? folder->string() : std::string("no folder"));
+	}
+}
+
+void MusicMoodSystem::UpdateOnGameTurn(bool reset)
+{
+	const auto listen = []() -> std::optional<uint32_t> {
+		const auto* player = Player();
+		// The music moods work only while the custom music player has tracks
+		if (player == nullptr || !player->IsRunning())
+		{
+			return std::nullopt;
+		}
+		// A track counts only while it plays
+		if (player->GetPlayState() != audio::CustomMusicPlayerInterface::PlayState::Playing)
+		{
+			return 0u;
+		}
+		return music_mood::TrackId(player->GetSongName());
+	};
+	if (const auto packet = _controller.Turn(music_mood::k_TurnSeconds, reset, listen, Feelings(), machine_clock::UnixTime());
+	    packet.has_value())
+	{
+		Tell(*packet);
+	}
+}
+
+void MusicMoodSystem::ReadRecords(const std::optional<std::vector<music_mood::Record>>& records, bool own)
+{
+	Tell(_controller.ReadRecords(records, own, Feelings()));
+}
+
+std::vector<music_mood::Record> MusicMoodSystem::WriteRecords()
+{
+	return _controller.WriteRecords(Feelings());
+}
+
+std::vector<music_mood::Record> MusicMoodSystem::GetRecords() const
+{
+	const auto& records = _controller.GetRecords();
+	return {records.begin(), records.end()};
+}
+
+std::optional<entt::entity> MusicMoodSystem::LocalCreature()
+{
+	if (!Locator::playerSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& players = Locator::playerSystem::value();
+	const auto creature = players.GetPrimaryCreature(players.GetLocalPlayer());
+	if (!creature.has_value() || !Locator::entitiesRegistry::value().Valid(*creature))
+	{
+		return std::nullopt;
+	}
+	return creature;
+}
+
+std::optional<music_mood::Emotion> MusicMoodSystem::Feelings()
+{
+	const auto creature = LocalCreature();
+	if (!creature.has_value() || !Locator::creatureMindSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	float fear = 0.0f;
+	const auto* mind = Locator::entitiesRegistry::value().TryGet<const components::CreatureMindState>(*creature);
+	if (mind != nullptr && mind->desires.has_value())
+	{
+		fear = (*mind->desires)[creature_desires::Desire::Fear].value;
+	}
+	return music_mood::Emotion {.mood = Locator::creatureMindSystem::value().GetAverageFeedback(), .fear = fear};
+}
+
+void MusicMoodSystem::Tell(const music_mood::Packet& packet)
+{
+	// Only a packet of a track that starts makes the creature react; then the player's recent feedback starts again
+	if (packet.id == 0 || !Locator::creatureMindSystem::has_value())
+	{
+		return;
+	}
+	const auto creature = LocalCreature();
+	if (!creature.has_value())
+	{
+		return;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} hears music track {:08x} with mood {}", entt::to_integral(*creature),
+	                    packet.id, packet.emotion.mood);
+	auto& minds = Locator::creatureMindSystem::value();
+	minds.ReactToMusic(*creature, packet.emotion.mood);
+	minds.ClearAverageFeedback();
+}

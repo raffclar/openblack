@@ -100,6 +100,7 @@
 #include "ECS/Systems/Implementations/MagicSystem.h"
 #include "ECS/Systems/Implementations/MiracleFxSystem.h"
 #include "ECS/Systems/Implementations/MistSystem.h"
+#include "ECS/Systems/Implementations/MusicMoodSystem.h"
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
 #include "ECS/Systems/Implementations/PickingSystem.h"
@@ -222,13 +223,14 @@ using openblack::ecs::systems::MagicShieldSystem;
 using openblack::ecs::systems::MagicSystem;
 using openblack::ecs::systems::MiracleFxSystem;
 using openblack::ecs::systems::MistSystem;
+using openblack::ecs::systems::MusicMoodSystem;
 using openblack::ecs::systems::ObjectDrawListSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PickingSystem;
 using openblack::ecs::systems::PlayerProfileSystem;
-using openblack::ecs::systems::ProfileFolderSystem;
 using openblack::ecs::systems::PlayerSystem;
+using openblack::ecs::systems::ProfileFolderSystem;
 using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RenderingSystem;
@@ -326,6 +328,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
 	Locator::playerProfileSystem::emplace<PlayerProfileSystem>(profiles);
 	Locator::profileFolderSystem::emplace<ProfileFolderSystem>(Locator::filesystem::value(), profiles.folder);
+	Locator::musicMoodSystem::emplace<MusicMoodSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
 	Locator::time::emplace<TimeSystem>();
@@ -536,6 +539,7 @@ void openblack::ShutDownServices()
 	Locator::videoSystem::reset();
 	Locator::helpTextSystem::reset();
 	Locator::helpProfileSystem::reset();
+	Locator::musicMoodSystem::reset();
 	Locator::profileFolderSystem::reset();
 	Locator::creatureHelpSystem::reset();
 	Locator::guidanceSystem::reset();

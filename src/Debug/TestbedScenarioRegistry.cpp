@@ -2058,6 +2058,30 @@ void AddAudio(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// Two tracks in the custom music folder: the first is liked after strokes, the second disliked after slaps
+	const auto music = [](size_t track, float delay) {
+		return Command {.kind = Kind::PlayCustomMusic, .delaySeconds = delay, .value = track};
+	};
+	all.push_back({
+	    .id = "audio.custom_music_moods",
+	    .name = "The creature's moods for custom music",
+	    .facet = Facet::Audio,
+	    .description = "Put two MP3 files in the custom_music folder of the profile folder (Profiles/custom_music in the "
+	                   "working folder of the game, Profiles/developer/custom_music on a developer run). The first track plays "
+	                   "and the tiger is stroked three times, then the second track plays and the tiger is slapped three "
+	                   "times. Then the first track plays again, and after 45 seconds the second track again. The log "
+	                   "gives the tiger's mood for each track as it starts.",
+	    .expected = "Each new track makes the tiger curious: it turns to the camera, points at it, talks, yawns and sits "
+	                "still. The first track again (mood above 0) makes it happy: it smiles, waves and dances. The second "
+	                "track again (mood below 0) makes it sad, frightened or angry, and the advisor tells you that it "
+	                "does not like the music.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.4f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 40.0f}, 180.0f)},
+	    .commands = {music(0, 0.5f), Act(Kind::Stroke, 0, 3.0f), Act(Kind::Stroke, 0, 0.5f), Act(Kind::Stroke, 0, 0.5f),
+	                 music(1, 2.0f), Act(Kind::Slap, 0, 3.0f), Act(Kind::Slap, 0, 0.5f), Act(Kind::Slap, 0, 0.5f),
+	                 music(0, 2.0f), music(1, 45.0f), music(k_StopCustomMusic, 45.0f)},
+	});
+
 	all.push_back({
 	    .id = "audio.snow",
 	    .name = "Footsteps in snow",
@@ -6540,7 +6564,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
-	       IsPointerCommand(kind);
+	       kind == Kind::PlayCustomMusic || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -6567,7 +6591,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 126> k_Names {
+	constexpr std::array<std::string_view, 127> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -6694,6 +6718,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand grips totem",
 	    "pointer on altar",
 	    "check the profile folder",
+	    "play custom music",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

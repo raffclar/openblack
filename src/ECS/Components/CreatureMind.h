@@ -224,6 +224,8 @@ struct CreatureMindState
 	std::optional<creature_watching::MimicKind> copiedKind;
 	/// The one thing that it does when it completes its current work, in place of the next decision
 	std::optional<creature_follow_up::FollowUp> followUp;
+	/// A number that the thing that waits uses: after a custom music track, ten times the track's mood
+	int32_t followUpValue {0};
 	/// The trees it planted others by most recently, by entity number, oldest first: it never takes one of them to plant
 	std::vector<uint32_t> plantedBy;
 	/// The last deed of the player that it started to copy. It copies this deed again when it chooses to copy the player

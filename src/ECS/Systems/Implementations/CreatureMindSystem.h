@@ -70,6 +70,8 @@ public:
 	void HandTookHold(entt::entity creature) override;
 	void UpdateAttitudeFromFeedback(entt::entity creature, float feedback) override;
 	[[nodiscard]] float GetAverageFeedback() const override { return _averageFeedback; }
+	void ClearAverageFeedback() override { _averageFeedback = 0.0f; }
+	void ReactToMusic(entt::entity creature, float mood) override;
 	void NoteLeashOrder(entt::entity creature) override;
 	void ChangeDesireSource(entt::entity creature, uint32_t type, float amount) override;
 	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
@@ -428,6 +430,10 @@ private:
 	/// A stroke, or the end of the meal of the lesson to eat what it holds: the creature must do again the action that
 	/// feedback goes to now, to the most useful thing of the same kind. This can be the same thing again.
 	void DoLessonAgain(entt::entity creature, components::CreatureMindState& mind);
+	/// After a custom music track that it likes: it dances, alone or with villagers
+	void DanceAfterMusic(entt::entity creature, components::CreatureMindState& mind);
+	/// Whether the creature is the first creature of the local player
+	[[nodiscard]] static bool IsLocalPrimaryCreature(entt::entity creature);
 	/// A player did a deed, maybe with a miracle (0 for none), that creatures can copy (CreatureMindLearning.cpp)
 	void NoticeDeed(size_t deed, const glm::vec3& point, std::optional<entt::entity> object, std::optional<PlayerNames> player,
 	                uint32_t magic);

@@ -1051,3 +1051,11 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_profile_folder test_profile_folder.cpp)
 target_link_libraries(test_profile_folder PRIVATE helpstats)
+openblack_setup_and_add_test(test_music_mood test_music_mood.cpp)
+target_link_libraries(test_music_mood PRIVATE creaturemind)
+openblack_setup_and_add_test(
+  test_custom_music_playlist test_custom_music_playlist.cpp
+)
+openblack_setup_and_add_test(
+  test_creature_music_reaction test_creature_music_reaction.cpp
+)

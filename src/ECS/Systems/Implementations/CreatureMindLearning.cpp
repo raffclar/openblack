@@ -34,6 +34,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Audio/MusicMood.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -57,6 +58,7 @@
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMode.h"
+#include "Creature/CreatureMusicReaction.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreaturePlanActions.h"
@@ -141,6 +143,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -1105,7 +1108,8 @@ const creature_mind_tables::Tables* CreatureMindSystem::GetTables()
 
 void CreatureMindSystem::SetUpMind(entt::entity creature, const Creature& body, CreatureMindState& mind)
 {
-	if (!mind.desires.has_value())
+	const bool made = !mind.desires.has_value();
+	if (made)
 	{
 		mind.desires = creature_desires::Create(SetupFor(body.species), [this](float low, float high) {
 			return high > low ? std::uniform_real_distribution<float>(low, high)(_random) : low;
@@ -1119,6 +1123,21 @@ void CreatureMindSystem::SetUpMind(entt::entity creature, const Creature& body, 
 	{
 		SetUpLearning(creature, mind);
 	}
+	// A new creature of the local player is told about the custom music track that plays now
+	if (made && IsLocalPrimaryCreature(creature) && Locator::musicMoodSystem::has_value())
+	{
+		Locator::musicMoodSystem::value().ReadRecords(std::nullopt, true);
+	}
+}
+
+bool CreatureMindSystem::IsLocalPrimaryCreature(entt::entity creature)
+{
+	if (!Locator::playerSystem::has_value())
+	{
+		return false;
+	}
+	const auto& players = Locator::playerSystem::value();
+	return players.GetPrimaryCreature(players.GetLocalPlayer()) == creature;
 }
 
 void CreatureMindSystem::SetUpLearning(entt::entity creature, CreatureMindState& mind)
@@ -1170,6 +1189,13 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 	if (body == nullptr || !mind.desires.has_value() || !mind.learnt.has_value())
 	{
 		return;
+	}
+	// The records of the custom music tracks in the file are kept only for the local player's creature
+	if (Locator::musicMoodSystem::has_value())
+	{
+		const auto records =
+		    file->database.has_value() ? std::optional(music_mood::FromMindFile(*file->database)) : std::nullopt;
+		Locator::musicMoodSystem::value().ReadRecords(records, IsLocalPrimaryCreature(creature));
 	}
 	// It takes the name the file keeps, unless a computer player owns it
 	if (creature_names::TakesNameFromFile(ecs::creature_naming::OwnerOf(body->owner)))
@@ -2964,6 +2990,13 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 	case FollowUp::WalkOn:
 		WalkOn(creature, mind);
 		return;
+	case FollowUp::ScratchAfterNewMusic:
+		static_cast<void>(
+		    ForcePlan(creature, {.desire = Desire::Curiosity, .action = "Scratch", .object = creature, .ordered = true}));
+		return;
+	case FollowUp::DanceAfterLikedMusic:
+		DanceAfterMusic(creature, mind);
+		return;
 	case FollowUp::ShowSlapFeeling:
 	{
 		const creature_follow_up::Feelings feelings {
@@ -4313,6 +4346,13 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 	}
 	auto file = creature_mind_model::ToFile(*mind->desires, *mind->learnt, mind->developmentPhase, mind->attitudeToPlayer,
 	                                        mind->turnsLookedAt, static_cast<uint32_t>(creature::InfoRow(body->species)));
+	// The mind file keeps the records of the custom music tracks. The current track's record first gets what the local
+	// player's creature feels now.
+	if (Locator::musicMoodSystem::has_value())
+	{
+		const auto records = Locator::musicMoodSystem::value().WriteRecords();
+		file.database = music_mood::ToMindFile(records);
+	}
 	// It is saved as itself: as it was before any spell on it changed it
 	const creature_spells::SavedBody now {.size = body->size, .strength = body->strength, .alignment = body->alignment};
 	const auto* spells = registry.TryGet<const CreatureSpells>(creature);
@@ -4814,6 +4854,47 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	                                       .instrument = instrument,
 	                                       .activityObject = whole,
 	                                       .ordered = true}));
+}
+
+void CreatureMindSystem::DanceAfterMusic(entt::entity creature, CreatureMindState& mind)
+{
+	constexpr std::string_view k_DanceWithVillagers = "DanceWithVillagers";
+	constexpr uint32_t k_VillagerDanceLots = 8;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	// After a track that it likes very much, one time in eight it looks for villagers to impress with a dance: the most
+	// useful thing that it believes in for the dance
+	if (tables != nullptr && creature_music::MayDanceWithVillagers(mind.followUpValue) && Random(k_VillagerDanceLots) == 0)
+	{
+		const auto action = creature_mind_tables::FindAction(*tables, k_DanceWithVillagers);
+		const auto* executor = creature_plan_actions::For(k_DanceWithVillagers);
+		if (action.has_value() && executor != nullptr)
+		{
+			const bool actsOnThing = tables->actions.at(*action).actsOnThing;
+			std::vector<creature_planner::ObjectCandidate> candidates;
+			if (actsOnThing)
+			{
+				candidates = BelievedThingsToActOn(creature, mind, Desire::Impress, [&](entt::entity candidate) {
+					return candidate != creature &&
+					       (executor->target == Target::None || Accepts(registry, executor->target, candidate, creature));
+				});
+			}
+			if (const auto chosen = creature_follow_up::ThingToDoAgainTo(actsOnThing, entt::to_integral(creature), candidates);
+			    chosen.has_value())
+			{
+				const auto object = static_cast<entt::entity>(*chosen);
+				static_cast<void>(
+				    ForcePlan(creature, {.desire = Desire::Impress,
+				                         .action = k_DanceWithVillagers,
+				                         .object = object,
+				                         .activityObject = WholeOfForcedPlan(creature, mind, Desire::Impress, object),
+				                         .ordered = true}));
+				return;
+			}
+		}
+	}
+	static_cast<void>(ForcePlan(
+	    creature, {.desire = Desire::IdleWithPlayer, .action = "PracticeDance", .object = creature, .ordered = true}));
 }
 
 void CreatureMindSystem::LearnFromDeedSeen(entt::entity creature, CreatureMindState& mind, size_t deed, entt::entity thing,
