@@ -109,6 +109,7 @@ public:
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
 	void AteMagicMushroom(entt::entity creature) override;
 	bool SwapMinds(entt::entity from, entt::entity to) override;
+	void TakeUpMindFile(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> file) override;
 	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
 	void SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus) override;

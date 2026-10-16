@@ -65,6 +65,9 @@ public:
 	/// for now; the creature the first belonged to now owns the second and the other way round, and both carry out the
 	/// swap, during which each body takes on the size and alignment the other had. Returns whether it could.
 	virtual bool SwapMinds(entt::entity /*from*/, entt::entity /*to*/) { return false; }
+	/// Loads a mind file over the mind of the creature at once, as for a creature that a script makes from a file. The
+	/// creature keeps its examples and adds the examples of the file. The help gives the message of the new stage.
+	virtual void TakeUpMindFile(entt::entity /*creature*/, std::shared_ptr<const creaturemind::MindFileData> /*file*/) {}
 	/// Forgets everything learnt: the desires start again as the species' do, with no opinions or examples
 	virtual void ClearLearning(entt::entity creature) = 0;
 	/// Creatures that can see the point watch an ordinary skill practised (by its row in the game's table), or a miracle

@@ -78,6 +78,7 @@
 #include "ECS/Archetypes/FishFarmArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
@@ -124,6 +125,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureFromFile.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -893,6 +895,23 @@ void Runner::Stop()
 		Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = *_landNumberBefore;
 	}
 	_landNumberBefore.reset();
+	// The players that the scenario added go
+	if (Locator::entitiesRegistry::has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		for (const auto player : _addedPlayers)
+		{
+			if (registry.Valid(player))
+			{
+				registry.Destroy(player);
+			}
+		}
+		if (!_addedPlayers.empty() && Locator::playerSystem::has_value())
+		{
+			Locator::playerSystem::value().RegisterPlayers();
+		}
+	}
+	_addedPlayers.clear();
 	// The mouse is the player's again
 	_sweep.reset();
 	if (Locator::gameActionSystem::has_value())
@@ -1052,6 +1071,19 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			_landNumberBefore = landNumber;
 		}
 		landNumber = *environment.landNumber;
+	}
+	// The other players that the scenario puts in the game
+	if (Locator::entitiesRegistry::has_value() && Locator::playerSystem::has_value())
+	{
+		for (const auto name : environment.players)
+		{
+			if (!ecs::creature_from_file::PlayerInGame(name))
+			{
+				const auto player = ecs::archetypes::PlayerArchetype::Create(name);
+				Locator::playerSystem::value().AddPlayer(player);
+				_addedPlayers.push_back(player);
+			}
+		}
 	}
 	if (environment.cursor && Locator::windowing::has_value())
 	{
