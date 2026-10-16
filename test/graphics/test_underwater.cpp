@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <numbers>
+#include <optional>
 #include <vector>
 
 #include <LNDFile.h>
@@ -739,4 +740,164 @@ TEST(UnderwaterFarSea, TheRoughnessGrowsWithTheWavesAPixelCannotShow)
 	EXPECT_GT(underwater::FilteredRoughness(0.01f), calm);
 	EXPECT_GT(underwater::FilteredRoughness(0.1f), underwater::FilteredRoughness(0.01f));
 	EXPECT_LE(underwater::FilteredRoughness(10.0f), 1.0f);
+}
+
+// The storm on the sea: the rogue wave and the lightning
+
+namespace
+{
+// The rogue waves over a long time in a storm, with the sea everywhere past x = 0
+std::vector<underwater::RogueWave> RogueWavesOver(float seconds, float storm, bool firstCertain = false)
+{
+	const auto seaDistance = [](glm::vec2 point) { return point.x; };
+	const auto waves = underwater::WavesFor(storm, 0.0f);
+	std::vector<underwater::RogueWave> seen;
+	for (float at = 0.0f; at < seconds; at += 1.0f)
+	{
+		if (const auto rogue = underwater::RogueWaveAt(at, waves, {1500.0f, 0.0f}, seaDistance, firstCertain))
+		{
+			seen.push_back(*rogue);
+		}
+	}
+	return seen;
+}
+} // namespace
+
+TEST(UnderwaterStorm, RogueWavesComeOnlyInAStrongStorm)
+{
+	EXPECT_TRUE(RogueWavesOver(3000.0f, 0.0f).empty());
+	EXPECT_TRUE(RogueWavesOver(3000.0f, 0.5f).empty());
+	const auto storm = RogueWavesOver(3000.0f, 1.0f);
+	EXPECT_FALSE(storm.empty());
+	// Now and then: never more than its life in each period
+	EXPECT_LE(storm.size(), static_cast<size_t>(3000.0f / underwater::k_RoguePeriod * (underwater::k_RogueSeconds + 1.0f)));
+}
+
+TEST(UnderwaterStorm, TheDebugStormHasARogueWaveInItsFirstPeriod)
+{
+	const auto seaDistance = [](glm::vec2) { return 1000.0f; };
+	const auto waves = underwater::WavesFor(1.0f, 0.0f);
+	EXPECT_TRUE(underwater::RogueWaveAt(10.0f, waves, {0.0f, 0.0f}, seaDistance, true).has_value());
+}
+
+TEST(UnderwaterStorm, ARogueWaveIsTwoToThreeTimesTheStormsWaves)
+{
+	const auto waves = underwater::WavesFor(1.0f, 0.0f);
+	const float significant = underwater::SignificantWaveHeight(waves);
+	EXPECT_GT(significant, underwater::SignificantWaveHeight(underwater::WavesFor(0.0f, 0.0f)));
+	for (const auto& rogue : RogueWavesOver(3000.0f, 1.0f))
+	{
+		if (rogue.strength < 0.05f)
+		{
+			continue;
+		}
+		// The height from its crest to the trough in front of it, at full strength
+		const float height = rogue.crest * 1.5f / rogue.strength;
+		EXPECT_GE(height, 2.0f * significant - 1e-3f);
+		EXPECT_LE(height, 3.0f * significant + 1e-3f);
+		EXPECT_LE(rogue.strength, 1.0f);
+	}
+}
+
+TEST(UnderwaterStorm, ARogueWaveStaysOutAtSeaAndDiesBeforeTheCoast)
+{
+	for (const auto& rogue : RogueWavesOver(3000.0f, 1.0f))
+	{
+		const glm::vec2 across {-rogue.direction.y, rogue.direction.x};
+		EXPECT_GE(rogue.position.x, underwater::k_RogueSeaRoom - 1.0f);
+		EXPECT_GE((rogue.position + across * rogue.halfWidth).x, underwater::k_RogueSeaRoom - 1.0f);
+		EXPECT_GE((rogue.position - across * rogue.halfWidth).x, underwater::k_RogueSeaRoom - 1.0f);
+	}
+	// Its height is nothing near the coast and in shallow water, whatever the wave
+	const underwater::RogueWave rogue {.position = {0.0f, 0.0f}, .crest = 8.0f};
+	EXPECT_FLOAT_EQ(underwater::RogueWaveHeight({0.0f, 0.0f}, rogue, underwater::k_RogueShoreNear - 1.0f, 50.0f).height, 0.0f);
+	EXPECT_FLOAT_EQ(underwater::RogueWaveHeight({0.0f, 0.0f}, rogue, 1000.0f, 2.0f).height, 0.0f);
+	// At its crest the troughs take off a little
+	EXPECT_NEAR(underwater::RogueWaveHeight({0.0f, 0.0f}, rogue, 1000.0f, 50.0f).height, 8.0f, 0.1f);
+}
+
+TEST(UnderwaterStorm, ARogueWaveTravelsWithTheSpeedOfItsLength)
+{
+	const auto seaDistance = [](glm::vec2) { return 1000.0f; };
+	const auto waves = underwater::WavesFor(1.0f, 0.0f);
+	const auto before = underwater::RogueWaveAt(3.0f, waves, {0.0f, 0.0f}, seaDistance, true);
+	const auto after = underwater::RogueWaveAt(4.0f, waves, {0.0f, 0.0f}, seaDistance, true);
+	ASSERT_TRUE(before.has_value());
+	ASSERT_TRUE(after.has_value());
+	const float speed = 0.8f * std::sqrt(9.8f * before->length / (2.0f * std::numbers::pi_v<float>));
+	EXPECT_NEAR(glm::dot(after->position - before->position, before->direction), speed, 1e-3f);
+	EXPECT_GT(after->crest, before->crest);
+}
+
+TEST(UnderwaterStorm, TheRogueWavesSlopeIsTheRiseOfItsHeight)
+{
+	const underwater::RogueWave rogue {.position = {10.0f, -5.0f},
+	                                   .direction = glm::normalize(glm::vec2(0.6f, 0.8f)),
+	                                   .crest = 7.0f,
+	                                   .length = 110.0f,
+	                                   .halfWidth = 120.0f,
+	                                   .bend = 0.2f};
+	constexpr float k_Step = 0.01f;
+	for (const glm::vec2 point : {glm::vec2(10.0f, -5.0f), glm::vec2(18.0f, 3.0f), glm::vec2(-30.0f, 40.0f),
+	                              glm::vec2(60.0f, -90.0f), glm::vec2(4.0f, -14.0f)})
+	{
+		const auto sample = underwater::RogueWaveHeight(point, rogue, 1000.0f, 50.0f);
+		const float east = underwater::RogueWaveHeight(point + glm::vec2(k_Step, 0.0f), rogue, 1000.0f, 50.0f).height;
+		const float west = underwater::RogueWaveHeight(point - glm::vec2(k_Step, 0.0f), rogue, 1000.0f, 50.0f).height;
+		const float north = underwater::RogueWaveHeight(point + glm::vec2(0.0f, k_Step), rogue, 1000.0f, 50.0f).height;
+		const float south = underwater::RogueWaveHeight(point - glm::vec2(0.0f, k_Step), rogue, 1000.0f, 50.0f).height;
+		EXPECT_NEAR(sample.slope.x, (east - west) / (2.0f * k_Step), 0.02f);
+		EXPECT_NEAR(sample.slope.y, (north - south) / (2.0f * k_Step), 0.02f);
+	}
+	// The face in front of the crest is steeper than its back
+	const auto face = underwater::RogueWaveHeight(rogue.position + rogue.direction * 6.0f, rogue, 1000.0f, 50.0f);
+	const auto back = underwater::RogueWaveHeight(rogue.position - rogue.direction * 15.0f, rogue, 1000.0f, 50.0f);
+	EXPECT_GT(-glm::dot(face.slope, rogue.direction), glm::dot(back.slope, rogue.direction));
+}
+
+TEST(UnderwaterStorm, FloatingThingsRideTheRogueWave)
+{
+	const auto waves = underwater::WavesFor(1.0f, 0.0f);
+	const underwater::RogueWave rogue {.position = {0.0f, 0.0f}, .crest = 8.0f};
+	const auto plain = underwater::WavesAt({0.0f, 0.0f}, 3.0f, waves);
+	const auto riding = underwater::WavesAt({0.0f, 0.0f}, 3.0f, waves, rogue, 1000.0f, 50.0f);
+	EXPECT_FLOAT_EQ(riding.height - plain.height, underwater::RogueWaveHeight({0.0f, 0.0f}, rogue, 1000.0f, 50.0f).height);
+	EXPECT_NEAR(riding.height - plain.height, 8.0f, 0.1f);
+	const auto none = underwater::WavesAt({0.0f, 0.0f}, 3.0f, waves, std::nullopt, 1000.0f, 50.0f);
+	EXPECT_FLOAT_EQ(none.height, plain.height);
+	// The shaders take the wave as two vectors, all zero for none
+	const auto uniform = underwater::RogueUniform(rogue);
+	EXPECT_FLOAT_EQ(uniform.at(0).w, 8.0f);
+	EXPECT_FLOAT_EQ(underwater::RogueUniform(std::nullopt).at(0).w, 0.0f);
+}
+
+TEST(UnderwaterStorm, ANewFlashStartsAStrikeOnTheSea)
+{
+	underwater::SeaStrike strike;
+	strike = underwater::TrackStrike(strike, std::nullopt, 0.1f, 0.0f);
+	EXPECT_GT(strike.since, underwater::k_StrikeSeconds);
+	const underwater::StrikeFlash flash {.position = {100.0f, 50.0f}, .time = 0.0f, .strength = 1.0f, .active = true};
+	strike = underwater::TrackStrike(strike, flash, 0.1f, 40.0f);
+	EXPECT_FLOAT_EQ(strike.since, 0.0f);
+	EXPECT_TRUE(strike.overSea);
+	EXPECT_FLOAT_EQ(strike.position.x, 100.0f);
+	// The same flash, older, does not start it again
+	auto older = flash;
+	older.time = 0.1f;
+	strike = underwater::TrackStrike(strike, older, 0.1f, 40.0f);
+	EXPECT_NEAR(strike.since, 0.1f, 1e-6f);
+	// After the flash goes out, the strike gets older
+	strike = underwater::TrackStrike(strike, std::nullopt, 1.0f, 0.0f);
+	EXPECT_NEAR(strike.since, 1.1f, 1e-5f);
+	// A flash on the land does not hit the sea
+	strike = underwater::TrackStrike(strike, flash, 0.1f, -20.0f);
+	EXPECT_FALSE(strike.overSea);
+	EXPECT_FLOAT_EQ(strike.since, 0.0f);
+}
+
+TEST(UnderwaterStorm, TheRingOfAStrikeSpreads)
+{
+	EXPECT_GT(underwater::StrikeRingRadius(0.0f), 0.0f);
+	EXPECT_GT(underwater::StrikeRingRadius(1.0f), underwater::StrikeRingRadius(0.5f));
+	EXPECT_GT(underwater::StrikeRingRadius(3.0f), underwater::StrikeRingRadius(1.0f));
 }

@@ -16,7 +16,9 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <functional>
 #include <numbers>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -29,6 +31,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/Lightning.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
@@ -36,6 +39,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -183,20 +187,21 @@ void UnderwaterSystem::UpdateSea(float frameSeconds)
 	_storm = underwater::EaseTowards(_storm, storm, storm > _storm ? 0.12f : 0.05f, frameSeconds);
 	_waves = underwater::WavesFor(_storm, _windAngle);
 	// The waterspouts, out at sea from the coast of the sea bed's map
+	const auto& bed = _seabed;
+	const auto seaDistance = [&bed](glm::vec2 point) {
+		if (bed.size.x == 0 || bed.shore.empty())
+		{
+			return 0.0f;
+		}
+		const glm::ivec2 corner =
+		    glm::clamp(glm::ivec2(glm::round((point - bed.origin) / bed.spacing)), glm::ivec2(0), bed.size - 1);
+		return bed.shore[static_cast<size_t>((corner.y * bed.size.x) + corner.x)].x;
+	};
 	{
-		const auto& bed = _seabed;
-		const auto seaDistance = [&bed](glm::vec2 point) {
-			if (bed.size.x == 0 || bed.shore.empty())
-			{
-				return 0.0f;
-			}
-			const glm::ivec2 corner =
-			    glm::clamp(glm::ivec2(glm::round((point - bed.origin) / bed.spacing)), glm::ivec2(0), bed.size - 1);
-			return bed.shore[static_cast<size_t>((corner.y * bed.size.x) + corner.x)].x;
-		};
 		const glm::vec2 centre = bed.origin + glm::vec2(bed.size - 1) * bed.spacing * 0.5f;
 		_waterspouts = underwater::WaterspoutsAt(_seconds, _storm, centre, seaDistance);
 	}
+	UpdateStorm(frameSeconds, seaDistance);
 	_current = underwater::CurrentFor(_tideRate, _windAngle, _storm);
 
 	// The things that float: the bodies in the physics over the sea, near its surface
@@ -221,6 +226,54 @@ void UnderwaterSystem::UpdateSea(float frameSeconds)
 	}
 }
 
+void UnderwaterSystem::UpdateStorm(float frameSeconds, const std::function<float(glm::vec2)>& seaDistance)
+{
+	namespace underwater = graphics::underwater;
+	// The rogue wave comes near what the camera looks at. The point stays the same while a wave lives.
+	if (!_rogue.has_value() && Locator::camera::has_value())
+	{
+		const auto focus = Locator::camera::value().GetFocus();
+		_rogueCentre = {focus.x, focus.z};
+	}
+	_rogueSeconds += frameSeconds;
+	if (_rogueSeconds > underwater::k_RoguePeriod * 1000.0f)
+	{
+		_rogueSeconds = 0.0f;
+		_rogueCertain = false;
+	}
+	if (_rogueCertain && _rogueSeconds > underwater::k_RoguePeriod)
+	{
+		_rogueCertain = false;
+	}
+	_rogue = _enabled ? underwater::RogueWaveAt(_rogueSeconds, _waves, _rogueCentre, seaDistance, _rogueCertain) : std::nullopt;
+
+	// The lightning: the youngest flash of the storms, and the flash of the sky over the camera that the land takes too
+	std::optional<underwater::StrikeFlash> flash;
+	float bolt = 0.0f;
+	float sky = 0.0f;
+	if (Locator::weatherSystem::has_value() && Locator::entitiesRegistry::has_value())
+	{
+		Locator::entitiesRegistry::value().Each<const ecs::components::Storm>([&](const ecs::components::Storm& storm) {
+			if (storm.dead || !storm.flash.active || (flash.has_value() && flash->time <= storm.flash.time))
+			{
+				return;
+			}
+			flash = underwater::StrikeFlash {.position = {storm.flash.position.x, storm.flash.position.z},
+			                                 .time = storm.flash.time,
+			                                 .strength = storm.flash.strength,
+			                                 .active = true};
+			bolt = lightning::Brightness(storm.flash);
+		});
+		if (Locator::camera::has_value())
+		{
+			sky = static_cast<float>(Locator::weatherSystem::value().GetLightningFlash(Locator::camera::value().GetOrigin())) /
+			      255.0f;
+		}
+	}
+	_strike = underwater::TrackStrike(_strike, flash, frameSeconds, flash.has_value() ? seaDistance(flash->position) : 0.0f);
+	_seaFlash = {sky, bolt};
+}
+
 bool UnderwaterSystem::Floats(const glm::vec3& origin) const
 {
 	// The physics floats a thing at the usual sea height: near it, and over water deeper than a unit
@@ -234,7 +287,12 @@ glm::mat4 UnderwaterSystem::FloatOnWaves(const glm::mat4& model) const
 	{
 		return model;
 	}
-	const auto wave = graphics::underwater::WavesAt({origin.x, origin.z}, _seconds, _waves);
+	// The rogue wave lifts it too, faded near the coast and in shallow water as the shaders fade it
+	const glm::vec2 ground {origin.x, origin.z};
+	const auto shore = _seabed.shore.empty() ? glm::vec4(1000.0f, 0.0f, 0.0f, -160.0f)
+	                                         : graphics::underwater::ShoreAt(_seabed.shore, _seabed.cliff, _seabed.size,
+	                                                                         _seabed.spacing, ground - _seabed.origin);
+	const auto wave = graphics::underwater::WavesAt(ground, _seconds, _waves, _rogue, shore.x, _seaLevel - shore.w);
 	const float lift = _seaLevel - graphics::underwater::k_SeaLevel + wave.height;
 	// It tilts with the surface, a little less than the surface does
 	const glm::vec3 up {0.0f, 1.0f, 0.0f};
@@ -258,6 +316,11 @@ void UnderwaterSystem::StartDebugStorm()
 	storm.effect.windZ = 40;
 	storm.seconds = 40.0f;
 	storm.fadeSeconds = 10.0f;
+	// Lightning now and then, to see it on the sea, and a rogue wave once the sea is rough
+	storm.thunderWait = {4.0f, 9.0f};
+	storm.boltWait = {2.0f, 5.0f};
+	_rogueSeconds = 0.0f;
+	_rogueCertain = true;
 	Locator::weatherSystem::value().ForceStorm(storm);
 }
 

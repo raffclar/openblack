@@ -112,6 +112,26 @@ float SurfaceHeight(vec2 p, float t)
 	return UwSurface(p, t, 0.0f, ShoreAt(p), slope, face);
 }
 
+// The steps that a ray takes to find the surface: more near a rogue wave, which makes the surface high and steep. The
+// steps after the third go only part of the way, so that they do not jump across the steep face. `onLevel` is where the
+// ray meets the sea's level, and `down` is how steeply the ray goes down.
+int RogueSteps(vec2 onLevel, float down)
+{
+	vec4 a = u_uwRogue[0];
+	vec4 b = u_uwRogue[1];
+	if (a.w <= 0.0f)
+	{
+		return 3;
+	}
+	vec2 along = vec2(cos(a.z), sin(a.z));
+	vec2 offset = onLevel - a.xy;
+	float side = dot(offset, vec2(-along.y, along.x)) / b.y;
+	float u = (dot(offset, along) + b.w * b.x * side * side) / b.x;
+	// The wave moves the point where the ray meets the surface by up to its height over the steepness of the ray
+	float reach = a.w / max(down, 0.05f) / b.x;
+	return abs(side) < 2.2f && u > -1.8f - reach && u < 1.1f + reach ? 8 : 3;
+}
+
 // Where a ray from the eye meets the sea's surface: the surface's height is found again three times at the point the
 // ray reaches, from the sea's level. `along` is how far along the ray, `slope` and `face` as UwSurface gives them,
 // and `shore` the shore map there.
@@ -121,12 +141,13 @@ float RayToSurface(vec3 eye, vec3 direction, float t, out vec2 slope, out float 
 	slope = vec2_splat(0.0f);
 	face = 0.0f;
 	shore = vec4(1000.0f, 0.0f, 0.0f, -160.0f);
-	for (int i = 0; i < 3; i++)
+	int steps = RogueSteps(eye.xz + direction.xz * max(along, 0.0f), abs(direction.y));
+	for (int i = 0; i < steps; i++)
 	{
 		vec2 at = eye.xz + direction.xz * max(along, 0.0f);
 		shore = ShoreAt(at);
 		float height = UwSurface(at, t, max(along, 0.0f), shore, slope, face);
-		along = (height - eye.y) / direction.y;
+		along = mix(along, (height - eye.y) / direction.y, i < 3 ? 1.0f : 0.6f);
 	}
 	return along;
 }
@@ -241,12 +262,13 @@ float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, ou
 	face = 0.0f;
 	variance = 0.0f;
 	shore = vec4(1000.0f, 0.0f, 0.0f, -160.0f);
-	for (int i = 0; i < 3; i++)
+	int steps = RogueSteps(eye.xz + direction.xz * max(along, 0.0f), abs(direction.y));
+	for (int i = 0; i < steps; i++)
 	{
 		vec2 at = eye.xz + direction.xz * max(along, 0.0f);
 		shore = ShoreAt(at);
 		float height = UwSurfaceFiltered(at, t, FootprintOnWater(direction, max(along, 0.0f)), shore, slope, face, variance);
-		along = (height - eye.y) / direction.y;
+		along = mix(along, (height - eye.y) / direction.y, i < 3 ? 1.0f : 0.6f);
 	}
 	return along;
 }
@@ -438,6 +460,95 @@ float Foam(vec2 p, float depth, float t)
 	return clamp(max(foam, edge * (0.5f + 0.5f * patches)), 0.0f, 1.0f);
 }
 
+// The storm on the sea: the rogue wave and the lightning.
+
+// The white water of the rogue wave at a point of the surface: on its crest as it breaks, and in streaks down its
+// steep face. `shore` is the shore map at the point.
+float RogueFoam(vec2 p, vec4 shore, float t)
+{
+	if (u_uwRogue[0].w <= 0.0f || u_uwRogue[1].z <= 0.0f)
+	{
+		return 0.0f;
+	}
+	vec2 slope;
+	float crest;
+	UwRogueWave(p, shore.x, u_uwParams.z - shore.w, slope, crest);
+	vec2 along = vec2(cos(u_uwRogue[0].z), sin(u_uwRogue[0].z));
+	vec2 q = vec2(dot(p, along), dot(p, vec2(-along.y, along.x)));
+	// The face is where the surface falls steeply ahead of the crest
+	float steep = smoothstep(0.25f, 0.65f, -dot(slope, along));
+	float churn = UwFoamNoise(q * vec2(0.3f, 0.45f) - vec2(t * 1.1f, 0.0f));
+	float streaks = smoothstep(0.35f, 0.7f, UwNoise(vec2(q.x * 0.12f - t * 0.9f, q.y * 0.55f)));
+	float top = smoothstep(0.45f, 0.85f, crest) * (0.75f + 0.25f * churn);
+	float face = steep * smoothstep(0.02f, 0.3f, crest) * (0.5f + 0.5f * streaks);
+	// The white water that the breaking crest leaves on its back, in patches that break up
+	float back = smoothstep(0.1f, 0.5f, crest) * smoothstep(0.0f, 0.15f, dot(slope, along)) * smoothstep(0.4f, 0.7f, churn);
+	return clamp((top + face + back * 0.6f) * 1.2f * u_uwRogue[1].z, 0.0f, 1.0f);
+}
+
+// The extra light of the lightning on the colour of the water: the flash of the sky lights the water and what is in
+// it. Under the surface the light is less the deeper the eye is.
+vec3 LightningInWater()
+{
+	float depth = max(u_uwParams.w, 0.0f);
+	return UW_FLASH_COLOUR * u_uwStrike[1].x * 0.3f * UwTransmittance(depth * 0.7f) * u_uwStrike[1].w;
+}
+
+// The flash of the sky in the reflections that the screen does not give
+vec3 LightningInSky(vec3 reflected)
+{
+	return UW_FLASH_COLOUR * u_uwStrike[1].x * (0.55f + 0.45f * clamp(reflected.y, 0.0f, 1.0f)) * u_uwStrike[1].w;
+}
+
+// The glint of the bolt on the waves: the bolt is a line of light from the sea up to the cloud. The point of the line
+// nearest to the reflected ray stands for the line, so the glint is a long path on the water towards the strike. Near
+// the strike the bolt also lights the water round it.
+vec3 LightningGlint(vec3 p, vec3 normal, vec3 toEye, float roughness)
+{
+	float bolt = u_uwStrike[0].w * u_uwStrike[1].w;
+	if (bolt <= 0.0f)
+	{
+		return vec3_splat(0.0f);
+	}
+	vec3 base = u_uwStrike[0].xyz;
+	vec3 r = reflect(-toEye, normal);
+	// The point on the bolt nearest to the reflected ray
+	vec3 w = p - base;
+	float b = r.y;
+	float d = dot(r, w);
+	float denominator = max(1.0f - b * b, 1e-4f);
+	float height = clamp((w.y - b * d) / denominator, 0.0f, 220.0f);
+	vec3 toBolt = base + vec3(0.0f, height, 0.0f) - p;
+	float distance = length(toBolt);
+	vec3 toLight = toBolt / max(distance, 1e-3f);
+	float falloff = 1.0f / (1.0f + distance * distance / (450.0f * 450.0f));
+	float glint = min(SeaGlint(normal, toEye, toLight, max(roughness, 0.08f)), 20.0f);
+	float near = exp(-length(w.xz) / 120.0f) * 0.35f;
+	return UW_FLASH_COLOUR * bolt * (glint * 1.4f * falloff + near);
+}
+
+// The ring that a strike on the sea sends out: x, y its slope on the water, z its brightness. It flashes white at the
+// point first, and then the ring spreads and fades (see underwater::StrikeRingRadius).
+vec3 StrikeRing(vec2 p)
+{
+	float strength = u_uwStrike[1].z * u_uwStrike[1].w;
+	float since = u_uwStrike[1].y;
+	if (strength <= 0.0f || since > 4.0f)
+	{
+		return vec3_splat(0.0f);
+	}
+	vec2 away = p - u_uwStrike[0].xz;
+	float d = length(away);
+	float radius = 2.0f + 30.0f * sqrt(max(since, 0.0f));
+	float width = 1.5f + 2.0f * since;
+	float s = (d - radius) / width;
+	float fade = 1.0f - smoothstep(0.0f, 2.6f, since);
+	float ring = exp(-s * s) * fade;
+	float core = (1.0f - smoothstep(0.0f, 0.3f, since)) * exp(-d / 7.0f);
+	vec2 slope = away / max(d, 1e-3f) * (-2.0f * s / width) * ring * 0.6f;
+	return vec3(slope * strength, (ring * 0.8f + core * 3.0f) * strength);
+}
+
 void main()
 {
 	vec2 uv = gl_FragCoord.xy * u_viewTexel.xy;
@@ -464,6 +575,8 @@ void main()
 	float sceneDistance = length(world - eye);
 
 	vec3 scatter = u_uwScatter.rgb;
+	// The flash of the lightning lights the water for a moment
+	scatter += LightningInWater();
 	// Beyond the land's blocks nothing is drawn under the water: there the far floor of sand lies at the sea bed's
 	// deepest, lit by what light comes down to it
 	bool farFloor = sky && direction.y < 0.0f;
@@ -508,7 +621,7 @@ void main()
 			vec3 surface = mirror;
 			if (dot(leaving, leaving) > 0.0f)
 			{
-				vec3 through = SkyIn(leaving);
+				vec3 through = SkyIn(leaving) + LightningInSky(leaving);
 				if (u_uwFlags.z > 0.5f)
 				{
 					// What is above the water, from where the bent ray points
@@ -565,7 +678,8 @@ void main()
 			vec3 surfacePoint = eye + direction * toSurface;
 			vec3 ring = FloaterRings(surfacePoint.xz, t);
 			// The filtered waves keep their slope far away: the roughness takes the waves that the pixel cannot show
-			vec2 shownSlope = surfaceSlope + ring.xy;
+			vec3 strike = StrikeRing(surfacePoint.xz);
+			vec2 shownSlope = surfaceSlope + ring.xy + strike.xy;
 			vec3 normal = u_uwSea.x > 0.5f ? normalize(vec3(-shownSlope.x, 1.0f, -shownSlope.y))
 			                               : UwSurfaceNormalOf(shownSlope, toSurface);
 			// How deep the water is over what the pixel shows, and over the ground under the surface
@@ -601,11 +715,15 @@ void main()
 			vec3 reflected = reflect(direction, normal);
 			reflected.y = abs(reflected.y);
 			vec3 mirror = u_uwSea.w > 0.5f ? EnvironmentReflection(surfacePoint, reflected, roughness) : SkyIn(reflected);
+			float screenShare = 0.0f;
 			if (u_uwFlags.x > 0.5f)
 			{
 				vec4 found = ScreenReflection(surfacePoint, reflected, jitter);
 				mirror = mix(mirror, found.rgb, found.a);
+				screenShare = found.a;
 			}
+			// The scene in the screen already has the flash of the lightning: the sky and the far scene get it here
+			mirror += LightningInSky(reflected) * (1.0f - screenShare);
 			float facing = clamp(dot(-direction, normal), 0.0f, 1.0f);
 			float fresnel = 0.02f + 0.98f * pow(max(1.0f - facing, 0.0f), 5.0f);
 			colour = mix(water, mirror, fresnel);
@@ -613,6 +731,9 @@ void main()
 			float glint = u_uwSea.x > 0.5f ? min(SeaGlint(normal, -direction, u_uwAbove.xyz, roughness), 12.0f)
 			                               : pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f) * 3.0f;
 			colour += u_uwLightColour.rgb * glint * u_uwLightColour.w;
+			// The glint of the bolt, and the ring where a strike hit the sea
+			colour += LightningGlint(surfacePoint, normal, -direction, roughness);
+			colour += UW_FLASH_COLOUR * strike.z;
 
 			// The foam where the water is shallow and at the edge of the run up the beach, on the crests that break
 			// near the coast, round the things that float, and in a storm on the crests and in streaks along the wind
@@ -647,6 +768,8 @@ void main()
 					foam = max(foam, clamp((band + sheets * 0.85f) * cliff * 1.4f, 0.0f, 1.0f) * strength + length(flow) * 0.0f);
 				}
 				foam = max(foam, ring.z * 0.6f);
+				foam = max(foam, RogueFoam(surfacePoint.xz, shore, t));
+				foam = max(foam, min(strike.z, 1.0f) * 0.5f);
 				if (u_uwFlags2.x > 0.5f && u_uwWaves.y > 0.05f)
 				{
 					vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
@@ -667,6 +790,8 @@ void main()
 				}
 				vec3 foamColour = u_uwLightColour.rgb * (0.4f + 0.6f * max(u_uwAbove.y, 0.0f)) + u_uwSky.rgb * 0.7f +
 				                  scatter * 0.5f;
+				// The flash of the lightning lights the foam
+				foamColour += UW_FLASH_COLOUR * (u_uwStrike[1].x * 0.8f + u_uwStrike[0].w * 0.3f) * u_uwStrike[1].w;
 				colour = mix(colour, min(foamColour, vec3_splat(1.0f)), foam * 0.85f);
 			}
 			// Where the original game shows its land over its sea, the land shows here too, as much as there

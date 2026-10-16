@@ -77,6 +77,10 @@ public:
 	/// k_SpoutPuffs particles each; false when there are none.
 	bool BindWaterspouts(std::span<const glm::vec4> spouts);
 	static constexpr uint32_t k_SpoutPuffs = 900;
+	/// The spray of the storm on the sea: one instance for each (i_data0.x 0 for the spray off the rogue wave's crest,
+	/// 1 for the steam and the spray where lightning hit the sea), with k_StormPuffs particles each; false when none
+	bool BindStormPuffs(std::span<const glm::vec4> kinds);
+	static constexpr uint32_t k_StormPuffs = 900;
 	/// The spray's noise volume (see underwater::SprayNoiseVolume), made the first time it is asked for
 	[[nodiscard]] TextureHandle SprayNoise();
 
@@ -127,6 +131,8 @@ private:
 	bgfx::VertexBufferHandle _bubbleMesh = BGFX_INVALID_HANDLE;
 	bgfx::IndexBufferHandle _bubbleIndices = BGFX_INVALID_HANDLE;
 	bgfx::VertexBufferHandle _spoutMesh = BGFX_INVALID_HANDLE;
+	bgfx::VertexBufferHandle _stormMesh = BGFX_INVALID_HANDLE;
+	bgfx::IndexBufferHandle _stormIndices = BGFX_INVALID_HANDLE;
 	bgfx::IndexBufferHandle _spoutIndices = BGFX_INVALID_HANDLE;
 	bgfx::IndexBufferHandle _moteIndices = BGFX_INVALID_HANDLE;
 	bgfx::TextureHandle _environmentColour = BGFX_INVALID_HANDLE;
@@ -171,6 +177,11 @@ struct UnderwaterUniforms
 	glm::vec4 environment {0.0f};
 	/// The long waves of the open sea (see underwater::FarWaveTable)
 	std::array<glm::vec4, underwater::k_FarWaveCount> farWaves {};
+	/// The rogue wave (see underwater::RogueUniform), zero when there is none or it is turned off
+	std::array<glm::vec4, 2> rogue {};
+	/// The lightning on the sea: [0] xyz where it struck, w the light of its bolt; [1] x the flash of the sky, y the time
+	/// since it struck, z its strength where it hit the sea, w 1 while it shows
+	std::array<glm::vec4, 2> strike {};
 	/// Whether the motes show
 	bool motes {true};
 	/// Whether the eye is under the surface, or near enough to it that the surface can cut the view

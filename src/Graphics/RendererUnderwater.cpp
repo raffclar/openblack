@@ -169,6 +169,18 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	const auto& current = system.GetCurrent();
 	const bool still = off == Effect::Current;
 	frame.current = still ? glm::vec4(0.0f) : glm::vec4(current.flow, current.swirl, current.gust);
+	// The storm on the sea: the rogue wave and the lightning, each with its own switch
+	if (off != Effect::RogueWaves && off != Effect::Waves)
+	{
+		frame.rogue = underwater::RogueUniform(system.GetRogueWave());
+	}
+	if (off != Effect::LightningOnWater)
+	{
+		const auto& strike = system.GetSeaStrike();
+		const auto flash = system.GetSeaFlash();
+		frame.strike = {glm::vec4(strike.position.x, seaLevel, strike.position.y, flash.y),
+		                glm::vec4(flash.x, strike.since, strike.overSea ? strike.strength : 0.0f, 1.0f)};
+	}
 	const auto floaters = system.GetFloaters();
 	for (size_t i = 0; i < frame.floaters.size(); ++i)
 	{
@@ -238,6 +250,8 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	post->SetUniformValue("u_uwSea", &frame.sea);
 	post->SetUniformValue("u_uwEnvironment", &frame.environment);
 	post->SetUniformArray("u_uwFarWaves", frame.farWaves.data(), static_cast<uint16_t>(frame.farWaves.size()));
+	post->SetUniformArray("u_uwRogue", frame.rogue.data(), static_cast<uint16_t>(frame.rogue.size()));
+	post->SetUniformArray("u_uwStrike", frame.strike.data(), static_cast<uint16_t>(frame.strike.size()));
 	if (frame.sea.w > 0.5f)
 	{
 		post->SetTextureSampler("s_environment", 5, _underwater->EnvironmentColour());
@@ -321,6 +335,31 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 			spout->SetTextureSampler("s_sprayNoise", 3, _underwater->SprayNoise());
 			bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 			spout->Submit(postView);
+		}
+	}
+	// The spray blown off the crest of a rogue wave, and the steam and the spray where lightning hit the sea
+	if (const auto* storm = _shaderManager->GetShader("UnderwaterStorm"); storm != nullptr)
+	{
+		std::vector<glm::vec4> kinds;
+		if (frame.rogue[0].w > 0.0f && frame.rogue[1].z > 0.0f)
+		{
+			kinds.emplace_back(0.0f, 0.0f, 0.0f, 0.0f);
+		}
+		if (frame.strike[1].z > 0.0f && frame.strike[1].y < underwater::k_StrikeSeconds)
+		{
+			kinds.emplace_back(1.0f, 0.0f, 0.0f, 0.0f);
+		}
+		if (_underwater->BindStormPuffs(kinds))
+		{
+			setUniforms(*storm);
+			storm->SetUniformValue("u_uwSky", &frame.sky);
+			storm->SetUniformArray("u_uwRogue", frame.rogue.data(), static_cast<uint16_t>(frame.rogue.size()));
+			storm->SetUniformArray("u_uwStrike", frame.strike.data(), static_cast<uint16_t>(frame.strike.size()));
+			storm->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
+			storm->SetTextureSampler("s_shore", 2, shoreMap);
+			storm->SetTextureSampler("s_sprayNoise", 3, _underwater->SprayNoise());
+			bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+			storm->Submit(postView);
 		}
 	}
 	// The air under the water at the foot of the cliffs

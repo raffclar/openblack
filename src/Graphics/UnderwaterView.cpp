@@ -105,14 +105,14 @@ UnderwaterView::~UnderwaterView()
 	{
 		bgfx::destroy(_sprayNoise);
 	}
-	for (auto* buffer : {&_sprayMesh, &_sprayInstances, &_bubbleMesh, &_spoutMesh})
+	for (auto* buffer : {&_sprayMesh, &_sprayInstances, &_bubbleMesh, &_spoutMesh, &_stormMesh})
 	{
 		if (bgfx::isValid(*buffer))
 		{
 			bgfx::destroy(*buffer);
 		}
 	}
-	for (auto* indices : {&_sprayIndices, &_bubbleIndices, &_spoutIndices})
+	for (auto* indices : {&_sprayIndices, &_bubbleIndices, &_spoutIndices, &_stormIndices})
 	{
 		if (bgfx::isValid(*indices))
 		{
@@ -632,6 +632,45 @@ bool UnderwaterView::BindWaterspouts(std::span<const glm::vec4> spouts)
 	std::copy_n(reinterpret_cast<const uint8_t*>(spouts.data()), count * sizeof(glm::vec4), instances.data);
 	bgfx::setVertexBuffer(0, _spoutMesh);
 	bgfx::setIndexBuffer(_spoutIndices);
+	bgfx::setInstanceDataBuffer(&instances);
+	return true;
+}
+
+bool UnderwaterView::BindStormPuffs(std::span<const glm::vec4> kinds)
+{
+	const auto count = static_cast<uint32_t>(kinds.size());
+	if (count == 0 || bgfx::getAvailInstanceDataBuffer(count, sizeof(glm::vec4)) < count)
+	{
+		return false;
+	}
+	if (!bgfx::isValid(_stormMesh))
+	{
+		// A square for each particle: the corner in xy and the number of the particle in z
+		std::vector<glm::vec3> vertices;
+		std::vector<uint16_t> indices;
+		constexpr std::array<glm::vec2, 4> k_Corners {{{-1.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, 1.0f}}};
+		for (uint32_t puff = 0; puff < k_StormPuffs; ++puff)
+		{
+			const auto first = static_cast<uint16_t>(vertices.size());
+			for (const auto& corner : k_Corners)
+			{
+				vertices.emplace_back(corner, static_cast<float>(puff));
+			}
+			indices.insert(indices.end(), {first, static_cast<uint16_t>(first + 1), static_cast<uint16_t>(first + 2), first,
+			                               static_cast<uint16_t>(first + 2), static_cast<uint16_t>(first + 3)});
+		}
+		bgfx::VertexLayout layout;
+		layout.begin().add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float).end();
+		_stormMesh = bgfx::createVertexBuffer(
+		    bgfx::copy(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(glm::vec3))), layout);
+		_stormIndices =
+		    bgfx::createIndexBuffer(bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t))));
+	}
+	bgfx::InstanceDataBuffer instances;
+	bgfx::allocInstanceDataBuffer(&instances, count, sizeof(glm::vec4));
+	std::copy_n(reinterpret_cast<const uint8_t*>(kinds.data()), count * sizeof(glm::vec4), instances.data);
+	bgfx::setVertexBuffer(0, _stormMesh);
+	bgfx::setIndexBuffer(_stormIndices);
 	bgfx::setInstanceDataBuffer(&instances);
 	return true;
 }

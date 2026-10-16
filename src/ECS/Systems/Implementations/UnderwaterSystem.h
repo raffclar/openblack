@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -47,6 +48,9 @@ public:
 	[[nodiscard]] uint32_t GetSeabedRevision() const override { return _revision; }
 	[[nodiscard]] std::span<const seabed::ReefPlant> GetReef() const override { return _reef; }
 	[[nodiscard]] std::span<const graphics::underwater::Waterspout> GetWaterspouts() const override { return _waterspouts; }
+	[[nodiscard]] const std::optional<graphics::underwater::RogueWave>& GetRogueWave() const override { return _rogue; }
+	[[nodiscard]] const graphics::underwater::SeaStrike& GetSeaStrike() const override { return _strike; }
+	[[nodiscard]] glm::vec2 GetSeaFlash() const override { return _seaFlash; }
 	[[nodiscard]] const graphics::underwater::CurrentState& GetCurrent() const override { return _current; }
 	[[nodiscard]] float FloorAt(glm::vec2 point, float landHeight) const override;
 
@@ -55,6 +59,8 @@ private:
 	static void LoadSand();
 	/// The tide, the storm and the waves, and the things that float
 	void UpdateSea(float frameSeconds);
+	/// The rogue wave and the lightning on the sea. `seaDistance` gives the distance from the coast at a point.
+	void UpdateStorm(float frameSeconds, const std::function<float(glm::vec2)>& seaDistance);
 	/// Whether a thing whose physics body is drawn here floats on the sea
 	[[nodiscard]] bool Floats(const glm::vec3& origin) const;
 
@@ -71,6 +77,14 @@ private:
 	std::vector<glm::vec3> _floaters;
 	std::vector<seabed::ReefPlant> _reef;
 	std::vector<graphics::underwater::Waterspout> _waterspouts;
+	/// The rogue wave now, its own clock, and the point it comes near; the point follows the camera while no wave lives
+	std::optional<graphics::underwater::RogueWave> _rogue;
+	float _rogueSeconds {0.0f};
+	glm::vec2 _rogueCentre {0.0f};
+	/// The debug storm makes the first chance of a rogue wave certain
+	bool _rogueCertain {false};
+	graphics::underwater::SeaStrike _strike;
+	glm::vec2 _seaFlash {0.0f};
 	graphics::underwater::CurrentState _current;
 	float _tideRate {0.0f};
 	/// How far the debug tour has gone, in seconds; none while it does not run

@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <chrono>
+#include <optional>
 #include <span>
 
 #include <glm/mat4x4.hpp>
@@ -69,6 +70,13 @@ public:
 	[[nodiscard]] virtual std::span<const seabed::ReefPlant> GetReef() const = 0;
 	/// The waterspouts over the open sea this frame (none unless a strong storm blows)
 	[[nodiscard]] virtual std::span<const graphics::underwater::Waterspout> GetWaterspouts() const = 0;
+	/// The rogue wave on the open sea this frame, or none (only in a strong storm)
+	[[nodiscard]] virtual const std::optional<graphics::underwater::RogueWave>& GetRogueWave() const = 0;
+	/// The last strike of the storm's lightning, as the sea sees it
+	[[nodiscard]] virtual const graphics::underwater::SeaStrike& GetSeaStrike() const = 0;
+	/// How brightly the lightning lights the sea now, 0 to 1: x the flash of the sky over the camera, y the light of the
+	/// bolt where it struck
+	[[nodiscard]] virtual glm::vec2 GetSeaFlash() const = 0;
 	/// The sea's currents now (see underwater::CurrentAt)
 	[[nodiscard]] virtual const graphics::underwater::CurrentState& GetCurrent() const = 0;
 	/// A number that changes each time the sea bed is made again

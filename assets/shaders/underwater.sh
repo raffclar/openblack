@@ -322,6 +322,66 @@ float UwCliffBackwash(float distance, float t, float cliff)
 	return cliff * u_uwWaves.w * 0.6f * sin(k * distance - 1.3f * t) * exp(-max(distance, 0.0f) / 25.0f);
 }
 
+// The rogue wave of a strong storm (see underwater::RogueWave). [0] xy: the middle of its crest line, z: its direction
+// in radians, w: its crest over the mean level (0 for no wave); [1] x: its length, y: half the length of its crest
+// line, z: how much its crest breaks, w: how far the ends of the crest line stay behind
+uniform vec4 u_uwRogue[2];
+
+// The lightning on the sea (see underwater::SeaStrike). [0] xyz: where it struck, on the sea's level, w: how bright its
+// bolt is now, 0 to 1; [1] x: how bright the flash of the sky over the camera is, 0 to 1, y: the time since it struck,
+// in seconds, z: how strong the strike was where it hit the sea (0 where it did not), w: 1 while it shows
+uniform vec4 u_uwStrike[2];
+// The colour of the light of the lightning
+#define UW_FLASH_COLOUR vec3(0.82f, 0.88f, 1.0f)
+
+// One bump of the rogue wave's profile: x its value, y its rise along the profile
+vec2 UwRogueBump(float u, float middle, float width, float amount)
+{
+	float s = (u - middle) / width;
+	float value = amount * exp(-s * s);
+	return vec2(value, value * (-2.0f * s / width));
+}
+
+// The rogue wave's part of the sea's height at a point, and its slope; `crestShare` is how much of its crest is at the
+// point (0 to 1), for its foam. The same as underwater::RogueWaveHeight: change them together.
+float UwRogueWave(vec2 xz, float shoreDistance, float depth, out vec2 slope, out float crestShare)
+{
+	slope = vec2_splat(0.0f);
+	crestShare = 0.0f;
+	vec4 a = u_uwRogue[0];
+	vec4 b = u_uwRogue[1];
+	if (a.w <= 0.0f)
+	{
+		return 0.0f;
+	}
+	vec2 direction = vec2(cos(a.z), sin(a.z));
+	vec2 across = vec2(-direction.y, direction.x);
+	vec2 offset = xz - a.xy;
+	float side = dot(offset, across) / b.y;
+	if (abs(side) > 2.0f)
+	{
+		return 0.0f;
+	}
+	// The crest line bends back towards its ends
+	float u = (dot(offset, direction) + b.w * b.x * side * side) / b.x;
+	if (u < -1.6f || u > 0.9f)
+	{
+		return 0.0f;
+	}
+	// The crest, with a steep face in front and a long back, the deep trough in front of it, the trough behind it and
+	// a smaller wave behind that
+	vec2 crest = UwRogueBump(u, 0.0f, u >= 0.0f ? 0.08f : 0.2f, 1.0f);
+	vec2 profile = crest + UwRogueBump(u, 0.3f, 0.14f, -0.5f) + UwRogueBump(u, -0.55f, 0.2f, -0.35f) +
+	               UwRogueBump(u, -1.0f, 0.14f, 0.3f);
+	float ends = exp(-(side * side * side * side));
+	float endsRise = ends * (-4.0f * side * side * side / b.y);
+	float fade = smoothstep(60.0f, 200.0f, shoreDistance) * smoothstep(3.0f, 15.0f, depth);
+	vec2 uRise = (direction + across * (b.w * 2.0f * side / b.y * b.x)) / b.x;
+	slope = a.w * fade * (uRise * (profile.y * ends) + across * (profile.x * endsRise));
+	crestShare = crest.x * ends * fade;
+	return a.w * fade * profile.x * ends;
+}
+
 // The height of the sea's surface at a point: the sea's level, the deep waves, faded out near the coast and where the
 // water is shallow, and the shore wave that rolls in to the coast. One height for each point, so the water is one
 // surface from the open sea to the edge of the run up the beach. `shore` is the shore map at the point, `footprint`
@@ -343,7 +403,12 @@ float UwSurfaceFiltered(vec2 xz, float t, vec4 footprint, vec4 shore, out vec2 s
 	float length2 = dot(shore.yz, shore.yz);
 	vec2 towards = length2 > 1e-6f ? shore.yz / sqrt(length2) : vec2_splat(0.0f);
 	slope = deepSlope * deep + towards * ((nearer - wave) / 0.5f);
-	return level + height + wave;
+	// The rogue wave of a strong storm, which dies before the coast
+	vec2 rogueSlope;
+	float rogueCrest;
+	float rogue = UwRogueWave(xz, shore.x, depth, rogueSlope, rogueCrest);
+	slope += rogueSlope;
+	return level + height + wave + rogue;
 }
 
 // The height of the sea's surface at a point, as UwSurfaceFiltered gives it for a round pixel at `range` from the eye

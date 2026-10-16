@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <numbers>
+#include <numeric>
 #include <span>
 #include <utility>
 #include <vector>
@@ -636,4 +637,194 @@ std::vector<underwater::Waterspout> underwater::WaterspoutsAt(float seconds, flo
 		}
 	}
 	return spouts;
+}
+
+float underwater::SignificantWaveHeight(const WaveState& waves)
+{
+	const auto table = WaveTable(waves);
+	const float squares = std::accumulate(table.begin(), table.end(), 0.0f,
+	                                      [](float sum, const glm::vec4& wave) { return sum + wave.z * wave.z; });
+	return 4.0f * std::sqrt(squares * 0.5f);
+}
+
+namespace
+{
+// The trough in front of a rogue wave is this share of its crest, so the height from crest to trough is 1.5 crests
+constexpr float k_RogueTroughShare = 0.5f;
+
+// One bump of the rogue wave's profile at a place along it: its value and its rise along the profile
+struct Bump
+{
+	float value;
+	float rise;
+};
+Bump RogueBump(float u, float middle, float width, float amount)
+{
+	const float s = (u - middle) / width;
+	const float value = amount * std::exp(-s * s);
+	return {.value = value, .rise = value * (-2.0f * s / width)};
+}
+} // namespace
+
+std::optional<underwater::RogueWave> underwater::RogueWaveAt(float seconds, const WaveState& waves, glm::vec2 centre,
+                                                             const std::function<float(glm::vec2)>& seaDistance,
+                                                             bool firstCertain)
+{
+	const float stormShare = glm::smoothstep(0.55f, 0.85f, waves.storm);
+	if (stormShare <= 0.0f || seconds < 0.0f)
+	{
+		return std::nullopt;
+	}
+	const float period = std::floor(seconds / k_RoguePeriod);
+	const auto seed = static_cast<int>(period);
+	const bool first = firstCertain && seed == 0;
+	// The chance of a wave in a period grows with the storm, to about two periods in three in the worst storm
+	if (!first && LatticeHash(seed, 11, 2) > 0.7f * stormShare)
+	{
+		return std::nullopt;
+	}
+	const float start = first ? 0.0f : LatticeHash(seed, 13, 4) * (k_RoguePeriod - k_RogueSeconds);
+	const float age = seconds - period * k_RoguePeriod - start;
+	if (age < 0.0f || age > k_RogueSeconds)
+	{
+		return std::nullopt;
+	}
+	const float length = 90.0f + 40.0f * LatticeHash(seed, 17, 6);
+	// It travels at the speed of a deep water wave of its length, as the waves of the wave table do
+	const float speed = 0.8f * std::sqrt(9.8f * length / (2.0f * std::numbers::pi_v<float>));
+	const float halfWidth = 90.0f + 70.0f * LatticeHash(seed, 19, 8);
+	const float travel = speed * k_RogueSeconds;
+	// Places to try, the first ones nearest to the centre: the first one whose path stays out at sea is the wave's
+	for (int attempt = 0; attempt < 16; ++attempt)
+	{
+		const float angle = LatticeHash(seed, attempt, 21) * 2.0f * std::numbers::pi_v<float>;
+		const float radius = 120.0f + 330.0f * LatticeHash(seed, attempt, 23) + 100.0f * static_cast<float>(attempt);
+		const glm::vec2 place = centre + glm::vec2(std::cos(angle), std::sin(angle)) * radius;
+		const float heading = waves.windAngle + (LatticeHash(seed, attempt, 25) - 0.5f) * 0.8f;
+		const glm::vec2 direction {std::cos(heading), std::sin(heading)};
+		const glm::vec2 across {-direction.y, direction.x};
+		const glm::vec2 begin = place - direction * (travel * 0.5f);
+		const glm::vec2 end = place + direction * (travel * 0.5f);
+		// The whole path, at the middle and the ends of the crest line, must stay out at sea
+		const std::array<glm::vec2, 9> path {begin,
+		                                     place,
+		                                     end,
+		                                     begin + across * halfWidth,
+		                                     begin - across * halfWidth,
+		                                     place + across * halfWidth,
+		                                     place - across * halfWidth,
+		                                     end + across * halfWidth,
+		                                     end - across * halfWidth};
+		if (!std::ranges::all_of(path, [&](glm::vec2 point) { return seaDistance(point) >= k_RogueSeaRoom; }))
+		{
+			continue;
+		}
+		const glm::vec2 position = begin + direction * (speed * age);
+		// It grows as its group of waves comes together, holds, and dies away as the group spreads out again
+		const float life =
+		    glm::smoothstep(0.0f, 7.0f, age) * (1.0f - glm::smoothstep(k_RogueSeconds - 9.0f, k_RogueSeconds, age));
+		const float room = glm::smoothstep(k_RogueShoreNear, k_RogueShoreFar, seaDistance(position));
+		const float strength = life * stormShare * room;
+		const float height = SignificantWaveHeight(waves) * (2.0f + LatticeHash(seed, 27, 10));
+		return RogueWave {.position = position,
+		                  .direction = direction,
+		                  .crest = height / (1.0f + k_RogueTroughShare) * strength,
+		                  .length = length,
+		                  .halfWidth = halfWidth,
+		                  .bend = 0.1f + 0.15f * LatticeHash(seed, 29, 12),
+		                  .breaking = glm::smoothstep(0.55f, 0.9f, life) * stormShare * room,
+		                  .strength = strength,
+		                  .age = age,
+		                  .seed = static_cast<float>(seed % 97)};
+	}
+	return std::nullopt;
+}
+
+underwater::WaveSample underwater::RogueWaveHeight(glm::vec2 point, const RogueWave& rogue, float shoreDistance, float depth)
+{
+	WaveSample sample {.height = 0.0f, .slope = {0.0f, 0.0f}};
+	if (rogue.crest <= 0.0f)
+	{
+		return sample;
+	}
+	const glm::vec2 across {-rogue.direction.y, rogue.direction.x};
+	const glm::vec2 offset = point - rogue.position;
+	const float side = glm::dot(offset, across) / rogue.halfWidth;
+	if (std::abs(side) > 2.0f)
+	{
+		return sample;
+	}
+	// The crest line bends back towards its ends
+	const float u = (glm::dot(offset, rogue.direction) + rogue.bend * rogue.length * side * side) / rogue.length;
+	if (u < -1.6f || u > 0.9f)
+	{
+		return sample;
+	}
+	// The crest, with a steep face in front and a long back, the deep trough in front of it, the trough behind it and
+	// a smaller wave behind that
+	const auto crest = RogueBump(u, 0.0f, u >= 0.0f ? 0.08f : 0.2f, 1.0f);
+	const auto front = RogueBump(u, 0.3f, 0.14f, -k_RogueTroughShare);
+	const auto back = RogueBump(u, -0.55f, 0.2f, -0.35f);
+	const auto next = RogueBump(u, -1.0f, 0.14f, 0.3f);
+	const float profile = crest.value + front.value + back.value + next.value;
+	const float profileRise = crest.rise + front.rise + back.rise + next.rise;
+	// The crest line fades out towards its ends
+	const float ends = std::exp(-(side * side * side * side));
+	const float endsRise = ends * (-4.0f * side * side * side / rogue.halfWidth);
+	const float fade = glm::smoothstep(k_RogueShoreNear, k_RogueShoreFar, shoreDistance) * glm::smoothstep(3.0f, 15.0f, depth);
+	const glm::vec2 uRise =
+	    (rogue.direction + across * (rogue.bend * 2.0f * side / rogue.halfWidth * rogue.length)) / rogue.length;
+	sample.height = rogue.crest * fade * profile * ends;
+	sample.slope = rogue.crest * fade * (uRise * (profileRise * ends) + across * (profile * endsRise));
+	return sample;
+}
+
+std::array<glm::vec4, 2> underwater::RogueUniform(const std::optional<RogueWave>& rogue)
+{
+	if (!rogue.has_value())
+	{
+		return {};
+	}
+	return {glm::vec4(rogue->position, std::atan2(rogue->direction.y, rogue->direction.x), rogue->crest),
+	        glm::vec4(rogue->length, rogue->halfWidth, rogue->breaking, rogue->bend)};
+}
+
+underwater::WaveSample underwater::WavesAt(glm::vec2 point, float seconds, const WaveState& waves,
+                                           const std::optional<RogueWave>& rogue, float shoreDistance, float depth)
+{
+	auto sample = WavesAt(point, seconds, waves);
+	if (rogue.has_value())
+	{
+		const auto big = RogueWaveHeight(point, *rogue, shoreDistance, depth);
+		sample.height += big.height;
+		sample.slope += big.slope;
+	}
+	return sample;
+}
+
+underwater::SeaStrike underwater::TrackStrike(const SeaStrike& before, const std::optional<StrikeFlash>& flash, float seconds,
+                                              float seaDistance)
+{
+	SeaStrike after = before;
+	after.since = std::min(before.since + seconds, 1000.0f);
+	if (!flash.has_value() || !flash->active)
+	{
+		after.flashTime = 1000.0f;
+		return after;
+	}
+	const bool fresh = flash->time < before.flashTime || glm::distance(flash->position, before.position) > 1.0f;
+	after.flashTime = flash->time;
+	if (fresh)
+	{
+		after.position = flash->position;
+		after.since = flash->time;
+		after.strength = flash->strength;
+		after.overSea = seaDistance >= k_StrikeSeaRoom;
+	}
+	return after;
+}
+
+float underwater::StrikeRingRadius(float since)
+{
+	return 2.0f + 30.0f * std::sqrt(std::max(since, 0.0f));
 }

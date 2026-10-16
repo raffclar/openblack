@@ -699,37 +699,66 @@ std::unique_ptr<ProviderInterface> LandProvider()
 	provider->Add(
 	    Query("underwater", "EXPERIMENT (not for merge): the view under the sea: whether it is on, how deep the camera is, "
 	                        "the effect turned off to measure it, and the sea bed's grid"),
-	    Serve<Locator::underwaterSystem>(
-	        "the view under the sea", [](const ecs::systems::UnderwaterSystemInterface& underwater, const QueryContext& /*c*/) {
-		        const auto& bed = underwater.GetSeabed();
-		        return Json {{"enabled", underwater.IsEnabled()},
-		                     {"eye_depth", underwater.GetEyeDepth()},
-		                     {"eye_under", underwater.IsEyeUnder()},
-		                     {"effect_off", static_cast<int>(underwater.GetEffectOff())},
-		                     {"seabed_size", {bed.size.x, bed.size.y}},
-		                     {"seabed_revision", underwater.GetSeabedRevision()},
-		                     {"sea_level", underwater.GetSeaLevel()},
-		                     {"storm", underwater.GetWaves().storm},
-		                     {"reef", underwater.GetReef().size()},
-		                     {"cliff_feet", bed.cliffFoot.size()},
-		                     {"waterspouts",
-		                      [&underwater] {
-			                      Json spouts = Json::array();
-			                      for (const auto& spout : underwater.GetWaterspouts())
-			                      {
-				                      spouts.push_back({spout.position.x, spout.position.y, spout.strength});
-			                      }
-			                      return spouts;
-		                      }()},
-		                     {"some_cliff_feet", [&bed] {
-			                      Json feet = Json::array();
-			                      for (size_t i = 0; i < bed.cliffFoot.size() && i < 400; i += 40)
-			                      {
-				                      feet.push_back({bed.cliffFoot[i].x, bed.cliffFoot[i].y});
-			                      }
-			                      return feet;
-		                      }()}};
-	        }));
+	    Serve<Locator::underwaterSystem>("the view under the sea", [](const ecs::systems::UnderwaterSystemInterface& underwater,
+	                                                                  const QueryContext& /*c*/) {
+		    const auto& bed = underwater.GetSeabed();
+		    return Json {{"enabled", underwater.IsEnabled()},
+		                 {"eye_depth", underwater.GetEyeDepth()},
+		                 {"eye_under", underwater.IsEyeUnder()},
+		                 {"effect_off", static_cast<int>(underwater.GetEffectOff())},
+		                 {"seabed_size", {bed.size.x, bed.size.y}},
+		                 {"seabed_revision", underwater.GetSeabedRevision()},
+		                 {"sea_level", underwater.GetSeaLevel()},
+		                 {"storm", underwater.GetWaves().storm},
+		                 {"seconds", underwater.GetSeconds()},
+		                 {"waves", {underwater.GetWaves().scale, underwater.GetWaves().windAngle, underwater.GetWaves().swash}},
+		                 {"reef", underwater.GetReef().size()},
+		                 {"cliff_feet", bed.cliffFoot.size()},
+		                 {"waterspouts",
+		                  [&underwater] {
+			                  Json spouts = Json::array();
+			                  for (const auto& spout : underwater.GetWaterspouts())
+			                  {
+				                  spouts.push_back({spout.position.x, spout.position.y, spout.strength});
+			                  }
+			                  return spouts;
+		                  }()},
+		                 {"rogue_wave",
+		                  [&underwater] {
+			                  const auto& rogue = underwater.GetRogueWave();
+			                  if (!rogue.has_value())
+			                  {
+				                  return Json();
+			                  }
+			                  return Json {{"position", {rogue->position.x, rogue->position.y}},
+			                               {"direction", {rogue->direction.x, rogue->direction.y}},
+			                               {"crest", rogue->crest},
+			                               {"length", rogue->length},
+			                               {"half_width", rogue->halfWidth},
+			                               {"breaking", rogue->breaking},
+			                               {"strength", rogue->strength},
+			                               {"age", rogue->age}};
+		                  }()},
+		                 {"lightning",
+		                  [&underwater] {
+			                  const auto& strike = underwater.GetSeaStrike();
+			                  const auto flash = underwater.GetSeaFlash();
+			                  return Json {{"strike", {strike.position.x, strike.position.y}},
+			                               {"since", strike.since},
+			                               {"strength", strike.strength},
+			                               {"over_sea", strike.overSea},
+			                               {"sky_flash", flash.x},
+			                               {"bolt_light", flash.y}};
+		                  }()},
+		                 {"some_cliff_feet", [&bed] {
+			                  Json feet = Json::array();
+			                  for (size_t i = 0; i < bed.cliffFoot.size() && i < 400; i += 40)
+			                  {
+				                  feet.push_back({bed.cliffFoot[i].x, bed.cliffFoot[i].y});
+			                  }
+			                  return feet;
+		                  }()}};
+	    }));
 	provider->Add(
 	    Query("underwater_at",
 	          "EXPERIMENT (not for merge): the sea bed under a point: the depth of the sea bed under the usual sea level, the "

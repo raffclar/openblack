@@ -166,6 +166,10 @@ enum class Effect : uint8_t
 	Filtering,
 	/// The long waves of the open sea, which show out to the horizon
 	FarWaves,
+	/// The rogue waves in a strong storm, with their foam and spray
+	RogueWaves,
+	/// The lightning on the sea: its flash in the water, its glint, and the ring and the steam where it hits the sea
+	LightningOnWater,
 	/// Not an effect: the water is drawn as a flat colour where it shows, to compare it with the original sea
 	WaterMask,
 	_Count
@@ -320,6 +324,102 @@ inline constexpr float k_WaterspoutSeaRoom = 150.0f;
 /// gives at least k_WaterspoutSeaRoom. Each one drifts slowly while it lives.
 [[nodiscard]] std::vector<Waterspout> WaterspoutsAt(float seconds, float storm, glm::vec2 centre,
                                                     const std::function<float(glm::vec2)>& seaDistance);
+
+/// A rogue wave in a strong storm: one wave much higher than the storm's waves, that rolls across the open sea as a
+/// local event. It has its own crest line, a steep face, a deep trough in front and a smaller wave behind. It grows,
+/// travels with the speed of its length and dies away. It dies before it comes near the coast.
+struct RogueWave
+{
+	/// The middle of its crest line now, across the ground
+	glm::vec2 position {0.0f};
+	/// The direction it travels in, a unit vector
+	glm::vec2 direction {1.0f, 0.0f};
+	/// The height of its crest over the sea's mean level now, with its growth and its death
+	float crest {0.0f};
+	/// Its length from crest to crest, in units
+	float length {100.0f};
+	/// Half the length of its crest line, in units
+	float halfWidth {120.0f};
+	/// How far the ends of the crest line stay behind its middle, as a share of the length
+	float bend {0.15f};
+	/// How much its crest breaks into white water, 0 to 1
+	float breaking {0.0f};
+	/// How strong it is now, 0 to 1: its growth, its death, the storm and the room it has from the coast
+	float strength {0.0f};
+	/// The time since it started, in seconds
+	float age {0.0f};
+	/// A number for this wave, for the noise of its foam and spray
+	float seed {0.0f};
+};
+/// How long a rogue wave lives, and the time from the start of one chance of a rogue wave to the next, in seconds
+inline constexpr float k_RogueSeconds = 30.0f;
+inline constexpr float k_RoguePeriod = 45.0f;
+/// The rogue wave fades out between these distances from the coast, so that it never comes to the land
+inline constexpr float k_RogueShoreNear = 60.0f;
+inline constexpr float k_RogueShoreFar = 200.0f;
+/// How far out to sea the path of a rogue wave stays, from the nearest coast
+inline constexpr float k_RogueSeaRoom = 160.0f;
+
+/// The height of the storm's waves: the significant height of the wave table (4 times the deviation of the surface)
+[[nodiscard]] float SignificantWaveHeight(const WaveState& waves);
+
+/// The rogue wave at a time, or none. In each period a rogue wave comes with a chance that grows with the storm (none
+/// in a calm sea). Its place is 120 to 450 units from `centre`, or farther when the sea there has no room. It travels
+/// about the wind's direction, and it is 2 to 3 times the storm's waves from its crest to its trough. Its whole path
+/// must be at least k_RogueSeaRoom out to sea by `seaDistance` (the distance from the coast, positive at sea), and it
+/// fades as it comes near the coast. With `firstCertain`, the first period always has a wave (for the debug storm).
+[[nodiscard]] std::optional<RogueWave> RogueWaveAt(float seconds, const WaveState& waves, glm::vec2 centre,
+                                                   const std::function<float(glm::vec2)>& seaDistance,
+                                                   bool firstCertain = false);
+
+/// The rogue wave's part of the sea's height at a point, and its slope. `shoreDistance` and `depth` are the distance
+/// from the coast and the water's depth there: the wave fades out near the coast and in shallow water. The same as
+/// UwRogueWave in underwater.sh: change them together.
+[[nodiscard]] WaveSample RogueWaveHeight(glm::vec2 point, const RogueWave& rogue, float shoreDistance, float depth);
+
+/// The rogue wave as the shaders take it (u_uwRogue): x, y the middle of its crest, z its direction (radians), w its
+/// crest; then its length, half the length of its crest line, its breaking, and its bend. All zero for no wave.
+[[nodiscard]] std::array<glm::vec4, 2> RogueUniform(const std::optional<RogueWave>& rogue);
+
+/// The waves' height and slope at a point with a rogue wave added (see RogueWaveHeight)
+[[nodiscard]] WaveSample WavesAt(glm::vec2 point, float seconds, const WaveState& waves, const std::optional<RogueWave>& rogue,
+                                 float shoreDistance, float depth);
+
+/// A strike of lightning as the sea sees it: where it struck, how long ago, and whether it hit the sea
+struct SeaStrike
+{
+	/// Where it struck, across the ground
+	glm::vec2 position {0.0f};
+	/// The time since it struck, in seconds; large when there was no strike
+	float since {1000.0f};
+	/// How strong the strike was: the strength of its flash (a bolt is weaker than a flash with thunder)
+	float strength {0.0f};
+	/// Whether it hit the sea, far enough from the coast
+	bool overSea {false};
+	/// The age of the flash that the last update saw, to find a new strike
+	float flashTime {1000.0f};
+};
+/// How long the flash ring and the steam of a strike on the sea last, in seconds
+inline constexpr float k_StrikeSeconds = 4.0f;
+/// A strike hits the sea where it is at least this far out from the coast
+inline constexpr float k_StrikeSeaRoom = 8.0f;
+
+/// A flash of lightning for the sea: where it struck, its age and strength, and whether it is on
+struct StrikeFlash
+{
+	glm::vec2 position {0.0f};
+	float time {0.0f};
+	float strength {0.0f};
+	bool active {false};
+};
+
+/// The strike after `seconds` more, from the storm's last flash (none when no storm flashes). A new flash (a younger
+/// one, or one in another place) starts a new strike; `seaDistance` is the distance from the coast at its point.
+[[nodiscard]] SeaStrike TrackStrike(const SeaStrike& before, const std::optional<StrikeFlash>& flash, float seconds,
+                                    float seaDistance);
+
+/// The radius of the bright ring that a strike on the sea sends out, at a time since it struck
+[[nodiscard]] float StrikeRingRadius(float since);
 
 /// The far scene round the eye, in the six faces of a cube that the water reflects: one face is drawn again each
 /// frame. The faces are in the order of a cube texture: +x, -x, +y, -y, +z, -z.
