@@ -14,14 +14,20 @@
 #include <algorithm>
 #include <chrono>
 #include <exception>
+#include <filesystem>
+#include <iterator>
+#include <optional>
 #include <span>
+#include <system_error>
 #include <utility>
 
 #include <CreatureHtml.h>
+#include <LhpFile.h>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
 #include "Camera/Camera.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureAttention.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -29,6 +35,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreaturePictures.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -271,6 +278,39 @@ void CreatureWebPageSystem::WritePage(entt::entity creature)
 		    creature_attention::Share(mind->turnsLookedAt, needs != nullptr ? needs->needs.turns : 0u));
 	}
 
+	if (const auto* spells = registry.TryGet<const CreatureSpells>(creature))
+	{
+		const auto& slots = spells->spells.slots;
+		const auto on = std::ranges::find_if(slots, [](const auto& slot) { return slot.phase != creature_spells::Phase::Off; });
+		if (on != slots.end())
+		{
+			facts.spellOn = static_cast<uint32_t>(std::distance(slots.begin(), on));
+		}
+	}
+	const auto values = creature_web_page::PageValues(facts);
+
+	auto& profiles = Locator::profileFolderSystem::value();
+	WritePageFile(*player, body->name, values);
+
+	// The game packs the values and the pictures for the upload tool even when it could not write the page
+	std::array<std::optional<std::vector<uint8_t>>, creature_web_page::k_MostPictures> pictures;
+	for (size_t slot = 0; slot < pictures.size(); ++slot)
+	{
+		pictures.at(slot) = profiles.ReadPlayerFile(*player, creature_web_page::PictureFile(static_cast<uint32_t>(slot)));
+	}
+	const auto stamp = Locator::gameRandom::has_value()
+	                       ? static_cast<uint16_t>(Locator::gameRandom::value().LocalRand(creature_web_page::k_StampRange))
+	                       : uint16_t {0};
+	const auto package = lhp::Write(creature_web_page::UploadPackage(values, pictures, stamp));
+	if (!profiles.WritePlayerFile(*player, creature_web_page::k_UploadFile, package))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not write {}", creature_web_page::k_UploadFile);
+	}
+}
+
+void CreatureWebPageSystem::WritePageFile(std::u16string_view player, std::u16string_view name,
+                                          std::span<const creaturehtml::Value> values)
+{
 	// The game reads the template each time that it writes the page
 	auto& files = Locator::filesystem::value();
 	const auto templatePath = files.GetPath<filesystem::Path::Scripts>() / creature_web_page::k_Template;
@@ -288,21 +328,28 @@ void CreatureWebPageSystem::WritePage(entt::entity creature)
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The creature's web page has no template: {}", error.what());
 		return;
 	}
-	const auto values = creature_web_page::PageValues(facts);
 	const auto filled = creaturehtml::Fill(std::string_view(reinterpret_cast<const char*>(page.data()), page.size()), values);
+	// The template links to its decorations in the game folder by a path from the profile folder, which is not in the
+	// game folder here
+	std::error_code error;
+	auto gameFolder = std::filesystem::absolute(files.GetGamePath(), error);
+	if (error)
+	{
+		gameFolder = files.GetGamePath();
+	}
+	const auto linked = creature_web_page::PointLinksAtGameFolder(filled, gameFolder.lexically_normal());
 
 	auto& profiles = Locator::profileFolderSystem::value();
-	const auto folder = profiles.GetPlayerFolder(*player);
+	const auto folder = profiles.GetPlayerFolder(player);
 	const auto root = profiles.GetFolder();
 	if (!folder.has_value() || !root.has_value() ||
 	    !profiles.MakeFolder(folder->lexically_relative(*root) / creature_web_page::k_PageFolder).has_value())
 	{
 		return;
 	}
-	const auto file = fmt::format("{}/{}", creature_web_page::k_PageFolder, creature_web_page::PageFile(body->name));
-	if (profiles.WritePlayerFile(*player, file, AsBytes(filled)))
+	const auto file = fmt::format("{}/{}", creature_web_page::k_PageFolder, creature_web_page::PageFile(name));
+	if (profiles.WritePlayerFile(player, file, AsBytes(linked)))
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Wrote the web page of creature {} to {}", entt::to_integral(creature),
-		                   (*folder / file).generic_string());
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Wrote the web page of the creature to {}", (*folder / file).generic_string());
 	}
 }

@@ -9,6 +9,8 @@
 
 #include <cstdint>
 
+#include <algorithm>
+#include <array>
 #include <optional>
 #include <string>
 #include <vector>
@@ -290,6 +292,66 @@ TEST(CreatureWebPage, FillsTheShippedMarks)
 	          " Your Creature is angry.||0.50|4");
 	EXPECT_EQ(creaturehtml::Fill("[$how_nice_player_has_been$] [$how_much_attention_player_has_given_me$]", values),
 	          "1136 1141");
+}
+
+TEST(CreatureWebPage, SaysWhichSpellIsOnTheCreature)
+{
+	creature_web_page::PageFacts facts;
+	const auto none = creature_web_page::PageValues(facts);
+	EXPECT_TRUE(std::ranges::none_of(none, [](const Value& value) { return value.name.starts_with("spell_received_"); }));
+
+	facts.spellOn = 4;
+	const auto values = creature_web_page::PageValues(facts);
+	const auto spell = std::ranges::find(values, std::string("spell_received_1050"), &Value::name);
+	ASSERT_NE(spell, values.end());
+	EXPECT_EQ(spell->value, "1");
+	// It comes after the beliefs and before the two help numbers
+	EXPECT_EQ((spell - 1)->name, "beliefs_23");
+	EXPECT_EQ((spell + 1)->name, "how_nice_player_has_been");
+}
+
+TEST(CreatureWebPage, PacksTheValuesLastFirst)
+{
+	const std::vector<Value> values {{"name", "Rex"}, {"age", "12"}};
+	const auto packed = creature_web_page::PackValues(values);
+	ASSERT_EQ(packed.size(), 1000u);
+	EXPECT_EQ(std::string(reinterpret_cast<const char*>(packed.data())), "age");
+	EXPECT_EQ(std::string(reinterpret_cast<const char*>(packed.data() + 250)), "12");
+	EXPECT_EQ(std::string(reinterpret_cast<const char*>(packed.data() + 500)), "name");
+	EXPECT_EQ(std::string(reinterpret_cast<const char*>(packed.data() + 750)), "Rex");
+	EXPECT_TRUE(std::all_of(packed.begin() + 504, packed.begin() + 750, [](uint8_t byte) { return byte == 0; }));
+
+	const std::vector<Value> longValue {{"key", std::string(300, 'v')}};
+	const auto cut = creature_web_page::PackValues(longValue);
+	EXPECT_EQ(std::string(reinterpret_cast<const char*>(cut.data() + 250)), std::string(249, 'v'));
+}
+
+TEST(CreatureWebPage, PackageHasTheValuesThenThePicturesThatExist)
+{
+	const std::vector<Value> values {{"name", "Rex"}};
+	std::array<std::optional<std::vector<uint8_t>>, creature_web_page::k_MostPictures> pictures;
+	pictures.at(1) = std::vector<uint8_t> {1, 2};
+	pictures.at(4) = std::vector<uint8_t> {3};
+	const auto package = creature_web_page::UploadPackage(values, pictures, 77);
+	EXPECT_EQ(package.stamp, 77);
+	ASSERT_EQ(package.blocks.size(), 3u);
+	EXPECT_EQ(package.blocks[0].category, "CREATURE");
+	EXPECT_EQ(package.blocks[0].name, "creature");
+	EXPECT_EQ(package.blocks[0].data, creature_web_page::PackValues(values));
+	EXPECT_EQ(package.blocks[1].category, "PICTURES");
+	EXPECT_EQ(package.blocks[1].name, "_1.jpg");
+	EXPECT_EQ(package.blocks[1].data, (std::vector<uint8_t> {1, 2}));
+	EXPECT_EQ(package.blocks[2].name, "_4.jpg");
+}
+
+TEST(CreatureWebPage, PointsTheDecorationsAtTheGameFolder)
+{
+	EXPECT_EQ(creature_web_page::FolderUrl("C:/Games/Black & White"), "file:///C:/Games/Black%20%26%20White/");
+	EXPECT_EQ(creature_web_page::FolderUrl("/home/me/bw/"), "file:///home/me/bw/");
+	const auto page = creature_web_page::PointLinksAtGameFolder(
+	    "var ImageRoot\t=\t\"../../../scripts/html/\";\r\nvar CreatureImages\t=\t\"../\";\r\n", "D:/bw");
+	EXPECT_EQ(page, "var ImageRoot\t=\t\"file:///D:/bw/scripts/html/\";\r\nvar CreatureImages\t=\t\"../\";\r\n");
+	EXPECT_EQ(creature_web_page::PointLinksAtGameFolder("a ../../../x ../../../y", "/g"), "a file:///g/x file:///g/y");
 }
 
 TEST(CreatureWebPage, TheBodyGetsToTheMomentOfItsAction)

@@ -12,7 +12,9 @@
 #include <array>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "Creature/CreatureWebPage.h"
@@ -47,6 +49,10 @@ private:
 		std::u16string player;
 		uint32_t slot;
 	};
+
+	/// Fills the template with the values into the page in the player's profile folder, if the template is there
+	static void WritePageFile(std::u16string_view player, std::u16string_view name,
+	                          std::span<const creaturehtml::Value> values);
 
 	PlayerOfFiles _player;
 	/// The captions belong to the slots of the files, not to a creature

@@ -153,6 +153,7 @@ target_link_libraries(
           rawimage
           helpstats
           creaturehtml
+          lhp
           imgui::imgui
           imgui_user
           ScriptLibrary
