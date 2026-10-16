@@ -7,9 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
+
 #include <gtest/gtest.h>
 
 #include "Animals/AnimalRules.h"
+#include "InfoConstants.h"
 
 using namespace openblack;
 
@@ -39,4 +42,21 @@ TEST(AnimalReactions, BusyStatesAreTheGamesDancingDyingDeadDrowningDownedEatenAn
 	}
 	// Setting off to die is not yet dying
 	EXPECT_FALSE(animals::IsBusyForReaction(13));
+}
+
+TEST(AnimalReactions, AfterAReactionAnAnimalGoesIntoTheResumeStateOfItsStateBefore)
+{
+	// A small table: a script state with the empty state, and a wander state that decides again
+	std::array<GAnimalStateTableInfo, 33> table {};
+	table.at(4).resumeState = 0;
+	table.at(32).resumeState = 43;
+	EXPECT_EQ(animals::StateAfterReacting(32, table), 43);
+	EXPECT_EQ(animals::StateAfterReacting(4, table), 0);
+}
+
+TEST(AnimalReactions, AStateThatIsNotInTheTableGivesTheEmptyState)
+{
+	std::array<GAnimalStateTableInfo, 4> table {};
+	table.at(3).resumeState = 43;
+	EXPECT_EQ(animals::StateAfterReacting(4, table), 0);
 }

@@ -10,7 +10,9 @@
 #include <cstring>
 
 #include <algorithm>
+#include <chrono>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -40,6 +42,7 @@
 #include "ECS/Dances.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/WallHugRules.h"
@@ -137,6 +140,55 @@ public:
 	void SetSeeds(GameRandomSeeds) override {}
 	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
 	void SetParticleStream(ParticleRandomStream) override {}
+};
+/// Records how the reaction system ends the reaction of an animal. It does nothing else.
+class FakeAnimals final: public ecs::systems::AnimalSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void Update(std::chrono::milliseconds, float) override {}
+	void Reset() override {}
+	entt::entity CreateFlock(glm::vec2, float, float) override { return entt::null; }
+	entt::entity CreateSpellAnimal(AnimalInfo, glm::vec2, float, uint16_t, PlayerNames, entt::entity, entt::entity) override
+	{
+		return entt::null;
+	}
+	entt::entity CreateScriptFlock(int32_t, glm::vec2, glm::vec2, float, float) override { return entt::null; }
+	[[nodiscard]] entt::entity FindScriptFlock(int32_t) const override { return entt::null; }
+	entt::entity CreateBird(AnimalInfo, glm::vec2, uint32_t, entt::entity) override { return entt::null; }
+	void SetFlockTown(entt::entity, entt::entity) override {}
+	entt::entity CreateGrazer(AnimalInfo, glm::vec2, uint32_t, entt::entity, entt::entity) override { return entt::null; }
+	entt::entity CreateScriptAnimal(AnimalInfo, glm::vec2) override { return entt::null; }
+	entt::entity CreateStillAnimal(AnimalInfo, glm::vec3, float, float) override { return entt::null; }
+	void JoinFlock(entt::entity, entt::entity) override {}
+	bool SetScriptState(entt::entity, LivingStates) override { return false; }
+	void ScriptMoveTo(entt::entity, glm::vec2) override {}
+	[[nodiscard]] std::optional<uint8_t> FinalGameStateOf(entt::entity) const override { return std::nullopt; }
+	void SetScale(entt::entity, float) override {}
+	[[nodiscard]] float RadiusOf(entt::entity) const override { return 0.0f; }
+	[[nodiscard]] glm::vec3 MovementOf(entt::entity) const override { return glm::vec3(0.0f); }
+	void SetFlockCentre(entt::entity, glm::vec2) override {}
+	void MoveFlockPlace(entt::entity, glm::ivec2) override {}
+	entt::entity SeparateIntoOwnFlock(entt::entity) override { return entt::null; }
+	void SendToSlaughter(entt::entity, glm::vec2) override {}
+	[[nodiscard]] uint16_t SpeedOf(entt::entity) const override { return 0; }
+	[[nodiscard]] entt::entity LeaderOf(entt::entity) const override { return entt::null; }
+	[[nodiscard]] std::vector<entt::entity> MembersOf(entt::entity) const override { return {}; }
+	[[nodiscard]] glm::vec2 GoalOf(entt::entity) const override { return glm::vec2(0.0f); }
+	[[nodiscard]] float GoalHeightOf(entt::entity) const override { return 0.0f; }
+	void SendBird(entt::entity, glm::vec2, float, bool) override {}
+	void SendWolf(entt::entity, glm::vec2, glm::vec2, float) override {}
+	void StartFading(entt::entity) override {}
+	void KillByEffect(entt::entity, glm::vec3) override {}
+	void SetDying(entt::entity) override {}
+	[[nodiscard]] bool IsFrighteningToCreature(entt::entity) const override { return false; }
+	[[nodiscard]] bool CanPlayerPickUp(entt::entity) const override { return false; }
+	[[nodiscard]] std::optional<bool> BirdCanBePickedUpByCreature(entt::entity) const override { return std::nullopt; }
+	[[nodiscard]] bool CanBeStompedOnByCreature(entt::entity, float) const override { return false; }
+	void StopReaction(entt::entity, bool resetState) override { stops.push_back(resetState); }
+
+	/// For each end of a reaction, whether the animal goes into the state after the reaction
+	std::vector<bool> stops;
 };
 } // namespace
 
@@ -425,6 +477,35 @@ TEST_F(Reactions, AnAnimalWaitsItsTimeFromTheEndOfAReactionThatIsGone)
 	const auto& after = registry.Get<const LivingReaction>(animal);
 	EXPECT_EQ(after.reaction, 0u);
 	EXPECT_EQ(after.creatureMemory.LastReacted(static_cast<uint32_t>(Reaction::LookAtNiceSpell)), 5u);
+}
+
+TEST_F(Reactions, AnAnimalWhoseReactionIsGoneStaysInItsState)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& animals = static_cast<FakeAnimals&>(Locator::animalSystem::emplace<FakeAnimals>());
+	const auto animal = registry.Create();
+	registry.Assign<Transform>(animal, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Animal>(animal);
+	registry.Assign<LivingReaction>(animal, LivingReaction {.reaction = 999, .type = Reaction::FleeFromObject});
+	// The reaction does not exist, so the animal lets go of it and keeps its state
+	_reactions.ProcessTurn();
+	EXPECT_EQ(animals.stops, std::vector<bool> {false});
+	Locator::animalSystem::reset();
+}
+
+TEST_F(Reactions, AnAnimalWhoseReactionShutsDownGoesIntoTheStateAfterTheReaction)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& animals = static_cast<FakeAnimals&>(Locator::animalSystem::emplace<FakeAnimals>());
+	const auto id = _reactions.Create(Miracle());
+	const auto animal = registry.Create();
+	registry.Assign<Transform>(animal, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Animal>(animal);
+	registry.Assign<LivingReaction>(animal, LivingReaction {.reaction = id, .type = Reaction::LookAtNiceSpell});
+	_reactions.Remove(id);
+	EXPECT_EQ(animals.stops, std::vector<bool> {true});
+	EXPECT_EQ(registry.Get<const LivingReaction>(animal).reaction, 0u);
+	Locator::animalSystem::reset();
 }
 
 TEST_F(Reactions, AVillagerKeepsTheFireReactionItTookUpAndLetsGoOfItLeavingTheFire)

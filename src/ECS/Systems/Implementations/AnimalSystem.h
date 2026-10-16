@@ -71,7 +71,8 @@ public:
 	bool SetupFleeFromPredator(entt::entity entity, entt::entity predator) override;
 	[[nodiscard]] std::optional<uint8_t> TopGameStateOf(entt::entity animal) const override;
 	bool SetupReactToFlyingObject(entt::entity animal, entt::entity object, float speed) override;
-	void StopReaction(entt::entity animal) override;
+	void RememberStateBeforeReaction(entt::entity animal) override;
+	void StopReaction(entt::entity animal, bool resetState) override;
 
 	[[nodiscard]] bool IsFrighteningToCreature(entt::entity animal) const override;
 	[[nodiscard]] bool CanPlayerPickUp(entt::entity animal) const override;

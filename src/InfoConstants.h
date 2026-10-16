@@ -1442,7 +1442,8 @@ struct GAnimalStateTableInfo
 	uint32_t field0x10;
 	uint32_t field0x14;
 	uint32_t field0x18;
-	uint32_t field0x1c;
+	/// The state that an animal goes into when a reaction ends, if the animal was in this state before the reaction
+	uint32_t resumeState;
 	uint32_t field0x20;
 	std::array<char, 0x80> name;
 	uint32_t field0xa4;

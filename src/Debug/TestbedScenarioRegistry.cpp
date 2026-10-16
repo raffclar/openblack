@@ -727,6 +727,20 @@ void AddNeeds(std::vector<Scenario>& all)
 	                {.type = AnimalInfo::Cow, .offset = {8.0f, 0.0f}, .living = true}},
 	});
 
+	// A free cow beside a tiger that stands still: the cow runs from the tiger, and its fright ends after a time
+	all.push_back({
+	    .id = "animals.cow_after_fright",
+	    .name = "A cow goes back to its ways after a fright",
+	    .facet = Facet::Animals,
+	    .description = "A tiger stands still with a free cow eight metres from it. The cow takes fright at the tiger.",
+	    .expected = "The cow runs from the tiger, then turns to watch it. When its fright ends, it goes back to what it "
+	                "did before the fright: it decides again and wanders with its herd. It does not stay in its fright.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -20.0f}, {40.0f, 20.0f}}, .distance = 0.6f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .pauseMind = true}},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {8.0f, 0.0f}, .living = true}},
+	});
+
 	all.push_back({
 	    .id = "needs.starving",
 	    .name = "Starving creature faints",
