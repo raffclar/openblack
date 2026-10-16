@@ -1063,60 +1063,114 @@ bool creature_fight::ComputerEndsBlock(const Random& random)
 	return random(k_EndBlockLots) == 1;
 }
 
-AttackChoice creature_fight::ChooseAttack(std::span<const Reach> reaches, Band band, float gap, float stepLength,
-                                          float attackerSize, float opponentHeight)
+std::optional<float> creature_fight::DepthToBody(std::span<const physics::Ellipsoid> bones, const glm::vec3& point,
+                                                 const glm::vec3& towards, float opponentSize)
 {
-	struct Best
+	const auto width = static_cast<float>(static_cast<double>(opponentSize * k_DepthWidthPerSize) * k_DepthWidthShare);
+	const auto spacing = (width + width) * k_DepthSpacingShare;
+	// The row goes across the direction, flat on the land
+	const auto across = glm::vec3(towards.z, 0.0f, -towards.x);
+	const auto acrossLength = glm::length(across);
+	const auto unitAcross = acrossLength > 0.0f ? across / acrossLength : glm::vec3(0.0f);
+	auto origin = point - (unitAcross * width);
+	const auto next = unitAcross * spacing;
+	std::optional<float> depth;
+	for (int i = 0; i < k_DepthLines; ++i)
 	{
-		size_t animation;
-		int steps;
-		int score;
-		float depth;
-	};
-	std::optional<Best> best;
-	const auto maxDepth = k_DepthPerSize * attackerSize;
-	const int maxSteps = stepLength > 0.0f ? k_MaxSteps : 0;
-	for (const auto& reach : reaches)
-	{
-		if (IsSpecialAttack(reach.animation) || reach.height > opponentHeight || opponentHeight <= 0.0f)
+		if (const auto hit = physics::EllipsoidHit(bones, origin, towards); hit.has_value())
 		{
-			continue;
+			depth = std::min(depth.value_or(k_NoDepth), glm::dot(hit->first.point - point, towards));
 		}
-		const bool inBand = BandOf(reach.height / opponentHeight) == band;
-		// The fewest steps forward (more than 0) or back from which it lands
-		std::optional<std::pair<int, float>> landing;
-		for (int count = 0; count <= maxSteps && !landing.has_value(); ++count)
+		origin += next;
+	}
+	return depth;
+}
+
+bool creature_fight::WithinBlowLine(const glm::vec3& point, const glm::vec3& origin, const glm::vec3& direction)
+{
+	const auto length = glm::length(direction);
+	if (length <= 0.0f)
+	{
+		return false;
+	}
+	const auto ahead = glm::dot(point - origin, direction / length);
+	return ahead > 0.0f && ahead < length;
+}
+
+std::pair<float, float> creature_fight::BandLimits(Band band, float headHeight)
+{
+	switch (band)
+	{
+	case Band::High:
+		return {headHeight * k_HighAbove, headHeight};
+	case Band::Mid:
+		return {headHeight * k_LowBelow, headHeight * k_HighAbove};
+	case Band::Low:
+		break;
+	}
+	return {0.0f, headHeight * k_LowBelow};
+}
+
+AttackChoice creature_fight::ChooseAttack(std::span<const BlowDepth> blows, Band band, float headHeight, StepLengths steps,
+                                          float attackerSize)
+{
+	const auto [lowest, highest] = BandLimits(band, headHeight);
+	const auto deepest = -k_DepthPerSize * attackerSize;
+	std::optional<size_t> bestBlow;
+	int bestSteps = 0;
+	int bestScore = 0;
+	float bestDepth = -k_NoDepth;
+	for (int count = -k_MaxSteps; count <= k_MaxSteps; ++count)
+	{
+		float moved = 0.0f;
+		if (count < 0)
 		{
-			for (const int steps : {count, -count})
+			moved = static_cast<float>(count) * steps.back;
+		}
+		else if (count > 0)
+		{
+			moved = static_cast<float>(count) * steps.forward;
+		}
+		for (const auto& blow : blows)
+		{
+			if (blow.animation == animations::k_AttackSpecial || !blow.depth.has_value() || !(blow.height <= headHeight))
 			{
-				const auto depth = reach.reach - (gap - (static_cast<float>(steps) * stepLength));
-				if (depth > 0.0f && depth < maxDepth)
+				continue;
+			}
+			const auto depth = *blow.depth - moved;
+			if (!(depth < 0.0f) || !(depth > deepest))
+			{
+				continue;
+			}
+			const bool inBand = !(highest < blow.height || blow.height < lowest);
+			const auto score = inBand ? std::abs(count) : k_OutOfBandScore;
+			if (bestBlow.has_value() && score == bestScore)
+			{
+				// The same score: the blow that goes in less wins, with the steps found first
+				if (depth > bestDepth)
 				{
-					landing = std::pair(steps, depth);
-					break;
+					bestBlow = blow.animation;
+					bestDepth = depth;
 				}
 			}
-		}
-		if (!landing.has_value())
-		{
-			continue;
-		}
-		const auto score = inBand ? std::abs(landing->first) : k_OutOfBandScore;
-		if (!best.has_value() || score < best->score || (score == best->score && landing->second > best->depth))
-		{
-			best = Best {.animation = reach.animation, .steps = landing->first, .score = score, .depth = landing->second};
+			else if (!bestBlow.has_value() || score < bestScore)
+			{
+				bestBlow = blow.animation;
+				bestSteps = count;
+				bestScore = score;
+				bestDepth = depth;
+			}
 		}
 	}
-	if (!best.has_value())
+	if (!bestBlow.has_value())
 	{
-		// Nothing lands from anywhere near: close in, or back off when already on top of the opponent
-		return {.step = gap > 0.0f ? Step::Forward : Step::Back};
+		return {};
 	}
-	if (best->steps != 0)
+	if (bestSteps != 0)
 	{
-		return {.step = best->steps > 0 ? Step::Forward : Step::Back};
+		return {.step = bestSteps > 0 ? Step::Forward : Step::Back};
 	}
-	return {.animation = best->animation};
+	return {.animation = bestBlow};
 }
 
 bool creature_fight::WinnerPoos(float alignment)

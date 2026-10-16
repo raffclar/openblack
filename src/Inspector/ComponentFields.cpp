@@ -2273,7 +2273,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_fight::QueuedMove::chargeMs>("chargeMs");
 	Reflect<openblack::creature_fight::Reach>(context, ValueOnly {})
 	    .Field<&openblack::creature_fight::Reach::animation>("animation")
-	    .Field<&openblack::creature_fight::Reach::reach>("reach")
+	    .Field<&openblack::creature_fight::Reach::point>("point")
 	    .Field<&openblack::creature_fight::Reach::height>("height")
 	    .Field<&openblack::creature_fight::Reach::swing>("swing");
 	Reflect<openblack::creature_fight::marks::Mark>(context, ValueOnly {})
@@ -3116,7 +3116,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::skeletal_animation::Animation::rotatedJoints>("rotatedJoints")
 	    .Field<&openblack::skeletal_animation::Animation::translatedJoints>("translatedJoints")
 	    .Field<&openblack::skeletal_animation::Animation::frames>("frames")
-	    .Field<&openblack::skeletal_animation::Animation::displacement>("displacement");
+	    .Field<&openblack::skeletal_animation::Animation::displacement>("displacement")
+	    .Field<&openblack::skeletal_animation::Animation::strideLength>("strideLength");
 	Reflect<openblack::skeletal_animation::Animation::Frame>(context, ValueOnly {})
 	    .Field<&openblack::skeletal_animation::Animation::Frame::eulerAngles>("eulerAngles")
 	    .Field<&openblack::skeletal_animation::Animation::Frame::translations>("translations");

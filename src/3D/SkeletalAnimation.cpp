@@ -669,6 +669,7 @@ Animation FromMorph(const morph::Animation& source)
 	    .translatedJoints = source.translatedJointIndices,
 	    .frames = {},
 	    .displacement = {source.header.displacement[0], source.header.displacement[1], source.header.displacement[2]},
+	    .strideLength = source.header.strideLength,
 	};
 	animation.frames.reserve(source.keyframes.size());
 	for (const auto& keyframe : source.keyframes)

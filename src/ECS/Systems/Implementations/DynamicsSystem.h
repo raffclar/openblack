@@ -75,6 +75,7 @@ public:
 	[[nodiscard]] std::optional<std::pair<glm::mat3, glm::vec3>> ReleasePose(entt::entity object, bool alignToSlope) override;
 	float PushObject(entt::entity object) override;
 	[[nodiscard]] const physics::Ground* GetGround() const override;
+	[[nodiscard]] std::vector<physics::Ellipsoid> CreatureSkeleton(entt::entity creature) override;
 
 	void RecordHit(entt::entity hit, entt::entity hitter) override;
 	[[nodiscard]] entt::entity GetHitObject() const override;
@@ -100,8 +101,6 @@ private:
 	[[nodiscard]] std::unique_ptr<physics::Body> MakeBody(entt::entity object, const physics_classes::ClassFacts& facts);
 	/// The creature's body: an obstacle of its bones' ellipsoids, as it stands posed now
 	[[nodiscard]] std::unique_ptr<physics::Body> MakeCreatureBody(entt::entity creature, const physics::Material& material);
-	/// The creature's bones as the ellipsoids a body hits, posed as they are now
-	[[nodiscard]] std::vector<physics::Ellipsoid> CreatureSkeleton(entt::entity creature);
 	/// The list grows by a few slots when it is full, before a body is added to it
 	void MakeRoomForOne();
 	/// A resting obstacle for an object a moving body may hit

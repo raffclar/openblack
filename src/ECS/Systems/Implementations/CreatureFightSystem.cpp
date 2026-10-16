@@ -338,18 +338,11 @@ void SetEyes(ecs::Registry& registry, entt::entity creature, creature_eyes::Mode
 	}
 }
 
-std::vector<feedback::Capsule> BodyOf(const ecs::Registry& registry, entt::entity creature)
+/// The bones of a creature as the ellipsoids that fight blows strike, as its body is posed now
+std::vector<physics::Ellipsoid> BonesOf(entt::entity creature)
 {
-	const auto* body = registry.TryGet<const Creature>(creature);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	if (body == nullptr || animation == nullptr || transform == nullptr)
-	{
-		return {};
-	}
-	return feedback::BodyCapsules(animation->skeleton.parents, animation->boneMatrices,
-	                              creature::PlacementMatrix(transform->position, transform->rotation, transform->scale),
-	                              feedback::k_BodyRadiusShare * HeightOf(ShownSize(*body)));
+	return Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().CreatureSkeleton(creature)
+	                                            : std::vector<physics::Ellipsoid> {};
 }
 
 /// How high a creature's head is over the land under it, as its body is posed now; none without a posed head
@@ -2432,8 +2425,16 @@ void CreatureFightSystem::MeasureBlows(entt::entity creature)
 		const auto duration = DurationOf(creature, animation);
 		const auto& strike = rig->blowStrikes->at(i);
 		const auto landMs = static_cast<float>(strike.landMs);
-		if (duration <= 0.0f || landMs < fight::k_LeastLandMs || strike.bone < 0)
+		if (duration <= 0.0f)
 		{
+			continue;
+		}
+		fighting.hitTimesMs.at(i) = landMs;
+		if (landMs < fight::k_LeastLandMs || strike.bone < 0)
+		{
+			// A blow that the creature has but does not measure stays at the origin of the mesh, and it can still be
+			// chosen
+			fighting.reaches.push_back({.animation = animation, .point = glm::vec3(0.0f), .height = 0.0f});
 			continue;
 		}
 		// The striking bone as the blow lands, and the land time before
@@ -2447,11 +2448,10 @@ void CreatureFightSystem::MeasureBlows(entt::entity creature)
 		const auto shape = fight::ShapeOfBlow(*atLand, *before, landMs, duration, DisplacementOf(body.species, animation).y);
 		fighting.reaches.push_back({
 		    .animation = animation,
-		    .reach = -shape.point.z * scale,
+		    .point = shape.point,
 		    .height = shape.point.y * scale,
 		    .swing = shape.swing,
 		});
-		fighting.hitTimesMs.at(i) = landMs;
 	}
 	fighting.measured = true;
 }
@@ -2730,22 +2730,58 @@ void CreatureFightSystem::AttemptBlow(entt::entity creature, fight::Band band, f
 	const auto& body = registry.Get<const Creature>(creature);
 	const auto opponent = fighting.opponent;
 	const auto selfAt = Flat(registry.Get<const Transform>(creature).position);
-	const auto opponentAt = Flat(registry.Get<const Transform>(opponent).position);
-	const auto* opponentMoves = registry.TryGet<const CreatureLocomotion>(opponent);
-	const auto opponentRadius = opponentMoves != nullptr ? opponentMoves->radius : 5.0f;
-	const auto gap = glm::distance(selfAt, opponentAt) - opponentRadius;
-	const auto scale = std::abs(registry.Get<const Transform>(creature).scale.x);
-	const auto stepLength = glm::length(DisplacementOf(body.species, fight::animations::k_StepForward)) * scale;
-	const auto choice = fight::ChooseAttack(fighting.reaches, band, gap, stepLength, ShownSize(body),
-	                                        HeightOf(ShownSize(registry.Get<const Creature>(opponent))));
+	const auto& transform = registry.Get<const Transform>(creature);
+	const auto& opponentTransform = registry.Get<const Transform>(opponent);
+	const auto scale = std::abs(transform.scale.x);
+	const auto headHeight = HeadHeightOf(registry, opponent);
+	if (!headHeight.has_value())
+	{
+		return;
+	}
+	// Lines from where each blow lands, towards the opponent, find how far its body is ahead of the blow
+	const auto bones = BonesOf(opponent);
+	const auto towards = opponentTransform.position - transform.position;
+	const auto unitTowards = glm::length(towards) > 0.0f ? glm::normalize(towards) : towards;
+	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	const auto opponentSize = ShownSize(registry.Get<const Creature>(opponent));
+	std::vector<fight::BlowDepth> blows;
+	blows.reserve(fighting.reaches.size());
+	for (const auto& reach : fighting.reaches)
+	{
+		fight::BlowDepth blow {.animation = reach.animation, .height = reach.height, .depth = std::nullopt};
+		if (reach.animation != fight::animations::k_AttackSpecial && reach.height <= *headHeight)
+		{
+			const auto point = glm::vec3(placement * glm::vec4(0.0f, reach.point.y, reach.point.z, 1.0f));
+			blow.depth = fight::DepthToBody(bones, point, unitTowards, opponentSize);
+		}
+		blows.push_back(blow);
+	}
+	const auto strideOf = [&body, scale](size_t animation) {
+		const auto* rig = RigOf(body.species);
+		const auto* played = rig != nullptr ? rig->GetAnimation(CreatureRig::Mesh::Base, animation) : nullptr;
+		return played != nullptr ? played->strideLength * scale : 0.0f;
+	};
+	const auto steps = fight::StepLengths {.forward = strideOf(fight::animations::k_StepForward),
+	                                       .back = strideOf(fight::animations::k_StepBack)};
+	const auto choice = fight::ChooseAttack(blows, band, *headHeight, steps, ShownSize(body));
 	fight_transcript::Note(
 	    creature, "attack_choice",
 	    [&] {
 		    return fight_transcript::Fields {
 		        {"creature", fight_transcript::Id(creature)},
 		        {"band", fight::Name(band)},
-		        {"gap", gap},
-		        {"step_length", stepLength},
+		        {"head_height", *headHeight},
+		        {"nearest_depth",
+		         [&blows] {
+			         float nearest = fight::k_NoDepth;
+			         for (const auto& blow : blows)
+			         {
+				         nearest = std::min(nearest, blow.depth.value_or(fight::k_NoDepth));
+			         }
+			         return nearest;
+		         }()},
+		        {"step_forward", steps.forward},
+		        {"step_back", steps.back},
 		        {"animation", choice.animation.has_value() ? static_cast<int64_t>(*choice.animation) : int64_t {-1}},
 		        {"step", choice.step.has_value() ? fight::Name(*choice.step) : std::string_view("none")},
 		        {"speed", speed}};
@@ -2982,7 +3018,7 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	const bool reeling = victim.state == fight::State::Action && victim.animation >= fight::animations::k_RecoilHigh &&
 	                     victim.animation < fight::animations::k_WobbleHighSide;
 	const bool open = !reeling && victim.state != fight::State::BlockRecoil && victim.state != fight::State::Faint;
-	const auto capsules = BodyOf(registry, opponent);
+	const auto bones = BonesOf(opponent);
 	const auto reach = fight::BlowTestReach(size, special);
 	std::optional<std::pair<glm::vec3, glm::vec3>> landed;
 	for (const auto time : times)
@@ -2998,17 +3034,16 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 			                                         fight::k_SwingPuffColour, physics::turn::PuffKind::Dust);
 		}
 		const auto from = worldBone(groin, time);
-		if (open && !landed.has_value() && from.has_value() && !capsules.empty())
+		if (open && !landed.has_value() && from.has_value() && !bones.empty())
 		{
-			// The capsules round the opponent's bones stand in for the shapes the game tests
+			// All five lines are tested, and the last line that meets the body within its length gives the point
 			for (const auto& target : fight::BlowTestPoints(*at, *before, reach))
 			{
 				const auto direction = target - *from;
-				const auto along = feedback::RayHit(*from, direction, capsules);
-				if (along.has_value() && *along > 0.0f && *along < 1.0f)
+				const auto hit = physics::EllipsoidHit(bones, *from, direction);
+				if (hit.has_value() && fight::WithinBlowLine(hit->first.point, *from, direction))
 				{
-					landed = std::pair {*from + (direction * *along), (*at - *before) * fight::k_BlowVectorScale};
-					break;
+					landed = std::pair {hit->first.point, (*at - *before) * fight::k_BlowVectorScale};
 				}
 			}
 		}
