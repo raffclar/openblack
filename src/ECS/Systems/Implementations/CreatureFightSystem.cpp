@@ -49,6 +49,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMarks.h"
+#include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMode.h"
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureRig.h"
@@ -136,6 +137,19 @@ constexpr float k_FaceDue = 1e-3f;
 constexpr float k_ApproachSeconds = 30.0f;
 /// A press on the ground counts as a step within this many of the arena's radii of its middle
 constexpr float k_GroundClickRadii = 1.5f;
+
+/// How many times a creature completed the fight action
+uint32_t FightsCompleted(entt::entity creature)
+{
+	if (!Locator::creatureMindSystem::has_value())
+	{
+		return 0;
+	}
+	auto& minds = Locator::creatureMindSystem::value();
+	const auto* tables = minds.GetTables();
+	const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, "Fight") : std::nullopt;
+	return action.has_value() ? minds.GetActionCount(creature, *action) : 0;
+}
 
 float HeightOf(float size)
 {
@@ -897,8 +911,8 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		}
 		registry.Get<CreatureAnimation>(self).body = {};
 
-		const auto& record = registry.AllOf<CreatureFightRecord>(self) ? registry.Get<CreatureFightRecord>(self)
-		                                                               : registry.Assign<CreatureFightRecord>(self);
+		auto& record = registry.AllOf<CreatureFightRecord>(self) ? registry.Get<CreatureFightRecord>(self)
+		                                                         : registry.Assign<CreatureFightRecord>(self);
 		const auto* needs = registry.TryGet<const CreatureNeeds>(self);
 		const auto bodyNeeds = needs != nullptr ? needs->needs : creature_physiology::Needs {};
 
@@ -913,7 +927,14 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		// The human player directs their own creature; any other fights by itself
 		fighter.control = body.owner == k_LocalPlayer ? fight::Control::Player : fight::Control::Computer;
 		fighter.computerWaitMs = fight::k_ComputerWaitsAtStartMs;
-		fighter.tendency = record.foughtBefore ? record.tendency : fight::FirstTendency(body.alignment);
+		// The creature that started the fight takes its learnt lean to choose its moves by; the other keeps the lean
+		// of the last fight that it started
+		if (self == creature)
+		{
+			record.tendency = fight::TendencyAtStart(FightsCompleted(self), record.tendency, body.alignment);
+			record.choosingTendency = record.tendency;
+		}
+		fighter.tendency = record.choosingTendency;
 		registry.AssignOrReplace<CreatureFighting>(self, std::move(fighting));
 	}
 	const bool planned = _startReason == "plan" || _startReason == "anger";
@@ -2607,12 +2628,13 @@ void CreatureFightSystem::CheckQueue(entt::entity creature)
 	{
 		_actionCause[creature] = *orderIndex;
 	}
-	// A human player's creature learns from each move it makes, whoever asked for it
-	if (order->kind != fight::Order::Kind::EndBlock && front.has_value() &&
-	    registry.Get<const Creature>(creature).owner == k_LocalPlayer)
+	// The creature learns from the moves it makes, whoever asked for them
+	auto* record = registry.TryGet<CreatureFightRecord>(creature);
+	if (order->kind != fight::Order::Kind::EndBlock && front.has_value() && record != nullptr &&
+	    fight::LearnsFromMove(front->move.kind, registry.Get<const Creature>(creature).owner == k_LocalPlayer))
 	{
-		const auto before = fighter.tendency;
-		fighter.tendency = fight::LearnTendency(fighter.tendency, front->move.kind);
+		const auto before = record->tendency;
+		record->tendency = fight::LearnTendency(record->tendency, front->move.kind);
 		fight_transcript::Note(
 		    creature, "learning",
 		    [&] {
@@ -2620,7 +2642,7 @@ void CreatureFightSystem::CheckQueue(entt::entity creature)
 			                                     {"what", "tendency"},
 			                                     {"move", fight::Name(front->move.kind)},
 			                                     {"before", before},
-			                                     {"after", fighter.tendency}};
+			                                     {"after", record->tendency}};
 		    },
 		    orderIndex);
 	}
@@ -3414,9 +3436,7 @@ void CreatureFightSystem::EndFightFor(entt::entity creature, std::optional<bool>
 	}
 	auto& record = registry.AllOf<CreatureFightRecord>(creature) ? registry.Get<CreatureFightRecord>(creature)
 	                                                             : registry.Assign<CreatureFightRecord>(creature);
-	record.tendency = fighting->fighter.tendency;
 	record.control = fighting->fighter.control;
-	record.foughtBefore = true;
 	if (won.has_value() && Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().FoughtFight(creature, *won);

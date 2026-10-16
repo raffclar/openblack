@@ -4921,6 +4921,25 @@ void AddCombat(std::vector<Scenario>& all)
 	    .creatures = {angry, blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
 	});
 
+	auto unpractised = red(PlayerNames::PLAYER_THREE, 0.6f, -0.3f);
+	unpractised.desires = OnlyDesire(Desire::Anger);
+	all.push_back({
+	    .id = "combat.lean_until_completed",
+	    .name = "A creature that did not complete a fight leans against its alignment again",
+	    .facet = Facet::Combat,
+	    .description = "A slightly evil red tiger (alignment -0.30) as angry as it gets stands near a blue tiger. Both "
+	                   "fight by themselves. The scenario gives the red tiger an aggressive lean of +0.70, but the red "
+	                   "tiger did not complete a fight.",
+	    .expected = "Its anger makes a plan to fight the blue tiger. When the fight starts, the lean of the red tiger "
+	                "changes to +0.30, against its alignment (the inspector shows CreatureFightRecord tendency). That "
+	                "lean is below the aggressive tier, thus the red tiger fights as a defensive fighter and blocks and "
+	                "steps more than it strikes. The blue tiger has not started a fight, thus it chooses its moves with a "
+	                "lean of 0.",
+	    .framing = ringside,
+	    .creatures = {unpractised, blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+	    .commands = {Command {.kind = Kind::SetFightLean, .creature = 0, .delaySeconds = 0.0f, .amount = 0.7f}},
+	});
+
 	auto lion = Fighter(left, 90.0f, "evil lion", PlayerNames::PLAYER_TWO, 1.0f, -0.9f);
 	lion.species = CreatureType::Lion;
 	lion.size = 1.3f;
