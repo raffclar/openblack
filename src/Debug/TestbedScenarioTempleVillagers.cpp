@@ -413,4 +413,63 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	                  .repeatSeconds = 8.0f}},
 	    .townBeliefInPlayer = k_TownBelief,
 	});
+	// The town centre close up, under miracles: from south east of it, above its huts
+	const Framing closeOnCentre {.shot = Shot::Placed, .eye = {22.0f, 16.0f, 18.0f}, .look = {0.0f, 3.0f, 40.0f}};
+	const MiracleCast lightningAtCentre {.type = MagicType::LightningBolt,
+	                                     .target = MiracleCast::Target::Point,
+	                                     .point = k_Centre,
+	                                     .handOffset = k_Centre + glm::vec2(0.0f, -12.0f),
+	                                     .handHeight = 18.0f,
+	                                     .delaySeconds = 8.0f,
+	                                     .holdSeconds = 4.0f,
+	                                     .repeatSeconds = 8.0f};
+	all.push_back({
+	    .id = "miracles.fireball_town_centre",
+	    .name = "Fireball at a town centre",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town centre with its two huts and people, and no temple. A fireball is thrown from the "
+	                   "south at the town centre.",
+	    .expected = "The ball strikes the town centre and goes off. The town centre catches fire, with flames and smoke "
+	                "on it, and loses life as it burns. Its people come out and the town cries out.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = closeOnCentre,
+	    .objects = Town(),
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = k_Centre,
+	                  .handOffset = k_Centre + glm::vec2(0.0f, -14.0f),
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 12.0f},
+	                  .delaySeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.lightning_town_centre",
+	    .name = "Lightning at a town centre",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town centre with its two huts and people, and no temple. A lightning bolt is held from "
+	                   "a hand south of the town centre, looking at it, for four seconds in every eight.",
+	    .expected = "The bolts strike the town centre and arcs crawl over it. It catches fire and loses life. Its people "
+	                "come out and the town cries out.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = closeOnCentre,
+	    .objects = Town(),
+	    .miracles = {lightningAtCentre},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	auto hurtTown = Town();
+	hurtTown.front().life = 0.15f;
+	all.push_back({
+	    .id = "miracles.town_centre_destroyed",
+	    .name = "A town centre destroyed by lightning",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town centre at 15 percent of its life, with its two huts and people, and no temple. A "
+	                   "lightning bolt is held from a hand south of the town centre, for four seconds in every eight.",
+	    .expected = "The bolts take the last of its life. The town centre flickers out as a ghost and goes, with its totem "
+	                "and its stone hands. Its town plans it again where it stood.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = closeOnCentre,
+	    .objects = hurtTown,
+	    .miracles = {lightningAtCentre},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
 }
