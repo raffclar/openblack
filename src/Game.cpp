@@ -900,13 +900,25 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			}
 			break;
 		// EXPERIMENT (not for merge): F10 starts the camera's tour above and under the sea by the shore; shift and F10
-		// the tour out along the sea bed
+		// the tour out along the sea bed; control and F10 bring a storm for forty seconds; alt and F10 drop the mobile
+		// objects near the camera's focus into the physics
 		case SDLK_F10:
 			if (Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled())
 			{
-				Locator::underwaterSystem::value().StartTour((event.key.keysym.mod & KMOD_SHIFT) != 0
-				                                                 ? graphics::underwater::Tour::FarSeabed
-				                                                 : graphics::underwater::Tour::Shore);
+				auto& underwater = Locator::underwaterSystem::value();
+				if ((event.key.keysym.mod & KMOD_CTRL) != 0)
+				{
+					underwater.StartDebugStorm();
+				}
+				else if ((event.key.keysym.mod & KMOD_ALT) != 0)
+				{
+					underwater.DropDebugFloaters();
+				}
+				else
+				{
+					underwater.StartTour((event.key.keysym.mod & KMOD_SHIFT) != 0 ? graphics::underwater::Tour::FarSeabed
+					                                                              : graphics::underwater::Tour::Shore);
+				}
 			}
 			break;
 		// F1 is the game's Help key, so the renderer's statistics are on F11

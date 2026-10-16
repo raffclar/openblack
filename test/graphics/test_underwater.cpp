@@ -9,8 +9,10 @@
 
 // EXPERIMENT (not for merge): the rules of the view under the sea and of the sea bed
 
+#include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <numbers>
 #include <vector>
 
@@ -171,4 +173,131 @@ TEST(Seabed, IsDeeperTowardsTheMapsEdge)
 	EXPECT_LT(depth(110, 100), depth(150, 100));
 	EXPECT_LT(depth(150, 100), depth(200, 100));
 	EXPECT_LE(depth(200, 100), seabed::k_MaxDepth);
+}
+
+TEST(Underwater, TheFullMoonsHighTideIsTheUsualHeight)
+{
+	constexpr float k_Full = std::numbers::pi_v<float>;
+	// High tide at midnight and midday, at a full moon exactly at the usual height
+	EXPECT_NEAR(underwater::TideLevel(0.0f, k_Full), 0.0f, 1e-5f);
+	EXPECT_NEAR(underwater::TideLevel(12.0f, k_Full), 0.0f, 1e-5f);
+	// The lowest low tide, at six, at a full moon
+	EXPECT_NEAR(underwater::TideLevel(6.0f, k_Full), -underwater::k_LowestTide, 1e-4f);
+	// Never above the usual height, at any hour or phase
+	for (float phase = 0.0f; phase < 6.3f; phase += 0.1f)
+	{
+		for (float hour = 0.0f; hour < 24.0f; hour += 0.25f)
+		{
+			EXPECT_LE(underwater::TideLevel(hour, phase), 1e-5f);
+			EXPECT_GE(underwater::TideLevel(hour, phase), -underwater::k_LowestTide - 1e-4f);
+		}
+	}
+	// Away from a full moon the high tide is lower, and the low tide at a quarter moon is not as low
+	constexpr float k_Quarter = std::numbers::pi_v<float> * 0.5f;
+	EXPECT_LT(underwater::TideLevel(0.0f, k_Quarter), -0.1f);
+	EXPECT_GT(underwater::TideLevel(6.0f, k_Quarter), -underwater::k_LowestTide + 0.5f);
+}
+
+TEST(Underwater, AStormMakesTheWavesHigher)
+{
+	const auto calm = underwater::WavesFor(0.0f, 0.0f);
+	const auto storm = underwater::WavesFor(1.0f, 0.0f);
+	EXPECT_GT(storm.scale, calm.scale * 3.0f);
+	EXPECT_GT(storm.swash, calm.swash);
+	float calmHighest = 0.0f;
+	float stormHighest = 0.0f;
+	for (float x = 0.0f; x < 200.0f; x += 1.0f)
+	{
+		calmHighest = std::max(calmHighest, std::abs(underwater::WavesAt({x, 0.0f}, 3.0f, calm).height));
+		stormHighest = std::max(stormHighest, std::abs(underwater::WavesAt({x, 0.0f}, 3.0f, storm).height));
+	}
+	EXPECT_GT(stormHighest, calmHighest * 2.0f);
+	EXPECT_LT(calmHighest, 1.0f);
+	// The slope agrees with the height's change along x
+	const auto here = underwater::WavesAt({10.0f, 5.0f}, 2.0f, calm);
+	const auto next = underwater::WavesAt({10.01f, 5.0f}, 2.0f, calm);
+	EXPECT_NEAR((next.height - here.height) / 0.01f, here.slope.x, 0.02f);
+}
+
+TEST(Underwater, StorminessAndEasing)
+{
+	EXPECT_FLOAT_EQ(underwater::Storminess(0.0f, 0.0f, {0.0f, 0.0f}), 0.0f);
+	EXPECT_FLOAT_EQ(underwater::Storminess(100.0f, 100.0f, {100.0f, 0.0f}), 1.0f);
+	EXPECT_FLOAT_EQ(underwater::EaseTowards(0.0f, 1.0f, 0.5f, 1.0f), 0.5f);
+	EXPECT_FLOAT_EQ(underwater::EaseTowards(0.0f, 1.0f, 0.5f, 4.0f), 1.0f);
+	EXPECT_FLOAT_EQ(underwater::EaseTowards(1.0f, 0.0f, 0.25f, 1.0f), 0.75f);
+}
+
+TEST(Seabed, GentleCoastsGoOnAsLongBeaches)
+{
+	// Two coasts on one sea: low land on the left (gentle), a high cliff on the right
+	constexpr glm::ivec2 k_Size {61, 3};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Size.x * k_Size.y), 0);
+	for (int z = 0; z < k_Size.y; ++z)
+	{
+		for (int x = 0; x < 5; ++x)
+		{
+			altitudes[static_cast<size_t>(z * k_Size.x + x)] = 6;
+		}
+		for (int x = 56; x < k_Size.x; ++x)
+		{
+			altitudes[static_cast<size_t>(z * k_Size.x + x)] = 120;
+		}
+	}
+	const auto bed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
+	const auto depth = [&bed](int x) { return bed.depth[static_cast<size_t>(bed.size.x + x)]; };
+	// Five cells out from the beach the water is shallow, under the lowest tide by eight cells
+	EXPECT_LT(depth(4 + 5), underwater::k_LowestTide);
+	EXPECT_GT(depth(4 + 9), underwater::k_LowestTide - 0.5f);
+	// Five cells out from the cliff it is much deeper
+	EXPECT_GT(depth(56 - 5), depth(4 + 5) * 2.0f);
+}
+
+TEST(Underwater, TheCurrentsSwirlsHaveNoSinks)
+{
+	// With no steady flow, no gust and no waves, what flows into a small square flows out of it
+	const underwater::CurrentState current {.flow = {0.0f, 0.0f}, .swirl = 1.0f, .gust = 0.0f};
+	auto still = underwater::WavesFor(0.0f, 0.0f);
+	still.scale = 0.0f;
+	for (float x = 0.0f; x < 400.0f; x += 37.0f)
+	{
+		const float h = 0.05f;
+		const auto flow = [&](float px, float pz) {
+			return underwater::CurrentAt({px, -20.0f, pz}, 5.0f, current, still, 0.0f);
+		};
+		const float divergence =
+		    (flow(x + h, 10.0f).x - flow(x - h, 10.0f).x + flow(x, 10.0f + h).y - flow(x, 10.0f - h).y) / (2.0f * h);
+		EXPECT_NEAR(divergence, 0.0f, 1e-3f);
+	}
+	// A storm makes the current stronger, and a rising tide adds a steady flow
+	const auto calm = underwater::CurrentFor(0.0f, 0.0f, 0.0f);
+	const auto storm = underwater::CurrentFor(0.0f, 0.0f, 1.0f);
+	EXPECT_GT(storm.swirl, calm.swirl);
+	EXPECT_GT(storm.gust, calm.gust);
+	EXPECT_GT(glm::length(underwater::CurrentFor(0.01f, 0.0f, 0.0f).flow - calm.flow), 0.0f);
+}
+
+TEST(Seabed, TheReefStaysUnderTheLowestTide)
+{
+	// A wide sea round a small island: every coral and plant is deep enough and not too deep
+	constexpr glm::ivec2 k_Size {161, 161};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Size.x * k_Size.y), 0);
+	for (int z = 75; z <= 85; ++z)
+	{
+		for (int x = 75; x <= 85; ++x)
+		{
+			altitudes[static_cast<size_t>(z * k_Size.x + x)] = 6;
+		}
+	}
+	const auto bed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
+	const auto reef = seabed::PlaceReef(bed, underwater::k_LowestTide, 500, 500);
+	ASSERT_FALSE(reef.empty());
+	for (const auto& plant : reef)
+	{
+		const float under = -plant.position.y - underwater::k_LowestTide;
+		const bool coral = plant.kind == seabed::ReefPlant::Kind::Coral;
+		EXPECT_GE(under, coral ? seabed::k_CoralTopUnderTide : seabed::k_PlantTopUnderTide);
+		EXPECT_LE(under, coral ? seabed::k_CoralBottomUnderTide : seabed::k_PlantBottomUnderTide);
+	}
+	EXPECT_LE(seabed::PlaceReef(bed, underwater::k_LowestTide, 3, 4).size(), 7u);
 }

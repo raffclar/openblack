@@ -10,6 +10,7 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 
@@ -35,19 +36,41 @@ public:
 	void Update(std::chrono::milliseconds frameRealTime) override;
 	[[nodiscard]] float GetEyeDepth() const override { return _eyeDepth; }
 	[[nodiscard]] bool IsEyeUnder() const override { return _eyeUnder; }
+	[[nodiscard]] float GetSeaLevel() const override { return _seaLevel; }
+	[[nodiscard]] const graphics::underwater::WaveState& GetWaves() const override { return _waves; }
+	[[nodiscard]] float GetSeconds() const override { return _seconds; }
+	[[nodiscard]] std::span<const glm::vec3> GetFloaters() const override { return _floaters; }
+	[[nodiscard]] glm::mat4 FloatOnWaves(const glm::mat4& model) const override;
+	void StartDebugStorm() override;
+	void DropDebugFloaters() override;
 	[[nodiscard]] const seabed::Seabed& GetSeabed() const override { return _seabed; }
 	[[nodiscard]] uint32_t GetSeabedRevision() const override { return _revision; }
+	[[nodiscard]] std::span<const seabed::ReefPlant> GetReef() const override { return _reef; }
+	[[nodiscard]] const graphics::underwater::CurrentState& GetCurrent() const override { return _current; }
 	[[nodiscard]] float FloorAt(glm::vec2 point, float landHeight) const override;
 
 private:
 	/// The sand texture of the sea bed, once
 	static void LoadSand();
+	/// The tide, the storm and the waves, and the things that float
+	void UpdateSea(float frameSeconds);
+	/// Whether a thing whose physics body is drawn here floats on the sea
+	[[nodiscard]] bool Floats(const glm::vec3& origin) const;
 
 	bool _enabled {true};
 	float _eyeDepth {0.0f};
 	bool _eyeUnder {false};
 	/// How much the land's sounds and the music are turned down now, eased towards its target
 	float _duck {1.0f};
+	float _seaLevel {0.0f};
+	float _seconds {0.0f};
+	float _storm {0.0f};
+	float _windAngle {0.0f};
+	graphics::underwater::WaveState _waves;
+	std::vector<glm::vec3> _floaters;
+	std::vector<seabed::ReefPlant> _reef;
+	graphics::underwater::CurrentState _current;
+	float _tideRate {0.0f};
 	/// How far the debug tour has gone, in seconds; none while it does not run
 	std::optional<float> _tourSeconds;
 	graphics::underwater::Tour _tour {graphics::underwater::Tour::Shore};

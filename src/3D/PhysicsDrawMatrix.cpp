@@ -11,6 +11,9 @@
 
 #include <glm/ext/matrix_transform.hpp>
 
+#include "ECS/Systems/UnderwaterSystemInterface.h"
+#include "Locator.h"
+
 std::optional<glm::mat4> openblack::physics_draw::ModelMatrix(const glm::mat4& standing,
                                                               const ecs::components::PhysicsDrawPose* pose)
 {
@@ -22,7 +25,9 @@ std::optional<glm::mat4> openblack::physics_draw::ModelMatrix(const glm::mat4& s
 	{
 		return std::nullopt;
 	}
-	return glm::translate(glm::mat4(1.0f), pose->origin) * glm::mat4(pose->axes);
+	const auto model = glm::translate(glm::mat4(1.0f), pose->origin) * glm::mat4(pose->axes);
+	// EXPERIMENT (not for merge): a thing that floats rides the experiment's waves and tide
+	return Locator::underwaterSystem::has_value() ? Locator::underwaterSystem::value().FloatOnWaves(model) : model;
 }
 
 glm::vec3 openblack::physics_draw::Position(const glm::vec3& standing, const ecs::components::PhysicsDrawPose* pose)

@@ -16,6 +16,7 @@
 #include <limits>
 
 #include <glm/common.hpp>
+#include <glm/geometric.hpp>
 
 using namespace openblack;
 
@@ -60,6 +61,13 @@ float Hills(int x, int z)
 	return sum * 2.0f - 1.0f;
 }
 } // namespace
+
+float seabed::BeachDepth(float cells)
+{
+	// A gentle slope down to below the lowest tide, then steeper out to the shelf
+	const float beyond = std::max(cells - 10.0f, 0.0f);
+	return k_BeachSlope * std::max(cells, 0.0f) + 0.15f * beyond * std::sqrt(beyond);
+}
 
 float seabed::DepthForDistance(float cells)
 {
@@ -141,6 +149,32 @@ seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size
 	const auto at = [&size](int x, int z) {
 		return static_cast<size_t>(z) * static_cast<size_t>(size.x) + static_cast<size_t>(x);
 	};
+	// The coasts that slope gently: land next to the sea that rises little over the two cells round it
+	std::vector<bool> gentle(count, false);
+	for (int z = 0; z < size.y; ++z)
+	{
+		for (int x = 0; x < size.x; ++x)
+		{
+			if (!land[at(x, z)])
+			{
+				continue;
+			}
+			bool coast = false;
+			uint8_t highest = 0;
+			for (int dz = -2; dz <= 2; ++dz)
+			{
+				for (int dx = -2; dx <= 2; ++dx)
+				{
+					const int nx = std::clamp(x + dx, 0, size.x - 1);
+					const int nz = std::clamp(z + dz, 0, size.y - 1);
+					highest = std::max(highest, altitudes[at(nx, nz)]);
+					coast = coast || (std::abs(dx) + std::abs(dz) == 1 && !land[at(nx, nz)]);
+				}
+			}
+			gentle[at(x, z)] = coast && highest <= k_SeaLevelAltitude + k_GentleRise;
+		}
+	}
+	const auto toGentle = DistanceTo(gentle, size);
 	seabed.depth.resize(count);
 	for (int z = 0; z < size.y; ++z)
 	{
@@ -153,12 +187,15 @@ seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size
 				continue;
 			}
 			float depth = DepthForDistance(cells);
+			// Out from a gentle coast the land goes on under the water as a long beach, so the tide has room to move
+			const float beachShare = 1.0f - std::clamp((toGentle[at(x, z)] - cells - 1.0f) / 3.0f, 0.0f, 1.0f);
+			depth = glm::mix(depth, std::min(depth, BeachDepth(cells)), beachShare);
 			// Deeper again towards the map's edge, away from the coast
 			const auto edge = static_cast<float>(std::min(std::min(x, z), std::min(size.x - 1 - x, size.y - 1 - z)));
 			const float towardsEdge = 1.0f - std::clamp(edge / 80.0f, 0.0f, 1.0f);
 			depth += k_EdgeDepth * towardsEdge * towardsEdge * std::clamp((cells - 10.0f) / 30.0f, 0.0f, 1.0f);
 			// The hills and dips: none at the coast, and larger in deeper water
-			const float amplitude = std::min(cells / 4.0f, 1.0f) * (1.5f + depth * 0.1f);
+			const float amplitude = std::min(cells / 4.0f, 1.0f) * (1.5f + depth * 0.1f) * (1.0f - beachShare * 0.7f);
 			depth += Hills(x, z) * amplitude;
 			seabed.depth[at(x, z)] = std::clamp(depth, 0.5f, k_MaxDepth);
 		}
@@ -191,4 +228,72 @@ float seabed::FloorHeight(const Seabed& seabed, glm::vec2 world, float landHeigh
 		return landHeight;
 	}
 	return -seabed.DepthAt(world);
+}
+
+std::vector<seabed::ReefPlant> seabed::PlaceReef(const Seabed& seabed, float lowestTide, size_t mostCoral, size_t mostPlants)
+{
+	std::vector<ReefPlant> plants;
+	if (seabed.size.x <= 1 || seabed.size.y <= 1)
+	{
+		return plants;
+	}
+	constexpr float k_Step = 4.0f;
+	size_t coral = 0;
+	size_t weed = 0;
+	const glm::vec2 extent = glm::vec2(seabed.size - 1) * seabed.spacing;
+	for (float z = 0.0f; z < extent.y; z += k_Step)
+	{
+		for (float x = 0.0f; x < extent.x; x += k_Step)
+		{
+			const auto ix = static_cast<int>(x / k_Step);
+			const auto iz = static_cast<int>(z / k_Step);
+			// A point a little off the grid, the same each time
+			const glm::vec2 at =
+			    seabed.origin + glm::vec2(x, z) + glm::vec2(Hash(ix, iz * 7 + 1) - 0.5f, Hash(ix * 3 + 2, iz) - 0.5f) * k_Step;
+			const float depth = seabed.DepthAt(at);
+			const float underTide = depth - lowestTide;
+			if (depth <= 0.0f || underTide < k_PlantTopUnderTide || underTide > k_PlantBottomUnderTide)
+			{
+				continue;
+			}
+			const float dx = seabed.DepthAt(at + glm::vec2(2.0f, 0.0f)) - seabed.DepthAt(at - glm::vec2(2.0f, 0.0f));
+			const float dz = seabed.DepthAt(at + glm::vec2(0.0f, 2.0f)) - seabed.DepthAt(at - glm::vec2(0.0f, 2.0f));
+			if (glm::length(glm::vec2(dx, dz)) / 4.0f > k_ReefSteepest)
+			{
+				continue;
+			}
+			const float roll = Hash(ix * 13 + 5, iz * 17 + 3);
+			const float tint = Hash(ix * 5 + 11, iz * 3 + 7);
+			const float yaw = Hash(ix + 19, iz * 11 + 2) * 6.2831853f;
+			const glm::vec3 foot {at.x, -depth, at.y};
+			// The reef's patches: a broad noise and a finer one, so the coral grows in clumps
+			const float reef =
+			    ValueNoise(at.x / 10.0f, at.y / 10.0f, 14.0f) * 0.7f + ValueNoise(at.x / 10.0f, at.y / 10.0f, 4.0f) * 0.3f;
+			if (coral < mostCoral && underTide >= k_CoralTopUnderTide && underTide <= k_CoralBottomUnderTide && reef > 0.55f &&
+			    roll < (reef - 0.55f) * 4.5f)
+			{
+				const float variant = std::floor(Hash(ix * 23 + 1, iz * 29 + 4) * 9.0f);
+				plants.push_back({.kind = ReefPlant::Kind::Coral,
+				                  .position = foot,
+				                  .scale = 1.2f + 2.2f * Hash(ix * 31 + 6, iz * 7 + 9),
+				                  .yaw = yaw,
+				                  .variant = std::min(variant, 8.0f),
+				                  .tint = tint});
+				++coral;
+				continue;
+			}
+			const float meadow = ValueNoise(at.x / 10.0f + 50.0f, at.y / 10.0f, 10.0f);
+			if (weed < mostPlants && meadow > 0.58f && roll < (meadow - 0.58f) * 2.5f)
+			{
+				plants.push_back({.kind = ReefPlant::Kind::Seaweed,
+				                  .position = foot,
+				                  .scale = 1.5f + 3.0f * Hash(ix * 37 + 8, iz * 13 + 1) * std::min(underTide / 6.0f, 1.0f),
+				                  .yaw = yaw,
+				                  .variant = Hash(ix * 41 + 3, iz * 19 + 5),
+				                  .tint = tint});
+				++weed;
+			}
+		}
+	}
+	return plants;
 }

@@ -11,21 +11,34 @@
 
 #include "UnderwaterSystem.h"
 
+#include <cmath>
 #include <cstddef>
 
 #include <algorithm>
 #include <filesystem>
+#include <numbers>
 #include <stdexcept>
 #include <vector>
 
 #include <LNDFile.h>
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/Physics.h"
+#include "ECS/Components/Sky.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/Registry.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/Underwater.h"
 #include "Locator.h"
@@ -36,6 +49,8 @@ using namespace openblack::ecs::systems;
 
 void UnderwaterSystem::Update(std::chrono::milliseconds frameRealTime)
 {
+	const float frameSeconds = std::chrono::duration<float>(frameRealTime).count();
+	UpdateSea(frameSeconds);
 	// The debug tour puts the camera where it is now on its way
 	if (_tourSeconds.has_value() && Locator::camera::has_value())
 	{
@@ -68,7 +83,7 @@ void UnderwaterSystem::Update(std::chrono::milliseconds frameRealTime)
 	// change takes about a third of a second each way, so nothing clicks at the surface.
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
-	_eyeDepth = _enabled && !inTemple ? graphics::underwater::EyeDepth(eye.y) : 0.0f;
+	_eyeDepth = _enabled && !inTemple ? graphics::underwater::EyeDepth(eye.y, _seaLevel) : 0.0f;
 	_eyeUnder = _eyeDepth > 0.0f;
 	constexpr float k_DuckUnder = 0.3f;
 	constexpr float k_DuckPerSecond = 2.5f;
@@ -106,7 +121,139 @@ void UnderwaterSystem::Update(std::chrono::milliseconds frameRealTime)
 		}
 	}
 	_seabed = seabed::Build(altitudes, size, glm::vec2(0.0f), LandIslandInterface::k_CellSize);
+	_reef = seabed::PlaceReef(_seabed, graphics::underwater::k_LowestTide, graphics::underwater::k_MostCoral,
+	                          graphics::underwater::k_MostPlants);
+	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: {} coral and plants on the reef", _reef.size());
 	++_revision;
+}
+
+void UnderwaterSystem::UpdateSea(float frameSeconds)
+{
+	namespace underwater = graphics::underwater;
+	_seconds = std::fmod(_seconds + frameSeconds, 3600.0f);
+	// The tide, from the hour and the moon's phase
+	float hour = 12.0f;
+	float phase = std::numbers::pi_v<float>;
+	if (Locator::skySystem::has_value())
+	{
+		const auto& sky = Locator::skySystem::value();
+		hour = sky.GetClock().GetScriptTime();
+		if (const auto* moon = Locator::entitiesRegistry::value().TryGet<const ecs::components::Moon>(sky.GetMoon()))
+		{
+			phase = moon->phase;
+		}
+	}
+	const float tide = _enabled ? underwater::TideLevel(hour, phase) : underwater::k_SeaLevel;
+	// The tide moves slowly, so a jump of the clock does not jerk the sea
+	const float before = _seaLevel;
+	_seaLevel = underwater::EaseTowards(_seaLevel, tide, 0.4f, frameSeconds);
+	if (frameSeconds > 0.0f)
+	{
+		_tideRate = underwater::EaseTowards(_tideRate, (_seaLevel - before) / frameSeconds, 0.05f, frameSeconds);
+	}
+
+	// The storm at the camera: the sea gets rough over some seconds and calms again more slowly
+	float storm = 0.0f;
+	if (Locator::weatherSystem::has_value() && Locator::camera::has_value())
+	{
+		const auto weather = Locator::weatherSystem::value().GetWeatherSmooth(Locator::camera::value().GetOrigin());
+		const glm::vec2 wind {static_cast<float>(weather.windX), static_cast<float>(weather.windZ)};
+		storm = underwater::Storminess(weather.rain, weather.overcast, wind);
+		if (glm::length(wind) > 5.0f)
+		{
+			// The waves turn with the wind, slowly
+			const float target = std::atan2(wind.y, wind.x);
+			const float turn = std::remainder(target - _windAngle, 2.0f * std::numbers::pi_v<float>);
+			_windAngle += std::clamp(turn, -0.2f * frameSeconds, 0.2f * frameSeconds);
+		}
+	}
+	_storm = underwater::EaseTowards(_storm, storm, storm > _storm ? 0.12f : 0.05f, frameSeconds);
+	_waves = underwater::WavesFor(_storm, _windAngle);
+	_current = underwater::CurrentFor(_tideRate, _windAngle, _storm);
+
+	// The things that float: the bodies in the physics over the sea, near its surface
+	_floaters.clear();
+	if (!_enabled || !Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	Locator::entitiesRegistry::value().Each<const ecs::components::PhysicsDrawPose>(
+	    [this](entt::entity /*entity*/, const ecs::components::PhysicsDrawPose& pose) {
+		    if (Floats(pose.origin))
+		    {
+			    _floaters.push_back(pose.origin);
+		    }
+	    });
+	const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
+	std::ranges::sort(_floaters, {}, [&eye](const glm::vec3& at) { return glm::distance(at, eye); });
+	constexpr size_t k_MostFloaters = 8;
+	if (_floaters.size() > k_MostFloaters)
+	{
+		_floaters.resize(k_MostFloaters);
+	}
+}
+
+bool UnderwaterSystem::Floats(const glm::vec3& origin) const
+{
+	// The physics floats a thing at the usual sea height: near it, and over water deeper than a unit
+	return std::abs(origin.y - graphics::underwater::k_SeaLevel) < 3.0f && _seabed.DepthAt({origin.x, origin.z}) > 1.0f;
+}
+
+glm::mat4 UnderwaterSystem::FloatOnWaves(const glm::mat4& model) const
+{
+	const glm::vec3 origin = model[3];
+	if (!_enabled || !Floats(origin))
+	{
+		return model;
+	}
+	const auto wave = graphics::underwater::WavesAt({origin.x, origin.z}, _seconds, _waves);
+	const float lift = _seaLevel - graphics::underwater::k_SeaLevel + wave.height;
+	// It tilts with the surface, a little less than the surface does
+	const glm::vec3 up {0.0f, 1.0f, 0.0f};
+	const auto normal = glm::normalize(glm::vec3(-wave.slope.x, 1.0f, -wave.slope.y));
+	const auto tilt = glm::rotation(up, glm::normalize(glm::mix(up, normal, 0.7f)));
+	return glm::translate(glm::mat4(1.0f), origin + glm::vec3(0.0f, lift, 0.0f)) * glm::mat4_cast(tilt) *
+	       glm::translate(glm::mat4(1.0f), -origin) * model;
+}
+
+void UnderwaterSystem::StartDebugStorm()
+{
+	if (!Locator::weatherSystem::has_value())
+	{
+		return;
+	}
+	// Rain, cloud and a strong wind over the land for forty seconds, coming in and clearing over ten each
+	ecs::systems::ForcedStorm storm {};
+	storm.effect.rain = 100;
+	storm.effect.overcast = 100;
+	storm.effect.windX = 90;
+	storm.effect.windZ = 40;
+	storm.seconds = 40.0f;
+	storm.fadeSeconds = 10.0f;
+	Locator::weatherSystem::value().ForceStorm(storm);
+}
+
+void UnderwaterSystem::DropDebugFloaters()
+{
+	if (!Locator::dynamicsSystem::has_value() || !Locator::camera::has_value())
+	{
+		return;
+	}
+	const auto focus = Locator::camera::value().GetFocus();
+	std::vector<entt::entity> near;
+	Locator::entitiesRegistry::value().Each<const ecs::components::MobileObject, const ecs::components::Transform>(
+	    [&](entt::entity entity, const ecs::components::MobileObject& /*mobile*/, const ecs::components::Transform& transform) {
+		    if (glm::distance(glm::vec2(transform.position.x, transform.position.z), glm::vec2(focus.x, focus.z)) < 40.0f)
+		    {
+			    near.push_back(entity);
+		    }
+	    });
+	for (const auto entity : near)
+	{
+		Locator::dynamicsSystem::value().InitialisePhysics(entity,
+		                                                   ecs::systems::PhysicsStart {.velocity = {0.0f, -1.0f, 0.0f}});
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: dropped {} things into the physics", near.size());
 }
 
 void UnderwaterSystem::CycleEffectOff()
@@ -119,6 +266,26 @@ void UnderwaterSystem::CycleEffectOff()
 
 void UnderwaterSystem::LoadSand()
 {
+	// The coral atlas, with its alpha, through the texture cache
+	{
+		auto& textures = Locator::resources::value().GetTextures();
+		const std::filesystem::path coral {graphics::underwater::k_CoralPath};
+		const std::filesystem::path coralAlpha {graphics::underwater::k_CoralAlphaPath};
+		if (!textures.Contains(graphics::underwater::k_CoralTextureId.value()) && std::filesystem::exists(coral) &&
+		    std::filesystem::exists(coralAlpha))
+		{
+			try
+			{
+				textures.Load(graphics::underwater::k_CoralTextureId.value(),
+				              resources::Texture2DLoader::FromDiskWithAlphaTag {}, coral, coralAlpha,
+				              graphics::underwater::k_CoralSide);
+			}
+			catch (std::runtime_error& err)
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "{}", err.what());
+			}
+		}
+	}
 	// The sand of the sea bed, from the experiment's folder, through the texture cache
 	auto& textures = Locator::resources::value().GetTextures();
 	const std::filesystem::path sand {graphics::underwater::k_SandPath};

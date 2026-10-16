@@ -404,6 +404,8 @@ private:
 	void SetTerrainUnderwater(const ShaderProgram& program, bool active) const;
 	/// EXPERIMENT (not for merge): the sea bed past the land's blocks, in the land's pass of the main view
 	void DrawFarSeabed(RenderPass landViewId) const;
+	/// EXPERIMENT (not for merge): the reef's coral and plants, in the land's pass of the main view
+	void DrawReef(RenderPass landViewId) const;
 	/// The beams of the temple's spot lights and the light its windows shed, which the game draws in its
 	/// rooms but not in the reflection of the main room
 	void DrawLightBeams(const DrawSceneDesc& desc) const;

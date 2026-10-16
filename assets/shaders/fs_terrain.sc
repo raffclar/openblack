@@ -362,6 +362,14 @@ void main()
 		if (sandShare > 0.0f)
 		{
 			land = mix(land, SeabedSand(v_world, v_lightColour, surfaceNormal), sandShare);
+			// The sand is wet and darker below the highest run of the waves up the beach: wettest where the water just
+			// was, drier further up. The beach that the tide leaves is damp.
+			float level = u_uwParams.z;
+			float runUp = level + UwSwash(v_world.xz, u_uwParams.y);
+			float wetTop = level + u_uwWaves.w * 1.1f + 0.15f;
+			float wet = 1.0f - smoothstep(runUp, wetTop, v_world.y);
+			wet = max(wet, 0.45f * (1.0f - smoothstep(-0.3f, 0.05f, v_world.y)));
+			land = mix(land, land * 0.6f, wet * sandShare);
 			bumpAlpha *= 1.0f - sandShare;
 		}
 		block.a = 1.0f;

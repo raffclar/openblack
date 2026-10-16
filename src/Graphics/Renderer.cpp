@@ -5888,6 +5888,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			if (desc.viewId == RenderPass::Main && _underwaterFrame.has_value())
 			{
 				DrawFarSeabed(landViewId);
+				DrawReef(landViewId);
 			}
 			_shaderManager->DiscardBindings();
 			DrawCreatureFootprints(desc);

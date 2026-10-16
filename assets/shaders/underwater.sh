@@ -19,6 +19,14 @@ uniform vec4 u_uwEye;
 uniform vec4 u_uwFlags;
 // xyz: the direction towards the light above the surface; w: the caustics, 1 on, 0 off
 uniform vec4 u_uwAbove;
+// x: how high the waves are (1 calm), y: how stormy the sea is (0 to 1), z: the wind's direction in radians from +x
+// towards +z, w: how far the waves run up the beach, in height
+uniform vec4 u_uwWaves;
+// x: the storm's whitecaps and streaks of foam, 1 on, 0 off; y: the reef, 1 on, 0 off; zw: unused
+uniform vec4 u_uwFlags2;
+// The sea's currents, one field for every moving thing in the water (see underwater::CurrentAt). xy: the steady flow
+// in units a second, z: how strong the swirls are, w: how strong the gusts are
+uniform vec4 u_uwCurrent;
 
 // How much of each colour the water takes out for each unit the light goes through it: the red first, then the green
 #define UW_ABSORPTION vec3(0.085f, 0.032f, 0.018f)
@@ -108,26 +116,102 @@ float UwSurfaceLight(vec2 p, float t)
 	return smoothstep(0.42f, 0.78f, n);
 }
 
-// The normal of the sea's surface at a point, from its waves: four long waves that go different ways and two short
-// ones. They fade to a flat surface far away, where they would be smaller than a pixel.
-vec3 UwWaveNormal(vec2 p, float t, float range)
+// One wave of the sea: its angle from the wind, its length, its height and its phase. Four long swells and two short
+// chops, the same as underwater::WavesAt.
+float UwWave(vec2 p, float t, float turn, float wavelength, float amplitude, float phase, float chop, inout vec2 slope)
 {
-	vec2 slope = vec2_splat(0.0f);
-	vec2 d1 = vec2(0.80f, 0.60f);
-	vec2 d2 = vec2(-0.39f, 0.92f);
-	vec2 d3 = vec2(0.96f, -0.28f);
-	vec2 d4 = vec2(-0.70f, -0.71f);
-	slope += d1 * cos(dot(p, d1) * 0.31f + t * 0.90f) * 0.060f;
-	slope += d2 * cos(dot(p, d2) * 0.53f + t * 1.25f) * 0.045f;
-	slope += d3 * cos(dot(p, d3) * 0.97f + t * 1.70f) * 0.035f;
-	slope += d4 * cos(dot(p, d4) * 1.71f + t * 2.30f) * 0.025f;
-	float close = 1.0f - smoothstep(30.0f, 120.0f, range);
-	vec2 d5 = vec2(0.17f, 0.98f);
-	vec2 d6 = vec2(0.99f, 0.12f);
-	slope += d5 * cos(dot(p, d5) * 3.70f + t * 3.4f) * 0.020f * close;
-	slope += d6 * cos(dot(p, d6) * 5.30f - t * 3.9f) * 0.014f * close;
-	slope *= 1.0f - smoothstep(150.0f, 600.0f, range);
+	float storm = u_uwWaves.y;
+	float angle = u_uwWaves.z + turn;
+	vec2 along = vec2(cos(angle), sin(angle));
+	float k = 6.2831853f / (wavelength * (1.0f - 0.35f * storm));
+	float omega = sqrt(9.8f * k) * 0.8f;
+	float sharp = 1.0f + 1.5f * storm;
+	float a = amplitude * u_uwWaves.x * chop;
+	float theta = k * dot(along, p) - omega * t + phase;
+	float s = 0.5f + 0.5f * sin(theta);
+	slope += along * (a * sharp * pow(max(s, 1e-4f), sharp - 1.0f) * cos(theta) * k);
+	return a * (2.0f * pow(max(s, 0.0f), sharp) - 1.0f);
+}
+
+// The height of the waves over the sea's level at a point, and the slope of the surface there. The short chop fades
+// far away, where it would be smaller than a pixel: `range` is how far the point is from the eye.
+float UwWaves(vec2 p, float t, float range, out vec2 slope)
+{
+	slope = vec2_splat(0.0f);
+	float chop = 1.0f + u_uwWaves.y * 2.5f;
+	float close = 1.0f - smoothstep(60.0f, 250.0f, range);
+	float height = UwWave(p, t, 0.0f, 61.0f, 0.30f, 0.0f, 1.0f, slope);
+	height += UwWave(p, t, 0.5f, 41.0f, 0.18f, 1.7f, 1.0f, slope);
+	height += UwWave(p, t, -0.4f, 27.0f, 0.12f, 4.1f, 1.0f, slope);
+	height += UwWave(p, t, 1.1f, 18.0f, 0.08f, 2.3f, 1.0f, slope);
+	vec2 chopSlope = vec2_splat(0.0f);
+	height += UwWave(p, t, 0.3f, 7.0f, 0.04f, 5.2f, chop, chopSlope) * close;
+	height += UwWave(p, t, -0.9f, 4.3f, 0.03f, 0.9f, chop, chopSlope) * close;
+	slope += chopSlope * close;
+	return height;
+}
+
+// How the highest of the waves is over the sea's level, for the crests' foam
+float UwWaveTop()
+{
+	return (0.30f + 0.18f + 0.12f + 0.08f) * u_uwWaves.x;
+}
+
+// The normal of the sea's surface from its slope
+vec3 UwSurfaceNormalOf(vec2 slope, float range)
+{
+	// The waves look flatter far away, where many of them fall in one pixel
+	slope *= 1.0f - smoothstep(200.0f, 900.0f, range) * 0.8f;
 	return normalize(vec3(-slope.x, 1.0f, -slope.y));
+}
+
+// How high the waves run up the beach now at a point, over the sea's level: in and out, a little out of step along the
+// coast
+float UwSwash(vec2 p, float t)
+{
+	float along = UwNoise(p * 0.02f) * 6.2831f;
+	float cycle = 0.5f + 0.5f * sin(t * (0.9f + 0.4f * u_uwWaves.y) + along);
+	return u_uwWaves.w * cycle * cycle;
+}
+
+// One swirl of the currents: the flow is the curl of a sum of these, so the water has no sinks
+vec2 UwSwirl(vec2 p, float t, vec2 k, float omega, float amplitude, float phase, inout vec2 shift)
+{
+	float theta = dot(k, p) + omega * t + phase;
+	vec2 across = vec2(k.y, -k.x) * (amplitude * u_uwCurrent.z);
+	shift += across * (sin(theta) / omega);
+	return across * cos(theta);
+}
+
+// How strong the gust is at a point now, 0 to 1: a front that passes along the wind every 300 units at 6 a second
+float UwGust(vec2 p, float t)
+{
+	vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
+	float front = fract((dot(p, wind) - 6.0f * t) / 300.0f);
+	return smoothstep(0.0f, 0.06f, front) * (1.0f - smoothstep(0.06f, 0.22f, front));
+}
+
+// The water's flow across the ground at a point, in units a second, and how far the swirls and the waves have moved
+// the water there (`shift`), for things that drift with it. The same as underwater::CurrentAt.
+vec2 UwCurrent(vec3 p, float t, out vec2 shift)
+{
+	shift = vec2_splat(0.0f);
+	vec2 flow = u_uwCurrent.xy;
+	flow += UwSwirl(p.xz, t, vec2(0.031f, 0.012f), 0.15f, 4.0f, 0.0f, shift);
+	flow += UwSwirl(p.xz, t, vec2(-0.018f, 0.047f), 0.22f, 2.4f, 2.1f, shift);
+	flow += UwSwirl(p.xz, t, vec2(0.062f, -0.051f), 0.31f, 1.2f, 4.4f, shift);
+	vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
+	float gust = UwGust(p.xz, t) * u_uwCurrent.w;
+	flow += wind * gust;
+	shift += wind * gust * 1.5f;
+	float k = 6.2831853f / (61.0f * (1.0f - 0.35f * u_uwWaves.y));
+	float omega = sqrt(9.8f * k) * 0.8f;
+	float theta = k * dot(wind, p.xz) - omega * t;
+	float nearSurface = exp(min(p.y - u_uwParams.z, 0.0f) * k);
+	float orbit = 0.30f * u_uwWaves.x * nearSurface;
+	flow += wind * (orbit * omega * sin(theta));
+	shift -= wind * (orbit * cos(theta));
+	return flow;
 }
 
 #endif // UNDERWATER_SH

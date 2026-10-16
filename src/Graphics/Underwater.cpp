@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <array>
+#include <numbers>
 
 #include <glm/common.hpp>
 #include <glm/exponential.hpp>
@@ -136,7 +137,140 @@ glm::vec2 underwater::FarTourGround(float seconds)
 	return {x, z};
 }
 
-float underwater::EyeDepth(float eyeHeight)
+float underwater::TideLevel(float scriptHour, float moonPhase)
 {
-	return std::max(k_SeaLevel - eyeHeight, 0.0f);
+	// 1 at a full moon, 0 at a new moon; the spring tides are at both
+	const float full = PhaseBrightness(moonPhase);
+	const float spring = std::abs(std::cos(moonPhase));
+	const float high = -k_NeapHighDrop * (1.0f - full);
+	const float low = -k_LowestTide * (k_NeapLowShare + (1.0f - k_NeapLowShare) * spring);
+	// High at midnight and midday, low at six
+	const float rise = 0.5f + 0.5f * std::cos(scriptHour * 2.0f * std::numbers::pi_v<float> / 12.0f);
+	return glm::mix(low, high, rise);
+}
+
+underwater::WaveState underwater::WavesFor(float storm, float windAngle)
+{
+	storm = std::clamp(storm, 0.0f, 1.0f);
+	return {.scale = 1.0f + storm * 3.5f, .storm = storm, .windAngle = windAngle, .swash = 0.25f + storm * 0.55f};
+}
+
+namespace
+{
+struct Wave
+{
+	/// The angle from the wind
+	float turn;
+	float wavelength;
+	float amplitude;
+	float phase;
+};
+/// Four long swells and two short chops. The shaders have the same table (UwWaves).
+constexpr std::array<Wave, 6> k_Waves {{
+    {0.0f, 61.0f, 0.30f, 0.0f},
+    {0.5f, 41.0f, 0.18f, 1.7f},
+    {-0.4f, 27.0f, 0.12f, 4.1f},
+    {1.1f, 18.0f, 0.08f, 2.3f},
+    {0.3f, 7.0f, 0.04f, 5.2f},
+    {-0.9f, 4.3f, 0.03f, 0.9f},
+}};
+} // namespace
+
+underwater::WaveSample underwater::WavesAt(glm::vec2 point, float seconds, const WaveState& waves)
+{
+	WaveSample sample {.height = 0.0f, .slope = {0.0f, 0.0f}};
+	// A storm makes the waves shorter and their crests sharper, and the chop higher
+	const float shorter = 1.0f - 0.35f * waves.storm;
+	const float sharp = 1.0f + 1.5f * waves.storm;
+	for (size_t i = 0; i < k_Waves.size(); ++i)
+	{
+		const auto& wave = k_Waves.at(i);
+		const float angle = waves.windAngle + wave.turn;
+		const glm::vec2 along {std::cos(angle), std::sin(angle)};
+		const float k = 2.0f * std::numbers::pi_v<float> / (wave.wavelength * shorter);
+		const float omega = std::sqrt(9.8f * k) * 0.8f;
+		const float chop = i >= 4 ? 1.0f + waves.storm * 2.5f : 1.0f;
+		const float amplitude = wave.amplitude * waves.scale * chop;
+		const float theta = k * glm::dot(along, point) - omega * seconds + wave.phase;
+		const float s = 0.5f + 0.5f * std::sin(theta);
+		const float lifted = std::pow(s, sharp);
+		sample.height += amplitude * (2.0f * lifted - 1.0f);
+		const float rise = amplitude * sharp * std::pow(std::max(s, 1e-4f), sharp - 1.0f) * std::cos(theta) * k;
+		sample.slope += along * rise;
+	}
+	return sample;
+}
+
+underwater::CurrentState underwater::CurrentFor(float tideRate, float windAngle, float storm)
+{
+	storm = std::clamp(storm, 0.0f, 1.0f);
+	// The tide flows in towards the land as it rises and out as it falls, along one way over the whole map
+	const glm::vec2 tideWay {0.6f, 0.8f};
+	const glm::vec2 wind {std::cos(windAngle), std::sin(windAngle)};
+	return {.flow = tideWay * (tideRate * 40.0f) + wind * (0.05f + 0.25f * storm),
+	        .swirl = 1.0f + 3.0f * storm,
+	        .gust = 0.4f + 1.6f * storm};
+}
+
+namespace
+{
+struct Swirl
+{
+	glm::vec2 k;
+	float omega;
+	float amplitude;
+	float phase;
+};
+/// The swirls: the flow is the curl of a sum of these, so the water has no sinks. The shaders have the same table.
+constexpr std::array<Swirl, 3> k_Swirls {{
+    {{0.031f, 0.012f}, 0.15f, 4.0f, 0.0f},
+    {{-0.018f, 0.047f}, 0.22f, 2.4f, 2.1f},
+    {{0.062f, -0.051f}, 0.31f, 1.2f, 4.4f},
+}};
+/// A gust front passes every this many units along the wind, at this speed
+constexpr float k_GustSpacing = 300.0f;
+constexpr float k_GustSpeed = 6.0f;
+} // namespace
+
+glm::vec2 underwater::CurrentAt(glm::vec3 point, float seconds, const CurrentState& current, const WaveState& waves,
+                                float seaLevel)
+{
+	const glm::vec2 p {point.x, point.z};
+	glm::vec2 flow = current.flow;
+	for (const auto& swirl : k_Swirls)
+	{
+		const float theta = glm::dot(swirl.k, p) + swirl.omega * seconds + swirl.phase;
+		// The curl of amplitude * sin(theta) across the ground
+		flow += glm::vec2(swirl.k.y, -swirl.k.x) * (swirl.amplitude * current.swirl * std::cos(theta));
+	}
+	const glm::vec2 wind {std::cos(waves.windAngle), std::sin(waves.windAngle)};
+	const float front = glm::fract((glm::dot(p, wind) - k_GustSpeed * seconds) / k_GustSpacing);
+	const float gust = glm::smoothstep(0.0f, 0.06f, front) * (1.0f - glm::smoothstep(0.06f, 0.22f, front));
+	flow += wind * (gust * current.gust);
+	// The waves move the water near the surface to and fro along the longest swell
+	const float k = 2.0f * std::numbers::pi_v<float> / (61.0f * (1.0f - 0.35f * waves.storm));
+	const float omega = std::sqrt(9.8f * k) * 0.8f;
+	const float theta = k * glm::dot(wind, p) - omega * seconds;
+	const float nearSurface = std::exp(std::min(point.y - seaLevel, 0.0f) * k);
+	flow += wind * (0.30f * waves.scale * omega * std::sin(theta) * nearSurface);
+	return flow;
+}
+
+float underwater::Storminess(float rain, float overcast, glm::vec2 wind)
+{
+	const float wet = std::clamp(rain / 100.0f, 0.0f, 1.0f);
+	const float cloud = std::clamp((overcast - 40.0f) / 60.0f, 0.0f, 1.0f);
+	const float blow = std::clamp(glm::length(wind) / 100.0f, 0.0f, 1.0f);
+	return std::clamp(wet * 0.45f + cloud * 0.25f + blow * 0.5f, 0.0f, 1.0f);
+}
+
+float underwater::EaseTowards(float value, float target, float rate, float seconds)
+{
+	const float step = rate * std::max(seconds, 0.0f);
+	return target < value ? std::max(target, value - step) : std::min(target, value + step);
+}
+
+float underwater::EyeDepth(float eyeHeight, float seaLevel)
+{
+	return std::max(seaLevel - eyeHeight, 0.0f);
 }

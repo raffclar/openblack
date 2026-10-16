@@ -36,12 +36,12 @@ vec3 SeabedSand(vec3 world, vec3 landLight, vec3 normal)
 	// Ripples smaller than about a pixel fade out, so they do not flicker or make rings.
 	vec3 toEye = (u_uwEye.xyz - world) / max(viewDistance, 1e-3f);
 	float footprint = 0.0015f * viewDistance / max(abs(dot(normal, toEye)), 0.12f);
-	float rippleFade = 1.0f - smoothstep(0.5f, 1.4f, footprint * 6.2831f / wavelength);
+	float rippleFade = 1.0f - smoothstep(0.2f, 0.6f, footprint * 6.2831f / wavelength);
 	// Fewer ripples on steep ground and in silt
 	float strength = 0.4f * rippleFade * (1.0f - steep * 2.0f);
 	vec2 gradient = across * (6.2831f / wavelength) * 0.3f * slope * max(strength, 0.0f);
 	vec2 crossing = vec2(-across.y, across.x);
-	float fine = sin(dot(p, crossing) * 5.3f + bend * 2.0f) * (1.0f - smoothstep(0.5f, 1.4f, footprint * 5.3f));
+	float fine = sin(dot(p, crossing) * 5.3f + bend * 2.0f) * (1.0f - smoothstep(0.2f, 0.6f, footprint * 5.3f));
 	gradient += crossing * fine * 0.1f;
 	vec3 rippled = normalize(normal + vec3(-gradient.x, 0.0f, -gradient.y));
 
@@ -69,7 +69,9 @@ vec3 SeabedSand(vec3 world, vec3 landLight, vec3 normal)
 	vec3 towards = u_uwLight.xyz;
 	vec2 surface = p + towards.xz / max(towards.y, 0.2f) * depth;
 	float sharpness = 1.0f - smoothstep(4.0f, 40.0f, depth);
-	float caustics = u_uwAbove.w > 0.5f ? UwCaustics(surface * 0.21f, t * 1.1f, sharpness) : 0.5f;
+	float caustics = u_uwAbove.w > 0.5f ? UwCaustics(surface * 0.21f, t * (1.1f + 1.5f * u_uwWaves.y), sharpness) : 0.5f;
+	// A storm's rough surface spreads the caustics out
+	caustics = mix(caustics, 0.55f, 0.4f * u_uwWaves.y);
 	// The caustics too become an even light where their lines would be smaller than a pixel
 	caustics = mix(caustics, 0.55f, smoothstep(0.08f, 0.3f, footprint));
 	caustics *= smoothstep(0.0f, 1.2f, depth) * (1.0f - smoothstep(30.0f, 60.0f, viewDistance) * 0.6f);

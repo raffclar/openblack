@@ -12,8 +12,11 @@
 #include <cstdint>
 
 #include <chrono>
+#include <span>
 
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "3D/Seabed.h"
 #include "Graphics/Underwater.h"
@@ -45,8 +48,27 @@ public:
 	[[nodiscard]] virtual float GetEyeDepth() const = 0;
 	/// Whether the camera is under the sea's surface and the view is on
 	[[nodiscard]] virtual bool IsEyeUnder() const = 0;
+	/// The height of the sea now, with the tide: never higher than the usual height
+	[[nodiscard]] virtual float GetSeaLevel() const = 0;
+	/// How the sea moves now, from the weather
+	[[nodiscard]] virtual const graphics::underwater::WaveState& GetWaves() const = 0;
+	/// The clock the waves move by, in seconds
+	[[nodiscard]] virtual float GetSeconds() const = 0;
+	/// Where the things that float on the sea are now, at most a few, the nearest to the camera first
+	[[nodiscard]] virtual std::span<const glm::vec3> GetFloaters() const = 0;
+	/// A thing that floats on the sea, drawn on the waves: lifted to the sea's height with the tide and the waves, and
+	/// tilted with them. Things that do not float keep their model.
+	[[nodiscard]] virtual glm::mat4 FloatOnWaves(const glm::mat4& model) const = 0;
+	/// Brings a storm over the camera for a short time, to see the waves in it
+	virtual void StartDebugStorm() = 0;
+	/// Drops the mobile objects near what the camera looks at into the physics, so that those over the sea float
+	virtual void DropDebugFloaters() = 0;
 	/// The sea bed of the open land; empty before a land is open
 	[[nodiscard]] virtual const seabed::Seabed& GetSeabed() const = 0;
+	/// The reef on the sea bed, made with it
+	[[nodiscard]] virtual std::span<const seabed::ReefPlant> GetReef() const = 0;
+	/// The sea's currents now (see underwater::CurrentAt)
+	[[nodiscard]] virtual const graphics::underwater::CurrentState& GetCurrent() const = 0;
 	/// A number that changes each time the sea bed is made again
 	[[nodiscard]] virtual uint32_t GetSeabedRevision() const = 0;
 	/// The lowest the camera can go at a point, given the land's height there: the sea bed under the sea while the view

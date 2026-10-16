@@ -109,12 +109,14 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	// The light under the water this frame, and the water's colour at the eye's depth
 	const auto light = SkyLights(eye);
 	const glm::vec3 skyColour = glm::vec3(_haze[1]) / 255.0f;
-	const float eyeDepth = underwater::EyeDepth(eye.y);
+	const auto& system = Locator::underwaterSystem::value();
+	const float seaLevel = system.GetSeaLevel();
+	const float eyeDepth = underwater::EyeDepth(eye.y, seaLevel);
 	const auto scatter = underwater::AmbientAtDepth(underwater::ScatterColour(skyColour, light), eyeDepth);
-	const float time = static_cast<float>(desc.time % 3600000u) / 1000.0f;
+	const float time = system.GetSeconds();
 	const float lightShows = glm::length(light.colour) > 0.0f ? 1.0f : 0.0f;
 	_underwaterFrame = UnderwaterUniforms {
-	    .params = {1.0f, time, underwater::k_SeaLevel, eyeDepth},
+	    .params = {1.0f, time, seaLevel, eyeDepth},
 	    .light = {light.towards, light.moonShare},
 	    .lightColour = {light.colour, lightShows},
 	    .scatter = {scatter, 0.0f},
@@ -129,9 +131,21 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	frame.flags = {on(Effect::Reflections), on(Effect::Foam), on(Effect::Refraction), on(Effect::Shafts)};
 	frame.above = {light.aboveTowards, on(Effect::Caustics)};
 	frame.motes = off != Effect::Motes;
-	frame.eyeNearOrUnder = underwater::IsActive(eye.y);
+	frame.eyeNearOrUnder = underwater::IsActive(eye.y, seaLevel);
 	// The eye's w says whether the eye is under the surface
-	frame.eye.w = eye.y < underwater::k_SeaLevel ? 1.0f : 0.0f;
+	frame.eye.w = eye.y < seaLevel ? 1.0f : 0.0f;
+	const auto& waves = system.GetWaves();
+	frame.waves = {off == Effect::Waves ? 0.0f : waves.scale, waves.storm, waves.windAngle,
+	               off == Effect::Waves ? 0.0f : waves.swash};
+	frame.flags2 = {on(Effect::Whitecaps), on(Effect::Reef), 0.0f, 0.0f};
+	const auto& current = system.GetCurrent();
+	const bool still = off == Effect::Current;
+	frame.current = still ? glm::vec4(0.0f) : glm::vec4(current.flow, current.swirl, current.gust);
+	const auto floaters = system.GetFloaters();
+	for (size_t i = 0; i < frame.floaters.size(); ++i)
+	{
+		frame.floaters.at(i) = i < floaters.size() ? glm::vec4(floaters[i], 1.0f) : glm::vec4(0.0f);
+	}
 
 	// The scene goes into the target, with no sea and no reflection of it, and is drawn through the water after
 	desc.frameBuffer = &_underwater->Target(size);
@@ -178,6 +192,9 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		program.SetUniformValue("u_uwEye", &frame.eye);
 		program.SetUniformValue("u_uwFlags", &frame.flags);
 		program.SetUniformValue("u_uwAbove", &frame.above);
+		program.SetUniformValue("u_uwWaves", &frame.waves);
+		program.SetUniformValue("u_uwFlags2", &frame.flags2);
+		program.SetUniformValue("u_uwCurrent", &frame.current);
 	};
 
 	// The scene through the water: one triangle over the screen, the sea's own
@@ -187,6 +204,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	mesh.GetVertexBuffer().Bind();
 	setUniforms(*post);
 	post->SetUniformValue("u_uwSky", &frame.sky);
+	post->SetUniformArray("u_uwFloaters", frame.floaters.data(), static_cast<uint16_t>(frame.floaters.size()));
 	post->SetTextureSampler("s_sceneColour", 0, target.GetColorAttachment());
 	post->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
@@ -200,6 +218,14 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		setUniforms(*motes);
 		motes->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_ADD);
+		motes->Submit(postView);
+		// The bits of debris among them, blended over the scene
+		_underwater->BindMotes();
+		setUniforms(*motes);
+		const glm::vec4 debris {frame.flags2.x, frame.flags2.y, 1.0f, 0.0f};
+		motes->SetUniformValue("u_uwFlags2", &debris);
+		motes->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
+		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		motes->Submit(postView);
 	}
 }
@@ -218,6 +244,7 @@ void Renderer::SetTerrainUnderwater(const ShaderProgram& program, bool active) c
 	program.SetUniformValue("u_uwLightColour", &frame.lightColour);
 	program.SetUniformValue("u_uwEye", &frame.eye);
 	program.SetUniformValue("u_uwAbove", &frame.above);
+	program.SetUniformValue("u_uwWaves", &frame.waves);
 	// The snow does not show under the sea: its samplers hold the sea bed and the sand
 	const glm::vec4 noSnow {0.0f};
 	program.SetUniformValue("u_snow", &noSnow);
@@ -265,10 +292,46 @@ void Renderer::DrawFarSeabed(RenderPass landViewId) const
 	program->SetUniformValue("u_uwLightColour", &frame.lightColour);
 	program->SetUniformValue("u_uwEye", &frame.eye);
 	program->SetUniformValue("u_uwAbove", &frame.above);
+	program->SetUniformValue("u_uwWaves", &frame.waves);
 	program->SetTextureSampler("s_sand", 0, *textures.Handle(underwater::k_SandTextureId.value()));
 	program->SetTextureSampler("s_landLight", 1, GetLandLightTexture());
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
 	               BGFX_STATE_MSAA);
 	// After every block of the land, which is drawn the nearest first
 	program->Submit(static_cast<bgfx::ViewId>(landViewId), UINT32_MAX);
+}
+
+void Renderer::DrawReef(RenderPass landViewId) const
+{
+	const auto* program = _shaderManager->GetShader("Reef");
+	if (program == nullptr || _underwater == nullptr || !_underwaterFrame.has_value() ||
+	    !Locator::underwaterSystem::has_value() || _underwaterFrame->flags2.y < 0.5f)
+	{
+		return;
+	}
+	const auto& textures = Locator::resources::value().GetTextures();
+	if (!textures.Contains(underwater::k_CoralTextureId.value()))
+	{
+		return;
+	}
+	const auto& system = Locator::underwaterSystem::value();
+	const auto& frame = *_underwaterFrame;
+	for (const auto kind : {seabed::ReefPlant::Kind::Coral, seabed::ReefPlant::Kind::Seaweed})
+	{
+		if (!_underwater->BindReef(system.GetReef(), system.GetSeabedRevision(), kind))
+		{
+			continue;
+		}
+		program->SetUniformValue("u_uwParams", &frame.params);
+		program->SetUniformValue("u_uwLight", &frame.light);
+		program->SetUniformValue("u_uwLightColour", &frame.lightColour);
+		program->SetUniformValue("u_uwAbove", &frame.above);
+		program->SetUniformValue("u_uwWaves", &frame.waves);
+		program->SetUniformValue("u_uwCurrent", &frame.current);
+		program->SetTextureSampler("s_coral", 0, *textures.Handle(underwater::k_CoralTextureId.value()));
+		program->SetTextureSampler("s_landLight", 1, GetLandLightTexture());
+		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
+		               BGFX_STATE_MSAA);
+		program->Submit(static_cast<bgfx::ViewId>(landViewId), UINT32_MAX);
+	}
 }

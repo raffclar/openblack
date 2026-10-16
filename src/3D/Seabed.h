@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 /// EXPERIMENT (not for merge): a sea bed under the sea for the underwater view. The original game draws the land at sea
 /// level flat in the plane of the sea, so there is nothing under the water. This makes a floor that goes down from the
@@ -54,11 +55,53 @@ struct Seabed
 /// The depth for a corner of the sea that is this many cells from the nearest land above the sea
 [[nodiscard]] float DepthForDistance(float cells);
 
+/// A coast slopes gently when the land within two cells of it is no higher than this over sea level, in altitude steps
+inline constexpr uint8_t k_GentleRise = 8;
+/// How much deeper a beach gets for each cell out from a gentle coast: it is under the lowest tide 8 cells out
+inline constexpr float k_BeachSlope = 0.35f;
+/// The depth out from a gentle coast, where the land goes on under the water as a beach
+[[nodiscard]] float BeachDepth(float cells);
+
 /// The sea bed for a grid of corner altitudes (x first along each row of z). Each corner of the sea goes down by its
 /// distance to the nearest land above the sea, as a shelf and then a slope, deeper towards the map's edge, with broad
 /// hills and dips over it.
 /// The grid is the whole map: past the land's blocks the sea goes on down to the map's edge.
 [[nodiscard]] Seabed Build(std::span<const uint8_t> altitudes, glm::ivec2 size, glm::vec2 origin, float spacing);
+
+/// A coral or a plant of the reef on the sea bed
+struct ReefPlant
+{
+	enum class Kind : uint8_t
+	{
+		Coral,
+		Seaweed
+	};
+	Kind kind;
+	/// Where its foot is, on the sea bed
+	glm::vec3 position;
+	/// How big it is, in units
+	float scale;
+	/// The angle it is turned to about the up axis, in radians
+	float yaw;
+	/// Which of the coral atlas's nine cells, or for a plant 0 to 1 for its kind
+	float variant;
+	/// 0 to 1, which of the soft colours it takes
+	float tint;
+};
+
+/// The coral: where the sea bed is at least this much under the lowest tide, so that it is never out of the water, and
+/// at most this much under it
+inline constexpr float k_CoralTopUnderTide = 1.5f;
+inline constexpr float k_CoralBottomUnderTide = 12.0f;
+/// The plants grow from a little shallower to a little deeper than the coral
+inline constexpr float k_PlantTopUnderTide = 1.0f;
+inline constexpr float k_PlantBottomUnderTide = 20.0f;
+/// The steepest sea bed that coral and plants grow on, in height for each unit across
+inline constexpr float k_ReefSteepest = 0.4f;
+
+/// The reef: coral in patches on the sea bed that the lowest tide still covers, and plants in patches of their own,
+/// never on the beaches the tide leaves, on steep slopes or in deep water. At most `mostCoral` and `mostPlants`.
+[[nodiscard]] std::vector<ReefPlant> PlaceReef(const Seabed& seabed, float lowestTide, size_t mostCoral, size_t mostPlants);
 
 /// The height of the floor at a point: the land's own height where the land is above the sea, else the sea bed
 [[nodiscard]] float FloorHeight(const Seabed& seabed, glm::vec2 world, float landHeight);

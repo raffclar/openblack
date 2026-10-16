@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <array>
+#include <numbers>
 #include <random>
 #include <span>
 #include <utility>
@@ -21,7 +22,9 @@
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include "GraphicsHandleBgfx.h"
 
@@ -76,6 +79,20 @@ UnderwaterView::UnderwaterView()
 
 UnderwaterView::~UnderwaterView()
 {
+	for (auto& kind : _reef)
+	{
+		for (auto* buffer : {&kind.mesh, &kind.instances})
+		{
+			if (bgfx::isValid(*buffer))
+			{
+				bgfx::destroy(*buffer);
+			}
+		}
+		if (bgfx::isValid(kind.indices))
+		{
+			bgfx::destroy(kind.indices);
+		}
+	}
 	if (bgfx::isValid(_farVertices))
 	{
 		bgfx::destroy(_farVertices);
@@ -264,4 +281,147 @@ bool UnderwaterView::BindFarSeabed(const seabed::Seabed& seabed, uint32_t revisi
 	bgfx::setVertexBuffer(0, _farVertices);
 	bgfx::setIndexBuffer(_farIndices);
 	return true;
+}
+
+namespace
+{
+struct ReefVertex
+{
+	glm::vec3 position;
+	glm::vec2 uv;
+};
+
+/// One coral: three quads a unit wide and high that cross at their middle, a third of a turn apart
+void CoralMesh(std::vector<ReefVertex>& vertices, std::vector<uint16_t>& indices)
+{
+	for (int q = 0; q < 3; ++q)
+	{
+		const float angle = static_cast<float>(q) * std::numbers::pi_v<float> / 3.0f;
+		const glm::vec3 side {std::cos(angle) * 0.5f, 0.0f, std::sin(angle) * 0.5f};
+		const auto first = static_cast<uint16_t>(vertices.size());
+		vertices.push_back({-side, {0.0f, 1.0f}});
+		vertices.push_back({side, {1.0f, 1.0f}});
+		vertices.push_back({side + glm::vec3(0.0f, 1.0f, 0.0f), {1.0f, 0.0f}});
+		vertices.push_back({-side + glm::vec3(0.0f, 1.0f, 0.0f), {0.0f, 0.0f}});
+		indices.insert(indices.end(), {first, static_cast<uint16_t>(first + 1), static_cast<uint16_t>(first + 2), first,
+		                               static_cast<uint16_t>(first + 2), static_cast<uint16_t>(first + 3)});
+	}
+}
+
+/// One plant: a clump of five blades of different heights round its foot, each a strip in five pieces, narrower towards
+/// its top
+void PlantMesh(std::vector<ReefVertex>& vertices, std::vector<uint16_t>& indices)
+{
+	constexpr int k_Pieces = 5;
+	constexpr std::array<glm::vec4, 5> k_Blades {{
+	    {0.0f, 0.0f, 0.0f, 1.0f},
+	    {0.18f, 0.05f, 1.3f, 0.75f},
+	    {-0.12f, 0.15f, 2.4f, 0.85f},
+	    {-0.05f, -0.2f, 3.6f, 0.6f},
+	    {0.15f, -0.14f, 4.9f, 0.7f},
+	}};
+	for (const auto& blade : k_Blades)
+	{
+		const glm::vec3 foot {blade.x, 0.0f, blade.y};
+		const glm::vec3 side {std::cos(blade.z), 0.0f, std::sin(blade.z)};
+		const auto first = static_cast<uint16_t>(vertices.size());
+		for (int i = 0; i <= k_Pieces; ++i)
+		{
+			const float h = static_cast<float>(i) / static_cast<float>(k_Pieces);
+			const float half = glm::mix(0.045f, 0.008f, h);
+			const glm::vec3 up {0.0f, h * blade.w, 0.0f};
+			vertices.push_back({foot - side * half + up, {0.0f, h}});
+			vertices.push_back({foot + side * half + up, {1.0f, h}});
+		}
+		for (int i = 0; i < k_Pieces; ++i)
+		{
+			const auto a = static_cast<uint16_t>(first + i * 2);
+			indices.insert(indices.end(),
+			               {a, static_cast<uint16_t>(a + 1), static_cast<uint16_t>(a + 2), static_cast<uint16_t>(a + 1),
+			                static_cast<uint16_t>(a + 3), static_cast<uint16_t>(a + 2)});
+		}
+	}
+}
+} // namespace
+
+bool UnderwaterView::BindReef(std::span<const seabed::ReefPlant> reef, uint32_t revision, seabed::ReefPlant::Kind kind)
+{
+	if (_reefRevision != revision)
+	{
+		_reefRevision = revision;
+		bgfx::VertexLayout meshLayout;
+		meshLayout.begin()
+		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+		    .end();
+		bgfx::VertexLayout instanceLayout;
+		instanceLayout.begin()
+		    .add(bgfx::Attrib::TexCoord7, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord6, 4, bgfx::AttribType::Float)
+		    .end();
+		for (size_t k = 0; k < _reef.size(); ++k)
+		{
+			auto& made = _reef.at(k);
+			if (!bgfx::isValid(made.mesh))
+			{
+				std::vector<ReefVertex> vertices;
+				std::vector<uint16_t> indices;
+				if (k == 0)
+				{
+					CoralMesh(vertices, indices);
+				}
+				else
+				{
+					PlantMesh(vertices, indices);
+				}
+				made.mesh = bgfx::createVertexBuffer(
+				    bgfx::copy(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(ReefVertex))), meshLayout);
+				made.indices = bgfx::createIndexBuffer(
+				    bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t))));
+				made.triangles = static_cast<uint32_t>(indices.size() / 3);
+			}
+			if (bgfx::isValid(made.instances))
+			{
+				bgfx::destroy(made.instances);
+				made.instances = BGFX_INVALID_HANDLE;
+			}
+			// Two vectors an instance: the foot and the size, then the angle, the cell or kind, the colour and the kind
+			std::vector<glm::vec4> data;
+			const auto wanted = static_cast<seabed::ReefPlant::Kind>(k);
+			for (const auto& plant : reef)
+			{
+				if (plant.kind == wanted)
+				{
+					// The foot a little into the sea bed, so that no gap shows under it
+					data.emplace_back(plant.position - glm::vec3(0.0f, 0.15f, 0.0f), plant.scale);
+					data.emplace_back(plant.yaw, plant.variant, plant.tint, static_cast<float>(k));
+				}
+			}
+			made.count = static_cast<uint32_t>(data.size() / 2);
+			if (made.count > 0)
+			{
+				made.instances = bgfx::createVertexBuffer(
+				    bgfx::copy(data.data(), static_cast<uint32_t>(data.size() * sizeof(glm::vec4))), instanceLayout);
+			}
+		}
+	}
+	const auto& made = _reef.at(static_cast<size_t>(kind));
+	if (made.count == 0 || !bgfx::isValid(made.instances))
+	{
+		return false;
+	}
+	bgfx::setVertexBuffer(0, made.mesh);
+	bgfx::setIndexBuffer(made.indices);
+	bgfx::setInstanceDataBuffer(made.instances, 0, made.count);
+	return true;
+}
+
+uint32_t UnderwaterView::ReefTriangles(seabed::ReefPlant::Kind kind) const
+{
+	return _reef.at(static_cast<size_t>(kind)).triangles;
+}
+
+uint32_t UnderwaterView::ReefCount(seabed::ReefPlant::Kind kind) const
+{
+	return _reef.at(static_cast<size_t>(kind)).count;
 }

@@ -43,11 +43,46 @@ vec3 ScreenAt(vec4 clip)
 #endif
 }
 
-// The height of the surface at a point, with its small waves
+// x: the things that float, where they are; w: 1 for each that there is
+uniform vec4 u_uwFloaters[8];
+
+// 1 while the waves show, 0 while they are turned off to measure them
+float WavesOn()
+{
+	return u_uwWaves.x > 0.0f ? 1.0f : 0.0f;
+}
+
+// The height of the surface at a point near the eye, with its waves
 float SurfaceHeight(vec2 p, float t)
 {
-	return u_uwParams.z + 0.07f * sin(p.x * 0.7f + t * 1.6f) + 0.05f * sin(p.y * 0.9f - t * 1.3f) +
-	       0.03f * sin((p.x + p.y) * 2.3f + t * 2.9f);
+	vec2 slope;
+	return u_uwParams.z + UwWaves(p, t, 0.0f, slope) * WavesOn();
+}
+
+
+// How much higher the waves are where the water is this deep: higher as it gets shallow, and none at the water's edge
+float Shoaling(float waterDepth)
+{
+	return (1.0f + 1.2f * (1.0f - smoothstep(1.0f, 8.0f, waterDepth))) * smoothstep(0.0f, 0.8f, waterDepth);
+}
+
+// The rings on the water round the things that float, as they bob: the slope they add to the surface and their foam
+vec3 FloaterRings(vec2 p, float t)
+{
+	vec3 rings = vec3_splat(0.0f);
+	for (int i = 0; i < 8; i++)
+	{
+		vec4 floater = u_uwFloaters[i];
+		if (floater.w > 0.5f)
+		{
+			vec2 away = p - floater.xz;
+			float d = length(away);
+			float wave = sin(d * 2.2f - t * 3.0f) * exp(-d * 0.22f) * smoothstep(0.3f, 1.2f, d);
+			rings.xy += away / max(d, 1e-3f) * wave * 0.25f;
+			rings.z += (1.0f - smoothstep(0.8f, 2.5f, d)) * (0.5f + 0.5f * UwNoise(p * 3.0f + t));
+		}
+	}
+	return rings;
 }
 
 // The sky seen in a direction, for the reflections that leave the screen: brighter towards the horizon
@@ -133,7 +168,7 @@ vec3 Shafts(vec3 eye, vec3 direction, float range, float t, float jitter)
 		if (depth > 0.0f)
 		{
 			vec2 surface = p.xz + towards.xz / towards.y * depth;
-			float bright = UwSurfaceLight(surface, t);
+			float bright = UwSurfaceLight(surface, t * (1.0f + 2.0f * u_uwWaves.y));
 			// The light lost on its way down to the sample, and on its way from the sample to the eye
 			vec3 lost = UwTransmittance(depth / towards.y + along);
 			colour += lost * bright;
@@ -143,23 +178,26 @@ vec3 Shafts(vec3 eye, vec3 direction, float range, float t, float jitter)
 	float cosine = dot(direction, towards);
 	float g = 0.55f;
 	float phase = (1.0f - g * g) / pow(max(1.0f + g * g - 2.0f * g * cosine, 1e-4f), 1.5f) * 0.08f;
-	return colour * stepLength * phase * u_uwLightColour.rgb;
+	// A storm's rough surface and its clouds break the shafts up and darken them
+	return colour * stepLength * phase * u_uwLightColour.rgb * (1.0f - 0.55f * u_uwWaves.y);
 }
 
 // The foam where the water is shallow: in patches that break up and drift, and in lines that run in to the shore with
 // the waves. depth is how deep the water is under the point.
 float Foam(vec2 p, float depth, float t)
 {
-	float shallow = 1.0f - smoothstep(0.0f, 1.8f, depth);
+	float shallow = 1.0f - smoothstep(0.0f, 0.9f, depth);
 	if (shallow <= 0.0f)
 	{
 		return 0.0f;
 	}
-	float patches = UwNoise(p * 0.9f + vec2(t * 0.25f, -t * 0.18f)) * UwNoise(p * 2.3f - vec2(t * 0.4f, t * 0.31f));
-	float lines = 0.5f + 0.5f * sin(depth * 5.0f - t * 2.2f + UwNoise(p * 0.4f) * 4.0f);
-	float edge = 1.0f - smoothstep(0.0f, 0.25f, depth);
-	float foam = smoothstep(0.18f, 0.42f, patches * 1.4f + lines * 0.35f * shallow) * shallow;
-	return clamp(max(foam, edge * (0.6f + 0.4f * patches)), 0.0f, 1.0f);
+	// Two layers of noise that drift different ways, turned so that their cells do not line up
+	vec2 q = vec2(p.x * 0.8f - p.y * 0.6f, p.x * 0.6f + p.y * 0.8f);
+	float patches = UwNoise(q * 0.7f + vec2(t * 0.25f, -t * 0.18f)) * 0.6f + UwNoise(p * 1.9f - vec2(t * 0.4f, t * 0.31f)) * 0.4f;
+	float lines = 0.5f + 0.5f * sin(depth * 9.0f - t * 2.2f + UwNoise(p * 0.4f) * 4.0f);
+	float edge = 1.0f - smoothstep(0.0f, 0.18f, depth);
+	float foam = smoothstep(0.55f, 0.8f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
+	return clamp(max(foam, edge * (0.5f + 0.5f * patches)), 0.0f, 1.0f);
 }
 
 void main()
@@ -211,14 +249,23 @@ void main()
 		scene = mix(scene, around * 0.25f, 0.35f + 0.45f * far);
 
 		// The distance along the ray to the surface, when the ray goes up to it before it meets the scene
-		float toSurface = direction.y > 0.0f ? (SurfaceHeight(eye.xz, t) - eye.y) / direction.y : 1e9f;
+		float toSurface = 1e9f;
+		vec2 surfaceSlope = vec2_splat(0.0f);
+		if (direction.y > 0.0f)
+		{
+			// Where the ray meets the level of the sea, then the waves' height there
+			float first = (u_uwParams.z - eye.y) / direction.y;
+			vec2 at = eye.xz + direction.xz * first;
+			float lift = UwWaves(at, t, first, surfaceSlope) * WavesOn();
+			toSurface = max((u_uwParams.z + lift - eye.y) / direction.y, 0.0f);
+		}
 		if (toSurface < sceneDistance)
 		{
 			// The surface seen from below. The light bends as it comes through: where the ray can go out, the sky and
 			// what is above the water show through, bent by the waves; at low angles the surface is a mirror of the
 			// dark water below.
 			vec3 surfacePoint = eye + direction * toSurface;
-			vec3 normal = UwWaveNormal(surfacePoint.xz, t, toSurface);
+			vec3 normal = UwSurfaceNormalOf(surfaceSlope * WavesOn(), toSurface);
 			vec3 leaving = refract(direction, -normal, 1.333f);
 			float ripple = UwSurfaceLight(surfacePoint.xz * 1.7f, t * 1.8f);
 			vec3 mirror = scatter * (0.55f + 0.35f * ripple);
@@ -265,12 +312,23 @@ void main()
 	}
 	else if (direction.y < 0.0f)
 	{
-		// The surface seen from above, where the ray meets it before the scene
-		float toSurface = (u_uwParams.z - eye.y) / direction.y;
+		// The surface seen from above, where the ray meets it before the scene. The water's height there is the sea's
+		// level with the waves, higher where the water gets shallow, and the run of the waves up the beach. The
+		// depth of the water is the depth under its level of what the scene shows at the pixel.
+		float waterDepth = sky ? 160.0f : u_uwParams.z - world.y;
+		float shoal = Shoaling(max(waterDepth, 0.0f) + 0.3f);
+		float swash = UwSwash(world.xz, t) * (1.0f - smoothstep(0.5f, 4.0f, max(waterDepth, 0.0f))) * WavesOn();
+		float first = (u_uwParams.z - eye.y) / direction.y;
+		vec2 surfaceSlope = vec2_splat(0.0f);
+		float lift = UwWaves(eye.xz + direction.xz * first, t, first, surfaceSlope) * shoal * WavesOn();
+		float waterTop = u_uwParams.z + lift + swash;
+		float toSurface = (waterTop - eye.y) / direction.y;
 		if (toSurface > 0.0f && (toSurface < sceneDistance || farFloor))
 		{
 			vec3 surfacePoint = eye + direction * toSurface;
-			vec3 normal = UwWaveNormal(surfacePoint.xz, t, toSurface);
+			vec3 ring = FloaterRings(surfacePoint.xz, t);
+			vec3 normal = UwSurfaceNormalOf(surfaceSlope * shoal * WavesOn() + ring.xy, toSurface);
+			float thickness = waterTop - world.y;
 			// The scene under the surface, bent by the waves: the bend is less where the water is thin, and none
 			// where it would show what is above the water
 			vec3 below = world;
@@ -310,10 +368,26 @@ void main()
 			float glint = pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f);
 			colour += u_uwLightColour.rgb * glint * 3.0f * u_uwLightColour.w;
 
-			// The foam where the water is shallow, lit by the light and the sky
+			// The foam where the water is shallow and at the edge of the run up the beach, on the crests that break
+			// near the coast, round the things that float, and in a storm on the crests and in streaks along the wind
 			if (u_uwFlags.y > 0.5f)
 			{
-				float foam = Foam(surfacePoint.xz, max(u_uwParams.z - world.y, 0.0f), t);
+				float foam = Foam(surfacePoint.xz, max(thickness, 0.0f), t);
+				float crest = lift / max(UwWaveTop() * shoal, 1e-3f);
+				float breaking = smoothstep(0.35f, 0.85f, crest) * (1.0f - smoothstep(0.6f, 3.0f, waterDepth)) *
+				                 smoothstep(0.0f, 0.4f, waterDepth);
+				foam = max(foam, breaking * (0.6f + 0.4f * UwNoise(surfacePoint.xz * 1.3f + t)));
+				foam = max(foam, ring.z * 0.6f);
+				if (u_uwFlags2.x > 0.5f && u_uwWaves.y > 0.05f)
+				{
+					vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
+					vec2 across = vec2(-wind.y, wind.x);
+					vec2 q = surfacePoint.xz;
+					float caps = smoothstep(0.5f, 0.9f, crest) * smoothstep(0.45f, 0.75f, UwNoise(q * 0.35f + t * 0.4f));
+					float streaks = smoothstep(0.62f, 0.85f,
+					                           UwNoise(vec2(dot(q, wind) * 0.04f - t * 0.2f, dot(q, across) * 0.5f)));
+					foam = max(foam, (caps + streaks * 0.5f) * u_uwWaves.y);
+				}
 				vec3 foamColour = u_uwLightColour.rgb * (0.4f + 0.6f * max(u_uwAbove.y, 0.0f)) + u_uwSky.rgb * 0.7f +
 				                  scatter * 0.5f;
 				colour = mix(colour, min(foamColour, vec3_splat(1.0f)), foam * 0.85f);

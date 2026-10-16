@@ -18,5 +18,8 @@ void main()
 	float r = dot(v_texcoord0.xy, v_texcoord0.xy);
 	float glow = max(1.0f - r, 0.0f);
 	glow = glow * glow;
-	gl_FragColor = vec4(v_color0.rgb * glow * v_texcoord0.w, 1.0f);
+	// Motes add their light; the debris is blended over what is behind it, premultiplied
+	float cover = v_color0.a > 0.5f ? smoothstep(0.0f, 0.3f, glow) * v_texcoord0.w : 0.0f;
+	vec3 shade = v_color0.a > 0.5f ? v_color0.rgb * cover : v_color0.rgb * glow * v_texcoord0.w;
+	gl_FragColor = vec4(shade, cover);
 }
