@@ -400,6 +400,9 @@ private:
 	bool BeginUnderwater(DrawSceneDesc& desc) const;
 	/// EXPERIMENT (not for merge): the scene drawn through the water into the window, and the motes in the water
 	void EndUnderwater(const DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): one face of the cube of the far scene round the eye, which the water reflects. Each
+	/// frame draws the next face, with the sky, the land and what stands on it.
+	void DrawUnderwaterEnvironment(const DrawSceneDesc& desc) const;
 	/// EXPERIMENT (not for merge): the land's uniforms for the view under the sea, off unless `active`
 	void SetTerrainUnderwater(const ShaderProgram& program, bool active) const;
 	/// EXPERIMENT (not for merge): the sea bed past the land's blocks, in the land's pass of the main view

@@ -23,8 +23,16 @@ SAMPLER2DARRAY(s_blockTextures, 3);
 // The layer of each block of the 32 by 32 map, plus 1; 0 where there is no block
 SAMPLER2D(s_blockLayers, 4);
 
+// The cube of the far scene round the eye: its colour, and its depth for how far away the scene is in each direction
+SAMPLERCUBE(s_environment, 5);
+SAMPLERCUBE(s_environmentDepth, 6);
+// The sky alone, for the rays that meet no scene: the scene near the middle of the cube can hide the sky in the first
+SAMPLERCUBE(s_environmentSky, 7);
+
 // rgb: the sky's colour, as the haze takes it; w: the near distance of the view
 uniform vec4 u_uwSky;
+// xyz: where the middle of the cube of the far scene is
+uniform vec4 u_uwEnvironment;
 
 // Where a point of the screen (0 to 1, as the textures are read) is in the world, at a depth of the depth buffer
 vec3 WorldAt(vec2 uv, float depth)
@@ -207,6 +215,178 @@ vec4 ScreenReflection(vec3 p, vec3 r, float jitter)
 	return vec4(texture2DLod(s_sceneColour, hit.xy, 0.0f).rgb, alpha);
 }
 
+// The far sea seen from above: the waves as each pixel shows them, the reflection of the far scene and the glint.
+
+// The size of a pixel on the water, for a ray from the eye that goes this far to the water (see UwFootprint). With
+// no filter, it is the old round pixel.
+vec4 FootprintOnWater(vec3 direction, float along)
+{
+	if (u_uwSea.x < 0.5f)
+	{
+		return UwFootprint(along);
+	}
+	vec2 ground = direction.xz;
+	float groundLength = max(length(ground), 1e-4f);
+	// A pixel is longer along the view the more the view grazes the water
+	return vec4(u_uwSea.z * max(along, 1.0f), ground / groundLength, 1.0f / max(-direction.y, 0.02f));
+}
+
+// Where a ray from the eye meets the sea's surface from above, as RayToSurface finds it, with the waves as the pixel
+// shows them. `variance` is the variance of the slope that the pixel cannot show.
+float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, out float face, out vec4 shore,
+                           out float variance)
+{
+	float along = (u_uwParams.z - eye.y) / direction.y;
+	slope = vec2_splat(0.0f);
+	face = 0.0f;
+	variance = 0.0f;
+	shore = vec4(1000.0f, 0.0f, 0.0f, -160.0f);
+	for (int i = 0; i < 3; i++)
+	{
+		vec2 at = eye.xz + direction.xz * max(along, 0.0f);
+		shore = ShoreAt(at);
+		float height = UwSurfaceFiltered(at, t, FootprintOnWater(direction, max(along, 0.0f)), shore, slope, face, variance);
+		along = (height - eye.y) / direction.y;
+	}
+	return along;
+}
+
+// How far away the far scene is from the middle of the cube along a direction, or 0 where the cube shows the sky.
+// The faces of the cube have a near distance of 1 (see EnvironmentCamera), and their depth is reversed.
+float EnvironmentDistance(vec3 direction)
+{
+	float depth = textureCubeLod(s_environmentDepth, direction, 0.0f).r;
+#if BGFX_SHADER_LANGUAGE_GLSL
+	depth = depth * 2.0f - 1.0f;
+#endif
+	if (depth <= 1e-6f)
+	{
+		return 0.0f;
+	}
+	vec3 a = abs(direction);
+	float axis = max(a.x, max(a.y, a.z));
+	return (1.0f / depth) * length(direction) / axis;
+}
+
+// Where a point (from the middle of the cube) is against the far scene that the cube shows in its direction: 0 in front
+// of the scene or where the cube shows the sky, 1 just behind the scene, 2 far behind it. The scene that hides a point
+// far behind it from the middle of the cube does not always hide that point from the water.
+float EnvironmentSide(vec3 q)
+{
+	float scene = EnvironmentDistance(q);
+	float range = length(q);
+	if (scene <= 0.0f || range < scene)
+	{
+		return 0.0f;
+	}
+	return range < scene + max(40.0f, scene * 0.1f) ? 1.0f : 2.0f;
+}
+
+// Where a ray from p along r first meets the far scene that the cube shows, seen from the middle of the cube, or zero
+// when it meets nothing. `o` is p from the middle. The ray takes steps that grow longer
+// with the distance, then two halving steps close in on the scene. The ray meets the scene only where it goes from in
+// front of the scene to behind it: a point that the middle of the cube cannot see tells nothing.
+vec3 EnvironmentHit(vec3 o, vec3 r)
+{
+	float before = 0.0f;
+	float along = 6.0f;
+	bool seen = EnvironmentSide(o) < 0.5f;
+	for (int i = 0; i < 14; i++)
+	{
+		float side = EnvironmentSide(o + r * along);
+		if (side < 0.5f)
+		{
+			seen = true;
+		}
+		else if (seen && side < 1.5f)
+		{
+			float low = before;
+			float high = along;
+			for (int j = 0; j < 2; j++)
+			{
+				float mid = (low + high) * 0.5f;
+				if (EnvironmentSide(o + r * mid) > 0.5f)
+				{
+					high = mid;
+				}
+				else
+				{
+					low = mid;
+				}
+			}
+			return o + r * high;
+		}
+		else
+		{
+			seen = false;
+		}
+		before = along;
+		along *= 1.7f;
+	}
+	return vec3_splat(0.0f);
+}
+
+// The reflection of the far scene on the water at p along r, from the cube. The cube shows the scene from its middle,
+// not from p, so the shader reads the cube in the direction of the point where the ray meets the scene. A rough
+// surface takes the light from a wider cone of directions.
+vec3 EnvironmentReflection(vec3 p, vec3 r, float roughness)
+{
+	vec3 hit = EnvironmentHit(p - u_uwEnvironment.xyz, r);
+	bool met = dot(hit, hit) > 0.0f;
+	// The cube has no water under its horizon: the reflection reads no lower than the horizon
+	vec3 lookup = met ? normalize(hit) : r;
+	lookup = normalize(vec3(lookup.x, max(lookup.y, 0.004f), lookup.z));
+	// A rough surface takes four more samples round the middle one, as far out as the cone of the rough surface
+	vec3 side = normalize(cross(lookup, abs(lookup.y) < 0.9f ? vec3(0.0f, 1.0f, 0.0f) : vec3(1.0f, 0.0f, 0.0f)));
+	vec3 up = cross(side, lookup);
+	float spread = min(roughness, 0.6f) * 0.6f;
+	vec3 colour = vec3_splat(0.0f);
+	if (met)
+	{
+		colour = textureCubeLod(s_environment, lookup, 0.0f).rgb;
+		if (roughness > 0.1f)
+		{
+			colour += textureCubeLod(s_environment, lookup + side * spread, 0.0f).rgb;
+			colour += textureCubeLod(s_environment, lookup - side * spread, 0.0f).rgb;
+			colour += textureCubeLod(s_environment, lookup + up * spread, 0.0f).rgb;
+			colour += textureCubeLod(s_environment, lookup - up * spread, 0.0f).rgb;
+			colour *= 0.2f;
+		}
+	}
+	else
+	{
+		// A ray that meets nothing goes to the sky
+		colour = textureCubeLod(s_environmentSky, lookup, 0.0f).rgb;
+		if (roughness > 0.1f)
+		{
+			colour += textureCubeLod(s_environmentSky, lookup + side * spread, 0.0f).rgb;
+			colour += textureCubeLod(s_environmentSky, lookup - side * spread, 0.0f).rgb;
+			colour += textureCubeLod(s_environmentSky, lookup + up * spread, 0.0f).rgb;
+			colour += textureCubeLod(s_environmentSky, lookup - up * spread, 0.0f).rgb;
+			colour *= 0.2f;
+		}
+	}
+	return colour;
+}
+
+// The glint of the sun or the moon on the water: the light that the waves reflect towards the eye, from a GGX
+// microfacet model. The waves that the pixel cannot show make the roughness larger. Thus the far glint spreads into a
+// long, soft path across the sea, and does not show as single bright pixels.
+float SeaGlint(vec3 normal, vec3 toEye, vec3 toLight, float roughness)
+{
+	vec3 halfway = normalize(toEye + toLight);
+	float nl = clamp(dot(normal, toLight), 0.0f, 1.0f);
+	float nv = clamp(dot(normal, toEye), 1e-3f, 1.0f);
+	float nh = clamp(dot(normal, halfway), 0.0f, 1.0f);
+	float vh = clamp(dot(toEye, halfway), 0.0f, 1.0f);
+	float a2 = roughness * roughness;
+	float d = nh * nh * (a2 - 1.0f) + 1.0f;
+	float distribution = a2 / (3.14159265f * d * d);
+	float visibility = 0.5f / max(nl * sqrt(nv * nv * (1.0f - a2) + a2) + nv * sqrt(nl * nl * (1.0f - a2) + a2), 1e-4f);
+	float fresnel = 0.02f + 0.98f * pow(1.0f - vh, 5.0f);
+	return distribution * visibility * fresnel * nl;
+}
+
 // How much light the water scatters towards the eye along the ray, out to a distance: the shafts of light. The ray is
 // sampled in steps, and each sample takes the light that came down to it through the surface along the light's
 // direction, where the surface's bright and dark patches make the shafts.
@@ -374,7 +554,9 @@ void main()
 		vec2 surfaceSlope;
 		float face;
 		vec4 shore;
-		float toSurface = RayToSurface(eye, direction, t, surfaceSlope, face, shore);
+		float slopeVariance;
+		float toSurface = RayToSurfaceFiltered(eye, direction, t, surfaceSlope, face, shore, slopeVariance);
+		float roughness = UwRoughness(slopeVariance);
 		float waterTop = eye.y + direction.y * toSurface;
 		float waterDepth = waterTop - shore.w;
 		float lift = waterTop - u_uwParams.z;
@@ -382,7 +564,10 @@ void main()
 		{
 			vec3 surfacePoint = eye + direction * toSurface;
 			vec3 ring = FloaterRings(surfacePoint.xz, t);
-			vec3 normal = UwSurfaceNormalOf(surfaceSlope + ring.xy, toSurface);
+			// The filtered waves keep their slope far away: the roughness takes the waves that the pixel cannot show
+			vec2 shownSlope = surfaceSlope + ring.xy;
+			vec3 normal = u_uwSea.x > 0.5f ? normalize(vec3(-shownSlope.x, 1.0f, -shownSlope.y))
+			                               : UwSurfaceNormalOf(shownSlope, toSurface);
 			// How deep the water is over what the pixel shows, and over the ground under the surface
 			float thickness = farFloor ? 160.0f : waterTop - world.y;
 			float cliff = UwShoreCliff(shore);
@@ -412,7 +597,7 @@ void main()
 			// The reflection: of the scene where the screen has it, else of the sky
 			vec3 reflected = reflect(direction, normal);
 			reflected.y = abs(reflected.y);
-			vec3 mirror = SkyIn(reflected);
+			vec3 mirror = u_uwSea.w > 0.5f ? EnvironmentReflection(surfacePoint, reflected, roughness) : SkyIn(reflected);
 			if (u_uwFlags.x > 0.5f)
 			{
 				vec4 found = ScreenReflection(surfacePoint, reflected, jitter);
@@ -422,8 +607,9 @@ void main()
 			float fresnel = 0.02f + 0.98f * pow(max(1.0f - facing, 0.0f), 5.0f);
 			colour = mix(water, mirror, fresnel);
 			// The glint of the sun or the moon on the waves
-			float glint = pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f);
-			colour += u_uwLightColour.rgb * glint * 3.0f * u_uwLightColour.w;
+			float glint = u_uwSea.x > 0.5f ? min(SeaGlint(normal, -direction, u_uwAbove.xyz, roughness), 12.0f)
+			                               : pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f) * 3.0f;
+			colour += u_uwLightColour.rgb * glint * u_uwLightColour.w;
 
 			// The foam where the water is shallow and at the edge of the run up the beach, on the crests that break
 			// near the coast, round the things that float, and in a storm on the crests and in streaks along the wind
@@ -460,12 +646,18 @@ void main()
 				{
 					vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
 					vec2 across = vec2(-wind.y, wind.x);
+					// Far away a pixel covers many caps and streaks: it shows how much of the water they cover, as one shade
+					vec4 seen = FootprintOnWater(direction, toSurface);
+					float capsShown = u_uwSea.x > 0.5f ? 1.0f - smoothstep(1.0f, 3.0f, max(seen.x * seen.w, seen.x)) : 1.0f;
+					float streaksShown = u_uwSea.x > 0.5f ? 1.0f - smoothstep(0.7f, 2.0f, UwFootprintAlong(seen, across)) : 1.0f;
 					vec2 q = surfacePoint.xz;
 					float caps = smoothstep(0.5f, 0.9f, crest) * smoothstep(0.45f, 0.75f, UwNoise(q * 0.35f + t * 0.4f));
 					// Two layers, the second turned against the first, so the noise's square cells do not show
 					vec2 streakUv = vec2(dot(q, wind) * 0.04f - t * 0.2f, dot(q, across) * 0.5f);
 					vec2 turned = vec2(streakUv.x * 0.8f - streakUv.y * 0.6f, streakUv.x * 0.6f + streakUv.y * 0.8f);
 					float streaks = smoothstep(0.6f, 0.85f, UwNoise(streakUv) * 0.6f + UwNoise(turned * 1.7f + 3.1f) * 0.4f);
+					caps = mix(0.12f * smoothstep(0.2f, 1.0f, u_uwWaves.y), caps, capsShown);
+					streaks = mix(0.16f, streaks, streaksShown);
 					foam = max(foam, (caps + streaks * 0.5f) * u_uwWaves.y);
 				}
 				vec3 foamColour = u_uwLightColour.rgb * (0.4f + 0.6f * max(u_uwAbove.y, 0.0f)) + u_uwSky.rgb * 0.7f +

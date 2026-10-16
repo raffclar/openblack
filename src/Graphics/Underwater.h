@@ -152,6 +152,14 @@ enum class Effect : uint8_t
 	SprayMist,
 	/// The wet rock of the cliffs after a wave
 	WetRock,
+	/// The cube of the far scene round the eye, which the water reflects where the screen has no reflection (the sky
+	/// alone when it is off)
+	Environment,
+	/// The waves and the glint as each pixel shows them: the waves that a pixel cannot show make the surface rougher
+	/// (when it is off, the short waves fade out and the far sea is flat)
+	Filtering,
+	/// The long waves of the open sea, which show out to the horizon
+	FarWaves,
 	/// Not an effect: the water is drawn as a flat colour where it shows, to compare it with the original sea
 	WaterMask,
 	_Count
@@ -287,5 +295,53 @@ struct CliffCrash
 /// least `spacing` from the others, so that one crash along a cliff is heard once
 [[nodiscard]] std::vector<size_t> HeardCliffFeet(std::span<const glm::vec4> feet, glm::vec2 eye, size_t count, float spacing,
                                                  float range);
+
+/// The far scene round the eye, in the six faces of a cube that the water reflects: one face is drawn again each
+/// frame. The faces are in the order of a cube texture: +x, -x, +y, -y, +z, -z.
+inline constexpr uint16_t k_EnvironmentSize = 512;
+inline constexpr uint8_t k_EnvironmentFaces = 6;
+/// The face under the eye shows only the sea bed, which the water never reflects, so it is not drawn
+inline constexpr uint8_t k_EnvironmentFaceDown = 3;
+
+/// The face of the cube to draw after `face`. It skips the face that looks down.
+[[nodiscard]] constexpr uint8_t NextEnvironmentFace(uint8_t face)
+{
+	auto next = static_cast<uint8_t>((face + 1) % k_EnvironmentFaces);
+	return next == k_EnvironmentFaceDown ? static_cast<uint8_t>(next + 1) : next;
+}
+
+/// The direction a face of the cube looks along, and its up direction, as a cube texture keeps them
+struct EnvironmentFaceAxes
+{
+	glm::vec3 forward;
+	glm::vec3 up;
+};
+[[nodiscard]] EnvironmentFaceAxes EnvironmentFaceAxesOf(uint8_t face);
+
+/// Where the cube is for an eye: on the sea's level under the eye, so the water near the eye reflects from its
+/// middle
+[[nodiscard]] glm::vec3 EnvironmentCentre(glm::vec3 eye, float seaLevel);
+
+/// The long waves of the open sea: longer than the wind sea's waves and lower for their length, so that they show as
+/// far as the horizon. A storm makes them higher. x: the direction (radians), y: the length, z: the height, w: the
+/// phase, as in WaveTable. The shaders take the same table (u_uwFarWaves).
+inline constexpr size_t k_FarWaveCount = 3;
+[[nodiscard]] std::array<glm::vec4, k_FarWaveCount> FarWaveTable(const WaveState& waves);
+
+/// How much of a wave a pixel shows, from the wave's length and the size of the pixel on the water along the wave's
+/// direction. The rest of the wave's slope makes the surface rougher.
+struct WaveFilter
+{
+	/// The share of the wave's height that the surface keeps, 0 to 1
+	float height;
+	/// The share of the wave's slope that the normal keeps, 0 to 1
+	float slope;
+	/// The variance of the slope that the pixel cannot show, which adds to the surface's roughness (alpha squared)
+	float variance;
+};
+[[nodiscard]] WaveFilter FilterWave(float length, float amplitude, float footprint);
+
+/// The roughness (GGX alpha) of the water at a pixel, from the variance of the slopes that the pixel cannot show
+[[nodiscard]] float FilteredRoughness(float variance);
 
 } // namespace openblack::graphics::underwater
