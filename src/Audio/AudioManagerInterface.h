@@ -26,6 +26,7 @@
 #include "ScriptSoundEffect.h"
 #include "Sound.h"
 #include "SoundGroup.h"
+#include "VoiceOwner.h"
 
 namespace openblack
 {
@@ -77,12 +78,16 @@ struct SoundEffectOptions
 	std::optional<uint32_t> volume;
 	/// Repeat loops it until it is stopped or released; Once plays it the bank header's number of times
 	PlayType playType {PlayType::Once};
-	/// What it does about the voices that play already, unless its bank header gives another play type. Empty takes
-	/// a free voice.
+	/// What it does about the voices that play already, unless its bank header gives another play type. Empty uses
+	/// restart, the play type of a sound effect when its caller gives no other.
 	std::optional<pack::AudioBankLoop> voicePlayType;
 	/// What it is played for: a loop tied to its owner is moved with SetEmitterPosition and stopped with
 	/// StopOwnedSounds
 	entt::entity owner {entt::null};
+	/// Whose sound it is to the voice rules
+	VoiceOwner voiceOwner {VoiceOwner::Entity};
+	/// The owner number when the voice owner is a number
+	uint32_t ownerNumber {0};
 	/// The distances it is heard at fully and no further, instead of the bank header's
 	std::optional<float> minDistance;
 	std::optional<float> maxDistance;
@@ -115,8 +120,9 @@ public:
 	virtual void DestroyEmitter(entt::entity emitter) = 0;
 	/// An emitter for a loaded sound, ready to play. With a world position it is 3D audio sounding from there,
 	/// otherwise 2D audio centred on the listener. Repeat loops it forever, otherwise the bank header's loop count
-	/// applies.
-	virtual entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType) = 0;
+	/// applies. It gets a voice by the restart play type for its owner, unless its bank header gives another.
+	virtual entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
+	                                   entt::entity owner) = 0;
 	virtual bool EmitterExists(entt::entity emitter) = 0;
 	[[nodiscard]] virtual float GetProgress(entt::entity emitter) = 0;
 	[[nodiscard]] virtual AudioStatus GetStatus(entt::entity emitter) = 0;

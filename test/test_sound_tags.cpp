@@ -66,7 +66,7 @@ public:
 	void PauseEmitter(entt::entity) override {}
 	void StopEmitter(entt::entity emitter) override { emitters.at(emitter).stopped = true; }
 	void DestroyEmitter(entt::entity emitter) override { emitters.erase(emitter); }
-	entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, audio::PlayType) override
+	entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, audio::PlayType, entt::entity) override
 	{
 		const auto entity = static_cast<entt::entity>(emitters.size() + 1);
 		emitters.emplace(entity, Emitter {.sound = id, .position = worldPosition.value_or(glm::vec3(0.0f))});

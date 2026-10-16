@@ -1656,7 +1656,7 @@ void FireSystem::Update(std::chrono::milliseconds frameRealTime, std::chrono::mi
 			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Fire: object {} hisses with steam at {:.0f}",
 			                        entt::to_integral(object), fire.state.temperature);
 			    audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_Steam_01),
-			                                {.position = transform.position});
+			                                {.position = transform.position, .owner = object});
 		    }
 	    });
 }

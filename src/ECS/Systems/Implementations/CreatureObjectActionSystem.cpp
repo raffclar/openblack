@@ -2651,7 +2651,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			}
 			else if (object_physics::IsRock(target) && Locator::dynamicsSystem::has_value())
 			{
-				object_physics::SmashRock(Locator::dynamicsSystem::value(), target);
+				object_physics::SmashRock(Locator::dynamicsSystem::value(), target, creature);
 			}
 			break;
 		}

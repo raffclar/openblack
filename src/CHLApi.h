@@ -21,6 +21,11 @@
 #include "ScriptHeaders/NativeStubCalls.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 
+namespace openblack::audio
+{
+struct SoundEffectOptions;
+}
+
 namespace openblack::chlapi
 {
 
@@ -80,8 +85,8 @@ public:
 	[[nodiscard]] bool IsHelpSystemOn() const { return _scriptHelpOn && _playerHelpLevel != 0; }
 	/// A sound of one of the game's banks, by its number in the bank, through the game's common sound effect path: its
 	/// gates may keep it quiet (see audio::SoundEffectHeard). Placed, it isn't started further from the camera than the
-	/// sample's maximum distance.
-	void PlayBankSoundEffect(int32_t bank, int32_t sample, std::optional<glm::vec3> position) const;
+	/// sample's maximum distance. The options give its place and how it gets a voice.
+	void PlayBankSoundEffect(int32_t bank, int32_t sample, const audio::SoundEffectOptions& options) const;
 
 private:
 	void InitFunctionsTable0();

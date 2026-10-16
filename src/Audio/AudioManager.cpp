@@ -335,10 +335,11 @@ VoiceStart AudioManager::MakeVoiceStart(const Sound& sound, std::optional<glm::v
 	};
 }
 
-entt::entity AudioManager::CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType)
+entt::entity AudioManager::CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
+                                         entt::entity owner)
 {
 	VoiceChoice choice;
-	return CreateVoiceEmitter(id, worldPosition, playType, entt::null, pack::AudioBankLoop::Overlap, choice);
+	return CreateVoiceEmitter(id, worldPosition, playType, owner, k_CallerPlayType, choice);
 }
 
 entt::entity AudioManager::CreateVoiceEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
@@ -462,7 +463,7 @@ const Sound& AudioManager::GetSound(entt::id_type id)
 
 void AudioManager::PlaySound(entt::id_type id, PlayType playType)
 {
-	const auto entity = CreateEmitter(id, std::nullopt, playType);
+	const auto entity = CreateEmitter(id, std::nullopt, playType, entt::null);
 	if (entity != entt::null)
 	{
 		PlayEmitter(entity);
@@ -483,7 +484,7 @@ void AudioManager::PlaySoundEffect(entt::id_type id, std::optional<glm::vec3> wo
 			return;
 		}
 	}
-	const auto entity = CreateEmitter(id, worldPosition, PlayType::Once);
+	const auto entity = CreateEmitter(id, worldPosition, PlayType::Once, entt::null);
 	if (entity != entt::null)
 	{
 		PlayEmitter(entity);
@@ -526,10 +527,9 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 		LogNotStarted(*sound, *options.position, TooFar(*options.position, range));
 		return entt::null;
 	}
-	// The voice rules apply the play type of the bank header. A sound that plays once does not start again while it
-	// plays, and a sound that restarts starts again on its voice.
-	const auto choice =
-	    AcquireVoice(*sound, OwnerKey(options.owner), options.voicePlayType.value_or(pack::AudioBankLoop::Overlap));
+	// The voice rules apply the play type of the bank header, else the play type of the caller. A sound that plays once
+	// does not start again while it plays, and a sound that restarts starts again on its voice.
+	const auto choice = AcquireVoice(*sound, OwnerKey(options), options.voicePlayType.value_or(k_CallerPlayType));
 	if (!choice.start)
 	{
 		LogNotStarted(*sound, options.position.value_or(glm::zero<glm::vec3>()), NoVoiceReason(choice));
@@ -1139,7 +1139,19 @@ std::optional<size_t> AudioManager::VoiceOf(entt::entity emitter) const
 
 uint64_t AudioManager::OwnerKey(entt::entity owner)
 {
-	return owner == entt::null ? 0 : static_cast<uint64_t>(entt::to_integral(owner)) + 1;
+	return VoiceOwnerKey(VoiceOwner::Entity,
+	                     owner == entt::null ? std::nullopt : std::optional<uint32_t>(entt::to_integral(owner)), 0, 0);
+}
+
+uint64_t AudioManager::OwnerKey(const SoundEffectOptions& options)
+{
+	const auto owner = options.owner == entt::null ? std::nullopt : std::optional<uint32_t>(entt::to_integral(options.owner));
+	const auto key = VoiceOwnerKey(options.voiceOwner, owner, options.ownerNumber, _ownSoundSerial);
+	if (options.voiceOwner == VoiceOwner::OwnSound)
+	{
+		++_ownSoundSerial;
+	}
+	return key;
 }
 
 } // namespace openblack::audio

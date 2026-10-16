@@ -14,6 +14,8 @@
 #include <string>
 #include <string_view>
 
+#include <PackFile.h>
+
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
@@ -185,7 +187,8 @@ void GameDynamicsWorld::PlaySound(audio::SoundId sound)
 {
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(static_cast<entt::id_type>(sound), std::nullopt);
+		// A rock rushing past does not start its sound again while the sound plays
+		audio::StartGameSoundEffect(static_cast<entt::id_type>(sound), {.voicePlayType = pack::AudioBankLoop::Once});
 	}
 }
 

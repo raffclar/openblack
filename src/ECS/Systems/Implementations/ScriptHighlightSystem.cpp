@@ -157,7 +157,7 @@ void ScriptHighlightSystem::SetActive(entt::entity entity, bool active)
 	{
 		if (!rules::IsTipSign(highlight->kind))
 		{
-			_world->PlaySound(rules::k_ScrollStartedSound);
+			_world->PlaySound(rules::k_ScrollStartedSound, entity);
 		}
 		const auto info = _world->InfoOf(static_cast<uint32_t>(highlight->kind));
 		if (info.has_value() && info->activeEffect != ParticleType::None)
@@ -197,7 +197,7 @@ bool ScriptHighlightSystem::Tap(entt::entity entity, bool byThisPlayer)
 	SetActive(entity, true);
 	if (outcome.signSound)
 	{
-		_world->PlaySound(rules::k_SignTappedSound);
+		_world->PlaySound(rules::k_SignTappedSound, entt::null);
 	}
 	if (outcome.showsTip)
 	{

@@ -21,6 +21,9 @@
 namespace openblack::audio
 {
 
+/// The play type of a sample when its caller gives no other play type and its bank header does not override it
+constexpr pack::AudioBankLoop k_CallerPlayType = pack::AudioBankLoop::Restart;
+
 /// A request for a voice to play a bank sample on
 struct VoiceRequest
 {

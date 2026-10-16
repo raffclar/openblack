@@ -3204,7 +3204,7 @@ static std::optional<entt::id_type> BankSound(int32_t bank, int32_t sample)
 	return id;
 }
 
-void CHLApi::PlayBankSoundEffect(int32_t bank, int32_t sample, std::optional<glm::vec3> position) const
+void CHLApi::PlayBankSoundEffect(int32_t bank, int32_t sample, const audio::SoundEffectOptions& options) const
 {
 	// A number naming no bank, a bank the game doesn't ship and a sample the bank doesn't have all play nothing
 	const auto found = BankSound(bank, sample);
@@ -3220,7 +3220,7 @@ void CHLApi::PlayBankSoundEffect(int32_t bank, int32_t sample, std::optional<glm
 	{
 		return;
 	}
-	Locator::audio::value().PlaySoundEffect(id, position);
+	Locator::audio::value().StartSoundEffect(id, options);
 }
 
 void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
@@ -3229,7 +3229,11 @@ void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
 	const auto position = PopVec();
 	const auto bank = Pop().intVal;
 	const auto sample = Pop().intVal;
-	Locator::chlapi::value().PlayBankSoundEffect(bank, sample, withPosition ? std::optional(position) : std::nullopt);
+	// The sample number is the owner of a script's sound
+	Locator::chlapi::value().PlayBankSoundEffect(bank, sample,
+	                                             {.position = withPosition ? std::optional(position) : std::nullopt,
+	                                              .voiceOwner = audio::VoiceOwner::Number,
+	                                              .ownerNumber = static_cast<uint32_t>(sample)});
 }
 
 /// The game's music, none before the game has started it

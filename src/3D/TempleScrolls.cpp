@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <string>
 
+#include <PackFile.h>
 #include <bgfx/bgfx.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
@@ -293,7 +294,8 @@ bool TempleScrolls::Hold(bool pressed, float mouseY, const std::optional<TempleC
 		{
 			const auto ticks = machine_clock::Ticks();
 			const auto squeak = k_Squeaks.at(static_cast<size_t>(ticks % static_cast<int64_t>(k_Squeaks.size())));
-			audio::PlayGameSoundEffect(static_cast<entt::id_type>(squeak), std::nullopt);
+			// A squeak does not start again while it plays
+			audio::StartGameSoundEffect(static_cast<entt::id_type>(squeak), {.voicePlayType = pack::AudioBankLoop::Once});
 		}
 	}
 	return true;

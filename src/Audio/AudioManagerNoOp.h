@@ -37,7 +37,7 @@ public:
 	void StopEmitter([[maybe_unused]] entt::entity emitter) override {}
 	void DestroyEmitter([[maybe_unused]] entt::entity emitter) override {}
 	entt::entity CreateEmitter([[maybe_unused]] entt::id_type id, [[maybe_unused]] std::optional<glm::vec3> worldPosition,
-	                           [[maybe_unused]] PlayType playType) override
+	                           [[maybe_unused]] PlayType playType, [[maybe_unused]] entt::entity owner) override
 	{
 		return entt::null;
 	};

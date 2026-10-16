@@ -36,8 +36,8 @@ public:
 
 private:
 	/// The knock on a building of a kind, built so far, of a town (none for none), with these people inside
-	bool Knock(AbodeType type, float built, entt::entity town, std::span<const entt::entity> inhabitants, glm::vec3 handPoint,
-	           bool ownHand);
+	bool Knock(entt::entity building, AbodeType type, float built, entt::entity town, std::span<const entt::entity> inhabitants,
+	           glm::vec3 handPoint, bool ownHand);
 
 	/// The town last knocked on
 	entt::entity _knockedTown {entt::null};

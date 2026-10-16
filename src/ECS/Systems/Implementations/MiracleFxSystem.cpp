@@ -17,6 +17,7 @@
 #include <numbers>
 #include <vector>
 
+#include <PackFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -106,11 +107,11 @@ HandMiracleFx* HandFx()
 	return found != nullptr ? found : &registry.Assign<HandMiracleFx>(hand);
 }
 
-void PlaySound(entt::id_type id)
+void PlaySound(entt::id_type id, std::optional<pack::AudioBankLoop> voicePlayType = std::nullopt)
 {
 	if (Locator::audio::has_value())
 	{
-		audio::StartGameSoundEffect(id, {});
+		audio::StartGameSoundEffect(id, {.voicePlayType = voicePlayType});
 	}
 }
 } // namespace
@@ -341,7 +342,8 @@ void MiracleFxSystem::SeedInHand(int powerUp, int previousPowerUp)
 	}
 	if (const auto voice = visuals::PowerUpVoiceSample(powerUp))
 	{
-		PlaySound(entt::hashed_string(fmt::format("SpellDialogue.sad/{}", *voice).c_str()).value());
+		// The voice does not start again while it speaks
+		PlaySound(entt::hashed_string(fmt::format("SpellDialogue.sad/{}", *voice).c_str()).value(), pack::AudioBankLoop::Once);
 	}
 }
 

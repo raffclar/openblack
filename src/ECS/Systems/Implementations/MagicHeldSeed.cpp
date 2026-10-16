@@ -16,6 +16,7 @@
 
 #include <string>
 
+#include <PackFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 
@@ -204,5 +205,6 @@ void MagicSystem::AfterSeedCast(const SpellSeed& seed, MagicType type)
 	}
 	// The announcer names the tribe whose power is behind the miracle
 	const auto sample = k_TribalPowerVoice + static_cast<int>(*tribe);
-	audio::StartGameSoundEffect(entt::hashed_string(fmt::format("SpellDialogue.sad/{}", sample).c_str()).value(), {});
+	audio::StartGameSoundEffect(entt::hashed_string(fmt::format("SpellDialogue.sad/{}", sample).c_str()).value(),
+	                            {.voicePlayType = pack::AudioBankLoop::Once});
 }

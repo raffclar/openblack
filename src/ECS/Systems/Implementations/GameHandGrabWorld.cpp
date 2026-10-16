@@ -443,7 +443,9 @@ void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 {
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(), position);
+		// Each of these sounds is a sound of its own to the voice rules
+		audio::StartGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
+		                            {.position = position, .voiceOwner = audio::VoiceOwner::OwnSound});
 	}
 }
 

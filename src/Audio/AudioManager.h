@@ -60,7 +60,8 @@ public:
 	void PauseEmitter(entt::entity emitter) override;
 	void StopEmitter(entt::entity emitter) override;
 	void DestroyEmitter(entt::entity emitter) override;
-	entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType) override;
+	entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
+	                           entt::entity owner) override;
 	[[nodiscard]] bool EmitterExists(entt::entity emitter) override;
 	[[nodiscard]] float GetProgress(entt::entity entity) override;
 	[[nodiscard]] AudioStatus GetStatus(entt::entity emitter) override;
@@ -151,6 +152,8 @@ private:
 	[[nodiscard]] std::optional<size_t> VoiceOf(entt::entity emitter) const;
 	/// The key of an owner in the voice pool
 	[[nodiscard]] static uint64_t OwnerKey(entt::entity owner);
+	/// The key of the owner of a sound effect in the voice pool, by whose sound it is
+	[[nodiscard]] uint64_t OwnerKey(const SoundEffectOptions& options);
 	/// The bank of a loaded sound, 0 when the sound is not loaded
 	[[nodiscard]] static uint32_t BankOf(entt::id_type id);
 	/// An emitter for a sound on a voice of the pool, null when the sound does not start
@@ -199,6 +202,8 @@ private:
 	/// The voices that all the bank samples share, and what plays on each voice
 	VoicePool _voicePool;
 	std::array<VoiceOccupant, VoicePool::k_VoiceCount> _voiceOccupants {};
+	/// Counts the sounds that have an owner of their own
+	uint64_t _ownSoundSerial {0};
 };
 
 } // namespace openblack::audio

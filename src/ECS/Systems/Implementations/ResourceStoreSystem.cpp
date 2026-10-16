@@ -119,18 +119,20 @@ uint32_t TickMs()
 	return machine_clock::Ticks();
 }
 
-void PlayInGame(uint32_t sample, glm::vec3 position)
+/// A sample of the in-game bank at a place, played for what owns it
+void PlayInGame(uint32_t sample, glm::vec3 position, entt::entity owner)
 {
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(), position);
+		audio::StartGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
+		                            {.position = position, .owner = owner});
 	}
 }
 
 /// The thud of a pile, where it is
-void Thud(ResourceType type, uint32_t amount, glm::vec3 position)
+void Thud(entt::entity pile, ResourceType type, uint32_t amount, glm::vec3 position)
 {
-	PlayInGame(piles::PileSoundSample(type, amount, TickMs()), position);
+	PlayInGame(piles::PileSoundSample(type, amount, TickMs()), position, pile);
 }
 
 /// The pile a storage pit keeps its food or wood in, made empty where the pit's model says if it has none
@@ -470,7 +472,7 @@ uint32_t ResourceStoreSystem::AddToPile(entt::entity pile, ResourceType type, ui
 	const auto& info = PotInfoOf(pot->type);
 	if (piles::Thuds(pot->type))
 	{
-		Thud(type, amount, registry.Get<const Transform>(pile).position);
+		Thud(pile, type, amount, registry.Get<const Transform>(pile).position);
 	}
 	const auto taken = piles::AmountTaken(pot->amount, amount, pot->maxAmount, piles::IsCapped(info.nextPotForResource));
 	pot->amount += taken;
@@ -762,7 +764,7 @@ bool ResourceStoreSystem::TakeObject(entt::entity store, entt::entity object, st
 	if (resource.type == ResourceType::Wood && !registry.AllOf<Pot>(object))
 	{
 		_mulch = (_mulch + 1) % k_MulchSamples;
-		PlayInGame(k_MulchSample + _mulch, at);
+		PlayInGame(k_MulchSample + _mulch, at, object);
 	}
 	ecs::world_objects::LeaveGhost(object);
 	ecs::world_objects::Remove(object);
@@ -860,7 +862,7 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 	    glm::vec3(type == ResourceType::Food ? piles::k_MagicFoodScale : piles::k_MagicWoodScale);
 	registry.Assign<MagicPile>(created, type, player);
 	registry.Get<Pot>(created).poisoned = poisoned;
-	Thud(type, left, point);
+	Thud(created, type, left, point);
 	// A power-up's food speeds up the people who take from the new pile, and sparkles over it for as long as it lasts
 	auto& pile = registry.Get<ResourcePile>(created);
 	if (speedUp && type == ResourceType::Food)

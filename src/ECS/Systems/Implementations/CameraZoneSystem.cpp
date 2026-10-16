@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <EXCFile.h>
+#include <PackFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
@@ -76,7 +77,8 @@ void CameraZoneSystem::FenceHit(const glm::vec3& origin, const glm::vec3& listen
 {
 	++_fenceHits;
 	// The sound of going out of bounds, heard from where the camera is
-	audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_OutOfBounds), listener);
+	audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_OutOfBounds),
+	                            {.position = listener, .voicePlayType = pack::AudioBankLoop::Once});
 	if (Locator::explosionSystem::has_value())
 	{
 		Locator::explosionSystem::value().AddShake(origin, k_ShakeRadius, k_ShakeStrength, k_ShakeSeconds, false);
