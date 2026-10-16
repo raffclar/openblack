@@ -251,6 +251,29 @@ glm::vec3 fight_view::WayPoint(const glm::vec3& from, const glm::vec3& to, float
 	return way;
 }
 
+Flight fight_view::PlanFlight(const glm::vec3& from, View to, float rise, const GroundHeight& ground,
+                              const KeepInside& keepInside)
+{
+	to.origin = keepInside(to.origin, to.focus);
+	return {
+	    .to = to, .way = WayPoint(from, to.origin, rise, ground), .woosh = glm::distance(from, to.origin) > k_WooshDistance};
+}
+
+bool fight_view::DraggedAway(float secondsSinceFlight, bool landHeld, glm::vec2 eye, glm::vec2 looking, glm::vec2 arenaCentre,
+                             float arenaRadius)
+{
+	return k_DragLeaveSeconds < secondsSinceFlight && landHeld &&
+	       TooFar(eye, looking, arenaCentre, arenaRadius, k_DragLeaveScale);
+}
+
+void Chase::Resume(const View& from, const View& speed)
+{
+	_origin.Carry(from.origin, speed.origin);
+	_focus.Carry(from.focus, speed.focus);
+	_held = from;
+	_flight.reset();
+}
+
 void Chase::Fly(const View& from, const View& speed, const View& to, const glm::vec3& way)
 {
 	_origin.Carry(from.origin, speed.origin);

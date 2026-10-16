@@ -102,6 +102,15 @@ public:
 		float turn {0.0f};
 		float tilt {0.0f};
 		float zoom {0.0f};
+		/// Whether the player used a control of the camera this frame: a key or the wheel that turns, tilts, zooms or
+		/// moves it, both buttons, the button that turns it round the hand, or a grip of the land. Controls that the
+		/// scripts switch off count too.
+		bool controlsUsed {false};
+		/// Whether the player holds the land with no key or wheel that turns, tilts or zooms the camera
+		bool landHeld {false};
+		/// What a drag of the land turned the camera across and tilted it this frame, in radians
+		float dragTurn {0.0f};
+		float dragTilt {0.0f};
 	};
 	[[nodiscard]] virtual Asked GetAsked() const { return {}; }
 };

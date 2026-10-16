@@ -1075,6 +1075,12 @@ void CreatureFightSystem::UpdateView(float seconds)
 			if (model->ZoomedOut() && _fightExit)
 			{
 				EndView("zoomed_out");
+				return;
+			}
+			// The player who drags the land far enough from the arena leaves the fight
+			if (DraggedAway(*model))
+			{
+				EndView("dragged_away");
 			}
 			return;
 		}
@@ -1185,8 +1191,7 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 	const auto normal = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetNormalAt(arena.centre)
 	                                                        : glm::vec3(0.0f, 1.0f, 0.0f);
 	const auto start = fight_view::Start(arena.centre, arena.radius, ground, GroundAt, normal);
-	const auto way = fight_view::WayPoint(camera.GetOrigin(), start.origin, fight_view::k_StartWayRise, GroundAt);
-	auto model = std::make_unique<FightCameraModel>(nullptr, start, way);
+	auto model = std::make_unique<FightCameraModel>(nullptr, start);
 	auto* view = model.get();
 	// The fight view is a part of the player's camera, so the count of the camera's time continues
 	const auto modelSeconds = camera.GetModelSeconds();
@@ -1194,6 +1199,30 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 	camera.SetModelSeconds(modelSeconds);
 	_view = Watched {.first = first, .second = second, .lingerSeconds = std::nullopt};
 	_lookSeconds = 0.0f;
+}
+
+bool CreatureFightSystem::DraggedAway(const FightCameraModel& model) const
+{
+	if (!_view.has_value() || !model.LandHeld())
+	{
+		return false;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.TryGet<const CreatureFighting>(_view->first);
+	if (fighting == nullptr)
+	{
+		return false;
+	}
+	// The camera must look at the land in the middle of the screen
+	const auto& camera = Locator::camera::value();
+	const auto looking = camera.RaycastScreenCoordToLand({0.5f, 0.5f}, true, Camera::Interpolation::Drawn);
+	if (!looking.has_value())
+	{
+		return false;
+	}
+	const auto eye = camera.GetOrigin(Camera::Interpolation::Target);
+	return fight_view::DraggedAway(model.GetSecondsSinceFlight(), model.LandHeld(), {eye.x, eye.z},
+	                               {looking->position.x, looking->position.z}, fighting->arena.centre, fighting->arena.radius);
 }
 
 void CreatureFightSystem::EndView(std::string_view why)
