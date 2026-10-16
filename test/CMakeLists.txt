@@ -1063,3 +1063,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_creature_gesture test_creature_gesture.cpp)
 # EXPERIMENT (not for merge): the view under the sea
 openblack_setup_and_add_test(test_underwater graphics/test_underwater.cpp)
+target_link_libraries(test_underwater PRIVATE lnd)

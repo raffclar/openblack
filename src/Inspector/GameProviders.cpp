@@ -26,6 +26,7 @@
 #include <L3DFile.h>
 #include <LHVM.h>
 #include <LNDFile.h>
+#include <glm/common.hpp>
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
 
@@ -720,6 +721,32 @@ std::unique_ptr<ProviderInterface> LandProvider()
 			                      return feet;
 		                      }()}};
 	        }));
+	provider->Add(
+	    Query("underwater_at",
+	          "EXPERIMENT (not for merge): the sea bed under a point: the depth of the sea bed under the usual sea level, the "
+	          "lowest the camera goes there, the distance to the coast (out to sea positive) and how much it is a cliff's foot",
+	          {PositionParameter()}),
+	    Serve<Locator::underwaterSystem>("the view under the sea", [](const ecs::systems::UnderwaterSystemInterface& underwater,
+	                                                                  const QueryContext& context) {
+		    const auto position = PositionParam(context.params);
+		    if (!position.has_value())
+		    {
+			    return QueryResult::Error("position must be [x, z] or [x, y, z]");
+		    }
+		    const glm::vec2 point(position->x, position->z);
+		    const auto& bed = underwater.GetSeabed();
+		    const float land = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+		    Json result {{"depth", bed.DepthAt(point)}, {"floor", underwater.FloorAt(point, land)}, {"land", land}};
+		    if (bed.size.x > 0 && bed.size.y > 0 && !bed.shore.empty())
+		    {
+			    const auto corner =
+			        glm::clamp(glm::ivec2(glm::round((point - bed.origin) / bed.spacing)), glm::ivec2(0), bed.size - 1);
+			    const auto i = static_cast<size_t>(corner.y) * static_cast<size_t>(bed.size.x) + static_cast<size_t>(corner.x);
+			    result["coast_distance"] = bed.shore[i].x;
+			    result["cliff"] = i < bed.cliff.size() ? bed.cliff[i] : 0.0f;
+		    }
+		    return QueryResult::Value(std::move(result));
+	    }));
 	provider->Add(Query("weather", "The climate: whether it runs, its storms and the season"),
 	              Serve<Locator::weatherSystem>(
 	                  "the weather", [](const ecs::systems::WeatherSystemInterface& weather, const QueryContext& /*c*/) {

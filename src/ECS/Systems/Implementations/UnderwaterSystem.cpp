@@ -112,15 +112,27 @@ void UnderwaterSystem::Update(std::chrono::milliseconds frameRealTime)
 	constexpr int k_Corners = LandIslandInterface::k_MapCellsPerSide + 1;
 	const glm::ivec2 size {k_Corners, k_Corners};
 	std::vector<uint8_t> altitudes(static_cast<size_t>(size.x) * static_cast<size_t>(size.y));
+	// How much of each corner's ground is the beach's sand, from its country's materials at its altitude
+	std::vector<float> beach(altitudes.size(), 0.0f);
+	const auto& countries = island.GetCountries();
+	const auto types = island.GetMaterialTypes();
+	size_t beachCorners = 0;
 	for (int z = 0; z < size.y; ++z)
 	{
 		for (int x = 0; x < size.x; ++x)
 		{
-			altitudes[static_cast<size_t>(z) * static_cast<size_t>(size.x) + static_cast<size_t>(x)] =
-			    island.GetCell(glm::u16vec2(x, z)).altitude;
+			const auto i = static_cast<size_t>(z) * static_cast<size_t>(size.x) + static_cast<size_t>(x);
+			const auto& cell = island.GetCell(glm::u16vec2(x, z));
+			altitudes[i] = cell.altitude;
+			if (cell.properties.country < countries.size())
+			{
+				beach[i] = seabed::BeachShare(countries[cell.properties.country], cell.altitude, types);
+				beachCorners += beach[i] > 0.5f && cell.altitude > seabed::k_SeaLevelAltitude ? 1 : 0;
+			}
 		}
 	}
-	_seabed = seabed::Build(altitudes, size, glm::vec2(0.0f), LandIslandInterface::k_CellSize);
+	_seabed = seabed::Build(altitudes, size, glm::vec2(0.0f), LandIslandInterface::k_CellSize, beach);
+	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: {} corners of beach sand above the sea", beachCorners);
 	_reef = seabed::PlaceReef(_seabed, graphics::underwater::k_LowestTide, graphics::underwater::k_MostCoral,
 	                          graphics::underwater::k_MostPlants);
 	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: {} coral and plants on the reef", _reef.size());

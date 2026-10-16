@@ -30,7 +30,8 @@ namespace
 land_line::CellLookup Flat(uint8_t height)
 {
 	return [height](int32_t, int32_t) -> std::optional<land_line::CellHeights> {
-		return land_line::CellHeights {.here = height, .acrossX = height, .acrossZ = height, .acrossBoth = height};
+		const auto h = static_cast<float>(height);
+		return land_line::CellHeights {.here = h, .acrossX = h, .acrossZ = h, .acrossBoth = h};
 	};
 }
 
@@ -102,8 +103,8 @@ TEST(LandLine, TheFirstCellAlongTheLineIsTheOneMet)
 	const auto cells = [](int32_t x, int32_t z) -> std::optional<land_line::CellHeights> {
 		// Two ramps rising across x
 		const bool ramp = z == 50 && (x == 103 || x == 108);
-		const uint8_t rise = ramp ? 200 : 0;
-		return land_line::CellHeights {.here = 0, .acrossX = rise, .acrossZ = 0, .acrossBoth = rise};
+		const float rise = ramp ? 200.0f : 0.0f;
+		return land_line::CellHeights {.here = 0.0f, .acrossX = rise, .acrossZ = 0.0f, .acrossBoth = rise};
 	};
 	const glm::vec3 from(100.5f * k_Metres, 100.0f * k_Height, 50.5f * k_Metres);
 	const glm::vec3 to(101.5f * k_Metres, 100.0f * k_Height, 50.5f * k_Metres);

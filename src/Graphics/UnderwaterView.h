@@ -44,6 +44,10 @@ public:
 	[[nodiscard]] const FrameBuffer& Target(glm::u16vec2 size);
 	/// The sea bed's depth at each cell corner, made again when the sea bed changes
 	[[nodiscard]] const Texture2D& Seabed(const seabed::Seabed& seabed, uint32_t revision);
+	/// The layer of the land's block textures for each block of the 32 by 32 map, plus 1, and 0 where there is no block.
+	/// `layers` has one value for each block, x first. Made again when it changes. The water reads the original game's
+	/// coast alpha from the block textures through it, so that the water shows only where the original sea shows.
+	[[nodiscard]] const Texture2D& BlockLayers(std::span<const float> layers, uint32_t revision);
 	/// Binds the motes' squares to draw them
 	void BindMotes() const;
 	/// The sea bed past the land's blocks, out to the map's edge, made again when the sea bed changes: a tile of 160
@@ -69,6 +73,8 @@ private:
 	glm::u16vec2 _targetSize {0, 0};
 	std::unique_ptr<Texture2D> _seabed;
 	std::optional<uint32_t> _seabedRevision;
+	std::unique_ptr<Texture2D> _blockLayers;
+	std::optional<uint32_t> _blockLayersRevision;
 	bgfx::VertexBufferHandle _moteVertices = BGFX_INVALID_HANDLE;
 	bgfx::VertexBufferHandle _farVertices = BGFX_INVALID_HANDLE;
 	bgfx::IndexBufferHandle _farIndices = BGFX_INVALID_HANDLE;

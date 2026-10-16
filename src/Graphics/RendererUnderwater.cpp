@@ -137,7 +137,7 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	const auto& waves = system.GetWaves();
 	frame.waves = {off == Effect::Waves ? 0.0f : waves.scale, waves.storm, waves.windAngle,
 	               off == Effect::Waves ? 0.0f : waves.swash};
-	frame.flags2 = {on(Effect::Whitecaps), on(Effect::Reef), 0.0f, 0.0f};
+	frame.flags2 = {on(Effect::Whitecaps), on(Effect::Reef), off == Effect::WaterMask ? 1.0f : 0.0f, 0.0f};
 	auto tableWaves = waves;
 	tableWaves.scale = off == Effect::Waves ? 0.0f : waves.scale;
 	frame.waveTable = underwater::WaveTable(tableWaves);
@@ -221,6 +221,23 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	const auto& system = Locator::underwaterSystem::value();
 	const auto& shoreMap = _underwater->Seabed(system.GetSeabed(), system.GetSeabedRevision());
 	post->SetTextureSampler("s_shore", 2, shoreMap);
+	// The original game's coast alpha, in the blocks' textures: the water shows only as much as the original sea
+	if (Locator::terrainSystem::has_value())
+	{
+		const auto& island = Locator::terrainSystem::value();
+		std::array<float, 32 * 32> layers {};
+		const auto& blocks = island.GetBlocks();
+		for (size_t i = 0; i < blocks.size(); ++i)
+		{
+			const auto at = blocks[i].GetBlockPosition();
+			if (at.x >= 0 && at.y >= 0 && at.x < 32 && at.y < 32)
+			{
+				layers.at(static_cast<size_t>(at.y * 32 + at.x)) = static_cast<float>(i + 1);
+			}
+		}
+		post->SetTextureSampler("s_blockTextures", 3, island.GetBlockTextures());
+		post->SetTextureSampler("s_blockLayers", 4, _underwater->BlockLayers(layers, system.GetSeabedRevision()));
+	}
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 	post->Submit(postView);
 

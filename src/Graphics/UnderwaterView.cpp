@@ -163,6 +163,21 @@ const Texture2D& UnderwaterView::Seabed(const seabed::Seabed& seabed, uint32_t r
 	return *_seabed;
 }
 
+const Texture2D& UnderwaterView::BlockLayers(std::span<const float> layers, uint32_t revision)
+{
+	constexpr uint16_t k_Blocks = 32;
+	if (_blockLayers == nullptr || _blockLayersRevision != revision)
+	{
+		std::vector<float> texels(static_cast<size_t>(k_Blocks) * k_Blocks, 0.0f);
+		std::copy_n(layers.begin(), std::min(layers.size(), texels.size()), texels.begin());
+		_blockLayers = std::make_unique<Texture2D>("Underwater Block Layers");
+		_blockLayers->CreateWithinFrame(k_Blocks, k_Blocks, 1, TextureFormat::R32F, Wrapping::ClampEdge, Filter::Nearest,
+		                                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(float))));
+		_blockLayersRevision = revision;
+	}
+	return *_blockLayers;
+}
+
 void UnderwaterView::BindMotes() const
 {
 	bgfx::setVertexBuffer(0, _moteVertices);

@@ -144,6 +144,8 @@ enum class Effect : uint8_t
 	Whitecaps,
 	Reef,
 	Current,
+	/// Not an effect: the water is drawn as a flat colour where it shows, to compare it with the original sea
+	WaterMask,
 	_Count
 };
 

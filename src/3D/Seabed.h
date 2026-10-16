@@ -18,6 +18,11 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+namespace openblack::lnd
+{
+struct LNDCountry;
+}
+
 /// EXPERIMENT (not for merge): a sea bed under the sea for the underwater view. The original game draws the land at sea
 /// level flat in the plane of the sea, so there is nothing under the water. This makes a floor that goes down from the
 /// coast into deep water.
@@ -76,11 +81,38 @@ inline constexpr float k_CliffRiseFull = 30.0f;
 /// How far out to sea a cliff's foot reaches, in cells
 inline constexpr float k_CliffReach = 6.0f;
 
+/// The slope of a beach under the water, in height for each unit across: a long and shallow grade
+inline constexpr float k_BeachSlope = 0.02f;
+/// How far out a beach's grade goes before it eases into the shelf, from and to, in units
+inline constexpr float k_BeachEaseStart = 150.0f;
+inline constexpr float k_BeachEaseEnd = 450.0f;
+/// The deepest the water is at high tide where a creature can walk, so that it only covers the creature's feet
+inline constexpr float k_WadeDepth = 0.45f;
+
+/// The depth at high tide of a corner at sea level with an altitude of 1 to 3. The original game draws these corners
+/// flat at sea level and fades the land out over them, so its coast is at about altitude 3. The water's edge at high
+/// tide is at the corners of altitude 3, and the lower corners go down a little.
+[[nodiscard]] float ShallowDepth(uint8_t altitude);
+
+/// How much of the ground of a country at an altitude is the beach's sand, 0 to 1: the share of its two blended
+/// materials whose terrain type is sand or wet sand. `materialTypes` is the terrain type of each of the land's
+/// materials.
+[[nodiscard]] float BeachShare(const lnd::LNDCountry& country, uint8_t altitude, std::span<const uint16_t> materialTypes);
+
+/// Whether a creature can walk on the cell with these four corner altitudes: some corner is over the bottom and the
+/// cell is not too steep (see creature_route::WalkableLand)
+[[nodiscard]] bool Walkable(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
+
 /// The sea bed for a grid of corner altitudes (x first along each row of z). Each corner of the sea goes down by its
 /// distance to the nearest land above the sea, as a shelf and then a slope, deeper towards the map's edge, with broad
-/// hills and dips over it.
-/// The grid is the whole map: past the land's blocks the sea goes on down to the map's edge.
-[[nodiscard]] Seabed Build(std::span<const uint8_t> altitudes, glm::ivec2 size, glm::vec2 origin, float spacing);
+/// hills and dips over it. The grid is the whole map: past the land's blocks the sea goes on down to the map's edge.
+/// The coast keeps the original game's line:
+/// - The corners at sea level that the original game draws with land over them are only a little under the water.
+/// - Where a creature can walk, the water is never deeper than k_WadeDepth at high tide.
+/// - `beach` is how much of each corner's ground is the beach's sand, 0 to 1 (empty for none). A beach goes on down
+///   under the water at the shallow k_BeachSlope. Other coasts keep their own slope, and cliffs stay steep.
+[[nodiscard]] Seabed Build(std::span<const uint8_t> altitudes, glm::ivec2 size, glm::vec2 origin, float spacing,
+                           std::span<const float> beach = {});
 
 /// A coral or a plant of the reef on the sea bed
 struct ReefPlant
