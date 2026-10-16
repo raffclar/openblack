@@ -46,6 +46,9 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
+#include "Audio/AudioManagerInterface.h"
+#include "Audio/CustomMusicPlayerInterface.h"
+#include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/FileDialog.h"
@@ -165,6 +168,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -588,6 +592,36 @@ std::string CheckProfileFolder()
 		return "failed: the help record changed when the game read it again";
 	}
 	return fmt::format("passed: {} holds the help record ({} bytes) and reads back the same", path, read->size());
+}
+
+/// The custom music player plays a track of the custom music folder, or stops; the music moods look at once
+std::string PlayCustomMusic(size_t track)
+{
+	auto* player = Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+	if (player == nullptr || !Locator::musicMoodSystem::has_value())
+	{
+		return "failed: no custom music player";
+	}
+	auto& moods = Locator::musicMoodSystem::value();
+	if (track == k_StopCustomMusic)
+	{
+		player->Stop();
+		moods.UpdateOnGameTurn(true);
+		return "the custom music stops";
+	}
+	moods.LoadFolder();
+	if (track >= player->GetTracks().size())
+	{
+		return fmt::format("failed: the custom music folder has {} tracks", player->GetTracks().size());
+	}
+	player->SetCurrentTrack(track);
+	player->Play();
+	const auto id = music_mood::TrackId(player->GetSongName());
+	const auto records = moods.GetRecords();
+	const auto record = std::ranges::find(records, id, &music_mood::Record::id);
+	const auto mood = record != records.end() && !record->emotions.empty() ? record->emotions.front().mood : 0.0f;
+	moods.UpdateOnGameTurn(true);
+	return fmt::format("plays {} (track {:08x}), the creature's mood for it {:.3f}", player->GetSongName(), id, mood);
 }
 } // namespace
 
@@ -2165,6 +2199,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
 		return;
 	}
+	if (command.kind == Kind::PlayCustomMusic)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PlayCustomMusic(command.value)));
+		return;
+	}
 	if (command.kind == Kind::ProfileFolderCheck)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), CheckProfileFolder()));
@@ -2555,6 +2594,7 @@ void Runner::Give(const Command& command)
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
 	case Kind::ProfileFolderCheck:
+	case Kind::PlayCustomMusic:
 	case Kind::RunText:
 	case Kind::ReadTip:
 	case Kind::LookAtTempleScroll:

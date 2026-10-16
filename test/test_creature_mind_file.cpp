@@ -82,7 +82,7 @@ MindFileData SampleMind()
 	                 .blood = {1, 2},
 	                 .wounds = {3}};
 	mind.database = std::vector<MindDatabaseEntry> {
-	    {.id = 5, .unknown = 6, .size = 3, .pairs = {{.number = 1, .a = 0.5f, .b = 0.25f}, {.number = 3, .a = 1.0f}}}};
+	    {.id = 5, .time = 6, .count = 3, .pairs = {{.number = 1, .mood = 0.5f, .fear = 0.25f}, {.number = 3, .mood = 1.0f}}}};
 	mind.unknown2 = 8;
 	mind.unknown3 = std::array<uint32_t, 4> {1, 2, 3, 4};
 	mind.tattooHeader = std::array<uint32_t, 8> {};

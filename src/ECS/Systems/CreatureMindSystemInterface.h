@@ -123,6 +123,11 @@ public:
 	/// The average of the feedback the player has given all creatures: each new feedback counts for more than the
 	/// average before it. It is one for all creatures.
 	[[nodiscard]] virtual float GetAverageFeedback() const { return 0.0f; }
+	/// The running average of the player's feedback starts again from 0, as a custom music track starts
+	virtual void ClearAverageFeedback() {}
+	/// A custom music track starts: the creature reacts to the mood that it felt before about the track (0 for a new
+	/// track, above 0 for a track it likes, below 0 for a track it does not like)
+	virtual void ReactToMusic(entt::entity /*creature*/, float /*mood*/) {}
 	/// The player told the creature what to do on the leash: the player has dealt with it now
 	virtual void NoteLeashOrder(entt::entity /*creature*/) {}
 	/// Every source of a type in the creature's desires goes up or down by an amount

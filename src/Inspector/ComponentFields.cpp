@@ -871,6 +871,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::copiedAt>("copiedAt")
 	    .Field<&components::CreatureMindState::copiedKind>("copiedKind")
 	    .Field<&components::CreatureMindState::followUp>("followUp")
+	    .Field<&components::CreatureMindState::followUpValue>("followUpValue")
 	    .Field<&components::CreatureMindState::plantedBy>("plantedBy")
 	    .Field<&components::CreatureMindState::observedDeed>("observedDeed")
 	    .Field<&components::CreatureMindState::clearingWaySerial>("clearingWaySerial")

@@ -155,18 +155,20 @@ struct MindPhysique
 	std::vector<uint32_t> wounds;
 };
 
-/// From version 18 on, entries of a small database kept with the mind: each a pair of numbers and pairs of values, the
-/// pairs numbered from 1 and only the non-zero ones kept
+/// From version 18 on, the music records of the player's creature: for each custom music track that it heard, the
+/// track's number, when the track last started, how many feelings the record keeps and the feelings that are not 0,
+/// numbered from 1
 struct MindDatabaseEntry
 {
 	uint32_t id {0};
-	uint32_t unknown {0};
-	int32_t size {0};
+	/// Seconds since the start of 1970
+	uint32_t time {0};
+	int32_t count {0};
 	struct Pair
 	{
 		int32_t number {0};
-		float a {0.0f};
-		float b {0.0f};
+		float mood {0.0f};
+		float fear {0.0f};
 	};
 	std::vector<Pair> pairs;
 };

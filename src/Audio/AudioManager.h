@@ -13,6 +13,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <random>
 #include <span>
 #include <string>
 #include <type_traits>
@@ -26,6 +27,7 @@
 #include "AudioDecoderInterface.h"
 #include "AudioManagerInterface.h"
 #include "AudioPlayer.h"
+#include "CustomMusicPlayer.h"
 #include "MusicPlayer.h"
 #include "MusicStreamBackend.h"
 #include "SoundGroup.h"
@@ -113,6 +115,7 @@ public:
 	void AtmosSetGroup(uint32_t bank, uint32_t group) override;
 	void AtmosProcess(bool active) override;
 	[[nodiscard]] const AtmosPlayer* GetAtmos() const override { return _atmos.get(); }
+	[[nodiscard]] CustomMusicPlayerInterface* GetCustomMusic() override { return _customMusic.get(); }
 
 private:
 	// VoiceBackend
@@ -166,6 +169,8 @@ private:
 	std::vector<BufferId> _decodedBuffers;
 	Handle _nextAtmosVoice {1};
 	std::unique_ptr<AtmosPlayer> _atmos;
+	std::mt19937 _customMusicRandom;
+	std::unique_ptr<CustomMusicPlayer> _customMusic;
 };
 
 } // namespace openblack::audio

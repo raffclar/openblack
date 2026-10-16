@@ -39,6 +39,7 @@ namespace audio
 {
 
 class AtmosPlayer;
+class CustomMusicPlayerInterface;
 
 /// What became of an animation effect asked for
 struct AnimEffectPlay
@@ -203,6 +204,9 @@ public:
 	/// Puts the listener somewhere other than the camera (the inspector's view shown over the camera), or gives it back
 	/// to the camera with none
 	virtual void SetListenerOverride(std::optional<Listener> listener) = 0;
+
+	/// The player of the custom music folder, null when there is no audio device
+	[[nodiscard]] virtual CustomMusicPlayerInterface* GetCustomMusic() { return nullptr; }
 };
 
 /// The listener at the camera, as the camera is now; a listener at the world's origin when there is no camera

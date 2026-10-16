@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -67,10 +68,27 @@ AudioManager::AudioManager()
 	                                       [] { return static_cast<uint32_t>(machine_clock::UnixTime()); });
 	_musicStreams = std::make_unique<MusicStreamBackend>(*_audioPlayer);
 	_musicPlayer = std::make_unique<MusicPlayer>(*_musicStreams);
+	// The custom music player reads its tracks through the file system, and picks shuffled tracks with its own random
+	// numbers
+	_customMusicRandom.seed(static_cast<uint32_t>(machine_clock::UnixTime()));
+	_customMusic = std::make_unique<CustomMusicPlayer>(
+	    *_audioPlayer,
+	    [](const std::filesystem::path& path) -> std::vector<uint8_t> {
+		    try
+		    {
+			    return Locator::filesystem::value().ReadAll(path);
+		    }
+		    catch (const std::exception&)
+		    {
+			    return {};
+		    }
+	    },
+	    [this](uint32_t range) { return range == 0 ? 0u : static_cast<uint32_t>(_customMusicRandom() % range); });
 }
 
 AudioManager::~AudioManager()
 {
+	_customMusic.reset();
 	_musicPlayer.reset();
 	_musicStreams.reset();
 	auto& registry = Locator::entitiesRegistry::value();
@@ -184,6 +202,7 @@ void AudioManager::Update()
 	_musicStreams->SetOutputVolume(_globalVolume * _musicVolume);
 	_musicPlayer->Update(std::chrono::duration_cast<std::chrono::microseconds>(now - _lastMusicUpdate));
 	_lastMusicUpdate = now;
+	_customMusic->Update();
 	// Positional music, like 3D emitters, is heard from where it is placed as the listener moves
 	_musicStreams->ForEachPlaced([this](SourceId source, const MusicPlacement& placement) {
 		PositionSource(source, ToListenerFrame(placement.position));

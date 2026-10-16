@@ -40,6 +40,10 @@ enum class FollowUp : uint8_t
 	DoLessonAgain,
 	/// It cleared a thing out of its way, and walks on to where it went
 	WalkOn,
+	/// It heard a custom music track for the first time, and scratches itself out of curiosity
+	ScratchAfterNewMusic,
+	/// It heard a custom music track that it likes, and dances
+	DanceAfterLikedMusic,
 };
 
 /// The creature eats a magic mushroom: it becomes high only when nothing else waits
