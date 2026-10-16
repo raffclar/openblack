@@ -1588,6 +1588,24 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		    });
 		return post.has_value() && leashes.TapPost(*post) ? "tapped" : "no such leash";
 	}
+	case Kind::LeashTapBuilding:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value())
+		{
+			return "it is gone";
+		}
+		if (leashes.TapThing(command.player, *object))
+		{
+			return "the leash takes the tap";
+		}
+		if (!Locator::abodeKnockSystem::has_value())
+		{
+			return "no knock";
+		}
+		const auto& at = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(*object).position;
+		return Locator::abodeKnockSystem::value().Tap(*object, at, true) ? "knocked" : "not knocked";
+	}
 	case Kind::UntieLeash:
 		leashes.UntieToHand(creature);
 		return {};
@@ -2476,6 +2494,7 @@ void Runner::Give(const Command& command)
 	case Kind::LeashOrderOn:
 	case Kind::HangLeashPosts:
 	case Kind::TapLeashPost:
+	case Kind::LeashTapBuilding:
 		result = GiveLeashCommand(*entity, command);
 		break;
 	case Kind::StartFight:

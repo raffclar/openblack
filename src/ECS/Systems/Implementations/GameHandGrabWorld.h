@@ -68,8 +68,8 @@ public:
 	[[nodiscard]] bool RightHanded() const override;
 	[[nodiscard]] bool HoldsLooseLeash() const override;
 	bool LeashTap(entt::entity object) override;
-	/// Whether the player's hand holds their creature's leash, rather than a post or a thing holding it
-	[[nodiscard]] static bool HoldsLeash(PlayerNames player);
+	/// Whether the player's leash takes a tap on the thing as an order to the creature, in place of the thing's own tap
+	[[nodiscard]] static bool LeashTakesTap(entt::entity object, PlayerNames player);
 	[[nodiscard]] uint32_t LocalRandom(uint32_t count) override;
 	void VillagerIntoHand(entt::entity villager) override;
 	void AnimalIntoOwnFlock(entt::entity animal) override;

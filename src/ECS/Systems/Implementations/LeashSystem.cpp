@@ -1728,6 +1728,17 @@ bool LeashSystem::PressAction(PlayerNames player, const glm::vec3& rayOrigin, co
 
 bool LeashSystem::TapThing(PlayerNames player, entt::entity object)
 {
+	if (!TakesTap(player, object))
+	{
+		return false;
+	}
+	// The leash takes the tap even when the creature refuses the order
+	OrderOn(player, object);
+	return true;
+}
+
+bool LeashSystem::TakesTap(PlayerNames player, entt::entity object) const
+{
 	const auto creature = PlayersCreature(player);
 	if (!creature.has_value() || !IsLeashed(*creature) || TiedTo(*creature).has_value())
 	{
@@ -1744,13 +1755,9 @@ bool LeashSystem::TapThing(PlayerNames player, entt::entity object)
 	    .leashTarget = !registry.AnyOf<LeashPost, Temple, LeashMarker>(object),
 	    .miracleBubble = registry.AllOf<OneOffSpellSeed>(object),
 	};
-	if (orders::OnTap(
-	        {.worn = true, .creature = entt::to_integral(*creature), .carriedByTeleport = CarriedByTeleport(*creature)},
-	        tapped) != orders::Tap::OrderOnThing)
-	{
-		return false;
-	}
-	return OrderOn(player, object);
+	return orders::OnTap(
+	           {.worn = true, .creature = entt::to_integral(*creature), .carriedByTeleport = CarriedByTeleport(*creature)},
+	           tapped) == orders::Tap::OrderOnThing;
 }
 
 bool LeashSystem::OrderAt(PlayerNames player, const glm::vec3& place)
