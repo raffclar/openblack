@@ -113,6 +113,8 @@ inline size_t GameStateOf(AnimalState state)
 {
 	switch (state)
 	{
+	case AnimalState::Invalid:
+		return 0;
 	case AnimalState::MoveToPos:
 		return 1;
 	case AnimalState::InScript:
@@ -173,6 +175,20 @@ inline size_t GameStateOf(AnimalState state)
 	default:
 		return 43;
 	}
+}
+
+/// The animal state that has a number in the game's animal state table. The first state with the number, so that 43 is
+/// DecideWhatToDo. None for a number that no state of openblack has
+inline std::optional<AnimalState> AnimalStateOfGame(size_t gameState)
+{
+	for (auto value = 0; value <= static_cast<int>(AnimalState::Invalid); ++value)
+	{
+		if (const auto state = static_cast<AnimalState>(value); GameStateOf(state) == gameState)
+		{
+			return state;
+		}
+	}
+	return std::nullopt;
 }
 
 /// A grazer's clip of a state: it stands to decide, to be born, while a script holds it, watching what it fled and

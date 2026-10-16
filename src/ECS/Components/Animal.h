@@ -91,6 +91,9 @@ enum class AnimalState : uint8_t
 	Flying,
 	/// Came down on the land: its flock gets a new home, then it gets up
 	Landed,
+	/// The empty state: the animal does nothing and plays its move clip. It goes into it when a reaction ends and the
+	/// state before the reaction has no state to go back to
+	Invalid,
 };
 
 /// A living animal: a kind of the tables, flying or on the land
@@ -110,6 +113,9 @@ struct Animal
 	/// The state it goes into once it gets where it is going, and once its clip has played while it waits
 	AnimalState finalState {AnimalState::DecideWhatToDo};
 	AnimalState afterClip {AnimalState::DecideWhatToDo};
+	/// The state that it was in when it took up a reaction, by its number in the game's animal state table. When the
+	/// reaction ends, the animal goes into the resume state of this state
+	uint8_t stateBeforeReaction {0};
 	uint32_t turnsInState {0};
 	/// Its move across the land: where it is and is going, in map units, which way it faces and how fast it goes
 	animals::Move move;
