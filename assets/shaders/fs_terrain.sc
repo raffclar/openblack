@@ -28,6 +28,8 @@ SAMPLER2D(s8_landAlpha, 8);
 
 // The noise that makes the snow's edges ragged, once across each land block of 160 units
 SAMPLER2D(s12_snowNoise, 12);
+// EXPERIMENT (not for merge): the land's light, which the vertices read, for the sand under the sea
+SAMPLER2D(s7_landLight, 7);
 // EXPERIMENT (not for merge): while the experiment's water is on, s12_snowNoise holds the sand texture
 #define SEABED_SAND_TEXTURE s12_snowNoise
 #include "seabed_sand.sh"
@@ -361,12 +363,17 @@ void main()
 		land = u_uwEye.w > 0.5f ? col.rgb : land;
 		if (sandShare > 0.0f)
 		{
-			land = mix(land, SeabedSand(v_world, v_lightColour, surfaceNormal), sandShare);
+			// Under the sea the sand takes the same light as the sea bed past the land's blocks, so the two match
+			vec3 seaLight = texture2DLod(s7_landLight, vec2(150.5f / 256.0f, 0.5f), 0.0f).rgb;
+			vec3 sandLight = mix(v_lightColour, seaLight, smoothstep(0.5f, 3.0f, -v_world.y));
+			land = mix(land, SeabedSand(v_world, sandLight, surfaceNormal), sandShare);
 			// The sand is wet and darker below the highest run of the waves up the beach: wettest where the water just
 			// was, drier further up. The beach that the tide leaves is damp.
 			float level = u_uwParams.z;
-			float runUp = level + UwSwash(v_world.xz, u_uwParams.y);
-			float wetTop = level + u_uwWaves.w * 1.1f + 0.15f;
+			vec4 shore = texture2DLod(s_snowDepth, UwShoreUv(v_world.xz), 0.0f);
+			float face;
+			float runUp = level + UwShoreWave(shore.x, v_world.xz, u_uwParams.y, UwShoreCliff(shore), face);
+			float wetTop = level + u_uwWaves.w * 1.4f + 0.15f;
 			float wet = 1.0f - smoothstep(runUp, wetTop, v_world.y);
 			wet = max(wet, 0.45f * (1.0f - smoothstep(-0.3f, 0.05f, v_world.y)));
 			land = mix(land, land * 0.6f, wet * sandShare);

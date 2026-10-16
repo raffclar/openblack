@@ -207,6 +207,9 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	post->SetUniformArray("u_uwFloaters", frame.floaters.data(), static_cast<uint16_t>(frame.floaters.size()));
 	post->SetTextureSampler("s_sceneColour", 0, target.GetColorAttachment());
 	post->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
+	const auto& system = Locator::underwaterSystem::value();
+	const auto& shoreMap = _underwater->Seabed(system.GetSeabed(), system.GetSeabedRevision());
+	post->SetTextureSampler("s_shore", 2, shoreMap);
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 	post->Submit(postView);
 
@@ -227,6 +230,19 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		motes->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		motes->Submit(postView);
+	}
+
+	// The spray at the foot of the cliffs, above and under the water
+	if (const auto* spray = _shaderManager->GetShader("UnderwaterSpray");
+	    spray != nullptr && frame.flags.y > 0.5f &&
+	    _underwater->BindSpray(system.GetSeabed().cliffFoot, system.GetSeabedRevision()))
+	{
+		setUniforms(*spray);
+		spray->SetUniformValue("u_uwSky", &frame.sky);
+		spray->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
+		spray->SetTextureSampler("s_shore", 2, shoreMap);
+		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+		spray->Submit(postView);
 	}
 }
 

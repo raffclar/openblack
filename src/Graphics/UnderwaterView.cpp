@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include <bx/uint32_t.h>
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
@@ -79,6 +80,17 @@ UnderwaterView::UnderwaterView()
 
 UnderwaterView::~UnderwaterView()
 {
+	for (auto* buffer : {&_sprayMesh, &_sprayInstances})
+	{
+		if (bgfx::isValid(*buffer))
+		{
+			bgfx::destroy(*buffer);
+		}
+	}
+	if (bgfx::isValid(_sprayIndices))
+	{
+		bgfx::destroy(_sprayIndices);
+	}
 	for (auto& kind : _reef)
 	{
 		for (auto* buffer : {&kind.mesh, &kind.instances})
@@ -127,14 +139,25 @@ const Texture2D& UnderwaterView::Seabed(const seabed::Seabed& seabed, uint32_t r
 {
 	if (_seabed == nullptr || _seabedRevision != revision)
 	{
-		// One texel for each corner of the map, its depth in units; one texel of zero when there is no sea bed
+		// The shore map: one texel for each corner of the map, at half precision. x the distance to the coast, yz the
+		// direction towards it, shortened by up to a half at the foot of a cliff, w the height of the ground.
 		const auto size = glm::max(seabed.size, glm::ivec2(1));
-		std::vector<float> texels(static_cast<size_t>(size.x) * static_cast<size_t>(size.y), 0.0f);
-		std::copy_n(seabed.depth.begin(), std::min(seabed.depth.size(), texels.size()), texels.begin());
-		_seabed = std::make_unique<Texture2D>("Underwater Seabed");
-		_seabed->CreateWithinFrame(static_cast<uint16_t>(size.x), static_cast<uint16_t>(size.y), 1, TextureFormat::R32F,
-		                           Wrapping::ClampEdge, Filter::Nearest,
-		                           bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(float))));
+		const auto texelCount = static_cast<size_t>(size.x) * static_cast<size_t>(size.y);
+		std::vector<uint16_t> texels(texelCount * 4, 0);
+		for (size_t i = 0; i < seabed.shore.size() && i < texelCount; ++i)
+		{
+			const auto& shore = seabed.shore[i];
+			const float cliff = i < seabed.cliff.size() ? seabed.cliff[i] : 0.0f;
+			const float shorten = 1.0f - 0.5f * cliff;
+			texels[i * 4 + 0] = bx::halfFromFloat(shore.x);
+			texels[i * 4 + 1] = bx::halfFromFloat(shore.y * shorten);
+			texels[i * 4 + 2] = bx::halfFromFloat(shore.z * shorten);
+			texels[i * 4 + 3] = bx::halfFromFloat(shore.w);
+		}
+		_seabed = std::make_unique<Texture2D>("Underwater Shore Map");
+		_seabed->CreateWithinFrame(static_cast<uint16_t>(size.x), static_cast<uint16_t>(size.y), 1, TextureFormat::RGBA16F,
+		                           Wrapping::ClampEdge, Filter::Linear,
+		                           bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(uint16_t))));
 		_seabedRevision = revision;
 	}
 	return *_seabed;
@@ -424,4 +447,56 @@ uint32_t UnderwaterView::ReefTriangles(seabed::ReefPlant::Kind kind) const
 uint32_t UnderwaterView::ReefCount(seabed::ReefPlant::Kind kind) const
 {
 	return _reef.at(static_cast<size_t>(kind)).count;
+}
+
+bool UnderwaterView::BindSpray(std::span<const glm::vec4> cliffFoot, uint32_t revision)
+{
+	if (!bgfx::isValid(_sprayMesh))
+	{
+		// Sixteen squares, each corner with the number of its puff
+		std::vector<glm::vec3> vertices;
+		std::vector<uint16_t> indices;
+		constexpr std::array<glm::vec2, 4> k_Corners {{{-1.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, 1.0f}}};
+		for (uint32_t puff = 0; puff < k_SprayPuffs; ++puff)
+		{
+			const auto first = static_cast<uint16_t>(vertices.size());
+			for (const auto& corner : k_Corners)
+			{
+				vertices.emplace_back(corner, static_cast<float>(puff));
+			}
+			indices.insert(indices.end(), {first, static_cast<uint16_t>(first + 1), static_cast<uint16_t>(first + 2), first,
+			                               static_cast<uint16_t>(first + 2), static_cast<uint16_t>(first + 3)});
+		}
+		bgfx::VertexLayout layout;
+		layout.begin().add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float).end();
+		_sprayMesh = bgfx::createVertexBuffer(
+		    bgfx::copy(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(glm::vec3))), layout);
+		_sprayIndices =
+		    bgfx::createIndexBuffer(bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t))));
+	}
+	if (_sprayRevision != revision)
+	{
+		_sprayRevision = revision;
+		if (bgfx::isValid(_sprayInstances))
+		{
+			bgfx::destroy(_sprayInstances);
+			_sprayInstances = BGFX_INVALID_HANDLE;
+		}
+		_sprayCount = static_cast<uint32_t>(cliffFoot.size());
+		if (_sprayCount > 0)
+		{
+			bgfx::VertexLayout layout;
+			layout.begin().add(bgfx::Attrib::TexCoord7, 4, bgfx::AttribType::Float).end();
+			_sprayInstances = bgfx::createVertexBuffer(
+			    bgfx::copy(cliffFoot.data(), static_cast<uint32_t>(cliffFoot.size() * sizeof(glm::vec4))), layout);
+		}
+	}
+	if (_sprayCount == 0)
+	{
+		return false;
+	}
+	bgfx::setVertexBuffer(0, _sprayMesh);
+	bgfx::setIndexBuffer(_sprayIndices);
+	bgfx::setInstanceDataBuffer(_sprayInstances, 0, _sprayCount);
+	return true;
 }

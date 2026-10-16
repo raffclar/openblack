@@ -29,6 +29,9 @@ uniform vec4 u_uwFlags2;
 uniform vec4 u_uwCurrent;
 
 // How much of each colour the water takes out for each unit the light goes through it: the red first, then the green
+// The lowest low tide under the usual height (underwater::k_LowestTide)
+#define UW_LOWEST_TIDE 2.5f
+
 #define UW_ABSORPTION vec3(0.085f, 0.032f, 0.018f)
 
 // The part of each colour that is left after the light goes this far through the water
@@ -165,13 +168,63 @@ vec3 UwSurfaceNormalOf(vec2 slope, float range)
 	return normalize(vec3(-slope.x, 1.0f, -slope.y));
 }
 
-// How high the waves run up the beach now at a point, over the sea's level: in and out, a little out of step along the
-// coast
-float UwSwash(vec2 p, float t)
+// The shore map (see seabed::Seabed::shore): read by each shader from its own sampler, then taken apart here.
+// x: the distance to the coast in units, out to sea positive; yz: the direction towards the coast, shorter at the foot
+// of a cliff; w: the height of the ground.
+vec2 UwShoreUv(vec2 xz)
 {
-	float along = UwNoise(p * 0.02f) * 6.2831f;
-	float cycle = 0.5f + 0.5f * sin(t * (0.9f + 0.4f * u_uwWaves.y) + along);
-	return u_uwWaves.w * cycle * cycle;
+	return (xz / 10.0f + 0.5f) / 513.0f;
+}
+
+// How much a point is at the foot of a cliff, 0 to 1
+float UwShoreCliff(vec4 shore)
+{
+	return clamp((1.0f - length(shore.yz)) * 2.0f, 0.0f, 1.0f);
+}
+
+// The shore wave at a distance from the coast: one front that rolls in along the whole coast towards the land, its
+// crests along the coast, with a steep face and a long back. It is the height over the sea's level; `face` is 1 on
+// the face of the wave and 0 elsewhere. At the foot of a cliff the wave does not run up.
+float UwShoreWave(float distance, vec2 xz, float t, float cliff, out float face)
+{
+	float storm = u_uwWaves.y;
+	float k = 6.2831853f / mix(14.0f, 22.0f, storm);
+	float omega = mix(1.1f, 1.5f, storm);
+	float theta = k * distance + omega * t + UwNoise(xz * 0.008f) * 1.2f;
+	float x = fract(theta / 6.2831853f);
+	float profile = smoothstep(0.0f, 0.1f, x) * pow(max(1.0f - x, 0.0f), 1.6f);
+	face = 1.0f - smoothstep(0.0f, 0.15f, x);
+	float reach = 1.0f - smoothstep(8.0f, 45.0f, distance);
+	return u_uwWaves.w * 2.0f * reach * (1.0f - cliff) * (profile - 0.3f);
+}
+
+// The waves that go back out to sea from the foot of a cliff, in rings
+float UwCliffBackwash(float distance, float t, float cliff)
+{
+	float k = 6.2831853f / mix(14.0f, 22.0f, u_uwWaves.y);
+	return cliff * u_uwWaves.w * 0.6f * sin(k * distance - 1.3f * t) * exp(-max(distance, 0.0f) / 25.0f);
+}
+
+// The height of the sea's surface at a point: the sea's level, the deep waves, faded out near the coast and where the
+// water is shallow, and the shore wave that rolls in to the coast. One height for each point, so the water is one
+// surface from the open sea to the edge of the run up the beach. `shore` is the shore map at the point, `range` how
+// far the point is from the eye; `slope` is the surface's slope, `face` the shore wave's face.
+float UwSurface(vec2 xz, float t, float range, vec4 shore, out vec2 slope, out float face)
+{
+	float level = u_uwParams.z;
+	float depth = level - shore.w;
+	float deep = smoothstep(5.0f, 40.0f, shore.x) * smoothstep(0.2f, 4.0f, depth);
+	vec2 deepSlope;
+	float height = UwWaves(xz, t, range, deepSlope) * deep;
+	float cliff = UwShoreCliff(shore);
+	float faceNear;
+	float wave = UwShoreWave(shore.x, xz, t, cliff, face) + UwCliffBackwash(shore.x, t, cliff);
+	// The shore wave's slope, along the direction to the coast
+	float nearer = UwShoreWave(shore.x - 0.5f, xz, t, cliff, faceNear) + UwCliffBackwash(shore.x - 0.5f, t, cliff);
+	float length2 = dot(shore.yz, shore.yz);
+	vec2 towards = length2 > 1e-6f ? shore.yz / sqrt(length2) : vec2_splat(0.0f);
+	slope = deepSlope * deep + towards * ((nearer - wave) / 0.5f);
+	return level + height + wave;
 }
 
 // One swirl of the currents: the flow is the curl of a sum of these, so the water has no sinks

@@ -30,8 +30,9 @@ uniform vec4 u_landBands;
 // x: the block's layer of the block textures, y: how its corners morph (0 not, 1 to the half mesh, 2 to the quarter
 // mesh), z: its texture (0 full, 1 cross-faded, 2 coarse)
 uniform vec4 u_block;
-// EXPERIMENT (not for merge): with the experiment's water, the depth of the sea bed in units at each cell corner of the
-// whole map, 513 corners a side. The snow's depth is bound here at other times.
+// EXPERIMENT (not for merge): with the experiment's water, the shore map: at each cell corner of the whole map, 513
+// corners a side, w is the height of the ground (the sea bed under the sea). The snow's depth is bound here at other
+// times.
 SAMPLER2D(s_snowDepth, 11);
 
 // How far a point on the ground is before a detail line lying ahead units from the camera; negative beyond it
@@ -97,7 +98,7 @@ void main()
 	if (u_uwParams.x > 0.5f && height <= 0.0f)
 	{
 		vec2 seabedCorner = floor((a_position.xz + blockPosition) / 10.0f + 0.5f);
-		height = -texture2DLod(s_snowDepth, (seabedCorner + 0.5f) / 513.0f, 0.0f).r;
+		height = texture2DLod(s_snowDepth, (seabedCorner + 0.5f) / 513.0f, 0.0f).a;
 	}
 	vec3 transformedPosition = vec3(a_position.x + blockPosition.x, height, a_position.z + blockPosition.y);
 	// zw: where the vertex is along x and z, for the snow lying there

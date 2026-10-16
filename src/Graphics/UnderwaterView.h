@@ -57,6 +57,12 @@ public:
 	/// How many triangles one coral and one plant have, and how many of each the reef has
 	[[nodiscard]] uint32_t ReefTriangles(seabed::ReefPlant::Kind kind) const;
 	[[nodiscard]] uint32_t ReefCount(seabed::ReefPlant::Kind kind) const;
+	/// The spray at the foot of the cliffs: sixteen puffs for each point along a cliff's foot, made again when the sea
+	/// bed changes. Binds them; false when there are no cliffs.
+	bool BindSpray(std::span<const glm::vec4> cliffFoot, uint32_t revision);
+	/// The puffs of spray there are at once at most
+	[[nodiscard]] uint32_t SprayCount() const { return _sprayCount * k_SprayPuffs; }
+	static constexpr uint32_t k_SprayPuffs = 16;
 
 private:
 	std::unique_ptr<FrameBuffer> _target;
@@ -78,6 +84,11 @@ private:
 	};
 	std::array<ReefKind, 2> _reef {};
 	std::optional<uint32_t> _reefRevision;
+	bgfx::VertexBufferHandle _sprayMesh = BGFX_INVALID_HANDLE;
+	bgfx::IndexBufferHandle _sprayIndices = BGFX_INVALID_HANDLE;
+	bgfx::VertexBufferHandle _sprayInstances = BGFX_INVALID_HANDLE;
+	uint32_t _sprayCount {0};
+	std::optional<uint32_t> _sprayRevision;
 	bgfx::IndexBufferHandle _moteIndices = BGFX_INVALID_HANDLE;
 };
 

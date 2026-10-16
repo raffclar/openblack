@@ -16,6 +16,7 @@
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 /// EXPERIMENT (not for merge): a sea bed under the sea for the underwater view. The original game draws the land at sea
 /// level flat in the plane of the sea, so there is nothing under the water. This makes a floor that goes down from the
@@ -46,6 +47,13 @@ struct Seabed
 	float spacing {10.0f};
 	/// The depth of each corner, x first along each row of z
 	std::vector<float> depth;
+	/// The shore at each corner: x the distance to the coast in units (out to sea positive, inland negative), yz the
+	/// direction across the ground towards the coast, w the height of the ground (the land, or the sea bed)
+	std::vector<glm::vec4> shore;
+	/// How much each corner is at the foot of a cliff, 0 to 1: steep land at the coast with deep water close in
+	std::vector<float> cliff;
+	/// Points along the foot of the cliffs, on the sea's side, with the direction out to sea (zw)
+	std::vector<glm::vec4> cliffFoot;
 
 	/// The depth of the sea bed at a point, blended between the four corners round it; the nearest edge outside the
 	/// grid, and 0 when there is no grid
@@ -59,6 +67,12 @@ struct Seabed
 inline constexpr uint8_t k_GentleRise = 8;
 /// How much deeper a beach gets for each cell out from a gentle coast: it is under the lowest tide 8 cells out
 inline constexpr float k_BeachSlope = 0.35f;
+/// A coast is a cliff where the land within two cells of it rises this much over sea level, in altitude steps, to the
+/// full weight at the second
+inline constexpr float k_CliffRiseStart = 14.0f;
+inline constexpr float k_CliffRiseFull = 30.0f;
+/// How far out to sea a cliff's foot reaches, in cells
+inline constexpr float k_CliffReach = 6.0f;
 /// The depth out from a gentle coast, where the land goes on under the water as a beach
 [[nodiscard]] float BeachDepth(float cells);
 

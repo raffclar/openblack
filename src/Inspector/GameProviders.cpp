@@ -698,13 +698,28 @@ std::unique_ptr<ProviderInterface> LandProvider()
 	provider->Add(
 	    Query("underwater", "EXPERIMENT (not for merge): the view under the sea: whether it is on, how deep the camera is, "
 	                        "the effect turned off to measure it, and the sea bed's grid"),
-	    Serve<Locator::underwaterSystem>("the view under the sea", [](const ecs::systems::UnderwaterSystemInterface& underwater,
-	                                                                  const QueryContext& /*c*/) {
-		    const auto& bed = underwater.GetSeabed();
-		    return Json {{"enabled", underwater.IsEnabled()},       {"eye_depth", underwater.GetEyeDepth()},
-		                 {"eye_under", underwater.IsEyeUnder()},    {"effect_off", static_cast<int>(underwater.GetEffectOff())},
-		                 {"seabed_size", {bed.size.x, bed.size.y}}, {"seabed_revision", underwater.GetSeabedRevision()}};
-	    }));
+	    Serve<Locator::underwaterSystem>(
+	        "the view under the sea", [](const ecs::systems::UnderwaterSystemInterface& underwater, const QueryContext& /*c*/) {
+		        const auto& bed = underwater.GetSeabed();
+		        return Json {{"enabled", underwater.IsEnabled()},
+		                     {"eye_depth", underwater.GetEyeDepth()},
+		                     {"eye_under", underwater.IsEyeUnder()},
+		                     {"effect_off", static_cast<int>(underwater.GetEffectOff())},
+		                     {"seabed_size", {bed.size.x, bed.size.y}},
+		                     {"seabed_revision", underwater.GetSeabedRevision()},
+		                     {"sea_level", underwater.GetSeaLevel()},
+		                     {"storm", underwater.GetWaves().storm},
+		                     {"reef", underwater.GetReef().size()},
+		                     {"cliff_feet", bed.cliffFoot.size()},
+		                     {"some_cliff_feet", [&bed] {
+			                      Json feet = Json::array();
+			                      for (size_t i = 0; i < bed.cliffFoot.size() && i < 400; i += 40)
+			                      {
+				                      feet.push_back({bed.cliffFoot[i].x, bed.cliffFoot[i].y});
+			                      }
+			                      return feet;
+		                      }()}};
+	        }));
 	provider->Add(Query("weather", "The climate: whether it runs, its storms and the season"),
 	              Serve<Locator::weatherSystem>(
 	                  "the weather", [](const ecs::systems::WeatherSystemInterface& weather, const QueryContext& /*c*/) {

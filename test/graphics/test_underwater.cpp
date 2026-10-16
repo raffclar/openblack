@@ -301,3 +301,42 @@ TEST(Seabed, TheReefStaysUnderTheLowestTide)
 	}
 	EXPECT_LE(seabed::PlaceReef(bed, underwater::k_LowestTide, 3, 4).size(), 7u);
 }
+
+TEST(Seabed, TheShoreMapPointsToTheCoastAndFindsTheCliffs)
+{
+	// Low land on the left, a cliff on the right, sea between
+	constexpr glm::ivec2 k_Size {61, 9};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Size.x * k_Size.y), 0);
+	for (int z = 0; z < k_Size.y; ++z)
+	{
+		for (int x = 0; x < 5; ++x)
+		{
+			altitudes[static_cast<size_t>(z * k_Size.x + x)] = 6;
+		}
+		for (int x = 56; x < k_Size.x; ++x)
+		{
+			altitudes[static_cast<size_t>(z * k_Size.x + x)] = 120;
+		}
+	}
+	const auto bed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
+	ASSERT_EQ(bed.shore.size(), altitudes.size());
+	const auto at = [&bed](int x) { return static_cast<size_t>(4 * bed.size.x + x); };
+	// Out to sea the distance grows, inland it is below zero, and the direction points to the nearer coast
+	EXPECT_LT(bed.shore[at(2)].x, 0.0f);
+	EXPECT_GT(bed.shore[at(10)].x, bed.shore[at(6)].x);
+	EXPECT_LT(bed.shore[at(10)].y, -0.9f);
+	EXPECT_GT(bed.shore[at(50)].y, 0.9f);
+	// The ground: land up, the sea bed down
+	EXPECT_GT(bed.shore[at(2)].w, 0.0f);
+	EXPECT_LT(bed.shore[at(30)].w, 0.0f);
+	// The cliff's foot is marked, and the beach is not
+	EXPECT_GT(bed.cliff[at(54)], 0.5f);
+	EXPECT_FLOAT_EQ(bed.cliff[at(6)], 0.0f);
+	EXPECT_FALSE(bed.cliffFoot.empty());
+	for (const auto& foot : bed.cliffFoot)
+	{
+		EXPECT_GT(foot.x, 400.0f);
+		// Out to sea from the right-hand cliff is towards -x
+		EXPECT_LT(foot.z, 0.0f);
+	}
+}

@@ -131,6 +131,118 @@ std::vector<float> DistanceTo(const std::vector<bool>& sources, glm::ivec2 size)
 }
 } // namespace
 
+namespace
+{
+/// The shore map and the cliffs of a sea bed whose depths are made
+void BuildShore(seabed::Seabed& seabed, std::span<const uint8_t> altitudes, const std::vector<bool>& land,
+                const std::vector<float>& toLand)
+{
+	using namespace seabed;
+	const auto size = seabed.size;
+	const auto count = land.size();
+	const auto at = [&size](int x, int z) {
+		return static_cast<size_t>(z) * static_cast<size_t>(size.x) + static_cast<size_t>(x);
+	};
+	std::vector<bool> sea(count);
+	for (size_t i = 0; i < count; ++i)
+	{
+		sea[i] = !land[i];
+	}
+	const auto toSea = DistanceTo(sea, size);
+	// The distance to the coast, the waterline half a cell between the last land and the first sea
+	std::vector<float> distance(count);
+	for (size_t i = 0; i < count; ++i)
+	{
+		distance[i] = land[i] ? -(std::min(toSea[i], 1000.0f) - 0.5f) * seabed.spacing
+		                      : (std::min(toLand[i], 1000.0f) - 0.5f) * seabed.spacing;
+	}
+	seabed.shore.resize(count);
+	seabed.cliff.assign(count, 0.0f);
+	seabed.cliffFoot.clear();
+	for (int z = 0; z < size.y; ++z)
+	{
+		for (int x = 0; x < size.x; ++x)
+		{
+			const auto d = [&](int px, int pz) {
+				return distance[at(std::clamp(px, 0, size.x - 1), std::clamp(pz, 0, size.y - 1))];
+			};
+			const glm::vec2 rise {d(x + 1, z) - d(x - 1, z), d(x, z + 1) - d(x, z - 1)};
+			const auto towards = glm::length(rise) > 1e-4f ? -glm::normalize(rise) : glm::vec2(0.0f);
+			const auto i = at(x, z);
+			const float ground = land[i] ? static_cast<float>(altitudes[i]) * 0.67f : -seabed.depth[i];
+			seabed.shore[i] = {distance[i], towards, ground};
+		}
+	}
+	// The cliffs: coast land that rises steeply within two cells, with deep water next to it
+	for (int z = 0; z < size.y; ++z)
+	{
+		for (int x = 0; x < size.x; ++x)
+		{
+			if (!land[at(x, z)])
+			{
+				continue;
+			}
+			uint8_t highest = 0;
+			float deepest = 0.0f;
+			glm::ivec2 seaSide {-1, -1};
+			for (int dz = -2; dz <= 2; ++dz)
+			{
+				for (int dx = -2; dx <= 2; ++dx)
+				{
+					const int nx = std::clamp(x + dx, 0, size.x - 1);
+					const int nz = std::clamp(z + dz, 0, size.y - 1);
+					highest = std::max(highest, altitudes[at(nx, nz)]);
+					if (!land[at(nx, nz)])
+					{
+						deepest = std::max(deepest, seabed.depth[at(nx, nz)]);
+						if (std::abs(dx) + std::abs(dz) == 1)
+						{
+							seaSide = {nx, nz};
+						}
+					}
+				}
+			}
+			if (seaSide.x < 0)
+			{
+				continue;
+			}
+			const float rise = static_cast<float>(highest) - static_cast<float>(k_SeaLevelAltitude);
+			const float steep = std::clamp((rise - k_CliffRiseStart) / (k_CliffRiseFull - k_CliffRiseStart), 0.0f, 1.0f);
+			const float weight = steep * std::clamp((deepest - 2.0f) / 3.0f, 0.0f, 1.0f);
+			if (weight <= 0.0f)
+			{
+				continue;
+			}
+			// The foot of the cliff reaches out over the water round it
+			const auto reach = static_cast<int>(k_CliffReach);
+			for (int dz = -reach; dz <= reach; ++dz)
+			{
+				for (int dx = -reach; dx <= reach; ++dx)
+				{
+					const int nx = x + dx;
+					const int nz = z + dz;
+					if (nx < 0 || nz < 0 || nx >= size.x || nz >= size.y)
+					{
+						continue;
+					}
+					const float fall = 1.0f - std::sqrt(static_cast<float>(dx * dx + dz * dz)) / (k_CliffReach + 1.0f);
+					auto& cliff = seabed.cliff[at(nx, nz)];
+					cliff = std::max(cliff, weight * std::max(fall, 0.0f));
+				}
+			}
+			// Every other foot point along the cliff, on the sea's side, facing out to sea
+			if (weight > 0.5f && ((x + z) % 2) == 0)
+			{
+				const auto& toCoast = seabed.shore[at(seaSide.x, seaSide.y)];
+				seabed.cliffFoot.emplace_back(static_cast<float>(seaSide.x) * seabed.spacing + seabed.origin.x,
+				                              static_cast<float>(seaSide.y) * seabed.spacing + seabed.origin.y, -toCoast.y,
+				                              -toCoast.z);
+			}
+		}
+	}
+}
+} // namespace
+
 seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size, glm::vec2 origin, float spacing)
 {
 	Seabed seabed {.size = size, .origin = origin, .spacing = spacing, .depth = {}};
@@ -200,6 +312,7 @@ seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size
 			seabed.depth[at(x, z)] = std::clamp(depth, 0.5f, k_MaxDepth);
 		}
 	}
+	BuildShore(seabed, altitudes, land, toLand);
 	return seabed;
 }
 
