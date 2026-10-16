@@ -4187,9 +4187,8 @@ void ConvertCameraFocus() // 082 CONVERT_CAMERA_FOCUS
 }
 
 /// The creature becomes the local player's: their creature from now on, which they lead on the leash when they have no
-/// other to lead, named with their profile's creature name
-// TODO(opening-skip): the game also moves a reaction it started over to its new player; openblack keeps no creature
-// reactions yet
+/// other to lead, named with their profile's creature name. The newest reaction that the creature started also becomes
+/// the player's.
 void MakePlayersCreature(entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -4211,6 +4210,10 @@ void MakePlayersCreature(entt::entity object)
 	if (Locator::playerSystem::has_value())
 	{
 		Locator::playerSystem::value().AddCreature(object);
+	}
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().SetPlayerOfNewest(object, player);
 	}
 }
 
