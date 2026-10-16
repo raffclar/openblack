@@ -27,6 +27,7 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
@@ -57,6 +58,7 @@
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -67,6 +69,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
+#include "ECS/RegistryContext.h"
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -114,6 +117,7 @@
 #include "Physics/LivingRules.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Temple/TempleEntranceTap.h"
 #include "VillagerPhysics.h"
 
 using namespace openblack;
@@ -571,6 +575,25 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	{
 		countTap();
 		return Locator::abodeKnockSystem::value().Tap(object, handPoint, ownHand);
+	}
+	// A temple's entrance takes the player of this computer into their own temple. The held leash takes the tap first.
+	if (const auto* entrance = Entities().TryGet<const TempleEntrance>(object); entrance != nullptr)
+	{
+		const auto* heart = Entities().Valid(entrance->temple) ? Entities().TryGet<const Temple>(entrance->temple) : nullptr;
+		const auto tap = openblack::temple::TapEntrance({
+		    .scriptLetsTap = Entities().Context().scriptLetsTempleBeEntered,
+		    .ownTemple = ownHand && heart != nullptr && heart->owner == player,
+		    .leashHeld = HoldsLeash(player),
+		});
+		if (tap.tapped)
+		{
+			countTap();
+		}
+		if (tap.enters && Locator::temple::has_value())
+		{
+			Locator::temple::value().Activate();
+		}
+		return tap.tapped;
 	}
 	// A script's scroll or sign answers the tap itself
 	if (const auto* highlight = Entities().TryGet<const ScriptHighlight>(object);

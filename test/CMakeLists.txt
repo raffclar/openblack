@@ -1069,3 +1069,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_music_reaction test_creature_music_reaction.cpp
 )
+openblack_setup_and_add_test(
+  test_temple_entrance_tap temple/test_temple_entrance_tap.cpp
+)
