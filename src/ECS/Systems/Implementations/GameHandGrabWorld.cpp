@@ -577,7 +577,7 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		const auto tap = openblack::temple::TapEntrance({
 		    .scriptLetsTap = Entities().Context().scriptLetsTempleBeEntered,
 		    .ownTemple = ownHand && heart != nullptr && heart->owner == player,
-		    .leashHeld = HoldsLeash(player),
+		    .leashHeld = LeashTakesTap(object, player),
 		});
 		if (tap.tapped)
 		{
