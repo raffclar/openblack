@@ -72,6 +72,10 @@ constexpr uint32_t k_TurnsBetweenStories = 450;
 /// of the row ago. A row that the creature does not note is always possible.
 [[nodiscard]] bool MayDanceAgain(uint32_t type, uint32_t lastType, uint32_t lastTurn, uint32_t turn);
 
+/// Whether a creature's dance that dances continues: it continues while the agenda that started it continues, through
+/// all of its steps. It stops when that agenda ends, when the creature gives it up, or when a new agenda replaces it.
+[[nodiscard]] bool DanceGoesOn(std::optional<uint32_t> startedBy, uint32_t agenda, bool agendaUnderway);
+
 /// Whether a creature may dance to impress villagers: its last such dance was of another kind, and more than 200
 /// turns ago
 [[nodiscard]] bool MayDanceToImpress(uint32_t lastType, uint32_t lastTurn, uint32_t turn);

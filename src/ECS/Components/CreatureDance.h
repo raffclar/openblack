@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -24,6 +25,8 @@ struct CreatureDance
 {
 	/// The dance it made last, none before it made one or after the dance went
 	entt::entity dance {entt::null};
+	/// The agenda, by its count, that started the dance last; none before the creature started one
+	std::optional<uint32_t> startedBy;
 	/// The villagers it called to dance with it, the last called first. A villager stays on the list after the dance
 	/// stops. It leaves the list only when the hand takes it, when it flies or when it dies.
 	std::vector<entt::entity> dancers;
