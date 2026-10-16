@@ -101,6 +101,10 @@ public:
 	[[nodiscard]] Listener GetListener() const override { return _listenerOverride.value_or(CameraListener()); }
 	void SetListenerOverride(std::optional<Listener> listener) override { _listenerOverride = listener; }
 	void SetUnderwaterDuck(float gain) override { _underwaterDuck = gain; }
+	void AtmosPlayOnce(uint32_t bank, int32_t sampleId, uint32_t volume, glm::vec3 position) override
+	{
+		_atmos->PlayOnce(bank, sampleId, volume, position);
+	}
 	void CreateSoundGroup(const std::string& name) override;
 	void AddMusicEntry(const std::string& name) override;
 	[[nodiscard]] const std::vector<std::string>& GetMusicTracks() const override { return _music; }

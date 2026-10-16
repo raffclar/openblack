@@ -15,6 +15,9 @@
 #include <algorithm>
 #include <array>
 #include <numbers>
+#include <span>
+#include <utility>
+#include <vector>
 
 #include <glm/common.hpp>
 #include <glm/exponential.hpp>
@@ -292,4 +295,241 @@ float underwater::EaseTowards(float value, float target, float rate, float secon
 float underwater::EyeDepth(float eyeHeight, float seaLevel)
 {
 	return std::max(seaLevel - eyeHeight, 0.0f);
+}
+
+namespace
+{
+
+// A hash of a lattice point to 0 to 1, the same each time
+float LatticeHash(int x, int y, int z)
+{
+	auto h = static_cast<uint32_t>(x) * 73856093u ^ static_cast<uint32_t>(y) * 19349663u ^ static_cast<uint32_t>(z) * 83492791u;
+	h ^= h >> 13u;
+	h *= 0x5bd1e995u;
+	h ^= h >> 15u;
+	return static_cast<float>(h & 0xffffffu) / static_cast<float>(0xffffffu);
+}
+
+int Wrap(int value, int period)
+{
+	return ((value % period) + period) % period;
+}
+
+// Smooth noise that repeats every `period` lattice cells
+float TiledValueNoise(glm::vec3 p, int period)
+{
+	const glm::vec3 cell = glm::floor(p);
+	const glm::vec3 f = p - cell;
+	const glm::vec3 u = f * f * (3.0f - 2.0f * f);
+	const auto x0 = static_cast<int>(cell.x);
+	const auto y0 = static_cast<int>(cell.y);
+	const auto z0 = static_cast<int>(cell.z);
+	auto at = [period](int x, int y, int z) { return LatticeHash(Wrap(x, period), Wrap(y, period), Wrap(z, period)); };
+	const float x00 = glm::mix(at(x0, y0, z0), at(x0 + 1, y0, z0), u.x);
+	const float x10 = glm::mix(at(x0, y0 + 1, z0), at(x0 + 1, y0 + 1, z0), u.x);
+	const float x01 = glm::mix(at(x0, y0, z0 + 1), at(x0 + 1, y0, z0 + 1), u.x);
+	const float x11 = glm::mix(at(x0, y0 + 1, z0 + 1), at(x0 + 1, y0 + 1, z0 + 1), u.x);
+	return glm::mix(glm::mix(x00, x10, u.y), glm::mix(x01, x11, u.y), u.z);
+}
+
+// Smooth noise in octaves, 0 to 1, that repeats over the unit cube
+float TiledFbm(glm::vec3 unit, int period, int octaves)
+{
+	float sum = 0.0f;
+	float weight = 0.5f;
+	float total = 0.0f;
+	for (int octave = 0; octave < octaves; ++octave)
+	{
+		sum += weight * TiledValueNoise(unit * static_cast<float>(period), period);
+		total += weight;
+		weight *= 0.5f;
+		period *= 2;
+	}
+	return sum / total;
+}
+
+// Round cells: 1 at the middle of the nearest cell, falling to 0 at its edge, repeating over the unit cube
+float TiledCells(glm::vec3 unit, int period)
+{
+	const glm::vec3 p = unit * static_cast<float>(period);
+	const glm::vec3 cell = glm::floor(p);
+	float nearest = 1e9f;
+	for (int dz = -1; dz <= 1; ++dz)
+	{
+		for (int dy = -1; dy <= 1; ++dy)
+		{
+			for (int dx = -1; dx <= 1; ++dx)
+			{
+				const auto cx = static_cast<int>(cell.x) + dx;
+				const auto cy = static_cast<int>(cell.y) + dy;
+				const auto cz = static_cast<int>(cell.z) + dz;
+				const int wx = Wrap(cx, period);
+				const int wy = Wrap(cy, period);
+				const int wz = Wrap(cz, period);
+				const glm::vec3 jitter {LatticeHash(wx, wy, wz + 101), LatticeHash(wx + 37, wy, wz),
+				                        LatticeHash(wx, wy + 59, wz)};
+				const glm::vec3 centre = glm::vec3(cx, cy, cz) + jitter;
+				nearest = std::min(nearest, glm::length(p - centre));
+			}
+		}
+	}
+	return std::clamp(1.0f - nearest, 0.0f, 1.0f);
+}
+
+uint8_t ToByte(float value)
+{
+	return static_cast<uint8_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f));
+}
+
+} // namespace
+
+std::vector<uint8_t> underwater::SprayNoiseVolume()
+{
+	constexpr int k_Side = k_SprayNoiseSide;
+	std::vector<uint8_t> texels(static_cast<size_t>(k_Side) * k_Side * k_Side * 4);
+	for (int z = 0; z < k_Side; ++z)
+	{
+		for (int y = 0; y < k_Side; ++y)
+		{
+			for (int x = 0; x < k_Side; ++x)
+			{
+				const glm::vec3 unit = (glm::vec3(x, y, z) + 0.5f) / static_cast<float>(k_Side);
+				const float smooth = TiledFbm(unit, 4, 3);
+				const float fine = TiledFbm(unit, 8, 2);
+				// Stretch the smooth noise out about its middle, so it reaches from 0 to 1
+				const float spread = std::clamp((smooth - 0.5f) * 2.2f + 0.5f, 0.0f, 1.0f);
+				const float ridge = 1.0f - std::abs(2.0f * TiledFbm(unit + glm::vec3(0.37f), 4, 3) - 1.0f);
+				const auto index = static_cast<size_t>((((z * k_Side) + y) * k_Side) + x) * 4;
+				texels[index + 0] = ToByte(spread);
+				texels[index + 1] = ToByte(TiledCells(unit, 4));
+				texels[index + 2] = ToByte((fine - 0.5f) * 2.0f + 0.5f);
+				texels[index + 3] = ToByte(ridge * ridge);
+			}
+		}
+	}
+	return texels;
+}
+
+namespace
+{
+// The fraction of a value, as the shaders' fract
+float Fract(float value)
+{
+	return value - std::floor(value);
+}
+
+// The hash of the shaders (UwHash in underwater.sh)
+float NoiseHash(glm::vec2 p)
+{
+	glm::vec3 q {Fract(p.x * 0.1031f), Fract(p.y * 0.1031f), Fract(p.x * 0.1031f)};
+	const float add = glm::dot(q, glm::vec3(q.y, q.z, q.x) + 33.33f);
+	q += add;
+	return Fract((q.x + q.y) * q.z);
+}
+} // namespace
+
+float underwater::Noise(glm::vec2 point)
+{
+	const glm::vec2 i = glm::floor(point);
+	const glm::vec2 f = point - i;
+	const glm::vec2 u = f * f * (3.0f - 2.0f * f);
+	const float a = NoiseHash(i);
+	const float b = NoiseHash(i + glm::vec2(1.0f, 0.0f));
+	const float c = NoiseHash(i + glm::vec2(0.0f, 1.0f));
+	const float d = NoiseHash(i + glm::vec2(1.0f, 1.0f));
+	return glm::mix(glm::mix(a, b, u.x), glm::mix(c, d, u.x), u.y);
+}
+
+float underwater::Hash(glm::vec2 point)
+{
+	return NoiseHash(point);
+}
+
+glm::vec4 underwater::ShoreTexel(glm::vec4 shore, float cliff)
+{
+	const float shorten = 1.0f - 0.5f * cliff;
+	return {shore.x, shore.y * shorten, shore.z * shorten, shore.w};
+}
+
+glm::vec4 underwater::ShoreAt(std::span<const glm::vec4> shore, std::span<const float> cliff, glm::ivec2 size, float spacing,
+                              glm::vec2 point)
+{
+	if (size.x <= 0 || size.y <= 0 || shore.size() < static_cast<size_t>(size.x) * static_cast<size_t>(size.y))
+	{
+		return {1000.0f, 0.0f, 0.0f, 0.0f};
+	}
+	const glm::vec2 cell = glm::clamp(point / spacing, glm::vec2(0.0f), glm::vec2(size - 1));
+	const glm::ivec2 low = glm::min(glm::ivec2(glm::floor(cell)), size - 2);
+	const glm::vec2 share = cell - glm::vec2(low);
+	const auto at = [&](int x, int z) {
+		const auto i = static_cast<size_t>(z) * static_cast<size_t>(size.x) + static_cast<size_t>(x);
+		return ShoreTexel(shore[i], i < cliff.size() ? cliff[i] : 0.0f);
+	};
+	const auto nearRow = glm::mix(at(low.x, low.y), at(low.x + 1, low.y), share.x);
+	const auto farRow = glm::mix(at(low.x, low.y + 1), at(low.x + 1, low.y + 1), share.x);
+	return glm::mix(nearRow, farRow, share.y);
+}
+
+float underwater::ShoreCliff(glm::vec4 shore)
+{
+	return std::clamp((1.0f - glm::length(glm::vec2(shore.y, shore.z))) * 2.0f, 0.0f, 1.0f);
+}
+
+underwater::CliffCrash underwater::CliffCrashAt(glm::vec2 foot, float seconds, const WaveState& waves, float seaLevel,
+                                                float cliff)
+{
+	constexpr float k_Turn = 2.0f * std::numbers::pi_v<float>;
+	// The same steps as UwCliffCrash in underwater.sh: when the shore wave reaches the coast here, and which crash it is
+	const float omega = glm::mix(1.1f, 1.5f, waves.storm);
+	const float theta = omega * seconds + Noise(foot * 0.008f) * 1.2f;
+	const float period = k_Turn / omega;
+	const float number = std::floor(theta / k_Turn);
+	// Each crash has its own strength, the sets make some crashes stronger, and some parts of a cliff take more
+	const float own = 0.6f + 0.8f * NoiseHash({number, 17.0f});
+	const float sets = 0.55f + 0.45f * std::sin(number * 0.9f);
+	const float along = 0.6f + 0.8f * Noise(foot * 0.012f + glm::vec2(3.0f, 7.0f));
+	const float strength = own * sets * along;
+	const float tide = std::clamp((seaLevel + k_LowestTide) / k_LowestTide, 0.0f, 1.0f);
+	return {
+	    .number = number,
+	    .since = Fract(theta / k_Turn) * period,
+	    .power = waves.swash * cliff * (0.7f + 0.3f * tide) * strength / 0.55f,
+	    .seed = number * 3.7f + glm::dot(foot, glm::vec2(0.0173f, 0.0291f)),
+	};
+}
+
+bool underwater::CrashStarts(const CliffCrash& before, const CliffCrash& now)
+{
+	return now.number != before.number;
+}
+
+std::vector<size_t> underwater::HeardCliffFeet(std::span<const glm::vec4> feet, glm::vec2 eye, size_t count, float spacing,
+                                               float range)
+{
+	std::vector<std::pair<float, size_t>> inRange;
+	for (size_t i = 0; i < feet.size(); ++i)
+	{
+		const float distance = glm::distance(glm::vec2(feet[i]), eye);
+		if (distance <= range)
+		{
+			inRange.emplace_back(distance, i);
+		}
+	}
+	std::ranges::sort(inRange);
+	std::vector<size_t> heard;
+	for (const auto& [distance, index] : inRange)
+	{
+		if (heard.size() >= count)
+		{
+			break;
+		}
+		const glm::vec2 foot {feet[index]};
+		const bool apart =
+		    std::ranges::none_of(heard, [&](size_t other) { return glm::distance(glm::vec2(feet[other]), foot) < spacing; });
+		if (apart)
+		{
+			heard.push_back(index);
+		}
+	}
+	return heard;
 }

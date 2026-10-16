@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <iterator>
 
 #include <LNDFile.h>
 
@@ -229,4 +230,40 @@ void block_texture::PaintCells(std::span<const lnd::LNDCell> cells, const Source
 			out[3] = static_cast<uint8_t>(((texel >> 12) & 0xF) * 17);
 		}
 	}
+}
+
+void block_texture::PaintSeaFloor(const lnd::LNDCountry& country, const Sources& sources, std::span<uint8_t> rgba)
+{
+	std::ranges::fill(rgba, uint8_t {0});
+	if (rgba.size() < k_BlockBytes)
+	{
+		return;
+	}
+	// The lowest height that the land paints with its materials
+	constexpr int32_t k_LowestPainted = 0x100;
+	for (size_t index = 0; index < static_cast<size_t>(k_Side) * k_Side; ++index)
+	{
+		const uint8_t noise = index < sources.noise.size() ? sources.noise[index] : uint8_t {0};
+		const uint8_t bump = index < sources.bump.size() ? sources.bump[index] : uint8_t {0x80};
+		const auto texel = CountryTexel(country, k_LowestPainted, noise, bump, sources.materials, index);
+		const auto out = rgba.subspan(index * 4, 4);
+		out[0] = static_cast<uint8_t>(((texel >> 8) & 0xF) * 17);
+		out[1] = static_cast<uint8_t>(((texel >> 4) & 0xF) * 17);
+		out[2] = static_cast<uint8_t>((texel & 0xF) * 17);
+		out[3] = 0xFF;
+	}
+}
+
+uint8_t block_texture::SeaFloorCountry(std::span<const lnd::LNDCell> cells)
+{
+	std::array<size_t, 16> counts {};
+	for (const auto& cell : cells)
+	{
+		if (cell.altitude == 0)
+		{
+			++counts.at(cell.properties.country);
+		}
+	}
+	const auto most = std::ranges::max_element(counts);
+	return *most == 0 ? uint8_t {0} : static_cast<uint8_t>(std::distance(counts.begin(), most));
 }

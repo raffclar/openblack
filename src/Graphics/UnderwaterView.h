@@ -22,6 +22,7 @@
 
 #include "3D/Seabed.h"
 #include "FrameBuffer.h"
+#include "GraphicsHandle.h"
 #include "Texture2D.h"
 
 namespace openblack::graphics
@@ -61,12 +62,14 @@ public:
 	/// How many triangles one coral and one plant have, and how many of each the reef has
 	[[nodiscard]] uint32_t ReefTriangles(seabed::ReefPlant::Kind kind) const;
 	[[nodiscard]] uint32_t ReefCount(seabed::ReefPlant::Kind kind) const;
-	/// The spray at the foot of the cliffs: 64 particles for each point along the foot of a cliff, made again when the sea
-	/// bed changes. Binds them; false when there are no cliffs.
+	/// The spray at the foot of the cliffs: k_SprayPuffs particles for each point along the foot of a cliff, made again
+	/// when the sea bed changes. Binds them; false when there are no cliffs.
 	bool BindSpray(std::span<const glm::vec4> cliffFoot, uint32_t revision);
 	/// The puffs of spray there are at once at most
 	[[nodiscard]] uint32_t SprayCount() const { return _sprayCount * k_SprayPuffs; }
-	static constexpr uint32_t k_SprayPuffs = 64;
+	static constexpr uint32_t k_SprayPuffs = 128;
+	/// The spray's noise volume (see underwater::SprayNoiseVolume), made the first time it is asked for
+	[[nodiscard]] TextureHandle SprayNoise();
 
 private:
 	std::unique_ptr<FrameBuffer> _target;
@@ -95,6 +98,7 @@ private:
 	bgfx::VertexBufferHandle _sprayInstances = BGFX_INVALID_HANDLE;
 	uint32_t _sprayCount {0};
 	std::optional<uint32_t> _sprayRevision;
+	bgfx::TextureHandle _sprayNoise = BGFX_INVALID_HANDLE;
 	bgfx::IndexBufferHandle _moteIndices = BGFX_INVALID_HANDLE;
 };
 

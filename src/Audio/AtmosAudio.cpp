@@ -21,11 +21,14 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/Seabed.h"
 #include "AudioManagerInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/Underwater.h"
 #include "InfoConstants.h"
+#include "ListenerFrame.h"
 #include "Locator.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
@@ -55,6 +58,23 @@ constexpr std::string_view k_UnderwaterBankName = "underwater.sad";
 constexpr int32_t k_UnderwaterSample = 1;
 /// How loud the loop is just under the surface, of the bank's full volume
 constexpr float k_UnderwaterVolume = 0.8f;
+/// The crashes of the waves at the cliffs: how many feet of the cliffs are heard at once, how far apart they are at
+/// least, and how far away a crash is heard
+constexpr size_t k_CrashVoices = 3;
+constexpr float k_CrashSpacing = 60.0f;
+constexpr float k_CrashRange = 400.0f;
+/// The spray's power of a crash at full volume, of the smallest crash heard, and of a crash that breaks
+constexpr float k_CrashFull = 0.5f;
+constexpr float k_CrashLeast = 0.05f;
+constexpr float k_CrashBig = 0.22f;
+/// The distance at which a crash is half as loud as at the cliff
+constexpr float k_CrashNear = 60.0f;
+/// How loud a crash is under the sea, of its volume above it, and the lowest volume played (0 to 127)
+constexpr float k_CrashUnderwater = 0.25f;
+constexpr uint32_t k_CrashQuietest = 3;
+/// The first sample and the number of samples of a crash: the coast's waves that break, the sea's waves that lap
+constexpr std::pair<int32_t, int32_t> k_ShoreCrashSamples {2, 18};
+constexpr std::pair<int32_t, int32_t> k_SeaCrashSamples {2, 14};
 
 int32_t Ftol(double value)
 {
@@ -286,6 +306,75 @@ void AtmosAudio::ProcessAtmosBanks()
 		_underwaterCurrent = current;
 		audio.AtmosSetBankVolume(_underwaterBank, bankVolume);
 	}
+}
+
+void AtmosAudio::UpdateCliffCrashes()
+{
+	if (!_registered || !Locator::underwaterSystem::has_value())
+	{
+		return;
+	}
+	const auto& system = Locator::underwaterSystem::value();
+	const float seconds = system.GetSeconds();
+	const bool moved = seconds != _crashSeconds;
+	_crashSeconds = seconds;
+	const auto& seabed = system.GetSeabed();
+	auto& audio = Locator::audio::value();
+	if (!system.IsEnabled() || seabed.cliffFoot.empty())
+	{
+		_crashFeet.clear();
+		return;
+	}
+	const auto listener = audio.GetListener();
+	const auto heard = graphics::underwater::HeardCliffFeet(seabed.cliffFoot, {listener.origin.x, listener.origin.z},
+	                                                        k_CrashVoices, k_CrashSpacing, k_CrashRange);
+	const auto& waves = system.GetWaves();
+	const float seaLevel = system.GetSeaLevel();
+	const float under = system.IsEyeUnder() ? k_CrashUnderwater : 1.0f;
+	std::vector<std::pair<size_t, float>> next;
+	next.reserve(heard.size());
+	for (const auto index : heard)
+	{
+		const auto& foot = seabed.cliffFoot.at(index);
+		const glm::vec2 xz {foot.x, foot.y};
+		const float cliff = graphics::underwater::ShoreCliff(
+		    graphics::underwater::ShoreAt(seabed.shore, seabed.cliff, seabed.size, seabed.spacing, xz));
+		const auto crash = graphics::underwater::CliffCrashAt(xz, seconds, waves, seaLevel, cliff);
+		next.emplace_back(index, crash.number);
+		// A foot newly heard waits for its next crash; nothing starts while the clock stands still
+		const auto before = std::ranges::find(_crashFeet, index, &std::pair<size_t, float>::first);
+		if (!moved || before == _crashFeet.end() || before->second == crash.number || crash.power < k_CrashLeast)
+		{
+			continue;
+		}
+		const glm::vec3 place {foot.x, seaLevel, foot.y};
+		const float distance = glm::distance(place, listener.origin);
+		const float loudness = std::min(crash.power / k_CrashFull, 1.0f) * k_CrashNear / (k_CrashNear + distance) * under;
+		const auto volume = static_cast<uint32_t>(std::clamp(loudness * k_BankVolumeScale, 0.0f, k_BankVolumeScale));
+		if (volume < k_CrashQuietest)
+		{
+			continue;
+		}
+		// A big crash is a wave breaking on the shore, a small one a wave that slaps the rock
+		const bool big = crash.power >= k_CrashBig;
+		const auto bank = _banks.at(static_cast<size_t>(big ? AtmosType::Coastal : AtmosType::Sea));
+		if (bank == 0)
+		{
+			continue;
+		}
+		const auto [first, count] = big ? k_ShoreCrashSamples : k_SeaCrashSamples;
+		const auto pick = static_cast<int32_t>(graphics::underwater::Hash({crash.seed, 29.0f}) * static_cast<float>(count));
+		// Placed by its direction only: the volume above already has the distance in it
+		auto towards = ToListenerFrame(place, listener.origin, listener.forward, listener.up);
+		const float length = glm::length(towards);
+		towards = length > 0.0f ? towards / length : glm::vec3(0.0f, 1.0f, 0.0f);
+		const auto sample = first + std::min(pick, count - 1);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"),
+		                    "Cliff crash at ({:.0f}, {:.0f}): power {:.2f}, {} away, {} sample {} volume {}", foot.x, foot.y,
+		                    crash.power, distance, big ? "shore" : "ocean", sample, volume);
+		audio.AtmosPlayOnce(bank, sample, volume, towards);
+	}
+	_crashFeet = std::move(next);
 }
 
 std::pair<float, int32_t> AtmosAudio::StepBankVolume(float current, float target)

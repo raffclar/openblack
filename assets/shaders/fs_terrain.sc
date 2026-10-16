@@ -32,6 +32,8 @@ SAMPLER2D(s12_snowNoise, 12);
 SAMPLER2D(s7_landLight, 7);
 // EXPERIMENT (not for merge): while the experiment's water is on, s12_snowNoise holds the sand texture
 #define SEABED_SAND_TEXTURE s12_snowNoise
+#define SEABED_FLOOR_TEXTURE s0_blockTextures
+#define SEABED_SHORE_TEXTURE s_snowDepth
 #include "seabed_sand.sh"
 // The ring an open vortex lays over the land around its hole
 SAMPLER2D(s13_vortexRing, 13);
@@ -280,6 +282,51 @@ vec4 CoarsePage(vec2 blockUv)
 	return mix(low, high, blend.y) / 15.0f;
 }
 
+// EXPERIMENT (not for merge): how wet the rock of a cliff is at a point, 0 to 1. Each wave that hits the foot of the
+// cliff throws water up the face as high as its spray goes. The rock is wet where the water came, streaks of water run
+// down the face, and the rock dries until the next wave. The low rock that each wave reaches stays damp.
+float CliffWetness(vec3 world)
+{
+	vec4 shore = texture2DLod(s_snowDepth, UwShoreUv(world.xz), 0.0f);
+	float inland = -shore.x;
+	float level = u_uwParams.z;
+	float above = world.y - level;
+	float towards = length(shore.yz);
+	if (inland < -2.0f || inland > 30.0f || above < -0.5f || towards < 1e-3f)
+	{
+		return 0.0f;
+	}
+	vec2 outward = shore.yz / towards;
+	vec2 foot = world.xz + outward * (max(inland, 0.0f) + 4.0f);
+	float cliff = UwShoreCliff(texture2DLod(s_snowDepth, UwShoreUv(foot), 0.0f));
+	if (cliff <= 0.0f)
+	{
+		return 0.0f;
+	}
+	float since;
+	float crash;
+	float period;
+	float strength = UwCliffCrash(foot, u_uwParams.y, since, crash, period);
+	float tide = clamp((level + UW_LOWEST_TIDE) / UW_LOWEST_TIDE, 0.0f, 1.0f);
+	float power = u_uwWaves.w * (0.7f + 0.3f * tide) * cliff * (strength / 0.55f);
+	// As high as the sheet of spray went, and the time the water took to come up to this height
+	float rise = 7.0f + 22.0f * power;
+	float reach = rise * rise / 19.6f;
+	float arrived = since - above / max(rise, 1.0f);
+	vec2 across = vec2(-outward.y, outward.x);
+	float along = dot(world.xz, across);
+	// The splash: the top edge of the wet rock is ragged
+	float edge = reach * (0.55f + 0.6f * UwNoise(vec2(along * 0.3f, crash * 1.7f)));
+	float splash = (1.0f - smoothstep(edge * 0.8f, edge, above)) * step(0.0f, arrived) * exp(-max(arrived, 0.0f) / 2.5f);
+	// The streaks: thin lines of water that run down the face from the splash, slowly, and dry last
+	float streaks = smoothstep(0.62f, 0.8f, UwNoise(vec2(along * 1.4f, above * 0.05f + max(arrived, 0.0f) * 0.35f)));
+	streaks *= (1.0f - smoothstep(edge * 0.6f, edge * 1.1f, above)) * exp(-max(arrived, 0.0f) / 6.0f);
+	// The low rock that the waves reach each time
+	float damp = 0.5f * (1.0f - smoothstep(0.0f, 1.0f + 3.0f * u_uwWaves.w, above));
+	float fade = 1.0f - smoothstep(18.0f, 30.0f, inland);
+	return clamp(max(max(splash, streaks), damp * cliff) * fade, 0.0f, 1.0f);
+}
+
 void main()
 {
 	// unpack uniforms
@@ -338,6 +385,9 @@ void main()
 		ring = texture2D(s13_vortexRing, vortexUv);
 	}
 
+	// EXPERIMENT (not for merge): the land's colour before its light, for the ground under the sea
+	vec3 painted = col.rgb;
+	float paintedAlpha = block.a;
 	col.rgb = col.rgb * v_lightColour * v_haze.a;
 
 	// The small bump detail is a second layer over the lit land, its colour unlit, blended by its alpha whatever the
@@ -357,30 +407,31 @@ void main()
 	// the shore, and the land is opaque everywhere: the sea bed is under the water
 	if (u_uwParams.x > 0.5f)
 	{
-		vec3 surfaceNormal = SeabedSurfaceNormal(v_world);
-		// The sand comes in over a band of height at the shore, and keeps off steep ground, where the land's own rock goes
-		// on down under the water
-		float steepness = 1.0f - surfaceNormal.y;
-		float sandShare = (1.0f - smoothstep(-1.5f, 2.4f, v_world.y)) * (1.0f - smoothstep(0.25f, 0.55f, steepness));
+		vec3 normal = SeabedNormal(v_world);
 		// Under the surface the water's own fog takes the place of the haze
 		land = u_uwEye.w > 0.5f ? col.rgb : land;
-		if (sandShare > 0.0f)
+		// The ground under the sea comes in over a band of height at the shore. Near the sea's level it keeps off steep
+		// ground, where the land's own rock stays as the land draws it; deeper down it covers all, as past the blocks.
+		float steepRock = smoothstep(0.25f, 0.55f, 1.0f - normal.y) * smoothstep(-3.0f, 0.0f, v_world.y);
+		float seabedShare = (1.0f - smoothstep(-1.5f, 2.4f, v_world.y)) * (1.0f - steepRock);
+		if (seabedShare > 0.0f)
 		{
-			// Under the sea the sand takes the same light as the sea bed past the land's blocks, so the two match
+			// Under the sea the ground takes the same light as the sea bed past the land's blocks, so the two match
 			vec3 seaLight = texture2DLod(s7_landLight, vec2(150.5f / 256.0f, 0.5f), 0.0f).rgb;
-			vec3 sandLight = mix(v_lightColour, seaLight, smoothstep(0.5f, 3.0f, -v_world.y));
-			land = mix(land, SeabedSand(v_world, sandLight, surfaceNormal), sandShare);
-			// The sand is wet and darker below the highest run of the waves up the beach: wettest where the water just
-			// was, drier further up. The beach that the tide leaves is damp.
-			float level = u_uwParams.z;
-			vec4 shore = texture2DLod(s_snowDepth, UwShoreUv(v_world.xz), 0.0f);
-			float face;
-			float runUp = level + UwShoreWave(shore.x, v_world.xz, u_uwParams.y, UwShoreCliff(shore), face);
-			float wetTop = level + u_uwWaves.w * 1.4f + 0.15f;
-			float wet = 1.0f - smoothstep(runUp, wetTop, v_world.y);
-			wet = max(wet, 0.45f * (1.0f - smoothstep(-0.3f, 0.05f, v_world.y)));
-			land = mix(land, land * 0.6f, wet * sandShare);
-			bumpAlpha *= 1.0f - sandShare;
+			vec3 groundLight = mix(v_lightColour, seaLight, smoothstep(0.5f, 3.0f, -v_world.y));
+			// The land's own texture, faded by its coast alpha into the sea floor of the land's material
+			vec3 ground = mix(SeabedFloorAlbedo(v_world.xz), painted, paintedAlpha);
+			float sandShare;
+			land = mix(land, SeabedGround(v_world, ground, groundLight, normal, sandShare), seabedShare);
+			bumpAlpha *= 1.0f - seabedShare;
+		}
+		// The rock of a cliff after a wave hits it: darker, with a sheen of the light on the water
+		float wet = CliffWetness(v_world);
+		if (wet > 0.0f)
+		{
+			vec3 toEye = normalize(u_uwEye.xyz - v_world);
+			float sheen = pow(max(dot(reflect(-u_uwAbove.xyz, normal), toEye), 0.0f), 24.0f);
+			land = mix(land, land * 0.55f, wet) + u_uwLightColour.rgb * sheen * 0.35f * wet;
 		}
 		block.a = 1.0f;
 	}

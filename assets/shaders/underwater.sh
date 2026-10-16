@@ -22,8 +22,8 @@ uniform vec4 u_uwAbove;
 // x: how high the waves are (1 calm), y: how stormy the sea is (0 to 1), z: the wind's direction in radians from +x
 // towards +z, w: how far the waves run up the beach, in height
 uniform vec4 u_uwWaves;
-// x: the storm's whitecaps and streaks of foam, 1 on, 0 off; y: the reef, 1 on, 0 off; z: 1 to draw the water as a
-// flat colour where it shows, to compare it with the original sea; w: unused
+// x: the storm's whitecaps and streaks of foam, 1 on, 0 off; y: the reef, 1 on, 0 off; z: 1 for the motes' pass of
+// debris; w: 1 to draw the water as a flat colour where it shows, to compare it with the original sea
 uniform vec4 u_uwFlags2;
 // The sea's currents, one field for every moving thing in the water (see underwater::CurrentAt). xy: the steady flow
 // in units a second, z: how strong the swirls are, w: how strong the gusts are
@@ -222,6 +222,24 @@ float UwShoreWave(float distance, vec2 xz, float t, float cliff, out float face)
 	float sets = 0.55f + 0.45f * sin(wave * 0.9f);
 	float along = 0.6f + 0.8f * UwNoise(xz * 0.012f + vec2(3.0f, 7.0f));
 	return u_uwWaves.w * 2.0f * reach * (1.0f - cliff) * own * sets * along * (profile - 0.3f);
+}
+
+// A crash of the shore wave on the foot of a cliff at a point of the coast: the same wave as UwShoreWave, that
+// reaches the coast there at its own time. It gives how strong the last wave to reach the coast there was, about 0.05
+// to 2 (0.55 for a usual wave): its own height, the height of its set and how big the breakers are at that place.
+// `since` is the time since it reached the coast, in seconds; `crash` is the number of the wave, for the hashes that
+// make each crash different; `period` is the time from one wave to the next.
+float UwCliffCrash(vec2 xz, float t, out float since, out float crash, out float period)
+{
+	float omega = mix(1.1f, 1.5f, u_uwWaves.y);
+	float theta = omega * t + UwNoise(xz * 0.008f) * 1.2f;
+	period = 6.2831853f / omega;
+	crash = floor(theta / 6.2831853f);
+	since = fract(theta / 6.2831853f) * period;
+	float own = 0.6f + 0.8f * UwHash(vec2(crash, 17.0f));
+	float sets = 0.55f + 0.45f * sin(crash * 0.9f);
+	float along = 0.6f + 0.8f * UwNoise(xz * 0.012f + vec2(3.0f, 7.0f));
+	return own * sets * along;
 }
 
 // The waves that go back out to sea from the foot of a cliff, in rings

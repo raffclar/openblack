@@ -473,7 +473,7 @@ void main()
 			}
 			// Where the original game shows its land over its sea, the land shows here too, as much as there
 			float originalLand = OriginalLandAt(surfacePoint.xz);
-			colour = u_uwFlags2.z > 0.5f ? vec3(1.0f, 0.0f, 1.0f) : colour;
+			colour = u_uwFlags2.w > 0.5f ? vec3(1.0f, 0.0f, 1.0f) : colour;
 			colour = mix(colour, scene, originalLand);
 		}
 	}
