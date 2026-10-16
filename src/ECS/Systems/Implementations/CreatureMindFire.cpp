@@ -155,12 +155,14 @@ std::optional<entt::entity> CreatureMindSystem::BelongsTo(entt::entity thing)
 
 void CreatureMindSystem::ReactToFire(entt::entity creature, entt::entity burning)
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
 	if (mind == nullptr || !mind->desires.has_value() || !registry.Valid(burning))
 	{
 		return;
 	}
+	// It comes across the burning thing and what the thing belongs to, so it weighs them as they are now
+	ComeAcrossWithWhole(creature, *mind, burning);
 	// What it weighs is what the burning thing belongs to, by how useful it has learnt that is for compassion
 	const auto owner = BelongsTo(burning);
 	const auto usefulness =
