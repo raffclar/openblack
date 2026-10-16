@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
 #include <memory>
 
 #include <glm/mat3x3.hpp>
@@ -18,6 +19,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/StreetLanternRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -103,4 +105,17 @@ TEST_F(EffectReceivers, ABallTakesEffectsByTheBallsRowAndIsNotCrushed)
 	EXPECT_EQ(ecs::world_objects::EffectInfoOf(ball), &Locator::infoConstants::value().ball);
 	EXPECT_FALSE(ecs::world_objects::CanBeCrushed(ball));
 	EXPECT_EQ(ecs::world_objects::PlayerOf(ball), PlayerNames::NEUTRAL);
+}
+
+TEST(StreetLanternRules, NoLanternWithinHalfAMetreOfAStatic)
+{
+	constexpr glm::vec3 k_At {100.0f, 0.0f, 100.0f};
+	EXPECT_TRUE(ecs::street_lanterns::Refused(k_At, std::array {glm::vec3(100.4f, 0.0f, 100.0f)}));
+	EXPECT_FALSE(ecs::street_lanterns::Refused(k_At, std::array {glm::vec3(100.6f, 0.0f, 100.0f)}));
+	// Only the distance across the land counts, not the height
+	EXPECT_TRUE(ecs::street_lanterns::Refused(k_At, std::array {glm::vec3(100.0f, 50.0f, 100.3f)}));
+	// One near thing among far ones is enough
+	EXPECT_TRUE(
+	    ecs::street_lanterns::Refused(k_At, std::array {glm::vec3(108.0f, 0.0f, 100.0f), glm::vec3(99.8f, 0.0f, 99.8f)}));
+	EXPECT_FALSE(ecs::street_lanterns::Refused(k_At, {}));
 }
