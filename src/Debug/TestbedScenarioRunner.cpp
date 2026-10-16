@@ -559,7 +559,6 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	}
 }
 
-/// The game writes the help record of the player to their folder in the profile folder, then reads it again
 /// The player has grey rings of their own for a design, which the tattoo editor puts in the creature's block of
 /// pictures when a tattoo is dropped
 std::string GiveOwnTattooPicture(size_t design)
@@ -587,6 +586,7 @@ std::string GiveOwnTattooPicture(size_t design)
 	return fmt::format("design {} has the player's own picture", design + 1);
 }
 
+/// The game writes the help record of the player to their folder in the profile folder, then reads it again
 std::string CheckProfileFolder()
 {
 	if (!Locator::profileFolderSystem::has_value() || !Locator::helpProfileSystem::has_value() ||
@@ -2244,2143 +2244,2134 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RecordChallenge(command)));
 		return;
 	}
+	if (command.kind == Kind::ShowCustomMusicControls)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr)
+		{
+			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
+			return;
+		}
+		auto& controls = game->GetInterface()->GetMusicControls();
+		controls.ShowControls(command.value >= 1, command.value >= 2);
+		Log(fmt::format("{:.1f}s: {}: buttons {}, play list {}, the controls {}", _seconds, Name(command.kind),
+		                controls.GetPanel().controlsShown ? "shown" : "hidden",
+		                controls.GetPanel().playListShown ? "shown" : "hidden", controls.IsActive() ? "show" : "hide now"));
+		return;
+	}
+	if (command.kind == Kind::PlayCustomMusic)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PlayCustomMusic(command.value)));
+		return;
+	}
 	if (command.kind == Kind::OwnTattooPicture)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), GiveOwnTattooPicture(command.value)));
-		if (command.kind == Kind::ShowCustomMusicControls)
+		return;
+	}
+	if (command.kind == Kind::ProfileFolderCheck)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), CheckProfileFolder()));
+		return;
+	}
+	if (command.kind == Kind::PlayBoatFilm)
+	{
+		Log(fmt::format("{:.1f}s: {}", _seconds, PlayBoatFilm(command)));
+		return;
+	}
+	if (command.kind == Kind::EnterTemple)
+	{
+		const auto room = static_cast<TempleRoom>(command.value);
+		if (Locator::temple::has_value())
 		{
-			auto* game = Game::Instance();
-			if (game == nullptr || game->GetInterface() == nullptr)
+			auto& temple = Locator::temple::value();
+			if (temple.Active())
 			{
-				Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
-				return;
-			}
-			auto& controls = game->GetInterface()->GetMusicControls();
-			controls.ShowControls(command.value >= 1, command.value >= 2);
-			Log(fmt::format("{:.1f}s: {}: buttons {}, play list {}, the controls {}", _seconds, Name(command.kind),
-			                controls.GetPanel().controlsShown ? "shown" : "hidden",
-			                controls.GetPanel().playListShown ? "shown" : "hidden", controls.IsActive() ? "show" : "hide now"));
-			return;
-		}
-		if (command.kind == Kind::PlayCustomMusic)
-		{
-			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PlayCustomMusic(command.value)));
-			return;
-		}
-		if (command.kind == Kind::ProfileFolderCheck)
-		{
-			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), CheckProfileFolder()));
-			return;
-		}
-		if (command.kind == Kind::PlayBoatFilm)
-		{
-			Log(fmt::format("{:.1f}s: {}", _seconds, PlayBoatFilm(command)));
-			return;
-		}
-		if (command.kind == Kind::EnterTemple)
-		{
-			const auto room = static_cast<TempleRoom>(command.value);
-			if (Locator::temple::has_value())
-			{
-				auto& temple = Locator::temple::value();
-				if (temple.Active())
-				{
-					temple.GoToRoom(room);
-				}
-				else
-				{
-					temple.Activate(room);
-				}
-			}
-			Log(fmt::format("{:.1f}s: the player goes into temple room {}", _seconds, command.value));
-			return;
-		}
-		if (command.kind == Kind::Reframe)
-		{
-			Frame(_scenario->framing.shot, _scenario->framing.creature, _scenario->framing.distance);
-			Log(fmt::format("{:.1f}s: the camera is put back", _seconds));
-			return;
-		}
-		if (command.kind == Kind::SetHour)
-		{
-			if (Locator::skySystem::has_value())
-			{
-				Locator::skySystem::value().SetTime(command.hour);
-			}
-			Log(fmt::format("{:.1f}s: the hour is {:.1f}", _seconds, command.hour));
-			return;
-		}
-		if (command.kind == Kind::Advisor)
-		{
-			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), GiveAdvisorCommand(command)));
-			return;
-		}
-		if (command.kind == Kind::SetOpenClose || command.kind == Kind::LayGateStone)
-		{
-			GiveSceneryCommand(command);
-			return;
-		}
-		if (command.kind == Kind::SetAlignment)
-		{
-			if (Locator::alignmentSystem::has_value())
-			{
-				Locator::alignmentSystem::value().SetPlayerAlignment(command.player, command.alignment);
-			}
-			Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
-			return;
-		}
-		if (command.kind == Kind::EndGuidanceWaits)
-		{
-			if (Locator::guidanceSystem::has_value())
-			{
-				Locator::guidanceSystem::value().EndWaits();
-			}
-			Log(fmt::format("{:.1f}s: the guidance's waits are over", _seconds));
-			return;
-		}
-		if (command.kind == Kind::RunHelpMessage)
-		{
-			const bool started =
-			    Locator::helpMessageSystem::has_value() && Locator::helpMessageSystem::value().RunMessageSet(command.value);
-			Log(fmt::format("{:.1f}s: the help message set {} {}", _seconds, command.value, started ? "runs" : "doesn't run"));
-			return;
-		}
-		if (command.kind == Kind::DestroyTemple)
-		{
-			const bool known = command.value < _temples.size();
-			if (known && Locator::templeDestructionSystem::has_value())
-			{
-				Locator::templeDestructionSystem::value().Start(_temples.at(command.value));
-			}
-			Log(fmt::format("{:.1f}s: temple {} {}", _seconds, command.value,
-			                known ? "starts being destroyed" : "isn't there"));
-			return;
-		}
-		if (command.kind == Kind::LookAtTempleScroll)
-		{
-			if (Locator::temple::has_value())
-			{
-				Locator::temple::value().LookAtScroll(command.value);
-			}
-			Log(fmt::format("{:.1f}s: the temple's camera looks at scroll {}", _seconds, command.value));
-			return;
-		}
-		if (command.kind == Kind::ReadTip)
-		{
-			// A sign far under the land, tapped once by the player
-			const auto text = static_cast<uint32_t>(command.value);
-			const auto category = static_cast<uint32_t>(std::lround(command.amount));
-			const bool read = Locator::scriptHighlightSystem::has_value();
-			if (read)
-			{
-				auto& highlights = Locator::scriptHighlightSystem::value();
-				const auto sign =
-				    highlights.Create(static_cast<uint32_t>(HighlightInfo::DidYouKnowSign), {0.0f, -1000.0f, 0.0f}, 0);
-				highlights.SetProperties(sign, text, category);
-				highlights.Tap(sign, true);
-			}
-			Log(fmt::format("{:.1f}s: tip {} of category {} {}", _seconds, text, category, read ? "read" : "not read"));
-			return;
-		}
-		if (command.kind == Kind::RunText)
-		{
-			// Not alone on its line and not waiting for a click, as the lessons' texts are shown
-			const bool shown = Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().IsStarted() &&
-			                   Locator::helpTextSystem::value().RunText(false, static_cast<uint32_t>(command.value), 0);
-			Log(fmt::format("{:.1f}s: help text {} {}", _seconds, command.value, shown ? "shown" : "not shown"));
-			return;
-		}
-		if (command.kind == Kind::PlayHandDemo)
-		{
-			if (Locator::handDemoSystem::has_value())
-			{
-				Locator::handDemoSystem::value().Play(command.handDemo, 0, false, false);
-			}
-			Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
-			return;
-		}
-		if (command.kind == Kind::WideScreen)
-		{
-			// Held by a script, as the land's scripts hold them, under a number no script task has: a task of that number
-			// stopping would take the bars away with it
-			constexpr uint32_t k_ScriptOwner = std::numeric_limits<uint32_t>::max();
-			if (Locator::cinematicDirectorSystem::has_value())
-			{
-				Locator::cinematicDirectorSystem::value().SetWideScreen(command.value != 0, k_ScriptOwner);
-			}
-			Log(fmt::format("{:.1f}s: the cinema bars slide {}", _seconds, command.value != 0 ? "in" : "out"));
-			return;
-		}
-		const auto entity = CreatureAt(command.creature);
-		if (!entity.has_value() || !Locator::creatureLocomotionSystem::has_value() || !Locator::creatureMindSystem::has_value())
-		{
-			return;
-		}
-		const auto& setup = _scenario->creatures[command.creature];
-		const auto who = setup.label.empty() ? fmt::format("creature {}", command.creature) : std::string(setup.label);
-		// Lying out cold, it does nothing it is told until it comes round
-		if (const auto* needs = Locator::entitiesRegistry::value().TryGet<const CreatureNeeds>(*entity);
-		    needs != nullptr && needs->rest == CreatureNeeds::Rest::Unconscious && command.kind != Kind::BringRound)
-		{
-			Log(fmt::format("{:.1f}s: {} {}: out cold", _seconds, who, Name(command.kind)));
-			return;
-		}
-		auto& locomotion = Locator::creatureLocomotionSystem::value();
-		auto& minds = Locator::creatureMindSystem::value();
-		const auto point = MapPoint(_middle, command.point);
-		std::string result;
-		switch (command.kind)
-		{
-		case Kind::WalkTo:
-		case Kind::RunTo:
-			result = MoveResultName(
-			    locomotion.MoveTo(*entity, point, command.kind == Kind::RunTo ? Pace::Run : Pace::Walk, 0.0f, 1.0f));
-			break;
-		case Kind::ScriptPlay:
-			result = minds.CarryOutForScript(
-			             *entity, creature_script_play::Agenda({.animation = static_cast<int32_t>(command.value),
-			                                                    .plays = static_cast<uint32_t>(std::lround(command.amount))}))
-			             ? "playing"
-			             : "can't";
-			break;
-		case Kind::DoAction:
-		{
-			const auto* tables = minds.GetTables();
-			const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, command.action) : std::nullopt;
-			const auto target = command.onTemple && !_temples.empty()          ? std::optional(_temples.front())
-			                    : command.onGlobe && command.globe.has_value() ? GlobeAt(*command.globe)
-			                                                                   : ObjectAt(command.object);
-			const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
-			                  : command.with.has_value()                    ? ObjectAt(*command.with)
-			                                                                : std::nullopt;
-			result = !action.has_value()                                     ? "no such action"
-			         : !target.has_value()                                   ? "no such object"
-			         : minds.ScriptDoAction(*entity, *action, *target, with) ? fmt::format("doing {}", command.action)
-			                                                                 : "can't";
-			break;
-		}
-		case Kind::MakeFriends:
-			if (const auto other = CreatureAt(command.value))
-			{
-				auto& registry = Locator::entitiesRegistry::value();
-				for (const auto each : {*entity, *other})
-				{
-					if (!registry.AllOf<ecs::components::CreatureFriends>(each))
-					{
-						registry.Assign<ecs::components::CreatureFriends>(each);
-					}
-				}
-				creature_activity::MakeFriends(
-				    registry.Get<ecs::components::CreatureFriends>(*entity).friends, entt::to_integral(*entity),
-				    registry.Get<ecs::components::CreatureFriends>(*other).friends, entt::to_integral(*other));
-				result = "friends";
+				temple.GoToRoom(room);
 			}
 			else
 			{
-				result = "no such creature";
+				temple.Activate(room);
 			}
-			break;
-		case Kind::SwapMinds:
-			if (const auto other = CreatureAt(command.value))
-			{
-				result = minds.SwapMinds(*entity, *other) ? "swapped" : "can't";
-			}
-			else
-			{
-				result = "no such creature";
-			}
-			break;
-		case Kind::WalkHome:
-			if (const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
-			    leash != nullptr && leash->home.has_value())
-			{
-				result = MoveResultName(
-				    locomotion.MoveTo(*entity, glm::vec2(leash->home->x, leash->home->z), Pace::Walk, 0.0f, 1.0f));
-			}
-			else
-			{
-				result = "it has no home";
-			}
-			break;
-		case Kind::Follow:
-			if (const auto leader = CreatureAt(command.value))
-			{
-				const auto size = ShownSize(Locator::entitiesRegistry::value().Get<Creature>(*entity));
-				result =
-				    MoveResultName(locomotion.Follow(*entity, *leader, k_FollowDistance * std::max(size, 0.5f), Pace::Walk));
-			}
-			break;
-		case Kind::FleeFrom:
-			result = MoveResultName(locomotion.FleeFrom(*entity, point));
-			break;
-		case Kind::TurnToFace:
-			result = locomotion.TurnToFace(*entity, point) ? "turning" : "can't";
-			break;
-		case Kind::FaceCamera:
-			result = locomotion.TurnToFace(*entity, glm::xz(Locator::camera::value().GetOrigin())) ? "turning" : "can't";
-			break;
-		case Kind::Stop:
-			locomotion.Stop(*entity);
-			break;
-		case Kind::PlayAction:
-			result = minds.PlayAction(*entity, command.value) ? "playing" : "busy";
-			break;
-		case Kind::PlayGesture:
-			result = minds.PlayGesture(*entity, command.value) ? "playing" : "busy";
-			break;
-		case Kind::PullFace:
-			minds.PullFace(*entity, command.value);
-			break;
-		case Kind::CreatureDrawGesture:
-			result = minds.DrawGesture(*entity, static_cast<uint32_t>(command.value)) ? "drawing" : "busy";
-			break;
-		case Kind::ShowFeeling:
-			if (const auto face = minds.ShowFeeling(*entity, static_cast<creature_face::Cue>(command.value)))
-			{
-				result = creature_face::Name(face->face);
-			}
-			break;
-		case Kind::SitDown:
-			result = minds.SitDown(*entity) ? "sitting" : "busy";
-			break;
-		case Kind::StandUp:
-			minds.StandUp(*entity);
-			break;
-		case Kind::Sleep:
-			result = minds.Sleep(*entity) ? "started" : "can't";
-			break;
-		case Kind::Wake:
-			minds.Wake(*entity);
-			break;
-		case Kind::Eat:
-			result = minds.Eat(*entity, std::nullopt) ? "started" : "nothing to eat";
-			break;
-		case Kind::Drink:
-			result = minds.Drink(*entity) ? "started" : "no water near";
-			break;
-		case Kind::Poo:
-			result = minds.Poo(*entity) ? "started" : "can't";
-			break;
-		case Kind::Fart:
-			// A fart is always a plan for the desire to poo
-			result =
-			    minds.ForcePlan(*entity, {.desire = creature_desires::Desire::Poo, .action = "Fart"}) ? "started" : "can't";
-			break;
-		case Kind::Puke:
-			result = minds.Puke(*entity) ? "started" : "can't";
-			break;
-		case Kind::Faint:
-			result = minds.Faint(*entity) ? "started" : "can't";
-			break;
-		case Kind::Stroke:
-		case Kind::Slap:
-			// As a whole session of the hand on the creature would, a full reward or punishment as the hand lets go
-			minds.ReceiveFeedback(*entity, command.kind == Kind::Stroke ? 1.0f : -1.0f);
-			break;
-		case Kind::PickUp:
-		case Kind::PutDown:
-		case Kind::Discard:
-		case Kind::EatHeld:
-		case Kind::Examine:
-		case Kind::ThrowAt:
-		case Kind::KnockDown:
-		case Kind::PointAt:
-			result = GiveObjectCommand(*entity, command);
-			break;
-		case Kind::HandStroke:
-		case Kind::HandSlap:
-		case Kind::HandLetGo:
-			result = GiveHandCommand(*entity, command);
-			break;
-		case Kind::PutOnLeash:
-		case Kind::TieLeash:
-		case Kind::UntieLeash:
-		case Kind::TakeOffLeash:
-		case Kind::ConfineToHome:
-		case Kind::MakeLeashable:
-		case Kind::HandTapLeash:
-		case Kind::LeashKey:
-		case Kind::LeashShake:
-		case Kind::LeashOrderAt:
-		case Kind::LeashOrderOn:
-		case Kind::HangLeashPosts:
-		case Kind::TapLeashPost:
-		case Kind::LeashTapBuilding:
-			result = GiveLeashCommand(*entity, command);
-			break;
-		case Kind::StartFight:
-		case Kind::FightBlow:
-		case Kind::FightBlock:
-		case Kind::FightStep:
-		case Kind::FightSpecial:
-		case Kind::FightAuto:
-		case Kind::FightSpell:
-		case Kind::FightView:
-		case Kind::FightAutopilot:
-		case Kind::FightLessonCheck:
-		case Kind::KnockOut:
-		case Kind::BringRound:
-		case Kind::FightAbort:
-		case Kind::TieLeashToCreature:
-			result = GiveFightCommand(*entity, command);
-			break;
-		case Kind::CreatureKey:
-		case Kind::DoubleClick:
-		case Kind::CameraKeys:
-		case Kind::ClearCameraView:
-		case Kind::LeaveCreatureMode:
-		case Kind::OpenCreatureCave:
-		case Kind::ApplyTattoo:
-		case Kind::RemoveTattoo:
-		case Kind::OpenTattooEditor:
-			result = GiveCreatureModeCommand(*entity, command);
-			break;
-		case Kind::HandGive:
-			result = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GiveHeldTo(*entity)
-			             ? "given"
-			             : "the hand gives nothing";
-			break;
-		case Kind::SetHour:
-		case Kind::HoldSeed:
-		case Kind::DrawGesture:
-		case Kind::SummonSeed:
-		case Kind::PressKey:
-		case Kind::HandTakeFireBall:
-		case Kind::HandTapObject:
-		case Kind::HandTake:
-		case Kind::HandPour:
-		case Kind::HandRelease:
-		case Kind::RemoveObject:
-		case Kind::HandGripTotem:
-		case Kind::SetAlignment:
-		case Kind::Advisor:
-		case Kind::DestroyTemple:
-		case Kind::SetOpenClose:
-		case Kind::LayGateStone:
-		case Kind::WideScreen:
-		case Kind::RunHelpMessage:
-		case Kind::EndGuidanceWaits:
-		case Kind::ProfileFolderCheck:
-		case Kind::OwnTattooPicture:
-		case Kind::PlayCustomMusic:
-		case Kind::ShowCustomMusicControls:
-		case Kind::RunText:
-		case Kind::ReadTip:
-		case Kind::LookAtTempleScroll:
-		case Kind::PlayHandDemo:
-		case Kind::Reframe:
-		case Kind::RecordChallenge:
-		case Kind::EnterTemple:
-		case Kind::PlayBoatFilm:
-		// The mouse commands are given before a creature is looked for
-		case Kind::PointerTo:
-		case Kind::PointerPress:
-		case Kind::PointerRelease:
-		case Kind::PointerSweep:
-		case Kind::WheelTurn:
-		case Kind::PointerOnOpponent:
-		case Kind::PointerOnCaveCreature:
-		case Kind::PointerOnAltar:
-			break;
-		case Kind::SetDesire:
-		case Kind::SetPhase:
-		case Kind::RewardIf:
-		case Kind::SetMiracleSightings:
-			result = TeachMind(*entity, command);
-			break;
-		case Kind::SetAlight:
-		{
-			// With a value of 1, the scenario's object catches fire in place of the creature
-			const auto burning = command.value == 1 ? ObjectAt(command.object) : std::optional(*entity);
-			if (Locator::fireSystem::has_value() && burning.has_value())
-			{
-				Locator::fireSystem::value().SetOnFire(*burning, 0.0f);
-			}
-			result = Locator::fireSystem::has_value() && burning.has_value() ? "alight" : "no fire";
-			break;
 		}
-		case Kind::SetFizz:
-			if (Locator::creatureFizzSystem::has_value())
-			{
-				Locator::creatureFizzSystem::value().SetFizz(*entity, command.amount,
-				                                             static_cast<float>(command.value) / 1000.0f, false);
-			}
-			result = Locator::creatureFizzSystem::has_value() ? fmt::format("fizzes to {:.2f}", command.amount) : "no fizz";
-			break;
-		case Kind::SetFightLean:
+		Log(fmt::format("{:.1f}s: the player goes into temple room {}", _seconds, command.value));
+		return;
+	}
+	if (command.kind == Kind::Reframe)
+	{
+		Frame(_scenario->framing.shot, _scenario->framing.creature, _scenario->framing.distance);
+		Log(fmt::format("{:.1f}s: the camera is put back", _seconds));
+		return;
+	}
+	if (command.kind == Kind::SetHour)
+	{
+		if (Locator::skySystem::has_value())
+		{
+			Locator::skySystem::value().SetTime(command.hour);
+		}
+		Log(fmt::format("{:.1f}s: the hour is {:.1f}", _seconds, command.hour));
+		return;
+	}
+	if (command.kind == Kind::Advisor)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), GiveAdvisorCommand(command)));
+		return;
+	}
+	if (command.kind == Kind::SetOpenClose || command.kind == Kind::LayGateStone)
+	{
+		GiveSceneryCommand(command);
+		return;
+	}
+	if (command.kind == Kind::SetAlignment)
+	{
+		if (Locator::alignmentSystem::has_value())
+		{
+			Locator::alignmentSystem::value().SetPlayerAlignment(command.player, command.alignment);
+		}
+		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
+		return;
+	}
+	if (command.kind == Kind::EndGuidanceWaits)
+	{
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().EndWaits();
+		}
+		Log(fmt::format("{:.1f}s: the guidance's waits are over", _seconds));
+		return;
+	}
+	if (command.kind == Kind::RunHelpMessage)
+	{
+		const bool started =
+		    Locator::helpMessageSystem::has_value() && Locator::helpMessageSystem::value().RunMessageSet(command.value);
+		Log(fmt::format("{:.1f}s: the help message set {} {}", _seconds, command.value, started ? "runs" : "doesn't run"));
+		return;
+	}
+	if (command.kind == Kind::DestroyTemple)
+	{
+		const bool known = command.value < _temples.size();
+		if (known && Locator::templeDestructionSystem::has_value())
+		{
+			Locator::templeDestructionSystem::value().Start(_temples.at(command.value));
+		}
+		Log(fmt::format("{:.1f}s: temple {} {}", _seconds, command.value, known ? "starts being destroyed" : "isn't there"));
+		return;
+	}
+	if (command.kind == Kind::LookAtTempleScroll)
+	{
+		if (Locator::temple::has_value())
+		{
+			Locator::temple::value().LookAtScroll(command.value);
+		}
+		Log(fmt::format("{:.1f}s: the temple's camera looks at scroll {}", _seconds, command.value));
+		return;
+	}
+	if (command.kind == Kind::ReadTip)
+	{
+		// A sign far under the land, tapped once by the player
+		const auto text = static_cast<uint32_t>(command.value);
+		const auto category = static_cast<uint32_t>(std::lround(command.amount));
+		const bool read = Locator::scriptHighlightSystem::has_value();
+		if (read)
+		{
+			auto& highlights = Locator::scriptHighlightSystem::value();
+			const auto sign =
+			    highlights.Create(static_cast<uint32_t>(HighlightInfo::DidYouKnowSign), {0.0f, -1000.0f, 0.0f}, 0);
+			highlights.SetProperties(sign, text, category);
+			highlights.Tap(sign, true);
+		}
+		Log(fmt::format("{:.1f}s: tip {} of category {} {}", _seconds, text, category, read ? "read" : "not read"));
+		return;
+	}
+	if (command.kind == Kind::RunText)
+	{
+		// Not alone on its line and not waiting for a click, as the lessons' texts are shown
+		const bool shown = Locator::helpTextSystem::has_value() && Locator::helpTextSystem::value().IsStarted() &&
+		                   Locator::helpTextSystem::value().RunText(false, static_cast<uint32_t>(command.value), 0);
+		Log(fmt::format("{:.1f}s: help text {} {}", _seconds, command.value, shown ? "shown" : "not shown"));
+		return;
+	}
+	if (command.kind == Kind::PlayHandDemo)
+	{
+		if (Locator::handDemoSystem::has_value())
+		{
+			Locator::handDemoSystem::value().Play(command.handDemo, 0, false, false);
+		}
+		Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
+		return;
+	}
+	if (command.kind == Kind::WideScreen)
+	{
+		// Held by a script, as the land's scripts hold them, under a number no script task has: a task of that number
+		// stopping would take the bars away with it
+		constexpr uint32_t k_ScriptOwner = std::numeric_limits<uint32_t>::max();
+		if (Locator::cinematicDirectorSystem::has_value())
+		{
+			Locator::cinematicDirectorSystem::value().SetWideScreen(command.value != 0, k_ScriptOwner);
+		}
+		Log(fmt::format("{:.1f}s: the cinema bars slide {}", _seconds, command.value != 0 ? "in" : "out"));
+		return;
+	}
+	const auto entity = CreatureAt(command.creature);
+	if (!entity.has_value() || !Locator::creatureLocomotionSystem::has_value() || !Locator::creatureMindSystem::has_value())
+	{
+		return;
+	}
+	const auto& setup = _scenario->creatures[command.creature];
+	const auto who = setup.label.empty() ? fmt::format("creature {}", command.creature) : std::string(setup.label);
+	// Lying out cold, it does nothing it is told until it comes round
+	if (const auto* needs = Locator::entitiesRegistry::value().TryGet<const CreatureNeeds>(*entity);
+	    needs != nullptr && needs->rest == CreatureNeeds::Rest::Unconscious && command.kind != Kind::BringRound)
+	{
+		Log(fmt::format("{:.1f}s: {} {}: out cold", _seconds, who, Name(command.kind)));
+		return;
+	}
+	auto& locomotion = Locator::creatureLocomotionSystem::value();
+	auto& minds = Locator::creatureMindSystem::value();
+	const auto point = MapPoint(_middle, command.point);
+	std::string result;
+	switch (command.kind)
+	{
+	case Kind::WalkTo:
+	case Kind::RunTo:
+		result =
+		    MoveResultName(locomotion.MoveTo(*entity, point, command.kind == Kind::RunTo ? Pace::Run : Pace::Walk, 0.0f, 1.0f));
+		break;
+	case Kind::ScriptPlay:
+		result = minds.CarryOutForScript(
+		             *entity, creature_script_play::Agenda({.animation = static_cast<int32_t>(command.value),
+		                                                    .plays = static_cast<uint32_t>(std::lround(command.amount))}))
+		             ? "playing"
+		             : "can't";
+		break;
+	case Kind::DoAction:
+	{
+		const auto* tables = minds.GetTables();
+		const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, command.action) : std::nullopt;
+		const auto target = command.onTemple && !_temples.empty()          ? std::optional(_temples.front())
+		                    : command.onGlobe && command.globe.has_value() ? GlobeAt(*command.globe)
+		                                                                   : ObjectAt(command.object);
+		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
+		                  : command.with.has_value()                    ? ObjectAt(*command.with)
+		                                                                : std::nullopt;
+		result = !action.has_value()                                     ? "no such action"
+		         : !target.has_value()                                   ? "no such object"
+		         : minds.ScriptDoAction(*entity, *action, *target, with) ? fmt::format("doing {}", command.action)
+		                                                                 : "can't";
+		break;
+	}
+	case Kind::MakeFriends:
+		if (const auto other = CreatureAt(command.value))
 		{
 			auto& registry = Locator::entitiesRegistry::value();
-			auto* found = registry.TryGet<ecs::components::CreatureFightRecord>(*entity);
-			auto& record = found != nullptr ? *found : registry.Assign<ecs::components::CreatureFightRecord>(*entity);
-			record.tendency = command.amount;
-			result = fmt::format("leans {:+.2f}", record.tendency);
-			break;
-		}
-		case Kind::SeeSkill:
-			minds.SeeSkill(Locator::entitiesRegistry::value().Get<Transform>(*entity).position, command.value);
-			break;
-		case Kind::SeeMiracle:
-			minds.SeeMiracle(Locator::entitiesRegistry::value().Get<Transform>(*entity).position, command.value);
-			break;
-		case Kind::KnowMiracle:
-			minds.KnowMiracle(*entity, command.value);
-			break;
-		case Kind::CastMiracle:
-		{
-			const auto target = command.atCreature.has_value() ? CreatureAt(*command.atCreature) : ObjectAt(command.object);
-			result = !target.has_value()                                                       ? "nothing to cast at"
-			         : minds.TellCast(*entity, static_cast<MagicType>(command.value), *target) ? ""
-			                                                                                   : "can't";
-			break;
-		}
-		case Kind::PlayerDid:
-		{
-			const auto& land = Locator::terrainSystem::value();
-			minds.PlayerDid(command.value, glm::vec3(point.x, land.GetHeightAt(point), point.y), std::nullopt, std::nullopt);
-			break;
-		}
-		case Kind::PlayerDidOn:
-		{
-			const auto object = ObjectAt(command.object);
-			const auto* at = object.has_value() ? Locator::entitiesRegistry::value().TryGet<const Transform>(*object) : nullptr;
-			if (at == nullptr)
+			for (const auto each : {*entity, *other})
 			{
-				result = "no such object";
-				break;
+				if (!registry.AllOf<ecs::components::CreatureFriends>(each))
+				{
+					registry.Assign<ecs::components::CreatureFriends>(each);
+				}
 			}
-			minds.PlayerDid(command.value, at->position, object, std::nullopt);
-			break;
+			creature_activity::MakeFriends(
+			    registry.Get<ecs::components::CreatureFriends>(*entity).friends, entt::to_integral(*entity),
+			    registry.Get<ecs::components::CreatureFriends>(*other).friends, entt::to_integral(*other));
+			result = "friends";
 		}
+		else
+		{
+			result = "no such creature";
 		}
-		Log(fmt::format("{:.1f}s: {} {}{}{}", _seconds, who, Name(command.kind), result.empty() ? "" : ": ", result));
+		break;
+	case Kind::SwapMinds:
+		if (const auto other = CreatureAt(command.value))
+		{
+			result = minds.SwapMinds(*entity, *other) ? "swapped" : "can't";
+		}
+		else
+		{
+			result = "no such creature";
+		}
+		break;
+	case Kind::WalkHome:
+		if (const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
+		    leash != nullptr && leash->home.has_value())
+		{
+			result =
+			    MoveResultName(locomotion.MoveTo(*entity, glm::vec2(leash->home->x, leash->home->z), Pace::Walk, 0.0f, 1.0f));
+		}
+		else
+		{
+			result = "it has no home";
+		}
+		break;
+	case Kind::Follow:
+		if (const auto leader = CreatureAt(command.value))
+		{
+			const auto size = ShownSize(Locator::entitiesRegistry::value().Get<Creature>(*entity));
+			result = MoveResultName(locomotion.Follow(*entity, *leader, k_FollowDistance * std::max(size, 0.5f), Pace::Walk));
+		}
+		break;
+	case Kind::FleeFrom:
+		result = MoveResultName(locomotion.FleeFrom(*entity, point));
+		break;
+	case Kind::TurnToFace:
+		result = locomotion.TurnToFace(*entity, point) ? "turning" : "can't";
+		break;
+	case Kind::FaceCamera:
+		result = locomotion.TurnToFace(*entity, glm::xz(Locator::camera::value().GetOrigin())) ? "turning" : "can't";
+		break;
+	case Kind::Stop:
+		locomotion.Stop(*entity);
+		break;
+	case Kind::PlayAction:
+		result = minds.PlayAction(*entity, command.value) ? "playing" : "busy";
+		break;
+	case Kind::PlayGesture:
+		result = minds.PlayGesture(*entity, command.value) ? "playing" : "busy";
+		break;
+	case Kind::PullFace:
+		minds.PullFace(*entity, command.value);
+		break;
+	case Kind::CreatureDrawGesture:
+		result = minds.DrawGesture(*entity, static_cast<uint32_t>(command.value)) ? "drawing" : "busy";
+		break;
+	case Kind::ShowFeeling:
+		if (const auto face = minds.ShowFeeling(*entity, static_cast<creature_face::Cue>(command.value)))
+		{
+			result = creature_face::Name(face->face);
+		}
+		break;
+	case Kind::SitDown:
+		result = minds.SitDown(*entity) ? "sitting" : "busy";
+		break;
+	case Kind::StandUp:
+		minds.StandUp(*entity);
+		break;
+	case Kind::Sleep:
+		result = minds.Sleep(*entity) ? "started" : "can't";
+		break;
+	case Kind::Wake:
+		minds.Wake(*entity);
+		break;
+	case Kind::Eat:
+		result = minds.Eat(*entity, std::nullopt) ? "started" : "nothing to eat";
+		break;
+	case Kind::Drink:
+		result = minds.Drink(*entity) ? "started" : "no water near";
+		break;
+	case Kind::Poo:
+		result = minds.Poo(*entity) ? "started" : "can't";
+		break;
+	case Kind::Fart:
+		// A fart is always a plan for the desire to poo
+		result = minds.ForcePlan(*entity, {.desire = creature_desires::Desire::Poo, .action = "Fart"}) ? "started" : "can't";
+		break;
+	case Kind::Puke:
+		result = minds.Puke(*entity) ? "started" : "can't";
+		break;
+	case Kind::Faint:
+		result = minds.Faint(*entity) ? "started" : "can't";
+		break;
+	case Kind::Stroke:
+	case Kind::Slap:
+		// As a whole session of the hand on the creature would, a full reward or punishment as the hand lets go
+		minds.ReceiveFeedback(*entity, command.kind == Kind::Stroke ? 1.0f : -1.0f);
+		break;
+	case Kind::PickUp:
+	case Kind::PutDown:
+	case Kind::Discard:
+	case Kind::EatHeld:
+	case Kind::Examine:
+	case Kind::ThrowAt:
+	case Kind::KnockDown:
+	case Kind::PointAt:
+		result = GiveObjectCommand(*entity, command);
+		break;
+	case Kind::HandStroke:
+	case Kind::HandSlap:
+	case Kind::HandLetGo:
+		result = GiveHandCommand(*entity, command);
+		break;
+	case Kind::PutOnLeash:
+	case Kind::TieLeash:
+	case Kind::UntieLeash:
+	case Kind::TakeOffLeash:
+	case Kind::ConfineToHome:
+	case Kind::MakeLeashable:
+	case Kind::HandTapLeash:
+	case Kind::LeashKey:
+	case Kind::LeashShake:
+	case Kind::LeashOrderAt:
+	case Kind::LeashOrderOn:
+	case Kind::HangLeashPosts:
+	case Kind::TapLeashPost:
+	case Kind::LeashTapBuilding:
+		result = GiveLeashCommand(*entity, command);
+		break;
+	case Kind::StartFight:
+	case Kind::FightBlow:
+	case Kind::FightBlock:
+	case Kind::FightStep:
+	case Kind::FightSpecial:
+	case Kind::FightAuto:
+	case Kind::FightSpell:
+	case Kind::FightView:
+	case Kind::FightAutopilot:
+	case Kind::FightLessonCheck:
+	case Kind::KnockOut:
+	case Kind::BringRound:
+	case Kind::FightAbort:
+	case Kind::TieLeashToCreature:
+		result = GiveFightCommand(*entity, command);
+		break;
+	case Kind::CreatureKey:
+	case Kind::DoubleClick:
+	case Kind::CameraKeys:
+	case Kind::ClearCameraView:
+	case Kind::LeaveCreatureMode:
+	case Kind::OpenCreatureCave:
+	case Kind::ApplyTattoo:
+	case Kind::RemoveTattoo:
+	case Kind::OpenTattooEditor:
+		result = GiveCreatureModeCommand(*entity, command);
+		break;
+	case Kind::HandGive:
+		result = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GiveHeldTo(*entity)
+		             ? "given"
+		             : "the hand gives nothing";
+		break;
+	case Kind::SetHour:
+	case Kind::HoldSeed:
+	case Kind::DrawGesture:
+	case Kind::SummonSeed:
+	case Kind::PressKey:
+	case Kind::HandTakeFireBall:
+	case Kind::HandTapObject:
+	case Kind::HandTake:
+	case Kind::HandPour:
+	case Kind::HandRelease:
+	case Kind::RemoveObject:
+	case Kind::HandGripTotem:
+	case Kind::SetAlignment:
+	case Kind::Advisor:
+	case Kind::DestroyTemple:
+	case Kind::SetOpenClose:
+	case Kind::LayGateStone:
+	case Kind::WideScreen:
+	case Kind::RunHelpMessage:
+	case Kind::EndGuidanceWaits:
+	case Kind::ProfileFolderCheck:
+	case Kind::OwnTattooPicture:
+	case Kind::PlayCustomMusic:
+	case Kind::ShowCustomMusicControls:
+	case Kind::RunText:
+	case Kind::ReadTip:
+	case Kind::LookAtTempleScroll:
+	case Kind::PlayHandDemo:
+	case Kind::Reframe:
+	case Kind::RecordChallenge:
+	case Kind::EnterTemple:
+	case Kind::PlayBoatFilm:
+	// The mouse commands are given before a creature is looked for
+	case Kind::PointerTo:
+	case Kind::PointerPress:
+	case Kind::PointerRelease:
+	case Kind::PointerSweep:
+	case Kind::WheelTurn:
+	case Kind::PointerOnOpponent:
+	case Kind::PointerOnCaveCreature:
+	case Kind::PointerOnAltar:
+		break;
+	case Kind::SetDesire:
+	case Kind::SetPhase:
+	case Kind::RewardIf:
+	case Kind::SetMiracleSightings:
+		result = TeachMind(*entity, command);
+		break;
+	case Kind::SetAlight:
+	{
+		// With a value of 1, the scenario's object catches fire in place of the creature
+		const auto burning = command.value == 1 ? ObjectAt(command.object) : std::optional(*entity);
+		if (Locator::fireSystem::has_value() && burning.has_value())
+		{
+			Locator::fireSystem::value().SetOnFire(*burning, 0.0f);
+		}
+		result = Locator::fireSystem::has_value() && burning.has_value() ? "alight" : "no fire";
+		break;
 	}
-
-	void Runner::GiveSceneryCommand(const Command& command)
+	case Kind::SetFizz:
+		if (Locator::creatureFizzSystem::has_value())
+		{
+			Locator::creatureFizzSystem::value().SetFizz(*entity, command.amount, static_cast<float>(command.value) / 1000.0f,
+			                                             false);
+		}
+		result = Locator::creatureFizzSystem::has_value() ? fmt::format("fizzes to {:.2f}", command.amount) : "no fizz";
+		break;
+	case Kind::SetFightLean:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		auto* found = registry.TryGet<ecs::components::CreatureFightRecord>(*entity);
+		auto& record = found != nullptr ? *found : registry.Assign<ecs::components::CreatureFightRecord>(*entity);
+		record.tendency = command.amount;
+		result = fmt::format("leans {:+.2f}", record.tendency);
+		break;
+	}
+	case Kind::SeeSkill:
+		minds.SeeSkill(Locator::entitiesRegistry::value().Get<Transform>(*entity).position, command.value);
+		break;
+	case Kind::SeeMiracle:
+		minds.SeeMiracle(Locator::entitiesRegistry::value().Get<Transform>(*entity).position, command.value);
+		break;
+	case Kind::KnowMiracle:
+		minds.KnowMiracle(*entity, command.value);
+		break;
+	case Kind::CastMiracle:
+	{
+		const auto target = command.atCreature.has_value() ? CreatureAt(*command.atCreature) : ObjectAt(command.object);
+		result = !target.has_value()                                                       ? "nothing to cast at"
+		         : minds.TellCast(*entity, static_cast<MagicType>(command.value), *target) ? ""
+		                                                                                   : "can't";
+		break;
+	}
+	case Kind::PlayerDid:
+	{
+		const auto& land = Locator::terrainSystem::value();
+		minds.PlayerDid(command.value, glm::vec3(point.x, land.GetHeightAt(point), point.y), std::nullopt, std::nullopt);
+		break;
+	}
+	case Kind::PlayerDidOn:
 	{
 		const auto object = ObjectAt(command.object);
-		if (!object.has_value() || !Locator::animatedStaticSystem::has_value())
+		const auto* at = object.has_value() ? Locator::entitiesRegistry::value().TryGet<const Transform>(*object) : nullptr;
+		if (at == nullptr)
 		{
-			Log(fmt::format("{:.1f}s: no such object", _seconds));
-			return;
+			result = "no such object";
+			break;
 		}
-		auto& scenery = Locator::animatedStaticSystem::value();
-		if (command.kind == Kind::SetOpenClose)
-		{
-			const bool done = scenery.SetOpenState(*object, static_cast<int32_t>(command.value));
-			Log(fmt::format("{:.1f}s: {} object {}{}", _seconds, command.value == 1 ? "opened" : "closed", command.object,
-			                done ? "" : ", which isn't animated scenery"));
-			return;
-		}
-		// As the hand gives it: laid in the plinth, the stone is used up, leaving its ghost
-		const auto plinth = ObjectAt(command.value);
-		if (plinth.has_value() && scenery.LayGateStone(*plinth, *object))
-		{
-			ecs::world_objects::LeaveGhost(*object);
-			ecs::world_objects::Remove(*object);
-			Log(fmt::format("{:.1f}s: object {} laid in the plinth, now worth {}", _seconds, command.object,
-			                scenery.GateStoneValue(*plinth).value_or(0)));
-			return;
-		}
-		Log(fmt::format("{:.1f}s: object {} isn't taken by object {}", _seconds, command.object, command.value));
+		minds.PlayerDid(command.value, at->position, object, std::nullopt);
+		break;
 	}
+	}
+	Log(fmt::format("{:.1f}s: {} {}{}{}", _seconds, who, Name(command.kind), result.empty() ? "" : ": ", result));
+}
 
-	std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command& command)
+void Runner::GiveSceneryCommand(const Command& command)
+{
+	const auto object = ObjectAt(command.object);
+	if (!object.has_value() || !Locator::animatedStaticSystem::has_value())
 	{
-		if (!Locator::creatureModeSystem::has_value() || !Locator::creatureCaveSystem::has_value())
+		Log(fmt::format("{:.1f}s: no such object", _seconds));
+		return;
+	}
+	auto& scenery = Locator::animatedStaticSystem::value();
+	if (command.kind == Kind::SetOpenClose)
+	{
+		const bool done = scenery.SetOpenState(*object, static_cast<int32_t>(command.value));
+		Log(fmt::format("{:.1f}s: {} object {}{}", _seconds, command.value == 1 ? "opened" : "closed", command.object,
+		                done ? "" : ", which isn't animated scenery"));
+		return;
+	}
+	// As the hand gives it: laid in the plinth, the stone is used up, leaving its ghost
+	const auto plinth = ObjectAt(command.value);
+	if (plinth.has_value() && scenery.LayGateStone(*plinth, *object))
+	{
+		ecs::world_objects::LeaveGhost(*object);
+		ecs::world_objects::Remove(*object);
+		Log(fmt::format("{:.1f}s: object {} laid in the plinth, now worth {}", _seconds, command.object,
+		                scenery.GateStoneValue(*plinth).value_or(0)));
+		return;
+	}
+	Log(fmt::format("{:.1f}s: object {} isn't taken by object {}", _seconds, command.object, command.value));
+}
+
+std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command& command)
+{
+	if (!Locator::creatureModeSystem::has_value() || !Locator::creatureCaveSystem::has_value())
+	{
+		return "no creature mode";
+	}
+	auto& mode = Locator::creatureModeSystem::value();
+	auto& cave = Locator::creatureCaveSystem::value();
+	const auto following = [&mode] {
+		const auto followed = mode.GetCreature();
+		return followed.has_value() ? fmt::format("following entity {}", static_cast<uint32_t>(*followed))
+		                            : std::string("the camera is the player's");
+	};
+	switch (command.kind)
+	{
+	case Kind::CreatureKey:
+		mode.PressCreatureKey();
+		return following();
+	case Kind::DoubleClick:
+	{
+		// Two presses of the left button on the creature, a fifth of a second apart
+		const auto now = static_cast<uint32_t>(_seconds * 1000.0f) + 1;
+		mode.Press({.milliseconds = now, .creature = creature});
+		mode.Press({.milliseconds = now + 200, .creature = creature});
+		return following();
+	}
+	case Kind::CameraKeys:
+	{
+		constexpr std::array<glm::ivec2, 4> k_Directions {{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}};
+		const auto direction = k_Directions.at(std::min<size_t>(command.value, k_Directions.size() - 1));
+		mode.HoldKeys(direction.x, direction.y, !command.ctrl, command.ctrl, command.amount);
+		return mode.IsActive() ? "" : "not in Creature Mode";
+	}
+	case Kind::ClearCameraView:
+		mode.ClearView();
+		if (const auto view = mode.GetView(); view.has_value())
 		{
-			return "no creature mode";
+			return fmt::format("heading {:.2f}, pitch {:.2f}", view->yaw, view->pitch);
 		}
-		auto& mode = Locator::creatureModeSystem::value();
-		auto& cave = Locator::creatureCaveSystem::value();
-		const auto following = [&mode] {
-			const auto followed = mode.GetCreature();
-			return followed.has_value() ? fmt::format("following entity {}", static_cast<uint32_t>(*followed))
-			                            : std::string("the camera is the player's");
+		return "not in Creature Mode";
+	case Kind::LeaveCreatureMode:
+		mode.Leave();
+		return following();
+	case Kind::OpenCreatureCave:
+		cave.Open();
+		cave.GetScreen().page = static_cast<creature_cave::Page>(command.value);
+		cave.GetScreen().pageRequested = true;
+		return cave.GetCreature().has_value() ? "" : "the player has no creature";
+	case Kind::ApplyTattoo:
+		return cave.ApplyTattoo(static_cast<uint8_t>(command.bodyPart), static_cast<uint8_t>(command.value),
+		                        glm::u8vec3(180, 30, 30))
+		           ? ""
+		           : "can't";
+	case Kind::RemoveTattoo:
+		return cave.RemoveTattoo(static_cast<uint8_t>(command.bodyPart)) ? "" : "nothing there";
+	case Kind::OpenTattooEditor:
+	{
+		const auto caveCreature = cave.GetCreature();
+		if (!caveCreature.has_value() || !Locator::tattooEditorSystem::has_value())
+		{
+			return "the player has no creature";
+		}
+		const auto& transform = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(*caveCreature);
+		Locator::tattooEditorSystem::value().Open(*caveCreature,
+		                                          creature_tattoo_editor::CaveView(transform.position, transform.scale.x));
+		return "";
+	}
+	default:
+		return {};
+	}
+}
+
+std::string Runner::TeachMind(entt::entity entity, const Command& command)
+{
+	auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(entity);
+	if (mind == nullptr)
+	{
+		return "no mind";
+	}
+	switch (command.kind)
+	{
+	case Kind::SetDesire:
+		if (mind->desires.has_value() && command.value < creature_desires::k_DesireCount)
+		{
+			auto& state = mind->desires->desires.at(command.value);
+			state.activated = true;
+			state.suppressedTurns = 0;
+			state.value = command.amount * std::max(state.max, 0.0f);
+			return fmt::format("{} {:.2f}", creature_desires::Name(static_cast<creature_desires::Desire>(command.value)),
+			                   state.value);
+		}
+		return "no desires yet";
+	case Kind::SetPhase:
+		mind->developmentPhase = static_cast<uint32_t>(command.value);
+		return fmt::format("stage {}", command.value);
+	case Kind::SetMiracleSightings:
+	{
+		if (!mind->learnt.has_value())
+		{
+			return "nothing learnt yet";
+		}
+		auto& knowledge = mind->learnt->knowledge;
+		if (command.value >= knowledge.miraclesSeen.size() || command.value >= knowledge.miraclesKnown.size())
+		{
+			return "no such miracle";
+		}
+		knowledge.miraclesSeen.at(command.value).count = static_cast<uint32_t>(command.amount);
+		knowledge.miraclesKnown.at(command.value) = true;
+		return fmt::format("miracle {} seen {} times", command.value, knowledge.miraclesSeen.at(command.value).count);
+	}
+	case Kind::RewardIf:
+		// From now on each thing it does to something is judged as soon as it is done
+		mind->trainer = static_cast<uint32_t>(command.value);
+		return fmt::format("trained: stroked for a {}, slapped for anything else",
+		                   creature_tree::BeliefName(static_cast<uint32_t>(command.value)));
+	default:
+		return {};
+	}
+}
+
+void Runner::LoadMindFile(entt::entity entity, std::string_view name)
+{
+	constexpr std::string_view k_Chosen = "chosen:";
+	constexpr std::string_view k_Game = "game:";
+	std::filesystem::path gameFolder;
+	if (Locator::filesystem::has_value())
+	{
+		gameFolder = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true);
+	}
+	std::filesystem::path path;
+	if (name.starts_with(k_Chosen))
+	{
+		// The mind file last opened with the spawner's file dialog, else the game's own mind of that name
+		std::error_code error;
+		const auto chosen = file_dialog::RememberedPath("creature-mind-file");
+		if (chosen.has_value() && std::filesystem::is_regular_file(*chosen, error))
+		{
+			path = *chosen;
+		}
+		else if (!gameFolder.empty())
+		{
+			path = gameFolder / name.substr(k_Chosen.size());
+		}
+	}
+	else if (name.starts_with(k_Game) && !gameFolder.empty())
+	{
+		path = gameFolder / name.substr(k_Game.size());
+	}
+	auto data = std::make_shared<creaturemind::MindFileData>();
+	const auto result = path.empty() ? creaturemind::MindResult::ErrCantOpen : creaturemind::ReadFile(path, *data);
+	if (result == creaturemind::MindResult::Success && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().LoadMind(entity, data);
+	}
+	Log(fmt::format("mind file {}: {}", path.empty() ? std::string(name) : path.filename().string(),
+	                creaturemind::ResultToStr(result)));
+}
+
+void Runner::Frame(Shot shot, size_t creature, float distance)
+{
+	_shot = shot;
+	_shotCreature = creature;
+	_shotDistance = distance;
+	UpdateCamera();
+}
+
+void Runner::UpdateCamera()
+{
+	if (!_shot.has_value() || _scenario == nullptr || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	// Creature Mode takes the camera from the scenario's shot for good
+	if (Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().IsActive())
+	{
+		_shot.reset();
+		return;
+	}
+	auto& camera = Locator::camera::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& land = Locator::terrainSystem::value();
+	std::optional<CameraPlacement> placement;
+	switch (*_shot)
+	{
+	case Shot::Testbed:
+		// As the testbed leaves it: south of the middle and up, looking north just east of the middle
+		placement = CameraPlacement {
+		    .origin = {_middle.x + flat_land::k_CameraAside, land.GetHeightAt(_middle) + flat_land::k_CameraHeight,
+		               _middle.y - flat_land::k_CameraBack},
+		    .focus = {_middle.x + flat_land::k_CameraAside, land.GetHeightAt(_middle), _middle.y},
 		};
-		switch (command.kind)
+		break;
+	case Shot::Overview:
+	{
+		std::vector<glm::vec2> points;
+		for (size_t i = 0; i < _creatures.size(); ++i)
 		{
-		case Kind::CreatureKey:
-			mode.PressCreatureKey();
-			return following();
-		case Kind::DoubleClick:
-		{
-			// Two presses of the left button on the creature, a fifth of a second apart
-			const auto now = static_cast<uint32_t>(_seconds * 1000.0f) + 1;
-			mode.Press({.milliseconds = now, .creature = creature});
-			mode.Press({.milliseconds = now + 200, .creature = creature});
-			return following();
-		}
-		case Kind::CameraKeys:
-		{
-			constexpr std::array<glm::ivec2, 4> k_Directions {{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}};
-			const auto direction = k_Directions.at(std::min<size_t>(command.value, k_Directions.size() - 1));
-			mode.HoldKeys(direction.x, direction.y, !command.ctrl, command.ctrl, command.amount);
-			return mode.IsActive() ? "" : "not in Creature Mode";
-		}
-		case Kind::ClearCameraView:
-			mode.ClearView();
-			if (const auto view = mode.GetView(); view.has_value())
+			if (const auto entity = CreatureAt(i))
 			{
-				return fmt::format("heading {:.2f}, pitch {:.2f}", view->yaw, view->pitch);
+				points.push_back(glm::xz(registry.Get<Transform>(*entity).position));
 			}
-			return "not in Creature Mode";
-		case Kind::LeaveCreatureMode:
-			mode.Leave();
-			return following();
-		case Kind::OpenCreatureCave:
-			cave.Open();
-			cave.GetScreen().page = static_cast<creature_cave::Page>(command.value);
-			cave.GetScreen().pageRequested = true;
-			return cave.GetCreature().has_value() ? "" : "the player has no creature";
-		case Kind::ApplyTattoo:
-			return cave.ApplyTattoo(static_cast<uint8_t>(command.bodyPart), static_cast<uint8_t>(command.value),
-			                        glm::u8vec3(180, 30, 30))
-			           ? ""
-			           : "can't";
-		case Kind::RemoveTattoo:
-			return cave.RemoveTattoo(static_cast<uint8_t>(command.bodyPart)) ? "" : "nothing there";
-		case Kind::OpenTattooEditor:
-		{
-			const auto caveCreature = cave.GetCreature();
-			if (!caveCreature.has_value() || !Locator::tattooEditorSystem::has_value())
-			{
-				return "the player has no creature";
-			}
-			const auto& transform = Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(*caveCreature);
-			Locator::tattooEditorSystem::value().Open(*caveCreature,
-			                                          creature_tattoo_editor::CaveView(transform.position, transform.scale.x));
-			return "";
 		}
-		default:
-			return {};
+		for (const auto& object : _scenario->objects)
+		{
+			points.push_back(MapPoint(_middle, object.offset));
+		}
+		for (const auto& particle : _scenario->particles)
+		{
+			points.push_back(MapPoint(_middle, particle.offset));
+		}
+		for (const auto& extra : _scenario->framing.include)
+		{
+			points.push_back(MapPoint(_middle, extra));
+		}
+		// And everywhere the creatures are sent
+		for (const auto& command : _scenario->commands)
+		{
+			if (HasPoint(command.kind))
+			{
+				points.push_back(MapPoint(_middle, command.point));
+			}
+		}
+		const auto bounds = BoundsOf(points, glm::vec2(k_MinOverviewHalfSize));
+		placement = Overview({bounds.centre.x, land.GetHeightAt(bounds.centre), bounds.centre.y}, bounds.halfSize,
+		                     FieldsOfView(camera), _shotDistance);
+		break;
+	}
+	case Shot::Placed:
+	{
+		const auto eye = MapPoint(_middle, {_scenario->framing.eye.x, _scenario->framing.eye.z});
+		const auto look = MapPoint(_middle, {_scenario->framing.look.x, _scenario->framing.look.z});
+		placement = CameraPlacement {
+		    .origin = {eye.x, land.GetHeightAt(eye) + _scenario->framing.eye.y, eye.y},
+		    .focus = {look.x, land.GetHeightAt(look) + _scenario->framing.look.y, look.y},
+		};
+		break;
+	}
+	case Shot::Follow:
+	case Shot::Head:
+		if (const auto entity = CreatureAt(_shotCreature))
+		{
+			const auto& transform = registry.Get<Transform>(*entity);
+			const auto height = CreatureHeight(ShownSize(registry.Get<Creature>(*entity)));
+			placement = *_shot == Shot::Follow ? Follow(transform.position, height, _shotDistance)
+			                                   : Head(transform.position, AheadOf(transform), height, _shotDistance);
+		}
+		break;
+	}
+	if (placement.has_value())
+	{
+		camera.SetOrigin(placement->origin).SetFocus(placement->focus);
+	}
+	// A shot of everything is taken once; following and close ups keep up with the creature
+	if (*_shot == Shot::Overview || *_shot == Shot::Testbed || *_shot == Shot::Placed)
+	{
+		_shot.reset();
+	}
+}
+
+void Runner::Update(float seconds)
+{
+	if (_scenario == nullptr)
+	{
+		return;
+	}
+	UpdateCamera();
+	if (!_running)
+	{
+		return;
+	}
+	// Another land was loaded over the testbed
+	const auto gone = [](entt::entity entity) { return !Locator::entitiesRegistry::value().Valid(entity); };
+	if ((!_creatures.empty() && std::ranges::none_of(std::views::iota(size_t {0}, _creatures.size()),
+	                                                 [this](size_t i) { return CreatureAt(i).has_value(); })) ||
+	    (!_crowdEntities.empty() && gone(_crowdEntities.front())))
+	{
+		_running = false;
+		_shot.reset();
+		Log("Its creatures are gone");
+		return;
+	}
+	_seconds += seconds;
+	LogMiracles();
+	Measure();
+	SpawnCrowd();
+	UpdateParticles(seconds);
+	UpdateVortices();
+	UpdateRewards();
+	UpdateMiracles(seconds);
+	UpdateVillagerWalks();
+	UpdateThrows();
+	WatchGesture();
+	FinishTakingFireBall();
+	ApplyStates();
+	UpdatePointer(seconds);
+	const auto due = Advance(_timeline, _scenario->commands, _scenario->repeatFrom, seconds, [this](const Command& command) {
+		const bool toHand =
+		    command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed;
+		if (toHand)
+		{
+			return !Locator::gestureSystem::has_value() || !Locator::gestureSystem::value().IsDrawingPath();
+		}
+		return IsFree(command.creature);
+	});
+	for (const auto index : due)
+	{
+		Give(_scenario->commands[index]);
+	}
+}
+
+void Runner::UpdateThrows()
+{
+	if (!Locator::dynamicsSystem::has_value() || !Locator::entitiesRegistry::has_value() ||
+	    !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& dynamics = Locator::dynamicsSystem::value();
+	for (size_t i = 0; i < _throwsDue.size() && i < _scenario->throws.size(); ++i)
+	{
+		auto& due = _throwsDue.at(i);
+		if (!due.has_value() || _seconds < *due)
+		{
+			continue;
+		}
+		const auto& setup = _scenario->throws.at(i);
+		const auto object = setup.object < _objects.size() ? _objects.at(setup.object) : entt::null;
+		// What broke or went is thrown no more
+		if (!registry.Valid(object) || !registry.AllOf<ecs::components::Transform>(object))
+		{
+			due.reset();
+			continue;
+		}
+		// Still flying from the last throw: it is thrown once it lands
+		if (registry.AllOf<ecs::components::InPhysics>(object))
+		{
+			continue;
+		}
+		auto& transform = registry.Get<ecs::components::Transform>(object);
+		const auto point =
+		    setup.from.has_value() ? MapPoint(_middle, *setup.from) : glm::vec2(transform.position.x, transform.position.z);
+		transform.position = {point.x, Locator::terrainSystem::value().GetHeightAt(point) + setup.height, point.y};
+		registry.SetDirty();
+		const auto result = dynamics.LetGoFromHand(object, {.velocity = setup.velocity, .player = PlayerNames::PLAYER_ONE});
+		if (!result.accepted)
+		{
+			Log(fmt::format("{:.1f}s: object {} wasn't thrown", _seconds, setup.object));
+		}
+		due = setup.repeatSeconds.has_value() ? std::optional(*due + *setup.repeatSeconds) : std::nullopt;
+	}
+}
+
+void Runner::PlaceDispensers(const Scenario& scenario)
+{
+	if (!KeepsDispenserGrid(scenario))
+	{
+		testbed_dispensers::RemoveGrid();
+	}
+	if (!Locator::magicSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto& magic = Locator::magicSystem::value();
+	for (const auto& dispenser : scenario.dispensers)
+	{
+		const auto point = MapPoint(_middle, dispenser.offset);
+		const float ground = Locator::terrainSystem::value().GetHeightAt(point);
+		if (dispenser.bubbleHeight.has_value())
+		{
+			_globes.push_back(magic.CreateOneOffSeedFor({point.x, ground + *dispenser.bubbleHeight, point.y}, dispenser.type));
+		}
+		else if (dispenser.reward)
+		{
+			PlaceRewardDispenser(dispenser, {point.x, ground, point.y});
+		}
+		else
+		{
+			const auto made = magic.CreateDispenser({point.x, ground, point.y}, dispenser.type, 0.0f);
+			if (dispenser.charged && made != entt::null)
+			{
+				magic.ChargeDispenser(made);
+			}
 		}
 	}
+}
 
-	std::string Runner::TeachMind(entt::entity entity, const Command& command)
+void Runner::PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 position)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& magic = Locator::magicSystem::value();
+	entt::entity town = entt::null;
+	if (!setup.noTown)
 	{
-		auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(entity);
-		if (mind == nullptr)
-		{
-			return "no mind";
-		}
-		switch (command.kind)
-		{
-		case Kind::SetDesire:
-			if (mind->desires.has_value() && command.value < creature_desires::k_DesireCount)
-			{
-				auto& state = mind->desires->desires.at(command.value);
-				state.activated = true;
-				state.suppressedTurns = 0;
-				state.value = command.amount * std::max(state.max, 0.0f);
-				return fmt::format("{} {:.2f}", creature_desires::Name(static_cast<creature_desires::Desire>(command.value)),
-				                   state.value);
-			}
-			return "no desires yet";
-		case Kind::SetPhase:
-			mind->developmentPhase = static_cast<uint32_t>(command.value);
-			return fmt::format("stage {}", command.value);
-		case Kind::SetMiracleSightings:
-		{
-			if (!mind->learnt.has_value())
-			{
-				return "nothing learnt yet";
-			}
-			auto& knowledge = mind->learnt->knowledge;
-			if (command.value >= knowledge.miraclesSeen.size() || command.value >= knowledge.miraclesKnown.size())
-			{
-				return "no such miracle";
-			}
-			knowledge.miraclesSeen.at(command.value).count = static_cast<uint32_t>(command.amount);
-			knowledge.miraclesKnown.at(command.value) = true;
-			return fmt::format("miracle {} seen {} times", command.value, knowledge.miraclesSeen.at(command.value).count);
-		}
-		case Kind::RewardIf:
-			// From now on each thing it does to something is judged as soon as it is done
-			mind->trainer = static_cast<uint32_t>(command.value);
-			return fmt::format("trained: stroked for a {}, slapped for anything else",
-			                   creature_tree::BeliefName(static_cast<uint32_t>(command.value)));
-		default:
-			return {};
-		}
+		const auto id = ScenarioTown(_middle);
+		town = registry.Context().towns.at(id);
 	}
-
-	void Runner::LoadMindFile(entt::entity entity, std::string_view name)
+	// As the reward script does: the dispenser, its miracle with the building's own period, then turned on
+	const auto made = magic.CreateScriptDispenser(position, AbodeInfo::NorseSpellDispenser, 0.0f, 1.0f, town);
+	if (made == entt::null)
 	{
-		constexpr std::string_view k_Chosen = "chosen:";
-		constexpr std::string_view k_Game = "game:";
-		std::filesystem::path gameFolder;
-		if (Locator::filesystem::has_value())
-		{
-			gameFolder = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true);
-		}
-		std::filesystem::path path;
-		if (name.starts_with(k_Chosen))
-		{
-			// The mind file last opened with the spawner's file dialog, else the game's own mind of that name
-			std::error_code error;
-			const auto chosen = file_dialog::RememberedPath("creature-mind-file");
-			if (chosen.has_value() && std::filesystem::is_regular_file(*chosen, error))
-			{
-				path = *chosen;
-			}
-			else if (!gameFolder.empty())
-			{
-				path = gameFolder / name.substr(k_Chosen.size());
-			}
-		}
-		else if (name.starts_with(k_Game) && !gameFolder.empty())
-		{
-			path = gameFolder / name.substr(k_Game.size());
-		}
-		auto data = std::make_shared<creaturemind::MindFileData>();
-		const auto result = path.empty() ? creaturemind::MindResult::ErrCantOpen : creaturemind::ReadFile(path, *data);
-		if (result == creaturemind::MindResult::Success && Locator::creatureMindSystem::has_value())
-		{
-			Locator::creatureMindSystem::value().LoadMind(entity, data);
-		}
-		Log(fmt::format("mind file {}: {}", path.empty() ? std::string(name) : path.filename().string(),
-		                creaturemind::ResultToStr(result)));
+		return;
 	}
-
-	void Runner::Frame(Shot shot, size_t creature, float distance)
+	if (setup.noTown)
 	{
-		_shot = shot;
-		_shotCreature = creature;
-		_shotDistance = distance;
-		UpdateCamera();
+		// The script gives a dispenser the player's first town when it names none, so take it from its town
+		auto& dispenser = registry.Get<ecs::components::SpellDispenser>(made);
+		if (registry.Valid(dispenser.town))
+		{
+			std::erase(registry.Get<ecs::components::Town>(dispenser.town).abodes, made);
+		}
+		dispenser.town = entt::null;
 	}
-
-	void Runner::UpdateCamera()
+	const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(AbodeInfo::NorseSpellDispenser));
+	magic.SetDispenserMagic(made, setup.type, static_cast<uint32_t>(info.timeEachMobileObjectTakesToProduce));
+	Log(fmt::format("dispenser: period {} turns, wood value {}, builders {}, desire to be repaired {}",
+	                info.timeEachMobileObjectTakesToProduce, info.woodValue, info.maxVillagerNeededToBuild,
+	                info.desireToBeRepaired));
+	magic.SetDispenserActive(made, true);
+	if (setup.globeTaken)
 	{
-		if (!_shot.has_value() || _scenario == nullptr || !Locator::terrainSystem::has_value())
+		magic.Remove(registry.Get<const ecs::components::SpellDispenser>(made).orb);
+	}
+	if (setup.life < 1.0f)
+	{
+		ecs::world_objects::ReduceLife(made, 1.0f - setup.life, std::nullopt);
+	}
+}
+
+void Runner::UpdateMiracles(float seconds)
+{
+	if (!Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	auto& magic = Locator::magicSystem::value();
+	for (size_t i = 0; i < _miracles.size(); ++i)
+	{
+		auto& miracle = _miracles.at(i);
+		const auto& setup = _scenario->miracles.at(i);
+		if (setup.byHand)
 		{
-			return;
-		}
-		// Creature Mode takes the camera from the scenario's shot for good
-		if (Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().IsActive())
-		{
-			_shot.reset();
-			return;
-		}
-		auto& camera = Locator::camera::value();
-		auto& registry = Locator::entitiesRegistry::value();
-		const auto& land = Locator::terrainSystem::value();
-		std::optional<CameraPlacement> placement;
-		switch (*_shot)
-		{
-		case Shot::Testbed:
-			// As the testbed leaves it: south of the middle and up, looking north just east of the middle
-			placement = CameraPlacement {
-			    .origin = {_middle.x + flat_land::k_CameraAside, land.GetHeightAt(_middle) + flat_land::k_CameraHeight,
-			               _middle.y - flat_land::k_CameraBack},
-			    .focus = {_middle.x + flat_land::k_CameraAside, land.GetHeightAt(_middle), _middle.y},
-			};
-			break;
-		case Shot::Overview:
-		{
-			std::vector<glm::vec2> points;
-			for (size_t i = 0; i < _creatures.size(); ++i)
+			// A cast on a creature takes the creature under the pointer, so the pointer stays on the creature's body
+			if (setup.target == MiracleCast::Target::Creature && (miracle.pressAt.has_value() || miracle.releaseAt.has_value()))
 			{
-				if (const auto entity = CreatureAt(i))
+				if (const auto creature = CreatureAt(setup.creature))
 				{
-					points.push_back(glm::xz(registry.Get<Transform>(*entity).position));
+					PointAtBody(*creature);
 				}
 			}
-			for (const auto& object : _scenario->objects)
+			// The button goes down once the hand is over the point, and comes up after the hold, the hand moving meanwhile
+			if (miracle.pressAt.has_value() && _seconds >= *miracle.pressAt)
 			{
-				points.push_back(MapPoint(_middle, object.offset));
+				magic.PressAction();
+				Log(fmt::format("Pressed: {}", HandResultName(magic.GetLastHandResult())));
+				miracle.pressAt.reset();
+				miracle.releaseAt = _seconds + setup.holdSeconds.value_or(k_HandThrowSeconds);
 			}
-			for (const auto& particle : _scenario->particles)
+			if (miracle.releaseAt.has_value())
 			{
-				points.push_back(MapPoint(_middle, particle.offset));
-			}
-			for (const auto& extra : _scenario->framing.include)
-			{
-				points.push_back(MapPoint(_middle, extra));
-			}
-			// And everywhere the creatures are sent
-			for (const auto& command : _scenario->commands)
-			{
-				if (HasPoint(command.kind))
+				miracle.hand += setup.throwVelocity * seconds;
+				magic.DriveHand(HandFrameFor(i, miracle.hand));
+				if (_seconds >= *miracle.releaseAt)
 				{
-					points.push_back(MapPoint(_middle, command.point));
-				}
-			}
-			const auto bounds = BoundsOf(points, glm::vec2(k_MinOverviewHalfSize));
-			placement = Overview({bounds.centre.x, land.GetHeightAt(bounds.centre), bounds.centre.y}, bounds.halfSize,
-			                     FieldsOfView(camera), _shotDistance);
-			break;
-		}
-		case Shot::Placed:
-		{
-			const auto eye = MapPoint(_middle, {_scenario->framing.eye.x, _scenario->framing.eye.z});
-			const auto look = MapPoint(_middle, {_scenario->framing.look.x, _scenario->framing.look.z});
-			placement = CameraPlacement {
-			    .origin = {eye.x, land.GetHeightAt(eye) + _scenario->framing.eye.y, eye.y},
-			    .focus = {look.x, land.GetHeightAt(look) + _scenario->framing.look.y, look.y},
-			};
-			break;
-		}
-		case Shot::Follow:
-		case Shot::Head:
-			if (const auto entity = CreatureAt(_shotCreature))
-			{
-				const auto& transform = registry.Get<Transform>(*entity);
-				const auto height = CreatureHeight(ShownSize(registry.Get<Creature>(*entity)));
-				placement = *_shot == Shot::Follow ? Follow(transform.position, height, _shotDistance)
-				                                   : Head(transform.position, AheadOf(transform), height, _shotDistance);
-			}
-			break;
-		}
-		if (placement.has_value())
-		{
-			camera.SetOrigin(placement->origin).SetFocus(placement->focus);
-		}
-		// A shot of everything is taken once; following and close ups keep up with the creature
-		if (*_shot == Shot::Overview || *_shot == Shot::Testbed || *_shot == Shot::Placed)
-		{
-			_shot.reset();
-		}
-	}
-
-	void Runner::Update(float seconds)
-	{
-		if (_scenario == nullptr)
-		{
-			return;
-		}
-		UpdateCamera();
-		if (!_running)
-		{
-			return;
-		}
-		// Another land was loaded over the testbed
-		const auto gone = [](entt::entity entity) { return !Locator::entitiesRegistry::value().Valid(entity); };
-		if ((!_creatures.empty() && std::ranges::none_of(std::views::iota(size_t {0}, _creatures.size()),
-		                                                 [this](size_t i) { return CreatureAt(i).has_value(); })) ||
-		    (!_crowdEntities.empty() && gone(_crowdEntities.front())))
-		{
-			_running = false;
-			_shot.reset();
-			Log("Its creatures are gone");
-			return;
-		}
-		_seconds += seconds;
-		LogMiracles();
-		Measure();
-		SpawnCrowd();
-		UpdateParticles(seconds);
-		UpdateVortices();
-		UpdateRewards();
-		UpdateMiracles(seconds);
-		UpdateVillagerWalks();
-		UpdateThrows();
-		WatchGesture();
-		FinishTakingFireBall();
-		ApplyStates();
-		UpdatePointer(seconds);
-		const auto due =
-		    Advance(_timeline, _scenario->commands, _scenario->repeatFrom, seconds, [this](const Command& command) {
-			    const bool toHand =
-			        command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed;
-			    if (toHand)
-			    {
-				    return !Locator::gestureSystem::has_value() || !Locator::gestureSystem::value().IsDrawingPath();
-			    }
-			    return IsFree(command.creature);
-		    });
-		for (const auto index : due)
-		{
-			Give(_scenario->commands[index]);
-		}
-	}
-
-	void Runner::UpdateThrows()
-	{
-		if (!Locator::dynamicsSystem::has_value() || !Locator::entitiesRegistry::has_value() ||
-		    !Locator::terrainSystem::has_value())
-		{
-			return;
-		}
-		auto& registry = Locator::entitiesRegistry::value();
-		auto& dynamics = Locator::dynamicsSystem::value();
-		for (size_t i = 0; i < _throwsDue.size() && i < _scenario->throws.size(); ++i)
-		{
-			auto& due = _throwsDue.at(i);
-			if (!due.has_value() || _seconds < *due)
-			{
-				continue;
-			}
-			const auto& setup = _scenario->throws.at(i);
-			const auto object = setup.object < _objects.size() ? _objects.at(setup.object) : entt::null;
-			// What broke or went is thrown no more
-			if (!registry.Valid(object) || !registry.AllOf<ecs::components::Transform>(object))
-			{
-				due.reset();
-				continue;
-			}
-			// Still flying from the last throw: it is thrown once it lands
-			if (registry.AllOf<ecs::components::InPhysics>(object))
-			{
-				continue;
-			}
-			auto& transform = registry.Get<ecs::components::Transform>(object);
-			const auto point =
-			    setup.from.has_value() ? MapPoint(_middle, *setup.from) : glm::vec2(transform.position.x, transform.position.z);
-			transform.position = {point.x, Locator::terrainSystem::value().GetHeightAt(point) + setup.height, point.y};
-			registry.SetDirty();
-			const auto result = dynamics.LetGoFromHand(object, {.velocity = setup.velocity, .player = PlayerNames::PLAYER_ONE});
-			if (!result.accepted)
-			{
-				Log(fmt::format("{:.1f}s: object {} wasn't thrown", _seconds, setup.object));
-			}
-			due = setup.repeatSeconds.has_value() ? std::optional(*due + *setup.repeatSeconds) : std::nullopt;
-		}
-	}
-
-	void Runner::PlaceDispensers(const Scenario& scenario)
-	{
-		if (!KeepsDispenserGrid(scenario))
-		{
-			testbed_dispensers::RemoveGrid();
-		}
-		if (!Locator::magicSystem::has_value() || !Locator::terrainSystem::has_value())
-		{
-			return;
-		}
-		auto& magic = Locator::magicSystem::value();
-		for (const auto& dispenser : scenario.dispensers)
-		{
-			const auto point = MapPoint(_middle, dispenser.offset);
-			const float ground = Locator::terrainSystem::value().GetHeightAt(point);
-			if (dispenser.bubbleHeight.has_value())
-			{
-				_globes.push_back(
-				    magic.CreateOneOffSeedFor({point.x, ground + *dispenser.bubbleHeight, point.y}, dispenser.type));
-			}
-			else if (dispenser.reward)
-			{
-				PlaceRewardDispenser(dispenser, {point.x, ground, point.y});
-			}
-			else
-			{
-				const auto made = magic.CreateDispenser({point.x, ground, point.y}, dispenser.type, 0.0f);
-				if (dispenser.charged && made != entt::null)
-				{
-					magic.ChargeDispenser(made);
-				}
-			}
-		}
-	}
-
-	void Runner::PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 position)
-	{
-		auto& registry = Locator::entitiesRegistry::value();
-		auto& magic = Locator::magicSystem::value();
-		entt::entity town = entt::null;
-		if (!setup.noTown)
-		{
-			const auto id = ScenarioTown(_middle);
-			town = registry.Context().towns.at(id);
-		}
-		// As the reward script does: the dispenser, its miracle with the building's own period, then turned on
-		const auto made = magic.CreateScriptDispenser(position, AbodeInfo::NorseSpellDispenser, 0.0f, 1.0f, town);
-		if (made == entt::null)
-		{
-			return;
-		}
-		if (setup.noTown)
-		{
-			// The script gives a dispenser the player's first town when it names none, so take it from its town
-			auto& dispenser = registry.Get<ecs::components::SpellDispenser>(made);
-			if (registry.Valid(dispenser.town))
-			{
-				std::erase(registry.Get<ecs::components::Town>(dispenser.town).abodes, made);
-			}
-			dispenser.town = entt::null;
-		}
-		const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(AbodeInfo::NorseSpellDispenser));
-		magic.SetDispenserMagic(made, setup.type, static_cast<uint32_t>(info.timeEachMobileObjectTakesToProduce));
-		Log(fmt::format("dispenser: period {} turns, wood value {}, builders {}, desire to be repaired {}",
-		                info.timeEachMobileObjectTakesToProduce, info.woodValue, info.maxVillagerNeededToBuild,
-		                info.desireToBeRepaired));
-		magic.SetDispenserActive(made, true);
-		if (setup.globeTaken)
-		{
-			magic.Remove(registry.Get<const ecs::components::SpellDispenser>(made).orb);
-		}
-		if (setup.life < 1.0f)
-		{
-			ecs::world_objects::ReduceLife(made, 1.0f - setup.life, std::nullopt);
-		}
-	}
-
-	void Runner::UpdateMiracles(float seconds)
-	{
-		if (!Locator::magicSystem::has_value())
-		{
-			return;
-		}
-		auto& magic = Locator::magicSystem::value();
-		for (size_t i = 0; i < _miracles.size(); ++i)
-		{
-			auto& miracle = _miracles.at(i);
-			const auto& setup = _scenario->miracles.at(i);
-			if (setup.byHand)
-			{
-				// A cast on a creature takes the creature under the pointer, so the pointer stays on the creature's body
-				if (setup.target == MiracleCast::Target::Creature &&
-				    (miracle.pressAt.has_value() || miracle.releaseAt.has_value()))
-				{
-					if (const auto creature = CreatureAt(setup.creature))
+					magic.ReleaseAction();
+					Log(fmt::format("Let go: {}", HandResultName(magic.GetLastHandResult())));
+					miracle.releaseAt.reset();
+					if (setup.sweepSeconds.has_value())
 					{
-						PointAtBody(*creature);
+						miracle.sweepUntil = _seconds + *setup.sweepSeconds;
 					}
-				}
-				// The button goes down once the hand is over the point, and comes up after the hold, the hand moving meanwhile
-				if (miracle.pressAt.has_value() && _seconds >= *miracle.pressAt)
-				{
-					magic.PressAction();
-					Log(fmt::format("Pressed: {}", HandResultName(magic.GetLastHandResult())));
-					miracle.pressAt.reset();
-					miracle.releaseAt = _seconds + setup.holdSeconds.value_or(k_HandThrowSeconds);
-				}
-				if (miracle.releaseAt.has_value())
-				{
-					miracle.hand += setup.throwVelocity * seconds;
-					magic.DriveHand(HandFrameFor(i, miracle.hand));
-					if (_seconds >= *miracle.releaseAt)
+					else
 					{
-						magic.ReleaseAction();
-						Log(fmt::format("Let go: {}", HandResultName(magic.GetLastHandResult())));
-						miracle.releaseAt.reset();
-						if (setup.sweepSeconds.has_value())
-						{
-							miracle.sweepUntil = _seconds + *setup.sweepSeconds;
-						}
-						else
-						{
-							magic.DriveHand(std::nullopt);
-						}
-						// A seed kept in the hand is dropped, for the next go
-						if (magic.IsHandBusy())
-						{
-							magic.DiscardHeldSeed();
-						}
-					}
-				}
-				if (miracle.sweepUntil.has_value())
-				{
-					// The hand sweeps on over the land as the flock pours out of it
-					miracle.hand += setup.throwVelocity * seconds;
-					magic.DriveHand(HandFrameFor(i, miracle.hand));
-					if (_seconds >= *miracle.sweepUntil)
-					{
-						miracle.sweepUntil.reset();
 						magic.DriveHand(std::nullopt);
 					}
-				}
-				if (miracle.nextAt.has_value() && _seconds >= *miracle.nextAt)
-				{
-					StartHandCast(i);
-					miracle.nextAt =
-					    setup.repeatSeconds.has_value() ? std::optional(*miracle.nextAt + *setup.repeatSeconds) : std::nullopt;
-				}
-				continue;
-			}
-			if (miracle.letGoAt.has_value() && _seconds >= *miracle.letGoAt)
-			{
-				Locator::magicSystem::value().CloseDown(miracle.spell);
-				miracle.letGoAt.reset();
-			}
-			if (miracle.breakAt.has_value() && _seconds >= *miracle.breakAt)
-			{
-				miracle.breakAt.reset();
-				if (Locator::magicShieldSystem::has_value() && Locator::magicShieldSystem::value().HasObject(miracle.spell))
-				{
-					Locator::magicShieldSystem::value().ShieldStruck(miracle.spell, true);
-					Locator::magicSystem::value().CloseDown(miracle.spell);
-					Log("Shield broken");
-				}
-			}
-			if (!miracle.nextAt.has_value() || _seconds < *miracle.nextAt)
-			{
-				continue;
-			}
-			miracle.spell = CastMiracle(i);
-			Log(fmt::format("Cast {}{}", static_cast<int>(setup.type), miracle.spell == entt::null ? ", which failed" : ""));
-			if (setup.holdSeconds.has_value() && miracle.spell != entt::null)
-			{
-				miracle.letGoAt = _seconds + *setup.holdSeconds;
-			}
-			if (setup.breakSeconds.has_value() && miracle.spell != entt::null)
-			{
-				miracle.breakAt = _seconds + *setup.breakSeconds;
-			}
-			miracle.nextAt =
-			    setup.repeatSeconds.has_value() ? std::optional(*miracle.nextAt + *setup.repeatSeconds) : std::nullopt;
-		}
-	}
-
-	void Runner::UpdateVillagerWalks()
-	{
-		auto& registry = Locator::entitiesRegistry::value();
-		_walks.resize(_objects.size());
-		for (size_t i = 0; i < _objects.size() && i < _scenario->objects.size(); ++i)
-		{
-			const auto& setup = _scenario->objects.at(i);
-			auto& walk = _walks.at(i);
-			const auto entity = _objects.at(i);
-			if (!registry.Valid(entity) || !registry.AllOf<ecs::components::LivingAction, ecs::components::WallHug>(entity))
-			{
-				continue;
-			}
-			if (setup.walkTo.has_value())
-			{
-				if (!walk.nextAt.has_value() && walk.outwards)
-				{
-					walk.nextAt = setup.walkAfterSeconds;
-				}
-				if (walk.nextAt.has_value() && _seconds >= *walk.nextAt)
-				{
-					const auto goal = MapPoint(_middle, walk.outwards ? *setup.walkTo : setup.offset);
-					ecs::villager_home::SetupMoveTo(registry.Get<ecs::components::LivingAction>(entity), goal, setup.walkFinal);
-					Log(fmt::format("Villager {} walks {}", i, walk.outwards ? "out" : "back"));
-					walk.goal = goal;
-					walk.setOffTurn =
-					    Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
-					walk.outwards = !walk.outwards;
-					walk.nextAt = setup.walkRepeatSeconds.has_value() ? std::optional(*walk.nextAt + *setup.walkRepeatSeconds)
-					                                                  : std::nullopt;
-					if (!setup.walkRepeatSeconds.has_value())
+					// A seed kept in the hand is dropped, for the next go
+					if (magic.IsHandBusy())
 					{
-						walk.outwards = false;
+						magic.DiscardHeldSeed();
 					}
 				}
 			}
-			// How long each walk took, in game turns, for comparing walks round things in the way
-			if (walk.setOffTurn.has_value() && Locator::time::has_value() &&
-			    ecs::villager_home::WalkIsOverAt(entity, walk.goal))
+			if (miracle.sweepUntil.has_value())
 			{
-				Log(fmt::format("Villager {} got there in {} turns", i, Locator::time::value().GetTurn() - *walk.setOffTurn));
-				walk.setOffTurn.reset();
-			}
-			if (setup.mateWith.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
-			    *setup.mateWith < _objects.size() && registry.Valid(_objects.at(*setup.mateWith)))
-			{
-				walk.dropped = true;
-				ecs::villager_breeding::GoAndHaveSexWith(entity, _objects.at(*setup.mateWith));
-				Log(fmt::format("Villager {} goes to make love with object {}", i, *setup.mateWith));
-			}
-			if (setup.worshipAt.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
-			    Locator::teleportSystem::has_value() && Locator::terrainSystem::has_value())
-			{
-				walk.dropped = true;
-				// A villager goes through its own player's stones only: one without a town is given one of the player's
-				auto& villager = registry.Get<ecs::components::Villager>(entity);
-				if (villager.town == entt::null || !registry.Valid(villager.town))
+				// The hand sweeps on over the land as the flock pours out of it
+				miracle.hand += setup.throwVelocity * seconds;
+				magic.DriveHand(HandFrameFor(i, miracle.hand));
+				if (_seconds >= *miracle.sweepUntil)
 				{
-					villager.town = registry.Context().towns.at(ScenarioTown(_middle));
+					miracle.sweepUntil.reset();
+					magic.DriveHand(std::nullopt);
 				}
-				const auto site = MapPoint(_middle, *setup.worshipAt);
-				const glm::vec3 point {site.x, Locator::terrainSystem::value().GetHeightAt(site), site.y};
-				const bool routed = Locator::teleportSystem::value().RouteWorshipper(entity, point);
-				Log(fmt::format("Villager {} sets off to worship: {}", i, routed ? "through a stone" : "no stone"));
 			}
-			if (setup.dropOnStoneSeconds.has_value() && !walk.dropped && _seconds >= *setup.dropOnStoneSeconds &&
-			    Locator::teleportSystem::has_value())
+			if (miracle.nextAt.has_value() && _seconds >= *miracle.nextAt)
 			{
-				walk.dropped = true;
-				// The stone nearest the villager
-				const auto here = registry.Get<const ecs::components::Transform>(entity).position;
-				// A villager jumps from its own player's stones only: one without a town is given one of the player's
-				auto& villager = registry.Get<ecs::components::Villager>(entity);
-				if (villager.town == entt::null || !registry.Valid(villager.town))
-				{
-					villager.town = registry.Context().towns.at(ScenarioTown(_middle));
-				}
-				std::optional<entt::entity> nearest;
-				float best = std::numeric_limits<float>::max();
-				registry.Each<const ecs::components::TeleportStone, const ecs::components::Transform>(
-				    [&](entt::entity stone, const auto&, const ecs::components::Transform& transform) {
-					    const float d = glm::distance(transform.position, here);
-					    if (d < best)
-					    {
-						    best = d;
-						    nearest = stone;
-					    }
-				    });
-				// The testbed's hand is the first player's
-				const bool jumped = nearest.has_value() &&
-				                    Locator::teleportSystem::value().DropOnStone(entity, *nearest, PlayerNames::PLAYER_ONE);
-				Log(fmt::format("Villager {} dropped on a stone: {}", i, jumped ? "jumped" : "stayed"));
+				StartHandCast(i);
+				miracle.nextAt =
+				    setup.repeatSeconds.has_value() ? std::optional(*miracle.nextAt + *setup.repeatSeconds) : std::nullopt;
+			}
+			continue;
+		}
+		if (miracle.letGoAt.has_value() && _seconds >= *miracle.letGoAt)
+		{
+			Locator::magicSystem::value().CloseDown(miracle.spell);
+			miracle.letGoAt.reset();
+		}
+		if (miracle.breakAt.has_value() && _seconds >= *miracle.breakAt)
+		{
+			miracle.breakAt.reset();
+			if (Locator::magicShieldSystem::has_value() && Locator::magicShieldSystem::value().HasObject(miracle.spell))
+			{
+				Locator::magicShieldSystem::value().ShieldStruck(miracle.spell, true);
+				Locator::magicSystem::value().CloseDown(miracle.spell);
+				Log("Shield broken");
 			}
 		}
+		if (!miracle.nextAt.has_value() || _seconds < *miracle.nextAt)
+		{
+			continue;
+		}
+		miracle.spell = CastMiracle(i);
+		Log(fmt::format("Cast {}{}", static_cast<int>(setup.type), miracle.spell == entt::null ? ", which failed" : ""));
+		if (setup.holdSeconds.has_value() && miracle.spell != entt::null)
+		{
+			miracle.letGoAt = _seconds + *setup.holdSeconds;
+		}
+		if (setup.breakSeconds.has_value() && miracle.spell != entt::null)
+		{
+			miracle.breakAt = _seconds + *setup.breakSeconds;
+		}
+		miracle.nextAt = setup.repeatSeconds.has_value() ? std::optional(*miracle.nextAt + *setup.repeatSeconds) : std::nullopt;
 	}
+}
 
-	entt::entity Runner::CastMiracle(size_t index)
+void Runner::UpdateVillagerWalks()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	_walks.resize(_objects.size());
+	for (size_t i = 0; i < _objects.size() && i < _scenario->objects.size(); ++i)
 	{
-		if (!Locator::terrainSystem::has_value() || !Locator::infoConstants::has_value())
+		const auto& setup = _scenario->objects.at(i);
+		auto& walk = _walks.at(i);
+		const auto entity = _objects.at(i);
+		if (!registry.Valid(entity) || !registry.AllOf<ecs::components::LivingAction, ecs::components::WallHug>(entity))
+		{
+			continue;
+		}
+		if (setup.walkTo.has_value())
+		{
+			if (!walk.nextAt.has_value() && walk.outwards)
+			{
+				walk.nextAt = setup.walkAfterSeconds;
+			}
+			if (walk.nextAt.has_value() && _seconds >= *walk.nextAt)
+			{
+				const auto goal = MapPoint(_middle, walk.outwards ? *setup.walkTo : setup.offset);
+				ecs::villager_home::SetupMoveTo(registry.Get<ecs::components::LivingAction>(entity), goal, setup.walkFinal);
+				Log(fmt::format("Villager {} walks {}", i, walk.outwards ? "out" : "back"));
+				walk.goal = goal;
+				walk.setOffTurn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
+				walk.outwards = !walk.outwards;
+				walk.nextAt =
+				    setup.walkRepeatSeconds.has_value() ? std::optional(*walk.nextAt + *setup.walkRepeatSeconds) : std::nullopt;
+				if (!setup.walkRepeatSeconds.has_value())
+				{
+					walk.outwards = false;
+				}
+			}
+		}
+		// How long each walk took, in game turns, for comparing walks round things in the way
+		if (walk.setOffTurn.has_value() && Locator::time::has_value() && ecs::villager_home::WalkIsOverAt(entity, walk.goal))
+		{
+			Log(fmt::format("Villager {} got there in {} turns", i, Locator::time::value().GetTurn() - *walk.setOffTurn));
+			walk.setOffTurn.reset();
+		}
+		if (setup.mateWith.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
+		    *setup.mateWith < _objects.size() && registry.Valid(_objects.at(*setup.mateWith)))
+		{
+			walk.dropped = true;
+			ecs::villager_breeding::GoAndHaveSexWith(entity, _objects.at(*setup.mateWith));
+			Log(fmt::format("Villager {} goes to make love with object {}", i, *setup.mateWith));
+		}
+		if (setup.worshipAt.has_value() && !walk.dropped && _seconds >= setup.walkAfterSeconds &&
+		    Locator::teleportSystem::has_value() && Locator::terrainSystem::has_value())
+		{
+			walk.dropped = true;
+			// A villager goes through its own player's stones only: one without a town is given one of the player's
+			auto& villager = registry.Get<ecs::components::Villager>(entity);
+			if (villager.town == entt::null || !registry.Valid(villager.town))
+			{
+				villager.town = registry.Context().towns.at(ScenarioTown(_middle));
+			}
+			const auto site = MapPoint(_middle, *setup.worshipAt);
+			const glm::vec3 point {site.x, Locator::terrainSystem::value().GetHeightAt(site), site.y};
+			const bool routed = Locator::teleportSystem::value().RouteWorshipper(entity, point);
+			Log(fmt::format("Villager {} sets off to worship: {}", i, routed ? "through a stone" : "no stone"));
+		}
+		if (setup.dropOnStoneSeconds.has_value() && !walk.dropped && _seconds >= *setup.dropOnStoneSeconds &&
+		    Locator::teleportSystem::has_value())
+		{
+			walk.dropped = true;
+			// The stone nearest the villager
+			const auto here = registry.Get<const ecs::components::Transform>(entity).position;
+			// A villager jumps from its own player's stones only: one without a town is given one of the player's
+			auto& villager = registry.Get<ecs::components::Villager>(entity);
+			if (villager.town == entt::null || !registry.Valid(villager.town))
+			{
+				villager.town = registry.Context().towns.at(ScenarioTown(_middle));
+			}
+			std::optional<entt::entity> nearest;
+			float best = std::numeric_limits<float>::max();
+			registry.Each<const ecs::components::TeleportStone, const ecs::components::Transform>(
+			    [&](entt::entity stone, const auto&, const ecs::components::Transform& transform) {
+				    const float d = glm::distance(transform.position, here);
+				    if (d < best)
+				    {
+					    best = d;
+					    nearest = stone;
+				    }
+			    });
+			// The testbed's hand is the first player's
+			const bool jumped =
+			    nearest.has_value() && Locator::teleportSystem::value().DropOnStone(entity, *nearest, PlayerNames::PLAYER_ONE);
+			Log(fmt::format("Villager {} dropped on a stone: {}", i, jumped ? "jumped" : "stayed"));
+		}
+	}
+}
+
+entt::entity Runner::CastMiracle(size_t index)
+{
+	if (!Locator::terrainSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return entt::null;
+	}
+	const auto& setup = _scenario->miracles.at(index);
+	const auto& info = Locator::infoConstants::value();
+	const auto& land = Locator::terrainSystem::value();
+	auto& magic = Locator::magicSystem::value();
+	// What a seed of it in the hand would cast: a sizing miracle at its usual size
+	const auto seed = magic::FindFirstSpellSeedForMagicType(info, setup.type).value_or(SpellSeedType::None);
+	float size = 1.0f;
+	if (const auto* radius = magic::GetMagicInfoAs<GMagicRadiusSpellInfo>(info, setup.type))
+	{
+		size = radius->radiusForNormalCost;
+	}
+	const auto cast = magic::SeedCastData(info, setup.type, seed, 1.0f, size);
+	std::optional<entt::entity> target;
+	auto point2 = MapPoint(_middle, setup.point);
+	glm::vec3 point {point2.x, land.GetHeightAt(point2), point2.y};
+	if (setup.target == MiracleCast::Target::Creature)
+	{
+		target = CreatureAt(setup.creature);
+		if (!target.has_value())
 		{
 			return entt::null;
 		}
-		const auto& setup = _scenario->miracles.at(index);
-		const auto& info = Locator::infoConstants::value();
-		const auto& land = Locator::terrainSystem::value();
-		auto& magic = Locator::magicSystem::value();
-		// What a seed of it in the hand would cast: a sizing miracle at its usual size
-		const auto seed = magic::FindFirstSpellSeedForMagicType(info, setup.type).value_or(SpellSeedType::None);
-		float size = 1.0f;
-		if (const auto* radius = magic::GetMagicInfoAs<GMagicRadiusSpellInfo>(info, setup.type))
-		{
-			size = radius->radiusForNormalCost;
-		}
-		const auto cast = magic::SeedCastData(info, setup.type, seed, 1.0f, size);
-		std::optional<entt::entity> target;
-		auto point2 = MapPoint(_middle, setup.point);
-		glm::vec3 point {point2.x, land.GetHeightAt(point2), point2.y};
-		if (setup.target == MiracleCast::Target::Creature)
-		{
-			target = CreatureAt(setup.creature);
-			if (!target.has_value())
-			{
-				return entt::null;
-			}
-			point = Locator::entitiesRegistry::value().Get<Transform>(*target).position;
-		}
-		const auto hand2 = MapPoint(_middle, setup.handOffset);
-		const glm::vec3 hand {hand2.x, land.GetHeightAt(hand2) + setup.handHeight, hand2.y};
-		// As a script casts it: the neutral player's, from the hand's place, on the creature when its seed is cast on things
-		if (setup.script.has_value())
-		{
-			const auto scripted = magic::MakeScriptCast(magic::GetMagicEffectInfo(info, setup.type).initialChants, point, hand,
-			                                            setup.script->radius, setup.script->seconds, setup.script->curl);
-			const bool onObject =
-			    target.has_value() && seed != SpellSeedType::None && magic::GetSpellSeedInfo(info, seed).castOnObject != 0;
-			return onObject ? magic.CastOnObject(setup.type, PlayerNames::NEUTRAL, *target, scripted.cast, scripted.info)
-			                : magic.CastAtPoint(setup.type, PlayerNames::NEUTRAL, scripted.point, scripted.cast, scripted.info);
-		}
-		const auto toward = point - hand;
-		const particles::ProcessInfo process {
-		    .handPosition = hand,
-		    .cameraForward = glm::length(toward) > 0.0f ? glm::normalize(toward) : glm::vec3(0.0f, 0.0f, 1.0f),
-		    .direction = setup.throwVelocity,
-		};
-		return target.has_value() ? magic.CastOnObject(setup.type, setup.player, *target, cast, process)
-		                          : magic.CastAtPoint(setup.type, setup.player, point, cast, process);
+		point = Locator::entitiesRegistry::value().Get<Transform>(*target).position;
 	}
-
-	std::optional<ecs::systems::MagicSystemInterface::HandFrame> Runner::HandFrameFor(size_t index, glm::vec3 hand) const
+	const auto hand2 = MapPoint(_middle, setup.handOffset);
+	const glm::vec3 hand {hand2.x, land.GetHeightAt(hand2) + setup.handHeight, hand2.y};
+	// As a script casts it: the neutral player's, from the hand's place, on the creature when its seed is cast on things
+	if (setup.script.has_value())
 	{
-		const auto& setup = _scenario->miracles.at(index);
-		const auto& land = Locator::terrainSystem::value();
+		const auto scripted = magic::MakeScriptCast(magic::GetMagicEffectInfo(info, setup.type).initialChants, point, hand,
+		                                            setup.script->radius, setup.script->seconds, setup.script->curl);
+		const bool onObject =
+		    target.has_value() && seed != SpellSeedType::None && magic::GetSpellSeedInfo(info, seed).castOnObject != 0;
+		return onObject ? magic.CastOnObject(setup.type, PlayerNames::NEUTRAL, *target, scripted.cast, scripted.info)
+		                : magic.CastAtPoint(setup.type, PlayerNames::NEUTRAL, scripted.point, scripted.cast, scripted.info);
+	}
+	const auto toward = point - hand;
+	const particles::ProcessInfo process {
+	    .handPosition = hand,
+	    .cameraForward = glm::length(toward) > 0.0f ? glm::normalize(toward) : glm::vec3(0.0f, 0.0f, 1.0f),
+	    .direction = setup.throwVelocity,
+	};
+	return target.has_value() ? magic.CastOnObject(setup.type, setup.player, *target, cast, process)
+	                          : magic.CastAtPoint(setup.type, setup.player, point, cast, process);
+}
+
+std::optional<ecs::systems::MagicSystemInterface::HandFrame> Runner::HandFrameFor(size_t index, glm::vec3 hand) const
+{
+	const auto& setup = _scenario->miracles.at(index);
+	const auto& land = Locator::terrainSystem::value();
+	const auto point2 = MapPoint(_middle, setup.point);
+	glm::vec3 point {point2.x, land.GetHeightAt(point2), point2.y};
+	glm::vec3 aim = point;
+	if (setup.target == MiracleCast::Target::Creature)
+	{
+		const auto creature = CreatureAt(setup.creature);
+		if (!creature.has_value())
+		{
+			return std::nullopt;
+		}
+		point = Locator::entitiesRegistry::value().Get<Transform>(*creature).position;
+		// At the middle of its body
+		aim = point + glm::vec3(0.0f, k_HandAimHeight, 0.0f);
+	}
+	// Looking down at it from over the hand
+	const auto eye = hand + glm::vec3(0.0f, k_HandEyeHeight, 0.0f);
+	const auto toward = aim - eye;
+	const auto direction = glm::length(toward) > 0.0f ? glm::normalize(toward) : glm::vec3(0.0f, -1.0f, 0.0f);
+	return ecs::systems::MagicSystemInterface::HandFrame {
+	    .handPosition = hand,
+	    .point = point,
+	    .rayOrigin = eye,
+	    .rayDirection = direction,
+	    .cameraForward = direction,
+	    .overWorld = true,
+	};
+}
+
+void Runner::StartHandCast(size_t index)
+{
+	if (!Locator::terrainSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& setup = _scenario->miracles.at(index);
+	auto& miracle = _miracles.at(index);
+	const auto& info = Locator::infoConstants::value();
+	auto& magic = Locator::magicSystem::value();
+	if (magic.IsHandBusy())
+	{
+		magic.DiscardHeldSeed();
+	}
+	const auto seed = magic::FindFirstSpellSeedForMagicType(info, setup.type);
+	if (!seed.has_value())
+	{
+		return;
+	}
+	if (setup.casterAlignment.has_value() && Locator::alignmentSystem::has_value())
+	{
+		Locator::alignmentSystem::value().SetPlayerAlignment(PlayerNames::PLAYER_ONE, *setup.casterAlignment);
+	}
+	const auto level = magic::GetPowerUpGesture(magic::GetSpellSeedInfo(info, *seed), setup.type).level;
+	const auto held = setup.fromWorship ? magic.SummonSeed(PlayerNames::PLAYER_ONE, *seed, level)
+	                                    : magic.GiveSeedToHand(PlayerNames::PLAYER_ONE, *seed, level, 1.0f);
+	if (held == entt::null)
+	{
+		Log("The hand couldn't take the seed");
+		return;
+	}
+	const auto& land = Locator::terrainSystem::value();
+	const auto hand2 = MapPoint(_middle, setup.handOffset);
+	miracle.hand = {hand2.x, land.GetHeightAt(hand2) + setup.handHeight, hand2.y};
+	magic.DriveHand(HandFrameFor(index, miracle.hand));
+	if (setup.circleRadius.has_value() && Locator::gestureEvents::has_value())
+	{
 		const auto point2 = MapPoint(_middle, setup.point);
-		glm::vec3 point {point2.x, land.GetHeightAt(point2), point2.y};
-		glm::vec3 aim = point;
-		if (setup.target == MiracleCast::Target::Creature)
-		{
-			const auto creature = CreatureAt(setup.creature);
-			if (!creature.has_value())
-			{
-				return std::nullopt;
-			}
-			point = Locator::entitiesRegistry::value().Get<Transform>(*creature).position;
-			// At the middle of its body
-			aim = point + glm::vec3(0.0f, k_HandAimHeight, 0.0f);
-		}
-		// Looking down at it from over the hand
-		const auto eye = hand + glm::vec3(0.0f, k_HandEyeHeight, 0.0f);
-		const auto toward = aim - eye;
-		const auto direction = glm::length(toward) > 0.0f ? glm::normalize(toward) : glm::vec3(0.0f, -1.0f, 0.0f);
-		return ecs::systems::MagicSystemInterface::HandFrame {
-		    .handPosition = hand,
-		    .point = point,
-		    .rayOrigin = eye,
-		    .rayDirection = direction,
-		    .cameraForward = direction,
-		    .overWorld = true,
-		};
+		Locator::gestureEvents::value().Inject({.kind = ecs::systems::GestureEvent::Kind::Circle,
+		                                        .gesture = GestureType::Circle,
+		                                        .centre = {point2.x, land.GetHeightAt(point2), point2.y},
+		                                        .radius = *setup.circleRadius,
+		                                        .powerUpLevel = -1});
 	}
+	// A seed from worship waits until it is ready
+	const float wait = setup.holdBeforePress.has_value() ? *setup.holdBeforePress
+	                   : setup.fromWorship               ? info.spellSystem.delayBeforeSeedActive + k_HandPressWait
+	                                                     : k_HandPressWait;
+	miracle.pressAt = _seconds + wait;
+	Log(fmt::format("Seed of {} in the hand{}", static_cast<int>(setup.type), setup.fromWorship ? ", from worship" : ""));
+}
 
-	void Runner::StartHandCast(size_t index)
+uint32_t Runner::StartParticle(size_t index) const
+{
+	if (!Locator::particleSystem::has_value() || !Locator::terrainSystem::has_value())
 	{
-		if (!Locator::terrainSystem::has_value() || !Locator::infoConstants::has_value())
-		{
-			return;
-		}
-		const auto& setup = _scenario->miracles.at(index);
-		auto& miracle = _miracles.at(index);
-		const auto& info = Locator::infoConstants::value();
-		auto& magic = Locator::magicSystem::value();
-		if (magic.IsHandBusy())
-		{
-			magic.DiscardHeldSeed();
-		}
-		const auto seed = magic::FindFirstSpellSeedForMagicType(info, setup.type);
-		if (!seed.has_value())
-		{
-			return;
-		}
-		if (setup.casterAlignment.has_value() && Locator::alignmentSystem::has_value())
-		{
-			Locator::alignmentSystem::value().SetPlayerAlignment(PlayerNames::PLAYER_ONE, *setup.casterAlignment);
-		}
-		const auto level = magic::GetPowerUpGesture(magic::GetSpellSeedInfo(info, *seed), setup.type).level;
-		const auto held = setup.fromWorship ? magic.SummonSeed(PlayerNames::PLAYER_ONE, *seed, level)
-		                                    : magic.GiveSeedToHand(PlayerNames::PLAYER_ONE, *seed, level, 1.0f);
-		if (held == entt::null)
-		{
-			Log("The hand couldn't take the seed");
-			return;
-		}
-		const auto& land = Locator::terrainSystem::value();
-		const auto hand2 = MapPoint(_middle, setup.handOffset);
-		miracle.hand = {hand2.x, land.GetHeightAt(hand2) + setup.handHeight, hand2.y};
-		magic.DriveHand(HandFrameFor(index, miracle.hand));
-		if (setup.circleRadius.has_value() && Locator::gestureEvents::has_value())
-		{
-			const auto point2 = MapPoint(_middle, setup.point);
-			Locator::gestureEvents::value().Inject({.kind = ecs::systems::GestureEvent::Kind::Circle,
-			                                        .gesture = GestureType::Circle,
-			                                        .centre = {point2.x, land.GetHeightAt(point2), point2.y},
-			                                        .radius = *setup.circleRadius,
-			                                        .powerUpLevel = -1});
-		}
-		// A seed from worship waits until it is ready
-		const float wait = setup.holdBeforePress.has_value() ? *setup.holdBeforePress
-		                   : setup.fromWorship               ? info.spellSystem.delayBeforeSeedActive + k_HandPressWait
-		                                                     : k_HandPressWait;
-		miracle.pressAt = _seconds + wait;
-		Log(fmt::format("Seed of {} in the hand{}", static_cast<int>(setup.type), setup.fromWorship ? ", from worship" : ""));
+		return ecs::systems::ParticleSystemInterface::k_NoEffect;
 	}
-
-	uint32_t Runner::StartParticle(size_t index) const
+	const auto& particle = _scenario->particles.at(index);
+	const auto point = MapPoint(_middle, particle.offset);
+	const glm::vec3 position {point.x, Locator::terrainSystem::value().GetHeightAt(point) + particle.height, point.y};
+	auto& particles = Locator::particleSystem::value();
+	const auto effect = particle.file.empty() ? particles.Start(particle.type, position, particle.magnitude)
+	                                          : particles.Start(particle.file, position, particle.magnitude);
+	particles.SetPlayer(effect, particle.player);
+	particles.SetDrawPath(effect, particle.path);
+	if (particle.targetsCreatures)
 	{
-		if (!Locator::particleSystem::has_value() || !Locator::terrainSystem::has_value())
+		for (const auto creature : _creatures)
 		{
-			return ecs::systems::ParticleSystemInterface::k_NoEffect;
-		}
-		const auto& particle = _scenario->particles.at(index);
-		const auto point = MapPoint(_middle, particle.offset);
-		const glm::vec3 position {point.x, Locator::terrainSystem::value().GetHeightAt(point) + particle.height, point.y};
-		auto& particles = Locator::particleSystem::value();
-		const auto effect = particle.file.empty() ? particles.Start(particle.type, position, particle.magnitude)
-		                                          : particles.Start(particle.file, position, particle.magnitude);
-		particles.SetPlayer(effect, particle.player);
-		particles.SetDrawPath(effect, particle.path);
-		if (particle.targetsCreatures)
-		{
-			for (const auto creature : _creatures)
-			{
-				particles.AddTarget(effect, creature);
-			}
-		}
-		return effect;
-	}
-
-	void Runner::WriteCrossingFile(std::span<const std::string_view> lines)
-	{
-		// Where the profile keeps it, as a vortex out of the last land writes it
-		if (!Locator::playerProfileSystem::has_value())
-		{
-			return;
-		}
-		const auto folder = Locator::playerProfileSystem::value().SavedGamesFolder();
-		if (!folder.has_value())
-		{
-			return;
-		}
-		std::error_code error;
-		std::filesystem::create_directories(*folder, error);
-		std::ofstream file(*folder / "vortex.txt", std::ios::out | std::ios::trunc | std::ios::binary);
-		for (const auto line : lines)
-		{
-			file << line << '\n';
-		}
-		Log(fmt::format("Wrote {} lines to the crossing file in {}", lines.size(), folder->string()));
-	}
-
-	void Runner::UpdateVortices()
-	{
-		if (!Locator::vortexSystem::has_value() || !Locator::terrainSystem::has_value())
-		{
-			return;
-		}
-		auto& vortices = Locator::vortexSystem::value();
-		for (size_t i = 0; i < _vortices.size(); ++i)
-		{
-			const auto& setup = _scenario->vortices.at(i);
-			auto& running = _vortices.at(i);
-			if (running.vortex == entt::null && _seconds >= setup.delaySeconds)
-			{
-				const auto point = MapPoint(_middle, setup.offset);
-				if (!setup.crossingLines.empty())
-				{
-					WriteCrossingFile(setup.crossingLines);
-				}
-				running.vortex = vortices.Create({point.x, 0.0f, point.y}, setup.type, 0.0f);
-				if (setup.gatheringOffset.has_value())
-				{
-					const auto gathering = MapPoint(_middle, *setup.gatheringOffset);
-					vortices.SetArrival(running.vortex, {.town = entt::null,
-					                                     .gatheringPlace = {gathering.x, 0.0f, gathering.y},
-					                                     .flockDistance = setup.flockDistance,
-					                                     .flockRadius = setup.flockRadius,
-					                                     .flock = entt::null});
-				}
-				Log(fmt::format("Vortex {} opened at {:.0f}, {:.0f}", i, point.x, point.y));
-			}
-			if (running.vortex != entt::null && !running.fading && setup.fadeOutAfterSeconds.has_value() &&
-			    _seconds >= setup.delaySeconds + *setup.fadeOutAfterSeconds)
-			{
-				running.fading = vortices.StartFadeOut(running.vortex);
-				Log(fmt::format("Vortex {} fading out", i));
-			}
+			particles.AddTarget(effect, creature);
 		}
 	}
+	return effect;
+}
 
-	void Runner::UpdateRewards()
+void Runner::WriteCrossingFile(std::span<const std::string_view> lines)
+{
+	// Where the profile keeps it, as a vortex out of the last land writes it
+	if (!Locator::playerProfileSystem::has_value())
 	{
-		if (!Locator::rewardSystem::has_value() || !Locator::terrainSystem::has_value())
+		return;
+	}
+	const auto folder = Locator::playerProfileSystem::value().SavedGamesFolder();
+	if (!folder.has_value())
+	{
+		return;
+	}
+	std::error_code error;
+	std::filesystem::create_directories(*folder, error);
+	std::ofstream file(*folder / "vortex.txt", std::ios::out | std::ios::trunc | std::ios::binary);
+	for (const auto line : lines)
+	{
+		file << line << '\n';
+	}
+	Log(fmt::format("Wrote {} lines to the crossing file in {}", lines.size(), folder->string()));
+}
+
+void Runner::UpdateVortices()
+{
+	if (!Locator::vortexSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto& vortices = Locator::vortexSystem::value();
+	for (size_t i = 0; i < _vortices.size(); ++i)
+	{
+		const auto& setup = _scenario->vortices.at(i);
+		auto& running = _vortices.at(i);
+		if (running.vortex == entt::null && _seconds >= setup.delaySeconds)
 		{
-			return;
-		}
-		const auto player =
-		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
-		for (size_t i = 0; i < _rewards.size(); ++i)
-		{
-			const auto& setup = _scenario->rewards.at(i);
-			if (_rewards.at(i) != entt::null || _seconds < setup.delaySeconds)
-			{
-				continue;
-			}
 			const auto point = MapPoint(_middle, setup.offset);
-			const glm::vec3 at {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y};
-			const auto town =
-			    setup.inTown ? Locator::entitiesRegistry::value().Context().towns.at(ScenarioTown(_middle)) : entt::null;
-			_rewards.at(i) = Locator::rewardSystem::value().Create(at, setup.type, player, town, setup.fromSky);
-			if (setup.opened && !setup.fromSky)
+			if (!setup.crossingLines.empty())
 			{
-				Locator::rewardSystem::value().Tap(_rewards.at(i), player);
+				WriteCrossingFile(setup.crossingLines);
 			}
-			Log(fmt::format("Reward chest {} (kind {}) given at {:.0f}, {:.0f}", i, static_cast<int>(setup.type), point.x,
-			                point.y));
-		}
-	}
-
-	void Runner::UpdateParticles(float seconds)
-	{
-		if (!Locator::particleSystem::has_value())
-		{
-			return;
-		}
-		auto& particles = Locator::particleSystem::value();
-		for (size_t i = 0; i < _particles.size(); ++i)
-		{
-			auto& running = _particles.at(i);
-			const auto restart = _scenario->particles.at(i).restartSeconds;
-			running.seconds += seconds;
-			// An effect that has ended, or whose time is up, starts again
-			if (!particles.IsRunning(running.effect) || (restart > 0.0f && running.seconds >= restart))
+			running.vortex = vortices.Create({point.x, 0.0f, point.y}, setup.type, 0.0f);
+			if (setup.gatheringOffset.has_value())
 			{
-				particles.CloseDown(running.effect);
-				running = {StartParticle(i), 0.0f};
+				const auto gathering = MapPoint(_middle, *setup.gatheringOffset);
+				vortices.SetArrival(running.vortex, {.town = entt::null,
+				                                     .gatheringPlace = {gathering.x, 0.0f, gathering.y},
+				                                     .flockDistance = setup.flockDistance,
+				                                     .flockRadius = setup.flockRadius,
+				                                     .flock = entt::null});
 			}
+			Log(fmt::format("Vortex {} opened at {:.0f}, {:.0f}", i, point.x, point.y));
+		}
+		if (running.vortex != entt::null && !running.fading && setup.fadeOutAfterSeconds.has_value() &&
+		    _seconds >= setup.delaySeconds + *setup.fadeOutAfterSeconds)
+		{
+			running.fading = vortices.StartFadeOut(running.vortex);
+			Log(fmt::format("Vortex {} fading out", i));
 		}
 	}
+}
 
-	void Runner::LogMiracles()
+void Runner::UpdateRewards()
+{
+	if (!Locator::rewardSystem::has_value() || !Locator::terrainSystem::has_value())
 	{
-		if (!_scenario->logMiraclesEvery.has_value() || _seconds < _nextMiracleLog || !Locator::terrainSystem::has_value())
-		{
-			return;
-		}
-		_nextMiracleLog = _seconds + *_scenario->logMiraclesEvery;
-		const auto& land = Locator::terrainSystem::value();
-		Locator::entitiesRegistry::value().Each<const ecs::components::Spell>(
-		    [&](entt::entity, const ecs::components::Spell& spell) {
-			    const glm::vec2 xz(spell.position.x, spell.position.z);
-			    Log(fmt::format("{:.1f} s: miracle {} at ({:.2f}, {:.2f}), land {:.2f}", _seconds,
-			                    static_cast<int>(spell.magicType), xz.x - _middle.x, xz.y - _middle.y, land.GetHeightAt(xz)));
-		    });
+		return;
 	}
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	for (size_t i = 0; i < _rewards.size(); ++i)
+	{
+		const auto& setup = _scenario->rewards.at(i);
+		if (_rewards.at(i) != entt::null || _seconds < setup.delaySeconds)
+		{
+			continue;
+		}
+		const auto point = MapPoint(_middle, setup.offset);
+		const glm::vec3 at {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y};
+		const auto town =
+		    setup.inTown ? Locator::entitiesRegistry::value().Context().towns.at(ScenarioTown(_middle)) : entt::null;
+		_rewards.at(i) = Locator::rewardSystem::value().Create(at, setup.type, player, town, setup.fromSky);
+		if (setup.opened && !setup.fromSky)
+		{
+			Locator::rewardSystem::value().Tap(_rewards.at(i), player);
+		}
+		Log(fmt::format("Reward chest {} (kind {}) given at {:.0f}, {:.0f}", i, static_cast<int>(setup.type), point.x,
+		                point.y));
+	}
+}
 
-	namespace
+void Runner::UpdateParticles(float seconds)
+{
+	if (!Locator::particleSystem::has_value())
 	{
-	glm::vec2 WindowSize()
-	{
-		return Locator::windowing::has_value() ? glm::vec2(Locator::windowing::value().GetSize()) : glm::vec2(1.0f);
+		return;
 	}
+	auto& particles = Locator::particleSystem::value();
+	for (size_t i = 0; i < _particles.size(); ++i)
+	{
+		auto& running = _particles.at(i);
+		const auto restart = _scenario->particles.at(i).restartSeconds;
+		running.seconds += seconds;
+		// An effect that has ended, or whose time is up, starts again
+		if (!particles.IsRunning(running.effect) || (restart > 0.0f && running.seconds >= restart))
+		{
+			particles.CloseDown(running.effect);
+			running = {StartParticle(i), 0.0f};
+		}
+	}
+}
 
-	/// Sends a move of the pointer to where it is, by so much, with the buttons held, as the mouse does
-	void PushMotion(const input::GameActionInterface::ScriptedPointer& pointer, glm::ivec2 moved)
+void Runner::LogMiracles()
+{
+	if (!_scenario->logMiraclesEvery.has_value() || _seconds < _nextMiracleLog || !Locator::terrainSystem::has_value())
 	{
-		SDL_Event event {};
-		event.type = SDL_MOUSEMOTION;
-		event.motion.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
-		event.motion.state = pointer.buttons;
-		event.motion.x = pointer.position.x;
-		event.motion.y = pointer.position.y;
-		event.motion.xrel = moved.x;
-		event.motion.yrel = moved.y;
-		input::MarkInjected(event);
-		SDL_PushEvent(&event);
+		return;
 	}
-	/// What the player's hand holds, for the log
-	std::string HeldByHand()
-	{
-		if (!Locator::handGrabSystem::has_value())
-		{
-			return {};
-		}
-		const auto held = Locator::handGrabSystem::value().GetHeld();
-		return held.has_value() ? fmt::format(", holding {}", static_cast<uint32_t>(*held)) : std::string {};
-	}
-	} // namespace
+	_nextMiracleLog = _seconds + *_scenario->logMiraclesEvery;
+	const auto& land = Locator::terrainSystem::value();
+	Locator::entitiesRegistry::value().Each<const ecs::components::Spell>(
+	    [&](entt::entity, const ecs::components::Spell& spell) {
+		    const glm::vec2 xz(spell.position.x, spell.position.z);
+		    Log(fmt::format("{:.1f} s: miracle {} at ({:.2f}, {:.2f}), land {:.2f}", _seconds,
+		                    static_cast<int>(spell.magicType), xz.x - _middle.x, xz.y - _middle.y, land.GetHeightAt(xz)));
+	    });
+}
 
-	std::optional<glm::ivec2> Runner::OpponentOnScreen(size_t creature, glm::vec2 size) const
-	{
-		const auto self = CreatureAt(creature);
-		if (!self.has_value() || !Locator::creatureFightSystem::has_value() || !Locator::camera::has_value())
-		{
-			return std::nullopt;
-		}
-		const auto opponent = Locator::creatureFightSystem::value().OpponentOf(*self);
-		if (!opponent.has_value())
-		{
-			return std::nullopt;
-		}
-		// The middle of the body is half the height of the creature above its feet
-		const auto& registry = Locator::entitiesRegistry::value();
-		const auto& feet = registry.Get<const ecs::components::Transform>(*opponent).position;
-		const auto height = creature_feedback::k_HeightAtSizeOne *
-		                    ecs::components::ShownSize(registry.Get<const ecs::components::Creature>(*opponent));
-		glm::vec3 screen;
-		if (!Locator::camera::value().ProjectWorldToScreen(feet + glm::vec3(0.0f, height * 0.5f, 0.0f),
-		                                                   {0.0f, 0.0f, size.x, size.y}, screen))
-		{
-			return std::nullopt;
-		}
-		return glm::ivec2(glm::round(glm::vec2(screen)));
-	}
+namespace
+{
+glm::vec2 WindowSize()
+{
+	return Locator::windowing::has_value() ? glm::vec2(Locator::windowing::value().GetSize()) : glm::vec2(1.0f);
+}
 
-	std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size) const
+/// Sends a move of the pointer to where it is, by so much, with the buttons held, as the mouse does
+void PushMotion(const input::GameActionInterface::ScriptedPointer& pointer, glm::ivec2 moved)
+{
+	SDL_Event event {};
+	event.type = SDL_MOUSEMOTION;
+	event.motion.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
+	event.motion.state = pointer.buttons;
+	event.motion.x = pointer.position.x;
+	event.motion.y = pointer.position.y;
+	event.motion.xrel = moved.x;
+	event.motion.yrel = moved.y;
+	input::MarkInjected(event);
+	SDL_PushEvent(&event);
+}
+/// What the player's hand holds, for the log
+std::string HeldByHand()
+{
+	if (!Locator::handGrabSystem::has_value())
 	{
-		auto& registry = Locator::entitiesRegistry::value();
-		const auto& towns = registry.Context().towns;
-		const auto found = towns.find(k_ScenarioTownId);
-		if (found == towns.end() || !registry.Valid(found->second) || !Locator::camera::has_value())
-		{
-			return std::nullopt;
-		}
-		const auto site = registry.Get<const ecs::components::Town>(found->second).worshipSite;
-		const auto* worship = registry.Valid(site) ? registry.TryGet<const ecs::components::WorshipSite>(site) : nullptr;
-		if (worship == nullptr || !registry.Valid(worship->altar))
-		{
-			return std::nullopt;
-		}
-		// The middle of the altar's foot: the line from the camera to it meets the altar's low top first
-		const auto& foot = registry.Get<const ecs::components::Transform>(worship->altar).position;
-		glm::vec3 screen;
-		if (!Locator::camera::value().ProjectWorldToScreen(foot, {0.0f, 0.0f, size.x, size.y}, screen))
-		{
-			return std::nullopt;
-		}
-		return glm::ivec2(glm::round(glm::vec2(screen)));
+		return {};
 	}
+	const auto held = Locator::handGrabSystem::value().GetHeld();
+	return held.has_value() ? fmt::format(", holding {}", static_cast<uint32_t>(*held)) : std::string {};
+}
+} // namespace
 
-	std::optional<glm::ivec2> Runner::CaveCreatureOnScreen(glm::vec2 size)
+std::optional<glm::ivec2> Runner::OpponentOnScreen(size_t creature, glm::vec2 size) const
+{
+	const auto self = CreatureAt(creature);
+	if (!self.has_value() || !Locator::creatureFightSystem::has_value() || !Locator::camera::has_value())
 	{
-		if (!Locator::creatureCaveSystem::has_value() || !Locator::camera::has_value())
-		{
-			return std::nullopt;
-		}
-		const auto& cave = Locator::creatureCaveSystem::value();
-		const auto copy = cave.GetCaveCreature();
-		if (!copy.has_value())
-		{
-			return std::nullopt;
-		}
-		const auto& registry = Locator::entitiesRegistry::value();
-		const auto* transform = registry.TryGet<const ecs::components::Transform>(*copy);
-		const auto* original = registry.TryGet<const ecs::components::CreatureCopy>(*copy);
-		const auto* mesh = original != nullptr && registry.Valid(original->creature)
-		                       ? registry.TryGet<const ecs::components::Mesh>(original->creature)
-		                       : nullptr;
-		const auto& meshes = Locator::resources::value().GetMeshes();
-		if (transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id))
-		{
-			return std::nullopt;
-		}
-		// From the creature's feet up to the middle of its body's bounding box, the first pixel where the cave finds the
-		// creature under the pointer, as it is posed now
-		const auto& camera = Locator::camera::value();
-		const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-		const auto middle = glm::vec3(model * glm::vec4(meshes.Handle(mesh->id)->GetBoundingBox().Center(), 1.0f));
-		glm::vec3 feet;
-		glm::vec3 top;
-		const glm::vec4 viewport {0.0f, 0.0f, size.x, size.y};
-		if (!camera.ProjectWorldToScreen(transform->position, viewport, feet) ||
-		    !camera.ProjectWorldToScreen(middle, viewport, top))
-		{
-			return std::nullopt;
-		}
-		constexpr int k_Steps = 64;
-		for (int step = 0; step <= k_Steps; ++step)
-		{
-			const auto pixel = glm::round(glm::mix(glm::vec2(feet), glm::vec2(top), static_cast<float>(step) / k_Steps));
-			const auto [eye, near] = camera.OnNearPlane(pixel / size);
-			if (cave.CursorOverCaveCreature({
-			        .worldToClip = camera.GetViewProjectionMatrix(),
-			        .resolution = size,
-			        .near = camera.GetNearClip(),
-			        .xScale = camera.GetProjectionMatrix()[0][0],
-			        .camera = eye,
-			        .cursor = pixel,
-			    }))
-			{
-				return glm::ivec2(pixel);
-			}
-		}
 		return std::nullopt;
 	}
-
-	std::string Runner::GivePointerCommand(const Command& command)
+	const auto opponent = Locator::creatureFightSystem::value().OpponentOf(*self);
+	if (!opponent.has_value())
 	{
-		if (!Locator::gameActionSystem::has_value())
+		return std::nullopt;
+	}
+	// The middle of the body is half the height of the creature above its feet
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& feet = registry.Get<const ecs::components::Transform>(*opponent).position;
+	const auto height = creature_feedback::k_HeightAtSizeOne *
+	                    ecs::components::ShownSize(registry.Get<const ecs::components::Creature>(*opponent));
+	glm::vec3 screen;
+	if (!Locator::camera::value().ProjectWorldToScreen(feet + glm::vec3(0.0f, height * 0.5f, 0.0f),
+	                                                   {0.0f, 0.0f, size.x, size.y}, screen))
+	{
+		return std::nullopt;
+	}
+	return glm::ivec2(glm::round(glm::vec2(screen)));
+}
+
+std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size) const
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(k_ScenarioTownId);
+	if (found == towns.end() || !registry.Valid(found->second) || !Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto site = registry.Get<const ecs::components::Town>(found->second).worshipSite;
+	const auto* worship = registry.Valid(site) ? registry.TryGet<const ecs::components::WorshipSite>(site) : nullptr;
+	if (worship == nullptr || !registry.Valid(worship->altar))
+	{
+		return std::nullopt;
+	}
+	// The middle of the altar's foot: the line from the camera to it meets the altar's low top first
+	const auto& foot = registry.Get<const ecs::components::Transform>(worship->altar).position;
+	glm::vec3 screen;
+	if (!Locator::camera::value().ProjectWorldToScreen(foot, {0.0f, 0.0f, size.x, size.y}, screen))
+	{
+		return std::nullopt;
+	}
+	return glm::ivec2(glm::round(glm::vec2(screen)));
+}
+
+std::optional<glm::ivec2> Runner::CaveCreatureOnScreen(glm::vec2 size)
+{
+	if (!Locator::creatureCaveSystem::has_value() || !Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& cave = Locator::creatureCaveSystem::value();
+	const auto copy = cave.GetCaveCreature();
+	if (!copy.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* transform = registry.TryGet<const ecs::components::Transform>(*copy);
+	const auto* original = registry.TryGet<const ecs::components::CreatureCopy>(*copy);
+	const auto* mesh = original != nullptr && registry.Valid(original->creature)
+	                       ? registry.TryGet<const ecs::components::Mesh>(original->creature)
+	                       : nullptr;
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id))
+	{
+		return std::nullopt;
+	}
+	// From the creature's feet up to the middle of its body's bounding box, the first pixel where the cave finds the
+	// creature under the pointer, as it is posed now
+	const auto& camera = Locator::camera::value();
+	const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const auto middle = glm::vec3(model * glm::vec4(meshes.Handle(mesh->id)->GetBoundingBox().Center(), 1.0f));
+	glm::vec3 feet;
+	glm::vec3 top;
+	const glm::vec4 viewport {0.0f, 0.0f, size.x, size.y};
+	if (!camera.ProjectWorldToScreen(transform->position, viewport, feet) ||
+	    !camera.ProjectWorldToScreen(middle, viewport, top))
+	{
+		return std::nullopt;
+	}
+	constexpr int k_Steps = 64;
+	for (int step = 0; step <= k_Steps; ++step)
+	{
+		const auto pixel = glm::round(glm::mix(glm::vec2(feet), glm::vec2(top), static_cast<float>(step) / k_Steps));
+		const auto [eye, near] = camera.OnNearPlane(pixel / size);
+		if (cave.CursorOverCaveCreature({
+		        .worldToClip = camera.GetViewProjectionMatrix(),
+		        .resolution = size,
+		        .near = camera.GetNearClip(),
+		        .xScale = camera.GetProjectionMatrix()[0][0],
+		        .camera = eye,
+		        .cursor = pixel,
+		    }))
 		{
-			return "no controls";
+			return glm::ivec2(pixel);
 		}
-		auto& actions = Locator::gameActionSystem::value();
-		const auto size = WindowSize();
-		auto pointer = actions.GetScriptedPointer().value_or(input::GameActionInterface::ScriptedPointer {
-		    .position = glm::ivec2(actions.GetMousePosition()),
-		});
-		KeepDebugWindowsOffTheMouse(true);
-		_ownsPointer = true;
-		switch (command.kind)
+	}
+	return std::nullopt;
+}
+
+std::string Runner::GivePointerCommand(const Command& command)
+{
+	if (!Locator::gameActionSystem::has_value())
+	{
+		return "no controls";
+	}
+	auto& actions = Locator::gameActionSystem::value();
+	const auto size = WindowSize();
+	auto pointer = actions.GetScriptedPointer().value_or(input::GameActionInterface::ScriptedPointer {
+	    .position = glm::ivec2(actions.GetMousePosition()),
+	});
+	KeepDebugWindowsOffTheMouse(true);
+	_ownsPointer = true;
+	switch (command.kind)
+	{
+	case Kind::PointerOnOpponent:
+	{
+		const auto to = OpponentOnScreen(command.creature, size);
+		if (!to.has_value())
 		{
-		case Kind::PointerOnOpponent:
+			return "no opponent on the screen";
+		}
+		const auto moved = *to - pointer.position;
+		pointer.position = *to;
+		_framesSincePointerMoved = 0;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerOnCaveCreature:
+	{
+		const auto to = CaveCreatureOnScreen(size);
+		if (!to.has_value())
 		{
-			const auto to = OpponentOnScreen(command.creature, size);
-			if (!to.has_value())
-			{
-				return "no opponent on the screen";
-			}
-			const auto moved = *to - pointer.position;
-			pointer.position = *to;
-			_framesSincePointerMoved = 0;
-			actions.SetScriptedPointer(pointer);
-			PushMotion(pointer, moved);
+			return "no creature in the cave on the screen";
+		}
+		const auto moved = *to - pointer.position;
+		pointer.position = *to;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerOnAltar:
+	{
+		const auto to = AltarOnScreen(size);
+		if (!to.has_value())
+		{
+			return "no altar on the screen";
+		}
+		const auto moved = *to - pointer.position;
+		pointer.position = *to;
+		_framesSincePointerMoved = 0;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerTo:
+	{
+		const auto to = glm::ivec2(glm::round(command.point * size));
+		const auto moved = to - pointer.position;
+		pointer.position = to;
+		_framesSincePointerMoved = 0;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerPress:
+	case Kind::PointerRelease:
+	{
+		const bool press = command.kind == Kind::PointerPress;
+		// A press waits for the game to know what the pointer is over, so it acts as a press of a hand at rest
+		if (press && !input::pointer_settle::PressMayStart(_framesSincePointerMoved))
+		{
+			_pressWaiting = command;
 			break;
 		}
-		case Kind::PointerOnCaveCreature:
-		{
-			const auto to = CaveCreatureOnScreen(size);
-			if (!to.has_value())
-			{
-				return "no creature in the cave on the screen";
-			}
-			const auto moved = *to - pointer.position;
-			pointer.position = *to;
-			actions.SetScriptedPointer(pointer);
-			PushMotion(pointer, moved);
-			break;
-		}
-		case Kind::PointerOnAltar:
-		{
-			const auto to = AltarOnScreen(size);
-			if (!to.has_value())
-			{
-				return "no altar on the screen";
-			}
-			const auto moved = *to - pointer.position;
-			pointer.position = *to;
-			_framesSincePointerMoved = 0;
-			actions.SetScriptedPointer(pointer);
-			PushMotion(pointer, moved);
-			break;
-		}
-		case Kind::PointerTo:
-		{
-			const auto to = glm::ivec2(glm::round(command.point * size));
-			const auto moved = to - pointer.position;
-			pointer.position = to;
-			_framesSincePointerMoved = 0;
-			actions.SetScriptedPointer(pointer);
-			PushMotion(pointer, moved);
-			break;
-		}
-		case Kind::PointerPress:
-		case Kind::PointerRelease:
-		{
-			const bool press = command.kind == Kind::PointerPress;
-			// A press waits for the game to know what the pointer is over, so it acts as a press of a hand at rest
-			if (press && !input::pointer_settle::PressMayStart(_framesSincePointerMoved))
-			{
-				_pressWaiting = command;
-				break;
-			}
-			const auto button = static_cast<uint8_t>(command.value);
-			pointer.buttons = press ? (pointer.buttons | SDL_BUTTON(button)) : (pointer.buttons & ~SDL_BUTTON(button));
-			actions.SetScriptedPointer(pointer);
-			SDL_Event event {};
-			event.type = press ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
-			event.button.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
-			event.button.button = button;
-			event.button.state = press ? SDL_PRESSED : SDL_RELEASED;
-			event.button.clicks = 1;
-			event.button.x = pointer.position.x;
-			event.button.y = pointer.position.y;
-			input::MarkInjected(event);
-			SDL_PushEvent(&event);
-			_handWatchSeconds = 0.5f;
-			break;
-		}
-		case Kind::PointerSweep:
-			_framesSincePointerMoved = 0;
-			actions.SetScriptedPointer(pointer);
-			_sweep = PointerSweep {.pixelsPerSecond = command.point * size / command.amount, .secondsLeft = command.amount};
-			break;
-		case Kind::WheelTurn:
-		{
-			actions.SetScriptedPointer(pointer);
-			SDL_Event event {};
-			event.type = SDL_MOUSEWHEEL;
-			event.wheel.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
-			event.wheel.y = static_cast<int32_t>(command.value) * (command.ctrl ? -1 : 1);
-			event.wheel.preciseY = static_cast<float>(event.wheel.y);
-			input::MarkInjected(event);
-			SDL_PushEvent(&event);
-			break;
-		}
-		default:
-			break;
-		}
-		return HandOnScreen();
+		const auto button = static_cast<uint8_t>(command.value);
+		pointer.buttons = press ? (pointer.buttons | SDL_BUTTON(button)) : (pointer.buttons & ~SDL_BUTTON(button));
+		actions.SetScriptedPointer(pointer);
+		SDL_Event event {};
+		event.type = press ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+		event.button.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
+		event.button.button = button;
+		event.button.state = press ? SDL_PRESSED : SDL_RELEASED;
+		event.button.clicks = 1;
+		event.button.x = pointer.position.x;
+		event.button.y = pointer.position.y;
+		input::MarkInjected(event);
+		SDL_PushEvent(&event);
+		_handWatchSeconds = 0.5f;
+		break;
 	}
-
-	void Runner::UpdatePointer(float seconds)
+	case Kind::PointerSweep:
+		_framesSincePointerMoved = 0;
+		actions.SetScriptedPointer(pointer);
+		_sweep = PointerSweep {.pixelsPerSecond = command.point * size / command.amount, .secondsLeft = command.amount};
+		break;
+	case Kind::WheelTurn:
 	{
-		++_framesSincePointerMoved;
-		if (_pressWaiting.has_value() && input::pointer_settle::PressMayStart(_framesSincePointerMoved))
+		actions.SetScriptedPointer(pointer);
+		SDL_Event event {};
+		event.type = SDL_MOUSEWHEEL;
+		event.wheel.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
+		event.wheel.y = static_cast<int32_t>(command.value) * (command.ctrl ? -1 : 1);
+		event.wheel.preciseY = static_cast<float>(event.wheel.y);
+		input::MarkInjected(event);
+		SDL_PushEvent(&event);
+		break;
+	}
+	default:
+		break;
+	}
+	return HandOnScreen();
+}
+
+void Runner::UpdatePointer(float seconds)
+{
+	++_framesSincePointerMoved;
+	if (_pressWaiting.has_value() && input::pointer_settle::PressMayStart(_framesSincePointerMoved))
+	{
+		const auto waiting = std::exchange(_pressWaiting, std::nullopt);
+		static_cast<void>(GivePointerCommand(*waiting));
+	}
+	if (!Locator::gameActionSystem::has_value())
+	{
+		return;
+	}
+	auto& actions = Locator::gameActionSystem::value();
+	// Once the commands are done and the buttons let go, the mouse is the player's again
+	if (const auto pointer = actions.GetScriptedPointer(); _ownsPointer && pointer.has_value() && pointer->buttons == 0 &&
+	                                                       !_sweep.has_value() && _timeline.done && _handWatchSeconds <= 0.0f)
+	{
+		actions.SetScriptedPointer(std::nullopt);
+		KeepDebugWindowsOffTheMouse(false);
+		_ownsPointer = false;
+	}
+	if (_handWatchSeconds > 0.0f || _sweep.has_value())
+	{
+		_handWatchSeconds -= seconds;
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Testbed {:.3f}s: {}", _seconds, HandOnScreen());
+	}
+	if (_sweep.has_value())
+	{
+		_framesSincePointerMoved = 0;
+		auto pointer = actions.GetScriptedPointer().value_or(input::GameActionInterface::ScriptedPointer {});
+		const auto step = std::min(seconds, _sweep->secondsLeft);
+		const auto exact = _sweep->pixelsPerSecond * step + _sweep->remainder;
+		const auto moved = glm::ivec2(exact);
+		_sweep->remainder = exact - glm::vec2(moved);
+		// While the camera turns with the mouse its pointer is held, and only the movement comes through
+		if (!actions.IsCursorFrozen())
 		{
-			const auto waiting = std::exchange(_pressWaiting, std::nullopt);
-			static_cast<void>(GivePointerCommand(*waiting));
+			pointer.position = glm::clamp(pointer.position + moved, glm::ivec2(0), glm::ivec2(WindowSize()) - 1);
 		}
-		if (!Locator::gameActionSystem::has_value())
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		_sweep->secondsLeft -= step;
+		if (_sweep->secondsLeft <= 0.0f)
 		{
-			return;
-		}
-		auto& actions = Locator::gameActionSystem::value();
-		// Once the commands are done and the buttons let go, the mouse is the player's again
-		if (const auto pointer = actions.GetScriptedPointer(); _ownsPointer && pointer.has_value() && pointer->buttons == 0 &&
-		                                                       !_sweep.has_value() && _timeline.done &&
-		                                                       _handWatchSeconds <= 0.0f)
-		{
-			actions.SetScriptedPointer(std::nullopt);
-			KeepDebugWindowsOffTheMouse(false);
-			_ownsPointer = false;
-		}
-		if (_handWatchSeconds > 0.0f || _sweep.has_value())
-		{
-			_handWatchSeconds -= seconds;
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Testbed {:.3f}s: {}", _seconds, HandOnScreen());
-		}
-		if (_sweep.has_value())
-		{
-			_framesSincePointerMoved = 0;
-			auto pointer = actions.GetScriptedPointer().value_or(input::GameActionInterface::ScriptedPointer {});
-			const auto step = std::min(seconds, _sweep->secondsLeft);
-			const auto exact = _sweep->pixelsPerSecond * step + _sweep->remainder;
-			const auto moved = glm::ivec2(exact);
-			_sweep->remainder = exact - glm::vec2(moved);
-			// While the camera turns with the mouse its pointer is held, and only the movement comes through
-			if (!actions.IsCursorFrozen())
-			{
-				pointer.position = glm::clamp(pointer.position + moved, glm::ivec2(0), glm::ivec2(WindowSize()) - 1);
-			}
-			actions.SetScriptedPointer(pointer);
-			PushMotion(pointer, moved);
-			_sweep->secondsLeft -= step;
-			if (_sweep->secondsLeft <= 0.0f)
-			{
-				_sweep.reset();
-				const auto line = fmt::format("{:.2f}s: moved: {}", _seconds, HandOnScreen());
-				SPDLOG_LOGGER_INFO(spdlog::get("game"), "Testbed {}", line);
-				Log(line);
-			}
+			_sweep.reset();
+			const auto line = fmt::format("{:.2f}s: moved: {}", _seconds, HandOnScreen());
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Testbed {}", line);
+			Log(line);
 		}
 	}
+}
 
-	std::string Runner::HandOnScreen() const
+std::string Runner::HandOnScreen() const
+{
+	if (!Locator::gameActionSystem::has_value() || !Locator::handSystem::has_value() || !Locator::camera::has_value())
 	{
-		if (!Locator::gameActionSystem::has_value() || !Locator::handSystem::has_value() || !Locator::camera::has_value())
-		{
-			return {};
-		}
-		const auto cursor = Locator::gameActionSystem::value().GetMousePosition();
-		const auto hand = Locator::handSystem::value().GetPlayerHands()[0];
-		const auto& transform = Locator::entitiesRegistry::value().Get<Transform>(hand);
-		const auto& position = transform.position;
-		const auto size = WindowSize();
-		glm::vec3 screen {0.0f};
-		Locator::camera::value().ProjectWorldToScreen(position, {0.0f, 0.0f, size.x, size.y}, screen);
-		const auto& camera = Locator::camera::value();
-		const auto cues = camera.GetModel().GetHandCues();
-		constexpr std::array<std::string_view, 4> k_DragModes {"pan", "edge rotate", "pitch", "pitch from the top"};
-		const auto drag = !cues.dragging              ? std::string_view("none")
-		                  : cues.dragMode.has_value() ? k_DragModes.at(static_cast<size_t>(*cues.dragMode))
-		                                              : std::string_view("undecided");
-		return fmt::format("cursor ({}, {}), hand ({:.0f}, {:.0f}) at ({:.1f}, {:.1f}, {:.1f}), {:.1f} from the camera, scale "
-		                   "{:.3f}, hints {:#x}, drag {}, camera heading {:.3f} pitch {:.3f}{}{}",
-		                   cursor.x, cursor.y, screen.x, screen.y, position.x, position.y, position.z,
-		                   glm::distance(position, camera.GetOrigin()), transform.scale.y, cues.tricons, drag,
-		                   camera.GetRotation().y, camera.GetRotation().x,
-		                   Locator::gameActionSystem::value().IsCursorFrozen() ? ", held" : "", HeldByHand());
+		return {};
 	}
+	const auto cursor = Locator::gameActionSystem::value().GetMousePosition();
+	const auto hand = Locator::handSystem::value().GetPlayerHands()[0];
+	const auto& transform = Locator::entitiesRegistry::value().Get<Transform>(hand);
+	const auto& position = transform.position;
+	const auto size = WindowSize();
+	glm::vec3 screen {0.0f};
+	Locator::camera::value().ProjectWorldToScreen(position, {0.0f, 0.0f, size.x, size.y}, screen);
+	const auto& camera = Locator::camera::value();
+	const auto cues = camera.GetModel().GetHandCues();
+	constexpr std::array<std::string_view, 4> k_DragModes {"pan", "edge rotate", "pitch", "pitch from the top"};
+	const auto drag = !cues.dragging              ? std::string_view("none")
+	                  : cues.dragMode.has_value() ? k_DragModes.at(static_cast<size_t>(*cues.dragMode))
+	                                              : std::string_view("undecided");
+	return fmt::format("cursor ({}, {}), hand ({:.0f}, {:.0f}) at ({:.1f}, {:.1f}, {:.1f}), {:.1f} from the camera, scale "
+	                   "{:.3f}, hints {:#x}, drag {}, camera heading {:.3f} pitch {:.3f}{}{}",
+	                   cursor.x, cursor.y, screen.x, screen.y, position.x, position.y, position.z,
+	                   glm::distance(position, camera.GetOrigin()), transform.scale.y, cues.tricons, drag,
+	                   camera.GetRotation().y, camera.GetRotation().x,
+	                   Locator::gameActionSystem::value().IsCursorFrozen() ? ", held" : "", HeldByHand());
+}
 
-	void Runner::Log(std::string line)
+void Runner::Log(std::string line)
+{
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Testbed: {}", line);
+	_log.push_back(std::move(line));
+	while (_log.size() > k_LogLines)
 	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Testbed: {}", line);
-		_log.push_back(std::move(line));
-		while (_log.size() > k_LogLines)
+		_log.pop_front();
+	}
+}
+
+std::optional<CrowdProgress> Runner::GetCrowdProgress() const
+{
+	if (_scenario == nullptr || !_scenario->crowd.has_value())
+	{
+		return std::nullopt;
+	}
+	return _crowdProgress;
+}
+
+std::span<const benchmark::StageInfo> Runner::GetStages() const
+{
+	if (_recorder == nullptr)
+	{
+		return {};
+	}
+	return _recorder->Stages();
+}
+
+uint32_t Runner::GetWarmUpLeft() const
+{
+	return _settledFrames >= _benchmark.warmUpFrames ? 0 : _benchmark.warmUpFrames - _settledFrames;
+}
+
+void Runner::SpawnCrowd()
+{
+	if (_scenario == nullptr || !_scenario->crowd.has_value() || _crowdProgress.Done() ||
+	    !Locator::terrainSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto start = std::chrono::steady_clock::now();
+	const auto batch = std::min(_scenario->crowd->perFrame, _crowdProgress.total - _crowdNext);
+	for (size_t i = 0; i < batch; ++i)
+	{
+		SpawnCrowdMember(_crowdNext++);
+	}
+	_crowdProgress.spawned = _crowdNext;
+	_crowdProgress.spawnMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+	++_crowdProgress.spawnFrames;
+	if (_crowdProgress.Done())
+	{
+		Log(fmt::format("Spawned {} in {:.0f} ms over {} frames", _crowdProgress.total, _crowdProgress.spawnMs,
+		                _crowdProgress.spawnFrames));
+	}
+}
+
+void Runner::SpawnCrowdMember(size_t index)
+{
+	const auto& land = Locator::terrainSystem::value();
+	const auto onLand = [&land, this](glm::vec2 offset) {
+		const auto point = MapPoint(_middle, offset);
+		return glm::vec3(point.x, land.GetHeightAt(point), point.y);
+	};
+	if (!_crowdCreatures.empty())
+	{
+		const auto& member = _crowdCreatures.at(index);
+		_crowdEntities.push_back(CreatureArchetype::Create(onLand(member.offset), member.owner, member.species, 0,
+		                                                   glm::radians(member.facingDegrees), k_DefaultSize,
+		                                                   CreatureArchetype::StartBody(member.species)));
+		return;
+	}
+	// The towns first, then their homes and stores, then the villagers who live in them
+	const auto towns = _village.towns.size();
+	const auto abodes = _village.abodes.size();
+	if (index < towns)
+	{
+		const auto& town = _village.towns.at(index);
+		_crowdEntities.push_back(
+		    ecs::archetypes::TownArchetype::Create(static_cast<int>(index), onLand(town.offset), town.owner, town.tribe));
+		return;
+	}
+	if (index < towns + abodes)
+	{
+		const auto& abode = _village.abodes.at(index - towns);
+		_crowdAbodes.push_back(ecs::archetypes::AbodeArchetype::Create(static_cast<uint32_t>(abode.town), onLand(abode.offset),
+		                                                               abode.type, glm::radians(abode.yawDegrees), 1.0f,
+		                                                               k_CrowdFood, k_CrowdWood));
+		return;
+	}
+	const auto& member = _village.villagers.at(index - towns - abodes);
+	const auto& home = _village.abodes.at(member.abode);
+	const auto entity =
+	    ecs::archetypes::VillagerArchetype::Create(onLand(home.offset), onLand(member.offset), member.type, member.age);
+	_crowdEntities.push_back(entity);
+	// It lives in the home laid out for it, rather than the first in its town with room
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto abode = _crowdAbodes.at(member.abode);
+	const auto& townIds = registry.Context().towns;
+	const auto town = townIds.find(static_cast<uint32_t>(home.town));
+	if (abode != entt::null && registry.Valid(abode) && town != townIds.end())
+	{
+		Locator::townSystem::value().AddVillagerToAbode(abode, entity);
+		registry.Get<ecs::components::Villager>(entity).town = town->second;
+	}
+}
+
+void Runner::Measure()
+{
+	if (_recorder == nullptr || !_crowdProgress.Done() || !Locator::profiler::has_value())
+	{
+		return;
+	}
+	if (_settledFrames < _benchmark.warmUpFrames)
+	{
+		++_settledFrames;
+		return;
+	}
+	// The last frame, whole: it ended as this one started
+	const auto& profiler = Locator::profiler::value();
+	const auto& entry = profiler.GetEntries().at(profiler.GetEntryIndex(-1));
+	const auto frame = entry.frameEnd - entry.frameStart;
+	const auto& draw = entry.stages.at(static_cast<size_t>(Profiler::Stage::SceneDraw));
+	const bool drawn = draw.finalized && draw.start >= entry.frameStart && draw.start <= entry.frameEnd;
+	const auto update = drawn ? draw.start - entry.frameStart : frame;
+	std::array<float, static_cast<size_t>(Profiler::Stage::_count)> stages {};
+	for (size_t i = 0; i < stages.size(); ++i)
+	{
+		stages.at(i) = static_cast<float>(Milliseconds(entry.stages.at(i).total));
+	}
+	// What the renderer last drew, the frame before
+	const auto* renderStats = bgfx::getStats();
+	_recorder->Add(static_cast<float>(Milliseconds(frame)), static_cast<float>(Milliseconds(update)),
+	               static_cast<float>(Milliseconds(frame - update)), stages,
+	               renderStats != nullptr ? static_cast<float>(renderStats->numDraw) : 0.0f);
+	if (++_framesSinceSummary >= k_FramesPerSummary || _recorder->Count() == _recorder->Capacity())
+	{
+		_framesSinceSummary = 0;
+		_liveResults = _recorder->Summarise();
+	}
+	if (_benchmark.autoSave.has_value() && !_saved && _recorder->Count() >= _recorder->Capacity())
+	{
+		_saved = true;
+		_liveResults = _recorder->Summarise();
+		const auto written = SaveResults(_benchmark.autoSave);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Benchmark {}: frame mean {:.2f} ms p95 {:.2f} max {:.2f}; results {}",
+		                   _scenario->id, _liveResults.frame.average, _liveResults.frame.p95, _liveResults.frame.max,
+		                   written.has_value() ? written->generic_string() : "not written");
+		if (auto* game = Game::Instance(); game != nullptr)
 		{
-			_log.pop_front();
+			game->RequestQuit();
 		}
 	}
+}
 
-	std::optional<CrowdProgress> Runner::GetCrowdProgress() const
+std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
+{
+	if (!Locator::entitiesRegistry::has_value())
 	{
-		if (_scenario == nullptr || !_scenario->crowd.has_value())
-		{
-			return std::nullopt;
-		}
-		return _crowdProgress;
+		return {};
 	}
+	auto& registry = Locator::entitiesRegistry::value();
+	return {
+	    {"placed", registry.Size<Transform>()},
+	    {"creatures", registry.Size<Creature>()},
+	    {"villagers", registry.Size<ecs::components::Villager>()},
+	    {"abodes", registry.Size<ecs::components::Abode>()},
+	    {"towns", registry.Size<ecs::components::Town>()},
+	};
+}
 
-	std::span<const benchmark::StageInfo> Runner::GetStages() const
+std::optional<std::filesystem::path> Runner::SaveResults(std::optional<std::filesystem::path> base)
+{
+	if (_scenario == nullptr || _recorder == nullptr || _recorder->Count() == 0)
 	{
-		if (_recorder == nullptr)
-		{
-			return {};
-		}
-		return _recorder->Stages();
+		return std::nullopt;
 	}
-
-	uint32_t Runner::GetWarmUpLeft() const
+	if (!base.has_value())
 	{
-		return _settledFrames >= _benchmark.warmUpFrames ? 0 : _benchmark.warmUpFrames - _settledFrames;
-	}
-
-	void Runner::SpawnCrowd()
-	{
-		if (_scenario == nullptr || !_scenario->crowd.has_value() || _crowdProgress.Done() ||
-		    !Locator::terrainSystem::has_value() || !Locator::infoConstants::has_value())
-		{
-			return;
-		}
-		const auto start = std::chrono::steady_clock::now();
-		const auto batch = std::min(_scenario->crowd->perFrame, _crowdProgress.total - _crowdNext);
-		for (size_t i = 0; i < batch; ++i)
-		{
-			SpawnCrowdMember(_crowdNext++);
-		}
-		_crowdProgress.spawned = _crowdNext;
-		_crowdProgress.spawnMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-		++_crowdProgress.spawnFrames;
-		if (_crowdProgress.Done())
-		{
-			Log(fmt::format("Spawned {} in {:.0f} ms over {} frames", _crowdProgress.total, _crowdProgress.spawnMs,
-			                _crowdProgress.spawnFrames));
-		}
-	}
-
-	void Runner::SpawnCrowdMember(size_t index)
-	{
-		const auto& land = Locator::terrainSystem::value();
-		const auto onLand = [&land, this](glm::vec2 offset) {
-			const auto point = MapPoint(_middle, offset);
-			return glm::vec3(point.x, land.GetHeightAt(point), point.y);
-		};
-		if (!_crowdCreatures.empty())
-		{
-			const auto& member = _crowdCreatures.at(index);
-			_crowdEntities.push_back(CreatureArchetype::Create(onLand(member.offset), member.owner, member.species, 0,
-			                                                   glm::radians(member.facingDegrees), k_DefaultSize,
-			                                                   CreatureArchetype::StartBody(member.species)));
-			return;
-		}
-		// The towns first, then their homes and stores, then the villagers who live in them
-		const auto towns = _village.towns.size();
-		const auto abodes = _village.abodes.size();
-		if (index < towns)
-		{
-			const auto& town = _village.towns.at(index);
-			_crowdEntities.push_back(
-			    ecs::archetypes::TownArchetype::Create(static_cast<int>(index), onLand(town.offset), town.owner, town.tribe));
-			return;
-		}
-		if (index < towns + abodes)
-		{
-			const auto& abode = _village.abodes.at(index - towns);
-			_crowdAbodes.push_back(
-			    ecs::archetypes::AbodeArchetype::Create(static_cast<uint32_t>(abode.town), onLand(abode.offset), abode.type,
-			                                            glm::radians(abode.yawDegrees), 1.0f, k_CrowdFood, k_CrowdWood));
-			return;
-		}
-		const auto& member = _village.villagers.at(index - towns - abodes);
-		const auto& home = _village.abodes.at(member.abode);
-		const auto entity =
-		    ecs::archetypes::VillagerArchetype::Create(onLand(home.offset), onLand(member.offset), member.type, member.age);
-		_crowdEntities.push_back(entity);
-		// It lives in the home laid out for it, rather than the first in its town with room
-		auto& registry = Locator::entitiesRegistry::value();
-		const auto abode = _crowdAbodes.at(member.abode);
-		const auto& townIds = registry.Context().towns;
-		const auto town = townIds.find(static_cast<uint32_t>(home.town));
-		if (abode != entt::null && registry.Valid(abode) && town != townIds.end())
-		{
-			Locator::townSystem::value().AddVillagerToAbode(abode, entity);
-			registry.Get<ecs::components::Villager>(entity).town = town->second;
-		}
-	}
-
-	void Runner::Measure()
-	{
-		if (_recorder == nullptr || !_crowdProgress.Done() || !Locator::profiler::has_value())
-		{
-			return;
-		}
-		if (_settledFrames < _benchmark.warmUpFrames)
-		{
-			++_settledFrames;
-			return;
-		}
-		// The last frame, whole: it ended as this one started
-		const auto& profiler = Locator::profiler::value();
-		const auto& entry = profiler.GetEntries().at(profiler.GetEntryIndex(-1));
-		const auto frame = entry.frameEnd - entry.frameStart;
-		const auto& draw = entry.stages.at(static_cast<size_t>(Profiler::Stage::SceneDraw));
-		const bool drawn = draw.finalized && draw.start >= entry.frameStart && draw.start <= entry.frameEnd;
-		const auto update = drawn ? draw.start - entry.frameStart : frame;
-		std::array<float, static_cast<size_t>(Profiler::Stage::_count)> stages {};
-		for (size_t i = 0; i < stages.size(); ++i)
-		{
-			stages.at(i) = static_cast<float>(Milliseconds(entry.stages.at(i).total));
-		}
-		// What the renderer last drew, the frame before
-		const auto* renderStats = bgfx::getStats();
-		_recorder->Add(static_cast<float>(Milliseconds(frame)), static_cast<float>(Milliseconds(update)),
-		               static_cast<float>(Milliseconds(frame - update)), stages,
-		               renderStats != nullptr ? static_cast<float>(renderStats->numDraw) : 0.0f);
-		if (++_framesSinceSummary >= k_FramesPerSummary || _recorder->Count() == _recorder->Capacity())
-		{
-			_framesSinceSummary = 0;
-			_liveResults = _recorder->Summarise();
-		}
-		if (_benchmark.autoSave.has_value() && !_saved && _recorder->Count() >= _recorder->Capacity())
-		{
-			_saved = true;
-			_liveResults = _recorder->Summarise();
-			const auto written = SaveResults(_benchmark.autoSave);
-			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Benchmark {}: frame mean {:.2f} ms p95 {:.2f} max {:.2f}; results {}",
-			                   _scenario->id, _liveResults.frame.average, _liveResults.frame.p95, _liveResults.frame.max,
-			                   written.has_value() ? written->generic_string() : "not written");
-			if (auto* game = Game::Instance(); game != nullptr)
-			{
-				game->RequestQuit();
-			}
-		}
-	}
-
-	std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
-	{
-		if (!Locator::entitiesRegistry::has_value())
-		{
-			return {};
-		}
-		auto& registry = Locator::entitiesRegistry::value();
-		return {
-		    {"placed", registry.Size<Transform>()},
-		    {"creatures", registry.Size<Creature>()},
-		    {"villagers", registry.Size<ecs::components::Villager>()},
-		    {"abodes", registry.Size<ecs::components::Abode>()},
-		    {"towns", registry.Size<ecs::components::Town>()},
-		};
-	}
-
-	std::optional<std::filesystem::path> Runner::SaveResults(std::optional<std::filesystem::path> base)
-	{
-		if (_scenario == nullptr || _recorder == nullptr || _recorder->Count() == 0)
-		{
-			return std::nullopt;
-		}
-		if (!base.has_value())
-		{
-			const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-			std::tm local {};
+		const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+		std::tm local {};
 #ifdef _WIN32
-			localtime_s(&local, &now);
+		localtime_s(&local, &now);
 #else
-			localtime_r(&now, &local);
+		localtime_r(&now, &local);
 #endif
-			base = std::filesystem::path("benchmarks") / fmt::format("{}_{}_{:04}{:02}{:02}_{:02}{:02}{:02}", _scenario->id,
-			                                                         k_Build, local.tm_year + 1900, local.tm_mon + 1,
-			                                                         local.tm_mday, local.tm_hour, local.tm_min, local.tm_sec);
-		}
-		benchmark::RunInfo run {
-		    .scenarioId = std::string(_scenario->id),
-		    .scenarioName = std::string(_scenario->name),
-		    .build = std::string(k_Build),
-		    .crowd = _crowdProgress.total,
-		    .spawnMs = _crowdProgress.spawnMs,
-		    .spawnFrames = _crowdProgress.spawnFrames,
-		    .warmUpFrames = _benchmark.warmUpFrames,
-		    .entityCounts = EntityCounts(),
-		};
-		if (Locator::windowing::has_value())
-		{
-			const auto size = Locator::windowing::value().GetSize();
-			run.width = static_cast<uint32_t>(size.x);
-			run.height = static_cast<uint32_t>(size.y);
-		}
-		std::error_code error;
-		if (base->has_parent_path())
-		{
-			std::filesystem::create_directories(base->parent_path(), error);
-		}
-		auto jsonPath = *base;
-		jsonPath += ".json";
-		auto csvPath = *base;
-		csvPath += ".csv";
-		std::ofstream json(jsonPath, std::ios::binary);
-		std::ofstream csv(csvPath, std::ios::binary);
-		if (!json || !csv)
-		{
-			Log(fmt::format("Couldn't write {}", jsonPath.generic_string()));
-			return std::nullopt;
-		}
-		const auto results = _recorder->Summarise();
-		json << benchmark::ToJson(run, results, _recorder->Stages());
-		csv << benchmark::ToCsv(run, results, _recorder->Stages());
-		Log(fmt::format("Saved {}", jsonPath.generic_string()));
-		return jsonPath;
+		base = std::filesystem::path("benchmarks") / fmt::format("{}_{}_{:04}{:02}{:02}_{:02}{:02}{:02}", _scenario->id,
+		                                                         k_Build, local.tm_year + 1900, local.tm_mon + 1, local.tm_mday,
+		                                                         local.tm_hour, local.tm_min, local.tm_sec);
 	}
-
-	std::string Runner::PlayBoatFilm(const Command& command) const
+	benchmark::RunInfo run {
+	    .scenarioId = std::string(_scenario->id),
+	    .scenarioName = std::string(_scenario->name),
+	    .build = std::string(k_Build),
+	    .crowd = _crowdProgress.total,
+	    .spawnMs = _crowdProgress.spawnMs,
+	    .spawnFrames = _crowdProgress.spawnFrames,
+	    .warmUpFrames = _benchmark.warmUpFrames,
+	    .entityCounts = EntityCounts(),
+	};
+	if (Locator::windowing::has_value())
 	{
-		if (!Locator::boatLaunchSystem::has_value() || !Locator::terrainSystem::has_value())
-		{
-			return "no boat film";
-		}
-		const auto dock = MapPoint(_middle, command.point);
-		// The sailing clip starts the boat about 67 metres west and 59 south of where it is played from: played from there,
-		// the boat sets off from the lake's north-east corner and crosses it to the south west
-		constexpr glm::vec2 k_SailingClipStart {-67.3f, -59.4f};
-		const auto corner = flat_land::k_LakeCentre + flat_land::k_LakeHalfExtent;
-		const auto sailing = corner - k_SailingClipStart;
-		const ecs::systems::BoatLaunchSystemInterface::Places places {
-		    .dock = {dock.x, Locator::terrainSystem::value().GetHeightAt(dock), dock.y},
-		    .sailingStart = {sailing.x, 0.0f, sailing.y},
-		};
-		Locator::boatLaunchSystem::value().Play(places);
-		return fmt::format("the explorers' boat film plays from ({:.0f}, {:.0f})", dock.x, dock.y);
+		const auto size = Locator::windowing::value().GetSize();
+		run.width = static_cast<uint32_t>(size.x);
+		run.height = static_cast<uint32_t>(size.y);
 	}
-
-	std::string Runner::RecordChallenge(const Command& command) const
+	std::error_code error;
+	if (base->has_parent_path())
 	{
-		if (!Locator::terrainSystem::has_value())
+		std::filesystem::create_directories(base->parent_path(), error);
+	}
+	auto jsonPath = *base;
+	jsonPath += ".json";
+	auto csvPath = *base;
+	csvPath += ".csv";
+	std::ofstream json(jsonPath, std::ios::binary);
+	std::ofstream csv(csvPath, std::ios::binary);
+	if (!json || !csv)
+	{
+		Log(fmt::format("Couldn't write {}", jsonPath.generic_string()));
+		return std::nullopt;
+	}
+	const auto results = _recorder->Summarise();
+	json << benchmark::ToJson(run, results, _recorder->Stages());
+	csv << benchmark::ToCsv(run, results, _recorder->Stages());
+	Log(fmt::format("Saved {}", jsonPath.generic_string()));
+	return jsonPath;
+}
+
+std::string Runner::PlayBoatFilm(const Command& command) const
+{
+	if (!Locator::boatLaunchSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return "no boat film";
+	}
+	const auto dock = MapPoint(_middle, command.point);
+	// The sailing clip starts the boat about 67 metres west and 59 south of where it is played from: played from there,
+	// the boat sets off from the lake's north-east corner and crosses it to the south west
+	constexpr glm::vec2 k_SailingClipStart {-67.3f, -59.4f};
+	const auto corner = flat_land::k_LakeCentre + flat_land::k_LakeHalfExtent;
+	const auto sailing = corner - k_SailingClipStart;
+	const ecs::systems::BoatLaunchSystemInterface::Places places {
+	    .dock = {dock.x, Locator::terrainSystem::value().GetHeightAt(dock), dock.y},
+	    .sailingStart = {sailing.x, 0.0f, sailing.y},
+	};
+	Locator::boatLaunchSystem::value().Play(places);
+	return fmt::format("the explorers' boat film plays from ({:.0f}, {:.0f})", dock.x, dock.y);
+}
+
+std::string Runner::RecordChallenge(const Command& command) const
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return "no land";
+	}
+	// The camera is put over the place first, and the picture is of the frame drawn from there
+	const auto at = MapPoint(_middle, command.point);
+	const auto focus = glm::vec3(at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y);
+	const auto position = focus + glm::vec3(0.0f, 50.0f, 70.0f);
+	auto& camera = Locator::camera::value();
+	camera.SetOrigin(position);
+	camera.SetFocus(focus);
+	script::challenge_snapshots::Snapshot snapshot;
+	snapshot.challenge = static_cast<uint32_t>(command.value);
+	snapshot.reminderScript = "";
+	snapshot.success = command.amount;
+	snapshot.position = position;
+	snapshot.focus = focus;
+	snapshot.quest = command.ctrl;
+	auto* game = Game::Instance();
+	if (game != nullptr && game->GetInterface() != nullptr)
+	{
+		const auto names = game->GetInterface()->GetTexts().GetHelpNames();
+		if (const auto found = std::ranges::find(names, command.title); found != names.end())
 		{
-			return "no land";
+			snapshot.title = static_cast<uint32_t>(std::distance(names.begin(), found));
 		}
-		// The camera is put over the place first, and the picture is of the frame drawn from there
+	}
+	chlapi::CHLApi::RecordChallenge(snapshot, script::challenge_snapshots::Call::Start);
+	return fmt::format("challenge {} ({}), {:.0f}% done{}", command.value, command.title, command.amount * 100.0f,
+	                   command.ctrl ? ", a quest" : "");
+}
+
+std::string Runner::GiveAdvisorCommand(const Command& command) const
+{
+	if (!Locator::advisorSystem::has_value())
+	{
+		return "no advisors";
+	}
+	auto& control = Locator::advisorSystem::value().GetController();
+	// The scripts name the good advisor 1 and the evil one 2
+	const int32_t type = command.value == 0 ? 1 : 2;
+	const auto who = command.value == 0 ? "the good advisor" : "the evil advisor";
+	using Action = Command::AdvisorAction;
+	switch (command.advisor)
+	{
+	case Action::Out:
+		control.SpiritEject(type, false);
+		return fmt::format("{} comes out", who);
+	case Action::Appear:
+		control.SpiritEject(type, true);
+		return fmt::format("{} appears", who);
+	case Action::Home:
+		control.SpiritHome(type, false);
+		return fmt::format("{} goes home", who);
+	case Action::Vanish:
+		control.SpiritHome(type, true);
+		return fmt::format("{} vanishes", who);
+	case Action::Cling:
+		control.SpiritCling(type, command.point.x, command.point.y);
+		return fmt::format("{} clings at ({:.2f}, {:.2f})", who, command.point.x, command.point.y);
+	case Action::Fly:
+		control.SpiritFly(type, command.point.x, command.point.y);
+		return fmt::format("{} flies to ({:.2f}, {:.2f})", who, command.point.x, command.point.y);
+	case Action::PointOnScreen:
+	{
+		const auto& screen = control.GetScreen();
+		control.SpiritScreenPoint(type, glm::ivec2(static_cast<int32_t>(static_cast<float>(screen.width) * command.point.x),
+		                                           static_cast<int32_t>(static_cast<float>(screen.height) * command.point.y)));
+		return fmt::format("{} points at ({:.2f}, {:.2f}) on the screen", who, command.point.x, command.point.y);
+	}
+	case Action::PointAtLand:
+	case Action::LookAtLand:
+	{
 		const auto at = MapPoint(_middle, command.point);
-		const auto focus = glm::vec3(at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y);
-		const auto position = focus + glm::vec3(0.0f, 50.0f, 70.0f);
-		auto& camera = Locator::camera::value();
-		camera.SetOrigin(position);
-		camera.SetFocus(focus);
-		script::challenge_snapshots::Snapshot snapshot;
-		snapshot.challenge = static_cast<uint32_t>(command.value);
-		snapshot.reminderScript = "";
-		snapshot.success = command.amount;
-		snapshot.position = position;
-		snapshot.focus = focus;
-		snapshot.quest = command.ctrl;
-		auto* game = Game::Instance();
-		if (game != nullptr && game->GetInterface() != nullptr)
+		const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
+		const glm::vec3 position(at.x, height, at.y);
+		if (command.advisor == Action::LookAtLand)
 		{
-			const auto names = game->GetInterface()->GetTexts().GetHelpNames();
-			if (const auto found = std::ranges::find(names, command.title); found != names.end())
-			{
-				snapshot.title = static_cast<uint32_t>(std::distance(names.begin(), found));
-			}
+			control.SpiritLookAtPosition(type, position);
+			return fmt::format("{} looks at ({:.0f}, {:.0f})", who, at.x, at.y);
 		}
-		chlapi::CHLApi::RecordChallenge(snapshot, script::challenge_snapshots::Call::Start);
-		return fmt::format("challenge {} ({}), {:.0f}% done{}", command.value, command.title, command.amount * 100.0f,
-		                   command.ctrl ? ", a quest" : "");
+		control.SpiritPointPosition(type, position, command.gentle);
+		return fmt::format("{} points at ({:.0f}, {:.0f}){}", who, at.x, at.y, command.gentle ? " out in the world" : "");
 	}
-
-	std::string Runner::GiveAdvisorCommand(const Command& command) const
-	{
-		if (!Locator::advisorSystem::has_value())
-		{
-			return "no advisors";
-		}
-		auto& control = Locator::advisorSystem::value().GetController();
-		// The scripts name the good advisor 1 and the evil one 2
-		const int32_t type = command.value == 0 ? 1 : 2;
-		const auto who = command.value == 0 ? "the good advisor" : "the evil advisor";
-		using Action = Command::AdvisorAction;
-		switch (command.advisor)
-		{
-		case Action::Out:
-			control.SpiritEject(type, false);
-			return fmt::format("{} comes out", who);
-		case Action::Appear:
-			control.SpiritEject(type, true);
-			return fmt::format("{} appears", who);
-		case Action::Home:
-			control.SpiritHome(type, false);
-			return fmt::format("{} goes home", who);
-		case Action::Vanish:
-			control.SpiritHome(type, true);
-			return fmt::format("{} vanishes", who);
-		case Action::Cling:
-			control.SpiritCling(type, command.point.x, command.point.y);
-			return fmt::format("{} clings at ({:.2f}, {:.2f})", who, command.point.x, command.point.y);
-		case Action::Fly:
-			control.SpiritFly(type, command.point.x, command.point.y);
-			return fmt::format("{} flies to ({:.2f}, {:.2f})", who, command.point.x, command.point.y);
-		case Action::PointOnScreen:
-		{
-			const auto& screen = control.GetScreen();
-			control.SpiritScreenPoint(type,
-			                          glm::ivec2(static_cast<int32_t>(static_cast<float>(screen.width) * command.point.x),
-			                                     static_cast<int32_t>(static_cast<float>(screen.height) * command.point.y)));
-			return fmt::format("{} points at ({:.2f}, {:.2f}) on the screen", who, command.point.x, command.point.y);
-		}
-		case Action::PointAtLand:
-		case Action::LookAtLand:
-		{
-			const auto at = MapPoint(_middle, command.point);
-			const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
-			const glm::vec3 position(at.x, height, at.y);
-			if (command.advisor == Action::LookAtLand)
-			{
-				control.SpiritLookAtPosition(type, position);
-				return fmt::format("{} looks at ({:.0f}, {:.0f})", who, at.x, at.y);
-			}
-			control.SpiritPointPosition(type, position, command.gentle);
-			return fmt::format("{} points at ({:.0f}, {:.0f}){}", who, at.x, at.y, command.gentle ? " out in the world" : "");
-		}
-		case Action::PlayAnim:
-			control.SpiritPlayAnim(type, command.point.x, command.point.y, command.anim, command.amount);
-			return fmt::format("{} plays {}", who, help::spirits::AnimName(command.anim));
-		case Action::Feel:
-			control.Dude(type == 1 ? help::spirits::k_GoodDude : help::spirits::k_EvilDude).SetEmotion(command.anim, 1.0f);
-			return fmt::format("{} feels {}", who, help::spirits::EmotionName(command.anim));
-		}
-		return "";
+	case Action::PlayAnim:
+		control.SpiritPlayAnim(type, command.point.x, command.point.y, command.anim, command.amount);
+		return fmt::format("{} plays {}", who, help::spirits::AnimName(command.anim));
+	case Action::Feel:
+		control.Dude(type == 1 ? help::spirits::k_GoodDude : help::spirits::k_EvilDude).SetEmotion(command.anim, 1.0f);
+		return fmt::format("{} feels {}", who, help::spirits::EmotionName(command.anim));
 	}
+	return "";
+}
