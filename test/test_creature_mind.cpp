@@ -345,10 +345,10 @@ TEST(CreatureIdleMind, BeingIdleIsWaitingThenYawningTwice)
 	// The yawn keeps the body busy 30 turns; the mind sees it free the turn after, starts the next wait on the one after
 	// that, and yawns again 12 turns on
 	EXPECT_EQ(actionTurns[1], 12 + 31 + 1 + 12);
-	ASSERT_GE(eyes.size(), 3u);
+	// The lids droop with each yawn and stay down between the yawns, until it stops what it does
+	ASSERT_GE(eyes.size(), 2u);
 	EXPECT_EQ(eyes[0], creature_mind::Eyes::Sleepy);
-	EXPECT_EQ(eyes[1], creature_mind::Eyes::Normal);
-	EXPECT_EQ(eyes[2], creature_mind::Eyes::Sleepy);
+	EXPECT_EQ(eyes[1], creature_mind::Eyes::Sleepy);
 }
 
 TEST(CreatureIdleMind, IdleStepsPullAFaceAsTheyStartAndEveryFewSeconds)
@@ -732,7 +732,7 @@ TEST(CreatureLook, ItWatchesTheFirstThingThatItSees)
 	creature_look::Target target;
 	// With nothing watched, even a thing of no interest far past the range takes over
 	EXPECT_TRUE(creature_look::Consider(target, {.id = 4, .kind = creature_look::Interest::None, .distance = 500.0f}, 0.0f,
-	                                    150.0f, 0.999f, 10));
+	                                    150.0f, {.things = 0.999f}, 10));
 	EXPECT_EQ(target.id, 4u);
 	EXPECT_EQ(target.watchedTurns, 0u);
 	creature_look::Watch(target, true);
@@ -744,12 +744,12 @@ TEST(CreatureLook, AMoreInterestingThingTakesOver)
 	creature_look::Target tree {.id = 1, .interest = 0.3f, .watchedTurns = 0};
 	// The creature catches its eye more than the tree holds it
 	EXPECT_TRUE(creature_look::Consider(tree, {.id = 2, .kind = creature_look::Interest::Creature, .distance = 40.0f}, 30.0f,
-	                                    150.0f, 0.999f, 10));
+	                                    150.0f, {.things = 0.999f}, 10));
 	EXPECT_EQ(tree.id, 2u);
 	EXPECT_FLOAT_EQ(tree.interest, 0.85f);
 	// A villager does not catch its eye more than the creature holds it
 	EXPECT_FALSE(creature_look::Consider(tree, {.id = 3, .kind = creature_look::Interest::Villager, .distance = 10.0f}, 40.0f,
-	                                     150.0f, 0.999f, 10));
+	                                     150.0f, {.things = 0.999f}, 10));
 	EXPECT_EQ(tree.id, 2u);
 }
 
@@ -758,15 +758,15 @@ TEST(CreatureLook, TheLongerItWatchesTheLessElseCatchesItsEye)
 	// Watching a tree for 18 whole seconds: a creature catches its eye a tenth as much, 0.085 against 0.3
 	creature_look::Target tree {.id = 1, .interest = 0.3f, .watchedTurns = 189};
 	EXPECT_FALSE(creature_look::Consider(tree, {.id = 2, .kind = creature_look::Interest::Creature, .distance = 40.0f}, 30.0f,
-	                                     150.0f, 0.999f, 10));
+	                                     150.0f, {.things = 0.999f}, 10));
 	// At 5 whole seconds (59 turns), three quarters as much: 0.6375 against 0.3
 	tree.watchedTurns = 59;
 	EXPECT_TRUE(creature_look::Consider(tree, {.id = 2, .kind = creature_look::Interest::Creature, .distance = 40.0f}, 30.0f,
-	                                    150.0f, 0.999f, 10));
+	                                    150.0f, {.things = 0.999f}, 10));
 	// After twenty seconds, nothing else does
 	creature_look::Target bored {.id = 1, .interest = 0.25f, .watchedTurns = 200};
 	EXPECT_FALSE(creature_look::Consider(bored, {.id = 2, .kind = creature_look::Interest::Dove, .distance = 0.0f}, 140.0f,
-	                                     150.0f, 0.999f, 10));
+	                                     150.0f, {.things = 0.999f}, 10));
 }
 
 TEST(CreatureLook, WhatItWatchesHoldsItLessFarAway)
@@ -777,6 +777,47 @@ TEST(CreatureLook, WhatItWatchesHoldsItLessFarAway)
 	// Held to the range: never less than nothing
 	EXPECT_FLOAT_EQ(creature_look::Hold(tree, 300.0f, 100.0f, 1.0f), 0.0f);
 	EXPECT_FLOAT_EQ(creature_look::Hold({}, 30.0f, 100.0f, 1.0f), 0.0f);
+}
+
+TEST(CreatureLook, TheMountainsOrTheWaterTakeOverByTheirOwnWeight)
+{
+	const creature_look::Weights weights {.things = 0.5f, .mountains = 0.5f, .water = 0.1f};
+	// Watching nothing, the mountains take over even past the range
+	creature_look::Target target;
+	EXPECT_TRUE(creature_look::ConsiderLand(
+	    target, {.sight = creature_look::Sight::Mountains, .place = {300.0f, 40.0f}, .distance = 400.0f}, 0.0f, 150.0f, weights,
+	    10));
+	EXPECT_TRUE(creature_look::Watches(target));
+	EXPECT_FALSE(target.id.has_value());
+	EXPECT_EQ(target.sight, creature_look::Sight::Mountains);
+	EXPECT_FLOAT_EQ(target.interest, creature_look::k_LandInterest);
+	// A villager near by catches its eye more (0.25) than the far mountains hold it (nothing at the range)
+	EXPECT_TRUE(creature_look::Consider(target, {.id = 3, .kind = creature_look::Interest::Villager, .distance = 10.0f}, 400.0f,
+	                                    150.0f, weights, 10));
+	EXPECT_EQ(target.id, 3u);
+	EXPECT_FALSE(target.place.has_value());
+	// Near water does not catch its eye (0.05) more than the villager holds it (0.25)
+	EXPECT_FALSE(creature_look::ConsiderLand(
+	    target, {.sight = creature_look::Sight::Water, .place = {0.0f, 0.0f}, .distance = 20.0f}, 10.0f, 150.0f, weights, 10));
+	EXPECT_EQ(target.id, 3u);
+}
+
+TEST(CreatureLook, WhatItWatchesHoldsItByTheWeightOfItsKind)
+{
+	// Watching water of weight 0.1 near by, it holds the creature at 0.05: a tree (0.3 x 0.5 = 0.15) takes over
+	const creature_look::Weights weights {.things = 0.5f, .mountains = 0.5f, .water = 0.1f};
+	creature_look::Target water;
+	creature_look::ConsiderLand(water, {.sight = creature_look::Sight::Water, .place = {0.0f, 0.0f}, .distance = 20.0f}, 0.0f,
+	                            150.0f, weights, 10);
+	EXPECT_TRUE(creature_look::Consider(water, {.id = 9, .kind = creature_look::Interest::Tree, .distance = 20.0f}, 20.0f,
+	                                    150.0f, weights, 10));
+	EXPECT_EQ(water.id, 9u);
+	// Out of view, the mountains are dropped as a thing is
+	creature_look::Target mountains {.sight = creature_look::Sight::Mountains, .place = glm::vec2 {1.0f, 1.0f}};
+	creature_look::Watch(mountains, true);
+	EXPECT_EQ(mountains.watchedTurns, 1u);
+	creature_look::Watch(mountains, false);
+	EXPECT_FALSE(creature_look::Watches(mountains));
 }
 
 TEST(CreatureLook, WhatGoesOutOfViewIsDropped)
@@ -1024,6 +1065,32 @@ TEST(CreatureNeedsMind, ItSleepsWithItsEyesClosedUntilRested)
 	commands = creature_mind::Think(mind, body.Senses(), Always(1));
 	EXPECT_EQ(commands.playOnce, animations::k_Confused);
 	EXPECT_EQ(commands.eyes, creature_mind::Eyes::Sleepy);
+}
+
+TEST(CreatureIdleMind, WokenItsLidsDroopUntilItStopsWhatItDoes)
+{
+	creature_mind::IdleMind mind;
+	FakeBody body;
+	creature_mind::Plan(mind, creature_mind::Activity::BeIdle,
+	                    {{.kind = creature_mind::Step::Kind::Action, .animation = animations::k_Confused, .sleepyEyes = true},
+	                     {.kind = creature_mind::Step::Kind::Wait, .seconds = 0.2f}});
+	// Taking up the plan, its eyes look rested first; then the dazed look droops them
+	auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
+	EXPECT_TRUE(commands.restEyes);
+	EXPECT_EQ(commands.eyes, creature_mind::Eyes::Sleepy);
+	body.Obey(commands, 2);
+	// The droop stays through the end of the look and the wait after it
+	bool rested = false;
+	for (int turn = 0; turn < 20 && !rested; ++turn)
+	{
+		commands = creature_mind::Think(mind, body.Senses(), Always(1));
+		EXPECT_NE(commands.eyes, creature_mind::Eyes::Normal);
+		rested = commands.restEyes;
+		body.Obey(commands, 1);
+	}
+	// It stopped what it did: its eyes look rested again
+	EXPECT_TRUE(rested);
+	EXPECT_GE(mind.step, mind.agenda.size());
 }
 
 TEST(CreatureNeedsMind, APooTakesFourSecondsAndDropsAsItEnds)

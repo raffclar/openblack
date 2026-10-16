@@ -233,3 +233,29 @@ bool openblack::creature_object_beliefs::CanSee(uint16_t looking, uint16_t direc
 	}
 	return apart <= k_SightHalfAngle || sameCell;
 }
+
+int32_t openblack::creature_object_beliefs::TownCellDistance(glm::ivec2 a, glm::ivec2 b)
+{
+	const auto dx = std::abs(a.x - b.x);
+	const auto dz = std::abs(a.y - b.y);
+	return dx < dz ? (dx >> 1) + dz : (dz >> 1) + dx;
+}
+
+std::optional<uint32_t> openblack::creature_object_beliefs::NearestOtherTown(glm::ivec2 from, std::span<const TownCell> towns,
+                                                                             std::optional<uint32_t> last)
+{
+	// No town further than this counts
+	constexpr int32_t k_FurthestTown = 10'000'000;
+	std::optional<uint32_t> nearest;
+	auto best = k_FurthestTown;
+	for (const auto& town : towns)
+	{
+		const auto distance = TownCellDistance(from, town.cell);
+		if (distance < best && town.id != last)
+		{
+			nearest = town.id;
+			best = distance;
+		}
+	}
+	return nearest;
+}

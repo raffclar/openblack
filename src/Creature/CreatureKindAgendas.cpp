@@ -148,7 +148,7 @@ std::vector<Step> creature_mind::ThrowDie(std::optional<uint32_t> pickUp, uint32
 	agenda.push_back({.kind = Step::Kind::WatchFlying,
 	                  .object = die,
 	                  .face = creature_face::Cue::Amazed,
-	                  .gaze = Gaze {.object = die},
+	                  .gaze = Gaze {.object = die, .itself = true},
 	                  .main = true});
 	const bool happy = random(k_DieOutcomeLots) > 0;
 	agenda.push_back({.kind = Step::Kind::Action,
