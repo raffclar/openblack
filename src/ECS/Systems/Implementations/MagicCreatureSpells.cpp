@@ -30,6 +30,7 @@
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureSpellCasting.h"
 #include "Creature/CreatureSpellMind.h"
+#include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
@@ -406,6 +407,10 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 				target = creature_spells::Target(event.spell).value_or(slot.before);
 			}
 			*value = creature_spells::Ease(slot.before, target, event.ratio);
+			if (value == &creature->strength)
+			{
+				ecs::archetypes::CreatureArchetype::ShowStrength(entity);
+			}
 		}
 		if (event.spell == Spell::Freeze)
 		{
@@ -441,6 +446,10 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 		if (value != nullptr)
 		{
 			*value = slot.before;
+			if (value == &creature->strength)
+			{
+				ecs::archetypes::CreatureArchetype::ShowStrength(entity);
+			}
 		}
 		if (event.spell == Spell::Freeze)
 		{

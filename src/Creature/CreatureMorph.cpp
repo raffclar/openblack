@@ -26,12 +26,22 @@ float Axis(float value)
 
 creature_morph::Morph creature_morph::FromAttributes(float alignment, float fatness, float strength, float speciesStrength)
 {
-	const auto shownStrength = (k_SpeciesStrengthWeight * speciesStrength) + ((1.0f - k_SpeciesStrengthWeight) * strength);
 	return {
 	    .evilGood = Axis(alignment),
 	    .thinFat = Axis((2.0f * fatness) - 1.0f),
-	    .weakStrong = Axis((2.0f * shownStrength) - 1.0f),
+	    .weakStrong = StrengthLook(strength, speciesStrength),
 	};
+}
+
+float creature_morph::StrengthLook(float strength, float speciesStrength)
+{
+	const auto shownStrength = (k_SpeciesStrengthWeight * speciesStrength) + ((1.0f - k_SpeciesStrengthWeight) * strength);
+	return Axis((2.0f * shownStrength) - 1.0f);
+}
+
+float creature_morph::CopiedWeakStrong(float source, float scale)
+{
+	return std::clamp(source < 0.0f ? source / scale : source * scale, 0.0f, 1.0f);
 }
 
 float creature_morph::ClampScale(float scale)

@@ -43,6 +43,12 @@ constexpr float k_UnknownSpeciesStrength = 0.5f;
 /// own strength is speciesStrength, 0 to 1
 [[nodiscard]] Morph FromAttributes(float alignment, float fatness, float strength, float speciesStrength);
 
+/// The weak to strong look, -1 to 1, of a creature of strength 0 to 1, of a species whose own strength is speciesStrength
+[[nodiscard]] float StrengthLook(float strength, float speciesStrength);
+/// The weak to strong look of a creature made from another at a scale: the other's look times the scale, or divided by
+/// it when the other looks weak, from 0 to 1
+[[nodiscard]] float CopiedWeakStrong(float source, float scale);
+
 [[nodiscard]] float ClampScale(float scale);
 
 /// The game draws a creature of size 1 this tall, by the height of its rest pose's bones

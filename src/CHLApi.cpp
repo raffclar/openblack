@@ -2009,6 +2009,7 @@ void SetProperty() // 022 SET_PROPERTY
 		{
 			// Its body shows it
 			creature->strength = value;
+			ecs::archetypes::CreatureArchetype::ShowStrength(object);
 			return;
 		}
 		if (auto* globe = registry.TryGet<ecs::components::OneOffSpellSeed>(object); globe != nullptr)
@@ -3886,10 +3887,8 @@ void CreatureCreateRelativeToCreature() // 069 CREATURE_CREATE_RELATIVE_TO_CREAT
 {
 	// A new creature of the species given, made from another: as big and as strong as that one times the scale, standing
 	// on the ground where the script says. It belongs to the first player who has no creature of their own.
-	// It takes no notice of reactions until a script tells it to.
-	// TODO(creature-script-natives): the game also starts how strong its body looks from how strong the other creature's
-	// body looks, times the scale (or divided by it when weak), from none to fully strong, until its strength next
-	// changes. openblack works out the look from the strength each time, so it can't keep that.
+	// It takes no notice of reactions until a script tells it to. How strong its body looks comes from how strong the
+	// other creature's body looks, until its strength is set or changed by an amount.
 	const auto type = Pop().intVal;
 	const auto position = PopVec();
 	const auto scale = Popf();
@@ -3930,6 +3929,16 @@ void CreatureCreateRelativeToCreature() // 069 CREATURE_CREATE_RELATIVE_TO_CREAT
 	if (!registry.AllOf<ecs::components::CreatureReactionsOff>(created))
 	{
 		registry.Assign<ecs::components::CreatureReactionsOff>(created);
+	}
+	// The look of the other creature as its body shows it now
+	const auto* fromMorph = registry.TryGet<const ecs::components::CreatureMorph>(source);
+	auto* morph = registry.TryGet<ecs::components::CreatureMorph>(created);
+	if (fromMorph != nullptr && morph != nullptr)
+	{
+		const auto& other = registry.Get<const ecs::components::Creature>(source);
+		const auto look = fromMorph->strengthLook.value_or(
+		    creature_morph::StrengthLook(other.strength, ecs::archetypes::CreatureArchetype::SpeciesStrength(other.species)));
+		morph->strengthLook = creature_morph::CopiedWeakStrong(look, scale);
 	}
 	RegisterCreated(created);
 	PushObject(created);

@@ -35,6 +35,9 @@ public:
 	[[nodiscard]] static float DrawnScale(CreatureType species, float size);
 	/// The species' own strength, 0 to 1, which counts a little towards how strong its creatures look
 	[[nodiscard]] static float SpeciesStrength(CreatureType species);
+	/// The creature's body takes the weak to strong look of its strength now, as when its strength is set or changed by an
+	/// amount
+	static void ShowStrength(entt::entity creature);
 
 	static entt::entity Create(const glm::vec3& position, PlayerNames playerName, CreatureType creatureType,
 	                           entt::id_type creatureMindId, float yAngleRadians, float scale, const Body& body);

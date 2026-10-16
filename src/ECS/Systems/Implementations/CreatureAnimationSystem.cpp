@@ -105,8 +105,10 @@ void Kick(const ecs::Registry& registry, entt::entity entity, CreatureAnimation&
 
 creature_morph::Morph TargetMorph(const Creature& creature, const CreatureMorph& morph)
 {
-	return creature_morph::FromAttributes(creature.alignment, morph.shownFatness, creature.strength,
-	                                      ecs::archetypes::CreatureArchetype::SpeciesStrength(creature.species));
+	auto target = creature_morph::FromAttributes(creature.alignment, morph.shownFatness, creature.strength,
+	                                             ecs::archetypes::CreatureArchetype::SpeciesStrength(creature.species));
+	target.weakStrong = morph.strengthLook.value_or(target.weakStrong);
+	return target;
 }
 
 CreatureRig::Mesh EvilGoodMesh(float value)

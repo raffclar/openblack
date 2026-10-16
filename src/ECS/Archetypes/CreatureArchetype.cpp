@@ -88,6 +88,17 @@ CreatureArchetype::Body CreatureArchetype::StartBody(CreatureType species)
 	return {.alignment = 0.0f, .fatness = info->startFatness, .strength = info->strength};
 }
 
+void CreatureArchetype::ShowStrength(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	auto* morph = registry.TryGet<CreatureMorph>(creature);
+	if (body != nullptr && morph != nullptr)
+	{
+		morph->strengthLook = creature_morph::StrengthLook(body->strength, SpeciesStrength(body->species));
+	}
+}
+
 entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames playerName, CreatureType creatureType,
                                        entt::id_type creatureMindId, float yAngleRadians, float scale, const Body& body)
 {
@@ -106,7 +117,8 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	                                            .made = ++registry.Context().creaturesMade});
 	// The body is drawn with the base mesh's skins, its shape blended towards the other meshes
 	registry.Assign<Mesh>(entity, creature::GetIdFromType(creatureType, CreatureBody::Appearance::Base));
-	registry.Assign<CreatureMorph>(entity, CreatureMorph {.shownFatness = body.fatness, .drawn = morph, .revision = 0});
+	registry.Assign<CreatureMorph>(
+	    entity, CreatureMorph {.shownFatness = body.fatness, .drawn = morph, .strengthLook = morph.weakStrong, .revision = 0});
 	registry.Assign<CreatureAnimation>(entity);
 	registry.Assign<CreatureEyes>(entity);
 	registry.Assign<CreatureMindState>(entity);

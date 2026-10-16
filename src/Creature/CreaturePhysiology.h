@@ -117,6 +117,8 @@ struct Shape
 	float size {1.0f};
 	/// The smaller size it is shown at while in its temple's pen; none elsewhere
 	std::optional<float> penSize;
+	/// The strength just after it last changed by an amount, which the body then shows; none when it did not change so
+	std::optional<float> shownStrength {};
 };
 
 /// The size its body is shown at, which sets how fast it uses up its energy and how much it can hold: its own size, or

@@ -140,3 +140,23 @@ TEST(CreatureMorph, ACreatureOfSizeOneIsFifteenUnitsTall)
 	EXPECT_FLOAT_EQ(creature_morph::RestHeight(rest), 40.0f);
 	EXPECT_FLOAT_EQ(creature_morph::DrawnScale(2.0f, 0.0f), 2.0f);
 }
+
+TEST(CreatureMorph, ACopyLooksAsStrongAsTheOtherTimesTheScale)
+{
+	EXPECT_FLOAT_EQ(creature_morph::CopiedWeakStrong(0.4f, 1.5f), 0.6f);
+	// A strong look never goes past fully strong
+	EXPECT_FLOAT_EQ(creature_morph::CopiedWeakStrong(0.8f, 2.0f), 1.0f);
+	// A weak look is divided by the scale, and a copy never looks weak
+	EXPECT_FLOAT_EQ(creature_morph::CopiedWeakStrong(-0.5f, 2.0f), 0.0f);
+	EXPECT_FLOAT_EQ(creature_morph::CopiedWeakStrong(-0.5f, -2.0f), 0.25f);
+}
+
+TEST(CreatureMorph, TheStrengthLookIsTheWeakStrongAxis)
+{
+	EXPECT_FLOAT_EQ(creature_morph::StrengthLook(0.5f, 0.5f), 0.0f);
+	EXPECT_FLOAT_EQ(creature_morph::StrengthLook(1.0f, 0.5f), 0.8f);
+	EXPECT_FLOAT_EQ(creature_morph::StrengthLook(0.25f, 1.0f), -0.2f);
+	EXPECT_FLOAT_EQ(creature_morph::StrengthLook(1.0f, 1.0f), 1.0f);
+	EXPECT_FLOAT_EQ(creature_morph::FromAttributes(0.0f, 0.5f, 0.25f, 1.0f).weakStrong,
+	                creature_morph::StrengthLook(0.25f, 1.0f));
+}
