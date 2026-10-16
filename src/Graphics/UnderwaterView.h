@@ -68,6 +68,10 @@ public:
 	/// The puffs of spray there are at once at most
 	[[nodiscard]] uint32_t SprayCount() const { return _sprayCount * k_SprayPuffs; }
 	static constexpr uint32_t k_SprayPuffs = 128;
+	/// The air that the waves drive under the water at the cliffs: k_Bubbles particles for each point along the foot
+	/// of a cliff, on the same instances as the spray. Binds them; false when there are no cliffs.
+	bool BindBubbles(std::span<const glm::vec4> cliffFoot, uint32_t revision);
+	static constexpr uint32_t k_Bubbles = 96;
 	/// The spray's noise volume (see underwater::SprayNoiseVolume), made the first time it is asked for
 	[[nodiscard]] TextureHandle SprayNoise();
 
@@ -99,6 +103,8 @@ private:
 	uint32_t _sprayCount {0};
 	std::optional<uint32_t> _sprayRevision;
 	bgfx::TextureHandle _sprayNoise = BGFX_INVALID_HANDLE;
+	bgfx::VertexBufferHandle _bubbleMesh = BGFX_INVALID_HANDLE;
+	bgfx::IndexBufferHandle _bubbleIndices = BGFX_INVALID_HANDLE;
 	bgfx::IndexBufferHandle _moteIndices = BGFX_INVALID_HANDLE;
 };
 

@@ -276,6 +276,18 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		spray->Submit(postView);
 	}
+	// The air under the water at the foot of the cliffs
+	if (const auto* bubbles = _shaderManager->GetShader("UnderwaterBubbles");
+	    bubbles != nullptr && system.GetEffectOff() != underwater::Effect::Bubbles &&
+	    _underwater->BindBubbles(system.GetSeabed().cliffFoot, system.GetSeabedRevision()))
+	{
+		setUniforms(*bubbles);
+		bubbles->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
+		bubbles->SetTextureSampler("s_shore", 2, shoreMap);
+		bubbles->SetTextureSampler("s_sprayNoise", 3, _underwater->SprayNoise());
+		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+		bubbles->Submit(postView);
+	}
 }
 
 void Renderer::SetTerrainUnderwater(const ShaderProgram& program, bool active) const

@@ -86,16 +86,19 @@ UnderwaterView::~UnderwaterView()
 	{
 		bgfx::destroy(_sprayNoise);
 	}
-	for (auto* buffer : {&_sprayMesh, &_sprayInstances})
+	for (auto* buffer : {&_sprayMesh, &_sprayInstances, &_bubbleMesh})
 	{
 		if (bgfx::isValid(*buffer))
 		{
 			bgfx::destroy(*buffer);
 		}
 	}
-	if (bgfx::isValid(_sprayIndices))
+	for (auto* indices : {&_sprayIndices, &_bubbleIndices})
 	{
-		bgfx::destroy(_sprayIndices);
+		if (bgfx::isValid(*indices))
+		{
+			bgfx::destroy(*indices);
+		}
 	}
 	for (auto& kind : _reef)
 	{
@@ -540,4 +543,38 @@ TextureHandle UnderwaterView::SprayNoise()
 		bgfx::setName(_sprayNoise, "Underwater Spray Noise");
 	}
 	return fromBgfx(_sprayNoise);
+}
+
+bool UnderwaterView::BindBubbles(std::span<const glm::vec4> cliffFoot, uint32_t revision)
+{
+	// The cliffs' instances are the spray's: bind those, then put the bubbles' squares in place of the spray's
+	if (!BindSpray(cliffFoot, revision))
+	{
+		return false;
+	}
+	if (!bgfx::isValid(_bubbleMesh))
+	{
+		std::vector<glm::vec3> vertices;
+		std::vector<uint16_t> indices;
+		constexpr std::array<glm::vec2, 4> k_Corners {{{-1.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, 1.0f}}};
+		for (uint32_t bubble = 0; bubble < k_Bubbles; ++bubble)
+		{
+			const auto first = static_cast<uint16_t>(vertices.size());
+			for (const auto& corner : k_Corners)
+			{
+				vertices.emplace_back(corner, static_cast<float>(bubble));
+			}
+			indices.insert(indices.end(), {first, static_cast<uint16_t>(first + 1), static_cast<uint16_t>(first + 2), first,
+			                               static_cast<uint16_t>(first + 2), static_cast<uint16_t>(first + 3)});
+		}
+		bgfx::VertexLayout layout;
+		layout.begin().add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float).end();
+		_bubbleMesh = bgfx::createVertexBuffer(
+		    bgfx::copy(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(glm::vec3))), layout);
+		_bubbleIndices =
+		    bgfx::createIndexBuffer(bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t))));
+	}
+	bgfx::setVertexBuffer(0, _bubbleMesh);
+	bgfx::setIndexBuffer(_bubbleIndices);
+	return true;
 }
