@@ -20,6 +20,7 @@
 #include <limits>
 #include <optional>
 #include <utility>
+#include <vector>
 
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
@@ -38,6 +39,7 @@
 #include "Creature/CreatureLostThing.h"
 #include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreatureSteal.h"
+#include "Creature/CreatureTempleParts.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/BuildingSites.h"
@@ -79,6 +81,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/Map.h"
+#include "ECS/MapCells.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
@@ -89,6 +92,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -170,16 +174,47 @@ float HeightOf(const ecs::Registry& registry, entt::entity thing)
 	}
 	const auto* transform = registry.TryGet<const Transform>(thing);
 	const auto* mesh = registry.TryGet<const Mesh>(thing);
-	if (transform == nullptr || mesh == nullptr || !Locator::resources::has_value())
+	// An altar has its model's size from when its site is made, before the model shows
+	const auto meshId = mesh != nullptr                       ? std::optional(mesh->id)
+	                    : registry.AllOf<WorshipAltar>(thing) ? mind_detail::AltarMeshOf(registry, thing)
+	                                                          : std::nullopt;
+	if (transform == nullptr || !meshId.has_value() || !Locator::resources::has_value())
 	{
 		return 0.0f;
 	}
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(mesh->id))
+	if (!meshes.Contains(*meshId))
 	{
 		return 0.0f;
 	}
-	return meshes.Handle(mesh->id)->GetBoundingBox().Size().y * transform->scale.y;
+	return meshes.Handle(*meshId)->GetBoundingBox().Size().y * transform->scale.y;
+}
+
+/// The worship site altars that stand in a map cell, by the cells that the outline of each altar's model covers
+std::vector<entt::entity> AltarsIn(const ecs::Registry& registry, glm::ivec2 cell)
+{
+	std::vector<entt::entity> altars;
+	if (!Locator::resources::has_value())
+	{
+		return altars;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	registry.Each<const WorshipAltar, const Transform>(
+	    [&](entt::entity altar, const WorshipAltar& /*unused*/, const Transform& transform) {
+		    const auto meshId = mind_detail::AltarMeshOf(registry, altar);
+		    if (!meshId.has_value() || !meshes.Contains(*meshId))
+		    {
+			    return;
+		    }
+		    const auto box = meshes.Handle(*meshId)->GetBoundingBox();
+		    const auto outline = ecs::map_cells::OutlineOfBox(transform.position, transform.rotation, transform.scale.x,
+		                                                      box.Center(), box.Size() * 0.5f);
+		    if (creature_temple_parts::AltarIn(outline, cell))
+		    {
+			    altars.push_back(altar);
+		    }
+	    });
+	return altars;
 }
 
 /// The game turns in one second
@@ -327,8 +362,8 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 	{
 		return kinds::k_Tree;
 	}
-	// A worship site is a part of its player's temple
-	if (registry.AllOf<WorshipSite>(thing))
+	// A worship site and the altar at its head are parts of their player's temple
+	if (registry.AnyOf<WorshipSite, WorshipAltar>(thing))
 	{
 		return kinds::k_CitadelPart;
 	}
@@ -390,6 +425,29 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 		return kinds::k_Spell;
 	}
 	return std::nullopt;
+}
+
+std::optional<entt::id_type> mind_detail::AltarMeshOf(const ecs::Registry& registry, entt::entity altar)
+{
+	if (const auto* mesh = registry.TryGet<const Mesh>(altar))
+	{
+		return mesh->id;
+	}
+	const auto* info = AltarInfoOf(registry, altar);
+	return info != nullptr ? std::optional(resources::HashIdentifier(info->meshType)) : std::nullopt;
+}
+
+const GWorshipSiteInfo* mind_detail::AltarInfoOf(const ecs::Registry& registry, entt::entity altar)
+{
+	const auto* part = registry.Valid(altar) ? registry.TryGet<const WorshipAltar>(altar) : nullptr;
+	const auto* site = part != nullptr && registry.Valid(part->site) ? registry.TryGet<const WorshipSite>(part->site) : nullptr;
+	if (site == nullptr || !Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& sites = Locator::infoConstants::value().worshipSite;
+	const auto row = static_cast<size_t>(site->tribe);
+	return row < sites.size() ? &sites.at(row) : nullptr;
 }
 
 void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureMindState& mind, entt::entity thing)
@@ -710,8 +768,10 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 		{
 			continue;
 		}
-		// The things that stay put, then the things that move
-		for (const auto thing : map.GetAllInCell(cell))
+		// The things that stay put, then the things that move. The altars of the worship sites are not in the map's
+		// cells, but they stand in the cells that they cover as the newest of the things that stay put.
+		const auto altars = AltarsIn(registry, cell);
+		for (const auto thing : creature_temple_parts::ThingsSeenInCell(altars, map.GetAllInCell(cell)))
 		{
 			ComeAcross(entity, mind, thing);
 			// Each thing in view that it sees may take over what it watches

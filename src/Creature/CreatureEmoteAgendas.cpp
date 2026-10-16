@@ -286,14 +286,14 @@ std::vector<Step> creature_emote::SitDownBy(uint32_t thing, glm::vec2 place, flo
 	};
 }
 
-bool creature_emote::NotTooFarFromHome(std::optional<float> homeDistance)
+bool creature_emote::NotTooFarFromHome(bool hasTemple, std::optional<float> homeDistance)
 {
-	return homeDistance.has_value() && *homeDistance < k_FurthestToSleepAtHome;
+	return hasTemple && homeDistance.has_value() && *homeDistance < k_FurthestToSleepAtHome;
 }
 
-bool creature_emote::LeashedOrTooFarFromHome(bool leashed, std::optional<float> homeDistance)
+bool creature_emote::LeashedOrTooFarFromHome(bool leashed, bool hasTemple, std::optional<float> homeDistance)
 {
-	return leashed || !homeDistance.has_value() || *homeDistance > k_NearestToSleepAway;
+	return leashed || !hasTemple || !homeDistance.has_value() || *homeDistance > k_NearestToSleepAway;
 }
 
 bool creature_emote::PlayerNearbyAndFrightening(std::optional<float> handDistance, float attitudeToPlayer)

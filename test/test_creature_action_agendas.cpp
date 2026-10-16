@@ -504,9 +504,13 @@ TEST(CreatureActionAgendas, SleepingByAThingIsPlannedOnTheLeashOrFarFromHome)
 {
 	const auto* sleep = plan_actions::For("SleepByObject");
 	ASSERT_NE(sleep, nullptr);
-	plan_actions::Situation situation {.homeDistance = 10.0f};
+	plan_actions::Situation situation {.homeDistance = 10.0f, .hasTemple = true};
 	EXPECT_TRUE(plan_actions::Possible(*sleep, situation));
 	EXPECT_FALSE(plan_actions::Allowed(*sleep, situation));
+	// With no temple of its player, it is as far from home as can be
+	situation.hasTemple = false;
+	EXPECT_TRUE(plan_actions::Allowed(*sleep, situation));
+	situation.hasTemple = true;
 	situation.leashed = true;
 	EXPECT_TRUE(plan_actions::Allowed(*sleep, situation));
 	situation.nothingFrighteningNear = false;
