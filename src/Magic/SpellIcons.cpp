@@ -145,9 +145,14 @@ bool MayStartCharge(const IconCharge& icon, bool magicEnabled, bool onSite)
 	return !icon.charging && !icon.seedOut && magicEnabled && (onSite || icon.store != 0.0f);
 }
 
-bool ValidToTap(PlayerNames iconPlayer, PlayerNames tapper)
+bool Functional(float life, bool built)
 {
-	return iconPlayer == tapper;
+	return built && life > k_FunctionalLife;
+}
+
+bool ValidToTap(PlayerNames iconPlayer, PlayerNames tapper, bool functional)
+{
+	return functional && iconPlayer == tapper;
 }
 
 TapResult Tap(const IconCharge& icon, bool handReady, bool magicEnabled, bool onSite)

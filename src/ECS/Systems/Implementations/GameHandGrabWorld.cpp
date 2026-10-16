@@ -623,10 +623,12 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	// A stone hand on a village centre, or a worship site's icon, charges its miracle for the hand
 	if (Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().IsIcon(object))
 	{
-		if (Locator::spellIconSystem::value().ValidToTap(object, player))
+		// A tap that is not valid does nothing: the help does not count it, and the icon does not take it
+		if (!Locator::spellIconSystem::value().ValidToTap(object, player))
 		{
-			countTap();
+			return false;
 		}
+		countTap();
 		return Locator::spellIconSystem::value().Tap(object, player);
 	}
 	// Other things' taps are the clicking and activating of the interface
