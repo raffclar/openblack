@@ -24,6 +24,7 @@ public:
 	void SetFizz(entt::entity creature, float target, float seconds, bool goesForGood) override;
 	void ProcessTurn() override;
 	void UpdateFrame(float seconds) override;
+	void SlideDrawnStatic(float seconds) override;
 	[[nodiscard]] float FizzOf(entt::entity creature) const override;
 	[[nodiscard]] glm::vec2 EyeStaticScroll() const override;
 

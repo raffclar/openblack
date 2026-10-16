@@ -6237,14 +6237,15 @@ void SetCreatureHome() // 223 SET_CREATURE_HOME
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_CREATURE_HOME: thing not creature");
 		return;
 	}
-	const auto place = temple_pen::MapPlace(position);
-	const auto ground = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(place) : 0.0f;
+	const auto home = temple_pen::ScriptHome(position, [](glm::vec2 place) {
+		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(place) : 0.0f;
+	});
 	auto* leash = registry.TryGet<ecs::components::CreatureLeash>(creature);
 	if (leash == nullptr)
 	{
 		leash = &registry.Assign<ecs::components::CreatureLeash>(creature);
 	}
-	leash->home = glm::vec3(place.x, ground, place.y);
+	leash->home = home;
 }
 
 void GetHitObject() // 224 GET_HIT_OBJECT
