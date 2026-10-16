@@ -2571,6 +2571,7 @@ void Runner::Give(const Command& command)
 	case Kind::WheelTurn:
 	case Kind::PointerOnOpponent:
 	case Kind::PointerOnCaveCreature:
+	case Kind::PointerOnCreature:
 	case Kind::PointerOnAltar:
 		break;
 	case Kind::SetDesire:
@@ -3635,11 +3636,20 @@ std::optional<glm::ivec2> Runner::OpponentOnScreen(size_t creature, glm::vec2 si
 	{
 		return std::nullopt;
 	}
-	// The middle of the body is half the height of the creature above its feet
+	return BodyOnScreen(*opponent, size);
+}
+
+std::optional<glm::ivec2> Runner::BodyOnScreen(entt::entity creature, glm::vec2 size)
+{
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto& feet = registry.Get<const ecs::components::Transform>(*opponent).position;
+	if (!Locator::camera::has_value() || !registry.AllOf<ecs::components::Transform, ecs::components::Creature>(creature))
+	{
+		return std::nullopt;
+	}
+	// The middle of the body is half the height of the creature above its feet
+	const auto& feet = registry.Get<const ecs::components::Transform>(creature).position;
 	const auto height = creature_feedback::k_HeightAtSizeOne *
-	                    ecs::components::ShownSize(registry.Get<const ecs::components::Creature>(*opponent));
+	                    ecs::components::ShownSize(registry.Get<const ecs::components::Creature>(creature));
 	glm::vec3 screen;
 	if (!Locator::camera::value().ProjectWorldToScreen(feet + glm::vec3(0.0f, height * 0.5f, 0.0f),
 	                                                   {0.0f, 0.0f, size.x, size.y}, screen))
@@ -3751,6 +3761,21 @@ std::string Runner::GivePointerCommand(const Command& command)
 		if (!to.has_value())
 		{
 			return "no opponent on the screen";
+		}
+		const auto moved = *to - pointer.position;
+		pointer.position = *to;
+		_framesSincePointerMoved = 0;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerOnCreature:
+	{
+		const auto self = CreatureAt(command.creature);
+		const auto to = self.has_value() ? BodyOnScreen(*self, size) : std::nullopt;
+		if (!to.has_value())
+		{
+			return "no creature on the screen";
 		}
 		const auto moved = *to - pointer.position;
 		pointer.position = *to;

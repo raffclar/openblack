@@ -9,6 +9,9 @@
 
 #include "Camera.h"
 
+#include <algorithm>
+#include <chrono>
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/intersect.hpp>
@@ -29,6 +32,8 @@ using namespace openblack;
 
 namespace
 {
+/// A step adds at most this many seconds to the count of the model's time
+constexpr float k_LongestModelStep = 0.1f;
 constexpr auto k_DefaultCameraOriginOffset = glm::vec3(0.0f, 0.0f, 120.0f);
 // The normal projection puts depth from -w at the near plane to w at the far plane, or at infinity without one; reversed,
 // depth runs from w at the near plane down to 0 at the far plane, the range the renderer clips to, so that nothing beyond
@@ -353,6 +358,9 @@ void Camera::Update(std::chrono::microseconds dt)
 {
 	using namespace std::chrono_literals;
 
+	// The count of the model's time increases first, in whole milliseconds, by at most a tenth of a second a step
+	const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
+	_modelSeconds += std::min(static_cast<float>(milliseconds) * 0.001f, k_LongestModelStep);
 	const auto updateInfo = _model->Update(dt, *this);
 
 	if (updateInfo)
@@ -406,6 +414,7 @@ void Camera::SetKeyboardMoveSpeed(float speed)
 std::unique_ptr<CameraModel> Camera::SetModel(std::unique_ptr<CameraModel> model)
 {
 	std::swap(_model, model);
+	_modelSeconds = 0.0f;
 	return model;
 }
 

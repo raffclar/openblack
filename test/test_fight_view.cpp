@@ -9,7 +9,9 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <numbers>
+#include <optional>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -139,4 +141,104 @@ TEST(FightView, ZoomingFarOutLeavesTheFight)
 	EXPECT_FLOAT_EQ(tracker.GetPitch(), k_MaxPitch);
 	tracker.Follow(first, second, {.turn = 640.0f, .screenWidth = 1280.0f}, 0.02f);
 	EXPECT_NEAR(tracker.GetHeadingOffset(), k_StartHeadingOffset + (k_Pi / 2.0f), 1e-5f);
+}
+
+TEST(FightView, TheCameraBlendFallsFromFiveSecondsToTwo)
+{
+	EXPECT_FLOAT_EQ(BlendSeconds(0.0f), 5.0f);
+	EXPECT_FLOAT_EQ(BlendSeconds(1.0f), 3.5f);
+	EXPECT_FLOAT_EQ(BlendSeconds(2.0f), 2.0f);
+	// After the first 2 seconds it stays at 2 seconds
+	EXPECT_FLOAT_EQ(BlendSeconds(2.001f), 2.0f);
+	EXPECT_FLOAT_EQ(BlendSeconds(600.0f), 2.0f);
+	// It falls evenly
+	EXPECT_NEAR(BlendSeconds(0.5f) - BlendSeconds(1.5f), 1.5f, 1e-5f);
+}
+
+TEST(FightView, TheWayPointIsHalfWayRaisedAndAboveTheLand)
+{
+	const glm::vec3 from {0.0f, 100.0f, 0.0f};
+	const glm::vec3 to {300.0f, 20.0f, 400.0f};
+	// Raised by a share of the distance across the land
+	const auto raised = WayPoint(from, to, k_ReturnWayRise, k_Flat);
+	EXPECT_FLOAT_EQ(raised.x, 150.0f);
+	EXPECT_FLOAT_EQ(raised.z, 200.0f);
+	EXPECT_FLOAT_EQ(raised.y, 60.0f + 50.0f);
+	EXPECT_FLOAT_EQ(WayPoint(from, to, k_StartWayRise, k_Flat).y, 60.0f);
+	// Kept 10 above high land
+	const GroundHeight high = [](glm::vec2) { return 80.0f; };
+	EXPECT_FLOAT_EQ(WayPoint(from, to, k_StartWayRise, high).y, 90.0f);
+}
+
+TEST(FightView, TheChaseFliesThroughTheWayPointThenFollowsOnTheBlend)
+{
+	constexpr float k_Step = 0.01f;
+	// A step of an eighth of a second adds up with no rounding
+	constexpr float k_FlightStep = 0.125f;
+	const View from {.origin = {0.0f, 50.0f, 0.0f}, .focus = {0.0f, 0.0f, 100.0f}};
+	const View still {.origin = glm::vec3(0.0f), .focus = glm::vec3(0.0f)};
+	const View to {.origin = {200.0f, 50.0f, 0.0f}, .focus = {200.0f, 0.0f, 100.0f}};
+	const glm::vec3 way {100.0f, 80.0f, 0.0f};
+	Chase chase;
+	chase.Fly(from, still, to, way);
+	EXPECT_TRUE(chase.Flying());
+	// A wanted view does not move it during the flight: it goes to the way point on a curve of 1.35 seconds
+	const View elsewhere {.origin = {-500.0f, 0.0f, 0.0f}, .focus = {-500.0f, 0.0f, 0.0f}};
+	glm::vec3 highest = from.origin;
+	int steps = 0;
+	while (chase.Flying())
+	{
+		const auto shown = chase.Step(elsewhere, 10.0f, k_FlightStep);
+		highest.y = std::max(highest.y, shown.origin.y);
+		++steps;
+	}
+	// It turns to the view itself on the first step after more than 0.75 seconds on the way: 0.875 seconds
+	EXPECT_EQ(steps, 8);
+	EXPECT_GT(highest.y, 60.0f);
+	// Then it follows the wanted view on curves of 2 seconds, sent each step
+	auto shown = chase.GetValue();
+	for (int i = 0; i < 1000; ++i)
+	{
+		shown = chase.Step(to, 10.0f, k_Step);
+	}
+	EXPECT_NEAR(shown.origin.x, to.origin.x, 1e-2f);
+	EXPECT_NEAR(shown.focus.z, to.focus.z, 1e-2f);
+}
+
+TEST(FightView, AFreshChaseEasesSlowerThanALaterOne)
+{
+	constexpr float k_Step = 0.01f;
+	const View still {.origin = glm::vec3(0.0f), .focus = glm::vec3(0.0f)};
+	const View start {.origin = {0.0f, 0.0f, 0.0f}, .focus = {0.0f, 0.0f, 1.0f}};
+	const View wanted {.origin = {100.0f, 0.0f, 0.0f}, .focus = {100.0f, 0.0f, 1.0f}};
+	// Each chase first ends its flight at the start, then follows the wanted view
+	const auto chaseFrom = [&](float modelSeconds) {
+		Chase chase;
+		chase.Fly(start, still, start, start.origin);
+		while (chase.Flying())
+		{
+			chase.Step(std::nullopt, modelSeconds, k_Step);
+		}
+		for (int i = 0; i < 50; ++i)
+		{
+			chase.Step(wanted, modelSeconds, k_Step);
+		}
+		return chase.GetValue().origin.x;
+	};
+	// On a 5 second curve it has moved less after half a second than on a 2 second one
+	EXPECT_LT(chaseFrom(0.0f), chaseFrom(10.0f));
+	EXPECT_GT(chaseFrom(0.0f), 0.0f);
+}
+
+TEST(FightView, AZoomerCarriesTheSpeedItTakesOver)
+{
+	Zoomer zoomer;
+	zoomer.Carry(10.0f, 4.0f);
+	EXPECT_FLOAT_EQ(zoomer.GetValue(), 10.0f);
+	EXPECT_FLOAT_EQ(zoomer.GetSpeed(), 4.0f);
+	// Sent to where it is, it first carries on in the way it moved
+	zoomer.SetDestination(10.0f, 2.0f);
+	zoomer.Update(0.1f);
+	EXPECT_GT(zoomer.GetValue(), 10.0f);
+	EXPECT_FLOAT_EQ(zoomer.GetElapsed(), 0.1f);
 }

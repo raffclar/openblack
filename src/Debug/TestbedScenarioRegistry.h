@@ -774,6 +774,8 @@ struct Command
 		/// makes the folder if it is missing. Then the game reads the file again, and the log tells if the record is the
 		/// same. Needs no creature
 		ProfileFolderCheck,
+		/// The pointer moves to the middle of the body of the creature on the screen, as the mouse moves it
+		PointerOnCreature,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

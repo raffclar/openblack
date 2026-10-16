@@ -4688,6 +4688,37 @@ void AddCombat(std::vector<Scenario>& all)
 	});
 
 	{
+		// Two creatures that are not the player's fight by themselves, and the player's own lion stands near the arena
+		// The Action button is the right button of the mouse
+		constexpr size_t k_RightButton = 3;
+		constexpr size_t k_Own = 2;
+		auto own = Content(CreatureType::Lion, {12.0f, 15.0f}, 0.0f, "own");
+		own.owner = PlayerNames::PLAYER_ONE;
+		all.push_back({
+		    .id = "combat.view_eases_back",
+		    .name = "The fight view eases back after the hand lets go",
+		    .facet = Facet::Combat,
+		    .description = "A red tiger and a blue tiger that are not the player's fight by themselves. The player's own "
+		                   "lion stands near the arena. A double click into the arena makes the camera show the fight. "
+		                   "A second later the hand holds the lion with the Action button for four seconds, and then "
+		                   "lets go.",
+		    .expected = "The camera flies to the side of the arena and then follows the duel. While the hand holds the "
+		                "lion, the camera looks at the lion. When the hand lets go, the camera flies back to where the "
+		                "fight view was, and then eases on to the fight slowly: first over 5 seconds, then faster, over "
+		                "2 seconds after the first 2 seconds. It does not jump.",
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+		    .creatures = {red(PlayerNames::PLAYER_TWO, 0.6f, -0.2f), blue(PlayerNames::NEUTRAL, 0.5f, -0.2f), own},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 1, 0.2f),
+		                 Fight(Kind::FightView, 0, 0, 7.0f),
+		                 {.kind = Kind::PointerOnCreature, .creature = k_Own, .delaySeconds = 1.2f},
+		                 {.kind = Kind::PointerPress, .delaySeconds = 0.0f, .value = k_RightButton},
+		                 {.kind = Kind::PointerRelease, .delaySeconds = 4.0f, .value = k_RightButton}},
+		});
+	}
+
+	{
 		// The fight lesson of the guide: no one chooses the moves of either creature, and the guide belongs to no player
 		// The Action button is the right button of the mouse
 		constexpr size_t k_RightButton = 3;
@@ -6756,7 +6787,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 128> k_Names {
+	constexpr std::array<std::string_view, 129> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -6885,6 +6916,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "pointer on altar",
 	    "set fizz",
 	    "check the profile folder",
+	    "pointer on creature",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -6893,7 +6925,7 @@ bool testbed_scenarios::IsPointerCommand(Command::Kind kind)
 {
 	return kind == Kind::PointerTo || kind == Kind::PointerPress || kind == Kind::PointerRelease ||
 	       kind == Kind::PointerSweep || kind == Kind::WheelTurn || kind == Kind::PointerOnOpponent ||
-	       kind == Kind::PointerOnCaveCreature || kind == Kind::PointerOnAltar;
+	       kind == Kind::PointerOnCaveCreature || kind == Kind::PointerOnCreature || kind == Kind::PointerOnAltar;
 }
 
 bool NeedOverrides::Empty() const
