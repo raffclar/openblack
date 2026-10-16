@@ -9093,8 +9093,7 @@ void StopImmersion() // 430 STOP_IMMERSION
 
 void StopAllImmersion() // 431 STOP_ALL_IMMERSION
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Stopping every force-feedback effect does nothing without the device either
 }
 
 void SetCreatureInTemple() // 432 SET_CREATURE_IN_TEMPLE

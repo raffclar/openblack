@@ -120,6 +120,7 @@ constexpr uint32_t k_SexIsMale = 358;
 constexpr uint32_t k_StopSoundEffect = 424;
 constexpr uint32_t k_StartImmersion = 429;
 constexpr uint32_t k_StopImmersion = 430;
+constexpr uint32_t k_StopAllImmersion = 431;
 constexpr uint32_t k_AttachSoundTag = 447;
 constexpr uint32_t k_DetachSoundTag = 448;
 constexpr uint32_t k_GameSoundPlaying = 450;
@@ -145,6 +146,7 @@ TEST_F(ScriptMiscNatives, TakeAndGiveWhatTheGameDoes)
 	    {k_StopSoundEffect, "STOP_SOUND_EFFECT", 3, 0},
 	    {k_StartImmersion, "START_IMMERSION", 1, 0},
 	    {k_StopImmersion, "STOP_IMMERSION", 1, 0},
+	    {k_StopAllImmersion, "STOP_ALL_IMMERSION", 0, 0},
 	    {k_AttachSoundTag, "ATTACH_SOUND_TAG", 4, 0},
 	    {k_DetachSoundTag, "DETACH_SOUND_TAG", 3, 0},
 	    {k_GameSoundPlaying, "GAME_SOUND_PLAYING", 2, 1},
@@ -166,6 +168,7 @@ TEST_F(ScriptMiscNatives, ThereIsNoForceFeedbackDevice)
 	EXPECT_FALSE(AskBool(k_ImmersionExists, {}));
 	EXPECT_TRUE(Call(k_StartImmersion, {Int(16)}).empty());
 	EXPECT_TRUE(Call(k_StopImmersion, {Int(16)}).empty());
+	EXPECT_TRUE(Call(k_StopAllImmersion, {}).empty());
 	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
 }
 
