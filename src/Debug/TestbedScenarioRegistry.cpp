@@ -6612,6 +6612,21 @@ void AddRestAndHome(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BehaveStrangely"},
 	                 {.kind = Kind::DoAction, .delaySeconds = 20.0f, .object = 0, .action = "BehaveStrangely"}},
 	});
+
+	all.push_back({
+	    .id = "mind.examine_kind_looked_over",
+	    .name = "Examine a thing and know its kind",
+	    .facet = Facet::Mind,
+	    .description = "A content tiger and a rock. After one second a script tells the tiger to examine the rock by "
+	                   "picking it up.",
+	    .expected = "The tiger picks up the rock, looks at it with a curious face and releases it. Then the inspector "
+	                "shows the kind of a rock (12) in the observedKinds of its mind. After that, for its curiosity a "
+	                "rock is a hundredth as useful as before.",
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {15.0f, -15.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "ExamineByPickingUp"}},
+	});
 }
 
 std::vector<Scenario> Build()

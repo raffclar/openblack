@@ -294,6 +294,8 @@ std::vector<Step> creature_mind::ExamineByPickingUp(uint32_t object, bool handFu
 	examine.main = true;
 	agenda.push_back(std::move(examine));
 	agenda.push_back(Object({.kind = letGo}));
+	// After it releases the thing, it knows the kind of thing
+	agenda.push_back({.kind = Step::Kind::Observe, .object = object});
 	return agenda;
 }
 
