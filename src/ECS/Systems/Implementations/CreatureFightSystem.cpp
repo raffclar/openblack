@@ -39,6 +39,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
+#include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureArena.h"
@@ -1065,6 +1066,13 @@ void CreatureFightSystem::UpdateView(float seconds)
 	}
 	if (!_cameraWatches)
 	{
+		return;
+	}
+	// Only the player's own camera watches for fights: Creature Mode and the hand held to a creature keep their view,
+	// and the look starts again when the player's camera comes back
+	if (dynamic_cast<const DefaultWorldCameraModel*>(&camera.GetModel()) == nullptr)
+	{
+		_lookSeconds = 0.0f;
 		return;
 	}
 	// A double click that sends the camera into the arena of a fight shows that fight at once. Only the first arena that
