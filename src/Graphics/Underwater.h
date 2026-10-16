@@ -152,6 +152,8 @@ enum class Effect : uint8_t
 	SprayMist,
 	/// The wet rock of the cliffs after a wave
 	WetRock,
+	/// Not an effect: the water is drawn as a flat colour where it shows, to compare it with the original sea
+	WaterMask,
 	_Count
 };
 

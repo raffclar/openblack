@@ -22,9 +22,11 @@ uniform vec4 u_uwAbove;
 // x: how high the waves are (1 calm), y: how stormy the sea is (0 to 1), z: the wind's direction in radians from +x
 // towards +z, w: how far the waves run up the beach, in height
 uniform vec4 u_uwWaves;
-// x: the storm's whitecaps and streaks of foam, y: the reef, z: the wet rock of the cliffs, w: the spray's mist and
-// haze; 1 on, 0 off
+// x: the storm's whitecaps and streaks of foam, 1 on, 0 off; y: the reef, 1 on, 0 off; z: 1 for the motes' pass of
+// debris; w: 1 to draw the water as a flat colour where it shows, to compare it with the original sea
 uniform vec4 u_uwFlags2;
+// x: the wet rock of the cliffs, y: the spray's mist and haze; 1 on, 0 off; zw: unused
+uniform vec4 u_uwFlags3;
 // The sea's currents, one field for every moving thing in the water (see underwater::CurrentAt). xy: the steady flow
 // in units a second, z: how strong the swirls are, w: how strong the gusts are
 uniform vec4 u_uwCurrent;

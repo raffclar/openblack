@@ -426,7 +426,7 @@ void main()
 			bumpAlpha *= 1.0f - seabedShare;
 		}
 		// The rock of a cliff after a wave hits it: darker, with a sheen of the light on the water
-		float wet = u_uwFlags2.z > 0.5f ? CliffWetness(v_world) : 0.0f;
+		float wet = u_uwFlags3.x > 0.5f ? CliffWetness(v_world) : 0.0f;
 		if (wet > 0.0f)
 		{
 			vec3 toEye = normalize(u_uwEye.xyz - v_world);

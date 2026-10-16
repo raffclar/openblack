@@ -23,13 +23,15 @@
 namespace openblack::land_line
 {
 
-/// The height units of the land's corners, from the corner at the cell itself across x, across z and across both
+/// The height units of the land's corners, from the corner at the cell itself across x, across z and across both.
+/// The land's own corners are whole numbers from 0 to 255. EXPERIMENT (not for merge): the sea bed under the water
+/// goes below 0.
 struct CellHeights
 {
-	uint8_t here;
-	uint8_t acrossX;
-	uint8_t acrossZ;
-	uint8_t acrossBoth;
+	float here;
+	float acrossX;
+	float acrossZ;
+	float acrossBoth;
 };
 
 /// The corner heights of the map cell at x, z (each 0 to 511), none for a cell the land doesn't have

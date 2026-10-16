@@ -70,14 +70,14 @@ std::optional<glm::vec2> HitInCell(int32_t x, int32_t z, glm::vec3 from, glm::ve
 	{
 		return std::nullopt;
 	}
-	const int here = corners->here;
-	const int acrossX = corners->acrossX;
-	const int acrossZ = corners->acrossZ;
-	const int acrossBoth = corners->acrossBoth;
+	const float here = corners->here;
+	const float acrossX = corners->acrossX;
+	const float acrossZ = corners->acrossZ;
+	const float acrossBoth = corners->acrossBoth;
 
 	// A line wholly below the lowest corner, or wholly above the highest, misses the cell
-	const auto highest = static_cast<float>(std::max({here, acrossX, acrossZ, acrossBoth}));
-	const auto lowest = static_cast<float>(std::min({here, acrossX, acrossZ, acrossBoth}));
+	const float highest = std::max({here, acrossX, acrossZ, acrossBoth});
+	const float lowest = std::min({here, acrossX, acrossZ, acrossBoth});
 	if (from.y < lowest && to.y < lowest)
 	{
 		return std::nullopt;
@@ -118,29 +118,28 @@ std::optional<glm::vec2> HitInCell(int32_t x, int32_t z, glm::vec3 from, glm::ve
 	};
 
 	// The triangle on the corners at the cell, across x and across z. A line level with it misses the whole cell.
-	const auto slopeX = static_cast<float>(acrossX - here);
-	const auto slopeZ = static_cast<float>(acrossZ - here);
+	const float slopeX = acrossX - here;
+	const float slopeZ = acrossZ - here;
 	const float near = (climb - slopeX * alongX) - slopeZ * alongZ;
 	if (std::abs(near) < k_LevelWithLine)
 	{
 		return std::nullopt;
 	}
-	const float nearShare = ((fromCellZ * slopeZ + fromCellX * slopeX + static_cast<float>(here)) - from.y) / near;
+	const float nearShare = ((fromCellZ * slopeZ + fromCellX * slopeX + here) - from.y) / near;
 	if (const auto hit = onCell(nearShare, false))
 	{
 		return hit;
 	}
 
 	// The triangle on the corners across x, across both and across z
-	const auto farSlopeX = static_cast<float>(acrossBoth - acrossZ);
-	const auto farSlopeZ = static_cast<float>(acrossBoth - acrossX);
+	const float farSlopeX = acrossBoth - acrossZ;
+	const float farSlopeZ = acrossBoth - acrossX;
 	const float far = (climb - farSlopeX * alongX) - farSlopeZ * alongZ;
 	if (std::abs(far) < k_LevelWithLine)
 	{
 		return std::nullopt;
 	}
-	const float farShare =
-	    (((static_cast<float>(acrossX) - farSlopeX) + fromCellZ * farSlopeZ) + fromCellX * farSlopeX - from.y) / far;
+	const float farShare = (((acrossX - farSlopeX) + fromCellZ * farSlopeZ) + fromCellX * farSlopeX - from.y) / far;
 	return onCell(farShare, true);
 }
 

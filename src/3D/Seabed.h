@@ -18,6 +18,11 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+namespace openblack::lnd
+{
+struct LNDCountry;
+}
+
 /// EXPERIMENT (not for merge): a sea bed under the sea for the underwater view. The original game draws the land at sea
 /// level flat in the plane of the sea, so there is nothing under the water. This makes a floor that goes down from the
 /// coast into deep water.
@@ -76,11 +81,48 @@ inline constexpr float k_CliffRiseFull = 30.0f;
 /// How far out to sea a cliff's foot reaches, in cells
 inline constexpr float k_CliffReach = 6.0f;
 
+/// The slope of a beach under the water, in height for each unit across: a long and shallow grade
+inline constexpr float k_BeachSlope = 0.02f;
+/// How far out a beach's grade goes before it eases into the shelf, from and to, in units
+inline constexpr float k_BeachEaseStart = 150.0f;
+inline constexpr float k_BeachEaseEnd = 450.0f;
+/// The deepest the water is at high tide where a creature can walk, so that it only covers the creature's feet
+inline constexpr float k_WadeDepth = 0.45f;
+
+/// The original game draws the land at altitude 3 and lower flat at sea level, and fades it into its sea over a
+/// band from altitude 1 to 4. Its coast is about where the land is at this altitude, with the land half shown.
+inline constexpr float k_OriginalCoast = 2.8f;
+/// How far out from the original coast the sea bed goes down to k_WadeDepth, in units, and how far past that its slope
+/// grows to the coast's own
+inline constexpr float k_ShallowsWidth = 12.0f;
+inline constexpr float k_ShallowsEase = 20.0f;
+/// The steepest coast that is gentle: a steeper one starts to fall at its own slope from the original coast
+inline constexpr float k_GentleMost = 0.3f;
+
+/// The depth of the sea bed at a distance out from the original coast (in units) for a coast of this slope (height for
+/// each unit across). A gentle coast goes down to k_WadeDepth over k_ShallowsWidth, then its slope grows to its own.
+/// A cliff falls at its own slope from the line. The depth grows with the distance and has no steps.
+[[nodiscard]] float ShelfFromCoastLine(float from, float slope);
+
+/// How much of the ground of a country at an altitude is the beach's sand, 0 to 1: the share of its two blended
+/// materials whose terrain type is sand or wet sand. `materialTypes` is the terrain type of each of the land's
+/// materials.
+[[nodiscard]] float BeachShare(const lnd::LNDCountry& country, uint8_t altitude, std::span<const uint16_t> materialTypes);
+
+/// Whether a creature can walk on the cell with these four corner altitudes: some corner is over the bottom and the
+/// cell is not too steep (see creature_route::WalkableLand)
+[[nodiscard]] bool Walkable(uint8_t a, uint8_t b, uint8_t c, uint8_t d);
+
 /// The sea bed for a grid of corner altitudes (x first along each row of z). Each corner of the sea goes down by its
 /// distance to the nearest land above the sea, as a shelf and then a slope, deeper towards the map's edge, with broad
-/// hills and dips over it.
-/// The grid is the whole map: past the land's blocks the sea goes on down to the map's edge.
-[[nodiscard]] Seabed Build(std::span<const uint8_t> altitudes, glm::ivec2 size, glm::vec2 origin, float spacing);
+/// hills and dips over it. The grid is the whole map: past the land's blocks the sea goes on down to the map's edge.
+/// The coast keeps the original game's line:
+/// - The water's edge at high tide is on the original coast (k_OriginalCoast), and the sea bed goes down from it.
+/// - Where a creature can walk, the water is never deeper than k_WadeDepth at high tide.
+/// - `beach` is how much of each corner's ground is the beach's sand, 0 to 1 (empty for none). A beach goes on down
+///   under the water at the shallow k_BeachSlope. Other coasts keep their own slope, and cliffs stay steep.
+[[nodiscard]] Seabed Build(std::span<const uint8_t> altitudes, glm::ivec2 size, glm::vec2 origin, float spacing,
+                           std::span<const float> beach = {});
 
 /// A coral or a plant of the reef on the sea bed
 struct ReefPlant

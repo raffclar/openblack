@@ -17,6 +17,11 @@ SAMPLER2D(s_sceneColour, 0);
 SAMPLER2D(s_sceneDepth, 1);
 // The shore map (see UwShoreUv): the distance to the coast, the direction to it and the height of the ground
 SAMPLER2D(s_shore, 2);
+// The land's block textures, a layer for each block: their alpha is the original game's coast alpha, which fades the
+// land into the sea under it
+SAMPLER2DARRAY(s_blockTextures, 3);
+// The layer of each block of the 32 by 32 map, plus 1; 0 where there is no block
+SAMPLER2D(s_blockLayers, 4);
 
 // rgb: the sky's colour, as the haze takes it; w: the near distance of the view
 uniform vec4 u_uwSky;
@@ -52,6 +57,37 @@ uniform vec4 u_uwFloaters[8];
 float WavesOn()
 {
 	return u_uwWaves.x > 0.0f ? 1.0f : 0.0f;
+}
+
+// One texel of a block's texture, at a texel along the texture's axes (z, then x), kept inside the block
+float BlockAlphaTexel(vec2 texel, float layer)
+{
+	vec2 inside = clamp(texel, vec2_splat(0.0f), vec2_splat(255.0f));
+	return texture2DArrayLod(s_blockTextures, vec3((inside + 0.5f) / 256.0f, layer), 0.0f).a;
+}
+
+// How much the original game shows its land over its sea at a point, 0 to 1: the coast alpha of the block's texture
+// there, blended between its four nearest texels. It is 0 where there is no block. The water shows only where the
+// original sea shows, and as much as it shows: the land is never under the water where the original game shows land.
+float OriginalLandAt(vec2 xz)
+{
+	vec2 block = floor(xz / 160.0f);
+	if (block.x < 0.0f || block.y < 0.0f || block.x > 31.0f || block.y > 31.0f)
+	{
+		return 0.0f;
+	}
+	float layer = texture2DLod(s_blockLayers, (block + 0.5f) / 32.0f, 0.0f).r;
+	if (layer < 0.5f)
+	{
+		return 0.0f;
+	}
+	layer -= 1.0f;
+	vec2 texel = (xz - block * 160.0f).yx * (256.0f / 160.0f) - 0.5f;
+	vec2 first = floor(texel);
+	vec2 f = texel - first;
+	float low = mix(BlockAlphaTexel(first, layer), BlockAlphaTexel(first + vec2(1.0f, 0.0f), layer), f.x);
+	float high = mix(BlockAlphaTexel(first + vec2(0.0f, 1.0f), layer), BlockAlphaTexel(first + vec2(1.0f, 1.0f), layer), f.x);
+	return mix(low, high, f.y);
 }
 
 // The shore map at a point
@@ -207,7 +243,8 @@ vec3 Shafts(vec3 eye, vec3 direction, float range, float t, float jitter)
 // the waves. depth is how deep the water is under the point.
 float Foam(vec2 p, float depth, float t)
 {
-	float shallow = 1.0f - smoothstep(0.0f, 0.9f, depth);
+	// The shallows of a gentle beach go down slowly, so the bands are thin in depth: a wide band of foam would cover them
+	float shallow = 1.0f - smoothstep(0.0f, 0.45f, depth);
 	if (shallow <= 0.0f)
 	{
 		return 0.0f;
@@ -216,7 +253,7 @@ float Foam(vec2 p, float depth, float t)
 	vec2 q = vec2(p.x * 0.8f - p.y * 0.6f, p.x * 0.6f + p.y * 0.8f);
 	float patches = UwFoamNoise(q * 0.7f + vec2(t * 0.25f, -t * 0.18f)) * 0.6f + UwFoamNoise(p * 1.9f - vec2(t * 0.4f, t * 0.31f)) * 0.4f;
 	float lines = 0.5f + 0.5f * sin(depth * 9.0f - t * 2.2f + UwNoise(p * 0.4f) * 4.0f);
-	float edge = 1.0f - smoothstep(0.0f, 0.18f, depth);
+	float edge = 1.0f - smoothstep(0.0f, 0.06f, depth);
 	float foam = smoothstep(0.55f, 0.8f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
 	return clamp(max(foam, edge * (0.5f + 0.5f * patches)), 0.0f, 1.0f);
 }
@@ -435,6 +472,10 @@ void main()
 				                  scatter * 0.5f;
 				colour = mix(colour, min(foamColour, vec3_splat(1.0f)), foam * 0.85f);
 			}
+			// Where the original game shows its land over its sea, the land shows here too, as much as there
+			float originalLand = OriginalLandAt(surfacePoint.xz);
+			colour = u_uwFlags2.w > 0.5f ? vec3(1.0f, 0.0f, 1.0f) : colour;
+			colour = mix(colour, scene, originalLand);
 		}
 	}
 	// The surface that cuts the view, as the camera goes through it: a thin dark line with water running down it

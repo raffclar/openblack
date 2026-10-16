@@ -65,7 +65,7 @@ void main()
 	bool culled = dot(toFoot, forward) < -40.0f || range > 2600.0f;
 	culled = culled || (layer > 1.5f && layer < 3.5f && range > 1100.0f);
 	culled = culled || (layer > 1.5f && layer < 3.5f && range > 450.0f && fract(index * 0.5f) > 0.25f);
-	culled = culled || (layer > 3.5f && range > 1800.0f) || (layer > 2.5f && u_uwFlags2.w < 0.5f);
+	culled = culled || (layer > 3.5f && range > 1800.0f) || (layer > 2.5f && u_uwFlags3.y < 0.5f);
 
 	vec4 shore = texture2DLod(s_shore, UwShoreUv(foot), 0.0f);
 	float cliff = UwShoreCliff(shore);

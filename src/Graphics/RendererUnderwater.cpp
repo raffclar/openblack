@@ -137,7 +137,8 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	const auto& waves = system.GetWaves();
 	frame.waves = {off == Effect::Waves ? 0.0f : waves.scale, waves.storm, waves.windAngle,
 	               off == Effect::Waves ? 0.0f : waves.swash};
-	frame.flags2 = {on(Effect::Whitecaps), on(Effect::Reef), on(Effect::WetRock), on(Effect::SprayMist)};
+	frame.flags2 = {on(Effect::Whitecaps), on(Effect::Reef), 0.0f, off == Effect::WaterMask ? 1.0f : 0.0f};
+	frame.flags3 = {on(Effect::WetRock), on(Effect::SprayMist), 0.0f, 0.0f};
 	auto tableWaves = waves;
 	tableWaves.scale = off == Effect::Waves ? 0.0f : waves.scale;
 	frame.waveTable = underwater::WaveTable(tableWaves);
@@ -204,6 +205,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		program.SetUniformValue("u_uwAbove", &frame.above);
 		program.SetUniformValue("u_uwWaves", &frame.waves);
 		program.SetUniformValue("u_uwFlags2", &frame.flags2);
+		program.SetUniformValue("u_uwFlags3", &frame.flags3);
 		program.SetUniformValue("u_uwCurrent", &frame.current);
 	};
 
@@ -221,6 +223,23 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	const auto& system = Locator::underwaterSystem::value();
 	const auto& shoreMap = _underwater->Seabed(system.GetSeabed(), system.GetSeabedRevision());
 	post->SetTextureSampler("s_shore", 2, shoreMap);
+	// The original game's coast alpha, in the blocks' textures: the water shows only as much as the original sea
+	if (Locator::terrainSystem::has_value())
+	{
+		const auto& island = Locator::terrainSystem::value();
+		std::array<float, 32 * 32> layers {};
+		const auto& blocks = island.GetBlocks();
+		for (size_t i = 0; i < blocks.size(); ++i)
+		{
+			const auto at = blocks[i].GetBlockPosition();
+			if (at.x >= 0 && at.y >= 0 && at.x < 32 && at.y < 32)
+			{
+				layers.at(static_cast<size_t>(at.y * 32 + at.x)) = static_cast<float>(i + 1);
+			}
+		}
+		post->SetTextureSampler("s_blockTextures", 3, island.GetBlockTextures());
+		post->SetTextureSampler("s_blockLayers", 4, _underwater->BlockLayers(layers, system.GetSeabedRevision()));
+	}
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 	post->Submit(postView);
 
@@ -274,7 +293,7 @@ void Renderer::SetTerrainUnderwater(const ShaderProgram& program, bool active) c
 	program.SetUniformValue("u_uwEye", &frame.eye);
 	program.SetUniformValue("u_uwAbove", &frame.above);
 	program.SetUniformValue("u_uwWaves", &frame.waves);
-	program.SetUniformValue("u_uwFlags2", &frame.flags2);
+	program.SetUniformValue("u_uwFlags3", &frame.flags3);
 	// The snow does not show under the sea: its samplers hold the sea bed and the sand
 	const glm::vec4 noSnow {0.0f};
 	program.SetUniformValue("u_snow", &noSnow);

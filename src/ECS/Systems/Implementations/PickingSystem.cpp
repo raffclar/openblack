@@ -63,6 +63,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/UndrawnPicks.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -76,6 +77,35 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
+/// EXPERIMENT (not for merge): the sea bed to pick on, while the experiment's view is on and the camera is under the
+/// sea. Above the sea the hand picks as the game does.
+const seabed::Seabed* SeabedToPick()
+{
+	if (!Locator::underwaterSystem::has_value())
+	{
+		return nullptr;
+	}
+	const auto& underwater = Locator::underwaterSystem::value();
+	const auto& seabed = underwater.GetSeabed();
+	return underwater.IsEnabled() && underwater.IsEyeUnder() && seabed.size.x > 1 && seabed.size.y > 1 ? &seabed : nullptr;
+}
+
+/// EXPERIMENT (not for merge): the height units of a corner with the sea bed: the land's altitude above the sea, else
+/// the sea bed under the water, below 0
+float CornerWithSeabed(const seabed::Seabed& seabed, int32_t x, int32_t z)
+{
+	const int32_t cx = std::clamp(x, 0, seabed.size.x - 1);
+	const int32_t cz = std::clamp(z, 0, seabed.size.y - 1);
+	const auto altitude =
+	    Locator::terrainSystem::value().GetCell({static_cast<uint16_t>(cx), static_cast<uint16_t>(cz)}).altitude;
+	if (altitude > seabed::k_SeaLevelAltitude)
+	{
+		return static_cast<float>(altitude);
+	}
+	const auto depth = seabed.depth[(static_cast<size_t>(cz) * static_cast<size_t>(seabed.size.x)) + static_cast<size_t>(cx)];
+	return -depth / land_line::k_HeightUnit;
+}
+
 /// The land's corner heights as the game reads them for its line test: the cell's own block holds its far corners
 std::optional<land_line::CellHeights> CornersOf(int32_t x, int32_t z)
 {
@@ -83,19 +113,35 @@ std::optional<land_line::CellHeights> CornersOf(int32_t x, int32_t z)
 	{
 		return std::nullopt;
 	}
+	// EXPERIMENT (not for merge): under the sea, the line meets the sea bed in every cell of the map
+	if (const auto* seabed = SeabedToPick())
+	{
+		return land_line::CellHeights {.here = CornerWithSeabed(*seabed, x, z),
+		                               .acrossX = CornerWithSeabed(*seabed, x + 1, z),
+		                               .acrossZ = CornerWithSeabed(*seabed, x, z + 1),
+		                               .acrossBoth = CornerWithSeabed(*seabed, x + 1, z + 1)};
+	}
 	const auto* cell = Locator::terrainSystem::value().FindCell({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
 	if (cell == nullptr)
 	{
 		return std::nullopt;
 	}
 	// Within a block's 17 by 17 cells, +1 is across z and +17 across x
-	return land_line::CellHeights {
-	    .here = cell[0].altitude, .acrossX = cell[17].altitude, .acrossZ = cell[1].altitude, .acrossBoth = cell[18].altitude};
+	return land_line::CellHeights {.here = static_cast<float>(cell[0].altitude),
+	                               .acrossX = static_cast<float>(cell[17].altitude),
+	                               .acrossZ = static_cast<float>(cell[1].altitude),
+	                               .acrossBoth = static_cast<float>(cell[18].altitude)};
 }
 
 float HeightAt(glm::vec2 point)
 {
-	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+	const float land = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+	// EXPERIMENT (not for merge): under the sea, the height of the sea bed
+	if (SeabedToPick() != nullptr)
+	{
+		return Locator::underwaterSystem::value().FloorAt(point, land);
+	}
+	return land;
 }
 
 /// The middle of the model a seed shows in its picture, as the model is made (neither turned nor scaled), nothing for a

@@ -17,15 +17,19 @@
 #include <numbers>
 #include <vector>
 
+#include <LNDFile.h>
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/Seabed.h"
 #include "3D/SeabedTiles.h"
+#include "Enums.h"
 #include "Graphics/Underwater.h"
 
 namespace underwater = openblack::graphics::underwater;
 namespace seabed = openblack::seabed;
+namespace lnd = openblack::lnd;
+using openblack::TerrainMaterialType;
 
 TEST(Underwater, TheMoonIsBrightestWhenFull)
 {
@@ -343,6 +347,87 @@ TEST(Seabed, TheShoreMapPointsToTheCoastAndFindsTheCliffs)
 	}
 }
 
+TEST(Seabed, TheOriginalCoastStaysAtTheWater)
+{
+	// Land, then the original game's sea-level band of altitudes 3, 2 and 1, then the open sea
+	constexpr glm::ivec2 k_Size {40, 3};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Size.x * k_Size.y), 0);
+	for (int z = 0; z < k_Size.y; ++z)
+	{
+		for (int x = 0; x < 10; ++x)
+		{
+			altitudes[static_cast<size_t>(z * k_Size.x + x)] = 8;
+		}
+		altitudes[static_cast<size_t>(z * k_Size.x + 10)] = 3;
+		altitudes[static_cast<size_t>(z * k_Size.x + 11)] = 2;
+		altitudes[static_cast<size_t>(z * k_Size.x + 12)] = 1;
+	}
+	const auto bed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
+	const auto depth = [&bed](int x) { return bed.depth[static_cast<size_t>(bed.size.x + x)]; };
+	EXPECT_FLOAT_EQ(depth(9), 0.0f);
+	// The water's edge at high tide is on the original coast, between altitudes 3 and 2, and the band goes down a little
+	EXPECT_FLOAT_EQ(depth(10), 0.0f);
+	EXPECT_GT(depth(11), 0.0f);
+	EXPECT_LT(depth(10), depth(11));
+	EXPECT_LT(depth(11), depth(12));
+	// A creature can walk on the cell from altitude 1 to the open sea: there the water only covers its feet
+	EXPECT_LE(depth(13), seabed::k_WadeDepth);
+	// Past it the sea bed goes on down, with no ledge at the edge of the shallows
+	EXPECT_LT(depth(14) - depth(13), 3.0f);
+	EXPECT_GT(depth(30), 1.0f);
+}
+
+TEST(Seabed, OnlyWalkableCellsAreShallow)
+{
+	EXPECT_TRUE(seabed::Walkable(0, 0, 0, 1));
+	// All four corners at the bottom are deep sea
+	EXPECT_FALSE(seabed::Walkable(0, 0, 0, 0));
+	// Too steep for a creature: more than ten units of rise across the cell
+	EXPECT_FALSE(seabed::Walkable(0, 0, 0, 30));
+	EXPECT_TRUE(seabed::Walkable(0, 0, 0, 14));
+}
+
+TEST(Seabed, ABeachGoesOnDownGentlyUnderTheWater)
+{
+	// The same low coast twice, one of them a beach of sand
+	constexpr glm::ivec2 k_Size {120, 3};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Size.x * k_Size.y), 0);
+	for (int z = 0; z < k_Size.y; ++z)
+	{
+		for (int x = 0; x < 5; ++x)
+		{
+			altitudes[static_cast<size_t>(z * k_Size.x + x)] = 12;
+		}
+	}
+	std::vector<float> sand(altitudes.size(), 1.0f);
+	const auto rock = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
+	const auto beach = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f, sand);
+	const auto depthOf = [](const seabed::Seabed& bed, int x) { return bed.depth[static_cast<size_t>(bed.size.x + x)]; };
+	// Fifteen cells out the beach is still shallower than the other coast, at about its own grade
+	EXPECT_LT(depthOf(beach, 4 + 15), depthOf(rock, 4 + 15));
+	EXPECT_LT(depthOf(beach, 4 + 15), 150.0f * seabed::k_BeachSlope + 1.0f);
+	// The grade does not step: each cell out is a little deeper
+	for (int x = 6; x < 30; ++x)
+	{
+		EXPECT_GE(depthOf(beach, x + 1), depthOf(beach, x) - 0.05f) << x;
+	}
+}
+
+TEST(Seabed, TheBeachIsTheShareOfSand)
+{
+	lnd::LNDCountry country {};
+	country.materials.at(5) = {.indices = {0, 1}, .coefficient = 64};
+	country.materials.at(9) = {.indices = {1, 1}, .coefficient = 128};
+	const std::vector<uint16_t> types {static_cast<uint16_t>(TerrainMaterialType::Sand),
+	                                   static_cast<uint16_t>(TerrainMaterialType::Grass)};
+	// The first material weighs the coefficient out of 256
+	EXPECT_FLOAT_EQ(seabed::BeachShare(country, 5, types), 0.25f);
+	EXPECT_FLOAT_EQ(seabed::BeachShare(country, 9, types), 0.0f);
+	// A material that the land does not have is not sand
+	country.materials.at(2) = {.indices = {7, 7}, .coefficient = 256};
+	EXPECT_FLOAT_EQ(seabed::BeachShare(country, 2, types), 0.0f);
+}
+
 TEST(Underwater, TheSprayNoiseTilesAndFillsItsRange)
 {
 	const auto texels = underwater::SprayNoiseVolume();
@@ -467,4 +552,24 @@ TEST(Underwater, ShoreIsBlendedBetweenCorners)
 	// No direction to the coast is the foot of a cliff, a full one a beach
 	EXPECT_FLOAT_EQ(underwater::ShoreCliff({0.0f, 0.0f, 0.0f, 0.0f}), 1.0f);
 	EXPECT_FLOAT_EQ(underwater::ShoreCliff({0.0f, 1.0f, 0.0f, 0.0f}), 0.0f);
+}
+
+TEST(Seabed, TheShelfFromTheCoastHasNoSteps)
+{
+	for (const float slope : {0.02f, 0.1f, 0.3f, 0.6f, 2.0f, 6.0f})
+	{
+		float last = seabed::ShelfFromCoastLine(0.0f, slope);
+		EXPECT_FLOAT_EQ(last, 0.0f);
+		for (float from = 0.5f; from < 200.0f; from += 0.5f)
+		{
+			const float depth = seabed::ShelfFromCoastLine(from, slope);
+			EXPECT_GE(depth, last) << slope << " " << from;
+			EXPECT_LT(depth - last, 0.5f * std::max(slope, 0.05f) + 0.01f) << slope << " " << from;
+			last = depth;
+		}
+	}
+	// A gentle coast only covers a creature's feet at the end of the shallows
+	EXPECT_NEAR(seabed::ShelfFromCoastLine(seabed::k_ShallowsWidth, 0.1f), seabed::k_WadeDepth, 1e-4f);
+	// A cliff is deep at once
+	EXPECT_GT(seabed::ShelfFromCoastLine(5.0f, 6.0f), 20.0f);
 }
