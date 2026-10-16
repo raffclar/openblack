@@ -146,6 +146,12 @@ enum class Effect : uint8_t
 	Whitecaps,
 	Reef,
 	Current,
+	/// The spray at the cliffs, all of it
+	Spray,
+	/// The spray's fine mist and the haze at the foot of the cliffs
+	SprayMist,
+	/// The wet rock of the cliffs after a wave
+	WetRock,
 	_Count
 };
 

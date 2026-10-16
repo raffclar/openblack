@@ -137,7 +137,7 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	const auto& waves = system.GetWaves();
 	frame.waves = {off == Effect::Waves ? 0.0f : waves.scale, waves.storm, waves.windAngle,
 	               off == Effect::Waves ? 0.0f : waves.swash};
-	frame.flags2 = {on(Effect::Whitecaps), on(Effect::Reef), 0.0f, 0.0f};
+	frame.flags2 = {on(Effect::Whitecaps), on(Effect::Reef), on(Effect::WetRock), on(Effect::SprayMist)};
 	auto tableWaves = waves;
 	tableWaves.scale = off == Effect::Waves ? 0.0f : waves.scale;
 	frame.waveTable = underwater::WaveTable(tableWaves);
@@ -245,7 +245,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 
 	// The spray at the foot of the cliffs, above and under the water
 	if (const auto* spray = _shaderManager->GetShader("UnderwaterSpray");
-	    spray != nullptr && frame.flags.y > 0.5f &&
+	    spray != nullptr && frame.flags.y > 0.5f && system.GetEffectOff() != underwater::Effect::Spray &&
 	    _underwater->BindSpray(system.GetSeabed().cliffFoot, system.GetSeabedRevision()))
 	{
 		setUniforms(*spray);
@@ -274,6 +274,7 @@ void Renderer::SetTerrainUnderwater(const ShaderProgram& program, bool active) c
 	program.SetUniformValue("u_uwEye", &frame.eye);
 	program.SetUniformValue("u_uwAbove", &frame.above);
 	program.SetUniformValue("u_uwWaves", &frame.waves);
+	program.SetUniformValue("u_uwFlags2", &frame.flags2);
 	// The snow does not show under the sea: its samplers hold the sea bed and the sand
 	const glm::vec4 noSnow {0.0f};
 	program.SetUniformValue("u_snow", &noSnow);
