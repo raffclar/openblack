@@ -26,6 +26,9 @@ constexpr float k_BreathRestSeconds = 10.0f;
 constexpr float k_BreathChangeSeconds = 0.5f;
 /// Breathing is five seconds at size 1, by the square root of the size
 constexpr float k_BreathSecondsAtSizeOne = 5.0f;
+/// When a walk starts, breathing is this fast at size 1, at a walk or at the run speed
+constexpr float k_WalkBreathSecondsAtSizeOne = 3.0f;
+constexpr float k_RunBreathSecondsAtSizeOne = 1.4f;
 
 /// Where each bone is in a list of the bones an animation moves, or nothing for those it doesn't
 std::vector<std::optional<size_t>> JointSlots(const std::vector<uint32_t>& joints)
@@ -304,6 +307,12 @@ std::vector<glm::mat4> creature_animation::BlendRest(std::span<const glm::mat4> 
 float creature_animation::BreathPeriod(float size)
 {
 	return k_BreathSecondsAtSizeOne * std::sqrt(std::max(size, 0.0f));
+}
+
+float creature_animation::WalkBreathPeriod(float size, bool running)
+{
+	const auto atSizeOne = running ? k_RunBreathSecondsAtSizeOne : k_WalkBreathSecondsAtSizeOne;
+	return atSizeOne * std::sqrt(std::max(size, 0.0f));
 }
 
 float creature_animation::AdvanceBreath(float phase, float seconds, float period)

@@ -78,6 +78,9 @@ struct CreatureAnimation
 	/// How far through a breath the creature is, 0 to 1, and the seconds a breath takes now
 	float breathPhase {0.0f};
 	float breathPeriod {0.0f};
+	/// The seconds a breath moves towards each frame. Each game turn sets it and the period to the resting period. A walk
+	/// that starts sets a shorter one, and a stop sets the resting period again.
+	float breathTarget {0.0f};
 
 	/// The CreatureMorph revision the animations below were built for
 	std::optional<uint32_t> builtRevision;

@@ -57,8 +57,24 @@ TEST(CreatureLocomotion, TargetSpeedIsAFractionOfALittleOverRunning)
 
 TEST(CreatureLocomotion, ExhaustedCreaturesGoSlowly)
 {
-	EXPECT_NEAR(RequiredFraction(0.9f, 0.5f, 0.79f), 0.9f, k_Tolerance);
-	EXPECT_NEAR(RequiredFraction(0.9f, 0.5f, 0.8f), 0.5f, k_Tolerance);
+	EXPECT_NEAR(RequiredFraction(0.9f, 0.5f, 0.79f, false), 0.9f, k_Tolerance);
+	EXPECT_NEAR(RequiredFraction(0.9f, 0.5f, 0.8f, false), 0.5f, k_Tolerance);
+}
+
+TEST(CreatureLocomotion, AnExhaustedCreatureStaysSlowAfterItRecovers)
+{
+	// Exhausted, the creature gets its slow fraction and keeps it
+	auto kept = RequiredFraction(0.7f, 0.5f, 0.9f, false);
+	EXPECT_NEAR(kept, 0.5f, k_Tolerance);
+	// Rested again, it keeps the slow fraction until a new action sets a different speed
+	kept = RequiredFraction(kept, 0.5f, 0.1f, false);
+	EXPECT_NEAR(kept, 0.5f, k_Tolerance);
+	EXPECT_NEAR(KeptFraction(kept, 0.7f), 0.5f, k_Tolerance);
+}
+
+TEST(CreatureLocomotion, AHeldCreatureDoesNotGetTheSlowFraction)
+{
+	EXPECT_NEAR(RequiredFraction(0.7f, 0.5f, 0.9f, true), 0.7f, k_Tolerance);
 }
 
 TEST(CreatureLocomotion, AWalkKeepsTheSpeedThatTheCreatureGotLast)

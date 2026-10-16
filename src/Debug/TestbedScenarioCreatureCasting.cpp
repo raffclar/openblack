@@ -455,6 +455,28 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	    .commands = paces,
 	});
 
+	// Three tigers set off at once: an exhausted one and a rested one walk, and a rested one runs
+	const std::vector<Command> setOff {
+	    {.kind = Kind::WalkTo, .creature = 0, .delaySeconds = 1.0f, .point = {-60.0f, 150.0f}},
+	    {.kind = Kind::WalkTo, .creature = 1, .delaySeconds = 0.0f, .point = {0.0f, 150.0f}},
+	    {.kind = Kind::RunTo, .creature = 2, .delaySeconds = 0.0f, .point = {60.0f, 150.0f}},
+	};
+	all.push_back({
+	    .id = "movement.exhausted_slow_walk",
+	    .name = "Creature movement: an exhausted walk and the breath while it moves",
+	    .facet = Facet::Movement,
+	    .description = "Three tigers go 150 metres. The left tiger is exhausted and walks, the middle tiger walks and the "
+	                   "right tiger runs.",
+	    .expected = "The exhausted tiger walks at its slow speed. If its exhaustion goes below 0.8 on the way, it stays "
+	                "slow until the walk ends. As each tiger sets off, its breath period goes to 3 seconds (walk) or 1.4 "
+	                "seconds (run) for the rest of that game turn, then back to 5 seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-80.0f, -10.0f}, {80.0f, 160.0f}}},
+	    .creatures = {Caster({-60.0f, 0.0f}, "exhausted walker", 0.85f), Caster({0.0f, 0.0f}, "walker"),
+	                  Caster({60.0f, 0.0f}, "runner")},
+	    .commands = setOff,
+	});
+
 	all.push_back({
 	    .id = "miracles.hand_itchy_seed",
 	    .name = "Creature spells: the itchy spell held in the hand",

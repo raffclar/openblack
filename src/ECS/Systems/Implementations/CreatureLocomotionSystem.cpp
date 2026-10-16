@@ -186,6 +186,15 @@ float PaceFraction(CreatureLocomotionSystemInterface::Pace pace, float kept, con
 	return fractions.walk;
 }
 
+/// A walk that starts makes the creature breathe faster for the rest of the game turn: faster still at the run speed
+void BreatheForWalk(entt::entity creature, const Creature& body, float fraction, const Fractions& fractions)
+{
+	if (auto* animation = Locator::entitiesRegistry::value().TryGet<CreatureAnimation>(creature))
+	{
+		animation->breathTarget = creature_animation::WalkBreathPeriod(ShownSize(body), fraction == fractions.run);
+	}
+}
+
 /// The species' animations, as its base mesh has them: the blends follow the base's lengths and moves
 struct Moves
 {
@@ -977,7 +986,9 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveTo(entt::enti
 	}
 	self->following.reset();
 	const auto fractions = FractionsOf(body->species);
-	return StartMove(creature, *self, point, PaceFraction(pace, self->fraction, fractions), minDistance, maxDistance, true);
+	const auto fraction = PaceFraction(pace, self->fraction, fractions);
+	BreatheForWalk(creature, *body, fraction, fractions);
+	return StartMove(creature, *self, point, fraction, minDistance, maxDistance, true);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::LeadTo(entt::entity creature, glm::vec2 point, float extraSpeed,
@@ -1014,8 +1025,9 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::MoveToObject(entt
 	const auto ring = locomotion::ObjectRing(self->radius, ReachOf(registry, target, walker), extra);
 	self->following.reset();
 	const auto fractions = FractionsOf(body->species);
-	return StartMove(creature, *self, glm::xz(at->position), PaceFraction(pace, self->fraction, fractions), ring.min, ring.max,
-	                 false);
+	const auto fraction = PaceFraction(pace, self->fraction, fractions);
+	BreatheForWalk(creature, *body, fraction, fractions);
+	return StartMove(creature, *self, glm::xz(at->position), fraction, ring.min, ring.max, false);
 }
 
 CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::Follow(entt::entity creature, entt::entity target,
@@ -1055,6 +1067,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::FleeFrom(entt::en
 		point = *valid;
 	}
 	self->following.reset();
+	BreatheForWalk(creature, *body, fractions.run, fractions);
 	return StartMove(creature, *self, point, fractions.run, 0.0f, k_RunAwayArrival, false);
 }
 
@@ -1118,10 +1131,19 @@ void CreatureLocomotionSystem::Place(entt::entity creature, glm::vec3 position)
 
 void CreatureLocomotionSystem::Stop(entt::entity creature)
 {
-	if (auto* self = Locator::entitiesRegistry::value().TryGet<CreatureLocomotion>(creature))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* self = registry.TryGet<CreatureLocomotion>(creature))
 	{
 		ClearWalk(*self);
 		self->following.reset();
+	}
+	// Stopped, it breathes at its resting period again
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature); animation != nullptr)
+	{
+		if (const auto* body = registry.TryGet<const Creature>(creature))
+		{
+			animation->breathTarget = creature_animation::BreathPeriod(ShownSize(*body));
+		}
 	}
 }
 
@@ -1235,9 +1257,11 @@ void CreatureLocomotionSystem::ProcessTurn()
 		    }
 		    const auto* needs = registry.TryGet<const CreatureNeeds>(entity);
 		    const auto fractions = FractionsOf(creature.species);
-		    const auto fraction =
-		        locomotion::RequiredFraction(self.fraction, fractions.slow, needs != nullptr ? needs->needs.exhaustion : 0.0f);
-		    const auto targetSpeed = locomotion::TargetSpeed(fraction, self.speeds.run);
+		    // Exhausted, the creature gets its slow speed and keeps it until a new action or a run sets a different speed
+		    self.fraction =
+		        locomotion::RequiredFraction(self.fraction, fractions.slow, needs != nullptr ? needs->needs.exhaustion : 0.0f,
+		                                     registry.AnyOf<InHand>(entity));
+		    const auto targetSpeed = locomotion::TargetSpeed(self.fraction, self.speeds.run);
 
 		    switch (self.motion)
 		    {
