@@ -58,15 +58,19 @@ TEST(CreaturePointing, ATargetTooNearAimsAhead)
 	EXPECT_EQ(aim.rise, 0.0f);
 }
 
-// The left arm points at targets on the positive side of the aim; a creature that holds a thing uses its free hand
+// Without a turn, the left arm points at a target round to the positive side of the head; after a turn, at a target
+// on the positive side of the aim. A creature that holds a thing uses its free hand.
 TEST(CreaturePointing, TheArmIsTheFreeOneOrTheOneOnTheTargetsSide)
 {
 	using namespace creature_pointing;
-	EXPECT_TRUE(PointsWithLeft({.across = 0.2f}, std::nullopt));
-	EXPECT_FALSE(PointsWithLeft({.across = -0.2f}, std::nullopt));
-	EXPECT_FALSE(PointsWithLeft({.across = 0.0f}, std::nullopt));
-	EXPECT_TRUE(PointsWithLeft({.across = -0.2f}, false));
-	EXPECT_FALSE(PointsWithLeft({.across = 0.2f}, true));
+	EXPECT_TRUE(PointsWithLeft(0.2f, std::nullopt));
+	EXPECT_FALSE(PointsWithLeft(-0.2f, std::nullopt));
+	EXPECT_FALSE(PointsWithLeft(0.0f, std::nullopt));
+	EXPECT_TRUE(PointsWithLeft(-0.2f, false));
+	EXPECT_FALSE(PointsWithLeft(0.2f, true));
+	EXPECT_TRUE(PointsWithLeftAfterTurn({.across = 0.2f}, std::nullopt));
+	EXPECT_FALSE(PointsWithLeftAfterTurn({.across = -0.2f}, std::nullopt));
+	EXPECT_TRUE(PointsWithLeftAfterTurn({.across = 0.2f}, false));
 	// The left arm turns the aim over: its weights are those of the right arm for the target on the other side
 	const auto left = Weights({.across = 0.3f, .rise = 0.1f}, true);
 	const auto right = Weights({.across = -0.3f, .rise = 0.1f}, false);
@@ -74,6 +78,14 @@ TEST(CreaturePointing, TheArmIsTheFreeOneOrTheOneOnTheTargetsSide)
 	{
 		EXPECT_FLOAT_EQ(left.at(i), right.at(i));
 	}
+}
+
+// The turn angle is seen from the head: a target a quarter turn round along +x, facing along -z, is a quarter turn
+TEST(CreaturePointing, TheTurnAngleIsSeenFromTheHead)
+{
+	using namespace creature_pointing;
+	EXPECT_NEAR(TurnAngle({5.0f, 10.0f, 0.0f}, {0.0f, -1.0f}, {15.0f, 0.0f, 0.0f}), 1.5707964f, k_Near);
+	EXPECT_NEAR(TurnAngle({0.0f, 10.0f, 0.0f}, {0.0f, -1.0f}, {0.0f, 0.0f, -10.0f}), 0.0f, k_Near);
 }
 
 // The arm rises to the moment of the point and holds there; when the point ends, it plays on

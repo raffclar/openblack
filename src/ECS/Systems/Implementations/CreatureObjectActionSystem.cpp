@@ -184,6 +184,19 @@ float BearingTo(const Transform& transform, const glm::vec3& target)
 	return std::acos(std::clamp(glm::dot(ahead, glm::normalize(towards)), -1.0f, 1.0f));
 }
 
+/// Where the creature's head bone is as posed now, or its position when its species has no head bone
+glm::vec3 HeadOf(entt::entity creature, const Transform& transform, const Creature& body)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* points = PointsOf(body);
+	if (animation == nullptr || points == nullptr || points->head >= animation->boneMatrices.size())
+	{
+		return transform.position;
+	}
+	return glm::vec3(creature::PosedBone(points->head, animation->boneMatrices, PlacementOf(transform))[3]);
+}
+
 /// The hand a creature acts with: the right, or its mirror
 uint32_t HandBone(const CreatureRig::ActionPoints& points, const CreatureAnimation& animation, bool mirrored)
 {
@@ -813,10 +826,10 @@ void SetPointing(CreatureObjectAction& action, const Transform& transform, const
 	const auto origin = transform.position + glm::vec3(0.0f, creature_pointing::k_OriginHeightPerSize * ShownSize(body), 0.0f);
 	const auto facing = glm::xz(transform.rotation * (-k_MeshBack));
 	const auto aim = creature_pointing::AimAt(origin, facing, action.point);
-	if (choosesArm)
+	if (choosesArm && action.pointTurned)
 	{
 		action.mirrored =
-		    creature_pointing::PointsWithLeft(aim, held != nullptr ? std::optional(held->mirrored) : std::nullopt);
+		    creature_pointing::PointsWithLeftAfterTurn(aim, held != nullptr ? std::optional(held->mirrored) : std::nullopt);
 	}
 	const auto weights = creature_pointing::Weights(aim, action.mirrored);
 	SetSlots(action, creature_pointing::k_Animations, weights);
@@ -882,7 +895,25 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	{
 		const auto limit = action.kind == Kind::Throw ? creature_object_actions::k_ThrowTurnRadians
 		                                              : creature_object_actions::k_PointTurnRadians;
-		if (BearingTo(transform, action.point) > limit && action.attempts < k_TurnAttempts)
+		if (action.kind == Kind::Point)
+		{
+			// The arm points without a turn when the point is near enough ahead, as seen from the head
+			const auto facing = glm::xz(transform.rotation * (-k_MeshBack));
+			const auto turn = creature_pointing::TurnAngle(HeadOf(creature, transform, body), facing, action.point);
+			if (std::abs(turn) >= creature_pointing::k_TurnLimit && action.attempts < k_TurnAttempts)
+			{
+				++action.attempts;
+				action.pointTurned = true;
+				locomotion.TurnToFace(creature, glm::xz(action.point));
+				return;
+			}
+			if (!action.pointTurned)
+			{
+				action.mirrored =
+				    creature_pointing::PointsWithLeft(turn, held != nullptr ? std::optional(held->mirrored) : std::nullopt);
+			}
+		}
+		else if (BearingTo(transform, action.point) > limit && action.attempts < k_TurnAttempts)
 		{
 			++action.attempts;
 			locomotion.TurnToFace(creature, glm::xz(action.point));

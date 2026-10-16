@@ -47,9 +47,16 @@ struct Aim
 /// The aim at a target from a point, for a creature that faces a way on the land. Each part stops at its limit.
 [[nodiscard]] Aim AimAt(glm::vec3 origin, glm::vec2 facing, glm::vec3 target);
 
+/// The creature turns to face the target before it points when the target is this far round from its head (radians)
+inline constexpr float k_TurnLimit = 0.471239f;
+/// How far round the target is from the way the creature faces, as seen from its head
+[[nodiscard]] float TurnAngle(glm::vec3 head, glm::vec2 facing, glm::vec3 target);
+
 /// Whether the creature points with its left arm, chosen as it starts to point. A creature that holds something
-/// points with the free hand; else, it points with the left arm at a target on the positive side of the aim.
-[[nodiscard]] bool PointsWithLeft(const Aim& aim, std::optional<bool> heldInLeft);
+/// points with the free hand. A creature that did not turn first uses its left arm when the turn angle is more than 0.
+/// After a turn, it uses its left arm at a target on the positive side of the aim.
+[[nodiscard]] bool PointsWithLeft(float turnAngle, std::optional<bool> heldInLeft);
+[[nodiscard]] bool PointsWithLeftAfterTurn(const Aim& aim, std::optional<bool> heldInLeft);
 
 /// The weights of the four animations, low left, low right, high left and high right. The left arm turns the aim
 /// over before the weights.

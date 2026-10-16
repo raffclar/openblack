@@ -198,6 +198,8 @@ void CreatureMindSystem::StepGesture(entt::entity creature)
 		objects.PointUntilTold(creature, start);
 		StartChain(registry, creature, *drawing, start);
 		drawing->stage = Stage::Draw;
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} points at the start of gesture {} on turn {}",
+		                    entt::to_integral(creature), drawing->gesture, now);
 		break;
 	}
 	case Stage::Draw:
@@ -211,6 +213,11 @@ void CreatureMindSystem::StepGesture(entt::entity creature)
 		{
 			return;
 		}
+		if (drawing->drawing.drawn > 0.0f && drawing->drawing.drawn <= drawing->sharePerTurn)
+		{
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} draws the first share of gesture {} on turn {}",
+			                    entt::to_integral(creature), drawing->gesture, now);
+		}
 		if (outcome == creature_gesture::Outcome::Failed)
 		{
 			drawing->stage = Stage::None;
@@ -220,6 +227,8 @@ void CreatureMindSystem::StepGesture(entt::entity creature)
 		objects.MovePoint(creature, TargetOf(registry, creature, *drawing));
 		if (outcome == creature_gesture::Outcome::Done)
 		{
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} ends gesture {} on turn {}", entt::to_integral(creature),
+			                    drawing->gesture, now);
 			objects.EndPoint(creature);
 			drawing->stage = Stage::End;
 			return;

@@ -897,6 +897,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureObjectAction::pointsUntilTold>("pointsUntilTold")
 	    .Field<&components::CreatureObjectAction::pointEnding>("pointEnding")
 	    .Field<&components::CreatureObjectAction::pointMs>("pointMs")
+	    .Field<&components::CreatureObjectAction::pointTurned>("pointTurned")
 	    .Field<&components::CreatureObjectAction::reach>("reach")
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")

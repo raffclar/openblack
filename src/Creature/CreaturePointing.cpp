@@ -51,7 +51,21 @@ creature_pointing::Aim creature_pointing::AimAt(glm::vec3 origin, glm::vec2 faci
 	        .rise = std::clamp(offset.y / distance, -k_RiseLimit, k_RiseLimit)};
 }
 
-bool creature_pointing::PointsWithLeft(const Aim& aim, std::optional<bool> heldInLeft)
+float creature_pointing::TurnAngle(glm::vec3 head, glm::vec2 facing, glm::vec3 target)
+{
+	return Wrap(AngleOf({target.x - head.x, target.z - head.z}) - AngleOf(facing));
+}
+
+bool creature_pointing::PointsWithLeft(float turnAngle, std::optional<bool> heldInLeft)
+{
+	if (heldInLeft.has_value())
+	{
+		return !*heldInLeft;
+	}
+	return turnAngle > 0.0f;
+}
+
+bool creature_pointing::PointsWithLeftAfterTurn(const Aim& aim, std::optional<bool> heldInLeft)
 {
 	if (heldInLeft.has_value())
 	{

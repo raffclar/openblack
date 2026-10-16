@@ -61,6 +61,8 @@ struct CreatureObjectAction
 	bool pointEnding {false};
 	/// Pointing: the moment that the arm gets to its point, in the time of the animations
 	float pointMs {0.0f};
+	/// Pointing: the creature turned to face the point first, which changes how it chooses its arm
+	bool pointTurned {false};
 
 	/// Where the hand gets to in the reaching animations, and how far the creature can reach, measured as it starts
 	std::optional<creature_reach::Points> reach;
