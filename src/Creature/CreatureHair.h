@@ -115,8 +115,10 @@ struct Strand
 	std::vector<glm::vec3> velocities;
 };
 
-/// A strand of segmentCount points laid straight out from its root, at rest
-[[nodiscard]] Strand Straight(const Root& root, const Physics& physics, uint32_t segmentCount);
+/// A new strand of segmentCount points, as vanilla starts it: every point and every speed is zero, because the game
+/// never clears the memory it reads them into. The first step puts the root on the body and each point after it a
+/// segment from the one before, towards the world origin.
+[[nodiscard]] Strand FromZero(uint32_t segmentCount);
 
 /// The strand some seconds on. Its root follows the body; each point after it is pulled towards lying straight on from
 /// the segment before it, falls, loses speed and moves, then is put back the segment's length from the point before
