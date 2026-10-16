@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include <optional>
 #include <span>
 
 #include <entt/core/fwd.hpp>
@@ -44,20 +43,11 @@ constexpr float k_UnknownSpeciesStrength = 0.5f;
 /// own strength is speciesStrength, 0 to 1
 [[nodiscard]] Morph FromAttributes(float alignment, float fatness, float strength, float speciesStrength);
 
-/// A weak to strong look that a script gave a creature. The creature keeps it until its strength changes.
-struct WeakStrongSet
-{
-	/// The look, -1 (weak) to 1 (strong)
-	float value {0.0f};
-	/// The strength of the creature when it got the look
-	float strength {0.0f};
-};
+/// The weak to strong look, -1 to 1, of a creature of strength 0 to 1, of a species whose own strength is speciesStrength
+[[nodiscard]] float StrengthLook(float strength, float speciesStrength);
 /// The weak to strong look of a creature made from another at a scale: the other's look times the scale, or divided by
 /// it when the other looks weak, from 0 to 1
 [[nodiscard]] float CopiedWeakStrong(float source, float scale);
-/// The weak to strong look a creature shows: the look a script gave it while its strength stays the same, otherwise the
-/// look of its strength
-[[nodiscard]] float ShownWeakStrong(float fromStrength, const std::optional<WeakStrongSet>& set, float strength);
 
 [[nodiscard]] float ClampScale(float scale);
 

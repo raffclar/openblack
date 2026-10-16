@@ -8,7 +8,6 @@
  *******************************************************************************/
 
 #include <array>
-#include <optional>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
@@ -152,10 +151,12 @@ TEST(CreatureMorph, ACopyLooksAsStrongAsTheOtherTimesTheScale)
 	EXPECT_FLOAT_EQ(creature_morph::CopiedWeakStrong(-0.5f, -2.0f), 0.25f);
 }
 
-TEST(CreatureMorph, AScriptLookStaysUntilTheStrengthChanges)
+TEST(CreatureMorph, TheStrengthLookIsTheWeakStrongAxis)
 {
-	const creature_morph::WeakStrongSet set {.value = 0.9f, .strength = 0.3f};
-	EXPECT_FLOAT_EQ(creature_morph::ShownWeakStrong(-0.2f, set, 0.3f), 0.9f);
-	EXPECT_FLOAT_EQ(creature_morph::ShownWeakStrong(-0.2f, set, 0.31f), -0.2f);
-	EXPECT_FLOAT_EQ(creature_morph::ShownWeakStrong(-0.2f, std::nullopt, 0.3f), -0.2f);
+	EXPECT_FLOAT_EQ(creature_morph::StrengthLook(0.5f, 0.5f), 0.0f);
+	EXPECT_FLOAT_EQ(creature_morph::StrengthLook(1.0f, 0.5f), 0.8f);
+	EXPECT_FLOAT_EQ(creature_morph::StrengthLook(0.25f, 1.0f), -0.2f);
+	EXPECT_FLOAT_EQ(creature_morph::StrengthLook(1.0f, 1.0f), 1.0f);
+	EXPECT_FLOAT_EQ(creature_morph::FromAttributes(0.0f, 0.5f, 0.25f, 1.0f).weakStrong,
+	                creature_morph::StrengthLook(0.25f, 1.0f));
 }

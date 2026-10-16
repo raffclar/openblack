@@ -196,6 +196,7 @@ float creature_physiology::AutoScaledSize(float size, float playersSize, float s
 void creature_physiology::ModifyStrength(Shape& shape, float amount)
 {
 	shape.strength = Clamp01(shape.strength + amount);
+	shape.shownStrength = shape.strength;
 }
 
 void creature_physiology::ApplyActionCost(Needs& needs, Shape& shape, const ActionCost& cost, uint32_t phase)

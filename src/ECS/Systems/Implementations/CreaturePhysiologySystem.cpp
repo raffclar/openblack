@@ -169,10 +169,16 @@ physiology::Shape ShapeOf(const Creature& creature)
 }
 
 /// Takes on a changed shape; returns whether its drawn size changed
-bool TakeShape(Creature& creature, Transform* transform, const physiology::Shape& shape)
+bool TakeShape(Creature& creature, CreatureMorph* morph, Transform* transform, const physiology::Shape& shape)
 {
 	creature.fatness = shape.fatness;
 	creature.strength = shape.strength;
+	// The body shows a change of its strength by an amount, but not how the strength goes down each turn
+	if (morph != nullptr && shape.shownStrength.has_value())
+	{
+		morph->strengthLook = creature_morph::StrengthLook(
+		    *shape.shownStrength, ecs::archetypes::CreatureArchetype::SpeciesStrength(creature.species));
+	}
 	if (shape.size == creature.size)
 	{
 		return false;
@@ -304,7 +310,7 @@ void CreaturePhysiologySystem::ProcessTurn()
 				needs.rested = physiology::SleepTurn(needs.needs, species, shape.size, needs.restTurns, night) || needs.rested;
 			}
 		}
-		resized = TakeShape(creature, transform, shape) || resized;
+		resized = TakeShape(creature, registry.TryGet<CreatureMorph>(entity), transform, shape) || resized;
 
 		needs.faint.reset();
 		if (_fainting && needs.rest != CreatureNeeds::Rest::Unconscious)
@@ -474,7 +480,7 @@ float CreaturePhysiologySystem::Eat(entt::entity creature, float foodValue)
 	StartNeeds(*needs, species);
 	auto shape = ShapeOf(*self);
 	const auto energy = physiology::Eat(needs->needs, shape, species, foodValue);
-	if (TakeShape(*self, registry.TryGet<Transform>(creature), shape))
+	if (TakeShape(*self, registry.TryGet<CreatureMorph>(creature), registry.TryGet<Transform>(creature), shape))
 	{
 		registry.SetDirty();
 	}
@@ -616,7 +622,7 @@ void CreaturePhysiologySystem::FinishAction(entt::entity creature, std::string_v
 	    needs->needs, shape,
 	    {.strengthGain = found->strengthGain, .energyCost = found->energyCost, .exhaustionCost = found->exhaustionCost},
 	    PhaseOf(registry, creature));
-	if (TakeShape(*self, registry.TryGet<Transform>(creature), shape))
+	if (TakeShape(*self, registry.TryGet<CreatureMorph>(creature), registry.TryGet<Transform>(creature), shape))
 	{
 		registry.SetDirty();
 	}
@@ -629,6 +635,7 @@ void CreaturePhysiologySystem::ModifyStrength(entt::entity creature, float amoun
 		auto shape = ShapeOf(*self);
 		physiology::ModifyStrength(shape, amount);
 		self->strength = shape.strength;
+		ecs::archetypes::CreatureArchetype::ShowStrength(creature);
 	}
 }
 
