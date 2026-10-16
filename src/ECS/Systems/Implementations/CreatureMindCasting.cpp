@@ -269,6 +269,12 @@ bool CanPayFor(entt::entity creature, MagicType type)
 	                                        .sizeFactor = species.spellSizeFactor},
 	                                       magic::GetMagicEffectInfo(info, type).costToCreate);
 }
+
+/// A move of a cast goes on at the speed that the creature got last, unless the move asks for the run speed
+CreatureLocomotionSystemInterface::Pace KeptOrRun(const CreatureCasting& casting)
+{
+	return casting.run ? CreatureLocomotionSystemInterface::Pace::Run : CreatureLocomotionSystemInterface::Pace::Keep;
+}
 } // namespace
 
 std::optional<uint32_t> CreatureMindSystem::CastMagicOf(uint32_t action)
@@ -724,6 +730,7 @@ void CreatureMindSystem::StartSubMove(entt::entity creature, const creature_mind
 	casting.target = movement.object.has_value() ? static_cast<entt::entity>(*movement.object) : entt::null;
 	casting.keep = movement.maxDistance;
 	casting.settleSeconds = seconds;
+	casting.run = movement.run;
 	casting.phase = 0;
 	casting.turns = 0;
 	casting.holdTurns = 0;
@@ -779,10 +786,7 @@ bool CreatureMindSystem::GoNear(entt::entity creature, CreatureCasting& casting,
 	const float distance = glm::distance(Flat(transform->position), target);
 	const float near = std::min(clear, distance - 0.05f);
 	const float far = std::max(casting.keep + clear, near + 0.001f);
-	// TODO(raffclar): the game walks it on at whatever speed it was last asked to go, which stopping what it does sets back
-	// to walking for every creature but a computer player's; nothing here keeps that speed, so it walks
-	const auto result = Locator::creatureLocomotionSystem::value().MoveTo(
-	    creature, target, CreatureLocomotionSystemInterface::Pace::Walk, near, far);
+	const auto result = Locator::creatureLocomotionSystem::value().MoveTo(creature, target, KeptOrRun(casting), near, far);
 	if (result != CreatureLocomotionSystemInterface::MoveResult::Started)
 	{
 		return false;
@@ -904,8 +908,8 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 				    return locomotion.GetWalkableLand().At(x, z) == creature_route::Ground::Open &&
 				           !CellBlocked(registry, creature, x, z);
 			    });
-			if (!clear.has_value() || locomotion.MoveTo(creature, *clear, CreatureLocomotionSystemInterface::Pace::Walk, 0.0f,
-			                                            1.0f) != CreatureLocomotionSystemInterface::MoveResult::Started)
+			if (!clear.has_value() || locomotion.MoveTo(creature, *clear, KeptOrRun(*casting), 0.0f, 1.0f) !=
+			                              CreatureLocomotionSystemInterface::MoveResult::Started)
 			{
 				fail();
 				break;
@@ -964,8 +968,7 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 				point = *valid;
 			}
 		}
-		switch (locomotion.MoveTo(creature, point, CreatureLocomotionSystemInterface::Pace::Walk, stand->minDistance,
-		                          stand->maxDistance))
+		switch (locomotion.MoveTo(creature, point, KeptOrRun(*casting), stand->minDistance, stand->maxDistance))
 		{
 		case CreatureLocomotionSystemInterface::MoveResult::Started:
 			casting->phase = 1;

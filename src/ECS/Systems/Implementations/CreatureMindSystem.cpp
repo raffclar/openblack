@@ -40,6 +40,7 @@
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureEmergencies.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureGiving.h"
@@ -573,6 +574,27 @@ void FaceForScript(entt::entity creature, const creature_mind::Movement& move)
 	}
 }
 
+/// A new agenda means that the creature stopped what it did. The creature of a player that is not the computer then
+/// goes back to its walk speed. Other creatures keep the speed that they got last.
+void KeepPaceWithAgenda(entt::entity creature, CreatureMindState& mind)
+{
+	if (mind.paceSerial == mind.idle.serial)
+	{
+		return;
+	}
+	mind.paceSerial = mind.idle.serial;
+	const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+	if (body == nullptr || !Locator::creatureLocomotionSystem::has_value())
+	{
+		return;
+	}
+	const bool computer = Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(body->owner);
+	if (!creature_emergencies::KeepsRunSpeed(body->owner != PlayerNames::NEUTRAL, computer))
+	{
+		Locator::creatureLocomotionSystem::value().ResetPace(creature);
+	}
+}
+
 bool Move(entt::entity creature, const creature_mind::Commands& commands)
 {
 	if (!Locator::creatureLocomotionSystem::has_value())
@@ -591,7 +613,8 @@ bool Move(entt::entity creature, const creature_mind::Commands& commands)
 	using Kind = creature_mind::Movement::Kind;
 	using Pace = CreatureLocomotionSystemInterface::Pace;
 	const auto& move = *commands.move;
-	const auto pace = move.run ? Pace::Run : Pace::Walk;
+	// A walk that does not ask for the run speed keeps the speed that the creature got last
+	const auto pace = move.run ? Pace::Run : Pace::Keep;
 	const auto object = move.object.has_value() ? std::optional(static_cast<entt::entity>(*move.object)) : std::nullopt;
 	switch (move.kind)
 	{
@@ -2025,6 +2048,7 @@ void CreatureMindSystem::ProcessTurn()
 			    CarryOutDance(entity, mind.idle, *commands.dance);
 		    }
 		    KeepDanceWithAgenda(entity, mind.idle);
+		    KeepPaceWithAgenda(entity, mind);
 		    Apply(commands, animation, eyes);
 		    if (Move(entity, commands))
 		    {

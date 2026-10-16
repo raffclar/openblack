@@ -173,6 +173,8 @@ struct CreatureMindState
 	/// The turns that the agenda (by the idle mind's count of them) has run steps for
 	uint32_t agendaTurns {0};
 	uint32_t agendaTurnsSerial {0};
+	/// The agenda (by the idle mind's count of them) that the creature last set its kept speed for
+	uint32_t paceSerial {0};
 	/// The actions of the desire of the plan that it carries out, in the order of the list that the plan came from; and
 	/// for each desire, the list that its last plan came from
 	std::vector<uint32_t> planActions;
