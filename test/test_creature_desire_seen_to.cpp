@@ -84,6 +84,31 @@ TEST(CreatureDesireSeenTo, StrengthFadesByTheSpeciesRateEachTurn)
 	EXPECT_FLOAT_EQ(shape.strength, 0.2f);
 }
 
+TEST(CreatureDesireSeenTo, TheBodyShowsAStrengthGainButNotTheFade)
+{
+	using namespace creature_physiology;
+	const Species species {.strengthDecay = 0.5f, .carryStrengthMinutes = 1.0f};
+	auto needs = Start(species);
+	Shape shape {.fatness = 0.5f, .strength = 0.8f, .size = 1.0f};
+	// Standing still, the strength fades and the body does not show it
+	const Turn still {.moving = false, .phase = 1, .temperature = species.comfortTemperature, .turnsPerSecond = 10.0f};
+	TickTurn(needs, shape, species, still);
+	EXPECT_FALSE(shape.shownStrength.has_value());
+	// Carrying a thing, the body shows the strength just after the gain, before the fade of the turn
+	const Turn carrying {
+	    .moving = true, .phase = 1, .carriedWeight = 1.0f, .temperature = species.comfortTemperature, .turnsPerSecond = 10.0f};
+	const auto before = shape.strength;
+	TickTurn(needs, shape, species, carrying);
+	ASSERT_TRUE(shape.shownStrength.has_value());
+	EXPECT_GT(*shape.shownStrength, before);
+	EXPECT_FLOAT_EQ(shape.strength, *shape.shownStrength * 0.5f);
+	// An action that changes the strength by an amount is shown too
+	Shape acted {.strength = 0.3f};
+	ModifyStrength(acted, 0.1f);
+	ASSERT_TRUE(acted.shownStrength.has_value());
+	EXPECT_FLOAT_EQ(*acted.shownStrength, 0.4f);
+}
+
 TEST(CreatureDesireSeenTo, ScriptsSetTheFatnessOfACreatureByItsOwnNumber)
 {
 	EXPECT_EQ(static_cast<int>(script::ObjectPropertyType::CreatureFatness), 27);

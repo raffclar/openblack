@@ -296,7 +296,11 @@ void CreatureSpawner::DrawSelected() noexcept
 		ImGui::SetTooltip("Its body follows its fatness by at most %.2f a game turn",
 		                  static_cast<double>(creature_morph::k_MaxFatnessStep));
 	}
-	ImGui::SliderFloat("Its strength", &creature->strength, 0.0f, 1.0f, "%.2f");
+	if (ImGui::SliderFloat("Its strength", &creature->strength, 0.0f, 1.0f, "%.2f"))
+	{
+		// Set here, as a script sets it, the body shows it
+		CreatureArchetype::ShowStrength(*_selected);
+	}
 	if (ImGui::SliderFloat("Its size", &creature->size, creature_morph::k_MinScale, creature_morph::k_MaxScale, "%.2f",
 	                       ImGuiSliderFlags_Logarithmic))
 	{

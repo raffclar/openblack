@@ -613,6 +613,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreatureMorph>(context)
 	    .Field<&components::CreatureMorph::shownFatness>("shownFatness")
 	    .Field<&components::CreatureMorph::drawn>("drawn")
+	    .Field<&components::CreatureMorph::strengthLook>("strengthLook")
 	    .Field<&components::CreatureMorph::revision>("revision");
 	Reflect<components::CreatureAnimation>(context)
 	    .Field<&components::CreatureAnimation::body>("body")
