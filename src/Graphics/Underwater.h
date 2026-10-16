@@ -152,6 +152,12 @@ enum class Effect : uint8_t
 	SprayMist,
 	/// The wet rock of the cliffs after a wave
 	WetRock,
+	/// The field of small waves that the things in the water write into: their wakes and rings
+	WakeField,
+	/// The splashes where things fall into the water
+	Splashes,
+	/// The hulls that push the water down, with no water inside a boat
+	HullMask,
 	/// Not an effect: the water is drawn as a flat colour where it shows, to compare it with the original sea
 	WaterMask,
 	_Count

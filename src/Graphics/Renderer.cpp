@@ -623,6 +623,7 @@ Renderer::~Renderer() noexcept
 		}
 	}
 	_underwater.reset();
+	_wakeField.reset();
 	_shaderManager.reset();
 	bgfx::frame();
 	bgfx::shutdown();

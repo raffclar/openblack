@@ -231,6 +231,7 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
+#include "ECS/Systems/WaterWakeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownDesireFlags.h"
@@ -906,7 +907,18 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			if (Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled())
 			{
 				auto& underwater = Locator::underwaterSystem::value();
-				if ((event.key.keysym.mod & KMOD_CTRL) != 0)
+				const bool shift = (event.key.keysym.mod & KMOD_SHIFT) != 0;
+				// Shift, alt and F10 throw the mobile objects near the focus into the water; shift, control and F10
+				// play the explorers' boat film, for the wakes, the splashes and the hulls
+				if (shift && (event.key.keysym.mod & KMOD_ALT) != 0 && Locator::waterWakeSystem::has_value())
+				{
+					Locator::waterWakeSystem::value().DropDebugThings();
+				}
+				else if (shift && (event.key.keysym.mod & KMOD_CTRL) != 0 && Locator::waterWakeSystem::has_value())
+				{
+					Locator::waterWakeSystem::value().PlayDebugBoat();
+				}
+				else if ((event.key.keysym.mod & KMOD_CTRL) != 0)
 				{
 					underwater.StartDebugStorm();
 				}
@@ -2394,6 +2406,11 @@ bool Game::Update() noexcept
 		if (_atmosAudio)
 		{
 			_atmosAudio->UpdateCliffCrashes();
+		}
+		// The things in the water and what they write into the water's field of small waves
+		if (Locator::waterWakeSystem::has_value())
+		{
+			Locator::waterWakeSystem::value().Update(clock.GetFrameRealTime());
 		}
 	}
 	{

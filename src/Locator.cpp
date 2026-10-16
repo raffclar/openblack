@@ -136,6 +136,7 @@
 #include "ECS/Systems/Implementations/VortexSystem.h"
 #include "ECS/Systems/Implementations/WalkPathSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
+#include "ECS/Systems/Implementations/WaterWakeSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -258,6 +259,7 @@ using openblack::ecs::systems::VillageTotemSystem;
 using openblack::ecs::systems::VortexSystem;
 using openblack::ecs::systems::WalkPathSystem;
 using openblack::ecs::systems::WaterRingSystem;
+using openblack::ecs::systems::WaterWakeSystem;
 using openblack::ecs::systems::WeatherSystem;
 using openblack::ecs::systems::WorshipSiteSystem;
 using openblack::graphics::RendererInterface;
@@ -347,6 +349,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::snowfallSystem::emplace<SnowfallSystem>();
 	Locator::waterRingSystem::emplace<WaterRingSystem>();
 	Locator::underwaterSystem::emplace<UnderwaterSystem>();
+	Locator::waterWakeSystem::emplace<WaterWakeSystem>();
 	Locator::creatureAnimationSystem::emplace<CreatureAnimationSystem>();
 	Locator::creatureMindSystem::emplace<CreatureMindSystem>();
 	Locator::creaturePhysiologySystem::emplace<CreaturePhysiologySystem>();
@@ -552,6 +555,7 @@ void openblack::ShutDownServices()
 	Locator::snowfallSystem::reset();
 	Locator::waterRingSystem::reset();
 	Locator::underwaterSystem::reset();
+	Locator::waterWakeSystem::reset();
 	Locator::tattooEditorSystem::reset();
 	Locator::creatureCaveSystem::reset();
 	Locator::creatureModeSystem::reset();

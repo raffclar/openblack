@@ -193,6 +193,9 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	_shaderManager->SetViewOrder(RenderPass::UnderwaterPost, ViewOrder::Sequential);
 	_shaderManager->SetCamera(RenderPass::UnderwaterPost, *desc.camera);
 
+	// The water's field of small waves steps before the water reads it
+	StepWakeField();
+
 	const auto& frame = *_underwaterFrame;
 	const auto& target = *desc.frameBuffer;
 	const auto setUniforms = [&frame](const ShaderProgram& program) {
@@ -240,6 +243,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		post->SetTextureSampler("s_blockTextures", 3, island.GetBlockTextures());
 		post->SetTextureSampler("s_blockLayers", 4, _underwater->BlockLayers(layers, system.GetSeabedRevision()));
 	}
+	BindWakeField(*post);
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 	post->Submit(postView);
 
@@ -276,6 +280,9 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		spray->Submit(postView);
 	}
+
+	// The splashes where things fall into the water
+	DrawSplashes(target);
 }
 
 void Renderer::SetTerrainUnderwater(const ShaderProgram& program, bool active) const
