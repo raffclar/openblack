@@ -365,15 +365,15 @@ TEST(Seabed, TheOriginalCoastStaysAtTheWater)
 	const auto bed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
 	const auto depth = [&bed](int x) { return bed.depth[static_cast<size_t>(bed.size.x + x)]; };
 	EXPECT_FLOAT_EQ(depth(9), 0.0f);
-	// The water's edge at high tide is at the corners of altitude 3, and the band goes down a little
-	EXPECT_FLOAT_EQ(depth(10), seabed::ShallowDepth(3));
-	EXPECT_FLOAT_EQ(depth(11), seabed::ShallowDepth(2));
-	EXPECT_FLOAT_EQ(depth(12), seabed::ShallowDepth(1));
+	// The water's edge at high tide is on the original coast, between altitudes 3 and 2, and the band goes down a little
+	EXPECT_FLOAT_EQ(depth(10), 0.0f);
+	EXPECT_GT(depth(11), 0.0f);
 	EXPECT_LT(depth(10), depth(11));
 	EXPECT_LT(depth(11), depth(12));
 	// A creature can walk on the cell from altitude 1 to the open sea: there the water only covers its feet
 	EXPECT_LE(depth(13), seabed::k_WadeDepth);
-	// Past it the sea bed goes on down
+	// Past it the sea bed goes on down, with no ledge at the edge of the shallows
+	EXPECT_LT(depth(14) - depth(13), 3.0f);
 	EXPECT_GT(depth(30), 1.0f);
 }
 
@@ -552,4 +552,24 @@ TEST(Underwater, ShoreIsBlendedBetweenCorners)
 	// No direction to the coast is the foot of a cliff, a full one a beach
 	EXPECT_FLOAT_EQ(underwater::ShoreCliff({0.0f, 0.0f, 0.0f, 0.0f}), 1.0f);
 	EXPECT_FLOAT_EQ(underwater::ShoreCliff({0.0f, 1.0f, 0.0f, 0.0f}), 0.0f);
+}
+
+TEST(Seabed, TheShelfFromTheCoastHasNoSteps)
+{
+	for (const float slope : {0.02f, 0.1f, 0.3f, 0.6f, 2.0f, 6.0f})
+	{
+		float last = seabed::ShelfFromCoastLine(0.0f, slope);
+		EXPECT_FLOAT_EQ(last, 0.0f);
+		for (float from = 0.5f; from < 200.0f; from += 0.5f)
+		{
+			const float depth = seabed::ShelfFromCoastLine(from, slope);
+			EXPECT_GE(depth, last) << slope << " " << from;
+			EXPECT_LT(depth - last, 0.5f * std::max(slope, 0.05f) + 0.01f) << slope << " " << from;
+			last = depth;
+		}
+	}
+	// A gentle coast only covers a creature's feet at the end of the shallows
+	EXPECT_NEAR(seabed::ShelfFromCoastLine(seabed::k_ShallowsWidth, 0.1f), seabed::k_WadeDepth, 1e-4f);
+	// A cliff is deep at once
+	EXPECT_GT(seabed::ShelfFromCoastLine(5.0f, 6.0f), 20.0f);
 }

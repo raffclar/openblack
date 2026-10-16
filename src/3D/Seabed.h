@@ -89,10 +89,20 @@ inline constexpr float k_BeachEaseEnd = 450.0f;
 /// The deepest the water is at high tide where a creature can walk, so that it only covers the creature's feet
 inline constexpr float k_WadeDepth = 0.45f;
 
-/// The depth at high tide of a corner at sea level with an altitude of 1 to 3. The original game draws these corners
-/// flat at sea level and fades the land out over them, so its coast is at about altitude 3. The water's edge at high
-/// tide is at the corners of altitude 3, and the lower corners go down a little.
-[[nodiscard]] float ShallowDepth(uint8_t altitude);
+/// The original game draws the land at altitude 3 and lower flat at sea level, and fades it into its sea over a
+/// band from altitude 1 to 4. Its coast is about where the land is at this altitude, with the land half shown.
+inline constexpr float k_OriginalCoast = 2.8f;
+/// How far out from the original coast the sea bed goes down to k_WadeDepth, in units, and how far past that its slope
+/// grows to the coast's own
+inline constexpr float k_ShallowsWidth = 12.0f;
+inline constexpr float k_ShallowsEase = 20.0f;
+/// The steepest coast that is gentle: a steeper one starts to fall at its own slope from the original coast
+inline constexpr float k_GentleMost = 0.3f;
+
+/// The depth of the sea bed at a distance out from the original coast (in units) for a coast of this slope (height for
+/// each unit across). A gentle coast goes down to k_WadeDepth over k_ShallowsWidth, then its slope grows to its own.
+/// A cliff falls at its own slope from the line. The depth grows with the distance and has no steps.
+[[nodiscard]] float ShelfFromCoastLine(float from, float slope);
 
 /// How much of the ground of a country at an altitude is the beach's sand, 0 to 1: the share of its two blended
 /// materials whose terrain type is sand or wet sand. `materialTypes` is the terrain type of each of the land's
@@ -107,7 +117,7 @@ inline constexpr float k_WadeDepth = 0.45f;
 /// distance to the nearest land above the sea, as a shelf and then a slope, deeper towards the map's edge, with broad
 /// hills and dips over it. The grid is the whole map: past the land's blocks the sea goes on down to the map's edge.
 /// The coast keeps the original game's line:
-/// - The corners at sea level that the original game draws with land over them are only a little under the water.
+/// - The water's edge at high tide is on the original coast (k_OriginalCoast), and the sea bed goes down from it.
 /// - Where a creature can walk, the water is never deeper than k_WadeDepth at high tide.
 /// - `beach` is how much of each corner's ground is the beach's sand, 0 to 1 (empty for none). A beach goes on down
 ///   under the water at the shallow k_BeachSlope. Other coasts keep their own slope, and cliffs stay steep.

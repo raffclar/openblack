@@ -83,6 +83,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -250,7 +251,9 @@ Moves MovesOf(CreatureType species)
 
 float HeightAt(glm::vec2 point)
 {
-	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+	const float land = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+	// EXPERIMENT (not for merge): with the experiment's water, a creature walks on the sea bed in the shallows
+	return Locator::underwaterSystem::has_value() ? Locator::underwaterSystem::value().FloorAt(point, land) : land;
 }
 
 float HeadingOfRotation(const glm::mat3& rotation)

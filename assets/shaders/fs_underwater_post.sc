@@ -243,7 +243,8 @@ vec3 Shafts(vec3 eye, vec3 direction, float range, float t, float jitter)
 // the waves. depth is how deep the water is under the point.
 float Foam(vec2 p, float depth, float t)
 {
-	float shallow = 1.0f - smoothstep(0.0f, 0.9f, depth);
+	// The shallows of a gentle beach go down slowly, so the bands are thin in depth: a wide band of foam would cover them
+	float shallow = 1.0f - smoothstep(0.0f, 0.45f, depth);
 	if (shallow <= 0.0f)
 	{
 		return 0.0f;
@@ -252,7 +253,7 @@ float Foam(vec2 p, float depth, float t)
 	vec2 q = vec2(p.x * 0.8f - p.y * 0.6f, p.x * 0.6f + p.y * 0.8f);
 	float patches = UwFoamNoise(q * 0.7f + vec2(t * 0.25f, -t * 0.18f)) * 0.6f + UwFoamNoise(p * 1.9f - vec2(t * 0.4f, t * 0.31f)) * 0.4f;
 	float lines = 0.5f + 0.5f * sin(depth * 9.0f - t * 2.2f + UwNoise(p * 0.4f) * 4.0f);
-	float edge = 1.0f - smoothstep(0.0f, 0.18f, depth);
+	float edge = 1.0f - smoothstep(0.0f, 0.06f, depth);
 	float foam = smoothstep(0.55f, 0.8f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
 	return clamp(max(foam, edge * (0.5f + 0.5f * patches)), 0.0f, 1.0f);
 }
