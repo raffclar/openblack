@@ -225,6 +225,13 @@ constexpr std::array k_Executors {
     Executor {.action = "Fight", .target = Target::FightableCreature, .build = Build::Fight},
     Executor {.action = "LookAtFlyingObject", .target = Target::Anything, .build = Build::LookAtFlyingObject},
     Executor {.action = "WaveAtFriend", .target = Target::CreatureFreeForJoint, .build = Build::WaveAtFriend},
+    Executor {.action = "BeHappyWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::BeHappyWithFriend},
+    Executor {.action = "PooWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::PooWithFriend},
+    Executor {.action = "SitWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::SitWithFriend},
+    Executor {.action = "SleepWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::SleepWithFriend},
+    Executor {.action = "DrinkWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::DrinkWithFriend},
+    Executor {.action = "HelpTownWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::HelpTownWithFriend},
+    Executor {.action = "AttackWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::AttackTownWithFriend},
     Executor {.action = "LookAtMountains", .build = Build::LookAtMountains},
     Executor {.action = "LookOutToSea", .build = Build::LookOutToSea, .leavesHome = true},
     // It dances alone on the nearest coast, by its map of the land
@@ -701,6 +708,62 @@ bool creature_plan_actions::NeedsThingToUse(std::string_view action)
 
 namespace
 {
+/// The joint actions with a friend. Without what the action needs (the friend, a clear place, a coast and a sea, or a
+/// town with a storage pit), the creature cannot do it.
+std::optional<std::vector<creature_mind::Step>> FriendsAgenda(const Executor& executor, uint32_t friendly,
+                                                              const Situation& situation, const creature_mind::Random& random)
+{
+	if (!situation.friendly.has_value())
+	{
+		return std::nullopt;
+	}
+	const creature_mind::Friends friends {
+	    .self = situation.self,
+	    .friendly = friendly,
+	    .selfPoint = situation.position,
+	    .friendPoint = situation.friendly->point,
+	    .height = situation.height,
+	    .friendHeight = situation.friendly->height,
+	};
+	switch (executor.build)
+	{
+	case Build::BeHappyWithFriend:
+		return creature_mind::BeHappyWithFriend(friends);
+	case Build::PooWithFriend:
+		return creature_mind::PooWithFriend(friends, random);
+	case Build::SitWithFriend:
+	case Build::SleepWithFriend:
+	{
+		if (!situation.clearArea.has_value())
+		{
+			return std::nullopt;
+		}
+		const bool sit = executor.build == Build::SitWithFriend;
+		const float radius = sit ? creature_mind::SitTogetherRadius(friends.height, friends.friendHeight)
+		                         : creature_mind::SleepTogetherRadius(friends.height, friends.friendHeight);
+		return sit ? creature_mind::SitWithFriend(friends, *situation.clearArea, radius, random)
+		           : creature_mind::SleepWithFriend(friends, *situation.clearArea, radius, random);
+	}
+	case Build::DrinkWithFriend:
+		if (!situation.explorePlace.has_value() || !situation.exploreSea.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::DrinkWithFriend(friends, *situation.explorePlace, *situation.exploreSea, random);
+	case Build::HelpTownWithFriend:
+	case Build::AttackTownWithFriend:
+		if (!situation.friendsTown.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::TownWithFriend(friends, *situation.friendsTown,
+		                                     executor.build == Build::HelpTownWithFriend ? creature_desires::Desire::Compassion
+		                                                                                 : creature_desires::Desire::Anger);
+	default:
+		return std::nullopt;
+	}
+}
+
 /// The agendas that bring a thing home. Without a home, the creature cannot do them.
 std::optional<std::vector<creature_mind::Step>> BringHomeAgenda(const Executor& executor, uint32_t object,
                                                                 glm::vec2 objectPoint, const Situation& situation)
@@ -798,6 +861,20 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 		return !situation.hasPlayer || situation.eye.has_value();
 	case Build::Fight:
 		return situation.healthyEnoughToFight;
+	// The joint actions with a friend that need a desire of the creature's own to be a little strong
+	case Build::DrinkWithFriend:
+		return situation.water > k_SlightDesire;
+	case Build::PooWithFriend:
+		return situation.pooDesire > k_SlightDesire;
+	case Build::SleepWithFriend:
+		return situation.tiredness > k_SlightDesire;
+	case Build::BeHappyWithFriend:
+		return situation.sadness < k_SlightDesire;
+	// Helping the nearest town with a friend when it does not want to attack the town more than to help it
+	case Build::HelpTownWithFriend:
+		return situation.attackNearestTown.has_value() && !*situation.attackNearestTown;
+	case Build::AttackTownWithFriend:
+		return situation.attackNearestTown.has_value() && *situation.attackNearestTown;
 	case Build::CastOneShotInHand:
 		// Only with a one-shot miracle of the action's kind in its hand
 		return situation.heldOneShot.has_value() && situation.heldOneShot->Is(executor.oneShot);
@@ -1117,6 +1194,14 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::ApproachAndEmote(*object, executor.animation);
 	case Build::WaveAtFriend:
 		return creature_mind::WaveAtFriend(situation.self, *object);
+	case Build::BeHappyWithFriend:
+	case Build::PooWithFriend:
+	case Build::SitWithFriend:
+	case Build::SleepWithFriend:
+	case Build::DrinkWithFriend:
+	case Build::HelpTownWithFriend:
+	case Build::AttackTownWithFriend:
+		return FriendsAgenda(executor, *object, situation, random);
 	case Build::HowlAtFriend:
 		return creature_mind::HowlAtFriend(*object);
 	case Build::PineForFriend:

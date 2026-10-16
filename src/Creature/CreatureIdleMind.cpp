@@ -841,6 +841,7 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::RaiseTotem:
 	case Step::Kind::LowerTotem:
 	case Step::Kind::Fight:
+	case Step::Kind::Apply:
 		return HandsNeed::Free;
 	case Step::Kind::MakeDisciple:
 	case Step::Kind::UseUpHeld:
@@ -902,6 +903,8 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::Order:
 	case Step::Kind::Demobilise:
 	case Step::Kind::Remobilise:
+	case Step::Kind::WaitForStill:
+	case Step::Kind::ApplyDesire:
 		break;
 	}
 	return HandsNeed::Any;
@@ -1405,6 +1408,29 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			}
 			FinishStep(mind);
 			break;
+		case Step::Kind::WaitForStill:
+			// The step looks at the object on the turn that it starts too
+			if (!senses.objectMoving)
+			{
+				FinishStep(mind);
+			}
+			break;
+		case Step::Kind::Apply:
+			commands.effect = step.effect;
+			FinishStep(mind);
+			break;
+		case Step::Kind::ApplyDesire:
+			// The step does not end by itself: the new plan takes the place of the agenda, and with no plan the agenda
+			// stops
+			if (step.object.has_value())
+			{
+				commands.applyDesire = Commands::DesireOn {.desire = step.desire, .thing = *step.object};
+			}
+			else
+			{
+				GiveUpAgenda(mind);
+			}
+			break;
 		case Step::Kind::Kiss:
 			commands.playOnce = step.animation;
 			break;
@@ -1698,6 +1724,17 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Demobilise:
 	case Step::Kind::Remobilise:
 		FinishStep(mind);
+		break;
+	case Step::Kind::WaitForStill:
+		if (!senses.objectMoving)
+		{
+			FinishStep(mind);
+		}
+		break;
+	case Step::Kind::Apply:
+		FinishStep(mind);
+		break;
+	case Step::Kind::ApplyDesire:
 		break;
 	case Step::Kind::Kiss:
 		if (!senses.bodyBusy)

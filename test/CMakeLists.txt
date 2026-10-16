@@ -1063,3 +1063,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_friendship test_creature_friendship.cpp
 )
+openblack_setup_and_add_test(
+  test_creature_joint_actions test_creature_joint_actions.cpp
+)

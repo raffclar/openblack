@@ -2504,7 +2504,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::faint>("faint")
 	    .Field<&openblack::creature_mind::Step::main>("main")
 	    .Field<&openblack::creature_mind::Step::request>("request")
-	    .Field<&openblack::creature_mind::Step::ordered>("ordered");
+	    .Field<&openblack::creature_mind::Step::ordered>("ordered")
+	    .Field<&openblack::creature_mind::Step::desire>("desire");
 	Reflect<openblack::creature_mind_model::Learnt>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind_model::Learnt::opinions>("opinions")
 	    .Field<&openblack::creature_mind_model::Learnt::turnsSinceDone>("turnsSinceDone")

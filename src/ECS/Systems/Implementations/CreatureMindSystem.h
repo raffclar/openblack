@@ -234,6 +234,13 @@ private:
 	/// The places of the creature's map of the land that the action uses: where it goes or looks, and the sea
 	static void SituateExploration(entt::entity creature, const creature_plan_actions::Executor& executor,
 	                               creature_plan_actions::Situation& situation);
+	/// What the joint actions with a friend need to know before a friend is chosen: how strong the desires are that let
+	/// them start, and whether the nearest town is to be helped or attacked
+	void SituateFriends(entt::entity creature, creature_plan_actions::Situation& situation);
+	/// What a joint action with a friend needs to know of the friend: where it is and how tall it is, the clear place
+	/// that the two use, the coast and the sea where they drink, and the town that they help or attack
+	void SituateFriend(entt::entity creature, const creature_plan_actions::Executor& executor, entt::entity friendly,
+	                   creature_plan_actions::Situation& situation);
 	/// The creature carried out an action to its end on this game turn
 	static void NoteDone(components::CreatureMindState& mind, uint32_t action);
 	/// An agenda that no plan gave ends: its action was done just now, and the other actions of its desire get older

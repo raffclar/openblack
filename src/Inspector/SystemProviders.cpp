@@ -211,6 +211,12 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "demobilise";
 	case Kind::Remobilise:
 		return "remobilise";
+	case Kind::WaitForStill:
+		return "wait_for_still";
+	case Kind::Apply:
+		return "apply";
+	case Kind::ApplyDesire:
+		return "apply_desire";
 	case Kind::Communicate:
 		return "communicate";
 	}

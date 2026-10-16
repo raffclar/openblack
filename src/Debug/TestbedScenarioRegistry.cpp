@@ -5829,6 +5829,29 @@ void AddMind(std::vector<Scenario>& all)
 	                  .value = static_cast<uint32_t>(Desire::BeFriends),
 	                  .amount = 600.0f}},
 	});
+	all.push_back({
+	    .id = "friends.side_by_side",
+	    .name = "Do things side by side with a friend",
+	    .facet = Facet::Mind,
+	    .description = "A tiger and a lion of no player stand 50 apart and face each other. Both want only to be friends.",
+	    .expected = "Some of the time the tiger asks the lion to be its friend and does a joint action with it. To be happy "
+	                "together, both go to places side by side, the tiger waits until the lion stops, both turn to face "
+	                "each other and both play the happy action. To sit together, both go to the two sides of a clear "
+	                "place, turn to face each other and sit for 10 to 15 seconds; then the tiger plays the happy action. "
+	                "The inspector shows the partners while they do it.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {befriender, guideLion({25.0f, 0.0f}, 270.0f)},
+	    .commands = {{.kind = Kind::OnlyDesire,
+	                  .creature = 0,
+	                  .delaySeconds = 0.0f,
+	                  .value = static_cast<uint32_t>(Desire::BeFriends),
+	                  .amount = 600.0f},
+	                 {.kind = Kind::OnlyDesire,
+	                  .creature = 1,
+	                  .delaySeconds = 0.0f,
+	                  .value = static_cast<uint32_t>(Desire::BeFriends),
+	                  .amount = 600.0f}},
+	});
 	auto missing = Content(CreatureType::Tiger, {-60.0f, 0.0f}, 90.0f, "misses its friend");
 	missing.desires = OnlyDesire(Desire::MissFriend);
 	all.push_back({

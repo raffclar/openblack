@@ -822,7 +822,8 @@ struct Command
 	float amount {1.0f};
 	/// The camera's keys are held with Ctrl rather than Shift
 	bool ctrl {false};
-	/// The creature a miracle is cast at, by its place in the scenario's creatures
+	/// The creature a miracle is cast at, or that a script's action is done to in place of the object, by its place in
+	/// the scenario's creatures
 	std::optional<size_t> atCreature;
 	/// The player's alignment jumped to, from -1 (evil) to 1 (good)
 	float alignment {0.0f};

@@ -2325,6 +2325,7 @@ void Runner::Give(const Command& command)
 		const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, command.action) : std::nullopt;
 		const auto target = command.onTemple && !_temples.empty()          ? std::optional(_temples.front())
 		                    : command.onGlobe && command.globe.has_value() ? GlobeAt(*command.globe)
+		                    : command.atCreature.has_value()               ? CreatureAt(*command.atCreature)
 		                                                                   : ObjectAt(command.object);
 		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
 		                  : command.with.has_value()                    ? ObjectAt(*command.with)
