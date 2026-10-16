@@ -123,24 +123,17 @@ creature_fight::PullApart creature_fight::PullApartOf(const Arena& arena, glm::v
 	return {.first = inside(first - push), .second = inside(second + push)};
 }
 
-float creature_fight::ClosestApart(float radius, float opponentRadius)
+creature_fight::PullApart creature_fight::BlowPushOf(glm::vec2 striker, glm::vec2 opponent, glm::vec2 forward,
+                                                     float strikerExtent, float opponentExtent)
 {
-	return (radius * 0.5f) + opponentRadius;
-}
-
-glm::vec2 creature_fight::KeepApart(glm::vec2 from, glm::vec2 to, glm::vec2 opponent, float closest)
-{
-	const auto distance = glm::distance(to, opponent);
-	if (distance >= closest || distance >= glm::distance(from, opponent))
+	const auto apart = glm::distance(striker, opponent);
+	const auto extents = strikerExtent + (opponentExtent * 0.5f);
+	if (!(apart < extents))
 	{
-		return to;
+		return {};
 	}
-	auto away = distance > 0.0f ? to - opponent : from - opponent;
-	if (glm::length(away) <= 0.0f)
-	{
-		away = {1.0f, 0.0f};
-	}
-	return opponent + (glm::normalize(away) * closest);
+	const auto push = forward * ((extents - apart) * 0.5f);
+	return {.first = striker - push, .second = opponent + push};
 }
 
 Band creature_fight::BandOf(float shareOfHeight)
@@ -893,9 +886,19 @@ void creature_fight::Enter(Fighter& fighter, State state, std::optional<size_t> 
 	fighter.stateMs = 0.0f;
 	fighter.speed = speed;
 	fighter.special = state == State::Action && IsSpecialAttack(fighter.animation);
+	// The last action counts every move that the fighter starts: a blow, a step, a reel, a block or a cast. A block
+	// counts as its hold and a cast as its loop.
 	if (state == State::Action || state == State::BlockRecoil)
 	{
 		fighter.lastAction = fighter.animation;
+	}
+	else if (state == State::BlockStart)
+	{
+		fighter.lastAction = animations::k_Block;
+	}
+	else if (state == State::CastStart)
+	{
+		fighter.lastAction = animations::k_Cast;
 	}
 }
 

@@ -26,6 +26,7 @@
 
 #include <LNDFile.h>
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/mat3x3.hpp>
@@ -496,6 +497,21 @@ bool FacesOpponent(const ecs::Registry& registry, entt::entity creature, entt::e
 	           fight::k_FacingTolerance;
 }
 
+/// A fighter turns at once to face its opponent straight on
+void FaceOpponentNow(ecs::Registry& registry, entt::entity creature, entt::entity opponent)
+{
+	auto* locomotion = registry.TryGet<CreatureLocomotion>(creature);
+	if (locomotion == nullptr || !registry.Valid(opponent) || !registry.AllOf<Transform>(opponent))
+	{
+		return;
+	}
+	const auto towards = Flat(registry.Get<const Transform>(opponent).position) - Flat(locomotion->toPosition);
+	if (glm::length(towards) > 0.0f)
+	{
+		TurnTowards(*locomotion, creature_locomotion::HeadingOf(towards), glm::pi<float>());
+	}
+}
+
 /// Who is in a duel with whom, both of them still at it
 /// The player at this computer
 constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
@@ -824,6 +840,36 @@ void PullApartFighters(ecs::Registry& registry, entt::entity creature, const Cre
 			                                 {"moved_opponent", pulled.second.has_value()}};
 		});
 	}
+}
+
+/// On each turn of a blow, whether it lands or not, the striker and its opponent move apart when their bodies overlap
+void PushApartOnBlow(ecs::Registry& registry, entt::entity striker, entt::entity opponent)
+{
+	auto* self = registry.TryGet<CreatureLocomotion>(striker);
+	auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureLocomotion>(opponent) : nullptr;
+	if (self == nullptr || other == nullptr)
+	{
+		return;
+	}
+	const auto at = Flat(self->toPosition);
+	const auto otherAt = Flat(other->toPosition);
+	const auto strikerExtent = ForwardExtentOf(registry, striker);
+	const auto opponentExtent = ForwardExtentOf(registry, opponent);
+	const auto pushed =
+	    fight::BlowPushOf(at, otherAt, creature_locomotion::DirectionOf(self->heading), strikerExtent, opponentExtent);
+	if (!pushed.first.has_value() || !pushed.second.has_value())
+	{
+		return;
+	}
+	Shift(*self, *pushed.first - at);
+	Shift(*other, *pushed.second - otherAt);
+	registry.SetDirty();
+	fight_transcript::Note(striker, "blow_push", [&] {
+		return fight_transcript::Fields {{"creature", fight_transcript::Id(striker)},
+		                                 {"apart", glm::distance(at, otherAt)},
+		                                 {"striker_extent", strikerExtent},
+		                                 {"opponent_extent", opponentExtent}};
+	});
 }
 
 /// When either fighter is not inside the range of the arena, the fighter makes no moves. In its stance, it steps back to
@@ -1490,6 +1536,12 @@ uint32_t CreatureFightSystem::QueuedBlows(entt::entity creature) const
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* fighting = registry.Valid(creature) ? registry.TryGet<const CreatureFighting>(creature) : nullptr;
 	return fighting != nullptr ? fight::QueuedBlows(fighting->fighter.queue.Moves()) : 0;
+}
+
+float CreatureFightSystem::ForwardExtent(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	return registry.Valid(creature) ? ForwardExtentOf(registry, creature) : 0.0f;
 }
 
 float CreatureFightSystem::GetFightHealth(entt::entity creature) const
@@ -2526,13 +2578,19 @@ void CreatureFightSystem::ProcessDuels()
 			}
 		}
 		const bool computer = fighter.control == fight::Control::Computer;
+		// In its stance, its block and its moves other than blows, it faces its opponent straight on each turn
+		const bool stance = fighter.state == fight::State::Stance;
+		const bool moving = fighter.state == fight::State::Action && !fight::IsAttack(fighter.animation);
+		if (stance || moving || fighter.state == fight::State::Block)
+		{
+			FaceOpponentNow(registry, entity, opponent);
+		}
 		const bool facing = FacesOpponent(registry, entity, opponent);
 		// Near the edge of the arena, it makes no moves and steps back to the middle
-		const bool kept = facing && (fighter.state == fight::State::Stance || fighter.state == fight::State::Block) &&
-		                  KeepInArena(registry, entity, *fighting);
-		// Bodies that overlap move apart, in its stance and in its steps
-		if ((facing && !kept && fighter.state == fight::State::Stance) ||
-		    (fighter.state == fight::State::Action && !fight::IsAttack(fighter.animation)))
+		const bool kept =
+		    facing && (stance || fighter.state == fight::State::Block) && KeepInArena(registry, entity, *fighting);
+		// Bodies that overlap move apart, in its stance and in its moves other than blows
+		if ((stance && !kept) || moving)
 		{
 			PullApartFighters(registry, entity, *fighting);
 		}
@@ -2857,12 +2915,8 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 			          (share - fighting->movedShare);
 			fighting->movedShare = share;
 			const auto at = Flat(locomotion->toPosition);
-			auto to = fighter.state == fight::State::BlockRecoil ? fight::BlockRecoilTo(fighting->arena, at, at + by) : at + by;
-			// Never through the opponent
-			if (const auto* other = registry.TryGet<const CreatureLocomotion>(fighting->opponent))
-			{
-				to = fight::KeepApart(at, to, Flat(other->toPosition), fight::ClosestApart(locomotion->radius, other->radius));
-			}
+			const auto to =
+			    fighter.state == fight::State::BlockRecoil ? fight::BlockRecoilTo(fighting->arena, at, at + by) : at + by;
 			by = to - at;
 			if (glm::length(by) > 0.0f)
 			{
@@ -2972,6 +3026,7 @@ void CreatureFightSystem::ProcessBlows()
 		if (registry.Valid(entity) && registry.AllOf<CreatureFighting>(entity))
 		{
 			TestBlow(entity, from);
+			PushApartOnBlow(registry, entity, registry.Get<const CreatureFighting>(entity).opponent);
 		}
 	}
 }

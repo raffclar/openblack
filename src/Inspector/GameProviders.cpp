@@ -2788,7 +2788,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 			              const auto& fights = Locator::creatureFightSystem::value();
 			              result["fight"] = {{"fighting", fights.IsFighting(creature)},
 			                                 {"opponent", Id(fights.OpponentOf(creature))},
-			                                 {"knocked_out", fights.IsKnockedOut(creature)}};
+			                                 {"knocked_out", fights.IsKnockedOut(creature)},
+			                                 {"forward_extent", fights.ForwardExtent(creature)}};
 		              }
 		              if (const auto* animation = registry.TryGet<const CreatureAnimation>(creature); animation != nullptr)
 		              {
