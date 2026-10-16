@@ -80,4 +80,27 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
+	all.push_back({
+	    .id = "town.miracle_spares_stone_hands",
+	    .name = "A fireball on a village centre with stone hands",
+	    .facet = Facet::Miracles,
+	    .description = "The same town and temple on the first land, given the heal and the water miracles. After four "
+	                   "seconds a fireball falls on the village centre.",
+	    .expected = "The blast and its fire hurt the centre and the villagers near it, and the centre can catch fire. "
+	                "The two stone hands are not hurt and do not go: they are not in the land's cells, so the blast, "
+	                "the fire and a heal do not find them. Each seed still spins over its palm, and a tap on a hand "
+	                "still works.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = TownAndTemple(),
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = k_Centre,
+	                  .handOffset = k_Centre - glm::vec2(0.0f, 10.0f),
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 4.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
 }
