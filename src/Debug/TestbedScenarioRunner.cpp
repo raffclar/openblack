@@ -132,6 +132,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -2565,6 +2566,14 @@ void Runner::Give(const Command& command)
 		result = Locator::fireSystem::has_value() && burning.has_value() ? "alight" : "no fire";
 		break;
 	}
+	case Kind::SetFizz:
+		if (Locator::creatureFizzSystem::has_value())
+		{
+			Locator::creatureFizzSystem::value().SetFizz(*entity, command.amount, static_cast<float>(command.value) / 1000.0f,
+			                                             false);
+		}
+		result = Locator::creatureFizzSystem::has_value() ? fmt::format("fizzes to {:.2f}", command.amount) : "no fizz";
+		break;
 	case Kind::SetFightLean:
 	{
 		auto& registry = Locator::entitiesRegistry::value();

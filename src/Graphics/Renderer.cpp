@@ -142,6 +142,7 @@
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
 #include "Graphics/DrawOrder.h"
+#include "Graphics/FizzDrawOrder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
@@ -6072,20 +6073,49 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.objectLook.reset();
 				}
 			};
+			// The solid things after a fizzing creature in the land's draw list come after the passes of the creature.
+			// They go in the sorted view, each segment of the list at the depth after the creature before it. Thus they
+			// do not show where the creature wrote its depth, as in the game. Segment 0 stays in this view.
+			const bool splitByFizz =
+			    desc.viewId == RenderPass::Main && translucentViewId != desc.viewId && !renderCtx.fizzOrder.Empty();
+			const auto inSegment = [&](uint32_t segment, const auto& draw) {
+				if (!splitByFizz || segment == 0)
+				{
+					draw();
+					return;
+				}
+				const auto view = submitDesc.viewId;
+				const auto depth = submitDesc.sortDepth;
+				submitDesc.viewId = translucentViewId;
+				submitDesc.sortDepth = graphics::fizz_draw_order::SegmentDepth(segment);
+				draw();
+				submitDesc.viewId = view;
+				submitDesc.sortDepth = depth;
+			};
+			// Call `draw(first, count)` for the placed instances of each segment, each in the place of its segment
+			const auto inSegments = [&](const RenderContext::InstancedDrawDesc& placers, const auto& draw) {
+				const auto starts =
+				    splitByFizz ? std::span<const uint32_t>(placers.segmentStarts) : std::span<const uint32_t>();
+				graphics::fizz_draw_order::ForEachSegment(
+				    placers.offset, placers.filled, starts,
+				    [&](uint32_t first, uint32_t count, uint32_t segment) { inSegment(segment, [&] { draw(first, count); }); });
+			};
 			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own
 			const auto drawPlaced = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
 			                            bool useMaterialBlending, const EntityPose* pose = nullptr) {
-				if (!placers.partsByLevel)
-				{
-					drawInstances(meshId, placers, useMaterialBlending, placers.offset, placers.filled, pose);
-					return;
-				}
-				for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
-				{
-					submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
-					drawInstances(meshId, placers, useMaterialBlending, instance, 1, pose);
-				}
-				submitDesc.detailLevel = 1;
+				inSegments(placers, [&](uint32_t first, uint32_t count) {
+					if (!placers.partsByLevel)
+					{
+						drawInstances(meshId, placers, useMaterialBlending, first, count, pose);
+						return;
+					}
+					for (uint32_t instance = first; instance < first + count; ++instance)
+					{
+						submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+						drawInstances(meshId, placers, useMaterialBlending, instance, 1, pose);
+					}
+					submitDesc.detailLevel = 1;
+				});
 			};
 			// Those placed this frame: the things too far off to be drawn are after them
 			for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
@@ -6156,7 +6186,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			{
 				if (!build.fading)
 				{
-					drawPartialBuild(build);
+					inSegment(build.segment, [&] { drawPartialBuild(build); });
 				}
 			}
 			// The creatures, each posed and shaped as it is, then its eyes
@@ -6254,14 +6284,20 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				uint32_t eyesSortDepth = 0;
 				if (creature_fizz_look::Fizzing(fizz) && instance < renderCtx.instanceUniforms.size())
 				{
+					// A creature in the land's draw list takes its place in the order of the list. Any other creature
+					// takes its place by its distance, after the creatures of the list.
 					const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
-					const auto depth = zsort::BeforeSorted(position, cameraOrigin);
+					const auto rank = copy ? std::nullopt : renderCtx.fizzOrder.RankOf(entity);
+					const auto depth = rank.has_value() ? graphics::fizz_draw_order::CreatureDepth(*rank)
+					                                    : zsort::BeforeSorted(position, cameraOrigin);
 					eyesSortDepth = drawFizzing(mesh->id, placers->second, instance, std::nullopt, pose,
 					                            creature_fizz_look::Level(fizz), spells->staticScroll, depth);
 				}
 				else if (creature_fizz_look::Drawn(fizz))
 				{
-					drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
+					inSegment(copy ? 0 : renderCtx.fizzOrder.SegmentOf(entity), [&] {
+						drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
+					});
 				}
 				const float freeze = spells != nullptr ? spells->freeze : 0.0f;
 				if (const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
@@ -6385,13 +6421,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// over: in its colour under the sea, and nothing of it above the sea's level
 				if (desc.viewId == RenderPass::Main && desc.drawWater && pose->underSea.has_value() && alpha >= 1.0f)
 				{
-					submitDesc.viewId = RenderPass::UnderSea;
+					const auto view = std::exchange(submitDesc.viewId, RenderPass::UnderSea);
 					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = *pose->underSea, .alpha = 1.0f};
 					submitDesc.cutAbove = pose->cutBelow.value_or(0.0f);
 					drawInstances(*mesh, placers->second, placers->second.materialBlending, instance, 1, &entityPose);
 					submitDesc.cutAbove.reset();
 					submitDesc.objectLook.reset();
-					submitDesc.viewId = desc.viewId;
+					submitDesc.viewId = view;
 				}
 				if (!pose->aboveCutShown)
 				{
@@ -6543,16 +6579,20 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = colour, .alpha = 1.0f};
 				}
-				drawInstances(meshId, placers->second, placers->second.materialBlending, placers->second.offset,
-				              placers->second.filled, nullptr, nullptr, std::nullopt, &group);
+				inSegments(placers->second, [&](uint32_t first, uint32_t count) {
+					drawInstances(meshId, placers->second, placers->second.materialBlending, first, count, nullptr, nullptr,
+					              std::nullopt, &group);
+				});
 				submitDesc.objectLook.reset();
 				submitDesc.boneTexture = nullptr;
 			}
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
-				drawAnimal(entity, instance, false);
-				drawVillager(entity, instance);
-				drawPosedStill(entity, instance, false);
+				inSegment(renderCtx.fizzOrder.SegmentOf(entity), [&] {
+					drawAnimal(entity, instance, false);
+					drawVillager(entity, instance);
+					drawPosedStill(entity, instance, false);
+				});
 			}
 			// The villagers, a draw for each of their meshes, each instance posed by its own bones in the bone palette
 			if (renderCtx.bonePaletteTexture)
@@ -6563,7 +6603,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					if (placers.bonePalette && placers.filled > 0 &&
 					    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
 					{
-						drawInstances(meshId, placers, placers.materialBlending, placers.offset, placers.filled, &palettePose);
+						inSegments(placers, [&](uint32_t first, uint32_t count) {
+							drawInstances(meshId, placers, placers.materialBlending, first, count, &palettePose);
+						});
 					}
 				}
 			}
@@ -6862,6 +6904,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					    run.fading ? zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(run.first).modelMatrix[3]),
 					                              desc.camera->GetOrigin())
 					               : 0;
+					// The solid trees after a fizzing creature in the land's draw list come after the passes of the
+					// creature
+					if (!run.fading && run.segment > 0 && desc.viewId == RenderPass::Main &&
+					    TranslucentView(desc.viewId) != desc.viewId)
+					{
+						submitDesc.viewId = TranslucentView(desc.viewId);
+						submitDesc.sortDepth = graphics::fizz_draw_order::SegmentDepth(run.segment);
+					}
 					DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				}
 				submitDesc.detailLevel = 1;
