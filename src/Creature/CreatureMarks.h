@@ -49,9 +49,8 @@ constexpr std::array<uint8_t, 8> k_WoundLifetimes {32, 64, 64, 64, 64, 64, 64, 1
 constexpr uint8_t k_BloodLifetime = 63;
 /// Healing comes in counts: a mark ages a step every so many
 constexpr uint32_t k_CountsPerStep = 600;
-/// The counts a game turn heals by, and while healing quickly
+/// The counts a game turn heals by. Healing never runs faster than this.
 constexpr uint32_t k_CountsPerTurn = 1;
-constexpr uint32_t k_FastCountsPerTurn = 50;
 /// A heal effect heals by this many counts for each of its strength
 constexpr uint32_t k_HealEffectCounts = 9600;
 
