@@ -4639,6 +4639,10 @@ void AddCombat(std::vector<Scenario>& all)
 		// The fight lesson of the guide: no one chooses the moves of either creature, and the guide belongs to no player
 		// The Action button is the right button of the mouse
 		constexpr size_t k_RightButton = 3;
+		// The double click comes after the arena is made, nearly six seconds into the fight, so it finds the arena. The
+		// presses come after the duel starts, nearly fourteen seconds into the fight.
+		constexpr float k_ViewAfterArena = 6.5f;
+		constexpr float k_PressAfterDuel = 8.0f;
 		auto guide = Fighter(right, 270.0f, "guide", PlayerNames::NEUTRAL, 0.5f, 0.0f);
 		guide.species = CreatureType::Lion;
 		all.push_back({
@@ -4657,13 +4661,41 @@ void AddCombat(std::vector<Scenario>& all)
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
 		                 Fight(Kind::FightAuto, 0, 0, 0.2f),
 		                 Fight(Kind::FightAuto, 1, 0, 0.2f),
-		                 Fight(Kind::FightView, 0, 0, 0.5f),
-		                 Fight(Kind::PointerOnOpponent, 0, 0, 9.0f),
+		                 Fight(Kind::FightView, 0, 0, k_ViewAfterArena),
+		                 Fight(Kind::PointerOnOpponent, 0, 0, k_PressAfterDuel),
 		                 {.kind = Kind::PointerPress, .delaySeconds = 0.1f, .value = k_RightButton},
 		                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = k_RightButton},
 		                 Fight(Kind::PointerOnOpponent, 0, 0, 3.8f)},
 		    .repeatFrom = 5,
 		});
+		{
+			// Eighteen quick presses fill the queue of twelve moves, also when the fight plays some of the moves; the fight
+			// refuses the presses after that
+			constexpr size_t k_QuickPresses = 18;
+			std::vector<Command> commands {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 0, 0.2f),
+			                               Fight(Kind::FightAuto, 1, 0, 0.2f), Fight(Kind::FightView, 0, 0, k_ViewAfterArena),
+			                               Fight(Kind::PointerOnOpponent, 0, 0, k_PressAfterDuel)};
+			for (size_t press = 0; press < k_QuickPresses; ++press)
+			{
+				commands.push_back({.kind = Kind::PointerPress, .delaySeconds = 0.05f, .value = k_RightButton});
+				commands.push_back({.kind = Kind::PointerRelease, .delaySeconds = 0.05f, .value = k_RightButton});
+			}
+			all.push_back({
+			    .id = "combat.refused_press_does_nothing",
+			    .name = "A press that the fight refuses does nothing",
+			    .facet = Facet::Combat,
+			    .description = "The player's red tiger fights a lion that belongs to no player, as the guide's fight "
+			                   "lesson starts it. No one chooses the moves of either creature. A double click into the "
+			                   "arena makes the camera show the fight. Then the hand presses the Action button on the lion "
+			                   "eighteen times quickly.",
+			    .expected = "The presses put sparkles on the lion until twelve show. The fight refuses the presses after "
+			                "that (the fight transcript shows refused_full), and nothing else takes them: the log shows no "
+			                "line that the hand can't hold the lion, and the leash does not answer.",
+			    .framing = ringside,
+			    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), guide},
+			    .commands = std::move(commands),
+			});
+		}
 		// The fight autopilot plays the stages of the lesson with the real mouse, then checks them in the transcript
 		constexpr size_t k_LessonPolicy = 0;
 		constexpr float k_LessonCheckAfterSeconds = 45.0f;

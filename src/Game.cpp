@@ -702,6 +702,9 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	    !Locator::debugGui::value().IsMouseOverWindow())
 	{
 		_actionPressTaken = magic.IsHandBusy() && magic.PressAction();
+		// While the camera shows a duel of the player's creature and the hand is empty, every Action press goes to the
+		// fight and to nothing else
+		const bool fightTakesPress = fights.DirectsFight();
 		// Holding a thing, the hand makes ready to throw it
 		if (!_actionPressTaken && handHoldsThing)
 		{
@@ -721,20 +724,20 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			                                                              cursor, machine_clock::Ticks());
 		}
 		// With an empty hand on the tip bubble, the hand grips it and the words follow the hand until the button is let go
-		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && Locator::tipBubbleSystem::has_value() &&
-		    Locator::tipBubbleSystem::value().IsUnderHand())
+		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy() &&
+		    Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsUnderHand())
 		{
 			Locator::tipBubbleSystem::value().Grip();
 			_actionPressTaken = true;
 		}
 		// With an empty hand over the rope of the tied leash, the hand takes hold of the rope
-		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() &&
+		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy() &&
 		    Locator::leashSystem::value().PressRope(PlayerNames::PLAYER_ONE))
 		{
 			_actionPressTaken = true;
 		}
 		// With an empty hand, a fireball under it takes the press. A one-shot globe is taken hold of as any thing is.
-		if (!_actionPressTaken && !handHoldsThing && !magic.IsHandBusy())
+		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy())
 		{
 			_actionPressTaken = magic.PressFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
@@ -752,6 +755,11 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			{
 				_actionPressTaken = true;
 				_fightButton = creature_fight::Button::Action;
+			}
+			// A press that the fight refuses does nothing: the hand does not take hold of a creature or a thing then
+			else if (fightTakesPress)
+			{
+				_actionPressTaken = true;
 			}
 			const auto& leashes = Locator::leashSystem::value();
 			const auto own = leashes.PlayersCreature(PlayerNames::PLAYER_ONE);
