@@ -254,13 +254,25 @@ void LandIsland::Build(const LandData& data)
 	    .bump = _bump,
 	};
 	_blockTextures = std::make_unique<Texture2D>("LandIslandBlockTextures");
-	_blockTextures->Create(block_texture::k_Side, block_texture::k_Side, static_cast<uint16_t>(_landBlocks.size()),
+	// EXPERIMENT (not for merge): one more layer after the blocks' layers holds the ground under the sea, painted with
+	// the land's own material, for the experiment's sea bed
+	_blockTextures->Create(block_texture::k_Side, block_texture::k_Side, static_cast<uint16_t>(_landBlocks.size() + 1),
 	                       TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Linear, nullptr);
 	std::vector<uint8_t> blockTexels(block_texture::k_BlockBytes);
+	std::vector<lnd::LNDCell> allCells;
 	for (size_t i = 0; i < _landBlocks.size(); ++i)
 	{
-		block_texture::BuildBlock(_landBlocks[i].GetLndBlock()->cells, sources, blockTexels);
+		const auto& cells = _landBlocks[i].GetLndBlock()->cells;
+		block_texture::BuildBlock(cells, sources, blockTexels);
 		_blockTextures->UpdateLayer(static_cast<uint16_t>(i), blockTexels.data(), static_cast<uint32_t>(blockTexels.size()));
+		allCells.insert(allCells.end(), std::begin(cells), std::end(cells));
+	}
+	if (!_countries.empty())
+	{
+		const auto country = std::min<size_t>(block_texture::SeaFloorCountry(allCells), _countries.size() - 1);
+		block_texture::PaintSeaFloor(_countries[country], sources, blockTexels);
+		_blockTextures->UpdateLayer(static_cast<uint16_t>(_landBlocks.size()), blockTexels.data(),
+		                            static_cast<uint32_t>(blockTexels.size()));
 	}
 
 	// The coarse texture pages the landscape file keeps, a layer each, and where each block's square of them is. A block

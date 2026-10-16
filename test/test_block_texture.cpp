@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <cstddef>
+#include <cstdint>
 
 #include <algorithm>
 #include <array>
@@ -193,5 +194,41 @@ TEST(BlockTexture, PaintCellsPaintsARectangleAsTheWholeBlockWould)
 			                       whole.begin() + static_cast<std::ptrdiff_t>(fromWhole)))
 			    << "texel x " << x << " z " << z;
 		}
+	}
+}
+
+TEST(BlockTexture, TheSeaFloorTakesTheCountryOfMostSeaCells)
+{
+	std::vector<openblack::lnd::LNDCell> cells(10);
+	for (size_t i = 0; i < cells.size(); ++i)
+	{
+		cells[i].altitude = i < 7 ? 0 : 40;
+		cells[i].properties.country = i < 3 ? 2 : 5;
+	}
+	// Cells 3 to 6 are at sea level in country 5, more than the three in country 2; the land cells do not count
+	EXPECT_EQ(openblack::block_texture::SeaFloorCountry(cells), 5);
+}
+
+TEST(BlockTexture, TheSeaFloorIsOpaqueLand)
+{
+	namespace bt = openblack::block_texture;
+	openblack::lnd::LNDCountry country {};
+	for (auto& entry : country.materials)
+	{
+		entry.indices = {0, 0};
+	}
+	// One material, all one colour
+	std::vector<uint16_t> materials(static_cast<size_t>(bt::k_Side) * bt::k_Side, uint16_t {0x7FFF});
+	const std::vector<uint8_t> noise(static_cast<size_t>(bt::k_Side) * bt::k_Side, 0);
+	const std::vector<uint8_t> bump(static_cast<size_t>(bt::k_Side) * bt::k_Side, 0x80);
+	const bt::Sources sources {.countries = {&country, 1}, .materials = materials, .noise = noise, .bump = bump};
+	std::vector<uint8_t> rgba(bt::k_BlockBytes);
+	bt::PaintSeaFloor(country, sources, rgba);
+	for (size_t i = 0; i < rgba.size(); i += 4)
+	{
+		ASSERT_EQ(rgba[i + 3], 0xFF);
+		// The same texel as the land paints at its lowest height
+		const auto texel = bt::CountryTexel(country, 0x100, 0, 0x80, materials, i / 4);
+		ASSERT_EQ(rgba[i], ((texel >> 8) & 0xF) * 17);
 	}
 }
