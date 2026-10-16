@@ -53,14 +53,18 @@ enum class SeedAfterCast : uint8_t
 {
 	/// It stays in the hand to cast again: lightning, water, food and wood
 	StaysInHand,
-	/// It goes: the fireball, the heal, teleport, the flocks, the beam explosion, the creature spells
+	/// It goes: the creature spells' phials
 	Deleted,
+	/// It leaves the hand, out of sight, and stays linked to its miracle until the miracle goes: the fireball, the heal,
+	/// teleport, the flocks, the beam explosion
+	LinkedToSpell,
 	/// It leaves the hand bound to its miracle and goes with it: the storms and both shields, and the forest
 	FollowsSpell,
 };
 
-/// From the seed's record: whether it is kept in the hand, deleted once cast, or follows its miracle. Deleted wins over
-/// kept, as for the creature spells' phials, which are marked both.
+/// From the seed's record: whether it is kept in the hand, deleted once cast, or follows its miracle. Only a seed that
+/// is kept in the hand is deleted by its mark (the creature spells' phials). A seed that is not kept leaves the hand
+/// linked to its miracle, whatever its mark.
 [[nodiscard]] SeedAfterCast SeedAfterCastOf(bool keptInHand, bool deletedOnceCast, bool followsSpell);
 
 } // namespace openblack::magic

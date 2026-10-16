@@ -64,18 +64,19 @@ TEST(SpellLifetime, ACastIsRefusedWhenItsEffectCantStart)
 	EXPECT_FALSE(CastRefusedWithoutEffect(false, false));
 }
 
-TEST(SpellLifetime, TheSeedStaysGoesOrFollowsByItsRecord)
+TEST(SpellLifetime, TheSeedStaysGoesOrStaysLinkedByItsRecord)
 {
 	// Lightning, water, food and wood stay in the hand
 	EXPECT_EQ(SeedAfterCastOf(true, false, true), SeedAfterCast::StaysInHand);
-	// The fireball, the heal and the flocks go
-	EXPECT_EQ(SeedAfterCastOf(false, true, false), SeedAfterCast::Deleted);
+	// The fireball, the heal and the flocks leave the hand, linked to their miracle until it goes
+	EXPECT_EQ(SeedAfterCastOf(false, true, false), SeedAfterCast::LinkedToSpell);
+	EXPECT_EQ(SeedAfterCastOf(false, false, false), SeedAfterCast::LinkedToSpell);
 	// The creature spells' phials are marked both kept and deleted: they go
 	EXPECT_EQ(SeedAfterCastOf(true, true, true), SeedAfterCast::Deleted);
 	// The storms, the shields and the forest follow their miracle
 	EXPECT_EQ(SeedAfterCastOf(false, false, true), SeedAfterCast::FollowsSpell);
-	// Teleport neither follows nor is kept
-	EXPECT_EQ(SeedAfterCastOf(false, true, false), SeedAfterCast::Deleted);
+	// A mark to delete a seed that is not kept has no effect on the cast
+	EXPECT_EQ(SeedAfterCastOf(false, true, true), SeedAfterCast::FollowsSpell);
 }
 
 // The action button

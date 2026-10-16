@@ -27,14 +27,10 @@ SpellFate openblack::magic::FateOf(const SpellLife& life)
 
 SeedAfterCast openblack::magic::SeedAfterCastOf(bool keptInHand, bool deletedOnceCast, bool followsSpell)
 {
-	// The creature spells' phials are both kept and deleted: deleted wins
-	if (deletedOnceCast)
-	{
-		return SeedAfterCast::Deleted;
-	}
 	if (keptInHand)
 	{
-		return SeedAfterCast::StaysInHand;
+		// The creature spells' phials are both kept and deleted: deleted wins
+		return deletedOnceCast ? SeedAfterCast::Deleted : SeedAfterCast::StaysInHand;
 	}
-	return followsSpell ? SeedAfterCast::FollowsSpell : SeedAfterCast::Deleted;
+	return followsSpell ? SeedAfterCast::FollowsSpell : SeedAfterCast::LinkedToSpell;
 }

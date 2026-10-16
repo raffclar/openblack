@@ -5467,13 +5467,13 @@ void AddMind(std::vector<Scenario>& all)
 	healed.needs.life = 0.3f;
 	all.push_back({
 	    .id = "learning.icon_miracle_without_seed",
-	    .name = "A miracle with no seed teaches nothing",
+	    .name = "A miracle that an icon made, and its seed",
 	    .facet = Facet::Mind,
 	    .description = "A grown-up tiger stands near a hurt cow. A heal seed from the player's worship (made at an icon) "
-	                   "is pressed on the cow: the seed goes once it casts.",
-	    .expected = "When the tiger takes up its reaction to the heal (some seconds later), the log tells that it "
-	                "ignores the miracle: an icon made it and no seed holds it now. The tiger does not go to look at the "
-	                "heal, and its knowledge of the heal miracle does not change.",
+	                   "is pressed on the cow. The seed leaves the hand but stays linked to the heal until the heal goes.",
+	    .expected = "If the tiger takes up its reaction at the moment of the cast, the log tells that it ignores the "
+	                "miracle: the seed is not linked yet. When it takes up the reaction later, while the heal lasts, it "
+	                "is not ignored (no such log line) and the heal counts towards learning the miracle.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 0.0f}, {0.0f, 30.0f}}, .distance = 0.6f},
 	    .creatures = {iconWatcher, healed},

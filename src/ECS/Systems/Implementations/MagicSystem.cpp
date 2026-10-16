@@ -2359,10 +2359,10 @@ void MagicSystem::AfterCast(entt::entity spellEntity)
 		LetGoOfSeed(true);
 		return;
 	}
-	// Bound to its miracle, out of the hand, and gone with it
+	// Bound to its miracle, out of the hand, and gone with it. Only a seed that follows its miracle moves with it.
 	const auto entity = *_held;
 	StopHandEffect(seed);
-	seed.followsSpell = true;
+	seed.followsSpell = fate == magic::SeedAfterCast::FollowsSpell;
 	registry.Remove<Mesh>(entity);
 	LetGoOfSeed(false);
 }
