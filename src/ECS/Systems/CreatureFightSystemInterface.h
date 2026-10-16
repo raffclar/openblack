@@ -114,6 +114,8 @@ public:
 	/// last fight left it or a script set it, full before any. Nothing keeps a value set within 0 to 1.
 	[[nodiscard]] virtual float GetFightHealth(entt::entity /*creature*/) const { return 1.0f; }
 	virtual void SetFightHealth(entt::entity /*creature*/, float /*health*/) {}
+	/// How far the posed body of a creature reaches in front of its feet, in the direction that it faces
+	[[nodiscard]] virtual float ForwardExtent(entt::entity /*creature*/) const { return 0.0f; }
 
 	/// An arena a script asks for, and whether it was made for it
 	struct FoundArena

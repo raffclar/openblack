@@ -114,11 +114,6 @@ struct Arena
 [[nodiscard]] float ArrivalDistance(float size);
 /// Whether a point is within the range moves are made in
 [[nodiscard]] bool WithinRange(const Arena& arena, glm::vec2 point);
-/// Fighters keep at least half their own radius and all of their opponent's apart
-[[nodiscard]] float ClosestApart(float radius, float opponentRadius);
-/// Where a fighter moving from one point to another ends up without coming closer to its opponent than a distance:
-/// moving in that far, it stops on the circle round the opponent
-[[nodiscard]] glm::vec2 KeepApart(glm::vec2 from, glm::vec2 to, glm::vec2 opponent, float closest);
 /// Fighters only make moves facing their opponents to within this many radians, turning to them first
 constexpr float k_FacingTolerance = 0.35f;
 /// Where a creature that reels back in its block goes in one frame: to the new point only when that point is inside the
@@ -139,6 +134,12 @@ struct PullApart
 };
 /// The two fighters stand at two points. The extents are the sum of how far their two bodies reach in front of them.
 [[nodiscard]] PullApart PullApartOf(const Arena& arena, glm::vec2 first, glm::vec2 second, glm::vec2 forward, float extents);
+/// Where a fighter that makes a blow and its opponent go when their bodies overlap. The overlap counts all of how far
+/// the striker's body reaches in front of it, but only half of how far the opponent's body reaches. Each one moves by
+/// half the overlap, along the direction that the striker faces: the striker moves back, the opponent moves away. The
+/// range of the arena does not stop these moves. When the bodies do not overlap, neither one moves.
+[[nodiscard]] PullApart BlowPushOf(glm::vec2 striker, glm::vec2 opponent, glm::vec2 forward, float strikerExtent,
+                                   float opponentExtent);
 
 // Bands of the body
 
@@ -521,7 +522,8 @@ struct Fighter
 	float stateMs {0.0f};
 	float speed {1.0f};
 	bool mirrored {false};
-	/// The last action that it started: a blow, a step, a reel, or the reel in a block. It stays after the action ends.
+	/// The last action that it started: a blow, a step, a reel, the reel in a block, a block or a cast. It stays after
+	/// the action ends.
 	size_t lastAction {0};
 	/// A blow that is the special move
 	bool special {false};
