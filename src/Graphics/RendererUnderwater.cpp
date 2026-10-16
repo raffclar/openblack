@@ -13,8 +13,10 @@
 
 #include <array>
 #include <optional>
+#include <vector>
 
 #include <bgfx/bgfx.h>
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/mat4x4.hpp>
 
@@ -275,6 +277,27 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		spray->SetUniformArray("u_uwWaveTable", frame.waveTable.data(), static_cast<uint16_t>(frame.waveTable.size()));
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		spray->Submit(postView);
+	}
+	// The waterspouts over the open sea in a strong storm
+	if (const auto* spout = _shaderManager->GetShader("UnderwaterSpout");
+	    spout != nullptr && system.GetEffectOff() != underwater::Effect::Waterspouts)
+	{
+		const auto spouts = system.GetWaterspouts();
+		std::vector<glm::vec4> instances;
+		instances.reserve(spouts.size());
+		for (size_t i = 0; i < spouts.size(); ++i)
+		{
+			instances.emplace_back(spouts[i].position, spouts[i].strength, static_cast<float>(i));
+		}
+		if (_underwater->BindWaterspouts(instances))
+		{
+			setUniforms(*spout);
+			spout->SetUniformValue("u_uwSky", &frame.sky);
+			spout->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
+			spout->SetTextureSampler("s_sprayNoise", 3, _underwater->SprayNoise());
+			bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
+			spout->Submit(postView);
+		}
 	}
 	// The air under the water at the foot of the cliffs
 	if (const auto* bubbles = _shaderManager->GetShader("UnderwaterBubbles");

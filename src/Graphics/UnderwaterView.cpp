@@ -86,14 +86,14 @@ UnderwaterView::~UnderwaterView()
 	{
 		bgfx::destroy(_sprayNoise);
 	}
-	for (auto* buffer : {&_sprayMesh, &_sprayInstances, &_bubbleMesh})
+	for (auto* buffer : {&_sprayMesh, &_sprayInstances, &_bubbleMesh, &_spoutMesh})
 	{
 		if (bgfx::isValid(*buffer))
 		{
 			bgfx::destroy(*buffer);
 		}
 	}
-	for (auto* indices : {&_sprayIndices, &_bubbleIndices})
+	for (auto* indices : {&_sprayIndices, &_bubbleIndices, &_spoutIndices})
 	{
 		if (bgfx::isValid(*indices))
 		{
@@ -576,5 +576,43 @@ bool UnderwaterView::BindBubbles(std::span<const glm::vec4> cliffFoot, uint32_t 
 	}
 	bgfx::setVertexBuffer(0, _bubbleMesh);
 	bgfx::setIndexBuffer(_bubbleIndices);
+	return true;
+}
+
+bool UnderwaterView::BindWaterspouts(std::span<const glm::vec4> spouts)
+{
+	const auto count = static_cast<uint32_t>(spouts.size());
+	if (count == 0 || bgfx::getAvailInstanceDataBuffer(count, sizeof(glm::vec4)) < count)
+	{
+		return false;
+	}
+	if (!bgfx::isValid(_spoutMesh))
+	{
+		std::vector<glm::vec3> vertices;
+		std::vector<uint16_t> indices;
+		constexpr std::array<glm::vec2, 4> k_Corners {{{-1.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, 1.0f}}};
+		for (uint32_t puff = 0; puff < k_SpoutPuffs; ++puff)
+		{
+			const auto first = static_cast<uint16_t>(vertices.size());
+			for (const auto& corner : k_Corners)
+			{
+				vertices.emplace_back(corner, static_cast<float>(puff));
+			}
+			indices.insert(indices.end(), {first, static_cast<uint16_t>(first + 1), static_cast<uint16_t>(first + 2), first,
+			                               static_cast<uint16_t>(first + 2), static_cast<uint16_t>(first + 3)});
+		}
+		bgfx::VertexLayout layout;
+		layout.begin().add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float).end();
+		_spoutMesh = bgfx::createVertexBuffer(
+		    bgfx::copy(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(glm::vec3))), layout);
+		_spoutIndices =
+		    bgfx::createIndexBuffer(bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t))));
+	}
+	bgfx::InstanceDataBuffer instances;
+	bgfx::allocInstanceDataBuffer(&instances, count, sizeof(glm::vec4));
+	std::copy_n(reinterpret_cast<const uint8_t*>(spouts.data()), count * sizeof(glm::vec4), instances.data);
+	bgfx::setVertexBuffer(0, _spoutMesh);
+	bgfx::setIndexBuffer(_spoutIndices);
+	bgfx::setInstanceDataBuffer(&instances);
 	return true;
 }

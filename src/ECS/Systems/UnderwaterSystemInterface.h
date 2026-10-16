@@ -67,6 +67,8 @@ public:
 	[[nodiscard]] virtual const seabed::Seabed& GetSeabed() const = 0;
 	/// The reef on the sea bed, made with it
 	[[nodiscard]] virtual std::span<const seabed::ReefPlant> GetReef() const = 0;
+	/// The waterspouts over the open sea this frame (none unless a strong storm blows)
+	[[nodiscard]] virtual std::span<const graphics::underwater::Waterspout> GetWaterspouts() const = 0;
 	/// The sea's currents now (see underwater::CurrentAt)
 	[[nodiscard]] virtual const graphics::underwater::CurrentState& GetCurrent() const = 0;
 	/// A number that changes each time the sea bed is made again

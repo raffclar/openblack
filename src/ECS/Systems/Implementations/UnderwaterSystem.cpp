@@ -21,6 +21,7 @@
 #include <vector>
 
 #include <LNDFile.h>
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -181,6 +182,21 @@ void UnderwaterSystem::UpdateSea(float frameSeconds)
 	}
 	_storm = underwater::EaseTowards(_storm, storm, storm > _storm ? 0.12f : 0.05f, frameSeconds);
 	_waves = underwater::WavesFor(_storm, _windAngle);
+	// The waterspouts, out at sea from the coast of the sea bed's map
+	{
+		const auto& bed = _seabed;
+		const auto seaDistance = [&bed](glm::vec2 point) {
+			if (bed.size.x == 0 || bed.shore.empty())
+			{
+				return 0.0f;
+			}
+			const glm::ivec2 corner =
+			    glm::clamp(glm::ivec2(glm::round((point - bed.origin) / bed.spacing)), glm::ivec2(0), bed.size - 1);
+			return bed.shore[static_cast<size_t>((corner.y * bed.size.x) + corner.x)].x;
+		};
+		const glm::vec2 centre = bed.origin + glm::vec2(bed.size - 1) * bed.spacing * 0.5f;
+		_waterspouts = underwater::WaterspoutsAt(_seconds, _storm, centre, seaDistance);
+	}
 	_current = underwater::CurrentFor(_tideRate, _windAngle, _storm);
 
 	// The things that float: the bodies in the physics over the sea, near its surface

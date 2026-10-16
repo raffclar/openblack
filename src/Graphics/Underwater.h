@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -154,6 +155,8 @@ enum class Effect : uint8_t
 	WetRock,
 	/// The bubbles and the cloud of air under the water at the cliffs
 	Bubbles,
+	/// The waterspouts in a storm
+	Waterspouts,
 	/// Not an effect: the water is drawn as a flat colour where it shows, to compare it with the original sea
 	WaterMask,
 	_Count
@@ -289,5 +292,24 @@ struct CliffCrash
 /// least `spacing` from the others, so that one crash along a cliff is heard once
 [[nodiscard]] std::vector<size_t> HeardCliffFeet(std::span<const glm::vec4> feet, glm::vec2 eye, size_t count, float spacing,
                                                  float range);
+
+/// A waterspout over the open sea in a storm: where its foot is, and how strong it is now, 0 to 1 (it grows in and dies
+/// away)
+struct Waterspout
+{
+	glm::vec2 position {0.0f};
+	float strength {0.0f};
+};
+/// The waterspouts there can be at once
+inline constexpr size_t k_MostWaterspouts = 2;
+/// How long a waterspout lives, in seconds
+inline constexpr float k_WaterspoutSeconds = 70.0f;
+/// How far out to sea a waterspout stays, from the nearest coast
+inline constexpr float k_WaterspoutSeaRoom = 150.0f;
+/// The waterspouts at a time: none in a calm sea, at most k_MostWaterspouts in a strong storm, each at its own place
+/// between 500 and 1300 units from `centre`, and only where `seaDistance` (the distance from the coast, positive at sea)
+/// gives at least k_WaterspoutSeaRoom. Each one drifts slowly while it lives.
+[[nodiscard]] std::vector<Waterspout> WaterspoutsAt(float seconds, float storm, glm::vec2 centre,
+                                                    const std::function<float(glm::vec2)>& seaDistance);
 
 } // namespace openblack::graphics::underwater

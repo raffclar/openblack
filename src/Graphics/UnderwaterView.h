@@ -72,6 +72,10 @@ public:
 	/// of a cliff, on the same instances as the spray. Binds them; false when there are no cliffs.
 	bool BindBubbles(std::span<const glm::vec4> cliffFoot, uint32_t revision);
 	static constexpr uint32_t k_Bubbles = 96;
+	/// The waterspouts this frame: xy the foot, z the strength, w the waterspout's own number. Binds them with
+	/// k_SpoutPuffs particles each; false when there are none.
+	bool BindWaterspouts(std::span<const glm::vec4> spouts);
+	static constexpr uint32_t k_SpoutPuffs = 900;
 	/// The spray's noise volume (see underwater::SprayNoiseVolume), made the first time it is asked for
 	[[nodiscard]] TextureHandle SprayNoise();
 
@@ -105,6 +109,8 @@ private:
 	bgfx::TextureHandle _sprayNoise = BGFX_INVALID_HANDLE;
 	bgfx::VertexBufferHandle _bubbleMesh = BGFX_INVALID_HANDLE;
 	bgfx::IndexBufferHandle _bubbleIndices = BGFX_INVALID_HANDLE;
+	bgfx::VertexBufferHandle _spoutMesh = BGFX_INVALID_HANDLE;
+	bgfx::IndexBufferHandle _spoutIndices = BGFX_INVALID_HANDLE;
 	bgfx::IndexBufferHandle _moteIndices = BGFX_INVALID_HANDLE;
 };
 

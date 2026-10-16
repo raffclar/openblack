@@ -573,3 +573,36 @@ TEST(Seabed, TheShelfFromTheCoastHasNoSteps)
 	// A cliff is deep at once
 	EXPECT_GT(seabed::ShelfFromCoastLine(5.0f, 6.0f), 20.0f);
 }
+
+TEST(Underwater, WaterspoutsComeOnlyInAStormAndStayAtSea)
+{
+	// The sea is everything past x = 0, the land the rest
+	const auto seaDistance = [](glm::vec2 point) { return point.x; };
+	EXPECT_TRUE(underwater::WaterspoutsAt(30.0f, 0.2f, {0.0f, 0.0f}, seaDistance).empty());
+	size_t seen = 0;
+	for (float seconds = 0.0f; seconds < 600.0f; seconds += 5.0f)
+	{
+		const auto spouts = underwater::WaterspoutsAt(seconds, 1.0f, {0.0f, 0.0f}, seaDistance);
+		EXPECT_LE(spouts.size(), underwater::k_MostWaterspouts);
+		for (const auto& spout : spouts)
+		{
+			EXPECT_GE(spout.position.x, underwater::k_WaterspoutSeaRoom);
+			EXPECT_GE(spout.strength, 0.0f);
+			EXPECT_LE(spout.strength, 1.0f);
+		}
+		seen += spouts.size();
+	}
+	EXPECT_GT(seen, 0u);
+}
+
+TEST(Underwater, AWaterspoutDriftsSlowly)
+{
+	const auto seaDistance = [](glm::vec2) { return 1000.0f; };
+	const auto before = underwater::WaterspoutsAt(20.0f, 1.0f, {0.0f, 0.0f}, seaDistance);
+	const auto after = underwater::WaterspoutsAt(20.5f, 1.0f, {0.0f, 0.0f}, seaDistance);
+	ASSERT_EQ(before.size(), after.size());
+	for (size_t i = 0; i < before.size(); ++i)
+	{
+		EXPECT_LT(glm::length(after[i].position - before[i].position), 2.0f);
+	}
+}

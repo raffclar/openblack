@@ -533,3 +533,39 @@ std::vector<size_t> underwater::HeardCliffFeet(std::span<const glm::vec4> feet, 
 	}
 	return heard;
 }
+
+std::vector<underwater::Waterspout> underwater::WaterspoutsAt(float seconds, float storm, glm::vec2 centre,
+                                                              const std::function<float(glm::vec2)>& seaDistance)
+{
+	std::vector<Waterspout> spouts;
+	const float stormShare = glm::smoothstep(0.5f, 0.8f, storm);
+	if (stormShare <= 0.0f)
+	{
+		return spouts;
+	}
+	for (size_t slot = 0; slot < k_MostWaterspouts; ++slot)
+	{
+		// Each slot starts a new waterspout once a life, the slots half a life apart
+		const float shifted = seconds + static_cast<float>(slot) * k_WaterspoutSeconds * 0.5f;
+		const float life = std::floor(shifted / k_WaterspoutSeconds);
+		const float age = shifted - life * k_WaterspoutSeconds;
+		const auto seed = static_cast<int>(life) * 7 + static_cast<int>(slot) * 131;
+		// A few places to try, the first one far enough out to sea is the waterspout's
+		for (int attempt = 0; attempt < 4; ++attempt)
+		{
+			const float angle = LatticeHash(seed, attempt, 3) * 6.2831853f;
+			const float radius = 500.0f + 800.0f * LatticeHash(seed, attempt, 5);
+			const glm::vec2 start = centre + glm::vec2(std::cos(angle), std::sin(angle)) * radius;
+			const float heading = LatticeHash(seed, attempt, 7) * 6.2831853f;
+			const glm::vec2 position = start + glm::vec2(std::cos(heading), std::sin(heading)) * (age * 1.5f);
+			if (seaDistance(start) >= k_WaterspoutSeaRoom && seaDistance(position) >= k_WaterspoutSeaRoom)
+			{
+				const float grow = glm::smoothstep(0.0f, 8.0f, age) *
+				                   (1.0f - glm::smoothstep(k_WaterspoutSeconds - 12.0f, k_WaterspoutSeconds, age));
+				spouts.push_back({.position = position, .strength = grow * stormShare});
+				break;
+			}
+		}
+	}
+	return spouts;
+}
