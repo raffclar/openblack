@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstddef>
+#include <cstdint>
+
 #include <algorithm>
 #include <array>
 #include <optional>
@@ -18,6 +21,7 @@
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreatureLayers.h"
 #include "Creature/CreaturePlanActions.h"
 
 using namespace openblack;
@@ -804,4 +808,64 @@ TEST(CreatureCastAgenda, EachStepOfACastLooksAndPullsItsFace)
 	EXPECT_EQ(water[0].face, Cue::None);
 	EXPECT_EQ(water[1].face, Cue::Smile);
 	EXPECT_EQ(water[2].face, Cue::Smile);
+}
+
+TEST(CreatureCastAgenda, ToAmuseItPicksASpellAtRandomAndCastsFromFourTimesItsHeight)
+{
+	const std::array spells {AmusingSpell {.magicType = 26}, AmusingSpell {.magicType = 31, .gesture = 5}};
+	// The first number picks the spell. The second number decides whether it shows how it feels first.
+	std::array<uint32_t, 2> draws {1, 0};
+	size_t next = 0;
+	const Random random = [&](uint32_t range) { return std::min(draws.at(next++), range - 1); };
+	const auto agenda = CastAmusingAt(spells, 7, 10.0f, random);
+	ASSERT_EQ(agenda.size(), 6u);
+	EXPECT_EQ(agenda[0].kind, Step::Kind::Action);
+	EXPECT_EQ(agenda[0].animation, creature_layers::animations::k_FeelPlayful);
+	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_FLOAT_EQ(agenda[1].movement.maxDistance, 40.0f);
+	EXPECT_EQ(agenda[2].movement.kind, Movement::Kind::GetAwayFromObject);
+	EXPECT_FLOAT_EQ(agenda[2].movement.maxDistance, 20.0f);
+	EXPECT_EQ(agenda[3].movement.kind, Movement::Kind::TurnToFaceObject);
+	EXPECT_EQ(agenda[4].kind, Step::Kind::Gesture);
+	EXPECT_EQ(agenda[4].animation, 5u);
+	EXPECT_EQ(agenda[5].kind, Step::Kind::Cast);
+	EXPECT_EQ(agenda[5].cast.magicType, 31u);
+	EXPECT_EQ(agenda[5].cast.object, 7u);
+
+	// Four times in five it does not show how it feels first
+	const auto quiet = CastAmusingAt(spells, 7, 10.0f, Always(1));
+	ASSERT_EQ(quiet.size(), 5u);
+	EXPECT_EQ(quiet[0].movement.kind, Movement::Kind::GoNearObject);
+	EXPECT_EQ(quiet[4].cast.magicType, 31u);
+}
+
+TEST(CreatureCastAgenda, WithNoSpellToAmuseItOnlyShowsThatItFeelsPlayful)
+{
+	const auto agenda = CastAmusingAt({}, 7, 10.0f, Always(0));
+	ASSERT_EQ(agenda.size(), 1u);
+	EXPECT_EQ(agenda[0].kind, Step::Kind::Action);
+	EXPECT_EQ(agenda[0].animation, creature_layers::animations::k_FeelPlayful);
+}
+
+TEST(CreatureCastAgenda, AnotherCreatureSeemsFriendlyUnlessAngerOrFearComesBetweenThem)
+{
+	using creature_desires::Desire;
+	EXPECT_TRUE(SeemsFriendly(Desire::Play, Desire::Play));
+	EXPECT_TRUE(SeemsFriendly(std::nullopt, std::nullopt));
+	EXPECT_TRUE(SeemsFriendly(Desire::Play, Desire::Fear));
+	EXPECT_FALSE(SeemsFriendly(Desire::Anger, Desire::Play));
+	EXPECT_FALSE(SeemsFriendly(Desire::Fear, Desire::Play));
+	EXPECT_FALSE(SeemsFriendly(Desire::Play, Desire::Anger));
+}
+
+TEST(CreatureCastAgenda, TheAmusingSpellIsACastAtACreatureThatSeemsFriendly)
+{
+	const auto* amuse = creature_plan_actions::For("CastAmusingSpellOnCreature");
+	ASSERT_NE(amuse, nullptr);
+	EXPECT_TRUE(creature_plan_actions::IsCast(*amuse));
+	EXPECT_EQ(amuse->target, creature_plan_actions::Target::FriendlyCreature);
+	const creature_plan_actions::CastInfo cast {.height = 10.0f, .amusingSpells = {AmusingSpell {.magicType = 33}}};
+	const auto agenda = creature_plan_actions::Agenda(*amuse, 7u, {}, {}, Always(1), cast);
+	ASSERT_TRUE(agenda.has_value());
+	EXPECT_EQ(agenda->back().cast.magicType, 33u);
 }

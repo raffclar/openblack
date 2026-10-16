@@ -251,6 +251,8 @@ constexpr std::array k_Executors {
     Executor {.action = "CastMakeCreatureIll", .target = Target::Creature, .build = Build::CastPlayful},
     Executor {.action = "CastMakeCreatureThirsty", .target = Target::Creature, .build = Build::CastPlayful},
     Executor {.action = "CastMakeCreatureItchy", .target = Target::Creature, .build = Build::CastPlayful},
+    // To amuse a creature that seems friendly, it casts a spell on creatures that it picks at random
+    Executor {.action = "CastAmusingSpellOnCreature", .target = Target::FriendlyCreature, .build = Build::CastAmusing},
     // The miracles that attack: the power-ups of lightning, the fireball and its power-ups, the explosion and its
     // power-ups, the tornado and the lightning storm
     Executor {.action = "CastLightningBoltPU1", .target = Target::Anything, .build = Build::CastLightning},
@@ -687,6 +689,7 @@ bool creature_plan_actions::IsCast(const Executor& executor)
 	case Build::CastShield:
 	case Build::CastWaterOnItself:
 	case Build::CastToImpress:
+	case Build::CastAmusing:
 	case Build::CastForest:
 	case Build::WaterTreeForTown:
 	case Build::HealItself:
@@ -1207,6 +1210,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::CastToImpress:
 		return creature_mind::CastToImpress(cast->magicType != 0 ? std::optional(cast->magicType) : std::nullopt, *object,
 		                                    cast->height, random);
+	case Build::CastAmusing:
+		return creature_mind::CastAmusingAt(cast->amusingSpells, *object, cast->height, random);
 	case Build::WaterTreeForTown:
 		// Without a tree to use, the creature cannot water a tree for the town
 		if (!situation.instrument.has_value())

@@ -53,6 +53,8 @@ enum class CastStyle : uint8_t
 	Aggressive,
 	/// The explosion
 	Explosion,
+	/// A spell that the creature casts on another creature to amuse it
+	Amusing,
 };
 
 /// It shows how it feels first one time in this many
@@ -151,6 +153,28 @@ struct ImpressiveMiracleState
 	float needed {0.0f};
 };
 [[nodiscard]] bool CanCastToImpress(std::span<const ImpressiveMiracleState> miracles);
+
+/// The first and the last magic types of the spells on a creature. The creature casts one of these to amuse another
+/// creature.
+inline constexpr uint32_t k_FirstAmusingSpell = 26;
+inline constexpr uint32_t k_LastAmusingSpell = 41;
+/// To amuse another creature, the creature casts from this many times its height
+inline constexpr float k_AmusingCastHeights = 4.0f;
+/// A spell that the creature can cast to amuse: it knows the spell and can pay for it. The gesture is 0 for none.
+struct AmusingSpell
+{
+	uint32_t magicType {0};
+	uint32_t gesture {0};
+};
+/// The creature casts a spell to amuse another creature. It picks one of the spells at random. Then one time in five it
+/// shows that it feels playful. It goes near to four times its height and gets away to twice its height. It turns,
+/// draws the gesture and casts. With no spell, it only shows that it feels playful.
+[[nodiscard]] std::vector<Step> CastAmusingAt(std::span<const AmusingSpell> spells, uint32_t object, float height,
+                                              const Random& random);
+/// Whether another creature seems friendly to the creature, by the desire that each creature wants most to do about the
+/// other. It does not seem friendly when the creature is angry with it or afraid of it, or when the other creature is
+/// angry with the creature. None is a creature that wants nothing of the other.
+[[nodiscard]] bool SeemsFriendly(std::optional<creature_desires::Desire> mine, std::optional<creature_desires::Desire> theirs);
 
 /// A creature goes this near the thing that it casts a one-shot miracle at
 inline constexpr float k_OneShotCastDistance = 50.0f;

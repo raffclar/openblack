@@ -93,6 +93,7 @@ public:
 	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;
 	[[nodiscard]] bool IsTakingFromHand(entt::entity creature) const override;
 	[[nodiscard]] bool IsLyingDead(entt::entity creature) override;
+	[[nodiscard]] bool SeemsFriendly(entt::entity creature, entt::entity other) override;
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
 	void ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
@@ -412,6 +413,8 @@ private:
 	/// The miracle that a creature casts to impress, none when it knows none. It notes the turn of the cast for every
 	/// creature.
 	std::optional<uint32_t> PickImpressiveMiracle(entt::entity creature);
+	/// The spells on creatures that the creature knows and can pay for, in the order of their types
+	std::vector<creature_mind::AmusingSpell> AmusingSpells(entt::entity creature, const components::CreatureMindState& mind);
 	std::optional<creature_plan_actions::CastInfo> CastInfoFor(entt::entity creature, uint32_t action,
 	                                                           std::optional<entt::entity> target);
 	/// How often the creature has seen a miracle and how often it needs to have seen it to cast it
