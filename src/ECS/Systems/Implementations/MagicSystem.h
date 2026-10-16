@@ -350,6 +350,11 @@ private:
 	[[nodiscard]] magic::SeedWithSpell SeedWithSpellOf(const components::SpellSeed& seed, const components::Spell& spell) const;
 	[[nodiscard]] bool SeedShownWithSpell(const components::SpellSeed& seed, const components::Spell& spell) const;
 	/// A miracle whose seed is shown closes down once the seed is out of its player's influence
+	/// A phial kept in the hand after its cast goes with its closed miracle, or leaves the hand once its miracle is old
+	/// enough
+	void KeepSeedInHand(const components::Spell& spell);
+	/// The held seed leaves the hand, out of sight, linked to its miracle until the miracle goes
+	void SeedOutOfHandWithSpell(bool followsSpell);
 	void KeepSeedInInfluence(entt::entity spellEntity, const components::Spell& spell);
 	/// Whether a player has an icon for a seed at one of their worship sites, at which a seed from a globe is then made
 	[[nodiscard]] bool PlayerHasSpellIcon(PlayerNames player, SpellSeedType seed) const;

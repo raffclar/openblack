@@ -1550,6 +1550,10 @@ void MagicSystem::ProcessTurn()
 		// The seed it was cast from has its turn first
 		if (const auto* before = FindSpell(entity))
 		{
+			KeepSeedInHand(*before);
+		}
+		if (const auto* before = FindSpell(entity))
+		{
 			KeepSeedInInfluence(entity, *before);
 		}
 		auto* spell = FindSpell(entity);
@@ -2342,8 +2346,7 @@ void MagicSystem::AfterCast(entt::entity spellEntity)
 	}
 	auto& seed = registry.Get<SpellSeed>(*_held);
 	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
-	const auto fate =
-	    magic::SeedAfterCastOf(seedInfo.isKeptInHand != 0, seedInfo.deleteSeedOnceCast != 0, seedInfo.seedFollowsSpell != 0);
+	const auto fate = magic::SeedAfterCastOf(seedInfo.isKeptInHand != 0, seedInfo.seedFollowsSpell != 0);
 	if (fate == magic::SeedAfterCast::StaysInHand)
 	{
 		return;
@@ -2354,15 +2357,21 @@ void MagicSystem::AfterCast(entt::entity spellEntity)
 		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellSucceedCast, spell->castPosition, std::nullopt,
 		                                                 entt::null);
 	}
-	if (fate == magic::SeedAfterCast::Deleted)
+	SeedOutOfHandWithSpell(fate == magic::SeedAfterCast::FollowsSpell);
+}
+
+void MagicSystem::SeedOutOfHandWithSpell(bool followsSpell)
+{
+	auto& registry = EntityRegistry();
+	if (!_held.has_value() || !registry.Valid(*_held))
 	{
-		LetGoOfSeed(true);
 		return;
 	}
 	// Bound to its miracle, out of the hand, and gone with it. Only a seed that follows its miracle moves with it.
 	const auto entity = *_held;
+	auto& seed = registry.Get<SpellSeed>(entity);
 	StopHandEffect(seed);
-	seed.followsSpell = fate == magic::SeedAfterCast::FollowsSpell;
+	seed.followsSpell = followsSpell;
 	registry.Remove<Mesh>(entity);
 	LetGoOfSeed(false);
 }
