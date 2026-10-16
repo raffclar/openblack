@@ -194,4 +194,11 @@ struct MindHooks
 	std::vector<Attitude> attitudes;
 };
 
+/// Tells if the sound of a tied leash comes from the thing that holds the leash. The local player hears the leash of
+/// their own creature without a place. The leash of each other creature makes its sound at the thing.
+[[nodiscard]] constexpr bool TieSoundIsPlaced(PlayerNames creatureOwner, PlayerNames localPlayer)
+{
+	return creatureOwner != localPlayer;
+}
+
 } // namespace openblack::creature_leash
