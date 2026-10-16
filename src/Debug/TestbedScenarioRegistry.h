@@ -592,6 +592,9 @@ struct Command
 		/// the player tapping one of them (value: 0 aggression, 1 learning, 2 compassion)
 		HangLeashPosts,
 		TapLeashPost,
+		/// The player's empty hand tapping the scenario's object, a building that the hand cannot take. The leash takes
+		/// the tap as an order when it can. If the leash does not take the tap, the hand knocks on the building.
+		LeashTapBuilding,
 		/// Fighting the other creature; then, in the fight, a blow high, in the middle or low charged for a while, a
 		/// block, a step forward, back, right or left, the special move, and fighting by itself or not, as the player's
 		/// clicks and the debug tools give them

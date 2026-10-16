@@ -64,7 +64,7 @@ float WholeTurns(float seconds, float turnsPerSecond)
 
 Tap creature_leash_orders::OnTap(const Leash& leash, const Tapped& tapped)
 {
-	if (!leash.worn || leash.tiedTo.has_value() || leash.playingGame)
+	if (!leash.worn || leash.tiedTo.has_value() || leash.carriedByTeleport)
 	{
 		return Tap::Normal;
 	}
@@ -72,7 +72,7 @@ Tap creature_leash_orders::OnTap(const Leash& leash, const Tapped& tapped)
 	{
 		return Tap::OrderOnLand;
 	}
-	if (*tapped.object == leash.creature || !tapped.leashTarget || leash.carriedByTeleport)
+	if (*tapped.object == leash.creature || !tapped.leashTarget)
 	{
 		return Tap::Normal;
 	}

@@ -89,6 +89,7 @@ public:
 		return false;
 	}
 	bool TapThing(PlayerNames /*player*/, entt::entity /*object*/) override { return false; }
+	[[nodiscard]] bool TakesTap(PlayerNames /*player*/, entt::entity /*object*/) const override { return false; }
 	[[nodiscard]] std::optional<float> RopeUnderCursor(PlayerNames /*player*/, const RopeFrame& /*frame*/) override
 	{
 		return std::nullopt;

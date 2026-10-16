@@ -135,8 +135,12 @@ public:
 	virtual bool PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
 	                         uint32_t milliseconds) = 0;
 	/// A tap on a thing that the hand let go before taking it, with the leash held loose in the hand: an order to act on
-	/// it, in place of the thing's own tap. Returns whether the leash took the tap.
+	/// it, in place of the thing's own tap. Returns whether the leash took the tap, which it does also when the creature
+	/// refuses the order.
 	virtual bool TapThing(PlayerNames player, entt::entity object) = 0;
+	/// Whether the player's leash takes a single tap on the thing as an order, in place of the thing's own tap. The leash
+	/// must be worn, held by the player and not tied. A teleport stone must not carry the creature.
+	[[nodiscard]] virtual bool TakesTap(PlayerNames player, entt::entity object) const = 0;
 
 	/// The frame as seen, to find whether the cursor touches the rope of the player's tied leash: the camera's view and
 	/// projection, the screen's size in pixels and the cursor's pixel
