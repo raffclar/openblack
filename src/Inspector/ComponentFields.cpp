@@ -91,6 +91,7 @@
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
@@ -566,6 +567,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::ChimneySmoke::state>("state")
 	    .Field<&components::ChimneySmoke::puffs>("puffs");
 	Reflect<components::Cloud>(context).Field<&components::Cloud::track>("track").Field<&components::Cloud::pinned>("pinned");
+	Reflect<components::ComputerPlayer>(context)
+	    .Field<&components::ComputerPlayer::switchedOn>("switchedOn")
+	    .Field<&components::ComputerPlayer::marked>("marked")
+	    .Field<&components::ComputerPlayer::started>("started")
+	    .Field<&components::ComputerPlayer::creatureLike>("creatureLike");
 	Reflect<components::PlannedTemple>(context)
 	    .Field<&components::PlannedTemple::townId>("townId")
 	    .Field<&components::PlannedTemple::owner>("owner")

@@ -1,0 +1,32 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#pragma once
+
+#include "Enums.h"
+
+namespace openblack::ecs::systems
+{
+
+/// The computer minds of the players. A land script switches a mind on. At its first turn after that, the mind starts on
+/// the land: it gives the player a creature when the player has none, sizes the creature and teaches it its miracles.
+class ComputerPlayerSystemInterface
+{
+public:
+	virtual ~ComputerPlayerSystemInterface() = default;
+
+	/// A land script switches the mind of the player on or off. The game makes the player when the land has none yet.
+	virtual void SwitchOn(PlayerNames player, bool on) = 0;
+	/// A land script names the player whose creature gives the size of this player's creature
+	virtual void SetCreatureLike(PlayerNames player, PlayerNames like) = 0;
+	/// In the turn of the players: each mind that is switched on and did not start on the land starts
+	virtual void ProcessTurn() = 0;
+};
+
+} // namespace openblack::ecs::systems

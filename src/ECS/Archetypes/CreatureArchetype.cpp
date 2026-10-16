@@ -30,6 +30,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Enums.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -146,4 +147,16 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 		Locator::leashSystem::value().ClaimOnArrival(entity);
 	}
 	return entity;
+}
+
+entt::entity CreatureArchetype::CreateFromMindFile(const glm::vec3& position, PlayerNames playerName, CreatureType creatureType,
+                                                   const std::string& mindFile)
+{
+	auto& resources = Locator::resources::value();
+	auto& creatureMindManager = resources.GetCreatureMinds();
+	const auto creatureMindPath = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / mindFile;
+	const auto loadResult = creatureMindManager.Load(mindFile, resources::CreatureMindLoader::FromDiskTag {}, creatureMindPath);
+	const auto creatureMindId = loadResult.first->first;
+	return Create(position, playerName, creatureType, creatureMindId, glm::radians(180.0f), StartScale(creatureType),
+	              StartBody(creatureType));
 }
