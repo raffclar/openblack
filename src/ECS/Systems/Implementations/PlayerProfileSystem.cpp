@@ -15,8 +15,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <string>
 #include <system_error>
 #include <utility>
 
@@ -170,9 +172,18 @@ bool PlayerProfileSystem::SelectProfile(std::u16string_view name)
 
 bool PlayerProfileSystem::DeleteProfile(std::u16string_view name)
 {
+	const auto* profile = player_profiles::Find(_profiles, name);
+	const auto creatureFile = profile != nullptr ? profile->creatureFile : std::string {};
 	if (!player_profiles::Remove(_profiles, name))
 	{
 		return false;
+	}
+	// The profile's creature goes with it: its mind file is deleted, but its physique file beside it stays, as in the
+	// game
+	if (_store.creatureMinds.has_value() && !creatureFile.empty())
+	{
+		std::error_code error;
+		std::filesystem::remove(*_store.creatureMinds / creatureFile, error);
 	}
 	if (const auto logger = spdlog::get("game"); logger != nullptr)
 	{

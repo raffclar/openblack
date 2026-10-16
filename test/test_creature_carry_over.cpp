@@ -11,6 +11,7 @@
 
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -31,10 +32,12 @@
 #include "Creature/CreaturePhysiology.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFileSave.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "Locator.h"
 
@@ -76,6 +79,48 @@ creature_mind_body::Body GrownBody()
 	body.blood = {{.u = 1, .v = 2, .skin = 1, .age = 10}};
 	return body;
 }
+/// A mind system that only gives each creature's mind as a file of its name, and counts the minds it gives
+class FakeMinds final: public ecs::systems::CreatureMindSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void PlanTurn() override {}
+	void LearnTurn() override {}
+	void LoadMind(entt::entity, std::shared_ptr<const creaturemind::MindFileData>) override {}
+	[[nodiscard]] std::optional<creaturemind::MindFileData> SaveMind(entt::entity) const override
+	{
+		++saved;
+		creaturemind::MindFileData file;
+		file.name = u"Spot";
+		return file;
+	}
+	void ClearLearning(entt::entity) override {}
+	void SeeSkill(const glm::vec3&, size_t) override {}
+	void SeeMiracle(const glm::vec3&, size_t) override {}
+	void PlayerDid(size_t, const glm::vec3&, std::optional<entt::entity>, std::optional<PlayerNames>) override {}
+	[[nodiscard]] const creature_mind_tables::Tables* GetTables() override { return nullptr; }
+	bool PlayAction(entt::entity, size_t) override { return false; }
+	bool PlayGesture(entt::entity, size_t) override { return false; }
+	void PullFace(entt::entity, size_t) override {}
+	std::optional<creature_face::Request> ShowFeeling(entt::entity, creature_face::Cue) override { return std::nullopt; }
+	bool SitDown(entt::entity) override { return false; }
+	void StandUp(entt::entity) override {}
+	void ReceiveFeedback(entt::entity, float) override {}
+	bool ForceAction(entt::entity, size_t, bool, std::optional<creature_face::Request>, float) override { return false; }
+	bool Sleep(entt::entity) override { return false; }
+	bool Eat(entt::entity, std::optional<entt::entity>) override { return false; }
+	bool Drink(entt::entity) override { return false; }
+	bool Poo(entt::entity) override { return false; }
+	bool Puke(entt::entity) override { return false; }
+	bool Faint(entt::entity) override { return false; }
+	void Wake(entt::entity) override {}
+	void FoughtFight(entt::entity, bool) override {}
+	void ChangeDesires(entt::entity, const std::function<void(creature_desires::Desires&)>&) override {}
+	void SetAgendaPriority(entt::entity, float) override {}
+
+	mutable int saved {0};
+};
+
 /// A leash system that knows only whose creature is whose
 class FakeLeash final: public ecs::systems::LeashSystemInterface
 {
@@ -506,4 +551,101 @@ TEST_F(CreatureCarryOverSystem, ANewGameAsTheSameProfileKeepsItsCreature)
 	carryOver.StartGame();
 	ASSERT_NE(carryOver.Kept(), nullptr);
 	EXPECT_EQ(carryOver.Kept()->name, u"Spot");
+}
+
+TEST(CreatureCarryOver, TheCreatureIsSavedEachTimeItHasLivedAnother600Turns)
+{
+	EXPECT_FALSE(SavesAsItLives(0, 0));
+	EXPECT_FALSE(SavesAsItLives(0, 599));
+	EXPECT_TRUE(SavesAsItLives(599, 600));
+	EXPECT_FALSE(SavesAsItLives(600, 600));
+	EXPECT_FALSE(SavesAsItLives(600, 1199));
+	EXPECT_TRUE(SavesAsItLives(1199, 1200));
+	// Turns that go by in one step past a multiple of 600 save it once
+	EXPECT_TRUE(SavesAsItLives(1198, 1201));
+	// A count that goes back, as when a mind file is loaded, saves nothing
+	EXPECT_FALSE(SavesAsItLives(1800, 1200));
+}
+
+class CreatureCarryOverSaves: public CreatureCarryOverSystem
+{
+protected:
+	void SetUp() override
+	{
+		CreatureCarryOverSystem::SetUp();
+		Locator::creatureMindSystem::emplace<FakeMinds>();
+	}
+	void TearDown() override
+	{
+		Locator::creatureMindSystem::reset();
+		CreatureCarryOverSystem::TearDown();
+	}
+
+	static entt::entity MakeCreature(PlayerNames owner, uint32_t turns)
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto entity = registry.Create();
+		registry.Assign<ecs::components::Creature>(entity, owner, true, CreatureType::Leopard, entt::id_type {0});
+		registry.Assign<ecs::components::CreatureNeeds>(entity).needs.turns = turns;
+		return entity;
+	}
+	static void Live(entt::entity creature, uint32_t turns)
+	{
+		Locator::entitiesRegistry::value().Get<ecs::components::CreatureNeeds>(creature).needs.turns = turns;
+	}
+	static int Saved() { return static_cast<FakeMinds&>(Locator::creatureMindSystem::value()).saved; }
+};
+
+TEST_F(CreatureCarryOverSaves, ThePlayersCreatureIsWrittenToItsFilesAsItLives)
+{
+	const TestFolder folder("carry_over_as_it_lives");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	const auto files = KeptFilesIn(folder.Path(), k_ProfileFile);
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, 1199);
+	const auto rival = MakeCreature(PlayerNames::PLAYER_TWO, 1199);
+
+	// A creature first looked at at its count is not written then
+	carryOver.ProcessTurn();
+	EXPECT_EQ(Saved(), 0);
+	Live(creature, 1200);
+	Live(rival, 1200);
+	carryOver.ProcessTurn();
+	// Only the player's own creature is written, its mind and its physique beside it
+	EXPECT_EQ(Saved(), 1);
+	EXPECT_TRUE(std::filesystem::exists(files.mind));
+	EXPECT_TRUE(std::filesystem::exists(files.physique));
+	ASSERT_NE(carryOver.Kept(), nullptr);
+	EXPECT_EQ(carryOver.Kept()->name, u"Spot");
+
+	// Not again until it has lived another 600 turns
+	carryOver.ProcessTurn();
+	Live(creature, 1799);
+	carryOver.ProcessTurn();
+	EXPECT_EQ(Saved(), 1);
+	Live(creature, 1800);
+	carryOver.ProcessTurn();
+	EXPECT_EQ(Saved(), 2);
+}
+
+TEST_F(CreatureCarryOverSaves, ALandThatKeepsNoCreaturesWritesNoneAsTheyLiveNorAtTheEnd)
+{
+	const TestFolder folder("carry_over_testbed");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	auto& leash = static_cast<FakeLeash&>(Locator::leashSystem::emplace<FakeLeash>());
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, 599);
+	leash.playersCreature = creature;
+	carryOver.SetLandKeepsCreatures(false);
+	carryOver.ProcessTurn();
+	Live(creature, 600);
+	carryOver.ProcessTurn();
+	carryOver.EndGame();
+	EXPECT_EQ(Saved(), 0);
+	EXPECT_FALSE(std::filesystem::exists(KeptFilesIn(folder.Path(), k_ProfileFile).mind));
+
+	// A land that keeps creatures writes the player's creature when the game ends
+	carryOver.SetLandKeepsCreatures(true);
+	carryOver.EndGame();
+	Locator::leashSystem::reset();
+	EXPECT_EQ(Saved(), 1);
+	EXPECT_TRUE(std::filesystem::exists(KeptFilesIn(folder.Path(), k_ProfileFile).mind));
 }

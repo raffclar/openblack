@@ -4374,6 +4374,11 @@ bool Game::Run() noexcept
 		frameStart = frameEnd;
 	}
 
+	// As the game ends, the player's creature is written to their files as it is now
+	if (Locator::creatureCarryOverSystem::has_value())
+	{
+		Locator::creatureCarryOverSystem::value().EndGame();
+	}
 	// The last line of an orderly end: a log that stops without it, and without a crash report, was ended from outside
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ends after {} frames, at turn {}", _frameCount,
 	                   Locator::time::value().GetTurn());
@@ -4597,6 +4602,8 @@ void Game::PrepareNewLand(land_change::Kind change)
 			Locator::creatureCarryOverSystem::value().KeepPlayersCreature();
 		}
 		Locator::creatureCarryOverSystem::value().Reset();
+		// The land to come keeps the player's creature in their files as it lives, but for the testbed
+		Locator::creatureCarryOverSystem::value().SetLandKeepsCreatures(!toTestbed);
 		// A new game is played as the profile picked now: the profile picked during the last game took over only now,
 		// once that game's creature was kept for the profile it was played as
 		if (rules.gameStarts)

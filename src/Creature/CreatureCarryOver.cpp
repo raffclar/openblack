@@ -66,3 +66,8 @@ creature_carry_over::KeptFiles creature_carry_over::KeptFilesIn(const std::files
 	const std::string name(profileFile);
 	return {.mind = folder / name, .physique = folder / ("Physique" + name)};
 }
+
+bool creature_carry_over::SavesAsItLives(uint32_t turnsBefore, uint32_t turnsNow)
+{
+	return turnsNow > turnsBefore && turnsNow / k_SaveEveryTurns > turnsBefore / k_SaveEveryTurns;
+}
