@@ -13,6 +13,7 @@
 #include <array>
 #include <string_view>
 
+#include "3D/FlatLand.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -534,6 +535,35 @@ void AddCreatureSpells(std::vector<Scenario>& all)
 		});
 	}
 }
+/// A script's food miracle, as SPELL_AT_POS casts it: the neutral player's, with no seed and no influence needed
+void AddScriptFood(std::vector<Scenario>& all)
+{
+	constexpr glm::vec2 k_Lake = flat_land::k_LakeCentre - flat_land::k_MapMiddle;
+	constexpr ScriptSpell k_Food {.radius = 5.0f, .seconds = 5.0f, .curl = 0.0f};
+	all.push_back({
+	    .id = "miracles.script_food_land_and_lake",
+	    .name = "A script's food on the land and in the lake",
+	    .facet = Facet::Miracles,
+	    .description = "A script casts the food miracle twice, each from 20 units above its point: once on the land north "
+	                   "of the middle, and once over the middle of the lake.",
+	    .expected = "Grains fall from both points. On the land they make one pile of magic food at the point. The grains "
+	                "that fall in the lake make no pile, because food lands only on dry land.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 30.0f}, k_Lake}},
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = {0.0f, 30.0f},
+	                  .handOffset = {0.0f, 30.0f},
+	                  .handHeight = 20.0f,
+	                  .delaySeconds = 1.0f,
+	                  .script = k_Food},
+	                 {.type = MagicType::Food,
+	                  .point = k_Lake,
+	                  .handOffset = k_Lake,
+	                  .handHeight = 20.0f,
+	                  .delaySeconds = 1.0f,
+	                  .script = k_Food}},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddMiracleScenarios(std::vector<Scenario>& all)
@@ -544,4 +574,5 @@ void testbed_scenarios::AddMiracleScenarios(std::vector<Scenario>& all)
 	AddShieldForestScenarios(all);
 	AddBlastFireScenarios(all);
 	AddFirewaterScenarios(all);
+	AddScriptFood(all);
 }
