@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/GameRandom.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
@@ -388,6 +389,42 @@ TEST_F(Reactions, ACreatureWaitsItsTimeFromTheEndOfItsReaction)
 	// The memory of the kind comes up to the turn when the reaction ended, after the turn when the creature took it up
 	EXPECT_GT(memory.LastReacted(kind), takenUp);
 	EXPECT_EQ(memory.LastReacted(kind), _reactions.CurrentTurn());
+}
+
+TEST_F(Reactions, AVillagerWaitsItsTimeFromTheEndOfItsReaction)
+{
+	_reactions.Create(Miracle());
+	auto& registry = Locator::entitiesRegistry::value();
+	ASSERT_NE(registry.Get<const LivingReaction>(_villagers[0]).reaction, 0u);
+	uint32_t turns = 0;
+	while (registry.Get<const LivingReaction>(_villagers[0]).reaction != 0 && turns < 200)
+	{
+		_reactions.ProcessTurn();
+		++turns;
+	}
+	ASSERT_EQ(registry.Get<const LivingReaction>(_villagers[0]).reaction, 0u);
+	// The villager remembers the kind from the turn that the reaction stopped, not from the turn that it started
+	const auto& memory = registry.Get<const VillagerReactionMemory>(_villagers[0]).memory;
+	EXPECT_EQ(memory.LastReacted(static_cast<uint32_t>(Reaction::LookAtNiceSpell)), turns);
+}
+
+TEST_F(Reactions, AnAnimalWaitsItsTimeFromTheEndOfAReactionThatIsGone)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (int turn = 0; turn < 4; ++turn)
+	{
+		_reactions.ProcessTurn();
+	}
+	const auto animal = registry.Create();
+	registry.Assign<Transform>(animal, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Animal>(animal);
+	auto& state = registry.Assign<LivingReaction>(animal, LivingReaction {.reaction = 999, .type = Reaction::LookAtNiceSpell});
+	state.creatureMemory.Record(static_cast<uint32_t>(Reaction::LookAtNiceSpell), 1);
+	// The reaction does not exist, so the animal stops it on the next turn
+	_reactions.ProcessTurn();
+	const auto& after = registry.Get<const LivingReaction>(animal);
+	EXPECT_EQ(after.reaction, 0u);
+	EXPECT_EQ(after.creatureMemory.LastReacted(static_cast<uint32_t>(Reaction::LookAtNiceSpell)), 5u);
 }
 
 TEST_F(Reactions, AVillagerKeepsTheFireReactionItTookUpAndLetsGoOfItLeavingTheFire)
