@@ -134,6 +134,19 @@ struct WatchVerdict
 /// the older creature is dominant. If not, the creature that the game made first is dominant.
 [[nodiscard]] bool IsDominant(uint32_t age, uint32_t otherAge, bool madeFirst);
 
+/// What a creature body does now that keeps a creature from all reactions
+struct BodyState
+{
+	/// The life that the creature has. A creature with no life left takes no reaction.
+	float life {1.0f};
+	/// The hand holds the creature to stroke or slap it
+	bool heldByHand {false};
+	/// A teleport stone carries the creature: from the start of the walk to the stone to the end of the walk after it
+	bool teleporting {false};
+};
+/// Whether the body of a creature lets it take a reaction now
+[[nodiscard]] bool BodyFree(const BodyState& body);
+
 /// How urgent a kind is to a creature before its distance counts, for the kinds a creature weighs its own way; none for
 /// the kinds it weighs as everything alive does. A draw below a range is asked for only where the rule draws one.
 [[nodiscard]] std::optional<uint8_t> Priority(Reaction type, const Facts& facts,

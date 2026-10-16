@@ -35,6 +35,8 @@ uint32_t openblack::magic::KindPriority(Reaction type, uint32_t tablePriority, f
 		{
 			return 0;
 		}
+		// The game keeps this sum in one byte. The game's table gives 150 here, so the sum is at most 250 and the byte
+		// does not overflow.
 		if (fastDistance < k_FleeUrgencyUnits)
 		{
 			return tablePriority + static_cast<uint32_t>(100.0f * (k_FleeUrgencyUnits - fastDistance) / k_FleeUrgencyUnits);

@@ -21,6 +21,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
@@ -31,6 +32,7 @@
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
@@ -366,6 +368,28 @@ TEST_F(Reactions, AVillagerLettingGoOfAReactionKeepsWhatItDoesAndWaitsItsTimeFro
 	EXPECT_EQ(memory.LastReacted(static_cast<uint32_t>(Reaction::LookAtNiceSpell)), 5u);
 }
 
+TEST_F(Reactions, ACreatureWaitsItsTimeFromTheEndOfItsReaction)
+{
+	for (int turn = 0; turn < 5; ++turn)
+	{
+		_reactions.ProcessTurn();
+	}
+	_reactions.Create(Miracle());
+	auto& registry = Locator::entitiesRegistry::value();
+	ASSERT_NE(registry.Get<const LivingReaction>(_creature).reaction, 0u);
+	const auto takenUp = _reactions.CurrentTurn();
+	for (int turn = 0; turn < 100 && registry.Get<const LivingReaction>(_creature).reaction != 0; ++turn)
+	{
+		_reactions.ProcessTurn();
+	}
+	ASSERT_EQ(registry.Get<const LivingReaction>(_creature).reaction, 0u);
+	const auto& memory = registry.Get<const LivingReaction>(_creature).creatureMemory;
+	const auto kind = static_cast<uint32_t>(Reaction::LookAtNiceSpell);
+	// The memory of the kind comes up to the turn when the reaction ended, after the turn when the creature took it up
+	EXPECT_GT(memory.LastReacted(kind), takenUp);
+	EXPECT_EQ(memory.LastReacted(kind), _reactions.CurrentTurn());
+}
+
 TEST_F(Reactions, AVillagerKeepsTheFireReactionItTookUpAndLetsGoOfItLeavingTheFire)
 {
 	// The fire's reaction is spread as soon as it is made, before the fire knows it: the villager keeps the one it took
@@ -694,6 +718,25 @@ TEST_F(Reactions, ACreatureToldToTakeNoNoticeOrBusyWithAnOrderIsNotImpressed)
 	_reactions.Create(Miracle());
 	EXPECT_FALSE(impressed());
 	registry.Remove<CreatureLeash>(_creature);
+	_reactions.Create(Miracle());
+	EXPECT_TRUE(impressed());
+}
+
+TEST_F(Reactions, ACreatureWithNoLifeOrCarriedByATeleportIsNotImpressed)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto impressed = [&]() {
+		const auto* impression = registry.TryGet<const CreatureImpression>(_creature);
+		return impression != nullptr && impression->byOwnPlayer > 0.0f;
+	};
+	registry.Assign<CreatureNeeds>(_creature).needs.life = 0.0f;
+	_reactions.Create(Miracle());
+	EXPECT_FALSE(impressed());
+	registry.Remove<CreatureNeeds>(_creature);
+	registry.Assign<TeleportTraveller>(_creature);
+	_reactions.Create(Miracle());
+	EXPECT_FALSE(impressed());
+	registry.Remove<TeleportTraveller>(_creature);
 	_reactions.Create(Miracle());
 	EXPECT_TRUE(impressed());
 }
