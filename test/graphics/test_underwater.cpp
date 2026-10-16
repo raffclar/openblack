@@ -304,6 +304,8 @@ TEST(Seabed, TheReefStaysUnderTheLowestTide)
 		const bool coral = plant.kind == seabed::ReefPlant::Kind::Coral;
 		EXPECT_GE(under, coral ? seabed::k_CoralTopUnderTide : seabed::k_PlantTopUnderTide);
 		EXPECT_LE(under, coral ? seabed::k_CoralBottomUnderTide : seabed::k_PlantBottomUnderTide);
+		// The top of each coral and plant stays under the water at the lowest tide
+		EXPECT_LE(plant.scale, under - seabed::k_ReefClearance + 1e-4f);
 	}
 	EXPECT_LE(seabed::PlaceReef(bed, underwater::k_LowestTide, 3, 4).size(), 7u);
 }

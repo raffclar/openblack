@@ -404,9 +404,12 @@ void main()
 				}
 			}
 			// The water takes the light out on its way down to the scene and back up to the surface, the red first
+			// Where the original game shows its sea, the water is never thinner than a layer of the sea's colour, so
+			// that the shallows a creature walks in look like water and not like wet ground
+			float originalLand = OriginalLandAt(surfacePoint.xz);
 			float down = max(u_uwParams.z - below.y, 0.0f);
 			float path = min(length(below - surfacePoint), 400.0f);
-			vec3 left = UwTransmittance(path + down * 0.6f);
+			vec3 left = UwTransmittance(max(path + down * 0.6f, (1.0f - originalLand) * UW_SHALLOWS_TINT));
 			vec3 water = through * left + scatter * (1.0f - left);
 
 			// The reflection: of the scene where the screen has it, else of the sky
@@ -473,9 +476,28 @@ void main()
 				colour = mix(colour, min(foamColour, vec3_splat(1.0f)), foam * 0.85f);
 			}
 			// Where the original game shows its land over its sea, the land shows here too, as much as there
-			float originalLand = OriginalLandAt(surfacePoint.xz);
 			colour = u_uwFlags2.w > 0.5f ? vec3(1.0f, 0.0f, 1.0f) : colour;
 			colour = mix(colour, scene, originalLand);
+		}
+		else if (!sky && world.y < UW_FILM_TOP && (world.y > -0.05f || world.y < u_uwParams.z + 0.05f) &&
+		         abs(texture2DLod(s_sceneColour, sampleUv, 0.0f).a - UW_LAND_MARK) < 0.5f / 255.0f)
+		{
+			// The land over the water, where the original game shows its sea through the land's coast alpha. The
+			// original sea shows there as a thin layer of water on the land, so that the new water shows wherever the
+			// original sea shows. Things on the land do not get this layer. The sea bed that a low tide shows (under
+			// the usual sea level and over the tide) does not get it either, so that the wet sand shows. The sea bed
+			// that the trough of a wave shows gets it.
+			float originalLand = OriginalLandAt(world.xz);
+			if (originalLand < 1.0f)
+			{
+				vec3 left = UwTransmittance((1.0f - originalLand) * UW_SHALLOWS_TINT);
+				vec3 water = scene * left + scatter * (1.0f - left);
+				float facing = clamp(-direction.y, 0.0f, 1.0f);
+				float fresnel = 0.02f + 0.98f * pow(max(1.0f - facing, 0.0f), 5.0f);
+				water = mix(water, SkyIn(reflect(direction, vec3(0.0f, 1.0f, 0.0f))), fresnel);
+				water = u_uwFlags2.w > 0.5f ? vec3(1.0f, 0.0f, 1.0f) : water;
+				colour = mix(water, scene, originalLand);
+			}
 		}
 	}
 	// The surface that cuts the view, as the camera goes through it: a thin dark line with water running down it

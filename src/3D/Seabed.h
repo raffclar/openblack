@@ -152,6 +152,8 @@ inline constexpr float k_CoralBottomUnderTide = 12.0f;
 /// The plants grow from a little shallower to a little deeper than the coral
 inline constexpr float k_PlantTopUnderTide = 1.0f;
 inline constexpr float k_PlantBottomUnderTide = 20.0f;
+/// The least water over the top of a coral or a plant at the lowest tide, in units: no reef shows over the water
+inline constexpr float k_ReefClearance = 0.5f;
 /// The steepest sea bed that coral and plants grow on, in height for each unit across
 inline constexpr float k_ReefSteepest = 0.4f;
 

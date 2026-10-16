@@ -653,7 +653,7 @@ std::vector<seabed::ReefPlant> seabed::PlaceReef(const Seabed& seabed, float low
 				const float variant = std::floor(Hash(ix * 23 + 1, iz * 29 + 4) * 9.0f);
 				plants.push_back({.kind = ReefPlant::Kind::Coral,
 				                  .position = foot,
-				                  .scale = 1.2f + 2.2f * Hash(ix * 31 + 6, iz * 7 + 9),
+				                  .scale = std::min(1.2f + 2.2f * Hash(ix * 31 + 6, iz * 7 + 9), underTide - k_ReefClearance),
 				                  .yaw = yaw,
 				                  .variant = std::min(variant, 8.0f),
 				                  .tint = tint});
@@ -663,12 +663,14 @@ std::vector<seabed::ReefPlant> seabed::PlaceReef(const Seabed& seabed, float low
 			const float meadow = ValueNoise(at.x / 10.0f + 50.0f, at.y / 10.0f, 10.0f);
 			if (weed < mostPlants && meadow > 0.58f && roll < (meadow - 0.58f) * 2.5f)
 			{
-				plants.push_back({.kind = ReefPlant::Kind::Seaweed,
-				                  .position = foot,
-				                  .scale = 1.5f + 3.0f * Hash(ix * 37 + 8, iz * 13 + 1) * std::min(underTide / 6.0f, 1.0f),
-				                  .yaw = yaw,
-				                  .variant = Hash(ix * 41 + 3, iz * 19 + 5),
-				                  .tint = tint});
+				plants.push_back(
+				    {.kind = ReefPlant::Kind::Seaweed,
+				     .position = foot,
+				     .scale = std::min(1.5f + 3.0f * Hash(ix * 37 + 8, iz * 13 + 1) * std::min(underTide / 6.0f, 1.0f),
+				                       underTide - k_ReefClearance),
+				     .yaw = yaw,
+				     .variant = Hash(ix * 41 + 3, iz * 19 + 5),
+				     .tint = tint});
 				++weed;
 			}
 		}
