@@ -286,6 +286,10 @@ public:
 	/// frame shows none of it, and nothing that later frames draw changes. Call it behind the loading screen, before
 	/// the draws of the loading frame, so that the first frames of the game do not make them.
 	virtual void WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept = 0;
+	/// Makes the next frame wait until the GPU did all the work that the renderer sent before it. Then the renderer
+	/// releases all the memory that it kept for that work. Without this, some backends keep that memory for hundreds of
+	/// command lists and then release all of it in one frame of the game. Call it behind the loading screen.
+	virtual void ReleaseGpuWorkMemory() noexcept = 0;
 	/// Asks for the frame being made to be written to a PNG once drawn; the file appears whole once written
 	virtual void RequestScreenshot(const std::filesystem::path& filepath) noexcept = 0;
 	/// Why a picture asked for was given up, once; none while it may still come
