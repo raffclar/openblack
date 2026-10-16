@@ -320,7 +320,10 @@ void FightAutopilot::Frame(uint64_t frame)
 				scripted = ScriptStage(*fight, entt::to_integral(*own));
 			}
 		}
-		const auto next = scripted.has_value() ? std::max(*scripted, _stage) : Advance(_stage, seen);
+		// When the script reads the fight, its stage replaces a stage that the autopilot saw too early. The stage that
+		// the caller gave at the start is the lowest stage.
+		const auto first = _settings.stage.value_or(LessonStage::Hit);
+		const auto next = scripted.has_value() ? std::max(*scripted, first) : Advance(_stage, seen);
 		if (next != _stage)
 		{
 			Log("stage", std::format("{} -> {}", fight_autopilot::Name(_stage), fight_autopilot::Name(next)));
