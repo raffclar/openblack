@@ -68,9 +68,14 @@ public:
 	void Update(float deltaSeconds, ecs::systems::TattooEditorSystemInterface& editor,
 	            std::span<const std::array<uint8_t, 3>> palette, bool leftButtonDown);
 
-	/// The dialog, and the marker on the place under the pointer while the mouse button is down, at a point of the
-	/// dialog space
-	void Draw(const DialogPainter& painter, std::optional<glm::ivec2> marker, uint32_t milliseconds) const;
+	/// The dialog, under the creature it shows
+	void Draw(const DialogPainter& painter, uint32_t milliseconds) const;
+	/// What goes over the creature: the marker on the place under the pointer while the mouse button is down, at a
+	/// point of the dialog space, then each symbol being dragged again, in its place in the highlight colour and at the
+	/// pointer
+	void DrawOverCreature(const DialogPainter& painter, std::optional<glm::ivec2> marker) const;
+	/// Whether it has a frame of its own, as from the main menu
+	[[nodiscard]] bool IsFramed() const noexcept { return _framed; }
 
 	/// The symbols' colour
 	[[nodiscard]] glm::u8vec4 GetTint() const noexcept { return _tint; }

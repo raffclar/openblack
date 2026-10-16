@@ -61,6 +61,12 @@ enum class RenderPass : uint8_t
 	/// The advisors near the screen, drawn over the whole scene with its depth cleared
 	Advisors,
 	Interface,
+	/// The creature that the main menu's tattoo editor shows over its dialog, seen by the editor's own camera, with the
+	/// depth cleared
+	MenuCreature,
+	/// What the tattoo editor draws over its creature: the marker on the place under the pointer and the symbols being
+	/// dragged
+	MenuCreatureOverlay,
 	/// The creatures that the interface shows over itself, each player's creature on the statistics box's creature tab,
 	/// with the depth cleared
 	InterfaceCreatures,
@@ -96,6 +102,8 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Cinema Bars Pass",            //
     "Advisors Pass",               //
     "Interface Pass",              //
+    "Menu Creature Pass",          //
+    "Menu Creature Overlay Pass",  //
     "Interface Creatures Pass",    //
     "ImGui Pass",                  //
     "Cursor Pass",                 //

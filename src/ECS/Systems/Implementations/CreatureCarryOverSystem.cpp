@@ -65,6 +65,16 @@ CreatureCarryOverSystem::CreatureCarryOverSystem(std::optional<std::filesystem::
 {
 }
 
+std::optional<std::filesystem::path> CreatureCarryOverSystem::ProfilePhysique() const
+{
+	if (!_folder.has_value() || !_profileFile)
+	{
+		return std::nullopt;
+	}
+	const auto file = _profileFile();
+	return file.has_value() ? std::optional(creature_carry_over::KeptFilesIn(*_folder, *file).physique) : std::nullopt;
+}
+
 std::optional<creature_carry_over::KeptFiles> CreatureCarryOverSystem::Files() const
 {
 	if (!_folder.has_value() || !_profileFile)

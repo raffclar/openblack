@@ -35,9 +35,19 @@ public:
 
 	/// Opens the editor on a creature, the player's own, with the view the camera has of it
 	virtual void Open(entt::entity creature, const creature_tattoo_editor::Orbit& view) = 0;
+	/// Opens the editor from the main menu on a creature of its own that it shows, which wears the tattoos as they are
+	/// edited. The tattoos start as the player's creature has them, or with none when the player has no creature, and
+	/// the player's creature wears them too.
+	virtual void OpenFromMenu(std::optional<entt::entity> playerCreature, entt::entity shown,
+	                          const creature_tattoo_editor::Orbit& view) = 0;
+	/// Whether the editor is open from the main menu
+	[[nodiscard]] virtual bool IsFromMenu() const = 0;
+	/// The creature the editor shows from the main menu
+	[[nodiscard]] virtual std::optional<entt::entity> GetShown() const = 0;
 	/// Closes it as it is, as when the camera leaves the creature
 	virtual void Close() = 0;
 	[[nodiscard]] virtual bool IsOpen() const = 0;
+	/// The player's creature, which wears the tattoos; none from the main menu when the player has no creature
 	[[nodiscard]] virtual std::optional<entt::entity> GetCreature() const = 0;
 	/// The view of the creature as the editor turns it, for the camera to take while it is open
 	[[nodiscard]] virtual const creature_tattoo_editor::Orbit& GetView() const = 0;

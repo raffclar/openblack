@@ -542,6 +542,20 @@ void GameMenu::ShowPlayer(std::u16string_view creatureName, int symbol, const pl
 	_page = page;
 }
 
+void GameMenu::SetCovered(bool covered)
+{
+	if (_covered == covered)
+	{
+		return;
+	}
+	_covered = covered;
+	CurrentDialog().Reset();
+	if (_open)
+	{
+		_fade.SetDestination(covered ? 0.0f : 1.0f, covered ? k_FadeOutSeconds : k_FadeInSeconds);
+	}
+}
+
 void GameMenu::SetTattooAvailable(bool available)
 {
 	_tattooAvailable = available;
@@ -885,6 +899,7 @@ void GameMenu::Close()
 		KeepPlayerEdits();
 	}
 	_open = false;
+	_covered = false;
 	_question.reset();
 	CurrentDialog().Reset();
 	_fade.SetDestination(0.0f, k_FadeOutSeconds);
@@ -898,7 +913,7 @@ void GameMenu::Update(float deltaSeconds)
 	{
 		_question->fade.Update(deltaSeconds);
 	}
-	if (_open)
+	if (_open && !_covered)
 	{
 		CurrentDialog().Update(_question ? 0.0f : deltaSeconds);
 		if (_question)
@@ -1020,7 +1035,7 @@ void GameMenu::Draw(const DialogPainter& painter) const
 		return;
 	}
 	painter.SetAlpha(fade);
-	CurrentDialog().Draw(painter, _open && !_question);
+	CurrentDialog().Draw(painter, _open && !_question && !_covered);
 	if (_question)
 	{
 		// The question: an opaque box over the menu, fading in
