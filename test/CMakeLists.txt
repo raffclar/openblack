@@ -1061,4 +1061,6 @@ openblack_setup_and_add_test(
   test_creature_hold_pose test_creature_hold_pose.cpp
 )
 openblack_setup_and_add_test(test_creature_steal test_creature_steal.cpp)
-openblack_setup_and_add_test(test_creature_town_theft test_creature_town_theft.cpp)
+openblack_setup_and_add_test(
+  test_creature_town_theft test_creature_town_theft.cpp
+)
