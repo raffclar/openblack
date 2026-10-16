@@ -318,8 +318,8 @@ private:
 /// whoever asked for it: a block or a step towards defence, a blow or the special move towards attack; a miracle leaves
 /// it be. See LearnsFromMove for the creatures that learn.
 [[nodiscard]] float LearnTendency(float tendency, Move::Kind kind);
-/// Whether a move teaches a creature to lean: a step teaches every creature, the other moves teach only the human
-/// player's creature
+/// Whether a move from the queue teaches a creature to lean: a step teaches every creature, the other moves teach only
+/// the human player's creature. The moves that the computer chooses do not go into the queue, thus they teach nothing.
 [[nodiscard]] bool LearnsFromMove(Move::Kind kind, bool humanPlayers);
 /// A creature's first fight starts it leaning against its alignment: evil creatures attack, good ones defend
 [[nodiscard]] float FirstTendency(float alignment);
