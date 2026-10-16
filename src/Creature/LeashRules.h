@@ -56,9 +56,11 @@ struct Lengths
 
 /// The desire a leash makes dominant every turn the creature wears it, and whenever the player picks it while it is on:
 /// anger on the aggression leash and compassion on the compassion leash; nothing on the learning leash, which instead
-/// lets go of a desire made dominant before. Taking the leash off doesn't end it: the other desires stay held down
-/// until their time is up.
+/// lets go of a desire made dominant before.
 [[nodiscard]] std::optional<creature_desires::Desire> ForcedDesireFor(LeashType type);
+/// Whether taking the leash off lets go of the desire made dominant: yes, unless the leash its player has chosen is the
+/// learning leash. The other desires are then free again at once.
+[[nodiscard]] bool TakingOffEndsDominantDesire(LeashType chosen);
 /// How long the leash's desire holds the creature's other desires (but its bodily needs) down, in seconds
 constexpr float k_ForcedDesireSeconds = 36000.0f;
 /// How long a creature tied to a village it wants to impress holds its other desires down, in seconds

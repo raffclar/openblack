@@ -1043,3 +1043,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_clear_way test_creature_clear_way.cpp
 )
+openblack_setup_and_add_test(
+  test_script_creature_natives test_script_creature_natives.cpp
+)

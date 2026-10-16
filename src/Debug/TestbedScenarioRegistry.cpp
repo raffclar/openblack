@@ -4086,8 +4086,8 @@ void AddLeash(std::vector<Scenario>& all)
 	                   "while each, and the leash is taken off. Move the hand about to lead it.",
 	    .expected = "A rope runs from the hand to its collar, coloured for each leash; on the aggression leash anger is "
 	                "what it wants most, on the compassion leash kindness and making friends, and on the learning leash "
-	                "it watches the player. Taken off, the last of these moods stays until the learning leash is picked "
-	                "while it is worn.",
+	                "it watches the player. Taken off the compassion leash, that mood ends at once and its other wants "
+	                "come back; taken off the learning leash, nothing it wants changes.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 40.0f})},
 	    .commands = {Leash(0, LeashType::Rope, 1.0f), Leash(0, LeashType::Evil, 10.0f), Leash(0, LeashType::Good, 10.0f),

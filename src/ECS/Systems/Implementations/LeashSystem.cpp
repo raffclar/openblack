@@ -576,6 +576,7 @@ bool LeashSystem::PutOnFor(PlayerNames player, entt::entity creature, LeashType 
 		// Assigned rather than emplaced: clang can't yet see that the nested type is default constructible
 		leashes->worn = CreatureLeash::Worn {};
 		leashes->worn->holder = player;
+		leashes->worn->works = leashes->leashWorks;
 	}
 	leashes->worn->type = type;
 	leashes->selected = type;
@@ -600,6 +601,11 @@ void LeashSystem::TakeOff(entt::entity creature)
 	{
 		mind->leash.learningInHand = false;
 		mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
+	}
+	// Off any leash but the learning leash, the desire it made dominant lets go
+	if (leash::TakingOffEndsDominantDesire(leashes->selected) && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().EndDominantDesire(creature);
 	}
 }
 
@@ -785,10 +791,18 @@ void LeashSystem::UntieToHand(entt::entity creature)
 
 void LeashSystem::SetWorks(entt::entity creature, bool works)
 {
+	// The switch stays while no leash is on, for the next leash put on
 	auto& registry = Locator::entitiesRegistry::value();
-	if (auto* leashes = registry.TryGet<CreatureLeash>(creature); leashes != nullptr && leashes->worn.has_value())
+	if (!registry.Valid(creature) || registry.TryGet<const Creature>(creature) == nullptr)
 	{
-		leashes->worn->works = works;
+		return;
+	}
+	auto& leashes = registry.TryGet<CreatureLeash>(creature) != nullptr ? registry.Get<CreatureLeash>(creature)
+	                                                                    : registry.Assign<CreatureLeash>(creature);
+	leashes.leashWorks = works;
+	if (leashes.worn.has_value())
+	{
+		leashes.worn->works = works;
 	}
 }
 

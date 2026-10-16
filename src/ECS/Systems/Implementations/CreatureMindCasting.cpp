@@ -1140,10 +1140,14 @@ void CreatureMindSystem::SetKnowsAction(entt::entity creature, CreatureActionLea
 		sightings = creature_watching::TaughtSightings(
 		    tables->miracles[action].timesToSee, creature_mind_tables::MiracleMultiplier(creature::InfoRow(body->species)));
 	}
-	// TODO(script-natives): a newly known skill or miracle shows the player the creature's lesson ("has learnt"), through
-	// the creature's help scripts, which openblack doesn't have yet
-	[[maybe_unused]] const bool newlyKnown =
-	    creature_watching::SetKnown(mind->learnt->knowledge, list, action, knows, sightings);
+	const bool newlyKnown = creature_watching::SetKnown(mind->learnt->knowledge, list, action, knows, sightings);
+	// A skill or miracle it did not know before shows the player the creature's lesson
+	if (knows && newlyKnown && Locator::creatureHelpSystem::has_value())
+	{
+		const auto kind = list == creature_watching::KnownList::Miracle ? creature_help::Kind::LessonMagicAction
+		                                                                : creature_help::Kind::LessonNormalAction;
+		Locator::creatureHelpSystem::value().Raise(creature, {.kind = kind, .parameter = action});
+	}
 }
 
 bool CreatureMindSystem::TellCast(entt::entity creature, MagicType type, entt::entity target)
