@@ -22,6 +22,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/HearingRange.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -72,6 +73,20 @@ void LetGo(SoundTag& tag)
 		Locator::audio::value().ReleaseEmitterLoop(tag.emitter);
 	}
 	tag.emitter = entt::null;
+}
+
+/// The point that an object's sounds come from. An object in a hand sounds from the hand, because the hand moves the
+/// object's map position to the hand each turn. Other objects sound from their position.
+glm::vec3 SoundPoint(const ecs::Registry& registry, entt::entity object, const Transform& transform)
+{
+	if (const auto* inHand = registry.TryGet<const InHand>(object); inHand != nullptr && registry.Valid(inHand->hand))
+	{
+		if (const auto* hand = registry.TryGet<const Transform>(inHand->hand); hand != nullptr)
+		{
+			return hand->position;
+		}
+	}
+	return transform.position;
 }
 
 /// Whether a point is within a sound's reach of the camera, a reach of none meaning anywhere
@@ -148,7 +163,7 @@ void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 			}
 			return;
 		}
-		const auto position = transform->position + tag.offset;
+		const auto position = SoundPoint(registry, source, *transform) + tag.offset;
 		const auto reach = sounds.Handle(tag.sound)->maxDistance;
 		if (tag.point)
 		{
@@ -173,7 +188,14 @@ void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 			}
 			return;
 		}
-		if (!tag.active || IsPlaying(tag) || !WithinReach(reach, position, camera) || !Heard(tag.sound))
+		// The sound of an object follows the object: each turn its emitter moves to where the object is now. The audio
+		// turn after this stops the sound if the new place is out of its range.
+		if (tag.active && IsPlaying(tag))
+		{
+			audio.SetEmitterPosition(tag.emitter, position);
+			return;
+		}
+		if (!tag.active || !WithinReach(reach, position, camera) || !Heard(tag.sound))
 		{
 			return;
 		}

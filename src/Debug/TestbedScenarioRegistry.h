@@ -844,6 +844,9 @@ struct Command
 		/// A script attaches a sound to the creature, as ATTACH_SOUND_TAG does: the value gives the sound. Each start
 		/// plays it one time, and the next turn starts it again when it is finished.
 		AttachScriptSound,
+		/// A script attaches a sound to the scenario's object, as ATTACH_SOUND_TAG does: the value gives the sound.
+		/// Needs no creature.
+		AttachObjectScriptSound,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
