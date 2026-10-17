@@ -45,6 +45,7 @@ class GameParticleWorld final: public particles::ParticleWorldInterface
 {
 public:
 	[[nodiscard]] float LandHeight(glm::vec2 xz) const override;
+	[[nodiscard]] float LandHeightAtMap(int32_t x, int32_t z) const override;
 	[[nodiscard]] uint32_t PlayerColour(int player) const override;
 	[[nodiscard]] glm::vec3 CameraRight() const override;
 	[[nodiscard]] glm::vec3 CameraUp() const override;

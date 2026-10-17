@@ -260,11 +260,12 @@ TEST(CreatureEmoteAgendas, SleepingOnTheSpotWalksToTheClearPlaceWithoutFacingDow
 
 TEST(CreatureEmoteAgendas, SittingByAThingSitsTenToFifteenSeconds)
 {
-	const auto agenda = SitDownBy(3, {1.0f, 2.0f}, 4.0f, Draws({0xFFFE}));
+	// The extra time is a draw of the game from 0 to 5 seconds, not cut to whole seconds
+	const auto agenda = SitDownBy(3, {1.0f, 2.0f}, 4.0f, 4.5f);
 	ASSERT_EQ(agenda.size(), 4u);
 	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::TurnToFaceObject);
 	EXPECT_EQ(agenda[2].movement.kind, Movement::Kind::FaceDownSlope);
-	EXPECT_NEAR(agenda[3].seconds, 15.0f, 1e-3f);
+	EXPECT_EQ(agenda[3].seconds, 14.5f);
 	EXPECT_EQ(agenda[3].sequence[1], creature_layers::animations::k_Sit);
 }
 

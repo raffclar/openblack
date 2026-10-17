@@ -27,6 +27,7 @@
 
 #include "3D/CreatureBody.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureGiving.h"
@@ -566,7 +567,6 @@ bool CreatureMindSystem::StartTry(entt::entity creature, MagicType type, std::op
 	{
 		return false;
 	}
-	Locator::magicSystem::value().ReleaseCreatureCast(creature);
 	// A try short of all but one of the sightings it needs fizzles, and counts as one more
 	const auto magicType = static_cast<uint32_t>(type);
 	const auto sightings = SightingsOf(*mind, *tables, body->species, magicType);
@@ -660,10 +660,12 @@ bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt:
 
 bool CreatureMindSystem::TryMiracleAt(entt::entity creature, MagicType type, glm::vec3 place)
 {
+	// A try at a place that fizzles keeps the miracle in the hand. Only a try that does not fizzle lets go of it.
 	if (!StartTry(creature, type, std::nullopt))
 	{
 		return false;
 	}
+	Locator::magicSystem::value().ReleaseCreatureCast(creature);
 	// It is frustrated only when it does not have the energy for the miracle, or the miracle cannot go to the place
 	if (Locator::magicSystem::value().CastByCreatureAt(creature, type, place))
 	{
@@ -774,14 +776,17 @@ bool CreatureMindSystem::CastGivenGlobe(entt::entity creature, CreatureMindState
 void CreatureMindSystem::ShowFizzle(entt::entity creature, CreatureMindState& mind)
 {
 	auto* casting = Entities().TryGet<CreatureCasting>(creature);
-	if (casting == nullptr || !casting->fizzle.has_value())
+	if (casting == nullptr || !casting->fizzle.has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
 	const auto fizzle = *casting->fizzle;
 	casting->fizzle.reset();
 	// Embarrassed, then one time in two sad as well, and sadder for it
-	auto reaction = creature_mind::ReactToFizzle([this](uint32_t range) { return Random(range); }, Chance());
+	// The reaction draws from the random numbers of the game
+	auto& gameRandom = Locator::gameRandom::value();
+	auto reaction = creature_mind::ReactToFizzle([&gameRandom](uint32_t range) { return gameRandom.GameRand(range); },
+	                                             [&gameRandom](float most) { return gameRandom.GameFloatRand(most); });
 	if (reaction.sadness.has_value() && mind.desires.has_value())
 	{
 		creature_desires::ChangeSource(*mind.desires, creature_desires::sources::k_Sadness, *reaction.sadness);

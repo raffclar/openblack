@@ -308,13 +308,14 @@ bool creature_mind::CanCastToImpress(std::span<const ImpressiveMiracleState> mir
 	});
 }
 
-creature_mind::FizzleReaction creature_mind::ReactToFizzle(const Random& random, float chance)
+creature_mind::FizzleReaction creature_mind::ReactToFizzle(const Random& random, const FizzleFloatRandom& floatRandom)
 {
 	FizzleReaction reaction {.agenda = {{.kind = Step::Kind::Action, .animation = k_Embarrassed}}};
+	// Only a sad creature draws the second number
 	if (random(2) == 0)
 	{
 		reaction.agenda.push_back({.kind = Step::Kind::Action, .animation = animations::k_Sad});
-		reaction.sadness = chance * k_SadnessFromFizzle;
+		reaction.sadness = floatRandom(k_SadnessFromFizzle);
 	}
 	return reaction;
 }

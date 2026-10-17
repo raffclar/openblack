@@ -8,10 +8,13 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
+#include <cstdlib>
 
 #include <memory>
 #include <numbers>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <ParticleFile.h>
@@ -38,6 +41,12 @@ class FakeWorld final: public ParticleWorldInterface
 {
 public:
 	[[nodiscard]] float LandHeight(glm::vec2 /*xz*/) const override { return 0.0f; }
+	/// A hill near the map's corner, 50 m high within 20 m of it, and flat land elsewhere
+	[[nodiscard]] float LandHeightAtMap(int32_t x, int32_t z) const override
+	{
+		constexpr int32_t k_HillFixed = 20 * 6553;
+		return std::abs(x) < k_HillFixed && std::abs(z) < k_HillFixed ? 50.0f : 0.0f;
+	}
 	[[nodiscard]] uint32_t PlayerColour(int /*player*/) const override { return 0xFF0000u; }
 	[[nodiscard]] glm::vec3 CameraRight() const override { return {1.0f, 0.0f, 0.0f}; }
 	[[nodiscard]] glm::vec3 CameraUp() const override { return {0.0f, 1.0f, 0.0f}; }
@@ -106,9 +115,10 @@ public:
 	int kind {1};
 };
 
-std::string Header()
+std::string Header(std::string_view hierarchies = "0 0 0 0 0 0")
 {
-	return "BEGINPROPERTIES\nPROPERTY DeleteOnCloseDown BOOL 0\nPROPERTY Hierarchies ARRAY SIZE 6 0 0 0 0 0 0\n"
+	return "BEGINPROPERTIES\nPROPERTY DeleteOnCloseDown BOOL 0\nPROPERTY Hierarchies ARRAY SIZE 6 " + std::string(hierarchies) +
+	       "\n"
 	       "PROPERTY InitiallyCreated ARRAY SIZE 6 1 0 0 0 0 0\nPROPERTY MaxSpellAge FLOAT -1\nENDPROPERTIES\n";
 }
 
@@ -144,7 +154,7 @@ class CreatureSpellParticles: public ::testing::Test
 protected:
 	std::unique_ptr<Effect> Make(const std::string& body)
 	{
-		auto file = psys::ParticleFile::Parse(Header() + body);
+		auto file = psys::ParticleFile::Parse(header + body);
 		EXPECT_TRUE(file.has_value());
 		auto effect = std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
 		                                       EffectServices {classes, world, random, noise}, world.body.origin, 1.0f, false);
@@ -166,6 +176,7 @@ protected:
 	}
 
 	static constexpr glm::vec3 k_Hand {60.0f, 40.0f, 60.0f};
+	std::string header {Header()};
 	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
 	FakeWorld world;
 	FakeRandom random;
@@ -217,6 +228,10 @@ TEST(CreatureSpellMaths, TheFliesCircleTheHeadHalfAsWideAgainAsTheEyes)
 	const auto quarter = maths::ItchOrbit(right, left, std::numbers::pi_v<float> / 2.0f, 1.0f);
 	EXPECT_NEAR(glm::length(quarter - glm::vec3(0.0f, 10.0f, 0.0f)), 1.5f, k_Epsilon);
 	EXPECT_NEAR(quarter.y, 10.0f, k_Epsilon);
+	// The angle wraps at the full turn of double precision: after 100 radians the flies are where the game has them
+	const auto later = maths::ItchOrbit(right, left, 100.0f, 1.0f);
+	EXPECT_EQ(later.x, -1.2934784889221191f);
+	EXPECT_EQ(later.z, -0.7595484852790833f);
 }
 
 TEST(CreatureRigMirror, TheMirrorTableEndsTheFile)
@@ -236,17 +251,20 @@ TEST(CreatureRigMirror, TheMirrorTableEndsTheFile)
 	EXPECT_EQ(*rig.MirrorBones(3), (std::vector<uint32_t> {0, 1, 2}));
 }
 
-TEST_F(CreatureSpellParticles, AnAtomStaysAtTheCreaturesFeetAndHumsWithTheCastingSound)
+TEST_F(CreatureSpellParticles, AnAtomStartsAtTheCreaturesFeetAndHumsWithTheCastingSound)
 {
 	auto effect = Make(First("0") + k_Point);
 	effect->Step(k_Step);
 	ASSERT_EQ(world.sounds.size(), 2u);
 	EXPECT_EQ(world.sounds[0]->sound.action.sound, "SOUND_SPELL_CREATURE_WHISPS");
 	EXPECT_EQ(world.sounds[1]->sound.action.sound, "SOUND_SPELL_CREATURE_SPELL_CAST");
+	ASSERT_EQ(effect->AtomCount(), 1u);
+	const float start = world.sounds[0]->atom->position.x;
+	// The atom does not move with the creature
 	world.body.origin = {110.0f, 0.0f, 100.0f};
 	effect->Step(k_Step);
 	ASSERT_EQ(effect->AtomCount(), 1u);
-	EXPECT_NEAR(world.sounds[0]->atom->position.x, 110.0f, k_Epsilon);
+	EXPECT_EQ(world.sounds[0]->atom->position.x, start);
 }
 
 TEST_F(CreatureSpellParticles, ACreaturesCastSoundsCastByACreatureAndAScriptsMakesNone)
@@ -345,6 +363,41 @@ TEST_F(CreatureSpellParticles, HeartsRiseFromAllOverANiceCreatureFourASecond)
 		effect->Step(k_Step);
 	}
 	EXPECT_LE(effect->AtomCount() - 1, 20u);
+}
+
+TEST_F(CreatureSpellParticles, HeartsWithNoneToMakeMakeNone)
+{
+	const auto hearts = Object("UR_CreatureSpellCompassion", "Hearts",
+	                           "PROPERTY DieAge FLOAT 5\nPROPERTY Group INTEGER 4\nPROPERTY InitSpeed FLOAT 6\n"
+	                           "PROPERTY MaxAtoms INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Point\n");
+	auto effect = Make(First("1 4") + hearts + k_Point);
+	for (int i = 0; i < 10; ++i)
+	{
+		effect->Step(k_Step);
+	}
+	EXPECT_EQ(effect->AtomCount(), 1u);
+}
+
+// The land test of the steam reads the position of each atom in the space of its parent atom as a place in the world.
+// The creature is far from the hill, so only that reading lifts the steam onto the hill.
+TEST_F(CreatureSpellParticles, TheSteamTestsTheLandAtItsPositionInTheEffect)
+{
+	header = Header("1 0 0 0 0 0");
+	const auto steam =
+	    Object("UR_CreatureSpellFreeze", "Steam",
+	           "PROPERTY DieAge FLOAT 5\nPROPERTY Group INTEGER 4\nPROPERTY InitSpeed FLOAT 1\n"
+	           "PROPERTY MaxAtoms INTEGER 20\nPROPERTY MinHeight FLOAT 1\nPROPERTY PCreator PERSIS_PNTR Point\n");
+	auto effect = Make(First("1 4") + steam + k_Point);
+	for (int i = 0; i < 10; ++i)
+	{
+		effect->Step(k_Step);
+	}
+	const auto atoms = Atoms(*effect, Creator::Kind::Sprite);
+	ASSERT_FALSE(atoms.empty());
+	for (const auto& atom : atoms)
+	{
+		EXPECT_GE(atom.position.y, 50.0f);
+	}
 }
 
 TEST(CreatureSpellMaths, ACreaturesCastGivesUpOnceItSwingsTooFar)

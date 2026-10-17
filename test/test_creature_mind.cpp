@@ -420,16 +420,17 @@ TEST(CreatureIdleMind, EachFacePulledMovesTheVarietyOn)
 {
 	creature_mind::IdleMind mind;
 	const creature_mind::Senses senses {};
-	const auto first = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(3));
+	// The variety moves on by the draw from the random numbers of the game (the second source)
+	const auto first = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(0), Always(3));
 	ASSERT_TRUE(first.has_value());
 	EXPECT_EQ(first->face, creature_face::Face::Scared);
 	EXPECT_EQ(mind.faceVariety, 3u);
-	const auto second = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(3));
+	const auto second = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(0), Always(3));
 	ASSERT_TRUE(second.has_value());
 	EXPECT_EQ(second->face, creature_face::Face::Ooh);
 	EXPECT_EQ(mind.faceVariety, 6u);
 	// A reason that pulls no face leaves it be
-	EXPECT_FALSE(creature_mind::PullFace(mind, creature_face::Cue::None, senses, Always(3)).has_value());
+	EXPECT_FALSE(creature_mind::PullFace(mind, creature_face::Cue::None, senses, Always(0), Always(3)).has_value());
 	EXPECT_EQ(mind.faceVariety, 6u);
 }
 

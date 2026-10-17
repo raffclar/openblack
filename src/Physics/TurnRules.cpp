@@ -189,7 +189,8 @@ int32_t turn::DustPuffFrame(const DustPuff& puff)
 bool turn::AdvanceDustPuff(DustPuff& puff, float seconds)
 {
 	puff.age += seconds;
-	if (puff.age >= PuffLife(puff.kind))
+	// A puff goes when its age is more than its life
+	if (puff.age > PuffLife(puff.kind))
 	{
 		return false;
 	}

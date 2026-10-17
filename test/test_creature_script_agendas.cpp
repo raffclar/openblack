@@ -46,15 +46,18 @@ TEST(CreatureScriptAgendas, LookingForeverTurnsToTheThingAndWatchesItForADay)
 	EXPECT_FALSE(agenda[1].gaze->bottom);
 }
 
-// Looking without going up to it, it watches the thing's foot for 1.1 seconds and up to 1.2 more
+// Looking without going up to it, it watches the thing's foot for 1.1 seconds and a draw of up to 1.2 more, cut to
+// whole turns of a tenth of a second
 TEST(CreatureScriptAgendas, LookingWithoutApproachingWatchesTheFootAWhile)
 {
 	const auto shortest = LookButDontApproach(3, 0.0f);
-	const auto longest = LookButDontApproach(3, 1.0f);
+	const auto longest = LookButDontApproach(3, 1.19f);
 	ASSERT_EQ(shortest.size(), 2);
 	EXPECT_EQ(shortest[0].movement.kind, Movement::Kind::TurnToFaceObject);
-	EXPECT_FLOAT_EQ(shortest[1].seconds, 1.1f);
-	EXPECT_FLOAT_EQ(longest[1].seconds, 2.3f);
+	// 1.1 x 10 is 11 turns; 2.29 x 10 is 22.9, cut to 22 turns
+	EXPECT_EQ(shortest[1].seconds, 11.0f / 10.0f);
+	EXPECT_EQ(longest[1].seconds, 22.0f / 10.0f);
+	EXPECT_EQ(LookButDontApproachSeconds(0.35f), 14.0f / 10.0f);
 	ASSERT_TRUE(shortest[1].gaze.has_value());
 	EXPECT_TRUE(shortest[1].gaze->bottom);
 }
@@ -241,6 +244,12 @@ TEST(CreatureScriptAgendas, AScriptSendsACreatureInTwoGoes)
 	EXPECT_FLOAT_EQ(middling[0].movement.maxDistance, 20.0f);
 	const auto near = MoveForScript({0.0f, 0.0f}, {30.0f, 0.0f, 0.0f}, 15.0f, 0.0f);
 	EXPECT_FLOAT_EQ(near[0].movement.maxDistance, 15.0f);
+	// A height equal to the sixth does not replace it: the cap of 0.7 of the height and 22 applies
+	const auto equal = MoveForScript({0.0f, 0.0f}, to, 100.0f, 0.0f);
+	EXPECT_FLOAT_EQ(equal[0].movement.maxDistance, (0.7f * 100.0f) + 22.0f);
+	// Each leg looks at the ground below the point
+	EXPECT_TRUE(far[0].gaze->pointOnGround);
+	EXPECT_TRUE(far[1].gaze->pointOnGround);
 	const auto given = MoveForScript({0.0f, 0.0f}, to, 15.0f, 4.0f);
 	EXPECT_FLOAT_EQ(given[0].movement.maxDistance, 4.0f);
 	EXPECT_FLOAT_EQ(given[1].movement.maxDistance, 4.0f);

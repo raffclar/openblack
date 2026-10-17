@@ -53,8 +53,9 @@ float openblack::creature_spell_casting::StaminaCost(float costToCreate)
 
 bool openblack::creature_spell_casting::MayTry(float seen, float needed)
 {
+	// A share that is not a number (no sightings needed and none seen) does not pass
 	const float share = seen / needed;
-	return share > 1.0f || !(share < k_ShareToTry);
+	return share > 1.0f || share >= k_ShareToTry;
 }
 
 bool openblack::creature_spell_casting::TrySucceeds(float seen, float needed)
