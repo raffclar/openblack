@@ -48,7 +48,7 @@ struct Fizz
 [[nodiscard]] map_coords::MapCoords ArrivalCoords(glm::vec2 place);
 
 /// The player's creature is kept in two files named after the player's profile file: its mind under the profile's name,
-/// and its physique under the name with "Physique" before it
+/// and its physique under the name that creaturemind::PhysiqueFileName gives
 struct KeptFiles
 {
 	std::filesystem::path mind;

@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <string>
 
+#include <PhysiqueFile.h>
+
 using namespace openblack;
 using namespace openblack::creature_carry_over;
 
@@ -63,8 +65,7 @@ map_coords::MapCoords creature_carry_over::ArrivalCoords(glm::vec2 place)
 creature_carry_over::KeptFiles creature_carry_over::KeptFilesIn(const std::filesystem::path& folder,
                                                                 std::string_view profileFile)
 {
-	const std::string name(profileFile);
-	return {.mind = folder / name, .physique = folder / ("Physique" + name)};
+	return {.mind = folder / std::string(profileFile), .physique = folder / creaturemind::PhysiqueFileName(profileFile)};
 }
 
 bool creature_carry_over::SavesAsItLives(uint32_t turnsBefore, uint32_t turnsNow)

@@ -65,10 +65,7 @@ struct Marks
 /// A mark added to a list, in place of the oldest when the list is full
 void Add(std::vector<Mark>& marks, const Mark& mark);
 
-/// How a creature's file keeps a mark, a word each: the texel across in the lowest byte and down in the next, then a
-/// byte of the skin in its top two bits over the mark's age, then for a wound a byte of its column over its kind, whose
-/// top two bits the game always sets. What the top byte of a drop of blood holds was not found; it is written as 0 and
-/// not read.
+/// A mark as the creature's files keep it, one word a mark (see creaturemind::WoundToWord for its layout)
 [[nodiscard]] uint32_t WoundToWord(const Mark& wound);
 [[nodiscard]] Mark WoundFromWord(uint32_t word);
 [[nodiscard]] uint32_t BloodToWord(const Mark& blood);
