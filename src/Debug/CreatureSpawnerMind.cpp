@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <MindFile.h>
+#include <PhysiqueFile.h>
 #include <fmt/format.h>
 #include <imgui.h>
 
@@ -62,7 +63,7 @@ std::vector<std::filesystem::path> MindFilesIn(const std::filesystem::path& fold
 	for (const auto& entry : std::filesystem::directory_iterator(folder, error))
 	{
 		const auto name = entry.path().filename().string();
-		if (entry.is_regular_file(error) && !name.starts_with("Physique"))
+		if (entry.is_regular_file(error) && !creaturemind::IsPhysiqueFileName(name))
 		{
 			files.push_back(entry.path());
 		}

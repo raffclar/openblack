@@ -249,6 +249,12 @@ struct MindFileData
 	[[nodiscard]] std::u16string ProfileText() const;
 };
 
+/// The bytes of a file of this component, or none when the file cannot be opened. Only this component opens the
+/// files: other code reads and writes them through the functions here.
+[[nodiscard]] std::optional<std::vector<uint8_t>> ReadFileBytes(const std::filesystem::path& path);
+/// Writes the bytes to the file at the path, in place of what it had
+[[nodiscard]] bool WriteFileBytes(const std::filesystem::path& path, std::span<const uint8_t> bytes);
+
 /// Reads a mind file into data
 [[nodiscard]] MindResult Read(std::span<const uint8_t> bytes, MindFileData& data);
 [[nodiscard]] MindResult ReadFile(const std::filesystem::path& path, MindFileData& data);

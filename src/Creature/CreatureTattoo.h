@@ -109,10 +109,7 @@ using Pictures = std::array<std::optional<Picture>, k_DesignCount>;
 void PutPicture(std::span<std::array<uint8_t, 3>> atlas, uint32_t atlasWidth, uint32_t design, const Picture& picture);
 
 /// The block of pictures that a creature keeps with its tattoos, which its saved file also keeps. The block has each
-/// picture of the player's own that a tattoo on a site uses, so the creature keeps the tattoo when the player has the
-/// picture no longer. The block starts with its size in bytes, the number of pictures and a bit for each slot that uses
-/// a picture. Then come eight offsets, one for each slot. Each picture follows at its offset, two levels to a byte with
-/// the first level in the low four bits.
+/// picture of the player's own that a tattoo on a site uses (see creaturemind::WriteTattooPictures for its layout).
 [[nodiscard]] std::vector<uint8_t> PicturesBlock(const Slots& slots, const Pictures& pictures);
 
 /// The design that a slot paints from the block of pictures, when the slot's bit is set and the block holds the picture
@@ -154,8 +151,7 @@ constexpr uint32_t k_PaletteRows = 128;
 /// then the one with something else on that site; none when every slot holds another site's tattoo
 [[nodiscard]] std::optional<size_t> SlotFor(const Slots& slots, uint8_t site, uint8_t design);
 
-/// A tattoo as a saved creature keeps it, one 32-bit word a slot: the design in the lowest four bits, the site in the
-/// next four, then the colour's blue, green and red bytes
+/// A tattoo as a saved creature keeps it, one word a slot (see creaturemind::TattooFromWord for its layout)
 [[nodiscard]] Slot FromWord(uint32_t word);
 [[nodiscard]] uint32_t ToWord(const Slot& slot);
 } // namespace openblack::creature_tattoo

@@ -1092,3 +1092,14 @@ openblack_setup_and_add_test(
   test_creature_temple_parts test_creature_temple_parts.cpp
 )
 openblack_setup_and_add_test(test_creature_owner test_creature_owner.cpp)
+openblack_setup_and_add_test(
+  test_creature_mind_file_users test_creature_mind_file_users.cpp
+)
+target_compile_definitions(
+  test_creature_mind_file_users
+  PRIVATE OPENBLACK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  test_creature_mind_file_users
+  PROPERTIES ENVIRONMENT "OPENBLACK_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+)

@@ -12,14 +12,17 @@
 #include <cstddef>
 #include <cstring>
 
-#include <fstream>
 #include <type_traits>
 #include <utility>
+
+#include "MindFile.h"
 
 using namespace openblack::creaturemind;
 
 namespace
 {
+constexpr std::string_view k_PhysiquePrefix = "Physique";
+
 template <typename T>
 void Put(std::vector<uint8_t>& bytes, T value)
 {
@@ -125,14 +128,23 @@ std::optional<PhysiqueFileData> openblack::creaturemind::ReadPhysique(std::span<
 	                         .wounds = std::move(*wounds)};
 }
 
+std::string openblack::creaturemind::PhysiqueFileName(std::string_view mindFile)
+{
+	return std::string(k_PhysiquePrefix) + std::string(mindFile);
+}
+
+bool openblack::creaturemind::IsPhysiqueFileName(std::string_view name)
+{
+	return name.starts_with(k_PhysiquePrefix);
+}
+
+std::optional<PhysiqueFileData> openblack::creaturemind::ReadPhysiqueFile(const std::filesystem::path& path)
+{
+	const auto bytes = ReadFileBytes(path);
+	return bytes.has_value() ? ReadPhysique(*bytes) : std::nullopt;
+}
+
 bool openblack::creaturemind::WritePhysiqueFile(const std::filesystem::path& path, const PhysiqueFileData& data)
 {
-	const auto bytes = WritePhysique(data);
-	std::ofstream file(path, std::ios::binary | std::ios::trunc);
-	if (!file)
-	{
-		return false;
-	}
-	file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-	return static_cast<bool>(file);
+	return WriteFileBytes(path, WritePhysique(data));
 }

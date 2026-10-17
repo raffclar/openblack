@@ -11,8 +11,6 @@
 #include <cstdlib>
 
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <span>
 #include <string>
 #include <string_view>
@@ -131,8 +129,7 @@ int main(int argc, char* argv[]) noexcept
 			roundTrip = true;
 			continue;
 		}
-		std::ifstream file(std::filesystem::path(arg), std::ios::binary);
-		const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+		const auto bytes = ReadFileBytes(std::filesystem::path(arg)).value_or(std::vector<uint8_t> {});
 		MindFileData mind;
 		const auto result = Read(bytes, mind);
 		std::printf("== %s (%zu bytes): %s\n", std::string(arg).c_str(), bytes.size(), ResultToStr(result).data());
