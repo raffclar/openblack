@@ -32,6 +32,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureDevelopment.h"
@@ -220,7 +221,7 @@ leash::Lengths LengthsOf(const Registry& registry, entt::entity creature, const 
 	}
 	const auto& from = registry.Get<const Transform>(creature).position;
 	const auto& to = registry.Get<const Transform>(*worn.tiedTo).position;
-	return leash::TiedToStatic(glm::distance(glm::vec2(from.x, from.z), glm::vec2(to.x, to.z)));
+	return leash::TiedToStatic(gutils::GetDistanceInMetres(from, to));
 }
 
 /// How far along a ray it meets a ball, if it does
@@ -890,7 +891,7 @@ bool LeashSystem::FreeOfHome(entt::entity creature) const
 	{
 		return false;
 	}
-	return leash::FreeOfHome(glm::distance(transform->position, *home), temple.has_value());
+	return leash::FreeOfHome(gutils::GetDistanceInMetres(transform->position, *home), temple.has_value());
 }
 
 bool LeashSystem::IsLeashed(entt::entity creature) const
@@ -1197,7 +1198,7 @@ void LeashSystem::UpdateMoods(entt::entity creature, const CreatureLeash::Worn& 
 	const auto* otherAt = registry.TryGet<const Transform>(other);
 	if (worn.type == LeashType::Evil && at != nullptr && otherAt != nullptr &&
 	    minds.DominantDesire(other) != creature_desires::Desire::Anger &&
-	    glm::distance(at->position, otherAt->position) < leash::k_AngerOtherReach * CreatureHeight(*body))
+	    gutils::GetDistanceInMetres(otherAt->position, at->position) < leash::k_AngerOtherReach * CreatureHeight(*body))
 	{
 		minds.MakeDesireDominant(other, creature_desires::Desire::Anger, leash::k_ForcedDesireSeconds, false);
 	}
@@ -1246,11 +1247,11 @@ bool LeashSystem::ShouldWalkBack(entt::entity creature) const
 	    .mimicking = mind != nullptr && mind->learnt.has_value() && mind->learnt->mimicry.has_value(),
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	    .teleporting = TravelsByTeleport(registry, creature),
-	    .distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), centre),
+	    .distance = gutils::GetDistanceInMetres(glm::vec2(transform.position.x, transform.position.z), centre),
 	    .centreOpen = centreOpen,
-	    .returnToCentre = leashes.returnTo.has_value()
-	                          ? std::optional(glm::distance(glm::vec2(leashes.returnTo->x, leashes.returnTo->z), centre))
-	                          : std::nullopt,
+	    .returnToCentre = leashes.returnTo.has_value() ? std::optional(gutils::GetDistanceInMetres(
+	                                                         glm::vec2(leashes.returnTo->x, leashes.returnTo->z), centre))
+	                                                   : std::nullopt,
 	    .clearingWay =
 	        [&registry, creature] {
 		        const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
@@ -1266,7 +1267,7 @@ void LeashSystem::WalkBack(entt::entity creature)
 	const auto& body = registry.Get<const Creature>(creature);
 	const auto& transform = registry.Get<const Transform>(creature);
 	const auto centre = glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z);
-	const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), centre);
+	const auto distance = gutils::GetDistanceInMetres(glm::vec2(transform.position.x, transform.position.z), centre);
 	// The creature stops what it does and walks to the centre. It is faster when it is further away.
 	creature_mind::Step walk {.kind = creature_mind::Step::Kind::Move};
 	walk.movement = {

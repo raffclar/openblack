@@ -1175,3 +1175,4 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
 endforeach ()
 openblack_setup_and_add_test(test_x87 test_x87.cpp)
 openblack_setup_and_add_test(test_float_sweep_4 test_float_sweep_4.cpp)
+openblack_setup_and_add_test(test_glm_order test_glm_order.cpp)

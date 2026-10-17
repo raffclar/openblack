@@ -16,6 +16,10 @@
 
 #include <glm/geometric.hpp>
 
+#include "Camera/ScriptCameraModel.h"
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
+
 using namespace openblack;
 using namespace openblack::fight_view;
 
@@ -23,9 +27,6 @@ namespace
 {
 constexpr float k_Pi = std::numbers::pi_v<float>;
 constexpr float k_TwoPi = 2.0f * k_Pi;
-/// A line nearer upright than this across the land has no heading, and looks almost straight down
-constexpr float k_Upright = 0.01f;
-constexpr float k_UprightPitch = 1.5393804f;
 /// The best heading is looked for among this many round the point, the land sampled at these eighths of the distance
 constexpr int k_Headings = 32;
 constexpr int k_FirstSample = 3;
@@ -69,7 +70,7 @@ float fight_view::ZoomDistance(float zoomInput, float heightAboveFocus)
 
 float fight_view::AngleOf(glm::vec2 line)
 {
-	return std::atan2(line.x, -line.y);
+	return x87::RoundToFloat(x87::GameHeadingOf(line.x, line.y));
 }
 
 float fight_view::Wrapped(float angle)
@@ -96,19 +97,15 @@ float fight_view::Wrapped(float angle)
 
 glm::vec3 fight_view::PointFrom(const glm::vec3& from, float distance, float heading, float pitch)
 {
-	const auto level = std::cos(pitch);
-	return {(std::sin(heading) * level * distance) + from.x, (std::sin(pitch) * distance) + from.y,
-	        (std::cos(heading) * level * distance) + from.z};
+	// The camera's own point from a heading and a pitch
+	return script_camera::PointFromDistanceHeadingAndPitch(from, distance, heading, pitch);
 }
 
 HeadingPitch fight_view::HeadingAndPitch(const glm::vec3& origin, const glm::vec3& focus)
 {
-	const auto across = glm::vec2(origin.x - focus.x, origin.z - focus.z);
-	if (std::abs(across.x) < k_Upright && std::abs(across.y) < k_Upright)
-	{
-		return {.heading = 0.0f, .pitch = k_UprightPitch};
-	}
-	return {.heading = k_Pi - AngleOf(across), .pitch = std::atan2(origin.y - focus.y, glm::length(across))};
+	// The camera's own heading and pitch between two points
+	const auto view = script_camera::HeadingAndPitchFromPoints(origin, focus);
+	return {.heading = view.heading, .pitch = view.pitch};
 }
 
 float fight_view::BestHeading(float heading, float distance, const glm::vec3& focus, float& pitch, const GroundHeight& ground,

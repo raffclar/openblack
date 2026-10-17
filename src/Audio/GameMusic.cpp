@@ -21,6 +21,7 @@
 #include <spdlog/spdlog.h>
 
 #include "AudioManagerInterface.h"
+#include "Common/X87Vector.h"
 #include "Locator.h"
 
 using namespace openblack::audio;
@@ -539,7 +540,7 @@ bool GameMusic::ProcessAttached(const TurnInputs& inputs)
 		const auto position = inputs.thingPosition(music.thing);
 		candidates.push_back({
 		    .hasBank = info.has_value() && position.has_value(),
-		    .distance = position ? glm::distance(inputs.camera, *position) : 0.0f,
+		    .distance = position ? x87::Distance<x87::SumOrder::Zyx>(inputs.camera, *position) : 0.0f,
 		    .range = info ? AttachedMusicRange(info->maxDistance) : 0.0f,
 		});
 		heard.push_back({.path = std::move(path), .info = info, .position = position.value_or(glm::vec3(0.0f))});

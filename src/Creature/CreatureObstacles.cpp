@@ -17,6 +17,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/X87.h"
+#include "Common/X87Angle.h"
 
 using namespace openblack;
 using namespace openblack::creature_obstacles;
@@ -80,20 +81,16 @@ float FireMargin(const Thing& thing)
 	return thing.hasFire ? k_FireMargin : 0.0f;
 }
 
-glm::vec2 Turned(glm::vec2 v, float angle)
-{
-	const auto c = std::cos(angle);
-	const auto s = std::sin(angle);
-	return {(v.x * c) - (v.y * s), (v.x * s) + (v.y * c)};
-}
-
 /// The outline of a model's box: one circle at its middle, or a row along a long box
 std::vector<Circle> BoxCircles(const Thing& thing, const Walker& walker)
 {
 	// The margin and the fire margin are added one after the other
 	const auto margin = walker.radius - (RadiusShare(thing.height, walker.height) * walker.radius);
 	const auto fire = FireMargin(thing);
-	const auto centre = thing.position + Turned(glm::vec2(thing.boxCentre.x, thing.boxCentre.z) * thing.scale, thing.yAngle);
+	// The middle of the box goes through the thing's turn and scale as the game builds them
+	const auto rows = thing.placement == Placement::Leaning ? LeaningPlacement(thing.yAngle, 0.0f, 0.0f, thing.scale)
+	                                                        : UprightPlacement(thing.yAngle, thing.scale);
+	const auto centre = PlacedOnLand(rows, thing.boxCentre, thing.position);
 	auto sizeX = ((thing.boxHalfSize.x * thing.scale) + margin) + fire;
 	auto sizeZ = ((thing.boxHalfSize.z * thing.scale) + margin) + fire;
 
@@ -310,4 +307,31 @@ float creature_obstacles::BodyRadius(std::span<const glm::mat4> boneMatrices)
 float creature_obstacles::YAngleOf(const glm::mat3& rotation)
 {
 	return std::atan2(rotation[0].z, rotation[0].x);
+}
+
+PlacementRows creature_obstacles::UprightPlacement(float yAngle, float scale)
+{
+	const float c = x87::Mul(x87::Cos(yAngle), scale);
+	const float s = x87::Mul(x87::Sin(yAngle), scale);
+	return {glm::vec3(c, 0.0f, s), glm::vec3(0.0f, scale, 0.0f), glm::vec3(-s, 0.0f, c)};
+}
+
+PlacementRows creature_obstacles::LeaningPlacement(float yAngle, float xAngle, float zAngle, float scale)
+{
+	auto rows = x87::GameTurnYxz(yAngle, xAngle, zAngle);
+	if (scale != 1.0f)
+	{
+		for (auto& row : rows)
+		{
+			row *= scale;
+		}
+	}
+	return rows;
+}
+
+glm::vec2 creature_obstacles::PlacedOnLand(const PlacementRows& rows, const glm::vec3& point, glm::vec2 position)
+{
+	const float x = (((rows[1].x * point.y) + (rows[0].x * point.x)) + (rows[2].x * point.z)) + position.x;
+	const float z = (((rows[1].z * point.y) + (rows[0].z * point.x)) + (rows[2].z * point.z)) + position.y;
+	return {x, z};
 }

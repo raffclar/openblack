@@ -64,6 +64,17 @@ enum class Avoidance : uint8_t
 };
 
 /// The circles a thing is planned round with
+/// How the game builds a thing's turn and scale. Most things turn about the upright axis only. A thing that does not
+/// move but can lean (a fence) builds its turn from three angles first and scales it after.
+enum class Placement : uint8_t
+{
+	Upright,
+	Leaning,
+};
+
+/// The rows of a thing's turn and scale as the game builds them: where the model's x, y and z axes go
+using PlacementRows = std::array<glm::vec3, 3>;
+
 enum class Shape : uint8_t
 {
 	/// The outline of its model's box: one circle at the box's middle, or a row along a box much longer than wide
@@ -124,6 +135,8 @@ struct Thing
 	std::array<bool, 6> worshipSites;
 	/// The player it belongs to, which matters for shields
 	PlayerNames owner;
+	/// How the game builds its turn and scale, which moves the middle of its model's box
+	Placement placement {Placement::Upright};
 };
 
 /// Anything burning is kept this much further off
@@ -169,5 +182,15 @@ constexpr float k_TeleportStoneWidth = 6.0f;
 
 /// The way a thing's model's x axis points across the land, from its rotation
 [[nodiscard]] float YAngleOf(const glm::mat3& rotation);
+
+/// The turn and scale of a thing that turns about the upright axis only. The wide cosine and sine of the angle are
+/// multiplied by the scale and rounded one time.
+[[nodiscard]] PlacementRows UprightPlacement(float yAngle, float scale);
+/// The turn and scale of a thing that can lean: the turn from the angle about the upright axis, then about x, then about
+/// z, each part rounded as the game rounds it, then each part multiplied by the scale
+[[nodiscard]] PlacementRows LeaningPlacement(float yAngle, float xAngle, float zAngle, float scale);
+/// Where a point of a model goes on the land, through the rows and the position. Each part adds the y, x and z terms
+/// in that order, then the position.
+[[nodiscard]] glm::vec2 PlacedOnLand(const PlacementRows& rows, const glm::vec3& point, glm::vec2 position);
 
 } // namespace openblack::creature_obstacles

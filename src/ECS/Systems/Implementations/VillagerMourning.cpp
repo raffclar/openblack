@@ -14,6 +14,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/HandGrab.h"
@@ -143,7 +144,8 @@ uint32_t villager_mourning::GoTowardsDeadPerson(LivingAction& action)
 	}
 	const auto here = Entities().Get<const Transform>(villager).position;
 	const auto toDead = glm::xz(*dead) - glm::xz(here);
-	const float distance = glm::length(toDead);
+	// The game measures the way to the body by its map distance
+	const float distance = gutils::GetDistanceInMetres(glm::xz(here), glm::xz(*dead));
 	const auto approach = villager_death::ApproachToBody(distance, DeathInfo().maxDistanceToRunAwayFromObject);
 	if (approach.looks)
 	{

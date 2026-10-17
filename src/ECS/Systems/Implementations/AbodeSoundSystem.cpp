@@ -21,6 +21,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Vector.h"
 #include "ECS/AbodeSounds.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Transform.h"
@@ -85,7 +86,7 @@ void AbodeSoundSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 			continue;
 		}
 		const auto& position = registry.Get<components::Transform>(entity).position;
-		if (!abode_sounds::InReach(glm::distance(position, camera)))
+		if (!abode_sounds::InReach(x87::Distance<x87::SumOrder::Zyx>(position, camera)))
 		{
 			continue;
 		}

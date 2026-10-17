@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#include "Common/X87Angle.h"
+
 using namespace openblack;
 using namespace openblack::temple_leashes;
 
@@ -51,33 +53,16 @@ Look temple_leashes::Advance(const Look& look, float seconds)
 
 glm::mat3 temple_leashes::TurnByAngles(const glm::vec3& angles)
 {
-	const auto c1 = std::cos(angles.x);
-	const auto s1 = std::sin(angles.x);
-	const auto c2 = std::cos(angles.y);
-	const auto s2 = std::sin(angles.y);
-	const auto c3 = std::cos(angles.z);
-	const auto s3 = std::sin(angles.z);
 	// Each column is one of the thing's own axes in the world
-	return {
-	    glm::vec3((c1 * c3) - (s1 * s2 * s3), -s3 * c2, (s1 * c3) + (c1 * s2 * s3)),
-	    glm::vec3((s1 * s2 * c3) + (c1 * s3), c3 * c2, (s1 * s3) - (c1 * c3 * s2)),
-	    glm::vec3(-s1 * c2, s2, c1 * c2),
-	};
+	const auto rows = x87::GameTurnYxz(angles.x, angles.y, angles.z);
+	return {rows[0], rows[1], rows[2]};
 }
 
 glm::vec3 temple_leashes::AnglesOf(const glm::mat3& turn)
 {
 	// The first angle turns the third axis out of its plane, the second lifts it, the third turns the first axis
-	const auto first = std::atan2(-turn[2][0], turn[2][2]);
-	const auto c1 = std::cos(-first);
-	const auto s1 = std::sin(-first);
-	const auto xx = (c1 * turn[0][0]) - (s1 * turn[0][2]);
-	const auto xz = (c1 * turn[0][2]) + (s1 * turn[0][0]);
-	const auto second = std::atan2(turn[2][1], (s1 * turn[2][0]) + (c1 * turn[2][2]));
-	const auto c2 = std::cos(-second);
-	const auto s2 = std::sin(-second);
-	const auto third = std::atan2(-((c2 * turn[0][1]) + (s2 * xz)), xx);
-	return {first, second, third};
+	const auto angles = x87::GameAnglesYxz(turn[0], turn[2]);
+	return {angles.y, angles.x, angles.z};
 }
 
 glm::mat3 temple_leashes::Turn(const Look& look)

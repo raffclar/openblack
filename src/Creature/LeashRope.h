@@ -36,8 +36,12 @@ constexpr float k_Stiffness = 20000.0f;
 constexpr float k_Drag = 0.1f;
 /// The drag is divided by the rest length of a segment, never less than this
 constexpr float k_MinDragLength = 0.5f;
-constexpr float k_Gravity = -7.848f;
 constexpr float k_Mass = 0.8f;
+/// The weight of a mass: the game multiplies the mass by the fall acceleration each step, in float
+constexpr float k_FallAcceleration = -9.81f;
+constexpr float k_Gravity = k_Mass * k_FallAcceleration;
+/// The rest length of a segment is the slack length times this share, one part in 41 as a float
+constexpr float k_RestShare = 1.0f / 41.0f;
 constexpr float k_MaxSpeed = 300.0f;
 /// The masses keep this much over the ground beyond the ribbon's half width
 constexpr float k_GroundClearance = 0.5f;

@@ -16,6 +16,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::leash_rope;
 
@@ -33,14 +35,16 @@ constexpr float k_UScale = 0.05f;
 glm::vec3 SpringPull(const glm::vec3& p, const glm::vec3& neighbour, float rest, float& stretch)
 {
 	const auto d = neighbour - p;
-	const auto length = glm::length(d);
+	const auto length = x87::Length<x87::SumOrder::Zyx>(d);
 	if (length <= rest || length <= 0.0f)
 	{
 		stretch = 0.0f;
 		return glm::vec3(0.0f);
 	}
 	stretch = (length / rest) - 1.0f;
-	return k_Stiffness * (d - (d * (rest / length)));
+	// The spring pulls towards the place at the rest length from p, on the line to the neighbour
+	const auto atRest = (d * (rest / length)) + p;
+	return k_Stiffness * (neighbour - atRest);
 }
 
 /// The acceleration of each mass, from the springs to its neighbours, the air and gravity
@@ -53,7 +57,8 @@ std::array<glm::vec3, k_NodeCount> Accelerations(Rope& rope, float rest)
 		auto& node = rope.nodes.at(i);
 		const auto& previous = i == 0 ? rope.start : rope.nodes.at(i - 1).position;
 		const auto& next = i + 1 == k_NodeCount ? rope.end : rope.nodes.at(i + 1).position;
-		auto a = -k_Drag * glm::length(node.velocity) * node.velocity / dragLength;
+		// The game multiplies the drag by one over the length. It does not divide by the length.
+		auto a = (-k_Drag * (x87::Length<x87::SumOrder::Zyx>(node.velocity) * node.velocity)) * (1.0f / dragLength);
 		a.y += k_Gravity;
 		float stretch = 0.0f;
 		a += SpringPull(node.position, previous, rest, stretch);
@@ -85,7 +90,7 @@ void Integrate(Rope& rope, const std::array<glm::vec3, k_NodeCount>& acceleratio
 
 float leash_rope::RestLength(float slackLength)
 {
-	return slackLength / k_Segments;
+	return slackLength * k_RestShare;
 }
 
 Rope leash_rope::Create(const glm::vec3& start, const glm::vec3& end, float slackLength, float maxLength, const Look& look)

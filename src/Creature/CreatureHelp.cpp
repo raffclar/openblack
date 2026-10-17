@@ -16,6 +16,9 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::creature_help;
 
@@ -389,19 +392,20 @@ bool creature_help::LooksAt(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::
 	auto view = cameraFocus - cameraOrigin;
 	if (view != glm::vec3(0.0f))
 	{
-		view *= 1.0f / std::sqrt(glm::dot(view, view));
+		view *= 1.0f / x87::LengthZyx(view);
 	}
 	auto toPoint = point - cameraOrigin;
 	if (toPoint != glm::vec3(0.0f))
 	{
-		const auto distance = std::sqrt(glm::dot(toPoint, toPoint));
+		const auto distance = x87::LengthZyx(toPoint);
 		if (!(distance < k_ViewDistance))
 		{
 			return false;
 		}
 		toPoint *= 1.0f / distance;
 	}
-	return std::cos(k_ViewCone) < glm::dot(toPoint, view);
+	// The cosine of the angle stays wide in the compare
+	return x87::Greater(x87::DotZyx(toPoint, view), x87::Cos(k_ViewCone));
 }
 
 size_t creature_help::DominantDesire(std::span<const float> values, std::span<const bool> active)

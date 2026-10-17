@@ -13,6 +13,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
+
 namespace openblack::camera_pan
 {
 
@@ -30,7 +32,8 @@ constexpr float k_LevelLimit = 0.0001f;
 
 glm::vec3 UnitOrZero(glm::vec3 v)
 {
-	return v != glm::vec3(0.0f) ? v / std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z) : v;
+	// The game adds the squares from z to x and multiplies by one over the length
+	return v != glm::vec3(0.0f) ? openblack::x87::Scaled<openblack::x87::SumOrder::Zyx>(v) : v;
 }
 } // namespace
 
@@ -40,8 +43,9 @@ GripPlane PlaneThrough(glm::vec3 gripped, glm::vec3 cameraOrigin, float groundUn
 	const auto ground = glm::vec3(cameraOrigin.x, std::min(groundUnderCamera, gripped.y), cameraOrigin.z);
 	const auto towards = UnitOrZero(gripped - ground);
 	const auto across = UnitOrZero({towards.z, 0.0f, -towards.x});
-	const auto normal = UnitOrZero(glm::cross(towards, across));
-	return {.normal = normal, .distance = glm::dot(normal, gripped)};
+	// The game makes the normal a unit two times
+	const auto normal = UnitOrZero(UnitOrZero(glm::cross(towards, across)));
+	return {.normal = normal, .distance = openblack::x87::DotZyx(normal, gripped)};
 }
 
 std::optional<CameraPlace> Pan(const GripPlane& plane, glm::vec3 originAtGrip, glm::vec3 focusAtGrip, float distance,
@@ -76,7 +80,8 @@ std::optional<CameraPlace> Pan(const GripPlane& plane, glm::vec3 originAtGrip, g
 	}
 
 	const auto focus = focusAtGrip - moved;
-	const auto origin = focus + UnitOrZero((originAtGrip - moved) - focus) * distance;
+	const auto back = (originAtGrip - moved) - focus;
+	const auto origin = focus + (back != glm::vec3(0.0f) ? back / glm::length(back) : back) * distance;
 	return CameraPlace {.origin = origin, .focus = focus};
 }
 
