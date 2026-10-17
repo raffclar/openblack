@@ -1130,6 +1130,11 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		return commands;
 	}
 	const auto& step = mind.agenda[mind.step];
+	// Each turn, a try to start an action that the body does not have picks a side first
+	if (step.retriedClip == RetriedClip::Static || (step.retriedClip == RetriedClip::Individual && !senses.held.has_value()))
+	{
+		static_cast<void>(gameRandom(2));
+	}
 	// A step with something to look at has the head on it for as long as it lasts
 	commands.gaze = LookOf(step);
 	// The creature's moves in a dance with villagers start and stop its poses and its dance themselves

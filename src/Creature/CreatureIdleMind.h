@@ -384,6 +384,16 @@ constexpr float k_FeetLookMetres = 4.0f;
 	return {.point = glm::vec3(point.x, 0.0f, point.y), .whileGoing = true};
 }
 
+/// The action that a step tries to start again each turn, because the body does not have its clip. The step never ends.
+/// Each try first picks a side at random: a static action always, an individual action only while the creature holds
+/// nothing (the hand that holds a thing picks the side).
+enum class RetriedClip : uint8_t
+{
+	None,
+	Static,
+	Individual,
+};
+
 struct Step
 {
 	enum class Kind : uint8_t
@@ -531,6 +541,8 @@ struct Step
 	bool holdLoop {false};
 	/// A static step plays left to right half the time, chosen as it starts
 	bool mirrorAtRandom {false};
+	/// The action that a never-ending wait tries to start each turn
+	RetriedClip retriedClip {RetriedClip::None};
 	/// Played with the eyes closed
 	bool closedEyes {false};
 	/// What the step does to the body: when an action is done (eating, as it starts), or a static step's loop ends
