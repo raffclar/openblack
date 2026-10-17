@@ -18,8 +18,6 @@
 
 #include <algorithm>
 
-#include <glm/geometric.hpp>
-
 #include "3D/CreatureBody.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSpellCasting.h"
@@ -36,6 +34,7 @@
 #include "Magic/SpellBehaviours.h"
 #include "MagicSystem.h"
 #include "ObjectMeasures.h"
+#include "Particles/ParticleSpellLink.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -217,10 +216,9 @@ bool MagicSystem::StartCreatureCast(entt::entity creature, MagicType type, std::
 	const auto hands = magic::IsCreatureCastFromAbove(info, type)
 	                       ? at + glm::vec3(0.0f, std::max(k_CastFromAboveLeast, k_CastFromAboveShare * aboveHeight), 0.0f)
 	                       : HandsOf(creature);
-	const auto towards = at - hands;
 	const particles::ProcessInfo process {
 	    .handPosition = hands,
-	    .cameraForward = glm::length(towards) > 0.0f ? glm::normalize(towards) : glm::vec3(0.0f),
+	    .cameraForward = particles::CastHeading(hands, at),
 	};
 	const auto seed = magic::FindFirstSpellSeedForMagicType(info, type);
 	const bool onObject = target.has_value() && seed.has_value() && magic::GetSpellSeedInfo(info, *seed).castOnObject != 0;
@@ -293,8 +291,7 @@ void MagicSystem::UpdateCreatureCast(Spell& spell)
 		return;
 	}
 	spell.processInfo.handPosition = HandsOf(spell.caster.entity);
-	const auto towards = spell.castPosition - spell.processInfo.handPosition;
-	spell.processInfo.cameraForward = glm::length(towards) > 0.0f ? glm::normalize(towards) : glm::vec3(0.0f);
+	spell.processInfo.cameraForward = particles::CastHeading(spell.processInfo.handPosition, spell.castPosition);
 }
 
 void MagicSystem::KeepCreatureBeams()

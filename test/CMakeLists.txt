@@ -1209,3 +1209,11 @@ set_tests_properties(
   test_oracle_lightning_spell_order
   PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(
+  test_oracle_sway_ribbon oracle/test_oracle_sway_ribbon.cpp
+)
+target_link_libraries(test_oracle_sway_ribbon PRIVATE psys)
+set_tests_properties(
+  test_oracle_sway_ribbon
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
