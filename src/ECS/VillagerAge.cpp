@@ -16,32 +16,38 @@
 using namespace openblack;
 using namespace openblack::ecs;
 
-float villager_age::StartScale(uint32_t age, uint32_t grownUp, std::span<const float, 20> ageToScale)
+float villager_age::StartScale(uint32_t age, uint32_t grownUp, std::span<const float, 20> ageToScale, float beforeTable)
 {
-	if (IsChildAge(age, grownUp) && age < ageToScale.size())
+	if (!IsChildAge(age, grownUp) || age > ageToScale.size())
 	{
-		return ageToScale[age];
+		return k_AdultStartScale;
 	}
-	return k_AdultStartScale;
+	// A child starts at the size of the year before its age. A child of age 0 takes the value before the table.
+	return age == 0 ? beforeTable : ageToScale[age - 1];
 }
 
 float villager_age::GrownScale(uint32_t age, uint32_t grownUp, std::span<const float, 20> ageToScale, float scale,
                                const FloatRandom& random)
 {
-	if (IsChildAge(age, grownUp) && age < ageToScale.size())
+	if (IsChildAge(age, grownUp))
 	{
-		const float gap = ageToScale[age] - scale;
+		// A child grows towards the size of the year after its age. The table has no size past its last year.
+		if (static_cast<size_t>(age) + 1 >= ageToScale.size())
+		{
+			return scale;
+		}
+		const float gap = ageToScale[age + 1] - scale;
 		const float most = gap * k_ChildGrowthShare;
 		const float growth = random(most);
 		return scale + growth;
 	}
-	const float first = k_AdultLargestScale - random(k_AdultScaleRange);
+	const float first = (k_AdultScaleSpread - random(k_AdultScaleRange)) + 1.0f;
 	if (first <= scale)
 	{
 		return scale;
 	}
 	// The game draws again rather than keeping the size it compared
-	return k_AdultLargestScale - random(k_AdultScaleRange);
+	return (k_AdultScaleSpread - random(k_AdultScaleRange)) + 1.0f;
 }
 
 bool villager_age::DiesOfOldAge(uint32_t age, const Ages& ages, const FloatRandom& floatRandom, const IntRandom& intRandom)
@@ -66,8 +72,8 @@ villager_age::Newborn villager_age::MakeNewborn(uint32_t age, uint32_t turn, con
 	Newborn born;
 	born.age = GivenAge(age, kind.grownUp);
 	born.child = IsChildAge(born.age, kind.grownUp);
-	born.scale =
-	    GrownScale(born.age, kind.grownUp, kind.ageToScale, StartScale(born.age, kind.grownUp, kind.ageToScale), floatRandom);
+	born.scale = GrownScale(born.age, kind.grownUp, kind.ageToScale,
+	                        StartScale(born.age, kind.grownUp, kind.ageToScale, kind.beforeTable), floatRandom);
 
 	const float firstFood = floatRandom(k_NewbornFoodRange) + kind.hungryForFood;
 	born.food = firstFood < 1.0f ? floatRandom(k_NewbornFoodRange) + kind.hungryForFood : 1.0f;

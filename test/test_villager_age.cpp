@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <bit>
 #include <string>
 #include <vector>
 
@@ -59,31 +60,41 @@ TEST(VillagerAge, AdultsAreAtLeastEighteen)
 	EXPECT_FALSE(IsChildAge(13, k_GrownUp));
 }
 
-TEST(VillagerAge, ChildrenStartAtTheirAgesSizeAndAdultsANearlyFullOne)
+TEST(VillagerAge, ChildrenStartAtTheSizeOfTheYearBeforeAndAdultsANearlyFullOne)
 {
-	EXPECT_FLOAT_EQ(StartScale(0, k_GrownUp, k_AgeToScale), 0.41f);
-	EXPECT_FLOAT_EQ(StartScale(12, k_GrownUp, k_AgeToScale), 0.93f);
-	EXPECT_FLOAT_EQ(StartScale(30, k_GrownUp, k_AgeToScale), 0.9f);
+	// Age 1 takes the first size of the table, age 12 the size of age 11
+	EXPECT_EQ(StartScale(1, k_GrownUp, k_AgeToScale, 0.0f), 0.41f);
+	EXPECT_EQ(StartScale(12, k_GrownUp, k_AgeToScale, 0.0f), 0.89f);
+	EXPECT_EQ(StartScale(30, k_GrownUp, k_AgeToScale, 0.0f), 0.9f);
+	// Age 0 takes the value before the table: the dancing speed read as a size
+	EXPECT_EQ(StartScale(0, k_GrownUp, k_AgeToScale, BeforeTable(0x3F000000u)), 0.5f);
+	EXPECT_EQ(BeforeTable(10u), std::bit_cast<float>(10u));
 }
 
-TEST(VillagerAge, AChildGrowsUpToThreeQuartersOfTheWayToItsAgesSize)
+TEST(VillagerAge, AChildGrowsUpToThreeQuartersOfTheWayToTheSizeOfTheYearAfter)
 {
+	// Age 5 grows towards the size of age 6
 	Draws draws {.values = {0.03f}};
 	const float scale = GrownScale(5, k_GrownUp, k_AgeToScale, 0.58f, draws.Float());
 	ASSERT_EQ(draws.limits.size(), 1u);
-	EXPECT_FLOAT_EQ(draws.limits[0], (0.63f - 0.58f) * 0.75f);
-	EXPECT_FLOAT_EQ(scale, 0.61f);
+	EXPECT_EQ(draws.limits[0], (0.67f - 0.58f) * 0.75f);
+	EXPECT_EQ(scale, 0.58f + 0.03f);
+	// The last year of the table has no year after it: the size stays
+	Draws none {.values = {}};
+	EXPECT_EQ(GrownScale(19, 20, k_AgeToScale, 0.7f, none.Float()), 0.7f);
+	EXPECT_TRUE(none.limits.empty());
 }
 
 TEST(VillagerAge, AnAdultKeepsItsSizeUnlessTheDrawIsBiggerThenDrawsAgain)
 {
-	// 1.05 - 0.08 = 0.97 is no bigger than 0.98: it stays
+	// (0.05 - 0.08) + 1 = 0.97 is no bigger than 0.98: it stays
 	Draws keep {.values = {0.08f}};
 	EXPECT_FLOAT_EQ(GrownScale(30, k_GrownUp, k_AgeToScale, 0.98f, keep.Float()), 0.98f);
 	EXPECT_EQ(keep.limits.size(), 1u);
-	// 1.05 - 0.02 is bigger than 0.9: a second draw decides
+	// (0.05 - 0.02) + 1 is bigger than 0.9: a second draw decides, with the spread first and the one added last
 	Draws redraw {.values = {0.02f, 0.09f}};
-	EXPECT_FLOAT_EQ(GrownScale(30, k_GrownUp, k_AgeToScale, 0.9f, redraw.Float()), 1.05f - 0.09f);
+	const float adult = GrownScale(30, k_GrownUp, k_AgeToScale, 0.9f, redraw.Float());
+	EXPECT_EQ(adult, (0.05f - 0.09f) + 1.0f);
 	ASSERT_EQ(redraw.limits.size(), 2u);
 	EXPECT_FLOAT_EQ(redraw.limits[1], 0.1f);
 }
@@ -159,8 +170,8 @@ TEST(VillagerAge, ANewAdultDrawsItsSizeFoodCheckAndWaitInTheGamesOrder)
 	const auto born = MakeNewborn(13, 1000, k_Kind, stream.Float(), stream.Int());
 	EXPECT_EQ(born.age, 18u);
 	EXPECT_FALSE(born.child);
-	// 1.05 - 0.02 is bigger than 0.9, so the size is a second draw
-	EXPECT_FLOAT_EQ(born.scale, 0.97f);
+	// (0.05 - 0.02) + 1 is bigger than 0.9, so the size is a second draw
+	EXPECT_EQ(born.scale, (0.05f - 0.08f) + 1.0f);
 	// 0.3 + 0.5 is under full, so the food is a second draw
 	EXPECT_FLOAT_EQ(born.food, 0.95f);
 	// 5 is under the turn, so the check is drawn again
@@ -176,13 +187,13 @@ TEST(VillagerAge, ANewAdultDrawsItsSizeFoodCheckAndWaitInTheGamesOrder)
 	EXPECT_EQ(stream.order, expected);
 }
 
-TEST(VillagerAge, ANewChildIsItsAgesSizeAndAFullOneDrawsOnce)
+TEST(VillagerAge, ANewChildIsTheSizeOfTheYearBeforeAndAFullOneDrawsOnce)
 {
 	Stream stream {.floats = {0.0f, 0.55f}, .ints = {5, 0}};
 	const auto born = MakeNewborn(5, 2, k_Kind, stream.Float(), stream.Int());
 	EXPECT_TRUE(born.child);
 	EXPECT_EQ(born.age, 5u);
-	EXPECT_FLOAT_EQ(born.scale, 0.63f);
+	EXPECT_EQ(born.scale, 0.58f);
 	// 0.55 + 0.5 is full: exactly full, no second draw
 	EXPECT_FLOAT_EQ(born.food, 1.0f);
 	// The game is younger than the draw: last checked when the game began
@@ -266,12 +277,12 @@ TEST(VillagerAge, AGrownChildTakesAnAdultsSizeAndIsNotSizedAgainAtHome)
 {
 	// Grown up it starts at the adult start size and draws twice, since the first draw is always above it
 	Draws draws {.values = {0.02f, 0.06f}};
-	const auto start = StartScale(GrownUpAge(k_GrownUp), k_GrownUp, k_AgeToScale);
+	const auto start = StartScale(GrownUpAge(k_GrownUp), k_GrownUp, k_AgeToScale, 0.0f);
 	EXPECT_FLOAT_EQ(start, 0.9f);
 	const auto scale = GrownScale(GrownUpAge(k_GrownUp), k_GrownUp, k_AgeToScale, start, draws.Float());
-	EXPECT_FLOAT_EQ(scale, 1.05f - 0.06f);
+	EXPECT_EQ(scale, (0.05f - 0.06f) + 1.0f);
 	EXPECT_EQ(draws.limits.size(), 2u);
 	// Even the smallest adult size drawn (a draw is always under its limit) is full grown, so it isn't sized again
 	// arriving home
-	EXPECT_GE(1.05f - 0.0999f, k_FullGrownScale);
+	EXPECT_GE((0.05f - 0.0999f) + 1.0f, k_FullGrownScale);
 }

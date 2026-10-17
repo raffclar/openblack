@@ -53,6 +53,7 @@ void walker_placement::Place(Registry& registry, entt::entity entity, glm::vec3 
 	                MoveStateFinalStepTag, MoveStateArrivedTag>(entity);
 	registry.Remove<WallHugObjectReference>(entity);
 	wallHug->step = {0, 0};
+	wallHug->stepAltitude = 0.0f;
 	wallHug->turnsUntilStepRebuild = 0;
 	if (arrived)
 	{
@@ -76,5 +77,6 @@ void walker_placement::Stop(Registry& registry, entt::entity entity)
 	                MoveStateFinalStepTag, MoveStateArrivedTag>(entity);
 	registry.Remove<WallHugObjectReference>(entity);
 	wallHug->step = {0, 0};
+	wallHug->stepAltitude = 0.0f;
 	wallHug->turnsUntilStepRebuild = 0;
 }
