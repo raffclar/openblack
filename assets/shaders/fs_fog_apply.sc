@@ -4,6 +4,7 @@ $input v_texcoord0, v_texcoord1
 
 #include "fog.sh"
 #include "sky_dome.sh"
+#include "world_curve.sh"
 
 // EXPERIMENT (not for merge): the fog over the scene and the water, before the clouds. Each pixel reads the summed fog
 // at the distance of its scene, between the two slices round it. Where the screen shows the sky, a thinner share of the
@@ -35,14 +36,14 @@ void main()
 	vec3 world = WorldAt(uv, depth);
 	sky = sky || OnSkyDome(world);
 	float range = sky ? u_fogGrid.w : length(world - eye);
-	// Above the water, the water's surface is where the scene is. The sea is a part of the scene at its full distance,
-	// also past the grid's far end. Thus its fog eases to the sky's share with the distance and does not change in a
-	// step where the sea passes the grid's far end.
+	// Above the water, the water's surface on the curved world is where the scene is. The sea is a part of the scene at
+	// its full distance, also past the grid's far end. Thus its fog eases to the sky's share with the distance and does
+	// not change in a step where the sea passes the grid's far end. A ray over the horizon does not meet the sea.
 	float sea = u_fogAmbient.w;
 	if (eye.y > sea && dir.y < 0.0f)
 	{
-		float toSea = (eye.y - sea) / -dir.y;
-		if (sky || toSea < range)
+		float toSea = CurvedSeaDistance(eye.y - sea, dir);
+		if (toSea >= 0.0f && (sky || toSea < range))
 		{
 			range = toSea;
 			sky = false;

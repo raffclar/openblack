@@ -1,6 +1,8 @@
 #ifndef AERIAL_HAZE_SH
 #define AERIAL_HAZE_SH
 
+#include "world_curve.sh"
+
 // EXPERIMENT (not for merge): the haze between the eye and a point of the scene or a cloud, from the haze's grid that
 // follows the view. Include atmosphere.sh first and declare the grid's sampler s_atmosAerial.
 
@@ -22,11 +24,13 @@ vec4 AtmosHazeAlong(vec2 uv, vec3 eye, vec3 dir, float range, float sunHeight)
 	// from a high eye down to the sea holds less haze than a path along the sea.
 	float sea = u_atmosParams.w;
 	float fromHeight = (eye.y - sea) / ATMOS_UNITS_PER_KM;
-	float toHeight = (eye.y + dir.y * range - sea) / ATMOS_UNITS_PER_KM;
+	vec3 end = eye + dir * range;
+	float toHeight = (end.y + WorldDrop(end.xz) - sea) / ATMOS_UNITS_PER_KM;
 	float farther = max(range - AtmosSliceDistance(ATMOS_AERIAL_SLICES - 1.0f), 0.0f) / ATMOS_UNITS_PER_KM *
 	                AtmosMeanExtinction(fromHeight, toHeight);
 	float hidden = 1.0f - exp(-farther);
-	vec3 horizonSky = AtmosSkyOnScreen(normalize(vec3(dir.x, max(dir.y, 0.0f), dir.z)), sunHeight);
+	// The sky over the sea's horizon in this direction: the horizon goes down under the eye's level as the eye climbs
+	vec3 horizonSky = AtmosSkyOnScreen(normalize(vec3(dir.x, max(dir.y, WorldHorizonY(eye.y - sea)), dir.z)), sunHeight);
 	// A thick haze has the colour of the sky at the horizon, as the dome shows it. A thin haze near the eye keeps the
 	// grid's own light, with the shadows of the hills and the clouds in it.
 	float opacity = 1.0f - haze.a;

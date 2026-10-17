@@ -6,6 +6,7 @@ $input v_texcoord0, v_texcoord1
 SAMPLER2D(s_atmosAerial, 0);
 #include "aerial_haze.sh"
 #include "sky_dome.sh"
+#include "world_curve.sh"
 
 // EXPERIMENT (not for merge): the haze over the scene and the water. Each pixel reads the haze's grid at the distance of
 // its scene, between the two slices round it. The sky has the air's light in it already and gets no haze. The low tier
@@ -86,12 +87,13 @@ void main()
 	// The sky's dome writes its depth: a point on it is the sky
 	sky = sky || OnSkyDome(world);
 	float range = sky ? 1e9f : length(world - eye);
-	// Above the water, the water's surface is where the scene is
+	// Above the water, the water's surface is where the scene is. The far sea curves away with the world, and a ray over
+	// the horizon does not meet it.
 	float sea = u_atmosParams.w;
 	if (eye.y > sea && dir.y < 0.0f)
 	{
-		float toSea = (eye.y - sea) / -dir.y;
-		if (toSea < range)
+		float toSea = CurvedSeaDistance(eye.y - sea, dir);
+		if (toSea >= 0.0f && toSea < range)
 		{
 			range = toSea;
 			sky = false;

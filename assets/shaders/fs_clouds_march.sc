@@ -54,7 +54,8 @@ void main()
 	// Above the water, the water's surface hides what is under it
 	if (u_cloudEye.w > 0.5f && dir.y < 0.0f)
 	{
-		limit = min(limit, (eye.y - u_cloudLayer.w) / -dir.y);
+		float toSea = CurvedSeaDistance(eye.y - u_cloudLayer.w, dir);
+		limit = toSea >= 0.0f ? min(limit, toSea) : limit;
 	}
 
 	// Blue noise, moved on each frame by the golden ratio, so that each pixel samples other places over a few frames

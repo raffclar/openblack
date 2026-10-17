@@ -439,6 +439,9 @@ private:
 	void DrawCloudsInEnvironment(const glm::vec3& centre) const;
 	/// EXPERIMENT (not for merge): the clouds' uniforms and their textures for one program
 	void SetCloudUniforms(const ShaderProgram& program, const volumetric_clouds::CloudUniforms& uniforms) const;
+	/// EXPERIMENT (not for merge): sets the curve of the world far away for a program that uses it, a flat world without
+	/// the experiment's air
+	void SetWorldCurve(const ShaderProgram& program) const;
 	/// EXPERIMENT (not for merge): the map of the clouds' shadow for the water, in a sampler stage; none when the
 	/// clouds are off
 	void BindCloudShadow(const ShaderProgram& program, uint8_t stage) const;

@@ -5,6 +5,7 @@ $input v_texcoord0, v_texcoord1
 // The water reads the field of the wakes and the hulls (see underwater_wake.sh)
 #define UW_WAKE
 #include "underwater.sh"
+#include "world_curve.sh"
 
 // EXPERIMENT (not for merge): the experiment's water. The scene is drawn into its own target, with no sea, and this
 // pass draws it to the window with the water over it.
@@ -307,11 +308,16 @@ float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, ou
 {
 	whitecap = 0.0f;
 	chopShare = 0.0f;
-	float along = (u_uwParams.z - eye.y) / direction.y;
 	slope = vec2_splat(0.0f);
 	face = 0.0f;
 	variance = 0.0f;
 	shore = vec4(1000.0f, 0.0f, 0.0f, -160.0f);
+	// The ray starts at the curved sea's level. A ray over the horizon does not meet the sea.
+	float along = CurvedSeaDistance(eye.y - u_uwParams.z, direction);
+	if (along < 0.0f)
+	{
+		return -1.0f;
+	}
 	// High waves seen at a low angle move the point where the ray meets the surface far: more steps (see NextAlong)
 	int steps = RogueSteps(eye.xz + direction.xz * max(along, 0.0f), abs(direction.y));
 	float grazing = UwWaveTop() / max(abs(direction.y), 0.02f);
@@ -327,7 +333,8 @@ float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, ou
 		shore = ShoreAt(at);
 		float height =
 		    UwSurfaceSheltered(at, t, FootprintOnWater(direction, max(along, 0.0f)), shore, shelter, slope, face, variance,
-		                       whitecap, chopShare);
+		                       whitecap, chopShare) -
+		    WorldDrop(at);
 		along = NextAlong(along, eye.y, direction, height, slope);
 	}
 	return along;
@@ -762,10 +769,12 @@ void main()
 		// The small ripples on the waves keep the reflection soft, so that the steep faces of the waves do not mirror the
 		// sky like metal
 		float roughness = max(UwRoughness(slopeVariance), 0.17f) + 0.05f * smoothstep(25.0f, 160.0f, toSurface);
-		float waterTop = eye.y + direction.y * toSurface;
+		vec3 surfacePoint = eye + direction * toSurface;
+		// The heights over the curved world's level at that point, and the slope with the curve of the far sea
+		float waterTop = surfacePoint.y + WorldDrop(surfacePoint.xz);
 		float waterDepth = waterTop - shore.w;
 		float lift = waterTop - u_uwParams.z;
-		vec3 surfacePoint = eye + direction * toSurface;
+		surfaceSlope -= WorldDropSlope(surfacePoint.xz);
 		// No water shows inside a boat's hull
 		float insideBoat = UwInsideBoat(surfacePoint.xz);
 		if (toSurface > 0.0f && (toSurface < sceneDistance || farFloor) && insideBoat < 0.999f)

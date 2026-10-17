@@ -76,6 +76,8 @@ struct AtmosphereFrame
 	glm::vec3 lightAtGround {1.0f};
 	/// The light of the air's sky from above on the screen, as the dome shows the sky (for the shade of the clouds)
 	glm::vec3 skyFromAbove {0.0f};
+	/// The curve of the world far away (world_curve.sh): xy the eye's x and z, z the flat reach, w the world's radius
+	glm::vec4 worldCurve {0.0f};
 	global_illumination::ShL1 sky;
 	/// Where the sky's dome is: xy the middle across the land, z how far across and w how high a point must be to be on
 	/// the dome. The dome writes its depth, so the haze and the fog know the sky by this.

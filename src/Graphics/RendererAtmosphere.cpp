@@ -135,6 +135,10 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	const float moonShare = atmos::AirMoonShare(sunTowards.y);
 	const glm::vec3 towardsLight = atmos::AirLightTowards(sunFromEye, -sunTowards, moonShare);
 
+	// The world curves away past the farthest corner of the map from the eye, and the sea's horizon goes down as the eye
+	// climbs
+	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+	const float flatReach = atmos::FlatReach({eye.x, eye.z}, mapSize);
 	// The sky's light on the processor, again only when the light, the air or the height has changed enough
 	if (Stale(view.cache, towardsLight, air.turbidity, altitude, seconds))
 	{
@@ -143,7 +147,7 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		    .turbidity = air.turbidity,
 		    .altitude = altitude,
 		    .seconds = seconds,
-		    .horizon = atmos::HorizonRadiance(towardsLight, altitude, air),
+		    .horizon = atmos::HorizonRadiance(towardsLight, altitude, air, atmos::WorldHorizonY(eye.y - seaLevel, flatReach)),
 		    .sky = gi::SkySh(towardsLight, altitude, air, k_SkySamples),
 		};
 	}
@@ -204,6 +208,7 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.sunDisc = {gameLight, frame.lightColour.w * glm::mix(1.0f, 0.35f, frame.light.w)};
 	atmosphere.sunColour = {glm::vec3(frame.lightColour) * atmosphere.lightTint, 0.0f};
 	atmosphere.sky = cache.sky;
+	atmosphere.worldCurve = {eye.x, eye.z, flatReach, atmos::k_WorldRadius};
 	// The sky's light from above: the mean of the air's upper sky in the colours that the dome shows. It is blue by day
 	// and blue-grey at dusk, because the sky high up does not have the red of the horizon.
 	constexpr glm::vec3 k_Up {0.0f, 1.0f, 0.0f};
@@ -367,6 +372,7 @@ void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarge
 	applyProgram->SetUniformValue("u_hazeDome", &atmosphere.skyDome);
 	applyProgram->SetUniformValue("u_hazeSun", &atmosphere.sunDisc);
 	applyProgram->SetUniformValue("u_hazeSunColour", &atmosphere.sunColour);
+	SetWorldCurve(*applyProgram);
 	BindScreenTriangle();
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_SRC_ALPHA));
 	applyProgram->Submit(static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver), std::numeric_limits<uint32_t>::max());
@@ -381,4 +387,14 @@ void Renderer::BindFoliageLight(const ShaderProgram& program) const
 	{
 		program.SetUniformValue("u_foliageLightColour", &_atmosphereFrame->sunColour);
 	}
+}
+
+void Renderer::SetWorldCurve(const ShaderProgram& program) const
+{
+	if (!program.HasUniform("u_worldCurve"))
+	{
+		return;
+	}
+	const glm::vec4 flat {0.0f};
+	program.SetUniformValue("u_worldCurve", _atmosphereFrame.has_value() ? &_atmosphereFrame->worldCurve : &flat);
 }
