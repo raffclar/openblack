@@ -582,7 +582,8 @@ void LHVM::InvokeStopTaskCallback(const uint32_t taskNumber)
 
 void LHVM::AddReference(const uint32_t objectId)
 {
-	if (_addReference != nullptr)
+	// A variable that holds no object gives no reference to the game
+	if (objectId != 0 && _addReference != nullptr)
 	{
 		_addReference(objectId);
 	}
@@ -590,7 +591,8 @@ void LHVM::AddReference(const uint32_t objectId)
 
 void LHVM::RemoveReference(const uint32_t objectId)
 {
-	if (_removeReference != nullptr)
+	// A variable that held no object has no reference to give back
+	if (objectId != 0 && _removeReference != nullptr)
 	{
 		_removeReference(objectId);
 	}

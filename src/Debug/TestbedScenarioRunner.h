@@ -158,6 +158,7 @@ private:
 	[[nodiscard]] std::string PlayBoatFilm(const Command& command) const;
 	/// Starts a land's script as another script's call starts it; what came of that
 	[[nodiscard]] std::string RunScript(const Command& command);
+	[[nodiscard]] std::string StopScript(const Command& command);
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
 	std::string HandTapObject(size_t index);

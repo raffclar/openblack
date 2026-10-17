@@ -1869,6 +1869,21 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 }
 
+std::string Runner::StopScript(const Command& command)
+{
+	if (!Locator::vm::has_value())
+	{
+		return "no script machine";
+	}
+	auto& vm = Locator::vm::value();
+	const auto before = vm.GetTasks().size();
+	vm.StopScripts([&command](const std::string& name, const std::string& /*filename*/) { return name == command.script; });
+	const auto stopped = before - vm.GetTasks().size();
+	const auto object = ObjectAt(0);
+	const auto inScript = object.has_value() && Locator::entitiesRegistry::value().AllOf<ecs::components::InScript>(*object);
+	return fmt::format("stopped {} tasks of {}; the object is {}in a script", stopped, command.script, inScript ? "" : "not ");
+}
+
 std::string Runner::RunScript(const Command& command)
 {
 	if (!Locator::vm::has_value() || !Locator::scriptObjects::has_value())
@@ -2257,6 +2272,11 @@ void Runner::Give(const Command& command)
 	if (command.kind == Kind::RunScript)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RunScript(command)));
+		return;
+	}
+	if (command.kind == Kind::StopScript)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), StopScript(command)));
 		return;
 	}
 	if (command.kind == Kind::RecordChallenge)
@@ -2721,6 +2741,7 @@ void Runner::Give(const Command& command)
 	case Kind::OpenTattooMenu:
 	case Kind::PlayCustomMusic:
 	case Kind::ShowCustomMusicControls:
+	case Kind::StopScript:
 	case Kind::RunText:
 	case Kind::ReadTip:
 	case Kind::LookAtTempleScroll:

@@ -15,17 +15,12 @@
 #include <vector>
 
 #include "Common/FixedFormat.h"
+#include "Common/X87.h"
 #include "ECS/Components/LearningMarker.h"
 #include "ECS/Registry.h"
 
 namespace openblack::ecs::learning_marker
 {
-
-namespace
-{
-/// The mark's age is turned into the bulb's blink by this many radians a millisecond: one turn a second
-constexpr double k_BlinkPerMillisecond = 0.0062831854;
-} // namespace
 
 std::string Text(float share)
 {
@@ -71,7 +66,9 @@ uint8_t TextAlpha(float milliseconds)
 
 uint8_t BulbWhite(float milliseconds)
 {
-	return static_cast<uint8_t>(std::abs(std::cos(static_cast<double>(milliseconds) * k_BlinkPerMillisecond)) * 255.0);
+	// The angle rounds to a float. The cosine stays wide until the multiply by 255 rounds it
+	const float angle = milliseconds * k_BlinkPerMillisecond;
+	return static_cast<uint8_t>(x87::Mul(std::abs(x87::Cos(angle)), 255.0f));
 }
 
 uint8_t GlowAlpha(float milliseconds)

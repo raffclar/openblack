@@ -306,6 +306,13 @@ else ()
   endif ()
 endif ()
 
+# Each float operation of the game's logic must round one time, as the game's FPU did. Fused multiply-add rounds two
+# operations one time, so these options stop it in the game, its library and the tests (see Common/X87.h).
+target_compile_options(
+  openblack_lib
+  PUBLIC "$<IF:$<CXX_COMPILER_ID:MSVC>,/fp:precise,-ffp-contract=off>"
+)
+
 set_property(
   DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT openblack
 )
