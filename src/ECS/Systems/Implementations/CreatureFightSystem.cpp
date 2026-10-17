@@ -68,6 +68,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DeadTree.h"
@@ -936,6 +937,11 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	if (!fight::AgreesToFight(HeightOf(ShownSize(registry.Get<const Creature>(opponent))),
 	                          HeightOf(ShownSize(registry.Get<const Creature>(creature))), dead,
 	                          registry.AllOf<ScriptControlled>(opponent), registry.AllOf<ScriptControlled>(creature)))
+	{
+		return StartResult::Refused;
+	}
+	// A creature that does a joint action with a third creature refuses too
+	if (const auto* link = registry.TryGet<const CreaturePartner>(opponent); link != nullptr && link->partner != creature)
 	{
 		return StartResult::Refused;
 	}

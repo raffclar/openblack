@@ -930,6 +930,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureObjectAction::catching>("catching")
 	    .Field<&components::CreatureObjectAction::catchTurned>("catchTurned")
 	    .Field<&components::CreatureObjectAction::catchHeight>("catchHeight")
+	    .Field<&components::CreatureObjectAction::swallows>("swallows")
 	    .Field<&components::CreatureObjectAction::failure>("failure")
 	    .Field<&components::CreatureObjectAction::failureKind>("failureKind");
 	Reflect<components::CreatureDroppedObject>(context).Field<&components::CreatureDroppedObject::object>("object");
@@ -2522,7 +2523,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::ObjectOrder::pointHeight>("pointHeight")
 	    .Field<&openblack::creature_mind::ObjectOrder::seconds>("seconds")
 	    .Field<&openblack::creature_mind::ObjectOrder::mirrored>("mirrored")
-	    .Field<&openblack::creature_mind::ObjectOrder::atObject>("atObject");
+	    .Field<&openblack::creature_mind::ObjectOrder::atObject>("atObject")
+	    .Field<&openblack::creature_mind::ObjectOrder::swallows>("swallows");
 	Reflect<openblack::creature_mind::Step>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Step::kind>("kind")
 	    .Field<&openblack::creature_mind::Step::seconds>("seconds")

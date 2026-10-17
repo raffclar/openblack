@@ -60,6 +60,9 @@ public:
 	/// Tosses away what it holds with another animation, letting go at the same moment
 	virtual bool DiscardWith(entt::entity creature, size_t animation) = 0;
 	virtual bool EatHeld(entt::entity creature) = 0;
+	/// Eats what it holds when it is told only to eat, with no thing given: the food goes into its body, but it does not
+	/// swallow the meal, and the eat fails when the animation ends
+	virtual bool EatHeldOnly(entt::entity creature) = 0;
 	/// Strokes, shakes, smells or examines what it holds, by the animation of that
 	virtual bool Keep(entt::entity creature, size_t animation) = 0;
 	virtual bool Throw(entt::entity creature, const glm::vec3& target) = 0;

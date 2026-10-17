@@ -160,7 +160,8 @@ void testbed_scenarios::AddFriendActionScenarios(std::vector<Scenario>& all)
 	                   "south. A script tells the lion to smile at the tiger, then tells the tiger to eat from the field "
 	                   "with the lion.",
 	    .expected = "The two walk to the two sides of the field, 10 from it, face it, take a handful of wheat each and eat "
-	                "it. Then the tiger plays its happy action twice.",
+	                "it. Neither brings the wheat back up. When the first of the two finishes its eat, the joint action "
+	                "stops, so the tiger does not play its happy action.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .distance = k_CloseUp},
 	    .creatures = {Asker(), Partner()},

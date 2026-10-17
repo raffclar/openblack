@@ -645,7 +645,10 @@ std::vector<Step> creature_mind::EatFromFieldWithFriend(const Friends& friends, 
 	    Step {.kind = Step::Kind::Object,
 	          .effect = Effect::TookFromPile,
 	          .order = {.kind = ObjectOrder::Kind::TakeFromPile, .handful = ObjectOrder::Handful::Wheat, .object = field}};
-	const auto eat = Step {.kind = Step::Kind::Object, .effect = Effect::Eat, .order = {.kind = ObjectOrder::Kind::Eat}};
+	// Both are told only to eat, with no thing given: each takes in its handful and then its step fails, which ends the
+	// joint action before the steps after it
+	const auto eat =
+	    Step {.kind = Step::Kind::Object, .effect = Effect::Eat, .order = {.kind = ObjectOrder::Kind::Eat, .swallows = false}};
 	std::vector<Step> agenda {
 	    AskToBeFriends(friends.friendly, Cue::Playfulness),
 	    Order(friends.friendly, GoTo(fieldPoint - glm::vec2(k_FieldPlaceMetres, 0.0f), friends.height)),
