@@ -971,6 +971,8 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	auto pose = _world->PoseOf(object);
 	pose.axes = _world->UnstretchedAxes(object, pose.axes);
 	_world->SetPose(object, pose);
+	// The thing keeps its place on the map while it is held, where a tree takes its light
+	registry.AssignOrReplace<HeldLight>(object, HeldLight {.takenAt = pose.origin});
 	registry.AssignOrReplace<InHand>(object, InHand {.hand = _world->Hand()});
 	grab.state = HandGrab::State::Holding;
 	grab.object = object;

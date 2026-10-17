@@ -225,8 +225,9 @@ struct RenderContext
 		glm::mat4 castModel;
 		/// Its place among the instances, where it has one
 		uint32_t instance {std::numeric_limits<uint32_t>::max()};
-		/// For a thing in a hand, the light that the sea mirrors it in (see graphics::hand_reflection::StepHeldLight)
-		std::optional<graphics::hand_reflection::HeldLightPoint> heldLight;
+		/// For a thing in a hand, the light that the sea mirrors it in on this frame (see
+		/// graphics::hand_reflection::StepHeldLight)
+		std::optional<graphics::hand_reflection::HeldLook> heldLight;
 	};
 	std::vector<HighDetailDraw> highDetailDraws;
 	/// The explorers' boat while it is pushed down the beach, which casts its shadow from the same far sun onto the land
@@ -244,6 +245,8 @@ struct RenderContext
 	/// The things held in a hand this frame, with the model each is drawn with and its matrix (as castModel too): each
 	/// joins the shadow of the hand holding it
 	std::vector<HighDetailDraw> inHandDraws;
+	/// The trees held in a hand this frame: each one's instance among the trees' instances, its model and its light
+	std::vector<HighDetailDraw> heldTreeDraws;
 	/// The rivers' stretches, whose beds and channels are laid into the land (see components::StreamSegment)
 	std::vector<glm::mat4> streamSegments;
 	/// The hand is scaled by a negative factor to mirror it, which turns its faces round

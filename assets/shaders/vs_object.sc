@@ -227,10 +227,13 @@ void main()
 		colour = u_objectLook.xyz;
 	}
 #ifdef USE_INSTANCING
-	// An instance's own colour, 0xRRGGBB, multiplies the light in whole steps
-	if (i_data4.y > 0.0f)
+	// An instance's own colour, 0xRRGGBB, multiplies the light in whole steps. A held thing mirrored in the sea takes
+	// the colour that it kept in the hand.
+	bool heldMirror = u_fogAt.w > 1.5f;
+	float ownTint = heldMirror ? u_fogAt.y : i_data4.y;
+	if (ownTint > 0.0f)
 	{
-		vec3 tint = vec3(floor(i_data4.y / 65536.0f), mod(floor(i_data4.y / 256.0f), 256.0f), mod(i_data4.y, 256.0f));
+		vec3 tint = vec3(floor(ownTint / 65536.0f), mod(floor(ownTint / 256.0f), 256.0f), mod(ownTint, 256.0f));
 		colour = floor(colour * tint / 256.0f);
 	}
 #endif // USE_INSTANCING
@@ -247,7 +250,7 @@ void main()
 		}
 	}
 	float hazeDepth = mul(u_view, vec4(fogOrigin, 1.0f)).z;
-	// A held thing mirrored in the sea takes the haze of the distance that it kept in the hand
+	// A held thing mirrored in the sea takes the haze of the distance that it kept in the hand (w 2)
 	if (u_fogAt.w > 1.5f)
 	{
 		hazeDepth = u_fogAt.x;
@@ -298,6 +301,11 @@ void main()
 	else if (u_window.x < 0.5f && i_data4.x > 1.5f)
 	{
 		v_snow.w = i_data4.x - 1.0f;
+	}
+	// A held thing mirrored in the sea takes the colour added that it kept in the hand
+	if (heldMirror)
+	{
+		v_snow.w = u_fogAt.z;
 	}
 #endif // USE_INSTANCING
 	// The posed models the game lights as it poses them take their own rule

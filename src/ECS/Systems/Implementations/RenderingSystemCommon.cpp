@@ -11,24 +11,28 @@
 
 #include "RenderingSystemCommon.h"
 
+#include <algorithm>
 #include <vector>
 
 #include <glm/gtx/transform.hpp>
 
 #include "3D/L3DMesh.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FireSystemInterface.h"
+#include "Fire/FireGraphic.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/GraphicsHandleBgfx.h"
-#include "Graphics/MeshDetail.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
@@ -36,6 +40,58 @@
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
+
+namespace
+{
+
+/// The light that the sea mirrors a held thing in this frame, and the light that the thing keeps for the next frame
+openblack::graphics::hand_reflection::HeldLightStep HeldLightStepOf(const openblack::ecs::Registry& registry,
+                                                                    entt::entity entity, glm::vec3 drawnAt, bool tree,
+                                                                    const openblack::Camera* camera)
+{
+	using namespace openblack::graphics::hand_reflection;
+	HeldThing thing {.drawnAt = drawnAt, .takenAt = drawnAt, .tree = tree};
+	if (camera != nullptr)
+	{
+		thing.eye = camera->GetOrigin();
+		thing.forward = camera->GetForward();
+	}
+	std::optional<HeldLook> kept;
+	if (const auto* light = registry.TryGet<const HeldLight>(entity); light != nullptr)
+	{
+		thing.takenAt = light->takenAt;
+		if (light->drawn)
+		{
+			kept = HeldLook {.point = light->point,
+			                 .viewDepth = light->viewDepth,
+			                 .tint = light->tint,
+			                 .added = light->added,
+			                 .treeGrey = light->treeGrey};
+		}
+	}
+	if (const auto* fire = registry.TryGet<const Fire>(entity); fire != nullptr && openblack::Locator::fireSystem::has_value())
+	{
+		const auto& fires = openblack::Locator::fireSystem::value();
+		if (tree)
+		{
+			const auto look = fires.GetBurningTreeLook(entity);
+			thing.onFire = look.has_value();
+			thing.treeGrey = look.has_value() ? static_cast<uint32_t>(look->grey) : 0u;
+		}
+		else
+		{
+			thing.onFire = true;
+			thing.charredGrey = openblack::fire::graphic::CharredGrey(fire->state.charring);
+			thing.glow = fires.GetGlowColour(entity).value_or(0u);
+		}
+	}
+	if (const auto* pot = registry.TryGet<const Pot>(entity); pot != nullptr && pot->poisoned)
+	{
+		thing.poisonedPot = true;
+	}
+	return StepHeldLight(kept, HeldLookOf(thing));
+}
+} // namespace
 
 RenderContext::RenderContext()
     : instanceUniformBuffer(BGFX_INVALID_HANDLE)
@@ -186,25 +242,30 @@ void RenderingSystemCommon::KeepHeldLights()
 	{
 		registry.Remove<HeldLight>(entity);
 	}
+	// Each draw of a thing in the hand takes the light of this frame, which the thing keeps for the next frame. The sea
+	// mirrors it in the light that it kept the frame before.
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
-	for (const auto& draw : _renderContext.inHandDraws)
-	{
-		const glm::vec3 point(draw.model[3]);
-		const HeldLight now {
-		    .point = point,
-		    .viewDepth =
-		        camera != nullptr ? graphics::mesh_detail::ViewDepth(point, camera->GetOrigin(), camera->GetForward()) : 0.0f,
+	const auto keep = [&registry, camera](bool tree) {
+		return [&registry, camera, tree](RenderContext::HighDetailDraw& draw) {
+			const auto step = HeldLightStepOf(registry, draw.entity, glm::vec3(draw.model[3]), tree, camera);
+			draw.heldLight = step.mirrored;
+			auto* kept = registry.TryGet<HeldLight>(draw.entity);
+			if (kept == nullptr)
+			{
+				// A thing put in the hand some other way keeps its place where it is first drawn there
+				kept = &registry.Assign<HeldLight>(draw.entity, HeldLight {.takenAt = step.kept.point});
+			}
+			// The light changes in place, so that the draw lists stay as they are
+			kept->drawn = true;
+			kept->point = step.kept.point;
+			kept->viewDepth = step.kept.viewDepth;
+			kept->tint = step.kept.tint;
+			kept->added = step.kept.added;
+			kept->treeGrey = step.kept.treeGrey;
 		};
-		// The light changes in place, so that the draw lists stay as they are
-		if (auto* kept = registry.TryGet<HeldLight>(draw.entity); kept != nullptr)
-		{
-			*kept = now;
-		}
-		else
-		{
-			registry.Assign<HeldLight>(draw.entity, now);
-		}
-	}
+	};
+	std::ranges::for_each(_renderContext.inHandDraws, keep(false));
+	std::ranges::for_each(_renderContext.heldTreeDraws, keep(true));
 }
 
 void RenderingSystemCommon::UploadBonePalette()
