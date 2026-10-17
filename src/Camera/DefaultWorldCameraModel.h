@@ -46,6 +46,8 @@ public:
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) final;
 	void HandleActions(std::chrono::microseconds dt) final;
+	/// Flies to a place, as a bookmark or a key does. The flight ends at the fence when the place is outside it, and
+	/// wooshes only when it starts more than 150 from its end.
 	void SetFlight(glm::vec3 origin, glm::vec3 focus) final;
 	/// Flies back to where it was, as when the camera is given back after the hand lets go of a creature: as SetFlight,
 	/// wooshing only when asked

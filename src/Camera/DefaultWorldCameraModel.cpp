@@ -638,15 +638,20 @@ bool DefaultWorldCameraModel::KeepInsideFence(const camera_zones::Zones& zones, 
 	// Outside the fence it is put back inside, what it looks at moving with it; turned by a drag round the edge of the
 	// screen, it is put further in, and goes on turning
 	const bool edgeTurning = _dragging && _drag.GetMode() == camera_drag::DragMode::EdgeRotate;
-	const auto pushed = camera_zones::PushInsideFence(zones.fence, zones.fenceOn, originAtFrameStart, _targetOrigin,
-	                                                  _targetFocus, camera_zones::SearchRadius(edgeTurning));
-	if (!pushed.has_value())
+	auto& cameraZones = Locator::cameraZoneSystem::value();
+	const auto kept = camera_zones::PushInsideFence(zones.fence, zones.fenceOn, originAtFrameStart, _targetOrigin, _targetFocus,
+	                                                camera_zones::SearchRadius(edgeTurning));
+	cameraZones.SetInclusionDistance(kept.inclusionDistance);
+	if (!kept.target.has_value())
 	{
 		return false;
 	}
-	_targetOrigin += *pushed;
-	_targetFocus += *pushed;
-	Locator::cameraZoneSystem::value().FenceHit(_targetOrigin, listener);
+	// The camera goes to the point across the ground. What it looks at and the point it turns about move with it.
+	const glm::vec3 origin {kept.target->x, _targetOrigin.y, kept.target->z};
+	_targetFocus = camera_zones::MovedWithOrigin(_targetFocus, _targetOrigin, origin);
+	_focusAtClick = camera_zones::MovedWithOrigin(_focusAtClick, _targetOrigin, origin);
+	_targetOrigin = origin;
+	cameraZones.FenceHit(_targetOrigin, listener);
 	_heldBack = _heldBack || !edgeTurning;
 	return true;
 }
@@ -1222,7 +1227,10 @@ void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 		origin = camera_zones::FlightOriginInsideFence(zones.fence, zones.fenceOn, origin, focus);
 	}
 	_flightPath = CharterFlight(origin, focus, _currentOrigin, k_FlightHeightFactor);
-	Woosh();
+	if (camera_zones::FlightWooshes(_currentOrigin, origin))
+	{
+		Woosh();
+	}
 }
 
 void DefaultWorldCameraModel::FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh)
