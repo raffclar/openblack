@@ -50,7 +50,7 @@ void main()
 		float side = (h1 * 2.0f - 1.0f) * 1.5f;
 		float ends = exp(-(side * side * side * side));
 		vec2 crest = a.xy + across * (side * b.y) - along * (b.w * b.x * side * side);
-		vec4 shore = texture2DLod(s_shore, UwShoreUv(crest), 0.0f);
+		vec4 shore = UwOpenSea(texture2DLod(s_shore, UwShoreUv(crest), 0.0f), crest);
 		float fade = smoothstep(60.0f, 200.0f, shore.x) * smoothstep(3.0f, 15.0f, level - shore.w);
 		float top = level + a.w * fade * ends;
 		float strength = b.z * ends * fade;

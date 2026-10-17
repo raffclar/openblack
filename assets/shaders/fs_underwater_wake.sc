@@ -81,7 +81,7 @@ void main()
 	}
 	pull *= fresh;
 	// In shallow water the waves are slower, as tanh(k h) of the depth h for a wave of the reference length
-	vec4 shore = texture2DLod(s_shore, UwShoreUv(world), 0.0f);
+	vec4 shore = UwOpenSea(texture2DLod(s_shore, UwShoreUv(world), 0.0f), world);
 	float water = max(u_uwParams.z - shore.w, 0.0f);
 	float kh = 6.2831853f / (16.0f * u_wakeField.z) * water;
 	float shallow = clamp((exp(2.0f * kh) - 1.0f) / (exp(2.0f * kh) + 1.0f), 0.1f, 1.0f);

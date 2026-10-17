@@ -67,7 +67,7 @@ vec4 UwSedimentAlong(vec3 start, vec3 direction, float range, float t, float jit
 		float depth = u_uwParams.z - p.y;
 		if (depth > 0.0f)
 		{
-			vec4 shore = texture2DLod(s_shore, UwShoreUv(p.xz), 0.0f);
+			vec4 shore = UwOpenSea(texture2DLod(s_shore, UwShoreUv(p.xz), 0.0f), p.xz);
 			float silt = UwSedimentAt(p, shore, p.xz - drift);
 			// The silt is lit by the light that comes down to its depth and by the water round it. It sends only a small
 			// part of the light that falls on it towards the eye.

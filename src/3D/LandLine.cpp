@@ -429,6 +429,19 @@ std::optional<glm::vec3> UnderPixel(glm::vec3 camera, glm::vec3 nearPoint, bool 
 	return point;
 }
 
+std::optional<glm::vec3> PlaneAhead(glm::vec3 camera, glm::vec3 nearPoint, float height)
+{
+	const float rise = nearPoint.y - camera.y;
+	const float toPlane = height - camera.y;
+	// The line must go towards the plane, and not lie along it
+	if (rise == 0.0f || (toPlane < 0.0f) != (rise < 0.0f))
+	{
+		return std::nullopt;
+	}
+	const float share = toPlane / rise;
+	return glm::vec3(camera.x + (nearPoint.x - camera.x) * share, height, camera.z + (nearPoint.z - camera.z) * share);
+}
+
 glm::vec3 KeptInReach(glm::vec3 point)
 {
 	constexpr float k_Middle = k_CellSize * k_MapCells * 0.5f;

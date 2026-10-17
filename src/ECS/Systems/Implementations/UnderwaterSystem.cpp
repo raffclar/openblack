@@ -136,7 +136,7 @@ void UnderwaterSystem::Update(std::chrono::milliseconds frameRealTime)
 			}
 		}
 	}
-	_seabed = seabed::Build(altitudes, size, glm::vec2(0.0f), LandIslandInterface::k_CellSize, beach);
+	_seabed = seabed::Build(altitudes, size, glm::vec2(0.0f), LandIslandInterface::k_CellSize, beach, seabed::k_EdgeRingCells);
 	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: {} corners of beach sand above the sea", beachCorners);
 	_reef = seabed::PlaceReef(_seabed, graphics::underwater::k_LowestSea, graphics::underwater::k_MostCoral,
 	                          graphics::underwater::k_MostPlants);

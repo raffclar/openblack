@@ -26,6 +26,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/LandLine.h"
 #include "3D/MapCoords.h"
+#include "3D/Seabed.h"
 #include "Creature/CreatureMorph.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -77,9 +78,8 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// EXPERIMENT (not for merge): the sea bed to pick on, while the experiment's view is on and the camera is under the
-/// sea. Above the sea the hand picks as the game does.
-const seabed::Seabed* SeabedToPick()
+/// EXPERIMENT (not for merge): the sea bed, while the experiment's view is on
+const seabed::Seabed* SeabedWhileOn()
 {
 	if (!Locator::underwaterSystem::has_value())
 	{
@@ -87,7 +87,15 @@ const seabed::Seabed* SeabedToPick()
 	}
 	const auto& underwater = Locator::underwaterSystem::value();
 	const auto& seabed = underwater.GetSeabed();
-	return underwater.IsEnabled() && underwater.IsEyeUnder() && seabed.size.x > 1 && seabed.size.y > 1 ? &seabed : nullptr;
+	return underwater.IsEnabled() && seabed.size.x > 1 && seabed.size.y > 1 ? &seabed : nullptr;
+}
+
+/// EXPERIMENT (not for merge): the sea bed for the camera's own feel of the land, while the experiment's view is on and
+/// the camera is under the sea. Above the sea the camera feels the land as the game does.
+const seabed::Seabed* SeabedToPick()
+{
+	return Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEyeUnder() ? SeabedWhileOn()
+	                                                                                                 : nullptr;
 }
 
 /// EXPERIMENT (not for merge): the height units of a corner with the sea bed: the land's altitude above the sea, else
@@ -106,15 +114,15 @@ float CornerWithSeabed(const seabed::Seabed& seabed, int32_t x, int32_t z)
 	return -depth / land_line::k_HeightUnit;
 }
 
-/// The land's corner heights as the game reads them for its line test: the cell's own block holds its far corners
-std::optional<land_line::CellHeights> CornersOf(int32_t x, int32_t z)
+/// The land's corner heights as the game reads them for its line test: the cell's own block holds its far corners.
+/// EXPERIMENT (not for merge): with a sea bed, the line meets the sea bed in every cell of the map.
+std::optional<land_line::CellHeights> CornersWith(const seabed::Seabed* seabed, int32_t x, int32_t z)
 {
 	if (!Locator::terrainSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	// EXPERIMENT (not for merge): under the sea, the line meets the sea bed in every cell of the map
-	if (const auto* seabed = SeabedToPick())
+	if (seabed != nullptr)
 	{
 		return land_line::CellHeights {.here = CornerWithSeabed(*seabed, x, z),
 		                               .acrossX = CornerWithSeabed(*seabed, x + 1, z),
@@ -133,15 +141,47 @@ std::optional<land_line::CellHeights> CornersOf(int32_t x, int32_t z)
 	                               .acrossBoth = static_cast<float>(cell[18].altitude)};
 }
 
-float HeightAt(glm::vec2 point)
+/// The height of the land at a point. EXPERIMENT (not for merge): with a sea bed, the sea bed under the water.
+float HeightWith(const seabed::Seabed* seabed, glm::vec2 point)
 {
 	const float land = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
-	// EXPERIMENT (not for merge): under the sea, the height of the sea bed
-	if (SeabedToPick() != nullptr)
+	return seabed != nullptr ? Locator::underwaterSystem::value().FloorAt(point, land) : land;
+}
+
+/// The camera's own feel of the land
+std::optional<land_line::CellHeights> CornersOf(int32_t x, int32_t z)
+{
+	return CornersWith(SeabedToPick(), x, z);
+}
+
+float HeightAt(glm::vec2 point)
+{
+	return HeightWith(SeabedToPick(), point);
+}
+
+/// The land or sea under a pixel, from the camera through the pixel's point on the near plane, as land_line::UnderPixel
+/// finds it with the sea, kept within the reach round the map's middle. EXPERIMENT (not for merge): while the
+/// experiment's view is on, the line goes through the water to the sea bed, from above the sea or under it. A line that
+/// meets no sea bed in the map's cells (past the map's edge) meets the far floor of the open sea, at the sea bed's
+/// greatest depth. The point is not kept within the reach, and its height is that of the floor there.
+std::optional<glm::vec3> PickUnderPixel(glm::vec3 camera, glm::vec3 nearPoint)
+{
+	const auto* seabed = SeabedWhileOn();
+	if (seabed == nullptr)
 	{
-		return Locator::underwaterSystem::value().FloorAt(point, land);
+		const auto under = land_line::UnderPixel(camera, nearPoint, true, CornersOf, HeightAt);
+		return under.has_value() ? std::optional(land_line::KeptInReach(*under)) : std::nullopt;
 	}
-	return land;
+	const auto corners = [seabed](int32_t x, int32_t z) { return CornersWith(seabed, x, z); };
+	if (const auto hit = land_line::LandAlong(camera, nearPoint, corners))
+	{
+		return glm::vec3(hit->x, HeightWith(seabed, *hit), hit->y);
+	}
+	if (const auto floor = land_line::PlaneAhead(camera, nearPoint, -seabed::k_MaxDepth))
+	{
+		return glm::vec3(floor->x, HeightWith(seabed, {floor->x, floor->z}), floor->z);
+	}
+	return std::nullopt;
 }
 
 /// The middle of the model a seed shows in its picture, as the model is made (neither turned nor scaled), nothing for a
@@ -205,7 +245,11 @@ std::optional<glm::vec3> PickingSystem::LandUnderPixel(glm::vec3 camera, glm::ve
 	{
 		return LandOrSeaAlong(camera, nearPoint, camera);
 	}
-	if (const auto point = land_line::UnderPixel(camera, nearPoint, sea == Sea::Anywhere, CornersOf, HeightAt))
+	if (sea == Sea::Anywhere)
+	{
+		return PickUnderPixel(camera, nearPoint);
+	}
+	if (const auto point = land_line::UnderPixel(camera, nearPoint, false, CornersOf, HeightAt))
 	{
 		return land_line::KeptInReach(*point);
 	}
@@ -351,10 +395,10 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 	// The land or sea under the cursor, counted a little further than it is
 	float landDistance = std::numeric_limits<float>::max();
 	std::optional<glm::vec3> land;
-	if (const auto under = land_line::UnderPixel(view.camera, frame.nearPoint, true, CornersOf, HeightAt))
+	if (const auto under = PickUnderPixel(view.camera, frame.nearPoint))
 	{
 		landDistance = screen_pick::Depth(view, *under) + land_line::k_LandDistanceAllowance;
-		land = land_line::KeptInReach(*under);
+		land = under;
 	}
 
 	// Gripping the land, the interface keeps what it picked and follows only the land

@@ -132,6 +132,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/UnderwaterBoundary.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
@@ -5004,7 +5005,9 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 				const auto* handMesh = &*meshManager.Handle(mesh->id);
 				const auto model =
 				    glm::translate(transform->position) * glm::mat4(transform->rotation) * glm::scale(transform->scale);
-				const auto ground = land.GetHeightAt(glm::vec2(transform->position.x, transform->position.z));
+				// EXPERIMENT (not for merge): while the experiment's view is on, the shadow falls on the sea bed
+				const auto handPoint = glm::vec2(transform->position.x, transform->position.z);
+				const auto ground = underwater_boundary::FloorAt(handPoint, land.GetHeightAt(handPoint));
 				const auto radius = glm::length(handMesh->GetBoundingBox().Size()) * 0.5f * scaleOf(model);
 				const auto& sky = Locator::skySystem::value();
 				const auto fade =

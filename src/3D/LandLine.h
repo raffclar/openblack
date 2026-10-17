@@ -68,6 +68,11 @@ inline constexpr float k_HeightUnit = 0.67f;
 [[nodiscard]] std::optional<glm::vec3> UnderPixel(glm::vec3 camera, glm::vec3 nearPoint, bool withSea, const CellLookup& cells,
                                                   const std::function<float(glm::vec2)>& heightAt);
 
+/// EXPERIMENT (not for merge): where the line from the camera through the pixel's point on the near plane, in metres,
+/// meets the level plane at `height` ahead of the camera, none when it does not go towards it. Under the sea past the
+/// map's edge, this is the far floor of the open sea.
+[[nodiscard]] std::optional<glm::vec3> PlaneAhead(glm::vec3 camera, glm::vec3 nearPoint, float height);
+
 /// A point picked under the cursor, kept within 7680 of the map's middle at (2560, 0, 2560)
 [[nodiscard]] glm::vec3 KeptInReach(glm::vec3 point);
 

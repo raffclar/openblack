@@ -38,6 +38,12 @@ inline constexpr float k_ClosestZoom = k_Clearance + 0.1f;
 /// to its rim, at the same height. Only the camera is moved, not what it looks at. Nothing when it is inside.
 [[nodiscard]] std::optional<glm::vec3> KeepInsideAllowedArea(const glm::vec3& origin);
 
+/// EXPERIMENT (not for merge): with the map's boundary off, the camera goes out past the map's edge over the open sea, but
+/// no further across the ground than this from the middle of the map, so that its map position stays in range
+inline constexpr float k_OpenSeaRadius = 20000.0f;
+/// The same rule as KeepInsideAllowedArea, with the disc of k_OpenSeaRadius
+[[nodiscard]] std::optional<glm::vec3> KeepInsideOpenSea(const glm::vec3& origin);
+
 /// However a camera is moved, where it is going is kept within a ball round the middle of the map at the sea's level,
 /// 3500 from it in every direction: going further, it is sent back to 3499 from the middle along the same line, easing
 /// there over three seconds and arriving still. So the camera rises no higher than 3500 over the middle of the map, less

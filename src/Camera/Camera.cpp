@@ -20,6 +20,7 @@
 #include "CameraLimits.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/UnderwaterBoundary.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
@@ -384,7 +385,8 @@ void Camera::Update(std::chrono::microseconds dt)
 void Camera::KeepInsideTheWorld()
 {
 	using namespace std::chrono_literals;
-	if (_model == nullptr || !_model->HeldInsideTheWorld())
+	// EXPERIMENT (not for merge): with the map's boundary off, the ball round the map does not hold the camera
+	if (_model == nullptr || !_model->HeldInsideTheWorld() || underwater_boundary::Off())
 	{
 		return;
 	}

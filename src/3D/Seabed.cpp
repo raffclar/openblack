@@ -474,7 +474,7 @@ void SmoothField(std::vector<float>& field, glm::ivec2 size, int radius, int pas
 } // namespace
 
 seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size, glm::vec2 origin, float spacing,
-                             std::span<const float> beach)
+                             std::span<const float> beach, float edgeRing)
 {
 	Seabed seabed {.size = size, .origin = origin, .spacing = spacing, .depth = {}};
 	const auto count = static_cast<size_t>(std::max(size.x, 0)) * static_cast<size_t>(std::max(size.y, 0));
@@ -652,6 +652,21 @@ seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size
 		}
 	}
 	seabed.pond = Ponds(land, size);
+	// Near the grid's edge the sea bed eases down to the depth of the far floor past it
+	for (int z = 0; edgeRing > 0.0f && z < size.y; ++z)
+	{
+		for (int x = 0; x < size.x; ++x)
+		{
+			const auto i = at(x, z);
+			if (land[i])
+			{
+				continue;
+			}
+			const auto edge = static_cast<float>(std::min(std::min(x, z), std::min(size.x - 1 - x, size.y - 1 - z)));
+			const float t = 1.0f - std::clamp(edge / edgeRing, 0.0f, 1.0f);
+			seabed.depth[i] = glm::mix(seabed.depth[i], k_MaxDepth, t * t * (3.0f - 2.0f * t));
+		}
+	}
 	BuildShore(seabed, altitudes, land, toLand, openDepth);
 	return seabed;
 }
@@ -731,7 +746,8 @@ std::vector<float> seabed::Ponds(const std::vector<bool>& land, glm::ivec2 size)
 
 float seabed::Seabed::DepthAt(glm::vec2 world) const
 {
-	if (size.x <= 0 || size.y <= 0 || depth.empty())
+	// A point that is not a number has no depth
+	if (size.x <= 0 || size.y <= 0 || depth.empty() || !std::isfinite(world.x) || !std::isfinite(world.y))
 	{
 		return 0.0f;
 	}

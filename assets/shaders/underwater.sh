@@ -358,6 +358,24 @@ vec2 UwShoreUv(vec2 xz)
 	return (xz / 10.0f + 0.5f) / 513.0f;
 }
 
+// The sides of the map in units: the shore map covers it, and holds its edge past it
+#define UW_MAP_UNITS 5120.0f
+
+// The shore map past the map's edge: the open, deep sea. The coast is further away by the distance past the edge, no
+// cliff is there, and the ground eases down to the far floor (160 under the sea's level). On the map it changes nothing.
+vec4 UwOpenSea(vec4 shore, vec2 xz)
+{
+	vec2 past = max(max(-xz, xz - UW_MAP_UNITS), vec2_splat(0.0f));
+	float beyond = length(past);
+	if (beyond > 0.0f)
+	{
+		shore.x = max(shore.x, 0.0f) + beyond;
+		shore.yz = -sign(xz - UW_MAP_UNITS * 0.5f) * past / beyond;
+		shore.w = mix(shore.w, -160.0f, smoothstep(0.0f, 160.0f, beyond));
+	}
+	return shore;
+}
+
 // How much a point is at the foot of a cliff, 0 to 1
 float UwShoreCliff(vec4 shore)
 {
