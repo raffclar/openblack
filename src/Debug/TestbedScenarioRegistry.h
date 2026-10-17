@@ -809,6 +809,9 @@ struct Command
 		StopScript,
 		/// The pointer moves to the middle of the body of the creature on the screen, as the mouse moves it
 		PointerOnCreature,
+		/// The music of the music type that the value gives starts as a script's "start music" starts it. The value 0
+		/// stops it as "stop music" does. Needs no creature
+		StartScriptMusic,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
