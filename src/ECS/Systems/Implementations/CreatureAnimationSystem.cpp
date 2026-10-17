@@ -415,7 +415,8 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 	}
 	const auto bodyDuration = DurationOf(animationOf(creature_layers::CurrentAnimation(animation.body)));
 	animation.actionMoment =
-	    animation.actionMoment || creature_layers::ReachesActionMoment(animation.body, playbackMs, bodyDuration, rig.kissMs);
+	    animation.actionMoment || creature_layers::ReachesActionMoment(animation.body, playbackMs, bodyDuration,
+	                                                                   static_cast<uint32_t>(rig.kissMs.value_or(0.0f)));
 	animation.body = creature_layers::AdvanceBody(animation.body, playbackMs, bodyDuration, milliseconds);
 	// A dance that needs its next move chooses one of the moves that the species has
 	if (animation.body.chooseDanceMove)

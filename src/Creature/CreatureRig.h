@@ -176,8 +176,6 @@ struct CreatureRig
 	std::optional<uint32_t> rightEye;
 	/// The bone at the creature's collar that a leash is tied to, when the file names one
 	std::optional<uint32_t> leashBone;
-	/// The moment of the kiss in milliseconds, 0 when the file does not give it
-	uint32_t kissMs {0};
 
 	/// Each bone's mirror bone, the bone on the other side of the body, for the species' mesh of so many bones: the
 	/// table that ends its file. None when the file has none that fits.
