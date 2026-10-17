@@ -886,7 +886,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		// EXPERIMENT (not for merge): F9 puts the camera under the sea by the shore of the first land; shift and F9
 		// turn the experiment's water on or off; control and F9 turn off its effects one at a time, to measure them;
 		// control, alt and F9 turn them off the other way round; alt and F9 step through its quality tiers; shift,
-		// alt and F9 change the cover of the volumetric clouds
+		// alt and F9 change the cover of the volumetric clouds; shift, control and F9 show the noctilucent clouds at full
+		// strength or as the night has them
 		case SDLK_F9:
 			if (Locator::underwaterSystem::has_value())
 			{
@@ -895,6 +896,14 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				{
 					// The next debug choice of the volumetric clouds' cover
 					underwater.CycleCloudCover();
+				}
+				else if ((event.key.keysym.mod & KMOD_SHIFT) != 0 && (event.key.keysym.mod & KMOD_CTRL) != 0)
+				{
+					// The noctilucent clouds at full strength, or back to the night's own
+					const bool forced = underwater.GetNoctilucentOverride().has_value();
+					underwater.SetNoctilucentOverride(forced ? std::nullopt : std::optional(1.0f));
+					SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: noctilucent clouds {}",
+					                   forced ? "of the night" : "at full strength");
 				}
 				else if ((event.key.keysym.mod & KMOD_SHIFT) != 0)
 				{

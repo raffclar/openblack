@@ -181,8 +181,8 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
-#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -933,6 +933,7 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		{
 			underwater.CycleCloudCover();
 		}
+		underwater.SetNoctilucentOverride(environment.noctilucent);
 	}
 	if (Locator::creaturePhysiologySystem::has_value())
 	{

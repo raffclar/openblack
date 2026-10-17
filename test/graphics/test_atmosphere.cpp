@@ -328,9 +328,9 @@ TEST(Atmosphere, TheCloudsShadeTakesTheUpperSkyWhileTheSunIsLow)
 	const glm::vec3 dusk = atmos::CloudSkyLight(horizonRed, upperBlue, 0.02f);
 	EXPECT_GT(dusk.b, dusk.r);
 	EXPECT_NEAR(atmos::Luminance(dusk), atmos::Luminance(horizonRed), 1e-4f);
-	// The dim sky after sunset has less colour
+	// The dim sky in the night has less colour (the blue hour between keeps it)
 	const glm::vec3 deepBlue {0.0f, 0.1f, 1.0f};
-	const glm::vec3 dim = atmos::DimSkyColour(deepBlue, -0.1f);
+	const glm::vec3 dim = atmos::DimSkyColour(deepBlue, -0.3f);
 	EXPECT_NEAR(atmos::Luminance(dim), atmos::Luminance(deepBlue), 1e-4f);
 	EXPECT_LT(dim.b - dim.r, 0.5f * (deepBlue.b - deepBlue.r));
 	EXPECT_EQ(atmos::DimSkyColour(deepBlue, 0.5f), deepBlue);
@@ -504,4 +504,118 @@ TEST(Atmosphere, TheIslandSitsUnderTheAurorasOvalOnStrongNights)
 	EXPECT_GT(strong, 50);
 	// The same night always has the same strength
 	EXPECT_EQ(atmos::AuroraStrength(7), atmos::AuroraStrength(7));
+}
+
+TEST(Atmosphere, TheDayOfTheYearCountsFromTheFirstOfJanuary)
+{
+	EXPECT_EQ(atmos::DayOfYear(1767225600, 0), 0);
+	EXPECT_EQ(atmos::DayOfYear(1782864000, 0), 181);
+	EXPECT_EQ(atmos::DayOfYear(1782864000 + 3600, 0), 181);
+	EXPECT_EQ(atmos::DayOfYear(1767225600, 181), 181);
+	// The last day of a leap year
+	EXPECT_EQ(atmos::DayOfYear(1735603200, 0), 365);
+	EXPECT_EQ(atmos::DayOfYear(1735603200, 1), 0);
+}
+
+TEST(Atmosphere, NoctilucentCloudsComeOnlyInTheirSummerSeason)
+{
+	EXPECT_EQ(atmos::NoctilucentChance(0), 0.0f);
+	EXPECT_EQ(atmos::NoctilucentChance(atmos::k_NoctilucentSeasonStart), 0.0f);
+	EXPECT_EQ(atmos::NoctilucentChance(289), 0.0f);
+	EXPECT_NEAR(atmos::NoctilucentChance((atmos::k_NoctilucentSeasonStart + atmos::k_NoctilucentSeasonEnd) / 2),
+	            atmos::k_NoctilucentPeakChance, 1e-4f);
+	EXPECT_GT(atmos::NoctilucentChance(160), 0.0f);
+	EXPECT_LT(atmos::NoctilucentChance(160), atmos::NoctilucentChance(185));
+	// No night out of the season has them
+	for (int64_t night = 20000; night < 20400; ++night)
+	{
+		EXPECT_EQ(atmos::NoctilucentStrength(night, 20), 0.0f);
+		EXPECT_EQ(atmos::NoctilucentStrength(night, 300), 0.0f);
+	}
+}
+
+TEST(Atmosphere, NoctilucentCloudsAreRareOnSummerNights)
+{
+	int seen = 0;
+	constexpr int k_Nights = 4000;
+	for (int64_t night = 0; night < k_Nights; ++night)
+	{
+		const float strength = atmos::NoctilucentStrength(night, 185);
+		if (strength > 0.0f)
+		{
+			++seen;
+			EXPECT_GE(strength, 0.5f);
+			EXPECT_LE(strength, 1.0f);
+		}
+	}
+	// About the peak share of the nights at the middle of the season
+	const float share = static_cast<float>(seen) / k_Nights;
+	EXPECT_GT(share, atmos::k_NoctilucentPeakChance * 0.7f);
+	EXPECT_LT(share, atmos::k_NoctilucentPeakChance * 1.3f);
+	// The same night always has the same clouds
+	EXPECT_EQ(atmos::NoctilucentStrength(20630, 185), atmos::NoctilucentStrength(20630, 185));
+}
+
+TEST(Atmosphere, TheSkyKeepsItsColourInTheBlueHour)
+{
+	const auto sine = [](float degrees) { return std::sin(degrees * k_Pi / 180.0f); };
+	// By day all of it, at sunset only a part
+	EXPECT_FLOAT_EQ(atmos::SkyColourKept(sine(30.0f)), 1.0f);
+	EXPECT_LT(atmos::SkyColourKept(sine(1.0f)), 0.4f);
+	// The blue hour keeps most of its colour, and the night has less again
+	const float blueHour = 0.25f + (0.75f * atmos::k_BlueHourColour);
+	EXPECT_FLOAT_EQ(atmos::SkyColourKept(sine(-6.5f)), blueHour);
+	EXPECT_FLOAT_EQ(atmos::SkyColourKept(sine(-8.0f)), blueHour);
+	EXPECT_GT(atmos::SkyColourKept(sine(-6.5f)), atmos::SkyColourKept(sine(1.0f)));
+	EXPECT_FLOAT_EQ(atmos::SkyColourKept(sine(-20.0f)), 0.25f);
+	// The blue of the blue hour stays blue, and the blue of the night goes part of the way to grey
+	const glm::vec3 blue {0.1f, 0.2f, 0.6f};
+	const glm::vec3 dusk = atmos::DimSkyColour(blue, sine(-6.0f));
+	EXPECT_GT(dusk.b - dusk.r, 0.7f * (blue.b - blue.r));
+	const glm::vec3 night = atmos::DimSkyColour(blue, sine(-25.0f));
+	EXPECT_LT(night.b - night.r, blue.b - blue.r);
+}
+
+TEST(Atmosphere, TheAirScattersLessLightMoreThanOnceInTheEarthsShadow)
+{
+	// The table, made from the real light that gets through
+	const atmos::ThroughFunction through = [](float altitude, float mu) { return atmos::Transmittance(altitude, mu, k_Clear); };
+	const glm::vec3 noon = atmos::MultipleScatteringAt(1.0f, 0.9f, k_Clear, 32, 12, through);
+	const glm::vec3 sunset = atmos::MultipleScatteringAt(1.0f, 0.0f, k_Clear, 32, 12, through);
+	const glm::vec3 dusk = atmos::MultipleScatteringAt(1.0f, -0.15f, k_Clear, 32, 12, through);
+	// The light of the many scatterings is blue by day
+	EXPECT_GT(noon.b, noon.r);
+	EXPECT_GT(noon.b, 0.0f);
+	// It goes down as the sun goes down, and the low air in the earth's shadow has almost none
+	EXPECT_LT(sunset.g, noon.g * 0.3f);
+	EXPECT_LT(dusk.g, noon.g * 0.01f);
+	// The day's simple share does not go dark as fast, which made the low air glow at dusk
+	EXPECT_GT(atmos::DayMultipleScattering(1.0f, -0.15f, k_Clear).g, dusk.g * 10.0f);
+}
+
+TEST(Atmosphere, TheMultipleScatteringTableKeepsTheDaysLightAndFollowsTheTableAtDusk)
+{
+	auto air = k_Clear;
+	air.multiple = atmos::MakeMultipleTable(air);
+	ASSERT_NE(air.multiple, nullptr);
+	EXPECT_EQ(air.multiple->texels.size(), static_cast<size_t>(atmos::k_MultipleCpuWidth) * atmos::k_MultipleCpuHeight);
+	// While the light is high, the sky has the day's simple share as before
+	for (const float mu : {0.4f, 0.7f, 1.0f})
+	{
+		const glm::vec3 before = atmos::DayMultipleScattering(2.0f, mu, k_Clear);
+		const glm::vec3 after = atmos::MultipleScattering(2.0f, mu, air);
+		EXPECT_NEAR(after.r, before.r, 1e-6f);
+		EXPECT_NEAR(after.b, before.b, 1e-6f);
+	}
+	// While it is low, the sky has the table's light
+	const glm::vec3 low = atmos::MultipleScattering(2.0f, -0.1f, air);
+	const glm::vec3 table = air.multiple->At(2.0f, -0.1f);
+	EXPECT_NEAR(low.g, table.g, 1e-7f);
+	// The texels hold the light of their own height and angle
+	const auto at = atmos::FromMultipleTexel(3, 5, air.multiple->width, air.multiple->height);
+	const glm::vec3 texel = air.multiple->texels[static_cast<size_t>(5) * air.multiple->width + 3];
+	const glm::vec3 between = air.multiple->At(at.altitude, at.mu);
+	EXPECT_NEAR(between.g, texel.g, 1e-6f);
+	// Without a table the air has the day's share at all angles
+	EXPECT_EQ(atmos::MultipleScattering(2.0f, -0.1f, k_Clear), atmos::DayMultipleScattering(2.0f, -0.1f, k_Clear));
 }

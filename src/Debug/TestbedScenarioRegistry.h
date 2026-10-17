@@ -162,6 +162,9 @@ struct Environment
 	/// EXPERIMENT (not for merge): the cover of the volumetric clouds, as Shift, Alt and F9 choose it (the number of a
 	/// volumetric_clouds::CoverChoice). The weather gives the cover when not given.
 	std::optional<uint8_t> cloudCover;
+	/// EXPERIMENT (not for merge): how strong the noctilucent clouds are, 0 to 1, whatever the night. The night's own
+	/// strength shows when not given.
+	std::optional<float> noctilucent;
 };
 
 /// Where the camera looks as the scenario starts

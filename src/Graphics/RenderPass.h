@@ -26,9 +26,11 @@ enum class RenderPass : uint8_t
 	/// blend from the old map to the new
 	SunVisibility,
 	SunVisibilityBlend,
-	/// EXPERIMENT (not for merge): the air's light: the texture of the light that gets through the air (made again only
-	/// when the air changes), the texture of the sky round the eye, and the haze's grid that follows the view
+	/// EXPERIMENT (not for merge): the air's light: the texture of the light that gets through the air and the table of
+	/// the light that the air scatters more than once (both made again only when the air changes), the texture of the
+	/// sky round the eye, and the haze's grid that follows the view
 	AtmosphereTransmittance,
+	AtmosphereMultiple,
 	AtmosphereSkyView,
 	AtmosphereAerial,
 	/// EXPERIMENT (not for merge): the light probes over the island, a band of rows a frame after each new set of
@@ -126,6 +128,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Sun Visibility Pass",         //
     "Sun Visibility Blend Pass",   //
     "Atmosphere Transmittance",    //
+    "Atmosphere Multiple",         //
     "Atmosphere Sky View",         //
     "Atmosphere Aerial",           //
     "Light Probes",                //

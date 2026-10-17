@@ -11,8 +11,11 @@
 
 #include <cstdint>
 
+#include <functional>
+#include <memory>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -53,6 +56,26 @@ inline constexpr float k_OzoneHalfWidth = 15.0f;
 /// The share of the light that the air scatters more than once, as a part of the single scattering's light that
 /// reaches a point. The sky's light in the shade and at dusk comes mostly from it.
 inline constexpr float k_MultipleShare = 0.3f;
+/// The light that the air scatters more than once after sunset comes from the table of Hillaire (2020). The
+/// table holds, for each height and each angle of the light, the light of all the scattering after the first. While the
+/// light is over k_MultipleDayHigh (as a sine), the sky keeps the day's simple share above, and under k_MultipleDayLow
+/// it has the table's light only. Thus the day's sky and the sunset do not change, and the low air in the earth's shadow
+/// at dusk does not glow.
+inline constexpr float k_MultipleDayLow = -0.1f;
+inline constexpr float k_MultipleDayHigh = -0.02f;
+/// The size of the table on the graphics card (across: the cosine of the light from -1 to 1; down: the height from 0 to
+/// the top of the air), the directions round each point and the steps along each direction
+inline constexpr uint16_t k_MultipleWidth = 32;
+inline constexpr uint16_t k_MultipleHeight = 32;
+inline constexpr int k_MultipleDirections = 64;
+inline constexpr int k_MultipleSteps = 20;
+/// The size of the same table that the processor makes for its own sky, and its directions and steps
+inline constexpr uint16_t k_MultipleCpuWidth = 16;
+inline constexpr uint16_t k_MultipleCpuHeight = 16;
+inline constexpr int k_MultipleCpuDirections = 32;
+inline constexpr int k_MultipleCpuSteps = 16;
+/// How much of the light the ground under the air sends back: mostly sea, with some land
+inline constexpr float k_GroundAlbedo = 0.1f;
 /// The haze over the land is this much denser than the real air at the same height. The far islands are a few
 /// kilometres away, and the real air needs some tens of kilometres to fade a hill this much.
 inline constexpr float k_HazeScale = 7.0f;
@@ -81,9 +104,13 @@ inline constexpr float k_AerialFarthest = 24000.0f;
 
 /// How much dust and salt the air holds, as a multiple of the clean air's: more over the sea, and more in rain and in
 /// a storm
+struct MultipleTable;
 struct Air
 {
 	float turbidity {1.0f};
+	/// The table of the light that the air scatters more than once, made for this air. Without it the air has the day's
+	/// simple share at all angles of the light.
+	std::shared_ptr<const MultipleTable> multiple;
 };
 
 /// The air for how stormy the weather is (0 to 1) and how wet the land is (0 to 1)
@@ -141,6 +168,38 @@ struct HeightAngle
 /// the light that the air scatters once and more than once along the ray
 [[nodiscard]] glm::vec3 SkyRadiance(glm::vec3 view, glm::vec3 towardsLight, float altitude, const Air& air);
 
+/// The table of the light that the air scatters more than once (Hillaire 2020), for each height and each angle of the
+/// light. Each texel is the light, for each steradian, that reaches a point after two or more scatterings, for a light of
+/// strength 1. It sums the second scattering from all directions round the point, the light from the ground included,
+/// and then all the scatterings after it as a series.
+struct MultipleTable
+{
+	uint16_t width {0};
+	uint16_t height {0};
+	std::vector<glm::vec3> texels;
+	/// The light at a height in kilometres and the cosine of the light from straight up, between the texels
+	[[nodiscard]] glm::vec3 At(float altitude, float lightMu) const;
+};
+
+/// The light of the table at one height and one cosine of the light, summed over `directions` directions with `steps`
+/// steps each. `through` gives the part of each colour that gets through from a height to the top along a cosine.
+using ThroughFunction = std::function<glm::vec3(float altitude, float mu)>;
+[[nodiscard]] glm::vec3 MultipleScatteringAt(float altitude, float lightMu, const Air& air, int directions, int steps,
+                                             const ThroughFunction& through);
+
+/// The height in kilometres and the cosine of the light at the middle of a texel of the table
+[[nodiscard]] HeightAngle FromMultipleTexel(int column, int row, uint16_t width, uint16_t height);
+
+/// Makes the table for an air, with the size, directions and steps that the processor uses
+[[nodiscard]] std::shared_ptr<const MultipleTable> MakeMultipleTable(const Air& air);
+
+/// The light that the air scatters more than once at a height with the light at a cosine: the day's simple share while
+/// the light is high, and the table's light while it is low (see k_MultipleDayLow)
+[[nodiscard]] glm::vec3 MultipleScattering(float altitude, float lightMu, const Air& air);
+
+/// The day's simple share of the light that the air scatters more than once
+[[nodiscard]] glm::vec3 DayMultipleScattering(float altitude, float lightMu, const Air& air);
+
 /// The haze over a distance along a ray from the eye: the light that the air adds and the part of the scene behind that
 /// shows through
 struct Haze
@@ -177,9 +236,16 @@ inline constexpr float k_OriginalHue = 0.35f;
 /// A colour's luminance
 [[nodiscard]] float Luminance(glm::vec3 colour);
 
-/// The sky's colour as the eye sees it while the sun is low: after sunset the air gives a deep, strong blue, but the eye
-/// sees a dim sky with less colour. The colour goes part of the way to a grey of the same luminance, more while the
-/// air's sun is low. `sunHeight` is the sine of the air's sun over the horizon.
+/// The share of its colour that the sky keeps on the screen, from the sine of the air's sun over the horizon. By day
+/// all of it. While the sun sets, the sky goes part of the way to grey. In the blue hour, from about 3 to 9 degrees
+/// under the horizon, the sun lights only the high air through the ozone, and the sky keeps most of its deep blue. In the
+/// moon's light at night the eye sees the dim sky with less colour again.
+[[nodiscard]] float SkyColourKept(float sunHeight);
+/// How much of the colour that the day keeps, the blue hour keeps
+inline constexpr float k_BlueHourColour = 0.7f;
+
+/// The sky's colour as the eye sees it while the sun is low: the colour goes to a grey of the same luminance by the
+/// share that SkyColourKept does not keep. `sunHeight` is the sine of the air's sun over the horizon.
 [[nodiscard]] glm::vec3 DimSkyColour(glm::vec3 colour, float sunHeight);
 
 /// A colour of the air's light, which the model gives in linear light, as the screen shows it. The game draws in the
@@ -321,6 +387,26 @@ inline constexpr float k_PoleFromIslandDegrees = 32.0f;
 
 /// How strong the aurora is on a night, 0 to 1, from the night's number. Most nights are weak, and some are strong.
 [[nodiscard]] float AuroraStrength(int night);
+
+/// The noctilucent clouds: a thin sheet of ice at the top of the mesosphere, about 83 kilometres up. They form only in
+/// the cold summer mesopause, mostly from late May to late August in the north. They are rare at the island's latitude
+/// of 40 degrees: on the nights of their season a share of at most k_NoctilucentPeakChance, the most near the start of
+/// July. The sheet shows only in deep twilight, when the sun under the horizon lights it and the low air is dark.
+inline constexpr float k_NoctilucentHeight = 83.0f;
+inline constexpr float k_NoctilucentPeakChance = 0.15f;
+inline constexpr int k_NoctilucentSeasonStart = 135;
+inline constexpr int k_NoctilucentSeasonEnd = 235;
+
+/// The day of the year, 0 for the first of January, of a date in seconds from 1970 with `passedDays` days added
+[[nodiscard]] int DayOfYear(int64_t unixTime, int32_t passedDays);
+
+/// The share of the nights on a day of the year that have noctilucent clouds: none out of their season, and
+/// k_NoctilucentPeakChance at the middle of it
+[[nodiscard]] float NoctilucentChance(int dayOfYear);
+
+/// How strong the noctilucent clouds are on a night, 0 to 1, from the night's own number (its days from 1970) and its
+/// day of the year. Most nights have none. A night with clouds has a strength from 0.5 to 1.
+[[nodiscard]] float NoctilucentStrength(int64_t night, int dayOfYear);
 
 /// The y of the direction from the eye to the curved sea's horizon, from the eye's height over the sea's level: near 0
 /// low down, and under 0 as the eye climbs

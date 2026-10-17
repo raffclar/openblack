@@ -9,7 +9,7 @@
 
 // The testbed's scenarios of the sky: the moon at night, looked at from low on the land towards the east, where it
 // keeps its place beside the camera, for trying its phases and its path through the night with the moon debug window;
-// and a storm's forked bolts coming down round the camera
+// a storm's forked bolts coming down round the camera; and the experiment's noctilucent clouds and blue hour
 
 #include <vector>
 
@@ -104,6 +104,44 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	                    .dispenserGrid = false,
 	                    .cloudCover = static_cast<uint8_t>(4)},
 	    .framing = {.shot = Shot::Placed, .eye = {-2560.0f, 40.0f, -3460.0f}, .look = {-2560.0f, 600.0f, -2260.0f}},
+	    .objects = TreesToTheEast(),
+	});
+
+	// EXPERIMENT (not for merge): the noctilucent clouds and the blue hour of the air model
+	all.push_back({
+	    .id = "sky.noctilucent",
+	    .name = "Noctilucent clouds at dusk",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at 18:45, with the sun 9 degrees under the horizon, under a clear sky. The "
+	                   "noctilucent clouds show at full strength whatever the night. The camera is low on the land and "
+	                   "looks west, towards the sun, a little up.",
+	    .expected = "Thin silver-blue bands and small billows of cloud fill a low part of the western sky, over the last "
+	                "glow of the sunset, and the darker sky round them. They are brightest near the horizon and towards "
+	                "the sun. They drift slowly. They are gone overhead, where the earth's shadow covers them.",
+	    .environment = {.hour = 18.75f,
+	                    .clockRuns = false,
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1),
+	                    .noctilucent = 1.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 10.0f, 0.0f}, .look = {-400.0f, 70.0f, 0.0f}},
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
+	    .id = "sky.ozone_twilight",
+	    .name = "The blue hour",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at 18:30, with the sun 6 degrees under the horizon, under a clear sky with no "
+	                   "noctilucent clouds. The camera is low on the land and looks up to the west.",
+	    .expected = "The sky over the camera is a deep blue, not grey or yellow: the ozone takes the red and the green "
+	                "out of the sun's light that goes through the high air. Low in the west a band of warm glow stays "
+	                "over the horizon. The east is darker, with the earth's shadow low over the horizon.",
+	    .environment = {.hour = 18.5f,
+	                    .clockRuns = false,
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1),
+	                    .noctilucent = 0.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 10.0f, 0.0f}, .look = {-300.0f, 400.0f, 0.0f}},
 	    .objects = TreesToTheEast(),
 	});
 }

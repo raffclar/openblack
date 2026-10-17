@@ -2,6 +2,7 @@ $input v_texcoord0, v_texcoord1
 
 #include <bgfx_shader.sh>
 
+#define ATMOS_MULTIPLE_TABLE
 #include "atmosphere.sh"
 #include "clouds_shadow.sh"
 #include "sun_visibility.sh"
