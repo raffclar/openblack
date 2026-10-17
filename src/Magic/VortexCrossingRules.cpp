@@ -16,6 +16,8 @@
 
 #include <fmt/printf.h>
 
+#include "Common/X87.h"
+
 namespace openblack::vortex::crossing
 {
 
@@ -37,10 +39,13 @@ constexpr float k_SwingScale = 30.0f;
 /// Once it has blended this far, a thing that can't be destroyed may go from the middle
 constexpr float k_IndestructibleGoesAt = 0.5f;
 
-/// A place across the land in metres, as the game turns a map position into one
+/// A place across the land in metres, as the game turns a map position into one: the units times ten round to a
+/// float, then the 65536th is exact. The text takes the float as a double
 double Metres(int32_t fixed)
 {
-	return static_cast<double>(fixed) * 10.0 / 65536.0;
+	constexpr float k_Ten = 10.0f;
+	constexpr float k_Fraction = 1.0f / 65536.0f;
+	return static_cast<double>(x87::Mul(static_cast<double>(fixed), k_Ten) * k_Fraction);
 }
 } // namespace
 
@@ -57,7 +62,7 @@ std::optional<AttractStep> Attract(const AttractSettings& settings, const Attrac
 	const float dx = atom.position.x - origin.x;
 	const float dz = atom.position.z - origin.z;
 	float radius = std::sqrt(dx * dx + dz * dz);
-	const float angle = std::atan2(dz, dx);
+	const float angle = x87::RoundToFloat(x87::Atan2(dz, dx));
 	const float blend = Blend(atom.age, settings.blendTime);
 	const float velocityBlend = Blend(atom.age, settings.blendTimeVelocity);
 	radius -= blend * settings.radialSpeed * dt * radius;
@@ -72,13 +77,14 @@ std::optional<AttractStep> Attract(const AttractSettings& settings, const Attrac
 		return std::nullopt;
 	}
 	const float invDt = 1.0f / dt;
-	const double targetX = std::cos(static_cast<double>(swung)) * radius + origin.x;
+	// The cosine stays wide until the multiply. The game stores the sine as a float first
+	const float targetX = x87::Mul(x87::Cos(swung), radius) + origin.x;
 	const float sinRadius = static_cast<float>(std::sin(static_cast<double>(swung))) * radius;
 	const float targetY = 0.0f + origin.y;
 	const float targetZ = sinRadius + origin.z;
 	// The velocity that would put it there this step, blended in from the one it was taken with
 	const glm::vec3 wanted {
-	    static_cast<float>((targetX - atom.position.x) * invDt) - atom.takenVelocity.x,
+	    (targetX - atom.position.x) * invDt - atom.takenVelocity.x,
 	    (targetY - atom.position.y) * invDt - atom.takenVelocity.y,
 	    (targetZ - atom.position.z) * invDt - atom.takenVelocity.z,
 	};
@@ -209,16 +215,17 @@ std::string Text(const Line& line)
 map_coords::MapCoords ThrowOutPlace(const map_coords::MapCoords& vortex, float angle)
 {
 	// The whole cell (the top half of each coordinate) is moved; the place within it stays
-	constexpr double k_Out = 16.0;
-	constexpr double k_CellSize = 10.0;
-	const auto moved = [](int32_t fixed, double by) {
-		const auto cell = static_cast<double>(static_cast<uint32_t>(fixed) >> 16u);
+	constexpr float k_Out = 16.0f;
+	constexpr float k_CellSize = 10.0f;
+	const auto moved = [](int32_t fixed, float by) {
+		const auto cell = static_cast<float>(static_cast<uint32_t>(fixed) >> 16u);
 		const auto newCell = static_cast<uint16_t>(static_cast<int32_t>((cell * k_CellSize + by) / k_CellSize));
 		return static_cast<int32_t>((static_cast<uint32_t>(newCell) << 16u) | (static_cast<uint32_t>(fixed) & 0xffffu));
 	};
 	map_coords::MapCoords place = vortex;
-	place.x = moved(vortex.x, std::sin(static_cast<double>(angle)) * k_Out);
-	place.z = moved(vortex.z, -std::cos(static_cast<double>(angle)) * k_Out);
+	// The sine and the cosine stay wide until the multiply by the distance out
+	place.x = moved(vortex.x, x87::Mul(x87::Sin(angle), k_Out));
+	place.z = moved(vortex.z, x87::Mul(x87::Cos(angle), -k_Out));
 	return place;
 }
 

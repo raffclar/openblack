@@ -38,11 +38,12 @@ public:
 	/// The wave has three crests along the sheet and rolls along it at three radians a second, between 0.5 and 1.1 of
 	/// the sheet's height
 	static constexpr float k_WaveSpan = 6.0f * std::numbers::pi_v<float>;
-	static constexpr double k_WaveSpeed = 3.0;
-	static constexpr double k_WaveDepth = 0.3;
-	static constexpr double k_WaveMiddle = 0.8;
+	static constexpr float k_WaveSpeed = 3.0f;
+	/// The game holds the depth and the middle as doubles with the bits of the floats 0.3 and 0.8
+	static constexpr double k_WaveDepth = static_cast<double>(0.3f);
+	static constexpr double k_WaveMiddle = static_cast<double>(0.8f);
 	/// A point's light is its height times this, at most 255
-	static constexpr double k_LightPerHeight = 50.0;
+	static constexpr float k_LightPerHeight = 50.0f;
 	/// The stars repeat this often along the sheet, by distance
 	static constexpr float k_StarsPerUnit = 0.1f;
 	/// The texture's row of the brightest line
@@ -51,7 +52,7 @@ public:
 	/// A pulsed sheet (see StartPulsed): its pulses fade out with a time constant of a second, it shows only while one of
 	/// its points has more than this, a point's light is its strength times this, its middle line is halfway up, and its
 	/// texture runs a tenth as fast along it as the stars do, repeating every hundred units
-	static constexpr float k_PulseFadeSeconds = 1.0f;
+	static constexpr float k_PulseFadeRate = 1.0f;
 	static constexpr float k_PulseShowsAbove = 0.02f;
 	static constexpr float k_PulseLightPerStrength = 255.0f;
 	static constexpr float k_PulseMiddleLine = 0.5f;

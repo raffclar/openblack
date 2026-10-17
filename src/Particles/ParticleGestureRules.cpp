@@ -155,7 +155,7 @@ public:
 				const auto step = 1.0f / static_cast<float>(trail::k_SheetPoints - 1);
 				for (int i = 0; i < trail::k_SheetPoints; ++i)
 				{
-					points.push_back(data.trail->ideal.At(static_cast<float>(static_cast<double>(i) * step)));
+					points.push_back(data.trail->ideal.At(static_cast<float>(i) * step));
 				}
 				data.sheet = std::make_shared<LightSheet>();
 				data.sheet->Start(std::move(points), data.colour, data.scale * sheetHeightScale, trail::k_SheetShiftSeconds);
@@ -171,12 +171,12 @@ private:
 	void CarryRound(Effect& effect, Atom& atom, Collection& sub, const TrailAtom& data) const
 	{
 		const float age = effect.AtomAge(atom);
-		const auto round = static_cast<float>(std::fmod(static_cast<double>(age) / trail::k_CircuitSeconds, 1.0));
+		const float round = std::fmod(age / trail::k_CircuitSeconds, 1.0f);
 		atom.position = data.trail->ideal.At(round);
-		const double left = static_cast<double>(dieAge) - age;
+		const float left = dieAge - age;
 		if (left < trail::k_CircuitFadeSeconds)
 		{
-			const double alpha = std::clamp(left * (k_ByteMax / trail::k_CircuitFadeSeconds), 0.0, 255.0);
+			const float alpha = std::clamp(left * (k_ByteMax / trail::k_CircuitFadeSeconds), 0.0f, k_ByteMax);
 			const auto level = static_cast<uint8_t>(static_cast<int>(alpha));
 			atom.rgba[3] = level;
 			sub.alpha = level;
@@ -194,33 +194,32 @@ private:
 		const float age = effect.CollectionAge(sub);
 
 		// From the drawn path to the shape over a time, eased by the gain
-		const auto grown = static_cast<float>(
-		    std::min(static_cast<double>(age) - data.startAge, static_cast<double>(timeToIdeal)) / timeToIdeal);
+		const float grown = std::min(age - data.startAge, timeToIdeal) / timeToIdeal;
 		const auto transition = trail::Transition(grown, interpGain);
 		const auto width = data.boxMax.x - data.boxMin.x;
 		const auto depth = data.boxMax.z - data.boxMin.z;
 		const auto wiggle = trail::WiggleAmount(age, wigglePhaseSpeed, dispersalTime, shrinkTime);
 
 		// A while in, the particles flash and the hand glows in the player's colour, both dying away
-		const auto sinceFlash = static_cast<float>(static_cast<double>(age) - trail::k_FlashStart);
+		const float sinceFlash = age - trail::k_FlashStart;
 		if (sinceFlash > 0.0f)
 		{
-			const double flash = collectionAlphaPulse * trail::FlashLeft(sinceFlash, trail::k_FlashSeconds);
+			const float flash = static_cast<float>(collectionAlphaPulse) * trail::FlashLeft(sinceFlash, trail::k_FlashSeconds);
 			sub.alpha = static_cast<uint8_t>(static_cast<int>(flash));
-			const auto glow = static_cast<uint8_t>(
-			    static_cast<int>(trail::FlashLeft(sinceFlash, handPulseDuration) * static_cast<double>(k_ByteMax)));
+			const auto glow =
+			    static_cast<uint8_t>(static_cast<int>(trail::FlashLeft(sinceFlash, handPulseDuration) * k_ByteMax));
 			world.SetHandGlow(trail::Dimmed(data.colour, glow));
 		}
 
 		const auto count = sub.atoms.size();
-		const auto step = static_cast<float>(1.0 / (static_cast<double>(count) - 1.0));
+		const float step = 1.0f / (static_cast<float>(count) - 1.0f);
 		const auto perSecond = 1.0f / effect.GetDt();
 		const auto& noise = effect.Services().noise;
 		// The newest first
 		for (size_t i = 0; i < count; ++i)
 		{
 			auto& atom = *sub.atoms[count - 1 - i];
-			const auto along = static_cast<float>(static_cast<double>(i) * step);
+			const float along = static_cast<float>(i) * step;
 			atom.rgba[3] = trail::RevealAlpha(along, grown, maxAlpha);
 
 			glm::vec3 position;
@@ -236,17 +235,14 @@ private:
 			}
 
 			// Each wiggles by its own place in the shuffled order, across the shape's box
-			const auto place = static_cast<float>(static_cast<double>(data.order.at(i)) * step);
-			const auto phase = [&](float offset) {
-				return static_cast<float>((static_cast<double>(age) * wiggleSpeed) +
-				                          ((static_cast<double>(place) + offset) * wiggleFreq));
-			};
-			const auto acrossX = static_cast<float>(noise.Smooth(phase(0.0f)) * static_cast<double>(width) * wiggleMag);
-			const auto acrossZ =
-			    static_cast<float>(noise.Smooth(phase(trail::k_WiggleOffsetZ)) * static_cast<double>(depth) * wiggleMag);
-			const double up = (noise.Smooth(phase(trail::k_WiggleOffsetY)) + 1.0) * 0.5 * wiggleMagY * depth;
+			const float place = static_cast<float>(data.order.at(i)) * step;
+			const float sweep = age * wiggleSpeed;
+			const auto phase = [&](float offset) { return sweep + ((place + offset) * wiggleFreq); };
+			const float acrossX = noise.Smooth(phase(0.0f)) * width * wiggleMag;
+			const float acrossZ = noise.Smooth(phase(trail::k_WiggleOffsetZ)) * depth * wiggleMag;
+			const float up = (noise.Smooth(phase(trail::k_WiggleOffsetY)) + 1.0f) * 0.5f * wiggleMagY * depth;
 			position.x = (acrossX * wiggle) + position.x;
-			position.y = static_cast<float>(position.y + (up * wiggle));
+			position.y = position.y + (up * wiggle);
 			position.z = position.z + (acrossZ * wiggle);
 
 			atom.velocity = (position - atom.position) * perSecond;
@@ -262,7 +258,7 @@ private:
 		data.startAge = effect.CollectionAge(sub);
 		data.started = true;
 		sub.alpha = static_cast<float>(static_cast<uint8_t>(collectionAlphaInit));
-		data.scale = static_cast<float>(static_cast<double>(data.trail->ideal.Length()) * trail::k_ScalePerLength);
+		data.scale = data.trail->ideal.Length() * trail::k_ScalePerLength;
 
 		const auto camera = world.CameraPosition();
 		auto& ideal = data.trail->ideal;
@@ -402,7 +398,7 @@ public:
 		{
 			auto& atom = *collection.atoms[n];
 			auto& data = state.atoms[&atom];
-			if (!data.active && static_cast<double>(effect.AtomAge(atom)) - data.stoppedAt > k_LeftSeconds)
+			if (!data.active && effect.AtomAge(atom) - data.stoppedAt > k_LeftSeconds)
 			{
 				state.atoms.erase(&atom);
 				collection.atoms.erase(collection.atoms.begin() + static_cast<std::ptrdiff_t>(n));
@@ -447,22 +443,19 @@ private:
 		}
 		const float headScale = adjustInitialScale.empty() ? 1.0f : effect.FloatProvider(adjustInitialScale, 1.0f);
 		const float before = data.wanted;
-		const auto most = static_cast<float>(static_cast<double>(chain.atoms.size()) / dieAge * effect.GetDt());
-		double asked = 1.0;
+		const float most = static_cast<float>(chain.atoms.size()) / dieAge * effect.GetDt();
+		float asked = 1.0f;
 		if (data.laid != 0.0f)
 		{
 			const auto away = data.lastJoint - hand;
-			asked = std::sqrt((static_cast<double>(away.x) * away.x) + (static_cast<double>(away.y) * away.y) +
-			                  (static_cast<double>(away.z) * away.z)) /
-			        minEmitDist;
+			asked = std::sqrt((away.z * away.z) + (away.y * away.y) + (away.x * away.x)) / minEmitDist;
 		}
 		if (!(most > asked))
 		{
 			asked = most;
 		}
-		const double total = asked + before;
-		data.wanted = static_cast<float>(total);
-		for (bool more = total - 1.0 > data.laid; more; more = static_cast<double>(data.wanted) - 1.0 > data.laid)
+		data.wanted = asked + before;
+		for (bool more = data.wanted - 1.0f > data.laid; more; more = data.wanted - 1.0f > data.laid)
 		{
 			data.laid += 1.0f;
 			// Each joint takes the place, age and size of the one newer than it
@@ -478,8 +471,7 @@ private:
 			glm::vec3 point = hand;
 			if (data.wanted != before)
 			{
-				const auto t =
-				    static_cast<float>((static_cast<double>(data.laid) - before) / (static_cast<double>(data.wanted) - before));
+				const float t = (data.laid - before) / (data.wanted - before);
 				point = data.last + ((hand - data.last) * t);
 				head.birth = effect.GetAge() - (effect.GetDt() * t);
 			}

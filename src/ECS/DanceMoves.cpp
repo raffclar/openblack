@@ -16,6 +16,7 @@
 
 #include "3D/AllMeshes.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -28,30 +29,25 @@ using map_coords::MapCoords;
 
 namespace
 {
-/// Each step rounded to a float, as the game's are
-float Round(double value)
-{
-	return static_cast<float>(value);
-}
-
+/// The steps of the game's sums, one float operation each, so that the order of the steps is clear
 float Add(float a, float b)
 {
-	return Round(static_cast<double>(a) + static_cast<double>(b));
+	return a + b;
 }
 
 float Sub(float a, float b)
 {
-	return Round(static_cast<double>(a) - static_cast<double>(b));
+	return a - b;
 }
 
 float Mul(float a, float b)
 {
-	return Round(static_cast<double>(a) * static_cast<double>(b));
+	return a * b;
 }
 
 float Div(float a, float b)
 {
-	return Round(static_cast<double>(a) / static_cast<double>(b));
+	return a / b;
 }
 
 /// The way round a shape, and a turn of a group's rotation, in their own units
@@ -83,7 +79,7 @@ DanceGroup* GroupAt(Dance& dance, std::size_t index)
 /// A map position's metres, as the game reckons them: the whole units, taken exactly, scaled by ten 65536ths
 float ToMetres(int32_t fixed)
 {
-	return Mul(Round(static_cast<double>(fixed) * static_cast<double>(k_TenMetres)), k_UnitsToFraction);
+	return Mul(x87::Mul(static_cast<double>(fixed), k_TenMetres), k_UnitsToFraction);
 }
 
 /// Metres back to whole units, truncated
@@ -374,8 +370,9 @@ void dance_moves::ProcessGroup(DanceGroup& group, int32_t now)
 
 glm::vec2 dance_moves::RotatePointByAngle(glm::vec2 point, float angle)
 {
-	const float length = Round(std::sqrt(static_cast<double>(Add(Mul(point.y, point.y), Mul(point.x, point.x)))));
-	float own = 0.0f;
+	const float length = std::sqrt(Add(Mul(point.y, point.y), Mul(point.x, point.x)));
+	// The point's own angle. The arctangent stays wide until the next add, which rounds it
+	double own = 0.0;
 	if (point.x == 0.0f)
 	{
 		own = point.y > 0.0f ? k_HalfPi : k_ThreeHalvesPi;
@@ -384,10 +381,10 @@ glm::vec2 dance_moves::RotatePointByAngle(glm::vec2 point, float angle)
 	{
 		if (point.y != 0.0f)
 		{
-			own = Round(std::atan(static_cast<double>(Div(point.y, point.x))));
+			own = x87::Atan(Div(point.y, point.x));
 			if (point.y < 0.0f)
 			{
-				own = Add(own, k_TwoPi);
+				own = x87::Add(own, k_TwoPi);
 			}
 		}
 	}
@@ -397,9 +394,9 @@ glm::vec2 dance_moves::RotatePointByAngle(glm::vec2 point, float angle)
 	}
 	else
 	{
-		own = Add(Round(std::atan(static_cast<double>(Div(point.y, point.x)))), k_Pi);
+		own = x87::Add(x87::Atan(Div(point.y, point.x)), k_Pi);
 	}
-	float turned = Add(own, angle);
+	float turned = x87::Add(own, angle);
 	if (turned < 0.0f)
 	{
 		turned = Add(turned, k_TwoPi);

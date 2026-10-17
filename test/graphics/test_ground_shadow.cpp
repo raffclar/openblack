@@ -97,10 +97,11 @@ TEST(GroundShadow, TheBodyIsFlattenedAwayFromTheSunOntoItsFeet)
 	const auto feet = GroundShadow::OnLevel(Rigid({1000.0f, 20.0f, 2000.0f}), cast);
 	EXPECT_NEAR(feet.x, 1000.0f, 1e-3f);
 	EXPECT_NEAR(feet.y, 2000.0f, 1e-3f);
-	// A head 2 up falls about 2 further along x and z, away from the sun, a little more the further from it
+	// A head 2 up falls about 2 further along x and z, away from the sun, a little more the further from it. The game
+	// works from the far sun in float, so the shadow falls on steps of a 32nd of a unit
 	const auto head = GroundShadow::OnLevel(Rigid({1000.0f, 22.0f, 2000.0f}), cast);
-	EXPECT_NEAR(head.x - 1000.0f, 2.0f * 501000.0f / 500000.0f, 1e-2f);
-	EXPECT_NEAR(head.y - 2000.0f, 2.0f * 502000.0f / 500000.0f, 1e-2f);
+	EXPECT_NEAR(head.x - 1000.0f, 2.0f * 501000.0f / 500000.0f, 1.0f / 32.0f);
+	EXPECT_NEAR(head.y - 2000.0f, 2.0f * 502000.0f / 500000.0f, 1.0f / 32.0f);
 	// Nothing moved with the body whole is lower than the feet
 	const auto below = GroundShadow::OnLevel(Rigid({1000.0f, 18.0f, 2000.0f}), cast);
 	EXPECT_NEAR(below.x, 1000.0f, 1e-3f);
@@ -125,10 +126,10 @@ TEST(GroundShadow, TheFootprintSpansTheFlattenedBody)
 	const auto footprint = GroundShadow::Measure(points, standsAt, cast);
 	ASSERT_TRUE(footprint.has_value());
 	EXPECT_NEAR(footprint->low.x, 99.0f, 1e-3f);
-	// The head, 2 up, reaches furthest
-	EXPECT_NEAR(footprint->high.x, 102.0f, 1e-2f);
+	// The head, 2 up, reaches furthest, on the steps of a 32nd of a unit that the far sun gives in float
+	EXPECT_NEAR(footprint->high.x, 102.0f, 1.0f / 32.0f);
 	EXPECT_NEAR(footprint->low.y, 100.0f, 1e-3f);
-	EXPECT_NEAR(footprint->high.y, 102.0f, 1e-2f);
+	EXPECT_NEAR(footprint->high.y, 102.0f, 1.0f / 32.0f);
 	// The nearest point to the sun across the ground is the one at the lowest x and z
 	EXPECT_NEAR(footprint->nearest, GroundShadow::Reach(points[0].position, standsAt, cast.light), 1e-3f);
 	// No points, no shadow; nor for a body with no extent across the ground

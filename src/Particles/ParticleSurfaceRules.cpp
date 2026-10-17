@@ -31,8 +31,8 @@ using openblack::psys::ParticleObject;
 
 namespace
 {
-/// The sway turns over once in this many seconds times two pi
-constexpr double k_SwayPeriod = 6.2831854820251465;
+/// The sway turns over once each two pi seconds. The game holds two pi as a double with the bits of the float
+constexpr double k_SwayPeriod = static_cast<double>(6.28318548f);
 constexpr float k_SwaySpeed = 1.0f;
 /// A texture's size is given in pixels; its sheet spans 256
 constexpr float k_SheetPixels = 256.0f;
