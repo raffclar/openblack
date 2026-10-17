@@ -574,6 +574,36 @@ vec3 LightningInSky(vec3 reflected)
 	return UW_FLASH_COLOUR * u_uwStrike[1].x * (0.55f + 0.45f * clamp(reflected.y, 0.0f, 1.0f)) * u_uwStrike[1].w;
 }
 
+// The light of a flash inside the clouds on the sea under it. The lit bottom of the cloud lights a wide area of the
+// water, most of all straight under the flash.
+vec3 CloudFlashOnWater(vec3 p)
+{
+	float light = u_uwStrike[2].w * u_uwStrike[1].w;
+	if (light <= 0.0f)
+	{
+		return vec3_splat(0.0f);
+	}
+	vec3 toFlash = u_uwStrike[2].xyz - p;
+	float height = max(toFlash.y, 100.0f);
+	return UW_FLASH_COLOUR * light * 0.22f * height * height / (height * height + dot(toFlash.xz, toFlash.xz));
+}
+
+// The flash inside the clouds in the reflection: the water reflects the lit cloud where the reflected ray goes towards
+// the flash
+vec3 CloudFlashInMirror(vec3 p, vec3 reflected)
+{
+	float light = u_uwStrike[2].w * u_uwStrike[1].w;
+	if (light <= 0.0f)
+	{
+		return vec3_splat(0.0f);
+	}
+	vec3 toFlash = u_uwStrike[2].xyz - p;
+	float distance = length(toFlash);
+	float facing = max(dot(reflected, toFlash / max(distance, 1.0f)), 0.0f);
+	float falloff = 1.0f / (1.0f + distance * distance / (2500.0f * 2500.0f));
+	return UW_FLASH_COLOUR * light * 1.5f * pow(facing, 6.0f) * falloff;
+}
+
 // The glint of the bolt on the waves: the bolt is a line of light from the sea up to the cloud. The point of the line
 // nearest to the reflected ray stands for the line, so the glint is a long path on the water towards the strike. Near
 // the strike the bolt also lights the water round it.
@@ -869,7 +899,7 @@ void main()
 				screenShare = found.a;
 			}
 			// The scene in the screen already has the flash of the lightning: the sky and the far scene get it here
-			mirror += LightningInSky(reflected) * (1.0f - screenShare);
+			mirror += (LightningInSky(reflected) + CloudFlashInMirror(surfacePoint, reflected)) * (1.0f - screenShare);
 			float facing = clamp(dot(-direction, normal), 0.0f, 1.0f);
 			// Water is not a metal: Schlick's reflection with the water's 0.02 head on, and less of it on rough water,
 			// where the small waves send part of the reflection away from the eye
@@ -931,7 +961,7 @@ void main()
 			colour += u_uwLightColour.rgb * u_uwLightColour.w * glintShade * highlight * 0.5f *
 			          (1.0f - smoothstep(40.0f, 400.0f, toSurface)) * (1.0f - pond);
 			// The glint of the bolt, and the ring where a strike hit the sea
-			colour += LightningGlint(surfacePoint, normal, -direction, roughness);
+			colour += LightningGlint(surfacePoint, normal, -direction, roughness) + CloudFlashOnWater(surfacePoint);
 			colour += UW_FLASH_COLOUR * strike.z;
 
 			// The foam where the water is shallow and at the edge of the run up the beach, on the crests that break

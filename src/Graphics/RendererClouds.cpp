@@ -15,7 +15,9 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <array>
 #include <limits>
+#include <span>
 #include <vector>
 
 #include <bgfx/bgfx.h>
@@ -162,8 +164,13 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 	    air ? atmosphere::CloudSkyLight(original, _atmosphereFrame->skyFromAbove, _atmosphereFrame->sunHeight) : original;
 	uniforms.ambient = {skyLight, system.GetSeaFlash().x};
 	uniforms.eye = {eye, frame.eye.w > 0.5f ? 0.0f : 1.0f};
-	const auto& strike = system.GetSeaStrike();
-	uniforms.strike = {strike.position.x, frame.params.z, strike.position.y, system.GetSeaFlash().y};
+	// Each flash of the storms lights the clouds from inside, along a channel across the layer of the storm's clouds
+	std::array<cloud_lightning::FlashLight, cloud_lightning::k_MaxFlashes> flashLights {};
+	const auto flashes = system.GetCloudFlashes();
+	std::ranges::transform(flashes, flashLights.begin(), [&eye](const cloud_lightning::FlashEvent& flash) {
+		return cloud_lightning::LightFor(flash, eye, clouds::k_CloudBase, clouds::k_CumulonimbusDepth);
+	});
+	uniforms.flashes = cloud_lightning::Pack(std::span(flashLights).first(flashes.size()));
 	// From high up the clouds and their shadow reach farther, so the layer and the shadow have no edge round the eye
 	const float eyeHeight = eye.y - frame.params.z;
 	const float window = clouds::ShadowWindowFor(eyeHeight);
@@ -183,7 +190,7 @@ void Renderer::SetCloudUniforms(const ShaderProgram& program, const clouds::Clou
 	program.SetUniformValue("u_cloudLightColour", &uniforms.lightColour);
 	program.SetUniformValue("u_cloudAmbient", &uniforms.ambient);
 	program.SetUniformValue("u_cloudEye", &uniforms.eye);
-	program.SetUniformValue("u_cloudStrike", &uniforms.strike);
+	program.SetUniformArray("u_cloudFlashes", uniforms.flashes.data(), static_cast<uint16_t>(uniforms.flashes.size()));
 	// EXPERIMENT (not for merge): the sky's dome, which writes its depth, is the sky
 	const glm::vec4 noDome {0.0f, 0.0f, 1e9f, 1e9f};
 	program.SetUniformValue("u_hazeDome", _atmosphereFrame.has_value() ? &_atmosphereFrame->skyDome : &noDome);

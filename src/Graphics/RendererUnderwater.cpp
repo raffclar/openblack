@@ -43,6 +43,7 @@
 #include "Graphics/Underwater.h"
 #include "Graphics/UnderwaterJellyfish.h"
 #include "Graphics/VertexBuffer.h"
+#include "Graphics/VolumetricClouds.h"
 #include "Locator.h"
 #include "Renderer.h"
 #include "Resources/ResourcesInterface.h"
@@ -200,8 +201,19 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	{
 		const auto& strike = system.GetSeaStrike();
 		const auto flash = system.GetSeaFlash();
+		// The brightest flash inside the clouds lights the sea under it and shows in the reflection
+		glm::vec4 cloudFlash {0.0f};
+		for (const auto& event : system.GetCloudFlashes())
+		{
+			const auto inCloud =
+			    cloud_lightning::LightFor(event, eye, volumetric_clouds::k_CloudBase, volumetric_clouds::k_CumulonimbusDepth);
+			if (inCloud.brightness > cloudFlash.w)
+			{
+				cloudFlash = {(inCloud.start + inCloud.end) * 0.5f, inCloud.brightness};
+			}
+		}
 		frame.strike = {glm::vec4(strike.position.x, seaLevel, strike.position.y, flash.y),
-		                glm::vec4(flash.x, strike.since, strike.overSea ? strike.strength : 0.0f, 1.0f)};
+		                glm::vec4(flash.x, strike.since, strike.overSea ? strike.strength : 0.0f, 1.0f), cloudFlash};
 	}
 	const auto floaters = system.GetFloaters();
 	for (size_t i = 0; i < frame.floaters.size(); ++i)

@@ -19,6 +19,8 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "CloudLightning.h"
+
 /// EXPERIMENT (not for merge): the rules of the volumetric clouds. The original game has billboards for its clouds.
 /// The shaders march rays through a layer of cloud over the land. The density in that layer comes from noise volumes,
 /// a weather map and a profile of the height for each type of cloud. These functions make the noise once, ease the
@@ -270,8 +272,8 @@ struct CloudUniforms
 	glm::vec4 ambient {0.0f};
 	/// xyz the eye, w 1 while the eye is above the water
 	glm::vec4 eye {0.0f};
-	/// xyz where the lightning struck, w the light of its bolt
-	glm::vec4 strike {0.0f};
+	/// The flashes of the lightning inside the clouds (see cloud_lightning::Pack)
+	std::array<glm::vec4, cloud_lightning::k_MaxFlashes * 2> flashes {};
 	/// xy where the map of the shadow starts, z the units it covers, w how dark the shadow is
 	glm::vec4 shadow {0.0f};
 	/// The storms: [i] xy the middle, z the inner radius, w the outer radius; [k_MaxStorms + i] x the strength, y the rain
