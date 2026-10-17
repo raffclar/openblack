@@ -67,7 +67,7 @@ private:
 	/// While the tattoo editor shows the copy: which tattoo place is under the pointer, as the copy is posed now
 	void HoverTattooSites(entt::entity copy, glm::ivec2 pointer);
 	/// Starts the copy turning on the spot to face a heading
-	static void StartCaveTurn(const components::CreatureCopy& copy, cave_creature::State& state, float heading);
+	static void StartCaveTurn(const components::CreatureCopy& copy, cave_creature::State& state, GameHeading heading);
 
 	const gui::GameInterface* _interface {nullptr};
 	creature_cave::Screen _screen;

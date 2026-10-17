@@ -148,12 +148,12 @@ TEST(GlmOrder2, MeshAndSkinIntersectionsMeasureTheSameWay)
 	EXPECT_EQ(mesh->windingNormal, skin->windingNormal);
 }
 
-TEST(GlmOrder2, LocomotionHeadingIsTheGameHeadingMirrored)
+TEST(GlmOrder2, LocomotionHeadingIsTheGameHeading)
 {
 	const glm::vec2 direction {0.3f, -0.7f};
-	EXPECT_EQ(Bits(openblack::creature_locomotion::HeadingOf(direction)),
-	          Bits(static_cast<float>(x87::GameHeadingOf(-direction.x, direction.y))));
-	EXPECT_EQ(openblack::creature_locomotion::HeadingOf(glm::vec2(0.0f)), 0.0f);
+	EXPECT_EQ(Bits(openblack::creature_locomotion::HeadingOf(direction).Radians()),
+	          Bits(x87::RoundToFloat(x87::GameHeadingOf(direction.x, direction.y))));
+	EXPECT_EQ(openblack::creature_locomotion::HeadingOf(glm::vec2(0.0f)).Radians(), 0.0f);
 }
 
 TEST(GlmOrder2, KickTakesTheUpRowLessTheBackRow)

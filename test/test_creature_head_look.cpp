@@ -83,15 +83,15 @@ TEST(CreatureHeadLook, AnglesTowardsATarget)
 {
 	const glm::vec3 eyes {0.0f, 15.0f, 0.0f};
 	// The heading 0 faces -z
-	const auto straight = AnglesTowards(eyes, 0.0f, {0.0f, 15.0f, -10.0f});
+	const auto straight = AnglesTowards(eyes, openblack::GameHeading(0.0f), {0.0f, 15.0f, -10.0f});
 	EXPECT_NEAR(straight.yaw, 0.0f, k_Tolerance);
 	EXPECT_NEAR(straight.pitch, 0.0f, k_Tolerance);
 	// Facing -z in the left-handed world, +x is on the creature's left
-	const auto left = AnglesTowards(eyes, 0.0f, {10.0f, 15.0f, -10.0f});
+	const auto left = AnglesTowards(eyes, openblack::GameHeading(0.0f), {10.0f, 15.0f, -10.0f});
 	EXPECT_NEAR(left.yaw, k_Pi / 4.0f, k_Tolerance);
-	const auto right = AnglesTowards(eyes, 0.0f, {-10.0f, 15.0f, -10.0f});
+	const auto right = AnglesTowards(eyes, openblack::GameHeading(0.0f), {-10.0f, 15.0f, -10.0f});
 	EXPECT_NEAR(right.yaw, -k_Pi / 4.0f, k_Tolerance);
-	const auto up = AnglesTowards(eyes, 0.0f, {0.0f, 25.0f, -10.0f});
+	const auto up = AnglesTowards(eyes, openblack::GameHeading(0.0f), {0.0f, 25.0f, -10.0f});
 	EXPECT_NEAR(up.pitch, k_Pi / 4.0f, k_Tolerance);
 }
 
@@ -99,11 +99,11 @@ TEST(CreatureHeadLook, ATargetAlongAMapAxisGivesNoSidewaysTurn)
 {
 	const glm::vec3 eyes {0.0f, 15.0f, 0.0f};
 	// Straight to the side along x, the head does not turn sideways, but it still turns down
-	const auto side = AnglesTowards(eyes, 0.0f, {-10.0f, 5.0f, 0.0f});
+	const auto side = AnglesTowards(eyes, openblack::GameHeading(0.0f), {-10.0f, 5.0f, 0.0f});
 	EXPECT_FLOAT_EQ(side.yaw, 0.0f);
 	EXPECT_NEAR(side.pitch, -k_Pi / 4.0f, k_Tolerance);
 	// Facing along x, a target along z is also on an axis
-	const auto behind = AnglesTowards(eyes, k_Pi / 2.0f, {0.0f, 15.0f, 10.0f});
+	const auto behind = AnglesTowards(eyes, openblack::GameHeading::FromYaw(k_Pi / 2.0f), {0.0f, 15.0f, 10.0f});
 	EXPECT_FLOAT_EQ(behind.yaw, 0.0f);
 }
 
@@ -111,7 +111,7 @@ TEST(CreatureHeadLook, TheYawIsFromTheHeadingTheBodyFaces)
 {
 	const glm::vec3 eyes {0.0f, 15.0f, 0.0f};
 	// The same target seen from a body turned a quarter turn
-	const auto turned = AnglesTowards(eyes, k_Pi / 4.0f, {10.0f, 15.0f, -10.0f});
+	const auto turned = AnglesTowards(eyes, openblack::GameHeading::FromYaw(k_Pi / 4.0f), {10.0f, 15.0f, -10.0f});
 	EXPECT_NEAR(turned.yaw, k_Pi / 2.0f, k_Tolerance);
 }
 

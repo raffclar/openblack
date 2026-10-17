@@ -184,12 +184,13 @@ TEST(FightMarks, ASkinPointFollowsItsTriangle)
 
 TEST(FightMarks, PointsGoInAndOutOfAFrame)
 {
-	const auto frame = GroundFrame({100.0f, 5.0f, 50.0f}, std::numbers::pi_v<float> / 2.0f);
+	const auto frame = GroundFrame({100.0f, 5.0f, 50.0f}, openblack::GameHeading::FromYaw(std::numbers::pi_v<float> / 2.0f));
 	const glm::vec3 point {104.0f, 5.0f, 47.0f};
 	const auto local = ToLocal(frame, point);
 	ExpectNear(ToWorld(frame, local), point);
 	// The creature turned on: the point turns with it
-	const auto turned = ToWorld(GroundFrame({100.0f, 5.0f, 50.0f}, std::numbers::pi_v<float>), local);
+	const auto turned =
+	    ToWorld(GroundFrame({100.0f, 5.0f, 50.0f}, openblack::GameHeading::FromYaw(std::numbers::pi_v<float>)), local);
 	EXPECT_NEAR(glm::distance(turned, glm::vec3(100.0f, 5.0f, 50.0f)), 5.0f, k_Tolerance);
 	EXPECT_GT(glm::distance(turned, point), 1.0f);
 }

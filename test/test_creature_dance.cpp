@@ -164,9 +164,9 @@ TEST(CreatureDance, TheCreatureTurnsToAGameAngleOnlyWhenItFacesFarFromIt)
 	ASSERT_TRUE(first.facePoint.has_value());
 	EXPECT_EQ(gutils::GetAngleFromXZ(position, *first.facePoint), 512);
 	// Facing the point within the limit, it does not turn
-	view.heading = creature_locomotion::HeadingOf(*first.facePoint - position) + 0.4f;
+	view.heading = GameHeading(creature_locomotion::HeadingOf(*first.facePoint - position).Radians() + 0.4f);
 	EXPECT_FALSE(creature_dance::Turn(view, position).facePoint.has_value());
-	view.heading = creature_locomotion::HeadingOf(*first.facePoint - position) + 0.5f;
+	view.heading = GameHeading(creature_locomotion::HeadingOf(*first.facePoint - position).Radians() + 0.5f);
 	EXPECT_TRUE(creature_dance::Turn(view, position).facePoint.has_value());
 }
 

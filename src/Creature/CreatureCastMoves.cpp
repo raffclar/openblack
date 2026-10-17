@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <numbers>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -22,6 +23,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreaturePlayerAttention.h"
 
@@ -194,16 +196,30 @@ bool creature_cast_moves::Facing(glm::vec2 creature, GameHeading heading, glm::v
 	{
 		return true;
 	}
-	// The way from the creature's map position to the point's, each made metres first
-	const auto offset =
-	    map_coords::ToMetres(map_coords::FromMetres(point)) - map_coords::ToMetres(map_coords::FromMetres(creature));
-	const float off = GameHeading::Of(offset.x, offset.y).TurnFrom(heading);
+	const float off = HeadingTo(creature, point).TurnFrom(heading);
 	return !(std::abs(off) > k_FacingRadians);
 }
 
-glm::vec2 creature_cast_moves::PointToFaceAwayFrom(glm::vec2 creature, glm::vec2 thing)
+namespace
 {
-	return creature + (creature - thing);
+/// The way from a creature's map position to a point's, each made metres first
+glm::vec2 MapOffset(glm::vec2 creature, glm::vec2 point)
+{
+	return map_coords::ToMetres(map_coords::FromMetres(point)) - map_coords::ToMetres(map_coords::FromMetres(creature));
+}
+} // namespace
+
+GameHeading creature_cast_moves::HeadingTo(glm::vec2 creature, glm::vec2 point)
+{
+	const auto offset = MapOffset(creature, point);
+	return GameHeading::Of(offset.x, offset.y);
+}
+
+GameHeading creature_cast_moves::HeadingAwayFrom(glm::vec2 creature, glm::vec2 thing)
+{
+	// The half turn is added to the heading before the heading is made a float, and the sum is rounded one time
+	const auto offset = MapOffset(creature, thing);
+	return GameHeading(x87::Add(x87::GameHeadingOf(offset.x, offset.y), std::numbers::pi_v<float>));
 }
 
 std::vector<CollideCircle> creature_cast_moves::CollideCircles(glm::vec2 halfSize, glm::vec2 centre, const glm::mat2& turn)
@@ -240,7 +256,8 @@ bool creature_cast_moves::BlocksCell(const CollideSphere& sphere, int32_t x, int
 {
 	const glm::vec3 middle {static_cast<float>(x) * k_CellSize + k_CellSize * 0.5f, 0.0f,
 	                        static_cast<float>(z) * k_CellSize + k_CellSize * 0.5f};
-	return glm::distance(middle, sphere.centre) - sphere.radius < k_ClearOfThings;
+	// The squares are added from z to x
+	return x87::Distance<x87::SumOrder::Zyx>(middle, sphere.centre) - sphere.radius < k_ClearOfThings;
 }
 
 std::array<CollideSphere, creature_cast_moves::k_WorshipSiteSpheres>

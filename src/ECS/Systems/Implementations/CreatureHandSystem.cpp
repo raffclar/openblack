@@ -129,7 +129,7 @@ PartsOf(const Creature& creature, const CreatureAnimation& animation, const Tran
 }
 
 /// The heading the creature's body is drawn at, or the one it is turning to while it turns
-float HeadingOf(const ecs::Registry& registry, entt::entity creature, const Transform& transform)
+GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature, const Transform& transform)
 {
 	if (const auto* walking = registry.TryGet<const CreatureLocomotion>(creature); walking != nullptr && walking->started)
 	{

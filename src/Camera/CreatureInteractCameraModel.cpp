@@ -53,12 +53,12 @@ glm::vec3 DestinationOf(const Zoomers& zoomers)
 }
 } // namespace
 
-creature_interact::View creature_interact::ViewOf(const glm::vec3& position, float height, float heading)
+creature_interact::View creature_interact::ViewOf(const glm::vec3& position, float height, GameHeading heading)
 {
 	const auto focus = position + glm::vec3(0.0f, k_FocusHeightShare * height, 0.0f);
 	const auto ahead = glm::vec3(0.0f, k_Up - (k_UpLessPerHeight * height), -k_Ahead);
 	const auto offset = glm::normalize(ahead) * (k_DistanceHeights * height);
-	return {.origin = focus + (glm::mat3(glm::eulerAngleY(heading)) * offset), .focus = focus};
+	return {.origin = focus + (glm::mat3(glm::eulerAngleY(heading.Yaw())) * offset), .focus = focus};
 }
 
 bool creature_interact::WooshesFlyingBack(const glm::vec3& from, const glm::vec3& to)

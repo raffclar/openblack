@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/GameHeading.h"
 #include "Enums.h"
 
 /// How the scripts read and write a thing's properties, where the answer is a rule of its own
@@ -102,10 +103,10 @@ struct Angles
 [[nodiscard]] glm::mat3 PlacedRotation(const Angles& angles);
 
 /// A living thing's angle as the scripts take it is the way it faces across the land, in radians from +x towards +z.
-/// Villagers and animals keep their facing that way. A creature's heading turns its model the other way round, a quarter
-/// turn on: these turn one into the other, the angle kept from 0 to a whole turn.
-[[nodiscard]] float CreatureHeadingToLivingAngle(float heading);
-[[nodiscard]] float LivingAngleToCreatureHeading(float angle);
+/// Villagers and animals keep their facing that way. A creature's heading is a quarter turn back from it: these turn one
+/// into the other, the angle kept from 0 to a whole turn.
+[[nodiscard]] float CreatureHeadingToLivingAngle(GameHeading heading);
+[[nodiscard]] GameHeading LivingAngleToCreatureHeading(float angle);
 /// Whether a living thing moved in its last turn: the game compares where it stood across the land, in whole map units
 /// (a 65536th of ten metres), and not its height
 [[nodiscard]] bool MovedAcross(const glm::vec3& before, const glm::vec3& after);

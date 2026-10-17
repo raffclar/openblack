@@ -166,9 +166,10 @@ glm::vec3 openblack::creature_fight::marks::ToWorld(const glm::mat4& frame, cons
 	return glm::vec3(frame * glm::vec4(local, 1.0f));
 }
 
-glm::mat4 openblack::creature_fight::marks::GroundFrame(const glm::vec3& position, float heading)
+glm::mat4 openblack::creature_fight::marks::GroundFrame(const glm::vec3& position, GameHeading heading)
 {
-	return glm::rotate(glm::translate(glm::mat4(1.0f), position), heading, glm::vec3(0.0f, 1.0f, 0.0f));
+	// The frame turns as the drawn body does
+	return glm::rotate(glm::translate(glm::mat4(1.0f), position), heading.Yaw(), glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
 bool Pace::Advance(float realMs)

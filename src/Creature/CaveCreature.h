@@ -17,6 +17,7 @@
 
 #include <glm/vec3.hpp>
 
+#include "Common/GameHeading.h"
 #include "Creature/CreatureLayers.h"
 
 /// The player's creature as the Creature Cave shows it. The cave shows a copy of the creature's body, its shape, skin
@@ -74,9 +75,9 @@ constexpr uint32_t k_IdleFidgets = 10;
 /// seat's height
 [[nodiscard]] glm::vec3 StandsAt(const Places& places, float size, Rest rest);
 /// The way it faces to face a point, as a heading about the vertical
-[[nodiscard]] float HeadingTowards(const glm::vec3& from, const glm::vec3& to);
+[[nodiscard]] GameHeading HeadingTowards(const glm::vec3& from, const glm::vec3& to);
 /// Whether a heading is far enough off the one wanted to turn
-[[nodiscard]] bool MustTurn(float heading, float wanted);
+[[nodiscard]] bool MustTurn(GameHeading heading, GameHeading wanted);
 /// The point under the pointer that it looks at, from the camera's eye and the point under the pointer on the near
 /// plane, which is the near distance into the screen
 [[nodiscard]] glm::vec3 PointerPoint(const glm::vec3& eye, const glm::vec3& onNearPlane, float nearDistance);
@@ -86,14 +87,14 @@ struct State
 {
 	Rest rest {Rest::Sit};
 	/// The way it faces
-	float heading {0.0f};
+	GameHeading heading {};
 	/// A turn waiting for the body to be free
-	std::optional<float> wantedHeading;
+	std::optional<GameHeading> wantedHeading;
 	/// The turn it is making, from one heading to another, timed in milliseconds of its spin
 	struct Turn
 	{
-		float from;
-		float to;
+		GameHeading from;
+		GameHeading to;
 		float timeMs;
 		float durationMs;
 		/// The two spins it blends, and how far from the first to the second
@@ -151,7 +152,7 @@ void InEditor(State& state, Body& body, const Frame& frame, const Random& random
 /// fire), and when it doesn't its rest ends and it turns to face it. Zoomed onto, it gets up and turns to face the
 /// camera as the zoom starts, looks at the pointer while a button has been held for under a second and a half, and
 /// fidgets now and then. A turn waits for the body to be free. Returns the heading of a turn to start this frame.
-[[nodiscard]] std::optional<float> Step(State& state, Body& body, const Frame& frame, const Random& random);
+[[nodiscard]] std::optional<GameHeading> Step(State& state, Body& body, const Frame& frame, const Random& random);
 
 /// The turn some milliseconds of its spin on: finished, it faces the way it turned to
 void AdvanceTurn(State& state, float milliseconds);

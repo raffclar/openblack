@@ -181,8 +181,11 @@ using ClearCell = std::function<bool(int32_t x, int32_t z)>;
 /// map position to the point's, and the creature faces it when its own heading is near enough to it. A creature on top
 /// of the point faces it.
 [[nodiscard]] bool Facing(glm::vec2 creature, GameHeading heading, glm::vec2 point);
-/// The point a creature turns to so that its back is to a thing: as far from the creature as the thing, on the other
-/// side
-[[nodiscard]] glm::vec2 PointToFaceAwayFrom(glm::vec2 creature, glm::vec2 thing);
+/// The heading from a creature's map position to a point's map position, each made metres first. A creature turns to
+/// this heading to face the point.
+[[nodiscard]] GameHeading HeadingTo(glm::vec2 creature, glm::vec2 point);
+/// The heading a creature turns to so that its back is to a thing: the heading to the thing plus a half turn. The
+/// result is not brought back into the half turns each side of 0.
+[[nodiscard]] GameHeading HeadingAwayFrom(glm::vec2 creature, glm::vec2 thing);
 
 } // namespace openblack::creature_cast_moves

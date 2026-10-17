@@ -18,6 +18,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/GameHeading.h"
 #include "Creature/CreatureHeadLook.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureRoute.h"
@@ -47,9 +48,10 @@ struct CreatureLocomotion
 	Motion motion {Motion::Standing};
 	/// Whether its heading has been read from where it faces
 	bool started {false};
-	float heading {0.0f};
+	/// Its heading as the game keeps it. Only the drawn turn of its body changes it to a yaw.
+	GameHeading heading {};
 	/// The heading it turns or steps towards
-	float targetHeading {0.0f};
+	GameHeading targetHeading {};
 	/// Units a second
 	float speed {0.0f};
 	/// The fraction of its top speed it is asked to go at
@@ -101,8 +103,8 @@ struct CreatureLocomotion
 		float timeMs;
 		float durationMs;
 		glm::vec2 displacement;
-		float startHeading;
-		float startRouteHeading;
+		GameHeading startHeading;
+		GameHeading startRouteHeading;
 	};
 	std::optional<Move> move;
 	/// The walk animation's time, which the run keeps in step with
@@ -119,8 +121,8 @@ struct CreatureLocomotion
 	/// Where it was at the start of this turn and where it is at its end, drawn between them
 	glm::vec3 fromPosition {0.0f};
 	glm::vec3 toPosition {0.0f};
-	float fromHeading {0.0f};
-	float toHeading {0.0f};
+	GameHeading fromHeading {};
+	GameHeading toHeading {};
 	/// A turn or step ended this turn with its animation turning the body to its new heading: the body is drawn at its
 	/// old heading until the turn ends, and at the new one at once from the next
 	bool headingSnaps {false};

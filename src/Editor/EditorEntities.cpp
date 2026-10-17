@@ -625,7 +625,7 @@ void Turn(entt::entity entity, float radians)
 	transform->rotation = YawRotation(radians) * transform->rotation;
 	if (auto* locomotion = registry.TryGet<CreatureLocomotion>(entity))
 	{
-		const auto heading = YawOf(transform->rotation);
+		const auto heading = GameHeading::FromYaw(YawOf(transform->rotation));
 		locomotion->heading = heading;
 		locomotion->targetHeading = heading;
 		locomotion->fromHeading = heading;

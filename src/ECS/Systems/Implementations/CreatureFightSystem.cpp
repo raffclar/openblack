@@ -262,14 +262,14 @@ bool Has(entt::entity creature, size_t animation)
 }
 
 /// A point in the mesh's space of a creature facing a heading, in the world's directions
-glm::vec2 MeshToWorld(glm::vec2 mesh, float heading)
+glm::vec2 MeshToWorld(glm::vec2 mesh, GameHeading heading)
 {
-	const auto turned = glm::mat3(glm::eulerAngleY(heading)) * glm::vec3(mesh.x, 0.0f, mesh.y);
+	const auto turned = glm::mat3(glm::eulerAngleY(heading.Yaw())) * glm::vec3(mesh.x, 0.0f, mesh.y);
 	return {turned.x, turned.z};
 }
 
 /// A direction in the world as seen by a creature facing a heading: x to its right, y ahead
-glm::vec2 WorldToLocal(glm::vec2 world, float heading)
+glm::vec2 WorldToLocal(glm::vec2 world, GameHeading heading)
 {
 	const auto ahead = creature_locomotion::DirectionOf(heading);
 	const glm::vec2 right {-ahead.y, ahead.x};
@@ -296,10 +296,10 @@ void PlaceAt(CreatureLocomotion& locomotion, Transform& transform, glm::vec3 at)
 }
 
 /// Turns a creature towards a heading by at most an angle, at once
-void TurnTowards(CreatureLocomotion& locomotion, float heading, float maxRadians)
+void TurnTowards(CreatureLocomotion& locomotion, GameHeading heading, float maxRadians)
 {
-	const auto difference = creature_locomotion::WrapAngle(heading - locomotion.heading);
-	const auto turned = locomotion.heading + std::clamp(difference, -maxRadians, maxRadians);
+	const auto difference = heading.TurnFrom(locomotion.heading);
+	const auto turned = GameHeading(locomotion.heading.Radians() + std::clamp(difference, -maxRadians, maxRadians));
 	locomotion.heading = turned;
 	locomotion.targetHeading = turned;
 	locomotion.fromHeading = turned;
@@ -410,8 +410,8 @@ std::optional<glm::vec3> MarkPosition(const ecs::Registry& registry, entt::entit
 	{
 		const auto* locomotion = registry.TryGet<const CreatureLocomotion>(self);
 		const auto& transform = registry.Get<const Transform>(self);
-		return marks::ToWorld(marks::GroundFrame(transform.position, locomotion != nullptr ? locomotion->heading : 0.0f),
-		                      mark.local);
+		return marks::ToWorld(
+		    marks::GroundFrame(transform.position, locomotion != nullptr ? locomotion->heading : GameHeading()), mark.local);
 	}
 	const auto body = mark.anchor == marks::Anchor::Opponent ? opponent : self;
 	const auto drawn = DrawnMeshOf(registry, body);

@@ -230,7 +230,11 @@ creature_throw::HeldPose HeldPoseOf(const CreatureHeldObject& held, const Transf
 	const auto placement = PlacementOf(transform);
 	const auto hand = creature::PosedBone(held.bone, animation.boneMatrices, placement);
 	const auto hang = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().HangOf(held.object) : 0.0f;
-	return creature_throw::HeldPlacement(glm::mat3(hand), FingerEndsOf(held.bone, animation, placement), held.mirrored, hang);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* thing = registry.Valid(held.object) ? registry.TryGet<const Transform>(held.object) : nullptr;
+	const float thingScale = thing != nullptr ? thing->scale.x : 1.0f;
+	return creature_throw::HeldPlacement(glm::mat3(hand), FingerEndsOf(held.bone, animation, placement), held.mirrored, hang,
+	                                     thingScale);
 }
 
 /// Where a bone is in an animation at a time, in the creature's own space at the world's scale
@@ -1193,7 +1197,7 @@ Transform AsFacing(const ecs::Registry& registry, entt::entity creature, const T
 	auto facing = transform;
 	if (const auto* walking = registry.TryGet<const CreatureLocomotion>(creature); walking != nullptr && walking->started)
 	{
-		facing.rotation = glm::mat3(glm::eulerAngleY(walking->heading));
+		facing.rotation = glm::mat3(glm::eulerAngleY(walking->heading.Yaw()));
 	}
 	return facing;
 }
@@ -2299,7 +2303,7 @@ std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entit
 	// Measured once in the model's own size, the first time it is wanted, and scaled as the creature is drawn
 	if (const auto* kept = registry.TryGet<const PickUpReach>(creature))
 	{
-		return kept->straightReach * transform->scale.x;
+		return creature_reach::StraightReach(kept->points, transform->scale.x);
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const auto* points = body != nullptr ? PointsOf(*body) : nullptr;
@@ -2315,9 +2319,8 @@ std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entit
 	{
 		return std::nullopt;
 	}
-	const float straight = creature_reach::StraightReach(*reach);
-	registry.AssignOrReplace<PickUpReach>(creature, PickUpReach {.straightReach = straight});
-	return straight * transform->scale.x;
+	registry.AssignOrReplace<PickUpReach>(creature, PickUpReach {.points = *reach});
+	return creature_reach::StraightReach(*reach, transform->scale.x);
 }
 
 void CreatureObjectActionSystem::ProcessTurn()

@@ -34,9 +34,9 @@ float TurnSeconds(float pace)
 	return static_cast<float>(milliseconds) * 0.001f;
 }
 
-float TurnHeading(float heading, float targetHeading, float timeMs, float durationMs)
+GameHeading TurnHeading(GameHeading heading, GameHeading targetHeading, float timeMs, float durationMs)
 {
-	return ((creature_locomotion::WrapAngle(targetHeading - heading) * timeMs) / durationMs) + heading;
+	return GameHeading(((targetHeading.TurnFrom(heading) * timeMs) / durationMs) + heading.Radians());
 }
 
 void Kick(Sway& sway, glm::vec3 force, float heightAboveLand, float splitHeight, float mass)

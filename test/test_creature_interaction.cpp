@@ -8,10 +8,13 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <array>
+#include <bit>
 #include <numeric>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <glm/gtx/euler_angles.hpp>
@@ -106,7 +109,21 @@ TEST(CreatureReach, TheStraightReachCountsHeight)
 {
 	const auto points = FakeReach();
 	// Back corners weigh -0.4, the front ones 0.9: (0, 1.2, -11.8)
-	EXPECT_NEAR(creature_reach::StraightReach(points), std::sqrt((1.2f * 1.2f) + (11.8f * 11.8f)), k_Tolerance);
+	EXPECT_NEAR(creature_reach::StraightReach(points, 1.0f), std::sqrt((1.2f * 1.2f) + (11.8f * 11.8f)), k_Tolerance);
+	EXPECT_NEAR(creature_reach::StraightReach(points, 2.0f), 2.0f * std::sqrt((1.2f * 1.2f) + (11.8f * 11.8f)), k_Tolerance);
+	// The weights are scaled first, and the squares are added from z to x
+	const glm::vec3 a {1.1f, 2.3f, -3.7f};
+	const glm::vec3 b {-0.7f, 4.9f, 6.1f};
+	const creature_reach::Points mixed {a, a, b, b};
+	const float scale = 1.37f;
+	glm::vec3 sum {0.0f};
+	for (const auto& [weight, point] :
+	     {std::pair {-0.39999998f, a}, std::pair {-0.39999998f, a}, std::pair {0.9f, b}, std::pair {0.9f, b}})
+	{
+		sum += (weight * scale) * point;
+	}
+	const float expected = std::sqrt(((sum.z * sum.z) + (sum.y * sum.y)) + (sum.x * sum.x));
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_reach::StraightReach(mixed, scale)), std::bit_cast<uint32_t>(expected));
 	EXPECT_NEAR(creature_reach::MaxReach(points), 11.8f, k_Tolerance);
 }
 

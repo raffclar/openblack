@@ -1516,14 +1516,15 @@ static float LivingAngleOf(entt::entity object, const Transform& transform)
 		return script::property_rules::CreatureHeadingToLivingAngle(locomotion->heading);
 	}
 	// Standing still, a living thing is turned as it is drawn: its model faces the other way round, a quarter turn on
-	return script::property_rules::CreatureHeadingToLivingAngle(-script::property_rules::PlacedAngles(transform.rotation).y);
+	return script::property_rules::CreatureHeadingToLivingAngle(
+	    GameHeading(script::property_rules::PlacedAngles(transform.rotation).y));
 }
 
 /// Turns a living thing to face a way, given as the scripts take it: its walk, if it has one, faces that way from now
 static void TurnLivingThing(entt::entity object, Transform& transform, float angle)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const float heading = script::property_rules::LivingAngleToCreatureHeading(angle);
+	const auto heading = script::property_rules::LivingAngleToCreatureHeading(angle);
 	if (auto* walk = registry.TryGet<ecs::components::WallHug>(object); walk != nullptr)
 	{
 		walk->yAngle = angle;
@@ -1541,7 +1542,7 @@ static void TurnLivingThing(entt::entity object, Transform& transform, float ang
 		locomotion->fromHeading = heading;
 		locomotion->toHeading = heading;
 	}
-	transform.rotation = glm::mat3(glm::eulerAngleY(heading));
+	transform.rotation = glm::mat3(glm::eulerAngleY(heading.Yaw()));
 	registry.SetDirty();
 }
 

@@ -15,6 +15,8 @@
 
 #include <glm/vec3.hpp>
 
+#include "Common/GameHeading.h"
+
 /// How a creature's body sways: things thrown at it and the leash dragging it kick its lower or upper body, which
 /// swings back on a damped spring and is drawn leaning by four lean animations played on top of its pose
 namespace openblack::creature_sway
@@ -55,7 +57,7 @@ struct Sway
 	/// The seconds that the creature lived in its last game turn, which turn a kick's force into speed
 	float turnSeconds {0.0f};
 	/// While the creature turns on the spot, the heading that the turn has reached. The sway leans along this heading.
-	std::optional<float> turnHeading;
+	std::optional<GameHeading> turnHeading;
 };
 
 /// The seconds that a creature lives in a game turn at a pace. A frozen creature has a pace below 1. The
@@ -81,7 +83,7 @@ struct BodyFacts
 
 /// The heading that the body faces part of the way through a turn on the spot: the start heading, plus the turn
 /// to the target heading times the time over the duration of the turn
-[[nodiscard]] float TurnHeading(float heading, float targetHeading, float timeMs, float durationMs);
+[[nodiscard]] GameHeading TurnHeading(GameHeading heading, GameHeading targetHeading, float timeMs, float durationMs);
 
 /// A force kicks the body at a point: the upper body when the point is higher above the land than its split height,
 /// else the lower. The kick is only across the land, by the force over the last game turn for half the creature's

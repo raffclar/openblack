@@ -254,10 +254,10 @@ float HeightAt(glm::vec2 point)
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
 }
 
-float HeadingOfRotation(const glm::mat3& rotation)
+GameHeading HeadingOfRotation(const glm::mat3& rotation)
 {
-	// The body is turned about y; its mesh looks back along +z
-	return std::atan2(rotation[2].x, rotation[2].z);
+	// The drawn body is turned about y by a yaw; its mesh looks back along +z
+	return GameHeading::FromYaw(std::atan2(rotation[2].x, rotation[2].z));
 }
 
 /// How far round its middle a species' body reaches at its drawn scale of one: the furthest any of its base mesh's bones
@@ -360,7 +360,7 @@ void BeginLeg(CreatureLocomotion& self, const Moves& moves)
 		return;
 	}
 	self.targetHeading = route.Heading();
-	const auto angle = locomotion::WrapAngle(self.targetHeading - self.heading);
+	const auto angle = self.targetHeading.TurnFrom(self.heading);
 	const auto side = locomotion::SideOf(angle);
 	const auto firstStep =
 	    side == locomotion::Side::Right ? locomotion::animations::k_RightStep : locomotion::animations::k_LeftStep;
@@ -496,7 +496,7 @@ void StepOff(CreatureLocomotion& self, const Moves& moves)
 	// The step's own root turns the body round towards the route as it steps; its heading follows once the step ends
 	TrackPair(self, from, move.timeMs - from);
 
-	if (std::abs(locomotion::WrapAngle(advanced.heading - move.startRouteHeading)) > locomotion::k_CornerAngle)
+	if (std::abs(advanced.heading.TurnFrom(move.startRouteHeading)) > locomotion::k_CornerAngle)
 	{
 		self.tracks.clear();
 		self.move.reset();
@@ -543,7 +543,7 @@ void Walk(CreatureLocomotion& self, const Moves& moves, float targetSpeed, float
 		RouteEnded(self);
 		return;
 	}
-	if (std::abs(locomotion::WrapAngle(advanced.heading - self.heading)) >= locomotion::k_CornerAngle)
+	if (std::abs(advanced.heading.TurnFrom(self.heading)) >= locomotion::k_CornerAngle)
 	{
 		self.speed = 0.0f;
 		BeginLeg(self, moves);
@@ -903,7 +903,7 @@ bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point
 	self->following.reset();
 	self->facingOnly = true;
 	self->targetHeading = locomotion::HeadingOf(offset);
-	const auto angle = locomotion::WrapAngle(self->targetHeading - self->heading);
+	const auto angle = self->targetHeading.TurnFrom(self->heading);
 	const auto moves = MovesOf(body->species);
 	const auto firstSpin = locomotion::SideOf(angle) == locomotion::Side::Right ? locomotion::animations::k_RightSpin
 	                                                                            : locomotion::animations::k_LeftSpin;
@@ -928,7 +928,7 @@ bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point
 	return true;
 }
 
-bool CreatureLocomotionSystem::TurnToHeading(entt::entity creature, float heading)
+bool CreatureLocomotionSystem::TurnToHeading(entt::entity creature, GameHeading heading)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* self = registry.TryGet<CreatureLocomotion>(creature);
@@ -940,13 +940,14 @@ bool CreatureLocomotionSystem::TurnToHeading(entt::entity creature, float headin
 	ClearWalk(*self);
 	self->following.reset();
 	self->facingOnly = true;
-	self->targetHeading = locomotion::WrapAngle(heading);
-	const auto angle = locomotion::WrapAngle(self->targetHeading - self->heading);
+	// The target is kept as it is given, and the turn to it is wrapped once
+	self->targetHeading = heading;
+	const auto angle = self->targetHeading.TurnFrom(self->heading);
 	const auto moves = MovesOf(body->species);
 	const auto firstSpin = locomotion::SpinSideOf(angle) == locomotion::Side::Right ? locomotion::animations::k_RightSpin
 	                                                                                : locomotion::animations::k_LeftSpin;
 	// With all three spins of the side, it plays their blend. Without them, it eases round over the stand's length.
-	const auto animations = moves.HasAll(firstSpin) ? std::optional(locomotion::PairFor(firstSpin, angle)) : std::nullopt;
+	const auto animations = moves.HasAll(firstSpin) ? std::optional(locomotion::SpinPairFor(firstSpin, angle)) : std::nullopt;
 	self->motion = Motion::Turning;
 	self->move =
 	    CreatureLocomotion::Move {.animations = animations,
@@ -1249,8 +1250,8 @@ void CreatureLocomotionSystem::Update(float turnFraction)
 			    return;
 		    }
 		    const auto position = self.fromPosition + ((self.toPosition - self.fromPosition) * f);
-		    const auto heading = self.fromHeading + (locomotion::WrapAngle(self.toHeading - self.fromHeading) * f);
-		    const auto rotation = glm::mat3(glm::eulerAngleY(heading));
+		    const auto heading = GameHeading(self.fromHeading.Radians() + (self.toHeading.TurnFrom(self.fromHeading) * f));
+		    const auto rotation = glm::mat3(glm::eulerAngleY(heading.Yaw()));
 		    if (position != transform.position || rotation != transform.rotation)
 		    {
 			    transform.position = position;

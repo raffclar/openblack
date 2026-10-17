@@ -19,6 +19,8 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "Common/GameHeading.h"
+
 /// The sparkles that mark the player's queued fight moves. Each click on the opponent, on the player's own creature
 /// or on the arena's ground (and each special move or miracle drawn as a gesture) leaves a sparkle where it landed,
 /// one for each move waiting in the queue. They follow the body or the creature as it moves, and are drawn half way
@@ -107,7 +109,7 @@ constexpr float k_TowardsCamera = 0.5f;
 [[nodiscard]] glm::vec3 ToLocal(const glm::mat4& frame, const glm::vec3& point);
 [[nodiscard]] glm::vec3 ToWorld(const glm::mat4& frame, const glm::vec3& local);
 /// The ground's frame of a creature: at its feet, turned by its heading
-[[nodiscard]] glm::mat4 GroundFrame(const glm::vec3& position, float heading);
+[[nodiscard]] glm::mat4 GroundFrame(const glm::vec3& position, GameHeading heading);
 
 /// Steps the sparkles' flicker at most 60 times a second of real time, as the game did drawing at the screen's
 /// refresh. Returns whether this frame is a step.

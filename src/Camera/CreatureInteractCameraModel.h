@@ -17,6 +17,7 @@
 
 #include "CameraModel.h"
 #include "CameraZoomer.h"
+#include "Common/GameHeading.h"
 
 /// Where the camera goes while the hand is held to a creature: in front of it, looking at its middle from one and a half
 /// of its heights away and a little above, gliding there over 0.7 seconds and following it as it moves and turns.
@@ -40,9 +41,9 @@ struct View
 	glm::vec3 origin;
 	glm::vec3 focus;
 };
-/// The camera's place for a creature standing at a position, so tall, turned about the vertical by a heading as its body
-/// is drawn (the heading it is turning to while it turns)
-[[nodiscard]] View ViewOf(const glm::vec3& position, float height, float heading);
+/// The camera's place for a creature standing at a position, so tall, with a heading (the heading it is turning to
+/// while it turns)
+[[nodiscard]] View ViewOf(const glm::vec3& position, float height, GameHeading heading);
 
 /// Given back, the player's camera flies back to where it was; it wooshes when it starts further than this from there
 constexpr float k_WooshDistance = 150.0f;
