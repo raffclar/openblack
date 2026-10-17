@@ -78,6 +78,7 @@
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureRig.h"
@@ -2796,7 +2797,8 @@ bool Game::Update() noexcept
 						// Measured to the land under the cursor, or under the hand a scenario puts
 						const auto land = driven.has_value() ? driven->point : _cursorWorldPosition;
 						handTransform.position.y += magic::HandHoldPoser::Lift(
-						    *held, glm::distance(camera.GetOrigin(), land.value_or(handTransform.position)));
+						    *held,
+						    x87::Distance<x87::SumOrder::Zyx>(camera.GetOrigin(), land.value_or(handTransform.position)));
 						TraceHand("seed lift", handTransform.position);
 					}
 					else if (const auto screenSize = Locator::windowing::has_value() ? Locator::windowing::value().GetSize()
@@ -2816,7 +2818,8 @@ bool Game::Update() noexcept
 						    .rayDirection = rayDirection,
 						    .camera = camera.GetOrigin(),
 						    .cursorGround = _cursorWorldPosition,
-						    .handSize = HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), land)),
+						    .handSize =
+						        HandAnimation::SizeAtDistance(x87::Distance<x87::SumOrder::Zyx>(camera.GetOrigin(), land)),
 						    .seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
 						    .gameMs = static_cast<uint32_t>(std::lround(gameTime.count())),
 						    .nowMs = machine_clock::Ticks(),
@@ -3026,7 +3029,8 @@ bool Game::Update() noexcept
 			}
 			else if (pullClip != nullptr)
 			{
-				const float handSize = HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), _handPosition));
+				const float handSize = HandAnimation::SizeAtDistance(
+				    magic::hand_hold::DistanceFromView(camera.GetOrigin(), _handPosition, heldThing.has_value()));
 				_handAnimation->UpdateHeld(deltaTime, *pullCycle,
 				                           magic::hand_hold::TugTimeMs(pull->hold, pullClip->duration, pull->reach, handSize),
 				                           _mousePosition);
@@ -3061,7 +3065,8 @@ bool Game::Update() noexcept
 			// The hand keeps about the same size on screen however far away it is
 			if (auto* handTransform = registry.TryGet<ecs::components::Transform>(handEntity))
 			{
-				const auto distance = glm::distance(camera.GetOrigin(), handTransform->position);
+				const auto distance =
+				    magic::hand_hold::DistanceFromView(camera.GetOrigin(), handTransform->position, heldThing.has_value());
 				// The game mirrors the mesh's left hand along its x axis to make a right hand
 				// Held to a creature, it is drawn larger with the creature's size
 				const auto scale =
@@ -3094,8 +3099,8 @@ bool Game::Update() noexcept
 			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			if (auto* handTransform = Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(handEntity))
 			{
-				const float handSize =
-				    HandAnimation::SizeAtDistance(glm::distance(camera.GetOrigin(), handTransform->position));
+				const float handSize = HandAnimation::SizeAtDistance(
+				    magic::hand_hold::DistanceFromView(camera.GetOrigin(), handTransform->position, heldThing.has_value()));
 				// Each change of what the hand does starts a blend of the drawn hand from how it looked before
 				const auto* grab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
 				const auto mode = hand_blend::ModeOf({

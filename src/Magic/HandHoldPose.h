@@ -75,6 +75,9 @@ struct HoldFrame
 /// The hand's sway from how far the cursor runs ahead of the hand, in pixels (positive right and down): a roll about
 /// the line from the hand to the camera, and a pitch
 [[nodiscard]] glm::vec2 CursorSway(glm::vec2 cursorLag);
+/// The hand's distance from the camera, from which its drawn size comes. The game adds the squares in one order while
+/// the hand holds a thing and in another order when it holds nothing.
+[[nodiscard]] float DistanceFromView(glm::vec3 camera, glm::vec3 hand, bool holding);
 /// The held seed's up, and the hand's: straight up, rolled back by the roll about the line from the hand to the camera,
 /// then pitched back by the pitch about the level line across it
 [[nodiscard]] glm::vec3 HeldUp(glm::vec3 camera, glm::vec3 hand, float roll, float pitch);

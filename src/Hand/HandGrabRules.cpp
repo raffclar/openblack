@@ -218,13 +218,15 @@ float hand_grab::CursorRaise(float handRise)
 
 glm::mat3 hand_grab::AxesAtSize(const glm::mat3& axes, float size)
 {
-	glm::mat3 result = axes;
-	for (glm::length_t column = 0; column < 3; ++column)
-	{
-		const float length = x87::LengthZyx(axes[column]);
-		result[column] = length > 0.0f ? axes[column] * (size / length) : axes[column];
-	}
-	return result;
+	// The game adds the squares of the first axis z, x, y and of the other two z, y, x. An axis with all parts zero stays.
+	const auto atSize = [size](const glm::vec3& axis, bool first) {
+		if (axis == glm::vec3(0.0f))
+		{
+			return axis;
+		}
+		return first ? x87::Scaled<x87::SumOrder::Zxy>(axis, size) : x87::Scaled<x87::SumOrder::Zyx>(axis, size);
+	};
+	return {atSize(axes[0], true), atSize(axes[1], false), atSize(axes[2], false)};
 }
 
 void HandSpring::Start(glm::vec3 position)

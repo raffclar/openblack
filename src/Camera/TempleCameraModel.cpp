@@ -246,9 +246,19 @@ glm::vec3 Between(glm::vec3 from, glm::vec3 to, float share)
 	return ((to - from) * share) + from;
 }
 
+/// A point turned about the vertical with the sine kept wide: each product with the sine rounds one time
+glm::vec3 TurnAboutWithWideSine(glm::vec3 point, float angle)
+{
+	const float cosine = x87::RoundToFloat(x87::Cos(angle));
+	const double sine = x87::Sin(angle);
+	return {((cosine * point.x) + x87::Mul(-sine, point.z)) + 0.0f, point.y,
+	        ((cosine * point.z) + x87::Mul(sine, point.x)) + 0.0f};
+}
+
+/// A pose a share of the way to another, as the game blends the camera: each point is found as `Between` finds it
 TempleCameraModel::Pose Mix(const TempleCameraModel::Pose& from, const TempleCameraModel::Pose& to, float amount)
 {
-	return {glm::mix(from.origin, to.origin, amount), glm::mix(from.focus, to.focus, amount)};
+	return {Between(from.origin, to.origin, amount), Between(from.focus, to.focus, amount)};
 }
 } // namespace
 
@@ -420,6 +430,12 @@ TempleCameraModel::Pose TempleCameraModel::TurnToDoor(const Pose& pose, uint32_t
 {
 	const float angle = static_cast<float>(door) * glm::quarter_pi<float>();
 	return {TurnAbout(pose.origin, angle), TurnAbout(pose.focus, angle)};
+}
+
+TempleCameraModel::Pose TempleCameraModel::TurnToDoorBack(const Pose& pose, uint32_t door)
+{
+	const float angle = static_cast<float>(door) * glm::quarter_pi<float>();
+	return {TurnAboutWithWideSine(pose.origin, angle), TurnAboutWithWideSine(pose.focus, angle)};
 }
 
 bool TempleCameraModel::IsPictureRoom(Room room)
@@ -1304,7 +1320,7 @@ void TempleCameraModel::UpdatePictureKeys(float dt, PictureCamera& picture)
 void TempleCameraModel::WalkBackThrough(uint32_t door)
 {
 	// The rooms' cameras head halfway from where they are to the door, at its height, then through it
-	const auto through = TurnToDoor(k_DoorBack, door);
+	const auto through = TurnToDoorBack(k_DoorBack, door);
 	_doorStart = {(through.origin + _target.origin) * 0.5f, (through.focus + _target.focus) * 0.5f};
 	_doorStart.origin.y = through.origin.y;
 	_doorEnd = through;
