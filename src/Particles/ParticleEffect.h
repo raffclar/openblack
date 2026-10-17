@@ -338,8 +338,15 @@ public:
 	[[nodiscard]] virtual bool LandBlocks(glm::vec3 /*from*/, glm::vec3 /*to*/) const { return false; }
 	/// A shield is raised; the effect keeps the sphere, the world finds it while it lives
 	virtual void AddShield(const std::shared_ptr<ShieldSphere>& /*shield*/) {}
-	/// The live shield holding a point, the sphere grown by a margin, if any
+	/// The live shield holding a point, the sphere grown by a margin, if any. The newest shield comes first.
 	[[nodiscard]] virtual std::shared_ptr<ShieldSphere> FindShield(glm::vec3 /*point*/, float /*margin*/) const
+	{
+		return nullptr;
+	}
+	/// The live shield that a point went into over a step: the sphere, grown by a margin, holds the point now and did
+	/// not hold the point before. The newest shield comes first.
+	[[nodiscard]] virtual std::shared_ptr<ShieldSphere> FindShieldCrossing(glm::vec3 /*before*/, glm::vec3 /*point*/,
+	                                                                       float /*margin*/) const
 	{
 		return nullptr;
 	}

@@ -7138,6 +7138,18 @@ void AddParticles(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "particles.flies_face_their_way",
+	    .name = "Flies turned to the way they fly",
+	    .facet = Facet::Particles,
+	    .description = "A swarm of flies close up, every eight seconds. Each fly is a sprite that the flock rule turns on "
+	                   "the screen.",
+	    .expected = "Each fly's picture turns to point the way that the fly moves across the screen, as the game turns "
+	                "it. A fly that flies to the right on the screen points to the right.",
+	    .framing = {.shot = Shot::Overview, .include = {{-3.0f, 33.0f}, {3.0f, 39.0f}}, .distance = 0.15f},
+	    .particles = {{.file = "SF_Flies", .offset = {0.0f, 36.0f}, .height = 2.0f, .restartSeconds = 8.0f}},
+	});
+
+	all.push_back({
 	    .id = "particles.ribbon_slide",
 	    .name = "A ribbon's corners and its texture sliding along it",
 	    .facet = Facet::Particles,

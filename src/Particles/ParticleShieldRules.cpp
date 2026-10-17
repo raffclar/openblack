@@ -54,6 +54,12 @@ constexpr float k_SparkWiggle = 0.08f;
 /// The atoms put on an object without points of its own to put them at
 constexpr size_t k_AtomsWithoutPoints = 5;
 
+/// How an atom moved over the step before, as last drawn: none until it has been through two steps
+glm::vec3 LastMove(const Atom& atom)
+{
+	return atom.steps >= 2 ? atom.current.position - atom.previous.position : glm::vec3(0.0f);
+}
+
 /// The rotation that turns the vertical towards a point from the centre
 glm::mat3 OrientAlong(const glm::vec3& p, const glm::mat3& start)
 {
@@ -140,7 +146,7 @@ public:
 		StrikeShield(*shield, global);
 		const bool through = effect.SendSpellEvent({.type = SpellEventInfo::Type::HitSpell,
 		                                            .position = global,
-		                                            .velocity = atom.velocity * effect.GetDt(),
+		                                            .velocity = LastMove(atom),
 		                                            .strength = 1.0f,
 		                                            .checkShields = false,
 		                                            .target = shield->spell});
@@ -438,22 +444,19 @@ bool openblack::particles::DeflectOffShields(Effect& effect, Atom& atom, const g
 	auto& world = effect.Services().world;
 	const auto global = effect.GlobalPosition(atom);
 	const float margin = k_ShieldParticleMargin * atom.baseScale * atom.ruleScale;
-	const auto shield = world.FindShield(global, margin);
-	if (!shield || shield->owner == &effect || maths::InsideSphere(previousGlobal, shield->centre, shield->radius, margin))
+	const auto shield = world.FindShieldCrossing(previousGlobal, global, margin);
+	if (!shield || shield->owner == &effect)
 	{
 		return false;
 	}
 	const auto hit = maths::SphereEntry(previousGlobal, global, shield->centre, shield->radius, margin);
 	StrikeShield(*shield, hit);
-	const bool through =
-	    effect.SendSpellEvent({.type = SpellEventInfo::Type::HitSpell,
-	                           .position = hit,
-	                           // How it moved over the step before, as last drawn: none until it
-	                           // has been through two steps
-	                           .velocity = atom.steps >= 2 ? atom.current.position - atom.previous.position : glm::vec3(0.0f),
-	                           .strength = 1.0f,
-	                           .checkShields = false,
-	                           .target = shield->spell});
+	const bool through = effect.SendSpellEvent({.type = SpellEventInfo::Type::HitSpell,
+	                                            .position = hit,
+	                                            .velocity = LastMove(atom),
+	                                            .strength = 1.0f,
+	                                            .checkShields = false,
+	                                            .target = shield->spell});
 	if (through)
 	{
 		return false;
