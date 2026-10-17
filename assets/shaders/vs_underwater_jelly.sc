@@ -7,13 +7,17 @@ $output v_world, v_texcoord0, v_color0, v_normal
 
 // EXPERIMENT (not for merge): the jellyfish in the deep water, one instance each (see underwater::jellyfish). The bell
 // beats: a quick squeeze that makes it narrower and taller and lifts it, then a slow release. The tentacles hang from
-// the bell, sway with the water and turn to face the eye.
-// a_position: x along (round the shell, or down the tentacle), y across (down the shell, or the side of the tentacle),
-// z the part (0 outer shell, 1 inner shell, 2 inner tentacle, 3 outer tentacle), w which tentacle.
+// the bell, sway with the water and turn to face the eye. The halo is a square round the middle of the bell that turns
+// to face the eye; the fragment shader finds the light in the ball of water inside it.
+// a_position: x along (round the shell, or down the tentacle, or -1 to 1 across the halo), y across (down the shell, or
+// the side of the tentacle, or -1 to 1 up the halo), z the part (0 outer shell, 1 inner shell, 2 inner tentacle,
+// 3 outer tentacle, 4 halo), w which tentacle.
 // i_data0: xyz the top of the bell, w its size. i_data1: x the phase of the beat, y the colour, z how much it shows,
 // w its seed. u_uwEye: xyz the eye, w the pass (0 the bodies in the scene, 1 their own light after the water).
 
 #define JELLY_TAU 6.2831853f
+// The radius of the ball of water that the light of a jellyfish makes bright (underwater::jellyfish::k_LightRadius)
+#define JELLY_LIGHT_RADIUS (0.5f * UW_UNITS_PER_METRE)
 
 void main()
 {
@@ -34,7 +38,19 @@ void main()
 
 	vec3 world;
 	vec3 normal;
-	if (part < 1.5f)
+	if (part > 3.5f)
+	{
+		// The halo: a square a little larger than the ball of light, round the middle of the bell. The normal holds the
+		// middle of the ball.
+		vec3 middle = top - vec3(0.0f, 0.4f * radius * height, 0.0f);
+		vec3 towardsEye = u_uwEye.xyz - middle;
+		vec3 side = cross(vec3(0.0f, 1.0f, 0.0f), towardsEye);
+		side = length(side) > 1e-4f ? normalize(side) : vec3(1.0f, 0.0f, 0.0f);
+		vec3 up = normalize(cross(towardsEye, side));
+		world = middle + (side * a_position.x + up * a_position.y) * (1.05f * JELLY_LIGHT_RADIUS);
+		normal = middle;
+	}
+	else if (part < 1.5f)
 	{
 		// A shell: a dome with a flatter top, the inner shell smaller, the edge with a soft frill
 		float angle = a_position.x * JELLY_TAU;
@@ -82,7 +98,7 @@ void main()
 	// jellyfish's size. It stays at the same place on the screen, and its depth is in front of the jellyfish's own
 	// parts, so that only the scene in front of the jellyfish hides its light.
 	vec3 drawn = world;
-	if (u_uwEye.w > 0.5f)
+	if (u_uwEye.w > 0.5f && part < 3.5f)
 	{
 		vec3 fromEye = world - u_uwEye.xyz;
 		float distance = length(fromEye);

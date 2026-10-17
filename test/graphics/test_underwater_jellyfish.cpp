@@ -39,13 +39,13 @@ TEST(UnderwaterJellyfish, NoneInTheShallows)
 {
 	EXPECT_TRUE(jelly::Around({0.0f, 0.0f}, 10.0f, k_SeaLevel, Flat(0.45f)).empty());
 	EXPECT_TRUE(jelly::Around({0.0f, 0.0f}, 10.0f, k_SeaLevel, Flat(jelly::k_LeastDepth - 0.1f)).empty());
-	EXPECT_FALSE(jelly::Around({0.0f, 0.0f}, 10.0f, k_SeaLevel, Flat(40.0f)).empty());
+	EXPECT_FALSE(jelly::Around({0.0f, 0.0f}, 10.0f, k_SeaLevel, Flat(70.0f)).empty());
 }
 
 TEST(UnderwaterJellyfish, OnlyWhereTheSeaBedIsDeep)
 {
 	// Deep water on one side of x = 0 only
-	const jelly::DepthAt half = [](glm::vec2 point) { return point.x > 0.0f ? 40.0f : 2.0f; };
+	const jelly::DepthAt half = [](glm::vec2 point) { return point.x > 0.0f ? 70.0f : 2.0f; };
 	for (const auto& found : jelly::Around({0.0f, 0.0f}, 5.0f, k_SeaLevel, half))
 	{
 		EXPECT_GT(found.position.x, 0.0f);
@@ -54,14 +54,14 @@ TEST(UnderwaterJellyfish, OnlyWhereTheSeaBedIsDeep)
 
 TEST(UnderwaterJellyfish, StayInTheWaterAndInRange)
 {
-	const float depth = 30.0f;
+	const float depth = 60.0f;
 	for (const float seconds : {0.0f, 17.0f, 333.0f, 4000.0f})
 	{
 		const auto found = jelly::Around({500.0f, -200.0f}, seconds, k_SeaLevel, Flat(depth));
 		ASSERT_LE(found.size(), jelly::k_Most);
 		for (const auto& one : found)
 		{
-			EXPECT_LE(one.position.y, k_SeaLevel - jelly::k_SurfaceGap + 1e-3f);
+			EXPECT_LE(one.position.y, k_SeaLevel - jelly::k_TopDepth + 1e-3f);
 			EXPECT_GE(one.position.y - one.size, k_SeaLevel - depth + jelly::k_BedGap - 1e-3f);
 			EXPECT_LE(glm::distance(glm::vec2(one.position.x, one.position.z), glm::vec2(500.0f, -200.0f)), jelly::k_Range);
 			EXPECT_GT(one.shows, 0.0f);
@@ -74,8 +74,8 @@ TEST(UnderwaterJellyfish, StayInTheWaterAndInRange)
 
 TEST(UnderwaterJellyfish, TheyRiseSlowlyAndTheNearestComeFirst)
 {
-	const auto before = jelly::Around({0.0f, 0.0f}, 100.0f, k_SeaLevel, Flat(40.0f));
-	const auto after = jelly::Around({0.0f, 0.0f}, 101.0f, k_SeaLevel, Flat(40.0f));
+	const auto before = jelly::Around({0.0f, 0.0f}, 100.0f, k_SeaLevel, Flat(70.0f));
+	const auto after = jelly::Around({0.0f, 0.0f}, 101.0f, k_SeaLevel, Flat(70.0f));
 	ASSERT_FALSE(before.empty());
 	uint32_t rose = 0;
 	for (const auto& a : before)
@@ -109,7 +109,7 @@ TEST(UnderwaterJellyfish, TheMeshHasEveryPart)
 	jelly::Mesh(vertices, indices);
 	const uint32_t shell = (jelly::k_ShellRings + 1) * (jelly::k_ShellSides + 1);
 	const uint32_t tentacle = (jelly::k_TentacleSegments + 1) * 2;
-	EXPECT_EQ(vertices.size(), 2 * shell + (jelly::k_InnerTentacles + jelly::k_OuterTentacles) * tentacle);
+	EXPECT_EQ(vertices.size(), 2 * shell + (jelly::k_InnerTentacles + jelly::k_OuterTentacles) * tentacle + 4);
 	EXPECT_EQ(indices.size() % 3, 0u);
 	for (const auto index : indices)
 	{
@@ -130,24 +130,49 @@ TEST(UnderwaterJellyfish, TheWaterPathIsThePartOfTheWayUnderTheSea)
 	EXPECT_NEAR(jelly::WaterPath({30.0f, 10.0f, 40.0f}, point, 0.0f), 0.5f * std::sqrt(2900.0f), 1e-3f);
 }
 
-TEST(UnderwaterJellyfish, TheirLightKeepsItsColourThroughTheWater)
+TEST(UnderwaterJellyfish, TheirLightFadesFasterThanTheWatersLight)
 {
 	// Near the eye it is all there
 	const glm::vec3 near = jelly::GlowThroughWater(0.0f);
 	EXPECT_NEAR(glm::length(near - glm::vec3(1.0f)), 0.0f, 1e-5f);
-	// It fades with the distance
 	float last = 1.0f;
-	for (const float path : {10.0f, 40.0f, 80.0f, 120.0f})
+	for (const float path : {5.0f, 10.0f, 20.0f, 40.0f})
 	{
 		const glm::vec3 left = jelly::GlowThroughWater(path);
-		EXPECT_LT(left.g, last);
-		last = left.g;
-		// Less of it is lost than of the water's own light, and the red keeps a larger share of the blue
+		EXPECT_LT(left.b, last);
+		last = left.b;
+		// The water scatters it out of its way too, so less of it comes through than of the scene's light
 		const glm::vec3 water = openblack::graphics::underwater::Transmittance(path);
-		EXPECT_GT(left.r, water.r);
-		EXPECT_GT(left.r / left.b, water.r / water.b);
-		// Pink light far away is still more red than green
-		const glm::vec3 pink = glm::vec3(1.0f, 0.32f, 0.62f) * left;
-		EXPECT_GT(pink.r, pink.g);
+		EXPECT_LT(left.r, water.r);
+		EXPECT_LT(left.g, water.g);
+		EXPECT_LT(left.b, water.b);
 	}
+	// Close by it shows: more than a tenth of the blue at 10 units
+	EXPECT_GT(jelly::GlowThroughWater(10.0f).b, 0.1f);
+}
+
+TEST(UnderwaterJellyfish, NoneOfTheirLightComesToTheSurface)
+{
+	// The shortest way from a jellyfish to the surface is straight up from its top. The brightest glow and the brightest
+	// halo, through that water, are less than one step of an 8-bit colour, in each colour.
+	const glm::vec3 left = jelly::GlowThroughWater(jelly::k_TopDepth);
+	const float brightest = jelly::k_MostGlow * (1.0f + jelly::k_HaloStrength);
+	for (int colour = 0; colour < 3; ++colour)
+	{
+		EXPECT_LT(brightest * left[colour], 1.0f / 255.0f);
+	}
+	// And they are all at least that deep
+	for (const float seconds : {0.0f, 50.0f, 900.0f})
+	{
+		for (const auto& one : jelly::Around({0.0f, 0.0f}, seconds, k_SeaLevel, Flat(jelly::k_LeastDepth + 2.0f)))
+		{
+			EXPECT_LE(one.position.y, k_SeaLevel - jelly::k_TopDepth + 1e-3f);
+		}
+	}
+}
+
+TEST(UnderwaterJellyfish, TheirHaloIsAboutOneCubicMetre)
+{
+	const float side = 2.0f * jelly::k_LightRadius / openblack::graphics::underwater::k_UnitsPerMetre;
+	EXPECT_NEAR(side, 1.0f, 1e-4f);
 }
