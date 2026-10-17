@@ -1753,6 +1753,33 @@ void AddAppearance(std::vector<Scenario>& all)
 	                 Command {.kind = Kind::GiveCreedPower, .delaySeconds = 1.0f, .value = 3, .amount = 1.0f}},
 	});
 
+	// Sounds on objects follow the objects: a creature that hums as it walks, and a ball with a sound in the hand
+	all.push_back({
+	    .id = "audio.sounds_follow_objects",
+	    .name = "Sounds on objects follow the objects",
+	    .facet = Facet::Audio,
+	    .description = "The player's giant ape gets the full creed power and walks from the west to the east. A script "
+	                   "attaches the village bell sound to a ball. The hand takes the ball and moves it from the left of "
+	                   "the screen to the right. Then the hand puts the ball down.",
+	    .expected = "The hum of the ape moves from the left speaker to the right speaker as the ape walks. The bell "
+	                "moves with the hand, also when the hand holds the ball. Each sound changes its place one time each "
+	                "game turn, ten times each second.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::GiantApe, {-40.0f, 10.0f}, 90.0f)},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {0.0f, -10.0f}}},
+	    .commands = {Command {.kind = Kind::GiveCreedPower, .delaySeconds = 1.0f, .value = 3, .amount = 1.0f},
+	                 Go(Kind::WalkTo, 0, {40.0f, 10.0f}, 1.0f, false),
+	                 Command {.kind = Kind::AttachObjectScriptSound,
+	                          .delaySeconds = 8.0f,
+	                          .value = static_cast<size_t>(audio::SoundId::G_VillageBell)},
+	                 Command {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 Command {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.1f, 0.5f}},
+	                 Command {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.9f, 0.5f}},
+	                 Command {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.6f}},
+	                 Command {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
+	});
+
 	// The hair close up while the head moves: the tiger's whiskers, and the wolf's tufts, which use the same material
 	std::vector<Command> headMoves;
 	for (size_t i = 0; i < animations::k_GestureCount; ++i)
@@ -7705,8 +7732,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
-	       kind == Kind::PlayFallingSpellFilm ||
-	       IsPointerCommand(kind);
+	       kind == Kind::PlayFallingSpellFilm || kind == Kind::AttachObjectScriptSound || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -7733,7 +7759,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 144> k_Names {
+	constexpr std::array<std::string_view, 145> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7878,6 +7904,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "give hand glows",
 		    "give a creed power",
 		    "attach a script sound",
+		    "attach a script sound to the object",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

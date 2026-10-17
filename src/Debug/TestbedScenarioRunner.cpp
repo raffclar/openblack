@@ -1895,6 +1895,17 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		const auto why = hand.WhyNotTake(*object);
 		return hand.TakeIntoHand(*object) ? std::string("taken into the hand") : fmt::format("the hand can't take it: {}", why);
 	}
+	case Kind::AttachObjectScriptSound:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::soundTagSystem::has_value())
+		{
+			return "nothing to attach a sound to";
+		}
+		const auto sound = static_cast<entt::id_type>(command.value);
+		const auto tag = Locator::soundTagSystem::value().AttachObjectSound(*object, sound, false);
+		return fmt::format("sound {} attached to the object as tag {}", sound, entt::to_integral(tag));
+	}
 	case Kind::HandPour:
 	{
 		if (!Locator::resourceStoreSystem::has_value())
@@ -2309,7 +2320,8 @@ void Runner::Give(const Command& command)
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
-	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem)
+	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
+	    command.kind == Kind::AttachObjectScriptSound)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2850,6 +2862,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTake:
 	case Kind::HandPour:
 	case Kind::HandRelease:
+	case Kind::AttachObjectScriptSound:
 	case Kind::RemoveObject:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
