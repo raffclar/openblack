@@ -24,6 +24,7 @@
 #include <glm/mat3x3.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/X87Vector.h"
 #include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/BuildingDamage.h"
@@ -527,7 +528,7 @@ void BuildingDamageSystem::Blow(DynamicsSystemInterface& dynamics, entt::entity 
 		return;
 	}
 	const auto& rock = *hitterEntry->body;
-	const float momentum = glm::length(rock.velocity) * rock.Mass();
+	const float momentum = x87::LengthZyx(rock.velocity) * rock.Mass();
 	switch (damage::JudgeBlow(momentum))
 	{
 	case damage::Blow::Nothing:

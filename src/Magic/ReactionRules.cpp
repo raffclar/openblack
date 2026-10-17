@@ -16,6 +16,8 @@
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack::magic;
 
 float openblack::magic::FastMapDistance(glm::vec3 a, glm::vec3 b)
@@ -95,7 +97,10 @@ bool openblack::magic::ComingTowards(glm::vec3 villager, glm::vec3 object, glm::
 	{
 		return false;
 	}
-	return glm::dot(glm::normalize(toVillager), glm::normalize(velocity)) >= k_ComingTowardsCosine;
+	// The game multiplies each by one over its length, and adds every sum from z to x
+	using openblack::x87::SumOrder;
+	return !(openblack::x87::DotZyx(openblack::x87::Scaled<SumOrder::Zyx>(toVillager),
+	                                openblack::x87::Scaled<SumOrder::Zyx>(velocity)) < k_ComingTowardsCosine);
 }
 
 bool openblack::magic::TimesOut(openblack::Reaction type)

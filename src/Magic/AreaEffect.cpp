@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/GUtilsDistance.h"
 #include "InfoConstants.h"
 
 using namespace openblack;
@@ -54,7 +55,8 @@ CellRange magic::EffectCellsAround(glm::vec3 point, float radius)
 
 bool magic::Reaches(const EffectValues& values, glm::vec3 point, const EffectReceiver& receiver)
 {
-	const float across = glm::distance(glm::vec2(point.x, point.z), glm::vec2(receiver.position.x, receiver.position.z));
+	// The game measures the map distance between the two places
+	const float across = gutils::GetDistanceInMetres(point, receiver.position);
 	return across <= receiver.radius + values.radius &&
 	       std::abs(point.y - receiver.position.y) <= receiver.height + values.radius;
 }

@@ -16,6 +16,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
 #include "InfoConstants.h"
 #include "VillagerReactionRules.h"
 
@@ -126,7 +127,8 @@ shield::DomeVolume shield::VolumeOf(glm::vec3 meshHalfExtent, float scale)
 bool shield::WithinSpiritualShield(glm::vec3 shieldOnLand, float radius, glm::vec3 pointOnLand)
 {
 	const auto d = pointOnLand - shieldOnLand;
-	return radius * radius > glm::dot(d, d);
+	// The game adds the squares from z to x
+	return radius * radius > x87::DotZyx(d, d);
 }
 
 bool shield::WithinPhysicalShield(const DomeVolume& volume, float distanceAcross, float heightAboveLand)
