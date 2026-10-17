@@ -3859,14 +3859,17 @@ std::optional<Desire> CreatureMindSystem::DesireForThingInHand(entt::entity crea
 
 void CreatureMindSystem::LetGoOfHeld(entt::entity creature, CreatureMindState& mind, creature_mind::LetGo how)
 {
+	// A let-go that does not start leaves the hands to be checked again on the next turn
 	if (!Locator::creatureObjectActionSystem::has_value())
 	{
+		mind.idle.handsChecked.reset();
 		return;
 	}
 	auto& hands = Locator::creatureObjectActionSystem::value();
 	const auto held = hands.GetHeld(creature);
 	if (!held.has_value())
 	{
+		mind.idle.handsChecked.reset();
 		return;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -3882,7 +3885,11 @@ void CreatureMindSystem::LetGoOfHeld(entt::entity creature, CreatureMindState& m
 		}
 		gently = creature_mind::PutsDownGently(heldIsCreature, use);
 	}
-	[[maybe_unused]] const bool started = gently ? hands.PutDown(creature) : hands.Discard(creature);
+	const bool started = gently ? hands.PutDown(creature) : hands.Discard(creature);
+	if (!started)
+	{
+		mind.idle.handsChecked.reset();
+	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} lets go of {} before a step that needs empty hands: {} ({}), {}",
 	                    entt::to_integral(creature), entt::to_integral(*held), gently ? "puts it down" : "tosses it away",
 	                    use.has_value() ? static_cast<int>(*use) : -1, started ? "started" : "can't");

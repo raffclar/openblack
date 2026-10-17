@@ -142,6 +142,9 @@ struct CreatureKnockedOut
 	};
 	Stage stage {Stage::Lying};
 	float seconds {0.0f};
+	/// The faint is still to start on the body. It starts on the next turn that the knock-out is looked after: then the
+	/// side of the faint is chosen, and those near it react as to a death.
+	bool fainting {true};
 	/// Decided as it faints: whether it rests to get better before it gets up
 	bool rest {false};
 	/// Only a script kills a creature for good: it never gets up

@@ -621,6 +621,14 @@ struct IdleMind
 	bool wakeWanted {false};
 	/// Counts the agendas planned, so that a new one can be told from the last
 	uint32_t serial {0};
+	/// A step of an agenda, by the agenda's count and the step's place in it
+	struct StepRef
+	{
+		uint32_t serial {0};
+		size_t step {0};
+	};
+	/// The step that started to let go of the thing in the hand before it starts. Its hands are not checked again.
+	std::optional<StepRef> handsChecked;
 	/// The agenda was given up before its end, as a step it needed couldn't be done
 	bool gaveUp {false};
 	/// A script asked if the creature played and so stopped the agenda. The plan stays, with no steps, until the
@@ -758,6 +766,8 @@ struct Senses
 	HandsState hands {HandsState::Idle};
 	/// The thing that the creature holds, by the number of its entity
 	std::optional<uint32_t> held;
+	/// Whether it holds the thing in its left hand, as it reached for the thing on the left side
+	bool heldLeft {false};
 	/// Whether the object a step waits for is on the map, none when the object is gone
 	std::optional<bool> objectInMap;
 	/// Whether the object that a step waits to be still moves

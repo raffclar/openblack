@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <numbers>
 #include <optional>
 
@@ -199,4 +200,35 @@ struct Ring
 [[nodiscard]] float TimeLimitMs(float distance);
 /// Running away from a threat: a distance further along the way from the threat to the creature
 [[nodiscard]] glm::vec2 RunAwayPoint(glm::vec2 creature, glm::vec2 threat, float distance);
+
+/// Fidgets while the creature waits for its route: the first comes after this long, a look about is followed by a
+/// longer wait, and after a confused clip the wait starts again at the first length
+constexpr float k_FidgetMs = 3000.0f;
+constexpr float k_LookAboutFidgetMs = 6000.0f;
+/// What the creature does while it waits for its route
+enum class Fidget : uint8_t
+{
+	None,
+	LookAbout,
+	Puzzled,
+	Confused,
+};
+/// The wait of a creature for its route: the time to its next fidget, and whether it fidgeted already on this walk
+struct FidgetWait
+{
+	float ms {k_FidgetMs};
+	bool fidgeted {false};
+};
+struct FidgetTurn
+{
+	Fidget fidget {Fidget::None};
+	/// The confused clip plays on the left side
+	bool mirrored {false};
+};
+/// A number from 0 up to the range, not including it
+using Random = std::function<uint32_t(uint32_t)>;
+/// One turn of the wait for a route. The wait counts down by the body's clip step of the turn. When it is below zero,
+/// the creature fidgets. The first fidget is a look about. The game's random numbers choose each later fidget from the
+/// three, and then the side of the confused clip. The confused clip needs a free body, else nothing plays.
+[[nodiscard]] FidgetTurn WaitTurn(FidgetWait& wait, float stepMs, bool bodyFree, const Random& gameRandom);
 } // namespace openblack::creature_locomotion
