@@ -18,13 +18,19 @@
 #include <glm/geometric.hpp>
 
 #include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87.h"
 
 using namespace openblack::particles;
+namespace x87 = openblack::x87;
 
 namespace
 {
 /// How sharply a wisp narrows above its full width
 constexpr float k_TaperSteepness = 3.3333333f;
+/// A wisp's angles wrap at a full turn
+constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
+/// A wisp's wobble turns at this rate against its age
+constexpr float k_WispWobbleSpeed = 1.0f;
 /// A wisp's opacity comes up from the least by the rise over this many seconds
 constexpr float k_WispFadeInSeconds = 0.5f;
 constexpr float k_WispLeastAlpha = 20.0f;
@@ -53,23 +59,29 @@ maths::WispBox maths::WispBoxOf(std::span<const glm::vec3> bones)
 	        .radius = 0.5f * std::sqrt(dx * dx + dz * dz)};
 }
 
+float maths::WispTurn(float angle, float rate, float dt)
+{
+	return std::fmod(angle + dt * rate, k_TwoPi);
+}
+
 glm::vec3 maths::WispOrbit(const WispBox& box, float theta, float phi, float taper, float age)
 {
-	const float up = (std::cos(phi) + 1.0f) * 0.5f;
+	// Each sine and cosine stays wide until the next operation rounds it
+	const float up = x87::Add(x87::Cos(phi), 1.0f) * 0.5f;
 	float width = 1.0f;
 	if (!(up < k_WispFullWidthBelow))
 	{
 		const float over = (up - k_WispFullWidthBelow) * k_TaperSteepness;
 		width = 1.0f - over * over * taper;
 	}
-	glm::vec3 point(box.centreX + std::cos(theta) * width * box.radius * k_WispReach,
+	glm::vec3 point(box.centreX + x87::Mul(x87::Cos(theta), width) * box.radius * k_WispReach,
 	                box.bottom + up * box.height * k_WispReach,
-	                box.centreZ + std::sin(theta) * width * box.radius * k_WispReach);
+	                box.centreZ + x87::Mul(x87::Sin(theta), width) * box.radius * k_WispReach);
 	// It wobbles on its way round
-	const float t = age;
-	point.x += (std::sin(1.3f * t) + std::sin(t)) * k_WispWobble * box.radius;
-	point.y += (std::sin(1.13f * t) + std::sin(0.53f * t)) * k_WispWobble * box.radius;
-	point.z += (std::sin(0.9f * t) + std::sin(2.72f * t)) * k_WispWobble * box.radius;
+	const float t = age * k_WispWobbleSpeed;
+	point.x += x87::Add(x87::Sin(1.3f * t), x87::Sin(t)) * k_WispWobble * box.radius;
+	point.y += x87::Add(x87::Sin(1.13f * t), x87::Sin(0.53f * t)) * k_WispWobble * box.radius;
+	point.z += x87::Add(x87::Sin(0.9f * t), x87::Sin(2.72f * t)) * k_WispWobble * box.radius;
 	return point;
 }
 

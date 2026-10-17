@@ -40,6 +40,8 @@ inline constexpr float k_WispReach = 1.2f;
 inline constexpr float k_WispWobble = 0.2f;
 /// Up to this share of its height a wisp winds at full width; above it narrows by the taper
 inline constexpr float k_WispFullWidthBelow = 0.7f;
+/// A wisp's angle round or up after a step at its turn rate, wrapped to one turn
+[[nodiscard]] float WispTurn(float angle, float rate, float dt);
 /// Where a wisp winds about the box, at its angles round and up and its age in seconds
 [[nodiscard]] glm::vec3 WispOrbit(const WispBox& box, float theta, float phi, float taper, float age);
 

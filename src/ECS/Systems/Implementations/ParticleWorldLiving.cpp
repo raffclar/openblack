@@ -325,15 +325,11 @@ std::optional<particles::CreatureSpellBody> GameParticleWorld::CreatureBody(entt
 		return std::nullopt;
 	}
 	particles::CreatureSpellBody result {.origin = transform->position, .size = ShownSize(*body)};
-	// Each bone where it is drawn this frame, and its mirror as the species' file has it
+	// Each bone where it was at the end of the last game turn, and its mirror as the species' file has it
 	if (const auto* animation = registry.TryGet<const CreatureAnimation>(creature))
 	{
 		const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-		result.bones.reserve(animation->boneMatrices.size());
-		for (uint32_t bone = 0; bone < animation->boneMatrices.size(); ++bone)
-		{
-			result.bones.emplace_back(creature::PosedBone(bone, animation->boneMatrices, placement)[3]);
-		}
+		result.bones = creature::TurnPoseBones(animation->lastTurnBones, animation->boneMatrices, placement);
 		result.mirror = animation->mirror;
 	}
 	if (Locator::resources::has_value())
