@@ -283,11 +283,27 @@ void CreatureMindSystem::KeepJointActions()
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> ended;
-	registry.Each<const CreaturePartner>([&](entt::entity creature, const CreaturePartner& link) {
+	registry.Each<CreaturePartner>([&](entt::entity creature, CreaturePartner& link) {
 		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-		// The joint action stops when the creature took up another agenda, or its agenda came to an end
-		if (mind == nullptr || !registry.Valid(link.partner) || mind->idle.serial != link.agenda ||
-		    (link.agendaRunning && !AgendaRunning(*mind)))
+		if (mind == nullptr || !registry.Valid(link.partner))
+		{
+			ended.push_back(creature);
+			return;
+		}
+		const auto& idle = mind->idle;
+		const auto turn = creature_friendship::JointTurnOf({
+		    .otherAgenda = idle.serial != link.agenda,
+		    .hadStepsLeft = link.agendaRunning,
+		    .hasStepsLeft = AgendaRunning(*mind),
+		    .endedWithOrder =
+		        !idle.gaveUp && !idle.agenda.empty() && idle.agenda.back().kind == creature_mind::Step::Kind::Order,
+		    .endSeen = link.endSeen,
+		});
+		if (turn == creature_friendship::JointTurn::EndsNextTurn)
+		{
+			link.endSeen = true;
+		}
+		else if (turn == creature_friendship::JointTurn::Ends)
 		{
 			ended.push_back(creature);
 		}
