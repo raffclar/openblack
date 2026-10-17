@@ -53,6 +53,15 @@ bgfx::FrameBufferHandle OwnedTarget::Target()
 	return _target;
 }
 
+OwnedTarget& AtmosphereView::Aurora(glm::u16vec2 size)
+{
+	if (_aurora == nullptr || _aurora->Width() != size.x || _aurora->Height() != size.y)
+	{
+		_aurora = std::make_unique<OwnedTarget>("Aurora", size.x, size.y, bgfx::TextureFormat::RGBA16F);
+	}
+	return *_aurora;
+}
+
 TextureHandle OwnedTarget::Texture() const
 {
 	return fromBgfx(_texture);

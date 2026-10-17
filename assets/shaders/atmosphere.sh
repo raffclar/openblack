@@ -13,6 +13,8 @@ uniform vec4 u_atmosParams;
 uniform vec4 u_atmosLight;
 // rgb: what the air's light is scaled by on the screen (the light's colour and the exposure); w: unused
 uniform vec4 u_atmosSun;
+// xyz: the air's own up, the line from the middle of the world's ball through the eye (atmosphere::AirFrame); w: unused
+uniform vec4 u_atmosUp;
 
 #define ATMOS_PI 3.14159265f
 #define ATMOS_GROUND_RADIUS 6371.0f
@@ -142,11 +144,32 @@ vec2 AtmosSkyViewUv(float viewMu, float lightCos, float altitude)
 	return vec2(u, v);
 }
 
-// The sky's light from a world direction, for a light of strength 1
-vec3 AtmosSky(vec3 dir)
+// The air's own up, or straight up when it is not known
+vec3 AtmosUp()
 {
+	return dot(u_atmosUp.xyz, u_atmosUp.xyz) > 0.5f ? u_atmosUp.xyz : vec3(0.0f, 1.0f, 0.0f);
+}
+
+// A world direction in the air's own frame, where the air's up is y (atmosphere::TurnToUp). Low down the two frames
+// are the same. From high over a place away from the map the frame turns, so the sky's texture sees the same planet
+// as the sea.
+vec3 AtmosToLocal(vec3 v)
+{
+	vec3 up = AtmosUp();
+	vec3 axis = vec3(-up.z, 0.0f, up.x);
+	if (dot(axis, axis) < 1e-12f || up.y <= -0.999999f)
+	{
+		return v;
+	}
+	return v * up.y + cross(axis, v) + axis * (dot(axis, v) / (1.0f + up.y));
+}
+
+// The sky's light from a world direction, for a light of strength 1
+vec3 AtmosSky(vec3 worldDir)
+{
+	vec3 dir = AtmosToLocal(worldDir);
 	vec2 across = dir.xz;
-	vec2 light = u_atmosLight.xz;
+	vec2 light = AtmosToLocal(u_atmosLight.xyz).xz;
 	float lightCos = dot(across, across) > 1e-8f && dot(light, light) > 1e-8f ? dot(normalize(across), normalize(light)) : 1.0f;
 	return texture2DLod(s_atmosSkyView, AtmosSkyViewUv(dir.y, lightCos, u_atmosParams.z), 0.0f).rgb;
 }
@@ -196,7 +219,8 @@ vec3 AtmosSkyOnScreen(vec3 dir, float sunHeight)
 	// By day the air's sky high up is lighter than the plain model gives, as the original dome is, so the sky does not
 	// go to a deep blue over the eye. The sky at dusk and at night keeps the model's own brightness.
 	const vec3 luma = vec3(0.2126f, 0.7152f, 0.0722f);
-	float lift = 1.0f + 0.8f * smoothstep(0.05f, 0.6f, dir.y) * smoothstep(-0.02f, 0.2f, u_atmosLight.y);
+	float lift = 1.0f + 0.8f * smoothstep(0.05f, 0.6f, dot(dir, AtmosUp())) *
+	              smoothstep(-0.02f, 0.2f, dot(u_atmosLight.xyz, AtmosUp()));
 	air = AtmosSoftClip(air * lift);
 	// After sunset and in the moon's light the model gives a deep, strong blue. The eye sees the dim sky with less
 	// colour, so the sky goes part of the way to grey while the air's sun is low.

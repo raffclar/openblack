@@ -125,7 +125,12 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	const auto air = atmos::AirFor(system.GetWaves().storm, view.wetness);
 	const float seaLevel = frame.params.z;
 	const glm::vec3 eye = frame.eye;
-	const float altitude = atmos::AltitudeOf(eye.y - seaLevel);
+	// The world curves away past a flat cap that holds the map, and the sea's horizon goes down as the eye climbs. The
+	// air works in the frame of the same ball, so from space the air's planet and the sea are one ball.
+	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+	const auto cap = atmos::MapCap({eye.x, eye.z}, eye.y - seaLevel, mapSize);
+	const auto airFrame = atmos::AirFrameFor(cap, eye.y - seaLevel);
+	const float altitude = atmos::AltitudeOf(airFrame.height);
 	const glm::vec3 gameLight =
 	    glm::length(glm::vec3(frame.above)) > 0.0f ? glm::normalize(glm::vec3(frame.above)) : glm::vec3(0.0f, 1.0f, 0.0f);
 	// The air's light comes from the sun on its real path (atmosphere::SunTowards). After sunset it moves to the moon
@@ -145,10 +150,6 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	const glm::vec3 towardsLight =
 	    atmos::AirLightTowards(sunFromEye, atmos::AirMoonTowards(sunTowards, moonTowards), moonShare);
 
-	// The world curves away past the farthest corner of the map from the eye, and the sea's horizon goes down as the eye
-	// climbs
-	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
-	const float flatReach = atmos::FlatReach({eye.x, eye.z}, mapSize);
 	// The sky's light on the processor, again only when the light, the air or the height has changed enough. Over
 	// k_HighestExposure the exposure and the sky's light stay as they are there, so the sky goes dark as the eye climbs
 	// to space and the bright limb does not change the exposure.
@@ -161,7 +162,7 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		    .turbidity = air.turbidity,
 		    .altitude = skyAltitude,
 		    .seconds = seconds,
-		    .horizon = atmos::HorizonRadiance(towardsLight, skyAltitude, air, atmos::WorldHorizonY(skyHeight, flatReach)),
+		    .horizon = atmos::HorizonRadiance(towardsLight, skyAltitude, air, atmos::WorldHorizonY(cap, skyHeight)),
 		    .sky = gi::SkySh(towardsLight, skyAltitude, air, k_SkySamples),
 		};
 	}
@@ -174,6 +175,8 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.lightDetail = underwater::LightingDetail(system.GetQuality());
 	atmosphere.params = {air.turbidity, atmos::k_HazeScale, altitude, seaLevel};
 	atmosphere.light = {towardsLight, atmosphere.haze ? 1.0f : 0.0f};
+	atmosphere.airUp = {airFrame.up, 0.0f};
+	atmosphere.skyViewLight = {atmos::TurnToUp(airFrame.up, towardsLight), atmosphere.light.w};
 	atmosphere.sunHeight = sunTowards.y;
 	// The place's own colour tints the haze: the land's cells round the point that the camera looks at
 	{
@@ -222,14 +225,14 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.sunDisc = {gameLight, frame.lightColour.w * glm::mix(1.0f, 0.35f, frame.light.w)};
 	atmosphere.sunColour = {glm::vec3(frame.lightColour) * atmosphere.lightTint, 0.0f};
 	atmosphere.sky = cache.sky;
-	atmosphere.worldCurve = {eye.x, eye.z, flatReach, atmos::k_WorldRadius};
-	// The sky above the air and the aurora. The aurora's night runs from noon to noon, so that one night keeps one
-	// strength.
-	const float mapMiddle = 0.5f * mapSize;
+	atmosphere.worldCurve = {eye.x, eye.z, cap.radius, atmos::k_WorldRadius};
+	atmosphere.worldCap = {cap.eyeFromMiddle, 0.0f, 0.0f};
+	// The sky above the air and the aurora, round the middle of the world's ball. The aurora's night runs from noon to
+	// noon, so that one night keeps one strength.
 	const int night = (moon != nullptr ? moon->passedDays : 0) - (hour < 12.0f ? 1 : 0);
 	atmosphere.airSun = {sunTowards, 0.0f};
-	atmosphere.aurora = {atmos::MagneticPole(), atmos::AuroraStrength(night)};
-	atmosphere.airPlanet = {mapMiddle, seaLevel - atmos::k_WorldRadius, mapMiddle, seconds};
+	atmosphere.aurora = {atmos::MagneticPole(), atmos::AuroraTonight(night, system.GetAuroraChoice())};
+	atmosphere.airPlanet = {eye.x - cap.eyeFromMiddle.x, seaLevel - atmos::k_WorldRadius, eye.z - cap.eyeFromMiddle.y, seconds};
 	if (moon != nullptr && moon->placement.has_value())
 	{
 		const float radius = real_moon::Radius(atmos::k_MoonDistance) / atmos::k_MoonDistance;
@@ -290,6 +293,8 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		bgfx::setViewRect(pass, 0, 0, view.skyView.Width(), view.skyView.Height());
 		bgfx::setViewClear(pass, BGFX_CLEAR_NONE);
 		setUniforms(*skyProgram);
+		// The sky round the eye is in the air's own frame, with the light turned into it
+		skyProgram->SetUniformValue("u_atmosLight", &atmosphere.skyViewLight);
 		skyProgram->SetTextureSampler("s_atmosTransmittance", 13, view.transmittance.Texture());
 		const glm::vec4 target {view.skyView.Width(), view.skyView.Height(), 0.0f, 0.0f};
 		skyProgram->SetUniformValue("u_atmosTarget", &target);
@@ -298,14 +303,52 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		skyProgram->Submit(pass);
 		view.skyView.drawn = true;
 	}
+	// The aurora at half the screen's size, before the sky's pass reads it. With no aurora tonight the pass only clears
+	// its target.
+	if (const auto* auroraProgram = _shaderManager->GetShader("Aurora"))
+	{
+		const auto* stats = bgfx::getStats();
+		const glm::u16vec2 half {static_cast<uint16_t>((stats->width + 1) / 2), static_cast<uint16_t>((stats->height + 1) / 2)};
+		auto& target = view.Aurora(half);
+		const auto pass = static_cast<bgfx::ViewId>(RenderPass::Aurora);
+		bgfx::setViewFrameBuffer(pass, target.Target());
+		bgfx::setViewRect(pass, 0, 0, half.x, half.y);
+		bgfx::setViewClear(pass, BGFX_CLEAR_COLOR, 0x000000ffu);
+		if (atmosphere.aurora.w > 0.01f && atmosphere.haze && !system.IsAuroraFullSize())
+		{
+			_shaderManager->SetCamera(RenderPass::Aurora, *desc.camera);
+			setUniforms(*auroraProgram);
+			BindAirSky(*auroraProgram);
+			auroraProgram->SetTextureSampler("s_atmosTransmittance", 13, view.transmittance.Texture());
+			BindScreenTriangle();
+			bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+			auroraProgram->Submit(pass);
+		}
+		else
+		{
+			bgfx::touch(pass);
+		}
+		target.drawn = true;
+	}
 }
 
-void Renderer::BindAtmosphere(const ShaderProgram& program, float skyShare) const
+void Renderer::BindAtmosphere(const ShaderProgram& program, float skyShare, bool screenAurora) const
 {
 	const bool ready =
 	    _atmosphereFrame.has_value() && _atmosphere != nullptr && _atmosphere->skyView.drawn && _atmosphereFrame->haze;
 	const float sunHeight = _atmosphereFrame.has_value() ? _atmosphereFrame->sunHeight : 1.0f;
-	const glm::vec4 share {ready ? skyShare : 0.0f, sunHeight, 0.0f, 0.0f};
+	// The view on the screen reads the aurora's pass; the faces of the far cube march the aurora themselves, with fewer
+	// steps. For a debug comparison the view on the screen can march the aurora's full march itself.
+	const bool fullSize = Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsAuroraFullSize();
+	const auto* aurora = ready ? _atmosphere->Aurora() : nullptr;
+	const bool readsAurora = screenAurora && !fullSize && aurora != nullptr && aurora->drawn;
+	// The full march for the comparison has no probes (a step count under 0), as the march before the pass had none
+	const float marchSteps = screenAurora ? -atmos::k_AuroraSteps : atmos::k_AuroraCubeSteps;
+	const glm::vec4 share {ready ? skyShare : 0.0f, sunHeight, readsAurora ? 1.0f : 0.0f, marchSteps};
+	if (readsAurora && program.HasUniform("s_airAurora"))
+	{
+		program.SetTextureSampler("s_airAurora", 12, aurora->Texture());
+	}
 	program.SetUniformValue("u_skyAtmos", &share);
 	if (!ready)
 	{
@@ -315,6 +358,10 @@ void Renderer::BindAtmosphere(const ShaderProgram& program, float skyShare) cons
 	program.SetUniformValue("u_atmosParams", &atmosphere.params);
 	program.SetUniformValue("u_atmosLight", &atmosphere.light);
 	program.SetUniformValue("u_atmosSun", &atmosphere.sun);
+	if (program.HasUniform("u_atmosUp"))
+	{
+		program.SetUniformValue("u_atmosUp", &atmosphere.airUp);
+	}
 	BindAirSky(program);
 	program.SetTextureSampler("s_atmosTransmittance", 13, _atmosphere->transmittance.Texture());
 	program.SetTextureSampler("s_atmosSkyView", 14, _atmosphere->skyView.Texture());
@@ -356,6 +403,10 @@ void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarge
 		program.SetUniformValue("u_atmosParams", &atmosphere.params);
 		program.SetUniformValue("u_atmosLight", &atmosphere.light);
 		program.SetUniformValue("u_atmosSun", &atmosphere.sun);
+		if (program.HasUniform("u_atmosUp"))
+		{
+			program.SetUniformValue("u_atmosUp", &atmosphere.airUp);
+		}
 	};
 
 	// The haze's grid that follows the view
@@ -402,13 +453,20 @@ void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarge
 	const bool outsideDome = glm::dot(scaled, scaled) >= 0.7f * 0.7f;
 	const glm::vec4 apply {grid ? 1.0f : 0.0f, atmosphere.lowTierDensity, atmosphere.sunHeight, outsideDome ? 1.0f : 0.0f};
 	applyProgram->SetUniformValue("u_hazeApply", &apply);
-	applyProgram->SetUniformValue("u_hazeHorizon", &atmosphere.horizon);
+	// For a debug comparison the haze can march the aurora's full march itself (w of the horizon's colour)
+	const bool fullSize = Locator::underwaterSystem::value().IsAuroraFullSize();
+	const glm::vec4 horizon {glm::vec3(atmosphere.horizon), fullSize ? 1.0f : 0.0f};
+	applyProgram->SetUniformValue("u_hazeHorizon", &horizon);
 	applyProgram->SetUniformValue("u_hazeDome", &atmosphere.skyDome);
 	applyProgram->SetUniformValue("u_hazeSun", &atmosphere.sunDisc);
 	applyProgram->SetUniformValue("u_hazeSunColour", &atmosphere.sunColour);
 	SetWorldCurve(*applyProgram);
 	BindAirSky(*applyProgram);
 	applyProgram->SetUniformValue("u_hazeMoon", &atmosphere.moonDisc);
+	if (const auto* aurora = view.Aurora(); aurora != nullptr && aurora->drawn)
+	{
+		applyProgram->SetTextureSampler("s_airAurora", 12, aurora->Texture());
+	}
 	applyProgram->SetTextureSampler("s_atmosTransmittance", 13, _atmosphere->transmittance.Texture());
 	applyProgram->SetTextureSampler("s_atmosSkyView", 14, view.skyView.Texture());
 	BindScreenTriangle();
@@ -435,6 +493,10 @@ void Renderer::SetWorldCurve(const ShaderProgram& program) const
 	}
 	const glm::vec4 flat {0.0f};
 	program.SetUniformValue("u_worldCurve", _atmosphereFrame.has_value() ? &_atmosphereFrame->worldCurve : &flat);
+	if (program.HasUniform("u_worldCap"))
+	{
+		program.SetUniformValue("u_worldCap", _atmosphereFrame.has_value() ? &_atmosphereFrame->worldCap : &flat);
+	}
 }
 
 void Renderer::BindAirSky(const ShaderProgram& program) const

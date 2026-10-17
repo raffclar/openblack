@@ -188,6 +188,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_haze_apply
 #include "ShaderIncluder.h"
+#define SHADER_NAME fs_aurora
+#include "ShaderIncluder.h"
 #define SHADER_NAME fs_light_probes
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_light_probes_blend
@@ -304,7 +306,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 116> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 117> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -371,6 +373,7 @@ const std::array<bgfx::EmbeddedShader, 116> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_atmos_skyview),
     BGFX_EMBEDDED_SHADER(fs_atmos_aerial),
     BGFX_EMBEDDED_SHADER(fs_haze_apply),
+    BGFX_EMBEDDED_SHADER(fs_aurora),
     BGFX_EMBEDDED_SHADER(fs_light_probes),
     BGFX_EMBEDDED_SHADER(fs_light_probes_blend),
     BGFX_EMBEDDED_SHADER(fs_ambient_occlusion), //
@@ -473,6 +476,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"AtmosphereSkyView", "vs_water", "fs_atmos_skyview"},
     ShaderDefinition {"AtmosphereAerial", "vs_water", "fs_atmos_aerial"},
     ShaderDefinition {"HazeApply", "vs_water", "fs_haze_apply"},
+    ShaderDefinition {"Aurora", "vs_water", "fs_aurora"},
     ShaderDefinition {"LightProbes", "vs_water", "fs_light_probes"},
     ShaderDefinition {"LightProbesBlend", "vs_water", "fs_light_probes_blend"},
     ShaderDefinition {"AmbientOcclusion", "vs_water", "fs_ambient_occlusion"},

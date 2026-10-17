@@ -317,6 +317,8 @@ private:
 	std::optional<Shot> _shot;
 	size_t _shotCreature {0};
 	float _shotDistance {1.0f};
+	/// The seconds since the shot was framed, for a climbing shot
+	float _shotSeconds {0.0f};
 };
 
 } // namespace openblack::testbed_scenarios

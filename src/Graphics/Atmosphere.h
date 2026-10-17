@@ -287,18 +287,58 @@ inline constexpr float k_PlaceShare = 0.3f;
 /// the eye's level, from 30000 units up it is about 6 degrees, and from space the planet is a ball against the dark.
 inline constexpr float k_WorldRadius = k_GroundRadius * k_UnitsPerKilometre;
 
-/// The distance from the eye, across the ground, inside which the world stays flat: the distance to the farthest
-/// corner of the map, which is `mapSize` units on each side. The land, the sea bed and all the things on the map stay
-/// where they are, so the coast and the near game do not change. Past this distance the world curves away.
-[[nodiscard]] float FlatReach(glm::vec2 eye, float mapSize);
+/// The flat cap of the world: a disc on the sea's level that holds the whole map, so the land, the sea bed and all the
+/// things on the map stay where they are and the coast and the near game do not change. Past the cap the world is a
+/// sphere of k_WorldRadius. Low down the cap is round the eye, with the radius to the map's farthest corner. Between
+/// k_CapFollowsEyeBelow and k_CapOnMapAbove units over the sea the cap moves to the map's middle and gets smaller, so
+/// that from space the sea is the same ball as the air's planet under the map's middle.
+struct WorldCap
+{
+	/// The eye across the ground less the cap's middle
+	glm::vec2 eyeFromMiddle {0.0f};
+	/// The radius of the cap
+	float radius {0.0f};
+};
+inline constexpr float k_CapFollowsEyeBelow = 20000.0f;
+inline constexpr float k_CapOnMapAbove = 200000.0f;
 
-/// How far a point of the world goes down at `distance` units from the eye across the ground, for the flat reach
-/// `flatReach`: none inside the flat reach, and past it the drop of the world's ball
-[[nodiscard]] float WorldDrop(float distance, float flatReach);
+/// The flat cap for an eye at `eye` across the ground and `heightOverSea` units over the sea, for a map that is
+/// `mapSize` units on each side
+[[nodiscard]] WorldCap MapCap(glm::vec2 eye, float heightOverSea, float mapSize);
+
+/// The world in the upright plane through the eye along a direction on the ground. The ground is flat along the cap's
+/// chord, from `chordFrom` to `chordTo` units along the plane from the eye. Past each end of the chord it is a circle
+/// that is a section of the world's ball. A plane that does not cross the cap has no chord: both ends are at the point
+/// nearest to the cap, and `pastSquared` is the square of the plane's distance past the cap's edge.
+struct WorldSection
+{
+	float chordFrom {0.0f};
+	float chordTo {0.0f};
+	float pastSquared {0.0f};
+};
+[[nodiscard]] WorldSection SectionToward(const WorldCap& cap, glm::vec2 across);
+
+/// How far a point of the world goes down at `fromEye` across the ground from the eye: none on the cap, and past it
+/// the drop of the world's ball
+[[nodiscard]] float WorldDrop(const WorldCap& cap, glm::vec2 fromEye);
 
 /// The distance along a ray from the eye, `heightOverSea` units over the sea's level, to the curved sea. None when the
-/// ray goes over the horizon and does not meet the sea.
-[[nodiscard]] std::optional<float> CurvedSeaDistance(float heightOverSea, glm::vec3 direction, float flatReach);
+/// ray goes over the horizon and does not meet the sea, or when the eye is under the curved sea.
+[[nodiscard]] std::optional<float> CurvedSeaDistance(const WorldCap& cap, float heightOverSea, glm::vec3 direction);
+
+/// The air's own frame for an eye: `up` is the line from the middle of the world's ball (under the flat cap's middle)
+/// through the eye, and `height` is the eye's height over the ball in world units. Low down the cap is round the eye,
+/// so the line is straight up and the height is the height over the sea. The sky's textures work in this frame, so from
+/// space the air's planet is the same ball as the sea.
+struct AirFrame
+{
+	glm::vec3 up {0.0f, 1.0f, 0.0f};
+	float height {0.0f};
+};
+[[nodiscard]] AirFrame AirFrameFor(const WorldCap& cap, float heightOverSea);
+
+/// A direction turned by the smallest turn that makes `up` point straight up
+[[nodiscard]] glm::vec3 TurnToUp(glm::vec3 up, glm::vec3 direction);
 
 /// The place from which the directions to the game's sun and moon are found. The game's sun is a few kilometres away,
 /// so from high up or far out its direction would turn round. Thus the place is the eye with its height at most
@@ -322,8 +362,20 @@ inline constexpr float k_PoleFromIslandDegrees = 32.0f;
 /// How strong the aurora is on a night, 0 to 1, from the night's number. Most nights are weak, and some are strong.
 [[nodiscard]] float AuroraStrength(int night);
 
+/// The steps of the aurora's march along a ray (air_sky.sh), and the fewer steps in the faces of the far cube, which the
+/// water shows blurred
+inline constexpr float k_AuroraSteps = 40.0f;
+inline constexpr float k_AuroraCubeSteps = 16.0f;
+
+/// A strong aurora: its oval comes down over the island
+inline constexpr float k_StrongAurora = 0.9f;
+
+/// How strong the aurora is tonight: the chosen strength (from 0 to 1) when there is one, else the night's own
+[[nodiscard]] float AuroraTonight(int night, std::optional<float> chosen);
+
 /// The y of the direction from the eye to the curved sea's horizon, from the eye's height over the sea's level: near 0
-/// low down, and under 0 as the eye climbs
-[[nodiscard]] float WorldHorizonY(float heightOverSea, float flatReach);
+/// low down, and under 0 as the eye climbs. It is the horizon in the plane at a right angle to the line from the cap's
+/// middle.
+[[nodiscard]] float WorldHorizonY(const WorldCap& cap, float heightOverSea);
 
 } // namespace openblack::graphics::atmosphere

@@ -471,7 +471,7 @@ private:
 	void DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const;
 	/// EXPERIMENT (not for merge): the air's uniforms and textures for one program; `skyShare` is how much of the air's
 	/// sky the sky's dome shows near the horizon
-	void BindAtmosphere(const ShaderProgram& program, float skyShare) const;
+	void BindAtmosphere(const ShaderProgram& program, float skyShare, bool screenAurora = false) const;
 	/// EXPERIMENT (not for merge): binds the haze's grid that follows the view at a sampler stage, when the grid is drawn
 	/// this frame; true when it is bound
 	[[nodiscard]] bool BindHazeGrid(const ShaderProgram& program, uint8_t stage) const;

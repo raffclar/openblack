@@ -38,6 +38,10 @@ public:
 	void CycleEffectOffBack() override;
 	[[nodiscard]] uint8_t GetCloudCover() const override { return _cloudCover; }
 	void CycleCloudCover() override;
+	[[nodiscard]] std::optional<float> GetAuroraChoice() const override { return _auroraChoice; }
+	void SetAuroraChoice(std::optional<float> strength) override { _auroraChoice = strength; }
+	[[nodiscard]] bool IsAuroraFullSize() const override { return _auroraFullSize; }
+	void SetAuroraFullSize(bool fullSize) override;
 	void StartTour(graphics::underwater::Tour tour) override
 	{
 		_tour = tour;
@@ -111,6 +115,8 @@ private:
 	graphics::underwater::Tour _tour {graphics::underwater::Tour::Shore};
 	graphics::underwater::Effect _effectOff {graphics::underwater::Effect::None};
 	uint8_t _cloudCover {0};
+	std::optional<float> _auroraChoice;
+	bool _auroraFullSize {false};
 	seabed::Seabed _seabed;
 	uint32_t _revision {0};
 	/// The land the sea bed was made for: its height map, as each land makes its own

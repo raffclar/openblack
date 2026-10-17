@@ -19,7 +19,8 @@ SAMPLER2D(s_sceneDepth, 1);
 // x: 1 for the grid, 0 for the low tier's haze; y: the low tier's haze for each world unit; z: the sine of the air's
 // sun over the horizon; w: 1 while the eye is outside the sky's dome
 uniform vec4 u_hazeApply;
-// rgb: the colour of the horizon on the screen, for the low tier; w: unused
+// rgb: the colour of the horizon on the screen, for the low tier; w: 1 to march the aurora's full march here in place of
+// its pass at half size, for a debug comparison
 uniform vec4 u_hazeHorizon;
 // The game's own sun or moon: xyz the direction towards it, w how strongly its glare shows; and its light's colour
 uniform vec4 u_hazeSun;
@@ -112,8 +113,10 @@ void main()
 		// Where the dome is not, this pass draws the same sky as the dome does
 		float moonCos = dot(dir, u_hazeMoon.xyz);
 		float onMoon = u_hazeMoon.w < 1.5f ? smoothstep(u_hazeMoon.w - 2e-5f, u_hazeMoon.w + 2e-5f, moonCos) : 0.0f;
-		gl_FragColor = empty ? vec4(AirSkyColour(eye, dir, u_hazeApply.z, gl_FragCoord.xy) * (1.0f - onMoon) + glare, onMoon)
-		                     : vec4(glare, 1.0f);
+		vec3 airAurora = u_hazeHorizon.w > 0.5f ? AirAurora(eye, dir, 1e9f, gl_FragCoord.xy, AIR_AURORA_STEPS, false)
+		                                        : AirAuroraOnScreen(uv);
+		vec3 airSky = AirSkyColour(eye, dir, u_hazeApply.z, gl_FragCoord.xy) + airAurora;
+		gl_FragColor = empty ? vec4(airSky * (1.0f - onMoon) + glare, onMoon) : vec4(glare, 1.0f);
 
 		return;
 	}
@@ -128,6 +131,7 @@ void main()
 		haze = vec4(u_hazeHorizon.rgb * (1.0f - through), through);
 	}
 	// From over the aurora, its curtains show in front of the sea
-	vec3 aurora = AirAurora(eye, dir, range / ATMOS_UNITS_PER_KM, gl_FragCoord.xy);
+	vec3 aurora = u_hazeHorizon.w > 0.5f ? AirAurora(eye, dir, range / ATMOS_UNITS_PER_KM, gl_FragCoord.xy, AIR_AURORA_STEPS, false)
+	                                     : (AirAuroraOverScene() ? AirAuroraOnScreen(uv) : vec3_splat(0.0f));
 	gl_FragColor = vec4(haze.rgb + glare + aurora, haze.a);
 }

@@ -13,7 +13,8 @@ uniform vec4 u_skyAlignment;
 uniform vec4 u_skyModulate;
 uniform vec4 u_skyAdd;
 // EXPERIMENT (not for merge): x: how much of the air's sky shows, 0 with the experiment off; y: the sine of the height of
-// the air's sun over the horizon; zw: unused
+// the air's sun over the horizon; z: 1 when the aurora's pass at half the screen's size is for this view, 0 to march the
+// aurora here (as in the faces of the far cube); w: the steps of that march, under 0 for a march with no probes
 uniform vec4 u_skyAtmos;
 
 // A point of an alignment's dome, sampled as if its third of the texture stood alone, clamped to its edges
@@ -43,7 +44,9 @@ void main()
 	{
 		vec3 eye = mul(u_invView, vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
 		vec3 dir = normalize(v_position.xyz - eye);
-		dome = mix(dome, AirSkyColour(eye, dir, u_skyAtmos.y, gl_FragCoord.xy), u_skyAtmos.x);
+		vec3 aurora = u_skyAtmos.z > 0.5f ? AirAuroraOnScreen(gl_FragCoord.xy * u_viewTexel.xy)
+		                                  : AirAurora(eye, dir, 1e9f, gl_FragCoord.xy, int(abs(u_skyAtmos.w)), u_skyAtmos.w > 0.0f);
+		dome = mix(dome, AirSkyColour(eye, dir, u_skyAtmos.y, gl_FragCoord.xy) + aurora, u_skyAtmos.x);
 	}
 	gl_FragColor = vec4(dome, 1.0f);
 }

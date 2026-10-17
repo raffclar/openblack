@@ -31,6 +31,8 @@ enum class RenderPass : uint8_t
 	AtmosphereTransmittance,
 	AtmosphereSkyView,
 	AtmosphereAerial,
+	/// EXPERIMENT (not for merge): the aurora at half the screen's size, which the sky and the haze read
+	Aurora,
 	/// EXPERIMENT (not for merge): the light probes over the island, a band of rows a frame after each new set of
 	/// shadows, and the blend of the old grid into the new
 	LightProbes,
@@ -128,6 +130,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Atmosphere Transmittance",    //
     "Atmosphere Sky View",         //
     "Atmosphere Aerial",           //
+    "Aurora Pass",                 //
     "Light Probes",                //
     "Light Probes Blend",          //
     "Sun Shadow Environment 0",    //
