@@ -1110,3 +1110,10 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
     PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
   )
 endforeach ()
+openblack_setup_and_add_test(
+  test_oracle_creature_may_try oracle/test_oracle_creature_may_try.cpp
+)
+target_compile_definitions(
+  test_oracle_creature_may_try
+  PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

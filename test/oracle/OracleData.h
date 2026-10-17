@@ -36,9 +36,14 @@ class Table
 {
 public:
 	/// Reads a data file from the pinned data folder. It gives no value when the file is missing or not valid.
-	[[nodiscard]] static std::optional<Table> Load(std::string_view name)
+	///
+	/// The folder is a default argument, so the test that calls this function gives its own folder. All the tests are
+	/// one program, and the linker keeps only one copy of this function. A copy of an object file from the build cache
+	/// can have the folder of a different worktree.
+	[[nodiscard]] static std::optional<Table> Load(std::string_view name,
+	                                               const std::filesystem::path& folder = OPENBLACK_ORACLE_DATA)
 	{
-		std::ifstream stream(std::filesystem::path(OPENBLACK_ORACLE_DATA) / name);
+		std::ifstream stream(folder / name);
 		if (!stream)
 		{
 			return std::nullopt;
