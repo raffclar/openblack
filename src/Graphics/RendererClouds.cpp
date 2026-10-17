@@ -28,6 +28,7 @@
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WindSystemInterface.h"
+#include "Graphics/Atmosphere.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
@@ -150,12 +151,16 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 	// The sun's light goes orange and red near the horizon. The moon's light is cool and silver.
 	constexpr glm::vec3 k_MoonTint {0.72f, 0.84f, 1.1f};
 	const float moonShare = frame.light.w;
-	// EXPERIMENT (not for merge): with the haze on, the light through the air comes from the air's model
-	const glm::vec3 throughAir = _atmosphereFrame.has_value() && _atmosphereFrame->haze ? _atmosphereFrame->lightTint
-	                                                                                    : clouds::SunThroughAir(frame.above.y);
+	// EXPERIMENT (not for merge): with the haze on, the light through the air comes from the air's model, in the
+	// colours of the screen. The clouds' shade takes the air's upper sky while the sun is low, not the red horizon.
+	const bool air = _atmosphereFrame.has_value() && _atmosphereFrame->haze;
+	const glm::vec3 throughAir = air ? _atmosphereFrame->lightTintOnScreen : clouds::SunThroughAir(frame.above.y);
 	const glm::vec3 tint = glm::mix(throughAir, k_MoonTint, moonShare);
 	uniforms.lightColour = {glm::vec3(frame.lightColour) * tint, frame.lightColour.w};
-	uniforms.ambient = {glm::vec3(frame.sky) * k_SkyLight, system.GetSeaFlash().x};
+	const glm::vec3 original = glm::vec3(frame.sky) * k_SkyLight;
+	const glm::vec3 skyLight =
+	    air ? atmosphere::CloudSkyLight(original, _atmosphereFrame->skyFromAbove, _atmosphereFrame->sunHeight) : original;
+	uniforms.ambient = {skyLight, system.GetSeaFlash().x};
 	uniforms.eye = {eye, frame.eye.w > 0.5f ? 0.0f : 1.0f};
 	const auto& strike = system.GetSeaStrike();
 	uniforms.strike = {strike.position.x, frame.params.z, strike.position.y, system.GetSeaFlash().y};

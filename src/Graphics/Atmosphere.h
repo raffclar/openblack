@@ -173,6 +173,20 @@ inline constexpr float k_OriginalHue = 0.35f;
 /// A colour's luminance
 [[nodiscard]] float Luminance(glm::vec3 colour);
 
+/// The sky's colour as the eye sees it while the sun is low: after sunset the air gives a deep, strong blue, but the eye
+/// sees a dim sky with less colour. The colour goes part of the way to a grey of the same luminance, more while the
+/// air's sun is low. `sunHeight` is the sine of the air's sun over the horizon.
+[[nodiscard]] glm::vec3 DimSkyColour(glm::vec3 colour, float sunHeight);
+
+/// A colour of the air's light, which the model gives in linear light, as the screen shows it. The game draws in the
+/// colours of the screen, so a low sun's linear deep red shows as the orange that the eye sees.
+[[nodiscard]] glm::vec3 OnScreen(glm::vec3 linear);
+
+/// The light of the sky from above on the clouds. By day it is the original game's sky colour. While the air's sun is
+/// low, that colour is the red of the horizon, so the light takes the colour of the air's upper sky (`airAbove`) at the
+/// same luminance. `sunHeight` is the sine of the air's sun over the horizon.
+[[nodiscard]] glm::vec3 CloudSkyLight(glm::vec3 original, glm::vec3 airAbove, float sunHeight);
+
 /// The sun's real path over the island. The model puts the island at a latitude of 40 degrees north on the day of an
 /// equinox, with noon at 12 of script time. The sun comes up in the east at 6, climbs to 50 degrees at noon in the south
 /// and goes down in the west at 18. The original game keeps its sun low in the north west; the noon sun of this model

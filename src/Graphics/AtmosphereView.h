@@ -69,9 +69,13 @@ struct AtmosphereFrame
 	glm::vec4 horizon {0.0f};
 	/// The light of the sun or the moon at the ground, a part of its light at noon (for the clouds and the fog)
 	glm::vec3 lightTint {1.0f};
+	/// lightTint in the colours of the screen, with the same strongest colour (for the clouds)
+	glm::vec3 lightTintOnScreen {1.0f};
 	/// The light of the sun or the moon at the ground and the sky's light, for a light of strength 1 at the top of the
 	/// air (for the light in the shade)
 	glm::vec3 lightAtGround {1.0f};
+	/// The light of the air's sky from above on the screen, as the dome shows the sky (for the shade of the clouds)
+	glm::vec3 skyFromAbove {0.0f};
 	global_illumination::ShL1 sky;
 	/// Where the sky's dome is: xy the middle across the land, z how far across and w how high a point must be to be on
 	/// the dome. The dome writes its depth, so the haze and the fog know the sky by this.

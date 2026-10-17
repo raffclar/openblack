@@ -301,6 +301,24 @@ float atmosphere::Luminance(glm::vec3 colour)
 	return glm::dot(colour, glm::vec3(0.2126f, 0.7152f, 0.0722f));
 }
 
+glm::vec3 atmosphere::DimSkyColour(glm::vec3 colour, float sunHeight)
+{
+	const float kept = 0.25f + 0.75f * Smoothstep(0.0f, 0.35f, sunHeight);
+	return glm::mix(glm::vec3(Luminance(colour)), colour, kept);
+}
+
+glm::vec3 atmosphere::OnScreen(glm::vec3 linear)
+{
+	constexpr float k_Gamma = 2.2f;
+	return glm::pow(glm::max(linear, glm::vec3(0.0f)), glm::vec3(1.0f / k_Gamma));
+}
+
+glm::vec3 atmosphere::CloudSkyLight(glm::vec3 original, glm::vec3 airAbove, float sunHeight)
+{
+	const glm::vec3 air = airAbove * (Luminance(original) / std::max(Luminance(airAbove), 1e-4f));
+	return glm::mix(original, air, 1.0f - Smoothstep(0.1f, 0.35f, sunHeight));
+}
+
 glm::vec3 atmosphere::SunTowards(float hour)
 {
 	constexpr float k_Radians = k_Pi / 180.0f;

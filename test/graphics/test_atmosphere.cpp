@@ -301,3 +301,35 @@ TEST(Atmosphere, TheSkysTypeFollowsTheSunsHeight)
 	// By 8 in the morning the day's sky shows
 	EXPECT_FLOAT_EQ(atmos::SkyTypeFromSun(atmos::SunTowards(8.0f).y), 2.0f);
 }
+
+TEST(Atmosphere, TheLowSunsLightIsOrangeOnTheScreen)
+{
+	// The linear light of a sun 1 degree over the horizon is a deep red with almost no blue
+	const atmos::Air air {.turbidity = 2.0f};
+	const glm::vec3 linear = atmos::LightAtGround(std::sin(k_Pi / 180.0f), air);
+	const glm::vec3 screen = atmos::OnScreen(linear);
+	// On the screen it keeps its order of colours but has more green and blue for each red: orange, not red
+	EXPECT_GT(screen.r, screen.g);
+	EXPECT_GT(screen.g, screen.b);
+	EXPECT_GT(screen.g / screen.r, 2.0f * linear.g / linear.r);
+	EXPECT_EQ(atmos::OnScreen(glm::vec3(1.0f)), glm::vec3(1.0f));
+	EXPECT_EQ(atmos::OnScreen(glm::vec3(-1.0f)), glm::vec3(0.0f));
+}
+
+TEST(Atmosphere, TheCloudsShadeTakesTheUpperSkyWhileTheSunIsLow)
+{
+	const glm::vec3 horizonRed {0.22f, 0.145f, 0.12f};
+	const glm::vec3 upperBlue {0.1f, 0.1f, 0.16f};
+	// By day the original colour stays
+	EXPECT_EQ(atmos::CloudSkyLight(horizonRed, upperBlue, 0.5f), horizonRed);
+	// With a low sun the light is blue-grey at the original's luminance
+	const glm::vec3 dusk = atmos::CloudSkyLight(horizonRed, upperBlue, 0.02f);
+	EXPECT_GT(dusk.b, dusk.r);
+	EXPECT_NEAR(atmos::Luminance(dusk), atmos::Luminance(horizonRed), 1e-4f);
+	// The dim sky after sunset has less colour
+	const glm::vec3 deepBlue {0.0f, 0.1f, 1.0f};
+	const glm::vec3 dim = atmos::DimSkyColour(deepBlue, -0.1f);
+	EXPECT_NEAR(atmos::Luminance(dim), atmos::Luminance(deepBlue), 1e-4f);
+	EXPECT_LT(dim.b - dim.r, 0.5f * (deepBlue.b - deepBlue.r));
+	EXPECT_EQ(atmos::DimSkyColour(deepBlue, 0.5f), deepBlue);
+}

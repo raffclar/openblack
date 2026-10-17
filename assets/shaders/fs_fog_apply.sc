@@ -35,12 +35,18 @@ void main()
 	vec3 world = WorldAt(uv, depth);
 	sky = sky || OnSkyDome(world);
 	float range = sky ? u_fogGrid.w : length(world - eye);
-	// Above the water, the water's surface is where the scene is
+	// Above the water, the water's surface is where the scene is. The sea is a part of the scene at its full distance,
+	// also past the grid's far end. Thus its fog eases to the sky's share with the distance and does not change in a
+	// step where the sea passes the grid's far end.
 	float sea = u_fogAmbient.w;
 	if (eye.y > sea && dir.y < 0.0f)
 	{
-		range = min(range, (eye.y - sea) / -dir.y);
-		sky = sky && range >= u_fogGrid.w;
+		float toSea = (eye.y - sea) / -dir.y;
+		if (sky || toSea < range)
+		{
+			range = toSea;
+			sky = false;
+		}
 	}
 	float slice = clamp(FogSliceAt(range), 0.0f, u_fogGrid.z - 1.0f);
 	float first = floor(slice);
@@ -50,9 +56,12 @@ void main()
 	// Nearer than the first slice, the fog is a share of the first slice's
 	float nearShare = clamp(range / FogSliceDistance(0.0f), 0.0f, 1.0f);
 	fog = mix(vec4(0.0f, 0.0f, 0.0f, 1.0f), fog, nearShare);
-	// Past the grid's far end the scene eases to the sky's thinner share, so the far sea at the horizon has the same
-	// fog as the sky over it and the line between them does not show
-	float share = sky ? u_fogApply.x : mix(1.0f, u_fogApply.x, smoothstep(u_fogGrid.w, u_fogGrid.w * 4.0f, range));
+	// A ray along the horizon goes through all of the fog's layer, so the sky at the horizon has all of the fog, as the
+	// far sea under it has. Higher up the sky has a thinner share, so that it stays clear. Past the grid's far end a
+	// scene over the horizon eases to the share of the sky behind it. Thus the fog grows with the distance and the far
+	// sea and the sky have the same fog at the horizon, with no line between them.
+	float skyShare = mix(1.0f, u_fogApply.x, smoothstep(0.0f, 0.06f, dir.y));
+	float share = sky ? skyShare : mix(1.0f, skyShare, smoothstep(u_fogGrid.w, u_fogGrid.w * 4.0f, range));
 	fog = mix(vec4(0.0f, 0.0f, 0.0f, 1.0f), fog, share);
 	gl_FragColor = fog;
 }
