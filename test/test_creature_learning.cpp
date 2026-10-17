@@ -317,6 +317,17 @@ TEST(CreaturePlanner, PriorityAndSwitching)
 	EXPECT_TRUE(creature_planner::ShouldSwitch(1.0f, 0.0f));
 }
 
+TEST(CreaturePlanner, AnAgendaThatNoPlanGaveRunsToItsEndWhateverItsKind)
+{
+	// A plan that runs can change for a plan that is pressing enough
+	EXPECT_TRUE(creature_planner::MayChoose(true, true));
+	EXPECT_TRUE(creature_planner::MayChoose(true, false));
+	// With nothing left to do, it chooses
+	EXPECT_TRUE(creature_planner::MayChoose(false, false));
+	// An agenda that it was made to do, with steps left, stops the choice
+	EXPECT_FALSE(creature_planner::MayChoose(false, true));
+}
+
 TEST(CreaturePlanner, PlansTheActionFirstAndThenTheThing)
 {
 	// The action is the most wanted, the last of equals; the thing is then found for that action only

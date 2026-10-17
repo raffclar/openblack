@@ -20,6 +20,7 @@
 #include <limits>
 #include <optional>
 #include <utility>
+#include <vector>
 
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
@@ -32,12 +33,15 @@
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureDecisionTree.h"
+#include "Creature/CreatureDesireSources.h"
+#include "Creature/CreatureDesires.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureLook.h"
 #include "Creature/CreatureLostThing.h"
 #include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreatureSteal.h"
+#include "Creature/CreatureTempleParts.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/BuildingSites.h"
@@ -65,11 +69,13 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -79,6 +85,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/Map.h"
+#include "ECS/MapCells.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
@@ -86,9 +93,11 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -170,21 +179,64 @@ float HeightOf(const ecs::Registry& registry, entt::entity thing)
 	}
 	const auto* transform = registry.TryGet<const Transform>(thing);
 	const auto* mesh = registry.TryGet<const Mesh>(thing);
-	if (transform == nullptr || mesh == nullptr || !Locator::resources::has_value())
+	// An altar has its model's size from when its site is made, before the model shows
+	const auto meshId = mesh != nullptr                       ? std::optional(mesh->id)
+	                    : registry.AllOf<WorshipAltar>(thing) ? mind_detail::AltarMeshOf(registry, thing)
+	                                                          : std::nullopt;
+	if (transform == nullptr || !meshId.has_value() || !Locator::resources::has_value())
 	{
 		return 0.0f;
 	}
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(mesh->id))
+	if (!meshes.Contains(*meshId))
 	{
 		return 0.0f;
 	}
-	return meshes.Handle(mesh->id)->GetBoundingBox().Size().y * transform->scale.y;
+	return meshes.Handle(*meshId)->GetBoundingBox().Size().y * transform->scale.y;
+}
+
+/// The worship site altars that stand in a map cell, by the cells that the outline of each altar's model covers
+std::vector<entt::entity> AltarsIn(const ecs::Registry& registry, glm::ivec2 cell)
+{
+	std::vector<entt::entity> altars;
+	if (!Locator::resources::has_value())
+	{
+		return altars;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	registry.Each<const WorshipAltar, const Transform>(
+	    [&](entt::entity altar, const WorshipAltar& /*unused*/, const Transform& transform) {
+		    const auto meshId = mind_detail::AltarMeshOf(registry, altar);
+		    if (!meshId.has_value() || !meshes.Contains(*meshId))
+		    {
+			    return;
+		    }
+		    const auto box = meshes.Handle(*meshId)->GetBoundingBox();
+		    const auto outline = ecs::map_cells::OutlineOfBox(transform.position, transform.rotation, transform.scale.x,
+		                                                      box.Center(), box.Size() * 0.5f);
+		    if (creature_temple_parts::AltarIn(outline, cell))
+		    {
+			    altars.push_back(altar);
+		    }
+	    });
+	return altars;
 }
 
 /// The game turns in one second
 constexpr uint32_t k_TurnsPerSecond =
     static_cast<uint32_t>(std::chrono::milliseconds(std::chrono::seconds(1)) / TimeSystemInterface::k_TurnDuration);
+
+/// Whether a building is the centre of a town
+bool IsTownCentre(const Abode& abode)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto& infos = Locator::infoConstants::value().abode;
+	const auto row = static_cast<size_t>(abode.info);
+	return row < infos.size() && infos.at(row).abodeType == AbodeType::TownCentre;
+}
 
 /// How much a thing catches a creature's eye, by what it is. The temple, fields, features and the other things that
 /// stand on the land are fixed things.
@@ -327,8 +379,8 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 	{
 		return kinds::k_Tree;
 	}
-	// A worship site is a part of its player's temple
-	if (registry.AllOf<WorshipSite>(thing))
+	// A worship site and the altar at its head are parts of their player's temple
+	if (registry.AnyOf<WorshipSite, WorshipAltar>(thing))
 	{
 		return kinds::k_CitadelPart;
 	}
@@ -392,6 +444,29 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 	return std::nullopt;
 }
 
+std::optional<entt::id_type> mind_detail::AltarMeshOf(const ecs::Registry& registry, entt::entity altar)
+{
+	if (const auto* mesh = registry.TryGet<const Mesh>(altar))
+	{
+		return mesh->id;
+	}
+	const auto* info = AltarInfoOf(registry, altar);
+	return info != nullptr ? std::optional(resources::HashIdentifier(info->meshType)) : std::nullopt;
+}
+
+const GWorshipSiteInfo* mind_detail::AltarInfoOf(const ecs::Registry& registry, entt::entity altar)
+{
+	const auto* part = registry.Valid(altar) ? registry.TryGet<const WorshipAltar>(altar) : nullptr;
+	const auto* site = part != nullptr && registry.Valid(part->site) ? registry.TryGet<const WorshipSite>(part->site) : nullptr;
+	if (site == nullptr || !Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& sites = Locator::infoConstants::value().worshipSite;
+	const auto row = static_cast<size_t>(site->tribe);
+	return row < sites.size() ? &sites.at(row) : nullptr;
+}
+
 void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureMindState& mind, entt::entity thing)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -413,18 +488,17 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 		return;
 	}
 	const auto added = mind.beliefs.Add(thing, *kind, PlaceOf(registry, thing));
-	// Seen again, a villager may show the creature a skill
-	if (!added.isNew && *kind == kinds::k_Villager)
+	// The belief takes in the attributes of the thing now
+	if (added.belief != nullptr)
 	{
-		WatchVillager(creature, mind, thing);
-	}
-	if (added.isNew && added.belief != nullptr)
-	{
-		added.belief->firstSight = mind_detail::BeliefOf(registry, thing, creature);
+		if (const auto now = mind_detail::BeliefNowOf(registry, thing, creature))
+		{
+			beliefs::TakeIn(*added.belief, added.isNew, *now);
+		}
 	}
 	if (!added.isNew && added.belief != nullptr)
 	{
-		StirSourcesOnSighting(creature, mind, *added.belief);
+		SeeAgain(creature, mind, *added.belief);
 	}
 	// A new belief leads it on to what the thing belongs to, but for another creature, which is its own
 	if (!added.isNew || *kind == kinds::k_Creature)
@@ -438,6 +512,52 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 		if (mind.beliefs.Find(*owner) != nullptr)
 		{
 			mind.beliefs.JoinTo(thing, *owner);
+		}
+	}
+}
+
+void CreatureMindSystem::ComeAcrossWithWhole(entt::entity creature, components::CreatureMindState& mind, entt::entity thing)
+{
+	ComeAcross(creature, mind, thing);
+	if (const auto whole = BelongsTo(thing); whole.has_value() && *whole != thing)
+	{
+		ComeAcross(creature, mind, *whole);
+	}
+}
+
+void CreatureMindSystem::SeeAgain(entt::entity creature, components::CreatureMindState& mind, beliefs::Belief& belief)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	// A building seen again does not stir the desires. A seen village centre leads the creature on to its town.
+	if (!beliefs::TakesInAgain(belief.kind))
+	{
+		if (const auto* abode = registry.TryGet<const Abode>(belief.thing); abode != nullptr && IsTownCentre(*abode))
+		{
+			if (const auto town = BelongsTo(belief.thing); town.has_value() && *town != belief.thing)
+			{
+				ComeAcross(creature, mind, *town);
+			}
+		}
+		return;
+	}
+	// What it does next can come across other things, so it keeps what it needs of the belief first
+	const auto kind = belief.kind;
+	const auto thing = belief.thing;
+	StirSourcesOnSighting(creature, mind, belief);
+	// Seen again, a villager may show the creature a skill
+	if (kind == kinds::k_Villager)
+	{
+		WatchVillager(creature, mind, thing);
+	}
+	// A town that wants something stirs compassion
+	if (kind == kinds::k_Town && mind.desires.has_value())
+	{
+		const auto* wants = registry.TryGet<const TownDesire>(thing);
+		const bool wantsSomething = wants != nullptr && ecs::town_desire::GetMostSignificantRawDesire(*wants, 0.0f) != -1;
+		if (creature_desire_sources::TownSightingStirs(registry.AllOf<ScriptControlled>(creature), wantsSomething))
+		{
+			creature_desires::ChangeSource(*mind.desires, creature_desire_sources::k_TownSightingSource,
+			                               creature_desire_sources::TownSightingAmount(k_TurnsPerSecond));
 		}
 	}
 }
@@ -710,8 +830,10 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 		{
 			continue;
 		}
-		// The things that stay put, then the things that move
-		for (const auto thing : map.GetAllInCell(cell))
+		// The things that stay put, then the things that move. The altars of the worship sites are not in the map's
+		// cells, but they stand in the cells that they cover as the newest of the things that stay put.
+		const auto altars = AltarsIn(registry, cell);
+		for (const auto thing : creature_temple_parts::ThingsSeenInCell(altars, map.GetAllInCell(cell)))
 		{
 			ComeAcross(entity, mind, thing);
 			// Each thing in view that it sees may take over what it watches

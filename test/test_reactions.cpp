@@ -1688,3 +1688,15 @@ TEST_F(Reactions, AVillagerNearADiscipleFollowsItToItsWorkOneTime)
 	EXPECT_FALSE(registry.AllOf<DiscipleFollower>(_villagers[1]));
 	Locator::reactionSystem::reset();
 }
+
+// A creature a script has told to take no notice may take up no kind of reaction, until a script tells it to again
+TEST_F(Reactions, ACreatureToldToTakeNoNoticeIsAvailableForNoReaction)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	EXPECT_TRUE(_reactions.IsAvailable(_creature, Reaction::FleeFromObject));
+	registry.Assign<CreatureReactionsOff>(_creature);
+	EXPECT_FALSE(_reactions.IsAvailable(_creature, Reaction::FleeFromObject));
+	EXPECT_FALSE(_reactions.IsAvailable(_creature, Reaction::ReactToHandPickUp));
+	registry.Remove<CreatureReactionsOff>(_creature);
+	EXPECT_TRUE(_reactions.IsAvailable(_creature, Reaction::ReactToHandPickUp));
+}

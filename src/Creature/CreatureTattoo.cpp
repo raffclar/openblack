@@ -12,7 +12,8 @@
 #include <cassert>
 
 #include <algorithm>
-#include <bit>
+
+#include <MindBody.h>
 
 using namespace openblack;
 using namespace openblack::creature_tattoo;
@@ -30,11 +31,6 @@ constexpr uint16_t k_Opaque = 0xF000;
 /// A colour becomes a grey after each channel goes to the middle of its step of eight
 constexpr uint32_t k_StepMask = 0xF8;
 constexpr uint32_t k_StepMiddles = 3 * 4;
-/// The block of pictures: its size, the number of pictures, the slots' bits, two spare bytes, then eight offsets
-constexpr uint32_t k_OffsetsStart = 8;
-constexpr uint32_t k_BlockHeader = k_OffsetsStart + (4 * k_SlotCount);
-/// A picture in the block keeps two levels to a byte
-constexpr uint32_t k_PackedPicture = (k_DesignSize * k_DesignSize) / 2;
 
 Mask Halved(const Mask& mask)
 {
@@ -153,80 +149,36 @@ void creature_tattoo::PutPicture(std::span<std::array<uint8_t, 3>> atlas, uint32
 
 std::vector<uint8_t> creature_tattoo::PicturesBlock(const Slots& slots, const Pictures& pictures)
 {
-	const auto usesPicture = [&pictures](const Slot& slot) {
-		return slot.site < k_SlotCount && slot.design < pictures.size() && pictures.at(slot.design).has_value();
-	};
-	uint32_t designs = 0;
-	for (const auto& slot : slots)
-	{
-		if (usesPicture(slot))
-		{
-			designs |= 1u << slot.design;
-		}
-	}
-	const auto count = static_cast<uint32_t>(std::popcount(designs));
-	const auto size = (count * k_PackedPicture) + k_BlockHeader;
-	std::vector<uint8_t> block(size, 0);
-	const auto putWord = [&block](size_t at, uint32_t value) {
-		for (size_t i = 0; i < 4; ++i)
-		{
-			block.at(at + i) = static_cast<uint8_t>(value >> (8 * i));
-		}
-	};
-	putWord(0, size);
-	block.at(4) = static_cast<uint8_t>(count);
-	std::array<uint32_t, k_DesignCount> offsets {};
-	uint32_t next = k_BlockHeader;
+	std::array<std::optional<uint8_t>, k_SlotCount> slotDesigns {};
 	for (size_t i = 0; i < slots.size(); ++i)
 	{
-		const auto& slot = slots.at(i);
-		if (!usesPicture(slot))
+		if (slots.at(i).site < k_SlotCount)
 		{
-			continue;
+			slotDesigns.at(i) = slots.at(i).design;
 		}
-		block.at(5) = static_cast<uint8_t>(block.at(5) | (1u << i));
-		auto& offset = offsets.at(slot.design);
-		if (offset == 0)
-		{
-			// The first slot with the picture puts it in the block, two levels to a byte
-			offset = next;
-			next += k_PackedPicture;
-			const auto& picture = *pictures.at(slot.design);
-			for (uint32_t byte = 0; byte < k_PackedPicture; ++byte)
-			{
-				block.at(offset + byte) =
-				    static_cast<uint8_t>((picture.at((byte * 2) + 1) & 0xF0u) | (picture.at(byte * 2) >> 4u));
-			}
-		}
-		putWord(k_OffsetsStart + (i * 4), offset);
 	}
-	return block;
+	// The block keeps the top four bits of each grey
+	std::array<std::optional<creaturemind::TattooPicture>, k_DesignCount> levels {};
+	for (size_t design = 0; design < pictures.size(); ++design)
+	{
+		if (pictures.at(design).has_value())
+		{
+			auto& picture = levels.at(design).emplace();
+			std::ranges::transform(*pictures.at(design), picture.begin(),
+			                       [](uint8_t grey) { return static_cast<uint8_t>(grey >> 4u); });
+		}
+	}
+	return creaturemind::WriteTattooPictures(slotDesigns, levels);
 }
 
 std::optional<Design> creature_tattoo::DesignInBlock(std::span<const uint8_t> block, size_t slot)
 {
-	if (block.size() < k_BlockHeader || slot >= k_SlotCount || ((block[5] >> slot) & 1u) == 0)
+	const auto picture = creaturemind::ReadTattooPicture(block, slot);
+	if (!picture.has_value())
 	{
 		return std::nullopt;
 	}
-	uint32_t offset = 0;
-	for (size_t i = 0; i < 4; ++i)
-	{
-		offset |= static_cast<uint32_t>(block[k_OffsetsStart + (slot * 4) + i]) << (8 * i);
-	}
-	// A block that does not hold all of the picture gives none
-	if (offset < k_BlockHeader || offset > block.size() || block.size() - offset < k_PackedPicture)
-	{
-		return std::nullopt;
-	}
-	std::vector<uint8_t> levels(static_cast<size_t>(k_DesignSize) * k_DesignSize);
-	for (uint32_t byte = 0; byte < k_PackedPicture; ++byte)
-	{
-		const auto packed = block[offset + byte];
-		levels.at(byte * 2) = packed & 0x0Fu;
-		levels.at((byte * 2) + 1) = packed >> 4u;
-	}
-	return DesignFromLevels(levels);
+	return DesignFromLevels(*picture);
 }
 
 size_t creature_tattoo::MaskLevel(float size)
@@ -383,15 +335,12 @@ std::optional<size_t> creature_tattoo::SlotFor(const Slots& slots, uint8_t site,
 
 Slot creature_tattoo::FromWord(uint32_t word)
 {
-	return {
-	    .design = static_cast<uint8_t>(word & 0xFu),
-	    .site = static_cast<uint8_t>((word >> 4u) & 0xFu),
-	    .colour = {static_cast<uint8_t>(word >> 24u), static_cast<uint8_t>(word >> 16u), static_cast<uint8_t>(word >> 8u)},
-	};
+	const auto tattoo = creaturemind::TattooFromWord(word);
+	return {.design = tattoo.design, .site = tattoo.site, .colour = {tattoo.red, tattoo.green, tattoo.blue}};
 }
 
 uint32_t creature_tattoo::ToWord(const Slot& slot)
 {
-	return (slot.design & 0xFu) | ((slot.site & 0xFu) << 4u) | (static_cast<uint32_t>(slot.colour.b) << 8u) |
-	       (static_cast<uint32_t>(slot.colour.g) << 16u) | (static_cast<uint32_t>(slot.colour.r) << 24u);
+	return creaturemind::TattooToWord(
+	    {.design = slot.design, .site = slot.site, .red = slot.colour.r, .green = slot.colour.g, .blue = slot.colour.b});
 }

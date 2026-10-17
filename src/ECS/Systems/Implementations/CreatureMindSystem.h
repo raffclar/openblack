@@ -273,6 +273,8 @@ private:
 	/// does when that teaches a skill it does not know, and goes after the villager to watch it. A villager of another
 	/// player's village, or of a village of no player, also makes it want to impress more.
 	void WatchVillager(entt::entity creature, components::CreatureMindState& mind, entt::entity villager);
+	/// The creature sees again a thing that it has a belief about: the desires and skills that the sight stirs
+	void SeeAgain(entt::entity creature, components::CreatureMindState& mind, creature_object_beliefs::Belief& belief);
 	/// Seeing a thing again that it believes in stirs some of its desire sources
 	void StirSourcesOnSighting(entt::entity creature, components::CreatureMindState& mind,
 	                           creature_object_beliefs::Belief& belief);
@@ -398,6 +400,9 @@ private:
 	/// thing belongs to. If the thing moves and is not the creature itself, it becomes the last moving thing that the
 	/// creature noticed.
 	void ComeAcross(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
+	/// It comes across a thing and then across the whole thing that the thing belongs to, also when its belief about the
+	/// thing is not new. Another creature is its own whole thing.
+	void ComeAcrossWithWhole(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
 	/// Where it believes a thing is: where it last came across it; nothing when it has never come across it
 	[[nodiscard]] static std::optional<glm::vec3> BelievedPlace(const components::CreatureMindState& mind, entt::entity thing);
 	/// It forgets what it believed about things gone from the world, and its last try that fizzled when the thing of

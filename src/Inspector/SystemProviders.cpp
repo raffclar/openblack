@@ -36,6 +36,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureReactionNotice.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 
@@ -467,6 +468,56 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		              return QueryResult::Value(
 		                  {{"id", ToId(entity)}, {"sum", mind.desires->sum}, {"desires", DesireItems(*mind.desires, top)}});
 	              });
+	provider->Add(Query("reactions",
+	                    "Whether a creature takes notice of reactions. A creature that a script makes takes no notice until a "
+	                    "script or a swap of minds tells it to: it reacts to nothing near it and catches nothing",
+	                    {id}),
+	              [sources](const QueryContext& context) {
+		              const auto* registry = Registry(sources.world);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              const auto creature = CreatureParam(*registry, context.params);
+		              if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		              {
+			              return QueryResult::Error(*problem);
+		              }
+		              const auto entity = std::get<entt::entity>(creature);
+		              return QueryResult::Value(
+		                  {{"id", ToId(entity)}, {"notice", ecs::creature_reaction_notice::TakesNotice(*registry, entity)}});
+	              });
+	auto setReactions =
+	    Query("set_reactions",
+	          "A debug tool, not a rule of the game: the creature starts (notice true) or stops (notice false) to take "
+	          "notice of reactions; answers what it now does",
+	          {id, Parameter("notice", "boolean", "Whether it takes notice of reactions", true)});
+	setReactions.writes = true;
+	provider->Add(std::move(setReactions), [sources](const QueryContext& context) {
+		const auto* registry = Registry(sources.world);
+		if (registry == nullptr)
+		{
+			return QueryResult::Error(std::string(k_NoRegistry));
+		}
+		if (!sources.setReactionNotice)
+		{
+			return QueryResult::Error("this game cannot set it");
+		}
+		const auto notice = context.params.find("notice");
+		if (notice == context.params.end() || !notice->is_boolean())
+		{
+			return QueryResult::Error("give notice as true or false");
+		}
+		const auto creature = CreatureParam(*registry, context.params);
+		if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		{
+			return QueryResult::Error(*problem);
+		}
+		const auto entity = std::get<entt::entity>(creature);
+		sources.setReactionNotice(entity, notice->get<bool>());
+		return QueryResult::Value(
+		    {{"id", ToId(entity)}, {"notice", ecs::creature_reaction_notice::TakesNotice(*registry, entity)}});
+	});
 	provider->Add(
 	    Query("known", "The ordinary skills and miracles a creature knows, and how often it has seen each miracle", {id}),
 	    [sources](const QueryContext& context) {
@@ -587,7 +638,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 	    });
 	provider->Add(
 	    Query("beliefs",
-	          "A creature's beliefs about things: kind, last place, the whole thing, the attributes its decision trees test; "
+	          "A creature's beliefs about things: kind, last place, the whole thing, the attributes it last took in, which its "
+	          "decision trees test; "
 	          "and how nice it finds other creatures",
 	          {id, Parameter("kind", "integer", "Only beliefs of this kind (the game's belief type, 0 to 23)", false)}),
 	    [sources](const QueryContext& context) {
@@ -615,12 +667,15 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 				    continue;
 			    }
 			    auto attributes = Json::object();
-			    const auto now = sources.beliefAbout ? sources.beliefAbout(entity, belief.thing) : std::nullopt;
-			    if (now.has_value())
+			    // The attributes that the creature last took in, else what the mind makes of the thing
+			    const auto held = belief.attributes.has_value()
+			                          ? belief.attributes
+			                          : (sources.beliefAbout ? sources.beliefAbout(entity, belief.thing) : std::nullopt);
+			    if (held.has_value())
 			    {
-				    for (const auto attribute : creature_tree::SlotsFor(now->type))
+				    for (const auto attribute : creature_tree::SlotsFor(held->type))
 				    {
-					    const auto value = now->Value(attribute);
+					    const auto value = held->Value(attribute);
 					    attributes[creature_tree::Name(attribute)] = value.has_value() ? Json(*value) : Json(nullptr);
 				    }
 			    }

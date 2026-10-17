@@ -363,10 +363,26 @@ TEST(CreatureScriptProperties, ACopyTakesItsSizeAndStrengthAndAnOwner)
 	EXPECT_FLOAT_EQ(bigger.size, 3.0f);
 	EXPECT_FLOAT_EQ(bigger.strength, 1.2f);
 
-	std::array<bool, 7> have {true, false, false, false, false, false, false};
-	EXPECT_EQ(OwnerOfCopy(have), PlayerNames::PLAYER_TWO);
-	have = {false, true, true, true, true, true, true};
-	EXPECT_EQ(OwnerOfCopy(have), PlayerNames::PLAYER_ONE);
-	have.fill(true);
-	EXPECT_EQ(OwnerOfCopy(have), std::nullopt);
+	// Two players that play: the second one, who has no creature, gets the copy
+	std::array<PlayerPlace, 7> places {};
+	places.at(0) = {.plays = true, .hasCreature = true};
+	places.at(1) = {.plays = true, .hasCreature = false};
+	EXPECT_EQ(OwnerOfCopy(places), PlayerNames::PLAYER_TWO);
+	places.at(0).hasCreature = false;
+	EXPECT_EQ(OwnerOfCopy(places), PlayerNames::PLAYER_ONE);
+	places.at(0).hasCreature = true;
+	places.at(1).hasCreature = true;
+	EXPECT_EQ(OwnerOfCopy(places), std::nullopt);
+}
+
+TEST(CreatureScriptProperties, OnALandWithOnePlayerTheOgreBelongsToNoPlayer)
+{
+	using namespace script::property_rules;
+	// The player has a creature, and the six other places are empty: an empty place gets no creature
+	std::array<PlayerPlace, 7> places {};
+	places.at(0) = {.plays = true, .hasCreature = true};
+	EXPECT_EQ(OwnerOfCopy(places), std::nullopt);
+	// Before the player has a creature, the player gets the copy
+	places.at(0).hasCreature = false;
+	EXPECT_EQ(OwnerOfCopy(places), PlayerNames::PLAYER_ONE);
 }

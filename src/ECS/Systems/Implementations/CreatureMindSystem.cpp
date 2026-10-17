@@ -3195,6 +3195,10 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	{
 		return false;
 	}
+	if (forced.comeAcross && registry.Valid(forced.actionObject))
+	{
+		ComeAcross(creature, *mind, forced.actionObject);
+	}
 	// A forced plan first stops the reaction that the creature has
 	EndReaction(creature);
 	// The current action stops as a failure. This occurs also when the creature finds no new plan.
@@ -3286,6 +3290,9 @@ void CreatureMindSystem::AbandonAction(entt::entity creature)
 	if (auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr)
 	{
 		Abandon(*mind);
+		// The action stops as a failure, and its agenda ends with it. The creature then chooses a new plan.
+		mind->idle.step = mind->idle.agenda.size();
+		mind->idle.stepStarted = false;
 	}
 	ReleaseCast(creature);
 }

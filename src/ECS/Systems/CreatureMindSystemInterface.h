@@ -194,6 +194,8 @@ public:
 		std::optional<entt::entity> instrument;
 		/// The plan counts as an order: when the creature forgets the plan, the plan can teach approval
 		bool ordered {false};
+		/// The creature comes across the thing that it acts on before it makes the plan
+		bool comeAcross {false};
 	};
 	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the

@@ -226,13 +226,6 @@ bool IsPowerUpCast(std::string_view action)
 	return action.ends_with("PU1") || action.ends_with("PU2");
 }
 
-/// While doing these, which it chose with nothing better to do, the creature changes to any plan good enough
-bool Interruptible(creature_mind::Activity activity)
-{
-	using enum creature_mind::Activity;
-	return activity == None || activity == BeIdle || activity == Sit || activity == HangAround;
-}
-
 /// A creature stroked for what it holds eats it as the action that eats a thing alive
 constexpr std::string_view k_EatHeldAction = "EatAlive";
 /// A creature that sees a villager do a skill it does not know follows the villager to watch it
@@ -625,8 +618,8 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 		return oneShot.has_value() && oneShot->Is(creature_plan_actions::OneShotKind::RestoreHealth);
 	}
 	case Target::TemplePart:
-		// The temple of any player, or a worship site of any town
-		return registry.AllOf<Temple>(entity) || registry.AllOf<WorshipSite>(entity);
+		// The temple of any player, a worship site of any town or the altar at the head of a worship site
+		return registry.AnyOf<Temple, WorshipSite, WorshipAltar>(entity);
 	case Target::OneShotAggressive:
 	case Target::OneShotCompassionate:
 	case Target::OneShotPlayful:
@@ -869,6 +862,12 @@ std::optional<uint32_t> BeliefPlayerOf(const ecs::Registry& registry, entt::enti
 	{
 		return PlayerNumberOf(site->player);
 	}
+	// An altar is of the player of its site's temple
+	if (const auto* altar = registry.TryGet<const WorshipAltar>(thing))
+	{
+		const auto* site = registry.Valid(altar->site) ? registry.TryGet<const WorshipSite>(altar->site) : nullptr;
+		return PlayerNumberOf(site != nullptr ? site->player : PlayerNames::NEUTRAL);
+	}
 	if (const auto* spell = registry.TryGet<const ecs::components::Spell>(thing))
 	{
 		switch (spell->caster.kind)
@@ -1058,9 +1057,20 @@ void SetKindAttributes(const ecs::Registry& registry, entt::entity entity, const
 }
 } // namespace
 
-/// What a creature knows of a thing: its kind and attributes, as far as the game's world here tells them
 std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                            entt::entity self)
+{
+	const auto* mind = registry.Valid(entity) ? registry.TryGet<const CreatureMindState>(self) : nullptr;
+	if (const auto* known = mind != nullptr ? mind->beliefs.Find(entity) : nullptr;
+	    known != nullptr && known->attributes.has_value())
+	{
+		return known->attributes;
+	}
+	return BeliefNowOf(registry, entity, self);
+}
+
+std::optional<creature_tree::Belief> mind_detail::BeliefNowOf(const ecs::Registry& registry, entt::entity entity,
+                                                              entt::entity self)
 {
 	if (!registry.Valid(entity))
 	{
@@ -1083,13 +1093,6 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 	    .creatureType = creature != nullptr ? static_cast<uint32_t>(creature::InfoRow(creature->species)) : 0,
 	});
 	SetKindAttributes(registry, entity, me, belief);
-	// The kind of thing and some attributes stay as the creature saw them first
-	const auto* mind = registry.TryGet<const CreatureMindState>(self);
-	const auto* known = mind != nullptr ? mind->beliefs.Find(entity) : nullptr;
-	if (known != nullptr && known->firstSight.has_value())
-	{
-		return creature_tree::WithFirstSight(*known->firstSight, belief);
-	}
 	return belief;
 }
 
@@ -2128,9 +2131,8 @@ const GTotemStatueInfo* TotemStatueInfo(const ecs::Registry& registry, entt::ent
 bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing)
 {
 	const auto* belief = mind.beliefs.Find(thing);
-	const bool fixed =
-	    registry.AnyOf<Abode, Tree, Feature, Field, FishFarm, AnimatedStatic, Flowers, Temple, WorshipSite, VillageTotem>(
-	        thing);
+	const bool fixed = registry.AnyOf<Abode, Tree, Feature, Field, FishFarm, AnimatedStatic, Flowers, Temple, WorshipSite,
+	                                  WorshipAltar, VillageTotem>(thing);
 	return belief != nullptr && creature_object_beliefs::BlockedRecently(*belief, mind.turn, fixed);
 }
 
@@ -2139,9 +2141,8 @@ constexpr float k_MostCompassionToEatFrom = 0.1f;
 
 /// Whether a creature can act on a thing at all. The living and miracles can always have an action. A whole thing, a
 /// worship site and a thing without data cannot. Any other thing lets a creature act on it when its data says so. The
-/// temple here is one thing, which stands for its heart: the data of the heart says if a creature can act on it.
-// TODO(creature-belief-types-in-trees): the game also has the creature pens of a temple as parts that a creature can act
-// on. Here the pens are not things of their own.
+/// temple here is one thing, which stands for its heart: the data of the heart says if a creature can act on it. The
+/// altar of a worship site has the data of its site. The shipped lands make no creature pen as a thing of its own.
 bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
 {
 	if (registry.AnyOf<Villager, Animal, Creature, ecs::components::Spell>(thing))
@@ -2152,6 +2153,11 @@ bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
 	{
 		return Locator::infoConstants::has_value() &&
 		       Locator::infoConstants::value().citadelHeart.canCreatureInteractWithMe != 0;
+	}
+	if (registry.AllOf<WorshipAltar>(thing))
+	{
+		const auto* info = mind_detail::AltarInfoOf(registry, thing);
+		return info != nullptr && info->canCreatureInteractWithMe != 0;
 	}
 	if (registry.AnyOf<WorshipSite, Town, Flock, ForestTurns>(thing))
 	{
@@ -2194,7 +2200,7 @@ bool Frightens(AnimalInfo type)
 }
 
 /// The data that tells if a creature can act on a thing. A field has the data of its town's field building, a village
-/// totem the data of its statue, and the temple the data of its heart.
+/// totem the data of its statue, the temple the data of its heart, and the altar of a worship site the data of its site.
 const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thing)
 {
 	if (!Locator::infoConstants::has_value())
@@ -2205,6 +2211,10 @@ const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thin
 	if (registry.AllOf<Temple>(thing))
 	{
 		return &info.citadelHeart;
+	}
+	if (registry.AllOf<WorshipAltar>(thing))
+	{
+		return mind_detail::AltarInfoOf(registry, thing);
 	}
 	if (registry.AllOf<Field>(thing))
 	{
@@ -2271,7 +2281,7 @@ creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity
 	{
 		return Thing::TotemStatue;
 	}
-	if (registry.AnyOf<Abode, Temple, WorshipSite, Feature, AnimatedStatic, Flowers, BigForest>(thing))
+	if (registry.AnyOf<Abode, Temple, WorshipSite, WorshipAltar, Feature, AnimatedStatic, Flowers, BigForest>(thing))
 	{
 		return Thing::Building;
 	}
@@ -2968,8 +2978,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		}
 		return;
 	}
-	// Doing something it chose for itself that isn't idling, it carries on
-	if (!mind.planActive && !Interruptible(mind.idle.activity) && mind.idle.step < mind.idle.agenda.size())
+	// An agenda that it was made to do continues to its end
+	if (!creature_planner::MayChoose(mind.planActive, mind.idle.step < mind.idle.agenda.size()))
 	{
 		return;
 	}
@@ -4039,6 +4049,8 @@ void CreatureMindSystem::LearnTurn()
 		// What the player showed it on a leash: anger or compassion towards such things
 		for (const auto& shown : mind->leash.shown)
 		{
+			// It comes across the thing first, so the lesson has the thing as it is now
+			ComeAcross(creature, *mind, static_cast<entt::entity>(shown.object));
 			const auto belief = BeliefOf(registry, static_cast<entt::entity>(shown.object), creature);
 			if (!belief.has_value())
 			{
@@ -4060,6 +4072,8 @@ void CreatureMindSystem::LearnTurn()
 		{
 			auto& attitude = creature_learning::AttitudeTo(learnt.creatures, change.creature);
 			const auto lessons = creature_learning::ChangeHowNice(attitude, change.change);
+			// It comes across the other creature first, so the lessons have that creature as it is now
+			ComeAcross(creature, *mind, static_cast<entt::entity>(change.creature));
 			if (const auto belief = BeliefOf(registry, static_cast<entt::entity>(change.creature), creature))
 			{
 				for (const auto& [desire, amount] : lessons)
@@ -4096,7 +4110,7 @@ creature_watching::MimicKind MimicKindOf(const ecs::Registry& registry, entt::en
 	{
 		facts.kind = Class::Creature;
 	}
-	else if (registry.AnyOf<WorshipSite, VillageTotem, FishFarm, Temple, Town>(thing))
+	else if (registry.AnyOf<WorshipSite, WorshipAltar, VillageTotem, FishFarm, Temple, Town>(thing))
 	{
 		facts.kind = Class::Other;
 	}

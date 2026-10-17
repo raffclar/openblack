@@ -237,6 +237,27 @@ void AddIdle(std::vector<Scenario>& all)
 	    .commands = hangAround,
 	    .repeatFrom = 0,
 	});
+
+	// A script puts the tiger somewhere else while it walks
+	const std::vector<Command> placed {
+	    Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 1.0f, false),
+	    Go(Kind::ScriptPlace, 0, {-40.0f, 0.0f}, 3.0f, false),
+	    Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 4.0f, false),
+	    Go(Kind::ScriptPlace, 0, {40.0f, 0.0f}, 3.0f, false),
+	};
+	all.push_back({
+	    .id = "movement.script_place_stops_walk",
+	    .name = "Script place stops the walk",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks north. After three seconds, a script puts it to one side at once, as SET_POSITION "
+	                   "does.",
+	    .expected = "It shows at the new place at once and stands there. It does not continue its walk, and its head "
+	                "looks straight ahead. Then it walks north again, and the script puts it on the other side.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -10.0f}, 0.0f)},
+	    .commands = placed,
+	    .repeatFrom = 0,
+	});
 }
 
 void AddExpressions(std::vector<Scenario>& all)
@@ -5481,6 +5502,22 @@ void AddCombat(std::vector<Scenario>& all)
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
 	}
+
+	{
+		all.push_back({
+		    .id = "combat.start_turn",
+		    .name = "Fighters turn on the spot as the duel starts",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger starts a fight with the blue tiger to its east, and both fight by themselves. The "
+		                   "camera looks at the arena from the side.",
+		    .expected = "As the duel starts, each tiger first turns on the spot to the other with its turn animation. A very "
+		                "small turn also plays this animation. Then each tiger plays its start animation, and it faces the "
+		                "other at once on each game turn. As a tiger starts or ends a block, it does not turn.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
 }
 
 void AddMind(std::vector<Scenario>& all)
@@ -6414,6 +6451,23 @@ void AddMind(std::vector<Scenario>& all)
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-20.0f, 20.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {15.0f, 15.0f}}},
 	});
+	// The player's tiger looks north at a villager and a hut, which both catch fire after three seconds
+	all.push_back({
+	    .id = "mind.belief_attributes",
+	    .name = "A belief keeps what the creature took in, and a building keeps its first sight",
+	    .facet = Facet::Mind,
+	    .description = "The player's tiger, its mind paused, looks north at a villager and a hut. After three seconds both "
+	                   "catch fire. Read its beliefs with the inspector query creature.beliefs.",
+	    .expected = "Before the fire, both beliefs show OnFire 1 (not on fire). After the fire, the villager's belief shows "
+	                "OnFire 0 (on fire) once the eyes sweep over it again. The hut's belief still shows OnFire 1: a belief "
+	                "about a building keeps the attributes of the first sight.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "yours")},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {15.0f, 15.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {-20.0f, 20.0f}}},
+	    .commands = {{.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 3.0f, .value = 1, .object = 0},
+	                 {.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 0.0f, .value = 1, .object = 1}},
+	});
 	// A hungry tiger, its mind running, looks north at a villager some way off; a nearer one stands behind it, out of sight
 	auto peckish = Posed(CreatureType::Tiger, {0.0f, -20.0f}, 180.0f, "yours");
 	peckish.needs = {.energy = 0.3f};
@@ -7195,7 +7249,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 136> k_Names {
+	constexpr std::array<std::string_view, 138> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7332,6 +7386,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "show the custom music controls",
 		    "save the game",
 		    "load the game",
+		    "script reaction",
+		    "script place",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

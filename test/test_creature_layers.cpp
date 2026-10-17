@@ -524,3 +524,18 @@ TEST(CreatureLayers, AStopOfTheDancePlaysTheFinishAtOnceOrAfterTheStart)
 	BodyAction sitting {.kind = BodyAction::Kind::Sequence, .phase = BodyAction::Phase::Loop, .animations = {37, 38, 39}};
 	EXPECT_FALSE(creature_layers::EndDance(sitting).endWanted);
 }
+
+TEST(CreatureLayers, ADroppedFaceShowsNoFaceAtOnceAndWantsNone)
+{
+	const auto pulled = creature_layers::PullFace({}, 3, 2000.0f, creature_face::Cue::None);
+	auto showing = creature_layers::AdvanceFace(pulled, 100.0f, 500U);
+	ASSERT_TRUE(showing.current.has_value());
+	const auto dropped = creature_layers::DropFace(showing);
+	EXPECT_FALSE(dropped.current.has_value());
+	EXPECT_FALSE(dropped.wanted.has_value());
+	EXPECT_FLOAT_EQ(dropped.timeMs, 0.0f);
+	// The time that the face had left stays, but no face comes back
+	EXPECT_FLOAT_EQ(dropped.remainingMs, showing.remainingMs);
+	const auto later = creature_layers::AdvanceFace(dropped, 100.0f, 500U);
+	EXPECT_FALSE(later.current.has_value());
+}

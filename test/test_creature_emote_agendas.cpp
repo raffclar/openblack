@@ -273,17 +273,27 @@ TEST(CreatureEmoteAgendas, TheRulesOfDayNightHomeAndTheHand)
 	EXPECT_TRUE(SunVisible(false));
 	EXPECT_FALSE(SunVisible(true));
 	EXPECT_TRUE(MoonVisible(true));
-	EXPECT_TRUE(NotTooFarFromHome(999.0f));
-	EXPECT_FALSE(NotTooFarFromHome(1000.0f));
-	EXPECT_FALSE(NotTooFarFromHome(std::nullopt));
-	EXPECT_TRUE(LeashedOrTooFarFromHome(true, 10.0f));
-	EXPECT_TRUE(LeashedOrTooFarFromHome(false, std::nullopt));
-	EXPECT_FALSE(LeashedOrTooFarFromHome(false, 140.0f));
-	EXPECT_TRUE(LeashedOrTooFarFromHome(false, 140.5f));
+	EXPECT_TRUE(NotTooFarFromHome(true, 999.0f));
+	EXPECT_FALSE(NotTooFarFromHome(true, 1000.0f));
+	EXPECT_FALSE(NotTooFarFromHome(true, std::nullopt));
+	EXPECT_TRUE(LeashedOrTooFarFromHome(true, true, 10.0f));
+	EXPECT_TRUE(LeashedOrTooFarFromHome(false, true, std::nullopt));
+	EXPECT_FALSE(LeashedOrTooFarFromHome(false, true, 140.0f));
+	EXPECT_TRUE(LeashedOrTooFarFromHome(false, true, 140.5f));
 	EXPECT_TRUE(PlayerNearbyAndFrightening(9.0f, -0.1f));
 	EXPECT_FALSE(PlayerNearbyAndFrightening(9.0f, 0.0f));
 	EXPECT_FALSE(PlayerNearbyAndFrightening(10.0f, -0.5f));
 	EXPECT_FALSE(PlayerNearbyAndFrightening(std::nullopt, -0.5f));
+}
+
+// With no temple of its player, a creature never sleeps at home, and it may sleep on the spot or by a thing near its home
+TEST(CreatureEmoteAgendas, WithNoTempleItIsAsIfItHadNoHome)
+{
+	EXPECT_FALSE(NotTooFarFromHome(false, 10.0f));
+	EXPECT_FALSE(NotTooFarFromHome(false, std::nullopt));
+	EXPECT_TRUE(LeashedOrTooFarFromHome(false, false, 10.0f));
+	EXPECT_TRUE(LeashedOrTooFarFromHome(false, false, 0.0f));
+	EXPECT_FALSE(LeashedOrTooFarFromHome(false, true, 0.0f));
 }
 
 TEST(CreatureEmoteAgendas, RecentlyCountsWholeSecondsAndNeverForZero)

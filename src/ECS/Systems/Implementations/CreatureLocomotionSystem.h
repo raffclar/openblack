@@ -42,9 +42,11 @@ public:
 	MoveResult Follow(entt::entity creature, entt::entity target, float distance, Pace pace) override;
 	MoveResult FleeFrom(entt::entity creature, glm::vec2 threat) override;
 	bool TurnToFace(entt::entity creature, glm::vec2 point) override;
+	bool TurnToHeading(entt::entity creature, float heading) override;
 	void Stop(entt::entity creature) override;
 	void ResetPace(entt::entity creature) override;
 	void Place(entt::entity creature, glm::vec3 position) override;
+	void PlaceWithoutWalking(entt::entity creature, glm::vec3 position) override;
 	[[nodiscard]] bool IsMoving(entt::entity creature) const override;
 	[[nodiscard]] const creature_route::WalkableLand& GetWalkableLand() override;
 	[[nodiscard]] std::vector<creature_route::Circle> ThingCirclesIn(entt::entity creature, glm::ivec2 cell) override;

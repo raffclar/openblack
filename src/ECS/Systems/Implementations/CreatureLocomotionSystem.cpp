@@ -451,7 +451,8 @@ void TurnStep(CreatureLocomotion& self, const Moves& moves, float playbackRate)
 	}
 	else
 	{
-		self.heading = locomotion::LerpHeading(move.startHeading, self.targetHeading, move.timeMs, move.durationMs);
+		// On each game turn, the heading closes the part of the gap that the turn's time before this step gives
+		self.heading = locomotion::LerpHeading(self.heading, self.targetHeading, from, move.durationMs);
 	}
 	if (move.timeMs < move.durationMs)
 	{
@@ -1114,6 +1115,37 @@ bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point
 	return true;
 }
 
+bool CreatureLocomotionSystem::TurnToHeading(entt::entity creature, float heading)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* self = registry.TryGet<CreatureLocomotion>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (self == nullptr || body == nullptr || !self->started)
+	{
+		return false;
+	}
+	ClearWalk(*self);
+	self->following.reset();
+	self->facingOnly = true;
+	self->targetHeading = locomotion::WrapAngle(heading);
+	const auto angle = locomotion::WrapAngle(self->targetHeading - self->heading);
+	const auto moves = MovesOf(body->species);
+	const auto firstSpin = locomotion::SpinSideOf(angle) == locomotion::Side::Right ? locomotion::animations::k_RightSpin
+	                                                                                : locomotion::animations::k_LeftSpin;
+	// With all three spins of the side, it plays their blend. Without them, it eases round over the stand's length.
+	const auto animations = moves.HasAll(firstSpin) ? std::optional(locomotion::PairFor(firstSpin, angle)) : std::nullopt;
+	self->motion = Motion::Turning;
+	self->move =
+	    CreatureLocomotion::Move {.animations = animations,
+	                              .timeMs = 0.0f,
+	                              .durationMs = animations.has_value() ? moves.PairDuration(*animations)
+	                                                                   : moves.Duration(locomotion::animations::k_Stand),
+	                              .displacement = glm::vec2(0.0f),
+	                              .startHeading = self->heading,
+	                              .startRouteHeading = self->heading};
+	return true;
+}
+
 void CreatureLocomotionSystem::Place(entt::entity creature, glm::vec3 position)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1126,6 +1158,26 @@ void CreatureLocomotionSystem::Place(entt::entity creature, glm::vec3 position)
 	{
 		transform->position = position;
 		registry.SetDirty();
+	}
+}
+
+void CreatureLocomotionSystem::PlaceWithoutWalking(entt::entity creature, glm::vec3 position)
+{
+	Place(creature, position);
+	auto& registry = Locator::entitiesRegistry::value();
+	// The route starts again at the new place, and the walk or turn stops. A walk step of the plan is then complete.
+	if (auto* self = registry.TryGet<CreatureLocomotion>(creature))
+	{
+		ClearWalk(*self);
+	}
+	// The body stands, no face shows, and the head looks straight ahead at nothing
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+	{
+		animation->body = {};
+		animation->face = creature_layers::DropFace(animation->face);
+		animation->lookAt.reset();
+		animation->yaw = {};
+		animation->pitch = {};
 	}
 }
 

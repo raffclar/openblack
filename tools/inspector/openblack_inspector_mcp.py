@@ -534,6 +534,21 @@ TOOLS = [
         "params": ["id", "top"],
     },
     {
+        "name": "creature_reactions",
+        "description": "Whether a creature takes notice of reactions. A creature a script makes takes no notice: it "
+                       "reacts to nothing near it and catches nothing.",
+        "inputSchema": schema({"id": {"type": "integer"}}),
+        "query": "creature.reactions",
+        "params": ["id"],
+    },
+    {
+        "name": "creature_set_reactions",
+        "description": "Debug tool: makes a creature take notice of reactions (notice true) or not (false).",
+        "inputSchema": schema({"id": {"type": "integer"}, "notice": {"type": "boolean"}}, ["notice"]),
+        "query": "creature.set_reactions",
+        "params": ["id", "notice"],
+    },
+    {
         "name": "creature_plan",
         "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps.",
         "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}),

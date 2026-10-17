@@ -261,6 +261,43 @@ void AddCreatureCatch(std::vector<Scenario>& all)
 	});
 }
 
+void AddCreatureIgnoringReactions(std::vector<Scenario>& all)
+{
+	// The second tiger stands 40 units east of the first
+	constexpr glm::vec2 k_Apart {40.0f, 0.0f};
+	all.push_back({
+	    .id = "physics.creature_ignoring_reactions_catches_nothing",
+	    .name = "A creature that takes no notice of reactions",
+	    .facet = Facet::Physics,
+	    .description = "Two tigers stand side by side. A script tells the east tiger to take no notice of reactions, as "
+	                   "every creature that a script makes starts. This includes the creature that the player picks in "
+	                   "the glade on the first land. A villager is thrown straight at each tiger every ten seconds.",
+	    .expected = "The west tiger turns to each villager and catches it in its hand. The east tiger does not turn to "
+	                "its villagers and does not catch them: they fly past it or land at its feet.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = glm::vec3(k_Field.x + 20.0f, 22.0f, k_Field.y - 62.0f),
+	                .look = glm::vec3(k_Field.x + 20.0f, 9.0f, k_Field.y + 6.0f)},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Field, .facingDegrees = 180.0f},
+	                  {.species = CreatureType::Tiger, .offset = k_Field + k_Apart, .facingDegrees = 180.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = k_Field + glm::vec2 {-10.0f, 34.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_Field + k_Apart + glm::vec2 {-10.0f, 34.0f}}},
+	    .commands = {{.kind = Command::Kind::ScriptReaction, .creature = 1, .delaySeconds = 0.0f, .value = 0}},
+	    .throws = {{.object = 0,
+	                .from = k_Field + glm::vec2 {0.0f, 20.0f},
+	                .height = 14.0f,
+	                .velocity = {0.0f, 4.0f, -22.0f},
+	                .delaySeconds = 3.0f,
+	                .repeatSeconds = 10.0f},
+	               {.object = 1,
+	                .from = k_Field + k_Apart + glm::vec2 {0.0f, 20.0f},
+	                .height = 14.0f,
+	                .velocity = {0.0f, 4.0f, -22.0f},
+	                .delaySeconds = 3.0f,
+	                .repeatSeconds = 10.0f}},
+	});
+}
+
 void AddSinking(std::vector<Scenario>& all)
 {
 	// One of each kind the physics treats differently in the water, dropped side by side into the lake's open water
@@ -355,6 +392,7 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddRockSplit(all);
 	AddCreatureHit(all);
 	AddCreatureCatch(all);
+	AddCreatureIgnoringReactions(all);
 	AddSinking(all);
 	AddTempleStruck(all);
 }

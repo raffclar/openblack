@@ -195,6 +195,8 @@ void CreatureMindSystem::StepEmergencies(entt::entity creature, const Creature& 
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} goes to put out the fire on {}", entt::to_integral(creature),
 	                    entt::to_integral(*burning));
+	// It comes across the burning building and its town, so the plan has them as they are now
+	ComeAcrossWithWhole(creature, mind, *burning);
 	ForceActivity(creature, {.desire = Desire::Compassion,
 	                         .activityObject = BelongsTo(*burning),
 	                         .action = k_PutOutFireAction,

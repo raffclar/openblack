@@ -59,12 +59,19 @@ struct Belief
 	uint64_t order {0};
 	/// The game turn on which the creature last found no way to the thing, none if it never did
 	std::optional<uint32_t> blockedTurn;
-	/// What the creature knew of the thing when the belief was new. Some attributes keep these values (see
-	/// creature_tree::KeptFromFirstSight).
-	std::optional<creature_tree::Belief> firstSight;
+	/// The attributes of the thing as the creature last took them in. The decision trees test these values, not the
+	/// thing as it is now. None until the creature takes in the thing.
+	std::optional<creature_tree::Belief> attributes;
 	/// The game turn on which seeing the thing last stirred the creature's desire sources
 	uint32_t sourcesTurn {0};
 };
+
+/// Whether the belief about a thing of a kind takes in the thing again each time the creature comes across it. A belief
+/// about a building does not: it keeps the attributes of the first sight, and the sight stirs no desire.
+[[nodiscard]] bool TakesInAgain(uint32_t kind);
+/// The creature takes in what it finds of the thing now. A new belief takes all the attributes. A belief that the
+/// creature has already takes only the attributes that change with the thing, if its kind takes in the thing again.
+void TakeIn(Belief& belief, bool isNew, const creature_tree::Belief& now);
 
 /// After the creature finds no way to a thing, it does not choose the thing for a time: 10 seconds for a thing that
 /// moves, 60 seconds for a thing that is fixed in the land (a building, a tree), at 10 game turns each second

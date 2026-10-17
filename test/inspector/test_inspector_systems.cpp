@@ -24,6 +24,7 @@
 #include <ECS/Components/Abode.h>
 #include <ECS/Components/AudioEmitter.h>
 #include <ECS/Components/CreatureMind.h>
+#include <ECS/Components/LivingReaction.h>
 #include <ECS/Components/Mesh.h>
 #include <ECS/Components/Physics.h>
 #include <ECS/Components/SoundTag.h>
@@ -31,6 +32,7 @@
 #include <ECS/Components/Transform.h>
 #include <ECS/Components/Tree.h>
 #include <ECS/Components/VillageTotem.h>
+#include <ECS/CreatureReactionNotice.h>
 #include <ECS/Map.h>
 #include <ECS/Registry.h>
 #include <Inspector.h>
@@ -489,4 +491,31 @@ TEST(InspectorEntities, PositionsAreWhereThingsAreDrawn)
 	const auto stood = FindEntities(registry, nullptr, Json::object(), nearStand);
 	ASSERT_EQ(stood.value.size(), 1u);
 	EXPECT_EQ(stood.value[0]["id"], ToId(standing));
+}
+
+// A debug tool shows whether a creature takes notice of reactions and sets it
+TEST(InspectorCreature, ReactionsAreShownAndSetForDebugging)
+{
+	ecs::Registry registry;
+	const auto creature = Placed(registry, glm::vec3(0.0f));
+	registry.Assign<CreatureMindState>(creature);
+	ecs::creature_reaction_notice::SetTakesNotice(registry, creature, false);
+
+	Inspector inspector;
+	inspector.Add(MakeCreatureProvider({.world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
+	                                              .info = []() -> const InfoConstants* { return nullptr; }},
+	                                    .tables = []() -> const creature_mind_tables::Tables* { return nullptr; },
+	                                    .setReactionNotice =
+	                                        [&registry](entt::entity entity, bool notice) {
+		                                        ecs::creature_reaction_notice::SetTakesNotice(registry, entity, notice);
+	                                        }}));
+
+	EXPECT_EQ(Ask(inspector, R"({"query": "creature.reactions"})")["notice"], false);
+	const auto set = Ask(inspector, R"({"query": "creature.set_reactions", "params": {"notice": true}})");
+	EXPECT_EQ(set["notice"], true);
+	EXPECT_FALSE(registry.AllOf<ecs::components::CreatureReactionsOff>(creature));
+	EXPECT_EQ(Ask(inspector, R"({"query": "creature.set_reactions", "params": {"notice": false}})")["notice"], false);
+	EXPECT_TRUE(registry.AllOf<ecs::components::CreatureReactionsOff>(creature));
+	// Without a notice it sets nothing
+	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.set_reactions"})").Ok());
 }

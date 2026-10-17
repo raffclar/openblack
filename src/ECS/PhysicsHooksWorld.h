@@ -150,6 +150,9 @@ public:
 	/// Whether creatures act on objects at all, and whether a flying thing is one they may catch
 	[[nodiscard]] virtual bool HasCreatureActions() const = 0;
 	[[nodiscard]] virtual bool CanBeCaught(entt::entity object) const = 0;
+	/// Whether a creature may catch a flying thing: when it may take up a reaction now, or when a desire was made its
+	/// only desire. A creature that takes no notice of reactions catches nothing.
+	[[nodiscard]] virtual bool FreeToCatch(entt::entity creature) const = 0;
 	/// A creature's action catches a thing, with no mind to choose it
 	virtual void Catch(entt::entity creature, entt::entity object) = 0;
 	/// The creature stops where it is, and the action that its body plays continues at two times the usual speed

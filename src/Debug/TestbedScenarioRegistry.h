@@ -802,6 +802,12 @@ struct Command
 		SaveGame,
 		/// The game loads the creatures of the slot (value) into the land, as a load of the slot does. Needs no creature
 		LoadGame,
+		/// A script tells the creature to take notice of reactions (value 1) or to take no notice (value 0), as
+		/// a script's "enable ... reaction" and "disable ... reaction" do
+		ScriptReaction,
+		/// A script puts the creature at the point at once (from the middle of the map), as SET_POSITION does. Its walk,
+		/// body action, face and head look stop there.
+		ScriptPlace,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
