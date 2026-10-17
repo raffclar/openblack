@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/Seabed.h"
+#include "Graphics/CloudLightning.h"
 #include "Graphics/Underwater.h"
 
 namespace openblack::ecs::systems
@@ -88,6 +89,8 @@ public:
 	/// How brightly the lightning lights the sea now, 0 to 1: x the flash of the sky over the camera, y the light of the
 	/// bolt where it struck
 	[[nodiscard]] virtual glm::vec2 GetSeaFlash() const = 0;
+	/// The flashes of the storms' lightning that light the clouds from inside now
+	[[nodiscard]] virtual std::span<const graphics::cloud_lightning::FlashEvent> GetCloudFlashes() const = 0;
 	/// The sea's currents now (see underwater::CurrentAt)
 	[[nodiscard]] virtual const graphics::underwater::CurrentState& GetCurrent() const = 0;
 	/// A number that changes each time the sea bed is made again

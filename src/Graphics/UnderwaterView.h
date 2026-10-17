@@ -204,8 +204,9 @@ struct UnderwaterUniforms
 	/// The rogue wave (see underwater::RogueUniform), zero when there is none or it is turned off
 	std::array<glm::vec4, 2> rogue {};
 	/// The lightning on the sea: [0] xyz where it struck, w the light of its bolt; [1] x the flash of the sky, y the time
-	/// since it struck, z its strength where it hit the sea, w 1 while it shows
-	std::array<glm::vec4, 2> strike {};
+	/// since it struck, z its strength where it hit the sea, w 1 while it shows; [2] xyz the middle of the brightest
+	/// flash inside the clouds, w its light
+	std::array<glm::vec4, 3> strike {};
 	/// Whether the motes show
 	bool motes {true};
 	/// Whether the eye is under the surface, or near enough to it that the surface can cut the view

@@ -820,8 +820,9 @@ uniform vec4 u_uwRogue[2];
 
 // The lightning on the sea (see underwater::SeaStrike). [0] xyz: where it struck, on the sea's level, w: how bright its
 // bolt is now, 0 to 1; [1] x: how bright the flash of the sky over the camera is, 0 to 1, y: the time since it struck,
-// in seconds, z: how strong the strike was where it hit the sea (0 where it did not), w: 1 while it shows
-uniform vec4 u_uwStrike[2];
+// in seconds, z: how strong the strike was where it hit the sea (0 where it did not), w: 1 while it shows; [2] xyz: the
+// middle of the brightest flash inside the clouds, w: its light now (see cloud_lightning::LightFor)
+uniform vec4 u_uwStrike[3];
 // The colour of the light of the lightning
 #define UW_FLASH_COLOUR vec3(0.82f, 0.88f, 1.0f)
 

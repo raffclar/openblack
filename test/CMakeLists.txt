@@ -1088,3 +1088,5 @@ openblack_setup_and_add_test(test_atmosphere graphics/test_atmosphere.cpp)
 openblack_setup_and_add_test(test_global_illumination graphics/test_global_illumination.cpp)
 # EXPERIMENT (not for merge): the jellyfish in the deep water
 openblack_setup_and_add_test(test_underwater_jellyfish graphics/test_underwater_jellyfish.cpp)
+# EXPERIMENT (not for merge): the lightning inside the volumetric clouds
+openblack_setup_and_add_test(test_cloud_lightning graphics/test_cloud_lightning.cpp)

@@ -300,10 +300,21 @@ void UnderwaterSystem::UpdateStorm(float frameSeconds, const std::function<float
 	std::optional<underwater::StrikeFlash> flash;
 	float bolt = 0.0f;
 	float sky = 0.0f;
+	std::vector<graphics::cloud_lightning::Strike> strikes;
 	if (Locator::weatherSystem::has_value() && Locator::entitiesRegistry::has_value())
 	{
 		Locator::entitiesRegistry::value().Each<const ecs::components::Storm>([&](const ecs::components::Storm& storm) {
-			if (storm.dead || !storm.flash.active || (flash.has_value() && flash->time <= storm.flash.time))
+			if (storm.dead || !storm.flash.active)
+			{
+				return;
+			}
+			// Each flash of each storm also lights the clouds from inside
+			strikes.push_back({.position = {storm.flash.position.x, storm.flash.position.z},
+			                   .time = storm.flash.time,
+			                   .strength = storm.flash.strength,
+			                   .stormCentre = {storm.position.x, storm.position.z},
+			                   .stormRadius = storm.innerRadius});
+			if (flash.has_value() && flash->time <= storm.flash.time)
 			{
 				return;
 			}
@@ -321,6 +332,7 @@ void UnderwaterSystem::UpdateStorm(float frameSeconds, const std::function<float
 	}
 	_strike = underwater::TrackStrike(_strike, flash, frameSeconds, flash.has_value() ? seaDistance(flash->position) : 0.0f);
 	_seaFlash = {sky, bolt};
+	_cloudFlashes = graphics::cloud_lightning::TrackFlashes(_cloudFlashes, strikes, frameSeconds);
 }
 
 bool UnderwaterSystem::Floats(const glm::vec3& origin) const
