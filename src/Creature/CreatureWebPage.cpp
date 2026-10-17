@@ -270,9 +270,93 @@ std::vector<creaturehtml::Value> creature_web_page::PageValues(const PageFacts& 
 	{
 		values.push_back({fmt::format("beliefs_{}", kind), fmt::format("{}", facts.beliefs.at(kind))});
 	}
+	if (facts.spellOn.has_value())
+	{
+		values.push_back({fmt::format("spell_received_{}", k_FirstSpellText + *facts.spellOn), "1"});
+	}
 	values.push_back(
 	    {"how_nice_player_has_been", fmt::format("{}", static_cast<int32_t>(k_FirstNicenessText) + facts.niceness)});
 	values.push_back({"how_much_attention_player_has_given_me",
 	                  fmt::format("{}", static_cast<int32_t>(k_FirstAttentionText) + facts.attention)});
 	return values;
+}
+
+std::vector<uint8_t> creature_web_page::PackValues(std::span<const creaturehtml::Value> values)
+{
+	constexpr size_t k_FieldSize = k_PackedValueSize / 2;
+	std::vector<uint8_t> packed(values.size() * k_PackedValueSize, 0);
+	auto at = packed.begin();
+	const auto put = [](std::vector<uint8_t>::iterator field, std::string_view text) {
+		// The last byte of the field stays zero
+		std::ranges::copy(text.substr(0, std::min(text.size(), k_FieldSize - 1)), field);
+	};
+	for (const auto& value : std::views::reverse(values))
+	{
+		put(at, value.name);
+		put(at + k_FieldSize, value.value);
+		at += k_PackedValueSize;
+	}
+	return packed;
+}
+
+std::string creature_web_page::PictureBlockName(uint32_t slot)
+{
+	return fmt::format("_{}.jpg", slot);
+}
+
+lhp::Package creature_web_page::UploadPackage(std::span<const creaturehtml::Value> values,
+                                              std::span<const std::optional<std::vector<uint8_t>>> pictures, uint16_t stamp)
+{
+	lhp::Package package {.stamp = stamp};
+	package.blocks.push_back({
+	    .category = std::string(k_ValuesCategory),
+	    .name = std::string(k_ValuesName),
+	    .data = PackValues(values),
+	});
+	for (size_t slot = 0; slot < pictures.size(); ++slot)
+	{
+		if (pictures[slot].has_value())
+		{
+			package.blocks.push_back({
+			    .category = std::string(k_PicturesCategory),
+			    .name = PictureBlockName(static_cast<uint32_t>(slot)),
+			    .data = *pictures[slot],
+			});
+		}
+	}
+	return package;
+}
+
+std::string creature_web_page::FolderUrl(const std::filesystem::path& folder)
+{
+	const auto text = folder.generic_u8string();
+	std::string url = !text.empty() && text.front() == u8'/' ? "file://" : "file:///";
+	for (const auto unit : text)
+	{
+		const auto byte = static_cast<uint8_t>(unit);
+		const bool plain = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') ||
+		                   std::string_view("-._~/:").find(static_cast<char>(byte)) != std::string_view::npos;
+		url += plain ? std::string(1, static_cast<char>(byte)) : fmt::format("%{:02X}", byte);
+	}
+	if (url.back() != '/')
+	{
+		url += '/';
+	}
+	return url;
+}
+
+std::string creature_web_page::PointLinksAtGameFolder(std::string_view page, const std::filesystem::path& gameFolder)
+{
+	const auto url = FolderUrl(gameFolder);
+	std::string result;
+	result.reserve(page.size());
+	size_t from = 0;
+	for (auto at = page.find(k_GameFolderLink); at != std::string_view::npos; at = page.find(k_GameFolderLink, from))
+	{
+		result.append(page.substr(from, at - from));
+		result.append(url);
+		from = at + k_GameFolderLink.size();
+	}
+	result.append(page.substr(from));
+	return result;
 }

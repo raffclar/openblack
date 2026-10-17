@@ -1133,7 +1133,7 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_draw_window graphics/test_draw_window.cpp)
 openblack_setup_and_add_test(test_creature_web_page test_creature_web_page.cpp)
-target_link_libraries(test_creature_web_page PRIVATE creaturehtml)
+target_link_libraries(test_creature_web_page PRIVATE creaturehtml lhp)
 openblack_setup_and_add_test(test_oracle_catch oracle/test_oracle_catch.cpp)
 openblack_setup_and_add_test(test_oracle_sigmoid oracle/test_oracle_sigmoid.cpp)
 openblack_setup_and_add_test(
@@ -1206,3 +1206,5 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_glm_order_2 test_glm_order_2.cpp)
 openblack_setup_and_add_test(test_glm_order_3 test_glm_order_3.cpp)
+openblack_setup_and_add_test(test_lhp_file test_lhp_file.cpp)
+target_link_libraries(test_lhp_file PRIVATE lhp)
