@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <span>
@@ -162,6 +163,9 @@ public:
 	/// Once a frame, by the frame's game time (none while the game is paused): the trails' sheets of light move on, and
 	/// the chain behind the hand steps
 	virtual void UpdateFrame(float gameSeconds, const HandFrame& hand) = 0;
+	/// Once a frame, by the frame's real and game time: the textures of the ribbons that show slide along them. They step
+	/// no more often than 60 times a second, and each step takes all the game time since the last.
+	virtual void ScrollChains(std::chrono::milliseconds /*frameRealTime*/, std::chrono::milliseconds /*frameGameTime*/) {}
 	/// The effect stops making particles and fades out as its file has it, or goes at once
 	virtual void CloseDown(EffectId id) = 0;
 	virtual void Delete(EffectId id) = 0;

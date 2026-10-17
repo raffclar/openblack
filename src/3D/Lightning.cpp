@@ -44,7 +44,7 @@ float Brightness(const Flash& flash)
 		return 0.0f;
 	}
 	float brightness = 1.0f - flash.time;
-	if (flash.time < 0.5f && flash.time > 0.1f)
+	if (flash.time < 0.5f && flash.time > 0.2f)
 	{
 		brightness = 0.1f;
 	}
@@ -59,7 +59,7 @@ float GlowStrength(const Flash& flash)
 	}
 	const float fade = 1.0f - flash.time;
 	float glow = fade * fade * fade;
-	if (flash.time < 0.5f && flash.time > 0.1f)
+	if (flash.time < 0.5f && flash.time > 0.2f)
 	{
 		glow = 0.1f;
 	}

@@ -28,8 +28,9 @@ TEST(Lightning, FlashFlickersAsItFades)
 		brightnesses.push_back(lightning::Brightness(flash));
 	}
 	EXPECT_NEAR(brightnesses[0], 0.9f, 1e-6f);
-	// Down to a tenth for a while, then back up and fading out
-	EXPECT_NEAR(brightnesses[1], 0.1f, 1e-6f);
+	// Still fading at 0.2 s, then down to a tenth after 0.2 s and before 0.5 s, then back up and fading out
+	EXPECT_NEAR(brightnesses[1], 0.8f, 1e-6f);
+	EXPECT_NEAR(brightnesses[2], 0.1f, 1e-6f);
 	EXPECT_NEAR(brightnesses[3], 0.1f, 1e-6f);
 	EXPECT_NEAR(brightnesses[4], 0.5f, 1e-6f);
 	EXPECT_NEAR(brightnesses[6], 0.3f, 1e-6f);

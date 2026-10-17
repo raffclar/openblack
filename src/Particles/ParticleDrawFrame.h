@@ -48,31 +48,31 @@ struct Material
 	[[nodiscard]] bool operator==(const Material& other) const = default;
 };
 
-/// One corner of a ribbon. Where it lies depends on where the camera is, so the vertex shader works it out: the joint
-/// moved to one side of the segment as seen from the camera, by the joint's half width. Where two segments meet, their
-/// corners there meet half way.
+/// One corner of a ribbon as it is drawn. Where it lies depends on where the camera is, so each pass places it again
+/// from the ribbon's joints before the pass draws it.
 struct ChainVertex
 {
-	/// The joint, and its half width signed by the side the corner is on
-	glm::vec4 joint;
-	/// The segment's other joint
-	glm::vec3 other;
-	/// The other joint of the neighbouring segment that shares this joint; the joint itself when there is none
-	glm::vec3 adjacent;
+	glm::vec3 position;
 	glm::vec2 uv;
 	/// Its colour and alpha, as bytes from the lowest: red, green, blue, alpha
 	uint32_t abgr;
-	/// x: 1 at the segment's first joint, -1 at its next. y: 1 when a neighbouring segment shares the joint.
-	glm::vec2 flags;
 };
-static_assert(sizeof(ChainVertex) == 60);
+static_assert(sizeof(ChainVertex) == 24);
 
-/// The corners of a ribbon, in its chain's vertices: four to each segment
+/// One joint of a ribbon: where it is and half the ribbon's width there
+struct ChainJoint
+{
+	glm::vec3 position;
+	float halfWidth;
+};
+
+/// The corners of a ribbon, in its chain's vertices: four to each segment; and its joints, one more than its segments
 struct ChainDraw
 {
 	uint32_t material;
 	uint32_t firstVertex;
 	uint32_t segments;
+	uint32_t firstJoint;
 };
 
 /// A model drawn for an atom
@@ -212,6 +212,7 @@ struct Frame
 	/// Each sprite's material
 	std::vector<uint32_t> spriteMaterials;
 	std::vector<ChainVertex> chainVertices;
+	std::vector<ChainJoint> chainJoints;
 	std::vector<ChainDraw> chains;
 	std::vector<MeshDraw> meshes;
 	std::vector<MistDraw> mists;
@@ -312,12 +313,14 @@ struct PlayerSymbol
 /// Adds a player's symbol to the frame, its three sprites drawn together at its place among what blends
 void AddPlayerSymbol(Frame& frame, const PlayerSymbol& symbol, const Sources& sources);
 
-/// The corners of a ribbon through its joints, four to a segment, its texture coordinates from its creator, slid along it
-/// by a scroll in sheet heights
-void AppendChain(std::vector<ChainVertex>& out, const Creator& creator, std::span<const Effect::DrawAtom> joints,
-                 int textureRepeats = -1, float textureScroll = 0.0f);
-/// Where a ribbon's corner lies seen from a point, as the vertex shader places it
-[[nodiscard]] glm::vec3 ChainCorner(const ChainVertex& vertex, const glm::vec3& eye);
+/// The corners of a ribbon through its joints, four to a segment, with their texture coordinates from its creator, slid
+/// along it by a scroll in sheet heights, and their colours; and its joints, which place the corners for each pass
+void AppendChain(std::vector<ChainVertex>& out, std::vector<ChainJoint>& outJoints, const Creator& creator,
+                 std::span<const Effect::DrawAtom> joints, int textureRepeats = -1, float textureScroll = 0.0f);
+/// Places a ribbon's corners as seen from a point, four to a segment: each joint of a segment moved to either side of it,
+/// square to the segment and to the line to the eye, by its half width; then where two segments meet, each pair of
+/// their corners there moved to half way between them. Each step is in floats, in the game's order.
+void PlaceChainCorners(std::span<ChainVertex> corners, std::span<const ChainJoint> joints, const glm::vec3& eye);
 
 /// One draw: a run of sprites that share a material, or one ribbon, model or mist
 struct Command

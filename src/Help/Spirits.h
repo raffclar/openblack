@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <bit>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -49,6 +50,9 @@ constexpr int k_GoodDude = 0;
 constexpr int k_EvilDude = 1;
 constexpr size_t k_AnimSlots = 80; ///< The size of the anim name table
 constexpr size_t k_Zones = 6;      ///< The hover zones the dude feels
+/// The two advisors move apart in depth when the square of their distance on the screen is less than this. It is the
+/// float one step above 0.81.
+constexpr float k_PartnerCloseSquared = std::bit_cast<float>(0x3F4F5C2Au);
 
 /// The anim indices AdvisorSpirit uses by number
 namespace anim

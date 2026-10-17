@@ -1282,7 +1282,7 @@ void AdvisorSpirit::UpdateDepthSpacing(float zMin)
 		const float d = std::sqrt(d2);
 		_partnerDistance = d;
 		partner->_partnerDistance = d;
-		if (d2 < 0.81f)
+		if (d2 < k_PartnerCloseSquared)
 		{
 			const float k = d * 1.1111110f;
 			const float v = 1.0f - k * k;
