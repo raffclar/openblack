@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <numbers>
 #include <vector>
 
 #include <LNDFile.h>
@@ -193,11 +194,21 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	const glm::vec3 airLight = atmos::LightAtGround(towardsLight.y, air);
 	const float brightness = atmos::Luminance(volumetric_clouds::SunThroughAir(towardsLight.y));
 	atmosphere.lightTint = airLight * (brightness / std::max(atmos::Luminance(airLight), 1e-4f));
+	// The same light in the colours of the screen. Its strongest colour stays as strong, so a low sun stays bright.
+	const glm::vec3 airLightOnScreen = atmos::OnScreen(airLight);
+	const float peak = std::max({atmosphere.lightTint.r, atmosphere.lightTint.g, atmosphere.lightTint.b});
+	const float peakOnScreen = std::max({airLightOnScreen.r, airLightOnScreen.g, airLightOnScreen.b, 1e-4f});
+	atmosphere.lightTintOnScreen = airLightOnScreen * (peak / peakOnScreen);
 	atmosphere.lightAtGround = atmos::LightAtGround(towardsLight.y, air);
 	// The game's own sun or moon in the sky, for its glare and for the light through the leaves
 	atmosphere.sunDisc = {gameLight, frame.lightColour.w * glm::mix(1.0f, 0.35f, frame.light.w)};
 	atmosphere.sunColour = {glm::vec3(frame.lightColour) * atmosphere.lightTint, 0.0f};
 	atmosphere.sky = cache.sky;
+	// The sky's light from above: the mean of the air's upper sky in the colours that the dome shows. It is blue by day
+	// and blue-grey at dusk, because the sky high up does not have the red of the horizon.
+	constexpr glm::vec3 k_Up {0.0f, 1.0f, 0.0f};
+	atmosphere.skyFromAbove = atmos::DimSkyColour(
+	    gi::ShIrradiance(cache.sky, k_Up) / std::numbers::pi_v<float> * glm::vec3(atmosphere.sun), atmosphere.sunHeight);
 	// The sky's dome: its middle across the land, its half width and its height. The shaders take it as a half ball
 	// of this size; a point near its skin is on the dome (sky_dome.sh)
 	if (Locator::skySystem::has_value())
