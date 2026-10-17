@@ -60,6 +60,24 @@ struct MenuCreature
 	glm::vec2 viewSize {0.0f};
 };
 
+/// The player's creature in the falling spell's film: a copy posed at the world's origin. The film's camera sees it
+/// over the film's picture on the window. The film's light shades its colour. The renderer then adds a second colour
+/// after its texture.
+struct FilmCreature
+{
+	entt::entity copy {entt::null};
+	glm::mat4 view {1.0f};
+	glm::mat4 projection {1.0f};
+	/// Where the film's picture is on the window, in pixels: its top left corner and its size
+	glm::vec2 viewOrigin {0.0f};
+	glm::vec2 viewSize {0.0f};
+	/// Where the light is that shades it
+	glm::vec3 light {0.0f};
+	/// The colour that the light shades, 0 to 255, and the colour added after its texture, 0 to 1
+	glm::vec3 colour {0.0f};
+	glm::vec3 added {0.0f};
+};
+
 /// The size of the interface's space, which the creatures are placed and sized in as the game placed them on its
 /// default screen
 constexpr glm::vec2 k_Space {800.0f, 600.0f};

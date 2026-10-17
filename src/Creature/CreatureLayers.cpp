@@ -284,6 +284,10 @@ BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std
 	{
 		return body;
 	}
+	if (body.realTime)
+	{
+		milliseconds = realMilliseconds.value_or(milliseconds);
+	}
 	if (body.hurried)
 	{
 		milliseconds *= k_HurriedRate;

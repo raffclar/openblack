@@ -643,6 +643,10 @@ Renderer::~Renderer() noexcept
 	{
 		bgfx::destroy(toBgfx(*_menuCreatureInstance));
 	}
+	if (_filmCreatureInstance.has_value())
+	{
+		bgfx::destroy(toBgfx(*_filmCreatureInstance));
+	}
 	for (auto& query : _glareQueries)
 	{
 		if (bgfx::isValid(query))
@@ -2007,6 +2011,13 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components
 	submitDesc.groundShadows = false;
 	submitDesc.sortDepth = bodyDesc.sortDepth;
 	submitDesc.modelLight = bodyDesc.modelLight;
+	// A body that has colours of its own alone, and no light of the land, gives its eyes the same colours
+	if (!bodyDesc.landLightAndHaze)
+	{
+		submitDesc.landLightAndHaze = false;
+		submitDesc.objectLook = bodyDesc.objectLook;
+		submitDesc.alwaysLit = bodyDesc.alwaysLit;
+	}
 	auto tint = glm::vec4(bodyDesc.tint.r, bodyDesc.tint.g, bodyDesc.tint.b, 0.0f);
 	// Frozen, each piece takes the body's freeze: its light tinted towards the icy colour and a sheen of ice over it
 	if (freeze > 0.0f)

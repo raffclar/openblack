@@ -19,6 +19,7 @@
 #include <utility>
 
 #include <BinkFile.h>
+#include <CM2File.h>
 #include <DanceFile.h>
 #include <DanceShapeFile.h>
 #include <EDTFile.h>
@@ -850,6 +851,17 @@ CameraPathLoader::result_type CameraPathLoader::operator()(FromDiskTag, const st
 	}
 
 	return cameraPath;
+}
+
+FilmCameraPathLoader::result_type FilmCameraPathLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	const auto bytes = Locator::filesystem::value().ReadAll(path);
+	const auto file = cam::ReadCM2(bytes);
+	if (!file.has_value())
+	{
+		throw std::runtime_error("Unable to load film camera path");
+	}
+	return std::make_shared<FilmCameraPath>(*file);
 }
 
 CameraEditLoader::result_type CameraEditLoader::operator()(FromDiskTag, const std::filesystem::path& path) const

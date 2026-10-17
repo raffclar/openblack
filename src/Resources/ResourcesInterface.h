@@ -32,6 +32,7 @@ using CreatureSkinArtManager = ResourceManager<CreatureSkinArtLoader>;
 using SoundManager = ResourceManager<SoundLoader>;
 using GlowManager = ResourceManager<LightLoader>;
 using CameraPathManager = ResourceManager<CameraPathLoader>;
+using FilmCameraPathManager = ResourceManager<FilmCameraPathLoader>;
 using CameraEditManager = ResourceManager<CameraEditLoader>;
 using CameraZoneManager = ResourceManager<CameraZoneLoader>;
 using DanceFileManager = ResourceManager<DanceFileLoader>;
@@ -66,6 +67,8 @@ public:
 	virtual SoundManager& GetSounds() = 0;
 	virtual GlowManager& GetGlows() = 0;
 	virtual CameraPathManager& GetCameraPaths() = 0;
+	/// The films' camera paths, by their file names
+	virtual FilmCameraPathManager& GetFilmCameraPaths() = 0;
 	/// The scripts' numbered cameras and tracks, by camera_edits::k_FileId
 	virtual CameraEditManager& GetCameraEdits() = 0;
 	/// The lands' camera zones, by their file names

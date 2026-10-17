@@ -319,6 +319,9 @@ public:
 	/// The creature that the main menu's tattoo editor shows. The game asks for it each frame that the editor shows it,
 	/// and the next frame of the scene draws it.
 	virtual void ShowMenuCreature(interface_creatures::MenuCreature creature) noexcept = 0;
+	/// Draws the player's creature in the falling spell's film over the film's picture, in place of the scene, which the
+	/// film hides. The game calls this each frame that the film shows the creature.
+	virtual void DrawFilmCreature(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& creature) const = 0;
 };
 
 } // namespace openblack::graphics

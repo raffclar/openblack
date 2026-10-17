@@ -137,6 +137,7 @@ class CreatureModeSystemInterface;
 class CreatureCaveSystemInterface;
 class TattooEditorSystemInterface;
 class TattooMenuSystemInterface;
+class FilmCreatureSystemInterface;
 class CinematicDirectorSystemInterface;
 class ScriptControlSystemInterface;
 class DialogueControlSystemInterface;
@@ -308,6 +309,7 @@ struct Locator
 	using creatureCaveSystem = entt::locator<ecs::systems::CreatureCaveSystemInterface>;
 	using tattooEditorSystem = entt::locator<ecs::systems::TattooEditorSystemInterface>;
 	using tattooMenuSystem = entt::locator<ecs::systems::TattooMenuSystemInterface>;
+	using filmCreatureSystem = entt::locator<ecs::systems::FilmCreatureSystemInterface>;
 	using cinematicDirectorSystem = entt::locator<ecs::systems::CinematicDirectorSystemInterface>;
 	using scriptControlSystem = entt::locator<ecs::systems::ScriptControlSystemInterface>;
 	using dialogueControlSystem = entt::locator<ecs::systems::DialogueControlSystemInterface>;
