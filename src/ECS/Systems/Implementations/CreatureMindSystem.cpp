@@ -3241,18 +3241,19 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	{
 		return false;
 	}
+	const auto priority = forced.unforcedPriority.value_or(creature_planner::k_ForcedScore);
 	mind->planner.current = creature_planner::Plan {
 	    .desire = forced.desire,
 	    .action = *action,
 	    .object = actionObject,
-	    .goalUsefulness = creature_planner::k_ForcedScore,
-	    .actionPriority = creature_planner::k_ForcedScore,
-	    .priority = creature_planner::k_ForcedScore,
+	    .goalUsefulness = priority,
+	    .actionPriority = priority,
+	    .priority = priority,
 	    .activityObject = toNumber(forced.activityObject),
 	    .instrument = situation.instrument,
 	};
 	mind->planActive = true;
-	mind->planForced = true;
+	mind->planForced = !forced.unforcedPriority.has_value();
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
 	mind->satisfiedByEffect = false;

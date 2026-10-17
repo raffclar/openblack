@@ -5134,6 +5134,26 @@ void AddCombat(std::vector<Scenario>& all)
 	                 Act(Kind::KnockOut, 0, 1.0f, true)},
 	});
 
+	{
+		constexpr float k_HurtLife = 0.3f;
+		auto hurt = Fighter({0.0f, 0.0f}, 0.0f, "hurt", PlayerNames::PLAYER_ONE, 0.5f, 0.0f);
+		hurt.hold = false;
+		hurt.needs.life = k_HurtLife;
+		all.push_back({
+		    .id = "combat.knocked_out_no_emergency",
+		    .name = "Knocked out, a hurt creature has no emergency until it gets up",
+		    .facet = Facet::Combat,
+		    .description = "A hurt tiger, life 0.3, is knocked out at once, as a fight's loser is. A life below 0.4 is an "
+		                   "emergency for a creature that is awake.",
+		    .expected = "It lies out cold, is taken home and rests. The emergency that its low life started stops when it "
+		                "faints. While it lies there, the mind starts no new emergency (inspector: emergencyRunning of "
+		                "CreatureMindState stays false). It can have an emergency again only after it gets up.",
+		    .framing = {.shot = Shot::Overview, .include = {{0.0f, 0.0f}}, .distance = 0.4f},
+		    .creatures = {hurt},
+		    .commands = {Act(Kind::KnockOut, 0, 0.0f, true)},
+		});
+	}
+
 	all.push_back({
 	    .id = "combat.leash",
 	    .name = "Leashed onto another creature",

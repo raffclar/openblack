@@ -179,6 +179,9 @@ public:
 		bool ordered {false};
 		/// The creature comes across the thing that it acts on before it makes the plan
 		bool comeAcross {false};
+		/// When this has a value, the plan is not forced and has this priority. The creature then changes to a plan that
+		/// is more than twice as pressing, it looks at its emergencies, and the plan counts for its desire at its end.
+		std::optional<float> unforcedPriority;
 	};
 	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the

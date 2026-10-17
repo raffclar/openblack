@@ -40,6 +40,8 @@ TEST(CreatureEmergencies, AnyGateStopsTheEmergencies)
 	EXPECT_FALSE(creature_emergencies::LooksAtEmergencies({.scripted = true}));
 	EXPECT_FALSE(creature_emergencies::LooksAtEmergencies({.planForced = true}));
 	EXPECT_FALSE(creature_emergencies::LooksAtEmergencies({.fighting = true}));
+	// The faint forces its plan until the creature gets up
+	EXPECT_FALSE(creature_emergencies::LooksAtEmergencies({.knockedOut = true}));
 }
 
 TEST(CreatureEmergencies, LifeBelowFourTenthsIsHurt)
