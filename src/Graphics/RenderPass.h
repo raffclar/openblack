@@ -39,6 +39,9 @@ enum class RenderPass : uint8_t
 	Reflection,
 	/// What blends in the sea's reflection, the farthest first
 	ReflectionTranslucent,
+	/// The hand, the thing that it holds and the player's creature, which the game mirrors after the land, over all of
+	/// it: drawn into the reflection's target with its depth cleared, the smallest sort key first
+	ReflectionMirrored,
 	/// What is under the sea's surface, seen from the view as it is (not mirrored), drawn into the reflection's target
 	/// over the mirrored world: the sea is then blended over it all. The sharks' bodies.
 	UnderSea,
@@ -95,6 +98,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Reflection Sky Pass",         //
     "Reflection Pass",             //
     "Reflection Translucent Pass", //
+    "Reflection Mirrored Pass",    //
     "Under Sea Pass",              //
     "Sky Pass",                    //
     "Land Pass",                   //

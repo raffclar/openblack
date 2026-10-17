@@ -1939,6 +1939,57 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .commands = headMoves,
 	    .repeatFrom = 0,
 	});
+	// The player's hand mirrored in the lake with the villager that it holds, beside the player's creature
+	all.push_back({
+	    .id = "appearance.hand_sea_reflection",
+	    .name = "Hand reflection in the sea",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, the camera looks down over the lake of the testbed near its far "
+	                   "shallows, with the player's hand over the water. After a second the hand takes a villager. The "
+	                   "player's giant ape stands in the shallows near the hand.",
+	    .expected = "The hand shows upside down in the water under it, in one flat grey with no light, shade or glow, and "
+	                "only its outside. The villager that it holds shows in the water with it. The reflections of the hand "
+	                "and the ape show over the reflection of the land.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.45f)},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 25.0f}}, .distance = 0.2f},
+	    .creatures = {Posed(CreatureType::GiantApe, {k_Lake.x - 8.0f, k_FarShallows}, 0.0f, "player's ape")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x + 10.0f, k_FarShallows + 10.0f}}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0}},
+	});
+	// The player's creature frozen in the lake: the game mirrors its body without the ice
+	all.push_back({
+	    .id = "appearance.frozen_creature_sea_reflection",
+	    .name = "Frozen creature reflection in the sea",
+	    .facet = Facet::Appearance,
+	    .description =
+	        "At noon, the clock stopped, the player's giant ape stands in the far shallows of the testbed's "
+	        "lake, seen from close by across the water from the south. After a second the freeze spell is cast on it.",
+	    .expected = "The ape darkens to an icy blue with a sheen of ice. Its reflection in the water stays one flat blue "
+	                "grey colour, with no icy tint and no sheen of ice, before, during and after the freeze.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 20.0f}}, .distance = 0.35f},
+	    .creatures = {Posed(CreatureType::GiantApe, {k_Lake.x, k_FarShallows}, 0.0f, "player's ape")},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze,
+	                  .target = MiracleCast::Target::Creature,
+	                  .creature = 0,
+	                  .delaySeconds = 1.0f}},
+	});
+	// The player's lion mirrored in the lake: its one chroma part keeps the alpha of its texture
+	all.push_back({
+	    .id = "appearance.lion_sea_reflection",
+	    .name = "Lion reflection in the sea",
+	    .facet = Facet::Appearance,
+	    .description =
+	        "At noon, the clock stopped, the player's lion stands in the far shallows of the testbed's lake, "
+	        "seen from close by across the water from the south. The lion nods, shakes its head and does its other gestures.",
+	    .expected = "The lion shows upside down in the water in one flat blue grey colour. Its part with the cut-out "
+	                "edge shows the same cut-out edge in the reflection as on the lion.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 20.0f}}, .distance = 0.35f},
+	    .creatures = {Posed(CreatureType::Lion, {k_Lake.x, k_FarShallows}, 0.0f, "player's lion")},
+	    .commands = headMoves,
+	    .repeatFrom = 0,
+	});
 	// The eyes close up by day and at night, with the glass environment map added over each eyeball
 	const auto eyesClose = [&all, &headMoves](std::string_view id, std::string_view name, float hour,
 	                                          std::string_view description, std::string_view expected) {

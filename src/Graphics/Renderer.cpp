@@ -155,6 +155,7 @@
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
 #include "Graphics/HandLight.h"
+#include "Graphics/HandReflection.h"
 #include "Graphics/HandWaterGlow.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/LandShadowBake.h"
@@ -688,6 +689,7 @@ void SetSceneViewRects(RenderPass viewId, glm::u16vec2 resolution) noexcept
 	}
 	if (viewId == RenderPass::Reflection)
 	{
+		setRect(RenderPass::ReflectionMirrored);
 		setRect(RenderPass::UnderSea);
 	}
 	if (const auto translucentId = TranslucentPassOf(viewId); translucentId != viewId)
@@ -719,9 +721,11 @@ void Renderer::ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolutio
 	{
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::Advisors), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 	}
-	// What is under the sea's surface is drawn over the mirrored world, into the same target
+	// The hand and the creature that the game mirrors are drawn over the mirrored world with its depth cleared, as the
+	// game draws its mirrored land without depth. What is under the sea's surface is then drawn over it all.
 	if (viewId == RenderPass::Reflection)
 	{
+		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::ReflectionMirrored), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::UnderSea), BGFX_CLEAR_NONE);
 	}
 	// And what blends in it is drawn over it after
@@ -777,7 +781,10 @@ namespace
 float CreatureLandLightScale(RenderPass viewId)
 {
 	constexpr float k_ReflectionLight = 0.5f;
-	return viewId == RenderPass::Reflection || viewId == RenderPass::ReflectionTranslucent ? k_ReflectionLight : 1.0f;
+	return viewId == RenderPass::Reflection || viewId == RenderPass::ReflectionTranslucent ||
+	               viewId == RenderPass::ReflectionMirrored
+	           ? k_ReflectionLight
+	           : 1.0f;
 }
 
 /// Whether the game mirrors a creature's body in the sea this frame (see creature_reflection). The block under the
@@ -904,13 +911,15 @@ void BindCreatureSpellLooks(const ShaderProgram& program)
 
 /// How a creature fizzing out of sight is drawn in the pass at hand: xy how far the static has slid across its skin, z
 /// 0 for none, 1 for its depth through the static, with w the least alpha the static must have, or 2 for its body over
-/// that depth, blended at w. With z 0, w is how frozen it is.
-glm::vec4 CreatureSpellLookOf(const std::optional<RendererInterface::L3DMeshSubmitDesc::Fizz>& fizz, float freeze)
+/// that depth, blended at w. With z 0, w is how frozen it is. With z -1, the mesh shows no ice, also where its instance
+/// is frozen.
+glm::vec4 CreatureSpellLookOf(const std::optional<RendererInterface::L3DMeshSubmitDesc::Fizz>& fizz, float freeze,
+                              bool iceShown)
 {
 	using Pass = RendererInterface::L3DMeshSubmitDesc::Fizz::Pass;
 	if (!fizz.has_value())
 	{
-		return {0.0f, 0.0f, 0.0f, freeze};
+		return {0.0f, 0.0f, iceShown ? 0.0f : -1.0f, iceShown ? freeze : 0.0f};
 	}
 	const bool depth = fizz->pass == Pass::Depth;
 	const float w = depth ? static_cast<float>(creature_fizz_look::StaticThreshold(fizz->level)) / 255.0f
@@ -1232,7 +1241,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			// Set for every mesh, so that none is drawn with another's fizz
 			if (has(MeshUniform::CreatureSpellLook))
 			{
-				const auto u_creatureSpellLook = CreatureSpellLookOf(desc.fizz, desc.freeze);
+				const auto u_creatureSpellLook = CreatureSpellLookOf(desc.fizz, desc.freeze, desc.iceShown);
 				setUniform(MeshUniform::CreatureSpellLook, &u_creatureSpellLook);
 			}
 			if (has(MeshUniform::ShadeAt))
@@ -1273,8 +1282,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (has(MeshUniform::SeaClip))
 			{
 				// The sea mirrors only what stands above it
-				const bool reflection =
-				    desc.viewId == RenderPass::Reflection || desc.viewId == RenderPass::ReflectionTranslucent;
+				const bool reflection = desc.viewId == RenderPass::Reflection ||
+				                        desc.viewId == RenderPass::ReflectionTranslucent ||
+				                        desc.viewId == RenderPass::ReflectionMirrored;
 				// and a mesh cut by a plane shows nothing below it
 				float height = desc.cutBelow.value_or(0.0f);
 				if (reflection)
@@ -5719,6 +5729,20 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		_shaderManager->SetViewOrder(translucentViewId, ViewOrder::DepthDescending);
 		_shaderManager->SetCamera(translucentViewId, *desc.camera);
 	}
+	// Outside the temple, the hand, the thing that it holds and the creature that the game mirrors in the sea are drawn
+	// over all of the mirrored world, in their order
+	const auto mirroredViewId =
+	    desc.viewId == RenderPass::Reflection && !inTemple ? RenderPass::ReflectionMirrored : desc.viewId;
+	if (mirroredViewId != desc.viewId)
+	{
+		if (desc.frameBuffer != nullptr)
+		{
+			desc.frameBuffer->Bind(mirroredViewId);
+		}
+		bgfx::touch(static_cast<bgfx::ViewId>(mirroredViewId));
+		_shaderManager->SetViewOrder(mirroredViewId, ViewOrder::DepthAscending);
+		_shaderManager->SetCamera(mirroredViewId, *desc.camera);
+	}
 	const auto cameraOrigin = desc.camera->GetOrigin();
 
 	_shaderManager->SetCamera(skyViewId, *desc.camera);
@@ -6076,8 +6100,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			};
 			// The creatures are drawn with a light of their own, at every detail level
 			bool drawingCreatures = false;
-			// The creature's body mirrored in the sea is drawn in one flat colour, unlit, with a little blue added
-			bool flatReflection = false;
+			// A thing that the game mirrors in the sea by itself is drawn in one flat colour with a colour added, and with no
+			// light, haze, snow or shadows
+			struct FlatLook
+			{
+				glm::vec3 colour;
+				glm::vec3 added;
+			};
+			std::optional<FlatLook> flatReflection;
 			const auto drawInstances = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
 			                               bool useMaterialBlending, uint32_t first, uint32_t count,
 			                               const EntityPose* pose = nullptr,
@@ -6238,10 +6268,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					                    static_cast<float>(size.x), static_cast<float>(size.y)};
 				}
 
-				if (flatReflection)
+				if (flatReflection.has_value())
 				{
-					submitDesc.tint = glm::vec4(creature_reflection::Colour(), 1.0f);
-					submitDesc.lightAdd = creature_reflection::Added();
+					submitDesc.tint = glm::vec4(flatReflection->colour, 1.0f);
+					submitDesc.lightAdd = flatReflection->added;
 					submitDesc.landLightAndHaze = false;
 					submitDesc.snow = false;
 					submitDesc.groundShadows = false;
@@ -6275,13 +6305,44 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.viewId = view;
 				submitDesc.sortDepth = depth;
 			};
+			// What the hand holds is mirrored with the hand, after it, so the rest of the mirrored world leaves it out
+			const auto mirroredWithHand = [&](uint32_t instance) {
+				return mirroredViewId != desc.viewId &&
+				       std::ranges::any_of(renderCtx.inHandDraws,
+				                           [instance](const auto& held) { return held.instance == instance; });
+			};
+			// Call `draw(first, count)` for each run of instances that the hand does not hold
+			const auto withoutHeld = [&](uint32_t first, uint32_t count, const auto& draw) {
+				if (mirroredViewId == desc.viewId || renderCtx.inHandDraws.empty())
+				{
+					draw(first, count);
+					return;
+				}
+				uint32_t start = first;
+				for (uint32_t instance = first; instance < first + count; ++instance)
+				{
+					if (mirroredWithHand(instance))
+					{
+						if (instance > start)
+						{
+							draw(start, instance - start);
+						}
+						start = instance + 1;
+					}
+				}
+				if (first + count > start)
+				{
+					draw(start, first + count - start);
+				}
+			};
 			// Call `draw(first, count)` for the placed instances of each segment, each in the place of its segment
 			const auto inSegments = [&](const RenderContext::InstancedDrawDesc& placers, const auto& draw) {
 				const auto starts =
 				    splitByFizz ? std::span<const uint32_t>(placers.segmentStarts) : std::span<const uint32_t>();
-				graphics::fizz_draw_order::ForEachSegment(
-				    placers.offset, placers.filled, starts,
-				    [&](uint32_t first, uint32_t count, uint32_t segment) { inSegment(segment, [&] { draw(first, count); }); });
+				graphics::fizz_draw_order::ForEachSegment(placers.offset, placers.filled, starts,
+				                                          [&](uint32_t first, uint32_t count, uint32_t segment) {
+					                                          inSegment(segment, [&] { withoutHeld(first, count, draw); });
+				                                          });
 			};
 			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own
 			const auto drawPlaced = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
@@ -6463,11 +6524,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					const auto position = instance < renderCtx.instanceUniforms.size()
 					                          ? glm::vec3(renderCtx.instanceUniforms.at(instance).model[3])
 					                          : glm::vec3(0.0f);
+					// It shows none of the creature's frozen look. It comes after the hand and what the hand holds.
 					if (!copy && CreatureMirrored(entity, position, fizz))
 					{
-						flatReflection = true;
+						flatReflection =
+						    FlatLook {.colour = creature_reflection::Colour(), .added = creature_reflection::Added()};
+						submitDesc.iceShown = false;
+						submitDesc.viewId = mirroredViewId;
+						submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Creature);
 						drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
-						flatReflection = false;
+						submitDesc.sortDepth = 0;
+						submitDesc.viewId = desc.viewId;
+						submitDesc.iceShown = true;
+						flatReflection.reset();
 					}
 					submitDesc.modelLight.reset();
 					continue;
@@ -6822,11 +6891,42 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			}
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
+				if (mirroredWithHand(instance))
+				{
+					continue;
+				}
 				inSegment(renderCtx.fizzOrder.SegmentOf(entity), [&] {
 					drawAnimal(entity, instance, false);
 					drawVillager(entity, instance);
 					drawPosedStill(entity, instance, false);
 				});
+			}
+			// The game mirrors what the hand holds just after the hand, in its own look
+			if (mirroredViewId != desc.viewId && handReflected)
+			{
+				submitDesc.viewId = mirroredViewId;
+				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Held);
+				for (const auto& held : renderCtx.inHandDraws)
+				{
+					const auto posed =
+					    std::ranges::find(renderCtx.entityDraws, held.entity, &RenderContext::EntityDraw::entity);
+					if (posed != renderCtx.entityDraws.end())
+					{
+						drawAnimal(held.entity, held.instance, false);
+						drawVillager(held.entity, held.instance);
+						drawPosedStill(held.entity, held.instance, false);
+						continue;
+					}
+					const auto placers = renderCtx.instancedDrawDescs.find(held.mesh);
+					if (placers != renderCtx.instancedDrawDescs.end() && held.instance >= placers->second.offset &&
+					    held.instance < placers->second.offset + placers->second.filled)
+					{
+						drawInstances(held.mesh, placers->second,
+						              placers->second.translucent || placers->second.materialBlending, held.instance, 1);
+					}
+				}
+				submitDesc.sortDepth = 0;
+				submitDesc.viewId = desc.viewId;
 			}
 			// The villagers, a draw for each of their meshes, each instance posed by its own bones in the bone palette
 			if (renderCtx.bonePaletteTexture)
@@ -6888,6 +6988,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
+						if (mirroredWithHand(instance))
+						{
+							continue;
+						}
 						const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
 						submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
 						if (placers.partsByLevel)
@@ -6909,7 +7013,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				for (const auto& [entity, instance] : renderCtx.entityDraws)
 				{
-					if (instance < renderCtx.instanceUniforms.size())
+					if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
 					{
 						submitDesc.sortDepth =
 						    zsort::Depth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
@@ -6948,6 +7052,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
+						if (mirroredWithHand(instance))
+						{
+							continue;
+						}
 						const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
 						submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
 						drawInstances(meshId, placers, true, instance, 1);
@@ -6956,7 +7064,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			}
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
-				if (instance < renderCtx.instanceUniforms.size())
+				if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
 				{
 					const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
 					submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
@@ -7039,11 +7147,37 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			// The mists blend over the rest, the farthest first
 			DrawMists(desc);
 
+			// The game mirrors the hand in the sea while the hand shows, wherever it is: in one flat grey, with no light
+			// and no glow, and only its front faces. Its texture alone gives its alpha.
+			if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
+			    mirroredViewId != desc.viewId && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
+			    !hand->second.hiddenFromReflection &&
+			    hand_reflection::Shown(hand->second.count > 0, meshManager.Contains(hand->first)))
+			{
+				// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
+				const bool facesTurned = desc.cullBack != renderCtx.handMirrored;
+				const auto opaqueState = submitDesc.state;
+				submitDesc.viewId = mirroredViewId;
+				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Hand);
+				submitDesc.state =
+				    (opaqueState & ~BGFX_STATE_CULL_MASK) | (facesTurned ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW);
+				auto mirrored = hand->second;
+				mirrored.additiveShare.reset();
+				mirrored.instanceAlpha = false;
+				const auto handMorph = HandMorphTargets();
+				flatReflection = FlatLook {.colour = hand_reflection::Colour(), .added = hand_reflection::Added()};
+				drawInstances(hand->first, mirrored, true, mirrored.offset, mirrored.count, nullptr,
+				              handMorph ? &*handMorph : nullptr);
+				flatReflection.reset();
+				submitDesc.state = opaqueState;
+				submitDesc.viewId = desc.viewId;
+				submitDesc.sortDepth = 0;
+			}
 			// The game draws the hand after the rest of the scene, blended by its translucent texture. Black & White
 			// culls its back faces; here both sides are drawn, the inside first so that the outside blends over it.
 			// The game's reflection of the main room has no hand in it
 			if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
-			    desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
+			    mirroredViewId == desc.viewId && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
 			    !(desc.viewId == RenderPass::Reflection && hand->second.hiddenFromReflection))
 			{
 				// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
