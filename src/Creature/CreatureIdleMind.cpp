@@ -907,6 +907,30 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	return HandsNeed::Any;
 }
 
+bool creature_mind::LacksClipToStart(const Step& step, std::optional<size_t> communication,
+                                     const std::function<bool(size_t)>& hasClip)
+{
+	switch (step.kind)
+	{
+	case Step::Kind::Action:
+	case Step::Kind::SwapMind:
+		return !hasClip(step.animation);
+	case Step::Kind::Communicate:
+		return communication.has_value() && !hasClip(*communication);
+	case Step::Kind::Static:
+		// A faint lies down with no test of its clips
+		if (step.holdLoop)
+		{
+			return false;
+		}
+		[[fallthrough]];
+	case Step::Kind::Cast:
+		return !std::ranges::all_of(step.sequence, hasClip);
+	default:
+		return false;
+	}
+}
+
 bool creature_mind::PutsDownGently(bool heldIsCreature, std::optional<creature_desires::Desire> use)
 {
 	using creature_desires::Desire;
@@ -1111,6 +1135,26 @@ std::optional<Gaze> creature_mind::LookOf(const Step& step)
 	return std::nullopt;
 }
 
+namespace
+{
+/// One try to start a step that the body does not have a clip for. Each try picks a side first from the game's random
+/// numbers: a static action or a cast always, other actions only while the hand holds nothing. Each try to communicate
+/// also stops the desire to show its state for a time.
+void RetryClipStart(IdleMind& mind, const Step& step, const Senses& senses, const Random& gameRandom, Commands& commands)
+{
+	const bool always = step.kind == Step::Kind::Static || step.kind == Step::Kind::Cast;
+	if (always || !senses.held.has_value())
+	{
+		static_cast<void>(gameRandom(2));
+	}
+	if (step.kind == Step::Kind::Communicate)
+	{
+		commands.communicated = senses.communication;
+		mind.shown = senses.communication.desire;
+	}
+}
+} // namespace
+
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
 	return Think(mind, senses, random, random);
@@ -1205,6 +1249,13 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		// A dance alone waits only while the body plays an action
 		if (step.kind == Step::Kind::PracticeDance && senses.bodyPlaying)
 		{
+			return commands;
+		}
+		// When the body does not have a clip of the step, the step does not start. The creature tries again on each turn
+		// until a new plan or its death replaces the agenda.
+		if (senses.clipMissing)
+		{
+			RetryClipStart(mind, step, senses, gameRandom, commands);
 			return commands;
 		}
 		mind.stepStarted = true;

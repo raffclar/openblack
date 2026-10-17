@@ -1183,6 +1183,28 @@ void ReleaseCast(entt::entity creature)
 	}
 }
 
+/// Whether the creature's species has the clip. A body that is not loaded yet counts as one that has every clip.
+bool HasClip(entt::entity creature, const CreatureAnimation& animation, size_t clip)
+{
+	if (!Locator::creatureAnimationSystem::has_value() || animation.skeleton.Empty())
+	{
+		return true;
+	}
+	return Locator::creatureAnimationSystem::value().AnimationDuration(creature, clip).has_value();
+}
+
+/// Whether the body does not have a clip that the next step plays as it starts. A step that started has no test.
+bool ClipMissing(entt::entity creature, const CreatureAnimation& animation, const creature_mind::IdleMind& mind,
+                 std::optional<size_t> communication)
+{
+	if (mind.stepStarted || mind.step >= mind.agenda.size())
+	{
+		return false;
+	}
+	return creature_mind::LacksClipToStart(mind.agenda[mind.step], communication,
+	                                       [creature, &animation](size_t clip) { return HasClip(creature, animation, clip); });
+}
+
 void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation, CreatureEyes* eyes)
 {
 	if (commands.endSit || commands.endStaticLoop)
@@ -2098,6 +2120,7 @@ void CreatureMindSystem::ProcessTurn()
 		    // As a step that communicates its state starts, the creature finds what it feels at that time
 		    const bool communicates = !mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
 		                              mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Communicate;
+		    const auto communication = communicates ? Communication(mind) : creature_desires::Communication {};
 		    const auto inHand = Locator::creatureObjectActionSystem::has_value()
 		                            ? Locator::creatureObjectActionSystem::value().GetHeld(entity)
 		                            : std::nullopt;
@@ -2106,11 +2129,12 @@ void CreatureMindSystem::ProcessTurn()
 		        .seconds = k_TurnSeconds,
 		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
 		        .bodyLooping = creature_layers::IsLooping(animation.body),
+		        .clipMissing = ClipMissing(entity, animation, mind.idle, communication.animation),
 		        .bodyDancing = creature_layers::IsDancing(animation.body),
 		        .moving = moving,
 		        .subMove = SubMoveOf(entity),
 		        .position = glm::vec2(transform.position.x, transform.position.z),
-		        .communication = communicates ? Communication(mind) : creature_desires::Communication {},
+		        .communication = communication,
 		        .rested = needs != nullptr && needs->rested,
 		        .better = needs != nullptr && creature_mind::IsBetter(needs->needs.life, needs->needs.exhaustion),
 		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),

@@ -1129,3 +1129,4 @@ target_compile_definitions(
   test_oracle_wisp_orbit
   PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(test_creature_missing_clip test_creature_missing_clip.cpp)

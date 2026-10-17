@@ -303,6 +303,21 @@ TEST_F(CreatureSpellParticles, WispsComeAfterASecondOneByOneFromTheHand)
 	EXPECT_EQ(count(), 3u);
 }
 
+// The wisps let go of their rule with no creature spell, and for an anti-spell: they make no wisps
+TEST_F(CreatureSpellParticles, WispsNeedACreatureSpellThatIsNotAnAntiSpell)
+{
+	for (const int kind : {-1, 16})
+	{
+		spell.kind = kind;
+		auto effect = Make(First("1 1") + k_Wisps + k_Point);
+		for (int i = 0; i < 40; ++i)
+		{
+			effect->Step(k_Step);
+		}
+		EXPECT_EQ(effect->AtomCount(), 1u) << kind;
+	}
+}
+
 TEST_F(CreatureSpellParticles, AnInvisibleCreaturesWispsFadeWithIt)
 {
 	spell.kind = 7;
