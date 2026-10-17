@@ -186,6 +186,8 @@ enum class Effect : uint8_t
 	Clouds,
 	/// The shadows of the sun and the moon: the hills' shadows over the land and the water, and the things' shadows
 	Shadows,
+	/// The volumetric fog: the haze, the ground fog at dawn, the mist and the shafts of light
+	Fog,
 	_Count
 };
 

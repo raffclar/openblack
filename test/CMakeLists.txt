@@ -1076,3 +1076,5 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_wind test_wind.cpp)
 # EXPERIMENT (not for merge): the shadows of the sun and the moon
 openblack_setup_and_add_test(test_sun_shadows graphics/test_sun_shadows.cpp)
+# EXPERIMENT (not for merge): the volumetric fog
+openblack_setup_and_add_test(test_volumetric_fog graphics/test_volumetric_fog.cpp)

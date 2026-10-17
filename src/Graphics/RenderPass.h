@@ -65,6 +65,10 @@ enum class RenderPass : uint8_t
 	CloudResolve,
 	/// EXPERIMENT (not for merge): the shadows of the things from the light's maps, over the scene's colour
 	ShadowApply,
+	/// EXPERIMENT (not for merge): the volumetric fog's grid of the light that each cell scatters, and its sum from the
+	/// eye
+	FogScatter,
+	FogIntegrate,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
 	/// EXPERIMENT (not for merge): one step of the foam that builds up on the water and decays
@@ -131,6 +135,8 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Cloud March Pass",            //
     "Cloud Resolve Pass",          //
     "Shadow Apply Pass",           //
+    "Fog Scatter Pass",            //
+    "Fog Integrate Pass",          //
     "Translucent Pass",            //
     "Underwater Foam Pass",        //
     "Underwater Cube Sky Pass",    //

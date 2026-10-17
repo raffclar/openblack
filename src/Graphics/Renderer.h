@@ -47,6 +47,8 @@
 #include "Graphics/UnderwaterWakeField.h"
 #include "Graphics/VolumeGlowShell.h"
 #include "Graphics/VolumetricCloudsView.h"
+#include "Graphics/VolumetricFog.h"
+#include "Graphics/VolumetricFogView.h"
 #include "Particles/ParticleDrawFrame.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -440,6 +442,11 @@ private:
 	/// EXPERIMENT (not for merge): the map of the sun's visibility for one program, in a sampler stage; off while the
 	/// shadows are off
 	void BindSunVisibility(const ShaderProgram& program, uint8_t stage) const;
+	/// EXPERIMENT (not for merge): the volumetric fog of this frame: its layers for the time of day, the wetness and
+	/// the storm, and its light. None while the fog is off.
+	void BeginFog(const DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): the fog's grid, its sum from the eye, then the fog over the scene and the water
+	void DrawFog(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const;
 	/// EXPERIMENT (not for merge): the sea bed past the land's blocks, in the land's pass of the main view
 	void DrawFarSeabed(RenderPass landViewId) const;
 	/// EXPERIMENT (not for merge): the reef's coral and plants, in the land's pass of the main view
@@ -650,6 +657,10 @@ private:
 	mutable std::optional<SunShadowFrame> _shadowsFrame;
 	/// EXPERIMENT (not for merge): whether the blend of the maps of the sun's visibility has been drawn once
 	mutable bool _sunVisibilityReady {false};
+	/// EXPERIMENT (not for merge): the fog's grids and its state, made when it first shows
+	mutable std::unique_ptr<VolumetricFogView> _fog;
+	/// EXPERIMENT (not for merge): the fog's uniforms of this frame, while the fog shows
+	mutable std::optional<volumetric_fog::FogUniforms> _fogFrame;
 	/// EXPERIMENT (not for merge): whether the scene's views are bound to the underwater target
 	mutable bool _underwaterBound {false};
 	/// The colours the sky's dome is drawn in this frame
