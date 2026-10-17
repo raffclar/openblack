@@ -1138,7 +1138,8 @@ std::optional<creature_kiss::KissPoints> CreatureAnimationSystem::KissPointsOf(e
 		if (rig.kissPoint.has_value())
 		{
 			const auto& point = *rig.kissPoint;
-			const auto triangle = creature::PosedTriangle(point.vertices, point.bones, morph->drawn, matrices, glm::mat4(1.0f));
+			const auto triangle = creature::PosedTriangle(point.vertices, point.bones, morph->drawn, matrices, glm::mat4(1.0f),
+			                                              creature::k_SkinPointOrder);
 			lips = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], point.u, point.v).position;
 		}
 		else if (rig.actionPoints.has_value() && rig.actionPoints->head < matrices.size())
