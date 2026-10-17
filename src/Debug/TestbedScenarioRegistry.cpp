@@ -1556,22 +1556,6 @@ void AddStory(std::vector<Scenario>& all)
 	                .distance = 1.0f},
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .life = 0.3f}},
 	});
-	all.push_back({
-	    .id = "particles.ribbon_slide",
-	    .name = "A ribbon's corners and its texture sliding along it",
-	    .facet = Facet::Particles,
-	    .description = "The hurt temple's heart beaming across itself, as in temple.damage_beam, seen close up so that the "
-	                   "beams' ribbons fill the view.",
-	    .expected = "Each beam is a ribbon that faces the camera from every side, its corners meeting half way where two "
-	                "segments join. Its texture slides along it at twice the speed of its data, as the game adds the "
-	                "slide to the texture twice. The slide moves on only by the frames drawn, and stops while the game is "
-	                "paused.",
-	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview,
-	                .include = {k_Temple - glm::vec2 {20.0f}, k_Temple + glm::vec2 {20.0f}},
-	                .distance = 0.6f},
-	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .life = 0.3f}},
-	});
 	AddBreederOffers(all);
 	AddOgreLair(all);
 	AddGuideStorm(all);
@@ -6686,6 +6670,26 @@ void AddParticles(std::vector<Scenario>& all)
 	    .particles = {{.file = "SF_LandscapeVortexInBefore", .offset = {-8.0f, 40.0f}, .restartSeconds = 8.0f},
 	                  {.file = "SF_LandscapeVortexOutAfter", .offset = {8.0f, 40.0f}, .restartSeconds = 8.0f},
 	                  {.file = "SF_Flies", .offset = {0.0f, 36.0f}, .height = 2.0f, .restartSeconds = 8.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.ribbon_slide",
+	    .name = "A ribbon's corners and its texture sliding along it",
+	    .facet = Facet::Particles,
+	    .description = "The simple beam, three ribbons from a point ten metres up to a creature twenty metres away, "
+	                   "started again every six seconds and seen close from the side.",
+	    .expected = "Each beam is a ribbon that faces the camera from every side, its corners meeting half way where two "
+	                "segments join. Its texture slides along it at twice the speed of its data, as the game adds the "
+	                "slide to the texture twice. The slide moves on only by the frames drawn, and stops while the game "
+	                "pauses.",
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -5.0f}, {25.0f, 5.0f}}, .distance = 0.35f},
+	    .creatures = {{.offset = {20.0f, 0.0f}, .pauseMind = true}},
+	    .particles = {{.file = "SF_SimpleBeam",
+	                   .targetsCreatures = true,
+	                   .offset = {-10.0f, 0.0f},
+	                   .height = 10.0f,
+	                   .magnitude = 1.0f,
+	                   .restartSeconds = 6.0f}},
 	});
 
 	all.push_back({
