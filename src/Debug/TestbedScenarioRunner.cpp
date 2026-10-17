@@ -1858,23 +1858,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		auto& totems = Locator::villageTotemSystem::value();
 		if (!totems.Grip(*totem, command.player))
 		{
-			// Say what the town lacks
-			const auto& registry = Locator::entitiesRegistry::value();
-			const auto* abode = registry.TryGet<const ecs::components::Abode>(*centre);
-			const auto& towns = registry.Context().towns;
-			const auto found = abode != nullptr ? towns.find(abode->townId) : towns.end();
-			const auto townEntity = found != towns.end() ? found->second : entt::null;
-			const auto* townComponent =
-			    registry.Valid(townEntity) ? registry.TryGet<const ecs::components::Town>(townEntity) : nullptr;
-			const auto built = [&registry](entt::entity building) {
-				return registry.Valid(building) && !registry.AllOf<ecs::components::BuildProgress>(building);
-			};
-			return fmt::format("the hand can't take hold of the totem (town {}, owner {}, centre built {}, worship site built "
-			                   "{}, temples {})",
-			                   entt::to_integral(townEntity),
-			                   townComponent != nullptr ? static_cast<int>(townComponent->owner) : -1, built(*centre),
-			                   townComponent != nullptr && built(townComponent->worshipSite),
-			                   registry.Size<ecs::components::Temple>());
+			return fmt::format("the hand can't take hold of the totem: {}", totems.WhyNotGrip(*totem, command.player));
 		}
 		totems.LetGo();
 		return "gripped and let go";
