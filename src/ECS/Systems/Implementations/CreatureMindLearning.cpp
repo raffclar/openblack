@@ -3857,20 +3857,20 @@ std::optional<Desire> CreatureMindSystem::DesireForThingInHand(entt::entity crea
 	return std::nullopt;
 }
 
-void CreatureMindSystem::LetGoOfHeld(entt::entity creature, CreatureMindState& mind, creature_mind::LetGo how)
+bool CreatureMindSystem::LetGoOfHeld(entt::entity creature, CreatureMindState& mind, creature_mind::LetGo how)
 {
 	// A let-go that does not start leaves the hands to be checked again on the next turn
 	if (!Locator::creatureObjectActionSystem::has_value())
 	{
 		mind.idle.handsChecked.reset();
-		return;
+		return false;
 	}
 	auto& hands = Locator::creatureObjectActionSystem::value();
 	const auto held = hands.GetHeld(creature);
 	if (!held.has_value())
 	{
 		mind.idle.handsChecked.reset();
-		return;
+		return false;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
 	bool gently = how == creature_mind::LetGo::PutDown;
@@ -3893,6 +3893,7 @@ void CreatureMindSystem::LetGoOfHeld(entt::entity creature, CreatureMindState& m
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} lets go of {} before a step that needs empty hands: {} ({}), {}",
 	                    entt::to_integral(creature), entt::to_integral(*held), gently ? "puts it down" : "tosses it away",
 	                    use.has_value() ? static_cast<int>(*use) : -1, started ? "started" : "can't");
+	return started;
 }
 
 void CreatureMindSystem::PlanTurn()

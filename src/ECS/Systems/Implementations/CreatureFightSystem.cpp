@@ -1999,11 +1999,10 @@ void CreatureFightSystem::Faint(entt::entity creature)
 	{
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
-	if (Locator::creatureObjectActionSystem::has_value())
-	{
-		Locator::creatureObjectActionSystem::value().Cancel(creature);
-		Locator::creatureObjectActionSystem::value().Drop(creature);
-	}
+	// The action that its body plays ends at two times the usual speed. What its hands do goes on, and it keeps what it
+	// holds: before the faint starts, it lets go of the thing as before any action that needs empty hands.
+	auto& animation = registry.Get<CreatureAnimation>(creature);
+	animation.body = creature_layers::Hurry(animation.body);
 	// The faint stops what its mind does as a failure, an emergency too. Until it gets up, it looks at no emergency.
 	if (Locator::creatureMindSystem::has_value())
 	{
@@ -2047,6 +2046,11 @@ void CreatureFightSystem::Faint(entt::entity creature)
 void CreatureFightSystem::StartFaint(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// The faint also stops what the hands do, such as a catch or a let-go. The hand keeps what it holds.
+	if (Locator::creatureObjectActionSystem::has_value())
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
 	// The faint cuts what the body plays at once. The game's random numbers choose its side, one time in two the left
 	// side.
 	auto& animation = registry.Get<CreatureAnimation>(creature);
@@ -2113,6 +2117,7 @@ void CreatureFightSystem::Resurrect(entt::entity creature)
 	StopCarryingHome(creature, *knockedOut);
 	knockedOut->permanent = false;
 	knockedOut->fainting = false;
+	knockedOut->handsChecked = false;
 	knockedOut->stage = CreatureKnockedOut::Stage::GettingUp;
 	knockedOut->seconds = 0.0f;
 	auto& animation = registry.Get<CreatureAnimation>(creature);
@@ -3709,16 +3714,32 @@ void CreatureFightSystem::ProcessKnockedOut()
 	    [&lying](entt::entity entity, CreatureKnockedOut& /*knockedOut*/) { lying.push_back(entity); });
 	for (const auto entity : lying)
 	{
-		// The first turn after the knock-out starts the faint on the body
-		if (std::exchange(registry.Get<CreatureKnockedOut>(entity).fainting, false))
-		{
-			StartFaint(entity);
-		}
+		// The first turn after the knock-out starts the faint on the body. First the creature checks its hands: with a
+		// thing in the hand it starts to let go, and the faint starts on the next turn and cuts the let-go. While its
+		// body or hands are busy it cannot start to let go, and the faint waits.
 		auto& knockedOut = registry.Get<CreatureKnockedOut>(entity);
+		if (knockedOut.fainting)
+		{
+			const auto check = knockedOut.handsChecked || !Locator::creatureMindSystem::has_value()
+			                       ? creature_mind::HandsCheck::Free
+			                       : Locator::creatureMindSystem::value().CheckHandsBeforeFaint(entity);
+			knockedOut.handsChecked = check == creature_mind::HandsCheck::LetGo;
+			if (check == creature_mind::HandsCheck::Free)
+			{
+				knockedOut.fainting = false;
+				StartFaint(entity);
+			}
+		}
 		auto* needs = registry.TryGet<CreatureNeeds>(entity);
 		auto& animation = registry.Get<CreatureAnimation>(entity);
 		const auto& body = registry.Get<const Creature>(entity);
 		knockedOut.seconds += k_TurnSeconds;
+		// It counts the time that it lies only from when it lies still
+		if (knockedOut.stage == CreatureKnockedOut::Stage::Lying &&
+		    (knockedOut.fainting || !creature_layers::IsLooping(animation.body)))
+		{
+			knockedOut.seconds = -creature_mind::k_FaintWaitTurnsLate * k_TurnSeconds;
+		}
 		const auto next = [&knockedOut, entity](CreatureKnockedOut::Stage stage) {
 			fight_transcript::Note(entity, "knocked_out", [&] {
 				return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)},

@@ -724,6 +724,24 @@ enum class HandsNeed : uint8_t
 [[nodiscard]] bool LacksClipToStart(const Step& step, std::optional<size_t> communication,
                                     const std::function<bool(size_t)>& hasClip);
 
+/// What the check of the hands before a step that needs empty hands does on a turn
+enum class HandsCheck : uint8_t
+{
+	/// The hands are empty: the step can start now
+	Free,
+	/// The creature starts to let go of the thing that it holds. The step tries to start on the next turn.
+	LetGo,
+	/// The body or the hands are busy: the creature cannot start to let go, and it checks again on the next turn
+	Wait,
+};
+/// The check of the hands before a step that needs empty hands, until the let-go starts. A faint that does not come
+/// from the mind also does this check before it starts.
+[[nodiscard]] HandsCheck CheckHands(bool holds, bool bodyBusy, bool handsBusy);
+
+/// The turns between when a fainted creature lies still and when its wait starts, plus the turn between the end of
+/// the wait and the start of the next part of the faint
+inline constexpr float k_FaintWaitTurnsLate = 3.0f;
+
 /// How the creature lets go of the thing that it holds before a step that needs empty hands
 enum class LetGo : uint8_t
 {
