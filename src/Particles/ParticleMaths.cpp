@@ -19,8 +19,11 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/X87.h"
+#include "Common/X87Matrix.h"
 #include "Common/X87Vector.h"
 
+using namespace openblack;
 using namespace openblack::particles;
 
 namespace
@@ -31,6 +34,12 @@ constexpr uint32_t k_SpriteCellMask = 0x3Fu;
 constexpr float k_MaxLoopedFrameLerp = 5.0f;
 /// Frames further out than this can no longer be moved by whole cycles in single precision
 constexpr float k_LargestSteppableFrame = 16777216.0f;
+/// The order in which the products of a point with the rows are added, to move a point of a hierarchy into the world
+constexpr openblack::x87::AxisOrders k_FrameToWorldOrder {{{2, 1, 0}, {1, 0, 2}, {2, 1, 0}}};
+/// The order in which the products are added, to move a point of the world into a hierarchy
+constexpr openblack::x87::AxisOrders k_WorldToFrameOrder {{{1, 2, 0}, {1, 0, 2}, {2, 1, 0}}};
+/// A quarter turn, as the float the game adds to an angle
+constexpr float k_QuarterTurn = 1.5707963705062866f;
 
 /// The permutation the noise reads its lattice through
 constexpr std::array<uint8_t, 256> k_Permutation {
@@ -205,7 +214,10 @@ maths::UvRect maths::SpriteCellUv(int cell, int cellsPerRow)
 
 glm::mat3 maths::AngleY(float a)
 {
-	return Rotation(-a, {0.0f, 1.0f, 0.0f});
+	// The cosine and sine are stored as floats, and the other parts are exact
+	const float c = x87::RoundToFloat(x87::Cos(a));
+	const float s = x87::RoundToFloat(x87::Sin(a));
+	return {glm::vec3(c, 0.0f, s), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(-s, 0.0f, c)};
 }
 
 glm::mat3 maths::AngleXYZ(float x, float y, float z)
@@ -220,6 +232,29 @@ glm::mat3 maths::TurnAboutAxis(const glm::mat3& rotation, int axis, float a)
 	return Rotation(-a, direction) * rotation;
 }
 
+float maths::TumbleSpeed(const glm::vec3& velocity, float tumbleSpeed)
+{
+	return x87::LengthZyx(velocity) * tumbleSpeed;
+}
+
+glm::mat3 maths::Tumble(const glm::mat3& rotation, float angle, bool aboutForward)
+{
+	const double c = x87::Cos(angle);
+	const double s = x87::Sin(angle);
+	// The two parts of each axis that the turn changes
+	const int first = aboutForward ? 0 : 1;
+	const int second = first + 1;
+	auto turned = rotation;
+	for (int i = 0; i < 3; ++i)
+	{
+		const float a = rotation[i][first];
+		const float b = rotation[i][second];
+		turned[i][first] = x87::Mul(s, b) + x87::Mul(c, a);
+		turned[i][second] = x87::Mul(c, b) - x87::Mul(s, a);
+	}
+	return turned;
+}
+
 float maths::SpriteAngle(const glm::mat3& rotation)
 {
 	return std::atan2(rotation[0][2], rotation[0][0]);
@@ -227,9 +262,108 @@ float maths::SpriteAngle(const glm::mat3& rotation)
 
 float maths::ScreenVelocityAngle(const glm::vec3& velocity, const glm::vec3& right, const glm::vec3& up)
 {
-	const float x = glm::dot(velocity, right);
-	const float y = glm::dot(velocity, up);
-	return std::atan2(-y, x) + std::numbers::pi_v<float> * 0.5f;
+	const float x = x87::Dot<x87::SumOrder::Zyx>(velocity, right);
+	const float y = x87::Dot<x87::SumOrder::Zxy>(velocity, up);
+	return x87::Add(x87::Atan2(-y, x), k_QuarterTurn);
+}
+
+glm::vec3 maths::FrameToWorld(std::span<const glm::mat4> frames, const glm::vec3& point)
+{
+	glm::mat4 frame {1.0f};
+	for (const auto& next : frames)
+	{
+		frame = x87::Product(frame, next);
+	}
+	return x87::TransformPoint(frame, point, k_FrameToWorldOrder);
+}
+
+glm::vec3 maths::WorldToFrame(std::span<const glm::mat4> frames, const glm::vec3& point)
+{
+	if (frames.empty())
+	{
+		return point;
+	}
+	glm::mat4 frame {1.0f};
+	for (const auto& next : frames)
+	{
+		frame = x87::PreProduct(x87::Inverse(next), frame);
+	}
+	return x87::TransformPoint(frame, point, k_WorldToFrameOrder);
+}
+
+glm::mat3 maths::OrientAlong(const glm::vec3& p, const glm::mat3& start)
+{
+	// The heading and the angle from the vertical stay wide; each cosine is stored as a float and each sine stays wide
+	const double yaw = x87::Atan2(p.z, p.x);
+	const float across = std::sqrt((p.z * p.z) + (p.x * p.x));
+	const float colatitude = x87::Sub(k_QuarterTurn, x87::Atan2(p.y, across));
+	glm::mat3 m = start;
+	const float cc = x87::RoundToFloat(x87::Cos(colatitude));
+	const double sc = x87::Sin(colatitude);
+	const float cy = x87::RoundToFloat(x87::Cos(yaw));
+	const double sy = x87::Sin(yaw);
+	for (int i = 0; i < 3; ++i)
+	{
+		const float x = m[i].x;
+		const float y = m[i].y;
+		m[i].x = x87::Mul(sc, y) + (x * cc);
+		m[i].y = (y * cc) - x87::Mul(sc, x);
+		const float x2 = m[i].x;
+		const float z = m[i].z;
+		m[i].x = (x2 * cy) - x87::Mul(sy, z);
+		m[i].z = (z * cy) + x87::Mul(sy, x2);
+	}
+	return m;
+}
+
+glm::mat3 maths::TurnWithMove(const glm::mat3& rotation, const glm::vec3& last, const glm::vec3& p)
+{
+	const float lengths = std::sqrt(x87::DotZyx(p, p) * x87::DotZyx(last, last));
+	const auto axis = glm::cross(last, p);
+	if (!(lengths > 0.0f) || axis == glm::vec3(0.0f))
+	{
+		return rotation;
+	}
+	const float between = x87::Dot<x87::SumOrder::Yzx>(last, p) / lengths;
+	// The game gives not a number when rounding takes the cosine past 1; the clamp keeps the turn whole
+	const float angle = x87::RoundToFloat(x87::Acos(std::clamp(between, -1.0f, 1.0f)));
+	const auto turn = x87::AxisTurn(axis, angle);
+	auto turned = rotation;
+	for (glm::length_t i = 0; i < 3; ++i)
+	{
+		turned[i] = x87::TurnPoint(turn, rotation[i], x87::k_MeshPointOrder);
+	}
+	return turned;
+}
+
+float maths::FadedSpinAngle(float spin, float fade, float dt)
+{
+	return ((-spin * fade) + spin) * dt;
+}
+
+glm::mat3 maths::SpinAboutVertical(const glm::mat3& rotation, float angle)
+{
+	const float c = x87::RoundToFloat(x87::Cos(angle));
+	const double s = x87::Sin(angle);
+	auto turned = rotation;
+	for (glm::length_t k = 0; k < 3; ++k)
+	{
+		const float first = rotation[0][k];
+		const float third = rotation[2][k];
+		turned[0][k] = (c * first) + x87::Mul(s, third);
+		turned[2][k] = (c * third) - x87::Mul(s, first);
+	}
+	return turned;
+}
+
+float maths::SmoothingRate(float smoothing, float scale)
+{
+	return x87::Mul(std::log(static_cast<double>(1.0f - smoothing)), scale);
+}
+
+float maths::SmoothingShare(float dt, float rate)
+{
+	return 1.0f - x87::Exp(-(dt * rate));
 }
 
 maths::ValueNoise::ValueNoise()

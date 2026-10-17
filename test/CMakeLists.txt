@@ -1177,6 +1177,10 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_oracle_glm_order_5 oracle/test_oracle_glm_order_5.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_glm_order_6 oracle/test_oracle_glm_order_6.cpp
+)
+target_link_libraries(test_oracle_glm_order_6 PRIVATE psys)
 # The data folder is found at run time (see oracle/OracleData.h), never compiled into an object: ctest sets the
 # environment variable for each test, and the file in the build folder serves a program started by hand from there
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
@@ -1193,6 +1197,7 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_glm_order_3
                      test_oracle_glm_order_4
                      test_oracle_glm_order_5
+                     test_oracle_glm_order_6
 )
   set_tests_properties(
     ${oracle_test}
@@ -1222,3 +1227,4 @@ openblack_setup_and_add_test(test_film_creature video/test_film_creature.cpp)
 target_link_libraries(test_film_creature PRIVATE cam)
 openblack_setup_and_add_test(test_creature_hand_glow test_creature_hand_glow.cpp)
 openblack_setup_and_add_test(test_film_effects video/test_film_effects.cpp)
+openblack_setup_and_add_test(test_glm_order_6 test_glm_order_6.cpp)

@@ -411,10 +411,8 @@ public:
 				auto& atom = effect.NewAtom(collection, &creator, {});
 				atom.position = placed.centre;
 				atom.fragment = placed.shape;
-				auto random = effect.RandomInBall();
-				const float length = glm::length(random);
-				random = length > 0.0f ? random / length : glm::vec3(0.0f, 1.0f, 0.0f);
-				atom.velocity = blast::FragmentVelocity(placed.centre, record.origin, record.speed, randomFactor, random);
+				atom.velocity =
+				    blast::FragmentVelocity(placed.centre, record.origin, record.speed, randomFactor, effect.RandomInBall());
 			}
 		}
 		return true;

@@ -18,6 +18,7 @@
 #include "Common/GameRandom.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleCreators.h"
+#include "ParticleMaths.h"
 
 using namespace openblack;
 using namespace openblack::particles;
@@ -257,45 +258,39 @@ glm::vec3 Effect::FrameScale(const Atom& atom)
 	return {s, s * atom.stretch, s};
 }
 
+glm::mat4 Effect::FrameMatrix(const Atom& atom)
+{
+	const auto scale = FrameScale(atom);
+	glm::mat4 frame {1.0f};
+	for (glm::length_t row = 0; row < 3; ++row)
+	{
+		frame[row] = glm::vec4(atom.rotation[row] * scale[row], 0.0f);
+	}
+	frame[3] = glm::vec4(atom.position, 1.0f);
+	return frame;
+}
+
 glm::vec3 Effect::LocalToGlobal(const Collection& collection, const glm::vec3& local) const
 {
-	glm::vec3 p = local;
-	if (!collection.hierarchy)
-	{
-		return p;
-	}
-	for (const Atom* a = collection.parent; a != nullptr && a->collection != nullptr; a = a->collection->parent)
-	{
-		if (IsHierarchy(a->collection->group))
-		{
-			p = a->position + a->rotation * (FrameScale(*a) * p);
-		}
-	}
-	return p;
+	return collection.hierarchy ? maths::FrameToWorld(HierarchyFrames(collection), local) : local;
 }
 
 glm::vec3 Effect::GlobalToLocal(const Collection& collection, const glm::vec3& global) const
 {
-	if (!collection.hierarchy)
-	{
-		return global;
-	}
-	std::vector<const Atom*> frames;
+	return collection.hierarchy ? maths::WorldToFrame(HierarchyFrames(collection), global) : global;
+}
+
+std::vector<glm::mat4> Effect::HierarchyFrames(const Collection& collection) const
+{
+	std::vector<glm::mat4> frames;
 	for (const Atom* a = collection.parent; a != nullptr && a->collection != nullptr; a = a->collection->parent)
 	{
 		if (IsHierarchy(a->collection->group))
 		{
-			frames.push_back(a);
+			frames.push_back(FrameMatrix(*a));
 		}
 	}
-	glm::vec3 p = global;
-	for (auto it = frames.rbegin(); it != frames.rend(); ++it)
-	{
-		const auto s = FrameScale(**it);
-		p = glm::inverse((*it)->rotation) * (p - (*it)->position);
-		p = {s.x != 0.0f ? p.x / s.x : 0.0f, s.y != 0.0f ? p.y / s.y : 0.0f, s.z != 0.0f ? p.z / s.z : 0.0f};
-	}
-	return p;
+	return frames;
 }
 
 glm::vec3 Effect::SpawnPosition(const Collection& collection) const

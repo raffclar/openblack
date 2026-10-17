@@ -13,8 +13,10 @@
 
 #include <array>
 #include <optional>
+#include <span>
 
 #include <glm/mat3x3.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -132,11 +134,38 @@ struct UvRect
 [[nodiscard]] glm::mat3 AngleXYZ(float x, float y, float z);
 /// A rotation turned by a about one of the world axes (0 x, 1 y, 2 z), as a spinning rule turns its atoms
 [[nodiscard]] glm::mat3 TurnAboutAxis(const glm::mat3& rotation, int axis, float a);
+/// The tumble speed of an atom: its speed times the tumble speed, its squares added z first
+[[nodiscard]] float TumbleSpeed(const glm::vec3& velocity, float tumbleSpeed);
+/// A rotation turned by a tumble angle: about the forward axis when `aboutForward` is true, else about the east to west
+/// axis. Each of the three axes turns by the sine and cosine of the angle, as wide values.
+[[nodiscard]] glm::mat3 Tumble(const glm::mat3& rotation, float angle, bool aboutForward);
 
 /// The roll of a sprite drawn from an atom's rotation: the angle its local x axis makes in the ground plane
 [[nodiscard]] float SpriteAngle(const glm::mat3& rotation);
 /// The roll that lines a sprite's top up with a velocity as the camera sees it, from the camera's right and up
 [[nodiscard]] float ScreenVelocityAngle(const glm::vec3& velocity, const glm::vec3& right, const glm::vec3& up);
+/// A point of a hierarchy moved into the world: the frames (nearest first) multiplied into one matrix, then the point
+/// moved by that matrix one time
+[[nodiscard]] glm::vec3 FrameToWorld(std::span<const glm::mat4> frames, const glm::vec3& point);
+/// A point of the world moved into a hierarchy: the inverses of the frames (nearest first), each put in front of the
+/// matrix so far, then the point moved by that matrix one time. With no frames, the point stays.
+[[nodiscard]] glm::vec3 WorldToFrame(std::span<const glm::mat4> frames, const glm::vec3& point);
+/// A rotation that turns the vertical towards a point from the centre: first by the angle from the vertical, then by
+/// the heading
+[[nodiscard]] glm::mat3 OrientAlong(const glm::vec3& p, const glm::mat3& start);
+/// A rotation turned as a point moved round the centre from `last` to `p`: about the axis across both, by the angle
+/// between them. Not turned when either point is at the centre or the two points are in line.
+[[nodiscard]] glm::mat3 TurnWithMove(const glm::mat3& rotation, const glm::vec3& last, const glm::vec3& p);
+/// The angle a slowing spin turns in a step: the spin less its faded share, times the step time
+[[nodiscard]] float FadedSpinAngle(float spin, float fade, float dt);
+/// A rotation turned about its own vertical: the first and third axes turn, each part by the stored cosine and the wide
+/// sine
+[[nodiscard]] glm::mat3 SpinAboutVertical(const glm::mat3& rotation, float angle);
+/// How fast a smoothed velocity follows the real one: the natural log of (1 - smoothing) times the scale
+[[nodiscard]] float SmoothingRate(float smoothing, float scale);
+/// The share of the gap a smoothed velocity closes in a step: 1 - e^-(dt rate), with e to the power found by the FPU's
+/// own steps
+[[nodiscard]] float SmoothingShare(float dt, float rate);
 
 /// The particles' value noise: a lattice of 256 values in -1..1 fixed for every game, read through a permutation of
 /// the lattice points and blended linearly between them

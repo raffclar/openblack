@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/X87.h"
+#include "Common/X87Matrix.h"
 #include "Common/X87Vector.h"
 
 using namespace openblack::particles;
@@ -152,12 +153,20 @@ Argb surface::Modulate(Argb a, Argb b)
 
 uint32_t surface::LightLevel(glm::vec3 normal, glm::vec3 towardsLight, uint32_t ambient)
 {
-	const auto facing = static_cast<int32_t>(std::nearbyint(glm::dot(towardsLight, normal) * k_ByteMax));
+	// The products are added z, y, then x; the level is stored as a float before it is rounded to a whole number
+	const auto facing = static_cast<int32_t>(std::nearbyint(x87::DotZyx(towardsLight, normal) * k_ByteMax));
 	if (facing < 0)
 	{
 		return ambient;
 	}
 	return ambient + static_cast<uint32_t>((static_cast<int32_t>(255u - ambient) * facing) >> 8);
+}
+
+glm::vec3 surface::TowardsLight(const glm::mat4& worldToSurface, glm::vec3 light)
+{
+	constexpr x87::AxisOrders k_LightOrder {{{0, 2, 1}, {2, 1, 0}, {2, 1, 0}}};
+	const auto towards = x87::TransformPoint(worldToSurface, light, k_LightOrder);
+	return towards != glm::vec3(0.0f) ? x87::Scaled<x87::SumOrder::Xzy>(towards) : towards;
 }
 
 Mesh surface::Build(const Shape& shape, Argb specularColour)
