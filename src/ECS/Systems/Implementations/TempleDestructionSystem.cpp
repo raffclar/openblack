@@ -159,7 +159,7 @@ void TempleDestructionSystem::DamageEffect(entt::entity entity, Temple& temple)
 	{
 		// The sound takes the next of the five whether or not it can be heard
 		const auto sample = temple_heart::NextDamageSample(registry.Context().nextDamageBeamSound);
-		_world->PlayOnce(k_DamageSounds.at(sample - k_FirstDamageSample).value(), position, entity);
+		_world->PlayOnce(k_DamageSounds.at(sample - k_FirstDamageSample).value(), position, entity, audio::Follows::Nothing);
 	}
 	if (!from.has_value() || !to.has_value())
 	{
@@ -283,7 +283,8 @@ void TempleDestructionSystem::Step(entt::entity entity, Temple& temple)
 			std::erase(_loops, std::pair {entity, loop});
 		}
 		temple.destructionLoops.clear();
-		_world->PlayOnce(k_ExplosionSound.value(), position, entity);
+		// The explosion stays with the temple, and it stops when the temple goes
+		_world->PlayOnce(k_ExplosionSound.value(), position, entity, audio::Follows::Owner);
 		_world->StartSpotVisual(SpotVisualType::ExplosionCitadel, position,
 		                        td::TurnsFor(millisecondsPerTurn, td::k_ExplosionSeconds), temple.owner);
 	}

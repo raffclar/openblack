@@ -103,8 +103,11 @@ void Sound(entt::entity entity, const Creature& creature, const Transform& trans
 		else if (Locator::audio::has_value())
 		{
 			// The sample has its say in when it is heard, as for every sound effect
-			const auto result = Locator::audio::value().PlayAnimEffect(bank, keys.ToArray(), entity, transform.position,
-			                                                           audio::CurrentSoundEffectConditions());
+			auto& audio = Locator::audio::value();
+			const auto result =
+			    audio.PlayAnimEffect(bank, keys.ToArray(), entity, transform.position, audio::CurrentSoundEffectConditions());
+			// The sound stays with the creature while it plays
+			audio.SetEmitterFollows(result.emitter, audio::Follows::Owner);
 			note.sample = result.sample;
 			note.played = result.outcome == AnimEffectPlay::Outcome::Played;
 			switch (result.outcome)

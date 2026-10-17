@@ -22,6 +22,7 @@
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/SoundPoint.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -72,18 +73,10 @@ void LetGo(SoundTag& tag)
 	tag.emitter = entt::null;
 }
 
-/// The point that an object's sounds come from. An object in a hand sounds from the hand, because the hand moves the
-/// object's map position to the hand each turn. Other objects sound from their position.
+/// The point that an object's sounds come from (see ecs::SoundPointOf). An object in a hand sounds from the hand.
 glm::vec3 SoundPoint(const ecs::Registry& registry, entt::entity object, const Transform& transform)
 {
-	if (const auto* inHand = registry.TryGet<const InHand>(object); inHand != nullptr && registry.Valid(inHand->hand))
-	{
-		if (const auto* hand = registry.TryGet<const Transform>(inHand->hand); hand != nullptr)
-		{
-			return hand->position;
-		}
-	}
-	return transform.position;
+	return ecs::SoundPointOf(registry, object).value_or(transform.position);
 }
 
 /// Whether a point is within a sound's reach of the camera, a reach of none meaning anywhere
@@ -123,6 +116,8 @@ void SoundTagSystem::StartPointSound(entt::entity entity, SoundTag& tag, const g
 	tag.emitter = audio.CreateEmitter(tag.sound, position, audio::PlayType::Once, entity);
 	if (tag.emitter != entt::null)
 	{
+		// The sound stays at its point, and the audio turn stops it when the camera goes too far
+		audio.SetEmitterFollows(tag.emitter, audio::Follows::Place);
 		audio.PlayEmitter(tag.emitter);
 	}
 }
@@ -200,6 +195,9 @@ void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 		    audio.CreateEmitter(tag.sound, position, tag.loops ? audio::PlayType::Repeat : audio::PlayType::Once, entity);
 		if (tag.emitter != entt::null)
 		{
+			// This system moves the sound with its object each turn, and the audio turn stops it when the camera goes
+			// too far
+			audio.SetEmitterFollows(tag.emitter, audio::Follows::Place);
 			audio.PlayEmitter(tag.emitter);
 		}
 	});

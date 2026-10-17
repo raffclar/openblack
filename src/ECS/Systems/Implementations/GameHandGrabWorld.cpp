@@ -447,9 +447,11 @@ void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 {
 	if (Locator::audio::has_value())
 	{
-		// Each of these sounds is a sound of its own to the voice rules
-		audio::StartGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
-		                            {.position = position, .voiceOwner = audio::VoiceOwner::OwnSound});
+		// Each of these sounds is a sound of its own to the voice rules. It stays where it started, and it stops when
+		// the camera goes too far.
+		audio::StartGameSoundEffect(
+		    entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
+		    {.position = position, .voiceOwner = audio::VoiceOwner::OwnSound, .follows = audio::Follows::Place});
 	}
 }
 

@@ -116,10 +116,10 @@ public:
 	[[nodiscard]] virtual GameRandomInterface* Random() = 0;
 	/// A sound heard the same everywhere
 	virtual void PlaySound(audio::SoundId sound) = 0;
-	/// A collision sound from a bank, as an animation's sound effect is played; none when there is no audio
+	/// A collision sound from a bank, as an animation's sound effect is played; none when there is no audio. A sound that
+	/// follows moves with its owner each audio turn, and stops when its owner goes.
 	virtual std::optional<audio::AnimEffectPlay> PlayCollisionSound(std::span<const int32_t> keys, entt::entity owner,
-	                                                                glm::vec3 position) = 0;
-	virtual void MoveSound(entt::entity emitter, glm::vec3 position) = 0;
+	                                                                glm::vec3 position, bool follows) = 0;
 	virtual void AddWaterRing(const water_rings::Ring& ring) = 0;
 	/// Sends the fish near a splash in the sea darting away
 	virtual void ScareFish(glm::vec3 point) = 0;

@@ -379,8 +379,10 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 			const std::array<int32_t, 5> keys {0, 0, 0, 0, effect.soundAction};
 			if (const auto* transform = registry.TryGet<const Transform>(entity))
 			{
-				const auto played =
-				    Locator::audio::value().PlayAnimEffect(std::string(k_SpellSoundBank), keys, entity, transform->position);
+				auto& audio = Locator::audio::value();
+				const auto played = audio.PlayAnimEffect(std::string(k_SpellSoundBank), keys, entity, transform->position);
+				// The sound stays with the creature while it plays
+				audio.SetEmitterFollows(played.emitter, audio::Follows::Owner);
 				SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Creature spell {} on creature {}: sound {} sample {} outcome {}",
 				                    static_cast<int>(event.spell), entt::to_integral(entity), effect.soundAction,
 				                    played.sample.value_or(-1), static_cast<int>(played.outcome));

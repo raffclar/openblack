@@ -192,7 +192,9 @@ void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
 		if (idleChance > 1 && TreeRustle::IsAmongTree(transform.position, height, camera) &&
 		    rng.NextValue<uint32_t>(0, idleChance - 1) == 1)
 		{
-			audio.PlayAnimEffect(bank, TreeRustle::IdleKeys().ToArray(), entity, transform.position);
+			// The idle rustle stays with its tree. The rustle of a bend stays where it started.
+			const auto idle = audio.PlayAnimEffect(bank, TreeRustle::IdleKeys().ToArray(), entity, transform.position);
+			audio.SetEmitterFollows(idle.emitter, audio::Follows::Owner);
 		}
 	});
 }

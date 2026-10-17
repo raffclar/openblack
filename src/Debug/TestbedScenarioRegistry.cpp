@@ -1753,21 +1753,23 @@ void AddAppearance(std::vector<Scenario>& all)
 	                 Command {.kind = Kind::GiveCreedPower, .delaySeconds = 1.0f, .value = 3, .amount = 1.0f}},
 	});
 
-	// Sounds on objects follow the objects: a creature that hums as it walks, and a ball with a sound in the hand
+	// Sounds on objects follow the objects: a creature that hums as it walks, a burning villager, and a ball with a sound
+	// in the hand
 	all.push_back({
 	    .id = "audio.sounds_follow_objects",
 	    .name = "Sounds on objects follow the objects",
 	    .facet = Facet::Audio,
-	    .description = "The player's giant ape gets the full creed power and walks from the west to the east. A script "
-	                   "attaches the village bell sound to a ball. The hand takes the ball and moves it from the left of "
-	                   "the screen to the right. Then the hand puts the ball down.",
-	    .expected = "The hum of the ape moves from the left speaker to the right speaker as the ape walks. The bell "
-	                "moves with the hand, also when the hand holds the ball. Each sound changes its place one time each "
-	                "game turn, ten times each second.",
+	    .description = "The player's giant ape gets the full creed power and walks from the west to the east. A villager "
+	                   "burns and runs. A script attaches the village bell sound to a ball. The hand takes the ball and "
+	                   "moves it from the left of the screen to the right. Then the hand puts the ball down.",
+	    .expected = "The hum and the footsteps of the ape move from the left speaker to the right speaker as the ape "
+	                "walks. The fire moves with the villager. The bell moves with the hand, also when the hand holds the "
+	                "ball. Each sound changes its place one time each game turn, ten times each second.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview},
+	    .framing = {.shot = Shot::Overview, .distance = 0.55f},
 	    .creatures = {Posed(CreatureType::GiantApe, {-40.0f, 10.0f}, 90.0f)},
-	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {0.0f, -10.0f}}},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {0.0f, -10.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {20.0f, -30.0f}, .alight = true}},
 	    .commands = {Command {.kind = Kind::GiveCreedPower, .delaySeconds = 1.0f, .value = 3, .amount = 1.0f},
 	                 Go(Kind::WalkTo, 0, {40.0f, 10.0f}, 1.0f, false),
 	                 Command {.kind = Kind::AttachObjectScriptSound,

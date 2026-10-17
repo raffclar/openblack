@@ -193,21 +193,19 @@ void GameDynamicsWorld::PlaySound(audio::SoundId sound)
 }
 
 std::optional<audio::AnimEffectPlay> GameDynamicsWorld::PlayCollisionSound(std::span<const int32_t> keys, entt::entity owner,
-                                                                           glm::vec3 position)
+                                                                           glm::vec3 position, bool follows)
 {
 	if (!Locator::audio::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::audio::value().PlayAnimEffect(std::string(k_CollisionBank), keys, owner, position);
-}
-
-void GameDynamicsWorld::MoveSound(entt::entity emitter, glm::vec3 position)
-{
-	if (Locator::audio::has_value())
+	auto& audio = Locator::audio::value();
+	const auto played = audio.PlayAnimEffect(std::string(k_CollisionBank), keys, owner, position);
+	if (follows)
 	{
-		Locator::audio::value().SetEmitterPosition(emitter, position);
+		audio.SetEmitterFollows(played.emitter, audio::Follows::Owner);
 	}
+	return played;
 }
 
 void GameDynamicsWorld::AddWaterRing(const water_rings::Ring& ring)

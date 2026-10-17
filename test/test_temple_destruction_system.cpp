@@ -65,7 +65,7 @@ public:
 		playing.push_back(emitter);
 		return emitter;
 	}
-	void PlayOnce(entt::id_type sound, glm::vec3 /*position*/, entt::entity /*owner*/) override
+	void PlayOnce(entt::id_type sound, glm::vec3 /*position*/, entt::entity /*owner*/, audio::Follows /*follows*/) override
 	{
 		onceSound = sound;
 		played.push_back(turn);

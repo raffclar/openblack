@@ -1522,6 +1522,11 @@ void MagicSystem::Delete(entt::entity entity)
 
 void MagicSystem::ProcessTurn()
 {
+	// The hum of an armed seed follows the hand one time each turn, before the audio turn
+	if (_holdLoop != entt::null && Locator::audio::has_value())
+	{
+		Locator::audio::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
+	}
 	if (!Locator::infoConstants::has_value() || !Locator::particleSystem::has_value())
 	{
 		return;
@@ -1613,11 +1618,6 @@ void MagicSystem::Update(float /*seconds*/)
 	auto& registry = EntityRegistry();
 	TakeGestures();
 	KeepCreatureSpellSounds();
-	// The hum of an armed seed follows the hand
-	if (_holdLoop != entt::null && Locator::audio::has_value())
-	{
-		Locator::audio::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
-	}
 	// A seed out of the hand stays with its miracle, shown over it or not
 	ShowSeedsWithSpells();
 	// The held seed itself is placed in the hand as the hand is posed, and its in-hand effect with it
@@ -2144,7 +2144,8 @@ void MagicSystem::StartHoldLoop()
 		                                        {.position = _hand.handPosition,
 		                                         .playType = audio::PlayType::Repeat,
 		                                         .owner = *_held,
-		                                         .voiceOwner = audio::VoiceOwner::OwnSound});
+		                                         .voiceOwner = audio::VoiceOwner::OwnSound,
+		                                         .follows = audio::Follows::Place});
 	}
 }
 

@@ -807,9 +807,10 @@ uint32_t villager_breeding::GivingBirth(LivingAction& action)
 		// The baby cries one of its cries, at its side
 		const auto cry =
 		    k_BabyCrySounds.at(Locator::gameRandom::value().LocalRand(static_cast<int32_t>(k_BabyCrySounds.size())));
-		audio::StartGameSoundEffect(
-		    static_cast<entt::id_type>(cry),
-		    {.position = Entities().Get<const Transform>(child).position, .voiceOwner = audio::VoiceOwner::OwnSound});
+		audio::StartGameSoundEffect(static_cast<entt::id_type>(cry),
+		                            {.position = Entities().Get<const Transform>(child).position,
+		                             .voiceOwner = audio::VoiceOwner::OwnSound,
+		                             .follows = audio::Follows::Place});
 	}
 	SetTopState(action, VillagerStates::HousewifeGivenBirth);
 	return 1;

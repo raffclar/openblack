@@ -90,8 +90,9 @@ void AbodeSoundSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 			continue;
 		}
 		// The sound plays only as its sample allows, as the scripts' sound effects do
-		[[maybe_unused]] const auto played =
-		    audio.PlayAnimEffect(bank, keys, entity, position, audio::CurrentSoundEffectConditions());
+		const auto played = audio.PlayAnimEffect(bank, keys, entity, position, audio::CurrentSoundEffectConditions());
+		// The sound stays with its building, and it stops when the building goes
+		audio.SetEmitterFollows(played.emitter, audio::Follows::Owner);
 		++_sounds;
 		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Building {} makes its sound {}: {}/{} ({})", entt::to_integral(entity),
 		                    keys[4], bank, played.sample.value_or(-1), static_cast<int>(played.outcome));

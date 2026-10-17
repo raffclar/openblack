@@ -521,6 +521,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AudioEmitter::state>("state")
 	    .Field<&components::AudioEmitter::music>("music")
 	    .Field<&components::AudioEmitter::owner>("owner")
+	    .Field<&components::AudioEmitter::follows>("follows")
 	    .Field<&components::AudioEmitter::bank>("bank")
 	    .Field<&components::AudioEmitter::group>("group");
 	Reflect<components::Ball>(context).Field<&components::Ball::destination>("destination");
