@@ -22,8 +22,6 @@ namespace
 constexpr float k_Pi = std::numbers::pi_v<float>;
 constexpr float k_TwoPi = 2.0f * k_Pi;
 constexpr float k_QuarterTurn = k_Pi / 2.0f;
-/// The ordinary drawn turn, in radians a millisecond
-constexpr double k_TurnPerMillisecond = 0.003;
 /// A high-detail body's further turn, in radians a second
 constexpr float k_DetailedTurnPerSecond = 3.927f;
 /// Models face a quarter turn off the game's headings
