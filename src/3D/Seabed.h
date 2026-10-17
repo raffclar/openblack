@@ -59,6 +59,9 @@ struct Seabed
 	std::vector<float> cliff;
 	/// Points along the foot of the cliffs, on the sea's side, with the direction out to sea (zw)
 	std::vector<glm::vec4> cliffFoot;
+	/// How much each corner is in a still pond, 0 to 1: water at sea level that does not join the open sea at the
+	/// map's edge, and the land just round it
+	std::vector<float> pond;
 
 	/// The depth of the sea bed at a point, blended between the four corners round it; the nearest edge outside the
 	/// grid, and 0 when there is no grid
@@ -74,10 +77,10 @@ inline constexpr float k_LowestLandHeight = 4.0f * k_HeightUnit;
 /// The gentlest and the steepest slope a coast goes on down at under the water, in height for each unit across
 inline constexpr float k_GentlestSlope = 0.06f;
 inline constexpr float k_SteepestSlope = 6.0f;
-/// A coast is a cliff where the land within two cells of it rises this much over sea level, in altitude steps, to the
-/// full weight at the second
-inline constexpr float k_CliffRiseStart = 14.0f;
-inline constexpr float k_CliffRiseFull = 30.0f;
+/// A coast is a cliff where the land within one cell of it rises this much over sea level, in altitude steps, to the
+/// full weight at the second: a face of about 23 to 37 units over 10 units across, so only sharp cliffs count
+inline constexpr float k_CliffRiseStart = 35.0f;
+inline constexpr float k_CliffRiseFull = 55.0f;
 /// How far out to sea a cliff's foot reaches, in cells
 inline constexpr float k_CliffReach = 6.0f;
 
@@ -116,6 +119,11 @@ inline constexpr float k_GentleMost = 0.3f;
 /// The cells where a creature can walk, for a grid of corner altitudes (x first along each row of z): (size.x - 1) by
 /// (size.y - 1) cells. A cell is walkable when it is Walkable and it joins the largest region of Walkable cells side by
 /// side, as the creature's own map of the land has it. A shallow patch of sea that does not join the land is not walkable.
+/// The ponds of a grid of corners that are land (true) or water (false), x first along each row of z: 1 for each water
+/// corner that does not join the water at the edge of the grid side by side, then spread out by one corner onto the
+/// land and blended over the corners round it, 0 to 1
+[[nodiscard]] std::vector<float> Ponds(const std::vector<bool>& land, glm::ivec2 size);
+
 [[nodiscard]] std::vector<bool> WalkableCells(std::span<const uint8_t> altitudes, glm::ivec2 size);
 
 /// The sea bed for a grid of corner altitudes (x first along each row of z). Each corner of the sea goes down by its

@@ -452,18 +452,19 @@ vec3 Shafts(vec3 eye, vec3 direction, float range, float t, float jitter)
 float Foam(vec2 p, float depth, float t)
 {
 	// The shallows of a gentle beach go down slowly, so the bands are thin in depth: a wide band of foam would cover them
-	float shallow = 1.0f - smoothstep(0.0f, 0.45f, depth);
+	float shallow = 1.0f - smoothstep(0.0f, 0.25f, depth);
 	if (shallow <= 0.0f)
 	{
 		return 0.0f;
 	}
-	// Two layers of noise that drift different ways, turned so that their cells do not line up
+	// Two layers of noise that drift different ways, turned so that their cells do not line up. The chunks are small
+	// (cells of about a metre) and cover a quarter of the water that the foam covered before.
 	vec2 q = vec2(p.x * 0.8f - p.y * 0.6f, p.x * 0.6f + p.y * 0.8f);
-	float patches = UwFoamNoise(q * 0.7f + vec2(t * 0.25f, -t * 0.18f)) * 0.6f + UwFoamNoise(p * 1.9f - vec2(t * 0.4f, t * 0.31f)) * 0.4f;
-	float lines = 0.5f + 0.5f * sin(depth * 9.0f - t * 2.2f + UwNoise(p * 0.4f) * 4.0f);
-	float edge = 1.0f - smoothstep(0.0f, 0.06f, depth);
-	float foam = smoothstep(0.55f, 0.8f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
-	return clamp(max(foam, edge * (0.5f + 0.5f * patches)), 0.0f, 1.0f);
+	float patches = UwFoamNoise(q * 1.4f + vec2(t * 0.25f, -t * 0.18f)) * 0.6f + UwFoamNoise(p * 3.8f - vec2(t * 0.4f, t * 0.31f)) * 0.4f;
+	float lines = 0.5f + 0.5f * sin(depth * 9.0f - t * 2.2f + UwNoise(p * 0.8f) * 4.0f);
+	float edge = 1.0f - smoothstep(0.0f, 0.03f, depth);
+	float foam = smoothstep(0.7f, 0.9f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
+	return clamp(max(foam, edge * smoothstep(0.45f, 0.7f, patches)), 0.0f, 1.0f);
 }
 
 // The storm on the sea: the rogue wave and the lightning.
@@ -483,12 +484,12 @@ float RogueFoam(vec2 p, vec4 shore, float t)
 	vec2 q = vec2(dot(p, along), dot(p, vec2(-along.y, along.x)));
 	// The face is where the surface falls steeply ahead of the crest
 	float steep = smoothstep(0.25f, 0.65f, -dot(slope, along));
-	float churn = UwFoamNoise(q * vec2(0.3f, 0.45f) - vec2(t * 1.1f, 0.0f));
-	float streaks = smoothstep(0.35f, 0.7f, UwNoise(vec2(q.x * 0.12f - t * 0.9f, q.y * 0.55f)));
-	float top = smoothstep(0.45f, 0.85f, crest) * (0.75f + 0.25f * churn);
-	float face = steep * smoothstep(0.02f, 0.3f, crest) * (0.5f + 0.5f * streaks);
+	float churn = UwFoamNoise(q * vec2(0.6f, 0.9f) - vec2(t * 1.1f, 0.0f));
+	float streaks = smoothstep(0.55f, 0.8f, UwNoise(vec2(q.x * 0.24f - t * 0.9f, q.y * 1.1f)));
+	float top = smoothstep(0.6f, 0.95f, crest) * smoothstep(0.4f, 0.65f, churn);
+	float face = steep * smoothstep(0.2f, 0.5f, crest) * streaks;
 	// The white water that the breaking crest leaves on its back, in patches that break up
-	float back = smoothstep(0.1f, 0.5f, crest) * smoothstep(0.0f, 0.15f, dot(slope, along)) * smoothstep(0.4f, 0.7f, churn);
+	float back = smoothstep(0.1f, 0.5f, crest) * smoothstep(0.0f, 0.15f, dot(slope, along)) * smoothstep(0.6f, 0.8f, churn);
 	return clamp((top + face + back * 0.6f) * 1.2f * u_uwRogue[1].z, 0.0f, 1.0f);
 }
 
@@ -704,6 +705,9 @@ void main()
 			// How deep the water is over what the pixel shows, and over the ground under the surface
 			float thickness = farFloor ? 160.0f : waterTop - world.y;
 			float cliff = UwShoreCliff(shore);
+			// A still pond: smooth water that mirrors the sky, brown and dark from what it holds
+			float pond = UwShorePond(shore);
+			roughness = mix(roughness, 0.025f, pond);
 			// The scene under the surface, bent by the waves: the bend is less where the water is thin, and none
 			// where it would show what is above the water
 			vec3 below = world;
@@ -729,6 +733,12 @@ void main()
 			float path = min(length(below - surfacePoint), 400.0f);
 			vec3 left = UwTransmittance(max(path + down * 0.6f, (1.0f - originalLand) * UW_SHALLOWS_TINT));
 			vec3 water = through * left + scatter * (1.0f - left);
+			if (pond > 0.0f)
+			{
+				vec3 pondLeft = exp(-vec3(0.45f, 0.55f, 0.8f) * (path + down * 0.6f + 0.3f));
+				vec3 pondColour = vec3(0.07f, 0.08f, 0.04f) * (0.3f + 0.7f * u_uwLightColour.rgb * u_uwLightColour.w);
+				water = mix(water, through * pondLeft + pondColour * (1.0f - pondLeft), pond);
+			}
 			// The silt in the water under the surface, on the way to what the pixel shows
 			float siltMean;
 			vec3 siltStart = vec3(surfacePoint.x, min(surfacePoint.y, u_uwParams.z) - 0.05f, surfacePoint.z);
@@ -768,9 +778,9 @@ void main()
 				float foam = Foam(surfacePoint.xz, max(min(thickness, waterDepth), 0.0f), t) * (1.0f - originalLand);
 				float crest = lift / max(UwWaveTop(), 1e-3f);
 				// The shore wave breaks on its face as it comes in, from 20 units out to the edge of the water
-				float breaking = face * (1.0f - smoothstep(2.0f, 20.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth) *
+				float breaking = face * (1.0f - smoothstep(1.0f, 10.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth) *
 				                 (1.0f - cliff);
-				foam = max(foam, breaking * (0.6f + 0.4f * UwNoise(surfacePoint.xz * 1.3f + t)));
+				foam = max(foam, breaking * smoothstep(0.5f, 0.75f, UwFoamNoise(surfacePoint.xz * 2.6f + t * 0.3f)));
 				// At the foot of a cliff: a thick band of boiling white water against the rock, and broad sheets of foam
 				// that each crash pushes out and that break up into patches and streaks as the current carries them
 				// away. The foam builds up between the waves, so it never clears at a cliff.
@@ -779,19 +789,18 @@ void main()
 					vec2 shift;
 					vec2 flow = UwCurrent(vec3(surfacePoint.x, u_uwParams.z, surfacePoint.z), t, shift);
 					vec2 carried = surfacePoint.xz - shift - u_uwCurrent.xy * t;
-					float boil = UwFoamNoise(carried * 0.7f - t * 0.5f);
-					float band = (1.0f - smoothstep(4.0f, 12.0f, shore.x)) * (0.75f + 0.25f * boil);
-					float omega = mix(1.1f, 1.5f, u_uwWaves.y);
-					float since = fract((omega * t + UwNoise(surfacePoint.xz * 0.008f) * 1.2f) / 6.2831853f);
+					float boil = UwFoamNoise(carried * 1.4f - t * 0.5f);
+					float band = (1.0f - smoothstep(1.5f, 5.0f, shore.x)) * smoothstep(0.35f, 0.6f, boil);
+					float since = fract((u_uwPhase.x + UwNoise(surfacePoint.xz * 0.008f) * 1.2f) / 6.2831853f);
 					float front = 6.0f + since * (40.0f + 40.0f * u_uwWaves.y);
 					float push = smoothstep(front - 25.0f, front, shore.x) * (1.0f - smoothstep(front, front + 4.0f, shore.x));
-					float spread = 1.0f - smoothstep(10.0f, 70.0f + 50.0f * u_uwWaves.y, shore.x);
-					float pieces = smoothstep(0.38f, 0.62f, UwFoamNoise(carried * 0.18f) * 0.7f + UwFoamNoise(carried * 0.6f) * 0.3f);
-					float sheets = spread * mix(pieces, 1.0f, push * 0.6f);
+					float spread = 1.0f - smoothstep(5.0f, 25.0f + 15.0f * u_uwWaves.y, shore.x);
+					float pieces = smoothstep(0.55f, 0.75f, UwFoamNoise(carried * 0.36f) * 0.7f + UwFoamNoise(carried * 1.2f) * 0.3f);
+					float sheets = spread * pieces * (1.0f + push * 0.5f);
 					float strength = 0.7f + 0.3f * u_uwWaves.y + 0.15f * min(u_uwWaves.x, 2.0f);
 					foam = max(foam, clamp((band + sheets * 0.85f) * cliff * 1.4f, 0.0f, 1.0f) * strength + length(flow) * 0.0f);
 				}
-				foam = max(foam, ring.z * 0.6f);
+				foam = max(foam, ring.z * 0.6f * smoothstep(0.4f, 0.65f, UwFoamNoise(surfacePoint.xz * 3.0f)));
 				// The foam of the wakes and the splashes, and the water line on the hulls
 				foam = max(foam, max(UwWakeFoam(surfacePoint.xz, t), UwHullLine(surfacePoint.xz, t) * 0.6f));
 				foam = max(foam, RogueFoam(surfacePoint.xz, shore, t));
@@ -805,15 +814,16 @@ void main()
 					float capsShown = u_uwSea.x > 0.5f ? 1.0f - smoothstep(1.0f, 3.0f, max(seen.x * seen.w, seen.x)) : 1.0f;
 					float streaksShown = u_uwSea.x > 0.5f ? 1.0f - smoothstep(0.7f, 2.0f, UwFootprintAlong(seen, across)) : 1.0f;
 					vec2 q = surfacePoint.xz;
-					float caps = smoothstep(0.5f, 0.9f, crest) * smoothstep(0.45f, 0.75f, UwNoise(q * 0.35f + t * 0.4f));
+					float caps = smoothstep(0.72f, 0.98f, crest) * smoothstep(0.6f, 0.85f, UwNoise(q * 0.7f + t * 0.4f));
 					// Two layers, the second turned against the first, so the noise's square cells do not show
-					vec2 streakUv = vec2(dot(q, wind) * 0.04f - t * 0.2f, dot(q, across) * 0.5f);
+					vec2 streakUv = vec2(dot(q, wind) * 0.08f - t * 0.2f, dot(q, across) * 1.0f);
 					vec2 turned = vec2(streakUv.x * 0.8f - streakUv.y * 0.6f, streakUv.x * 0.6f + streakUv.y * 0.8f);
-					float streaks = smoothstep(0.6f, 0.85f, UwNoise(streakUv) * 0.6f + UwNoise(turned * 1.7f + 3.1f) * 0.4f);
-					caps = mix(0.12f * smoothstep(0.2f, 1.0f, u_uwWaves.y), caps, capsShown);
-					streaks = mix(0.16f, streaks, streaksShown);
+					float streaks = smoothstep(0.75f, 0.92f, UwNoise(streakUv) * 0.6f + UwNoise(turned * 1.7f + 3.1f) * 0.4f);
+					caps = mix(0.03f * smoothstep(0.2f, 1.0f, u_uwWaves.y), caps, capsShown);
+					streaks = mix(0.04f, streaks, streaksShown);
 					foam = max(foam, (caps + streaks * 0.5f) * u_uwWaves.y);
 				}
+				foam *= 1.0f - pond;
 				vec3 foamColour = u_uwLightColour.rgb * (0.4f + 0.6f * max(u_uwAbove.y, 0.0f)) + u_uwSky.rgb * 0.7f +
 				                  scatter * 0.5f;
 				// The flash of the lightning lights the foam

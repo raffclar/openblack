@@ -219,7 +219,9 @@ TEST(Underwater, AStormMakesTheWavesHigher)
 		stormHighest = std::max(stormHighest, std::abs(underwater::WavesAt({x, 0.0f}, 3.0f, storm).height));
 	}
 	EXPECT_GT(stormHighest, calmHighest * 2.0f);
-	EXPECT_LT(calmHighest, 1.0f);
+	// The open sea on a calm day: crests of a metre or two, not more than four
+	EXPECT_LT(calmHighest, underwater::Metres(4.0f));
+	EXPECT_GT(calmHighest, underwater::Metres(0.8f));
 	// The slope agrees with the height's change along x
 	const auto here = underwater::WavesAt({10.0f, 5.0f}, 2.0f, calm);
 	const auto next = underwater::WavesAt({10.01f, 5.0f}, 2.0f, calm);
@@ -533,14 +535,15 @@ TEST(Underwater, NoiseMatchesTheShaderAtItsCorners)
 
 TEST(Underwater, CliffCrashesComeOnceAWave)
 {
-	const auto waves = underwater::WavesFor(0.0f, 0.0f);
+	auto waves = underwater::WavesFor(0.0f, 0.0f);
 	const glm::vec2 foot {3020.0f, 2110.0f};
-	// A calm sea: omega 1.1, so a crash about every 5.7 seconds
+	// A calm sea: a crash every 8 seconds
 	int starts = 0;
-	auto before = underwater::CliffCrashAt(foot, 0.0f, waves, 0.0f, 1.0f);
-	for (float t = 0.01f; t <= 57.2f; t += 0.01f)
+	auto before = underwater::CliffCrashAt(foot, waves, 0.0f, 1.0f);
+	for (float t = 0.01f; t <= 80.05f; t += 0.01f)
 	{
-		const auto now = underwater::CliffCrashAt(foot, t, waves, 0.0f, 1.0f);
+		waves.shorePhase = underwater::AdvanceShorePhase(waves.shorePhase, 0.0f, 0.01f);
+		const auto now = underwater::CliffCrashAt(foot, waves, 0.0f, 1.0f);
 		EXPECT_GE(now.since, 0.0f);
 		starts += underwater::CrashStarts(before, now) ? 1 : 0;
 		before = now;
@@ -552,9 +555,9 @@ TEST(Underwater, CliffCrashesAreStrongerAtHighTideAndAtCliffs)
 {
 	const auto waves = underwater::WavesFor(0.0f, 0.0f);
 	const glm::vec2 foot {3020.0f, 2110.0f};
-	const auto high = underwater::CliffCrashAt(foot, 10.0f, waves, 0.0f, 1.0f);
-	const auto low = underwater::CliffCrashAt(foot, 10.0f, waves, -underwater::k_LowestTide, 1.0f);
-	const auto flat = underwater::CliffCrashAt(foot, 10.0f, waves, 0.0f, 0.0f);
+	const auto high = underwater::CliffCrashAt(foot, waves, 0.0f, 1.0f);
+	const auto low = underwater::CliffCrashAt(foot, waves, -underwater::k_LowestTide, 1.0f);
+	const auto flat = underwater::CliffCrashAt(foot, waves, 0.0f, 0.0f);
 	EXPECT_GT(high.power, low.power);
 	EXPECT_NEAR(low.power / high.power, 0.7f, 1e-4f);
 	EXPECT_FLOAT_EQ(flat.power, 0.0f);
@@ -859,7 +862,7 @@ TEST(UnderwaterStorm, FloatingThingsRideTheRogueWave)
 {
 	const auto waves = underwater::WavesFor(1.0f, 0.0f);
 	const underwater::RogueWave rogue {.position = {0.0f, 0.0f}, .crest = 8.0f};
-	const auto plain = underwater::WavesAt({0.0f, 0.0f}, 3.0f, waves);
+	const auto plain = underwater::WavesInDepth({0.0f, 0.0f}, 3.0f, waves, 1000.0f, 50.0f);
 	const auto riding = underwater::WavesAt({0.0f, 0.0f}, 3.0f, waves, rogue, 1000.0f, 50.0f);
 	EXPECT_FLOAT_EQ(riding.height - plain.height, underwater::RogueWaveHeight({0.0f, 0.0f}, rogue, 1000.0f, 50.0f).height);
 	EXPECT_NEAR(riding.height - plain.height, 8.0f, 0.1f);
@@ -900,4 +903,114 @@ TEST(UnderwaterStorm, TheRingOfAStrikeSpreads)
 	EXPECT_GT(underwater::StrikeRingRadius(0.0f), 0.0f);
 	EXPECT_GT(underwater::StrikeRingRadius(1.0f), underwater::StrikeRingRadius(0.5f));
 	EXPECT_GT(underwater::StrikeRingRadius(3.0f), underwater::StrikeRingRadius(1.0f));
+}
+
+TEST(UnderwaterScale, TheVillagerSetsTheScale)
+{
+	// An adult man is 1.75 m tall, and the adult male villager is 1.661 units tall
+	EXPECT_NEAR(underwater::Metres(1.75f), 1.661f, 1e-4f);
+	EXPECT_NEAR(underwater::k_Gravity, 9.81f * underwater::k_UnitsPerMetre, 1e-5f);
+}
+
+TEST(UnderwaterWaves, TheWeatherChangesOnlyHowHighTheWavesAre)
+{
+	// A change of the weather must not move the crests: the lengths stay the same
+	const auto calm = underwater::WaveTable(underwater::WavesFor(0.0f, 0.4f));
+	const auto storm = underwater::WaveTable(underwater::WavesFor(1.0f, 0.4f));
+	for (size_t i = 0; i < calm.size(); ++i)
+	{
+		EXPECT_FLOAT_EQ(calm.at(i).y, storm.at(i).y);
+		EXPECT_GT(storm.at(i).z, calm.at(i).z);
+	}
+	const auto farCalm = underwater::FarWaveTable(underwater::WavesFor(0.0f, 0.4f));
+	const auto farStorm = underwater::FarWaveTable(underwater::WavesFor(1.0f, 0.4f));
+	for (size_t i = 0; i < farCalm.size(); ++i)
+	{
+		EXPECT_FLOAT_EQ(farCalm.at(i).y, farStorm.at(i).y);
+	}
+}
+
+TEST(UnderwaterWaves, TheShorePhaseGrowsSmoothlyWhenTheWeatherChanges)
+{
+	// The phase grows at the wave's speed: a jump of the storm changes only how fast it grows from then on
+	float phase = 0.0f;
+	float storm = 0.0f;
+	float most = 0.0f;
+	for (int frame = 0; frame < 6000; ++frame)
+	{
+		storm = frame < 3000 ? std::min(storm + 0.001f, 1.0f) : 0.0f;
+		const float next = underwater::AdvanceShorePhase(phase, storm, 0.01f);
+		if (next > phase)
+		{
+			most = std::max(most, next - phase);
+		}
+		phase = next;
+	}
+	EXPECT_LE(most, underwater::ShoreOmega(0.0f) * 0.01f + 1e-5f);
+	EXPECT_GT(underwater::ShoreOmega(0.0f), underwater::ShoreOmega(1.0f));
+}
+
+TEST(UnderwaterWaves, WavesGrowInShallowWaterAndBreak)
+{
+	const float k = 2.0f * std::numbers::pi_v<float> / underwater::Metres(100.0f);
+	EXPECT_FLOAT_EQ(underwater::Shoaling(k, 1000.0f), 1.0f);
+	// A little lower between deep and shallow water, then higher in shallow water, as one over the fourth root
+	EXPECT_LT(underwater::Shoaling(k, underwater::Metres(15.0f)), 1.0f);
+	const float shallow = underwater::Shoaling(k, underwater::Metres(1.0f));
+	const float shallower = underwater::Shoaling(k, underwater::Metres(0.25f));
+	EXPECT_GT(shallow, 1.0f);
+	EXPECT_NEAR(shallower / shallow, std::pow(4.0f, 0.25f), 0.05f);
+	EXPECT_FLOAT_EQ(underwater::Shoaling(k, 0.0f), 0.0f);
+	// In shallow water no crest is higher than the depth lets it be
+	const auto waves = underwater::WavesFor(1.0f, 0.0f);
+	for (float x = 0.0f; x < 300.0f; x += 3.0f)
+	{
+		const auto sample = underwater::WavesInDepth({x, 20.0f}, 5.0f, waves, 20.0f, 1.0f);
+		EXPECT_LE(std::abs(sample.height), underwater::BreakingCrest(1.0f) * 1.6f);
+	}
+}
+
+TEST(UnderwaterWaves, TheWavesVaryMoreFarOut)
+{
+	float nearLow = 1e9f;
+	float nearHigh = 0.0f;
+	float farLow = 1e9f;
+	float farHigh = 0.0f;
+	for (float x = 0.0f; x < 6000.0f; x += 37.0f)
+	{
+		for (float z = 0.0f; z < 6000.0f; z += 41.0f)
+		{
+			const float near = underwater::OpenSeaSize({x, z}, 0.0f, 10.0f);
+			const float far = underwater::OpenSeaSize({x, z}, 0.0f, 2000.0f);
+			nearLow = std::min(nearLow, near);
+			nearHigh = std::max(nearHigh, near);
+			farLow = std::min(farLow, far);
+			farHigh = std::max(farHigh, far);
+		}
+	}
+	EXPECT_GT(farHigh - farLow, (nearHigh - nearLow) + 0.8f);
+	EXPECT_GT(farHigh, nearHigh * 1.8f);
+}
+
+TEST(Seabed, WaterThatDoesNotJoinTheSeaIsAPond)
+{
+	// A ring of land with water inside, on a grid of water
+	constexpr glm::ivec2 k_Size {12, 12};
+	std::vector<bool> land(144, false);
+	for (int z = 3; z <= 8; ++z)
+	{
+		for (int x = 3; x <= 8; ++x)
+		{
+			land[static_cast<size_t>(z * 12 + x)] = x == 3 || x == 8 || z == 3 || z == 8;
+		}
+	}
+	const auto pond = seabed::Ponds(land, k_Size);
+	EXPECT_GT(pond[static_cast<size_t>(5 * 12 + 5)], 0.9f);
+	EXPECT_FLOAT_EQ(pond[0], 0.0f);
+	EXPECT_FLOAT_EQ(pond[static_cast<size_t>(5 * 12 + 1)], 0.0f);
+	// The texel keeps the pond and no cliff
+	const glm::vec4 shore {3.0f, 1.0f, 0.0f, -1.0f};
+	EXPECT_NEAR(underwater::ShorePond(underwater::ShoreTexel(shore, 0.0f, 1.0f)), 1.0f, 1e-5f);
+	EXPECT_FLOAT_EQ(underwater::ShoreCliff(underwater::ShoreTexel(shore, 0.0f, 1.0f)), 0.0f);
+	EXPECT_FLOAT_EQ(underwater::ShorePond(underwater::ShoreTexel(shore, 1.0f, 0.0f)), 0.0f);
 }

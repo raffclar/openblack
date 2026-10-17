@@ -30,6 +30,14 @@ uniform vec4 u_uwFlags3;
 // The sea's currents, one field for every moving thing in the water (see underwater::CurrentAt). xy: the steady flow
 // in units a second, z: how strong the swirls are, w: how strong the gusts are
 uniform vec4 u_uwCurrent;
+// x: the shore wave's phase in radians, which grows each frame (see underwater::AdvanceShorePhase); y: the height of
+// the open sea's waves that come in to the coast, in units; zw: unused
+uniform vec4 u_uwPhase;
+
+// The world's scale: units for each metre, from the height of an adult male villager (underwater::k_UnitsPerMetre)
+#define UW_UNITS_PER_METRE 0.949143f
+// The acceleration of gravity, in units a second squared (underwater::k_Gravity)
+#define UW_GRAVITY (9.81f * UW_UNITS_PER_METRE)
 
 // How much of each colour the water takes out for each unit the light goes through it: the red first, then the green
 // The lowest low tide under the usual height (underwater::k_LowestTide)
@@ -117,6 +125,9 @@ float UwCausticLayer(vec2 p, float t)
 	return pow(clamp(1.0f - edge * 1.5f, 0.0f, 1.0f), 4.0f);
 }
 
+// The size of a cell of the caustics on the sea bed: 1 m, so their lines are some tens of centimetres apart
+#define UW_CAUSTIC_FREQUENCY (1.0f / (1.0f * UW_UNITS_PER_METRE))
+
 // The caustics at a point of the surface: two layers that move different ways, so that the lines join and part.
 // sharpness goes from 1 (sharp, near the surface) to 0 (soft, deep down).
 float UwCaustics(vec2 p, float t, float sharpness)
@@ -191,11 +202,66 @@ vec2 UwWaveShown(float length, float pixel)
 // The height of the waves over the sea's level at a point, and the slope of the surface there, as a pixel of the
 // size `footprint` (see UwFootprint) shows them. `variance` is the variance of the slope that the pixel cannot show,
 // which makes the surface rougher.
-float UwWavesFiltered(vec2 p, float t, vec4 footprint, out vec2 slope, out float variance)
+// How much a wave of wave number k (deep water) grows as it comes into water of a depth: the same as
+// underwater::Shoaling
+float UwShoaling(float k, float depth)
+{
+	if (depth <= 0.0f)
+	{
+		return 0.0f;
+	}
+	float deep = k * depth;
+	if (deep > 6.0f)
+	{
+		return 1.0f;
+	}
+	// GLSL 1.20 has no hyperbolic functions: they come from exp here
+	float e1 = exp(-2.0f * deep);
+	float tanhDeep = (1.0f - e1) / (1.0f + e1);
+	float kh = deep / sqrt(max(tanhDeep, 1e-6f));
+	float e2 = exp(-2.0f * kh);
+	float tanhKh = (1.0f - e2) / (1.0f + e2);
+	float sinh2Kh = 0.5f * (exp(2.0f * kh) - exp(-2.0f * kh));
+	float group = tanhKh * (1.0f + 2.0f * kh / max(sinh2Kh, 1e-6f));
+	return 1.0f / sqrt(max(group, 1e-4f));
+}
+
+// How big the waves are at a point against the usual, from the distance to the coast: the same as
+// underwater::OpenSeaSize
+float UwOpenSeaSize(vec2 p, float t, float shoreDistance)
+{
+	float far = smoothstep(60.0f * UW_UNITS_PER_METRE, 500.0f * UW_UNITS_PER_METRE, shoreDistance);
+	float patches = 0.5f + 0.5f * sin(p.x * 0.0021f + p.y * 0.0013f + t * 0.01f) * sin(p.y * 0.0017f - p.x * 0.0009f - t * 0.008f);
+	return mix(0.85f, 0.7f + 0.9f * patches, far) * (1.0f + 0.35f * far);
+}
+
+// The height of the waves over the sea's level at a point in water of a depth, at a distance from the coast, and the
+// slope there, as a pixel of the size `footprint` shows them. Each wave grows as the water gets shallow, and all of
+// them break together where they are too high for the depth (the same as underwater::WavesInDepth). `breaking` is
+// how much of their height the breaking takes away, 0 to 1.
+float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float depth, out vec2 slope, out float variance,
+                     out float breaking)
 {
 	slope = vec2_splat(0.0f);
 	variance = 0.0f;
 	vec2 sets = UwWaveSets(p, t);
+	float open = smoothstep(60.0f * UW_UNITS_PER_METRE, 500.0f * UW_UNITS_PER_METRE, shoreDistance);
+	sets = pow(max(sets, vec2_splat(1e-3f)), vec2_splat(1.0f + 0.8f * open));
+	float size = UwOpenSeaSize(p, t, shoreDistance);
+	float total = 0.0f;
+	for (int n = 0; n < 14; n++)
+	{
+		vec4 wave = u_uwWaveTable[n];
+		total += wave.z * (n < 2 ? sets.y : sets.x) * UwShoaling(6.2831853f / max(wave.y, 1.0f), depth);
+	}
+	for (int m = 0; m < 3; m++)
+	{
+		vec4 wave = u_uwFarWaves[m];
+		total += wave.z * sets.y * UwShoaling(6.2831853f / max(wave.y, 1.0f), depth);
+	}
+	total *= size;
+	float kept = total > 0.0f ? min(1.0f, 0.39f * max(depth, 0.0f) / total) : 0.0f;
+	breaking = 1.0f - kept;
 	float sharp = 1.0f + 1.5f * u_uwWaves.y;
 	float height = 0.0f;
 	for (int i = 0; i < 14; i++)
@@ -203,11 +269,11 @@ float UwWavesFiltered(vec2 p, float t, vec4 footprint, out vec2 slope, out float
 		vec4 wave = u_uwWaveTable[i];
 		vec2 along = vec2(cos(wave.x), sin(wave.x));
 		float k = 6.2831853f / wave.y;
-		float omega = sqrt(9.8f * k) * 0.8f;
+		float omega = sqrt(UW_GRAVITY * k);
 		float pixel = u_uwSea.x > 0.5f ? UwFootprintAlong(footprint, along) : footprint.x;
 		// A sharp crest holds shorter waves than the wave's own length: the filter takes the length of the shortest
 		vec2 shown = UwWaveShown(u_uwSea.x > 0.5f ? wave.y / sharp : wave.y, pixel);
-		float a = wave.z * (i < 2 ? sets.y : sets.x);
+		float a = wave.z * (i < 2 ? sets.y : sets.x) * size * UwShoaling(k, depth) * kept;
 		float theta = k * dot(along, p) - omega * t + wave.w;
 		float s = 0.5f + 0.5f * sin(theta);
 		height += a * shown.x * (2.0f * pow(max(s, 0.0f), sharp) - 1.0f);
@@ -220,16 +286,23 @@ float UwWavesFiltered(vec2 p, float t, vec4 footprint, out vec2 slope, out float
 		vec4 wave = u_uwFarWaves[j];
 		vec2 along = vec2(cos(wave.x), sin(wave.x));
 		float k = 6.2831853f / max(wave.y, 1.0f);
-		float omega = sqrt(9.8f * k) * 0.8f;
+		float omega = sqrt(UW_GRAVITY * k);
 		float pixel = u_uwSea.x > 0.5f ? UwFootprintAlong(footprint, along) : footprint.x;
 		vec2 shown = UwWaveShown(wave.y, pixel);
-		float a = wave.z * sets.y;
+		float a = wave.z * sets.y * size * UwShoaling(k, depth) * kept;
 		float theta = k * dot(along, p) - omega * t + wave.w;
 		height += a * shown.x * sin(theta);
 		slope += along * (a * shown.y * k * cos(theta));
 		variance += (1.0f - shown.y * shown.y) * 0.5f * (a * k) * (a * k);
 	}
 	return height;
+}
+
+// The height of the waves of the open sea, far from the coast, as a pixel of the size `footprint` shows them
+float UwWavesFiltered(vec2 p, float t, vec4 footprint, out vec2 slope, out float variance)
+{
+	float breaking;
+	return UwWavesInDepth(p, t, footprint, 1e6f, 1e6f, slope, variance, breaking);
 }
 
 // The height of the waves over the sea's level at a point, and the slope of the surface there. The short waves fade
@@ -247,10 +320,26 @@ float UwRoughness(float variance)
 	return min(sqrt(0.06f * 0.06f + max(variance, 0.0f)), 1.0f);
 }
 
-// How the highest of the waves is over the sea's level, for the crests' foam
+// How the highest of the waves is over the sea's level, for the crests' foam: half the sum of their heights
 float UwWaveTop()
 {
-	return 0.8f * u_uwWaves.x;
+	float sum = 0.0f;
+	for (int i = 0; i < 14; i++)
+	{
+		sum += u_uwWaveTable[i].z;
+	}
+	for (int j = 0; j < 3; j++)
+	{
+		sum += u_uwFarWaves[j].z;
+	}
+	return max(0.5f * sum, 0.05f);
+}
+
+// How much a point is in a still pond that does not join the sea, 0 to 1. The shore map keeps it in the length of
+// the direction to the coast, over 1 (see underwater::ShoreTexel)
+float UwShorePond(vec4 shore)
+{
+	return clamp((length(shore.yz) - 1.0f) * 2.0f, 0.0f, 1.0f);
 }
 
 // The normal of the sea's surface from its slope
@@ -275,26 +364,44 @@ float UwShoreCliff(vec4 shore)
 	return clamp((1.0f - length(shore.yz)) * 2.0f, 0.0f, 1.0f);
 }
 
-// The shore wave at a distance from the coast: one front that rolls in along the whole coast towards the land, its
-// crests along the coast, with a steep face and a long back. It is the height over the sea's level; `face` is 1 on
-// the face of the wave and 0 elsewhere. At the foot of a cliff the wave does not run up.
-float UwShoreWave(float distance, vec2 xz, float t, float cliff, out float face)
+// The shore wave's wave number in deep water, radians a unit: 100 m long (underwater::k_ShoreWaveNumber)
+#define UW_SHORE_K (6.2831853f / (100.0f * UW_UNITS_PER_METRE))
+
+// How much of the shore wave there is at a depth: it shows where the water is shallow for the height of the waves
+// that come in, where they grow, steepen and break
+float UwShoreReach(float depth)
 {
-	float storm = u_uwWaves.y;
-	float k = 6.2831853f / mix(14.0f, 22.0f, storm);
-	float omega = mix(1.1f, 1.5f, storm);
-	float theta = k * distance + omega * t + UwNoise(xz * 0.008f) * 1.2f;
+	return 1.0f - smoothstep(1.2f, 3.0f, max(depth, 0.0f) / max(u_uwPhase.y, 0.05f));
+}
+
+// The shore wave at a distance from the coast, in water of a depth: one front that rolls in along the whole coast
+// towards the land, its crests along the coast, with a steep face and a long back. In shallow water the wave gets
+// shorter (its wave number grows as one over the root of the depth), taller as it shoals and no taller than the depth
+// lets it be before it breaks; at the edge of the water it runs up the beach as far as the swash. It is the height over
+// the sea's level; `face` is 1 on the face of the wave and 0 elsewhere. At the foot of a cliff and in a pond there is
+// no shore wave.
+float UwShoreWave(float distance, float depth, vec2 xz, float cliff, float pond, out float face)
+{
+	// The phase across the shallows: for a bed that goes down evenly, the phase of a shallow water wave is twice the
+	// distance over the root of the depth (times the angular speed and over the root of gravity)
+	float omega = sqrt(UW_GRAVITY * UW_SHORE_K);
+	float shallow = 2.0f * omega / sqrt(UW_GRAVITY * max(depth, 0.3f));
+	float theta = distance * max(UW_SHORE_K, shallow) + u_uwPhase.x + UwNoise(xz * 0.008f) * 1.2f;
 	float x = fract(theta / 6.2831853f);
 	float profile = smoothstep(0.0f, 0.1f, x) * pow(max(1.0f - x, 0.0f), 1.6f);
 	face = 1.0f - smoothstep(0.0f, 0.15f, x);
-	float reach = 1.0f - smoothstep(8.0f, 45.0f, distance);
+	// How high the wave is: the open sea's waves, grown as they shoal and cut where they break; at the edge of the
+	// water, the run up the beach
+	float grown = min(u_uwPhase.y * UwShoaling(UW_SHORE_K, depth), 0.78f * max(depth, 0.0f));
+	float runUp = u_uwWaves.w * 2.0f * (1.0f - smoothstep(0.0f, 6.0f, distance));
+	float height = max(grown * UwShoreReach(depth), runUp);
 	// No two waves alike: each wave has its own height, the waves of a set are higher, and the breakers are larger in
 	// some places along the beach than in others
 	float wave = floor(theta / 6.2831853f);
 	float own = 0.6f + 0.8f * UwHash(vec2(wave, 17.0f));
 	float sets = 0.55f + 0.45f * sin(wave * 0.9f);
 	float along = 0.6f + 0.8f * UwNoise(xz * 0.012f + vec2(3.0f, 7.0f));
-	return u_uwWaves.w * 2.0f * reach * (1.0f - cliff) * own * sets * along * (profile - 0.3f);
+	return height * (1.0f - cliff) * (1.0f - pond) * own * sets * along * (profile - 0.3f);
 }
 
 // A crash of the shore wave on the foot of a cliff at a point of the coast: the same wave as UwShoreWave, that
@@ -304,8 +411,9 @@ float UwShoreWave(float distance, vec2 xz, float t, float cliff, out float face)
 // make each crash different; `period` is the time from one wave to the next.
 float UwCliffCrash(vec2 xz, float t, out float since, out float crash, out float period)
 {
-	float omega = mix(1.1f, 1.5f, u_uwWaves.y);
-	float theta = omega * t + UwNoise(xz * 0.008f) * 1.2f;
+	// The shore wave's angular speed (underwater::ShoreOmega) and its phase, which grows each frame
+	float omega = 6.2831853f / (8.0f + 3.0f * u_uwWaves.y);
+	float theta = u_uwPhase.x + UwNoise(xz * 0.008f) * 1.2f;
 	period = 6.2831853f / omega;
 	crash = floor(theta / 6.2831853f);
 	since = fract(theta / 6.2831853f) * period;
@@ -318,7 +426,7 @@ float UwCliffCrash(vec2 xz, float t, out float since, out float crash, out float
 // The waves that go back out to sea from the foot of a cliff, in rings
 float UwCliffBackwash(float distance, float t, float cliff)
 {
-	float k = 6.2831853f / mix(14.0f, 22.0f, u_uwWaves.y);
+	float k = 6.2831853f / (18.0f * UW_UNITS_PER_METRE);
 	return cliff * u_uwWaves.w * 0.6f * sin(k * distance - 1.3f * t) * exp(-max(distance, 0.0f) / 25.0f);
 }
 
@@ -393,18 +501,32 @@ float UwSurfaceFiltered(vec2 xz, float t, vec4 footprint, vec4 shore, out vec2 s
 {
 	float level = u_uwParams.z;
 	float depth = level - shore.w;
-	float deep = smoothstep(5.0f, 40.0f, shore.x) * smoothstep(0.2f, 4.0f, depth);
+	float pond = UwShorePond(shore);
+	// The waves of the sea, grown and broken by the depth; where the shore wave rolls in, they give way to it. A pond
+	// has none: only small ripples that the wind makes.
+	float breaking;
 	vec2 deepSlope;
-	float height = UwWavesFiltered(xz, t, footprint, deepSlope, variance) * deep;
+	float height = UwWavesInDepth(xz, t, footprint, shore.x, depth, deepSlope, variance, breaking);
+	float deep = smoothstep(0.05f, 0.6f, depth) * (1.0f - 0.7f * UwShoreReach(depth)) * (1.0f - pond);
+	height *= deep;
 	variance *= deep * deep;
 	float cliff = UwShoreCliff(shore);
 	float faceNear;
-	float wave = UwShoreWave(shore.x, xz, t, cliff, face) + UwCliffBackwash(shore.x, t, cliff);
+	float wave = UwShoreWave(shore.x, depth, xz, cliff, pond, face) + UwCliffBackwash(shore.x, t, cliff);
 	// The shore wave's slope, along the direction to the coast
-	float nearer = UwShoreWave(shore.x - 0.5f, xz, t, cliff, faceNear) + UwCliffBackwash(shore.x - 0.5f, t, cliff);
+	float nearer =
+	    UwShoreWave(shore.x - 0.5f, depth, xz, cliff, pond, faceNear) + UwCliffBackwash(shore.x - 0.5f, t, cliff);
 	float length2 = dot(shore.yz, shore.yz);
 	vec2 towards = length2 > 1e-6f ? shore.yz / sqrt(length2) : vec2_splat(0.0f);
 	slope = deepSlope * deep + towards * ((nearer - wave) / 0.5f);
+	// The ripples of a pond: low, short and slow
+	if (pond > 0.0f)
+	{
+		vec2 q = xz * 1.7f;
+		float a = 0.012f * pond;
+		height += sin(q.x + t * 0.9f + sin(q.y * 0.6f + t * 0.3f)) * sin(q.y * 1.3f - t * 0.7f + sin(q.x * 0.5f)) * a;
+		slope += vec2(cos(q.x + t * 0.9f) * 1.7f, cos(q.y * 1.3f - t * 0.7f) * 2.2f) * a * 0.5f;
+	}
 	// The wakes and the rings of the things in the water, and the hulls that push the water down
 	vec2 wakeSlope;
 	float wake = UwWake(xz, wakeSlope);

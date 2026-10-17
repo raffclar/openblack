@@ -173,6 +173,8 @@ struct UnderwaterUniforms
 	glm::vec4 above {0.0f, 1.0f, 0.0f, 1.0f};
 	/// x: how high the waves are, y: how stormy, z: the wind's angle, w: the run of the waves up the beach
 	glm::vec4 waves {1.0f, 0.0f, 0.0f, 0.25f};
+	/// x: the shore wave's phase in radians, y: the height of the open sea's waves that come in to the coast
+	glm::vec4 phase {0.0f};
 	/// x: the storm's whitecaps, 1 on, 0 off
 	glm::vec4 flags2 {1.0f, 0.0f, 0.0f, 0.0f};
 	/// x: the wet rock of the cliffs, y: the spray's mist and haze; 1 on, 0 off

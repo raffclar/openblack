@@ -190,6 +190,7 @@ void Renderer::DrawSplashes(const FrameBuffer& target) const
 	program->SetUniformValue("u_uwEye", &uniforms.eye);
 	program->SetUniformValue("u_uwAbove", &uniforms.above);
 	program->SetUniformValue("u_uwWaves", &uniforms.waves);
+	program->SetUniformValue("u_uwPhase", &uniforms.phase);
 	program->SetUniformValue("u_uwSky", &uniforms.sky);
 	program->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
 	program->SetTextureSampler("s_sprayNoise", 3, _underwater->SprayNoise());

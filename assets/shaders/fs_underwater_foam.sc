@@ -59,7 +59,7 @@ void main()
 	float wet = smoothstep(-0.05f, 0.05f, waterDepth);
 	float cliff = UwShoreCliff(shore);
 	// The face of the shore wave as it breaks, and the edge of the water as it runs up the beach
-	float breaking = face * (1.0f - smoothstep(2.0f, 30.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth);
+	float breaking = face * (1.0f - smoothstep(1.0f, 12.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth);
 	float edge = (1.0f - smoothstep(0.0f, 0.06f, waterDepth)) * wet * (1.0f - cliff) * (1.0f - smoothstep(2.0f, 8.0f, abs(shore.x)));
 	// At the foot of a cliff: a band of foam that never clears, and a push of foam from each crash, at the time and the
 	// place where the crash drives its cloud of air under the water
@@ -67,15 +67,17 @@ void main()
 	float crash;
 	float period;
 	float strength = UwCliffCrash(p, t, since, crash, period);
-	float band = cliff * (1.0f - smoothstep(4.0f, 20.0f, shore.x));
-	float reach = 8.0f + since * (6.0f + 6.0f * storm);
+	float band = cliff * (1.0f - smoothstep(1.5f, 6.0f, shore.x));
+	float reach = 4.0f + since * (3.0f + 3.0f * storm);
 	float push = cliff * (strength / 0.55f) * exp(-since * 1.2f) * (1.0f - smoothstep(reach - 6.0f, reach, shore.x)) *
 	             (0.7f + 0.3f * u_uwWaves.w / 0.25f);
 	// The crests of a storm break into whitecaps
 	float crest = (height - level) / max(UwWaveTop(), 1e-3f);
-	float caps = storm * smoothstep(0.55f, 0.9f, crest) * smoothstep(0.4f, 0.7f, UwNoise(p * 0.35f + t * 0.4f)) *
+	float caps = storm * smoothstep(0.72f, 0.98f, crest) * smoothstep(0.6f, 0.85f, UwNoise(p * 0.7f + t * 0.4f)) *
 	             smoothstep(20.0f, 40.0f, shore.x);
-	float made = (5.0f * breaking + 1.0f * edge + 3.0f * band + 6.0f * push + 3.0f * caps) * wet;
+	// A quarter of the foam that the field made before; none on a pond
+	float made = (5.0f * breaking + 1.0f * edge + 3.0f * band + 6.0f * push + 3.0f * caps) * wet * 0.25f *
+	             (1.0f - UwShorePond(shore));
 	float air = 3.0f * breaking + 1.0f * band + 5.0f * push + 2.0f * caps;
 
 	// The foam decays: slowly at the cliffs and in the shallows, sooner on the open sea, and soon on dry sand

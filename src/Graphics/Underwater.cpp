@@ -156,32 +156,72 @@ float underwater::TideLevel(float scriptHour, float moonPhase)
 underwater::WaveState underwater::WavesFor(float storm, float windAngle)
 {
 	storm = std::clamp(storm, 0.0f, 1.0f);
-	return {.scale = 1.0f + storm * 3.5f, .storm = storm, .windAngle = windAngle, .swash = 0.25f + storm * 0.55f};
+	WaveState waves {.scale = 1.0f + storm * 3.5f, .storm = storm, .windAngle = windAngle, .swash = 0.25f + storm * 0.55f};
+	// The waves that come in to the coast: the sum of the heights of the swell and of the longest waves of the wind sea
+	const auto table = WaveTable(waves);
+	waves.swellHeight = table.at(0).z + table.at(1).z + table.at(2).z + table.at(3).z;
+	return waves;
 }
 
 std::array<glm::vec4, underwater::k_WaveCount> underwater::WaveTable(const WaveState& waves)
 {
 	std::array<glm::vec4, k_WaveCount> table {};
-	// A storm makes the wind sea's waves shorter and higher, and its short chop much higher
-	const float shorter = 1.0f - 0.35f * waves.storm;
-	// The swell: two long waves from far away, a little higher in a storm
-	table.at(0) = {k_SwellAngle, 120.0f, 0.22f * (1.0f + 0.5f * waves.storm), 0.7f};
-	table.at(1) = {k_SwellAngle + 0.15f, 92.0f, 0.14f * (1.0f + 0.5f * waves.storm), 3.9f};
-	// The wind sea: lengths falling by a share each, directions spread about the wind's, wider for the shorter waves
+	// The lengths of the waves stay the same in all weather, so a change of the weather never moves their crests. The
+	// weather changes only how high each wave is. scale is 1 for the usual sea and 0 for no waves.
+	const float on = std::min(waves.scale, 1.0f);
+	// The swell from far away: 160 m and 115 m long, 0.6 m and 0.4 m high on a calm day, two and a half times that
+	// in a storm
+	const float swell = on * (1.0f + 1.5f * waves.storm);
+	table.at(0) = {k_SwellAngle, Metres(160.0f), Metres(0.6f) * swell, 0.7f};
+	table.at(1) = {k_SwellAngle + 0.15f, Metres(115.0f), Metres(0.4f) * swell, 3.9f};
+	// The wind sea: 75 m long to 5 m, each 0.78 of the one before, directions spread about the wind's. The steepness
+	// (height for each length) grows from 0.0035 on a calm day to 0.015 in a storm, and the short chop grows more.
 	constexpr std::array<float, 12> k_Spread {0.0f, 0.35f, -0.45f, 0.6f, -0.2f, 0.85f, -0.7f, 0.3f, -1.0f, 0.95f, -0.5f, 0.65f};
 	constexpr std::array<float, 12> k_Phase {0.0f, 1.7f, 4.1f, 2.3f, 5.2f, 0.9f, 3.3f, 6.0f, 1.2f, 4.6f, 2.8f, 5.7f};
+	const float steepness = 0.0035f + 0.0115f * waves.storm;
 	for (size_t i = 0; i < 12; ++i)
 	{
-		const float length = 70.0f * std::pow(0.78f, static_cast<float>(i));
-		// The spectrum: height grows a little slower than length
-		float height = 0.0042f * std::pow(length, 0.9f) * waves.scale;
-		if (length < 12.0f)
+		const float length = Metres(75.0f) * std::pow(0.78f, static_cast<float>(i));
+		float height = length * steepness * on;
+		if (length < Metres(12.0f))
 		{
-			height *= 1.0f + waves.storm * 2.5f;
+			height *= 1.0f + waves.storm * 1.5f;
 		}
-		table.at(i + 2) = {waves.windAngle + k_Spread.at(i), length * shorter, height, k_Phase.at(i)};
+		table.at(i + 2) = {waves.windAngle + k_Spread.at(i), length, height, k_Phase.at(i)};
 	}
 	return table;
+}
+
+float underwater::ShoreOmega(float storm)
+{
+	// A wave comes in every 8 seconds on a calm day and every 11 seconds in a storm
+	const float period = 8.0f + 3.0f * std::clamp(storm, 0.0f, 1.0f);
+	return 2.0f * std::numbers::pi_v<float> / period;
+}
+
+float underwater::AdvanceShorePhase(float phase, float storm, float seconds)
+{
+	constexpr float k_Range = 64.0f * 2.0f * std::numbers::pi_v<float>;
+	const float next = phase + ShoreOmega(storm) * std::max(seconds, 0.0f);
+	return next >= k_Range ? next - k_Range : next;
+}
+
+float underwater::Shoaling(float k, float depth)
+{
+	if (depth <= 0.0f)
+	{
+		return 0.0f;
+	}
+	// The wave number in this depth, from the dispersion of linear waves (an explicit approximation)
+	const float deep = k * depth;
+	if (deep > 6.0f)
+	{
+		return 1.0f;
+	}
+	const float kh = deep / std::sqrt(std::tanh(deep));
+	// The speed of the wave's energy against its speed in deep water
+	const float group = std::tanh(kh) * (1.0f + 2.0f * kh / std::sinh(2.0f * kh));
+	return 1.0f / std::sqrt(std::max(group, 1e-4f));
 }
 
 glm::vec2 underwater::WaveSets(glm::vec2 point, float seconds, const WaveState& waves)
@@ -202,19 +242,52 @@ glm::vec2 underwater::WaveSets(glm::vec2 point, float seconds, const WaveState& 
 	return {(0.45f + 1.1f * sets * sets) * patches, 0.5f + 1.0f * swellSets};
 }
 
+float underwater::OpenSeaSize(glm::vec2 point, float seconds, float shoreDistance)
+{
+	// Out at sea the waves vary more: wide patches of bigger and smaller swell drift slowly over the sea, and the
+	// waves grow with the distance from the coast
+	const float far = glm::smoothstep(Metres(60.0f), Metres(500.0f), shoreDistance);
+	const float patch = 0.5f + 0.5f * std::sin(point.x * 0.0021f + point.y * 0.0013f + seconds * 0.01f) *
+	                               std::sin(point.y * 0.0017f - point.x * 0.0009f - seconds * 0.008f);
+	return glm::mix(0.85f, 0.7f + 0.9f * patch, far) * (1.0f + 0.35f * far);
+}
+
 underwater::WaveSample underwater::WavesAt(glm::vec2 point, float seconds, const WaveState& waves)
+{
+	return WavesAt(point, seconds, waves, std::nullopt, 1e6f, 1e6f);
+}
+
+underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, const WaveState& waves, float shoreDistance,
+                                                float depth)
 {
 	WaveSample sample {.height = 0.0f, .slope = {0.0f, 0.0f}};
 	const auto table = WaveTable(waves);
-	const auto sets = WaveSets(point, seconds, waves);
+	const auto far = FarWaveTable(waves);
+	auto sets = WaveSets(point, seconds, waves);
+	// The sets are stronger far out at sea
+	const float open = glm::smoothstep(Metres(60.0f), Metres(500.0f), shoreDistance);
+	sets = glm::pow(glm::max(sets, glm::vec2(1e-3f)), glm::vec2(1.0f + 0.8f * open));
+	const float size = OpenSeaSize(point, seconds, shoreDistance);
+	// Each wave grows as the water gets shallow; all of them together break where they are too high for the depth
+	std::array<float, k_WaveCount + k_FarWaveCount> grown {};
+	float total = 0.0f;
+	for (size_t i = 0; i < grown.size(); ++i)
+	{
+		const auto& wave = i < k_WaveCount ? table.at(i) : far.at(i - k_WaveCount);
+		const bool swell = i < 2 || i >= k_WaveCount;
+		const float k = 2.0f * std::numbers::pi_v<float> / wave.y;
+		grown.at(i) = wave.z * (swell ? sets.y : sets.x) * size * Shoaling(k, depth);
+		total += grown.at(i);
+	}
+	const float breaking = total > 0.0f ? std::min(1.0f, BreakingCrest(depth) / total) : 0.0f;
 	const float sharp = 1.0f + 1.5f * waves.storm;
 	for (size_t i = 0; i < table.size(); ++i)
 	{
 		const auto& wave = table.at(i);
 		const glm::vec2 along {std::cos(wave.x), std::sin(wave.x)};
 		const float k = 2.0f * std::numbers::pi_v<float> / wave.y;
-		const float omega = std::sqrt(9.8f * k) * 0.8f;
-		const float amplitude = wave.z * (i < 2 ? sets.y : sets.x);
+		const float omega = std::sqrt(k_Gravity * k);
+		const float amplitude = grown.at(i) * breaking;
 		const float theta = k * glm::dot(along, point) - omega * seconds + wave.w;
 		const float s = 0.5f + 0.5f * std::sin(theta);
 		sample.height += amplitude * (2.0f * std::pow(s, sharp) - 1.0f);
@@ -222,12 +295,13 @@ underwater::WaveSample underwater::WavesAt(glm::vec2 point, float seconds, const
 		sample.slope += along * rise;
 	}
 	// The long waves of the open sea are plain sine waves, which rise and fall with the swell's sets
-	for (const auto& wave : FarWaveTable(waves))
+	for (size_t j = 0; j < far.size(); ++j)
 	{
+		const auto& wave = far.at(j);
 		const glm::vec2 along {std::cos(wave.x), std::sin(wave.x)};
 		const float k = 2.0f * std::numbers::pi_v<float> / wave.y;
-		const float omega = std::sqrt(9.8f * k) * 0.8f;
-		const float amplitude = wave.z * sets.y;
+		const float omega = std::sqrt(k_Gravity * k);
+		const float amplitude = grown.at(k_WaveCount + j) * breaking;
 		const float theta = k * glm::dot(along, point) - omega * seconds + wave.w;
 		sample.height += amplitude * std::sin(theta);
 		sample.slope += along * (amplitude * k * std::cos(theta));
@@ -238,12 +312,12 @@ underwater::WaveSample underwater::WavesAt(glm::vec2 point, float seconds, const
 std::array<glm::vec4, underwater::k_FarWaveCount> underwater::FarWaveTable(const WaveState& waves)
 {
 	// A storm makes the long waves longer and much higher, so that the storm shows far out
-	const float longer = 1.0f + 0.3f * waves.storm;
-	const float higher = (1.0f + 6.0f * waves.storm) * std::min(waves.scale, 1.0f);
+	// Their lengths stay the same in all weather; a storm makes them five times higher
+	const float higher = (1.0f + 4.0f * waves.storm) * std::min(waves.scale, 1.0f);
 	return {{
-	    {waves.windAngle + 0.2f, 170.0f * longer, 0.12f * higher, 2.1f},
-	    {waves.windAngle - 0.35f, 240.0f * longer, 0.15f * higher, 4.9f},
-	    {k_SwellAngle + 0.4f, 330.0f * longer, 0.16f * higher, 0.4f},
+	    {waves.windAngle + 0.2f, Metres(180.0f), Metres(0.25f) * higher, 2.1f},
+	    {waves.windAngle - 0.35f, Metres(250.0f), Metres(0.3f) * higher, 4.9f},
+	    {k_SwellAngle + 0.4f, Metres(340.0f), Metres(0.35f) * higher, 0.4f},
 	}};
 }
 
@@ -514,10 +588,24 @@ float underwater::Hash(glm::vec2 point)
 	return NoiseHash(point);
 }
 
-glm::vec4 underwater::ShoreTexel(glm::vec4 shore, float cliff)
+glm::vec4 underwater::ShoreTexel(glm::vec4 shore, float cliff, float pond)
 {
+	if (pond > 0.0f)
+	{
+		// A pond keeps its share in the length of the direction, over 1
+		const glm::vec2 direction {shore.y, shore.z};
+		const float length = glm::length(direction);
+		const auto unit = length > 1e-4f ? direction / length : glm::vec2(1.0f, 0.0f);
+		const auto longer = unit * (1.0f + 0.5f * std::min(pond, 1.0f));
+		return {shore.x, longer.x, longer.y, shore.w};
+	}
 	const float shorten = 1.0f - 0.5f * cliff;
 	return {shore.x, shore.y * shorten, shore.z * shorten, shore.w};
+}
+
+float underwater::ShorePond(glm::vec4 shore)
+{
+	return std::clamp((glm::length(glm::vec2(shore.y, shore.z)) - 1.0f) * 2.0f, 0.0f, 1.0f);
 }
 
 glm::vec4 underwater::ShoreAt(std::span<const glm::vec4> shore, std::span<const float> cliff, glm::ivec2 size, float spacing,
@@ -544,13 +632,12 @@ float underwater::ShoreCliff(glm::vec4 shore)
 	return std::clamp((1.0f - glm::length(glm::vec2(shore.y, shore.z))) * 2.0f, 0.0f, 1.0f);
 }
 
-underwater::CliffCrash underwater::CliffCrashAt(glm::vec2 foot, float seconds, const WaveState& waves, float seaLevel,
-                                                float cliff)
+underwater::CliffCrash underwater::CliffCrashAt(glm::vec2 foot, const WaveState& waves, float seaLevel, float cliff)
 {
 	constexpr float k_Turn = 2.0f * std::numbers::pi_v<float>;
 	// The same steps as UwCliffCrash in underwater.sh: when the shore wave reaches the coast here, and which crash it is
-	const float omega = glm::mix(1.1f, 1.5f, waves.storm);
-	const float theta = omega * seconds + Noise(foot * 0.008f) * 1.2f;
+	const float omega = ShoreOmega(waves.storm);
+	const float theta = waves.shorePhase + Noise(foot * 0.008f) * 1.2f;
 	const float period = k_Turn / omega;
 	const float number = std::floor(theta / k_Turn);
 	// Each crash has its own strength, the sets make some crashes stronger, and some parts of a cliff take more
@@ -792,7 +879,7 @@ std::array<glm::vec4, 2> underwater::RogueUniform(const std::optional<RogueWave>
 underwater::WaveSample underwater::WavesAt(glm::vec2 point, float seconds, const WaveState& waves,
                                            const std::optional<RogueWave>& rogue, float shoreDistance, float depth)
 {
-	auto sample = WavesAt(point, seconds, waves);
+	auto sample = WavesInDepth(point, seconds, waves, shoreDistance, depth);
 	if (rogue.has_value())
 	{
 		const auto big = RogueWaveHeight(point, *rogue, shoreDistance, depth);

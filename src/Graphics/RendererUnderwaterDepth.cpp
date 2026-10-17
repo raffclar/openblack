@@ -79,6 +79,7 @@ void Renderer::StepUnderwaterFoam(const DrawSceneDesc& desc) const
 
 	program->SetUniformValue("u_uwParams", &frame.params);
 	program->SetUniformValue("u_uwWaves", &frame.waves);
+	program->SetUniformValue("u_uwPhase", &frame.phase);
 	program->SetUniformValue("u_uwCurrent", &frame.current);
 	program->SetUniformValue("u_uwSea", &frame.sea);
 	program->SetUniformArray("u_uwWaveTable", frame.waveTable.data(), static_cast<uint16_t>(frame.waveTable.size()));

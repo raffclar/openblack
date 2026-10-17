@@ -190,7 +190,8 @@ const Texture2D& UnderwaterView::Seabed(const seabed::Seabed& seabed, uint32_t r
 		std::vector<uint16_t> texels(texelCount * 4, 0);
 		for (size_t i = 0; i < seabed.shore.size() && i < texelCount; ++i)
 		{
-			const auto texel = underwater::ShoreTexel(seabed.shore[i], i < seabed.cliff.size() ? seabed.cliff[i] : 0.0f);
+			const auto texel = underwater::ShoreTexel(seabed.shore[i], i < seabed.cliff.size() ? seabed.cliff[i] : 0.0f,
+			                                          i < seabed.pond.size() ? seabed.pond[i] : 0.0f);
 			texels[i * 4 + 0] = bx::halfFromFloat(texel.x);
 			texels[i * 4 + 1] = bx::halfFromFloat(texel.y);
 			texels[i * 4 + 2] = bx::halfFromFloat(texel.z);

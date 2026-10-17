@@ -143,6 +143,7 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	const auto& waves = system.GetWaves();
 	frame.waves = {off == Effect::Waves ? 0.0f : waves.scale, waves.storm, waves.windAngle,
 	               off == Effect::Waves ? 0.0f : waves.swash};
+	frame.phase = {waves.shorePhase, off == Effect::Waves ? 0.0f : waves.swellHeight, 0.0f, 0.0f};
 	frame.flags2 = {on(Effect::Whitecaps), on(Effect::Reef), 0.0f, off == Effect::WaterMask ? 1.0f : 0.0f};
 	frame.flags3 = {on(Effect::WetRock), on(Effect::SprayMist), 0.0f, 0.0f};
 	auto tableWaves = waves;
@@ -237,6 +238,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		program.SetUniformValue("u_uwFlags", &frame.flags);
 		program.SetUniformValue("u_uwAbove", &frame.above);
 		program.SetUniformValue("u_uwWaves", &frame.waves);
+		program.SetUniformValue("u_uwPhase", &frame.phase);
 		program.SetUniformValue("u_uwFlags2", &frame.flags2);
 		program.SetUniformValue("u_uwFlags3", &frame.flags3);
 		program.SetUniformValue("u_uwCurrent", &frame.current);
@@ -489,6 +491,7 @@ void Renderer::SetTerrainUnderwater(const ShaderProgram& program, bool active) c
 	program.SetUniformValue("u_uwEye", &frame.eye);
 	program.SetUniformValue("u_uwAbove", &frame.above);
 	program.SetUniformValue("u_uwWaves", &frame.waves);
+	program.SetUniformValue("u_uwPhase", &frame.phase);
 	program.SetUniformValue("u_uwFlags3", &frame.flags3);
 	// The snow does not show under the sea: its samplers hold the sea bed and the sand
 	const glm::vec4 noSnow {0.0f};
@@ -544,6 +547,7 @@ void Renderer::DrawFarSeabed(RenderPass landViewId) const
 	program->SetUniformValue("u_uwEye", &frame.eye);
 	program->SetUniformValue("u_uwAbove", &frame.above);
 	program->SetUniformValue("u_uwWaves", &frame.waves);
+	program->SetUniformValue("u_uwPhase", &frame.phase);
 	program->SetTextureSampler("s_sand", 0, *textures.Handle(underwater::k_SandTextureId.value()));
 	program->SetTextureSampler("s_landLight", 1, GetLandLightTexture());
 	// The same shore map and sea floor texture as the land's blocks, so the two match where they meet
@@ -584,6 +588,7 @@ void Renderer::DrawReef(RenderPass landViewId) const
 		program->SetUniformValue("u_uwLightColour", &frame.lightColour);
 		program->SetUniformValue("u_uwAbove", &frame.above);
 		program->SetUniformValue("u_uwWaves", &frame.waves);
+		program->SetUniformValue("u_uwPhase", &frame.phase);
 		program->SetUniformValue("u_uwCurrent", &frame.current);
 		program->SetTextureSampler("s_coral", 0, *textures.Handle(underwater::k_CoralTextureId.value()));
 		program->SetTextureSampler("s_landLight", 1, GetLandLightTexture());

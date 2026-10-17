@@ -36,7 +36,7 @@ void main()
 	float facing = 0.35f + 0.65f * abs(dot(normalize(v_normal), towards));
 	vec2 surface = v_world.xz + towards.xz / max(towards.y, 0.2f) * depth;
 	float sharpness = 1.0f - smoothstep(4.0f, 40.0f, depth);
-	float caustics = u_uwAbove.w > 0.5f ? UwCaustics(surface * 0.21f, u_uwParams.y * (1.1f + 1.5f * u_uwWaves.y), sharpness) : 0.5f;
+	float caustics = u_uwAbove.w > 0.5f ? UwCaustics(surface * UW_CAUSTIC_FREQUENCY, u_uwParams.y * 1.4f, sharpness) : 0.5f;
 	caustics = mix(caustics, 0.55f, 0.4f * u_uwWaves.y);
 	vec3 light = u_uwLightColour.rgb * UwTransmittance(depth * 0.6f / max(towards.y, 0.2f));
 	vec3 colour = albedo * (landLight * 0.7f + light * facing * (0.6f + caustics));

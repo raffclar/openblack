@@ -184,8 +184,11 @@ void UnderwaterSystem::UpdateSea(float frameSeconds)
 			_windAngle += std::clamp(turn, -0.2f * frameSeconds, 0.2f * frameSeconds);
 		}
 	}
-	_storm = underwater::EaseTowards(_storm, storm, storm > _storm ? 0.12f : 0.05f, frameSeconds);
+	// A storm builds over about half a minute and calms over about a minute, as the weather does
+	_storm = underwater::EaseTowards(_storm, storm, storm > _storm ? 0.03f : 0.015f, frameSeconds);
+	_shorePhase = underwater::AdvanceShorePhase(_shorePhase, _storm, frameSeconds);
 	_waves = underwater::WavesFor(_storm, _windAngle);
+	_waves.shorePhase = _shorePhase;
 	// The waterspouts, out at sea from the coast of the sea bed's map
 	const auto& bed = _seabed;
 	const auto seaDistance = [&bed](glm::vec2 point) {

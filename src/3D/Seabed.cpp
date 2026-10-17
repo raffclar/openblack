@@ -296,7 +296,7 @@ void BuildShore(seabed::Seabed& seabed, std::span<const uint8_t> altitudes, cons
 			seabed.shore[i] = {distance[i], towards, ground};
 		}
 	}
-	// The cliffs: coast land that rises steeply within two cells, with deep water next to it
+	// The cliffs: coast land that rises sharply within one cell, with deep water next to it
 	for (int z = 0; z < size.y; ++z)
 	{
 		for (int x = 0; x < size.x; ++x)
@@ -314,7 +314,11 @@ void BuildShore(seabed::Seabed& seabed, std::span<const uint8_t> altitudes, cons
 				{
 					const int nx = std::clamp(x + dx, 0, size.x - 1);
 					const int nz = std::clamp(z + dz, 0, size.y - 1);
-					highest = std::max(highest, altitudes[at(nx, nz)]);
+					// Only the land within one cell counts: a sharp cliff rises at once from the water
+					if (std::abs(dx) <= 1 && std::abs(dz) <= 1)
+					{
+						highest = std::max(highest, altitudes[at(nx, nz)]);
+					}
 					if (!land[at(nx, nz)])
 					{
 						deepest = std::max(deepest, openDepth[at(nx, nz)]);
@@ -325,7 +329,7 @@ void BuildShore(seabed::Seabed& seabed, std::span<const uint8_t> altitudes, cons
 					}
 				}
 			}
-			if (seaSide.x < 0)
+			if (seaSide.x < 0 || (!seabed.pond.empty() && seabed.pond[at(seaSide.x, seaSide.y)] > 0.5f))
 			{
 				continue;
 			}
@@ -647,8 +651,82 @@ seabed::Seabed seabed::Build(std::span<const uint8_t> altitudes, glm::ivec2 size
 			seabed.depth[i] = std::min(seabed.depth[i], ramp);
 		}
 	}
+	seabed.pond = Ponds(land, size);
 	BuildShore(seabed, altitudes, land, toLand, openDepth);
 	return seabed;
+}
+
+std::vector<float> seabed::Ponds(const std::vector<bool>& land, glm::ivec2 size)
+{
+	const auto count = static_cast<size_t>(std::max(size.x, 0)) * static_cast<size_t>(std::max(size.y, 0));
+	std::vector<float> pond(count, 0.0f);
+	if (count == 0 || land.size() < count)
+	{
+		return pond;
+	}
+	const auto at = [&size](int x, int z) {
+		return static_cast<size_t>(z) * static_cast<size_t>(size.x) + static_cast<size_t>(x);
+	};
+	// The open sea: the water that joins the edge of the grid
+	std::vector<bool> open(count, false);
+	std::vector<glm::ivec2> next;
+	for (int z = 0; z < size.y; ++z)
+	{
+		for (int x = 0; x < size.x; ++x)
+		{
+			const bool edge = x == 0 || z == 0 || x == size.x - 1 || z == size.y - 1;
+			if (edge && !land[at(x, z)])
+			{
+				open[at(x, z)] = true;
+				next.emplace_back(x, z);
+			}
+		}
+	}
+	constexpr std::array<glm::ivec2, 4> k_Sides {glm::ivec2 {1, 0}, glm::ivec2 {-1, 0}, glm::ivec2 {0, 1}, glm::ivec2 {0, -1}};
+	while (!next.empty())
+	{
+		const auto here = next.back();
+		next.pop_back();
+		for (const auto& side : k_Sides)
+		{
+			const auto there = here + side;
+			if (there.x < 0 || there.y < 0 || there.x >= size.x || there.y >= size.y)
+			{
+				continue;
+			}
+			const auto i = at(there.x, there.y);
+			if (!land[i] && !open[i])
+			{
+				open[i] = true;
+				next.push_back(there);
+			}
+		}
+	}
+	// The water that is not open sea is a pond; the land next to it takes the pond too, so its edge is still
+	for (int z = 0; z < size.y; ++z)
+	{
+		for (int x = 0; x < size.x; ++x)
+		{
+			if (land[at(x, z)] || open[at(x, z)])
+			{
+				continue;
+			}
+			for (int dz = -1; dz <= 1; ++dz)
+			{
+				for (int dx = -1; dx <= 1; ++dx)
+				{
+					const int nx = x + dx;
+					const int nz = z + dz;
+					if (nx >= 0 && nz >= 0 && nx < size.x && nz < size.y && !open[at(nx, nz)])
+					{
+						pond[at(nx, nz)] = 1.0f;
+					}
+				}
+			}
+		}
+	}
+	SmoothField(pond, size, 1, 1);
+	return pond;
 }
 
 float seabed::Seabed::DepthAt(glm::vec2 world) const

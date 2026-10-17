@@ -37,7 +37,7 @@ float SpraySwell(vec2 p, float t)
 		vec4 wave = u_uwWaveTable[i];
 		vec2 along = vec2(cos(wave.x), sin(wave.x));
 		float k = 6.2831853f / wave.y;
-		float omega = sqrt(9.8f * k) * 0.8f;
+		float omega = sqrt(UW_GRAVITY * k);
 		height += wave.z * sets.y * sin(k * dot(along, p) - omega * t + wave.w);
 		top += wave.z;
 	}
@@ -243,6 +243,9 @@ void main()
 	// The light that comes to the particle from all directions: the sky and the sea's colour. The direct light is
 	// added in the fragments.
 	vec3 ambient = u_uwSky.rgb * 1.5f + u_uwScatter.rgb * 0.25f + u_uwLightColour.rgb * 0.3f;
+	// The whole crash is half its size about the foot of the cliff: the sheet, the core, the drops, the mist and the
+	// haze. Its timing stays the same.
+	placed = vec3(foot.x, level, foot.y) + (placed - vec3(foot.x, level, foot.y)) * 0.5f;
 	v_texcoord0 = vec4(corner, layer, alpha);
 	v_color0 = vec4(ambient, age);
 	v_normal = normal;

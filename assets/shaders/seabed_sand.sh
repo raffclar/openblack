@@ -81,12 +81,13 @@ vec3 SeabedLit(vec3 albedo, vec3 world, vec3 landLight, vec3 normal)
 	vec3 towards = u_uwLight.xyz;
 	vec2 surface = p + towards.xz / max(towards.y, 0.2f) * depth;
 	float sharpness = 1.0f - smoothstep(4.0f, 40.0f, depth);
-	float caustics = u_uwAbove.w > 0.5f ? UwCaustics(surface * 0.21f, t * (1.1f + 1.5f * u_uwWaves.y), sharpness) : 0.5f;
+	float caustics = u_uwAbove.w > 0.5f ? UwCaustics(surface * UW_CAUSTIC_FREQUENCY, t * 1.4f, sharpness) : 0.5f;
 	// A storm's rough surface spreads the caustics out
 	caustics = mix(caustics, 0.55f, 0.4f * u_uwWaves.y);
 	// The caustics too become an even light where their lines would be smaller than a pixel
 	caustics = mix(caustics, 0.55f, smoothstep(0.08f, 0.3f, footprint));
-	caustics *= smoothstep(0.0f, 1.2f, depth) * (1.0f - smoothstep(30.0f, 60.0f, viewDistance) * 0.6f);
+	// They show from just under the surface, in the shallows and on the beaches
+	caustics *= smoothstep(0.0f, 0.15f, depth) * (1.0f - smoothstep(30.0f, 60.0f, viewDistance) * 0.6f);
 	float facing = max(dot(normal, towards), 0.0f);
 	// The lit and shaded sides, and the light the water lets down to this depth
 	vec3 light = u_uwLightColour.rgb * UwTransmittance(depth * 0.6f / max(towards.y, 0.2f));
@@ -164,7 +165,7 @@ vec3 SeabedGround(vec3 world, vec3 ground, vec3 landLight, vec3 normal, out floa
 	float level = u_uwParams.z;
 	vec4 shore = texture2DLod(SEABED_SHORE_TEXTURE, UwShoreUv(world.xz), 0.0f);
 	float face;
-	float runUp = level + UwShoreWave(shore.x, world.xz, u_uwParams.y, UwShoreCliff(shore), face);
+	float runUp = level + UwShoreWave(shore.x, level - shore.w, world.xz, UwShoreCliff(shore), UwShorePond(shore), face);
 	float wetTop = level + u_uwWaves.w * 1.4f + 0.15f;
 	float wet = 1.0f - smoothstep(runUp, wetTop, world.y);
 	wet = max(wet, 0.45f * (1.0f - smoothstep(-0.3f, 0.05f, world.y)));

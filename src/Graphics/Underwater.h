@@ -67,6 +67,20 @@ enum class Tour : uint8_t
 	FarSeabed
 };
 
+/// The world's scale for the water: the height of an adult male villager at full size, in units (the bounds of his
+/// model in its rest pose), and the height of an adult man in metres. Every size of the water comes from metres
+/// through k_UnitsPerMetre. The shaders have the same value as UW_UNITS_PER_METRE in underwater.sh.
+inline constexpr float k_VillagerHeight = 1.661f;
+inline constexpr float k_VillagerMetres = 1.75f;
+inline constexpr float k_UnitsPerMetre = k_VillagerHeight / k_VillagerMetres;
+/// A length in metres, in units
+[[nodiscard]] constexpr float Metres(float metres)
+{
+	return metres * k_UnitsPerMetre;
+}
+/// The acceleration of gravity, in units a second squared
+inline constexpr float k_Gravity = 9.81f * k_UnitsPerMetre;
+
 /// The height of the sea's surface
 inline constexpr float k_SeaLevel = 0.0f;
 /// The underwater look is on while the eye is lower than this. Between sea level and this height each pixel finds for
@@ -214,7 +228,31 @@ struct WaveState
 	float windAngle {0.0f};
 	/// How far the waves run up the beach and back, in height
 	float swash {0.25f};
+	/// The phase of the shore wave, in radians. It grows each frame by the wave's angular speed, so a change of the
+	/// speed with the weather never makes the waves jump
+	float shorePhase {0.0f};
+	/// The height of the open sea's waves that come in to the coast (the sum of their heights), in units
+	float swellHeight {0.0f};
 };
+
+/// The shore wave's angular speed for a stormy share of 0 to 1: longer waves come in a storm
+[[nodiscard]] float ShoreOmega(float storm);
+/// The shore wave's phase after a time step: it grows at the wave's angular speed, kept in a range of 64 waves, so the
+/// number of each wave stays the same for a long time
+[[nodiscard]] float AdvanceShorePhase(float phase, float storm, float seconds);
+/// The wave number of the shore wave, in radians a unit, in deep water (its length does not change with the weather)
+inline constexpr float k_ShoreWaveNumber = 2.0f * 3.14159265f / (100.0f * k_UnitsPerMetre);
+
+/// How much a wave of wave number `k` (radians a unit, in deep water) grows or shrinks as it comes into water of this
+/// depth (units): the shoaling of linear waves, which keep their energy flux (Green's law in shallow water). It is 1
+/// in deep water, a little under 1 between, and grows in shallow water. The shaders have the same in UwShoaling.
+[[nodiscard]] float Shoaling(float k, float depth);
+/// The highest a wave's crest can be over its mean level in water of this depth before it breaks (units): a wave
+/// breaks when it is higher than 0.78 of the depth from crest to trough
+[[nodiscard]] constexpr float BreakingCrest(float depth)
+{
+	return 0.39f * (depth > 0.0f ? depth : 0.0f);
+}
 
 /// The sea's state for a stormy share of 0 to 1 and the wind's direction
 [[nodiscard]] WaveState WavesFor(float storm, float windAngle);
@@ -227,6 +265,13 @@ struct WaveSample
 	glm::vec2 slope;
 };
 [[nodiscard]] WaveSample WavesAt(glm::vec2 point, float seconds, const WaveState& waves);
+/// The same in water of a depth (units) at a distance from the coast (units, out to sea positive): each wave grows as
+/// the water gets shallow (Shoaling), all of them break together where they are too high for the depth
+/// (BreakingCrest), and far out the waves vary more (OpenSeaSize). UwWavesFiltered in underwater.sh is the same.
+[[nodiscard]] WaveSample WavesInDepth(glm::vec2 point, float seconds, const WaveState& waves, float shoreDistance, float depth);
+/// How big the waves are at a point against the usual, from the distance to the coast (units): 0.85 near the coast,
+/// and 0.9 to 2.2 far out, in wide patches that drift slowly
+[[nodiscard]] float OpenSeaSize(glm::vec2 point, float seconds, float shoreDistance);
 
 /// The waves of the sea: a swell from far away and a wind sea of many waves with lengths over a wide range, their
 /// directions spread about the wind's, their heights from a spectrum and their speeds from the deep water's
@@ -285,7 +330,10 @@ inline constexpr uint16_t k_SprayNoiseSide = 32;
 
 /// A texel of the shore map from a corner's shore and how much it is at the foot of a cliff: the direction to the coast
 /// is shortened by up to a half at the foot of a cliff
-[[nodiscard]] glm::vec4 ShoreTexel(glm::vec4 shore, float cliff);
+[[nodiscard]] glm::vec4 ShoreTexel(glm::vec4 shore, float cliff, float pond = 0.0f);
+/// How much a point is in a still pond, 0 to 1, from its shore value: the direction to the coast is made up to half
+/// longer in a pond (UwShorePond in underwater.sh)
+[[nodiscard]] float ShorePond(glm::vec4 shore);
 
 /// The shore map's value at a point across the ground, blended between the four corners round it (as the shaders read
 /// the shore map): x the distance to the coast, yz the shortened direction to the coast, w the ground's height. The
@@ -311,7 +359,7 @@ struct CliffCrash
 
 /// The crash at a foot of a cliff now. It is the same timing and strength as UwCliffCrash in underwater.sh and the
 /// spray's power in vs_underwater_spray.sc: change them together. `cliff` is ShoreCliff at the foot.
-[[nodiscard]] CliffCrash CliffCrashAt(glm::vec2 foot, float seconds, const WaveState& waves, float seaLevel, float cliff);
+[[nodiscard]] CliffCrash CliffCrashAt(glm::vec2 foot, const WaveState& waves, float seaLevel, float cliff);
 
 /// Whether a crash starts between two times of the same foot
 [[nodiscard]] bool CrashStarts(const CliffCrash& before, const CliffCrash& now);

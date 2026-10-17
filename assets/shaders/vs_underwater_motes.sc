@@ -38,7 +38,8 @@ void main()
 	vec3 corner = world + (right * a_texcoord0.x + up * a_texcoord0.y) * size;
 	if (debrisPass)
 	{
-		size = mix(0.08f, 0.22f, fract(seed.y * 53.7f));
+		// A tenth of the size they had: 1 to 2.5 cm, as small bits of weed and leaf are
+		size = mix(0.008f, 0.022f, fract(seed.y * 53.7f));
 		vec3 along = length(flow) > 1e-3f ? normalize(vec3(flow.x, 0.15f * sin(t + seed.z * 9.0f), flow.y)) : right;
 		vec3 across = normalize(cross(along, mul(u_invView, vec4(0.0f, 0.0f, 1.0f, 0.0f)).xyz));
 		corner = world + (along * a_texcoord0.x * 1.8f + across * a_texcoord0.y * 0.6f) * size;

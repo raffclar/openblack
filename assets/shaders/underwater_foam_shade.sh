@@ -31,7 +31,7 @@ vec4 FoamFieldAt(vec2 xz)
 float FoamLace(float field, float lumps, float pixel)
 {
 	float soft = clamp(pixel * 0.8f, 0.0f, 0.3f);
-	return 0.15f + 1.35f * smoothstep(0.42f - 0.12f * min(field, 1.0f) - soft, 0.72f + soft, lumps);
+	return 1.5f * smoothstep(0.55f - 0.08f * min(field, 1.0f) - soft, 0.75f + soft, lumps);
 }
 
 // How thick the foam is at a point, 0 to about 3: the foam field, broken into its lace. `carried` is how far the current
@@ -39,7 +39,7 @@ float FoamLace(float field, float lumps, float pixel)
 float FoamThicknessAt(vec2 xz, vec2 carried, float pixel)
 {
 	float field = FoamFieldAt(xz).x;
-	return field * FoamLace(field, UwFoamNoise((xz - carried) * 0.9f), pixel);
+	return field * FoamLace(field, UwFoamNoise((xz - carried) * 1.8f), pixel);
 }
 
 // The bubbles in the foam, as cells: x the distance to the middle of the nearest cell, y to the middle of the second
@@ -69,7 +69,7 @@ vec2 FoamCells(vec2 p)
 // fade out where a pixel is larger than a bubble.
 vec2 FoamBubbles(vec2 xz, vec3 field, float pixel)
 {
-	float size = mix(0.32f, 0.1f, smoothstep(0.0f, 12.0f, field.y)) * (0.7f + 0.3f * min(field.z, 1.0f));
+	float size = mix(0.16f, 0.05f, smoothstep(0.0f, 12.0f, field.y)) * (0.7f + 0.3f * min(field.z, 1.0f));
 	float shows = 1.0f - smoothstep(0.25f * size, 0.8f * size, pixel);
 	if (shows <= 0.0f)
 	{

@@ -339,7 +339,7 @@ void AtmosAudio::UpdateCliffCrashes()
 		const glm::vec2 xz {foot.x, foot.y};
 		const float cliff = graphics::underwater::ShoreCliff(
 		    graphics::underwater::ShoreAt(seabed.shore, seabed.cliff, seabed.size, seabed.spacing, xz));
-		const auto crash = graphics::underwater::CliffCrashAt(xz, seconds, waves, seaLevel, cliff);
+		const auto crash = graphics::underwater::CliffCrashAt(xz, waves, seaLevel, cliff);
 		next.emplace_back(index, crash.number);
 		// A foot newly heard waits for its next crash; nothing starts while the clock stands still
 		const auto before = std::ranges::find(_crashFeet, index, &std::pair<size_t, float>::first);

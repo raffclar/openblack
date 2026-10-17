@@ -72,6 +72,8 @@ private:
 	float _seaLevel {0.0f};
 	float _seconds {0.0f};
 	float _storm {0.0f};
+	/// The shore wave's phase, which grows each frame (see underwater::AdvanceShorePhase)
+	float _shorePhase {0.0f};
 	float _windAngle {0.0f};
 	graphics::underwater::WaveState _waves;
 	std::vector<glm::vec3> _floaters;
