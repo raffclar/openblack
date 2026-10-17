@@ -15,9 +15,11 @@
 #include <string_view>
 #include <vector>
 
+#include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
+#include "3D/MapCoords.h"
 #include "Audio/AnimEffectKeys.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureAudio.h"
@@ -196,7 +198,7 @@ void CreatureMindSystem::EndRunAway(entt::entity creature, CreatureMindState& mi
 	}
 	// From a thing, it measures to where it believes the thing is. From the player, it measures to the nearest hand
 	// of its player.
-	std::optional<glm::vec3> from;
+	std::optional<map_coords::MapCoords> from;
 	if (object.has_value())
 	{
 		if (const auto* belief = mind.beliefs.Find(static_cast<entt::entity>(*object)))
@@ -207,17 +209,23 @@ void CreatureMindSystem::EndRunAway(entt::entity creature, CreatureMindState& mi
 	else if (Locator::handSystem::has_value() && Locator::playerSystem::has_value() &&
 	         body->owner == Locator::playerSystem::value().GetLocalPlayer())
 	{
+		std::optional<glm::vec3> nearest;
 		for (const auto& hand : Locator::handSystem::value().GetPlayerHandPositions())
 		{
 			if (hand.has_value() &&
-			    (!from.has_value() || glm::distance(*hand, at->position) < glm::distance(*from, at->position)))
+			    (!nearest.has_value() || glm::distance(*hand, at->position) < glm::distance(*nearest, at->position)))
 			{
-				from = hand;
+				nearest = hand;
 			}
+		}
+		if (nearest.has_value())
+		{
+			from = map_coords::FromMetres(glm::xz(*nearest));
 		}
 	}
 	if (from.has_value() &&
-	    creature_emote::RanFarEnough(gutils::GetDistanceInMetres(at->position, *from), creatures.at(row).runAwayDistance))
+	    creature_emote::RanFarEnough(gutils::GetDistanceInMetres(map_coords::FromMetres(glm::xz(at->position)), *from),
+	                                 creatures.at(row).runAwayDistance))
 	{
 		mind.desireSeenTo = true;
 	}

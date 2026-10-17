@@ -638,7 +638,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 	    });
 	provider->Add(
 	    Query("beliefs",
-	          "A creature's beliefs about things: kind, last place, the whole thing, the attributes it last took in, which its "
+	          "A creature's beliefs about things: kind, last place (in metres, and in map units as place_map), the whole "
+	          "thing, the attributes it last took in, which its "
 	          "decision trees test; "
 	          "and how nice it finds other creatures",
 	          {id, Parameter("kind", "integer", "Only beliefs of this kind (the game's belief type, 0 to 23)", false)}),
@@ -682,7 +683,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 			    beliefs.push_back({{"thing", ToId(belief.thing)},
 			                       {"kind", belief.kind},
 			                       {"kind_name", name},
-			                       {"place", {belief.place.x, belief.place.z}},
+			                       {"place", {map_coords::ToMetres(belief.place.x), map_coords::ToMetres(belief.place.z)}},
+			                       {"place_map", {belief.place.x, belief.place.z}},
 			                       {"part_of", belief.partOf.has_value() ? Json(ToId(*belief.partOf)) : Json(nullptr)},
 			                       {"attributes", std::move(attributes)}});
 		    }

@@ -5791,6 +5791,19 @@ void AddMind(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {60.0f, -50.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-60.0f, -55.0f}}},
 	});
+	all.push_back({
+	    .id = "mind.made_from_file_by_land",
+	    .name = "A land makes a creature from a mind file",
+	    .facet = Facet::Mind,
+	    .description = "The land's script line CREATE_CREATURE_FROM_FILE makes the second player's creature from the "
+	                   "game's mind file ComputerControlledCreature, 20 m east of the middle, as the later lands do. Save "
+	                   "the game and read the creature's mind file.",
+	    .expected = "The creature takes up the file. Then it knows all leashes and it is fully grown (stage 13, its time "
+	                "at the stage 0). In the saved mind file, the four leash words are 1 and the stage is 13.",
+	    .framing = {.shot = Shot::Overview},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {-20.0f, 0.0f}}},
+	    .landScript = R"(CREATE_CREATURE_FROM_FILE("PLAYER_TWO", 6, "ComputerControlledCreature", "20.0,0.0"))",
+	});
 
 	std::vector<Command> phases;
 	for (size_t phase = 1; phase <= k_LastPhase; ++phase)

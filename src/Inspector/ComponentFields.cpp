@@ -875,6 +875,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::trainer>("trainer")
 	    .Field<&components::CreatureMindState::pendingFile>("pendingFile")
 	    .Field<&components::CreatureMindState::resourceChecked>("resourceChecked")
+	    .Field<&components::CreatureMindState::growUpAfterFile>("growUpAfterFile")
 	    .Field<&components::CreatureMindState::pendingTeaching>("pendingTeaching")
 	    .Field<&components::CreatureMindState::leash>("leash")
 	    .Field<&components::CreatureMindState::heldSortCounts>("heldSortCounts")
@@ -2577,6 +2578,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind_model::Learnt::name>("name")
 	    .Field<&openblack::creature_mind_model::Learnt::alignment>("alignment")
 	    .Field<&openblack::creature_mind_model::Learnt::developmentTimer>("developmentTimer")
+	    .Field<&openblack::creature_mind_model::Learnt::leashWords>("leashWords")
 	    .Field<&openblack::creature_mind_model::Learnt::file>("file");
 	Reflect<openblack::creature_mind_model::TreeHeader>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind_model::TreeHeader::type>("type")

@@ -60,6 +60,7 @@
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -775,14 +776,28 @@ void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName
 {
 	// A name that is no player's, such as an eighth player's, makes the creature the neutral player's
 	const auto player = GetPlayerName(playerName);
+	// The game does not make a creature of a player off the map, but it then changes the creature that it did not make.
+	// Here, no creature is made.
+	if (!map_coords::InBounds(map_coords::FromMetres(glm::xz(position))))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "CREATE_CREATURE_FROM_FILE: {} is off the map, no creature is made",
+		                   glm::to_string(position));
+		return;
+	}
 	auto yAngleRadians = glm::radians(180.0f);
 	auto& resources = Locator::resources::value();
 	auto& creatureMindManager = resources.GetCreatureMinds();
 	auto creatureMindPath = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / creatureMind;
 	auto loadResult = creatureMindManager.Load(creatureMind, resources::CreatureMindLoader::FromDiskTag {}, creatureMindPath);
 	auto creatureMindId = loadResult.first->first;
-	CreatureArchetype::Create(position, player, creatureType, creatureMindId, yAngleRadians,
-	                          CreatureArchetype::StartScale(creatureType), CreatureArchetype::StartBody(creatureType));
+	const auto creature =
+	    CreatureArchetype::Create(position, player, creatureType, creatureMindId, yAngleRadians,
+	                              CreatureArchetype::StartScale(creatureType), CreatureArchetype::StartBody(creatureType));
+	// After it takes up its mind file, it knows every leash and it is fully grown
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().GrowUpAfterFile(creature);
+	}
 }
 
 void FeatureScriptCommands::CreateFlock(int32_t id, glm::vec3 position, glm::vec3 home, int32_t reach, int32_t flockDistance,

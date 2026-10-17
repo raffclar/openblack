@@ -1109,3 +1109,4 @@ set_tests_properties(
   test_creature_mind_file_users
   PROPERTIES ENVIRONMENT "OPENBLACK_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
 )
+openblack_setup_and_add_test(test_thing_map_place test_thing_map_place.cpp)
