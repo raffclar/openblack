@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+# ******************************************************************************
+# Copyright (c) 2018-2026 openblack developers
+#
+# For a complete list of all authors, please refer to contributors.md
+# Interested in contributing? Visit https://github.com/openblack/openblack
+#
+# openblack is licensed under the GNU General Public License version 3.
+# ******************************************************************************
+"""The summary of a simulation run, and the comparison of two runs, from the run records that the game writes.
+
+A run record is a file of JSON lines that the game writes with --sim-record: a "start" line, a "record" line each
+time some turns go by, and an "end" line. This module only reads records and logs. It does not start the game.
+
+    python tools/sim/sim_report.py summary RUN.jsonl [--log RUN.log] [--json OUT.json] [--markdown OUT.md]
+    python tools/sim/sim_report.py compare A.jsonl B.jsonl
+"""
+
+import argparse
+import json
+import re
+import sys
+from collections import Counter
+
+# A turn is a tenth of a second of game time
+TURNS_PER_SECOND = 10.0
+# The share of the records at the start and at the end of a run that the times are compared over
+TREND_SHARE = 0.1
+LOG_LINE = re.compile(r"\[(error|critical|warning)\]", re.IGNORECASE)
+ASSERT_WORD = re.compile(r"assert", re.IGNORECASE)
+
+
+def read_records(lines):
+    """The start line, the records and the end line of a run record, from its lines. A line that is not JSON (as the
+    last line of a run that stopped as it wrote) is left out."""
+    start, records, end = None, [], None
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except ValueError:
+            continue
+        kind = item.get("type")
+        if kind == "start":
+            start = item
+        elif kind == "record":
+            records.append(item)
+        elif kind == "end":
+            end = item
+    return start, records, end
+
+
+def load(path):
+    with open(path, encoding="utf-8") as file:
+        return read_records(file)
+
+
+def scan_log(lines, most=10):
+    """The errors, the critical messages and the asserts in a game's log"""
+    counts = Counter()
+    examples = []
+    for line in lines:
+        found = LOG_LINE.search(line)
+        level = found.group(1).lower() if found else None
+        if level == "warning" and not ASSERT_WORD.search(line):
+            continue
+        if level is None and not ASSERT_WORD.search(line):
+            continue
+        key = level if level is not None else "assert"
+        if ASSERT_WORD.search(line):
+            key = "assert"
+        counts[key] += 1
+        if len(examples) < most:
+            examples.append(line.strip()[:300])
+    return {"counts": dict(counts), "examples": examples}
+
+
+def average(values):
+    values = [value for value in values if value is not None]
+    return sum(values) / len(values) if values else None
+
+
+def stage_turns(records):
+    """The first turn at which the creature is at each stage of growing up"""
+    first = {}
+    for record in records:
+        creature = record.get("creature") or {}
+        stage = creature.get("stage")
+        if stage is not None and stage not in first:
+            first[stage] = record["turn"]
+    return {str(stage): turn for stage, turn in sorted(first.items())}
+
+
+def creature_value(key):
+    """A getter of a value of the creature in a record"""
+    return lambda record: (record.get("creature") or {}).get(key)
+
+
+def belief_count(record):
+    return ((record.get("creature") or {}).get("beliefs") or {}).get("count")
+
+
+def value_range(records, getter):
+    """The first, last, lowest and highest of a value over the records, none when no record has it"""
+    values = [getter(record) for record in records]
+    values = [value for value in values if isinstance(value, (int, float))]
+    if not values:
+        return None
+    return {"first": values[0], "last": values[-1], "lowest": min(values), "highest": max(values)}
+
+
+def name_of(value):
+    if isinstance(value, dict):
+        return value.get("action")
+    return value
+
+
+def summary(start, records, end, log_lines=None, exit_code=None):
+    """The summary of a run as a dict: its speed, the creature's life, the problems and the times"""
+    timed = [record for record in records if record.get("turns", 0) > 0]
+    first_turn = records[0]["turn"] if records else 0
+    last_turn = end["turn"] if end else (records[-1]["turn"] if records else 0)
+    wall = end.get("wall_s") if end else (records[-1].get("wall_s") if records else None)
+    turns_per_second = (last_turn - first_turn) / wall if wall else None
+    share = max(1, int(len(timed) * TREND_SHARE))
+    flags = [flag for record in records for flag in record.get("flags", [])]
+    flag_counts = Counter(flag["kind"] for flag in flags)
+    plans = Counter(name_of((record.get("creature") or {}).get("plan")) or "none" for record in records)
+    activities = Counter((record.get("creature") or {}).get("activity") or "none" for record in records)
+    memory = [record.get("memory_mb") for record in records if record.get("memory_mb") is not None]
+    log = scan_log(log_lines) if log_lines is not None else None
+    result = {
+        "seed": start.get("seed") if start else None,
+        "fast": start.get("fast") if start else None,
+        "frame_ms": start.get("frame_ms") if start else None,
+        "every": start.get("every") if start else None,
+        "records": len(records),
+        "first_turn": first_turn,
+        "last_turn": last_turn,
+        "ended": end is not None,
+        "exit_code": exit_code,
+        "wall_s": wall,
+        "turns_per_second": turns_per_second,
+        "times_real_time": turns_per_second / TURNS_PER_SECOND if turns_per_second else None,
+        "turn_ms_start": average(record["turn_ms"] for record in timed[:share]),
+        "turn_ms_end": average(record["turn_ms"] for record in timed[-share:]),
+        "turn_ms_longest": max((record.get("turn_ms_max", 0) for record in timed), default=None),
+        "frame_ms_average": average(record.get("frame_ms") for record in timed),
+        "frame_ms_longest": max((record.get("frame_ms_max", 0) for record in timed), default=None),
+        "memory_mb_start": memory[0] if memory else None,
+        "memory_mb_end": memory[-1] if memory else None,
+        "memory_mb_highest": max(memory) if memory else None,
+        "entities_start": records[0].get("entities") if records else None,
+        "entities_end": records[-1].get("entities") if records else None,
+        "stages": stage_turns(records),
+        "age": value_range(records, creature_value("age")),
+        "size": value_range(records, creature_value("size")),
+        "hunger": value_range(records, creature_value("hunger")),
+        "tiredness": value_range(records, creature_value("tiredness")),
+        "health": value_range(records, creature_value("health")),
+        "alignment": value_range(records, creature_value("alignment")),
+        "beliefs": value_range(records, belief_count),
+        "plans": dict(plans.most_common(15)),
+        "activities": dict(activities.most_common(15)),
+        "flag_counts": dict(flag_counts),
+        "flags": flags[:50],
+        "longest": (end or {}).get("longest", [])[:20],
+        "log": log,
+    }
+    problems = sum(flag_counts.values())
+    if log is not None:
+        problems += sum(log["counts"].get(level, 0) for level in ("error", "critical", "assert"))
+    crashed = exit_code not in (None, 0)
+    result["verdict"] = "stable" if problems == 0 and not crashed and result["ended"] else "problems"
+    return result
+
+
+def compare(records_a, records_b):
+    """Where two runs part: the first turn recorded in both whose hashes differ, and what differs there"""
+    by_turn_b = {record["turn"]: record for record in records_b}
+    compared = 0
+    for record in records_a:
+        other = by_turn_b.get(record["turn"])
+        if other is None:
+            continue
+        compared += 1
+        state_a = (record.get("creature") or {}).get("state_hash")
+        state_b = (other.get("creature") or {}).get("state_hash")
+        if record.get("hash") != other.get("hash") or state_a != state_b:
+            parts_a, parts_b = record.get("hash_parts", {}), other.get("hash_parts", {})
+            parts = sorted(key for key in set(parts_a) | set(parts_b) if parts_a.get(key) != parts_b.get(key))
+            return {
+                "same": False,
+                "compared": compared,
+                "turn": record["turn"],
+                "hash": [record.get("hash"), other.get("hash")],
+                "creature_same": state_a == state_b,
+                "parts": parts,
+            }
+    return {"same": compared > 0, "compared": compared, "turn": None}
+
+
+def markdown(result, title="Simulation run"):
+    """The summary as a short Markdown report"""
+
+    def number(value, digits=2):
+        return "n/a" if value is None else (f"{value:.{digits}f}" if isinstance(value, float) else str(value))
+
+    lines = [f"# {title}", "", f"Verdict: **{result['verdict']}**", ""]
+    lines += [
+        f"- Turns {result['first_turn']} to {result['last_turn']} in {number(result['wall_s'], 1)} s: "
+        f"{number(result['turns_per_second'], 0)} turns a second, {number(result['times_real_time'], 1)} times real time",
+        f"- Seed {result['seed']}, fast {result['fast']}, frame {result['frame_ms']} ms, a record every "
+        f"{result['every']} turns, {result['records']} records, ended {result['ended']}, exit {result['exit_code']}",
+        f"- Turn time {number(result['turn_ms_start'], 3)} ms at the start, {number(result['turn_ms_end'], 3)} ms at "
+        f"the end, longest {number(result['turn_ms_longest'], 2)} ms; frame average "
+        f"{number(result['frame_ms_average'], 3)} ms, longest {number(result['frame_ms_longest'], 2)} ms",
+        f"- Memory {number(result['memory_mb_start'], 0)} MB to {number(result['memory_mb_end'], 0)} MB (highest "
+        f"{number(result['memory_mb_highest'], 0)}); entities {result['entities_start']} to {result['entities_end']}",
+        "",
+        "## Creature",
+        "",
+        f"- First turn at each stage: {result['stages']}",
+    ]
+    for key in ("age", "size", "hunger", "tiredness", "health", "alignment", "beliefs"):
+        value = result.get(key)
+        if value:
+            lines.append(f"- {key}: first {number(value['first'], 3)}, last {number(value['last'], 3)}, lowest "
+                         f"{number(value['lowest'], 3)}, highest {number(value['highest'], 3)}")
+    lines.append(f"- Plans (records): {result['plans']}")
+    lines.append(f"- Activities (records): {result['activities']}")
+    lines += ["", "## Problems", "", f"- Flags: {result['flag_counts'] or 'none'}"]
+    for flag in result["flags"][:15]:
+        lines.append(f"  - turn {flag['turn']}: {flag['kind']} {flag['what']}: {flag['detail']}")
+    if result["log"] is not None:
+        lines.append(f"- Log: {result['log']['counts'] or 'no errors, critical messages or asserts'}")
+        for example in result["log"]["examples"][:5]:
+            lines.append(f"  - `{example}`")
+    lines += ["", "## Longest time the same (turns; the limit when known)", ""]
+    for run in result["longest"][:12]:
+        lines.append(f"- {run['key']}: {run['turns']} (limit {run['limit']})")
+    return "\n".join(lines) + "\n"
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    commands = parser.add_subparsers(dest="command", required=True)
+    summary_parser = commands.add_parser("summary", help="the summary of one run")
+    summary_parser.add_argument("record")
+    summary_parser.add_argument("--log")
+    summary_parser.add_argument("--json")
+    summary_parser.add_argument("--markdown")
+    compare_parser = commands.add_parser("compare", help="where two runs part")
+    compare_parser.add_argument("first")
+    compare_parser.add_argument("second")
+    arguments = parser.parse_args(argv)
+    if arguments.command == "summary":
+        start, records, end = load(arguments.record)
+        log_lines = None
+        if arguments.log:
+            with open(arguments.log, encoding="utf-8", errors="replace") as file:
+                log_lines = file.readlines()
+        result = summary(start, records, end, log_lines)
+        if arguments.json:
+            with open(arguments.json, "w", encoding="utf-8") as file:
+                json.dump(result, file, indent=1)
+        text = markdown(result)
+        if arguments.markdown:
+            with open(arguments.markdown, "w", encoding="utf-8") as file:
+                file.write(text)
+        sys.stdout.write(text)
+        return 0 if result["verdict"] == "stable" else 1
+    _, first, _ = load(arguments.first)
+    _, second, _ = load(arguments.second)
+    result = compare(first, second)
+    print(json.dumps(result))
+    return 0 if result["same"] else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

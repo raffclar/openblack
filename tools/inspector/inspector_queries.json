@@ -2274,5 +2274,130 @@
   ],
   "query": "input.replay",
   "writes": true
+ },
+ {
+  "description": "The fast simulation mode, the fixed frame time and the run record that the game writes",
+  "kind": "object",
+  "parameters": [],
+  "query": "sim.state"
+ },
+ {
+  "description": "Turns the fast simulation mode on or off. In the mode the game plays its frames one after the other and draws none or only some. Each frame takes the fixed frame time, so that the turns are the same at any speed. The state after",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The fast mode on or off",
+    "name": "on",
+    "required": true,
+    "type": "boolean"
+   },
+   {
+    "description": "Draw one frame in this many (0 for no frame)",
+    "name": "draw_every",
+    "type": "integer"
+   },
+   {
+    "description": "The fixed game time of each frame, 1 to 1000 (20 by default when the mode turns on with no fixed frame time; 0 for the wall clock)",
+    "name": "frame_ms",
+    "type": "integer"
+   },
+   {
+    "description": "Stop the game at this turn (0 for never)",
+    "name": "until_turn",
+    "type": "integer"
+   }
+  ],
+  "query": "sim.fast",
+  "writes": true
+ },
+ {
+  "description": "Starts the run record in a file of JSON lines, or stops it with stop. The state after",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The file to write",
+    "name": "path",
+    "type": "string"
+   },
+   {
+    "description": "Write a record each time this many turns go by (100 by default)",
+    "name": "every",
+    "type": "integer"
+   },
+   {
+    "description": "The JSON table of how long a plan or an activity can stay the same",
+    "name": "limits",
+    "type": "string"
+   },
+   {
+    "description": "Also keep the hash of the transforms of the entities of each component",
+    "name": "parts",
+    "type": "boolean"
+   },
+   {
+    "description": "Stop the record",
+    "name": "stop",
+    "type": "boolean"
+   }
+  ],
+  "query": "sim.record",
+  "writes": true
+ },
+ {
+  "description": "The player's hand strokes or slaps the player's creature, as the button would: it takes hold of the creature by a command first. With release, or kind release, it lets go, and the creature learns from the sum. A stroke waits for the clocks of the last one, and a slap needs the hand to hold the creature for a second first: an answer of busy is no stroke or slap",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "stroke, slap or release",
+    "name": "kind",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The creature (the player's creature by default)",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The part stroked, 0 (the head) to 8 (the left hand); 3, the belly, by default",
+    "name": "part",
+    "type": "integer"
+   },
+   {
+    "description": "Where the slap lands, as a share of the creature's height (0.5 by default)",
+    "name": "height",
+    "type": "number"
+   },
+   {
+    "description": "A gentle slap",
+    "name": "gentle",
+    "type": "boolean"
+   },
+   {
+    "description": "Let go afterwards",
+    "name": "release",
+    "type": "boolean"
+   }
+  ],
+  "query": "sim.feedback",
+  "writes": true
+ },
+ {
+  "description": "The record of the game now: the player's creature, the counts, the times, and the problems in its values. Only the records keep the times of the turns and the frames",
+  "kind": "object",
+  "parameters": [],
+  "query": "sim.sample"
+ },
+ {
+  "description": "The problems that the stability checks found since the record started",
+  "kind": "list",
+  "parameters": [],
+  "query": "sim.flags"
+ },
+ {
+  "description": "The limits of how long a plan or an activity can stay the same, and the longest time that each stayed the same in this record",
+  "kind": "object",
+  "parameters": [],
+  "query": "sim.limits"
  }
 ]

@@ -60,7 +60,12 @@ constexpr float k_DefaultDistanceScale = 0.3f;
 } // namespace
 
 AudioManager::AudioManager()
-    : _audioPlayer(new AudioPlayer())
+    : AudioManager(std::make_unique<AudioPlayer>())
+{
+}
+
+AudioManager::AudioManager(std::unique_ptr<AudioPlayerInterface> player)
+    : _audioPlayer(std::move(player))
 {
 	_audioPlayer->Initialize();
 	// The atmosphere's random numbers are seeded from the date as the game reads it (pinned in a seeded run)

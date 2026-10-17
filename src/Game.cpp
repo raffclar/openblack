@@ -18,6 +18,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -212,6 +213,7 @@
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
+#include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -501,6 +503,7 @@ Game::Game(Arguments&& args) noexcept
     , _inspectPort(args.inspectPort)
     , _fightAutopilot(args.fightAutopilot)
     , _fightTranscriptFolder(args.fightTranscriptFolder)
+    , _simulation(args.simulation)
     , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _inspectInputLock(args.inspectInputLock)
@@ -564,6 +567,7 @@ Game::Game(Arguments&& args) noexcept
 	config.displayMode = args.displayMode;
 	config.graphicsBackend = args.graphicsBackend;
 	config.vsync = args.vsync;
+	config.clockedAudio = args.simulation.has_value() && args.simulation->frameMs.has_value();
 	config.detailLevel = args.detailLevel;
 	config.guiScale = args.guiScale;
 }
@@ -2316,9 +2320,17 @@ bool Game::Update() noexcept
 	// Update Game Logic in Registry
 	{
 		auto gameLogic = profiler.BeginScoped(Profiler::Stage::GameLogic);
+		const auto turnBefore = Locator::time::value().GetTurn();
+		const auto logicStart = std::chrono::steady_clock::now();
 		if (GameLogicLoop())
 		{
 			return false; // Quit event
+		}
+		// The run record keeps the time of each turn
+		if (Locator::time::value().GetTurn() != turnBefore)
+		{
+			Locator::simulation::value().TurnPlayed(
+			    std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - logicStart).count());
 		}
 	}
 
@@ -3225,6 +3237,8 @@ bool Game::Update() noexcept
 				// The static of each fizzing creature slides only when the frame draws its body on the screen
 				Locator::creatureFizzSystem::value().SlideDrawnStatic(
 				    std::chrono::duration<float>(clock.GetFrameGameTime()).count());
+				// The fast simulation mode makes every frame ready, also the ones it does not draw: the game's things go
+				// by what the frames make ready, so a frame left out would change the run
 				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
 				                                                config.drawStreams);
 				ShowInspectorCamera(false);
@@ -3247,6 +3261,11 @@ bool Game::Update() noexcept
 		Locator::audio::value().Update();
 	} // Update Audio
 
+	if (sim_run::Finished(Locator::simulation::value().GetSettings(), Locator::time::value().GetTurn()))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The simulation run is at its last turn, {}", Locator::time::value().GetTurn());
+		return false;
+	}
 	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
 }
 
@@ -3380,6 +3399,19 @@ bool Game::Initialize() noexcept
 		Locator::rng::value().SetRunSeed(*_seed);
 		Locator::time::value().RestartClock(ecs::systems::TimeSystemInterface::k_DeterministicDate);
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Seeded run: seed {}, date pinned", *_seed);
+	}
+	// A simulation run: each frame takes a fixed game time from the first, so that the run plays the same turns at any
+	// speed
+	if (_simulation.has_value())
+	{
+		Locator::simulation::value().SetSettings(_simulation->settings);
+		if (_simulation->frameMs.has_value())
+		{
+			Locator::time::value().SetFixedFrameTime(std::chrono::milliseconds(*_simulation->frameMs));
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: fast {}, frame time {} ms, draw every {}, until turn {}",
+		                   _simulation->settings.fast, _simulation->frameMs.value_or(0), _simulation->settings.drawEvery,
+		                   _simulation->settings.untilTurn.value_or(0));
 	}
 	// The debug inspector answers from the first frame; the game carries on without it if it can't listen. Until then,
 	// while the game's data loads, it answers that the game is loading
@@ -4121,6 +4153,21 @@ bool Game::Initialize() noexcept
 
 void Game::StartFightTools()
 {
+	// A tool that steps a simulation run has each land start paused
+	if (_simulation.has_value() && _simulation->startPaused && Locator::inspector::has_value())
+	{
+		Locator::inspector::value().PauseOnLoad(true);
+	}
+	// The run record of a simulation run starts with the inspector
+	if (_simulation.has_value() && _simulation->recordPath.has_value() && Locator::inspector::has_value())
+	{
+		if (const auto error = Locator::inspector::value().StartSimRecord(*_simulation->recordPath, _simulation->recordEvery,
+		                                                                  _simulation->limitsPath, _simulation->hashParts);
+		    error.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The simulation record cannot start: {}", *error);
+		}
+	}
 	if (_fightTranscriptFolder.has_value() && Locator::fightTranscript::has_value())
 	{
 		Locator::fightTranscript::value().SetOutputFolder(_fightTranscriptFolder);
@@ -4253,6 +4300,21 @@ bool Game::Run() noexcept
 	LoadHelpRecord();
 	SaveHelpRecord();
 
+	// A simulation run with a fixed frame time loads every resource before its first frame. A thing that waits for its
+	// picture or its model then starts after the same frames each run, at any speed.
+	if (_simulation.has_value() && _simulation->frameMs.has_value())
+	{
+		auto& loading = Locator::resources::value();
+		const auto loadStart = std::chrono::steady_clock::now();
+		while (loading.PendingCount() > 0)
+		{
+			loading.UpdateLoading(k_LoadingScreenLoadBudget, k_FrameUploads);
+			// The graphics card takes what the loading made, as on the loading screen
+			Locator::rendererInterface::value().Frame();
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: every resource loaded in {:.0f} ms",
+		                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
+	}
 	_frameCount = 0;
 	auto lastTime = std::chrono::high_resolution_clock::now();
 	auto& profiler = Locator::profiler::value();
@@ -4286,13 +4348,16 @@ bool Game::Run() noexcept
 		// is laid out before the scene, so that the creatures it shows over itself are drawn in the same frame as it.
 		PlaceScreenLabels();
 		PlaceLearningTexts();
-		if (_interface && Locator::windowing::has_value())
+		// In the fast simulation mode the game draws only some frames, or none
+		const bool drawsFrame = sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount);
+		if (drawsFrame && _interface && Locator::windowing::has_value())
 		{
 			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
 			_interface->Draw(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), mouse, machine_clock::Ticks(),
 			                 Locator::debugGui::value().IsMouseOverWindow());
 			ShowTattooMenuCreature();
 		}
+		if (drawsFrame)
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
 			// TODO(#481): get actual time
@@ -4326,7 +4391,7 @@ bool Game::Run() noexcept
 			// nor in a challenge's picture
 			const bool hiddenThisFrame =
 			    _debugGuiHiddenFrame == _frameCount || ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value());
-			if ((!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
+			if (drawsFrame && (!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
 			{
 				Locator::debugGui::value().Draw();
 			}
@@ -4365,7 +4430,19 @@ bool Game::Run() noexcept
 			_startupTimer.reset();
 		}
 
+		// A simulation run at the normal speed waits until the frame took its fixed game time in real time too
+		auto& simulation = Locator::simulation::value();
+		const auto fixedFrame = Locator::time::value().GetFixedFrameTime();
+		if (const auto wait = sim_run::PaceWait(
+		        simulation.GetSettings(),
+		        fixedFrame.has_value() ? std::optional(static_cast<uint32_t>(fixedFrame->count())) : std::nullopt,
+		        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - frameStart));
+		    wait.count() > 0)
+		{
+			std::this_thread::sleep_for(wait);
+		}
 		const auto frameEnd = std::chrono::steady_clock::now();
+		simulation.FrameEnded(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count());
 		if (frameStats.has_value())
 		{
 			frameStats->Frame(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(), profiler,

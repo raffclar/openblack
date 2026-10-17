@@ -1102,3 +1102,12 @@ target_link_libraries(test_script_task_release PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(
   test_creature_joint_actions test_creature_joint_actions.cpp
 )
+openblack_setup_and_add_test(test_sim_run test_sim_run.cpp)
+openblack_setup_and_add_test(test_sim_checks test_sim_checks.cpp)
+openblack_setup_and_add_test(
+  test_clocked_audio_player audio/test_clocked_audio_player.cpp
+)
+  add_test(NAME test_sim_report
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tools/sim/test_sim_report.py
+  )
