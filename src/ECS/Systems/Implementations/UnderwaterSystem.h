@@ -66,6 +66,8 @@ public:
 private:
 	/// The sand texture of the sea bed, once
 	static void LoadSand();
+	/// EXPERIMENT (not for merge): pockets of fog over the land's still water and swamps, made again for each land
+	static void PlaceFogPockets();
 	/// The tide, the storm and the waves, and the things that float
 	void UpdateSea(float frameSeconds);
 	/// The rogue wave and the lightning on the sea. `seaDistance` gives the distance from the coast at a point.

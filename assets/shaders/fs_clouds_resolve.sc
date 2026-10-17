@@ -38,7 +38,12 @@ void main()
 	}
 
 	vec4 result = current;
-	if (u_cloudResolve.x > 0.5f)
+	// Where the scene is nearer than the lowest cloud, no cloud of the last frames may show: the sky's clouds would
+	// otherwise trail onto the edge of a hill as the view moves
+	float scene = texture2DLod(s_cloudCurrentDepth, uv, 0.0f).g;
+	vec3 ray = CloudRayAt(uv);
+	bool clear = scene < CloudNearestAlong(ray) && !CloudOnDome(ray, scene);
+	if (u_cloudResolve.x > 0.5f && !clear)
 	{
 		// Where the cloud was in the last frame: the wind has moved it on since then
 		vec3 world = u_cloudEye.xyz + CloudRayAt(uv) * depth - vec3(u_cloudResolve.z, 0.0f, u_cloudResolve.w);

@@ -150,7 +150,10 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 	// The sun's light goes orange and red near the horizon. The moon's light is cool and silver.
 	constexpr glm::vec3 k_MoonTint {0.72f, 0.84f, 1.1f};
 	const float moonShare = frame.light.w;
-	const glm::vec3 tint = glm::mix(clouds::SunThroughAir(frame.above.y), k_MoonTint, moonShare);
+	// EXPERIMENT (not for merge): with the haze on, the light through the air comes from the air's model
+	const glm::vec3 throughAir = _atmosphereFrame.has_value() && _atmosphereFrame->haze ? _atmosphereFrame->lightTint
+	                                                                                    : clouds::SunThroughAir(frame.above.y);
+	const glm::vec3 tint = glm::mix(throughAir, k_MoonTint, moonShare);
 	uniforms.lightColour = {glm::vec3(frame.lightColour) * tint, frame.lightColour.w};
 	uniforms.ambient = {glm::vec3(frame.sky) * k_SkyLight, system.GetSeaFlash().x};
 	uniforms.eye = {eye, frame.eye.w > 0.5f ? 0.0f : 1.0f};
@@ -171,6 +174,9 @@ void Renderer::SetCloudUniforms(const ShaderProgram& program, const clouds::Clou
 	program.SetUniformValue("u_cloudAmbient", &uniforms.ambient);
 	program.SetUniformValue("u_cloudEye", &uniforms.eye);
 	program.SetUniformValue("u_cloudStrike", &uniforms.strike);
+	// EXPERIMENT (not for merge): the sky's dome, which writes its depth, is the sky
+	const glm::vec4 noDome {0.0f, 0.0f, 1e9f, 1e9f};
+	program.SetUniformValue("u_hazeDome", _atmosphereFrame.has_value() ? &_atmosphereFrame->skyDome : &noDome);
 	program.SetUniformArray("u_cloudStorms", uniforms.storms.data(), static_cast<uint16_t>(uniforms.storms.size()));
 	program.SetTextureSampler("s_cloudBase", 0, _clouds->BaseNoise());
 	program.SetTextureSampler("s_cloudDetail", 1, _clouds->DetailNoise());

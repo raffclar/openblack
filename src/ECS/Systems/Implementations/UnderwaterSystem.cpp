@@ -35,6 +35,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/FogPocket.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Sky.h"
@@ -46,6 +47,7 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/Underwater.h"
+#include "Graphics/VolumetricFog.h"
 #include "Locator.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
@@ -141,7 +143,51 @@ void UnderwaterSystem::Update(std::chrono::milliseconds frameRealTime)
 	_reef = seabed::PlaceReef(_seabed, graphics::underwater::k_LowestSea, graphics::underwater::k_MostCoral,
 	                          graphics::underwater::k_MostPlants);
 	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: {} coral and plants on the reef", _reef.size());
+	PlaceFogPockets();
 	++_revision;
+}
+
+void UnderwaterSystem::PlaceFogPockets()
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	// The pockets of the last land go; the cells of still water and swamp of this land get new ones
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> old;
+	registry.Each<const ecs::components::FogPocket>(
+	    [&old](entt::entity entity, const ecs::components::FogPocket& /*pocket*/) { old.push_back(entity); });
+	for (const auto entity : old)
+	{
+		registry.Destroy(entity);
+	}
+	const auto& island = Locator::terrainSystem::value();
+	constexpr int k_Side = LandIslandInterface::k_MapCellsPerSide;
+	std::vector<uint8_t> sounds(static_cast<size_t>(k_Side) * k_Side);
+	std::vector<float> heights(sounds.size());
+	for (int z = 0; z < k_Side; ++z)
+	{
+		for (int x = 0; x < k_Side; ++x)
+		{
+			const auto& cell = island.GetCell(glm::u16vec2(x, z));
+			const auto i = static_cast<size_t>(z) * k_Side + static_cast<size_t>(x);
+			sounds[i] = static_cast<uint8_t>((cell.flags >> 2) & 0xF);
+			heights[i] = static_cast<float>(cell.altitude) * LandIslandInterface::k_HeightUnit;
+		}
+	}
+	constexpr int k_FewestCells = 6;
+	const auto pockets =
+	    graphics::volumetric_fog::StillWaterPockets(sounds, heights, k_Side, LandIslandInterface::k_CellSize, k_FewestCells);
+	for (const auto& pocket : pockets)
+	{
+		registry.Assign<ecs::components::FogPocket>(registry.Create(), pocket);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"), "Underwater experiment: a pocket of fog at ({}, {}, {}), {} by {}",
+		                    pocket.centre.x, pocket.centre.y, pocket.centre.z, pocket.halfSize.x * 2.0f,
+		                    pocket.halfSize.z * 2.0f);
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: {} pockets of fog over still water and swamp",
+	                   pockets.size());
 }
 
 void UnderwaterSystem::UpdateSea(float frameSeconds)

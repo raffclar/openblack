@@ -26,6 +26,13 @@ float SunVisibilityAt(vec2 xz)
 	return mix(1.0f, SunVisibilityTexel(xz).r, u_sunVisibility.y);
 }
 
+// How much of the sun's or the moon's light reaches the ground at a point, 0 to 1, without the softer darkness that the
+// shade keeps: the glint on the water goes fully where the hills hide the sun. 1 while the map is off.
+float SunLightAt(vec2 xz)
+{
+	return u_sunVisibility.x < 0.5f ? 1.0f : SunVisibilityTexel(xz).r;
+}
+
 // How much of the sun's or the moon's light reaches a point over the land: none under the hills' shadow, with a soft
 // edge a few units deep
 float SunVisibilityAbove(vec3 p)

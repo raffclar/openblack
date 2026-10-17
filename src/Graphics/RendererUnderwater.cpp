@@ -93,6 +93,7 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	_cloudsFrame.reset();
 	_shadowsFrame.reset();
 	_fogFrame.reset();
+	_atmosphereFrame.reset();
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	const bool enabled = Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled();
 	const auto* postProgram = _shaderManager->GetShader("UnderwaterPost");
@@ -197,6 +198,7 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	desc.drawWater = false;
 	_underwaterBound = true;
 	// The volumetric clouds and the shadows of this frame, before the land's shade reads their shadows
+	BeginAtmosphere(desc);
 	BeginClouds(desc);
 	BeginShadows(desc);
 	BeginFog(desc);
@@ -303,6 +305,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	BindUnderwaterDepth(*post, 9, 10);
 	BindCloudShadow(*post, 11);
 	BindSunVisibility(*post, 12);
+	BindLighting(*post, 15);
 	// The post pass also writes the depth of the scene and of the water's surface, so that what blends over the water
 	// after it is hidden by the land, the models and the water
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_ALWAYS);
@@ -321,6 +324,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	// The shadows of the sun and the moon, and the volumetric clouds over the water or into the scene under it
 	DrawSunShadows(desc, target);
 	DrawClouds(desc, target);
+	DrawHaze(desc, target);
 	DrawFog(desc, target);
 
 	// The motes in the water, added over it and hidden by the scene in front of them

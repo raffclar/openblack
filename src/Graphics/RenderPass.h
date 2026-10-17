@@ -26,6 +26,15 @@ enum class RenderPass : uint8_t
 	/// blend from the old map to the new
 	SunVisibility,
 	SunVisibilityBlend,
+	/// EXPERIMENT (not for merge): the air's light: the texture of the light that gets through the air (made again only
+	/// when the air changes), the texture of the sky round the eye, and the haze's grid that follows the view
+	AtmosphereTransmittance,
+	AtmosphereSkyView,
+	AtmosphereAerial,
+	/// EXPERIMENT (not for merge): the light probes over the island, a band of rows a frame after each new set of
+	/// shadows, and the blend of the old grid into the new
+	LightProbes,
+	LightProbesBlend,
 	/// EXPERIMENT (not for merge): the maps of the environment's shadows seen from the light, two cascades made again
 	/// about every 3 seconds, and the map of the moving things' shadows, made each frame
 	SunShadowEnvironment0,
@@ -63,6 +72,8 @@ enum class RenderPass : uint8_t
 	/// depth is known, and their blend with the frames before
 	CloudMarch,
 	CloudResolve,
+	/// EXPERIMENT (not for merge): the shade where the things round a point hide the sky, at half the screen's size
+	AmbientOcclusion,
 	/// EXPERIMENT (not for merge): the shadows of the things from the light's maps, over the scene's colour
 	ShadowApply,
 	/// EXPERIMENT (not for merge): the volumetric fog's grid of the light that each cell scatters, and its sum from the
@@ -114,6 +125,11 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Cloud Shadow Pass",           //
     "Sun Visibility Pass",         //
     "Sun Visibility Blend Pass",   //
+    "Atmosphere Transmittance",    //
+    "Atmosphere Sky View",         //
+    "Atmosphere Aerial",           //
+    "Light Probes",                //
+    "Light Probes Blend",          //
     "Sun Shadow Environment 0",    //
     "Sun Shadow Environment 1",    //
     "Sun Shadow Moving Pass",      //
@@ -134,6 +150,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Main Pass",                   //
     "Cloud March Pass",            //
     "Cloud Resolve Pass",          //
+    "Ambient Occlusion Pass",      //
     "Shadow Apply Pass",           //
     "Fog Scatter Pass",            //
     "Fog Integrate Pass",          //

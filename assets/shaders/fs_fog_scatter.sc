@@ -31,6 +31,11 @@ uniform mat4 u_fogShadowMoving;
 uniform mat4 u_fogPreviousViewProj;
 // xyz: the eye of the last frame; w: 1 while the last frame's grid holds fog
 uniform vec4 u_fogPrevious;
+// The pockets of fog nearest to the eye: [i] xyz the middle, w 0 for a ball and 1 for a box; [8 + i] xyz the half size
+// (a ball's radius is x), w the density now (0 for none)
+uniform vec4 u_fogPockets[16];
+// The soft edge of each pocket, four to an element
+uniform vec4 u_fogPocketEdges[2];
 // x: 1 while the maps of the environment are made; y: 1 while the moving things' map is made; z: how much of the
 // last frame's grid to keep; w: 1 while the cube of the sky is ready
 uniform vec4 u_fogShadows;
@@ -95,6 +100,36 @@ float HenyeyGreenstein(float cosAngle, float g)
 	return (1.0f - g2) / (4.0f * 3.14159265f * d * sqrt(d));
 }
 
+// The fog of the pockets at a point (volumetric_fog::PocketDensity)
+float PocketFog(vec3 p)
+{
+	float sum = 0.0f;
+	for (int i = 0; i < 8; ++i)
+	{
+		vec4 size = u_fogPockets[8 + i];
+		if (size.w <= 0.0f)
+		{
+			continue;
+		}
+		vec4 middle = u_fogPockets[i];
+		float inside;
+		if (middle.w > 0.5f)
+		{
+			vec3 q = abs(p - middle.xyz) - size.xyz;
+			inside = -max(q.x, max(q.y, q.z));
+		}
+		else
+		{
+			inside = size.x - length(p - middle.xyz);
+		}
+		vec4 edges = i < 4 ? u_fogPocketEdges[0] : u_fogPocketEdges[1];
+		float lane = mod(float(i), 4.0f);
+		float edge = lane < 0.5f ? edges.x : (lane < 1.5f ? edges.y : (lane < 2.5f ? edges.z : edges.w));
+		sum += size.w * smoothstep(0.0f, max(edge, 1e-3f), inside);
+	}
+	return sum;
+}
+
 void main()
 {
 	vec2 cells = u_fogGrid.xy;
@@ -124,7 +159,9 @@ void main()
 	float groundFog = u_fogLayers.z * (1.0f - smoothstep(top - 8.0f, top + 6.0f, y)) * smoothstep(0.2f, 0.75f, mist + 0.15f);
 	// A thin mist close over the ground all day, which the shafts of light show in the trees
 	float lowMist = (0.0014f + u_fogLayers.z * 0.12f) * exp(-max(overGround, 0.0f) / 14.0f) * (0.5f + mist);
-	float sigma = (haze + groundFog + lowMist) * step(-0.5f, overGround) * smoothstep(-0.5f, 0.5f, y);
+	// The pockets over the swamps and the still water, in wisps that the mist moves
+	float pockets = PocketFog(p) * (0.55f + 0.9f * mist);
+	float sigma = (haze + groundFog + lowMist + pockets) * step(-0.5f, overGround) * smoothstep(-0.5f, 0.5f, y);
 
 	// The light of the sun or the moon through the shadows
 	float visibility = SunVisibilityAbove(p) * CloudShadeAt(p.xz);

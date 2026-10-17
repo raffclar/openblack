@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <vector>
 
 #include <bgfx/bgfx.h>
 #include <glm/common.hpp>
@@ -23,6 +24,8 @@
 
 #include "3D/OceanInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/FogPocket.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -118,9 +121,27 @@ void Renderer::BeginFog(const DrawSceneDesc& desc) const
 	uniforms.light = {frame.above.x, frame.above.y, frame.above.z, frame.light.w};
 	// Warm at sunrise and sunset, cool and faint under the moon
 	constexpr glm::vec3 k_MoonTint {0.72f, 0.84f, 1.1f};
-	const glm::vec3 tint = glm::mix(volumetric_clouds::SunThroughAir(frame.above.y), k_MoonTint, frame.light.w);
+	const glm::vec3 throughAir = _atmosphereFrame.has_value() && _atmosphereFrame->haze
+	                                 ? _atmosphereFrame->lightTint
+	                                 : volumetric_clouds::SunThroughAir(frame.above.y);
+	const glm::vec3 tint = glm::mix(throughAir, k_MoonTint, frame.light.w);
 	uniforms.lightColour = {glm::vec3(frame.lightColour) * tint, frame.lightColour.w};
 	uniforms.ambient = {glm::vec3(frame.sky) * k_SkyLight, frame.params.z};
+	// EXPERIMENT (not for merge): the place's own colour tints the fog
+	if (_atmosphereFrame.has_value())
+	{
+		uniforms.ambient = {glm::vec3(uniforms.ambient) * _atmosphereFrame->placeTint, uniforms.ambient.w};
+	}
+	// EXPERIMENT (not for merge): the pockets of fog nearest to the eye
+	if (system.IsEffectOn(underwater::Effect::FogPockets) && Locator::entitiesRegistry::has_value())
+	{
+		std::vector<ecs::components::FogPocket> pockets;
+		Locator::entitiesRegistry::value().Each<const ecs::components::FogPocket>(
+		    [&pockets](const ecs::components::FogPocket& pocket) { pockets.push_back(pocket); });
+		const auto packed = fog::PackPockets(pockets, desc.camera->GetOrigin(), fog::DawnFog(hour));
+		uniforms.pockets = packed.pockets;
+		uniforms.pocketEdges = packed.edges;
+	}
 	_fogFrame = uniforms;
 }
 
@@ -156,6 +177,9 @@ void Renderer::DrawFog(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget
 		program.SetUniformValue("u_fogAmbient", &uniforms.ambient);
 		program.SetUniformValue("u_fogGrid", &uniforms.grid);
 	};
+	scatterProgram->SetUniformArray("u_fogPockets", uniforms.pockets.data(), static_cast<uint16_t>(uniforms.pockets.size()));
+	scatterProgram->SetUniformArray("u_fogPocketEdges", uniforms.pocketEdges.data(),
+	                                static_cast<uint16_t>(uniforms.pocketEdges.size()));
 
 	// The fog of each cell and the light that it scatters
 	const glm::mat4 viewProj = desc.camera->GetProjectionMatrix() * desc.camera->GetViewMatrix(Camera::Interpolation::Current);
@@ -231,7 +255,10 @@ void Renderer::DrawFog(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget
 	applyProgram->SetTextureSampler("s_sceneDepth", 1, sceneTarget.GetDepthStencilAttachment());
 	const glm::vec4 apply {k_SkyShare, 0.0f, 0.0f, 0.0f};
 	applyProgram->SetUniformValue("u_fogApply", &apply);
+	// EXPERIMENT (not for merge): the sky's dome, so that the fog over the sky is the thinner share
+	const glm::vec4 noDome {0.0f, 0.0f, 1e9f, 1e9f};
+	applyProgram->SetUniformValue("u_hazeDome", _atmosphereFrame.has_value() ? &_atmosphereFrame->skyDome : &noDome);
 	BindScreenTriangle();
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_SRC_ALPHA));
-	applyProgram->Submit(static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver), std::numeric_limits<uint32_t>::max() - 1);
+	applyProgram->Submit(static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver), std::numeric_limits<uint32_t>::max() - 2);
 }

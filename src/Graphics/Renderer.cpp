@@ -645,6 +645,8 @@ Renderer::~Renderer() noexcept
 	_clouds.reset();
 	_sunShadows.reset();
 	_fog.reset();
+	_atmosphere.reset();
+	_lightProbes.reset();
 	_shaderManager.reset();
 	bgfx::frame();
 	bgfx::shutdown();
@@ -4788,7 +4790,12 @@ TextureHandle Renderer::UpdateLandLight() const
 		const auto& haze = _landLightTable->GetHaze();
 		const auto detailLevel = Locator::config::value().detailLevel;
 		// The lower detail levels draw no haze at all
-		const float hazeOn = detail_level::Fog(detailLevel) ? 1.0f : 0.0f;
+		float hazeOn = detail_level::Fog(detailLevel) ? 1.0f : 0.0f;
+		// EXPERIMENT (not for merge): the haze of the air's light takes the place of the distance haze
+		if (_atmosphereFrame.has_value() && _atmosphereFrame->haze)
+		{
+			hazeOn = 0.0f;
+		}
 		_haze = {glm::vec4(haze.nearDistance, haze.farDistance, haze.k, hazeOn), glm::vec4(haze.colour, 0.0f)};
 		_skyTint = sky_dome::TintOf({
 		    .hazeColour = haze.colour,
@@ -5648,6 +5655,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto* debugShader = _shaderManager->GetShader("DebugLine");
 	// Trees are placed on the land already, so they are drawn where they are rather than moved onto the height map
 	const auto* vegetationShaderInstanced = _shaderManager->GetShader("Vegetation");
+	// EXPERIMENT (not for merge): the light of the sun through the leaves and round their edges
+	if (vegetationShaderInstanced != nullptr)
+	{
+		BindFoliageLight(*vegetationShaderInstanced);
+	}
 	const auto* spriteShader = _shaderManager->GetShader("Sprite");
 	const auto* debugShaderInstanced = _shaderManager->GetShader("DebugLineInstanced");
 	const auto* objectShaderInstanced = _shaderManager->GetShader("ObjectInstanced");
@@ -5698,6 +5710,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			const glm::vec4 u_skyAdd {glm::vec3(_skyTint.add) / 255.0f, 0.0f};
 			skyShader->SetUniformValue("u_skyModulate", &u_skyModulate);
 			skyShader->SetUniformValue("u_skyAdd", &u_skyAdd);
+			// EXPERIMENT (not for merge): the air's sky near the horizon
+			BindAtmosphere(*skyShader, 1.0f);
 
 			L3DMeshSubmitDesc submitDesc = {};
 			submitDesc.viewId = skyViewId;
