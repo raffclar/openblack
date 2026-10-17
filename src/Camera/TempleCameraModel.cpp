@@ -30,6 +30,7 @@
 #include "CameraLens.h"
 #include "Common/MachineClock.h"
 #include "Common/X87.h"
+#include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
@@ -175,6 +176,11 @@ constexpr float k_LookMaxPitch = 1.4959966f;
 /// How fast the arrow keys speed up the look's turn, and how quickly it slows
 constexpr float k_LookAcceleration = 0.3f;
 constexpr float k_LookSlowing = 10.0f;
+/// A look whose sideways parts are both under this is straight up or down, at the pitch below
+constexpr double k_StraightLook = 0.01;
+constexpr float k_StraightLookPitch = 1.5393804f;
+/// A half turn, as the float the game takes a heading from
+constexpr float k_HalfTurn = 3.1415927410125732f;
 /// How long the camera takes to catch up with the look
 constexpr float k_LookEaseTime = 0.15f;
 
@@ -426,11 +432,12 @@ TempleCameraModel::Pose TempleCameraModel::PictureOrbitPose(Room room, float yaw
 	// Where a room of pictures' camera is and looks, at a turn, lean and height
 	const auto& picture = *PictureRoomOf(room);
 	const auto centre = picture.aroundPathEnd ? glm::vec3(pathEnd.x, 0.0f, pathEnd.z) : picture.centre;
-	const glm::vec3 raise {0.0f, height, 0.0f};
-	return {
-	    TurnAbout(glm::mix(picture.lowOrigin, picture.highOrigin, lean), yaw) + centre + raise,
-	    TurnAbout(glm::mix(picture.lowFocus, picture.highFocus, lean), yaw) + centre + raise,
-	};
+	// The height goes on after the centre, and only up
+	auto origin = TurnAbout(Between(picture.lowOrigin, picture.highOrigin, lean), yaw) + centre;
+	auto focus = TurnAbout(Between(picture.lowFocus, picture.highFocus, lean), yaw) + centre;
+	origin.y = height + origin.y;
+	focus.y = height + focus.y;
+	return {origin, focus};
 }
 
 float TempleCameraModel::PictureStartYaw(const Pose& pathEnd)
@@ -442,21 +449,25 @@ float TempleCameraModel::PictureStartYaw(const Pose& pathEnd)
 
 TempleCameraModel::Pose TempleCameraModel::LookPose(glm::vec3 from, float heading, float pitch)
 {
-	// The point at the look's distance, heading and pitch from the camera, mirrored through the camera
-	const glm::vec3 behind {std::sin(heading) * std::cos(pitch), std::sin(pitch), std::cos(heading) * std::cos(pitch)};
-	return {from, from - behind * k_LookDistance};
+	// The point at the look's distance, heading and pitch from the camera, mirrored through the camera. The cosine of
+	// the pitch is stored as a float; the other cosine and the sines stay wide into their first products.
+	const float pitchCosine = x87::RoundToFloat(x87::Cos(pitch));
+	const glm::vec3 point {(x87::Mul(x87::Sin(heading), pitchCosine) * k_LookDistance) + from.x,
+	                       x87::Mul(x87::Sin(pitch), k_LookDistance) + from.y,
+	                       (x87::Mul(x87::Cos(heading), pitchCosine) * k_LookDistance) + from.z};
+	return {from, (from - point) + from};
 }
 
 glm::vec2 TempleCameraModel::HeadingAndPitch(const Pose& look)
 {
 	const auto behind = look.origin - look.focus;
-	const float across = std::sqrt(behind.x * behind.x + behind.z * behind.z);
-	if (across < 1e-4f)
+	if (x87::Less(std::abs(behind.x), k_StraightLook) && x87::Less(std::abs(behind.z), k_StraightLook))
 	{
 		// Straight up or down
-		return {0.0f, 1.5393804f};
+		return {0.0f, k_StraightLookPitch};
 	}
-	return {std::atan2(behind.x, behind.z), std::atan2(behind.y, across)};
+	const float across = std::sqrt((behind.z * behind.z) + (behind.x * behind.x));
+	return {x87::Sub(k_HalfTurn, x87::GameHeadingOf(behind.x, behind.z)), x87::RoundToFloat(x87::GameAtan2(behind.y, across))};
 }
 
 TempleCameraModel::TempleCameraModel(Paths paths, Room room)
@@ -672,18 +683,19 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 
 	auto origin = _origin.GetValue();
 	auto focus = _focus.GetValue();
-	// In every room, the camera goes over to the scroll it looks at along a cosine
-	if (_subMeshLook.has_value() && _subMeshZoom > 0.0f)
-	{
-		const float along = (1.0f - std::cos(_subMeshZoom * glm::pi<float>())) * 0.5f;
-		origin = glm::mix(origin, _subMeshLook->origin, along);
-		focus = glm::mix(focus, _subMeshLook->focus, along);
-	}
 	// In the creature's room, it goes over to the target zoomed to in a straight line
 	if (_caveZoom > 0.0f)
 	{
-		origin = glm::mix(origin, _caveLook.origin, _caveZoom);
-		focus = glm::mix(focus, _caveLook.focus, _caveZoom);
+		origin = Between(origin, _caveLook.origin, _caveZoom);
+		focus = Between(focus, _caveLook.focus, _caveZoom);
+	}
+	// In every room, the camera then goes over to the scroll it looks at along a cosine
+	if (_subMeshLook.has_value() && _subMeshZoom > 0.0f)
+	{
+		// The FPU's cosine stays wide for the subtraction
+		const float along = x87::Sub(1.0, x87::Cos(std::min(_subMeshZoom, 1.0f) * glm::pi<float>())) * 0.5f;
+		origin = Between(origin, _subMeshLook->origin, along);
+		focus = Between(focus, _subMeshLook->focus, along);
 	}
 	return CameraInterpolationUpdateInfo {origin, focus, std::chrono::microseconds::zero()};
 }
@@ -972,7 +984,7 @@ void TempleCameraModel::UpdateLook(float dt, const Input& input)
 		// What the lens sees across this screen: wider on a screen wider than 4:3, so the look still follows the mouse
 		const float across =
 		    2.0f * std::tan(camera_lens::HorizontalFieldOfView(glm::radians(k_FieldOfView), size.x / size.y) * 0.5f);
-		_look = _lookAtPress + across * (_pressMouse - input.mouse) / width;
+		_look = (across * ((_pressMouse - input.mouse) / width)) + _lookAtPress;
 	}
 
 	// The arrow keys speed up its turn, which slows as they're let go
@@ -997,12 +1009,19 @@ void TempleCameraModel::UpdateLook(float dt, const Input& input)
 	// It never looks straight up or down
 	_look.y = std::clamp(_look.y, -k_LookMaxPitch, k_LookMaxPitch);
 	_lookAtPress.y = std::clamp(_lookAtPress.y, -k_LookMaxPitch, k_LookMaxPitch);
-	_look.x = std::fmod(_look.x, glm::two_pi<float>());
-	if (_look.x < 0.0f)
+	// The headings come back into one turn a whole turn at a time
+	for (auto* heading : {&_lookAtPress.x, &_look.x})
 	{
-		_look.x += glm::two_pi<float>();
+		while (*heading < 0.0f)
+		{
+			*heading += glm::two_pi<float>();
+		}
+		while (*heading > glm::two_pi<float>())
+		{
+			*heading -= glm::two_pi<float>();
+		}
 	}
-	_lookSpeed *= std::exp(-k_LookSlowing * dt);
+	_lookSpeed *= x87::Exp(-k_LookSlowing * dt);
 
 	_target = LookPose(_lookFrom, _look.x, _look.y);
 	_originTime = k_LookEaseTime;

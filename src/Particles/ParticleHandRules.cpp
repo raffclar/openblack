@@ -120,13 +120,19 @@ public:
 	bool ModifyAtom(Effect& effect, Atom& atom, Collection::Slot& /*slot*/) const override
 	{
 		const auto& v = atom.velocity;
-		float speed = glm::length(v) * tumbleSpeed;
+		float speed = maths::TumbleSpeed(v, tumbleSpeed);
 		if (restrict)
 		{
-			speed = std::clamp(speed, -maxTumbleSpeed, maxTumbleSpeed);
+			if (speed > maxTumbleSpeed)
+			{
+				speed = maxTumbleSpeed;
+			}
+			else if (speed < -maxTumbleSpeed)
+			{
+				speed = -maxTumbleSpeed;
+			}
 		}
-		const auto axis = std::abs(v.z) < std::abs(v.x) ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
-		atom.rotation = glm::mat3(glm::rotate(glm::mat4(1.0f), speed * effect.GetDt(), axis)) * atom.rotation;
+		atom.rotation = maths::Tumble(atom.rotation, speed * effect.GetDt(), std::abs(v.z) < std::abs(v.x));
 		return true;
 	}
 

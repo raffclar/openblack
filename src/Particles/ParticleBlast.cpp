@@ -68,7 +68,7 @@ glm::vec3 blast::FragmentOrigin(const glm::vec3& centre)
 }
 
 glm::vec3 blast::FragmentVelocity(const glm::vec3& piece, const glm::vec3& origin, float speed, float randomFactor,
-                                  const glm::vec3& randomUnit)
+                                  const glm::vec3& random)
 {
 	auto out = piece - origin;
 	if (out != glm::vec3(0.0f))
@@ -76,12 +76,12 @@ glm::vec3 blast::FragmentVelocity(const glm::vec3& piece, const glm::vec3& origi
 		out = x87::Scaled<x87::SumOrder::Zyx>(out, speed);
 	}
 	// The random part is made as long as the speed out times the factor, its squares added z first
-	auto random = randomUnit;
+	auto scaledRandom = random;
 	if (random != glm::vec3(0.0f))
 	{
-		random = x87::Scaled<x87::SumOrder::Zyx>(random, x87::LengthZyx(out) * randomFactor);
+		scaledRandom = x87::Scaled<x87::SumOrder::Zyx>(random, x87::LengthZyx(out) * randomFactor);
 	}
-	return {random.x + out.x, out.y + (random.y * k_UpwardShare), random.z + out.z};
+	return {scaledRandom.x + out.x, out.y + (scaledRandom.y * k_UpwardShare), scaledRandom.z + out.z};
 }
 
 std::optional<float> blast::MoveFraction(float age, float dt, float start, float stop, bool smoothly)

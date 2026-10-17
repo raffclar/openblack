@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Common/X87Vector.h"
 #include "Physics/Body.h"
 
 using namespace openblack;
@@ -213,6 +214,17 @@ float hand_grab::HandRise(HoldType hold, float lowering, float handSize, std::op
 float hand_grab::CursorRaise(float handRise)
 {
 	return k_CursorRaiseShare * handRise;
+}
+
+glm::mat3 hand_grab::AxesAtSize(const glm::mat3& axes, float size)
+{
+	glm::mat3 result = axes;
+	for (glm::length_t column = 0; column < 3; ++column)
+	{
+		const float length = x87::LengthZyx(axes[column]);
+		result[column] = length > 0.0f ? axes[column] * (size / length) : axes[column];
+	}
+	return result;
 }
 
 void HandSpring::Start(glm::vec3 position)
