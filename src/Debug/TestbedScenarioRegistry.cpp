@@ -3752,8 +3752,9 @@ void AddObjects(std::vector<Scenario>& all)
 	    .description = "The camera looks at a tiger that plays the impress action after twelve seconds; then the game "
 	                   "writes the tiger's web page from Scripts/creature_html.tmpl into the profile folder.",
 	    .expected = "Halfway through the impress action the game takes a picture of the screen: creatureshot_0.jpg, 400 "
-	                "by 300, in the player's profile folder. Then html/<the tiger's name>.html shows its values and "
-	                "the picture.",
+	                "by 300, in the player's profile folder. Then html/<the tiger's name>.html shows its values, the "
+	                "picture and the decorations from the game folder, and creature.lhp holds the values and the "
+	                "picture.",
 	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .commands = {Play(Kind::PlayAction, 0, animations::k_Impress, 12.0f, true),

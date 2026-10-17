@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <filesystem>
 #include <optional>
 #include <span>
 #include <string>
@@ -21,6 +22,7 @@
 #include <vector>
 
 #include <CreatureHtml.h>
+#include <LhpFile.h>
 
 namespace openblack::graphics
 {
@@ -43,6 +45,19 @@ namespace openblack::creature_web_page
 constexpr std::string_view k_Template = "creature_html.tmpl";
 /// The folder of the page in the player's profile folder
 constexpr std::string_view k_PageFolder = "html";
+/// The package of the page's values and the pictures, in the player's profile folder, for the creature upload tool
+constexpr std::string_view k_UploadFile = "creature.lhp";
+/// The category and name of the package's block of values, and the category of its blocks of pictures
+constexpr std::string_view k_ValuesCategory = "CREATURE";
+constexpr std::string_view k_ValuesName = "creature";
+constexpr std::string_view k_PicturesCategory = "PICTURES";
+/// The size of each value in the package: its name, then its value, each a text that ends in a zero byte in a field of
+/// half this size
+constexpr size_t k_PackedValueSize = 500;
+/// The stamp of the package is a random number below this
+constexpr int32_t k_StampRange = 0x8000;
+/// The text that the template puts before the folder of the game, in the links to its decorations
+constexpr std::string_view k_GameFolderLink = "../../../";
 
 /// The size of a picture
 constexpr uint32_t k_PictureWidth = 400;
@@ -60,6 +75,8 @@ constexpr uint32_t k_FirstDesireText = 624;
 constexpr uint32_t k_FirstAttentionText = 1137;
 /// The help texts that say how good the player was to the creature, from "totally evil" to the most good
 constexpr uint32_t k_FirstNicenessText = 1130;
+/// The help texts that say which spell is on the creature, one for each spell in the order of the game's tables
+constexpr uint32_t k_FirstSpellText = 1046;
 /// The kinds of belief that the page counts
 constexpr size_t k_BeliefKinds = 24;
 
@@ -160,10 +177,31 @@ struct PageFacts
 	int32_t niceness {0};
 	/// How much attention the player gave the creature, from 0 (none) to 4
 	int32_t attention {0};
+	/// The first spell in the order of the game's tables that is on the creature now (cast and not finished), none for
+	/// none
+	std::optional<uint32_t> spellOn;
 };
 
 /// The values for the template, in the order that the game makes them. The marks of the template that the game ships
 /// are name, age, alignment, strength, health, energy, num-people-killed and num-battles-won.
 [[nodiscard]] std::vector<creaturehtml::Value> PageValues(const PageFacts& facts);
+
+/// The values as the package keeps them: the last value first, each in a field of k_PackedValueSize bytes
+[[nodiscard]] std::vector<uint8_t> PackValues(std::span<const creaturehtml::Value> values);
+
+/// The package of the values and the pictures. The pictures are the bytes of the files of the five slots, in the order
+/// of the slots; a slot with no file adds no block.
+[[nodiscard]] lhp::Package UploadPackage(std::span<const creaturehtml::Value> values,
+                                         std::span<const std::optional<std::vector<uint8_t>>> pictures, uint16_t stamp);
+
+/// The name of the package's block of the picture of a slot
+[[nodiscard]] std::string PictureBlockName(uint32_t slot);
+
+/// A file URL of a folder, with a "/" at its end
+[[nodiscard]] std::string FolderUrl(const std::filesystem::path& folder);
+
+/// The page with each link to the game folder that the template has (k_GameFolderLink) replaced by the URL of the
+/// game folder, so that the decorations show wherever the profile folder is
+[[nodiscard]] std::string PointLinksAtGameFolder(std::string_view page, const std::filesystem::path& gameFolder);
 
 } // namespace openblack::creature_web_page
