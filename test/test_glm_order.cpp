@@ -14,18 +14,22 @@
 #include <cmath>
 #include <cstdint>
 
+#include <array>
 #include <bit>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
 #include "Camera/ScriptCameraModel.h"
+#include "Common/ModelInverseSquareRoot.h"
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureObstacles.h"
 #include "Creature/LeashRope.h"
+#include "Magic/FlockMiracleRules.h"
+#include "Physics/Body.h"
 
 namespace x87 = openblack::x87;
 using x87::SumOrder;
@@ -213,4 +217,29 @@ TEST(GlmOrder, GameTurnRoundsEachProduct)
 	// cosine about x, both floats
 	EXPECT_EQ(Bits(rows[2].y), Bits(static_cast<float>(sx)));
 	EXPECT_EQ(Bits(rows[0].y), Bits(-(sz * static_cast<float>(std::cos(static_cast<double>(-0.3f))))));
+}
+
+TEST(GlmOrder, WolfEatsFromItsOwnPlaceAlongTheWay)
+{
+	const glm::vec3 wolf {1200.5f, 0.25f, 980.75f};
+	const auto prey = wolf + k_Odd;
+	const float scale = 1.3f;
+	const auto goal = openblack::magic::flock::EatingPosition(prey, wolf, scale);
+	const auto towards = prey - wolf;
+	const float share = scale / std::sqrt(SquareSumZyx(towards));
+	EXPECT_EQ(Bits(goal.x), Bits(wolf.x + (towards.x - (towards.x * share))));
+	EXPECT_EQ(Bits(goal.y), Bits(wolf.y + (towards.y - (towards.y * share))));
+	EXPECT_EQ(Bits(goal.z), Bits(wolf.z + (towards.z - (towards.z * share))));
+}
+
+TEST(GlmOrder, EllipsoidNormalUsesTheEngineInverseSquareRoot)
+{
+	// A unit box about the origin, not turned: the line along -x from x = 5 meets it at x = 1
+	openblack::physics::Ellipsoid bone {.boxMin = glm::vec3(-1.0f), .boxMax = glm::vec3(1.0f)};
+	const std::array bones {bone};
+	const auto hit = openblack::physics::EllipsoidHit(bones, glm::vec3(5.0f, 0.0f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
+	ASSERT_TRUE(hit.has_value());
+	EXPECT_EQ(hit->first.point, glm::vec3(1.0f, 0.0f, 0.0f));
+	const float inverse = openblack::gutils::ModelInverseSquareRoot(1.0f);
+	EXPECT_EQ(Bits(hit->first.normal.x), Bits(inverse));
 }

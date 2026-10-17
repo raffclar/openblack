@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/X87.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack::magic;
 
@@ -213,11 +214,12 @@ bool flock::IsPrey(const PreyFacts& prey)
 
 glm::vec3 flock::EatingPosition(glm::vec3 prey, glm::vec3 wolf, float scale)
 {
-	auto way = prey - wolf;
-	const float length = glm::length(way);
-	if (length != 0.0f)
+	// The game adds the squares from z to x, and goes from the wolf along the way less the scaled way
+	const auto towards = prey - wolf;
+	auto way = towards;
+	if (towards != glm::vec3(0.0f))
 	{
-		way *= scale / length;
+		way = openblack::x87::Scaled<openblack::x87::SumOrder::Zyx>(towards, scale);
 	}
-	return prey - way;
+	return wolf + (towards - way);
 }

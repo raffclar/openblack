@@ -19,6 +19,7 @@
 #include <glm/matrix.hpp>
 #include <glm/vec2.hpp>
 
+#include "Common/ModelInverseSquareRoot.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
 #include "Ground.h"
@@ -51,6 +52,8 @@ constexpr int k_RestCounterPerStep = 5;
 constexpr float k_MinRotationStep = 1e-5f;
 constexpr float k_FacingThreshold = -0.0001f;
 constexpr float k_AnyFaceStart = -10000.0f;
+/// The overlap test takes a face that faces the line more than this, a double
+constexpr double k_AnyFacingThreshold = -0.0001;
 constexpr float k_MinAheadLength = 0.001f;
 /// The spin kept each step is the share kept each second raised to the step's length
 constexpr double k_StepExponent = 0.005000000074505806;
@@ -70,6 +73,12 @@ glm::vec3 NormaliseOrKeep(glm::vec3 v)
 glm::vec3 TurnedZyx(const glm::mat3& axes, glm::vec3 v)
 {
 	return axes[2] * v.z + axes[1] * v.y + axes[0] * v.x;
+}
+
+/// The axes times a vector, as the game adds the parts of each row in each step: y first, then x, then z
+glm::vec3 TurnedYxz(const glm::mat3& axes, glm::vec3 v)
+{
+	return (axes[1] * v.y + axes[0] * v.x) + axes[2] * v.z;
 }
 
 glm::mat3 NormaliseAxes(glm::mat3 axes)
@@ -110,10 +119,29 @@ glm::vec2 Xz(glm::vec3 v)
 	return {v.x, v.z};
 }
 
+/// A point through a part's matrix, as the game adds the terms of each part. Into the part's space the terms of x add
+/// z, y, then x, and the terms of y and z add z, x, then y. Back into the world all three add z, y, then x. A direction
+/// takes no move.
+glm::vec3 IntoPart(const glm::mat4& m, const glm::vec3& v, float w)
+{
+	return {(((m[2][0] * v.z) + (m[1][0] * v.y)) + (v.x * m[0][0])) + (m[3][0] * w),
+	        (((m[2][1] * v.z) + (m[0][1] * v.x)) + (m[1][1] * v.y)) + (m[3][1] * w),
+	        (((m[2][2] * v.z) + (m[0][2] * v.x)) + (m[1][2] * v.y)) + (m[3][2] * w)};
+}
+
+glm::vec3 OutOfPart(const glm::mat4& m, const glm::vec3& v, float w)
+{
+	return {(((v.z * m[2][0]) + (v.y * m[1][0])) + (v.x * m[0][0])) + (m[3][0] * w),
+	        (((v.z * m[2][1]) + (v.y * m[1][1])) + (v.x * m[0][1])) + (m[3][1] * w),
+	        (((v.z * m[2][2]) + (v.y * m[1][2])) + (v.x * m[0][2])) + (m[3][2] * w)};
+}
+
 bool InsideTriangle(glm::vec3 p, glm::vec3 v0, glm::vec3 v1, glm::vec3 v2, glm::vec3 normal)
 {
-	return glm::dot(glm::cross(v1 - v0, p - v0), normal) > 0.0f && glm::dot(glm::cross(v2 - v1, p - v1), normal) > 0.0f &&
-	       glm::dot(glm::cross(v0 - v2, p - v2), normal) > 0.0f;
+	// The game adds each dot product from z to x
+	using openblack::x87::DotZyx;
+	return DotZyx(glm::cross(v1 - v0, p - v0), normal) > 0.0f && DotZyx(glm::cross(v2 - v1, p - v1), normal) > 0.0f &&
+	       DotZyx(glm::cross(v0 - v2, p - v2), normal) > 0.0f;
 }
 } // namespace
 
@@ -312,7 +340,7 @@ void Body::ClearForces()
 	const auto ahead = velocity * k_LookAheadSeconds;
 	for (auto& point : _points)
 	{
-		point.world = _axes * point.local + _centre + ahead;
+		point.world = TurnedYxz(_axes, point.local) + _centre + ahead;
 		point.aheadLength = std::max(openblack::x87::LengthZyx(point.world - _centre), k_MinAheadLength);
 	}
 	_aheadCentre = _centre + ahead;
@@ -413,13 +441,14 @@ std::optional<RayHit> Body::FaceBehind(glm::vec3 point, glm::vec3 direction) con
 	for (const auto& face : _faces)
 	{
 		const auto& normal = face.worldNormal;
-		const float facing = glm::dot(normal, direction);
+		// The facing adds x, z, then y; the distance along the line adds z, y, then x
+		const float facing = openblack::x87::Dot<openblack::x87::SumOrder::Xzy>(normal, direction);
 		if (!(facing < k_FacingThreshold))
 		{
 			continue;
 		}
 		const auto& v0 = _points[face.indices[0]].world;
-		const float t = -glm::dot(point - v0, normal) / facing;
+		const float t = -openblack::x87::DotZyx(point - v0, normal) / facing;
 		if (!(t < 0.0f) || !(best < t))
 		{
 			continue;
@@ -445,12 +474,13 @@ std::optional<glm::vec3> Body::AnyFaceBehind(glm::vec3 point, glm::vec3 directio
 		const auto& v1 = _points[face.indices[1]].world;
 		const auto& v2 = _points[face.indices[2]].world;
 		const auto normal = glm::cross(v1 - v0, v2 - v0);
-		const float facing = glm::dot(normal, direction);
-		if (!(facing < k_FacingThreshold))
+		const float facing = openblack::x87::Dot<openblack::x87::SumOrder::Xzy>(normal, direction);
+		// This test compares with a double
+		if (!openblack::x87::Less(facing, k_AnyFacingThreshold))
 		{
 			continue;
 		}
-		const float t = -glm::dot(point - v0, normal) / facing;
+		const float t = -openblack::x87::DotZyx(point - v0, normal) / facing;
 		if (!(t < 0.0f) || !(t > best))
 		{
 			continue;
@@ -479,16 +509,17 @@ std::optional<std::pair<RayHit, float>> openblack::physics::EllipsoidHit(std::sp
 			continue;
 		}
 		// Into the part's own space, where its box is the unit sphere about the box's centre
-		const auto localPoint = glm::vec3(bone.worldToLocal * glm::vec4(point, 1.0f));
+		const auto localPoint = IntoPart(bone.worldToLocal, point, 1.0f);
 		const auto start = (localPoint - bone.boxMin) / half - 1.0f;
-		const auto along = glm::vec3(bone.worldToLocal * glm::vec4(direction, 0.0f)) / half;
-		const float a = glm::dot(along, along);
+		const auto along = IntoPart(bone.worldToLocal, direction, 0.0f) / half;
+		// The game adds the squares and the products from z to x
+		const float a = openblack::x87::DotZyx(along, along);
 		if (!(a > k_Tiny))
 		{
 			continue;
 		}
-		const float b = 2.0f * glm::dot(along, start);
-		const float discriminant = b * b - (glm::dot(start, start) - 1.0f) * a * 4.0f;
+		const float b = 2.0f * openblack::x87::DotZyx(along, start);
+		const float discriminant = b * b - (openblack::x87::DotZyx(start, start) - 1.0f) * a * 4.0f;
 		if (!(discriminant >= 0.0f))
 		{
 			continue;
@@ -501,8 +532,11 @@ std::optional<std::pair<RayHit, float>> openblack::physics::EllipsoidHit(std::sp
 		const auto onSphere = start + along * t;
 		const auto hitLocal = (onSphere + 1.0f) * half + bone.boxMin;
 		const auto normalLocal = onSphere * half;
-		const auto hitWorld = glm::vec3(bone.localToWorld * glm::vec4(hitLocal, 1.0f));
-		const auto normalWorld = NormaliseOrKeep(glm::vec3(bone.localToWorld * glm::vec4(normalLocal, 0.0f)));
+		const auto hitWorld = OutOfPart(bone.localToWorld, hitLocal, 1.0f);
+		// The 3D engine scales the normal by its own inverse square root of the squares added from x to z
+		const auto turned = OutOfPart(bone.localToWorld, normalLocal, 0.0f);
+		const auto normalWorld = turned * openblack::gutils::ModelInverseSquareRoot(
+		                                      openblack::x87::Dot<openblack::x87::SumOrder::Xyz>(turned, turned));
 		best = std::pair {RayHit {.point = hitWorld, .normal = normalWorld}, t};
 	}
 	return best;
@@ -523,7 +557,7 @@ void Body::TouchFaces(Body& other)
 	for (auto& point : _points)
 	{
 		const auto offset = point.world - other._centre;
-		if (!(glm::dot(offset, offset) < reach2))
+		if (!(openblack::x87::DotZyx(offset, offset) < reach2))
 		{
 			continue;
 		}
@@ -539,7 +573,7 @@ void Body::TouchFaces(Body& other)
 			if (hit.has_value())
 			{
 				// A skeleton is hit only between the body's centre and where the point will be
-				const float along = glm::dot(hit->point - _centre, direction) / point.aheadLength;
+				const float along = openblack::x87::DotZyx(hit->point - _centre, direction) / point.aheadLength;
 				if (along < 0.0f || point.aheadLength < along)
 				{
 					continue;
@@ -554,7 +588,7 @@ void Body::TouchFaces(Body& other)
 		point.contact = hit->point;
 		point.other = &other;
 		point.normal = hit->normal;
-		const float depth = point.aheadLength - glm::dot(hit->point - _centre, direction) / point.aheadLength;
+		const float depth = point.aheadLength - openblack::x87::DotZyx(hit->point - _centre, direction) / point.aheadLength;
 		if (point.depth < depth)
 		{
 			point.depth = depth;
@@ -610,11 +644,13 @@ void Body::ApplyContacts()
 		const float maxFriction = push * friction;
 		point.normal *= push;
 		auto hold = (point.anchor - point.contact) * stiffness;
-		if (maxFriction * maxFriction < glm::dot(hold, hold))
+		const float holdSquared = openblack::x87::DotZyx(hold, hold);
+		if (maxFriction * maxFriction < holdSquared)
 		{
-			// It slides: friction holds no harder than its limit, and the anchor follows the point
-			hold *= maxFriction / std::sqrt(glm::dot(hold, hold));
-			point.anchor = point.contact + hold / stiffness;
+			// It slides: friction holds no harder than its limit, and the anchor follows the point. The game multiplies
+			// by one over the stiffness.
+			hold *= maxFriction / std::sqrt(holdSquared);
+			point.anchor = point.contact + hold * (1.0f / stiffness);
 		}
 		point.normal += hold;
 		const auto total = point.normal;
@@ -704,8 +740,9 @@ StepResult Body::Integrate()
 	}
 	if (_contacts != 0 && _speed < threshold && spin2 < threshold * threshold * 0.25f)
 	{
-		const auto turning = _torque / (_radius * _radius * _mass);
-		if (glm::dot(turning, turning) < threshold * threshold)
+		// The game multiplies the torque by one over the radius squared times the mass
+		const auto turning = _torque * (1.0f / ((_radius * _radius) * _mass));
+		if (openblack::x87::DotZyx(turning, turning) < threshold * threshold)
 		{
 			if (resting)
 			{
@@ -750,7 +787,7 @@ float Body::OverlapDepth(const Body& other, glm::vec3 direction) const
 		}
 		if (hit.has_value())
 		{
-			deepest = std::max(deepest, glm::dot(point.world - *hit, direction));
+			deepest = std::max(deepest, openblack::x87::DotZyx(point.world - *hit, direction));
 		}
 	}
 	return deepest;
