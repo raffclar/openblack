@@ -39,6 +39,8 @@ struct Gates
 	/// An order forced the plan that it does
 	bool planForced {false};
 	bool fighting {false};
+	/// It lies knocked out or recovers from that. The faint forces this plan until the creature gets up.
+	bool knockedOut {false};
 };
 [[nodiscard]] bool LooksAtEmergencies(const Gates& gates);
 
