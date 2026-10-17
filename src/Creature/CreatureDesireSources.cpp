@@ -15,6 +15,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::creature_desire_sources;
 
@@ -123,8 +125,8 @@ float creature_desire_sources::InterestNow(PlayerInterest& interest, const std::
 	{
 		interest.lastHand = hand;
 	}
-	interest.handMovement =
-	    std::clamp(interest.handMovement + glm::distance(*hand, *interest.lastHand), 0.0f, k_MostHandMovement);
+	interest.handMovement = std::clamp(interest.handMovement + x87::Distance<x87::SumOrder::Zyx>(*hand, *interest.lastHand),
+	                                   0.0f, k_MostHandMovement);
 	interest.handMovement *= k_HandMovementFade;
 	interest.lastHand = hand;
 	const auto held = heldRadius.has_value() ? std::clamp(*heldRadius, 0.0f, k_MostHeldRadius) * k_PerMostHeldRadius : 0.0f;

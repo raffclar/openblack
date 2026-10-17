@@ -13,6 +13,9 @@
 
 #include <algorithm>
 
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
+
 namespace openblack::temple_people
 {
 namespace
@@ -124,7 +127,7 @@ float FacingOf(const glm::vec3& direction)
 	{
 		return 0.0f;
 	}
-	return std::atan2(direction.x, -direction.z);
+	return x87::RoundToFloat(x87::GameHeadingOf(direction.x, direction.z));
 }
 
 Walker Arrive(const WalkMesh& mesh, Dice& dice)

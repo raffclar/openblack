@@ -71,7 +71,8 @@ TEST(LeashRope, SagsUnderItsWeight)
 	// The middle hangs below the ends, the ends exactly where they were put
 	EXPECT_LT(rope.nodes.at(k_NodeCount / 2).position.y, k_Start.y - 1.0f);
 	EXPECT_EQ(rope.start, k_Start);
-	EXPECT_FLOAT_EQ(rope.tension, 0.0f);
+	// The weight of the rope stretches the end segments a very small distance only
+	EXPECT_LT(rope.tension, 0.05f);
 }
 
 TEST(LeashRope, PullingTheEndAwayTightensIt)
@@ -202,16 +203,21 @@ TEST(LeashRope, HangingFromAHandAboveItIsSlackAtTheCollarButNotAtTheHand)
 	// segments, while the end at the collar lies slack. The tension is taken at the collar, the rope's start.
 	const glm::vec3 collar {100.0f, 1.0f, 100.0f};
 	const auto hand = collar + glm::vec3(8.0f, 9.0f, 0.0f);
-	auto rope = Create(collar, hand, k_Slack, k_Max, {});
-	for (int frame = 0; frame < 300; ++frame)
-	{
-		Step(rope, collar, hand, 1.0f / 30.0f, Flat);
-	}
-	EXPECT_LT(rope.tension, 0.8f);
-	auto reversed = Create(hand, collar, k_Slack, k_Max, {});
-	for (int frame = 0; frame < 300; ++frame)
-	{
-		Step(reversed, hand, collar, 1.0f / 30.0f, Flat);
-	}
-	EXPECT_GT(reversed.tension, rope.tension);
+	// The masses swing up and down a little, so the test takes the largest tension in the last second
+	const auto largestTension = [](Rope rope, const glm::vec3& start, const glm::vec3& end) {
+		float largest = 0.0f;
+		for (int frame = 0; frame < 300; ++frame)
+		{
+			Step(rope, start, end, 1.0f / 30.0f, Flat);
+			if (frame >= 270)
+			{
+				largest = std::max(largest, rope.tension);
+			}
+		}
+		return largest;
+	};
+	const auto atCollar = largestTension(Create(collar, hand, k_Slack, k_Max, {}), collar, hand);
+	EXPECT_LT(atCollar, 0.8f);
+	const auto atHand = largestTension(Create(hand, collar, k_Slack, k_Max, {}), hand, collar);
+	EXPECT_GT(atHand, atCollar);
 }

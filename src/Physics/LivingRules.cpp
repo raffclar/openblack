@@ -19,6 +19,10 @@
 #include <glm/vec2.hpp>
 
 #include "Body.h"
+#include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::physics;
@@ -28,8 +32,6 @@ namespace
 {
 constexpr float k_Pi = std::numbers::pi_v<float>;
 constexpr float k_TwoPi = 2.0f * k_Pi;
-/// A direction shorter than this across the land has no heading
-constexpr float k_HeadingLeast = 1e-6f;
 /// A thing nearer than it flies in this many seconds is too near to stand and look at
 constexpr float k_RunSeconds = 2.0f;
 } // namespace
@@ -68,11 +70,8 @@ glm::mat3 living::HeadingAxes(float heading)
 
 float living::HeadingOf(glm::vec3 axis)
 {
-	if (!(axis.x * axis.x + axis.z * axis.z > k_HeadingLeast))
-	{
-		return 0.0f;
-	}
-	return std::atan2(axis.x, -axis.z);
+	// The game's own heading of a direction, with the same least length
+	return x87::RoundToFloat(x87::GameHeadingOf(axis.x, axis.z));
 }
 
 float living::WrapHeading(float radians)
@@ -258,7 +257,8 @@ living::LandedLair living::LairOnLanding(AnimalInfo kind, bool leader)
 
 float living::MapDistance(glm::vec3 from, glm::vec3 to)
 {
-	return glm::distance(glm::vec2(from.x, from.z), glm::vec2(to.x, to.z));
+	// The game's map distance
+	return gutils::GetDistanceInMetres(from, to);
 }
 
 bool living::ShelterSeesFlyer(glm::vec3 shield, float radius, glm::vec3 flyer)
@@ -270,15 +270,16 @@ bool living::FlyingAt(glm::vec3 living, glm::vec3 object, glm::vec3 velocity)
 {
 	constexpr float k_Coming = 0.8f;
 	auto towards = living - object;
+	// The game multiplies each by one over its length, and adds every sum from z to x
 	if (towards != glm::vec3(0.0f))
 	{
-		towards = glm::normalize(towards);
+		towards = x87::Scaled<x87::SumOrder::Zyx>(towards);
 	}
 	if (velocity != glm::vec3(0.0f))
 	{
-		velocity = glm::normalize(velocity);
+		velocity = x87::Scaled<x87::SumOrder::Zyx>(velocity);
 	}
-	return !(glm::dot(velocity, towards) < k_Coming);
+	return !(x87::DotZyx(velocity, towards) < k_Coming);
 }
 
 bool living::IsActuallyInTheAir(float speed, float centreHeight, float landHeight, float radius)

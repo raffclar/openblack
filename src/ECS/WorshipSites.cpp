@@ -13,6 +13,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/GUtilsDistance.h"
+
 namespace openblack::ecs::worship_site
 {
 
@@ -46,7 +48,7 @@ std::optional<uint32_t> NearestFreePlace(const std::array<bool, k_Places>& taken
 		{
 			continue;
 		}
-		const float distance = glm::distance(spot, TurnedPoint(temple, PlaceFacing(0.0f, place), placePoint));
+		const float distance = gutils::GetDistanceInMetres(spot, TurnedPoint(temple, PlaceFacing(0.0f, place), placePoint));
 		if (distance < nearest)
 		{
 			nearest = distance;

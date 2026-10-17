@@ -27,6 +27,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/BuildingSites.h"
@@ -204,8 +205,8 @@ void Face(entt::entity villager, entt::entity other)
 /// Whether two villagers stand within a gap of each other, edge to edge
 bool AreTouching(entt::entity a, entt::entity b, float gap)
 {
-	return villager_breeding::Touching(glm::distance(PositionOf(a), PositionOf(b)), world_objects::SizeOf(a).radius,
-	                                   world_objects::SizeOf(b).radius, gap);
+	return villager_breeding::Touching(gutils::GetDistanceInMetres(PositionOf(a), PositionOf(b)),
+	                                   world_objects::SizeOf(a).radius, world_objects::SizeOf(b).radius, gap);
 }
 
 /// The villager falls pregnant, for her kind's time, and makes for home unless there already
@@ -922,7 +923,7 @@ uint32_t villager_breeding::BreederJustLanded(LivingAction& action)
 				}
 				if (IsVillager(thing) && IsSexuallyActive(thing) && IsFemale(thing) != female)
 				{
-					const float distance = glm::distance(here, PositionOf(thing));
+					const float distance = gutils::GetDistanceInMetres(here, PositionOf(thing));
 					if (distance < best)
 					{
 						best = distance;

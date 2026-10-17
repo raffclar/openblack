@@ -24,6 +24,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
@@ -477,7 +478,8 @@ bool BlocksTreeTent(entt::entity thing, glm::vec2 tree)
 	auto& registry = WorldRegistry();
 	const auto* transform = registry.TryGet<const Transform>(thing);
 	if (transform == nullptr ||
-	    glm::distance(tree, glm::xz(transform->position)) - world_objects::SizeOf(thing).radius >= routine::k_TentTreeCrowd)
+	    gutils::GetDistanceInMetres(tree, glm::xz(transform->position)) - world_objects::SizeOf(thing).radius >=
+	        routine::k_TentTreeCrowd)
 	{
 		return false;
 	}
@@ -574,7 +576,7 @@ bool SleeperNear(glm::ivec2 cell, glm::vec2 point)
 	{
 		const auto* action = registry.TryGet<const LivingAction>(thing);
 		if (action != nullptr && registry.AllOf<Villager>(thing) &&
-		    glm::distance(point, PositionOf(thing)) < routine::k_TentSleeperGap &&
+		    gutils::GetDistanceInMetres(point, PositionOf(thing)) < routine::k_TentSleeperGap &&
 		    State(*action, LivingAction::Index::Top) == VillagerStates::SleepInTent)
 		{
 			return true;
@@ -645,7 +647,7 @@ void GetMeToMyChillOutPos(LivingAction& action, SpotFinder findSpot, glm::vec2 c
 {
 	const auto villager = EntityOf(action);
 	const auto position = PositionOf(villager);
-	const float distance = glm::distance(centre, position);
+	const float distance = gutils::GetDistanceInMetres(centre, position);
 	auto& towns = Locator::townSystem::value();
 	if (distance <= radius)
 	{
@@ -1108,7 +1110,7 @@ uint32_t villager_home::DoGoingHome(LivingAction& action, VillagerStates arrive,
 	const auto townPosition = PositionOf(town);
 	auto end = top;
 	glm::vec2 goal;
-	if (glm::distance(townPosition, position) > routine::k_FarFromTown)
+	if (gutils::GetDistanceInMetres(townPosition, position) > routine::k_FarFromTown)
 	{
 		goal = routine::TowardsTown(townPosition, position, FloatRandom());
 	}

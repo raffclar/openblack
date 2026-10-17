@@ -20,6 +20,7 @@
 #include "3D/CameraTrack.h"
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::script_camera;
@@ -54,17 +55,19 @@ glm::vec3 DestinationOf(const Zoomers& zoomers)
 	return {zoomers[0].Destination(), zoomers[1].Destination(), zoomers[2].Destination()};
 }
 
+/// The square of the distance, with the squares added in the given order
+template <x87::SumOrder Order>
 float DistanceSquared(const glm::vec3& a, const glm::vec3& b)
 {
 	const auto d = a - b;
-	return glm::dot(d, d);
+	return x87::Dot<Order>(d, d);
 }
 } // namespace
 
 std::optional<glm::vec3> script_camera::PullIntoWorld(const glm::vec3& destination)
 {
 	const auto fromCentre = destination - glm::vec3(k_WorldCentre, 0.0f, k_WorldCentre);
-	const float distanceSquared = glm::dot(fromCentre, fromCentre);
+	const float distanceSquared = x87::Dot<x87::SumOrder::Yxz>(fromCentre, fromCentre);
 	if (!(k_WorldRadiusSquared < distanceSquared))
 	{
 		return std::nullopt;
@@ -77,7 +80,7 @@ View script_camera::Drawn(const View& camera, const std::function<float(float x,
 {
 	auto view = camera;
 	// A camera where it looks would look nowhere
-	if (DistanceSquared(view.origin, view.focus) < k_ArrivedDistanceSquared)
+	if (DistanceSquared<x87::SumOrder::Yzx>(view.origin, view.focus) < k_ArrivedDistanceSquared)
 	{
 		view.origin.x -= 1.0f;
 		view.origin.y += 1.0f;
@@ -457,8 +460,8 @@ bool ScriptCameraModel::Arrived() const
 	{
 		return _track->position.duration <= _trackTime.count();
 	}
-	return DistanceSquared(DestinationOf(_origin), ValueOf(_origin)) < k_ArrivedDistanceSquared &&
-	       DistanceSquared(DestinationOf(_focus), ValueOf(_focus)) < k_ArrivedDistanceSquared;
+	return DistanceSquared<x87::SumOrder::Yxz>(DestinationOf(_origin), ValueOf(_origin)) < k_ArrivedDistanceSquared &&
+	       DistanceSquared<x87::SumOrder::Yxz>(DestinationOf(_focus), ValueOf(_focus)) < k_ArrivedDistanceSquared;
 }
 
 std::optional<CameraModel::CameraInterpolationUpdateInfo> ScriptCameraModel::Update(std::chrono::microseconds dt,

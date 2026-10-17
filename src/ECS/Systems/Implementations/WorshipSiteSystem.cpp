@@ -25,6 +25,7 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
+#include "Common/GUtilsDistance.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Footpath.h"
@@ -615,7 +616,7 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	for (const auto& [id, town] : towns)
 	{
 		const auto at = Across(registry.Get<const Transform>(town).position);
-		if (const auto distance = glm::distance(Across(templePosition), at); distance < nearest)
+		if (const auto distance = gutils::GetDistanceInMetres(Across(templePosition), at); distance < nearest)
 		{
 			nearest = distance;
 			spot = at;
