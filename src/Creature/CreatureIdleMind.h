@@ -701,6 +701,12 @@ enum class HandsNeed : uint8_t
 ///   breeder and the step that uses up the held thing.
 [[nodiscard]] HandsNeed HandsNeededFor(const Step& step);
 
+/// Whether the body does not have a clip that the step plays as it starts: the clip of an action, a swap of minds or a
+/// communication, or the start, loop or end of a static action or a cast. A faint has no such test. The test says
+/// whether the body has a clip.
+[[nodiscard]] bool LacksClipToStart(const Step& step, std::optional<size_t> communication,
+                                    const std::function<bool(size_t)>& hasClip);
+
 /// How the creature lets go of the thing that it holds before a step that needs empty hands
 enum class LetGo : uint8_t
 {
@@ -721,6 +727,9 @@ struct Senses
 	/// Whether the body plays an action or is on the move, and whether it is in the loop of an action, such as sitting
 	bool bodyBusy {false};
 	bool bodyLooping {false};
+	/// Whether the body does not have a clip that the next step plays as it starts. Then the step does not start, and
+	/// the creature tries to start it again on each turn.
+	bool clipMissing {false};
 	/// Whether the body dances and does not play the finish of the dance yet
 	bool bodyDancing {false};
 	/// Whether it is on its way somewhere or turning, and where it stands
