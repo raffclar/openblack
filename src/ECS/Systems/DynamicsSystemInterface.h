@@ -253,6 +253,9 @@ public:
 	                     [[maybe_unused]] uint32_t argb, [[maybe_unused]] physics::turn::PuffKind kind)
 	{
 	}
+	/// The puffs in the pool live, grow and move on by some seconds. Each frame moves them on by the game's time; a film
+	/// that pauses the game moves them on by the real time.
+	virtual void AdvancePuffs([[maybe_unused]] float seconds) {}
 	/// The land as the physics feels it, none without a land
 	[[nodiscard]] virtual const physics::Ground* GetGround() const { return nullptr; }
 	/// The creature's bones as the ellipsoids that thrown things and fight blows hit, posed as they are now. Each is the

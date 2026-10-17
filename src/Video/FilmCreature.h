@@ -18,6 +18,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/FilmCameraPath.h"
+#include "Creature/CreatureHandGlow.h"
 
 /// The player's creature in the falling spell's film. The film shows a copy of the creature: its body, size, skin,
 /// tattoos and alignment look. The copy holds nothing and never faints. It stands at the world's origin, facing as its
@@ -74,6 +75,15 @@ struct Look
 /// own texture. As the brightness rises, the light becomes orange and a dark red that flickers is added. Three local
 /// random draws in this order give the flicker of the red, the green and the blue: 0 to 31, 0 to 7 and 0 to 3.
 [[nodiscard]] Look LookAt(int32_t brightness, uint32_t red, uint32_t green, uint32_t blue);
+
+/// The copy has a glow on each hand, with a scale of 1, from the start. Each glow's power rises and falls by the film's
+/// time. The left hand's glow rises from 1 to 3 in a second, falls back in two seconds, and rises again later. The right
+/// hand's glow does the same a little after.
+constexpr float k_GlowScale = 1.0f;
+constexpr float k_StartGlowPower = 1.0f;
+/// The power that the film gives a hand's glow at a time into the film, or none when the film does not change it then.
+/// Only the left and the right hand have glows.
+[[nodiscard]] std::optional<float> GlowPower(creature_hand_glow::Place hand, int32_t filmMs);
 
 /// The camera's view at a point of its path: its axes from the point's frame, kept unit long, at the point's position
 /// scaled by k_PathScale

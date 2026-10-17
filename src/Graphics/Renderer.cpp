@@ -90,6 +90,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
@@ -2011,12 +2012,20 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components
 	submitDesc.groundShadows = false;
 	submitDesc.sortDepth = bodyDesc.sortDepth;
 	submitDesc.modelLight = bodyDesc.modelLight;
-	// A body that has colours of its own alone, and no light of the land, gives its eyes the same colours
+	// A body that has colours of its own alone, and no light of the land, gives its eyes the same colours. Its eyelids
+	// take its colour times the skin's colour under them, over 255 in whole steps, and its added colour.
+	std::optional<L3DMeshSubmitDesc::ObjectLook> lidLook;
 	if (!bodyDesc.landLightAndHaze)
 	{
 		submitDesc.landLightAndHaze = false;
 		submitDesc.objectLook = bodyDesc.objectLook;
 		submitDesc.alwaysLit = bodyDesc.alwaysLit;
+		if (bodyDesc.objectLook.has_value())
+		{
+			const auto skin = glm::round(glm::clamp(eyes.lidColour, 0.0f, 1.0f) * 255.0f);
+			lidLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::floor(bodyDesc.objectLook->colour * skin / 255.0f),
+			                                         .alpha = bodyDesc.objectLook->alpha};
+		}
 	}
 	auto tint = glm::vec4(bodyDesc.tint.r, bodyDesc.tint.g, bodyDesc.tint.b, 0.0f);
 	// Frozen, each piece takes the body's freeze: its light tinted towards the icy colour and a sheen of ice over it
@@ -2064,8 +2073,22 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components
 		{
 			submitDesc.modelMatrices = &*eye.eyelid;
 			// Wholly frozen, the eyelids are white rather than the colour of the skin under them
-			submitDesc.tint = creature_fizz_look::EyelidsWhite(freeze) ? tint : tint * glm::vec4(eyes.lidColour, 1.0f);
+			const bool white = creature_fizz_look::EyelidsWhite(freeze);
+			if (lidLook.has_value() && !white)
+			{
+				submitDesc.objectLook = lidLook;
+				submitDesc.tint = tint;
+			}
+			else
+			{
+				submitDesc.tint = white ? tint : tint * glm::vec4(eyes.lidColour, 1.0f);
+			}
 			draw(*eyelid);
+			// The next eyeball takes the body's colours again
+			if (lidLook.has_value())
+			{
+				submitDesc.objectLook = bodyDesc.objectLook;
+			}
 		}
 	}
 }
@@ -2076,7 +2099,8 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 }
 
 void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin,
-                                RenderPass pass, glm::vec3 eye) const
+                                RenderPass pass, glm::vec3 eye, std::optional<glm::vec3> ownLight,
+                                std::optional<glm::vec3> ownAdded) const
 {
 	using ecs::components::CreatureHair;
 	const auto& textures = Locator::resources::value().GetTextures();
@@ -2107,6 +2131,9 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 	const glm::vec4 u_hairOrigin {origin, 0.0f};
 	const glm::vec4 u_hairAlphaCutOff {creature_hair::k_AlphaCutOff, 0.0f, 0.0f, 0.0f};
 	const auto u_haze = inTemple ? glm::vec4(0.0f) : _haze[0];
+	// Each strand's colour times the creature's own light over 255, plus its added colour, at most 255
+	const glm::vec4 u_hairLight {ownLight.value_or(glm::vec3(255.0f)), ownLight.has_value() ? 1.0f : 0.0f};
+	const glm::vec4 u_hairAdded {ownAdded.value_or(glm::vec3(0.0f)), 0.0f};
 	std::vector<creature_hair::RibbonVertex> ribbon;
 	for (const auto& group : hair.groups)
 	{
@@ -2184,6 +2211,8 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 		program->SetUniformValue("u_landLight", &u_landLight);
 		program->SetUniformValue("u_hairOrigin", &u_hairOrigin);
 		program->SetUniformValue("u_hairAlphaCutOff", &u_hairAlphaCutOff);
+		program->SetUniformValue("u_hairLight", &u_hairLight);
+		program->SetUniformValue("u_hairAdded", &u_hairAdded);
 		program->SetUniformValue("u_haze", &u_haze);
 		program->SetUniformValue("u_hazeColour", &_haze[1]);
 		bgfx::setVertexBuffer(0, &vertexBuffer);
@@ -6402,6 +6431,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				    Locator::creatureHairSystem::value().IsShown())
 				{
 					DrawCreatureHair(desc, *hair, transform->position);
+				}
+				// The glows on its body, where its pose put them
+				if (const auto* glows = desc.entities.TryGet<const ecs::components::CreatureHandGlows>(poser);
+				    glows != nullptr && transform != nullptr)
+				{
+					DrawCreatureHandGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), *glows,
+					                      desc.camera->GetProjectionMatrix(), desc.viewId == RenderPass::Reflection,
+					                      zsort::Depth(transform->position, cameraOrigin));
 				}
 			}
 			// The creatures that the interface shows over itself, each moved for its draw to its place before the

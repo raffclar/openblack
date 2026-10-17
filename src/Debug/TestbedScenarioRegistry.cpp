@@ -1795,12 +1795,28 @@ void AddAppearance(std::vector<Scenario>& all)
 	                   "Land 5 script starts it.",
 	    .expected = "The world goes and the film plays. A copy of the ape stands in the middle of the film and plays its "
 	                "fall action once, on the right side, as the film's camera moves round it. It glows white at first, "
-	                "then orange over a dark red that flickers. It goes from 19.55 s to 27.35 s, then comes back white. "
-	                "The white fade at the end covers it, and the copy goes with the film.",
+	                "then orange over a dark red that flickers. Its hands glow white, and the glows become larger at about "
+	                "16 s and 17 s. Orange stars fall and fade from 13.45 s. It goes from 19.55 s to 27.35 s, then comes "
+	                "back white. From 37.75 s a burst of coloured rays turns round it and grows. The white fade at the end "
+	                "covers it, and the copy goes with the film.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {CreatureSetup {.species = CreatureType::GiantApe, .needs = Content(), .hold = true, .pauseMind = true}},
 	    .commands = {Command {.kind = Kind::PlayFallingSpellFilm, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
+	    .id = "appearance.creature_hand_glows",
+	    .name = "The glows on a creature's hands",
+	    .facet = Facet::Appearance,
+	    .description = "The player's giant ape stands on the land. After a second, it gets the four glows that the creed "
+	                   "powers use: one on each hand, one on its belly and one above its body.",
+	    .expected = "A white glowing shell shows round each hand and the belly, and one turns slowly above the head. Each "
+	                "texture slides. The glows move with the ape's pose.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::GiantApe, .needs = Content(), .hold = true, .pauseMind = true}},
+	    .commands = {Command {.kind = Kind::GiveHandGlows, .delaySeconds = 1.0f, .value = 2}},
 	});
 
 	// The hair close up while the head moves: the tiger's whiskers, and the wolf's tufts, which use the same material
@@ -8051,7 +8067,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 145> k_Names {
+	constexpr std::array<std::string_view, 146> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -8197,6 +8213,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "save the game",
 		    "load the game",
 		    "play the falling spell film",
+		    "give hand glows",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

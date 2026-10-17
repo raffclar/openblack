@@ -37,6 +37,9 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> AnimationTravel(entt::entity creature, size_t animation) override;
 	[[nodiscard]] std::optional<creature_kiss::KissPoints> KissPointsOf(entt::entity creature) override;
 	void KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point) override;
+	void PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs) override;
+	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity creature) override;
+	void AddAlignmentMotesOf(entt::entity copy) override;
 
 private:
 	/// Each creature steps the sway of its body by the seconds that it lived in this game turn
