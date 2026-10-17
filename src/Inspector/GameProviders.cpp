@@ -2229,7 +2229,9 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 			              result["help"] = {{"features", help.features},
 			                                {"auto_pitch", help.autoPitch},
 			                                {"camera_keys", help.cameraKeys},
-			                                {"hand_reach", help.handReach}};
+			                                {"hand_reach", help.handReach},
+			                                {"interface_level",
+			                                 help.interfaceLevel.has_value() ? Json(*help.interfaceLevel) : Json(nullptr)}};
 		              }
 		              if (Locator::abodeKnockSystem::has_value())
 		              {
