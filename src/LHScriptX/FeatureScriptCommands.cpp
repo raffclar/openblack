@@ -60,6 +60,7 @@
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -774,15 +775,7 @@ void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName
                                                    const std::string& creatureMind, glm::vec3 position)
 {
 	// A name that is no player's, such as an eighth player's, makes the creature the neutral player's
-	const auto player = GetPlayerName(playerName);
-	auto yAngleRadians = glm::radians(180.0f);
-	auto& resources = Locator::resources::value();
-	auto& creatureMindManager = resources.GetCreatureMinds();
-	auto creatureMindPath = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / creatureMind;
-	auto loadResult = creatureMindManager.Load(creatureMind, resources::CreatureMindLoader::FromDiskTag {}, creatureMindPath);
-	auto creatureMindId = loadResult.first->first;
-	CreatureArchetype::Create(position, player, creatureType, creatureMindId, yAngleRadians,
-	                          CreatureArchetype::StartScale(creatureType), CreatureArchetype::StartBody(creatureType));
+	CreatureArchetype::CreateFromMindFile(position, GetPlayerName(playerName), creatureType, creatureMind);
 }
 
 void FeatureScriptCommands::CreateFlock(int32_t id, glm::vec3 position, glm::vec3 home, int32_t reach, int32_t flockDistance,
@@ -1014,15 +1007,22 @@ void FeatureScriptCommands::SetInteractDesire(float)
 	// __func__);
 }
 
-void FeatureScriptCommands::ToggleComputerPlayer(const std::string& affiliation, int32_t)
+void FeatureScriptCommands::ToggleComputerPlayer(const std::string& affiliation, int32_t toggle)
 {
-	PlayerArchetype::Create(GetPlayerName(affiliation));
+	// Any value but 0 switches the computer mind of the player on, and 0 switches it off
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SwitchOn(GetPlayerName(affiliation), toggle != 0);
+	}
 }
 
-void FeatureScriptCommands::SetComputerPlayerCreatureLike(const std::string&, const std::string&)
+void FeatureScriptCommands::SetComputerPlayerCreatureLike(const std::string& affiliation, const std::string& like)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The computer mind keeps the name, which starts the size change of its creature at the start of the mind
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetCreatureLike(GetPlayerName(affiliation), GetPlayerName(like));
+	}
 }
 
 void FeatureScriptCommands::MultiplayerDebug(int32_t, int32_t)

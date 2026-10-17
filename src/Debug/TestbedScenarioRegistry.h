@@ -1067,6 +1067,8 @@ void AddFirewaterScenarios(std::vector<Scenario>& all);
 void AddFishScenarios(std::vector<Scenario>& all);
 /// Creatures casting miracles
 void AddCreatureCastingScenarios(std::vector<Scenario>& all);
+/// A computer player's creature at the start of the computer mind
+void AddComputerPlayerScenarios(std::vector<Scenario>& all);
 /// The joint actions of two friends, each close up
 void AddFriendActionScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios
