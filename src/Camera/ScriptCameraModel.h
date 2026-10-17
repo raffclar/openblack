@@ -158,7 +158,7 @@ inline constexpr float k_DualLowestPitch = std::numbers::pi_v<float> / 13.0f;
 inline constexpr float k_DualZoom = 1.0f;
 inline constexpr float k_DualHeightFactor = 1.4f;
 /// Things this close along both axes have no direction between them: the heading is kept as it is
-inline constexpr double k_DualSameSpot = 0.01;
+inline constexpr double k_DualSameSpot = static_cast<double>(0.01f);
 /// A thing with no model of its own (a marker, a group) counts as this wide
 inline constexpr float k_DualNoModelRadius = 30.0f;
 

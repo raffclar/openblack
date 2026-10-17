@@ -122,7 +122,8 @@ uint8_t Darkness(float alignment)
 	{
 		return 0;
 	}
-	const auto darkness = static_cast<int>(static_cast<double>(evil - 0.6f) * 225.0);
+	// The product rounds to a float before it is cut to a whole number
+	const auto darkness = static_cast<int>((evil - 0.6f) * 225.0f);
 	return static_cast<uint8_t>(std::clamp(darkness, 0, 90));
 }
 

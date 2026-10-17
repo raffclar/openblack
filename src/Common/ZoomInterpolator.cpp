@@ -32,24 +32,6 @@ ZoomInterpolator<float>::ZoomInterpolator(float p0, float p1, float v0, float v1
 }
 
 template <>
-ZoomInterpolator<double>::ZoomInterpolator(double p)
-    : p0(p)
-    , p1(p)
-    , v0(0.0)
-    , v1(0.0)
-{
-}
-
-template <>
-ZoomInterpolator<double>::ZoomInterpolator(double p0, double p1, double v0, double v1)
-    : p0(p0)
-    , p1(p1)
-    , v0(v0)
-    , v1(v1)
-{
-}
-
-template <>
 ZoomInterpolator3f::ZoomInterpolatorVec(glm::vec3 p)
     : p0(p)
     , p1(p)
@@ -158,31 +140,13 @@ float ZoomInterpolator<float>::PositionAt(float t) const
 }
 
 template <>
-double ZoomInterpolator<double>::PositionAt(double t) const
-{
-	return PositionAtImpl(p0, p1, v0, v1, t);
-}
-
-template <>
 float ZoomInterpolator<float>::VelocityAt(float t) const
 {
 	return VelocityAtImpl(p0, p1, v0, v1, t);
 }
 
 template <>
-double ZoomInterpolator<double>::VelocityAt(double t) const
-{
-	return VelocityAtImpl(p0, p1, v0, v1, t);
-}
-
-template <>
 float ZoomInterpolator<float>::AccelerationAt(float t) const
-{
-	return AccelerationAtImpl(p0, p1, v0, v1, t);
-}
-
-template <>
-double ZoomInterpolator<double>::AccelerationAt(double t) const
 {
 	return AccelerationAtImpl(p0, p1, v0, v1, t);
 }

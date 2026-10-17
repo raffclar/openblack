@@ -87,6 +87,9 @@ constexpr float k_PointAtHandSeconds = 1.0f;
 /// the camera's view width at the focus. The function makes the two positions map positions first.
 [[nodiscard]] bool AwayFromHand(glm::vec3 creature, glm::vec3 hand, glm::vec3 cameraOrigin, glm::vec3 cameraFocus);
 
+/// The camera's view width at its focus: the tangent of the half angle times the distance from the camera to the focus
+[[nodiscard]] float ViewWidthAtFocus(glm::vec3 cameraOrigin, glm::vec3 cameraFocus);
+
 /// The speed of the player's hand: it follows the movement of each turn, made a speed, by a part each turn. Thus it
 /// stays more than 0 for many turns after the hand stops.
 struct HandSpeed

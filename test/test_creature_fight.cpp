@@ -11,6 +11,7 @@
 #include <cstdint>
 
 #include <array>
+#include <bit>
 #include <deque>
 #include <vector>
 
@@ -973,6 +974,14 @@ TEST(CreatureFight, FightMusicIsHeardWhileTheHandDirectsTheFightOrNearItsArena)
 	const std::array several {glm::vec3 {500.0f, 0.0f, 0.0f}, glm::vec3 {0.0f, 0.0f, 99.0f}};
 	EXPECT_FALSE(FightMusicHeard(false, std::span(several).first(1), camera));
 	EXPECT_TRUE(FightMusicHeard(false, several, glm::vec3 {0.0f}));
+}
+
+TEST(CreatureFight, TheFightMusicDistanceAddsTheSquaresFromZToX)
+{
+	// From z to x the distance rounds to 100, which is not near enough. From x to z it would be just under 100
+	const std::array arena {
+	    glm::vec3 {std::bit_cast<float>(0x425E6243u), std::bit_cast<float>(0x4267679Bu), std::bit_cast<float>(0x426EBDB4u)}};
+	EXPECT_FALSE(FightMusicHeard(false, arena, glm::vec3 {0.0f}));
 }
 
 TEST(CreatureFight, LifeLostInADuelComesOffTheFightHealth)

@@ -74,7 +74,7 @@ constexpr int32_t k_UnknownTribeMusic = 5;
 /// The music has voices when more than this many dance
 constexpr uint32_t k_DancersForVoices = 8;
 /// The share of the town's population that the belief formula keeps above zero
-constexpr double k_BeliefShareSmall = 0.001;
+constexpr float k_BeliefShareSmall = 0.001f;
 
 glm::vec2 AlongGameAngle(glm::vec2 from, uint16_t angle)
 {
@@ -183,11 +183,9 @@ std::optional<std::vector<uint32_t>> creature_dance::Summon(std::span<const uint
 float creature_dance::WorshipBelief(float unmodifiedPopulation, uint32_t people, float impressiveSize,
                                     float danceImpressiveness)
 {
-	// The game works the sum out at a higher precision and keeps a float at the end
-	const double impression = static_cast<double>(impressiveSize) * static_cast<double>(danceImpressiveness);
-	const double share =
-	    (static_cast<double>(unmodifiedPopulation) + k_BeliefShareSmall) / (static_cast<double>(people) + k_BeliefShareSmall);
-	return static_cast<float>(share * impression);
+	const float impression = impressiveSize * danceImpressiveness;
+	const float share = (unmodifiedPopulation + k_BeliefShareSmall) / (static_cast<float>(people) + k_BeliefShareSmall);
+	return share * impression;
 }
 
 DanceTurn creature_dance::Turn(const creature_mind::Senses::DanceView& view, glm::vec2 position)
