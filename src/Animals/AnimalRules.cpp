@@ -19,6 +19,7 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/X87.h"
 #include "InfoConstants.h"
 
 using namespace openblack;
@@ -147,12 +148,13 @@ glm::vec2 animals::FormationGoal(glm::vec2 leader, glm::vec2 follower, Formation
 	const auto slotAngle = gutils::GetAngleFromDXDZ(slot.row, slot.column);
 	const auto away = gutils::GetAngleFromXZ(follower, leader) + 0x400;
 	const auto angle = static_cast<double>(gutils::ConvertGameAngleTo3D(static_cast<int32_t>(slotAngle + away)));
-	// The row's spacing along the angle's x and the column's along its z, each truncated to a map position
-	const double spacing = k_FormationSpacing;
-	const auto x =
-	    static_cast<float>(map_coords::ToMetres(map_coords::ToFixed(leader.x)) + (std::cos(angle) * slot.row * spacing));
-	const auto z =
-	    static_cast<float>(map_coords::ToMetres(map_coords::ToFixed(leader.y)) + (std::sin(angle) * slot.column * spacing));
+	// The row's spacing along the angle's x and the column's along its z, each truncated to a map position. The game
+	// keeps the spacing as a double, and each product rounds to a float
+	const auto spacing = static_cast<double>(k_FormationSpacing);
+	const auto alongX = x87::Mul(x87::Mul(x87::Cos(angle), static_cast<double>(slot.row)), spacing);
+	const auto alongZ = x87::Mul(x87::Mul(x87::Sin(angle), static_cast<double>(slot.column)), spacing);
+	const auto x = map_coords::ToMetres(map_coords::ToFixed(leader.x)) + alongX;
+	const auto z = map_coords::ToMetres(map_coords::ToFixed(leader.y)) + alongZ;
 	return {map_coords::ToMetres(map_coords::ToFixedGUtils(x)), map_coords::ToMetres(map_coords::ToFixedGUtils(z))};
 }
 

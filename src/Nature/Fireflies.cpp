@@ -182,7 +182,7 @@ std::optional<uint8_t> fireflies::OpacityAt(float distanceSquared)
 
 int32_t fireflies::SearchCells(float reach)
 {
-	const auto side = map_coords::FtoL(static_cast<float>(std::ceil(static_cast<double>((reach + reach) / k_SearchCellSize))));
+	const auto side = map_coords::FtoL(std::ceil((reach + reach) / k_SearchCellSize));
 	return side * side;
 }
 

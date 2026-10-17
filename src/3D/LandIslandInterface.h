@@ -100,7 +100,7 @@ public:
 	/// The height of the land at a map position, in 1/65536 of a cell. It is interpolated
 	/// over the triangle of the cell the position is in, the way the land is drawn, with land at sea level flat unless
 	/// told otherwise (as the game only does to find a fish farm's open sea).
-	[[nodiscard]] double GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevelFlat = true) const;
+	[[nodiscard]] float GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevelFlat = true) const;
 	/// A world coordinate in 1/65536 of a cell (map_coords::ToFixed)
 	[[nodiscard]] static int32_t ToMapCoords(float unit);
 	/// The height the game draws land of a cell altitude at: land at or below sea level is drawn flat at height 0

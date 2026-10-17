@@ -25,6 +25,7 @@
 
 #include "3D/ModelSurface.h"
 #include "Common/GameRandom.h"
+#include "Common/ModelInverseSquareRoot.h"
 #include "Creature/CreatureDesires.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -484,7 +485,8 @@ TEST(PhysicsGameHooks, ATemplesHeartWithNothingToPassABlowToBeamsAtAPointOnItsel
 	EXPECT_EQ(beam.start, glm::vec3(0.0f, 10.0f, 0.0f));
 	EXPECT_EQ(beam.end, glm::vec3(101.0f, 4.0f, 2.0f));
 	EXPECT_EQ(beam.startTangent, up);
-	EXPECT_EQ(beam.endTangent, down);
+	// The 3D engine's inverse square root makes the unit normal a little shorter than one
+	EXPECT_EQ(beam.endTangent, down * gutils::ModelInverseSquareRoot(1.0f));
 	EXPECT_EQ(beam.life, particles::k_HeartPlasmaLife);
 	EXPECT_EQ(beam.speed, particles::k_HeartPlasmaSpeed);
 	EXPECT_EQ(beam.alpha, particles::k_HeartPlasmaAlpha);

@@ -1107,11 +1107,25 @@ openblack_setup_and_add_test(test_oracle_sigmoid oracle/test_oracle_sigmoid.cpp)
 openblack_setup_and_add_test(
   test_oracle_inverse_square_root oracle/test_oracle_inverse_square_root.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_float_sweep_3 oracle/test_oracle_float_sweep_3.cpp
+)
+target_link_libraries(test_oracle_float_sweep_3 PRIVATE pack lnd)
+# The tests read the data from a copy in the build folder. The compile cache treats every worktree as one folder, so a
+# worktree's own path built into a test can come from another worktree's object.
+add_custom_target(
+  oracle_data
+  COMMAND
+    ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/oracle/data
+    ${CMAKE_CURRENT_BINARY_DIR}/oracle/data
+)
+set_property(TARGET oracle_data PROPERTY FOLDER "tests")
 foreach (oracle_test test_oracle_catch test_oracle_sigmoid
-                     test_oracle_inverse_square_root
+                     test_oracle_inverse_square_root test_oracle_float_sweep_3
 )
   target_compile_definitions(
     ${oracle_test}
-    PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+    PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_BINARY_DIR}/oracle/data"
   )
+  add_dependencies(${oracle_test} oracle_data)
 endforeach ()

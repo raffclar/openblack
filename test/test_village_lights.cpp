@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <bit>
+
 #include <gtest/gtest.h>
 
 #include "3D/VillageLights.h"
@@ -50,10 +52,10 @@ TEST(VillageLights, PlacedOnTheCellsWithWeights)
 	const auto placement = village_lights::Place({125.0f, -3.0f});
 	EXPECT_EQ(placement.cell, glm::ivec2(12, -1));
 	EXPECT_EQ(placement.weight, glm::ivec2(127, 76));
-	// On a cell's corner the next texel takes it all, but for the game's tenth falling a little over a tenth
+	// On a cell's corner the next texel takes it all: 100 times the float tenth rounds to 10 exactly
 	const auto corner = village_lights::Place({100.0f, 0.0f});
 	EXPECT_EQ(corner.cell, glm::ivec2(10, 0));
-	EXPECT_EQ(corner.weight, glm::ivec2(254, 255));
+	EXPECT_EQ(corner.weight, glm::ivec2(255, 255));
 }
 
 TEST(VillageLights, FlickerEveryThirtyMilliseconds)
@@ -108,4 +110,19 @@ TEST(VillageLights, ThresholdFollowsTheBrightestLight)
 	EXPECT_EQ(village_lights::Threshold(255), 47);
 	EXPECT_EQ(village_lights::Threshold(128), 24);
 	EXPECT_EQ(village_lights::Threshold(0), 0);
+}
+
+TEST(VillageLights, ThePlaceAndTheFlickerRoundToFloats)
+{
+	// The position times 0.1 rounds to a float before the cell and its weight. In double precision the weights are 50
+	// and 105
+	const auto placement = village_lights::Place({4178.0390625f, 1375.88232421875f});
+	EXPECT_EQ(placement.cell.x, 417);
+	EXPECT_EQ(placement.cell.y, 137);
+	EXPECT_EQ(placement.weight.x, 49);
+	EXPECT_EQ(placement.weight.y, 104);
+	// The timer times 1/30 rounds up to 94 periods, so the timer goes a little below nought
+	const auto step = village_lights::AdvanceFlicker(2800.0f, 19.999755859375f);
+	EXPECT_TRUE(step.flickers);
+	EXPECT_EQ(std::bit_cast<uint32_t>(step.timer), 0xB9800000u);
 }
