@@ -1321,7 +1321,7 @@
   "query": "players.custom_music"
  },
  {
-  "description": "The players: their entities, primary creatures and alignment",
+  "description": "The players: their entities, primary creatures, computer minds and alignment",
   "kind": "list",
   "parameters": [],
   "query": "players.list"

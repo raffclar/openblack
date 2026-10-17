@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <string>
+
 #include <entt/fwd.hpp>
 #include <glm/fwd.hpp>
 
@@ -46,6 +48,10 @@ public:
 	{
 		return Create(position, playerName, creatureType, creatureMindId, yAngleRadians, scale, Body {});
 	}
+	/// A creature of the player's, of the species, made where given from the mind file of the name in the game's folder
+	/// of creature minds. It is turned half round and is as big, fat and strong as the species starts.
+	static entt::entity CreateFromMindFile(const glm::vec3& position, PlayerNames playerName, CreatureType creatureType,
+	                                       const std::string& mindFile);
 	CreatureArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

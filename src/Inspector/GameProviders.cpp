@@ -59,6 +59,7 @@
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
@@ -277,6 +278,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"cameraHelpSystem", "view.state"},
     LocatorCoverage {"templeExteriorSystem", "temple.state"},
     LocatorCoverage {"templeDestructionSystem", "temple.state"},
+    LocatorCoverage {"computerPlayerSystem", "players.list"},
     LocatorCoverage {"worshipSiteSystem", "worship.sites"},
     LocatorCoverage {"handSystem", "players.hand"},
     LocatorCoverage {"handGrabSystem", "players.hand"},
@@ -1551,32 +1553,43 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
-	provider->Add(Query("list", "The players: their entities, primary creatures and alignment", {}, ResultKind::List),
-	              Serve<Locator::playerSystem>(
-	                  "the players", [](const ecs::systems::PlayerSystemInterface& players, const QueryContext& /*c*/) {
-		                  Json items = Json::array();
-		                  const auto* registry = Registry();
-		                  if (registry == nullptr)
-		                  {
-			                  return items;
-		                  }
-		                  // The players the land has, by their own components: the system is asked only of those it knows
-		                  registry->Each<const Player>([&](entt::entity entity, const Player& player) {
-			                  const auto name = player.name;
-			                  Json item = {{"player", static_cast<int>(name)},
-			                               {"id", Id(entity)},
-			                               {"local", players.GetLocalPlayer() == name},
-			                               {"computer", players.IsComputerPlayer(name)},
-			                               {"primary_creature", Id(players.GetPrimaryCreature(name))}};
-			                  if (Locator::alignmentSystem::has_value())
-			                  {
-				                  item["alignment"] = Locator::alignmentSystem::value().GetPlayerAlignment(name);
-				                  item["pending_alignment"] = Locator::alignmentSystem::value().GetPendingAlignment(name);
-			                  }
-			                  items.push_back(std::move(item));
-		                  });
-		                  return items;
-	                  }));
+	provider->Add(
+	    Query("list", "The players: their entities, primary creatures, computer minds and alignment", {}, ResultKind::List),
+	    Serve<Locator::playerSystem>(
+	        "the players", [](const ecs::systems::PlayerSystemInterface& players, const QueryContext& /*c*/) {
+		        Json items = Json::array();
+		        const auto* registry = Registry();
+		        if (registry == nullptr)
+		        {
+			        return items;
+		        }
+		        // The players the land has, by their own components: the system is asked only of those it knows
+		        registry->Each<const Player>([&](entt::entity entity, const Player& player) {
+			        const auto name = player.name;
+			        Json item = {{"player", static_cast<int>(name)},
+			                     {"id", Id(entity)},
+			                     {"local", players.GetLocalPlayer() == name},
+			                     {"computer", players.IsComputerPlayer(name)},
+			                     {"primary_creature", Id(players.GetPrimaryCreature(name))}};
+			        // The computer mind of the player, when a land script switched it on or named a player for it
+			        if (const auto* mind = registry->TryGet<const ecs::components::ComputerPlayer>(entity); mind != nullptr)
+			        {
+				        item["computer_mind"] = {{"switched_on", mind->switchedOn},
+				                                 {"marked", mind->marked},
+				                                 {"started", mind->started},
+				                                 {"creature_like", mind->creatureLike.has_value()
+				                                                       ? Json(static_cast<int>(*mind->creatureLike))
+				                                                       : Json(nullptr)}};
+			        }
+			        if (Locator::alignmentSystem::has_value())
+			        {
+				        item["alignment"] = Locator::alignmentSystem::value().GetPlayerAlignment(name);
+				        item["pending_alignment"] = Locator::alignmentSystem::value().GetPendingAlignment(name);
+			        }
+			        items.push_back(std::move(item));
+		        });
+		        return items;
+	        }));
 	provider->Add(Query("heartbeat", "Each player's heartbeat: danger, rate, beat and pulse", {}, ResultKind::List),
 	              Serve<Locator::heartbeatSystem>(
 	                  "the heartbeats", [](const ecs::systems::HeartbeatSystemInterface& hearts, const QueryContext& /*c*/) {

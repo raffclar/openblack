@@ -94,6 +94,7 @@
 #endif
 #include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/ArtefactSystem.h"
+#include "ECS/Systems/Implementations/ComputerPlayerSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
@@ -182,6 +183,7 @@ using openblack::ecs::systems::CameraZoneSystem;
 using openblack::ecs::systems::ChimneySmokeSystem;
 using openblack::ecs::systems::CinematicDirectorSystem;
 using openblack::ecs::systems::CloudSystem;
+using openblack::ecs::systems::ComputerPlayerSystem;
 using openblack::ecs::systems::CreatureAnimationSystem;
 using openblack::ecs::systems::CreatureAudioSystem;
 using openblack::ecs::systems::CreatureCarryOverSystem;
@@ -345,6 +347,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::musicMoodSystem::emplace<MusicMoodSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
+	Locator::computerPlayerSystem::emplace<ComputerPlayerSystem>();
 	Locator::time::emplace<TimeSystem>();
 	Locator::simulation::emplace<ecs::systems::SimulationSystem>();
 	Locator::vegetation::emplace<VegetationSystem>();
@@ -525,6 +528,7 @@ void openblack::ShutDownServices()
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();
+	Locator::computerPlayerSystem::reset();
 	Locator::pickingSystem::reset();
 	Locator::editorSystem::reset();
 	Locator::cameraBookmarkSystem::reset();

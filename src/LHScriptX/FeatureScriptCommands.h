@@ -111,8 +111,8 @@ public:
 	static void CreateBase(glm::vec3 position, int32_t);
 	static void CreateNewFeature(glm::vec3 position, const std::string& type, int32_t rotation, int32_t scale, int32_t param5);
 	static void SetInteractDesire(float);
-	static void ToggleComputerPlayer(const std::string&, int32_t toggle);
-	static void SetComputerPlayerCreatureLike(const std::string&, const std::string&);
+	static void ToggleComputerPlayer(const std::string& affiliation, int32_t toggle);
+	static void SetComputerPlayerCreatureLike(const std::string& affiliation, const std::string& like);
 	static void MultiplayerDebug(int32_t, int32_t);
 	static void CreateStreetLantern(glm::vec3 position, int32_t);
 	static void CreateStreetLight(glm::vec3 position);
