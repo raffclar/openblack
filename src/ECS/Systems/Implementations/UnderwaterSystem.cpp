@@ -45,6 +45,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "Graphics/RealMoon.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/Underwater.h"
 #include "Graphics/VolumetricFog.h"
@@ -462,6 +463,22 @@ void UnderwaterSystem::LoadSand()
 				textures.Load(graphics::underwater::k_CoralTextureId.value(),
 				              resources::Texture2DLoader::FromDiskWithAlphaTag {}, coral, coralAlpha,
 				              graphics::underwater::k_CoralSide);
+			}
+			catch (std::runtime_error& err)
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "{}", err.what());
+			}
+		}
+	}
+	// The map of the moon that looks like the real moon, through the texture cache
+	{
+		auto& textures = Locator::resources::value().GetTextures();
+		const std::filesystem::path moonMap {graphics::real_moon::k_MapPath};
+		if (!textures.Contains(graphics::real_moon::k_MapId.value()) && std::filesystem::exists(moonMap))
+		{
+			try
+			{
+				textures.Load(graphics::real_moon::k_MapId.value(), resources::Texture2DLoader::FromDiskTag {}, moonMap);
 			}
 			catch (std::runtime_error& err)
 			{

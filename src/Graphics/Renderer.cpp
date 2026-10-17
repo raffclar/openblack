@@ -140,7 +140,6 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
-#include "Graphics/Atmosphere.h"
 #include "Graphics/BoneBudget.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
@@ -3736,6 +3735,12 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	{
 		return;
 	}
+	// EXPERIMENT (not for merge): with the water experiment on, the moon looks like the real moon
+	if (Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled())
+	{
+		DrawRealMoon(viewId);
+		return;
+	}
 	// The moon keeps its place beside the player's camera and faces it. The sea shows it mirrored, and the glow of a
 	// copy of it with its height mirrored through sea level.
 	const bool inTheSea = viewId == RenderPass::ReflectionSky;
@@ -3743,14 +3748,7 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	const auto centre = camera.GetOrigin() + (placed ? moon->placement->offset : glm::vec3(0.0f));
 	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
 	const auto inverseView = glm::inverse(view);
-	auto basis = moon::Basis(view, inverseView, centre);
-	// EXPERIMENT (not for merge): with the sun and the moon on their real paths, the lit edge of the moon points to the
-	// sun
-	if (Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled())
-	{
-		basis = atmosphere::TurnLitEdgeTowards(basis,
-		                                       atmosphere::SunTowards(Locator::skySystem::value().GetClock().GetScriptTime()));
-	}
+	const auto basis = moon::Basis(view, inverseView, centre);
 	const auto& colour = moon->colour;
 	// It shows less through an overcast
 	const float alpha = moon->strength / 255.0f;

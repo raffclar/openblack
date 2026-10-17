@@ -33,17 +33,18 @@ std::optional<graphics::sun::Placement> SunOnPath(float scriptHour)
 	return graphics::sun::Placement {.position = towards * graphics::atmosphere::k_SunDistance, .alpha = alpha};
 }
 
-/// EXPERIMENT (not for merge): the moon on its real path, which its phase sets. It shows as the original game's moon
-/// shows at the same height.
+/// EXPERIMENT (not for merge): the moon on its real path, which its phase sets. Its light shows as the original game's
+/// moon shows at the same height. It has a place down to a little under the horizon, so that the moon that looks like
+/// the real moon can rise and set; its strength there is 0.
 std::optional<graphics::moon::Placement> MoonOnPath(float scriptHour, double monthFraction)
 {
-	const glm::vec3 offset =
-	    graphics::atmosphere::MoonTowards(scriptHour, monthFraction) * graphics::atmosphere::k_MoonDistance;
-	const float alpha = std::min(200.0f, std::floor((0.5f * offset.y) - 110.0f));
-	if (alpha <= 0.0f)
+	const glm::vec3 towards = graphics::atmosphere::MoonTowards(scriptHour, monthFraction);
+	if (towards.y < k_MoonSetSine)
 	{
 		return std::nullopt;
 	}
+	const glm::vec3 offset = towards * graphics::atmosphere::k_MoonDistance;
+	const float alpha = std::clamp(std::floor((0.5f * offset.y) - 110.0f), 0.0f, 200.0f);
 	return graphics::moon::Placement {.offset = offset, .alpha = alpha};
 }
 
@@ -107,6 +108,7 @@ void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::component
 	    moon.placement.has_value() ? sky_dome::ThroughOvercast(moon.placement->alpha, dome.overcast, inputs.fog) : 0.0f;
 	if (inputs.solarPath)
 	{
+		moon.clearSky = sky_dome::ThroughOvercast(255.0f, dome.overcast, inputs.fog) / 255.0f;
 		// The phase that shows is the phase of the moon's place on its path
 		moon.phase = graphics::atmosphere::MoonPhase(monthFraction);
 		return;

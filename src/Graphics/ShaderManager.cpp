@@ -154,6 +154,10 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_underwater_jelly
 #include "ShaderIncluder.h"
+#define SHADER_NAME vs_real_moon
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_real_moon
+#include "ShaderIncluder.h"
 #define SHADER_NAME fs_clouds_shadow
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_clouds_march
@@ -300,7 +304,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 114> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 116> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -350,6 +354,8 @@ const std::array<bgfx::EmbeddedShader, 114> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_underwater_tap),
     BGFX_EMBEDDED_SHADER(vs_underwater_jelly),
     BGFX_EMBEDDED_SHADER(fs_underwater_jelly),
+    BGFX_EMBEDDED_SHADER(vs_real_moon),
+    BGFX_EMBEDDED_SHADER(fs_real_moon),
     BGFX_EMBEDDED_SHADER(fs_clouds_shadow),
     BGFX_EMBEDDED_SHADER(fs_clouds_march),
     BGFX_EMBEDDED_SHADER(fs_clouds_resolve),
@@ -451,6 +457,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"UnderwaterDrift", "vs_underwater_drift", "fs_underwater_drift"},
     ShaderDefinition {"UnderwaterTap", "vs_underwater_tap", "fs_underwater_tap"},
     ShaderDefinition {"UnderwaterJelly", "vs_underwater_jelly", "fs_underwater_jelly"},
+    ShaderDefinition {"RealMoon", "vs_real_moon", "fs_real_moon"},
     ShaderDefinition {"CloudShadow", "vs_water", "fs_clouds_shadow"},
     ShaderDefinition {"CloudMarch", "vs_water", "fs_clouds_march"},
     ShaderDefinition {"CloudResolve", "vs_water", "fs_clouds_resolve"},

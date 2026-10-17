@@ -148,6 +148,9 @@ private:
 	void DrawMists(const DrawSceneDesc& desc) const;
 	/// The moon and its glow in the sky, after the sky's dome
 	void DrawMoon(RenderPass viewId) const;
+	/// EXPERIMENT (not for merge): the moon that looks like the real moon, with the water experiment on. It does not
+	/// write its depth, so the clouds and the haze draw over it.
+	void DrawRealMoon(RenderPass viewId) const;
 	/// The creatures' footprints laid over the land, blended before the rest of what blends, in the main view and the
 	/// sea's reflection
 	void DrawCreatureFootprints(const DrawSceneDesc& desc) const;
