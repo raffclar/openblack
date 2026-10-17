@@ -238,6 +238,12 @@ vec3 SeabedLit(vec3 albedo, vec3 world, vec3 landLight, vec3 normal)
 	float sharpness = 1.0f - smoothstep(4.0f, 40.0f, depth);
 	// The caustics come from the waves over the bed (UwCausticsFromWaves); 0.55 is the even light
 	float caustics = u_uwAbove.w > 0.5f ? 0.55f * mix(1.0f, UwCausticsFromWaves(surface, t, depth), sharpness) : 0.55f;
+	// A pond has no sea waves: its own ripples make its caustics
+	float pond = UwShorePond(texture2DLod(SEABED_SHORE_TEXTURE, UwShoreUv(surface), 0.0f));
+	if (pond > 0.0f && u_uwAbove.w > 0.5f)
+	{
+		caustics = mix(caustics, 0.55f * mix(1.0f, UwPondCaustics(surface, t, depth), sharpness), pond);
+	}
 	// A storm's rough surface spreads the caustics out
 	caustics = mix(caustics, 0.55f, 0.4f * u_uwWaves.y);
 	// The caustics too become an even light where their lines would be smaller than a pixel

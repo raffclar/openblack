@@ -286,6 +286,10 @@ public:
 	/// frame shows none of it, and nothing that later frames draw changes. Call it behind the loading screen, before
 	/// the draws of the loading frame, so that the first frames of the game do not make them.
 	virtual void WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept = 0;
+	/// EXPERIMENT (not for merge): draws the scene with the experiment's water from this eye, so that the renderer makes
+	/// the pipelines of the water's passes before the game starts. Call it behind the loading screen, once for each
+	/// place: under the water, at a cliff and high over the sea.
+	virtual void WarmUpUnderwater(const DrawSceneDesc& drawDesc) const noexcept = 0;
 	/// Asks for the frame being made to be written to a PNG once drawn; the file appears whole once written
 	virtual void RequestScreenshot(const std::filesystem::path& filepath) noexcept = 0;
 	/// Why a picture asked for was given up, once; none while it may still come

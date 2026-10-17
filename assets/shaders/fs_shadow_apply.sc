@@ -4,6 +4,7 @@ $input v_texcoord0, v_texcoord1
 
 #include "lighting.sh"
 #include "sun_visibility.sh"
+#include "sky_dome.sh"
 
 // EXPERIMENT (not for merge): the shadows of the trees, the buildings and the other things, from the light's maps,
 // over the scene's colour. Each pixel finds its place in the world from the scene's depth, then its place in each map:
@@ -31,10 +32,6 @@ uniform mat4 u_shadowMoving;
 uniform vec4 u_shadowParams;
 // x: 1 while the shade from the scene's depth shows; yz: the size of its texture; w: unused
 uniform vec4 u_shadowOcclusion;
-// The sky's dome: xy its middle across the land; z how far across and w how high a point must be to be on it (the
-// dome writes its depth)
-uniform vec4 u_hazeDome;
-
 // Where a point of the screen is in the world, at a depth of the depth buffer
 vec3 WorldAt(vec2 uv, float depth)
 {
@@ -145,7 +142,7 @@ void main()
 		return;
 	}
 	vec3 world = WorldAt(uv, depth);
-	if (length(world.xz - u_hazeDome.xy) > u_hazeDome.z || world.y > u_hazeDome.w)
+	if (OnSkyDome(world))
 	{
 		gl_FragColor = vec4_splat(1.0f);
 		return;

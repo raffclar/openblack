@@ -781,6 +781,10 @@ void main()
 			{
 				float thin = clamp((sceneDistance - toSurface) / 6.0f, 0.0f, 1.0f);
 				vec2 bentUv = clamp(uv + normal.xz * 0.05f * thin, vec2_splat(0.001f), vec2_splat(0.999f));
+				// The middle of a texel: the colour then comes from the same texel as the depth that was tested. A
+				// sample between two texels mixed in the colour of a thing above the water next to it (a bird's edge
+				// showed as specks in the water).
+				bentUv = (floor(bentUv / u_viewTexel.xy) + 0.5f) * u_viewTexel.xy;
 				float bentDepth = texture2DLod(s_sceneDepth, bentUv, 0.0f).r;
 				vec3 bentWorld = bentDepth <= 0.0f ? eye + normalize(WorldAt(bentUv, 0.5f) - eye) * 10000.0f
 				                                   : WorldAt(bentUv, bentDepth);

@@ -298,7 +298,9 @@ float CliffWetness(vec3 world)
 	}
 	vec2 outward = shore.yz / towards;
 	vec2 foot = world.xz + outward * (max(inland, 0.0f) + 4.0f);
-	float cliff = UwShoreCliff(texture2DLod(s_snowDepth, UwShoreUv(foot), 0.0f));
+	// Only the sharp cliffs that throw up spray (the feet of the spray need more than half the weight) get wet. A weak
+	// weight is a steep bank by the water that no wave crashes on.
+	float cliff = smoothstep(0.45f, 0.75f, UwShoreCliff(texture2DLod(s_snowDepth, UwShoreUv(foot), 0.0f)));
 	if (cliff <= 0.0f)
 	{
 		return 0.0f;
@@ -317,10 +319,14 @@ float CliffWetness(vec3 world)
 	float along = dot(world.xz, across);
 	// The splash: the top edge of the wet rock is ragged
 	float edge = reach * (0.55f + 0.6f * UwNoise(vec2(along * 0.3f, crash * 1.7f)));
-	float splash = (1.0f - smoothstep(edge * 0.8f, edge, above)) * step(0.0f, arrived) * exp(-max(arrived, 0.0f) / 2.5f);
+	// The water climbs the face and soaks into the rock over a short time, not in one frame
+	float splash = (1.0f - smoothstep(edge * 0.8f, edge, above)) * smoothstep(0.0f, 0.4f, arrived) *
+	               exp(-max(arrived, 0.0f) / 2.5f);
 	// The streaks: thin lines of water that run down the face from the splash, slowly, and dry last
 	float streaks = smoothstep(0.62f, 0.8f, UwNoise(vec2(along * 1.4f, above * 0.05f + max(arrived, 0.0f) * 0.35f)));
-	streaks *= (1.0f - smoothstep(edge * 0.6f, edge * 1.1f, above)) * exp(-max(arrived, 0.0f) / 6.0f);
+	// They start when the water comes; the streaks of the wave before have mostly dried by then
+	streaks *= (1.0f - smoothstep(edge * 0.6f, edge * 1.1f, above)) * smoothstep(0.0f, 0.4f, arrived) *
+	           exp(-max(arrived, 0.0f) / 6.0f);
 	// The low rock that the waves reach each time
 	float damp = 0.5f * (1.0f - smoothstep(0.0f, 1.0f + 3.0f * u_uwWaves.w, above));
 	float fade = 1.0f - smoothstep(18.0f, 30.0f, inland);

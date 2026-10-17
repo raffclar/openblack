@@ -5512,6 +5512,13 @@ void Renderer::WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept
 	_warmUpInFrame = true;
 }
 
+void Renderer::WarmUpUnderwater(const DrawSceneDesc& drawDesc) const noexcept
+{
+	// The experiment's passes draw as in a frame of the game. The loading screen's view clears the window after them.
+	DrawScene(drawDesc);
+	_warmUpInFrame = true;
+}
+
 void Renderer::DrawScene(const DrawSceneDesc& requestedDesc) const noexcept
 {
 	// EXPERIMENT (not for merge): under the sea the scene is drawn into a target of its own, then through the water

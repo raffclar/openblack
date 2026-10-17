@@ -1183,3 +1183,26 @@ TEST(UnderwaterQuality, AProfileGoesToTheShadersAsTwoVectors)
 	EXPECT_GT(underwater::k_PondProfile.absorption.x, underwater::k_PondProfile.absorption.y);
 	EXPECT_FLOAT_EQ(underwater::k_PondProfile.waveScale, 0.0f);
 }
+
+TEST(Underwater, TheTiltOfTheWindSeaChangesItsLengthsAndHasItsSlope)
+{
+	using namespace openblack::graphics;
+	// Over 0 the long waves are higher and the short waves lower; at the middle length nothing changes
+	float rate = 0.0f;
+	EXPECT_GT(underwater::TiltScale(1.0f, 30.0f, rate), 1.0f);
+	EXPECT_LT(underwater::TiltScale(1.0f, 4.0f, rate), 1.0f);
+	EXPECT_NEAR(underwater::TiltScale(-0.6f, 10.0f * underwater::k_UnitsPerMetre, rate), 1.0f, 1e-5f);
+	// The slope agrees with the tilt's change
+	constexpr float k_Step = 0.05f;
+	for (const glm::vec2 point : {glm::vec2(100.0f, 200.0f), glm::vec2(3400.0f, 2250.0f), glm::vec2(-50.0f, 900.0f)})
+	{
+		const auto here = underwater::WaveTiltAt(point, 12.0f);
+		EXPECT_LE(std::abs(here.tilt), 1.0f);
+		const float east = underwater::WaveTiltAt(point + glm::vec2(k_Step, 0.0f), 12.0f).tilt;
+		const float west = underwater::WaveTiltAt(point - glm::vec2(k_Step, 0.0f), 12.0f).tilt;
+		const float north = underwater::WaveTiltAt(point + glm::vec2(0.0f, k_Step), 12.0f).tilt;
+		const float south = underwater::WaveTiltAt(point - glm::vec2(0.0f, k_Step), 12.0f).tilt;
+		EXPECT_NEAR(here.slope.x, (east - west) / (2.0f * k_Step), 1e-3f);
+		EXPECT_NEAR(here.slope.y, (north - south) / (2.0f * k_Step), 1e-3f);
+	}
+}

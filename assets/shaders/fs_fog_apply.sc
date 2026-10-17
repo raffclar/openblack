@@ -3,6 +3,7 @@ $input v_texcoord0, v_texcoord1
 #include <bgfx_shader.sh>
 
 #include "fog.sh"
+#include "sky_dome.sh"
 
 // EXPERIMENT (not for merge): the fog over the scene, the water and the clouds. Each pixel reads the summed fog at the
 // distance of its scene, between the two slices round it. Where the screen shows the sky, a thinner share of the fog
@@ -13,10 +14,6 @@ SAMPLER2D(s_sceneDepth, 1);
 
 // x: how much of the fog shows over the sky; yzw: unused
 uniform vec4 u_fogApply;
-// The sky's dome: xy its middle across the land; z how far across and w how high a point must be to be on it (the
-// dome writes its depth)
-uniform vec4 u_hazeDome;
-
 vec3 WorldAt(vec2 uv, float depth)
 {
 #if BGFX_SHADER_LANGUAGE_GLSL
@@ -36,7 +33,7 @@ void main()
 	bool sky = depth <= 0.0f;
 	vec3 dir = normalize(WorldAt(uv, 0.5f) - eye);
 	vec3 world = WorldAt(uv, depth);
-	sky = sky || length(world.xz - u_hazeDome.xy) > u_hazeDome.z || world.y > u_hazeDome.w;
+	sky = sky || OnSkyDome(world);
 	float range = sky ? u_fogGrid.w : length(world - eye);
 	// Above the water, the water's surface is where the scene is
 	float sea = u_fogAmbient.w;

@@ -304,6 +304,27 @@ underwater::WaveVariation underwater::WaveVariationAt(glm::vec2 point, float sec
 	return variation;
 }
 
+underwater::WaveTilt underwater::WaveTiltAt(glm::vec2 point, float seconds)
+{
+	constexpr float k_Tau = 2.0f * std::numbers::pi_v<float>;
+	const float h1 = k_Tau / Metres(260.0f);
+	const float h2 = k_Tau / Metres(190.0f);
+	const glm::vec2 q1 {0.6f, -0.8f};
+	const glm::vec2 q2 {0.95f, 0.31f};
+	const float c1 = h1 * glm::dot(q1, point) + 0.012f * seconds + 0.4f;
+	const float c2 = h2 * glm::dot(q2, point) - 0.009f * seconds + 1.9f;
+	return WaveTilt {.tilt = std::sin(c1) * std::sin(c2),
+	                 .slope = std::cos(c1) * std::sin(c2) * h1 * q1 + std::sin(c1) * std::cos(c2) * h2 * q2};
+}
+
+float underwater::TiltScale(float tilt, float length, float& rate)
+{
+	const float lengthLog = k_TiltStrength * std::log(std::max(length, 1e-3f) / Metres(k_TiltMetres));
+	const float scale = std::exp(tilt * lengthLog);
+	rate = scale * lengthLog;
+	return scale;
+}
+
 underwater::WaveSample underwater::WavesAt(glm::vec2 point, float seconds, const WaveState& waves)
 {
 	return WavesAt(point, seconds, waves, std::nullopt, 1e6f, 1e6f);
@@ -335,6 +356,7 @@ underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, 
 	const float sharp = k_CrestSharpness + 1.5f * waves.storm;
 	// The wind sea is drawn at a warped point, with its waves in groups (see WaveVariationAt)
 	const auto variation = WaveVariationAt(point, seconds);
+	const auto tilt = WaveTiltAt(point, seconds);
 	const glm::vec2 warped = point + variation.warp;
 	glm::vec2 windSlope {0.0f};
 	for (size_t i = 0; i < table.size(); ++i)
@@ -345,7 +367,9 @@ underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, 
 		const float k = 2.0f * std::numbers::pi_v<float> / wave.y;
 		const float omega = std::sqrt(k_Gravity * k);
 		const bool even = (i % 2) == 0;
-		const float group = wind ? (even ? variation.groups.x : variation.groups.y) : 1.0f;
+		float tiltRate = 0.0f;
+		const float tiltScale = wind ? TiltScale(tilt.tilt, wave.y, tiltRate) : 1.0f;
+		const float group = wind ? (even ? variation.groups.x : variation.groups.y) * tiltScale : 1.0f;
 		const float amplitude = grown.at(i) * breaking * group;
 		const float theta = k * glm::dot(along, wind ? warped : point) - omega * seconds + wave.w;
 		const float s = 0.5f + 0.5f * std::sin(theta);
@@ -358,7 +382,8 @@ underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, 
 			// The height changes with the group too
 			const glm::vec2 groupSlope = even ? glm::vec2(variation.groupSlope.x, variation.groupSlope.z)
 			                                  : glm::vec2(variation.groupSlope.y, variation.groupSlope.w);
-			sample.slope += grown.at(i) * breaking * shape * groupSlope;
+			const float plainGroup = even ? variation.groups.x : variation.groups.y;
+			sample.slope += grown.at(i) * breaking * shape * (groupSlope * tiltScale + plainGroup * tiltRate * tilt.slope);
 		}
 		else
 		{

@@ -1085,6 +1085,100 @@ void Game::WarmUpFirstFrame()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Load: the first frame drawn behind the loading screen in {:.1f} ms",
 		                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
 	}
+	WarmUpUnderwater();
+}
+
+void Game::WarmUpUnderwater()
+{
+	// EXPERIMENT (not for merge): the water's passes change with the eye: under the water, at a cliff's spray and high
+	// over the sea each use pipelines that the others do not. The renderer makes them behind the loading screen, so that
+	// a jump of the camera to a new place does not make them in one slow frame.
+	if (!Locator::underwaterSystem::has_value() || !Locator::underwaterSystem::value().IsEnabled())
+	{
+		return;
+	}
+	// The sea bed and the rivers are built in their systems' first steps after the land opens; a step of no time builds
+	// them now
+	Locator::underwaterSystem::value().Update(std::chrono::milliseconds(0));
+	if (Locator::streamWaterSystem::has_value())
+	{
+		Locator::streamWaterSystem::value().Update(std::chrono::milliseconds(0));
+	}
+	const auto& seabed = Locator::underwaterSystem::value().GetSeabed();
+	if (seabed.cliffFoot.empty())
+	{
+		return;
+	}
+	const auto& config = Locator::config::value();
+	const auto& opening = Locator::camera::value();
+	const float sea = Locator::underwaterSystem::value().GetSeaLevel();
+	const auto& foot = seabed.cliffFoot.front();
+	const glm::vec3 cliff {foot.x, sea, foot.y};
+	const glm::vec3 outward {foot.z, 0.0f, foot.w};
+	struct Place
+	{
+		glm::vec3 eye;
+		glm::vec3 focus;
+	};
+	std::vector<Place> places {
+	    Place {.eye = opening.GetOrigin(), .focus = opening.GetFocus()},
+	    Place {.eye = cliff + outward * 20.0f - glm::vec3(0.0f, 3.0f, 0.0f), .focus = cliff - glm::vec3(0.0f, 5.0f, 0.0f)},
+	    Place {.eye = cliff + outward * 40.0f + glm::vec3(0.0f, 8.0f, 0.0f), .focus = cliff + glm::vec3(0.0f, 4.0f, 0.0f)},
+	    Place {.eye = cliff + outward * 300.0f + glm::vec3(0.0f, 500.0f, 0.0f), .focus = cliff + outward * 600.0f},
+	};
+	// The reef, from under the water near it
+	if (const auto reef = Locator::underwaterSystem::value().GetReef(); !reef.empty())
+	{
+		const auto at = reef[reef.size() / 2].position;
+		const glm::vec3 eye {at.x + 8.0f, std::min(at.y + 4.0f, sea - 1.0f), at.z + 8.0f};
+		places.push_back(Place {.eye = eye, .focus = at});
+	}
+	// A river where it meets the sea, and one along its way, each seen from the land above it
+	if (Locator::streamWaterSystem::has_value() && Locator::terrainSystem::has_value())
+	{
+		const auto& network = Locator::streamWaterSystem::value().GetNetwork();
+		const auto& land = Locator::terrainSystem::value();
+		const auto above = [&land](glm::vec2 xz, float height) { return glm::vec3(xz.x, land.GetHeightAt(xz) + height, xz.y); };
+		if (!network.mouths.empty())
+		{
+			const auto& mouth = network.mouths.front();
+			places.push_back(
+			    Place {.eye = above(mouth.position - mouth.direction * 40.0f, 25.0f), .focus = above(mouth.position, 0.0f)});
+		}
+		if (!network.segments.empty())
+		{
+			const auto& segment = network.segments.at(network.segments.size() / 2);
+			const glm::vec2 middle = (segment.from + segment.to) * 0.5f;
+			const glm::vec2 along = segment.to - segment.from;
+			const glm::vec2 side =
+			    glm::length(along) > 0.0f ? glm::vec2(-along.y, along.x) / glm::length(along) : glm::vec2(1.0f, 0.0f);
+			places.push_back(Place {.eye = above(middle + side * 30.0f, 20.0f), .focus = above(middle, 0.0f)});
+		}
+	}
+	// The game's own camera goes to each place, so that every system sees the eye there (under the water or not), and
+	// comes back after
+	auto& camera = Locator::camera::value();
+	const glm::vec3 keptEye = camera.GetOrigin();
+	const glm::vec3 keptFocus = camera.GetFocus();
+	const auto start = std::chrono::steady_clock::now();
+	auto& renderer = Locator::rendererInterface::value();
+	const auto desc = SceneDrawDesc(config, 0, IsHandDrawn());
+	for (const auto& place : places)
+	{
+		camera.Place(place.eye, place.focus);
+		// Some passes start only after the first frames at a place: the far cube draws a face a frame, and the clouds and
+		// the light probes use the frames before them. A second of the sea passes each frame, so that the frames see a
+		// whole cycle of the shore wave and a cliff's crash with its spray.
+		constexpr int k_FramesAtEachPlace = 12;
+		for (int frame = 0; frame < k_FramesAtEachPlace; ++frame)
+		{
+			Locator::underwaterSystem::value().Update(std::chrono::milliseconds(1000));
+			RenderLoadingFrame(true, [&renderer, &desc]() { renderer.WarmUpUnderwater(desc); });
+		}
+	}
+	camera.Place(keptEye, keptFocus);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Load: the experiment's water drawn behind the loading screen in {:.1f} ms",
+	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
 }
 
 bool Game::IsHandDrawn() const

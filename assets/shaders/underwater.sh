@@ -211,6 +211,21 @@ void UwWaveVariation(vec2 p, float t, out vec2 warp, out vec4 warpSlope, out vec
 	groupSlope = vec4(even.x, odd.x, even.y, odd.y);
 }
 
+// The tilt of the wind sea's lengths, the same as underwater::WaveTiltAt: x the tilt (-1 to 1), yz its change along x
+// and z. Where it is over 0 the long waves of the wind sea are higher and the short ones lower.
+#define UW_TILT_STRENGTH 0.7f
+#define UW_TILT_METRES 10.0f
+vec3 UwWaveTilt(vec2 p, float t)
+{
+	float h1 = 6.2831853f / (260.0f * UW_UNITS_PER_METRE);
+	float h2 = 6.2831853f / (190.0f * UW_UNITS_PER_METRE);
+	vec2 q1 = vec2(0.6f, -0.8f);
+	vec2 q2 = vec2(0.95f, 0.31f);
+	float c1 = h1 * dot(q1, p) + 0.012f * t + 0.4f;
+	float c2 = h2 * dot(q2, p) - 0.009f * t + 1.9f;
+	return vec3(sin(c1) * sin(c2), cos(c1) * sin(c2) * h1 * q1 + sin(c1) * cos(c2) * h2 * q2);
+}
+
 // The far sea. x: 1 while the waves are filtered for each pixel, y: 1 while the long waves show, z: the angle that one
 // pixel takes up on the screen (radians), w: 1 while the water reflects the cube of the far scene
 uniform vec4 u_uwSea;
@@ -319,6 +334,7 @@ float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float
 	vec2 groups;
 	vec4 groupSlope;
 	UwWaveVariation(p, t, warp, warpSlope, groups, groupSlope);
+	vec3 tilt = UwWaveTilt(p, t);
 	vec2 warped = p + warp;
 	vec2 windSlope = vec2_splat(0.0f);
 	for (int i = 0; i < 14; i++)
@@ -333,7 +349,10 @@ float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float
 		// A sharp crest holds shorter waves than the wave's own length: the filter takes the length of the shortest
 		vec2 shown = UwWaveShown(u_uwSea.x > 0.5f ? wave.y / sharp : wave.y, pixel);
 		float plain = wave.z * (i < 2 ? sets.y : sets.x) * size * grown[i] * kept;
-		float group = wind ? (even ? groups.x : groups.y) : 1.0f;
+		float tiltLog = UW_TILT_STRENGTH * log(max(wave.y, 1e-3f) / (UW_TILT_METRES * UW_UNITS_PER_METRE));
+		float tiltScale = wind ? exp(tilt.x * tiltLog) : 1.0f;
+		float plainGroup = even ? groups.x : groups.y;
+		float group = wind ? plainGroup * tiltScale : 1.0f;
 		float a = plain * group;
 		float theta = k * dot(along, wind ? warped : p) - omega * t + wave.w;
 		float s = 0.5f + 0.5f * sin(theta);
@@ -343,7 +362,8 @@ float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float
 		if (wind)
 		{
 			windSlope += rise;
-			slope += plain * shown.x * shape * (even ? groupSlope.xz : groupSlope.yw);
+			slope += plain * shown.x * shape *
+			         ((even ? groupSlope.xz : groupSlope.yw) * tiltScale + plainGroup * tiltScale * tiltLog * tilt.yz);
 		}
 		else
 		{
@@ -459,6 +479,59 @@ float UwWaveTop()
 		sum += u_uwFarWaves[j].z;
 	}
 	return max(0.5f * sum, 0.05f);
+}
+
+// The ripples of a still pond, its height over the level and its slope: broad soft swells that bend the reflections,
+// short low ripples on them, and the fine ripples that the wind makes, which run with the wind. All are slow.
+float UwPondRipples(vec2 xz, float t, out vec2 slope)
+{
+	vec2 q = xz * 1.7f;
+	float a = 0.008f;
+	float height = sin(q.x + t * 0.9f + sin(q.y * 0.6f + t * 0.3f)) * sin(q.y * 1.3f - t * 0.7f + sin(q.x * 0.5f)) * a;
+	slope = vec2(cos(q.x + t * 0.9f) * 1.7f, cos(q.y * 1.3f - t * 0.7f) * 2.2f) * a * 0.5f;
+	vec2 r = xz * 0.45f;
+	float b = 0.025f;
+	height += sin(r.x + t * 0.4f) * sin(r.y * 0.8f - t * 0.33f) * b;
+	slope += vec2(cos(r.x + t * 0.4f) * sin(r.y * 0.8f - t * 0.33f) * 0.45f,
+	              sin(r.x + t * 0.4f) * cos(r.y * 0.8f - t * 0.33f) * 0.36f) *
+	         b;
+	// The wind's fine ripples: three trains near the wind's direction, 0.5 to 0.9 m long
+	vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
+	for (int i = 0; i < 3; i++)
+	{
+		float turn = (float(i) - 1.0f) * 0.45f;
+		vec2 along = vec2(wind.x * cos(turn) - wind.y * sin(turn), wind.x * sin(turn) + wind.y * cos(turn));
+		float length_ = (0.5f + 0.2f * float(i)) * UW_UNITS_PER_METRE;
+		float k = 6.2831853f / length_;
+		float speed = sqrt(UW_GRAVITY * k) * 0.35f;
+		float amplitude = 0.0035f * length_ * (0.6f + 0.4f * sin(dot(xz, vec2(0.11f, 0.07f)) + float(i) * 2.1f + t * 0.2f));
+		float phase = k * dot(xz, along) - speed * t + float(i) * 1.7f;
+		height += sin(phase) * amplitude;
+		slope += along * (cos(phase) * amplitude * k);
+	}
+	return height;
+}
+
+// The caustics on the bed of a pond under a point of its surface, 1 the even light: the ripples bend the light from
+// above by about a quarter of their slope, so the light from a point of the surface falls on the bed at the point plus
+// a quarter of the depth times the slope. Where the ripples curve up, as a lens, the light from a patch of the surface
+// falls on a smaller patch of the bed, and the bed is brighter by the ratio of the two areas.
+float UwPondCaustics(vec2 p, float t, float depth)
+{
+	float apart = 0.08f * UW_UNITS_PER_METRE;
+	vec2 here;
+	vec2 alongX;
+	vec2 alongZ;
+	UwPondRipples(p, t, here);
+	UwPondRipples(p + vec2(apart, 0.0f), t, alongX);
+	UwPondRipples(p + vec2(0.0f, apart), t, alongZ);
+	float bend = 0.25f * depth;
+	float xx = 1.0f + bend * (alongX.x - here.x) / apart;
+	float zz = 1.0f + bend * (alongZ.y - here.y) / apart;
+	float xz = bend * (alongZ.x - here.x) / apart;
+	float zx = bend * (alongX.y - here.y) / apart;
+	float area = abs(xx * zz - xz * zx);
+	return clamp(1.0f / max(area, 0.25f), 0.3f, 3.0f);
 }
 
 // How much a point is in a still pond that does not join the sea, 0 to 1. The shore map keeps it in the length of
@@ -683,18 +756,12 @@ float UwSurfaceSheltered(vec2 xz, float t, vec4 footprint, vec4 shore, float she
 	float length2 = dot(shore.yz, shore.yz);
 	vec2 towards = length2 > 1e-6f ? shore.yz / sqrt(length2) : vec2_splat(0.0f);
 	slope = deepSlope * deep + towards * ((nearer - wave) / 0.5f);
-	// The ripples of a pond: broad soft swells that bend the reflections, and short low ripples on them, slow
+	// The ripples of a pond (UwPondRipples)
 	if (pond > 0.0f)
 	{
-		vec2 q = xz * 1.7f;
-		float a = 0.008f * pond;
-		height += sin(q.x + t * 0.9f + sin(q.y * 0.6f + t * 0.3f)) * sin(q.y * 1.3f - t * 0.7f + sin(q.x * 0.5f)) * a;
-		slope += vec2(cos(q.x + t * 0.9f) * 1.7f, cos(q.y * 1.3f - t * 0.7f) * 2.2f) * a * 0.5f;
-		vec2 r = xz * 0.45f;
-		float b = 0.025f * pond;
-		height += sin(r.x + t * 0.4f) * sin(r.y * 0.8f - t * 0.33f) * b;
-		slope += vec2(cos(r.x + t * 0.4f) * sin(r.y * 0.8f - t * 0.33f) * 0.45f,
-		              sin(r.x + t * 0.4f) * cos(r.y * 0.8f - t * 0.33f) * 0.36f) * b;
+		vec2 pondSlope;
+		height += UwPondRipples(xz, t, pondSlope) * pond;
+		slope += pondSlope * pond;
 	}
 	// The wakes and the rings of the things in the water, and the hulls that push the water down
 	vec2 wakeSlope;

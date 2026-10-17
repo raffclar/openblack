@@ -1,6 +1,8 @@
 #ifndef CLOUDS_SH
 #define CLOUDS_SH
 
+#include "sky_dome.sh"
+
 // EXPERIMENT (not for merge): the volumetric clouds. The rays go through a layer of cloud over the land and add the
 // light that the cloud scatters towards the eye. The original game has billboards for its clouds. The formulas match
 // the CPU twins in src/Graphics/VolumetricClouds.cpp, which the tests check.
@@ -410,14 +412,10 @@ float CloudSceneDistance(vec2 uv, float depth)
 	return length(CloudWorldAt(uv, depth) - u_cloudEye.xyz);
 }
 
-// The sky's dome: xy its middle across the land; z how far across and w how high a point must be to be on it. The dome
-// writes its depth, so a scene point on it is the sky.
-uniform vec4 u_hazeDome;
-
 bool CloudOnDome(vec3 dir, float reach)
 {
 	vec3 p = u_cloudEye.xyz + dir * reach;
-	return length(p.xz - u_hazeDome.xy) > u_hazeDome.z || p.y > u_hazeDome.w;
+	return OnSkyDome(p);
 }
 
 // How far along a ray from the eye the lowest cloud can be: the ray meets the lowest bottom of the layer there, on the

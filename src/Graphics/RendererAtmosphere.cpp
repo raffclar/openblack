@@ -199,7 +199,8 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.sunDisc = {gameLight, frame.lightColour.w * glm::mix(1.0f, 0.35f, frame.light.w)};
 	atmosphere.sunColour = {glm::vec3(frame.lightColour) * atmosphere.lightTint, 0.0f};
 	atmosphere.sky = cache.sky;
-	// The sky's dome: a point at most of its size from its middle is on it
+	// The sky's dome: its middle across the land, its half width and its height. The shaders take it as a half ball
+	// of this size; a point near its skin is on the dome (sky_dome.sh)
 	if (Locator::skySystem::has_value())
 	{
 		const auto* dome =
@@ -207,10 +208,9 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		const auto* mesh = dome != nullptr ? Locator::resources::value().GetMeshes().Find(dome->meshId) : nullptr;
 		if (mesh != nullptr)
 		{
-			constexpr float k_OnDome = 0.85f;
 			const auto box = mesh->GetBoundingBox();
-			const float wide = 0.5f * std::min(box.Size().x, box.Size().z) * sky_dome::k_Scale * k_OnDome;
-			const float high = box.maxima.y * sky_dome::k_Scale * k_OnDome;
+			const float wide = 0.5f * std::min(box.Size().x, box.Size().z) * sky_dome::k_Scale;
+			const float high = box.maxima.y * sky_dome::k_Scale;
 			atmosphere.skyDome = {sky_dome::k_Centre.x, sky_dome::k_Centre.z, wide, high};
 		}
 	}

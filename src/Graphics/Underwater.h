@@ -395,6 +395,24 @@ struct WaveVariation
 };
 [[nodiscard]] WaveVariation WaveVariationAt(glm::vec2 point, float seconds);
 
+/// How strongly the wind sea's mix of lengths changes over the sea (see WaveTiltAt)
+inline constexpr float k_TiltStrength = 0.7f;
+/// The length of the wind sea's waves that the tilt does not change, in metres
+inline constexpr float k_TiltMetres = 10.0f;
+/// The tilt of the wind sea's lengths at a point, -1 to 1, and its change along x and z: wide patches, 190 m and 260 m
+/// across, where the long waves of the wind sea are higher and the short ones lower (above 0), or the other way
+/// (under 0). Seen from high up, some patches show big rounded waves and others fine chop. The same in the shaders
+/// (UwWaveTilt).
+struct WaveTilt
+{
+	float tilt;
+	glm::vec2 slope;
+};
+[[nodiscard]] WaveTilt WaveTiltAt(glm::vec2 point, float seconds);
+/// How a wind wave of this length is scaled at a tilt: e^(tilt k_TiltStrength ln(length / k_TiltMetres)). `rate` is the
+/// change of the scale for each unit of tilt.
+[[nodiscard]] float TiltScale(float tilt, float length, float& rate);
+
 /// The sea's currents this frame: one field that every moving thing in the water follows, the same on the processor and
 /// in the shaders (UwCurrent)
 struct CurrentState

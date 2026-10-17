@@ -3,6 +3,7 @@ $input v_texcoord0, v_texcoord1
 #include <bgfx_shader.sh>
 
 #include "atmosphere.sh"
+#include "sky_dome.sh"
 
 // EXPERIMENT (not for merge): the haze over the scene and the water. Each pixel reads the haze's grid at the distance of
 // its scene, between the two slices round it. The sky has the air's light in it already and gets no haze. The low tier
@@ -16,8 +17,6 @@ SAMPLER2D(s_sceneDepth, 1);
 uniform vec4 u_hazeApply;
 // rgb: the colour of the horizon on the screen, for the low tier; w: unused
 uniform vec4 u_hazeHorizon;
-// The sky's dome: xy its middle across the land; z how far across and w how high a point must be to be on it
-uniform vec4 u_hazeDome;
 // The game's own sun or moon: xyz the direction towards it, w how strongly its glare shows; and its light's colour
 uniform vec4 u_hazeSun;
 uniform vec4 u_hazeSunColour;
@@ -60,7 +59,7 @@ float SunOpen(vec3 eye)
 		vec2 uv = clamp(at + offset * vec2(u_viewTexel.x / u_viewTexel.y, 1.0f), vec2_splat(0.0f), vec2_splat(1.0f));
 		float depth = texture2DLod(s_sceneDepth, uv, 0.0f).r;
 		vec3 p = WorldAt(uv, depth);
-		bool sky = depth <= 0.0f || length(p.xz - u_hazeDome.xy) > u_hazeDome.z || p.y > u_hazeDome.w;
+		bool sky = depth <= 0.0f || OnSkyDome(p);
 		open += sky ? 0.2f : 0.0f;
 	}
 	return open;
@@ -83,7 +82,7 @@ void main()
 	vec3 dir = normalize(WorldAt(uv, 0.5f) - eye);
 	vec3 world = WorldAt(uv, depth);
 	// The sky's dome writes its depth: a point on it is the sky
-	sky = sky || length(world.xz - u_hazeDome.xy) > u_hazeDome.z || world.y > u_hazeDome.w;
+	sky = sky || OnSkyDome(world);
 	float range = sky ? 1e9f : length(world - eye);
 	// Above the water, the water's surface is where the scene is
 	float sea = u_atmosParams.w;
