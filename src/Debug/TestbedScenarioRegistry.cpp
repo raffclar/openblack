@@ -1917,6 +1917,52 @@ void AddAppearance(std::vector<Scenario>& all)
 	          "and do their other gestures.",
 	          "The light that the hand carries at night lights each body as the game lights the bodies it poses. The side "
 	          "away from the hand keeps two fifths of the light. The eyes keep the usual light of the models.");
+	// The player's creature mirrored in the lake, beside a creature of no player that the game does not mirror
+	auto mirroredApe = Posed(CreatureType::GiantApe, {k_Lake.x - 15.0f, k_FarShallows}, 0.0f, "player's ape");
+	auto unmirroredCow = Posed(CreatureType::Cow, {k_Lake.x + 15.0f, k_FarShallows}, 0.0f, "cow of no player");
+	unmirroredCow.owner = PlayerNames::NEUTRAL;
+	all.push_back({
+	    .id = "appearance.creature_sea_reflection",
+	    .name = "Creature reflection in the sea",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, the player's giant ape and a cow of no player stand in the far "
+	                   "shallows of the testbed's lake, seen across the water from the south. The ape nods, shakes its "
+	                   "head and does its other gestures.",
+	    .expected = "The ape shows upside down in the water in front of it and moves as it moves. Its reflection is one "
+	                "flat blue grey colour over its skin, with no light or shade, and without its eyes or hair. The cow "
+	                "shows no reflection.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {mirroredApe, unmirroredCow},
+	    .commands = headMoves,
+	    .repeatFrom = 0,
+	});
+	// The eyes close up by day and at night, with the glass environment map added over each eyeball
+	const auto eyesClose = [&all, &headMoves](std::string_view id, std::string_view name, float hour,
+	                                          std::string_view description, std::string_view expected) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Appearance,
+		    .description = description,
+		    .expected = expected,
+		    .environment = {.hour = hour, .clockRuns = false, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Head, .distance = 0.6f},
+		    .creatures = {Posed(CreatureType::GiantApe, {0.0f, 0.0f})},
+		    .commands = headMoves,
+		    .repeatFrom = 0,
+		});
+	};
+	eyesClose("appearance.creature_eyes_glass_day", "Creature eyes close up by day", 12.0f,
+	          "At noon, the clock stopped, a giant ape with a paused mind faces the camera close up. It nods, shakes its "
+	          "head and does its other gestures.",
+	          "Each eyeball shines with the glass environment map added over its lit texture. The shine moves over the "
+	          "eyeball as the head turns, as if the eye reflects the sky.");
+	eyesClose("appearance.creature_eyes_glass_night", "Creature eyes close up at night", 23.0f,
+	          "At eleven at night, the clock stopped, a giant ape with a paused mind faces the camera close up. It nods, "
+	          "shakes its head and does its other gestures.",
+	          "Each eyeball shines with the glass environment map. The night does not dim the shine, because it is "
+	          "added after the light, so the eyes look bright in the dark face.");
 	const auto hairClose = [&all, &headMoves](std::string_view id, std::string_view name, CreatureType species,
 	                                          std::string_view description, std::string_view expected, float distance) {
 		all.push_back({
@@ -2116,7 +2162,9 @@ void AddLight(std::vector<Scenario>& all)
 	    .facet = Facet::Light,
 	    .description = "A tiger, a horse and a giant ape stand in the far shallows of the testbed's lake, seen across "
 	                   "the water from the south.",
-	    .expected = "Each shows upside down in the water in front of it, moving as it moves.",
+	    .expected = "Only the tiger, the player's first creature, shows upside down in the water in front of it, moving "
+	                "as it moves. Its reflection is a flat blue grey without light or shade. The horse and the giant ape "
+	                "show no reflection.",
 	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
 	    .creatures = {Posed(CreatureType::Tiger, {k_Lake.x + 30.0f, k_FarShallows}),
 	                  Posed(CreatureType::Horse, {k_Lake.x, k_FarShallows}),
