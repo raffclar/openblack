@@ -763,6 +763,8 @@ enum class FlowersInfo
 	WhiteOne = 0,
 	Pink = 1,
 	// Sun      = 2, // CREATUREISLE
+
+	_COUNT
 };
 
 enum class AnimatedStaticInfo : int32_t
