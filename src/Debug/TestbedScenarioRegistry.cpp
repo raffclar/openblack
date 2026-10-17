@@ -21,6 +21,7 @@
 
 #include "3D/FlatLand.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Audio/Sound.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
@@ -1833,6 +1834,24 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .creatures = {CreatureSetup {.species = CreatureType::GiantApe, .needs = Content(), .hold = true, .pauseMind = true}},
 	    .commands = {Command {.kind = Kind::GiveCreedPower, .delaySeconds = 1.0f, .value = 3, .amount = 0.1f},
 	                 Command {.kind = Kind::GiveCreedPower, .delaySeconds = 2.0f, .value = 3, .amount = 1.0f}},
+	});
+
+	all.push_back({
+	    .id = "audio.creed_hum_with_script_sound",
+	    .name = "A creature with a script's sound gets a creed power",
+	    .facet = Facet::Audio,
+	    .description = "The player's giant ape stands on the land. After a second, a script attaches the village bell "
+	                   "sound to the ape. A second later, a script gives the ape the full creed power above its body. "
+	                   "The ape keeps up the two sounds at the same time, each from its own tag.",
+	    .expected = "The bell rings from the ape again and again. Then a white glowing shell turns above the head of the "
+	                "ape, and the ape starts to hum. The bell continues while the ape hums.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::GiantApe, .needs = Content(), .hold = true, .pauseMind = true}},
+	    .commands = {Command {.kind = Kind::AttachScriptSound,
+	                          .delaySeconds = 1.0f,
+	                          .value = static_cast<size_t>(audio::SoundId::G_VillageBell)},
+	                 Command {.kind = Kind::GiveCreedPower, .delaySeconds = 1.0f, .value = 3, .amount = 1.0f}},
 	});
 
 	// The hair close up while the head moves: the tiger's whiskers, and the wolf's tufts, which use the same material
@@ -8125,7 +8144,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 147> k_Names {
+	constexpr std::array<std::string_view, 148> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -8273,6 +8292,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "play the falling spell film",
 		    "give hand glows",
 		    "give a creed power",
+		    "attach a script sound",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

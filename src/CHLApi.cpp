@@ -9298,7 +9298,7 @@ void GetDeadLiving() // 446 GET_DEAD_LIVING
 
 void AttachSoundTag() // 447 ATTACH_SOUND_TAG
 {
-	// An object keeps up a sound from a script bank: it plays from the object while the camera is in its reach
+	// An object keeps up a sound from a script bank: it plays from the object while the camera is in its range
 	const auto object = PopObject();
 	const auto bank = Pop().intVal;
 	const auto sample = Pop().intVal;
@@ -9319,11 +9319,9 @@ void AttachSoundTag() // 447 ATTACH_SOUND_TAG
 	{
 		return;
 	}
-	if (!Locator::soundTagSystem::value().AttachObjectSound(object, *sound))
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "ATTACH_SOUND_TAG: object {} already keeps up another sound",
-		                   entt::to_integral(object));
-	}
+	// A script's tag plays its sound one time each start, and the next turn starts it again when it is finished. It
+	// adds to the sounds that the object keeps up already.
+	Locator::soundTagSystem::value().AttachObjectSound(object, *sound, false);
 }
 
 void DetachSoundTag() // 448 DETACH_SOUND_TAG
