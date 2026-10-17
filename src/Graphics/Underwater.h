@@ -93,6 +93,8 @@ inline constexpr float k_RefractiveIndex = 1.333f;
 inline constexpr glm::vec3 k_Absorption {0.085f, 0.032f, 0.018f};
 /// How bright the full moon is under the water, against the sun at full strength
 inline constexpr float k_MoonLight = 0.45f;
+/// Under this sum of the two lights' strengths, the direction of the light moves towards straight up
+inline constexpr float k_UpBlend = 0.1f;
 /// The steepest that the light under the water can be from straight down (the critical angle), as its upward part
 inline constexpr float k_LowestRefractedUp = 0.66f;
 

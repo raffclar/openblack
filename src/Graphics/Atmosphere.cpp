@@ -296,13 +296,62 @@ float atmosphere::Luminance(glm::vec3 colour)
 	return glm::dot(colour, glm::vec3(0.2126f, 0.7152f, 0.0722f));
 }
 
-float atmosphere::AirSunElevation(float hour)
+glm::vec3 atmosphere::SunTowards(float hour)
 {
+	constexpr float k_Radians = k_Pi / 180.0f;
 	const float h = std::fmod(std::fmod(hour, 24.0f) + 24.0f, 24.0f);
-	// Up from 6 to 18 on a sine; under the horizon through the night, lowest at midnight
-	const float arc = std::sin(k_Pi * (h - 6.0f) / 12.0f);
-	const float degrees = arc >= 0.0f ? k_NoonElevation * arc : 30.0f * arc;
-	return std::sin(degrees * k_Pi / 180.0f);
+	const float hourAngle = (h - 12.0f) * 15.0f * k_Radians;
+	const float latitude = k_LatitudeDegrees * k_Radians;
+	const float declination = k_DeclinationDegrees * k_Radians;
+	// The sun's direction in the frame of the ground: east, north and up
+	const float east = -std::cos(declination) * std::sin(hourAngle);
+	const float north =
+	    (std::cos(latitude) * std::sin(declination)) - (std::sin(latitude) * std::cos(declination) * std::cos(hourAngle));
+	const float up =
+	    (std::sin(latitude) * std::sin(declination)) + (std::cos(latitude) * std::cos(declination) * std::cos(hourAngle));
+	return glm::normalize((east * k_East) + (north * k_North) + glm::vec3(0.0f, up, 0.0f));
+}
+
+float atmosphere::SunStrength(float elevationSine)
+{
+	const float degrees = std::asin(std::clamp(elevationSine, -1.0f, 1.0f)) * 180.0f / k_Pi;
+	return 255.0f * std::clamp((degrees + 1.0f) / 5.0f, 0.0f, 1.0f);
+}
+
+float atmosphere::SkyTypeFromSun(float elevationSine)
+{
+	const float degrees = std::asin(std::clamp(elevationSine, -1.0f, 1.0f)) * 180.0f / k_Pi;
+	if (degrees < 0.0f)
+	{
+		return std::clamp(1.0f + (degrees / 18.0f), 0.0f, 1.0f);
+	}
+	return 1.0f + std::clamp((degrees - 5.0f) / 5.0f, 0.0f, 1.0f);
+}
+
+float atmosphere::AirMoonShare(float elevationSine)
+{
+	const float degrees = std::asin(std::clamp(elevationSine, -1.0f, 1.0f)) * 180.0f / k_Pi;
+	const float t = std::clamp((-degrees - 2.0f) / 6.0f, 0.0f, 1.0f);
+	return t * t * (3.0f - (2.0f * t));
+}
+
+glm::vec3 atmosphere::AirLightTowards(glm::vec3 sun, glm::vec3 moon, float moonShare)
+{
+	const auto angles = [](glm::vec3 towards) {
+		const glm::vec3 unit = glm::normalize(towards);
+		float round = std::atan2(glm::dot(unit, k_East), glm::dot(unit, k_North));
+		if (round < 0.0f)
+		{
+			round += 2.0f * k_Pi;
+		}
+		return glm::vec2(round, std::asin(std::clamp(unit.y, -1.0f, 1.0f)));
+	};
+	constexpr float k_Dip = 10.0f * k_Pi / 180.0f;
+	const float share = std::clamp(moonShare, 0.0f, 1.0f);
+	glm::vec2 angle = glm::mix(angles(sun), angles(moon), share);
+	angle.y -= k_Dip * std::sin(k_Pi * share);
+	const float flat = std::cos(angle.y);
+	return (flat * ((std::sin(angle.x) * k_East) + (std::cos(angle.x) * k_North))) + glm::vec3(0.0f, std::sin(angle.y), 0.0f);
 }
 
 glm::vec3 atmosphere::PlaceTint(std::span<const glm::vec3> colours, float share)

@@ -122,18 +122,17 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	const float altitude = atmos::AltitudeOf(eye.y - seaLevel);
 	const glm::vec3 gameLight =
 	    glm::length(glm::vec3(frame.above)) > 0.0f ? glm::normalize(glm::vec3(frame.above)) : glm::vec3(0.0f, 1.0f, 0.0f);
-	// The air's light comes from the game's sun or moon round the horizon. The sun's height comes from the hour (see
-	// atmosphere::AirSunElevation); the moon keeps its own height.
+	// The air's light comes from the sun on its real path (atmosphere::SunTowards). After sunset it moves round the
+	// south to the moon, which stands on the other side of the sky.
 	float hour = 12.0f;
 	if (Locator::skySystem::has_value())
 	{
 		hour = Locator::skySystem::value().GetClock().GetScriptTime();
 	}
-	const float elevation = glm::mix(atmos::AirSunElevation(hour), gameLight.y, frame.light.w);
-	const glm::vec2 round {gameLight.x, gameLight.z};
-	const glm::vec2 across = glm::length(round) > 1e-5f ? glm::normalize(round) : glm::vec2(1.0f, 0.0f);
-	const float flat = std::sqrt(std::max(1.0f - elevation * elevation, 0.0f));
-	const glm::vec3 towardsLight {across.x * flat, elevation, across.y * flat};
+	const glm::vec3 sunTowards = atmos::SunTowards(hour);
+	const glm::vec3 sunFromEye = glm::normalize((sunTowards * atmos::k_SunDistance) - eye);
+	const float moonShare = atmos::AirMoonShare(sunTowards.y);
+	const glm::vec3 towardsLight = atmos::AirLightTowards(sunFromEye, -sunTowards, moonShare);
 
 	// The sky's light on the processor, again only when the light, the air or the height has changed enough
 	if (Stale(view.cache, towardsLight, air.turbidity, altitude, seconds))
@@ -156,7 +155,7 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.lightDetail = underwater::LightingDetail(system.GetQuality());
 	atmosphere.params = {air.turbidity, atmos::k_HazeScale, altitude, seaLevel};
 	atmosphere.light = {towardsLight, atmosphere.haze ? 1.0f : 0.0f};
-	atmosphere.sunHeight = atmos::AirSunElevation(hour);
+	atmosphere.sunHeight = sunTowards.y;
 	// The place's own colour tints the haze: the land's cells round the point that the camera looks at
 	{
 		const auto& island = Locator::terrainSystem::value();
@@ -185,14 +184,14 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		atmosphere.placeTint = atmos::PlaceTint(colours, atmos::k_PlaceShare);
 	}
 	// The air's horizon is as bright as the original game's haze, with some of its colour
-	const glm::vec3 tint = glm::mix(glm::vec3(1.0f), k_MoonTint, frame.light.w);
+	const glm::vec3 tint = glm::mix(glm::vec3(1.0f), k_MoonTint, moonShare);
 	const glm::vec3 original = glm::vec3(frame.sky);
 	atmosphere.sun = {atmos::ScreenScale(cache.horizon, original, tint, atmos::k_OriginalHue), 0.0f};
 	atmosphere.sun = {glm::vec3(atmosphere.sun) * atmosphere.placeTint * k_HazeBrightness, 0.0f};
 	atmosphere.horizon = {cache.horizon * glm::vec3(atmosphere.sun), 0.0f};
 	// The clouds and the fog take the air's colour of the light, at the brightness that they have without the haze
 	const glm::vec3 airLight = atmos::LightAtGround(towardsLight.y, air);
-	const float brightness = atmos::Luminance(volumetric_clouds::SunThroughAir(gameLight.y));
+	const float brightness = atmos::Luminance(volumetric_clouds::SunThroughAir(towardsLight.y));
 	atmosphere.lightTint = airLight * (brightness / std::max(atmos::Luminance(airLight), 1e-4f));
 	atmosphere.lightAtGround = atmos::LightAtGround(towardsLight.y, air);
 	// The game's own sun or moon in the sky, for its glare and for the light through the leaves

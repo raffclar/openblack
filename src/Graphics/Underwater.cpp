@@ -75,6 +75,11 @@ underwater::WaterLight underwater::BlendLights(const std::optional<SkyLight>& su
 		above += unit(moon->towards) * moonWeight;
 		light.colour += moon->colour * moonWeight;
 	}
+	// When the two lights are weak, the direction moves towards straight up. Thus it turns smoothly from the sun to
+	// the moon, which stand on the two sides of the sky, and it does not jump.
+	const float upWeight = std::max(k_UpBlend - total, 0.0f);
+	towards.y += upWeight;
+	above.y += upWeight;
 	light.towards = unit(towards);
 	light.aboveTowards = unit(above);
 	light.moonShare = moonWeight / total;

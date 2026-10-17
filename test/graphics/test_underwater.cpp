@@ -77,6 +77,12 @@ TEST(Underwater, SunAndMoonBlendByStrength)
 	// No light: straight up and black
 	const auto dark = underwater::BlendLights(std::nullopt, std::nullopt);
 	EXPECT_FLOAT_EQ(glm::length(dark.colour), 0.0f);
+	// A weak light: its direction moves towards straight up, so a change from the sun to the moon does not jump
+	auto weak = sun;
+	weak.strength = underwater::k_UpBlend * 0.5f;
+	const auto faint = underwater::BlendLights(weak, std::nullopt);
+	EXPECT_GT(faint.aboveTowards.y, glm::normalize(sun.towards).y);
+	EXPECT_GT(faint.aboveTowards.x, 0.0f);
 }
 
 TEST(Underwater, RedIsLostFirstThenGreen)

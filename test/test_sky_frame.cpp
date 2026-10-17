@@ -12,10 +12,12 @@
 #include <optional>
 #include <vector>
 
+#include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/LandLightTable.h"
 #include "3D/SkyFrame.h"
+#include "Graphics/Atmosphere.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -260,4 +262,32 @@ TEST(SkyFrame, TheDomeFollowsOnlyWhileDrawn)
 TEST(SkyFrame, ColourIsOfTheThreeBytes)
 {
 	EXPECT_EQ(sky_frame::Colour(0xFF8000), glm::vec3(1.0f, 128.0f / 255.0f, 0.0f));
+}
+
+TEST(SkyFrame, OnTheRealPathTheSunClimbsHighAndTheMoonStandsOpposite)
+{
+	SkyDome dome {};
+	Sun sun;
+	Moon moon;
+	auto noon = Frame(12.0f);
+	noon.solarPath = true;
+	sky_frame::Update(noon, dome, sun, moon);
+	ASSERT_TRUE(sun.placement.has_value());
+	// Much higher than the original game's sun, which stays near 10 degrees over the horizon
+	const auto& position = sun.placement->position;
+	EXPECT_GT(position.y / std::hypot(position.x, position.z), 1.0f);
+	EXPECT_FLOAT_EQ(sun.placement->alpha, 255.0f);
+	EXPECT_FALSE(moon.placement.has_value());
+
+	auto midnight = Frame(0.0f);
+	midnight.solarPath = true;
+	sky_frame::Update(midnight, dome, sun, moon);
+	EXPECT_FALSE(sun.placement.has_value());
+	ASSERT_TRUE(moon.placement.has_value());
+	EXPECT_GT(moon.placement->offset.y, 0.0f);
+	EXPECT_FLOAT_EQ(moon.placement->alpha, 200.0f);
+	// The moon stands opposite the sun: at midnight it is high in the south, as the sun is at noon
+	const auto opposite = -graphics::atmosphere::SunTowards(0.0f) * graphics::atmosphere::k_MoonDistance;
+	EXPECT_NEAR(glm::length(moon.placement->offset - opposite), 0.0f, 1e-2f);
+	EXPECT_LT(glm::dot(moon.placement->offset, graphics::atmosphere::k_North), 0.0f);
 }

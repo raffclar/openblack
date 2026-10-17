@@ -18,7 +18,9 @@
 #include "3D/SkyFrame.h"
 #include "Common/MachineClock.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "EngineConfig.h"
+#include "Graphics/Atmosphere.h"
 #include "Graphics/DetailLevel.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -91,6 +93,7 @@ void SkySystem::UpdateFrame(bool skyDrawn)
 	        .landLight = FrameLandLightInputs(),
 	        .palette = palette,
 	        .fog = graphics::detail_level::Fog(Locator::config::value().detailLevel),
+	        .solarPath = Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled(),
 	    },
 	    dome, registry.Get<Sun>(_entities.sun), registry.Get<Moon>(_entities.moon));
 	sky_frame::AdvanceDome(dome, GetCurrentSkyType(), skyDrawn);
@@ -105,6 +108,12 @@ void SkySystem::SetTime(float time)
 float SkySystem::GetCurrentSkyType() const
 {
 	const auto& clock = GetClock();
+	// EXPERIMENT (not for merge): with the water experiment on, the sky's type follows the height of the sun on its real
+	// path
+	if (Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled())
+	{
+		return graphics::atmosphere::SkyTypeFromSun(graphics::atmosphere::SunTowards(clock.GetScriptTime()).y);
+	}
 	return clock.SkyType(clock.GetVisualTime());
 }
 

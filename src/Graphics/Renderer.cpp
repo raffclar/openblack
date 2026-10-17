@@ -2715,6 +2715,17 @@ constexpr uint64_t k_AdditiveState =
 /// Far out to the north west, facing the island
 glm::mat4 SunModel(const glm::vec3& position)
 {
+	// EXPERIMENT (not for merge): with the water experiment on, the sun moves over the whole sky. Its square turns to
+	// face the middle of the world from each place.
+	const bool facesWorld = Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled();
+	const glm::vec3 out = glm::length(position) > 0.0f ? glm::normalize(position) : glm::vec3(0.0f, 0.0f, 1.0f);
+	const glm::vec3 side = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), out);
+	if (facesWorld && glm::length(side) > 1e-3f)
+	{
+		const glm::vec3 across = glm::normalize(side);
+		const glm::vec3 up = glm::cross(out, across);
+		return glm::mat4(glm::vec4(across, 0.0f), glm::vec4(up, 0.0f), glm::vec4(out, 0.0f), glm::vec4(position, 1.0f));
+	}
 	return glm::translate(position) * glm::rotate(-3.0f * glm::pi<float>() / 4.0f, glm::vec3(0.0f, 1.0f, 0.0f));
 }
 } // namespace

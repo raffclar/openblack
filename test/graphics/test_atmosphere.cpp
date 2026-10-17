@@ -163,14 +163,64 @@ TEST(Atmosphere, TheHazeThickensWithDistanceAndIsBlue)
 	EXPECT_GT(high.through.b, farHaze.through.b);
 }
 
-TEST(Atmosphere, TheAirsSunClimbsHighAtNoon)
+TEST(Atmosphere, TheSunRisesInTheEastClimbsAtNoonAndSetsInTheWest)
 {
-	EXPECT_NEAR(atmos::AirSunElevation(12.0f), std::sin(atmos::k_NoonElevation * k_Pi / 180.0f), 1e-4f);
-	EXPECT_NEAR(atmos::AirSunElevation(6.0f), 0.0f, 1e-4f);
-	EXPECT_NEAR(atmos::AirSunElevation(18.0f), 0.0f, 1e-4f);
-	EXPECT_LT(atmos::AirSunElevation(0.0f), -0.4f);
-	EXPECT_GT(atmos::AirSunElevation(9.0f), atmos::AirSunElevation(7.0f));
-	EXPECT_NEAR(atmos::AirSunElevation(36.0f), atmos::AirSunElevation(12.0f), 1e-4f);
+	const auto degrees = [](glm::vec3 towards) { return std::asin(towards.y) * 180.0f / k_Pi; };
+	// At an equinox the sun comes up due east at 6 and goes down due west at 18
+	const auto rise = atmos::SunTowards(6.0f);
+	EXPECT_NEAR(rise.y, 0.0f, 1e-4f);
+	EXPECT_NEAR(glm::dot(rise, atmos::k_East), 1.0f, 1e-4f);
+	const auto set = atmos::SunTowards(18.0f);
+	EXPECT_NEAR(set.y, 0.0f, 1e-4f);
+	EXPECT_NEAR(glm::dot(set, atmos::k_East), -1.0f, 1e-4f);
+	// At noon it stands in the south at 90 degrees less the latitude
+	const auto noon = atmos::SunTowards(12.0f);
+	EXPECT_NEAR(degrees(noon), 90.0f - atmos::k_LatitudeDegrees, 1e-3f);
+	EXPECT_NEAR(glm::dot(noon, atmos::k_North), -std::cos((90.0f - atmos::k_LatitudeDegrees) * k_Pi / 180.0f), 1e-4f);
+	// Low in the morning, higher to noon, then down again by the same path
+	EXPECT_GT(degrees(atmos::SunTowards(8.0f)), 10.0f);
+	EXPECT_LT(degrees(atmos::SunTowards(8.0f)), degrees(atmos::SunTowards(10.0f)));
+	EXPECT_NEAR(degrees(atmos::SunTowards(9.0f)), degrees(atmos::SunTowards(15.0f)), 1e-3f);
+	EXPECT_NEAR(degrees(atmos::SunTowards(0.0f)), -(90.0f - atmos::k_LatitudeDegrees), 1e-3f);
+	EXPECT_NEAR(glm::length(atmos::SunTowards(26.0f) - atmos::SunTowards(2.0f)), 0.0f, 1e-5f);
+	// The morning sun is in the east half of the sky and the afternoon sun in the west half
+	EXPECT_GT(glm::dot(atmos::SunTowards(9.0f), atmos::k_East), 0.0f);
+	EXPECT_LT(glm::dot(atmos::SunTowards(15.0f), atmos::k_East), 0.0f);
+}
+
+TEST(Atmosphere, TheSunShowsOnlyNearAndOverTheHorizon)
+{
+	const auto sine = [](float degrees) { return std::sin(degrees * k_Pi / 180.0f); };
+	EXPECT_FLOAT_EQ(atmos::SunStrength(sine(-2.0f)), 0.0f);
+	EXPECT_FLOAT_EQ(atmos::SunStrength(sine(-1.0f)), 0.0f);
+	EXPECT_NEAR(atmos::SunStrength(sine(1.5f)), 127.5f, 0.5f);
+	EXPECT_FLOAT_EQ(atmos::SunStrength(sine(4.0f)), 255.0f);
+	EXPECT_FLOAT_EQ(atmos::SunStrength(sine(50.0f)), 255.0f);
+	// The moon takes the air's light only after the sun has gone under the horizon
+	EXPECT_FLOAT_EQ(atmos::AirMoonShare(sine(2.0f)), 0.0f);
+	EXPECT_FLOAT_EQ(atmos::AirMoonShare(sine(-2.0f)), 0.0f);
+	EXPECT_NEAR(atmos::AirMoonShare(sine(-5.0f)), 0.5f, 1e-3f);
+	EXPECT_FLOAT_EQ(atmos::AirMoonShare(sine(-8.0f)), 1.0f);
+}
+
+TEST(Atmosphere, TheAirsLightMovesRoundTheSouthFromTheSunToTheMoon)
+{
+	const auto sun = atmos::SunTowards(18.2f);
+	const auto moon = -sun;
+	EXPECT_NEAR(glm::length(atmos::AirLightTowards(sun, moon, 0.0f) - sun), 0.0f, 1e-4f);
+	EXPECT_NEAR(glm::length(atmos::AirLightTowards(sun, moon, 1.0f) - moon), 0.0f, 1e-4f);
+	// Half way it is under the horizon in the south, not at the top of the sky
+	const auto half = atmos::AirLightTowards(sun, moon, 0.5f);
+	EXPECT_NEAR(glm::length(half), 1.0f, 1e-4f);
+	EXPECT_NEAR(half.y, -std::sin(10.0f * k_Pi / 180.0f), 0.01f);
+	EXPECT_LT(glm::dot(half, atmos::k_North), -0.97f);
+	// Small steps of the share give small turns
+	for (int i = 0; i < 100; ++i)
+	{
+		const auto a = atmos::AirLightTowards(sun, moon, static_cast<float>(i) / 100.0f);
+		const auto b = atmos::AirLightTowards(sun, moon, static_cast<float>(i + 1) / 100.0f);
+		EXPECT_GT(glm::dot(a, b), std::cos(3.0f * k_Pi / 180.0f));
+	}
 }
 
 TEST(Atmosphere, TheExposureMatchesTheTargetsBrightness)
@@ -220,4 +270,18 @@ TEST(Atmosphere, APlaceTintsItsHazeWithItsOwnColour)
 	EXPECT_NEAR(atmos::Luminance(green), 1.0f, 1e-3f);
 	// With no share the haze keeps no colour of the place
 	EXPECT_EQ(atmos::PlaceTint(grass, 0.0f), glm::vec3(1.0f));
+}
+
+TEST(Atmosphere, TheSkysTypeFollowsTheSunsHeight)
+{
+	const auto sine = [](float degrees) { return std::sin(degrees * k_Pi / 180.0f); };
+	EXPECT_FLOAT_EQ(atmos::SkyTypeFromSun(sine(-40.0f)), 0.0f);
+	EXPECT_FLOAT_EQ(atmos::SkyTypeFromSun(sine(-18.0f)), 0.0f);
+	EXPECT_NEAR(atmos::SkyTypeFromSun(sine(-9.0f)), 0.5f, 1e-4f);
+	EXPECT_NEAR(atmos::SkyTypeFromSun(sine(0.0f)), 1.0f, 1e-4f);
+	EXPECT_NEAR(atmos::SkyTypeFromSun(sine(3.0f)), 1.0f, 1e-4f);
+	EXPECT_NEAR(atmos::SkyTypeFromSun(sine(7.5f)), 1.5f, 1e-4f);
+	EXPECT_FLOAT_EQ(atmos::SkyTypeFromSun(sine(10.0f)), 2.0f);
+	// By 8 in the morning the day's sky shows
+	EXPECT_FLOAT_EQ(atmos::SkyTypeFromSun(atmos::SunTowards(8.0f).y), 2.0f);
 }
