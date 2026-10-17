@@ -14,6 +14,7 @@
   surface points are the vertices as given.
 - flock_falloff.txt: the flock rule's falloff of a pull with distance
 - set_length.txt: the particle code's "make a vector this long" (the squares added z first)
+- hair_step.txt: one step of a creature's hair strand that is not turned, on the same mesh as the eyes
 
 Usage: python tools/oracle/cases/glm_order_3_cases.py [output folder]   (default: test/oracle/data)
 The random inputs come from a fixed seed, so a second run gives the same files (except the date line).
@@ -205,12 +206,71 @@ def set_length_cases(oracle: Oracle) -> list[list[int]]:
     return rows
 
 
+HAIR_STEP = 0x8467C0  # thiscall (strand), (seconds)
+HAIR_BONES = 0xC37D9C  # the bone matrices the strands are placed with
+HAIR_POINTS = 6
+
+
+def hair_cases(oracle: Oracle) -> list[list[int]]:
+    rng = random.Random(0x4A12)
+    eyes = Eyes(oracle)  # the same mesh, bones and inverse square root table
+    o = oracle
+    o.write_u32(HAIR_BONES, eyes.bones)
+    group = o.alloc(0x80)
+    strand = o.alloc(0x80)
+    points = o.alloc(0x24 * HAIR_POINTS)
+    rows = []
+    for _ in range(400):
+        def f(low: float, high: float) -> int:
+            return f2u(rng.uniform(low, high))
+
+        head = [rng.uniform(-200, 200), rng.uniform(0, 30), rng.uniform(-200, 200)]
+        triangle = [f2u(head[k % 3] + rng.uniform(-2.0, 2.0)) for k in range(9)]
+        st = [f(0.0, 0.6), f(0.0, 0.4)]
+        looks = [f(0.2, 1.0) for _ in range(3)] + [f(0.5, 0.95) for _ in range(3)] +                 [f(0.01, 0.3) for _ in range(3)] + [f(0.01, 0.2) for _ in range(3)]
+        alignment = f(-1.0, 1.0) if rng.random() < 0.8 else rng.choice([0, f2u(1e-9), f2u(-1e-9), f2u(1.0)])
+        scale = f(5.0, 40.0)
+        seconds = f2u(rng.choice([0.0, 0.01, 0.016, 0.033, 0.1, 1.0])) if rng.random() < 0.5 else f(0.0, 0.2)
+        start = [f2u(head[k % 3] + rng.uniform(-10, 10)) for k in range(3 * HAIR_POINTS)]
+        speeds = [f(-30, 30) for _ in range(3 * HAIR_POINTS)]
+        o.write_u32(eyes.vertices, *triangle[0:3])
+        o.write_u32(eyes.vertices + 0x20, *triangle[3:6])
+        o.write_u32(eyes.vertices + 0x40, *triangle[6:9])
+        o.write(group, bytes(0x80))
+        o.write_u32(group + 0x2C, *looks)
+        o.write_u32(group + 0x5C, HAIR_POINTS)
+        o.write_u32(group + 0x64, alignment, scale)
+        o.write_u32(group + 0x70, eyes.mesh)
+        o.write(strand, bytes(0x80))
+        o.write_u32(strand + 0x34, points)
+        o.write_u32(strand + 0x38 + 8, 0, 1, 2)
+        o.write_u32(strand + 0x38 + 0x20, *st)
+        o.write_u32(strand + 0x60, group)
+        o.write(points, bytes(0x24 * HAIR_POINTS))
+        o.write_u32(points, *start)
+        o.write_u32(points + 0x18 * HAIR_POINTS, *speeds)
+        o.call(HAIR_STEP, this=strand, args=[seconds])
+        after = o.read_f32_bits(points, 3 * HAIR_POINTS)
+        after_speeds = o.read_f32_bits(points + 0x18 * HAIR_POINTS, 3 * HAIR_POINTS)
+        rows.append(triangle + st + looks + [alignment, scale, seconds] + start + speeds + after + after_speeds)
+    return rows
+
+
 def main() -> int:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "test" / "oracle" / "data"
     with Oracle() as oracle:
         rows = eye_cases(oracle)
         falloffs = falloff_cases(oracle)
         lengths = set_length_cases(oracle)
+        hairs = hair_cases(oracle)
+    hair_columns = ([f"t{i}" for i in range(9)] + ["s", "t"] + [f"look{i}" for i in range(12)]
+                    + ["alignment", "scale", "seconds"]
+                    + [f"p{i}" for i in range(3 * HAIR_POINTS)] + [f"v{i}" for i in range(3 * HAIR_POINTS)]
+                    + [f"rp{i}" for i in range(3 * HAIR_POINTS)] + [f"rv{i}" for i in range(3 * HAIR_POINTS)])
+    write_pinned(out / "hair_step.txt", "One step of a creature's hair strand (not turned)",
+                 ["the triangle's three vertices, s and t, the looks (length, damping, stiffness, thickness: neutral,",
+                  "evil, good each), the alignment, the scale and the seconds, the points and speeds before; the",
+                  f"points and speeds after. {HAIR_POINTS} points."], hair_columns, hairs)
     write_pinned(out / "flock_falloff.txt", "The flock rule's falloff of a pull with distance",
                  ["distance, scale modifier, type and invert in; the falloff out"],
                  ["distance", "modifier", "type", "invert", "falloff"], falloffs)

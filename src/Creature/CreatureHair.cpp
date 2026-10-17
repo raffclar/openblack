@@ -18,6 +18,9 @@
 #include <glm/matrix.hpp>
 
 #include "3D/SkeletalAnimation.h"
+#include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::creature_hair;
@@ -35,14 +38,22 @@ constexpr float k_StiffnessScale = 1000.0f;
 /// A bones' frame flatter than this has no inverse to turn a strand in
 constexpr float k_MinFrameDeterminant = 1e-8f;
 
+/// The value made no faster than the most, its squares added in the given order
+template <x87::SumOrder Order>
 glm::vec3 Capped(const glm::vec3& value)
 {
-	const auto squared = glm::dot(value, value);
+	const auto squared = x87::Dot<Order>(value, value);
 	if (squared > k_MaxSpeed * k_MaxSpeed)
 	{
 		return value * (k_MaxSpeed / std::sqrt(squared));
 	}
 	return value;
+}
+
+/// The value made one long with the 3D engine's inverse square root, its squares added x first. Zero stays zero.
+glm::vec3 Unit(const glm::vec3& value)
+{
+	return value * gutils::ModelInverseSquareRoot(x87::Dot<x87::SumOrder::Xyz>(value, value));
 }
 
 glm::vec3 NormalisedOr(const glm::vec3& value, const glm::vec3& fallback)
@@ -58,7 +69,9 @@ float creature_hair::ByAlignment(const std::array<float, 3>& values, float align
 	{
 		return (values[0] * (1.0f + alignment)) - (values[1] * alignment);
 	}
-	return (values[0] * (1.0f - alignment)) + (values[2] * alignment);
+	// The game takes the good share as one less the rest, not as the alignment itself
+	const float rest = 1.0f - alignment;
+	return ((1.0f - rest) * values[2]) + (rest * values[0]);
 }
 
 int32_t creature_hair::ByAlignment(const std::array<int32_t, 3>& values, float alignment)
@@ -108,7 +121,7 @@ Physics creature_hair::PhysicsFor(const Look& look, float scale, uint32_t segmen
 
 glm::vec3 creature_hair::GrowthDirection(const glm::vec3& inwardNormal)
 {
-	return NormalisedOr(-inwardNormal, glm::vec3(0.0f, 1.0f, 0.0f));
+	return Unit(-inwardNormal);
 }
 
 glm::vec3 creature_hair::GrowthDirection(const glm::vec3& inwardNormal, const glm::mat3& frame, const glm::vec3& angles)
@@ -170,7 +183,7 @@ void creature_hair::Step(Strand& strand, const Root& root, const Physics& physic
 	// The root is sunk a little into the body
 	positions[0] = root.position + (root.inwardNormal * physics.rootDepth);
 	const auto before = positions;
-	const auto kept = std::pow(physics.damping, seconds);
+	const auto kept = physics.damping > 0.0f ? x87::Pow(physics.damping, seconds) : std::pow(physics.damping, seconds);
 
 	// Each point is pulled towards lying straight on from the segment before it, as the strand lay at the start of
 	// the step; the first towards growing out of the surface
@@ -178,10 +191,10 @@ void creature_hair::Step(Strand& strand, const Root& root, const Physics& physic
 	for (size_t i = 1; i < positions.size(); ++i)
 	{
 		const auto target = positions[i - 1] + (direction * physics.segmentLength);
-		const auto pull = Capped((target - positions[i]) * physics.stiffness);
+		const auto pull = Capped<x87::SumOrder::Xyz>((target - positions[i]) * physics.stiffness);
 		velocities[i] += glm::vec3(pull.x, pull.y - k_Gravity, pull.z) * seconds;
-		velocities[i] = Capped(velocities[i]) * kept;
-		direction = NormalisedOr(positions[i] - positions[i - 1], direction);
+		velocities[i] = Capped<x87::SumOrder::Zyx>(velocities[i]) * kept;
+		direction = Unit(positions[i] - positions[i - 1]);
 	}
 	for (size_t i = 1; i < positions.size(); ++i)
 	{
@@ -190,14 +203,19 @@ void creature_hair::Step(Strand& strand, const Root& root, const Physics& physic
 	// The strand doesn't stretch: each point is put back a segment from the one before it
 	for (size_t i = 1; i < positions.size(); ++i)
 	{
-		const auto offset = NormalisedOr(positions[i] - positions[i - 1], direction) * physics.segmentLength;
+		auto offset = positions[i] - positions[i - 1];
+		if (offset != glm::vec3(0.0f))
+		{
+			offset = x87::Scaled<x87::SumOrder::Zyx>(offset, physics.segmentLength);
+		}
 		positions[i] = positions[i - 1] + offset;
 	}
 	if (seconds > k_MinStepSeconds)
 	{
+		const float share = 1.0f / seconds;
 		for (size_t i = 1; i < positions.size(); ++i)
 		{
-			velocities[i] = (positions[i] - before[i]) / seconds;
+			velocities[i] = (positions[i] - before[i]) * share;
 		}
 	}
 }

@@ -22,6 +22,7 @@
 #include "Common/X87Vector.h"
 #include "Common/Zoomer.h"
 #include "Creature/CreatureEyes.h"
+#include "Creature/CreatureHair.h"
 #include "OracleData.h"
 #include "Particles/ParticleFlocking.h"
 
@@ -156,6 +157,68 @@ TEST(OracleGlmOrder3, AVectorMadeALengthLong)
 		{
 			ADD_FAILURE() << "row " << row << " game " << oracle::Hex(table->Float(row, c("rx"))) << " ours "
 			              << oracle::Hex(ours.x);
+		}
+	}
+	EXPECT_EQ(different, 0U);
+}
+
+TEST(OracleGlmOrder3, AStepOfAHairStrand)
+{
+	constexpr size_t k_Points = 6;
+	const auto table = oracle::Table::Load("hair_step.txt");
+	ASSERT_TRUE(table.has_value());
+	size_t different = 0;
+	for (size_t row = 0; row < table->Rows(); ++row)
+	{
+		const auto f = [&](const std::string& name) { return table->Float(row, table->Column(name).value_or(0)); };
+		const auto u = [&](const std::string& name) { return table->Bits(row, table->Column(name).value_or(0)); };
+		const auto vec = [&](const std::string& prefix, size_t i) {
+			return glm::vec3(f(prefix + std::to_string(3 * i)), f(prefix + std::to_string((3 * i) + 1)),
+			                 f(prefix + std::to_string((3 * i) + 2)));
+		};
+		const auto point = creature_eyes::PointOnTriangle(vec("t", 0), vec("t", 1), vec("t", 2), f("s"), f("t"));
+		const auto alignment = f("alignment");
+		const auto blend = [&](size_t first) {
+			return creature_hair::ByAlignment(std::array {f("look" + std::to_string(first)),
+			                                              f("look" + std::to_string(first + 1)),
+			                                              f("look" + std::to_string(first + 2))},
+			                                  alignment);
+		};
+		const creature_hair::Look look {
+		    .colour = glm::ivec3(0), .length = blend(0), .damping = blend(3), .stiffness = blend(6), .thickness = blend(9)};
+		const auto physics = creature_hair::PhysicsFor(look, f("scale"), k_Points);
+		creature_hair::Strand strand {.positions = std::vector<glm::vec3>(k_Points),
+		                              .velocities = std::vector<glm::vec3>(k_Points)};
+		for (size_t i = 0; i < k_Points; ++i)
+		{
+			strand.positions[i] = vec("p", i);
+			strand.velocities[i] = vec("v", i);
+		}
+		const creature_hair::Root root {.position = point.position,
+		                                .inwardNormal = point.normal,
+		                                .direction = creature_hair::GrowthDirection(point.normal)};
+		creature_hair::Step(strand, root, physics, f("seconds"));
+		bool same = true;
+		std::string text;
+		for (size_t i = 0; i < k_Points; ++i)
+		{
+			for (glm::length_t axis = 0; axis < 3; ++axis)
+			{
+				const auto index = std::to_string((3 * i) + static_cast<size_t>(axis));
+				for (const auto& [name, ours] : {std::pair {"rp" + index, strand.positions[i][axis]},
+				                                 std::pair {"rv" + index, strand.velocities[i][axis]}})
+				{
+					if (std::bit_cast<uint32_t>(ours) != u(name))
+					{
+						same = false;
+						text += " " + name + " game " + oracle::Hex(f(name)) + " ours " + oracle::Hex(ours);
+					}
+				}
+			}
+		}
+		if (!same && ++different <= 20)
+		{
+			ADD_FAILURE() << "row " << row << ":" << text;
 		}
 	}
 	EXPECT_EQ(different, 0U);
