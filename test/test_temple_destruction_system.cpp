@@ -235,6 +235,41 @@ TEST_F(TempleDestructionSystemTest, EachStepComesOnTheGameTurnOfIt)
 	EXPECT_TRUE(_world->scripts.empty());
 }
 
+TEST_F(TempleDestructionSystemTest, TheTemplesTakeTheirTurnsInTheOrderOfThePlayers)
+{
+	// The second player's temple is made and starts first, but the first player's turn comes first
+	const auto second = MakeTemple(PlayerNames::PLAYER_TWO);
+	const auto first = MakeTemple(PlayerNames::PLAYER_ONE);
+	_world->share = 0.4f;
+	_system->Start(second);
+	_system->Start(first);
+	for (int i = 0; i < 100; ++i)
+	{
+		Turn();
+	}
+	ASSERT_EQ(_world->visuals.size(), 2u);
+	EXPECT_EQ(_world->visuals[0].player, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(_world->visuals[1].player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(_world->visuals[0].turn, _world->visuals[1].turn);
+}
+
+TEST_F(TempleDestructionSystemTest, APlayersTurnMovesOnlyThatPlayersTemple)
+{
+	const auto mine = MakeTemple(PlayerNames::PLAYER_ONE);
+	const auto theirs = MakeTemple(PlayerNames::PLAYER_THREE);
+	_world->share = 0.4f;
+	_system->Start(mine);
+	_system->Start(theirs);
+	for (int i = 0; i < 100; ++i)
+	{
+		++_world->turn;
+		_system->StartTurn();
+		_system->ProcessPlayerTurn(PlayerNames::PLAYER_THREE);
+	}
+	ASSERT_EQ(_world->visuals.size(), 1u);
+	EXPECT_EQ(_world->visuals[0].player, PlayerNames::PLAYER_THREE);
+}
+
 TEST_F(TempleDestructionSystemTest, BeamsLeapBetweenPointsOfTheHeartUntilItFades)
 {
 	const auto temple = MakeTemple(PlayerNames::PLAYER_TWO);

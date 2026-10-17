@@ -42,6 +42,8 @@ public:
 	/// the artefact's worth in its owner's town and sends its dancers back to waiting (if the town most wants to relax)
 	/// or to their lives; one left with no dancers stops.
 	virtual void ProcessTurn() = 0;
+	/// The same for the artefacts of one town, in its town's turn
+	virtual void ProcessTown(entt::entity town) = 0;
 	/// A villager wanting to relax is offered its town's artefacts: it joins the dance of the one it wants most, if it
 	/// wants any. Whether it joined one.
 	virtual bool OfferRelaxation(entt::entity town, entt::entity villager) = 0;
