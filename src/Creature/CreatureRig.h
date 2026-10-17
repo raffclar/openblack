@@ -138,6 +138,18 @@ struct CreatureRig
 		float pointMs {0.0f};
 	};
 	std::optional<ActionPoints> actionPoints;
+	/// The point on the body that kisses: a triangle of the meshes, in the space of the bone that moves each vertex, and
+	/// where on the triangle. None when the file has no such point. Then the creature kisses with its head bone.
+	struct KissPoint
+	{
+		std::array<std::array<glm::vec3, 3>, k_MeshCount> vertices;
+		std::array<uint32_t, 3> bones;
+		float u;
+		float v;
+	};
+	std::optional<KissPoint> kissPoint;
+	/// The moment of the high and the low kiss animations when the lips meet, in milliseconds from their starts
+	std::optional<float> kissMs;
 	/// The type of wound each of its twelve fight blows leaves, in the order of the blow animations, when its file gives
 	/// them
 	std::optional<std::array<int32_t, 12>> blowWoundTypes;

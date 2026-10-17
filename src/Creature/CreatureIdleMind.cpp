@@ -906,6 +906,7 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::Demobilise:
 	case Step::Kind::Remobilise:
 	case Step::Kind::WaitForStill:
+	case Step::Kind::WaitForFree:
 	case Step::Kind::ApplyDesire:
 		break;
 	}
@@ -1424,6 +1425,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 				FinishStep(mind);
 			}
 			break;
+		case Step::Kind::WaitForFree:
+			// The count of turns starts on the next turn
+			mind.watchTurns = 0;
+			break;
 		case Step::Kind::Apply:
 			commands.effect = step.effect;
 			FinishStep(mind);
@@ -1441,7 +1446,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			}
 			break;
 		case Step::Kind::Kiss:
-			commands.playOnce = step.animation;
+			commands.kiss = Commands::KissOrder {.partner = step.object};
 			break;
 		case Step::Kind::PracticeDance:
 			commands.startDance = creature_dance::k_PracticeMoveMs;
@@ -1736,6 +1741,13 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		break;
 	case Step::Kind::WaitForStill:
 		if (!senses.objectMoving)
+		{
+			FinishStep(mind);
+		}
+		break;
+	case Step::Kind::WaitForFree:
+		++mind.watchTurns;
+		if (mind.watchTurns > step.turns.value_or(0) && !senses.objectBusy)
 		{
 			FinishStep(mind);
 		}

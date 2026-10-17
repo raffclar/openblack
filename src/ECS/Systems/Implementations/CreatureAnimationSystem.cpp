@@ -460,9 +460,12 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 		}
 		poses = skeletal_animation::WeightedSumInMeshSpace(sampled, weights, animation.skeleton.parents);
 	}
-	else if (const auto* played = creature_layers::IsPlaying(animation.body)
-	                                  ? animationOf(creature_layers::CurrentAnimation(animation.body))
-	                                  : nullptr;
+	else if (const auto* played =
+	             !creature_layers::IsPlaying(animation.body) ? nullptr
+	             : animation.body.blendedWith.has_value()
+	                 ? PairAnimationOf(animation, rig, morph, creature_layers::CurrentAnimation(animation.body),
+	                                   *animation.body.blendedWith, animation.body.blendWeight)
+	                 : animationOf(creature_layers::CurrentAnimation(animation.body));
 	         played != nullptr)
 	{
 		const auto time = creature_layers::DanceMoveTime(animation.body, played->duration);
@@ -1042,6 +1045,52 @@ std::optional<glm::vec3> CreatureAnimationSystem::AnimationTravel(entt::entity c
 {
 	const auto* played = PosedAnimationOf(creature, animation);
 	return played != nullptr ? std::optional(played->displacement) : std::nullopt;
+}
+
+std::optional<creature_kiss::KissPoints> CreatureAnimationSystem::KissPointsOf(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* self = registry.TryGet<const Creature>(creature);
+	const auto* morph = registry.TryGet<const CreatureMorph>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	if (self == nullptr || morph == nullptr || transform == nullptr || !rigs.Contains(creature::GetRigId(self->species)))
+	{
+		return std::nullopt;
+	}
+	const auto& rig = *rigs.Handle(creature::GetRigId(self->species));
+	const auto* stand = PosedAnimationOf(creature, creature_layers::animations::k_Stand);
+	if (stand == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto& body = registry.Get<CreatureAnimation>(creature);
+	// The lips are the point on the body that kisses, or else the head bone. Without the animation they stay at the
+	// origin of the creature.
+	const auto lipsIn = [&](size_t index) {
+		const auto* played = PosedAnimationOf(creature, index);
+		if (played == nullptr)
+		{
+			return glm::vec3(0.0f);
+		}
+		const auto time = static_cast<uint32_t>(
+		    std::clamp(rig.kissMs.value_or(0.0f), 0.0f, static_cast<float>(std::max(played->duration, 1u) - 1)));
+		const auto poses = skeletal_animation::SampleCycle(*played, *stand, time, body.skeleton, {});
+		const auto matrices = skeletal_animation::ComposeBoneMatrices(poses, body.skeleton.parents);
+		glm::vec3 lips(0.0f);
+		if (rig.kissPoint.has_value())
+		{
+			const auto& point = *rig.kissPoint;
+			const auto triangle = creature::PosedTriangle(point.vertices, point.bones, morph->drawn, matrices, glm::mat4(1.0f));
+			lips = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], point.u, point.v).position;
+		}
+		else if (rig.actionPoints.has_value() && rig.actionPoints->head < matrices.size())
+		{
+			lips = glm::vec3(matrices[rig.actionPoints->head][3]);
+		}
+		return lips * transform->scale;
+	};
+	return creature_kiss::KissPoints {.high = lipsIn(creature_kiss::k_HighKiss), .low = lipsIn(creature_kiss::k_LowKiss)};
 }
 
 void CreatureAnimationSystem::KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point)

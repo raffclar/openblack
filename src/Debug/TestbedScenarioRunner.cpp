@@ -2514,6 +2514,7 @@ void Runner::Give(const Command& command)
 		                    : command.atCreature.has_value()               ? CreatureAt(*command.atCreature)
 		                                                                   : ObjectAt(command.object);
 		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
+		                  : command.usesCreature.has_value()            ? CreatureAt(*command.usesCreature)
 		                  : command.with.has_value()                    ? ObjectAt(*command.with)
 		                                                                : std::nullopt;
 		result = !action.has_value()                                     ? "no such action"

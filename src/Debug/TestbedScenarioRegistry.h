@@ -863,6 +863,8 @@ struct Command
 	/// The creature a miracle is cast at, or that a script's action is done to in place of the object, by its place in
 	/// the scenario's creatures
 	std::optional<size_t> atCreature;
+	/// The creature that a script's action uses, in place of the object (with), by its place in the scenario's creatures
+	std::optional<size_t> usesCreature;
 	/// The player's alignment jumped to, from -1 (evil) to 1 (good)
 	float alignment {0.0f};
 	/// What an advisor is told: to come out of its corner, or to appear in a puff of smoke; to go home, or to vanish; to
@@ -1065,6 +1067,8 @@ void AddFirewaterScenarios(std::vector<Scenario>& all);
 void AddFishScenarios(std::vector<Scenario>& all);
 /// Creatures casting miracles
 void AddCreatureCastingScenarios(std::vector<Scenario>& all);
+/// The joint actions of two friends, each close up
+void AddFriendActionScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios
 void AddCreatureModeScenarios(std::vector<Scenario>& all);
 /// The gestures drawn with the hand: sizing and powering up miracles, scribbles, and the leash's gestures

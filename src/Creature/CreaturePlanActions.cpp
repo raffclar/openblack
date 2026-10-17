@@ -234,6 +234,31 @@ constexpr std::array k_Executors {
     Executor {.action = "DrinkWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::DrinkWithFriend},
     Executor {.action = "HelpTownWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::HelpTownWithFriend},
     Executor {.action = "AttackWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::AttackTownWithFriend},
+    Executor {.action = "KissFriend", .target = Target::CreatureFreeForJoint, .build = Build::KissFriend},
+    Executor {.action = "TalkToFriend", .target = Target::CreatureFreeForJoint, .build = Build::TalkToFriend},
+    Executor {.action = "TellFriendAJoke", .target = Target::CreatureFreeForJoint, .build = Build::TellFriendAJoke},
+    Executor {.action = "DanceWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::DanceWithFriend},
+    Executor {.action = "ArgueWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::ArgueWithFriend},
+    Executor {.action = "MopeAboutWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::MopeAboutWithFriend},
+    Executor {.action = "ShowOffToFriend", .target = Target::CreatureFreeForJoint, .build = Build::ShowOffToFriend},
+    Executor {
+        .action = "GetAttentionFromFriend", .target = Target::CreatureNotFreeForJoint, .build = Build::GetAttentionFromFriend},
+    Executor {.action = "TellCreatureToSodOff", .target = Target::CreatureFreeForJoint, .build = Build::TellCreatureToSodOff},
+    Executor {.action = "ExamineOtherCreatureWithFriend",
+              .target = Target::CreatureFreeForJoint,
+              .use = Target::Creature,
+              .build = Build::ExamineOtherCreatureWithFriend},
+    Executor {
+        .action = "SitOnTopOfHillWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::SitOnTopOfHillWithFriend},
+    Executor {
+        .action = "EatFromFieldWithFriend", .target = Target::CreatureFreeForJoint, .build = Build::EatFromFieldWithFriend},
+    Executor {.action = "PlayThrowingGameWithFriend",
+              .target = Target::CreatureFreeForJoint,
+              .use = Target::Toy,
+              .build = Build::PlayThrowingGameWithFriend},
+    Executor {
+        .action = "GiveFriendToy", .target = Target::CreatureFreeForJoint, .use = Target::Toy, .build = Build::GiveFriendToy},
+    Executor {.action = "ShowFriendCitadel", .target = Target::CreatureFreeForJoint, .build = Build::ShowFriendCitadel},
     Executor {.action = "LookAtMountains", .build = Build::LookAtMountains},
     Executor {.action = "LookOutToSea", .build = Build::LookOutToSea, .leavesHome = true},
     // It dances alone on the nearest coast, by its map of the land
@@ -782,6 +807,73 @@ std::optional<std::vector<creature_mind::Step>> FriendsAgenda(const Executor& ex
 		return creature_mind::TownWithFriend(friends, *situation.friendsTown,
 		                                     executor.build == Build::HelpTownWithFriend ? creature_desires::Desire::Compassion
 		                                                                                 : creature_desires::Desire::Anger);
+	case Build::KissFriend:
+		if (!situation.kissingDistance.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::KissFriend(friends, *situation.kissingDistance,
+		                                 (situation.standing.y + situation.friendly->position.y) * 0.5f, random);
+	case Build::TalkToFriend:
+		return creature_mind::TalkToFriend(situation.self, friendly, situation.height, random);
+	case Build::TellFriendAJoke:
+		return creature_mind::TellFriendAJoke(situation.self, friendly, situation.height, random);
+	case Build::DanceWithFriend:
+		return creature_mind::DanceWithFriend(situation.self, friendly, situation.height);
+	case Build::ArgueWithFriend:
+		return creature_mind::ArgueWithFriend(situation.self, friendly, situation.height, random);
+	case Build::MopeAboutWithFriend:
+		return creature_mind::MopeAboutWithFriend(situation.self, friendly, situation.height, random);
+	case Build::ShowOffToFriend:
+		if (!situation.homePlace.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::ShowOffToFriend(situation.self, friendly, situation.height, *situation.homePlace, random);
+	case Build::TellCreatureToSodOff:
+		return creature_mind::TellCreatureToSodOff(situation.self, friendly, situation.standing, situation.friendly->position,
+		                                           situation.friendly->height, random);
+	case Build::ExamineOtherCreatureWithFriend:
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::ExamineOtherCreatureWithFriend(friendly, *situation.instrument, random);
+	case Build::SitOnTopOfHillWithFriend:
+		if (!situation.clearArea.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::SitOnTopOfHillWithFriend(
+		    friends, *situation.clearArea, creature_mind::HillTogetherRadius(situation.radius, situation.friendly->radius),
+		    situation.seesFriend, random);
+	case Build::EatFromFieldWithFriend:
+		if (!situation.friendsField.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::EatFromFieldWithFriend(friends, situation.friendsField->pile, situation.friendsField->point);
+	case Build::PlayThrowingGameWithFriend:
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::PlayThrowingGameWithFriend(friends, *situation.instrument, situation.standing,
+		                                                 situation.friendly->position, situation.handFull);
+	case Build::GiveFriendToy:
+		if (!situation.instrument.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::GiveFriendToy(situation.self, friendly, *situation.instrument, situation.handFull, random);
+	case Build::ShowFriendCitadel:
+		if (!situation.templeHeart.has_value() || !situation.head.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::ShowFriendCitadel(
+		    friends, {.point = situation.templeHeart->point, .radius = situation.templeHeart->radius}, situation.radius,
+		    situation.friendly->radius, *situation.head, situation.seesFriend, random);
 	default:
 		return std::nullopt;
 	}
@@ -1225,7 +1317,23 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::DrinkWithFriend:
 	case Build::HelpTownWithFriend:
 	case Build::AttackTownWithFriend:
+	case Build::KissFriend:
+	case Build::TalkToFriend:
+	case Build::TellFriendAJoke:
+	case Build::DanceWithFriend:
+	case Build::ArgueWithFriend:
+	case Build::MopeAboutWithFriend:
+	case Build::ShowOffToFriend:
+	case Build::TellCreatureToSodOff:
+	case Build::ExamineOtherCreatureWithFriend:
+	case Build::SitOnTopOfHillWithFriend:
+	case Build::EatFromFieldWithFriend:
+	case Build::PlayThrowingGameWithFriend:
+	case Build::GiveFriendToy:
+	case Build::ShowFriendCitadel:
 		return FriendsAgenda(executor, *object, situation, random);
+	case Build::GetAttentionFromFriend:
+		return creature_mind::GetAttentionFromFriend(*object, random);
 	case Build::HowlAtFriend:
 		return creature_mind::HowlAtFriend(*object);
 	case Build::PineForFriend:

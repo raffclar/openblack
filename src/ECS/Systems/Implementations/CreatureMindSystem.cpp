@@ -48,6 +48,7 @@
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureKindAgendas.h"
+#include "Creature/CreatureKiss.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
@@ -916,6 +917,25 @@ bool WaitedForMoving(const ecs::Registry& registry, const creature_mind::IdleMin
 	       Locator::creatureLocomotionSystem::value().IsMoving(object);
 }
 
+/// Whether the creature that a step waits to be free plays an action or moves
+bool WaitedForBusy(const ecs::Registry& registry, const creature_mind::IdleMind& idle)
+{
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WaitForFree ||
+	    !idle.agenda[idle.step].object.has_value())
+	{
+		return false;
+	}
+	const auto object = static_cast<entt::entity>(*idle.agenda[idle.step].object);
+	if (!registry.Valid(object) || !registry.AllOf<Creature>(object))
+	{
+		return false;
+	}
+	const auto* body = registry.TryGet<const CreatureAnimation>(object);
+	const bool playing = body != nullptr && creature_layers::IsPlaying(body->body);
+	return playing ||
+	       (Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(object));
+}
+
 /// Whether the thing a step watches fly is still really in the air: in the physics, and moving fast or clear of the land
 /// The villager a step follows to watch, as the creature sees it, while that step is next or under way
 std::optional<creature_mind::Senses::FollowedView> FollowedViewOf(const ecs::Registry& registry, const glm::vec3& from,
@@ -1179,6 +1199,50 @@ void ReleaseCast(entt::entity creature)
 	if (Locator::magicSystem::has_value())
 	{
 		Locator::magicSystem::value().ReleaseCreatureCast(creature);
+	}
+}
+
+/// The kiss of a creature. It kisses only when its species has the high and the low kiss animations. A kiss of the air
+/// plays the low kiss alone. A kiss of another creature blends the low kiss towards the high kiss, so that the lips of
+/// the two meet. When the lips cannot meet, it does not kiss.
+void StartKiss(entt::entity creature, const creature_mind::Commands::KissOrder& kiss, CreatureAnimation& animation)
+{
+	if (!Locator::creatureAnimationSystem::has_value() || creature_layers::IsPlaying(animation.body))
+	{
+		return;
+	}
+	auto& bodies = Locator::creatureAnimationSystem::value();
+	if (!bodies.AnimationDuration(creature, creature_kiss::k_HighKiss).has_value() ||
+	    !bodies.AnimationDuration(creature, creature_kiss::k_LowKiss).has_value())
+	{
+		return;
+	}
+	float highWeight = 0.0f;
+	if (kiss.partner.has_value())
+	{
+		const auto partner = static_cast<entt::entity>(*kiss.partner);
+		const auto& registry = Locator::entitiesRegistry::value();
+		const auto self = bodies.KissPointsOf(creature);
+		const auto other = registry.Valid(partner) ? bodies.KissPointsOf(partner) : std::nullopt;
+		const auto weight = self.has_value() && other.has_value() ? creature_kiss::HighWeight(*self, *other) : std::nullopt;
+		if (!weight.has_value())
+		{
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} cannot kiss creature {}: the lips do not meet",
+			                    entt::to_integral(creature), *kiss.partner);
+			return;
+		}
+		highWeight = *weight;
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} kisses creature {} with the high kiss at {:.3f}",
+		                    entt::to_integral(creature), *kiss.partner, highWeight);
+	}
+	if (auto body = creature_layers::PlayOnce(animation.body, creature_kiss::k_LowKiss, false))
+	{
+		if (highWeight > 0.0f)
+		{
+			body->blendedWith = creature_kiss::k_HighKiss;
+			body->blendWeight = highWeight;
+		}
+		animation.body = *body;
 	}
 }
 
@@ -2112,6 +2176,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .held = inHand.has_value() ? std::optional(entt::to_integral(*inHand)) : std::nullopt,
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
 		        .objectMoving = WaitedForMoving(registry, mind.idle),
+		        .objectBusy = WaitedForBusy(registry, mind.idle),
 		        .objectInTheAir = WatchedIsInTheAir(registry, mind.idle),
 		        .objectFlying = StillObjectFlies(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
@@ -2149,6 +2214,10 @@ void CreatureMindSystem::ProcessTurn()
 		    if (commands.restEyes)
 		    {
 			    RestEyes(registry, entity, eyes);
+		    }
+		    if (commands.kiss.has_value())
+		    {
+			    StartKiss(entity, *commands.kiss, animation);
 		    }
 		    Apply(commands, animation, eyes);
 		    if (Move(entity, commands))

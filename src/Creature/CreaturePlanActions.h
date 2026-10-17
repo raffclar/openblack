@@ -206,6 +206,22 @@ enum class Build : uint8_t
 	DrinkWithFriend,
 	HelpTownWithFriend,
 	AttackTownWithFriend,
+	/// The other joint actions with a friend (see creature_mind::KissFriend and the others)
+	KissFriend,
+	TalkToFriend,
+	TellFriendAJoke,
+	DanceWithFriend,
+	ArgueWithFriend,
+	MopeAboutWithFriend,
+	ShowOffToFriend,
+	GetAttentionFromFriend,
+	TellCreatureToSodOff,
+	ExamineOtherCreatureWithFriend,
+	SitOnTopOfHillWithFriend,
+	EatFromFieldWithFriend,
+	PlayThrowingGameWithFriend,
+	GiveFriendToy,
+	ShowFriendCitadel,
 	RunFromObject,
 	RunFromPlayer,
 	LookAbout,
@@ -619,15 +635,26 @@ struct Situation
 	/// The nearest town, when the creature believes something about it: whether it wants to attack it more than to
 	/// help it. None without a town, or without a belief about the nearest town.
 	std::optional<bool> attackNearestTown;
-	/// The friend of a joint action: where it stands and how tall it is
+	/// The friend of a joint action: where it stands, how tall it is, where its body is, and its radius on the ground
 	struct Friend
 	{
 		glm::vec2 point {0.0f};
 		float height {0.0f};
+		glm::vec3 position {0.0f};
+		float radius {0.0f};
 	};
 	std::optional<Friend> friendly;
 	/// The town of a joint action with a town, none without a town that has a storage pit
 	std::optional<creature_mind::FriendsTown> friendsTown;
+	/// The distance that each of the two kissers stands from the point halfway between them
+	std::optional<float> kissingDistance;
+	/// Whether the creature can see the friend
+	bool seesFriend {true};
+	/// The field nearest the creature that it believes in, for a meal with a friend
+	std::optional<FoodPile> friendsField;
+	/// Where the head of the creature is, and where its home is on the ground
+	std::optional<glm::vec3> head;
+	std::optional<glm::vec3> homePlace;
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo
