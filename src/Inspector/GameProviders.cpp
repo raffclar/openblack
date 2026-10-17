@@ -179,6 +179,7 @@
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -334,6 +335,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"reactionSystem", "magic.reactions"},
     LocatorCoverage {"teleportSystem", "magic.teleport"},
     LocatorCoverage {"creatureCarryOverSystem", "creatures.systems"},
+    LocatorCoverage {"saveGameSystem", "saves.slots"},
     LocatorCoverage {"creaturePenSystem", "creatures.systems"},
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
     LocatorCoverage {"creatureWebPageSystem", "creatures.systems"},
@@ -3208,6 +3210,61 @@ std::optional<std::vector<BodyInfo>> Bodies()
 
 // The help: the advisors and the scripts' dialogue
 
+std::unique_ptr<ProviderInterface> SavesProvider()
+{
+	auto provider = std::make_unique<FunctionProvider>("saves");
+	provider->Add(Query("slots", "The slots of the current player that have a saved game, for the land that is open", {},
+	                    ResultKind::List),
+	              [](const QueryContext& /*c*/) {
+		              if (!Locator::saveGameSystem::has_value())
+		              {
+			              return QueryResult::Error("there are no saved games without a game");
+		              }
+		              Json items = Json::array();
+		              for (const auto& slot : Locator::saveGameSystem::value().Slots())
+		              {
+			              items.push_back({{"slot", slot.slot},
+			                               {"land", slot.land},
+			                               {"date", gui::ToUtf8(slot.date)},
+			                               {"name", gui::ToUtf8(slot.name)}});
+		              }
+		              return QueryResult::Value(std::move(items));
+	              });
+	const ParameterDescription slotParameter {
+	    .name = "slot", .type = "integer", .description = "The slot, 0 to 20", .required = true};
+	auto save =
+	    Query("save",
+	          "Saves the game into a slot: the land, the turn and every creature with its mind file and its "
+	          "leash. The towns, the villagers, the story and the scripts are not saved yet",
+	          {slotParameter, {.name = "name", .type = "string", .description = "The name of the save", .required = false}});
+	save.writes = true;
+	provider->Add(std::move(save), [](const QueryContext& context) {
+		const auto slot = NumberMember(context.params, "slot");
+		if (!Locator::saveGameSystem::has_value() || !slot.has_value() || *slot < 0.0)
+		{
+			return QueryResult::Error("saves.save needs a game and a slot from 0 to 20");
+		}
+		const auto name = gui::ToUtf16(StringMember(context.params, "name").value_or(""));
+		const bool saved = Locator::saveGameSystem::value().Save(static_cast<uint32_t>(*slot), name);
+		return QueryResult::Value({{"saved", saved}, {"slot", static_cast<uint32_t>(*slot)}});
+	});
+	auto load = Query("load",
+	                  "Puts the creatures of the land that is open back as a slot keeps them: the values of each record, "
+	                  "the mind of its mind file, the plan that the save kept and its leash",
+	                  {slotParameter});
+	load.writes = true;
+	provider->Add(std::move(load), [](const QueryContext& context) {
+		const auto slot = NumberMember(context.params, "slot");
+		if (!Locator::saveGameSystem::has_value() || !slot.has_value() || *slot < 0.0)
+		{
+			return QueryResult::Error("saves.load needs a game and a slot from 0 to 20");
+		}
+		const bool loaded = Locator::saveGameSystem::value().Load(static_cast<uint32_t>(*slot));
+		return QueryResult::Value({{"loaded", loaded}, {"slot", static_cast<uint32_t>(*slot)}});
+	});
+	return provider;
+}
+
 std::unique_ptr<ProviderInterface> HelpProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("help");
@@ -3654,6 +3711,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(CreaturesProvider());
 	inspector.Add(ScriptProvider(controls.scripts));
 	inspector.Add(HelpProvider());
+	inspector.Add(SavesProvider());
 
 	auto game = std::make_unique<GameProvider>(runTarget);
 	auto* gameProvider = game.get();

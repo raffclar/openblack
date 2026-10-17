@@ -88,6 +88,7 @@
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/IntroSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
+#include "ECS/Systems/Implementations/SaveGameSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 #include "ECS/Systems/Implementations/TipBubbleSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
@@ -244,6 +245,7 @@ using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
+using openblack::ecs::systems::SaveGameSystem;
 using openblack::ecs::systems::ScriptControlSystem;
 using openblack::ecs::systems::SharkSystem;
 using openblack::ecs::systems::SnowfallSystem;
@@ -418,6 +420,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	// The player's creature is kept under their profile's file
 	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(
 	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); });
+	Locator::saveGameSystem::emplace<SaveGameSystem>();
 	// The creature's web page and its pictures go to the folder of the profile picked now
 	Locator::creatureWebPageSystem::emplace<CreatureWebPageSystem>([]() -> std::optional<std::u16string> {
 		if (!Locator::playerProfileSystem::has_value())
@@ -626,6 +629,7 @@ void openblack::ShutDownServices()
 	Locator::creatureFizzSystem::reset();
 	Locator::creatureWebPageSystem::reset();
 	Locator::creatureCarryOverSystem::reset();
+	Locator::saveGameSystem::reset();
 	Locator::tornadoSystem::reset();
 	Locator::magicShieldSystem::reset();
 	Locator::forestSystem::reset();

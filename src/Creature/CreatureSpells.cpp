@@ -142,7 +142,7 @@ int32_t creature_spells::TurnsOf(float seconds, float turnsPerSecond)
 	return seconds > 0.0f ? static_cast<int32_t>(seconds * turnsPerSecond) : -1;
 }
 
-ReceiveResult creature_spells::Receive(Spells& spells, Spell spell, int32_t holdTurns, entt::entity miracle)
+ReceiveResult creature_spells::Receive(Spells& spells, Spell spell, int32_t holdTurns, entt::entity miracle, float seconds)
 {
 	auto& slot = spells[spell];
 	switch (slot.phase)
@@ -163,7 +163,7 @@ ReceiveResult creature_spells::Receive(Spells& spells, Spell spell, int32_t hold
 		return {Received::Extended, replaced};
 	}
 	case Phase::Finishing:
-		spells.waiting.push_back({spell, holdTurns, miracle});
+		spells.waiting.push_back({spell, holdTurns, miracle, seconds});
 		return {Received::Queued, entt::null};
 	case Phase::Off:
 		break;
@@ -178,7 +178,7 @@ ReceiveResult creature_spells::Receive(Spells& spells, Spell spell, int32_t hold
 				CutShort(spells.slots.at(i));
 			}
 		}
-		spells.waiting.push_back({spell, holdTurns, miracle});
+		spells.waiting.push_back({spell, holdTurns, miracle, seconds});
 		return {Received::Queued, entt::null};
 	}
 	Begin(slot, holdTurns, miracle, spells.startDelayTurns);

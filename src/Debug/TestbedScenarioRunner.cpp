@@ -188,6 +188,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -2430,6 +2431,20 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::SaveGame || command.kind == Kind::LoadGame)
+	{
+		const auto slot = static_cast<uint32_t>(command.value);
+		const bool saving = command.kind == Kind::SaveGame;
+		bool done = false;
+		if (Locator::saveGameSystem::has_value())
+		{
+			auto& saves = Locator::saveGameSystem::value();
+			done = saving ? saves.Save(slot, u"Testbed") : saves.Load(slot);
+		}
+		Log(fmt::format("{:.1f}s: {} slot {}: {}", _seconds, saving ? "save into" : "load from", slot,
+		                done ? "done" : "failed"));
+		return;
+	}
 	if (command.kind == Kind::EndGuidanceWaits)
 	{
 		if (Locator::guidanceSystem::has_value())
@@ -2823,6 +2838,8 @@ void Runner::Give(const Command& command)
 	case Kind::OpenTattooMenu:
 	case Kind::PlayCustomMusic:
 	case Kind::ShowCustomMusicControls:
+	case Kind::SaveGame:
+	case Kind::LoadGame:
 	case Kind::StopScript:
 	case Kind::StartScriptMusic:
 	case Kind::RunText:

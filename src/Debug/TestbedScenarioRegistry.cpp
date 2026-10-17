@@ -6507,6 +6507,29 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "saves.creature_resumes",
+	    .name = "Save and load: the creature does its plan again",
+	    .facet = Facet::Mind,
+	    .description = "A content tiger of the second player, so a load gives it the mind of the saved game's mind "
+	                   "file. A script tells it to hold a rock 250 metres away, so the tiger walks to the rock. 4 "
+	                   "seconds later the game saves into slot 0. 6 seconds after that, before the tiger gets to the "
+	                   "rock, the game loads slot 0.",
+	    .expected = "At the load the tiger is back where it was at the save, facing the same way. A script controls "
+	                "it, so the save kept its plan: it walks to the rock again from the start of its step and holds "
+	                "the rock. The log shows the save and the load.",
+	    .framing = {.shot = Shot::Overview, .include = {{100.0f, -15.0f}, {260.0f, 15.0f}}},
+	    .creatures = {[] {
+		    auto tiger = Content(CreatureType::Tiger, {100.0f, 0.0f});
+		    tiger.owner = PlayerNames::PLAYER_TWO;
+		    return tiger;
+	    }()},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {350.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "HoldObject"},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 4.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 6.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "mind.hand_free_pick_up",
 	    .name = "Put down a thing before a pick-up",
 	    .facet = Facet::Mind,
@@ -7906,7 +7929,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
-	       IsPointerCommand(kind);
+	       kind == Kind::SaveGame || kind == Kind::LoadGame || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -7933,7 +7956,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 142> k_Names {
+	constexpr std::array<std::string_view, 144> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -8076,6 +8099,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "start script music",
 		    "write the web page",
 		    "fly to a bookmark",
+		    "save the game",
+		    "load the game",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}
