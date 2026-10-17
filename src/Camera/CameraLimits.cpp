@@ -54,17 +54,32 @@ std::optional<float> DomeRoof(const Exclusion& dome, glm::vec2 point)
 }
 } // namespace
 
-std::optional<glm::vec3> camera_limits::KeepInsideAllowedArea(const glm::vec3& origin)
+namespace
 {
-	const float x = origin.x - k_AllowedAreaCentre.x;
-	const float z = origin.z - k_AllowedAreaCentre.y;
+/// Where a camera outside a disc of a radius round the middle of the map is brought back to, straight across the ground
+std::optional<glm::vec3> KeepInsideDisc(const glm::vec3& origin, float radius)
+{
+	const float x = origin.x - camera_limits::k_AllowedAreaCentre.x;
+	const float z = origin.z - camera_limits::k_AllowedAreaCentre.y;
 	const float squared = z * z + x * x;
-	if (!(squared > k_AllowedAreaRadius * k_AllowedAreaRadius))
+	if (!(squared > radius * radius))
 	{
 		return std::nullopt;
 	}
-	const float scale = k_AllowedAreaRadius / std::sqrt(squared);
-	return glm::vec3(x * scale + k_AllowedAreaCentre.x, origin.y, z * scale + k_AllowedAreaCentre.y);
+	const float scale = radius / std::sqrt(squared);
+	return glm::vec3(x * scale + camera_limits::k_AllowedAreaCentre.x, origin.y,
+	                 z * scale + camera_limits::k_AllowedAreaCentre.y);
+}
+} // namespace
+
+std::optional<glm::vec3> camera_limits::KeepInsideAllowedArea(const glm::vec3& origin)
+{
+	return KeepInsideDisc(origin, k_AllowedAreaRadius);
+}
+
+std::optional<glm::vec3> camera_limits::KeepInsideOpenSea(const glm::vec3& origin)
+{
+	return KeepInsideDisc(origin, k_OpenSeaRadius);
 }
 
 std::optional<glm::vec3> camera_limits::KeepInsideTheWorld(const glm::vec3& destination)

@@ -139,6 +139,20 @@ TEST(LandLine, TheSeaIsMetGoingDownNearTheCamera)
 	    land_line::UnderPixel(camera, {1100.0f, 99.0f, 1000.0f}, false, Sea, [](glm::vec2) { return 0.0f; }).has_value());
 }
 
+TEST(LandLine, ALineMeetsALevelPlaneOnlyAheadOfTheCamera)
+{
+	// From under the sea down to the far floor
+	const auto floor = land_line::PlaneAhead({-500.0f, -20.0f, 100.0f}, {-499.0f, -21.0f, 100.0f}, -160.0f);
+	ASSERT_TRUE(floor.has_value());
+	EXPECT_FLOAT_EQ(floor->x, -360.0f);
+	EXPECT_FLOAT_EQ(floor->y, -160.0f);
+	EXPECT_FLOAT_EQ(floor->z, 100.0f);
+	// Going up, level, or with the plane behind, it misses
+	EXPECT_FALSE(land_line::PlaneAhead({0.0f, -20.0f, 0.0f}, {1.0f, -19.0f, 0.0f}, -160.0f).has_value());
+	EXPECT_FALSE(land_line::PlaneAhead({0.0f, -20.0f, 0.0f}, {1.0f, -20.0f, 0.0f}, -160.0f).has_value());
+	EXPECT_FALSE(land_line::PlaneAhead({0.0f, -200.0f, 0.0f}, {1.0f, -201.0f, 0.0f}, -160.0f).has_value());
+}
+
 TEST(LandLine, ThePointUnderTheCursorIsKeptNearTheMap)
 {
 	const auto kept = land_line::KeptInReach({2560.0f + 10000.0f, 0.0f, 2560.0f});

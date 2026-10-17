@@ -57,6 +57,19 @@ TEST(CameraLimits, TheCameraIsBroughtBackToTheRimOfTheDiscRoundTheIsland)
 	EXPECT_TRUE(KeepInsideAllowedArea({-1500.0f, 0.0f, -1500.0f}).has_value());
 }
 
+TEST(CameraLimits, WithTheBoundaryOffTheCameraGoesOutOverTheOpenSea)
+{
+	// Past the map's corner and far past the disc round the island, it stays
+	EXPECT_FALSE(KeepInsideOpenSea({-1500.0f, 40.0f, -1500.0f}).has_value());
+	EXPECT_FALSE(KeepInsideOpenSea({2560.0f + 15000.0f, 40.0f, 2560.0f}).has_value());
+
+	// Further than the open sea's disc, back to its rim at the same height
+	const auto back = KeepInsideOpenSea({2560.0f + 30000.0f, 70.0f, 2560.0f});
+	ASSERT_TRUE(back.has_value());
+	EXPECT_NEAR(AcrossFromCentre(*back), k_OpenSeaRadius, 0.01f);
+	EXPECT_FLOAT_EQ(back->y, 70.0f);
+}
+
 TEST(CameraLimits, TheCameraMovesNoFurtherInAFrameThanItsLimit)
 {
 	// At least 300 a frame, or 1.6 times the distance to what it looks at each second

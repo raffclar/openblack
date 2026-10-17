@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <numbers>
 #include <optional>
 #include <vector>
@@ -137,6 +138,34 @@ TEST(Seabed, LandStaysAndTheSeaGoesDown)
 	// The floor is the land where the land is above the sea, else the sea bed
 	EXPECT_FLOAT_EQ(seabed::FloorHeight(bed, {0.0f, 0.0f}, 13.4f), 13.4f);
 	EXPECT_FLOAT_EQ(seabed::FloorHeight(bed, {100.0f, 0.0f}, 0.0f), -bed.DepthAt({100.0f, 0.0f}));
+}
+
+TEST(Seabed, NearTheEdgeTheSeaBedEasesDownToTheFarFloor)
+{
+	// A small island in the middle of a sea, with and without the ring at the edge
+	constexpr glm::ivec2 k_Size {48, 48};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Size.x * k_Size.y), 0);
+	for (int z = 22; z < 26; ++z)
+	{
+		for (int x = 22; x < 26; ++x)
+		{
+			altitudes[static_cast<size_t>(z * k_Size.x + x)] = 40;
+		}
+	}
+	const auto plain = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
+	const auto ringed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f, {}, 8.0f);
+	const auto at = [&k_Size](int x, int z) { return static_cast<size_t>(z * k_Size.x + x); };
+	// At the edge the sea bed is at the far floor's depth, and past the edge it stays there
+	EXPECT_FLOAT_EQ(ringed.depth[at(0, 24)], seabed::k_MaxDepth);
+	EXPECT_FLOAT_EQ(ringed.depth[at(47, 10)], seabed::k_MaxDepth);
+	EXPECT_FLOAT_EQ(ringed.DepthAt({-300.0f, 240.0f}), seabed::k_MaxDepth);
+	// Further in than the ring, nothing changes; inside it, the sea bed is deeper, and the island stays
+	EXPECT_FLOAT_EQ(ringed.depth[at(12, 24)], plain.depth[at(12, 24)]);
+	EXPECT_GE(ringed.depth[at(4, 24)], plain.depth[at(4, 24)]);
+	EXPECT_FLOAT_EQ(ringed.depth[at(23, 23)], 0.0f);
+	// A point that is not a number reads no depth, and reads no memory out of the grid
+	EXPECT_FLOAT_EQ(ringed.DepthAt({std::numeric_limits<float>::quiet_NaN(), 10.0f}), 0.0f);
+	EXPECT_FLOAT_EQ(ringed.DepthAt({std::numeric_limits<float>::infinity(), 10.0f}), 0.0f);
 }
 
 TEST(Seabed, EmptyWithoutAltitudes)

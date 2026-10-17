@@ -107,7 +107,7 @@ float OriginalLandAt(vec2 xz)
 // The shore map at a point
 vec4 ShoreAt(vec2 xz)
 {
-	return texture2DLod(s_shore, UwShoreUv(xz), 0.0f);
+	return UwOpenSea(texture2DLod(s_shore, UwShoreUv(xz), 0.0f), xz);
 }
 
 // The height of the surface at a point near the eye

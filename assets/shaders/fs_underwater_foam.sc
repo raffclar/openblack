@@ -50,7 +50,7 @@ void main()
 	}
 
 	// Where the waves make new foam
-	vec4 shore = texture2DLod(s_shore, UwShoreUv(p), 0.0f);
+	vec4 shore = UwOpenSea(texture2DLod(s_shore, UwShoreUv(p), 0.0f), p);
 	vec2 slope;
 	float face;
 	// The waves as a texel of the field shows them: a round pixel of 1.5 units

@@ -38,6 +38,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/UnderwaterBoundary.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "Help/HelpProfile.h"
 #include "Help/TurnCheer.h"
@@ -262,7 +263,8 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 	moved.pushed = moved.pushed || push.pushed;
 	moved.focusMoved = moved.focusMoved || push.focusMoved;
 
-	if (KeepInsideFence(zones, originAtFrameStart, listener))
+	// EXPERIMENT (not for merge): with the map's boundary off, no fence holds the camera
+	if (!underwater_boundary::Off() && KeepInsideFence(zones, originAtFrameStart, listener))
 	{
 		moved.pushed = true;
 		moved.focusMoved = true;
@@ -311,8 +313,11 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 		_targetFocus = _targetOrigin + glm::normalize(_targetFocus - _targetOrigin) * _focusDistance;
 	}
 
-	// Within the disc round the island; what it looks at stays where it is
-	if (const auto inside = camera_limits::KeepInsideAllowedArea(_targetOrigin); inside.has_value())
+	// Within the disc round the island; what it looks at stays where it is. EXPERIMENT (not for merge): with the map's
+	// boundary off, within the much larger disc of the open sea.
+	if (const auto inside = underwater_boundary::Off() ? camera_limits::KeepInsideOpenSea(_targetOrigin)
+	                                                   : camera_limits::KeepInsideAllowedArea(_targetOrigin);
+	    inside.has_value())
 	{
 		_targetOrigin = *inside;
 		moved.focusMoved = true;
@@ -550,7 +555,9 @@ bool DefaultWorldCameraModel::FlyTo(camera_fly::Reason reason)
 			}
 		}
 	}
-	const auto destination = camera_fly::Destination(place, CurrentZones());
+	// EXPERIMENT (not for merge): with the map's boundary off, the flight goes to the place itself, past the fence and
+	// the map's edge
+	const auto destination = underwater_boundary::Off() ? place : camera_fly::Destination(place, CurrentZones());
 	if (!destination.has_value())
 	{
 		return false;

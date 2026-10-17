@@ -40,6 +40,9 @@ inline constexpr float k_SlopeCells = 8.0f;
 inline constexpr float k_SlopeDepth = 70.0f;
 /// How much deeper the sea bed goes towards the map's edge
 inline constexpr float k_EdgeDepth = 40.0f;
+/// The game's map: over this many cells in from its edge, the sea bed eases down to k_MaxDepth, so that at the edge it
+/// meets the far floor of the open sea past the map at that depth, with no step
+inline constexpr float k_EdgeRingCells = 16.0f;
 
 /// The depth of the sea bed under each cell corner, in units below sea level (0 where the land is above the sea)
 struct Seabed
@@ -126,8 +129,9 @@ inline constexpr float k_GentleMost = 0.3f;
 /// - Where a creature can walk, the water is never deeper than k_WadeDepth at high tide.
 /// - `beach` is how much of each corner's ground is the beach's sand, 0 to 1 (empty for none). A beach goes on down
 ///   under the water at the shallow k_BeachSlope. Other coasts keep their own slope, and cliffs stay steep.
+/// - `edgeRing` is how many cells in from the grid's edge the sea bed eases down to k_MaxDepth (0 for none).
 [[nodiscard]] Seabed Build(std::span<const uint8_t> altitudes, glm::ivec2 size, glm::vec2 origin, float spacing,
-                           std::span<const float> beach = {});
+                           std::span<const float> beach = {}, float edgeRing = 0.0f);
 
 /// A coral or a plant of the reef on the sea bed
 struct ReefPlant
