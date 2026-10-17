@@ -6360,6 +6360,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					continue;
 				}
 				uint32_t eyesSortDepth = 0;
+				// The game lights the body as it poses it, with the posed models' rule, also while the body fizzes. The
+				// eyes keep the usual model light.
+				submitDesc.posedModelLight = true;
 				if (creature_fizz_look::Fizzing(fizz) && instance < renderCtx.instanceUniforms.size())
 				{
 					// A creature in the land's draw list takes its place in the order of the list. Any other creature
@@ -6377,6 +6380,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
 					});
 				}
+				submitDesc.posedModelLight = false;
 				const float freeze = spells != nullptr ? spells->freeze : 0.0f;
 				if (const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
 				{
@@ -6407,8 +6411,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 					const EntityPose pose {.bones = bones, .morphTargets = targets};
 					submitDesc.viewId = RenderPass::InterfaceCreatures;
+					// The body takes the posed models' light, as in the world
+					submitDesc.posedModelLight = true;
 					drawInstances(meshId, placers->second, placers->second.materialBlending, instance, 1, &pose, nullptr,
 					              _interfaceCreatureInstances);
+					submitDesc.posedModelLight = false;
 					if (eyes != nullptr)
 					{
 						DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
@@ -6430,7 +6437,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					const RenderContext::InstancedDrawDesc placers {0, 1, false};
 					const EntityPose pose {.bones = bones, .morphTargets = targets};
 					submitDesc.viewId = RenderPass::MenuCreature;
+					// The body takes the posed models' light, as in the world
+					submitDesc.posedModelLight = true;
 					drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, _menuCreatureInstance);
+					submitDesc.posedModelLight = false;
 					if (eyes != nullptr)
 					{
 						DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
@@ -6466,6 +6476,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					{
 						continue;
 					}
+					// The body takes the posed models' light, as in the world, but not in the reflection
+					submitDesc.posedModelLight = desc.viewId != RenderPass::Reflection;
 					drawInstances(ids.base, placers, false, 0, 1, &pose, nullptr, *_warmUpInstances);
 					// And fizzing, as it comes into sight
 					if (desc.viewId != RenderPass::Reflection)
@@ -6473,6 +6485,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						drawFizzing(ids.base, placers, 0, *_warmUpInstances, pose,
 						            creature_fizz_look::Level(warm_up::k_CreatureFizz), glm::vec2(0.0f), 0);
 					}
+					submitDesc.posedModelLight = false;
 				}
 				if (desc.viewId != RenderPass::Reflection)
 				{

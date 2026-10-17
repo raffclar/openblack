@@ -1692,6 +1692,36 @@ void AddAppearance(std::vector<Scenario>& all)
 	{
 		headMoves.push_back(Play(Kind::PlayGesture, 0, animations::k_FirstGesture + i, 3.0f, false));
 	}
+	// The light on the bodies of creatures by day and at night, while they move
+	const auto bodyLight = [&all, &headMoves](std::string_view id, std::string_view name, float hour,
+	                                          std::string_view description, std::string_view expected) {
+		auto ape = Content(CreatureType::GiantApe, {-12.0f, 0.0f}, 0.0f, "ape");
+		ape.pauseMind = true;
+		auto cow = Content(CreatureType::Cow, {12.0f, 0.0f}, 0.0f, "cow");
+		cow.pauseMind = true;
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Appearance,
+		    .description = description,
+		    .expected = expected,
+		    .environment = {.hour = hour, .clockRuns = false, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Overview, .include = {{-18.0f, -4.0f}, {18.0f, 4.0f}}, .distance = 0.6f},
+		    .creatures = {ape, cow},
+		    .commands = headMoves,
+		    .repeatFrom = 0,
+		});
+	};
+	bodyLight("appearance.creature_body_light_day", "Creature body light by day", 12.0f,
+	          "At noon, the clock stopped, a giant ape and a cow stand side by side. They nod, shake their heads and do "
+	          "their other gestures.",
+	          "The sun lights each body as the game lights the bodies it poses. The side away from the sun keeps two fifths "
+	          "of the light. The side that faces the sun is fully lit, also where it faces the sun only a little.");
+	bodyLight("appearance.creature_body_light_night", "Creature body light at night", 23.0f,
+	          "At eleven at night, the clock stopped, a giant ape and a cow stand side by side. They nod, shake their heads "
+	          "and do their other gestures.",
+	          "The light that the hand carries at night lights each body as the game lights the bodies it poses. The side "
+	          "away from the hand keeps two fifths of the light. The eyes keep the usual light of the models.");
 	const auto hairClose = [&all, &headMoves](std::string_view id, std::string_view name, CreatureType species,
 	                                          std::string_view description, std::string_view expected, float distance) {
 		all.push_back({

@@ -58,3 +58,12 @@ TEST(ModelLight, PosedModelsAreLitFromTwoFifthsUp)
 	EXPECT_EQ(model_light::PosedFactor({0.0f, 0.47f, 0.0f}, light), 255.0f);
 	EXPECT_EQ(model_light::PosedFactor({0.0f, 1.0f, 0.0f}, light), 255.0f);
 }
+
+TEST(ModelLight, PosedModelsAddTheZAndXPartsFirst)
+{
+	// The z and x parts cancel first, so the small y part stays. When the code adds x, y, then z, it loses the y part.
+	const glm::vec3 normal {1.0f, 1.0e-8f, -1.0f};
+	const glm::vec3 light {1.0f, 1.0f, 1.0f};
+	EXPECT_EQ(model_light::PosedFacing(normal, light), 1.0e-8f);
+	EXPECT_EQ((normal.x * light.x + normal.y * light.y) + normal.z * light.z, 0.0f);
+}
