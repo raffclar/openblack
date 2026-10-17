@@ -233,13 +233,16 @@ std::vector<entt::entity> CreaturesInOrder()
 	return creatures;
 }
 
-/// A world point as the game's map position. The altitude is the height above the ground.
+/// A world point as the game's map position. The altitude is the height above the ground. A point that openblack took
+/// from a map position gives that position back: x and z go to the nearest 65536th of a cell.
 gamesave::MapCoords MapPosition(const glm::vec3& point)
 {
-	map_coords::MapCoords coords {map_coords::ToFixed(point.x), map_coords::ToFixed(point.z), 0.0f};
+	constexpr double k_FixedPerMetre = 65536.0 / 10.0;
+	map_coords::MapCoords coords {static_cast<int32_t>(std::llround(static_cast<double>(point.x) * k_FixedPerMetre)),
+	                              static_cast<int32_t>(std::llround(static_cast<double>(point.z) * k_FixedPerMetre)), 0.0f};
 	if (Locator::terrainSystem::has_value())
 	{
-		coords = map_coords::FromWorld(Locator::terrainSystem::value(), point);
+		coords.altitude = point.y - map_coords::ToWorld(Locator::terrainSystem::value(), coords).y;
 	}
 	return {.x = coords.x, .z = coords.z, .altitude = coords.altitude};
 }
@@ -693,7 +696,9 @@ bool IsOpenLand(std::string_view landscape)
 	auto saved = std::string(landscape);
 	std::ranges::replace(saved, '\\', '/');
 	const auto savedName = std::filesystem::path(saved).filename().string();
-	const auto openName = instance->GetLandPath().filename().string();
+	auto open = instance->GetLandscapePath().generic_string();
+	std::ranges::replace(open, '\\', '/');
+	const auto openName = std::filesystem::path(open).filename().string();
 	return std::ranges::equal(savedName, openName, [](char a, char b) {
 		return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
 	});

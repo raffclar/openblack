@@ -298,6 +298,8 @@ public:
 	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
 	[[nodiscard]] const std::filesystem::path& GetLandPath() const noexcept { return _landPath; }
+	/// The land's file, as the land's script asked for it
+	[[nodiscard]] const std::filesystem::path& GetLandscapePath() const noexcept { return _landscapePath; }
 
 	static Game* Instance() { return sInstance; }
 
@@ -624,6 +626,7 @@ private:
 	hand_blend::ChangeTracker _handBlend;
 	/// The game's own interface, null without the game's files for it
 	std::unique_ptr<gui::GameInterface> _interface;
+	std::filesystem::path _landscapePath;
 	std::filesystem::path _landPath;
 	/// The pause that the menu holds while it is open
 	gui::MenuPause _menuPause;

@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureSaveState.h"
 #include "Creature/CreatureScriptAgendas.h"
 
@@ -197,4 +198,23 @@ TEST(CreatureSaveState, TheAgendaOfAScriptWalkKeepsTheGamesSteps)
 	// A step that does not keep the game's step leaves the steps out
 	idle.agenda.push_back({});
 	EXPECT_TRUE(AgendaToSave(idle, self).steps.empty());
+}
+
+TEST(CreatureSaveState, TheKindOfACreatureCountsDownFromTheGiantApe)
+{
+	EXPECT_EQ(CreatureInfo(CreatureType::GiantApe), 2517u);
+	EXPECT_EQ(CreatureInfo(CreatureType::Cow), 2516u);
+	EXPECT_EQ(CreatureInfo(CreatureType::Tiger), 2515u);
+	EXPECT_EQ(CreatureInfo(CreatureType::BrownBear), 2508u);
+	EXPECT_FALSE(CreatureInfo(CreatureType::Unknown).has_value());
+}
+
+TEST(CreatureSaveState, ALeashOrderAimsTwoMetresOverThePlaceAndTheThing)
+{
+	const auto onLand = TargetPoint({2199.3967f, 20.77f, 2308.9426f}, 0.0f);
+	EXPECT_FLOAT_EQ(onLand.y, 22.77f);
+	// x and z are as precise as a map position: a whole number of 65536ths of a cell
+	EXPECT_EQ(onLand.x, map_coords::ToMetres(0x00DBF08E));
+	EXPECT_EQ(onLand.z, map_coords::ToMetres(0x00E6E4EE));
+	EXPECT_FLOAT_EQ(TargetPoint({100.0f, 5.0f, 100.0f}, 3.5f).y, 10.5f);
 }

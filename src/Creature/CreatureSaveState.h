@@ -19,6 +19,7 @@
 #include <CreatureRecord.h>
 #include <SavedObjects.h>
 #include <entt/entity/entity.hpp>
+#include <glm/vec3.hpp>
 
 #include "Creature/CreatureFizz.h"
 #include "Creature/CreatureIdleMind.h"
@@ -84,7 +85,11 @@ inline constexpr uint16_t k_CreatureSpeedWord = 0x05C3;
 /// The agenda that a load gives back: the game starts the step that the creature did again from its beginning
 [[nodiscard]] gamesave::Agenda AgendaAfterLoad(gamesave::Agenda agenda);
 
-/// The number of the kind of a creature of the species in the game's tables of kinds, or nothing when it is not known
+/// The point that a leash order aims the creature at, from the place of the order or of the thing: x and z as a map
+/// position keeps them, and two metres over the place, plus the height of the thing for an order to a thing
+[[nodiscard]] glm::vec3 TargetPoint(glm::vec3 at, float thingHeight);
+
+/// The number of the kind of a creature of the species in the game's tables of kinds, or nothing for no species
 [[nodiscard]] std::optional<uint32_t> CreatureInfo(CreatureType species);
 
 /// The agenda of the plan as the save keeps it. The save writes the steps from the step that the creature does to the

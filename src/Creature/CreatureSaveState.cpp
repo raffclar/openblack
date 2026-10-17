@@ -9,6 +9,12 @@
 
 #include "CreatureSaveState.h"
 
+#include <cmath>
+
+#include <MindFile.h>
+
+#include "3D/MapCoords.h"
+
 using namespace openblack;
 using namespace openblack::creature_save_state;
 
@@ -242,11 +248,28 @@ gamesave::CreatureObject creature_save_state::MergeOnto(const gamesave::Creature
 	return merged;
 }
 
-std::optional<uint32_t> creature_save_state::CreatureInfo(CreatureType /*species*/)
+glm::vec3 creature_save_state::TargetPoint(glm::vec3 at, float thingHeight)
 {
-	// The game numbers its kinds in the order that it reads them from its tables. That order is not known yet for the
-	// creatures, so a creature that openblack made writes no kind.
-	return std::nullopt;
+	constexpr double k_FixedPerMetre = 65536.0 / 10.0;
+	constexpr double k_OverThePlace = 2.0;
+	const auto onMap = [](float metres) {
+		return map_coords::ToMetres(static_cast<int32_t>(std::llround(static_cast<double>(metres) * k_FixedPerMetre)));
+	};
+	return {onMap(at.x), static_cast<float>(static_cast<double>(at.y) + k_OverThePlace + static_cast<double>(thingHeight)),
+	        onMap(at.z)};
+}
+
+std::optional<uint32_t> creature_save_state::CreatureInfo(CreatureType species)
+{
+	// The game numbers the kinds of creature from the last row of its creature tables down: the first row (the Giant
+	// Ape) has the highest number
+	constexpr uint32_t k_FirstRowInfo = 2517;
+	const auto row = species == CreatureType::GiantApe ? 0u : static_cast<uint32_t>(species);
+	if (species == CreatureType::Unknown || row >= creaturemind::k_SpeciesRows)
+	{
+		return std::nullopt;
+	}
+	return k_FirstRowInfo - row;
 }
 
 gamesave::Agenda creature_save_state::AgendaToSave(const creature_mind::IdleMind& idle, const gamesave::ObjectRef& creature)
