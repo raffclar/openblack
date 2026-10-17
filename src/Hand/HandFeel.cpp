@@ -15,6 +15,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 
 namespace
@@ -25,13 +27,15 @@ constexpr float k_Upwards = 0.5f;
 /// Holding something, the hand is kept out from the face by this share of the held thing's radius
 constexpr float k_HeldShare = 0.5f;
 
-[[nodiscard]] glm::vec3 Normalised(glm::vec3 v)
+/// The vector made one long with its squares added in the given order; a vector of no length stays as it is
+template <x87::SumOrder Order>
+[[nodiscard]] glm::vec3 Unit(glm::vec3 v)
 {
 	if (v.x == 0.0f && v.y == 0.0f && v.z == 0.0f)
 	{
 		return v;
 	}
-	return v * (1.0f / std::sqrt(glm::dot(v, v)));
+	return x87::Scaled<Order>(v);
 }
 } // namespace
 
@@ -48,23 +52,41 @@ hand_feel::Feel hand_feel::FeelOf(const Picked& picked)
 	return picked.posedModel && !picked.animatedStatic ? Feel::AtPosition : Feel::OnModel;
 }
 
-glm::vec3 hand_feel::FeelDirection(glm::vec3 camera, glm::vec3 cursorDirection, std::optional<glm::vec3> raisedCursorGround)
+glm::vec3 hand_feel::PointAlongCursor(glm::vec3 camera, glm::vec3 nearPoint, float distance)
 {
-	if (!raisedCursorGround.has_value())
+	auto way = nearPoint - camera;
+	if (way.x != 0.0f || way.y != 0.0f || way.z != 0.0f)
+	{
+		way = x87::Scaled<x87::SumOrder::Zyx>(way, distance);
+	}
+	return camera + way;
+}
+
+glm::vec3 hand_feel::CursorDirection(glm::vec3 camera, glm::vec3 nearPoint, float furthest)
+{
+	return Unit<x87::SumOrder::Xzy>(PointAlongCursor(camera, nearPoint, furthest) - camera);
+}
+
+glm::vec3 hand_feel::FeelDirection(glm::vec3 camera, glm::vec3 cursorDirection, std::optional<RaisedGround> raised)
+{
+	if (!raised.has_value())
 	{
 		return cursorDirection;
 	}
-	return Normalised(*raisedCursorGround - camera);
+	// The lift is added to the rise from the camera, not to the ground
+	const glm::vec3 way {raised->ground.x - camera.x, (raised->ground.y - camera.y) + raised->lift,
+	                     raised->ground.z - camera.z};
+	return Unit<x87::SumOrder::Yxz>(way);
 }
 
 hand_feel::Rest hand_feel::RestOnModel(glm::vec3 camera, glm::vec3 cursorDirection, glm::vec3 feltDirection, glm::vec3 hitPoint,
                                        glm::vec3 hitNormal, bool feelsModel, std::optional<Holding> holding)
 {
-	const auto normal = Normalised(hitNormal);
+	const auto normal = Unit<x87::SumOrder::Zyx>(hitNormal);
 	auto point = hitPoint;
 	auto towardsCamera = camera - point;
 	// How far along the felt direction the face is
-	const float along = -glm::dot(towardsCamera, feltDirection);
+	const float along = -x87::Dot<x87::SumOrder::Zxy>(towardsCamera, feltDirection);
 	if (holding.has_value())
 	{
 		// Holding something, the point is put on the line of sight at the same distance
@@ -73,7 +95,7 @@ hand_feel::Rest hand_feel::RestOnModel(glm::vec3 camera, glm::vec3 cursorDirecti
 	}
 	if (1.0f <= along)
 	{
-		towardsCamera = Normalised(towardsCamera);
+		towardsCamera = Unit<x87::SumOrder::Zyx>(towardsCamera);
 	}
 	else
 	{
@@ -85,7 +107,8 @@ hand_feel::Rest hand_feel::RestOnModel(glm::vec3 camera, glm::vec3 cursorDirecti
 		float deeper = 0.0f;
 		if (holding->creature.has_value())
 		{
-			const float across = glm::length(glm::vec2(point.x, point.z) - holding->creature->centre);
+			const auto offset = glm::vec2(point.x, point.z) - holding->creature->centre;
+			const float across = std::sqrt((offset.y * offset.y) + (offset.x * offset.x));
 			if (across < holding->creature->radius)
 			{
 				deeper = holding->creature->radius - across;
@@ -97,16 +120,18 @@ hand_feel::Rest hand_feel::RestOnModel(glm::vec3 camera, glm::vec3 cursorDirecti
 	{
 		return {.point = point, .up = std::nullopt};
 	}
-	const auto up = towardsCamera * k_TowardsCamera - normal + glm::vec3(0.0f, k_Upwards, 0.0f);
+	const glm::vec3 up {(towardsCamera.x * k_TowardsCamera) - normal.x,
+	                    ((towardsCamera.y * k_TowardsCamera) - normal.y) + k_Upwards,
+	                    (towardsCamera.z * k_TowardsCamera) - normal.z};
 	return {.point = point, .up = up};
 }
 
-glm::vec3 hand_feel::RestAtPosition(glm::vec3 camera, glm::vec3 cursorDirection, glm::vec3 feltDirection, glm::vec3 position,
+glm::vec3 hand_feel::RestAtPosition(glm::vec3 camera, glm::vec3 nearPoint, glm::vec3 feltDirection, glm::vec3 position,
                                     float radius)
 {
-	const float distance = glm::length(position - camera) - radius;
-	const auto first = camera + Normalised(cursorDirection) * distance;
-	return camera + Normalised(cursorDirection) * ((first.y - position.y) * feltDirection.y + distance);
+	const float distance = x87::Distance<x87::SumOrder::Xzy>(position, camera) - radius;
+	const auto first = PointAlongCursor(camera, nearPoint, distance);
+	return PointAlongCursor(camera, nearPoint, ((first.y - position.y) * feltDirection.y) + distance);
 }
 
 bool hand_feel::TurnsToLand(bool restsOnFace, bool overThing, float aboveLand, float handHeight)
@@ -114,20 +139,32 @@ bool hand_feel::TurnsToLand(bool restsOnFace, bool overThing, float aboveLand, f
 	return !restsOnFace || (overThing && aboveLand < handHeight * 0.5f);
 }
 
-hand_feel::HoverDistances hand_feel::HoverDistancesOf(const Hover& hover)
+float hand_feel::HoverLimit(const Hover& hover)
 {
 	auto limit = hover.currentDistance;
 	if (hover.land.has_value())
 	{
-		limit = glm::length(*hover.land - hover.camera);
+		limit = x87::Distance<x87::SumOrder::Zyx>(hover.camera, *hover.land);
 		if (!hover.landIsSea && !hover.holding)
 		{
 			limit -= hover.handHeight;
 		}
 	}
-	limit = limit <= hover.minDistance ? hover.minDistance : std::min(limit, hover.reach);
-	const float target = hover.restOnThing.has_value() ? glm::length(*hover.restOnThing - hover.camera) : limit;
+	return limit <= hover.minDistance ? hover.minDistance : std::min(limit, hover.reach);
+}
+
+hand_feel::HoverDistances hand_feel::HoverDistancesOf(const Hover& hover)
+{
+	const float limit = HoverLimit(hover);
+	// The hand eases to the distance of the point it rests at, or else of the cursor's point at the limit
+	const auto at = hover.restOnThing.has_value() ? hover.restOnThing : hover.cursorPoint;
+	const float target = at.has_value() ? x87::Distance<x87::SumOrder::Xzy>(hover.camera, *at) : limit;
 	return {.target = std::max(target, 1.0f), .limit = limit};
+}
+
+glm::vec3 hand_feel::UnitUp(glm::vec3 up)
+{
+	return Unit<x87::SumOrder::Zyx>(up);
 }
 
 void hand_feel::EaseHover(Zoomer& hover, float target, float seconds, bool pulling)

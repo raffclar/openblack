@@ -40,6 +40,7 @@
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
 #include "Gui/MenuPause.h"
+#include "Hand/HandFeel.h"
 #include "Input/HandPointer.h"
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
@@ -538,6 +539,8 @@ private:
 	void UpdateHandTricons(bool handDrawn, float seconds);
 	/// Places the hand on the line of sight through the cursor the way the game does
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
+	/// What sets how far from the camera the hand may hover this frame, without where it rests
+	[[nodiscard]] hand_feel::Hover HandHoverInputs(glm::vec3 eye) const;
 	/// A knock on a house: the hand's tap starts, waits while the hand holds something, and the houses' read-out runs
 	void UpdateHandKnock(const ecs::components::Transform& handTransform);
 	/// Loads the hand animations of Data/CTR/hh.hbn for the hand mesh

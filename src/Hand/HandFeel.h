@@ -50,9 +50,20 @@ struct Picked
 };
 [[nodiscard]] Feel FeelOf(const Picked& picked);
 
+/// The point on the line from the camera through the cursor's point on the near plane at a distance from the camera
+[[nodiscard]] glm::vec3 PointAlongCursor(glm::vec3 camera, glm::vec3 nearPoint, float distance);
+/// The line of sight through the cursor, one long: the way to the cursor's point at the hand's furthest distance
+[[nodiscard]] glm::vec3 CursorDirection(glm::vec3 camera, glm::vec3 nearPoint, float furthest);
+
+/// The cursor's point on the land and how far the hand lifts what it holds above it
+struct RaisedGround
+{
+	glm::vec3 ground;
+	float lift;
+};
 /// The direction the hand feels along: the line of sight through the cursor, or, holding something, the line to the
 /// cursor's point on the land raised by the hand's lift for what it holds
-[[nodiscard]] glm::vec3 FeelDirection(glm::vec3 camera, glm::vec3 cursorDirection, std::optional<glm::vec3> raisedCursorGround);
+[[nodiscard]] glm::vec3 FeelDirection(glm::vec3 camera, glm::vec3 cursorDirection, std::optional<RaisedGround> raised);
 
 /// A creature the hand offers to: its middle across the ground and its radius
 struct CreatureReach
@@ -87,7 +98,7 @@ struct Rest
 /// The hand hovering before a villager or an animal: on the line of sight at the thing's distance from the camera less
 /// its radius, moved on along the line by how far that point is above or below the thing times the felt direction's
 /// rise
-[[nodiscard]] glm::vec3 RestAtPosition(glm::vec3 camera, glm::vec3 cursorDirection, glm::vec3 feltDirection, glm::vec3 position,
+[[nodiscard]] glm::vec3 RestAtPosition(glm::vec3 camera, glm::vec3 nearPoint, glm::vec3 feltDirection, glm::vec3 position,
                                        float radius);
 
 /// Whether the hand turns to the land's slope where it is: when it rests on no face, or when over a thing it is lower
@@ -108,6 +119,8 @@ struct Hover
 	/// Where the hand rests on or before the thing under the cursor; none over the land, or over a thing it doesn't
 	/// rest on
 	std::optional<glm::vec3> restOnThing;
+	/// The cursor's point at the furthest the hand may be, which it eases to when it rests on no thing
+	std::optional<glm::vec3> cursorPoint;
 	/// The hand's height at its size
 	float handHeight {0.0f};
 	/// How far from the camera the hand is now, kept when nothing is under the cursor
@@ -127,6 +140,11 @@ struct HoverDistances
 /// Over a thing it rests on, it eases to that resting point, so it touches the thing; elsewhere it eases to the
 /// furthest it may be. It never eases nearer than a unit from the camera.
 [[nodiscard]] HoverDistances HoverDistancesOf(const Hover& hover);
+/// The furthest the hand may be (the limit of HoverDistancesOf), which does not need the resting point
+[[nodiscard]] float HoverLimit(const Hover& hover);
+
+/// The way the hand stands up, one long, its squares added z, y, x; no way stays none
+[[nodiscard]] glm::vec3 UnitUp(glm::vec3 up);
 
 /// How long the hand's hover takes to ease away from the camera, and towards it
 inline constexpr float k_HoverEaseOutSeconds = 0.28f;

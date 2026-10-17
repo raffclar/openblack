@@ -31,7 +31,8 @@ TEST(HandFeel, HoldingSomethingTheHandFeelsTowardsTheRaisedGround)
 	const glm::vec3 camera(0.0f, 10.0f, 0.0f);
 	const glm::vec3 cursor = glm::normalize(glm::vec3(1.0f, -1.0f, 0.0f));
 	EXPECT_EQ(hand_feel::FeelDirection(camera, cursor, std::nullopt), cursor);
-	const auto towards = hand_feel::FeelDirection(camera, cursor, glm::vec3(10.0f, 5.0f, 0.0f));
+	const auto towards =
+	    hand_feel::FeelDirection(camera, cursor, hand_feel::RaisedGround {.ground = {10.0f, 0.0f, 0.0f}, .lift = 5.0f});
 	EXPECT_NEAR(towards.x, glm::normalize(glm::vec3(10.0f, -5.0f, 0.0f)).x, 1e-6f);
 	EXPECT_NEAR(glm::length(towards), 1.0f, 1e-6f);
 }

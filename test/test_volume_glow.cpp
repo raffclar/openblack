@@ -104,16 +104,18 @@ TEST(VolumeGlowRules, TheGamesTimeIsATenthOfASecondATurnAndTheMillisecondsIntoTh
 
 TEST(VolumeGlowRules, TheViewNormalIsWidenedByTheProjectionThenEachAxisMadeOneLong)
 {
+	// The 3D engine makes the axes one long by a table guess of the inverse square root, which is near but not exact
+	constexpr float k_TableEpsilon = 1e-4f;
 	const std::array<glm::vec3, 3> level {glm::vec3 {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
 	// Axes along the camera's own are left as they are
 	const auto side = volume_glow::ViewNormal({1.0f, 0.0f, 0.0f}, level, {1.43f, 1.79f});
-	EXPECT_NEAR(side.x, 1.0f, k_Epsilon);
-	EXPECT_NEAR(side.y, 0.0f, k_Epsilon);
+	EXPECT_NEAR(side.x, 1.0f, k_TableEpsilon);
+	EXPECT_NEAR(side.y, 0.0f, k_TableEpsilon);
 	// An axis half towards the camera leans across once widened
 	const std::array<glm::vec3, 3> turned {glm::vec3 {0.6f, 0.0f, 0.8f}, {0.0f, 1.0f, 0.0f}, {-0.8f, 0.0f, 0.6f}};
 	const auto leaning = volume_glow::ViewNormal({1.0f, 0.0f, 0.0f}, turned, {2.0f, 2.0f});
-	EXPECT_NEAR(leaning.x, 1.2f / std::sqrt(1.44f + 0.64f), k_Epsilon);
-	EXPECT_NEAR(leaning.z, 0.8f / std::sqrt(1.44f + 0.64f), k_Epsilon);
+	EXPECT_NEAR(leaning.x, 1.2f / std::sqrt(1.44f + 0.64f), k_TableEpsilon);
+	EXPECT_NEAR(leaning.z, 0.8f / std::sqrt(1.44f + 0.64f), k_TableEpsilon);
 }
 
 TEST(VolumeGlowRules, TheInnerEdgeGlowsTheMoreSideOnItIsSeen)

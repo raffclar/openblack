@@ -23,6 +23,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/SkeletalAnimation.h"
+#include "Common/X87Matrix.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureHair.h"
@@ -187,13 +188,32 @@ struct CreatureRig
 /// The matrix the renderer places a creature's mesh with: scaled, then turned and moved
 [[nodiscard]] glm::mat4 PlacementMatrix(const glm::vec3& position, const glm::mat3& rotation, const glm::vec3& scale);
 
+/// The order in which a vertex's three products with the axes of its bone are added, for each vertex of a triangle and
+/// each world axis: three axis indices (0 x, 1 y, 2 z) each. The game adds them in different orders in different places,
+/// and the order changes the last bit of the sum.
+using PlacingOrder = std::array<x87::AxisOrders, 3>;
+
+/// The order for a point on the skin: the eyes, the hair that is not turned
+inline constexpr PlacingOrder k_SkinPointOrder {{
+    {{{1, 2, 0}, {1, 2, 0}, {1, 2, 0}}},
+    {{{2, 1, 0}, {0, 2, 1}, {0, 2, 1}}},
+    {{{2, 1, 0}, {2, 1, 0}, {2, 1, 0}}},
+}};
+
+/// The order for the root of a hair strand that is turned in the frame of its bones
+inline constexpr PlacingOrder k_TurnedHairOrder {{
+    {{{2, 1, 0}, {2, 1, 0}, {2, 1, 0}}},
+    {{{0, 2, 1}, {0, 2, 1}, {0, 2, 1}}},
+    {{{0, 2, 1}, {0, 2, 1}, {0, 2, 1}}},
+}};
+
 /// A triangle of the body as it is drawn this frame, in the world: each vertex blended between the meshes as the body
-/// is, then placed by its bone's posed matrix and the creature's placement. vertices are the triangle's in each mesh,
-/// in the space of the bone that moves each.
+/// is, then placed by its bone's posed matrix and the creature's placement, with the sums in the given order. vertices
+/// are the triangle's in each mesh, in the space of the bone that moves each.
 [[nodiscard]] std::array<glm::vec3, 3>
 PosedTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCount>& vertices,
               const std::array<uint32_t, 3>& bones, const creature_morph::Morph& morph, std::span<const glm::mat4> boneMatrices,
-              const glm::mat4& placement);
+              const glm::mat4& placement, const PlacingOrder& order);
 
 /// The world matrix of a bone as posed this frame, the creature's placement included; the placement alone for a bone
 /// the pose lacks

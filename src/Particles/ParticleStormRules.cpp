@@ -27,6 +27,7 @@
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleShields.h"
 #include "ParticleSounds.h"
@@ -34,6 +35,7 @@
 
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -568,8 +570,7 @@ private:
 		swirl.radius = params.maxRadius;
 		// It heads the way it was cast at its top speed; cast looking straight down, it stays where it is
 		const auto heading = Heading(effect);
-		const float length = glm::length(heading);
-		swirl.velocity = length != 0.0f ? heading * (maxSpeed / length) : glm::vec3(0.0f);
+		swirl.velocity = heading != glm::vec3(0.0f) ? x87::Scaled<x87::SumOrder::Zyx>(heading, maxSpeed) : glm::vec3(0.0f);
 		const auto* spriteCreator = effect.FindCreator(creator);
 		for (int i = 0; i < count; ++i)
 		{

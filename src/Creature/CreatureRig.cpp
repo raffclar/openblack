@@ -82,7 +82,8 @@ std::vector<glm::vec3> creature::TurnPoseBones(std::span<const glm::vec3> lastTu
 
 std::array<glm::vec3, 3> creature::PosedTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCount>& vertices,
                                                  const std::array<uint32_t, 3>& bones, const creature_morph::Morph& morph,
-                                                 std::span<const glm::mat4> boneMatrices, const glm::mat4& placement)
+                                                 std::span<const glm::mat4> boneMatrices, const glm::mat4& placement,
+                                                 const PlacingOrder& order)
 {
 	const auto evilGood = morph.evilGood < 0.0f ? CreatureRig::Mesh::Evil : CreatureRig::Mesh::Good;
 	const auto thinFat = morph.thinFat < 0.0f ? CreatureRig::Mesh::Thin : CreatureRig::Mesh::Fat;
@@ -93,7 +94,7 @@ std::array<glm::vec3, 3> creature::PosedTriangle(const std::array<std::array<glm
 		const auto vertexOf = [&vertices, i](CreatureRig::Mesh mesh) { return vertices.at(static_cast<size_t>(mesh)).at(i); };
 		const auto local = creature_morph::Blend(vertexOf(CreatureRig::Mesh::Base), vertexOf(evilGood), vertexOf(thinFat),
 		                                         vertexOf(weakStrong), morph);
-		world.at(i) = glm::vec3(PosedBone(bones.at(i), boneMatrices, placement) * glm::vec4(local, 1.0f));
+		world.at(i) = x87::TransformPoint(PosedBone(bones.at(i), boneMatrices, placement), local, order.at(i));
 	}
 	return world;
 }

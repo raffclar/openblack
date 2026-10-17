@@ -2638,7 +2638,8 @@ bool Game::Update() noexcept
 					// of, or else on the land, turned to its slope
 					const auto [eye, nearPoint] =
 					    camera.OnNearPlane(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize));
-					const auto cursorDirection = glm::normalize(nearPoint - eye);
+					const auto cursorDirection =
+					    hand_feel::CursorDirection(eye, nearPoint, hand_feel::HoverLimit(HandHoverInputs(eye)));
 					_handSurfaceUp.reset();
 					_handOverObject = false;
 					std::optional<glm::vec3> rest;
@@ -2662,15 +2663,16 @@ bool Game::Update() noexcept
 						});
 						// Holding something, the hand feels along the line to the cursor's point on the land, raised by
 						// its lift for what it holds
-						std::optional<glm::vec3> raisedGround;
+						std::optional<hand_feel::RaisedGround> raisedGround;
 						if (held.has_value())
 						{
-							raisedGround = pick.land.value_or(_handPosition) + glm::vec3(0.0f, grab.GetCursorRaise(), 0.0f);
+							raisedGround = hand_feel::RaisedGround {.ground = pick.land.value_or(_handPosition),
+							                                        .lift = grab.GetCursorRaise()};
 						}
 						const auto feltDirection = hand_feel::FeelDirection(eye, cursorDirection, raisedGround);
 						if (feel == hand_feel::Feel::AtPosition)
 						{
-							rest = hand_feel::RestAtPosition(eye, cursorDirection, feltDirection,
+							rest = hand_feel::RestAtPosition(eye, nearPoint, feltDirection,
 							                                 registry.Get<const ecs::components::Transform>(object).position,
 							                                 ecs::systems::object_measures::TwoDRadius(registry, object));
 							_handOverObject = true;
@@ -2761,7 +2763,7 @@ bool Game::Update() noexcept
 				else
 				{
 					OrientHand(handTransform, glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection),
-					           intersectionTransform.rotation * glm::vec3(0.0f, 1.0f, 0.0f),
+					           _handSurfaceUp.value_or(glm::vec3(0.0f, 1.0f, 0.0f)),
 					           std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 				}
 				PlaceHand(handTransform, std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
@@ -5776,6 +5778,20 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	}
 	_handHoldZoomer.Reset(_handDistance);
 
+	// The cursor's point on the near plane, which the hand's line of sight goes through
+	std::optional<glm::vec3> cursorNearPoint;
+	auto lineEye = eye;
+	if (Locator::windowing::has_value())
+	{
+		const auto size = Locator::windowing::value().GetSize();
+		if (size.x > 0 && size.y > 0)
+		{
+			const auto line = camera.OnNearPlane(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(size));
+			lineEye = line.eye;
+			cursorNearPoint = line.point;
+		}
+	}
+
 	// The game puts the origin of the hand, by its fingertips, on the line of sight through the cursor, so the hand is
 	// always under the cursor on screen. How far along it depends on the land the cursor is over. Turning the camera
 	// with the mouse holds the cursor still, so the hand stays where it is on screen and eases to the land coming under
@@ -5792,20 +5808,13 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		// The furthest the hand may be is the land less its height, so its fingers hang down to the land, or the
 		// water over the sea; holding something, the land itself. Over a thing it eases to where it rests on the thing,
 		// touching it.
-		const bool holding = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldPose().has_value();
-		const auto overSea =
-		    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
-		const auto hover = hand_feel::HoverDistancesOf({
-		    .camera = eye,
-		    .land = _cursorLand,
-		    .landIsSea = overSea,
-		    .holding = holding,
-		    .restOnThing = _handRestOnThing,
-		    .handHeight = k_HandHeight * HandAnimation::SizeAtDistance(_handDistance),
-		    .currentDistance = _handDistance,
-		    .minDistance = k_HandMinDistance,
-		    .reach = handReach,
-		});
+		auto inputs = HandHoverInputs(lineEye);
+		inputs.restOnThing = _handRestOnThing;
+		if (cursorNearPoint.has_value())
+		{
+			inputs.cursorPoint = hand_feel::PointAlongCursor(lineEye, *cursorNearPoint, hand_feel::HoverLimit(inputs));
+		}
+		const auto hover = hand_feel::HoverDistancesOf(inputs);
 
 		// The hand eases out slowly away from the camera and quickly towards it, but not while it pulls a thing out of
 		// the ground: the pull places it then
@@ -5813,9 +5822,30 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		hand_feel::EaseHover(_handHoverZoomer, hover.target, deltaSeconds, pulling);
 		_handDistance = glm::clamp(glm::min(_handHoverZoomer.GetValue(), hover.limit), k_HandMinDistance, handReach);
 	}
-	_handPosition = eye + _handRayDirection * _handDistance;
+	// The hand is on the line of sight through the cursor at its distance
+	_handPosition = cursorNearPoint.has_value() ? hand_feel::PointAlongCursor(lineEye, *cursorNearPoint, _handDistance)
+	                                            : eye + _handRayDirection * _handDistance;
 	_handCrossFade.Update(deltaSeconds);
 	handTransform.position = _handCrossFade.Apply(_handPosition);
+}
+
+hand_feel::Hover Game::HandHoverInputs(glm::vec3 eye) const
+{
+	const bool holding = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldPose().has_value();
+	const auto overSea =
+	    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
+	return {
+	    .camera = eye,
+	    .land = _cursorLand,
+	    .landIsSea = overSea,
+	    .holding = holding,
+	    .restOnThing = std::nullopt,
+	    .cursorPoint = std::nullopt,
+	    .handHeight = k_HandHeight * HandAnimation::SizeAtDistance(_handDistance),
+	    .currentDistance = _handDistance,
+	    .minDistance = k_HandMinDistance,
+	    .reach = Locator::cameraHelpSystem::value().Get().handReach,
+	};
 }
 
 void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
@@ -6045,7 +6075,7 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 			{
 				up = hand_navigation_pose::UpTowardsFocus(_cursorWorldPosition.value_or(_handPosition), camera.GetFocus());
 			}
-			_handUp.SetDestination(up, k_UpEaseSeconds);
+			_handUp.SetDestination(hand_feel::UnitUp(up), k_UpEaseSeconds);
 		}
 		_handUp.Update(deltaSeconds);
 	}
@@ -6056,7 +6086,7 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	{
 		_handUp.Reset(glm::vec3(0.0f, 1.0f, 0.0f));
 	}
-	const auto up = _handUp.GetValue();
+	const auto up = hand_feel::UnitUp(_handUp.GetValue());
 	const auto onLevelLand = TurnToHeading(facingCamera, cameraHeading, _handHeading);
 	_handOnLevelLand = onLevelLand;
 	handTransform.rotation = glm::length(up) > 0.0f ? StandOnSlope(onLevelLand, _handHeading, up) : onLevelLand;
