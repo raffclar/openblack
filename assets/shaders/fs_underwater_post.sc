@@ -933,7 +933,7 @@ void main()
 				// does not draw a line that the original coast does not have
 				float foam = Foam(surfacePoint.xz, max(min(thickness, waterDepth), 0.0f), t) * (1.0f - originalLand);
 				// The shore wave breaks on its face as it comes in, from 20 units out to the edge of the water
-				float breaking = face * (1.0f - smoothstep(1.0f, 10.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth) *
+				float breaking = face * (1.0f - smoothstep(4.0f, 20.0f, shore.x)) * smoothstep(0.0f, 0.15f, waterDepth) *
 				                 (1.0f - cliff);
 				foam = max(foam, breaking * smoothstep(0.33f, 0.63f, UwFoamNoise(surfacePoint.xz * 2.6f + t * 0.3f)));
 				// At the foot of a cliff: a thick band of boiling white water against the rock, and broad sheets of foam

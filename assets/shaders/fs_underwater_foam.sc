@@ -59,7 +59,7 @@ void main()
 	float wet = smoothstep(-0.05f, 0.05f, waterDepth);
 	float cliff = UwShoreCliff(shore);
 	// The face of the shore wave as it breaks, and the edge of the water as it runs up the beach
-	float breaking = face * (1.0f - smoothstep(1.0f, 12.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth);
+	float breaking = face * (1.0f - smoothstep(4.0f, 20.0f, shore.x)) * smoothstep(0.0f, 0.15f, waterDepth);
 	float edge = (1.0f - smoothstep(0.0f, 0.06f, waterDepth)) * wet * (1.0f - cliff) * (1.0f - smoothstep(2.0f, 8.0f, abs(shore.x)));
 	// At the foot of a cliff: a band of foam that never clears, and a push of foam from each crash, at the time and the
 	// place where the crash drives its cloud of air under the water
