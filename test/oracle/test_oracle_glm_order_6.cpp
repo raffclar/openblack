@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "Camera/TempleCameraModel.h"
 #include "Common/X87Matrix.h"
 #include "OracleData.h"
 #include "Particles/ParticleEffect.h"
@@ -316,6 +317,71 @@ TEST(OracleGlmOrder6, APointOfAParticleHierarchy)
 		std::string text;
 		mismatches.Check(SameBits(row, {"owx", "owy", "owz", "olx", "oly", "olz"},
 		                          {world.x, world.y, world.z, local.x, local.y, local.z}, text),
+		                 index, text);
+	}
+	EXPECT_EQ(mismatches.Count(), 0u);
+}
+
+TEST(OracleGlmOrder6, TheCreatureRoomLook)
+{
+	const auto table = oracle::Table::Load("look_point.txt");
+	ASSERT_TRUE(table.has_value());
+	Mismatches mismatches;
+	for (size_t index = 0; index < table->Rows(); ++index)
+	{
+		const Row row {*table, index};
+		if (row.F("distance") != 20.0f)
+		{
+			continue;
+		}
+		// The look's focus is the game's point mirrored through the camera
+		const auto from = row.Vec("px", "py", "pz");
+		const auto point = row.Vec("ox", "oy", "oz");
+		const auto mirrored = (from - point) + from;
+		const auto pose = TempleCameraModel::LookPose(from, row.F("heading"), row.F("pitch"));
+		std::string text;
+		const bool same = std::bit_cast<uint32_t>(pose.focus.x) == std::bit_cast<uint32_t>(mirrored.x) &&
+		                  std::bit_cast<uint32_t>(pose.focus.y) == std::bit_cast<uint32_t>(mirrored.y) &&
+		                  std::bit_cast<uint32_t>(pose.focus.z) == std::bit_cast<uint32_t>(mirrored.z);
+		if (!same)
+		{
+			text = " focus " + oracle::Hex(pose.focus.x) + " " + oracle::Hex(pose.focus.y) + " " + oracle::Hex(pose.focus.z);
+		}
+		mismatches.Check(same, index, text);
+	}
+	EXPECT_EQ(mismatches.Count(), 0u);
+}
+
+TEST(OracleGlmOrder6, TheCameraHeadingAndPitch)
+{
+	const auto table = oracle::Table::Load("heading_pitch.txt");
+	ASSERT_TRUE(table.has_value());
+	Mismatches mismatches;
+	for (size_t index = 0; index < table->Rows(); ++index)
+	{
+		const Row row {*table, index};
+		const auto angles = TempleCameraModel::HeadingAndPitch({row.Vec("ax", "ay", "az"), row.Vec("bx", "by", "bz")});
+		std::string text;
+		mismatches.Check(SameBits(row, {"heading", "pitch"}, {angles.x, angles.y}, text), index, text);
+	}
+	EXPECT_EQ(mismatches.Count(), 0u);
+}
+
+TEST(OracleGlmOrder6, ARoomOfPicturesCamera)
+{
+	const auto table = oracle::Table::Load("picture_pose.txt");
+	ASSERT_TRUE(table.has_value());
+	Mismatches mismatches;
+	for (size_t index = 0; index < table->Rows(); ++index)
+	{
+		const Row row {*table, index};
+		const auto room = row.U("around") != 0 ? TempleRoom::Credits : TempleRoom::Options;
+		const auto pose =
+		    TempleCameraModel::PictureOrbitPose(room, row.F("yaw"), row.F("lean"), row.F("height"), row.Vec("ex", "ey", "ez"));
+		std::string text;
+		mismatches.Check(SameBits(row, {"ox", "oy", "oz", "fx", "fy", "fz"},
+		                          {pose.origin.x, pose.origin.y, pose.origin.z, pose.focus.x, pose.focus.y, pose.focus.z},
+		                          text),
 		                 index, text);
 	}
 	EXPECT_EQ(mismatches.Count(), 0u);

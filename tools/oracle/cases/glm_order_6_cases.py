@@ -16,6 +16,9 @@
 - matrix_products.txt: the 3D engine's two matrix products (a matrix times a second one, and a second one put in front)
 - axis_turn.txt: the 3D engine's turn about an axis by an angle (a quaternion made into a matrix)
 - hierarchy_points.txt: a point of a particle hierarchy moved into the world and a point of the world moved into it
+- look_point.txt: the camera's point at a distance, heading and pitch from a point (the creature room's look)
+- heading_pitch.txt: the camera's heading and pitch from one point to another
+- picture_pose.txt: a room of pictures' camera place and focus at a turn, lean and height
 
 Usage: python tools/oracle/cases/glm_order_6_cases.py [output folder]   (default: test/oracle/data)
 The random inputs come from a fixed seed, so a second run gives the same files (except the date line).
@@ -43,6 +46,9 @@ PRE_PRODUCT = 0x7FAE60  # fastcall (ECX matrix, in and out; EDX the matrix put i
 AXIS_TURN = 0x57D1D0  # cdecl (angle, axis, out)
 LOCAL_TO_GLOBAL = 0x6751D0  # thiscall (collection), (point, in and out)
 GLOBAL_TO_LOCAL = 0x675410  # thiscall (collection), (point, in and out)
+LOOK_POINT = 0x442810  # cdecl (out, from, distance, heading, pitch)
+HEADING_PITCH = 0x4428D0  # cdecl (origin, focus, out heading, out pitch)
+PICTURE_POSE = 0x785580  # thiscall (picture room camera), (out place, out focus, centre)
 DT = 0xD4E0EC  # the step time, float
 CAMERA_AXES = 0xEA1D28  # the camera's 3x3 turn, rows
 
@@ -281,6 +287,79 @@ def hierarchy_cases(oracle: Oracle) -> list[list[int]]:
     return rows
 
 
+def look_point_cases(oracle: Oracle) -> list[list[int]]:
+    rng = random.Random(0x100C)
+    o = oracle
+    out = o.alloc(0x10)
+    start = o.alloc(0x10)
+    rows = []
+    for _ in range(1500):
+        point = [rand_float(rng, -200.0, 200.0) for _ in range(3)]
+        distance = rng.choice([f2u(20.0), rand_float(rng, 0.5, 100.0)])
+        heading = rand_float(rng, -0.5, 6.8)
+        pitch = rand_float(rng, -1.5, 1.5)
+        o.write_u32(start, *point)
+        o.call(LOOK_POINT, args=[out, start, distance, heading, pitch])
+        rows.append(point + [distance, heading, pitch] + o.read_u32(out, 3))
+    return rows
+
+
+def heading_pitch_cases(oracle: Oracle) -> list[list[int]]:
+    rng = random.Random(0x4EAD)
+    o = oracle
+    origin = o.alloc(0x10)
+    focus = o.alloc(0x10)
+    heading = o.alloc(4)
+    pitch = o.alloc(4)
+    rows = []
+    for index in range(1500):
+        a = [rand_float(rng, -200.0, 200.0) for _ in range(3)]
+        b = [rand_float(rng, -200.0, 200.0) for _ in range(3)]
+        if index % 9 == 0:
+            b[0] = a[0]
+            b[2] = a[2]
+        o.write_u32(origin, *a)
+        o.write_u32(focus, *b)
+        o.call(HEADING_PITCH, args=[origin, focus, heading, pitch])
+        rows.append(a + b + o.read_u32(heading, 1) + o.read_u32(pitch, 1))
+    return rows
+
+
+def picture_pose_cases(oracle: Oracle) -> list[list[int]]:
+    rng = random.Random(0x91C7)
+    o = oracle
+    camera = o.alloc(0x560)
+    out_origin = o.alloc(0x10)
+    out_focus = o.alloc(0x10)
+    centre = o.alloc(0x10)
+    rooms = [
+        # place low, place high, focus low, focus high (the options room and the credits room)
+        [0.0, -7.0, 20.0, 0.0, 7.0, 20.0, 0.0, 6.0, -4.0, 0.0, -6.0, -4.0],
+        [0.0, -0.1, 0.1, 0.0, 0.1, 0.1, 0.0, 0.5, -1.0, 0.0, -0.5, -1.0],
+    ]
+    rows = []
+    for index in range(1500):
+        around = index % 2
+        vectors = [f2u(value) for value in rooms[around]]
+        yaw = rand_float(rng, -7.0, 7.0)
+        lean = rand_float(rng, 0.0, 1.0)
+        height = rand_float(rng, 0.0, 80.0)
+        middle = [f2u(87.0), 0, f2u(87.0)]  # the options room's centre
+        path_end = [rand_float(rng, -150.0, 150.0) for _ in range(3)]
+        o.write_u32(camera + 0x518, *vectors)
+        o.write(camera + 0x548, bytes([around, 0, 0, 0]))
+        o.write_u32(camera + 0x54C, *path_end)
+        o.write_u32(camera + 0x46C, yaw)
+        o.write_u32(camera + 0x49C, lean)
+        o.write_u32(camera + 0x4CC, height)
+        o.write_u32(camera + 0x450, 0)
+        o.write_u32(centre, *middle)
+        o.call(PICTURE_POSE, this=camera, args=[out_origin, out_focus, centre])
+        rows.append([around] + vectors + [yaw, lean, height] + middle + path_end + o.read_u32(out_origin, 3)
+                    + o.read_u32(out_focus, 3))
+    return rows
+
+
 def main() -> int:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "test" / "oracle" / "data"
     with Oracle() as oracle:
@@ -291,6 +370,9 @@ def main() -> int:
         products = product_cases(oracle)
         turns = axis_turn_cases(oracle)
         points = hierarchy_cases(oracle)
+        looks = look_point_cases(oracle)
+        headings = heading_pitch_cases(oracle)
+        pictures = picture_pose_cases(oracle)
     write_pinned(out / "tumble.txt", "A tumbling particle's turn in one step",
                  ["whether the speed is held to the most, the tumble speed, the most, the step time, the velocity and",
                   "the rows in; the turned rows out"],
@@ -329,6 +411,17 @@ def main() -> int:
                   "in the world and the world point in the hierarchy out"],
                  ["h0", "h1", "h2"] + frame_columns + ["lx", "ly", "lz", "wx", "wy", "wz", "owx", "owy", "owz", "olx",
                                                        "oly", "olz"], points)
+    write_pinned(out / "look_point.txt", "The camera's point at a distance, heading and pitch from a point",
+                 ["the point, the distance, the heading and the pitch in; the new point out"],
+                 ["px", "py", "pz", "distance", "heading", "pitch", "ox", "oy", "oz"], looks)
+    write_pinned(out / "heading_pitch.txt", "The camera's heading and pitch from one point to another",
+                 ["the place and the focus in; the heading and the pitch out"],
+                 ["ax", "ay", "az", "bx", "by", "bz", "heading", "pitch"], headings)
+    write_pinned(out / "picture_pose.txt", "A room of pictures' camera place and focus",
+                 ["whether it turns about the path end, the low and high places and focuses, the turn, the lean, the",
+                  "height, the room's centre and the path end in; the place and the focus out"],
+                 ["around"] + [f"v{i}" for i in range(12)] + ["yaw", "lean", "height", "cx", "cy", "cz", "ex", "ey",
+                                                               "ez", "ox", "oy", "oz", "fx", "fy", "fz"], pictures)
     print(f"tumble {len(tumbles)}, orient_sprite {len(sprites)}, initial_spin {len(spins)}, vapour_turn {len(vapours)}, "
           f"matrix_products {len(products)}, axis_turn {len(turns)}, hierarchy_points {len(points)}")
     return 0
