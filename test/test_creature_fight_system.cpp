@@ -363,8 +363,11 @@ TEST_F(CreatureFightSystemTest, AKnockOutThatNoBlowMadeGivesNoSightOfAFightWon)
 {
 	Locator::reactionSystem::emplace<RecordedReactions>();
 	auto& reactions = static_cast<RecordedReactions&>(Locator::reactionSystem::value());
-	// A miracle or a loss of life knocks the loser out, not a blow. The faint alone makes a reaction, as to a death.
+	// A miracle or a loss of life knocks the loser out, not a blow. The faint alone makes a reaction, as to a death, on
+	// the turn that it starts on the body.
 	fights.KnockOut(second);
+	EXPECT_TRUE(reactions.made.empty());
+	fights.ProcessTurn();
 	ASSERT_EQ(reactions.made.size(), 1u);
 	EXPECT_EQ(reactions.made.front().type, Reaction::ReactToDeath);
 	EXPECT_EQ(reactions.made.front().initiator, second);
@@ -748,7 +751,8 @@ TEST_F(CreatureFightSystemTest, TheGameChoosesTheTauntsAndEachTryDrawsASide)
 	Locator::gameRandom::reset();
 }
 
-// A faint cuts what the body plays at once and lies on the side that one draw of the game's random numbers chooses
+// A faint starts on the body on the next turn of the knock-out. It cuts what the body plays and lies on the side that
+// one draw of the game's random numbers chooses then.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureFightSystemTest, AFaintCutsTheBodyAndDrawsItsSide)
 {
@@ -757,6 +761,9 @@ TEST_F(CreatureFightSystemTest, AFaintCutsTheBodyAndDrawsItsSide)
 	game.numbers = {1};
 	registry.Get<CreatureAnimation>(second).body.kind = creature_layers::BodyAction::Kind::Once;
 	fights.ForceFaint(second);
+	EXPECT_TRUE(game.ranges.empty());
+	EXPECT_EQ(registry.Get<const CreatureAnimation>(second).body.kind, creature_layers::BodyAction::Kind::Once);
+	fights.ProcessTurn();
 	const auto& body = registry.Get<const CreatureAnimation>(second).body;
 	EXPECT_EQ(body.kind, creature_layers::BodyAction::Kind::Sequence);
 	EXPECT_TRUE(body.mirrored);

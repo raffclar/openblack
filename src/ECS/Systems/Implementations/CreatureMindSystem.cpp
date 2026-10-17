@@ -635,6 +635,11 @@ void KeepPaceWithAgenda(entt::entity creature, CreatureMindState& mind)
 
 bool Move(entt::entity creature, const creature_mind::Commands& commands)
 {
+	// A start that cuts the body also stops what the hands do, such as a catch or a let-go. The hand keeps what it holds.
+	if (commands.cutBody && Locator::creatureObjectActionSystem::has_value())
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
 	if (!Locator::creatureLocomotionSystem::has_value())
 	{
 		return false;
@@ -1826,6 +1831,13 @@ void GiveUpTakenFood(ecs::Registry& registry, CreatureMindState& mind)
 	static_cast<void>(Locator::resourceStoreSystem::value().RemoveResource(pile, ResourceType::Food, pot->amount));
 }
 
+/// Whether the creature holds a thing in its left hand
+bool HeldLeft(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
+	return held != nullptr && held->mirrored;
+}
+
 creature_mind::HandsState HandsOf(entt::entity creature)
 {
 	if (!Locator::creatureObjectActionSystem::has_value())
@@ -2227,6 +2239,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .better = needs != nullptr && creature_mind::IsBetter(needs->needs.life, needs->needs.exhaustion),
 		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
 		        .held = inHand.has_value() ? std::optional(entt::to_integral(*inHand)) : std::nullopt,
+		        .heldLeft = HeldLeft(registry, entity),
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
 		        .objectMoving = WaitedForMoving(registry, mind.idle),
 		        .objectBusy = WaitedForBusy(registry, mind.idle),
@@ -2405,11 +2418,11 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    HealItself(registry, entity);
 		    }
-		    // It faints, and those near it react as to a death
+		    // It faints, and those near it react as to a death. The reaction belongs to no player.
 		    if (commands.fainted && Locator::reactionSystem::has_value())
 		    {
 			    Locator::reactionSystem::value().Create(
-			        {.initiator = entity, .type = Reaction::ReactToDeath, .position = transform.position});
+			        {.initiator = entity, .type = Reaction::ReactToDeath, .position = transform.position, .playerless = true});
 		    }
 		    if (commands.effect == creature_mind::Effect::RanAway)
 		    {

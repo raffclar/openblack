@@ -9,6 +9,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <gtest/gtest.h>
 
 #define LOCATOR_IMPLEMENTATIONS
@@ -43,8 +45,9 @@ Step StepOf(uint32_t start)
 
 // The mind starts a step as the game's body does: it picks the side from the game's random numbers with the same draw,
 // and it makes the draw also when the busy body refuses the start. A faint starts also on a busy body. On a body that a
-// script set to real time, a static action starts on the right side. A step with a thing in the hand is not compared:
-// these steps start with empty hands.
+// script set to real time, a static action starts on the right side. A step with a thing in the hand is a step that
+// started to let go of the thing on an earlier turn: an action then makes no draw and plays on the side of the free
+// hand.
 TEST(OracleCreatureStartSide, TheMindPicksTheSideAsTheGameDoes)
 {
 	const auto table = oracle::Table::Load("creature_start_side.txt");
@@ -54,19 +57,17 @@ TEST(OracleCreatureStartSide, TheMindPicksTheSideAsTheGameDoes)
 	const auto busy = table->Column("busy");
 	const auto slowed = table->Column("slowed");
 	const auto holds = table->Column("holds");
+	const auto heldLeft = table->Column("held_left");
 	const auto started = table->Column("started");
 	const auto side = table->Column("side");
 	const auto seedAfter = table->Column("seed_after");
-	ASSERT_TRUE(start && seed && busy && slowed && holds && started && side && seedAfter);
+	ASSERT_TRUE(start && seed && busy && slowed && holds && heldLeft && started && side && seedAfter);
 	size_t compared = 0;
 	for (size_t row = 0; row < table->Rows(); ++row)
 	{
 		const auto kind = table->Bits(row, *start);
 		const bool isBusy = table->Bits(row, *busy) != 0;
-		if (table->Bits(row, *holds) != 0)
-		{
-			continue;
-		}
+		const bool isHolding = table->Bits(row, *holds) != 0;
 		GameRandomProduction game;
 		game.SetSeeds({.synced = table->Bits(row, *seed)});
 		const creature_mind::Random gameRandom = [&game](uint32_t range) { return game.GameRand(range); };
@@ -74,7 +75,17 @@ TEST(OracleCreatureStartSide, TheMindPicksTheSideAsTheGameDoes)
 		creature_mind::IdleMind mind;
 		mind.activity = creature_mind::Activity::Told;
 		mind.agenda = {StepOf(kind)};
-		const creature_mind::Senses senses {.seconds = 0.1f, .bodyBusy = isBusy, .realTime = table->Bits(row, *slowed) != 0};
+		if (isHolding)
+		{
+			mind.handsChecked = creature_mind::IdleMind::StepRef {.serial = mind.serial, .step = 0};
+		}
+		const creature_mind::Senses senses {
+		    .seconds = 0.1f,
+		    .bodyBusy = isBusy,
+		    .realTime = table->Bits(row, *slowed) != 0,
+		    .held = isHolding ? std::optional<uint32_t>(7) : std::nullopt,
+		    .heldLeft = isHolding && table->Bits(row, *heldLeft) != 0,
+		};
 		const auto commands = creature_mind::Think(mind, senses, mindRandom, gameRandom);
 		const bool gameStarted = table->Bits(row, *started) != 0;
 		EXPECT_EQ(mind.stepStarted, gameStarted) << "row " << row;
@@ -87,5 +98,5 @@ TEST(OracleCreatureStartSide, TheMindPicksTheSideAsTheGameDoes)
 		EXPECT_EQ(game.GetSeeds().synced, table->Bits(row, *seedAfter)) << "row " << row;
 		++compared;
 	}
-	EXPECT_GE(compared, 70u);
+	EXPECT_EQ(compared, table->Rows());
 }

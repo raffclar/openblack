@@ -31,6 +31,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMorph.h"
@@ -118,12 +119,16 @@ constexpr float k_BaseCost = 5000.0f;
 constexpr float k_TurningJoinAhead = 0.05f;
 /// A new destination this close to the current one carries on the same walk
 constexpr float k_SameDestination = 0.1f;
-/// Fidgets while waiting for a route: the first comes after this long, a look about is followed by a longer wait, and
-/// a puzzled face is held this long
-constexpr float k_FidgetMs = 3000.0f;
-constexpr float k_LookAboutFidgetMs = 6000.0f;
+/// Waiting for a route, a puzzled face is held this long
 constexpr float k_PuzzledMs = 2000.0f;
 constexpr size_t k_PuzzledFace = creature_layers::animations::k_FirstFace + 6;
+
+/// A number from 0 up to the range, not including it, from the game's random numbers. Without them it is 0.
+uint32_t GameRand(uint32_t range)
+{
+	return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : 0u;
+}
+
 /// Following something, the walk is pointed anew once it has moved this far from where the walk heads
 constexpr float k_FollowRetarget = 1.0f;
 /// Running away, a creature goes up to this much further than its species' distance, and looks this far round the
@@ -771,7 +776,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 	self.ring = locomotion::MoveRing(distance, minDistance, maxDistance);
 	self.ontoDestination = ontoDestination;
 	self.destination = point;
-	self.fidgetMs = k_FidgetMs;
+	self.fidgetMs = locomotion::k_FidgetMs;
 	self.fidgeted = false;
 	// The head looks ahead along the new search at once
 	self.routeLook.countdownMs = 0;
@@ -1148,27 +1153,27 @@ void CreatureLocomotionSystem::ProcessTurn()
 				    }
 				    break;
 			    }
-			    self.fidgetMs -= k_TurnMs;
-			    if (self.fidgetMs <= 0.0f)
 			    {
-				    // The first fidget is always a look about
-				    const auto choice = self.fidgeted ? std::uniform_int_distribution<uint32_t>(0, 2)(_random) : 0u;
-				    self.fidgeted = true;
-				    self.fidgetMs = k_FidgetMs;
-				    if (choice == 0)
-				    {
-					    self.fidgetMs = k_LookAboutFidgetMs;
-				    }
-				    else if (choice == 1)
+				    // The wait counts down at the rate that the body plays its clips
+				    locomotion::FidgetWait wait {.ms = self.fidgetMs, .fidgeted = self.fidgeted};
+				    const auto turn = locomotion::WaitTurn(
+				        wait, k_TurnMs * creature_layers::BodyRate(ShownSize(creature), animation.realTime),
+				        !creature_layers::IsPlaying(animation.body), GameRand);
+				    self.fidgetMs = wait.ms;
+				    self.fidgeted = wait.fidgeted;
+				    if (turn.fidget == locomotion::Fidget::Puzzled)
 				    {
 					    animation.face =
 					        creature_layers::PullFace(animation.face, k_PuzzledFace, k_PuzzledMs, creature_face::Cue::Lost);
 				    }
-				    else if (auto confused = creature_layers::PlayOnce(animation.body, creature_layers::animations::k_Confused,
-				                                                       std::bernoulli_distribution(0.5)(_random)))
+				    else if (turn.fidget == locomotion::Fidget::Confused)
 				    {
-					    animation.body = *confused;
-					    self.motion = Motion::Confused;
+					    if (auto confused = creature_layers::PlayOnce(animation.body, creature_layers::animations::k_Confused,
+					                                                  turn.mirrored))
+					    {
+						    animation.body = *confused;
+						    self.motion = Motion::Confused;
+					    }
 				    }
 			    }
 			    break;
