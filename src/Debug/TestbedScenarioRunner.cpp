@@ -167,6 +167,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
+#include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerBreeding.h"
 #include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
@@ -1923,6 +1924,23 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return fmt::format("{} wood poured at ({:.1f}, {:.1f}): {}", amount, at.x, at.y,
 		                   loose() > before ? "left on the land as a new pile" : "taken in");
 	}
+	case Kind::SayLine:
+	{
+		if (!Locator::helpSpeechSystem::has_value())
+		{
+			return "no speech";
+		}
+		const auto text = static_cast<uint32_t>(command.value);
+		if (!command.ctrl)
+		{
+			Locator::helpSpeechSystem::value().Say(text, audio::SpeechVoice::First, std::nullopt);
+			return fmt::format("line of text {} said, heard everywhere", text);
+		}
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 point {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+		Locator::helpSpeechSystem::value().Say(text, audio::SpeechVoice::First, point);
+		return fmt::format("line of text {} said at ({:.1f}, {:.1f})", text, at.x, at.y);
+	}
 	case Kind::HandRelease:
 		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
 		{
@@ -2321,7 +2339,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
-	    command.kind == Kind::AttachObjectScriptSound)
+	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2863,6 +2881,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandPour:
 	case Kind::HandRelease:
 	case Kind::AttachObjectScriptSound:
+	case Kind::SayLine:
 	case Kind::RemoveObject:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:

@@ -37,7 +37,10 @@ void HelpSpeechSystem::Say(uint32_t text, audio::SpeechVoice voice, std::optiona
 	{
 		return;
 	}
-	const auto emitter = Locator::audio::value().StartSoundEffect(sample->sound, {.position = position});
+	// Placed only when the script gives a position, and it stays there. The voice rules know the line by its voice.
+	const auto emitter = Locator::audio::value().StartSoundEffect(
+	    sample->sound,
+	    {.position = position, .voiceOwner = audio::VoiceOwner::Number, .ownerNumber = audio::OwnerNumberOf(voice)});
 	_voices.Add(voice, *sample, emitter);
 }
 
