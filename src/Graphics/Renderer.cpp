@@ -140,6 +140,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Graphics/Atmosphere.h"
 #include "Graphics/BoneBudget.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
@@ -3697,7 +3698,14 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	const auto centre = camera.GetOrigin() + (placed ? moon->placement->offset : glm::vec3(0.0f));
 	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
 	const auto inverseView = glm::inverse(view);
-	const auto basis = moon::Basis(view, inverseView, centre);
+	auto basis = moon::Basis(view, inverseView, centre);
+	// EXPERIMENT (not for merge): with the sun and the moon on their real paths, the lit edge of the moon points to the
+	// sun
+	if (Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled())
+	{
+		basis = atmosphere::TurnLitEdgeTowards(basis,
+		                                       atmosphere::SunTowards(Locator::skySystem::value().GetClock().GetScriptTime()));
+	}
 	const auto& colour = moon->colour;
 	// It shows less through an overcast
 	const float alpha = moon->strength / 255.0f;

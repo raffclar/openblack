@@ -9,6 +9,7 @@
 
 // EXPERIMENT (not for merge): the rules of the jellyfish in the deep water
 
+#include <cmath>
 #include <cstdint>
 
 #include <vector>
@@ -16,6 +17,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "Graphics/Underwater.h"
 #include "Graphics/UnderwaterJellyfish.h"
 
 namespace jelly = openblack::graphics::underwater::jellyfish;
@@ -116,4 +118,36 @@ TEST(UnderwaterJellyfish, TheMeshHasEveryPart)
 	// The outer shell comes last, so that it glows over the rest
 	EXPECT_EQ(vertices.back().data.z, static_cast<float>(jelly::Part::OuterShell));
 	EXPECT_EQ(vertices.front().data.z, static_cast<float>(jelly::Part::InnerShell));
+}
+
+TEST(UnderwaterJellyfish, TheWaterPathIsThePartOfTheWayUnderTheSea)
+{
+	const glm::vec3 point {0.0f, -10.0f, 0.0f};
+	// With the eye under the water, all of the way
+	EXPECT_FLOAT_EQ(jelly::WaterPath({30.0f, -10.0f, 40.0f}, point, 0.0f), 50.0f);
+	// With the eye above the water, the part under the sea's level: here half of it
+	EXPECT_NEAR(jelly::WaterPath({0.0f, 10.0f, 0.0f}, point, 0.0f), 10.0f, 1e-4f);
+	EXPECT_NEAR(jelly::WaterPath({30.0f, 10.0f, 40.0f}, point, 0.0f), 0.5f * std::sqrt(2900.0f), 1e-3f);
+}
+
+TEST(UnderwaterJellyfish, TheirLightKeepsItsColourThroughTheWater)
+{
+	// Near the eye it is all there
+	const glm::vec3 near = jelly::GlowThroughWater(0.0f);
+	EXPECT_NEAR(glm::length(near - glm::vec3(1.0f)), 0.0f, 1e-5f);
+	// It fades with the distance
+	float last = 1.0f;
+	for (const float path : {10.0f, 40.0f, 80.0f, 120.0f})
+	{
+		const glm::vec3 left = jelly::GlowThroughWater(path);
+		EXPECT_LT(left.g, last);
+		last = left.g;
+		// Less of it is lost than of the water's own light, and the red keeps a larger share of the blue
+		const glm::vec3 water = openblack::graphics::underwater::Transmittance(path);
+		EXPECT_GT(left.r, water.r);
+		EXPECT_GT(left.r / left.b, water.r / water.b);
+		// Pink light far away is still more red than green
+		const glm::vec3 pink = glm::vec3(1.0f, 0.32f, 0.62f) * left;
+		EXPECT_GT(pink.r, pink.g);
+	}
 }

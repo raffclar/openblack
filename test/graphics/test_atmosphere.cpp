@@ -11,14 +11,17 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
 #include <numbers>
 
 #include <glm/geometric.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
 #include "Graphics/Atmosphere.h"
+#include "Graphics/Moon.h"
 #include "Graphics/Underwater.h"
 
 namespace atmos = openblack::graphics::atmosphere;
@@ -300,4 +303,138 @@ TEST(Atmosphere, TheSkysTypeFollowsTheSunsHeight)
 	EXPECT_FLOAT_EQ(atmos::SkyTypeFromSun(sine(10.0f)), 2.0f);
 	// By 8 in the morning the day's sky shows
 	EXPECT_FLOAT_EQ(atmos::SkyTypeFromSun(atmos::SunTowards(8.0f).y), 2.0f);
+}
+
+TEST(Atmosphere, TheMoonStandsEastOfTheSunByItsPhase)
+{
+	const auto angle = [](glm::vec3 a, glm::vec3 b) {
+		return std::acos(std::clamp(glm::dot(glm::normalize(a), glm::normalize(b)), -1.0f, 1.0f)) * 180.0f / k_Pi;
+	};
+	for (const float hour : {0.0f, 6.0f, 12.0f, 17.5f, 21.0f})
+	{
+		const auto sun = atmos::SunTowards(hour);
+		// Next to the sun at a new moon, 90 degrees away at a quarter and opposite at a full moon
+		EXPECT_NEAR(angle(atmos::MoonTowards(hour, 0.0), sun), 0.0f, 0.1f);
+		EXPECT_NEAR(angle(atmos::MoonTowards(hour, 0.25), sun), 90.0f, 0.1f);
+		EXPECT_NEAR(angle(atmos::MoonTowards(hour, 0.5), sun), 180.0f, 0.1f);
+		EXPECT_NEAR(angle(atmos::MoonTowards(hour, 0.75), sun), 90.0f, 0.1f);
+		EXPECT_NEAR(angle(atmos::MoonTowards(hour, 0.1), sun), 36.0f, 0.1f);
+	}
+	// A young moon is east of the sun: after sunset it is still up in the west
+	const auto evening = atmos::MoonTowards(18.5f, 0.12);
+	EXPECT_GT(evening.y, 0.2f);
+	EXPECT_LT(glm::dot(evening, atmos::k_East), 0.0f);
+	// At the spring equinox the first quarter is high and the last quarter low, as the moon goes along the sun's path
+	EXPECT_GT(std::asin(atmos::MoonTowards(18.0f, 0.25).y) * 180.0f / k_Pi, 70.0f);
+	EXPECT_LT(std::asin(atmos::MoonTowards(6.0f, 0.75).y) * 180.0f / k_Pi, 30.0f);
+}
+
+TEST(Atmosphere, TheMoonComesUpAboutFiftyMinutesLaterEachDay)
+{
+	// The first hour after noon at which the moon is over the horizon
+	const auto rise = [](double fractionAtNoon) {
+		constexpr double k_PerHour = 0.03386318012808897 / 24.0;
+		for (int step = 1; step < 24 * 600; ++step)
+		{
+			const float hour = 12.0f + static_cast<float>(step) / 600.0f;
+			const double fraction = fractionAtNoon + (k_PerHour * (static_cast<double>(hour) - 12.0));
+			const float before = 12.0f + static_cast<float>(step - 1) / 600.0f;
+			const double fractionBefore = fractionAtNoon + (k_PerHour * (static_cast<double>(before) - 12.0));
+			if (atmos::MoonTowards(hour, fraction).y >= 0.0f && atmos::MoonTowards(before, fractionBefore).y < 0.0f)
+			{
+				return hour;
+			}
+		}
+		return -1.0f;
+	};
+	const float today = rise(0.45);
+	const float tomorrow = rise(0.45 + 0.03386318012808897);
+	ASSERT_GT(today, 0.0f);
+	ASSERT_GT(tomorrow, 0.0f);
+	const float minutes = (tomorrow - today) * 60.0f;
+	EXPECT_GT(minutes, 30.0f);
+	EXPECT_LT(minutes, 75.0f);
+}
+
+TEST(Atmosphere, TheMoonsMonthMovesOnSmoothlyThroughTheDaysOfTheGame)
+{
+	// 15 March 2025, at noon
+	constexpr int64_t k_Date = 1742040000;
+	// At the start of the day it is the game's own moon month
+	EXPECT_NEAR(atmos::MoonMonthFraction(k_Date, 0, 0.0f), openblack::graphics::moon::MonthFraction(k_Date), 1e-9);
+	EXPECT_NEAR(atmos::MoonPhase(atmos::MoonMonthFraction(k_Date, 0, 0.0f)), openblack::graphics::moon::Phase(k_Date), 1e-5f);
+	// Midnight at the end of a day of the game is the start of the next one
+	EXPECT_NEAR(atmos::MoonMonthFraction(k_Date, 0, 24.0f), atmos::MoonMonthFraction(k_Date, 1, 0.0f), 1e-9);
+	// A day is a 29.53th of a moon month
+	const double day = atmos::MoonMonthFraction(k_Date, 3, 6.0f) - atmos::MoonMonthFraction(k_Date, 2, 6.0f);
+	EXPECT_NEAR(day - std::floor(day), 0.03386318012808897, 1e-9);
+	EXPECT_FLOAT_EQ(atmos::MoonPhase(0.5), k_Pi);
+	EXPECT_NEAR(atmos::MoonPhase(0.0), 2.0f * k_Pi, 1e-6f);
+	// The days of the game start as the hour goes past midnight
+	EXPECT_EQ(atmos::DaysStarted(-1.0f, 0.1f), 0);
+	EXPECT_EQ(atmos::DaysStarted(23.9f, 0.1f), 1);
+	EXPECT_EQ(atmos::DaysStarted(0.1f, 23.9f), -1);
+	EXPECT_EQ(atmos::DaysStarted(11.0f, 11.1f), 0);
+	EXPECT_EQ(atmos::DaysStarted(5.0f, 19.0f), -1);
+	EXPECT_EQ(atmos::DaysStarted(12.0f, 0.0f), 0);
+}
+
+TEST(Atmosphere, TheMoonsLightIsWeakerLowDown)
+{
+	const auto sine = [](float degrees) { return std::sin(degrees * k_Pi / 180.0f); };
+	EXPECT_NEAR(atmos::MoonThroughAir(1.0f), 1.0f, 1e-3f);
+	EXPECT_FLOAT_EQ(atmos::MoonThroughAir(-0.1f), 0.0f);
+	EXPECT_FLOAT_EQ(atmos::MoonThroughAir(0.0f), 0.0f);
+	float last = 0.0f;
+	for (const float degrees : {1.0f, 5.0f, 10.0f, 30.0f, 60.0f, 90.0f})
+	{
+		const float through = atmos::MoonThroughAir(sine(degrees));
+		EXPECT_GT(through, last);
+		last = through;
+	}
+	EXPECT_NEAR(atmos::MoonThroughAir(sine(30.0f)), std::exp(-0.2f), 0.01f);
+}
+
+TEST(Atmosphere, TheNightAirTakesItsLightFromTheMoonWhileItIsUp)
+{
+	const auto sun = atmos::SunTowards(0.0f);
+	const auto up = atmos::MoonTowards(0.0f, 0.5);
+	EXPECT_NEAR(glm::length(atmos::AirMoonTowards(sun, up) - up), 0.0f, 1e-4f);
+	// A new moon is down with the sun: the air keeps the glow from the point opposite the sun
+	const auto down = atmos::MoonTowards(0.0f, 0.02);
+	ASSERT_LT(down.y, -0.1f);
+	EXPECT_NEAR(glm::length(atmos::AirMoonTowards(sun, down) + sun), 0.0f, 1e-4f);
+}
+
+TEST(Atmosphere, TheMoonsLitEdgePointsToTheSun)
+{
+	// The moon's axes from the eye: across, up and along the line from the eye, at the size of the moon
+	const glm::vec3 line = glm::normalize(glm::vec3(0.3f, 0.4f, 1.0f));
+	const glm::vec3 across0 = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), line));
+	const glm::vec3 up0 = glm::cross(line, across0);
+	const glm::mat3 basis(across0 * 4.0f, up0 * 4.0f, line * 4.0f);
+	const glm::vec3 sun = glm::normalize(glm::vec3(-1.0f, 0.5f, 0.2f));
+	const glm::mat3 turned = atmos::TurnLitEdgeTowards(basis, sun);
+	// The line from the eye and the sizes stay
+	EXPECT_NEAR(glm::length(turned[2] - basis[2]), 0.0f, 1e-5f);
+	EXPECT_NEAR(glm::length(turned[0]), 4.0f, 1e-4f);
+	EXPECT_NEAR(glm::length(turned[1]), 4.0f, 1e-4f);
+	// The first axis points to the sun across the face, and the axes stay square and in the same order
+	const glm::vec3 toSun = glm::normalize(sun - (line * glm::dot(line, sun)));
+	EXPECT_NEAR(glm::dot(glm::normalize(turned[0]), toSun), 1.0f, 1e-4f);
+	EXPECT_NEAR(glm::dot(turned[0], turned[1]), 0.0f, 1e-3f);
+	EXPECT_NEAR(glm::dot(turned[0], turned[2]), 0.0f, 1e-3f);
+	EXPECT_GT(glm::dot(glm::cross(turned[2], turned[0]), turned[1]) * glm::dot(glm::cross(basis[2], basis[0]), basis[1]), 0.0f);
+	// A sun in line with the moon leaves the axes as they are
+	const glm::mat3 same = atmos::TurnLitEdgeTowards(basis, line);
+	EXPECT_NEAR(glm::length(same[0] - basis[0]), 0.0f, 1e-5f);
+}
+
+TEST(Atmosphere, TheNightSkyGivesAFaintLightAfterSunset)
+{
+	const auto sine = [](float degrees) { return std::sin(degrees * k_Pi / 180.0f); };
+	EXPECT_FLOAT_EQ(atmos::NightGlow(sine(30.0f)), 0.0f);
+	EXPECT_FLOAT_EQ(atmos::NightGlow(sine(-1.0f)), 0.0f);
+	EXPECT_NEAR(atmos::NightGlow(sine(-5.0f)), 0.5f * atmos::k_NightGlow, 1e-3f);
+	EXPECT_FLOAT_EQ(atmos::NightGlow(sine(-30.0f)), atmos::k_NightGlow);
 }

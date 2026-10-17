@@ -50,6 +50,15 @@ inline constexpr float k_MostSize = 1.4f;
 /// The most that are drawn
 inline constexpr uint32_t k_Most = 320;
 
+/// The two passes of the shader, as the w of the eye's uniform: the bodies in the scene, and their own light after the
+/// water's pass
+inline constexpr float k_BodyPass = 0.0f;
+inline constexpr float k_GlowPass = 1.0f;
+/// Their own light after the water's pass. The water takes it out over this share of the way only, and the light keeps
+/// most of its colour: only this share of the change of colour by the water stays, the rest is a grey loss.
+inline constexpr float k_GlowPathShare = 0.5f;
+inline constexpr float k_GlowTint = 0.15f;
+
 /// The parts of the mesh: the outer shell of the bell, its inner shell, the inner tentacles and the outer tentacles
 enum class Part : uint8_t
 {
@@ -92,6 +101,14 @@ using DepthAt = std::function<float(glm::vec2 point)>;
 /// The two vectors of a jellyfish's instance: xyz the top of the bell and w its size; x the phase, y the colour, z how
 /// much it shows and w its seed
 [[nodiscard]] std::array<glm::vec4, 2> InstanceData(const Jellyfish& jellyfish);
+
+/// The length of the way from the eye to a point that goes through the water: all of it with the eye under the water,
+/// and the part under the sea's level with the eye above it
+[[nodiscard]] float WaterPath(glm::vec3 eye, glm::vec3 point, float seaLevel);
+
+/// The part of each colour of a jellyfish's own light that comes to the eye through a length of water. It fades with
+/// the distance as the water's light does, but more slowly, and it keeps its colour longer: pink stays pink far away.
+[[nodiscard]] glm::vec3 GlowThroughWater(float path);
 
 /// A vertex of the mesh: x along (round the shell, or down the tentacle, 0 to 1), y across (down the shell 0 to 1, or
 /// the side of the tentacle, -1 or 1), z the part, w which tentacle
