@@ -13,6 +13,7 @@
 
 #include <algorithm>
 
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureLayers.h"
 
@@ -22,16 +23,6 @@ namespace animations = openblack::creature_layers::animations;
 
 namespace
 {
-/// The game's sigmoid, from how far a value is past its threshold, -1 to 1, in 41 steps
-constexpr std::array<float, 41> k_Sigmoid {
-    0.0f,        3.6e-9f,     1e-8f,        2.8e-8f,      7.78e-8f,     2.163e-7f,    6.018e-7f,    1.674e-6f,   4.6568e-6f,
-    1.29542e-5f, 3.60351e-5f, 1.002359e-4f, 2.787865e-4f, 7.751431e-4f, 0.002153319f, 0.005967208f, 0.01642494f, 0.04439174f,
-    0.1144373f,  0.2644244f,  0.5f,         0.7355757f,   0.8855627f,   0.9556082f,   0.9835750f,   0.9940328f,  0.9978467f,
-    0.9992248f,  0.9997212f,  0.9998997f,   0.9999639f,   0.9999871f,   0.9999954f,   0.9999983f,   0.9999994f,  0.9999998f,
-    0.9999999f,  1.0f,        1.0f,         1.0f,         1.0f,
-};
-constexpr float k_SigmoidSteps = 20.5f;
-
 constexpr std::array<std::string_view, k_DesireCount> k_Names {
     "Impress",
     "Compassion",
@@ -113,18 +104,12 @@ std::string_view creature_desires::Name(Desire desire)
 
 float creature_desires::Sigmoid(float threshold, float value)
 {
-	if (value <= 0.0f || threshold == 1.0f)
-	{
-		return 0.0f;
-	}
-	return SigmoidStep(threshold, value);
+	return gutils::CreatureSigmoidThreshold(threshold, value);
 }
 
 float creature_desires::SigmoidStep(float threshold, float value)
 {
-	const auto past = std::clamp(std::clamp(value, -1.0f, 1.0f) - threshold, -1.0f, 1.0f);
-	const auto step = std::min(static_cast<size_t>((past + 1.0f) * k_SigmoidSteps), k_Sigmoid.size() - 1);
-	return k_Sigmoid.at(step);
+	return gutils::SigmoidThreshold(threshold, value);
 }
 
 Desires creature_desires::Create(const std::array<DesireSetup, k_DesireCount>& setup,

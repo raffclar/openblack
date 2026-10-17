@@ -66,10 +66,8 @@ TEST(OracleCatch, DataIsComplete)
 	EXPECT_GT(table->Rows(), 400u);
 }
 
-// The game does the catch maths in a different order (the way as a unit vector over the speed, the sums z first, and
-// other points where values are rounded), so near an edge our answer can be different. Turn this test on when
-// Reaches does the maths in the game's order.
-TEST(OracleCatch, DISABLED_ReachesAsTheGameDoes)
+// Reaches does the catch maths in the game's order, so it gives the game's answer at every edge too
+TEST(OracleCatch, ReachesAsTheGameDoes)
 {
 	const auto table = oracle::Table::Load("catch_reaches.txt");
 	ASSERT_TRUE(table.has_value());

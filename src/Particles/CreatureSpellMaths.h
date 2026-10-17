@@ -59,8 +59,9 @@ inline constexpr float k_WispFlightSeconds = 2.0f;
 inline constexpr float k_ItchReach = 1.5f;
 [[nodiscard]] glm::vec3 ItchOrbit(glm::vec3 rightEye, glm::vec3 leftEye, float seconds, float orbitSpeed);
 
-/// Whether the way from a creature casting to its target has swung too far from the way it began: the two ways, flat,
-/// made unit length, meet at less than the cosine of the limit, taken as radians. A way of no length never has.
+/// Whether the way from a creature casting to its target has swung too far from the way it began. The two flat ways
+/// become unit length by the engine's table inverse square root. The way has swung too far when their dot is less than
+/// the cosine of the limit, in radians. A way of no length gives a dot of 0.
 [[nodiscard]] bool SwungTooFar(glm::vec2 began, glm::vec2 now, float limit);
 
 } // namespace openblack::particles::maths

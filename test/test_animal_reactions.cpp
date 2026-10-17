@@ -60,3 +60,18 @@ TEST(AnimalReactions, AStateThatIsNotInTheTableGivesTheEmptyState)
 	table.at(3).resumeState = 43;
 	EXPECT_EQ(animals::StateAfterReacting(4, table), 0);
 }
+
+TEST(AnimalReactions, BatsVulturesAndTheBigHuntersFrightenACreature)
+{
+	for (const auto type : {AnimalInfo::Bat, AnimalInfo::SpellBat, AnimalInfo::Vulture, AnimalInfo::Lion, AnimalInfo::Tiger,
+	                        AnimalInfo::Leopard, AnimalInfo::Wolf, AnimalInfo::SpellWolf})
+	{
+		EXPECT_TRUE(animals::FrightensCreatures(type)) << static_cast<int>(type);
+	}
+	// The lion and the cow of the puzzles and the farm animals do not frighten a creature
+	for (const auto type :
+	     {AnimalInfo::PuzzleLion, AnimalInfo::PuzzleCow, AnimalInfo::Sheep, AnimalInfo::Cow, AnimalInfo::Horse})
+	{
+		EXPECT_FALSE(animals::FrightensCreatures(type)) << static_cast<int>(type);
+	}
+}
