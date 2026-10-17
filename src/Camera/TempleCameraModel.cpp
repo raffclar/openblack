@@ -1436,7 +1436,7 @@ void TempleCameraModel::FollowTemple()
 	}
 }
 
-void TempleCameraModel::SetFlight(glm::vec3 /*origin*/, glm::vec3 /*focus*/) {}
+void TempleCameraModel::SetFlight(glm::vec3 /*origin*/, glm::vec3 /*focus*/, float /*rise*/) {}
 
 glm::vec3 TempleCameraModel::GetTargetOrigin() const
 {

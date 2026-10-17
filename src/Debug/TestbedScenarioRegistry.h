@@ -812,6 +812,10 @@ struct Command
 		/// The game stops every task of a land's script (script, by its name), as a script's "stop script" does. The log
 		/// tells how many tasks stopped and if the scenario's object is still in a script. Needs no creature
 		StopScript,
+		/// A bookmark (value, 0 to 6) is put at a point on the land (point, from the middle of the map), with the camera
+		/// origin 80 metres back and 50 metres up from it. Then the camera flies to it, as the bookmark's number key does.
+		/// Needs no creature
+		FlyToBookmark,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

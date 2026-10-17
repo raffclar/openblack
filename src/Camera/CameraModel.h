@@ -80,7 +80,8 @@ public:
 
 	virtual std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) = 0;
 	virtual void HandleActions(std::chrono::microseconds dt) = 0;
-	virtual void SetFlight(glm::vec3 origin, glm::vec3 focus) = 0;
+	/// Flies to a place. The way goes by a point half way, which rises by the rise times the distance across
+	virtual void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) = 0;
 	/// A script command or a debug tool puts the camera here, with no speed. Each model decides what continues from
 	/// here, for example a flight or a camera that follows a thing.
 	virtual void PlaceAt(glm::vec3 /*origin*/, glm::vec3 /*focus*/) {}

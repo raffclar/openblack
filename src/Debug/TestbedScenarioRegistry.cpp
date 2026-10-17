@@ -6873,6 +6873,21 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Testbed},
 	    .commands = levels,
 	});
+	all.push_back({
+	    .id = "tutorial.bookmark_flight",
+	    .name = "A long flight to a bookmark",
+	    .facet = Facet::Tutorial,
+	    .description = "A bookmark is put on the land 900 metres from the middle of the map, and the camera flies to it, as "
+	                   "the number key 1 does. Five seconds later a second bookmark is put back at the middle, and the "
+	                   "camera flies back to it.",
+	    .expected = "Each flight goes by a high point half way. The high point is 0.3 metres higher for each metre that the "
+	                "flight goes across, so these flights go up by about 270 metres. The camera makes a woosh at the start "
+	                "of each flight.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::FlyToBookmark, .delaySeconds = 2.0f, .point = {900.0f, 0.0f}, .value = 0},
+	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 5.0f, .point = {0.0f, 0.0f}, .value = 1}},
+	});
 }
 
 void AddRestAndHome(std::vector<Scenario>& all)
@@ -7296,9 +7311,9 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
-	       kind == Kind::SetInterfaceLevel || kind == Kind::SetOpenClose || kind == Kind::LayGateStone ||
-	       kind == Kind::HandTapObject || kind == Kind::Advisor || kind == Kind::RunText || kind == Kind::PlayHandDemo ||
-	       kind == Kind::Reframe || kind == Kind::DestroyTemple || kind == Kind::RunHelpMessage ||
+	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::SetOpenClose ||
+	       kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor || kind == Kind::RunText ||
+	       kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple || kind == Kind::RunHelpMessage ||
 	       kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge || kind == Kind::EnterTemple ||
 	       kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm || kind == Kind::HandPour ||
 	       kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
@@ -7331,7 +7346,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 138> k_Names {
+	constexpr std::array<std::string_view, 139> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -7470,6 +7485,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "script reaction",
 	    "script place",
 	    "stop script",
+	    "fly to a bookmark",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

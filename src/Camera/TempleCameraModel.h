@@ -110,7 +110,7 @@ public:
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) final;
 	void HandleActions(std::chrono::microseconds dt) final;
-	void SetFlight(glm::vec3 origin, glm::vec3 focus) final;
+	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) final;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const final;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const final;
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const final;

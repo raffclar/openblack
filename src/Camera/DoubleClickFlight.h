@@ -57,6 +57,12 @@ inline constexpr float k_GripStart = 0.01f;
 /// A long flight rises over its half way point by a tenth of how far it goes across, and at least this far over the land
 inline constexpr float k_HalfWayRise = 0.1f;
 inline constexpr float k_HalfWayClearance = 10.0f;
+/// How much the half way point of a flight rises for each metre across: to a bookmark
+inline constexpr float k_BookmarkRise = 0.3f;
+/// To the temple or over the realm, and back from there
+inline constexpr float k_ZoomToRise = 0.4f;
+/// To the pleasing view of a single tap of the temple key: no rise
+inline constexpr float k_SingleTapRise = 0.0f;
 
 /// The heading (round the vertical) and pitch (down from level) of a camera at `origin` looking at `focus`; one almost
 /// straight above looks with no heading, nearly straight down

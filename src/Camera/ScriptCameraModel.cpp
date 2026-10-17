@@ -505,7 +505,7 @@ void ScriptCameraModel::HandleActions(std::chrono::microseconds /*dt*/)
 	// The player has no say while a script has the camera
 }
 
-void ScriptCameraModel::SetFlight(glm::vec3 /*origin*/, glm::vec3 /*focus*/)
+void ScriptCameraModel::SetFlight(glm::vec3 /*origin*/, glm::vec3 /*focus*/, float /*rise*/)
 {
 	// Nor do the player's flights to places
 }

@@ -163,7 +163,9 @@ glm::vec3 camera_fly::HalfWayPoint(const glm::vec3& end, const glm::vec3& curren
                                    const std::function<float(glm::vec2)>& groundHeight)
 {
 	auto point = (end + current) * 0.5f;
-	point.y += std::hypot(current.x - end.x, current.z - end.z) * rise;
+	const float acrossX = current.x - end.x;
+	const float acrossZ = current.z - end.z;
+	point.y += std::sqrt(acrossZ * acrossZ + acrossX * acrossX) * rise;
 	const float clear = groundHeight({point.x, point.z}) + k_HalfWayClearance;
 	if (clear > point.y)
 	{
