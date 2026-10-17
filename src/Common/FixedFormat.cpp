@@ -10,26 +10,65 @@
 #include "FixedFormat.h"
 
 #include <cmath>
-#include <cstdint>
 
 #include <algorithm>
+#include <format>
 #include <optional>
 #include <span>
 
 namespace openblack::fixed_format
 {
 
+namespace
+{
+/// The digits of a value of no sign with `precision` digits after the point, as the game's C library makes them, with
+/// no point and no zeros at the front: the 17 first digits of the value, cut after the precision and then rounded up
+/// when the next digit is 5 or more
+std::string RoundedDigits(double value, int precision)
+{
+	constexpr int k_Significant = 17;
+	// A value that is not finite is written as zero. The game's texts do not show such a value.
+	if (value == 0.0 || !std::isfinite(value))
+	{
+		return "0";
+	}
+	const auto text = std::format("{:.16e}", value);
+	std::string significant;
+	significant.push_back(text[0]);
+	significant.append(text, 2, k_Significant - 1);
+	const auto exponent = std::stoi(text.substr(text.find('e') + 1));
+	const int kept = exponent + 1 + precision;
+	if (kept < 0)
+	{
+		return "0";
+	}
+	// A place at the front for the carry of the rounding
+	std::string digits = "0";
+	for (int i = 0; i < kept; ++i)
+	{
+		digits.push_back(i < k_Significant ? significant[static_cast<size_t>(i)] : '0');
+	}
+	if (kept < k_Significant && significant[static_cast<size_t>(kept)] >= '5')
+	{
+		auto at = digits.size() - 1;
+		while (digits[at] == '9')
+		{
+			digits[at] = '0';
+			--at;
+		}
+		++digits[at];
+	}
+	const auto first = digits.find_first_not_of('0');
+	return first == std::string::npos ? "0" : digits.substr(first);
+}
+} // namespace
+
 std::string Fixed(double value, int width, int precision)
 {
 	precision = std::clamp(precision, 0, 9);
-	const bool negative = std::signbit(value);
-	double scale = 1.0;
-	for (int i = 0; i < precision; ++i)
-	{
-		scale *= 10.0;
-	}
-	const auto scaled = static_cast<uint64_t>(std::floor(std::abs(value) * scale + 0.5));
-	auto digits = std::to_string(scaled);
+	// An exact zero has no sign, but a value under zero that rounds to zero keeps its sign
+	const bool negative = value < 0.0;
+	auto digits = RoundedDigits(std::abs(value), precision);
 	if (precision > 0)
 	{
 		if (digits.size() <= static_cast<size_t>(precision))

@@ -7,8 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
 #include <tuple>
+#include <utility>
 
+#include <entt/core/fwd.hpp>
 #include <glm/vec2.hpp>
 
 namespace openblack
@@ -24,4 +27,7 @@ struct Transform;
 namespace openblack::ecs::archetypes
 {
 std::pair<glm::vec2, float> GetFixedObstacleBoundingCircle(MeshId meshId, const components::Transform& transform);
-}
+/// The same circle for a model by its id; none when the resources do not have the model
+[[nodiscard]] std::optional<std::pair<glm::vec2, float>> GetFixedObstacleBoundingCircle(entt::id_type meshId,
+                                                                                        const components::Transform& transform);
+} // namespace openblack::ecs::archetypes

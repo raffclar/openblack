@@ -101,7 +101,7 @@ constexpr uint32_t k_MadePitch = 100;
 constexpr auto k_GlowSheet = entt::hashed_string("raw/smoke");
 constexpr auto k_GlowSheetAlpha = entt::hashed_string("raw/smokea");
 constexpr uint32_t k_GlowFrames = 15;
-constexpr float k_GlowCycleMs = 500.0f;
+constexpr uint32_t k_GlowCycleMs = 500;
 /// Half-bright orange, added to what is behind
 constexpr glm::vec4 k_GlowTint {193.0f / 255.0f, 129.0f / 255.0f, 25.0f / 255.0f, 128.0f / 255.0f};
 /// The symbol is drawn in yellow (0xFFFFFF00), whatever the player
@@ -1070,6 +1070,20 @@ bool villager_disciple::SetDiscipleNothingToDo(LivingAction& action, std::option
 	return true;
 }
 
+uint32_t villager_disciple::GlowFrame(uint64_t gameMilliseconds)
+{
+	// The game milliseconds into the cycle, times the frames over the cycle. The share rounds to a float. The game's
+	// count goes back into the cycle only when it is more than the cycle, so a count of a whole cycle shows the frame
+	// after the last
+	auto intoCycle = static_cast<int32_t>(gameMilliseconds % k_GlowCycleMs);
+	if (intoCycle == 0 && gameMilliseconds > 0)
+	{
+		intoCycle = static_cast<int32_t>(k_GlowCycleMs);
+	}
+	const float framesPerMillisecond = static_cast<float>(k_GlowFrames) / static_cast<float>(k_GlowCycleMs);
+	return static_cast<uint32_t>(framesPerMillisecond * static_cast<float>(intoCycle));
+}
+
 void villager_disciple::UpdateMarks()
 {
 	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
@@ -1084,15 +1098,15 @@ void villager_disciple::UpdateMarks()
 		return;
 	}
 	// The puffs turn with the game's time
-	float clock = 0.0f;
+	uint64_t gameMs = 0;
 	if (Locator::time::has_value())
 	{
 		const auto& time = Locator::time::value();
-		constexpr auto k_TurnMs = static_cast<float>(systems::TimeSystemInterface::k_TurnDuration.count());
-		const double gameMs = (static_cast<double>(time.GetTurn()) + static_cast<double>(time.GetTurnFraction())) * k_TurnMs;
-		clock = static_cast<float>(std::fmod(gameMs, static_cast<double>(k_GlowCycleMs)));
+		constexpr auto k_TurnMs = static_cast<uint64_t>(systems::TimeSystemInterface::k_TurnDuration.count());
+		const auto intoTurn = static_cast<uint64_t>(time.GetTurnFraction() * static_cast<float>(k_TurnMs));
+		gameMs = static_cast<uint64_t>(time.GetTurn()) * k_TurnMs + intoTurn;
 	}
-	const auto frame = static_cast<uint32_t>(static_cast<float>(k_GlowFrames) / k_GlowCycleMs * clock);
+	const auto frame = GlowFrame(gameMs);
 
 	// Marks of villagers gone or no longer glowing go
 	std::vector<entt::entity> gone;

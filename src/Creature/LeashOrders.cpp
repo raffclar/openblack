@@ -49,16 +49,16 @@ Step Hands(ObjectOrder order)
 	return step;
 }
 
-/// Seconds cut down to whole game turns, worked out as the game does in more than single precision, so that 2.1 seconds
-/// at ten turns a second is 20 turns
+/// Seconds cut down to whole game turns. The product rounds to a float before the cut, so that 2.1 seconds at ten turns
+/// a second is 21 turns
 float WholeTurns(float seconds, float turnsPerSecond)
 {
 	if (turnsPerSecond <= 0.0f)
 	{
 		return seconds;
 	}
-	const auto turns = std::floor(static_cast<double>(seconds) * static_cast<double>(turnsPerSecond));
-	return static_cast<float>(turns / static_cast<double>(turnsPerSecond));
+	const float turns = std::floor(seconds * turnsPerSecond);
+	return turns / turnsPerSecond;
 }
 } // namespace
 
@@ -335,6 +335,16 @@ glm::vec2 creature_leash_orders::MarkerSize(uint32_t clockMs)
 		return std::abs(std::cos(static_cast<float>(ms) * k_TurnsPerMs * 2.0f * std::numbers::pi_v<float>)) + k_Least;
 	};
 	return {swing(clockMs), swing(clockMs + k_PulseLagMs)};
+}
+
+bool creature_leash_orders::MarkerShown(bool inTemple, bool worldHidden)
+{
+	return !inTemple && !worldHidden;
+}
+
+glm::vec2 creature_leash_orders::FootprintSize(glm::vec2 ring)
+{
+	return {k_FootprintShare * ring.y, k_FootprintShare * k_FootprintShare * ring.x};
 }
 
 uint8_t creature_leash_orders::FootprintCell(size_t speciesRow)

@@ -397,6 +397,7 @@ void ShaderManager::LoadShaders()
 	if (bgfx::getRendererType() == bgfx::RendererType::Vulkan)
 	{
 		_descriptorSets = std::make_unique<DescriptorSetTally>();
+		_drawWindow = std::make_unique<DrawWindow>();
 	}
 	for (const auto& shader : k_Shaders)
 	{
@@ -405,8 +406,9 @@ void ShaderManager::LoadShaders()
 		assert(bgfx::isValid(vs));
 		auto fs = bgfx::createEmbeddedShader(k_EmbeddedShaders.data(), type, shader.fragmentShaderName.data());
 		assert(bgfx::isValid(fs));
-		_shaderPrograms[shader.name.data()] = new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs),
-		                                                        SamplersOf(shader), *_samplerDefaults, _descriptorSets.get());
+		_shaderPrograms[shader.name.data()] =
+		    new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs), SamplersOf(shader), *_samplerDefaults,
+		                      _descriptorSets.get(), _drawWindow.get());
 	}
 }
 
@@ -451,6 +453,25 @@ std::optional<FrameDescriptorSets> ShaderManager::FrameEnded() const
 		return std::nullopt;
 	}
 	return _descriptorSets->EndFrame();
+}
+
+bool ShaderManager::OpenDrawWindow(uint32_t first, uint32_t count, std::span<const uint16_t> views) const
+{
+	if (!_drawWindow)
+	{
+		return false;
+	}
+	_drawWindow->Open(first, count, views);
+	return true;
+}
+
+std::optional<uint32_t> ShaderManager::CloseDrawWindow() const
+{
+	if (!_drawWindow || !_drawWindow->IsOpen())
+	{
+		return std::nullopt;
+	}
+	return _drawWindow->Close();
 }
 
 void ShaderManager::SetViewOrder(RenderPass viewId, ViewOrder order) const

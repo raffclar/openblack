@@ -29,6 +29,8 @@
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/CreatureInteractCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/FightCameraModel.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureLocomotion.h"
@@ -241,8 +243,8 @@ bool CreatureHandSystem::Grab()
 	// The hand starts a little short of the creature, seen from where the camera is before it turns to the creature
 	if (Locator::camera::has_value() && registry.AllOf<Creature, Transform>(*nearest))
 	{
-		const auto cameraToCreature =
-		    glm::distance(Locator::camera::value().GetOrigin(), registry.Get<const Transform>(*nearest).position);
+		const auto cameraToCreature = x87::Distance<x87::SumOrder::Zyx>(Locator::camera::value().GetOrigin(),
+		                                                                registry.Get<const Transform>(*nearest).position);
 		contact.distance.Reset(
 		    feedback::HandStartDistance(cameraToCreature, ShownSize(registry.Get<const Creature>(*nearest))));
 		contact.distanceStarted = true;
@@ -263,14 +265,15 @@ void CreatureHandSystem::TakeCamera(entt::entity creature)
 	}
 	auto& camera = Locator::camera::value();
 	auto& current = camera.GetModel();
-	// Already on a creature it stays; only the player's own camera, or Creature Mode's, gives way: not a fight's, a
-	// script's, the temple's or the editor's
+	// Already on a creature it stays; only the player's own camera, its fight view or Creature Mode's camera gives way:
+	// not a script's, the temple's or the editor's
 	if (dynamic_cast<CreatureInteractCameraModel*>(&current) != nullptr)
 	{
 		return;
 	}
 	auto* world = dynamic_cast<DefaultWorldCameraModel*>(&current);
-	if (world == nullptr && dynamic_cast<CreatureCameraModel*>(&current) == nullptr)
+	auto* fight = dynamic_cast<FightCameraModel*>(&current);
+	if (world == nullptr && fight == nullptr && dynamic_cast<CreatureCameraModel*>(&current) == nullptr)
 	{
 		return;
 	}
@@ -278,6 +281,11 @@ void CreatureHandSystem::TakeCamera(entt::entity creature)
 	if (world != nullptr)
 	{
 		_returnTo = creature_interact::View {.origin = world->GetTargetOrigin(), .focus = world->GetTargetFocus()};
+	}
+	// If the fight view stops while the hand holds the creature, the player's camera flies back to where the view was
+	if (fight != nullptr)
+	{
+		_returnTo = creature_interact::View {.origin = fight->GetShown().origin, .focus = fight->GetShown().focus};
 	}
 	auto model = std::make_unique<CreatureInteractCameraModel>(camera.GetOrigin(), camera.GetFocus());
 	model->SetTarget(InteractViewOf(Locator::entitiesRegistry::value(), creature));
@@ -306,8 +314,16 @@ void CreatureHandSystem::GiveCameraBack()
 	}
 	const auto origin = camera.GetOrigin();
 	const auto focus = camera.GetFocus();
+	const auto speed = fight_view::View {.origin = model->GetOriginSpeed(), .focus = model->GetFocusSpeed()};
 	auto* world = dynamic_cast<DefaultWorldCameraModel*>(player.get());
+	auto* fight = dynamic_cast<FightCameraModel*>(player.get());
 	camera.SetModel(std::move(player));
+	// The fight view starts again from where the camera now is and how fast it moves
+	if (fight != nullptr)
+	{
+		fight->Return({.origin = origin, .focus = focus}, speed);
+		return;
+	}
 	// The player's camera starts again from where the camera now is and flies back to where it was going
 	if (world != nullptr && returnTo.has_value())
 	{
@@ -454,10 +470,11 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	const auto middle = parts.has_value() ? parts->at(static_cast<size_t>(feedback::BodyPart::Groin)) : centre;
 	if (!contact->distanceStarted)
 	{
-		contact->distance.Reset(feedback::HandStartDistance(glm::distance(camera, transform.position), ShownSize(creature)));
+		contact->distance.Reset(
+		    feedback::HandStartDistance(x87::Distance<x87::SumOrder::Zyx>(camera, transform.position), ShownSize(creature)));
 		contact->distanceStarted = true;
 	}
-	feedback::KeepHandBack(contact->distance, glm::distance(camera, middle), height);
+	feedback::KeepHandBack(contact->distance, x87::Distance<x87::SumOrder::Zyx>(camera, middle), height);
 	auto handDistance = feedback::HandDistanceFromCamera(contact->distance);
 
 	// The line through the cursor looks for the creature's posed mesh. When it does not touch the mesh, a second line
@@ -482,27 +499,28 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	if (step.has_value() && *step > 0.0f)
 	{
 		const auto lastDirection = DirectionThrough(contact->lastCursor).value_or(sight);
-		slapped = Step(*contact, {.shownAt = contact->shownAt.value_or(camera + (sight * handDistance)),
-		                          .here = camera + (sight * handDistance),
-		                          .before = camera + (lastDirection * handDistance),
-		                          .touch = touch,
-		                          .cursor = cursor,
-		                          .screenWidth = screenWidth,
-		                          .stepMs = *step,
-		                          .rayOrigin = rayOrigin,
-		                          .rayDirection = rayDirection});
+		slapped =
+		    Step(*contact, {.shownAt = contact->shownAt.value_or(feedback::PointOnSight(camera, rayDirection, handDistance)),
+		                    .here = feedback::PointOnSight(camera, rayDirection, handDistance),
+		                    .before = camera + (lastDirection * handDistance),
+		                    .touch = touch,
+		                    .cursor = cursor,
+		                    .screenWidth = screenWidth,
+		                    .stepMs = *step,
+		                    .rayOrigin = rayOrigin,
+		                    .rayDirection = rayDirection});
 	}
 	// On the body, the hand eases to a place a little short of the mesh. A slap leaves the distance as it is.
 	// The mesh's way out at the touch comes from the order of the triangle's corners. A slap leaves it straight up.
 	auto normal = glm::vec3(0.0f, 1.0f, 0.0f);
 	if (onBody && !slapped)
 	{
-		feedback::RestHandOnBody(contact->distance, glm::distance(camera, hit->point), height);
+		feedback::RestHandOnBody(contact->distance, x87::Distance<x87::SumOrder::Xzy>(camera, hit->point), height);
 		handDistance = feedback::HandDistanceFromCamera(contact->distance);
 		normal = hit->windingNormal;
 	}
 	contact->distance.UpdateInline(seconds);
-	const auto position = camera + (sight * handDistance);
+	const auto position = feedback::PointOnSight(camera, rayDirection, handDistance);
 	contact->shownAt = position;
 
 	// The hand turns to the body where it touches it, as the cursor moves across the screen
@@ -541,7 +559,7 @@ glm::vec3 CreatureHandSystem::TurnHand(HandOnCreature& contact, bool onBody, boo
 	}
 	contact.up.Update(seconds);
 	const auto up = contact.up.GetValue();
-	return glm::length(up) > 0.0f ? glm::normalize(up) : glm::vec3(0.0f, 1.0f, 0.0f);
+	return glm::length(up) > 0.0f ? x87::Scaled<x87::SumOrder::Zyx>(up) : glm::vec3(0.0f, 1.0f, 0.0f);
 }
 
 bool CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
@@ -560,7 +578,10 @@ bool CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
 	clocks.sinceHold += input.stepMs;
 	// How fast the hand moves across the land, up and down not counting: between the lines through the cursor now and
 	// at the last step, both at the hand's distance
-	contact.speed = glm::length(glm::xz(input.here) - glm::xz(input.before)) / (input.stepMs / 1000.0f);
+	// The game multiplies each part by one over the seconds before it finds the length
+	const float perSecond = 1.0f / (input.stepMs / 1000.0f);
+	const auto moved = (glm::xz(input.here) - glm::xz(input.before)) * perSecond;
+	contact.speed = std::sqrt((moved.x * moved.x) + (moved.y * moved.y));
 	const bool cursorMoved = input.cursor.x != contact.lastCursor.x;
 	bool stroking = false;
 

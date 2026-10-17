@@ -16,6 +16,8 @@
 #include <glm/geometric.hpp>
 
 #include "3D/CreatureBody.h"
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
 
 namespace openblack::creature_footprints
 {
@@ -52,9 +54,7 @@ Foot FootOf(const glm::mat4& world)
 	// The game's matrices are the transposes of these. Its yaw, of a turn about y then x then z, comes from what the
 	// bone's z axis has become.
 	const auto z = glm::vec3(world[2]);
-	const auto length = glm::length(z);
-	const auto axis = length > 0.0f ? z / length : glm::vec3(0.0f, 0.0f, 1.0f);
-	return {.position = glm::vec3(world[3]), .yaw = std::atan2(-axis.x, axis.z)};
+	return {.position = glm::vec3(world[3]), .yaw = x87::RoundToFloat(x87::GameAtan2(-z.x, z.z))};
 }
 
 float Side(float creatureSize, const SpeciesPrint& print)

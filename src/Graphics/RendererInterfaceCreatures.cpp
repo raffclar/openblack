@@ -21,6 +21,7 @@
 #include "Camera/Camera.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/TattooMenu.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
@@ -263,14 +264,20 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 		}
 	}
 	const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(shown.copy);
-	drawBody(mesh->id, 0, bones, targets.has_value() ? &*targets : nullptr, eyes);
-
-	// Its own hair, which hangs from its own pose, faces the editor's eye
 	const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(shown.copy);
-	if (hair != nullptr && Locator::creatureHairSystem::value().IsShown())
+	for (const auto layer : tattoo_menu::DrawOrder(hair != nullptr, Locator::creatureHairSystem::value().IsShown()))
 	{
-		const auto eye = glm::vec3(glm::inverse(shown.view)[3]);
-		DrawCreatureHair(desc, *hair, transform->position, RenderPass::MenuCreature, eye);
+		switch (layer)
+		{
+		case tattoo_menu::Layer::Body:
+			drawBody(mesh->id, 0, bones, targets.has_value() ? &*targets : nullptr, eyes);
+			break;
+		case tattoo_menu::Layer::Hair:
+			// Its own hair, which hangs from its own pose, faces the editor's eye
+			DrawCreatureHair(desc, *hair, transform->position, RenderPass::MenuCreature,
+			                 glm::vec3(glm::inverse(shown.view)[3]));
+			break;
+		}
 	}
 }
 

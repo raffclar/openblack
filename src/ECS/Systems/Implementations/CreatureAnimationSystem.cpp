@@ -21,6 +21,8 @@
 #include <optional>
 #include <span>
 #include <tuple>
+#include <utility>
+#include <vector>
 
 #include <glm/gtx/transform.hpp>
 
@@ -53,6 +55,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Physics/LivingRules.h"
@@ -85,18 +88,31 @@ float LandHeightAt(glm::vec3 point)
 	                                           : 0.0f;
 }
 
-/// Striking with a destroying blow, the body doesn't sway
-bool StrikingToDestroy(const ecs::Registry& registry, entt::entity creature)
+/// What the body of a creature does, as far as a kick of its sway is concerned
+creature_sway::BodyFacts SwayFactsOf(const ecs::Registry& registry, entt::entity creature, const CreatureAnimation& animation)
 {
-	const auto* action = registry.TryGet<const CreatureObjectAction>(creature);
-	return action != nullptr && action->kind == creature_object_actions::Kind::Destroy &&
-	       action->phase == CreatureObjectAction::Phase::Playing;
+	creature_sway::BodyFacts facts;
+	// A fight shows its moves as loops, but only a fighter that is down keeps still
+	if (const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+	    fighting != nullptr && fighting->fighter.state != creature_fight::State::Idle)
+	{
+		const auto state = fighting->fighter.state;
+		facts.downInFight = state == creature_fight::State::Faint || state == creature_fight::State::GetUp ||
+		                    state == creature_fight::State::Lying;
+		return facts;
+	}
+	facts.playsStartLoopEnd = creature_layers::IsPlaying(animation.body) &&
+	                          animation.body.kind == creature_layers::BodyAction::Kind::Sequence &&
+	                          !animation.body.timedByPlayer;
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
+	facts.turnsOnTheSpot = walk != nullptr && walk->motion == CreatureLocomotion::Motion::Turning;
+	return facts;
 }
 
-/// The sway kicked at a point, by the force over the creature's last frame
+/// The sway kicked at a point, by the force over the last game turn of the creature
 void Kick(const ecs::Registry& registry, entt::entity entity, CreatureAnimation& animation, glm::vec3 force, glm::vec3 point)
 {
-	if (StrikingToDestroy(registry, entity))
+	if (!creature_sway::TakesKick(SwayFactsOf(registry, entity, animation)))
 	{
 		return;
 	}
@@ -307,8 +323,15 @@ void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimati
 	{
 		return;
 	}
-	const auto side = glm::normalize(transform.rotation[0]);
-	const auto front = glm::normalize(transform.rotation[2]);
+	auto side = glm::normalize(transform.rotation[0]);
+	auto front = glm::normalize(transform.rotation[2]);
+	// A body that turns on the spot leans along the heading that the turn has reached
+	if (animation.sway.turnHeading.has_value())
+	{
+		const float heading = *animation.sway.turnHeading;
+		side = glm::vec3(std::cos(heading), 0.0f, -std::sin(heading));
+		front = glm::vec3(std::sin(heading), 0.0f, std::cos(heading));
+	}
 	const auto lean = [&](uint32_t clip, float amount) {
 		if (std::abs(amount) <= creature_sway::k_DrawnLean)
 		{
@@ -413,8 +436,11 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 	{
 		animation.body = {};
 	}
-	animation.body = creature_layers::AdvanceBody(
-	    animation.body, playbackMs, DurationOf(animationOf(creature_layers::CurrentAnimation(animation.body))), milliseconds);
+	const auto bodyDuration = DurationOf(animationOf(creature_layers::CurrentAnimation(animation.body)));
+	animation.actionMoment =
+	    animation.actionMoment || creature_layers::ReachesActionMoment(animation.body, playbackMs, bodyDuration,
+	                                                                   static_cast<uint32_t>(rig.kissMs.value_or(0.0f)));
+	animation.body = creature_layers::AdvanceBody(animation.body, playbackMs, bodyDuration, milliseconds);
 	// A dance that needs its next move chooses one of the moves that the species has
 	if (animation.body.chooseDanceMove)
 	{
@@ -460,9 +486,12 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 		}
 		poses = skeletal_animation::WeightedSumInMeshSpace(sampled, weights, animation.skeleton.parents);
 	}
-	else if (const auto* played = creature_layers::IsPlaying(animation.body)
-	                                  ? animationOf(creature_layers::CurrentAnimation(animation.body))
-	                                  : nullptr;
+	else if (const auto* played =
+	             !creature_layers::IsPlaying(animation.body) ? nullptr
+	             : animation.body.blendedWith.has_value()
+	                 ? PairAnimationOf(animation, rig, morph, creature_layers::CurrentAnimation(animation.body),
+	                                   *animation.body.blendedWith, animation.body.blendWeight)
+	                 : animationOf(creature_layers::CurrentAnimation(animation.body));
 	         played != nullptr)
 	{
 		const auto time = creature_layers::DanceMoveTime(animation.body, played->duration);
@@ -736,7 +765,28 @@ void CreatureAnimationSystem::ProcessTurn()
 		animation.breathPeriod = resting;
 		animation.breathTarget = resting;
 	});
+	StepSway();
 	AddAlignmentMotes();
+}
+
+void CreatureAnimationSystem::StepSway()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// Each game turn the body sways from what kicked it, by the seconds that the creature lived in the turn
+	registry.Each<const Creature, const CreatureMorph, CreatureAnimation>(
+	    [&registry](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation) {
+		    auto& sway = animation.sway;
+		    sway.turnSeconds = creature_sway::TurnSeconds(animation.playbackScale);
+		    creature_sway::Step(sway, sway.turnSeconds, MassOf(creature, &morph));
+		    sway.turnHeading.reset();
+		    const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
+		    if (walk != nullptr && walk->motion == CreatureLocomotion::Motion::Turning && walk->move.has_value() &&
+		        walk->move->animations.has_value() && walk->move->durationMs > 0.0f)
+		    {
+			    sway.turnHeading =
+			        creature_sway::TurnHeading(walk->heading, walk->targetHeading, walk->move->timeMs, walk->move->durationMs);
+		    }
+	    });
 }
 
 void CreatureAnimationSystem::AddAlignmentMotes()
@@ -749,24 +799,31 @@ void CreatureAnimationSystem::AddAlignmentMotes()
 	auto& dynamics = Locator::dynamicsSystem::value();
 	auto& random = Locator::gameRandom::value();
 	const creature_alignment_motes::LocalRandom localRandom = [&random](int32_t n) { return random.LocalRand(n); };
-	// Each game turn, a creature whose body looks good or evil makes motes or smoke near the bones of its last pose
-	registry.Each<const Creature, const CreatureMorph, const CreatureAnimation, const Transform>(
-	    [&](const Creature& creature, const CreatureMorph& morph, const CreatureAnimation& animation,
-	        const Transform& transform) {
-		    if (!creature_alignment_motes::MakesAny(morph.drawn.evilGood))
-		    {
-			    return;
-		    }
+	// While the falling spell plays, no creature in the world makes motes
+	const bool fallingSpell = Locator::videoSystem::has_value() && Locator::videoSystem::value().HidesWorld();
+	// Each game turn, a creature whose body is to look good or evil makes motes or smoke near the bones of the pose of the
+	// turn before. Then it keeps the bones of this turn for the next turn.
+	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
+	    [&](const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation, const Transform& transform) {
 		    const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-		    const creature_alignment_motes::BonePoint bonePoint = [&animation, &placement](uint32_t bone) {
-			    return glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
-		    };
-		    const auto bones = static_cast<uint32_t>(animation.boneMatrices.size());
-		    for (const auto& puff :
-		         creature_alignment_motes::PuffsOf(morph.drawn.evilGood, ShownSize(creature), bones, bonePoint, localRandom))
+		    std::vector<glm::vec3> bones(animation.boneMatrices.size());
+		    for (uint32_t bone = 0; bone < bones.size(); ++bone)
 		    {
-			    dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+			    bones[bone] = glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
 		    }
+		    // Before the first turn ends, the bones of this frame are the only pose there is
+		    const auto& last = animation.lastTurnBones.size() == bones.size() ? animation.lastTurnBones : bones;
+		    const auto alignment = TargetMorph(creature, morph).evilGood;
+		    if (!fallingSpell && creature_alignment_motes::MakesAny(alignment))
+		    {
+			    const creature_alignment_motes::BonePoint bonePoint = [&last](uint32_t bone) { return last.at(bone); };
+			    for (const auto& puff : creature_alignment_motes::PuffsOf(
+			             alignment, ShownSize(creature), static_cast<uint32_t>(last.size()), bonePoint, localRandom))
+			    {
+				    dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+			    }
+		    }
+		    animation.lastTurnBones = std::move(bones);
 	    });
 }
 
@@ -841,10 +898,6 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    const float scale = animation.playbackScale;
 		    animation.breathPhase =
 		        creature_animation::AdvanceBreath(animation.breathPhase, seconds * scale, animation.breathPeriod);
-
-		    // The body sways from what kicked it
-		    animation.sway.frameSeconds = seconds;
-		    creature_sway::Step(animation.sway, animation.sway.frameSeconds, MassOf(creature, &morph));
 
 		    if (rig != nullptr)
 		    {
@@ -1042,6 +1095,52 @@ std::optional<glm::vec3> CreatureAnimationSystem::AnimationTravel(entt::entity c
 {
 	const auto* played = PosedAnimationOf(creature, animation);
 	return played != nullptr ? std::optional(played->displacement) : std::nullopt;
+}
+
+std::optional<creature_kiss::KissPoints> CreatureAnimationSystem::KissPointsOf(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* self = registry.TryGet<const Creature>(creature);
+	const auto* morph = registry.TryGet<const CreatureMorph>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	if (self == nullptr || morph == nullptr || transform == nullptr || !rigs.Contains(creature::GetRigId(self->species)))
+	{
+		return std::nullopt;
+	}
+	const auto& rig = *rigs.Handle(creature::GetRigId(self->species));
+	const auto* stand = PosedAnimationOf(creature, creature_layers::animations::k_Stand);
+	if (stand == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto& body = registry.Get<CreatureAnimation>(creature);
+	// The lips are the point on the body that kisses, or else the head bone. Without the animation they stay at the
+	// origin of the creature.
+	const auto lipsIn = [&](size_t index) {
+		const auto* played = PosedAnimationOf(creature, index);
+		if (played == nullptr)
+		{
+			return glm::vec3(0.0f);
+		}
+		const auto time = static_cast<uint32_t>(
+		    std::clamp(rig.kissMs.value_or(0.0f), 0.0f, static_cast<float>(std::max(played->duration, 1u) - 1)));
+		const auto poses = skeletal_animation::SampleCycle(*played, *stand, time, body.skeleton, {});
+		const auto matrices = skeletal_animation::ComposeBoneMatrices(poses, body.skeleton.parents);
+		glm::vec3 lips(0.0f);
+		if (rig.kissPoint.has_value())
+		{
+			const auto& point = *rig.kissPoint;
+			const auto triangle = creature::PosedTriangle(point.vertices, point.bones, morph->drawn, matrices, glm::mat4(1.0f));
+			lips = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], point.u, point.v).position;
+		}
+		else if (rig.actionPoints.has_value() && rig.actionPoints->head < matrices.size())
+		{
+			lips = glm::vec3(matrices[rig.actionPoints->head][3]);
+		}
+		return lips * transform->scale;
+	};
+	return creature_kiss::KissPoints {.high = lipsIn(creature_kiss::k_HighKiss), .low = lipsIn(creature_kiss::k_LowKiss)};
 }
 
 void CreatureAnimationSystem::KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point)

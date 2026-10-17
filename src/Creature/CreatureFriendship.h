@@ -59,6 +59,9 @@ struct AvailabilityFacts
 	uint32_t asker {0};
 };
 [[nodiscard]] Availability AvailabilityOf(const AvailabilityFacts& facts);
+/// The partner of a creature now: the creature it does a joint action with, else the opponent of the fight it is in,
+/// else none
+[[nodiscard]] std::optional<uint32_t> PartnerNow(std::optional<uint32_t> jointPartner, std::optional<uint32_t> opponent);
 
 /// The answer of the asked creature
 struct Answer
@@ -117,6 +120,32 @@ struct AgendaUse
 /// Whether the agenda uses a thing. With no belief about the thing (none), it is "used" whenever a part of the plan or
 /// a step that is left uses nothing, as in the game.
 [[nodiscard]] bool AgendaUses(const AgendaUse& use, std::optional<uint32_t> thing);
+
+/// What a turn does to a joint action, from the agenda of one of the two creatures
+enum class JointTurn : uint8_t
+{
+	Continues,
+	/// The agenda came to an end with an order: the joint action stops on the next turn
+	EndsNextTurn,
+	Ends,
+};
+/// The facts about the agenda of one of the two creatures in a joint action on a turn
+struct JointFacts
+{
+	/// The creature took up another agenda
+	bool otherAgenda;
+	/// The agenda had steps left when the joint action noted it, and has steps left now
+	bool hadStepsLeft;
+	bool hasStepsLeft;
+	/// The last step of the agenda gave an order to the partner, and the agenda did not stop before that step
+	bool endedWithOrder;
+	/// The creature saw on an earlier turn that its agenda came to an end
+	bool endSeen;
+};
+/// The joint action stops when the creature takes up another agenda, or when its agenda comes to an end. The asker gives
+/// an order on the turn that the order step starts, but it sees the end of its agenda only on the next turn. Thus the
+/// partner starts the last order before the joint action stops.
+[[nodiscard]] JointTurn JointTurnOf(const JointFacts& facts);
 
 /// Each turn that a creature thinks, how impressive it finds the other creatures fades a little, and the attention
 /// that they gave it fades faster

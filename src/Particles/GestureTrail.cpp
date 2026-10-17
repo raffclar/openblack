@@ -14,6 +14,8 @@
 #include <array>
 #include <utility>
 
+#include "Common/X87.h"
+
 using namespace openblack::particles;
 
 namespace
@@ -40,9 +42,8 @@ void TrailPath::Measure()
 	for (size_t i = 1; i < _points.size(); ++i)
 	{
 		const auto step = _points[i] - _points[i - 1];
-		const double length = std::sqrt((static_cast<double>(step.x) * step.x) + (static_cast<double>(step.y) * step.y) +
-		                                (static_cast<double>(step.z) * step.z));
-		_distances[i] = static_cast<float>(length + _distances[i - 1]);
+		const float length = std::sqrt((step.z * step.z) + (step.y * step.y) + (step.x * step.x));
+		_distances[i] = length + _distances[i - 1];
 	}
 }
 
@@ -53,30 +54,31 @@ float TrailPath::Length() const
 
 float gesture_trail::Transition(float t, float gain)
 {
-	const double eased = ((3.0 - (static_cast<double>(t) + t)) * t * t) - t;
-	return static_cast<float>((eased * gain) + t);
+	const float eased = ((3.0f - (t + t)) * t * t) - t;
+	return (eased * gain) + t;
 }
 
 uint8_t gesture_trail::RevealAlpha(float along, float grown, float maxAlpha)
 {
-	constexpr double k_ByteMax = 255.0;
-	const auto fade = grown * maxAlpha;
-	// Fading in from the start and from the end
-	const auto fromStart = along < grown ? static_cast<float>((-static_cast<double>(fade) * (along / grown)) + fade) : 0.0f;
-	const auto fromEnd = 1.0f - along;
-	double alpha = fromEnd < grown ? (-static_cast<double>(fade) * (fromEnd / grown)) + fade : 0.0;
+	constexpr float k_ByteMax = 255.0f;
+	const float fade = grown * maxAlpha;
+	// It fades in from the start and from the end
+	const float fromStart = along < grown ? ((along / grown) * -fade) + fade : 0.0f;
+	const float fromEnd = 1.0f - along;
+	float alpha = fromEnd < grown ? ((fromEnd / grown) * -fade) + fade : 0.0f;
 	alpha += fromStart;
-	alpha = alpha <= 0.0 ? 0.0 : (alpha < k_ByteMax ? alpha : k_ByteMax);
+	alpha = alpha <= 0.0f ? 0.0f : (alpha < k_ByteMax ? alpha : k_ByteMax);
 	return static_cast<uint8_t>(static_cast<int>(alpha));
 }
 
 float gesture_trail::WiggleAmount(float age, float phaseSpeed, float dispersalTime, float shrinkTime)
 {
-	auto amount = static_cast<float>((std::cos(static_cast<double>(age) * phaseSpeed) + 1.0) * 0.5);
-	const double dispersed = static_cast<double>(age) - dispersalTime;
-	if (dispersed >= 0.0)
+	// The cosine stays wide until the add of one
+	float amount = x87::Add(x87::Cos(age * phaseSpeed), 1.0) * 0.5f;
+	const float dispersed = age - dispersalTime;
+	if (dispersed >= 0.0f)
 	{
-		const auto left = static_cast<float>(1.0 - (dispersed / shrinkTime));
+		const float left = 1.0f - (dispersed / shrinkTime);
 		amount *= left <= 0.0f ? 0.0f : (left < 1.0f ? left : 1.0f);
 	}
 	return amount;
@@ -88,35 +90,31 @@ glm::vec3 gesture_trail::Lift(glm::vec3 point, glm::vec3 camera, float size)
 	float distance = 0.0f;
 	if (towards != glm::vec3(0.0f))
 	{
-		distance = static_cast<float>(std::sqrt((static_cast<double>(towards.y) * towards.y) +
-		                                        (static_cast<double>(towards.x) * towards.x) +
-		                                        (static_cast<double>(towards.z) * towards.z)));
-		const double inverse = 1.0 / distance;
-		towards = {static_cast<float>(inverse * towards.x), static_cast<float>(inverse * towards.y),
-		           static_cast<float>(inverse * towards.z)};
+		distance = std::sqrt((towards.z * towards.z) + (towards.x * towards.x) + (towards.y * towards.y));
+		towards *= 1.0f / distance;
 	}
 	if (towards.y <= 0.0f)
 	{
 		return point;
 	}
-	const double steep = static_cast<double>(size) / towards.y;
+	const float steep = size / towards.y;
 	const auto half = distance * k_MostLift;
-	const auto lift = static_cast<float>(steep <= half ? steep : half);
+	const float lift = steep <= half ? steep : half;
 	return point + (towards * lift);
 }
 
 float gesture_trail::SheetStrength(float age, float lifetime)
 {
-	double share = static_cast<double>(age) / lifetime;
-	share = share <= 0.0 ? 0.0 : (share < 1.0 ? share : 1.0);
-	const double centred = share + share - 1.0;
-	return static_cast<float>(1.0 - (centred * centred));
+	float share = age / lifetime;
+	share = share <= 0.0f ? 0.0f : (share < 1.0f ? share : 1.0f);
+	const float centred = share + share - 1.0f;
+	return 1.0f - (centred * centred);
 }
 
-double gesture_trail::FlashLeft(float since, float duration)
+float gesture_trail::FlashLeft(float since, float duration)
 {
-	const double left = 1.0 - (static_cast<double>(since) / duration);
-	return left <= 0.0 ? 0.0 : (left < 1.0 ? left : 1.0);
+	const float left = 1.0f - (since / duration);
+	return left <= 0.0f ? 0.0f : (left < 1.0f ? left : 1.0f);
 }
 
 uint32_t gesture_trail::Dimmed(uint32_t argb, uint8_t level)
@@ -147,9 +145,8 @@ float gesture_trail::ChainDistanceScale(float distance)
 	{
 		++i;
 	}
-	const double t =
-	    (static_cast<double>(distance) - k_Distances.at(i)) / (static_cast<double>(k_Distances.at(i + 1)) - k_Distances.at(i));
-	return static_cast<float>((t * (static_cast<double>(k_Scales.at(i + 1)) - k_Scales.at(i))) + k_Scales.at(i));
+	const float t = (distance - k_Distances.at(i)) / (k_Distances.at(i + 1) - k_Distances.at(i));
+	return (t * (k_Scales.at(i + 1) - k_Scales.at(i))) + k_Scales.at(i);
 }
 
 glm::vec3 TrailPath::At(float fraction) const
@@ -158,7 +155,7 @@ glm::vec3 TrailPath::At(float fraction) const
 	{
 		return glm::vec3(0.0f);
 	}
-	const double distance = static_cast<double>(fraction) * _distances.back();
+	const float distance = fraction * _distances.back();
 	if (_distances.back() < distance)
 	{
 		return _points.back();
@@ -175,11 +172,11 @@ glm::vec3 TrailPath::At(float fraction) const
 	}
 	const auto& from = _points[i];
 	const auto& to = _points[i + 1];
-	const double span = static_cast<double>(_distances[i + 1]) - _distances[i];
-	if (span == 0.0)
+	const float span = _distances[i + 1] - _distances[i];
+	if (span == 0.0f)
 	{
 		return from;
 	}
-	const auto t = static_cast<float>((distance - _distances[i]) / span);
+	const float t = (distance - _distances[i]) / span;
 	return (to - from) * t + from;
 }

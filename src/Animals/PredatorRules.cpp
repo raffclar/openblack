@@ -11,14 +11,17 @@
 
 #include <algorithm>
 
+#include "3D/MapCoords.h"
+#include "Common/X87.h"
+
 using namespace openblack;
 namespace predators = openblack::animals::predators;
 
 namespace
 {
 /// A speed state is map units a turn: ten metres a second for every 65536 / 100 of them
-constexpr double k_SpeedStateScale = 10.0 / 65536.0;
-constexpr double k_SpeedStateMetres = 10.0;
+constexpr float k_SpeedStateScale = 10.0f / 65536.0f;
+constexpr float k_SpeedStateMetres = 10.0f;
 
 uint8_t AsUrgency(uint32_t value)
 {
@@ -44,7 +47,7 @@ bool predators::IsPredator(AnimalInfo type)
 
 float predators::SpeedMetresPerSecond(uint16_t speedState)
 {
-	return static_cast<float>(k_SpeedStateScale * static_cast<double>(speedState) * k_SpeedStateMetres);
+	return (k_SpeedStateScale * static_cast<float>(speedState)) * k_SpeedStateMetres;
 }
 
 uint8_t predators::VillagerPriority(const VillagerSees& sees)
@@ -66,9 +69,10 @@ uint8_t predators::VillagerPriority(const VillagerSees& sees)
 	{
 		return 0;
 	}
-	const double factor =
-	    static_cast<double>(sees.speed) / static_cast<double>(std::max<uint32_t>(sees.kindSpeed3, 1)) * 0.5 + 0.5;
-	return AsUrgency(static_cast<uint32_t>(static_cast<int32_t>(static_cast<double>(sees.tablePriority) * factor)));
+	const float speedShare =
+	    x87::Div(static_cast<double>(sees.speed), static_cast<double>(std::max<uint32_t>(sees.kindSpeed3, 1)));
+	const float factor = speedShare * 0.5f + 0.5f;
+	return AsUrgency(static_cast<uint32_t>(map_coords::FtoL(x87::Mul(static_cast<double>(sees.tablePriority), factor))));
 }
 
 uint8_t predators::HunterPriority(bool thingLiving, float thingStrength, float ownStrength, uint32_t tablePriority)

@@ -256,6 +256,12 @@ public:
 
 	/// The height of the land at a point of the ground
 	[[nodiscard]] virtual float LandHeight(glm::vec2 xz) const = 0;
+	/// The height of the land at a map position, x and z in 16.16 fixed point (a 10 m cell to 0x10000)
+	[[nodiscard]] virtual float LandHeightAtMap(int32_t x, int32_t z) const
+	{
+		constexpr float k_MetresPerFixed = 10.0f / 65536.0f;
+		return LandHeight({static_cast<float>(x) * k_MetresPerFixed, static_cast<float>(z) * k_MetresPerFixed});
+	}
 	/// A player's colour as 0xRRGGBB
 	[[nodiscard]] virtual uint32_t PlayerColour(int player) const = 0;
 	/// The camera's right and up, for rules that line sprites up with what the camera sees
@@ -703,6 +709,9 @@ struct Collection
 	int textureRepeats {-1};
 	/// How fast its ribbon's texture slides along it, in sheet heights a second
 	float textureSpeed {0.0f};
+	/// How far its ribbon's texture has slid along it, in sheet heights, wrapped round at one repeat of the frame. It moves
+	/// on only on the frames that draw the ribbon.
+	float textureScroll {0.0f};
 	std::vector<std::unique_ptr<Atom>> atoms;
 	std::vector<Slot> modifiers;
 };
@@ -928,6 +937,8 @@ public:
 	void Walk(float t, DrawWalk& out) const;
 	/// Each shower of sparks of an atom that is drawn, for a frame's time to pass on it
 	void ForEachDrawnShower(const std::function<void(ObjectShower&)>& visit);
+	/// Slides the texture of each ribbon that shows, by a drawn frame of this many game milliseconds
+	void ScrollChains(float milliseconds);
 	[[nodiscard]] size_t AtomCount() const { return _atomCount; }
 	[[nodiscard]] size_t CollectionCount() const;
 

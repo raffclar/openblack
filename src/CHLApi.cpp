@@ -58,6 +58,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureActivity.h"
+#include "Creature/CreatureCreed.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureRoute.h"
@@ -85,6 +86,7 @@
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCreedPowers.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -131,6 +133,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipChants.h"
+#include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/CreatureRemoval.h"
@@ -5235,9 +5238,8 @@ void MoveMusic() // 149 MOVE_MUSIC
 
 void GetInclusionDistance() // 150 GET_INCLUSION_DISTANCE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The world camera's distance to the fence from its last fence test
+	Pushf(Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f);
 }
 
 void GetLandHeight() // 151 GET_LAND_HEIGHT
@@ -7942,12 +7944,13 @@ void VortexParameters() // 328 VORTEX_PARAMETERS
 
 void LoadCreature() // 329 LOAD_CREATURE
 {
-	// const auto position = PopVec();
-	// const auto player = Popf();
-	// const auto mindFilename = PopString();
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A creature of the species for the player from a mind file, which becomes the creature of the player
+	const auto position = PopVec();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto fileName = PopString();
+	const auto speciesRow = Pop().uintVal;
+	ecs::creature_from_file::Make(
+	    {.owner = player, .speciesRow = speciesRow, .fileName = fileName, .place = glm::vec2(position.x, position.z)});
 }
 
 void IsSpellCharging() // 330 IS_SPELL_CHARGING
@@ -8040,13 +8043,25 @@ void GetBellyPosition() // 337 GET_BELLY_POSITION
 
 void SetCreatureCreedProperties() // 338 SET_CREATURE_CREED_PROPERTIES
 {
-	// const auto time = Popf();
-	// const auto power = Popf();
-	// const auto scale = Popf();
-	// const auto handGlow = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The glow's values only: openblack does not show the glows yet. The time has no effect in the game.
+	[[maybe_unused]] const auto time = Popf();
+	const auto power = Popf();
+	const auto scale = Popf();
+	const auto glow = Pop().intVal;
+	const auto creature = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature) || !registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("Thing not creature!");
+		return;
+	}
+	auto& powers = registry.AllOf<ecs::components::CreatureCreedPowers>(creature)
+	                   ? registry.Get<ecs::components::CreatureCreedPowers>(creature)
+	                   : registry.Assign<ecs::components::CreatureCreedPowers>(creature);
+	if (glow >= 0)
+	{
+		creature_creed::Set(powers, static_cast<size_t>(glow), scale, power);
+	}
 }
 
 void GameThingCanViewCamera() // 339 GAME_THING_CAN_VIEW_CAMERA
@@ -9094,8 +9109,7 @@ void StopImmersion() // 430 STOP_IMMERSION
 
 void StopAllImmersion() // 431 STOP_ALL_IMMERSION
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Stopping every force-feedback effect does nothing without the device either
 }
 
 void SetCreatureInTemple() // 432 SET_CREATURE_IN_TEMPLE

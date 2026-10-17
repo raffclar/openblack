@@ -66,10 +66,6 @@ namespace openblack::ecs::systems::mind_detail
 /// The kind of belief a creature keeps about a thing, by the game's belief types; none for the things it does not yet
 /// know the kind of here
 [[nodiscard]] std::optional<uint32_t> BeliefKindOf(const ecs::Registry& registry, entt::entity thing);
-/// The model of a worship site's altar: its own once it shows, else the model of its site's tribe that it shows when
-/// its site is built. The altar stands on the map from when its site is made, so its size and its cells come from this
-/// model.
-[[nodiscard]] std::optional<entt::id_type> AltarMeshOf(const ecs::Registry& registry, entt::entity altar);
 /// The data of a worship site's altar: the data of the worship site of its site's tribe. None for another thing.
 [[nodiscard]] const GWorshipSiteInfo* AltarInfoOf(const ecs::Registry& registry, entt::entity altar);
 /// What a creature knows of a thing. When the creature has a belief about the thing, these are the attributes that it
@@ -124,6 +120,9 @@ void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::s
 /// standing in its way there (nor anything living, when asked), inside any area it is kept within. None without one.
 [[nodiscard]] std::optional<glm::vec2> ClearAreaFor(const ecs::Registry& registry, entt::entity creature, glm::vec2 point,
                                                     float width, bool livingBlocks);
+/// Whether a cell of the land is clear for a creature: land it can walk on, with nothing standing in its way there (nor
+/// anything living, when asked)
+[[nodiscard]] bool CellClearFor(const ecs::Registry& registry, entt::entity creature, int32_t x, int32_t z, bool livingBlocks);
 /// The way a creature looks, as a game angle: towards what its head is turned to, or else the way its body faces
 [[nodiscard]] uint16_t LookingAngle(const components::Transform& transform, const std::optional<glm::vec3>& lookAt);
 /// Whether the body of the creature can pay for a miracle of a type

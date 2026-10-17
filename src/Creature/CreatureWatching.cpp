@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include "Common/X87.h"
+
 using namespace openblack;
 using namespace openblack::creature_watching;
 
@@ -140,15 +142,15 @@ bool creature_watching::WatchesVillagers(const Watcher& watcher)
 
 float creature_watching::TimesNeeded(uint32_t timesToSee, float speciesMultiplier)
 {
-	return static_cast<float>(timesToSee) * speciesMultiplier;
+	// The count is exact in the multiply, and the product rounds to a float
+	return x87::Mul(static_cast<double>(timesToSee), speciesMultiplier);
 }
 
 uint32_t creature_watching::TaughtSightings(uint32_t timesToSee, float speciesMultiplier)
 {
-	// The product is taken at full precision before it is rounded down, so a multiplier just under a whole share
-	// (10 * 0.7 is 6.99999...) gives one sighting fewer than single precision would
-	const auto times = static_cast<double>(timesToSee) * static_cast<double>(speciesMultiplier);
-	return times > 0.0 ? static_cast<uint32_t>(times) : 0;
+	// The float product is cut towards zero. 10 times 0.7 rounds to 7 before the cut
+	const float times = TimesNeeded(timesToSee, speciesMultiplier);
+	return times > 0.0f ? static_cast<uint32_t>(times) : 0;
 }
 
 bool creature_watching::SetKnown(Knowledge& knowledge, KnownList list, size_t index, bool knows, uint32_t taughtSightings)
@@ -321,9 +323,9 @@ bool creature_watching::MayStartMimicry(const std::optional<Mimicry>& mimicry, s
 
 CastDeedStep creature_watching::CastDeedGate(uint32_t sightings, uint32_t timesToSee, float speciesMultiplier)
 {
-	// The times needed are taken at full precision, less the sightings, then cut towards zero
-	const auto needed = static_cast<double>(timesToSee) * static_cast<double>(speciesMultiplier);
-	const auto stillNeeded = static_cast<int64_t>(needed - static_cast<double>(static_cast<float>(sightings)));
+	// The times needed less the sightings, both floats, then cut towards zero
+	const float needed = TimesNeeded(timesToSee, speciesMultiplier);
+	const auto stillNeeded = static_cast<int64_t>(needed - static_cast<float>(sightings));
 	if (stillNeeded > 1)
 	{
 		return CastDeedStep::CountAndStop;

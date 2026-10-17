@@ -8,9 +8,11 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <numbers>
 #include <optional>
 #include <vector>
@@ -101,6 +103,16 @@ TEST(CreatureDesires, TheSigmoidSteps)
 	EXPECT_FLOAT_EQ(creature_desires::Sigmoid(0.5f, 0.5f), 0.5f);
 	EXPECT_FLOAT_EQ(creature_desires::Sigmoid(0.0f, 1.0f), 1.0f);
 	EXPECT_LT(creature_desires::Sigmoid(0.9f, 0.1f), 1e-6f);
+}
+
+TEST(CreatureDesires, TheSigmoidStepsHaveTheBitsOfTheGameTable)
+{
+	// These values read the steps 16, 24 and 32 of the table
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_desires::Sigmoid(0.5f, 0.29f)), 0x3C868D9Bu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_desires::Sigmoid(0.0f, 0.18f)), 0x3F7BCB93u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_desires::SigmoidStep(-0.6f, 0.0f)), 0x3F7FFFB2u);
+	// The step without the cut off still gives 0 for a threshold of 1
+	EXPECT_EQ(creature_desires::SigmoidStep(1.0f, 0.5f), 0.0f);
 }
 
 TEST(CreatureDesires, ADesireGrowsByItsDriveOverItsIncreaseTime)
@@ -390,7 +402,7 @@ TEST(CreatureIdleMind, AgendasPullTheFacesOfWhatTheyDo)
 	EXPECT_EQ(creature_mind::DestroyThing(1).back().face, Cue::Anger);
 	EXPECT_EQ(creature_mind::RunFrom({}).back().face, Cue::Fear);
 	const auto examine = creature_mind::ExamineByPickingUp(1, false, Always(0));
-	ASSERT_EQ(examine.size(), 3u);
+	ASSERT_EQ(examine.size(), 4u);
 	EXPECT_EQ(examine[0].face, Cue::None);
 	EXPECT_EQ(examine[1].face, Cue::Curiosity);
 	EXPECT_EQ(examine[2].face, Cue::None);
@@ -408,16 +420,17 @@ TEST(CreatureIdleMind, EachFacePulledMovesTheVarietyOn)
 {
 	creature_mind::IdleMind mind;
 	const creature_mind::Senses senses {};
-	const auto first = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(3));
+	// The variety moves on by the draw from the random numbers of the game (the second source)
+	const auto first = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(0), Always(3));
 	ASSERT_TRUE(first.has_value());
 	EXPECT_EQ(first->face, creature_face::Face::Scared);
 	EXPECT_EQ(mind.faceVariety, 3u);
-	const auto second = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(3));
+	const auto second = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(0), Always(3));
 	ASSERT_TRUE(second.has_value());
 	EXPECT_EQ(second->face, creature_face::Face::Ooh);
 	EXPECT_EQ(mind.faceVariety, 6u);
 	// A reason that pulls no face leaves it be
-	EXPECT_FALSE(creature_mind::PullFace(mind, creature_face::Cue::None, senses, Always(3)).has_value());
+	EXPECT_FALSE(creature_mind::PullFace(mind, creature_face::Cue::None, senses, Always(0), Always(3)).has_value());
 	EXPECT_EQ(mind.faceVariety, 6u);
 }
 
@@ -909,12 +922,11 @@ TEST(CreatureIdleMind, HangingAroundGoesOutFromHomeAwayFromTheTemple)
 	ASSERT_TRUE(agenda[4].order.seconds.has_value());
 	EXPECT_NEAR(*agenda[4].order.seconds, 1.0f, k_Tolerance);
 	EXPECT_EQ(agenda[4].face, creature_face::Cue::Amazed);
-	// Then it turns to the temple and sits for ten seconds and a little more, mirrored half the time
+	// Then it turns to the temple and sits for ten seconds and a little more
 	EXPECT_EQ(agenda[5].movement.kind, Movement::Kind::FacePoint);
 	EXPECT_NEAR(agenda[5].movement.point.y, 100.0f, k_Tolerance);
 	EXPECT_EQ(agenda[6].kind, Kind::Static);
 	EXPECT_EQ(agenda[6].sequence[1], animations::k_Sit);
-	EXPECT_TRUE(agenda[6].mirrorAtRandom);
 	EXPECT_NEAR(agenda[6].seconds, 10.0f + (5.0f * 0.005f), k_Tolerance);
 	EXPECT_EQ(agenda[6].face, creature_face::Cue::None);
 }

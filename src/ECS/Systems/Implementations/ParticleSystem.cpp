@@ -136,6 +136,11 @@ float GameParticleWorld::LandHeight(glm::vec2 xz) const
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(xz) : 0.0f;
 }
 
+float GameParticleWorld::LandHeightAtMap(int32_t x, int32_t z) const
+{
+	return Locator::terrainSystem::has_value() ? static_cast<float>(Locator::terrainSystem::value().GetAltitude(x, z)) : 0.0f;
+}
+
 uint32_t GameParticleWorld::PlayerColour(int player) const
 {
 	return ecs::components::Player::k_Colours.at(static_cast<size_t>(player) &

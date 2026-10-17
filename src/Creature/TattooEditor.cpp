@@ -28,8 +28,8 @@ constexpr float k_SpeedDecay = -8.0f;
 constexpr float k_SteerScale = 0.001f;
 constexpr float k_TurnSteer = 0.2f;
 constexpr float k_TipSteer = 0.1f;
-/// The lowest the view goes: a quarter as high above the focus as it is far from it across the ground
-constexpr float k_LowestTip = 0.25f;
+/// The lowest the view goes: an eighth as high above the focus as it is far from it across the ground
+constexpr float k_LowestTip = 0.125f;
 } // namespace
 
 Session creature_tattoo_editor::Open(const creature_tattoo::Slots& slots)

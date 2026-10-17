@@ -23,6 +23,9 @@ namespace openblack::primary_creature
 /// Remembers that a player got a creature, after those they got before; a creature already listed keeps its place
 void Acquire(std::vector<entt::entity>& acquired, entt::entity creature);
 
+/// Makes a creature the primary creature of the player, before all the creatures that the player got before
+void MakePrimary(std::vector<entt::entity>& acquired, entt::entity creature);
+
 /// The earliest creature got that is still the player's, by a test of whether a creature still exists and is theirs
 template <typename StillOwned>
 [[nodiscard]] std::optional<entt::entity> Primary(std::span<const entt::entity> acquired, StillOwned&& stillOwned)

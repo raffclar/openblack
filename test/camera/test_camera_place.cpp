@@ -20,6 +20,7 @@
 #include <Audio/AudioManagerNoOp.h>
 #include <Camera/Camera.h>
 #include <Camera/DefaultWorldCameraModel.h>
+#include <Camera/DoubleClickFlight.h>
 #include <ECS/Registry.h>
 #include <Locator.h>
 
@@ -125,7 +126,7 @@ protected:
 // The camera stays where a script puts it during the first part of a flight: the flight clock stops there
 TEST_F(CameraPlace, AFlightUnderWayDoesntCarryThePlacedCameraOff)
 {
-	_camera.GetModel().SetFlight(k_FarOrigin, k_FarFocus);
+	_camera.GetModel().SetFlight(k_FarOrigin, k_FarFocus, openblack::camera_fly::k_BookmarkRise);
 	RunFrames(3);
 	_camera.Place(k_PlacedOrigin, k_PlacedFocus);
 	EXPECT_LT(glm::distance(_camera.GetOrigin(), k_PlacedOrigin), 1e-3f);
@@ -135,7 +136,7 @@ TEST_F(CameraPlace, AFlightUnderWayDoesntCarryThePlacedCameraOff)
 // A flight that did not start yet starts from where a script puts the camera, and ends where it was to end
 TEST_F(CameraPlace, AFlightNotStartedFliesFromThePlace)
 {
-	_camera.GetModel().SetFlight(k_FarOrigin, k_FarFocus);
+	_camera.GetModel().SetFlight(k_FarOrigin, k_FarFocus, openblack::camera_fly::k_BookmarkRise);
 	_camera.Place(k_PlacedOrigin, k_PlacedFocus);
 	RunFrames(1);
 	EXPECT_GT(glm::distance(_camera.GetOrigin(Camera::Interpolation::Target), k_PlacedOrigin), 1.0f);
@@ -147,7 +148,7 @@ TEST_F(CameraPlace, AFlightNotStartedFliesFromThePlace)
 // part of the flight starts.
 TEST_F(CameraPlace, AMoveBackIntoTheWorldStartsTheRestOfAFlight)
 {
-	_camera.GetModel().SetFlight(k_FarOrigin, k_FarFocus);
+	_camera.GetModel().SetFlight(k_FarOrigin, k_FarFocus, openblack::camera_fly::k_BookmarkRise);
 	RunFrames(3);
 	_camera.Place(k_OutsideOrigin, k_OutsideFocus);
 	RunFrames(300);

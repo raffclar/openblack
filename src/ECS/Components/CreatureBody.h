@@ -52,6 +52,9 @@ struct CreatureAnimation
 {
 	/// What the body plays: standing and breathing, an action, or sitting
 	creature_layers::BodyAction body {};
+	/// The body got to the moment of its action since the last game turn: the middle of an action played once, the
+	/// start of a kiss, or a blow that hits. The pictures for the creature's web page wait for this moment.
+	bool actionMoment {false};
 	/// Animations played together, each by its weight, in place of the body's own when there are any (as walking
 	/// blends into running)
 	struct Slot
@@ -105,6 +108,9 @@ struct CreatureAnimation
 
 	/// The bones' matrices in the mesh's space as posed this frame, which the body is drawn with
 	std::vector<glm::mat4> boneMatrices;
+	/// Where each bone was in the world at the end of the last game turn. The alignment motes of a turn start at the
+	/// bones of the pose of the turn before.
+	std::vector<glm::vec3> lastTurnBones;
 };
 
 /// A creature's eyes: where they look and blink, and where each eyeball and eyelid is drawn this frame

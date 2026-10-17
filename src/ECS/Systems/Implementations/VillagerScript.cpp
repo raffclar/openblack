@@ -256,7 +256,8 @@ void villager_script::SetAge(entt::entity villager, uint32_t age)
 	// Its size starts at its age's and then grows, as a newly made villager's does
 	if (auto* transform = registry.TryGet<Transform>(villager); transform != nullptr)
 	{
-		const auto start = villager_age::StartScale(setting.age, info.grownUpAge, info.ageToScale.values);
+		const auto start = villager_age::StartScale(setting.age, info.grownUpAge, info.ageToScale.values,
+		                                            villager_age::BeforeTable(info.dancingSpeed));
 		const auto grown =
 		    villager_age::GrownScale(setting.age, info.grownUpAge, info.ageToScale.values, start, [](float limit) {
 			    return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(limit) : 0.0f;

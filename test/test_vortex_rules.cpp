@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <bit>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -25,9 +26,9 @@ constexpr uint32_t k_MillisecondsPerTurn = 100;
 
 TEST(VortexRules, ElapsedSecondsCountsTurnsAndThePartOfOne)
 {
-	EXPECT_NEAR(ElapsedSeconds(10, 0.0f, k_MillisecondsPerTurn), 1.0, 1e-6);
-	EXPECT_NEAR(ElapsedSeconds(10, 0.5f, k_MillisecondsPerTurn), 1.05, 1e-6);
-	EXPECT_DOUBLE_EQ(ElapsedSeconds(0, 0.0f, k_MillisecondsPerTurn), 0.0);
+	EXPECT_NEAR(ElapsedSeconds(10, 0.0f, k_MillisecondsPerTurn), 1.0f, 1e-6f);
+	EXPECT_NEAR(ElapsedSeconds(10, 0.5f, k_MillisecondsPerTurn), 1.05f, 1e-6f);
+	EXPECT_FLOAT_EQ(ElapsedSeconds(0, 0.0f, k_MillisecondsPerTurn), 0.0f);
 }
 
 TEST(VortexRules, AFadeIsOverOnTheSeventiethTurn)
@@ -38,8 +39,8 @@ TEST(VortexRules, AFadeIsOverOnTheSeventiethTurn)
 	EXPECT_EQ(Advance(VortexStateType::FadeOut, ElapsedSeconds(69, 0.0f, k_MillisecondsPerTurn)), Step::Stay);
 	EXPECT_EQ(Advance(VortexStateType::FadeOut, ElapsedSeconds(70, 0.0f, k_MillisecondsPerTurn)), Step::Remove);
 	// An open vortex stays open
-	EXPECT_EQ(Advance(VortexStateType::Active, 1000.0), Step::Stay);
-	EXPECT_EQ(Advance(VortexStateType::Inactive, 1000.0), Step::Stay);
+	EXPECT_EQ(Advance(VortexStateType::Active, 1000.0f), Step::Stay);
+	EXPECT_EQ(Advance(VortexStateType::Inactive, 1000.0f), Step::Stay);
 }
 
 TEST(VortexRules, FadingInWaitsTwoSecondsThenEasesOpenOverFive)
@@ -120,7 +121,8 @@ TEST(VortexRules, TheHoleAndRingTexturesAreCentredOnTheVortexAcrossZAndDownX)
 TEST(VortexRules, TheSwirlRisesTowardsTheGroundAsTheLandIsLevelled)
 {
 	EXPECT_FLOAT_EQ(SwirlDepth(0.0f), 2.5f);
-	EXPECT_FLOAT_EQ(SwirlDepth(1.0f), 0.3f);
+	// 0.3 less 2.5 is -2.2 as a float, so the swirl ends a little higher than 0.3 below the ground
+	EXPECT_EQ(std::bit_cast<uint32_t>(SwirlDepth(1.0f)), 0x3E999998u);
 }
 
 TEST(VortexRules, OnlyTheLandVorticesLevelTheGround)
@@ -172,6 +174,14 @@ TEST(VortexRules, ACellIsPulledTowardsTheAverageByTheAmount)
 	EXPECT_EQ(LevelledAltitude(10, 11.0f, 0.0f, 0.5f), 10);
 	EXPECT_EQ(LevelledAltitude(11, 12.0f, 0.0f, 0.5f), 12);
 	EXPECT_EQ(LevelledAltitude(0, 255.0f, 0.0f, 1.0f), 255);
+}
+
+TEST(VortexRules, TheRingsPullIsWorkedOutInFloats)
+{
+	// 56 less 51.3 is 4.7000008 as a float, so the height is 17.499994 and rounds down
+	EXPECT_EQ(LevelledAltitude(41, 11.0f, 51.3f, 1.0f), 17);
+	// 56 less 52.7 is 3.2999992 as a float, so the height is 24.500004 and rounds up
+	EXPECT_EQ(LevelledAltitude(41, 11.0f, 52.7f, 1.0f), 25);
 }
 
 TEST(VortexRules, TheSquareFlattensRoundItsMiddleAndLeavesItsCorners)

@@ -376,7 +376,8 @@ struct CreatureInitialDesireInfo
 	uint32_t field0x6c;
 	std::array<char, 0x40> field0x70;
 	std::array<char, 0x40> field0xb0;
-	std::array<char, 0x40> field0xf0;
+	/// The short name of the desire, as "impress", which the creature's web page uses
+	std::array<char, 0x40> shortName;
 	std::array<char, 0x40> field0x130;
 	std::array<char, 0x40> field0x170;
 };
@@ -1989,7 +1990,8 @@ struct CreatureActionInfo
 	uint32_t field0xdc;
 	uint32_t field0xe0;
 	uint32_t field0xe4;
-	float field0xe8;
+	/// How much a picture of the action is worth for the creature's web page, from 0 to 1
+	float pictureWorth;
 	/// When the action ends well on another creature, how much nicer the creature finds the other creature, from -1 to 1
 	float creatureNicenessChange;
 	uint32_t field0xf0;
@@ -2002,6 +2004,7 @@ static_assert(offsetof(CreatureActionInfo, skillsNeeded) == 0x9c);
 static_assert(offsetof(CreatureActionInfo, desireMultiplier) == 0xc0);
 static_assert(offsetof(CreatureActionInfo, magicType) == 0xa4);
 static_assert(offsetof(CreatureActionInfo, shownDesire) == 0xb4);
+static_assert(offsetof(CreatureActionInfo, pictureWorth) == 0xe8);
 static_assert(offsetof(CreatureActionInfo, creatureNicenessChange) == 0xec);
 
 struct InfoConstants

@@ -13,7 +13,7 @@ using namespace openblack;
 
 bool creature_emergencies::LooksAtEmergencies(const Gates& gates)
 {
-	return !gates.emergencyRunning && !gates.scripted && !gates.planForced && !gates.fighting;
+	return !gates.emergencyRunning && !gates.scripted && !gates.planForced && !gates.fighting && !gates.knockedOut;
 }
 
 bool creature_emergencies::IsHurt(float life)

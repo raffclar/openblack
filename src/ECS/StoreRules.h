@@ -24,8 +24,8 @@ namespace openblack::ecs::store_rules
 [[nodiscard]] uint32_t TreeWood(float life, float multiplier, uint32_t woodValue, float scale, float landBalance);
 /// The same, as a forest counts it: not truncated
 [[nodiscard]] float TreeWoodValue(float life, float multiplier, uint32_t woodValue, float scale, float landBalance);
-/// A dead tree's wood: its scale and its tree's wood value, times what the tree was worth when it died; its life
-/// doesn't count
+/// A dead tree's wood: its tree's wood value times what the tree was worth when it died, then times its scale, each
+/// step as a float, then cut towards zero; its life does not count
 [[nodiscard]] uint32_t DeadTreeWood(float scale, uint32_t woodValue, float multiplier);
 /// A fence's wood: its life and wood value, by the cube of its scale
 [[nodiscard]] uint32_t FenceWood(float life, uint32_t woodValue, float scale);

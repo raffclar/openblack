@@ -31,6 +31,8 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
@@ -41,7 +43,6 @@
 #include "Creature/CreatureLostThing.h"
 #include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreatureSteal.h"
-#include "Creature/CreatureTempleParts.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/BuildingSites.h"
@@ -85,7 +86,6 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/Map.h"
-#include "ECS/MapCells.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
@@ -93,6 +93,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/ThingModel.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -178,11 +179,8 @@ float HeightOf(const ecs::Registry& registry, entt::entity thing)
 		return k_CreatureHeightOfSizeOne * ShownSize(*creature);
 	}
 	const auto* transform = registry.TryGet<const Transform>(thing);
-	const auto* mesh = registry.TryGet<const Mesh>(thing);
 	// An altar has its model's size from when its site is made, before the model shows
-	const auto meshId = mesh != nullptr                       ? std::optional(mesh->id)
-	                    : registry.AllOf<WorshipAltar>(thing) ? mind_detail::AltarMeshOf(registry, thing)
-	                                                          : std::nullopt;
+	const auto meshId = ecs::thing_model::ModelOf(registry, thing);
 	if (transform == nullptr || !meshId.has_value() || !Locator::resources::has_value())
 	{
 		return 0.0f;
@@ -193,33 +191,6 @@ float HeightOf(const ecs::Registry& registry, entt::entity thing)
 		return 0.0f;
 	}
 	return meshes.Handle(*meshId)->GetBoundingBox().Size().y * transform->scale.y;
-}
-
-/// The worship site altars that stand in a map cell, by the cells that the outline of each altar's model covers
-std::vector<entt::entity> AltarsIn(const ecs::Registry& registry, glm::ivec2 cell)
-{
-	std::vector<entt::entity> altars;
-	if (!Locator::resources::has_value())
-	{
-		return altars;
-	}
-	const auto& meshes = Locator::resources::value().GetMeshes();
-	registry.Each<const WorshipAltar, const Transform>(
-	    [&](entt::entity altar, const WorshipAltar& /*unused*/, const Transform& transform) {
-		    const auto meshId = mind_detail::AltarMeshOf(registry, altar);
-		    if (!meshId.has_value() || !meshes.Contains(*meshId))
-		    {
-			    return;
-		    }
-		    const auto box = meshes.Handle(*meshId)->GetBoundingBox();
-		    const auto outline = ecs::map_cells::OutlineOfBox(transform.position, transform.rotation, transform.scale.x,
-		                                                      box.Center(), box.Size() * 0.5f);
-		    if (creature_temple_parts::AltarIn(outline, cell))
-		    {
-			    altars.push_back(altar);
-		    }
-	    });
-	return altars;
 }
 
 /// The game turns in one second
@@ -311,11 +282,7 @@ uint16_t mind_detail::LookingAngle(const Transform& transform, const std::option
 	const auto direction = lookAt.has_value() && *lookAt != transform.position ? *lookAt - transform.position : ahead;
 	// Turned as the game keeps a creature's turn, a quarter turn on from the map's, and nothing for no direction across
 	// the land
-	constexpr float k_NoDirection = 1e-6f;
-	const float scawen =
-	    direction.x * direction.x + direction.z * direction.z > k_NoDirection
-	        ? static_cast<float>(std::atan2(static_cast<double>(direction.x), -static_cast<double>(direction.z)))
-	        : 0.0f;
+	const float scawen = x87::RoundToFloat(x87::GameHeadingOf(direction.x, direction.z));
 	return static_cast<uint16_t>(gutils::ConvertScawenAngleToGameAngle(scawen));
 }
 
@@ -442,16 +409,6 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 		return kinds::k_Spell;
 	}
 	return std::nullopt;
-}
-
-std::optional<entt::id_type> mind_detail::AltarMeshOf(const ecs::Registry& registry, entt::entity altar)
-{
-	if (const auto* mesh = registry.TryGet<const Mesh>(altar))
-	{
-		return mesh->id;
-	}
-	const auto* info = AltarInfoOf(registry, altar);
-	return info != nullptr ? std::optional(resources::HashIdentifier(info->meshType)) : std::nullopt;
 }
 
 const GWorshipSiteInfo* mind_detail::AltarInfoOf(const ecs::Registry& registry, entt::entity altar)
@@ -830,10 +787,8 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 		{
 			continue;
 		}
-		// The things that stay put, then the things that move. The altars of the worship sites are not in the map's
-		// cells, but they stand in the cells that they cover as the newest of the things that stay put.
-		const auto altars = AltarsIn(registry, cell);
-		for (const auto thing : creature_temple_parts::ThingsSeenInCell(altars, map.GetAllInCell(cell)))
+		// The things that stay put, then the things that move
+		for (const auto thing : map.GetAllInCell(cell))
 		{
 			ComeAcross(entity, mind, thing);
 			// Each thing in view that it sees may take over what it watches

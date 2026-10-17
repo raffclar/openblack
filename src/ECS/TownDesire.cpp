@@ -17,6 +17,7 @@
 #include <utility>
 
 #include "Common/RuntimeQsort.h"
+#include "Common/X87.h"
 #include "InfoConstants.h"
 
 namespace openblack::ecs::town_desire
@@ -29,7 +30,7 @@ namespace
 constexpr float k_Milli = 0.001f;
 constexpr float k_Tiny = 0.0001f;
 constexpr float k_TinyAbodes = 1e-5f;
-/// Added in double precision, then rounded once
+/// Added to a count of villagers. The game holds it as a double
 constexpr double k_TinyPopulation = 1e-5;
 constexpr float k_HomelessShare = 0.2f;
 constexpr float k_SmallestTrigger = 0.001f;
@@ -432,7 +433,7 @@ float GetDesireVillagerModification(const DesireContext& c, size_t d)
 
 float ModificationGeneral(const DesireContext& c, size_t d)
 {
-	const auto population = static_cast<float>(static_cast<double>(c.in.stats.adults + c.in.stats.children) + k_TinyPopulation);
+	const auto population = x87::Add(static_cast<double>(c.in.stats.adults + c.in.stats.children), k_TinyPopulation);
 	return 1.0f - MinOne(c.desire.doingNow.at(d) / population);
 }
 
@@ -469,7 +470,7 @@ float ModificationToBuild(const DesireContext& c, [[maybe_unused]] size_t d)
 
 float GetTemporaryDesireVillagerModification(const TownDesire& desire, uint32_t population, size_t k)
 {
-	const auto people = static_cast<float>(static_cast<double>(population) + k_TinyPopulation);
+	const auto people = x87::Add(static_cast<double>(population), k_TinyPopulation);
 	float taken = desire.doingNow.at(k) - desire.doingNowAtStart.at(k);
 	taken = (taken < 0.0f) ? 0.0f : taken;
 	return 1.0f - MinOne(taken / people);

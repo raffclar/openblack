@@ -33,6 +33,7 @@
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -76,6 +77,16 @@ std::optional<std::filesystem::path> CreatureCarryOverSystem::ProfilePhysique() 
 	}
 	const auto file = _profileFile();
 	return file.has_value() ? std::optional(creature_carry_over::KeptFilesIn(*_folder, *file).physique) : std::nullopt;
+}
+
+std::optional<std::filesystem::path> CreatureCarryOverSystem::ProfileMind() const
+{
+	if (!_folder.has_value() || !_profileFile)
+	{
+		return std::nullopt;
+	}
+	const auto file = _profileFile();
+	return file.has_value() ? std::optional(creature_carry_over::KeptFilesIn(*_folder, *file).mind) : std::nullopt;
 }
 
 std::optional<creature_carry_over::KeptFiles> CreatureCarryOverSystem::Files() const
@@ -280,6 +291,11 @@ void CreatureCarryOverSystem::SaveAsTheyLive()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player's creature {} has lived another {} turns",
 		                   entt::to_integral(creature), creature_carry_over::k_SaveEveryTurns);
 		KeepCreature(creature);
+		// The game writes the web page with the files of a creature that lives on, but not when a land keeps it
+		if (Locator::creatureWebPageSystem::has_value())
+		{
+			Locator::creatureWebPageSystem::value().WritePage(creature);
+		}
 	}
 }
 

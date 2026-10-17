@@ -501,7 +501,7 @@ bool IsInterestedInFoodObject(entt::entity villager, entt::entity food)
 	    .carried = person.foodHeld,
 	    .maxCarried = info.maxFoodCarried,
 	    .stateInterest = StateInfo(FinalState(action)).foodInterest,
-	    .distanceModifier = gutils::GetDistanceModifier(glm::distance(Position(villager), Position(food)), reach),
+	    .distanceModifier = gutils::GetDistanceModifier(gutils::GetDistanceInMetres(Position(villager), Position(food)), reach),
 	    .speedUp = IsSpeedUp(food),
 	    .townFoodDesire = townDesire,
 	    .townTrigger = townInfo.desireTriggersVillagerAction,
@@ -516,7 +516,7 @@ uint32_t villager_food::ReactToFoodPriority(entt::entity villager, entt::entity 
 	auto& registry = Entities();
 	if (food == entt::null || !registry.Valid(food) || !registry.AllOf<Transform>(food) ||
 	    Locator::resourceStoreSystem::value().GetResource(food, ResourceType::Food) == 0 ||
-	    glm::distance(Position(villager), Position(food)) > FoodReactionInfo().maxDistanceToRunAwayFromObject)
+	    gutils::GetDistanceInMetres(Position(villager), Position(food)) > FoodReactionInfo().maxDistanceToRunAwayFromObject)
 	{
 		return 0;
 	}

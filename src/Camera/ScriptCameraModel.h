@@ -158,7 +158,7 @@ inline constexpr float k_DualLowestPitch = std::numbers::pi_v<float> / 13.0f;
 inline constexpr float k_DualZoom = 1.0f;
 inline constexpr float k_DualHeightFactor = 1.4f;
 /// Things this close along both axes have no direction between them: the heading is kept as it is
-inline constexpr double k_DualSameSpot = 0.01;
+inline constexpr double k_DualSameSpot = static_cast<double>(0.01f);
 /// A thing with no model of its own (a marker, a group) counts as this wide
 inline constexpr float k_DualNoModelRadius = 30.0f;
 
@@ -271,7 +271,7 @@ public:
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	void HandleActions(std::chrono::microseconds dt) override;
-	void SetFlight(glm::vec3 origin, glm::vec3 focus) override;
+	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
 	/// The camera stops at this position and focus. A thing that it follows or looks at, its track and a two-thing
 	/// camera continue, and move it again on the next frame.
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) override;

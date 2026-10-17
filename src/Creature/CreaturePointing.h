@@ -25,9 +25,9 @@ inline constexpr std::array<size_t, 4> k_Animations {208, 209, 210, 211};
 /// The creature points from this height for each unit of its size
 inline constexpr float k_OriginHeightPerSize = 15.0f;
 /// Across, the aim stops at this angle each way (radians)
-inline constexpr float k_AcrossLimit = 0.523599f;
+inline constexpr float k_AcrossLimit = 0.5235987901687622f;
 /// The aim goes 0 to 1 across this many radians, the two limits apart
-inline constexpr float k_AcrossScale = 0.95493f;
+inline constexpr float k_AcrossScale = 0.9549296498298645f;
 /// Up and down, the aim stops at this sine of the angle each way
 inline constexpr float k_RiseLimit = 0.5f;
 /// A target nearer than this gives a level aim straight ahead
@@ -48,7 +48,7 @@ struct Aim
 [[nodiscard]] Aim AimAt(glm::vec3 origin, glm::vec2 facing, glm::vec3 target);
 
 /// The creature turns to face the target before it points when the target is this far round from its head (radians)
-inline constexpr float k_TurnLimit = 0.471239f;
+inline constexpr float k_TurnLimit = 0.4712389409542084f;
 /// How far round the target is from the way the creature faces, as seen from its head
 [[nodiscard]] float TurnAngle(glm::vec3 head, glm::vec2 facing, glm::vec3 target);
 

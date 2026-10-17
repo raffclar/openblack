@@ -363,6 +363,45 @@ void AddFire(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.creature_casts_on_leash",
+	    .name = "Leashed creature casts a nasty miracle",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "A tiger on the learning leash, tied to a tree, knows the lightning miracle. The hand casts "
+	        "lightning 45 m in front of the tiger. A villager stands 10 m past the place where the bolts strike, under "
+	        "the cursor.",
+	    .expected =
+	        "The tiger goes to look at the place where the lightning strikes. When it finishes, it casts the "
+	        "lightning miracle at the first thing near the point under the cursor, the villager here. While it casts, it "
+	        "takes up no "
+	        "reaction.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Placed, .eye = glm::vec3(45.0f, 35.0f, 20.0f), .look = glm::vec3(0.0f, 0.0f, 95.0f)},
+	    .creatures = {{.label = "caster",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {0.0f, 40.0f},
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 95.0f}},
+	                // The leash is tied to the tree, so that the hand can leave the tiger
+	                {.type = TreeInfo::Oak, .offset = {-10.0f, 35.0f}}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = {0.0f, 85.0f},
+	                  .handOffset = {0.0f, 85.0f},
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 4.0f,
+	                  .holdSeconds = 3.0f,
+	                  .byHand = true}},
+	    .commands =
+	        {
+	            {.kind = Command::Kind::PutOnLeash, .delaySeconds = 1.0f, .leash = LeashType::Rope},
+	            {.kind = Command::Kind::TieLeash, .delaySeconds = 0.3f, .waitUntilFree = false, .object = 1},
+	            {.kind = Command::Kind::KnowMiracle,
+	             .delaySeconds = 0.5f,
+	             .value = static_cast<size_t>(MagicType::LightningBolt)},
+	        },
+	});
+
+	all.push_back({
 	    .id = "miracles.fireball_water",
 	    .name = "Fireballs onto the lake",
 	    .facet = Facet::Miracles,

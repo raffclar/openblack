@@ -181,8 +181,8 @@ TEST(BeamMaths, KeyPointsKeepAboveTheLand)
 	const maths::BeamWiggle wiggle {.frequency = 3.0f, .speed = 1.0f, .amount = 1.0f, .minHeight = 2.0f};
 	const auto hill = [](glm::vec2 /*xz*/) { return 5.0f; };
 	// Pushed as far down as the noise goes, the points between would be under the hill
-	const auto keys = maths::BeamKeyPoints(
-	    {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 30.0f}, 4, wiggle, 0.0f, 0, [](float) { return -1.0f; }, hill);
+	const auto keys =
+	    maths::BeamKeyPoints({0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 30.0f}, 4, wiggle, 0.0f, 0, [](float) { return -1.0f; }, hill);
 	ASSERT_EQ(keys.size(), 4u);
 	EXPECT_FLOAT_EQ(keys[1].y, 7.0f);
 	EXPECT_FLOAT_EQ(keys[2].y, 7.0f);
@@ -223,19 +223,31 @@ TEST(BeamMaths, TheCurveLeavesAndArrivesFlat)
 	EXPECT_NEAR(joints[15].position.z, 1.5f, k_Epsilon);
 }
 
-TEST(ParticleDraw, RibbonTextureSlidesAndWrapsRoundAtOneRepeat)
+TEST(ParticleDraw, RibbonTextureSlidesByTwiceItsScroll)
 {
 	ChainCreator creator;
 	creator.frameWidth = 64;
 	creator.frameHeight = 128;
 	creator.texturesForWholeChain = 1;
 	const auto still = creator.SegmentUv(1, 4);
-	const auto slid = creator.SegmentUv(1, 4, -1, 0.25f);
+	const auto slid = creator.SegmentUv(1, 4, -1, 0.125f);
+	// The scroll goes on each corner, then again on the whole draw
 	EXPECT_FLOAT_EQ(slid[0].y, still[0].y + 0.25f);
 	EXPECT_FLOAT_EQ(slid[3].y, still[3].y + 0.25f);
+	EXPECT_FLOAT_EQ(slid[0].x, still[0].x);
+}
+
+TEST(ParticleDraw, RibbonScrollMovesOnByTheFrameAndWrapsRoundAtOneRepeat)
+{
+	ChainCreator creator;
+	creator.frameHeight = 128;
+	// Half a sheet a second for 100 ms
+	EXPECT_FLOAT_EQ(creator.ScrolledOn(0.0f, 100.0f, 0.5f), 0.05f);
 	// One repeat is half a sheet: 0.75 wraps round to 0.25, and backwards slides stay forwards of the frame's start
-	EXPECT_FLOAT_EQ(creator.SegmentUv(1, 4, -1, 0.75f)[0].y, slid[0].y);
-	EXPECT_FLOAT_EQ(creator.SegmentUv(1, 4, -1, -0.25f)[0].y, slid[0].y);
+	EXPECT_FLOAT_EQ(creator.ScrolledOn(0.0f, 1500.0f, 0.5f), 0.25f);
+	EXPECT_FLOAT_EQ(creator.ScrolledOn(0.0f, 500.0f, -0.5f), 0.25f);
+	// Each step adds on to the last
+	EXPECT_FLOAT_EQ(creator.ScrolledOn(0.25f, 100.0f, 0.5f), 0.3f);
 }
 
 TEST_F(ParticleBeamTest, EachTargetPositionGetsThreeBeamsFromTheOrigin)
@@ -253,6 +265,8 @@ TEST_F(ParticleBeamTest, EachTargetPositionGetsThreeBeamsFromTheOrigin)
 	// The beam's own atom and the joints of its three beams
 	EXPECT_EQ(effect->AtomCount(), 1u + (3u * 20u));
 	Effect::DrawWalk walk;
+	// A tenth of a second of drawn frames
+	effect->ScrollChains(100.0f);
 	effect->Walk(1.0f, walk);
 	ASSERT_EQ(walk.chains.size(), 3u);
 	for (const auto& chain : walk.chains)
@@ -266,8 +280,8 @@ TEST_F(ParticleBeamTest, EachTargetPositionGetsThreeBeamsFromTheOrigin)
 		EXPECT_NEAR(first.scale, 0.1f, k_Epsilon);
 		EXPECT_NEAR(last.scale, 0.1f, k_Epsilon);
 		EXPECT_NEAR(first.alpha, 33.0f, k_Epsilon);
-		// Its texture slides at a sheet a second over its life
-		EXPECT_NEAR(chain.textureScroll, effect->GetAge(), k_Epsilon);
+		// Its texture slides at a sheet a second by the frames it is drawn
+		EXPECT_NEAR(chain.textureScroll, 0.1f, k_Epsilon);
 	}
 	// No two beams wiggle alike
 	const auto middle = [&walk](size_t chain) { return walk.joints[walk.chains[chain].firstJoint + 10].position; };

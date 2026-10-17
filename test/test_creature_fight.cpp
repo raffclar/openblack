@@ -11,6 +11,7 @@
 #include <cstdint>
 
 #include <array>
+#include <bit>
 #include <deque>
 #include <vector>
 
@@ -658,6 +659,10 @@ TEST(CreatureFight, OutcomesAndStarting)
 	EXPECT_TRUE(FightWonIsSeen(true, true));
 	EXPECT_FALSE(FightWonIsSeen(false, true));
 	EXPECT_FALSE(FightWonIsSeen(true, false));
+	// The winner's plan is an order, forced only when a miracle or a loss of life knocked the loser out
+	EXPECT_FALSE(WinPlanForced(true));
+	EXPECT_TRUE(WinPlanForced(false));
+	EXPECT_FLOAT_EQ(k_WinPlanPriority, 1.0f);
 	EXPECT_EQ(Response(0.8f, 0.5f), animations::k_Happy);
 	EXPECT_EQ(Response(0.4f, 0.5f), animations::k_Sad);
 }
@@ -884,6 +889,11 @@ TEST(CreatureFight, AFighterOnTheEdgeOfTheRangeIsOutsideIt)
 
 TEST(CreatureFight, AFighterStepsBackToTheMiddle)
 {
+	// Both fighters inside the range: the arena lets them fight. Either one at the range or past it stops both.
+	const Arena ring {.centre = {0.0f, 0.0f}, .radius = 10.0f};
+	EXPECT_FALSE(KeepsInArena(ring, {7.99f, 0.0f}, {0.0f, -7.99f}));
+	EXPECT_TRUE(KeepsInArena(ring, {8.0f, 0.0f}, {0.0f, 0.0f}));
+	EXPECT_TRUE(KeepsInArena(ring, {0.0f, 0.0f}, {0.0f, -8.01f}));
 	// Within its body radius of the middle it takes no step
 	EXPECT_FALSE(StepToMiddle({0.0f, 2.0f}, 2.0f, 2.0f).has_value());
 	// Ahead or behind when the middle is 1.5 times farther that way than to the side
@@ -964,6 +974,14 @@ TEST(CreatureFight, FightMusicIsHeardWhileTheHandDirectsTheFightOrNearItsArena)
 	const std::array several {glm::vec3 {500.0f, 0.0f, 0.0f}, glm::vec3 {0.0f, 0.0f, 99.0f}};
 	EXPECT_FALSE(FightMusicHeard(false, std::span(several).first(1), camera));
 	EXPECT_TRUE(FightMusicHeard(false, several, glm::vec3 {0.0f}));
+}
+
+TEST(CreatureFight, TheFightMusicDistanceAddsTheSquaresFromZToX)
+{
+	// From z to x the distance rounds to 100, which is not near enough. From x to z it would be just under 100
+	const std::array arena {
+	    glm::vec3 {std::bit_cast<float>(0x425E6243u), std::bit_cast<float>(0x4267679Bu), std::bit_cast<float>(0x426EBDB4u)}};
+	EXPECT_FALSE(FightMusicHeard(false, arena, glm::vec3 {0.0f}));
 }
 
 TEST(CreatureFight, LifeLostInADuelComesOffTheFightHealth)

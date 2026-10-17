@@ -35,6 +35,7 @@ public:
 	void AddPlayer(entt::entity playerEntity) override;
 	[[nodiscard]] entt::entity GetPlayer(PlayerNames playerName) const override;
 	void AddCreature(entt::entity creature) override;
+	void MakePrimaryCreature(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const override;
 	void KeepForNextLand() override;
 	void ForgetKept() override;
@@ -42,6 +43,8 @@ public:
 	void TakeUpKept(entt::entity playerEntity) override;
 
 private:
+	/// Remembers that the owner of the creature got it, after the creatures they got before or before all of them
+	void Acquire(entt::entity creature, bool primary);
 	/// What a player keeps from land to land
 	struct Kept
 	{

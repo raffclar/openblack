@@ -14,6 +14,8 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "Enums.h"
+
 namespace openblack::ecs
 {
 class Registry;
@@ -26,5 +28,7 @@ namespace openblack::ecs::creature_home
 /// A creature's home: its player's temple's pen while the temple stands, else the home its leash keeps it at; none
 /// without either
 [[nodiscard]] std::optional<glm::vec3> HomeOf(const Registry& registry, entt::entity creature);
+/// The pen of the first temple of the player whose mesh marks a pen; none when no temple of the player has one
+[[nodiscard]] std::optional<glm::vec3> TemplePenOf(const Registry& registry, PlayerNames owner);
 
 } // namespace openblack::ecs::creature_home

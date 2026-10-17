@@ -243,3 +243,9 @@ TEST(GrazerRules, TheBiggerHerdKeepsThemAllUnlessTheOtherIsAScripts)
 	EXPECT_EQ(MergedMost(5, 3, 3, 50), 14u);
 	EXPECT_EQ(MergedMost(5, 30, 3, 50), 50u);
 }
+
+TEST(GrazerRules, TheGrazeSearchSquareRoundsToAFloat)
+{
+	// 515.09998 squared is 265327.985, which rounds to 265328 as a float; in double precision it truncates to 265327
+	EXPECT_EQ(GrazeSearchCells(5151), 265328);
+}

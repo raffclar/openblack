@@ -584,7 +584,8 @@ void PlayKickSound(const ecs::Registry& registry, entt::entity target, glm::vec3
 		return;
 	}
 	const std::array<int32_t, 5> keys {0, 0, *object, 0, k_BeenKicked};
-	Locator::audio::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot);
+	Locator::audio::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot,
+	                                       openblack::audio::AnimEffectMeasure::AcrossFirst);
 }
 
 /// The foot meets what the creature kicks. The order of the rules is:
@@ -610,7 +611,8 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 	    creature_object_actions::LeanOf(height(at + glm::vec2(radius, 0.0f)), height(at - glm::vec2(radius, 0.0f)),
 	                                    height(at + glm::vec2(0.0f, radius)), height(at - glm::vec2(0.0f, radius)), radius);
 	const auto ahead = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-	const auto velocity = creature_object_actions::KickVelocity(glm::normalize(glm::xz(ahead)), lean, ShownSize(body));
+	const auto velocity =
+	    creature_object_actions::KickVelocity(glm::normalize(glm::xz(ahead)), lean, transform.scale.x, ShownSize(body));
 	const auto* points = PointsOf(body);
 	const auto foot = points != nullptr && points->rightFoot < animation.boneMatrices.size()
 	                      ? glm::vec3(creature::PosedBone(points->rightFoot, animation.boneMatrices, PlacementOf(transform))[3])
@@ -1543,7 +1545,14 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 		}
 	}
 	const bool started = action.status == Status::Running;
-	registry.AssignOrReplace<CreatureObjectAction>(creature, std::move(action));
+	auto& kept = registry.AssignOrReplace<CreatureObjectAction>(creature, std::move(action));
+	// The creature starts its walk or its turn to the target on the turn that the action starts. Thus another creature
+	// that waits while this creature walks to a thing sees the walk at once.
+	if (started && kept.phase == Phase::Approach)
+	{
+		Approach(creature, kept, body, registry.Get<const Transform>(creature), registry.Get<CreatureAnimation>(creature),
+		         held);
+	}
 	return started;
 }
 
@@ -1656,6 +1665,19 @@ bool CreatureObjectActionSystem::EatHeld(entt::entity creature)
 		return false;
 	}
 	return Start(creature, {.kind = Kind::Eat, .target = held});
+}
+
+bool CreatureObjectActionSystem::EatHeldOnly(entt::entity creature)
+{
+	const auto held = GetHeld(creature);
+	if (!held.has_value())
+	{
+		auto action = CreatureObjectAction {.kind = Kind::Eat, .swallows = false};
+		Fail(action, "it holds nothing to eat");
+		Locator::entitiesRegistry::value().AssignOrReplace<CreatureObjectAction>(creature, std::move(action));
+		return false;
+	}
+	return Start(creature, {.kind = Kind::Eat, .target = held, .swallows = false});
 }
 
 bool CreatureObjectActionSystem::Keep(entt::entity creature, size_t animation)
@@ -2448,6 +2470,13 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 				    animation.slots.clear();
 				    return;
 			    }
+			    // An eat with no thing given fails when its animation ends
+			    if (action.kind == Kind::Eat && !action.swallows)
+			    {
+				    Fail(action, "it was told to eat no thing");
+				    animation.slots.clear();
+				    return;
+			    }
 			    action.status = Status::Done;
 		    }
 		    if (action.status == Status::Done)
@@ -2843,6 +2872,19 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			const auto held = GetHeld(creature);
 			if (!held.has_value())
 			{
+				break;
+			}
+			// Told only to eat, it takes in the food of what it holds, and what it holds is gone from its hand
+			if (!action.swallows)
+			{
+				const auto value = FoodValueOf(*held);
+				registry.Remove<CreatureHeldObject>(creature);
+				Consume(registry, creature, *held);
+				[[maybe_unused]] const auto gained = value.has_value() && Locator::creaturePhysiologySystem::has_value()
+				                                         ? Locator::creaturePhysiologySystem::value().Eat(creature, *value)
+				                                         : 0.0f;
+				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} takes in what it holds: food {}, energy {}",
+				                    entt::to_integral(creature), value.value_or(0.0f), gained);
 				break;
 			}
 			if (BringsBackUp(registry, *held))

@@ -15,15 +15,18 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack::physics;
 using namespace openblack::physics::damage;
 
 namespace
 {
+/// The squares of the parts are added z, y, x, as the game does for the edge lengths
 float DistanceSquared(glm::vec3 a, glm::vec3 b)
 {
 	const auto d = a - b;
-	return glm::dot(d, d);
+	return openblack::x87::DotZyx(d, d);
 }
 
 /// Two corners the same, within the tolerance on every axis
@@ -162,15 +165,16 @@ int damage::CornersNear(const Triangle& triangle, glm::vec3 point, glm::vec3 dir
 {
 	if (direction != glm::vec3(0.0f))
 	{
-		direction /= std::sqrt(glm::dot(direction, direction));
+		// The game multiplies by one over the length. All its sums here add z, y, then x
+		direction *= 1.0f / openblack::x87::LengthZyx(direction);
 	}
 	int near = 0;
 	for (const auto& corner : triangle.corners)
 	{
 		// From the corner to the nearest point of the line
-		const float along = glm::dot(corner.position - point, direction);
+		const float along = openblack::x87::DotZyx(corner.position - point, direction);
 		const auto offset = (direction * along + point) - corner.position;
-		if (std::sqrt(glm::dot(offset, offset)) < reach)
+		if (openblack::x87::LengthZyx(offset) < reach)
 		{
 			++near;
 		}

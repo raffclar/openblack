@@ -9,6 +9,8 @@
 
 #include <cstdint>
 
+#include <bit>
+
 #include <gtest/gtest.h>
 
 #include "Nature/ForestGrowth.h"
@@ -134,11 +136,11 @@ TEST(ForestGrowth, AForestWithNoGrownTreesNeverSpreads)
 
 TEST(ForestGrowth, AForestSpreadsWhenTheRollFallsBelowItsChance)
 {
-	// Twenty grown trees count in full, and three hundred turns since the last gain count a little over once, so the
-	// chance is a little over the counter
-	uint16_t counter = 1998;
+	// Twenty grown trees count in full, and three hundred turns since the last gain count once: 300 times the float
+	// 1/300 rounds to 1. So the chance is the counter, and the roll of 2000 must be below it
+	uint16_t counter = 1999;
 	EXPECT_FALSE(forest_growth::Spreads(0.0f, counter, 300, 20));
-	EXPECT_EQ(counter, 1999);
+	EXPECT_EQ(counter, 2000);
 	EXPECT_TRUE(forest_growth::Spreads(0.0f, counter, 300, 20));
 	EXPECT_EQ(counter, 0);
 
@@ -146,7 +148,7 @@ TEST(ForestGrowth, AForestSpreadsWhenTheRollFallsBelowItsChance)
 	counter = 1998;
 	EXPECT_FALSE(forest_growth::Spreads(0.0f, counter, 300, 400));
 	// Ten count half
-	counter = 3998;
+	counter = 3999;
 	EXPECT_FALSE(forest_growth::Spreads(0.0f, counter, 300, 10));
 	EXPECT_TRUE(forest_growth::Spreads(0.0f, counter, 300, 10));
 	// A higher roll needs more
@@ -198,4 +200,12 @@ TEST(ForestGrowth, AForestEmptiedAgainCarriesOnItsCount)
 		ASSERT_FALSE(forest_growth::EmptyForestGoes(countdown));
 	}
 	EXPECT_TRUE(forest_growth::EmptyForestGoes(countdown));
+}
+
+TEST(ForestGrowth, TheGrowthRoundsToAFloatAtEachStep)
+{
+	const forest_growth::Kind kind {
+	    .turnsBetween = 100, .amount = std::bit_cast<float>(0x3D3A9543u), .rainAccelerator = std::bit_cast<float>(0x3FC43EF1u)};
+	// One float step above the result of a chain in double precision (0x3DB5D075)
+	EXPECT_EQ(std::bit_cast<uint32_t>(forest_growth::Growth(kind, 40, std::bit_cast<float>(0x3ED506E7u))), 0x3DB5D076u);
 }

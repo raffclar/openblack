@@ -137,3 +137,49 @@ TEST(HandOrientation, TheHandsFrameIsTheGamesFrame)
 		}
 	}
 }
+
+TEST(HandOrientation, TheHandOnATotemTurnsByItsHeadingAndTipsForwards)
+{
+	// The rows the totem's hand uses give the hand that faces along the line of sight, tipped forwards over it
+	const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::half_pi<float>());
+	const std::array<std::pair<glm::vec3, glm::vec3>, 3> cameras {{
+	    {{0.0f, 80.0f, 0.0f}, {60.0f, 0.0f, 90.0f}},
+	    {{500.0f, 120.0f, 300.0f}, {420.0f, 0.0f, 360.0f}},
+	    {{-40.0f, 60.0f, 10.0f}, {-90.0f, 0.0f, -70.0f}},
+	}};
+	const std::array<glm::vec3, 3> lines {glm::normalize(glm::vec3(0.6f, -0.5f, -0.2f)),
+	                                      glm::normalize(glm::vec3(-0.1f, -0.9f, 0.7f)),
+	                                      glm::normalize(glm::vec3(-0.5f, -0.3f, -0.6f))};
+	for (const auto& [eye, focus] : cameras)
+	{
+		openblack::Camera camera;
+		camera.SetOrigin(eye).SetFocus(focus);
+		const auto facingCamera = glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection);
+		const auto cameraHeading = HeadingAlongRay(camera.GetForward(), {0.0f, 0.0f, 1.0f});
+		for (const auto& line : lines)
+		{
+			const auto heading = HeadingAlongRay(line, {0.0f, 0.0f, 1.0f});
+			for (const float tilt : {0.0f, 0.6f, 1.3744469f, 2.1f})
+			{
+				const auto expected = TipForwards(TurnToHeading(facingCamera, cameraHeading, heading), heading, tilt);
+				const auto hand = TippedHand(TippedRows(HeadingAngle(line), tilt));
+				for (int i = 0; i < 3; ++i)
+				{
+					ExpectNear(hand[i], expected[i]);
+				}
+			}
+		}
+	}
+}
+
+TEST(HandOrientation, TheHeadingAngleGrowsFromMinusZTowardsPlusX)
+{
+	EXPECT_FLOAT_EQ(HeadingAngle({0.0f, -1.0f, -1.0f}), 0.0f);
+	EXPECT_FLOAT_EQ(HeadingAngle({1.0f, -1.0f, 0.0f}), glm::half_pi<float>());
+	EXPECT_FLOAT_EQ(HeadingAngle({0.0f, -1.0f, 1.0f}), glm::pi<float>());
+	EXPECT_FLOAT_EQ(HeadingAngle({-1.0f, -1.0f, 0.0f}), -glm::half_pi<float>());
+	// Straight down there is no heading
+	EXPECT_EQ(HeadingAngle({0.0005f, -1.0f, 0.0005f}), 0.0f);
+	EXPECT_FALSE(LeansAcrossLand({0.01f, -1.0f, -0.01f}));
+	EXPECT_TRUE(LeansAcrossLand({0.0101f, -1.0f, 0.0f}));
+}

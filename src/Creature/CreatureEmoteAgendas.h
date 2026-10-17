@@ -140,8 +140,8 @@ constexpr float k_SleepOnTheSpotHeights = 4.0f;
 
 /// Sitting down by a thing: walking to the place until within its radius on the ground, turning to face the thing for
 /// a tenth of a second with the head on it, facing down the slope, then sitting ten seconds and up to five more while
-/// it looks about
-[[nodiscard]] std::vector<Step> SitDownBy(uint32_t thing, glm::vec2 place, float radius, const Random& random);
+/// it looks about. The extra time (0 to 5 seconds) is a draw from the random numbers of the game.
+[[nodiscard]] std::vector<Step> SitDownBy(uint32_t thing, glm::vec2 place, float radius, float extraSeconds);
 /// Left to itself, it looks for a clear place as wide as four times its radius on the ground about the thing
 constexpr float k_SitDownRadii = 4.0f;
 constexpr float k_SitFaceSeconds = 0.1f;

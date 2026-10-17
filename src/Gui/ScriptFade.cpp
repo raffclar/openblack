@@ -11,12 +11,21 @@
 
 #include <cstdint>
 
+#include "Common/X87.h"
+
 using namespace openblack::gui;
 
 namespace
 {
-/// Ten game turns a second
+/// Ten game turns a second. The game holds it and the full alpha as doubles
 constexpr double k_TurnsPerSecond = 10.0;
+constexpr double k_FullAlpha = 255.0;
+
+/// The alpha a turn: the full alpha over the turns, rounded to a float one time for each step
+float RatePerTurn(int8_t seconds)
+{
+	return openblack::x87::Div(k_FullAlpha, openblack::x87::Mul(static_cast<double>(seconds), k_TurnsPerSecond));
+}
 
 uint32_t WithAlpha(uint32_t colour, uint32_t alpha)
 {
@@ -34,7 +43,7 @@ void ScriptFade::FadeTo(uint8_t red, uint8_t green, uint8_t blue, int8_t seconds
 		return;
 	}
 	_alpha = 0.0f;
-	_rate = static_cast<float>(255.0 / (seconds * k_TurnsPerSecond));
+	_rate = RatePerTurn(seconds);
 }
 
 void ScriptFade::FadeBackToNormal(int8_t seconds)
@@ -46,7 +55,7 @@ void ScriptFade::FadeBackToNormal(int8_t seconds)
 		return;
 	}
 	_alpha = 255.0f;
-	_rate = -static_cast<float>(255.0 / (seconds * k_TurnsPerSecond));
+	_rate = -RatePerTurn(seconds);
 }
 
 void ScriptFade::ProcessTurn()

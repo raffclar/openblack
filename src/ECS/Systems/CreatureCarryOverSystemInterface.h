@@ -46,6 +46,9 @@ public:
 	/// The physique file of the profile picked now, from which the main menu's tattoo editor shows the body of the
 	/// profile's creature. None without a profile or a folder for the files.
 	[[nodiscard]] virtual std::optional<std::filesystem::path> ProfilePhysique() const = 0;
+	/// The file that keeps the mind of the current profile's creature. A load of a saved game gives the local player's
+	/// creature the mind of this file.
+	[[nodiscard]] virtual std::optional<std::filesystem::path> ProfileMind() const = 0;
 
 	/// A script loads the player's creature at a place on the land. Nothing happens when the player has a creature
 	/// already or none was kept. It is made standing on the ground in the middle of the place's cell, starts out of sight

@@ -349,7 +349,7 @@ TEST(CreatureKindActions, AKickFliesHalfUpHalfAheadOnFlatLand)
 {
 	const auto lean = creature_object_actions::LeanOf(5.0f, 5.0f, 5.0f, 5.0f, 2.0f);
 	EXPECT_EQ(lean, glm::vec2(0.0f));
-	const auto velocity = creature_object_actions::KickVelocity({0.0f, -1.0f}, lean, 2.0f);
+	const auto velocity = creature_object_actions::KickVelocity({0.0f, -1.0f}, lean, 2.0f, 2.0f);
 	const float component = 90.0f / std::sqrt(2.0f);
 	EXPECT_NEAR(velocity.x, 0.0f, 1e-4f);
 	EXPECT_NEAR(velocity.y, component, 1e-3f);
@@ -364,7 +364,7 @@ TEST(CreatureKindActions, AKickTipsUpWithTheLandAheadRisingAndTheLeanIsCapped)
 	EXPECT_NEAR(lean.y, 0.3f, 1e-6f);
 	EXPECT_NEAR(creature_object_actions::LeanOf(0.0f, 10.0f, 0.0f, 0.0f, 1.0f).x, -0.3f, 1e-6f);
 	// Facing +x, the up part is 1 + 0.15
-	const auto velocity = creature_object_actions::KickVelocity({1.0f, 0.0f}, lean, 1.0f);
+	const auto velocity = creature_object_actions::KickVelocity({1.0f, 0.0f}, lean, 1.0f, 1.0f);
 	const auto length = std::sqrt(1.0f + (1.15f * 1.15f));
 	EXPECT_NEAR(velocity.x, 45.0f / length, 1e-3f);
 	EXPECT_NEAR(velocity.y, 45.0f * 1.15f / length, 1e-3f);

@@ -59,6 +59,7 @@
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
@@ -132,6 +133,7 @@
 #include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -177,6 +179,7 @@
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -277,11 +280,13 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"cameraHelpSystem", "view.state"},
     LocatorCoverage {"templeExteriorSystem", "temple.state"},
     LocatorCoverage {"templeDestructionSystem", "temple.state"},
+    LocatorCoverage {"computerPlayerSystem", "players.list"},
     LocatorCoverage {"worshipSiteSystem", "worship.sites"},
     LocatorCoverage {"handSystem", "players.hand"},
     LocatorCoverage {"handGrabSystem", "players.hand"},
     LocatorCoverage {"temple", "temple.interior"},
     LocatorCoverage {"time", "game.state"},
+    LocatorCoverage {"simulation", "sim.state"},
     LocatorCoverage {"vegetation", "land.vegetation"},
     LocatorCoverage {"mistSystem", "land.atmosphere"},
     LocatorCoverage {"cloudSystem", "land.atmosphere"},
@@ -330,8 +335,10 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"reactionSystem", "magic.reactions"},
     LocatorCoverage {"teleportSystem", "magic.teleport"},
     LocatorCoverage {"creatureCarryOverSystem", "creatures.systems"},
+    LocatorCoverage {"saveGameSystem", "saves.slots"},
     LocatorCoverage {"creaturePenSystem", "creatures.systems"},
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
+    LocatorCoverage {"creatureWebPageSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tattooMenuSystem", "creatures.systems"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
@@ -1550,32 +1557,43 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
-	provider->Add(Query("list", "The players: their entities, primary creatures and alignment", {}, ResultKind::List),
-	              Serve<Locator::playerSystem>(
-	                  "the players", [](const ecs::systems::PlayerSystemInterface& players, const QueryContext& /*c*/) {
-		                  Json items = Json::array();
-		                  const auto* registry = Registry();
-		                  if (registry == nullptr)
-		                  {
-			                  return items;
-		                  }
-		                  // The players the land has, by their own components: the system is asked only of those it knows
-		                  registry->Each<const Player>([&](entt::entity entity, const Player& player) {
-			                  const auto name = player.name;
-			                  Json item = {{"player", static_cast<int>(name)},
-			                               {"id", Id(entity)},
-			                               {"local", players.GetLocalPlayer() == name},
-			                               {"computer", players.IsComputerPlayer(name)},
-			                               {"primary_creature", Id(players.GetPrimaryCreature(name))}};
-			                  if (Locator::alignmentSystem::has_value())
-			                  {
-				                  item["alignment"] = Locator::alignmentSystem::value().GetPlayerAlignment(name);
-				                  item["pending_alignment"] = Locator::alignmentSystem::value().GetPendingAlignment(name);
-			                  }
-			                  items.push_back(std::move(item));
-		                  });
-		                  return items;
-	                  }));
+	provider->Add(
+	    Query("list", "The players: their entities, primary creatures, computer minds and alignment", {}, ResultKind::List),
+	    Serve<Locator::playerSystem>(
+	        "the players", [](const ecs::systems::PlayerSystemInterface& players, const QueryContext& /*c*/) {
+		        Json items = Json::array();
+		        const auto* registry = Registry();
+		        if (registry == nullptr)
+		        {
+			        return items;
+		        }
+		        // The players the land has, by their own components: the system is asked only of those it knows
+		        registry->Each<const Player>([&](entt::entity entity, const Player& player) {
+			        const auto name = player.name;
+			        Json item = {{"player", static_cast<int>(name)},
+			                     {"id", Id(entity)},
+			                     {"local", players.GetLocalPlayer() == name},
+			                     {"computer", players.IsComputerPlayer(name)},
+			                     {"primary_creature", Id(players.GetPrimaryCreature(name))}};
+			        // The computer mind of the player, when a land script switched it on or named a player for it
+			        if (const auto* mind = registry->TryGet<const ecs::components::ComputerPlayer>(entity); mind != nullptr)
+			        {
+				        item["computer_mind"] = {{"switched_on", mind->switchedOn},
+				                                 {"marked", mind->marked},
+				                                 {"started", mind->started},
+				                                 {"creature_like", mind->creatureLike.has_value()
+				                                                       ? Json(static_cast<int>(*mind->creatureLike))
+				                                                       : Json(nullptr)}};
+			        }
+			        if (Locator::alignmentSystem::has_value())
+			        {
+				        item["alignment"] = Locator::alignmentSystem::value().GetPlayerAlignment(name);
+				        item["pending_alignment"] = Locator::alignmentSystem::value().GetPendingAlignment(name);
+			        }
+			        items.push_back(std::move(item));
+		        });
+		        return items;
+	        }));
 	provider->Add(Query("heartbeat", "Each player's heartbeat: danger, rate, beat and pulse", {}, ResultKind::List),
 	              Serve<Locator::heartbeatSystem>(
 	                  "the heartbeats", [](const ecs::systems::HeartbeatSystemInterface& hearts, const QueryContext& /*c*/) {
@@ -2229,7 +2247,9 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 			              result["help"] = {{"features", help.features},
 			                                {"auto_pitch", help.autoPitch},
 			                                {"camera_keys", help.cameraKeys},
-			                                {"hand_reach", help.handReach}};
+			                                {"hand_reach", help.handReach},
+			                                {"interface_level",
+			                                 help.interfaceLevel.has_value() ? Json(*help.interfaceLevel) : Json(nullptr)}};
 		              }
 		              if (Locator::abodeKnockSystem::has_value())
 		              {
@@ -2650,7 +2670,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("creatures");
 	provider->Add(Query("systems", "The creature systems' own state: the creature followed or in the cave, the hand on a "
-	                               "creature, the hair, voices, footprints, physiology and the mind kept between lands"),
+	                               "creature, the hair, voices, footprints, physiology, the mind kept between lands and the "
+	                               "web page"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
 		              if (Locator::creatureModeSystem::has_value())
@@ -2732,6 +2753,18 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              if (Locator::creatureCarryOverSystem::has_value())
 		              {
 			              result["mind_kept"] = Locator::creatureCarryOverSystem::value().Kept() != nullptr;
+		              }
+		              // The web page: the captions of the five slots of pictures, and whether a picture waits for its frame
+		              if (Locator::creatureWebPageSystem::has_value())
+		              {
+			              const auto& page = Locator::creatureWebPageSystem::value();
+			              auto captions = Json::array();
+			              for (const auto& caption : page.GetCaptions())
+			              {
+				              captions.push_back(gui::ToUtf8(caption));
+			              }
+			              result["web_page_captions"] = captions;
+			              result["web_page_picture_waiting"] = page.AnyPictureWaiting();
 		              }
 		              // The temples' pens: each creature's shrunk size there is its Creature component's penSize
 		              result["pens"] = Locator::creaturePenSystem::has_value();
@@ -3177,6 +3210,83 @@ std::optional<std::vector<BodyInfo>> Bodies()
 
 // The help: the advisors and the scripts' dialogue
 
+std::unique_ptr<ProviderInterface> SavesProvider()
+{
+	auto provider = std::make_unique<FunctionProvider>("saves");
+	provider->Add(Query("slots", "The slots of the current player that have a saved game, for the land that is open", {},
+	                    ResultKind::List),
+	              [](const QueryContext& /*c*/) {
+		              if (!Locator::saveGameSystem::has_value())
+		              {
+			              return QueryResult::Error("there are no saved games without a game");
+		              }
+		              Json items = Json::array();
+		              for (const auto& slot : Locator::saveGameSystem::value().Slots())
+		              {
+			              items.push_back({{"slot", slot.slot},
+			                               {"land", slot.land},
+			                               {"date", gui::ToUtf8(slot.date)},
+			                               {"name", gui::ToUtf8(slot.name)}});
+		              }
+		              return QueryResult::Value(std::move(items));
+	              });
+	const ParameterDescription slotParameter {
+	    .name = "slot", .type = "integer", .description = "The slot, 0 to 20", .required = true};
+	auto save =
+	    Query("save",
+	          "Saves the game into a slot: the land, the turn and every creature with its mind file and its "
+	          "leash. The towns, the villagers, the story and the scripts are not saved yet",
+	          {slotParameter, {.name = "name", .type = "string", .description = "The name of the save", .required = false}});
+	save.writes = true;
+	provider->Add(std::move(save), [](const QueryContext& context) {
+		const auto slot = NumberMember(context.params, "slot");
+		if (!Locator::saveGameSystem::has_value() || !slot.has_value() || *slot < 0.0)
+		{
+			return QueryResult::Error("saves.save needs a game and a slot from 0 to 20");
+		}
+		const auto name = gui::ToUtf16(StringMember(context.params, "name").value_or(""));
+		const bool saved = Locator::saveGameSystem::value().Save(static_cast<uint32_t>(*slot), name);
+		return QueryResult::Value({{"saved", saved}, {"slot", static_cast<uint32_t>(*slot)}});
+	});
+	auto load = Query("load",
+	                  "Puts the creatures of the land that is open back as a slot keeps them: the values of each record, "
+	                  "the mind of its mind file, the plan that the save kept and its leash",
+	                  {slotParameter});
+	load.writes = true;
+	provider->Add(std::move(load), [](const QueryContext& context) {
+		const auto slot = NumberMember(context.params, "slot");
+		if (!Locator::saveGameSystem::has_value() || !slot.has_value() || *slot < 0.0)
+		{
+			return QueryResult::Error("saves.load needs a game and a slot from 0 to 20");
+		}
+		const bool loaded = Locator::saveGameSystem::value().Load(static_cast<uint32_t>(*slot));
+		return QueryResult::Value({{"loaded", loaded}, {"slot", static_cast<uint32_t>(*slot)}});
+	});
+	provider->Add(Query("vanilla_check",
+	                    "After a load of a slot of the game itself: each creature of the game's file, and whether the record "
+	                    "that a save writes for it now has the same bytes as the file's record",
+	                    {}, ResultKind::List),
+	              [](const QueryContext& /*c*/) {
+		              if (!Locator::saveGameSystem::has_value())
+		              {
+			              return QueryResult::Error("there are no saved games without a game");
+		              }
+		              Json items = Json::array();
+		              for (const auto& check : Locator::saveGameSystem::value().CheckVanillaRecords())
+		              {
+			              Json item {
+			                  {"number", check.number}, {"entity", check.entity}, {"same", check.same}, {"size", check.size}};
+			              if (check.firstDifference.has_value())
+			              {
+				              item["firstDifference"] = *check.firstDifference;
+			              }
+			              items.push_back(std::move(item));
+		              }
+		              return QueryResult::Value(std::move(items));
+	              });
+	return provider;
+}
+
 std::unique_ptr<ProviderInterface> HelpProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("help");
@@ -3505,6 +3615,16 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	        [](entt::entity creature, bool notice) {
 		        ecs::creature_reaction_notice::SetTakesNotice(Locator::entitiesRegistry::value(), creature, notice);
 	        },
+	    .cellClear =
+	        [](entt::entity creature, int32_t x, int32_t z, bool livingBlocks) {
+		        return Locator::creatureMindSystem::has_value() &&
+		               Locator::creatureMindSystem::value().IsCellClearFor(creature, x, z, livingBlocks);
+	        },
+	    .clearArea = [](entt::entity creature, glm::vec2 point, float width, bool livingBlocks) -> std::optional<glm::vec2> {
+		    return Locator::creatureMindSystem::has_value()
+		               ? Locator::creatureMindSystem::value().FindClearAreaFor(creature, point, width, livingBlocks)
+		               : std::nullopt;
+	    },
 	}));
 	inspector.Add(MakeMapProvider({
 	    .world = World(),
@@ -3613,6 +3733,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(CreaturesProvider());
 	inspector.Add(ScriptProvider(controls.scripts));
 	inspector.Add(HelpProvider());
+	inspector.Add(SavesProvider());
 
 	auto game = std::make_unique<GameProvider>(runTarget);
 	auto* gameProvider = game.get();

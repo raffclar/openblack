@@ -50,6 +50,8 @@ public:
 
 	void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) override;
 	[[nodiscard]] std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const override;
+	void RestoreMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind,
+	                 const std::optional<RestoredPlan>& plan) override;
 	void ClearLearning(entt::entity creature) override;
 	void SeeSkill(const glm::vec3& point, size_t skill) override;
 	void SeeMiracle(const glm::vec3& point, size_t miracle) override;
@@ -59,6 +61,9 @@ public:
 	                    std::optional<PlayerNames> player, MagicType magic) override;
 	[[nodiscard]] const creature_mind_tables::Tables* GetTables() override;
 	[[nodiscard]] std::optional<creature_tree::Belief> BeliefAbout(entt::entity creature, entt::entity thing) const override;
+	[[nodiscard]] bool IsCellClearFor(entt::entity creature, int32_t x, int32_t z, bool livingBlocks) const override;
+	[[nodiscard]] std::optional<glm::vec2> FindClearAreaFor(entt::entity creature, glm::vec2 point, float width,
+	                                                        bool livingBlocks) const override;
 
 	bool PlayAction(entt::entity creature, size_t animation) override;
 	bool PlayGesture(entt::entity creature, size_t animation) override;
@@ -97,6 +102,7 @@ public:
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
 	void ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
+	void CastOnLeashAfterReaction(entt::entity creature, size_t miracle) override;
 	void ReactToNiceMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
 	void StartReacting(entt::entity creature) override;
 	void TakeUpReaction(entt::entity creature, entt::entity thing, const creature_reaction::Setup& setup) override;
@@ -109,6 +115,7 @@ public:
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
 	void AteMagicMushroom(entt::entity creature) override;
 	bool SwapMinds(entt::entity from, entt::entity to) override;
+	void TakeUpMindFile(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> file) override;
 	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
 	void SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus) override;
@@ -242,6 +249,13 @@ private:
 	/// The places of the creature's map of the land that the action uses: where it goes or looks, and the sea
 	static void SituateExploration(entt::entity creature, const creature_plan_actions::Executor& executor,
 	                               creature_plan_actions::Situation& situation);
+	/// What the joint actions with a friend need to know before a friend is chosen: how strong the desires are that let
+	/// them start, and whether the nearest town is to be helped or attacked
+	void SituateFriends(entt::entity creature, creature_plan_actions::Situation& situation);
+	/// What a joint action with a friend needs to know of the friend: where it is and how tall it is, the clear place
+	/// that the two use, the coast and the sea where they drink, and the town that they help or attack
+	void SituateFriend(entt::entity creature, const creature_plan_actions::Executor& executor, entt::entity friendly,
+	                   creature_plan_actions::Situation& situation);
 	/// The creature carried out an action to its end on this game turn
 	static void NoteDone(components::CreatureMindState& mind, uint32_t action);
 	/// An agenda that no plan gave ends: its action was done just now, and the other actions of its desire get older
@@ -454,6 +468,8 @@ private:
 	              std::span<const uint32_t> met);
 	/// The creature cleared its way and walks on to the destination
 	void WalkOn(entt::entity creature, const components::CreatureMindState& mind);
+	/// What waited after the reaction on the leash: the creature casts the miracle at the thing it found
+	void CastOnLeash(entt::entity creature, components::CreatureMindState& mind);
 	/// Each turn: the mark of a creature that clears its way stays while the plan that clears it runs. The movement of
 	/// the creature gets the mark.
 	void StepClearingWay(entt::entity creature, components::CreatureMindState& mind);

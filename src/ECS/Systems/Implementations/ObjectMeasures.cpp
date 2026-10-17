@@ -27,6 +27,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
+#include "ECS/ThingModel.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -84,10 +85,11 @@ float BoneReachOf(const ecs::Registry& registry, CreatureType species)
 /// A model's half width, height and length, times the thing's scale
 std::optional<glm::vec3> HalfExtentsOf(const ecs::Registry& registry, entt::entity entity)
 {
-	const auto* mesh = registry.TryGet<const Mesh>(entity);
 	const auto* transform = registry.TryGet<const Transform>(entity);
-	// A one-shot globe has no mesh of its own to draw, but it measures as the model of its dome
-	const auto id = mesh != nullptr                           ? std::optional(mesh->id)
+	// A one-shot globe has no mesh of its own to draw, but it measures as the model of its dome. An altar measures as
+	// its model before the model shows.
+	const auto model = ecs::thing_model::ModelOf(registry, entity);
+	const auto id = model.has_value()                         ? model
 	                : registry.AllOf<OneOffSpellSeed>(entity) ? std::optional(OneOffSpellSeed::k_MeshId.value())
 	                                                          : std::nullopt;
 	if (!id.has_value() || transform == nullptr || !Locator::resources::has_value())

@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -31,6 +32,7 @@
 #include "Common/Zoomer.h"
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureFight.h"
+#include "Debug/SimRun.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
@@ -173,6 +175,8 @@ struct Arguments
 	/// The fight autopilot to start with the inspector, and the folder for the files of the fight transcript
 	std::optional<FightAutopilotRequest> fightAutopilot;
 	std::optional<std::filesystem::path> fightTranscriptFolder;
+	/// A tool run in the fast simulation mode, or with a run record; none for the usual game
+	std::optional<sim_run::Request> simulation;
 	/// Where the inspector keeps pictures by feature, with their catalogue; OPENBLACK_SCREENSHOT_ROOT's or
 	/// E:/openblack/screenshots when not given
 	std::optional<std::filesystem::path> screenshotRoot;
@@ -298,6 +302,8 @@ public:
 	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
 	[[nodiscard]] const std::filesystem::path& GetLandPath() const noexcept { return _landPath; }
+	/// The land's file, as the land's script asked for it
+	[[nodiscard]] const std::filesystem::path& GetLandscapePath() const noexcept { return _landscapePath; }
 
 	static Game* Instance() { return sInstance; }
 
@@ -400,6 +406,7 @@ private:
 	std::optional<uint16_t> _inspectPort;
 	std::optional<FightAutopilotRequest> _fightAutopilot;
 	std::optional<std::filesystem::path> _fightTranscriptFolder;
+	std::optional<sim_run::Request> _simulation;
 	/// Where the players' profiles are kept instead of the game's own folder
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box
@@ -473,6 +480,8 @@ private:
 	input::ShortcutKeys _shortcutKeys;
 	/// Which way the hand faces across the land, and its up, easing to the slope under it
 	glm::vec3 _handHeading {0.0f, 0.0f, 1.0f};
+	/// The same heading as an angle about the up axis, from -z towards +x, which the hand that holds a totem turns by
+	float _handHeadingAngle {std::numbers::pi_v<float>};
 	Zoomer3 _handUp {glm::vec3(0.0f, 1.0f, 0.0f)};
 	/// How the hand stands facing along its heading on level land, from which it is stood on a slope or a creature's body
 	glm::mat3 _handOnLevelLand {1.0f};
@@ -518,6 +527,8 @@ private:
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
 	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it
+	/// Each player's turn in the game turn: its temple, then its towns
+	void ProcessPlayerTurns();
 	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,
 	                float deltaSeconds);
 	/// Decides how the hand moves this frame, gripping the land, held as it drags by the edge, or hovering, and its pose
@@ -624,6 +635,7 @@ private:
 	hand_blend::ChangeTracker _handBlend;
 	/// The game's own interface, null without the game's files for it
 	std::unique_ptr<gui::GameInterface> _interface;
+	std::filesystem::path _landscapePath;
 	std::filesystem::path _landPath;
 	/// The pause that the menu holds while it is open
 	gui::MenuPause _menuPause;

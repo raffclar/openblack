@@ -19,6 +19,8 @@
 #include <glm/mat3x3.hpp>
 #include <glm/matrix.hpp>
 
+#include "Common/X87Angle.h"
+
 namespace openblack::skeletal_animation
 {
 
@@ -47,16 +49,11 @@ Skeleton Skeleton::FromRestMatrices(std::span<const uint32_t> parents, std::span
 
 Matrix RotationYXZ(const glm::vec3& euler)
 {
-	const auto cy = std::cos(euler.y);
-	const auto sy = std::sin(euler.y);
-	const auto cx = std::cos(euler.x);
-	const auto sx = std::sin(euler.x);
-	const auto cz = std::cos(euler.z);
-	const auto sz = std::sin(euler.z);
+	const auto rows = x87::GameTurnYxz(euler.y, euler.x, euler.z);
 	return {{
-	    {(cy * cz) - (sy * sx * sz), -sz * cx, (sy * cz) + (cy * sx * sz)},
-	    {(cy * sz) + (sy * sx * cz), cx * cz, (sy * sz) - (cy * sx * cz)},
-	    {-sy * cx, sx, cy * cx},
+	    {rows[0].x, rows[0].y, rows[0].z},
+	    {rows[1].x, rows[1].y, rows[1].z},
+	    {rows[2].x, rows[2].y, rows[2].z},
 	}};
 }
 
@@ -65,16 +62,7 @@ glm::vec3 EulerYXZ(const Matrix& m)
 	// The angles are taken off one at a time, as the game does: y from the third row (-sin y cos x, sin x, cos y cos x),
 	// then x from that row turned back by y, then z from the first row turned back by y and x. For a true rotation this
 	// is exact; for one blended on its elements, which is not quite a rotation, it gives the game's angles.
-	const auto y = std::atan2(-m[2][0], m[2][2]);
-	const auto cy = std::cos(-y);
-	const auto sy = std::sin(-y);
-	const auto x = std::atan2(m[2][1], (sy * m[2][0]) + (cy * m[2][2]));
-	const auto first = (cy * m[0][0]) - (sy * m[0][2]);
-	const auto third = (cy * m[0][2]) + (sy * m[0][0]);
-	const auto cx = std::cos(-x);
-	const auto sx = std::sin(-x);
-	const auto z = std::atan2(-((cx * m[0][1]) + (sx * third)), first);
-	return {x, y, z};
+	return x87::GameAnglesYxz(glm::vec3(m[0][0], m[0][1], m[0][2]), glm::vec3(m[2][0], m[2][1], m[2][2]));
 }
 
 Matrix Multiply(const Matrix& a, const Matrix& b)

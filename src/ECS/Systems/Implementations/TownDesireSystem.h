@@ -22,6 +22,7 @@ class TownDesireSystem final: public TownDesireSystemInterface
 {
 public:
 	void ProcessTurn() override;
+	void ProcessTown(entt::entity town) override;
 	uint32_t OfferVillager(entt::entity town, bool child, float trigger,
 	                       const std::function<uint32_t(TownDesireInfo)>& satisfy) override;
 	[[nodiscard]] float GetDesire(entt::entity town, TownDesireInfo desire) const override;

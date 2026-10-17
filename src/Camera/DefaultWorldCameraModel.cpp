@@ -38,6 +38,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "FightView.h"
 #include "Help/HelpProfile.h"
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
@@ -638,15 +639,20 @@ bool DefaultWorldCameraModel::KeepInsideFence(const camera_zones::Zones& zones, 
 	// Outside the fence it is put back inside, what it looks at moving with it; turned by a drag round the edge of the
 	// screen, it is put further in, and goes on turning
 	const bool edgeTurning = _dragging && _drag.GetMode() == camera_drag::DragMode::EdgeRotate;
-	const auto pushed = camera_zones::PushInsideFence(zones.fence, zones.fenceOn, originAtFrameStart, _targetOrigin,
-	                                                  _targetFocus, camera_zones::SearchRadius(edgeTurning));
-	if (!pushed.has_value())
+	auto& cameraZones = Locator::cameraZoneSystem::value();
+	const auto kept = camera_zones::PushInsideFence(zones.fence, zones.fenceOn, originAtFrameStart, _targetOrigin, _targetFocus,
+	                                                camera_zones::SearchRadius(edgeTurning));
+	cameraZones.SetInclusionDistance(kept.inclusionDistance);
+	if (!kept.target.has_value())
 	{
 		return false;
 	}
-	_targetOrigin += *pushed;
-	_targetFocus += *pushed;
-	Locator::cameraZoneSystem::value().FenceHit(_targetOrigin, listener);
+	// The camera goes to the point across the ground. What it looks at and the point it turns about move with it.
+	const glm::vec3 origin {kept.target->x, _targetOrigin.y, kept.target->z};
+	_targetFocus = camera_zones::MovedWithOrigin(_targetFocus, _targetOrigin, origin);
+	_focusAtClick = camera_zones::MovedWithOrigin(_focusAtClick, _targetOrigin, origin);
+	_targetOrigin = origin;
+	cameraZones.FenceHit(_targetOrigin, listener);
 	_heldBack = _heldBack || !edgeTurning;
 	return true;
 }
@@ -777,6 +783,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 {
 	_rotateAroundDelta = glm::vec3();
 	_keyBoardMoveDelta = glm::vec2();
+	_dragTurn = 0.0f;
+	_dragTilt = 0.0f;
 
 	// Compute delta position (dp) based on the elapsed time and speed.
 	const auto dp = k_InteractionSpeedMultiplier * std::chrono::duration_cast<std::chrono::duration<float>>(dt).count();
@@ -1030,6 +1038,30 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 			_turnedThisFrame.reset();
 		}
 	}
+	// What the fight view takes from the controls: any control used, before the features take any away, and the land held
+	// with no key or wheel that turns, tilts or zooms. Held back, nothing counts.
+	{
+		const auto& asked = _helpControls;
+		const bool keyMoving = asked.turn != 0.0f || asked.tilt != 0.0f || asked.zoom != 0.0f;
+		const bool directs = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().DirectsFight();
+		_landGripped = fight_view::GripsLand({
+		    .gripping = gripping,
+		    .directsFight = directs,
+		    .move = actionSystem.Get(input::BindableActionMap::MOVE),
+		    .action = actionSystem.Get(input::BindableActionMap::ACTION),
+		    .bothButtons = actionSystem.Get(input::UnbindableActionMap::TWO_BUTTON_CLICK),
+		    .rotateAroundMouse = rotateAroundMouse,
+		    .heldBack = _heldBack,
+		});
+		_controlsUsed =
+		    !_heldBack && (keyMoving || asked.move != glm::vec2() || _landGripped || rotateAroundMouse || twoButtons);
+		_landHeld = _landGripped && !keyMoving;
+		if (_heldBack)
+		{
+			_dragTurn = 0.0f;
+			_dragTilt = 0.0f;
+		}
+	}
 	// Whether the self-tilting camera keeps to its place this frame: held back, the controls count for nothing and the
 	// camera doesn't tilt itself
 	{
@@ -1171,6 +1203,7 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		if ((_features & camera_help::feature::k_Rotate) != 0)
 		{
 			_turnedThisFrame = turn;
+			_dragTurn += turn;
 			_rotateAroundDelta.y += turn * static_cast<float>(screenSize.x) / glm::pi<float>();
 		}
 		actionSystem.WarpCursor(step.cursor);
@@ -1184,7 +1217,9 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		_helpEvents.Add(camera_help::events::TiltDragEvents(_helpControls));
 		if ((_features & camera_help::feature::k_Pitch) != 0)
 		{
-			_rotateAroundDelta.x += camera_drag::PitchStep(actionSystem.GetMouseDelta().y, screenSize.y, fov) / k_PitchPerInput;
+			const auto step = camera_drag::PitchStep(actionSystem.GetMouseDelta().y, screenSize.y, fov);
+			_dragTilt += step;
+			_rotateAroundDelta.x += step / k_PitchPerInput;
 		}
 		return Mode::Polar;
 	}
@@ -1213,7 +1248,7 @@ CameraModel::HandCues DefaultWorldCameraModel::GetHandCues() const
 	return {.tricons = _tricons, .icons = _iconFrame, .clearView = _clearView.GetValue()};
 }
 
-void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
+void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus, float rise)
 {
 	// A flight ending outside the fence ends where the line from there to what it looks at meets the fence
 	if (Locator::cameraZoneSystem::has_value())
@@ -1221,8 +1256,11 @@ void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
 		origin = camera_zones::FlightOriginInsideFence(zones.fence, zones.fenceOn, origin, focus);
 	}
-	_flightPath = CharterFlight(origin, focus, _currentOrigin, k_FlightHeightFactor);
-	Woosh();
+	_flightPath = CharterFlight(origin, focus, _currentOrigin, rise);
+	if (camera_zones::FlightWooshes(_currentOrigin, origin))
+	{
+		Woosh();
+	}
 }
 
 void DefaultWorldCameraModel::FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh)

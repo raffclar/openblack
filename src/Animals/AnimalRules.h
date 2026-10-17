@@ -56,9 +56,10 @@ struct FormationSlot
 [[nodiscard]] FormationSlot FormationSlotOf(int place);
 /// A formation's rows and columns are this far apart
 inline constexpr float k_FormationSpacing = 10.0f;
-/// Where a follower goes for its slot, in metres: the game angle of its slot's (row, column), plus the way from the
-/// leader to the follower, then the row's spacing along that angle's x and the column's along its z, from the leader
-[[nodiscard]] glm::vec2 FormationGoal(glm::vec2 leader, glm::vec2 follower, FormationSlot slot);
+/// Where a follower goes for its slot: the game angle of its slot's (row, column), plus the way from the leader to the
+/// follower, then the row's spacing along that angle's x and the column's along its z, from the leader. The positions
+/// and the goal are in 16.16 map units, because a goal in metres can change by one unit when it goes back
+[[nodiscard]] glm::ivec2 FormationGoal(glm::ivec2 leader, glm::ivec2 follower, FormationSlot slot);
 
 /// What lets an animal take up a reaction to what it sees, or not
 struct ReactionFacts
@@ -92,6 +93,11 @@ struct ReactionFacts
 /// the resume state of the table row of the state that the animal was in when it took up the reaction. A number that
 /// is not in the table gives the empty state (0).
 [[nodiscard]] uint8_t StateAfterReacting(uint8_t stateBefore, std::span<const GAnimalStateTableInfo> table);
+
+/// Whether a kind of animal frightens a creature. Bats, the bats of the evil flock and vultures frighten a creature.
+/// Lions, tigers, leopards, wolves and the wolves that a spell makes also frighten a creature.
+/// The lion and the cow of the puzzles do not frighten a creature.
+[[nodiscard]] bool FrightensCreatures(AnimalInfo type);
 
 /// A killed animal lies dead this many turns, and one more, before it goes
 inline constexpr int16_t k_TurnsToDieOver = 600;

@@ -60,11 +60,31 @@ public:
 	virtual void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) = 0;
 	/// The creature's mind as a mind file of the current version, over the file it was loaded from, if it has a mind
 	[[nodiscard]] virtual std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const = 0;
+	/// The plan that a saved game keeps for a creature: what it wants, what it does and to what, and the step of the
+	/// agenda that it did
+	struct RestoredPlan
+	{
+		creature_desires::Desire desire {creature_desires::Desire::ObeyPlayer};
+		uint32_t action {0};
+		std::optional<entt::entity> object;
+		std::optional<entt::entity> activityObject;
+		std::optional<entt::entity> instrument;
+		size_t step {0};
+	};
+	/// A load of a saved game gives the creature the fresh mind of the mind file at once. When the save kept a plan, the
+	/// creature then does the plan again from the start of the step that it did.
+	virtual void RestoreMind(entt::entity /*creature*/, std::shared_ptr<const creaturemind::MindFileData> /*mind*/,
+	                         const std::optional<RestoredPlan>& /*plan*/)
+	{
+	}
 	/// Swaps the minds of two creatures at once, as a script does: everything the mind file keeps (what each has learnt
 	/// and how it feels, its physique and tattoos) moves to the other body, while each keeps its name, size and alignment
 	/// for now; the creature the first belonged to now owns the second and the other way round, and both carry out the
 	/// swap, during which each body takes on the size and alignment the other had. Returns whether it could.
 	virtual bool SwapMinds(entt::entity /*from*/, entt::entity /*to*/) { return false; }
+	/// Loads a mind file over the mind of the creature at once, as for a creature that a script makes from a file. The
+	/// creature keeps its examples and adds the examples of the file. The help gives the message of the new stage.
+	virtual void TakeUpMindFile(entt::entity /*creature*/, std::shared_ptr<const creaturemind::MindFileData> /*file*/) {}
 	/// Forgets everything learnt: the desires start again as the species' do, with no opinions or examples
 	virtual void ClearLearning(entt::entity creature) = 0;
 	/// Creatures that can see the point watch an ordinary skill practised (by its row in the game's table), or a miracle
@@ -89,6 +109,20 @@ public:
 	/// that is of no kind that a creature keeps beliefs about.
 	[[nodiscard]] virtual std::optional<creature_tree::Belief> BeliefAbout(entt::entity /*creature*/,
 	                                                                       entt::entity /*thing*/) const
+	{
+		return std::nullopt;
+	}
+
+	/// Whether a cell of the land, by its column and row, is clear for a creature to go to: land it can walk on with
+	/// nothing in the way (nor anything living, when asked)
+	[[nodiscard]] virtual bool IsCellClearFor(entt::entity /*creature*/, int32_t /*x*/, int32_t /*z*/,
+	                                          bool /*livingBlocks*/) const
+	{
+		return false;
+	}
+	/// The middle of the nearest clear area so wide about a point that the creature may go to, none without one
+	[[nodiscard]] virtual std::optional<glm::vec2> FindClearAreaFor(entt::entity /*creature*/, glm::vec2 /*point*/,
+	                                                                float /*width*/, bool /*livingBlocks*/) const
 	{
 		return std::nullopt;
 	}
@@ -179,6 +213,13 @@ public:
 		bool ordered {false};
 		/// The creature comes across the thing that it acts on before it makes the plan
 		bool comeAcross {false};
+		/// When this has a value, the plan is not forced and has this priority. The creature then changes to a plan that
+		/// is more than twice as pressing, it looks at its emergencies, and the plan counts for its desire at its end.
+		std::optional<float> unforcedPriority;
+		/// The plan is marked as forced until the creature stops it. Then the creature takes up no reaction and no
+		/// emergency, and the plan does not count for its desire at its end. The plans of reactions, of copying the
+		/// player and of watching a villager are not marked, but they also have the highest priority.
+		bool forced {true};
 	};
 	/// What the creature was doing stops as a failure and it carries out the plan instead: whether it could. A plan
 	/// carried out is remembered for the player's feedback (unless nothing says why it wants it), and the desires the
@@ -204,6 +245,9 @@ public:
 	/// A nasty miracle struck near the creature: it is frightened by it, and runs from where it struck, or goes to look
 	/// at it when it isn't afraid or is on the learning leash; it learns the miracle when it may
 	virtual void ReactToNastyMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
+	/// After it reacts to a nasty miracle, a creature on the leash that knows the miracle casts it. It casts at the first
+	/// thing near the hand, when its reaction ends.
+	virtual void CastOnLeashAfterReaction(entt::entity /*creature*/, size_t /*miracle*/) {}
 	/// A nice miracle of its own player's was cast near the creature: it goes to look at it, and learns it
 	virtual void ReactToNiceMagic(entt::entity /*creature*/, const glm::vec3& /*point*/, std::optional<size_t> /*learn*/) {}
 	/// The creature starts to react to a thing. It keeps the plan that it does now, before the reaction changes the plan.
@@ -252,6 +296,13 @@ public:
 		/// The plan counts as an order: by an order on the leash, by a script, by a thing that the player gives, by what
 		/// the creature does after a stroke or a slap
 		bool ordered {false};
+		/// The plan is marked as forced until the creature stops it: it then takes up no reaction and no emergency, and
+		/// the plan does not count for its desire at its end. A script's order and the meal after a stroke are not
+		/// marked.
+		bool forced {true};
+		/// The priority of the plan against the plans that the creature finds for itself. With none, nothing that it wants
+		/// is more pressing.
+		std::optional<float> priority;
 	};
 	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is
 	/// about to already

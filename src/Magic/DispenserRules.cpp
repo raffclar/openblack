@@ -16,6 +16,8 @@
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 
+#include "Common/GUtilsDistance.h"
+
 using namespace openblack::magic;
 
 namespace
@@ -117,5 +119,6 @@ glm::vec3 openblack::magic::OrbPosition(const glm::vec3& base, float height)
 
 bool openblack::magic::Touching(glm::vec2 first, float firstRadius, glm::vec2 second, float secondRadius)
 {
-	return glm::distance(first, second) - (firstRadius + secondRadius) <= k_OrbTouchGap;
+	// The game measures the map distance between the two places
+	return openblack::gutils::GetDistanceInMetres(first, second) - (firstRadius + secondRadius) <= k_OrbTouchGap;
 }

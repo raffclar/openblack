@@ -18,22 +18,22 @@ namespace openblack::land_colour_stamps
 
 Placement Place(glm::vec2 xz)
 {
-	// A cell is 10 units; each axis gives its cell, rounded towards zero and then down, and the weight of the next
-	// texel, rounded to the nearest
+	// A cell is 10 units; each axis gives its cell, cut towards zero and then down, and the weight of the next texel,
+	// cut towards zero. Each step is a float.
 	const auto axis = [](float position, int32_t& cell, int32_t& weight) {
-		const double cells = static_cast<double>(position) * 0.1;
+		const float cells = position * 0.1f;
 		cell = static_cast<int32_t>(cells);
-		double next = 0.0;
-		if (cells < 0.0)
+		float next = 0.0f;
+		if (cells < 0.0f)
 		{
-			next = (cell - cells) * 255.0;
+			next = (static_cast<float>(cell) - cells) * 255.0f;
 			--cell;
 		}
 		else
 		{
-			next = 255.0 - (cells - cell) * 255.0;
+			next = 255.0f - ((cells - static_cast<float>(cell)) * 255.0f);
 		}
-		weight = static_cast<int32_t>(std::nearbyint(static_cast<float>(next))) & 0xFF;
+		weight = static_cast<int32_t>(next) & 0xFF;
 	};
 	Placement placement {};
 	axis(xz.x, placement.cell.x, placement.weight.x);

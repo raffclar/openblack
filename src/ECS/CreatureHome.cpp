@@ -27,7 +27,7 @@ namespace
 {
 /// Where a temple keeps its player's creature: the pen its mesh marks in front of it, turned and moved with the temple.
 /// None when its mesh marks no pen
-std::optional<glm::vec3> TemplePenOf(const Transform& transform, const Mesh* mesh)
+std::optional<glm::vec3> PenOfTempleMesh(const Transform& transform, const Mesh* mesh)
 {
 	if (mesh == nullptr || !openblack::Locator::resources::has_value())
 	{
@@ -52,18 +52,24 @@ std::optional<glm::vec3> creature_home::HomeOf(const Registry& registry, entt::e
 	}
 	const auto* leash = registry.TryGet<const CreatureLeash>(creature);
 	const auto home = leash != nullptr ? leash->home : std::nullopt;
-	std::optional<glm::vec3> temple;
-	registry.Each<const Temple, const Transform>(
-	    [&registry, &temple, owner = body->owner](entt::entity entity, const Temple& building, const Transform& transform) {
-		    if (building.owner == owner && !temple.has_value())
-		    {
-			    temple = TemplePenOf(transform, registry.TryGet<const Mesh>(entity));
-		    }
-	    });
+	const auto temple = TemplePenOf(registry, body->owner);
 	if (!temple.has_value() && !home.has_value())
 	{
 		return std::nullopt;
 	}
 	// The temple's pen while the temple stands, whatever home it was given; else that home
 	return openblack::creature_mode::PenOf(home, temple, glm::vec3 {});
+}
+
+std::optional<glm::vec3> creature_home::TemplePenOf(const Registry& registry, PlayerNames owner)
+{
+	std::optional<glm::vec3> pen;
+	registry.Each<const Temple, const Transform>(
+	    [&registry, &pen, owner](entt::entity entity, const Temple& building, const Transform& transform) {
+		    if (building.owner == owner && !pen.has_value())
+		    {
+			    pen = PenOfTempleMesh(transform, registry.TryGet<const Mesh>(entity));
+		    }
+	    });
+	return pen;
 }

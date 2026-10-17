@@ -193,6 +193,9 @@ struct ObjectOrder
 	bool mirrored {false};
 	/// Throwing: the creature aims at the place of the object as the throw starts, not at the point
 	bool atObject {false};
+	/// Eating: the creature swallows what it eats. A creature told only to eat, with no thing given, takes in the food
+	/// of what it holds without a swallow, and then the step fails.
+	bool swallows {true};
 };
 
 /// Going somewhere, or turning to face something
@@ -357,6 +360,9 @@ struct Gaze
 	/// The player: the hand when it moved much lately, else the camera
 	bool player {false};
 	std::optional<glm::vec3> point;
+	/// The look goes to the ground below the point, not to the height of the point. While the creature moves near the
+	/// point, it does not look at the point.
+	bool pointOnGround {false};
 	bool camera {false};
 	/// The look of a creature that walks to the point: at the point, at what it watches, and a sweep from side to side
 	/// (see creature_look::LookWhileGoing). Without a point, the look uses the top of the object, or else the place that
@@ -380,6 +386,16 @@ constexpr float k_FeetLookMetres = 4.0f;
 {
 	return {.point = glm::vec3(point.x, 0.0f, point.y), .whileGoing = true};
 }
+
+/// The action that a step tries to start again each turn, because the body does not have its clip. The step never ends.
+/// Each try first picks a side at random: a static action always, an individual action only while the creature holds
+/// nothing (the hand that holds a thing picks the side).
+enum class RetriedClip : uint8_t
+{
+	None,
+	Static,
+	Individual,
+};
 
 struct Step
 {
@@ -487,7 +503,8 @@ struct Step
 		LowerTotem,
 		/// Making the step's object, a villager, a breeder at once
 		MakeDisciple,
-		/// Kissing: once its body plays no action, it plays the step's animation once, with whatever its hand holds
+		/// Kissing: once its body plays no action, it kisses, with whatever its hand holds. With the step's object, another
+		/// creature, it kisses that creature. Else it kisses the air. The step is done when the body plays no action.
 		Kiss,
 		/// Dancing alone: as it starts, once its body plays no action, the creature starts a dance with moves of one
 		/// second each. The step lasts for the step's seconds counted in whole turns. The dance stops when the step
@@ -506,6 +523,17 @@ struct Step
 		/// Making the partner (the step's object) stand still in its mind, or letting its mind go free again, at once
 		Demobilise,
 		Remobilise,
+		/// Waiting while the step's object moves. The step is done on a turn when the object does not move.
+		WaitForStill,
+		/// The step's effect occurs at once, with no animation, as the drink or the poo after the animation of it
+		Apply,
+		/// Making the step's desire fully strong at once and planning it on the step's object, a town. The current
+		/// action stops as a failure. When no plan is found, the creature decides again.
+		ApplyDesire,
+		/// Waiting for the step's object, a creature, to be free. The creature waits for the step's turns after the turn
+		/// that the step starts. Then the step is done on a turn when the body of the object plays no action and does
+		/// not move.
+		WaitForFree,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -526,8 +554,8 @@ struct Step
 	bool untilBetter {false};
 	/// A static step's loop holds the last frame of its start, as lying out cold
 	bool holdLoop {false};
-	/// A static step plays left to right half the time, chosen as it starts
-	bool mirrorAtRandom {false};
+	/// The action that a never-ending wait tries to start each turn
+	RetriedClip retriedClip {RetriedClip::None};
 	/// Played with the eyes closed
 	bool closedEyes {false};
 	/// What the step does to the body: when an action is done (eating, as it starts), or a static step's loop ends
@@ -559,6 +587,19 @@ struct Step
 	creature_friendship::RequestKind request {creature_friendship::RequestKind::Play};
 	/// The step that an order step tells the partner to do
 	std::shared_ptr<const Step> ordered;
+	/// The desire that a step that applies a desire makes strong
+	creature_desires::Desire desire {creature_desires::Desire::Compassion};
+	/// The step of the game that this step stands for, as a saved game keeps it in the plan of a creature that a script
+	/// controls. Only the steps that such a plan has keep it.
+	struct Saved
+	{
+		/// The number of the game's step
+		uint32_t kind {0};
+		uint32_t integer {0};
+		glm::vec3 point {0.0f};
+		float real {0.0f};
+	};
+	std::optional<Saved> saved;
 };
 
 struct IdleMind
@@ -669,6 +710,12 @@ enum class HandsNeed : uint8_t
 ///   breeder and the step that uses up the held thing.
 [[nodiscard]] HandsNeed HandsNeededFor(const Step& step);
 
+/// Whether the body does not have a clip that the step plays as it starts: the clip of an action, a swap of minds or a
+/// communication, or the start, loop or end of a static action or a cast. A faint has no such test. The test says
+/// whether the body has a clip.
+[[nodiscard]] bool LacksClipToStart(const Step& step, std::optional<size_t> communication,
+                                    const std::function<bool(size_t)>& hasClip);
+
 /// How the creature lets go of the thing that it holds before a step that needs empty hands
 enum class LetGo : uint8_t
 {
@@ -689,6 +736,9 @@ struct Senses
 	/// Whether the body plays an action or is on the move, and whether it is in the loop of an action, such as sitting
 	bool bodyBusy {false};
 	bool bodyLooping {false};
+	/// Whether the body does not have a clip that the next step plays as it starts. Then the step does not start, and
+	/// the creature tries to start it again on each turn.
+	bool clipMissing {false};
 	/// Whether the body dances and does not play the finish of the dance yet
 	bool bodyDancing {false};
 	/// Whether it is on its way somewhere or turning, and where it stands
@@ -708,6 +758,10 @@ struct Senses
 	std::optional<uint32_t> held;
 	/// Whether the object a step waits for is on the map, none when the object is gone
 	std::optional<bool> objectInMap;
+	/// Whether the object that a step waits to be still moves
+	bool objectMoving {false};
+	/// Whether the body of the creature that a step waits for plays an action or moves
+	bool objectBusy {false};
 	/// Whether the object a step watches fly is still really in the air
 	bool objectInTheAir {false};
 	/// Whether the living object of a step that makes it still is in its state of flying
@@ -912,6 +966,19 @@ struct Commands
 	std::optional<PartnerOrder> order;
 	/// The partner to make stand still in its mind (true) or to let go free again (false)
 	std::optional<std::pair<uint32_t, bool>> demobilise;
+	/// A kiss to start, with the creature that it kisses, or with no creature for a kiss of the air
+	struct KissOrder
+	{
+		std::optional<uint32_t> partner;
+	};
+	std::optional<KissOrder> kiss;
+	/// A desire to make fully strong and to plan on a thing, by its entity's number
+	struct DesireOn
+	{
+		creature_desires::Desire desire {creature_desires::Desire::Compassion};
+		uint32_t thing {0};
+	};
+	std::optional<DesireOn> applyDesire;
 };
 
 /// random(n) is a whole number from 0 to n - 1
@@ -1020,15 +1087,18 @@ constexpr uint32_t k_FewestRestTurns = 30;
 
 /// A new agenda in place of the current one
 void Plan(IdleMind& mind, Activity activity, std::vector<Step> agenda);
-/// Pulls a face for a reason, if the reason calls for one, and moves the variety of faces on
+/// Pulls a face for a reason, if the reason calls for one, and moves the variety of faces on by a draw from gameRandom
 [[nodiscard]] std::optional<creature_face::Request> PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
-                                                             const Random& random);
+                                                             const Random& random, const Random& gameRandom);
 /// The world carried out a dance stage that the mind ordered: the step is done, or the rest of the agenda is no use
 void DanceOrderDone(IdleMind& mind, bool done);
 /// What the head looks at while the step lasts. A step that picks a thing up, or goes near a thing, looks at that
 /// thing as the creature walks, unless the step gives a look of its own. Without a look, the head looks about.
 [[nodiscard]] std::optional<Gaze> LookOf(const Step& step);
-/// One game turn of the mind
+/// One game turn of the mind. The variety of faces moves on by the random numbers of the game (gameRandom), and all
+/// else draws from random.
+[[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random, const Random& gameRandom);
+/// One game turn of the mind, with one source of random numbers for all draws
 [[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random);
 /// The main step of an agenda: the last step marked as main. A step that casts a miracle is always a main step. When no
 /// step is a main step, the last step is the main step. An empty agenda gives 0.

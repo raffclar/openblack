@@ -54,12 +54,20 @@ std::vector<Step> openblack::creature_mind::LookForever(uint32_t thing)
 	};
 }
 
-std::vector<Step> openblack::creature_mind::LookButDontApproach(uint32_t thing, float chance)
+float openblack::creature_mind::LookButDontApproachSeconds(float extraSeconds)
+{
+	constexpr auto k_TurnsPerSecond = static_cast<float>(k_LookButDontApproachTurnsPerSecond);
+	const float seconds = extraSeconds + k_LookButDontApproachSeconds;
+	const auto turns = static_cast<int32_t>(seconds * k_TurnsPerSecond);
+	return static_cast<float>(turns) / k_TurnsPerSecond;
+}
+
+std::vector<Step> openblack::creature_mind::LookButDontApproach(uint32_t thing, float extraSeconds)
 {
 	return {
 	    FaceThing(thing, k_FaceThingSeconds),
 	    {.kind = Step::Kind::Wait,
-	     .seconds = k_LookButDontApproachSeconds + (chance * k_LookButDontApproachExtraSeconds),
+	     .seconds = LookButDontApproachSeconds(extraSeconds),
 	     .gaze = Gaze {.object = thing, .bottom = true}},
 	};
 }
@@ -156,9 +164,11 @@ std::vector<Step> openblack::creature_mind::SitDownAt(uint32_t place, glm::vec2 
 
 std::vector<Step> openblack::creature_mind::FaceForScript(glm::vec3 point)
 {
-	return {{.kind = Step::Kind::Move,
-	         .movement = {.kind = Movement::Kind::FacePoint, .point = {point.x, point.z}},
-	         .gaze = Gaze {.point = point}}};
+	Step face {.kind = Step::Kind::Move,
+	           .movement = {.kind = Movement::Kind::FacePoint, .point = {point.x, point.z}},
+	           .gaze = Gaze {.point = point}};
+	face.saved = Step::Saved {.kind = k_SavedTurnToFacePoint, .point = point};
+	return {face};
 }
 
 std::vector<Step> openblack::creature_mind::FaceThingForScript(uint32_t thing)
@@ -174,14 +184,17 @@ std::vector<Step> openblack::creature_mind::MoveForScript(glm::vec2 from, glm::v
 	if (distance == 0.0f)
 	{
 		first = glm::distance(from, to) * k_FirstLegShare;
-		first = height >= first ? height : std::min(first, (k_FirstLegHeightShare * height) + k_FirstLegMost);
+		first = height > first ? height : std::min(first, (k_FirstLegHeightShare * height) + k_FirstLegMost);
 		second = height;
 	}
 	const auto leg = [&to, &point](float within) {
-		return Step {
+		Step step {
 		    .kind = Step::Kind::Move,
 		    .movement = {.kind = Movement::Kind::ToPoint, .point = to, .maxDistance = within, .giveUpIfUnreachable = false},
-		    .gaze = Gaze {.point = point}};
+		    .gaze = Gaze {.point = point, .pointOnGround = true}};
+		// The saved game keeps the point and the distance of each walk
+		step.saved = Step::Saved {.kind = k_SavedMoveToPoint, .point = point, .real = within};
+		return step;
 	};
 	return {leg(first), leg(second)};
 }

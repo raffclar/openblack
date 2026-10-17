@@ -25,7 +25,9 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
+#include "Common/GUtilsDistance.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Fixed.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
@@ -614,7 +616,7 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	for (const auto& [id, town] : towns)
 	{
 		const auto at = Across(registry.Get<const Transform>(town).position);
-		if (const auto distance = glm::distance(Across(templePosition), at); distance < nearest)
+		if (const auto distance = gutils::GetDistanceInMetres(Across(templePosition), at); distance < nearest)
 		{
 			nearest = distance;
 			spot = at;
@@ -666,10 +668,16 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	// The tribe's altar stands at the head of the site, facing as it does
 	const auto altarPoint = _world->SitePoint(ws::k_AltarPoint).value_or(glm::vec3(0.0f));
 	const auto altarAt = ws::TurnedPoint(Across(templePosition), facing, altarPoint);
+	// The altar has its model's size and shape on the map from now on, but the model shows only when the town builds the site
 	const auto altar = registry.Create();
-	registry.Assign<Transform>(altar, glm::vec3(altarAt.x, _world->LandHeightAt(altarAt), altarAt.y),
-	                           glm::mat3(glm::eulerAngleY(-facing)), glm::vec3(1.0f));
-	registry.Assign<WorshipAltar>(altar, site);
+	const auto& placed = registry.Assign<Transform>(altar, glm::vec3(altarAt.x, _world->LandHeightAt(altarAt), altarAt.y),
+	                                                glm::mat3(glm::eulerAngleY(-facing)), glm::vec3(1.0f));
+	const auto altarModel = _world->AltarMesh(tribe);
+	if (const auto circle = _world->FixedCircleOf(altarModel, placed))
+	{
+		registry.Assign<Fixed>(altar, circle->first, circle->second);
+	}
+	registry.Assign<WorshipAltar>(altar, WorshipAltar {.site = site, .model = altarModel});
 	registry.Get<WorshipSite>(site).altar = altar;
 	Init(site);
 	if (const auto logger = spdlog::get("game"))
@@ -766,7 +774,7 @@ void WorshipSiteSystem::Built(entt::entity site)
 	registry.Remove<BuildProgress>(site);
 	if (registry.Valid(component.altar) && !registry.AllOf<Mesh>(component.altar))
 	{
-		registry.Assign<Mesh>(component.altar, _world->AltarMesh(component.tribe), static_cast<int8_t>(0),
+		registry.Assign<Mesh>(component.altar, registry.Get<const WorshipAltar>(component.altar).model, static_cast<int8_t>(0),
 		                      static_cast<int8_t>(0));
 	}
 }

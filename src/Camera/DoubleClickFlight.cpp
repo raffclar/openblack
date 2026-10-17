@@ -18,6 +18,9 @@
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::camera_fly;
 
@@ -33,10 +36,10 @@ constexpr int k_FirstPoint = 3;
 constexpr int k_LastPoint = 7;
 constexpr float k_PointStep = 0.125f;
 /// The turn from the camera's heading is weighed by this times its cosine
-constexpr float k_TurnWeight = 50.0f;
+constexpr double k_TurnWeight = 50.0;
 /// The pitch a flight ends with
 constexpr float k_OldPitchShare = 0.2f;
-constexpr float k_SlopeShare = 0.2f;
+constexpr double k_SlopeShare = 0.2;
 constexpr double k_PitchBase = 0.37699114390179034;
 constexpr float k_BestMinPitch = k_Pi / 8.0f;
 constexpr float k_BestMaxPitch = k_Pi / 3.0f;
@@ -77,7 +80,8 @@ Bearing camera_fly::BestBearing(const camera_limits::Ground& ground, const Beari
 	float bestScore = -1.0e20f;
 	for (int i = 0; i < k_Headings; ++i)
 	{
-		scores.at(i) += static_cast<float>(std::cos(static_cast<double>(static_cast<float>(i) * k_Pi / 16.0f)) * k_TurnWeight);
+		// The cosine goes wide into the multiply by the double weight
+		scores.at(i) += x87::Mul(x87::Cos(static_cast<float>(i) * k_Pi / 16.0f), k_TurnWeight);
 		if (scores.at(i) > bestScore)
 		{
 			bestScore = scores.at(i);
@@ -89,8 +93,7 @@ Bearing camera_fly::BestBearing(const camera_limits::Ground& ground, const Beari
 	const auto normal = ground.normal({place.x, place.z});
 	const float slopePitch = BearingOf(normal + place, place).pitch * 0.5f;
 	const float oldPitch = current.pitch * k_OldPitchShare;
-	const auto pitch = static_cast<float>(static_cast<double>(oldPitch) +
-	                                      static_cast<double>(slopePitch) * static_cast<double>(k_SlopeShare) + k_PitchBase);
+	const float pitch = x87::Add(oldPitch + x87::Mul(slopePitch, k_SlopeShare), k_PitchBase);
 	return {.heading = static_cast<float>(best) * k_Pi / 16.0f + current.heading,
 	        .pitch = std::clamp(pitch, k_BestMinPitch, k_BestMaxPitch)};
 }
@@ -98,8 +101,8 @@ Bearing camera_fly::BestBearing(const camera_limits::Ground& ground, const Beari
 Flight camera_fly::Plan(Reason reason, const camera_limits::Ground& ground, const glm::vec3& place, const glm::vec3& origin,
                         const glm::vec3& focus, const glm::vec3& screenCentre)
 {
-	const float focusDistance = glm::distance(place, screenCentre);
-	const float originDistance = glm::distance(place, origin);
+	const float focusDistance = x87::Distance<x87::SumOrder::Zyx>(place, screenCentre);
+	const float originDistance = x87::Distance<x87::SumOrder::Zyx>(place, origin);
 	Flight flight {.focus = place};
 	float distance = originDistance;
 	bool bestBearing = true;
@@ -163,7 +166,9 @@ glm::vec3 camera_fly::HalfWayPoint(const glm::vec3& end, const glm::vec3& curren
                                    const std::function<float(glm::vec2)>& groundHeight)
 {
 	auto point = (end + current) * 0.5f;
-	point.y += std::hypot(current.x - end.x, current.z - end.z) * rise;
+	const float acrossX = current.x - end.x;
+	const float acrossZ = current.z - end.z;
+	point.y += std::sqrt(acrossZ * acrossZ + acrossX * acrossX) * rise;
 	const float clear = groundHeight({point.x, point.z}) + k_HalfWayClearance;
 	if (clear > point.y)
 	{

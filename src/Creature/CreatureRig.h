@@ -138,6 +138,18 @@ struct CreatureRig
 		float pointMs {0.0f};
 	};
 	std::optional<ActionPoints> actionPoints;
+	/// The point on the body that kisses: a triangle of the meshes, in the space of the bone that moves each vertex, and
+	/// where on the triangle. None when the file has no such point. Then the creature kisses with its head bone.
+	struct KissPoint
+	{
+		std::array<std::array<glm::vec3, 3>, k_MeshCount> vertices;
+		std::array<uint32_t, 3> bones;
+		float u;
+		float v;
+	};
+	std::optional<KissPoint> kissPoint;
+	/// The moment of the high and the low kiss animations when the lips meet, in milliseconds from their starts
+	std::optional<float> kissMs;
 	/// The type of wound each of its twelve fight blows leaves, in the order of the blow animations, when its file gives
 	/// them
 	std::optional<std::array<int32_t, 12>> blowWoundTypes;
@@ -186,4 +198,10 @@ PosedTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCoun
 /// The world matrix of a bone as posed this frame, the creature's placement included; the placement alone for a bone
 /// the pose lacks
 [[nodiscard]] glm::mat4 PosedBone(uint32_t bone, std::span<const glm::mat4> boneMatrices, const glm::mat4& placement);
+
+/// Where each bone was in the world at the end of the last game turn, as the game's effects on a creature read them.
+/// Before the first turn ends (no bones kept, or not one for each bone of the pose), the bones of this frame are the
+/// only pose there is.
+[[nodiscard]] std::vector<glm::vec3> TurnPoseBones(std::span<const glm::vec3> lastTurnBones,
+                                                   std::span<const glm::mat4> boneMatrices, const glm::mat4& placement);
 } // namespace openblack::creature

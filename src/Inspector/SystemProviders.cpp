@@ -212,6 +212,14 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "demobilise";
 	case Kind::Remobilise:
 		return "remobilise";
+	case Kind::WaitForStill:
+		return "wait_for_still";
+	case Kind::Apply:
+		return "apply";
+	case Kind::ApplyDesire:
+		return "apply_desire";
+	case Kind::WaitForFree:
+		return "wait_for_free";
 	case Kind::Communicate:
 		return "communicate";
 	}
@@ -718,6 +726,56 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		              plan["id"] = ToId(entity);
 		              return QueryResult::Value(std::move(plan));
 	              });
+	provider->Add(
+	    Query("clear_area",
+	          "The cells about a point that are not clear for a creature to go to (land it can't walk on, or things in "
+	          "its way), and the middle of the nearest clear area so wide, as its search for a place to cast, sit or "
+	          "get away finds it",
+	          {id, Parameter("position", "point", "The point searched about, [x, z] or [x, y, z]", true),
+	           Parameter("width", "number", "How wide the area must be, in metres", true),
+	           Parameter("living", "boolean", "Whether anything living also keeps a cell from being clear", false)}),
+	    [sources](const QueryContext& context) {
+		    const auto* registry = Registry(sources.world);
+		    if (registry == nullptr || !sources.cellClear || !sources.clearArea)
+		    {
+			    return QueryResult::Error(std::string(k_NoRegistry));
+		    }
+		    const auto creature = CreatureParam(*registry, context.params);
+		    if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		    {
+			    return QueryResult::Error(*problem);
+		    }
+		    const auto entity = std::get<entt::entity>(creature);
+		    const auto position = context.params.find("position");
+		    const auto point = position == context.params.end() ? std::nullopt : ReadPoint(*position);
+		    const auto width = context.params.find("width");
+		    if (!point.has_value() || width == context.params.end() || !width->is_number())
+		    {
+			    return QueryResult::Error("give position [x, z] and width in metres");
+		    }
+		    const bool living = context.params.value("living", false);
+		    const glm::vec2 at(static_cast<float>((*point)[0]), static_cast<float>((*point)[2]));
+		    const float wide = width->get<float>();
+		    constexpr float k_CellSize = 10.0f;
+		    const auto reach = static_cast<int32_t>(std::ceil(wide / k_CellSize)) + 1;
+		    const auto middleX = static_cast<int32_t>(std::floor(at.x / k_CellSize));
+		    const auto middleZ = static_cast<int32_t>(std::floor(at.y / k_CellSize));
+		    Json blocked = Json::array();
+		    for (int32_t x = middleX - reach; x <= middleX + reach; ++x)
+		    {
+			    for (int32_t z = middleZ - reach; z <= middleZ + reach; ++z)
+			    {
+				    if (!sources.cellClear(entity, x, z, living))
+				    {
+					    blocked.push_back({x, z});
+				    }
+			    }
+		    }
+		    const auto found = sources.clearArea(entity, at, wide, living);
+		    return QueryResult::Value({{"id", ToId(entity)},
+		                               {"blocked", std::move(blocked)},
+		                               {"found", found.has_value() ? Json {found->x, found->y} : Json(nullptr)}});
+	    });
 	return provider;
 }
 

@@ -32,6 +32,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureDevelopment.h"
@@ -40,6 +41,7 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureSaveState.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashOwnership.h"
@@ -55,6 +57,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/CreatureTarget.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Forest.h"
@@ -86,6 +89,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "Graphics/Texture2D.h"
 #include "Help/HelpProfile.h"
 #include "Input/GameActionMapInterface.h"
@@ -220,7 +224,7 @@ leash::Lengths LengthsOf(const Registry& registry, entt::entity creature, const 
 	}
 	const auto& from = registry.Get<const Transform>(creature).position;
 	const auto& to = registry.Get<const Transform>(*worn.tiedTo).position;
-	return leash::TiedToStatic(glm::distance(glm::vec2(from.x, from.z), glm::vec2(to.x, to.z)));
+	return leash::TiedToStatic(gutils::GetDistanceInMetres(from, to));
 }
 
 /// How far along a ray it meets a ball, if it does
@@ -602,6 +606,8 @@ void LeashSystem::TakeOff(entt::entity creature)
 	{
 		mind->leash.learningInHand = false;
 		mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
+		// The leash no longer leads what the creature does
+		mind->ledByLeash = false;
 	}
 	// Off any leash but the learning leash, the desire it made dominant lets go
 	if (leash::TakingOffEndsDominantDesire(leashes->selected) && Locator::creatureMindSystem::has_value())
@@ -888,7 +894,7 @@ bool LeashSystem::FreeOfHome(entt::entity creature) const
 	{
 		return false;
 	}
-	return leash::FreeOfHome(glm::distance(transform->position, *home), temple.has_value());
+	return leash::FreeOfHome(gutils::GetDistanceInMetres(transform->position, *home), temple.has_value());
 }
 
 bool LeashSystem::IsLeashed(entt::entity creature) const
@@ -1195,7 +1201,7 @@ void LeashSystem::UpdateMoods(entt::entity creature, const CreatureLeash::Worn& 
 	const auto* otherAt = registry.TryGet<const Transform>(other);
 	if (worn.type == LeashType::Evil && at != nullptr && otherAt != nullptr &&
 	    minds.DominantDesire(other) != creature_desires::Desire::Anger &&
-	    glm::distance(at->position, otherAt->position) < leash::k_AngerOtherReach * CreatureHeight(*body))
+	    gutils::GetDistanceInMetres(otherAt->position, at->position) < leash::k_AngerOtherReach * CreatureHeight(*body))
 	{
 		minds.MakeDesireDominant(other, creature_desires::Desire::Anger, leash::k_ForcedDesireSeconds, false);
 	}
@@ -1244,11 +1250,11 @@ bool LeashSystem::ShouldWalkBack(entt::entity creature) const
 	    .mimicking = mind != nullptr && mind->learnt.has_value() && mind->learnt->mimicry.has_value(),
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	    .teleporting = TravelsByTeleport(registry, creature),
-	    .distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), centre),
+	    .distance = gutils::GetDistanceInMetres(glm::vec2(transform.position.x, transform.position.z), centre),
 	    .centreOpen = centreOpen,
-	    .returnToCentre = leashes.returnTo.has_value()
-	                          ? std::optional(glm::distance(glm::vec2(leashes.returnTo->x, leashes.returnTo->z), centre))
-	                          : std::nullopt,
+	    .returnToCentre = leashes.returnTo.has_value() ? std::optional(gutils::GetDistanceInMetres(
+	                                                         glm::vec2(leashes.returnTo->x, leashes.returnTo->z), centre))
+	                                                   : std::nullopt,
 	    .clearingWay =
 	        [&registry, creature] {
 		        const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
@@ -1264,7 +1270,7 @@ void LeashSystem::WalkBack(entt::entity creature)
 	const auto& body = registry.Get<const Creature>(creature);
 	const auto& transform = registry.Get<const Transform>(creature);
 	const auto centre = glm::vec2(leashes.confinementCentre.x, leashes.confinementCentre.z);
-	const auto distance = glm::distance(glm::vec2(transform.position.x, transform.position.z), centre);
+	const auto distance = gutils::GetDistanceInMetres(glm::vec2(transform.position.x, transform.position.z), centre);
 	// The creature stops what it does and walks to the centre. It is faster when it is further away.
 	creature_mind::Step walk {.kind = creature_mind::Step::Kind::Move};
 	walk.movement = {
@@ -1279,6 +1285,11 @@ void LeashSystem::WalkBack(entt::entity creature)
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} walks back to ({:.1f}, {:.1f}), {:.1f} away",
 	                   entt::to_integral(creature), centre.x, centre.y, distance);
 	Force(creature, {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = std::vector {walk}});
+	// While the leash is on, the leash leads the walk back
+	if (auto* led = MindOf(registry, creature))
+	{
+		led->ledByLeash = leashes.worn.has_value();
+	}
 	// The creature keeps the place until the action of the walk ends
 	leashes.returnTo = leashes.confinementCentre;
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
@@ -1861,7 +1872,8 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	        .playerHasCitadel = home.has_value(),
 	        .exhaustion = needs != nullptr ? needs->needs.exhaustion : 0.0f,
 	        .sleeping = mind != nullptr && mind->idle.activity == creature_mind::Activity::Sleep,
-	        .distanceFromHome = home.has_value() ? std::optional(glm::distance(glm::vec2(home->x, home->z), at)) : std::nullopt,
+	        .distanceFromHome =
+	            home.has_value() ? std::optional(gutils::GetDistanceInMetres(glm::vec2(home->x, home->z), at)) : std::nullopt,
 	        .leash = TypeOf(creature),
 	        .orderInForce = OrderInForce(creature),
 	        .height = height,
@@ -1929,7 +1941,7 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		                         .action = orders::k_MoveAction,
 		                         .agenda = orders::MoveTo(order.point, order.arrival, order.runAndWait, wait)});
 		// Sent far, it says which desire it acts on
-		if (glm::distance(at, position) > orders::k_TellDesireDistance)
+		if (gutils::GetDistanceInMetres(at, position) > orders::k_TellDesireDistance)
 		{
 			desire = Desire::ObeyPlayer;
 		}
@@ -1955,6 +1967,11 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} couldn't carry out the order", entt::to_integral(creature));
 		return false;
+	}
+	// The leash leads the order that the player gave
+	if (auto* led = MindOf(registry, creature))
+	{
+		led->ledByLeash = true;
 	}
 	if (desire.has_value())
 	{
@@ -2010,7 +2027,7 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	    .liftable = Locator::creatureObjectActionSystem::has_value() &&
 	                Locator::creatureObjectActionSystem::value().CanPickUp(creature, object),
 	    .creature = isCreature,
-	    .distance = glm::distance(transform.position, objectAt),
+	    .distance = gutils::GetDistanceInMetres(transform.position, objectAt),
 	    .leash = type,
 	    .height = height,
 	});
@@ -2094,6 +2111,11 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	leashes.helpDesire = desire;
 	TellHelp(creature,
 	         {.kind = creature_help::Kind::CurrentDesire, .parameter = static_cast<uint32_t>(*desire), .thing = object});
+	// The leash leads the order that the player gave
+	if (mind != nullptr)
+	{
+		mind->ledByLeash = true;
+	}
 	MarkOrder(creature, object, objectAt, fight);
 	// What it is shown on the aggression and compassion leashes teaches it which desire to act on such things with
 	if (auto lessons = leash::LessonsFor(type, isCreature); mind != nullptr && !lessons.empty())
@@ -2155,6 +2177,10 @@ void LeashSystem::MarkOrder(entt::entity creature, std::optional<entt::entity> o
 		}
 	}
 	leashes.order = order;
+	// The creature keeps the point and the thing that the order aims at, for as long as it does the order
+	const float height = object.has_value() && registry.Valid(*object) ? world_objects::SizeOf(*object).height : 0.0f;
+	registry.AssignOrReplace<CreatureTarget>(
+	    creature, CreatureTarget {.point = creature_save_state::TargetPoint(point, height), .object = object, .has = true});
 	registry.SetDirty();
 }
 
@@ -2168,6 +2194,12 @@ void LeashSystem::EndOrder(entt::entity creature)
 	}
 	const auto order = *leashes->order;
 	leashes->order.reset();
+	// The creature stops the order: the point stays, but it aims at nothing now
+	if (auto* target = registry.TryGet<CreatureTarget>(creature))
+	{
+		target->object.reset();
+		target->has = false;
+	}
 	if (order.sparkles != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value() &&
 	    Locator::particleSystem::value().IsRunning(order.sparkles))
 	{
@@ -2229,8 +2261,8 @@ void LeashSystem::UpdateMarkers(float seconds)
 	auto& registry = Locator::entitiesRegistry::value();
 	_markerClockMs = std::fmod(_markerClockMs + (seconds * 1000.0f), static_cast<float>(orders::k_PulsePeriodMs));
 	const auto size = orders::MarkerSize(static_cast<uint32_t>(_markerClockMs));
-	// The footprint is a quarter turn round, in the plane facing the camera
-	const auto quarterTurn = glm::mat3(glm::rotate(-0.5f * std::numbers::pi_v<float>, glm::vec3(0.0f, 0.0f, 1.0f)));
+	// The footprint turns a quarter turn to the left, in the plane that faces the camera
+	const auto quarterTurn = glm::mat3(glm::rotate(orders::k_FootprintTurn, glm::vec3(0.0f, 0.0f, 1.0f)));
 	std::vector<std::pair<entt::entity, CreatureLeash::Order>> marked;
 	registry.Each<const CreatureLeash>([&marked](entt::entity creature, const CreatureLeash& leashes) {
 		if (leashes.order.has_value() && leashes.order->ring != entt::null)
@@ -2251,7 +2283,7 @@ void LeashSystem::UpdateMarkers(float seconds)
 		auto& footprint = registry.Get<Transform>(order.footprint);
 		footprint.position = *at;
 		footprint.rotation = quarterTurn;
-		footprint.scale = glm::vec3(size * orders::k_FootprintShare, 1.0f);
+		footprint.scale = glm::vec3(orders::FootprintSize(size), 1.0f);
 	}
 }
 

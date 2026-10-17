@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <deque>
 #include <map>
 #include <memory>
@@ -23,6 +24,7 @@
 #include <entt/entity/registry.hpp>
 #include <entt/signal/sigh.hpp>
 
+#include "3D/WaterRings.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ParticleObjectEffects.h"
 #include "Particles/ParticleClassRegistry.h"
@@ -43,6 +45,7 @@ class GameParticleWorld final: public particles::ParticleWorldInterface
 {
 public:
 	[[nodiscard]] float LandHeight(glm::vec2 xz) const override;
+	[[nodiscard]] float LandHeightAtMap(int32_t x, int32_t z) const override;
 	[[nodiscard]] uint32_t PlayerColour(int player) const override;
 	[[nodiscard]] glm::vec3 CameraRight() const override;
 	[[nodiscard]] glm::vec3 CameraUp() const override;
@@ -224,6 +227,7 @@ public:
 	void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) override;
 	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override { _world.AddLightSheet(sheet); }
 	void UpdateFrame(float gameSeconds, const HandFrame& hand) override;
+	void ScrollChains(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) override;
 	void CloseDown(EffectId id) override;
 	void Delete(EffectId id) override;
 	[[nodiscard]] bool IsRunning(EffectId id) const override;
@@ -297,6 +301,8 @@ private:
 	std::deque<Running> _effects;
 	EffectId _nextId {1};
 	bool _paused {false};
+	/// When the ribbons' textures last slid on
+	water_rings::Pace _chainScrollPace;
 	/// A symbol of belief waits for its effect
 	bool _beliefWanted {false};
 	/// The effect the hand's mana path sparks run in, once started

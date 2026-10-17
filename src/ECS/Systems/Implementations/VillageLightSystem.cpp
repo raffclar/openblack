@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <vector>
 
 #include "3D/DayNightClock.h"
 #include "3D/LandLightTable.h"
@@ -61,6 +62,28 @@ bool IsLandDark()
 void VillageLightSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// A lantern's light, flames and glow go when the lantern has gone
+	std::vector<entt::entity> gone;
+	registry.Each<const VillageLight>([&registry, &gone](entt::entity entity, const VillageLight& light) {
+		if (light.owner != entt::null && !registry.Valid(light.owner))
+		{
+			gone.push_back(entity);
+		}
+	});
+	if (!gone.empty())
+	{
+		registry.Each<const VillageLightSprite>([&gone](entt::entity entity, const VillageLightSprite& sprite) {
+			if (std::ranges::find(gone, sprite.light) != gone.end())
+			{
+				gone.push_back(entity);
+			}
+		});
+		for (const auto entity : gone)
+		{
+			registry.Destroy(entity);
+		}
+		registry.SetDirty();
+	}
 	const bool dark = IsLandDark();
 	// The street lanterns' crackle is switched on and off with the dark
 	if (dark != _dark)

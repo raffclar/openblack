@@ -12,6 +12,7 @@
 #include <spdlog/spdlog.h>
 
 #include "DescriptorSetTally.h"
+#include "DrawWindow.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "SamplerDefaults.h"
@@ -24,12 +25,13 @@ static_assert(ShaderProgram::k_DiscardAll == BGFX_DISCARD_ALL);
 
 ShaderProgram::ShaderProgram(const std::string& name, ShaderHandle vertexShader, ShaderHandle fragmentShader,
                              std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults,
-                             DescriptorSetTally* tally)
+                             DescriptorSetTally* tally, DrawWindow* window)
     : _name(name)
     , _program(BGFX_INVALID_HANDLE)
     , _samplers(std::move(samplers))
     , _samplerDefaults(samplerDefaults)
     , _tally(tally)
+    , _window(window)
 {
 	uint16_t numShaderUniforms = 0;
 	bgfx::UniformInfo info = {};
@@ -139,9 +141,21 @@ void ShaderProgram::Submit(uint16_t viewId, uint32_t depth, uint8_t discardFlags
 			Bind(sampler.stage, *_uniforms.Find(sampler.name), texture);
 		}
 	}
+	const bool dropsBindings = (discardFlags & BGFX_DISCARD_BINDINGS) != 0;
+	if (_window != nullptr && !_window->Admit(viewId))
+	{
+		// The draw goes in a later frame. Its state stays or goes as the draw would keep or drop it.
+		if (_tally != nullptr && dropsBindings)
+		{
+			_tally->DiscardBindings();
+		}
+		bgfx::discard(discardFlags);
+		_samplerDefaults.Discarded(discardFlags);
+		return;
+	}
 	if (_tally != nullptr)
 	{
-		_tally->Submit(viewId, toBgfx(_program).idx, depth, (discardFlags & BGFX_DISCARD_BINDINGS) != 0);
+		_tally->Submit(viewId, toBgfx(_program).idx, depth, dropsBindings);
 	}
 	bgfx::submit(viewId, toBgfx(_program), depth, discardFlags);
 	_samplerDefaults.Discarded(discardFlags);

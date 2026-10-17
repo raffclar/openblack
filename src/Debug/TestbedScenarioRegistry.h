@@ -160,6 +160,9 @@ struct Environment
 	std::optional<int32_t> landNumber;
 	/// The snow lies this deep in every cell of the island as the scenario starts, 0 to 255. A testbed set-up step.
 	std::optional<float> snowDepth;
+	/// The players other than the first that are in the game while the scenario runs, such as a rival god for whom a
+	/// script makes a creature. The runner removes them when the scenario stops.
+	std::vector<PlayerNames> players;
 };
 
 /// Where the camera looks as the scenario starts
@@ -260,7 +263,7 @@ struct CreatureSetup
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo>
+	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo, FlowersInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
@@ -277,6 +280,8 @@ struct ObjectSetup
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
 	/// A villager belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
+	/// A villager is made at this age, rather than as a grown up of 30
+	std::optional<uint32_t> villagerAge;
 	/// A villager of the town lives in the scenario's object of this index, a building of the town
 	std::optional<size_t> livesIn;
 	/// A villager lives in the scenario's building of this index. The building must come before the villager in the
@@ -690,6 +695,9 @@ struct Command
 		LayGateStone,
 		/// A script's cinema bars slide in (value 1) or out (value 0)
 		WideScreen,
+		/// A script sets the interface level (value), as the script command that sets the interface interaction does:
+		/// the camera's features, its keys and the hand's reach. Needs no creature
+		SetInterfaceLevel,
 		/// Its history, as the Creature Cave's trophies show it: how it leans in fights (amount, -1 defensive to 1
 		/// aggressive) as if it had fought; how many times it has seen a miracle (value, by its magic type; amount, the
 		/// times), which it then knows about
@@ -798,12 +806,31 @@ struct Command
 		/// list (value 2), as the music button and the play list button show them. Value 0 hides them. Needs no
 		/// creature
 		ShowCustomMusicControls,
+		/// The game saves into the slot (value), as the save game room saves into it. Needs no creature
+		SaveGame,
+		/// The game loads the creatures of the slot (value) into the land, as a load of the slot does. Needs no creature
+		LoadGame,
 		/// A script tells the creature to take notice of reactions (value 1) or to take no notice (value 0), as
 		/// a script's "enable ... reaction" and "disable ... reaction" do
 		ScriptReaction,
 		/// A script puts the creature at the point at once (from the middle of the map), as SET_POSITION does. Its walk,
 		/// body action, face and head look stop there.
 		ScriptPlace,
+		/// The game stops every task of a land's script (script, by its name), as a script's "stop script" does. The log
+		/// tells how many tasks stopped and if the scenario's object is still in a script. Needs no creature
+		StopScript,
+		/// The pointer moves to the middle of the body of the creature on the screen, as the mouse moves it
+		PointerOnCreature,
+		/// The music of the music type that the value gives starts as a script's "start music" starts it. The value 0
+		/// stops it as "stop music" does. Needs no creature
+		StartScriptMusic,
+		/// The game writes the web page of the creature into the player's profile folder, as it does each 600 turns of
+		/// the creature's life
+		WriteWebPage,
+		/// A bookmark (value, 0 to 6) is put at a point on the land (point, from the middle of the map), with the camera
+		/// origin 80 metres back and 50 metres up from it. Then the camera flies to it, as the bookmark's number key does.
+		/// Needs no creature
+		FlyToBookmark,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -852,8 +879,11 @@ struct Command
 	float amount {1.0f};
 	/// The camera's keys are held with Ctrl rather than Shift
 	bool ctrl {false};
-	/// The creature a miracle is cast at, by its place in the scenario's creatures
+	/// The creature a miracle is cast at, or that a script's action is done to in place of the object, by its place in
+	/// the scenario's creatures
 	std::optional<size_t> atCreature;
+	/// The creature that a script's action uses, in place of the object (with), by its place in the scenario's creatures
+	std::optional<size_t> usesCreature;
 	/// The player's alignment jumped to, from -1 (evil) to 1 (good)
 	float alignment {0.0f};
 	/// What an advisor is told: to come out of its corner, or to appear in a puff of smoke; to go home, or to vanish; to
@@ -1056,6 +1086,10 @@ void AddFirewaterScenarios(std::vector<Scenario>& all);
 void AddFishScenarios(std::vector<Scenario>& all);
 /// Creatures casting miracles
 void AddCreatureCastingScenarios(std::vector<Scenario>& all);
+/// A computer player's creature at the start of the computer mind
+void AddComputerPlayerScenarios(std::vector<Scenario>& all);
+/// The joint actions of two friends, each close up
+void AddFriendActionScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios
 void AddCreatureModeScenarios(std::vector<Scenario>& all);
 /// The gestures drawn with the hand: sizing and powering up miracles, scribbles, and the leash's gestures

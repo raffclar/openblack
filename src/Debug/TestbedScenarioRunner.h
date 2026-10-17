@@ -158,6 +158,7 @@ private:
 	[[nodiscard]] std::string PlayBoatFilm(const Command& command) const;
 	/// Starts a land's script as another script's call starts it; what came of that
 	[[nodiscard]] std::string RunScript(const Command& command);
+	[[nodiscard]] std::string StopScript(const Command& command);
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
 	std::string HandTapObject(size_t index);
@@ -177,6 +178,8 @@ private:
 	std::string GivePointerCommand(const Command& command);
 	/// Where the middle of the body of the opponent of a creature (by its place in the scenario) is on a screen of a size
 	[[nodiscard]] std::optional<glm::ivec2> OpponentOnScreen(size_t creature, glm::vec2 size) const;
+	/// The middle of the body of a creature on the screen
+	[[nodiscard]] static std::optional<glm::ivec2> BodyOnScreen(entt::entity creature, glm::vec2 size);
 	/// Where the middle of the foot of the scenario's town's worship site altar is on the screen
 	[[nodiscard]] std::optional<glm::ivec2> AltarOnScreen(glm::vec2 size) const;
 	/// A pixel over the body of the creature in the Creature Cave, as the cave finds it under the pointer, on a screen
@@ -208,6 +211,8 @@ private:
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;
+	/// The players that the scenario put in the game, which go when it stops
+	std::vector<entt::entity> _addedPlayers;
 	/// Frames since the hand went over a fireball to take hold of it, none while it isn't
 	std::optional<int> _fireBallTakeFrames;
 	/// The fireball the hand goes over to tap

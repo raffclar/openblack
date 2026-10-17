@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <functional>
 #include <optional>
 #include <vector>
@@ -71,5 +73,16 @@ using SpeciesStrength = std::function<float(CreatureType)>;
 /// size of the view in pixels.
 [[nodiscard]] std::optional<glm::vec3> PointerPoint(const glm::mat4& view, const glm::mat4& projection, glm::vec2 screen,
                                                     glm::vec2 pixel);
+
+/// What is drawn of the creature, in the order that it is drawn. The body comes with its eyes.
+enum class Layer : uint8_t
+{
+	Body,
+	Hair,
+};
+
+/// The layers to draw, in order: the body first, and its hair after it, so that the hair blends over the body. The hair
+/// is drawn only where the creature has hair of its own and the hair is shown.
+[[nodiscard]] std::vector<Layer> DrawOrder(bool hasHair, bool hairShown);
 
 } // namespace openblack::tattoo_menu

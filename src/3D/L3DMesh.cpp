@@ -162,6 +162,12 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 		}
 	}
 
+	// Each effect point's matrix is its rotation then its position
+	for (const auto& point : l3d.GetNewEffectPoints())
+	{
+		_effectPoints.push_back({.position = {point.matrix[9], point.matrix[10], point.matrix[11]}, .kind = point.kind});
+	}
+
 	// Each point's matrix is its rotation then its position
 	if (const auto& eBone = l3d.GetEBone(); eBone.has_value() && eBone->bones[0] >= 0)
 	{

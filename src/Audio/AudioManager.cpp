@@ -60,7 +60,12 @@ constexpr float k_DefaultDistanceScale = 0.3f;
 } // namespace
 
 AudioManager::AudioManager()
-    : _audioPlayer(new AudioPlayer())
+    : AudioManager(std::make_unique<AudioPlayer>())
+{
+}
+
+AudioManager::AudioManager(std::unique_ptr<AudioPlayerInterface> player)
+    : _audioPlayer(std::move(player))
 {
 	_audioPlayer->Initialize();
 	// The atmosphere's random numbers are seeded from the date as the game reads it (pinned in a seeded run)
@@ -158,6 +163,12 @@ constexpr uint16_t k_WaveFormatMpeg = 0x0050;
 float ListenerDistance(const glm::vec3& position)
 {
 	return glm::distance(Locator::audio::value().GetListener().origin, position);
+}
+
+/// The square of the distance from the listener, as the game sums it to test where a sound may start
+float ListenerDistanceSquared(const glm::vec3& position)
+{
+	return DistanceSquared(Locator::audio::value().GetListener().origin, position);
 }
 
 std::string TooFar(const glm::vec3& position, float range)
@@ -497,7 +508,7 @@ void AudioManager::PlaySoundEffect(entt::id_type id, std::optional<glm::vec3> wo
 		const auto sound = sounds.Handle(id);
 		// A sound with a place doesn't start further from the camera than its maximum distance
 		const auto range = SoundEffectStartRange(sound->maxDistance, k_DefaultMaxDistance);
-		if (worldPosition.has_value() && !IsWithinStartRange(ListenerDistance(*worldPosition), range))
+		if (worldPosition.has_value() && !IsWithinStartRange(ListenerDistanceSquared(*worldPosition), range))
 		{
 			LogNotStarted(*sound, *worldPosition, TooFar(*worldPosition, range));
 			return;
@@ -541,7 +552,7 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 	}
 	auto sound = sounds.Handle(id);
 	const auto range = SoundEffectStartRange(sound->maxDistance, options.maxDistance.value_or(k_DefaultMaxDistance));
-	if (options.position.has_value() && !IsWithinStartRange(ListenerDistance(*options.position), range))
+	if (options.position.has_value() && !IsWithinStartRange(ListenerDistanceSquared(*options.position), range))
 	{
 		LogNotStarted(*sound, *options.position, TooFar(*options.position, range));
 		return entt::null;
@@ -697,7 +708,8 @@ void AudioManager::AddAnimEffects(const std::string& bankName, AnimEffectTable t
 }
 
 AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
-                                            const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder)
+                                            const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder,
+                                            AnimEffectMeasure measure)
 {
 	const auto effects = _animEffects.find(bankName);
 	if (effects == _animEffects.end())
@@ -726,11 +738,14 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 		return {.outcome = AnimEffectPlay::Outcome::NotHeard, .emitter = entt::null, .sample = sample};
 	}
 
-	// The sample doesn't start further from the camera than its bank's maximum distance, applied to the voice or not
-	const auto range = AnimEffectStartRange(sound->maxDistance);
-	if (!IsWithinStartRange(ListenerDistance(position), range))
+	// The sample doesn't start further from the camera than the hearing limit, or than its bank's maximum distance,
+	// applied to the voice or not
+	const auto distance = AnimEffectDistance(GetListener().origin, position, measure);
+	if (!IsAnimEffectWithinReach(distance, sound->maxDistance))
 	{
-		LogNotStarted(*sound, position, TooFar(position, range));
+		LogNotStarted(*sound, position,
+		              fmt::format("{:.1f} m from the listener, beyond its {} m or the {} m limit", distance, sound->maxDistance,
+		                          k_AnimEffectHearingLimit));
 		return {.outcome = AnimEffectPlay::Outcome::TooFar, .emitter = entt::null, .sample = sample};
 	}
 

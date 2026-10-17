@@ -9,9 +9,9 @@
 
 #include "LightShine.h"
 
-#include <cmath>
+#include <cstdint>
 
-#include <numbers>
+#include "Common/X87.h"
 
 namespace openblack::graphics::light_shine
 {
@@ -24,8 +24,9 @@ constexpr float k_TurnPerMillisecond = -0.00031415926f;
 
 double TextureTurn(std::chrono::milliseconds realTime)
 {
-	const double angle = static_cast<double>(realTime.count()) * static_cast<double>(k_TurnPerMillisecond);
-	return std::fmod(angle, 2.0 * std::numbers::pi);
+	// The game keeps the time as a 32-bit count. The angle rounds to a float, and the game takes no remainder of a turn
+	const auto milliseconds = static_cast<int32_t>(realTime.count());
+	return static_cast<double>(x87::Mul(static_cast<double>(milliseconds), k_TurnPerMillisecond));
 }
 
 glm::vec2 TurnedUv(glm::vec2 uv, float cosTurn, float sinTurn)

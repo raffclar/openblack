@@ -28,10 +28,11 @@ namespace openblack::particles::maths
 /// A bolt searches this many of the land's cells, spiralling out from the hand's: a square twice its radius across
 inline constexpr float k_StrikeCellSize = 10.0f;
 [[nodiscard]] size_t StrikeSearchCells(float radius);
-/// A bolt from a cloud or a parent searches a quarter as many: a square its radius across
+/// A bolt from a cloud or a parent searches a quarter as many: a square its radius across. A bolt with a radius of zero,
+/// or a little less than zero, searches no cells.
 [[nodiscard]] size_t CloudSearchCells(float radius);
-/// The forks a bolt keeps ready: two for each target it may strike at once, and two more
-[[nodiscard]] size_t ForkCount(int atOnce, size_t targets);
+/// The forks a bolt keeps ready: two for each target that it found
+[[nodiscard]] size_t ForkCount(size_t targets);
 
 /// A creature less faded away than this draws the bolt
 inline constexpr float k_DrawsBoltBelowFizz = 0.5f;
@@ -79,12 +80,14 @@ struct ArcEnds
 	glm::vec3 fromNormal {0.0f};
 	glm::vec3 toNormal {0.0f};
 };
+/// The arc's length: the distance from one end to the other
+[[nodiscard]] float ArcLength(const ArcEnds& ends);
 /// The arc's joints along the curve: a cubic from one end to the other with the given tangents, each joint jittered by a
 /// point of the unit ball times the arc's length times the jitter
 [[nodiscard]] std::vector<glm::vec3> ArcJoints(const ArcEnds& ends, glm::vec3 fromTangent, glm::vec3 toTangent,
                                                std::span<const glm::vec3> jitters, float randomFrac);
-/// An end's tangent: its normal, nudged by a point of the unit ball times the random tangent share, times the arc's
-/// length times the tangent scale
+/// An end's tangent: its normal, nudged by a point of the unit ball times the random tangent share. The arc's length
+/// times the tangent scale then multiplies it.
 [[nodiscard]] glm::vec3 ArcTangent(glm::vec3 normal, glm::vec3 nudge, float randomTangents, float length, float scale);
 
 } // namespace openblack::particles::maths

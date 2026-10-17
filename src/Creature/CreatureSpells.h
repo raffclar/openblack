@@ -122,6 +122,8 @@ struct Waiting
 	Spell spell;
 	int32_t holdTurns;
 	entt::entity miracle;
+	/// The time that the spell holds for, in seconds, as the player cast it. A saved game keeps the time in seconds.
+	float seconds {0.0f};
 };
 
 /// A spell cast on a creature starts this long after it is cast
@@ -174,7 +176,7 @@ struct ReceiveResult
 void FinishEarly(Slot& slot);
 
 /// A spell is cast on the creature for some turns, behind a miracle; it starts after the spells' delay
-ReceiveResult Receive(Spells& spells, Spell spell, int32_t holdTurns, entt::entity miracle);
+ReceiveResult Receive(Spells& spells, Spell spell, int32_t holdTurns, entt::entity miracle, float seconds = 0.0f);
 
 /// What a turn of the spells has the creature go through, in order
 enum class Event : uint8_t

@@ -14,6 +14,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
 #include "Creature/CreatureLayers.h"
 
 using namespace openblack;
@@ -42,7 +43,8 @@ std::optional<glm::vec2> creature_drink::StandingPoint(glm::vec3 wanted, bool wa
 	{
 		return glm::vec2(wanted.x, wanted.z);
 	}
-	if (found.has_value() && glm::distance(wanted, glm::vec3(found->x, 0.0f, found->y)) < k_StandSearchReach)
+	if (found.has_value() &&
+	    x87::Distance<x87::SumOrder::Zyx>(wanted, glm::vec3(found->x, 0.0f, found->y)) < k_StandSearchReach)
 	{
 		return found;
 	}

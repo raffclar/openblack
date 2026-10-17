@@ -610,3 +610,17 @@ TEST(ScriptObjectsSystem, DisbandingLetsEveryMemberGo)
 	EXPECT_TRUE(system->Disband(town));
 	EXPECT_FALSE(system->Disband(rock));
 }
+
+TEST(ScriptObjectsSystem, AnObjectLetGoOfStaysInAScriptUntilTheScriptsTurnEnds)
+{
+	auto [world, system] = MakeSystem();
+	const auto found = world->Add(3);
+	system->AddReference(found);
+	ASSERT_TRUE(world->objects.at(found).inScript);
+	// A task that stops gives back the reference of its variable, but the mark stays for the rest of the scripts' turn
+	system->RemoveReference(found);
+	EXPECT_TRUE(world->objects.at(found).inScript);
+	system->ReleaseUnreferenced();
+	EXPECT_FALSE(world->objects.at(found).inScript);
+	EXPECT_TRUE(system->Places().empty());
+}

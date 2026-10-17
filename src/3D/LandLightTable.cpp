@@ -113,7 +113,7 @@ uint32_t LandColour(const std::array<uint32_t, k_RowCount>& colours, float align
 /// No channel of the land's colour brighter than 255 - 96 times the overcast
 uint32_t Overcast(uint32_t land, float overcast)
 {
-	const auto limit = static_cast<int32_t>(255.0 - static_cast<double>(overcast) * k_OvercastDarkening);
+	const auto limit = static_cast<int32_t>(255.0f - overcast * k_OvercastDarkening);
 	for (const uint32_t shift : {16u, 8u, 0u})
 	{
 		if (static_cast<int32_t>((land >> shift) & 0xFFu) > limit)

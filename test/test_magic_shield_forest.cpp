@@ -226,6 +226,15 @@ TEST(ShieldRules, ADestroyedShieldImpressesFourTimesAndAnAttackersShieldNotAtAll
 	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldStruck, true, true), 1.0f);
 }
 
+TEST(ShieldRules, ATownThatTheShieldsPlayerAttackedLastIgnoresTheShield)
+{
+	EXPECT_TRUE(shield::TownIgnoresShield(Reaction::ReactToMagicShield, true, false));
+	EXPECT_TRUE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldStruck, true, false));
+	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldStruck, true, true));
+	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldDestroyed, true, false));
+	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShield, false, false));
+}
+
 // The forest
 
 TEST(ForestRules, EighteenTreesSpiralOutFromTwoToEleven)
@@ -331,7 +340,9 @@ TEST(VillagerReaction, NearerReactionsAreMoreUrgent)
 	EXPECT_EQ(villager_reaction::Priority(100, true, reach, 61.0f), 0);
 	EXPECT_EQ(villager_reaction::Priority(100, false, reach, 0.0f), 0);
 	EXPECT_EQ(villager_reaction::Priority(200, true, reach, 0.0f), 255);
-	EXPECT_FLOAT_EQ(villager_reaction::SpreadDistance({0.0f, 0.0f}, {10.0f, -4.0f}), 7.0f);
+	// Each position goes through map units first: -4 m is -26214 units, 3.99993896484375 m
+	EXPECT_EQ(villager_reaction::SpreadDistance({0.0f, 0.0f}, {10.0f, -4.0f}), 6.999969482421875f);
+	EXPECT_EQ(villager_reaction::SpreadDistance({0.0f, 0.0f}, {10.0f, -5.0f}), 7.5f);
 }
 
 TEST(VillagerReaction, AVillagerTakesAKindUpAgainOnlyAfterItsCooldown)

@@ -365,14 +365,24 @@ TEST(WallHugRules, TurningRoundWinsOnlyWhenItGetsThereSoonerOrEndsNearer)
 	EXPECT_FALSE(TurnedRoundIsBetter({.turnsToSpare = 5, .distanceSq = 1.0f}, {.turnsToSpare = 5, .distanceSq = 1.0f}));
 }
 
-// A walker turned round jumps three steps on and faces back; of its step only the across part is left, backwards
+// A walker turned round jumps three steps on and faces back. Its x part turns backwards, and its z part and height
+// change places, both backwards.
 TEST(WallHugRules, AWalkerTurnedRoundJumpsThreeStepsOnAndFacesBack)
 {
-	const auto turned = TurnRound({1000000, 2000000}, {1200, -500}, 100);
+	const auto turned = TurnRound({1000000, 2000000}, {1200, -500}, 0.0f, 100);
 	EXPECT_EQ(turned.position, glm::ivec2(1003600, 1998500));
 	EXPECT_EQ(turned.step, glm::ivec2(-1200, 0));
+	EXPECT_EQ(turned.stepAltitude, 500.0f);
 	EXPECT_EQ(turned.gameAngle, 100 + 2048 - 1024);
-	EXPECT_EQ(TurnRound({0, 0}, {0, 0}, 1500).gameAngle, 476);
+	EXPECT_EQ(TurnRound({0, 0}, {0, 0}, 0.0f, 1500).gameAngle, 476);
+	// Turned round again before the next aim: it gets its z part back, and the x part comes round to the start
+	const auto again = TurnRound(turned.position, turned.step, turned.stepAltitude, turned.gameAngle);
+	EXPECT_EQ(again.position, glm::ivec2(1000000, 1998500));
+	EXPECT_EQ(again.step, glm::ivec2(1200, -500));
+	EXPECT_EQ(again.stepAltitude, 0.0f);
+	// A height with a fraction is cut towards nothing
+	EXPECT_EQ(TurnRound({0, 0}, {0, 7}, 2.75f, 0).step, glm::ivec2(0, -2));
+	EXPECT_EQ(TurnRound({0, 0}, {0, 7}, -2.75f, 0).step, glm::ivec2(0, 2));
 }
 
 // A walker going round a circle that keeps its way faces a quarter turn round from the circle's middle

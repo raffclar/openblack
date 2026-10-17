@@ -34,6 +34,14 @@ void Zoomer::Reset(float value)
 	_coefficients = glm::vec3(0.0f);
 }
 
+void Zoomer::Carry(float value, float speed)
+{
+	Reset(value);
+	_speed = speed;
+	_startSpeed = speed;
+	_destinationSpeed = speed;
+}
+
 void Zoomer::SetDestination(float destination, float seconds, float speed)
 {
 	// Too short a time, or none at all, puts it there
@@ -129,6 +137,13 @@ void Zoomer3::Reset(glm::vec3 point)
 	z.Reset(point.z);
 }
 
+void Zoomer3::Carry(glm::vec3 point, glm::vec3 speed)
+{
+	x.Carry(point.x, speed.x);
+	y.Carry(point.y, speed.y);
+	z.Carry(point.z, speed.z);
+}
+
 void Zoomer3::SetDestination(glm::vec3 destination, float seconds)
 {
 	x.SetDestination(destination.x, seconds);
@@ -146,4 +161,9 @@ void Zoomer3::Update(float deltaSeconds)
 glm::vec3 Zoomer3::GetValue() const
 {
 	return {x.GetValue(), y.GetValue(), z.GetValue()};
+}
+
+glm::vec3 Zoomer3::GetSpeed() const
+{
+	return {x.GetSpeed(), y.GetSpeed(), z.GetSpeed()};
 }

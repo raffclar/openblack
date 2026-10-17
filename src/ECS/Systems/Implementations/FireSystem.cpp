@@ -41,6 +41,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandGrab.h"
@@ -60,7 +61,9 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureScars.h"
+#include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/Map.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
@@ -71,7 +74,9 @@
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/TempleHeartPassOn.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/WorshipSites.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Fire/FireGraphic.h"
 #include "InfoConstants.h"
@@ -85,6 +90,8 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace world_objects = openblack::ecs::world_objects;
+namespace worship_site = openblack::ecs::worship_site;
+namespace temple_heart_pass_on = openblack::ecs::temple_heart_pass_on;
 
 namespace
 {
@@ -137,9 +144,8 @@ std::optional<fire::Material> MaterialOf(entt::entity object)
 	}
 	if (const auto* ball = registry.TryGet<const MagicFireBall>(object))
 	{
-		// Every fireball burns as the first row of the fireball's table, whatever its power-up: the game picks the row
-		// by a power-up type no fireball has
-		const auto& info = Locator::infoConstants::value().magicFireBall.at(0);
+		// A fireball burns as the row of the fireball table that its miracle selected
+		const auto& info = Locator::infoConstants::value().magicFireBall.at(ball->infoRow);
 		return fire::Material {
 		    .combustion = info.combustionTemperature,
 		    .capacity = ball->radius * ball->radius * k_FireBallCapacityScale * info.heatCapacity * ball->strength,
@@ -151,14 +157,19 @@ std::optional<fire::Material> MaterialOf(entt::entity object)
 		    .fireRadius = ball->radius,
 		};
 	}
-	const auto* info = world_objects::InfoOf(object);
+	const auto* info = world_objects::EffectInfoOf(object);
 	if (info == nullptr)
 	{
 		return std::nullopt;
 	}
 	const auto size = world_objects::SizeOf(object);
-	// A dead tree's fire reaches by a share of its height rather than by its width
-	const float fireRadius = registry.AllOf<DeadTree>(object) ? k_DeadTreeFireRadius * size.height : size.radius;
+	// A dead tree's fire reaches by a share of its height rather than by its width; a worship site's by a radius of its
+	// own
+	float fireRadius = registry.AllOf<DeadTree>(object) ? k_DeadTreeFireRadius * size.height : size.radius;
+	if (registry.AllOf<WorshipSite>(object))
+	{
+		fireRadius = worship_site::k_EffectRadius;
+	}
 	return fire::Material {
 	    .combustion = info->combustionTemperature,
 	    .capacity = info->heatCapacity,
@@ -180,6 +191,12 @@ glm::vec3 FireCentre(entt::entity object)
 		return glm::vec3(0.0f);
 	}
 	const auto& p = transform->position;
+	// A worship site burns round its middle, which is to one side of its position
+	if (Entities().AllOf<WorshipSite>(object))
+	{
+		const auto middle = worship_site::CentreOnLand(p, transform->rotation, transform->scale.x);
+		return {middle.x, p.y - LandHeight(middle), middle.y};
+	}
 	return {p.x, p.y - LandHeight({p.x, p.z}), p.z};
 }
 
@@ -249,8 +266,9 @@ bool TakesBurn(entt::entity object, float burn)
 bool LightsLandWhenBurning(entt::entity object)
 {
 	const auto& registry = Entities();
-	return !registry.AllOf<Field>(object) && registry.AnyOf<Abode, StoragePit, SpellDispenser, Feature, AnimatedStatic, Flowers,
-	                                                        BigForest, MobileStatic, TeleportStone, TempleExterior>(object);
+	return !registry.AllOf<Field>(object) &&
+	       registry.AnyOf<Abode, StoragePit, SpellDispenser, Feature, AnimatedStatic, Flowers, BigForest, MobileStatic,
+	                      TeleportStone, TempleExterior, WorshipSite, FishFarm>(object);
 }
 
 /// What an object's flames are sized for
@@ -486,7 +504,8 @@ Fire* FireSystem::FindOrCreate(entt::entity object, std::optional<PlayerNames> p
 	}
 	// What the living thought of it before it burned is forgotten while it burns; a magic tree stops drawing its
 	// caster's people to look at it
-	if (registry.AnyOf<Abode, Feature, Field, BigForest, MobileStatic, AnimatedStatic, DeadTree, Pot>(object) &&
+	if (registry.AnyOf<Abode, Feature, Field, BigForest, MobileStatic, AnimatedStatic, DeadTree, Pot, Flowers, SpellDispenser,
+	                   WorshipSite, Temple, FishFarm>(object) &&
 	    Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().RemoveFrom(object);
@@ -1227,7 +1246,7 @@ void FireSystem::HeatTransfer(entt::entity source, entt::entity target)
 		return;
 	}
 	const auto sourceMaterial = MaterialOf(source);
-	const auto targetMaterial = MaterialOf(target);
+	auto targetMaterial = MaterialOf(target);
 	if (!sourceMaterial.has_value() || !targetMaterial.has_value())
 	{
 		return;
@@ -1261,12 +1280,26 @@ void FireSystem::HeatTransfer(entt::entity source, entt::entity target)
 			return;
 		}
 	}
-	const float targetTemperature = GetTemperature(target);
-	if (!(fire.state.temperature - targetTemperature > 0.0f))
+	// The heat that reaches a temple's heart or a worship site goes to what the heart chooses, and the heart beams at it
+	ecs::GamePhysicsHooksWorld hooksWorld;
+	target = temple_heart_pass_on::TakerOf(hooksWorld, target, true);
+	if (!registry.Valid(target) || !registry.AllOf<Fire>(source))
 	{
 		return;
 	}
-	const auto player = fire.hasPlayer ? std::optional(fire.player) : std::nullopt;
+	const auto takerMaterial = MaterialOf(target);
+	if (!takerMaterial.has_value())
+	{
+		return;
+	}
+	targetMaterial = takerMaterial;
+	const float targetTemperature = GetTemperature(target);
+	if (!(registry.Get<Fire>(source).state.temperature - targetTemperature > 0.0f))
+	{
+		return;
+	}
+	const auto& heat = registry.Get<Fire>(source);
+	const auto player = heat.hasPlayer ? std::optional(heat.player) : std::nullopt;
 	auto* targetFire = FindOrCreate(target, player, entt::null);
 	if (targetFire == nullptr)
 	{

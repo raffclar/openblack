@@ -8,8 +8,10 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <array>
+#include <bit>
 #include <numbers>
 #include <string_view>
 #include <vector>
@@ -335,6 +337,17 @@ TEST(CreatureMode, TemplePenIsKeptAsAMapPosition)
 	// Truncated to whole map units (a tenth of a metre over 65536), towards zero on both sides
 	EXPECT_FLOAT_EQ(pen->x, static_cast<float>(6553.0 * 10.0 / 65536.0));
 	EXPECT_FLOAT_EQ(pen->z, static_cast<float>(-6553.0 * 10.0 / 65536.0));
+}
+
+TEST(CreatureMode, TemplePenMapPositionIsAFloatProductTruncated)
+{
+	// The product rounds to a float before the truncation: the exact product is just below 26836758, the float product
+	// is 26836758
+	const auto places = FakeMarkedPlaces(16, {0.0f, 0.0f, 0.0f});
+	const float x = std::bit_cast<float>(0x457FEF6Du);
+	const auto pen = creature_mode::TemplePen({x, 0.0f, 0.0f}, glm::mat3(1.0f), glm::vec3(1.0f), places);
+	ASSERT_TRUE(pen.has_value());
+	EXPECT_EQ(std::bit_cast<uint32_t>(pen->x), 0x457FEF6Eu);
 }
 
 TEST(CreatureMode, NoTemplePenWhenTheMeshMarksTooFewPlaces)

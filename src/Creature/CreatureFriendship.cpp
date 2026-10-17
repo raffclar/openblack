@@ -50,6 +50,11 @@ Availability creature_friendship::AvailabilityOf(const AvailabilityFacts& facts)
 	return facts.partner.has_value() ? Availability::Refuses : Availability::Free;
 }
 
+std::optional<uint32_t> creature_friendship::PartnerNow(std::optional<uint32_t> jointPartner, std::optional<uint32_t> opponent)
+{
+	return jointPartner.has_value() ? jointPartner : opponent;
+}
+
 Answer creature_friendship::AnswerOf(const AnswerFacts& facts)
 {
 	if (facts.kind == RequestKind::Fight)
@@ -90,6 +95,19 @@ Answer creature_friendship::AnswerOf(const AnswerFacts& facts)
 		break;
 	}
 	return {};
+}
+
+JointTurn creature_friendship::JointTurnOf(const JointFacts& facts)
+{
+	if (facts.otherAgenda)
+	{
+		return JointTurn::Ends;
+	}
+	if (!facts.hadStepsLeft || facts.hasStepsLeft)
+	{
+		return JointTurn::Continues;
+	}
+	return facts.endedWithOrder && !facts.endSeen ? JointTurn::EndsNextTurn : JointTurn::Ends;
 }
 
 bool creature_friendship::AttentionRises(bool scriptControlled, bool sameCreature, bool otherAgendaUsesIt)

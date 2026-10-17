@@ -192,8 +192,8 @@ void MagicSystem::ReceiveCreatureSpell(entt::entity creature, entt::entity mirac
 	// The creature holds the spell for the miracle's time, made longer by the caster's tribal power; the miracle itself
 	// then runs until the creature lets it go
 	const float seconds = spell.duration > 0.0f ? spell.duration * TribalPower(spell) : spell.duration;
-	const auto result =
-	    creature_spells::Receive(component->spells, *which, creature_spells::TurnsOf(seconds, k_TurnsPerSecond), miracle);
+	const auto result = creature_spells::Receive(component->spells, *which, creature_spells::TurnsOf(seconds, k_TurnsPerSecond),
+	                                             miracle, seconds);
 	spell.duration = magic::k_NoTimeLimit;
 	if (result.replaced != entt::null && result.replaced != miracle)
 	{
@@ -379,8 +379,10 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 			const std::array<int32_t, 5> keys {0, 0, 0, 0, effect.soundAction};
 			if (const auto* transform = registry.TryGet<const Transform>(entity))
 			{
+				// The sound counts as at the camera, so the distance never stops it
 				const auto played =
-				    Locator::audio::value().PlayAnimEffect(std::string(k_SpellSoundBank), keys, entity, transform->position);
+				    Locator::audio::value().PlayAnimEffect(std::string(k_SpellSoundBank), keys, entity, transform->position,
+				                                           openblack::audio::AnimEffectMeasure::AtCamera);
 				SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Creature spell {} on creature {}: sound {} sample {} outcome {}",
 				                    static_cast<int>(event.spell), entt::to_integral(entity), effect.soundAction,
 				                    played.sample.value_or(-1), static_cast<int>(played.outcome));

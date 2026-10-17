@@ -7,9 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The scenarios in audio/scenarios were produced by running the original BW1 v1.20 code (runblack.exe and
-// LHaudiodllR.dll) under an x86 emulator on synthetic inputs. These tests check that the port reproduces the
-// original's results exactly.
+// The scenarios in audio/scenarios hold the results of the original BW1 v1.20 code (runblack.exe and LHaudiodllR.dll)
+// on synthetic inputs. An x86 emulator ran the code at 64-bit precision. The oracle (tools/oracle) made the volume
+// results again at the game's 24-bit precision. The scheduler results did not change, because the float steps of the
+// scheduler are exact at all precisions. These tests check that the port gives the same results as the original.
 
 #include <cstring>
 

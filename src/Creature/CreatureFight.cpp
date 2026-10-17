@@ -17,6 +17,9 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
 #include "Help/HelpProfile.h"
 
 using namespace openblack;
@@ -66,10 +69,9 @@ bool creature_fight::IsStep(size_t animation)
 
 float creature_fight::ArenaRadius(float sizeA, float sizeB)
 {
-	// The bigger creature's height, then the share of it, as the game rounds them
+	// The bigger creature's height, then the share of it
 	const float height = std::max(sizeA * k_ArenaHeightPerSize, sizeB * k_ArenaHeightPerSize);
-	const auto radius = static_cast<double>(height) * static_cast<double>(k_ArenaRadiusPerHeight);
-	return static_cast<float>(std::clamp(radius, 0.0, static_cast<double>(k_MaxArenaRadius)));
+	return std::clamp(height * k_ArenaRadiusPerHeight, 0.0f, k_MaxArenaRadius);
 }
 
 glm::vec2 creature_fight::ArenaSpot(const Arena& arena, float size, bool madeIt)
@@ -96,6 +98,11 @@ glm::vec2 creature_fight::BlockRecoilTo(const Arena& arena, glm::vec2 from, glm:
 bool creature_fight::OutsideRange(const Arena& arena, glm::vec2 point)
 {
 	return !(glm::distance(point, arena.centre) < k_RangeShare * arena.radius);
+}
+
+bool creature_fight::KeepsInArena(const Arena& arena, glm::vec2 self, glm::vec2 opponent)
+{
+	return OutsideRange(arena, opponent) || OutsideRange(arena, self);
 }
 
 float creature_fight::ForwardExtent(std::span<const glm::vec2> bones, glm::vec2 forward)
@@ -617,7 +624,7 @@ std::array<glm::vec3, 5> creature_fight::BlowTestPoints(const glm::vec3& bone, c
 	{
 		if (point != glm::vec3(0.0f))
 		{
-			point *= reach / glm::length(point);
+			point = x87::Scaled<x87::SumOrder::Zyx>(point, reach);
 		}
 		point += bone;
 	}
@@ -1080,12 +1087,12 @@ bool creature_fight::ComputerEndsBlock(const Random& random)
 std::optional<float> creature_fight::DepthToBody(std::span<const physics::Ellipsoid> bones, const glm::vec3& point,
                                                  const glm::vec3& towards, float opponentSize)
 {
-	const auto width = static_cast<float>(static_cast<double>(opponentSize * k_DepthWidthPerSize) * k_DepthWidthShare);
+	const float width = x87::Mul(opponentSize * k_DepthWidthPerSize, k_DepthWidthShare);
 	const auto spacing = (width + width) * k_DepthSpacingShare;
-	// The row goes across the direction, flat on the land
+	// The row goes across the direction, flat on the land. The 3D engine's inverse square root makes it a unit vector
 	const auto across = glm::vec3(towards.z, 0.0f, -towards.x);
-	const auto acrossLength = glm::length(across);
-	const auto unitAcross = acrossLength > 0.0f ? across / acrossLength : glm::vec3(0.0f);
+	const float acrossSquared = glm::dot(across, across);
+	const auto unitAcross = acrossSquared > 0.0f ? across * gutils::ModelInverseSquareRoot(acrossSquared) : glm::vec3(0.0f);
 	auto origin = point - (unitAcross * width);
 	const auto next = unitAcross * spacing;
 	std::optional<float> depth;
@@ -1093,7 +1100,7 @@ std::optional<float> creature_fight::DepthToBody(std::span<const physics::Ellips
 	{
 		if (const auto hit = physics::EllipsoidHit(bones, origin, towards); hit.has_value())
 		{
-			depth = std::min(depth.value_or(k_NoDepth), glm::dot(hit->first.point - point, towards));
+			depth = std::min(depth.value_or(k_NoDepth), x87::DotZyx(hit->first.point - point, towards));
 		}
 		origin += next;
 	}
@@ -1102,12 +1109,13 @@ std::optional<float> creature_fight::DepthToBody(std::span<const physics::Ellips
 
 bool creature_fight::WithinBlowLine(const glm::vec3& point, const glm::vec3& origin, const glm::vec3& direction)
 {
-	const auto length = glm::length(direction);
+	const auto length = x87::LengthZyx(direction);
 	if (length <= 0.0f)
 	{
 		return false;
 	}
-	const auto ahead = glm::dot(point - origin, direction / length);
+	// The game multiplies the direction by one over its length
+	const auto ahead = x87::DotZyx(point - origin, direction * (1.0f / length));
 	return ahead > 0.0f && ahead < length;
 }
 
@@ -1195,6 +1203,11 @@ bool creature_fight::WinnerPoos(float alignment)
 bool creature_fight::FightWonIsSeen(bool byBlow, bool winnerHasPlayer)
 {
 	return byBlow && winnerHasPlayer;
+}
+
+bool creature_fight::WinPlanForced(bool byBlow)
+{
+	return !byBlow;
 }
 
 size_t creature_fight::Response(float life, float otherLife)
@@ -1309,7 +1322,7 @@ bool creature_fight::CountsHelpEvent(State state, bool inRange, bool queued)
 bool creature_fight::FightMusicHeard(bool directsFight, std::span<const glm::vec3> arenasOfItsFights, const glm::vec3& camera)
 {
 	return directsFight || std::ranges::any_of(arenasOfItsFights, [&camera](const glm::vec3& middle) {
-		       return glm::distance(middle, camera) < k_FightMusicDistance;
+		       return x87::LengthZyx(middle - camera) < k_FightMusicDistance;
 	       });
 }
 

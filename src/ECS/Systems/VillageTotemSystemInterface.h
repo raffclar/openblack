@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <string_view>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
@@ -49,6 +50,8 @@ public:
 	/// The hand takes hold of a totem: only one of the player's own towns, standing built, with the player's temple and
 	/// the town's worship site built. Whether it took hold.
 	virtual bool Grip(entt::entity totem, PlayerNames player) = 0;
+	/// Why the hand of the player cannot take hold of a totem, in the order the game asks. Empty when it can.
+	[[nodiscard]] virtual std::string_view WhyNotGrip(entt::entity totem, PlayerNames player) const = 0;
 	/// The mouse moved up the screen by some pixels this frame while the hand holds a totem: the hand slides it
 	virtual void Slide(float upPixels, float screenHeight) = 0;
 	/// The hand lets go: the town's share is set to where it was left

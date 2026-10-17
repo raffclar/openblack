@@ -51,6 +51,8 @@ constexpr float k_BulbScale = 0.33333334f;
 constexpr float k_TextSize = 15.0f;
 constexpr float k_TextHalfHeight = 7.5f;
 constexpr float k_ShadowOffset = 1.0f;
+/// The mark's age turns into the blink of the bulb by this many radians a millisecond: one turn a second
+constexpr float k_BlinkPerMillisecond = 0.0062831854f;
 
 /// The mark's text for a share, 0 to 1: the share in hundredths, with no point, and a percent sign
 [[nodiscard]] std::string Text(float share);

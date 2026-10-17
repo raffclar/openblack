@@ -368,7 +368,28 @@ L3DFile& L3DFile::operator=(const L3DFile& other)
 	_submeshNames = other._submeshNames;
 	_extraMetrics = other._extraMetrics;
 	_eBone = other._eBone;
+	_newEffectPoints = other._newEffectPoints;
 	return *this;
+}
+
+bool openblack::l3d::DecodeNewEffectPoints(std::span<const uint8_t> block, std::vector<L3DNewEffectPoint>& points) noexcept
+{
+	points.clear();
+	// The block starts with its size and its number of points, then the points
+	constexpr size_t k_HeaderSize = 2 * sizeof(uint32_t);
+	if (block.size() < k_HeaderSize)
+	{
+		return false;
+	}
+	int32_t count = 0;
+	std::memcpy(&count, block.data() + sizeof(uint32_t), sizeof(count));
+	if (count < 0 || block.size() < k_HeaderSize + static_cast<size_t>(count) * sizeof(L3DNewEffectPoint))
+	{
+		return false;
+	}
+	points.resize(static_cast<size_t>(count));
+	std::memcpy(points.data(), block.data() + k_HeaderSize, points.size() * sizeof(L3DNewEffectPoint));
+	return true;
 }
 
 bool openblack::l3d::DecodeLightmaps(std::span<const uint8_t> data, uint32_t blockOffset, uint32_t blockSize,
@@ -892,6 +913,52 @@ L3DResult L3DFile::ReadFile(std::istream& stream) noexcept
 		if (stream && eBone.size == sizeof(L3DEBone))
 		{
 			_eBone = eBone;
+		}
+		stream.clear();
+	}
+
+	// Effect points: the last block, after the footprint, UV2, name, extra metrics, EBone and TnL blocks, each starting
+	// with its size (the footprint block keeps its size at +8)
+	if ((headerFlags & static_cast<uint32_t>(L3DMeshFlags::ContainsNewEP)) != 0u)
+	{
+		stream.seekg(0x48, std::istream::beg);
+		stream.read(reinterpret_cast<char*>(&additionalDataOffset), sizeof(additionalDataOffset));
+		const auto readSize = [&stream](uint32_t at) {
+			uint32_t size = 0;
+			stream.seekg(at, std::istream::beg);
+			stream.read(reinterpret_cast<char*>(&size), sizeof(size));
+			return size;
+		};
+		uint32_t offset = additionalDataOffset;
+		if (offset != 0)
+		{
+			if ((headerFlags & static_cast<uint32_t>(L3DMeshFlags::ContainsLandscapeFeature)) != 0u)
+			{
+				offset += readSize(offset + 8);
+			}
+			for (const auto flag :
+			     {L3DMeshFlags::ContainsUV2, L3DMeshFlags::ContainsNameData, L3DMeshFlags::ContainsExtraMetrics,
+			      L3DMeshFlags::ContainsEBone, L3DMeshFlags::ContainsTnLData})
+			{
+				if ((headerFlags & static_cast<uint32_t>(flag)) != 0u)
+				{
+					offset += readSize(offset);
+				}
+			}
+			stream.seekg(0, std::istream::end);
+			const auto end = static_cast<std::streamoff>(stream.tellg());
+			const auto blockSize = readSize(offset);
+			// A block said to run past the end of the file is not read
+			if (stream && static_cast<std::streamoff>(offset) + static_cast<std::streamoff>(blockSize) <= end)
+			{
+				std::vector<uint8_t> block(blockSize);
+				stream.seekg(offset, std::istream::beg);
+				stream.read(reinterpret_cast<char*>(block.data()), static_cast<std::streamsize>(block.size()));
+				if (!stream || !DecodeNewEffectPoints(block, _newEffectPoints))
+				{
+					_newEffectPoints.clear();
+				}
+			}
 		}
 		stream.clear();
 	}

@@ -24,6 +24,7 @@
 
 #include "3D/ModelSurface.h"
 #include "Common/GameRandom.h"
+#include "Common/ModelInverseSquareRoot.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
@@ -234,6 +235,41 @@ TEST_F(TempleDestructionSystemTest, EachStepComesOnTheGameTurnOfIt)
 	EXPECT_TRUE(_world->scripts.empty());
 }
 
+TEST_F(TempleDestructionSystemTest, TheTemplesTakeTheirTurnsInTheOrderOfThePlayers)
+{
+	// The second player's temple is made and starts first, but the first player's turn comes first
+	const auto second = MakeTemple(PlayerNames::PLAYER_TWO);
+	const auto first = MakeTemple(PlayerNames::PLAYER_ONE);
+	_world->share = 0.4f;
+	_system->Start(second);
+	_system->Start(first);
+	for (int i = 0; i < 100; ++i)
+	{
+		Turn();
+	}
+	ASSERT_EQ(_world->visuals.size(), 2u);
+	EXPECT_EQ(_world->visuals[0].player, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(_world->visuals[1].player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(_world->visuals[0].turn, _world->visuals[1].turn);
+}
+
+TEST_F(TempleDestructionSystemTest, APlayersTurnMovesOnlyThatPlayersTemple)
+{
+	const auto mine = MakeTemple(PlayerNames::PLAYER_ONE);
+	const auto theirs = MakeTemple(PlayerNames::PLAYER_THREE);
+	_world->share = 0.4f;
+	_system->Start(mine);
+	_system->Start(theirs);
+	for (int i = 0; i < 100; ++i)
+	{
+		++_world->turn;
+		_system->StartTurn();
+		_system->ProcessPlayerTurn(PlayerNames::PLAYER_THREE);
+	}
+	ASSERT_EQ(_world->visuals.size(), 1u);
+	EXPECT_EQ(_world->visuals[0].player, PlayerNames::PLAYER_THREE);
+}
+
 TEST_F(TempleDestructionSystemTest, BeamsLeapBetweenPointsOfTheHeartUntilItFades)
 {
 	const auto temple = MakeTemple(PlayerNames::PLAYER_TWO);
@@ -257,8 +293,10 @@ TEST_F(TempleDestructionSystemTest, BeamsLeapBetweenPointsOfTheHeartUntilItFades
 	EXPECT_EQ(first.command.alpha, 52);
 	EXPECT_EQ(first.command.start.y, 5.0f);
 	EXPECT_EQ(first.command.end.y, 5.0f);
-	EXPECT_EQ(first.command.startTangent, up);
-	EXPECT_EQ(first.command.endTangent, -up);
+	// The 3D engine's inverse square root makes the unit normal a little shorter than one
+	const auto placedUp = up * gutils::ModelInverseSquareRoot(1.0f);
+	EXPECT_EQ(first.command.startTangent, placedUp);
+	EXPECT_EQ(first.command.endTangent, -placedUp);
 	// Fired from one spot visual of the heart's player's that lasts the beaming
 	ASSERT_EQ(_world->beamSources.size(), 1u);
 	EXPECT_EQ(_world->beamSources[0].turn, 2);
@@ -336,8 +374,9 @@ TEST_F(TempleDamageTest, AHurtHeartBeamsAcrossItselfOnItsWaitWithASound)
 	const auto& command = _world->beams[0].command;
 	EXPECT_EQ(command.start.y, 5.0f);
 	EXPECT_EQ(command.end.y, 5.0f);
-	EXPECT_EQ(command.startTangent, k_Up);
-	EXPECT_EQ(command.endTangent, -k_Up);
+	const auto placedUp = k_Up * gutils::ModelInverseSquareRoot(1.0f);
+	EXPECT_EQ(command.startTangent, placedUp);
+	EXPECT_EQ(command.endTangent, -placedUp);
 	// Each lasts the wait, at the speed of the heart's beams, with an alpha of 60
 	EXPECT_FLOAT_EQ(command.life, 1.7f);
 	EXPECT_FLOAT_EQ(command.speed, particles::k_HeartPlasmaSpeed);

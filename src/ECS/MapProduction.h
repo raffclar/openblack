@@ -15,6 +15,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -34,7 +35,12 @@ class Registry;
 class MapProduction final: public MapInterface
 {
 public:
+	/// The outline on the ground of a thing that covers its outline, none for a thing without a model
+	using OutlineSource = std::function<std::optional<map_cells::Outline>(const Registry& registry, entt::entity entity)>;
+
 	MapProduction();
+	/// The map with another source of outlines, for tests that have no models
+	explicit MapProduction(OutlineSource outlines);
 	~MapProduction() override;
 	MapProduction(const MapProduction&) = delete;
 	MapProduction& operator=(const MapProduction&) = delete;
@@ -52,16 +58,17 @@ public:
 	void Sync() override;
 	void Refile(entt::entity entity) override;
 
-private:
-	/// How a thing goes into the cells, by what it is; none for what isn't on the map
+	/// How a thing goes into the cells, by what it is
 	struct Kind
 	{
 		map_cells::Placement placement;
 		bool coversOutline;
 		bool moves;
 	};
+	/// How a thing goes into the cells; none for what is not on the map
 	[[nodiscard]] static std::optional<Kind> KindOf(const Registry& registry, entt::entity entity);
 
+private:
 	void OnMade(entt::registry& registry, entt::entity entity);
 	void OnGone(entt::registry& registry, entt::entity entity);
 	void OnResidentGone(entt::registry& registry, entt::entity entity);
@@ -73,6 +80,7 @@ private:
 	[[nodiscard]] std::vector<uint32_t> CellsFor(entt::entity entity, const Kind& kind) const;
 
 	Registry* _registry {nullptr};
+	OutlineSource _outlines;
 	std::vector<entt::connection> _connections;
 	/// The cells are filled lazily by the searches, which are const
 	mutable map_cells::CellLists _lists;

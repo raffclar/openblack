@@ -45,7 +45,6 @@ TEST(CreatureScriptPlay, AStaticActionStartsLoopsTenSecondsAndEnds)
 		EXPECT_EQ(step.kind, creature_mind::Step::Kind::Static);
 		EXPECT_EQ(step.sequence, (std::array<size_t, 3> {46, 47, 48}));
 		EXPECT_FLOAT_EQ(step.seconds, 10.0f);
-		EXPECT_TRUE(step.mirrorAtRandom);
 		EXPECT_FALSE(step.untilRested);
 	}
 	// The last static action is 51; the next is played once
@@ -65,6 +64,63 @@ TEST(CreatureScriptPlay, AStaticActionWithNoStartNeverEnds)
 	ASSERT_EQ(agenda.size(), 1);
 	EXPECT_EQ(agenda.front().kind, creature_mind::Step::Kind::Wait);
 	EXPECT_TRUE(std::isinf(agenda.front().seconds));
+	EXPECT_EQ(agenda.front().retriedClip, creature_mind::RetriedClip::Static);
+	// Asked to play it no times, it only waits for its body to be free
+	const auto none = Agenda({.animation = 0, .plays = 0});
+	ASSERT_EQ(none.size(), 1);
+	EXPECT_FLOAT_EQ(none.front().seconds, 0.0f);
+	EXPECT_EQ(none.front().retriedClip, creature_mind::RetriedClip::None);
+}
+
+// The game compares the number with no sign, so a number below 0 is an individual action. The body has no such clip,
+// so the action never starts and the creature never gets past it. Asked to play it no times, it only waits.
+TEST(CreatureScriptPlay, AnIndividualActionBelowZeroNeverEnds)
+{
+	const auto agenda = Agenda({.animation = -1, .plays = 2});
+	ASSERT_EQ(agenda.size(), 1);
+	EXPECT_EQ(agenda.front().kind, creature_mind::Step::Kind::Wait);
+	EXPECT_TRUE(std::isinf(agenda.front().seconds));
+	EXPECT_EQ(agenda.front().retriedClip, creature_mind::RetriedClip::Individual);
+	const auto none = Agenda({.animation = -5, .plays = 0});
+	ASSERT_EQ(none.size(), 1);
+	EXPECT_EQ(none.front().kind, creature_mind::Step::Kind::Wait);
+	EXPECT_FLOAT_EQ(none.front().seconds, 0.0f);
+}
+
+// Each turn the creature tries the action again and picks a side from the game's stream first. An individual action
+// picks no side while the creature holds a thing, because the hand picks it.
+TEST(CreatureScriptPlay, EachTryOfAMissingClipDrawsASide)
+{
+	for (const int32_t animation : {0, -1})
+	{
+		for (const bool holding : {false, true})
+		{
+			creature_mind::IdleMind mind;
+			mind.activity = creature_mind::Activity::Told;
+			mind.agenda = Agenda({.animation = animation, .plays = 1});
+			int gameDraws = 0;
+			const creature_mind::Random random = [](uint32_t) { return 0u; };
+			const creature_mind::Random gameRandom = [&gameDraws](uint32_t range) {
+				if (range == 2)
+				{
+					++gameDraws;
+				}
+				return 0u;
+			};
+			creature_mind::Senses senses {.seconds = 0.1f};
+			if (holding)
+			{
+				senses.held = 7u;
+			}
+			for (int turn = 0; turn < 5; ++turn)
+			{
+				static_cast<void>(creature_mind::Think(mind, senses, random, gameRandom));
+			}
+			EXPECT_EQ(mind.step, 0u);
+			const bool draws = animation == 0 || !holding;
+			EXPECT_EQ(gameDraws, draws ? 5 : 0) << animation << " " << holding;
+		}
+	}
 }
 
 // Played by the mind: it starts the sequence, left to right when the draw of two comes up 1, ends the loop on the

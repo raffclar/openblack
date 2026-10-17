@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <functional>
 #include <vector>
 
@@ -36,5 +38,12 @@ using CellCandidates = std::function<std::vector<Candidate>(glm::ivec2 cell)>;
 /// nearer than the nearest so far, so the first met wins a tie; and once one is found the walk ends at the first cell
 /// farther than half as far again as it, and ten more
 [[nodiscard]] entt::entity FindNearest(const map_coords::MapCoords& from, float reach, const CellCandidates& inCell);
+
+/// The things in a cell of the map, in the order the cell keeps them
+using CellThings = std::function<std::vector<entt::entity>(glm::ivec2 cell)>;
+/// The first thing other than `except` in a spiral of cells out from the point's own cell. The search looks in at most
+/// `cells` cells and skips the cells off the map.
+[[nodiscard]] entt::entity FindFirst(const map_coords::MapCoords& from, int32_t cells, entt::entity except,
+                                     const CellThings& inCell);
 
 } // namespace openblack::ecs::nearest_search

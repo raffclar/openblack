@@ -305,4 +305,285 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 0.0f,
 	});
+	all.push_back({
+	    .id = "movement.past_altar",
+	    .name = "A creature walks past the altar of a worship site",
+	    .facet = Facet::Movement,
+	    .description = "The same town and temple, the town's worship site put up built and nobody sent to worship. A grown "
+	                   "tiger of the player's stands west of the site's altar and faces it. Its mind does not run.",
+	    .expected = "The map_cell query of the altar's cell lists the altar in front of its site. Send the tiger east, past "
+	                "the altar, with the creatures.move query. It goes round the circles of the site's model, which hold "
+	                "the smaller circles of the altar, thus creatures.route keeps only the site's circles.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, 30.0f}, .look = {0.0f, 0.0f, -2.0f}},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = k_Altar + glm::vec2(-18.0f, 0.0f),
+	                   .facingDegrees = 90.0f,
+	                   .pauseMind = true}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
+	all.push_back({
+	    .id = "miracles.lightning_unbuilt_altar",
+	    .name = "Lightning at the altar of a worship site not yet built",
+	    .facet = Facet::Miracles,
+	    .description = "The same town and temple, the town's worship site just started and not yet built, so its altar is "
+	                   "not shown. A lightning bolt is held from a hand eight metres from the altar's place, looking at it, "
+	                   "for four seconds in every eight.",
+	    .expected = "Some of the forks strike the altar's place, as it is in the map although not shown. After a moment "
+	                "electric arcs crawl over the shape of the unseen altar, standing in the air above the empty ground. "
+	                "The altar takes no harm.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, 30.0f}, .look = {0.0f, 0.0f, -2.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_Altar,
+	                  .handOffset = k_Altar + glm::vec2(0.0f, 8.0f),
+	                  .handHeight = 15.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.lightning_temple_town",
+	    .name = "Lightning at a temple whose player has a town",
+	    .facet = Facet::Miracles,
+	    .description = "The same town and temple, the town's worship site put up built. A lightning bolt is held from a "
+	                   "hand above the temple's heart, looking at it, for four seconds in every eight.",
+	    .expected = "The bolts that strike the temple and its worship site do not harm them. The heart gives the harm to "
+	                "a building of the town. A beam goes from the top of the temple to the top of that building, at most "
+	                "once every two seconds, with a sound. The building loses life and can catch fire.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {40.0f, 45.0f, 60.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_Temple,
+	                  .handOffset = k_Temple + glm::vec2(0.0f, 20.0f),
+	                  .handHeight = 25.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
+	all.push_back({
+	    .id = "miracles.lightning_temple_alone",
+	    .name = "Lightning at a temple whose player has no town",
+	    .facet = Facet::Miracles,
+	    .description = "A temple of the player alone, with no town. A lightning bolt is held from a hand above the "
+	                   "temple's heart, looking at it, for four seconds in every eight.",
+	    .expected = "The heart has nothing to give the harm to, thus it takes the harm itself and loses some life. A beam "
+	                "goes from the top of the temple to a point on its own walls, at most once every two seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {40.0f, 45.0f, 30.0f}, .look = {0.0f, 0.0f, -30.0f}},
+	    .temples = {{.offset = k_Temple}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_Temple,
+	                  .handOffset = k_Temple + glm::vec2(0.0f, 20.0f),
+	                  .handHeight = 25.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	});
+	all.push_back({
+	    .id = "miracles.lightning_flowers_dispenser",
+	    .name = "Lightning at flowers and a miracle dispenser",
+	    .facet = Facet::Miracles,
+	    .description = "Two patches of flowers and a water dispenser of the player's town, 8 m apart. A lightning bolt "
+	                   "is held from a hand above them, looking between them, for four seconds in every eight.",
+	    .expected = "The flowers take no harm and stay. The dispenser loses life to the bolts that reach it. Its town "
+	                "sends builders to mend it, and with no life left it goes as a ghost.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 20.0f, 25.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	                {.type = FlowersInfo::WhiteOne, .offset = {-4.0f, 0.0f}},
+	                {.type = FlowersInfo::Pink, .offset = {-4.0f, 4.0f}}},
+	    .dispensers = {{.type = MagicType::Water, .offset = {4.0f, 0.0f}, .reward = true}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = {0.0f, 1.0f},
+	                  .handOffset = {0.0f, 12.0f},
+	                  .handHeight = 15.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	// The town centre close up, under miracles: from south east of it, above its huts
+	const Framing closeOnCentre {.shot = Shot::Placed, .eye = {22.0f, 16.0f, 18.0f}, .look = {0.0f, 3.0f, 40.0f}};
+	const MiracleCast lightningAtCentre {.type = MagicType::LightningBolt,
+	                                     .target = MiracleCast::Target::Point,
+	                                     .point = k_Centre,
+	                                     .handOffset = k_Centre + glm::vec2(0.0f, -12.0f),
+	                                     .handHeight = 18.0f,
+	                                     .delaySeconds = 8.0f,
+	                                     .holdSeconds = 4.0f,
+	                                     .repeatSeconds = 8.0f};
+	all.push_back({
+	    .id = "miracles.fireball_town_centre",
+	    .name = "Fireball at a town centre",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town centre with its two huts and people, and no temple. A fireball is thrown from the "
+	                   "south at the town centre.",
+	    .expected = "The ball strikes the town centre and goes off. The town centre catches fire, with flames and smoke "
+	                "on it, and loses life as it burns. Its people come out and the town cries out.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = closeOnCentre,
+	    .objects = Town(),
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = k_Centre,
+	                  .handOffset = k_Centre + glm::vec2(0.0f, -14.0f),
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 12.0f},
+	                  .delaySeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.lightning_town_centre",
+	    .name = "Lightning at a town centre",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town centre with its two huts and people, and no temple. A lightning bolt is held from "
+	                   "a hand south of the town centre, looking at it, for four seconds in every eight.",
+	    .expected = "The bolts strike the town centre and arcs crawl over it. It catches fire and loses life. Its people "
+	                "come out and the town cries out.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = closeOnCentre,
+	    .objects = Town(),
+	    .miracles = {lightningAtCentre},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	auto hurtTown = Town();
+	hurtTown.front().life = 0.15f;
+	all.push_back({
+	    .id = "miracles.town_centre_destroyed",
+	    .name = "A town centre destroyed by lightning",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town centre at 15 percent of its life, with its two huts and people, and no temple. A "
+	                   "lightning bolt is held from a hand south of the town centre, for four seconds in every eight.",
+	    .expected = "The bolts take the last of its life. The town centre flickers out as a ghost and goes, with its totem "
+	                "and its stone hands. Its town plans it again where it stood.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = closeOnCentre,
+	    .objects = hurtTown,
+	    .miracles = {lightningAtCentre},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	// The town with its crèche and workshop to the south, and lanterns along the way to them
+	constexpr glm::vec2 k_Creche {-14.0f, 12.0f};
+	constexpr glm::vec2 k_Workshop {14.0f, 12.0f};
+	constexpr glm::vec2 k_Lantern {-6.0f, 20.0f};
+	// A lantern away from the town, for the lightning
+	constexpr glm::vec2 k_LoneLantern {0.0f, -20.0f};
+	const auto civicTown = [&](float crecheLife) {
+		auto objects = Town();
+		objects.push_back({.type = AbodeInfo::CelticCreche, .offset = k_Creche, .yawDegrees = 180.0f, .life = crecheLife});
+		objects.push_back({.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f});
+		objects.push_back({.type = MobileStaticInfo::StreetLantern, .offset = k_Lantern});
+		objects.push_back({.type = MobileStaticInfo::StreetLantern, .offset = {6.0f, 20.0f}});
+		objects.push_back({.type = MobileStaticInfo::CountryLantern, .offset = {0.0f, 4.0f}});
+		return objects;
+	};
+	const Framing onCivic {.shot = Shot::Placed, .eye = {0.0f, 22.0f, -14.0f}, .look = {0.0f, 0.0f, 20.0f}};
+	all.push_back({
+	    .id = "advisors.building_tip_signs",
+	    .name = "Tip signs at a crèche and a workshop",
+	    .facet = Facet::Advisors,
+	    .description = "The Celtic town with its crèche and workshop south of the town centre, and three lanterns. It is "
+	                   "noon.",
+	    .expected = "A sign stands in front of the crèche and one in front of the workshop, at the corner of each "
+	                "building. Tap a sign and it gives the tip of its building. The town centre, the huts and the "
+	                "lanterns have no sign.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = onCivic,
+	    .objects = civicTown(1.0f),
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.lanterns_at_night",
+	    .name = "Street lanterns at night",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town with its crèche, workshop, two street lanterns and a country lantern. The clock "
+	                   "stands at ten at night.",
+	    .expected = "Each lantern burns with two flames in a glow, which flicker. The land round each lantern is lit. "
+	                "The lanterns crackle.",
+	    .environment = {.hour = 22.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = onCivic,
+	    .objects = civicTown(1.0f),
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.lightning_lantern",
+	    .name = "Lightning at a street lantern at night",
+	    .facet = Facet::Miracles,
+	    .description = "A street lantern at 15 percent of its life and a country lantern 6 m east of it, away from any "
+	                   "town, at ten at night. A lightning bolt is held from a hand above the street lantern for four "
+	                   "seconds in every eight.",
+	    .expected = "The bolts strike the lantern and it loses life. With no life left it goes at once, with no ghost, "
+	                "and its flames, glow, light and crackle go with it. The country lantern stays.",
+	    .environment = {.hour = 22.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, -36.0f}, .look = {3.0f, 2.0f, -20.0f}},
+	    .objects = {{.type = MobileStaticInfo::StreetLantern, .offset = k_LoneLantern, .life = 0.15f},
+	                {.type = MobileStaticInfo::CountryLantern, .offset = k_LoneLantern + glm::vec2(6.0f, 0.0f)}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_LoneLantern,
+	                  .handOffset = k_LoneLantern + glm::vec2(0.0f, -10.0f),
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 4.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.creche_destroyed_with_sign",
+	    .name = "A crèche destroyed with its tip sign",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town with its crèche at 40 percent of its life. After ten seconds, a lightning bolt is "
+	                   "held from a hand above the crèche for four seconds in every eight.",
+	    .expected = "The bolts take the last of the crèche's life. It flickers out as a ghost and goes, and its tip sign "
+	                "goes with it. The workshop keeps its sign. When the town puts the crèche up again, a new sign "
+	                "stands in front of the site.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 14.0f, -8.0f}, .look = {-14.0f, 0.0f, 12.0f}},
+	    .objects = civicTown(0.4f),
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_Creche,
+	                  .handOffset = k_Creche + glm::vec2(0.0f, -12.0f),
+	                  .handHeight = 18.0f,
+	                  .delaySeconds = 10.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.lightning_fish_farm",
+	    .name = "Lightning at a fish farm",
+	    .facet = Facet::Miracles,
+	    .description = "The Celtic town and a fish farm of the town 30 m west of its town centre. A lightning bolt is held "
+	                   "from a hand above the farm for four seconds in every eight.",
+	    .expected = "The bolts that reach the farm take its life, and the town cries out at the attack. With no life left "
+	                "the farm goes, and the fishermen at it decide again what to do.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = closeOnCentre,
+	    .objects =
+	        [] {
+		        auto objects = Town();
+		        objects.push_back({.type = FishFarmInfo::Normal, .offset = k_Centre + glm::vec2(-30.0f, 0.0f)});
+		        return objects;
+	        }(),
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_Centre + glm::vec2(-30.0f, 0.0f),
+	                  .handOffset = k_Centre + glm::vec2(-30.0f, -10.0f),
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 4.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
 }

@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "Common/FixedFormat.h"
+#include "Common/X87.h"
 #include "ECS/Components/LearningMarker.h"
 #include "ECS/Registry.h"
 
@@ -23,14 +24,17 @@ namespace openblack::ecs::learning_marker
 
 namespace
 {
-/// The mark's age is turned into the bulb's blink by this many radians a millisecond: one turn a second
-constexpr double k_BlinkPerMillisecond = 0.0062831854;
+/// The game multiplies by these reciprocals, each rounded to a float, and does not divide
+constexpr float k_InverseLife = 1.0f / k_LifeMilliseconds;
+constexpr float k_InverseFade = 1.0f / (k_LifeMilliseconds - k_FadeStartMilliseconds);
+constexpr float k_FullAlpha = 255.0f;
 } // namespace
 
 std::string Text(float share)
 {
-	// In hundredths, with no point, rounded as the game's C library does
-	return fixed_format::Fixed(static_cast<double>(share) * 100.0, 0, 0) + "%";
+	// In hundredths, with no point, rounded as the game's C library does. The share times 100 rounds to a float first
+	constexpr float k_Hundred = 100.0f;
+	return fixed_format::Fixed(static_cast<double>(share * k_Hundred), 0, 0) + "%";
 }
 
 components::LearningMarker Start(const glm::vec3& head, float creatureHeight, float share)
@@ -54,7 +58,7 @@ bool Step(components::LearningMarker& marker, float milliseconds)
 
 float Grown(const components::LearningMarker& marker)
 {
-	return std::max((marker.milliseconds / k_LifeMilliseconds + 1.0f) * marker.size, k_MinimumSize);
+	return std::max((marker.milliseconds * k_InverseLife + 1.0f) * marker.size, k_MinimumSize);
 }
 
 uint8_t TextAlpha(float milliseconds)
@@ -63,15 +67,16 @@ uint8_t TextAlpha(float milliseconds)
 	{
 		return 0xFF;
 	}
-	const double left =
-	    1.0 - (static_cast<double>(milliseconds) - k_FadeStartMilliseconds) / (k_LifeMilliseconds - k_FadeStartMilliseconds);
-	const auto alpha = static_cast<int32_t>(left * 255.0);
+	const float left = 1.0f - ((milliseconds - k_FadeStartMilliseconds) * k_InverseFade);
+	const auto alpha = static_cast<int32_t>(left * k_FullAlpha);
 	return static_cast<uint8_t>(std::clamp(alpha, 0, 0xFF));
 }
 
 uint8_t BulbWhite(float milliseconds)
 {
-	return static_cast<uint8_t>(std::abs(std::cos(static_cast<double>(milliseconds) * k_BlinkPerMillisecond)) * 255.0);
+	// The angle rounds to a float. The cosine stays wide until the multiply by 255 rounds it
+	const float angle = milliseconds * k_BlinkPerMillisecond;
+	return static_cast<uint8_t>(x87::Mul(std::abs(x87::Cos(angle)), 255.0f));
 }
 
 uint8_t GlowAlpha(float milliseconds)

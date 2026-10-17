@@ -22,6 +22,11 @@
 #error "ECS System implementations should only be included in Locator.cpp"
 #endif
 
+namespace openblack
+{
+class FightCameraModel;
+} // namespace openblack
+
 namespace openblack::ecs::systems
 {
 
@@ -129,6 +134,8 @@ private:
 	/// the test of distance are the ones given, or else the camera's now.
 	void TryStartView(entt::entity first, entt::entity second, const creature_fight::Arena& arena, std::string_view how,
 	                  std::optional<std::pair<glm::vec3, glm::vec3>> from = std::nullopt);
+	/// Whether the player has dragged the land so far from the arena of the fight that the view ends
+	[[nodiscard]] bool DraggedAway(const FightCameraModel& model) const;
 	/// Why names the end of the view for the transcript
 	void EndView(std::string_view why);
 	/// Leaves the fight for good, its mind taking over again

@@ -25,6 +25,7 @@
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -502,6 +503,21 @@ TEST_F(CreatureFightSystemTest, ACreatureRefusesAFightWithOneTooBigOrTooSmall)
 	registry.Get<Creature>(small).size = 1.0f;
 	registry.Assign<ScriptControlled>(small);
 	EXPECT_EQ(fights.StartFight(big, small), Start::Refused);
+}
+
+// A creature that does a joint action with a third creature refuses a fight; its partner may still ask it
+TEST_F(CreatureFightSystemTest, ACreatureTakenUpWithAThirdCreatureRefusesAFight)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto asker = MakeCreature(registry, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 0.0f});
+	const auto asked = MakeCreature(registry, PlayerNames::PLAYER_TWO, {130.0f, 0.0f, 0.0f});
+	const auto third = MakeCreature(registry, PlayerNames::PLAYER_TWO, {160.0f, 0.0f, 0.0f});
+	using Start = ecs::systems::CreatureFightSystemInterface::StartResult;
+	registry.Assign<CreaturePartner>(asked, CreaturePartner {.partner = third});
+	EXPECT_EQ(fights.StartFight(asker, asked), Start::Refused);
+	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(asked));
+	registry.AssignOrReplace<CreaturePartner>(asked, CreaturePartner {.partner = asker});
+	EXPECT_EQ(fights.StartFight(asker, asked), Start::Started);
 }
 
 TEST_F(CreatureFightSystemTest, AKnockOutKeepsTheWinnerAndTheLoserFromReactions)

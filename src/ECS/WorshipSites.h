@@ -42,6 +42,8 @@ inline constexpr float k_FoodPotTurn = 1.5f;
 inline constexpr uint32_t k_RestPoint = 7;
 /// The site's middle, which villagers are judged near or far from, in the model's own space
 inline constexpr glm::vec3 k_CentrePoint {12.55f, 0.0f, -26.1f};
+/// How far round its middle a site takes the effects of miracles and the heat of fires, whatever its size
+inline constexpr float k_EffectRadius = 14.0f;
 /// The food pot is made smaller than its kind, until the food in it sets its size
 inline constexpr float k_FoodPotScale = 0.7f;
 /// Each place's dance, the first place's first: the citadel dances of the info table

@@ -117,6 +117,8 @@ public:
 	[[nodiscard]] Json State() const;
 	/// The frames served so far
 	[[nodiscard]] uint64_t FrameNumber() const { return _frame; }
+	/// Each land or scenario loaded from now on starts paused, before any of its frames, as for a seeded run
+	void SetPauseOnLoad(bool pause) { _pauseOnLoad = pause; }
 
 private:
 	RunTargetInterface& _target;

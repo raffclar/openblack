@@ -12,6 +12,7 @@
 #include <array>
 
 #include "Common/GUtilsAngle.h"
+#include "Common/X87.h"
 
 using namespace openblack::ecs;
 using namespace openblack::ecs::fight_watch;
@@ -73,7 +74,7 @@ glm::ivec2 fight_watch::PlaceOnRing(glm::ivec2 middle, float arenaRadius, uint16
 	// In metres the game's way, each step rounded to a float, then back to map units, truncated
 	const auto axis = [radius](int32_t table, int32_t centre) {
 		const float along = static_cast<float>(table) * radius * k_PerUnit;
-		const float from = static_cast<float>(static_cast<double>(centre) * k_CellMetres) * k_PerUnit;
+		const float from = x87::Mul(static_cast<double>(centre), k_CellMetres) * k_PerUnit;
 		const float metres = along + from;
 		return static_cast<int32_t>((metres * k_UnitsPerCell) / k_CellMetres);
 	};

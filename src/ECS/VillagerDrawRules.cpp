@@ -11,8 +11,12 @@
 
 #include <cmath>
 
+#include <bit>
+
 #include <glm/common.hpp>
 #include <glm/gtx/euler_angles.hpp>
+
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -22,8 +26,8 @@ namespace
 constexpr float k_Pi = std::numbers::pi_v<float>;
 constexpr float k_TwoPi = 2.0f * k_Pi;
 constexpr float k_QuarterTurn = k_Pi / 2.0f;
-/// The ordinary drawn turn, in radians a millisecond
-constexpr double k_TurnPerMillisecond = 0.003;
+/// The game's 2 / pi, a double a little less than the true value
+constexpr double k_TwoOverPi = std::bit_cast<double>(uint64_t {0x3FE45F306446F9B4});
 /// A high-detail body's further turn, in radians a second
 constexpr float k_DetailedTurnPerSecond = 3.927f;
 /// Models face a quarter turn off the game's headings
@@ -59,11 +63,14 @@ float villager_draw::EasedHeading(float drawn, float facing, uint32_t gameMillis
 {
 	const float difference = Wrapped(Wrapped(facing) - drawn);
 	const float size = std::abs(difference);
-	// A turn of more than a quarter is made quicker the bigger it is
-	const double perMillisecond = size > k_QuarterTurn
-	                                  ? (static_cast<double>(size) * (2.0 / std::numbers::pi) * 2.0) * k_TurnPerMillisecond
-	                                  : k_TurnPerMillisecond;
-	const auto step = static_cast<float>(static_cast<double>(gameMilliseconds) * perMillisecond);
+	// A turn of more than a quarter is made quicker the bigger it is. Each step rounds to a float
+	float perMillisecond = x87::RoundToFloat(k_TurnPerMillisecond);
+	if (size > k_QuarterTurn)
+	{
+		const float scaled = x87::Mul(size, k_TwoOverPi);
+		perMillisecond = x87::Mul(scaled + scaled, k_TurnPerMillisecond);
+	}
+	const float step = x87::Mul(static_cast<double>(gameMilliseconds), perMillisecond);
 	if (size < step)
 	{
 		return facing;

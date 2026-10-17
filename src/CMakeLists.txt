@@ -152,6 +152,7 @@ target_link_libraries(
           gestures
           rawimage
           helpstats
+          creaturehtml
           imgui::imgui
           imgui_user
           ScriptLibrary
@@ -165,6 +166,8 @@ target_link_libraries(
   PUBLIC spdlog::spdlog
          # The mind file's types are part of the creature mind component
          creaturemind
+         # The saved game's files are part of the saved game component
+         gamesave
 )
 target_include_directories(openblack_lib PRIVATE ${CXXOPTS_INCLUDE_DIRS})
 
@@ -305,6 +308,13 @@ else ()
     target_compile_options(openblack_lib PRIVATE -Werror)
   endif ()
 endif ()
+
+# Each float operation of the game's logic must round one time, as the game's FPU did. Fused multiply-add rounds two
+# operations one time, so these options stop it in the game, its library and the tests (see Common/X87.h).
+target_compile_options(
+  openblack_lib
+  PUBLIC "$<IF:$<CXX_COMPILER_ID:MSVC>,/fp:precise,-ffp-contract=off>"
+)
 
 set_property(
   DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT openblack

@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -75,6 +76,7 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSkin.h"
 #include "Creature/CreatureSpells.h"
+#include "Creature/LeashOrders.h"
 #include "ECS/AbodeKnock.h"
 #include "ECS/BoatLaunchRules.h"
 #include "ECS/Components/Abode.h"
@@ -88,6 +90,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DestructionGhost.h"
@@ -132,6 +135,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -142,6 +146,7 @@
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
 #include "Graphics/DrawOrder.h"
+#include "Graphics/DrawWindow.h"
 #include "Graphics/FizzDrawOrder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -3517,12 +3522,25 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 	const auto& infos = Locator::infoConstants::value().abode;
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const float scale = knocks.GetReadoutScale();
-	for (const auto abode : townData->abodes)
+	const auto origin = desc.camera->GetOrigin();
+	// Each house of the town shows its read-out when the renderer draws the house. Only the houses that this frame draws
+	// show one, in the order of the draw, and each takes its own place among what blends.
+	struct Row
 	{
+		uint32_t firstVertex;
+		uint32_t vertexCount;
+		uint32_t depth;
+	};
+	std::vector<Row> rows;
+	const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
+	for (const auto& object : drawn)
+	{
+		const auto abode = object.entity;
 		const auto* data = desc.entities.TryGet<const ecs::components::Abode>(abode);
 		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(abode);
 		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(abode);
-		if (data == nullptr || transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id))
+		if (data == nullptr || transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id) ||
+		    std::ranges::find(townData->abodes, abode) == townData->abodes.end())
 		{
 			continue;
 		}
@@ -3534,6 +3552,7 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 		auto point = transform->position;
 		point.y += meshes.Handle(mesh->id)->GetBoundingBox().Size().y + ecs::abode_knock::k_RaisedAbove;
 		const auto places = infos.at(static_cast<size_t>(data->type)).maxVillagersInAbode;
+		const auto first = static_cast<uint32_t>(vertices.size());
 		for (const auto& marker : ecs::abode_knock::Readout(places, adults, scale))
 		{
 			const auto centre = point + right * marker.offset;
@@ -3546,9 +3565,14 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 				                    k_Person + k_Uvs.at(c), abgr});
 			}
 		}
+		const auto rowCount = static_cast<uint32_t>(vertices.size()) - first;
+		if (rowCount != 0)
+		{
+			rows.push_back({.firstVertex = first, .vertexCount = rowCount, .depth = zsort::Depth(point, origin)});
+		}
 	}
 	const auto count = static_cast<uint32_t>(vertices.size());
-	const auto quads = count / 4;
+	const auto quads = rows.empty() ? 0u : std::ranges::max(rows, {}, &Row::vertexCount).vertexCount / 4;
 	bgfx::VertexLayout layout;
 	layout.begin()
 	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
@@ -3565,6 +3589,7 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 	bgfx::allocTransientVertexBuffer(&vertexBuffer, count, layout);
 	bgfx::allocTransientIndexBuffer(&indexBuffer, quads * 6);
 	std::memcpy(vertexBuffer.data, vertices.data(), count * sizeof(Vertex));
+	// The quads of a row, counted from the row's first vertex
 	const auto indices = std::span(reinterpret_cast<uint16_t*>(indexBuffer.data), quads * 6);
 	constexpr std::array<uint16_t, 6> k_Triangles = {0, 1, 2, 2, 3, 0};
 	for (uint32_t q = 0; q < quads; ++q)
@@ -3575,13 +3600,17 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 		}
 	}
 	const auto* program = _shaderManager->GetShader("WorldTextured");
-	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
-	program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
-	bgfx::setVertexBuffer(0, &vertexBuffer);
-	bgfx::setIndexBuffer(&indexBuffer);
-	// Blended over what is behind, both sides, tested against depth but leaving none
-	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
-	program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)));
+	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	for (const auto& row : rows)
+	{
+		program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
+		program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
+		bgfx::setVertexBuffer(0, &vertexBuffer, row.firstVertex, row.vertexCount);
+		bgfx::setIndexBuffer(&indexBuffer, 0, row.vertexCount / 4 * 6);
+		// Blended over what is behind, both sides, tested against depth but leaving none
+		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
+		program->Submit(viewId, row.depth);
+	}
 }
 
 void Renderer::DrawRain(const DrawSceneDesc& desc) const
@@ -5441,7 +5470,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	}
 }
 
-void Renderer::WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept
+bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept
 {
 	// The draws into the window keep to one pixel. The renderer makes a pipeline for each draw that has pixels.
 	for (const auto view : warm_up::k_WindowSceneViews)
@@ -5461,10 +5490,22 @@ void Renderer::WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept
 		const RenderContext::ObjectInstance hidden {.model = glm::mat4(0.0f), .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
 		_warmUpInstances = fromBgfx(bgfx::createDynamicVertexBuffer(bgfx::copy(&hidden, sizeof(hidden)), layout));
 	}
+	// Under Vulkan, one frame with all the draws can use all of the descriptor sets, so each part does some of them
+	constexpr auto k_PartedViews = [] {
+		std::array<uint16_t, warm_up::k_PartedViews.size()> views {};
+		std::ranges::transform(warm_up::k_PartedViews, views.begin(),
+		                       [](RenderPass view) { return static_cast<uint16_t>(view); });
+		return views;
+	}();
+	const auto window = WarmUpPartWindow(part, warm_up::k_DrawsPerPart);
+	const bool parted = _shaderManager->OpenDrawWindow(window.first, window.count, k_PartedViews);
 	_warmingUp = true;
 	DrawScene(drawDesc);
 	_warmingUp = false;
 	_warmUpInFrame = true;
+	const auto draws = _shaderManager->CloseDrawWindow();
+	return parted && draws.has_value() && part + 1 < warm_up::k_MaxParts &&
+	       WarmUpPartsLeft(part, *draws, warm_up::k_DrawsPerPart);
 }
 
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
@@ -7078,6 +7119,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				    (!Locator::cameraBookmarkSystem::has_value() || Locator::cameraBookmarkSystem::value().IsEnabled()) &&
 				    (!Locator::cinematicDirectorSystem::has_value() ||
 				     Locator::cinematicDirectorSystem::value().IsInterfaceActive());
+				// The markers of leash orders show only while the land shows
+				const bool leashMarkersShown = creature_leash_orders::MarkerShown(
+				    Locator::temple::has_value() && Locator::temple::value().Active(),
+				    Locator::videoSystem::has_value() &&
+				        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld()));
 				// A warm-up draws a sprite of no size for each way that sprites blend, as the first sprites draw
 				if (_warmingUp)
 				{
@@ -7091,9 +7137,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 				}
 				registry.Each<const Sprite, const Transform>(
-				    [this, &spriteShader, &desc, translucentViewId, cameraOrigin, &registry,
-				     bookmarksShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+				    [this, &spriteShader, &desc, translucentViewId, cameraOrigin, &registry, bookmarksShown,
+				     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
 					    if (!bookmarksShown && registry.AllOf<CameraBookmark>(entity))
+					    {
+						    return;
+					    }
+					    if (!leashMarkersShown && registry.AllOf<LeashMarker>(entity))
 					    {
 						    return;
 					    }
@@ -7235,6 +7285,11 @@ void Renderer::Frame() noexcept
 	if (const auto sets = _shaderManager->FrameEnded(); sets.has_value() && !warmUp)
 	{
 		WatchDescriptorSets(*sets);
+	}
+	else if (sets.has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"), "A warm-up frame took {} Vulkan descriptor sets ({} draws)", sets->sets,
+		                    sets->draws);
 	}
 	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures, _bgfxCallback->pictures);
 }

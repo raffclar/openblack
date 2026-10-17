@@ -126,6 +126,24 @@ int BeamPlayer(PlayerNames owner)
 }
 } // namespace
 
+void CreatureMindSystem::TakeUpMindFile(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> file)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (file == nullptr || !registry.Valid(creature) || !registry.AllOf<Creature, CreatureMindState>(creature))
+	{
+		return;
+	}
+	auto& mind = registry.Get<CreatureMindState>(creature);
+	SetUpMind(creature, registry.Get<const Creature>(creature), mind);
+	mind.pendingFile = std::move(file);
+	TakeUpFile(creature, mind, FileBase::Own);
+	// The help gives the message of the stage that the mind brings
+	if (Locator::creatureHelpSystem::has_value())
+	{
+		Locator::creatureHelpSystem::value().Raise(creature, {.kind = creature_help::StageMessage(mind.developmentPhase)});
+	}
+}
+
 bool CreatureMindSystem::SwapMinds(entt::entity from, entt::entity to)
 {
 	auto& registry = Locator::entitiesRegistry::value();

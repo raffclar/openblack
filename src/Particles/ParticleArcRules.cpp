@@ -32,6 +32,12 @@ namespace
 {
 /// An arc picks its ends among this many points of the object's model
 constexpr size_t k_ArcPoints = 5;
+/// The arcer's values when its particle data does not give them
+constexpr int32_t k_DefaultAverageTicks = 10;
+constexpr int k_DefaultJoints = 19;
+constexpr float k_DefaultRandomFrac = 0.1f;
+constexpr float k_DefaultRandomTangents = 0.2f;
+constexpr float k_DefaultScaleTangents = 1.0f;
 
 /// What an arc keeps
 struct Arc
@@ -51,11 +57,11 @@ public:
 	    : creator(object.String("PCreator"))
 	    , chainCreator(object.String("ChainCreator"))
 	    , nextGroups(object.IntArray("NextGroups"))
-	    , averageTicks(std::max(1, object.Int("AverageTicksPerUpdate", 2)))
-	    , joints(std::max(2, object.Int("JointsPerArc", 8)))
-	    , randomFrac(object.Float("RandomFrac", 0.1f))
-	    , randomTangents(object.Float("RandomTangents", 0.2f))
-	    , scaleTangents(object.Float("ScaleTangents", 3.0f))
+	    , averageTicks(object.Int("AverageTicksPerUpdate", k_DefaultAverageTicks))
+	    , joints(object.Int("JointsPerArc", k_DefaultJoints))
+	    , randomFrac(object.Float("RandomFrac", k_DefaultRandomFrac))
+	    , randomTangents(object.Float("RandomTangents", k_DefaultRandomTangents))
+	    , scaleTangents(object.Float("ScaleTangents", k_DefaultScaleTangents))
 	{
 	}
 
@@ -70,16 +76,17 @@ public:
 		auto& arcs = *std::any_cast<Arcs>(&slot.data);
 		auto& world = effect.Services().world;
 		const auto random = [&effect](int32_t n) { return n > 0 ? effect.Rand(n) : 0; };
-		// The objects struck since the last step, each an atom with its points
+		// The objects struck since the last step, each an atom with its points. The atom is made first, then its points
+		// are picked; an object with no points loses its atom again.
 		for (auto object = world.TakeArcs(); object.has_value(); object = world.TakeArcs())
 		{
+			auto& atom = effect.NewAtom(collection, effect.FindCreator(creator), nextGroups);
 			auto points = world.SurfacePoints(*object, k_ArcPoints, random);
 			if (points.empty())
 			{
+				collection.atoms.pop_back();
 				continue;
 			}
-			auto& atom = effect.NewAtom(collection, effect.FindCreator(creator), nextGroups);
-			atom.position = points.front().position;
 			auto& data = atom.data[this];
 			data.object = *object;
 			// Counted among the live arcs for as long as its atom lasts
@@ -143,7 +150,7 @@ private:
 				effect.NewAtom(chain, jointCreator, {});
 			}
 		}
-		const float length = glm::distance(arc.ends.from, arc.ends.to);
+		const float length = maths::ArcLength(arc.ends);
 		const auto fromTangent =
 		    maths::ArcTangent(arc.ends.fromNormal, effect.RandomInBall(), randomTangents, length, scaleTangents);
 		const auto toTangent =

@@ -96,6 +96,8 @@ constexpr size_t k_DanceMoveCount = 7;
 /// After the first move, the body chooses the next move from only the first five
 constexpr size_t k_LaterDanceMoveCount = 5;
 constexpr size_t k_Talk = 205;
+/// The kiss
+constexpr size_t k_Kiss = 212;
 
 /// The spec file's name of an animation the minds play, without its type letter, or empty for others
 [[nodiscard]] std::string_view Name(size_t animation);
@@ -143,6 +145,10 @@ struct BodyAction
 	bool hurried {false};
 	/// Each move of a dance lasts this many milliseconds of real time, whatever the size of the creature
 	float danceMoveMs {0.0f};
+	/// An action played once as a blend: its animation, blended keyframe by keyframe towards this animation by the
+	/// weight, as a kiss blends its low and its high kiss
+	std::optional<size_t> blendedWith;
+	float blendWeight {0.0f};
 	/// The dance needs its next move: the first move after the start, or the next move after a move ended
 	bool chooseDanceMove {false};
 	bool firstDanceMove {false};
@@ -186,6 +192,12 @@ struct BodyAction
 /// The moves of a dance count real milliseconds, not the milliseconds of the creature's playback.
 [[nodiscard]] BodyAction AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration,
                                      std::optional<float> realMilliseconds = std::nullopt);
+/// Whether the body gets to the moment of its action as AdvanceBody moves it on some milliseconds. An action played
+/// once gets to its moment as it passes the middle of its animation (half its length in whole milliseconds). The kiss
+/// gets to its moment as it passes the kiss time of the species. A body timed by what plays it does not get to a moment
+/// here.
+[[nodiscard]] bool ReachesActionMoment(const BodyAction& body, float milliseconds, std::optional<uint32_t> duration,
+                                       uint32_t kissMs);
 
 /// The face's expression, played on top of the body. A face is pulled for some time: it plays through once and holds
 /// its last frame, the full expression, until that time is up. Then it relaxes, running back to its start a quarter as

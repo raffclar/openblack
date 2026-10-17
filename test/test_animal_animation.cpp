@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "Animals/AnimalAnimation.h"
+#include "Enums.h"
 
 using namespace openblack::animals;
 
@@ -74,6 +75,26 @@ TEST(AnimalAnimation, AMovingAnimalPlaysItsClipByTheGroundItCovers)
 	EXPECT_EQ(MovingPlay(k_Flap, speed, 1, 4.0f), 0);
 	// A clip with no stride doesn't play by the ground
 	EXPECT_EQ(MovingPlay(k_Held, speed, 100, 1.0f), 0);
+}
+
+TEST(AnimalAnimation, TheGroundCoveredIsWorkedOutInSinglePrecisionSteps)
+{
+	// 4626 x 17 / 655350 metres, divided by a stride of 3, times 1500 milliseconds: each single precision step gives 60
+	// exactly. Steps at double precision give a little under 60, which truncates to 59.
+	constexpr ClipTiming k_Stride {.playTime = 1500, .frameCount = 15, .looping = true, .playedByTime = false, .stride = 3.0f};
+	EXPECT_EQ(MovingPlay(k_Stride, 4626, 17, 1.0f), 60);
+	constexpr ClipTiming k_Short {.playTime = 800, .frameCount = 8, .looping = true, .playedByTime = false, .stride = 0.5f};
+	EXPECT_EQ(MovingPlay(k_Short, 2313, 17, 0.6f), 160);
+}
+
+TEST(AnimalAnimation, AWalkSpeedGivesBackTheSpeedStateItCameFrom)
+{
+	for (uint32_t state = 0; state <= 0xFFFF; ++state)
+	{
+		ASSERT_EQ(static_cast<uint32_t>(
+		              openblack::GetSpeedStateOf(openblack::GetSpeedStateSpeed(static_cast<openblack::SpeedState>(state)))),
+		          state);
+	}
 }
 
 TEST(AnimalAnimation, ACarriedPlayKeepsPaceWithTheGroundAtAnyFrameRate)
