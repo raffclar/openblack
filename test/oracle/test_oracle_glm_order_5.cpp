@@ -23,6 +23,7 @@
 #include "Creature/CreatureRig.h"
 #include "OracleData.h"
 #include "Particles/SurfaceOfRevolution.h"
+#include "Particles/VolumeGlow.h"
 
 using namespace openblack;
 
@@ -229,6 +230,25 @@ TEST(OracleGlmOrder5, TheNormalsOfASmallMesh)
 		}
 		std::string text;
 		if (!SameBits(row, names, ours, text) && ++different <= 20)
+		{
+			ADD_FAILURE() << "row " << index << ":" << text;
+		}
+	}
+	EXPECT_EQ(different, 0U);
+}
+
+TEST(OracleGlmOrder5, ACornersNormalInTheCamerasFrameForTheGlowingShell)
+{
+	const auto table = oracle::Table::Load("glow_view_normal.txt");
+	ASSERT_TRUE(table.has_value());
+	size_t different = 0;
+	for (size_t index = 0; index < table->Rows(); ++index)
+	{
+		const Row row {*table, index};
+		const std::array<glm::vec3, 3> axes {row.Indexed("m", 0), row.Indexed("m", 3), row.Indexed("m", 6)};
+		const auto view = particles::volume_glow::ViewNormal(row.Vec("nx", "ny", "nz"), axes, {1.0f, 1.0f});
+		std::string text;
+		if (!SameBits(row, {"vx", "vy", "vz"}, {view.x, view.y, view.z}, text) && ++different <= 20)
 		{
 			ADD_FAILURE() << "row " << index << ":" << text;
 		}

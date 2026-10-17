@@ -16,10 +16,12 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
 #include "ParticleClassRegistry.h"
 
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -276,7 +278,7 @@ public:
 		const auto camera = effect.Services().world.CameraPosition();
 		for (auto& atom : collection.atoms)
 		{
-			const float distance = glm::distance(camera, effect.GlobalPosition(*atom));
+			const float distance = x87::Distance<x87::SumOrder::Zyx>(camera, effect.GlobalPosition(*atom));
 			atom->ruleScale = maths::ScaleAtCameraDistance(distance, nearDistance, farDistance, nearScale, farScale);
 		}
 		return true;

@@ -15,6 +15,9 @@
 - mesh_points.txt: the points of a mesh moved by a matrix
 - surface_sway.txt: a surface of revolution swayed: its points turned by ring and its texture slid
 - surface_normals.txt: the normals of a small mesh, each the sum of its faces' unit normals, made unit again
+- glow_view_normal.txt: a corner's normal in the camera's frame as the glowing shell measures it: the rows of the
+  matrix made unit by the 3D engine (the game's function), then summed by the normal in the order the shell's draw adds
+  them (worked here in floats, as the draw function cannot be called alone)
 
 Usage: python tools/oracle/cases/glm_order_5_cases.py [output folder]   (default: test/oracle/data)
 The random inputs come from a fixed seed, so a second run gives the same files (except the date line).
@@ -23,11 +26,12 @@ The random inputs come from a fixed seed, so a second run gives the same files (
 from __future__ import annotations
 
 import random
+import struct
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from oracle import Oracle, f2u, write_pinned  # noqa: E402
+from oracle import Oracle, f2u, u2f, write_pinned  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -41,6 +45,9 @@ SURFACE_SLIDE = 0x685F40  # thiscall (rule: most slide +0x60), (from, around, ri
 MESH_NORMALS = 0x6C9000  # thiscall (mesh: points +0x8, count +0x10, faces +0x6C, count +0x74, normals +0x80, count +0x88)
 NORMAL_COUNTS = 0xD4EDD8  # the static list of face counts: pointer, end, size; made once (flag 0xD4EDEC)
 NORMAL_COUNTS_MADE = 0xD4EDEC
+UNIT_ROWS = 0x7FB5C0  # thiscall (3x3 matrix): each row made unit by the engine's inverse square root
+MAKE_INVERSE_SQRT_TABLE = 0x8411D0
+ENGINE_ALLOC = 0x842CE0  # the 3D engine's allocation, for the inverse square root table
 
 SWAY_AROUND = 5
 SWAY_RINGS = 4
@@ -186,6 +193,35 @@ def normal_cases(oracle: Oracle) -> list[list[int]]:
     return rows
 
 
+def f32(value: float) -> float:
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
+def view_normal_cases(oracle: Oracle) -> list[list[int]]:
+    rng = random.Random(0x6105)
+    o = oracle
+    o.hook_alloc(ENGINE_ALLOC)
+    o.call(MAKE_INVERSE_SQRT_TABLE)
+    matrix = o.alloc(0x30)
+    rows = []
+    for _ in range(800):
+        values = random_matrix(rng, 0.9, 0.2, 3.0, 0.0)[0:9]
+        normal = [rand_float(rng, -1.0, 1.0) for _ in range(3)]
+        o.write_u32(matrix, *values)
+        o.call(UNIT_ROWS, ecx=matrix)
+        u = [u2f(bits) for bits in o.read_f32_bits(matrix, 9)]
+        n = [u2f(bits) for bits in normal]
+
+        def p(row: int, axis: int) -> float:
+            return f32(u[3 * row + axis] * n[row])
+
+        view = [f32(f32(p(0, 0) + p(2, 0)) + p(1, 0)),
+                f32(f32(p(2, 1) + p(1, 1)) + p(0, 1)),
+                f32(f32(p(2, 2) + p(1, 2)) + p(0, 2))]
+        rows.append(values + normal + [f2u(v) for v in view])
+    return rows
+
+
 def main() -> int:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "test" / "oracle" / "data"
     with Oracle() as oracle:
@@ -194,6 +230,7 @@ def main() -> int:
         moved = mesh_point_cases(oracle)
         sways = sway_cases(oracle)
         normals = normal_cases(oracle)
+        views = view_normal_cases(oracle)
     write_pinned(out / "skin_point.txt", "A point on a skinned creature mesh as it is posed",
                  ["the triangle's three vertices (before the bones), the three bones (rows, then the place), s and t",
                   "in; the point and the normal out"],
@@ -215,7 +252,10 @@ def main() -> int:
     write_pinned(out / "surface_normals.txt", "The normals of a small mesh",
                  [f"the points in; the normals out. The faces: {faces_text}"],
                  [f"p{i}" for i in range(3 * NORMAL_POINTS)] + [f"n{i}" for i in range(3 * NORMAL_POINTS)], normals)
-    print(f"skin_point {len(points)}, engine_inverse {len(inverses)}, mesh_points {len(moved)}, "
+    write_pinned(out / "glow_view_normal.txt", "A corner's normal in the camera's frame for the glowing shell",
+                 ["the matrix's rows and the normal in; the rows made unit by the game, summed by the normal, out"],
+                 [f"m{i}" for i in range(9)] + ["nx", "ny", "nz", "vx", "vy", "vz"], views)
+    print(f"glow_view_normal {len(views)}, skin_point {len(points)}, engine_inverse {len(inverses)}, mesh_points {len(moved)}, "
           f"surface_sway {len(sways)}, surface_normals {len(normals)}")
     return 0
 

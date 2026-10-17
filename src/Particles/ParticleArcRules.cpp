@@ -22,11 +22,13 @@
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
 #include "LightningMaths.h"
 #include "ParticleClassRegistry.h"
 
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -143,7 +145,7 @@ private:
 				effect.NewAtom(chain, jointCreator, {});
 			}
 		}
-		const float length = glm::distance(arc.ends.from, arc.ends.to);
+		const float length = x87::Distance<x87::SumOrder::Zyx>(arc.ends.from, arc.ends.to);
 		const auto fromTangent =
 		    maths::ArcTangent(arc.ends.fromNormal, effect.RandomInBall(), randomTangents, length, scaleTangents);
 		const auto toTangent =
