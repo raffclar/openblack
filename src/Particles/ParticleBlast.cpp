@@ -19,6 +19,7 @@
 #include <glm/geometric.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/X87Vector.h"
 #include "ParticleObjectEffects.h"
 
 using namespace openblack;
@@ -58,32 +59,7 @@ bool blast::Reached(float front, const WaveTarget& target, const glm::vec3& cent
 {
 	const auto offset = target.point - centre;
 	const float reach = front + target.radius;
-	return reach * reach >= glm::dot(offset, offset);
-}
-
-glm::vec3 blast::EntersSphere(const glm::vec3& from, const glm::vec3& to, const glm::vec3& centre, float radius)
-{
-	const auto along = to - from;
-	const float length = glm::length(along);
-	if (length <= 0.0f)
-	{
-		return to;
-	}
-	const auto direction = along / length;
-	const auto offset = from - centre;
-	const float b = glm::dot(offset, direction);
-	const float c = glm::dot(offset, offset) - radius * radius;
-	if (c <= 0.0f)
-	{
-		return from;
-	}
-	const float discriminant = b * b - c;
-	if (discriminant < 0.0f)
-	{
-		return to;
-	}
-	const float t = -b - std::sqrt(discriminant);
-	return t >= 0.0f && t <= length ? from + direction * t : to;
+	return reach * reach >= x87::DotZyx(offset, offset);
 }
 
 glm::vec3 blast::FragmentOrigin(const glm::vec3& centre)
@@ -92,13 +68,20 @@ glm::vec3 blast::FragmentOrigin(const glm::vec3& centre)
 }
 
 glm::vec3 blast::FragmentVelocity(const glm::vec3& piece, const glm::vec3& origin, float speed, float randomFactor,
-                                  const glm::vec3& randomUnit)
+                                  const glm::vec3& random)
 {
 	auto out = piece - origin;
-	const float length = glm::length(out);
-	out = length > 0.0f ? out / length * speed : glm::vec3(0.0f);
-	const auto random = randomUnit * (glm::length(out) * randomFactor);
-	return {out.x + random.x, out.y + k_UpwardShare * random.y, out.z + random.z};
+	if (out != glm::vec3(0.0f))
+	{
+		out = x87::Scaled<x87::SumOrder::Zyx>(out, speed);
+	}
+	// The random part is made as long as the speed out times the factor, its squares added z first
+	auto scaledRandom = random;
+	if (random != glm::vec3(0.0f))
+	{
+		scaledRandom = x87::Scaled<x87::SumOrder::Zyx>(random, x87::LengthZyx(out) * randomFactor);
+	}
+	return {scaledRandom.x + out.x, out.y + (scaledRandom.y * k_UpwardShare), scaledRandom.z + out.z};
 }
 
 std::optional<float> blast::MoveFraction(float age, float dt, float start, float stop, bool smoothly)

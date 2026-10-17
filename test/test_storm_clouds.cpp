@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <bit>
 #include <chrono>
 #include <utility>
 #include <vector>
@@ -153,4 +154,10 @@ TEST(StormClouds, TheyStepAtTheScreensRefreshWhateverTheFrameRate)
 		steps += storm_clouds::StepDue(since, Milliseconds(50.0f)) ? 1 : 0;
 	}
 	EXPECT_EQ(steps, 20);
+}
+
+TEST(StormClouds, TheShadowsStrengthRoundsToAFloat)
+{
+	// (shade + 0.7) times the strength, in single precision; in double precision the alpha is 111
+	EXPECT_EQ(storm_clouds::ShadowAlpha(std::bit_cast<float>(0x3EB6BF58u), std::bit_cast<float>(0x3ED4C416u)), 112);
 }

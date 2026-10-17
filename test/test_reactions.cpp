@@ -37,6 +37,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
@@ -255,6 +256,8 @@ protected:
 
 		auto& registry = Locator::entitiesRegistry::value();
 		_town = registry.Create();
+		// The town's statistics count its three people: two adults and a child
+		registry.Assign<TownStats>(_town, TownStats {.adults = 2, .children = 1});
 		for (const float x : {0.0f, 5.0f, 200.0f})
 		{
 			const auto villager = registry.Create();
@@ -1722,4 +1725,18 @@ TEST_F(Reactions, ACreatureWithAForcedPlanIsAvailableOnlyWhenTheLeashLeadsIt)
 	EXPECT_TRUE(_reactions.IsAvailable(_creature, Reaction::FleeFromObject));
 	registry.Remove<CreatureLeash>(_creature);
 	registry.Remove<CreatureMindState>(_creature);
+}
+
+TEST(DiscipleGlow, TheFrameComesFromTheMillisecondsIntoTheHalfSecond)
+{
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(0), 0u);
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(499), 14u);
+	// A count of a whole half second shows the sixteenth puff, as the game's count does
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(500), 15u);
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(1000), 15u);
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(501), 0u);
+	// The share a millisecond is a float a little less than 0.03, but each product rounds to a float, so 100 ms is 3
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(100), 3u);
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(1400), 12u);
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(99), 2u);
 }

@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <bit>
 #include <vector>
 
 #include <glm/vec3.hpp>
@@ -136,6 +137,17 @@ TEST(CreatureSwap, TheAlignmentStaysWithinItsRange)
 {
 	const auto next = Ease({.size = 1.0f, .alignment = 0.99f}, {.size = 1.0f, .alignment = 2.0f});
 	EXPECT_FLOAT_EQ(next.alignment, 1.0f);
+}
+
+TEST(CreatureSwap, TheEaseRoundsAtEachStep)
+{
+	const auto next = Ease({.size = 0.73f, .alignment = 0.1f}, {.size = 2.91f, .alignment = 0.85f});
+	EXPECT_EQ(std::bit_cast<uint32_t>(next.size), 0x3F513405u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(next.alignment), 0x3E051EB8u);
+	// The settled distance is the float 0.01 widened, so a gap of the float 0.01 is not settled
+	EXPECT_FALSE(IsSettled({.size = 1.0f, .alignment = 0.0f}, {.size = 1.0f, .alignment = 0.01f}));
+	// A count rescaled rounds to a float before the cut: 3 times 0.7 / 0.3 is 7 as a float
+	EXPECT_EQ(RescaledSightings(3, 0.3f, 0.7f), 7u);
 }
 
 TEST(CreatureSwap, SettledWhenBothGapsAreUnderAHundredth)

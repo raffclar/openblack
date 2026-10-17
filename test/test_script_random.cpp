@@ -123,3 +123,15 @@ TEST(ScriptRandom, NumberFromCutsTheFractionTowardsZero)
 	EXPECT_EQ(NumberFrom(-3.0f, 3.0f, random), -1.0f);
 	EXPECT_EQ(random.floatWidths, (std::vector<float> {7.0f}));
 }
+
+TEST(ScriptRandom, NumberFromAddsInFloat)
+{
+	WidthRecordingRandom random;
+	// The largest float below 1, plus 1, rounds to 2 as a float before the cut
+	random.floatAnswer = 0.99999994f;
+	EXPECT_EQ(NumberFrom(1.0f, 10.0f, random), 2.0f);
+	// A span of 2^24 plus 1 rounds to 2^24 as a float
+	random.floatAnswer = 0.0f;
+	(void)NumberFrom(0.0f, 16777216.0f, random);
+	EXPECT_EQ(random.floatWidths.back(), 16777216.0f);
+}

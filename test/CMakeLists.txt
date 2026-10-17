@@ -1133,8 +1133,110 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_draw_window graphics/test_draw_window.cpp)
 openblack_setup_and_add_test(test_creature_web_page test_creature_web_page.cpp)
-target_link_libraries(test_creature_web_page PRIVATE creaturehtml)
+target_link_libraries(test_creature_web_page PRIVATE creaturehtml lhp)
+openblack_setup_and_add_test(test_oracle_catch oracle/test_oracle_catch.cpp)
+openblack_setup_and_add_test(test_oracle_sigmoid oracle/test_oracle_sigmoid.cpp)
+openblack_setup_and_add_test(
+  test_oracle_inverse_square_root oracle/test_oracle_inverse_square_root.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_data_folder oracle/test_oracle_data_folder.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_creature_camera_maths
+  oracle/test_oracle_creature_camera_maths.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_float_sweep_3 oracle/test_oracle_float_sweep_3.cpp
+)
+target_link_libraries(test_oracle_float_sweep_3 PRIVATE pack lnd)
+openblack_setup_and_add_test(
+  test_oracle_float_sweep_4 oracle/test_oracle_float_sweep_4.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_formation_land_line oracle/test_oracle_formation_land_line.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_totem_hand oracle/test_oracle_totem_hand.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_creature_may_try oracle/test_oracle_creature_may_try.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_wisp_orbit oracle/test_oracle_wisp_orbit.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_creature_start_side oracle/test_oracle_creature_start_side.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_glm_order_3 oracle/test_oracle_glm_order_3.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_glm_order_4 oracle/test_oracle_glm_order_4.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_glm_order_5 oracle/test_oracle_glm_order_5.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_glm_order_6 oracle/test_oracle_glm_order_6.cpp
+)
+target_link_libraries(test_oracle_glm_order_6 PRIVATE psys)
+# The data folder is found at run time (see oracle/OracleData.h), never compiled into an object: ctest sets the
+# environment variable for each test, and the file in the build folder serves a program started by hand from there
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
+     "${CMAKE_CURRENT_SOURCE_DIR}/oracle/data
+"
+)
+foreach (oracle_test test_oracle_catch test_oracle_sigmoid
+                     test_oracle_inverse_square_root test_oracle_data_folder
+                     test_oracle_creature_camera_maths
+                     test_oracle_creature_may_try
+                     test_oracle_totem_hand test_oracle_formation_land_line
+                     test_oracle_float_sweep_3 test_oracle_float_sweep_4
+                     test_oracle_wisp_orbit test_oracle_creature_start_side
+                     test_oracle_glm_order_3
+                     test_oracle_glm_order_4
+                     test_oracle_glm_order_5
+                     test_oracle_glm_order_6
+)
+  set_tests_properties(
+    ${oracle_test}
+    PROPERTIES ENVIRONMENT
+               "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+  )
+endforeach ()
+openblack_setup_and_add_test(test_x87 test_x87.cpp)
+openblack_setup_and_add_test(test_float_sweep_4 test_float_sweep_4.cpp)
+openblack_setup_and_add_test(test_glm_order test_glm_order.cpp)
+openblack_setup_and_add_test(test_town_turn_order test_town_turn_order.cpp)
+openblack_setup_and_add_test(test_creature_missing_clip test_creature_missing_clip.cpp)
+openblack_setup_and_add_test(test_creature_action_mirror test_creature_action_mirror.cpp)
+openblack_setup_and_add_test(
+  test_save_creature_record test_save_creature_record.cpp
+)
+openblack_setup_and_add_test(
+  test_creature_save_state test_creature_save_state.cpp
+)
+openblack_setup_and_add_test(test_glm_order_2 test_glm_order_2.cpp)
+openblack_setup_and_add_test(test_glm_order_3 test_glm_order_3.cpp)
+openblack_setup_and_add_test(test_lhp_file test_lhp_file.cpp)
+target_link_libraries(test_lhp_file PRIVATE lhp)
+openblack_setup_and_add_test(test_glm_order_4 test_glm_order_4.cpp)
+openblack_setup_and_add_test(test_glm_order_5 test_glm_order_5.cpp)
 openblack_setup_and_add_test(test_film_creature video/test_film_creature.cpp)
 target_link_libraries(test_film_creature PRIVATE cam)
 openblack_setup_and_add_test(test_creature_hand_glow test_creature_hand_glow.cpp)
 openblack_setup_and_add_test(test_film_effects video/test_film_effects.cpp)
+openblack_setup_and_add_test(test_glm_order_6 test_glm_order_6.cpp)
+openblack_setup_and_add_test(
+  test_creature_mind_file_users test_creature_mind_file_users.cpp
+)
+target_compile_definitions(
+  test_creature_mind_file_users
+  PRIVATE OPENBLACK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+set_tests_properties(
+  test_creature_mind_file_users
+  PROPERTIES ENVIRONMENT "OPENBLACK_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+)
+openblack_setup_and_add_test(test_thing_map_place test_thing_map_place.cpp)

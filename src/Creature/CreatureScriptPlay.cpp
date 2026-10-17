@@ -17,14 +17,17 @@ using namespace openblack::creature_script_play;
 std::vector<creature_mind::Step> creature_script_play::Agenda(const Request& request)
 {
 	using creature_mind::Step;
-	if (request.animation <= 0)
+	// The game compares the number with no sign, so a number below 0 is an individual action
+	const bool isStatic = request.animation >= 0 && request.animation <= k_LastStaticAction;
+	if (request.plays > 0 && request.animation <= 0)
 	{
-		// The body has no animation before its first static action's loop to start with, so the action is tried again
-		// and again and the creature never gets past it
-		return {{.kind = Step::Kind::Wait, .seconds = std::numeric_limits<float>::infinity()}};
+		// The body has no clip below 0, so a static action 0 (which starts with the clip before it) and an individual
+		// action below 0 never start. The creature tries again each turn and never gets past the first play.
+		return {{.kind = Step::Kind::Wait,
+		         .seconds = std::numeric_limits<float>::infinity(),
+		         .retriedClip = isStatic ? creature_mind::RetriedClip::Static : creature_mind::RetriedClip::Individual}};
 	}
 	const auto animation = static_cast<size_t>(request.animation);
-	const bool isStatic = request.animation <= k_LastStaticAction;
 	std::vector<Step> agenda;
 	agenda.reserve(static_cast<size_t>(request.plays) + 1);
 	for (uint32_t i = 0; i < request.plays; ++i)
@@ -35,8 +38,7 @@ std::vector<creature_mind::Step> creature_script_play::Agenda(const Request& req
 			agenda.push_back({.kind = Step::Kind::Static,
 			                  .seconds = k_StaticActionSeconds,
 			                  .animation = animation,
-			                  .sequence = {animation - 1, animation, animation + 1},
-			                  .mirrorAtRandom = true});
+			                  .sequence = {animation - 1, animation, animation + 1}});
 		}
 		else
 		{

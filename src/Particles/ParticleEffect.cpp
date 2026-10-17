@@ -17,6 +17,8 @@
 
 #include "Common/GameRandom.h"
 #include "ParticleClassRegistry.h"
+#include "ParticleCreators.h"
+#include "ParticleMaths.h"
 
 using namespace openblack;
 using namespace openblack::particles;
@@ -256,45 +258,39 @@ glm::vec3 Effect::FrameScale(const Atom& atom)
 	return {s, s * atom.stretch, s};
 }
 
+glm::mat4 Effect::FrameMatrix(const Atom& atom)
+{
+	const auto scale = FrameScale(atom);
+	glm::mat4 frame {1.0f};
+	for (glm::length_t row = 0; row < 3; ++row)
+	{
+		frame[row] = glm::vec4(atom.rotation[row] * scale[row], 0.0f);
+	}
+	frame[3] = glm::vec4(atom.position, 1.0f);
+	return frame;
+}
+
 glm::vec3 Effect::LocalToGlobal(const Collection& collection, const glm::vec3& local) const
 {
-	glm::vec3 p = local;
-	if (!collection.hierarchy)
-	{
-		return p;
-	}
-	for (const Atom* a = collection.parent; a != nullptr && a->collection != nullptr; a = a->collection->parent)
-	{
-		if (IsHierarchy(a->collection->group))
-		{
-			p = a->position + a->rotation * (FrameScale(*a) * p);
-		}
-	}
-	return p;
+	return collection.hierarchy ? maths::FrameToWorld(HierarchyFrames(collection), local) : local;
 }
 
 glm::vec3 Effect::GlobalToLocal(const Collection& collection, const glm::vec3& global) const
 {
-	if (!collection.hierarchy)
-	{
-		return global;
-	}
-	std::vector<const Atom*> frames;
+	return collection.hierarchy ? maths::WorldToFrame(HierarchyFrames(collection), global) : global;
+}
+
+std::vector<glm::mat4> Effect::HierarchyFrames(const Collection& collection) const
+{
+	std::vector<glm::mat4> frames;
 	for (const Atom* a = collection.parent; a != nullptr && a->collection != nullptr; a = a->collection->parent)
 	{
 		if (IsHierarchy(a->collection->group))
 		{
-			frames.push_back(a);
+			frames.push_back(FrameMatrix(*a));
 		}
 	}
-	glm::vec3 p = global;
-	for (auto it = frames.rbegin(); it != frames.rend(); ++it)
-	{
-		const auto s = FrameScale(**it);
-		p = glm::inverse((*it)->rotation) * (p - (*it)->position);
-		p = {s.x != 0.0f ? p.x / s.x : 0.0f, s.y != 0.0f ? p.y / s.y : 0.0f, s.z != 0.0f ? p.z / s.z : 0.0f};
-	}
-	return p;
+	return frames;
 }
 
 glm::vec3 Effect::SpawnPosition(const Collection& collection) const
@@ -728,14 +724,11 @@ void Effect::WalkCollection(const Collection& collection, float t, DrawWalk& out
 		if (count >= 2)
 		{
 			out.steps.push_back({.chain = true, .index = static_cast<uint32_t>(out.chains.size())});
-			// The texture slides on through the collection's life, at the drawn moment between the last two steps. The game
-			// moves it on by each drawn frame's time instead, which comes to the same while the game runs at its own pace.
-			const float drawnAge = std::max(0.0f, CollectionAge(collection) - (_dt * (1.0f - t)));
 			out.chains.push_back({.creator = chainCreator,
 			                      .firstJoint = first,
 			                      .jointCount = count,
 			                      .textureRepeats = collection.textureRepeats,
-			                      .textureScroll = collection.textureSpeed * drawnAge});
+			                      .textureScroll = collection.textureScroll});
 		}
 		else
 		{
@@ -790,6 +783,46 @@ void Effect::ForEachDrawnShower(const std::function<void(ObjectShower&)>& visit)
 			{
 				visit(*atom->shower);
 			}
+			for (const auto& sub : atom->subCollections)
+			{
+				self(self, *sub);
+			}
+		}
+	};
+	for (const auto& root : _roots)
+	{
+		walk(walk, *root);
+	}
+}
+
+void Effect::ScrollChains(float milliseconds)
+{
+	if (_hidden)
+	{
+		return;
+	}
+	const auto walk = [milliseconds](const auto& self, Collection& collection) -> void {
+		// A ribbon shows only through two joints or more
+		const ChainCreator* chain = nullptr;
+		size_t joints = 0;
+		for (const auto& atom : collection.atoms)
+		{
+			if (atom->creator == nullptr || atom->creator->kind != Creator::Kind::Chain || !IsDrawn(*atom))
+			{
+				continue;
+			}
+			++joints;
+			if (!atom->objectGlow.has_value() && atom->shower == nullptr)
+			{
+				chain = static_cast<const ChainCreator*>(atom->creator);
+			}
+		}
+		if (chain != nullptr && joints >= 2)
+		{
+			collection.textureScroll = chain->ScrolledOn(collection.textureScroll, milliseconds, collection.textureSpeed);
+		}
+		for (const auto& atom : collection.atoms)
+		{
 			for (const auto& sub : atom->subCollections)
 			{
 				self(self, *sub);

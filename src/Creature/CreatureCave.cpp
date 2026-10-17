@@ -87,7 +87,7 @@ TempleScrolls::CreatureFacts FactsOf(const Snapshot& snapshot)
 	// at it at all does it say what it thinks of its god
 	const auto attention = creature_attention::Share(snapshot.turnsLookedAt, needs.turns);
 	facts.attention = creature_attention::HowMuch(attention);
-	facts.opinionOfGod = attention > 0.0 ? std::optional(std::clamp(snapshot.attitudeToPlayer, -1.0f, 1.0f)) : std::nullopt;
+	facts.opinionOfGod = attention > 0.0f ? std::optional(std::clamp(snapshot.attitudeToPlayer, -1.0f, 1.0f)) : std::nullopt;
 	facts.knowsGodsDesire = snapshot.knowsGodsDesire;
 	// What it thinks of each creature it knows, and how much attention that creature has paid it once it has paid any
 	for (const auto& known : snapshot.creaturesKnown)
@@ -95,9 +95,7 @@ TempleScrolls::CreatureFacts FactsOf(const Snapshot& snapshot)
 		facts.creatures.push_back({
 		    .name = known.name,
 		    .opinion = known.howNice,
-		    .attention = known.attention > 0.0f
-		                     ? std::optional(creature_attention::HowMuch(static_cast<double>(known.attention)))
-		                     : std::nullopt,
+		    .attention = known.attention > 0.0f ? std::optional(creature_attention::HowMuch(known.attention)) : std::nullopt,
 		});
 	}
 	facts.known = {static_cast<int32_t>(snapshot.creaturesKnown.size()), static_cast<int32_t>(snapshot.templesKnown),

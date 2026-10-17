@@ -88,7 +88,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> CreatureInteractCamera
 	    .origin = ValueOf(_origin), .focus = ValueOf(_focus), .duration = std::chrono::microseconds::zero()};
 }
 
-void CreatureInteractCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
+void CreatureInteractCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus, [[maybe_unused]] float rise)
 {
 	_target = creature_interact::View {.origin = origin, .focus = focus};
 }

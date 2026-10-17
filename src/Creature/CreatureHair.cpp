@@ -15,9 +15,12 @@
 #include <algorithm>
 
 #include <glm/geometric.hpp>
-#include <glm/matrix.hpp>
 
-#include "3D/SkeletalAnimation.h"
+#include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
+#include "Common/X87Matrix.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::creature_hair;
@@ -32,12 +35,12 @@ constexpr float k_HeadScalePerSize = 0.5f;
 constexpr float k_MaxHeadScaleSize = 2.0f;
 /// The springs' stiffness is given in thousandths
 constexpr float k_StiffnessScale = 1000.0f;
-/// A bones' frame flatter than this has no inverse to turn a strand in
-constexpr float k_MinFrameDeterminant = 1e-8f;
 
+/// The value made no faster than the most, its squares added in the given order
+template <x87::SumOrder Order>
 glm::vec3 Capped(const glm::vec3& value)
 {
-	const auto squared = glm::dot(value, value);
+	const auto squared = x87::Dot<Order>(value, value);
 	if (squared > k_MaxSpeed * k_MaxSpeed)
 	{
 		return value * (k_MaxSpeed / std::sqrt(squared));
@@ -45,10 +48,18 @@ glm::vec3 Capped(const glm::vec3& value)
 	return value;
 }
 
-glm::vec3 NormalisedOr(const glm::vec3& value, const glm::vec3& fallback)
+/// The value made one long with the 3D engine's inverse square root, its squares added x first. Zero stays zero.
+glm::vec3 Unit(const glm::vec3& value)
 {
-	const auto length = glm::length(value);
-	return length > 0.0f ? value / length : fallback;
+	return value * gutils::ModelInverseSquareRoot(x87::Dot<x87::SumOrder::Xyz>(value, value));
+}
+
+/// A row vector times a matrix whose columns are the game's rows, with the products added first, third, second for the
+/// first two parts and second, first, third for the last
+glm::vec3 Times(const glm::vec3& v, const glm::mat3& m)
+{
+	return {((m[0][0] * v.x) + (m[2][0] * v.z)) + (m[1][0] * v.y), ((m[0][1] * v.x) + (m[2][1] * v.z)) + (m[1][1] * v.y),
+	        ((m[1][2] * v.y) + (m[0][2] * v.x)) + (m[2][2] * v.z)};
 }
 } // namespace
 
@@ -58,7 +69,9 @@ float creature_hair::ByAlignment(const std::array<float, 3>& values, float align
 	{
 		return (values[0] * (1.0f + alignment)) - (values[1] * alignment);
 	}
-	return (values[0] * (1.0f - alignment)) + (values[2] * alignment);
+	// The game takes the good share as one less the rest, not as the alignment itself
+	const float rest = 1.0f - alignment;
+	return ((1.0f - rest) * values[2]) + (rest * values[0]);
 }
 
 int32_t creature_hair::ByAlignment(const std::array<int32_t, 3>& values, float alignment)
@@ -108,37 +121,22 @@ Physics creature_hair::PhysicsFor(const Look& look, float scale, uint32_t segmen
 
 glm::vec3 creature_hair::GrowthDirection(const glm::vec3& inwardNormal)
 {
-	return NormalisedOr(-inwardNormal, glm::vec3(0.0f, 1.0f, 0.0f));
+	return Unit(-inwardNormal);
 }
 
 glm::vec3 creature_hair::GrowthDirection(const glm::vec3& inwardNormal, const glm::mat3& frame, const glm::vec3& angles)
 {
-	// The game's rotation is used with row vectors; as a matrix of columns it is its transpose, whose columns are the
-	// game's rows
-	const auto rows = skeletal_animation::RotationYXZ(angles);
-	glm::mat3 turn;
-	for (glm::length_t c = 0; c < 3; ++c)
-	{
-		for (glm::length_t r = 0; r < 3; ++r)
-		{
-			turn[c][r] = rows.at(static_cast<size_t>(c)).at(static_cast<size_t>(r));
-		}
-	}
-	// A frame that has collapsed flat can't be undone, so the strand grows straight out
-	if (std::abs(glm::determinant(frame)) <= k_MinFrameDeterminant)
-	{
-		return GrowthDirection(inwardNormal);
-	}
-	return NormalisedOr(frame * turn * glm::inverse(frame) * -inwardNormal, GrowthDirection(inwardNormal));
+	// The inverse takes the way out into the frame, the turn turns it there, and the frame takes it back out. Each step
+	// multiplies a row vector by the matrix. The columns here are the rows of the game's turn.
+	const auto rows = x87::GameTurnYxz(angles.y, angles.x, angles.z);
+	const glm::mat3 turn(rows[0], rows[1], rows[2]);
+	const auto inFrame = Times(-inwardNormal, x87::InverseTurn(frame));
+	return Unit(Times(Times(inFrame, turn), frame));
 }
 
 glm::mat3 creature_hair::BoneFrame(std::span<const glm::mat3> bones)
 {
-	const auto unitAxes = [](const glm::mat3& matrix) {
-		return glm::mat3(NormalisedOr(matrix[0], glm::vec3(1.0f, 0.0f, 0.0f)),
-		                 NormalisedOr(matrix[1], glm::vec3(0.0f, 1.0f, 0.0f)),
-		                 NormalisedOr(matrix[2], glm::vec3(0.0f, 0.0f, 1.0f)));
-	};
+	const auto unitAxes = [](const glm::mat3& matrix) { return glm::mat3(Unit(matrix[0]), Unit(matrix[1]), Unit(matrix[2])); };
 	glm::mat3 sum(0.0f);
 	for (const auto& bone : bones)
 	{
@@ -170,7 +168,7 @@ void creature_hair::Step(Strand& strand, const Root& root, const Physics& physic
 	// The root is sunk a little into the body
 	positions[0] = root.position + (root.inwardNormal * physics.rootDepth);
 	const auto before = positions;
-	const auto kept = std::pow(physics.damping, seconds);
+	const auto kept = physics.damping > 0.0f ? x87::Pow(physics.damping, seconds) : std::pow(physics.damping, seconds);
 
 	// Each point is pulled towards lying straight on from the segment before it, as the strand lay at the start of
 	// the step; the first towards growing out of the surface
@@ -178,10 +176,10 @@ void creature_hair::Step(Strand& strand, const Root& root, const Physics& physic
 	for (size_t i = 1; i < positions.size(); ++i)
 	{
 		const auto target = positions[i - 1] + (direction * physics.segmentLength);
-		const auto pull = Capped((target - positions[i]) * physics.stiffness);
+		const auto pull = Capped<x87::SumOrder::Xyz>((target - positions[i]) * physics.stiffness);
 		velocities[i] += glm::vec3(pull.x, pull.y - k_Gravity, pull.z) * seconds;
-		velocities[i] = Capped(velocities[i]) * kept;
-		direction = NormalisedOr(positions[i] - positions[i - 1], direction);
+		velocities[i] = Capped<x87::SumOrder::Zyx>(velocities[i]) * kept;
+		direction = Unit(positions[i] - positions[i - 1]);
 	}
 	for (size_t i = 1; i < positions.size(); ++i)
 	{
@@ -190,14 +188,19 @@ void creature_hair::Step(Strand& strand, const Root& root, const Physics& physic
 	// The strand doesn't stretch: each point is put back a segment from the one before it
 	for (size_t i = 1; i < positions.size(); ++i)
 	{
-		const auto offset = NormalisedOr(positions[i] - positions[i - 1], direction) * physics.segmentLength;
+		auto offset = positions[i] - positions[i - 1];
+		if (offset != glm::vec3(0.0f))
+		{
+			offset = x87::Scaled<x87::SumOrder::Zyx>(offset, physics.segmentLength);
+		}
 		positions[i] = positions[i - 1] + offset;
 	}
 	if (seconds > k_MinStepSeconds)
 	{
+		const float share = 1.0f / seconds;
 		for (size_t i = 1; i < positions.size(); ++i)
 		{
-			velocities[i] = (positions[i] - before[i]) / seconds;
+			velocities[i] = (positions[i] - before[i]) * share;
 		}
 	}
 }
@@ -215,8 +218,13 @@ void creature_hair::BuildRibbon(std::span<const glm::vec3> points, const glm::ve
 	{
 		const auto from = i == 0 ? size_t {0} : i - 1;
 		const auto across = glm::cross(points[from + 1] - points[from], points[from] - eye);
-		const auto length = glm::length(across);
-		const auto side = length > 0.0f ? across * (halfWidth / length) : glm::vec3(0.0f);
+		// The game adds the squares z first at the root, and x, z then y further along
+		auto side = across;
+		if (across != glm::vec3(0.0f))
+		{
+			side = i == 0 ? x87::Scaled<x87::SumOrder::Zyx>(across, halfWidth)
+			              : x87::Scaled<x87::SumOrder::Xzy>(across, halfWidth);
+		}
 		const auto u = static_cast<float>(i) / last;
 		out[i * 2] = {.position = points[i] + side, .uv = {u, 0.0f}};
 		out[(i * 2) + 1] = {.position = points[i] - side, .uv = {u, k_RibbonTextureHeight}};

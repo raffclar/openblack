@@ -56,6 +56,8 @@ struct CameraHelp
 	bool placeKeys {true};
 	/// How far from the camera the hand reaches
 	float handReach {k_DefaultHandReach};
+	/// The interface level that a script set last, none before a script sets one
+	std::optional<int32_t> interfaceLevel;
 	/// How fast the player turns the world camera, in radians a second, measured over the last frames
 	float turnSpeed {0.0f};
 	/// The advisors cheering the player's turning on, while a lesson asks for it
@@ -67,8 +69,8 @@ struct CameraHelp
 	void SetAutoPitch(float pitch, float height, bool on);
 	/// As a new land opens: every feature, and the height of the self-tilting camera back to its first
 	void ResetForNewLand();
-	/// The features, keys and the hand's reach as a script's interface level sets them; nothing for a level the game
-	/// doesn't know
+	/// The features, keys and the hand's reach as a script's interface level sets them. The level is kept. A level that
+	/// the game does not know changes nothing else.
 	bool SetInterfaceLevel(int32_t level);
 	/// The options screen's actions the keys allowed leave out
 	[[nodiscard]] input::BindableActionMap BlockedActions() const;

@@ -7,6 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+#include <cstdint>
+
+#include <bit>
+#include <limits>
+
 #include <gtest/gtest.h>
 
 #include "Audio/HearingRange.h"
@@ -23,27 +29,82 @@ TEST(HearingRange, SoundEffectUsesTheBanksMaximumDistance)
 	// A crash whose bank says 150 m starts at 150 m and not a step further, whatever the play asks
 	EXPECT_FLOAT_EQ(SoundEffectStartRange(150.0f, k_VoiceDefault), 150.0f);
 	EXPECT_FLOAT_EQ(SoundEffectStartRange(150.0f, 40.0f), 150.0f);
-	EXPECT_TRUE(IsWithinStartRange(150.0f, SoundEffectStartRange(150.0f, k_VoiceDefault)));
-	EXPECT_FALSE(IsWithinStartRange(150.5f, SoundEffectStartRange(150.0f, k_VoiceDefault)));
+	EXPECT_TRUE(IsWithinStartRange(150.0f * 150.0f, SoundEffectStartRange(150.0f, k_VoiceDefault)));
+	EXPECT_FALSE(IsWithinStartRange(150.5f * 150.5f, SoundEffectStartRange(150.0f, k_VoiceDefault)));
 }
 
 TEST(HearingRange, SoundEffectWithoutABankDistanceFallsBackOnThePlays)
 {
 	// Most samples keeping the default distances have none in their bank: they are heard from as far as the voice
 	EXPECT_FLOAT_EQ(SoundEffectStartRange(0.0f, k_VoiceDefault), k_VoiceDefault);
-	EXPECT_TRUE(IsWithinStartRange(400.0f, SoundEffectStartRange(0.0f, k_VoiceDefault)));
+	EXPECT_TRUE(IsWithinStartRange(400.0f * 400.0f, SoundEffectStartRange(0.0f, k_VoiceDefault)));
 	// A play that gives its own maximum distance is held to it
 	EXPECT_FLOAT_EQ(SoundEffectStartRange(0.0f, 60.0f), 60.0f);
-	EXPECT_FALSE(IsWithinStartRange(61.0f, SoundEffectStartRange(0.0f, 60.0f)));
+	EXPECT_FALSE(IsWithinStartRange(61.0f * 61.0f, SoundEffectStartRange(0.0f, 60.0f)));
 }
 
-TEST(HearingRange, AnimEffectHasNoFallback)
+TEST(HearingRange, AnimEffectHasNoFallbackAndAHearingLimit)
 {
-	EXPECT_TRUE(IsWithinStartRange(149.0f, AnimEffectStartRange(150.0f)));
-	EXPECT_FALSE(IsWithinStartRange(154.0f, AnimEffectStartRange(150.0f)));
+	// The limit's bits as the game keeps them
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_AnimEffectHearingLimit), 0x44480000u);
+	EXPECT_TRUE(IsAnimEffectWithinReach(149.0f, 150.0f));
+	EXPECT_TRUE(IsAnimEffectWithinReach(150.0f, 150.0f));
+	EXPECT_FALSE(IsAnimEffectWithinReach(154.0f, 150.0f));
+	// A bank distance more than the limit: the limit stops it
+	EXPECT_TRUE(IsAnimEffectWithinReach(800.0f, 9999.0f));
+	EXPECT_FALSE(IsAnimEffectWithinReach(std::nextafter(800.0f, 1000.0f), 9999.0f));
 	// No bank distance: only heard from right where it plays
-	EXPECT_TRUE(IsWithinStartRange(0.0f, AnimEffectStartRange(0.0f)));
-	EXPECT_FALSE(IsWithinStartRange(1.0f, AnimEffectStartRange(0.0f)));
+	EXPECT_TRUE(IsAnimEffectWithinReach(0.0f, 0.0f));
+	EXPECT_FALSE(IsAnimEffectWithinReach(1.0f, 0.0f));
+	// Not a number never stops a start
+	EXPECT_TRUE(IsAnimEffectWithinReach(std::numeric_limits<float>::quiet_NaN(), 0.0f));
+}
+
+TEST(HearingRange, AnimEffectComparesTheDistanceNotItsSquare)
+{
+	// The square root of this square is the bank distance, so the effect starts, but the square is more than the
+	// square of the bank distance
+	const auto range = std::bit_cast<float>(0x41F01BDEu);
+	const auto square = std::bit_cast<float>(0x44613444u);
+	EXPECT_TRUE(square > range * range);
+	EXPECT_TRUE(IsAnimEffectWithinReach(std::sqrt(square), range));
+}
+
+TEST(HearingRange, AnimEffectDistanceAddsTheSquaresInTheCallersOrder)
+{
+	const glm::vec3 camera {0.1f, 0.2f, 0.3f};
+	const glm::vec3 point {std::bit_cast<float>(0x4317FA5Bu), std::bit_cast<float>(0xC19F2DD6u),
+	                       std::bit_cast<float>(0x410B10B7u)};
+	// Worked by hand in single precision: z, y, x gives one bit more than x, z, y
+	EXPECT_EQ(std::bit_cast<uint32_t>(AnimEffectDistance(camera, point, AnimEffectMeasure::Straight)), 0x43196E79u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(AnimEffectDistance(camera, point, AnimEffectMeasure::AcrossFirst)), 0x43196E78u);
+	EXPECT_EQ(AnimEffectDistance(camera, point, AnimEffectMeasure::AtCamera), 0.0f);
+}
+
+TEST(HearingRange, TheStartTestUsesTheSquaresOfTheDistanceInTheGamesOrder)
+{
+	// The height first, then up, then across
+	const glm::vec3 camera {0.1f, 0.2f, 0.3f};
+	const glm::vec3 point {1000.7f, -3.9f, 77.1f};
+	const glm::vec3 way = camera - point;
+	EXPECT_EQ(DistanceSquared(camera, point), (way.z * way.z + way.y * way.y) + way.x * way.x);
+	// Not a number never stops a start: only a square more than the range's does
+	EXPECT_TRUE(IsWithinStartRange(std::numeric_limits<float>::quiet_NaN(), 10.0f));
+	EXPECT_TRUE(IsWithinStartRange(100.0f, 10.0f));
+	EXPECT_FALSE(IsWithinStartRange(100.0001f, 10.0f));
+}
+
+TEST(HearingRange, ADelayedSoundTravelsAtTheSpeedOfSoundAndStartsOnlyInsideItsRange)
+{
+	// Ten turns of 100 milliseconds: one second, 347 metres
+	EXPECT_EQ(SoundTravelled(10, 100), 347.0f * ((10.0f * 100.0f) * 0.001f));
+	EXPECT_FALSE(SoundArrived(SoundTravelled(1, 100), 35.0f * 35.0f));
+	EXPECT_TRUE(SoundArrived(SoundTravelled(2, 100), 69.0f * 69.0f));
+	// Arrived, it starts only nearer than its range
+	EXPECT_TRUE(ArrivedSoundStarts(99.0f * 99.0f, 100.0f));
+	EXPECT_FALSE(ArrivedSoundStarts(100.0f * 100.0f, 100.0f));
+	// A range of nothing never starts, not even on top of the camera
+	EXPECT_FALSE(ArrivedSoundStarts(0.0f, 0.0f));
 }
 
 TEST(HearingRange, PlayingSoundStopsAtItsVoiceMaximumDistance)

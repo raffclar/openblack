@@ -158,9 +158,17 @@ struct PowerUpStep
 [[nodiscard]] std::optional<SpellSeedType> FindSpellSeedByName(const InfoConstants& info, std::string_view name);
 
 /// The power-up level a miracle of this magic type runs at, from the first seed that casts it (k_BasePowerUpLevel
-/// when none does). The magic records' own power-up field is unset in every row, so the seeds are the only source.
-/// Not yet checked against the original.
+/// when none does). The magic records keep -1 in their own power-up field, and the game fills it from the seeds
+/// when it loads them.
 [[nodiscard]] int GetPowerUpLevel(const InfoConstants& info, MagicType type);
+
+/// The row of the fireball table that a fireball uses for its heat, its cooling and its catch. The first power-up
+/// (level 0) uses the second row. All other fireballs use the first row, also a ball with no spell. No fireball
+/// uses the third row.
+[[nodiscard]] constexpr size_t FireBallInfoRow(int powerUpLevel)
+{
+	return powerUpLevel == 0 ? 1 : 0;
+}
 
 namespace detail
 {

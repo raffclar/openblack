@@ -3562,12 +3562,25 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 	const auto& infos = Locator::infoConstants::value().abode;
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const float scale = knocks.GetReadoutScale();
-	for (const auto abode : townData->abodes)
+	const auto origin = desc.camera->GetOrigin();
+	// Each house of the town shows its read-out when the renderer draws the house. Only the houses that this frame draws
+	// show one, in the order of the draw, and each takes its own place among what blends.
+	struct Row
 	{
+		uint32_t firstVertex;
+		uint32_t vertexCount;
+		uint32_t depth;
+	};
+	std::vector<Row> rows;
+	const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
+	for (const auto& object : drawn)
+	{
+		const auto abode = object.entity;
 		const auto* data = desc.entities.TryGet<const ecs::components::Abode>(abode);
 		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(abode);
 		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(abode);
-		if (data == nullptr || transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id))
+		if (data == nullptr || transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id) ||
+		    std::ranges::find(townData->abodes, abode) == townData->abodes.end())
 		{
 			continue;
 		}
@@ -3579,6 +3592,7 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 		auto point = transform->position;
 		point.y += meshes.Handle(mesh->id)->GetBoundingBox().Size().y + ecs::abode_knock::k_RaisedAbove;
 		const auto places = infos.at(static_cast<size_t>(data->type)).maxVillagersInAbode;
+		const auto first = static_cast<uint32_t>(vertices.size());
 		for (const auto& marker : ecs::abode_knock::Readout(places, adults, scale))
 		{
 			const auto centre = point + right * marker.offset;
@@ -3591,9 +3605,14 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 				                    k_Person + k_Uvs.at(c), abgr});
 			}
 		}
+		const auto rowCount = static_cast<uint32_t>(vertices.size()) - first;
+		if (rowCount != 0)
+		{
+			rows.push_back({.firstVertex = first, .vertexCount = rowCount, .depth = zsort::Depth(point, origin)});
+		}
 	}
 	const auto count = static_cast<uint32_t>(vertices.size());
-	const auto quads = count / 4;
+	const auto quads = rows.empty() ? 0u : std::ranges::max(rows, {}, &Row::vertexCount).vertexCount / 4;
 	bgfx::VertexLayout layout;
 	layout.begin()
 	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
@@ -3610,6 +3629,7 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 	bgfx::allocTransientVertexBuffer(&vertexBuffer, count, layout);
 	bgfx::allocTransientIndexBuffer(&indexBuffer, quads * 6);
 	std::memcpy(vertexBuffer.data, vertices.data(), count * sizeof(Vertex));
+	// The quads of a row, counted from the row's first vertex
 	const auto indices = std::span(reinterpret_cast<uint16_t*>(indexBuffer.data), quads * 6);
 	constexpr std::array<uint16_t, 6> k_Triangles = {0, 1, 2, 2, 3, 0};
 	for (uint32_t q = 0; q < quads; ++q)
@@ -3620,13 +3640,17 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 		}
 	}
 	const auto* program = _shaderManager->GetShader("WorldTextured");
-	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
-	program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
-	bgfx::setVertexBuffer(0, &vertexBuffer);
-	bgfx::setIndexBuffer(&indexBuffer);
-	// Blended over what is behind, both sides, tested against depth but leaving none
-	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
-	program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)));
+	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	for (const auto& row : rows)
+	{
+		program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
+		program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
+		bgfx::setVertexBuffer(0, &vertexBuffer, row.firstVertex, row.vertexCount);
+		bgfx::setIndexBuffer(&indexBuffer, 0, row.vertexCount / 4 * 6);
+		// Blended over what is behind, both sides, tested against depth but leaving none
+		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
+		program->Submit(viewId, row.depth);
+	}
 }
 
 void Renderer::DrawRain(const DrawSceneDesc& desc) const

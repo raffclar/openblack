@@ -15,6 +15,8 @@
 
 #include <glm/gtc/constants.hpp>
 
+#include "Common/X87.h"
+
 namespace openblack::particles::rising_sparks
 {
 
@@ -50,7 +52,8 @@ std::optional<SparkLook> LookOf(const Sparks& sparks, size_t index, glm::vec3 fr
 	{
 		return std::nullopt;
 	}
-	constexpr float k_Rise = 20.0f;
+	/// The game subtracts this times the share from the height, so that the spark goes up
+	constexpr float k_Fall = -20.0f;
 	constexpr float k_StartHalfSize = 2.0f;
 	constexpr float k_EndHalfSize = 1.2f;
 	constexpr float k_FadeInPerMillisecond = 0.0002f;
@@ -60,17 +63,15 @@ std::optional<SparkLook> LookOf(const Sparks& sparks, size_t index, glm::vec3 fr
 	constexpr int32_t k_PictureMilliseconds = 50;
 	const auto& spark = sparks.sparks.at(index);
 	const int32_t age = spark.ageMilliseconds;
-	// Its share of its life, squared; the game works this through at more than a float's precision
-	const double share = static_cast<double>(age * age) * static_cast<double>(k_LifeShareSquared);
-	const double fade = age < k_FadeOutFrom
-	                        ? static_cast<double>(age) * static_cast<double>(k_FadeInPerMillisecond)
-	                        : 1.0 - static_cast<double>(age - k_FadeOutFrom) * static_cast<double>(k_FadeOutPerMillisecond);
+	// Its share of its life, squared. The square of the age is an exact integer, and the multiply rounds it
+	const float share = x87::Mul(static_cast<double>(age * age), k_LifeShareSquared);
+	const float fade = age < k_FadeOutFrom ? static_cast<float>(age) * k_FadeInPerMillisecond
+	                                       : 1.0f - static_cast<float>(age - k_FadeOutFrom) * k_FadeOutPerMillisecond;
 	// Cut down to a whole number, of which only the low byte is kept
-	const auto alpha = static_cast<uint8_t>(static_cast<int32_t>(static_cast<double>(strength) * fade) & 0xFF);
+	const auto alpha = static_cast<uint8_t>(static_cast<int32_t>(static_cast<float>(strength) * fade) & 0xFF);
 	return SparkLook {
-	    .position = {from.x, static_cast<float>(static_cast<double>(from.y) + static_cast<double>(k_Rise) * share), from.z},
-	    .halfSize = static_cast<float>(static_cast<double>(k_EndHalfSize - k_StartHalfSize) * share +
-	                                   static_cast<double>(k_StartHalfSize)),
+	    .position = {from.x, from.y - k_Fall * share, from.z},
+	    .halfSize = (k_EndHalfSize - k_StartHalfSize) * share + k_StartHalfSize,
 	    .alpha = alpha,
 	    .picture =
 	        (static_cast<uint32_t>(age / k_PictureMilliseconds) + static_cast<uint32_t>(index) + sparks.firstPicture) & 31u,

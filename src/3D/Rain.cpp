@@ -118,17 +118,18 @@ std::optional<Tile> TileOf(glm::vec2 centre, int32_t wettest, glm::vec2 camera)
 	}
 	if (distance > k_Thinning)
 	{
-		const double left = 1.0 - static_cast<double>((distance - k_Thinning) / (k_Farthest - k_Thinning));
-		tile.alpha = static_cast<int32_t>(static_cast<double>(tile.alpha) * left);
-		tile.streaks = static_cast<int32_t>(static_cast<double>(tile.streaks) * left);
+		const float left = 1.0f - ((distance - k_Thinning) / (k_Farthest - k_Thinning));
+		tile.alpha = static_cast<int32_t>(static_cast<float>(tile.alpha) * left);
+		tile.streaks = static_cast<int32_t>(static_cast<float>(tile.streaks) * left);
 	}
 	if (tile.streaks <= 0)
 	{
 		return std::nullopt;
 	}
 	// The top is fainter, and fainter still further away
-	const auto far = static_cast<float>((static_cast<double>(distance) / k_Farthest * 2.0) + 1.0);
-	tile.alphaTop = static_cast<int32_t>(static_cast<double>(tile.alpha) / (static_cast<double>(far) * 5.0));
+	const auto share = distance / k_Farthest;
+	const auto far = (share + share) + 1.0f;
+	tile.alphaTop = static_cast<int32_t>(static_cast<float>(tile.alpha) / (far * 5.0f));
 	return tile;
 }
 
@@ -136,11 +137,11 @@ int32_t StreakAlpha(int32_t alpha, float phase)
 {
 	if (phase < k_Fade)
 	{
-		return static_cast<int32_t>(static_cast<double>(alpha) * phase * 20.0);
+		return static_cast<int32_t>(static_cast<float>(alpha) * phase * 20.0f);
 	}
 	if (phase > 1.0f - k_Fade)
 	{
-		return static_cast<int32_t>(static_cast<double>(alpha) * ((1.0 - static_cast<double>(phase)) * 20.0));
+		return static_cast<int32_t>(static_cast<float>(alpha) * ((1.0f - phase) * 20.0f));
 	}
 	return alpha;
 }

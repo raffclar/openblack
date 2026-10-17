@@ -19,6 +19,8 @@
 #include <glm/geometric.hpp>
 #include <glm/matrix.hpp>
 
+#include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87Matrix.h"
 #include "Graphics/ZSort.h"
 #include "ParticleCreators.h"
 #include "ParticleSurfaces.h"
@@ -109,13 +111,6 @@ void GatherCommutingRuns(const Frame& frame, std::vector<uint32_t>& items)
 		});
 		first = last;
 	}
-}
-
-glm::vec3 SideOf(const glm::vec3& joint, const glm::vec3& along, const glm::vec3& eye)
-{
-	const auto side = glm::cross(eye - joint, along);
-	const float length = glm::length(side);
-	return length > 0.0f ? side / length : glm::vec3(0.0f);
 }
 
 sprites::SpriteInstance FacingSprite(const glm::vec3& position, float halfWidth, float angle, int cell, int cellsPerRow,
@@ -226,7 +221,7 @@ void AddSurface(Frame& frame, const SurfaceCreator& creator, const Effect::DrawA
 	    .indexCount = static_cast<uint32_t>(mesh.indices.size()),
 	    .doubleSided = creator.doubleSided,
 	    .lit = lit,
-	    .worldToAtom = glm::inverse(toWorld),
+	    .worldToAtom = x87::Inverse(toWorld),
 	});
 }
 
@@ -427,6 +422,7 @@ void Frame::Clear()
 	sprites.clear();
 	spriteMaterials.clear();
 	chainVertices.clear();
+	chainJoints.clear();
 	chains.clear();
 	meshes.clear();
 	mists.clear();
@@ -476,8 +472,8 @@ SymbolSprites draw::SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, i
 	}};
 }
 
-void draw::AppendChain(std::vector<ChainVertex>& out, const Creator& creator, std::span<const Effect::DrawAtom> joints,
-                       int textureRepeats, float textureScroll)
+void draw::AppendChain(std::vector<ChainVertex>& out, std::vector<ChainJoint>& outJoints, const Creator& creator,
+                       std::span<const Effect::DrawAtom> joints, int textureRepeats, float textureScroll)
 {
 	if (joints.size() < 2)
 	{
@@ -485,46 +481,65 @@ void draw::AppendChain(std::vector<ChainVertex>& out, const Creator& creator, st
 	}
 	const auto& chain = static_cast<const ChainCreator&>(creator);
 	const auto segments = static_cast<int>(joints.size()) - 1;
+	for (const auto& joint : joints)
+	{
+		outJoints.push_back({.position = joint.position, .halfWidth = joint.scale});
+	}
 	for (int i = 0; i < segments; ++i)
 	{
 		const auto& head = joints[static_cast<size_t>(i)];
 		const auto& tail = joints[static_cast<size_t>(i) + 1];
 		const auto uv = chain.SegmentUv(i, segments, textureRepeats, textureScroll);
-		const bool before = i > 0;
-		const bool after = i + 1 < segments;
-		const auto& previous = before ? joints[static_cast<size_t>(i) - 1].position : head.position;
-		const auto& next = after ? joints[static_cast<size_t>(i) + 2].position : tail.position;
 		const uint32_t headColour = Abgr(head.rgb, head.alpha);
 		const uint32_t tailColour = Abgr(tail.rgb, tail.alpha);
-		// The first joint's two sides, then the next joint's
-		const auto corner = [&](const Effect::DrawAtom& joint, const glm::vec3& other, const glm::vec3& adjacent, float side,
-		                        float end, bool neighbour, glm::vec2 cornerUv, uint32_t colour) {
-			out.push_back({
-			    .joint = glm::vec4(joint.position, side * joint.scale),
-			    .other = other,
-			    .adjacent = adjacent,
-			    .uv = cornerUv,
-			    .abgr = colour,
-			    .flags = {end, neighbour ? 1.0f : 0.0f},
-			});
-		};
-		corner(head, tail.position, previous, 1.0f, 1.0f, before, uv[0], headColour);
-		corner(head, tail.position, previous, -1.0f, 1.0f, before, uv[1], headColour);
-		corner(tail, head.position, next, 1.0f, -1.0f, after, uv[2], tailColour);
-		corner(tail, head.position, next, -1.0f, -1.0f, after, uv[3], tailColour);
+		// The first joint's two sides, then the next joint's; each pass places them
+		out.push_back({.position = head.position, .uv = uv[0], .abgr = headColour});
+		out.push_back({.position = head.position, .uv = uv[1], .abgr = headColour});
+		out.push_back({.position = tail.position, .uv = uv[2], .abgr = tailColour});
+		out.push_back({.position = tail.position, .uv = uv[3], .abgr = tailColour});
 	}
 }
 
-glm::vec3 draw::ChainCorner(const ChainVertex& vertex, const glm::vec3& eye)
+void draw::PlaceChainCorners(std::span<ChainVertex> corners, std::span<const ChainJoint> joints, const glm::vec3& eye)
 {
-	const glm::vec3 joint(vertex.joint);
-	// Along the segment from its first joint to its next, and along the neighbouring one the same way
-	auto side = SideOf(joint, (vertex.other - joint) * vertex.flags.x, eye);
-	if (vertex.flags.y > 0.5f)
+	if (joints.size() < 2)
 	{
-		side = (side + SideOf(joint, (joint - vertex.adjacent) * vertex.flags.x, eye)) * 0.5f;
+		return;
 	}
-	return joint + side * vertex.joint.w;
+	const size_t segments = std::min(joints.size() - 1, corners.size() / 4);
+	for (size_t i = 0; i < segments; ++i)
+	{
+		const auto along = joints[i + 1].position - joints[i].position;
+		for (size_t end = 0; end < 2; ++end)
+		{
+			const auto& joint = joints[i + end];
+			// The side is square to the segment and to the line to the eye. The 3D engine's inverse square root makes it
+			// about one long.
+			const auto toEye = eye - joint.position;
+			glm::vec3 side {(toEye.y * along.z) - (toEye.z * along.y), (toEye.z * along.x) - (along.z * toEye.x),
+			                (along.y * toEye.x) - (toEye.y * along.x)};
+			side *= gutils::ModelInverseSquareRoot(((side.z * side.z) + (side.x * side.x)) + (side.y * side.y));
+			// Then the side gets the length of the joint's half width
+			if (side != glm::vec3(0.0f))
+			{
+				side *= joint.halfWidth / std::sqrt(((side.z * side.z) + (side.y * side.y)) + (side.x * side.x));
+			}
+			corners[(i * 4) + (end * 2)].position = joint.position + side;
+			corners[(i * 4) + (end * 2) + 1].position = joint.position - side;
+		}
+	}
+	// Where two segments meet, their corners on each side meet half way
+	for (size_t i = 1; i < segments; ++i)
+	{
+		for (size_t side = 0; side < 2; ++side)
+		{
+			auto& before = corners[((i - 1) * 4) + 2 + side].position;
+			auto& after = corners[(i * 4) + side].position;
+			const auto middle = (before + after) * 0.5f;
+			before = middle;
+			after = middle;
+		}
+	}
 }
 
 void draw::AddEffect(Frame& frame, const Effect::DrawWalk& walk, DrawPath path, const glm::vec3& origin, int player,
@@ -555,8 +570,9 @@ void draw::AddEffect(Frame& frame, const Effect::DrawWalk& walk, DrawPath path, 
 		                       .sortPoint = joints[joints.size() / 2].position});
 		frame.chains.push_back({.material = material,
 		                        .firstVertex = static_cast<uint32_t>(frame.chainVertices.size()),
-		                        .segments = chain.jointCount - 1});
-		AppendChain(frame.chainVertices, *chain.creator, joints, chain.textureRepeats, chain.textureScroll);
+		                        .segments = chain.jointCount - 1,
+		                        .firstJoint = static_cast<uint32_t>(frame.chainJoints.size())});
+		AppendChain(frame.chainVertices, frame.chainJoints, *chain.creator, joints, chain.textureRepeats, chain.textureScroll);
 	}
 	const auto count = static_cast<uint32_t>(frame.items.size()) - firstItem;
 	if (count > 0)

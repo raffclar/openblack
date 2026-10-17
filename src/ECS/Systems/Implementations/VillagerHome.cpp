@@ -24,6 +24,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
@@ -477,7 +478,8 @@ bool BlocksTreeTent(entt::entity thing, glm::vec2 tree)
 	auto& registry = WorldRegistry();
 	const auto* transform = registry.TryGet<const Transform>(thing);
 	if (transform == nullptr ||
-	    glm::distance(tree, glm::xz(transform->position)) - world_objects::SizeOf(thing).radius >= routine::k_TentTreeCrowd)
+	    gutils::GetDistanceInMetres(tree, glm::xz(transform->position)) - world_objects::SizeOf(thing).radius >=
+	        routine::k_TentTreeCrowd)
 	{
 		return false;
 	}
@@ -574,7 +576,7 @@ bool SleeperNear(glm::ivec2 cell, glm::vec2 point)
 	{
 		const auto* action = registry.TryGet<const LivingAction>(thing);
 		if (action != nullptr && registry.AllOf<Villager>(thing) &&
-		    glm::distance(point, PositionOf(thing)) < routine::k_TentSleeperGap &&
+		    gutils::GetDistanceInMetres(point, PositionOf(thing)) < routine::k_TentSleeperGap &&
 		    State(*action, LivingAction::Index::Top) == VillagerStates::SleepInTent)
 		{
 			return true;
@@ -645,7 +647,7 @@ void GetMeToMyChillOutPos(LivingAction& action, SpotFinder findSpot, glm::vec2 c
 {
 	const auto villager = EntityOf(action);
 	const auto position = PositionOf(villager);
-	const float distance = glm::distance(centre, position);
+	const float distance = gutils::GetDistanceInMetres(centre, position);
 	auto& towns = Locator::townSystem::value();
 	if (distance <= radius)
 	{
@@ -709,29 +711,31 @@ entt::entity NearbyTownToJoin(entt::entity villager)
 {
 	auto& registry = WorldRegistry();
 	const auto& transform = registry.Get<const Transform>(villager);
-	const auto town = Locator::townSystem::value().FindClosestTown(transform.position);
-	if (town == entt::null || !registry.AllOf<Town, Transform>(town) ||
-	    glm::distance(PositionOf(town), glm::xz(transform.position)) > routine::k_VagrantTownSearch)
-	{
-		return entt::null;
-	}
-	// TODO(villagers): the town's own tribe; openblack's towns don't keep one yet, so its people's is used
 	const auto& person = registry.Get<const Villager>(villager);
-	const auto& data = registry.Get<const Town>(town);
-	for (const auto abode : data.abodes)
-	{
-		if (const auto* building = registry.TryGet<const Abode>(abode); building != nullptr)
+	// The game looks only at the towns of the villager's tribe as it searches
+	// TODO(villagers): the town's own tribe; openblack's towns don't keep one yet, so its first resident's is used
+	const auto ofItsTribe = [&registry, &person](entt::entity town) {
+		const auto* data = registry.TryGet<const Town>(town);
+		if (data == nullptr)
 		{
-			for (const auto other : building->inhabitants)
+			return false;
+		}
+		for (const auto abode : data->abodes)
+		{
+			if (const auto* building = registry.TryGet<const Abode>(abode); building != nullptr)
 			{
-				if (const auto* resident = registry.TryGet<const Villager>(other); resident != nullptr)
+				for (const auto other : building->inhabitants)
 				{
-					return resident->tribe == person.tribe ? town : entt::null;
+					if (const auto* resident = registry.TryGet<const Villager>(other); resident != nullptr)
+					{
+						return resident->tribe == person.tribe;
+					}
 				}
 			}
 		}
-	}
-	return entt::null;
+		return false;
+	};
+	return Locator::townSystem::value().NearestTown(glm::xz(transform.position), routine::k_VagrantTownSearch, ofItsTribe);
 }
 } // namespace
 
@@ -771,6 +775,7 @@ void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, Walk
 	wallHug.goal = goal;
 	// A fresh step is worked out on the next pathfinding turn
 	wallHug.step = {0, 0};
+	wallHug.stepAltitude = 0.0f;
 	registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
 	                MoveStateFinalStepTag, MoveStateArrivedTag>(villager);
 	registry.Remove<WallHugObjectReference>(villager);
@@ -1108,7 +1113,7 @@ uint32_t villager_home::DoGoingHome(LivingAction& action, VillagerStates arrive,
 	const auto townPosition = PositionOf(town);
 	auto end = top;
 	glm::vec2 goal;
-	if (glm::distance(townPosition, position) > routine::k_FarFromTown)
+	if (gutils::GetDistanceInMetres(townPosition, position) > routine::k_FarFromTown)
 	{
 		goal = routine::TowardsTown(townPosition, position, FloatRandom());
 	}

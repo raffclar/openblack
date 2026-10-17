@@ -17,6 +17,8 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack::physics;
 using namespace openblack::physics::shapes;
 
@@ -34,7 +36,7 @@ float FarthestPoint(std::span<const glm::vec3> points)
 	float farthest = 0.0f;
 	for (const auto& point : points)
 	{
-		farthest = std::max(farthest, glm::length(point));
+		farthest = std::max(farthest, openblack::x87::LengthZyx(point));
 	}
 	return farthest;
 }
@@ -177,10 +179,11 @@ FragmentShape shapes::Fragment(std::span<const std::array<glm::vec3, 3>> triangl
 	for (const auto& triangle : triangles)
 	{
 		auto normal = glm::cross(triangle[1] - triangle[0], triangle[2] - triangle[0]);
-		const float twiceArea = glm::length(normal);
+		// The game adds the squares from z to x and multiplies by one over the length
+		const float twiceArea = openblack::x87::LengthZyx(normal);
 		if (twiceArea != 0.0f)
 		{
-			normal /= twiceArea;
+			normal *= 1.0f / twiceArea;
 		}
 		result.area += twiceArea * 0.5f;
 		for (const auto& corner : triangle)

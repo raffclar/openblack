@@ -324,10 +324,10 @@ void Show(CreatureAnimation& animation, const fight::Fighter& fighter, bool powe
 	animation.slots.clear();
 }
 
-void PlayOnce(CreatureAnimation& animation, size_t played)
+void PlayOnce(CreatureAnimation& animation, size_t played, bool mirrored = false)
 {
 	animation.body = {};
-	if (const auto once = creature_layers::PlayOnce(animation.body, played, false))
+	if (const auto once = creature_layers::PlayOnce(animation.body, played, mirrored))
 	{
 		animation.body = *once;
 	}
@@ -985,6 +985,14 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		}
 		fighter.tendency = record.choosingTendency;
 		registry.AssignOrReplace<CreatureFighting>(self, std::move(fighting));
+	}
+	// The taunt of each creature is chosen now from the game's random numbers, the other creature's first. One time in
+	// two it is the rude gesture.
+	if (Locator::gameRandom::has_value())
+	{
+		auto& game = Locator::gameRandom::value();
+		registry.Get<CreatureFighting>(opponent).rude = game.GameRand(2) != 0;
+		registry.Get<CreatureFighting>(creature).rude = game.GameRand(2) != 0;
 	}
 	const bool planned = _startReason == "plan" || _startReason == "anger";
 	registry.Get<CreatureFighting>(creature).planned = planned;
@@ -1991,11 +1999,10 @@ void CreatureFightSystem::Faint(entt::entity creature)
 	{
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
-	if (Locator::creatureObjectActionSystem::has_value())
-	{
-		Locator::creatureObjectActionSystem::value().Cancel(creature);
-		Locator::creatureObjectActionSystem::value().Drop(creature);
-	}
+	// The action that its body plays ends at two times the usual speed. What its hands do goes on, and it keeps what it
+	// holds: before the faint starts, it lets go of the thing as before any action that needs empty hands.
+	auto& animation = registry.Get<CreatureAnimation>(creature);
+	animation.body = creature_layers::Hurry(animation.body);
 	// The faint stops what its mind does as a failure, an emergency too. Until it gets up, it looks at no emergency.
 	if (Locator::creatureMindSystem::has_value())
 	{
@@ -2006,16 +2013,6 @@ void CreatureFightSystem::Faint(entt::entity creature)
 	{
 		Locator::leashSystem::value().TakeOff(creature);
 	}
-	auto& animation = registry.Get<CreatureAnimation>(creature);
-	animation.body = {
-	    .kind = creature_layers::BodyAction::Kind::Sequence,
-	    .phase = creature_layers::BodyAction::Phase::Start,
-	    .animations = {fight::animations::k_Faint, fight::animations::k_Faint, fight::animations::k_GetUp},
-	    .mirrored = std::bernoulli_distribution(0.5)(_random),
-	    .holdLoop = true,
-	};
-	animation.face = creature_layers::RelaxFace(animation.face);
-	SetEyes(registry, creature, creature_eyes::Mode::Closed);
 	// Whether it will rest to get better once it has lain long enough is decided now, by how it is as it faints
 	bool rest = false;
 	if (auto* needs = registry.TryGet<CreatureNeeds>(creature))
@@ -2032,13 +2029,8 @@ void CreatureFightSystem::Faint(entt::entity creature)
 	// made, unless a script moved it). Only a creature with no home at all stays where it lies.
 	const auto here = registry.Get<const Transform>(creature).position;
 	const auto home = creature_home::HomeOf(registry, creature).value_or(here);
+	// The faint itself starts on the body on the next turn that the knock-out is looked after
 	registry.AssignOrReplace<CreatureKnockedOut>(creature, CreatureKnockedOut {.rest = rest, .home = home});
-	// The people and the creatures near it react to the faint as to a death. The reaction belongs to no player.
-	if (Locator::reactionSystem::has_value())
-	{
-		Locator::reactionSystem::value().Create(
-		    {.initiator = creature, .type = Reaction::ReactToDeath, .position = here, .playerless = true});
-	}
 	fight_transcript::Note(creature, "faint", [&] {
 		auto fields = Levels(registry, creature);
 		fields.emplace_back("rest_later", rest);
@@ -2048,6 +2040,40 @@ void CreatureFightSystem::Faint(entt::entity creature)
 		fields.emplace_back("home_z", home.z);
 		fields.emplace_back("script_controlled", registry.AllOf<ScriptControlled>(creature));
 		return fields;
+	});
+}
+
+void CreatureFightSystem::StartFaint(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The faint also stops what the hands do, such as a catch or a let-go. The hand keeps what it holds.
+	if (Locator::creatureObjectActionSystem::has_value())
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
+	// The faint cuts what the body plays at once. The game's random numbers choose its side, one time in two the left
+	// side.
+	auto& animation = registry.Get<CreatureAnimation>(creature);
+	const bool mirrored = Locator::gameRandom::has_value() && Locator::gameRandom::value().GameRand(2) == 1;
+	animation.body = {
+	    .kind = creature_layers::BodyAction::Kind::Sequence,
+	    .phase = creature_layers::BodyAction::Phase::Start,
+	    .animations = {fight::animations::k_Faint, fight::animations::k_Faint, fight::animations::k_GetUp},
+	    .mirrored = mirrored,
+	    .holdLoop = true,
+	};
+	animation.face = creature_layers::RelaxFace(animation.face);
+	SetEyes(registry, creature, creature_eyes::Mode::Closed);
+	// The people and the creatures near it react to the faint as to a death. The reaction belongs to no player.
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().Create({.initiator = creature,
+		                                         .type = Reaction::ReactToDeath,
+		                                         .position = registry.Get<const Transform>(creature).position,
+		                                         .playerless = true});
+	}
+	fight_transcript::Note(creature, "faint_starts", [&] {
+		return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)}, {"mirrored", mirrored}};
 	});
 }
 
@@ -2090,6 +2116,8 @@ void CreatureFightSystem::Resurrect(entt::entity creature)
 	}
 	StopCarryingHome(creature, *knockedOut);
 	knockedOut->permanent = false;
+	knockedOut->fainting = false;
+	knockedOut->handsChecked = false;
 	knockedOut->stage = CreatureKnockedOut::Stage::GettingUp;
 	knockedOut->seconds = 0.0f;
 	auto& animation = registry.Get<CreatureAnimation>(creature);
@@ -2348,18 +2376,21 @@ void CreatureFightSystem::ProcessStages()
 		case CreatureFighting::Stage::Taunt:
 			if (!fighting->played)
 			{
-				fighting->played = true;
-				if (locomotion != nullptr)
+				// Each try to start the taunt picks a side from the game's random numbers first. A body that plays an
+				// action or moves, or that does not have the clip, refuses the start, and the creature tries again on
+				// the next turn. With no bodies loaded, nothing plays.
+				const auto clip = fight::FaceOffAnimation(fighting->rude);
+				const bool mirrored = Locator::gameRandom::has_value() && Locator::gameRandom::value().GameRand(2) == 1;
+				const bool loaded = Locator::creatureAnimationSystem::has_value();
+				if (creature_layers::IsPlaying(animation.body) || moving(entity) || (loaded && !Has(entity, clip)))
 				{
-					locomotion->Stop(entity);
+					break;
 				}
-				// Each creature plays the taunt or the rude gesture, half and half. A species without the action plays
-				// nothing.
-				const auto clip = fight::FaceOffAnimation(std::bernoulli_distribution(0.5)(_random));
-				fighting->taunted = Has(entity, clip);
-				if (fighting->taunted)
+				fighting->played = true;
+				fighting->taunted = loaded;
+				if (loaded)
 				{
-					PlayOnce(animation, clip);
+					PlayOnce(animation, clip, mirrored);
 				}
 				fight_transcript::Note(entity, "face_off", [&] {
 					return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)},
@@ -2469,7 +2500,9 @@ void CreatureFightSystem::ProcessStages()
 				fighting->played = true;
 				const auto life = LifeOf(registry, entity);
 				const auto otherLife = opponentHere ? LifeOf(registry, opponent) : 0.0f;
-				PlayOnce(animation, fight::Response(life, otherLife));
+				// The game's random numbers choose the side of the response, one time in two the left side
+				const bool mirrored = Locator::gameRandom::has_value() && Locator::gameRandom::value().GameRand(2) == 1;
+				PlayOnce(animation, fight::Response(life, otherLife), mirrored);
 			}
 			else if (!creature_layers::IsPlaying(animation.body))
 			{
@@ -2844,16 +2877,15 @@ void CreatureFightSystem::CastFightSpell(entt::entity creature, MagicType type, 
 		    },
 		    fight_transcript::LastOf(creature, "action"));
 	};
+	// Without an opponent the creature casts no miracle, not even one that defends
+	if (opponent == entt::null)
+	{
+		note("no_opponent", entt::null, std::nullopt);
+		return;
+	}
 	if (effect.isAggressiveSpellWhichIsUsedInCreatureFightArena != 0)
 	{
-		if (opponent != entt::null)
-		{
-			note("attack", opponent, Locator::creatureMindSystem::value().TryMiracle(creature, type, opponent));
-		}
-		else
-		{
-			note("attack", opponent, std::nullopt);
-		}
+		note("attack", opponent, Locator::creatureMindSystem::value().TryMiracle(creature, type, opponent));
 	}
 	else if (effect.isDefensiveSpellWhichIsUsedInCreatureFightArena != 0)
 	{
@@ -3129,7 +3161,8 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	const auto groin = rig->actionPoints->groin;
 	const auto size = ShownSize(body);
 	const bool special = attacker.animation == fight::animations::k_AttackSpecial;
-	const auto spanMs = fight::TestSpanMs(k_TurnMs, size);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto spanMs = fight::TestSpanMs(k_TurnMs, size, animation != nullptr && animation->realTime);
 	const auto landMs = static_cast<int32_t>(fighting.hitTimesMs.at(blow));
 	const auto times = fight::BlowTestTimes(fromMs, spanMs, landMs);
 	if (times.empty())
@@ -3681,11 +3714,32 @@ void CreatureFightSystem::ProcessKnockedOut()
 	    [&lying](entt::entity entity, CreatureKnockedOut& /*knockedOut*/) { lying.push_back(entity); });
 	for (const auto entity : lying)
 	{
+		// The first turn after the knock-out starts the faint on the body. First the creature checks its hands: with a
+		// thing in the hand it starts to let go, and the faint starts on the next turn and cuts the let-go. While its
+		// body or hands are busy it cannot start to let go, and the faint waits.
 		auto& knockedOut = registry.Get<CreatureKnockedOut>(entity);
+		if (knockedOut.fainting)
+		{
+			const auto check = knockedOut.handsChecked || !Locator::creatureMindSystem::has_value()
+			                       ? creature_mind::HandsCheck::Free
+			                       : Locator::creatureMindSystem::value().CheckHandsBeforeFaint(entity);
+			knockedOut.handsChecked = check == creature_mind::HandsCheck::LetGo;
+			if (check == creature_mind::HandsCheck::Free)
+			{
+				knockedOut.fainting = false;
+				StartFaint(entity);
+			}
+		}
 		auto* needs = registry.TryGet<CreatureNeeds>(entity);
 		auto& animation = registry.Get<CreatureAnimation>(entity);
 		const auto& body = registry.Get<const Creature>(entity);
 		knockedOut.seconds += k_TurnSeconds;
+		// It counts the time that it lies only from when it lies still
+		if (knockedOut.stage == CreatureKnockedOut::Stage::Lying &&
+		    (knockedOut.fainting || !creature_layers::IsLooping(animation.body)))
+		{
+			knockedOut.seconds = -creature_mind::k_FaintWaitTurnsLate * k_TurnSeconds;
+		}
 		const auto next = [&knockedOut, entity](CreatureKnockedOut::Stage stage) {
 			fight_transcript::Note(entity, "knocked_out", [&] {
 				return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)},

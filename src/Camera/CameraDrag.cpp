@@ -16,6 +16,8 @@
 
 #include <glm/gtc/constants.hpp>
 
+#include "Common/X87.h"
+
 namespace openblack::camera_drag
 {
 
@@ -239,7 +241,9 @@ Sweep SweepAlongRing(glm::vec2 from, glm::vec2 to, const EdgeArea& area)
 	{
 		const auto halfWidth = static_cast<float>(area.screen.x / 2);
 		const auto halfHeight = static_cast<float>(area.screen.y >> 1);
-		auto angle = std::atan2(to.x - halfWidth, to.y - halfHeight) - std::atan2(from.x - halfWidth, from.y - halfHeight);
+		// The game keeps both arctangents wide and rounds their difference one time
+		auto angle =
+		    x87::Sub(x87::Atan2(to.x - halfWidth, to.y - halfHeight), x87::Atan2(from.x - halfWidth, from.y - halfHeight));
 		if (angle > glm::pi<float>())
 		{
 			angle -= glm::two_pi<float>();

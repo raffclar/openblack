@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <optional>
 #include <span>
 #include <vector>
@@ -206,15 +207,17 @@ struct OneShotCast
 [[nodiscard]] std::vector<Step> CastOneShotAt(const OneShotCast& cast);
 
 /// What a creature does when its try at a miracle fizzles: it is embarrassed, then one time in two it is sad too. The
-/// sadness grows by the chance from 0 to 1 times this.
+/// sadness grows by a random number from 0 to this.
 inline constexpr float k_SadnessFromFizzle = 0.3f;
+/// A random number from 0 to the given value
+using FizzleFloatRandom = std::function<float(float most)>;
 struct FizzleReaction
 {
 	std::vector<Step> agenda;
 	/// How much its sadness grows, none when it is not sad
 	std::optional<float> sadness;
 };
-[[nodiscard]] FizzleReaction ReactToFizzle(const Random& random, float chance);
+[[nodiscard]] FizzleReaction ReactToFizzle(const Random& random, const FizzleFloatRandom& floatRandom);
 
 /// What a creature keeps of its tries that fizzled, by entity numbers: the thing of the last try at a thing that
 /// fizzled, and whether it has yet to show its feelings about a try that fizzled

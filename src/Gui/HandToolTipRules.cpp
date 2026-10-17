@@ -114,18 +114,19 @@ bool OffersBuildingToolTips(bool whole, bool ownOrNoPlayer, uint32_t features)
 	return !whole && ownOrNoPlayer && (features & k_PitchFeature) != 0;
 }
 
-BuildingWords WoodRequired(std::optional<float> woodNeeded, double completed)
+BuildingWords WoodRequired(std::optional<float> woodNeeded, float completed)
 {
 	if (!woodNeeded.has_value())
 	{
-		return {.words = k_BuildingCompleted, .number = completed};
+		return {.words = k_BuildingCompleted, .number = static_cast<double>(completed)};
 	}
 	return {.words = k_WoodRequired, .number = static_cast<double>(std::max(*woodNeeded, 0.0f))};
 }
 
-double BuildingCompleted(bool built, float builtShare, float life)
+float BuildingCompleted(bool built, float builtShare, float life)
 {
-	return static_cast<double>(built ? life : builtShare) * 100.0;
+	constexpr float k_Percent = 100.0f;
+	return (built ? life : builtShare) * k_Percent;
 }
 
 } // namespace openblack::gui::hand_tooltip

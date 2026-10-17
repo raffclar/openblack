@@ -44,6 +44,8 @@ public:
 	void AddAlignmentMotesOf(entt::entity copy) override;
 
 private:
+	/// Each creature steps the sway of its body by the seconds that it lived in this game turn
+	static void StepSway();
 	/// Each creature whose body looks good or evil adds its motes or its smoke for this game turn
 	static void AddAlignmentMotes();
 

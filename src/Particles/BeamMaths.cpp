@@ -129,8 +129,7 @@ std::pair<glm::vec3, glm::vec3> maths::PlasmaTangents(glm::vec3 start, glm::vec3
                                                       float randomShare, float scale)
 {
 	const glm::vec3 d = start - end;
-	const auto length =
-	    static_cast<float>(std::sqrt(static_cast<double>((d.z * d.z) + (d.y * d.y)) + static_cast<double>(d.x * d.x)));
+	const float length = std::sqrt((d.z * d.z) + (d.y * d.y) + (d.x * d.x));
 	const auto first = (startNudge * randomShare) + startTangent;
 	const auto second = (endNudge * randomShare) + endTangent;
 	const float s = length * scale;

@@ -25,6 +25,7 @@
 
 #include <ParticleFile.h>
 
+#include "Common/X87Vector.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleCreators.h"
 #include "ParticleSounds.h"
@@ -32,6 +33,7 @@
 
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -223,7 +225,8 @@ public:
 			return true;
 		}
 		const glm::vec3 base = belief->totemTop + glm::vec3(0.0f, params.heightAt1, 0.0f);
-		const float distanceScale = town_belief::DistanceScale(params, glm::distance(world.CameraPosition(), base));
+		const float distanceScale =
+		    town_belief::DistanceScale(params, x87::Distance<x87::SumOrder::Xzy>(world.CameraPosition(), base));
 		const auto random = [&effect](float min, float max) { return effect.Random(min, max); };
 		for (auto& atom : collection.atoms)
 		{

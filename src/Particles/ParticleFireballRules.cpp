@@ -26,6 +26,7 @@
 
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/X87.h"
 #include "ParticleBlast.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMiracleMaths.h"
@@ -35,11 +36,15 @@
 
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
+namespace x87 = openblack::x87;
 
 namespace
 {
 /// The gravity a lob is worked out for when the group has no gravity rule
 constexpr float k_DefaultLobGravity = 30.0f;
+/// A whole turn and a quarter turn, as the game keeps them
+constexpr float k_FullTurn = 2.0f * std::numbers::pi_v<float>;
+constexpr float k_QuarterTurn = std::numbers::pi_v<float> / 2.0f;
 /// A throw's share of this speed sizes its sound
 constexpr float k_FastestThrowForSound = 200.0f;
 /// The wind's pull is scaled down so
@@ -280,20 +285,38 @@ public:
 			atom.baseScale *= effect.FloatProvider(initScale, 1.0f);
 			auto direction = launch.direction;
 			float speed = launch.speed;
-			if (elevate && i >= 1)
+			if (elevate)
 			{
-				float yaw = std::atan2(direction.z, direction.x);
-				float pitch = std::atan2(direction.y, std::sqrt(direction.x * direction.x + direction.z * direction.z));
-				const float around =
-				    static_cast<float>(i - 1) * 2.0f * std::numbers::pi_v<float> / static_cast<float>(numAtoms - 1);
-				pitch += std::sin(around) * ((verticalScatterMax - verticalScatterMin) * share + verticalScatterMin);
-				yaw += std::cos(around) * ((horizontalScatterMax - horizontalScatterMin) * share + horizontalScatterMin);
-				if (speedRandomFrac != 0.0f)
+				// The rule takes the direction apart into its heading and climb and makes it again, also for the first atom
+				float yaw = x87::RoundToFloat(x87::Atan2(direction.z, direction.x));
+				float pitch = x87::RoundToFloat(
+				    x87::Atan2(direction.y, std::sqrt((direction.z * direction.z) + (direction.x * direction.x))));
+				if (i >= 1)
 				{
-					speed = (1.0f - effect.Random(speedRandomFrac)) * launch.speed;
+					// The later atoms spread round the first
+					const float around = (static_cast<float>(i - 1) * k_FullTurn) / static_cast<float>(numAtoms - 1);
+					pitch =
+					    x87::Mul(x87::Sin(around), ((verticalScatterMax - verticalScatterMin) * share) + verticalScatterMin) +
+					    pitch;
+					yaw = x87::Mul(x87::Cos(around),
+					               ((horizontalScatterMax - horizontalScatterMin) * share) + horizontalScatterMin) +
+					      yaw;
+					if (speedRandomFrac != 0.0f)
+					{
+						speed = (1.0f - effect.Random(speedRandomFrac)) * launch.speed;
+					}
 				}
-				pitch = std::clamp(pitch, -std::numbers::pi_v<float> / 2.0f, std::numbers::pi_v<float> / 2.0f);
-				direction = {std::cos(yaw) * std::cos(pitch), std::sin(pitch), std::sin(yaw) * std::cos(pitch)};
+				if (!(pitch > -k_QuarterTurn))
+				{
+					pitch = -k_QuarterTurn;
+				}
+				else if (!(pitch < k_QuarterTurn))
+				{
+					pitch = k_QuarterTurn;
+				}
+				const double cosPitch = x87::Cos(pitch);
+				direction = {x87::Mul(x87::Cos(yaw), cosPitch), x87::RoundToFloat(x87::Sin(pitch)),
+				             x87::Mul(x87::Sin(yaw), cosPitch)};
 			}
 			atom.position = start;
 			atom.velocity = direction * speed;
@@ -390,7 +413,8 @@ public:
 			const auto player =
 			    effect.GetPlayer() >= 0 ? std::optional(static_cast<openblack::PlayerNames>(effect.GetPlayer())) : std::nullopt;
 			data.object =
-			    objects->AttachFireBall(position, effect.GetProcessInfo().power, radius, !script, player).value_or(entt::null);
+			    objects->AttachFireBall(position, effect.GetProcessInfo().power, radius, !script, player, effect.PowerUpLevel())
+			        .value_or(entt::null);
 		}
 		if (data.object != entt::null)
 		{

@@ -127,6 +127,8 @@ private:
 	void MeasureBlows(entt::entity creature);
 	/// Faints and lies out cold, to be taken home later
 	void Faint(entt::entity creature);
+	/// The faint starts on the body: its side, the faint itself, and the reaction of those near it
+	void StartFaint(entt::entity creature);
 	/// The camera's fight view: started by looking at an arena with a fight on, it follows the fight and lingers a little
 	/// after it, unless the player zooms out of it
 	void UpdateView(float seconds);

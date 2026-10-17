@@ -149,6 +149,19 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 	}
 }
 
+void ParticleSystem::ScrollChains(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
+{
+	const auto step = water_rings::Step(_chainScrollPace, frameRealTime, frameGameTime);
+	if (_paused || step.count() == 0)
+	{
+		return;
+	}
+	for (auto& running : _effects)
+	{
+		running.effect->ScrollChains(static_cast<float>(step.count()));
+	}
+}
+
 void ParticleSystem::StepShowers(float gameSeconds)
 {
 	constexpr float k_MillisecondsPerSecond = 1000.0f;

@@ -40,6 +40,8 @@ inline constexpr float k_WispReach = 1.2f;
 inline constexpr float k_WispWobble = 0.2f;
 /// Up to this share of its height a wisp winds at full width; above it narrows by the taper
 inline constexpr float k_WispFullWidthBelow = 0.7f;
+/// A wisp's angle round or up after a step at its turn rate, wrapped to one turn
+[[nodiscard]] float WispTurn(float angle, float rate, float dt);
 /// Where a wisp winds about the box, at its angles round and up and its age in seconds
 [[nodiscard]] glm::vec3 WispOrbit(const WispBox& box, float theta, float phi, float taper, float age);
 
@@ -59,8 +61,9 @@ inline constexpr float k_WispFlightSeconds = 2.0f;
 inline constexpr float k_ItchReach = 1.5f;
 [[nodiscard]] glm::vec3 ItchOrbit(glm::vec3 rightEye, glm::vec3 leftEye, float seconds, float orbitSpeed);
 
-/// Whether the way from a creature casting to its target has swung too far from the way it began: the two ways, flat,
-/// made unit length, meet at less than the cosine of the limit, taken as radians. A way of no length never has.
+/// Whether the way from a creature casting to its target has swung too far from the way it began. The two flat ways
+/// become unit length by the engine's table inverse square root. The way has swung too far when their dot is less than
+/// the cosine of the limit, in radians. A way of no length gives a dot of 0.
 [[nodiscard]] bool SwungTooFar(glm::vec2 began, glm::vec2 now, float limit);
 
 } // namespace openblack::particles::maths

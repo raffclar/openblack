@@ -360,6 +360,9 @@ struct Gaze
 	/// The player: the hand when it moved much lately, else the camera
 	bool player {false};
 	std::optional<glm::vec3> point;
+	/// The look goes to the ground below the point, not to the height of the point. While the creature moves near the
+	/// point, it does not look at the point.
+	bool pointOnGround {false};
 	bool camera {false};
 	/// The look of a creature that walks to the point: at the point, at what it watches, and a sweep from side to side
 	/// (see creature_look::LookWhileGoing). Without a point, the look uses the top of the object, or else the place that
@@ -383,6 +386,16 @@ constexpr float k_FeetLookMetres = 4.0f;
 {
 	return {.point = glm::vec3(point.x, 0.0f, point.y), .whileGoing = true};
 }
+
+/// The action that a step tries to start again each turn, because the body does not have its clip. The step never ends.
+/// Each try first picks a side at random: a static action always, an individual action only while the creature holds
+/// nothing (the hand that holds a thing picks the side).
+enum class RetriedClip : uint8_t
+{
+	None,
+	Static,
+	Individual,
+};
 
 struct Step
 {
@@ -541,8 +554,8 @@ struct Step
 	bool untilBetter {false};
 	/// A static step's loop holds the last frame of its start, as lying out cold
 	bool holdLoop {false};
-	/// A static step plays left to right half the time, chosen as it starts
-	bool mirrorAtRandom {false};
+	/// The action that a never-ending wait tries to start each turn
+	RetriedClip retriedClip {RetriedClip::None};
 	/// Played with the eyes closed
 	bool closedEyes {false};
 	/// What the step does to the body: when an action is done (eating, as it starts), or a static step's loop ends
@@ -576,6 +589,17 @@ struct Step
 	std::shared_ptr<const Step> ordered;
 	/// The desire that a step that applies a desire makes strong
 	creature_desires::Desire desire {creature_desires::Desire::Compassion};
+	/// The step of the game that this step stands for, as a saved game keeps it in the plan of a creature that a script
+	/// controls. Only the steps that such a plan has keep it.
+	struct Saved
+	{
+		/// The number of the game's step
+		uint32_t kind {0};
+		uint32_t integer {0};
+		glm::vec3 point {0.0f};
+		float real {0.0f};
+	};
+	std::optional<Saved> saved;
 };
 
 struct IdleMind
@@ -597,6 +621,14 @@ struct IdleMind
 	bool wakeWanted {false};
 	/// Counts the agendas planned, so that a new one can be told from the last
 	uint32_t serial {0};
+	/// A step of an agenda, by the agenda's count and the step's place in it
+	struct StepRef
+	{
+		uint32_t serial {0};
+		size_t step {0};
+	};
+	/// The step that started to let go of the thing in the hand before it starts. Its hands are not checked again.
+	std::optional<StepRef> handsChecked;
 	/// The agenda was given up before its end, as a step it needed couldn't be done
 	bool gaveUp {false};
 	/// A script asked if the creature played and so stopped the agenda. The plan stays, with no steps, until the
@@ -686,6 +718,30 @@ enum class HandsNeed : uint8_t
 ///   breeder and the step that uses up the held thing.
 [[nodiscard]] HandsNeed HandsNeededFor(const Step& step);
 
+/// Whether the body does not have a clip that the step plays as it starts: the clip of an action, a swap of minds or a
+/// communication, or the start, loop or end of a static action or a cast. A faint has no such test. The test says
+/// whether the body has a clip.
+[[nodiscard]] bool LacksClipToStart(const Step& step, std::optional<size_t> communication,
+                                    const std::function<bool(size_t)>& hasClip);
+
+/// What the check of the hands before a step that needs empty hands does on a turn
+enum class HandsCheck : uint8_t
+{
+	/// The hands are empty: the step can start now
+	Free,
+	/// The creature starts to let go of the thing that it holds. The step tries to start on the next turn.
+	LetGo,
+	/// The body or the hands are busy: the creature cannot start to let go, and it checks again on the next turn
+	Wait,
+};
+/// The check of the hands before a step that needs empty hands, until the let-go starts. A faint that does not come
+/// from the mind also does this check before it starts.
+[[nodiscard]] HandsCheck CheckHands(bool holds, bool bodyBusy, bool handsBusy);
+
+/// The turns between when a fainted creature lies still and when its wait starts, plus the turn between the end of
+/// the wait and the start of the next part of the faint
+inline constexpr float k_FaintWaitTurnsLate = 3.0f;
+
 /// How the creature lets go of the thing that it holds before a step that needs empty hands
 enum class LetGo : uint8_t
 {
@@ -706,6 +762,11 @@ struct Senses
 	/// Whether the body plays an action or is on the move, and whether it is in the loop of an action, such as sitting
 	bool bodyBusy {false};
 	bool bodyLooping {false};
+	/// Whether the body does not have a clip that the next step plays as it starts. Then the step does not start, and
+	/// the creature tries to start it again on each turn.
+	bool clipMissing {false};
+	/// Whether a script set real time on the body. Then each static action and cast pose starts on the right side.
+	bool realTime {false};
 	/// Whether the body dances and does not play the finish of the dance yet
 	bool bodyDancing {false};
 	/// Whether it is on its way somewhere or turning, and where it stands
@@ -723,6 +784,8 @@ struct Senses
 	HandsState hands {HandsState::Idle};
 	/// The thing that the creature holds, by the number of its entity
 	std::optional<uint32_t> held;
+	/// Whether it holds the thing in its left hand, as it reached for the thing on the left side
+	bool heldLeft {false};
 	/// Whether the object a step waits for is on the map, none when the object is gone
 	std::optional<bool> objectInMap;
 	/// Whether the object that a step waits to be still moves
@@ -831,6 +894,8 @@ struct Commands
 	/// A start, loop and end to play, the loop held on its last frame or not, and the end of the loop playing now
 	std::optional<std::array<size_t, 3>> startSequence;
 	bool holdLoop {false};
+	/// The start replaces the action that the body plays now, as a faint does
+	bool cutBody {false};
 	bool endSit {false};
 	/// A dance to start, with the milliseconds of each move; the dance to stop; only a start, loop and end to stop
 	std::optional<float> startDance;
@@ -1054,15 +1119,18 @@ constexpr uint32_t k_FewestRestTurns = 30;
 
 /// A new agenda in place of the current one
 void Plan(IdleMind& mind, Activity activity, std::vector<Step> agenda);
-/// Pulls a face for a reason, if the reason calls for one, and moves the variety of faces on
+/// Pulls a face for a reason, if the reason calls for one, and moves the variety of faces on by a draw from gameRandom
 [[nodiscard]] std::optional<creature_face::Request> PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
-                                                             const Random& random);
+                                                             const Random& random, const Random& gameRandom);
 /// The world carried out a dance stage that the mind ordered: the step is done, or the rest of the agenda is no use
 void DanceOrderDone(IdleMind& mind, bool done);
 /// What the head looks at while the step lasts. A step that picks a thing up, or goes near a thing, looks at that
 /// thing as the creature walks, unless the step gives a look of its own. Without a look, the head looks about.
 [[nodiscard]] std::optional<Gaze> LookOf(const Step& step);
-/// One game turn of the mind
+/// One game turn of the mind. The variety of faces moves on by the random numbers of the game (gameRandom), and all
+/// else draws from random.
+[[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random, const Random& gameRandom);
+/// One game turn of the mind, with one source of random numbers for all draws
 [[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random);
 /// The main step of an agenda: the last step marked as main. A step that casts a miracle is always a main step. When no
 /// step is a main step, the last step is the main step. An empty agenda gives 0.

@@ -79,10 +79,10 @@ public:
 	/// The cylinder each room's camera casts the cursor against
 	[[nodiscard]] static Cylinder CylinderOf(Room room);
 
-	/// A ray from origin along direction, which is scaled to the near plane as the game's picking rays are, against a
-	/// room at the origin
-	[[nodiscard]] static std::optional<RoomHit> RayCastRoom(glm::vec3 origin, glm::vec3 direction);
-	[[nodiscard]] static std::optional<RoomHit> RayCastRoom(glm::vec3 origin, glm::vec3 direction, const Cylinder& room);
+	/// A ray from the eye through a point of the near plane, as the game's picking rays are, against a room at the
+	/// origin or a given room
+	[[nodiscard]] static std::optional<RoomHit> RayCastRoom(glm::vec3 eye, glm::vec3 nearPoint);
+	[[nodiscard]] static std::optional<RoomHit> RayCastRoom(glm::vec3 eye, glm::vec3 nearPoint, const Cylinder& room);
 	/// The main room's door a hit on its walls is in: the eighth of the room it is in, when
 	/// it is within that eighth's door
 	[[nodiscard]] static std::optional<uint32_t> DoorAt(const RoomHit& hit);
@@ -91,6 +91,14 @@ public:
 	/// The main room's view at a turn about the room and a lean between looking down at the pool, at 0, and up at the
 	/// room, at 1
 	[[nodiscard]] static Pose OrbitPose(float yaw, float lean);
+	/// The turn and tilt from a point pressed on the pool's map to the camera, away being the way from the point to
+	/// the camera
+	[[nodiscard]] static glm::vec2 MapYawAndPitch(glm::vec3 away);
+	/// The way from the pressed point of the pool's map to the camera at a turn and tilt, one long
+	[[nodiscard]] static glm::vec3 MapAround(float yaw, float pitch);
+	/// How much the main room leans this step while the mouse is at the screen's edge or over the pool: the ramp eases
+	/// the speed in
+	[[nodiscard]] static float EdgeLeanStep(float dt, float ramp, float speed);
 	/// A pose about the main room's centre turned to face one of its doors
 	[[nodiscard]] static Pose TurnToDoor(const Pose& pose, uint32_t door);
 	/// Whether a room is one of the rooms of pictures, which share one kind of camera
@@ -110,7 +118,7 @@ public:
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) final;
 	void HandleActions(std::chrono::microseconds dt) final;
-	void SetFlight(glm::vec3 origin, glm::vec3 focus) final;
+	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) final;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const final;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const final;
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const final;

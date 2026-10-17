@@ -426,7 +426,7 @@
   "query": "creature.learnt"
  },
  {
-  "description": "A creature's beliefs about things: kind, last place, the whole thing, the attributes it last took in, which its decision trees test; and how nice it finds other creatures",
+  "description": "A creature's beliefs about things: kind, last place (in metres, and in map units as place_map), the whole thing, the attributes it last took in, which its decision trees test; and how nice it finds other creatures",
   "kind": "object",
   "parameters": [
    {
@@ -1862,6 +1862,51 @@
   "query": "help.hand_demo"
  },
  {
+  "description": "The slots of the current player that have a saved game, for the land that is open",
+  "kind": "list",
+  "parameters": [],
+  "query": "saves.slots"
+ },
+ {
+  "description": "Saves the game into a slot: the land, the turn and every creature with its mind file and its leash. The towns, the villagers, the story and the scripts are not saved yet",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The slot, 0 to 20",
+    "name": "slot",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The name of the save",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "saves.save",
+  "writes": true
+ },
+ {
+  "description": "Puts the creatures of the land that is open back as a slot keeps them: the values of each record, the mind of its mind file, the plan that the save kept and its leash",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The slot, 0 to 20",
+    "name": "slot",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "saves.load",
+  "writes": true
+ },
+ {
+  "description": "After a load of a slot of the game itself: each creature of the game's file, and whether the record that a save writes for it now has the same bytes as the file's record",
+  "kind": "list",
+  "parameters": [],
+  "query": "saves.vanilla_check"
+ },
+ {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
   "kind": "object",
   "parameters": [],
@@ -2039,7 +2084,7 @@
   "query": "screenshot.pending"
  },
  {
-  "description": "The pointer, the buttons held, the hand, what the cursor picks, and the input still to come",
+  "description": "The pointer, the buttons held, the hand, what the cursor picks (with whether the Action button takes it into the hand, or takes hold of a town's totem under it, and why not), and the input still to come",
   "kind": "object",
   "parameters": [],
   "query": "input.state"

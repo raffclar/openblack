@@ -256,6 +256,12 @@ public:
 
 	/// The height of the land at a point of the ground
 	[[nodiscard]] virtual float LandHeight(glm::vec2 xz) const = 0;
+	/// The height of the land at a map position, x and z in 16.16 fixed point (a 10 m cell to 0x10000)
+	[[nodiscard]] virtual float LandHeightAtMap(int32_t x, int32_t z) const
+	{
+		constexpr float k_MetresPerFixed = 10.0f / 65536.0f;
+		return LandHeight({static_cast<float>(x) * k_MetresPerFixed, static_cast<float>(z) * k_MetresPerFixed});
+	}
 	/// A player's colour as 0xRRGGBB
 	[[nodiscard]] virtual uint32_t PlayerColour(int player) const = 0;
 	/// The camera's right and up, for rules that line sprites up with what the camera sees
@@ -332,8 +338,15 @@ public:
 	[[nodiscard]] virtual bool LandBlocks(glm::vec3 /*from*/, glm::vec3 /*to*/) const { return false; }
 	/// A shield is raised; the effect keeps the sphere, the world finds it while it lives
 	virtual void AddShield(const std::shared_ptr<ShieldSphere>& /*shield*/) {}
-	/// The live shield holding a point, the sphere grown by a margin, if any
+	/// The live shield holding a point, the sphere grown by a margin, if any. The newest shield comes first.
 	[[nodiscard]] virtual std::shared_ptr<ShieldSphere> FindShield(glm::vec3 /*point*/, float /*margin*/) const
+	{
+		return nullptr;
+	}
+	/// The live shield that a point went into over a step: the sphere, grown by a margin, holds the point now and did
+	/// not hold the point before. The newest shield comes first.
+	[[nodiscard]] virtual std::shared_ptr<ShieldSphere> FindShieldCrossing(glm::vec3 /*before*/, glm::vec3 /*point*/,
+	                                                                       float /*margin*/) const
 	{
 		return nullptr;
 	}
@@ -703,6 +716,9 @@ struct Collection
 	int textureRepeats {-1};
 	/// How fast its ribbon's texture slides along it, in sheet heights a second
 	float textureSpeed {0.0f};
+	/// How far its ribbon's texture has slid along it, in sheet heights, wrapped round at one repeat of the frame. It moves
+	/// on only on the frames that draw the ribbon.
+	float textureScroll {0.0f};
 	std::vector<std::unique_ptr<Atom>> atoms;
 	std::vector<Slot> modifiers;
 };
@@ -848,8 +864,12 @@ public:
 	/// whose group is a hierarchy, each with its position, rotation and scale; elsewhere the world.
 	[[nodiscard]] glm::vec3 LocalToGlobal(const Collection& collection, const glm::vec3& local) const;
 	[[nodiscard]] glm::vec3 GlobalToLocal(const Collection& collection, const glm::vec3& global) const;
+	/// The frames of a collection's ancestor atoms whose groups are hierarchies, nearest first
+	[[nodiscard]] std::vector<glm::mat4> HierarchyFrames(const Collection& collection) const;
 	/// The scale of an atom's frame: its two scales, the vertical also stretched
 	[[nodiscard]] static glm::vec3 FrameScale(const Atom& atom);
+	/// An atom's frame as one matrix: its rotation, each axis scaled, and its position
+	[[nodiscard]] static glm::mat4 FrameMatrix(const Atom& atom);
 	[[nodiscard]] float AtomAge(const Atom& atom) const { return _age - atom.birth; }
 	[[nodiscard]] float CollectionAge(const Collection& collection) const { return _age - collection.birth; }
 	[[nodiscard]] bool IsHierarchy(int group) const;
@@ -928,6 +948,8 @@ public:
 	void Walk(float t, DrawWalk& out) const;
 	/// Each shower of sparks of an atom that is drawn, for a frame's time to pass on it
 	void ForEachDrawnShower(const std::function<void(ObjectShower&)>& visit);
+	/// Slides the texture of each ribbon that shows, by a drawn frame of this many game milliseconds
+	void ScrollChains(float milliseconds);
 	[[nodiscard]] size_t AtomCount() const { return _atomCount; }
 	[[nodiscard]] size_t CollectionCount() const;
 

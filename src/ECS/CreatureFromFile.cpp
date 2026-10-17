@@ -110,6 +110,8 @@ Result Make(const Order& order)
 		if (Locator::creatureMindSystem::has_value())
 		{
 			Locator::creatureMindSystem::value().TakeUpMindFile(creature, file);
+			// Once it takes up the file, its leash words are all set and it is fully grown
+			Locator::creatureMindSystem::value().GrowUpAfterFile(creature);
 		}
 		if (const auto body = creature_mind_body::FromMindFile(*file); body.has_value())
 		{

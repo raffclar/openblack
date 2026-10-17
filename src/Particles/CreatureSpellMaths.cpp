@@ -17,13 +17,20 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87.h"
+
 using namespace openblack::particles;
+namespace x87 = openblack::x87;
 
 namespace
 {
-constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 /// How sharply a wisp narrows above its full width
 constexpr float k_TaperSteepness = 3.3333333f;
+/// A wisp's angles wrap at a full turn
+constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
+/// A wisp's wobble turns at this rate against its age
+constexpr float k_WispWobbleSpeed = 1.0f;
 /// A wisp's opacity comes up from the least by the rise over this many seconds
 constexpr float k_WispFadeInSeconds = 0.5f;
 constexpr float k_WispLeastAlpha = 20.0f;
@@ -52,23 +59,29 @@ maths::WispBox maths::WispBoxOf(std::span<const glm::vec3> bones)
 	        .radius = 0.5f * std::sqrt(dx * dx + dz * dz)};
 }
 
+float maths::WispTurn(float angle, float rate, float dt)
+{
+	return std::fmod(angle + dt * rate, k_TwoPi);
+}
+
 glm::vec3 maths::WispOrbit(const WispBox& box, float theta, float phi, float taper, float age)
 {
-	const float up = (std::cos(phi) + 1.0f) * 0.5f;
+	// Each sine and cosine stays wide until the next operation rounds it
+	const float up = x87::Add(x87::Cos(phi), 1.0f) * 0.5f;
 	float width = 1.0f;
 	if (!(up < k_WispFullWidthBelow))
 	{
 		const float over = (up - k_WispFullWidthBelow) * k_TaperSteepness;
 		width = 1.0f - over * over * taper;
 	}
-	glm::vec3 point(box.centreX + std::cos(theta) * width * box.radius * k_WispReach,
+	glm::vec3 point(box.centreX + x87::Mul(x87::Cos(theta), width) * box.radius * k_WispReach,
 	                box.bottom + up * box.height * k_WispReach,
-	                box.centreZ + std::sin(theta) * width * box.radius * k_WispReach);
+	                box.centreZ + x87::Mul(x87::Sin(theta), width) * box.radius * k_WispReach);
 	// It wobbles on its way round
-	const float t = age;
-	point.x += (std::sin(1.3f * t) + std::sin(t)) * k_WispWobble * box.radius;
-	point.y += (std::sin(1.13f * t) + std::sin(0.53f * t)) * k_WispWobble * box.radius;
-	point.z += (std::sin(0.9f * t) + std::sin(2.72f * t)) * k_WispWobble * box.radius;
+	const float t = age * k_WispWobbleSpeed;
+	point.x += x87::Add(x87::Sin(1.3f * t), x87::Sin(t)) * k_WispWobble * box.radius;
+	point.y += x87::Add(x87::Sin(1.13f * t), x87::Sin(0.53f * t)) * k_WispWobble * box.radius;
+	point.z += x87::Add(x87::Sin(0.9f * t), x87::Sin(2.72f * t)) * k_WispWobble * box.radius;
 	return point;
 }
 
@@ -98,23 +111,35 @@ glm::vec3 maths::ItchOrbit(glm::vec3 rightEye, glm::vec3 leftEye, float seconds,
 {
 	const auto centre = (rightEye + leftEye) * 0.5f;
 	const auto out = (rightEye - centre) * k_ItchReach;
-	glm::vec3 across(out.z, 0.0f, -out.x);
-	const float acrossLength = glm::length(across);
-	if (acrossLength > 0.0f)
+	glm::vec3 across(out.z - 0.0f, 0.0f, 0.0f - out.x);
+	// The lengths add the squares in the order of the game: y, then z, then x
+	const float outLength = std::sqrt((out.y * out.y + out.z * out.z) + out.x * out.x);
+	if (across.x != 0.0f || across.y != 0.0f || across.z != 0.0f)
 	{
-		across *= glm::length(out) / acrossLength;
+		const float acrossLength = std::sqrt((across.z * across.z + across.y * across.y) + across.x * across.x);
+		across *= outLength / acrossLength;
 	}
-	const float angle = std::fmod(seconds * orbitSpeed, k_TwoPi);
-	return centre + out * std::cos(angle) + across * std::sin(angle);
+	// The angle wraps at the full turn of double precision. The sine uses the angle as it is. The cosine uses the angle
+	// cut to a float, and the result is cut to a float too.
+	const double angle = std::fmod(static_cast<double>(seconds * orbitSpeed), 2.0 * std::numbers::pi);
+	const auto sine = std::sin(angle);
+	const auto cosine = static_cast<float>(std::cos(static_cast<double>(static_cast<float>(angle))));
+	const glm::vec3 acrossPart(static_cast<float>(across.x * sine), static_cast<float>(across.y * sine),
+	                           static_cast<float>(across.z * sine));
+	return (centre + out * cosine) + acrossPart;
 }
 
 bool maths::SwungTooFar(glm::vec2 began, glm::vec2 now, float limit)
 {
-	const float a = glm::length(began);
-	const float b = glm::length(now);
-	if (!(a > 0.0f) || !(b > 0.0f))
-	{
-		return false;
-	}
-	return glm::dot(began / a, now / b) < std::cos(limit);
+	// The engine's table inverse square root makes each way unit length, so a unit way is a little short.
+	// A way of no length becomes a way of no length, and its dot is 0.
+	const float beganScale = openblack::gutils::ModelInverseSquareRoot((began.x * began.x) + (began.y * began.y));
+	const float beganX = beganScale * began.x;
+	const float beganZ = began.y * beganScale;
+	const float nowScale = openblack::gutils::ModelInverseSquareRoot((now.y * now.y) + (now.x * now.x));
+	const float nowX = now.x * nowScale;
+	const float nowZ = nowScale * now.y;
+	const float dot = (nowX * beganX) + (nowZ * beganZ);
+	// The cosine of the limit keeps its full precision
+	return std::cos(static_cast<double>(limit)) > static_cast<double>(dot);
 }

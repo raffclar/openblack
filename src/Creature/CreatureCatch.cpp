@@ -23,30 +23,41 @@ namespace openblack::creature_catch
 
 bool Reaches(const Approach& approach)
 {
-	const glm::vec2 velocity {approach.velocity.x, approach.velocity.z};
-	const float speedSquared = glm::dot(velocity, velocity);
-	if (speedSquared < k_LeastSpeedSquared)
+	const float speedX = approach.velocity.x;
+	const float speedZ = approach.velocity.z;
+	const float speedSquared = (speedZ * speedZ) + (speedX * speedX);
+	if (!(speedSquared >= k_LeastSpeedSquared))
 	{
 		return false;
 	}
-	const glm::vec2 offset {approach.thing.x - approach.creature.x, approach.thing.z - approach.creature.z};
+	const float speed = std::sqrt(speedSquared);
+	// The unit way back along the flight
+	const float back = -1.0f / speed;
+	const float backX = back * speedX;
+	const float backZ = back * speedZ;
+	const float offsetX = approach.thing.x - approach.creature.x;
+	const float offsetZ = approach.thing.z - approach.creature.z;
 	// When it passes closest across the land
-	const float seconds = -glm::dot(offset, velocity) / speedSquared;
+	const float seconds = ((backZ * offsetZ) + (offsetX * backX)) / speed;
 	if (seconds > k_MostSeconds)
 	{
 		return false;
 	}
 	// The creature's animations play faster the smaller it is
 	const float rate = creature_layers::PlaybackRate(approach.size);
-	const float spare = seconds - approach.catchMs / (1000.0f * rate);
-	if (spare < k_LeastSpare)
+	const float passX = ((speedX * seconds) + approach.thing.x) - approach.creature.x;
+	const float flownZ = speedZ * seconds;
+	const float passZ = (flownZ + approach.thing.z) - approach.creature.z;
+	const float msPerSecond = rate * 1000.0f;
+	const float spare = seconds - (approach.catchMs / msPerSecond);
+	if (!(spare >= k_LeastSpare))
 	{
 		return false;
 	}
-	const float step = approach.stepMs / (1000.0f * rate);
-	const float miss = glm::length(offset + velocity * seconds);
-	const float reach = (0.5f * step + spare) * (-approach.stepTravel * approach.modelScale / step);
-	return miss < reach;
+	const float step = approach.stepMs / msPerSecond;
+	const float miss = std::sqrt((passZ * passZ) + (passX * passX));
+	const float reach = ((step * 0.5f) + spare) * (-(approach.stepTravel * approach.modelScale) / step);
+	return reach > miss;
 }
 
 Blend Weigh(glm::vec3 thing, const std::array<glm::vec3, 4>& hands, float modelScale, bool mirrored)

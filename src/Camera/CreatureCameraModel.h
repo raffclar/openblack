@@ -43,7 +43,7 @@ public:
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	/// Reads the keys: the cursor keys with Shift or Ctrl, the wheel, and Ctrl and Shift together for a clear view
 	void HandleActions(std::chrono::microseconds dt) override;
-	void SetFlight(glm::vec3 origin, glm::vec3 focus) override;
+	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override { return creature_follow::Origin(_focus, _view); }
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override { return _focus; }
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const override { return std::chrono::seconds::zero(); }

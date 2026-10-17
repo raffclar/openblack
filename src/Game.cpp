@@ -72,6 +72,7 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/DoubleClickFlight.h"
 #include "Camera/FightCameraModel.h"
 #include "Camera/NearClipping.h"
 #include "Camera/ScriptCameraModel.h"
@@ -955,7 +956,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				    entitiesRegistry.TryGet<ecs::components::Transform, ecs::components::CameraBookmark>(entity);
 				if (transform != nullptr && bookmark != nullptr)
 				{
-					camera.GetModel().SetFlight(bookmark->savedOrigin, transform->position);
+					camera.GetModel().SetFlight(bookmark->savedOrigin, transform->position, camera_fly::k_BookmarkRise);
 				}
 			}
 			break;
@@ -1747,11 +1748,8 @@ bool Game::GameLogicLoop() noexcept
 	{
 		scriptCamera->LetGoOfGoneThings();
 	}
-	// The players' temples take their turn first: one whose heart lost all its life moves on through its destruction
-	if (Locator::templeDestructionSystem::has_value())
-	{
-		Locator::templeDestructionSystem::value().ProcessTurn();
-	}
+	// The players take their turns, each its temple and then its towns
+	ProcessPlayerTurns();
 	// In the turn of the players, each computer mind that a land script switched on starts on the land
 	if (Locator::computerPlayerSystem::has_value())
 	{
@@ -1759,10 +1757,6 @@ bool Game::GameLogicLoop() noexcept
 	}
 	// The sharks' turns start where they are, then the things the scripts walk along tracks go on, before the living
 	Locator::sharkSystem::value().ProcessTurn();
-	// The towns work out what they want and look after their artefacts as their players take their turns, before the
-	// dances go on
-	Locator::townDesireSystem::value().ProcessTurn();
-	Locator::artefactSystem::value().ProcessTurn();
 	// The dances go on after the players and before the things walking tracks and the living
 	Locator::danceSystem::value().ProcessTurn();
 	Locator::walkPathSystem::value().ProcessTurn();
@@ -1773,8 +1767,6 @@ bool Game::GameLogicLoop() noexcept
 		auto pathfinding = profiler.BeginScoped(Profiler::Stage::PathfindingUpdate);
 		Locator::pathfindingSystem::value().Update();
 	}
-	// A town's storage pit or village centre on fire calls its people together
-	Locator::townSystem::value().ProcessTurn();
 	// A town totem that arrives at its share rings the village bell
 	Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 	Locator::chimneySmokeSystem::value().ProcessTurn();
@@ -2411,6 +2403,11 @@ bool Game::Update() noexcept
 	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+	// The ribbons' textures slide on the frames that draw them
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().ScrollChains(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+	}
 	{
 		// The flames, steam and smoke of what burns move on
 		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
@@ -2674,7 +2671,8 @@ bool Game::Update() noexcept
 					// of, or else on the land, turned to its slope
 					const auto [eye, nearPoint] =
 					    camera.OnNearPlane(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(screenSize));
-					const auto cursorDirection = glm::normalize(nearPoint - eye);
+					const auto cursorDirection =
+					    hand_feel::CursorDirection(eye, nearPoint, hand_feel::HoverLimit(HandHoverInputs(eye)));
 					_handSurfaceUp.reset();
 					_handOverObject = false;
 					std::optional<glm::vec3> rest;
@@ -2698,15 +2696,16 @@ bool Game::Update() noexcept
 						});
 						// Holding something, the hand feels along the line to the cursor's point on the land, raised by
 						// its lift for what it holds
-						std::optional<glm::vec3> raisedGround;
+						std::optional<hand_feel::RaisedGround> raisedGround;
 						if (held.has_value())
 						{
-							raisedGround = pick.land.value_or(_handPosition) + glm::vec3(0.0f, grab.GetCursorRaise(), 0.0f);
+							raisedGround = hand_feel::RaisedGround {.ground = pick.land.value_or(_handPosition),
+							                                        .lift = grab.GetCursorRaise()};
 						}
 						const auto feltDirection = hand_feel::FeelDirection(eye, cursorDirection, raisedGround);
 						if (feel == hand_feel::Feel::AtPosition)
 						{
-							rest = hand_feel::RestAtPosition(eye, cursorDirection, feltDirection,
+							rest = hand_feel::RestAtPosition(eye, nearPoint, feltDirection,
 							                                 registry.Get<const ecs::components::Transform>(object).position,
 							                                 ecs::systems::object_measures::TwoDRadius(registry, object));
 							_handOverObject = true;
@@ -2797,7 +2796,7 @@ bool Game::Update() noexcept
 				else
 				{
 					OrientHand(handTransform, glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection),
-					           intersectionTransform.rotation * glm::vec3(0.0f, 1.0f, 0.0f),
+					           _handSurfaceUp.value_or(glm::vec3(0.0f, 1.0f, 0.0f)),
 					           std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 				}
 				PlaceHand(handTransform, std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
@@ -2905,11 +2904,8 @@ bool Game::Update() noexcept
 						handTransform.position = hold->position;
 						TraceHand("totem", handTransform.position);
 						// It faces the way it always does, tipped forwards over the icon
-						using namespace hand_orientation;
-						const auto facingCamera = glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection);
-						const auto cameraHeading = HeadingAlongRay(camera.GetForward(), _handHeading);
 						handTransform.rotation =
-						    TipForwards(TurnToHeading(facingCamera, cameraHeading, _handHeading), _handHeading, hold->tilt);
+						    hand_orientation::TippedHand(hand_orientation::TippedRows(_handHeadingAngle, hold->tilt));
 						// The pointer goes where the hand is on the screen, while it is on it
 						glm::vec3 screen;
 						if (camera.ProjectWorldToScreen(hold->position, glm::vec4(0.0f, 0.0f, glm::vec2(screenSize)), screen))
@@ -5477,6 +5473,7 @@ void Game::LoadLandscape(const std::filesystem::path& path)
 		throw std::runtime_error("Could not find landscape " + path.generic_string());
 	}
 	LoadTimer timer(fmt::format("landscape {}", path.stem().string()));
+	_landscapePath = path;
 	InitializeLevel(fixedName);
 	SetUpLandscape();
 }
@@ -5816,6 +5813,20 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	}
 	_handHoldZoomer.Reset(_handDistance);
 
+	// The cursor's point on the near plane, which the hand's line of sight goes through
+	std::optional<glm::vec3> cursorNearPoint;
+	auto lineEye = eye;
+	if (Locator::windowing::has_value())
+	{
+		const auto size = Locator::windowing::value().GetSize();
+		if (size.x > 0 && size.y > 0)
+		{
+			const auto line = camera.OnNearPlane(static_cast<glm::vec2>(_mousePosition) / static_cast<glm::vec2>(size));
+			lineEye = line.eye;
+			cursorNearPoint = line.point;
+		}
+	}
+
 	// The game puts the origin of the hand, by its fingertips, on the line of sight through the cursor, so the hand is
 	// always under the cursor on screen. How far along it depends on the land the cursor is over. Turning the camera
 	// with the mouse holds the cursor still, so the hand stays where it is on screen and eases to the land coming under
@@ -5832,20 +5843,13 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		// The furthest the hand may be is the land less its height, so its fingers hang down to the land, or the
 		// water over the sea; holding something, the land itself. Over a thing it eases to where it rests on the thing,
 		// touching it.
-		const bool holding = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldPose().has_value();
-		const auto overSea =
-		    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
-		const auto hover = hand_feel::HoverDistancesOf({
-		    .camera = eye,
-		    .land = _cursorLand,
-		    .landIsSea = overSea,
-		    .holding = holding,
-		    .restOnThing = _handRestOnThing,
-		    .handHeight = k_HandHeight * HandAnimation::SizeAtDistance(_handDistance),
-		    .currentDistance = _handDistance,
-		    .minDistance = k_HandMinDistance,
-		    .reach = handReach,
-		});
+		auto inputs = HandHoverInputs(lineEye);
+		inputs.restOnThing = _handRestOnThing;
+		if (cursorNearPoint.has_value())
+		{
+			inputs.cursorPoint = hand_feel::PointAlongCursor(lineEye, *cursorNearPoint, hand_feel::HoverLimit(inputs));
+		}
+		const auto hover = hand_feel::HoverDistancesOf(inputs);
 
 		// The hand eases out slowly away from the camera and quickly towards it, but not while it pulls a thing out of
 		// the ground: the pull places it then
@@ -5853,9 +5857,30 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		hand_feel::EaseHover(_handHoverZoomer, hover.target, deltaSeconds, pulling);
 		_handDistance = glm::clamp(glm::min(_handHoverZoomer.GetValue(), hover.limit), k_HandMinDistance, handReach);
 	}
-	_handPosition = eye + _handRayDirection * _handDistance;
+	// The hand is on the line of sight through the cursor at its distance
+	_handPosition = cursorNearPoint.has_value() ? hand_feel::PointAlongCursor(lineEye, *cursorNearPoint, _handDistance)
+	                                            : eye + _handRayDirection * _handDistance;
 	_handCrossFade.Update(deltaSeconds);
 	handTransform.position = _handCrossFade.Apply(_handPosition);
+}
+
+hand_feel::Hover Game::HandHoverInputs(glm::vec3 eye) const
+{
+	const bool holding = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldPose().has_value();
+	const auto overSea =
+	    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
+	return {
+	    .camera = eye,
+	    .land = _cursorLand,
+	    .landIsSea = overSea,
+	    .holding = holding,
+	    .restOnThing = std::nullopt,
+	    .cursorPoint = std::nullopt,
+	    .handHeight = k_HandHeight * HandAnimation::SizeAtDistance(_handDistance),
+	    .currentDistance = _handDistance,
+	    .minDistance = k_HandMinDistance,
+	    .reach = Locator::cameraHelpSystem::value().Get().handReach,
+	};
 }
 
 void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
@@ -5865,8 +5890,9 @@ void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
 		return;
 	}
 	auto& knocks = Locator::abodeKnockSystem::value();
-	// The houses' read-out of their people runs by the frame
-	knocks.Update(Locator::time::value().GetFrameRealTime());
+	// The houses' read-out of their people runs by the frame's game time, so it stops while the game pauses and
+	// follows the game speed
+	knocks.Update(Locator::time::value().GetFrameGameTime());
 	// A knock while the tap plays doesn't start it over, the hand already being where it knocked
 	if (knocks.TakeHandKnock())
 	{
@@ -6036,6 +6062,11 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 		                              rayDirection);
 		if (!glm::any(glm::isnan(rayDirection)))
 		{
+			// Both forms of the heading change together, only when the line of sight leans across the land
+			if (LeansAcrossLand(rayDirection))
+			{
+				_handHeadingAngle = HeadingAngle(rayDirection);
+			}
 			_handHeading = HeadingAlongRay(rayDirection, _handHeading);
 		}
 	}
@@ -6079,7 +6110,7 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 			{
 				up = hand_navigation_pose::UpTowardsFocus(_cursorWorldPosition.value_or(_handPosition), camera.GetFocus());
 			}
-			_handUp.SetDestination(up, k_UpEaseSeconds);
+			_handUp.SetDestination(hand_feel::UnitUp(up), k_UpEaseSeconds);
 		}
 		_handUp.Update(deltaSeconds);
 	}
@@ -6090,10 +6121,39 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	{
 		_handUp.Reset(glm::vec3(0.0f, 1.0f, 0.0f));
 	}
-	const auto up = _handUp.GetValue();
+	const auto up = hand_feel::UnitUp(_handUp.GetValue());
 	const auto onLevelLand = TurnToHeading(facingCamera, cameraHeading, _handHeading);
 	_handOnLevelLand = onLevelLand;
 	handTransform.rotation = glm::length(up) > 0.0f ? StandOnSlope(onLevelLand, _handHeading, up) : onLevelLand;
+}
+
+void Game::ProcessPlayerTurns()
+{
+	// Each player takes its turn in the order of the players, the neutral player last. First its temple: one whose heart
+	// lost all its life moves on through its destruction, and a hurt heart beams. Then each of its towns, in the order
+	// the player gained them: the town passes over its buildings, works out what it wants, looks after its artefacts,
+	// and goes on with the rest of its turn. So the game's random numbers are drawn in the same order as the game draws
+	// them.
+	if (Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().StartTurn();
+	}
+	auto& towns = Locator::townSystem::value();
+	for (uint8_t index = 0; index < static_cast<uint8_t>(PlayerNames::_COUNT); ++index)
+	{
+		const auto player = static_cast<PlayerNames>(index);
+		if (Locator::templeDestructionSystem::has_value())
+		{
+			Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
+		}
+		for (const auto town : towns.TownsInGainedOrder(player))
+		{
+			towns.ProcessTownBuildings(town);
+			Locator::townDesireSystem::value().ProcessTown(town);
+			Locator::artefactSystem::value().ProcessTown(town);
+			towns.ProcessTownTurn(town);
+		}
+	}
 }
 
 std::chrono::milliseconds Game::CameraStepTime() const

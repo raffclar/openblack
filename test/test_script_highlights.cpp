@@ -184,18 +184,21 @@ TEST(ScriptHighlightRules, TheBeatBlendsBetweenTurnsFromFourTenthsToOne)
 	const Pulse rising {.phase = 0.0f, .level = 1.0f, .previous = 0.0f};
 	EXPECT_NEAR(PulseShare(rising, 0.5f), 0.7, 1e-6);
 	EXPECT_NEAR(PulseShare(rising, 1.0f), 1.0, 1e-6);
+	// The float sum 0.6 + 0.4 rounds to a whole 1, as in the game
+	EXPECT_EQ(PulseShare(rising, 1.0f), 1.0f);
+	EXPECT_EQ(PulseShare(low, 0.5f), 0.4f);
 }
 
 TEST(ScriptHighlightRules, TheYellowBeamBeatsWithTheScroll)
 {
-	EXPECT_EQ(BeamColour(HighlightInfo::Silver, 0.7), 0x14b4dcffu);
+	EXPECT_EQ(BeamColour(HighlightInfo::Silver, 0.7f), 0x14b4dcffu);
 	// The beat runs from 0.4 to 1, so the beam's alpha runs from 32 to 80
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.4), 0x20ffff00u);
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.7), 0x38ffff00u);
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.99), 0x4fffff00u);
-	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 1.0), 0x50ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.4f), 0x20ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.7f), 0x38ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 0.99f), 0x4fffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Gold, 1.0f), 0x50ffff00u);
 	// A plain scroll's beam is the gold one's
-	EXPECT_EQ(BeamColour(HighlightInfo::Scroll, 0.7), 0x38ffff00u);
+	EXPECT_EQ(BeamColour(HighlightInfo::Scroll, 0.7f), 0x38ffff00u);
 }
 
 TEST(ScriptHighlightRules, TheYellowBeamShowsAllThroughATurn)

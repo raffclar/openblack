@@ -37,8 +37,8 @@ struct Request
 
 /// The agenda for what the script gave: the action that many times, then waiting until its body is free. An individual
 /// action is played through each time; a static action starts (left to right half the time), loops until
-/// k_StaticActionSeconds after it started and ends. A static action with no start before it never begins, so the agenda
-/// never ends.
+/// k_StaticActionSeconds after it started and ends. With no plays it only waits. An action whose clip the body does not
+/// have (static action 0, or a number below 0) never begins, so the agenda never ends.
 [[nodiscard]] std::vector<creature_mind::Step> Agenda(const Request& request);
 
 /// Whether a creature has played what it was doing: its agenda is over, or it is only being idle. A creature busy with

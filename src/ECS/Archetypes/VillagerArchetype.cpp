@@ -69,7 +69,8 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	const villager_age::NewbornKind kind {.grownUp = info.grownUpAge,
 	                                      .hungryForFood = info.hungryForFood,
 	                                      .processChecksEvery = info.processChecksEvery,
-	                                      .ageToScale = info.ageToScale.values};
+	                                      .ageToScale = info.ageToScale.values,
+	                                      .beforeTable = villager_age::BeforeTable(info.dancingSpeed)};
 	auto born = villager_age::MakeNewborn(
 	    age, turn, kind, [&random](float limit) { return random.GameFloatRand(limit); },
 	    [&random](uint32_t limit) { return random.GameRand(limit); });
@@ -81,9 +82,10 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 		    villager_age::SetAge(special_villager::NamedAge(age, names.at(*name).age), born.age, info.grownUpAge);
 		born.age = setting.age;
 		born.child = setting.child;
-		born.scale = villager_age::GrownScale(setting.age, info.grownUpAge, kind.ageToScale,
-		                                      villager_age::StartScale(setting.age, info.grownUpAge, kind.ageToScale),
-		                                      [&random](float limit) { return random.GameFloatRand(limit); });
+		born.scale =
+		    villager_age::GrownScale(setting.age, info.grownUpAge, kind.ageToScale,
+		                             villager_age::StartScale(setting.age, info.grownUpAge, kind.ageToScale, kind.beforeTable),
+		                             [&random](float limit) { return random.GameFloatRand(limit); });
 	}
 
 	registry.Assign<Transform>(entity, position, glm::eulerAngleY(glm::radians(180.0f)), glm::vec3(born.scale));

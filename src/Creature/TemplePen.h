@@ -19,6 +19,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
+
 /// A creature's pen at its player's temple, and how the creature is shown smaller as it walks into it.
 ///
 /// While its player's temple stands, a creature's home is the place in front of the temple that the temple's mesh marks
@@ -40,6 +42,8 @@ inline constexpr float k_PenSize = 0.22f;
 inline constexpr float k_FirstWallTurn = 3.83f;
 inline constexpr float k_WallsApart = 0.8975979f;
 
+/// A point's map position on the ground: x and z times the fixed units in a metre as a float product, then truncated
+[[nodiscard]] map_coords::MapCoords MapPosition(glm::vec3 point);
 /// A point's (x, z) as precisely as a map position keeps it
 [[nodiscard]] glm::vec2 MapPlace(glm::vec3 point);
 

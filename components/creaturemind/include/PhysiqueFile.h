@@ -14,6 +14,8 @@
 #include <filesystem>
 #include <optional>
 #include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 /// Creature physique files: the small file the game saves beside the player's creature's mind as a land is cleared, from
@@ -39,9 +41,16 @@ struct PhysiqueFileData
 	bool operator==(const PhysiqueFileData&) const = default;
 };
 
+/// The game keeps the physique file beside the mind file, with the name of the mind file after "Physique"
+[[nodiscard]] std::string PhysiqueFileName(std::string_view mindFile);
+/// Whether a file of the creature mind folder is a physique file and not a mind file
+[[nodiscard]] bool IsPhysiqueFileName(std::string_view name);
+
 [[nodiscard]] std::vector<uint8_t> WritePhysique(const PhysiqueFileData& data);
 /// The file read back, or none when it ends early or counts more marks than it holds
 [[nodiscard]] std::optional<PhysiqueFileData> ReadPhysique(std::span<const uint8_t> bytes);
+/// The file at the path read back, or none when it cannot be opened or read
+[[nodiscard]] std::optional<PhysiqueFileData> ReadPhysiqueFile(const std::filesystem::path& path);
 /// Whether the file was written whole
 [[nodiscard]] bool WritePhysiqueFile(const std::filesystem::path& path, const PhysiqueFileData& data);
 

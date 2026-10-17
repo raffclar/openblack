@@ -19,7 +19,7 @@ using namespace openblack;
 namespace
 {
 /// A speed state times the milliseconds over this is metres: 655.36 speed state is a metre a second
-constexpr double k_SpeedStateMillisecondsPerMetre = 655350.0;
+constexpr float k_SpeedStateMillisecondsPerMetre = 655350.0f;
 /// The milliseconds of a turn, and the most of them the clock counts into one
 constexpr uint32_t k_TurnMilliseconds = 100;
 constexpr uint32_t k_LastMillisecond = 99;
@@ -42,17 +42,17 @@ uint32_t animals::AdvanceClip(const ClipTiming& clip, uint32_t place, int32_t pl
 
 namespace
 {
-/// The milliseconds of a clip the ground a frame covers is worth, fraction and all; none for a clip without a stride
-double MovingShare(const animals::ClipTiming& clip, uint16_t speedState, uint32_t frameMilliseconds, float scale)
+/// The milliseconds of a clip the ground a frame covers is worth, fraction and all; none for a clip without a stride.
+/// Each step is a single precision step, in the game's order.
+float MovingShare(const animals::ClipTiming& clip, uint16_t speedState, uint32_t frameMilliseconds, float scale)
 {
 	if (!(clip.stride > 0.0f) || !(scale > 0.0f))
 	{
-		return 0.0;
+		return 0.0f;
 	}
-	// The metres are kept to single precision
-	const auto metres = static_cast<float>(static_cast<double>(static_cast<float>(uint64_t {speedState} * frameMilliseconds)) /
-	                                       (static_cast<double>(scale) * k_SpeedStateMillisecondsPerMetre));
-	return static_cast<double>(metres) / static_cast<double>(clip.stride) * static_cast<double>(clip.playTime);
+	const auto travelled = static_cast<float>(uint64_t {speedState} * frameMilliseconds);
+	const float metres = travelled / (scale * k_SpeedStateMillisecondsPerMetre);
+	return metres / clip.stride * static_cast<float>(clip.playTime);
 }
 } // namespace
 
@@ -70,9 +70,9 @@ animals::CarriedPlay animals::MovingPlayCarried(const ClipTiming& clip, uint16_t
 	{
 		return {};
 	}
-	const double share = MovingShare(clip, speedState, frameMilliseconds, scale) + static_cast<double>(carry);
-	const double whole = std::floor(share);
-	return {.played = static_cast<int32_t>(whole), .carry = static_cast<float>(share - whole)};
+	const float share = MovingShare(clip, speedState, frameMilliseconds, scale) + carry;
+	const float whole = std::floor(share);
+	return {.played = static_cast<int32_t>(whole), .carry = share - whole};
 }
 
 animals::CarriedPlay animals::FramePlay(const ClipTiming& clip, bool moving, uint16_t speedState, uint32_t frameMilliseconds,

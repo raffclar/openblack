@@ -353,7 +353,7 @@ void TempleDestructionSystem::EndTurn()
 	}
 }
 
-void TempleDestructionSystem::ProcessTurn()
+void TempleDestructionSystem::StartTurn()
 {
 	auto* registry = _world->Entities();
 	if (registry == nullptr)
@@ -370,28 +370,41 @@ void TempleDestructionSystem::ProcessTurn()
 		_world->StopSound(loop.second);
 		return true;
 	});
-	std::vector<entt::entity> destroying;
-	registry->Each<const Temple>([&destroying](entt::entity entity, const Temple& temple) {
-		if (temple.destroying)
+}
+
+void TempleDestructionSystem::ProcessPlayerTurn(PlayerNames player)
+{
+	auto* registry = _world->Entities();
+	if (registry == nullptr)
+	{
+		return;
+	}
+	std::vector<entt::entity> temples;
+	registry->Each<const Temple>([&temples, player](entt::entity entity, const Temple& temple) {
+		if (temple.owner == player)
 		{
-			destroying.push_back(entity);
+			temples.push_back(entity);
 		}
 	});
-	for (const auto entity : destroying)
+	// Each heart moves on through its destruction, then beams if it is hurt, its destruction under way or not
+	for (const auto entity : temples)
 	{
-		if (registry->Valid(entity))
+		if (registry->Valid(entity) && registry->Get<const Temple>(entity).destroying)
 		{
 			Step(entity, registry->Get<Temple>(entity));
 		}
-	}
-	// Then every heart that is hurt beams, its destruction under way or not
-	std::vector<entt::entity> temples;
-	registry->Each<const Temple>([&temples](entt::entity entity, const Temple&) { temples.push_back(entity); });
-	for (const auto entity : temples)
-	{
 		if (registry->Valid(entity))
 		{
 			DamageEffect(entity, registry->Get<Temple>(entity));
 		}
+	}
+}
+
+void TempleDestructionSystem::ProcessTurn()
+{
+	StartTurn();
+	for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
+	{
+		ProcessPlayerTurn(static_cast<PlayerNames>(player));
 	}
 }

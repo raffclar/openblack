@@ -21,6 +21,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreatureStatusPanel.h"
 
@@ -79,11 +80,14 @@ private:
 /// Which of the temple mesh's marked places is the pen in front of it, its creature's home
 inline constexpr size_t k_TemplePenPlace = 15;
 
-/// Where the pen of a temple is: its mesh's marked place for it turned, scaled and moved with the temple, kept as
-/// precisely as a map position (the height as the mesh has it; the creature is set on the ground). None when the mesh
-/// marks no such place
-[[nodiscard]] std::optional<glm::vec3> TemplePen(glm::vec3 templePosition, const glm::mat3& templeRotation,
-                                                 glm::vec3 templeScale, std::span<const glm::mat4> markedPlaces);
+/// Where the pen of a temple is on the map: the marked place of its mesh, turned, scaled and moved with the temple as
+/// the game does it in single precision, then truncated to the map's fixed point. The altitude is 0, on the ground. None
+/// when the mesh marks no such place
+[[nodiscard]] std::optional<map_coords::MapCoords> TemplePenOnMap(glm::vec3 templePosition, float yAngle, float scale,
+                                                                  std::span<const glm::mat4> markedPlaces);
+/// The same pen in metres, the height as the mesh has it (the creature is set on the ground)
+[[nodiscard]] std::optional<glm::vec3> TemplePen(glm::vec3 templePosition, float yAngle, float scale,
+                                                 std::span<const glm::mat4> markedPlaces);
 
 /// Where a creature that passed out is carried to come round, its home: while its player's temple stands, the temple's
 /// pen, whatever home it was given; else the home it was given, or for a player without either (as on the testbed) the

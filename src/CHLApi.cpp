@@ -315,7 +315,10 @@ lhvm::ScriptType TaskType(uint32_t task)
 /// A script's mistake the game tells of, and carries on
 void ScriptMessage(std::string_view message)
 {
-	SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "{}", message);
+	if (const auto logger = spdlog::get("scripting"))
+	{
+		SPDLOG_LOGGER_WARN(logger, "{}", message);
+	}
 }
 
 /// Nothing outside is in view while the player is inside the temple
@@ -5238,9 +5241,8 @@ void MoveMusic() // 149 MOVE_MUSIC
 
 void GetInclusionDistance() // 150 GET_INCLUSION_DISTANCE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The world camera's distance to the fence from its last fence test
+	Pushf(Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f);
 }
 
 void GetLandHeight() // 151 GET_LAND_HEIGHT
@@ -5955,10 +5957,18 @@ void ShakeCamera() // 201 SHAKE_CAMERA
 
 void SetAnimationModify() // 202 SET_ANIMATION_MODIFY
 {
-	// const auto creature = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature comes off the stack first. Only the value 1 sets real time; all other values clear it.
+	const auto thing = PopObject();
+	const bool realTime = Pop().uintVal == 1;
+	const auto creature = CreatureForNative(thing);
+	if (!creature.has_value())
+	{
+		return;
+	}
+	if (auto* animation = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureAnimation>(*creature))
+	{
+		animation->realTime = realTime;
+	}
 }
 
 void SetAviSequence() // 203 SET_AVI_SEQUENCE
@@ -6001,24 +6011,12 @@ void PlayGesture() // 204 PLAY_GESTURE
 	NotImplemented();
 }
 
-/// The story moves a creature to a stage of growing up: its mind takes up the stage, and reaching the stage it may
-/// leave home from, a creature kept near its home off the leash is let go
+/// The story moves a creature to a stage of growing up
 void MoveCreatureToStage(entt::entity creature, uint32_t stage)
 {
 	if (Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().MoveToStage(creature, stage);
-	}
-	if (!Locator::leashSystem::has_value())
-	{
-		return;
-	}
-	auto& leashes = Locator::leashSystem::value();
-	const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(creature);
-	if (leash != nullptr &&
-	    creature_development::ReleasedFromHome(stage, leash->confinementRadius, leashes.IsLeashed(creature)))
-	{
-		leashes.ClearConfinement(creature);
 	}
 }
 
@@ -6327,6 +6325,7 @@ void SetCreatureHome() // 223 SET_CREATURE_HOME
 		leash = &registry.Assign<ecs::components::CreatureLeash>(creature);
 	}
 	leash->home = home;
+	leash->homeOnMap = temple_pen::MapPosition(position);
 }
 
 void GetHitObject() // 224 GET_HIT_OBJECT

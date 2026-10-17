@@ -8,9 +8,11 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <numbers>
 #include <optional>
 #include <vector>
@@ -101,6 +103,16 @@ TEST(CreatureDesires, TheSigmoidSteps)
 	EXPECT_FLOAT_EQ(creature_desires::Sigmoid(0.5f, 0.5f), 0.5f);
 	EXPECT_FLOAT_EQ(creature_desires::Sigmoid(0.0f, 1.0f), 1.0f);
 	EXPECT_LT(creature_desires::Sigmoid(0.9f, 0.1f), 1e-6f);
+}
+
+TEST(CreatureDesires, TheSigmoidStepsHaveTheBitsOfTheGameTable)
+{
+	// These values read the steps 16, 24 and 32 of the table
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_desires::Sigmoid(0.5f, 0.29f)), 0x3C868D9Bu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_desires::Sigmoid(0.0f, 0.18f)), 0x3F7BCB93u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_desires::SigmoidStep(-0.6f, 0.0f)), 0x3F7FFFB2u);
+	// The step without the cut off still gives 0 for a threshold of 1
+	EXPECT_EQ(creature_desires::SigmoidStep(1.0f, 0.5f), 0.0f);
 }
 
 TEST(CreatureDesires, ADesireGrowsByItsDriveOverItsIncreaseTime)
@@ -408,16 +420,17 @@ TEST(CreatureIdleMind, EachFacePulledMovesTheVarietyOn)
 {
 	creature_mind::IdleMind mind;
 	const creature_mind::Senses senses {};
-	const auto first = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(3));
+	// The variety moves on by the draw from the random numbers of the game (the second source)
+	const auto first = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(0), Always(3));
 	ASSERT_TRUE(first.has_value());
 	EXPECT_EQ(first->face, creature_face::Face::Scared);
 	EXPECT_EQ(mind.faceVariety, 3u);
-	const auto second = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(3));
+	const auto second = creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, Always(0), Always(3));
 	ASSERT_TRUE(second.has_value());
 	EXPECT_EQ(second->face, creature_face::Face::Ooh);
 	EXPECT_EQ(mind.faceVariety, 6u);
 	// A reason that pulls no face leaves it be
-	EXPECT_FALSE(creature_mind::PullFace(mind, creature_face::Cue::None, senses, Always(3)).has_value());
+	EXPECT_FALSE(creature_mind::PullFace(mind, creature_face::Cue::None, senses, Always(0), Always(3)).has_value());
 	EXPECT_EQ(mind.faceVariety, 6u);
 }
 
@@ -545,15 +558,78 @@ TEST(CreatureIdleMind, AnActionWaitsWhileTheCreatureLetsGoOfWhatItHolds)
 	commands = creature_mind::Think(mind, senses, Always(0));
 	EXPECT_FALSE(commands.letGo.has_value());
 	EXPECT_FALSE(commands.playOnce.has_value());
-	// It tries again when its body is free but it still holds the thing
-	senses.hands = creature_mind::HandsState::Failed;
-	EXPECT_EQ(creature_mind::Think(mind, senses, Always(0)).letGo, creature_mind::LetGo::AsItChooses);
 	// With empty hands the action starts
 	senses.held.reset();
 	senses.hands = creature_mind::HandsState::Done;
 	commands = creature_mind::Think(mind, senses, Always(0));
 	EXPECT_FALSE(commands.letGo.has_value());
 	EXPECT_EQ(commands.playOnce, 60u);
+}
+
+TEST(CreatureIdleMind, TheHandsAreCheckedOnlyUntilTheLetGoStarts)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told, {{.kind = creature_mind::Step::Kind::Action, .animation = 60}});
+	auto senses = FakeBody {}.Senses();
+	senses.held = 7u;
+	senses.heldLeft = true;
+	uint32_t draws = 0;
+	const creature_mind::Random counted = [&draws](uint32_t) {
+		++draws;
+		return 1u;
+	};
+	EXPECT_EQ(creature_mind::Think(mind, senses, Always(0), counted).letGo, creature_mind::LetGo::AsItChooses);
+	// The let-go was cut and the thing is still in the left hand: the action starts with no draw, on the right side
+	auto commands = creature_mind::Think(mind, senses, Always(0), counted);
+	EXPECT_FALSE(commands.letGo.has_value());
+	EXPECT_EQ(commands.playOnce, 60u);
+	EXPECT_FALSE(commands.mirrored);
+	EXPECT_EQ(draws, 0u);
+}
+
+TEST(CreatureIdleMind, AStaticStepDrawsASideEachTurnWhileTheHandsLetGo)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told,
+	                    {{.kind = creature_mind::Step::Kind::Static, .seconds = 5.0f, .sequence = {27, 28, 29}}});
+	auto senses = FakeBody {}.Senses();
+	senses.held = 7u;
+	uint32_t draws = 0;
+	const creature_mind::Random counted = [&draws](uint32_t) {
+		++draws;
+		return 0u;
+	};
+	EXPECT_TRUE(creature_mind::Think(mind, senses, Always(0), counted).letGo.has_value());
+	EXPECT_EQ(draws, 0u);
+	// The let-go keeps the body busy: each turn the start is refused after its draw
+	senses.hands = creature_mind::HandsState::Busy;
+	for (uint32_t turn = 1; turn <= 3; ++turn)
+	{
+		const auto commands = creature_mind::Think(mind, senses, Always(0), counted);
+		EXPECT_FALSE(commands.startSequence.has_value());
+		EXPECT_EQ(draws, turn);
+	}
+	// Free again, the static action starts with its draw
+	senses.held.reset();
+	senses.hands = creature_mind::HandsState::Done;
+	EXPECT_TRUE(creature_mind::Think(mind, senses, Always(0), counted).startSequence.has_value());
+	EXPECT_EQ(draws, 4u);
+}
+
+TEST(CreatureIdleMind, AFaintCutsTheLetGoAndKeepsTheThingInTheHand)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Faint, creature_mind::Faint(1.0f));
+	auto senses = FakeBody {}.Senses();
+	senses.held = 7u;
+	EXPECT_TRUE(creature_mind::Think(mind, senses, Always(0)).letGo.has_value());
+	senses.hands = creature_mind::HandsState::Busy;
+	const auto commands = creature_mind::Think(mind, senses, Always(0), Always(1));
+	ASSERT_TRUE(commands.startSequence.has_value());
+	EXPECT_TRUE(commands.cutBody);
+	EXPECT_TRUE(commands.mirrored);
+	EXPECT_TRUE(commands.fainted);
+	EXPECT_FALSE(commands.letGo.has_value());
 }
 
 TEST(CreatureIdleMind, APickUpPutsDownADifferentThingAndSkipsTheThingItHolds)
@@ -571,6 +647,7 @@ TEST(CreatureIdleMind, APickUpPutsDownADifferentThingAndSkipsTheThingItHolds)
 	EXPECT_EQ(commands.letGo, creature_mind::LetGo::PutDown);
 	EXPECT_FALSE(commands.object.has_value());
 	// It holds the thing that it was to pick up: it does not do the pick-up
+	creature_mind::Plan(mind, creature_mind::Activity::Examine, {pickUp, examine});
 	senses.held = 3u;
 	commands = creature_mind::Think(mind, senses, Always(0));
 	EXPECT_FALSE(commands.letGo.has_value());
@@ -593,6 +670,18 @@ TEST(CreatureIdleMind, AStepThatNeedsNothingKeepsWhatItHolds)
 	const auto commands = creature_mind::Think(mind, senses, Always(0));
 	EXPECT_FALSE(commands.letGo.has_value());
 	EXPECT_TRUE(commands.move.has_value());
+}
+
+// With empty hands nothing waits. With a thing in the hand, the let-go starts only when the body and the hands are free.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureIdleMind, TheCheckOfTheHandsLetsGoOnlyWhenTheBodyAndHandsAreFree)
+{
+	using creature_mind::HandsCheck;
+	EXPECT_EQ(creature_mind::CheckHands(false, true, true), HandsCheck::Free);
+	EXPECT_EQ(creature_mind::CheckHands(false, false, false), HandsCheck::Free);
+	EXPECT_EQ(creature_mind::CheckHands(true, false, false), HandsCheck::LetGo);
+	EXPECT_EQ(creature_mind::CheckHands(true, true, false), HandsCheck::Wait);
+	EXPECT_EQ(creature_mind::CheckHands(true, false, true), HandsCheck::Wait);
 }
 
 TEST(CreatureIdleMind, ItPutsDownACreatureOrAThingForImpressCompassionOrCuriosity)
@@ -662,16 +751,19 @@ TEST(CreatureIdleMind, CommunicatingTurnsToTheCameraThenShowsWhatItFeels)
 	EXPECT_GE(mind.step, mind.agenda.size());
 }
 
-TEST(CreatureIdleMind, WithNothingToShowACommunicationIsDoneAtOnce)
+TEST(CreatureIdleMind, WithNothingToShowACommunicationStopsAsAFailure)
 {
 	creature_mind::IdleMind mind;
 	creature_mind::Plan(mind, creature_mind::Activity::ShowDesire,
-	                    {{.kind = creature_mind::Step::Kind::Communicate, .seconds = 0.0f}});
+	                    {{.kind = creature_mind::Step::Kind::Communicate, .seconds = 0.0f},
+	                     {.kind = creature_mind::Step::Kind::Wait, .seconds = 5.0f}});
 	const auto commands = creature_mind::Think(mind, FakeBody {}.Senses(), Always(0));
 	// It still counts as a communication, so that it does not want to show its state again for a time
 	EXPECT_TRUE(commands.communicated.has_value());
 	EXPECT_FALSE(commands.playOnce.has_value());
+	// The steps after it do not occur, and the agenda is not done
 	EXPECT_GE(mind.step, mind.agenda.size());
+	EXPECT_TRUE(mind.gaveUp);
 }
 
 TEST(CreatureIdleMind, AnAbandonedSitEnds)
@@ -909,12 +1001,11 @@ TEST(CreatureIdleMind, HangingAroundGoesOutFromHomeAwayFromTheTemple)
 	ASSERT_TRUE(agenda[4].order.seconds.has_value());
 	EXPECT_NEAR(*agenda[4].order.seconds, 1.0f, k_Tolerance);
 	EXPECT_EQ(agenda[4].face, creature_face::Cue::Amazed);
-	// Then it turns to the temple and sits for ten seconds and a little more, mirrored half the time
+	// Then it turns to the temple and sits for ten seconds and a little more
 	EXPECT_EQ(agenda[5].movement.kind, Movement::Kind::FacePoint);
 	EXPECT_NEAR(agenda[5].movement.point.y, 100.0f, k_Tolerance);
 	EXPECT_EQ(agenda[6].kind, Kind::Static);
 	EXPECT_EQ(agenda[6].sequence[1], animations::k_Sit);
-	EXPECT_TRUE(agenda[6].mirrorAtRandom);
 	EXPECT_NEAR(agenda[6].seconds, 10.0f + (5.0f * 0.005f), k_Tolerance);
 	EXPECT_EQ(agenda[6].face, creature_face::Cue::None);
 }
@@ -1214,6 +1305,8 @@ TEST(CreatureNeedsMind, FaintedItLiesFourSecondsASizeAndEightMoreThenComesRound)
 	EXPECT_EQ((*commands.startSequence)[0], animations::k_Faint);
 	EXPECT_EQ((*commands.startSequence)[2], animations::k_GetUp);
 	EXPECT_TRUE(creature_mind::IsUnconscious(mind));
+	// Those near it react as to a death
+	EXPECT_TRUE(commands.fainted);
 	body.Obey(commands, 1);
 	std::optional<int> cameRound;
 	for (int turn = 1; turn < 200 && !cameRound; ++turn)

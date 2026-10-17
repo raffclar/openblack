@@ -171,6 +171,9 @@ struct HoldFacts
 [[nodiscard]] float HandRise(HoldType hold, float lowering, float handSize, std::optional<float> rootedHeight);
 /// How far the point the hand picks on the land is raised for what it holds
 [[nodiscard]] float CursorRaise(float handRise);
+/// Each axis made as long as the size: the size divided by the axis's length (its squares added z, y, then x), times
+/// the axis. An axis of zero length stays.
+[[nodiscard]] glm::mat3 AxesAtSize(const glm::mat3& axes, float size);
 
 /// The spring that drags the hand after where it should be while it is ready to throw. It takes a fixed step for every
 /// few milliseconds of game time, and what it holds leaves the hand at its speed. The game time the hand spends holding

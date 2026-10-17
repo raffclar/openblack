@@ -244,12 +244,22 @@ void ArtefactSystem::ProcessTurn()
 	registry.Each<const Town>([&towns](entt::entity town, const Town&) { towns.push_back(town); });
 	for (const auto town : towns)
 	{
-		for (const auto object : ArtefactsOf(town))
+		ProcessTown(town);
+	}
+}
+
+void ArtefactSystem::ProcessTown(entt::entity town)
+{
+	auto& registry = Entities();
+	if (!Locator::infoConstants::has_value() || !Locator::time::has_value())
+	{
+		return;
+	}
+	for (const auto object : ArtefactsOf(town))
+	{
+		if (registry.Valid(object) && registry.AllOf<TownArtefact>(object))
 		{
-			if (registry.Valid(object) && registry.AllOf<TownArtefact>(object))
-			{
-				Process(object, registry.Get<TownArtefact>(object));
-			}
+			Process(object, registry.Get<TownArtefact>(object));
 		}
 	}
 }

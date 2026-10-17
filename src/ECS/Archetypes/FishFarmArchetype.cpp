@@ -56,7 +56,7 @@ bool IsOpenSea(const LandIslandInterface& island, glm::vec2 point)
 {
 	const auto x = map_coords::FtoL(point.x * 65536.0f * 0.1f);
 	const auto z = map_coords::FtoL(point.y * 65536.0f * 0.1f);
-	return island.GetAltitude(x, z, false) == 0.0;
+	return island.GetAltitude(x, z, false) == 0.0f;
 }
 } // namespace
 

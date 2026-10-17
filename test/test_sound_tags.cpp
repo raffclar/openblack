@@ -110,7 +110,7 @@ public:
 	void AddAnimEffects(const std::string&, audio::AnimEffectTable) override {}
 	using audio::AudioManagerInterface::PlayAnimEffect;
 	audio::AnimEffectPlay PlayAnimEffect(const std::string&, std::span<const int32_t>, entt::entity, const glm::vec3&,
-	                                     const std::optional<audio::SoundEffectConditions>&) override
+	                                     const std::optional<audio::SoundEffectConditions>&, audio::AnimEffectMeasure) override
 	{
 		return {};
 	}
@@ -215,6 +215,18 @@ TEST_F(SoundTags, ADelayedPointSoundWaitsToReachTheCamera)
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	ASSERT_EQ(Audio().emitters.size(), 1u);
 	EXPECT_TRUE(Audio().emitters.begin()->second.played);
+}
+
+TEST_F(SoundTags, ADelayedPointSoundAtItsReachNeverStarts)
+{
+	// Arrived at the camera, a delayed sound starts only nearer than its reach
+	const auto point = _tags.CreatePointSound(k_Sound, {k_Reach, 0.0f, 0.0f}, true);
+	for (int turn = 0; turn < 20; ++turn)
+	{
+		_tags.ProcessTurn(glm::vec3(0.0f));
+	}
+	EXPECT_TRUE(Audio().emitters.empty());
+	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(point));
 }
 
 TEST_F(SoundTags, InsideTheTempleOnlyTheTemplesSoundsStart)

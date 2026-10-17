@@ -365,7 +365,9 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	                             "wherever the game put the cursor; immediate: seen the same frame, as before");
 	return {
 	    {.name = "state",
-	     .description = "The pointer, the buttons held, the hand, what the cursor picks, and the input still to come",
+	     .description =
+	         "The pointer, the buttons held, the hand, what the cursor picks (with whether the Action button takes it "
+	         "into the hand, or takes hold of a town's totem under it, and why not), and the input still to come",
 	     .parameters = {},
 	     .kind = ResultKind::Object,
 	     .needsNear = false},

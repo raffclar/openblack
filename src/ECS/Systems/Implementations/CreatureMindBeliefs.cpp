@@ -31,6 +31,8 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
@@ -91,6 +93,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
@@ -280,11 +283,7 @@ uint16_t mind_detail::LookingAngle(const Transform& transform, const std::option
 	const auto direction = lookAt.has_value() && *lookAt != transform.position ? *lookAt - transform.position : ahead;
 	// Turned as the game keeps a creature's turn, a quarter turn on from the map's, and nothing for no direction across
 	// the land
-	constexpr float k_NoDirection = 1e-6f;
-	const float scawen =
-	    direction.x * direction.x + direction.z * direction.z > k_NoDirection
-	        ? static_cast<float>(std::atan2(static_cast<double>(direction.x), -static_cast<double>(direction.z)))
-	        : 0.0f;
+	const float scawen = x87::RoundToFloat(x87::GameHeadingOf(direction.x, direction.z));
 	return static_cast<uint16_t>(gutils::ConvertScawenAngleToGameAngle(scawen));
 }
 
@@ -446,7 +445,7 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 	{
 		return;
 	}
-	const auto added = mind.beliefs.Add(thing, *kind, PlaceOf(registry, thing));
+	const auto added = mind.beliefs.Add(thing, *kind, ecs::thing_map_place::Of(registry, thing));
 	// The belief takes in the attributes of the thing now
 	if (added.belief != nullptr)
 	{
@@ -584,7 +583,8 @@ bool CreatureMindSystem::CanSteal(entt::entity creature, entt::entity thing)
 	});
 }
 
-std::optional<glm::vec3> CreatureMindSystem::BelievedPlace(const components::CreatureMindState& mind, entt::entity thing)
+std::optional<map_coords::MapCoords> CreatureMindSystem::BelievedPlace(const components::CreatureMindState& mind,
+                                                                       entt::entity thing)
 {
 	if (const auto* known = mind.beliefs.Find(thing))
 	{

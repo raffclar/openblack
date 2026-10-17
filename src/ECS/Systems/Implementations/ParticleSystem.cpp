@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <ranges>
 
 #include <EnumHeader.h>
 #include <LNDFile.h>
@@ -63,6 +64,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Particles/ParticleClassRegistry.h"
+#include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleSoundRelease.h"
 #include "Particles/ParticleTypes.h"
 #include "Particles/VolumeGlow.h"
@@ -134,6 +136,11 @@ constexpr std::array<std::string_view, 2> k_SymbolTextures {"S_SpriteSheet3", "C
 float GameParticleWorld::LandHeight(glm::vec2 xz) const
 {
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(xz) : 0.0f;
+}
+
+float GameParticleWorld::LandHeightAtMap(int32_t x, int32_t z) const
+{
+	return Locator::terrainSystem::has_value() ? static_cast<float>(Locator::terrainSystem::value().GetAltitude(x, z)) : 0.0f;
 }
 
 uint32_t GameParticleWorld::PlayerColour(int player) const
@@ -617,9 +624,25 @@ void GameParticleWorld::AddShield(const std::shared_ptr<particles::ShieldSphere>
 
 std::shared_ptr<particles::ShieldSphere> GameParticleWorld::FindShield(glm::vec3 point, float margin) const
 {
-	for (const auto& weak : _shields)
+	// The game puts each new shield at the front of its list
+	for (const auto& weak : std::views::reverse(_shields))
 	{
-		if (auto shield = weak.lock(); shield && glm::distance(point, shield->centre) < shield->radius + margin)
+		if (auto shield = weak.lock(); shield && particles::maths::InsideSphere(point, shield->centre, shield->radius, margin))
+		{
+			return shield;
+		}
+	}
+	return nullptr;
+}
+
+std::shared_ptr<particles::ShieldSphere> GameParticleWorld::FindShieldCrossing(glm::vec3 before, glm::vec3 point,
+                                                                               float margin) const
+{
+	for (const auto& weak : std::views::reverse(_shields))
+	{
+		if (auto shield = weak.lock(); shield &&
+		                               particles::maths::InsideSphere(point, shield->centre, shield->radius, margin) &&
+		                               !particles::maths::InsideSphere(before, shield->centre, shield->radius, margin))
 		{
 			return shield;
 		}

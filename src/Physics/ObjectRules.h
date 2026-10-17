@@ -190,7 +190,7 @@ struct Felling
 	/// Its spin about its own axes, as the game's bodies count turning
 	glm::vec3 spin {0.0f};
 };
-inline constexpr float k_FellSpeedPerHeight = 0.2f;
+/// It falls at this share of its half height, and turns once over its half height in that time
 inline constexpr float k_FellSpin = 0.4f;
 /// Nearer than this (squared) the feller stands on the tree, and it falls with no heading
 inline constexpr float k_FellLeastSquaredDistance = 0.001f;

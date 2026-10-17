@@ -36,10 +36,12 @@
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureEmergencies.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
@@ -76,6 +78,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureGestureDrawing.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -114,6 +117,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -634,6 +638,11 @@ void KeepPaceWithAgenda(entt::entity creature, CreatureMindState& mind)
 
 bool Move(entt::entity creature, const creature_mind::Commands& commands)
 {
+	// A start that cuts the body also stops what the hands do, such as a catch or a let-go. The hand keeps what it holds.
+	if (commands.cutBody && Locator::creatureObjectActionSystem::has_value())
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
 	if (!Locator::creatureLocomotionSystem::has_value())
 	{
 		return false;
@@ -790,6 +799,20 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 		const auto ground =
 		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : self->position.y;
 		return glm::vec3 {at.x, ground, at.y};
+	}
+	if (!gaze.object.has_value() && gaze.point.has_value() && gaze.pointOnGround)
+	{
+		// The ground below the point. A creature that moves within a few metres of the point does not look at it.
+		const glm::vec2 flat {gaze.point->x, gaze.point->z};
+		const auto* self = registry.TryGet<const Transform>(creature);
+		if (self == nullptr ||
+		    (moving && glm::distance(glm::vec2(self->position.x, self->position.z), flat) < k_NoLookWhileMovingWithin))
+		{
+			return std::nullopt;
+		}
+		const auto ground =
+		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(flat) : gaze.point->y;
+		return glm::vec3 {flat.x, ground, flat.y};
 	}
 	if (!gaze.object.has_value())
 	{
@@ -1246,6 +1269,28 @@ void StartKiss(entt::entity creature, const creature_mind::Commands::KissOrder& 
 	}
 }
 
+/// Whether the creature's species has the clip. A body that is not loaded yet counts as one that has every clip.
+bool HasClip(entt::entity creature, const CreatureAnimation& animation, size_t clip)
+{
+	if (!Locator::creatureAnimationSystem::has_value() || animation.skeleton.Empty())
+	{
+		return true;
+	}
+	return Locator::creatureAnimationSystem::value().AnimationDuration(creature, clip).has_value();
+}
+
+/// Whether the body does not have a clip that the next step plays as it starts. A step that started has no test.
+bool ClipMissing(entt::entity creature, const CreatureAnimation& animation, const creature_mind::IdleMind& mind,
+                 std::optional<size_t> communication)
+{
+	if (mind.stepStarted || mind.step >= mind.agenda.size())
+	{
+		return false;
+	}
+	return creature_mind::LacksClipToStart(mind.agenda[mind.step], communication,
+	                                       [creature, &animation](size_t clip) { return HasClip(creature, animation, clip); });
+}
+
 void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation, CreatureEyes* eyes)
 {
 	if (commands.endSit || commands.endStaticLoop)
@@ -1273,7 +1318,9 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 	if (commands.startSequence.has_value())
 	{
 		const auto& sequence = *commands.startSequence;
-		if (auto body = creature_layers::PlaySequence(animation.body, sequence[0], sequence[1], sequence[2], commands.holdLoop,
+		// A start that cuts the body plays from a body that stands
+		const auto from = commands.cutBody ? creature_layers::BodyAction {} : animation.body;
+		if (auto body = creature_layers::PlaySequence(from, sequence[0], sequence[1], sequence[2], commands.holdLoop,
 		                                              commands.mirrored))
 		{
 			animation.body = *body;
@@ -1787,6 +1834,13 @@ void GiveUpTakenFood(ecs::Registry& registry, CreatureMindState& mind)
 	static_cast<void>(Locator::resourceStoreSystem::value().RemoveResource(pile, ResourceType::Food, pot->amount));
 }
 
+/// Whether the creature holds a thing in its left hand
+bool HeldLeft(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
+	return held != nullptr && held->mirrored;
+}
+
 creature_mind::HandsState HandsOf(entt::entity creature)
 {
 	if (!Locator::creatureObjectActionSystem::has_value())
@@ -1841,6 +1895,10 @@ void CreatureMindSystem::ProcessTurn()
 	}
 	const auto random = [this](uint32_t range) {
 		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
+	};
+	// The variety of faces moves on by the random numbers of the game
+	const auto gameRandom = [&random](uint32_t range) {
+		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : random(range);
 	};
 	const bool night = IsNight();
 	// The creatures passing out this turn, which are knocked out once every mind has thought
@@ -2164,6 +2222,7 @@ void CreatureMindSystem::ProcessTurn()
 		    // As a step that communicates its state starts, the creature finds what it feels at that time
 		    const bool communicates = !mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
 		                              mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Communicate;
+		    const auto communication = communicates ? Communication(mind) : creature_desires::Communication {};
 		    const auto inHand = Locator::creatureObjectActionSystem::has_value()
 		                            ? Locator::creatureObjectActionSystem::value().GetHeld(entity)
 		                            : std::nullopt;
@@ -2172,15 +2231,18 @@ void CreatureMindSystem::ProcessTurn()
 		        .seconds = k_TurnSeconds,
 		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
 		        .bodyLooping = creature_layers::IsLooping(animation.body),
+		        .clipMissing = ClipMissing(entity, animation, mind.idle, communication.animation),
+		        .realTime = animation.realTime,
 		        .bodyDancing = creature_layers::IsDancing(animation.body),
 		        .moving = moving,
 		        .subMove = SubMoveOf(entity),
 		        .position = glm::vec2(transform.position.x, transform.position.z),
-		        .communication = communicates ? Communication(mind) : creature_desires::Communication {},
+		        .communication = communication,
 		        .rested = needs != nullptr && needs->rested,
 		        .better = needs != nullptr && creature_mind::IsBetter(needs->needs.life, needs->needs.exhaustion),
 		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
 		        .held = inHand.has_value() ? std::optional(entt::to_integral(*inHand)) : std::nullopt,
+		        .heldLeft = HeldLeft(registry, entity),
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
 		        .objectMoving = WaitedForMoving(registry, mind.idle),
 		        .objectBusy = WaitedForBusy(registry, mind.idle),
@@ -2201,7 +2263,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .fighting = registry.AllOf<CreatureFighting>(entity),
 		        .totemShare = mind_town_help::TotemShareOf(registry, mind.idle),
 		    };
-		    const auto commands = creature_mind::Think(mind.idle, senses, random);
+		    const auto commands = creature_mind::Think(mind.idle, senses, random, gameRandom);
 		    NoteStepSeen(entity, mind);
 		    if (commands.communicated.has_value())
 		    {
@@ -2359,11 +2421,11 @@ void CreatureMindSystem::ProcessTurn()
 		    {
 			    HealItself(registry, entity);
 		    }
-		    // It faints, and those near it react as to a death
+		    // It faints, and those near it react as to a death. The reaction belongs to no player.
 		    if (commands.fainted && Locator::reactionSystem::has_value())
 		    {
 			    Locator::reactionSystem::value().Create(
-			        {.initiator = entity, .type = Reaction::ReactToDeath, .position = transform.position});
+			        {.initiator = entity, .type = Reaction::ReactToDeath, .position = transform.position, .playerless = true});
 		    }
 		    if (commands.effect == creature_mind::Effect::RanAway)
 		    {
@@ -2558,8 +2620,12 @@ std::optional<creature_face::Request> CreatureMindSystem::ShowFeeling(entt::enti
 	const auto random = [this](uint32_t range) {
 		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
 	};
+	// The variety of faces moves on by the random numbers of the game
+	const auto gameRandom = [&random](uint32_t range) {
+		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : random(range);
+	};
 	const creature_mind::Senses senses {.feelings = FeelingsOf(*mind)};
-	const auto face = creature_mind::PullFace(mind->idle, cue, senses, random);
+	const auto face = creature_mind::PullFace(mind->idle, cue, senses, random, gameRandom);
 	if (face.has_value())
 	{
 		body->face = creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, cue);
@@ -3462,7 +3528,24 @@ void CreatureMindSystem::MoveToStage(entt::entity creature, uint32_t stage)
 	{
 		return;
 	}
+	// A creature that its home keeps it near, with no leash on, is let go when it reaches the stage it may leave home
+	// from
+	if (Locator::leashSystem::has_value())
+	{
+		auto& leashes = Locator::leashSystem::value();
+		const auto* leash = registry.TryGet<const CreatureLeash>(creature);
+		if (leash != nullptr &&
+		    creature_development::ReleasedFromHome(stage, leash->confinementRadius, leashes.IsLeashed(creature)))
+		{
+			leashes.ClearConfinement(creature);
+		}
+	}
 	mind->developmentPhase = stage;
+	// The time at the stage starts again
+	if (mind->learnt.has_value())
+	{
+		mind->learnt->developmentTimer = 0;
+	}
 	// Its desires are set for the stage at once, even for the stage it is at already; a mind yet to think sets them up
 	// for the stage when it first does
 	if (mind->desires.has_value())

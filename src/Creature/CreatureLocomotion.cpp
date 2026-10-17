@@ -15,6 +15,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Angle.h"
+
 using namespace openblack;
 using namespace openblack::creature_locomotion;
 
@@ -111,7 +113,8 @@ float creature_locomotion::WrapAngle(float angle)
 
 float creature_locomotion::HeadingOf(glm::vec2 direction)
 {
-	return std::atan2(-direction.x, -direction.y);
+	// The game's heading routine. Its headings turn the other way round, so the direction is mirrored in x
+	return static_cast<float>(x87::GameHeadingOf(-direction.x, direction.y));
 }
 
 glm::vec2 creature_locomotion::DirectionOf(float heading)
@@ -236,4 +239,33 @@ glm::vec2 creature_locomotion::RunAwayPoint(glm::vec2 creature, glm::vec2 threat
 	// Fleeing something right on top of it, it runs away along x
 	away = glm::length(away) > 0.0f ? glm::normalize(away) : glm::vec2(1.0f, 0.0f);
 	return creature + (away * distance);
+}
+
+creature_locomotion::FidgetTurn creature_locomotion::WaitTurn(FidgetWait& wait, float stepMs, bool bodyFree,
+                                                              const Random& gameRandom)
+{
+	wait.ms -= stepMs;
+	if (wait.ms >= 0.0f)
+	{
+		return {};
+	}
+	const auto choice = wait.fidgeted ? gameRandom(3) : 0u;
+	wait.fidgeted = true;
+	switch (choice)
+	{
+	case 0:
+		wait.ms = k_LookAboutFidgetMs;
+		return {.fidget = Fidget::LookAbout};
+	case 1:
+		wait.ms = k_FidgetMs;
+		return {.fidget = Fidget::Puzzled};
+	default:
+		// The wait starts again at its first length when the clip is over. It does not count down while the clip plays.
+		wait.ms = k_FidgetMs;
+		if (!bodyFree)
+		{
+			return {};
+		}
+		return {.fidget = Fidget::Confused, .mirrored = gameRandom(2) == 1};
+	}
 }

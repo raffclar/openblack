@@ -21,6 +21,8 @@
 #include <optional>
 #include <span>
 #include <tuple>
+#include <utility>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <glm/gtx/transform.hpp>
@@ -59,6 +61,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Physics/LivingRules.h"
@@ -91,18 +94,31 @@ float LandHeightAt(glm::vec3 point)
 	                                           : 0.0f;
 }
 
-/// Striking with a destroying blow, the body doesn't sway
-bool StrikingToDestroy(const ecs::Registry& registry, entt::entity creature)
+/// What the body of a creature does, as far as a kick of its sway is concerned
+creature_sway::BodyFacts SwayFactsOf(const ecs::Registry& registry, entt::entity creature, const CreatureAnimation& animation)
 {
-	const auto* action = registry.TryGet<const CreatureObjectAction>(creature);
-	return action != nullptr && action->kind == creature_object_actions::Kind::Destroy &&
-	       action->phase == CreatureObjectAction::Phase::Playing;
+	creature_sway::BodyFacts facts;
+	// A fight shows its moves as loops, but only a fighter that is down keeps still
+	if (const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+	    fighting != nullptr && fighting->fighter.state != creature_fight::State::Idle)
+	{
+		const auto state = fighting->fighter.state;
+		facts.downInFight = state == creature_fight::State::Faint || state == creature_fight::State::GetUp ||
+		                    state == creature_fight::State::Lying;
+		return facts;
+	}
+	facts.playsStartLoopEnd = creature_layers::IsPlaying(animation.body) &&
+	                          animation.body.kind == creature_layers::BodyAction::Kind::Sequence &&
+	                          !animation.body.timedByPlayer;
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
+	facts.turnsOnTheSpot = walk != nullptr && walk->motion == CreatureLocomotion::Motion::Turning;
+	return facts;
 }
 
-/// The sway kicked at a point, by the force over the creature's last frame
+/// The sway kicked at a point, by the force over the last game turn of the creature
 void Kick(const ecs::Registry& registry, entt::entity entity, CreatureAnimation& animation, glm::vec3 force, glm::vec3 point)
 {
-	if (StrikingToDestroy(registry, entity))
+	if (!creature_sway::TakesKick(SwayFactsOf(registry, entity, animation)))
 	{
 		return;
 	}
@@ -194,58 +210,62 @@ std::optional<creature_eyes::SurfacePoint> EyePointOf(const CreatureRig::EyePoin
 	{
 		return std::nullopt;
 	}
-	const auto world = creature::PosedTriangle(point.vertices, point.bones, morph, bones, model);
+	const auto world = creature::PosedTriangle(point.vertices, point.bones, morph, bones, model, creature::k_SkinPointOrder);
 	return creature_eyes::PointOnTriangle(world[0], world[1], world[2], point.u, point.v);
 }
 
+template <typename Random>
 void PlaceEyes(CreatureEyes& eyes, const CreatureRig::Eyes& rig, const creature_morph::Morph& morph,
-               const std::vector<glm::mat4>& bones, const Transform& transform, float size, float seconds)
+               const std::vector<glm::mat4>& bones, const Transform& transform, float size, int32_t milliseconds,
+               Random&& random)
 {
 	const auto model = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
 	const auto eyeSize = creature_eyes::EyeSize(size, rig.scale, morph.evilGood, eyes.mode);
-	const auto ahead = glm::normalize(transform.rotation * k_MeshBack);
+	// The model's back axis, which is the way the creature faces across the land
+	const auto back = transform.rotation * k_MeshBack;
+	creature_eyes::Look look {
+	    .mode = eyes.mode,
+	    .openness = eyes.openness,
+	    .blink = eyes.blink,
+	    .lookAt = eyes.lookAt,
+	    .ahead = glm::vec3(back.x, 0.0f, back.z),
+	    .darts = {},
+	};
 	bool lidColourSet = false;
 	for (size_t i = 0; i < eyes.drawn.size(); ++i)
 	{
 		auto& drawn = eyes.drawn.at(i);
 		drawn = {};
 		const auto point = EyePointOf(rig.points.at(i), morph, bones, model);
-		if (!point || glm::length(point->normal) <= 0.0f)
+		if (!point)
 		{
 			continue;
 		}
-		const auto normal = glm::normalize(point->normal);
-		const auto centre = point->position - (rig.points.at(i).depth * normal);
-
-		const bool looksAtPoint =
-		    eyes.lookAt.has_value() && eyes.mode != creature_eyes::Mode::Ahead && glm::length(centre - *eyes.lookAt) > 0.0f;
-		const auto away = creature_eyes::ClampLook(looksAtPoint ? glm::normalize(centre - *eyes.lookAt) : ahead, normal);
-		auto& look = eyes.look.at(i);
+		if (look.mode == creature_eyes::Mode::Stoned)
+		{
+			for (auto& dart : look.darts)
+			{
+				dart = static_cast<int32_t>(random(201)) - 100;
+			}
+		}
+		auto& turn = eyes.look.at(i);
 		if (!eyes.lookStarted.at(i))
 		{
-			look.Reset(away);
+			turn.Reset(creature_eyes::LookDestination(*point, look));
 			eyes.lookStarted.at(i) = true;
 		}
-		look.SetDestination(away, creature_eyes::LookSeconds(eyes.openness, eyes.mode));
-		look.Update(seconds);
-		const auto eyeball = creature_eyes::EyeballFrame(centre, look.GetValue());
-		drawn.eyeball = creature_eyes::ToMatrix(eyeball, eyeSize);
-
 		const auto anchor = EyePointOf(rig.points.at(i + 2), morph, bones, model);
-		if (!anchor)
-		{
-			continue;
-		}
+		const auto placed =
+		    creature_eyes::PlaceEye(*point, anchor ? std::optional<glm::vec3>(anchor->position) : std::nullopt,
+		                            rig.points.at(i).depth, i == 1, look, rig.lidAngles, eyeSize, turn, milliseconds);
+		drawn.eyeball = placed.eyeball;
+		drawn.eyelid = placed.eyelid;
 		// Both lids take the skin's colour under the first one drawn
-		if (!lidColourSet)
+		if (anchor && !lidColourSet)
 		{
 			eyes.lidColour = rig.points.at(i + 2).skinColour;
 			lidColourSet = true;
 		}
-		const auto lid = creature_eyes::EyelidFrame(centre, normal, anchor->position, i == 1);
-		const auto angle = creature_eyes::EyelidAngle(eyes.mode, rig.lidAngles, eyes.openness,
-		                                              creature_eyes::LidPitch(lid, eyeball), eyes.blink);
-		drawn.eyelid = creature_eyes::ToMatrix(creature_eyes::Turned(lid, angle), eyeSize);
 	}
 }
 /// A blended animation of the creature's, blended the first time it is wanted, or nothing when the species has none
@@ -313,8 +333,15 @@ void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimati
 	{
 		return;
 	}
-	const auto side = glm::normalize(transform.rotation[0]);
-	const auto front = glm::normalize(transform.rotation[2]);
+	auto side = glm::normalize(transform.rotation[0]);
+	auto front = glm::normalize(transform.rotation[2]);
+	// A body that turns on the spot leans along the heading that the turn has reached
+	if (animation.sway.turnHeading.has_value())
+	{
+		const float heading = *animation.sway.turnHeading;
+		side = glm::vec3(std::cos(heading), 0.0f, -std::sin(heading));
+		front = glm::vec3(std::sin(heading), 0.0f, std::cos(heading));
+	}
 	const auto lean = [&](uint32_t clip, float amount) {
 		if (std::abs(amount) <= creature_sway::k_DrawnLean)
 		{
@@ -408,7 +435,7 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 	{
 		return;
 	}
-	const auto playbackMs = milliseconds * creature_layers::PlaybackRate(size);
+	const auto playbackMs = milliseconds * creature_layers::BodyRate(size, animation.realTime);
 	const auto animationOf = [&](size_t index) { return AnimationOf(animation, rig, morph, index); };
 
 	// A species without the start, the first move or the finish of the dance does not dance
@@ -696,9 +723,9 @@ HeadLook HeadLookOf(ecs::Registry& registry, entt::entity entity, CreatureAnimat
 				return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
 			};
 			const auto rate = animation.body.hurried ? 2 : 1;
-			const auto stepMs =
-			    static_cast<int32_t>(static_cast<float>(milliseconds) * creature_layers::PlaybackRate(ShownSize(creature))) *
-			    rate;
+			const auto stepMs = static_cast<int32_t>(static_cast<float>(milliseconds) *
+			                                         creature_layers::BodyRate(ShownSize(creature), animation.realTime)) *
+			                    rate;
 			walk->routeLook = creature_head_look::StepRouteLook(
 			    walk->routeLook, stepMs, {.searchHead = walk->follower.GetSearchHead(), .destination = *walk->destination},
 			    ground);
@@ -748,7 +775,28 @@ void CreatureAnimationSystem::ProcessTurn()
 		animation.breathPeriod = resting;
 		animation.breathTarget = resting;
 	});
+	StepSway();
 	AddAlignmentMotes();
+}
+
+void CreatureAnimationSystem::StepSway()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// Each game turn the body sways from what kicked it, by the seconds that the creature lived in the turn
+	registry.Each<const Creature, const CreatureMorph, CreatureAnimation>(
+	    [&registry](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation) {
+		    auto& sway = animation.sway;
+		    sway.turnSeconds = creature_sway::TurnSeconds(animation.playbackScale);
+		    creature_sway::Step(sway, sway.turnSeconds, MassOf(creature, &morph));
+		    sway.turnHeading.reset();
+		    const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
+		    if (walk != nullptr && walk->motion == CreatureLocomotion::Motion::Turning && walk->move.has_value() &&
+		        walk->move->animations.has_value() && walk->move->durationMs > 0.0f)
+		    {
+			    sway.turnHeading =
+			        creature_sway::TurnHeading(walk->heading, walk->targetHeading, walk->move->timeMs, walk->move->durationMs);
+		    }
+	    });
 }
 
 void CreatureAnimationSystem::AddAlignmentMotes()
@@ -761,24 +809,31 @@ void CreatureAnimationSystem::AddAlignmentMotes()
 	auto& dynamics = Locator::dynamicsSystem::value();
 	auto& random = Locator::gameRandom::value();
 	const creature_alignment_motes::LocalRandom localRandom = [&random](int32_t n) { return random.LocalRand(n); };
-	// Each game turn, a creature whose body looks good or evil makes motes or smoke near the bones of its last pose
-	registry.Each<const Creature, const CreatureMorph, const CreatureAnimation, const Transform>(
-	    [&](const Creature& creature, const CreatureMorph& morph, const CreatureAnimation& animation,
-	        const Transform& transform) {
-		    if (!creature_alignment_motes::MakesAny(morph.drawn.evilGood))
-		    {
-			    return;
-		    }
+	// While the falling spell plays, no creature in the world makes motes
+	const bool fallingSpell = Locator::videoSystem::has_value() && Locator::videoSystem::value().HidesWorld();
+	// Each game turn, a creature whose body is to look good or evil makes motes or smoke near the bones of the pose of the
+	// turn before. Then it keeps the bones of this turn for the next turn.
+	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
+	    [&](const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation, const Transform& transform) {
 		    const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-		    const creature_alignment_motes::BonePoint bonePoint = [&animation, &placement](uint32_t bone) {
-			    return glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
-		    };
-		    const auto bones = static_cast<uint32_t>(animation.boneMatrices.size());
-		    for (const auto& puff :
-		         creature_alignment_motes::PuffsOf(morph.drawn.evilGood, ShownSize(creature), bones, bonePoint, localRandom))
+		    std::vector<glm::vec3> bones(animation.boneMatrices.size());
+		    for (uint32_t bone = 0; bone < bones.size(); ++bone)
 		    {
-			    dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+			    bones[bone] = glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
 		    }
+		    // Before the first turn ends, the bones of this frame are the only pose there is
+		    const auto& last = animation.lastTurnBones.size() == bones.size() ? animation.lastTurnBones : bones;
+		    const auto alignment = TargetMorph(creature, morph).evilGood;
+		    if (!fallingSpell && creature_alignment_motes::MakesAny(alignment))
+		    {
+			    const creature_alignment_motes::BonePoint bonePoint = [&last](uint32_t bone) { return last.at(bone); };
+			    for (const auto& puff : creature_alignment_motes::PuffsOf(
+			             alignment, ShownSize(creature), static_cast<uint32_t>(last.size()), bonePoint, localRandom))
+			    {
+				    dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+			    }
+		    }
+		    animation.lastTurnBones = std::move(bones);
 	    });
 }
 
@@ -854,10 +909,6 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    animation.breathPhase =
 		        creature_animation::AdvanceBreath(animation.breathPhase, seconds * scale, animation.breathPeriod);
 
-		    // The body sways from what kicked it
-		    animation.sway.frameSeconds = seconds;
-		    creature_sway::Step(animation.sway, animation.sway.frameSeconds, MassOf(creature, &morph));
-
 		    if (rig != nullptr)
 		    {
 			    const auto look = HeadLookOf(registry, entity, animation, rig, morph.drawn, transform, creature, milliseconds);
@@ -885,7 +936,8 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    eyes->drawn = {};
 		    if (rig != nullptr && rig->eyes.has_value())
 		    {
-			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, ShownSize(creature), seconds);
+			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, ShownSize(creature), milliseconds,
+			              [this](uint32_t range) { return std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); });
 		    }
 	    });
 
@@ -985,7 +1037,9 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	eyes->drawn = {};
 	if (rig != nullptr && rig->eyes.has_value())
 	{
-		PlaceEyes(*eyes, *rig->eyes, morph->drawn, animation->boneMatrices, *transform, self->size, seconds);
+		PlaceEyes(*eyes, *rig->eyes, morph->drawn, animation->boneMatrices, *transform, self->size,
+		          static_cast<int32_t>(std::lround(milliseconds)),
+		          [this](uint32_t range) { return std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); });
 	}
 }
 
@@ -1104,7 +1158,8 @@ std::optional<creature_kiss::KissPoints> CreatureAnimationSystem::KissPointsOf(e
 		if (rig.kissPoint.has_value())
 		{
 			const auto& point = *rig.kissPoint;
-			const auto triangle = creature::PosedTriangle(point.vertices, point.bones, morph->drawn, matrices, glm::mat4(1.0f));
+			const auto triangle = creature::PosedTriangle(point.vertices, point.bones, morph->drawn, matrices, glm::mat4(1.0f),
+			                                              creature::k_SkinPointOrder);
 			lips = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], point.u, point.v).position;
 		}
 		else if (rig.actionPoints.has_value() && rig.actionPoints->head < matrices.size())
@@ -1311,7 +1366,8 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(entt::ent
 		{
 			return std::nullopt;
 		}
-		const auto triangle = creature::PosedTriangle(kiss.vertices, kiss.bones, body->morph->drawn, bones, placement);
+		const auto triangle = creature::PosedTriangle(kiss.vertices, kiss.bones, body->morph->drawn, bones, placement,
+		                                              creature::k_SkinPointOrder);
 		lips = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], kiss.u, kiss.v).position;
 	}
 	else if (rig->actionPoints->head < bones.size())

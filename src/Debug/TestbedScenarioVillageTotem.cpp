@@ -60,23 +60,27 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	    .id = "objects.village_totem",
 	    .name = "A town centre's totem",
 	    .facet = Facet::Objects,
-	    .description = "A Norse town centre of the player's town, which has no worship site.",
+	    .description = "A Norse town centre of the player's town, which believes only in the player and has no worship site. "
+	                   "The player has no temple.",
 	    .expected = "The tribe's totem, the column in the middle of the centre, stands at the centre's totem point, turned "
 	                "as the centre is, with the hand's icon on its pole (the player has no creature), sunk in the centre "
 	                "with no rise: with nowhere to worship the town has no one at worship. Holding the Action button on "
-	                "it takes no hold, as there is no worship site.",
+	                "it takes no hold, as the player has no temple and the town has no worship site. The inspector's pick says "
+	                "why.",
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_Centre - glm::vec2(15.0f), k_Centre + glm::vec2(15.0f)},
 	                .distance = 0.5f},
 	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre}},
+	    .townBeliefInPlayer = k_TownBelief,
 	});
 	all.push_back({
 	    .id = "objects.village_totem_worship",
 	    .name = "A town centre's totem with a temple",
 	    .facet = Facet::Objects,
-	    .description = "The same Norse town centre of the player's town, with the player's temple standing built "
-	                   "beside it, which opens the worship site of the town, which has one villager.",
-	    .expected = "Once the town's worship site is built, holding the Action button on the totem takes hold of it: the "
+	    .description = "The same Norse town centre of the player's town, which believes only in the player and has one "
+	                   "villager, with the player's temple standing built beside it and the town's worship site put up "
+	                   "built, no one at worship.",
+	    .expected = "Holding the Action button on the totem takes hold of it: the "
 	                "hand goes to the icon, tipped forwards over it in its side hold, and the pointer stays on the hand. "
 	                "Sliding the mouse up raises it, a see-through second totem staying at the town's share, with the "
 	                "People Worshipping tooltip by the hand. Let go, the share floats up over it in grey and it eases "
@@ -90,6 +94,9 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	                 .offset = k_Centre + glm::vec2(10.0f, -10.0f),
 	                 .joinTown = true}},
 	    .temples = {{.offset = k_Temple}},
+	    // Only a town of the player's own, with its worship site built, lets the hand take its totem
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
 	});
 	// The creature stands under the hand, so that it sees the hand, and the camera follows it
 	const glm::vec2 watcher = k_Centre + glm::vec2(0.0f, -20.0f);

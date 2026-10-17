@@ -28,8 +28,9 @@ TEST(Lightning, FlashFlickersAsItFades)
 		brightnesses.push_back(lightning::Brightness(flash));
 	}
 	EXPECT_NEAR(brightnesses[0], 0.9f, 1e-6f);
-	// Down to a tenth for a while, then back up and fading out
-	EXPECT_NEAR(brightnesses[1], 0.1f, 1e-6f);
+	// Still fading at 0.2 s, then down to a tenth after 0.2 s and before 0.5 s, then back up and fading out
+	EXPECT_NEAR(brightnesses[1], 0.8f, 1e-6f);
+	EXPECT_NEAR(brightnesses[2], 0.1f, 1e-6f);
 	EXPECT_NEAR(brightnesses[3], 0.1f, 1e-6f);
 	EXPECT_NEAR(brightnesses[4], 0.5f, 1e-6f);
 	EXPECT_NEAR(brightnesses[6], 0.3f, 1e-6f);
@@ -61,4 +62,13 @@ TEST(Lightning, FlashLightsTheLandWhite)
 	// The haze of black land, a third of nothing plus 8 for k, half way to white
 	EXPECT_FLOAT_EQ(table.GetHaze().colour.r, 127.5f);
 	EXPECT_FLOAT_EQ(table.GetHaze().k, 8.0f + 123.0f);
+}
+
+TEST(Lightning, TheClockPicksTheThunderClap)
+{
+	// The milliseconds since the machine started, over the eleven claps, from the third sample of the bank
+	EXPECT_EQ(openblack::lightning::ThunderClap(0), 2);
+	EXPECT_EQ(openblack::lightning::ThunderClap(10), 12);
+	EXPECT_EQ(openblack::lightning::ThunderClap(11), 2);
+	EXPECT_EQ(openblack::lightning::ThunderClap(0xFFFFFFFFu), static_cast<int32_t>(0xFFFFFFFFu % 11u) + 2);
 }

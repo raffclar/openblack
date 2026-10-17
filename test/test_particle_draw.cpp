@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <array>
+#include <bit>
 #include <string>
 #include <vector>
 
@@ -296,17 +297,49 @@ TEST(ParticleDraw, RibbonsMatchTheGamesStrip)
 		                  .rgb = {255, 128, 0}});
 	}
 	std::vector<ChainVertex> vertices;
-	AppendChain(vertices, creator, joints);
+	std::vector<ChainJoint> chainJoints;
+	AppendChain(vertices, chainJoints, creator, joints);
 	ASSERT_EQ(vertices.size(), 12u);
+	ASSERT_EQ(chainJoints.size(), 4u);
 	for (const glm::vec3 eye : {glm::vec3(5.0f, 50.0f, -40.0f), glm::vec3(-30.0f, 2.0f, 60.0f)})
 	{
+		PlaceChainCorners(vertices, chainJoints, eye);
 		const auto expected = GameRibbon(points, scales, eye);
 		for (size_t i = 0; i < vertices.size(); ++i)
 		{
-			ExpectNear(ChainCorner(vertices[i], eye), expected[i], 1e-3f);
+			ExpectNear(vertices[i].position, expected[i], 1e-3f);
 		}
 	}
 	EXPECT_EQ(vertices[0].abgr, (200u << 24u) | (0u << 16u) | (128u << 8u) | 255u);
+}
+
+TEST(ParticleDraw, RibbonCornersAreTheGamesFloats)
+{
+	// Each side made about one long by the 3D engine's inverse square root, then as long as the half width, then the
+	// corners where the two segments meet put half way: the bits the game's float steps give
+	const std::array<ChainJoint, 3> joints {ChainJoint {.position = {0.0f, 0.0f, 0.0f}, .halfWidth = 1.0f},
+	                                        ChainJoint {.position = {10.0f, 2.0f, 0.0f}, .halfWidth = 2.0f},
+	                                        ChainJoint {.position = {20.0f, 0.0f, 5.0f}, .halfWidth = 1.5f}};
+	std::array<ChainVertex, 8> corners {};
+	PlaceChainCorners(corners, joints, {5.0f, 50.0f, -40.0f});
+	constexpr std::array<std::array<uint32_t, 3>, 8> k_Expected {{
+	    {0x3E007CB6u, 0xBF209BE4u, 0xBF44BEF7u},
+	    {0xBE007CB6u, 0x3F209BE4u, 0x3F44BEF7u},
+	    {0x41261F41u, 0x3F451927u, 0xBFC31029u},
+	    {0x4119E0BFu, 0x404EB9B6u, 0x3FC31029u},
+	    {0x41261F41u, 0x3F451927u, 0xBFC31029u},
+	    {0x4119E0BFu, 0x404EB9B6u, 0x3FC31029u},
+	    {0x41A315FBu, 0xBF67706Fu, 0x40777B7Eu},
+	    {0x419CEA05u, 0x3F67706Fu, 0x40C44241u},
+	}};
+	for (size_t i = 0; i < corners.size(); ++i)
+	{
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			EXPECT_EQ(std::bit_cast<uint32_t>(corners[i].position[axis]), k_Expected[i][static_cast<size_t>(axis)])
+			    << "corner " << i << " axis " << axis;
+		}
+	}
 }
 
 TEST(ParticleDraw, RibbonFramesRepeatAlongTheChain)

@@ -42,7 +42,12 @@ constexpr std::array<Level, 16> k_Levels {{
      .placeKeys = true,
      .handReach = k_DefaultHandReach},
     {.known = true, .features = 0x08, .autoPitch = true, .cameraKeys = true, .placeKeys = false, .handReach = k_TutorialReach},
-    {.known = true, .features = 0x08, .autoPitch = true, .cameraKeys = true, .placeKeys = false, .handReach = std::nullopt},
+    {.known = true,
+     .features = 0x08,
+     .autoPitch = true,
+     .cameraKeys = true,
+     .placeKeys = false,
+     .handReach = k_DefaultHandReach},
     {.known = true,
      .features = 0x02,
      .autoPitch = false,
@@ -55,7 +60,12 @@ constexpr std::array<Level, 16> k_Levels {{
      .cameraKeys = true,
      .placeKeys = false,
      .handReach = k_DefaultHandReach},
-    {.known = true, .features = 0x24, .autoPitch = false, .cameraKeys = true, .placeKeys = false, .handReach = std::nullopt},
+    {.known = true,
+     .features = 0x24,
+     .autoPitch = false,
+     .cameraKeys = true,
+     .placeKeys = false,
+     .handReach = k_DefaultHandReach},
     {.known = true,
      .features = 0x02,
      .autoPitch = false,
@@ -76,7 +86,12 @@ constexpr std::array<Level, 16> k_Levels {{
      .cameraKeys = true,
      .placeKeys = false,
      .handReach = k_DefaultHandReach},
-    {.known = true, .features = 0x01, .autoPitch = false, .cameraKeys = true, .placeKeys = false, .handReach = std::nullopt},
+    {.known = true,
+     .features = 0x01,
+     .autoPitch = false,
+     .cameraKeys = true,
+     .placeKeys = false,
+     .handReach = k_DefaultHandReach},
     {.known = true, .features = 0x00, .autoPitch = false, .cameraKeys = false, .placeKeys = false, .handReach = std::nullopt},
     {.known = true,
      .features = 0x1A,
@@ -90,7 +105,12 @@ constexpr std::array<Level, 16> k_Levels {{
      .cameraKeys = true,
      .placeKeys = false,
      .handReach = k_DefaultHandReach},
-    {.known = true, .features = 0x3F, .autoPitch = false, .cameraKeys = true, .placeKeys = false, .handReach = std::nullopt},
+    {.known = true,
+     .features = 0x3F,
+     .autoPitch = false,
+     .cameraKeys = true,
+     .placeKeys = false,
+     .handReach = k_DefaultHandReach},
 }};
 
 /// Nothing tilts within this of the way there; the tilt is a fifth of the way, at most the frame's seconds, and
@@ -115,6 +135,8 @@ void CameraHelp::ResetForNewLand()
 
 bool CameraHelp::SetInterfaceLevel(int32_t level)
 {
+	// The level is kept, also a level that the game does not know
+	interfaceLevel = level;
 	if (level < 0 || level >= static_cast<int32_t>(k_Levels.size()) || !k_Levels.at(static_cast<size_t>(level)).known)
 	{
 		return false;

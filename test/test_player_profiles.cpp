@@ -13,6 +13,7 @@
 #include <string_view>
 #include <system_error>
 
+#include <PhysiqueFile.h>
 #include <gtest/gtest.h>
 
 #include "Common/PlayerProfiles.h"
@@ -348,7 +349,7 @@ TEST(PlayerProfileSystem, DeletingAProfileDeletesItsCreaturesMindFileButNotItsPh
 	ASSERT_TRUE(file.has_value());
 	std::filesystem::create_directories(*store.creatureMinds);
 	const auto mind = *store.creatureMinds / *file;
-	const auto physique = *store.creatureMinds / ("Physique" + *file);
+	const auto physique = *store.creatureMinds / creaturemind::PhysiqueFileName(*file);
 	std::ofstream(mind) << "mind";
 	std::ofstream(physique) << "physique";
 

@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -39,6 +40,7 @@
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
 #include "Gui/MenuPause.h"
+#include "Hand/HandFeel.h"
 #include "Input/HandPointer.h"
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
@@ -301,6 +303,8 @@ public:
 	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
 	[[nodiscard]] const std::filesystem::path& GetLandPath() const noexcept { return _landPath; }
+	/// The land's file, as the land's script asked for it
+	[[nodiscard]] const std::filesystem::path& GetLandscapePath() const noexcept { return _landscapePath; }
 
 	static Game* Instance() { return sInstance; }
 
@@ -477,6 +481,8 @@ private:
 	input::ShortcutKeys _shortcutKeys;
 	/// Which way the hand faces across the land, and its up, easing to the slope under it
 	glm::vec3 _handHeading {0.0f, 0.0f, 1.0f};
+	/// The same heading as an angle about the up axis, from -z towards +x, which the hand that holds a totem turns by
+	float _handHeadingAngle {std::numbers::pi_v<float>};
 	Zoomer3 _handUp {glm::vec3(0.0f, 1.0f, 0.0f)};
 	/// How the hand stands facing along its heading on level land, from which it is stood on a slope or a creature's body
 	glm::mat3 _handOnLevelLand {1.0f};
@@ -522,6 +528,8 @@ private:
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
 	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it
+	/// Each player's turn in the game turn: its temple, then its towns
+	void ProcessPlayerTurns();
 	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,
 	                float deltaSeconds);
 	/// Decides how the hand moves this frame, gripping the land, held as it drags by the edge, or hovering, and its pose
@@ -531,6 +539,8 @@ private:
 	void UpdateHandTricons(bool handDrawn, float seconds);
 	/// Places the hand on the line of sight through the cursor the way the game does
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
+	/// What sets how far from the camera the hand may hover this frame, without where it rests
+	[[nodiscard]] hand_feel::Hover HandHoverInputs(glm::vec3 eye) const;
 	/// A knock on a house: the hand's tap starts, waits while the hand holds something, and the houses' read-out runs
 	void UpdateHandKnock(const ecs::components::Transform& handTransform);
 	/// Loads the hand animations of Data/CTR/hh.hbn for the hand mesh
@@ -628,6 +638,7 @@ private:
 	hand_blend::ChangeTracker _handBlend;
 	/// The game's own interface, null without the game's files for it
 	std::unique_ptr<gui::GameInterface> _interface;
+	std::filesystem::path _landscapePath;
 	std::filesystem::path _landPath;
 	/// The pause that the menu holds while it is open
 	gui::MenuPause _menuPause;

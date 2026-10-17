@@ -52,8 +52,8 @@ inline constexpr uint8_t k_GroundHoleMaxThreshold = 235;
 inline constexpr float k_GroundTextureSpan = 160.0f;
 
 /// Seconds since a vortex's state began: whole game turns since then and the part of the current one, at the game's
-/// turn length. Kept in double: the end of a fade is judged on it unrounded, the fades themselves on it as a float.
-[[nodiscard]] double ElapsedSeconds(uint32_t turnsSince, float turnFraction, uint32_t millisecondsPerTurn);
+/// turn length, each step as a float
+[[nodiscard]] float ElapsedSeconds(uint32_t turnsSince, float turnFraction, uint32_t millisecondsPerTurn);
 
 /// How open a vortex is, 0 to 1, eased in and out
 [[nodiscard]] float Openness(VortexStateType state, float seconds);
@@ -71,7 +71,7 @@ enum class Step
 	/// Its fade-out is over: it is gone
 	Remove,
 };
-[[nodiscard]] Step Advance(VortexStateType state, double seconds);
+[[nodiscard]] Step Advance(VortexStateType state, float seconds);
 
 /// The glow the vortex lays on the ground, 0 to 1: rising to full over the delay of a fade-in and settling to 0.6 as it
 /// opens; rising back to full as it fades out, then dying away over the last 2 seconds

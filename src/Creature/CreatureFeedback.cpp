@@ -17,6 +17,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::creature_feedback;
 
@@ -26,7 +28,7 @@ BodyPart creature_feedback::NearestPart(const glm::vec3& touch, std::span<const 
 	float bestDistance = std::numeric_limits<float>::max();
 	for (size_t i = 0; i < parts.size(); ++i)
 	{
-		const auto distance = glm::distance(touch, parts[i]);
+		const auto distance = x87::Distance<x87::SumOrder::Xzy>(touch, parts[i]);
 		if (distance < bestDistance)
 		{
 			best = i;
@@ -303,7 +305,7 @@ glm::ivec2 creature_feedback::SecondTryCursor(glm::ivec2 cursor, glm::ivec2 last
 glm::vec3 creature_feedback::HandUpOnTakingHold(const glm::vec3& creaturePosition, const glm::vec3& camera)
 {
 	const auto towards = camera - creaturePosition;
-	return glm::length(towards) > 0.0f ? glm::normalize(towards) : glm::vec3(0.0f);
+	return glm::length(towards) > 0.0f ? x87::Scaled<x87::SumOrder::Zyx>(towards) : glm::vec3(0.0f);
 }
 
 std::optional<HandUpGlide> creature_feedback::HandUpGlideTo(bool onBody, bool cursorMoved, const glm::vec3& normal,
@@ -317,18 +319,31 @@ std::optional<HandUpGlide> creature_feedback::HandUpGlideTo(bool onBody, bool cu
 	{
 		return std::nullopt;
 	}
-	const auto out = glm::length(normal) > 0.0f ? glm::normalize(normal) : glm::vec3(0.0f);
-	const auto towards = HandUpOnTakingHold(creaturePosition, camera) * k_HandTowardsCamera;
+	const auto out = glm::length(normal) > 0.0f ? x87::Scaled<x87::SumOrder::Xyz>(normal) : glm::vec3(0.0f);
+	// The game divides the share towards the camera by the length one time, then multiplies each part by the result
+	const auto away = camera - creaturePosition;
+	const auto towards =
+	    glm::length(away) > 0.0f ? x87::Scaled<x87::SumOrder::Xzy>(away, k_HandTowardsCamera) : glm::vec3(0.0f);
 	return HandUpGlide {.destination = out + towards, .seconds = k_HandTurnsToBodySeconds};
 }
 
 glm::vec3 creature_feedback::HeldLookPoint(const glm::vec3& hand, const glm::vec3& middle, const glm::vec3& camera,
                                            const glm::vec3& lineOfSight, float creatureHeight)
 {
-	if (glm::distance(middle, hand) <= creatureHeight * k_LooksAtCameraWithin)
+	if (x87::Distance<x87::SumOrder::Xzy>(middle, hand) <= creatureHeight * k_LooksAtCameraWithin)
 	{
 		return camera;
 	}
-	const auto way = glm::length(lineOfSight) > 0.0f ? glm::normalize(lineOfSight) : glm::vec3(0.0f);
+	// The way is the point at one unit along the line of sight, less the camera
+	const auto way = PointOnSight(camera, lineOfSight, 1.0f) - camera;
 	return hand - (way * (creatureHeight * k_LooksNearerTheCamera));
+}
+
+glm::vec3 creature_feedback::PointOnSight(const glm::vec3& camera, const glm::vec3& lineOfSight, float distance)
+{
+	if (lineOfSight == glm::vec3(0.0f))
+	{
+		return camera;
+	}
+	return camera + x87::Scaled<x87::SumOrder::Zyx>(lineOfSight, distance);
 }

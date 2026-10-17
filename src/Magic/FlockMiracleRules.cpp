@@ -15,12 +15,16 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
+
 using namespace openblack::magic;
 
 int flock::NumberToCreate(uint32_t number, float tribalPower)
 {
-	// Rounded half to even, as the game's rounding does
-	return static_cast<int>(std::nearbyint(static_cast<double>(number) * static_cast<double>(tribalPower)));
+	// The game takes the number as a signed one and keeps it as a float, then rounds the product half to even
+	const float count = x87::RoundToFloat(static_cast<double>(static_cast<int32_t>(number)));
+	return static_cast<int>(std::nearbyint(tribalPower * count));
 }
 
 bool flock::IsEvil(float alignment, float alignmentSwitch)
@@ -210,11 +214,12 @@ bool flock::IsPrey(const PreyFacts& prey)
 
 glm::vec3 flock::EatingPosition(glm::vec3 prey, glm::vec3 wolf, float scale)
 {
-	auto way = prey - wolf;
-	const float length = glm::length(way);
-	if (length != 0.0f)
+	// The game adds the squares from z to x, and goes from the wolf along the way less the scaled way
+	const auto towards = prey - wolf;
+	auto way = towards;
+	if (towards != glm::vec3(0.0f))
 	{
-		way *= scale / length;
+		way = openblack::x87::Scaled<openblack::x87::SumOrder::Zyx>(towards, scale);
 	}
-	return prey - way;
+	return wolf + (towards - way);
 }

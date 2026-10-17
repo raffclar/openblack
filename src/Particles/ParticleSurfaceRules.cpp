@@ -21,18 +21,19 @@
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
 #include <glm/mat4x4.hpp>
-#include <glm/matrix.hpp>
 
+#include "Common/X87Matrix.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleSurfaces.h"
 
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
+namespace x87 = openblack::x87;
 
 namespace
 {
-/// The sway turns over once in this many seconds times two pi
-constexpr double k_SwayPeriod = 6.2831854820251465;
+/// The sway turns over once each two pi seconds. The game holds two pi as a double with the bits of the float
+constexpr double k_SwayPeriod = static_cast<double>(6.28318548f);
 constexpr float k_SwaySpeed = 1.0f;
 /// A texture's size is given in pixels; its sheet spans 256
 constexpr float k_SheetPixels = 256.0f;
@@ -62,7 +63,7 @@ AtomFrame FrameOf(const Effect& effect, const Collection& collection, const Atom
 		toWorld[axis] = glm::vec4(effect.LocalToGlobal(collection, atom.position + along) - origin, 0.0f);
 	}
 	toWorld[3] = glm::vec4(origin, 1.0f);
-	return {.toWorld = toWorld, .toAtom = glm::inverse(toWorld)};
+	return {.toWorld = toWorld, .toAtom = x87::Inverse(toWorld)};
 }
 
 class SurfaceOfRevolutionRule final: public Modifier
@@ -176,14 +177,14 @@ private:
 			const auto frame = FrameOf(effect, collection, atom);
 			for (auto& vertex : instance->mesh.vertices)
 			{
-				vertex.position = glm::vec3(frame.toWorld * glm::vec4(vertex.position, 1.0f));
+				vertex.position = x87::TransformPoint(frame.toWorld, vertex.position, x87::k_MeshPointOrder);
 			}
 			const glm::vec2 middle {frame.toWorld[3].x, frame.toWorld[3].z};
 			const auto& world = effect.Services().world;
 			surface::DrapeOverLand(instance->mesh, middle, [&world](glm::vec2 xz) { return world.LandHeight(xz); });
 			for (auto& vertex : instance->mesh.vertices)
 			{
-				vertex.position = glm::vec3(frame.toAtom * glm::vec4(vertex.position, 1.0f));
+				vertex.position = x87::TransformPoint(frame.toAtom, vertex.position, x87::k_MeshPointOrder);
 			}
 		}
 		atom.surface = std::move(instance);

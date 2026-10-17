@@ -104,8 +104,15 @@ void StepTo(Ease& ease, uint32_t realMs);
 [[nodiscard]] float TopY(float iconY, float iconHeight);
 /// How far the holding hand is tipped, in radians: more as it comes near the land
 [[nodiscard]] float HandTiltAt(float handY);
-/// How far the hand closes on the icon: by how wide the icon is against the hand, at most fully
-[[nodiscard]] float GripClosure(float iconRadius);
+/// How far the hand closes on the icon. The hand holds the icon on its palm, so the icon spreads out of the hand by
+/// three quarters of its height. The closure is that spread against half the hand, at most fully.
+[[nodiscard]] float GripClosure(float iconHeight);
+/// How far the hand closes on a thing that spreads out of it by a hold radius: that radius against half the hand, at
+/// most fully
+[[nodiscard]] float ClosureForHoldRadius(float holdRadius);
+
+/// Whether a totem works, so that the hand can take it: it stands built and has more than three quarters of its life
+[[nodiscard]] bool Functional(bool built, float life);
 
 /// The moment of the hand's side hold it takes on the icon, in milliseconds into the hold, which lasts some milliseconds:
 /// at most a quarter of the way in, for an icon as wide as the hand or wider; cut to whole milliseconds

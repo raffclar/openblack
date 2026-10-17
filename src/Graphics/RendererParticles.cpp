@@ -102,12 +102,9 @@ bgfx::VertexLayout ChainLayout()
 {
 	bgfx::VertexLayout layout;
 	layout.begin()
-	    .add(bgfx::Attrib::Position, 4, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::Normal, 3, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::Tangent, 3, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
 	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
 	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-	    .add(bgfx::Attrib::TexCoord3, 2, bgfx::AttribType::Float)
 	    .end();
 	return layout;
 }
@@ -807,6 +804,14 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 		{
 			bgfx::allocTransientVertexBuffer(&chainVertices, vertexCount, layout);
 			std::memcpy(chainVertices.data, frame.chainVertices.data(), vertexCount * sizeof(particles::draw::ChainVertex));
+			// Each ribbon's corners as this pass's camera sees them
+			const auto corners = std::span(reinterpret_cast<particles::draw::ChainVertex*>(chainVertices.data), vertexCount);
+			for (const auto& chain : frame.chains)
+			{
+				particles::draw::PlaceChainCorners(
+				    corners.subspan(chain.firstVertex, static_cast<size_t>(chain.segments) * k_CornersPerSegment),
+				    std::span(frame.chainJoints).subspan(chain.firstJoint, chain.segments + 1), origin);
+			}
 			bgfx::allocTransientIndexBuffer(&chainIndices, indexCount, true);
 			auto* index = reinterpret_cast<uint32_t*>(chainIndices.data);
 			for (uint32_t corner = 0; corner < vertexCount; corner += k_CornersPerSegment)
@@ -856,8 +861,7 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 				{
 					continue;
 				}
-				const auto towards = glm::vec3(surface.worldToAtom * glm::vec4(light, 1.0f));
-				const auto towardsLight = glm::length(towards) > 0.0f ? glm::normalize(towards) : towards;
+				const auto towardsLight = particles::surface::TowardsLight(surface.worldToAtom, light);
 				for (uint32_t i = surface.firstVertex; i < surface.firstVertex + surface.vertexCount; ++i)
 				{
 					const auto level = particles::surface::LightLevel(frame.surfaceNormals[i], towardsLight, ambient);

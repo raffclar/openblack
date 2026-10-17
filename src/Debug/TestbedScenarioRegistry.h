@@ -280,6 +280,8 @@ struct ObjectSetup
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
 	/// A villager belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
+	/// A villager is made at this age, rather than as a grown up of 30
+	std::optional<uint32_t> villagerAge;
 	/// A villager of the town lives in the scenario's object of this index, a building of the town
 	std::optional<size_t> livesIn;
 	/// A villager lives in the scenario's building of this index. The building must come before the villager in the
@@ -693,6 +695,9 @@ struct Command
 		LayGateStone,
 		/// A script's cinema bars slide in (value 1) or out (value 0)
 		WideScreen,
+		/// A script sets the interface level (value), as the script command that sets the interface interaction does:
+		/// the camera's features, its keys and the hand's reach. Needs no creature
+		SetInterfaceLevel,
 		/// Its history, as the Creature Cave's trophies show it: how it leans in fights (amount, -1 defensive to 1
 		/// aggressive) as if it had fought; how many times it has seen a miracle (value, by its magic type; amount, the
 		/// times), which it then knows about
@@ -801,6 +806,10 @@ struct Command
 		/// list (value 2), as the music button and the play list button show them. Value 0 hides them. Needs no
 		/// creature
 		ShowCustomMusicControls,
+		/// The game saves into the slot (value), as the save game room saves into it. Needs no creature
+		SaveGame,
+		/// The game loads the creatures of the slot (value) into the land, as a load of the slot does. Needs no creature
+		LoadGame,
 		/// A script tells the creature to take notice of reactions (value 1) or to take no notice (value 0), as
 		/// a script's "enable ... reaction" and "disable ... reaction" do
 		ScriptReaction,
@@ -818,6 +827,10 @@ struct Command
 		/// The game writes the web page of the creature into the player's profile folder, as it does each 600 turns of
 		/// the creature's life
 		WriteWebPage,
+		/// A bookmark (value, 0 to 6) is put at a point on the land (point, from the middle of the map), with the camera
+		/// origin 80 metres back and 50 metres up from it. Then the camera flies to it, as the bookmark's number key does.
+		/// Needs no creature
+		FlyToBookmark,
 		/// The falling spell's film plays as a script's SET_AVI_SEQUENCE 2 starts it, with a copy of the player's first
 		/// creature over the film. Needs no creature of its own
 		PlayFallingSpellFilm,

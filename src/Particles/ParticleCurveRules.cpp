@@ -122,12 +122,13 @@ public:
 		if (!data.started)
 		{
 			data.started = true;
-			data.a = glm::vec4(atom.velocity, std::log(1.0f - smoothFactor) * k_SmoothingRateScale);
+			data.a = glm::vec4(atom.velocity, maths::SmoothingRate(smoothFactor, k_SmoothingRateScale));
 		}
 		glm::vec3 smoothed(data.a);
-		smoothed += (atom.velocity - smoothed) * (1.0f - std::exp(-effect.GetDt() * data.a.w));
+		smoothed += (atom.velocity - smoothed) * maths::SmoothingShare(effect.GetDt(), data.a.w);
 		data.a = glm::vec4(smoothed, data.a.w);
-		const glm::vec3 seen(-smoothed.x, -smoothed.y + proportionDefault, -smoothed.z);
+		// The game adds zero to the sideways parts, so a negative zero becomes a positive zero
+		const glm::vec3 seen(-smoothed.x + 0.0f, -smoothed.y + proportionDefault, -smoothed.z + 0.0f);
 		const auto& world = effect.Services().world;
 		atom.rotation = maths::AngleY(maths::ScreenVelocityAngle(seen, world.CameraRight(), world.CameraUp()));
 		return true;

@@ -16,6 +16,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
 #include "InfoConstants.h"
 #include "VillagerReactionRules.h"
 
@@ -126,7 +127,8 @@ shield::DomeVolume shield::VolumeOf(glm::vec3 meshHalfExtent, float scale)
 bool shield::WithinSpiritualShield(glm::vec3 shieldOnLand, float radius, glm::vec3 pointOnLand)
 {
 	const auto d = pointOnLand - shieldOnLand;
-	return radius * radius > glm::dot(d, d);
+	// The game adds the squares from z to x
+	return radius * radius > x87::DotZyx(d, d);
 }
 
 bool shield::WithinPhysicalShield(const DomeVolume& volume, float distanceAcross, float heightAboveLand)
@@ -276,10 +278,15 @@ glm::vec2 shield::LookOut(glm::vec2 centre, glm::vec2 villager, float turn)
 	return villager + glm::vec2(std::cos(angle), std::sin(angle));
 }
 
+bool shield::TownIgnoresShield(Reaction reaction, bool townAttackedByShieldPlayer, bool physical)
+{
+	return townAttackedByShieldPlayer &&
+	       (reaction == Reaction::ReactToMagicShield || (!physical && reaction == Reaction::ReactToMagicShieldStruck));
+}
+
 float shield::ImpressiveMultiplier(Reaction reaction, bool townAttackedByShieldPlayer, bool physical)
 {
-	if (townAttackedByShieldPlayer &&
-	    (reaction == Reaction::ReactToMagicShield || (!physical && reaction == Reaction::ReactToMagicShieldStruck)))
+	if (TownIgnoresShield(reaction, townAttackedByShieldPlayer, physical))
 	{
 		return 0.0f;
 	}

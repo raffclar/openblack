@@ -27,7 +27,7 @@ namespace
 {
 /// Where a temple keeps its player's creature: the pen its mesh marks in front of it, turned and moved with the temple.
 /// None when its mesh marks no pen
-std::optional<glm::vec3> PenOfTempleMesh(const Transform& transform, const Mesh* mesh)
+std::optional<glm::vec3> PenOfTempleMesh(const Transform& transform, float yAngle, const Mesh* mesh)
 {
 	if (mesh == nullptr || !openblack::Locator::resources::has_value())
 	{
@@ -38,7 +38,7 @@ std::optional<glm::vec3> PenOfTempleMesh(const Transform& transform, const Mesh*
 	{
 		return std::nullopt;
 	}
-	return openblack::creature_mode::TemplePen(transform.position, transform.rotation, transform.scale,
+	return openblack::creature_mode::TemplePen(transform.position, yAngle, transform.scale.x,
 	                                           meshes.Handle(mesh->id)->GetExtraMetrics());
 }
 } // namespace
@@ -68,7 +68,7 @@ std::optional<glm::vec3> creature_home::TemplePenOf(const Registry& registry, Pl
 	    [&registry, &pen, owner](entt::entity entity, const Temple& building, const Transform& transform) {
 		    if (building.owner == owner && !pen.has_value())
 		    {
-			    pen = PenOfTempleMesh(transform, registry.TryGet<const Mesh>(entity));
+			    pen = PenOfTempleMesh(transform, building.yAngle, registry.TryGet<const Mesh>(entity));
 		    }
 	    });
 	return pen;

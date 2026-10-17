@@ -84,12 +84,18 @@ float GameVillageTotemWorld::LandHeightAt(glm::vec2 point) const
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
 }
 
-bool GameVillageTotemWorld::TempleBuilt(PlayerNames player) const
+bool GameVillageTotemWorld::HeartBuilt(PlayerNames player) const
 {
 	bool built = false;
-	Locator::entitiesRegistry::value().Each<const Temple>(
-	    [player, &built](entt::entity /*unused*/, const Temple& temple) { built = built || temple.owner == player; });
+	Locator::entitiesRegistry::value().Each<const Temple>([this, player, &built](entt::entity heart, const Temple& temple) {
+		built = built || (temple.owner == player && Built(heart));
+	});
 	return built;
+}
+
+float GameVillageTotemWorld::LifeOf(entt::entity object) const
+{
+	return world_objects::LifeOf(object);
 }
 
 bool GameVillageTotemWorld::Built(entt::entity building) const

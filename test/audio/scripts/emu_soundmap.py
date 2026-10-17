@@ -8,6 +8,10 @@ GDebug::SetMessage and the LHAudio imports.
 
 Regenerate a scenario (Python 3 with unicorn installed):
     python emu_soundmap.py <seed> <queries> ../scenarios/volumes_<seed>.json
+
+The emulator's FPU runs at 64-bit precision, not at the game's 24-bit precision, so its results are not the game's.
+After a new scenario, make its expected results again on the real FPU:
+    python tools/oracle/cases/atmos_volumes_cases.py test/audio/scenarios/volumes_<seed>.json
 """
 import json
 import os

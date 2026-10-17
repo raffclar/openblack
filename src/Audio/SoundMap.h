@@ -86,14 +86,20 @@ struct AtmosWeather
 	int8_t windZ {0};
 };
 
+namespace sound_map
+{
+/// The square of the distance in metres from the scan's centre to a cell's centre, both 16.16 map positions, as the
+/// scan works it out
+[[nodiscard]] float DistanceSquared(int32_t centerX, int32_t centerZ, int32_t cellX, int32_t cellZ);
+/// A cell centre's map position in whole metres, truncated, as the scan keeps the nearest cell
+[[nodiscard]] uint16_t WholeMetres(int32_t coordinate);
+} // namespace sound_map
+
 /// Port of the game's sound map: decides how loud each ambience type should be from the land around the listener.
 ///
 /// Each game turn the listener (the camera) scans the land cells within GSoundInfo::radiusForMinAtmosVolume,
 /// recording per type how many cells it found and which one is nearest. Every type then fades with the distance
 /// to its nearest cell and with the camera's height above the ground there.
-///
-/// The game works these out in double precision and rounds to float wherever it keeps a value, so they are carried
-/// out in double here with float casts where the game keeps a value.
 class SoundMap
 {
 public:
@@ -125,7 +131,7 @@ public:
 	[[nodiscard]] float GetReceiverHeight() const { return _receiverHeight; }
 
 	/// Interpolated land height at a map position in 1/65536 cell units
-	[[nodiscard]] static double GetAltitude(const LandIslandInterface& island, int32_t x, int32_t z);
+	[[nodiscard]] static float GetAltitude(const LandIslandInterface& island, int32_t x, int32_t z);
 	/// The ambience type painted into the land at a cell
 	[[nodiscard]] static uint32_t GetAtmosType(const LandIslandInterface& island, uint16_t x, uint16_t z);
 
@@ -143,7 +149,7 @@ private:
 	void CalculateVolumes(const LandIslandInterface& island, const GSoundInfo& info, const Inputs& inputs);
 
 	[[nodiscard]] float DistanceFade(const GSoundInfo& info, AtmosType type) const;
-	[[nodiscard]] double HeightFade(const LandIslandInterface& island, const GSoundInfo& info, float x, float z) const;
+	[[nodiscard]] float HeightFade(const LandIslandInterface& island, const GSoundInfo& info, float x, float z) const;
 	[[nodiscard]] float StratosphereVolume(const GSoundInfo& info) const;
 
 	std::array<TypeScan, k_AtmosTypeCount> _scans {};

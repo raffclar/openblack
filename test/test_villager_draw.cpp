@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
+#include <bit>
 #include <numbers>
 
 #include <glm/gtx/euler_angles.hpp>
@@ -71,12 +74,42 @@ TEST(VillagerDraw, ASmallTurnIsDrawnAtThreeRadiansASecond)
 	EXPECT_FLOAT_EQ(villager_draw::EasedHeading(0.0f, 0.02f, 10), 0.02f);
 }
 
+TEST(VillagerDraw, TheTurnRateIsTheGameDouble)
+{
+	// The game holds the float 0.003 widened to a double, not the double 0.003
+	EXPECT_EQ(std::bit_cast<uint64_t>(villager_draw::k_TurnPerMillisecond), 0x3F689374C0000000ull);
+}
+
 TEST(VillagerDraw, ABigTurnIsDrawnQuicker)
 {
 	// A half turn less a little: four times its size over a half turn, times the ordinary rate
 	const float size = 3.0f;
 	const float expected = 10.0f * (size * (2.0f / k_Pi) * 2.0f) * 0.003f;
 	EXPECT_NEAR(villager_draw::EasedHeading(0.0f, size, 10), expected, 1e-5f);
+}
+
+TEST(VillagerDraw, ABigTurnStepHasTheGameBits)
+{
+	// Each step of the big turn rounds to a float, with the game's 2 / pi. The values come from the game's instructions
+	// with exact rounding at each step
+	struct Case
+	{
+		float size;
+		uint32_t milliseconds;
+		uint32_t stepBits;
+	};
+	constexpr std::array<Case, 6> k_Cases {{
+	    {.size = 2.0f, .milliseconds = 10, .stepBits = 0x3D9C74A7u},
+	    {.size = 3.0f, .milliseconds = 10, .stepBits = 0x3DEAAEFBu},
+	    {.size = 1.977907657623291f, .milliseconds = 40, .stepBits = 0x3E9ABA39u},
+	    {.size = 2.6358838081359863f, .milliseconds = 40, .stepBits = 0x3ECE3311u},
+	    {.size = 2.226329803466797f, .milliseconds = 16, .stepBits = 0x3E0B542Au},
+	    {.size = 2.158015251159668f, .milliseconds = 10, .stepBits = 0x3DA8D11Du},
+	}};
+	for (const auto& c : k_Cases)
+	{
+		EXPECT_EQ(std::bit_cast<uint32_t>(villager_draw::EasedHeading(0.0f, c.size, c.milliseconds)), c.stepBits) << c.size;
+	}
 }
 
 TEST(VillagerDraw, ATurnGoesTheShortWayRound)

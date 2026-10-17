@@ -280,7 +280,6 @@ std::vector<Step> creature_mind::BecomeHigh(const std::function<std::optional<Hi
 			                  .seconds = k_HighSitSeconds + randomFloat(k_HighSitExtraSeconds),
 			                  .sequence = {creature_layers::animations::k_StartSit, creature_layers::animations::k_Sit,
 			                               creature_layers::animations::k_EndSit},
-			                  .mirrorAtRandom = true,
 			                  .face = Cue::Sad,
 			                  .heldEyes = Eyes::Stoned});
 		}

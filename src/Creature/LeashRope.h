@@ -29,15 +29,17 @@ constexpr size_t k_NodeCount = 40;
 /// The rope is stepped at 200 times a second, however long the frame
 constexpr float k_StepSeconds = 0.005f;
 constexpr float k_StepsPerSecond = 200.0f;
-/// At most this many steps a frame: a long stall moves the ends without making the rope catch up all at once
-constexpr uint32_t k_MaxSteps = 200;
 /// Each mass and how the springs and air act on it
 constexpr float k_Stiffness = 20000.0f;
 constexpr float k_Drag = 0.1f;
 /// The drag is divided by the rest length of a segment, never less than this
 constexpr float k_MinDragLength = 0.5f;
-constexpr float k_Gravity = -7.848f;
 constexpr float k_Mass = 0.8f;
+/// The weight of a mass: the game multiplies the mass by the fall acceleration each step, in float
+constexpr float k_FallAcceleration = -9.81f;
+constexpr float k_Gravity = k_Mass * k_FallAcceleration;
+/// The rest length of a segment is the slack length times this share, one part in 41 as a float
+constexpr float k_RestShare = 1.0f / 41.0f;
 constexpr float k_MaxSpeed = 300.0f;
 /// The masses keep this much over the ground beyond the ribbon's half width
 constexpr float k_GroundClearance = 0.5f;

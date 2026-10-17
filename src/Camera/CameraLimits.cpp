@@ -17,6 +17,10 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include "Camera/ScriptCameraModel.h"
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::camera_limits;
 using camera_zones::Exclusion;
@@ -69,13 +73,8 @@ std::optional<glm::vec3> camera_limits::KeepInsideAllowedArea(const glm::vec3& o
 
 std::optional<glm::vec3> camera_limits::KeepInsideTheWorld(const glm::vec3& destination)
 {
-	const auto fromCentre = destination - k_WorldCentre;
-	const float squared = glm::dot(fromCentre, fromCentre);
-	if (!(squared > k_WorldReach * k_WorldReach))
-	{
-		return std::nullopt;
-	}
-	return k_WorldCentre + fromCentre * (k_WorldHoldRadius / std::sqrt(squared));
+	// The same test and pull as the script camera's: the game does both in one place, each frame
+	return script_camera::PullIntoWorld(destination);
 }
 
 float camera_limits::EaseSeconds(float sinceFlight, bool pushed, bool focusMoved)
@@ -103,12 +102,13 @@ float camera_limits::FrameMoveLimit(float focusDistance, float seconds)
 
 std::optional<glm::vec3> camera_limits::LimitFrameMove(const glm::vec3& start, const glm::vec3& origin, float limit)
 {
+	// The game adds the squares from z to x, and makes the move a unit before it scales it
 	const auto move = origin - start;
-	if (!(glm::dot(move, move) > limit * limit))
+	if (!(x87::DotZyx(move, move) > limit * limit))
 	{
 		return std::nullopt;
 	}
-	return start + glm::normalize(move) * limit;
+	return start + x87::Scaled<x87::SumOrder::Zyx>(move) * limit;
 }
 
 std::vector<Exclusion> camera_limits::NearbyExclusions(std::span<const Exclusion> exclusions, const glm::vec3& originAtStart)
@@ -177,9 +177,16 @@ GroundPush camera_limits::PushOffTheGround(const Ground& ground, std::span<const
 {
 	GroundPush result {.origin = origin, .focus = focus};
 	// The ball faces the way the camera looks: `back` from what it looks at to the camera
-	const auto back = glm::normalize(origin - focus);
-	const auto side = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), back));
-	const auto up = glm::normalize(glm::cross(back, side));
+	// The game adds the squares of each axis x, z, then y, and multiplies by one over the length. It scales the axes by
+	// the clearance before it turns the points with them
+	using x87::SumOrder;
+	const auto unit = [](const glm::vec3& v) { return v == glm::vec3(0.0f) ? v : x87::Scaled<SumOrder::Xzy>(v); };
+	const auto back = unit(origin - focus);
+	const auto side = unit(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), back));
+	const auto up = unit(glm::cross(back, side));
+	const auto sideRow = side * k_Clearance;
+	const auto upRow = up * k_Clearance;
+	const auto backRow = back * k_Clearance;
 	constexpr float k_MaxPush = k_Clearance * 0.5f;
 	for (int ring = -2; ring <= 2; ++ring)
 	{
@@ -190,8 +197,14 @@ GroundPush camera_limits::PushOffTheGround(const Ground& ground, std::span<const
 		for (int i = 0; i < count; ++i)
 		{
 			const float angle = static_cast<float>(i) * glm::two_pi<float>() / static_cast<float>(count);
-			const auto point = result.origin + k_Clearance * (side * (std::sin(angle) * ringCos) + up * ringSin +
-			                                                  back * (std::cos(angle) * ringCos));
+			// The point on the ball: x adds the up, back and side terms in that order, y and z add the up, side and back
+			// terms, then each adds the camera's place
+			const float alongSide = x87::Mul(x87::Sin(angle), ringCos);
+			const float alongBack = x87::Mul(x87::Cos(angle), ringCos);
+			const glm::vec3 point {
+			    (((upRow.x * ringSin) + (backRow.x * alongBack)) + (alongSide * sideRow.x)) + result.origin.x,
+			    (((upRow.y * ringSin) + (sideRow.y * alongSide)) + (backRow.y * alongBack)) + result.origin.y,
+			    (((upRow.z * ringSin) + (sideRow.z * alongSide)) + (backRow.z * alongBack)) + result.origin.z};
 			const glm::vec2 across {point.x, point.z};
 			if (!(SurfaceHeight(ground, nearby, exclusionsOn, across) > point.y + k_Rounding))
 			{
@@ -209,15 +222,17 @@ GroundPush camera_limits::PushOffTheGround(const Ground& ground, std::span<const
 				}
 				if (const auto roof = DomeRoof(dome, across); roof.has_value() && *roof > surface)
 				{
-					normal = glm::normalize(point - dome.position);
+					// This normal adds its squares from z to x
+					const auto out = point - dome.position;
+					normal = out == glm::vec3(0.0f) ? out : x87::Scaled<SumOrder::Zyx>(out);
 					surface = *roof;
 				}
 			}
-			const float depth = std::min(glm::dot(normal, glm::vec3(point.x, surface, point.z) - point), k_MaxPush);
+			const float depth = std::min(x87::DotZyx(normal, glm::vec3(point.x, surface, point.z) - point), k_MaxPush);
 			const auto push = normal * depth;
 			result.origin += push;
 			result.pushed = true;
-			if (const float backwards = glm::dot(push, back); backwards > 0.0f)
+			if (const float backwards = x87::DotZyx(push, back); backwards > 0.0f)
 			{
 				result.focus += push * backwards;
 				result.focusMoved = true;

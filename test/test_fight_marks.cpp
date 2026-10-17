@@ -54,6 +54,13 @@ TEST(FightMarks, ColoursByPlaceInTheQueue)
 	}
 }
 
+TEST(FightMarks, TheColourRampRoundsAsTheGameDoes)
+{
+	// The share and each multiply by a double round to a float before the cut. Kept wide, these give 114 and 44
+	EXPECT_EQ(ColourOf(13, 68), 0xA0FFFF73u);
+	EXPECT_EQ(ColourOf(52, 85), 0xA0FF2D00u);
+}
+
 TEST(FightMarks, RgbaTakesTheBytes)
 {
 	const auto colour = Rgba(0xA0FF8300);

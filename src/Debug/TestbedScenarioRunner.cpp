@@ -52,6 +52,8 @@
 #include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraModel.h"
+#include "Camera/DoubleClickFlight.h"
 #include "Common/FileDialog.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureActivity.h"
@@ -140,6 +142,8 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
+#include "ECS/Systems/CameraBookmarkSystemInterface.h"
+#include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
@@ -186,6 +190,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -1235,7 +1240,8 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, VillagerInfo>)
 			    {
 				    constexpr uint32_t k_AdultAge = 30;
-				    const auto villager = ecs::archetypes::VillagerArchetype::Create(position, position, type, k_AdultAge);
+				    const auto villager = ecs::archetypes::VillagerArchetype::Create(position, position, type,
+				                                                                     object.villagerAge.value_or(k_AdultAge));
 				    if (object.joinTown)
 				    {
 					    auto& registry = Locator::entitiesRegistry::value();
@@ -1862,23 +1868,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		auto& totems = Locator::villageTotemSystem::value();
 		if (!totems.Grip(*totem, command.player))
 		{
-			// Say what the town lacks
-			const auto& registry = Locator::entitiesRegistry::value();
-			const auto* abode = registry.TryGet<const ecs::components::Abode>(*centre);
-			const auto& towns = registry.Context().towns;
-			const auto found = abode != nullptr ? towns.find(abode->townId) : towns.end();
-			const auto townEntity = found != towns.end() ? found->second : entt::null;
-			const auto* townComponent =
-			    registry.Valid(townEntity) ? registry.TryGet<const ecs::components::Town>(townEntity) : nullptr;
-			const auto built = [&registry](entt::entity building) {
-				return registry.Valid(building) && !registry.AllOf<ecs::components::BuildProgress>(building);
-			};
-			return fmt::format("the hand can't take hold of the totem (town {}, owner {}, centre built {}, worship site built "
-			                   "{}, temples {})",
-			                   entt::to_integral(townEntity),
-			                   townComponent != nullptr ? static_cast<int>(townComponent->owner) : -1, built(*centre),
-			                   townComponent != nullptr && built(townComponent->worshipSite),
-			                   registry.Size<ecs::components::Temple>());
+			return fmt::format("the hand can't take hold of the totem: {}", totems.WhyNotGrip(*totem, command.player));
 		}
 		totems.LetGo();
 		return "gripped and let go";
@@ -2445,6 +2435,20 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::SaveGame || command.kind == Kind::LoadGame)
+	{
+		const auto slot = static_cast<uint32_t>(command.value);
+		const bool saving = command.kind == Kind::SaveGame;
+		bool done = false;
+		if (Locator::saveGameSystem::has_value())
+		{
+			auto& saves = Locator::saveGameSystem::value();
+			done = saving ? saves.Save(slot, u"Testbed") : saves.Load(slot);
+		}
+		Log(fmt::format("{:.1f}s: {} slot {}: {}", _seconds, saving ? "save into" : "load from", slot,
+		                done ? "done" : "failed"));
+		return;
+	}
 	if (command.kind == Kind::EndGuidanceWaits)
 	{
 		if (Locator::guidanceSystem::has_value())
@@ -2512,6 +2516,31 @@ void Runner::Give(const Command& command)
 			Locator::handDemoSystem::value().Play(command.handDemo, 0, false, false);
 		}
 		Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
+		return;
+	}
+	if (command.kind == Kind::FlyToBookmark)
+	{
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 focus {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+		const glm::vec3 origin = focus + glm::vec3(0.0f, 50.0f, -80.0f);
+		if (Locator::cameraBookmarkSystem::has_value())
+		{
+			Locator::cameraBookmarkSystem::value().SetBookmark(static_cast<uint8_t>(command.value), focus, origin);
+		}
+		Locator::camera::value().GetModel().SetFlight(origin, focus, camera_fly::k_BookmarkRise);
+		Log(fmt::format("{:.1f}s: the camera flies to bookmark {} at ({:.0f}, {:.0f}, {:.0f})", _seconds, command.value + 1,
+		                focus.x, focus.y, focus.z));
+		return;
+	}
+	if (command.kind == Kind::SetInterfaceLevel)
+	{
+		if (Locator::cameraHelpSystem::has_value())
+		{
+			auto& help = Locator::cameraHelpSystem::value().Get();
+			const bool known = help.SetInterfaceLevel(static_cast<int32_t>(command.value));
+			Log(fmt::format("{:.1f}s: the interface level is {}{}, the hand reaches {:.0f}", _seconds, command.value,
+			                known ? "" : " (a level the game does not know)", help.handReach));
+		}
 		return;
 	}
 	if (command.kind == Kind::PlayFallingSpellFilm)
@@ -2845,6 +2874,8 @@ void Runner::Give(const Command& command)
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::SetInterfaceLevel:
+	case Kind::FlyToBookmark:
 	case Kind::PlayFallingSpellFilm:
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
@@ -2853,6 +2884,8 @@ void Runner::Give(const Command& command)
 	case Kind::OpenTattooMenu:
 	case Kind::PlayCustomMusic:
 	case Kind::ShowCustomMusicControls:
+	case Kind::SaveGame:
+	case Kind::LoadGame:
 	case Kind::StopScript:
 	case Kind::StartScriptMusic:
 	case Kind::RunText:

@@ -406,7 +406,8 @@ std::vector<Step> creature_mind::DeadForever()
 	         .seconds = k_DeadForeverSeconds,
 	         .sequence = {animations::k_Faint, animations::k_Faint, animations::k_GetUp},
 	         .holdLoop = true,
-	         .closedEyes = true}};
+	         .closedEyes = true,
+	         .faint = true}};
 }
 
 std::vector<Step> creature_mind::PointOutHighlight(uint32_t highlight, float cameraDistance)

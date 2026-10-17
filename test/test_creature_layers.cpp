@@ -78,6 +78,14 @@ TEST(CreatureLayers, BiggerCreaturesPlayMoreSlowly)
 	EXPECT_NEAR(PlaybackRate(2.0f), 0.75f, k_Tolerance);
 }
 
+// When a script sets real time, the body plays at the usual speed whatever its size
+TEST(CreatureLayers, RealTimePlaysAtTheUsualSpeed)
+{
+	EXPECT_EQ(BodyRate(2.0f, true), 1.0f);
+	EXPECT_EQ(BodyRate(0.0f, true), 1.0f);
+	EXPECT_EQ(BodyRate(1.0f, false), PlaybackRate(1.0f));
+}
+
 TEST(CreatureLayers, AnActionPlaysOnceThenTheBodyStands)
 {
 	const BodyAction stand {};

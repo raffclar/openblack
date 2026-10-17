@@ -41,14 +41,15 @@ entt::entity Thing(uint32_t n)
 TEST(CreatureObjectBeliefs, ItKeepsOneBeliefAboutEachThingWhereItLastCameAcrossIt)
 {
 	Store store;
-	const auto first = store.Add(Thing(1), k_Forest, {1.0f, 0.0f, 2.0f});
+	const auto first = store.Add(Thing(1), k_Forest, {.x = 10, .z = 20});
 	ASSERT_NE(first.belief, nullptr);
 	EXPECT_TRUE(first.isNew);
-	const auto again = store.Add(Thing(1), k_Forest, {5.0f, 0.0f, 6.0f});
+	const auto again = store.Add(Thing(1), k_Forest, {.x = 8090858, .z = 0x01000001});
 	EXPECT_FALSE(again.isNew);
 	EXPECT_EQ(store.Size(), 1u);
 	ASSERT_NE(store.Find(Thing(1)), nullptr);
-	EXPECT_EQ(store.Find(Thing(1))->place, glm::vec3(5.0f, 0.0f, 6.0f));
+	// The place stays in map units: no unit is lost to metres
+	EXPECT_EQ(store.Find(Thing(1))->place, (openblack::map_coords::MapCoords {.x = 8090858, .z = 0x01000001}));
 	EXPECT_EQ(store.Find(Thing(2)), nullptr);
 }
 
@@ -309,7 +310,7 @@ TEST(CreatureObjectBeliefs, ItKeepsWhenItLastLookedACreatureOver)
 	Store store;
 	EXPECT_FALSE(store.Add(Thing(1), k_Creature, {}).belief->inspected.has_value());
 	store.Find(Thing(1))->inspected = 600;
-	store.Add(Thing(1), k_Creature, {1.0f, 0.0f, 1.0f});
+	store.Add(Thing(1), k_Creature, {.x = 1, .z = 1});
 	EXPECT_EQ(store.Find(Thing(1))->inspected, 600u);
 	store.Forget(Thing(1));
 	EXPECT_FALSE(store.Add(Thing(1), k_Creature, {}).belief->inspected.has_value());
@@ -318,11 +319,11 @@ TEST(CreatureObjectBeliefs, ItKeepsWhenItLastLookedACreatureOver)
 TEST(CreatureObjectBeliefs, ItListsItsBeliefsNewestFirst)
 {
 	Store store;
-	(void)store.Add(Thing(1), k_Forest, glm::vec3(0.0f));
-	(void)store.Add(Thing(2), k_Forest, glm::vec3(0.0f));
-	(void)store.Add(Thing(3), k_Forest, glm::vec3(0.0f));
+	(void)store.Add(Thing(1), k_Forest, {});
+	(void)store.Add(Thing(2), k_Forest, {});
+	(void)store.Add(Thing(3), k_Forest, {});
 	// Coming across a thing again does not make its belief newer
-	(void)store.Add(Thing(1), k_Forest, glm::vec3(1.0f));
+	(void)store.Add(Thing(1), k_Forest, {.x = 1, .z = 1});
 	const auto newest = store.NewestFirst();
 	ASSERT_EQ(newest.size(), 3u);
 	EXPECT_EQ(newest[0].thing, Thing(3));

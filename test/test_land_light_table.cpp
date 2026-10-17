@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <bit>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -140,4 +141,11 @@ TEST(LandLightTable, TheNightIsLitByTheLandRowsNotTheMoonsColour)
 			          LandLightTable::GetMoonColour(paletteWithOtherMoon, skyType, alignment));
 		}
 	}
+}
+
+TEST(LandLightTable, TheOvercastLimitRoundsToAFloat)
+{
+	// 255 - 96 times the overcast is 252.999996, which rounds to 253 as a float; in double precision the limit is 252
+	const auto palette = FakePalette(255, 255, 255);
+	EXPECT_EQ(LandLightTable::GetLandColour(palette, 2.0f, 1.0f, std::bit_cast<float>(0x3CAAAAC0u)), 0xFDFDFDu);
 }

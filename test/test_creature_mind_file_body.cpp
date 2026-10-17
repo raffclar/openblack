@@ -9,6 +9,7 @@
 
 #include <array>
 #include <limits>
+#include <optional>
 
 #include <MindFile.h>
 #include <gtest/gtest.h>
@@ -69,18 +70,21 @@ TEST(CreatureMindFileBody, OlderFilesLeaveTheRestToTheSpecies)
 	EXPECT_FALSE(body->tattoos.has_value());
 }
 
-TEST(CreatureMindFileBody, OutOfRangeValuesAreKeptInBounds)
+TEST(CreatureMindFileBody, ValuesAreKeptAsTheFileHasThem)
 {
+	// As the game does, only the alignment is kept from -1 to 1. A value that is not a number is not taken.
 	creaturemind::MindFileData file;
 	file.speciesRow = 2;
 	file.alignment = 3.0f;
 	file.physique.strength = std::numeric_limits<float>::quiet_NaN();
 	file.physique.size = -1.0f;
+	file.physique.fatness = 1.5f;
 	const auto body = FromMindFile(file);
 	ASSERT_TRUE(body.has_value());
 	EXPECT_EQ(body->alignment, 1.0f);
 	EXPECT_EQ(body->strength, 0.5f);
-	EXPECT_FALSE(body->size.has_value());
+	EXPECT_EQ(body->size, std::optional<float>(-1.0f));
+	EXPECT_EQ(body->fatness, 1.5f);
 }
 
 TEST(CreatureMindFileBody, UnknownSpeciesIsNoCreature)

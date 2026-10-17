@@ -105,6 +105,8 @@ constexpr size_t k_Kiss = 212;
 
 /// How fast every animation but the stand plays: bigger creatures move more slowly
 [[nodiscard]] float PlaybackRate(float size);
+/// How fast the body plays its animations: at the rate of its size, or at the usual speed when a script sets real time
+[[nodiscard]] float BodyRate(float size, bool realTime);
 
 /// What the body plays
 struct BodyAction

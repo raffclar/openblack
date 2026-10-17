@@ -40,7 +40,7 @@ inline constexpr float k_LobAimShare = 0.8f;
 inline constexpr float k_LobSecondsPerMetre = 0.025f;
 inline constexpr float k_LobMinimumSeconds = 0.5f;
 /// A lob never leaves steeper than this, in radians
-inline constexpr float k_LobSteepest = 0.52370351552963257f;
+inline constexpr double k_LobSteepest = 0.52370351552963257;
 
 /// Where a throw goes and how fast
 struct Launch
@@ -87,7 +87,8 @@ struct ForkSplit
 /// Whether a point lies inside a sphere grown by a margin
 [[nodiscard]] bool InsideSphere(glm::vec3 point, glm::vec3 centre, float radius, float margin);
 /// Where a way from one point to another first goes into a sphere grown by a margin: the start when it is inside
-/// already, else the first crossing, or the end when it never crosses
+/// already, else the first crossing, or the end when it never crosses. A crossing exactly at the end of the way also
+/// gives the end.
 [[nodiscard]] glm::vec3 SphereEntry(glm::vec3 from, glm::vec3 to, glm::vec3 centre, float radius, float margin);
 /// A speed reflected off a sphere's surface at a point
 [[nodiscard]] glm::vec3 DeflectOffSphere(glm::vec3 point, glm::vec3 centre, glm::vec3 velocity);

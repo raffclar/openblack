@@ -13,12 +13,14 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
 #include "ParticleCreators.h"
 #include "ParticleFlocking.h"
 #include "ParticleObjectRules.h"
 #include "ParticleSurfaces.h"
 
 using namespace openblack::particles;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -216,7 +218,7 @@ void openblack::particles::RegisterConditions(ParticleClassRegistry& registry)
 	                          [](const Effect&, const psys::ParticleObject&, const Atom& atom) { return atom.visible; });
 	registry.AddAtomCondition("EventConditionAtomBelowSpeed",
 	                          [](const Effect&, const psys::ParticleObject& object, const Atom& atom) {
-		                          return glm::length(atom.velocity) < object.Float("CutOffSpeed", 0.0f);
+		                          return x87::LengthZyx(atom.velocity) < object.Float("CutOffSpeed", 0.0f);
 	                          });
 	registry.AddAtomCondition("EventConditionAtomBelowHeight",
 	                          [](const Effect& effect, const psys::ParticleObject& object, const Atom& atom) {

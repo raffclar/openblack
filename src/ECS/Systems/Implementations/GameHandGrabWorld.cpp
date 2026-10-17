@@ -839,13 +839,7 @@ glm::mat3 GameHandGrabWorld::UnstretchedAxes(entt::entity object, const glm::mat
 	const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(object);
 	// Its own size is the one across, which stretching up never changes
 	const float scale = transform != nullptr ? transform->scale.x : 1.0f;
-	glm::mat3 result = axes;
-	for (glm::length_t column = 0; column < 3; ++column)
-	{
-		const float length = glm::length(axes[column]);
-		result[column] = length > 0.0f ? axes[column] * (scale / length) : axes[column];
-	}
-	return result;
+	return hand_grab::AxesAtSize(axes, scale);
 }
 
 std::optional<hand_grab::HandGrabWorldInterface::Pose> GameHandGrabWorld::ReleasePose(entt::entity object, bool alignToSlope)

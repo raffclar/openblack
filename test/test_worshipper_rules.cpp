@@ -142,6 +142,8 @@ TEST(WorshipperRules, SiteFood)
 	EXPECT_EQ(rules::FoodSpareForWorship(std::nullopt, 0.0f), 0);
 	EXPECT_EQ(rules::FoodSpareForWorship(100u, 30.5f), 69);
 	EXPECT_EQ(rules::FoodSpareForWorship(10u, 30.0f), 0);
+	// The difference rounds to a float first: 1 less a very small amount is 1
+	EXPECT_EQ(rules::FoodSpareForWorship(1u, 1e-9f), 1);
 	EXPECT_EQ(rules::FoodForSiteIfEnough(0, 0), 0);
 	EXPECT_EQ(rules::FoodForSiteIfEnough(20, 20), 20);
 	EXPECT_EQ(rules::FoodForSiteIfEnough(20, 19), 0);

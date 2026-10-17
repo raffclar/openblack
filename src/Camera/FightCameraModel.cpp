@@ -154,7 +154,8 @@ void FightCameraModel::HandleActions(std::chrono::microseconds dt)
 	_input.screenWidth = Locator::windowing::has_value() ? static_cast<float>(Locator::windowing::value().GetSize().x) : 1.0f;
 }
 
-void FightCameraModel::SetFlight([[maybe_unused]] glm::vec3 origin, [[maybe_unused]] glm::vec3 focus)
+void FightCameraModel::SetFlight([[maybe_unused]] glm::vec3 origin, [[maybe_unused]] glm::vec3 focus,
+                                 [[maybe_unused]] float rise)
 {
 	// Watching a fight, the camera stays on it
 }

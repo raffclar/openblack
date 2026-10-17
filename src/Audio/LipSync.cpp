@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "Common/X87.h"
+
 namespace openblack::audio::lip_sync
 {
 
@@ -48,17 +50,16 @@ void Fft(std::span<float> data, int n, bool forward)
 		}
 		j += m;
 	}
-	// The butterflies. The game rounds every step to single precision except the two sines, so the angle is a float
-	// and the sines' products are rounded once.
+	// The butterflies. The two sines stay wide, and each operation on them rounds to a float one time
 	const int sign = forward ? 1 : -1;
 	int mmax = 2;
 	while (size > mmax)
 	{
 		const int step = mmax * 2;
-		const auto theta = static_cast<float>(k_TwoPi / static_cast<double>(mmax * sign));
-		const double halfSine = std::sin(static_cast<double>(theta * 0.5f));
-		const float wpr = static_cast<float>(halfSine * halfSine) * -2.0f;
-		const double wpi = std::sin(static_cast<double>(theta));
+		const auto theta = x87::Div(k_TwoPi, static_cast<double>(mmax * sign));
+		const double halfSine = x87::Sin(static_cast<double>(theta * 0.5f));
+		const float wpr = x87::Mul(halfSine, halfSine) * -2.0f;
+		const double wpi = x87::Sin(static_cast<double>(theta));
 		float wr = 1.0f;
 		float wi = 0.0f;
 		for (int m = 1; m < mmax; m += 2)
@@ -74,8 +75,8 @@ void Fft(std::span<float> data, int n, bool forward)
 				at(i + 1) = tempi + at(i + 1);
 			}
 			const float previous = wr;
-			wr = (previous * wpr - static_cast<float>(static_cast<double>(wi) * wpi)) + previous;
-			wi = wi * (wpr + 1.0f) + static_cast<float>(wpi * static_cast<double>(previous));
+			wr = (previous * wpr - x87::Mul(wi, wpi)) + previous;
+			wi = wi * (wpr + 1.0f) + x87::Mul(wpi, previous);
 		}
 		mmax = step;
 	}

@@ -501,6 +501,107 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.cast_sides",
+	    .name = "Creatures cast from the pose on the two sides",
+	    .facet = Facet::Mind,
+	    .description = "Four player's tigers in a row know the water miracle well. Each one catches fire.",
+	    .expected = "Each tiger casts the water miracle on itself from the cast pose. Some tigers cast with the right "
+	                "arm and some with the left arm, about one time in two.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {-45.0f, 60.0f}},
+	                  CreatureSetup {.species = CreatureType::Tiger, .offset = {-15.0f, 60.0f}},
+	                  CreatureSetup {.species = CreatureType::Tiger, .offset = {15.0f, 60.0f}},
+	                  CreatureSetup {.species = CreatureType::Tiger, .offset = {45.0f, 60.0f}}},
+	    .commands =
+	        {{.kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)},
+	         {.kind = Kind::KnowMiracle, .creature = 1, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)},
+	         {.kind = Kind::KnowMiracle, .creature = 2, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)},
+	         {.kind = Kind::KnowMiracle, .creature = 3, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)},
+	         {.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 1.0f},
+	         {.kind = Kind::SetAlight, .creature = 1, .delaySeconds = 1.0f},
+	         {.kind = Kind::SetAlight, .creature = 2, .delaySeconds = 1.0f},
+	         {.kind = Kind::SetAlight, .creature = 3, .delaySeconds = 1.0f}},
+	});
+	all.push_back({
+	    .id = "mind.sleep_sides",
+	    .name = "Creatures sleep on the two sides",
+	    .facet = Facet::Mind,
+	    .description = "Four worn out tigers in a row at midday, each with a strong desire to sleep, their bodies' time "
+	                   "ten times as fast.",
+	    .expected = "Each tiger lies down and sleeps until it is rested. Some tigers lie on the right side and some on "
+	                "the left side, about one time in two.",
+	    .environment = {.bodyTimeScale = 10.0f},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {-45.0f, 60.0f},
+	                                 .needs = {.energy = 1.0f, .exhaustion = 0.75f, .dehydration = 0.0f, .poo = 0.0f},
+	                                 .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}}},
+	                  CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {-15.0f, 60.0f},
+	                                 .needs = {.energy = 1.0f, .exhaustion = 0.75f, .dehydration = 0.0f, .poo = 0.0f},
+	                                 .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}}},
+	                  CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {15.0f, 60.0f},
+	                                 .needs = {.energy = 1.0f, .exhaustion = 0.75f, .dehydration = 0.0f, .poo = 0.0f},
+	                                 .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}}},
+	                  CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {45.0f, 60.0f},
+	                                 .needs = {.energy = 1.0f, .exhaustion = 0.75f, .dehydration = 0.0f, .poo = 0.0f},
+	                                 .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}}}},
+	});
+
+	all.push_back({
+	    .id = "mind.faint_cuts",
+	    .name = "A creature that falls dead stops what it does at once",
+	    .facet = Facet::Mind,
+	    .description = "Two player's tigers. The left tiger walks away to the west and the right tiger plays the impress "
+	                   "action. One second later a script tells each tiger to fall dead.",
+	    .expected = "Each tiger falls down at once. The left tiger stops its walk where it is, and the right tiger stops "
+	                "its action part of the way through. Neither tiger finishes what it did first.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {-20.0f, 60.0f}},
+	                  CreatureSetup {.species = CreatureType::Tiger, .offset = {20.0f, 60.0f}}},
+	    .commands = {Go(Kind::WalkTo, 0, {-160.0f, 60.0f}, 0.5f, false),
+	                 Play(Kind::PlayAction, 1, animations::k_Impress, 0.0f, false),
+	                 {.kind = Kind::DoAction, .creature = 0, .delaySeconds = 1.0f, .action = "DeadForever", .atCreature = 0},
+	                 {.kind = Kind::DoAction, .creature = 1, .delaySeconds = 0.0f, .action = "DeadForever", .atCreature = 1}},
+	});
+
+	all.push_back({
+	    .id = "mind.faint_holding",
+	    .name = "A creature that falls dead while it lets go of a thing keeps the thing",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger picks up a rock. Half a second after it holds the rock, a script tells it to fall "
+	                   "dead.",
+	    .expected = "The tiger starts to let go of the rock. On the next turn it falls down at once, before the rock "
+	                "leaves its hand, and it lies out cold with the rock still in its hand.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {4.0f, 54.0f}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f),
+	                 {.kind = Kind::DoAction,
+	                  .creature = 0,
+	                  .delaySeconds = 0.5f,
+	                  .waitUntilFree = true,
+	                  .action = "DeadForever",
+	                  .atCreature = 0}},
+	});
+
+	all.push_back({
+	    .id = "combat.knockout_holding",
+	    .name = "A creature knocked out while it holds a thing keeps the thing",
+	    .facet = Facet::Combat,
+	    .description = "A player's tiger picks up a rock. Half a second after it holds the rock, it is knocked out as a "
+	                   "fight's loser is.",
+	    .expected = "The tiger starts to let go of the rock. On the next turn it falls down at once, before the rock "
+	                "leaves its hand, and it lies out cold with the rock still in its hand.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {4.0f, 54.0f}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::KnockOut, 0, 0.5f, true)},
+	});
+
+	all.push_back({
 	    .id = "needs.badly_hurt",
 	    .name = "A badly hurt creature wants to restore its health",
 	    .facet = Facet::Needs,
@@ -3750,8 +3851,9 @@ void AddObjects(std::vector<Scenario>& all)
 	    .description = "The camera looks at a tiger that plays the impress action after twelve seconds; then the game "
 	                   "writes the tiger's web page from Scripts/creature_html.tmpl into the profile folder.",
 	    .expected = "Halfway through the impress action the game takes a picture of the screen: creatureshot_0.jpg, 400 "
-	                "by 300, in the player's profile folder. Then html/<the tiger's name>.html shows its values and "
-	                "the picture.",
+	                "by 300, in the player's profile folder. Then html/<the tiger's name>.html shows its values, the "
+	                "picture and the decorations from the game folder, and creature.lhp holds the values and the "
+	                "picture.",
 	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .commands = {Play(Kind::PlayAction, 0, animations::k_Impress, 12.0f, true),
@@ -6087,6 +6189,19 @@ void AddMind(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {60.0f, -50.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-60.0f, -55.0f}}},
 	});
+	all.push_back({
+	    .id = "mind.made_from_file_by_land",
+	    .name = "A land makes a creature from a mind file",
+	    .facet = Facet::Mind,
+	    .description = "The land's script line CREATE_CREATURE_FROM_FILE makes the second player's creature from the "
+	                   "game's mind file ComputerControlledCreature, 20 m east of the middle, as the later lands do. Save "
+	                   "the game and read the creature's mind file.",
+	    .expected = "The creature takes up the file. Then it knows all leashes and it is fully grown (stage 13, its time "
+	                "at the stage 0). In the saved mind file, the four leash words are 1 and the stage is 13.",
+	    .framing = {.shot = Shot::Overview},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {-20.0f, 0.0f}}},
+	    .landScript = R"(CREATE_CREATURE_FROM_FILE("PLAYER_TWO", 6, "ComputerControlledCreature", "20.0,0.0"))",
+	});
 
 	std::vector<Command> phases;
 	for (size_t phase = 1; phase <= k_LastPhase; ++phase)
@@ -6502,6 +6617,29 @@ void AddMind(std::vector<Scenario>& all)
 	                 {.kind = Kind::ScriptPlay, .delaySeconds = 8.0f, .value = k_HappyAction, .amount = 2.0f},
 	                 Act(Kind::Stop, 0, 11.0f)},
 	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "saves.creature_resumes",
+	    .name = "Save and load: the creature does its plan again",
+	    .facet = Facet::Mind,
+	    .description = "A content tiger of the second player, so a load gives it the mind of the saved game's mind "
+	                   "file. A script tells it to hold a rock 250 metres away, so the tiger walks to the rock. 4 "
+	                   "seconds later the game saves into slot 0. 6 seconds after that, before the tiger gets to the "
+	                   "rock, the game loads slot 0.",
+	    .expected = "At the load the tiger is back where it was at the save, facing the same way. A script controls "
+	                "it, so the save kept its plan: it walks to the rock again from the start of its step and holds "
+	                "the rock. The log shows the save and the load.",
+	    .framing = {.shot = Shot::Overview, .include = {{100.0f, -15.0f}, {260.0f, 15.0f}}},
+	    .creatures = {[] {
+		    auto tiger = Content(CreatureType::Tiger, {100.0f, 0.0f});
+		    tiger.owner = PlayerNames::PLAYER_TWO;
+		    return tiger;
+	    }()},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {350.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "HoldObject"},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 4.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 6.0f, .value = 0}},
 	});
 
 	all.push_back({
@@ -6997,6 +7135,22 @@ void AddMind(std::vector<Scenario>& all)
 	                 OnObject(Kind::LeashOrderOn, 0, 0, 0.5f, false), Act(Kind::TakeOffLeash, 0, 20.0f)},
 	    .repeatFrom = 0,
 	});
+	all.push_back({
+	    .id = "leash.aggression_lesson_saved",
+	    .name = "A hut shown on the aggression leash, then saved",
+	    .facet = Facet::Leash,
+	    .description = "The player's tiger on the aggression leash looks north at a village of the player: a hut and three "
+	                   "villagers. The Action button of the leash orders it onto the hut, then the leash comes off. Save "
+	                   "the game and read the creature's mind file.",
+	    .expected = "The tiger learns anger towards the village of the hut and less compassion for it. In the saved mind "
+	                "file, the activity trees of those desires (and of the desires that depend on them) hold a new example "
+	                "of lesson kind 1: the village, with the place of the village, action 0 and the desire of its tree.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {ownTiger},
+	    .objects = village,
+	    .commands = {Leash(0, LeashType::Evil, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 0.5f, false),
+	                 Act(Kind::TakeOffLeash, 0, 5.0f)},
+	});
 	// The player's evil, big tiger swaps minds with a small, neutral sheep that belongs to nobody, as The Lost Flock's
 	// sheep offers; then back again
 	auto swapper = Content(CreatureType::Tiger, {-15.0f, 0.0f}, 90.0f, "player's tiger");
@@ -7083,6 +7237,19 @@ void AddParticles(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "particles.tumble",
+	    .name = "Tumbling streamers and wood",
+	    .facet = Facet::Particles,
+	    .description = "Effects whose particles tumble as they move: the paper streamers of the ticker tape and the planks of "
+	                   "wood that a store gives out. Each turns about its forward axis when it moves more east to west, else "
+	                   "about its east to west axis.",
+	    .expected = "Streamers fall from a disk and planks fly out, each turning as it goes, faster the faster it moves.",
+	    .framing = {.shot = Shot::Overview, .include = {{-12.0f, 0.0f}, {12.0f, 0.0f}}, .distance = 0.25f},
+	    .particles = {{.file = "SF_TickerTape", .offset = {-8.0f, 0.0f}, .height = 15.0f, .restartSeconds = 6.0f},
+	                  {.file = "SF_Wood", .offset = {8.0f, 0.0f}, .height = 2.0f, .magnitude = 1.0f, .restartSeconds = 4.0f}},
+	});
+
+	all.push_back({
 	    .id = "particles.light_maps",
 	    .name = "Light on the land",
 	    .facet = Facet::Particles,
@@ -7109,6 +7276,38 @@ void AddParticles(std::vector<Scenario>& all)
 	    .particles = {{.file = "SF_LandscapeVortexInBefore", .offset = {-8.0f, 40.0f}, .restartSeconds = 8.0f},
 	                  {.file = "SF_LandscapeVortexOutAfter", .offset = {8.0f, 40.0f}, .restartSeconds = 8.0f},
 	                  {.file = "SF_Flies", .offset = {0.0f, 36.0f}, .height = 2.0f, .restartSeconds = 8.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.flies_face_their_way",
+	    .name = "Flies turned to the way they fly",
+	    .facet = Facet::Particles,
+	    .description = "A swarm of flies close up, every eight seconds. Each fly is a sprite that the flock rule turns on "
+	                   "the screen.",
+	    .expected = "Each fly's picture turns to point the way that the fly moves across the screen, as the game turns "
+	                "it. A fly that flies to the right on the screen points to the right.",
+	    .framing = {.shot = Shot::Overview, .include = {{-3.0f, 33.0f}, {3.0f, 39.0f}}, .distance = 0.15f},
+	    .particles = {{.file = "SF_Flies", .offset = {0.0f, 36.0f}, .height = 2.0f, .restartSeconds = 8.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.ribbon_slide",
+	    .name = "A ribbon's corners and its texture sliding along it",
+	    .facet = Facet::Particles,
+	    .description = "The simple beam, three ribbons from a point ten metres up to a creature twenty metres away, "
+	                   "started again every six seconds and seen close from the side.",
+	    .expected = "Each beam is a ribbon that faces the camera from every side, its corners meeting half way where two "
+	                "segments join. Its texture slides along it at twice the speed of its data, as the game adds the "
+	                "slide to the texture twice. The slide moves on only by the frames drawn, and stops while the game "
+	                "pauses.",
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -5.0f}, {25.0f, 5.0f}}, .distance = 0.35f},
+	    .creatures = {{.offset = {20.0f, 0.0f}, .pauseMind = true}},
+	    .particles = {{.file = "SF_SimpleBeam",
+	                   .targetsCreatures = true,
+	                   .offset = {-10.0f, 0.0f},
+	                   .height = 10.0f,
+	                   .magnitude = 1.0f,
+	                   .restartSeconds = 6.0f}},
 	});
 
 	all.push_back({
@@ -7161,6 +7360,78 @@ void AddParticles(std::vector<Scenario>& all)
 	                   .path = particles::draw::DrawPath::Immediate,
 	                   .offset = {20.0f, 0.0f},
 	                   .magnitude = 8.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.fireball_rows",
+	    .name = "The fireball's heat by its power-up",
+	    .facet = Facet::Particles,
+	    .description = "Three fireballs are thrown at three oaks every twelve seconds: the plain fireball on the left, "
+	                   "the first power-up in the middle and the second power-up on the right.",
+	    .expected = "The first power-up uses the second row of the fireball table, so it starts hotter and sets its oak "
+	                "on fire sooner. The plain fireball and the second power-up use the first row.",
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 0.0f}, {40.0f, 30.0f}}, .distance = 0.45f},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-30.0f, 25.0f}},
+	                {.type = TreeInfo::Oak, .offset = {0.0f, 25.0f}},
+	                {.type = TreeInfo::Oak, .offset = {30.0f, 25.0f}}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {-30.0f, 25.0f},
+	                  .handOffset = {-30.0f, 10.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f,
+	                  .repeatSeconds = 12.0f},
+	                 {.type = MagicType::FireballPowerUpOne,
+	                  .point = {0.0f, 25.0f},
+	                  .handOffset = {0.0f, 10.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f,
+	                  .repeatSeconds = 12.0f},
+	                 {.type = MagicType::FireballPowerUpTwo,
+	                  .point = {30.0f, 25.0f},
+	                  .handOffset = {30.0f, 10.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f,
+	                  .repeatSeconds = 12.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.lightning_forks_arcs",
+	    .name = "The lightning bolt's forks and electric arcs",
+	    .facet = Facet::Particles,
+	    .description = "A lightning bolt held over five villagers and an oak for six seconds, again every ten seconds.",
+	    .expected = "The bolt keeps two forks for each target that it finds, and no more. Electric arcs crawl over the "
+	                "things that it strikes, from one point of each model to another.",
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 20.0f}}, .distance = 0.35f},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-8.0f, 10.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-3.0f, 14.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {3.0f, 9.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticShepherdMale, .offset = {7.0f, 13.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticTraderMale, .offset = {0.0f, 17.0f}, .inScript = true},
+	                {.type = TreeInfo::Oak, .offset = {10.0f, 18.0f}}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = {0.0f, 12.0f},
+	                  .handOffset = {0.0f, 0.0f},
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 2.0f,
+	                  .holdSeconds = 6.0f,
+	                  .repeatSeconds = 10.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.globe_alpha",
+	    .name = "The one-shot globe's see-through bubble and rings",
+	    .facet = Facet::Particles,
+	    .description = "Two one-shot globes close up: a plain fireball and the fireball's first power-up, whose miracle "
+	                   "shows one ring.",
+	    .expected = "Each bubble is added over what is behind it at an alpha of 149, the globe's 150 times the land's "
+	                "fully opaque light. The ring round the powered-up miracle shows at an alpha of 34.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, -18.0f}, .look = {0.0f, 4.0f, 8.0f}},
+	    .dispensers = {{.type = MagicType::Fireball, .offset = {-5.0f, 8.0f}},
+	                   {.type = MagicType::FireballPowerUpOne, .offset = {5.0f, 8.0f}}},
 	});
 }
 
@@ -7486,6 +7757,146 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	                 stop(1.0f),
 	                 stop(1.0f)},
 	});
+
+	all.push_back({
+	    .id = "temple.main_room_lean",
+	    .name = "The temple's main room leans at the screen's edge and as the floor is dragged",
+	    .facet = Facet::Story,
+	    .description = "The player has a temple and is put in its main room. Move the pointer near the top or the bottom "
+	                   "of the screen, then drag the floor up and down.",
+	    .expected = "The camera starts to lean when the pointer is more than 0.8 of the way from the middle of the "
+	                "screen to the top or bottom edge, and leans faster nearer the edge. Dragging the floor leans the "
+	                "camera by 0.06 for each pixel and second, less the nearer the pointer is to the sides.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+}
+
+void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
+{
+	// Children of each age from 1 to 12 in a row, then a grown up, all held still by a script
+	std::vector<ObjectSetup> ages;
+	constexpr uint32_t k_OldestChild = 12;
+	for (uint32_t age = 1; age <= k_OldestChild + 1; ++age)
+	{
+		ages.push_back({.type = VillagerInfo::CelticHousewifeFemale,
+		                .offset = {static_cast<float>(age) * 4.0f - 28.0f, 0.0f},
+		                .villagerAge = age <= k_OldestChild ? age : 30u,
+		                .inScript = true});
+	}
+	all.push_back({
+	    .id = "growth.villager_size_by_age",
+	    .name = "Villagers of each age side by side",
+	    .facet = Facet::Growth,
+	    .description = "Twelve children of the ages 1 to 12 and a grown up stand in a row, from the west, held still by a "
+	                   "script.",
+	    .expected = "Each child is a little larger than the one to its west. A child starts at the size of the year before "
+	                "its age and grows towards the size of the year after it. The grown up is between 0.95 and 1.05 of "
+	                "full size.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -6.0f}, {30.0f, 6.0f}}},
+	    .objects = ages,
+	});
+
+	// Villagers of the player's town walking there and back
+	std::vector<ObjectSetup> walkers;
+	for (int i = 0; i < 3; ++i)
+	{
+		const float y = static_cast<float>(i) * 6.0f - 6.0f;
+		walkers.push_back({.type = VillagerInfo::CelticHousewifeFemale,
+		                   .offset = {-20.0f, y},
+		                   .walkTo = glm::vec2(20.0f, y),
+		                   .walkAfterSeconds = 1.0f,
+		                   .walkRepeatSeconds = 20.0f,
+		                   .joinTown = true});
+	}
+	all.push_back({
+	    .id = "movement.villager_speed_town_belief",
+	    .name = "The walk speed of villagers in a player's town",
+	    .facet = Facet::Movement,
+	    .description = "Three villagers of the player's town walk 40 metres east and back every twenty seconds. Their speed "
+	                   "comes from the player's most Indian tribal power and from the town's belief in the player against "
+	                   "the town's own neutral belief.",
+	    .expected = "The villagers walk at the speed of their state, scaled by the town's belief in the player beyond the "
+	                "town's own neutral belief. The inspector shows the speed of each walker's WallHug.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-24.0f, -10.0f}, {24.0f, 10.0f}}},
+	    .objects = walkers,
+	});
+
+	// The tutorial's interface levels, as a lesson's script steps through them
+	std::vector<Command> levels;
+	for (const size_t level : {1, 2, 1, 5, 1, 11, 1, 15, 8})
+	{
+		levels.push_back({.kind = Kind::SetInterfaceLevel, .delaySeconds = 5.0f, .value = level});
+	}
+	all.push_back({
+	    .id = "tutorial.interface_level_reach",
+	    .name = "The hand's reach at each interface level",
+	    .facet = Facet::Tutorial,
+	    .description = "The interface level changes every five seconds, as a lesson's script changes it: level 1, then 2, 5, "
+	                   "11 and 15, each after level 1 again, and at the end level 8. The scenario log gives the hand's reach "
+	                   "at each level.",
+	    .expected = "Level 1 gives the hand a short reach of 75 metres. Levels 2, 5, 11 and 15 give the full reach of "
+	                "1800 metres. Level 8 keeps the reach that level 15 gave.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = levels,
+	});
+	all.push_back({
+	    .id = "tutorial.bookmark_flight",
+	    .name = "A long flight to a bookmark",
+	    .facet = Facet::Tutorial,
+	    .description = "A bookmark is put on the land 900 metres from the middle of the map, and the camera flies to it, as "
+	                   "the number key 1 does. Five seconds later a second bookmark is put back at the middle, and the "
+	                   "camera flies back to it.",
+	    .expected = "Each flight goes by a high point half way. The high point is 0.3 metres higher for each metre that the "
+	                "flight goes across, so these flights go up by about 270 metres. The camera makes a woosh at the start "
+	                "of each flight.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::FlyToBookmark, .delaySeconds = 2.0f, .point = {900.0f, 0.0f}, .value = 0},
+	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 5.0f, .point = {0.0f, 0.0f}, .value = 1}},
+	});
+}
+
+/// A blow that sways the creature, and a wolf that frightens it
+void AddSwayAndFrightScenarios(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "objects.sway_from_a_thrown_rock",
+	    .name = "A thrown rock sways the creature",
+	    .facet = Facet::Objects,
+	    .description = "A tiger stands still, and a rock flies at its legs from the west every five seconds.",
+	    .expected = "Each rock that hits the tiger sways its body. The body swings back on its spring once a game "
+	                "turn and settles. A body that turns on the spot or sits does not sway.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 0.0f}, {10.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}, 90.0f)},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {-25.0f, 0.0f}}},
+	    .throws =
+	        {{.object = 0, .height = 14.0f, .velocity = {14.0f, 4.0f, 0.0f}, .delaySeconds = 2.0f, .repeatSeconds = 5.0f}},
+	});
+
+	all.push_back({
+	    .id = "senses.creature_runs_from_a_wolf",
+	    .name = "A wolf frightens the creature",
+	    .facet = Facet::Senses,
+	    .description = "A tiger with its fear as strong as it gets, and a wolf fifteen metres east of it.",
+	    .expected = "The tiger runs away from the wolf. Tigers, leopards, wolves and the wolves of a spell frighten a "
+	                "creature as lions do.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 0.0f}, {20.0f, 0.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {0.0f, 0.0f},
+	        .needs = Content(),
+	        .desires = {{.desire = Desire::Fear, .fraction = 1.0f}},
+	    }},
+	    .objects = {{.type = AnimalInfo::Wolf, .offset = {15.0f, 0.0f}, .living = true}},
+	});
 }
 
 std::vector<Scenario> Build()
@@ -7551,6 +7962,7 @@ std::vector<Scenario> Build()
 	AddTownMiracleScenarios(all);
 	AddCreatureExplorationScenarios(all);
 	AddScriptTaskRelease(all);
+	AddSwayAndFrightScenarios(all);
 	return all;
 }
 
@@ -7678,7 +8090,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
-	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
+	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
@@ -7686,8 +8098,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
-	       kind == Kind::PlayFallingSpellFilm ||
-	       IsPointerCommand(kind);
+	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::PlayFallingSpellFilm || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -7714,7 +8125,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 143> k_Names {
+	constexpr std::array<std::string_view, 147> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7813,6 +8224,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "open or close",
 		    "lay gate stone",
 		    "cinema bars",
+		    "set interface level",
 		    "set fight lean",
 		    "set miracle sightings",
 		    "hand tap",
@@ -7855,6 +8267,9 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "pointer on creature",
 		    "start script music",
 		    "write the web page",
+		    "fly to a bookmark",
+		    "save the game",
+		    "load the game",
 		    "play the falling spell film",
 		    "give hand glows",
 		    "give a creed power",

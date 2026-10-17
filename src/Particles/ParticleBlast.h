@@ -84,13 +84,11 @@ struct ExplosionRules
 [[nodiscard]] float WaveRange(float maxDistance, float tribalPower);
 /// Whether the wave's front has reached an object, by its edge
 [[nodiscard]] bool Reached(float front, const WaveTarget& target, const glm::vec3& centre);
-/// Where the straight way from one point to another first enters a sphere; its end when it never does
-[[nodiscard]] glm::vec3 EntersSphere(const glm::vec3& from, const glm::vec3& to, const glm::vec3& centre, float radius);
 /// Where the pieces fly out from
 [[nodiscard]] glm::vec3 FragmentOrigin(const glm::vec3& centre);
 /// A piece's velocity: out from the origin at the speed, plus a random part of it, less of it upwards
 [[nodiscard]] glm::vec3 FragmentVelocity(const glm::vec3& piece, const glm::vec3& origin, float speed, float randomFactor,
-                                         const glm::vec3& randomUnit);
+                                         const glm::vec3& random);
 
 /// How far along a move an atom is at an age, none outside its time; it reaches the end on the step that takes it past.
 /// Moving smoothly it eases in and out.

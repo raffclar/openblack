@@ -50,6 +50,8 @@ public:
 
 	void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) override;
 	[[nodiscard]] std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const override;
+	void RestoreMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind,
+	                 const std::optional<RestoredPlan>& plan) override;
 	void ClearLearning(entt::entity creature) override;
 	void SeeSkill(const glm::vec3& point, size_t skill) override;
 	void SeeMiracle(const glm::vec3& point, size_t miracle) override;
@@ -96,6 +98,7 @@ public:
 	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;
 	[[nodiscard]] bool IsTakingFromHand(entt::entity creature) const override;
 	[[nodiscard]] bool IsLyingDead(entt::entity creature) override;
+	creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity creature) override;
 	[[nodiscard]] bool SeemsFriendly(entt::entity creature, entt::entity other) override;
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
@@ -131,6 +134,7 @@ public:
 	void ChangeDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change) override;
 	void SetAgendaPriority(entt::entity creature, float priority) override;
 	void MoveToStage(entt::entity creature, uint32_t stage) override;
+	void GrowUpAfterFile(entt::entity creature) override;
 	void ForceFinish(entt::entity creature) override;
 	bool PointOutHighlight(entt::entity creature) override;
 
@@ -227,8 +231,8 @@ private:
 	[[nodiscard]] std::optional<creature_desires::Desire>
 	DesireForThingInHand(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
 	/// The creature lets go of the thing that it holds because the next step needs empty hands: it puts the thing down,
-	/// or it tosses the thing away (CreatureMindLearning.cpp)
-	void LetGoOfHeld(entt::entity creature, components::CreatureMindState& mind, creature_mind::LetGo how);
+	/// or it tosses the thing away. Whether the let-go started (CreatureMindLearning.cpp)
+	bool LetGoOfHeld(entt::entity creature, components::CreatureMindState& mind, creature_mind::LetGo how);
 	/// Uniform random numbers from 0 to n - 1, and from 0 to 1
 	uint32_t Random(uint32_t range);
 	float Chance();
@@ -414,7 +418,8 @@ private:
 	/// thing is not new. Another creature is its own whole thing.
 	void ComeAcrossWithWhole(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
 	/// Where it believes a thing is: where it last came across it; nothing when it has never come across it
-	[[nodiscard]] static std::optional<glm::vec3> BelievedPlace(const components::CreatureMindState& mind, entt::entity thing);
+	[[nodiscard]] static std::optional<map_coords::MapCoords> BelievedPlace(const components::CreatureMindState& mind,
+	                                                                        entt::entity thing);
 	/// It forgets what it believed about things gone from the world, and its last try that fizzled when the thing of
 	/// that try goes
 	void ForgetGoneThings(entt::entity creature, components::CreatureMindState& mind);

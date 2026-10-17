@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "ClickCue.h"
+#include "Common/X87.h"
 #include "ControlIcons.h"
 #include "TextSplitter.h"
 
@@ -51,12 +52,12 @@ float ReadSpeedFactor(float readSpeed)
 		const float scaled = readSpeed * 4.0f;
 		return 3.0f - scaled;
 	}
-	// Above, from 1 down to 0.2, each step rounded to a float
-	float value = static_cast<float>(static_cast<double>(readSpeed) - 0.5);
+	// Above, from 1 down to 0.2, each step rounded to a float. The game holds the constants as doubles
+	float value = x87::Sub(readSpeed, 0.5);
 	value = value + value;
-	value = static_cast<float>(1.0 - static_cast<double>(value));
-	value = static_cast<float>(static_cast<double>(value) * 0.8);
-	return static_cast<float>(static_cast<double>(value) + 0.2);
+	value = x87::Sub(1.0, value);
+	value = x87::Mul(value, 0.8);
+	return x87::Add(value, 0.2);
 }
 
 DialogueText::DialogueText(int screenHeight, bool biggerText, Settings settings, Queries queries, Hooks hooks)

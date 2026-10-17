@@ -584,7 +584,8 @@ void PlayKickSound(const ecs::Registry& registry, entt::entity target, glm::vec3
 		return;
 	}
 	const std::array<int32_t, 5> keys {0, 0, *object, 0, k_BeenKicked};
-	Locator::audio::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot);
+	Locator::audio::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot,
+	                                       openblack::audio::AnimEffectMeasure::AcrossFirst);
 }
 
 /// The foot meets what the creature kicks. The order of the rules is:
@@ -610,7 +611,8 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 	    creature_object_actions::LeanOf(height(at + glm::vec2(radius, 0.0f)), height(at - glm::vec2(radius, 0.0f)),
 	                                    height(at + glm::vec2(0.0f, radius)), height(at - glm::vec2(0.0f, radius)), radius);
 	const auto ahead = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-	const auto velocity = creature_object_actions::KickVelocity(glm::normalize(glm::xz(ahead)), lean, ShownSize(body));
+	const auto velocity =
+	    creature_object_actions::KickVelocity(glm::normalize(glm::xz(ahead)), lean, transform.scale.x, ShownSize(body));
 	const auto* points = PointsOf(body);
 	const auto foot = points != nullptr && points->rightFoot < animation.boneMatrices.size()
 	                      ? glm::vec3(creature::PosedBone(points->rightFoot, animation.boneMatrices, PlacementOf(transform))[3])
@@ -2388,7 +2390,7 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 		    {
 			    return;
 		    }
-		    const float step = gameTime.count() * creature_layers::PlaybackRate(ShownSize(body));
+		    const float step = gameTime.count() * creature_layers::BodyRate(ShownSize(body), animation.realTime);
 		    if (action.kind == Kind::Catch)
 		    {
 			    using Catching = CreatureObjectAction::Catching;

@@ -9,6 +9,8 @@
 
 #include "ScriptTimers.h"
 
+#include "Common/X87.h"
+
 namespace openblack::script::timers
 {
 
@@ -25,14 +27,16 @@ int32_t TurnsSince(const Timer& timer, uint32_t turn)
 
 float TurnsToSeconds(int32_t turns)
 {
-	return static_cast<float>(static_cast<double>(turns) * static_cast<double>(k_MillisecondsPerTurn) *
-	                          static_cast<double>(k_SecondsPerMillisecond));
+	// The milliseconds round to a float, then the seconds do
+	const float milliseconds = x87::Mul(static_cast<double>(turns), static_cast<double>(k_MillisecondsPerTurn));
+	return milliseconds * k_SecondsPerMillisecond;
 }
 } // namespace
 
 int32_t TurnsFor(float seconds)
 {
-	return static_cast<int32_t>(static_cast<double>(k_TurnsPerSecond) * static_cast<double>(seconds));
+	// The turns round to a float, then they are cut towards zero
+	return static_cast<int32_t>(static_cast<int64_t>(x87::Mul(static_cast<double>(k_TurnsPerSecond), seconds)));
 }
 
 Timer Set(uint32_t turn, float seconds)

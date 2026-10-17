@@ -60,6 +60,23 @@ public:
 	virtual void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) = 0;
 	/// The creature's mind as a mind file of the current version, over the file it was loaded from, if it has a mind
 	[[nodiscard]] virtual std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const = 0;
+	/// The plan that a saved game keeps for a creature: what it wants, what it does and to what, and the step of the
+	/// agenda that it did
+	struct RestoredPlan
+	{
+		creature_desires::Desire desire {creature_desires::Desire::ObeyPlayer};
+		uint32_t action {0};
+		std::optional<entt::entity> object;
+		std::optional<entt::entity> activityObject;
+		std::optional<entt::entity> instrument;
+		size_t step {0};
+	};
+	/// A load of a saved game gives the creature the fresh mind of the mind file at once. When the save kept a plan, the
+	/// creature then does the plan again from the start of the step that it did.
+	virtual void RestoreMind(entt::entity /*creature*/, std::shared_ptr<const creaturemind::MindFileData> /*mind*/,
+	                         const std::optional<RestoredPlan>& /*plan*/)
+	{
+	}
 	/// Swaps the minds of two creatures at once, as a script does: everything the mind file keeps (what each has learnt
 	/// and how it feels, its physique and tattoos) moves to the other body, while each keeps its name, size and alignment
 	/// for now; the creature the first belonged to now owns the second and the other way round, and both carry out the
@@ -219,6 +236,13 @@ public:
 	[[nodiscard]] virtual bool IsTakingFromHand(entt::entity /*creature*/) const { return false; }
 	/// Whether the creature lies dead, knocked out or doing one of the actions of lying dead for now or for good
 	[[nodiscard]] virtual bool IsLyingDead(entt::entity /*creature*/) { return false; }
+	/// Before a faint that does not come from its mind starts, the creature checks its hands as before any step that
+	/// needs empty hands. With a thing in the hand, it starts to let go of the thing when its body and hands are free.
+	/// This tells what the check did on this turn.
+	virtual creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity /*creature*/)
+	{
+		return creature_mind::HandsCheck::Free;
+	}
 	/// Whether another creature seems friendly to the creature: the creature is not angry with it or afraid of it, and the
 	/// other creature is not angry with the creature
 	[[nodiscard]] virtual bool SeemsFriendly(entt::entity /*creature*/, entt::entity /*other*/) { return false; }
@@ -349,9 +373,13 @@ public:
 	virtual void SetAgendaPriority(entt::entity /*creature*/, float /*priority*/) {}
 	/// The creature is told to point out the lesson highlight about it, if there is one; whether one was found
 	virtual bool PointOutHighlight(entt::entity /*creature*/) { return false; }
-	/// The story moves the creature to a stage of growing up: its desires become the ones its stages so far bring, none
-	/// stays held back, and it drops the plan it was carrying out
+	/// The creature moves to a stage of growing up: its desires become the ones its stages so far bring, none stays held
+	/// back, its time at the stage starts again, and it drops the plan it was carrying out. At the stage it may leave
+	/// home from, a creature that its home keeps it near, with no leash on, is let go.
 	virtual void MoveToStage(entt::entity /*creature*/, uint32_t /*stage*/) {}
+	/// A script made the creature from a mind file for a player. Once it takes up the file, it knows every leash and it
+	/// moves to the last stage of growing up.
+	virtual void GrowUpAfterFile(entt::entity /*creature*/) {}
 	/// A script makes the creature stop what it does at once, as a failure. The action that its body plays ends at two
 	/// times the usual speed, and the creature stops where it is.
 	virtual void ForceFinish(entt::entity /*creature*/) {}

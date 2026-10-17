@@ -18,7 +18,7 @@ namespace
 /// The ground height at a map position
 float GroundAt(const LandIslandInterface& island, const map_coords::MapCoords& coords)
 {
-	return static_cast<float>(island.GetAltitude(coords.x, coords.z));
+	return island.GetAltitude(coords.x, coords.z);
 }
 } // namespace
 
