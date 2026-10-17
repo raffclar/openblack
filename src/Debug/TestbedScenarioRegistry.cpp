@@ -7015,6 +7015,7 @@ void AddSwayAndFrightScenarios(std::vector<Scenario>& all)
 	    .description = "A tiger stands still, and a rock flies at its legs from the west every five seconds.",
 	    .expected = "Each rock that hits the tiger sways its body. The body swings back on its spring once a game "
 	                "turn and settles. A body that turns on the spot or sits does not sway.",
+	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 0.0f}, {10.0f, 0.0f}}},
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}, 90.0f)},
 	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {-25.0f, 0.0f}}},
@@ -7029,6 +7030,7 @@ void AddSwayAndFrightScenarios(std::vector<Scenario>& all)
 	    .description = "A tiger with its fear as strong as it gets, and a wolf fifteen metres east of it.",
 	    .expected = "The tiger runs away from the wolf. Tigers, leopards, wolves and the wolves of a spell frighten a "
 	                "creature as lions do.",
+	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 0.0f}, {20.0f, 0.0f}}},
 	    .creatures = {CreatureSetup {
 	        .species = CreatureType::Tiger,
