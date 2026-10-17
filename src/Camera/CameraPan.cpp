@@ -13,6 +13,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
 #include "Common/X87Vector.h"
 
 namespace openblack::camera_pan
@@ -23,7 +24,7 @@ namespace
 /// Lines of sight this close to running along the plane, or facing away from it, can't drag the land
 constexpr float k_ParallelLimit = 0.001f;
 /// The plane must be ahead along both lines of sight, at least this far
-constexpr float k_MinAhead = 0.0001f;
+constexpr double k_MinAhead = 0.0001;
 /// The camera only stops short of land once it moves this far across
 constexpr float k_SmallestMove = 1e-4f;
 /// The sea stops the camera only this close, squared, across from where it is
@@ -51,37 +52,43 @@ GripPlane PlaneThrough(glm::vec3 gripped, glm::vec3 cameraOrigin, float groundUn
 std::optional<CameraPlace> Pan(const GripPlane& plane, glm::vec3 originAtGrip, glm::vec3 focusAtGrip, float distance,
                                glm::vec3 rayNow, glm::vec3 rayAtGrip, glm::ivec2 cursorNow, glm::ivec2 cursorAtGrip)
 {
-	const auto now = glm::dot(plane.normal, rayNow);
-	const auto atGrip = glm::dot(plane.normal, rayAtGrip);
+	const auto now = openblack::x87::Dot<openblack::x87::SumOrder::Yzx>(plane.normal, rayNow);
+	const auto atGrip = openblack::x87::DotZyx(plane.normal, rayAtGrip);
 	if ((-k_ParallelLimit <= now || -k_ParallelLimit <= atGrip) && (now <= k_ParallelLimit || atGrip <= k_ParallelLimit))
 	{
 		return std::nullopt;
 	}
-	const auto toPlane = plane.distance - glm::dot(plane.normal, originAtGrip);
+	const auto toPlane = plane.distance - openblack::x87::DotZyx(plane.normal, originAtGrip);
 	const auto alongNow = toPlane / now;
 	const auto alongAtGrip = toPlane / atGrip;
-	if (!(k_MinAhead < alongNow && k_MinAhead < alongAtGrip))
+	if (!(openblack::x87::Greater(alongNow, k_MinAhead) && openblack::x87::Greater(alongAtGrip, k_MinAhead)))
 	{
 		return std::nullopt;
 	}
 
 	// The land under the cursor now moves to where the land under it at the grip was seen
-	auto moved = rayNow * alongNow - rayAtGrip * alongAtGrip;
+	auto moved = (originAtGrip + (rayNow * alongNow)) - (originAtGrip + (rayAtGrip * alongAtGrip));
 	const auto pixels = cursorNow - cursorAtGrip;
 	auto most = std::sqrt(static_cast<float>(pixels.x * pixels.x + pixels.y * pixels.y)) * distance * k_StepPerPixel;
 	if (most < k_MinStep)
 	{
 		most = k_MinStep;
 	}
-	const auto movedSquared = glm::dot(moved, moved);
+	const auto movedSquared = openblack::x87::Dot<openblack::x87::SumOrder::Xyz>(moved, moved);
 	if (most * most < movedSquared)
 	{
-		moved *= most / std::sqrt(movedSquared);
+		if (moved != glm::vec3(0.0f))
+		{
+			moved *= 1.0f / std::sqrt(movedSquared);
+		}
+		moved *= most;
 	}
 
 	const auto focus = focusAtGrip - moved;
 	const auto back = (originAtGrip - moved) - focus;
-	const auto origin = focus + (back != glm::vec3(0.0f) ? back / glm::length(back) : back) * distance;
+	const auto unit =
+	    back != glm::vec3(0.0f) ? back * (1.0f / openblack::x87::Length<openblack::x87::SumOrder::Zxy>(back)) : back;
+	const auto origin = focus + (unit * distance);
 	return CameraPlace {.origin = origin, .focus = focus};
 }
 

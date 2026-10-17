@@ -20,11 +20,13 @@
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleFlocking.h"
 
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -45,18 +47,6 @@ Falloff FalloffOf(float value)
 {
 	const auto type = static_cast<int>(value);
 	return type == 1 ? Falloff::Linear : (type == 2 ? Falloff::Square : Falloff::None);
-}
-
-glm::vec3 Direction(glm::vec3 offset, float& distance)
-{
-	distance = glm::length(offset);
-	return distance > 0.0f ? offset / distance : glm::vec3(0.0f);
-}
-
-glm::vec3 Clamped(glm::vec3 v, float most)
-{
-	const float length = glm::length(v);
-	return length > most && length > 0.0f ? v * (most / length) : v;
 }
 
 class Flocking final: public Modifier
@@ -109,11 +99,12 @@ public:
 			averagePosition += atom->position;
 			averageVelocity += atom->velocity;
 		}
-		averagePosition /= static_cast<float>(n);
-		averageVelocity /= static_cast<float>(n);
+		const float share = 1.0f / static_cast<float>(n);
+		averagePosition *= share;
+		averageVelocity *= share;
 		float toOrigin = 0.0f;
-		const auto originDirection = Direction(origin - averagePosition, toOrigin);
-		const auto ideal = originDirection * Weight(toOrigin, idealFalloff, invertIdeal) * idealVel;
+		const auto originDirection = flocking::Direction<x87::SumOrder::Xzy>(origin - averagePosition, toOrigin);
+		const auto ideal = originDirection * (Weight(toOrigin, idealFalloff, invertIdeal) * idealVel);
 		// The flock's own velocity, kept in the collection's slot
 		const glm::vec3 oldFlock(slot.state);
 		const glm::vec3 flock = (ideal * dt) + (oldFlock * (1.0f - (dt * flockDamping)));
@@ -136,13 +127,13 @@ public:
 				}
 				const auto offset = other->position - atom->position;
 				float distance = 0.0f;
-				const auto direction = Direction(offset, distance);
+				const auto direction = flocking::Direction<x87::SumOrder::Xzy>(offset, distance);
 				if (scaled)
 				{
 					distance *= scale;
 				}
 				neighbours += direction * Weight(distance, neighbourFalloff, invertNeighbour);
-				const float squared = glm::dot(offset, offset);
+				const float squared = x87::Dot<x87::SumOrder::Xzy>(offset, offset);
 				if (nearest == nullptr || squared < nearestSquared)
 				{
 					nearest = other.get();
@@ -158,23 +149,24 @@ public:
 			neighbours *= neighbourAccn / static_cast<float>(n);
 			const auto relative = atom->velocity - oldFlock;
 			float nearDistance = 0.0f;
-			const auto nearDirection = Direction(nearest->position - atom->position, nearDistance);
+			const auto nearDirection =
+			    flocking::Direction<x87::SumOrder::Zyx>(nearest->position - atom->position, nearDistance);
 			if (scaled)
 			{
 				nearDistance *= scale;
 			}
-			const auto avoid = nearDirection * Weight(nearDistance, Falloff::Square, false) * neighbourAvoidance;
+			const auto avoid = nearDirection * (Weight(nearDistance, Falloff::Square, false) * neighbourAvoidance);
 			float toMiddle = 0.0f;
-			const auto middleDirection = Direction(averagePosition - atom->position, toMiddle);
-			const auto central = middleDirection * Weight(toMiddle, centralFalloff, invertCentral) * centralAttraction;
+			const auto middleDirection = flocking::Direction<x87::SumOrder::Zyx>(averagePosition - atom->position, toMiddle);
+			const auto central = middleDirection * (Weight(toMiddle, centralFalloff, invertCentral) * centralAttraction);
 			auto matching = (averageVelocity - relative) * velocityMatching;
 			if (scaled)
 			{
 				matching *= scale;
 			}
-			const auto acceleration = Clamped((central - avoid) + matching + neighbours, maxAccn);
+			const auto acceleration = flocking::LimitedLength((central - avoid) + matching + neighbours, maxAccn);
 			auto velocity = (relative * (1.0f - (dt * damping))) + (acceleration * dt) + flock;
-			velocity = Clamped(velocity, maxVel);
+			velocity = flocking::LimitedSquaredLength(velocity, maxVel);
 			if (spriteRotation)
 			{
 				// Turned on the screen to face where it flies
@@ -186,7 +178,7 @@ public:
 			}
 			else
 			{
-				const auto accelerating = dt > 0.0f ? (velocity - atom->velocity) / dt : glm::vec3(0.0f);
+				const auto accelerating = dt > 0.0f ? (velocity - atom->velocity) * (1.0f / dt) : glm::vec3(0.0f);
 				atom->rotation = flocking::Banking(velocity, accelerating, reducePitchBy, gravityForBanking);
 			}
 			velocities.push_back(velocity);
@@ -225,13 +217,27 @@ public:
 
 float flocking::Falloff(float distance, int type, bool invert, float scaleModifier)
 {
-	const float x = std::max(distance, k_MinimumDistance) * scaleModifier;
+	const float x = (distance < k_MinimumDistance ? k_MinimumDistance : distance) * scaleModifier;
 	const float base = type == 1 ? x : (type == 2 ? x * x : 1.0f);
-	if (invert)
+	return invert ? base : 1.0f / base;
+}
+
+glm::vec3 flocking::LimitedLength(const glm::vec3& v, float most)
+{
+	if (v == glm::vec3(0.0f) || !(x87::LengthZyx(v) > most))
 	{
-		return base;
+		return v;
 	}
-	return base != 0.0f ? 1.0f / base : 0.0f;
+	return x87::Scaled<x87::SumOrder::Zyx>(v, most);
+}
+
+glm::vec3 flocking::LimitedSquaredLength(const glm::vec3& v, float most)
+{
+	if (v == glm::vec3(0.0f) || !(most * most < x87::DotZyx(v, v)))
+	{
+		return v;
+	}
+	return x87::Scaled<x87::SumOrder::Zyx>(v, most);
 }
 
 glm::mat3 flocking::Banking(glm::vec3 velocity, glm::vec3 acceleration, float reducePitchBy, float gravityForBanking)
