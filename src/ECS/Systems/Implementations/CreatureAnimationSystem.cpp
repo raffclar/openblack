@@ -1321,7 +1321,8 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(entt::ent
 		{
 			return std::nullopt;
 		}
-		const auto triangle = creature::PosedTriangle(kiss.vertices, kiss.bones, body->morph->drawn, bones, placement);
+		const auto triangle = creature::PosedTriangle(kiss.vertices, kiss.bones, body->morph->drawn, bones, placement,
+		                                              creature::k_SkinPointOrder);
 		lips = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], kiss.u, kiss.v).position;
 	}
 	else if (rig->actionPoints->head < bones.size())
