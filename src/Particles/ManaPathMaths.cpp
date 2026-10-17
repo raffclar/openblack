@@ -17,8 +17,10 @@
 #include <glm/geometric.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack::particles;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -59,7 +61,7 @@ mana_path::Path mana_path::MakePath(glm::vec3 from, glm::vec3 to, const Settings
 	auto tangent = to - from;
 	if (tangent != glm::vec3(0.0f))
 	{
-		tangent *= settings.timeToTravel * settings.speed / glm::length(tangent);
+		tangent *= settings.timeToTravel * settings.speed / x87::LengthZyx(tangent);
 	}
 	path.cubic = from * 2.0f + to * -2.0f + tangent + tangent;
 	path.square = from * -3.0f + to * 3.0f + tangent * -2.0f + tangent * -1.0f;

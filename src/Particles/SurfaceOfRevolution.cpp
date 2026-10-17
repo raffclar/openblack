@@ -15,8 +15,12 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
+
 using namespace openblack::particles;
 using namespace openblack::particles::surface;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -38,10 +42,26 @@ uint32_t Byte(float share)
 	return static_cast<uint32_t>(static_cast<int32_t>(share * k_ByteMax)) & 0xFFu;
 }
 
-/// The share of the way out of point i of n, the last at 1
+/// The share of the way out of point i of n, the last at 1, as the build finds it: i times the share of one step
 float Share(int i, int n)
 {
 	return static_cast<float>(i) * (1.0f / (static_cast<float>(n) - 1.0f));
+}
+
+/// The share of the way out of ring i of n, as the sway finds it: i divided by the number of steps
+float RingShare(int i, int n)
+{
+	return static_cast<float>(i) / (static_cast<float>(n) - 1.0f);
+}
+
+/// The vector made one long, a vector of no length kept as it is
+glm::vec3 UnitOrZero(const glm::vec3& v)
+{
+	if (v.x == 0.0f && v.y == 0.0f && v.z == 0.0f)
+	{
+		return v;
+	}
+	return x87::Scaled<x87::SumOrder::Zyx>(v);
 }
 
 uint32_t Channel(Argb colour, uint32_t shift)
@@ -166,8 +186,11 @@ Mesh surface::Build(const Shape& shape, Argb specularColour)
 		{
 			const float s = Share(step, numU);
 			const float angle = s * k_TwoPi;
+			const float c = x87::RoundToFloat(x87::Cos(angle));
+			const float sine = x87::RoundToFloat(x87::Sin(angle));
+			// The game turns the point with a full matrix, so a part that comes to zero is a positive zero
 			mesh.vertices.push_back({
-			    .position = {point.radius * std::cos(angle), point.height, point.radius * std::sin(angle)},
+			    .position = {(c * point.radius) + 0.0f, point.height + 0.0f, (sine * point.radius) + 0.0f},
 			    .uv = glm::vec2(s, t) * shape.uvScale,
 			    .colour = colour,
 			    .specular = specular,
@@ -200,13 +223,8 @@ void surface::ComputeNormals(Mesh& mesh)
 		const auto& v0 = mesh.vertices[a].position;
 		const auto& v1 = mesh.vertices[b].position;
 		const auto& v2 = mesh.vertices[c].position;
-		const auto cross = glm::cross(v1 - v0, v2 - v1);
-		const float length = glm::length(cross);
-		if (length <= 0.0f)
-		{
-			continue;
-		}
-		const auto normal = cross / length;
+		// A face of no area adds a zero normal, but it counts for its corners all the same
+		const auto normal = UnitOrZero(glm::cross(v1 - v0, v2 - v1));
 		for (const auto index : {a, b, c})
 		{
 			mesh.normals[index] += normal;
@@ -215,9 +233,9 @@ void surface::ComputeNormals(Mesh& mesh)
 	}
 	for (size_t i = 0; i < mesh.normals.size(); ++i)
 	{
-		if (faces[i] > 1 && glm::length(mesh.normals[i]) > 0.0f)
+		if (faces[i] > 1)
 		{
-			mesh.normals[i] = glm::normalize(mesh.normals[i]);
+			mesh.normals[i] = UnitOrZero(mesh.normals[i]);
 		}
 	}
 }
@@ -230,11 +248,12 @@ void surface::Sway(const Mesh& still, const Shape& shape, float maxTwist, float 
 	const int numV = std::max(shape.numV, 2);
 	for (int ring = 0; ring < numV; ++ring)
 	{
-		const float t = Share(ring, numV);
+		const float t = RingShare(ring, numV);
 		const float twist = t * maxTwist * sway;
-		const float c = std::cos(twist);
-		const float s = std::sin(twist);
+		const float c = x87::RoundToFloat(x87::Cos(twist));
+		const float s = x87::RoundToFloat(x87::Sin(twist));
 		const float inward = 1.0f - t;
+		const float inwardSquared = inward * inward;
 		for (int step = 0; step < numU; ++step)
 		{
 			const auto index = static_cast<size_t>(ring * numU + step);
@@ -246,12 +265,14 @@ void surface::Sway(const Mesh& still, const Shape& shape, float maxTwist, float 
 			const auto& from = still.vertices[index];
 			if (maxTwist != 0.0f)
 			{
-				vertex.position.x = from.position.x * c - from.position.z * s;
-				vertex.position.z = from.position.x * s + from.position.z * c;
+				// The y row of the turn is zero, but its products are in the sums
+				const auto& p = from.position;
+				vertex.position.x = (((-s) * p.z) + (0.0f * p.y)) + (p.x * c);
+				vertex.position.z = ((c * p.z) + (0.0f * p.y)) + (s * p.x);
 			}
 			if (maxSlide != 0.0f)
 			{
-				vertex.uv.x = inward * inward * maxSlide * sway + from.uv.x;
+				vertex.uv.x = ((inwardSquared * maxSlide) * sway) + from.uv.x;
 			}
 		}
 	}
@@ -260,7 +281,9 @@ void surface::Sway(const Mesh& still, const Shape& shape, float maxTwist, float 
 void surface::Slice(Mesh& mesh, const Plane& plane)
 {
 	const bool lit = mesh.normals.size() == mesh.vertices.size();
-	const auto distance = [&](uint32_t index) { return glm::dot(plane.normal, mesh.vertices[index].position) + plane.offset; };
+	const auto distance = [&](uint32_t index) {
+		return x87::Dot<x87::SumOrder::Yzx>(plane.normal, mesh.vertices[index].position) + plane.offset;
+	};
 	const size_t faces = mesh.indices.size() / 3;
 	for (size_t face = 0; face < faces; ++face)
 	{
@@ -341,7 +364,7 @@ void surface::DrapeOverLand(Mesh& worldMesh, glm::vec2 middle, const std::functi
 	const float diagonal = 1.0f / std::sqrt(2.0f);
 	const auto through = [&](const glm::vec3& normal, int i) {
 		const glm::vec3 point {static_cast<float>(i) * k_CellWidth, 0.0f, static_cast<float>(z1) * k_CellWidth};
-		return Plane {.normal = normal, .offset = -glm::dot(point, normal)};
+		return Plane {.normal = normal, .offset = -x87::DotZyx(point, normal)};
 	};
 	for (int i = x0 - (z1 - z0); i <= x1; ++i)
 	{

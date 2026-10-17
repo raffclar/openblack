@@ -770,15 +770,8 @@ void TempleInterior::UpdateCaveTrophies(float seconds)
 		{
 			continue;
 		}
-		// The creature's room gives each its point's matrix with its axes made unit long, turned a quarter back about
-		// the point's own x axis
-		auto place = points[trophy.point];
-		const auto across = glm::normalize(glm::vec3(place[0]));
-		const auto up = glm::normalize(glm::vec3(place[1]));
-		const auto forward = glm::normalize(glm::vec3(place[2]));
-		place[0] = glm::vec4(across, 0.0f);
-		place[1] = glm::vec4(forward, 0.0f);
-		place[2] = glm::vec4(-up, 0.0f);
+		// The creature's room places each at its point, its axes made unit long and turned a quarter back
+		const auto place = PointPlacement(points[trophy.point]);
 		_caveTrophies.push_back({
 		    .mesh = mesh,
 		    .model = temple * place,
@@ -1222,7 +1215,8 @@ std::optional<TempleCursorHit> TempleInterior::GetCursorHit() const
 		{
 			return TempleCursorHit {
 			    .point = onFloor ? hit->point : ray->origin + (ray->focus - ray->origin) * nearest->distance,
-			    .normal = onFloor ? hit->normal : -glm::normalize(ray->focus - ray->origin),
+			    // The room's cast gives the normal: up on the floor, else back along the ray
+			    .normal = hit.has_value() ? hit->normal : -glm::normalize(ray->focus - ray->origin),
 			    .room = nearestRoom,
 			    .subMesh = nearest->subMesh,
 			};

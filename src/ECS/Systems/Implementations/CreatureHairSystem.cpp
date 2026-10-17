@@ -44,7 +44,8 @@ namespace
 std::optional<creature_hair::Root> RootOf(const CreatureRig::HairStrand& strand, const creature_morph::Morph& morph,
                                           const std::vector<glm::mat4>& bones, const glm::mat4& model)
 {
-	const auto triangle = creature::PosedTriangle(strand.vertices, strand.bones, morph, bones, model);
+	const auto triangle = creature::PosedTriangle(strand.vertices, strand.bones, morph, bones, model,
+	                                              strand.turned ? creature::k_TurnedHairOrder : creature::k_SkinPointOrder);
 	const auto point = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], strand.u, strand.v);
 	if (glm::length(point.normal) <= 0.0f)
 	{

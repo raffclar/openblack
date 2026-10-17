@@ -20,6 +20,8 @@
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMaths.h"
 #include "ParticleSounds.h"
@@ -198,16 +200,11 @@ public:
 		{
 			auto& atom = effect.NewAtom(collection, atomCreator, nextGroups);
 			glm::vec3 direction(0.0f);
-			while (glm::dot(direction, direction) == 0.0f)
+			while (x87::Dot<x87::SumOrder::Zxy>(direction, direction) == 0.0f)
 			{
 				direction = effect.RandomInBall();
 			}
-			if (hemisphere)
-			{
-				direction.y = std::abs(direction.y);
-			}
-			direction *= 1.0f / std::sqrt(glm::dot(direction, direction));
-			atom.velocity = glm::vec3(direction.x, direction.y * scaleYSpeed, direction.z) * speed;
+			atom.velocity = maths::BurstVelocity(direction, speed, scaleYSpeed, hemisphere);
 			if (i == 0)
 			{
 				StartAtomSound(effect, atom, sound);
@@ -245,7 +242,7 @@ public:
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& /*slot*/) const override
 	{
 		const glm::vec3 parent = collection.parent != nullptr ? collection.parent->position : effect.GetOrigin();
-		const float swing = std::sin(effect.CollectionAge(collection) * wiggle * k_TwoPi);
+		const float swing = x87::RoundToFloat(x87::Sin(effect.CollectionAge(collection) * wiggle * k_TwoPi));
 		bool odd = false;
 		// In the game's order, the newest first
 		for (auto it = collection.atoms.rbegin(); it != collection.atoms.rend(); ++it)

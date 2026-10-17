@@ -14,6 +14,12 @@
 #include <utility>
 
 #include <fmt/format.h>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
+
+#include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
 
 namespace openblack::CreatureCaveTrophies
 {
@@ -135,6 +141,24 @@ std::array<std::optional<SpellSeedType>, k_BestMiracles> SeedsToMake(const std::
 		}
 	}
 	return made;
+}
+
+glm::mat4 PointPlacement(glm::mat4 point)
+{
+	const auto unit = [](const glm::vec4& axis) {
+		const glm::vec3 v {axis};
+		return v * gutils::ModelInverseSquareRoot(x87::Dot<x87::SumOrder::Xyz>(v, v));
+	};
+	const auto across = unit(point[0]);
+	const auto up = unit(point[1]);
+	const auto forward = unit(point[2]);
+	constexpr double k_QuarterBack = -1.5707963705062866;
+	const float c = x87::RoundToFloat(x87::Cos(k_QuarterBack));
+	const float s = x87::RoundToFloat(x87::Sin(k_QuarterBack));
+	point[0] = glm::vec4(across, 0.0f);
+	point[1] = glm::vec4((c * up) - (s * forward), 0.0f);
+	point[2] = glm::vec4((c * forward) + (s * up), 0.0f);
+	return point;
 }
 
 } // namespace openblack::CreatureCaveTrophies

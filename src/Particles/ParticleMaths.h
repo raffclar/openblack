@@ -43,6 +43,9 @@ namespace openblack::particles::maths
 /// How far the burst under a heal chakra has faded in at an age: rising from 0 to 1 by ageMax, then back to 0 by
 /// ageZero, held within 0..1
 [[nodiscard]] float ChakraFade(float age, float ageMax, float ageZero);
+/// The speed of an atom that a fused burst throws out along a random direction that is not zero: the direction made
+/// upwards when asked, made one long, times the speed, the vertical part then scaled
+[[nodiscard]] glm::vec3 BurstVelocity(glm::vec3 direction, float speed, float scaleY, bool upwards);
 
 /// How big a sound is by how far its effect reaches: 3 (small) under the small radius, 2 (medium) under the medium one,
 /// else 1 (large)

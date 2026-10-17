@@ -16,7 +16,12 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87Vector.h"
+
 namespace volume_glow = openblack::particles::volume_glow;
+namespace gutils = openblack::gutils;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -84,15 +89,18 @@ uint64_t volume_glow::SinceStarted(uint64_t now, uint64_t startedAt)
 
 glm::vec3 volume_glow::ViewNormal(glm::vec3 normal, const std::array<glm::vec3, 3>& axes, glm::vec2 projectionScale)
 {
+	// Each widened axis is made one long by the 3D engine's inverse square root, its squares added x, y, z
 	const glm::vec3 widen {projectionScale, 1.0f};
-	glm::vec3 out {0.0f};
+	std::array<glm::vec3, 3> unit {};
 	for (size_t i = 0; i < axes.size(); ++i)
 	{
 		const auto axis = widen * axes.at(i);
-		const float length = glm::length(axis);
-		out += length > 0.0f ? axis * (normal[static_cast<glm::length_t>(i)] / length) : glm::vec3(0.0f);
+		unit.at(i) = axis * gutils::ModelInverseSquareRoot(x87::Dot<x87::SumOrder::Xyz>(axis, axis));
 	}
-	return out;
+	// The products are added x, z, y for the first part and z, y, x for the others
+	return {((unit[0].x * normal.x) + (unit[2].x * normal.z)) + (unit[1].x * normal.y),
+	        ((unit[2].y * normal.z) + (unit[1].y * normal.y)) + (unit[0].y * normal.x),
+	        ((unit[2].z * normal.z) + (unit[1].z * normal.y)) + (unit[0].z * normal.x)};
 }
 
 uint32_t volume_glow::EdgeLevel(glm::vec2 viewNormal, bool boned)

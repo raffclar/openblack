@@ -18,6 +18,8 @@
 #include <string>
 #include <vector>
 
+#include <glm/mat4x4.hpp>
+
 #include "Enums.h"
 
 namespace openblack
@@ -83,6 +85,9 @@ struct MiracleLearning
 
 /// A medal's level, 0 for none to 25 for the last gem, by the percentage it stands for
 [[nodiscard]] int32_t MedalLevel(float percent);
+/// Where the creature's room places a trophy at one of its mesh's points: the point's matrix with its axes made unit
+/// long by the 3D engine's inverse square root, turned a quarter back about its own x axis by the FPU's cosine and sine
+[[nodiscard]] glm::mat4 PointPlacement(glm::mat4 point);
 
 /// The belts and medals shown. Fight balance is from -1 to 1, as the creature keeps it: a row of belts each way fills,
 /// white first, five a colour, as it leans to its side.
