@@ -24,6 +24,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
@@ -819,9 +820,9 @@ TEST_F(Reactions, TheCreatureIsImpressedByItsOwnPlayersMiracle)
 	EXPECT_FLOAT_EQ(impression->byOtherCreatures, 0.0f);
 }
 
-// A creature a script has told to take no notice, one a script controls, and one carrying out its player's order take
-// up no reaction, so aren't impressed by one
-TEST_F(Reactions, ACreatureToldToTakeNoNoticeOrBusyWithAnOrderIsNotImpressed)
+// A creature a script has told to take no notice, one a script controls, and one with a forced plan that the leash does
+// not lead take up no reaction, so aren't impressed by one
+TEST_F(Reactions, ACreatureToldToTakeNoNoticeOrBusyWithAForcedPlanIsNotImpressed)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto impressed = [&]() {
@@ -832,12 +833,14 @@ TEST_F(Reactions, ACreatureToldToTakeNoNoticeOrBusyWithAnOrderIsNotImpressed)
 	_reactions.Create(Miracle());
 	EXPECT_FALSE(impressed());
 	registry.Remove<CreatureReactionsOff>(_creature);
-	registry.Assign<CreatureLeash>(_creature).order = CreatureLeash::Order {};
+	registry.Assign<CreatureMindState>(_creature).planForced = true;
 	_reactions.Create(Miracle());
 	EXPECT_FALSE(impressed());
-	registry.Remove<CreatureLeash>(_creature);
+	// An order on the leash is forced, but the leash leads it
+	registry.Get<CreatureMindState>(_creature).ledByLeash = true;
 	_reactions.Create(Miracle());
 	EXPECT_TRUE(impressed());
+	registry.Remove<CreatureMindState>(_creature);
 }
 
 TEST_F(Reactions, ACreatureWithNoLifeOrCarriedByATeleportIsNotImpressed)
@@ -1699,4 +1702,24 @@ TEST_F(Reactions, ACreatureToldToTakeNoNoticeIsAvailableForNoReaction)
 	EXPECT_FALSE(_reactions.IsAvailable(_creature, Reaction::ReactToHandPickUp));
 	registry.Remove<CreatureReactionsOff>(_creature);
 	EXPECT_TRUE(_reactions.IsAvailable(_creature, Reaction::ReactToHandPickUp));
+}
+
+// A creature with a forced plan takes up no kind of reaction, unless the leash leads the plan. An order on the leash
+// alone does not keep reactions off.
+TEST_F(Reactions, ACreatureWithAForcedPlanIsAvailableOnlyWhenTheLeashLeadsIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& mind = registry.Assign<CreatureMindState>(_creature);
+	EXPECT_TRUE(_reactions.IsAvailable(_creature, Reaction::FleeFromObject));
+	mind.planForced = true;
+	EXPECT_FALSE(_reactions.IsAvailable(_creature, Reaction::FleeFromObject));
+	EXPECT_FALSE(_reactions.IsAvailable(_creature, Reaction::ReactToHandPickUp));
+	mind.ledByLeash = true;
+	EXPECT_TRUE(_reactions.IsAvailable(_creature, Reaction::FleeFromObject));
+	mind.planForced = false;
+	mind.ledByLeash = false;
+	registry.Assign<CreatureLeash>(_creature).order = CreatureLeash::Order {};
+	EXPECT_TRUE(_reactions.IsAvailable(_creature, Reaction::FleeFromObject));
+	registry.Remove<CreatureLeash>(_creature);
+	registry.Remove<CreatureMindState>(_creature);
 }

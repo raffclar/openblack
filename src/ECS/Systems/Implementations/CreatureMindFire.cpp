@@ -177,12 +177,14 @@ void CreatureMindSystem::ReactToFire(entt::entity creature, entt::entity burning
 	                    (*mind->desires)[Desire::Compassion].value);
 	if (response == creature_fire::Response::PutOut)
 	{
-		ForceActivity(
-		    creature,
-		    {.desire = Desire::Compassion, .activityObject = owner, .action = k_PutOutFireAction, .actionObject = burning});
+		ForceActivity(creature, {.desire = Desire::Compassion,
+		                         .activityObject = owner,
+		                         .action = k_PutOutFireAction,
+		                         .actionObject = burning,
+		                         .forced = false});
 		return;
 	}
-	ForceActivity(creature, {.desire = Desire::Fear, .action = k_RunAwayAction, .actionObject = burning});
+	ForceActivity(creature, {.desire = Desire::Fear, .action = k_RunAwayAction, .actionObject = burning, .forced = false});
 }
 
 bool CreatureMindSystem::Douse(entt::entity creature, entt::entity object)

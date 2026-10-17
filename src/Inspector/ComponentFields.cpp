@@ -838,6 +838,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureMindState::turnsWithoutOwnPlan>("turnsWithoutOwnPlan")
 	    .Field<&components::CreatureMindState::planForced>("planForced")
 	    .Field<&components::CreatureMindState::forcedPlanCounts>("forcedPlanCounts")
+	    .Field<&components::CreatureMindState::ledByLeash>("ledByLeash")
 	    .Field<&components::CreatureMindState::emergencyRunning>("emergencyRunning")
 	    .Field<&components::CreatureMindState::learnt>("learnt")
 	    .Field<&components::CreatureMindState::planner>("planner")

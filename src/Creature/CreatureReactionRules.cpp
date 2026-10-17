@@ -75,7 +75,7 @@ uint16_t creature_reaction::LookAngle(glm::vec2 way)
 
 bool creature_reaction::BlocksInspecting(const Facts& facts)
 {
-	return facts.thingIsSelf || facts.thingGone || !facts.thingIsCreature || facts.orderedByPlayer || facts.hasOpponent ||
+	return facts.thingIsSelf || facts.thingGone || !facts.thingIsCreature || facts.planForced || facts.hasOpponent ||
 	       facts.planActsOnThing;
 }
 
@@ -250,6 +250,11 @@ bool creature_reaction::BodyFree(const BodyState& body)
 {
 	// Only a life of exactly zero counts as no life
 	return body.life != 0.0f && !body.heldByHand && !body.teleporting;
+}
+
+bool creature_reaction::PlanFree(const PlanState& plan)
+{
+	return !plan.forced || plan.ledByLeash;
 }
 
 bool creature_reaction::OfAnotherGod(PlayerNames caster, PlayerNames creatureOwner)

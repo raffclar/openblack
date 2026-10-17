@@ -1306,6 +1306,7 @@ void CreatureMindSystem::Abandon(CreatureMindState& mind)
 	mind.ownPlanSinceStop = false;
 	mind.planForced = false;
 	mind.forcedPlanCounts = false;
+	mind.ledByLeash = false;
 	mind.emergencyRunning = false;
 }
 
@@ -3250,7 +3251,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	mind->planner.current = creature_planner::Plan {
 	    .desire = plan.desire, .action = *action, .object = object, .priority = std::numeric_limits<float>::max()};
 	mind->planActive = true;
-	mind->planForced = true;
+	mind->planForced = plan.forced;
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
 	mind->satisfiedByEffect = false;
@@ -3756,7 +3757,9 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 		mind->leash.actOn.clear();
 		if (mind->planActive && mind->planner.current.has_value() && mind->planner.current->desire == *desire)
 		{
+			// This plan is a forced plan
 			mind->planner.current->priority = std::numeric_limits<float>::max();
+			mind->planForced = true;
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} acts on the shown thing {} for desire {} after {} tries",
 			                    entt::to_integral(creature), entt::to_integral(object), static_cast<int>(*desire), attempt + 1);
 			return desire;
@@ -3878,12 +3881,14 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 				                           tables->attributes.at(static_cast<size_t>(Desire::Hunger)));
 			}
 			creature_mind_model::Think(learnt, "I've learnt to eat what I'm given");
-			// It must eat the thing alive. The feedback for this meal goes to eating that thing alive.
+			// It must eat the thing alive. The feedback for this meal goes to eating that thing alive. The meal is not a
+			// forced plan, but the lesson that it does again after the meal is a forced plan.
 			static_cast<void>(ForcePlan(creature, {.desire = Desire::Hunger,
 			                                       .action = k_EatHeldAction,
 			                                       .object = *held,
 			                                       .agenda = creature_mind::EatHeld(),
-			                                       .activity = creature_mind::Activity::Eat}));
+			                                       .activity = creature_mind::Activity::Eat,
+			                                       .forced = false}));
 			// When the meal is done, it does again what it was stroked for. This replaces a thing that waits.
 			mind.followUp = creature_follow_up::FollowUp::DoLessonAgain;
 			return;
@@ -4378,7 +4383,8 @@ void CreatureMindSystem::ProcessMimicry(entt::entity creature, CreatureMindState
 			ForceActivity(creature, {.desire = Desire::Curiosity,
 			                         .action = tables->actions.at(rule.noticeAction).name,
 			                         .actionObject = object,
-			                         .ordered = true});
+			                         .ordered = true,
+			                         .forced = false});
 		}
 		break;
 	}
@@ -4639,8 +4645,10 @@ void CreatureMindSystem::WatchVillagerSkill(entt::entity creature, CreatureMindS
 	}
 	// It takes in what the villager does, and goes after it to see more
 	WatchSkill(creature, skill);
-	ForceActivity(creature,
-	              {.desire = creature_desires::Desire::Curiosity, .action = k_FollowToWatchAction, .actionObject = villager});
+	ForceActivity(creature, {.desire = creature_desires::Desire::Curiosity,
+	                         .action = k_FollowToWatchAction,
+	                         .actionObject = villager,
+	                         .forced = false});
 }
 
 void CreatureMindSystem::ShowLearningMeter(entt::entity creature, CreatureMindState& mind, std::optional<float> share)
