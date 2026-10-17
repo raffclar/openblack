@@ -14,7 +14,8 @@ SAMPLER2D(s_cloudHistory, 5);
 
 // The view-projection of the last frame
 uniform mat4 u_cloudPreviousViewProj;
-// x: 1 while the history holds the clouds of the last frame; y: how much of the history to keep; zw: unused
+// x: 1 while the history holds the clouds of the last frame; y: how much of the history to keep; zw: how far the wind
+// moved the clouds since the last frame, across the ground
 uniform vec4 u_cloudResolve;
 
 void main()
@@ -39,7 +40,8 @@ void main()
 	vec4 result = current;
 	if (u_cloudResolve.x > 0.5f)
 	{
-		vec3 world = u_cloudEye.xyz + CloudRayAt(uv) * depth;
+		// Where the cloud was in the last frame: the wind has moved it on since then
+		vec3 world = u_cloudEye.xyz + CloudRayAt(uv) * depth - vec3(u_cloudResolve.z, 0.0f, u_cloudResolve.w);
 		vec3 before = CloudScreenAt(u_cloudPreviousViewProj, world);
 		if (before.z > 0.0f && before.x > 0.0f && before.y > 0.0f && before.x < 1.0f && before.y < 1.0f)
 		{

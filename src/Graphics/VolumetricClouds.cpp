@@ -621,7 +621,7 @@ CloudWeather volumetric_clouds::ChosenWeather(CoverChoice choice, const CloudWea
 	switch (choice)
 	{
 	case CoverChoice::Clear:
-		chosen.cover = 0.14f;
+		chosen.cover = 0.08f;
 		chosen.type = k_Cumulus;
 		break;
 	case CoverChoice::Scattered:

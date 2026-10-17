@@ -71,6 +71,8 @@ public:
 	std::optional<float> lastSeconds;
 	/// The view-projection of the last frame, which the history was drawn with
 	std::optional<glm::mat4> previousViewProj;
+	/// How far the wind had moved the clouds in the last frame
+	std::optional<glm::vec2> previousDrift;
 	/// The frames drawn, for the jitter
 	uint32_t frame {0};
 

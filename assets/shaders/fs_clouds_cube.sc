@@ -15,5 +15,5 @@ void main()
 	float jitter = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898f, 78.233f))) * 43758.547f);
 	float depth;
 	gl_FragColor =
-	    MarchClouds(u_cloudEye.xyz, dir, 1e9f, jitter, 40, false, u_cloudAmbient.rgb * 1.3f, u_cloudAmbient.rgb * 1.6f, depth);
+	    MarchClouds(u_cloudEye.xyz, dir, 1e9f, jitter, 64, false, u_cloudAmbient.rgb * 1.3f, u_cloudAmbient.rgb * 1.6f, depth);
 }

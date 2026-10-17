@@ -137,7 +137,7 @@ float CloudWeatherAt(vec2 xz, out float type, out float rain)
 		type = mix(type, 1.0f, s);
 		rain = max(rain, strength.y * reach);
 	}
-	return smoothstep(1.0f - cover - 0.04f, 1.0f - cover + 0.22f, field) * smoothstep(0.0f, 0.05f, cover);
+	return smoothstep(1.0f - cover - 0.12f, 1.0f - cover + 0.3f, field) * smoothstep(0.0f, 0.05f, cover);
 }
 
 // The density of the cloud at a point at a height over the curved world. `detail` adds the small shapes that wear away
@@ -151,7 +151,8 @@ float CloudDensity(vec3 p, float altitude, bool detail)
 	{
 		return 0.0f;
 	}
-	float h = (altitude - u_cloudLayer.x) / CloudLayerDepth(type);
+	// Each cloud is tallest where its cover is densest, at its middle, and low at its edges: round domes
+	float h = (altitude - u_cloudLayer.x) / (CloudLayerDepth(type) * mix(0.3f, 1.0f, cover));
 	float profile = CloudHeightProfile(type, h);
 	if (profile <= 0.0f)
 	{
@@ -164,12 +165,15 @@ float CloudDensity(vec3 p, float altitude, bool detail)
 	vec4 n = texture3DLod(s_cloudBase, q / CLOUD_BASE_TILE, 0.0f);
 	float low = n.g * 0.625f + n.b * 0.25f + n.a * 0.125f;
 	float shape = clamp(CloudRemap(n.r, low - 1.0f, 1.0f, 0.0f, 1.0f), 0.0f, 1.0f);
+	// The shape spreads over the whole range, so that the tops rise and fall with it
+	shape = clamp((shape - 0.42f) / 0.45f, 0.0f, 1.0f);
 	// The anvil: the top of a storm's tower spreads out
 	float anvil = smoothstep(0.75f, 1.0f, type) * smoothstep(0.65f, 0.85f, h);
 	float coverHere = clamp(cover * (1.0f + anvil * 0.6f), 0.0f, 1.0f);
 	// The more cover, the lower the threshold that the shape must pass. Inside a full cell the noise still makes
 	// gaps, and the tops follow the noise as the profile falls.
-	float threshold = mix(0.9f, 0.42f, coverHere);
+	// The threshold also rises with the height, so that the sides lean in to round tops and no cell has walls
+	float threshold = mix(0.85f, 0.25f, coverHere) + h * 0.15f;
 	shape = clamp(CloudRemap(shape * profile, threshold, 1.0f, 0.0f, 1.0f), 0.0f, 1.0f) * smoothstep(0.0f, 0.3f, coverHere);
 	if (shape <= 0.0f)
 	{
@@ -181,7 +185,7 @@ float CloudDensity(vec3 p, float altitude, bool detail)
 		float fine = d.r * 0.625f + d.g * 0.25f + d.b * 0.125f;
 		// Wisps at the bottom, billows at the top
 		float wear = mix(fine, 1.0f - fine, clamp(h * 5.0f, 0.0f, 1.0f));
-		shape = clamp(CloudRemap(shape, wear * 0.45f, 1.0f, 0.0f, 1.0f), 0.0f, 1.0f);
+		shape = clamp(CloudRemap(shape, wear * mix(0.4f, 0.6f, h), 1.0f, 0.0f, 1.0f), 0.0f, 1.0f);
 	}
 	// Rain clouds are denser and darker at the bottom
 	return shape * (1.0f + rain * 0.8f * (1.0f - h));
@@ -281,13 +285,18 @@ vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool 
 	{
 		return vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	}
+	// The steps grow with the distance: small near the eye, where the shapes show, and large far away. A short span
+	// keeps at least a few dozen steps.
 	float spanLength = span.y - span.x;
-	float dt = max(spanLength / float(steps), 6.0f);
+	float growth = 6.4f / float(steps);
+	float shortest = min(6.0f, spanLength / 24.0f);
+	float longest = max(spanLength / 24.0f, 6.0f);
+	float dt = clamp(span.x * growth, shortest, longest);
 	float t = span.x + dt * jitter;
 	float cosAngle = dot(dir, u_cloudLight.xyz);
 	vec3 sun = u_cloudLightColour.rgb * u_cloudLightColour.w;
 	// The light from below: the land and the sea give back a little of the sky's and the sun's light
-	vec3 ground = u_cloudAmbient.rgb * 0.6f + sun * 0.08f * max(u_cloudLight.y, 0.0f);
+	vec3 ground = sky * 0.5f + u_cloudAmbient.rgb * 0.3f + sun * 0.12f * max(u_cloudLight.y, 0.0f);
 	vec3 colour = vec3_splat(0.0f);
 	float transmittance = 1.0f;
 	float weightedDepth = 0.0f;
@@ -324,6 +333,7 @@ vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool 
 			transmittance *= through;
 		}
 		t += dt;
+		dt = clamp(t * growth, shortest, longest);
 	}
 	if (weights > 0.0f)
 	{

@@ -46,8 +46,9 @@ namespace
 {
 /// How much of the last frames' clouds each frame keeps
 constexpr float k_HistoryShare = 0.92f;
-/// How strong the shafts of light through the gaps in the clouds are
-constexpr float k_ShaftStrength = 0.35f;
+/// How strong the shafts of light through the gaps in the clouds are on the screen. None: the volumetric fog gives
+/// the shafts of light, through the clouds' shadow.
+constexpr float k_ShaftStrength = 0.0f;
 /// How dark the clouds' shadow is on the land and the water: a light shadow
 constexpr float k_ShadowStrength = 0.5f;
 /// The light of the sky on the clouds, from the colour of the haze
@@ -240,7 +241,10 @@ void Renderer::DrawClouds(const DrawSceneDesc& desc, const FrameBuffer& sceneTar
 		resolveProgram->SetTextureSampler("s_cloudHistory", 5, _clouds->PreviousHistory());
 		const auto previous = _clouds->previousViewProj.value_or(viewProj);
 		resolveProgram->SetUniformValue("u_cloudPreviousViewProj", &previous);
-		const glm::vec4 resolve {_clouds->HistoryValid() ? 1.0f : 0.0f, k_HistoryShare, 0.0f, 0.0f};
+		const glm::vec2 drift {uniforms.drift.x, uniforms.drift.y};
+		const glm::vec2 moved = drift - _clouds->previousDrift.value_or(drift);
+		_clouds->previousDrift = drift;
+		const glm::vec4 resolve {_clouds->HistoryValid() ? 1.0f : 0.0f, k_HistoryShare, moved};
 		resolveProgram->SetUniformValue("u_cloudResolve", &resolve);
 		BindScreenTriangle();
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);

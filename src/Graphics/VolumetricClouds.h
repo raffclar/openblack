@@ -50,7 +50,7 @@ inline constexpr float k_CumulonimbusDepth = 1500.0f;
 /// down a little with distance, and the far clouds stay over the sea.
 inline constexpr float k_PlanetRadius = 3000000.0f;
 /// The farthest that a ray goes through the clouds
-inline constexpr float k_FarthestCloud = 26000.0f;
+inline constexpr float k_FarthestCloud = 18000.0f;
 
 /// The most storms that the clouds show at a time
 inline constexpr size_t k_MaxStorms = 8;

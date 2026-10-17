@@ -63,8 +63,10 @@ void main()
 
 	float depth;
 	// More samples for the long rays near the horizon
-	int steps = int(mix(96.0f, 56.0f, clamp(abs(dir.y) * 3.0f, 0.0f, 1.0f)));
-	vec3 behind = u_cloudScreen.z > 0.5f ? textureCubeLod(s_cloudSky, dir, 0.0f).rgb : u_cloudAmbient.rgb * 1.6f;
+	int steps = int(mix(128.0f, 80.0f, clamp(abs(dir.y) * 3.0f, 0.0f, 1.0f)));
+	// The sky behind the ray, or the sky at the horizon for a ray that goes down: the cube has no sky under the horizon
+	vec3 skyDir = normalize(vec3(dir.x, max(dir.y, 0.02f), dir.z));
+	vec3 behind = u_cloudScreen.z > 0.5f ? textureCubeLod(s_cloudSky, skyDir, 0.0f).rgb : u_cloudAmbient.rgb * 1.6f;
 	vec4 clouds = MarchClouds(eye, dir, limit, jitter, steps, true, SkyLight(), behind, depth);
 	gl_FragData[0] = clouds;
 	gl_FragData[1] = vec4(depth, min(scene, 60000.0f), 0.0f, 1.0f);
