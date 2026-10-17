@@ -399,20 +399,24 @@ gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, ui
 	}
 	if (leash != nullptr)
 	{
+		const auto inHand = creature_leash::InHand(body.size);
 		gamesave::LeashRecord kept {.on = leash->worn.has_value() ? 1u : 0u,
 		                            .works = leash->leashWorks ? 1u : 0u,
 		                            .type = save_state::LeashTypeNumber(leash->selected),
-		                            .player = save_state::PlayerNumber(body.owner)};
+		                            .player = save_state::PlayerNumber(body.owner),
+		                            .length = inHand.slack,
+		                            .fullLength = inHand.max};
 		if (leash->worn.has_value())
 		{
 			const auto& worn = *leash->worn;
-			const auto lengths = creature_leash::InHand(body.size);
 			kept.works = worn.works ? 1u : 0u;
 			kept.type = save_state::LeashTypeNumber(worn.type);
 			kept.player = save_state::PlayerNumber(worn.holder);
 			kept.tiedTo = save_state::ToRef(worn.tiedTo);
-			kept.length = lengths.slack;
-			kept.fullLength = lengths.max;
+			kept.length = worn.rope.slackLength;
+			kept.fullLength = worn.rope.maxLength;
+			// The turn that the leash was last tied
+			kept.word34 = worn.tiedTurn;
 		}
 		saved.leash = gamesave::LeashStatusObject {.thing = {}, .leash = kept};
 	}
