@@ -87,3 +87,54 @@ TEST(NearestSearch, OnceFoundTheWalkStopsBeyondHalfAsFarAgainAndTen)
 	// Far fewer than the 40 by 40 cells a 200 m reach covers
 	EXPECT_LT(fake.visited, 40 * 40);
 }
+
+namespace
+{
+/// The things of the fake cells, as the map keeps them
+nearest_search::CellThings ThingsOf(const FakeCells& fake)
+{
+	return [&fake](glm::ivec2 cell) {
+		std::vector<entt::entity> things;
+		if (const auto found = fake.cells.find({cell.x, cell.y}); found != fake.cells.end())
+		{
+			for (const auto& candidate : found->second)
+			{
+				things.push_back(candidate.entity);
+			}
+		}
+		return things;
+	};
+}
+
+constexpr auto k_Self = static_cast<entt::entity>(3);
+} // namespace
+
+TEST(NearestSearch, TheFirstThingSkipsTheCreatureAndKeepsTheOrderOfTheCell)
+{
+	FakeCells fake;
+	fake.Put(k_Self, {1005.0f, 1005.0f});
+	fake.Put(k_B, {1005.0f, 1005.0f});
+	fake.Put(k_A, {1005.0f, 1005.0f});
+	const auto from = map_coords::FromMetres({1005.0f, 1005.0f});
+	EXPECT_EQ(nearest_search::FindFirst(from, 64, k_Self, ThingsOf(fake)), k_B);
+}
+
+TEST(NearestSearch, TheFirstThingIsInTheFirstCellOfTheSpiral)
+{
+	FakeCells fake;
+	// The spiral goes to the cell at -x before the cell at +x
+	fake.Put(k_A, {1015.0f, 1005.0f});
+	fake.Put(k_B, {995.0f, 1005.0f});
+	const auto from = map_coords::FromMetres({1005.0f, 1005.0f});
+	EXPECT_EQ(nearest_search::FindFirst(from, 64, k_Self, ThingsOf(fake)), k_B);
+}
+
+TEST(NearestSearch, TheFirstThingIsOnlyInTheCellsThatTheSearchCovers)
+{
+	FakeCells fake;
+	fake.Put(k_A, {1105.0f, 1005.0f});
+	const auto from = map_coords::FromMetres({1005.0f, 1005.0f});
+	// Ten cells to +x is out of 64 cells of the spiral, and in 21 x 21 of them
+	EXPECT_EQ(nearest_search::FindFirst(from, 64, k_Self, ThingsOf(fake)), k_None);
+	EXPECT_EQ(nearest_search::FindFirst(from, 21 * 21, k_Self, ThingsOf(fake)), k_A);
+}

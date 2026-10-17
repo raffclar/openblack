@@ -46,3 +46,24 @@ entt::entity nearest_search::FindNearest(const map_coords::MapCoords& from, floa
 	}
 	return nearest;
 }
+
+entt::entity nearest_search::FindFirst(const map_coords::MapCoords& from, int32_t cells, entt::entity except,
+                                       const CellThings& inCell)
+{
+	auto coords = from;
+	map_coords::Spiral spiral;
+	for (; cells > 0; --cells)
+	{
+		if (const glm::ivec2 cell = map_coords::Cell(coords); map_coords::InBounds(cell))
+		{
+			const auto things = inCell(cell);
+			if (const auto found = std::ranges::find_if(things, [except](entt::entity thing) { return thing != except; });
+			    found != things.end())
+			{
+				return *found;
+			}
+		}
+		map_coords::AddCells(coords, spiral.Next());
+	}
+	return entt::null;
+}

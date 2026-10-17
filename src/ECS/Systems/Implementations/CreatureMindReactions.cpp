@@ -12,9 +12,12 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cstdint>
+
 #include <algorithm>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <fmt/format.h>
@@ -24,6 +27,7 @@
 #include "Common/GameRandom.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
@@ -34,15 +38,19 @@
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Map.h"
+#include "ECS/NearestSearch.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -62,6 +70,8 @@ constexpr float k_FearOfScaryMagic = 0.5f;
 constexpr uint32_t k_TurnsPerSecond = 10;
 /// The magic type no creature learns by watching
 constexpr size_t k_NotLearnt = static_cast<size_t>(MagicType::LightningBoltPowerUpTwo);
+/// The cells that the creature looks in, out from the hand, for a thing to cast the miracle at
+constexpr int32_t k_LeashCastCells = 64;
 } // namespace
 
 void CreatureMindSystem::WatchMiracle(entt::entity creature, size_t miracle)
@@ -110,6 +120,84 @@ void CreatureMindSystem::ReactToNastyMagic(entt::entity creature, const glm::vec
 	{
 		WatchMiracle(creature, *learn);
 	}
+}
+
+void CreatureMindSystem::CastOnLeashAfterReaction(entt::entity creature, size_t miracle)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	const auto* body = mind != nullptr ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (body == nullptr || !mind->learnt.has_value() || !Locator::leashSystem::has_value() ||
+	    !Locator::pickingSystem::has_value() || !Locator::entitiesMap::has_value())
+	{
+		return;
+	}
+	// A leash of its player must be on, held or tied. The leash does not have to hold this creature.
+	const auto& leashes = Locator::leashSystem::value();
+	creature_reaction::LeashCastState state;
+	registry.Each<const Creature>([&](entt::entity other, const Creature& otherBody) {
+		if (otherBody.owner == body->owner && leashes.IsLeashed(other))
+		{
+			state.leashOn = true;
+			state.tied = state.tied || leashes.TiedTo(other).has_value();
+		}
+	});
+	const auto& known = mind->learnt->knowledge.miraclesKnown;
+	state.knowsMiracle = miracle < known.size() && known.at(miracle);
+	if (const auto& picked = Locator::pickingSystem::value().GetPick().point; picked.has_value())
+	{
+		state.pickedPoint = glm::vec2(picked->x, picked->z);
+	}
+	const auto centre = creature_reaction::LeashCastCentre(state);
+	if (!centre.has_value())
+	{
+		return;
+	}
+	// It finds the first thing other than itself in a spiral of cells out from the point that the interface picked
+	const auto& map = Locator::entitiesMap::value();
+	const auto thing = ecs::nearest_search::FindFirst(map_coords::FromMetres(*centre), k_LeashCastCells, creature,
+	                                                  [&map](glm::ivec2 cell) { return map.GetAllInCell(cell); });
+	if (thing == entt::null)
+	{
+		return;
+	}
+	// The cast replaces what waits for the end of its work, and the leash leads the reaction now
+	mind->followUp = creature_follow_up::FollowUp::CastOnLeash;
+	mind->leashCast = CreatureMindState::LeashCast {.thing = thing, .miracle = static_cast<uint32_t>(miracle)};
+	mind->ledByLeash = true;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} on the leash will cast miracle {} at {} after its reaction",
+	                    entt::to_integral(creature), miracle, entt::to_integral(thing));
+}
+
+void CreatureMindSystem::CastOnLeash(entt::entity creature, CreatureMindState& mind)
+{
+	const auto cast = std::exchange(mind.leashCast, std::nullopt);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	if (!cast.has_value() || !registry.Valid(cast->thing) || tables == nullptr || cast->miracle >= tables->miracles.size())
+	{
+		return;
+	}
+	const auto action = tables->miracles[cast->miracle].action;
+	if (action >= tables->actions.size() || tables->actions[action].desire >= creature_desires::k_DesireCount)
+	{
+		return;
+	}
+	// The cast is about the whole thing that the thing is part of. A creature is its own whole thing. With no whole
+	// thing, the cast is about the creature itself.
+	const auto whole =
+	    registry.AllOf<Creature>(cast->thing) ? std::optional(cast->thing) : WholeOfShownThing(creature, mind, cast->thing);
+	// The action that its body plays ends at two times the usual speed
+	if (auto* body = registry.TryGet<CreatureAnimation>(creature))
+	{
+		body->body = creature_layers::Hurry(body->body);
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} casts miracle {} at {} for the leash", entt::to_integral(creature),
+	                    cast->miracle, entt::to_integral(cast->thing));
+	static_cast<void>(ForcePlan(creature, {.desire = static_cast<Desire>(tables->actions[action].desire),
+	                                       .action = tables->actions[action].name,
+	                                       .object = cast->thing,
+	                                       .activityObject = whole.value_or(creature)}));
 }
 
 void CreatureMindSystem::ReactToNiceMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn)

@@ -158,6 +158,22 @@ struct PlanState
 /// leads it.
 [[nodiscard]] bool PlanFree(const PlanState& plan);
 
+/// What the cast of a nasty miracle on the leash looks at
+struct LeashCastState
+{
+	/// A leash of the creature's player is on. A leash tied to a post or a thing is also on.
+	bool leashOn {false};
+	/// The leash is tied to a post or a thing, not held by the hand. This does not change the cast.
+	bool tied {false};
+	/// The creature knows the miracle
+	bool knowsMiracle {false};
+	/// The point that the player's interface picked under the cursor, on the land, the sea or an object
+	std::optional<glm::vec2> pickedPoint;
+};
+/// The point that the search for a thing to cast at starts from: the point that the interface picked, not the hand
+/// itself. None when the creature does not cast.
+[[nodiscard]] std::optional<glm::vec2> LeashCastCentre(const LeashCastState& state);
+
 /// How urgent a kind is to a creature before its distance counts, for the kinds a creature weighs its own way; none for
 /// the kinds it weighs as everything alive does. A draw below a range is asked for only where the rule draws one.
 [[nodiscard]] std::optional<uint8_t> Priority(Reaction type, const Facts& facts,

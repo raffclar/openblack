@@ -2893,7 +2893,14 @@ bool CreatureMindSystem::Poo(entt::entity creature)
 
 bool CreatureMindSystem::Puke(entt::entity creature)
 {
-	return Replan(creature, creature_mind::Activity::Puke, creature_mind::Puke());
+	// The creature is sick on the spot. The plan is an order and a forced plan, so the creature accepts no reaction
+	// until the plan ends.
+	return ForcePlan(creature, {.desire = Desire::Puke,
+	                            .action = k_PukeAction,
+	                            .object = creature,
+	                            .agenda = creature_mind::Puke(),
+	                            .activity = creature_mind::Activity::Puke,
+	                            .ordered = true});
 }
 
 bool CreatureMindSystem::Faint(entt::entity creature)
@@ -3006,9 +3013,16 @@ void CreatureMindSystem::FightStarted(entt::entity creature, entt::entity oppone
 		fightWith(creature, opponent,
 		          {.desire = Desire::ObeyPlayer, .action = k_FightAction, .object = opponent, .agenda = steps(opponent)});
 	}
-	// The other creature stops what it does and obeys the first creature until the fight ends
+	// The other creature stops what it does and obeys the first creature until the fight ends. Its plan is an order
+	// that is not forced, with a low priority: it does not decide while it obeys.
 	fightWith(opponent, creature,
-	          {.desire = Desire::ObeyCreature, .action = k_ObeyCreatureAction, .object = creature, .agenda = steps(creature)});
+	          {.desire = Desire::ObeyCreature,
+	           .action = k_ObeyCreatureAction,
+	           .object = creature,
+	           .agenda = steps(creature),
+	           .ordered = true,
+	           .forced = false,
+	           .priority = creature_fight::k_ObeyPlanPriority * creature_planner::k_PriorityScale});
 }
 
 void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
