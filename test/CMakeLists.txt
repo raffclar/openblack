@@ -1090,3 +1090,5 @@ openblack_setup_and_add_test(test_global_illumination graphics/test_global_illum
 openblack_setup_and_add_test(test_underwater_jellyfish graphics/test_underwater_jellyfish.cpp)
 # EXPERIMENT (not for merge): the lightning inside the volumetric clouds
 openblack_setup_and_add_test(test_cloud_lightning graphics/test_cloud_lightning.cpp)
+# EXPERIMENT (not for merge): the moon that looks like the real moon
+openblack_setup_and_add_test(test_real_moon graphics/test_real_moon.cpp)
