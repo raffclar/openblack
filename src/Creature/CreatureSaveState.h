@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <bitset>
@@ -29,6 +30,8 @@
 // - The game saves the fizz of a creature only while the invisibility spell is on it. Else it writes no fizz, and the
 //   creature that it saved is in full sight again at once.
 // - A load gives the creature the fresh mind of its mind file, then the values of the record.
+// - When the mind file of a creature is missing or empty at a load, the game does not put the creature back on the map.
+//   The creature is lost from the land.
 namespace openblack::creature_save_state
 {
 
@@ -60,6 +63,10 @@ namespace openblack::creature_save_state
 /// The leash type as the save keeps it, and back: 1 evil, 2 the learning leash, 3 good
 [[nodiscard]] uint32_t LeashTypeNumber(LeashType type);
 [[nodiscard]] std::optional<LeashType> LeashTypeFromNumber(uint32_t number);
+
+/// Whether a load puts the creature back on the map, from the size of its mind file (none when the file does not open).
+/// Only a mind file that opens and is not empty does this.
+[[nodiscard]] bool ResolvesOnLoad(std::optional<size_t> mindFileSize);
 
 /// The agenda that a load gives back: the game starts the step that the creature did again from its beginning
 [[nodiscard]] gamesave::Agenda AgendaAfterLoad(gamesave::Agenda agenda);
