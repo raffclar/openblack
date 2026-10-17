@@ -37,3 +37,14 @@ TEST(ScriptCast, OnlyTheMagicTypesFromOneToFortyOneMayBeCast)
 	EXPECT_TRUE(magic::IsScriptMagicType(41));
 	EXPECT_FALSE(magic::IsScriptMagicType(42));
 }
+
+TEST(ScriptCast, TheMiracleKeepsTheScriptsHeightsOverTheLand)
+{
+	// A script's points become map positions: across the land they go to the map's grid, but each keeps its own height
+	const auto cast = magic::MakeScriptCast(10.0f, {2480.0f, 0.0f, 2510.0f}, {2480.0f, 82.0f, 2510.0f}, 1.0f, 5.0f, 0.0f);
+	EXPECT_FLOAT_EQ(cast.point.y, 0.0f);
+	EXPECT_FLOAT_EQ(cast.info.handPosition.y, 82.0f);
+	EXPECT_NEAR(cast.point.x, 2480.0f, 0.01f);
+	EXPECT_NEAR(cast.point.z, 2510.0f, 0.01f);
+	EXPECT_FLOAT_EQ(cast.info.cameraForward.y, -82.0f);
+}
