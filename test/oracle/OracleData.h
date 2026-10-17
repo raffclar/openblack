@@ -28,10 +28,6 @@
 // a row is a 32-bit word in hexadecimal (a float as its bits). The tests do not need the game: they read these files.
 namespace openblack::oracle
 {
-// Each test file has its own copy of these functions. A shared copy would read the data folder of the first file that
-// the linker takes, and a build cache can give that file from another checkout
-namespace
-{
 
 // The data folder is found when the test runs, never when it is compiled: a compiled object can be reused from another
 // checkout (the shared compiler cache), and a path in it would then point at the wrong folder.
@@ -149,5 +145,4 @@ private:
 	return text.str();
 }
 
-} // namespace
 } // namespace openblack::oracle
