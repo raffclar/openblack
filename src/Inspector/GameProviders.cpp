@@ -282,6 +282,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"handGrabSystem", "players.hand"},
     LocatorCoverage {"temple", "temple.interior"},
     LocatorCoverage {"time", "game.state"},
+    LocatorCoverage {"simulation", "sim.state"},
     LocatorCoverage {"vegetation", "land.vegetation"},
     LocatorCoverage {"mistSystem", "land.atmosphere"},
     LocatorCoverage {"cloudSystem", "land.atmosphere"},

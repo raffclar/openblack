@@ -180,6 +180,7 @@ class AnimatedStaticSystemInterface;
 class ObjectDrawListSystemInterface;
 class AppleBarrelSystemInterface;
 class TimeSystemInterface;
+class SimulationSystemInterface;
 class VegetationInterface;
 class SkySystemInterface;
 class WeatherSystemInterface;
@@ -267,6 +268,7 @@ struct Locator
 	using handGrabSystem = entt::locator<ecs::systems::HandGrabSystemInterface>;
 	using temple = entt::locator<TempleInteriorInterface>;
 	using time = entt::locator<ecs::systems::TimeSystemInterface>;
+	using simulation = entt::locator<ecs::systems::SimulationSystemInterface>;
 	using vegetation = entt::locator<ecs::systems::VegetationInterface>;
 	using mistSystem = entt::locator<ecs::systems::MistSystemInterface>;
 	using cloudSystem = entt::locator<ecs::systems::CloudSystemInterface>;

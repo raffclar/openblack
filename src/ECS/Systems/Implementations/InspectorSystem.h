@@ -37,6 +37,7 @@ class GameProvider;
 struct GameControlSet;
 class InputProvider;
 class ScreenshotProvider;
+class SimProvider;
 class InputTargetInterface;
 class RunTargetInterface;
 class WorldEditInterface;
@@ -63,6 +64,10 @@ public:
 	void GiveCameraBack() override;
 	void ShowOverrideToPointer() override;
 	[[nodiscard]] fight_autopilot::AutopilotInterface* GetFightAutopilot() override;
+	void PauseOnLoad(bool pause) override;
+	[[nodiscard]] std::optional<std::string> StartSimRecord(const std::filesystem::path& path, uint32_t every,
+	                                                        const std::optional<std::filesystem::path>& limits,
+	                                                        bool hashParts) override;
 
 private:
 	/// The helper answering while the game loads: until told to stop
@@ -88,6 +93,8 @@ private:
 	inspector::InputProvider* _input {nullptr};
 	/// Owned by the inspector, takes the pictures due each frame
 	inspector::ScreenshotProvider* _screenshots {nullptr};
+	/// Owned by the inspector, writes the run record of a simulation run
+	inspector::SimProvider* _sim {nullptr};
 	/// The file telling tools this game runs and where it listens, removed as the inspector goes
 	std::unique_ptr<inspector::discovery::DiscoveryFile> _discovery;
 	/// When it last served requests, for how long the input lock lingers after a client goes

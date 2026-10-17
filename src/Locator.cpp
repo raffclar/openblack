@@ -20,9 +20,11 @@
 #include "3D/LandData.h"
 #include "Audio/AudioManager.h"
 #include "Audio/AudioManagerNoOp.h"
+#include "Audio/ClockedAudioPlayer.h"
 #include "CHLApi.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
+#include "Common/MachineClock.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
 #include "Debug/DebugGuiInterface.h"
@@ -115,6 +117,7 @@
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
 #include "ECS/Systems/Implementations/SharkSystem.h"
+#include "ECS/Systems/Implementations/SimulationSystem.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
@@ -299,7 +302,16 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	Locator::gameRandom::emplace<GameRandomProduction>();
 	try
 	{
-		Locator::audio::emplace<AudioManager>();
+		// A simulation run with a fixed frame time times its sounds by the game's clock
+		if (Locator::config::has_value() && Locator::config::value().clockedAudio)
+		{
+			Locator::audio::emplace<AudioManager>(
+			    std::make_unique<audio::ClockedAudioPlayer>([] { return machine_clock::Ticks(); }));
+		}
+		else
+		{
+			Locator::audio::emplace<AudioManager>();
+		}
 	}
 	catch (std::runtime_error& error)
 	{
@@ -334,6 +346,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
 	Locator::time::emplace<TimeSystem>();
+	Locator::simulation::emplace<ecs::systems::SimulationSystem>();
 	Locator::vegetation::emplace<VegetationSystem>();
 	Locator::mistSystem::emplace<MistSystem>();
 	Locator::cloudSystem::emplace<CloudSystem>();
@@ -543,6 +556,7 @@ void openblack::ShutDownServices()
 	Locator::helpTextSystem::reset();
 	Locator::helpProfileSystem::reset();
 	Locator::musicMoodSystem::reset();
+	Locator::simulation::reset();
 	Locator::profileFolderSystem::reset();
 	Locator::creatureHelpSystem::reset();
 	Locator::guidanceSystem::reset();

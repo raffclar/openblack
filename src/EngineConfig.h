@@ -95,6 +95,9 @@ struct EngineConfig
 
 	bool vsync {false};
 	bool running {false};
+	/// Tools: the sounds make no noise and last their length by the game's machine clock, so that a run with a fixed
+	/// frame time goes the same way at any speed
+	bool clockedAudio {false};
 
 	float timeOfDay {12.0f};
 	float smallBumpMapStrength {1.0f};
