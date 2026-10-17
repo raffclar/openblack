@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <functional>
 #include <optional>
 #include <span>
@@ -34,9 +35,9 @@ constexpr uint32_t k_GrowthTurns = k_TurnsPerYear / 4;
 constexpr uint32_t k_YoungestAdult = 18;
 /// A newly made adult's size, before its own draw
 constexpr float k_AdultStartScale = 0.9f;
-/// An adult's size is drawn up to this far below its largest
+/// An adult's size is one plus this spread, less a draw up to the range: from 0.95 to 1.05
 constexpr float k_AdultScaleRange = 0.1f;
-constexpr float k_AdultLargestScale = 1.05f;
+constexpr float k_AdultScaleSpread = 0.05f;
 /// A child grows this share of the way to its age's size at most each time it grows
 constexpr float k_ChildGrowthShare = 0.75f;
 /// The old are looked at for dying of old age once in this many turns, each at its own turn
@@ -114,11 +115,19 @@ template <typename Model>
 	return child ? childModels : adultModels;
 }
 
-/// The size a villager starts at: a child its age's size from the table, an adult a little under full size
-[[nodiscard]] float StartScale(uint32_t age, uint32_t grownUp, std::span<const float, 20> ageToScale);
+/// The size a villager starts at: a child the size of the year before its age from the table, an adult a little under
+/// full size. A child of age 0 takes `beforeTable`, the value that comes before the table in the kind's data: the kind's
+/// dancing speed, read as a size (vanilla-bugs list).
+[[nodiscard]] float StartScale(uint32_t age, uint32_t grownUp, std::span<const float, 20> ageToScale, float beforeTable);
 
-/// Its size after it grows: a child a random way up to three quarters of the way to its age's size; an adult draws a
-/// size, and if that is bigger than it is, it takes a second draw instead
+/// The value that comes before the size table in a kind's data, read as a size: the bits of its dancing speed
+[[nodiscard]] constexpr float BeforeTable(uint32_t dancingSpeed)
+{
+	return std::bit_cast<float>(dancingSpeed);
+}
+
+/// Its size after it grows: a child a random way up to three quarters of the way to the size of the year after its age;
+/// an adult draws a size, and if that is bigger than it is, it takes a second draw instead
 [[nodiscard]] float GrownScale(uint32_t age, uint32_t grownUp, std::span<const float, 20> ageToScale, float scale,
                                const FloatRandom& random);
 
@@ -193,6 +202,8 @@ struct NewbornKind
 	float hungryForFood {0.5f};
 	uint32_t processChecksEvery {8};
 	std::span<const float, 20> ageToScale;
+	/// The value before the size table, for a child of age 0 (see StartScale)
+	float beforeTable {0.0f};
 };
 
 /// Makes a villager of an age on a turn, with the game's draws in the game's order: its size, its food (drawn twice

@@ -7532,6 +7532,79 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 }
 
+void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
+{
+	// Children of each age from 1 to 12 in a row, then a grown up, all held still by a script
+	std::vector<ObjectSetup> ages;
+	constexpr uint32_t k_OldestChild = 12;
+	for (uint32_t age = 1; age <= k_OldestChild + 1; ++age)
+	{
+		ages.push_back({.type = VillagerInfo::CelticHousewifeFemale,
+		                .offset = {static_cast<float>(age) * 4.0f - 28.0f, 0.0f},
+		                .villagerAge = age <= k_OldestChild ? age : 30u,
+		                .inScript = true});
+	}
+	all.push_back({
+	    .id = "growth.villager_size_by_age",
+	    .name = "Villagers of each age side by side",
+	    .facet = Facet::Growth,
+	    .description = "Twelve children of the ages 1 to 12 and a grown up stand in a row, from the west, held still by a "
+	                   "script.",
+	    .expected = "Each child is a little larger than the one to its west. A child starts at the size of the year before "
+	                "its age and grows towards the size of the year after it. The grown up is between 0.95 and 1.05 of "
+	                "full size.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -6.0f}, {30.0f, 6.0f}}},
+	    .objects = ages,
+	});
+
+	// Villagers of the player's town walking there and back
+	std::vector<ObjectSetup> walkers;
+	for (int i = 0; i < 3; ++i)
+	{
+		const float y = static_cast<float>(i) * 6.0f - 6.0f;
+		walkers.push_back({.type = VillagerInfo::CelticHousewifeFemale,
+		                   .offset = {-20.0f, y},
+		                   .walkTo = glm::vec2(20.0f, y),
+		                   .walkAfterSeconds = 1.0f,
+		                   .walkRepeatSeconds = 20.0f,
+		                   .joinTown = true});
+	}
+	all.push_back({
+	    .id = "movement.villager_speed_town_belief",
+	    .name = "The walk speed of villagers in a player's town",
+	    .facet = Facet::Movement,
+	    .description = "Three villagers of the player's town walk 40 metres east and back every twenty seconds. Their speed "
+	                   "comes from the player's most Indian tribal power and from the town's belief in the player against "
+	                   "the town's own neutral belief.",
+	    .expected = "The villagers walk at the speed of their state, scaled by the town's belief in the player beyond the "
+	                "town's own neutral belief. The inspector shows the speed of each walker's WallHug.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-24.0f, -10.0f}, {24.0f, 10.0f}}},
+	    .objects = walkers,
+	});
+
+	// The tutorial's interface levels, as a lesson's script steps through them
+	std::vector<Command> levels;
+	for (const size_t level : {1, 2, 1, 5, 1, 11, 1, 15, 8})
+	{
+		levels.push_back({.kind = Kind::SetInterfaceLevel, .delaySeconds = 5.0f, .value = level});
+	}
+	all.push_back({
+	    .id = "tutorial.interface_level_reach",
+	    .name = "The hand's reach at each interface level",
+	    .facet = Facet::Tutorial,
+	    .description = "The interface level changes every five seconds, as a lesson's script changes it: level 1, then 2, 5, "
+	                   "11 and 15, each after level 1 again, and at the end level 8. The scenario log gives the hand's reach "
+	                   "at each level.",
+	    .expected = "Level 1 gives the hand a short reach of 75 metres. Levels 2, 5, 11 and 15 give the full reach of "
+	                "1800 metres. Level 8 keeps the reach that level 15 gave.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = levels,
+	});
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -7722,7 +7795,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
-	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
+	       kind == Kind::SetInterfaceLevel || kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
@@ -7757,7 +7830,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 140> k_Names {
+	constexpr std::array<std::string_view, 141> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7856,6 +7929,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "open or close",
 		    "lay gate stone",
 		    "cinema bars",
+		    "set interface level",
 		    "set fight lean",
 		    "set miracle sightings",
 		    "hand tap",

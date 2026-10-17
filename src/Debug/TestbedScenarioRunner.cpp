@@ -139,6 +139,7 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
+#include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -1231,7 +1232,8 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, VillagerInfo>)
 			    {
 				    constexpr uint32_t k_AdultAge = 30;
-				    const auto villager = ecs::archetypes::VillagerArchetype::Create(position, position, type, k_AdultAge);
+				    const auto villager = ecs::archetypes::VillagerArchetype::Create(position, position, type,
+				                                                                     object.villagerAge.value_or(k_AdultAge));
 				    if (object.joinTown)
 				    {
 					    auto& registry = Locator::entitiesRegistry::value();
@@ -2494,6 +2496,17 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
 		return;
 	}
+	if (command.kind == Kind::SetInterfaceLevel)
+	{
+		if (Locator::cameraHelpSystem::has_value())
+		{
+			auto& help = Locator::cameraHelpSystem::value().Get();
+			const bool known = help.SetInterfaceLevel(static_cast<int32_t>(command.value));
+			Log(fmt::format("{:.1f}s: the interface level is {}{}, the hand reaches {:.0f}", _seconds, command.value,
+			                known ? "" : " (a level the game does not know)", help.handReach));
+		}
+		return;
+	}
 	if (command.kind == Kind::WideScreen)
 	{
 		// Held by a script, as the land's scripts hold them, under a number no script task has: a task of that number
@@ -2784,6 +2797,7 @@ void Runner::Give(const Command& command)
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::SetInterfaceLevel:
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
 	case Kind::ProfileFolderCheck:

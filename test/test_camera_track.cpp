@@ -7,9 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
 #include <cstring>
 
 #include <array>
+#include <bit>
 #include <string>
 #include <vector>
 
@@ -195,6 +197,15 @@ TEST(CameraTrack, AWaysLengthComesFromItsTimesAndSpeeds)
 	// Nothing to cover counts as a tenth
 	way.speeds = {0.0f, 0.0f, 0.0f};
 	EXPECT_FLOAT_EQ(WayLength(way), 0.1f);
+}
+
+TEST(CameraTrack, AWaysLengthIsSummedInSinglePrecisionSteps)
+{
+	// Each step rounds to single precision as the game's do. Steps at double precision give one bit less.
+	edt::EDTWay way;
+	way.times = {0.0f, 1234.0f, 2234.0f};
+	way.speeds = {1.0f, 0.5f, 10.0f};
+	EXPECT_EQ(std::bit_cast<uint32_t>(WayLength(way)), 0xC0AFA5E5u);
 }
 
 TEST(CameraTrack, ALivingWalksATrackAtItsOwnSpeed)

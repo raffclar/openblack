@@ -47,6 +47,10 @@ public:
 	[[nodiscard]] virtual const particles::LightSheet& GetForceField() const = 0;
 	/// How many times the camera has hit the fence on this land
 	[[nodiscard]] virtual uint32_t GetFenceHits() const = 0;
+	/// The inclusion distance of the world camera's last fence test, which the scripts read: the distance across the
+	/// ground to the fence when inside it, nothing when the fence put the camera back, very far with the fence off
+	virtual void SetInclusionDistance(float distance) = 0;
+	[[nodiscard]] virtual float GetInclusionDistance() const = 0;
 };
 
 } // namespace openblack::ecs::systems

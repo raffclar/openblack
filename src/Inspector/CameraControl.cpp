@@ -209,7 +209,7 @@ std::vector<std::string> openblack::inspector::CameraSetWarnings(const CameraPos
 	const auto& zones = keepers.zones;
 	if (camera_zones::PushInsideFence(zones.fence, zones.fenceOn, pose.origin, pose.origin, pose.focus,
 	                                  camera_zones::k_SearchRadius)
-	        .has_value())
+	        .target.has_value())
 	{
 		warnings.push_back("outside the camera fence the land's script set" + zoneFile +
 		                   ": the world camera is pushed back inside it on the next frame" + std::string(k_Override));

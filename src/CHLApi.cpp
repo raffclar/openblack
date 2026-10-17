@@ -5236,9 +5236,8 @@ void MoveMusic() // 149 MOVE_MUSIC
 
 void GetInclusionDistance() // 150 GET_INCLUSION_DISTANCE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The world camera's distance to the fence from its last fence test
+	Pushf(Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f);
 }
 
 void GetLandHeight() // 151 GET_LAND_HEIGHT

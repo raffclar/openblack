@@ -41,6 +41,7 @@
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -924,6 +925,22 @@ ecs::components::TownImpression& villager_reactions::ImpressionOf(entt::entity t
 	return impression;
 }
 
+namespace
+{
+/// The most power the Indian tribe gave a player's miracles, none when the player is not on the land
+std::optional<float> MostIndianPower(PlayerNames name)
+{
+	std::optional<float> power;
+	EntityRegistry().Each<const Player>([name, &power](entt::entity, const Player& player) {
+		if (player.name == name)
+		{
+			power = player.miracles.maxTribalPower.at(static_cast<size_t>(Tribe::INDIAN));
+		}
+	});
+	return power;
+}
+} // namespace
+
 void villager_reactions::SetStateSpeed(entt::entity villager, VillagerStates state)
 {
 	auto& registry = EntityRegistry();
@@ -974,14 +991,13 @@ void villager_reactions::SetStateSpeed(entt::entity villager, VillagerStates sta
 		// In an emergency of its town the villager runs
 		inputs.townInEmergency =
 		    Locator::townSystem::has_value() && Locator::townSystem::value().IsInStateOfEmergency(component->town);
-		// A player's villager goes by the player's Indian tribal power, 1 with no wonder raising it
-		if (town->owner != PlayerNames::NEUTRAL)
-		{
-			inputs.indianPower = 1.0f;
-			const auto& belief = ImpressionOf(component->town).belief.belief;
-			inputs.belief = villager_speed::Inputs::Belief {.player = belief.at(static_cast<size_t>(town->owner)),
-			                                                .neutral = belief.at(static_cast<size_t>(PlayerNames::NEUTRAL))};
-		}
+		// The villager of a town with a player goes by the most Indian tribal power that player had, and in the town of
+		// a player but the neutral one by the town's belief in the player against the town's own neutral belief
+		const auto& belief = ImpressionOf(component->town).belief;
+		const auto terms = villager_speed::TermsOfPlayer(MostIndianPower(town->owner), town->owner == PlayerNames::NEUTRAL,
+		                                                 belief.belief.at(static_cast<size_t>(town->owner)), belief.neutral);
+		inputs.indianPower = terms.indianPower;
+		inputs.belief = terms.belief;
 	}
 	const auto speed = villager_speed::StateSpeed(inputs, [](float max) {
 		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(max) : 0.0f;
