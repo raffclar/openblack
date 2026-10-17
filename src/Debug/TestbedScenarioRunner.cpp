@@ -115,6 +115,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Poisoned.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
@@ -539,7 +540,14 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	}
 	if (object.poisoned)
 	{
-		registry.AssignOrReplace<ecs::components::Poisoned>(entity);
+		if (auto* pot = registry.TryGet<ecs::components::Pot>(entity); pot != nullptr)
+		{
+			pot->poisoned = true;
+		}
+		else
+		{
+			registry.AssignOrReplace<ecs::components::Poisoned>(entity);
+		}
 	}
 	if (object.indestructible)
 	{

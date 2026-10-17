@@ -302,7 +302,7 @@ struct ObjectSetup
 	/// A tree belongs to the land's forest of this number, none for 0; and grows to this size, its scale when not given
 	uint32_t forest {0};
 	std::optional<float> fullSize;
-	/// A villager or animal that has eaten poison
+	/// A villager or animal that has eaten poison; a pot whose food is poisoned
 	bool poisoned {false};
 	/// Made indestructible, as a script makes one
 	bool indestructible {false};
