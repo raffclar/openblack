@@ -13,11 +13,15 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
+#include <optional>
+#include <span>
+#include <string>
+#include <system_error>
 #include <vector>
 
+#include <MindBody.h>
 #include <MindFile.h>
+#include <PhysiqueFile.h>
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureDecisionTree.h"
@@ -94,17 +98,28 @@ MindFileData SampleMind()
 	return mind;
 }
 
-std::vector<uint8_t> ReadBytes(const std::filesystem::path& path)
-{
-	std::ifstream file(path, std::ios::binary);
-	return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-}
-
 /// A folder of real creature saves to check against, given by OPENBLACK_CREATURE_SAVES; none by default
 std::filesystem::path ReferenceFolder()
 {
 	const char* folder = std::getenv("OPENBLACK_CREATURE_SAVES");
 	return folder != nullptr ? std::filesystem::path(folder) : std::filesystem::path {};
+}
+
+/// The creature mind folder of the game, given by OPENBLACK_GAME_PATH; none when it is not on this machine
+std::optional<std::filesystem::path> GameMindFolder()
+{
+	const char* game = std::getenv("OPENBLACK_GAME_PATH");
+	if (game == nullptr)
+	{
+		return std::nullopt;
+	}
+	auto folder = std::filesystem::path(game) / "Scripts" / "CreatureMind";
+	std::error_code error;
+	if (!std::filesystem::is_directory(folder, error))
+	{
+		return std::nullopt;
+	}
+	return folder;
 }
 } // namespace
 
@@ -321,7 +336,7 @@ TEST(CreatureMindFile, ReferenceSavesParseAndRoundTrip)
 		{
 			continue;
 		}
-		const auto bytes = ReadBytes(entry.path());
+		const auto bytes = ReadFileBytes(entry.path()).value_or(std::vector<uint8_t> {});
 		MindFileData mind;
 		ASSERT_EQ(Read(bytes, mind), MindResult::Success) << entry.path();
 		EXPECT_EQ(mind.version, k_CurrentVersion) << entry.path();
@@ -331,4 +346,152 @@ TEST(CreatureMindFile, ReferenceSavesParseAndRoundTrip)
 		++files;
 	}
 	EXPECT_GT(files, 0u);
+}
+
+/// The game's own minds and the creature files beside them read and write back the same, byte for byte. The game cannot
+/// load the four template minds in the old version 17 layout, which has no species row, so the read refuses them too.
+TEST(CreatureMindFile, ShippedFilesWriteBackTheSame)
+{
+	const auto folder = GameMindFolder();
+	if (!folder.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_GAME_PATH to the game's folder to check its creature files";
+	}
+	size_t minds = 0;
+	size_t physiques = 0;
+	for (const auto& entry : std::filesystem::directory_iterator(*folder))
+	{
+		if (!entry.is_regular_file())
+		{
+			continue;
+		}
+		const auto bytes = ReadFileBytes(entry.path());
+		ASSERT_TRUE(bytes.has_value()) << entry.path();
+		if (IsPhysiqueFileName(entry.path().filename().string()))
+		{
+			const auto physique = ReadPhysique(*bytes);
+			ASSERT_TRUE(physique.has_value()) << entry.path();
+			EXPECT_EQ(WritePhysique(*physique), *bytes) << entry.path() << " does not write back the same";
+			++physiques;
+			continue;
+		}
+		MindFileData mind;
+		const auto result = Read(*bytes, mind);
+		if (result == MindResult::ErrNotAMindFile)
+		{
+			ASSERT_GE(bytes->size(), 4u);
+			EXPECT_EQ((*bytes)[0], 17u) << entry.path() << " is not in the old version 17 layout";
+			continue;
+		}
+		ASSERT_EQ(result, MindResult::Success) << entry.path();
+		EXPECT_EQ(Write(mind), *bytes) << entry.path() << " does not write back the same";
+		++minds;
+	}
+	EXPECT_GT(minds, 0u);
+	EXPECT_GT(physiques, 0u);
+}
+
+/// The mind files of the players' saved games, in a copy of a Profiles folder that OPENBLACK_VANILLA_SAVES gives, read
+/// and write back the same
+TEST(CreatureMindFile, SavedGameMindsWriteBackTheSame)
+{
+	const char* saves = std::getenv("OPENBLACK_VANILLA_SAVES"); // NOLINT(concurrency-mt-unsafe)
+	std::error_code error;
+	if (saves == nullptr || !std::filesystem::is_directory(saves, error))
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(saves))
+	{
+		if (!entry.is_regular_file() || !entry.path().filename().string().starts_with("SavedCreature"))
+		{
+			continue;
+		}
+		const auto bytes = ReadFileBytes(entry.path());
+		ASSERT_TRUE(bytes.has_value()) << entry.path();
+		MindFileData mind;
+		ASSERT_EQ(Read(*bytes, mind), MindResult::Success) << entry.path();
+		EXPECT_EQ(Write(mind), *bytes) << entry.path();
+	}
+}
+
+TEST(CreatureMindFile, FileWritesAndReadsBack)
+{
+	const auto path = std::filesystem::path(TEST_BINARY_DIR) / "creature_mind_file_round_trip.erc";
+	const auto mind = SampleMind();
+	ASSERT_EQ(WriteFile(path, mind), MindResult::Success);
+	const auto bytes = ReadFileBytes(path);
+	ASSERT_TRUE(bytes.has_value());
+	EXPECT_EQ(*bytes, Write(mind));
+	MindFileData read;
+	ASSERT_EQ(ReadFile(path, read), MindResult::Success);
+	EXPECT_EQ(Write(read), *bytes);
+	std::filesystem::remove(path);
+	EXPECT_EQ(ReadFile(path, read), MindResult::ErrCantOpen);
+}
+
+TEST(CreatureMindFile, PhysiqueFileSitsBesideTheMind)
+{
+	EXPECT_EQ(PhysiqueFileName("C4a4f6e63.erc"), "PhysiqueC4a4f6e63.erc");
+	EXPECT_TRUE(IsPhysiqueFileName("PhysiqueC4a4f6e63.erc"));
+	EXPECT_FALSE(IsPhysiqueFileName("C4a4f6e63.erc"));
+	EXPECT_FALSE(IsPhysiqueFileName("LethysCreature"));
+
+	const auto path = std::filesystem::path(TEST_BINARY_DIR) / PhysiqueFileName("creature_mind_file_test.erc");
+	const PhysiqueFileData physique {.speciesRow = 3,
+	                                 .drawnSize = 1.5f,
+	                                 .strength = 0.25f,
+	                                 .fatness = 0.75f,
+	                                 .alignment = -0.5f,
+	                                 .blood = {0x00011234u},
+	                                 .wounds = {0xC5000102u, 0xC6000304u}};
+	ASSERT_TRUE(WritePhysiqueFile(path, physique));
+	EXPECT_EQ(ReadPhysiqueFile(path), physique);
+	std::filesystem::remove(path);
+	EXPECT_FALSE(ReadPhysiqueFile(path).has_value());
+}
+
+TEST(CreatureMindFile, MarkWordsRoundTrip)
+{
+	const MindMark wound {.u = 0x12, .v = 0x34, .skin = 2, .age = 5, .type = 6, .column = 3};
+	EXPECT_EQ(WoundToWord(wound), 0xDE853412u);
+	EXPECT_EQ(WoundFromWord(WoundToWord(wound)), wound);
+	const MindMark blood {.u = 7, .v = 9, .skin = 1, .age = 63};
+	EXPECT_EQ(BloodToWord(blood), 0x007F0907u);
+	EXPECT_EQ(BloodFromWord(BloodToWord(blood)), blood);
+}
+
+TEST(CreatureMindFile, TattooWordsRoundTrip)
+{
+	const MindTattoo tattoo {.design = 1, .site = 2, .red = 0x04, .green = 0x08, .blue = 0x0C};
+	EXPECT_EQ(TattooToWord(tattoo), 0x04080C21u);
+	EXPECT_EQ(TattooFromWord(0x04080C21u), tattoo);
+	EXPECT_EQ(TattooFromWord(TattooToWord({})).site, k_NoTattooSite);
+}
+
+TEST(CreatureMindFile, TattooPicturesShareOnePictureForADesign)
+{
+	std::array<std::optional<TattooPicture>, k_TattooDesigns> pictures {};
+	auto& picture = pictures.at(5).emplace();
+	for (size_t i = 0; i < picture.size(); ++i)
+	{
+		picture.at(i) = static_cast<uint8_t>(i % 16);
+	}
+	std::array<std::optional<uint8_t>, k_TattooSlots> slots {};
+	slots.at(1) = 5;
+	slots.at(4) = 5;
+	// A design with no picture of the player's own uses no picture
+	slots.at(6) = 2;
+	const auto block = WriteTattooPictures(slots, pictures);
+	constexpr size_t k_Header = 8 + (4 * k_TattooSlots);
+	ASSERT_EQ(block.size(), k_Header + (picture.size() / 2));
+	EXPECT_EQ(block.at(0), static_cast<uint8_t>(block.size()));
+	EXPECT_EQ(block.at(1), static_cast<uint8_t>(block.size() >> 8u));
+	EXPECT_EQ(block.at(4), 1u);
+	EXPECT_EQ(block.at(5), (1u << 1u) | (1u << 4u));
+	EXPECT_EQ(block.at(k_Header), 0x10u);
+	EXPECT_EQ(ReadTattooPicture(block, 1), picture);
+	EXPECT_EQ(ReadTattooPicture(block, 4), picture);
+	EXPECT_FALSE(ReadTattooPicture(block, 6).has_value());
+	EXPECT_FALSE(ReadTattooPicture(std::span(block).first(block.size() - 1), 1).has_value());
 }

@@ -440,7 +440,7 @@ TEST(CreatureCarryOver, TheCreatureIsKeptUnderTheProfilesNameAndItsPhysiqueBesid
 {
 	const auto files = KeptFilesIn("minds", "C4a4f6e63.erc");
 	EXPECT_EQ(files.mind, std::filesystem::path("minds") / "C4a4f6e63.erc");
-	EXPECT_EQ(files.physique, std::filesystem::path("minds") / "PhysiqueC4a4f6e63.erc");
+	EXPECT_EQ(files.physique, std::filesystem::path("minds") / creaturemind::PhysiqueFileName("C4a4f6e63.erc"));
 }
 
 TEST(CreatureCarryOver, ThePhysiqueIsTheBodyAsItIsWithTheAlignmentItIsSavedWith)

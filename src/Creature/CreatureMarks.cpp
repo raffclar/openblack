@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include <MindBody.h>
+
 using namespace openblack;
 using namespace openblack::creature_marks;
 
@@ -47,51 +49,35 @@ void creature_marks::Add(std::vector<Mark>& marks, const Mark& mark)
 
 namespace
 {
-constexpr uint32_t k_AgeBits = 0x3Fu;
-constexpr uint32_t k_SkinShift = 6;
-constexpr uint32_t k_WoundTopBits = 0xC0u;
-constexpr uint32_t k_KindBits = 0x7u;
-constexpr uint32_t k_ColumnShift = 3;
-
-uint32_t TexelWord(const Mark& mark)
+creaturemind::MindMark ToFile(const Mark& mark)
 {
-	const auto third = ((static_cast<uint32_t>(mark.skin) & 0x3u) << k_SkinShift) | (mark.age & k_AgeBits);
-	return static_cast<uint32_t>(mark.u) | (static_cast<uint32_t>(mark.v) << 8u) | (third << 16u);
+	return {.u = mark.u, .v = mark.v, .skin = mark.skin, .age = mark.age, .type = mark.type, .column = mark.column};
 }
 
-Mark TexelMark(uint32_t word)
+Mark FromFile(const creaturemind::MindMark& mark)
 {
-	const auto third = (word >> 16u) & 0xFFu;
-	return {.u = static_cast<uint8_t>(word & 0xFFu),
-	        .v = static_cast<uint8_t>((word >> 8u) & 0xFFu),
-	        .skin = static_cast<uint8_t>(third >> k_SkinShift),
-	        .age = static_cast<uint8_t>(third & k_AgeBits)};
+	return {.u = mark.u, .v = mark.v, .skin = mark.skin, .age = mark.age, .type = mark.type, .column = mark.column};
 }
 } // namespace
 
 uint32_t creature_marks::WoundToWord(const Mark& wound)
 {
-	const auto fourth = k_WoundTopBits | ((wound.column & k_KindBits) << k_ColumnShift) | (wound.type & k_KindBits);
-	return TexelWord(wound) | (fourth << 24u);
+	return creaturemind::WoundToWord(ToFile(wound));
 }
 
 Mark creature_marks::WoundFromWord(uint32_t word)
 {
-	auto wound = TexelMark(word);
-	const auto fourth = word >> 24u;
-	wound.type = static_cast<uint8_t>(fourth & k_KindBits);
-	wound.column = static_cast<uint8_t>((fourth >> k_ColumnShift) & k_KindBits);
-	return wound;
+	return FromFile(creaturemind::WoundFromWord(word));
 }
 
 uint32_t creature_marks::BloodToWord(const Mark& blood)
 {
-	return TexelWord(blood);
+	return creaturemind::BloodToWord(ToFile(blood));
 }
 
 Mark creature_marks::BloodFromWord(uint32_t word)
 {
-	return TexelMark(word);
+	return FromFile(creaturemind::BloodFromWord(word));
 }
 
 bool creature_marks::Heal(Marks& marks, uint32_t counts)

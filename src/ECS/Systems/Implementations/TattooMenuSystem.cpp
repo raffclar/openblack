@@ -15,8 +15,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <fstream>
-#include <iterator>
 #include <span>
 #include <system_error>
 #include <vector>
@@ -62,18 +60,6 @@ using namespace openblack::ecs::components;
 
 namespace
 {
-/// The profile's physique file, read whole, or none when it is not there or the game cannot read it
-std::optional<creaturemind::PhysiqueFileData> ReadPhysique(const std::filesystem::path& path)
-{
-	std::ifstream file(path, std::ios::binary);
-	if (!file)
-	{
-		return std::nullopt;
-	}
-	const std::vector<uint8_t> bytes {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-	return creaturemind::ReadPhysique(bytes);
-}
-
 std::optional<std::filesystem::path> ProfilePhysique()
 {
 	return Locator::creatureCarryOverSystem::has_value() ? Locator::creatureCarryOverSystem::value().ProfilePhysique()
@@ -96,7 +82,7 @@ void TattooMenuSystem::Open()
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto physique = ProfilePhysique();
 	const auto shown =
-	    tattoo_menu::FromPhysique(physique.has_value() ? ReadPhysique(*physique) : std::nullopt,
+	    tattoo_menu::FromPhysique(physique.has_value() ? creaturemind::ReadPhysiqueFile(*physique) : std::nullopt,
 	                              [](CreatureType species) { return archetypes::CreatureArchetype::SpeciesStrength(species); });
 
 	// The body: a creature's shape, skin and tattoos, which nothing of the world looks for, as it is nowhere in it
