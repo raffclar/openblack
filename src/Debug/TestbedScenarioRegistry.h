@@ -804,6 +804,9 @@ struct Command
 		/// A script puts the creature at the point at once (from the middle of the map), as SET_POSITION does. Its walk,
 		/// body action, face and head look stop there.
 		ScriptPlace,
+		/// The game stops every task of a land's script (script, by its name), as a script's "stop script" does. The log
+		/// tells how many tasks stopped and if the scenario's object is still in a script. Needs no creature
+		StopScript,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
