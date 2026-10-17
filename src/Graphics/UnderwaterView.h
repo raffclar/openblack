@@ -100,6 +100,10 @@ public:
 	[[nodiscard]] uint8_t NextEnvironmentFace();
 	/// Whether every face that the water reflects has been drawn once
 	[[nodiscard]] bool EnvironmentReady() const { return _environmentDrawn >= underwater::k_EnvironmentFaces - 1; }
+	/// Makes the cube not ready until each face is drawn again, as after a jump of the time of day
+	void ResetEnvironment() { _environmentDrawn = 0; }
+	/// The light and the eye of the last frame, to find a jump of the time of day or of the eye
+	std::optional<underwater::FrameLight> lastLight;
 
 	/// The foam field (see underwater::FoamClock): the target that one step writes, 0 or 1. The two targets are made
 	/// the first time one is asked for.

@@ -63,6 +63,8 @@ struct AtmosphereFrame
 	glm::vec4 light {0.0f, 1.0f, 0.0f, 1.0f};
 	/// rgb what the air's light is scaled by on the screen
 	glm::vec4 sun {1.0f};
+	/// The sine of the height of the air's sun over the horizon, from the hour (under 0 after sunset)
+	float sunHeight {1.0f};
 	/// rgb the horizon's colour on the screen
 	glm::vec4 horizon {0.0f};
 	/// The light of the sun or the moon at the ground, a part of its light at noon (for the clouds and the fog)

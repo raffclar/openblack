@@ -361,12 +361,39 @@ struct WaveSample
 inline constexpr size_t k_WaveCount = 14;
 /// Where the swell comes from, in radians about the up axis
 inline constexpr float k_SwellAngle = 2.4f;
+/// The wind sea's steepness (height for each length): a low base, and a peak at the middle lengths with its width in
+/// natural logs of the length
+inline constexpr float k_WindSeaBase = 0.005f;
+inline constexpr float k_WindSeaPeak = 0.04f;
+inline constexpr float k_WindSeaPeakMetres = 10.0f;
+inline constexpr float k_WindSeaPeakWidth = 0.75f;
+/// How sharp the crests are on a calm day (1 for a sine wave): sharper crests and broader troughs
+inline constexpr float k_CrestSharpness = 1.25f;
+/// How far the warp moves the wind sea's pattern at most (see WaveVariationAt), in metres
+inline constexpr float k_WarpMetres = 6.0f;
+/// The range of the wind sea's groups: the waves are 1 - k_GroupRange / 2 to 1 + k_GroupRange / 2 of their mean
+inline constexpr float k_GroupRange = 1.2f;
 /// For each wave, x: its direction (radians), y: its length, z: its height, w: its phase
 [[nodiscard]] std::array<glm::vec4, k_WaveCount> WaveTable(const WaveState& waves);
 
 /// How high the waves are at a point and time against their mean, about 0.4 to 1.6: the sets, a group of bigger waves
 /// every few waves, and calmer patches that drift over the sea. x for the wind sea, y for the swell.
 [[nodiscard]] glm::vec2 WaveSets(glm::vec2 point, float seconds, const WaveState& waves);
+
+/// How the wind sea varies over the sea, so that its crests bend and its waves are not all the same size. The same on
+/// the processor and in the shaders (UwWaveVariation).
+struct WaveVariation
+{
+	/// How far the wind sea's pattern moves at the point, in units
+	glm::vec2 warp;
+	/// The change of the warp along x (xy: of warp.x and warp.y) and along z (zw)
+	glm::vec4 warpSlope;
+	/// How big the wind sea's waves are against their mean, about 0.4 to 1.6: x for the even waves, y for the odd
+	glm::vec2 groups;
+	/// The change of each group along x (xy: of groups.x and groups.y) and along z (zw)
+	glm::vec4 groupSlope;
+};
+[[nodiscard]] WaveVariation WaveVariationAt(glm::vec2 point, float seconds);
 
 /// The sea's currents this frame: one field that every moving thing in the water follows, the same on the processor and
 /// in the shaders (UwCurrent)
@@ -579,6 +606,25 @@ inline constexpr uint8_t k_EnvironmentFaceDown = 3;
 	auto next = static_cast<uint8_t>((face + 1) % k_EnvironmentFaces);
 	return next == k_EnvironmentFaceDown ? static_cast<uint8_t>(next + 1) : next;
 }
+
+/// The light and the place of the eye in one frame, to find a jump between two frames
+struct FrameLight
+{
+	glm::vec3 towardsLight;
+	glm::vec3 skyColour;
+	glm::vec3 eye;
+};
+
+/// The light can turn by this angle in one frame at most, in radians, before it is a jump of the time of day
+inline constexpr float k_LightJumpRadians = 0.035f;
+/// The sky's colour can change by this much in one frame at most, in each channel from 0 to 1
+inline constexpr float k_SkyJumpChange = 0.06f;
+/// The eye can move by this distance in one frame at most, in world units
+inline constexpr float k_EyeJumpUnits = 300.0f;
+
+/// Whether the time of day or the eye jumped between two frames. The effects that keep the frames before (the cube of
+/// the far scene, the clouds' history, the light probes, the shadows) must then start again.
+[[nodiscard]] bool LightJumped(const FrameLight& before, const FrameLight& now);
 
 /// The direction a face of the cube looks along, and its up direction, as a cube texture keeps them
 struct EnvironmentFaceAxes

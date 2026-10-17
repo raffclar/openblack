@@ -464,6 +464,9 @@ private:
 	/// EXPERIMENT (not for merge): the light probes, a band of rows a frame after each new set of shadows, and the blend
 	/// of the old grid into the new
 	void DrawLightProbes(const DrawSceneDesc& desc, bool newShadows) const;
+	/// EXPERIMENT (not for merge): starts the effects that keep the frames before again, after a jump of the time of
+	/// day or of the eye
+	void RestartAfterJump() const;
 	/// EXPERIMENT (not for merge): the shade from the scene's depth, at half the screen's size
 	void DrawAmbientOcclusion(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const;
 	/// EXPERIMENT (not for merge): the light in the shade for one program: the grid of light probes in a sampler stage,

@@ -156,6 +156,7 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.lightDetail = underwater::LightingDetail(system.GetQuality());
 	atmosphere.params = {air.turbidity, atmos::k_HazeScale, altitude, seaLevel};
 	atmosphere.light = {towardsLight, atmosphere.haze ? 1.0f : 0.0f};
+	atmosphere.sunHeight = atmos::AirSunElevation(hour);
 	// The place's own colour tints the haze: the land's cells round the point that the camera looks at
 	{
 		const auto& island = Locator::terrainSystem::value();
@@ -262,7 +263,8 @@ void Renderer::BindAtmosphere(const ShaderProgram& program, float skyShare) cons
 {
 	const bool ready =
 	    _atmosphereFrame.has_value() && _atmosphere != nullptr && _atmosphere->skyView.drawn && _atmosphereFrame->haze;
-	const glm::vec4 share {ready ? skyShare : 0.0f, 0.0f, 0.0f, 0.0f};
+	const float sunHeight = _atmosphereFrame.has_value() ? _atmosphereFrame->sunHeight : 1.0f;
+	const glm::vec4 share {ready ? skyShare : 0.0f, sunHeight, 0.0f, 0.0f};
 	program.SetUniformValue("u_skyAtmos", &share);
 	if (!ready)
 	{

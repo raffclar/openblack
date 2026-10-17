@@ -197,6 +197,13 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	desc.frameBuffer = &_underwater->Target(size);
 	desc.drawWater = false;
 	_underwaterBound = true;
+	// A jump of the time of day or of the eye starts again the effects that keep the frames before
+	const underwater::FrameLight frameLight {.towardsLight = light.aboveTowards, .skyColour = skyColour, .eye = eye};
+	if (_underwater->lastLight.has_value() && underwater::LightJumped(*_underwater->lastLight, frameLight))
+	{
+		RestartAfterJump();
+	}
+	_underwater->lastLight = frameLight;
 	// The volumetric clouds and the shadows of this frame, before the land's shade reads their shadows
 	BeginAtmosphere(desc);
 	BeginClouds(desc);

@@ -740,7 +740,9 @@ void main()
 		vec4 shore;
 		float slopeVariance;
 		float toSurface = RayToSurfaceFiltered(eye, direction, t, surfaceSlope, face, shore, slopeVariance);
-		float roughness = UwRoughness(slopeVariance) + 0.05f * smoothstep(25.0f, 160.0f, toSurface);
+		// The small ripples on the waves keep the reflection soft, so that the steep faces of the waves do not mirror the
+		// sky like metal
+		float roughness = max(UwRoughness(slopeVariance), 0.17f) + 0.05f * smoothstep(25.0f, 160.0f, toSurface);
 		float waterTop = eye.y + direction.y * toSurface;
 		float waterDepth = waterTop - shore.w;
 		float lift = waterTop - u_uwParams.z;
@@ -794,7 +796,10 @@ void main()
 			float originalLand = OriginalLandAt(surfacePoint.xz);
 			float down = max(u_uwParams.z - below.y, 0.0f);
 			float path = min(length(below - surfacePoint), 400.0f);
-			vec3 left = UwTransmittance(max(path + down * 0.6f, (1.0f - originalLand) * UW_SHALLOWS_TINT));
+			// Deep, open water holds more fine matter than the clear shallows, so the sea bed fades sooner there and the
+			// light of the waves on the surface shows more
+			float cloudy = 1.0f + 2.0f * smoothstep(6.0f, 25.0f, u_uwParams.z - shore.w);
+			vec3 left = UwTransmittance(max((path + down * 0.6f) * cloudy, (1.0f - originalLand) * UW_SHALLOWS_TINT));
 			vec3 water = through * left + scatter * (1.0f - left);
 			if (pond > 0.0f)
 			{
@@ -824,7 +829,9 @@ void main()
 			float facing = clamp(dot(-direction, normal), 0.0f, 1.0f);
 			// Water is not a metal: Schlick's reflection with the water's 0.02 head on, and less of it on rough water,
 			// where the small waves send part of the reflection away from the eye
-			float fresnel = (0.02f + 0.98f * pow(max(1.0f - facing, 0.0f), 5.0f)) * mix(1.0f, 0.65f, clamp(roughness * 2.5f, 0.0f, 1.0f));
+			// The waves near the eye hide part of the grazing reflection with their own crests, so at most 0.65 of the
+			// light is the reflection
+			float fresnel = min((0.02f + 0.98f * pow(max(1.0f - facing, 0.0f), 5.0f)) * mix(1.0f, 0.6f, clamp(roughness * 2.5f, 0.0f, 1.0f)), 0.65f);
 			// The clouds' and the hills' shadows take away the glint and some of the light in the water
 			float cloudShade = CloudShadeAt(surfacePoint.xz) * SunVisibilityAt(surfacePoint.xz);
 			water *= mix(0.8f, 1.0f, cloudShade);
@@ -841,17 +848,23 @@ void main()
 			}
 			// Thick water: it reads green-teal, lighter on the crests and darker in the troughs
 			float waveLift = clamp(lift / max(UwWaveTop(), 1e-3f) * 0.5f + 0.5f, 0.0f, 1.0f);
-			water = mix(water, water * vec3(0.85f, 1.05f, 0.92f), 0.6f * (1.0f - pond)) * mix(0.82f, 1.15f, waveLift);
+			water = mix(water, water * vec3(0.85f, 1.05f, 0.92f), 0.6f * (1.0f - pond)) * mix(0.72f, 1.22f, waveLift);
+			// The faces of the waves that turn to the light are lighter, and the faces that turn away are darker, as the
+			// sides of a lit hill are. This gives the waves their shape in the light.
+			vec3 toSun = u_uwAbove.xyz;
+			float turn = (dot(normal, toSun) - toSun.y) * u_uwLightColour.w * cloudShade;
+			water *= mix(1.0f, clamp(1.0f + 2.2f * turn, 0.62f, 1.6f), 1.0f - pond);
 			colour = mix(water, mirror, fresnel);
+			// A soft, warm light on the high faces that turn to the light
+			colour += u_uwLightColour.rgb * smoothstep(0.0f, 0.3f, turn) * waveLift * 0.1f * (1.0f - pond);
 			// The light of the sun shines through the thin crests and comes out in the water's colour, most when the eye
 			// looks towards the sun
-			vec3 toSun = u_uwAbove.xyz;
 			float shineThrough = pow(clamp(dot(direction, normalize(toSun + normal * 0.4f)), 0.0f, 1.0f), 4.0f);
 			colour += u_uwLightColour.rgb * u_uwLightColour.w * vec3(0.30f, 0.62f, 0.40f) * shineThrough *
 			          (0.3f + 0.7f * waveLift * waveLift) * (1.0f - pond) * cloudShade * 0.6f;
 			// A broad soft sheen on the faces of the waves round the glint
-			colour += u_uwLightColour.rgb * u_uwLightColour.w * cloudShade * 0.12f *
-			          pow(max(dot(reflected, toSun), 0.0f), 12.0f) * (1.0f - 0.5f * pond);
+			colour += u_uwLightColour.rgb * u_uwLightColour.w * cloudShade * 0.2f *
+			          pow(max(dot(reflected, toSun), 0.0f), 8.0f) * (1.0f - 0.5f * pond);
 			// The glint of the sun or the moon on the waves: none where the hills hide the light
 			float glint = u_uwSea.x > 0.5f ? min(SeaGlint(normal, -direction, u_uwAbove.xyz, roughness), 12.0f)
 			                               : pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f) * 3.0f;

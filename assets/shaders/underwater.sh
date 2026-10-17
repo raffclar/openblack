@@ -167,6 +167,50 @@ vec2 UwWaveSets(vec2 p, float t)
 	return vec2((0.45f + 1.1f * sets * sets) * patches, 0.5f + 1.0f * swellSets);
 }
 
+// How sharp the crests are on a calm day (underwater::k_CrestSharpness)
+#define UW_CREST_SHARPNESS 1.25f
+// How far the warp moves the wind sea's pattern at most, in metres (underwater::k_WarpMetres)
+#define UW_WARP_METRES 6.0f
+// The range of the wind sea's groups (underwater::k_GroupRange)
+#define UW_GROUP_RANGE 1.2f
+
+// How the wind sea varies over the sea, the same as underwater::WaveVariationAt. warp: how far the wind sea's pattern
+// moves; warpSlope: the change of the warp along x (xy) and z (zw); groups: how big the even (x) and odd (y) waves are
+// against their mean; groupSlope: the change of the groups along x (xy) and z (zw).
+void UwWaveVariation(vec2 p, float t, out vec2 warp, out vec4 warpSlope, out vec2 groups, out vec4 groupSlope)
+{
+	float amplitude = UW_WARP_METRES * UW_UNITS_PER_METRE;
+	float f1 = 6.2831853f / (110.0f * UW_UNITS_PER_METRE);
+	float f2 = 6.2831853f / (130.0f * UW_UNITS_PER_METRE);
+	float f3 = 6.2831853f / (70.0f * UW_UNITS_PER_METRE);
+	float f4 = 6.2831853f / (85.0f * UW_UNITS_PER_METRE);
+	vec2 d1 = vec2(0.8f, 0.6f);
+	vec2 d2 = vec2(-0.6f, 0.8f);
+	vec2 d3 = vec2(0.28f, -0.96f);
+	vec2 d4 = vec2(0.96f, 0.28f);
+	float a1 = f1 * dot(d1, p) + 0.11f * t;
+	float a2 = f2 * dot(d2, p) - 0.09f * t;
+	float a3 = f3 * dot(d3, p) - 0.07f * t + 1.3f;
+	float a4 = f4 * dot(d4, p) + 0.05f * t + 2.9f;
+	warp = amplitude * vec2(sin(a1) + 0.5f * sin(a3), sin(a2) + 0.5f * sin(a4));
+	vec2 dx = amplitude * (vec2(f1 * d1.x * cos(a1), f2 * d2.x * cos(a2)) + 0.5f * vec2(f3 * d3.x * cos(a3), f4 * d4.x * cos(a4)));
+	vec2 dz = amplitude * (vec2(f1 * d1.y * cos(a1), f2 * d2.y * cos(a2)) + 0.5f * vec2(f3 * d3.y * cos(a3), f4 * d4.y * cos(a4)));
+	warpSlope = vec4(dx, dz);
+	float g1 = 6.2831853f / (90.0f * UW_UNITS_PER_METRE);
+	float g2 = 6.2831853f / (60.0f * UW_UNITS_PER_METRE);
+	vec2 e1 = vec2(0.92f, 0.39f);
+	vec2 e2 = vec2(-0.31f, 0.95f);
+	float b1 = g1 * dot(e1, p) + 0.04f * t;
+	float b2 = g2 * dot(e2, p) - 0.03f * t;
+	float b3 = g2 * dot(e1, p) - 0.05f * t + 2.1f;
+	float b4 = g1 * dot(e2, p) + 0.035f * t + 0.7f;
+	float range = 0.5f * UW_GROUP_RANGE;
+	groups = vec2(1.0f + range * sin(b1) * sin(b2), 1.0f + range * sin(b3) * sin(b4));
+	vec2 even = range * (cos(b1) * sin(b2) * g1 * e1 + sin(b1) * cos(b2) * g2 * e2);
+	vec2 odd = range * (cos(b3) * sin(b4) * g2 * e1 + sin(b3) * cos(b4) * g1 * e2);
+	groupSlope = vec4(even.x, odd.x, even.y, odd.y);
+}
+
 // The far sea. x: 1 while the waves are filtered for each pixel, y: 1 while the long waves show, z: the angle that one
 // pixel takes up on the screen (radians), w: 1 while the water reflects the cube of the far scene
 uniform vec4 u_uwSea;
@@ -267,24 +311,49 @@ float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float
 	total *= size;
 	float kept = total > 0.0f ? min(1.0f, 0.39f * max(depth, 0.0f) / total) : 0.0f;
 	breaking = 1.0f - kept;
-	float sharp = 1.0f + 1.5f * u_uwWaves.y;
+	float sharp = UW_CREST_SHARPNESS + 1.5f * u_uwWaves.y;
 	float height = 0.0f;
+	// The wind sea is drawn at a warped point, with its waves in groups (see UwWaveVariation)
+	vec2 warp;
+	vec4 warpSlope;
+	vec2 groups;
+	vec4 groupSlope;
+	UwWaveVariation(p, t, warp, warpSlope, groups, groupSlope);
+	vec2 warped = p + warp;
+	vec2 windSlope = vec2_splat(0.0f);
 	for (int i = 0; i < 14; i++)
 	{
 		vec4 wave = u_uwWaveTable[i];
+		bool wind = i >= 2;
+		bool even = mod(float(i), 2.0f) < 0.5f;
 		vec2 along = vec2(cos(wave.x), sin(wave.x));
 		float k = 6.2831853f / wave.y;
 		float omega = sqrt(UW_GRAVITY * k);
 		float pixel = u_uwSea.x > 0.5f ? UwFootprintAlong(footprint, along) : footprint.x;
 		// A sharp crest holds shorter waves than the wave's own length: the filter takes the length of the shortest
 		vec2 shown = UwWaveShown(u_uwSea.x > 0.5f ? wave.y / sharp : wave.y, pixel);
-		float a = wave.z * (i < 2 ? sets.y : sets.x) * size * grown[i] * kept;
-		float theta = k * dot(along, p) - omega * t + wave.w;
+		float plain = wave.z * (i < 2 ? sets.y : sets.x) * size * grown[i] * kept;
+		float group = wind ? (even ? groups.x : groups.y) : 1.0f;
+		float a = plain * group;
+		float theta = k * dot(along, wind ? warped : p) - omega * t + wave.w;
 		float s = 0.5f + 0.5f * sin(theta);
-		height += a * shown.x * (2.0f * pow(max(s, 0.0f), sharp) - 1.0f);
-		slope += along * (a * shown.y * sharp * pow(max(s, 1e-4f), sharp - 1.0f) * cos(theta) * k);
+		float shape = 2.0f * pow(max(s, 0.0f), sharp) - 1.0f;
+		height += a * shown.x * shape;
+		vec2 rise = along * (a * shown.y * sharp * pow(max(s, 1e-4f), sharp - 1.0f) * cos(theta) * k);
+		if (wind)
+		{
+			windSlope += rise;
+			slope += plain * shown.x * shape * (even ? groupSlope.xz : groupSlope.yw);
+		}
+		else
+		{
+			slope += rise;
+		}
 		variance += (1.0f - shown.y * shown.y) * 0.5f * (a * k) * (a * k);
 	}
+	// The slope at the warped point, turned back to the slope at the point itself
+	slope += vec2(windSlope.x * (1.0f + warpSlope.x) + windSlope.y * warpSlope.y,
+	              windSlope.x * warpSlope.z + windSlope.y * (1.0f + warpSlope.w));
 	// The long waves of the open sea: plain sine waves that rise and fall with the swell's sets
 	for (int j = 0; j < 3; j++)
 	{

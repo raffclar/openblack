@@ -132,6 +132,19 @@ vec2 RippleSlope(vec2 p, float size)
 	return slope;
 }
 
+// How much stronger the river's caustics are than the plain bend of the light gives, so that they show in water this
+// shallow
+#define k_StreamCausticGain 3.0f
+
+// The slope of the river's small waves at a point: the two layers of the waves that move with the water, and the small
+// waves that the wind makes. The caustics on the bed come from the same waves.
+vec2 StreamRipples(vec2 xz, vec2 shift0, vec2 shift1, float weight0, float rippleSize, float gain, vec2 windShift, float windy)
+{
+	vec2 ripple = mix(RippleSlope(xz - shift1 + vec2(3.7f, 1.9f), rippleSize), RippleSlope(xz - shift0, rippleSize), weight0);
+	vec2 gust = RippleSlope(xz - windShift + vec2(11.3f, 5.1f), 0.25f * u_streamParams.x);
+	return ripple * gain + gust * windy * 0.12f;
+}
+
 // The foam's pattern at a point, 0 to 1: lumps and threads
 float FoamPattern(vec2 p)
 {
@@ -241,17 +254,16 @@ void main()
 	vec2 shift0 = velocity * (phase0 - 0.5f) * cycle;
 	vec2 shift1 = velocity * (phase1 - 0.5f) * cycle;
 	float rippleSize = 0.55f * metre;
-	vec2 ripple = mix(RippleSlope(p.xz - shift1 + vec2(3.7f, 1.9f), rippleSize), RippleSlope(p.xz - shift0, rippleSize),
-	                  weight0);
 	// The waves stretch across the flow in fast water, and the pools are almost glassy
 	float roughness = mix(0.06f, 0.6f, fast);
-	vec2 slope = ripple * roughness * 0.45f * u_streamProfileWaves.x;
+	float rippleGain = roughness * 0.45f * u_streamProfileWaves.x;
 	// The wind roughens the water with small waves that run with it, most on the slow pools, where the river's own
 	// waves are small. The wind comes from the sea's waves: its direction, and more in a storm.
 	vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
 	float windy = u_streamProfileWaves.y * (0.25f + 0.75f * u_uwWaves.y) * (1.0f - 0.7f * fast);
-	vec2 gust = RippleSlope(p.xz - wind * t * 0.9f * metre + vec2(11.3f, 5.1f), 0.25f * metre);
-	slope += gust * windy * 0.12f;
+	vec2 windShift = wind * t * 0.9f * metre;
+	vec2 ripples = StreamRipples(p.xz, shift0, shift1, weight0, rippleSize, rippleGain, windShift, windy);
+	vec2 slope = ripples;
 
 	// Over the rocks in the bed the fast water stands in waves that do not move: a hump over each rock, and a few
 	// waves behind it. Their foam is white.
@@ -280,9 +292,21 @@ void main()
 	vec2 bedUv = StreamScreenAt(bedPoint);
 	vec4 bedSample = texture2DLod(s_sceneColour, clamp(bedUv, vec2_splat(0.0f), vec2_splat(1.0f)), 0.0f);
 	vec3 bed = abs(bedSample.a - UW_LAND_MARK) < 0.5f / 255.0f ? bedSample.rgb : scene.rgb;
-	// The light that the waves focus on the bed
-	float caustic = UwCaustics(bedPoint.xz * 1.3f / metre - velocity * t * 0.3f, t * 1.6f, 0.8f);
-	bed *= 0.85f + 0.45f * caustic * u_uwAbove.w * (1.0f - fast * 0.5f) * smoothstep(0.0f, 0.3f, toLight.y);
+	// The light that the small waves focus on the bed. The surface bends the light from above by about a quarter of its
+	// slope, so the light from a point of the surface falls on the bed at the point plus a quarter of the depth times
+	// the slope. Where the waves curve up, as a lens, the light from a patch of the surface falls on a smaller patch of
+	// the bed, and the bed is brighter by the ratio of the two areas.
+	float apart = 0.08f * metre;
+	vec2 alongX = StreamRipples(p.xz + vec2(apart, 0.0f), shift0, shift1, weight0, rippleSize, rippleGain, windShift, windy);
+	vec2 alongZ = StreamRipples(p.xz + vec2(0.0f, apart), shift0, shift1, weight0, rippleSize, rippleGain, windShift, windy);
+	float bend = 0.25f * waterDepth * k_StreamCausticGain;
+	float xx = 1.0f + bend * (alongX.x - ripples.x) / apart;
+	float zz = 1.0f + bend * (alongZ.y - ripples.y) / apart;
+	float xzTerm = bend * (alongZ.x - ripples.x) / apart;
+	float zx = bend * (alongX.y - ripples.y) / apart;
+	float area = abs(xx * zz - xzTerm * zx);
+	float caustic = clamp(1.0f / max(area, 0.25f), 0.3f, 3.0f);
+	bed *= mix(1.0f, caustic, u_uwAbove.w * smoothstep(0.0f, 0.3f, toLight.y));
 	// Fresh water takes out the red first, and a little light scatters back from the water itself
 	vec3 absorb = u_streamProfile[0].rgb / metre;
 	vec3 transmit = exp(-absorb * path * 2.0f) * u_streamProfile[0].w;

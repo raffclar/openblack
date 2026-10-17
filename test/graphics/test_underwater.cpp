@@ -782,6 +782,29 @@ TEST(UnderwaterFarSea, EnvironmentFacesSkipTheFaceThatLooksDown)
 	}
 }
 
+TEST(UnderwaterFarSea, OnlyAJumpRestartsTheFramesBefore)
+{
+	const underwater::FrameLight noon {
+	    .towardsLight = {0.3f, 0.9f, 0.3f}, .skyColour = {0.5f, 0.7f, 0.9f}, .eye = {100.0f, 50.0f, 100.0f}};
+	// One frame of the usual day: the sun turns a little, the sky changes a little, the eye moves a little
+	auto next = noon;
+	next.towardsLight = {0.31f, 0.9f, 0.3f};
+	next.skyColour += glm::vec3(0.01f);
+	next.eye += glm::vec3(20.0f, 0.0f, 0.0f);
+	EXPECT_FALSE(underwater::LightJumped(noon, next));
+	// A jump to dusk: the sun goes low and the sky goes red
+	auto dusk = noon;
+	dusk.towardsLight = {0.9f, 0.1f, 0.2f};
+	EXPECT_TRUE(underwater::LightJumped(noon, dusk));
+	auto red = noon;
+	red.skyColour = {0.8f, 0.3f, 0.2f};
+	EXPECT_TRUE(underwater::LightJumped(noon, red));
+	// The camera jumps to the other side of the map
+	auto far = noon;
+	far.eye = {3000.0f, 50.0f, 2000.0f};
+	EXPECT_TRUE(underwater::LightJumped(noon, far));
+}
+
 TEST(UnderwaterFarSea, EnvironmentFacesAreSquareToEachOther)
 {
 	for (uint8_t i = 0; i < underwater::k_EnvironmentFaces; ++i)

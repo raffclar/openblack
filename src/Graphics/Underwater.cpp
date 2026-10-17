@@ -157,9 +157,11 @@ underwater::WaveState underwater::WavesFor(float storm, float windAngle)
 {
 	storm = std::clamp(storm, 0.0f, 1.0f);
 	WaveState waves {.scale = 1.0f + storm * 3.5f, .storm = storm, .windAngle = windAngle, .swash = 0.25f + storm * 0.55f};
-	// The waves that come in to the coast: the sum of the heights of the swell and of the longest waves of the wind sea
+	// The waves that come in to the coast: the sum of the heights of the swell and of the two longest waves of the wind
+	// sea, at the steepness that a long wind sea has (0.012 on a calm day to 0.025 in a storm)
 	const auto table = WaveTable(waves);
-	waves.swellHeight = table.at(0).z + table.at(1).z + table.at(2).z + table.at(3).z;
+	const float longSteepness = (0.012f + 0.013f * storm) * std::min(waves.scale, 1.0f);
+	waves.swellHeight = table.at(0).z + table.at(1).z + (table.at(2).y + table.at(3).y) * longSteepness;
 	return waves;
 }
 
@@ -174,16 +176,24 @@ std::array<glm::vec4, underwater::k_WaveCount> underwater::WaveTable(const WaveS
 	table.at(0) = {k_SwellAngle, Metres(160.0f), Metres(1.0f) * swell, 0.7f};
 	table.at(1) = {k_SwellAngle + 0.15f, Metres(115.0f), Metres(0.7f) * swell, 3.9f};
 	// The wind sea: 75 m long to 5 m, each 0.78 of the one before, directions spread about the wind's. The steepness
-	// (height for each length) grows from 0.012 on a calm day to 0.025 in a storm, as a real wind sea's does.
+	// (height for each length) has a peak at the middle lengths, as a real wind sea's spectrum does: on a calm or breezy
+	// day the waves of 8 m to 20 m are the high ones, which gives broad, rolling waves. The long waves of the wind sea
+	// are low. A storm makes every wave higher and moves the peak to longer waves.
 	constexpr std::array<float, 12> k_Spread {0.0f, 0.35f, -0.45f, 0.6f, -0.2f, 0.85f, -0.7f, 0.3f, -1.0f, 0.95f, -0.5f, 0.65f};
 	constexpr std::array<float, 12> k_Phase {0.0f, 1.7f, 4.1f, 2.3f, 5.2f, 0.9f, 3.3f, 6.0f, 1.2f, 4.6f, 2.8f, 5.7f};
-	const float steepness = 0.012f + 0.013f * waves.storm;
+	const auto peak = [](float length, float middle) {
+		const float far = std::log(length / middle) / k_WindSeaPeakWidth;
+		return std::exp(-0.5f * far * far);
+	};
 	for (size_t i = 0; i < 12; ++i)
 	{
 		const float length = Metres(75.0f) * std::pow(0.78f, static_cast<float>(i));
+		const float steepness = k_WindSeaBase + 0.012f * waves.storm +
+		                        k_WindSeaPeak * peak(length, Metres(k_WindSeaPeakMetres)) +
+		                        0.02f * waves.storm * peak(length, Metres(28.0f));
 		float height = length * steepness * on;
-		// The short chop is low, so that the waves read as broad and chunky; a storm makes it higher
-		if (length < Metres(12.0f))
+		// The shortest chop is low, so that the waves read as broad and chunky; a storm makes it higher
+		if (length < Metres(6.0f))
 		{
 			height *= 0.6f * (1.0f + waves.storm);
 		}
@@ -252,6 +262,48 @@ float underwater::OpenSeaSize(glm::vec2 point, float seconds, float shoreDistanc
 	return glm::mix(0.85f, 0.7f + 0.9f * patch, far) * (1.0f + 0.35f * far);
 }
 
+underwater::WaveVariation underwater::WaveVariationAt(glm::vec2 point, float seconds)
+{
+	// The warp: four slow waves of position, 70 m to 130 m long, that bend the crests and make the waves longer or
+	// shorter from place to place
+	constexpr float k_Tau = 2.0f * std::numbers::pi_v<float>;
+	const float amplitude = Metres(k_WarpMetres);
+	const float f1 = k_Tau / Metres(110.0f);
+	const float f2 = k_Tau / Metres(130.0f);
+	const float f3 = k_Tau / Metres(70.0f);
+	const float f4 = k_Tau / Metres(85.0f);
+	const glm::vec2 d1 {0.8f, 0.6f};
+	const glm::vec2 d2 {-0.6f, 0.8f};
+	const glm::vec2 d3 {0.28f, -0.96f};
+	const glm::vec2 d4 {0.96f, 0.28f};
+	const float a1 = f1 * glm::dot(d1, point) + 0.11f * seconds;
+	const float a2 = f2 * glm::dot(d2, point) - 0.09f * seconds;
+	const float a3 = f3 * glm::dot(d3, point) - 0.07f * seconds + 1.3f;
+	const float a4 = f4 * glm::dot(d4, point) + 0.05f * seconds + 2.9f;
+	WaveVariation variation {};
+	variation.warp = amplitude * glm::vec2(std::sin(a1) + 0.5f * std::sin(a3), std::sin(a2) + 0.5f * std::sin(a4));
+	const glm::vec2 dx = amplitude * (glm::vec2(f1 * d1.x * std::cos(a1), f2 * d2.x * std::cos(a2)) +
+	                                  0.5f * glm::vec2(f3 * d3.x * std::cos(a3), f4 * d4.x * std::cos(a4)));
+	const glm::vec2 dz = amplitude * (glm::vec2(f1 * d1.y * std::cos(a1), f2 * d2.y * std::cos(a2)) +
+	                                  0.5f * glm::vec2(f3 * d3.y * std::cos(a3), f4 * d4.y * std::cos(a4)));
+	variation.warpSlope = {dx, dz};
+	// The groups: patches 60 m to 90 m across where the waves are higher or lower, which drift slowly
+	const float g1 = k_Tau / Metres(90.0f);
+	const float g2 = k_Tau / Metres(60.0f);
+	const glm::vec2 e1 {0.92f, 0.39f};
+	const glm::vec2 e2 {-0.31f, 0.95f};
+	const float b1 = g1 * glm::dot(e1, point) + 0.04f * seconds;
+	const float b2 = g2 * glm::dot(e2, point) - 0.03f * seconds;
+	const float b3 = g2 * glm::dot(e1, point) - 0.05f * seconds + 2.1f;
+	const float b4 = g1 * glm::dot(e2, point) + 0.035f * seconds + 0.7f;
+	constexpr float k_Range = 0.5f * k_GroupRange;
+	variation.groups = {1.0f + k_Range * std::sin(b1) * std::sin(b2), 1.0f + k_Range * std::sin(b3) * std::sin(b4)};
+	const glm::vec2 even = k_Range * (std::cos(b1) * std::sin(b2) * g1 * e1 + std::sin(b1) * std::cos(b2) * g2 * e2);
+	const glm::vec2 odd = k_Range * (std::cos(b3) * std::sin(b4) * g2 * e1 + std::sin(b3) * std::cos(b4) * g1 * e2);
+	variation.groupSlope = {even.x, odd.x, even.y, odd.y};
+	return variation;
+}
+
 underwater::WaveSample underwater::WavesAt(glm::vec2 point, float seconds, const WaveState& waves)
 {
 	return WavesAt(point, seconds, waves, std::nullopt, 1e6f, 1e6f);
@@ -280,20 +332,42 @@ underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, 
 		total += grown.at(i);
 	}
 	const float breaking = total > 0.0f ? std::min(1.0f, BreakingCrest(depth) / total) : 0.0f;
-	const float sharp = 1.0f + 1.5f * waves.storm;
+	const float sharp = k_CrestSharpness + 1.5f * waves.storm;
+	// The wind sea is drawn at a warped point, with its waves in groups (see WaveVariationAt)
+	const auto variation = WaveVariationAt(point, seconds);
+	const glm::vec2 warped = point + variation.warp;
+	glm::vec2 windSlope {0.0f};
 	for (size_t i = 0; i < table.size(); ++i)
 	{
 		const auto& wave = table.at(i);
+		const bool wind = i >= 2;
 		const glm::vec2 along {std::cos(wave.x), std::sin(wave.x)};
 		const float k = 2.0f * std::numbers::pi_v<float> / wave.y;
 		const float omega = std::sqrt(k_Gravity * k);
-		const float amplitude = grown.at(i) * breaking;
-		const float theta = k * glm::dot(along, point) - omega * seconds + wave.w;
+		const bool even = (i % 2) == 0;
+		const float group = wind ? (even ? variation.groups.x : variation.groups.y) : 1.0f;
+		const float amplitude = grown.at(i) * breaking * group;
+		const float theta = k * glm::dot(along, wind ? warped : point) - omega * seconds + wave.w;
 		const float s = 0.5f + 0.5f * std::sin(theta);
-		sample.height += amplitude * (2.0f * std::pow(s, sharp) - 1.0f);
+		const float shape = 2.0f * std::pow(s, sharp) - 1.0f;
+		sample.height += amplitude * shape;
 		const float rise = amplitude * sharp * std::pow(std::max(s, 1e-4f), sharp - 1.0f) * std::cos(theta) * k;
-		sample.slope += along * rise;
+		if (wind)
+		{
+			windSlope += along * rise;
+			// The height changes with the group too
+			const glm::vec2 groupSlope = even ? glm::vec2(variation.groupSlope.x, variation.groupSlope.z)
+			                                  : glm::vec2(variation.groupSlope.y, variation.groupSlope.w);
+			sample.slope += grown.at(i) * breaking * shape * groupSlope;
+		}
+		else
+		{
+			sample.slope += along * rise;
+		}
 	}
+	// The slope at the warped point, turned back to the slope at the point itself
+	sample.slope += glm::vec2(windSlope.x * (1.0f + variation.warpSlope.x) + windSlope.y * variation.warpSlope.y,
+	                          windSlope.x * variation.warpSlope.z + windSlope.y * (1.0f + variation.warpSlope.w));
 	// The long waves of the open sea are plain sine waves, which rise and fall with the swell's sets
 	for (size_t j = 0; j < far.size(); ++j)
 	{
@@ -333,6 +407,22 @@ underwater::EnvironmentFaceAxes underwater::EnvironmentFaceAxesOf(uint8_t face)
 	    {.forward = {0.0f, 0.0f, -1.0f}, .up = {0.0f, 1.0f, 0.0f}},
 	}};
 	return k_Axes.at(face % k_EnvironmentFaces);
+}
+
+bool underwater::LightJumped(const FrameLight& before, const FrameLight& now)
+{
+	const float before2 = glm::dot(before.towardsLight, before.towardsLight);
+	const float now2 = glm::dot(now.towardsLight, now.towardsLight);
+	bool turned = false;
+	if (before2 > 1e-8f && now2 > 1e-8f)
+	{
+		const float cosine = glm::dot(before.towardsLight, now.towardsLight) / std::sqrt(before2 * now2);
+		turned = cosine < std::cos(k_LightJumpRadians);
+	}
+	const glm::vec3 change = glm::abs(now.skyColour - before.skyColour);
+	const bool recoloured = std::max({change.x, change.y, change.z}) > k_SkyJumpChange;
+	const bool moved = glm::distance(now.eye, before.eye) > k_EyeJumpUnits;
+	return turned || recoloured || moved;
 }
 
 glm::vec3 underwater::EnvironmentCentre(glm::vec3 eye, float seaLevel)

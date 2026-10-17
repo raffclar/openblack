@@ -184,6 +184,38 @@ void Renderer::DrawLightProbes(const DrawSceneDesc& /*desc*/, bool newShadows) c
 	probes.blended.drawn = true;
 }
 
+void Renderer::RestartAfterJump() const
+{
+	// The cube of the far scene shows no old face: the water reflects the sky alone until each face is drawn again
+	if (_underwater != nullptr)
+	{
+		_underwater->ResetEnvironment();
+	}
+	// The clouds do not blend with the frames before the jump
+	if (_clouds != nullptr)
+	{
+		_clouds->SetHistoryValid(false);
+	}
+	// The light probes start a new grid at once, and the scene uses no probes until it is done
+	if (_lightProbes != nullptr)
+	{
+		_lightProbes->sweep = {};
+		_lightProbes->newest.reset();
+		_lightProbes->olderDone = false;
+		_lightProbes->blendedInFull.reset();
+	}
+	// The shadows are made again at once, with no blend from the old maps
+	if (_sunShadows != nullptr)
+	{
+		_sunShadows->Clock().Reset();
+	}
+	// The sky's light on the processor is found again in this frame
+	if (_atmosphere != nullptr)
+	{
+		_atmosphere->cache.reset();
+	}
+}
+
 void Renderer::DrawAmbientOcclusion(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const
 {
 	if (!_atmosphereFrame.has_value() || !_atmosphereFrame->lighting ||
