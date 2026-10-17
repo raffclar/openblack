@@ -1423,7 +1423,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				    Locator::skySystem::value().GetCurrentSkyType(),
 				    desc.alphaThreshold.value_or(prim.thresholdAlpha || desc.materialAlphaTest ? prim.alphaCutoutThreshold
 				                                                                               : 0.0f),
-				    0.0f,
+				    desc.ditherFade ? 1.0f : 0.0f,
 				    0.0f,
 				};
 				setUniform(MeshUniform::SkyAlphaThreshold, &u_skyAlphaThreshold);
@@ -7016,12 +7016,17 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.snow = !inTemple;
 					submitDesc.program = vegetationShaderInstanced;
 					submitDesc.detailLevel = run.level;
-					submitDesc.viewId = run.fading ? TranslucentView(desc.viewId) : desc.viewId;
-					submitDesc.state = run.fading ? opaqueState | BGFX_STATE_BLEND_ALPHA : opaqueState;
+					// EXPERIMENT (not for merge): over the new water, a fading tree is drawn solid in the scene with a
+					// screen pattern for its fade. A blended tree would come after the haze and the fog and not get them.
+					const bool dissolve = run.fading && desc.viewId == RenderPass::Main && BlendAfterWater();
+					const bool blended = run.fading && !dissolve;
+					submitDesc.ditherFade = dissolve;
+					submitDesc.viewId = blended ? TranslucentView(desc.viewId) : desc.viewId;
+					submitDesc.state = blended ? opaqueState | BGFX_STATE_BLEND_ALPHA : opaqueState;
 					submitDesc.sortDepth =
-					    run.fading ? zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(run.first).modelMatrix[3]),
-					                              desc.camera->GetOrigin())
-					               : 0;
+					    blended ? zsort::Depth(glm::vec3(renderCtx.treeInstanceData.at(run.first).modelMatrix[3]),
+					                           desc.camera->GetOrigin())
+					            : 0;
 					// The solid trees after a fizzing creature in the land's draw list come after the passes of the
 					// creature
 					if (!run.fading && run.segment > 0 && desc.viewId == RenderPass::Main &&
@@ -7036,6 +7041,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.viewId = desc.viewId;
 				submitDesc.state = opaqueState;
 				submitDesc.sortDepth = 0;
+				submitDesc.ditherFade = false;
 
 				// Draw tree bounding boxes if enabled
 				if (renderCtx.boundingBox && renderCtx.treeInstanceCount > 0)
