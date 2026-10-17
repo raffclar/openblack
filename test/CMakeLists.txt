@@ -1153,6 +1153,9 @@ target_link_libraries(test_oracle_float_sweep_3 PRIVATE pack lnd)
 openblack_setup_and_add_test(
   test_oracle_float_sweep_4 oracle/test_oracle_float_sweep_4.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_formation_land_line oracle/test_oracle_formation_land_line.cpp
+)
 # The data folder is found at run time (see oracle/OracleData.h), never compiled into an object: ctest sets the
 # environment variable for each test, and the file in the build folder serves a program started by hand from there
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
@@ -1161,7 +1164,7 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
 )
 foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_inverse_square_root test_oracle_data_folder
-                     test_oracle_creature_camera_maths
+                     test_oracle_creature_camera_maths test_oracle_formation_land_line
                      test_oracle_float_sweep_3 test_oracle_float_sweep_4
 )
   set_tests_properties(

@@ -83,6 +83,8 @@ private:
 	// Moving
 	/// Off to a goal at a height above the land there, in its kind's move state, into a final state once there
 	void SetupMoveTo(components::Animal& animal, glm::vec2 goal, float goalHeight, components::AnimalState finalState);
+	/// The same with a goal in 16.16 map units
+	void SetupMoveToFixed(components::Animal& animal, glm::ivec2 goal, float goalHeight, components::AnimalState finalState);
 	/// A turn's move towards its goal, climbing or sinking towards its goal's height: whether it arrived
 	bool MoveTo3D(components::Animal& animal);
 	/// It tilts into the turn it made

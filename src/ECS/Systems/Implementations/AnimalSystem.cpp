@@ -434,8 +434,13 @@ float AnimalSystem::GoalHeightOf(entt::entity animal) const
 
 void AnimalSystem::SetupMoveTo(Animal& animal, glm::vec2 goal, float goalHeight, AnimalState finalState)
 {
+	SetupMoveToFixed(animal, Fixed(goal), goalHeight, finalState);
+}
+
+void AnimalSystem::SetupMoveToFixed(Animal& animal, glm::ivec2 goal, float goalHeight, AnimalState finalState)
+{
 	animal.goalHeight = goalHeight;
-	Banked(animal, animals::SetUpMove(animal.move, Fixed(goal), TurnAngleOf(animal)));
+	Banked(animal, animals::SetUpMove(animal.move, goal, TurnAngleOf(animal)));
 	animal.finalState = finalState;
 	// It takes its kind's move state, and that state's clip
 	SetTopState(animal, AnimalState::MoveToPos);
@@ -807,9 +812,8 @@ void AnimalSystem::FollowFlock(entt::entity entity, Animal& animal)
 	// Counted from the leader, the last in the line
 	const int place = static_cast<int>(flockData->members.end() - found);
 	const auto& leader = registry.Get<const Animal>(leaderEntity);
-	const auto goal =
-	    animals::FormationGoal(Metres(leader.move.position), Metres(animal.move.position), animals::FormationSlotOf(place));
-	SetupMoveTo(animal, goal, leader.height, AnimalState::DecideWhatToDo);
+	const auto goal = animals::FormationGoal(leader.move.position, animal.move.position, animals::FormationSlotOf(place));
+	SetupMoveToFixed(animal, goal, leader.height, AnimalState::DecideWhatToDo);
 }
 
 // The temples' birds
