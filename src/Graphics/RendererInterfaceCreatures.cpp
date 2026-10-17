@@ -9,6 +9,8 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <limits>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -34,6 +36,7 @@
 #include "EngineConfig.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
+#include "Graphics/InstanceDesc.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
 #include "Renderer.h"
@@ -278,6 +281,113 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 			                 glm::vec3(glm::inverse(shown.view)[3]));
 			break;
 		}
+	}
+}
+
+void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown) const
+{
+	if (shown.viewSize.x <= 0.0f || shown.viewSize.y <= 0.0f || !desc.entities.Valid(shown.copy))
+	{
+		return;
+	}
+	const auto* copy = desc.entities.TryGet<const ecs::components::CreatureCopy>(shown.copy);
+	const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(shown.copy);
+	const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(shown.copy);
+	if (copy == nullptr || transform == nullptr || !desc.entities.Valid(copy->creature))
+	{
+		return;
+	}
+	const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(copy->creature);
+	const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(copy->creature);
+	const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(copy->creature);
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (mesh == nullptr || creature == nullptr || morph == nullptr || !meshes.Contains(mesh->id))
+	{
+		return;
+	}
+	const auto body = meshes.Handle(mesh->id);
+	const bool posed = animation != nullptr && animation->boneMatrices.size() == body->GetBoneMatrices().size();
+	const auto bones =
+	    posed ? std::span<const glm::mat4>(animation->boneMatrices) : std::span<const glm::mat4>(body->GetBoneMatrices());
+	if (bones.empty())
+	{
+		return;
+	}
+
+	// The film's camera over the film's picture, with the depth cleared: the renderer draws the creature over the
+	// picture and in front of nothing else
+	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::FilmCreature);
+	bgfx::setViewClear(viewId, BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
+	bgfx::setViewRect(viewId, static_cast<uint16_t>(shown.viewOrigin.x), static_cast<uint16_t>(shown.viewOrigin.y),
+	                  static_cast<uint16_t>(shown.viewSize.x), static_cast<uint16_t>(shown.viewSize.y));
+	bgfx::setViewTransform(viewId, &shown.view, &shown.projection);
+	// The body, its eyes and then its hair, in the order they are given, so the hair blends over the body
+	_shaderManager->SetViewOrder(RenderPass::FilmCreature, ViewOrder::Sequential);
+	bgfx::touch(viewId);
+
+	if (!_filmCreatureInstance.has_value())
+	{
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::TexCoord7, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord6, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord5, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord4, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
+		    .end();
+		_filmCreatureInstance = fromBgfx(bgfx::createDynamicVertexBuffer(1, layout));
+	}
+	const ecs::systems::RenderContext::ObjectInstance instance {
+	    .model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale)};
+	bgfx::update(toBgfx(*_filmCreatureInstance), 0, bgfx::copy(&instance, sizeof(instance)));
+
+	const auto ids =
+	    creature_morph::MeshesOf(creature->species, morph->drawn, [&meshes](entt::id_type id) { return meshes.Contains(id); });
+	L3DMeshSubmitDesc::MorphTargets targets {
+	    .meshes = {&*meshes.Handle(ids.evilGood), &*meshes.Handle(ids.thinFat), &*meshes.Handle(ids.weakStrong)},
+	    .weights = glm::abs(glm::vec3(morph->drawn.evilGood, morph->drawn.thinFat, morph->drawn.weakStrong)),
+	    .skins = {},
+	    .blendSeams = Locator::config::value().blendCreatureSeams,
+	};
+	if (const auto skins = _creatureSkins.find(copy->creature); skins != _creatureSkins.end())
+	{
+		targets.skins = skins->second.drawn;
+	}
+
+	// The film's light shades the colour of its own in place of the land's light. The renderer adds the second colour
+	// after the texture. Nothing of the land or its haze reaches it.
+	L3DMeshSubmitDesc submitDesc = {};
+	submitDesc.viewId = RenderPass::FilmCreature;
+	submitDesc.program = _shaderManager->GetShader("ObjectMorphInstanced");
+	submitDesc.state = 0u | BGFX_STATE_WRITE_MASK | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
+	submitDesc.useMaterialBlending = true;
+	submitDesc.useMaterialCulling = true;
+	submitDesc.useMaterialAddressing = true;
+	submitDesc.alwaysLit = true;
+	submitDesc.groundShadows = false;
+	submitDesc.snow = false;
+	submitDesc.landLightAndHaze = false;
+	submitDesc.modelLight = shown.light;
+	// The game lights the copy's posed body vertex by vertex, as it lights all the bodies it poses
+	submitDesc.posedModelLight = true;
+	submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = shown.colour, .alpha = 1.0f};
+	submitDesc.lightAdd = shown.added;
+	submitDesc.instanceDesc = std::make_unique<graphics::InstanceDesc>(*_filmCreatureInstance, 0, 1);
+	submitDesc.modelMatrices = bones.data();
+	submitDesc.matrixCount = static_cast<uint8_t>(bones.size());
+	submitDesc.morphTargets = &targets;
+	DrawMesh(*body, submitDesc, std::numeric_limits<uint8_t>::max());
+	submitDesc.morphTargets = nullptr;
+
+	if (const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(shown.copy); eyes != nullptr)
+	{
+		DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
+	}
+	// Its own hair, which hangs from its own pose, faces the film's camera
+	if (const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(shown.copy);
+	    hair != nullptr && Locator::creatureHairSystem::value().IsShown())
+	{
+		DrawCreatureHair(desc, *hair, transform->position, RenderPass::FilmCreature, glm::vec3(glm::inverse(shown.view)[3]));
 	}
 }
 

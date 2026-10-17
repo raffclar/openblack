@@ -17,6 +17,7 @@
 #include <PackFile.h>
 
 #include "3D/CameraPath.h"
+#include "3D/FilmCameraPath.h"
 #include "3D/L3DAnim.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/Light.h"
@@ -344,6 +345,12 @@ struct AdvisorModelLoader final: BaseLoader<help::spirits::AdvisorModel>
 };
 
 struct CameraPathLoader final: BaseLoader<CameraPath>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// A film's camera path from its .cm2 file
+struct FilmCameraPathLoader final: BaseLoader<FilmCameraPath>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };

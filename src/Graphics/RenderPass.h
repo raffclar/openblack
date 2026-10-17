@@ -61,6 +61,11 @@ enum class RenderPass : uint8_t
 	/// The advisors near the screen, drawn over the whole scene with its depth cleared
 	Advisors,
 	Interface,
+	/// The player's creature in the falling spell's film, over the film's picture, seen by the film's camera, with the
+	/// depth cleared
+	FilmCreature,
+	/// The fades over the falling spell's film and its creature
+	FilmOverlay,
 	/// The creature that the main menu's tattoo editor shows over its dialog, seen by the editor's own camera, with the
 	/// depth cleared
 	MenuCreature,
@@ -102,6 +107,8 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Cinema Bars Pass",            //
     "Advisors Pass",               //
     "Interface Pass",              //
+    "Film Creature Pass",          //
+    "Film Overlay Pass",           //
     "Menu Creature Pass",          //
     "Menu Creature Overlay Pass",  //
     "Interface Creatures Pass",    //

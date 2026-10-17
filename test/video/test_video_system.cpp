@@ -9,6 +9,9 @@
 
 // The video system with fake hooks and a fake clock, over small synthetic Bink files
 
+#include <cstdint>
+
+#include <algorithm>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -37,6 +40,9 @@ struct FakeGame
 	bool hasCreature {true};
 	bool whiteReached {false};
 	std::vector<video::FallingSpellCue> cues;
+	int filmStarts {0};
+	int filmEnds {0};
+	std::vector<int32_t> filmTimes;
 	std::vector<std::filesystem::path> closed;
 	std::map<std::filesystem::path, std::shared_ptr<const bink::BinkFile>> files;
 
@@ -58,6 +64,9 @@ struct FakeGame
 		    .fallingSpellPath = []() { return std::filesystem::path("fall.bik"); },
 		    .fallingSpellCue = [this](video::FallingSpellCue cue) { cues.push_back(cue); },
 		    .whiteFadeReached = [this]() { return whiteReached; },
+		    .fallingSpellStarted = [this]() { ++filmStarts; },
+		    .fallingSpellFrame = [this](int32_t filmMs, Clock::time_point) { filmTimes.push_back(filmMs); },
+		    .fallingSpellEnded = [this]() { ++filmEnds; },
 		};
 	}
 };
@@ -359,4 +368,26 @@ TEST(VideoSystem, EscapeEndsTheFallingSpell)
 	EXPECT_FALSE(videos.HidesWorld());
 	EXPECT_TRUE(videos.IsPlaying());
 	EXPECT_EQ(videos.GetStatus()->schedule, (video::Schedule {.fadeStart = 100, .end = 148}));
+}
+
+TEST(VideoSystem, TheFallingSpellsCreatureFollowsItsFilm)
+{
+	FakeGame game;
+	game.files["fall.bik"] = MakeVideo(1200, 24);
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
+	game.hasCreature = false;
+	videos.StartFallingSpell();
+	EXPECT_EQ(game.filmStarts, 0);
+
+	game.hasCreature = true;
+	videos.StartFallingSpell();
+	EXPECT_EQ(game.filmStarts, 1);
+	Play(videos, k_Start, 25, 24);
+	// Each frame gives the film's time, from the frames shown at 24 a second
+	ASSERT_FALSE(game.filmTimes.empty());
+	EXPECT_TRUE(std::ranges::is_sorted(game.filmTimes));
+	EXPECT_EQ(game.filmTimes.back(), 1041);
+	EXPECT_EQ(game.filmEnds, 0);
+	EXPECT_TRUE(videos.Escape(false, false));
+	EXPECT_EQ(game.filmEnds, 1);
 }

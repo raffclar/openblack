@@ -27,6 +27,7 @@
 #include "Animals/FishShoal.h"
 #include "Animals/GrazerRules.h"
 #include "Audio/AnimEffectKeys.h"
+#include "Common/FramePace.h"
 #include "Common/VirtualInfluence.h"
 #include "Common/Zoomer.h"
 #include "ComponentReflection.h"
@@ -136,6 +137,7 @@
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FilmCreature.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
@@ -280,6 +282,7 @@
 #include "Physics/DamageMesh.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptTimers.h"
+#include "Video/FilmCreature.h"
 
 namespace components = openblack::ecs::components;
 
@@ -1119,6 +1122,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Field::growthTurn>("growthTurn")
 	    .Field<&components::Field::height>("height")
 	    .Field<&components::Field::farmers>("farmers");
+	Reflect<components::FilmCreature>(context)
+	    .Field<&components::FilmCreature::clock>("clock")
+	    .Field<&components::FilmCreature::look>("look")
+	    .Field<&components::FilmCreature::pace>("pace")
+	    .Field<&components::FilmCreature::shown>("shown");
 	Reflect<components::Fire>(context)
 	    .Field<&components::Fire::state>("state")
 	    .Field<&components::Fire::source>("source")
@@ -2388,6 +2396,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_layers::BodyAction::holdLoop>("holdLoop")
 	    .Field<&openblack::creature_layers::BodyAction::timedByPlayer>("timedByPlayer")
 	    .Field<&openblack::creature_layers::BodyAction::hurried>("hurried")
+	    .Field<&openblack::creature_layers::BodyAction::realTime>("realTime")
 	    .Field<&openblack::creature_layers::BodyAction::danceMoveMs>("danceMoveMs")
 	    .Field<&openblack::creature_layers::BodyAction::blendedWith>("blendedWith")
 	    .Field<&openblack::creature_layers::BodyAction::blendWeight>("blendWeight")
@@ -3002,6 +3011,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::field_crop::Settle>(context, ValueOnly {})
 	    .Field<&openblack::field_crop::Settle::position>("position")
 	    .Field<&openblack::field_crop::Settle::speed>("speed");
+	Reflect<openblack::film_creature::Clock>(context, ValueOnly {}).Field<&openblack::film_creature::Clock::lastMs>("lastMs");
+	Reflect<openblack::film_creature::Look>(context, ValueOnly {})
+	    .Field<&openblack::film_creature::Look::colour>("colour")
+	    .Field<&openblack::film_creature::Look::added>("added");
 	Reflect<openblack::fire::State>(context, ValueOnly {})
 	    .Field<&openblack::fire::State::temperature>("temperature")
 	    .Field<&openblack::fire::State::previous>("previous")
@@ -3055,6 +3068,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::fish_shoal::Shoal::retargetSeconds>("retargetSeconds")
 	    .Field<&openblack::fish_shoal::Shoal::fullness>("fullness")
 	    .Field<&openblack::fish_shoal::Shoal::fish>("fish");
+	Reflect<openblack::frame_pace::Pace>(context, ValueOnly {})
+	    .Field<&openblack::frame_pace::Pace::sinceStep>("sinceStep")
+	    .Field<&openblack::frame_pace::Pace::gameSinceStep>("gameSinceStep");
 	Reflect<openblack::graphics::TextureHandle>(context, ValueOnly {}).Field<&openblack::graphics::TextureHandle::id>("id");
 	Reflect<openblack::graphics::moon::Placement>(context, ValueOnly {})
 	    .Field<&openblack::graphics::moon::Placement::offset>("offset")
