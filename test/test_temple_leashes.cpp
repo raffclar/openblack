@@ -9,6 +9,10 @@
 
 #include <cmath>
 
+#include <array>
+#include <optional>
+
+#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "Creature/TempleLeashes.h"
@@ -173,4 +177,48 @@ TEST(TempleLeashes, TheCarriedLeashGoesWithThePutAwayHand)
 	EXPECT_TRUE(Shows(false, false));
 	EXPECT_TRUE(Shows(true, true));
 	EXPECT_FALSE(Shows(true, false));
+}
+
+TEST(TempleLeashes, TheCarriedLeashStaysOnTheWristOfTheMovedHand)
+{
+	// One posed wrist bone, in the model of the hand
+	const auto boneTurn = TurnByAngles({0.4f, -0.3f, 1.1f});
+	glm::mat4 bone(boneTurn);
+	bone[3] = glm::vec4(-229.0f, -555.0f, -5.0f, 1.0f);
+	// The hand at rest, then on a creature: in another place, turned another way and larger
+	struct Hand
+	{
+		glm::vec3 position;
+		glm::vec3 angles;
+		float scale;
+	};
+	const std::array<Hand, 3> hands {{
+	    {.position = {10.0f, 20.0f, 30.0f}, .angles = {0.0f, 0.0f, 0.0f}, .scale = 0.0058f},
+	    {.position = {-40.0f, 5.0f, 12.0f}, .angles = {1.3f, 0.7f, -0.2f}, .scale = 0.0082f},
+	    {.position = {2560.0f, 28.0f, 2556.0f}, .angles = {-2.1f, 0.2f, 0.9f}, .scale = 0.0116f},
+	}};
+	for (const bool mirrored : {false, true})
+	{
+		std::optional<glm::vec3> first;
+		for (const auto& hand : hands)
+		{
+			auto model = glm::mat4(TurnByAngles(hand.angles));
+			model[3] = glm::vec4(hand.position, 1.0f);
+			const auto mirror = glm::vec3(mirrored ? -hand.scale : hand.scale, hand.scale, hand.scale);
+			const auto wrist = model * glm::scale(glm::mat4(1.0f), mirror) * bone;
+			const auto carried = CarriedAt(wrist, hand.scale);
+			// Seen from the wrist, the leash is at the same place for each hand
+			const auto local = glm::vec3(glm::inverse(wrist) * glm::vec4(carried.position, 1.0f));
+			if (!first.has_value())
+			{
+				first = local;
+			}
+			EXPECT_NEAR(glm::distance(local, *first), 0.0f, 0.1f);
+			EXPECT_NEAR(glm::length(local), glm::length(glm::vec2(0.05f, 0.25f)) * k_HandScale, 0.1f);
+			// Its ring keeps the axis of the wrist, and its size is the same share of the hand
+			const auto axis = glm::normalize(glm::vec3(wrist[2]));
+			EXPECT_NEAR(glm::dot(carried.rotation[2], axis), 1.0f, k_Tolerance);
+			EXPECT_NEAR(carried.scale / hand.scale, k_HandScale * 0.5f, 1e-2f);
+		}
+	}
 }
