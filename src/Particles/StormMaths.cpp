@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack::particles;
 
 namespace
@@ -215,6 +217,15 @@ float storm::SwirlTurning(float radius, const SwirlParams& params)
 {
 	const float t = Clamp01((radius - params.minRadius) / (params.maxRadius - params.minRadius));
 	return (params.thetaDotMaxRadius - params.thetaDotMinRadius) * t + params.thetaDotMinRadius;
+}
+
+glm::vec3 storm::SwirlVelocity(glm::vec3 heading, float maxSpeed)
+{
+	if (heading == glm::vec3(0.0f))
+	{
+		return glm::vec3(0.0f);
+	}
+	return x87::Scaled<x87::SumOrder::Zyx>(heading, maxSpeed);
 }
 
 float storm::SwirlAcceleration(float age, const SwirlParams& params)

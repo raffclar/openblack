@@ -39,6 +39,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureActionHistory.h"
 #include "Creature/CreatureActivity.h"
@@ -728,8 +729,9 @@ std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::R
 		{
 			const auto valid =
 			    land.NearestValid(point, creature_route::k_DestinationClearance, creature_route::k_ValidPointSearch);
+			// The game measures the reach in three parts, with the squares added from z to x
 			standAt = valid.has_value() &&
-			                  glm::distance(shoal, glm::vec3(valid->x, 0.0f, valid->y)) < creature_route::k_ValidPointReach
+			                  x87::LengthZyx(shoal - glm::vec3(valid->x, 0.0f, valid->y)) < creature_route::k_ValidPointReach
 			              ? valid
 			              : std::nullopt;
 		}

@@ -10,6 +10,7 @@
 #include "CreatureCastMoves.h"
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
 #include <array>
@@ -20,9 +21,12 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureLocomotion.h"
+#include "Creature/CreaturePlayerAttention.h"
 
 using namespace openblack;
 using namespace openblack::creature_cast_moves;
@@ -87,6 +91,24 @@ float creature_cast_moves::RoutePlanRadius(float radius, float height, bool tree
 	const float low = creatureHeight * k_LowThingShare;
 	const float keep = height <= low ? k_LowThingKeep - k_TallerThingKeep * height / low : k_TallThingKeep;
 	return radius - keep * creatureRadius;
+}
+
+float creature_cast_moves::MapPointDistance(glm::vec2 a, glm::vec2 b)
+{
+	return glm::distance(map_coords::ToMetres(map_coords::FromMetres(a)), map_coords::ToMetres(map_coords::FromMetres(b)));
+}
+
+bool creature_cast_moves::SameDestination(glm::vec2 before, glm::vec2 now)
+{
+	const auto offset = now - before;
+	return (offset.x * offset.x) + (offset.y * offset.y) < k_SameDestinationSquared;
+}
+
+bool creature_cast_moves::HeadsFor(glm::vec2 creature, glm::vec2 point, float heading)
+{
+	// The same test as a creature that follows the hand makes
+	return creature_player_attention::IsDirectionClose(map_coords::FromMetres(creature), map_coords::FromMetres(point),
+	                                                   static_cast<uint16_t>(gutils::ConvertScawenAngleToGameAngle(heading)));
 }
 
 bool creature_cast_moves::Arrived(float distance, float creatureRadius, float routeRadius, float keep)
@@ -172,7 +194,7 @@ std::optional<glm::vec2> creature_cast_moves::FindClearArea(glm::vec2 point, flo
 bool creature_cast_moves::Facing(glm::vec2 creature, float heading, glm::vec2 point)
 {
 	const auto offset = point - creature;
-	if (glm::length(offset) < k_OnTopDistance)
+	if (MapPointDistance(point, creature) < k_OnTopDistance)
 	{
 		return true;
 	}
