@@ -29,6 +29,7 @@
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
+#include "Creature/CreatureCreed.h"
 #include "Creature/CreatureFootstepPuffs.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureRig.h"
@@ -36,6 +37,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureAudio.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCreedPowers.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
@@ -271,6 +273,13 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 				    Locator::footprintSystem::value().Step(entity);
 			    }
 			    SoundIfAsked(entity, creature, transform, *rig, heard, fired.event, gate);
+			    // A creed event sets a glow of the hands, heard or not
+			    if (const auto glow = creature_creed::FromAnimationEvent(static_cast<int32_t>(fired.event.action)))
+			    {
+				    auto& powers = registry.AllOf<CreatureCreedPowers>(entity) ? registry.Get<CreatureCreedPowers>(entity)
+				                                                               : registry.Assign<CreatureCreedPowers>(entity);
+				    creature_creed::Set(powers, glow->glow, glow->scale, glow->power);
+			    }
 			    // After the sound, a footstep throws up dust, heard or not
 			    FootstepPuffs(creature, transform, creature_footstep_puffs::CountOf(fired.event.action));
 		    }

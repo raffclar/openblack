@@ -58,6 +58,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureActivity.h"
+#include "Creature/CreatureCreed.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureRoute.h"
@@ -85,6 +86,7 @@
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCreedPowers.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -8040,13 +8042,25 @@ void GetBellyPosition() // 337 GET_BELLY_POSITION
 
 void SetCreatureCreedProperties() // 338 SET_CREATURE_CREED_PROPERTIES
 {
-	// const auto time = Popf();
-	// const auto power = Popf();
-	// const auto scale = Popf();
-	// const auto handGlow = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The glow's values only: openblack does not show the glows yet. The time has no effect in the game.
+	[[maybe_unused]] const auto time = Popf();
+	const auto power = Popf();
+	const auto scale = Popf();
+	const auto glow = Pop().intVal;
+	const auto creature = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (creature == entt::null || !registry.Valid(creature) || !registry.AllOf<ecs::components::Creature>(creature))
+	{
+		ScriptMessage("Thing not creature!");
+		return;
+	}
+	auto& powers = registry.AllOf<ecs::components::CreatureCreedPowers>(creature)
+	                   ? registry.Get<ecs::components::CreatureCreedPowers>(creature)
+	                   : registry.Assign<ecs::components::CreatureCreedPowers>(creature);
+	if (glow >= 0)
+	{
+		creature_creed::Set(powers, static_cast<size_t>(glow), scale, power);
+	}
 }
 
 void GameThingCanViewCamera() // 339 GAME_THING_CAN_VIEW_CAMERA

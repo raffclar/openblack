@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
+#include "Creature/CreatureCreed.h"
 #include "Creature/CreatureSaveState.h"
 #include "Creature/CreatureScriptAgendas.h"
 
@@ -217,4 +218,29 @@ TEST(CreatureSaveState, ALeashOrderAimsTwoMetresOverThePlaceAndTheThing)
 	EXPECT_EQ(onLand.x, map_coords::ToMetres(0x00DBF08E));
 	EXPECT_EQ(onLand.z, map_coords::ToMetres(0x00E6E4EE));
 	EXPECT_FLOAT_EQ(TargetPoint({100.0f, 5.0f, 100.0f}, 3.5f).y, 10.5f);
+}
+
+TEST(CreatureCreed, TheGlowEventsSetTheGlowsZeroTwoAndOneByQuarters)
+{
+	EXPECT_FALSE(creature_creed::FromAnimationEvent(94).has_value());
+	EXPECT_FALSE(creature_creed::FromAnimationEvent(110).has_value());
+	const auto first = creature_creed::FromAnimationEvent(96);
+	ASSERT_TRUE(first.has_value());
+	EXPECT_EQ(first->glow, 0u);
+	EXPECT_EQ(first->power, 0.5f);
+	EXPECT_EQ(first->scale, 1.0f);
+	EXPECT_EQ(creature_creed::FromAnimationEvent(104)->glow, 2u);
+	EXPECT_EQ(creature_creed::FromAnimationEvent(104)->power, 2.0f);
+	EXPECT_EQ(creature_creed::FromAnimationEvent(105)->glow, 1u);
+	EXPECT_EQ(creature_creed::FromAnimationEvent(105)->power, 0.0f);
+
+	ecs::components::CreatureCreedPowers powers;
+	creature_creed::Set(powers, 2, 0.7f, 1.5f);
+	EXPECT_EQ(powers.glows[2].scale, 0.7f);
+	EXPECT_EQ(powers.glows[2].power, 1.5f);
+	// A power of 0 puts the glow out, and the save then writes no values for it
+	creature_creed::Set(powers, 2, 0.7f, 0.0f);
+	EXPECT_EQ(powers.glows[2].scale, 0.0f);
+	EXPECT_EQ(powers.glows[2].power, 0.0f);
+	creature_creed::Set(powers, 4, 1.0f, 1.0f);
 }
