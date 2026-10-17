@@ -39,6 +39,8 @@ uniform vec4 u_uwEnvironment;
 // The foam with a thickness, and the silt in the water
 #include "underwater_foam_shade.sh"
 #include "underwater_sediment.sh"
+// The shadow of the volumetric clouds on the water
+#include "clouds_shadow.sh"
 
 // Where a point of the screen (0 to 1, as the textures are read) is in the world, at a depth of the depth buffer
 vec3 WorldAt(vec2 uv, float depth)
@@ -750,11 +752,14 @@ void main()
 			mirror += LightningInSky(reflected) * (1.0f - screenShare);
 			float facing = clamp(dot(-direction, normal), 0.0f, 1.0f);
 			float fresnel = 0.02f + 0.98f * pow(max(1.0f - facing, 0.0f), 5.0f);
+			// The clouds' shadow takes away the glint and some of the light in the water
+			float cloudShade = CloudShadeAt(surfacePoint.xz);
+			water *= mix(0.8f, 1.0f, cloudShade);
 			colour = mix(water, mirror, fresnel);
 			// The glint of the sun or the moon on the waves
 			float glint = u_uwSea.x > 0.5f ? min(SeaGlint(normal, -direction, u_uwAbove.xyz, roughness), 12.0f)
 			                               : pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f) * 3.0f;
-			colour += u_uwLightColour.rgb * glint * u_uwLightColour.w;
+			colour += u_uwLightColour.rgb * glint * u_uwLightColour.w * cloudShade;
 			// The glint of the bolt, and the ring where a strike hit the sea
 			colour += LightningGlint(surfacePoint, normal, -direction, roughness);
 			colour += UW_FLASH_COLOUR * strike.z;

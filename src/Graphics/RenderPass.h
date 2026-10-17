@@ -20,6 +20,8 @@ namespace openblack::graphics
 
 enum class RenderPass : uint8_t
 {
+	/// EXPERIMENT (not for merge): the map of the volumetric clouds' shadow round the eye, before the land's shade reads it
+	CloudShadow,
 	/// The clouds' shadows over the land this frame, and the lights at night
 	LandShade,
 	/// The land's luminosity this frame: as it was laid, shaded by the clouds and lit by the lights
@@ -48,6 +50,10 @@ enum class RenderPass : uint8_t
 	/// it is clear over the sea, so what is under the sea's surface behind it is hidden
 	Land,
 	Main,
+	/// EXPERIMENT (not for merge): the rays through the volumetric clouds at half the screen's size, after the scene's
+	/// depth is known, and their blend with the frames before
+	CloudMarch,
+	CloudResolve,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
 	/// EXPERIMENT (not for merge): one step of the foam that builds up on the water and decays
@@ -90,6 +96,7 @@ enum class RenderPass : uint8_t
 };
 
 static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_count)> k_RenderPassNames {
+    "Cloud Shadow Pass",           //
     "Land Shade Pass",             //
     "Land Luminosity Pass",        //
     "Land Colour Pass",            //
@@ -105,6 +112,8 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Sky Pass",                    //
     "Land Pass",                   //
     "Main Pass",                   //
+    "Cloud March Pass",            //
+    "Cloud Resolve Pass",          //
     "Translucent Pass",            //
     "Underwater Foam Pass",        //
     "Underwater Cube Sky Pass",    //

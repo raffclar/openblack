@@ -45,6 +45,7 @@
 #include "Graphics/UnderwaterView.h"
 #include "Graphics/UnderwaterWakeField.h"
 #include "Graphics/VolumeGlowShell.h"
+#include "Graphics/VolumetricCloudsView.h"
 #include "Particles/ParticleDrawFrame.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -414,6 +415,21 @@ private:
 	/// EXPERIMENT (not for merge): the foam field and the silt for one of the water's programs. The foam field goes in
 	/// sampler stage `foamStage`, and the silt's noise in `noiseStage` when it is given.
 	void BindUnderwaterDepth(const ShaderProgram& program, uint8_t foamStage, std::optional<uint8_t> noiseStage) const;
+	/// EXPERIMENT (not for merge): the volumetric clouds of this frame: their weather eases, and their uniforms are kept.
+	/// None while the clouds are off; the original game's clouds show then.
+	void BeginClouds(const DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): whether the volumetric clouds take the place of the original clouds this frame
+	[[nodiscard]] bool VolumetricCloudsShown() const { return _cloudsFrame.has_value(); }
+	/// EXPERIMENT (not for merge): the map of the clouds' shadow, the rays through the clouds and their blend with the
+	/// frames before, then the clouds over the scene: into the scene's target under the water, else over the water
+	void DrawClouds(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const;
+	/// EXPERIMENT (not for merge): the clouds in one face of the cube of the far scene, seen from its middle
+	void DrawCloudsInEnvironment(const glm::vec3& centre) const;
+	/// EXPERIMENT (not for merge): the clouds' uniforms and their textures for one program
+	void SetCloudUniforms(const ShaderProgram& program, const volumetric_clouds::CloudUniforms& uniforms) const;
+	/// EXPERIMENT (not for merge): the map of the clouds' shadow for the water, in a sampler stage; none when the
+	/// clouds are off
+	void BindCloudShadow(const ShaderProgram& program, uint8_t stage) const;
 	/// EXPERIMENT (not for merge): the sea bed past the land's blocks, in the land's pass of the main view
 	void DrawFarSeabed(RenderPass landViewId) const;
 	/// EXPERIMENT (not for merge): the reef's coral and plants, in the land's pass of the main view
@@ -606,6 +622,10 @@ private:
 	mutable std::unique_ptr<UnderwaterWakeField> _wakeField;
 	/// EXPERIMENT (not for merge): the underwater uniforms of this frame, while the view is under the sea
 	mutable std::optional<UnderwaterUniforms> _underwaterFrame;
+	/// EXPERIMENT (not for merge): the volumetric clouds' textures, targets and weather, made when they first show
+	mutable std::unique_ptr<VolumetricCloudsView> _clouds;
+	/// EXPERIMENT (not for merge): the clouds' uniforms of this frame, while the volumetric clouds show
+	mutable std::optional<volumetric_clouds::CloudUniforms> _cloudsFrame;
 	/// EXPERIMENT (not for merge): whether the scene's views are bound to the underwater target
 	mutable bool _underwaterBound {false};
 	/// The colours the sky's dome is drawn in this frame

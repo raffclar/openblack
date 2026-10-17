@@ -182,6 +182,8 @@ enum class Effect : uint8_t
 	Sediment,
 	/// Not an effect: the water is drawn as a flat colour where it shows, to compare it with the original sea
 	WaterMask,
+	/// The volumetric clouds in place of the original game's clouds (the original clouds show when it is off)
+	Clouds,
 	_Count
 };
 

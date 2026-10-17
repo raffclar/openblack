@@ -90,6 +90,7 @@ underwater::WaterLight SkyLights(const glm::vec3& eye)
 bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 {
 	_underwaterFrame.reset();
+	_cloudsFrame.reset();
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	const bool enabled = Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled();
 	const auto* postProgram = _shaderManager->GetShader("UnderwaterPost");
@@ -191,6 +192,8 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	desc.frameBuffer = &_underwater->Target(size);
 	desc.drawWater = false;
 	_underwaterBound = true;
+	// The volumetric clouds of this frame, before the land's shade reads their shadow
+	BeginClouds(desc);
 	return true;
 }
 
@@ -286,6 +289,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	}
 	BindWakeField(*post);
 	BindUnderwaterDepth(*post, 9, 10);
+	BindCloudShadow(*post, 11);
 	// The post pass also writes the depth of the scene and of the water's surface, so that what blends over the water
 	// after it is hidden by the land, the models and the water
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_ALWAYS);
@@ -298,6 +302,8 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	bgfx::setViewClear(overView, BGFX_CLEAR_NONE);
 	_shaderManager->SetViewOrder(RenderPass::UnderwaterOver, ViewOrder::DepthDescending);
 	_shaderManager->SetCamera(RenderPass::UnderwaterOver, *desc.camera);
+	// The volumetric clouds, over the water or into the scene under it
+	DrawClouds(desc, target);
 
 	// The motes in the water, added over it and hidden by the scene in front of them
 	if (const auto* motes = _shaderManager->GetShader("UnderwaterMotes");
@@ -469,6 +475,8 @@ void Renderer::DrawUnderwaterEnvironment(const DrawSceneDesc& desc) const
 	faceDesc.drawHand = false;
 	faceDesc.smallBumpMapStrength = 0.0f;
 	DrawPass(faceDesc);
+	// The clouds in the face's sky, which the face of the scene copies
+	DrawCloudsInEnvironment(centre);
 
 	frame.environment = {centre, 0.0f};
 	frame.sea.w = _underwater->EnvironmentReady() ? 1.0f : 0.0f;

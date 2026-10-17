@@ -881,7 +881,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			Locator::time::value().SetPaused(!IsPaused());
 			break;
 		// EXPERIMENT (not for merge): F9 puts the camera under the sea by the shore of the first land; shift and F9
-		// turn the experiment's water on or off; control and F9 turn off its effects one at a time, to measure them
+		// turn the experiment's water on or off; control and F9 turn off its effects one at a time, to measure them;
+		// alt and F9 change the cover of the volumetric clouds
 		case SDLK_F9:
 			if (Locator::underwaterSystem::has_value())
 			{
@@ -893,6 +894,11 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				else if ((event.key.keysym.mod & KMOD_CTRL) != 0)
 				{
 					underwater.CycleEffectOff();
+				}
+				else if ((event.key.keysym.mod & KMOD_ALT) != 0)
+				{
+					// The next debug choice of the volumetric clouds' cover
+					underwater.CycleCloudCover();
 				}
 				else if (underwater.IsEnabled())
 				{

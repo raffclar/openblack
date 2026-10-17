@@ -640,6 +640,7 @@ Renderer::~Renderer() noexcept
 	}
 	_underwater.reset();
 	_wakeField.reset();
+	_clouds.reset();
 	_shaderManager.reset();
 	bgfx::frame();
 	bgfx::shutdown();
@@ -2800,6 +2801,11 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	desc.entities.Each<const Mist, const ecs::components::Transform>([&](entt::entity entity, const Mist& mist,
 	                                                                     const ecs::components::Transform& transform) {
 		auto colour = mist.colour;
+		// EXPERIMENT (not for merge): the volumetric clouds take the place of the sky's clouds and the storms' clouds
+		if (VolumetricCloudsShown() && desc.entities.AnyOf<ecs::components::Cloud, ecs::components::StormCloud>(entity))
+		{
+			return;
+		}
 		if (desc.entities.AnyOf<ecs::components::Cloud>(entity))
 		{
 			if (!cloudsShown)
@@ -4036,7 +4042,21 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 	// The clouds' shadows: each of the 40 by 40 cells under a cloud, from its corner, takes the darker of its luminosity
 	// and the shadow's, by the cloud's alpha
 	const auto shadowId = entt::hashed_string("raw/sclouds");
-	if (detail_level::CloudShadows(Locator::config::value().detailLevel) && textures.Contains(shadowId.value()))
+	// EXPERIMENT (not for merge): the volumetric clouds' shadow takes the place of the sky's clouds' and the storms'
+	// shadows. The map of the shadow is in world units round the eye; a texel's middle falls on each cell's corner.
+	if (VolumetricCloudsShown() && _clouds != nullptr)
+	{
+		const auto& area = _cloudsFrame->shadow;
+		const glm::vec2 from = glm::vec2(area.x, area.y) / LandIslandInterface::k_CellSize - firstCell + 0.5f;
+		const glm::vec2 to = from + area.z / LandIslandInterface::k_CellSize;
+		const glm::vec4 u_landShade {0.0f, 255.0f, 0.0f, 0.0f};
+		shadeProgram.SetTextureSampler("s_texture", 0, _clouds->Shadow());
+		shadeProgram.SetUniformValue("u_landShade", &u_landShade);
+		submitQuad(shadeView, shadeProgram, from, to, glm::vec2(0.0f), glm::vec2(1.0f),
+		           BGFX_STATE_WRITE_R | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
+		               BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN));
+	}
+	else if (detail_level::CloudShadows(Locator::config::value().detailLevel) && textures.Contains(shadowId.value()))
 	{
 		const auto shadow = textures.Handle(shadowId.value());
 		constexpr float k_ShadowCells = 40.0f;
@@ -4065,7 +4085,8 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 
 	// A storm with clouds of its own darkens the land under it by its shade and strength, its shadow centred on it
 	const auto stormShadowId = entt::hashed_string("raw/sstorm");
-	if (detail_level::CloudShadows(Locator::config::value().detailLevel) && textures.Contains(stormShadowId.value()))
+	if (!VolumetricCloudsShown() && detail_level::CloudShadows(Locator::config::value().detailLevel) &&
+	    textures.Contains(stormShadowId.value()))
 	{
 		const auto shadow = textures.Handle(stormShadowId.value());
 		constexpr auto k_ShadowCells = static_cast<float>(storm_clouds::k_ShadowCells);

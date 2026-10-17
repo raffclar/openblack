@@ -1068,3 +1068,7 @@ target_link_libraries(test_underwater PRIVATE lnd)
 openblack_setup_and_add_test(test_underwater_wake graphics/test_underwater_wake.cpp)
 # EXPERIMENT (not for merge): the foam that builds up on the water and the silt in it
 openblack_setup_and_add_test(test_underwater_foam graphics/test_underwater_foam.cpp)
+# EXPERIMENT (not for merge): the volumetric clouds' noise, weather and light
+openblack_setup_and_add_test(
+  test_volumetric_clouds graphics/test_volumetric_clouds.cpp
+)

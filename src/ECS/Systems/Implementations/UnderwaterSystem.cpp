@@ -355,6 +355,15 @@ void UnderwaterSystem::CycleEffectOff()
 	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: effect {} turned off (0 is none)", next);
 }
 
+void UnderwaterSystem::CycleCloudCover()
+{
+	// The weather's own cover, then clear, scattered, broken and overcast (volumetric_clouds::CoverChoice)
+	constexpr uint8_t k_Choices = 5;
+	_cloudCover = static_cast<uint8_t>((_cloudCover + 1) % k_Choices);
+	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: cloud cover choice {} (0 is the weather's)",
+	                   _cloudCover);
+}
+
 void UnderwaterSystem::LoadSand()
 {
 	// The coral atlas, with its alpha, through the texture cache
