@@ -69,6 +69,9 @@ struct DrawnHeadings
 /// The model's turn for a heading, the inverse of HeadingOf
 [[nodiscard]] glm::mat3 RotationOf(float heading);
 
+/// The ordinary drawn turn, in radians a millisecond. The game holds the float 0.003 as a double
+inline constexpr double k_TurnPerMillisecond = static_cast<double>(0.003f);
+
 /// The milliseconds over which a villager drawn in high detail changes from one clip to the next
 inline constexpr int32_t k_ClipBlendMilliseconds = 300;
 

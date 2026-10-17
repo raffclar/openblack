@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
+#include <bit>
 #include <numbers>
 
 #include <glm/gtx/euler_angles.hpp>
@@ -69,6 +72,12 @@ TEST(VillagerDraw, ASmallTurnIsDrawnAtThreeRadiansASecond)
 	EXPECT_NEAR(villager_draw::EasedHeading(0.0f, -1.0f, 10), -0.03f, 1e-6f);
 	// Within the step it faces its way at once
 	EXPECT_FLOAT_EQ(villager_draw::EasedHeading(0.0f, 0.02f, 10), 0.02f);
+}
+
+TEST(VillagerDraw, TheTurnRateIsTheGameDouble)
+{
+	// The game holds the float 0.003 widened to a double, not the double 0.003
+	EXPECT_EQ(std::bit_cast<uint64_t>(villager_draw::k_TurnPerMillisecond), 0x3F689374C0000000ull);
 }
 
 TEST(VillagerDraw, ABigTurnIsDrawnQuicker)
