@@ -62,6 +62,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
+#include "ECS/SaveGameFiles.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -141,19 +142,7 @@ bool WriteFile(const std::filesystem::path& relativeFolder, std::string_view fil
 
 std::optional<std::vector<uint8_t>> ReadFile(const std::filesystem::path& path)
 {
-	if (!Locator::filesystem::has_value() || !Locator::filesystem::value().Exists(path))
-	{
-		return std::nullopt;
-	}
-	try
-	{
-		return Locator::filesystem::value().ReadAll(path);
-	}
-	catch (const std::exception& error)
-	{
-		SPDLOG_LOGGER_WARN(Log(), "The game could not read {}: {}", path.generic_string(), error.what());
-		return std::nullopt;
-	}
+	return ecs::save_files::ReadFile(path);
 }
 
 uint32_t LandNumber()

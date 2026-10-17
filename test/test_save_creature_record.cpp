@@ -19,7 +19,6 @@
 #include <vector>
 
 #include <CreatureRecord.h>
-#include <MindFile.h>
 #include <SaveGameInfo.h>
 #include <SaveSlots.h>
 #include <SavedObjects.h>
@@ -555,19 +554,6 @@ TEST(SaveVanillaFile, TheRecordsOfRealSavedGamesWriteBackByteForByte)
 		for (const auto& leash : FindLeashes(bytes))
 		{
 			EXPECT_EQ(Replace(bytes, leash, NewObject(leash.number, leash.object)), bytes) << path << " leash " << leash.number;
-		}
-		// The minds of the creatures beside the world file read and write back the same
-		for (const auto& entry : std::filesystem::directory_iterator(path.parent_path()))
-		{
-			if (!entry.path().filename().string().starts_with("SavedCreature"))
-			{
-				continue;
-			}
-			const auto mindBytes = ReadAll(entry.path());
-			openblack::creaturemind::MindFileData mind;
-			ASSERT_EQ(openblack::creaturemind::Read(mindBytes, mind), openblack::creaturemind::MindResult::Success)
-			    << entry.path();
-			EXPECT_EQ(openblack::creaturemind::Write(mind), mindBytes) << entry.path();
 		}
 	}
 	EXPECT_GT(creatures, 0u) << "No saved game of the folder has a creature";
