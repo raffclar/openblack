@@ -84,8 +84,6 @@ struct ExplosionRules
 [[nodiscard]] float WaveRange(float maxDistance, float tribalPower);
 /// Whether the wave's front has reached an object, by its edge
 [[nodiscard]] bool Reached(float front, const WaveTarget& target, const glm::vec3& centre);
-/// Where the straight way from one point to another first enters a sphere; its end when it never does
-[[nodiscard]] glm::vec3 EntersSphere(const glm::vec3& from, const glm::vec3& to, const glm::vec3& centre, float radius);
 /// Where the pieces fly out from
 [[nodiscard]] glm::vec3 FragmentOrigin(const glm::vec3& centre);
 /// A piece's velocity: out from the origin at the speed, plus a random part of it, less of it upwards

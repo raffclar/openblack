@@ -27,6 +27,7 @@
 #include "ParticleBlast.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMaths.h"
+#include "ParticleMiracleMaths.h"
 #include "ParticleObjectEffects.h"
 #include "ParticleShields.h"
 #include "Resources/ResourceManager.h"
@@ -260,8 +261,8 @@ private:
 		// reach, and may stop it
 		if (const auto shield = effect.Services().world.FindShield(centre, margin))
 		{
-			const auto top = centre + glm::vec3(0.0f, k_ShieldTestHeight, 0.0f);
-			StrikeShield(*shield, blast::EntersSphere(top, centre, shield->centre, shield->radius + margin));
+			const glm::vec3 top {centre.x, centre.y + k_ShieldTestHeight, centre.z};
+			StrikeShield(*shield, maths::SphereEntry(top, centre, shield->centre, shield->radius, margin));
 			if (!effect.SendSpellEvent({.type = SpellEventInfo::Type::HitSpell,
 			                            .position = centre,
 			                            .velocity = glm::vec3(0.0f),

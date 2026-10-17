@@ -200,14 +200,6 @@ TEST(DustPuff, ABodysGreySmokeDriftsOffFaintlyOverThreeSeconds)
 	EXPECT_EQ(dust_puff::Make({}, 1.0f, [](float a, float) { return a; }).colour, dust_puff::k_Colour);
 }
 
-TEST(Blast, AShieldOverTheBlastIsStruckWhereTheWayDownEntersIt)
-{
-	const auto hit = blast::EntersSphere({0.0f, 200.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 30.0f);
-	EXPECT_NEAR(hit.y, 30.0f, k_Epsilon);
-	// Starting inside, it is struck where the way starts
-	EXPECT_EQ(blast::EntersSphere({0.0f, 1.0f, 0.0f}, glm::vec3(0.0f), glm::vec3(0.0f), 30.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-}
-
 TEST(Blast, BrokenPiecesAreShadedByTheModelLightInTheirOwnFrame)
 {
 	using namespace openblack::model_light;

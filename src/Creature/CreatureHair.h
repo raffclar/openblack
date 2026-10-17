@@ -95,12 +95,14 @@ struct Root
 /// The way a strand grows out of the surface: straight out, against the inward normal, or, for a turned strand, turned
 /// from that by x, y and z angles, combined y, x then z, in the frame of the bones that move its triangle. frame's
 /// columns are that frame's axes, which needn't be at right angles: the direction is taken into the frame by its
-/// inverse, turned there, and taken back out.
+/// inverse, turned there, and taken back out. For a frame that is nearly flat, the inverse keeps the determinant at least
+/// 1e-10 from zero, as the game does.
 [[nodiscard]] glm::vec3 GrowthDirection(const glm::vec3& inwardNormal);
 [[nodiscard]] glm::vec3 GrowthDirection(const glm::vec3& inwardNormal, const glm::mat3& frame, const glm::vec3& angles);
 
 /// The frame a turned strand is turned in, from the rotations of the bones that move its triangle's vertices: each
-/// bone's axes made unit length one by one, added up, and made unit length again. The axes are not set at right angles
+/// bone's axes made unit length one by one, added up, and made unit length again, by the 3D engine's inverse square
+/// root (an axis of no length stays zero). The axes are not set at right angles
 /// to each other, so the frame can be skewed.
 [[nodiscard]] glm::mat3 BoneFrame(std::span<const glm::mat3> bones);
 

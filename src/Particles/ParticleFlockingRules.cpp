@@ -20,6 +20,7 @@
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
 #include "Common/X87Vector.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleFlocking.h"
@@ -170,11 +171,8 @@ public:
 			if (spriteRotation)
 			{
 				// Turned on the screen to face where it flies
-				const auto right = effect.Services().world.CameraRight();
-				const auto up = effect.Services().world.CameraUp();
-				const float angle = std::atan2(-glm::dot(velocity, up), glm::dot(velocity, right)) + k_QuarterTurn;
-				atom->rotation = glm::mat3(glm::vec3(std::cos(angle), 0.0f, -std::sin(angle)), glm::vec3(0.0f, 1.0f, 0.0f),
-				                           glm::vec3(std::sin(angle), 0.0f, std::cos(angle)));
+				atom->rotation =
+				    flocking::SpriteTurn(velocity, effect.Services().world.CameraRight(), effect.Services().world.CameraUp());
 			}
 			else
 			{
@@ -243,29 +241,46 @@ glm::vec3 flocking::LimitedSquaredLength(const glm::vec3& v, float most)
 glm::mat3 flocking::Banking(glm::vec3 velocity, glm::vec3 acceleration, float reducePitchBy, float gravityForBanking)
 {
 	const float across = std::sqrt((velocity.x * velocity.x) + (velocity.z * velocity.z));
-	const float yaw = std::atan2(velocity.z, velocity.x);
-	const float pitch = std::atan2(velocity.y, across) * reducePitchBy;
+	const float yaw = x87::RoundToFloat(x87::Atan2(velocity.z, velocity.x));
+	const float pitch = x87::Mul(x87::Atan2(velocity.y, across), reducePitchBy);
 	const float lateral = across == 0.0f ? 0.0f : ((acceleration.z * velocity.x) - (acceleration.x * velocity.z)) / across;
-	const float bank = gravityForBanking != 0.0f ? std::atan(lateral / gravityForBanking) : 0.0f;
-	// Lying along its heading, then banked, pitched by its climb and turned to its heading
-	const float c0 = std::cos(-k_QuarterTurn);
-	const float s0 = std::sin(-k_QuarterTurn);
-	const float cb = std::cos(bank);
-	const float sb = std::sin(bank);
-	glm::mat3 m(glm::vec3(c0, s0 * sb, s0 * cb), glm::vec3(0.0f, cb, -sb), glm::vec3(-s0, c0 * sb, c0 * cb));
-	const float cp = std::cos(-pitch);
-	const float sp = std::sin(-pitch);
-	const float cy = std::cos(yaw);
-	const float sy = std::sin(yaw);
+	// The game divides by the gravity with no test for zero
+	const double bank = x87::Atan(lateral / gravityForBanking);
+	// Lying along its heading: a quarter turn back about the vertical, with the turn kept as a double
+	const double lying = -static_cast<double>(k_QuarterTurn);
+	const float c0 = x87::RoundToFloat(x87::Cos(lying));
+	const float s0 = x87::RoundToFloat(x87::Sin(lying));
+	// Banked about its length. The game adds and takes away the zero parts of the first turn.
+	const float cb = x87::RoundToFloat(x87::Cos(bank));
+	const double sb = x87::Sin(bank);
+	glm::mat3 m(glm::vec3(c0 - 0.0f, x87::Mul(sb, s0) + 0.0f, (s0 * cb) - 0.0f),
+	            glm::vec3(0.0f, (0.0f * cb) + cb, x87::Sub(0.0f, sb)),
+	            glm::vec3(0.0f - s0, x87::Mul(sb, c0) + 0.0f, (c0 * cb) - 0.0f));
+	// Pitched by its climb, then turned to its heading
+	const float down = -pitch;
+	const float cp = x87::RoundToFloat(x87::Cos(down));
+	const double sp = x87::Sin(down);
+	const double cy = x87::Cos(yaw);
+	const double sy = x87::Sin(yaw);
 	for (int i = 0; i < 3; ++i)
 	{
-		const float x = (m[i].x * cp) + (m[i].y * sp);
-		const float y = (m[i].y * cp) - (m[i].x * sp);
-		m[i].x = (cy * x) - (sy * m[i].z);
-		m[i].z = (sy * x) + (cy * m[i].z);
+		const float x = x87::Mul(sp, m[i].y) + (m[i].x * cp);
+		const float y = (m[i].y * cp) - x87::Mul(sp, m[i].x);
+		m[i].x = x87::Mul(cy, x) - x87::Mul(sy, m[i].z);
+		m[i].z = x87::Mul(cy, m[i].z) + x87::Mul(sy, x);
 		m[i].y = y;
 	}
 	return m;
+}
+
+glm::mat3 flocking::SpriteTurn(glm::vec3 velocity, glm::vec3 right, glm::vec3 up)
+{
+	const float across = x87::Dot<x87::SumOrder::Zyx>(velocity, right);
+	const float along = x87::Dot<x87::SumOrder::Zxy>(velocity, up);
+	const float angle = x87::Add(x87::Atan2(-along, across), k_QuarterTurn);
+	const float c = x87::RoundToFloat(x87::Cos(angle));
+	const float s = x87::RoundToFloat(x87::Sin(angle));
+	return {glm::vec3(c, 0.0f, s), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(-s, 0.0f, c)};
 }
 
 void openblack::particles::RegisterFlockingRules(ParticleClassRegistry& registry)

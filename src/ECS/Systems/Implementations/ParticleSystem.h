@@ -94,6 +94,8 @@ public:
 	[[nodiscard]] std::vector<std::shared_ptr<particles::LightSheet>> LightSheets() const;
 	void AddShield(const std::shared_ptr<particles::ShieldSphere>& shield) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
+	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShieldCrossing(glm::vec3 before, glm::vec3 point,
+	                                                                          float margin) const override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> ShieldOf(const particles::Effect& effect) const override;
 	// What a tornado asks of the world, through the tornado system
 	[[nodiscard]] uint32_t GameTurn() const override;

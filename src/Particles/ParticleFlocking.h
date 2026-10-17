@@ -29,6 +29,9 @@ namespace flocking
 /// The turn of a flying atom: along its heading, pitched by part of its climb and banked into its turn as if gravity
 /// held it, its axes as columns
 [[nodiscard]] glm::mat3 Banking(glm::vec3 velocity, glm::vec3 acceleration, float reducePitchBy, float gravityForBanking);
+/// The turn of a flying atom drawn as a sprite: about the vertical, so that it faces the way it flies on the screen.
+/// Right and up are the camera's.
+[[nodiscard]] glm::mat3 SpriteTurn(glm::vec3 velocity, glm::vec3 right, glm::vec3 up);
 
 /// The way of an offset, one long, and its length, with the squares added in the given order. A zero offset has no
 /// length and stays zero.

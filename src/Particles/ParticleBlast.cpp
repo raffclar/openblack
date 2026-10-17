@@ -62,31 +62,6 @@ bool blast::Reached(float front, const WaveTarget& target, const glm::vec3& cent
 	return reach * reach >= x87::DotZyx(offset, offset);
 }
 
-glm::vec3 blast::EntersSphere(const glm::vec3& from, const glm::vec3& to, const glm::vec3& centre, float radius)
-{
-	const auto along = to - from;
-	const float length = glm::length(along);
-	if (length <= 0.0f)
-	{
-		return to;
-	}
-	const auto direction = along / length;
-	const auto offset = from - centre;
-	const float b = glm::dot(offset, direction);
-	const float c = glm::dot(offset, offset) - radius * radius;
-	if (c <= 0.0f)
-	{
-		return from;
-	}
-	const float discriminant = b * b - c;
-	if (discriminant < 0.0f)
-	{
-		return to;
-	}
-	const float t = -b - std::sqrt(discriminant);
-	return t >= 0.0f && t <= length ? from + direction * t : to;
-}
-
 glm::vec3 blast::FragmentOrigin(const glm::vec3& centre)
 {
 	return centre - glm::vec3(0.0f, k_FragmentDrop, 0.0f);
@@ -96,10 +71,17 @@ glm::vec3 blast::FragmentVelocity(const glm::vec3& piece, const glm::vec3& origi
                                   const glm::vec3& randomUnit)
 {
 	auto out = piece - origin;
-	const float length = glm::length(out);
-	out = length > 0.0f ? out / length * speed : glm::vec3(0.0f);
-	const auto random = randomUnit * (glm::length(out) * randomFactor);
-	return {out.x + random.x, out.y + k_UpwardShare * random.y, out.z + random.z};
+	if (out != glm::vec3(0.0f))
+	{
+		out = x87::Scaled<x87::SumOrder::Zyx>(out, speed);
+	}
+	// The random part is made as long as the speed out times the factor, its squares added z first
+	auto random = randomUnit;
+	if (random != glm::vec3(0.0f))
+	{
+		random = x87::Scaled<x87::SumOrder::Zyx>(random, x87::LengthZyx(out) * randomFactor);
+	}
+	return {random.x + out.x, out.y + (random.y * k_UpwardShare), random.z + out.z};
 }
 
 std::optional<float> blast::MoveFraction(float age, float dt, float start, float stop, bool smoothly)

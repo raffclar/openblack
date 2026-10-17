@@ -16,20 +16,23 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
+
 using namespace openblack::particles;
 
 namespace
 {
 constexpr float k_HalfPi = std::numbers::pi_v<float> / 2.0f;
-/// A launch slower than this (squared) doesn't count as moving
-constexpr float k_StillLaunchSquared = 0.01f;
+/// A launch slower than this (squared) doesn't count as moving. The game keeps it as a double.
+constexpr double k_StillLaunchSquared = 0.01;
 /// A slide slower than this (squared) has no direction of its own, and is made one this long along x
 constexpr float k_StillSlideSquared = 1e-4f;
 constexpr float k_StillSlide = 1e-4f;
 /// A lob whose target is closer than this (squared) across the ground is nudged away
 constexpr float k_TooCloseSquared = 0.1f;
 constexpr float k_TooCloseNudge = 0.1f;
-/// The shortest flight a lob re-solved for its steepest angle takes, squared seconds
+/// The squared flight time a lob re-solved for its steepest angle takes when the steepest angle cannot reach the aim
 constexpr float k_ShortestFlightSquared = 0.1f;
 
 glm::vec3 NormaliseOrZero(glm::vec3 v)
@@ -41,10 +44,19 @@ glm::vec3 NormaliseOrZero(glm::vec3 v)
 
 glm::vec3 maths::LiftDirection(glm::vec3 direction, float lift)
 {
-	const float yaw = std::atan2(direction.z, direction.x);
-	const float pitch = std::clamp(
-	    std::atan2(direction.y, std::sqrt(direction.x * direction.x + direction.z * direction.z)) + lift, -k_HalfPi, k_HalfPi);
-	return {std::cos(yaw) * std::cos(pitch), std::sin(pitch), std::sin(yaw) * std::cos(pitch)};
+	// The heading stays wide; the climb is rounded when the lift is added
+	const double yaw = x87::Atan2(direction.z, direction.x);
+	float pitch = x87::Add(x87::Atan2(direction.y, std::sqrt((direction.x * direction.x) + (direction.z * direction.z))), lift);
+	if (!(pitch > -k_HalfPi))
+	{
+		pitch = -k_HalfPi;
+	}
+	else if (!(pitch < k_HalfPi))
+	{
+		pitch = k_HalfPi;
+	}
+	const float cosPitch = x87::RoundToFloat(x87::Cos(pitch));
+	return {x87::Mul(x87::Cos(yaw), cosPitch), x87::RoundToFloat(x87::Sin(pitch)), x87::Mul(x87::Sin(yaw), cosPitch)};
 }
 
 float maths::ThrowSpeedFromHand(float handSpeed, const ThrowSpeeds& speeds)
@@ -68,7 +80,8 @@ maths::Launch maths::HandThrow(glm::vec3 handVelocity, float lift, const ThrowSp
 	{
 		return {};
 	}
-	return {.direction = LiftDirection(handVelocity / handSpeed, lift), .speed = ThrowSpeedFromHand(handSpeed, speeds)};
+	// The game takes the heading and climb of the hand's movement itself, not of its unit direction
+	return {.direction = LiftDirection(handVelocity, lift), .speed = ThrowSpeedFromHand(handSpeed, speeds)};
 }
 
 maths::Launch maths::Lob(glm::vec3 from, glm::vec3 target, float gravity)
@@ -81,41 +94,76 @@ maths::Launch maths::Lob(glm::vec3 from, glm::vec3 target, float gravity)
 	const glm::vec3 aim = from + (target - from) * k_LobAimShare;
 	const glm::vec3 delta = aim - from;
 	const float distance = std::sqrt(delta.x * delta.x + delta.z * delta.z);
-	float seconds = std::max(distance * k_LobSecondsPerMetre, k_LobMinimumSeconds);
-	// Starting at v, gravity brings it down by half g t squared: it reaches the aim after t
-	const auto velocityFor = [&](float t) { return delta / t + glm::vec3(0.0f, gravity * 0.5f * t, 0.0f); };
-	glm::vec3 v = velocityFor(seconds);
-	const float horizontalSquared = v.x * v.x + v.z * v.z;
-	const float steepest = std::tan(k_LobSteepest);
-	if (horizontalSquared + v.y * v.y > k_StillLaunchSquared && v.y / std::sqrt(horizontalSquared) > steepest)
+	float seconds = distance * k_LobSecondsPerMetre;
+	if (!(seconds >= k_LobMinimumSeconds))
 	{
-		// The flight that leaves at the steepest angle instead
-		const float flightSquared = std::max((delta.y - distance * steepest) * (-2.0f / gravity), 0.0f);
-		seconds = std::sqrt(flightSquared > 0.0f ? flightSquared : k_ShortestFlightSquared);
-		v = velocityFor(seconds);
+		seconds = k_LobMinimumSeconds;
 	}
-	const float speed = glm::length(v);
-	return {.direction = speed > 0.0f ? v / speed : glm::vec3(0.0f), .speed = speed};
+	// Starting at v, gravity brings it down by half g t squared: it reaches the aim after t. The game multiplies by one
+	// over the time.
+	const float fall = -gravity;
+	const auto velocityFor = [&](float t) {
+		const float share = 1.0f / t;
+		return delta * share - glm::vec3(0.0f, fall * (t * 0.5f), 0.0f);
+	};
+	glm::vec3 v = velocityFor(seconds);
+	const float horizontalSquared = v.z * v.z + v.x * v.x;
+	if (x87::Greater(v.y * v.y + horizontalSquared, k_StillLaunchSquared))
+	{
+		const double steepest = x87::Tan(k_LobSteepest);
+		if (x87::Greater(v.y / std::sqrt(horizontalSquared), steepest))
+		{
+			// The flight that leaves at the steepest angle instead
+			float flightSquared = (delta.y - x87::Mul(distance, steepest)) * (-2.0f / gravity);
+			if (!(flightSquared >= 0.0f))
+			{
+				flightSquared = k_ShortestFlightSquared;
+			}
+			seconds = std::sqrt(flightSquared);
+			v = velocityFor(seconds);
+		}
+	}
+	if (v.x == 0.0f && v.y == 0.0f && v.z == 0.0f)
+	{
+		return {.direction = v, .speed = 0.0f};
+	}
+	const float speed = std::sqrt(x87::Dot<x87::SumOrder::Zxy>(v, v));
+	const float share = 1.0f / speed;
+	return {.direction = v * share, .speed = speed};
 }
 
 glm::vec3 maths::BounceOffSlope(glm::vec3 velocity, glm::vec3 normal, float groundDrag, float dt, float horizontalBounce,
                                 float verticalBounce)
 {
-	const float into = glm::dot(velocity, normal);
-	if (into >= 0.0f)
+	const float into = x87::Dot<x87::SumOrder::Zyx>(velocity, normal);
+	if (!(into < 0.0f))
 	{
 		return velocity;
 	}
 	const glm::vec3 normalPart = normal * into;
 	glm::vec3 slide = velocity - normalPart;
 	// A slide too small to have a way is made a tiny one along x
-	if (glm::dot(slide, slide) < k_StillSlideSquared)
+	glm::vec3 slideDirection = slide;
+	if (x87::Dot<x87::SumOrder::Zyx>(slide, slide) < k_StillSlideSquared)
 	{
-		slide = glm::vec3(k_StillSlide, 0.0f, 0.0f);
+		slideDirection = glm::vec3(k_StillSlide, 0.0f, 0.0f);
 	}
-	const float slideSpeed = glm::length(slide);
-	const glm::vec3 slideDirection = slide / slideSpeed;
-	slide -= slideDirection * std::clamp(dt * groundDrag, 0.0f, slideSpeed);
+	float slideSpeed = 0.0f;
+	if (slideDirection.x != 0.0f || slideDirection.y != 0.0f || slideDirection.z != 0.0f)
+	{
+		slideSpeed = std::sqrt(x87::Dot<x87::SumOrder::Zyx>(slideDirection, slideDirection));
+		slideDirection *= 1.0f / slideSpeed;
+	}
+	float drag = dt * groundDrag;
+	if (!(drag > 0.0f))
+	{
+		drag = 0.0f;
+	}
+	else if (!(drag < slideSpeed))
+	{
+		drag = slideSpeed;
+	}
+	slide -= slideDirection * drag;
 	return slide * horizontalBounce - normalPart * verticalBounce;
 }
 
@@ -165,39 +213,63 @@ float maths::ForkJointScale(float scale, int depth, float t)
 bool maths::InsideSphere(glm::vec3 point, glm::vec3 centre, float radius, float margin)
 {
 	const glm::vec3 d = point - centre;
-	const float r = radius + margin;
-	return glm::dot(d, d) < r * r;
+	const float r = margin + radius;
+	return r * r > x87::Dot<x87::SumOrder::Zyx>(d, d);
 }
 
 glm::vec3 maths::SphereEntry(glm::vec3 from, glm::vec3 to, glm::vec3 centre, float radius, float margin)
 {
-	if (InsideSphere(from, centre, radius, margin))
+	// Make the way one long, unless it has no length
+	glm::vec3 direction = to - from;
+	float length = 0.0f;
+	if (direction.x != 0.0f || direction.y != 0.0f || direction.z != 0.0f)
 	{
+		length = std::sqrt(x87::Dot<x87::SumOrder::Zxy>(direction, direction));
+		const float share = 1.0f / length;
+		direction *= share;
+	}
+	const glm::vec3 w = from - centre;
+	// The quadratic of the line and the sphere. The game multiplies by the squared length of the direction where the
+	// formula divides by it. The direction is one long, so the two are nearly the same.
+	const float a = x87::Dot<x87::SumOrder::Zxy>(direction, direction);
+	const float b = x87::Dot<x87::SumOrder::Zxy>(w, direction) * 2.0f;
+	const float r = margin + radius;
+	const float c = x87::Dot<x87::SumOrder::Zyx>(w, w) - r * r;
+	const float disc = b * b - c * a * 4.0f;
+	if (!(disc >= 0.0f))
+	{
+		return to;
+	}
+	const float root = std::sqrt(disc);
+	const float near = (-b - root) * a * 0.5f;
+	const float far = (root - b) * a * 0.5f;
+	if (!(far >= 0.0f) || !(length >= near))
+	{
+		return to;
+	}
+	if (near < 0.0f)
+	{
+		// The start is inside the sphere
 		return from;
 	}
-	const glm::vec3 way = to - from;
-	const float length = glm::length(way);
-	if (length <= 0.0f)
+	if (near > 0.0f && far != length)
 	{
-		return to;
+		return direction * near + from;
 	}
-	const glm::vec3 direction = way / length;
-	const glm::vec3 w = from - centre;
-	const float r = radius + margin;
-	const float b = glm::dot(w, direction);
-	const float disc = b * b - (glm::dot(w, w) - r * r);
-	if (disc < 0.0f)
-	{
-		return to;
-	}
-	const float t = -b - std::sqrt(disc);
-	return t >= 0.0f && t <= length ? from + direction * t : to;
+	return to;
 }
 
 glm::vec3 maths::DeflectOffSphere(glm::vec3 point, glm::vec3 centre, glm::vec3 velocity)
 {
-	const glm::vec3 n = NormaliseOrZero(point - centre);
-	return velocity - 2.0f * glm::dot(velocity, n) * n;
+	glm::vec3 n = point - centre;
+	if (n.x != 0.0f || n.y != 0.0f || n.z != 0.0f)
+	{
+		const float share = 1.0f / std::sqrt(x87::Dot<x87::SumOrder::Zyx>(n, n));
+		n *= share;
+	}
+	const glm::vec3 twice = n + n;
+	const float along = x87::Dot<x87::SumOrder::Xzy>(n, velocity);
+	return velocity - twice * along;
 }
 
 bool openblack::particles::maths::RushedPastCamera(glm::vec3 before, glm::vec3 now, glm::vec3 velocity, glm::vec3 camera)
@@ -207,6 +279,6 @@ bool openblack::particles::maths::RushedPastCamera(glm::vec3 before, glm::vec3 n
 	const auto nowAway = now - camera;
 	const auto beforeAway = before - camera;
 	constexpr float k_Reach = k_PassingDistance * k_PassingDistance;
-	return glm::dot(nowAway, nowAway) < k_Reach && glm::dot(beforeAway, beforeAway) > k_Reach &&
-	       glm::dot(velocity, velocity) > k_PassingSpeed * k_PassingSpeed;
+	return x87::DotZyx(nowAway, nowAway) < k_Reach && x87::DotZyx(beforeAway, beforeAway) > k_Reach &&
+	       x87::DotZyx(velocity, velocity) > k_PassingSpeed * k_PassingSpeed;
 }

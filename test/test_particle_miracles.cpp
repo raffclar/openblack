@@ -87,12 +87,18 @@ public:
 	{
 		for (const auto& weak : shields)
 		{
-			if (auto shield = weak.lock(); shield && glm::distance(point, shield->centre) < shield->radius + margin)
+			if (auto shield = weak.lock(); shield && maths::InsideSphere(point, shield->centre, shield->radius, margin))
 			{
 				return shield;
 			}
 		}
 		return nullptr;
+	}
+	[[nodiscard]] std::shared_ptr<ShieldSphere> FindShieldCrossing(glm::vec3 before, glm::vec3 point,
+	                                                               float margin) const override
+	{
+		const auto shield = FindShield(point, margin);
+		return shield && !maths::InsideSphere(before, shield->centre, shield->radius, margin) ? shield : nullptr;
 	}
 	[[nodiscard]] std::shared_ptr<ShieldSphere> ShieldOf(const Effect& effect) const override
 	{
