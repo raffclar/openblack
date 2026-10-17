@@ -78,6 +78,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureGestureDrawing.h"
+#include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -3556,6 +3557,11 @@ void CreatureMindSystem::MoveToStage(entt::entity creature, uint32_t stage)
 	else
 	{
 		mind->desiresPhase.reset();
+	}
+	// The help clears a value that it keeps about the creature. A creature without help memory has the value 0 already.
+	if (auto* help = registry.TryGet<CreatureHelpMemory>(creature))
+	{
+		creature_help::MovedToStage(help->memory);
 	}
 	Abandon(*mind);
 }

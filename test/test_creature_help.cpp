@@ -307,3 +307,15 @@ TEST(CreatureHelp, FeedbackLessonsTellOfTheOpinionOrTheSource)
 	EXPECT_EQ(FeedbackLesson(-0.4f, false, Desire::Hunger, 12).kind, Kind::LessonDecreaseSource);
 	EXPECT_EQ(Text(Kind::LessonDecreaseSource, 12), 535u);
 }
+
+TEST(CreatureHelp, AMoveToAStageClearsTheValueThatTheHelpKeepsForIt)
+{
+	Memory memory;
+	EXPECT_EQ(memory.clearedAtStage, 0u);
+	memory.clearedAtStage = 7;
+	memory.handOver = 0.5f;
+	MovedToStage(memory);
+	EXPECT_EQ(memory.clearedAtStage, 0u);
+	// Nothing else changes
+	EXPECT_EQ(memory.handOver, 0.5f);
+}

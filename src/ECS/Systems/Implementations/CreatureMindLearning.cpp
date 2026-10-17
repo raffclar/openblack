@@ -1121,7 +1121,8 @@ std::optional<creature_tree::Belief> CreatureMindSystem::BeliefAbout(entt::entit
 std::optional<creature_tree::Belief> mind_detail::ActedOnBeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                                   entt::entity self)
 {
-	// The temple here is one thing. Acted on, it stands for its heart: a part of the temple of the temple's player.
+	// The temple here is one thing. Acted on, it stands for its heart: a part of the temple of the temple's player. The
+	// heart is at the exact map position where the game made it, which the temple keeps.
 	if (const auto* temple = registry.Valid(entity) ? registry.TryGet<const Temple>(entity) : nullptr)
 	{
 		const auto* me = registry.TryGet<const Creature>(self);

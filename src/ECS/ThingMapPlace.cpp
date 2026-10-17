@@ -14,6 +14,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/MapPlace.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
@@ -26,6 +27,7 @@ map_coords::MapCoords thing_map_place::Of(const Registry& registry, entt::entity
 	using components::Animal;
 	using components::Firefly;
 	using components::Flock;
+	using components::MapPlace;
 	using components::Transform;
 	using components::WallHug;
 	if (const auto* flock = registry.TryGet<const Flock>(thing))
@@ -51,7 +53,44 @@ map_coords::MapCoords thing_map_place::Of(const Registry& registry, entt::entity
 	{
 		return {.x = walk->position.x, .z = walk->position.y};
 	}
+	// A thing that the game put at an exact map position keeps it while it stays there
+	if (const auto* kept = registry.TryGet<const MapPlace>(thing); kept != nullptr && kept->placedAt == metres)
+	{
+		return {.x = kept->place.x, .z = kept->place.z};
+	}
 	return {.x = map_coords::ToFixed(metres.x), .z = map_coords::ToFixed(metres.y)};
+}
+
+void thing_map_place::Keep(Registry& registry, entt::entity thing, const map_coords::MapCoords& place)
+{
+	const auto* at = registry.TryGet<const components::Transform>(thing);
+	if (at == nullptr)
+	{
+		return;
+	}
+	const auto metres = glm::xz(at->position);
+	registry.AssignOrReplace<components::MapPlace>(
+	    thing, components::MapPlace {.place = {.x = place.x, .z = place.z}, .placedAt = metres});
+	if (auto* walk = registry.TryGet<components::WallHug>(thing))
+	{
+		walk->position = {place.x, place.z};
+		walk->placedAt = metres;
+	}
+	if (auto* animal = registry.TryGet<components::Animal>(thing))
+	{
+		animal->move.position = {place.x, place.z};
+	}
+}
+
+void thing_map_place::Put(Registry& registry, entt::entity thing, const map_coords::MapCoords& place, float height)
+{
+	auto* at = registry.TryGet<components::Transform>(thing);
+	if (at == nullptr)
+	{
+		return;
+	}
+	at->position = {map_coords::ToMetres(place.x), height, map_coords::ToMetres(place.z)};
+	Keep(registry, thing, place);
 }
 
 } // namespace openblack::ecs
