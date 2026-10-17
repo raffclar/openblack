@@ -20,19 +20,24 @@
 #include <vector>
 
 #include "CreatureRecord.h"
+#include "SavedObjects.h"
 
-// openblack's own world file of a saved game. The original game writes the world as one stream of objects without
-// lengths, which openblack does not read or write (deviation 46). openblack writes a version and then a list of
-// blocks. Each block has a name of four letters and a length, so that a reader can skip a block that it does not know.
+// openblack's own world file of a saved game. The original game writes the whole world as one stream of objects
+// without lengths. openblack does not write the whole world yet (deviation 46). openblack writes a version and then a
+// list of blocks. Each block has a name of four letters and a length, so that a reader can skip a block that it does
+// not know. The creatures and their leashes go in one block as a stream in the game's layout.
 namespace openblack::gamesave
 {
 
 inline constexpr std::array<char, 4> k_WorldMagic {'O', 'B', 'S', 'V'};
-inline constexpr uint32_t k_WorldVersion = 1;
+inline constexpr uint32_t k_WorldVersion = 2;
 
 using Tag = std::array<char, 4>;
 inline constexpr Tag k_GameTag {'G', 'A', 'M', 'E'};
-inline constexpr Tag k_CreatureTag {'C', 'R', 'E', 'A'};
+/// The records of the creatures and of their leashes, as a stream in the game's layout
+inline constexpr Tag k_ObjectsTag {'O', 'B', 'J', 'S'};
+/// The keys of the numbers in the stream, and the numbers that have no record
+inline constexpr Tag k_KeysTag {'K', 'E', 'Y', 'S'};
 
 struct Chunk
 {
@@ -72,25 +77,32 @@ struct GameChunk
 [[nodiscard]] Chunk ToChunk(const GameChunk& game);
 [[nodiscard]] std::optional<GameChunk> ReadGameChunk(std::span<const uint8_t> bytes);
 
-/// A creature's block: its own reference, where it is, the creature part of its record in the original layout, and its
-/// player's leash on it
-struct CreatureChunk
+/// A creature that the world file keeps: its whole record, its player's leash on it, and the step of its agenda
+struct SavedCreature
 {
-	/// The reference that other blocks use for this creature
-	Ref self {0};
-	/// The parts that every object writes and that openblack keeps for the creature
-	Point position {};
-	float heading {0.0f};
-	float life {1.0f};
-	CreatureRecord record;
-	std::optional<LeashRecord> leash;
+	/// The key of the creature in the stream: an entity of openblack, or a number of a file of the game
+	ObjectKey key {k_NoObject};
+	CreatureObject creature;
+	std::optional<LeashStatusObject> leash;
 	/// The step of its agenda that it does, for the plan that the record keeps
 	uint32_t agendaStep {0};
+	/// Where it faces, which openblack keeps beside the record
+	float heading {0.0f};
+	/// The number that a file of the game gave the creature when openblack loaded it from that file, else 0
+	uint32_t vanillaNumber {0};
 
-	bool operator==(const CreatureChunk&) const = default;
+	bool operator==(const SavedCreature&) const = default;
 };
 
-[[nodiscard]] Chunk ToChunk(const CreatureChunk& creature);
-[[nodiscard]] std::optional<CreatureChunk> ReadCreatureChunk(std::span<const uint8_t> bytes);
+/// The key of the leash of the creature with the key
+[[nodiscard]] constexpr ObjectKey LeashKey(ObjectKey creature)
+{
+	return creature | (ObjectKey {1} << 33);
+}
+
+/// The blocks of the creatures: the stream of their records and the keys of its numbers
+[[nodiscard]] std::vector<Chunk> ToChunks(std::span<const SavedCreature> creatures);
+/// The creatures of the file, or nothing when the file has no stream of creatures that reads
+[[nodiscard]] std::optional<std::vector<SavedCreature>> ReadCreatures(const WorldFile& file);
 
 } // namespace openblack::gamesave
