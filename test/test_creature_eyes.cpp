@@ -94,7 +94,7 @@ TEST(CreatureEyes, TheEyeballFacesAwayFromWhereItLooks)
 	EXPECT_NEAR(frame.x.x, -1.0f, k_Tolerance);
 	EXPECT_NEAR(frame.y.y, -1.0f, k_Tolerance);
 	EXPECT_NEAR(frame.z.z, 1.0f, k_Tolerance);
-	const auto matrix = ToMatrix(frame, 0.5f);
+	const auto matrix = ToMatrix(Sized(frame, 0.5f));
 	// The pupil, at -2 along z of the mesh, ends up half that far along -z from the centre
 	const auto pupil = matrix * glm::vec4(0.0f, 0.0f, -2.0f, 1.0f);
 	EXPECT_NEAR(pupil.z, 2.0f, k_Tolerance);
@@ -142,7 +142,7 @@ TEST(CreatureEyes, TurningALidKeepsItsAxesSquare)
 	const auto lid = Turned(EyelidFrame({0, 0, 0}, {0, 0, 1}, {1, 0, 0}, false), 0.7f);
 	EXPECT_NEAR(glm::dot(lid.y, lid.z), 0.0f, k_Tolerance);
 	EXPECT_NEAR(glm::length(lid.y), 1.0f, k_Tolerance);
-	EXPECT_NEAR(LidPitch(lid, EyeballFrame({0, 0, 0}, lid.y)), 1.0f, k_Tolerance);
+	EXPECT_NEAR(LidPitch(lid, Sized(EyeballFrame({0, 0, 0}, lid.y), 0.5f), 0.5f), 1.0f, k_Tolerance);
 }
 
 TEST(CreatureEyes, StoppingWhatItDoesTheLidsOpenByHowRestedItIs)

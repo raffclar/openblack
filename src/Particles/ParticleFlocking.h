@@ -12,6 +12,8 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/X87Vector.h"
+
 // The rules of the flocks the miracles' effects fly, and of the forest miracle's effect: the butterflies or bats circling
 // over the new forest, the flock rule that has them fly together, and the caster's camera following the forest's path
 
@@ -27,6 +29,24 @@ namespace flocking
 /// The turn of a flying atom: along its heading, pitched by part of its climb and banked into its turn as if gravity
 /// held it, its axes as columns
 [[nodiscard]] glm::mat3 Banking(glm::vec3 velocity, glm::vec3 acceleration, float reducePitchBy, float gravityForBanking);
+
+/// The way of an offset, one long, and its length, with the squares added in the given order. A zero offset has no
+/// length and stays zero.
+template <x87::SumOrder Order>
+[[nodiscard]] glm::vec3 Direction(const glm::vec3& offset, float& distance)
+{
+	if (offset == glm::vec3(0.0f))
+	{
+		distance = 0.0f;
+		return offset;
+	}
+	distance = x87::Length<Order>(offset);
+	return offset * (1.0f / distance);
+}
+/// A vector made no longer than most: longer, it is made most long (the squares added z first)
+[[nodiscard]] glm::vec3 LimitedLength(const glm::vec3& v, float most);
+/// The same limit, but tested on the squares of the lengths
+[[nodiscard]] glm::vec3 LimitedSquaredLength(const glm::vec3& v, float most);
 } // namespace flocking
 
 namespace forest_path

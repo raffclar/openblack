@@ -1201,3 +1201,11 @@ openblack_setup_and_add_test(
   test_creature_save_state test_creature_save_state.cpp
 )
 openblack_setup_and_add_test(test_glm_order_2 test_glm_order_2.cpp)
+openblack_setup_and_add_test(
+  test_oracle_glm_order_3 oracle/test_oracle_glm_order_3.cpp
+)
+target_compile_definitions(
+  test_oracle_glm_order_3
+  PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_glm_order_3 test_glm_order_3.cpp)

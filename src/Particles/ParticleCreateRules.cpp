@@ -17,11 +17,13 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleSounds.h"
 
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -226,7 +228,7 @@ protected:
 			const float s = effect.Random(speed);
 			if (direction != glm::vec3(0.0f))
 			{
-				direction = glm::normalize(direction);
+				direction = x87::Scaled<x87::SumOrder::Zyx>(direction);
 			}
 			atom.velocity = direction * s;
 		}
@@ -382,9 +384,9 @@ public:
 		const glm::vec3 parent = collection.parent != nullptr ? effect.GlobalPosition(*collection.parent) : effect.GetOrigin();
 		const glm::vec3 parentVelocity = collection.parent != nullptr ? collection.parent->velocity : glm::vec3(0.0f);
 		glm::vec3 base = parentVelocity * speed;
-		if (glm::dot(base, base) > maxSpeed * maxSpeed && base != glm::vec3(0.0f))
+		if (maxSpeed * maxSpeed < x87::Dot<x87::SumOrder::Xzy>(base, base) && base != glm::vec3(0.0f))
 		{
-			base *= maxSpeed / glm::length(base);
+			base = x87::Scaled<x87::SumOrder::Xzy>(base, maxSpeed);
 		}
 		if (slot.first)
 		{
@@ -402,7 +404,8 @@ public:
 			float amount = dt * rate;
 			if (moving && movingDistance != 0.0f)
 			{
-				float moved = glm::distance(parent, last) * effect.FloatProvider(adjustScale, 1.0f) / movingDistance;
+				float moved =
+				    x87::Distance<x87::SumOrder::Zyx>(parent, last) * effect.FloatProvider(adjustScale, 1.0f) / movingDistance;
 				if (movingMaxRate != 0.0f)
 				{
 					moved = std::min(moved / dt, movingMaxRate) * dt;
