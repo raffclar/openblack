@@ -1134,3 +1134,16 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_draw_window graphics/test_draw_window.cpp)
 openblack_setup_and_add_test(test_creature_web_page test_creature_web_page.cpp)
 target_link_libraries(test_creature_web_page PRIVATE creaturehtml)
+openblack_setup_and_add_test(test_oracle_catch oracle/test_oracle_catch.cpp)
+openblack_setup_and_add_test(test_oracle_sigmoid oracle/test_oracle_sigmoid.cpp)
+openblack_setup_and_add_test(
+  test_oracle_inverse_square_root oracle/test_oracle_inverse_square_root.cpp
+)
+foreach (oracle_test test_oracle_catch test_oracle_sigmoid
+                     test_oracle_inverse_square_root
+)
+  target_compile_definitions(
+    ${oracle_test}
+    PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+  )
+endforeach ()
