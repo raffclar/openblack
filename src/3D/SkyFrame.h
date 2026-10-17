@@ -42,6 +42,9 @@ struct Inputs
 	const LandLightPalette* palette;
 	/// The fog setting: only with it does an overcast dim the sun and moon
 	bool fog;
+	/// EXPERIMENT (not for merge): with the water experiment on, the sun follows a real path over the sky and the moon
+	/// stands on the other side of the sky. Off, the sun and the moon are the original game's.
+	bool solarPath {false};
 };
 
 /// A 0xRRGGBB colour as 0 to 1

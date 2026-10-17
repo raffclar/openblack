@@ -167,12 +167,45 @@ inline constexpr float k_OriginalHue = 0.35f;
 /// A colour's luminance
 [[nodiscard]] float Luminance(glm::vec3 colour);
 
-/// The sun's height in the air's model: the sine of its angle over the horizon at an hour (0 to 24). The original game
-/// keeps its sun low (about 10 degrees at noon) for its picture; the air's light needs a sun that climbs to 60 degrees at
-/// noon, rises at 6 and sets at 18, else the whole day looks like a sunset.
-[[nodiscard]] float AirSunElevation(float hour);
-/// The highest that the sun climbs in the air's model, in degrees
-inline constexpr float k_NoonElevation = 60.0f;
+/// The sun's real path over the island. The model puts the island at a latitude of 40 degrees north on the day of an
+/// equinox, with noon at 12 of script time. The sun comes up in the east at 6, climbs to 50 degrees at noon in the south
+/// and goes down in the west at 18. The original game keeps its sun low in the north west; the noon sun of this model
+/// stands in the same direction across the land.
+inline constexpr float k_LatitudeDegrees = 40.0f;
+/// The angle of the sun north of the equator, in degrees: 0 on the day of an equinox
+inline constexpr float k_DeclinationDegrees = 0.0f;
+/// The directions of the world: north points away from the noon sun, and east is on the right of north
+inline constexpr glm::vec3 k_North {0.70710678f, 0.0f, 0.70710678f};
+inline constexpr glm::vec3 k_East {0.70710678f, 0.0f, -0.70710678f};
+/// The distance of the sun from the middle of the world, as the original game's sun
+inline constexpr float k_SunDistance = 42426.4f;
+/// The distance of the moon from the eye, as the original game's moon at midnight
+inline constexpr float k_MoonDistance = 4100.0f;
+
+/// The direction from the ground towards the sun at an hour of script time (0 to 24), from the latitude, the
+/// declination and the hour angle (15 degrees for each hour from noon)
+[[nodiscard]] glm::vec3 SunTowards(float hour);
+
+/// How strongly the sun shows, 0 to 255, from the sine of its angle over the horizon: none 1 degree under the horizon,
+/// all at 4 degrees over it
+[[nodiscard]] float SunStrength(float elevationSine);
+
+/// The share of the moon in the air's light, from the sine of the sun's angle over the horizon: none until the sun is 2
+/// degrees under the horizon, all when the sun is 8 degrees under it
+[[nodiscard]] float AirMoonShare(float elevationSine);
+
+/// The type of sky (0 night, 1 dusk, 2 day) from the sine of the sun's angle over the horizon, as the light of a real
+/// sky changes:
+/// - night when the sun is 18 degrees or more under the horizon, then towards dusk as the sun comes up to the horizon;
+/// - dusk while the sun is up to 5 degrees over the horizon;
+/// - towards day from 5 to 10 degrees, and day over 10 degrees.
+[[nodiscard]] float SkyTypeFromSun(float elevationSine);
+
+/// The direction of the air's light between the sun and the moon, which stand on the two sides of the sky. The angle
+/// round the horizon and the angle over it go from one to the other in a line, so the light moves through the south.
+/// On the way the light goes down to 10 degrees under the horizon, so the sky shows only a soft glow while it moves.
+/// It does not go across the top of the sky.
+[[nodiscard]] glm::vec3 AirLightTowards(glm::vec3 sun, glm::vec3 moon, float moonShare);
 
 /// The share of a place's own colour that its haze and fog take
 inline constexpr float k_PlaceShare = 0.3f;
