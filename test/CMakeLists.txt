@@ -1225,3 +1225,12 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(
+  test_oracle_creature_heading oracle/test_oracle_creature_heading.cpp
+)
+set_tests_properties(
+  test_oracle_creature_heading
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_game_heading test_game_heading.cpp)
