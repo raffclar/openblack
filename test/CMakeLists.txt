@@ -1131,3 +1131,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_file_load test_creature_file_load.cpp
 )
+openblack_setup_and_add_test(test_draw_window graphics/test_draw_window.cpp)
