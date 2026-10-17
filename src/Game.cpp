@@ -5716,8 +5716,9 @@ void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
 		return;
 	}
 	auto& knocks = Locator::abodeKnockSystem::value();
-	// The houses' read-out of their people runs by the frame
-	knocks.Update(Locator::time::value().GetFrameRealTime());
+	// The houses' read-out of their people runs by the frame's game time, so it stops while the game pauses and
+	// follows the game speed
+	knocks.Update(Locator::time::value().GetFrameGameTime());
 	// A knock while the tap plays doesn't start it over, the hand already being where it knocked
 	if (knocks.TakeHandKnock())
 	{
