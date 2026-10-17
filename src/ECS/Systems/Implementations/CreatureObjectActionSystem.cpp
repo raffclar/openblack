@@ -2608,8 +2608,9 @@ void KnockAbout(ecs::Registry& registry, entt::entity creature, const Creature& 
 		using creature_stomp::Victim;
 		const auto victim = VictimOf(registry, thing);
 		const auto& at = registry.Get<const Transform>(thing);
-		const auto distance = glm::distance(glm::xz(at.position), glm::xz(point));
-		if (!creature_stomp::InReach(victim, distance, sphereRadius, object_measures::TwoDRadius(registry, thing)))
+		const auto ground = glm::xz(at.position) - glm::xz(point);
+		const auto distanceSquared = (ground.x * ground.x) + (ground.y * ground.y);
+		if (!creature_stomp::InReach(victim, distanceSquared, sphereRadius, object_measures::TwoDRadius(registry, thing)))
 		{
 			continue;
 		}

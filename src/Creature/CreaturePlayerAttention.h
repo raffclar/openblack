@@ -101,8 +101,6 @@ void UpdateHandSpeed(HandSpeed& speed, glm::vec3 movement, float turnsPerSecond)
 /// Whether the hand moves, for the look at the hand: its speed is more than 0
 [[nodiscard]] bool IsHandMoving(const HandSpeed& speed);
 
-/// The game angle of a heading direction on the ground, 0 along +x and a quarter turn along +z
-[[nodiscard]] uint16_t GameAngleOf(glm::vec2 direction);
 /// Whether the direction from a creature to a point is near its heading: the two game angles are less than a sixth of a
 /// half turn apart, measured straight and not round the circle; or the point is in the creature's own map cell
 [[nodiscard]] bool IsDirectionClose(const map_coords::MapCoords& creature, const map_coords::MapCoords& point,

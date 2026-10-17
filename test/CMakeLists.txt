@@ -1235,3 +1235,12 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_game_heading test_game_heading.cpp)
 openblack_setup_and_add_test(test_hand_throw_speed test_hand_throw_speed.cpp)
+openblack_setup_and_add_test(test_creature_files_order test_creature_files_order.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_files_order oracle/test_oracle_creature_files_order.cpp
+)
+set_tests_properties(
+  test_oracle_creature_files_order
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

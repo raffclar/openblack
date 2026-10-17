@@ -44,6 +44,7 @@
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureArena.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFizz.h"
@@ -3434,8 +3435,8 @@ void CreatureFightSystem::WoundSkin(entt::entity victim, const glm::vec3& point,
 		return;
 	}
 	// The whole line along the blow counts: the wound goes where it first meets the skin
-	const auto hit =
-	    posed_model::NearestSkinHit(registry, victim, *drawn->first, drawn->second, point, glm::normalize(vector), true);
+	const auto hit = posed_model::NearestSkinHit(registry, victim, *drawn->first, drawn->second, point,
+	                                             x87::Scaled<x87::SumOrder::Zyx>(vector), true);
 	if (!hit.has_value())
 	{
 		return;

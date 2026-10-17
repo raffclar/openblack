@@ -16,6 +16,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::skeletal_animation;
 
@@ -206,9 +208,11 @@ Animation creature_animation::Blend(const Animation& base, const BlendTerm& evil
 
 glm::vec3 creature_animation::BlendMoves(const glm::vec3& from, const glm::vec3& to, float weight)
 {
-	const auto length = glm::length(from) + ((glm::length(to) - glm::length(from)) * weight);
+	// Each length adds the squares from z to x
+	const auto fromLength = x87::LengthZyx(from);
+	const auto length = fromLength + ((x87::LengthZyx(to) - fromLength) * weight);
 	const auto move = from + ((to - from) * weight);
-	return move == glm::vec3(0.0f) ? move : move * (length / glm::length(move));
+	return move == glm::vec3(0.0f) ? move : move * (length / x87::LengthZyx(move));
 }
 
 Animation creature_animation::BlendPair(const Animation& from, const Animation& to, const Animation& stand, float weight)
@@ -306,13 +310,14 @@ std::vector<glm::mat4> creature_animation::BlendRest(std::span<const glm::mat4> 
 
 float creature_animation::BreathPeriod(float size)
 {
-	return k_BreathSecondsAtSizeOne * std::sqrt(std::max(size, 0.0f));
+	// The game divides by the inverse of the square root
+	return k_BreathSecondsAtSizeOne / (1.0f / std::sqrt(std::max(size, 0.0f)));
 }
 
 float creature_animation::WalkBreathPeriod(float size, bool running)
 {
 	const auto atSizeOne = running ? k_RunBreathSecondsAtSizeOne : k_WalkBreathSecondsAtSizeOne;
-	return atSizeOne * std::sqrt(std::max(size, 0.0f));
+	return atSizeOne / (1.0f / std::sqrt(std::max(size, 0.0f)));
 }
 
 float creature_animation::AdvanceBreath(float phase, float seconds, float period)

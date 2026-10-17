@@ -286,7 +286,7 @@ void Scar(entt::entity entity, glm::vec3 from, glm::vec3 groin, uint8_t kind, fl
 		return;
 	}
 	const auto column = creature_marks::scar::Column(Locator::gameRandom::value().GameRand(5), harm);
-	ecs::creature_scars::MarkAlong(entity, from, groin, kind, column);
+	ecs::creature_scars::MarkAlong(entity, from, direction, kind, column);
 }
 
 /// Hurt by an effect out of a fight, a creature is frightened and angered by it, unless its own player applied it, and

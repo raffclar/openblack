@@ -16,6 +16,9 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::creature_tattoo_editor;
 
@@ -156,10 +159,10 @@ std::optional<glm::vec2> creature_tattoo_editor::InTriangle(glm::vec2 point, con
 
 float creature_tattoo_editor::FacingCamera(const std::array<glm::vec3, 3>& corners, glm::vec3 place, glm::vec3 camera)
 {
-	// A direction of no length stays as it is
-	const auto unit = [](glm::vec3 v) { return v == glm::vec3(0.0f) ? v : v * (1.0f / std::sqrt(glm::dot(v, v))); };
+	// A direction of no length stays as it is. The lengths and the dot product add from z to x.
+	const auto unit = [](glm::vec3 v) { return v == glm::vec3(0.0f) ? v : x87::Scaled<x87::SumOrder::Zyx>(v); };
 	const auto normal = glm::cross(corners[2] - corners[0], corners[1] - corners[0]);
-	return glm::dot(unit(normal), unit(place - camera));
+	return x87::DotZyx(unit(normal), unit(place - camera));
 }
 
 Orbit creature_tattoo_editor::CaveView(const glm::vec3& creature, float scale)
@@ -189,10 +192,12 @@ void creature_tattoo_editor::Turn(Orbit& orbit, float milliseconds)
 	const auto step = milliseconds * k_TurnScale;
 	const auto offset = orbit.eye - orbit.focus;
 	const auto angle = orbit.turnSpeed * step;
-	const auto cosine = std::cos(angle);
-	const auto sine = std::sin(angle);
-	const auto across = (cosine * offset.x) - (sine * offset.z);
-	const auto along = (cosine * offset.z) + (sine * offset.x);
+	// The cosine and the sine are rounded to floats, but the turn across uses the FPU's sine before it is rounded
+	const auto cosine = x87::RoundToFloat(x87::Cos(angle));
+	const auto wideSine = x87::Sin(angle);
+	const auto sine = x87::RoundToFloat(wideSine);
+	const auto across = (cosine * offset.x) + x87::Mul(-wideSine, offset.z);
+	const auto along = (sine * offset.x) + (cosine * offset.z);
 	const auto distance = std::sqrt((across * across) + (along * along));
 	const auto wanted = (orbit.tipSpeed * distance * step) + offset.y;
 	auto height = distance * k_LowestTip;
@@ -200,7 +205,7 @@ void creature_tattoo_editor::Turn(Orbit& orbit, float milliseconds)
 	{
 		height = std::min(wanted, distance);
 	}
-	const auto decay = std::exp(step * k_SpeedDecay);
+	const auto decay = x87::Exp(step * k_SpeedDecay);
 	orbit.turnSpeed *= decay;
 	orbit.tipSpeed *= decay;
 	orbit.eye = orbit.focus + glm::vec3(across, height, along);

@@ -56,8 +56,9 @@ struct Sway
 	bool active {false};
 	/// The seconds that the creature lived in its last game turn, which turn a kick's force into speed
 	float turnSeconds {0.0f};
-	/// While the creature turns on the spot, the heading that the turn has reached. The sway leans along this heading.
-	std::optional<GameHeading> turnHeading;
+	/// The heading that the sway leans along: the creature's heading, or while it turns on the spot, the heading that
+	/// the turn has reached. None for a creature that does not walk.
+	std::optional<GameHeading> heading;
 };
 
 /// The seconds that a creature lives in a game turn at a pace. A frozen creature has a pace below 1. The

@@ -13,6 +13,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureLayers.h"
 
@@ -161,13 +162,16 @@ std::vector<Step> creature_mind::RunHome(glm::vec2 home, float height, bool frig
 glm::vec2 creature_mind::TempleStop(glm::vec3 standing, glm::vec3 heart, float heartRadius)
 {
 	const auto offset = heart - standing;
-	const auto length = glm::length(offset);
-	if (!(length > 0.0f))
+	// The length adds the squares of y, x, then z, and the way to the heart uses the same sum
+	const auto squared = x87::Dot<x87::SumOrder::Yxz>(offset, offset);
+	if (!(squared > 0.0f))
 	{
 		return {standing.x, standing.z};
 	}
-	const auto distance = length - (k_TempleStopRoutes * heartRadius * k_HeartRouteShare);
-	const auto stop = standing + ((offset / length) * distance);
+	const float length = std::sqrt(squared);
+	const auto distance = length - ((heartRadius * k_HeartRouteShare) * k_TempleStopRoutes);
+	const auto way = offset * (1.0f / length);
+	const auto stop = standing + (way * distance);
 	return {stop.x, stop.z};
 }
 

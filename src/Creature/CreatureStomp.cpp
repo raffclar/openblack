@@ -16,6 +16,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::creature_stomp;
 
@@ -173,7 +175,8 @@ bool creature_stomp::MovedEnough(const glm::vec3& from, const glm::vec3& to, flo
 {
 	const auto move = to - from;
 	const auto limit = creatureSize * k_MoveShare;
-	return glm::dot(move, move) > limit * limit;
+	// The squares add x, z, then y
+	return x87::Dot<x87::SumOrder::Xzy>(move, move) > limit * limit;
 }
 
 Victim creature_stomp::VictimOf(const VictimFacts& facts)
@@ -197,17 +200,19 @@ Victim creature_stomp::VictimOf(const VictimFacts& facts)
 	return facts.canFly && !facts.immovable ? Victim::Thing : Victim::None;
 }
 
-bool creature_stomp::InReach(Victim victim, float groundDistance, float sphereRadius, float thingRadius)
+bool creature_stomp::InReach(Victim victim, float groundDistanceSquared, float sphereRadius, float thingRadius)
 {
+	// The game compares the squares, with no square root
+	const auto within = [groundDistanceSquared](float reach) { return groundDistanceSquared < reach * reach; };
 	switch (victim)
 	{
 	case Victim::None:
 		return false;
 	case Victim::Building:
-		return groundDistance < sphereRadius + thingRadius;
+		return within(thingRadius + sphereRadius);
 	case Victim::Living:
 	case Victim::Thing:
-		return groundDistance < (sphereRadius * k_KnockReachShare) + thingRadius;
+		return within(thingRadius + (sphereRadius * k_KnockReachShare));
 	}
 	return false;
 }
@@ -219,7 +224,14 @@ glm::vec3 creature_stomp::KnockVelocity(const glm::vec3& move)
 
 Blow creature_stomp::TrampleBlow(const glm::vec3& point, const glm::vec3& move, float sphereRadius)
 {
-	const auto length = glm::length(move);
-	const auto way = length > 0.0f ? move / length : glm::vec3(0.0f);
-	return {.point = point, .velocity = way * k_TrampleBlowSpeed, .reach = sphereRadius};
+	// The length adds the squares of x, z, then y. The speed is the length times the move's scale and share, so a move
+	// of no length gives no speed.
+	if (move == glm::vec3(0.0f))
+	{
+		return {.point = point, .velocity = glm::vec3(0.0f), .reach = sphereRadius};
+	}
+	const float length = x87::Length<x87::SumOrder::Xzy>(move);
+	const auto way = move * (1.0f / length);
+	const auto speed = (length * k_TrampleBlowPerMove) * k_TrampleBlowShare;
+	return {.point = point, .velocity = way * speed, .reach = sphereRadius};
 }

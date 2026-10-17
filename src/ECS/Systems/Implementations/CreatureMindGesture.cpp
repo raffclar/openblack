@@ -26,6 +26,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureGestureDrawing.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Transform.h"
@@ -61,11 +62,12 @@ uint32_t GameTurn()
 glm::vec3 TargetOf(const ecs::Registry& registry, entt::entity creature, const CreatureGestureDrawing& drawing)
 {
 	const auto& transform = registry.Get<const Transform>(creature);
-	// The meshes look back along their z axis: ahead is -z
+	// Its heading, or the way its rotation faces when it does not walk. The meshes look back along their z axis.
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
 	const auto ahead = glm::xz(transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
-	const auto facing = glm::length(ahead) > 0.0f ? glm::normalize(ahead) : glm::vec2(0.0f, -1.0f);
+	const auto heading = walk != nullptr ? walk->heading : GameHeading::Of(ahead.x, ahead.y);
 	const auto point = creature_gesture::SamplePath(drawing.shape, drawing.drawing.drawn);
-	return creature_gesture::HandTarget(mind_detail::HeadPoint(registry, creature), facing,
+	return creature_gesture::HandTarget(mind_detail::HeadPoint(registry, creature), heading,
 	                                    object_measures::TwoDRadius(registry, creature), point);
 }
 

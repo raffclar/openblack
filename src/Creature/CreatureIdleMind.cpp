@@ -18,6 +18,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureEmoteAgendas.h"
 #include "Creature/CreatureLayers.h"
@@ -610,11 +611,12 @@ std::vector<Step> creature_mind::HangAround(const HangAroundPlaces& places, floa
 	};
 	if (lot <= k_HangAroundOutLots)
 	{
-		// The way out from home is away from the temple, and it includes the difference in height
+		// The way out from home is away from the temple, and it includes the difference in height. Its length adds the
+		// squares of z, x, then y.
 		auto away = places.home - temple;
 		if (std::abs(away.x) > k_HangAroundSameSpot || std::abs(away.z) > k_HangAroundSameSpot)
 		{
-			away = glm::normalize(away);
+			away = x87::Scaled<x87::SumOrder::Zxy>(away);
 		}
 		else
 		{
