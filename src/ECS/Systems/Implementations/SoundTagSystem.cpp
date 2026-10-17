@@ -60,6 +60,17 @@ bool IsPlaying(const SoundTag& tag)
 	       audio.GetStatus(tag.emitter) != audio::AudioStatus::Stopped;
 }
 
+/// Removes a tag from its object. A looping sound that plays finishes its loop, and a sound that plays one time
+/// finishes. The audio removes the emitter when the sound stops.
+void LetGo(SoundTag& tag)
+{
+	if (tag.emitter != entt::null && Locator::audio::has_value() && IsPlaying(tag) && tag.loops)
+	{
+		Locator::audio::value().ReleaseEmitterLoop(tag.emitter);
+	}
+	tag.emitter = entt::null;
+}
+
 /// Whether a point is within a sound's reach of the camera, a reach of none meaning anywhere
 bool WithinReach(float reach, const glm::vec3& position, const glm::vec3& camera)
 {
@@ -108,57 +119,76 @@ void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 		return;
 	}
 	auto& audio = Locator::audio::value();
+	auto& registry = Locator::entitiesRegistry::value();
 	const auto& sounds = Locator::resources::value().GetSounds();
 	std::vector<entt::entity> finished;
-	Locator::entitiesRegistry::value().Each<SoundTag, const Transform>(
-	    [&](entt::entity entity, SoundTag& tag, const Transform& transform) {
-		    ++tag.turns;
-		    if (!sounds.Contains(tag.sound))
-		    {
-			    if (tag.point)
-			    {
-				    finished.push_back(entity);
-			    }
-			    return;
-		    }
-		    const auto position = transform.position + tag.offset;
-		    const auto reach = sounds.Handle(tag.sound)->maxDistance;
-		    if (tag.point)
-		    {
-			    if (tag.delayed)
-			    {
-				    // Not heard until the sound has travelled as far as the camera, and then only within its reach
-				    const auto travelled = k_SpeedOfSound * static_cast<float>(tag.turns) * k_TurnSeconds;
-				    const auto offset = position - camera;
-				    if (travelled * travelled < glm::dot(offset, offset))
-				    {
-					    return;
-				    }
-				    StartPointSound(entity, tag, position, camera);
-				    tag.delayed = false;
-				    return;
-			    }
-			    if (!IsPlaying(tag))
-			    {
-				    finished.push_back(entity);
-			    }
-			    return;
-		    }
-		    if (!tag.active || IsPlaying(tag) || !WithinReach(reach, position, camera) || !Heard(tag.sound))
-		    {
-			    return;
-		    }
-		    StopSound(tag);
-		    tag.emitter = audio.CreateEmitter(tag.sound, position, audio::PlayType::Repeat, entity);
-		    if (tag.emitter != entt::null)
-		    {
-			    audio.PlayEmitter(tag.emitter);
-		    }
-	    });
-	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> orphans;
+	registry.Each<SoundTag>([&](entt::entity entity, SoundTag& tag) {
+		++tag.turns;
+		// An attached tag sounds from its object. When the object is gone or has no position, the tag goes.
+		const auto source = tag.owner != entt::null ? tag.owner : entity;
+		const auto* transform = registry.Valid(source) ? registry.TryGet<const Transform>(source) : nullptr;
+		if (tag.owner != entt::null && transform == nullptr)
+		{
+			orphans.push_back(entity);
+			return;
+		}
+		if (transform == nullptr)
+		{
+			return;
+		}
+		if (!sounds.Contains(tag.sound))
+		{
+			if (tag.point)
+			{
+				finished.push_back(entity);
+			}
+			return;
+		}
+		const auto position = transform->position + tag.offset;
+		const auto reach = sounds.Handle(tag.sound)->maxDistance;
+		if (tag.point)
+		{
+			if (tag.delayed)
+			{
+				// Not heard until the sound has travelled as far as the camera, and then only within its reach
+				const auto travelled = k_SpeedOfSound * static_cast<float>(tag.turns) * k_TurnSeconds;
+				const auto offset = position - camera;
+				if (travelled * travelled < glm::dot(offset, offset))
+				{
+					return;
+				}
+				StartPointSound(entity, tag, position, camera);
+				tag.delayed = false;
+				return;
+			}
+			if (!IsPlaying(tag))
+			{
+				finished.push_back(entity);
+			}
+			return;
+		}
+		if (!tag.active || IsPlaying(tag) || !WithinReach(reach, position, camera) || !Heard(tag.sound))
+		{
+			return;
+		}
+		StopSound(tag);
+		// Each tag is the owner of its own sound, so the sounds of two tags never take the voice of the other
+		tag.emitter =
+		    audio.CreateEmitter(tag.sound, position, tag.loops ? audio::PlayType::Repeat : audio::PlayType::Once, entity);
+		if (tag.emitter != entt::null)
+		{
+			audio.PlayEmitter(tag.emitter);
+		}
+	});
 	for (const auto entity : finished)
 	{
 		StopSound(registry.Get<SoundTag>(entity));
+		registry.Destroy(entity);
+	}
+	for (const auto entity : orphans)
+	{
+		LetGo(registry.Get<SoundTag>(entity));
 		registry.Destroy(entity);
 	}
 }
@@ -199,37 +229,44 @@ entt::entity SoundTagSystem::CreatePointSound(entt::id_type sound, const glm::ve
 	return entity;
 }
 
-bool SoundTagSystem::AttachObjectSound(entt::entity entity, entt::id_type sound)
+entt::entity SoundTagSystem::AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (const auto* tag = registry.TryGet<SoundTag>(entity); tag != nullptr)
-	{
-		return tag->sound == sound;
-	}
-	registry.Assign<SoundTag>(entity, SoundTag {
-	                                      .sound = sound,
-	                                      .offset = glm::vec3(0.0f),
-	                                      .active = true,
-	                                      .emitter = entt::null,
-	                                      .point = false,
-	                                      .delayed = false,
-	                                      .turns = 0,
-	                                  });
-	return true;
+	const auto tag = registry.Create();
+	registry.Assign<SoundTag>(tag, SoundTag {
+	                                   .sound = sound,
+	                                   .offset = glm::vec3(0.0f),
+	                                   .active = true,
+	                                   .emitter = entt::null,
+	                                   .point = false,
+	                                   .delayed = false,
+	                                   .turns = 0,
+	                                   .owner = entity,
+	                                   .loops = loops,
+	                               });
+	return tag;
 }
 
 void SoundTagSystem::DetachObjectSound(entt::entity entity, entt::id_type sound)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto* tag = registry.TryGet<SoundTag>(entity);
-	if (tag == nullptr || tag->point || tag->sound != sound)
+	std::vector<entt::entity> attached;
+	registry.Each<SoundTag>([&attached, entity, sound](entt::entity tagEntity, const SoundTag& tag) {
+		if (tag.owner == entity && tag.sound == sound)
+		{
+			attached.push_back(tagEntity);
+		}
+	});
+	for (const auto tagEntity : attached)
 	{
-		return;
+		LetGo(registry.Get<SoundTag>(tagEntity));
+		registry.Destroy(tagEntity);
 	}
-	// The emitter is left to play out; the audio removes it once it has stopped
-	if (tag->emitter != entt::null && Locator::audio::has_value() && IsPlaying(*tag))
+	// The object's own tag of the same sound goes too
+	if (auto* own = registry.TryGet<SoundTag>(entity);
+	    own != nullptr && !own->point && own->owner == entt::null && own->sound == sound)
 	{
-		Locator::audio::value().ReleaseEmitterLoop(tag->emitter);
+		LetGo(*own);
+		registry.Remove<SoundTag>(entity);
 	}
-	registry.Remove<SoundTag>(entity);
 }

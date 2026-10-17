@@ -828,6 +828,9 @@ struct Command
 		/// belly, 2 the right hand, 3 above the body) and the amount gives its power. The scale is 5, as each shipped
 		/// script gives it.
 		GiveCreedPower,
+		/// A script attaches a sound to the creature, as ATTACH_SOUND_TAG does: the value gives the sound. Each start
+		/// plays it one time, and the next turn starts it again when it is finished.
+		AttachScriptSound,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

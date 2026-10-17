@@ -1246,7 +1246,7 @@
   "query": "living.chimneys"
  },
  {
-  "description": "The sounds tagged to things: sound, whether active, and its emitter",
+  "description": "The sounds tagged to things: sound, whether active, its emitter, the object it is attached to, whether it loops",
   "kind": "list",
   "parameters": [],
   "query": "living.sound_tags"

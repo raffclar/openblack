@@ -190,6 +190,7 @@
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
+#include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
@@ -2809,6 +2810,18 @@ void Runner::Give(const Command& command)
 		}
 		Locator::creatureAnimationSystem::value().SetCreedPower(*entity, *place, k_ScriptScale, command.amount);
 		result = fmt::format("a creed power of {} at place {}", command.amount, command.value);
+		break;
+	}
+	case Kind::AttachScriptSound:
+	{
+		if (!Locator::soundTagSystem::has_value())
+		{
+			result = "no sound tags";
+			break;
+		}
+		const auto sound = static_cast<entt::id_type>(command.value);
+		const auto tag = Locator::soundTagSystem::value().AttachObjectSound(*entity, sound, false);
+		result = fmt::format("sound {} attached as tag {}", sound, entt::to_integral(tag));
 		break;
 	}
 	case Kind::WriteWebPage:
