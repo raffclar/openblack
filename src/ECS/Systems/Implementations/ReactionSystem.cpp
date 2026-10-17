@@ -41,7 +41,6 @@
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
-#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -380,8 +379,9 @@ creature_reaction::Facts CreatureFactsOf(const ecs::Registry& registry, entt::en
 	}
 	if (source.type == Reaction::ReactToCreature)
 	{
-		const auto* leash = registry.TryGet<const CreatureLeash>(creature);
-		facts.orderedByPlayer = leash != nullptr && leash->order.has_value();
+		// A forced plan keeps it from looking over another creature, even when the leash leads the plan
+		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+		facts.planForced = mind != nullptr && mind->planForced;
 		facts.hasOpponent =
 		    Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().OpponentOf(creature).has_value();
 		const auto* plan = CurrentPlanOf(registry, creature);
@@ -476,8 +476,8 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 			return false;
 		}
 	}
-	// Nor does one a script has told to take no notice, or controls, one carrying out its player's order, one in a fight
-	// or whose opponent is, or one out cold in a faint
+	// Nor does one a script has told to take no notice, or controls, one in a fight or whose opponent is, or one out cold
+	// in a faint
 	if (registry.AnyOf<CreatureReactionsOff, ScriptControlled>(entity))
 	{
 		return false;
@@ -502,7 +502,9 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	{
 		return false;
 	}
-	if (const auto* leash = registry.TryGet<const CreatureLeash>(entity); leash != nullptr && leash->order.has_value())
+	// Nor does one with a forced plan, unless the leash leads the plan
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(entity);
+	    mind != nullptr && !creature_reaction::PlanFree({.forced = mind->planForced, .ledByLeash = mind->ledByLeash}))
 	{
 		return false;
 	}

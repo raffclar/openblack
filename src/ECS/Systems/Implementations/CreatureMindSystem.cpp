@@ -3099,7 +3099,9 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 	                                                .goalUsefulness = creature_planner::k_CatchOrGiftScore,
 	                                                .actionPriority = creature_planner::k_CatchOrGiftScore,
 	                                                .priority = creature_planner::k_CatchOrGiftScore};
+	// To take the thing from the hand is a forced plan
 	mind->planActive = true;
+	mind->planForced = true;
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
 	mind->satisfiedByEffect = false;
@@ -3276,7 +3278,7 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	    .instrument = situation.instrument,
 	};
 	mind->planActive = true;
-	mind->planForced = !forced.unforcedPriority.has_value();
+	mind->planForced = forced.forced && !forced.unforcedPriority.has_value();
 	mind->planSerial = mind->idle.serial;
 	mind->agendaSeen = mind->idle.serial;
 	mind->satisfiedByEffect = false;

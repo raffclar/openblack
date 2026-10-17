@@ -286,7 +286,7 @@ TEST(CreatureReactionRules, AnotherCreatureIsUrgentOnceDueALookOver)
 	facts.inspectDue = false;
 	EXPECT_EQ(rules::Priority(Reaction::ReactToCreature, facts, NoDraw), std::optional<uint8_t>(0));
 	facts.inspectDue = true;
-	for (auto busy : {&rules::Facts::thingIsSelf, &rules::Facts::orderedByPlayer, &rules::Facts::hasOpponent,
+	for (auto busy : {&rules::Facts::thingIsSelf, &rules::Facts::planForced, &rules::Facts::hasOpponent,
 	                  &rules::Facts::planActsOnThing, &rules::Facts::thingGone})
 	{
 		auto blocked = facts;
@@ -381,6 +381,24 @@ TEST(CreatureReactionRules, NoLifeTheHandOrATeleportKeepsAllReactionsOff)
 	EXPECT_FALSE(creature_reaction::BodyFree({.life = 0.0f}));
 	EXPECT_FALSE(creature_reaction::BodyFree({.heldByHand = true}));
 	EXPECT_FALSE(creature_reaction::BodyFree({.teleporting = true}));
+}
+
+TEST(CreatureReactionRules, AForcedPlanKeepsAllReactionsOffUnlessTheLeashLeadsIt)
+{
+	EXPECT_TRUE(creature_reaction::PlanFree({}));
+	EXPECT_FALSE(creature_reaction::PlanFree({.forced = true}));
+	// An order on the leash and a walk back on the leash are forced, but the creature still takes up reactions
+	EXPECT_TRUE(creature_reaction::PlanFree({.forced = true, .ledByLeash = true}));
+	// The leash alone changes nothing for a plan that is not forced
+	EXPECT_TRUE(creature_reaction::PlanFree({.ledByLeash = true}));
+}
+
+TEST(CreatureReactionRules, AForcedPlanBlocksLookingOverACreatureEvenWhenTheLeashLeadsIt)
+{
+	creature_reaction::Facts facts {.thingIsCreature = true, .planForced = true};
+	EXPECT_TRUE(creature_reaction::BlocksInspecting(facts));
+	facts.planForced = false;
+	EXPECT_FALSE(creature_reaction::BlocksInspecting(facts));
 }
 
 TEST(CreatureReactionRules, AnIconMiracleWithNoSeedTeachesNothing)

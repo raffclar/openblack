@@ -602,6 +602,8 @@ void LeashSystem::TakeOff(entt::entity creature)
 	{
 		mind->leash.learningInHand = false;
 		mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
+		// The leash no longer leads what the creature does
+		mind->ledByLeash = false;
 	}
 	// Off any leash but the learning leash, the desire it made dominant lets go
 	if (leash::TakingOffEndsDominantDesire(leashes->selected) && Locator::creatureMindSystem::has_value())
@@ -1279,6 +1281,11 @@ void LeashSystem::WalkBack(entt::entity creature)
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} walks back to ({:.1f}, {:.1f}), {:.1f} away",
 	                   entt::to_integral(creature), centre.x, centre.y, distance);
 	Force(creature, {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = std::vector {walk}});
+	// While the leash is on, the leash leads the walk back
+	if (auto* led = MindOf(registry, creature))
+	{
+		led->ledByLeash = leashes.worn.has_value();
+	}
 	// The creature keeps the place until the action of the walk ends
 	leashes.returnTo = leashes.confinementCentre;
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
@@ -1956,6 +1963,11 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} couldn't carry out the order", entt::to_integral(creature));
 		return false;
 	}
+	// The leash leads the order that the player gave
+	if (auto* led = MindOf(registry, creature))
+	{
+		led->ledByLeash = true;
+	}
 	if (desire.has_value())
 	{
 		leashes.help = CreatureLeash::Help::CurrentDesire;
@@ -2094,6 +2106,11 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	leashes.helpDesire = desire;
 	TellHelp(creature,
 	         {.kind = creature_help::Kind::CurrentDesire, .parameter = static_cast<uint32_t>(*desire), .thing = object});
+	// The leash leads the order that the player gave
+	if (mind != nullptr)
+	{
+		mind->ledByLeash = true;
+	}
 	MarkOrder(creature, object, objectAt, fight);
 	// What it is shown on the aggression and compassion leashes teaches it which desire to act on such things with
 	if (auto lessons = leash::LessonsFor(type, isCreature); mind != nullptr && !lessons.empty())

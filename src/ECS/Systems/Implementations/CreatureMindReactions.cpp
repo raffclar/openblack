@@ -170,9 +170,11 @@ void CreatureMindSystem::TakeUpReaction(entt::entity creature, entt::entity thin
 	     ObjectToActOnUsefulness(creature, *mind, setup.plan->desire, thing) > 0.0f);
 	if (setup.plan.has_value() && (setup.plan->onSelf || there) && wanted)
 	{
+		// The plan of a reaction is not a forced plan, so a more urgent reaction can replace it
 		ForceActivity(creature, {.desire = setup.plan->desire,
 		                         .action = setup.plan->action,
-		                         .actionObject = setup.plan->onSelf ? creature : thing});
+		                         .actionObject = setup.plan->onSelf ? creature : thing,
+		                         .forced = false});
 	}
 	// The hand's pick-up sets the watch it was just given to a minute and up to another
 	if (setup.longHandWatch)
