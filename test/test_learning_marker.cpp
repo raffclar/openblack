@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
+
 #include <glm/glm.hpp>
 #include <gtest/gtest.h>
 
@@ -65,10 +69,22 @@ TEST(LearningMarker, TheBulbBlinksAgainstTheGlow)
 	// White, with no glow, each half second
 	EXPECT_EQ(marker::BulbWhite(0.0f), 255);
 	EXPECT_EQ(marker::GlowAlpha(0.0f), 0);
-	EXPECT_EQ(marker::BulbWhite(500.0f), 254);
+	EXPECT_EQ(marker::BulbWhite(500.0f), 255);
 	// Yellow between, with the glow at half
 	EXPECT_EQ(marker::BulbWhite(250.0f), 0);
 	EXPECT_EQ(marker::GlowAlpha(250.0f), 127);
+}
+
+TEST(LearningMarker, TheBlinkUsesTheGameFloatAndRoundsLikeTheGame)
+{
+	// The float that the game holds for one turn a second
+	EXPECT_EQ(std::bit_cast<uint32_t>(marker::k_BlinkPerMillisecond), 0x3BCDE32Eu);
+	// At one second the angle is the float nearest to two pi. The cosine is a little under 1, and the multiply by 255
+	// rounds it to exactly 255
+	EXPECT_EQ(marker::BulbWhite(1000.0f), 255);
+	EXPECT_EQ(marker::BulbWhite(100.0f), 206);
+	EXPECT_EQ(marker::BulbWhite(333.0f), 127);
+	EXPECT_EQ(marker::BulbWhite(1234.0f), 25);
 }
 
 TEST(LearningMarker, ItsLookPlacesTheBulbUnderTheGlowAndTheTextOverIt)
