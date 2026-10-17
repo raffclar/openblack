@@ -3,6 +3,7 @@ $input v_texcoord0, v_texcoord1
 #include <bgfx_shader.sh>
 
 #include "atmosphere.sh"
+#include "air_sky.sh"
 SAMPLER2D(s_atmosAerial, 0);
 #include "aerial_haze.sh"
 #include "sky_dome.sh"
@@ -16,7 +17,7 @@ SAMPLER2D(s_atmosAerial, 0);
 SAMPLER2D(s_sceneDepth, 1);
 
 // x: 1 for the grid, 0 for the low tier's haze; y: the low tier's haze for each world unit; z: the sine of the air's
-// sun over the horizon; w: unused
+// sun over the horizon; w: 1 while the eye is outside the sky's dome
 uniform vec4 u_hazeApply;
 // rgb: the colour of the horizon on the screen, for the low tier; w: unused
 uniform vec4 u_hazeHorizon;
@@ -82,9 +83,13 @@ void main()
 	vec3 eye = mul(u_invView, vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
 	float depth = texture2DLod(s_sceneDepth, uv, 0.0f).r;
 	bool sky = depth <= 0.0f;
-	vec3 dir = normalize(WorldAt(uv, 0.5f) - eye);
+	// Nothing is drawn where the sky's dome does not reach, as from high up or from space
+	bool empty = sky;
+	vec3 dir = ViewRayAt(uv);
 	vec3 world = WorldAt(uv, depth);
-	// The sky's dome writes its depth: a point on it is the sky
+	// The sky's dome writes its depth: a point on it is the sky. From outside the dome nothing far away is drawn, and
+	// this pass draws the sky there.
+	empty = empty || (u_hazeApply.w > 0.5f && OnSkyDome(world));
 	sky = sky || OnSkyDome(world);
 	float range = sky ? 1e9f : length(world - eye);
 	// Above the water, the water's surface is where the scene is. The far sea curves away with the world, and a ray over
@@ -102,7 +107,9 @@ void main()
 	vec3 glare = u_hazeSun.w > 0.0f ? SunGlare(dir, SunOpen(eye)) : vec3_splat(0.0f);
 	if (sky)
 	{
-		gl_FragColor = vec4(glare, 1.0f);
+		// Where the dome is not, this pass draws the same sky as the dome does
+		gl_FragColor = empty ? vec4(AirSkyColour(eye, dir, u_hazeApply.z, gl_FragCoord.xy) + glare, 0.0f) : vec4(glare, 1.0f);
+
 		return;
 	}
 	vec4 haze;
@@ -115,5 +122,7 @@ void main()
 		float through = exp(-range * u_hazeApply.y);
 		haze = vec4(u_hazeHorizon.rgb * (1.0f - through), through);
 	}
-	gl_FragColor = vec4(haze.rgb + glare, haze.a);
+	// From over the aurora, its curtains show in front of the sea
+	vec3 aurora = AirAurora(eye, dir, range / ATMOS_UNITS_PER_KM, gl_FragCoord.xy);
+	gl_FragColor = vec4(haze.rgb + glare + aurora, haze.a);
 }

@@ -78,6 +78,11 @@ struct AtmosphereFrame
 	glm::vec3 skyFromAbove {0.0f};
 	/// The curve of the world far away (world_curve.sh): xy the eye's x and z, z the flat reach, w the world's radius
 	glm::vec4 worldCurve {0.0f};
+	/// The sky above the air and the aurora (air_sky.sh): the direction towards the real sun; the magnetic pole and the
+	/// aurora's strength tonight; the planet's middle and the seconds of the game
+	glm::vec4 airSun {0.0f, 1.0f, 0.0f, 0.0f};
+	glm::vec4 aurora {0.0f};
+	glm::vec4 airPlanet {0.0f};
 	global_illumination::ShL1 sky;
 	/// Where the sky's dome is: xy the middle across the land, z how far across and w how high a point must be to be on
 	/// the dome. The dome writes its depth, so the haze and the fog know the sky by this.

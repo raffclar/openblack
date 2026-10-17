@@ -124,6 +124,8 @@ vec4 ShoreAt(vec2 xz)
 
 // The open sea's colours: the deep body, and the pale green-yellow of the tops of the waves
 #define UW_SEA_DEEP vec3(0.02f, 0.11f, 0.17f)
+// The distance past which the sea is a smooth ball, with no waves of its own
+#define UW_FAR_SEA 60000.0f
 #define UW_SEA_TOPS vec3(0.48f, 0.54f, 0.36f)
 
 // The height of the surface at a point near the eye
@@ -317,6 +319,12 @@ float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, ou
 	if (along < 0.0f)
 	{
 		return -1.0f;
+	}
+	// Very far away no wave shows in a pixel: the ray stops on the ball of the sea
+	if (along > UW_FAR_SEA)
+	{
+		slope = -WorldDropSlope(eye.xz + direction.xz * along);
+		return along;
 	}
 	// High waves seen at a low angle move the point where the ray meets the surface far: more steps (see NextAlong)
 	int steps = RogueSteps(eye.xz + direction.xz * max(along, 0.0f), abs(direction.y));
@@ -658,7 +666,7 @@ void main()
 	vec2 uv = gl_FragCoord.xy * u_viewTexel.xy;
 	float t = u_uwParams.y;
 	vec3 eye = u_uwEye.xyz;
-	vec3 direction = normalize(WorldAt(uv, 0.5f) - eye);
+	vec3 direction = ViewRayAt(uv);
 	float jitter = fract(52.9829189f * fract(dot(gl_FragCoord.xy, vec2(0.06711056f, 0.00583715f))));
 	// Where the view's near plane is at this pixel, and whether it is under the surface: the line between the two
 	// sides is the surface cutting the view
@@ -804,7 +812,11 @@ void main()
 		float waterTop = surfacePoint.y + WorldDrop(surfacePoint.xz);
 		float waterDepth = waterTop - shore.w;
 		float lift = waterTop - u_uwParams.z;
-		surfaceSlope -= WorldDropSlope(surfacePoint.xz);
+		surfaceSlope = toSurface > UW_FAR_SEA ? surfaceSlope : surfaceSlope - WorldDropSlope(surfacePoint.xz);
+		// Far away the chop and the white horses go, so the far sea from high up has no grain
+		float farSea = smoothstep(0.5f * UW_FAR_SEA, UW_FAR_SEA, toSurface);
+		chopShare *= 1.0f - farSea;
+		whitecapEnvelope *= 1.0f - farSea;
 		// No water shows inside a boat's hull
 		float insideBoat = UwInsideBoat(surfacePoint.xz);
 		if (toSurface > 0.0f && (toSurface < sceneDistance || farFloor) && insideBoat < 0.999f)
@@ -890,9 +902,11 @@ void main()
 			// The reflection: of the scene where the screen has it, else of the sky
 			vec3 reflected = reflect(direction, normal);
 			reflected.y = abs(reflected.y);
-			vec3 mirror = u_uwSea.w > 0.5f ? EnvironmentReflection(surfacePoint, reflected, roughness) : SkyIn(reflected);
+			// The cube of the far scene is round a place near the land: the far sea from high up takes the sky's colour
+			vec3 mirror = u_uwSea.w > 0.5f && toSurface < UW_FAR_SEA ? EnvironmentReflection(surfacePoint, reflected, roughness)
+			                                                          : SkyIn(reflected);
 			float screenShare = 0.0f;
-			if (u_uwFlags.x > 0.5f)
+			if (u_uwFlags.x > 0.5f && toSurface < UW_FAR_SEA)
 			{
 				vec4 found = ScreenReflection(surfacePoint, reflected, jitter);
 				mirror = mix(mirror, found.rgb, found.a);

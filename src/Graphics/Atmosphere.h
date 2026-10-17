@@ -31,9 +31,11 @@
 namespace openblack::graphics::atmosphere
 {
 
-/// The radius of the ground and of the top of the air, in kilometres
-inline constexpr float k_GroundRadius = 6360.0f;
-inline constexpr float k_TopRadius = 6460.0f;
+/// The radius of the ground and of the top of the air, in kilometres: the Earth's mean radius (a circumference of about
+/// 40030 kilometres), and the top of the air at the line of space, 100 kilometres up. Over the air are the high layers
+/// with no light of their own in this model, the aurora from about 100 to 300 kilometres, and space.
+inline constexpr float k_GroundRadius = 6371.0f;
+inline constexpr float k_TopRadius = 6471.0f;
 /// The air's molecules: what they scatter of each colour for each kilometre at the ground, and the height over which
 /// they thin by e
 inline constexpr glm::vec3 k_RayleighScattering {5.802e-3f, 13.558e-3f, 33.1e-3f};
@@ -284,9 +286,11 @@ inline constexpr float k_PlaceShare = 0.3f;
 /// The height of the eye over the sea, in kilometres, from its height in world units over the sea's level
 [[nodiscard]] float AltitudeOf(float heightOverSea);
 
-/// The curve of the world far away. The world is a ball with the radius of the real planet (the radius that the sky's
-/// textures use), so the far sea goes down under the horizon at the same angle as the ground in the sky's texture.
-/// From 50 units up the horizon is 0.2 degrees under the eye's level, and from 30000 units up it is about 6 degrees.
+/// The world is a ball with the radius of the Earth: 6371 kilometres times 949 units a kilometre (underwater::
+/// k_UnitsPerMetre, from the villager's 1.661 units for 1.75 metres) is about 6.05 million units. The sky's textures use
+/// the same radius, so the far sea goes down under the horizon at the same angle as the ground in the sky's texture.
+/// The air's layers and the aurora are at their real heights over it. From 50 units up the horizon is 0.2 degrees under
+/// the eye's level, from 30000 units up it is about 6 degrees, and from space the planet is a ball against the dark.
 inline constexpr float k_WorldRadius = k_GroundRadius * k_UnitsPerKilometre;
 
 /// The distance from the eye, across the ground, inside which the world stays flat: the distance to the farthest
@@ -295,12 +299,34 @@ inline constexpr float k_WorldRadius = k_GroundRadius * k_UnitsPerKilometre;
 [[nodiscard]] float FlatReach(glm::vec2 eye, float mapSize);
 
 /// How far a point of the world goes down at `distance` units from the eye across the ground, for the flat reach
-/// `flatReach`: none inside the flat reach, and the square of the distance past it over twice the world's radius
+/// `flatReach`: none inside the flat reach, and past it the drop of the world's ball
 [[nodiscard]] float WorldDrop(float distance, float flatReach);
 
 /// The distance along a ray from the eye, `heightOverSea` units over the sea's level, to the curved sea. None when the
 /// ray goes over the horizon and does not meet the sea.
 [[nodiscard]] std::optional<float> CurvedSeaDistance(float heightOverSea, glm::vec3 direction, float flatReach);
+
+/// The place from which the directions to the game's sun and moon are found. The game's sun is a few kilometres away,
+/// so from high up or far out its direction would turn round. Thus the place is the eye with its height at most
+/// k_LightEyeHeight over the sea and inside k_LightEyeReach of the map's middle.
+inline constexpr float k_LightEyeHeight = 2000.0f;
+inline constexpr float k_LightEyeReach = 20000.0f;
+[[nodiscard]] glm::vec3 LightEye(glm::vec3 eye, float seaLevel);
+
+/// The aurora's oval is round the magnetic pole. The pole is on the island's line of longitude at 72 degrees north, 32
+/// degrees from the island at 40 degrees north, so the island is at a magnetic latitude of 58 degrees. On most nights
+/// the oval is at about 64 to 67 degrees and its curtains show low in the north. On strong nights the oval comes down
+/// over the island.
+inline constexpr float k_PoleFromIslandDegrees = 32.0f;
+
+/// The direction of the magnetic pole from the planet's middle, in the world's directions (up at the island is y)
+[[nodiscard]] glm::vec3 MagneticPole();
+
+/// The magnetic latitude in degrees of a place, from its direction from the planet's middle
+[[nodiscard]] float MagneticLatitude(glm::vec3 up);
+
+/// How strong the aurora is on a night, 0 to 1, from the night's number. Most nights are weak, and some are strong.
+[[nodiscard]] float AuroraStrength(int night);
 
 /// The y of the direction from the eye to the curved sea's horizon, from the eye's height over the sea's level: near 0
 /// low down, and under 0 as the eye climbs

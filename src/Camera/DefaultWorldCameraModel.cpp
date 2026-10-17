@@ -61,6 +61,9 @@ constexpr auto k_StepScaleHeightFactor = 3.0f;
 constexpr auto k_StepScaleMin = 60.0f;
 constexpr auto k_ZoomScaleMax = 2000.0f;
 constexpr auto k_ZoomScaleMaxBelowFocus = 4.0f * k_StepScaleMin;
+// EXPERIMENT (not for merge): with the experiment's view on, the camera can climb to space, so the zoom keeps its speed
+// in step with the height up to this bound
+constexpr auto k_ZoomScaleMaxToSpace = 3.0e7f;
 constexpr auto k_InteractionSpeedMultiplier = 400.0f;
 // Vanilla black and white uses a pretty bad PI/2 approximation
 constexpr auto k_CameraModelHalfPi = 1.53938043f;
@@ -664,7 +667,8 @@ float DefaultWorldCameraModel::GetZoomScale() const
 {
 	// Zooming speeds up with height, so a wheel notch covers about the same share of the view at any altitude
 	const auto heightAboveFocus = _targetOrigin.y - _targetFocus.y;
-	const auto maxScale = heightAboveFocus < 0.0f ? k_ZoomScaleMaxBelowFocus : k_ZoomScaleMax;
+	const auto maxScale = heightAboveFocus < 0.0f ? k_ZoomScaleMaxBelowFocus
+	                                              : (underwater_boundary::Off() ? k_ZoomScaleMaxToSpace : k_ZoomScaleMax);
 	return glm::clamp(k_StepScaleHeightFactor * glm::abs(heightAboveFocus), k_StepScaleMin, maxScale);
 }
 

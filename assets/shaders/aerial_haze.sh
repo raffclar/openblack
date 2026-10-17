@@ -29,8 +29,12 @@ vec4 AtmosHazeAlong(vec2 uv, vec3 eye, vec3 dir, float range, float sunHeight)
 	float farther = max(range - AtmosSliceDistance(ATMOS_AERIAL_SLICES - 1.0f), 0.0f) / ATMOS_UNITS_PER_KM *
 	                AtmosMeanExtinction(fromHeight, toHeight);
 	float hidden = 1.0f - exp(-farther);
-	// The sky over the sea's horizon in this direction: the horizon goes down under the eye's level as the eye climbs
-	vec3 horizonSky = AtmosSkyOnScreen(normalize(vec3(dir.x, max(dir.y, WorldHorizonY(eye.y - sea)), dir.z)), sunHeight);
+	// The sky over the sea's horizon in this direction: the horizon goes down under the eye's level as the eye climbs.
+	// From high up a ray down to the sea goes through all of the air, and the air's light along that ray is its haze.
+	float horizonY = WorldHorizonY(eye.y - sea);
+	float fromAbove = smoothstep(2000.0f, 20000.0f, eye.y - sea);
+	vec3 hazeDir = normalize(vec3(dir.x, mix(max(dir.y, horizonY), dir.y, fromAbove), dir.z));
+	vec3 horizonSky = AtmosSkyOnScreen(hazeDir, sunHeight);
 	// A thick haze has the colour of the sky at the horizon, as the dome shows it. A thin haze near the eye keeps the
 	// grid's own light, with the shadows of the hills and the clouds in it.
 	float opacity = 1.0f - haze.a;

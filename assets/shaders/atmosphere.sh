@@ -15,8 +15,8 @@ uniform vec4 u_atmosLight;
 uniform vec4 u_atmosSun;
 
 #define ATMOS_PI 3.14159265f
-#define ATMOS_GROUND_RADIUS 6360.0f
-#define ATMOS_TOP_RADIUS 6460.0f
+#define ATMOS_GROUND_RADIUS 6371.0f
+#define ATMOS_TOP_RADIUS 6471.0f
 #define ATMOS_RAYLEIGH_SCATTERING vec3(5.802e-3f, 13.558e-3f, 33.1e-3f)
 #define ATMOS_RAYLEIGH_HEIGHT 8.0f
 #define ATMOS_MIE_SCATTERING 3.996e-3f

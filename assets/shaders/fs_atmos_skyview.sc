@@ -38,9 +38,21 @@ void main()
 	float lightY = clamp(u_atmosLight.y, -1.0f, 1.0f);
 	vec3 towardsLight = vec3(sqrt(max(1.0f - lightY * lightY, 0.0f)), lightY, 0.0f);
 
-	float rayLength = AtmosHitsGround(radius, viewMu) ? AtmosDistanceToGround(radius, viewMu) : AtmosDistanceToTop(radius, viewMu);
-	float stride = rayLength / 30.0f;
-	vec3 eye = vec3(0.0f, radius, 0.0f);
+	// From over the top of the air the ray starts where it comes into the air, and a ray past the air has no light
+	float rayStart = 0.0f;
+	if (radius > ATMOS_TOP_RADIUS)
+	{
+		float disc = radius * radius * (viewMu * viewMu - 1.0f) + ATMOS_TOP_RADIUS * ATMOS_TOP_RADIUS;
+		if (disc < 0.0f || viewMu >= 0.0f)
+		{
+			gl_FragColor = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+			return;
+		}
+		rayStart = -radius * viewMu - sqrt(disc);
+	}
+	float rayEnd = AtmosHitsGround(radius, viewMu) ? AtmosDistanceToGround(radius, viewMu) : AtmosDistanceToTop(radius, viewMu);
+	float stride = max(rayEnd - rayStart, 0.0f) / 30.0f;
+	vec3 eye = vec3(0.0f, radius, 0.0f) + view * rayStart;
 	float cosAngle = dot(view, towardsLight);
 	vec3 light = vec3_splat(0.0f);
 	vec3 through = vec3_splat(1.0f);

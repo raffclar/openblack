@@ -442,6 +442,8 @@ private:
 	/// EXPERIMENT (not for merge): sets the curve of the world far away for a program that uses it, a flat world without
 	/// the experiment's air
 	void SetWorldCurve(const ShaderProgram& program) const;
+	/// EXPERIMENT (not for merge): sets the sky above the air and the aurora for a program that draws the air's sky
+	void BindAirSky(const ShaderProgram& program) const;
 	/// EXPERIMENT (not for merge): the map of the clouds' shadow for the water, in a sampler stage; none when the
 	/// clouds are off
 	void BindCloudShadow(const ShaderProgram& program, uint8_t stage) const;

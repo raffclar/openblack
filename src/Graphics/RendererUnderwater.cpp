@@ -134,10 +134,11 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	}
 
 	// The light under the water this frame, and the water's colour at the eye's depth
-	const auto light = SkyLights(eye);
-	const glm::vec3 skyColour = glm::vec3(_haze[1]) / 255.0f;
 	const auto& system = Locator::underwaterSystem::value();
 	const float seaLevel = system.GetSeaLevel();
+	// The game's sun stands a few kilometres away: from high up its direction is taken from near the land
+	const auto light = SkyLights(atmosphere::LightEye(eye, seaLevel));
+	const glm::vec3 skyColour = glm::vec3(_haze[1]) / 255.0f;
 	const float eyeDepth = underwater::EyeDepth(eye.y, seaLevel);
 	const auto scatter = underwater::AmbientAtDepth(underwater::ScatterColour(skyColour, light), eyeDepth);
 	const float time = system.GetSeconds();

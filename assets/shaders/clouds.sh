@@ -41,6 +41,9 @@ uniform vec4 u_cloudStorms[16];
 #define CLOUD_STRATUS_DEPTH 160.0f
 #define CLOUD_CUMULUS_DEPTH 520.0f
 #define CLOUD_CUMULONIMBUS_DEPTH 1500.0f
+// The heights of the eye over the sea between which the layer turns into a thin sheet (CloudSheet)
+#define CLOUD_SHEET_LOW 40000.0f
+#define CLOUD_SHEET_HIGH 90000.0f
 // How far under the bottom of the layer the ragged bottom of a rain cloud hangs at most
 #define CLOUD_LOWEST_DROP 200.0f
 // How much light the cloud takes out for each unit, at a density of 1
@@ -117,7 +120,7 @@ float CloudPowder(float localDepth, float cosAngle)
 // The height of a point over the curved world under the eye: the layer is a shell round the planet, as the sea is
 float CloudAltitude(vec3 p)
 {
-	return p.y + WorldDrop(p.xz);
+	return WorldAltitude(p, u_cloudLayer.w);
 }
 
 // The weather at a point across the land: the cloud's cover there (0 none), its type and its rain
@@ -241,9 +244,9 @@ vec2 CloudRoots(float a, float b, float c)
 	return vec2((-b - s) / (2.0f * a), (-b + s) / (2.0f * a));
 }
 
-// The part of a ray from the eye where its height over the curved world, c + t dir.y + the world's drop, is under 0.
-// Inside the flat reach the height changes in a line, and past it on a curve. The height bends up smoothly, so the two
-// parts make one span.
+// The part of a ray from the eye where it is under the height eye.y - c over the curved world. Inside the flat reach
+// the height changes in a line, and past it the layer is a shell round the ball of the world. The world bends down
+// smoothly, so the two parts make one span.
 vec2 CloudUnder(float c, vec3 dir)
 {
 	float across = length(dir.xz);
@@ -254,9 +257,8 @@ vec2 CloudUnder(float c, vec3 dir)
 	{
 		return straight;
 	}
-	float a = across * across / (2.0f * u_worldCurve.w);
-	float d = u_worldCurve.z;
-	vec2 curved = CloudRoots(a, dir.y - across * d / u_worldCurve.w, c + d * d / (2.0f * u_worldCurve.w));
+	float overSea = u_cloudEye.y - u_cloudLayer.w;
+	vec2 curved = WorldBallSpan(overSea, dir, overSea - c);
 	curved.x = max(curved.x, reach);
 	bool hasStraight = straight.x < straight.y;
 	bool hasCurved = curved.x < curved.y;
@@ -369,7 +371,7 @@ float CloudFlashOnGround(vec3 p)
 // light behind them goes through. `depth` is where the cloud is along the ray, weighted by how much each part shows,
 // or the end of the ray when there is no cloud. `steps` is the most samples, `jitter` (0 to 1) moves the first one.
 // `sky` is the light of the sky from above.
-vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool detail, vec3 sky, out float depth)
+vec4 MarchCloudVolume(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool detail, vec3 sky, out float depth)
 {
 	vec2 span = CloudSpan(eye, dir, limit);
 	depth = min(limit, u_cloudLayer.z);
@@ -453,6 +455,75 @@ vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool 
 	return vec4(colour, transmittance);
 }
 
+// A smooth noise from 0 to 1 over a point across the land, with cells of size 1
+float CloudSmoothNoise(vec2 x)
+{
+	vec2 i = floor(x);
+	vec2 f = x - i;
+	vec2 u = f * f * (3.0f - 2.0f * f);
+	vec4 corners = vec4(dot(i, vec2(127.1f, 311.7f)), dot(i + vec2(1.0f, 0.0f), vec2(127.1f, 311.7f)),
+	                    dot(i + vec2(0.0f, 1.0f), vec2(127.1f, 311.7f)), dot(i + vec2(1.0f, 1.0f), vec2(127.1f, 311.7f)));
+	vec4 h = fract(sin(mod(corners, 6283.0f)) * 43758.5453f);
+	return mix(mix(h.x, h.y, u.x), mix(h.z, h.w, u.x), u.y);
+}
+
+// From high up a cloud is less than a pixel deep, so the layer is a thin sheet: its cover where the ray meets the middle
+// of the layer, lit by the sun and the sky
+vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
+{
+	depth = min(limit, u_cloudLayer.z);
+	float middle = u_cloudLayer.x + 0.5f * CLOUD_CUMULUS_DEPTH;
+	vec2 under = CloudUnder(eye.y - middle, dir);
+	float t = under.x;
+	if (under.x >= under.y || t <= 0.0f || t > min(limit, u_cloudLayer.z))
+	{
+		return vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	}
+	vec3 p = eye + dir * t;
+	float type;
+	float rain;
+	// A pixel far away covers many cells of cloud: there the sheet shows the mean cover of the wide weather, so the far
+	// layer has no grain
+	float footprint = t * 0.0012f;
+	float fine = 1.0f - smoothstep(60.0f, 600.0f, footprint);
+	// The large weather systems, hundreds of kilometres across, from a smooth noise with no repeat
+	vec2 q = p.xz - u_cloudDrift.xy;
+	// Each octave turns on its own axes, so that no grid shows
+	vec2 turned = vec2(0.8f * q.x - 0.6f * q.y, 0.6f * q.x + 0.8f * q.y);
+	vec2 other = vec2(0.28f * q.x + 0.96f * q.y, -0.96f * q.x + 0.28f * q.y);
+	float systems = 0.5f * CloudSmoothNoise(q / 700000.0f) + 0.3f * CloudSmoothNoise(turned / 260000.0f + 7.3f) +
+	                0.2f * CloudSmoothNoise(other / 90000.0f + 3.1f);
+	float mean = clamp(u_cloudCover.x * (0.3f + 1.4f * systems) - 0.15f, 0.0f, 1.0f) * smoothstep(0.0f, 0.05f, u_cloudCover.x);
+	float cover = fine > 0.0f ? mix(mean, CloudWeatherAt(p.xz, type, rain), fine) : mean;
+	cover *= 1.0f - smoothstep(u_cloudLayer.z * 0.7f, u_cloudLayer.z, t);
+	float shown = smoothstep(0.05f, 0.6f, cover);
+	vec3 sun = u_cloudLightColour.rgb * u_cloudLightColour.w;
+	vec3 colour = sun * (0.25f + 0.75f * clamp(u_cloudLight.y * 3.0f, 0.0f, 1.0f)) * 0.9f + sky * 0.6f;
+	depth = t;
+	return vec4(colour * shown, 1.0f - shown);
+}
+
+// The clouds along a ray (MarchCloudVolume). As the eye climbs to space the layer turns into a thin sheet, which costs
+// one sample and has no grain far away.
+vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool detail, vec3 sky, out float depth)
+{
+	float fromAbove = smoothstep(CLOUD_SHEET_LOW, CLOUD_SHEET_HIGH, eye.y - u_cloudLayer.w);
+	float sheetDepth;
+	vec4 sheet = fromAbove > 0.0f ? CloudSheet(eye, dir, limit, sky, sheetDepth) : vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	if (fromAbove >= 1.0f)
+	{
+		depth = sheetDepth;
+		return sheet;
+	}
+	vec4 volume = MarchCloudVolume(eye, dir, limit, jitter, steps, detail, sky, depth);
+	if (fromAbove > 0.0f)
+	{
+		depth = mix(depth, sheetDepth, fromAbove);
+		return mix(volume, sheet, fromAbove);
+	}
+	return volume;
+}
+
 // How much of a cloud at a distance along a ray the haze hides, 0 to 1. The air thins with the height, so a path high
 // over the land holds less haze than one near the sea.
 float CloudHaze(vec3 eye, vec3 dir, float depth)
@@ -492,7 +563,7 @@ vec3 CloudScreenAt(mat4 viewProj, vec3 world)
 // The direction of the ray from the eye through a point of the screen
 vec3 CloudRayAt(vec2 uv)
 {
-	return normalize(CloudWorldAt(uv, 0.5f) - u_cloudEye.xyz);
+	return ViewRayAt(uv);
 }
 
 // How far the scene is from the eye at a depth of the depth buffer; very far where the screen shows the sky

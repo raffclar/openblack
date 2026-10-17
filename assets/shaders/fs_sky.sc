@@ -3,6 +3,7 @@ $input v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 #include <bgfx_shader.sh>
 
 #include "atmosphere.sh"
+#include "air_sky.sh"
 
 // The sky's dome for each alignment, blended for the time of day, one above the other from evil to good
 SAMPLER2D(s_diffuse, 0);
@@ -36,23 +37,13 @@ void main()
 	vec3 upper = Drawn(Dome(v_texcoord0.xy, u_skyAlignment.y));
 	vec3 dome = mix(lower, upper, u_skyAlignment.z / 255.0f);
 	// EXPERIMENT (not for merge): the whole sky is the air's own light, the same light as the haze over the far land, so
-	// that the sky follows the air's sun through the day and the far land fades into it. Where the air is dark at night,
-	// small stars show. The original dome shows only with the experiment off.
+	// that the sky follows the air's sun through the day and the far land fades into it. The stars, the sun above the
+	// air and the aurora are in it too (air_sky.sh). The original dome shows only with the experiment off.
 	if (u_skyAtmos.x > 0.0f)
 	{
 		vec3 eye = mul(u_invView, vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
 		vec3 dir = normalize(v_position.xyz - eye);
-		vec3 air = AtmosSkyOnScreen(dir, u_skyAtmos.y);
-		const vec3 luma = vec3(0.2126f, 0.7152f, 0.0722f);
-		float dark = 1.0f - smoothstep(0.02f, 0.12f, dot(air, luma));
-		vec3 cell = floor(dir * 260.0f);
-		vec3 q = fract(cell * vec3(0.1031f, 0.1030f, 0.0973f));
-		q += dot(q, q.yzx + 33.33f);
-		vec3 h = fract((q.xxy + q.yzz) * q.zyx);
-		vec3 star = cell + 0.2f + 0.6f * h - dir * 260.0f;
-		float glint = h.x > 0.985f ? smoothstep(0.06f, 0.0f, dot(star, star)) * (0.4f + 0.6f * h.y) : 0.0f;
-		air += vec3(0.85f, 0.9f, 1.0f) * glint * dark * smoothstep(0.02f, 0.2f, dir.y);
-		dome = mix(dome, air, u_skyAtmos.x);
+		dome = mix(dome, AirSkyColour(eye, dir, u_skyAtmos.y, gl_FragCoord.xy), u_skyAtmos.x);
 	}
 	gl_FragColor = vec4(dome, 1.0f);
 }

@@ -69,6 +69,9 @@ constexpr float k_ReducedSteps = 6.0f;
 /// The haze is this much brighter than the original game's haze at the horizon: a bright, airy haze that lifts the far
 /// land rather than greys it
 constexpr float k_HazeBrightness = 1.3f;
+/// The height in kilometres over which the sky's exposure does not change (a little over the eye's highest height
+/// before the experiment let it climb to space)
+constexpr float k_HighestExposure = 32.0f;
 
 void BindScreenTriangle()
 {
@@ -136,7 +139,7 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	}
 	const glm::vec3 sunTowards = atmos::SunTowards(hour);
 	const glm::vec3 moonTowards = moon != nullptr ? sky_frame::MoonTowards(*moon, hour) : -sunTowards;
-	const glm::vec3 sunFromEye = glm::normalize((sunTowards * atmos::k_SunDistance) - eye);
+	const glm::vec3 sunFromEye = glm::normalize((sunTowards * atmos::k_SunDistance) - atmos::LightEye(eye, seaLevel));
 	const float moonShare = atmos::AirMoonShare(sunTowards.y);
 	const glm::vec3 towardsLight =
 	    atmos::AirLightTowards(sunFromEye, atmos::AirMoonTowards(sunTowards, moonTowards), moonShare);
@@ -145,16 +148,20 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	// climbs
 	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
 	const float flatReach = atmos::FlatReach({eye.x, eye.z}, mapSize);
-	// The sky's light on the processor, again only when the light, the air or the height has changed enough
-	if (Stale(view.cache, towardsLight, air.turbidity, altitude, seconds))
+	// The sky's light on the processor, again only when the light, the air or the height has changed enough. Over
+	// k_HighestExposure the exposure and the sky's light stay as they are there, so the sky goes dark as the eye climbs
+	// to space and the bright limb does not change the exposure.
+	const float skyAltitude = std::min(altitude, k_HighestExposure);
+	const float skyHeight = std::min(eye.y - seaLevel, k_HighestExposure * atmos::k_UnitsPerKilometre);
+	if (Stale(view.cache, towardsLight, air.turbidity, skyAltitude, seconds))
 	{
 		view.cache = AtmosphereView::SkyCache {
 		    .towardsLight = towardsLight,
 		    .turbidity = air.turbidity,
-		    .altitude = altitude,
+		    .altitude = skyAltitude,
 		    .seconds = seconds,
-		    .horizon = atmos::HorizonRadiance(towardsLight, altitude, air, atmos::WorldHorizonY(eye.y - seaLevel, flatReach)),
-		    .sky = gi::SkySh(towardsLight, altitude, air, k_SkySamples),
+		    .horizon = atmos::HorizonRadiance(towardsLight, skyAltitude, air, atmos::WorldHorizonY(skyHeight, flatReach)),
+		    .sky = gi::SkySh(towardsLight, skyAltitude, air, k_SkySamples),
 		};
 	}
 	const auto& cache = *view.cache;
@@ -215,6 +222,13 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.sunColour = {glm::vec3(frame.lightColour) * atmosphere.lightTint, 0.0f};
 	atmosphere.sky = cache.sky;
 	atmosphere.worldCurve = {eye.x, eye.z, flatReach, atmos::k_WorldRadius};
+	// The sky above the air and the aurora. The aurora's night runs from noon to noon, so that one night keeps one
+	// strength.
+	const float mapMiddle = 0.5f * mapSize;
+	const int night = (moon != nullptr ? moon->passedDays : 0) - (hour < 12.0f ? 1 : 0);
+	atmosphere.airSun = {sunTowards, 0.0f};
+	atmosphere.aurora = {atmos::MagneticPole(), atmos::AuroraStrength(night)};
+	atmosphere.airPlanet = {mapMiddle, seaLevel - atmos::k_WorldRadius, mapMiddle, seconds};
 	// The sky's light from above: the mean of the air's upper sky in the colours that the dome shows. It is blue by day
 	// and blue-grey at dusk, because the sky high up does not have the red of the horizon.
 	constexpr glm::vec3 k_Up {0.0f, 1.0f, 0.0f};
@@ -295,6 +309,7 @@ void Renderer::BindAtmosphere(const ShaderProgram& program, float skyShare) cons
 	program.SetUniformValue("u_atmosParams", &atmosphere.params);
 	program.SetUniformValue("u_atmosLight", &atmosphere.light);
 	program.SetUniformValue("u_atmosSun", &atmosphere.sun);
+	BindAirSky(program);
 	program.SetTextureSampler("s_atmosTransmittance", 13, _atmosphere->transmittance.Texture());
 	program.SetTextureSampler("s_atmosSkyView", 14, _atmosphere->skyView.Texture());
 }
@@ -372,13 +387,23 @@ void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarge
 		// The scene far away fades into the sky that the dome shows at the horizon
 		applyProgram->SetTextureSampler("s_atmosSkyView", 14, view.skyView.Texture());
 	}
-	const glm::vec4 apply {grid ? 1.0f : 0.0f, atmosphere.lowTierDensity, atmosphere.sunHeight, 0.0f};
+	// From outside the sky's dome, as from space, the dome is not drawn and this pass draws all of the sky
+	const auto& domeSize = atmosphere.skyDome;
+	const glm::vec3 eye = desc.camera->GetOrigin();
+	const glm::vec3 scaled =
+	    domeSize.z > 0.0f ? glm::vec3 {(eye.x - domeSize.x) / domeSize.z, eye.y / domeSize.w, (eye.z - domeSize.y) / domeSize.z}
+	                      : glm::vec3(0.0f);
+	const bool outsideDome = glm::dot(scaled, scaled) >= 0.7f * 0.7f;
+	const glm::vec4 apply {grid ? 1.0f : 0.0f, atmosphere.lowTierDensity, atmosphere.sunHeight, outsideDome ? 1.0f : 0.0f};
 	applyProgram->SetUniformValue("u_hazeApply", &apply);
 	applyProgram->SetUniformValue("u_hazeHorizon", &atmosphere.horizon);
 	applyProgram->SetUniformValue("u_hazeDome", &atmosphere.skyDome);
 	applyProgram->SetUniformValue("u_hazeSun", &atmosphere.sunDisc);
 	applyProgram->SetUniformValue("u_hazeSunColour", &atmosphere.sunColour);
 	SetWorldCurve(*applyProgram);
+	BindAirSky(*applyProgram);
+	applyProgram->SetTextureSampler("s_atmosTransmittance", 13, _atmosphere->transmittance.Texture());
+	applyProgram->SetTextureSampler("s_atmosSkyView", 14, view.skyView.Texture());
 	BindScreenTriangle();
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_SRC_ALPHA));
 	applyProgram->Submit(static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver), std::numeric_limits<uint32_t>::max());
@@ -403,4 +428,16 @@ void Renderer::SetWorldCurve(const ShaderProgram& program) const
 	}
 	const glm::vec4 flat {0.0f};
 	program.SetUniformValue("u_worldCurve", _atmosphereFrame.has_value() ? &_atmosphereFrame->worldCurve : &flat);
+}
+
+void Renderer::BindAirSky(const ShaderProgram& program) const
+{
+	if (!_atmosphereFrame.has_value() || !program.HasUniform("u_airSun"))
+	{
+		return;
+	}
+	program.SetUniformValue("u_airSun", &_atmosphereFrame->airSun);
+	program.SetUniformValue("u_aurora", &_atmosphereFrame->aurora);
+	program.SetUniformValue("u_airPlanet", &_atmosphereFrame->airPlanet);
+	SetWorldCurve(program);
 }

@@ -662,7 +662,15 @@ glm::vec2 volumetric_clouds::ShadowOrigin(glm::vec2 eye, float window)
 
 float volumetric_clouds::FarthestCloudFor(float eyeHeight)
 {
-	return std::min(k_FarthestCloud + k_FarthestPerHeight * std::max(eyeHeight - k_CloudBase, 0.0f), k_FarthestCloudCap);
+	const float height = std::max(eyeHeight, 0.0f);
+	const float horizon = 1.1f * std::sqrt(height * (height + (2.0f * k_PlanetRadius)));
+	const float near =
+	    std::min(k_FarthestCloud + k_FarthestPerHeight * std::max(eyeHeight - k_CloudBase, 0.0f), k_FarthestCloudCap);
+	// Past the height where the reach meets its cap, the reach eases out to the horizon over the same height again
+	const float capHeight = (k_FarthestCloudCap - k_FarthestCloud) / k_FarthestPerHeight + k_CloudBase;
+	const float t = std::clamp((height - capHeight) / capHeight, 0.0f, 1.0f);
+	const float share = t * t * (3.0f - (2.0f * t));
+	return near + (std::max(horizon, near) - near) * share;
 }
 
 void volumetric_clouds::PackStorms(std::span<const StormCell> cells, CloudUniforms& uniforms)

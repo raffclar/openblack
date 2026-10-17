@@ -47,7 +47,7 @@ void main()
 	vec3 eye = mul(u_invView, vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
 	float depth = texture2DLod(s_sceneDepth, uv, 0.0f).r;
 	bool sky = depth <= 0.0f;
-	vec3 dir = normalize(WorldAt(uv, 0.5f) - eye);
+	vec3 dir = ViewRayAt(uv);
 	vec3 world = WorldAt(uv, depth);
 	sky = sky || OnSkyDome(world);
 	float range = sky ? u_fogGrid.w : length(world - eye);

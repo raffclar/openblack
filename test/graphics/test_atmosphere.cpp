@@ -508,3 +508,25 @@ TEST(Atmosphere, TheNightSkyGivesAFaintLightAfterSunset)
 	EXPECT_NEAR(atmos::NightGlow(sine(-5.0f)), 0.5f * atmos::k_NightGlow, 1e-3f);
 	EXPECT_FLOAT_EQ(atmos::NightGlow(sine(-30.0f)), atmos::k_NightGlow);
 }
+
+TEST(Atmosphere, TheIslandSitsUnderTheAurorasOvalOnStrongNights)
+{
+	// The island is at a magnetic latitude of 58 degrees, and the pole is to the north
+	EXPECT_NEAR(atmos::MagneticLatitude({0.0f, 1.0f, 0.0f}), 58.0f, 1e-3f);
+	EXPECT_GT(glm::dot(atmos::MagneticPole(), atmos::k_North), 0.5f);
+	// The strength of each night is from 0 to 1: most nights are weak and some are strong
+	float sum = 0.0f;
+	int strong = 0;
+	for (int night = 0; night < 1000; ++night)
+	{
+		const float strength = atmos::AuroraStrength(night);
+		EXPECT_GE(strength, 0.0f);
+		EXPECT_LE(strength, 1.0f);
+		sum += strength;
+		strong += strength > 0.8f ? 1 : 0;
+	}
+	EXPECT_LT(sum / 1000.0f, 0.45f);
+	EXPECT_GT(strong, 50);
+	// The same night always has the same strength
+	EXPECT_EQ(atmos::AuroraStrength(7), atmos::AuroraStrength(7));
+}

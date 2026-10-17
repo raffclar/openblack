@@ -271,7 +271,9 @@ TEST(VolumetricClouds, FromHighUpTheCloudsAndTheirShadowReachFarther)
 	EXPECT_GE(clouds::ShadowWindowFor(8000.0f), 8000.0f * 2.0f);
 	EXPECT_FLOAT_EQ(clouds::FarthestCloudFor(100.0f), clouds::k_FarthestCloud);
 	EXPECT_GT(clouds::FarthestCloudFor(10000.0f), clouds::FarthestCloudFor(5000.0f));
-	EXPECT_FLOAT_EQ(clouds::FarthestCloudFor(1e7f), clouds::k_FarthestCloudCap);
+	EXPECT_NEAR(clouds::FarthestCloudFor(60900.0f), clouds::k_FarthestCloudCap, 1000.0f);
+	// From space the clouds reach past the horizon of the world's ball
+	EXPECT_GT(clouds::FarthestCloudFor(1e6f), 3.0e6f);
 	// A texel of a wide map lies on whole texels too
 	const float window = clouds::ShadowWindowFor(9000.0f);
 	const auto origin = clouds::ShadowOrigin({1234.5f, 2345.6f}, window);

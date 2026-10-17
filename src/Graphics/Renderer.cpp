@@ -5850,13 +5850,28 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			submitDesc.matrixCount = 1;
 			submitDesc.isSky = true;
 
+			// EXPERIMENT (not for merge): from outside the dome, as from space, the haze's pass draws the air's sky
+			// where the dome is not, and the game's sun near the land does not show
+			bool insideDome = true;
+			if (_atmosphereFrame.has_value() && _atmosphereFrame->haze && _atmosphereFrame->skyDome.z > 0.0f)
+			{
+				const auto& domeSize = _atmosphereFrame->skyDome;
+				const auto eye = desc.camera->GetOrigin();
+				const glm::vec3 scaled {(eye.x - domeSize.x) / domeSize.z, eye.y / domeSize.w,
+				                        (eye.z - domeSize.y) / domeSize.z};
+				insideDome = glm::dot(scaled, scaled) < 0.7f * 0.7f;
+			}
 			const auto* dome =
 			    Locator::entitiesRegistry::value().TryGet<ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
-			if (const auto* mesh = dome != nullptr ? Locator::resources::value().GetMeshes().Find(dome->meshId) : nullptr)
+			if (const auto* mesh = dome != nullptr ? Locator::resources::value().GetMeshes().Find(dome->meshId) : nullptr;
+			    mesh != nullptr && insideDome)
 			{
 				DrawMesh(*mesh, submitDesc, 0);
 			}
-			DrawSun(skyViewId);
+			if (insideDome)
+			{
+				DrawSun(skyViewId);
+			}
 			DrawMoon(skyViewId);
 		}
 	}

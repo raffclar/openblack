@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <limits>
 #include <numbers>
 
 #include <glm/common.hpp>
@@ -511,37 +512,85 @@ float atmosphere::FlatReach(glm::vec2 eye, float mapSize)
 float atmosphere::WorldDrop(float distance, float flatReach)
 {
 	const float past = std::max(distance - flatReach, 0.0f);
-	return past * past / (2.0f * k_WorldRadius);
+	if (past >= k_WorldRadius)
+	{
+		return std::numeric_limits<float>::max();
+	}
+	return past * past / (k_WorldRadius + std::sqrt((k_WorldRadius * k_WorldRadius) - (past * past)));
 }
 
 std::optional<float> atmosphere::CurvedSeaDistance(float heightOverSea, glm::vec3 direction, float flatReach)
 {
-	if (direction.y >= 0.0f || heightOverSea <= 0.0f)
+	if (heightOverSea <= 0.0f)
 	{
 		return std::nullopt;
 	}
 	const float across = glm::length(glm::vec2(direction.x, direction.z));
-	const float flat = heightOverSea / -direction.y;
-	if (flat * across <= flatReach)
+	if (direction.y < 0.0f)
 	{
-		return flat;
+		const float straight = heightOverSea / -direction.y;
+		if (straight * across <= flatReach)
+		{
+			return straight;
+		}
 	}
-	// Past the flat reach the gap between the ray and the sea is c - k u + u^2 / (2 R), with u the distance across
-	// the ground past the reach
-	const float k = -direction.y / across;
-	const float c = heightOverSea - k * flatReach;
-	const float disc = k * k - 2.0f * c / k_WorldRadius;
-	if (disc < 0.0f)
+	// In the ray's upright plane the eye is at (-flatReach, heightOverSea + R) from the ball's middle, and the ray meets
+	// the ball where t^2 + 2 b t + c = 0
+	const float up = heightOverSea + k_WorldRadius;
+	const float b = (-across * flatReach) + (direction.y * up);
+	const float c = (flatReach * flatReach) + (heightOverSea * (heightOverSea + (2.0f * k_WorldRadius)));
+	const float disc = (b * b) - c;
+	if (disc < 0.0f || b >= 0.0f)
 	{
 		return std::nullopt;
 	}
-	const float u = 2.0f * c / (k + std::sqrt(disc));
-	return (u + flatReach) / across;
+	const float q = -b + std::sqrt(disc);
+	const float t = c / q;
+	if (t * across < flatReach * 0.999f)
+	{
+		return std::nullopt;
+	}
+	return t;
 }
 
 float atmosphere::WorldHorizonY(float heightOverSea, float flatReach)
 {
-	const float d = flatReach / k_WorldRadius;
-	const float k = std::sqrt(d * d + 2.0f * std::max(heightOverSea, 0.0f) / k_WorldRadius) - d;
-	return -k / std::sqrt(1.0f + k * k);
+	const float up = std::max(heightOverSea, 0.0f) + k_WorldRadius;
+	const float toMiddle = std::sqrt((flatReach * flatReach) + (up * up));
+	const float down = std::atan2(up, flatReach) - std::asin(std::min(k_WorldRadius / toMiddle, 1.0f));
+	return -std::sin(down);
+}
+
+glm::vec3 atmosphere::MagneticPole()
+{
+	const float angle = k_PoleFromIslandDegrees * k_Pi / 180.0f;
+	return (std::cos(angle) * glm::vec3(0.0f, 1.0f, 0.0f)) + (std::sin(angle) * k_North);
+}
+
+float atmosphere::MagneticLatitude(glm::vec3 up)
+{
+	return std::asin(std::clamp(glm::dot(glm::normalize(up), MagneticPole()), -1.0f, 1.0f)) * 180.0f / k_Pi;
+}
+
+float atmosphere::AuroraStrength(int night)
+{
+	// A hash of the night's number, then most nights pushed low
+	auto bits = static_cast<uint32_t>(night) * 2654435761u + 0x9E3779B9u;
+	bits ^= bits >> 15u;
+	bits *= 2246822519u;
+	bits ^= bits >> 13u;
+	const float random = static_cast<float>(bits & 0xFFFFu) / 65535.0f;
+	return std::pow(random, 1.8f);
+}
+
+glm::vec3 atmosphere::LightEye(glm::vec3 eye, float seaLevel)
+{
+	constexpr glm::vec2 k_MapMiddle {2560.0f, 2560.0f};
+	glm::vec2 across = glm::vec2(eye.x, eye.z) - k_MapMiddle;
+	const float distance = glm::length(across);
+	if (distance > k_LightEyeReach)
+	{
+		across *= k_LightEyeReach / distance;
+	}
+	return {k_MapMiddle.x + across.x, std::min(eye.y, seaLevel + k_LightEyeHeight), k_MapMiddle.y + across.y};
 }

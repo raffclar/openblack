@@ -51,9 +51,8 @@ inline constexpr float k_CloudBase = 300.0f;
 inline constexpr float k_StratusDepth = 160.0f;
 inline constexpr float k_CumulusDepth = 520.0f;
 inline constexpr float k_CumulonimbusDepth = 1500.0f;
-/// The radius of the curve of the layer. The sea is flat to the horizon, so the curve is very slight: the layer goes
-/// down a little with distance, and the far clouds stay over the sea.
-inline constexpr float k_PlanetRadius = 3000000.0f;
+/// The radius of the world's ball (atmosphere::k_WorldRadius): the layer is a shell round it
+inline constexpr float k_PlanetRadius = 6371.0f * 949.0f;
 /// The farthest that a ray goes through the clouds
 inline constexpr float k_FarthestCloud = 18000.0f;
 
@@ -252,7 +251,8 @@ enum class CoverChoice : uint8_t
 [[nodiscard]] glm::vec2 ShadowOrigin(glm::vec2 eye, float window);
 
 /// How far away the clouds show for the eye's height over the sea: k_FarthestCloud near the land, farther from high up
-/// so that the layer under a high eye has no edge, at most k_FarthestCloudCap
+/// so that the layer under a high eye has no edge, at most k_FarthestCloudCap. From very high up the clouds reach past
+/// the horizon of the world's ball, so the layer goes all the way to the limb.
 [[nodiscard]] float FarthestCloudFor(float eyeHeight);
 
 /// The shaders' uniforms of the clouds for a frame
