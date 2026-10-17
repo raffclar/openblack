@@ -1739,8 +1739,8 @@ TEST(CreatureWatching, TaughtSightingsAreTheTimesNeededRoundedDown)
 	EXPECT_EQ(creature_watching::TaughtSightings(10, 1.5f), 15u);
 	// 9 * 1.7 is 15.3
 	EXPECT_EQ(creature_watching::TaughtSightings(9, 1.7f), 15u);
-	// 10 * 0.7 falls just short of 7 at full precision
-	EXPECT_EQ(creature_watching::TaughtSightings(10, 0.7f), 6u);
+	// 10 * 0.7 is just short of 7, but the float product rounds to 7
+	EXPECT_EQ(creature_watching::TaughtSightings(10, 0.7f), 7u);
 	EXPECT_EQ(creature_watching::TaughtSightings(0, 4.0f), 0u);
 }
 

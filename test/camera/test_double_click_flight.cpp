@@ -8,7 +8,9 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
+#include <bit>
 #include <chrono>
 #include <memory>
 #include <numbers>
@@ -176,6 +178,15 @@ TEST(DoubleClickFlight, TheFlightLooksOverTheLowestLand)
 	const auto best = BestBearing(FlatLand(0.0f), {.heading = 0.0f, .pitch = 0.1f}, 100.0f, {});
 	EXPECT_NEAR(best.pitch, 0.02f + 0.2f * 1.53938043f * 0.5f + 0.37699114f, 1e-5f);
 	EXPECT_FLOAT_EQ(best.heading, 0.0f);
+}
+
+TEST(DoubleClickFlight, TheEndPitchRoundsAsTheGameDoes)
+{
+	// The land's share is a multiply by a double, and the base pitch is a double: each step rounds to a float one time
+	const auto first = BestBearing(FlatLand(0.0f), {.heading = 0.0f, .pitch = 0.1f}, 100.0f, {});
+	EXPECT_EQ(std::bit_cast<uint32_t>(first.pitch), 0x3F0D09B2u);
+	const auto second = BestBearing(FlatLand(0.0f), {.heading = 0.0f, .pitch = 0.77f}, 100.0f, {});
+	EXPECT_EQ(std::bit_cast<uint32_t>(second.pitch), 0x3F2F5785u);
 }
 
 TEST(DoubleClickFlight, APlaceOutsideTheFenceIsMovedOntoItAndOneBeyondTheDiscIsNotFlownTo)

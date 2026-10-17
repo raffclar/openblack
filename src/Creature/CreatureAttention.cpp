@@ -13,12 +13,16 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 
 bool creature_attention::IsLookingAt(const glm::vec3& origin, const glm::vec3& focus, const glm::vec3& creature)
 {
+	// The lengths and the dot product add z, then y, then x. Each vector is multiplied by the inverse of its length
 	const auto offset = creature - origin;
-	const auto distance = glm::length(offset);
+	const float distance = x87::LengthZyx(offset);
 	if (distance == 0.0f || distance >= k_LookingRange)
 	{
 		return false;
@@ -27,25 +31,27 @@ bool creature_attention::IsLookingAt(const glm::vec3& origin, const glm::vec3& f
 	auto ahead = focus - origin;
 	if (ahead != glm::vec3(0.0f))
 	{
-		ahead = glm::normalize(ahead);
+		ahead *= 1.0f / x87::LengthZyx(ahead);
 	}
-	return glm::dot(offset / distance, ahead) > std::cos(k_LookingAngle);
+	// The cosine of the angle stays wide in the compare
+	return x87::Greater(x87::DotZyx(offset * (1.0f / distance), ahead), x87::Cos(k_LookingAngle));
 }
 
-double creature_attention::Share(uint32_t turnsLookedAt, uint32_t turnsLived)
+float creature_attention::Share(uint32_t turnsLookedAt, uint32_t turnsLived)
 {
 	if (turnsLived == 0)
 	{
-		return 0.0;
+		return 0.0f;
 	}
-	// The lived turns are counted as a signed number when divided
-	return static_cast<double>(turnsLookedAt) / static_cast<double>(static_cast<int32_t>(turnsLived));
+	// The lived turns are counted as a signed number when divided. The two counts are exact, and the quotient rounds
+	// to a float one time
+	return x87::Div(static_cast<double>(turnsLookedAt), static_cast<double>(static_cast<int32_t>(turnsLived)));
 }
 
-int32_t creature_attention::HowMuch(double share)
+int32_t creature_attention::HowMuch(float share)
 {
 	constexpr int64_t k_Most = 4;
-	const auto level = static_cast<int64_t>(share * 5.0);
+	const auto level = static_cast<int64_t>(share * 5.0f);
 	// Counted without a sign, a level below nothing is the most
 	return static_cast<int32_t>(level < 0 || level > k_Most ? k_Most : level);
 }

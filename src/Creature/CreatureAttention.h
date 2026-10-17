@@ -30,10 +30,10 @@ inline constexpr float k_LookingAngle = 1.2217305f * 0.6666667f;
 [[nodiscard]] bool IsLookingAt(const glm::vec3& origin, const glm::vec3& focus, const glm::vec3& creature);
 
 /// The share of the turns a creature has lived that its player looked at it, 0 before it has lived a turn
-[[nodiscard]] double Share(uint32_t turnsLookedAt, uint32_t turnsLived);
+[[nodiscard]] float Share(uint32_t turnsLookedAt, uint32_t turnsLived);
 
 /// The five words for how much attention, as a number from 0 (the least) to 4: a fifth of the share each, the most
 /// for all from four fifths up (and, as the game counts, for a share below nothing)
-[[nodiscard]] int32_t HowMuch(double share);
+[[nodiscard]] int32_t HowMuch(float share);
 
 } // namespace openblack::creature_attention

@@ -8,7 +8,9 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
+#include <bit>
 #include <limits>
 #include <optional>
 
@@ -55,6 +57,20 @@ TEST(CreatureFire, ChoosesToPutOutOnlyWhenItCaresAndKnowsWater)
 	EXPECT_EQ(creature_fire::Choose(0.125f, 1.0f, 0.0f, 0.0f), Response::PutOut);
 	// No number for how much it cares: it runs
 	EXPECT_EQ(creature_fire::Choose(std::numeric_limits<float>::quiet_NaN(), 1.0f, 3.0f, 3.0f), Response::RunAway);
+}
+
+TEST(CreatureFire, TheSumsAndSharesRoundToAFloatBeforeTheTests)
+{
+	// The two reaches add to exactly 1 as a float, so a fire at 1 is not within them
+	EXPECT_EQ(creature_fire::Priority(1.0f, 1.0f, std::ldexp(1.0f, -24), 3.0f, 10.0f, 120), 0);
+	// The exact share is a little above a fifth, but the float share is a fifth, which is not more than a fifth
+	const float height = std::bit_cast<float>(0x406E2742u);
+	const float targetHeight = std::bit_cast<float>(0x4194D889u);
+	EXPECT_EQ(creature_fire::Priority(1.0f, 5.0f, 5.0f, height, targetHeight, 120), 0);
+	// The exact product is a little above the least use, but the float product is equal to it
+	const float usefulness = std::bit_cast<float>(0x3E913F64u);
+	const float compassion = std::bit_cast<float>(0x3E347B13u);
+	EXPECT_EQ(creature_fire::Choose(usefulness, compassion, 3.0f, 3.0f), creature_fire::Response::RunAway);
 }
 
 TEST(CreatureFire, WhatABurningThingBelongsTo)

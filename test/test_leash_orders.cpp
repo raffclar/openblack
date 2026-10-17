@@ -231,6 +231,8 @@ TEST(LeashOrders, Agendas)
 	EXPECT_NEAR(RunWaitSeconds(0.0f, 10.0f), 2.0f, k_Tolerance);
 	EXPECT_NEAR(RunWaitSeconds(2.97f, 10.0f), 4.9f, k_Tolerance);
 	EXPECT_NEAR(HoldSeconds(5.0f, 10.0f), 45.0f, k_Tolerance);
+	// 2.1 seconds at ten turns a second: the float product is 21, so the wait is 21 whole turns
+	EXPECT_EQ(RunWaitSeconds(0.1f, 10.0f), 21.0f / 10.0f);
 
 	const auto put = PutDownAt({1.0f, 2.0f}, 5.0f);
 	ASSERT_EQ(put.size(), 2u);

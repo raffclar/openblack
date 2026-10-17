@@ -8,9 +8,11 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <numbers>
 #include <vector>
 
@@ -255,4 +257,27 @@ TEST(CreatureObstacles, TurnsAreReadOffTheModelsAxis)
 {
 	const auto rotation = glm::mat3(glm::eulerAngleY(-0.6f));
 	EXPECT_NEAR(YAngleOf(rotation), 0.6f, k_Tolerance);
+}
+
+TEST(CreatureObstacles, TempleCirclesRoundAsTheGameDoes)
+{
+	// The steps round to a float one at a time. The straight circles of a spoke use its sine and cosine kept as floats,
+	// and the bent circles and the worship sites use them wide
+	const std::array<bool, 6> sites {true, true, true, true, true, true};
+	const auto circles = TempleCircles({1934.37f, 2571.81f}, 0.734f, 0.5f, sites);
+	ASSERT_EQ(circles.size(), 39u);
+	const auto expect = [&circles](size_t index, uint32_t x, uint32_t z, uint32_t radius) {
+		EXPECT_EQ(std::bit_cast<uint32_t>(circles.at(index).centre.x), x) << index;
+		EXPECT_EQ(std::bit_cast<uint32_t>(circles.at(index).centre.y), z) << index;
+		EXPECT_EQ(std::bit_cast<uint32_t>(circles.at(index).radius), radius) << index;
+	};
+	expect(0, 0x44F1CBD7u, 0x4520BCF6u, 0x416DC28Fu);
+	expect(1, 0x44F18092u, 0x451FC133u, 0x40175C29u);
+	expect(4, 0x44F17A75u, 0x451EF1CDu, 0x40175C29u);
+	expect(6, 0x44F249DEu, 0x451EB95Bu, 0x40175C29u);
+	expect(7, 0x44F32695u, 0x45200291u, 0x40175C29u);
+	expect(11, 0x44F3F263u, 0x451F2121u, 0x40175C29u);
+	expect(13, 0x44F4A478u, 0x45204397u, 0x41400000u);
+	expect(19, 0x44F2EA21u, 0x45218F76u, 0x40175C29u);
+	expect(38, 0x44F03D0Cu, 0x451F74CAu, 0x41400000u);
 }

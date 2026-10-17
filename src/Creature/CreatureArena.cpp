@@ -18,6 +18,7 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::creature_arena;
@@ -32,14 +33,16 @@ constexpr float k_PacePerSize = 20.0f;
 constexpr float k_PaceMargin = 1.1f;
 
 constexpr float k_CellSize = map_coords::k_CellSize;
+constexpr float k_FixedPerUnit = 65536.0f;
+constexpr float k_PerFixed = 1.0f / 65536.0f;
 
 /// The 16.16 position of a cell's corner moved on by a distance in metres, as the search turns a square into a place
 int32_t CornerPlus(int32_t cell, float metres)
 {
 	// The cell's 16.16 value, wrapped as the game's 16-bit cells wrap
 	const auto fixed = static_cast<int32_t>(static_cast<uint32_t>(static_cast<uint16_t>(cell)) << 16u);
-	const double inMetres = static_cast<double>(fixed) * static_cast<double>(k_CellSize) / 65536.0;
-	const double back = (inMetres + static_cast<double>(metres)) * 65536.0 / static_cast<double>(k_CellSize);
+	const float inMetres = static_cast<float>(fixed) * k_CellSize * k_PerFixed;
+	const float back = (inMetres + metres) * k_FixedPerUnit / k_CellSize;
 	return static_cast<int32_t>(back);
 }
 } // namespace
@@ -94,12 +97,12 @@ std::optional<glm::ivec2> creature_arena::FindClearPlace(glm::ivec2 start, float
 	{
 		return std::nullopt;
 	}
-	const double halfDiameter = static_cast<double>(diameter) * 0.5;
-	const double reach = static_cast<double>(diameter) * static_cast<double>(diameter) * 0.25;
+	const float halfDiameter = diameter * 0.5f;
+	const float reach = diameter * diameter * 0.25f;
 	// Whether a cell of the square, by its place in it, lies under the circle
 	const auto underCircle = [&](uint32_t p, uint32_t q) {
-		const double across = halfDiameter - ((static_cast<double>(p) * k_CellSize) + (k_CellSize * 0.5));
-		const double along = halfDiameter - ((static_cast<double>(q) * k_CellSize) + (k_CellSize * 0.5));
+		const float across = halfDiameter - ((static_cast<float>(p) * k_CellSize) + (k_CellSize * 0.5f));
+		const float along = halfDiameter - ((static_cast<float>(q) * k_CellSize) + (k_CellSize * 0.5f));
 		return (along * along) + (across * across) <= reach;
 	};
 
@@ -126,8 +129,8 @@ std::optional<glm::ivec2> creature_arena::FindClearPlace(glm::ivec2 start, float
 			{
 				continue;
 			}
-			const glm::ivec2 place {CornerPlus(firstX + static_cast<int32_t>(a), static_cast<float>(halfDiameter)),
-			                        CornerPlus(firstZ + static_cast<int32_t>(b), static_cast<float>(halfDiameter))};
+			const glm::ivec2 place {CornerPlus(firstX + static_cast<int32_t>(a), halfDiameter),
+			                        CornerPlus(firstZ + static_cast<int32_t>(b), halfDiameter)};
 			const float distance = gutils::GetDistanceInMetres(start, place);
 			if (distance < bestDistance)
 			{
@@ -177,14 +180,15 @@ bool creature_arena::KeepsArenaOff(const ThingInCell& thing, float creatureSize,
 
 std::vector<glm::vec3> creature_arena::RingPoints(glm::vec2 centre, float radius, const GroundHeight& ground)
 {
-	constexpr auto k_FullTurn = static_cast<double>(2.0f * std::numbers::pi_v<float>);
+	constexpr float k_FullTurn = 2.0f * std::numbers::pi_v<float>;
 	std::vector<glm::vec3> points;
 	points.reserve(k_RingPoints);
 	for (uint32_t i = 0; i < k_RingPoints; ++i)
 	{
-		const double angle = static_cast<double>(i) * k_FullTurn / (static_cast<double>(k_RingPoints) - 1.0);
-		const glm::vec2 at {static_cast<float>((std::cos(angle) * radius) + centre.x),
-		                    static_cast<float>((std::sin(angle) * radius) + centre.y)};
+		const float angle = (static_cast<float>(i) * k_FullTurn) / (static_cast<float>(k_RingPoints) - 1.0f);
+		// The cosine is kept as a float before the multiply; the sine goes wide into it
+		const float cosine = x87::RoundToFloat(x87::Cos(angle));
+		const glm::vec2 at {(cosine * radius) + centre.x, x87::Mul(x87::Sin(angle), radius) + centre.y};
 		points.emplace_back(at.x, ground(at), at.y);
 	}
 	return points;
