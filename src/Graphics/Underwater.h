@@ -388,6 +388,16 @@ inline constexpr float k_GroupRange = 1.2f;
 /// storm. Real waves break at about 0.44.
 inline constexpr float k_SteepestWaveCalm = 0.12f;
 inline constexpr float k_SteepestWaveStorm = 0.16f;
+/// The chop of the wind: short waves with pointed crests over the long waves. The height of its first octave on a
+/// calm day and its length, in metres; the octaves in the height of the surface and in its normal
+inline constexpr float k_ChopMetres = 0.25f;
+inline constexpr float k_ChopLengthMetres = 30.0f;
+inline constexpr int k_ChopGeometryOctaves = 3;
+inline constexpr int k_ChopShadingOctaves = 5;
+/// The height of the chop over its mean at a point, from `octaves` octaves. Each octave is a grid of crests that noise
+/// bends, with a round trough and a pointed crest, in two copies that move in opposite directions. The next octave
+/// turns, is 3.8 times shorter, 0.22 times as high and less pointed. UwChop in underwater.sh is the same.
+[[nodiscard]] float ChopAt(glm::vec2 point, float seconds, const WaveState& waves, int octaves);
 /// A wave's height after a soft cap at a limit: about the height while it is low, never more than the limit, and with
 /// no sharp change. `rate` is the change of the result for each change of the height.
 [[nodiscard]] float CapSteepness(float height, float limit, float& rate);

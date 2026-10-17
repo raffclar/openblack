@@ -121,6 +121,10 @@ vec4 ShoreAt(vec2 xz)
 	return UwOpenSea(texture2DLod(s_shore, UwShoreUv(xz), 0.0f), xz);
 }
 
+// The open sea's colours: the deep body, and the pale green-yellow of the tops of the waves
+#define UW_SEA_DEEP vec3(0.02f, 0.11f, 0.17f)
+#define UW_SEA_TOPS vec3(0.48f, 0.54f, 0.36f)
+
 // The height of the surface at a point near the eye
 float SurfaceHeight(vec2 p, float t)
 {
@@ -299,9 +303,10 @@ float Shelter(vec2 at)
 }
 
 float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, out float face, out vec4 shore,
-                           out float variance, out float whitecap)
+                           out float variance, out float whitecap, out float chopShare)
 {
 	whitecap = 0.0f;
+	chopShare = 0.0f;
 	float along = (u_uwParams.z - eye.y) / direction.y;
 	slope = vec2_splat(0.0f);
 	face = 0.0f;
@@ -322,7 +327,7 @@ float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, ou
 		shore = ShoreAt(at);
 		float height =
 		    UwSurfaceSheltered(at, t, FootprintOnWater(direction, max(along, 0.0f)), shore, shelter, slope, face, variance,
-		                       whitecap);
+		                       whitecap, chopShare);
 		along = NextAlong(along, eye.y, direction, height, slope);
 	}
 	return along;
@@ -751,8 +756,9 @@ void main()
 		vec4 shore;
 		float slopeVariance;
 		float whitecapEnvelope;
-		float toSurface =
-		    RayToSurfaceFiltered(eye, direction, t, surfaceSlope, face, shore, slopeVariance, whitecapEnvelope);
+		float chopShare;
+		float toSurface = RayToSurfaceFiltered(eye, direction, t, surfaceSlope, face, shore, slopeVariance, whitecapEnvelope,
+		                                       chopShare);
 		// The small ripples on the waves keep the reflection soft, so that the steep faces of the waves do not mirror the
 		// sky like metal
 		float roughness = max(UwRoughness(slopeVariance), 0.17f) + 0.05f * smoothstep(25.0f, 160.0f, toSurface);
@@ -768,6 +774,18 @@ void main()
 			// The filtered waves keep their slope far away: the roughness takes the waves that the pixel cannot show
 			vec3 strike = StrikeRing(surfacePoint.xz);
 			vec2 shownSlope = surfaceSlope + ring.xy + strike.xy;
+			// The slope of the chop of the wind, from all its octaves, found from three heights. The step between the
+			// heights grows with the distance, so far water stays smooth.
+			if (chopShare > 0.0f)
+			{
+				float chopStep = max(0.04f, 0.004f * toSurface);
+				// An octave shorter than a few steps fades out, so the steps do not alias it into noise
+				float chopPixel = max(FootprintOnWater(direction, toSurface).x, chopStep);
+				float chopHere = UwChop(surfacePoint.xz, t, UW_CHOP_SHADING, chopPixel);
+				float chopX = UwChop(surfacePoint.xz + vec2(chopStep, 0.0f), t, UW_CHOP_SHADING, chopPixel);
+				float chopZ = UwChop(surfacePoint.xz + vec2(0.0f, chopStep), t, UW_CHOP_SHADING, chopPixel);
+				shownSlope += vec2(chopX - chopHere, chopZ - chopHere) / chopStep * chopShare;
+			}
 			vec3 normal = u_uwSea.x > 0.5f ? normalize(vec3(-shownSlope.x, 1.0f, -shownSlope.y))
 			                               : UwSurfaceNormalOf(shownSlope, toSurface);
 			// The small ripples on the waves, too small for the sum of waves: they break up the reflection near the eye,
@@ -848,7 +866,9 @@ void main()
 			// where the small waves send part of the reflection away from the eye
 			// The waves near the eye hide part of the grazing reflection with their own crests, so at most 0.65 of the
 			// light is the reflection
-			float fresnel = min((0.02f + 0.98f * pow(max(1.0f - facing, 0.0f), 5.0f)) * mix(1.0f, 0.6f, clamp(roughness * 2.5f, 0.0f, 1.0f)), 0.65f);
+			// The reflection grows as the cube of the angle away from straight down, and at most half of the light is
+			// the reflection, so the colour of the water always shows
+			float fresnel = min(pow(max(1.0f - facing, 0.0f), 3.0f), 0.5f);
 			// The clouds' and the hills' shadows take away the glint and some of the light in the water
 			float cloudShade = CloudShadeAt(surfacePoint.xz) * SunVisibilityAt(surfacePoint.xz);
 			water *= mix(0.8f, 1.0f, cloudShade);
@@ -866,6 +886,16 @@ void main()
 			// Thick water: it reads green-teal, lighter on the crests and darker in the troughs
 			float waveLift = clamp(lift / max(UwWaveTop(), 1e-3f) * 0.5f + 0.5f, 0.0f, 1.0f);
 			water = mix(water, water * vec3(0.85f, 1.05f, 0.92f), 0.6f * (1.0f - pond)) * mix(0.72f, 1.22f, waveLift);
+			// The open sea: a deep blue-green body with a little light that comes through the faces of the waves, and a
+			// pale green-yellow on the tops of the waves, more on the higher tops and less far away
+			vec3 seaLight = u_uwLightColour.rgb * u_uwLightColour.w * cloudShade + u_uwSky.rgb * 0.35f;
+			float openWater = smoothstep(4.0f, 20.0f, u_uwParams.z - shore.w) * (1.0f - pond);
+			float wrap = pow(clamp(dot(normal, u_uwAbove.xyz) * 0.4f + 0.6f, 0.0f, 1.0f), 40.0f);
+			vec3 body = (UW_SEA_DEEP + UW_SEA_TOPS * 0.12f * wrap) * seaLight;
+			water = mix(water, body, openWater * 0.6f);
+			float nearTops = max(1.0f - (toSurface / 220.0f) * (toSurface / 220.0f), 0.0f);
+			water += UW_SEA_TOPS * seaLight * clamp(lift / max(UwWaveTop(), 1e-3f), -0.4f, 1.0f) * 0.18f * nearTops *
+			         (1.0f - pond);
 			// The faces of the waves that turn to the light are lighter, and the faces that turn away are darker, as the
 			// sides of a lit hill are. This gives the waves their shape in the light.
 			vec3 toSun = u_uwAbove.xyz;
@@ -887,6 +917,10 @@ void main()
 			                               : pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f) * 3.0f;
 			float glintShade = CloudShadeAt(surfacePoint.xz) * SunLightAt(surfacePoint.xz);
 			colour += u_uwLightColour.rgb * glint * u_uwLightColour.w * glintShade;
+			// A sharp highlight of the sun on each wave, which fades with the distance
+			float highlight = pow(max(dot(reflected, toSun), 0.0f), 60.0f) * (68.0f / (3.1415927f * 8.0f));
+			colour += u_uwLightColour.rgb * u_uwLightColour.w * glintShade * highlight * 0.5f *
+			          (1.0f - smoothstep(40.0f, 400.0f, toSurface)) * (1.0f - pond);
 			// The glint of the bolt, and the ring where a strike hit the sea
 			colour += LightningGlint(surfacePoint, normal, -direction, roughness);
 			colour += UW_FLASH_COLOUR * strike.z;

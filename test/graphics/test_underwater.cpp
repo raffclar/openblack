@@ -1300,3 +1300,46 @@ TEST(UnderwaterWaves, WhiteHorsesGrowWithTheWind)
 	EXPECT_LT(shares[1], shares[2]);
 	EXPECT_GT(shares[2], 0.04f);
 }
+
+TEST(UnderwaterWaves, TheChopOfTheWindHasPointedCrestsAndGrowsInAStorm)
+{
+	// The chop stays about its mean, has narrow crests and broad troughs, and a storm makes it higher
+	const auto range = [](float storm, float& mean, float& highShare) {
+		const auto waves = underwater::WavesFor(storm, 0.3f);
+		float low = 1e9f;
+		float high = -1e9f;
+		float sum = 0.0f;
+		std::vector<float> heights;
+		for (float x = 0.0f; x < 120.0f; x += 0.37f)
+		{
+			for (float z = 0.0f; z < 120.0f; z += 0.41f)
+			{
+				const float h = underwater::ChopAt({x, z}, 4.0f, waves, underwater::k_ChopGeometryOctaves);
+				heights.push_back(h);
+				low = std::min(low, h);
+				high = std::max(high, h);
+				sum += h;
+			}
+		}
+		mean = sum / static_cast<float>(heights.size());
+		// The share of the points in the top half of the range: small for narrow crests
+		const float middle = 0.5f * (low + high);
+		highShare = static_cast<float>(std::ranges::count_if(heights, [middle](float h) { return h > middle; })) /
+		            static_cast<float>(heights.size());
+		return high - low;
+	};
+	float calmMean = 0.0f;
+	float calmHigh = 0.0f;
+	float stormMean = 0.0f;
+	float stormHigh = 0.0f;
+	const float calm = range(0.0f, calmMean, calmHigh);
+	const float storm = range(1.0f, stormMean, stormHigh);
+	EXPECT_GT(calm, 0.0f);
+	EXPECT_GT(storm, calm * 2.0f);
+	EXPECT_LT(std::abs(calmMean), calm * 0.1f);
+	EXPECT_LT(calmHigh, 0.4f);
+	// No waves, no chop
+	auto still = underwater::WavesFor(0.0f, 0.3f);
+	still.scale = 0.0f;
+	EXPECT_FLOAT_EQ(underwater::ChopAt({10.0f, 20.0f}, 3.0f, still, 5), 0.0f);
+}

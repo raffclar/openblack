@@ -306,6 +306,60 @@ float UwShoaling(float k, float depth)
 	return 1.0f / sqrt(max(group, 1e-4f));
 }
 
+// The chop of the wind: short waves with pointed crests over the long waves of the sea. Each octave is a grid of
+// crests that noise bends, with a round trough and a pointed crest. Two copies of each octave move in opposite
+// directions. The next octave turns, is 3.8 times shorter, 0.22 times as high and less pointed. The same as
+// underwater::ChopAt: change them together.
+// The height of the first octave on a calm day, and its length, in metres (underwater::k_ChopMetres and
+// k_ChopLengthMetres)
+#define UW_CHOP_METRES 0.25f
+#define UW_CHOP_LENGTH_METRES 30.0f
+// The octaves for the height of the surface, and the octaves for its normal
+#define UW_CHOP_GEOMETRY 3
+#define UW_CHOP_SHADING 5
+
+// One octave of the chop at a point of its grid, 0 in the trough to 1 on the crest. `pointed` makes the crests
+// narrower and the troughs broader.
+float UwChopOctave(vec2 q, float pointed)
+{
+	q += vec2_splat(UwNoise(q) * 2.0f - 1.0f);
+	vec2 edge = 1.0f - abs(sin(q));
+	vec2 trough = mix(edge, abs(cos(q)), edge);
+	return pow(max(1.0f - pow(max(trough.x * trough.y, 0.0f), 0.6f), 0.0f), pointed);
+}
+
+// The height of the chop over its mean at a point. `octaves` is how many octaves to add, and `pixel` is the size of a
+// pixel on the water there: an octave that the pixel cannot show fades out.
+float UwChop(vec2 p, float t, int octaves, float pixel)
+{
+	float amplitude = UW_CHOP_METRES * UW_UNITS_PER_METRE * (1.0f + 2.0f * u_uwWaves.y) * min(u_uwWaves.x, 1.0f);
+	if (amplitude <= 0.0f)
+	{
+		return 0.0f;
+	}
+	vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
+	float k = 6.2831853f / (UW_CHOP_LENGTH_METRES * UW_UNITS_PER_METRE);
+	vec2 q = vec2(dot(p, wind), wind.x * p.y - wind.y * p.x) * k;
+	float pointed = 4.0f;
+	float height = 0.0f;
+	for (int i = 0; i < UW_CHOP_SHADING; i++)
+	{
+		if (i >= octaves)
+		{
+			break;
+		}
+		float shown = UwWaveShown(6.2831853f / k, pixel).x;
+		float drift = sqrt(UW_GRAVITY * k) * t;
+		float pair = UwChopOctave(q + vec2(drift, 0.0f), pointed) + UwChopOctave(q - vec2(drift, 0.0f), pointed);
+		height += (pair - 2.0f * (0.42f + 0.028f * float(i))) * amplitude * shown;
+		q = vec2(1.6f * q.x + 1.2f * q.y, 1.6f * q.y - 1.2f * q.x) * 1.9f;
+		k *= 3.8f;
+		amplitude *= 0.22f;
+		pointed = mix(pointed, 1.0f, 0.2f);
+	}
+	return height;
+}
+
 // How big the waves are at a point against the usual, from the distance to the coast: the same as
 // underwater::OpenSeaSize
 float UwOpenSeaSize(vec2 p, float t, float shoreDistance)
@@ -319,9 +373,10 @@ float UwOpenSeaSize(vec2 p, float t, float shoreDistance)
 // slope there, as a pixel of the size `footprint` shows them. Each wave grows as the water gets shallow, and all of
 // them break together where they are too high for the depth (the same as underwater::WavesInDepth). `breaking` is
 // how much of their height the breaking takes away, 0 to 1. `whitecap` is the crest envelope for the white horses (see
-// underwater::WaveSample::whitecap).
+// underwater::WaveSample::whitecap). The chop of the wind (UwChop) adds its octaves for the height, but not its slope:
+// `chopShare` is the share of the chop that the depth keeps, for the normal of the surface.
 float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float depth, out vec2 slope, out float variance,
-                     out float breaking, out float whitecap)
+                     out float breaking, out float whitecap, out float chopShare)
 {
 	slope = vec2_splat(0.0f);
 	variance = 0.0f;
@@ -424,6 +479,9 @@ float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float
 		slope += along * (a * shown.y * k * cos(theta));
 		variance += (1.0f - shown.y * shown.y) * 0.5f * (a * k) * (a * k);
 	}
+	// The chop of the wind, cut by the depth as the other waves are
+	chopShare = kept;
+	height += UwChop(p, t, UW_CHOP_GEOMETRY, footprint.x) * kept;
 	return height;
 }
 
@@ -484,7 +542,8 @@ float UwWavesFiltered(vec2 p, float t, vec4 footprint, out vec2 slope, out float
 {
 	float breaking;
 	float whitecap;
-	return UwWavesInDepth(p, t, footprint, 1e6f, 1e6f, slope, variance, breaking, whitecap);
+	float chopShare;
+	return UwWavesInDepth(p, t, footprint, 1e6f, 1e6f, slope, variance, breaking, whitecap, chopShare);
 }
 
 // The height of the waves over the sea's level at a point, and the slope of the surface there. The short waves fade
@@ -820,18 +879,20 @@ float UwRogueWave(vec2 xz, float shoreDistance, float depth, out vec2 slope, out
 // the size of the pixel on the water (see UwFootprint); `slope` is the surface's slope, `face` the shore wave's face
 // and `variance` the variance of the slope that the pixel cannot show.
 float UwSurfaceSheltered(vec2 xz, float t, vec4 footprint, vec4 shore, float shelter, out vec2 slope, out float face,
-                         out float variance, out float whitecap);
+                         out float variance, out float whitecap, out float chopShare);
 
 float UwSurfaceFiltered(vec2 xz, float t, vec4 footprint, vec4 shore, out vec2 slope, out float face, out float variance)
 {
 	float whitecap;
-	return UwSurfaceSheltered(xz, t, footprint, shore, 1.0f, slope, face, variance, whitecap);
+	float chopShare;
+	return UwSurfaceSheltered(xz, t, footprint, shore, 1.0f, slope, face, variance, whitecap, chopShare);
 }
 
 // The same, with `shelter` (0 to 1) the share of the open sea's waves that reach the point past the land upwind of it:
-// a bay behind a headland has less swell. `whitecap` is the crest envelope of the sea's waves (UwWhitecap).
+// a bay behind a headland has less swell. `whitecap` is the crest envelope of the sea's waves (UwWhitecap), and
+// `chopShare` the share of the chop of the wind that is in the height (its slope is not in `slope`).
 float UwSurfaceSheltered(vec2 xz, float t, vec4 footprint, vec4 shore, float shelter, out vec2 slope, out float face,
-                         out float variance, out float whitecap)
+                         out float variance, out float whitecap, out float chopShare)
 {
 	float level = u_uwParams.z;
 	float depth = level - shore.w;
@@ -840,9 +901,10 @@ float UwSurfaceSheltered(vec2 xz, float t, vec4 footprint, vec4 shore, float she
 	// has none: only small ripples that the wind makes.
 	float breaking;
 	vec2 deepSlope;
-	float height = UwWavesInDepth(xz, t, footprint, shore.x, depth, deepSlope, variance, breaking, whitecap);
+	float height = UwWavesInDepth(xz, t, footprint, shore.x, depth, deepSlope, variance, breaking, whitecap, chopShare);
 	float deep = smoothstep(0.05f, 0.6f, depth) * (1.0f - 0.7f * UwShoreReach(depth)) * (1.0f - pond) * shelter;
 	whitecap *= deep;
+	chopShare *= deep;
 	height *= deep;
 	variance *= deep * deep;
 	float cliff = UwShoreCliff(shore);
