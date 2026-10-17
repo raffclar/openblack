@@ -1686,6 +1686,22 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .creatures = {goodTiger, evilTiger},
 	});
 
+	all.push_back({
+	    .id = "appearance.falling_spell_film",
+	    .name = "The falling spell's film",
+	    .facet = Facet::Appearance,
+	    .description = "The player's giant ape stands on the land. After a second, the falling spell's film plays as the "
+	                   "Land 5 script starts it.",
+	    .expected = "The world goes and the film plays. A copy of the ape stands in the middle of the film and plays its "
+	                "fall action once, on the right side, as the film's camera moves round it. It glows white at first, "
+	                "then orange over a dark red that flickers. It goes from 19.55 s to 27.35 s, then comes back white. "
+	                "The white fade at the end covers it, and the copy goes with the film.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::GiantApe, .needs = Content(), .hold = true, .pauseMind = true}},
+	    .commands = {Command {.kind = Kind::PlayFallingSpellFilm, .delaySeconds = 1.0f}},
+	});
+
 	// The hair close up while the head moves: the tiger's whiskers, and the wolf's tufts, which use the same material
 	std::vector<Command> headMoves;
 	for (size_t i = 0; i < animations::k_GestureCount; ++i)
@@ -7638,6 +7654,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
+	       kind == Kind::PlayFallingSpellFilm ||
 	       IsPointerCommand(kind);
 }
 
@@ -7665,7 +7682,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 140> k_Names {
+	constexpr std::array<std::string_view, 141> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7806,6 +7823,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "pointer on creature",
 		    "start script music",
 		    "write the web page",
+		    "play the falling spell film",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

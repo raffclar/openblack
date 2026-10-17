@@ -194,6 +194,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -2510,6 +2511,20 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
 		return;
 	}
+	if (command.kind == Kind::PlayFallingSpellFilm)
+	{
+		// The script's film starts and the script's fade goes at once
+		if (Locator::videoSystem::has_value())
+		{
+			Locator::videoSystem::value().StartFallingSpell();
+		}
+		if (Locator::cinematicDirectorSystem::has_value())
+		{
+			Locator::cinematicDirectorSystem::value().FadeBackToNormal(0);
+		}
+		Log(fmt::format("{:.1f}s: the falling spell's film starts", _seconds));
+		return;
+	}
 	if (command.kind == Kind::WideScreen)
 	{
 		// Held by a script, as the land's scripts hold them, under a number no script task has: a task of that number
@@ -2800,6 +2815,7 @@ void Runner::Give(const Command& command)
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::PlayFallingSpellFilm:
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
 	case Kind::ProfileFolderCheck:

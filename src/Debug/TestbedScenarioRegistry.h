@@ -818,6 +818,9 @@ struct Command
 		/// The game writes the web page of the creature into the player's profile folder, as it does each 600 turns of
 		/// the creature's life
 		WriteWebPage,
+		/// The falling spell's film plays as a script's SET_AVI_SEQUENCE 2 starts it, with a copy of the player's first
+		/// creature over the film. Needs no creature of its own
+		PlayFallingSpellFilm,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

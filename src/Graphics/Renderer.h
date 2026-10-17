@@ -99,6 +99,7 @@ public:
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
 	void ShowInterfaceCreatures(interface_creatures::Request request) noexcept final;
 	void ShowMenuCreature(interface_creatures::MenuCreature creature) noexcept final;
+	void DrawFilmCreature(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& creature) const final;
 	void Frame() noexcept final;
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;
 	[[nodiscard]] std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept final;
@@ -635,6 +636,7 @@ private:
 	mutable std::optional<DynamicVertexBufferHandle> _interfaceCreatureInstances;
 	mutable std::optional<interface_creatures::MenuCreature> _menuCreature;
 	mutable std::optional<DynamicVertexBufferHandle> _menuCreatureInstance;
+	mutable std::optional<DynamicVertexBufferHandle> _filmCreatureInstance;
 	mutable bool _warnedCreatureCap {false};
 	/// Found by trial in a debug build, whose backends check the uploads: Vulkan overflowed with 65 creatures drawn and
 	/// Direct3D 12 with 850, and both held with 50 and 600

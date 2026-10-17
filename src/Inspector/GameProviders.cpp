@@ -140,6 +140,7 @@
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
+#include "ECS/Systems/FilmCreatureSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
@@ -339,6 +340,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"creatureWebPageSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tattooMenuSystem", "creatures.systems"},
+    LocatorCoverage {"filmCreatureSystem", "view.video"},
     LocatorCoverage {"tornadoSystem", "magic.state"},
     LocatorCoverage {"vortexSystem", "magic.vortices"},
     LocatorCoverage {"magicShieldSystem", "magic.state"},
@@ -2206,8 +2208,8 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 std::unique_ptr<ProviderInterface> ViewProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("view");
-	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, and "
-	                             "whether films and 16-bit colour are on"),
+	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell and its "
+	                             "creature, and whether films and 16-bit colour are on"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
 		              if (Locator::videoSystem::has_value())
@@ -2227,6 +2229,20 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 				              result["falling_spell"] = status->fallingSpell;
 				              result["falling_spell_state"] = status->fallingSpellState;
 			              }
+		              }
+		              // The copy of the player's creature that the falling spell's film shows, and its colours now
+		              if (Locator::filmCreatureSystem::has_value())
+		              {
+			              const auto& film = Locator::filmCreatureSystem::value();
+			              Json creature = {{"running", film.IsRunning()}};
+			              if (const auto shown = film.GetShown())
+			              {
+				              creature["copy"] = Id(shown->copy);
+				              creature["colour"] = Point(shown->colour);
+				              creature["added"] = Point(shown->added);
+				              creature["eye"] = Point(glm::vec3(glm::inverse(shown->view)[3]));
+			              }
+			              result["film_creature"] = std::move(creature);
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });

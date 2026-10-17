@@ -341,6 +341,8 @@ private:
 	Canvas _cinemaBarsCanvas {graphics::RenderPass::CinemaBars};
 	/// What the tattoo editor draws over the creature that it shows from the main menu
 	Canvas _menuCreatureCanvas {graphics::RenderPass::MenuCreatureOverlay};
+	/// The fades over the falling spell's film and the creature that the film shows
+	Canvas _filmOverlayCanvas {graphics::RenderPass::FilmOverlay};
 	DialogPainter _painter;
 	DialogPainter _menuCreaturePainter;
 	std::unique_ptr<GameMenu> _menu;

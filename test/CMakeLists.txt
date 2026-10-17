@@ -1134,3 +1134,5 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_draw_window graphics/test_draw_window.cpp)
 openblack_setup_and_add_test(test_creature_web_page test_creature_web_page.cpp)
 target_link_libraries(test_creature_web_page PRIVATE creaturehtml)
+openblack_setup_and_add_test(test_film_creature video/test_film_creature.cpp)
+target_link_libraries(test_film_creature PRIVATE cam)

@@ -97,6 +97,7 @@
 #include "ECS/Systems/Implementations/ArtefactSystem.h"
 #include "ECS/Systems/Implementations/ComputerPlayerSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
+#include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -208,6 +209,7 @@ using openblack::ecs::systems::DialogueControlSystem;
 using openblack::ecs::systems::DynamicsSystem;
 using openblack::ecs::systems::EditorSystem;
 using openblack::ecs::systems::FieldSystem;
+using openblack::ecs::systems::FilmCreatureSystem;
 using openblack::ecs::systems::FireflySystem;
 using openblack::ecs::systems::FishFarmSystem;
 using openblack::ecs::systems::FootprintSystem;
@@ -385,6 +387,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::creatureCaveSystem::emplace<CreatureCaveSystem>();
 	Locator::tattooEditorSystem::emplace<TattooEditorSystem>();
 	Locator::tattooMenuSystem::emplace<TattooMenuSystem>();
+	Locator::filmCreatureSystem::emplace<FilmCreatureSystem>();
 	Locator::cinematicDirectorSystem::emplace<CinematicDirectorSystem>();
 	Locator::scriptControlSystem::emplace<ScriptControlSystem>();
 	Locator::dialogueControlSystem::emplace<DialogueControlSystem>();
@@ -585,6 +588,7 @@ void openblack::ShutDownServices()
 	Locator::rainSystem::reset();
 	Locator::snowfallSystem::reset();
 	Locator::waterRingSystem::reset();
+	Locator::filmCreatureSystem::reset();
 	Locator::tattooMenuSystem::reset();
 	Locator::tattooEditorSystem::reset();
 	Locator::creatureCaveSystem::reset();

@@ -143,6 +143,8 @@ struct BodyAction
 	bool timedByPlayer {false};
 	/// The body plays at two times the usual speed until it stands again
 	bool hurried {false};
+	/// The body plays at the pace of real time, whatever the size of the creature
+	bool realTime {false};
 	/// Each move of a dance lasts this many milliseconds of real time, whatever the size of the creature
 	float danceMoveMs {0.0f};
 	/// An action played once as a blend: its animation, blended keyframe by keyframe towards this animation by the
@@ -189,7 +191,8 @@ struct BodyAction
 /// The body some milliseconds on, given how long the animation it plays now lasts, or nothing when the species has no
 /// such animation. Each animation starts from its beginning, without blending into the last. A body timed by what plays it
 /// stays where it was put.
-/// The moves of a dance count real milliseconds, not the milliseconds of the creature's playback.
+/// The moves of a dance and a body that plays in real time count real milliseconds, not the milliseconds of the
+/// creature's playback.
 [[nodiscard]] BodyAction AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration,
                                      std::optional<float> realMilliseconds = std::nullopt);
 /// Whether the body gets to the moment of its action as AdvanceBody moves it on some milliseconds. An action played

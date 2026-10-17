@@ -824,6 +824,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_canvas.Begin(resolution);
 	_pointerCanvas.Begin(resolution);
 	_menuCreatureCanvas.Begin(resolution);
+	_filmOverlayCanvas.Begin(resolution);
 	_painter.Begin(resolution);
 	_menuCreaturePainter.Begin(resolution);
 	// The villagers' labels and the tip bubble are part of the world's picture: under the interface, the cinema bars
@@ -944,14 +945,18 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// Inside the temple the temple draws its own fade, never the scripts': a scene that faded to black and took the
 	// player into the temple, as the game's end does, shows the room
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	// The fades cover the falling spell's film and the creature that the film shows over it
+	const bool overFilm = Locator::videoSystem::has_value() && Locator::videoSystem::value().HidesWorld();
+	auto& fadeCanvas = overFilm ? _filmOverlayCanvas : _canvas;
 	if (const auto fade = director.GetFadeColour(); !inTemple && (fade >> 24u) != 0)
 	{
 		const auto colour = glm::vec4(static_cast<float>((fade >> 16u) & 0xFFu), static_cast<float>((fade >> 8u) & 0xFFu),
 		                              static_cast<float>(fade & 0xFFu), static_cast<float>(fade >> 24u)) /
 		                    255.0f;
-		_canvas.DrawQuad({sides, bars}, {screen.x - sides, screen.y - bars}, glm::vec2(0.0f), glm::vec2(1.0f), colour, nullptr);
+		fadeCanvas.DrawQuad({sides, bars}, {screen.x - sides, screen.y - bars}, glm::vec2(0.0f), glm::vec2(1.0f), colour,
+		                    nullptr);
 		// While a fade shows, the bars are drawn again over it and over the advisors
-		drawBars(_canvas);
+		drawBars(fadeCanvas);
 	}
 	DrawDialogue(resolution, static_cast<int>(bars));
 	// The scripts' words go over the advisors' dialogue and the scripts' fade, but not while a video plays
@@ -962,10 +967,11 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// The game covers the frame with the fade's colour last of all
 	if (const auto fade = _screenFade.GetColour(); fade.a > 0.0f)
 	{
-		_canvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f), fade, nullptr);
+		fadeCanvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f), fade, nullptr);
 	}
 	_canvas.End();
 	_menuCreatureCanvas.End();
+	_filmOverlayCanvas.End();
 	_pointerCanvas.End();
 }
 

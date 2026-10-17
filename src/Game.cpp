@@ -171,6 +171,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
+#include "ECS/Systems/FilmCreatureSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
@@ -280,6 +281,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "Serializer/FotFile.h"
 #include "Temple/TempleHelp.h"
+#include "Video/VideoRules.h"
 
 #ifdef __ANDROID__
 #include <spdlog/sinks/android_sink.h>
@@ -462,6 +464,33 @@ bool HandInInfluence()
 	}
 	const auto point = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
 	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, *point);
+}
+
+/// Draws the player's creature in the falling spell's film, when the film shows it
+void DrawFilmCreature(const graphics::RendererInterface::DrawSceneDesc& drawDesc)
+{
+	if (!Locator::filmCreatureSystem::has_value() || !Locator::windowing::has_value() ||
+	    !Locator::videoSystem::value().HidesWorld())
+	{
+		return;
+	}
+	const auto shown = Locator::filmCreatureSystem::value().GetShown();
+	if (!shown.has_value())
+	{
+		return;
+	}
+	// The renderer draws the creature over the film's picture, where the picture is on the window
+	const auto size = Locator::windowing::value().GetSize();
+	const auto rect = video::LetterboxRect(size.x, size.y);
+	Locator::rendererInterface::value().DrawFilmCreature(
+	    drawDesc, {.copy = shown->copy,
+	               .view = shown->view,
+	               .projection = shown->projection,
+	               .viewOrigin = glm::vec2(static_cast<float>(rect.x), static_cast<float>(rect.y)),
+	               .viewSize = glm::vec2(static_cast<float>(rect.width), static_cast<float>(rect.height)),
+	               .light = shown->light,
+	               .colour = shown->colour,
+	               .added = shown->added});
 }
 
 /// How the game draws its scene into the window, from its camera
@@ -4391,6 +4420,7 @@ bool Game::Run() noexcept
 				bgfx::touch(static_cast<bgfx::ViewId>(graphics::RenderPass::Main));
 				// The interface's creatures of this frame are not shown, and are not kept for the next
 				Locator::rendererInterface::value().ShowInterfaceCreatures({});
+				DrawFilmCreature(drawDesc);
 			}
 			else
 			{
@@ -4410,7 +4440,8 @@ bool Game::Run() noexcept
 			// A picture without the debug windows: the frame's windows are made as ever but not drawn
 			// nor in a challenge's picture
 			const bool hiddenThisFrame =
-			    _debugGuiHiddenFrame == _frameCount || ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
+			    _debugGuiHiddenFrame == _frameCount ||
+			    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
 			    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting());
 			if (drawsFrame && (!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
 			{
