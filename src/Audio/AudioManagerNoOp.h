@@ -68,7 +68,8 @@ public:
 	using AudioManagerInterface::PlayAnimEffect;
 	AnimEffectPlay PlayAnimEffect([[maybe_unused]] const std::string& bankName, [[maybe_unused]] std::span<const int32_t> keys,
 	                              [[maybe_unused]] entt::entity owner, [[maybe_unused]] const glm::vec3& position,
-	                              [[maybe_unused]] const std::optional<SoundEffectConditions>& heardUnder) override
+	                              [[maybe_unused]] const std::optional<SoundEffectConditions>& heardUnder,
+	                              [[maybe_unused]] AnimEffectMeasure measure) override
 	{
 		return {};
 	}

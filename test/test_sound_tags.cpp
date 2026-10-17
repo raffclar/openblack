@@ -110,7 +110,7 @@ public:
 	void AddAnimEffects(const std::string&, audio::AnimEffectTable) override {}
 	using audio::AudioManagerInterface::PlayAnimEffect;
 	audio::AnimEffectPlay PlayAnimEffect(const std::string&, std::span<const int32_t>, entt::entity, const glm::vec3&,
-	                                     const std::optional<audio::SoundEffectConditions>&) override
+	                                     const std::optional<audio::SoundEffectConditions>&, audio::AnimEffectMeasure) override
 	{
 		return {};
 	}

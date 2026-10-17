@@ -21,6 +21,7 @@
 #include "AudioDecoderInterface.h"
 #include "AudioPlayerInterface.h"
 #include "ECS/Components/AudioEmitter.h"
+#include "HearingRange.h"
 #include "ListenerFrame.h"
 #include "MusicPlayer.h"
 #include "ScriptSoundEffect.h"
@@ -178,18 +179,30 @@ public:
 	/// The animation effects of a loaded sound bank, named as its sounds are ("<bank>/<sample id>")
 	virtual void AddAnimEffects(const std::string& bankName, AnimEffectTable table) = 0;
 	/// One of the samples a bank's animation effects pick for keys, chosen at random, as
-	/// a one-shot 3D sound at position on behalf of owner. Nothing plays when the listener is beyond the sample's
-	/// maximum distance, or when the bank header plays the sample once and owner is playing it, or another of its
-	/// voice group, already. Given conditions, nothing plays when the picked sample may not be heard in them (by its
-	/// user parameter, as the scripts' sound effects).
+	/// a one-shot 3D sound at position on behalf of owner. Nothing plays when the camera is further than the hearing
+	/// limit or the sample's maximum distance (measured as the measure tells), or when the bank header plays the
+	/// sample once and owner is playing it, or another of its voice group, already. Given conditions, nothing plays
+	/// when the picked sample may not be heard in them (by its user parameter, as the scripts' sound effects).
 	virtual AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
-	                                      const glm::vec3& position,
-	                                      const std::optional<SoundEffectConditions>& heardUnder) = 0;
+	                                      const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder,
+	                                      AnimEffectMeasure measure) = 0;
+	/// The same, at the straight distance
+	AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+	                              const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder)
+	{
+		return PlayAnimEffect(bankName, keys, owner, position, heardUnder, AnimEffectMeasure::Straight);
+	}
 	/// The same, whatever the conditions
+	AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+	                              const glm::vec3& position, AnimEffectMeasure measure)
+	{
+		return PlayAnimEffect(bankName, keys, owner, position, std::nullopt, measure);
+	}
+	/// The same, whatever the conditions, at the straight distance
 	AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
 	                              const glm::vec3& position)
 	{
-		return PlayAnimEffect(bankName, keys, owner, position, std::nullopt);
+		return PlayAnimEffect(bankName, keys, owner, position, std::nullopt, AnimEffectMeasure::Straight);
 	}
 	virtual const Sound& GetSound(entt::id_type id) = 0;
 	virtual void CreateSoundGroup(const std::string& name) = 0;
