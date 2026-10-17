@@ -15,6 +15,7 @@
 
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::creature_player_attention;
@@ -38,11 +39,17 @@ bool creature_player_attention::IsCross(float attitudeToPlayer)
 
 bool creature_player_attention::AwayFromHand(glm::vec3 creature, glm::vec3 hand, glm::vec3 cameraOrigin, glm::vec3 cameraFocus)
 {
-	// The function calculates the view width at the focus in double, then makes a float with the share
-	const auto focusDistance = static_cast<double>(glm::length(cameraOrigin - cameraFocus));
-	const auto limit = static_cast<float>(std::tan(k_ViewHalfAngle) * focusDistance * static_cast<double>(k_AwayFromHandShare));
+	const float limit = ViewWidthAtFocus(cameraOrigin, cameraFocus) * k_AwayFromHandShare;
 	const auto distance = gutils::GetDistanceInMetres(MapPositionOf(creature), MapPositionOf(hand));
 	return distance > limit;
+}
+
+float creature_player_attention::ViewWidthAtFocus(glm::vec3 cameraOrigin, glm::vec3 cameraFocus)
+{
+	// The distance adds the squares from z to x. The tangent goes wide into the multiply
+	const auto offset = cameraOrigin - cameraFocus;
+	const float focusDistance = std::sqrt(((offset.z * offset.z) + (offset.y * offset.y)) + (offset.x * offset.x));
+	return x87::Mul(x87::Tan(k_ViewHalfAngle), focusDistance);
 }
 
 void creature_player_attention::UpdateHandSpeed(HandSpeed& speed, glm::vec3 movement, float turnsPerSecond)

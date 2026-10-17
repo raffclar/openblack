@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
+
 #include <glm/vec4.hpp>
 #include <gtest/gtest.h>
 
@@ -103,6 +107,8 @@ TEST(SkyDome, DarknessOfAnEvilSky)
 	// The float 0.6 is a little over it, so even a wholly evil sky only reaches 89
 	EXPECT_EQ(sky_dome::Darkness(0.0f), 89);
 	EXPECT_EQ(sky_dome::Darkness(-1.0f), 90);
+	// The product rounds to 87 as a float before the cut; the exact product is a little under 87
+	EXPECT_EQ(sky_dome::Darkness(std::bit_cast<float>(0x3CDA73FAu)), 87);
 }
 
 TEST(SkyDome, ClearDayIsUntinted)

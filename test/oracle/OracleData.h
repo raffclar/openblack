@@ -27,6 +27,10 @@
 // a row is a 32-bit word in hexadecimal (a float as its bits). The tests do not need the game: they read these files.
 namespace openblack::oracle
 {
+// Each test file has its own copy of these functions. A shared copy would read the data folder of the first file that
+// the linker takes, and a build cache can give that file from another checkout
+namespace
+{
 
 #ifndef OPENBLACK_ORACLE_DATA
 #error Define OPENBLACK_ORACLE_DATA as the folder of the pinned data files
@@ -110,4 +114,5 @@ private:
 	return text.str();
 }
 
+} // namespace
 } // namespace openblack::oracle

@@ -49,16 +49,16 @@ Step Hands(ObjectOrder order)
 	return step;
 }
 
-/// Seconds cut down to whole game turns, worked out as the game does in more than single precision, so that 2.1 seconds
-/// at ten turns a second is 20 turns
+/// Seconds cut down to whole game turns. The product rounds to a float before the cut, so that 2.1 seconds at ten turns
+/// a second is 21 turns
 float WholeTurns(float seconds, float turnsPerSecond)
 {
 	if (turnsPerSecond <= 0.0f)
 	{
 		return seconds;
 	}
-	const auto turns = std::floor(static_cast<double>(seconds) * static_cast<double>(turnsPerSecond));
-	return static_cast<float>(turns / static_cast<double>(turnsPerSecond));
+	const float turns = std::floor(seconds * turnsPerSecond);
+	return turns / turnsPerSecond;
 }
 } // namespace
 

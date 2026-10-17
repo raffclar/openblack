@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <bit>
 #include <optional>
 #include <vector>
 
@@ -137,6 +138,13 @@ TEST(CreatureDance, AWorshipperGivesItsTownBeliefByTheTownsSizeTheCreatureAndThe
 {
 	// (10 + 0.001) / (20 + 0.001) times 2 times 0.0007
 	EXPECT_NEAR(creature_dance::WorshipBelief(10.0f, 20, 2.0f, 0.0007f), 0.00070000f * 2.0f * 10.001f / 20.001f, 1e-9f);
+}
+
+TEST(CreatureDance, TheWorshipBeliefRoundsToAFloatAtEachStep)
+{
+	// Each add, divide and multiply of the game rounds to a float. A sum kept wide gives 0x3C0B1155 for the second case
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_dance::WorshipBelief(10.0f, 20, 2.0f, 0.0007f)), 0x3A37828Eu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_dance::WorshipBelief(30.0f, 17, 3.7f, 0.0013f)), 0x3C0B1156u);
 }
 
 TEST(CreatureDance, InItsDanceTheCreaturePlaysTheActionOfItsGroupsMove)

@@ -35,8 +35,9 @@ struct Shape
 
 /// Each turn a body closes this share of the gap to the shape it takes on
 inline constexpr float k_EaseShare = 0.04f;
-/// It has taken on the shape once both its size and its alignment are nearer than this
-inline constexpr double k_Settled = 0.01;
+/// It has taken on the shape once both its size and its alignment are nearer than this. The game keeps the float 0.01
+/// as a double
+inline constexpr double k_Settled = static_cast<double>(0.01f);
 
 /// Whether the body has taken on the shape: both its size and its alignment within the settled distance of it
 [[nodiscard]] bool IsSettled(const Shape& now, const Shape& target);

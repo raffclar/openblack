@@ -17,6 +17,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/matrix.hpp>
 
+#include "Common/X87.h"
+
 using namespace openblack::creature_fight::marks;
 
 namespace
@@ -31,10 +33,10 @@ constexpr double k_ByteMax = 255.0;
 constexpr uint32_t k_AlphaOverRed = 0xFFFFA000u;
 constexpr float k_ChannelMax = 255.0f;
 
-uint32_t Ramp(double share)
+uint32_t Ramp(float share)
 {
-	// Cut towards nothing, as the game turned it into a whole number
-	return static_cast<uint32_t>(share * k_RampScale * k_ByteMax);
+	// Each multiply by a double rounds to a float, and the result is cut towards nothing
+	return static_cast<uint32_t>(openblack::x87::Mul(openblack::x87::Mul(share, k_RampScale), k_ByteMax));
 }
 
 } // namespace
@@ -111,23 +113,24 @@ uint32_t openblack::creature_fight::marks::NextFrame(uint32_t frame, float charg
 
 uint32_t openblack::creature_fight::marks::ColourOf(size_t place, size_t capacity)
 {
-	const auto share =
-	    static_cast<double>(static_cast<int64_t>(capacity) - static_cast<int64_t>(place)) / static_cast<double>(capacity);
+	// The two counts are exact, and the share rounds to a float
+	const float share = openblack::x87::Div(static_cast<double>(static_cast<int32_t>(capacity) - static_cast<int32_t>(place)),
+	                                        static_cast<double>(static_cast<int32_t>(capacity)));
 	uint32_t red = 0xFF;
 	uint32_t green = 0;
 	uint32_t blue = 0;
-	if (share < k_RedEnd)
+	if (openblack::x87::Less(share, k_RedEnd))
 	{
 		red = Ramp(share);
 	}
-	else if (share < k_GreenEnd)
+	else if (openblack::x87::Less(share, k_GreenEnd))
 	{
-		green = Ramp(share - k_RedEnd);
+		green = Ramp(openblack::x87::Sub(share, k_RedEnd));
 	}
 	else
 	{
 		green = 0xFF;
-		blue = Ramp(share - k_GreenEnd);
+		blue = Ramp(openblack::x87::Sub(share, k_GreenEnd));
 	}
 	// The channels are laid side by side without being kept to a byte: a blue over 255 spills into the green
 	return (((((red | k_AlphaOverRed) << 8u) | green) << 8u) | blue);

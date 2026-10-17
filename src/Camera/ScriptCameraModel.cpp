@@ -18,6 +18,8 @@
 #include <glm/geometric.hpp>
 
 #include "3D/CameraTrack.h"
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
 
 using namespace openblack;
 using namespace openblack::script_camera;
@@ -93,24 +95,22 @@ HeadingAndPitch script_camera::HeadingAndPitchFromPoints(const glm::vec3& origin
 {
 	constexpr double k_Overhead = 0.01;
 	const auto d = origin - focus;
-	if (std::abs(d.x) < k_Overhead && std::abs(d.z) < k_Overhead)
+	if (x87::Less(std::abs(d.x), k_Overhead) && x87::Less(std::abs(d.z), k_Overhead))
 	{
 		return {.heading = 0.0f, .pitch = k_StraightDownPitch};
 	}
-	constexpr float k_NoDirection = 1e-6f;
-	const float headingFromSouth = d.z * d.z + d.x * d.x > k_NoDirection ? static_cast<float>(std::atan2(d.x, -d.z)) : 0.0f;
-	const float across = std::sqrt(d.x * d.x + d.z * d.z);
-	return {.heading = std::numbers::pi_v<float> - headingFromSouth, .pitch = static_cast<float>(std::atan2(d.y, across))};
+	// The angles are the game's own angles of a vector. The heading from the south goes wide into the subtraction
+	const float heading = x87::Sub(std::numbers::pi_v<float>, x87::GameHeadingOf(d.x, d.z));
+	const float across = std::sqrt((d.z * d.z) + (d.x * d.x));
+	return {.heading = heading, .pitch = x87::RoundToFloat(x87::GameAtan2(d.y, across))};
 }
 
 glm::vec3 script_camera::PointFromDistanceHeadingAndPitch(const glm::vec3& point, float distance, float heading, float pitch)
 {
-	const auto cosPitch = static_cast<float>(std::cos(static_cast<double>(pitch)));
-	const auto sinPitch = std::sin(static_cast<double>(pitch));
-	const auto sinHeading = std::sin(static_cast<double>(heading));
-	const auto cosHeading = std::cos(static_cast<double>(heading));
-	return {static_cast<float>(sinHeading * cosPitch * distance + point.x), static_cast<float>(sinPitch * distance + point.y),
-	        static_cast<float>(cosHeading * cosPitch * distance + point.z)};
+	// The cosine of the pitch is kept as a float. The other sines and cosines go wide into the first multiply
+	const float cosPitch = x87::RoundToFloat(x87::Cos(pitch));
+	return {(x87::Mul(x87::Sin(heading), cosPitch) * distance) + point.x, x87::Mul(x87::Sin(pitch), distance) + point.y,
+	        (x87::Mul(x87::Cos(heading), cosPitch) * distance) + point.z};
 }
 
 float script_camera::FollowSeconds(float secondsSinceBegun, float zoomTimeScale)
@@ -173,18 +173,16 @@ View script_camera::DualView(const DualThing& first, const DualThing& second, Du
 	const float tallest = first.height > second.height ? first.height : second.height;
 	const glm::vec3 focus {(b.x + a.x) * 0.5f, ((b.y + a.y) * 0.5f) + (averageHeight * 0.5f), (b.z + a.z) * 0.5f};
 	settings.pitch = settings.pitch > k_DualLowestPitch ? settings.pitch : k_DualLowestPitch;
-	// Worked through at the FPU's precision, kept as a float at the end
-	const double dx = static_cast<double>(a.x) - b.x;
-	const double dz = static_cast<double>(a.z) - b.z;
-	const auto distance =
-	    static_cast<float>(((std::sqrt((dx * dx) + (dz * dz)) + second.radius + first.radius) * settings.zoom) +
-	                       (static_cast<double>(tallest) * k_DualHeightFactor));
-	// The heading is turned with the line from the first thing to the second
+	const float dx = a.x - b.x;
+	const float dz = a.z - b.z;
+	const float apart = std::sqrt((dx * dx) + (dz * dz));
+	const float distance = (((apart + second.radius) + first.radius) * settings.zoom) + (tallest * k_DualHeightFactor);
+	// The heading is turned with the line from the first thing to the second, by the game's angle of that line
 	const glm::vec3 across = b - a;
 	float heading = settings.heading;
-	if (std::abs(static_cast<double>(across.x)) > k_DualSameSpot || std::abs(static_cast<double>(across.z)) > k_DualSameSpot)
+	if (x87::Greater(std::abs(across.x), k_DualSameSpot) || x87::Greater(std::abs(across.z), k_DualSameSpot))
 	{
-		heading = settings.heading - static_cast<float>(std::atan2(across.x, -across.z));
+		heading = x87::Sub(settings.heading, x87::GameHeadingOf(across.x, across.z));
 	}
 	return {.origin = PointFromDistanceHeadingAndPitch(focus, distance, heading, settings.pitch), .focus = focus};
 }

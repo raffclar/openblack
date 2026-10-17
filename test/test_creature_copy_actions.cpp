@@ -78,8 +78,8 @@ TEST(CreatureCopyActions, CastDeedGateCountsWhatIsStillNeeded)
 	EXPECT_EQ(CastDeedGate(5, 10, 0.65f), CastDeedStep::CountThenRoll);
 	// 0.9 still needed is none
 	EXPECT_EQ(CastDeedGate(6, 10, 0.69f), CastDeedStep::Copy);
-	// At full precision 10 x 0.7 is just under 7, so with 5 seen just under 2 is still needed: one
-	EXPECT_EQ(CastDeedGate(5, 10, 0.7f), CastDeedStep::CountThenRoll);
+	// 10 x 0.7 rounds to 7 as a float, so with 5 seen 2 are still needed
+	EXPECT_EQ(CastDeedGate(5, 10, 0.7f), CastDeedStep::CountAndStop);
 }
 
 TEST(CreatureCopyActions, CopyActionsOfAMiracleDeedUseTheMiracle)
