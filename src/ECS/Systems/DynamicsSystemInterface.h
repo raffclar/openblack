@@ -127,6 +127,9 @@ public:
 	/// Asked of a body low in the sea and denser than water: whether its kind has sunk, which ends its physics.
 	/// Ordinary objects sink on until they are deleted far under the sea.
 	virtual bool HasSunk(DynamicsSystemInterface& dynamics, PhysicsEntry& entry);
+	/// EXPERIMENT (not for merge): asked once of a body low in the sea and denser than water, with the sea bed under it:
+	/// its kind starts to drown or die, and the body sinks on to the sea bed. Whether its kind did anything.
+	virtual bool SinkToSeaBed(DynamicsSystemInterface& dynamics, PhysicsEntry& entry);
 	/// The sound of a thing put down gently on land; only trees have one
 	virtual void DropSound(entt::entity object);
 	/// The kind of sound it makes as it hits or is hit

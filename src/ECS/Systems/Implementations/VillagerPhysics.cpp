@@ -34,6 +34,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/VillagerClips.h"
 #include "ECS/VillagerMemory.h"
@@ -230,11 +231,14 @@ void villager_physics::Land(PhysicsEntry* entry, entt::entity villager)
 			                                    feet ? 0.1f : 0.5f, transform->position);
 		}
 	}
-	// It stands on the land where it came down
+	// It stands on the land where it came down. EXPERIMENT (not for merge): with the underwater view on, on the sea bed
+	// under the sea.
 	if (Locator::terrainSystem::has_value())
 	{
+		const glm::vec2 at {transform->position.x, transform->position.z};
+		const float land = Locator::terrainSystem::value().GetHeightAt(at);
 		transform->position.y =
-		    Locator::terrainSystem::value().GetHeightAt(glm::vec2(transform->position.x, transform->position.z));
+		    Locator::underwaterSystem::has_value() ? Locator::underwaterSystem::value().FloorAt(at, land) : land;
 	}
 	const auto* info = InfoOf(villager);
 	const bool alive = world_objects::LifeOf(villager) > 0.0f;

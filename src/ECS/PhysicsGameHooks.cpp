@@ -604,6 +604,32 @@ bool PhysicsGameHooks::HasSunk(DynamicsSystemInterface& dynamics, PhysicsEntry& 
 	return PhysicsClassHooks::HasSunk(dynamics, entry);
 }
 
+bool PhysicsGameHooks::SinkToSeaBed(DynamicsSystemInterface& /*dynamics*/, PhysicsEntry& entry)
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(entry.entity))
+	{
+		return false;
+	}
+	// A villager starts to drown, or a dead one to die again, as when it sinks in the sea
+	if (registry.AllOf<Villager>(entry.entity))
+	{
+		return villager_physics::Sink(entry);
+	}
+	// An animal drowns: it dies, and lies dead on the sea bed for its time
+	if (auto* animal = registry.TryGet<Animal>(entry.entity))
+	{
+		if (const auto dropper = villager_physics::DropperOf(registry, entry.entity, _world->LocalPlayer()))
+		{
+			const auto& at = registry.Get<const Transform>(entry.entity).position;
+			_world->PlayerDid(living::k_DeedThrowInTheSea, at, entry.entity, *dropper);
+		}
+		animal->life = 0.0f;
+		return true;
+	}
+	return false;
+}
+
 void PhysicsGameHooks::DropSound(entt::entity object)
 {
 	const auto ticks = machine_clock::Ticks();

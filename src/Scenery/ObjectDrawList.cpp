@@ -41,12 +41,13 @@ struct BlockBox
 BlockBox BoxOf(const Block& block)
 {
 	const float height = static_cast<float>(block.highestAltitude) * k_AltitudeUnit;
+	// EXPERIMENT (not for merge): the box reaches down to the sea bed under the block
 	if (block.reflected)
 	{
-		return {.bottom = -height, .top = height, .middle = 0.0f};
+		return {.bottom = std::min(-height, -block.seabedDepth), .top = height, .middle = 0.0f};
 	}
 	const float half = height * 0.5f;
-	return {.bottom = half - half, .top = half + half, .middle = half};
+	return {.bottom = std::min(half - half, -block.seabedDepth), .top = half + half, .middle = half};
 }
 } // namespace
 

@@ -34,6 +34,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/VillagerDroppedLog.h"
 #include "ECS/WorldObjects.h"
@@ -63,7 +64,9 @@ std::optional<float> GamePhysicsHooksWorld::LandHeight(glm::vec2 point) const
 	{
 		return std::nullopt;
 	}
-	return Locator::terrainSystem::value().GetHeightAt(point);
+	// EXPERIMENT (not for merge): with the underwater view on, the sea bed under the sea
+	const float land = Locator::terrainSystem::value().GetHeightAt(point);
+	return Locator::underwaterSystem::has_value() ? Locator::underwaterSystem::value().FloorAt(point, land) : land;
 }
 
 uint32_t GamePhysicsHooksWorld::Turn() const

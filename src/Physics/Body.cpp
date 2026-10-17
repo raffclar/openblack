@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <optional>
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -342,6 +343,9 @@ void Body::TouchGround(const Ground& ground)
 
 	const bool overSea = ground.HeightAt(Xz(_centre)) < k_SeaLevelTolerance && _centre.y < _radius && !_points.empty() &&
 	                     ground.IsSeaCell(Xz(_points.front().world));
+	// EXPERIMENT (not for merge): with a sea bed, a thing that sinks comes to rest on it and is not deleted
+	const auto seaFloor = ground.SeaFloorAt(Xz(_centre));
+	_keptOnSeaFloor = seaFloor.has_value();
 	if (overSea)
 	{
 		const auto submerged = std::ranges::count_if(_points, [](const Point& point) { return point.world.y < 0.0f; });
@@ -365,7 +369,12 @@ void Body::TouchGround(const Ground& ground)
 					_torque += glm::cross(point.world - _aheadCentre, turn);
 				}
 			}
-			// While any point is in the sea the body never touches the sea floor
+			// While any point is in the sea the body never touches the sea floor. EXPERIMENT (not for merge): with a sea
+			// bed, the points under it touch it as they touch the land.
+			if (seaFloor.has_value())
+			{
+				TouchSeaFloor(ground);
+			}
 			return;
 		}
 		inWater = false;
@@ -373,16 +382,49 @@ void Body::TouchGround(const Ground& ground)
 
 	for (auto& point : _points)
 	{
-		const float height = ground.HeightAt(Xz(point.world));
+		// EXPERIMENT (not for merge): where the sea bed is under the land's flat sea-level ground, the body falls to it
+		const auto floor = _keptOnSeaFloor ? ground.SeaFloorAt(Xz(point.world)) : std::nullopt;
+		const float land = ground.HeightAt(Xz(point.world));
+		const bool onSeaFloor = floor.has_value() && *floor < land;
+		const float height = onSeaFloor ? *floor : land;
 		point.depth = height - point.world.y;
 		point.other = nullptr;
 		point.contact = point.world;
 		if (point.depth >= 0.0f)
 		{
 			++_contacts;
-			point.normal = ground.NormalAt(Xz(point.world));
+			point.normal = onSeaFloor ? glm::vec3(0.0f, 1.0f, 0.0f) : ground.NormalAt(Xz(point.world));
 			point.contact.y = height;
 			touched = true;
+		}
+	}
+}
+
+void Body::TouchSeaFloor(const Ground& ground)
+{
+	// The sea bed's slope from its height a little to each side of the centre
+	constexpr float k_SlopeStep = 1.0f;
+	const auto xz = Xz(_centre);
+	const auto here = ground.SeaFloorAt(xz);
+	const auto acrossX = ground.SeaFloorAt(xz + glm::vec2(k_SlopeStep, 0.0f));
+	const auto acrossZ = ground.SeaFloorAt(xz + glm::vec2(0.0f, k_SlopeStep));
+	const auto normal = here.has_value() && acrossX.has_value() && acrossZ.has_value()
+	                        ? glm::normalize(glm::vec3(*here - *acrossX, k_SlopeStep, *here - *acrossZ))
+	                        : glm::vec3(0.0f, 1.0f, 0.0f);
+	for (auto& point : _points)
+	{
+		const auto floor = ground.SeaFloorAt(Xz(point.world));
+		if (!floor.has_value())
+		{
+			continue;
+		}
+		point.depth = *floor - point.world.y;
+		point.other = nullptr;
+		if (point.depth >= 0.0f)
+		{
+			++_contacts;
+			point.normal = normal;
+			point.contact.y = *floor;
 		}
 	}
 }
@@ -652,7 +694,7 @@ StepResult Body::Integrate()
 	{
 		return StepResult::None;
 	}
-	if (_centre.y < _radius * k_DeleteDepthRadii)
+	if (!_keptOnSeaFloor && _centre.y < _radius * k_DeleteDepthRadii)
 	{
 		return StepResult::Delete;
 	}

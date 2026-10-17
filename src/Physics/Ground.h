@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -28,6 +30,9 @@ public:
 	/// Whether the map cell nearest to a point (its coordinates times a tenth, rounded to the nearest with halves to even)
 	/// is open sea: off the map, without a cell, or a cell whose land is at the sea's level
 	[[nodiscard]] virtual bool IsSeaCell(glm::vec2 xz) const = 0;
+	/// EXPERIMENT (not for merge): the height of the sea bed under a point of the sea, where a thing that sinks comes to
+	/// rest. None (the default) when there is no sea bed: then a thing that sinks goes on down until it is deleted.
+	[[nodiscard]] virtual std::optional<float> SeaFloorAt([[maybe_unused]] glm::vec2 xz) const { return std::nullopt; }
 };
 
 } // namespace openblack::physics

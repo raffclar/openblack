@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <numbers>
+#include <optional>
 #include <sstream>
 #include <vector>
 
@@ -55,6 +56,23 @@ public:
 	[[nodiscard]] float HeightAt(glm::vec2) const override { return -100.0f; }
 	[[nodiscard]] glm::vec3 NormalAt(glm::vec2) const override { return {0.0f, 1.0f, 0.0f}; }
 	[[nodiscard]] bool IsSeaCell(glm::vec2) const override { return true; }
+};
+
+/// EXPERIMENT (not for merge): open sea everywhere, with a sea bed at a height under it
+class FakeSeaWithBed final: public Ground
+{
+public:
+	explicit FakeSeaWithBed(float bed)
+	    : _bed(bed)
+	{
+	}
+	[[nodiscard]] float HeightAt(glm::vec2) const override { return 0.0f; }
+	[[nodiscard]] glm::vec3 NormalAt(glm::vec2) const override { return {0.0f, 1.0f, 0.0f}; }
+	[[nodiscard]] bool IsSeaCell(glm::vec2) const override { return true; }
+	[[nodiscard]] std::optional<float> SeaFloorAt(glm::vec2) const override { return _bed; }
+
+private:
+	float _bed;
 };
 
 constexpr Material k_Stone {
@@ -745,4 +763,20 @@ TEST(PhysicsShapes, EachBoneBoxHoldsItsVerticesAndItsOrigin)
 	// A bone with no vertices keeps a box at its origin
 	EXPECT_EQ(boxes[1].min, glm::vec3(0.0f));
 	EXPECT_EQ(boxes[1].max, glm::vec3(0.0f));
+}
+
+// EXPERIMENT (not for merge)
+TEST(PhysicsBody, WithASeaBedASinkingBodyComesToRestOnItAndStays)
+{
+	const FakeSeaWithBed sea(-8.0f);
+	auto body = MakeCube(0.5f, {0.0f, 0.0f, 0.0f});
+	int steps = 0;
+	StepResult result = StepResult::None;
+	for (; steps < 40000 && result != StepResult::Stopped; ++steps)
+	{
+		result = Step(body, sea);
+		ASSERT_NE(result, StepResult::Delete);
+	}
+	EXPECT_EQ(result, StepResult::Stopped);
+	EXPECT_NEAR(body.Centre().y, -7.5f, 0.2f);
 }

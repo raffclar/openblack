@@ -73,6 +73,8 @@ struct PhysicsEntry
 	bool animated {false};
 	/// Of its object's kind: it takes only its body's heading and stands upright
 	bool upright {false};
+	/// EXPERIMENT (not for merge): its kind was told it sank in the sea, and it sinks on to the sea bed
+	bool sankInSea {false};
 
 	[[nodiscard]] bool Has(Flags flag) const { return (flags & flag) != 0; }
 	[[nodiscard]] bool IsFlying() const { return body != nullptr && !body->resting; }

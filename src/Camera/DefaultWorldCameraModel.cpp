@@ -11,7 +11,9 @@
 
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <numeric>
+#include <optional>
 #include <ranges>
 #include <tuple>
 
@@ -85,6 +87,35 @@ glm::vec3 EulerFromPoints(glm::vec3 p0, glm::vec3 p1)
 	}
 	// Otherwise, calculate yaw and pitch based on the direction to the focus point.
 	return {glm::pi<float>() - glm::atan(diff.x, -diff.z), glm::atan(diff.y, glm::length(glm::xz(diff))), 0.0f};
+}
+
+/// EXPERIMENT (not for merge): where the line from the eye through what it looks at meets the sea bed, when it looks
+/// at the sea's surface with the sea bed deeper under it than the zoom can come close. None when the line does not go
+/// down, the floor is not deep enough under what it looks at, or the line meets no floor within reach.
+std::optional<glm::vec3> FocusThroughSea(glm::vec3 eye, glm::vec3 focus, const std::function<float(glm::vec2)>& floorAt)
+{
+	constexpr float k_Step = 0.5f;
+	constexpr float k_Reach = 600.0f;
+	const auto line = focus - eye;
+	if (glm::length2(line) < 1e-6f)
+	{
+		return std::nullopt;
+	}
+	const auto direction = glm::normalize(line);
+	if (direction.y > -1e-3f || floorAt(glm::xz(focus)) > focus.y - camera_limits::k_ClosestZoom)
+	{
+		return std::nullopt;
+	}
+	for (float along = k_Step; along <= k_Reach; along += k_Step)
+	{
+		const auto point = focus + direction * along;
+		const float floor = floorAt(glm::xz(point));
+		if (point.y <= floor)
+		{
+			return glm::vec3(point.x, floor, point.z);
+		}
+	}
+	return std::nullopt;
 }
 
 /// Calculates the projection length of a vector onto another vector.
@@ -710,6 +741,25 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	{
 		// Adjust camera's orientation based on user input. Call will reset deltas.
 		TiltZoom(eulerAngles, scalingFactor, zoomDelta);
+	}
+
+	// EXPERIMENT (not for merge): zoomed in as close as it comes to the sea's surface, the camera looks through the water
+	// at the sea bed on the same line, so the zoom goes on down under the water and back up the same way
+	if (_mode == Mode::Polar && zoomDelta < 0.0f &&
+	    _originFocusDistanceAtInteractionStart + zoomDelta < camera_limits::k_ClosestZoom &&
+	    Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled() &&
+	    Locator::terrainSystem::has_value())
+	{
+		const auto floorAt = [](glm::vec2 point) {
+			return Locator::underwaterSystem::value().FloorAt(point, Locator::terrainSystem::value().GetHeightAt(point));
+		};
+		const auto eye = _focusAtClick + _originFocusDistanceAtInteractionStart * glm::euclidean(glm::yx(eulerAngles));
+		if (const auto seaBed = FocusThroughSea(eye, _focusAtClick, floorAt); seaBed.has_value())
+		{
+			_originFocusDistanceAtInteractionStart += glm::distance(_focusAtClick, *seaBed);
+			_focusAtClick = *seaBed;
+			_targetFocus = *seaBed;
+		}
 	}
 
 	const auto mouseCurrent = Locator::gameActionSystem::value().GetMousePosition();

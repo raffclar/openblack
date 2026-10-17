@@ -43,6 +43,8 @@ public:
 	[[nodiscard]] float HeightAt(glm::vec2 xz) const override;
 	[[nodiscard]] glm::vec3 NormalAt(glm::vec2 xz) const override;
 	[[nodiscard]] bool IsSeaCell(glm::vec2 xz) const override;
+	/// EXPERIMENT (not for merge): the experiment's sea bed while its view is on, where it is under the land's ground
+	[[nodiscard]] std::optional<float> SeaFloorAt(glm::vec2 xz) const override;
 
 	/// The altitude of the cell a point is in (its coordinates rounded down to the cell), none off the map
 	[[nodiscard]] std::optional<uint8_t> CellAltitudeDown(glm::vec2 xz) const;

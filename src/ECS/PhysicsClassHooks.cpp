@@ -58,6 +58,11 @@ bool PhysicsClassHooks::HasSunk([[maybe_unused]] DynamicsSystemInterface& dynami
 	return false;
 }
 
+bool PhysicsClassHooks::SinkToSeaBed([[maybe_unused]] DynamicsSystemInterface& dynamics, [[maybe_unused]] PhysicsEntry& entry)
+{
+	return false;
+}
+
 void PhysicsClassHooks::DropSound([[maybe_unused]] entt::entity object) {}
 
 SoundCollisionType PhysicsClassHooks::CollideSoundType(entt::entity object) const
