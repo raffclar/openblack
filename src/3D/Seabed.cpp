@@ -197,11 +197,12 @@ std::vector<bool> seabed::WalkableCells(std::span<const uint8_t> altitudes, glm:
 
 namespace
 {
-/// The distance of each corner to the nearest source corner, in cells: a chamfer pass forwards, then backwards
+/// The distance of each corner to the nearest source corner, in cells. Each corner keeps its nearest source, and a
+/// pass forwards, then backwards, gives each corner the nearest source of its neighbours. The distance is the straight
+/// line to that source, so the lines of equal distance are round and do not have the corners of an octagon.
 std::vector<float> DistanceTo(const std::vector<bool>& sources, glm::ivec2 size, std::vector<int32_t>* nearest = nullptr)
 {
 	constexpr float k_Far = std::numeric_limits<float>::max() / 4.0f;
-	constexpr float k_Diagonal = 1.41421356f;
 	std::vector<float> distance(sources.size(), k_Far);
 	std::vector<int32_t> from(sources.size(), -1);
 	const auto at = [&size](int x, int z) {
@@ -215,36 +216,53 @@ std::vector<float> DistanceTo(const std::vector<bool>& sources, glm::ivec2 size,
 			from[i] = static_cast<int32_t>(i);
 		}
 	}
-	const auto relax = [&](int x, int z, int dx, int dz, float step) {
+	const auto relax = [&](int x, int z, int dx, int dz) {
 		const int nx = x + dx;
 		const int nz = z + dz;
-		if (nx >= 0 && nz >= 0 && nx < size.x && nz < size.y)
+		if (nx < 0 || nz < 0 || nx >= size.x || nz >= size.y)
 		{
-			if (distance[at(nx, nz)] + step < distance[at(x, z)])
-			{
-				distance[at(x, z)] = distance[at(nx, nz)] + step;
-				from[at(x, z)] = from[at(nx, nz)];
-			}
+			return;
+		}
+		const int32_t source = from[at(nx, nz)];
+		if (source < 0)
+		{
+			return;
+		}
+		const float sx = static_cast<float>(source % size.x) - static_cast<float>(x);
+		const float sz = static_cast<float>(source / size.x) - static_cast<float>(z);
+		const float candidate = std::sqrt(sx * sx + sz * sz);
+		if (candidate < distance[at(x, z)])
+		{
+			distance[at(x, z)] = candidate;
+			from[at(x, z)] = source;
 		}
 	};
 	for (int z = 0; z < size.y; ++z)
 	{
 		for (int x = 0; x < size.x; ++x)
 		{
-			relax(x, z, -1, 0, 1.0f);
-			relax(x, z, 0, -1, 1.0f);
-			relax(x, z, -1, -1, k_Diagonal);
-			relax(x, z, 1, -1, k_Diagonal);
+			relax(x, z, -1, 0);
+			relax(x, z, 0, -1);
+			relax(x, z, -1, -1);
+			relax(x, z, 1, -1);
+		}
+		for (int x = size.x - 1; x >= 0; --x)
+		{
+			relax(x, z, 1, 0);
 		}
 	}
 	for (int z = size.y - 1; z >= 0; --z)
 	{
 		for (int x = size.x - 1; x >= 0; --x)
 		{
-			relax(x, z, 1, 0, 1.0f);
-			relax(x, z, 0, 1, 1.0f);
-			relax(x, z, 1, 1, k_Diagonal);
-			relax(x, z, -1, 1, k_Diagonal);
+			relax(x, z, 1, 0);
+			relax(x, z, 0, 1);
+			relax(x, z, 1, 1);
+			relax(x, z, -1, 1);
+		}
+		for (int x = 0; x < size.x; ++x)
+		{
+			relax(x, z, -1, 0);
 		}
 	}
 	if (nearest != nullptr)
@@ -252,6 +270,50 @@ std::vector<float> DistanceTo(const std::vector<bool>& sources, glm::ivec2 size,
 		*nearest = std::move(from);
 	}
 	return distance;
+}
+} // namespace
+
+namespace
+{
+void SmoothField(std::vector<float>& field, glm::ivec2 size, int radius, int passes);
+
+/// Rounds the lines of equal distance to the coast out at sea. The lines are the crests of the shore wave. Where the
+/// distances to two parts of the coast are equal, the lines have a sharp bend. A blur rounds these bends. The blur
+/// gets wider with the distance, so the distance at the coast does not change. `distance` is in units, out to sea
+/// positive.
+void RoundFarFromCoast(std::vector<float>& distance, glm::ivec2 size, float spacing)
+{
+	constexpr std::array<int, 4> k_Radii {1, 2, 4, 8};
+	// The blur's radius is a third of the distance: its reach (two passes) stays short of the coast
+	constexpr float k_RadiusForDistance = 1.0f / 3.0f;
+	std::array<std::vector<float>, k_Radii.size()> blurred;
+	for (size_t level = 0; level < k_Radii.size(); ++level)
+	{
+		blurred.at(level) = distance;
+		SmoothField(blurred.at(level), size, k_Radii.at(level), 2);
+	}
+	for (size_t i = 0; i < distance.size(); ++i)
+	{
+		const float radius = std::clamp(distance[i] / spacing * k_RadiusForDistance, 0.0f, 8.0f);
+		if (radius <= 0.0f)
+		{
+			continue;
+		}
+		float lower = 0.0f;
+		float value = distance[i];
+		for (size_t level = 0; level < k_Radii.size(); ++level)
+		{
+			const auto upper = static_cast<float>(k_Radii.at(level));
+			const float below = level == 0 ? distance[i] : blurred.at(level - 1)[i];
+			if (radius <= upper)
+			{
+				value = glm::mix(below, blurred.at(level)[i], (radius - lower) / (upper - lower));
+				break;
+			}
+			lower = upper;
+		}
+		distance[i] = value;
+	}
 }
 } // namespace
 
@@ -280,6 +342,7 @@ void BuildShore(seabed::Seabed& seabed, std::span<const uint8_t> altitudes, cons
 		distance[i] = land[i] ? -(std::min(toSea[i], 1000.0f) - 0.5f) * seabed.spacing
 		                      : (std::min(toLand[i], 1000.0f) - 0.5f) * seabed.spacing;
 	}
+	RoundFarFromCoast(distance, size, seabed.spacing);
 	seabed.shore.resize(count);
 	seabed.cliff.assign(count, 0.0f);
 	seabed.cliffFoot.clear();

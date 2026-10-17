@@ -373,6 +373,13 @@ inline constexpr float k_CrestSharpness = 1.25f;
 inline constexpr float k_WarpMetres = 6.0f;
 /// The range of the wind sea's groups: the waves are 1 - k_GroupRange / 2 to 1 + k_GroupRange / 2 of their mean
 inline constexpr float k_GroupRange = 1.2f;
+/// The steepest that one wave of the table can be (its height times its wave number), on a calm day and in the worst
+/// storm. Real waves break at about 0.44.
+inline constexpr float k_SteepestWaveCalm = 0.12f;
+inline constexpr float k_SteepestWaveStorm = 0.16f;
+/// A wave's height after a soft cap at a limit: about the height while it is low, never more than the limit, and with
+/// no sharp change. `rate` is the change of the result for each change of the height.
+[[nodiscard]] float CapSteepness(float height, float limit, float& rate);
 /// For each wave, x: its direction (radians), y: its length, z: its height, w: its phase
 [[nodiscard]] std::array<glm::vec4, k_WaveCount> WaveTable(const WaveState& waves);
 

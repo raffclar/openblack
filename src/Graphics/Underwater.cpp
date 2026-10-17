@@ -317,6 +317,14 @@ underwater::WaveTilt underwater::WaveTiltAt(glm::vec2 point, float seconds)
 	                 .slope = std::cos(c1) * std::sin(c2) * h1 * q1 + std::sin(c1) * std::cos(c2) * h2 * q2};
 }
 
+float underwater::CapSteepness(float height, float limit, float& rate)
+{
+	const float over = height / limit;
+	const float share = 1.0f / (1.0f + over * over);
+	rate = share * std::sqrt(share);
+	return height * std::sqrt(share);
+}
+
 float underwater::TiltScale(float tilt, float length, float& rate)
 {
 	const float lengthLog = k_TiltStrength * std::log(std::max(length, 1e-3f) / Metres(k_TiltMetres));
@@ -370,7 +378,10 @@ underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, 
 		float tiltRate = 0.0f;
 		const float tiltScale = wind ? TiltScale(tilt.tilt, wave.y, tiltRate) : 1.0f;
 		const float group = wind ? (even ? variation.groups.x : variation.groups.y) * tiltScale : 1.0f;
-		const float amplitude = grown.at(i) * breaking * group;
+		// A soft cap keeps each wave under the steepness that the sea holds
+		const float limit = glm::mix(k_SteepestWaveCalm, k_SteepestWaveStorm, waves.storm) / k;
+		float capRate = 1.0f;
+		const float amplitude = CapSteepness(grown.at(i) * breaking * group, limit, capRate);
 		const float theta = k * glm::dot(along, wind ? warped : point) - omega * seconds + wave.w;
 		const float s = 0.5f + 0.5f * std::sin(theta);
 		const float shape = 2.0f * std::pow(s, sharp) - 1.0f;
@@ -383,7 +394,8 @@ underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, 
 			const glm::vec2 groupSlope = even ? glm::vec2(variation.groupSlope.x, variation.groupSlope.z)
 			                                  : glm::vec2(variation.groupSlope.y, variation.groupSlope.w);
 			const float plainGroup = even ? variation.groups.x : variation.groups.y;
-			sample.slope += grown.at(i) * breaking * shape * (groupSlope * tiltScale + plainGroup * tiltRate * tilt.slope);
+			sample.slope +=
+			    grown.at(i) * breaking * capRate * shape * (groupSlope * tiltScale + plainGroup * tiltRate * tilt.slope);
 		}
 		else
 		{

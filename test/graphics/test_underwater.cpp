@@ -1206,3 +1206,66 @@ TEST(Underwater, TheTiltOfTheWindSeaChangesItsLengthsAndHasItsSlope)
 		EXPECT_NEAR(here.slope.y, (north - south) / (2.0f * k_Step), 1e-3f);
 	}
 }
+
+TEST(UnderwaterWaves, NoWaveIsSteeperThanTheSeaHolds)
+{
+	// The cap keeps a low wave as it is, never goes over the limit, and its rate agrees with its change
+	float rate = 0.0f;
+	EXPECT_NEAR(underwater::CapSteepness(0.01f, 1.0f, rate), 0.01f, 1e-4f);
+	EXPECT_LT(underwater::CapSteepness(50.0f, 1.0f, rate), 1.0f);
+	const float low = underwater::CapSteepness(0.7f - 1e-3f, 1.0f, rate);
+	const float high = underwater::CapSteepness(0.7f + 1e-3f, 1.0f, rate);
+	underwater::CapSteepness(0.7f, 1.0f, rate);
+	EXPECT_NEAR(rate, (high - low) / 2e-3f, 1e-3f);
+	// Over a wide patch of the open sea the surface stays gentle: no faces that are nearly upright
+	for (const float storm : {0.0f, 1.0f})
+	{
+		const auto waves = underwater::WavesFor(storm, 0.3f);
+		float steepest = 0.0f;
+		for (float x = 3000.0f; x < 3200.0f; x += 1.3f)
+		{
+			for (float z = 2000.0f; z < 2200.0f; z += 1.7f)
+			{
+				const auto sample = underwater::WavesInDepth({x, z}, 47.0f, waves, 1000.0f, 200.0f);
+				steepest = std::max(steepest, glm::length(sample.slope));
+			}
+		}
+		EXPECT_LT(steepest, storm > 0.5f ? 2.2f : 1.3f) << "storm " << storm;
+	}
+	// The slope is the change of the height, with the cap
+	const auto waves = underwater::WavesFor(0.4f, 0.3f);
+	constexpr float k_Step = 0.01f;
+	for (const glm::vec2 point : {glm::vec2(3100.0f, 2050.0f), glm::vec2(812.0f, 4410.0f), glm::vec2(2500.0f, 2500.0f)})
+	{
+		const auto here = underwater::WavesInDepth(point, 9.0f, waves, 1000.0f, 200.0f);
+		const auto east = underwater::WavesInDepth(point + glm::vec2(k_Step, 0.0f), 9.0f, waves, 1000.0f, 200.0f);
+		const auto west = underwater::WavesInDepth(point - glm::vec2(k_Step, 0.0f), 9.0f, waves, 1000.0f, 200.0f);
+		const auto north = underwater::WavesInDepth(point + glm::vec2(0.0f, k_Step), 9.0f, waves, 1000.0f, 200.0f);
+		const auto south = underwater::WavesInDepth(point - glm::vec2(0.0f, k_Step), 9.0f, waves, 1000.0f, 200.0f);
+		EXPECT_NEAR(here.slope.x, (east.height - west.height) / (2.0f * k_Step), 0.02f);
+		EXPECT_NEAR(here.slope.y, (north.height - south.height) / (2.0f * k_Step), 0.02f);
+	}
+}
+
+TEST(Seabed, TheDistanceToTheCoastIsRound)
+{
+	// One corner of land in the middle of the sea: at the same straight distance, all directions get the same
+	// distance to the coast, so the crests of the shore wave are round and have no corners
+	constexpr glm::ivec2 k_Size {81, 81};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Size.x * k_Size.y), 0);
+	altitudes[static_cast<size_t>(40 * k_Size.x + 40)] = 20;
+	const auto bed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
+	ASSERT_EQ(bed.shore.size(), altitudes.size());
+	const auto distanceAt = [&bed](float angle, float cells) {
+		const int x = 40 + static_cast<int>(std::lround(std::cos(angle) * cells));
+		const int z = 40 + static_cast<int>(std::lround(std::sin(angle) * cells));
+		const float exact = std::hypot(static_cast<float>(x - 40), static_cast<float>(z - 40));
+		return bed.shore[static_cast<size_t>(z * bed.size.x + x)].x - exact * bed.spacing;
+	};
+	// 0, 22.5 and 45 degrees: a distance that steps from corner to corner is about 8 % too long at 22.5 degrees
+	const float straight = distanceAt(0.0f, 20.0f);
+	EXPECT_NEAR(distanceAt(0.3927f, 20.0f), straight, 4.0f);
+	EXPECT_NEAR(distanceAt(0.7854f, 20.0f), straight, 4.0f);
+	// Near the coast the distance is not blurred
+	EXPECT_NEAR(bed.shore[static_cast<size_t>(40 * bed.size.x + 42)].x, 15.0f, 2.5f);
+}

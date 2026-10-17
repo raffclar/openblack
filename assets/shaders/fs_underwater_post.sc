@@ -129,9 +129,8 @@ float SurfaceHeight(vec2 p, float t)
 	return UwSurface(p, t, 0.0f, ShoreAt(p), slope, face);
 }
 
-// The steps that a ray takes to find the surface: more near a rogue wave, which makes the surface high and steep. The
-// steps after the third go only part of the way, so that they do not jump across the steep face. `onLevel` is where the
-// ray meets the sea's level, and `down` is how steeply the ray goes down.
+// The steps that a ray takes to find the surface: more near a rogue wave, which makes the surface high and steep.
+// `onLevel` is where the ray meets the sea's level, and `down` is how steeply the ray goes down.
 int RogueSteps(vec2 onLevel, float down)
 {
 	vec4 a = u_uwRogue[0];
@@ -149,6 +148,17 @@ int RogueSteps(vec2 onLevel, float down)
 	return abs(side) < 2.2f && u > -1.8f - reach && u < 1.1f + reach ? 8 : 3;
 }
 
+// The next distance along a ray to the surface, from the surface's height and slope at the point that the ray reached.
+// The step uses the change of the gap between the ray and the surface along the ray (a Newton step). Where the surface
+// rises towards the eye the step is shorter, so the steps do not swing from crest to trough on a steep face. The step
+// is never more than about twice a plain step, so it does not go through a crest.
+float NextAlong(float along, float eyeHeight, vec3 direction, float height, vec2 slope)
+{
+	float gap = eyeHeight + direction.y * along - height;
+	float change = clamp((direction.y - dot(slope, direction.xz)) / direction.y, 0.6f, 4.0f);
+	return along - gap / (direction.y * change);
+}
+
 // Where a ray from the eye meets the sea's surface: the surface's height is found again three times at the point the
 // ray reaches, from the sea's level. `along` is how far along the ray, `slope` and `face` as UwSurface gives them,
 // and `shore` the shore map there.
@@ -164,7 +174,7 @@ float RayToSurface(vec3 eye, vec3 direction, float t, out vec2 slope, out float 
 		vec2 at = eye.xz + direction.xz * max(along, 0.0f);
 		shore = ShoreAt(at);
 		float height = UwSurface(at, t, max(along, 0.0f), shore, slope, face);
-		along = mix(along, (height - eye.y) / direction.y, i < 3 ? 1.0f : 0.6f);
+		along = NextAlong(along, eye.y, direction, height, slope);
 	}
 	return along;
 }
@@ -296,8 +306,7 @@ float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, ou
 	face = 0.0f;
 	variance = 0.0f;
 	shore = vec4(1000.0f, 0.0f, 0.0f, -160.0f);
-	// High waves seen at a low angle move the point where the ray meets the surface far: more steps, and the later
-	// steps go only part of the way, so the steps do not swing from crest to trough
+	// High waves seen at a low angle move the point where the ray meets the surface far: more steps (see NextAlong)
 	int steps = RogueSteps(eye.xz + direction.xz * max(along, 0.0f), abs(direction.y));
 	float grazing = UwWaveTop() / max(abs(direction.y), 0.02f);
 	float shelter = Shelter(eye.xz + direction.xz * max(along, 0.0f));
@@ -312,7 +321,7 @@ float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, ou
 		shore = ShoreAt(at);
 		float height =
 		    UwSurfaceSheltered(at, t, FootprintOnWater(direction, max(along, 0.0f)), shore, shelter, slope, face, variance);
-		along = mix(along, (height - eye.y) / direction.y, i < 2 ? 1.0f : 0.6f);
+		along = NextAlong(along, eye.y, direction, height, slope);
 	}
 	return along;
 }
