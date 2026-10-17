@@ -149,6 +149,11 @@ public:
 	[[nodiscard]] const CameraModel& GetModel() const { return *_model; }
 	/// Hands the camera's control to another model, as the temple does inside, giving back the one it had
 	std::unique_ptr<CameraModel> SetModel(std::unique_ptr<CameraModel> model);
+	/// The seconds since the current model took control. Each step adds its time, at most a tenth of a second, before the
+	/// model moves. A new model starts again from zero.
+	[[nodiscard]] float GetModelSeconds() const { return _modelSeconds; }
+	/// Sets the count, for a model that gives control to a different model for a time and then continues its count
+	void SetModelSeconds(float seconds) { _modelSeconds = seconds; }
 
 	/// Where the camera is and how it is moving there, whole: a tool showing the camera elsewhere for a frame puts this
 	/// back before the camera next moves, so that its movement carries on as if it hadn't
@@ -209,6 +214,7 @@ protected:
 	glm::mat4 _projectionMatrix = glm::mat4 {1.0f};
 	glm::mat4 _projectionMatrixReversedZ = glm::mat4 {1.0f};
 	std::unique_ptr<CameraModel> _model;
+	float _modelSeconds = 0.0f;
 	Projection _cameraProjection = Projection::ReversedZ;
 	glm::vec3 _shakeEye {0.0f};
 	glm::vec3 _shakeFocus {0.0f};

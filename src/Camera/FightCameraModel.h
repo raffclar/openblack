@@ -23,11 +23,17 @@ namespace openblack
 class FightCameraModel final: public CameraModel
 {
 public:
-	/// Takes over from the player's camera, flying to a view of the fight
-	FightCameraModel(std::unique_ptr<CameraModel> playerModel, const fight_view::View& start);
+	/// Takes over from the player's camera, flying to a view of the fight through a point on the way
+	FightCameraModel(std::unique_ptr<CameraModel> playerModel, const fight_view::View& start, const glm::vec3& way);
+
+	/// Takes control again after the hand lets go of a creature: from where the camera now is and how fast it moves, it
+	/// flies back to where this view last was, and then eases to the fight
+	void Return(const fight_view::View& from, const fight_view::View& speed);
 
 	/// Where the fighters now are, the first the one that made the arena
 	void SetFighters(const fight_view::Fighter& first, const fight_view::Fighter& second);
+	/// Where the camera was when its last step started
+	[[nodiscard]] const fight_view::View& GetShown() const { return _chase.GetHeld(); }
 	/// Whether the player has zoomed out of the fight
 	[[nodiscard]] bool ZoomedOut() const { return _zoomedOut; }
 	/// The player's own camera, which it hands back
@@ -44,13 +50,15 @@ public:
 private:
 	std::unique_ptr<CameraModel> _playerModel;
 	fight_view::Tracker _tracker;
+	fight_view::Chase _chase;
+	/// The view the fight wants, and the point on the way of the first flight
 	fight_view::View _view;
+	glm::vec3 _way;
 	std::optional<fight_view::Fighter> _first;
 	std::optional<fight_view::Fighter> _second;
 	fight_view::Input _input;
-	/// The flight to the fight is sent, and how long it has flown
-	bool _flightSent {false};
-	float _flownSeconds {0.0f};
+	/// The first step starts the flight to the fight from where the camera is
+	bool _started {false};
 	bool _zoomedOut {false};
 };
 

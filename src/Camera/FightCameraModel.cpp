@@ -9,6 +9,11 @@
 
 #include "FightCameraModel.h"
 
+#include <algorithm>
+#include <chrono>
+
+#include "3D/LandIslandInterface.h"
+#include "Camera.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -16,14 +21,27 @@ namespace openblack
 {
 namespace
 {
-/// The flight to the fight takes this long, as the player's camera's flights do
-constexpr float k_FlightSeconds = 1.5f;
+/// The camera's curves move by at most this many seconds a step
+constexpr float k_LongestStep = 0.1f;
 } // namespace
 
-FightCameraModel::FightCameraModel(std::unique_ptr<CameraModel> playerModel, const fight_view::View& start)
+FightCameraModel::FightCameraModel(std::unique_ptr<CameraModel> playerModel, const fight_view::View& start,
+                                   const glm::vec3& way)
     : _playerModel(std::move(playerModel))
     , _view(start)
+    , _way(way)
 {
+}
+
+void FightCameraModel::Return(const fight_view::View& from, const fight_view::View& speed)
+{
+	_started = true;
+	_tracker.Resnap();
+	const auto to = _chase.GetHeld();
+	const auto way = fight_view::WayPoint(from.origin, to.origin, fight_view::k_ReturnWayRise, [](glm::vec2 point) {
+		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+	});
+	_chase.Fly(from, speed, to, way);
 }
 
 void FightCameraModel::SetFighters(const fight_view::Fighter& first, const fight_view::Fighter& second)
@@ -33,37 +51,34 @@ void FightCameraModel::SetFighters(const fight_view::Fighter& first, const fight
 }
 
 std::optional<CameraModel::CameraInterpolationUpdateInfo> FightCameraModel::Update(std::chrono::microseconds dt,
-                                                                                   [[maybe_unused]] const Camera& camera)
+                                                                                   const Camera& camera)
 {
 	const auto seconds = std::chrono::duration<float>(dt).count();
-	// It flies to the fight first, and follows the fighters once there
-	if (!_flightSent)
+	// The fight's own easing uses the whole step; the camera's curves move by at most a tenth of a second a step
+	const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
+	const auto step = std::min(static_cast<float>(milliseconds) * 0.001f, k_LongestStep);
+	// It flies to the fight first from where the camera is, and follows the fighters once there
+	if (!_started)
 	{
-		_flightSent = true;
-		return CameraInterpolationUpdateInfo {
-		    .origin = _view.origin,
-		    .focus = _view.focus,
-		    .duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float>(k_FlightSeconds)),
-		};
+		_started = true;
+		_chase.Fly({.origin = camera.GetOrigin(), .focus = camera.GetFocus()},
+		           {.origin = camera.GetOriginVelocity(), .focus = camera.GetFocusVelocity()}, _view, _way);
 	}
-	if (_flownSeconds < k_FlightSeconds)
+	std::optional<fight_view::View> wanted;
+	if (_first.has_value() && _second.has_value())
 	{
-		_flownSeconds += seconds;
-		_input = {};
-		return std::nullopt;
+		auto input = _input;
+		input.zoom = fight_view::ZoomDistance(_input.zoom, _view.origin.y - _view.focus.y);
+		const auto followed = _tracker.Follow(*_first, *_second, input, seconds);
+		_view = followed.view;
+		_zoomedOut = followed.zoomedOut;
+		wanted = _view;
 	}
-	if (!_first.has_value() || !_second.has_value())
-	{
-		return std::nullopt;
-	}
-	auto input = _input;
-	input.zoom = fight_view::ZoomDistance(_input.zoom, _view.origin.y - _view.focus.y);
-	const auto step = _tracker.Follow(*_first, *_second, input, seconds);
 	_input = {};
-	_view = step.view;
-	_zoomedOut = step.zoomedOut;
-	// The fight's own easing moves it, so the camera goes straight there
-	return CameraInterpolationUpdateInfo {.origin = _view.origin, .focus = _view.focus, .duration = dt};
+	const auto shown = _chase.Step(wanted, camera.GetModelSeconds(), step);
+	// The camera goes straight to where its own curves put it
+	return CameraInterpolationUpdateInfo {
+	    .origin = shown.origin, .focus = shown.focus, .duration = std::chrono::microseconds::zero()};
 }
 
 void FightCameraModel::HandleActions(std::chrono::microseconds dt)

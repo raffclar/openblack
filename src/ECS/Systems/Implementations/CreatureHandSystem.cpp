@@ -29,6 +29,7 @@
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/CreatureInteractCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/FightCameraModel.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureLocomotion.h"
@@ -263,14 +264,15 @@ void CreatureHandSystem::TakeCamera(entt::entity creature)
 	}
 	auto& camera = Locator::camera::value();
 	auto& current = camera.GetModel();
-	// Already on a creature it stays; only the player's own camera, or Creature Mode's, gives way: not a fight's, a
-	// script's, the temple's or the editor's
+	// Already on a creature it stays; only the player's own camera, its fight view or Creature Mode's camera gives way:
+	// not a script's, the temple's or the editor's
 	if (dynamic_cast<CreatureInteractCameraModel*>(&current) != nullptr)
 	{
 		return;
 	}
 	auto* world = dynamic_cast<DefaultWorldCameraModel*>(&current);
-	if (world == nullptr && dynamic_cast<CreatureCameraModel*>(&current) == nullptr)
+	auto* fight = dynamic_cast<FightCameraModel*>(&current);
+	if (world == nullptr && fight == nullptr && dynamic_cast<CreatureCameraModel*>(&current) == nullptr)
 	{
 		return;
 	}
@@ -278,6 +280,11 @@ void CreatureHandSystem::TakeCamera(entt::entity creature)
 	if (world != nullptr)
 	{
 		_returnTo = creature_interact::View {.origin = world->GetTargetOrigin(), .focus = world->GetTargetFocus()};
+	}
+	// If the fight view stops while the hand holds the creature, the player's camera flies back to where the view was
+	if (fight != nullptr)
+	{
+		_returnTo = creature_interact::View {.origin = fight->GetShown().origin, .focus = fight->GetShown().focus};
 	}
 	auto model = std::make_unique<CreatureInteractCameraModel>(camera.GetOrigin(), camera.GetFocus());
 	model->SetTarget(InteractViewOf(Locator::entitiesRegistry::value(), creature));
@@ -306,8 +313,16 @@ void CreatureHandSystem::GiveCameraBack()
 	}
 	const auto origin = camera.GetOrigin();
 	const auto focus = camera.GetFocus();
+	const auto speed = fight_view::View {.origin = model->GetOriginSpeed(), .focus = model->GetFocusSpeed()};
 	auto* world = dynamic_cast<DefaultWorldCameraModel*>(player.get());
+	auto* fight = dynamic_cast<FightCameraModel*>(player.get());
 	camera.SetModel(std::move(player));
+	// The fight view starts again from where the camera now is and how fast it moves
+	if (fight != nullptr)
+	{
+		fight->Return({.origin = origin, .focus = focus}, speed);
+		return;
+	}
 	// The player's camera starts again from where the camera now is and flies back to where it was going
 	if (world != nullptr && returnTo.has_value())
 	{

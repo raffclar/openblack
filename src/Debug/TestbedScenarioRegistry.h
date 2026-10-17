@@ -807,6 +807,8 @@ struct Command
 		/// The game stops every task of a land's script (script, by its name), as a script's "stop script" does. The log
 		/// tells how many tasks stopped and if the scenario's object is still in a script. Needs no creature
 		StopScript,
+		/// The pointer moves to the middle of the body of the creature on the screen, as the mouse moves it
+		PointerOnCreature,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
