@@ -1165,3 +1165,4 @@ target_compile_definitions(
   PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 target_link_libraries(test_oracle_glm_order_6 PRIVATE psys)
+openblack_setup_and_add_test(test_glm_order_6 test_glm_order_6.cpp)
