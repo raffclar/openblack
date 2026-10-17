@@ -155,6 +155,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
@@ -1066,6 +1067,27 @@ size_t LeashWordOf(LeashType type)
 	return static_cast<size_t>(type);
 }
 
+/// The belief about the heart of a temple: a part of the temple of the temple's player, at the heart's exact map position
+std::optional<creature_tree::Belief> HeartBeliefOf(const ecs::Registry& registry, entt::entity temple, entt::entity heart,
+                                                   entt::entity self)
+{
+	const auto* building = registry.Valid(temple) ? registry.TryGet<const Temple>(temple) : nullptr;
+	if (building == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto* me = registry.TryGet<const Creature>(self);
+	auto belief = creature_tree::CommonBelief({
+	    .type = creature_tree::belief_types::k_CitadelPart,
+	    .player = PlayerNumberOf(building->owner),
+	    .creaturesPlayer = me != nullptr ? std::optional(PlayerNumberOf(me->owner)) : std::nullopt,
+	});
+	const auto place = ecs::thing_map_place::Of(registry, heart);
+	belief.x = place.x;
+	belief.z = place.z;
+	return belief;
+}
+
 } // namespace
 
 std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& registry, entt::entity entity,
@@ -1089,6 +1111,10 @@ std::optional<creature_tree::Belief> mind_detail::BeliefNowOf(const ecs::Registr
 	if (!registry.Valid(entity))
 	{
 		return std::nullopt;
+	}
+	if (const auto* heart = registry.TryGet<const TempleHeart>(entity))
+	{
+		return HeartBeliefOf(registry, heart->temple, entity, self);
 	}
 	const auto type = BeliefKindOf(registry, entity);
 	if (!type.has_value())
@@ -1121,20 +1147,11 @@ std::optional<creature_tree::Belief> CreatureMindSystem::BeliefAbout(entt::entit
 std::optional<creature_tree::Belief> mind_detail::ActedOnBeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                                   entt::entity self)
 {
-	// The temple here is one thing. Acted on, it stands for its heart: a part of the temple of the temple's player. The
-	// heart is at the exact map position where the game made it, which the temple keeps.
-	if (const auto* temple = registry.Valid(entity) ? registry.TryGet<const Temple>(entity) : nullptr)
+	// Acted on, the temple stands for its heart: the creature's belief about the heart
+	if (registry.Valid(entity) && registry.AllOf<Temple>(entity))
 	{
-		const auto* me = registry.TryGet<const Creature>(self);
-		auto heart = creature_tree::CommonBelief({
-		    .type = creature_tree::belief_types::k_CitadelPart,
-		    .player = PlayerNumberOf(temple->owner),
-		    .creaturesPlayer = me != nullptr ? std::optional(PlayerNumberOf(me->owner)) : std::nullopt,
-		});
-		const auto place = ecs::thing_map_place::Of(registry, entity);
-		heart.x = place.x;
-		heart.z = place.z;
-		return heart;
+		const auto heart = ecs::temple_heart::Of(registry, entity);
+		return heart != entt::null ? BeliefOf(registry, heart, self) : HeartBeliefOf(registry, entity, entity, self);
 	}
 	return BeliefOf(registry, entity, self);
 }
@@ -1628,6 +1645,17 @@ std::optional<map_coords::MapCoords> BelievedPlaceOf(const ecs::Registry& regist
 bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing);
 bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing);
 
+/// The thing that a creature acts on for a belief: the temple for the belief about the temple's heart, else the thing of
+/// the belief. None for a temple that has a heart: the creature acts on it only through the belief about its heart.
+std::optional<entt::entity> ActedThingOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (registry.Valid(thing) && registry.AllOf<Temple>(thing) && ecs::temple_heart::Of(registry, thing) != entt::null)
+	{
+		return std::nullopt;
+	}
+	return ecs::temple_heart::Acted(registry, thing);
+}
+
 /// The thing a creature at a point uses for an action, of a kind, other than the goal. It looks only through its
 /// beliefs about things that are not whole things, the newest first: what it has not come across, it does not use.
 std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Target use, glm::vec2 position, float distanceWeight,
@@ -1642,7 +1670,12 @@ std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Targe
 	std::vector<creature_planner::UsedCandidate> candidates;
 	for (const auto& belief : mind->beliefs.InListOrder())
 	{
-		const auto thing = belief.thing;
+		const auto acted = ActedThingOf(registry, belief.thing);
+		if (!acted.has_value())
+		{
+			continue;
+		}
+		const auto thing = *acted;
 		// Not a whole thing, nor a thing it found no way to lately, nor one outside the area its leash keeps it within
 		if (creature_object_beliefs::InListOfWholeThings(belief.kind) || !registry.Valid(thing) ||
 		    NoWayLately(registry, *mind, thing) || OutsideConfinedArea(registry, creature, belief.place) ||
@@ -2515,12 +2548,10 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::PartsToActOn(
 	};
 	for (const auto& belief : mind.beliefs.PartsOf(activity.whole))
 	{
-		add(belief.thing);
-	}
-	// The temple is its own heart, the part that the creature came across first
-	if (activity.kind == creature_activity::Whole::Citadel)
-	{
-		add(activity.whole);
+		if (const auto acted = ActedThingOf(registry, belief.thing))
+		{
+			add(*acted);
+		}
 	}
 	return parts;
 }
@@ -2557,13 +2588,15 @@ CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindSta
                                           const std::function<bool(entt::entity)>& suitsAction)
 {
 	std::vector<creature_planner::ObjectCandidate> found;
+	const auto& registry = Locator::entitiesRegistry::value();
 	for (const auto& belief : mind.beliefs.InListOrder())
 	{
-		if (belief.thing == creature || !SuitsDesire(creature, mind, desire, belief.thing) || !suitsAction(belief.thing))
+		const auto thing = ActedThingOf(registry, belief.thing);
+		if (!thing.has_value() || *thing == creature || !SuitsDesire(creature, mind, desire, *thing) || !suitsAction(*thing))
 		{
 			continue;
 		}
-		found.push_back(GoalWorth(creature, mind, desire, belief.thing, std::nullopt));
+		found.push_back(GoalWorth(creature, mind, desire, *thing, std::nullopt));
 	}
 	return found;
 }
@@ -2582,9 +2615,13 @@ std::optional<entt::entity> CreatureMindSystem::WholeOfShownThing(entt::entity c
 	{
 		return std::nullopt;
 	}
-	// The temple is its own heart, a part of itself
+	// A temple shown is its heart, a part of the temple
 	if (registry.AllOf<Temple>(thing))
 	{
+		if (const auto heart = ecs::temple_heart::Of(registry, thing); heart != entt::null)
+		{
+			ComeAcross(creature, mind, heart);
+		}
 		return thing;
 	}
 	const auto whole = BelongsTo(thing);
@@ -2659,9 +2696,10 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::ShownParts(en
 	std::vector<creature_planner::ObjectCandidate> parts;
 	for (const auto& belief : mind.beliefs.PartsOf(activity.whole))
 	{
-		if (belief.thing != creature && registry.Valid(belief.thing) && suits(belief.thing))
+		const auto part = ActedThingOf(registry, belief.thing);
+		if (part.has_value() && *part != creature && registry.Valid(*part) && suits(*part))
 		{
-			parts.push_back(GoalWorth(creature, mind, desire, belief.thing, activity));
+			parts.push_back(GoalWorth(creature, mind, desire, *part, activity));
 		}
 	}
 	return parts;
@@ -2684,9 +2722,9 @@ CreatureMindSystem::ShownThingsWithoutWhole(entt::entity creature, CreatureMindS
 	{
 		for (const auto& belief : mind.beliefs.PartsOf(*whole))
 		{
-			if (suits(belief.thing))
+			if (const auto part = ActedThingOf(registry, belief.thing); part.has_value() && suits(*part))
 			{
-				parts.push_back(GoalWorth(creature, mind, desire, belief.thing, std::nullopt));
+				parts.push_back(GoalWorth(creature, mind, desire, *part, std::nullopt));
 			}
 		}
 	}
@@ -3682,7 +3720,9 @@ void CreatureMindSystem::BelieveInTempleToEnter(entt::entity creature, const cre
 	}
 	if (executor.build == creature_plan_actions::Build::EnterTemple && situation.templeHeart.has_value())
 	{
-		ComeAcross(creature, *mind, static_cast<entt::entity>(situation.templeHeart->temple));
+		const auto temple = static_cast<entt::entity>(situation.templeHeart->temple);
+		const auto heart = ecs::temple_heart::Of(Locator::entitiesRegistry::value(), temple);
+		ComeAcross(creature, *mind, heart != entt::null ? heart : temple);
 	}
 	else if (executor.build == creature_plan_actions::Build::StealAndPutInTown && situation.ownTownPit.has_value())
 	{
@@ -4322,15 +4362,15 @@ void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindStat
 			std::vector<creature_watching::MimicCandidate> candidates;
 			for (const auto& belief : mind.beliefs.InListOrder())
 			{
-				if (belief.thing == creature || !SuitsDesire(creature, mind, desire, belief.thing) || !suits(belief.thing))
+				const auto thing = ActedThingOf(registry, belief.thing);
+				if (!thing.has_value() || *thing == creature || !SuitsDesire(creature, mind, desire, *thing) || !suits(*thing))
 				{
 					continue;
 				}
-				things.push_back(belief.thing);
+				things.push_back(*thing);
 				candidates.push_back({
-				    .kind = MimicKindOf(registry, belief.thing),
-				    .nearness =
-				        mind_detail::Nearness(registry, creature, at->position, belief.thing, belief.place, distanceWeight),
+				    .kind = MimicKindOf(registry, *thing),
+				    .nearness = mind_detail::Nearness(registry, creature, at->position, *thing, belief.place, distanceWeight),
 				});
 			}
 			const auto nearest = creature_watching::NearestOfKind(candidates, *mind.copiedKind);

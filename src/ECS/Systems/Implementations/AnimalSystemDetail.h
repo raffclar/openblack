@@ -363,22 +363,30 @@ inline void SyncWorld(Animal& animal)
 	animal.heading = gutils::ConvertGameAngleTo3D(animal.move.angle);
 }
 
-/// Whether a point (metres) is somewhere an animal of a collision mask can't stand: off the map or on no land, or in
-/// the sea or on dry land as its mask says. (The game also marks the trees and fields in a cell and the map's edge;
-/// no animal's mask takes them.)
-inline bool CellCollides(glm::vec2 point, uint32_t mask)
+/// Whether a map position is somewhere an animal of a collision mask can't stand: off the map or on no land, or in the
+/// sea or on dry land as its mask says. (The game also marks the trees and fields in a cell and the map's edge; no
+/// animal's mask takes them.)
+inline bool CellCollides(glm::ivec2 point, uint32_t mask)
 {
-	if (!OnMap(point) || !Locator::terrainSystem::has_value())
+	const map_coords::MapCoords place {.x = point.x, .z = point.y};
+	if (!map_coords::InBounds(place) || !Locator::terrainSystem::has_value())
 	{
 		return true;
 	}
-	const auto* cell = Locator::terrainSystem::value().FindCell(glm::u16vec2(map_coords::CellOf(point)));
+	const auto* cell =
+	    Locator::terrainSystem::value().FindCell(glm::u16vec2(map_coords::CellOf(point.x), map_coords::CellOf(point.y)));
 	if (cell == nullptr)
 	{
 		return true;
 	}
 	const auto here = cell->properties.hasWater != 0 ? CollideType::Water : CollideType::Land;
 	return (static_cast<uint32_t>(here) & mask) != 0;
+}
+
+/// The same for a point in metres, at its map position
+inline bool CellCollides(glm::vec2 point, uint32_t mask)
+{
+	return CellCollides(Fixed(point), mask);
 }
 
 /// The nearest town to a point (metres) within a distance, none for none

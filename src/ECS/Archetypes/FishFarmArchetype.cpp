@@ -23,6 +23,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -73,6 +74,7 @@ entt::entity FishFarmArchetype::Create(const glm::vec3& position)
 
 	const auto entity = registry.Create();
 	registry.Assign<Transform>(entity, centre, glm::mat3(1.0f), glm::vec3(1.0f));
+	ecs::thing_map_place::Keep(registry, entity, {.x = coords.x, .z = coords.z});
 
 	FishFarm farm;
 	farm.place = {coords.x, coords.z};

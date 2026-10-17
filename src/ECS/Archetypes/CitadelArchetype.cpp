@@ -65,6 +65,10 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	{
 		registry.Assign<BuildProgress>(entity, built < 0.0f ? 0.0f : built);
 	}
+	// Its heart is a thing of its own at the same place
+	const auto heart = registry.Create();
+	registry.Assign<Transform>(heart, position, rotation, size);
+	registry.Assign<TempleHeart>(heart, entity);
 	// The temple's heart, as it is made, puts its entrance where it is, turned as it is
 	const auto entrance = registry.Create();
 	registry.Assign<Transform>(entrance, position, rotation, size);

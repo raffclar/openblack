@@ -72,6 +72,13 @@ void TempleDestructionSystem::RemoveTemple(entt::entity temple)
 			entrances.push_back(entity);
 		}
 	});
+	registry.Each<const TempleHeart>([temple, &entrances](entt::entity entity, const TempleHeart& heart) {
+		if (heart.temple == temple)
+		{
+			entrances.push_back(entity);
+		}
+	});
+	// Its entrance and its heart go with it
 	for (const auto entrance : entrances)
 	{
 		_world->Remove(entrance);

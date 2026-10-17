@@ -93,6 +93,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownDesire.h"
@@ -347,8 +348,8 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 	{
 		return kinds::k_Tree;
 	}
-	// A worship site and the altar at its head are parts of their player's temple
-	if (registry.AnyOf<WorshipSite, WorshipAltar>(thing))
+	// A temple's heart, a worship site and the altar at its head are parts of their player's temple
+	if (registry.AnyOf<TempleHeart, WorshipSite, WorshipAltar>(thing))
 	{
 		return kinds::k_CitadelPart;
 	}
@@ -691,6 +692,11 @@ void CreatureMindSystem::LookFarAbout(entt::entity creature, CreatureMindState& 
 	{
 		mind.nearestTemple = temple;
 		ComeAcross(creature, mind, temple);
+		// Then the temple's heart
+		if (const auto heart = ecs::temple_heart::Of(registry, temple); heart != entt::null)
+		{
+			ComeAcross(creature, mind, heart);
+		}
 	}
 }
 
@@ -792,7 +798,10 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 		// The things that stay put, then the things that move
 		for (const auto thing : map.GetAllInCell(cell))
 		{
-			ComeAcross(entity, mind, thing);
+			// The thing in the map's cells for a temple is the temple's heart
+			const auto heart =
+			    registry.Valid(thing) && registry.AllOf<Temple>(thing) ? ecs::temple_heart::Of(registry, thing) : entt::null;
+			ComeAcross(entity, mind, heart != entt::null ? heart : thing);
 			// Each thing in view that it sees may take over what it watches
 			if (thing == entity || !registry.Valid(thing))
 			{
