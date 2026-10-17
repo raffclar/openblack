@@ -26,6 +26,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Editor/EditorEntities.h"
 #include "Gestures/GesturePaths.h"
 #include "Gestures/GestureRecorder.h"
@@ -501,6 +502,21 @@ Json GameInput::State() const
 			if (!why.empty())
 			{
 				state["pick"]["grab"]["why_not"] = why;
+			}
+		}
+		// A town's totem under the cursor is not taken into the hand: the Action button takes hold of it to slide it.
+		// Whether the first player's hand would take hold of it.
+		if (pick.object.has_value() && Locator::villageTotemSystem::has_value())
+		{
+			const auto& totems = Locator::villageTotemSystem::value();
+			if (const auto totem = totems.TotemOf(*pick.object); totem.has_value())
+			{
+				const auto why = totems.WhyNotGrip(*totem, PlayerNames::PLAYER_ONE);
+				state["pick"]["totem"] = {{"id", entt::to_integral(*totem)}, {"grips", why.empty()}, {"button", "right"}};
+				if (!why.empty())
+				{
+					state["pick"]["totem"]["why_not"] = std::string(why);
+				}
 			}
 		}
 	}

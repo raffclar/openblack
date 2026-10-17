@@ -339,6 +339,24 @@ TEST(VillageTotemSystem, OnlyTheTownsPlayerWithTheirTempleAndAWorshipSiteMayTake
 	EXPECT_TRUE(village.system->Grip(village.totem, PlayerNames::PLAYER_ONE));
 }
 
+TEST(VillageTotemSystem, SaysWhyTheHandCannotTakeHoldOfIt)
+{
+	auto noSite = MakeVillage(false);
+	EXPECT_EQ(noSite.system->WhyNotGrip(noSite.totem, PlayerNames::PLAYER_ONE), "the town's worship site is not built");
+	auto village = MakeVillage(true);
+	EXPECT_EQ(village.system->WhyNotGrip(village.totem, PlayerNames::PLAYER_TWO), "the totem's town is not the player's");
+	village.world->life = 0.75f;
+	EXPECT_EQ(village.system->WhyNotGrip(village.totem, PlayerNames::PLAYER_ONE),
+	          "the totem does not work: it is not built, or it has three quarters of its life or less");
+	village.world->life = 1.0f;
+	village.world->heart = false;
+	EXPECT_EQ(village.system->WhyNotGrip(village.totem, PlayerNames::PLAYER_ONE),
+	          "the heart of the player's temple is not built");
+	village.world->heart = true;
+	EXPECT_TRUE(village.system->WhyNotGrip(village.totem, PlayerNames::PLAYER_ONE).empty());
+	EXPECT_EQ(village.system->WhyNotGrip(entt::null, PlayerNames::PLAYER_ONE), "the totem has no town");
+}
+
 TEST(VillageTotemRules, ATotemWorksWhenBuiltWithMoreThanThreeQuartersOfItsLife)
 {
 	EXPECT_TRUE(vt::Functional(true, 1.0f));
