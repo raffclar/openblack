@@ -56,10 +56,11 @@ TEST(HandShadow, IsCastFromFarUpTheSunlight)
 	const auto towards = glm::normalize(light - ground);
 	EXPECT_NEAR(glm::dot(towards, -HandShadow::SunlightDirection(9.0f, k_Times)), 1.0f, 1e-5f);
 	EXPECT_NEAR(glm::distance(light, ground), glm::length(GroundShadow::k_Sun), 1.0f);
-	// Laid on the ground beneath the hand, a point of it held 10 up falls 10 times the sun's slope away from the sun
+	// Laid on the ground beneath the hand, a point of it held 10 up falls 10 times the sun's slope away from the sun. The
+	// game works from the far light in float, so the point falls on steps of a 16th of a unit
 	const GroundShadow::Cast cast {.light = light, .level = ground.y, .ground = ground.y};
 	const auto direction = HandShadow::SunlightDirection(9.0f, k_Times);
 	const auto held = GroundShadow::OnLevel({.position = ground + glm::vec3(0.0f, 10.0f, 0.0f), .keptAboveLevel = false}, cast);
-	EXPECT_NEAR(held.x - ground.x, 10.0f * direction.x / -direction.y, 1e-2f);
-	EXPECT_NEAR(held.y - ground.z, 10.0f * direction.z / -direction.y, 1e-2f);
+	EXPECT_NEAR(held.x - ground.x, 10.0f * direction.x / -direction.y, 1.0f / 16.0f);
+	EXPECT_NEAR(held.y - ground.z, 10.0f * direction.z / -direction.y, 1.0f / 16.0f);
 }

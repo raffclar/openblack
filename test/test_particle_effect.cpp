@@ -803,9 +803,9 @@ TEST(RisingSparks, ASparksAlphaIsCutDownFromTheShowersStrengthAndOnlyItsLowByteK
 	auto sparks = rising_sparks::MakeSparks([](float) { return 0.0f; }, [](uint32_t) { return 0u; });
 	rising_sparks::StepSparks(sparks, 2500, [](float) { return 0.0f; });
 	const glm::vec3 from {0.0f};
-	// Half faded in (the game's 0.0002 a millisecond is a hair under, so just under a half)
+	// Half faded in. The game's 0.0002 a millisecond is a little less, but the product rounds to a float of exactly a half
 	EXPECT_EQ(rising_sparks::LookOf(sparks, 0, from)->alpha, 127);
-	EXPECT_EQ(rising_sparks::LookOf(sparks, 0, from, 100)->alpha, 49);
+	EXPECT_EQ(rising_sparks::LookOf(sparks, 0, from, 100)->alpha, 50);
 	EXPECT_EQ(rising_sparks::LookOf(sparks, 0, from, 0)->alpha, 0);
 }
 

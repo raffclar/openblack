@@ -82,7 +82,7 @@ inline constexpr float k_WiggleOffsetY = 0.7f;
 /// The light sheet's strength at an age, rising from nothing and falling back to it over its life
 [[nodiscard]] float SheetStrength(float age, float lifetime);
 /// What is left of a flash a time after it started, 1 when it starts down to 0 a duration later
-[[nodiscard]] double FlashLeft(float since, float duration);
+[[nodiscard]] float FlashLeft(float since, float duration);
 /// Each channel of a colour (0xAARRGGBB) times a level of 0 to 255, over 256
 [[nodiscard]] uint32_t Dimmed(uint32_t argb, uint8_t level);
 /// The chain behind a gesturing hand is sized by how far the hand is from the camera: a fifth of its size up close,

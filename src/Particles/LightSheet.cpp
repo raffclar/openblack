@@ -15,6 +15,8 @@
 #include <span>
 #include <utility>
 
+#include "Common/X87.h"
+
 using namespace openblack::particles;
 
 namespace
@@ -54,9 +56,9 @@ void LightSheet::Start(std::vector<glm::vec3> points, uint32_t rgb, float height
 void LightSheet::Update(float seconds)
 {
 	_time += seconds;
-	const double since = static_cast<double>(seconds) + _sinceShift;
-	_sinceShift = static_cast<float>(since);
-	_slide = static_cast<float>(_slide - (static_cast<double>(seconds) * k_SlideSpeed));
+	_sinceShift = seconds + _sinceShift;
+	const float since = _sinceShift;
+	_slide = _slide - (seconds * k_SlideSpeed);
 	if (_pulsed)
 	{
 		UpdatePulsed(seconds);
@@ -74,8 +76,10 @@ void LightSheet::Update(float seconds)
 	const auto count = static_cast<int>(_points.size());
 	for (int i = 0; i < count; ++i)
 	{
-		const double wave = std::cos(((static_cast<double>(i) * k_WaveSpan) / (count - 1)) - (_time * k_WaveSpeed));
-		_heights[static_cast<size_t>(i)] = static_cast<float>(((wave * k_WaveDepth) + k_WaveMiddle) * _height);
+		// The cosine stays wide until the multiply by the depth of the wave
+		const float along = (static_cast<float>(i) * k_WaveSpan) / static_cast<float>(count - 1);
+		const double wave = x87::Cos(along - (_time * k_WaveSpeed));
+		_heights[static_cast<size_t>(i)] = x87::Add(x87::Mul(wave, k_WaveDepth), k_WaveMiddle) * _height;
 	}
 }
 
@@ -98,8 +102,8 @@ void LightSheet::Build(std::vector<Vertex>& vertices, std::vector<uint32_t>& tri
 	{
 		sum += point;
 	}
-	const double share = 1.0 / static_cast<double>(count);
-	_middle = {static_cast<float>(share * sum.x), static_cast<float>(share * sum.y), static_cast<float>(share * sum.z)};
+	const float share = 1.0f / static_cast<float>(count);
+	_middle = sum * share;
 	_slide -= static_cast<float>(static_cast<int>(_slide));
 
 	vertices.reserve(count * k_CornersPerPoint);
@@ -108,8 +112,8 @@ void LightSheet::Build(std::vector<Vertex>& vertices, std::vector<uint32_t>& tri
 	{
 		const auto& point = _points[i];
 		auto top = ((point - _middle) * _spread) + _middle;
-		const double rise = static_cast<double>(_heights[i]) * _strengths[i];
-		top.y = static_cast<float>(rise + top.y);
+		const float rise = _heights[i] * _strengths[i];
+		top.y = rise + top.y;
 		const auto bright = ((top - point) * k_BrightLine) + point;
 		const auto light = std::min(static_cast<uint32_t>(static_cast<int64_t>(rise * k_LightPerHeight)), k_ByteMax);
 		const uint32_t lit = Lit(_rgb, light);
@@ -120,9 +124,8 @@ void LightSheet::Build(std::vector<Vertex>& vertices, std::vector<uint32_t>& tri
 		                    .specularArgb = ((lit & k_HalfMask) | k_SpecularAlpha) >> 1u});
 		vertices.push_back({.position = top, .uv = {along, -_slide}, .argb = k_Opaque, .specularArgb = 0});
 		const auto step = _points[(i + 1) % count] - point;
-		const double distance = std::sqrt((static_cast<double>(step.x) * step.x) + (static_cast<double>(step.y) * step.y) +
-		                                  (static_cast<double>(step.z) * step.z));
-		along = static_cast<float>((distance * k_StarsPerUnit) + along);
+		const float distance = std::sqrt((step.z * step.z) + (step.y * step.y) + (step.x * step.x));
+		along = (distance * k_StarsPerUnit) + along;
 	}
 
 	triangles.reserve((count - 1) * 12);
@@ -189,10 +192,10 @@ bool LightSheet::Showing() const
 void LightSheet::UpdatePulsed(float seconds)
 {
 	// Each point's strength fades towards nothing
-	const auto kept = static_cast<float>(std::exp(-static_cast<double>(seconds) / k_PulseFadeSeconds));
+	const float lost = 1.0f - x87::Exp(seconds * -k_PulseFadeRate);
 	for (auto& strength : std::span(_strengths).first(_points.size()))
 	{
-		strength += (0.0f - strength) * (1.0f - kept);
+		strength += (0.0f - strength) * lost;
 	}
 }
 
@@ -204,8 +207,8 @@ void LightSheet::BuildPulsed(std::vector<Vertex>& vertices, std::vector<uint32_t
 	{
 		sum += point;
 	}
-	const double share = 1.0 / static_cast<double>(count);
-	_middle = {static_cast<float>(share * sum.x), static_cast<float>(share * sum.y), static_cast<float>(share * sum.z)};
+	const float share = 1.0f / static_cast<float>(count);
+	_middle = sum * share;
 	_slide *= k_PulseSlideKept;
 	_slide -= static_cast<float>(static_cast<int>(_slide));
 	if (!Showing())
@@ -238,9 +241,8 @@ void LightSheet::BuildPulsed(std::vector<Vertex>& vertices, std::vector<uint32_t
 			                    .specularArgb = ((argb & k_HalfMask) | k_SpecularAlpha) >> 1u});
 			vertices.push_back({.position = top, .uv = {u, 1.0f}, .argb = argb & 0xFFFFFFu, .specularArgb = 0});
 			const auto step = _points[(i + 1) % count] - point;
-			const double distance = std::sqrt((static_cast<double>(step.x) * step.x) + (static_cast<double>(step.y) * step.y) +
-			                                  (static_cast<double>(step.z) * step.z));
-			along = static_cast<float>((distance * k_StarsPerUnit) + along);
+			const float distance = std::sqrt((step.z * step.z) + (step.y * step.y) + (step.x * step.x));
+			along = (distance * k_StarsPerUnit) + along;
 		}
 		for (uint32_t s = 0; s + 1 < count; ++s)
 		{

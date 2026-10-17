@@ -8,7 +8,9 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
+#include <bit>
 #include <chrono>
 #include <numbers>
 
@@ -25,9 +27,19 @@ TEST(LightShine, TheTextureTurnsOnceEachTwentySecondsTheNegativeWay)
 	EXPECT_DOUBLE_EQ(graphics::light_shine::TextureTurn(0ms), 0.0);
 	EXPECT_NEAR(graphics::light_shine::TextureTurn(5000ms), -std::numbers::pi / 2.0, 1e-6);
 	EXPECT_NEAR(graphics::light_shine::TextureTurn(10000ms), -std::numbers::pi, 1e-6);
-	// After a full turn it starts again, so a long time keeps its precision
-	EXPECT_NEAR(graphics::light_shine::TextureTurn(25000ms), graphics::light_shine::TextureTurn(5000ms), 1e-5);
-	EXPECT_NEAR(graphics::light_shine::TextureTurn(3600000ms + 5000ms), graphics::light_shine::TextureTurn(5000ms), 1e-3);
+	// The angle grows with the time, as the game's float does. Its cosine and its sine come back after a full turn
+	EXPECT_NEAR(std::cos(graphics::light_shine::TextureTurn(25000ms)), std::cos(graphics::light_shine::TextureTurn(5000ms)),
+	            1e-5);
+	EXPECT_NEAR(std::sin(graphics::light_shine::TextureTurn(25000ms)), std::sin(graphics::light_shine::TextureTurn(5000ms)),
+	            1e-5);
+}
+
+TEST(LightShine, TheTurnRoundsToAFloatOneTimeFromTheWholeMilliseconds)
+{
+	// The milliseconds do not round to a float before the multiply, so the angle is one float step from that product
+	EXPECT_EQ(std::bit_cast<uint32_t>(static_cast<float>(graphics::light_shine::TextureTurn(12345ms))), 0xC0783601u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(static_cast<float>(graphics::light_shine::TextureTurn(16777217ms))), 0xC5A4B5BFu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(static_cast<float>(graphics::light_shine::TextureTurn(16777219ms))), 0xC5A4B5C0u);
 }
 
 TEST(LightShine, TheTextureIsMirroredTopToBottomBeforeItTurns)

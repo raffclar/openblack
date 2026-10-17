@@ -22,7 +22,8 @@ namespace openblack::graphics::light_shine
 /// texture turns about its middle with the real time.
 
 /// How far the texture has turned after this much real time, in radians: one full turn each 20 seconds, in the
-/// negative direction. The real time does not stop while the game is paused.
+/// negative direction. The real time does not stop while the game is paused. The angle is a float that grows with the
+/// time; the caller takes its cosine and sine.
 [[nodiscard]] double TextureTurn(std::chrono::milliseconds realTime);
 
 /// Where a vertex reads the texture: its coordinates about the middle of the texture, mirrored top to bottom and then

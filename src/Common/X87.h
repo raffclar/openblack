@@ -207,6 +207,46 @@ struct Exact
 	return std::atan2(y, x);
 }
 
+namespace detail
+{
+
+/// 2 to the power of a wide value, as the FPU's power steps make it. The steps are:
+/// 1. The whole number of the value, rounded to the nearest, comes off exactly.
+/// 2. The part that is left rounds to a float.
+/// 3. The FPU makes 2 to the power of that part, less one, at its full precision.
+/// 4. The one goes back, and the sum rounds to a float.
+/// 5. The whole number sets the exponent of the sum exactly.
+[[nodiscard]] inline float PowerOfTwo(double value)
+{
+	constexpr double k_Ln2 = 0.6931471805599453;
+	const double whole = std::nearbyint(value);
+	const float part = Sub(value, whole);
+	const float sum = Add(1.0, std::expm1(static_cast<double>(part) * k_Ln2));
+	return Narrow(std::ldexp(static_cast<double>(sum), static_cast<int>(whole)));
+}
+
+} // namespace detail
+
+/// The C library's power of the game, for a base more than 0. The library keeps the FPU at 24-bit precision. The FPU
+/// makes the exponent times the base's logarithm at its full precision, then 2 to the power of that (see PowerOfTwo).
+///
+/// Limits: this function uses the base's logarithm in double. A zero, a negative or an infinite base, and a result out
+/// of the float range, are not the game's.
+[[nodiscard]] inline float Pow(float base, double exponent)
+{
+	return detail::PowerOfTwo(exponent * std::log2(static_cast<double>(base)));
+}
+
+/// The game's e to the power of a float, when the game makes it with the FPU's own steps. The value times the FPU's
+/// logarithm of e rounds to a float, then the steps of PowerOfTwo make the result.
+///
+/// Limits: this function uses the logarithm of e in double, not the FPU's wider constant.
+[[nodiscard]] inline float Exp(float value)
+{
+	constexpr double k_Log2E = 1.4426950408889634;
+	return detail::PowerOfTwo(static_cast<double>(Mul(value, k_Log2E)));
+}
+
 /// value < constant, exact as the game's compare of a float with a double constant
 [[nodiscard]] constexpr bool Less(float value, double constant)
 {

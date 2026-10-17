@@ -13,6 +13,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
 #include "InfoConstants.h"
 
 using namespace openblack;
@@ -21,25 +22,27 @@ using namespace openblack::magic;
 namespace
 {
 /// A villager's or an animal's nearness counts within the row's distance and this much further
-constexpr double k_ReachExtra = 10.0;
+constexpr float k_ReachExtra = 10.0f;
 /// Its nearness lengthens the time by up to half as much again
-constexpr double k_NearnessShare = 0.5;
+constexpr float k_NearnessShare = 0.5f;
 /// A predator faster than this, in metres a second, counts as running
 constexpr float k_RunningPredator = 5.0f;
 /// Heading and the way to the point agree when the cosine between them is at least this
 constexpr float k_ComingAtCosine = 0.8f;
 
-/// Turns as the game counts them: the whole part, towards zero
-int32_t Whole(double turns)
+/// The turns times the factor, rounded to a float, then the whole part towards zero. The game takes the turns as a
+/// signed number
+int32_t Whole(uint32_t turns, float factor)
 {
-	return static_cast<int32_t>(static_cast<int64_t>(turns));
+	const float product = x87::Mul(static_cast<double>(static_cast<int32_t>(turns)), factor);
+	return static_cast<int32_t>(static_cast<int64_t>(product));
 }
 
 /// How much longer than its turns one keeps at a thing, by its nearness within the reach
-double Nearness(const villager_reaction::Distance& distance, float at)
+float Nearness(const villager_reaction::Distance& distance, float at)
 {
-	const double reach = static_cast<double>(distance.maxDistance) + k_ReachExtra;
-	return (reach - static_cast<double>(at)) / reach * static_cast<double>(distance.importance) * k_NearnessShare + 1.0;
+	const float reach = k_ReachExtra + distance.maxDistance;
+	return (reach - at) / reach * distance.importance * k_NearnessShare + 1.0f;
 }
 } // namespace
 
@@ -100,24 +103,24 @@ int32_t reaction_timing::StandardTurnsToReact(const Row& row, Reacting who, floa
 {
 	if (who == Reacting::Creature)
 	{
-		const double reach = row.distance.maxDistance;
-		const double importance = row.distance.importance;
-		const double factor = (reach - static_cast<double>(distance)) * importance / reach + (1.0 - importance);
-		return Whole(static_cast<double>(row.creatureTurnsToReact) * factor);
+		const float reach = row.distance.maxDistance;
+		const float importance = row.distance.importance;
+		const float factor = (reach - distance) * importance / reach + (1.0f - importance);
+		return Whole(row.creatureTurnsToReact, factor);
 	}
-	return Whole(static_cast<double>(static_cast<int32_t>(row.turnsToReact)) * Nearness(row.distance, distance));
+	return Whole(row.turnsToReact, Nearness(row.distance, distance));
 }
 
 int32_t reaction_timing::StandardTurnsBeforeReactingAgain(const Row& row, Reacting who, float distance)
 {
 	if (who == Reacting::Creature)
 	{
-		const double reach = row.distance.maxDistance;
-		const double importance = row.distance.importance;
-		const double factor = importance * static_cast<double>(distance) / reach + (1.0 - importance);
-		return Whole(static_cast<double>(row.creatureTurnsBeforeReactingAgain) * factor);
+		const float reach = row.distance.maxDistance;
+		const float importance = row.distance.importance;
+		const float factor = importance * distance / reach + (1.0f - importance);
+		return Whole(row.creatureTurnsBeforeReactingAgain, factor);
 	}
-	return Whole(static_cast<double>(static_cast<int32_t>(row.turnsBeforeReactingAgain)) * Nearness(row.distance, distance));
+	return Whole(row.turnsBeforeReactingAgain, Nearness(row.distance, distance));
 }
 
 int32_t reaction_timing::PredatorTurnsToReact(const PredatorWatch& watch, Reacting who, int32_t standard)

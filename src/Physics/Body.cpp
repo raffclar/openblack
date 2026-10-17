@@ -19,6 +19,8 @@
 #include <glm/matrix.hpp>
 #include <glm/vec2.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
 #include "Ground.h"
 
 using namespace openblack::physics;
@@ -60,7 +62,14 @@ glm::vec3 NormaliseOrKeep(glm::vec3 v)
 	{
 		return v;
 	}
-	return v / std::sqrt(glm::dot(v, v));
+	// The game adds the squares from z to x and multiplies by the inverse of the length
+	return v * (1.0f / openblack::x87::LengthZyx(v));
+}
+
+/// The axes times a vector, as the game adds the parts of each row: z first, then y, then x
+glm::vec3 TurnedZyx(const glm::mat3& axes, glm::vec3 v)
+{
+	return axes[2] * v.z + axes[1] * v.y + axes[0] * v.x;
 }
 
 glm::mat3 NormaliseAxes(glm::mat3 axes)
@@ -116,7 +125,7 @@ Body::Body(const BodySetup& setup, const Shape& shape)
     , _stiffness(setup.mass * setup.material.springK)
     , _damping(setup.mass * setup.material.dampK)
     , _friction(setup.material.friction)
-    , _spinKeptPerStep(static_cast<float>(std::pow(static_cast<double>(setup.material.spinKeptPerSecond), k_StepExponent)))
+    , _spinKeptPerStep(openblack::x87::Pow(setup.material.spinKeptPerSecond, k_StepExponent))
     , _drag(setup.material.drag)
     , _radius(shape.radius)
     , _dynamic(setup.dynamic)
@@ -142,7 +151,7 @@ void Body::SetUpInertia()
 	externalTorque = glm::vec3(0.0f);
 	for (auto& point : _points)
 	{
-		point.length = glm::length(point.local);
+		point.length = openblack::x87::LengthZyx(point.local);
 		point.aheadLength = point.length;
 	}
 	if (_dynamic)
@@ -180,7 +189,7 @@ void Body::SetUpInertia()
 				_inverseInertia[row][column] = inverse[column][row];
 			}
 		}
-		_drag *= _radius * _radius * k_DragRadiusFactor;
+		_drag = _radius * _drag * _radius * k_DragRadiusFactor;
 	}
 	else
 	{
@@ -194,13 +203,15 @@ void Body::SetUpInertia()
 
 void Body::SetUpPose(const Pose& objectMatrix)
 {
-	_centre = objectMatrix.origin + objectMatrix.axes * _centreOfMass;
+	// The game adds the parts of the centre of mass in the order y, z, x
+	const auto& scaled = objectMatrix.axes;
+	_centre = objectMatrix.origin + (scaled[1] * _centreOfMass.y + scaled[2] * _centreOfMass.z + scaled[0] * _centreOfMass.x);
 	_axes = NormaliseAxes(objectMatrix.axes);
 	_turnStartAxes = _axes;
 	_turnStartCentre = _centre;
 	for (auto& point : _points)
 	{
-		point.world = _axes * point.local + _centre;
+		point.world = TurnedZyx(_axes, point.local) + _centre;
 		point.contact = point.world;
 		point.firstDepth = 0.0f;
 		point.depth = 0.0f;
@@ -213,7 +224,12 @@ void Body::SetUpPose(const Pose& objectMatrix)
 		const auto& b = _points[face.indices[1]].local;
 		const auto& c = _points[face.indices[2]].local;
 		face.localNormal = NormaliseOrKeep(glm::cross(b - a, c - a));
-		face.worldNormal = _axes * face.localNormal;
+		// The game adds the parts of each row of the turned normal in its own order: y, z, x for the first, y, x, z for
+		// the others
+		const auto& n = face.localNormal;
+		face.worldNormal = {(_axes[1].x * n.y + _axes[2].x * n.z) + _axes[0].x * n.x,
+		                    (_axes[1].y * n.y + _axes[0].y * n.x) + _axes[2].y * n.z,
+		                    (_axes[1].z * n.y + _axes[0].z * n.x) + _axes[2].z * n.z};
 	}
 }
 
@@ -297,12 +313,15 @@ void Body::ClearForces()
 	for (auto& point : _points)
 	{
 		point.world = _axes * point.local + _centre + ahead;
-		point.aheadLength = std::max(glm::length(point.world - _centre), k_MinAheadLength);
+		point.aheadLength = std::max(openblack::x87::LengthZyx(point.world - _centre), k_MinAheadLength);
 	}
 	_aheadCentre = _centre + ahead;
 	for (auto& face : _faces)
 	{
-		face.worldNormal = _axes * face.localNormal;
+		// The game adds the first part of the turned normal from z to x, and the others from x to z
+		const auto& n = face.localNormal;
+		face.worldNormal = _axes * n;
+		face.worldNormal.x = (_axes[2].x * n.z + _axes[1].x * n.y) + _axes[0].x * n.x;
 	}
 	_force = externalForce;
 	_torque = externalTorque;
@@ -613,12 +632,11 @@ glm::vec3 Body::BodyOmega() const
 {
 	const auto local = glm::transpose(_axes) * angularMomentum;
 	glm::vec3 omega(0.0f);
+	// The game adds the three products of each part from the last row to the first
 	for (int column = 0; column < 3; ++column)
 	{
-		for (int row = 0; row < 3; ++row)
-		{
-			omega[column] += local[row] * _inverseInertia[row][column];
-		}
+		omega[column] = (local[2] * _inverseInertia[2][column] + local[1] * _inverseInertia[1][column]) +
+		                local[0] * _inverseInertia[0][column];
 	}
 	return omega;
 }
@@ -660,15 +678,15 @@ StepResult Body::Integrate()
 	angularMomentum += _torque * k_StepSeconds;
 	angularMomentum *= _spinKeptPerStep;
 	auto omega = BodyOmega();
-	const float spin2 = glm::dot(omega, omega);
+	const float spin2 = openblack::x87::DotZyx(omega, omega);
 	if (k_MaxSpin * k_MaxSpin < spin2 && (omega.x != 0.0f || omega.y != 0.0f || omega.z != 0.0f))
 	{
 		omega *= k_MaxSpin / std::sqrt(spin2);
 	}
-	const auto worldOmega = _axes * omega;
+	const auto worldOmega = TurnedZyx(_axes, omega);
 
 	velocity += _force * (k_StepSeconds / _mass);
-	_speed = glm::length(velocity);
+	_speed = openblack::x87::LengthZyx(velocity);
 	if (k_MaxSpeed < _speed)
 	{
 		velocity *= k_MaxSpeed / _speed;
@@ -707,7 +725,7 @@ StepResult Body::Integrate()
 	}
 
 	const auto step = worldOmega * k_StepSeconds;
-	const float angle = glm::length(step);
+	const float angle = openblack::x87::LengthZyx(step);
 	if (k_MinRotationStep < angle)
 	{
 		_axes = glm::mat3(glm::rotate(glm::mat4(1.0f), angle, step / angle)) * _axes;
