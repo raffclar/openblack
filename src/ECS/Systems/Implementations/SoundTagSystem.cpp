@@ -11,16 +11,21 @@
 
 #include "SoundTagSystem.h"
 
+#include <cstdint>
+
+#include <optional>
 #include <vector>
 
 #include <glm/geometric.hpp>
 
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
+#include "Audio/HearingRange.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -30,10 +35,8 @@ using namespace openblack::ecs::components;
 
 namespace
 {
-/// Units a second sound travels at
-constexpr float k_SpeedOfSound = 347.0f;
-/// Seconds of a game turn
-constexpr float k_TurnSeconds = 0.1f;
+/// The milliseconds of a game turn
+constexpr auto k_MillisecondsPerTurn = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
 
 void StopSound(SoundTag& tag)
 {
@@ -85,11 +88,11 @@ bool SoundTagSystem::Heard(entt::id_type sound) const
 }
 
 void SoundTagSystem::StartPointSound(entt::entity entity, SoundTag& tag, const glm::vec3& position,
-                                     const glm::vec3& camera) const
+                                     std::optional<glm::vec3> camera) const
 {
 	const auto& sounds = Locator::resources::value().GetSounds();
-	if (!tag.active || !sounds.Contains(tag.sound) || !WithinReach(sounds.Handle(tag.sound)->maxDistance, position, camera) ||
-	    !Heard(tag.sound))
+	if (!tag.active || !sounds.Contains(tag.sound) ||
+	    (camera.has_value() && !WithinReach(sounds.Handle(tag.sound)->maxDistance, position, *camera)) || !Heard(tag.sound))
 	{
 		return;
 	}
@@ -127,14 +130,16 @@ void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 		    {
 			    if (tag.delayed)
 			    {
-				    // Not heard until the sound has travelled as far as the camera, and then only within its reach
-				    const auto travelled = k_SpeedOfSound * static_cast<float>(tag.turns) * k_TurnSeconds;
-				    const auto offset = position - camera;
-				    if (travelled * travelled < glm::dot(offset, offset))
+				    // Not heard until the sound has travelled as far as the camera, and then only nearer than its reach
+				    const auto distanceSquared = audio::DistanceSquared(camera, position);
+				    if (!audio::SoundArrived(audio::SoundTravelled(tag.turns, k_MillisecondsPerTurn), distanceSquared))
 				    {
 					    return;
 				    }
-				    StartPointSound(entity, tag, position, camera);
+				    if (audio::ArrivedSoundStarts(distanceSquared, reach))
+				    {
+					    StartPointSound(entity, tag, position, std::nullopt);
+				    }
 				    tag.delayed = false;
 				    return;
 			    }

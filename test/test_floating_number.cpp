@@ -35,6 +35,20 @@ TEST(FixedFormat, WholeNumbersThreeWideRoundHalfAwayFromNothing)
 	EXPECT_EQ(fixed_format::Fixed(-2.5, 3, 0), " -3");
 	EXPECT_EQ(fixed_format::Fixed(3.14159, 0, 2), "3.14");
 	EXPECT_EQ(fixed_format::Fixed(0.05, 0, 1), "0.1");
+	// The C library rounds the first 17 digits half up. The 17 digits of this value are 49999999999999994, so it
+	// rounds down, where an added half would round it up.
+	EXPECT_EQ(fixed_format::Fixed(0.49999999999999994, 0, 0), "0");
+	// The 17 digits of 2.675 are 26749999999999998 and of 0.15 are 14999999999999999: both round down
+	EXPECT_EQ(fixed_format::Fixed(2.675, 0, 2), "2.67");
+	EXPECT_EQ(fixed_format::Fixed(0.15, 0, 1), "0.1");
+	EXPECT_EQ(fixed_format::Fixed(0.006, 0, 2), "0.01");
+	EXPECT_EQ(fixed_format::Fixed(0.0004, 0, 2), "0.00");
+	EXPECT_EQ(fixed_format::Fixed(9.999, 0, 2), "10.00");
+	EXPECT_EQ(fixed_format::Fixed(1e20, 0, 0), "100000000000000000000");
+	// An exact zero has no sign, but a value under zero that rounds to zero keeps its sign
+	EXPECT_EQ(fixed_format::Fixed(-0.0, 0, 0), "0");
+	EXPECT_EQ(fixed_format::Fixed(-0.0, 0, 2), "0.00");
+	EXPECT_EQ(fixed_format::Fixed(-0.4, 0, 0), "-0");
 }
 
 TEST(FixedFormat, ANumberIsWrittenIntoTheWords)

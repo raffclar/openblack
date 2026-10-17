@@ -2442,7 +2442,7 @@ std::array<TrailVertex, 2 * Trail::k_Points> AdvisorSpirit::TrailStrip() const
 	for (size_t i = 0; i < points.size(); ++i)
 	{
 		const glm::vec3 tangent = points.at(std::min(i + 1, points.size() - 1)) - points.at(i == 0 ? 0 : i - 1);
-		const float length = glm::length(tangent);
+		const float length = std::sqrt((tangent.z * tangent.z + tangent.y * tangent.y) + tangent.x * tangent.x);
 		// The direction along the strip, made unit length unless the points coincide
 		glm::vec2 across(tangent);
 		if (tangent != glm::vec3(0.0f))

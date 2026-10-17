@@ -160,6 +160,12 @@ float ListenerDistance(const glm::vec3& position)
 	return glm::distance(Locator::audio::value().GetListener().origin, position);
 }
 
+/// The square of the distance from the listener, as the game sums it to test where a sound may start
+float ListenerDistanceSquared(const glm::vec3& position)
+{
+	return DistanceSquared(Locator::audio::value().GetListener().origin, position);
+}
+
 std::string TooFar(const glm::vec3& position, float range)
 {
 	return fmt::format("{:.1f} m from the listener, beyond its {} m", ListenerDistance(position), range);
@@ -497,7 +503,7 @@ void AudioManager::PlaySoundEffect(entt::id_type id, std::optional<glm::vec3> wo
 		const auto sound = sounds.Handle(id);
 		// A sound with a place doesn't start further from the camera than its maximum distance
 		const auto range = SoundEffectStartRange(sound->maxDistance, k_DefaultMaxDistance);
-		if (worldPosition.has_value() && !IsWithinStartRange(ListenerDistance(*worldPosition), range))
+		if (worldPosition.has_value() && !IsWithinStartRange(ListenerDistanceSquared(*worldPosition), range))
 		{
 			LogNotStarted(*sound, *worldPosition, TooFar(*worldPosition, range));
 			return;
@@ -541,7 +547,7 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 	}
 	auto sound = sounds.Handle(id);
 	const auto range = SoundEffectStartRange(sound->maxDistance, options.maxDistance.value_or(k_DefaultMaxDistance));
-	if (options.position.has_value() && !IsWithinStartRange(ListenerDistance(*options.position), range))
+	if (options.position.has_value() && !IsWithinStartRange(ListenerDistanceSquared(*options.position), range))
 	{
 		LogNotStarted(*sound, *options.position, TooFar(*options.position, range));
 		return entt::null;
@@ -728,7 +734,7 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 
 	// The sample doesn't start further from the camera than its bank's maximum distance, applied to the voice or not
 	const auto range = AnimEffectStartRange(sound->maxDistance);
-	if (!IsWithinStartRange(ListenerDistance(position), range))
+	if (!IsWithinStartRange(ListenerDistanceSquared(position), range))
 	{
 		LogNotStarted(*sound, position, TooFar(position, range));
 		return {.outcome = AnimEffectPlay::Outcome::TooFar, .emitter = entt::null, .sample = sample};

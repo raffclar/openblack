@@ -23,6 +23,7 @@
 #include "3D/Lightning.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
@@ -711,9 +712,9 @@ void WeatherSystem::UpdateStorms()
 				{
 					storm.thunderTimer = random.GameFloatRange(storm.thunderWait.x, storm.thunderWait.y);
 					storm.flash = lightning::Strike(strikeAt, storm.outerRadius, lightning::k_ThunderStrength);
-					// Its thunder rolls from the cloud, one of eleven claps picked from the C runtime's numbers, heard
-					// once the sound has travelled to the camera
-					const auto clap = (random.CrtRand() % lightning::k_ThunderClaps) + lightning::k_FirstThunderClap;
+					// Its thunder rolls from the cloud, one of eleven claps that the clock picks, heard once the sound has
+					// travelled to the camera
+					const auto clap = lightning::ThunderClap(machine_clock::Ticks());
 					const auto ground = Locator::terrainSystem::value().GetHeightAt({strikeAt.x, strikeAt.z});
 					Locator::soundTagSystem::value().CreatePointSound(
 					    lightning::ThunderSound(clap), {strikeAt.x, ground + storm.cloudHeight, strikeAt.z}, true);

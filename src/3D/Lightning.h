@@ -29,6 +29,11 @@ inline constexpr float k_BoltStrength = 0.5f;
 inline constexpr int32_t k_ThunderClaps = 11;
 inline constexpr int32_t k_FirstThunderClap = 2;
 [[nodiscard]] entt::id_type ThunderSound(int32_t clap);
+/// The clap that the clock picks: the milliseconds since the machine started, over the eleven claps
+[[nodiscard]] constexpr int32_t ThunderClap(uint32_t ticks)
+{
+	return static_cast<int32_t>(ticks % static_cast<uint32_t>(k_ThunderClaps)) + k_FirstThunderClap;
+}
 
 /// A flash of lightning where it struck
 struct Flash
