@@ -27,8 +27,12 @@ float openblack::magic::DistanceChangeToBelief(float distance, float maxDistance
 
 float openblack::magic::ImpressiveValue(const ImpressionInputs& inputs)
 {
-	return inputs.landBalance * inputs.impressiveValue * inputs.reactionMultiplier *
-	       DistanceChangeToBelief(inputs.distance, inputs.maxDistance) * inputs.power * inputs.boredom;
+	// Multiplied in the game's order, each step rounded to a float. The shown part is the reaction's multiplier times
+	// the miracle's value, times the land's balance. The boredom, the power and the distance multiply first, then the
+	// shown part.
+	const float shown = (inputs.reactionMultiplier * inputs.impressiveValue) * inputs.landBalance;
+	const float watched = (inputs.boredom * inputs.power) * DistanceChangeToBelief(inputs.distance, inputs.maxDistance);
+	return watched * shown;
 }
 
 float openblack::magic::CreatureImpressiveSize(float size, float addition, float multiplier)

@@ -89,6 +89,8 @@ TEST(TempleDestruction, BeamsComeFasterBrighterAndShorterLivedOverFourteenSecond
 	EXPECT_FLOAT_EQ(NextBeam(1.0f, 0.0f), 1.4f);
 	EXPECT_FLOAT_EQ(NextBeam(1.0f, 0.5f), 1.3f);
 	EXPECT_FLOAT_EQ(NextBeam(1.0f, 1.0f), 1.2f);
+	// Each step rounds to a float, so the result is one unit above the value that double maths gives
+	EXPECT_EQ(NextBeam(0.83924955f, 0.22960503f), 1.1933286f);
 	const auto first = BeamLookAt(0.0f);
 	EXPECT_EQ(first.life, 3.0f);
 	EXPECT_EQ(first.speed, 1.0f);
@@ -107,6 +109,8 @@ TEST(TempleDestruction, SpotVisualsLastTheirSecondsInTurns)
 	EXPECT_EQ(TurnsFor(100, k_ExplosionSeconds), 150);
 	EXPECT_EQ(SmokeTurns(100, 0.0f), 60);
 	EXPECT_EQ(SmokeTurns(100, 0.4f), 90);
+	// The share and the scale multiply first: 10 x (1.12 x 7.5) comes to 84, where (10 x 1.12) x 7.5 cuts to 83
+	EXPECT_EQ(SmokeTurns(100, 0.31999987f), 84);
 }
 
 TEST(TempleDestruction, OnlyTheLocalPlayersLossOutsideSkirmishesAndOnlineGamesEndsTheGameOnce)

@@ -117,7 +117,7 @@ uint32_t WaitForMate(components::LivingAction& action);
 [[nodiscard]] uint8_t BurningInHandPriority(entt::entity villager, entt::entity thing, uint32_t tablePriority);
 [[nodiscard]] uint32_t BurningInHandAgainTurns(entt::entity villager, entt::entity thing, uint32_t tableTurns);
 
-/// The share of an impression a villager's town takes: its population for unchanged belief over its people
+/// The share of an impression a villager's town takes: its population for unchanged belief over its adults and children
 [[nodiscard]] float TownShare(entt::entity town);
 
 /// When a voice of belief was last heard, and when the guidance last spoke, in game turns; the gap before the next

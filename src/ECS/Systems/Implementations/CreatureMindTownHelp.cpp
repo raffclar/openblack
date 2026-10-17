@@ -19,6 +19,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
@@ -33,6 +34,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/VillageTotem.h"
 #include "ECS/WorshipSites.h"
 #include "Locator.h"
 #include "VillagerDisciples.h"
@@ -54,6 +56,13 @@ bool Built(const ecs::Registry& registry, entt::entity thing)
 	return progress == nullptr || !(progress->built < 1.0f);
 }
 
+/// The life of a thing, 0 to 1: its own life, or 1 when nothing has hurt it
+float LifeOf(const ecs::Registry& registry, entt::entity thing)
+{
+	const auto* life = registry.TryGet<const ObjectLife>(thing);
+	return life != nullptr ? life->life : 1.0f;
+}
+
 /// The town of a totem: the town of the town centre that it stands on
 entt::entity TownOfTotem(const ecs::Registry& registry, entt::entity totem)
 {
@@ -70,8 +79,9 @@ entt::entity TownOfTotem(const ecs::Registry& registry, entt::entity totem)
 	return found != towns.end() && registry.Valid(found->second) ? found->second : entt::null;
 }
 
-/// Whether a creature may move a totem: one of the towns of the player who watches, its town centre built, its worship
-/// site built, and that player's temple there. With one player at this machine, the player who watches is that player.
+/// Whether a creature may move a totem: the same rule as the hand that takes it. The totem is of a town of the player
+/// who watches, and it works. The heart of that player's temple and the town's worship site stand built. With one player
+/// at this machine, the player who watches is that player.
 bool MayMoveTotem(const ecs::Registry& registry, entt::entity totem)
 {
 	const auto town = TownOfTotem(registry, totem);
@@ -81,11 +91,14 @@ bool MayMoveTotem(const ecs::Registry& registry, entt::entity totem)
 		return false;
 	}
 	const auto player = Locator::playerSystem::value().GetLocalPlayer();
-	bool temple = false;
-	registry.Each<const Temple>(
-	    [player, &temple](entt::entity /*unused*/, const Temple& standing) { temple = temple || standing.owner == player; });
-	return townComponent->owner == player && Built(registry, registry.Get<const VillageTotem>(totem).townCentre) && temple &&
-	       Built(registry, townComponent->worshipSite);
+	bool heartBuilt = false;
+	registry.Each<const Temple>([&registry, player, &heartBuilt](entt::entity heart, const Temple& standing) {
+		heartBuilt = heartBuilt || (standing.owner == player && Built(registry, heart));
+	});
+	// The totem stands built when its town centre stands built
+	const bool works = ecs::village_totem::Functional(Built(registry, registry.Get<const VillageTotem>(totem).townCentre),
+	                                                  LifeOf(registry, totem));
+	return townComponent->owner == player && works && heartBuilt && Built(registry, townComponent->worshipSite);
 }
 
 /// The breeders that a town has now

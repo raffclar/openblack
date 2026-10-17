@@ -57,9 +57,10 @@ public:
 
 	// The fireball
 
-	/// The burning object a fireball's atom carries, as hot as its miracle is strong; none when it can't be made
+	/// The burning object a fireball's atom carries, as hot as its miracle is strong; none when it can't be made. The
+	/// power-up level of the miracle selects the row of the fireball table.
 	virtual std::optional<entt::entity> AttachFireBall(glm::vec3 position, float strength, float radius, bool affectedByRain,
-	                                                   std::optional<PlayerNames> player) = 0;
+	                                                   std::optional<PlayerNames> player, int powerUpLevel) = 0;
 	enum class FireBallState : uint8_t
 	{
 		/// Its fire has gone, and the ball with it

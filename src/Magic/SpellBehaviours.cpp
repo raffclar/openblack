@@ -523,9 +523,8 @@ bool spells::HasEnoughForRecast(const InfoConstants& info, const Spell& spell)
 	return true;
 }
 
-float spells::FireballTemperature(const InfoConstants& info, MagicType /*type*/)
+float spells::FireballTemperature(const InfoConstants& info, MagicType type)
 {
-	// Every fireball burns as the first row of the fireball's table: the game picks the row by a power-up type that no
-	// fireball has, so the power-ups throw more balls rather than hotter ones
-	return info.magicFireBall.at(0).initialTemperature;
+	// The power-up level of the magic type selects the row of the fireball table
+	return info.magicFireBall.at(magic::FireBallInfoRow(magic::GetPowerUpLevel(info, type))).initialTemperature;
 }

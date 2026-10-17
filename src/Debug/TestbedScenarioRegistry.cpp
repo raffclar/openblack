@@ -7134,6 +7134,78 @@ void AddParticles(std::vector<Scenario>& all)
 	                   .offset = {20.0f, 0.0f},
 	                   .magnitude = 8.0f}},
 	});
+
+	all.push_back({
+	    .id = "particles.fireball_rows",
+	    .name = "The fireball's heat by its power-up",
+	    .facet = Facet::Particles,
+	    .description = "Three fireballs are thrown at three oaks every twelve seconds: the plain fireball on the left, "
+	                   "the first power-up in the middle and the second power-up on the right.",
+	    .expected = "The first power-up uses the second row of the fireball table, so it starts hotter and sets its oak "
+	                "on fire sooner. The plain fireball and the second power-up use the first row.",
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 0.0f}, {40.0f, 30.0f}}, .distance = 0.45f},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-30.0f, 25.0f}},
+	                {.type = TreeInfo::Oak, .offset = {0.0f, 25.0f}},
+	                {.type = TreeInfo::Oak, .offset = {30.0f, 25.0f}}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {-30.0f, 25.0f},
+	                  .handOffset = {-30.0f, 10.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f,
+	                  .repeatSeconds = 12.0f},
+	                 {.type = MagicType::FireballPowerUpOne,
+	                  .point = {0.0f, 25.0f},
+	                  .handOffset = {0.0f, 10.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f,
+	                  .repeatSeconds = 12.0f},
+	                 {.type = MagicType::FireballPowerUpTwo,
+	                  .point = {30.0f, 25.0f},
+	                  .handOffset = {30.0f, 10.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f,
+	                  .repeatSeconds = 12.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.lightning_forks_arcs",
+	    .name = "The lightning bolt's forks and electric arcs",
+	    .facet = Facet::Particles,
+	    .description = "A lightning bolt held over five villagers and an oak for six seconds, again every ten seconds.",
+	    .expected = "The bolt keeps two forks for each target that it finds, and no more. Electric arcs crawl over the "
+	                "things that it strikes, from one point of each model to another.",
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 20.0f}}, .distance = 0.35f},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-8.0f, 10.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-3.0f, 14.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {3.0f, 9.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticShepherdMale, .offset = {7.0f, 13.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticTraderMale, .offset = {0.0f, 17.0f}, .inScript = true},
+	                {.type = TreeInfo::Oak, .offset = {10.0f, 18.0f}}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = {0.0f, 12.0f},
+	                  .handOffset = {0.0f, 0.0f},
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 2.0f,
+	                  .holdSeconds = 6.0f,
+	                  .repeatSeconds = 10.0f}},
+	});
+
+	all.push_back({
+	    .id = "particles.globe_alpha",
+	    .name = "The one-shot globe's see-through bubble and rings",
+	    .facet = Facet::Particles,
+	    .description = "Two one-shot globes close up: a plain fireball and the fireball's first power-up, whose miracle "
+	                   "shows one ring.",
+	    .expected = "Each bubble is added over what is behind it at an alpha of 149, the globe's 150 times the land's "
+	                "fully opaque light. The ring round the powered-up miracle shows at an alpha of 34.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, -18.0f}, .look = {0.0f, 4.0f, 8.0f}},
+	    .dispensers = {{.type = MagicType::Fireball, .offset = {-5.0f, 8.0f}},
+	                   {.type = MagicType::FireballPowerUpOne, .offset = {5.0f, 8.0f}}},
+	});
 }
 
 void AddEditor(std::vector<Scenario>& all)
