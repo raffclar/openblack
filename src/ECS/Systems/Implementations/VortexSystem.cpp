@@ -103,7 +103,7 @@ bool OnMap(glm::ivec2 cell)
 }
 
 /// Seconds since a vortex's state began, now
-double SecondsInState(const Vortex& vortex)
+float SecondsInState(const Vortex& vortex)
 {
 	const auto& time = Locator::time::value();
 	const auto turn = time.GetTurn();
@@ -207,7 +207,7 @@ void VortexSystem::UpdateFrame(float gameSeconds)
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
 	registry.Each<Vortex>([this, gameSeconds, particles](entt::entity /*entity*/, Vortex& vortex) {
-		const auto seconds = static_cast<float>(SecondsInState(vortex));
+		const auto seconds = SecondsInState(vortex);
 		const auto openness = vortex::Openness(vortex.state, seconds);
 		if (openness != 0.0f)
 		{
@@ -248,8 +248,8 @@ void VortexSystem::UpdateFrame(float gameSeconds)
 		// The glow on the ground is as bright as the vortex's state has it
 		if (auto* lightMap = particles->Find(vortex.lightMapEffect))
 		{
-			const auto glow = static_cast<double>(vortex::GlowBrightness(vortex.state, seconds));
-			lightMap->SetGlobalAlpha(static_cast<float>(static_cast<int>(glow * 255.0)));
+			const auto glow = vortex::GlowBrightness(vortex.state, seconds);
+			lightMap->SetGlobalAlpha(static_cast<float>(static_cast<int>(glow * 255.0f)));
 		}
 	});
 }
@@ -346,7 +346,7 @@ void VortexSystem::ProcessTurn()
 			return;
 		}
 		// The levelling only ever goes further
-		const auto amount = vortex::LevelAmount(vortex.state, static_cast<float>(seconds));
+		const auto amount = vortex::LevelAmount(vortex.state, seconds);
 		if (vortex.levelApplied < amount)
 		{
 			vortex.levelApplied = amount;
