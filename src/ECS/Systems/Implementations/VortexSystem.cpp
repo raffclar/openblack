@@ -788,7 +788,7 @@ void VortexSystem::ThrowOut(entt::entity entity, Vortex& vortex)
 		const auto& line = progress.lines.at(progress.nextLine++);
 		try
 		{
-			lhscriptx::Script script(glm::vec3(placeMetres.x, place.altitude, placeMetres.y));
+			lhscriptx::Script script(glm::vec3(placeMetres.x, place.altitude, placeMetres.y), place);
 			script.Load(line);
 		}
 		catch (const std::runtime_error& error)

@@ -11,8 +11,11 @@
 
 #include <array>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
+
+#include "3D/MapCoords.h"
 
 namespace openblack::lhscriptx
 {
@@ -65,6 +68,10 @@ public:
 		z = _value._vector[2];
 	}
 
+	/// The exact map position that the game reads from a place in the script; none for a parameter that is not a place
+	[[nodiscard]] const std::optional<map_coords::MapCoords>& GetMapPlace() const { return _mapPlace; }
+	void SetMapPlace(const map_coords::MapCoords& place) { _mapPlace = place; }
+
 	void SetString(const std::string& value) { _string = value; }
 	void SetFloat(float value) { _value._float = value; };
 	void SetNumber(int32_t value) { _value._number = value; }
@@ -88,6 +95,7 @@ private:
 		float _vector[3];
 	} _value;
 	std::string _string;
+	std::optional<map_coords::MapCoords> _mapPlace;
 };
 
 using ScriptCommandParameters = std::vector<ScriptCommandParameter>;

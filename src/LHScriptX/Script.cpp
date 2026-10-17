@@ -9,6 +9,8 @@
 
 #include "Script.h"
 
+#include <cstdlib>
+
 #include <algorithm>
 #include <array>
 #include <ranges>
@@ -26,9 +28,11 @@
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/FootpathRules.h"
 #include "ECS/Registry.h"
+#include "ECS/ThingMapPlace.h"
 #include "FeatureScriptCommands.h"
 #include "Lexer.h"
 #include "Locator.h"
@@ -38,8 +42,9 @@ using namespace openblack::lhscriptx;
 
 Script::Script() = default;
 
-Script::Script(glm::vec3 origin)
+Script::Script(glm::vec3 origin, const map_coords::MapCoords& originOnMap)
     : _origin(origin)
+    , _originOnMap(originOnMap)
 {
 }
 
@@ -129,7 +134,7 @@ bool Script::IsCommand(const std::string& identifier) const
 
 namespace
 {
-ScriptCommandParameter GetParameter(Token& argument, glm::vec3 origin)
+ScriptCommandParameter GetParameter(Token& argument, glm::vec3 origin, const map_coords::MapCoords& originOnMap)
 {
 	const auto type = argument.GetType();
 
@@ -158,8 +163,12 @@ ScriptCommandParameter GetParameter(Token& argument, glm::vec3 origin)
 				if (static_cast<size_t>(floatEnd - str.c_str()) == static_cast<size_t>(str.length()))
 				{
 					const auto& island = Locator::terrainSystem::value();
-
-					return {x, island.GetHeightAt(glm::vec2(x, z)) + origin.y, z};
+					ScriptCommandParameter place {x, island.GetHeightAt(glm::vec2(x, z)) + origin.y, z};
+					// The game reads the same text to its exact map position, then moves it by the origin's map position
+					const auto onMap = map_coords::ScriptPlace(std::strtod(str.c_str(), nullptr),
+					                                           std::strtod(str.c_str() + delim + 1, nullptr));
+					place.SetMapPlace(onMap + map_coords::MapCoords {.x = originOnMap.x, .z = originOnMap.z});
+					return place;
 				}
 			}
 		}
@@ -221,6 +230,57 @@ void RunAndKeepThingMade(Run&& run)
 	run();
 	registry.Context().scriptThingMadeLast = keeper.entity;
 }
+/// Keeps every thing made while a command runs
+struct ThingsMade
+{
+	std::vector<entt::entity> things;
+
+	void Made(entt::registry&, entt::entity made) { things.push_back(made); }
+};
+
+/// Runs a command. Each thing that it makes at one of its places keeps the exact map position that the game reads from
+/// that place, because the game makes the thing at that map position.
+template <typename Run>
+void RunAndKeepMapPlaces(const ScriptCommandParameters& parameters, Run&& run)
+{
+	const bool hasPlace = std::ranges::any_of(parameters, [](const auto& p) { return p.GetMapPlace().has_value(); });
+	if (!hasPlace || !Locator::entitiesRegistry::has_value())
+	{
+		run();
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	ThingsMade made;
+	{
+		const entt::scoped_connection connection {
+		    registry.Underlying().on_construct<ecs::components::Transform>().connect<&ThingsMade::Made>(made)};
+		run();
+	}
+	for (const auto thing : made.things)
+	{
+		const auto* at = registry.Valid(thing) ? registry.TryGet<const ecs::components::Transform>(thing) : nullptr;
+		if (at == nullptr)
+		{
+			continue;
+		}
+		// The first place of the command that the thing stands at
+		const auto place = std::ranges::find_if(parameters, [at](const ScriptCommandParameter& p) {
+			if (!p.GetMapPlace().has_value())
+			{
+				return false;
+			}
+			float x = 0.0f;
+			float y = 0.0f;
+			float z = 0.0f;
+			p.GetVector(x, y, z);
+			return at->position.x == x && at->position.z == z;
+		});
+		if (place != parameters.end())
+		{
+			ecs::thing_map_place::Keep(registry, thing, *place->GetMapPlace());
+		}
+	}
+}
 } // namespace
 
 void Script::RunCommand(const std::string& identifier, const std::vector<Token>& args)
@@ -248,7 +308,7 @@ void Script::RunCommand(const std::string& identifier, const std::vector<Token>&
 
 	for (auto arg : args)
 	{
-		const ScriptCommandParameter param = GetParameter(arg, _origin);
+		const ScriptCommandParameter param = GetParameter(arg, _origin, _originOnMap);
 		parameters.push_back(param);
 	}
 
@@ -281,12 +341,14 @@ void Script::RunCommand(const std::string& identifier, const std::vector<Token>&
 		}
 	}
 
-	if (ecs::footpath_rules::ScriptCommandMakesThing(identifier))
-	{
-		RunAndKeepThingMade([&]() { commandSignature->command(parameters); });
-		return;
-	}
-	commandSignature->command(parameters);
+	RunAndKeepMapPlaces(parameters, [&]() {
+		if (ecs::footpath_rules::ScriptCommandMakesThing(identifier))
+		{
+			RunAndKeepThingMade([&]() { commandSignature->command(parameters); });
+			return;
+		}
+		commandSignature->command(parameters);
+	});
 }
 
 const Token* Script::PeekToken(Lexer& lexer)
