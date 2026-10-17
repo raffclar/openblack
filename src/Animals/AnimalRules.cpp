@@ -142,20 +142,20 @@ animals::FormationSlot animals::FormationSlotOf(int place)
 	return {.row = b - 5, .column = (((b * b) - k) * sign + 1) / 2};
 }
 
-glm::vec2 animals::FormationGoal(glm::vec2 leader, glm::vec2 follower, FormationSlot slot)
+glm::ivec2 animals::FormationGoal(glm::ivec2 leader, glm::ivec2 follower, FormationSlot slot)
 {
 	// The slot's angle plus the way from the leader to the follower, in game angles
 	const auto slotAngle = gutils::GetAngleFromDXDZ(slot.row, slot.column);
 	const auto away = gutils::GetAngleFromXZ(follower, leader) + 0x400;
 	const auto angle = static_cast<double>(gutils::ConvertGameAngleTo3D(static_cast<int32_t>(slotAngle + away)));
-	// The row's spacing along the angle's x and the column's along its z, each truncated to a map position. The game
-	// keeps the spacing as a double, and each product rounds to a float
+	// The row's spacing along the angle's x and the column's along its z. The game keeps the spacing as a double, and
+	// each product rounds to a float. The sum with the leader's metres truncates to a map position
 	const auto spacing = static_cast<double>(k_FormationSpacing);
 	const auto alongX = x87::Mul(x87::Mul(x87::Cos(angle), static_cast<double>(slot.row)), spacing);
 	const auto alongZ = x87::Mul(x87::Mul(x87::Sin(angle), static_cast<double>(slot.column)), spacing);
-	const auto x = map_coords::ToMetres(map_coords::ToFixed(leader.x)) + alongX;
-	const auto z = map_coords::ToMetres(map_coords::ToFixed(leader.y)) + alongZ;
-	return {map_coords::ToMetres(map_coords::ToFixedGUtils(x)), map_coords::ToMetres(map_coords::ToFixedGUtils(z))};
+	const auto x = map_coords::ToMetres(leader.x) + alongX;
+	const auto z = map_coords::ToMetres(leader.y) + alongZ;
+	return {map_coords::ToFixedGUtils(x), map_coords::ToFixedGUtils(z)};
 }
 
 bool animals::DeadBodyGoes(int16_t& turnsLeft, bool scriptControlled)

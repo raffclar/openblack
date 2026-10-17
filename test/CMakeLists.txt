@@ -1172,3 +1172,10 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
 endforeach ()
 openblack_setup_and_add_test(test_x87 test_x87.cpp)
 openblack_setup_and_add_test(test_float_sweep_4 test_float_sweep_4.cpp)
+openblack_setup_and_add_test(
+  test_oracle_formation_land_line oracle/test_oracle_formation_land_line.cpp
+)
+foreach (oracle_test test_oracle_catch test_oracle_sigmoid
+                     test_oracle_inverse_square_root test_oracle_float_sweep_3 test_oracle_data_folder
+                     test_oracle_formation_land_line
+)
