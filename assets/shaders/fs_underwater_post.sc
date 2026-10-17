@@ -518,13 +518,13 @@ float Foam(vec2 p, float depth, float t)
 		return 0.0f;
 	}
 	// Two layers of noise that drift different ways, turned so that their cells do not line up. The chunks are small
-	// (cells of about a metre) and cover a quarter of the water that the foam covered before.
+	// (cells of about a metre) and cover a little more than half of the water that the foam covered at first.
 	vec2 q = vec2(p.x * 0.8f - p.y * 0.6f, p.x * 0.6f + p.y * 0.8f);
 	float patches = UwFoamNoise(q * 1.4f + vec2(t * 0.25f, -t * 0.18f)) * 0.6f + UwFoamNoise(p * 3.8f - vec2(t * 0.4f, t * 0.31f)) * 0.4f;
 	float lines = 0.5f + 0.5f * sin(depth * 9.0f - t * 2.2f + UwNoise(p * 0.8f) * 4.0f);
 	float edge = 1.0f - smoothstep(0.0f, 0.05f, depth);
-	float foam = smoothstep(0.62f, 0.85f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
-	return clamp(max(foam, edge * smoothstep(0.35f, 0.6f, patches)), 0.0f, 1.0f);
+	float foam = smoothstep(0.56f, 0.8f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
+	return clamp(max(foam, edge * smoothstep(0.3f, 0.55f, patches)), 0.0f, 1.0f);
 }
 
 // The storm on the sea: the rogue wave and the lightning.
@@ -935,7 +935,7 @@ void main()
 				// The shore wave breaks on its face as it comes in, from 20 units out to the edge of the water
 				float breaking = face * (1.0f - smoothstep(1.0f, 10.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth) *
 				                 (1.0f - cliff);
-				foam = max(foam, breaking * smoothstep(0.4f, 0.7f, UwFoamNoise(surfacePoint.xz * 2.6f + t * 0.3f)));
+				foam = max(foam, breaking * smoothstep(0.33f, 0.63f, UwFoamNoise(surfacePoint.xz * 2.6f + t * 0.3f)));
 				// At the foot of a cliff: a thick band of boiling white water against the rock, and broad sheets of foam
 				// that each crash pushes out and that break up into patches and streaks as the current carries them
 				// away. The foam builds up between the waves, so it never clears at a cliff.
@@ -980,10 +980,10 @@ void main()
 					float streaks = smoothstep(0.75f, 0.92f, UwNoise(streakUv) * 0.6f + UwNoise(turned * 1.7f + 3.1f) * 0.4f);
 					caps = mix(UwWhitecapCover() * 0.8f, caps, capsShown);
 					streaks = mix(0.04f, streaks, streaksShown);
-					// A calm day has few white horses, a wind many and a storm adds streaks. Near the coast they are
-					// fewer, as the rest of the foam there.
+					// A calm day has few white horses and a wind many. Thin streaks of old foam lie along the wind, a few on
+					// a calm day and more in a storm. Near the coast they are fewer, as the rest of the foam there.
 					float nearCoast = mix(0.3f, 1.0f, smoothstep(30.0f, 150.0f, shore.x));
-					foam = max(foam, (caps + streaks * 0.5f * u_uwWaves.y) * nearCoast);
+					foam = max(foam, (caps + streaks * (0.12f + 0.4f * u_uwWaves.y)) * nearCoast);
 				}
 				foam *= 1.0f - pond;
 				vec3 foamColour = u_uwLightColour.rgb * (0.4f + 0.6f * max(u_uwAbove.y, 0.0f)) + u_uwSky.rgb * 0.7f +
