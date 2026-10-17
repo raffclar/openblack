@@ -16,6 +16,7 @@
 #include <array>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <utility>
 
 #include <LNDFile.h>
@@ -779,64 +780,125 @@ std::vector<seabed::ReefPlant> seabed::PlaceReef(const Seabed& seabed, float low
 	{
 		return plants;
 	}
-	constexpr float k_Step = 4.0f;
+	// A pocket of the reef at the bed under the point, if the depth and the slope let it grow there
+	const auto bedAt = [&seabed, lowestTide](glm::vec2 at, float top, float bottom) -> std::optional<float> {
+		const float depth = seabed.DepthAt(at);
+		const float underTide = depth - lowestTide;
+		if (depth <= 0.0f || underTide < top || underTide > bottom)
+		{
+			return std::nullopt;
+		}
+		const float dx = seabed.DepthAt(at + glm::vec2(2.0f, 0.0f)) - seabed.DepthAt(at - glm::vec2(2.0f, 0.0f));
+		const float dz = seabed.DepthAt(at + glm::vec2(0.0f, 2.0f)) - seabed.DepthAt(at - glm::vec2(0.0f, 2.0f));
+		if (glm::length(glm::vec2(dx, dz)) / 4.0f > k_ReefSteepest)
+		{
+			return std::nullopt;
+		}
+		return depth;
+	};
+
+	// One pocket can start in each cell. The centre stays in the middle half of the cell, so two pockets never touch.
+	struct Pocket
+	{
+		glm::ivec2 cell;
+		glm::vec2 centre;
+		float radius;
+		bool coral;
+		float order;
+	};
+	std::vector<Pocket> pockets;
+	const glm::vec2 extent = glm::vec2(seabed.size - 1) * seabed.spacing;
+	const auto cells = glm::ivec2(glm::ceil(extent / k_ReefPocketCell));
+	for (int cz = 0; cz < cells.y; ++cz)
+	{
+		for (int cx = 0; cx < cells.x; ++cx)
+		{
+			if (Hash(cx * 71 + 3, cz * 53 + 11) > k_ReefPocketChance)
+			{
+				continue;
+			}
+			const glm::vec2 jitter {Hash(cx * 17 + 5, cz * 29 + 2), Hash(cx * 43 + 9, cz * 13 + 8)};
+			const glm::vec2 centre = seabed.origin + (glm::vec2(cx, cz) + glm::vec2(0.25f) + jitter * 0.5f) * k_ReefPocketCell;
+			const float size = Hash(cx * 59 + 1, cz * 31 + 6);
+			if (bedAt(centre, k_CoralTopUnderTide, k_CoralBottomUnderTide))
+			{
+				pockets.push_back({.cell = {cx, cz},
+				                   .centre = centre,
+				                   .radius = glm::mix(k_CoralPocketLeast, k_CoralPocketMost, size),
+				                   .coral = true,
+				                   .order = Hash(cx * 7 + 13, cz * 97 + 4)});
+			}
+			else if (bedAt(centre, k_PlantTopUnderTide, k_PlantBottomUnderTide))
+			{
+				pockets.push_back({.cell = {cx, cz},
+				                   .centre = centre,
+				                   .radius = glm::mix(k_PlantPocketLeast, k_PlantPocketMost, size),
+				                   .coral = false,
+				                   .order = Hash(cx * 7 + 13, cz * 97 + 4)});
+			}
+		}
+	}
+	// The pockets fill in an order that the hash gives, so that the caps remove pockets from all of the map
+	std::ranges::sort(pockets, {}, &Pocket::order);
+
 	size_t coral = 0;
 	size_t weed = 0;
-	const glm::vec2 extent = glm::vec2(seabed.size - 1) * seabed.spacing;
-	for (float z = 0.0f; z < extent.y; z += k_Step)
+	for (const auto& pocket : pockets)
 	{
-		for (float x = 0.0f; x < extent.x; x += k_Step)
+		const int cx = pocket.cell.x;
+		const int cz = pocket.cell.y;
+		// A roll from 0 to 1 for the item `item` of this pocket, with a salt for each value
+		const auto roll = [cx, cz](int item, int salt) {
+			return Hash(cx * 131 + item * 37 + salt, cz * 113 + item * 19 + salt * 7);
+		};
+		if (pocket.coral)
 		{
-			const auto ix = static_cast<int>(x / k_Step);
-			const auto iz = static_cast<int>(z / k_Step);
-			// A point a little off the grid, the same each time
-			const glm::vec2 at =
-			    seabed.origin + glm::vec2(x, z) + glm::vec2(Hash(ix, iz * 7 + 1) - 0.5f, Hash(ix * 3 + 2, iz) - 0.5f) * k_Step;
-			const float depth = seabed.DepthAt(at);
-			const float underTide = depth - lowestTide;
-			if (depth <= 0.0f || underTide < k_PlantTopUnderTide || underTide > k_PlantBottomUnderTide)
+			// Many coral close together: more of them near the centre, and the big ones in the middle
+			const auto count = static_cast<int>(k_CoralPocketBase + pocket.radius * k_CoralPocketPerUnit);
+			for (int i = 0; i < count && coral < mostCoral; ++i)
 			{
-				continue;
-			}
-			const float dx = seabed.DepthAt(at + glm::vec2(2.0f, 0.0f)) - seabed.DepthAt(at - glm::vec2(2.0f, 0.0f));
-			const float dz = seabed.DepthAt(at + glm::vec2(0.0f, 2.0f)) - seabed.DepthAt(at - glm::vec2(0.0f, 2.0f));
-			if (glm::length(glm::vec2(dx, dz)) / 4.0f > k_ReefSteepest)
-			{
-				continue;
-			}
-			const float roll = Hash(ix * 13 + 5, iz * 17 + 3);
-			const float tint = Hash(ix * 5 + 11, iz * 3 + 7);
-			const float yaw = Hash(ix + 19, iz * 11 + 2) * 6.2831853f;
-			const glm::vec3 foot {at.x, -depth, at.y};
-			// The reef's patches: a broad noise and a finer one, so the coral grows in clumps
-			const float reef =
-			    ValueNoise(at.x / 10.0f, at.y / 10.0f, 14.0f) * 0.7f + ValueNoise(at.x / 10.0f, at.y / 10.0f, 4.0f) * 0.3f;
-			if (coral < mostCoral && underTide >= k_CoralTopUnderTide && underTide <= k_CoralBottomUnderTide && reef > 0.55f &&
-			    roll < (reef - 0.55f) * 4.5f)
-			{
-				const float variant = std::floor(Hash(ix * 23 + 1, iz * 29 + 4) * 9.0f);
+				const float angle = roll(i, 1) * 6.2831853f;
+				const float out = pocket.radius * std::pow(roll(i, 2), 0.7f);
+				const glm::vec2 at = pocket.centre + out * glm::vec2(std::cos(angle), std::sin(angle));
+				const auto depth = bedAt(at, k_CoralTopUnderTide, k_CoralBottomUnderTide);
+				if (!depth)
+				{
+					continue;
+				}
+				const float underTide = *depth - lowestTide;
+				const float middle = 1.0f - 0.5f * out / pocket.radius;
 				plants.push_back({.kind = ReefPlant::Kind::Coral,
-				                  .position = foot,
-				                  .scale = std::min(1.2f + 2.2f * Hash(ix * 31 + 6, iz * 7 + 9), underTide - k_ReefClearance),
-				                  .yaw = yaw,
-				                  .variant = std::min(variant, 8.0f),
-				                  .tint = tint});
+				                  .position = {at.x, -*depth, at.y},
+				                  .scale = std::min((1.2f + 2.2f * roll(i, 3)) * middle + 0.6f, underTide - k_ReefClearance),
+				                  .yaw = roll(i, 4) * 6.2831853f,
+				                  .variant = std::min(std::floor(roll(i, 5) * 9.0f), 8.0f),
+				                  .tint = roll(i, 6)});
 				++coral;
+			}
+		}
+		// The plants: a loose ring round each coral pocket, or a loose patch of their own where the coral cannot grow
+		const float inner = pocket.coral ? pocket.radius : 0.0f;
+		const float outer = pocket.coral ? pocket.radius + k_PlantRingWidth : pocket.radius;
+		const auto count = static_cast<int>(k_PlantPocketBase + outer * k_PlantPocketPerUnit);
+		for (int i = 0; i < count && weed < mostPlants; ++i)
+		{
+			const float angle = roll(i, 11) * 6.2831853f;
+			const float out = std::sqrt(glm::mix(inner * inner, outer * outer, roll(i, 12)));
+			const glm::vec2 at = pocket.centre + out * glm::vec2(std::cos(angle), std::sin(angle));
+			const auto depth = bedAt(at, k_PlantTopUnderTide, k_PlantBottomUnderTide);
+			if (!depth)
+			{
 				continue;
 			}
-			const float meadow = ValueNoise(at.x / 10.0f + 50.0f, at.y / 10.0f, 10.0f);
-			if (weed < mostPlants && meadow > 0.58f && roll < (meadow - 0.58f) * 2.5f)
-			{
-				plants.push_back(
-				    {.kind = ReefPlant::Kind::Seaweed,
-				     .position = foot,
-				     .scale = std::min(1.5f + 3.0f * Hash(ix * 37 + 8, iz * 13 + 1) * std::min(underTide / 6.0f, 1.0f),
-				                       underTide - k_ReefClearance),
-				     .yaw = yaw,
-				     .variant = Hash(ix * 41 + 3, iz * 19 + 5),
-				     .tint = tint});
-				++weed;
-			}
+			const float underTide = *depth - lowestTide;
+			plants.push_back(
+			    {.kind = ReefPlant::Kind::Seaweed,
+			     .position = {at.x, -*depth, at.y},
+			     .scale = std::min(1.5f + 3.0f * roll(i, 13) * std::min(underTide / 6.0f, 1.0f), underTide - k_ReefClearance),
+			     .yaw = roll(i, 14) * 6.2831853f,
+			     .variant = roll(i, 15),
+			     .tint = roll(i, 16)});
+			++weed;
 		}
 	}
 	return plants;

@@ -54,7 +54,7 @@ constexpr uint32_t k_GoodGroup = 1;
 constexpr uint32_t k_EvilGroup = 2;
 /// EXPERIMENT (not for merge): the sea's own loop, a 16-bit copy of the experiment's sound
 constexpr std::string_view k_UnderwaterLoopPath = "E:/openblack/experiments/underwater/underwater_atmos_looped_s16.wav";
-constexpr std::string_view k_UnderwaterBankName = "underwater.sad";
+constexpr std::string_view k_UnderwaterBankName = "UnderwaterAtmos.sad";
 constexpr int32_t k_UnderwaterSample = 1;
 /// How loud the loop is just under the surface, of the bank's full volume
 constexpr float k_UnderwaterVolume = 0.8f;
@@ -147,6 +147,7 @@ void AtmosAudio::RegisterUnderwaterBank()
 	header.sampleRate = 48000;
 	header.atmosInterval = 0;
 	header.atmosGroup = 0;
+	header.loop = -1;
 	auto& sounds = Locator::resources::value().GetSounds();
 	const auto id = entt::hashed_string(fmt::format("{}/{}", k_UnderwaterBankName, k_UnderwaterSample).c_str()).value();
 	if (!sounds.Contains(id))
@@ -163,7 +164,16 @@ void AtmosAudio::RegisterUnderwaterBank()
 			return;
 		}
 	}
-	_underwaterBank = Locator::audio::value().AtmosRegisterBank(std::string(k_UnderwaterBankName), {header}, 1);
+	auto& audio = Locator::audio::value();
+	// The loop is also a sound bank of its own, so that the debug audio player lists it with the game's banks
+	const std::string bankName {k_UnderwaterBankName};
+	const auto& groups = audio.GetSoundGroups();
+	if (!groups.contains(bankName) || std::ranges::find(groups.at(bankName).sounds, id) == groups.at(bankName).sounds.end())
+	{
+		audio.CreateSoundGroup(bankName);
+		audio.AddToSoundGroup(bankName, id);
+	}
+	_underwaterBank = audio.AtmosRegisterBank(bankName, {header}, 1);
 }
 
 void AtmosAudio::Release()

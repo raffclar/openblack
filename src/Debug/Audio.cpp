@@ -66,6 +66,11 @@ void Audio::Emitters() noexcept
 	ImGui::SameLine();
 	ImGui::Button("Sort by bytes");
 	ImGui::Separator();
+	// EXPERIMENT (not for merge): the underwater atmosphere bank shows first, so that its loop is easy to find and play
+	if (_selectedSoundPack.empty() && Locator::audio::value().GetSoundGroups().contains("UnderwaterAtmos.sad"))
+	{
+		_selectedSoundPack = "UnderwaterAtmos.sad";
+	}
 	if (ImGui::BeginTable("SoundPackTable", 3,
 	                      ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV |
 	                          ImGuiTableFlags_SizingFixedFit))
@@ -105,12 +110,13 @@ void Audio::Emitters() noexcept
 	const std::string lastColumnString = "Length (s)";
 	const float lastColumnWidth = ImGui::CalcTextSize(lastColumnString.c_str()).x + extraPadding;
 
-	if (ImGui::BeginTable("SoundTable", 3,
+	if (ImGui::BeginTable("SoundTable", 4,
 	                      ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV |
 	                          ImGuiTableFlags_SizingFixedFit))
 	{
 		ImGui::TableSetupColumn("id", ImGuiTableColumnFlags_WidthFixed, firstColumnWidth);
 		ImGui::TableSetupColumn("Name / Play", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableSetupColumn("Loop", ImGuiTableColumnFlags_WidthFixed, ImGui::CalcTextSize("forever").x + extraPadding);
 		ImGui::TableSetupColumn(lastColumnString.c_str(), ImGuiTableColumnFlags_WidthFixed, lastColumnWidth);
 		ImGui::TableHeadersRow();
 
@@ -144,7 +150,21 @@ void Audio::Emitters() noexcept
 
 				ImGui::TableSetColumnIndex(1);
 				ImGui::Text("%s", sound->name.c_str());
+				// The loop count of the bank header: -1 loops for ever, 0 or 1 plays once
 				ImGui::TableSetColumnIndex(2);
+				if (sound->loop < 0)
+				{
+					ImGui::TextColored(k_GreenColor, "forever");
+				}
+				else if (sound->loop <= 1)
+				{
+					ImGui::TextUnformatted("once");
+				}
+				else
+				{
+					ImGui::Text("%d times", sound->loop);
+				}
+				ImGui::TableSetColumnIndex(3);
 				auto length = sound->duration;
 				ImGui::TextColored(length < 0 ? k_RedColor : k_GreenColor, "%s",
 				                   length < 0 ? "N/A" : std::to_string(length).c_str());

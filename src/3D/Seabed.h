@@ -174,8 +174,29 @@ inline constexpr float k_ReefClearance = 0.5f;
 /// The steepest sea bed that coral and plants grow on, in height for each unit across
 inline constexpr float k_ReefSteepest = 0.4f;
 
-/// The reef: coral in patches on the sea bed that the lowest tide still covers, and plants in patches of their own,
-/// never on the beaches the tide leaves, on steep slopes or in deep water. At most `mostCoral` and `mostPlants`.
+/// The reef grows in small pockets. One pocket can start in each square cell of this size, in units.
+inline constexpr float k_ReefPocketCell = 40.0f;
+/// The chance that a cell has a pocket, 0 to 1
+inline constexpr float k_ReefPocketChance = 0.6f;
+/// The radius of a pocket of coral, in units. The centres stay in the middle half of a cell, so the pockets never touch.
+inline constexpr float k_CoralPocketLeast = 3.0f;
+inline constexpr float k_CoralPocketMost = 7.0f;
+/// The number of coral in a pocket: a base number and more for each unit of the radius
+inline constexpr float k_CoralPocketBase = 6.0f;
+inline constexpr float k_CoralPocketPerUnit = 3.0f;
+/// The plants grow in a loose ring of this width round a pocket of coral, in units
+inline constexpr float k_PlantRingWidth = 6.0f;
+/// The radius of a pocket of plants where the coral cannot grow, in units
+inline constexpr float k_PlantPocketLeast = 6.0f;
+inline constexpr float k_PlantPocketMost = 12.0f;
+/// The number of plants in a pocket: a base number and more for each unit of the outer radius
+inline constexpr float k_PlantPocketBase = 3.0f;
+inline constexpr float k_PlantPocketPerUnit = 0.8f;
+
+/// The reef: tight pockets of coral on the sea bed that the lowest tide still covers, with bare sea bed between them.
+/// Plants grow in a loose ring round each pocket, and in loose pockets of their own where the coral cannot grow. No
+/// reef grows on the beaches that the tide leaves, on steep slopes or in deep water. At most `mostCoral` and
+/// `mostPlants`.
 [[nodiscard]] std::vector<ReefPlant> PlaceReef(const Seabed& seabed, float lowestTide, size_t mostCoral, size_t mostPlants);
 
 /// The height of the floor at a point: the land's own height where the land is above the sea, else the sea bed

@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <LNDFile.h>
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
@@ -340,6 +341,94 @@ TEST(Seabed, TheReefStaysUnderTheLowestTide)
 		EXPECT_LE(plant.scale, under - seabed::k_ReefClearance + 1e-4f);
 	}
 	EXPECT_LE(seabed::PlaceReef(bed, underwater::k_LowestTide, 3, 4).size(), 7u);
+}
+
+TEST(Seabed, TheCoralGrowsInSmallPocketsWithBareSeaBedBetween)
+{
+	// The same small island in a wide sea
+	constexpr glm::ivec2 k_Size {161, 161};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Size.x * k_Size.y), 0);
+	for (int z = 75; z <= 85; ++z)
+	{
+		for (int x = 75; x <= 85; ++x)
+		{
+			altitudes[static_cast<size_t>(z * k_Size.x + x)] = 6;
+		}
+	}
+	const auto bed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
+	const auto reef = seabed::PlaceReef(bed, underwater::k_LowestTide, 7000, 5000);
+	std::vector<glm::vec2> coral;
+	for (const auto& plant : reef)
+	{
+		if (plant.kind == seabed::ReefPlant::Kind::Coral)
+		{
+			coral.emplace_back(plant.position.x, plant.position.z);
+		}
+	}
+	ASSERT_GT(coral.size(), 50u);
+
+	// Nearly all of the coral has a neighbour close to it
+	const auto close = std::ranges::count_if(coral, [&coral](glm::vec2 a) {
+		return std::ranges::any_of(coral, [a](glm::vec2 b) { return a != b && glm::distance(a, b) < 3.0f; });
+	});
+	EXPECT_GT(static_cast<float>(close), 0.9f * static_cast<float>(coral.size()));
+
+	// Join the coral that is less than 4 units apart into groups. Each group is a pocket, at most about 15 units across.
+	std::vector<int> group(coral.size(), -1);
+	int groups = 0;
+	for (size_t start = 0; start < coral.size(); ++start)
+	{
+		if (group[start] >= 0)
+		{
+			continue;
+		}
+		std::vector<size_t> open {start};
+		group[start] = groups;
+		glm::vec2 low = coral[start];
+		glm::vec2 high = coral[start];
+		while (!open.empty())
+		{
+			const size_t at = open.back();
+			open.pop_back();
+			low = glm::min(low, coral[at]);
+			high = glm::max(high, coral[at]);
+			for (size_t other = 0; other < coral.size(); ++other)
+			{
+				if (group[other] < 0 && glm::distance(coral[at], coral[other]) < 4.0f)
+				{
+					group[other] = groups;
+					open.push_back(other);
+				}
+			}
+		}
+		EXPECT_LE(glm::length(high - low), 2.0f * seabed::k_CoralPocketMost * std::numbers::sqrt2_v<float> + 1e-3f);
+		++groups;
+	}
+	EXPECT_GT(groups, 5);
+	EXPECT_GT(static_cast<float>(coral.size()) / static_cast<float>(groups), 8.0f);
+
+	// Most of the sea bed where coral can grow has no coral near it
+	int growable = 0;
+	int bare = 0;
+	for (float z = 0.0f; z < 1600.0f; z += 5.0f)
+	{
+		for (float x = 0.0f; x < 1600.0f; x += 5.0f)
+		{
+			const glm::vec2 at {x, z};
+			const float under = bed.DepthAt(at) - underwater::k_LowestTide;
+			if (under < seabed::k_CoralTopUnderTide || under > seabed::k_CoralBottomUnderTide)
+			{
+				continue;
+			}
+			++growable;
+			if (std::ranges::none_of(coral, [at](glm::vec2 c) { return glm::distance(at, c) < 8.0f; }))
+			{
+				++bare;
+			}
+		}
+	}
+	ASSERT_GT(growable, 0);
+	EXPECT_GT(static_cast<float>(bare), 0.5f * static_cast<float>(growable));
 }
 
 TEST(Seabed, TheShoreMapPointsToTheCoastAndFindsTheCliffs)
