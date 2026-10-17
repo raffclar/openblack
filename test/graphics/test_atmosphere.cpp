@@ -11,6 +11,7 @@
 
 #include <cmath>
 
+#include <array>
 #include <numbers>
 
 #include <glm/geometric.hpp>
@@ -207,4 +208,16 @@ TEST(Atmosphere, EachTierKeepsAHazeAndALightInTheShade)
 		EXPECT_TRUE(underwater::InQuality(Effect::FogPockets, quality));
 	}
 	EXPECT_FALSE(underwater::InQuality(Effect::AmbientOcclusion, Quality::Medium));
+}
+
+TEST(Atmosphere, APlaceTintsItsHazeWithItsOwnColour)
+{
+	EXPECT_EQ(atmos::PlaceTint({}, atmos::k_PlaceShare), glm::vec3(1.0f));
+	const std::array<glm::vec3, 2> grass {glm::vec3(0.2f, 0.5f, 0.1f), glm::vec3(0.3f, 0.6f, 0.2f)};
+	const auto green = atmos::PlaceTint(grass, atmos::k_PlaceShare);
+	EXPECT_GT(green.g, green.r);
+	EXPECT_GT(green.g, green.b);
+	EXPECT_NEAR(atmos::Luminance(green), 1.0f, 1e-3f);
+	// With no share the haze keeps no colour of the place
+	EXPECT_EQ(atmos::PlaceTint(grass, 0.0f), glm::vec3(1.0f));
 }

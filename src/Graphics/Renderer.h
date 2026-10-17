@@ -458,6 +458,9 @@ private:
 	/// EXPERIMENT (not for merge): the air's uniforms and textures for one program; `skyShare` is how much of the air's
 	/// sky the sky's dome shows near the horizon
 	void BindAtmosphere(const ShaderProgram& program, float skyShare) const;
+	/// EXPERIMENT (not for merge): the sun's light through the leaves and round their edges, for the trees' program; off
+	/// while the experiment or the light in the shade is off
+	void BindFoliageLight(const ShaderProgram& program) const;
 	/// EXPERIMENT (not for merge): the light probes, a band of rows a frame after each new set of shadows, and the blend
 	/// of the old grid into the new
 	void DrawLightProbes(const DrawSceneDesc& desc, bool newShadows) const;

@@ -5655,6 +5655,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto* debugShader = _shaderManager->GetShader("DebugLine");
 	// Trees are placed on the land already, so they are drawn where they are rather than moved onto the height map
 	const auto* vegetationShaderInstanced = _shaderManager->GetShader("Vegetation");
+	// EXPERIMENT (not for merge): the light of the sun through the leaves and round their edges
+	if (vegetationShaderInstanced != nullptr)
+	{
+		BindFoliageLight(*vegetationShaderInstanced);
+	}
 	const auto* spriteShader = _shaderManager->GetShader("Sprite");
 	const auto* debugShaderInstanced = _shaderManager->GetShader("DebugLineInstanced");
 	const auto* objectShaderInstanced = _shaderManager->GetShader("ObjectInstanced");

@@ -6,6 +6,10 @@ $input v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 
 SAMPLER2D(s_diffuse, 0);
 uniform vec4 u_skyAlphaThreshold;
+// EXPERIMENT (not for merge): xyz the direction towards the sun or the moon, w how strongly its light comes through the
+// leaves (0 with the experiment off); and the colour of its light
+uniform vec4 u_foliageLight;
+uniform vec4 u_foliageLightColour;
 
 void main()
 {
@@ -25,6 +29,19 @@ void main()
 	if (snowLevel > 0.0f && SnowShows(snowLevel, texture2D(s_snowAlpha, v_snow.xy).r))
 	{
 		diffuseTex.rgb = texture2D(s_snow, v_snow.xy).rgb * v_snowLight;
+	}
+	// EXPERIMENT (not for merge): looking towards the sun, the leaves glow with the light that comes through them, and
+	// their edges catch it
+	if (u_foliageLight.w > 0.0f)
+	{
+		vec3 eye = mul(u_invView, vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
+		vec3 view = normalize(v_position.xyz - eye);
+		vec3 towards = normalize(u_foliageLight.xyz);
+		float through = pow(max(dot(view, towards), 0.0f), 6.0f);
+		vec3 n = normalize(v_normal.xyz);
+		float edge = pow(1.0f - abs(dot(n, view)), 3.0f) * (0.5f + 0.5f * dot(view, towards));
+		vec3 leaf = diffuseTex.rgb / max(light, vec3_splat(0.05f));
+		diffuseTex.rgb += leaf * u_foliageLightColour.rgb * (through * 0.55f + edge * 0.25f) * u_foliageLight.w;
 	}
 	// The distance haze is added after the texture
 	// A tree fading out in the distance is blended by its alpha

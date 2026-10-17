@@ -18,6 +18,9 @@ uniform vec4 u_hazeApply;
 uniform vec4 u_hazeHorizon;
 // The sky's dome: xy its middle across the land; z how far across and w how high a point must be to be on it
 uniform vec4 u_hazeDome;
+// The game's own sun or moon: xyz the direction towards it, w how strongly its glare shows; and its light's colour
+uniform vec4 u_hazeSun;
+uniform vec4 u_hazeSunColour;
 
 vec3 WorldAt(vec2 uv, float depth)
 {
@@ -28,6 +31,47 @@ vec3 WorldAt(vec2 uv, float depth)
 #endif
 	vec4 p = mul(u_invViewProj, vec4(ndc, 1.0f));
 	return p.xyz / p.w;
+}
+
+// How much of the sun shows past the scene: five samples of the depth round its place on the screen, each 1 where the
+// sky is there. Off the screen the sun is taken as open.
+float SunOpen(vec3 eye)
+{
+	vec4 clip = mul(u_viewProj, vec4(eye + u_hazeSun.xyz * 10000.0f, 1.0f));
+	if (clip.w <= 0.0f)
+	{
+		return 0.0f;
+	}
+	vec2 ndc = clip.xy / clip.w;
+#if BGFX_SHADER_LANGUAGE_GLSL
+	vec2 at = ndc * 0.5f + 0.5f;
+#else
+	vec2 at = vec2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f);
+#endif
+	if (at.x < 0.0f || at.y < 0.0f || at.x > 1.0f || at.y > 1.0f)
+	{
+		return 1.0f;
+	}
+	float open = 0.0f;
+	for (int i = 0; i < 5; ++i)
+	{
+		float angle = float(i) * 1.2566371f;
+		vec2 offset = i == 0 ? vec2_splat(0.0f) : vec2(cos(angle), sin(angle)) * 0.012f;
+		vec2 uv = clamp(at + offset * vec2(u_viewTexel.x / u_viewTexel.y, 1.0f), vec2_splat(0.0f), vec2_splat(1.0f));
+		float depth = texture2DLod(s_sceneDepth, uv, 0.0f).r;
+		vec3 p = WorldAt(uv, depth);
+		bool sky = depth <= 0.0f || length(p.xz - u_hazeDome.xy) > u_hazeDome.z || p.y > u_hazeDome.w;
+		open += sky ? 0.2f : 0.0f;
+	}
+	return open;
+}
+
+// The glare round the sun: a wide soft bloom and a tighter bright core, as the eye and the lens see a bright sun
+vec3 SunGlare(vec3 dir, float open)
+{
+	float facing = max(dot(dir, normalize(u_hazeSun.xyz)), 0.0f);
+	float glare = 0.18f * pow(facing, 12.0f) + 0.35f * pow(facing, 160.0f) + 0.5f * pow(facing, 2000.0f);
+	return u_hazeSunColour.rgb * glare * u_hazeSun.w * open;
 }
 
 void main()
@@ -52,9 +96,10 @@ void main()
 			sky = false;
 		}
 	}
+	vec3 glare = u_hazeSun.w > 0.0f ? SunGlare(dir, SunOpen(eye)) : vec3_splat(0.0f);
 	if (sky)
 	{
-		gl_FragColor = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		gl_FragColor = vec4(glare, 1.0f);
 		return;
 	}
 	vec4 haze;
@@ -79,5 +124,5 @@ void main()
 		float through = exp(-range * u_hazeApply.y);
 		haze = vec4(u_hazeHorizon.rgb * (1.0f - through), through);
 	}
-	gl_FragColor = haze;
+	gl_FragColor = vec4(haze.rgb + glare, haze.a);
 }

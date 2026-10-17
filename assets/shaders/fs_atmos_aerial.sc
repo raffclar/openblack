@@ -14,6 +14,8 @@ $input v_texcoord0, v_texcoord1
 
 // x: 1 while the hills' and the clouds' shadows dim the light; y: the steps along each ray; zw: unused
 uniform vec4 u_atmosAerial;
+// xyz: the direction towards the game's own sun or moon, where it shows in the sky. The haze glows round it.
+uniform vec4 u_atmosGameLight;
 
 vec3 WorldAt(vec2 uv, float depth)
 {
@@ -42,7 +44,8 @@ void main()
 	float strideKm = stride / ATMOS_UNITS_PER_KM;
 	float sea = u_atmosParams.w;
 	float scale = u_atmosParams.y;
-	float cosAngle = dot(dir, u_atmosLight.xyz);
+	// The dust's glow is round the sun that the sky shows
+	float cosAngle = dot(dir, normalize(u_atmosGameLight.xyz));
 	vec3 light = vec3_splat(0.0f);
 	vec3 through = vec3_splat(1.0f);
 	for (int i = 0; i < 16; ++i)

@@ -127,6 +127,11 @@ void Renderer::BeginFog(const DrawSceneDesc& desc) const
 	const glm::vec3 tint = glm::mix(throughAir, k_MoonTint, frame.light.w);
 	uniforms.lightColour = {glm::vec3(frame.lightColour) * tint, frame.lightColour.w};
 	uniforms.ambient = {glm::vec3(frame.sky) * k_SkyLight, frame.params.z};
+	// EXPERIMENT (not for merge): the place's own colour tints the fog
+	if (_atmosphereFrame.has_value())
+	{
+		uniforms.ambient = {glm::vec3(uniforms.ambient) * _atmosphereFrame->placeTint, uniforms.ambient.w};
+	}
 	// EXPERIMENT (not for merge): the pockets of fog nearest to the eye
 	if (system.IsEffectOn(underwater::Effect::FogPockets) && Locator::entitiesRegistry::has_value())
 	{

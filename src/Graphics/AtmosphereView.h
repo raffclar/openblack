@@ -74,6 +74,12 @@ struct AtmosphereFrame
 	/// Where the sky's dome is: xy the middle across the land, z how far across and w how high a point must be to be on
 	/// the dome. The dome writes its depth, so the haze and the fog know the sky by this.
 	glm::vec4 skyDome {2560.0f, 2560.0f, 1e9f, 1e9f};
+	/// The tint of the haze and the fog at the place the camera looks at (see atmosphere::PlaceTint)
+	glm::vec3 placeTint {1.0f};
+	/// The game's own sun or moon as it shows in the sky: xyz the direction towards it, w how strongly its glare shows;
+	/// and the colour of its light on the screen
+	glm::vec4 sunDisc {0.0f, 1.0f, 0.0f, 0.0f};
+	glm::vec4 sunColour {0.0f};
 	/// The low tier's haze for each world unit
 	float lowTierDensity {0.0f};
 	underwater::LightDetail hazeDetail {underwater::LightDetail::Full};

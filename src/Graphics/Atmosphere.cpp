@@ -305,6 +305,26 @@ float atmosphere::AirSunElevation(float hour)
 	return std::sin(degrees * k_Pi / 180.0f);
 }
 
+glm::vec3 atmosphere::PlaceTint(std::span<const glm::vec3> colours, float share)
+{
+	if (colours.empty())
+	{
+		return glm::vec3(1.0f);
+	}
+	glm::vec3 mean {0.0f};
+	for (const auto& colour : colours)
+	{
+		mean += colour;
+	}
+	mean /= static_cast<float>(colours.size());
+	const float luminance = Luminance(mean);
+	if (luminance <= 1e-4f)
+	{
+		return glm::vec3(1.0f);
+	}
+	return glm::mix(glm::vec3(1.0f), mean / luminance, std::clamp(share, 0.0f, 1.0f));
+}
+
 float atmosphere::AltitudeOf(float heightOverSea)
 {
 	return std::max(heightOverSea, 0.5f) / k_UnitsPerKilometre;

@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <span>
+
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -50,7 +52,7 @@ inline constexpr float k_OzoneHalfWidth = 15.0f;
 inline constexpr float k_MultipleShare = 0.3f;
 /// The haze over the land is this much denser than the real air at the same height. The far islands are a few
 /// kilometres away, and the real air needs some tens of kilometres to fade a hill this much.
-inline constexpr float k_HazeScale = 4.0f;
+inline constexpr float k_HazeScale = 7.0f;
 /// The world units in one kilometre (underwater::k_UnitsPerMetre, 0.949 units a metre)
 inline constexpr float k_UnitsPerKilometre = 949.0f;
 
@@ -171,6 +173,13 @@ inline constexpr float k_OriginalHue = 0.35f;
 [[nodiscard]] float AirSunElevation(float hour);
 /// The highest that the sun climbs in the air's model, in degrees
 inline constexpr float k_NoonElevation = 60.0f;
+
+/// The share of a place's own colour that its haze and fog take
+inline constexpr float k_PlaceShare = 0.3f;
+
+/// The tint of the haze and the fog at a place, from the colours of the land round it (0 to 1): their mean colour at a
+/// luminance of 1, with `share` of it kept and the rest white. Green fields give a green-grey haze, sand a warm one.
+[[nodiscard]] glm::vec3 PlaceTint(std::span<const glm::vec3> colours, float share);
 
 /// The height of the eye over the sea, in kilometres, from its height in world units over the sea's level
 [[nodiscard]] float AltitudeOf(float heightOverSea);

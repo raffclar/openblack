@@ -17,13 +17,16 @@
 
 #include <algorithm>
 #include <limits>
+#include <vector>
 
+#include <LNDFile.h>
 #include <bgfx/bgfx.h>
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/vec4.hpp>
 
 #include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
 #include "3D/OceanInterface.h"
 #include "3D/SkyDome.h"
 #include "Camera/Camera.h"
@@ -61,6 +64,9 @@ constexpr float k_SkySeconds = 0.5f;
 /// The steps along each ray of the haze's grid, with and without the shadows
 constexpr float k_FullSteps = 12.0f;
 constexpr float k_ReducedSteps = 6.0f;
+/// The haze is this much brighter than the original game's haze at the horizon: a bright, airy haze that lifts the far
+/// land rather than greys it
+constexpr float k_HazeBrightness = 1.3f;
 
 void BindScreenTriangle()
 {
@@ -150,16 +156,47 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.lightDetail = underwater::LightingDetail(system.GetQuality());
 	atmosphere.params = {air.turbidity, atmos::k_HazeScale, altitude, seaLevel};
 	atmosphere.light = {towardsLight, atmosphere.haze ? 1.0f : 0.0f};
+	// The place's own colour tints the haze: the land's cells round the point that the camera looks at
+	{
+		const auto& island = Locator::terrainSystem::value();
+		const glm::vec3 focus = Locator::camera::has_value() ? Locator::camera::value().GetFocus() : desc.camera->GetFocus();
+		constexpr int k_Reach = 3;
+		constexpr float k_Step = 30.0f;
+		std::vector<glm::vec3> colours;
+		colours.reserve((2 * k_Reach + 1) * (2 * k_Reach + 1));
+		for (int z = -k_Reach; z <= k_Reach; ++z)
+		{
+			for (int x = -k_Reach; x <= k_Reach; ++x)
+			{
+				const glm::vec2 at = glm::vec2(focus.x, focus.z) + glm::vec2(x, z) * k_Step;
+				const auto cellX = static_cast<int>(at.x / LandIslandInterface::k_CellSize);
+				const auto cellZ = static_cast<int>(at.y / LandIslandInterface::k_CellSize);
+				if (cellX < 0 || cellZ < 0 || cellX >= LandIslandInterface::k_MapCellsPerSide ||
+				    cellZ >= LandIslandInterface::k_MapCellsPerSide)
+				{
+					continue;
+				}
+				const auto& cell = island.GetCell(glm::u16vec2(cellX, cellZ));
+				// The game keeps a cell's colour with red and blue swapped
+				colours.emplace_back(glm::vec3(cell.b, cell.g, cell.r) / 255.0f);
+			}
+		}
+		atmosphere.placeTint = atmos::PlaceTint(colours, atmos::k_PlaceShare);
+	}
 	// The air's horizon is as bright as the original game's haze, with some of its colour
 	const glm::vec3 tint = glm::mix(glm::vec3(1.0f), k_MoonTint, frame.light.w);
 	const glm::vec3 original = glm::vec3(frame.sky);
 	atmosphere.sun = {atmos::ScreenScale(cache.horizon, original, tint, atmos::k_OriginalHue), 0.0f};
+	atmosphere.sun = {glm::vec3(atmosphere.sun) * atmosphere.placeTint * k_HazeBrightness, 0.0f};
 	atmosphere.horizon = {cache.horizon * glm::vec3(atmosphere.sun), 0.0f};
 	// The clouds and the fog take the air's colour of the light, at the brightness that they have without the haze
 	const glm::vec3 airLight = atmos::LightAtGround(towardsLight.y, air);
 	const float brightness = atmos::Luminance(volumetric_clouds::SunThroughAir(gameLight.y));
 	atmosphere.lightTint = airLight * (brightness / std::max(atmos::Luminance(airLight), 1e-4f));
 	atmosphere.lightAtGround = atmos::LightAtGround(towardsLight.y, air);
+	// The game's own sun or moon in the sky, for its glare and for the light through the leaves
+	atmosphere.sunDisc = {gameLight, frame.lightColour.w * glm::mix(1.0f, 0.35f, frame.light.w)};
+	atmosphere.sunColour = {glm::vec3(frame.lightColour) * atmosphere.lightTint, 0.0f};
 	atmosphere.sky = cache.sky;
 	// The sky's dome: a point at most of its size from its middle is on it
 	if (Locator::skySystem::has_value())
@@ -280,6 +317,7 @@ void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarge
 		BindSunVisibility(*aerialProgram, 12);
 		const glm::vec4 aerial {full ? 1.0f : 0.0f, full ? k_FullSteps : k_ReducedSteps, 0.0f, 0.0f};
 		aerialProgram->SetUniformValue("u_atmosAerial", &aerial);
+		aerialProgram->SetUniformValue("u_atmosGameLight", &atmosphere.sunDisc);
 		BindScreenTriangle();
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 		aerialProgram->Submit(pass);
@@ -297,7 +335,20 @@ void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarge
 	applyProgram->SetUniformValue("u_hazeApply", &apply);
 	applyProgram->SetUniformValue("u_hazeHorizon", &atmosphere.horizon);
 	applyProgram->SetUniformValue("u_hazeDome", &atmosphere.skyDome);
+	applyProgram->SetUniformValue("u_hazeSun", &atmosphere.sunDisc);
+	applyProgram->SetUniformValue("u_hazeSunColour", &atmosphere.sunColour);
 	BindScreenTriangle();
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_SRC_ALPHA));
 	applyProgram->Submit(static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver), std::numeric_limits<uint32_t>::max() - 1);
+}
+
+void Renderer::BindFoliageLight(const ShaderProgram& program) const
+{
+	const bool on = _atmosphereFrame.has_value() && _atmosphereFrame->lighting;
+	const glm::vec4 light = on ? _atmosphereFrame->sunDisc : glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+	program.SetUniformValue("u_foliageLight", &light);
+	if (on)
+	{
+		program.SetUniformValue("u_foliageLightColour", &_atmosphereFrame->sunColour);
+	}
 }

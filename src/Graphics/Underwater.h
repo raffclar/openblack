@@ -250,9 +250,9 @@ enum class LightDetail : uint8_t
 [[nodiscard]] LightDetail HazeDetail(Quality quality);
 [[nodiscard]] LightDetail LightingDetail(Quality quality);
 
-/// The last grade of the colour: x the exposure, y the saturation, z the contrast about middle grey. The default
-/// keeps the original game's colours: it only takes back the extra brightness and colour that the new light adds.
-inline constexpr glm::vec3 k_Grade {0.97f, 0.93f, 1.02f};
+/// The last grade of the colour: x the exposure, y the saturation, z the contrast about middle grey. It gives a bright,
+/// saturated look with soft contrast that keeps the original game's textures readable.
+inline constexpr glm::vec3 k_Grade {1.06f, 1.12f, 1.04f};
 
 /// How a body of water looks: what it takes out of the light for each unit (red, green, blue), the colour that it
 /// scatters back, how much it reflects against the sea and how smooth it is (GGX roughness, used when it is calm),
