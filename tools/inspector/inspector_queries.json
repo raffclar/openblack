@@ -978,6 +978,18 @@
   "query": "land.underwater"
  },
  {
+  "description": "EXPERIMENT (not for merge): the water in the rivers: how many river stretches and mouths, the box they lie in, the flow map's revision, the leaves that drift, and the water at a point (params position [x, z]): its surface, depth and flow",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "[x, z] or [x, y, z], optional",
+    "name": "position",
+    "type": "point"
+   }
+  ],
+  "query": "land.streams"
+ },
+ {
   "description": "EXPERIMENT (not for merge): the water's field of small waves: whether it is flat, its steps this frame, where it is, and the movers, rings, hulls and splashes in it",
   "kind": "object",
   "parameters": [],

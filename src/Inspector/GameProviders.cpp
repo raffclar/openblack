@@ -182,6 +182,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/StreamWaterSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -293,6 +294,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"waterRingSystem", "particles.splash"},
     LocatorCoverage {"underwaterSystem", "land.underwater"},
     LocatorCoverage {"waterWakeSystem", "land.wake"},
+    LocatorCoverage {"streamWaterSystem", "land.streams"},
     LocatorCoverage {"creatureAnimationSystem", "creatures.status"},
     LocatorCoverage {"creatureMindSystem", "creature.desires"},
     LocatorCoverage {"creatureLocomotionSystem", "creatures.status"},
@@ -760,6 +762,28 @@ std::unique_ptr<ProviderInterface> LandProvider()
 			                  }
 			                  return feet;
 		                  }()}};
+	    }));
+	provider->Add(
+	    Query("streams",
+	          "EXPERIMENT (not for merge): the water in the rivers: how many river stretches and mouths, the "
+	          "box they lie in, the flow map's revision, the leaves that drift, and the water at a point "
+	          "(params position [x, z]): its surface, depth and flow",
+	          {{.name = "position", .type = "point", .description = "[x, z] or [x, y, z], optional", .required = false}}),
+	    Serve<Locator::streamWaterSystem>("the rivers' water", [](const ecs::systems::StreamWaterSystemInterface& streams,
+	                                                              const QueryContext& c) {
+		    const auto& network = streams.GetNetwork();
+		    Json result {{"segments", network.segments.size()},   {"mouths", network.mouths.size()},
+		                 {"low", {network.low.x, network.low.y}}, {"high", {network.high.x, network.high.y}},
+		                 {"revision", streams.GetRevision()},     {"drifters", streams.GetDrifters().size()}};
+		    if (const auto position = PositionParam(c.params); position.has_value())
+		    {
+			    const auto water = streams.WaterAt({position->x, position->z});
+			    result["water"] =
+			        water.has_value()
+			            ? Json {{"surface", water->surface}, {"depth", water->depth}, {"flow", {water->flow.x, water->flow.y}}}
+			            : Json(nullptr);
+		    }
+		    return result;
 	    }));
 	provider->Add(
 	    Query("wake", "EXPERIMENT (not for merge): the water's field of small waves: whether it is flat, its steps this frame, "
