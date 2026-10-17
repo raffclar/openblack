@@ -1201,3 +1201,11 @@ openblack_setup_and_add_test(
   test_creature_save_state test_creature_save_state.cpp
 )
 openblack_setup_and_add_test(test_glm_order_2 test_glm_order_2.cpp)
+openblack_setup_and_add_test(test_lightning_spell_order test_lightning_spell_order.cpp)
+openblack_setup_and_add_test(
+  test_oracle_lightning_spell_order oracle/test_oracle_lightning_spell_order.cpp
+)
+set_tests_properties(
+  test_oracle_lightning_spell_order
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

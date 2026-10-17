@@ -32,6 +32,8 @@
 #include <glm/geometric.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
 #include "LightningMaths.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMiracleMaths.h"
@@ -40,6 +42,7 @@
 
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -159,7 +162,7 @@ public:
 		// The cone points the way the camera looks
 		if (info.cameraForward.x != 0.0f || info.cameraForward.z != 0.0f)
 		{
-			bolt.heading = std::atan2(info.cameraForward.z, info.cameraForward.x);
+			bolt.heading = x87::RoundToFloat(x87::Atan2(info.cameraForward.z, info.cameraForward.x));
 		}
 		bolt.forkScale = forkScale * (forkScaleProvider.empty() ? 1.0f : effect.FloatProvider(forkScaleProvider, 1.0f));
 		if (effect.Closing())
@@ -234,9 +237,8 @@ private:
 		{
 			return false;
 		}
-		const auto moved = bolt.searchOrigin - bolt.origin;
 		const float limit = SearchRadius(effect) * renewTargetsOnMoveFrac;
-		return glm::dot(moved, moved) > limit * limit;
+		return limit * limit < maths::MovedSquared(bolt.searchOrigin, bolt.origin);
 	}
 
 	void FindTargets(Effect& effect, Bolt& bolt) const
@@ -263,15 +265,17 @@ private:
 		};
 		if (castingFromHand)
 		{
-			// In the cone in front of the hand
-			const float cosHalfAngle = std::cos(splitAngle);
+			// In the cone in front of the hand. Keep the cosines and the sine as floats.
+			const float cosHeading = x87::RoundToFloat(x87::Cos(bolt.heading));
+			const float sinHeading = x87::RoundToFloat(x87::Sin(bolt.heading));
+			const float cosHalfAngle = x87::RoundToFloat(x87::Cos(splitAngle));
 			for (const auto& candidate : world.StrikeCandidates(bolt.origin, maths::StrikeSearchCells(radius)))
 			{
 				if (bolt.targets.size() >= most)
 				{
 					break;
 				}
-				if (maths::InStrikeCone(bolt.origin, bolt.heading, cosHalfAngle, candidate.position))
+				if (maths::InStrikeCone(bolt.origin, cosHeading, sinHeading, cosHalfAngle, candidate.position))
 				{
 					take(candidate);
 				}
@@ -314,7 +318,11 @@ private:
 			const float angle = castingFromHand ? bolt.heading + effect.Random(k_GroundPointSpread)
 			                                    : effect.Random(2.0f * std::numbers::pi_v<float>);
 			const float distance = effect.Random(k_GroundPointReach * radius);
-			glm::vec3 point(bolt.origin.x + distance * std::cos(angle), 0.0f, bolt.origin.z + distance * std::sin(angle));
+			const auto search = castingFromHand        ? maths::GroundPointSearch::Hand
+			                    : takeTargetsFromSpell ? maths::GroundPointSearch::SpellTargets
+			                                           : maths::GroundPointSearch::Around;
+			const auto offset = maths::GroundPointOffset(search, angle, distance);
+			glm::vec3 point(offset.x + bolt.origin.x, 0.0f, offset.y + bolt.origin.z);
 			point.y = world.LandHeight({point.x, point.z}) + k_GroundPointHeight;
 			bolt.targets.push_back({.object = entt::null, .ground = point});
 		}
@@ -338,13 +346,14 @@ private:
 		{
 			bolt.firstCount = bolt.targets.size();
 		}
-		glm::vec3 sum(0.0f);
+		std::vector<glm::vec3> tips;
+		tips.reserve(bolt.targets.size());
 		for (const auto& target : bolt.targets)
 		{
-			sum += TipOf(effect, target);
+			tips.push_back(TipOf(effect, target));
 		}
-		bolt.centroid = sum / static_cast<float>(bolt.targets.size());
-		bolt.centroidDistance = glm::length(bolt.centroid - bolt.origin);
+		bolt.centroid = maths::TipsMiddle(tips);
+		bolt.centroidDistance = x87::LengthZyx(bolt.centroid - bolt.origin);
 	}
 
 	/// One root atom, carrying two forks for each target that the bolt found, each fork a ribbon of joints drawn as the
@@ -526,13 +535,11 @@ private:
 		}
 		std::vector<glm::vec3> tips;
 		tips.reserve(targets.size());
-		glm::vec3 centroid(0.0f);
 		for (const auto index : targets)
 		{
 			tips.push_back(TipOf(effect, bolt.targets[index]));
-			centroid += tips.back();
 		}
-		centroid /= static_cast<float>(targets.size());
+		const auto centroid = maths::TipsMiddle(tips);
 		auto split = centroid;
 		if (targets.size() >= 2)
 		{
@@ -600,7 +607,7 @@ private:
 	{
 		const auto joints = static_cast<int>(fork.atoms.size());
 		const auto way = split - origin;
-		const float length = glm::length(way);
+		const float length = x87::LengthZyx(way);
 		if (texturesToTile != -1 && bolt.centroidDistance > 0.0f)
 		{
 			fork.textureRepeats =
@@ -621,7 +628,7 @@ private:
 				position.z += (effect.Random(2.0f * randomFrac) - randomFrac) * length;
 			}
 			joint.position = position;
-			joint.ruleScale = maths::ForkJointScale(scale * bolt.forkScale, depth, t);
+			joint.ruleScale = maths::ForkJointScale(scale * bolt.forkScale, depth, i, step);
 			joint.rgba[3] =
 			    scale > 1.0f ? k_JointAlphaThick : static_cast<uint8_t>(effect.Rand(k_JointAlphaRange) + k_JointAlphaMin);
 			joint.drawWeight = glued ? 1.0f - t : 0.0f;

@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include <bit>
 #include <memory>
 #include <numbers>
 #include <string>
@@ -229,10 +230,11 @@ TEST(CreatureSpellMaths, TheFliesCircleTheHeadHalfAsWideAgainAsTheEyes)
 	const auto quarter = maths::ItchOrbit(right, left, std::numbers::pi_v<float> / 2.0f, 1.0f);
 	EXPECT_NEAR(glm::length(quarter - glm::vec3(0.0f, 10.0f, 0.0f)), 1.5f, k_Epsilon);
 	EXPECT_NEAR(quarter.y, 10.0f, k_Epsilon);
-	// The angle wraps at the full turn of double precision: after 100 radians the flies are where the game has them
+	// The angle wraps at the float of two pi held as a double: after 100 radians the flies are where the game's steps
+	// put them
 	const auto later = maths::ItchOrbit(right, left, 100.0f, 1.0f);
-	EXPECT_EQ(later.x, -1.2934784889221191f);
-	EXPECT_EQ(later.z, -0.7595484852790833f);
+	EXPECT_EQ(std::bit_cast<uint32_t>(later.x), 0xBFA590A2u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(later.z), 0xBF4271FEu);
 }
 
 TEST(CreatureRigMirror, TheMirrorTableEndsTheFile)

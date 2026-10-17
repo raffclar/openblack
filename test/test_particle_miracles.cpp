@@ -273,11 +273,15 @@ TEST(ParticleMiracleMaths, ABounceKeepsTheSlideAndTurnsBackTheFall)
 TEST(ParticleMiracleMaths, ABoltLooksForTargetsInACone)
 {
 	const glm::vec3 origin {0.0f, 10.0f, 0.0f};
-	const float north = std::numbers::pi_v<float> / 2.0f;
+	// Heading north: its cosine is about 0 and its sine 1
+	const float cosNorth = 0.0f;
+	const float sinNorth = 1.0f;
 	const float cosHalf = std::cos(std::numbers::pi_v<float> / 4.0f);
-	EXPECT_TRUE(maths::InStrikeCone(origin, north, cosHalf, {1.0f, 0.0f, 20.0f}));
-	EXPECT_FALSE(maths::InStrikeCone(origin, north, cosHalf, {20.0f, 0.0f, 1.0f}));
-	EXPECT_FALSE(maths::InStrikeCone(origin, north, cosHalf, {0.0f, 0.0f, -20.0f}));
+	EXPECT_TRUE(maths::InStrikeCone(origin, cosNorth, sinNorth, cosHalf, {1.0f, 0.0f, 20.0f}));
+	EXPECT_FALSE(maths::InStrikeCone(origin, cosNorth, sinNorth, cosHalf, {20.0f, 0.0f, 1.0f}));
+	EXPECT_FALSE(maths::InStrikeCone(origin, cosNorth, sinNorth, cosHalf, {0.0f, 0.0f, -20.0f}));
+	// A thing at the hand itself is not in front of it
+	EXPECT_FALSE(maths::InStrikeCone(origin, cosNorth, sinNorth, cosHalf, {0.0f, 3.0f, 0.0f}));
 	EXPECT_EQ(maths::StrikesAtOnce(10, 3), 2);
 	EXPECT_EQ(maths::StrikesAtOnce(10, 50), 10);
 	EXPECT_EQ(maths::StrikesAtOnce(10, 0), 0);
@@ -294,9 +298,9 @@ TEST(ParticleMiracleMaths, AForkSplitsItsTargetsByWhichSideOfTheSplitTheyLie)
 	const auto lopsided = maths::SplitTargets(beyond, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 30.0f}, {0.0f, 0.0f, 10.0f});
 	EXPECT_EQ(lopsided.ahead.size(), 1u);
 	EXPECT_EQ(lopsided.behind.size(), 1u);
-	EXPECT_NEAR(maths::ForkJointScale(2.0f, 0, 0.0f), 2.0f, k_Epsilon);
-	EXPECT_NEAR(maths::ForkJointScale(2.0f, 0, 1.0f), 1.0f, k_Epsilon);
-	EXPECT_NEAR(maths::ForkJointScale(2.0f, 1, 0.0f), 1.0f, k_Epsilon);
+	EXPECT_NEAR(maths::ForkJointScale(2.0f, 0, 0, 0.25f), 2.0f, k_Epsilon);
+	EXPECT_NEAR(maths::ForkJointScale(2.0f, 0, 4, 0.25f), 1.0f, k_Epsilon);
+	EXPECT_NEAR(maths::ForkJointScale(2.0f, 1, 0, 0.25f), 1.0f, k_Epsilon);
 }
 
 TEST(ParticleMiracleMaths, AShieldIsEnteredAtItsSurfaceAndBouncesWhatStrikesIt)
