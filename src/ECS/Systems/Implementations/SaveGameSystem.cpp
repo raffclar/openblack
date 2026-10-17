@@ -45,10 +45,10 @@
 #include "Creature/CreatureSaveState.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
-#include "ECS/Components/CreatureCreedPowers.h"
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFizz.h"
+#include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -63,6 +63,7 @@
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
 #include "ECS/SaveGameFiles.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -364,11 +365,12 @@ gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, ui
 	record.alignment = AlignmentToSave(body);
 	record.autoScale = body.autoScale.has_value() ? 1 : 0;
 	record.autoScaleShare = body.autoScale.value_or(0.0f);
-	if (const auto* creed = registry.TryGet<const CreatureCreedPowers>(entity))
+	if (const auto* glows = registry.TryGet<const CreatureHandGlows>(entity))
 	{
-		for (size_t glow = 0; glow < record.creedPowers.size(); ++glow)
+		for (size_t place = 0; place < record.creedPowers.size(); ++place)
 		{
-			record.creedPowers.at(glow) = {.scale = creed->glows.at(glow).scale, .power = creed->glows.at(glow).power};
+			const auto kept = creature_hand_glow::SavedPowerOf(glows->glows, static_cast<creature_hand_glow::Place>(place));
+			record.creedPowers.at(place) = {.scale = kept.scale, .power = kept.power};
 		}
 	}
 
@@ -576,11 +578,14 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Saved
 	body.size = record.size;
 	body.alignment = record.alignment;
 	body.autoScale = record.autoScale != 0 ? std::optional(record.autoScaleShare) : std::nullopt;
-	auto& creed = registry.AllOf<CreatureCreedPowers>(entity) ? registry.Get<CreatureCreedPowers>(entity)
-	                                                          : registry.Assign<CreatureCreedPowers>(entity);
-	for (size_t glow = 0; glow < record.creedPowers.size(); ++glow)
+	// Last, each place gets its saved creed glow in turn. The creature hums when a glow has power.
+	std::array<creature_hand_glow::SavedPower, creature_hand_glow::k_PlaceCount> creed {};
+	std::ranges::transform(record.creedPowers, creed.begin(), [](const gamesave::CreedPower& kept) {
+		return creature_hand_glow::SavedPower {.scale = kept.scale, .power = kept.power};
+	});
+	if (Locator::creatureAnimationSystem::has_value())
 	{
-		creed.glows.at(glow) = {.scale = record.creedPowers.at(glow).scale, .power = record.creedPowers.at(glow).power};
+		Locator::creatureAnimationSystem::value().LoadCreedPowers(entity, creed);
 	}
 
 	// The mind file's physique and mind come over the record's values. When the mind file is missing or empty, the

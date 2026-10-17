@@ -1229,7 +1229,26 @@ void CreatureAnimationSystem::SetCreedPower(entt::entity creature, creature_hand
 	}
 	auto& glows = registry.AllOf<CreatureHandGlows>(creature) ? registry.Get<CreatureHandGlows>(creature)
 	                                                          : registry.Assign<CreatureHandGlows>(creature);
-	const auto hum = creature_hand_glow::SetCreedPower(glows.glows, place, scale, power);
+	ApplyHum(creature, creature_hand_glow::SetCreedPower(glows.glows, place, scale, power));
+}
+
+void CreatureAnimationSystem::LoadCreedPowers(
+    entt::entity creature, std::span<const creature_hand_glow::SavedPower, creature_hand_glow::k_PlaceCount> powers)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return;
+	}
+	auto& glows = registry.AllOf<CreatureHandGlows>(creature) ? registry.Get<CreatureHandGlows>(creature)
+	                                                          : registry.Assign<CreatureHandGlows>(creature);
+	const auto hum = creature_hand_glow::LoadCreedPowers(glows.glows, powers);
+	glows.placed = {};
+	ApplyHum(creature, hum);
+}
+
+void CreatureAnimationSystem::ApplyHum(entt::entity creature, creature_hand_glow::Hum hum)
+{
 	if (hum == creature_hand_glow::Hum::Unchanged || !Locator::soundTagSystem::has_value())
 	{
 		return;

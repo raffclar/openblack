@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <limits>
 #include <vector>
@@ -137,6 +138,60 @@ TEST(CreatureHandGlow, TheHumStartsAndStopsOnlyWhenTheGlowsGainOrLoseAllPower)
 	// A glow that an animation event gave counts as power before the script's change
 	creature_hand_glow::Set(glows, Place::Circling, 1.0f, 2.0f);
 	EXPECT_EQ(creature_hand_glow::SetCreedPower(glows, Place::LeftHand, 1.0f, 1.0f), Hum::Unchanged);
+}
+
+TEST(CreatureHandGlow, ASaveKeepsTheScaleAndThePowerOfEachPlaceAndZeroForNoGlow)
+{
+	creature_hand_glow::Glows glows;
+	creature_hand_glow::Set(glows, Place::Belly, 0.7f, -1.0f);
+	EXPECT_EQ(creature_hand_glow::SavedPowerOf(glows, Place::Belly),
+	          (creature_hand_glow::SavedPower {.scale = 0.7f, .power = -1.0f}));
+	EXPECT_EQ(creature_hand_glow::SavedPowerOf(glows, Place::LeftHand), creature_hand_glow::SavedPower {});
+}
+
+TEST(CreatureHandGlow, ALoadStartsWithNoGlowsAndGivesEachPlaceItsSavedPower)
+{
+	using creature_hand_glow::Hum;
+	using creature_hand_glow::SavedPower;
+	constexpr std::array<SavedPower, creature_hand_glow::k_PlaceCount> k_Saved {
+	    SavedPower {.scale = 1.0f, .power = 2.0f},
+	    SavedPower {},
+	    SavedPower {.scale = 3.0f, .power = -0.5f},
+	    SavedPower {.scale = 5.0f, .power = 0.1f},
+	};
+
+	// A creature with no glows gets the saved glows and starts to hum
+	creature_hand_glow::Glows glows;
+	EXPECT_EQ(creature_hand_glow::LoadCreedPowers(glows, k_Saved), Hum::Start);
+	ASSERT_TRUE(glows.at(0).has_value());
+	EXPECT_EQ(glows.at(0)->scale, 1.0f);
+	EXPECT_EQ(glows.at(0)->power, 2.0f);
+	EXPECT_FALSE(glows.at(1).has_value());
+	ASSERT_TRUE(glows.at(2).has_value());
+	EXPECT_EQ(glows.at(2)->power, -0.5f);
+	ASSERT_TRUE(glows.at(3).has_value());
+	// Each glow is new, so the circling glow has not turned and no texture has slid
+	EXPECT_EQ(glows.at(3)->turn, 0.0f);
+	EXPECT_EQ(glows.at(3)->slide, glm::vec2(0.0f));
+
+	// The load removes the glows that the creature had before, and the hum continues
+	creature_hand_glow::Set(glows, Place::Belly, 1.0f, 1.0f);
+	glows.at(3)->turn = 2.0f;
+	EXPECT_EQ(creature_hand_glow::LoadCreedPowers(glows, k_Saved), Hum::Unchanged);
+	EXPECT_FALSE(glows.at(1).has_value());
+	EXPECT_EQ(glows.at(3)->turn, 0.0f);
+
+	// A save with no power stops the hum and leaves no glows
+	constexpr std::array<SavedPower, creature_hand_glow::k_PlaceCount> k_None {};
+	EXPECT_EQ(creature_hand_glow::LoadCreedPowers(glows, k_None), Hum::Stop);
+	EXPECT_TRUE(std::ranges::none_of(glows, [](const auto& glow) { return glow.has_value(); }));
+	EXPECT_EQ(creature_hand_glow::LoadCreedPowers(glows, k_None), Hum::Unchanged);
+
+	// The load also restores a glow with a power below 0, but the creature does not hum
+	constexpr std::array<SavedPower, creature_hand_glow::k_PlaceCount> k_Negative {
+	    SavedPower {}, SavedPower {.scale = 1.0f, .power = -1.0f}, SavedPower {}, SavedPower {}};
+	EXPECT_EQ(creature_hand_glow::LoadCreedPowers(glows, k_Negative), Hum::Unchanged);
+	EXPECT_TRUE(glows.at(1).has_value());
 }
 
 TEST(CreatureHandGlow, TheCreedEventsSetTheLeftHandThenTheRightHandThenTheBelly)
