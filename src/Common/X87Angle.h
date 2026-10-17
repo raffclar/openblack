@@ -9,6 +9,10 @@
 
 #pragma once
 
+#include <array>
+
+#include <glm/vec3.hpp>
+
 #include "Common/X87.h"
 
 /// The game's angle of a vector, bit for bit.
@@ -71,6 +75,48 @@ inline constexpr double k_HalfTurn = static_cast<double>(3.1415927f);
 		return 0.0;
 	}
 	return GameAtan2(x, -z);
+}
+
+/// The game's turn by three angles: about y, then about x, then about z. The result is the three rows: where the model's
+/// x, y and z axes go. The game keeps the cosine about x and the sine about z as floats, and the other cosines and sines
+/// wide, and rounds each product.
+[[nodiscard]] inline std::array<glm::vec3, 3> GameTurnYxz(float yAngle, float xAngle, float zAngle)
+{
+	const double cy = Cos(yAngle);
+	const double sy = Sin(yAngle);
+	const float cx = RoundToFloat(Cos(xAngle));
+	const double sx = Sin(xAngle);
+	const double cz = Cos(zAngle);
+	const float sz = RoundToFloat(Sin(zAngle));
+	const float a = Mul(cz, cy);
+	const float b = Mul(sz, sx);
+	const float c = Mul(cz, sy);
+	return {
+	    glm::vec3(a - Mul(b, sy), -(sz * cx), Mul(b, cy) + c),
+	    glm::vec3(Mul(c, sx) + Mul(sz, cy), Mul(cz, cx), Mul(sz, sy) - Mul(a, sx)),
+	    glm::vec3(-Mul(cx, sy), RoundToFloat(sx), Mul(cx, cy)),
+	};
+}
+
+/// The game's angles of a turn, taken off one at a time: the angle about y from the third row, then the angle about x
+/// from that row turned back by y, then the angle about z from the first row turned back by y and x. `first` and
+/// `third` are the rows of where the model's x and z axes go. The result is (x, y, z), each rounded to a float as the
+/// game stores it.
+[[nodiscard]] inline glm::vec3 GameAnglesYxz(const glm::vec3& first, const glm::vec3& third)
+{
+	const double y = GameAtan2(-third.x, third.z);
+	// The cosine is kept as a float, the sine stays wide
+	const float cosY = RoundToFloat(Cos(-y));
+	const double sinY = Sin(-y);
+	const float firstX = (cosY * first.x) - Mul(first.z, sinY);
+	const float firstZ = (first.z * cosY) + Mul(sinY, first.x);
+	const float across = Mul(sinY, third.x) + (cosY * third.z);
+	const double x = GameAtan2(third.y, across);
+	const float cosX = RoundToFloat(Cos(-x));
+	const double sinX = Sin(-x);
+	const float lift = Mul(sinX, firstZ) + (cosX * first.y);
+	const double z = GameAtan2(-lift, firstX);
+	return {RoundToFloat(x), RoundToFloat(y), RoundToFloat(z)};
 }
 
 } // namespace openblack::x87

@@ -16,11 +16,14 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
+
 using namespace openblack;
 
 float creature_pointing::AngleOf(glm::vec2 direction)
 {
-	return std::atan2(direction.x, -direction.y);
+	return x87::RoundToFloat(x87::GameHeadingOf(direction.x, direction.y));
 }
 
 float creature_pointing::Wrap(float angle)
@@ -53,7 +56,8 @@ creature_pointing::Aim creature_pointing::AimAt(glm::vec3 origin, glm::vec2 faci
 
 float creature_pointing::TurnAngle(glm::vec3 head, glm::vec2 facing, glm::vec3 target)
 {
-	return Wrap(AngleOf({target.x - head.x, target.z - head.z}) - AngleOf(facing));
+	// The heading to the target stays wide into the subtraction
+	return Wrap(x87::Sub(x87::GameHeadingOf(target.x - head.x, target.z - head.z), AngleOf(facing)));
 }
 
 bool creature_pointing::PointsWithLeft(float turnAngle, std::optional<bool> heldInLeft)

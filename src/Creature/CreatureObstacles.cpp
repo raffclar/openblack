@@ -17,6 +17,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/X87.h"
+#include "Common/X87Angle.h"
 
 using namespace openblack;
 using namespace openblack::creature_obstacles;
@@ -317,21 +318,7 @@ PlacementRows creature_obstacles::UprightPlacement(float yAngle, float scale)
 
 PlacementRows creature_obstacles::LeaningPlacement(float yAngle, float xAngle, float zAngle, float scale)
 {
-	// The cosines and sines stay wide, except the two that the game stores as floats
-	const double cy = x87::Cos(yAngle);
-	const double sy = x87::Sin(yAngle);
-	const float cx = x87::RoundToFloat(x87::Cos(xAngle));
-	const double sx = x87::Sin(xAngle);
-	const double cz = x87::Cos(zAngle);
-	const float sz = x87::RoundToFloat(x87::Sin(zAngle));
-	const float a = x87::Mul(cz, cy);
-	const float b = x87::Mul(sz, sx);
-	const float c = x87::Mul(cz, sy);
-	PlacementRows rows {
-	    glm::vec3(a - x87::Mul(b, sy), -(sz * cx), x87::Mul(b, cy) + c),
-	    glm::vec3(x87::Mul(c, sx) + x87::Mul(sz, cy), x87::Mul(cz, cx), x87::Mul(sz, sy) - x87::Mul(a, sx)),
-	    glm::vec3(-x87::Mul(cx, sy), x87::RoundToFloat(sx), x87::Mul(cx, cy)),
-	};
+	auto rows = x87::GameTurnYxz(yAngle, xAngle, zAngle);
 	if (scale != 1.0f)
 	{
 		for (auto& row : rows)

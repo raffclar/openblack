@@ -19,6 +19,8 @@
 #include <glm/vec2.hpp>
 
 #include "Body.h"
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
 
 using namespace openblack;
 using namespace openblack::physics;
@@ -28,8 +30,6 @@ namespace
 {
 constexpr float k_Pi = std::numbers::pi_v<float>;
 constexpr float k_TwoPi = 2.0f * k_Pi;
-/// A direction shorter than this across the land has no heading
-constexpr float k_HeadingLeast = 1e-6f;
 /// A thing nearer than it flies in this many seconds is too near to stand and look at
 constexpr float k_RunSeconds = 2.0f;
 } // namespace
@@ -68,11 +68,8 @@ glm::mat3 living::HeadingAxes(float heading)
 
 float living::HeadingOf(glm::vec3 axis)
 {
-	if (!(axis.x * axis.x + axis.z * axis.z > k_HeadingLeast))
-	{
-		return 0.0f;
-	}
-	return std::atan2(axis.x, -axis.z);
+	// The game's own heading of a direction, with the same least length
+	return x87::RoundToFloat(x87::GameHeadingOf(axis.x, axis.z));
 }
 
 float living::WrapHeading(float radians)

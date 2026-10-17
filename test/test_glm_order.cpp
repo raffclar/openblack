@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 
 #include "Camera/ScriptCameraModel.h"
+#include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
@@ -187,4 +188,29 @@ TEST(GlmOrder, ScriptCameraPullsIntoTheWorldWithYThenXThenZ)
 	EXPECT_EQ(Bits(pulled->x), Bits((fromCentre.x * scale) + k_WorldCentre));
 	EXPECT_EQ(Bits(pulled->y), Bits(fromCentre.y * scale));
 	EXPECT_EQ(Bits(pulled->z), Bits((fromCentre.z * scale) + k_WorldCentre));
+}
+
+TEST(GlmOrder, GameAnglesUndoTheGameTurn)
+{
+	const float y = 0.6f;
+	const float x = -0.3f;
+	const float z = 0.2f;
+	const auto rows = x87::GameTurnYxz(y, x, z);
+	const auto angles = x87::GameAnglesYxz(rows[0], rows[2]);
+	EXPECT_NEAR(angles.x, x, 1e-6f);
+	EXPECT_NEAR(angles.y, y, 1e-6f);
+	EXPECT_NEAR(angles.z, z, 1e-6f);
+	// The angle about y is the game's angle of the third row, rounded to a float
+	EXPECT_EQ(Bits(angles.y), Bits(x87::RoundToFloat(x87::GameAtan2(-rows[2].x, rows[2].z))));
+}
+
+TEST(GlmOrder, GameTurnRoundsEachProduct)
+{
+	const auto rows = x87::GameTurnYxz(0.6f, -0.3f, 0.2f);
+	const double sx = std::sin(static_cast<double>(-0.3f));
+	const float sz = static_cast<float>(std::sin(static_cast<double>(0.2f)));
+	// The middle of the third row is the sine about x, rounded; the first row's middle is the sine about z times the
+	// cosine about x, both floats
+	EXPECT_EQ(Bits(rows[2].y), Bits(static_cast<float>(sx)));
+	EXPECT_EQ(Bits(rows[0].y), Bits(-(sz * static_cast<float>(std::cos(static_cast<double>(-0.3f))))));
 }
