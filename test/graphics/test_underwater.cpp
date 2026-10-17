@@ -249,8 +249,8 @@ TEST(Underwater, AStormMakesTheWavesHigher)
 		stormHighest = std::max(stormHighest, std::abs(underwater::WavesAt({x, 0.0f}, 3.0f, storm).height));
 	}
 	EXPECT_GT(stormHighest, calmHighest * 2.0f);
-	// The open sea on a calm day: crests of some metres, not more than eight
-	EXPECT_LT(calmHighest, underwater::Metres(8.0f));
+	// The open sea on a calm day: crests of some metres, not more than sixteen
+	EXPECT_LT(calmHighest, underwater::Metres(16.0f));
 	EXPECT_GT(calmHighest, underwater::Metres(0.8f));
 	// The slope agrees with the height's change along x
 	const auto here = underwater::WavesAt({10.0f, 5.0f}, 2.0f, calm);
@@ -1156,7 +1156,7 @@ TEST(UnderwaterQuality, AProfileGoesToTheShadersAsTwoVectors)
 	const auto pond = underwater::ProfileUniform(underwater::k_PondProfile);
 	EXPECT_FLOAT_EQ(pond.at(0).x, underwater::k_PondProfile.absorption.x);
 	EXPECT_FLOAT_EQ(pond.at(1).w, underwater::k_PondProfile.roughness);
-	// A pond takes the blue first and has no waves
-	EXPECT_GT(underwater::k_PondProfile.absorption.z, underwater::k_PondProfile.absorption.x);
+	// A pond takes the red first (green-teal water) and has no waves
+	EXPECT_GT(underwater::k_PondProfile.absorption.x, underwater::k_PondProfile.absorption.y);
 	EXPECT_FLOAT_EQ(underwater::k_PondProfile.waveScale, 0.0f);
 }

@@ -248,11 +248,12 @@ inline constexpr WaterProfile k_SeaProfile {.absorption = {0.085f, 0.032f, 0.018
                                             .reflection = 1.0f,
                                             .roughness = 0.06f,
                                             .waveScale = 1.0f};
-/// A still pond: brown water that holds what falls in it and takes the blue first, smooth as a mirror, no waves
-inline constexpr WaterProfile k_PondProfile {.absorption = {0.45f, 0.55f, 0.8f},
-                                             .scatter = {0.07f, 0.08f, 0.04f},
+/// A still pond: murky green-teal water that takes the red first and holds what falls in it, almost smooth (its
+/// reflections are soft), no waves
+inline constexpr WaterProfile k_PondProfile {.absorption = {0.55f, 0.35f, 0.42f},
+                                             .scatter = {0.035f, 0.085f, 0.075f},
                                              .reflection = 1.0f,
-                                             .roughness = 0.025f,
+                                             .roughness = 0.07f,
                                              .waveScale = 0.0f};
 /// A profile as the shaders take it: [0] xyz the absorption, w the reflection; [1] xyz the scatter, w the roughness
 [[nodiscard]] std::array<glm::vec4, 2> ProfileUniform(const WaterProfile& profile);

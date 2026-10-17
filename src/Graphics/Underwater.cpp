@@ -95,10 +95,10 @@ glm::vec3 underwater::AmbientAtDepth(const glm::vec3& surfaceAmbient, float dept
 
 glm::vec3 underwater::ScatterColour(const glm::vec3& skyColour, const WaterLight& light)
 {
-	// The water scatters the blue and the green most, so its own colour is a deep blue green, lit by the sky and by the
-	// sun or the moon
-	constexpr glm::vec3 k_WaterTint {0.10f, 0.42f, 0.55f};
-	const glm::vec3 lit = skyColour * 0.55f + light.colour * 0.6f;
+	// The water scatters the green and the blue most, so its own colour is a dark green teal, lit by the sky and by the
+	// sun or the moon. It is darker than the sky, so the water does not look like a mirror of it.
+	constexpr glm::vec3 k_WaterTint {0.07f, 0.28f, 0.25f};
+	const glm::vec3 lit = skyColour * 0.5f + light.colour * 0.5f;
 	return lit * k_WaterTint;
 }
 
@@ -174,17 +174,18 @@ std::array<glm::vec4, underwater::k_WaveCount> underwater::WaveTable(const WaveS
 	table.at(0) = {k_SwellAngle, Metres(160.0f), Metres(1.0f) * swell, 0.7f};
 	table.at(1) = {k_SwellAngle + 0.15f, Metres(115.0f), Metres(0.7f) * swell, 3.9f};
 	// The wind sea: 75 m long to 5 m, each 0.78 of the one before, directions spread about the wind's. The steepness
-	// (height for each length) grows from 0.0035 on a calm day to 0.012 in a storm, and the short chop grows more.
+	// (height for each length) grows from 0.012 on a calm day to 0.025 in a storm, as a real wind sea's does.
 	constexpr std::array<float, 12> k_Spread {0.0f, 0.35f, -0.45f, 0.6f, -0.2f, 0.85f, -0.7f, 0.3f, -1.0f, 0.95f, -0.5f, 0.65f};
 	constexpr std::array<float, 12> k_Phase {0.0f, 1.7f, 4.1f, 2.3f, 5.2f, 0.9f, 3.3f, 6.0f, 1.2f, 4.6f, 2.8f, 5.7f};
-	const float steepness = 0.0035f + 0.0085f * waves.storm;
+	const float steepness = 0.012f + 0.013f * waves.storm;
 	for (size_t i = 0; i < 12; ++i)
 	{
 		const float length = Metres(75.0f) * std::pow(0.78f, static_cast<float>(i));
 		float height = length * steepness * on;
+		// The short chop is low, so that the waves read as broad and chunky; a storm makes it higher
 		if (length < Metres(12.0f))
 		{
-			height *= 1.0f + waves.storm;
+			height *= 0.6f * (1.0f + waves.storm);
 		}
 		table.at(i + 2) = {waves.windAngle + k_Spread.at(i), length, height, k_Phase.at(i)};
 	}

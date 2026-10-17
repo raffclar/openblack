@@ -78,9 +78,9 @@ struct RiverProfile
 
 /// The river's look: clear, shallow fresh water that takes out the red first, and a little green and brown scatter
 inline constexpr RiverProfile k_River {.absorption = {0.45f, 0.12f, 0.09f},
-                                       .scatter = {0.16f, 0.26f, 0.27f},
+                                       .scatter = {0.10f, 0.20f, 0.17f},
                                        .clarity = 0.9f,
-                                       .reflection = 0.9f,
+                                       .reflection = 0.6f,
                                        .waveScale = 1.0f,
                                        .windResponse = 0.6f};
 

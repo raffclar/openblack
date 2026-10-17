@@ -322,7 +322,7 @@ float UwWaves(vec2 p, float t, float range, out vec2 slope)
 // same as underwater::FilteredRoughness
 float UwRoughness(float variance)
 {
-	return min(sqrt(0.06f * 0.06f + max(variance, 0.0f)), 1.0f);
+	return min(sqrt(0.1f * 0.1f + max(variance, 0.0f)), 1.0f);
 }
 
 // How the highest of the waves is over the sea's level, for the crests' foam: half the sum of their heights
@@ -562,13 +562,18 @@ float UwSurfaceSheltered(vec2 xz, float t, vec4 footprint, vec4 shore, float she
 	float length2 = dot(shore.yz, shore.yz);
 	vec2 towards = length2 > 1e-6f ? shore.yz / sqrt(length2) : vec2_splat(0.0f);
 	slope = deepSlope * deep + towards * ((nearer - wave) / 0.5f);
-	// The ripples of a pond: low, short and slow
+	// The ripples of a pond: broad soft swells that bend the reflections, and short low ripples on them, slow
 	if (pond > 0.0f)
 	{
 		vec2 q = xz * 1.7f;
-		float a = 0.012f * pond;
+		float a = 0.008f * pond;
 		height += sin(q.x + t * 0.9f + sin(q.y * 0.6f + t * 0.3f)) * sin(q.y * 1.3f - t * 0.7f + sin(q.x * 0.5f)) * a;
 		slope += vec2(cos(q.x + t * 0.9f) * 1.7f, cos(q.y * 1.3f - t * 0.7f) * 2.2f) * a * 0.5f;
+		vec2 r = xz * 0.45f;
+		float b = 0.025f * pond;
+		height += sin(r.x + t * 0.4f) * sin(r.y * 0.8f - t * 0.33f) * b;
+		slope += vec2(cos(r.x + t * 0.4f) * sin(r.y * 0.8f - t * 0.33f) * 0.45f,
+		              sin(r.x + t * 0.4f) * cos(r.y * 0.8f - t * 0.33f) * 0.36f) * b;
 	}
 	// The wakes and the rings of the things in the water, and the hulls that push the water down
 	vec2 wakeSlope;

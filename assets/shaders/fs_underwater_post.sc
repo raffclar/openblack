@@ -410,12 +410,12 @@ vec3 EnvironmentReflection(vec3 p, vec3 r, float roughness)
 	// A rough surface takes four more samples round the middle one, as far out as the cone of the rough surface
 	vec3 side = normalize(cross(lookup, abs(lookup.y) < 0.9f ? vec3(0.0f, 1.0f, 0.0f) : vec3(1.0f, 0.0f, 0.0f)));
 	vec3 up = cross(side, lookup);
-	float spread = min(roughness, 0.6f) * 0.6f;
+	// Even calm water bends the far reflection a little: it is always soft, never a sharp mirror of the far scene
+	float spread = max(min(roughness, 0.6f), 0.15f) * 0.6f;
 	vec3 colour = vec3_splat(0.0f);
 	if (met)
 	{
 		colour = textureCubeLod(s_environment, lookup, 0.0f).rgb;
-		if (roughness > 0.1f)
 		{
 			colour += textureCubeLod(s_environment, AboveHorizon(lookup + side * spread), 0.0f).rgb;
 			colour += textureCubeLod(s_environment, AboveHorizon(lookup - side * spread), 0.0f).rgb;
@@ -428,7 +428,6 @@ vec3 EnvironmentReflection(vec3 p, vec3 r, float roughness)
 	{
 		// A ray that meets nothing goes to the sky
 		colour = textureCubeLod(s_environmentSky, lookup, 0.0f).rgb;
-		if (roughness > 0.1f)
 		{
 			colour += textureCubeLod(s_environmentSky, AboveHorizon(lookup + side * spread), 0.0f).rgb;
 			colour += textureCubeLod(s_environmentSky, AboveHorizon(lookup - side * spread), 0.0f).rgb;
@@ -730,7 +729,7 @@ void main()
 		vec4 shore;
 		float slopeVariance;
 		float toSurface = RayToSurfaceFiltered(eye, direction, t, surfaceSlope, face, shore, slopeVariance);
-		float roughness = UwRoughness(slopeVariance);
+		float roughness = UwRoughness(slopeVariance) + 0.05f * smoothstep(25.0f, 160.0f, toSurface);
 		float waterTop = eye.y + direction.y * toSurface;
 		float waterDepth = waterTop - shore.w;
 		float lift = waterTop - u_uwParams.z;
@@ -745,6 +744,16 @@ void main()
 			vec2 shownSlope = surfaceSlope + ring.xy + strike.xy;
 			vec3 normal = u_uwSea.x > 0.5f ? normalize(vec3(-shownSlope.x, 1.0f, -shownSlope.y))
 			                               : UwSurfaceNormalOf(shownSlope, toSurface);
+			// The small ripples on the waves, too small for the sum of waves: they break up the reflection near the eye,
+			// and far away they become roughness
+			float near = 1.0f - smoothstep(25.0f, 160.0f, toSurface);
+			if (near > 0.0f)
+			{
+				vec2 dq = surfacePoint.xz * 0.9f + vec2(t * 0.35f, t * 0.27f);
+				float n0 = UwNoise(dq);
+				vec2 ripple = vec2(UwNoise(dq + vec2(0.15f, 0.0f)) - n0, UwNoise(dq + vec2(0.0f, 0.15f)) - n0) / 0.15f;
+				normal = normalize(normal + vec3(-ripple.x, 0.0f, -ripple.y) * 0.05f * near);
+			}
 			// How deep the water is over what the pixel shows, and over the ground under the surface
 			float thickness = farFloor ? 160.0f : waterTop - world.y;
 			float cliff = UwShoreCliff(shore);
@@ -802,11 +811,25 @@ void main()
 			// The scene in the screen already has the flash of the lightning: the sky and the far scene get it here
 			mirror += LightningInSky(reflected) * (1.0f - screenShare);
 			float facing = clamp(dot(-direction, normal), 0.0f, 1.0f);
-			float fresnel = 0.02f + 0.98f * pow(max(1.0f - facing, 0.0f), 5.0f);
+			// Water is not a metal: Schlick's reflection with the water's 0.02 head on, and less of it on rough water,
+			// where the small waves send part of the reflection away from the eye
+			float fresnel = (0.02f + 0.98f * pow(max(1.0f - facing, 0.0f), 5.0f)) * mix(1.0f, 0.65f, clamp(roughness * 2.5f, 0.0f, 1.0f));
 			// The clouds' and the hills' shadows take away the glint and some of the light in the water
 			float cloudShade = CloudShadeAt(surfacePoint.xz) * SunVisibilityAt(surfacePoint.xz);
 			water *= mix(0.8f, 1.0f, cloudShade);
+			// Thick water: it reads green-teal, lighter on the crests and darker in the troughs
+			float waveLift = clamp(lift / max(UwWaveTop(), 1e-3f) * 0.5f + 0.5f, 0.0f, 1.0f);
+			water = mix(water, water * vec3(0.85f, 1.05f, 0.92f), 0.6f * (1.0f - pond)) * mix(0.82f, 1.15f, waveLift);
 			colour = mix(water, mirror, fresnel);
+			// The light of the sun shines through the thin crests and comes out in the water's colour, most when the eye
+			// looks towards the sun
+			vec3 toSun = u_uwAbove.xyz;
+			float shineThrough = pow(clamp(dot(direction, normalize(toSun + normal * 0.4f)), 0.0f, 1.0f), 4.0f);
+			colour += u_uwLightColour.rgb * u_uwLightColour.w * vec3(0.30f, 0.62f, 0.40f) * shineThrough *
+			          (0.3f + 0.7f * waveLift * waveLift) * (1.0f - pond) * cloudShade * 0.6f;
+			// A broad soft sheen on the faces of the waves round the glint
+			colour += u_uwLightColour.rgb * u_uwLightColour.w * cloudShade * 0.12f *
+			          pow(max(dot(reflected, toSun), 0.0f), 12.0f) * (1.0f - 0.5f * pond);
 			// The glint of the sun or the moon on the waves
 			float glint = u_uwSea.x > 0.5f ? min(SeaGlint(normal, -direction, u_uwAbove.xyz, roughness), 12.0f)
 			                               : pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f) * 3.0f;

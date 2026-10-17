@@ -299,13 +299,14 @@ void main()
 	sky = mix(banks, sky, smoothstep(0.08f, 0.55f, reflected.y));
 	float cosine = clamp(dot(-view, normal), 0.0f, 1.0f);
 	float fresnel = 0.02f + 0.98f * pow(1.0f - cosine, 5.0f);
-	// Small waves too fine for a pixel to show still reflect the sky, more on rough water
+	// Small waves too fine for a pixel to show still reflect a little of the sky, a little more on rough water and far
+	// away; looking down, the river shows mostly its bed and its own colour
 	float far = smoothstep(40.0f, 260.0f, length(toPoint));
-	float reflection = max(fresnel, 0.06f + 0.12f * fast + 0.25f * far) * u_streamProfile[1].w;
+	float reflection = max(fresnel, 0.03f + 0.05f * fast + 0.06f * far) * u_streamProfile[1].w;
 	vec3 colour = mix(below, sky, reflection);
 	// The sun's glint: sharp on the glassy pools, wide and broken on the rough water
-	float shine = mix(600.0f, 60.0f, fast);
-	float glint = pow(max(dot(reflected, toLight), 0.0f), shine) * mix(6.0f, 2.0f, fast);
+	float shine = mix(150.0f, 40.0f, fast);
+	float glint = pow(max(dot(reflected, toLight), 0.0f), shine) * mix(2.5f, 1.2f, fast);
 	colour += u_uwLightColour.rgb * glint * u_uwLightColour.w;
 
 	// The white water: where the river is steep, over the rocks, at the banks of fast water, and in the field's foam.
