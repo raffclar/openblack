@@ -174,6 +174,9 @@ void Renderer::SetCloudUniforms(const ShaderProgram& program, const clouds::Clou
 	program.SetUniformValue("u_cloudAmbient", &uniforms.ambient);
 	program.SetUniformValue("u_cloudEye", &uniforms.eye);
 	program.SetUniformValue("u_cloudStrike", &uniforms.strike);
+	// EXPERIMENT (not for merge): the sky's dome, which writes its depth, is the sky
+	const glm::vec4 noDome {0.0f, 0.0f, 1e9f, 1e9f};
+	program.SetUniformValue("u_hazeDome", _atmosphereFrame.has_value() ? &_atmosphereFrame->skyDome : &noDome);
 	program.SetUniformArray("u_cloudStorms", uniforms.storms.data(), static_cast<uint16_t>(uniforms.storms.size()));
 	program.SetTextureSampler("s_cloudBase", 0, _clouds->BaseNoise());
 	program.SetTextureSampler("s_cloudDetail", 1, _clouds->DetailNoise());

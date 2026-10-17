@@ -57,7 +57,7 @@ void main()
 	vec4 clouds = sum / weights;
 	// A scene nearer than the lowest cloud has no cloud in front of it: the half size's pixels round a near hill's edge
 	// can hold the sky's clouds, which would show as a bright line along the hill
-	if (here < CloudNearestAlong(dir))
+	if (here < CloudNearestAlong(dir) && !CloudOnDome(dir, here))
 	{
 		clouds = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	}
