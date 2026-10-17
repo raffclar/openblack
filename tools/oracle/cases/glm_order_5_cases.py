@@ -15,6 +15,10 @@
 - mesh_points.txt: the points of a mesh moved by a matrix
 - surface_sway.txt: a surface of revolution swayed: its points turned by ring and its texture slid
 - surface_normals.txt: the normals of a small mesh, each the sum of its faces' unit normals, made unit again
+- temple_ray.txt: the temple room camera's cast of the cursor against a room's walls and floor (the point on the near
+  plane comes from the game's own function, with the same camera)
+- trophy_place.txt: where the creature's room places a trophy: the point's axes made unit by the game, then turned a
+  quarter back about the x axis (worked here in floats from the game's FPU cosine and sine of the double angle)
 - glow_view_normal.txt: a corner's normal in the camera's frame as the glowing shell measures it: the rows of the
   matrix made unit by the 3D engine (the game's function), then summed by the normal in the order the shell's draw adds
   them (worked here in floats, as the draw function cannot be called alone)
@@ -45,6 +49,13 @@ SURFACE_SLIDE = 0x685F40  # thiscall (rule: most slide +0x60), (from, around, ri
 MESH_NORMALS = 0x6C9000  # thiscall (mesh: points +0x8, count +0x10, faces +0x6C, count +0x74, normals +0x80, count +0x88)
 NORMAL_COUNTS = 0xD4EDD8  # the static list of face counts: pointer, end, size; made once (flag 0xD4EDEC)
 NORMAL_COUNTS_MADE = 0xD4EDEC
+NEAR_POINT = 0x81B370  # fastcall-like (ECX screen point ints, EDX out), (depth): the pixel on the near plane
+TEMPLE_RAY = 0x795980  # thiscall (inner camera; normal out at +0x440), (x, y, room, distance, angle, height, floor, point)
+HALF_RES = 0xE839F0  # half the screen's width and height, floats
+NEAR_EXTENT = 0xC3812C  # half the near plane's width and height
+NEAR_CLIP = 0xE839E0
+CAMERA_AXES = 0xEA1D28  # the camera's 3x3 turn, rows
+CAMERA_EYE = 0xEA1DB8
 UNIT_ROWS = 0x7FB5C0  # thiscall (3x3 matrix): each row made unit by the engine's inverse square root
 MAKE_INVERSE_SQRT_TABLE = 0x8411D0
 ENGINE_ALLOC = 0x842CE0  # the 3D engine's allocation, for the inverse square root table
@@ -222,6 +233,77 @@ def view_normal_cases(oracle: Oracle) -> list[list[int]]:
     return rows
 
 
+def trophy_cases(oracle: Oracle) -> list[list[int]]:
+    import math
+    rng = random.Random(0x7409)
+    o = oracle
+    matrix = o.alloc(0x30)
+    angle = -1.5707963705062866
+    c = f32(math.cos(angle))
+    s = f32(math.sin(angle))
+    rows = []
+    for _ in range(600):
+        values = random_matrix(rng, 0.9, 0.05, 20.0, 0.0)[0:9]
+        o.write_u32(matrix, *values)
+        o.call(UNIT_ROWS, ecx=matrix)
+        u = [u2f(bits) for bits in o.read_f32_bits(matrix, 9)]
+        up = u[3:6]
+        forward = u[6:9]
+        turned_up = [f32(f32(c * up[k]) - f32(s * forward[k])) for k in range(3)]
+        turned_forward = [f32(f32(c * forward[k]) + f32(s * up[k])) for k in range(3)]
+        rows.append(values + [f2u(v) for v in u[0:3] + turned_up + turned_forward])
+    return rows
+
+
+def temple_ray_cases(oracle: Oracle) -> list[list[int]]:
+    import math
+    rng = random.Random(0x7E3A)
+    o = oracle
+    screen = o.alloc(8)
+    near = o.alloc(16)
+    camera = o.alloc(0x500)
+    room = o.alloc(0x20)
+    outs = o.alloc(0x40)
+    o.write_u32(HALF_RES, f2u(400.0), f2u(300.0))
+    rows = []
+    for index in range(1200):
+        near_clip = rng.choice([1.0, 0.5, rng.uniform(0.3, 2.0)])
+        o.write_u32(NEAR_CLIP, f2u(near_clip))
+        o.write_u32(NEAR_EXTENT, f2u(near_clip * 0.7002075), f2u(near_clip * 0.5251556))
+        yaw = rng.uniform(-math.pi, math.pi)
+        pitch = rng.uniform(-1.2, 0.6)
+        # Rows: right, up, ahead
+        ahead = [math.cos(pitch) * math.sin(yaw), math.sin(pitch), math.cos(pitch) * math.cos(yaw)]
+        right = [math.cos(yaw), 0.0, -math.sin(yaw)]
+        up = [ahead[1] * right[2] - ahead[2] * right[1], ahead[2] * right[0] - ahead[0] * right[2],
+              ahead[0] * right[1] - ahead[1] * right[0]]
+        o.write_u32(CAMERA_AXES, *[f2u(v) for v in right + up + ahead])
+        centre = [rng.uniform(-40, 40), rng.uniform(-5, 5), rng.uniform(-40, 40)] if index % 3 else [0.0, 0.0, 0.0]
+        radius = rng.uniform(15.0, 60.0)
+        eye = [centre[0] + rng.uniform(-0.8, 0.8) * radius, centre[1] + rng.uniform(1.0, 30.0),
+               centre[2] + rng.uniform(-0.8, 0.8) * radius]
+        if index % 7 == 0:
+            eye[0] += radius * 2.0  # outside the walls
+        eye_bits = [f2u(v) for v in eye]
+        o.write_u32(CAMERA_EYE, *eye_bits)
+        floor = 0 if index % 5 == 0 else 1
+        room_bits = [f2u(v) for v in centre] + [f2u(radius)]
+        o.write_u32(room, *room_bits, floor)
+        x = rng.randrange(0, 800)
+        y = rng.randrange(0, 600)
+        o.write_u32(screen, x, y)
+        o.call(NEAR_POINT, ecx=screen, edx=near, args=[0])
+        point = o.read_f32_bits(near, 3)
+        o.write(outs, bytes(0x40))
+        o.write_u32(camera + 0x440, 0x7FC00000, 0x7FC00000, 0x7FC00000)
+        r = o.call(TEMPLE_RAY, this=camera,
+                   args=[x, y, room, outs, outs + 4, outs + 8, outs + 0xC, outs + 0x10])
+        hit = r.eax & 0xFF
+        values = o.read_f32_bits(outs, 3) + [o.read_u32(outs + 0xC)[0] & 0xFF] + o.read_f32_bits(outs + 0x10, 3)
+        rows.append(eye_bits + point + room_bits + [floor, hit] + values + o.read_f32_bits(camera + 0x440, 3))
+    return rows
+
+
 def main() -> int:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "test" / "oracle" / "data"
     with Oracle() as oracle:
@@ -231,6 +313,8 @@ def main() -> int:
         sways = sway_cases(oracle)
         normals = normal_cases(oracle)
         views = view_normal_cases(oracle)
+        rays = temple_ray_cases(oracle)
+        trophies = trophy_cases(oracle)
     write_pinned(out / "skin_point.txt", "A point on a skinned creature mesh as it is posed",
                  ["the triangle's three vertices (before the bones), the three bones (rows, then the place), s and t",
                   "in; the point and the normal out"],
@@ -255,7 +339,16 @@ def main() -> int:
     write_pinned(out / "glow_view_normal.txt", "A corner's normal in the camera's frame for the glowing shell",
                  ["the matrix's rows and the normal in; the rows made unit by the game, summed by the normal, out"],
                  [f"m{i}" for i in range(9)] + ["nx", "ny", "nz", "vx", "vy", "vz"], views)
-    print(f"glow_view_normal {len(views)}, skin_point {len(points)}, engine_inverse {len(inverses)}, mesh_points {len(moved)}, "
+    write_pinned(out / "temple_ray.txt", "The temple room camera's cast of the cursor against a room",
+                 ["the eye, the point on the near plane, the room (centre, radius, whether it has a floor) in; whether",
+                  "it hits, the distance from the axis, the angle round, the height, whether on the floor, the point and",
+                  "the normal out (the normal is not a number where the cast does not write it)"],
+                 ["ex", "ey", "ez", "px", "py", "pz", "cx", "cy", "cz", "radius", "floor", "hit", "distance", "angle",
+                  "height", "onfloor", "hx", "hy", "hz", "nx", "ny", "nz"], rays)
+    write_pinned(out / "trophy_place.txt", "Where the creature's room places a trophy",
+                 ["the point's three axes in; the axes made unit and turned a quarter back out"],
+                 [f"m{i}" for i in range(9)] + [f"r{i}" for i in range(9)], trophies)
+    print(f"trophy_place {len(trophies)}, temple_ray {len(rays)}, glow_view_normal {len(views)}, skin_point {len(points)}, engine_inverse {len(inverses)}, mesh_points {len(moved)}, "
           f"surface_sway {len(sways)}, surface_normals {len(normals)}")
     return 0
 

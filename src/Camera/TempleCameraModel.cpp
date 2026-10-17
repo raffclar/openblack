@@ -29,6 +29,8 @@
 #include "Camera.h"
 #include "CameraLens.h"
 #include "Common/MachineClock.h"
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
@@ -220,11 +222,22 @@ std::optional<HitKind> KindOf(const std::optional<TempleCameraModel::RoomHit>& h
 }
 
 /// Turns a point about the room's axis, as the main room's camera does by its matrix
+/// A point turned about the vertical by an angle, as the game turns it: by a full matrix of the FPU's cosine and sine
+/// with a place of zero, so a part that comes to zero is a positive zero
 glm::vec3 TurnAbout(glm::vec3 point, float angle)
 {
-	const float cosine = std::cos(angle);
-	const float sine = std::sin(angle);
-	return {point.x * cosine - point.z * sine, point.y, point.x * sine + point.z * cosine};
+	const float cosine = x87::RoundToFloat(x87::Cos(angle));
+	const float sine = x87::RoundToFloat(x87::Sin(angle));
+	return {((((-sine) * point.z) + (0.0f * point.y)) + (cosine * point.x)) + 0.0f,
+	        (((0.0f * point.z) + point.y) + (0.0f * point.x)) + 0.0f,
+	        (((0.0f * point.y) + (cosine * point.z)) + (sine * point.x)) + 0.0f};
+}
+
+/// The point a share of the way from one point to another, as the game finds it: the way between times the share,
+/// then the start added
+glm::vec3 Between(glm::vec3 from, glm::vec3 to, float share)
+{
+	return ((to - from) * share) + from;
 }
 
 TempleCameraModel::Pose Mix(const TempleCameraModel::Pose& from, const TempleCameraModel::Pose& to, float amount)
@@ -246,35 +259,41 @@ TempleCameraModel::Cylinder TempleCameraModel::CylinderOf(Room room)
 	return {glm::vec3(0.0f), k_RoomRadius};
 }
 
-std::optional<TempleCameraModel::RoomHit> TempleCameraModel::RayCastRoom(glm::vec3 origin, glm::vec3 direction)
+std::optional<TempleCameraModel::RoomHit> TempleCameraModel::RayCastRoom(glm::vec3 eye, glm::vec3 nearPoint)
 {
-	return RayCastRoom(origin, direction, Cylinder {glm::vec3(0.0f), k_RoomRadius});
+	return RayCastRoom(eye, nearPoint, Cylinder {glm::vec3(0.0f), k_RoomRadius});
 }
 
-std::optional<TempleCameraModel::RoomHit> TempleCameraModel::RayCastRoom(glm::vec3 origin, glm::vec3 direction,
+std::optional<TempleCameraModel::RoomHit> TempleCameraModel::RayCastRoom(glm::vec3 eye, glm::vec3 nearPoint,
                                                                          const Cylinder& room)
 {
-	// The game casts into a room about the room's centre
-	origin -= room.centre;
+	// The game casts into a room about the room's centre: both points are taken about it first, then the way from the
+	// eye to the near plane's point
+	const auto origin = eye - room.centre;
+	const auto direction = (nearPoint - room.centre) - origin;
 	const float radius = room.radius;
 
 	// The floor, when the ray points at it enough
 	std::optional<float> floorDistance;
-	if (room.floor && std::abs(direction.y) > 0.01f && -origin.y / direction.y > 0.0f)
+	if (room.floor && std::abs(direction.y) > 0.01f)
 	{
-		floorDistance = -origin.y / direction.y;
+		if (const float t = -(origin.y / direction.y); t > 0.0f)
+		{
+			floorDistance = t;
+		}
 	}
 
 	// The walls, from outside them or within
-	const float a = direction.x * direction.x + direction.z * direction.z;
-	const float b = 2.0f * (origin.x * direction.x + origin.z * direction.z);
-	const float c = origin.x * origin.x + origin.z * origin.z - radius * radius;
-	const float discriminant = b * b - c * a * 4.0f;
+	const float a = (direction.z * direction.z) + (direction.x * direction.x);
+	const float halfB = (direction.z * origin.z) + (origin.x * direction.x);
+	const float b = halfB + halfB;
+	const float c = ((origin.z * origin.z) + (origin.x * origin.x)) - (radius * radius);
+	const float discriminant = (b * b) - ((c * a) * 4.0f);
 	std::optional<float> wallDistance;
 	if (discriminant > 0.0f)
 	{
 		const float root = std::sqrt(discriminant);
-		const float t = c >= 0.0f ? (-b - root) / (a + a) : (root - b) / (a + a);
+		const float t = (c >= 0.0f ? (-b - root) : (root - b)) / (a + a);
 		if (t > 0.0f)
 		{
 			wallDistance = t;
@@ -297,14 +316,24 @@ std::optional<TempleCameraModel::RoomHit> TempleCameraModel::RayCastRoom(glm::ve
 		return std::nullopt;
 	}
 
-	const auto point = origin + direction * t;
+	// The wall's normal is back along the ray, made one long with its squares added x, z, y
+	glm::vec3 normal {0.0f, 1.0f, 0.0f};
+	if (!onFloor)
+	{
+		normal = -direction;
+		if (normal != glm::vec3(0.0f))
+		{
+			normal = x87::Scaled<x87::SumOrder::Xzy>(normal);
+		}
+	}
+	const glm::vec3 point {(direction.x * t) + origin.x, (t * direction.y) + origin.y, (direction.z * t) + origin.z};
 	return RoomHit {
-	    .distance = std::sqrt(point.x * point.x + point.z * point.z),
-	    .angle = std::atan2(point.z, point.x),
+	    .distance = std::sqrt((point.z * point.z) + (point.x * point.x)),
+	    .angle = x87::RoundToFloat(x87::Atan2(point.z, point.x)),
 	    .height = point.y + room.centre.y,
 	    .floor = onFloor,
 	    .point = point + room.centre,
-	    .normal = onFloor ? glm::vec3(0.0f, 1.0f, 0.0f) : -glm::normalize(direction),
+	    .normal = normal,
 	};
 }
 
@@ -358,7 +387,27 @@ std::optional<TempleCameraModel::Room> TempleCameraModel::RoomBehindDoor(uint32_
 
 TempleCameraModel::Pose TempleCameraModel::OrbitPose(float yaw, float lean)
 {
-	return {TurnAbout(glm::mix(k_LowOrigin, k_HighOrigin, lean), yaw), TurnAbout(glm::mix(k_LowFocus, k_HighFocus, lean), yaw)};
+	return {TurnAbout(Between(k_LowOrigin, k_HighOrigin, lean), yaw), TurnAbout(Between(k_LowFocus, k_HighFocus, lean), yaw)};
+}
+
+glm::vec2 TempleCameraModel::MapYawAndPitch(glm::vec3 away)
+{
+	const auto direction = away != glm::vec3(0.0f) ? x87::Scaled<x87::SumOrder::Yzx>(away) : away;
+	const float across = std::sqrt((direction.z * direction.z) + (direction.x * direction.x));
+	return {x87::RoundToFloat(x87::Atan2(direction.z, direction.x)), x87::RoundToFloat(x87::Atan2(direction.y, across))};
+}
+
+glm::vec3 TempleCameraModel::MapAround(float yaw, float pitch)
+{
+	// The FPU's cosines and sines stay wide for the products
+	return {x87::Mul(x87::Cos(yaw), x87::Cos(pitch)), x87::RoundToFloat(x87::Sin(pitch)),
+	        x87::Mul(x87::Sin(yaw), x87::Cos(pitch))};
+}
+
+float TempleCameraModel::EdgeLeanStep(float dt, float ramp, float speed)
+{
+	// The FPU's cosine stays wide for the subtraction
+	return ((dt * 1.5f) * x87::Sub(1.0, x87::Cos(ramp * glm::pi<float>()))) * speed;
 }
 
 TempleCameraModel::Pose TempleCameraModel::TurnToDoor(const Pose& pose, uint32_t door)
@@ -563,14 +612,14 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 		const auto forward = camera.GetForward();
 		if (const float along = glm::dot(rayDirection, forward); along > 0.0f)
 		{
-			const auto ray = rayDirection * (k_NearClip / along);
+			const auto nearPoint = camera.GetOrigin() + rayDirection * (k_NearClip / along);
 			_cursorRay = Pose {camera.GetOrigin(), camera.GetOrigin() + rayDirection};
-			input.hit = RayCastRoom(camera.GetOrigin(), ray, CylinderOf(GetRoom()));
+			input.hit = RayCastRoom(camera.GetOrigin(), nearPoint, CylinderOf(GetRoom()));
 			// The doors back to the main room are on a ring about its centre
 			if (GetRoom() != Room::Main)
 			{
 				const float ringRadius = GetRoom() == Room::CreatureCave ? k_CreatureDoorRadius : k_PictureDoorRadius;
-				if (const auto ring = RayCastRoom(camera.GetOrigin(), ray,
+				if (const auto ring = RayCastRoom(camera.GetOrigin(), nearPoint,
 				                                  Cylinder {glm::vec3(0.0f), ringRadius, CylinderOf(GetRoom()).floor});
 				    ring.has_value())
 				{
@@ -798,7 +847,7 @@ void TempleCameraModel::UpdateOrbit(float dt, const Input& input)
 		if (_wasPressed)
 		{
 			_yawTarget = _yaw.GetValue() + turn;
-			_leanTarget += (input.mouse.y - _lastMouse.y) * dt * 0.03f * (1.0f - std::abs(input.mouseScreen.x));
+			_leanTarget += (((input.mouse.y - _lastMouse.y) * dt) * 0.06f) * (1.0f - std::abs(input.mouseScreen.x));
 		}
 		_lastMouse = input.mouse;
 	}
@@ -810,16 +859,14 @@ void TempleCameraModel::UpdateOrbit(float dt, const Input& input)
 		{
 			// The turn and tilt from the point to where the camera is
 			_mapFocus = _pressHit->point;
-			const auto away = _target.origin - _mapFocus;
-			const auto direction = glm::length(away) > 0.0f ? glm::normalize(away) : away;
-			_mapYaw = std::atan2(direction.z, direction.x);
-			_mapPitch = std::atan2(direction.y, glm::length(glm::vec2(direction.x, direction.z)));
+			const auto angles = MapYawAndPitch(_target.origin - _mapFocus);
+			_mapYaw = angles.x;
+			_mapPitch = angles.y;
 		}
 		const auto moved = (input.mouse - _pressMouse) / glm::max(input.screen, glm::vec2(1.0f));
 		const float yaw = _mapYaw - (moved.x * k_MapTurnPerScreen);
 		const float pitch = std::clamp(_mapPitch + (moved.y * k_MapTiltPerScreen), k_MapMinPitch, k_MapMaxPitch);
-		const auto around = glm::vec3(std::cos(pitch) * std::cos(yaw), std::sin(pitch), std::cos(pitch) * std::sin(yaw));
-		_subMeshLook = Pose {_mapFocus + (around * k_MapDistance), _mapFocus};
+		_subMeshLook = Pose {_mapFocus + (MapAround(yaw, pitch) * k_MapDistance), _mapFocus};
 		_subMeshZoom = std::min(_subMeshZoom + (dt * k_MapZoomSpeed), 1.0f);
 
 		if (input.button == 2 && !_leavingByMap)
@@ -834,14 +881,14 @@ void TempleCameraModel::UpdateOrbit(float dt, const Input& input)
 	if (input.button == 0)
 	{
 		const float edge = input.mouseScreen.y;
-		if (edge > 0.9f)
+		if (edge > 0.8f)
 		{
-			leanSpeed = (edge - 0.9f) * -0.9f;
+			leanSpeed = (edge - 0.8f) * -0.8f;
 			_edgeRamp += dt * 0.2f;
 		}
-		else if (edge < -0.9f)
+		else if (edge < -0.8f)
 		{
-			leanSpeed = (-edge - 0.9f) * 0.9f;
+			leanSpeed = (-edge - 0.8f) * 0.8f;
 			_edgeRamp += dt * 0.2f;
 		}
 		else if (KindOf(input.hit) == HitKind::Pool)
@@ -855,7 +902,7 @@ void TempleCameraModel::UpdateOrbit(float dt, const Input& input)
 		}
 		_edgeRamp = std::clamp(_edgeRamp, 0.0f, 1.0f);
 	}
-	_leanTarget += leanSpeed * dt * 1.5f * (1.0f - std::cos(_edgeRamp * glm::pi<float>()));
+	_leanTarget += EdgeLeanStep(dt, _edgeRamp, leanSpeed);
 
 	// The arrow keys turn and lean
 	if (actions.Get(BindableActionMap::MOVE_LEFT))

@@ -128,7 +128,8 @@ TEST(TempleCamera, FindsTheMainRoomsDoorsAroundItsWalls)
 	{
 		const float angle = static_cast<float>(door) * glm::quarter_pi<float>() + 0.0f;
 		const glm::vec3 direction {std::cos(angle), 0.0f, std::sin(angle)};
-		const auto hit = TempleCameraModel::RayCastRoom(glm::vec3(0.0f, 15.0f, 0.0f), direction * 0.2f);
+		const auto hit =
+		    TempleCameraModel::RayCastRoom(glm::vec3(0.0f, 15.0f, 0.0f), glm::vec3(0.0f, 15.0f, 0.0f) + direction * 0.2f);
 		ASSERT_TRUE(hit.has_value());
 		EXPECT_FALSE(hit->floor);
 		EXPECT_NEAR(hit->distance, TempleCameraModel::k_RoomRadius, 1e-3f);
@@ -138,13 +139,15 @@ TEST(TempleCamera, FindsTheMainRoomsDoorsAroundItsWalls)
 	}
 	// Between doors, and above them, there are none
 	const glm::vec3 between {std::cos(0.4f), 0.0f, std::sin(0.4f)};
-	EXPECT_FALSE(TempleCameraModel::DoorAt(*TempleCameraModel::RayCastRoom(glm::vec3(0.0f, 15.0f, 0.0f), between)));
-	EXPECT_FALSE(TempleCameraModel::DoorAt(*TempleCameraModel::RayCastRoom(glm::vec3(0.0f, 30.0f, 0.0f), glm::vec3(1, 0, 0))));
+	EXPECT_FALSE(TempleCameraModel::DoorAt(
+	    *TempleCameraModel::RayCastRoom(glm::vec3(0.0f, 15.0f, 0.0f), glm::vec3(0.0f, 15.0f, 0.0f) + between)));
+	EXPECT_FALSE(
+	    TempleCameraModel::DoorAt(*TempleCameraModel::RayCastRoom(glm::vec3(0.0f, 30.0f, 0.0f), glm::vec3(1.0f, 30.0f, 0.0f))));
 }
 
 TEST(TempleCamera, HitsTheFloorBelowAndLeadsThroughTheDoorsToTheRooms)
 {
-	const auto hit = TempleCameraModel::RayCastRoom(glm::vec3(0.0f, 10.0f, 20.0f), glm::vec3(0.0f, -0.2f, -0.05f));
+	const auto hit = TempleCameraModel::RayCastRoom(glm::vec3(0.0f, 10.0f, 20.0f), glm::vec3(0.0f, 9.8f, 19.95f));
 	ASSERT_TRUE(hit.has_value());
 	EXPECT_TRUE(hit->floor);
 	EXPECT_NEAR(hit->point.z, 17.5f, 1e-3f);
@@ -184,7 +187,7 @@ TEST(TempleCamera, ClickingADoorOnScreenFindsIt)
 	glm::vec3 rayDirection;
 	camera.DeprojectScreenToWorld(glm::vec2(screen) / k_Screen, rayOrigin, rayDirection);
 	const auto direction = rayDirection * (0.2f / glm::dot(rayDirection, camera.GetForward()));
-	const auto hit = TempleCameraModel::RayCastRoom(camera.GetOrigin(), direction);
+	const auto hit = TempleCameraModel::RayCastRoom(camera.GetOrigin(), camera.GetOrigin() + direction);
 	ASSERT_TRUE(hit.has_value());
 	EXPECT_NEAR(hit->height, 15.0f, 0.05f);
 	EXPECT_EQ(TempleCameraModel::DoorAt(*hit), 7u);
@@ -222,8 +225,8 @@ TEST(TempleCamera, CastsAgainstEachRoomsOwnWalls)
 {
 	// From the challenge room's centre, out along +x, to its walls 37 away
 	const auto room = TempleCameraModel::CylinderOf(TempleRoom::Challenge);
-	const auto hit =
-	    TempleCameraModel::RayCastRoom(room.centre + glm::vec3(0.0f, 10.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), room);
+	const auto hit = TempleCameraModel::RayCastRoom(room.centre + glm::vec3(0.0f, 10.0f, 0.0f),
+	                                                room.centre + glm::vec3(1.0f, 10.0f, 0.0f), room);
 	ASSERT_TRUE(hit.has_value());
 	EXPECT_NEAR(hit->distance, 37.0f, 1e-3f);
 	EXPECT_NEAR(hit->point.x, room.centre.x + 37.0f, 1e-3f);

@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Camera/TempleCameraModel.h"
 #include "Particles/ParticleMaths.h"
 #include "Particles/SurfaceOfRevolution.h"
 
@@ -66,4 +67,35 @@ TEST(GlmOrder5, AFusedBurstThrowsItsAtomsInTheGamesOrder)
 	EXPECT_EQ(Bits(velocity.x), 0x4149D60Au);
 	EXPECT_EQ(Bits(velocity.y), 0x41E30624u);
 	EXPECT_EQ(Bits(velocity.z), 0xBF836F9Eu);
+}
+
+TEST(GlmOrder5, ThePoolMapTurnsAndTiltsAsTheGameDoes)
+{
+	// The way to the camera made one long with its squares added y, z, x; the FPU's arctangents stored as floats
+	const auto angles = openblack::TempleCameraModel::MapYawAndPitch({3.7f, -2.1f, 5.3f});
+	EXPECT_EQ(Bits(angles.x), 0x3F761A3Cu);
+	EXPECT_EQ(Bits(angles.y), 0xBEA0D5D9u);
+	// Each cosine and sine stays wide for its product
+	const auto around = openblack::TempleCameraModel::MapAround(0.9f, 0.7f);
+	EXPECT_EQ(Bits(around.x), 0x3EF36C07u);
+	EXPECT_EQ(Bits(around.y), 0x3F24EB73u);
+	EXPECT_EQ(Bits(around.z), 0x3F196006u);
+}
+
+TEST(GlmOrder5, TheMainRoomLeansAtTheEdgeAsTheGameDoes)
+{
+	// (dt x 1.5) x (1 - the wide cosine of ramp x pi), then times the speed
+	EXPECT_EQ(Bits(openblack::TempleCameraModel::EdgeLeanStep(0.016f, 0.4f, -0.08f)), 0xBAADE43Eu);
+}
+
+TEST(GlmOrder5, TheMainRoomOrbitsAsTheGameDoes)
+{
+	// The way between the low and the high view times the lean, the low added; then turned by a full matrix
+	const auto pose = openblack::TempleCameraModel::OrbitPose(0.7f, 0.35f);
+	EXPECT_EQ(Bits(pose.origin.x), 0xC128A163u);
+	EXPECT_EQ(Bits(pose.origin.y), 0x41428F5Cu);
+	EXPECT_EQ(Bits(pose.origin.z), 0x41483482u);
+	EXPECT_EQ(Bits(pose.focus.x), 0xBFD66548u);
+	EXPECT_EQ(Bits(pose.focus.y), 0x40866666u);
+	EXPECT_EQ(Bits(pose.focus.z), 0x3FFE8A1Bu);
 }

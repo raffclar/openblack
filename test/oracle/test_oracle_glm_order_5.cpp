@@ -18,6 +18,8 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/CreatureCaveTrophies.h"
+#include "Camera/TempleCameraModel.h"
 #include "Common/X87Matrix.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureRig.h"
@@ -249,6 +251,69 @@ TEST(OracleGlmOrder5, ACornersNormalInTheCamerasFrameForTheGlowingShell)
 		const auto view = particles::volume_glow::ViewNormal(row.Vec("nx", "ny", "nz"), axes, {1.0f, 1.0f});
 		std::string text;
 		if (!SameBits(row, {"vx", "vy", "vz"}, {view.x, view.y, view.z}, text) && ++different <= 20)
+		{
+			ADD_FAILURE() << "row " << index << ":" << text;
+		}
+	}
+	EXPECT_EQ(different, 0U);
+}
+
+TEST(OracleGlmOrder5, TheTempleCameraCastsTheCursorAgainstARoom)
+{
+	const auto table = oracle::Table::Load("temple_ray.txt");
+	ASSERT_TRUE(table.has_value());
+	size_t different = 0;
+	for (size_t index = 0; index < table->Rows(); ++index)
+	{
+		const Row row {*table, index};
+		const TempleCameraModel::Cylinder room {
+		    .centre = row.Vec("cx", "cy", "cz"), .radius = row.F("radius"), .floor = row.U("floor") != 0};
+		const auto hit = TempleCameraModel::RayCastRoom(row.Vec("ex", "ey", "ez"), row.Vec("px", "py", "pz"), room);
+		std::string text;
+		bool same = hit.has_value() == (row.U("hit") != 0);
+		if (!same)
+		{
+			text = " the hit differs";
+		}
+		else if (hit.has_value())
+		{
+			same = SameBits(row, {"distance", "angle", "height", "hx", "hy", "hz", "nx", "ny", "nz"},
+			                {hit->distance, hit->angle, hit->height, hit->point.x, hit->point.y, hit->point.z, hit->normal.x,
+			                 hit->normal.y, hit->normal.z},
+			                text) &&
+			       hit->floor == (row.U("onfloor") != 0);
+		}
+		if (!same && ++different <= 20)
+		{
+			ADD_FAILURE() << "row " << index << ":" << text;
+		}
+	}
+	EXPECT_EQ(different, 0U);
+}
+
+TEST(OracleGlmOrder5, TheCreaturesRoomPlacesATrophy)
+{
+	const auto table = oracle::Table::Load("trophy_place.txt");
+	ASSERT_TRUE(table.has_value());
+	size_t different = 0;
+	for (size_t index = 0; index < table->Rows(); ++index)
+	{
+		const Row row {*table, index};
+		const glm::mat4 point {glm::vec4(row.Indexed("m", 0), 0.0f), glm::vec4(row.Indexed("m", 3), 0.0f),
+		                       glm::vec4(row.Indexed("m", 6), 0.0f), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)};
+		const auto place = CreatureCaveTrophies::PointPlacement(point);
+		std::vector<std::string> names;
+		std::vector<float> ours;
+		for (glm::length_t r = 0; r < 3; ++r)
+		{
+			for (glm::length_t c = 0; c < 3; ++c)
+			{
+				names.push_back("r" + std::to_string((3 * r) + c));
+				ours.push_back(place[r][c]);
+			}
+		}
+		std::string text;
+		if (!SameBits(row, names, ours, text) && ++different <= 20)
 		{
 			ADD_FAILURE() << "row " << index << ":" << text;
 		}
