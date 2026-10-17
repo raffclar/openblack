@@ -124,7 +124,7 @@ std::optional<BuildingToolTips> BuildingOf(entt::entity object)
 	{
 		return std::nullopt;
 	}
-	const double completed = BuildingCompleted(built, ecs::construction::BuiltOf(object), life);
+	const float completed = BuildingCompleted(built, ecs::construction::BuiltOf(object), life);
 	// The wood that the site wants, which takes the wood that a hand brings
 	const auto* site = ecs::construction::BroughtWoodSite(object);
 	const auto wood = site != nullptr ? std::optional(ecs::construction::WoodNeededToBuild(site->town, object)) : std::nullopt;

@@ -28,8 +28,9 @@
 namespace openblack::gesture
 {
 
-/// A recorded point lies on the land when it is further than this from the world's origin along an axis
-inline constexpr double k_TrailOnLand = 1e-4;
+/// A recorded point lies on the land when it is further than this from the world's origin along an axis. The game
+/// holds it as a double with the bits of the float
+inline constexpr double k_TrailOnLand = static_cast<double>(1e-4f);
 /// The most the shape is squashed, and by how much each time
 inline constexpr int k_TrailSquashTries = 15;
 inline constexpr float k_TrailSquash = 0.75f;

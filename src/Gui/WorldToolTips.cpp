@@ -39,7 +39,7 @@ constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
 
 /// How much more the town believes in the local player than in the player it believes in most besides, the neutral
 /// player included (none counting below nothing)
-double BeliefMargin(const TownImpression& impression)
+float BeliefMargin(const TownImpression& impression)
 {
 	const auto& belief = impression.belief.belief;
 	float others = 0.0f;
@@ -50,7 +50,7 @@ double BeliefMargin(const TownImpression& impression)
 			others = std::max(others, belief[i]);
 		}
 	}
-	return static_cast<double>(belief[static_cast<size_t>(k_LocalPlayer)]) - static_cast<double>(others);
+	return belief[static_cast<size_t>(k_LocalPlayer)] - others;
 }
 
 /// Whether a building is fully built

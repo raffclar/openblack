@@ -88,6 +88,30 @@ TEST(VillagerDraw, ABigTurnIsDrawnQuicker)
 	EXPECT_NEAR(villager_draw::EasedHeading(0.0f, size, 10), expected, 1e-5f);
 }
 
+TEST(VillagerDraw, ABigTurnStepHasTheGameBits)
+{
+	// Each step of the big turn rounds to a float, with the game's 2 / pi. The values come from the game's instructions
+	// with exact rounding at each step
+	struct Case
+	{
+		float size;
+		uint32_t milliseconds;
+		uint32_t stepBits;
+	};
+	constexpr std::array<Case, 6> k_Cases {{
+	    {.size = 2.0f, .milliseconds = 10, .stepBits = 0x3D9C74A7u},
+	    {.size = 3.0f, .milliseconds = 10, .stepBits = 0x3DEAAEFBu},
+	    {.size = 1.977907657623291f, .milliseconds = 40, .stepBits = 0x3E9ABA39u},
+	    {.size = 2.6358838081359863f, .milliseconds = 40, .stepBits = 0x3ECE3311u},
+	    {.size = 2.226329803466797f, .milliseconds = 16, .stepBits = 0x3E0B542Au},
+	    {.size = 2.158015251159668f, .milliseconds = 10, .stepBits = 0x3DA8D11Du},
+	}};
+	for (const auto& c : k_Cases)
+	{
+		EXPECT_EQ(std::bit_cast<uint32_t>(villager_draw::EasedHeading(0.0f, c.size, c.milliseconds)), c.stepBits) << c.size;
+	}
+}
+
 TEST(VillagerDraw, ATurnGoesTheShortWayRound)
 {
 	// From just under a half turn to just over: the short way crosses the half turn

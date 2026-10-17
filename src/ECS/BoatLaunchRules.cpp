@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -28,14 +29,15 @@ constexpr double k_EighthTurn = 0.7853981852531433;
 /// third gives up its first, as much as the angle's sine
 void TurnAxes(glm::mat4& m, double angle)
 {
-	const double c = std::cos(angle);
-	const double s = std::sin(angle);
+	// The cosine and the sine stay wide. Each product rounds to a float before the sum
+	const double c = x87::Cos(angle);
+	const double s = x87::Sin(angle);
 	for (glm::length_t row = 0; row < 3; ++row)
 	{
-		const double first = m[0][row];
-		const double third = m[2][row];
-		m[0][row] = static_cast<float>((c * first) + (s * third));
-		m[2][row] = static_cast<float>((c * third) - (s * first));
+		const float first = m[0][row];
+		const float third = m[2][row];
+		m[0][row] = x87::Mul(c, first) + x87::Mul(s, third);
+		m[2][row] = x87::Mul(c, third) - x87::Mul(s, first);
 	}
 }
 

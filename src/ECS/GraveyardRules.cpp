@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <iterator>
 
+#include "Common/X87.h"
+
 namespace openblack::graveyard
 {
 
@@ -21,8 +23,8 @@ uint32_t GravesShown(uint32_t burials)
 	{
 		return 0;
 	}
-	// The share is worked out wider than the single-precision constant, then cut down to whole graves
-	const auto graves = static_cast<uint32_t>(static_cast<double>(burials) * static_cast<double>(k_GravePerBurial));
+	// The share rounds to a float, then it is cut down to whole graves
+	const auto graves = static_cast<uint32_t>(static_cast<int64_t>(x87::Mul(static_cast<double>(burials), k_GravePerBurial)));
 	return std::max(graves, 1u);
 }
 

@@ -13,13 +13,15 @@
 
 #include <algorithm>
 
+#include "Common/ModelInverseSquareRoot.h"
+
 using namespace openblack;
 using namespace openblack::gesture;
 
 namespace
 {
 /// The symbol files' square runs from -100 to 100 on both axes
-constexpr double k_SymbolHalfSize = 100.0;
+constexpr float k_SymbolHalfSize = 100.0f;
 constexpr float k_SymbolScale = 0.005f;
 /// The furthest any box starts from
 constexpr float k_FarAway = 1e7f;
@@ -36,12 +38,10 @@ struct Box
 /// own box, about the path's box's middle
 Box FitSymbol(const ScreenBox& box, const TrailSymbol& symbol)
 {
-	const auto middleX = static_cast<float>((static_cast<double>(box.min.x) + box.max.x) * 0.5);
-	const auto middleY = static_cast<float>((static_cast<double>(box.max.y) + box.min.y) * 0.5);
-	const auto halfHeight = static_cast<float>(((static_cast<double>(box.max.y) - box.min.y) * 0.5) /
-	                                           (static_cast<double>(symbol.maxZ) - symbol.minZ));
-	const auto halfWidth = static_cast<float>(((static_cast<double>(box.max.x) - box.min.x) * 0.5) /
-	                                          (static_cast<double>(symbol.maxX) - symbol.minX));
+	const float middleX = (box.min.x + box.max.x) * 0.5f;
+	const float middleY = (box.max.y + box.min.y) * 0.5f;
+	const float halfHeight = ((box.max.y - box.min.y) * 0.5f) / (symbol.maxZ - symbol.minZ);
+	const float halfWidth = ((box.max.x - box.min.x) * 0.5f) / (symbol.maxX - symbol.minX);
 	return {
 	    .minX = middleX - halfWidth, .minY = middleY - halfHeight, .maxX = halfWidth + middleX, .maxY = halfHeight + middleY};
 }
@@ -49,8 +49,8 @@ Box FitSymbol(const ScreenBox& box, const TrailSymbol& symbol)
 /// The pixel a point of the symbol's square falls on, truncated towards zero
 glm::ivec2 PixelOf(const Box& box, float x, float z)
 {
-	const double px = ((static_cast<double>(box.maxX) - box.minX + 1.0) * x) + box.minX;
-	const double py = ((static_cast<double>(box.maxY) - box.minY + 1.0) * z) + box.minY;
+	const float px = ((box.maxX - box.minX + 1.0f) * x) + box.minX;
+	const float py = ((box.maxY - box.minY + 1.0f) * z) + box.minY;
 	return {static_cast<int>(px), static_cast<int>(py)};
 }
 /// A path taken at a number of points evenly through its points (not along its length): the first at its start, the last
@@ -62,23 +62,23 @@ std::vector<glm::vec3> TakenEvenly(const std::vector<glm::vec3>& path, size_t co
 	{
 		return taken;
 	}
-	const auto step = static_cast<float>(1.0 / (static_cast<double>(count) - 1.0));
+	const float step = 1.0f / (static_cast<float>(count) - 1.0f);
 	const auto last = path.size() - 1;
 	taken.reserve(count);
 	for (size_t i = 0; i < count; ++i)
 	{
-		const double along = static_cast<double>(i) * step;
-		if (along == 1.0)
+		const float along = static_cast<float>(i) * step;
+		if (along == 1.0f)
 		{
 			taken.push_back(path.back());
 			continue;
 		}
-		const auto at = static_cast<float>(along * static_cast<double>(last));
+		const float at = (static_cast<float>(path.size()) - 1.0f) * along;
 		const auto index = std::min(static_cast<size_t>(at), last);
 		// The end of the path rounded up holds at its last point
 		const auto& from = path[index];
 		const auto& to = path[std::min(index + 1, last)];
-		const auto t = static_cast<float>(static_cast<double>(at) - static_cast<double>(index));
+		const float t = at - static_cast<float>(index);
 		taken.push_back(((to - from) * t) + from);
 	}
 	return taken;
@@ -96,8 +96,8 @@ TrailSymbol gesture::MakeTrailSymbol(std::span<const glm::vec3> filePoints)
 	square.reserve(filePoints.size());
 	for (const auto& point : filePoints)
 	{
-		const auto x = static_cast<float>((static_cast<double>(point.x) + k_SymbolHalfSize) * k_SymbolScale);
-		const auto z = static_cast<float>((k_SymbolHalfSize - point.z) * k_SymbolScale);
+		const float x = (point.x + k_SymbolHalfSize) * k_SymbolScale;
+		const float z = (k_SymbolHalfSize - point.z) * k_SymbolScale;
 		square.emplace_back(x, point.y, z);
 		symbol.maxX = std::max(x, symbol.maxX);
 		symbol.minX = std::min(x, symbol.minX);
@@ -108,11 +108,11 @@ TrailSymbol gesture::MakeTrailSymbol(std::span<const glm::vec3> filePoints)
 	const particles::TrailPath path(std::move(square));
 	symbol.length = path.Length();
 	const auto count = filePoints.size();
-	const auto step = static_cast<float>(1.0 / static_cast<double>(static_cast<float>(count)));
+	const float step = 1.0f / static_cast<float>(count);
 	symbol.points.reserve(count);
 	for (size_t i = 0; i < count; ++i)
 	{
-		symbol.points.push_back(path.At(static_cast<float>(static_cast<double>(i) * step)));
+		symbol.points.push_back(path.At(static_cast<float>(i) * step));
 	}
 	return symbol;
 }
@@ -147,9 +147,8 @@ std::optional<particles::GestureTrail> gesture::BuildTrail(std::span<const glm::
 	{
 		forward = {1.0f, 0.0f, 0.0f};
 	}
-	const auto inverseLength = static_cast<float>(
-	    1.0 / std::sqrt((static_cast<double>(forward.z) * forward.z) + (static_cast<double>(forward.x) * forward.x)));
-	forward *= inverseLength;
+	// The game uses its 3D engine's inverse square root here
+	forward *= gutils::ModelInverseSquareRoot((forward.x * forward.x) + (forward.y * forward.y) + (forward.z * forward.z));
 
 	std::vector<glm::vec3> laid;
 	float squash = 1.0f;
@@ -158,7 +157,7 @@ std::optional<particles::GestureTrail> gesture::BuildTrail(std::span<const glm::
 		laid.clear();
 		for (const auto& point : symbol.points)
 		{
-			const auto z = static_cast<float>(((static_cast<double>(point.z) - 0.5) * squash) + 0.5);
+			const float z = ((point.z - 0.5f) * squash) + 0.5f;
 			laid.push_back(view.pointUnder(PixelOf(box, point.x, z)));
 		}
 		float minAcross = k_FarAway;
@@ -167,16 +166,15 @@ std::optional<particles::GestureTrail> gesture::BuildTrail(std::span<const glm::
 		float maxDepth = -k_FarAway;
 		for (const auto& point : laid)
 		{
-			const auto across = static_cast<float>((-static_cast<double>(forward.x) * point.z) + (forward.z * point.x));
-			const auto depth =
-			    static_cast<float>((static_cast<double>(forward.y) * point.y) + (forward.x * point.x) + (forward.z * point.z));
+			const float across = (forward.z * point.x) + (-forward.x * point.z);
+			const float depth = (forward.z * point.z) + (forward.x * point.x) + (forward.y * point.y);
 			minAcross = std::min(minAcross, across);
 			maxAcross = std::max(maxAcross, across);
 			minDepth = std::min(minDepth, depth);
 			maxDepth = std::max(maxDepth, depth);
 		}
-		const double width = std::abs(static_cast<double>(maxAcross) - minAcross);
-		const double depthOverWidth = width <= 0.0 ? 1.0 : std::abs(static_cast<double>(maxDepth) - minDepth) / width;
+		const float width = std::abs(maxAcross - minAcross);
+		const float depthOverWidth = width <= 0.0f ? 1.0f : std::abs(maxDepth - minDepth) / width;
 		squash *= k_TrailSquash;
 		if (tries >= k_TrailSquashTries || depthOverWidth <= k_TrailMostDepth)
 		{

@@ -18,6 +18,7 @@
 
 #include "Common/GUtilsDistance.h"
 #include "Common/RuntimeQsort.h"
+#include "Common/X87.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -37,7 +38,7 @@ constexpr float k_ShuffleTiny = 0.001f;
 /// How much a building's want of people counts against its want of men
 constexpr float k_ShufflePeopleWeight = 0.5f;
 /// Each town evens out its homes this many turns after the one numbered before it
-constexpr double k_ShuffleTownStagger = 20.0;
+constexpr float k_ShuffleTownStagger = 20.0f;
 
 void AddFirst(std::vector<entt::entity>& list, entt::entity entity)
 {
@@ -673,7 +674,10 @@ bool town_homes::EvenOutDue(uint32_t townId, uint32_t turn, uint32_t every)
 	{
 		return false;
 	}
-	const auto when = static_cast<uint32_t>(static_cast<double>(townId) * k_ShuffleTownStagger + static_cast<double>(turn));
+	// The sum is a float, so a turn above 2^24 rounds to an even number of turns
+	const float stagger = x87::Mul(static_cast<double>(townId), k_ShuffleTownStagger);
+	const float sum = x87::Add(stagger, static_cast<double>(static_cast<int32_t>(turn)));
+	const auto when = static_cast<uint32_t>(static_cast<int64_t>(sum));
 	return when % every == 0;
 }
 

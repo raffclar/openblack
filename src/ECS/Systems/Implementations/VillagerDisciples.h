@@ -80,4 +80,8 @@ void TownClaimed(entt::entity town);
 /// Every frame: the disciples' glows, and the symbol of the one in the hand or under it
 void UpdateMarks();
 
+/// The puff of the glow sheet to show at a time in game milliseconds: the first fifteen, through in half a second. At a
+/// whole half second after the start, the sixteenth puff shows, as in the game
+[[nodiscard]] uint32_t GlowFrame(uint64_t gameMilliseconds);
+
 } // namespace openblack::ecs::villager_disciple

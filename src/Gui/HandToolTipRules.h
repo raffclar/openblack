@@ -163,9 +163,9 @@ struct BuildingWords
 	uint32_t words;
 	double number;
 };
-[[nodiscard]] BuildingWords WoodRequired(std::optional<float> woodNeeded, double completed);
+[[nodiscard]] BuildingWords WoodRequired(std::optional<float> woodNeeded, float completed);
 
 /// The percentage that "Building Completed" shows: of the repair for a built building, else of the building's build
-[[nodiscard]] double BuildingCompleted(bool built, float builtShare, float life);
+[[nodiscard]] float BuildingCompleted(bool built, float builtShare, float life);
 
 } // namespace openblack::gui::hand_tooltip

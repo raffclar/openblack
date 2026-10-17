@@ -15,6 +15,7 @@
 #include <numbers>
 
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -22,12 +23,15 @@ using map_coords::MapCoords;
 
 namespace
 {
-/// The game works the point out at double precision from a float angle and distance, and truncates it
-int32_t Offset(int32_t fixed, double along)
+/// A 16.16 value moved by a distance in metres, truncated. Each step rounds to a float
+int32_t Offset(int32_t fixed, float along)
 {
-	const double metres = along + static_cast<double>(fixed) * 10.0 / 65536.0;
-	const double back = metres * 65536.0 / 10.0;
-	if (!(back > -2147483648.0 && back < 2147483648.0))
+	constexpr float k_Ten = 10.0f;
+	constexpr float k_FixedOne = 65536.0f;
+	constexpr float k_InverseFixedOne = 1.0f / k_FixedOne;
+	const float metres = along + x87::Mul(static_cast<double>(fixed), k_Ten) * k_InverseFixedOne;
+	const float back = metres * k_FixedOne / k_Ten;
+	if (!(back > -2147483648.0f && back < 2147483648.0f))
 	{
 		return static_cast<int32_t>(0x80000000u);
 	}
@@ -56,9 +60,9 @@ MapCoords script_flock_rules::CalcRandomPos(const MapCoords& centre, float least
 	for (int draw = 0; draw < k_Draws; ++draw)
 	{
 		const float angle = random(2.0f * std::numbers::pi_v<float>);
-		const double distance = static_cast<double>(random(range)) + static_cast<double>(least);
-		MapCoords point {.x = Offset(centre.x, std::cos(static_cast<double>(angle)) * distance),
-		                 .z = Offset(centre.z, std::sin(static_cast<double>(angle)) * distance),
+		const float distance = random(range) + least;
+		MapCoords point {.x = Offset(centre.x, x87::Mul(x87::Cos(angle), distance)),
+		                 .z = Offset(centre.z, x87::Mul(x87::Sin(angle), distance)),
 		                 .altitude = 0.0f};
 		map_coords::Spiral spiral;
 		for (int left = k_SpiralCells; left != 0;)

@@ -51,6 +51,8 @@ TEST(GraveyardRules, AGraveAppearsForEachWholeGraveTheBurialsMakeUp)
 TEST(GraveyardRules, AFullGraveyardShowsNineGravesAndNeverItsScaffold)
 {
 	EXPECT_EQ(GravesShown(k_MostBurials), 9u);
+	// The share rounds to a float before the cut: a share just under a whole grave can round up to it
+	EXPECT_EQ(GravesShown(1456361), 262145u);
 	uint32_t burials = 0;
 	for (int death = 0; death < 200; ++death)
 	{

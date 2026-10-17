@@ -20,6 +20,8 @@ TEST(ScriptTimers, ATimerRunsForWholeTurns)
 	EXPECT_EQ(TurnsFor(1.25f), 12);
 	EXPECT_EQ(TurnsFor(0.05f), 0);
 	EXPECT_EQ(TurnsFor(-1.0f), -10);
+	// The turns are a float product: 0.7 as a float is a little under, but ten times it rounds to 7
+	EXPECT_EQ(TurnsFor(0.7f), 7);
 }
 
 TEST(ScriptTimers, TimeRemainingRunsDownToNothing)
