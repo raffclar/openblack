@@ -7044,6 +7044,21 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	                 stop(1.0f),
 	                 stop(1.0f)},
 	});
+
+	all.push_back({
+	    .id = "temple.main_room_lean",
+	    .name = "The temple's main room leans at the screen's edge and as the floor is dragged",
+	    .facet = Facet::Story,
+	    .description = "The player has a temple and is put in its main room. Move the pointer near the top or the bottom "
+	                   "of the screen, then drag the floor up and down.",
+	    .expected = "The camera starts to lean when the pointer is more than 0.8 of the way from the middle of the "
+	                "screen to the top or bottom edge, and leans faster nearer the edge. Dragging the floor leans the "
+	                "camera by 0.06 for each pixel and second, less the nearer the pointer is to the sides.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
 }
 
 std::vector<Scenario> Build()
