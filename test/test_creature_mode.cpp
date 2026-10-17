@@ -18,6 +18,7 @@
 
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "Camera/CreatureFollow.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureMode.h"
@@ -311,32 +312,63 @@ std::vector<glm::mat4> FakeMarkedPlaces(size_t count, glm::vec3 pen)
 TEST(CreatureMode, TemplePenIsTheMeshsSixteenthMarkedPlace)
 {
 	const auto places = FakeMarkedPlaces(20, {10.0f, 2.0f, 5.0f});
-	const auto pen = creature_mode::TemplePen({100.0f, 0.0f, 200.0f}, glm::mat3(1.0f), glm::vec3(1.0f), places);
+	const auto pen = creature_mode::TemplePen({100.0f, 0.0f, 200.0f}, 0.0f, 1.0f, places);
 	ASSERT_TRUE(pen.has_value());
-	EXPECT_NEAR(pen->x, 110.0f, 1e-3f);
+	EXPECT_FLOAT_EQ(pen->x, 110.0f);
 	EXPECT_FLOAT_EQ(pen->y, 2.0f);
-	EXPECT_NEAR(pen->z, 205.0f, 1e-3f);
+	EXPECT_FLOAT_EQ(pen->z, 205.0f);
 }
 
 TEST(CreatureMode, TemplePenTurnsAndScalesWithTheTemple)
 {
 	const auto places = FakeMarkedPlaces(16, {10.0f, 0.0f, 0.0f});
-	// A quarter turn about the vertical: the mesh's +x goes to the world's -z
-	const glm::mat3 quarter {glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f)};
-	const auto pen = creature_mode::TemplePen({100.0f, 0.0f, 200.0f}, quarter, glm::vec3(2.0f), places);
+	// A quarter turn back about the vertical: the mesh's +x goes to the world's -z
+	const auto pen = creature_mode::TemplePen({100.0f, 0.0f, 200.0f}, -std::numbers::pi_v<float> / 2.0f, 2.0f, places);
 	ASSERT_TRUE(pen.has_value());
 	EXPECT_NEAR(pen->x, 100.0f, 1e-3f);
 	EXPECT_NEAR(pen->z, 180.0f, 1e-3f);
 }
 
-TEST(CreatureMode, TemplePenIsKeptAsAMapPosition)
+TEST(CreatureMode, TemplePenIsTruncatedToAMapPosition)
 {
 	const auto places = FakeMarkedPlaces(16, {0.0f, 0.0f, 0.0f});
-	const auto pen = creature_mode::TemplePen({1.00001f, 0.0f, -1.00001f}, glm::mat3(1.0f), glm::vec3(1.0f), places);
+	const auto pen = creature_mode::TemplePenOnMap({1.00001f, 0.0f, -1.00001f}, 0.0f, 1.0f, places);
 	ASSERT_TRUE(pen.has_value());
-	// Truncated to whole map units (a tenth of a metre over 65536), towards zero on both sides
-	EXPECT_FLOAT_EQ(pen->x, static_cast<float>(6553.0 * 10.0 / 65536.0));
-	EXPECT_FLOAT_EQ(pen->z, static_cast<float>(-6553.0 * 10.0 / 65536.0));
+	// Truncated to whole map units, towards zero on both sides
+	EXPECT_EQ(pen->x, 6553);
+	EXPECT_EQ(pen->z, -6553);
+	EXPECT_EQ(pen->altitude, 0.0f);
+}
+
+TEST(CreatureMode, TemplePenTakesTheFloatProductBeforeItTruncates)
+{
+	// The float product rounds up to the next whole unit, which the exact product does not reach. The game keeps the
+	// float product.
+	const auto places = FakeMarkedPlaces(16, {0.0f, 0.0f, 0.0f});
+	const float metres = std::bit_cast<float>(0x44ECFF24u);
+	const double exact = static_cast<double>(metres) * static_cast<double>(map_coords::k_FixedPerMetre);
+	ASSERT_LT(exact, std::floor(exact) + 1.0);
+	const auto pen = creature_mode::TemplePenOnMap({metres, 0.0f, metres}, 0.0f, 1.0f, places);
+	ASSERT_TRUE(pen.has_value());
+	EXPECT_EQ(pen->x, map_coords::FtoL(metres * map_coords::k_FixedPerMetre));
+	EXPECT_EQ(pen->x, static_cast<int32_t>(std::floor(exact)) + 1);
+}
+
+TEST(CreatureMode, TemplePenAddsInTheGamesOrder)
+{
+	// A pen at the slot 20 save's temple: the turned offset is added before the temple's position
+	const auto places = FakeMarkedPlaces(16, {-3.7f, 1.0f, 22.2f});
+	const glm::vec3 temple {1890.4f, 50.0f, 2530.1f};
+	const float angle = 2.3f;
+	const float scale = 1.0f;
+	const auto pen = creature_mode::TemplePenOnMap(temple, angle, scale, places);
+	ASSERT_TRUE(pen.has_value());
+	const auto c = static_cast<float>(std::cos(static_cast<double>(angle)));
+	const auto s = static_cast<float>(std::sin(static_cast<double>(angle)));
+	const float x = (22.2f * (scale * -s) + -3.7f * (scale * c)) + temple.x;
+	const float z = (-3.7f * (scale * s) + 1.0f * (scale * 0.0f)) + 22.2f * (scale * c) + temple.z;
+	EXPECT_EQ(pen->x, map_coords::ToFixed(x));
+	EXPECT_EQ(pen->z, map_coords::ToFixed(z));
 }
 
 TEST(CreatureMode, TemplePenMapPositionIsAFloatProductTruncated)
@@ -353,8 +385,8 @@ TEST(CreatureMode, TemplePenMapPositionIsAFloatProductTruncated)
 TEST(CreatureMode, NoTemplePenWhenTheMeshMarksTooFewPlaces)
 {
 	const auto places = FakeMarkedPlaces(15, {});
-	EXPECT_FALSE(creature_mode::TemplePen({}, glm::mat3(1.0f), glm::vec3(1.0f), places).has_value());
-	EXPECT_FALSE(creature_mode::TemplePen({}, glm::mat3(1.0f), glm::vec3(1.0f), {}).has_value());
+	EXPECT_FALSE(creature_mode::TemplePen({}, 0.0f, 1.0f, places).has_value());
+	EXPECT_FALSE(creature_mode::TemplePenOnMap({}, 0.0f, 1.0f, {}).has_value());
 }
 
 TEST(CreatureMode, CreatureHeightGrowsWithSize)

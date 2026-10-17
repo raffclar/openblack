@@ -191,6 +191,9 @@ struct Episode
 	/// What a mind file keeps with an example and the trees don't use: the kind of lesson, the action, and where the
 	/// thing was
 	std::array<int32_t, 4> saved {};
+	/// The desire that the mind file gave with the example, which the game writes back as it read it. None for an
+	/// example that the creature learnt: the desire of its tree
+	std::optional<int32_t> savedDesire;
 };
 /// A tree keeps at most this many examples
 constexpr size_t k_MaxEpisodes = 16;

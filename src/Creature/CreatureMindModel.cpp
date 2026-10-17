@@ -200,34 +200,37 @@ LoadedMind creature_mind_model::FromFile(const creaturemind::MindFileData& file,
 			});
 		}
 	}
-	for (const auto& tree : file.trees)
+	// The file's trees go by their place in the file, two to each desire: which thing to use, then which thing to act on.
+	// The kind number and the desire in the file go into the tree as they are.
+	for (size_t i = 0; i < file.trees.size() && i / k_TreeKinds < k_DesireCount; ++i)
 	{
-		if (tree.type < 0 || tree.type >= static_cast<int32_t>(k_TreeKinds) || tree.desire < 0 ||
-		    tree.desire >= static_cast<int32_t>(k_DesireCount))
-		{
-			continue;
-		}
-		// The file's examples come after the examples that the fresh mind has, such as the starting lesson. When the tree
-		// is full, the remaining examples of the file are lost.
-		auto& episodes = mind.learnt.episodes.at(static_cast<size_t>(tree.type)).at(static_cast<size_t>(tree.desire));
+		const auto& tree = file.trees[i];
+		const auto kind = static_cast<size_t>(i % k_TreeKinds == 0 ? TreeKind::Use : TreeKind::ActOn);
+		const auto desire = i / k_TreeKinds;
+		mind.learnt.treeHeaders.at(kind).at(desire) = TreeHeader {.type = tree.type, .desire = tree.desireAgain};
+		// The file's examples come after the examples that the mind has, such as the starting lesson. When the tree is
+		// full, the remaining examples of the file are lost. A loaded example has no kind of lesson.
+		auto& episodes = mind.learnt.episodes.at(kind).at(desire);
 		for (const auto& saved : tree.episodes)
 		{
 			if (episodes.size() >= creature_tree::k_MaxEpisodes)
 			{
-				break;
+				continue;
 			}
 			episodes.push_back({
 			    .belief = creature_tree::FromSlots(saved.belief.type, saved.belief.attributes),
 			    .feedback = saved.feedback,
-			    .saved = {saved.kind, saved.action, saved.belief.x, saved.belief.z},
+			    .saved = {0, saved.action, saved.belief.x, saved.belief.z},
+			    .savedDesire = saved.desire,
 			});
 		}
 	}
+	// The opinions are kept as the file has them, as many as it has
 	if (file.opinions.has_value())
 	{
 		for (size_t a = 0; a < mind.learnt.opinions.size() && a < file.opinions->size(); ++a)
 		{
-			mind.learnt.opinions[a] = std::clamp((*file.opinions)[a], -1.0f, 1.0f);
+			mind.learnt.opinions[a] = (*file.opinions)[a];
 		}
 	}
 	auto& knowledge = mind.learnt.knowledge;
@@ -256,9 +259,12 @@ LoadedMind creature_mind_model::FromFile(const creaturemind::MindFileData& file,
 	mind.learnt.name = file.name;
 	mind.learnt.alignment = file.alignment.value_or(0.0f);
 	mind.learnt.developmentTimer = file.developmentTimer;
-	mind.learnt.file = std::make_shared<const creaturemind::MindFileData>(file);
+	// The word after the known actions is always 1 after a load
+	auto kept = std::make_shared<creaturemind::MindFileData>(file);
+	kept->unknown1 = 1;
+	mind.learnt.file = std::move(kept);
 	mind.developmentPhase = static_cast<uint32_t>(std::max(file.developmentPhase, 0));
-	mind.attitudeToPlayer = std::clamp(file.attitudeToPlayer, -1.0f, 1.0f);
+	mind.attitudeToPlayer = file.attitudeToPlayer;
 	mind.turnsLookedAt = file.turnsLookedAt;
 	mind.speciesRow = file.speciesRow;
 	mind.strength = file.physique.strength;
@@ -333,17 +339,20 @@ creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::D
 	file.trees.clear();
 	for (size_t d = 0; d < k_DesireCount; ++d)
 	{
-		for (size_t k = 0; k < k_TreeKinds; ++k)
+		for (const auto treeKind : {TreeKind::Use, TreeKind::ActOn})
 		{
+			const auto k = static_cast<size_t>(treeKind);
+			const auto header = learnt.treeHeaders.at(k).at(d).value_or(
+			    TreeHeader {.type = NewTreeType(treeKind), .desire = static_cast<int32_t>(d)});
 			auto& tree = file.trees.emplace_back();
-			tree.type = static_cast<int32_t>(k);
-			tree.desire = static_cast<int32_t>(d);
-			tree.desireAgain = static_cast<int32_t>(d);
+			tree.type = header.type;
+			tree.desire = header.desire;
+			tree.desireAgain = header.desire;
 			for (const auto& episode : learnt.episodes.at(k).at(d))
 			{
 				tree.episodes.push_back({
 				    .kind = episode.saved[0],
-				    .desire = static_cast<int32_t>(d),
+				    .desire = episode.savedDesire.value_or(static_cast<int32_t>(d)),
 				    .action = episode.saved[1],
 				    .belief = {.type = episode.belief.type,
 				               .x = episode.saved[2],

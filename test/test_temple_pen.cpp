@@ -124,12 +124,15 @@ namespace
 class CreaturePenSystemTest: public ::testing::Test
 {
 protected:
-	static constexpr glm::vec2 k_Pen {-4.0f, -8.0f};
+	// A pen at whole map units, so that the metres of the home are exact
+	static constexpr glm::vec2 k_Pen {-5.0f, -10.0f};
 	static constexpr float k_Ground = 3.0f;
 
 	CreaturePenSystemTest()
 	    : _system(CreaturePenSystem::World {
-	          .penPlace = [](entt::entity) -> std::optional<glm::vec2> { return k_Pen; },
+	          .penPlace = [](entt::entity) -> std::optional<map_coords::MapCoords> {
+		          return map_coords::MapCoords {.x = map_coords::ToFixed(k_Pen.x), .z = map_coords::ToFixed(k_Pen.y)};
+	          },
 	          .groundAt = [](glm::vec2) { return k_Ground; },
 	          .drawnScale = [](CreatureType, float size) { return size * 10.0f; },
 	      })
@@ -162,6 +165,10 @@ TEST_F(CreaturePenSystemTest, HomeFollowsTheTemplesPen)
 	ASSERT_NE(leash, nullptr);
 	ASSERT_TRUE(leash->home.has_value());
 	EXPECT_EQ(*leash->home, glm::vec3(k_Pen.x, k_Ground, k_Pen.y));
+	// The home keeps the map position of the pen too, for the save
+	ASSERT_TRUE(leash->homeOnMap.has_value());
+	EXPECT_EQ(leash->homeOnMap->x, -0x8000);
+	EXPECT_EQ(leash->homeOnMap->z, -0x10000);
 }
 
 TEST_F(CreaturePenSystemTest, ShownAsANewbornInThePen)
