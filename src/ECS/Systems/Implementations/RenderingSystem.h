@@ -113,6 +113,8 @@ private:
 		/// The tree, and whether it is in a hand
 		entt::entity entity {entt::null};
 		bool held {false};
+		/// The share of its width that its matrix keeps: less than 1 while a fire narrows it at the last
+		float widthShare {1.0f};
 	};
 	std::vector<PlacedTree> _placedTrees;
 	/// The bounding box of each mesh the distance bands have looked at, kept while the draw lists are

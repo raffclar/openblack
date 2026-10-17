@@ -1187,3 +1187,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_hand_reflection graphics/test_hand_reflection.cpp
 )
+openblack_setup_and_add_test(
+  test_object_tint graphics/test_object_tint.cpp
+)

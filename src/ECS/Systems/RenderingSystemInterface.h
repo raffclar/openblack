@@ -228,6 +228,8 @@ struct RenderContext
 		/// For a thing in a hand, the light that the sea mirrors it in on this frame (see
 		/// graphics::hand_reflection::StepHeldLight)
 		std::optional<graphics::hand_reflection::HeldLook> heldLight;
+		/// For a tree, the share of its width that its matrix keeps: less than 1 while a fire narrows it at the last
+		float widthShare {1.0f};
 	};
 	std::vector<HighDetailDraw> highDetailDraws;
 	/// The explorers' boat while it is pushed down the beach, which casts its shadow from the same far sun onto the land
