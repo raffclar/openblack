@@ -73,8 +73,9 @@ struct Walk
 /// How much of the track's way it has walked
 [[nodiscard]] float Percentage(const Walk& walk, const edt::EDTTrack& track);
 
-/// A turn of a walk: where on the land it goes this turn, or nothing once it has gone its share of the way and stops.
-/// It goes where the track's camera looks when the camera is where the walk has got to.
+/// A turn of a walk: where on the land it goes this turn, without being put on the land's grid, or nothing once it has
+/// gone its share of the way and stops. It goes where the track's camera looks when the camera is where the walk has got
+/// to.
 [[nodiscard]] std::optional<glm::vec2> WalkTurn(Walk& walk, const edt::EDTTrack& track);
 
 /// A way's length as the game works it out when it reads the way: for each segment with time to cover, its

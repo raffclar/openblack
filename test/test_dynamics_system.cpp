@@ -26,6 +26,7 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/LandIslandInterface.h"
+#include "ECS/Components/MapPlace.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
@@ -311,6 +312,20 @@ TEST_F(DynamicsSystemTest, AThrownRockComesToRestGoesBackIntoTheMapAndLeavesTheP
 		ASSERT_EQ(Entries(), 0u);
 	}
 	EXPECT_EQ(_world->Entities().Get<const Transform>(rock).position, rested);
+}
+
+TEST_F(DynamicsSystemTest, AThingThatItsBodyMovesNoLongerKeepsAnExactMapPosition)
+{
+	const auto rock = Rock({1000.0f, 1000.0f});
+	auto& registry = _world->Entities();
+	registry.Assign<MapPlace>(rock, MapPlace {.place = {.x = 6553601, .z = 6553601}, .placedAt = {1000.0f, 1000.0f}});
+	registry.Get<Transform>(rock).position.y += 3.0f;
+	ASSERT_TRUE(_dynamics->InitialisePhysics(rock, {.velocity = {4.0f, 2.0f, 0.0f}}).started);
+	// It keeps the map position until its body moves it
+	EXPECT_TRUE(registry.AllOf<MapPlace>(rock));
+	ASSERT_TRUE(RunUntilEmpty(600).has_value());
+	// Then its map position comes from where it lies
+	EXPECT_FALSE(registry.AllOf<MapPlace>(rock));
 }
 
 TEST_F(DynamicsSystemTest, ARestingRockWakesOnlyWhileSomethingMovingIsNear)

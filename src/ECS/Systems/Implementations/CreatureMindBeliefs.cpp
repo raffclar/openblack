@@ -173,9 +173,14 @@ bool MovedLastTurn(const ecs::Registry& registry, entt::entity thing)
 	return false;
 }
 
-/// How tall a thing is: a creature by its size, anything else by its model as the thing is scaled, and 0 without a model
+/// How tall a thing is: a creature by its size, anything else by its model as the thing is scaled, and 0 without a model.
+/// A temple's heart has the model of its temple.
 float HeightOf(const ecs::Registry& registry, entt::entity thing)
 {
+	if (const auto* heart = registry.TryGet<const ecs::components::TempleHeart>(thing))
+	{
+		return registry.Valid(heart->temple) ? HeightOf(registry, heart->temple) : 0.0f;
+	}
 	if (const auto* creature = registry.TryGet<const Creature>(thing))
 	{
 		return k_CreatureHeightOfSizeOne * ShownSize(*creature);
@@ -798,16 +803,16 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 		// The things that stay put, then the things that move
 		for (const auto thing : map.GetAllInCell(cell))
 		{
-			// The thing in the map's cells for a temple is the temple's heart
-			const auto heart =
-			    registry.Valid(thing) && registry.AllOf<Temple>(thing) ? ecs::temple_heart::Of(registry, thing) : entt::null;
-			ComeAcross(entity, mind, heart != entt::null ? heart : thing);
+			// The thing in the map's cells for a temple is the temple's heart. The creature believes in the heart and
+			// watches the heart.
+			const auto seen = ecs::temple_heart::MapThingOf(registry, thing);
+			ComeAcross(entity, mind, seen);
 			// Each thing in view that it sees may take over what it watches
-			if (thing == entity || !registry.Valid(thing))
+			if (seen == entity || !registry.Valid(seen))
 			{
 				continue;
 			}
-			const auto [inView, distance] = view(thing);
+			const auto [inView, distance] = view(seen);
 			if (!inView)
 			{
 				continue;
@@ -815,7 +820,7 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 			const auto watched = WatchedPlace(registry, mind.look);
 			const auto watchedDistance = watched.has_value() ? viewOf(*watched).second : 0.0f;
 			creature_look::Consider(
-			    mind.look, {.id = entt::to_integral(thing), .kind = LookInterestOf(registry, thing), .distance = distance},
+			    mind.look, {.id = entt::to_integral(seen), .kind = LookInterestOf(registry, seen), .distance = distance},
 			    watchedDistance, range, weights, k_TurnsPerSecond);
 		}
 	}

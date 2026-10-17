@@ -1656,6 +1656,18 @@ std::optional<entt::entity> ActedThingOf(const ecs::Registry& registry, entt::en
 	return ecs::temple_heart::Acted(registry, thing);
 }
 
+/// The thing that an agenda takes for the thing of a plan. A creature that looks at a temple looks at the temple's heart,
+/// the thing that it believes in; every other agenda takes the thing of the plan.
+std::optional<uint32_t> AgendaThingOf(const ecs::Registry& registry, const creature_plan_actions::Executor& executor,
+                                      std::optional<uint32_t> thing)
+{
+	if (!thing.has_value() || executor.build != creature_plan_actions::Build::LookAtTemple)
+	{
+		return thing;
+	}
+	return entt::to_integral(ecs::temple_heart::MapThingOf(registry, static_cast<entt::entity>(*thing)));
+}
+
 /// The thing a creature at a point uses for an action, of a kind, other than the goal. It looks only through its
 /// beliefs about things that are not whole things, the newest first: what it has not come across, it does not use.
 std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Target use, glm::vec2 position, float distanceWeight,
@@ -1921,7 +1933,8 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	}
 	DrawAgendaLengths(*executor, situated);
 	auto agenda = creature_plan_actions::Agenda(
-	    *executor, object, point, situated, [this](uint32_t range) { return Random(range); }, cast);
+	    *executor, AgendaThingOf(Locator::entitiesRegistry::value(), *executor, object), point, situated,
+	    [this](uint32_t range) { return Random(range); }, cast);
 	if (!agenda.has_value())
 	{
 		// The creature that finds no place to drink does not want to drink for a time
@@ -3364,8 +3377,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			                      ? CastInfoFor(creature, *actionIndex, plan.object)
 			                      : std::nullopt;
 			agenda = creature_plan_actions::Agenda(
-			    *executor, plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt, point,
-			    situation, random, cast);
+			    *executor,
+			    AgendaThingOf(registry, *executor,
+			                  plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt),
+			    point, situation, random, cast);
 			if (agenda.has_value())
 			{
 				BelieveInTempleToEnter(creature, *executor, situation);
