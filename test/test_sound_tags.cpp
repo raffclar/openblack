@@ -18,6 +18,7 @@
 
 #include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -59,6 +60,8 @@ public:
 		entt::entity owner {entt::null};
 	};
 	std::map<entt::entity, Emitter> emitters;
+	/// The number of times a system moved an emitter
+	int moves {0};
 
 	void Stop() override {}
 	void Update() override {}
@@ -106,7 +109,11 @@ public:
 	[[nodiscard]] bool IsInstalled() const override { return true; }
 	void StopAllSoundEffects() override {}
 	entt::entity StartSoundEffect(entt::id_type, const audio::SoundEffectOptions&) override { return entt::null; }
-	void SetEmitterPosition(entt::entity, const glm::vec3&) override {}
+	void SetEmitterPosition(entt::entity emitter, const glm::vec3& position) override
+	{
+		emitters.at(emitter).position = position;
+		++moves;
+	}
 	void ReleaseEmitterLoop(entt::entity emitter) override { emitters.at(emitter).released = true; }
 	[[nodiscard]] bool IsEmitterLooping(entt::entity) override { return false; }
 	void SetEmitterVolume(entt::entity, uint32_t) override {}
@@ -401,4 +408,58 @@ TEST_F(SoundTags, TheTagsOfAGoneObjectGo)
 	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(hum));
 	ASSERT_EQ(Audio().emitters.size(), 1u);
 	EXPECT_TRUE(Audio().emitters.begin()->second.released);
+}
+
+// The creed hum on a creature that walks: each game turn its sound moves to where the creature is now
+TEST_F(SoundTags, AnObjectsSoundFollowsItEachTurn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	_tags.AttachObjectSound(creature, k_Sound, true);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+	EXPECT_EQ(Audio().moves, 0);
+
+	registry.Get<ecs::components::Transform>(creature).position = {30.0f, 2.0f, -5.0f};
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+	const auto& played = Audio().emitters.begin()->second;
+	EXPECT_EQ(played.position, glm::vec3(30.0f, 2.0f, -5.0f));
+	EXPECT_EQ(Audio().moves, 1);
+	// It moves the sound that plays, and does not start a new one
+	EXPECT_FALSE(played.stopped);
+}
+
+// A sound of an object in the hand comes from the hand, not from where the object hangs below it
+TEST_F(SoundTags, AnObjectInTheHandSoundsFromTheHand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto box = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	const auto hand = CreateObjectAt({40.0f, 10.0f, 0.0f});
+	_tags.AttachObjectSound(box, k_Sound, true);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+
+	registry.Assign<ecs::components::InHand>(box, ecs::components::InHand {.hand = hand});
+	registry.Get<ecs::components::Transform>(box).position = {40.0f, 8.0f, 0.0f};
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(Audio().emitters.begin()->second.position, glm::vec3(40.0f, 10.0f, 0.0f));
+
+	// Let go, it sounds from its own place again
+	registry.Remove<ecs::components::InHand>(box);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(Audio().emitters.begin()->second.position, glm::vec3(40.0f, 8.0f, 0.0f));
+}
+
+// A tag's offset stays above the object as the object moves
+TEST_F(SoundTags, AMovedSoundKeepsItsOffset)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto box = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	const auto tag = _tags.AttachObjectSound(box, k_Sound, true);
+	registry.Get<ecs::components::SoundTag>(tag).offset = {0.0f, 3.0f, 0.0f};
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	registry.Get<ecs::components::Transform>(box).position = {25.0f, 1.0f, 0.0f};
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(Audio().emitters.begin()->second.position, glm::vec3(25.0f, 4.0f, 0.0f));
 }
