@@ -177,6 +177,23 @@ vec2 UwWaveSets(vec2 p, float t)
 // storm (underwater::k_SteepestWaveCalm and k_SteepestWaveStorm)
 #define UW_STEEPEST_WAVE_CALM 0.12f
 #define UW_STEEPEST_WAVE_STORM 0.16f
+// How long the foam of a white horse stays after its crest, in seconds (underwater::k_WhitecapSeconds)
+#define UW_WHITECAP_SECONDS 1.5f
+
+// How much of the water at a point is a white horse, 0 to 1, from the crest envelope of UwWavesInDepth: the same as
+// underwater::WhitecapShare. A stronger wind breaks lower crests.
+float UwWhitecap(float envelope)
+{
+	float start = 0.9f - 0.08f * u_uwWaves.y;
+	return smoothstep(start, start + 0.12f, envelope);
+}
+
+// The share of the open sea that white horses cover, for a pixel that is too large to show them one by one: the same
+// as underwater::WhitecapCover
+float UwWhitecapCover()
+{
+	return 0.005f + 0.2f * pow(max(u_uwWaves.y, 0.0f), 1.6f);
+}
 
 // How the wind sea varies over the sea, the same as underwater::WaveVariationAt. warp: how far the wind sea's pattern
 // moves; warpSlope: the change of the warp along x (xy) and z (zw); groups: how big the even (x) and odd (y) waves are
@@ -301,12 +318,14 @@ float UwOpenSeaSize(vec2 p, float t, float shoreDistance)
 // The height of the waves over the sea's level at a point in water of a depth, at a distance from the coast, and the
 // slope there, as a pixel of the size `footprint` shows them. Each wave grows as the water gets shallow, and all of
 // them break together where they are too high for the depth (the same as underwater::WavesInDepth). `breaking` is
-// how much of their height the breaking takes away, 0 to 1.
+// how much of their height the breaking takes away, 0 to 1. `whitecap` is the crest envelope for the white horses (see
+// underwater::WaveSample::whitecap).
 float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float depth, out vec2 slope, out float variance,
-                     out float breaking)
+                     out float breaking, out float whitecap)
 {
 	slope = vec2_splat(0.0f);
 	variance = 0.0f;
+	whitecap = 0.0f;
 	vec2 sets = UwWaveSets(p, t);
 	float open = smoothstep(60.0f * UW_UNITS_PER_METRE, 500.0f * UW_UNITS_PER_METRE, shoreDistance);
 	sets = pow(max(sets, vec2_splat(1e-3f)), vec2_splat(1.0f + 0.8f * open));
@@ -371,6 +390,12 @@ float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float
 		vec2 rise = along * (a * shown.y * sharp * pow(max(s, 1e-4f), sharp - 1.0f) * cos(theta) * k);
 		if (wind)
 		{
+			// The crest envelope: the steepness of the wave on its crest, and for a short time after its crest. Where the
+			// pixel cannot show the wave, the mean of the envelope over a wave takes its place, so far away it does not
+			// flicker.
+			float age = mod(1.5707963f - theta, 6.2831853f) / omega;
+			float onCrest = max(pow(max(s, 0.0f), sharp), exp(-age / UW_WHITECAP_SECONDS));
+			whitecap += a * k * mix(0.5f, onCrest, shown.y);
 			windSlope += rise;
 			slope += plain * capRate * shown.x * shape *
 			         ((even ? groupSlope.xz : groupSlope.yw) * tiltScale + plainGroup * tiltScale * tiltLog * tilt.yz);
@@ -458,7 +483,8 @@ float UwCausticsFromWaves(vec2 p, float t, float depth)
 float UwWavesFiltered(vec2 p, float t, vec4 footprint, out vec2 slope, out float variance)
 {
 	float breaking;
-	return UwWavesInDepth(p, t, footprint, 1e6f, 1e6f, slope, variance, breaking);
+	float whitecap;
+	return UwWavesInDepth(p, t, footprint, 1e6f, 1e6f, slope, variance, breaking, whitecap);
 }
 
 // The height of the waves over the sea's level at a point, and the slope of the surface there. The short waves fade
@@ -794,17 +820,18 @@ float UwRogueWave(vec2 xz, float shoreDistance, float depth, out vec2 slope, out
 // the size of the pixel on the water (see UwFootprint); `slope` is the surface's slope, `face` the shore wave's face
 // and `variance` the variance of the slope that the pixel cannot show.
 float UwSurfaceSheltered(vec2 xz, float t, vec4 footprint, vec4 shore, float shelter, out vec2 slope, out float face,
-                         out float variance);
+                         out float variance, out float whitecap);
 
 float UwSurfaceFiltered(vec2 xz, float t, vec4 footprint, vec4 shore, out vec2 slope, out float face, out float variance)
 {
-	return UwSurfaceSheltered(xz, t, footprint, shore, 1.0f, slope, face, variance);
+	float whitecap;
+	return UwSurfaceSheltered(xz, t, footprint, shore, 1.0f, slope, face, variance, whitecap);
 }
 
 // The same, with `shelter` (0 to 1) the share of the open sea's waves that reach the point past the land upwind of it:
-// a bay behind a headland has less swell
+// a bay behind a headland has less swell. `whitecap` is the crest envelope of the sea's waves (UwWhitecap).
 float UwSurfaceSheltered(vec2 xz, float t, vec4 footprint, vec4 shore, float shelter, out vec2 slope, out float face,
-                         out float variance)
+                         out float variance, out float whitecap)
 {
 	float level = u_uwParams.z;
 	float depth = level - shore.w;
@@ -813,8 +840,9 @@ float UwSurfaceSheltered(vec2 xz, float t, vec4 footprint, vec4 shore, float she
 	// has none: only small ripples that the wind makes.
 	float breaking;
 	vec2 deepSlope;
-	float height = UwWavesInDepth(xz, t, footprint, shore.x, depth, deepSlope, variance, breaking);
+	float height = UwWavesInDepth(xz, t, footprint, shore.x, depth, deepSlope, variance, breaking, whitecap);
 	float deep = smoothstep(0.05f, 0.6f, depth) * (1.0f - 0.7f * UwShoreReach(depth)) * (1.0f - pond) * shelter;
+	whitecap *= deep;
 	height *= deep;
 	variance *= deep * deep;
 	float cliff = UwShoreCliff(shore);

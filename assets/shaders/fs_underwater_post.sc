@@ -299,8 +299,9 @@ float Shelter(vec2 at)
 }
 
 float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, out float face, out vec4 shore,
-                           out float variance)
+                           out float variance, out float whitecap)
 {
+	whitecap = 0.0f;
 	float along = (u_uwParams.z - eye.y) / direction.y;
 	slope = vec2_splat(0.0f);
 	face = 0.0f;
@@ -320,7 +321,8 @@ float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, ou
 		vec2 at = eye.xz + direction.xz * max(along, 0.0f);
 		shore = ShoreAt(at);
 		float height =
-		    UwSurfaceSheltered(at, t, FootprintOnWater(direction, max(along, 0.0f)), shore, shelter, slope, face, variance);
+		    UwSurfaceSheltered(at, t, FootprintOnWater(direction, max(along, 0.0f)), shore, shelter, slope, face, variance,
+		                       whitecap);
 		along = NextAlong(along, eye.y, direction, height, slope);
 	}
 	return along;
@@ -748,7 +750,9 @@ void main()
 		float face;
 		vec4 shore;
 		float slopeVariance;
-		float toSurface = RayToSurfaceFiltered(eye, direction, t, surfaceSlope, face, shore, slopeVariance);
+		float whitecapEnvelope;
+		float toSurface =
+		    RayToSurfaceFiltered(eye, direction, t, surfaceSlope, face, shore, slopeVariance, whitecapEnvelope);
 		// The small ripples on the waves keep the reflection soft, so that the steep faces of the waves do not mirror the
 		// sky like metal
 		float roughness = max(UwRoughness(slopeVariance), 0.17f) + 0.05f * smoothstep(25.0f, 160.0f, toSurface);
@@ -894,7 +898,6 @@ void main()
 				// The foam of the shallows is less where the original game shows its land, so that the edge of the water
 				// does not draw a line that the original coast does not have
 				float foam = Foam(surfacePoint.xz, max(min(thickness, waterDepth), 0.0f), t) * (1.0f - originalLand);
-				float crest = lift / max(UwWaveTop(), 1e-3f);
 				// The shore wave breaks on its face as it comes in, from 20 units out to the edge of the water
 				float breaking = face * (1.0f - smoothstep(1.0f, 10.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth) *
 				                 (1.0f - cliff);
@@ -932,15 +935,21 @@ void main()
 					float capsShown = u_uwSea.x > 0.5f ? 1.0f - smoothstep(1.0f, 3.0f, max(seen.x * seen.w, seen.x)) : 1.0f;
 					float streaksShown = u_uwSea.x > 0.5f ? 1.0f - smoothstep(0.7f, 2.0f, UwFootprintAlong(seen, across)) : 1.0f;
 					vec2 q = surfacePoint.xz;
-					float caps = smoothstep(0.72f, 0.98f, crest) * smoothstep(0.6f, 0.85f, UwNoise(q * 0.7f + t * 0.4f));
+					// The white horses: foam on the crests of the sea's own waves that break, which stays a short time
+					// after the crest (UwWhitecap). The foam breaks up into lace that the wind carries.
+					vec2 laceUv = vec2(dot(q, wind) * 0.45f - t * 0.5f, dot(q, across) * 1.1f);
+					float lace = UwFoamNoise(laceUv) * 0.6f + UwFoamNoise(q * 1.9f + t * 0.15f) * 0.4f;
+					float caps = UwWhitecap(whitecapEnvelope) * mix(0.1f, 1.0f, smoothstep(0.25f, 0.65f, lace));
 					// Two layers, the second turned against the first, so the noise's square cells do not show
 					vec2 streakUv = vec2(dot(q, wind) * 0.08f - t * 0.2f, dot(q, across) * 1.0f);
 					vec2 turned = vec2(streakUv.x * 0.8f - streakUv.y * 0.6f, streakUv.x * 0.6f + streakUv.y * 0.8f);
 					float streaks = smoothstep(0.75f, 0.92f, UwNoise(streakUv) * 0.6f + UwNoise(turned * 1.7f + 3.1f) * 0.4f);
-					caps = mix(0.03f * smoothstep(0.2f, 1.0f, u_uwWaves.y), caps, capsShown);
+					caps = mix(UwWhitecapCover() * 0.8f, caps, capsShown);
 					streaks = mix(0.04f, streaks, streaksShown);
-					// A light wind gives small flecks on the biggest crests; a storm gives caps and streaks
-					foam = max(foam, caps * (0.35f + 0.65f * u_uwWaves.y) + streaks * 0.5f * u_uwWaves.y);
+					// A calm day has few white horses, a wind many and a storm adds streaks. Near the coast they are
+					// fewer, as the rest of the foam there.
+					float nearCoast = mix(0.3f, 1.0f, smoothstep(30.0f, 150.0f, shore.x));
+					foam = max(foam, (caps + streaks * 0.5f * u_uwWaves.y) * nearCoast);
 				}
 				foam *= 1.0f - pond;
 				vec3 foamColour = u_uwLightColour.rgb * (0.4f + 0.6f * max(u_uwAbove.y, 0.0f)) + u_uwSky.rgb * 0.7f +

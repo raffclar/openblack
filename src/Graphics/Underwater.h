@@ -345,7 +345,18 @@ struct WaveSample
 {
 	float height;
 	glm::vec2 slope;
+	/// The crest envelope of the wind sea: the sum of each wave's steepness on its crest and for a short time after it
+	/// (k_WhitecapSeconds). WhitecapShare makes it the white horses.
+	float whitecap {0.0f};
 };
+/// How long the foam of a white horse stays after its crest, in seconds
+inline constexpr float k_WhitecapSeconds = 1.5f;
+/// How much of the water is a white horse, 0 to 1, for a crest envelope (WaveSample::whitecap) and a stormy share of 0
+/// to 1. UwWhitecap in underwater.sh is the same.
+[[nodiscard]] float WhitecapShare(float envelope, float storm);
+/// The share of the open sea that white horses cover on average, for a stormy share of 0 to 1: few on a calm day, many
+/// in a wind, about a fifth in the worst storm. UwWhitecapCover in underwater.sh is the same.
+[[nodiscard]] float WhitecapCover(float storm);
 [[nodiscard]] WaveSample WavesAt(glm::vec2 point, float seconds, const WaveState& waves);
 /// The same in water of a depth (units) at a distance from the coast (units, out to sea positive): each wave grows as
 /// the water gets shallow (Shoaling), all of them break together where they are too high for the depth

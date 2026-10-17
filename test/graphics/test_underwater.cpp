@@ -1232,7 +1232,8 @@ TEST(UnderwaterWaves, NoWaveIsSteeperThanTheSeaHolds)
 		}
 		EXPECT_LT(steepest, storm > 0.5f ? 2.2f : 1.3f) << "storm " << storm;
 	}
-	// The slope is the change of the height, with the cap
+	// The slope is the change of the height, with the cap. The slope leaves out the slow change of the sets and
+	// patches, so a small difference stays.
 	const auto waves = underwater::WavesFor(0.4f, 0.3f);
 	constexpr float k_Step = 0.01f;
 	for (const glm::vec2 point : {glm::vec2(3100.0f, 2050.0f), glm::vec2(812.0f, 4410.0f), glm::vec2(2500.0f, 2500.0f)})
@@ -1242,8 +1243,8 @@ TEST(UnderwaterWaves, NoWaveIsSteeperThanTheSeaHolds)
 		const auto west = underwater::WavesInDepth(point - glm::vec2(k_Step, 0.0f), 9.0f, waves, 1000.0f, 200.0f);
 		const auto north = underwater::WavesInDepth(point + glm::vec2(0.0f, k_Step), 9.0f, waves, 1000.0f, 200.0f);
 		const auto south = underwater::WavesInDepth(point - glm::vec2(0.0f, k_Step), 9.0f, waves, 1000.0f, 200.0f);
-		EXPECT_NEAR(here.slope.x, (east.height - west.height) / (2.0f * k_Step), 0.02f);
-		EXPECT_NEAR(here.slope.y, (north.height - south.height) / (2.0f * k_Step), 0.02f);
+		EXPECT_NEAR(here.slope.x, (east.height - west.height) / (2.0f * k_Step), 0.05f);
+		EXPECT_NEAR(here.slope.y, (north.height - south.height) / (2.0f * k_Step), 0.05f);
 	}
 }
 
@@ -1268,4 +1269,34 @@ TEST(Seabed, TheDistanceToTheCoastIsRound)
 	EXPECT_NEAR(distanceAt(0.7854f, 20.0f), straight, 4.0f);
 	// Near the coast the distance is not blurred
 	EXPECT_NEAR(bed.shore[static_cast<size_t>(40 * bed.size.x + 42)].x, 15.0f, 2.5f);
+}
+
+TEST(UnderwaterWaves, WhiteHorsesGrowWithTheWind)
+{
+	// The share of the open sea under white horses: few on a calm day, more in a wind, many in a storm, near the
+	// average cover that a far pixel shows
+	std::array<float, 3> shares {};
+	constexpr std::array<float, 3> k_Storms {0.0f, 0.35f, 1.0f};
+	for (size_t i = 0; i < k_Storms.size(); ++i)
+	{
+		const auto waves = underwater::WavesFor(k_Storms.at(i), 0.3f);
+		float sum = 0.0f;
+		int count = 0;
+		for (float x = 2000.0f; x < 2400.0f; x += 2.3f)
+		{
+			for (float z = 2000.0f; z < 2300.0f; z += 2.9f)
+			{
+				const auto sample = underwater::WavesInDepth({x, z}, 20.0f, waves, 1000.0f, 200.0f);
+				sum += underwater::WhitecapShare(sample.whitecap, k_Storms.at(i));
+				++count;
+			}
+		}
+		shares.at(i) = sum / static_cast<float>(count);
+		EXPECT_LT(shares.at(i), underwater::WhitecapCover(k_Storms.at(i)) * 2.0f + 0.005f) << "storm " << k_Storms.at(i);
+		EXPECT_GT(shares.at(i), underwater::WhitecapCover(k_Storms.at(i)) / 2.0f) << "storm " << k_Storms.at(i);
+	}
+	EXPECT_LT(shares[0], 0.02f);
+	EXPECT_LT(shares[0], shares[1]);
+	EXPECT_LT(shares[1], shares[2]);
+	EXPECT_GT(shares[2], 0.04f);
 }

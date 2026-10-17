@@ -317,6 +317,17 @@ underwater::WaveTilt underwater::WaveTiltAt(glm::vec2 point, float seconds)
 	                 .slope = std::cos(c1) * std::sin(c2) * h1 * q1 + std::sin(c1) * std::cos(c2) * h2 * q2};
 }
 
+float underwater::WhitecapShare(float envelope, float storm)
+{
+	const float start = 0.9f - 0.08f * storm;
+	return glm::smoothstep(start, start + 0.12f, envelope);
+}
+
+float underwater::WhitecapCover(float storm)
+{
+	return 0.005f + 0.2f * std::pow(storm, 1.6f);
+}
+
 float underwater::CapSteepness(float height, float limit, float& rate)
 {
 	const float over = height / limit;
@@ -389,6 +400,11 @@ underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, 
 		const float rise = amplitude * sharp * std::pow(std::max(s, 1e-4f), sharp - 1.0f) * std::cos(theta) * k;
 		if (wind)
 		{
+			// The crest envelope: the steepness on the crest, and for a short time after it
+			constexpr float k_Tau = 2.0f * std::numbers::pi_v<float>;
+			const float behind = std::numbers::pi_v<float> / 2.0f - theta;
+			const float age = (behind - k_Tau * std::floor(behind / k_Tau)) / omega;
+			sample.whitecap += amplitude * k * std::max(std::pow(s, sharp), std::exp(-age / k_WhitecapSeconds));
 			windSlope += along * rise;
 			// The height changes with the group too
 			const glm::vec2 groupSlope = even ? glm::vec2(variation.groupSlope.x, variation.groupSlope.z)
