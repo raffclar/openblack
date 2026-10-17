@@ -14,6 +14,7 @@
 #include <array>
 #include <vector>
 
+#include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
 
 #include "Enums.h"
@@ -94,6 +95,9 @@ struct Worshipper
 struct WorshipAltar
 {
 	entt::entity site {entt::null};
+	/// The model of the altar. The altar has this size and shape on the map from when the game makes the site, but the
+	/// game shows the model only when the town builds the site.
+	entt::id_type model {0};
 };
 
 } // namespace openblack::ecs::components

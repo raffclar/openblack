@@ -23,7 +23,9 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
+#include "ECS/ThingModel.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -46,7 +48,8 @@ wall_hug::ThingShape thing_circles::ShapeOf(const Registry& registry, entt::enti
 	{
 		return wall_hug::ThingShape::TempleRing;
 	}
-	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, MobileStatic, DeadTree, SpellDispenser, TeleportStone>(thing))
+	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, MobileStatic, DeadTree, SpellDispenser, TeleportStone,
+	                   WorshipAltar>(thing))
 	{
 		return wall_hug::ThingShape::ModelBox;
 	}
@@ -70,12 +73,13 @@ std::vector<wall_hug::BlockingCircle> thing_circles::CirclesOf(const Registry& r
 	                            .fence = false};
 	if (shape == wall_hug::ThingShape::ModelBox)
 	{
-		const auto* mesh = registry.TryGet<const Mesh>(thing);
-		if (mesh == nullptr || !Locator::resources::has_value() || !Locator::resources::value().GetMeshes().Contains(mesh->id))
+		// An altar has its model's box before the model shows
+		const auto model = thing_model::ModelOf(registry, thing);
+		if (!model.has_value() || !Locator::resources::has_value() || !Locator::resources::value().GetMeshes().Contains(*model))
 		{
 			return {};
 		}
-		const auto box = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox();
+		const auto box = Locator::resources::value().GetMeshes().Handle(*model)->GetBoundingBox();
 		onMap.boxCentre = box.Center();
 		onMap.boxHalfSize = box.Size() * 0.5f;
 		if (const auto* mobileStatic = registry.TryGet<const MobileStatic>(thing);
