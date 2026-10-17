@@ -594,6 +594,8 @@ void main()
 		sceneDistance = length(world - eye);
 	}
 	vec3 colour = scene;
+	// The depth that this pass writes: the scene's, and the water's surface where the water is in front of the scene
+	float outDepth = texture2DLod(s_sceneDepth, uv, 0.0f).r;
 	if (under)
 	{
 		// A little blur, more far away, as the particles in the water soften what is seen
@@ -831,6 +833,11 @@ void main()
 			// Where the original game shows its land over its sea, the land shows here too, as much as there
 			colour = u_uwFlags2.w > 0.5f ? UwWakeDebug(surfacePoint.xz) : colour;
 			colour = mix(colour, scene, max(originalLand, insideBoat));
+			if (max(originalLand, insideBoat) < 0.5f)
+			{
+				vec4 projected = mul(u_viewProj, vec4(surfacePoint, 1.0f));
+				outDepth = max(outDepth, projected.z / projected.w);
+			}
 		}
 		else if (!sky && world.y < UW_FILM_TOP && (world.y > -0.05f || world.y < u_uwParams.z + 0.05f) &&
 		         abs(texture2DLod(s_sceneColour, sampleUv, 0.0f).a - UW_LAND_MARK) < 0.5f / 255.0f)
@@ -857,4 +864,6 @@ void main()
 	float meniscus = 1.0f - smoothstep(0.0f, lineWidth * 3.0f, abs(underBy));
 	colour = mix(colour, scatter * 0.35f, meniscus * 0.8f);
 	gl_FragColor = vec4(colour, 1.0f);
+	// What blends over the water is drawn after this pass, tested against this depth
+	gl_FragDepth = outDepth;
 }

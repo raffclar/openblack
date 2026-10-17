@@ -63,6 +63,10 @@ enum class RenderPass : uint8_t
 	/// EXPERIMENT (not for merge): the scene seen under the sea, from its own target to the window, with the motes in
 	/// the water over it
 	UnderwaterPost,
+	/// EXPERIMENT (not for merge): what blends over the water when the eye is above it (the clouds, the particles, the
+	/// soft edges of the birds). The water is drawn first, so that these blend over it and not over the empty sky. The
+	/// scene's land and models and the water's surface hide them by their depth
+	UnderwaterOver,
 	/// The collars of the leashes the gestures' hints offer, each in a view of its own over its hint's square
 	GestureHintCollar0,
 	GestureHintCollar1,
@@ -108,6 +112,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Underwater Wake Pass 0",      //
     "Underwater Wake Pass 1",      //
     "Underwater Post Pass",        //
+    "Underwater Over Pass",        //
     "Gesture Hint Collar 0 Pass",  //
     "Gesture Hint Collar 1 Pass",  //
     "Gesture Hint Collar 2 Pass",  //

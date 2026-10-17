@@ -211,7 +211,9 @@ private:
 	};
 	void DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown) const;
 	/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own
-	[[nodiscard]] static RenderPass TranslucentView(RenderPass scene);
+	[[nodiscard]] RenderPass TranslucentView(RenderPass scene) const;
+	/// EXPERIMENT (not for merge): whether what blends in the main scene is drawn after the new water, as the eye is above it
+	[[nodiscard]] bool BlendAfterWater() const;
 	/// The seeds of the creature's best-learnt miracles hovering by the plinths in the creature's room
 	void DrawCaveSeeds(const DrawSceneDesc& desc) const;
 	/// The seeds of the miracles that the players cast, over the main room's map

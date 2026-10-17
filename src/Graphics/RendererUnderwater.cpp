@@ -286,8 +286,18 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	}
 	BindWakeField(*post);
 	BindUnderwaterDepth(*post, 9, 10);
-	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+	// The post pass also writes the depth of the scene and of the water's surface, so that what blends over the water
+	// after it is hidden by the land, the models and the water
+	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_ALWAYS);
 	post->Submit(postView);
+
+	// What blends over the water, after it, the farthest first
+	const auto overView = static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver);
+	bgfx::setViewFrameBuffer(overView, BGFX_INVALID_HANDLE);
+	bgfx::setViewRect(overView, 0, 0, stats->width, stats->height);
+	bgfx::setViewClear(overView, BGFX_CLEAR_NONE);
+	_shaderManager->SetViewOrder(RenderPass::UnderwaterOver, ViewOrder::DepthDescending);
+	_shaderManager->SetCamera(RenderPass::UnderwaterOver, *desc.camera);
 
 	// The motes in the water, added over it and hidden by the scene in front of them
 	if (const auto* motes = _shaderManager->GetShader("UnderwaterMotes");

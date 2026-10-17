@@ -282,10 +282,24 @@ const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<ui
 
 } // namespace
 
-RenderPass Renderer::TranslucentView(RenderPass scene)
+RenderPass Renderer::TranslucentView(RenderPass scene) const
 {
 	// In the temple the scene's own pass draws everything in the order it comes
-	return Locator::temple::has_value() && Locator::temple::value().Active() ? scene : TranslucentPassOf(scene);
+	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		return scene;
+	}
+	// EXPERIMENT (not for merge): over the new water, what blends is drawn after the water
+	if (scene == RenderPass::Main && BlendAfterWater())
+	{
+		return RenderPass::UnderwaterOver;
+	}
+	return TranslucentPassOf(scene);
+}
+
+bool Renderer::BlendAfterWater() const
+{
+	return _underwaterFrame.has_value() && _underwaterFrame->eye.w < 0.5f;
 }
 
 /// How far back, as a fraction of their depth, the temple's rooms the player isn't in are drawn: a few millimetres at the
@@ -1511,9 +1525,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 
 			// Opaque draws whose order doesn't show are gathered by the textures they bind
-			const auto sortDepth =
-			    draw_order::Reorderable(viewId, drawState, desc.sortDepth) ? draw_order::GroupKey(bindings) : desc.sortDepth;
-			program->Submit(static_cast<bgfx::ViewId>(viewId), sortDepth,
+			// EXPERIMENT (not for merge): over the new water, the parts that blend are drawn after the water
+			const auto submitView = viewId == RenderPass::Main && BlendAfterWater() && (drawState & BGFX_STATE_BLEND_MASK) != 0
+			                            ? RenderPass::UnderwaterOver
+			                            : viewId;
+			const auto sortDepth = draw_order::Reorderable(submitView, drawState, desc.sortDepth)
+			                           ? draw_order::GroupKey(bindings)
+			                           : desc.sortDepth;
+			program->Submit(static_cast<bgfx::ViewId>(submitView), sortDepth,
 			                primitivePreserveState ? BGFX_DISCARD_NONE : BGFX_DISCARD_ALL);
 		}
 		lastPreserveState = primitivePreserveState;
@@ -5558,7 +5577,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	// Outside the temple, what blends in the world is drawn after the rest of the scene in a pass of its own, all of it
 	// together and the farthest first, as the game sorts it
 	const auto translucentViewId = TranslucentView(desc.viewId);
-	if (translucentViewId != desc.viewId)
+	if (translucentViewId != desc.viewId && translucentViewId != RenderPass::UnderwaterOver)
 	{
 		if (desc.frameBuffer != nullptr)
 		{
