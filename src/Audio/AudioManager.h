@@ -29,6 +29,7 @@
 #include "AudioManagerInterface.h"
 #include "AudioPlayer.h"
 #include "CustomMusicPlayer.h"
+#include "HeaderOverrides.h"
 #include "MusicPlayer.h"
 #include "MusicStreamBackend.h"
 #include "SoundGroup.h"
@@ -172,9 +173,10 @@ private:
 	void PositionSource(SourceId source, std::optional<glm::vec3> listenerPosition);
 	/// The volume of an emitter's source: its gain with the volume settings, or none past its maximum distance
 	[[nodiscard]] float EmitterVolume(const ecs::components::AudioEmitter& emitter) const;
-	/// LHSamplePlay's play parameters for a sample, with the bank header overriding LH_SamplePlayOptions' defaults
-	[[nodiscard]] static VoiceStart MakeVoiceStart(const Sound& sound, std::optional<glm::vec3> worldPosition,
-	                                               PlayType playType);
+	/// The play parameters for a sample: the bank header's settings win over the caller's, and the playback rate gets
+	/// the header's random deviation
+	[[nodiscard]] VoiceStart MakeVoiceStart(const Sound& sound, std::optional<glm::vec3> worldPosition, PlayType playType,
+	                                        const CallerPlaySettings& caller);
 	/// An emitter playing for owner a sound of bank that is id or else in group, null if there is none
 	[[nodiscard]] entt::entity FindPlaying(entt::entity owner, entt::id_type bank, entt::id_type id, uint16_t group) const;
 	/// A music bank by its path relative to the game: its headers are read the first time, and it is kept from then on,

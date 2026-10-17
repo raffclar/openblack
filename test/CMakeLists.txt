@@ -1140,3 +1140,5 @@ openblack_setup_and_add_test(test_creature_hand_glow test_creature_hand_glow.cpp
 openblack_setup_and_add_test(test_film_effects video/test_film_effects.cpp)
 openblack_setup_and_add_test(test_emitter_follow test_emitter_follow.cpp)
 openblack_setup_and_add_test(test_axis_locks test_axis_locks.cpp)
+openblack_setup_and_add_test(test_header_overrides test_header_overrides.cpp)
+target_link_libraries(test_header_overrides PRIVATE pack)

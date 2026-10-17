@@ -838,6 +838,10 @@ struct Command
 		/// GAME_PLAY_SAY_SOUND_EFFECT does: from the point (from the middle of the map) on the land with ctrl, else heard
 		/// everywhere. Needs no creature.
 		SayLine,
+		/// A sample of the guidance bank (value) with the volume and the pitch that the guidance's voices give: heard
+		/// everywhere, or with ctrl from the point (from the middle of the map) on the land, heard as far as radius with
+		/// the distances of a placed guidance voice. Needs no creature.
+		PlayGuidanceVoice,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

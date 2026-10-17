@@ -74,9 +74,10 @@ struct SoundEffectOptions
 {
 	/// A 3D sound anchored there, otherwise centred on the listener
 	std::optional<glm::vec3> position;
-	/// Its playback rate in percent instead of the bank header's, before the header's random deviation
+	/// Its playback rate in percent, before the bank header's random deviation. The bank header's rate wins, if it has
+	/// one.
 	std::optional<uint32_t> pitchPercent;
-	/// Its volume, 0 to 127, instead of the bank header's
+	/// Its volume, 0 to 127. The bank header's volume wins, if it has one.
 	std::optional<uint32_t> volume;
 	/// Repeat loops it until it is stopped or released; Once plays it the bank header's number of times
 	PlayType playType {PlayType::Once};
@@ -90,9 +91,12 @@ struct SoundEffectOptions
 	VoiceOwner voiceOwner {VoiceOwner::Entity};
 	/// The owner number when the voice owner is a number
 	uint32_t ownerNumber {0};
-	/// The distances it is heard at fully and no further, instead of the bank header's
+	/// The distances it is heard at fully and no further. The bank header's distances win, if it has them, unless
+	/// callerWins has them.
 	std::optional<float> minDistance;
 	std::optional<float> maxDistance;
+	/// The settings (bits of pack::AudioBankOverride) for which the values above win over the bank header
+	uint32_t callerWins {0};
 	/// What a 3D sound does in each audio turn: it follows its owner or the listener, or it stays where it started
 	Follows follows {Follows::Nothing};
 };
