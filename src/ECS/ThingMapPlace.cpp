@@ -12,6 +12,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/MapPlace.h"
@@ -69,6 +70,7 @@ void thing_map_place::Keep(Registry& registry, entt::entity thing, const map_coo
 		return;
 	}
 	const auto metres = glm::xz(at->position);
+	const bool firstPlace = !registry.AllOf<components::MapPlace>(thing);
 	registry.AssignOrReplace<components::MapPlace>(
 	    thing, components::MapPlace {.place = {.x = place.x, .z = place.z}, .placedAt = metres});
 	if (auto* walk = registry.TryGet<components::WallHug>(thing))
@@ -79,6 +81,14 @@ void thing_map_place::Keep(Registry& registry, entt::entity thing, const map_coo
 	if (auto* animal = registry.TryGet<components::Animal>(thing))
 	{
 		animal->move.position = {place.x, place.z};
+	}
+	// A creature that gets its first exact map position where it was made, with its home there, gets this map position as
+	// its home
+	auto* leash = firstPlace ? registry.TryGet<components::CreatureLeash>(thing) : nullptr;
+	if (leash != nullptr && leash->home.has_value() && leash->homeOnMap.has_value() && glm::xz(*leash->home) == metres &&
+	    leash->homeOnMap->x == map_coords::ToFixed(metres.x) && leash->homeOnMap->z == map_coords::ToFixed(metres.y))
+	{
+		leash->homeOnMap = place;
 	}
 }
 

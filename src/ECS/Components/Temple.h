@@ -75,6 +75,13 @@ struct TempleEntrance
 	entt::entity temple;
 };
 
+/// The heart of a temple, a thing of its own at the temple's place. A creature believes in the heart as a part of the
+/// temple, and the heart's belief is what the creature acts on and learns from. The temple does all else.
+struct TempleHeart
+{
+	entt::entity temple;
+};
+
 /// One of the two lanterns at a temple's entrance: the lantern's model, with a town village light standing on it (see
 /// temple_lanterns)
 struct TempleLantern

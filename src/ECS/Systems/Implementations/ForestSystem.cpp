@@ -66,6 +66,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -495,6 +496,8 @@ std::optional<entt::entity> ForestSystem::PlantBeside(entt::entity tree)
 				const float fullSize = k_AddedTreeFullSize + random.GameFloatRand(k_AddedTreeFullSizeMore);
 				const auto added =
 				    ecs::archetypes::TreeArchetype::Create(forestId, point, type, false, yaw, fullSize, k_AddedTreeStartSize);
+				// The tree keeps the exact map position that it was made at
+				ecs::thing_map_place::Keep(registry, added, spot);
 				// Beside a forest miracle's tree it is the miracle's forest's, and goes with it
 				if (const auto* magic = registry.TryGet<const MagicTree>(tree);
 				    magic != nullptr && registry.Valid(magic->forest))
@@ -910,6 +913,7 @@ std::optional<entt::entity> ForestSystem::PlantPineAround(entt::entity bigForest
 		const float yaw = random.GameFloatRand(k_TwoPi);
 		const auto pine = ecs::archetypes::TreeArchetype::Create(ForestNumberOf(bigForest), point, TreeInfo::Pine, false, yaw,
 		                                                         fullSize, big_forest::k_PineStartSize);
+		ecs::thing_map_place::Keep(registry, pine, spot);
 		registry.SetLayoutDirty();
 		return pine;
 	}

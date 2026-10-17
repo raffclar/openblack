@@ -16,6 +16,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -59,6 +60,8 @@ struct TeleportTraveller
 	/// A creature the stone carries: where it comes out, and the turns left of its fading out, or once there of its
 	/// fading back in
 	glm::vec3 arrival {0.0f};
+	/// The exact map position where it comes out
+	map_coords::MapCoords arrivalOnMap;
 	int32_t transportTurns {0};
 	bool transported {false};
 	bool fadingIn {false};

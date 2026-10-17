@@ -50,6 +50,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/TeleportRules.h"
@@ -405,6 +406,8 @@ bool TeleportSystem::DoTeleport(entt::entity stone, entt::entity living, bool fo
 		return false;
 	}
 	const auto arrival = positions.at(jump->stone);
+	// It comes out at the exact map position of the far stone
+	const auto arrivalOnMap = ecs::thing_map_place::Of(registry, stones.at(jump->stone));
 	const auto stonePosition = registry.Get<const Transform>(stone).position;
 	// The miracle acts at the stone, then is paid back for the way saved, or pays for a backwards jump
 	if (Locator::magicSystem::has_value() && component.spell != entt::null && registry.Valid(component.spell))
@@ -434,6 +437,7 @@ bool TeleportSystem::DoTeleport(entt::entity stone, entt::entity living, bool fo
 		if (auto* traveller = registry.TryGet<TeleportTraveller>(living))
 		{
 			traveller->arrival = arrival;
+			traveller->arrivalOnMap = teleport::CreatureArrival(arrivalOnMap);
 			traveller->transported = true;
 			traveller->fadingIn = false;
 			traveller->transportTurns = teleport::CreatureFadeTurns(k_TurnMilliseconds);
@@ -452,8 +456,8 @@ bool TeleportSystem::DoTeleport(entt::entity stone, entt::entity living, bool fo
 		sounds.CreatePointSound(static_cast<entt::id_type>(audio::SoundId::G_SpellTeleportEnergiseGo), departure, false);
 		sounds.CreatePointSound(static_cast<entt::id_type>(audio::SoundId::G_SpellTeleportEnergiseArrive), arrival, false);
 	}
-	// At once, without a step between
-	registry.Get<Transform>(living).position = arrival;
+	// At once, without a step between, to the exact map position of the far stone
+	ecs::thing_map_place::Put(registry, living, arrivalOnMap, arrival.y);
 	registry.SetDirty();
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: jumped {} m closer from ({}, {}) to ({}, {})", jump->saving,
 	                    departure.x, departure.z, arrival.x, arrival.z);
@@ -478,7 +482,8 @@ bool TeleportSystem::DropOnStone(entt::entity villager, entt::entity stone, Play
 	// way, and decides again once through. (The game first has it fly and land from the hand; openblack's hand doesn't
 	// hold villagers.)
 	auto& action = registry.Get<LivingAction>(villager);
-	registry.Get<Transform>(villager).position = registry.Get<const Transform>(stone).position;
+	ecs::thing_map_place::Put(registry, villager, ecs::thing_map_place::Of(registry, stone),
+	                          registry.Get<const Transform>(stone).position.y);
 	auto& living = Locator::livingActionSystem::value();
 	const auto decide = [&] {
 		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::DecideWhatToDo, true);
@@ -749,8 +754,8 @@ void TeleportSystem::Carry(entt::entity creature)
 			Locator::soundTagSystem::value().CreatePointSound(
 			    static_cast<entt::id_type>(audio::SoundId::G_SpellTeleportEnergiseArrive), traveller.arrival, false);
 		}
-		const auto at = OnLand({traveller.arrival.x, traveller.arrival.z});
-		registry.Get<Transform>(creature).position = at;
+		const auto at = OnLand(map_coords::ToMetres(traveller.arrivalOnMap));
+		ecs::thing_map_place::Put(registry, creature, traveller.arrivalOnMap, at.y);
 		if (auto* moving = registry.TryGet<CreatureLocomotion>(creature))
 		{
 			moving->fromPosition = at;

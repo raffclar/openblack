@@ -38,6 +38,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -235,6 +236,8 @@ std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::ve
 	    body->size.value_or(archetypes::CreatureArchetype::StartScale(species)),
 	    {.alignment = body->alignment.value_or(0.0f), .fatness = body->fatness, .strength = body->strength});
 	auto& registry = Locator::entitiesRegistry::value();
+	// It keeps the exact map position where it arrives
+	ecs::thing_map_place::Keep(registry, creature, creature_carry_over::ArrivalCoords(place));
 	ecs::creature_body_file::Apply(registry, creature, *body);
 	if (Locator::creatureMindSystem::has_value())
 	{

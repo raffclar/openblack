@@ -89,8 +89,9 @@ private:
 	bool MoveTo3D(components::Animal& animal);
 	/// It tilts into the turn it made
 	static void Banked(components::Animal& animal, const animals::Turn& turn);
-	/// A random point between two distances of a centre that the animal can reach without circling, or the centre
-	[[nodiscard]] glm::vec2 RandomPos(const components::Animal& animal, glm::vec2 centre, float inner, float outer) const;
+	/// A random map position between two distances of a centre that the animal can reach without circling, or the
+	/// centre
+	[[nodiscard]] glm::ivec2 RandomPos(const components::Animal& animal, glm::ivec2 centre, float inner, float outer) const;
 
 	// The birds of a flock
 	/// A land bird's leader gives its leg up once it has kept to it its kind's stay time: whether it did
