@@ -1177,7 +1177,7 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_creature_may_try
                      test_oracle_totem_hand test_oracle_formation_land_line
                      test_oracle_float_sweep_3 test_oracle_float_sweep_4
-                     test_oracle_wisp_orbit
+                     test_oracle_wisp_orbit test_oracle_creature_start_side
 )
   set_tests_properties(
     ${oracle_test}
@@ -1190,3 +1190,7 @@ openblack_setup_and_add_test(test_float_sweep_4 test_float_sweep_4.cpp)
 openblack_setup_and_add_test(test_glm_order test_glm_order.cpp)
 openblack_setup_and_add_test(test_town_turn_order test_town_turn_order.cpp)
 openblack_setup_and_add_test(test_creature_missing_clip test_creature_missing_clip.cpp)
+openblack_setup_and_add_test(test_creature_action_mirror test_creature_action_mirror.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_start_side oracle/test_oracle_creature_start_side.cpp
+)
