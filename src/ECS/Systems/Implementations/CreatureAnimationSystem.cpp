@@ -21,6 +21,8 @@
 #include <optional>
 #include <span>
 #include <tuple>
+#include <utility>
+#include <vector>
 
 #include <glm/gtx/transform.hpp>
 
@@ -53,6 +55,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Physics/LivingRules.h"
@@ -749,24 +752,31 @@ void CreatureAnimationSystem::AddAlignmentMotes()
 	auto& dynamics = Locator::dynamicsSystem::value();
 	auto& random = Locator::gameRandom::value();
 	const creature_alignment_motes::LocalRandom localRandom = [&random](int32_t n) { return random.LocalRand(n); };
-	// Each game turn, a creature whose body looks good or evil makes motes or smoke near the bones of its last pose
-	registry.Each<const Creature, const CreatureMorph, const CreatureAnimation, const Transform>(
-	    [&](const Creature& creature, const CreatureMorph& morph, const CreatureAnimation& animation,
-	        const Transform& transform) {
-		    if (!creature_alignment_motes::MakesAny(morph.drawn.evilGood))
-		    {
-			    return;
-		    }
+	// While the falling spell plays, no creature in the world makes motes
+	const bool fallingSpell = Locator::videoSystem::has_value() && Locator::videoSystem::value().HidesWorld();
+	// Each game turn, a creature whose body is to look good or evil makes motes or smoke near the bones of the pose of the
+	// turn before. Then it keeps the bones of this turn for the next turn.
+	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
+	    [&](const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation, const Transform& transform) {
 		    const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-		    const creature_alignment_motes::BonePoint bonePoint = [&animation, &placement](uint32_t bone) {
-			    return glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
-		    };
-		    const auto bones = static_cast<uint32_t>(animation.boneMatrices.size());
-		    for (const auto& puff :
-		         creature_alignment_motes::PuffsOf(morph.drawn.evilGood, ShownSize(creature), bones, bonePoint, localRandom))
+		    std::vector<glm::vec3> bones(animation.boneMatrices.size());
+		    for (uint32_t bone = 0; bone < bones.size(); ++bone)
 		    {
-			    dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+			    bones[bone] = glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
 		    }
+		    // Before the first turn ends, the bones of this frame are the only pose there is
+		    const auto& last = animation.lastTurnBones.size() == bones.size() ? animation.lastTurnBones : bones;
+		    const auto alignment = TargetMorph(creature, morph).evilGood;
+		    if (!fallingSpell && creature_alignment_motes::MakesAny(alignment))
+		    {
+			    const creature_alignment_motes::BonePoint bonePoint = [&last](uint32_t bone) { return last.at(bone); };
+			    for (const auto& puff : creature_alignment_motes::PuffsOf(
+			             alignment, ShownSize(creature), static_cast<uint32_t>(last.size()), bonePoint, localRandom))
+			    {
+				    dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+			    }
+		    }
+		    animation.lastTurnBones = std::move(bones);
 	    });
 }
 

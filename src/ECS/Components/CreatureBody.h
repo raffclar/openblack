@@ -105,6 +105,9 @@ struct CreatureAnimation
 
 	/// The bones' matrices in the mesh's space as posed this frame, which the body is drawn with
 	std::vector<glm::mat4> boneMatrices;
+	/// Where each bone was in the world at the end of the last game turn. The alignment motes of a turn start at the
+	/// bones of the pose of the turn before.
+	std::vector<glm::vec3> lastTurnBones;
 };
 
 /// A creature's eyes: where they look and blink, and where each eyeball and eyelid is drawn this frame

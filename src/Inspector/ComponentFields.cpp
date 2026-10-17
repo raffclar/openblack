@@ -640,7 +640,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureAnimation::animations>("animations")
 	    .Field<&components::CreatureAnimation::pair>("pair")
 	    .Field<&components::CreatureAnimation::mirror>("mirror")
-	    .Field<&components::CreatureAnimation::boneMatrices>("boneMatrices");
+	    .Field<&components::CreatureAnimation::boneMatrices>("boneMatrices")
+	    .Field<&components::CreatureAnimation::lastTurnBones>("lastTurnBones");
 	Reflect<components::CreatureEyes>(context)
 	    .Field<&components::CreatureEyes::mode>("mode")
 	    .Field<&components::CreatureEyes::openness>("openness")
@@ -2459,6 +2460,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Gaze::hand>("hand")
 	    .Field<&openblack::creature_mind::Gaze::player>("player")
 	    .Field<&openblack::creature_mind::Gaze::point>("point")
+	    .Field<&openblack::creature_mind::Gaze::pointOnGround>("pointOnGround")
 	    .Field<&openblack::creature_mind::Gaze::camera>("camera")
 	    .Field<&openblack::creature_mind::Gaze::whileGoing>("whileGoing")
 	    .Field<&openblack::creature_mind::Gaze::runningAway>("runningAway")
