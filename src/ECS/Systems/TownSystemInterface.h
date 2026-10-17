@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -32,6 +33,10 @@ public:
 	/// The building of any town, any player's or none, nearest a point on the ground; the first of equals by player, the
 	/// players' towns before the neutral ones
 	[[nodiscard]] virtual entt::entity NearestBuilding(glm::vec2 point) const = 0;
+	/// The town nearest a point on the ground, strictly nearer than a reach, that a test accepts; the first of equals by
+	/// player, the players' towns before the neutral ones
+	[[nodiscard]] virtual entt::entity NearestTown(glm::vec2 point, float reach,
+	                                               const std::function<bool(entt::entity)>& accepts) const = 0;
 	/// A villager joins a town, moving into the building that suits it best or joining the homeless; false for a town
 	/// nobody can live in
 	virtual bool AddVillagerToTown(entt::entity town, entt::entity villager) = 0;

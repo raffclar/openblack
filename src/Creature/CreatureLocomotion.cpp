@@ -15,6 +15,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Angle.h"
+
 using namespace openblack;
 using namespace openblack::creature_locomotion;
 
@@ -111,7 +113,8 @@ float creature_locomotion::WrapAngle(float angle)
 
 float creature_locomotion::HeadingOf(glm::vec2 direction)
 {
-	return std::atan2(-direction.x, -direction.y);
+	// The game's heading routine. Its headings turn the other way round, so the direction is mirrored in x
+	return static_cast<float>(x87::GameHeadingOf(-direction.x, direction.y));
 }
 
 glm::vec2 creature_locomotion::DirectionOf(float heading)

@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include "Camera/CameraDrag.h"
+#include "Common/X87.h"
 
 using namespace openblack::camera_drag;
 
@@ -58,9 +59,9 @@ GameStep GameEdgeTurn(glm::ivec2 cursor, glm::ivec2 previous, glm::ivec2 screen,
 		cursor.x = static_cast<int>(((x + 1.0f) * width + 1.0f) * 0.5f);
 		cursor.y = static_cast<int>((y * picture + height + 1.0f) * 0.5f);
 	}
-	const auto before =
-	    std::atan2(static_cast<float>(previous.x - screen.x / 2), static_cast<float>(previous.y - screen.y / 2));
-	auto angle = std::atan2(static_cast<float>(cursor.x - screen.x / 2), static_cast<float>(cursor.y - screen.y / 2)) - before;
+	// The game keeps both arctangents of the whole pixel offsets wide and rounds their difference one time
+	const auto before = openblack::x87::Atan2(previous.x - screen.x / 2, previous.y - screen.y / 2);
+	auto angle = openblack::x87::Sub(openblack::x87::Atan2(cursor.x - screen.x / 2, cursor.y - screen.y / 2), before);
 	if (angle > glm::pi<float>())
 	{
 		angle -= glm::two_pi<float>();

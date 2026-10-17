@@ -14,6 +14,8 @@
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Creature.h"
@@ -143,7 +145,6 @@ uint32_t villager_mourning::GoTowardsDeadPerson(LivingAction& action)
 		return 0;
 	}
 	const auto here = Entities().Get<const Transform>(villager).position;
-	const auto toDead = glm::xz(*dead) - glm::xz(here);
 	// The game measures the way to the body by its map distance
 	const float distance = gutils::GetDistanceInMetres(glm::xz(here), glm::xz(*dead));
 	const auto approach = villager_death::ApproachToBody(distance, DeathInfo().maxDistanceToRunAwayFromObject);
@@ -152,9 +153,17 @@ uint32_t villager_mourning::GoTowardsDeadPerson(LivingAction& action)
 		SetTop(action, VillagerStates::LookAtDeadPerson);
 		return 1;
 	}
-	// Straight towards the body, stopping as far off as it keeps from it, then on again from there
-	villager_home::SetupMoveTo(action, glm::xz(here) + toDead * (approach.walk / distance),
-	                           VillagerStates::GoTowardsDeadPerson);
+	// Straight towards the body, stopping as far off as it keeps from it, then on again from there. The game steps in
+	// map units by the game angle to the body, the walk cut to whole metres first.
+	const auto from = map_coords::FromMetres(glm::xz(here));
+	const auto angle = gutils::GetAngleFromXZ(from, map_coords::FromMetres(glm::xz(*dead)));
+	const auto whole = map_coords::FtoL((static_cast<float>(map_coords::FtoL(approach.walk)) / 10.0f) * 65536.0f);
+	const auto step = [whole](int32_t table) {
+		return static_cast<int32_t>(static_cast<uint32_t>(table) * static_cast<uint32_t>(whole >> 8)) >> 8;
+	};
+	const glm::vec2 goal {map_coords::ToMetres(from.x + step(gutils::Cos(angle))),
+	                      map_coords::ToMetres(from.z + step(gutils::Sin(angle)))};
+	villager_home::SetupMoveTo(action, goal, VillagerStates::GoTowardsDeadPerson);
 	return 1;
 }
 
