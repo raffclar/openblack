@@ -49,6 +49,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/ThingCircles.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerNeeds.h"
@@ -245,9 +246,13 @@ void MoveWalker(Walker& walker, glm::ivec2 position)
 	auto& wallHug = walker.wallHug;
 	wallHug.position = position;
 	wallHug.placedAt = wall_hug::ToPoint(position);
-	const float altitude = Locator::terrainSystem::has_value() && !walker.standIn
-	                           ? Locator::terrainSystem::value().GetHeightAt(wallHug.placedAt)
-	                           : walker.transform.position.y;
+	// EXPERIMENT (not for merge): with the underwater view on, the walker stands on the sea bed under the sea
+	const auto ground = [&wallHug]() {
+		const float land = Locator::terrainSystem::value().GetHeightAt(wallHug.placedAt);
+		return Locator::underwaterSystem::has_value() ? Locator::underwaterSystem::value().FloorAt(wallHug.placedAt, land)
+		                                              : land;
+	};
+	const float altitude = Locator::terrainSystem::has_value() && !walker.standIn ? ground() : walker.transform.position.y;
 	walker.transform.position = glm::xzy(glm::vec3(wallHug.placedAt, altitude));
 }
 

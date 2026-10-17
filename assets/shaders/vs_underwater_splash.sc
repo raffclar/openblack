@@ -106,7 +106,8 @@ void main()
 			since -= 0.15f * h2 * apex;
 			velocity = out_ * dropSpeed * (0.25f + 0.45f * h4) + upDir * dropSpeed * (0.55f + 0.45f * h2);
 			life = 3.0f;
-			size = 0.05f + 0.07f * h3;
+			// A small splash throws small drops
+			size = (0.05f + 0.07f * h3) * clamp(crownHeight, 0.25f, 1.0f);
 			opacity = index - 48.0f < drops ? 0.95f : 0.0f;
 		}
 		else
@@ -117,7 +118,7 @@ void main()
 			since -= 0.1f * h2;
 			velocity = out_ * (0.5f + dropSpeed * 0.15f * h4) + vec3(wind.x, 0.0f, wind.y) + upDir * rise * 0.3f * h2;
 			life = 1.6f + 0.8f * h4;
-			size = crownRadius * 0.2f + 0.5f * max(since, 0.0f);
+			size = crownRadius * 0.2f + 0.5f * min(crownRadius, 1.0f) * max(since, 0.0f);
 			opacity = 0.06f * clamp(crownHeight, 0.0f, 1.0f);
 		}
 		world = base + velocity * since;

@@ -242,7 +242,13 @@ void villager_physics::Land(PhysicsEntry* entry, entt::entity villager)
 	}
 	const auto* info = InfoOf(villager);
 	const bool alive = world_objects::LifeOf(villager) > 0.0f;
-	if (IsOnWater(transform->position))
+	// EXPERIMENT (not for merge): with the underwater view on, a villager that comes to rest on the sea bed is in the water
+	const glm::vec2 restAt {transform->position.x, transform->position.z};
+	const bool onSeaBed =
+	    Locator::underwaterSystem::has_value() && Locator::terrainSystem::has_value() &&
+	    Locator::underwaterSystem::value().FloorAt(restAt, Locator::terrainSystem::value().GetHeightAt(restAt)) <
+	        Locator::terrainSystem::value().GetHeightAt(restAt);
+	if (IsOnWater(transform->position) || onSeaBed)
 	{
 		if (!alive)
 		{

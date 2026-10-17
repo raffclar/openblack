@@ -1364,7 +1364,10 @@ void DynamicsSystem::AttemptCollisionSound(PhysicsEntry& entry)
 	{
 		return;
 	}
-	if (hitType == SoundCollisionType::Ground)
+	// EXPERIMENT (not for merge): a thing that strikes the sea bed under the water throws up no dust, ring or foam on the
+	// surface
+	const bool onSeaBed = _ground != nullptr && centre.y < 0.0f && _ground->SeaFloorAt({centre.x, centre.z}).has_value();
+	if (hitType == SoundCollisionType::Ground && !onSeaBed)
 	{
 		// Over land it throws up dust; over water a ring and foam
 		const auto* land = Land();
