@@ -285,6 +285,8 @@ vec3 CloudLightning(vec3 p, float rain)
 // cloud (near the haze's own, see atmosphere.sh), and the height over which the air thins to a third
 #define CLOUD_HAZE_REACH 7000.0f
 #define CLOUD_HAZE_HEIGHT 2000.0f
+// The distance past which a ray through the clouds leaves out their small shapes
+#define CLOUD_DETAIL_REACH 9000.0f
 
 // The clouds along a ray from the eye up to a limit: rgb the light that they scatter towards the eye, a how much of the
 // light behind them goes through. `depth` is where the cloud is along the ray, weighted by how much each part shows,
@@ -314,6 +316,9 @@ vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool 
 	float transmittance = 1.0f;
 	float weightedDepth = 0.0f;
 	float weights = 0.0f;
+	// A far cloud is a few pixels across: past CLOUD_DETAIL_REACH the ray leaves out the small shapes and takes fewer
+	// samples towards the light. From high up every ray starts far away, so the clouds cost less there.
+	detail = detail && span.x < CLOUD_DETAIL_REACH;
 	int lightSamples = detail ? 6 : 4;
 	for (int i = 0; i < 160; ++i)
 	{
@@ -323,8 +328,8 @@ vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool 
 		}
 		vec3 p = eye + dir * t;
 		float altitude = CloudAltitude(p);
-		// The clouds thin out towards the farthest distance, so that the layer has no hard edge there
-		float density = CloudDensity(p, altitude, detail) * (1.0f - smoothstep(u_cloudLayer.z * 0.35f, u_cloudLayer.z, t));
+		// The clouds thin out over the last part of their reach, so that the layer has no hard edge there
+		float density = CloudDensity(p, altitude, detail) * (1.0f - smoothstep(u_cloudLayer.z * 0.7f, u_cloudLayer.z, t));
 		if (density > 0.0f)
 		{
 			float sigma = density * CLOUD_EXTINCTION;
