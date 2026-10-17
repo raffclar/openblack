@@ -1883,6 +1883,25 @@ void AddAppearance(std::vector<Scenario>& all)
 	                 Command {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
 	});
 
+	// A script's spoken line from a point on the land, the same kind of line heard everywhere, and an advisor's line
+	all.push_back({
+	    .id = "audio.say_lines_and_advisor",
+	    .name = "Spoken lines of scripts and advisors",
+	    .facet = Facet::Audio,
+	    .description = "After a second, a script says a villager's line from a point on the land to the east of the "
+	                   "camera. Six seconds later, a script says the next line with no point. Six seconds later, a "
+	                   "script shows a help text that the good advisor says. No bank sample of the game locks an axis "
+	                   "of its position, so no sound here does.",
+	    .expected = "The first line comes from the right speaker and stays at its point. The second line is centred and "
+	                "has the same volume wherever the camera is. The good advisor's line is centred and does not move "
+	                "with the advisor.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 0.0f}, {40.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::SayLine, .delaySeconds = 1.0f, .point = {40.0f, 0.0f}, .value = 1250, .ctrl = true},
+	                 {.kind = Kind::SayLine, .delaySeconds = 6.0f, .value = 1251},
+	                 {.kind = Kind::RunText, .delaySeconds = 6.0f, .value = 1009}},
+	});
+
 	// The hair close up while the head moves: the tiger's whiskers, and the wolf's tufts, which use the same material
 	std::vector<Command> headMoves;
 	for (size_t i = 0; i < animations::k_GestureCount; ++i)
@@ -8275,7 +8294,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
-	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::PlayFallingSpellFilm || IsPointerCommand(kind);
+	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::PlayFallingSpellFilm ||
+	       kind == Kind::SayLine || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -8302,7 +8322,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 149> k_Names {
+	constexpr std::array<std::string_view, 150> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -8452,6 +8472,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "give a creed power",
 		    "attach a script sound",
 		    "attach a script sound to the object",
+		    "say a line",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

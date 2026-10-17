@@ -32,6 +32,7 @@
 #include <spdlog/spdlog.h>
 
 #include "AudioPlayerInterface.h"
+#include "AxisLocks.h"
 #include "Camera/Camera.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
@@ -59,6 +60,18 @@ constexpr uint32_t k_DefaultPitchPercent = 100;
 constexpr float k_DefaultMinDistance = 1.0f;
 constexpr float k_DefaultMaxDistance = 9999.0f;
 constexpr float k_DefaultDistanceScale = 0.3f;
+
+/// Where a sound plays from, after the axes that its bank header locks: the caller's position, or for a caller without
+/// one, the locked axes from the origin when the locks place the sound. Empty when the sound is centred on the
+/// listener.
+std::optional<glm::vec3> PlacedPosition(const Sound& sound, std::optional<glm::vec3> callerPosition)
+{
+	if (!callerPosition.has_value() && !LocksPlaceSound(sound.overrideFlags))
+	{
+		return std::nullopt;
+	}
+	return LockedStartPosition(sound.overrideFlags, sound.headerPosition, callerPosition.value_or(glm::zero<glm::vec3>()));
+}
 } // namespace
 
 AudioManager::AudioManager()
@@ -281,7 +294,7 @@ void AudioManager::StopOutOfRangeEmitters()
 		}
 		else if (step.moveTo.has_value())
 		{
-			emitter.position = *step.moveTo;
+			emitter.position = MoveWithLockedAxes(emitter.lockedAxes, emitter.position, *step.moveTo);
 		}
 	});
 	for (const auto entity : stopped)
@@ -406,7 +419,8 @@ entt::entity AudioManager::CreateVoiceEmitter(entt::id_type id, std::optional<gl
 		LogNotStarted(*sound, worldPosition.value_or(glm::zero<glm::vec3>()), NoVoiceReason(choice));
 		return entt::null;
 	}
-	const auto start = MakeVoiceStart(*sound, worldPosition, playType);
+	const auto placed = PlacedPosition(*sound, worldPosition);
+	const auto start = MakeVoiceStart(*sound, placed, playType);
 	const auto source = CreateSource(*sound, start);
 
 	auto& registry = Locator::entitiesRegistry::value();
@@ -415,8 +429,9 @@ entt::entity AudioManager::CreateVoiceEmitter(entt::id_type id, std::optional<gl
 	                                          .sourceId = source,
 	                                          .soundId = id,
 	                                          .priority = sound->priority,
-	                                          .spatial = worldPosition.has_value(),
-	                                          .position = worldPosition.value_or(glm::zero<glm::vec3>()),
+	                                          .spatial = placed.has_value(),
+	                                          .position = placed.value_or(glm::zero<glm::vec3>()),
+	                                          .lockedAxes = LockedAxesOf(sound->overrideFlags),
 	                                          .gain = _atmos->VolumeToGain(start.volume),
 	                                          .volume = start.volume,
 	                                          .pitchPercent = start.pitchPercent,
@@ -582,7 +597,8 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 		LogNotStarted(*sound, options.position.value_or(glm::zero<glm::vec3>()), NoVoiceReason(choice));
 		return entt::null;
 	}
-	auto start = MakeVoiceStart(*sound, options.position, options.playType);
+	const auto placed = PlacedPosition(*sound, options.position);
+	auto start = MakeVoiceStart(*sound, placed, options.playType);
 	if (options.pitchPercent.has_value())
 	{
 		start.pitchPercent = *options.pitchPercent;
@@ -601,8 +617,9 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 	                                          .sourceId = source,
 	                                          .soundId = id,
 	                                          .priority = sound->priority,
-	                                          .spatial = options.position.has_value(),
-	                                          .position = options.position.value_or(glm::zero<glm::vec3>()),
+	                                          .spatial = placed.has_value(),
+	                                          .position = placed.value_or(glm::zero<glm::vec3>()),
+	                                          .lockedAxes = LockedAxesOf(sound->overrideFlags),
 	                                          .gain = _atmos->VolumeToGain(start.volume),
 	                                          .volume = start.volume,
 	                                          .pitchPercent = start.pitchPercent,
@@ -629,7 +646,9 @@ void AudioManager::SetEmitterPosition(entt::entity emitter, const glm::vec3& pos
 	{
 		return;
 	}
-	Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter).position = position;
+	// A move does not change the axes that the bank header locks
+	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
+	component.position = MoveWithLockedAxes(component.lockedAxes, component.position, position);
 }
 
 void AudioManager::SetEmitterFollows(entt::entity emitter, Follows follows)

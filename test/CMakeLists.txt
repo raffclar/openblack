@@ -1252,3 +1252,4 @@ openblack_setup_and_add_test(test_emitter_follow test_emitter_follow.cpp)
 openblack_setup_and_add_test(
   test_hand_reflection graphics/test_hand_reflection.cpp
 )
+openblack_setup_and_add_test(test_axis_locks test_axis_locks.cpp)
