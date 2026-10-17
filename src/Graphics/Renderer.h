@@ -572,6 +572,8 @@ private:
 	uint32_t _descriptorSetWarningPause {0};
 	/// While the scene is drawn only to make the renderer's pipelines and targets: nothing that later frames use changes
 	mutable bool _warmingUp {false};
+	/// EXPERIMENT (not for merge): a warm-up frame that draws the experiment's water as well
+	mutable bool _warmingUpWater {false};
 	/// The next frame holds a warm-up's draws, after which its views are set back
 	mutable bool _warmUpInFrame {false};
 	/// The colour that the main view clears the window to

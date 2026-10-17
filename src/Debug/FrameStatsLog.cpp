@@ -11,6 +11,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -119,6 +122,24 @@ void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profile
 		    "{} draws; {} new resources; {} new pipelines; stages (ms):{}",
 		    _frameNumber, milliseconds, onCpu, static_cast<double>(stats->cpuTimeEnd - stats->cpuTimeBegin) * toMsCpu,
 		    static_cast<double>(stats->waitRender) * toMsCpu, stats->numDraw, newResources, newPipelines, spikeStages);
+		// With the views profiled, the views that took the most of the graphics card's time in this frame
+		if (_views)
+		{
+			std::vector<std::pair<double, std::string_view>> byView;
+			for (uint16_t i = 0; i < stats->numViews; ++i)
+			{
+				const auto& view = stats->viewStats[i];
+				byView.emplace_back(static_cast<double>(view.gpuTimeEnd - view.gpuTimeBegin) * toMsGpu, view.name);
+			}
+			std::ranges::sort(byView, std::greater {});
+			std::string top;
+			for (size_t i = 0; i < std::min<size_t>(byView.size(), 4); ++i)
+			{
+				top += fmt::format(" {}={:.2f}", byView.at(i).second, byView.at(i).first);
+			}
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Frame spike {}: GPU {:.2f} ms; slowest views:{}", _frameNumber,
+			                   static_cast<double>(stats->gpuTimeEnd - stats->gpuTimeBegin) * toMsGpu, top);
+		}
 	}
 	if (_views)
 	{

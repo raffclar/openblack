@@ -5514,8 +5514,13 @@ void Renderer::WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept
 
 void Renderer::WarmUpUnderwater(const DrawSceneDesc& drawDesc) const noexcept
 {
-	// The experiment's passes draw as in a frame of the game. The loading screen's view clears the window after them.
+	// The experiment's passes draw as in a frame of the game, with a body of each creature species and each particle
+	// sprite at no size, as a warm-up draws them. The loading screen's view clears the window after them.
+	_warmingUp = true;
+	_warmingUpWater = true;
 	DrawScene(drawDesc);
+	_warmingUpWater = false;
+	_warmingUp = false;
 	_warmUpInFrame = true;
 }
 

@@ -1110,6 +1110,9 @@ void Game::WarmUpUnderwater()
 		return;
 	}
 	const auto& config = Locator::config::value();
+	// The sun and the moon are placed before the first frame, so that the passes that need daylight (the shadows, the
+	// sun's visibility, the light probes and the shade of the things round a point) draw in the warm-up too
+	Locator::skySystem::value().UpdateFrame(config.drawSky);
 	const auto& opening = Locator::camera::value();
 	const float sea = Locator::underwaterSystem::value().GetSeaLevel();
 	const auto& foot = seabed.cliffFoot.front();
@@ -1163,9 +1166,24 @@ void Game::WarmUpUnderwater()
 	const auto start = std::chrono::steady_clock::now();
 	auto& renderer = Locator::rendererInterface::value();
 	const auto desc = SceneDrawDesc(config, 0, IsHandDrawn());
+	// The things that the land's draw list shows round a place, made again for each place: the shadow maps, the far
+	// cube and the scene then draw the kinds of model that stand there, in each pass
+	const auto prepareThings = [&config]() {
+		if (!config.drawEntities || !Locator::objectDrawListSystem::has_value() || !Locator::rendereringSystem::has_value())
+		{
+			return;
+		}
+		auto& drawList = Locator::objectDrawListSystem::value();
+		drawList.Reset();
+		drawList.Update(Locator::time::value().GetTurn());
+		auto& rendering = Locator::rendereringSystem::value();
+		rendering.SetLayoutDirty();
+		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams);
+	};
 	for (const auto& place : places)
 	{
 		camera.Place(place.eye, place.focus);
+		prepareThings();
 		// Some passes start only after the first frames at a place: the far cube draws a face a frame, and the clouds and
 		// the light probes use the frames before them. A second of the sea passes each frame, so that the frames see a
 		// whole cycle of the shore wave and a cliff's crash with its spray.
@@ -1177,6 +1195,7 @@ void Game::WarmUpUnderwater()
 		}
 	}
 	camera.Place(keptEye, keptFocus);
+	prepareThings();
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Load: the experiment's water drawn behind the loading screen in {:.1f} ms",
 	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
 }

@@ -99,8 +99,8 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	const auto* postProgram = _shaderManager->GetShader("UnderwaterPost");
 	const glm::vec3 eye = glm::inverse(desc.camera->GetViewMatrix(Camera::Interpolation::Current))[3];
 	// The experiment's water takes the place of the sea, above the surface as well as under it
-	const bool active = enabled && !inTemple && !_warmingUp && desc.viewId == RenderPass::Main && desc.drawIsland &&
-	                    desc.drawWater && postProgram != nullptr && Locator::terrainSystem::has_value();
+	const bool active = enabled && !inTemple && (!_warmingUp || _warmingUpWater) && desc.viewId == RenderPass::Main &&
+	                    desc.drawIsland && desc.drawWater && postProgram != nullptr && Locator::terrainSystem::has_value();
 	if (!active)
 	{
 		return false;
