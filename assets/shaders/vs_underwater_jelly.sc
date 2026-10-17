@@ -11,7 +11,7 @@ $output v_world, v_texcoord0, v_color0, v_normal
 // a_position: x along (round the shell, or down the tentacle), y across (down the shell, or the side of the tentacle),
 // z the part (0 outer shell, 1 inner shell, 2 inner tentacle, 3 outer tentacle), w which tentacle.
 // i_data0: xyz the top of the bell, w its size. i_data1: x the phase of the beat, y the colour, z how much it shows,
-// w its seed.
+// w its seed. u_uwEye: xyz the eye, w the pass (0 the bodies in the scene, 1 their own light after the water).
 
 #define JELLY_TAU 6.2831853f
 
@@ -78,5 +78,16 @@ void main()
 	v_normal = normal;
 	v_texcoord0 = vec4(a_position.x, a_position.y, part, squeeze);
 	v_color0 = vec4(i_data1.y, i_data1.z, cycle, seed);
-	gl_Position = mul(u_viewProj, vec4(world, 1.0f));
+	// In the pass of their own light (u_uwEye.w 1), each point moves along the line to the eye by more than the
+	// jellyfish's size. It stays at the same place on the screen, and its depth is in front of the jellyfish's own
+	// parts, so that only the scene in front of the jellyfish hides its light.
+	vec3 drawn = world;
+	if (u_uwEye.w > 0.5f)
+	{
+		vec3 fromEye = world - u_uwEye.xyz;
+		float distance = length(fromEye);
+		float pull = min(2.0f * size, 0.5f * distance);
+		drawn = u_uwEye.xyz + fromEye * ((distance - pull) / max(distance, 1e-3f));
+	}
+	gl_Position = mul(u_viewProj, vec4(drawn, 1.0f));
 }

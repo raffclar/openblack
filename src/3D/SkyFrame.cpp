@@ -33,17 +33,32 @@ std::optional<graphics::sun::Placement> SunOnPath(float scriptHour)
 	return graphics::sun::Placement {.position = towards * graphics::atmosphere::k_SunDistance, .alpha = alpha};
 }
 
-/// EXPERIMENT (not for merge): the moon on the other side of the sky from the sun. It shows as the original game's moon
+/// EXPERIMENT (not for merge): the moon on its real path, which its phase sets. It shows as the original game's moon
 /// shows at the same height.
-std::optional<graphics::moon::Placement> MoonOnPath(float scriptHour)
+std::optional<graphics::moon::Placement> MoonOnPath(float scriptHour, double monthFraction)
 {
-	const glm::vec3 offset = -graphics::atmosphere::SunTowards(scriptHour) * graphics::atmosphere::k_MoonDistance;
+	const glm::vec3 offset =
+	    graphics::atmosphere::MoonTowards(scriptHour, monthFraction) * graphics::atmosphere::k_MoonDistance;
 	const float alpha = std::min(200.0f, std::floor((0.5f * offset.y) - 110.0f));
 	if (alpha <= 0.0f)
 	{
 		return std::nullopt;
 	}
 	return graphics::moon::Placement {.offset = offset, .alpha = alpha};
+}
+
+/// Reads the date for the moon's phase again once two seconds have gone by, or before it was ever read
+void ReadMoonDate(ecs::components::Moon& moon, const Inputs& inputs)
+{
+	if (static_cast<int32_t>(inputs.ticks - moon.dateReadAt) > k_MoonDateReadInterval)
+	{
+		moon.dateReadAt = inputs.ticks;
+		moon.date = 0;
+	}
+	if (moon.date == 0)
+	{
+		moon.date = inputs.unixTime;
+	}
 }
 } // namespace
 
@@ -74,32 +89,49 @@ void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::component
 	sun.strength =
 	    sun.placement.has_value() ? sky_dome::ThroughOvercast(sun.placement->alpha, dome.overcast, inputs.fog) : 0.0f;
 
-	moon.placement = inputs.solarPath ? MoonOnPath(inputs.scriptHour) : graphics::moon::Place(inputs.scriptHour);
+	// EXPERIMENT (not for merge): count the days of the game, which move the moon forward on its real path
+	moon.passedDays += graphics::atmosphere::DaysStarted(moon.lastHour, inputs.scriptHour);
+	moon.lastHour = inputs.scriptHour;
+	double monthFraction = 0.0;
+	if (inputs.solarPath)
+	{
+		ReadMoonDate(moon, inputs);
+		monthFraction = MoonMonthFraction(moon, inputs.scriptHour);
+	}
+
+	moon.placement = inputs.solarPath ? MoonOnPath(inputs.scriptHour, monthFraction) : graphics::moon::Place(inputs.scriptHour);
 	moon.colour = Colour(inputs.palette != nullptr ? LandLightTable::GetMoonColour(*inputs.palette, inputs.landLight.skyType,
 	                                                                               inputs.landLight.alignment)
 	                                               : 0xFFFFFFu);
 	moon.strength =
 	    moon.placement.has_value() ? sky_dome::ThroughOvercast(moon.placement->alpha, dome.overcast, inputs.fog) : 0.0f;
+	if (inputs.solarPath)
+	{
+		// The phase that shows is the phase of the moon's place on its path
+		moon.phase = graphics::atmosphere::MoonPhase(monthFraction);
+		return;
+	}
 	if (moon.strength <= 0.0f)
 	{
 		return;
 	}
-	// The date is kept between reads, and read again once two seconds have gone by (or before it was ever read)
-	if (static_cast<int32_t>(inputs.ticks - moon.dateReadAt) > k_MoonDateReadInterval)
-	{
-		moon.dateReadAt = inputs.ticks;
-		moon.date = 0;
-	}
-	if (moon.date == 0)
-	{
-		moon.date = inputs.unixTime;
-	}
+	ReadMoonDate(moon, inputs);
 	moon.phase = graphics::moon::Phase(MoonDate(moon));
 }
 
 int64_t MoonDate(const ecs::components::Moon& moon)
 {
 	return moon.dateOverride.value_or(moon.date);
+}
+
+double MoonMonthFraction(const ecs::components::Moon& moon, float scriptHour)
+{
+	return graphics::atmosphere::MoonMonthFraction(MoonDate(moon), moon.passedDays, scriptHour);
+}
+
+glm::vec3 MoonTowards(const ecs::components::Moon& moon, float scriptHour)
+{
+	return graphics::atmosphere::MoonTowards(scriptHour, MoonMonthFraction(moon, scriptHour));
 }
 
 void AdvanceDome(ecs::components::SkyDome& dome, float skyType, bool drawn)

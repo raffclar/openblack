@@ -16,6 +16,8 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
+#include "Graphics/Underwater.h"
+
 namespace openblack::graphics::underwater::jellyfish
 {
 
@@ -159,6 +161,26 @@ void Mesh(std::vector<Vertex>& vertices, std::vector<uint16_t>& indices)
 	tentacles(Part::InnerTentacle, k_InnerTentacles);
 	tentacles(Part::OuterTentacle, k_OuterTentacles);
 	shell(Part::OuterShell);
+}
+
+float WaterPath(glm::vec3 eye, glm::vec3 point, float seaLevel)
+{
+	const float length = glm::distance(eye, point);
+	if (eye.y <= seaLevel)
+	{
+		return length;
+	}
+	// The part of the straight line from the eye that is under the sea's level
+	const float depth = std::max(seaLevel - point.y, 0.0f);
+	const float drop = eye.y - point.y;
+	return drop > 0.0f ? length * std::min(depth / drop, 1.0f) : 0.0f;
+}
+
+glm::vec3 GlowThroughWater(float path)
+{
+	const glm::vec3 left = Transmittance(path * k_GlowPathShare);
+	const float grey = glm::dot(left, glm::vec3(0.2126f, 0.7152f, 0.0722f));
+	return glm::mix(glm::vec3(grey), left, k_GlowTint);
 }
 
 } // namespace openblack::graphics::underwater::jellyfish

@@ -485,8 +485,13 @@ private:
 	void DrawFarSeabed(RenderPass landViewId) const;
 	/// EXPERIMENT (not for merge): the reef's coral and plants, in the land's pass of the main view
 	void DrawReef(RenderPass landViewId) const;
-	/// EXPERIMENT (not for merge): the jellyfish in the deep water, their light added to the scene
+	/// EXPERIMENT (not for merge): the jellyfish in the deep water: their bodies and the far water behind them, in the
+	/// scene
 	void DrawJellyfish() const;
+	/// EXPERIMENT (not for merge): the light of the jellyfish, added over the water after the water's pass
+	void DrawJellyfishGlow(bgfx::ViewId viewId, const FrameBuffer& target) const;
+	/// EXPERIMENT (not for merge): binds the jellyfish round the eye this frame for a draw; false when there are none
+	[[nodiscard]] bool BindJellyfish() const;
 	/// EXPERIMENT (not for merge): the steps of the water's field of small waves this frame, before the water reads it
 	void StepWakeField() const;
 	/// EXPERIMENT (not for merge): the field of small waves and the hulls, for the water's pass

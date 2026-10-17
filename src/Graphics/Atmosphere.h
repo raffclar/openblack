@@ -13,6 +13,7 @@
 
 #include <span>
 
+#include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -226,6 +227,50 @@ inline constexpr float k_MoonDistance = 4100.0f;
 /// On the way the light goes down to 10 degrees under the horizon, so the sky shows only a soft glow while it moves.
 /// It does not go across the top of the sky.
 [[nodiscard]] glm::vec3 AirLightTowards(glm::vec3 sun, glm::vec3 moon, float moonShare);
+
+/// The angle between the earth's axis and the axis of its path round the sun, in degrees. The moon goes round the sky
+/// near the path of the sun, so it climbs higher or lower than the sun.
+inline constexpr float k_AxisTiltDegrees = 23.44f;
+
+/// How far through its moon month the moon is, 0 at a new moon and 0.5 at a full moon. It counts the whole days of
+/// the date as the game's moon does, then adds the days that passed in the game and the part of the day of the hour.
+/// Thus the moon moves smoothly through the night and from one day of the game to the next.
+[[nodiscard]] double MoonMonthFraction(int64_t unixTime, int32_t passedDays, float hour);
+
+/// The phase of the moon from how far through its moon month it is, as the game's moon has it: a whole turn (2 pi) at
+/// a new moon and half a turn at a full moon
+[[nodiscard]] float MoonPhase(double monthFraction);
+
+/// The direction from the ground towards the moon at an hour of script time (0 to 24), on the day of the equinox. The
+/// moon is east of the sun by the part of its moon month that passed: next to the sun at a new moon, 90 degrees
+/// away at a quarter and opposite at a full moon. It goes along the sun's yearly path, so its angle north of the
+/// equator changes with the phase. Each day it is 12 degrees further east, so it rises about 50 minutes later.
+[[nodiscard]] glm::vec3 MoonTowards(float hour, double monthFraction);
+
+/// The part of the moon's light that comes through the air, from the sine of its angle over the horizon: all of it
+/// straight up and less near the horizon, as the light goes through more air there. None under the horizon.
+[[nodiscard]] float MoonThroughAir(float elevationSine);
+
+/// The most light that the night sky (the stars and the glow of the air) gives the water and the land when the moon is
+/// down, as a share of the light of a full moon high in the sky
+inline constexpr float k_NightGlow = 0.12f;
+
+/// The light of the night sky from the sine of the sun's angle over the horizon: none by day, then up to k_NightGlow
+/// as the moon takes the air's light after sunset (AirMoonShare)
+[[nodiscard]] float NightGlow(float sunElevationSine);
+
+/// The direction that the air's light at night comes from. It is the moon while the moon is up. While the moon is
+/// down, the direction goes to the point opposite the sun, so the night sky keeps its soft glow.
+[[nodiscard]] glm::vec3 AirMoonTowards(glm::vec3 sunTowards, glm::vec3 moonTowards);
+
+/// Turns the moon's axes about the line from the eye, so that the lit edge of the moon points to the sun across the
+/// sky. The first axis goes across the moon's face and the third axis goes along the line from the eye. The axes keep
+/// their lengths and their order. When the sun is in line with the moon, the axes do not change.
+[[nodiscard]] glm::mat3 TurnLitEdgeTowards(const glm::mat3& basis, glm::vec3 towardsSun);
+
+/// The number of days that start between two hours of script time from one frame to the next: 1 when the hour goes
+/// past midnight forward, -1 when it goes past midnight back, otherwise 0. A negative earlier hour means none yet.
+[[nodiscard]] int32_t DaysStarted(float earlierHour, float hour);
 
 /// The share of a place's own colour that its haze and fog take
 inline constexpr float k_PlaceShare = 0.3f;
