@@ -152,6 +152,7 @@ target_link_libraries(
           gestures
           rawimage
           helpstats
+          creaturehtml
           imgui::imgui
           imgui_user
           ScriptLibrary

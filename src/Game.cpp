@@ -163,6 +163,7 @@
 #include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
@@ -1900,6 +1901,11 @@ bool Game::GameLogicLoop() noexcept
 	}
 	// A creature loaded from what a last land kept sparkles into sight
 	Locator::creatureCarryOverSystem::value().ProcessTurn();
+	// The game can take a picture of the player's creature for its web page
+	if (Locator::creatureWebPageSystem::has_value())
+	{
+		Locator::creatureWebPageSystem::value().ProcessTurn();
+	}
 	{
 		// The particle effects not owned by a miracle step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
@@ -4404,7 +4410,8 @@ bool Game::Run() noexcept
 			// A picture without the debug windows: the frame's windows are made as ever but not drawn
 			// nor in a challenge's picture
 			const bool hiddenThisFrame =
-			    _debugGuiHiddenFrame == _frameCount || ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value());
+			    _debugGuiHiddenFrame == _frameCount || ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
+			    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting());
 			if (drawsFrame && (!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
 			{
 				Locator::debugGui::value().Draw();
@@ -4421,6 +4428,13 @@ bool Game::Run() noexcept
 		    Locator::entitiesRegistry::value(),
 		    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
 		     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
+		// The pictures of the player's creature whose screens are back
+		if (Locator::creatureWebPageSystem::has_value())
+		{
+			Locator::creatureWebPageSystem::value().CollectPictures(
+			    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
+			     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
+		}
 		ShowInspectorCamera(false);
 
 		// Clear the stale screenshot request
