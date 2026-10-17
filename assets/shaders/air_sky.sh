@@ -17,7 +17,11 @@ uniform vec4 u_airPlanet;
 #define AIR_SUN_RADIUS 0.0047f
 #define AIR_AURORA_BOTTOM 92.0f
 #define AIR_AURORA_TOP 320.0f
+// The steps of the aurora's full march (atmosphere::k_AuroraSteps)
 #define AIR_AURORA_STEPS 40
+
+// The aurora's pass at half the screen's size (see AirAuroraOnScreen)
+SAMPLER2D(s_airAurora, 12);
 
 float AirHash(vec2 p)
 {
@@ -49,11 +53,22 @@ vec2 AirBallSpan(vec3 eyeKm, vec3 dir, float radiusKm)
 	return vec2(-b - s, -b + s);
 }
 
-// The light of the aurora along a ray from the eye, up to `farthestKm` kilometres, for the screen's pixel `pixel`. The curtains of the aurora hang in
-// the high air in an oval round the magnetic pole. Their light is green from oxygen at about 110 to 200 kilometres, red
-// over 200 kilometres, and purple at their sharp bottom edge from nitrogen. The curtains fold slowly, have thin upright
-// rays and flicker fast. Only the night side of the planet shows them.
-vec3 AirAurora(vec3 eye, vec3 dir, float farthestKm, vec2 pixel)
+// The magnetic latitudes round the middle of the oval that can hold the curtains: the oval moves 3 degrees with the
+// time of night, the three curtains are 1.1 degrees apart, and their folds and thickness add less than 1.2 degrees
+#define AIR_AURORA_BAND radians(6.0f)
+// The samples along a ray that find the part of it near the curtains, before the march
+#define AIR_AURORA_PROBES 6
+
+// The light of the aurora along a ray from the eye, up to `farthestKm` kilometres, for the screen's pixel `pixel`, in
+// `steps` steps at most. The curtains of the aurora hang in the high air in an oval round the magnetic pole. Their light
+// is green from oxygen at about 110 to 200 kilometres, red over 200 kilometres, and purple at their sharp bottom edge
+// from nitrogen. The curtains fold slowly, have thin upright rays and flicker fast. Only the night side of the planet
+// shows them.
+//
+// With `probes`, a few probes along the ray first find the part of it that is near the oval's band of latitude and on
+// the night side. The march then takes only the steps of the full march that fall in that part. Thus it gives the same
+// light for fewer steps, and no steps for a ray far from the oval or on the day side.
+vec3 AirAurora(vec3 eye, vec3 dir, float farthestKm, vec2 pixel, int steps, bool probes)
 {
 	float strength = u_aurora.w;
 	if (strength <= 0.01f)
@@ -92,18 +107,60 @@ vec3 AirAurora(vec3 eye, vec3 dir, float farthestKm, vec2 pixel)
 		return vec3_splat(0.0f);
 	}
 	vec3 pole = u_aurora.xyz;
-	vec3 across = normalize(cross(pole, abs(pole.y) < 0.9f ? vec3(0.0f, 1.0f, 0.0f) : vec3(1.0f, 0.0f, 0.0f)));
-	vec3 side = cross(pole, across);
 	vec3 sun = u_airSun.xyz;
-	vec3 sunAcross = normalize(sun - pole * dot(sun, pole) + vec3_splat(1e-5f));
-	float time = u_airPlanet.w;
-	float stride = (end - start) / float(AIR_AURORA_STEPS);
-	float jitter = AirHash(pixel + fract(time * 7.13f) * 97.0f);
 	// The middle of the oval goes towards the equator on strong nights and on the side away from the sun
 	float ovalBase = radians(67.0f - 10.0f * strength);
-	vec3 light = vec3_splat(0.0f);
-	for (int i = 0; i < AIR_AURORA_STEPS; ++i)
+	float bandLow = sin(ovalBase - AIR_AURORA_BAND);
+	float bandHigh = sin(min(ovalBase + AIR_AURORA_BAND, radians(90.0f)));
+	// Along the ray the sine of the latitude and the height of the sun each follow a sine wave in the angle round the
+	// planet's middle. Between two probes such a curve goes away from the line between them by at most an eighth of the
+	// square of the angle between them.
+	float probeStride = (end - start) / float(AIR_AURORA_PROBES - 1);
+	float angle = probeStride / (ATMOS_GROUND_RADIUS + AIR_AURORA_BOTTOM);
+	float bend = 0.125f * angle * angle + 1e-4f;
+	float first = probes ? 1e9f : start;
+	float last = probes ? -1e9f : end;
+	vec2 before = vec2_splat(0.0f);
+	if (probes)
 	{
+		for (int probeIndex = 0; probeIndex < AIR_AURORA_PROBES; ++probeIndex)
+		{
+			vec3 probeUp = normalize(eyeKm + dir * (start + float(probeIndex) * probeStride));
+			vec2 probe = vec2(dot(probeUp, pole), dot(probeUp, sun));
+			if (probeIndex > 0)
+			{
+				bool nearBand = min(before.x, probe.x) - bend <= bandHigh && max(before.x, probe.x) + bend >= bandLow;
+				bool dark = min(before.y, probe.y) - bend < 0.05f;
+				if (nearBand && dark)
+				{
+					first = min(first, start + float(probeIndex - 1) * probeStride);
+					last = start + float(probeIndex) * probeStride;
+				}
+			}
+			before = probe;
+		}
+	}
+	if (last < first)
+	{
+		return vec3_splat(0.0f);
+	}
+	vec3 across = normalize(cross(pole, abs(pole.y) < 0.9f ? vec3(0.0f, 1.0f, 0.0f) : vec3(1.0f, 0.0f, 0.0f)));
+	vec3 side = cross(pole, across);
+	vec3 sunAcross = normalize(sun - pole * dot(sun, pole) + vec3_splat(1e-5f));
+	float time = u_airPlanet.w;
+	float stride = (end - start) / float(steps);
+	float jitter = AirHash(pixel + fract(time * 7.13f) * 97.0f);
+	// The steps of the full march from `start` that fall in the part near the curtains
+	int firstStep = int(max(floor((first - start) / stride - jitter), 0.0f));
+	int lastStep = int(min(ceil((last - start) / stride), float(steps - 1)));
+	vec3 light = vec3_splat(0.0f);
+	for (int marchIndex = 0; marchIndex < AIR_AURORA_STEPS; ++marchIndex)
+	{
+		int i = firstStep + marchIndex;
+		if (i > lastStep)
+		{
+			break;
+		}
 		vec3 p = eyeKm + dir * (start + (float(i) + jitter) * stride);
 		float r = length(p);
 		vec3 n = p / r;
@@ -124,16 +181,16 @@ vec3 AirAurora(vec3 eye, vec3 dir, float farthestKm, vec2 pixel)
 		float oval = ovalBase - radians(3.0f) * midnight;
 		// Three curtains, each folded slowly along its length
 		float curtains = 0.0f;
-		for (int k = 0; k < 3; ++k)
+		for (int c = 0; c < 3; ++c)
 		{
-			float fk = float(k);
-			float fold = radians(0.5f) * sin(longitude * 9.0f + fk * 1.7f + time * 0.02f) +
-			             radians(0.15f) * sin(longitude * 41.0f - fk * 2.3f + time * 0.07f) +
-			             radians(0.05f) * sin(longitude * 133.0f + fk + time * 0.25f);
-			float centre = oval + radians(1.1f) * (fk - 1.0f) + fold;
-			float thickness = radians(0.07f + 0.05f * AirNoise(longitude * 60.0f + fk * 11.0f));
+			float fc = float(c);
+			float fold = radians(0.5f) * sin(longitude * 9.0f + fc * 1.7f + time * 0.02f) +
+			             radians(0.15f) * sin(longitude * 41.0f - fc * 2.3f + time * 0.07f) +
+			             radians(0.05f) * sin(longitude * 133.0f + fc + time * 0.25f);
+			float centre = oval + radians(1.1f) * (fc - 1.0f) + fold;
+			float thickness = radians(0.07f + 0.05f * AirNoise(longitude * 60.0f + fc * 11.0f));
 			float d = (latitude - centre) / thickness;
-			curtains += exp(-d * d) * (0.55f + 0.45f * AirNoise(longitude * 25.0f + fk * 5.0f + time * 0.03f));
+			curtains += exp(-d * d) * (0.55f + 0.45f * AirNoise(longitude * 25.0f + fc * 5.0f + time * 0.03f));
 		}
 		if (curtains < 0.002f)
 		{
@@ -154,6 +211,19 @@ vec3 AirAurora(vec3 eye, vec3 dir, float farthestKm, vec2 pixel)
 	float eyeAltitude = length(eyeKm) - ATMOS_GROUND_RADIUS;
 	vec3 through = eyeAltitude < 100.0f ? AtmosTransmittance(eyeAltitude, dot(normalize(eyeKm), dir)) : vec3_splat(1.0f);
 	return light * through * (0.02f * (0.5f + strength));
+}
+
+// The aurora that the aurora's pass drew at half the screen's size, at a point of the screen (0 to 1)
+vec3 AirAuroraOnScreen(vec2 uv)
+{
+	return texture2DLod(s_airAurora, uv, 0.0f).rgb;
+}
+
+// Whether the scene can have the aurora in front of it: only when the eye is over the bottom of the curtains, as from
+// space. From under them, a ray to the scene never comes up to the curtains.
+bool AirAuroraOverScene()
+{
+	return u_atmosParams.z > AIR_AURORA_BOTTOM - 4.0f;
 }
 
 // The faint glow of the high air at about 95 kilometres: a thin green line along the limb, seen from above the air
@@ -182,7 +252,7 @@ vec3 AirGlow(vec3 eye, vec3 dir)
 }
 
 // The sky in a direction from the eye on the screen, with `sunHeight` the sine of the air's sun over the horizon at the
-// land, for the screen's pixel `pixel`
+// land, for the screen's pixel `pixel`. The aurora is not in it: the caller adds the aurora's pass or AirAurora.
 vec3 AirSkyColour(vec3 eye, vec3 dir, float sunHeight, vec2 pixel)
 {
 	vec3 air = AtmosSkyOnScreen(dir, sunHeight);
@@ -196,9 +266,12 @@ vec3 AirSkyColour(vec3 eye, vec3 dir, float sunHeight, vec2 pixel)
 	vec3 h = fract((q.xxy + q.yzz) * q.zyx);
 	vec3 star = cell + 0.2f + 0.6f * h - dir * 260.0f;
 	float glint = h.x > 0.985f ? smoothstep(0.06f, 0.0f, dot(star, star)) * (0.4f + 0.6f * h.y) : 0.0f;
-	float horizonY = WorldHorizonY(altitude * ATMOS_UNITS_PER_KM);
+	// The stars show over the limb of the world's ball, in the air's own frame
+	float ballRadius = ATMOS_GROUND_RADIUS + max(altitude, 0.0f);
+	float horizonUp = -sqrt(max(altitude, 0.0f) * (2.0f * ATMOS_GROUND_RADIUS + max(altitude, 0.0f))) / ballRadius;
 	float aboveAir = smoothstep(15.0f, 80.0f, altitude);
-	air += vec3(0.85f, 0.9f, 1.0f) * glint * dark * smoothstep(horizonY + 0.02f, horizonY + 0.2f, dir.y) * (1.0f + 1.5f * aboveAir);
+	air += vec3(0.85f, 0.9f, 1.0f) * glint * dark * smoothstep(horizonUp + 0.02f, horizonUp + 0.2f, dot(dir, AtmosUp())) *
+	       (1.0f + 1.5f * aboveAir);
 	// Above the air the sun is a hard white disc
 	float sunCos = dot(dir, normalize(u_airSun.xyz));
 	if (aboveAir > 0.0f && sunCos > cos(AIR_SUN_RADIUS * 1.5f))
@@ -207,7 +280,6 @@ vec3 AirSkyColour(vec3 eye, vec3 dir, float sunHeight, vec2 pixel)
 		air = mix(air, vec3(1.0f, 0.98f, 0.94f), disc * aboveAir);
 	}
 	air += AirGlow(eye, dir);
-	air += AirAurora(eye, dir, 1e9f, pixel);
 	return air;
 }
 

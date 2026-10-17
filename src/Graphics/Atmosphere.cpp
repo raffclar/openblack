@@ -481,62 +481,167 @@ float atmosphere::AltitudeOf(float heightOverSea)
 	return std::max(heightOverSea, 0.5f) / k_UnitsPerKilometre;
 }
 
-float atmosphere::FlatReach(glm::vec2 eye, float mapSize)
+atmosphere::WorldCap atmosphere::MapCap(glm::vec2 eye, float heightOverSea, float mapSize)
 {
-	const glm::vec2 far {std::max(eye.x, mapSize - eye.x), std::max(eye.y, mapSize - eye.y)};
-	return glm::length(far);
+	const glm::vec2 mapMiddle {0.5f * mapSize};
+	const float followsEye = 1.0f - Smoothstep(k_CapFollowsEyeBelow, k_CapOnMapAbove, heightOverSea);
+	const glm::vec2 middle = glm::mix(mapMiddle, eye, followsEye);
+	const glm::vec2 far {std::max(middle.x, mapSize - middle.x), std::max(middle.y, mapSize - middle.y)};
+	return {.eyeFromMiddle = eye - middle, .radius = glm::length(far)};
 }
 
-float atmosphere::WorldDrop(float distance, float flatReach)
+atmosphere::WorldSection atmosphere::SectionToward(const WorldCap& cap, glm::vec2 across)
 {
-	const float past = std::max(distance - flatReach, 0.0f);
-	if (past >= k_WorldRadius)
+	const float b = glm::dot(cap.eyeFromMiddle, across);
+	const float side = std::max(glm::dot(cap.eyeFromMiddle, cap.eyeFromMiddle) - (b * b), 0.0f);
+	if (side < cap.radius * cap.radius)
+	{
+		const float half = std::sqrt((cap.radius * cap.radius) - side);
+		return {.chordFrom = -b - half, .chordTo = -b + half, .pastSquared = 0.0f};
+	}
+	const float past = std::sqrt(side) - cap.radius;
+	return {.chordFrom = -b, .chordTo = -b, .pastSquared = past * past};
+}
+
+namespace
+{
+// The direction on the ground of a ray, or, for a ray straight up or down, the direction towards the cap
+glm::vec2 AcrossOf(const atmosphere::WorldCap& cap, glm::vec2 direction)
+{
+	const float length = glm::length(direction);
+	if (length > 1e-6f)
+	{
+		return direction / length;
+	}
+	const float fromMiddle = glm::length(cap.eyeFromMiddle);
+	return fromMiddle > 1e-3f ? -cap.eyeFromMiddle / fromMiddle : glm::vec2(1.0f, 0.0f);
+}
+
+// Where a ray meets a circle in its upright plane, the circle's middle `middle` units along the plane and the world's
+// radius under the sea, with `c` the square of the eye's distance from the middle less the square of the radius
+std::optional<glm::vec2> CircleSpan(float middle, float c, float across, float up, float heightOverSea)
+{
+	const float b = (-across * middle) + (up * (heightOverSea + atmosphere::k_WorldRadius));
+	const float disc = (b * b) - c;
+	if (disc < 0.0f)
+	{
+		return std::nullopt;
+	}
+	const float s = std::sqrt(disc);
+	// The roots of t^2 + 2 b t + c, kept exact for a small c
+	const float q = b < 0.0f ? -b + s : -b - s;
+	const glm::vec2 roots = std::abs(q) > 1e-20f ? glm::vec2(c / q, q) : glm::vec2(-b);
+	return glm::vec2(std::min(roots.x, roots.y), std::max(roots.x, roots.y));
+}
+
+// Where a ray from the eye is inside the world with `lift` added to its height: the slab over the cap's chord with a
+// circle at each end in the ray's upright plane. The shape is convex, so the span joins the spans of its parts.
+std::optional<glm::vec2> WorldSpan(const atmosphere::WorldCap& cap, float heightOverSea, glm::vec3 direction, float lift)
+{
+	constexpr float k_Radius = atmosphere::k_WorldRadius;
+	const glm::vec2 flat {direction.x, direction.z};
+	const float across = glm::length(flat);
+	const auto section = atmosphere::SectionToward(cap, AcrossOf(cap, flat));
+	const float c0 = ((heightOverSea - lift) * (heightOverSea + lift + (2.0f * k_Radius))) + section.pastSquared;
+	std::optional<glm::vec2> span;
+	const auto join = [&span](glm::vec2 part) {
+		span = span.has_value() ? glm::vec2(std::min(span->x, part.x), std::max(span->y, part.y)) : part;
+	};
+	for (const float middle : {section.chordFrom, section.chordTo})
+	{
+		if (const auto part = CircleSpan(middle, (middle * middle) + c0, across, direction.y, heightOverSea))
+		{
+			join(*part);
+		}
+	}
+	if (section.chordTo > section.chordFrom)
+	{
+		glm::vec2 slab {-1e30f, 1e30f};
+		if (across > 1e-6f)
+		{
+			slab = {section.chordFrom / across, section.chordTo / across};
+		}
+		else if (section.chordFrom > 0.0f || section.chordTo < 0.0f)
+		{
+			slab = {1.0f, -1.0f};
+		}
+		const float top = heightOverSea - lift;
+		const float bottom = heightOverSea + lift + (2.0f * k_Radius);
+		if (direction.y < 0.0f)
+		{
+			slab = {std::max(slab.x, top / -direction.y), std::min(slab.y, bottom / -direction.y)};
+		}
+		else if (direction.y > 0.0f)
+		{
+			slab = {std::max(slab.x, -bottom / direction.y), std::min(slab.y, -top / direction.y)};
+		}
+		else if (top > 0.0f)
+		{
+			slab = {1.0f, -1.0f};
+		}
+		if (slab.x < slab.y)
+		{
+			join(slab);
+		}
+	}
+	return span;
+}
+} // namespace
+
+float atmosphere::WorldDrop(const WorldCap& cap, glm::vec2 fromEye)
+{
+	const auto section = SectionToward(cap, AcrossOf(cap, fromEye));
+	const float along = glm::length(fromEye);
+	const float past = along > section.chordTo ? along - section.chordTo : std::max(section.chordFrom - along, 0.0f);
+	const float square = (past * past) + section.pastSquared;
+	if (square >= k_WorldRadius * k_WorldRadius)
 	{
 		return std::numeric_limits<float>::max();
 	}
-	return past * past / (k_WorldRadius + std::sqrt((k_WorldRadius * k_WorldRadius) - (past * past)));
+	return square / (k_WorldRadius + std::sqrt((k_WorldRadius * k_WorldRadius) - square));
 }
 
-std::optional<float> atmosphere::CurvedSeaDistance(float heightOverSea, glm::vec3 direction, float flatReach)
+std::optional<float> atmosphere::CurvedSeaDistance(const WorldCap& cap, float heightOverSea, glm::vec3 direction)
 {
-	if (heightOverSea <= 0.0f)
+	const auto span = WorldSpan(cap, heightOverSea, direction, 0.0f);
+	if (!span.has_value() || span->x >= span->y || span->x <= 0.0f)
 	{
 		return std::nullopt;
 	}
-	const float across = glm::length(glm::vec2(direction.x, direction.z));
-	if (direction.y < 0.0f)
-	{
-		const float straight = heightOverSea / -direction.y;
-		if (straight * across <= flatReach)
-		{
-			return straight;
-		}
-	}
-	// In the ray's upright plane the eye is at (-flatReach, heightOverSea + R) from the ball's middle, and the ray meets
-	// the ball where t^2 + 2 b t + c = 0
-	const float up = heightOverSea + k_WorldRadius;
-	const float b = (-across * flatReach) + (direction.y * up);
-	const float c = (flatReach * flatReach) + (heightOverSea * (heightOverSea + (2.0f * k_WorldRadius)));
-	const float disc = (b * b) - c;
-	if (disc < 0.0f || b >= 0.0f)
-	{
-		return std::nullopt;
-	}
-	const float q = -b + std::sqrt(disc);
-	const float t = c / q;
-	if (t * across < flatReach * 0.999f)
-	{
-		return std::nullopt;
-	}
-	return t;
+	return span->x;
 }
 
-float atmosphere::WorldHorizonY(float heightOverSea, float flatReach)
+float atmosphere::WorldHorizonY(const WorldCap& cap, float heightOverSea)
 {
+	const float fromMiddle = glm::length(cap.eyeFromMiddle);
+	const float chord = fromMiddle < cap.radius ? std::sqrt((cap.radius * cap.radius) - (fromMiddle * fromMiddle)) : 0.0f;
+	const float past = std::max(fromMiddle - cap.radius, 0.0f);
+	const float circle = std::sqrt(std::max((k_WorldRadius * k_WorldRadius) - (past * past), 0.0f));
 	const float up = std::max(heightOverSea, 0.0f) + k_WorldRadius;
-	const float toMiddle = std::sqrt((flatReach * flatReach) + (up * up));
-	const float down = std::atan2(up, flatReach) - std::asin(std::min(k_WorldRadius / toMiddle, 1.0f));
+	const float toMiddle = std::sqrt((chord * chord) + (up * up));
+	const float down = std::atan2(up, chord) - std::asin(std::min(circle / toMiddle, 1.0f));
 	return -std::sin(down);
+}
+
+atmosphere::AirFrame atmosphere::AirFrameFor(const WorldCap& cap, float heightOverSea)
+{
+	const glm::vec3 fromMiddle {cap.eyeFromMiddle.x, heightOverSea + k_WorldRadius, cap.eyeFromMiddle.y};
+	const float distance = glm::length(fromMiddle);
+	const float across = glm::dot(cap.eyeFromMiddle, cap.eyeFromMiddle);
+	// distance - R, with no loss of the small terms
+	const float height = (across + (heightOverSea * (heightOverSea + (2.0f * k_WorldRadius)))) / (distance + k_WorldRadius);
+	return {.up = fromMiddle / distance, .height = height};
+}
+
+glm::vec3 atmosphere::TurnToUp(glm::vec3 up, glm::vec3 direction)
+{
+	// Turn about the line up x (0, 1, 0) by the angle between them: v cos + k x v + k (k . v) / (1 + cos)
+	const glm::vec3 axis {-up.z, 0.0f, up.x};
+	if (glm::dot(axis, axis) < 1e-12f || up.y <= -1.0f + 1e-6f)
+	{
+		return direction;
+	}
+	return (direction * up.y) + glm::cross(axis, direction) + (axis * (glm::dot(axis, direction) / (1.0f + up.y)));
 }
 
 glm::vec3 atmosphere::MagneticPole()
@@ -559,6 +664,11 @@ float atmosphere::AuroraStrength(int night)
 	bits ^= bits >> 13u;
 	const float random = static_cast<float>(bits & 0xFFFFu) / 65535.0f;
 	return std::pow(random, 1.8f);
+}
+
+float atmosphere::AuroraTonight(int night, std::optional<float> chosen)
+{
+	return chosen.has_value() ? std::clamp(*chosen, 0.0f, 1.0f) : AuroraStrength(night);
 }
 
 glm::vec3 atmosphere::LightEye(glm::vec3 eye, float seaLevel)

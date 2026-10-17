@@ -162,6 +162,9 @@ struct Environment
 	/// EXPERIMENT (not for merge): the cover of the volumetric clouds, as Shift, Alt and F9 choose it (the number of a
 	/// volumetric_clouds::CoverChoice). The weather gives the cover when not given.
 	std::optional<uint8_t> cloudCover;
+	/// EXPERIMENT (not for merge): how strong the aurora is, 0 to 1 (atmosphere::AuroraTonight), such as
+	/// atmosphere::k_StrongAurora for its oval over the island. The night gives the strength when not given.
+	std::optional<float> auroraStrength;
 };
 
 /// Where the camera looks as the scenario starts
@@ -180,6 +183,14 @@ enum class Shot : uint8_t
 };
 [[nodiscard]] std::string_view Name(Shot shot);
 
+/// EXPERIMENT (not for merge): a placed shot that climbs. The camera's eye goes straight up from its placed height to
+/// `top` units over the sea in `seconds`, faster as it gets higher, and keeps the point it looks at.
+struct Climb
+{
+	float top {0.0f};
+	float seconds {1.0f};
+};
+
 struct Framing
 {
 	Shot shot {Shot::Overview};
@@ -194,6 +205,8 @@ struct Framing
 	/// under each
 	glm::vec3 eye {0.0f};
 	glm::vec3 look {0.0f};
+	/// A placed shot's climb, when it climbs
+	std::optional<Climb> climb;
 };
 
 /// A creature's body as the scenario wants it; what is not given is as the creature's species starts
@@ -1116,6 +1129,9 @@ struct CameraPlacement
 [[nodiscard]] CameraPlacement Follow(glm::vec3 position, float height, float distanceFactor);
 /// The camera in front of a creature's face, by its height, its position and the way it faces on the land
 [[nodiscard]] CameraPlacement Head(glm::vec3 position, glm::vec2 ahead, float height, float distanceFactor);
+/// EXPERIMENT (not for merge): the placed camera `elapsed` seconds into a climb from `start`, with `seaLevel` the
+/// sea's height. The height over the sea grows by the same ratio in each part of the climb, eased at both ends.
+[[nodiscard]] CameraPlacement Climbing(const CameraPlacement& start, const Climb& climb, float seaLevel, float elapsed);
 /// The box round points on the land, at least so big: its middle and half its size
 struct Bounds
 {

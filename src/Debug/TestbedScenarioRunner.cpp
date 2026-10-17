@@ -181,8 +181,8 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
-#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -933,6 +933,7 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		{
 			underwater.CycleCloudCover();
 		}
+		underwater.SetAuroraChoice(environment.auroraStrength);
 	}
 	if (Locator::creaturePhysiologySystem::has_value())
 	{
@@ -2849,6 +2850,7 @@ void Runner::Frame(Shot shot, size_t creature, float distance)
 	_shot = shot;
 	_shotCreature = creature;
 	_shotDistance = distance;
+	_shotSeconds = 0.0f;
 	UpdateCamera();
 }
 
@@ -2921,6 +2923,12 @@ void Runner::UpdateCamera()
 		    .origin = {eye.x, land.GetHeightAt(eye) + _scenario->framing.eye.y, eye.y},
 		    .focus = {look.x, land.GetHeightAt(look) + _scenario->framing.look.y, look.y},
 		};
+		// EXPERIMENT (not for merge): a climbing shot goes up from there
+		if (const auto& climb = _scenario->framing.climb)
+		{
+			const float sea = Locator::underwaterSystem::has_value() ? Locator::underwaterSystem::value().GetSeaLevel() : 0.0f;
+			placement = Climbing(*placement, *climb, sea, _shotSeconds);
+		}
 		break;
 	}
 	case Shot::Follow:
@@ -2938,8 +2946,11 @@ void Runner::UpdateCamera()
 	{
 		camera.SetOrigin(placement->origin).SetFocus(placement->focus);
 	}
-	// A shot of everything is taken once; following and close ups keep up with the creature
-	if (*_shot == Shot::Overview || *_shot == Shot::Testbed || *_shot == Shot::Placed)
+	// A shot of everything is taken once; following and close ups keep up with the creature, and a climb lasts until
+	// its top
+	const auto& climb = _scenario->framing.climb;
+	const bool climbing = *_shot == Shot::Placed && climb.has_value() && _shotSeconds < climb->seconds;
+	if ((*_shot == Shot::Overview || *_shot == Shot::Testbed || *_shot == Shot::Placed) && !climbing)
 	{
 		_shot.reset();
 	}
@@ -2951,6 +2962,7 @@ void Runner::Update(float seconds)
 	{
 		return;
 	}
+	_shotSeconds += seconds;
 	UpdateCamera();
 	if (!_running)
 	{
