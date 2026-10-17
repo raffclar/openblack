@@ -9,14 +9,19 @@
 
 #pragma once
 
+#include "Enums.h"
+
 namespace openblack::ecs::components
 {
 
-/// A lantern of a town or of the country, whose crackle is heard while it is dark (its SoundTag)
+/// A lantern of a town or of the country, whose crackle is heard while it is dark (its SoundTag). It takes miracles and
+/// fire by its row of the statics' table, and its light goes with it.
 struct StreetLantern
 {
 	/// A country lantern on a campfire, rather than a town's lantern on a post
 	bool country;
+	/// Its row of the statics' table
+	MobileStaticInfo info {MobileStaticInfo::StreetLantern};
 };
 
 } // namespace openblack::ecs::components

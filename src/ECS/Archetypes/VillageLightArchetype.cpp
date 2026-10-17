@@ -27,7 +27,7 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
-entt::entity VillageLightArchetype::Create(const glm::vec3& position, VillageLight::Kind kind)
+entt::entity VillageLightArchetype::Create(const glm::vec3& position, VillageLight::Kind kind, entt::entity owner)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	// Everything about it is drawn from the C runtime's numbers rather than the game's
@@ -40,6 +40,7 @@ entt::entity VillageLightArchetype::Create(const glm::vec3& position, VillageLig
 	                                         .flickerTimer = random.CrtRandom(0.0f, village_lights::k_FlickerMilliseconds),
 	                                         .flicker = glm::vec2(0.0f),
 	                                         .glowSize = village_lights::k_GlowSize,
+	                                         .owner = owner,
 	                                     });
 
 	auto& textures = Locator::resources::value().GetTextures();

@@ -30,6 +30,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandGrab.h"
@@ -43,6 +44,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
@@ -89,6 +91,10 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<MagicShield>();
 	func.template operator()<ShieldDome>();
 	func.template operator()<ScriptHighlight>();
+	// Fish farms, each in the cell it stands in, before the cell's other fixed things
+	func.template operator()<FishFarm>();
+	// Street lanterns, each in the cell it stands in, after the cell's other fixed things
+	func.template operator()<StreetLantern>();
 	// Things that count as staying put but can be carried
 	func.template operator()<Pot>();
 	func.template operator()<OneOffSpellSeed>();
@@ -196,6 +202,14 @@ std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registr
 	if (registry.AnyOf<Tree, MagicShield, ShieldDome, ScriptHighlight>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = false, .moves = false};
+	}
+	if (registry.AnyOf<FishFarm>(entity))
+	{
+		return Kind {.placement = Placement::FixedFront, .coversOutline = false, .moves = false};
+	}
+	if (registry.AnyOf<StreetLantern>(entity))
+	{
+		return Kind {.placement = Placement::FixedBack, .coversOutline = false, .moves = false};
 	}
 	if (registry.AnyOf<Pot, OneOffSpellSeed>(entity))
 	{
