@@ -19,8 +19,10 @@
 #include <glm/vec2.hpp>
 
 #include "Body.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::physics;
@@ -255,7 +257,8 @@ living::LandedLair living::LairOnLanding(AnimalInfo kind, bool leader)
 
 float living::MapDistance(glm::vec3 from, glm::vec3 to)
 {
-	return glm::distance(glm::vec2(from.x, from.z), glm::vec2(to.x, to.z));
+	// The game's map distance
+	return gutils::GetDistanceInMetres(from, to);
 }
 
 bool living::ShelterSeesFlyer(glm::vec3 shield, float radius, glm::vec3 flyer)
@@ -267,15 +270,16 @@ bool living::FlyingAt(glm::vec3 living, glm::vec3 object, glm::vec3 velocity)
 {
 	constexpr float k_Coming = 0.8f;
 	auto towards = living - object;
+	// The game multiplies each by one over its length, and adds every sum from z to x
 	if (towards != glm::vec3(0.0f))
 	{
-		towards = glm::normalize(towards);
+		towards = x87::Scaled<x87::SumOrder::Zyx>(towards);
 	}
 	if (velocity != glm::vec3(0.0f))
 	{
-		velocity = glm::normalize(velocity);
+		velocity = x87::Scaled<x87::SumOrder::Zyx>(velocity);
 	}
-	return !(glm::dot(velocity, towards) < k_Coming);
+	return !(x87::DotZyx(velocity, towards) < k_Coming);
 }
 
 bool living::IsActuallyInTheAir(float speed, float centreHeight, float landHeight, float radius)

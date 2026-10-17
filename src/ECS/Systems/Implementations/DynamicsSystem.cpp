@@ -26,6 +26,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -445,7 +446,7 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, con
 			{
 				const auto world = origin + axes * (point + centreOfMass);
 				point.y += land->HeightAt(glm::vec2(world.x, world.z)) - baseHeight;
-				shape.radius = std::max(shape.radius, glm::length(point));
+				shape.radius = std::max(shape.radius, x87::LengthZyx(point));
 			}
 		}
 	}
@@ -520,11 +521,12 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakeCreatureBody(entt::entity cre
 		origins.emplace_back(part.localToWorld[3]);
 		centre += origins.back();
 	}
-	centre /= static_cast<float>(origins.size());
+	// The game multiplies the sum by one over the count, and adds the squares from z to x
+	centre *= 1.0f / static_cast<float>(origins.size());
 	float radius = 0.0f;
 	for (const auto& point : origins)
 	{
-		radius = std::max(radius, glm::distance(point, centre));
+		radius = std::max(radius, x87::Distance<x87::SumOrder::Zyx>(point, centre));
 	}
 	auto body = std::make_unique<physics::Body>(
 	    physics::BodySetup {.mass = physics::shapes::k_CreatureMass, .material = material, .dynamic = false},
@@ -627,9 +629,10 @@ PhysicsEntry* DynamicsSystem::AddObject(entt::entity object, const PhysicsStart&
 	}
 	MakeRoomForOne();
 	body->velocity = start.velocity;
-	if (const float speed = glm::length(body->velocity); speed > physics::k_MaxSpeed)
+	// The game compares the squares, added from z to x, then scales by the most speed over the length
+	if (physics::k_MaxSpeed * physics::k_MaxSpeed < x87::DotZyx(body->velocity, body->velocity))
 	{
-		body->velocity *= physics::k_MaxSpeed / speed;
+		body->velocity = x87::Scaled<x87::SumOrder::Zyx>(body->velocity, physics::k_MaxSpeed);
 	}
 	// The spin comes the game's way round, the opposite of the body's
 	body->SetAngularVelocityInBodyAxes(-start.spin);
@@ -830,7 +833,7 @@ void DynamicsSystem::RaiseClearOfWhatIsUnder(PhysicsEntry& entry)
 			}
 			const auto offset = body->Centre() - other->body->Centre();
 			const float reach = body->Radius() + other->body->Radius();
-			if (glm::dot(offset, offset) >= reach * reach)
+			if (x87::DotZyx(offset, offset) >= reach * reach)
 			{
 				continue;
 			}
@@ -909,9 +912,10 @@ float DynamicsSystem::PushObject(entt::entity object)
 	}
 	entry->flags |= PhysicsEntry::k_PushedByLiving;
 	const auto offset = entry->body->Centre() - Entities().Get<const Transform>(object).position;
-	if (const float length = glm::length(offset); length > 0.0f)
+	// The game divides the force by the length one time, and adds the squares from z to x
+	if (offset != glm::vec3(0.0f))
 	{
-		entry->body->externalForce += force * offset / length;
+		entry->body->externalForce += x87::Scaled<x87::SumOrder::Zyx>(offset, force);
 	}
 	return 0.0f;
 }
