@@ -135,21 +135,35 @@ maths::Launch maths::Lob(glm::vec3 from, glm::vec3 target, float gravity)
 glm::vec3 maths::BounceOffSlope(glm::vec3 velocity, glm::vec3 normal, float groundDrag, float dt, float horizontalBounce,
                                 float verticalBounce)
 {
-	const float into = glm::dot(velocity, normal);
-	if (into >= 0.0f)
+	const float into = x87::Dot<x87::SumOrder::Zyx>(velocity, normal);
+	if (!(into < 0.0f))
 	{
 		return velocity;
 	}
 	const glm::vec3 normalPart = normal * into;
 	glm::vec3 slide = velocity - normalPart;
 	// A slide too small to have a way is made a tiny one along x
-	if (glm::dot(slide, slide) < k_StillSlideSquared)
+	glm::vec3 slideDirection = slide;
+	if (x87::Dot<x87::SumOrder::Zyx>(slide, slide) < k_StillSlideSquared)
 	{
-		slide = glm::vec3(k_StillSlide, 0.0f, 0.0f);
+		slideDirection = glm::vec3(k_StillSlide, 0.0f, 0.0f);
 	}
-	const float slideSpeed = glm::length(slide);
-	const glm::vec3 slideDirection = slide / slideSpeed;
-	slide -= slideDirection * std::clamp(dt * groundDrag, 0.0f, slideSpeed);
+	float slideSpeed = 0.0f;
+	if (slideDirection.x != 0.0f || slideDirection.y != 0.0f || slideDirection.z != 0.0f)
+	{
+		slideSpeed = std::sqrt(x87::Dot<x87::SumOrder::Zyx>(slideDirection, slideDirection));
+		slideDirection *= 1.0f / slideSpeed;
+	}
+	float drag = dt * groundDrag;
+	if (!(drag > 0.0f))
+	{
+		drag = 0.0f;
+	}
+	else if (!(drag < slideSpeed))
+	{
+		drag = slideSpeed;
+	}
+	slide -= slideDirection * drag;
 	return slide * horizontalBounce - normalPart * verticalBounce;
 }
 
@@ -265,6 +279,6 @@ bool openblack::particles::maths::RushedPastCamera(glm::vec3 before, glm::vec3 n
 	const auto nowAway = now - camera;
 	const auto beforeAway = before - camera;
 	constexpr float k_Reach = k_PassingDistance * k_PassingDistance;
-	return glm::dot(nowAway, nowAway) < k_Reach && glm::dot(beforeAway, beforeAway) > k_Reach &&
-	       glm::dot(velocity, velocity) > k_PassingSpeed * k_PassingSpeed;
+	return x87::DotZyx(nowAway, nowAway) < k_Reach && x87::DotZyx(beforeAway, beforeAway) > k_Reach &&
+	       x87::DotZyx(velocity, velocity) > k_PassingSpeed * k_PassingSpeed;
 }
