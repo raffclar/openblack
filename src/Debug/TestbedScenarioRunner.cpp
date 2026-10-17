@@ -934,6 +934,7 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			underwater.CycleCloudCover();
 		}
 		underwater.SetAuroraChoice(environment.auroraStrength);
+		underwater.SetNoctilucentOverride(environment.noctilucent);
 	}
 	if (Locator::creaturePhysiologySystem::has_value())
 	{

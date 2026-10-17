@@ -120,6 +120,8 @@ public:
 	AtmosphereView();
 
 	OwnedTarget transmittance;
+	/// The table of the light that the air scatters more than once, made with the texture of the light that gets through
+	OwnedTarget multiple;
 	OwnedTarget skyView;
 	OwnedTarget aerial;
 	/// The aurora at half the screen's size (fs_aurora.sc), made again when the screen's size changes
@@ -127,6 +129,9 @@ public:
 	[[nodiscard]] const OwnedTarget* Aurora() const { return _aurora.get(); }
 	/// The dust in the air that the texture of the light that gets through was made for
 	std::optional<float> transmittanceFor;
+	/// The processor's own table of the light that the air scatters more than once, and the dust that it was made for
+	std::shared_ptr<const atmosphere::MultipleTable> multipleTable;
+	std::optional<float> multipleFor;
 
 	/// The sky's light as the processor last worked it out, and what for
 	struct SkyCache

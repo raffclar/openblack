@@ -40,6 +40,7 @@
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
+#include "Graphics/Moon.h"
 #include "Graphics/RealMoon.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
@@ -122,7 +123,14 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		rain = static_cast<float>(Locator::weatherSystem::value().GetWeatherSmooth(desc.camera->GetOrigin()).rain) / 100.0f;
 	}
 	view.wetness = volumetric_fog::StepWetness(view.wetness, std::clamp(rain, 0.0f, 1.0f), elapsed);
-	const auto air = atmos::AirFor(system.GetWaves().storm, view.wetness);
+	auto air = atmos::AirFor(system.GetWaves().storm, view.wetness);
+	// The processor's table of the light that the air scatters more than once, again only when the dust has changed
+	if (!view.multipleFor.has_value() || std::abs(*view.multipleFor - air.turbidity) > 0.05f)
+	{
+		view.multipleTable = atmos::MakeMultipleTable(air);
+		view.multipleFor = air.turbidity;
+	}
+	air.multiple = view.multipleTable;
 	const float seaLevel = frame.params.z;
 	const glm::vec3 eye = frame.eye;
 	// The world curves away past a flat cap that holds the map, and the sea's horizon goes down as the eye climbs. The
@@ -230,7 +238,15 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	// The sky above the air and the aurora, round the middle of the world's ball. The aurora's night runs from noon to
 	// noon, so that one night keeps one strength.
 	const int night = (moon != nullptr ? moon->passedDays : 0) - (hour < 12.0f ? 1 : 0);
-	atmosphere.airSun = {sunTowards, 0.0f};
+	// The noctilucent clouds of the night: the debug choice, or the night's own from the game's date
+	float noctilucent = system.GetNoctilucentOverride().value_or(0.0f);
+	if (!system.GetNoctilucentOverride().has_value() && moon != nullptr)
+	{
+		const int64_t date = moon->dateOverride.value_or(moon->date);
+		const int32_t days = moon->passedDays - (hour < 12.0f ? 1 : 0);
+		noctilucent = atmos::NoctilucentStrength((date / graphics::moon::k_SecondsPerDay) + days, atmos::DayOfYear(date, days));
+	}
+	atmosphere.airSun = {sunTowards, noctilucent};
 	atmosphere.aurora = {atmos::MagneticPole(), atmos::AuroraTonight(night, system.GetAuroraChoice())};
 	atmosphere.airPlanet = {eye.x - cap.eyeFromMiddle.x, seaLevel - atmos::k_WorldRadius, eye.z - cap.eyeFromMiddle.y, seconds};
 	if (moon != nullptr && moon->placement.has_value())
@@ -270,6 +286,7 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	// The texture of the light that gets through, when the air's dust has changed
 	const auto* transmittanceProgram = _shaderManager->GetShader("AtmosphereTransmittance");
 	const auto* skyProgram = _shaderManager->GetShader("AtmosphereSkyView");
+	const auto* multipleProgram = _shaderManager->GetShader("AtmosphereMultiple");
 	if (transmittanceProgram != nullptr &&
 	    (!view.transmittanceFor.has_value() || std::abs(*view.transmittanceFor - air.turbidity) > 0.05f))
 	{
@@ -285,6 +302,22 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		transmittanceProgram->Submit(pass);
 		view.transmittanceFor = air.turbidity;
 		view.transmittance.drawn = true;
+		// The table of the light that the air scatters more than once reads the new texture of the light that gets through
+		if (multipleProgram != nullptr)
+		{
+			const auto multiplePass = static_cast<bgfx::ViewId>(RenderPass::AtmosphereMultiple);
+			bgfx::setViewFrameBuffer(multiplePass, view.multiple.Target());
+			bgfx::setViewRect(multiplePass, 0, 0, view.multiple.Width(), view.multiple.Height());
+			bgfx::setViewClear(multiplePass, BGFX_CLEAR_NONE);
+			setUniforms(*multipleProgram);
+			multipleProgram->SetTextureSampler("s_atmosTransmittance", 13, view.transmittance.Texture());
+			const glm::vec4 multipleTarget {view.multiple.Width(), view.multiple.Height(), 0.0f, 0.0f};
+			multipleProgram->SetUniformValue("u_atmosTarget", &multipleTarget);
+			BindScreenTriangle();
+			bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+			multipleProgram->Submit(multiplePass);
+			view.multiple.drawn = true;
+		}
 	}
 	// The sky round the eye, each frame
 	{
@@ -296,6 +329,7 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		// The sky round the eye is in the air's own frame, with the light turned into it
 		skyProgram->SetUniformValue("u_atmosLight", &atmosphere.skyViewLight);
 		skyProgram->SetTextureSampler("s_atmosTransmittance", 13, view.transmittance.Texture());
+		skyProgram->SetTextureSampler("s_atmosMultiple", 15, view.multiple.Texture());
 		const glm::vec4 target {view.skyView.Width(), view.skyView.Height(), 0.0f, 0.0f};
 		skyProgram->SetUniformValue("u_atmosTarget", &target);
 		BindScreenTriangle();
@@ -420,6 +454,7 @@ void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarge
 		_shaderManager->SetCamera(RenderPass::AtmosphereAerial, *desc.camera);
 		setUniforms(*aerialProgram);
 		aerialProgram->SetTextureSampler("s_atmosTransmittance", 13, view.transmittance.Texture());
+		aerialProgram->SetTextureSampler("s_atmosMultiple", 15, view.multiple.Texture());
 		BindCloudShadow(*aerialProgram, 11);
 		BindSunVisibility(*aerialProgram, 12);
 		const glm::vec4 aerial {full ? 1.0f : 0.0f, full ? k_FullSteps : k_ReducedSteps, 0.0f, 0.0f};

@@ -2,6 +2,7 @@ $input v_texcoord0, v_texcoord1
 
 #include <bgfx_shader.sh>
 
+#define ATMOS_MULTIPLE_TABLE
 #include "atmosphere.sh"
 
 // EXPERIMENT (not for merge): the texture of the sky round the eye, each frame (see atmosphere::SkyRadiance). Each

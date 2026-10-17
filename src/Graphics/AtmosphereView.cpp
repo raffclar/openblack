@@ -70,6 +70,7 @@ TextureHandle OwnedTarget::Texture() const
 AtmosphereView::AtmosphereView()
     : transmittance("Atmosphere Transmittance", atmos::k_TransmittanceWidth, atmos::k_TransmittanceHeight,
                     bgfx::TextureFormat::RGBA16F)
+    , multiple("Atmosphere Multiple", atmos::k_MultipleWidth, atmos::k_MultipleHeight, bgfx::TextureFormat::RGBA16F)
     , skyView("Atmosphere Sky View", atmos::k_SkyViewWidth, atmos::k_SkyViewHeight, bgfx::TextureFormat::RGBA16F)
     , aerial("Atmosphere Aerial", atmos::k_AerialCells * atmos::k_AerialTilesAcross,
              atmos::k_AerialCells * (atmos::k_AerialSlices / atmos::k_AerialTilesAcross), bgfx::TextureFormat::RGBA16F)

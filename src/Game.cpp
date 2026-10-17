@@ -887,12 +887,22 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		// turn the experiment's water on or off; control and F9 turn off its effects one at a time, to measure them;
 		// control, alt and F9 turn them off the other way round; alt and F9 step through its quality tiers; shift,
 		// alt and F9 change the cover of the volumetric clouds; control, shift and F9 change the aurora between its
-		// pass at half size and its full march
+		// pass at half size and its full march; control, shift, alt and F9 show the noctilucent clouds at full
+		// strength or as the night has them
 		case SDLK_F9:
 			if (Locator::underwaterSystem::has_value())
 			{
 				auto& underwater = Locator::underwaterSystem::value();
-				if ((event.key.keysym.mod & KMOD_SHIFT) != 0 && (event.key.keysym.mod & KMOD_ALT) != 0)
+				if ((event.key.keysym.mod & KMOD_SHIFT) != 0 && (event.key.keysym.mod & KMOD_CTRL) != 0 &&
+				    (event.key.keysym.mod & KMOD_ALT) != 0)
+				{
+					// The noctilucent clouds at full strength, or back to the night's own
+					const bool forced = underwater.GetNoctilucentOverride().has_value();
+					underwater.SetNoctilucentOverride(forced ? std::nullopt : std::optional(1.0f));
+					SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: noctilucent clouds {}",
+					                   forced ? "of the night" : "at full strength");
+				}
+				else if ((event.key.keysym.mod & KMOD_SHIFT) != 0 && (event.key.keysym.mod & KMOD_ALT) != 0)
 				{
 					// The next debug choice of the volumetric clouds' cover
 					underwater.CycleCloudCover();

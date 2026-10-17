@@ -42,6 +42,8 @@ public:
 	void SetAuroraChoice(std::optional<float> strength) override { _auroraChoice = strength; }
 	[[nodiscard]] bool IsAuroraFullSize() const override { return _auroraFullSize; }
 	void SetAuroraFullSize(bool fullSize) override;
+	[[nodiscard]] std::optional<float> GetNoctilucentOverride() const override { return _noctilucentOverride; }
+	void SetNoctilucentOverride(std::optional<float> strength) override { _noctilucentOverride = strength; }
 	void StartTour(graphics::underwater::Tour tour) override
 	{
 		_tour = tour;
@@ -117,6 +119,7 @@ private:
 	uint8_t _cloudCover {0};
 	std::optional<float> _auroraChoice;
 	bool _auroraFullSize {false};
+	std::optional<float> _noctilucentOverride;
 	seabed::Seabed _seabed;
 	uint32_t _revision {0};
 	/// The land the sea bed was made for: its height map, as each land makes its own

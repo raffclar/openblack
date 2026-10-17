@@ -59,6 +59,10 @@ public:
 	/// size
 	[[nodiscard]] virtual bool IsAuroraFullSize() const = 0;
 	virtual void SetAuroraFullSize(bool fullSize) = 0;
+	/// The debug choice of how strong the noctilucent clouds are, 0 to 1. Without it the night's own strength shows
+	/// (graphics::atmosphere::NoctilucentStrength).
+	[[nodiscard]] virtual std::optional<float> GetNoctilucentOverride() const = 0;
+	virtual void SetNoctilucentOverride(std::optional<float> strength) = 0;
 	/// Starts a debug tour of the camera: by the shore of the first land (see underwater::TourAt), or out along the sea
 	/// bed (see underwater::FarTourGround)
 	virtual void StartTour(graphics::underwater::Tour tour) = 0;

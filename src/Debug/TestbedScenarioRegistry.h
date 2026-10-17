@@ -165,6 +165,9 @@ struct Environment
 	/// EXPERIMENT (not for merge): how strong the aurora is, 0 to 1 (atmosphere::AuroraTonight), such as
 	/// atmosphere::k_StrongAurora for its oval over the island. The night gives the strength when not given.
 	std::optional<float> auroraStrength;
+	/// EXPERIMENT (not for merge): how strong the noctilucent clouds are, 0 to 1, whatever the night. The night's own
+	/// strength shows when not given.
+	std::optional<float> noctilucent;
 };
 
 /// Where the camera looks as the scenario starts

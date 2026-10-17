@@ -7,7 +7,7 @@
 
 #include "world_curve.sh"
 
-// xyz: the direction towards the real sun; w: unused
+// xyz: the direction towards the real sun; w: how strong the noctilucent clouds are tonight, 0 to 1
 uniform vec4 u_airSun;
 // xyz: the direction of the magnetic pole from the planet's middle; w: how strong the aurora is tonight, 0 to 1
 uniform vec4 u_aurora;
@@ -19,6 +19,9 @@ uniform vec4 u_airPlanet;
 #define AIR_AURORA_TOP 320.0f
 // The steps of the aurora's full march (atmosphere::k_AuroraSteps)
 #define AIR_AURORA_STEPS 40
+// The noctilucent clouds (atmosphere::k_NoctilucentHeight): their height in kilometres and their brightness on the screen
+#define AIR_NLC_HEIGHT 83.0f
+#define AIR_NLC_BRIGHTNESS 0.28f
 
 // The aurora's pass at half the screen's size (see AirAuroraOnScreen)
 SAMPLER2D(s_airAurora, 12);
@@ -226,6 +229,100 @@ bool AirAuroraOverScene()
 	return u_atmosParams.z > AIR_AURORA_BOTTOM - 4.0f;
 }
 
+float AirNoise2(vec2 p)
+{
+	vec2 i = floor(p);
+	vec2 f = p - i;
+	vec2 u = f * f * (3.0f - 2.0f * f);
+	float a = AirHash(i);
+	float b = AirHash(i + vec2(1.0f, 0.0f));
+	float c = AirHash(i + vec2(0.0f, 1.0f));
+	float d = AirHash(i + vec2(1.0f, 1.0f));
+	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+// The noctilucent clouds: a thin sheet of ice at the top of the mesosphere. The sheet is one surface, so each pixel
+// reads it once where its ray goes through. The sun under the horizon lights the sheet through the air at the limb,
+// while the low air is in the earth's shadow. Thus the sheet shows in deep twilight, low in the sky on the side of the
+// sun, as silver-blue bands and billows that drift slowly. From space it is a thin bright line over the limb at the
+// line between day and night.
+vec3 AirNoctilucent(vec3 eye, vec3 dir)
+{
+	float strength = u_airSun.w;
+	if (strength <= 0.01f)
+	{
+		return vec3_splat(0.0f);
+	}
+	vec3 eyeKm = (eye - u_airPlanet.xyz) / ATMOS_UNITS_PER_KM;
+	float eyeAltitude = length(eyeKm) - ATMOS_GROUND_RADIUS;
+	vec2 sheet = AirBallSpan(eyeKm, dir, ATMOS_GROUND_RADIUS + AIR_NLC_HEIGHT);
+	if (sheet.x >= sheet.y || sheet.y <= 0.0f)
+	{
+		return vec3_splat(0.0f);
+	}
+	// Under the sheet the ray meets it where it goes out of the ball, and over the sheet where it comes in
+	float t = sheet.x > 0.0f ? sheet.x : sheet.y;
+	vec2 ground = AirBallSpan(eyeKm, dir, ATMOS_GROUND_RADIUS);
+	if (ground.x < ground.y && ground.x > 0.0f && ground.x < t)
+	{
+		return vec3_splat(0.0f);
+	}
+	vec3 p = eyeKm + dir * t;
+	vec3 n = normalize(p);
+	vec3 sun = u_airSun.xyz;
+	// The sun's light that reaches the sheet through the air. It is none in the earth's shadow.
+	vec3 lit = AtmosTransmittance(AIR_NLC_HEIGHT, dot(n, sun));
+	if (max(lit.r, max(lit.g, lit.b)) < 1e-4f)
+	{
+		return vec3_splat(0.0f);
+	}
+	// The sky behind the sheet must be dark: the air over the eye from the ground, and the air under the sheet from space
+	vec3 place = normalize(mix(normalize(eyeKm), n, smoothstep(50.0f, 90.0f, eyeAltitude)));
+	float dark = 1.0f - smoothstep(-0.139f, -0.105f, dot(place, sun));
+	if (dark <= 0.0f)
+	{
+		return vec3_splat(0.0f);
+	}
+	// The pattern on the sheet in kilometres: wide patches, long bands 20 to 40 km apart, short waves across them and
+	// small billows. The wind of the mesosphere moves them all slowly.
+	float time = u_airPlanet.w;
+	vec2 q = p.xz + vec2(0.045f, 0.012f) * time;
+	// A strong night covers more of the sky
+	float patches = smoothstep(0.62f - 0.4f * strength, 0.9f - 0.35f * strength,
+	                           0.6f * AirNoise2(q / 380.0f) + 0.4f * AirNoise2(q / 140.0f + 7.3f));
+	if (patches <= 0.0f)
+	{
+		return vec3_splat(0.0f);
+	}
+	// The size of a pixel on the sheet. The fine parts go to their mean when they are smaller than a pixel, so they do
+	// not shimmer far away.
+	float along = min(1.0f / max(abs(dot(dir, n)), 1e-3f), 40.0f);
+	float pixel = t * 0.0012f * along;
+	// The sheet's own frame: x along the bands and y across them. The bands bend slowly across the sheet.
+	q += 45.0f * vec2(AirNoise2(q / 220.0f), AirNoise2(q / 220.0f + 5.7f));
+	vec2 b = vec2(dot(q, vec2(0.8f, 0.6f)), dot(q, vec2(-0.6f, 0.8f)));
+	// Long thin streaks along the bands, in groups 20 to 40 km apart
+	float wide = 0.7f * AirNoise2(vec2(b.x / 90.0f, b.y / 12.0f)) + 0.3f * AirNoise2(q / 40.0f + 9.2f);
+	float thin = AirNoise2(vec2(b.x / 40.0f, b.y / 4.0f) + 3.1f);
+	float streaks = mix(wide, 0.75f * wide + 0.25f * thin, 1.0f - smoothstep(1.0f, 3.0f, pixel));
+	float groups = 0.5f + 0.5f * sin(b.y * (6.2831853f / 28.0f) + 3.0f * AirNoise2(q / 90.0f));
+	// Short waves across the bands, a few kilometres long, and small billows
+	float waves = 0.5f + 0.5f * sin(b.x * (6.2831853f / 7.0f) + 4.0f * AirNoise2(q / 12.0f));
+	float fine = 1.0f - smoothstep(1.0f, 4.0f, pixel);
+	float billows = mix(0.5f, 0.6f * waves + 0.4f * AirNoise2(q / 2.0f), fine);
+	float density = patches * pow(max(streaks, 0.0f), 1.3f) * (0.7f + 0.3f * groups) * (0.85f + 0.3f * billows);
+	// The ray goes through more of the thin sheet when it goes along it. The small ice scatters more forward.
+	float forward = 0.6f + 1.4f * pow(max(dot(dir, sun), 0.0f), 4.0f);
+	// From under the sheet the air between dims the light on its way to the eye, most near the horizon
+	// From over the sheet the dark ground is behind it, and it shows less bright than against the sky.
+	vec3 toEye = eyeAltitude < AIR_NLC_HEIGHT ? AtmosTransmittance(eyeAltitude, dot(normalize(eyeKm), dir)) : vec3_splat(0.6f);
+	// The ice is silver-blue. The light at the limb keeps only some of its own colour.
+	vec3 tint = mix(vec3_splat(dot(lit, vec3(0.2126f, 0.7152f, 0.0722f))), lit, 0.05f) * vec3(0.7f, 0.86f, 1.0f);
+	vec3 light = tint * toEye * (density * min(along, 15.0f) * forward * dark * strength * AIR_NLC_BRIGHTNESS);
+	// The brightest parts ease towards white and do not go past it
+	return vec3_splat(1.0f) - exp(-light);
+}
+
 // The faint glow of the high air at about 95 kilometres: a thin green line along the limb, seen from above the air
 vec3 AirGlow(vec3 eye, vec3 dir)
 {
@@ -280,7 +377,10 @@ vec3 AirSkyColour(vec3 eye, vec3 dir, float sunHeight, vec2 pixel)
 		air = mix(air, vec3(1.0f, 0.98f, 0.94f), disc * aboveAir);
 	}
 	air += AirGlow(eye, dir);
-	return air;
+	air += AirNoctilucent(eye, dir);
+	// A little noise of about one step of the screen's colours, so the dim sky at dusk shows no bands
+	air += vec3_splat((AirHash(pixel) + AirHash(pixel + 31.7f) - 1.0f) / 255.0f);
+	return max(air, vec3_splat(0.0f));
 }
 
 #endif // AIR_SKY_SH

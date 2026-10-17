@@ -29,6 +29,11 @@ uniform vec4 u_atmosUp;
 #define ATMOS_OZONE_MIDDLE 25.0f
 #define ATMOS_OZONE_HALF_WIDTH 15.0f
 #define ATMOS_MULTIPLE_SHARE 0.3f
+// The table of the light that the air scatters more than once (atmosphere::k_Multiple*)
+#define ATMOS_MULTIPLE_DAY_LOW -0.1f
+#define ATMOS_MULTIPLE_DAY_HIGH -0.02f
+#define ATMOS_MULTIPLE_WIDTH 32.0f
+#define ATMOS_MULTIPLE_HEIGHT 32.0f
 #define ATMOS_UNITS_PER_KM 949.0f
 #define ATMOS_HAZE_LAYER_HEIGHT 2.5f
 // The haze's grid (atmosphere::k_Aerial* in Atmosphere.h)
@@ -114,12 +119,34 @@ vec3 AtmosTransmittance(float altitude, float mu)
 	return texture2DLod(s_atmosTransmittance, AtmosTransmittanceUv(altitude, mu), 0.0f).rgb;
 }
 
-// The light that the air scatters more than once, for each steradian, at a height with the light at mu
-vec3 AtmosMultipleScattering(float altitude, float mu)
+// The day's simple share of the light that the air scatters more than once, for each steradian, at a height with the
+// light at mu
+vec3 AtmosDayMultipleScattering(float altitude, float mu)
 {
 	return ATMOS_MULTIPLE_SHARE * AtmosTransmittance(altitude, max(mu, 0.05f)) * smoothstep(-0.25f, 0.05f, mu) /
 	       (4.0f * ATMOS_PI);
 }
+
+#ifdef ATMOS_MULTIPLE_TABLE
+// The table of the light that the air scatters more than once (fs_atmos_multiscatter.sc), at sampler stage 15
+SAMPLER2D(s_atmosMultiple, 15);
+
+// The light that the air scatters more than once (atmosphere::MultipleScattering): the day's simple share while the
+// light is high, and the table's light while it is low, so the low air in the earth's shadow at dusk does not glow
+vec3 AtmosMultipleScattering(float altitude, float mu)
+{
+	float day = smoothstep(ATMOS_MULTIPLE_DAY_LOW, ATMOS_MULTIPLE_DAY_HIGH, mu);
+	vec2 size = vec2(ATMOS_MULTIPLE_WIDTH, ATMOS_MULTIPLE_HEIGHT);
+	vec2 at = vec2(clamp(mu * 0.5f + 0.5f, 0.0f, 1.0f), clamp(altitude / (ATMOS_TOP_RADIUS - ATMOS_GROUND_RADIUS), 0.0f, 1.0f));
+	vec3 table = texture2DLod(s_atmosMultiple, (at * (size - 1.0f) + 0.5f) / size, 0.0f).rgb;
+	return day > 0.0f ? mix(table, AtmosDayMultipleScattering(altitude, mu), day) : table;
+}
+#else
+vec3 AtmosMultipleScattering(float altitude, float mu)
+{
+	return AtmosDayMultipleScattering(altitude, mu);
+}
+#endif
 
 // The light that the air at a height scatters towards the eye for each kilometre, with the light at lightMu and the
 // angle between the ray and the light at cosAngle, and `lit` of the direct light reaching it
@@ -222,10 +249,11 @@ vec3 AtmosSkyOnScreen(vec3 dir, float sunHeight)
 	float lift = 1.0f + 0.8f * smoothstep(0.05f, 0.6f, dot(dir, AtmosUp())) *
 	              smoothstep(-0.02f, 0.2f, dot(u_atmosLight.xyz, AtmosUp()));
 	air = AtmosSoftClip(air * lift);
-	// After sunset and in the moon's light the model gives a deep, strong blue. The eye sees the dim sky with less
-	// colour, so the sky goes part of the way to grey while the air's sun is low.
+	// While the sun sets and in the moon's light the sky goes part of the way to grey, as the eye sees a dim sky with
+	// less colour. In the blue hour the sky keeps most of its deep blue (atmosphere::SkyColourKept).
 	float grey = dot(air, luma);
-	return mix(vec3_splat(grey), air, mix(0.25f, 1.0f, smoothstep(0.0f, 0.35f, sunHeight)));
+	float blueHour = (1.0f - smoothstep(-0.1f, 0.0f, sunHeight)) * smoothstep(-0.29f, -0.16f, sunHeight);
+	return mix(vec3_splat(grey), air, 0.25f + 0.75f * max(smoothstep(0.0f, 0.35f, sunHeight), 0.7f * blueHour));
 }
 
 // The distance of a slice of the haze's grid from the eye in world units, and the slice at a distance
