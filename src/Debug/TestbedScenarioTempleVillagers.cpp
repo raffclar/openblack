@@ -325,4 +325,27 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 0.0f,
 	});
+	all.push_back({
+	    .id = "miracles.lightning_unbuilt_altar",
+	    .name = "Lightning at the altar of a worship site not yet built",
+	    .facet = Facet::Miracles,
+	    .description = "The same town and temple, the town's worship site just started and not yet built, so its altar is "
+	                   "not shown. A lightning bolt is held from a hand eight metres from the altar's place, looking at it, "
+	                   "for four seconds in every eight.",
+	    .expected = "Some of the forks strike the altar's place, as it is in the map although not shown. After a moment "
+	                "electric arcs crawl over the shape of the unseen altar, standing in the air above the empty ground. "
+	                "The altar takes no harm.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, 30.0f}, .look = {0.0f, 0.0f, -2.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .target = MiracleCast::Target::Point,
+	                  .point = k_Altar,
+	                  .handOffset = k_Altar + glm::vec2(0.0f, 8.0f),
+	                  .handHeight = 15.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 8.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
 }

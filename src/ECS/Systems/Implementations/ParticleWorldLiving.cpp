@@ -33,18 +33,17 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
-#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/ObjectGlow.h"
-#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
-#include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/ThingModel.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MapSpiral.h"
@@ -118,8 +117,8 @@ std::vector<particles::StrikeCandidate> GameParticleWorld::StrikeCandidates(glm:
 		// the cell it stands in
 		for (const auto entity : map.GetAllInCell(cell))
 		{
-			// Nothing strikes a miracle's globe or a script's scroll or sign
-			if (!registry.Valid(entity) || registry.AnyOf<OneOffSpellSeed, ScriptHighlight>(entity))
+			// Nothing strikes a seed of a miracle cast from the hand
+			if (!registry.Valid(entity) || registry.AnyOf<SpellSeed>(entity))
 			{
 				continue;
 			}
@@ -128,12 +127,8 @@ std::vector<particles::StrikeCandidate> GameParticleWorld::StrikeCandidates(glm:
 			{
 				continue;
 			}
-			// The dead are no longer there to strike
+			// A dying villager is no longer there to strike; a dead animal lies there still
 			if (const auto* villager = registry.TryGet<const Villager>(entity); villager != nullptr && villager->life <= 0.0f)
-			{
-				continue;
-			}
-			if (const auto* animal = registry.TryGet<const Animal>(entity); animal != nullptr && animal->Dead())
 			{
 				continue;
 			}
@@ -204,14 +199,15 @@ std::vector<particles::SurfacePoint> GameParticleWorld::SurfacePoints(entt::enti
 	{
 		return points;
 	}
-	const auto* mesh = registry.TryGet<const Mesh>(object);
+	// The model a thing has in the world, shown or not: an altar's site not yet built hides it, but the arcs crawl over it
+	const auto modelId = ecs::thing_model::ModelOf(registry, object);
 	const auto* transform = registry.TryGet<const Transform>(object);
 	auto& meshes = Locator::resources::value().GetMeshes();
-	if (mesh == nullptr || transform == nullptr || !meshes.Contains(mesh->id))
+	if (!modelId.has_value() || transform == nullptr || !meshes.Contains(*modelId))
 	{
 		return points;
 	}
-	const auto model = meshes.Handle(mesh->id);
+	const auto model = meshes.Handle(*modelId);
 	// The game picks a part of the model at random, then one of its primitives, then each point among that primitive's
 	// vertices
 	std::vector<const graphics::L3DSubMesh*> parts;
