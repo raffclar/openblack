@@ -19,6 +19,7 @@
 #include <glm/geometric.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/X87Vector.h"
 #include "ParticleObjectEffects.h"
 
 using namespace openblack;
@@ -58,7 +59,7 @@ bool blast::Reached(float front, const WaveTarget& target, const glm::vec3& cent
 {
 	const auto offset = target.point - centre;
 	const float reach = front + target.radius;
-	return reach * reach >= glm::dot(offset, offset);
+	return reach * reach >= x87::DotZyx(offset, offset);
 }
 
 glm::vec3 blast::EntersSphere(const glm::vec3& from, const glm::vec3& to, const glm::vec3& centre, float radius)
