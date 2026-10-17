@@ -132,13 +132,19 @@ void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profile
 				byView.emplace_back(static_cast<double>(view.gpuTimeEnd - view.gpuTimeBegin) * toMsGpu, view.name);
 			}
 			std::ranges::sort(byView, std::greater {});
+			double inViews = 0.0;
+			for (const auto& timed : byView)
+			{
+				inViews += timed.first;
+			}
 			std::string top;
 			for (size_t i = 0; i < std::min<size_t>(byView.size(), 4); ++i)
 			{
 				top += fmt::format(" {}={:.2f}", byView.at(i).second, byView.at(i).first);
 			}
-			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Frame spike {}: GPU {:.2f} ms; slowest views:{}", _frameNumber,
-			                   static_cast<double>(stats->gpuTimeEnd - stats->gpuTimeBegin) * toMsGpu, top);
+			SPDLOG_LOGGER_INFO(spdlog::get("game"),
+			                   "Frame spike {}: GPU {:.2f} ms, {:.2f} ms of it in the views; slowest views:{}", _frameNumber,
+			                   static_cast<double>(stats->gpuTimeEnd - stats->gpuTimeBegin) * toMsGpu, inViews, top);
 		}
 	}
 	if (_views)
