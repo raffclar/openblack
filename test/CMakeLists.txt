@@ -1142,6 +1142,10 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_oracle_data_folder oracle/test_oracle_data_folder.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_creature_camera_maths
+  oracle/test_oracle_creature_camera_maths.cpp
+)
 # The data folder is found at run time (see oracle/OracleData.h), never compiled into an object: ctest sets the
 # environment variable for each test, and the file in the build folder serves a program started by hand from there
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
@@ -1150,6 +1154,7 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
 )
 foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_inverse_square_root test_oracle_data_folder
+                     test_oracle_creature_camera_maths
 )
   set_tests_properties(
     ${oracle_test}
@@ -1158,11 +1163,3 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
   )
 endforeach ()
 openblack_setup_and_add_test(test_x87 test_x87.cpp)
-openblack_setup_and_add_test(
-  test_oracle_creature_camera_maths
-  oracle/test_oracle_creature_camera_maths.cpp
-)
-target_compile_definitions(
-  test_oracle_creature_camera_maths
-  PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
-)
