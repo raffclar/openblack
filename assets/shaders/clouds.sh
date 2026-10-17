@@ -33,6 +33,8 @@ uniform vec4 u_cloudStorms[16];
 #define CLOUD_STRATUS_DEPTH 160.0f
 #define CLOUD_CUMULUS_DEPTH 520.0f
 #define CLOUD_CUMULONIMBUS_DEPTH 1500.0f
+// How far under the bottom of the layer the ragged bottom of a rain cloud hangs at most
+#define CLOUD_LOWEST_DROP 200.0f
 // How much light the cloud takes out for each unit, at a density of 1
 #define CLOUD_EXTINCTION 0.06f
 // The colour of the flash of the lightning
@@ -115,7 +117,9 @@ float CloudAltitude(vec3 p)
 float CloudWeatherAt(vec2 xz, out float type, out float rain)
 {
 	vec2 q = xz - u_cloudDrift.xy;
-	vec4 w = texture2DLod(s_cloudWeather, q / CLOUD_WEATHER_TILE, 0.0f);
+	// A finer copy of the noise bends the place that the weather is read at, so that the edges of the cells are ragged
+	vec2 bend = texture2DLod(s_cloudWeather, q * (5.3f / CLOUD_WEATHER_TILE), 0.0f).ga - 0.5f;
+	vec4 w = texture2DLod(s_cloudWeather, (q + bend * 900.0f) / CLOUD_WEATHER_TILE, 0.0f);
 	// The field changes slowly between two patterns, so that the clouds form and break up as they move
 	float turn = 0.5f + 0.5f * sin(u_cloudDrift.z * 0.0035f);
 	float field = mix(w.r, w.b, turn);
@@ -151,8 +155,11 @@ float CloudDensity(vec3 p, float altitude, bool detail)
 	{
 		return 0.0f;
 	}
+	// The bottom of the cloud rises and falls a little; under rain it hangs lower, in ragged lumps
+	float lumps = texture2DLod(s_cloudWeather, (p.xz - u_cloudDrift.xy) * (9.1f / CLOUD_WEATHER_TILE), 0.0f).a - 0.5f;
+	float bottom = u_cloudLayer.x - rain * 70.0f + lumps * (50.0f + rain * 220.0f);
 	// Each cloud is tallest where its cover is densest, at its middle, and low at its edges: round domes
-	float h = (altitude - u_cloudLayer.x) / (CloudLayerDepth(type) * mix(0.3f, 1.0f, cover));
+	float h = (altitude - bottom) / (CloudLayerDepth(type) * mix(0.3f, 1.0f, cover));
 	float profile = CloudHeightProfile(type, h);
 	if (profile <= 0.0f)
 	{
@@ -218,8 +225,9 @@ vec2 CloudSpan(vec3 eye, vec3 dir, float limit)
 {
 	float a = dot(dir.xz, dir.xz) / (2.0f * u_cloudLayer.y);
 	float b = dir.y;
-	float bottom = u_cloudLayer.x;
-	float top = bottom + CLOUD_CUMULONIMBUS_DEPTH;
+	// The lowest that a rain cloud's ragged bottom hangs
+	float bottom = u_cloudLayer.x - CLOUD_LOWEST_DROP;
+	float top = u_cloudLayer.x + CLOUD_CUMULONIMBUS_DEPTH;
 	// Under the top between these, over the bottom outside these
 	vec2 underTop = CloudRoots(a, b, eye.y - top);
 	vec2 underBottom = CloudRoots(a, b, eye.y - bottom);
@@ -323,8 +331,24 @@ vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool 
 			float lightDepth = CloudLightDepth(p, lightSamples);
 			vec3 direct = sun * CloudMultipleScattering(lightDepth, cosAngle) * CloudPowder(sigma * 40.0f, cosAngle) * 32.0f;
 			// The sky lights the tops more than the bottoms; the bottoms of rain clouds are dark
-			vec3 ambient = mix(ground, sky, h * 0.7f + 0.3f) * (1.0f - 0.35f * rain * (1.0f - h));
-			vec3 scattered = direct + ambient + CloudLightning(p, rain);
+			// The game darkens its sky and its haze in a storm, so the storm's clouds take more of the dim light they
+			// have, to stay grey and not black
+			vec3 ambient = mix(ground, sky, h * 0.7f + 0.3f) * (1.0f + rain * (1.3f - 0.4f * (1.0f - h)));
+			if (detail)
+			{
+				// The sky's light comes down through the cloud over the point: where the cloud is thinner, its
+				// bottom is brighter
+				float above = 0.0f;
+				for (int k = 1; k <= 3; ++k)
+				{
+					vec3 up = p + vec3(0.0f, float(k * k) * 45.0f, 0.0f);
+					above += CloudDensity(up, CloudAltitude(up), false) * float(k * 2 - 1) * 45.0f;
+				}
+				ambient *= 0.55f + 0.45f * exp(-above * CLOUD_EXTINCTION * 0.35f);
+			}
+			// The sun's light that a thick deck lets through after it scatters many times: grey and soft
+			vec3 diffused = sun * 0.35f * exp(-lightDepth * 0.015f) * (0.5f + 0.5f * h);
+			vec3 scattered = direct + ambient + diffused + CloudLightning(p, rain);
 			float through = exp(-sigma * dt);
 			// The light scattered over the step, as the step's own cloud dims it (energy-conserving)
 			colour += transmittance * scattered * (1.0f - through);

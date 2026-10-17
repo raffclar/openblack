@@ -33,7 +33,7 @@ vec3 SkyLight()
 		sum += textureCubeLod(s_cloudSky, vec3(cos(angle) * 0.8f, 0.6f, sin(angle) * 0.8f), 0.0f).rgb;
 	}
 	// Never darker than the haze: the cube holds the clouds too, which would darken their own light
-	return max(sum / 10.0f, u_cloudAmbient.rgb * 1.1f);
+	return max(sum / 10.0f, u_cloudAmbient.rgb * 1.4f);
 }
 
 void main()
@@ -64,10 +64,22 @@ void main()
 	float depth;
 	// More samples for the long rays near the horizon
 	int steps = int(mix(128.0f, 80.0f, clamp(abs(dir.y) * 3.0f, 0.0f, 1.0f)));
-	// The sky behind the ray, or the sky at the horizon for a ray that goes down: the cube has no sky under the horizon
-	vec3 skyDir = normalize(vec3(dir.x, max(dir.y, 0.02f), dir.z));
-	vec3 behind = u_cloudScreen.z > 0.5f ? textureCubeLod(s_cloudSky, skyDir, 0.0f).rgb : u_cloudAmbient.rgb * 1.6f;
-	vec4 clouds = MarchClouds(eye, dir, limit, jitter, steps, true, SkyLight(), behind, depth);
+	// The sky behind the ray: the mean colour of the horizon, towards the light from above for rays that go up. A mean
+	// has no seams between the faces of the cube, which are drawn at other times.
+	vec3 horizon = u_cloudAmbient.rgb * 1.6f;
+	if (u_cloudScreen.z > 0.5f)
+	{
+		horizon = vec3_splat(0.0f);
+		for (int i = 0; i < 8; ++i)
+		{
+			float angle = float(i) * 0.785398f;
+			horizon += textureCubeLod(s_cloudSky, vec3(cos(angle), 0.05f, sin(angle)), 0.0f).rgb;
+		}
+		horizon /= 8.0f;
+	}
+	vec3 sky = SkyLight();
+	vec3 behind = mix(horizon, sky, clamp(dir.y * 3.0f, 0.0f, 1.0f));
+	vec4 clouds = MarchClouds(eye, dir, limit, jitter, steps, true, sky, behind, depth);
 	gl_FragData[0] = clouds;
 	gl_FragData[1] = vec4(depth, min(scene, 60000.0f), 0.0f, 1.0f);
 }

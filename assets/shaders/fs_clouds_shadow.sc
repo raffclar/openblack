@@ -18,7 +18,7 @@ void main()
 	towards.y = max(towards.y, 0.2f);
 	towards = normalize(towards);
 	float ground = u_cloudLayer.w;
-	float enter = (u_cloudLayer.x - ground) / towards.y;
+	float enter = (u_cloudLayer.x - CLOUD_LOWEST_DROP - ground) / towards.y;
 	float leave = (u_cloudLayer.x + CLOUD_CUMULONIMBUS_DEPTH - ground) / towards.y;
 	float dt = (leave - enter) / 12.0f;
 	float depth = 0.0f;
