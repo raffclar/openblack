@@ -1095,3 +1095,18 @@ openblack_setup_and_add_test(test_creature_owner test_creature_owner.cpp)
 openblack_setup_and_add_test(
   test_creature_action_coverage test_creature_action_coverage.cpp
 )
+
+# Oracle tests: our maths against values from the game's own functions, pinned in test/oracle/data by tools/oracle
+openblack_setup_and_add_test(test_oracle_catch oracle/test_oracle_catch.cpp)
+openblack_setup_and_add_test(test_oracle_sigmoid oracle/test_oracle_sigmoid.cpp)
+openblack_setup_and_add_test(
+  test_oracle_inverse_square_root oracle/test_oracle_inverse_square_root.cpp
+)
+foreach (oracle_test test_oracle_catch test_oracle_sigmoid
+                     test_oracle_inverse_square_root
+)
+  target_compile_definitions(
+    ${oracle_test}
+    PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+  )
+endforeach ()
