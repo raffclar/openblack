@@ -38,7 +38,7 @@ public:
 	void ProcessTurn(const glm::vec3& camera) override;
 	void SetActive(entt::entity entity, bool active) override;
 	entt::entity CreatePointSound(entt::id_type sound, const glm::vec3& position, bool delayed) override;
-	bool AttachObjectSound(entt::entity entity, entt::id_type sound) override;
+	entt::entity AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops) override;
 	void DetachObjectSound(entt::entity entity, entt::id_type sound) override;
 
 private:

@@ -1241,10 +1241,10 @@ void CreatureAnimationSystem::SetCreedPower(entt::entity creature, creature_hand
 	{
 		tags.DetachObjectSound(creature, k_Hum);
 	}
-	else if (const auto logger = spdlog::get("game"); !tags.AttachObjectSound(creature, k_Hum) && logger != nullptr)
+	else
 	{
-		SPDLOG_LOGGER_WARN(logger, "Creature {} keeps up another sound, so it does not hum its creed power",
-		                   entt::to_integral(creature));
+		// The hum loops. It adds to the other sounds of the creature, for example a script's sound.
+		tags.AttachObjectSound(creature, k_Hum, true);
 	}
 }
 

@@ -1348,7 +1348,9 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              return items;
 	              }));
 	provider->Add(
-	    Query("sound_tags", "The sounds tagged to things: sound, whether active, and its emitter", {}, ResultKind::List),
+	    Query("sound_tags",
+	          "The sounds tagged to things: sound, whether active, its emitter, the object it is attached to, whether it loops",
+	          {}, ResultKind::List),
 	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
 		    Json items = Json::array();
 		    registry.Each<const SoundTag>([&items, &registry](entt::entity entity, const SoundTag& tag) {
@@ -1356,6 +1358,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			    item["sound"] = tag.sound;
 			    item["active"] = tag.active;
 			    item["emitter"] = Id(tag.emitter);
+			    item["owner"] = Id(tag.owner);
+			    item["loops"] = tag.loops;
 			    items.push_back(std::move(item));
 		    });
 		    return items;

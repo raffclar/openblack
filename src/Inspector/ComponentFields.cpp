@@ -1697,7 +1697,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::SoundTag::emitter>("emitter")
 	    .Field<&components::SoundTag::point>("point")
 	    .Field<&components::SoundTag::delayed>("delayed")
-	    .Field<&components::SoundTag::turns>("turns");
+	    .Field<&components::SoundTag::turns>("turns")
+	    .Field<&components::SoundTag::owner>("owner")
+	    .Field<&components::SoundTag::loops>("loops");
 	Reflect<components::SpellCaster>(context)
 	    .Field<&components::SpellCaster::kind>("kind")
 	    .Field<&components::SpellCaster::player>("player")
