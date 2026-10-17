@@ -1653,7 +1653,14 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		}
 		break;
 	case Kind::Eat:
-		hands.EatHeld(creature);
+		if (order.swallows)
+		{
+			hands.EatHeld(creature);
+		}
+		else
+		{
+			hands.EatHeldOnly(creature);
+		}
 		break;
 	case Kind::Keep:
 		hands.Keep(creature, order.animation);

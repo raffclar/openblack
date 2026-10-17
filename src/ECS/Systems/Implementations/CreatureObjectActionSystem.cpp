@@ -1665,6 +1665,19 @@ bool CreatureObjectActionSystem::EatHeld(entt::entity creature)
 	return Start(creature, {.kind = Kind::Eat, .target = held});
 }
 
+bool CreatureObjectActionSystem::EatHeldOnly(entt::entity creature)
+{
+	const auto held = GetHeld(creature);
+	if (!held.has_value())
+	{
+		auto action = CreatureObjectAction {.kind = Kind::Eat, .swallows = false};
+		Fail(action, "it holds nothing to eat");
+		Locator::entitiesRegistry::value().AssignOrReplace<CreatureObjectAction>(creature, std::move(action));
+		return false;
+	}
+	return Start(creature, {.kind = Kind::Eat, .target = held, .swallows = false});
+}
+
 bool CreatureObjectActionSystem::Keep(entt::entity creature, size_t animation)
 {
 	CreatureObjectAction action {.kind = Kind::Keep};
@@ -2455,6 +2468,13 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 				    animation.slots.clear();
 				    return;
 			    }
+			    // An eat with no thing given fails when its animation ends
+			    if (action.kind == Kind::Eat && !action.swallows)
+			    {
+				    Fail(action, "it was told to eat no thing");
+				    animation.slots.clear();
+				    return;
+			    }
 			    action.status = Status::Done;
 		    }
 		    if (action.status == Status::Done)
@@ -2850,6 +2870,19 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			const auto held = GetHeld(creature);
 			if (!held.has_value())
 			{
+				break;
+			}
+			// Told only to eat, it takes in the food of what it holds, and what it holds is gone from its hand
+			if (!action.swallows)
+			{
+				const auto value = FoodValueOf(*held);
+				registry.Remove<CreatureHeldObject>(creature);
+				Consume(registry, creature, *held);
+				[[maybe_unused]] const auto gained = value.has_value() && Locator::creaturePhysiologySystem::has_value()
+				                                         ? Locator::creaturePhysiologySystem::value().Eat(creature, *value)
+				                                         : 0.0f;
+				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} takes in what it holds: food {}, energy {}",
+				                    entt::to_integral(creature), value.value_or(0.0f), gained);
 				break;
 			}
 			if (BringsBackUp(registry, *held))

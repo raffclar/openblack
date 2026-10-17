@@ -39,6 +39,7 @@
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/Field.h"
@@ -114,12 +115,18 @@ bool CreatureMindSystem::RequestPartner(entt::entity asker, entt::entity asked, 
 	    askedMind->planner.current.has_value() ? askedMind->planner.current->action : askedMind->planner.lastAction;
 	const bool dead = action < tables->actions.size() &&
 	                  (tables->actions[action].name == k_DieAction || tables->actions[action].name == k_DeadForeverAction);
+	// A creature in a fight has its opponent as its partner until the fight is over
 	const auto* askedLink = registry.TryGet<const CreaturePartner>(asked);
+	const auto* askedFight = registry.TryGet<const CreatureFighting>(asked);
+	const auto askedPartner = creature_friendship::PartnerNow(
+	    askedLink != nullptr ? std::optional(entt::to_integral(askedLink->partner)) : std::nullopt,
+	    askedFight != nullptr && registry.Valid(askedFight->opponent) ? std::optional(entt::to_integral(askedFight->opponent))
+	                                                                  : std::nullopt);
 	const auto availability = creature_friendship::AvailabilityOf({
 	    .dead = dead,
 	    .scriptControlled = registry.AllOf<ScriptControlled>(asked),
 	    .askerScriptControlled = registry.AllOf<ScriptControlled>(asker),
-	    .partner = askedLink != nullptr ? std::optional(entt::to_integral(askedLink->partner)) : std::nullopt,
+	    .partner = askedPartner,
 	    .asker = entt::to_integral(asker),
 	});
 	// The asked creature weighs its desires about the asker, as it sees it now
