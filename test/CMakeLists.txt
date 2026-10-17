@@ -1181,3 +1181,6 @@ openblack_setup_and_add_test(test_x87 test_x87.cpp)
 openblack_setup_and_add_test(test_float_sweep_4 test_float_sweep_4.cpp)
 openblack_setup_and_add_test(test_glm_order test_glm_order.cpp)
 openblack_setup_and_add_test(test_town_turn_order test_town_turn_order.cpp)
+openblack_setup_and_add_test(
+  test_creature_reflection graphics/test_creature_reflection.cpp
+)

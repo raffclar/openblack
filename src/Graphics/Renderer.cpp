@@ -129,6 +129,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -143,6 +144,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Graphics/BoneBudget.h"
+#include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
 #include "Graphics/DrawOrder.h"
@@ -180,6 +182,7 @@
 #include "Renderer.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Scenery/ObjectDrawList.h"
 #include "Windowing/WindowingInterface.h"
 #include "entt/locator/locator.hpp"
 
@@ -770,6 +773,44 @@ float CreatureLandLightScale(RenderPass viewId)
 {
 	constexpr float k_ReflectionLight = 0.5f;
 	return viewId == RenderPass::Reflection || viewId == RenderPass::ReflectionTranslucent ? k_ReflectionLight : 1.0f;
+}
+
+/// Whether the game mirrors a creature's body in the sea this frame (see creature_reflection). The block under the
+/// creature is tested against the main camera's view. Its box reaches below the water when the land is mirrored.
+bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
+{
+	if (!Locator::playerSystem::has_value() || !Locator::terrainSystem::has_value() || !Locator::camera::has_value())
+	{
+		return false;
+	}
+	const auto& players = Locator::playerSystem::value();
+	creature_reflection::Situation situation {
+	    .primaryCreature = players.GetPrimaryCreature(players.GetLocalPlayer()) == entity,
+	    .height = position.y,
+	    .fizz = fizz,
+	};
+	const auto under = creature_reflection::BlockUnder(position);
+	if (situation.primaryCreature && under.has_value())
+	{
+		const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+		const auto block = std::ranges::find_if(blocks, [&under](const LandBlock& candidate) {
+			return candidate.GetLndBlock() != nullptr && candidate.GetBlockPosition() == *under;
+		});
+		if (block != blocks.end())
+		{
+			const auto& cells = block->GetLndBlock()->cells;
+			const object_draw_list::Block box {
+			    .corner = block->GetMapPosition(),
+			    .highestAltitude = std::ranges::max(cells, {}, &lnd::LNDCell::altitude).altitude,
+			    .reflected = detail_level::For(Locator::config::value().detailLevel).landReflection,
+			};
+			const auto& camera = Locator::camera::value();
+			situation.onBlock = true;
+			situation.blockInView = object_draw_list::BlockInView(camera.GetViewProjectionMatrix(), camera.GetNearClip(), box);
+			situation.blockDistance = object_draw_list::BlockDistance(camera.GetOrigin(), box);
+		}
+	}
+	return creature_reflection::Shown(situation);
 }
 
 /// Binds the submeshes of a creature's variant meshes that match one of its base mesh as the second to fourth vertex
@@ -2021,6 +2062,13 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components
 	const bool fizzing = creature_fizz_look::EyesFizz(fizz, freeze) && Locator::creatureFizzSystem::has_value();
 	const auto scroll = fizzing ? Locator::creatureFizzSystem::value().EyeStaticScroll() : glm::vec2(0.0f);
 	auto sortDepth = fizzSortDepth;
+	// Drawn as usual, the eyeball adds the glass environment map, as each of its primitives' materials says. A fizzing or
+	// frozen eye is drawn without it.
+	const auto& textures = Locator::resources::value().GetTextures();
+	constexpr auto k_Glass = entt::hashed_string("raw/envmap_glass_fx");
+	const auto glass = k_Glass.value();
+	const auto* eyeballEnvironment =
+	    !fizzing && freeze <= 0.0f && textures.Contains(glass) ? &*textures.Handle(glass) : nullptr;
 	const auto draw = [&](const L3DMesh& piece) {
 		if (!fizzing)
 		{
@@ -2047,7 +2095,14 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components
 		{
 			submitDesc.modelMatrices = &*eye.eyeball;
 			submitDesc.tint = tint;
+			if (eyeballEnvironment != nullptr)
+			{
+				submitDesc.program = _shaderManager->GetShader("ObjectEnvironment");
+				submitDesc.environment = eyeballEnvironment;
+			}
 			draw(*eyeball);
+			submitDesc.program = _shaderManager->GetShader("Object");
+			submitDesc.environment = nullptr;
 		}
 		if (eye.eyelid.has_value())
 		{
@@ -5981,6 +6036,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			};
 			// The creatures are drawn with a light of their own, at every detail level
 			bool drawingCreatures = false;
+			// The creature's body mirrored in the sea is drawn in one flat colour, unlit, with a little blue added
+			bool flatReflection = false;
 			const auto drawInstances = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
 			                               bool useMaterialBlending, uint32_t first, uint32_t count,
 			                               const EntityPose* pose = nullptr,
@@ -6141,9 +6198,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					                    static_cast<float>(size.x), static_cast<float>(size.y)};
 				}
 
+				if (flatReflection)
+				{
+					submitDesc.tint = glm::vec4(creature_reflection::Colour(), 1.0f);
+					submitDesc.lightAdd = creature_reflection::Added();
+					submitDesc.landLightAndHaze = false;
+					submitDesc.snow = false;
+					submitDesc.groundShadows = false;
+				}
+
 				// TODO(bwrsandman): choose the correct LOD
 				DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				submitDesc.morphTargets = nullptr;
+				submitDesc.landLightAndHaze = true;
 				if (templeLit)
 				{
 					submitDesc.objectLook.reset();
@@ -6350,11 +6417,17 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.modelLight = drawn.light;
 				if (desc.viewId == RenderPass::Reflection)
 				{
-					// The sea reflects the body alone, without its eyes or hair, whole, and only until it has fizzed a
-					// fifth of the way out
-					if (creature_fizz_look::ReflectionShown(fizz))
+					// The sea reflects the body of the local player's creature alone, without its eyes or hair, whole.
+					// It does so only while the creature stands low on a near land block in view, and until it has fizzed
+					// a fifth of the way out.
+					const auto position = instance < renderCtx.instanceUniforms.size()
+					                          ? glm::vec3(renderCtx.instanceUniforms.at(instance).model[3])
+					                          : glm::vec3(0.0f);
+					if (!copy && CreatureMirrored(entity, position, fizz))
 					{
+						flatReflection = true;
 						drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
+						flatReflection = false;
 					}
 					submitDesc.modelLight.reset();
 					continue;
