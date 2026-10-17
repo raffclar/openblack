@@ -1082,3 +1082,7 @@ openblack_setup_and_add_test(test_wind test_wind.cpp)
 openblack_setup_and_add_test(test_sun_shadows graphics/test_sun_shadows.cpp)
 # EXPERIMENT (not for merge): the volumetric fog
 openblack_setup_and_add_test(test_volumetric_fog graphics/test_volumetric_fog.cpp)
+# EXPERIMENT (not for merge): the haze of the air's light
+openblack_setup_and_add_test(test_atmosphere graphics/test_atmosphere.cpp)
+# EXPERIMENT (not for merge): the light of the sky and the land in the shade
+openblack_setup_and_add_test(test_global_illumination graphics/test_global_illumination.cpp)

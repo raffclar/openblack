@@ -924,6 +924,7 @@ bool underwater::InQuality(Effect effect, Quality quality)
 	case Effect::SprayMist:
 	case Effect::Sediment:
 	case Effect::Fog:
+	case Effect::AmbientOcclusion:
 		return quality == Quality::High;
 	case Effect::Reflections:
 	case Effect::Shafts:
@@ -936,6 +937,24 @@ bool underwater::InQuality(Effect effect, Quality quality)
 	default:
 		return true;
 	}
+}
+
+underwater::LightDetail underwater::HazeDetail(Quality quality)
+{
+	switch (quality)
+	{
+	case Quality::High:
+		return LightDetail::Full;
+	case Quality::Medium:
+		return LightDetail::Reduced;
+	default:
+		return LightDetail::Basic;
+	}
+}
+
+underwater::LightDetail underwater::LightingDetail(Quality quality)
+{
+	return HazeDetail(quality);
 }
 
 underwater::Quality underwater::NextQuality(Quality quality)

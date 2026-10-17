@@ -209,6 +209,14 @@ enum class Effect : uint8_t
 	Shadows,
 	/// The volumetric fog: the haze, the ground fog at dawn, the mist and the shafts of light
 	Fog,
+	/// The haze of the air's light over the far land and the sea, and the air's sky near the horizon
+	Haze,
+	/// The light that the sky and the lit land give to the shade (the grid of light probes and the sky's light)
+	GlobalIllumination,
+	/// The shade where the things round a point and its own folds hide the sky, from the scene's depth
+	AmbientOcclusion,
+	/// The pockets of fog over the swamps and the still water
+	FogPockets,
 	_Count
 };
 
@@ -226,6 +234,21 @@ enum class Quality : uint8_t
 [[nodiscard]] bool InQuality(Effect effect, Quality quality);
 /// The next tier, High after Low
 [[nodiscard]] Quality NextQuality(Quality quality);
+
+/// How much of the haze or of the light in the shade a tier draws. No tier turns them off: each lower tier keeps a
+/// cheaper stand-in.
+enum class LightDetail : uint8_t
+{
+	/// The haze's grid with the hills' and the clouds' shadows; the light probes and the shade from the scene's depth
+	Full,
+	/// The haze's grid without the shadows, in fewer steps; the light probes without the shade from the scene's depth
+	Reduced,
+	/// The horizon's colour over the distance for the haze; the sky's light and the hills' shade for the light
+	Basic,
+};
+/// The haze's and the light's detail for a tier
+[[nodiscard]] LightDetail HazeDetail(Quality quality);
+[[nodiscard]] LightDetail LightingDetail(Quality quality);
 
 /// The last grade of the colour: x the exposure, y the saturation, z the contrast about middle grey. The default
 /// keeps the original game's colours: it only takes back the extra brightness and colour that the new light adds.

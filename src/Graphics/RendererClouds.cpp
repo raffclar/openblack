@@ -150,7 +150,10 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 	// The sun's light goes orange and red near the horizon. The moon's light is cool and silver.
 	constexpr glm::vec3 k_MoonTint {0.72f, 0.84f, 1.1f};
 	const float moonShare = frame.light.w;
-	const glm::vec3 tint = glm::mix(clouds::SunThroughAir(frame.above.y), k_MoonTint, moonShare);
+	// EXPERIMENT (not for merge): with the haze on, the light through the air comes from the air's model
+	const glm::vec3 throughAir = _atmosphereFrame.has_value() && _atmosphereFrame->haze ? _atmosphereFrame->lightTint
+	                                                                                    : clouds::SunThroughAir(frame.above.y);
+	const glm::vec3 tint = glm::mix(throughAir, k_MoonTint, moonShare);
 	uniforms.lightColour = {glm::vec3(frame.lightColour) * tint, frame.lightColour.w};
 	uniforms.ambient = {glm::vec3(frame.sky) * k_SkyLight, system.GetSeaFlash().x};
 	uniforms.eye = {eye, frame.eye.w > 0.5f ? 0.0f : 1.0f};

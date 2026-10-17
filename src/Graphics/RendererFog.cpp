@@ -118,7 +118,10 @@ void Renderer::BeginFog(const DrawSceneDesc& desc) const
 	uniforms.light = {frame.above.x, frame.above.y, frame.above.z, frame.light.w};
 	// Warm at sunrise and sunset, cool and faint under the moon
 	constexpr glm::vec3 k_MoonTint {0.72f, 0.84f, 1.1f};
-	const glm::vec3 tint = glm::mix(volumetric_clouds::SunThroughAir(frame.above.y), k_MoonTint, frame.light.w);
+	const glm::vec3 throughAir = _atmosphereFrame.has_value() && _atmosphereFrame->haze
+	                                 ? _atmosphereFrame->lightTint
+	                                 : volumetric_clouds::SunThroughAir(frame.above.y);
+	const glm::vec3 tint = glm::mix(throughAir, k_MoonTint, frame.light.w);
 	uniforms.lightColour = {glm::vec3(frame.lightColour) * tint, frame.lightColour.w};
 	uniforms.ambient = {glm::vec3(frame.sky) * k_SkyLight, frame.params.z};
 	_fogFrame = uniforms;
@@ -231,7 +234,10 @@ void Renderer::DrawFog(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget
 	applyProgram->SetTextureSampler("s_sceneDepth", 1, sceneTarget.GetDepthStencilAttachment());
 	const glm::vec4 apply {k_SkyShare, 0.0f, 0.0f, 0.0f};
 	applyProgram->SetUniformValue("u_fogApply", &apply);
+	// EXPERIMENT (not for merge): the sky's dome, so that the fog over the sky is the thinner share
+	const glm::vec4 noDome {0.0f, 0.0f, 1e9f, 1e9f};
+	applyProgram->SetUniformValue("u_hazeDome", _atmosphereFrame.has_value() ? &_atmosphereFrame->skyDome : &noDome);
 	BindScreenTriangle();
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_SRC_ALPHA));
-	applyProgram->Submit(static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver), std::numeric_limits<uint32_t>::max() - 1);
+	applyProgram->Submit(static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver), std::numeric_limits<uint32_t>::max() - 2);
 }

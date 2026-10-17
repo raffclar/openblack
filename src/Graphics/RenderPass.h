@@ -26,6 +26,11 @@ enum class RenderPass : uint8_t
 	/// blend from the old map to the new
 	SunVisibility,
 	SunVisibilityBlend,
+	/// EXPERIMENT (not for merge): the air's light: the texture of the light that gets through the air (made again only
+	/// when the air changes), the texture of the sky round the eye, and the haze's grid that follows the view
+	AtmosphereTransmittance,
+	AtmosphereSkyView,
+	AtmosphereAerial,
 	/// EXPERIMENT (not for merge): the maps of the environment's shadows seen from the light, two cascades made again
 	/// about every 3 seconds, and the map of the moving things' shadows, made each frame
 	SunShadowEnvironment0,
@@ -114,6 +119,9 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Cloud Shadow Pass",           //
     "Sun Visibility Pass",         //
     "Sun Visibility Blend Pass",   //
+    "Atmosphere Transmittance",    //
+    "Atmosphere Sky View",         //
+    "Atmosphere Aerial",           //
     "Sun Shadow Environment 0",    //
     "Sun Shadow Environment 1",    //
     "Sun Shadow Moving Pass",      //
