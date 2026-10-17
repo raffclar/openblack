@@ -1382,6 +1382,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::MagicFireBall>(context)
 	    .Field<&components::MagicFireBall::strength>("strength")
 	    .Field<&components::MagicFireBall::radius>("radius")
+	    .Field<&components::MagicFireBall::infoRow>("infoRow")
 	    .Field<&components::MagicFireBall::affectedByRain>("affectedByRain")
 	    .Field<&components::MagicFireBall::player>("player")
 	    .Field<&components::MagicFireBall::hasPlayer>("hasPlayer")

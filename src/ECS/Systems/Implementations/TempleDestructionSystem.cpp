@@ -370,15 +370,18 @@ void TempleDestructionSystem::ProcessTurn()
 		_world->StopSound(loop.second);
 		return true;
 	});
-	std::vector<entt::entity> destroying;
+	std::vector<std::pair<PlayerNames, entt::entity>> destroying;
 	registry->Each<const Temple>([&destroying](entt::entity entity, const Temple& temple) {
 		if (temple.destroying)
 		{
-			destroying.push_back(entity);
+			destroying.emplace_back(temple.owner, entity);
 		}
 	});
-	for (const auto entity : destroying)
+	// The temples take their turns in the order of their players, as each player's turn starts with its temple
+	std::ranges::sort(destroying);
+	for (const auto& turn : destroying)
 	{
+		const auto entity = turn.second;
 		if (registry->Valid(entity))
 		{
 			Step(entity, registry->Get<Temple>(entity));

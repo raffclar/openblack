@@ -37,16 +37,15 @@ float BeamShare(float clock)
 
 float NextBeam(float beamClock, float share)
 {
-	// Worked out at the game's wider precision and kept as a float
-	const double gap = (static_cast<double>(k_LastBeamGap) - static_cast<double>(k_FirstBeamGap)) * share + k_FirstBeamGap;
-	return static_cast<float>(gap + beamClock);
+	// Each step rounds to a float: the gap goes from the first to the last as the share grows, then the clock is added
+	const float gap = (k_LastBeamGap - k_FirstBeamGap) * share + k_FirstBeamGap;
+	return gap + beamClock;
 }
 
 BeamLook BeamLookAt(float share)
 {
-	const auto between = [share](float first, float last) {
-		return static_cast<float>((static_cast<double>(last) - static_cast<double>(first)) * share + first);
-	};
+	// Each step rounds to a float
+	const auto between = [share](float first, float last) { return (last - first) * share + first; };
 	return {
 	    .life = between(k_FirstBeamLife, k_LastBeamLife),
 	    .speed = between(k_FirstBeamSpeed, k_LastBeamSpeed),
@@ -68,8 +67,9 @@ int32_t TurnsFor(uint32_t millisecondsPerTurn, float seconds)
 
 int32_t SmokeTurns(uint32_t millisecondsPerTurn, float share)
 {
-	return static_cast<int32_t>(static_cast<float>(1000u / millisecondsPerTurn) * (k_SmokeShareFrom + share) *
-	                            k_SmokeSecondsScale);
+	// The share and the scale come together first, then the turns in a second multiply them
+	const float seconds = (share + k_SmokeShareFrom) * k_SmokeSecondsScale;
+	return static_cast<int32_t>(static_cast<float>(1000u / millisecondsPerTurn) * seconds);
 }
 
 } // namespace openblack::temple_destruction

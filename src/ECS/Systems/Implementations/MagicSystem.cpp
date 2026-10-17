@@ -2639,8 +2639,9 @@ bool MagicSystem::AbsorbFireBall(entt::entity ball)
 	{
 		return false;
 	}
-	// Every fireball takes the table's first row
-	seed.power *= 1.0f + Info().magicFireBall.at(0).catchIncreaseFactor;
+	// The catch uses the row of the fireball table that the ball uses
+	const auto row = EntityRegistry().Get<const MagicFireBall>(ball).infoRow;
+	seed.power *= 1.0f + Info().magicFireBall.at(row).catchIncreaseFactor;
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: the fire seed took in fireball #{}, its power now {:.4f}",
 	                    entt::to_integral(ball), seed.power);
 	if (Locator::fireSystem::has_value())

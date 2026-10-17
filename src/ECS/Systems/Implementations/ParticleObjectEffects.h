@@ -30,7 +30,7 @@ class GameObjectEffects final: public particles::ObjectEffectsInterface
 {
 public:
 	std::optional<entt::entity> AttachFireBall(glm::vec3 position, float strength, float radius, bool affectedByRain,
-	                                           std::optional<PlayerNames> player) override;
+	                                           std::optional<PlayerNames> player, int powerUpLevel) override;
 	FireBallState FollowFireBall(entt::entity ball, glm::vec3 position, float radius, float strength,
 	                             std::optional<glm::vec3> handTarget) override;
 

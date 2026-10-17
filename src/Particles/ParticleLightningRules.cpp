@@ -347,8 +347,8 @@ private:
 		bolt.centroidDistance = glm::length(bolt.centroid - bolt.origin);
 	}
 
-	/// One root atom, carrying two forks for each target it may strike at once and two more, each fork a ribbon of joints
-	/// drawn as the step leaves them
+	/// One root atom, carrying two forks for each target that the bolt found, each fork a ribbon of joints drawn as the
+	/// step leaves them
 	void Build(Effect& effect, Collection& collection, Bolt& bolt) const
 	{
 		collection.atoms.clear();
@@ -356,7 +356,7 @@ private:
 		const auto* jointCreator = effect.FindCreator(creator);
 		auto& root = effect.NewAtom(collection, jointCreator, {});
 		root.visible = false;
-		const std::vector<int> groups(maths::ForkCount(atOnce, bolt.targets.size()), forkGroup);
+		const std::vector<int> groups(maths::ForkCount(bolt.targets.size()), forkGroup);
 		effect.AddSubCollections(root, groups);
 		for (auto& fork : root.subCollections)
 		{

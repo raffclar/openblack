@@ -38,8 +38,9 @@ TEST(MiracleVisuals, AnExtremeGlobeHasARingForEachPowerUp)
 	EXPECT_EQ(RingCount(-1), 0);
 	EXPECT_EQ(RingCount(0), 1);
 	EXPECT_EQ(RingCount(1), 2);
-	// 60 of 256 of the globe's 150, and of an icon's full alpha
-	EXPECT_EQ(RingAlpha(150), 35);
+	// 60 of 256 of the globe's drawn 149, and of an icon's full alpha
+	EXPECT_EQ(k_GlobeAlpha, 149);
+	EXPECT_EQ(RingAlpha(k_GlobeAlpha), 34);
 	EXPECT_EQ(RingAlpha(255), 59);
 }
 

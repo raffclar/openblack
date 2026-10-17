@@ -390,7 +390,8 @@ public:
 			const auto player =
 			    effect.GetPlayer() >= 0 ? std::optional(static_cast<openblack::PlayerNames>(effect.GetPlayer())) : std::nullopt;
 			data.object =
-			    objects->AttachFireBall(position, effect.GetProcessInfo().power, radius, !script, player).value_or(entt::null);
+			    objects->AttachFireBall(position, effect.GetProcessInfo().power, radius, !script, player, effect.PowerUpLevel())
+			        .value_or(entt::null);
 		}
 		if (data.object != entt::null)
 		{
