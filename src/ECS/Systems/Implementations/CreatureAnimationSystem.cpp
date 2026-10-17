@@ -192,54 +192,58 @@ std::optional<creature_eyes::SurfacePoint> EyePointOf(const CreatureRig::EyePoin
 	return creature_eyes::PointOnTriangle(world[0], world[1], world[2], point.u, point.v);
 }
 
+template <typename Random>
 void PlaceEyes(CreatureEyes& eyes, const CreatureRig::Eyes& rig, const creature_morph::Morph& morph,
-               const std::vector<glm::mat4>& bones, const Transform& transform, float size, float seconds)
+               const std::vector<glm::mat4>& bones, const Transform& transform, float size, int32_t milliseconds,
+               Random&& random)
 {
 	const auto model = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
 	const auto eyeSize = creature_eyes::EyeSize(size, rig.scale, morph.evilGood, eyes.mode);
-	const auto ahead = glm::normalize(transform.rotation * k_MeshBack);
+	// The model's back axis, which is the way the creature faces across the land
+	const auto back = transform.rotation * k_MeshBack;
+	creature_eyes::Look look {
+	    .mode = eyes.mode,
+	    .openness = eyes.openness,
+	    .blink = eyes.blink,
+	    .lookAt = eyes.lookAt,
+	    .ahead = glm::vec3(back.x, 0.0f, back.z),
+	    .darts = {},
+	};
 	bool lidColourSet = false;
 	for (size_t i = 0; i < eyes.drawn.size(); ++i)
 	{
 		auto& drawn = eyes.drawn.at(i);
 		drawn = {};
 		const auto point = EyePointOf(rig.points.at(i), morph, bones, model);
-		if (!point || glm::length(point->normal) <= 0.0f)
+		if (!point)
 		{
 			continue;
 		}
-		const auto normal = glm::normalize(point->normal);
-		const auto centre = point->position - (rig.points.at(i).depth * normal);
-
-		const bool looksAtPoint =
-		    eyes.lookAt.has_value() && eyes.mode != creature_eyes::Mode::Ahead && glm::length(centre - *eyes.lookAt) > 0.0f;
-		const auto away = creature_eyes::ClampLook(looksAtPoint ? glm::normalize(centre - *eyes.lookAt) : ahead, normal);
-		auto& look = eyes.look.at(i);
+		if (look.mode == creature_eyes::Mode::Stoned)
+		{
+			for (auto& dart : look.darts)
+			{
+				dart = static_cast<int32_t>(random(201)) - 100;
+			}
+		}
+		auto& turn = eyes.look.at(i);
 		if (!eyes.lookStarted.at(i))
 		{
-			look.Reset(away);
+			turn.Reset(creature_eyes::LookDestination(*point, look));
 			eyes.lookStarted.at(i) = true;
 		}
-		look.SetDestination(away, creature_eyes::LookSeconds(eyes.openness, eyes.mode));
-		look.Update(seconds);
-		const auto eyeball = creature_eyes::EyeballFrame(centre, look.GetValue());
-		drawn.eyeball = creature_eyes::ToMatrix(eyeball, eyeSize);
-
 		const auto anchor = EyePointOf(rig.points.at(i + 2), morph, bones, model);
-		if (!anchor)
-		{
-			continue;
-		}
+		const auto placed =
+		    creature_eyes::PlaceEye(*point, anchor ? std::optional<glm::vec3>(anchor->position) : std::nullopt,
+		                            rig.points.at(i).depth, i == 1, look, rig.lidAngles, eyeSize, turn, milliseconds);
+		drawn.eyeball = placed.eyeball;
+		drawn.eyelid = placed.eyelid;
 		// Both lids take the skin's colour under the first one drawn
-		if (!lidColourSet)
+		if (anchor && !lidColourSet)
 		{
 			eyes.lidColour = rig.points.at(i + 2).skinColour;
 			lidColourSet = true;
 		}
-		const auto lid = creature_eyes::EyelidFrame(centre, normal, anchor->position, i == 1);
-		const auto angle = creature_eyes::EyelidAngle(eyes.mode, rig.lidAngles, eyes.openness,
-		                                              creature_eyes::LidPitch(lid, eyeball), eyes.blink);
-		drawn.eyelid = creature_eyes::ToMatrix(creature_eyes::Turned(lid, angle), eyeSize);
 	}
 }
 /// A blended animation of the creature's, blended the first time it is wanted, or nothing when the species has none
@@ -873,7 +877,8 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    eyes->drawn = {};
 		    if (rig != nullptr && rig->eyes.has_value())
 		    {
-			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, ShownSize(creature), seconds);
+			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, ShownSize(creature), milliseconds,
+			              [this](uint32_t range) { return std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); });
 		    }
 	    });
 }
@@ -959,7 +964,9 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	eyes->drawn = {};
 	if (rig != nullptr && rig->eyes.has_value())
 	{
-		PlaceEyes(*eyes, *rig->eyes, morph->drawn, animation->boneMatrices, *transform, self->size, seconds);
+		PlaceEyes(*eyes, *rig->eyes, morph->drawn, animation->boneMatrices, *transform, self->size,
+		          static_cast<int32_t>(std::lround(milliseconds)),
+		          [this](uint32_t range) { return std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); });
 	}
 }
 

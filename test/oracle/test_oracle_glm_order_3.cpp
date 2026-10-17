@@ -1,0 +1,115 @@
+/*******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#include <cstdint>
+
+#include <array>
+#include <bit>
+#include <optional>
+#include <string>
+
+#include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
+#include <gtest/gtest.h>
+
+#include "Common/X87.h"
+#include "Common/Zoomer.h"
+#include "Creature/CreatureEyes.h"
+#include "OracleData.h"
+
+using namespace openblack;
+
+namespace
+{
+
+/// The rows of a 4x3 matrix of the game, as our matrix holds them
+std::array<float, 12> RowsOf(const glm::mat4& matrix)
+{
+	std::array<float, 12> rows {};
+	for (int row = 0; row < 4; ++row)
+	{
+		for (int column = 0; column < 3; ++column)
+		{
+			rows.at(static_cast<size_t>((row * 3) + column)) = matrix[row][column];
+		}
+	}
+	return rows;
+}
+
+} // namespace
+
+TEST(OracleGlmOrder3, TheCreaturesEyeAsTheGameDrawsIt)
+{
+	const auto table = oracle::Table::Load("creature_eye.txt");
+	ASSERT_TRUE(table.has_value());
+	const auto column = [&](const std::string& name) {
+		const auto found = table->Column(name);
+		EXPECT_TRUE(found.has_value()) << name;
+		return found.value_or(0);
+	};
+	size_t different = 0;
+	for (size_t row = 0; row < table->Rows(); ++row)
+	{
+		const auto f = [&](const std::string& name) { return table->Float(row, column(name)); };
+		const auto u = [&](const std::string& name) { return table->Bits(row, column(name)); };
+		const auto vertex = [&](uint32_t i) {
+			const auto prefix = "v" + std::to_string(i);
+			return glm::vec3(f(prefix + "x"), f(prefix + "y"), f(prefix + "z"));
+		};
+		const auto surface = [&](uint32_t i) {
+			return creature_eyes::PointOnTriangle(vertex(3 * i), vertex((3 * i) + 1), vertex((3 * i) + 2),
+			                                      f("s" + std::to_string(i)), f("t" + std::to_string(i)));
+		};
+		const auto eye = u("eye");
+		const auto mode = static_cast<creature_eyes::Mode>(u("mode"));
+		const glm::vec3 target {f("target_x"), f("target_y"), f("target_z")};
+		const auto yaw = f("yaw");
+		const auto offset = static_cast<int32_t>(u("rand")) - 100;
+		const creature_eyes::Look look {
+		    .mode = mode,
+		    .openness = f("openness"),
+		    .blink = {.state = static_cast<creature_eyes::Blink::State>(u("blink")),
+		              .timerMs = static_cast<int32_t>(u("timer")),
+		              .intervalMs = creature_eyes::k_BlinkIntervalMs},
+		    .lookAt = target != glm::vec3(0.0f) ? std::optional(target) : std::nullopt,
+		    .ahead = {x87::Mul(x87::Sin(yaw), -1.0f), 0.0f, x87::RoundToFloat(x87::Cos(yaw))},
+		    .darts = {offset, offset, offset},
+		};
+		const creature_eyes::LidAngles lids {.open = f("lid_open"), .closed = f("lid_closed"), .calm = f("lid_calm")};
+		const auto eyeSize = creature_eyes::EyeSize(f("size"), f("eye_scale"), f("evil_good"), mode);
+		Zoomer3 turn;
+		const auto anchor = u("has_lid") != 0 ? std::optional(surface(eye + 2).position) : std::nullopt;
+		const auto placed = creature_eyes::PlaceEye(surface(eye), anchor, f("depth"), eye == 1, look, lids, eyeSize, turn,
+		                                            static_cast<int32_t>(u("ms")));
+		const auto ball = RowsOf(placed.eyeball);
+		const auto lid = placed.eyelid ? RowsOf(*placed.eyelid) : std::array<float, 12> {};
+		bool same = true;
+		std::string text;
+		for (size_t i = 0; i < 12; ++i)
+		{
+			const auto ballName = "ball" + std::to_string(i);
+			const auto lidName = "lid" + std::to_string(i);
+			if (std::bit_cast<uint32_t>(ball.at(i)) != u(ballName))
+			{
+				same = false;
+				text += " " + ballName + " game " + oracle::Hex(f(ballName)) + " ours " + oracle::Hex(ball.at(i));
+			}
+			if (std::bit_cast<uint32_t>(lid.at(i)) != u(lidName))
+			{
+				same = false;
+				text += " " + lidName + " game " + oracle::Hex(f(lidName)) + " ours " + oracle::Hex(lid.at(i));
+			}
+		}
+		if (!same && ++different <= 20)
+		{
+			ADD_FAILURE() << "row " << row << " mode " << u("mode") << " blink " << u("blink") << " eye " << eye << ":" << text;
+		}
+	}
+	EXPECT_EQ(different, 0U);
+}
