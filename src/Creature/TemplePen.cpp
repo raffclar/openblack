@@ -18,23 +18,15 @@
 
 using namespace openblack;
 
-namespace
+map_coords::MapCoords temple_pen::MapPosition(glm::vec3 point)
 {
-/// A metre value kept as a map position and read back: the product is exact (two floats), then truncated
-float AsMapPosition(float metres)
-{
-	const auto fixed = static_cast<double>(metres) * static_cast<double>(map_coords::k_FixedPerMetre);
-	if (!(fixed > -2147483648.0 && fixed < 2147483648.0))
-	{
-		return map_coords::ToMetres(static_cast<int32_t>(0x80000000u));
-	}
-	return map_coords::ToMetres(static_cast<int32_t>(fixed));
+	return {.x = map_coords::ToFixed(point.x), .z = map_coords::ToFixed(point.z), .altitude = 0.0f};
 }
-} // namespace
 
 glm::vec2 temple_pen::MapPlace(glm::vec3 point)
 {
-	return {AsMapPosition(point.x), AsMapPosition(point.z)};
+	const auto onMap = MapPosition(point);
+	return {map_coords::ToMetres(onMap.x), map_coords::ToMetres(onMap.z)};
 }
 
 bool temple_pen::BetweenWalls(glm::vec2 heart, float heartYAngle, glm::vec2 point)
