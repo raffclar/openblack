@@ -16,6 +16,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "Graphics/UnderwaterTap.h"
 #include "Graphics/UnderwaterWake.h"
 
 namespace openblack::ecs::systems
@@ -48,6 +49,15 @@ public:
 		graphics::underwater::wake::Splash splash;
 	};
 
+	/// EXPERIMENT (not for merge): a tap of the hand on the water that shows now
+	struct ActiveTap
+	{
+		glm::vec3 position {0.0f};
+		/// When it started, by the clock of the waves
+		float start {0.0f};
+		graphics::underwater::tap::TapSplash splash;
+	};
+
 	/// The field this frame
 	struct Frame
 	{
@@ -59,6 +69,7 @@ public:
 		std::span<const FieldWrite> rings;
 		std::span<const graphics::underwater::wake::Hull> hulls;
 		std::span<const ActiveSplash> splashes;
+		std::span<const ActiveTap> taps;
 		/// Whether the field is flat: the water does not read it
 		bool flat {true};
 	};
@@ -71,6 +82,9 @@ public:
 	[[nodiscard]] virtual Frame GetFrame() const = 0;
 	/// Drops the mobile objects near what the camera looks at from high over the water there, so that they splash
 	virtual void DropDebugThings() = 0;
+	/// The hand taps the water at a point on its surface, with a strength (see underwater::tap::SplashFor). `calm` is 0
+	/// on the open sea and 1 on calm water.
+	virtual void Tap(glm::vec3 position, float strength, float calm) = 0;
 	/// Plays the explorers' boat film where it plays on the first land, so that the boat makes its wake
 	virtual void PlayDebugBoat() = 0;
 };

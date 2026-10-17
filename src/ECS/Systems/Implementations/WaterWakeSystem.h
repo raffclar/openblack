@@ -36,6 +36,7 @@ public:
 	[[nodiscard]] Frame GetFrame() const override;
 	void DropDebugThings() override;
 	void PlayDebugBoat() override;
+	void Tap(glm::vec3 position, float strength, float calm) override;
 
 private:
 	/// How a thing moved over the last frames
@@ -74,6 +75,15 @@ private:
 	std::vector<FieldWrite> _rings;
 	std::vector<graphics::underwater::wake::Hull> _hulls;
 	std::vector<ActiveSplash> _splashes;
+	std::vector<ActiveTap> _taps;
+	/// The rings that start later: where the drops of a tap land, by the clock of the waves
+	struct PendingRing
+	{
+		float due {0.0f};
+		FieldWrite ring;
+	};
+	std::vector<PendingRing> _pendingRings;
+	uint32_t _tapCount {0};
 	/// The most that any thing wrote into the field this frame
 	float _height {0.0f};
 	float _foam {0.0f};

@@ -37,6 +37,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/StreamWaterSystemInterface.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "Graphics/Underwater.h"
 #include "Locator.h"
@@ -93,6 +94,8 @@ void WaterWakeSystem::Update(std::chrono::milliseconds frameRealTime)
 	{
 		_tracks.clear();
 		_splashes.clear();
+		_taps.clear();
+		_pendingRings.clear();
 		_plan = _clock.Plan(frameSeconds, _clock.Centre(), 0.0f, 0.0f);
 		return;
 	}
@@ -166,6 +169,19 @@ void WaterWakeSystem::Update(std::chrono::milliseconds frameRealTime)
 		const float age = seconds - active.start;
 		return age > active.splash.seconds || age < 0.0f;
 	});
+	std::erase_if(_taps, [seconds](const ActiveTap& active) {
+		const float age = seconds - active.start;
+		return age > active.splash.seconds || age < 0.0f;
+	});
+	// The rings of the taps that start now: the hole under the hand and the rings where the drops land
+	std::erase_if(_pendingRings, [seconds](const PendingRing& pending) { return pending.due > seconds + 30.0f; });
+	for (const auto& pending : _pendingRings)
+	{
+		if (pending.due <= seconds)
+		{
+			_rings.push_back(pending.ring);
+		}
+	}
 
 	// The nearest movers, rings and hulls first, up to the most of each
 	const auto byDistance = [this](const auto& a, const auto& b) {
@@ -207,8 +223,44 @@ void WaterWakeSystem::Update(std::chrono::milliseconds frameRealTime)
 	_plan = _clock.Plan(frameSeconds, wake::FieldCell(_centre), _height, _foam);
 	if (_plan.steps == 0)
 	{
-		// Rings start at the first step: with no step this frame, none start
+		// Rings start at the first step: with no step this frame, none start. The taps' rings wait for the next step.
 		_rings.clear();
+	}
+	else
+	{
+		std::erase_if(_pendingRings, [seconds](const PendingRing& pending) { return pending.due <= seconds; });
+	}
+}
+
+void WaterWakeSystem::Tap(glm::vec3 position, float strength, float calm)
+{
+	if (!Locator::underwaterSystem::has_value())
+	{
+		return;
+	}
+	namespace tap = graphics::underwater::tap;
+	const float seconds = Locator::underwaterSystem::value().GetSeconds();
+	// Each tap has numbers of its own, from its count and its place
+	++_tapCount;
+	const auto n = static_cast<float>(_tapCount);
+	const glm::vec3 seed {n * 0.3183099f + position.x * 0.0137f, n * 0.1372549f + position.z * 0.0191f + 0.5f,
+	                      n * 0.7113f + 0.25f};
+	const auto splash = tap::SplashFor(strength, calm, seed);
+	if (_taps.size() >= tap::k_MostTaps)
+	{
+		_taps.erase(_taps.begin());
+	}
+	_taps.push_back({.position = position, .start = seconds, .splash = splash});
+	const glm::vec2 at {position.x, position.z};
+	_pendingRings.push_back(
+	    {.due = seconds, .ring = {.position = at, .radius = splash.ringRadius, .depth = splash.ringDepth, .foam = 1.0f}});
+	for (const auto& landing : tap::RingLandings(splash))
+	{
+		_pendingRings.push_back({.due = seconds + landing.seconds,
+		                         .ring = {.position = at + landing.position,
+		                                  .radius = std::max(landing.size * 3.0f, 0.3f),
+		                                  .depth = tap::DropRingDepth(landing.size),
+		                                  .foam = 0.15f}});
 	}
 }
 
@@ -224,7 +276,15 @@ void WaterWakeSystem::Follow(const Candidate& candidate, float frameSeconds, flo
 	const auto& system = Locator::underwaterSystem::value();
 	const float depth = system.GetSeabed().DepthAt(across) + seaLevel;
 	const float shallow = std::clamp((depth - 0.2f) / 3.8f, 0.0f, 1.0f);
-	const float water = seaLevel + underwater::WavesAt(across, seconds, system.GetWaves()).height * shallow;
+	float water = seaLevel + underwater::WavesAt(across, seconds, system.GetWaves()).height * shallow;
+	// In a river the water is the river's own, over the land
+	if (Locator::streamWaterSystem::has_value())
+	{
+		if (const auto river = Locator::streamWaterSystem::value().WaterAt(across); river.has_value())
+		{
+			water = river->surface;
+		}
+	}
 
 	auto found = _tracks.find(candidate.entity);
 	const bool fresh = found == _tracks.end() || glm::distance(found->second.position, middle) > k_Jump;
@@ -339,6 +399,7 @@ WaterWakeSystemInterface::Frame WaterWakeSystem::GetFrame() const
 	        .rings = _rings,
 	        .hulls = _hulls,
 	        .splashes = _splashes,
+	        .taps = _taps,
 	        .flat = _clock.IsFlat()};
 }
 

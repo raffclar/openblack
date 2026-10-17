@@ -24,6 +24,7 @@
 #include "3D/Seabed.h"
 #include "AudioManagerInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/StreamWaterSystemInterface.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Underwater.h"
@@ -286,6 +287,14 @@ void AtmosAudio::CopyTargets(bool inCitadel)
 		return;
 	}
 	_targets = _soundMap.GetVolumes();
+	// EXPERIMENT (not for merge): near the rivers of the experiment's water the running water sounds, louder at the
+	// rapids and the falls
+	if (Locator::streamWaterSystem::has_value())
+	{
+		auto& running = _targets.at(static_cast<size_t>(AtmosType::RunningWater));
+		running =
+		    std::max(running, Locator::streamWaterSystem::value().LoudnessAt(Locator::audio::value().GetListener().origin));
+	}
 }
 
 void AtmosAudio::ProcessAtmosBanks()

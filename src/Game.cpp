@@ -213,6 +213,7 @@
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/StreamWaterSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -2406,6 +2407,11 @@ bool Game::Update() noexcept
 		if (_atmosAudio)
 		{
 			_atmosAudio->UpdateCliffCrashes();
+		}
+		// The water in the rivers and the leaves that drift down them
+		if (Locator::streamWaterSystem::has_value())
+		{
+			Locator::streamWaterSystem::value().Update(clock.GetFrameRealTime());
 		}
 		// The things in the water and what they write into the water's field of small waves
 		if (Locator::waterWakeSystem::has_value())
@@ -6005,6 +6011,51 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	}
 }
 
+namespace
+{
+/// EXPERIMENT (not for merge): the hand taps the experiment's water at a point: a splash in three dimensions where the
+/// original makes a ring. `riverSurface` is given when the point is in a river. False while the experiment's water or
+/// its splash is off.
+bool TapExperimentWater(glm::vec3 position, std::optional<float> riverSurface)
+{
+	if (!Locator::underwaterSystem::has_value() || !Locator::waterWakeSystem::has_value())
+	{
+		return false;
+	}
+	const auto& underwater = Locator::underwaterSystem::value();
+	if (!underwater.IsEnabled() || underwater.GetEffectOff() == graphics::underwater::Effect::TapSplash)
+	{
+		return false;
+	}
+	namespace uw = graphics::underwater;
+	const glm::vec2 xz {position.x, position.z};
+	// A faster hand taps harder
+	const float speed =
+	    Locator::magicSystem::has_value() ? glm::length(Locator::magicSystem::value().GetHandCastState().velocity) : 0.0f;
+	const float strength = uw::tap::StrengthForHandSpeed(speed);
+	float surface = underwater.GetSeaLevel();
+	float calm = 1.0f;
+	if (riverSurface.has_value() && Locator::terrainSystem::has_value())
+	{
+		// A river's water shows on the land's surface
+		surface = Locator::terrainSystem::value().GetHeightAt(xz);
+	}
+	else
+	{
+		// On the sea the splash is on the waves. Near a coast, as in a pond, the water is calm.
+		const auto& seabed = underwater.GetSeabed();
+		const auto shore = seabed.shore.empty()
+		                       ? glm::vec4(1000.0f, 0.0f, 0.0f, 0.0f)
+		                       : uw::ShoreAt(seabed.shore, seabed.cliff, seabed.size, seabed.spacing, xz - seabed.origin);
+		surface +=
+		    uw::WavesAt(xz, underwater.GetSeconds(), underwater.GetWaves()).height * std::clamp(shore.x / 40.0f, 0.0f, 1.0f);
+		calm = 1.0f - std::clamp(shore.x / 60.0f, 0.0f, 1.0f);
+	}
+	Locator::waterWakeSystem::value().Tap({position.x, surface, position.z}, strength, calm);
+	return true;
+}
+} // namespace
+
 void Game::PlayHandGrabSound()
 {
 	if (!_cursorWorldPosition || !Locator::terrainSystem::has_value())
@@ -6020,6 +6071,14 @@ void Game::PlayHandGrabSound()
 	{
 		const auto* landCell = Locator::terrainSystem::value().FindCell(glm::u16vec2(cell));
 		isLand = landCell != nullptr && landCell->properties.hasWater == 0;
+	}
+	// EXPERIMENT (not for merge): with the experiment's water on, the hand also goes into the water of a river
+	const auto river = Locator::streamWaterSystem::has_value()
+	                       ? Locator::streamWaterSystem::value().WaterAt(glm::vec2(position.x, position.z))
+	                       : std::nullopt;
+	if (river.has_value())
+	{
+		isLand = false;
 	}
 
 	if (isLand)
@@ -6041,8 +6100,13 @@ void Game::PlayHandGrabSound()
 		if (!Locator::time::value().IsPaused())
 		{
 			const auto angle = Locator::gameRandom::value().CrtRandom(0.0f, glm::two_pi<float>());
-			Locator::waterRingSystem::value().Add(
-			    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
+			// EXPERIMENT (not for merge): with the experiment's water on, a splash in three dimensions takes the place
+			// of the ring
+			if (!TapExperimentWater(position, river.has_value() ? std::optional<float>(river->surface) : std::nullopt))
+			{
+				Locator::waterRingSystem::value().Add(
+				    water_rings::HandSplash(glm::vec2(position.x, position.z), angle, FrameLandLight(255)));
+			}
 			// The fish near where the hand went in dart away
 			Locator::fishFarmSystem::value().Scare({position.x, k_HandSplashHeight, position.z});
 		}

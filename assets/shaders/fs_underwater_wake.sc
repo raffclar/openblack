@@ -3,6 +3,8 @@ $input v_texcoord0, v_texcoord1
 #include <bgfx_shader.sh>
 
 #include "underwater.sh"
+// EXPERIMENT (not for merge): the rivers' flow map, for the waves on the rivers' water
+#include "underwater_streams.sh"
 
 // EXPERIMENT (not for merge): one step of the field of small waves round the camera, that the things in the water write
 // into. Each texel keeps the water's height now (x), its height a step before (y) and its foam (z). The waves move by
@@ -61,8 +63,10 @@ void main()
 {
 	vec2 texel = floor(gl_FragCoord.xy);
 	vec2 world = u_wakeField.xy + (texel + 0.5f) * u_wakeField.z;
-	// Where this texel was in the last step's field
-	vec2 source = texel + u_wakeStep.xy;
+	// Where this texel was in the last step's field. On a river the water carries the waves downstream.
+	vec4 stream = UwStreamFlowAt(world);
+	float inStream = UwStreamWaterShare(stream);
+	vec2 source = texel + u_wakeStep.xy - stream.xy * inStream * u_wakeDamp.z / u_wakeField.z;
 	float fresh = u_wakeStep.z > 0.5f ? 0.0f : 1.0f;
 	vec2 inside = step(vec2_splat(0.0f), source) * step(source, vec2_splat(u_wakeField.w - 1.0f));
 	fresh *= inside.x * inside.y;
@@ -82,7 +86,7 @@ void main()
 	pull *= fresh;
 	// In shallow water the waves are slower, as tanh(k h) of the depth h for a wave of the reference length
 	vec4 shore = texture2DLod(s_shore, UwShoreUv(world), 0.0f);
-	float water = max(u_uwParams.z - shore.w, 0.0f);
+	float water = max(max(u_uwParams.z - shore.w, 0.0f), inStream * 0.4f);
 	float kh = 6.2831853f / (16.0f * u_wakeField.z) * water;
 	float shallow = clamp((exp(2.0f * kh) - 1.0f) / (exp(2.0f * kh) + 1.0f), 0.1f, 1.0f);
 	float damping = u_wakeDamp.x;
@@ -101,6 +105,9 @@ void main()
 	vec2 slope = vec2(east.x - west.x, north.x - south.x) / (2.0f * spacing);
 	float crest = -(east.x + west.x + north.x + south.x - 4.0f * height) / (spacing * spacing);
 	foam += (max(length(slope) - 0.08f, 0.0f) * 3.0f + max(crest - 0.4f, 0.0f) * 0.08f) * u_wakeDamp.z * 6.0f;
+
+	// On a river the white water feeds the field's foam, which the water then carries downstream and which decays
+	foam += inStream * stream.z * u_wakeDamp.z * 0.3f;
 
 	// The things that move in the water hold the water down under them, so the water flows round them as they move
 	for (int i = 0; i < 16; i++)
@@ -140,7 +147,7 @@ void main()
 	}
 
 	// The waves stop at the coast, and die away near the edges of the field so that they do not come back from them
-	float land = smoothstep(u_uwParams.z - 0.25f, u_uwParams.z + 0.05f, shore.w);
+	float land = smoothstep(u_uwParams.z - 0.25f, u_uwParams.z + 0.05f, shore.w) * (1.0f - inStream);
 	vec2 fromEdge = min(texel, u_wakeField.w - 1.0f - texel);
 	float edge = smoothstep(0.0f, 40.0f, min(fromEdge.x, fromEdge.y));
 	next *= (1.0f - land) * mix(0.9f, 1.0f, edge);

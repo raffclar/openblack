@@ -182,6 +182,11 @@ enum class Effect : uint8_t
 	Sediment,
 	/// Not an effect: the water is drawn as a flat colour where it shows, to compare it with the original sea
 	WaterMask,
+	/// The water in the rivers: its flow, its foam, its sound and the leaves that drift down it (see
+	/// underwater::streams). When it is off, the rivers show only their beds.
+	Streams,
+	/// The splash where the hand taps the water (see underwater::tap). When it is off, the tap makes the original ring.
+	TapSplash,
 	_Count
 };
 

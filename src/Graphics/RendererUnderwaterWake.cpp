@@ -112,6 +112,7 @@ void Renderer::StepWakeField() const
 		program->SetUniformArray("u_wakeRings", rings.data(), static_cast<uint16_t>(rings.size()));
 		program->SetTextureSampler("s_wakePrev", 0, _wakeField->Latest().GetColorAttachment());
 		program->SetTextureSampler("s_shore", 2, shoreMap);
+		BindStreamMap(*program, 3, shoreMap);
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 		program->Submit(viewId);
 		_wakeField->Swap();

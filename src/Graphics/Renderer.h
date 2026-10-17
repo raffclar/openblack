@@ -42,6 +42,7 @@
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/SeaRows.h"
+#include "Graphics/UnderwaterStreamView.h"
 #include "Graphics/UnderwaterView.h"
 #include "Graphics/UnderwaterWakeField.h"
 #include "Graphics/VolumeGlowShell.h"
@@ -424,6 +425,15 @@ private:
 	void BindWakeField(const ShaderProgram& program) const;
 	/// EXPERIMENT (not for merge): the splashes where things fall into the water, over the water
 	void DrawSplashes(const FrameBuffer& target) const;
+	/// EXPERIMENT (not for merge): the rivers' flow map and its place, for one of the water's programs, in sampler stage
+	/// `stage`; `fallback` is bound in its place while the land has no rivers
+	void BindStreamMap(const ShaderProgram& program, uint8_t stage, const Texture2D& fallback) const;
+	/// EXPERIMENT (not for merge): the water in the rivers, over the scene after the sea
+	void DrawStreams(const FrameBuffer& target, const Camera& camera) const;
+	/// EXPERIMENT (not for merge): the leaves and twigs that drift on the rivers and out to sea
+	void DrawDrifters() const;
+	/// EXPERIMENT (not for merge): the splashes where the hand taps the water
+	void DrawTaps(const FrameBuffer& target) const;
 	/// The beams of the temple's spot lights and the light its windows shed, which the game draws in its
 	/// rooms but not in the reflection of the main room
 	void DrawLightBeams(const DrawSceneDesc& desc) const;
@@ -604,6 +614,8 @@ private:
 	mutable std::unique_ptr<UnderwaterView> _underwater;
 	/// EXPERIMENT (not for merge): the water's field of small waves and the splashes' mesh, made when they first show
 	mutable std::unique_ptr<UnderwaterWakeField> _wakeField;
+	/// EXPERIMENT (not for merge): the rivers' flow map and the squares of the taps and the drifters
+	mutable std::unique_ptr<UnderwaterStreamView> _streamView;
 	/// EXPERIMENT (not for merge): the underwater uniforms of this frame, while the view is under the sea
 	mutable std::optional<UnderwaterUniforms> _underwaterFrame;
 	/// EXPERIMENT (not for merge): whether the scene's views are bound to the underwater target
