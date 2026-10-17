@@ -7,10 +7,13 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
+
 #include <gtest/gtest.h>
 
 #include "Graphics/HandReflection.h"
 #include "Graphics/RenderModes.h"
+#include "Graphics/RenderPass.h"
 
 using namespace openblack::graphics;
 
@@ -67,4 +70,39 @@ TEST(HandReflection, TheChromaPrimitiveKeepsItsTextureAlpha)
 	EXPECT_FALSE(mode.alphaModulate);
 	EXPECT_TRUE(mode.alphaTest);
 	EXPECT_EQ(mode.blend, render_modes::Blend::Standard);
+}
+
+// The game draws the held thing in the hand after the sea, and each draw keeps the light at the point of the thing. The
+// sea mirrors the thing in the light of the frame before. On its first frame in the hand, the thing takes the light where
+// it is.
+TEST(HandReflection, TheHeldThingIsMirroredInTheLightOfTheFrameBefore)
+{
+	using hand_reflection::HeldLightPoint;
+	using hand_reflection::StepHeldLight;
+	const HeldLightPoint first {.point = {10.0f, 20.0f, 30.0f}, .viewDepth = 400.0f};
+	const auto taken = StepHeldLight(std::nullopt, first);
+	EXPECT_EQ(taken.mirrored.point, first.point);
+	EXPECT_EQ(taken.mirrored.viewDepth, first.viewDepth);
+	EXPECT_EQ(taken.kept.point, first.point);
+
+	const HeldLightPoint second {.point = {12.0f, 21.0f, 33.0f}, .viewDepth = 410.0f};
+	const auto next = StepHeldLight(taken.kept, second);
+	EXPECT_EQ(next.mirrored.point, first.point);
+	EXPECT_EQ(next.mirrored.viewDepth, first.viewDepth);
+	EXPECT_EQ(next.kept.point, second.point);
+	EXPECT_EQ(next.kept.viewDepth, second.viewDepth);
+}
+
+// The mirrored held thing is flat: each vertex takes all of the colour, as the sun does not shade it
+TEST(HandReflection, TheMirroredHeldThingIsFlat)
+{
+	EXPECT_EQ(hand_reflection::k_HeldShade, 256.0f);
+}
+
+// The game draws the mirrored hand, the held thing and the creature before the sharks under the sea. The mirrored land
+// writes no depth, so the sharks test their depth only against these mirrored things.
+TEST(HandReflection, TheSharksUnderTheSeaComeAfterTheMirroredThings)
+{
+	EXPECT_LT(static_cast<int>(RenderPass::ReflectionMirrored), static_cast<int>(RenderPass::UnderSea));
+	EXPECT_LT(static_cast<int>(RenderPass::Reflection), static_cast<int>(RenderPass::ReflectionMirrored));
 }

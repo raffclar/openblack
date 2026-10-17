@@ -11,10 +11,14 @@
 
 #include "RenderingSystemCommon.h"
 
+#include <vector>
+
 #include <glm/gtx/transform.hpp>
 
 #include "3D/L3DMesh.h"
+#include "Camera/Camera.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Stream.h"
@@ -24,6 +28,7 @@
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/GraphicsHandleBgfx.h"
+#include "Graphics/MeshDetail.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
@@ -165,6 +170,40 @@ void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths
 		_renderContext.dirty = false;
 		_renderContext.layoutDirty = false;
 		_renderContext.hasBoundingBoxes = drawBoundingBox;
+	}
+
+	KeepHeldLights();
+}
+
+void RenderingSystemCommon::KeepHeldLights()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// A thing out of the hand keeps no light
+	std::vector<entt::entity> released;
+	registry.Each<const HeldLight>(
+	    [&released](entt::entity entity, const HeldLight& /*unused*/) { released.push_back(entity); }, entt::exclude<InHand>);
+	for (const auto entity : released)
+	{
+		registry.Remove<HeldLight>(entity);
+	}
+	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	for (const auto& draw : _renderContext.inHandDraws)
+	{
+		const glm::vec3 point(draw.model[3]);
+		const HeldLight now {
+		    .point = point,
+		    .viewDepth =
+		        camera != nullptr ? graphics::mesh_detail::ViewDepth(point, camera->GetOrigin(), camera->GetForward()) : 0.0f,
+		};
+		// The light changes in place, so that the draw lists stay as they are
+		if (auto* kept = registry.TryGet<HeldLight>(draw.entity); kept != nullptr)
+		{
+			*kept = now;
+		}
+		else
+		{
+			registry.Assign<HeldLight>(draw.entity, now);
+		}
 	}
 }
 

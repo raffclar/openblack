@@ -162,6 +162,9 @@ public:
 		/// whose land light, land colour and haze it takes, w its shade of 255 in place of the sun's on each vertex. w 0 for
 		/// none.
 		glm::vec4 shadeAt {0.0f};
+		/// The distance in front of the camera that sets the haze of the mesh, in place of the distance of the mesh in this
+		/// view: the haze that a held thing kept, which its mirror in the sea takes
+		std::optional<float> hazeDepth;
 		/// Inside the temple, the mesh fades with the temple's depth fog: a model once where it stands, the lightmapped
 		/// walls at each vertex. Off for the hand, which the game leaves unfogged.
 		bool templeFog {false};

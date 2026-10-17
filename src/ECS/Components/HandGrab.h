@@ -31,6 +31,17 @@ struct InHand
 	entt::entity hand {entt::null};
 };
 
+/// The light of a thing in a hand, as the game keeps it from the last time that it drew the thing in the hand. The
+/// thing takes the land's light, the land's colour and the haze at its own point. The sea mirrors the thing in this
+/// light, which is thus one frame old.
+struct HeldLight
+{
+	/// The point whose land light, land colour and haze the thing took
+	glm::vec3 point {0.0f};
+	/// The distance of the point in front of the camera, which sets the haze
+	float viewDepth {0.0f};
+};
+
 /// A thing a script has said the hand may not pick up
 struct CannotBePickedUp
 {

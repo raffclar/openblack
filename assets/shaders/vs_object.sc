@@ -40,7 +40,7 @@ uniform vec4 u_uvOffset;
 // xyz: a colour of the object's own, 0 to 255, in place of the land's light; w: its alpha, 0 for no colour of its own
 uniform vec4 u_objectLook;
 // The point a model is fogged at in the temple, in place of its own position: xyz the point, w 1 to use it. The temple's
-// walls without a lightmap are fogged once each, at their first vertex.
+// walls without a lightmap are fogged once each, at their first vertex. With w 2, x is the distance that sets the haze.
 uniform vec4 u_fogAt;
 // x: 1 for the light the game gives the models it lights as it poses them (the hand, the glow over it), in place of
 // the usual model light (see PosedModelLightFactor)
@@ -246,7 +246,13 @@ void main()
 			fogOrigin = u_fogAt.xyz;
 		}
 	}
-	float hazeT = HazeT(mul(u_view, vec4(fogOrigin, 1.0f)).z);
+	float hazeDepth = mul(u_view, vec4(fogOrigin, 1.0f)).z;
+	// A held thing mirrored in the sea takes the haze of the distance that it kept in the hand
+	if (u_fogAt.w > 1.5f)
+	{
+		hazeDepth = u_fogAt.x;
+	}
+	float hazeT = HazeT(hazeDepth);
 	colour = HazeDiffuse(colour, HazeFactor(hazeT));
 	// The haze is added with the land's colour where the object stands, each channel at most white, unless the object is
 	// lit in a colour of its own that the land's colour doesn't reach (w)

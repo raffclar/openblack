@@ -25,6 +25,7 @@
 
 #include "Graphics/FizzDrawOrder.h"
 #include "Graphics/GraphicsHandle.h"
+#include "Graphics/HandReflection.h"
 #include "Graphics/Mesh.h"
 
 namespace openblack::graphics
@@ -224,6 +225,8 @@ struct RenderContext
 		glm::mat4 castModel;
 		/// Its place among the instances, where it has one
 		uint32_t instance {std::numeric_limits<uint32_t>::max()};
+		/// For a thing in a hand, the light that the sea mirrors it in (see graphics::hand_reflection::StepHeldLight)
+		std::optional<graphics::hand_reflection::HeldLightPoint> heldLight;
 	};
 	std::vector<HighDetailDraw> highDetailDraws;
 	/// The explorers' boat while it is pushed down the beach, which casts its shadow from the same far sun onto the land

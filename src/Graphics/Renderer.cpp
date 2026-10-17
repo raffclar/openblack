@@ -1423,6 +1423,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				{
 					u_fogAt = glm::vec4(*desc.fogFromFirstVertex + subMesh.GetSurfacePoints().front().position, 1.0f);
 				}
+				// A mesh given the distance of its haze takes it in x, with w 2
+				if (desc.hazeDepth.has_value())
+				{
+					u_fogAt = glm::vec4(*desc.hazeDepth, 0.0f, 0.0f, 2.0f);
+				}
 				setUniform(MeshUniform::FogAt, &u_fogAt);
 			}
 			if (has(MeshUniform::ModelLight))
@@ -6068,6 +6073,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				glm::vec3 added;
 			};
 			std::optional<FlatLook> flatReflection;
+			// The thing that the hand holds, mirrored in the sea: flat in the land's light, the land's colour and the haze that
+			// it kept the frame before, with nothing of its own added
+			std::optional<hand_reflection::HeldLightPoint> heldReflection;
 			const auto drawInstances = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
 			                               bool useMaterialBlending, uint32_t first, uint32_t count,
 			                               const EntityPose* pose = nullptr,
@@ -6236,11 +6244,23 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.snow = false;
 					submitDesc.groundShadows = false;
 				}
+				if (heldReflection.has_value())
+				{
+					submitDesc.shadeAt = glm::vec4(heldReflection->point, hand_reflection::k_HeldShade);
+					submitDesc.hazeDepth = heldReflection->viewDepth;
+					submitDesc.unlit = true;
+					submitDesc.landLightScale = 1.0f;
+					submitDesc.objectLook.reset();
+					submitDesc.snow = false;
+					submitDesc.groundShadows = false;
+				}
 
 				// TODO(bwrsandman): choose the correct LOD
 				DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				submitDesc.morphTargets = nullptr;
 				submitDesc.landLightAndHaze = true;
+				submitDesc.shadeAt = glm::vec4(0.0f);
+				submitDesc.hazeDepth.reset();
 				if (templeLit)
 				{
 					submitDesc.objectLook.reset();
@@ -6853,13 +6873,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					drawPosedStill(entity, instance, false);
 				});
 			}
-			// The game mirrors what the hand holds just after the hand, in its own look
+			// The game mirrors what the hand holds just after the hand, flat in the light that it kept
 			if (mirroredViewId != desc.viewId && handReflected)
 			{
 				submitDesc.viewId = mirroredViewId;
 				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Held);
 				for (const auto& held : renderCtx.inHandDraws)
 				{
+					heldReflection = held.heldLight;
 					const auto posed =
 					    std::ranges::find(renderCtx.entityDraws, held.entity, &RenderContext::EntityDraw::entity);
 					if (posed != renderCtx.entityDraws.end())
@@ -6877,6 +6898,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						              placers->second.translucent || placers->second.materialBlending, held.instance, 1);
 					}
 				}
+				heldReflection.reset();
 				submitDesc.sortDepth = 0;
 				submitDesc.viewId = desc.viewId;
 			}

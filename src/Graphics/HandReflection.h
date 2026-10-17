@@ -11,11 +11,13 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <glm/vec3.hpp>
 
 /// How the game mirrors the player's hand in the sea. It mirrors the hand on each frame of the land while the hand
 /// shows, wherever the hand is. It draws the hand in one flat grey, with no light, no glow and only its front faces. The
-/// thing that the hand holds is mirrored with it, in a colour of its own.
+/// game mirrors the thing that the hand holds with it, flat in the light that the thing took in the hand.
 namespace openblack::graphics::hand_reflection
 {
 
@@ -53,5 +55,30 @@ enum class MirroredThing : uint8_t
 {
 	return static_cast<uint32_t>(thing);
 }
+
+/// Where a held thing takes its light: a point and the distance of that point in front of the camera
+struct HeldLightPoint
+{
+	glm::vec3 point {0.0f};
+	float viewDepth {0.0f};
+};
+
+/// The light of the mirrored held thing on this frame, and the light to keep for the next frame
+struct HeldLightStep
+{
+	HeldLightPoint mirrored;
+	HeldLightPoint kept;
+};
+
+/// The game draws the held thing in the hand after the sea, and each draw keeps the light at the point of the thing.
+/// The sea mirrors the thing in the light that the last draw kept. On the first frame in the hand, the thing has no
+/// kept light, so it takes the light where it is.
+[[nodiscard]] constexpr HeldLightStep StepHeldLight(const std::optional<HeldLightPoint>& kept, HeldLightPoint now) noexcept
+{
+	return {.mirrored = kept.value_or(now), .kept = now};
+}
+
+/// The shade of 256 that each vertex of the mirrored held thing takes: all of its colour, as the sun does not shade it
+inline constexpr float k_HeldShade = 256.0f;
 
 } // namespace openblack::graphics::hand_reflection

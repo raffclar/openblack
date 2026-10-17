@@ -1005,9 +1005,26 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    if (registry.AllOf<InHand>(entity) && look.z != 1.0f)
 		    {
-			    // What a hand holds joins the hand's shadow
+			    // What a hand holds joins the hand's shadow. The sea mirrors it in the light that it kept the frame before.
+			    std::optional<graphics::hand_reflection::HeldLightPoint> kept;
+			    if (const auto* light = registry.TryGet<const HeldLight>(entity); light != nullptr)
+			    {
+				    kept = graphics::hand_reflection::HeldLightPoint {.point = light->point, .viewDepth = light->viewDepth};
+			    }
+			    const glm::vec3 point(modelMatrix[3]);
+			    const auto now = graphics::hand_reflection::HeldLightPoint {
+			        .point = point,
+			        .viewDepth = camera != nullptr
+			                         ? graphics::mesh_detail::ViewDepth(point, camera->GetOrigin(), camera->GetForward())
+			                         : 0.0f,
+			    };
 			    _renderContext.inHandDraws.push_back(
-			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = modelMatrix, .instance = idx});
+			        {.entity = entity,
+			         .mesh = drawnMesh,
+			         .model = modelMatrix,
+			         .castModel = modelMatrix,
+			         .instance = idx,
+			         .heldLight = graphics::hand_reflection::StepHeldLight(kept, now).mirrored});
 		    }
 		    if (slots->second.perEntity && placed.has_value())
 		    {

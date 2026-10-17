@@ -1234,6 +1234,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::HandClicked::placeTurn>("placeTurn");
 	Reflect<components::HandGlow>(context).Field<&components::HandGlow::rgb>("rgb");
 	Reflect<components::InHand>(context).Field<&components::InHand::hand>("hand");
+	Reflect<components::HeldLight>(context)
+	    .Field<&components::HeldLight::point>("point")
+	    .Field<&components::HeldLight::viewDepth>("viewDepth");
 	Reflect<components::CannotBePickedUp> {context};
 	Reflect<components::HandGrab>(context)
 	    .Field<&components::HandGrab::state>("state")
