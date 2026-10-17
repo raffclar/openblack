@@ -40,6 +40,7 @@
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
+#include "Graphics/RealMoon.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/Underwater.h"
@@ -229,6 +230,11 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.airSun = {sunTowards, 0.0f};
 	atmosphere.aurora = {atmos::MagneticPole(), atmos::AuroraStrength(night)};
 	atmosphere.airPlanet = {mapMiddle, seaLevel - atmos::k_WorldRadius, mapMiddle, seconds};
+	if (moon != nullptr && moon->placement.has_value())
+	{
+		const float radius = real_moon::Radius(atmos::k_MoonDistance) / atmos::k_MoonDistance;
+		atmosphere.moonDisc = {glm::normalize(moon->placement->offset), std::cos(radius)};
+	}
 	// The sky's light from above: the mean of the air's upper sky in the colours that the dome shows. It is blue by day
 	// and blue-grey at dusk, because the sky high up does not have the red of the horizon.
 	constexpr glm::vec3 k_Up {0.0f, 1.0f, 0.0f};
@@ -402,6 +408,7 @@ void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarge
 	applyProgram->SetUniformValue("u_hazeSunColour", &atmosphere.sunColour);
 	SetWorldCurve(*applyProgram);
 	BindAirSky(*applyProgram);
+	applyProgram->SetUniformValue("u_hazeMoon", &atmosphere.moonDisc);
 	applyProgram->SetTextureSampler("s_atmosTransmittance", 13, _atmosphere->transmittance.Texture());
 	applyProgram->SetTextureSampler("s_atmosSkyView", 14, view.skyView.Texture());
 	BindScreenTriangle();

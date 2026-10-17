@@ -83,6 +83,8 @@ struct AtmosphereFrame
 	glm::vec4 airSun {0.0f, 1.0f, 0.0f, 0.0f};
 	glm::vec4 aurora {0.0f};
 	glm::vec4 airPlanet {0.0f};
+	/// The moon's disc as the eye sees it: xyz the direction towards it, w the cosine of its radius (2 for no moon)
+	glm::vec4 moonDisc {0.0f, 1.0f, 0.0f, 2.0f};
 	global_illumination::ShL1 sky;
 	/// Where the sky's dome is: xy the middle across the land, z how far across and w how high a point must be to be on
 	/// the dome. The dome writes its depth, so the haze and the fog know the sky by this.

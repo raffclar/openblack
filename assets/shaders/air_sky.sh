@@ -144,7 +144,7 @@ vec3 AirAurora(vec3 eye, vec3 dir, float farthestKm, vec2 pixel)
 		rays *= 0.85f + 0.15f * sin(time * 11.0f + longitude * 700.0f);
 		// The colours by height: green oxygen from a sharp bottom, red oxygen high up, purple nitrogen at the edge
 		float green = smoothstep(AIR_AURORA_BOTTOM, AIR_AURORA_BOTTOM + 12.0f, altitude) * exp(-max(altitude - 110.0f, 0.0f) / 45.0f);
-		float red = smoothstep(160.0f, 230.0f, altitude) * (1.0f - smoothstep(270.0f, AIR_AURORA_TOP, altitude)) * 0.32f;
+		float red = smoothstep(160.0f, 230.0f, altitude) * (1.0f - smoothstep(270.0f, AIR_AURORA_TOP, altitude)) * 0.18f;
 		float edge = (altitude - (AIR_AURORA_BOTTOM + 3.0f)) / 4.0f;
 		float purple = exp(-edge * edge) * 0.45f;
 		vec3 colour = green * vec3(0.22f, 1.0f, 0.38f) + red * vec3(1.0f, 0.1f, 0.14f) + purple * vec3(0.75f, 0.22f, 0.95f);

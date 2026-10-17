@@ -24,6 +24,8 @@ uniform vec4 u_hazeHorizon;
 // The game's own sun or moon: xyz the direction towards it, w how strongly its glare shows; and its light's colour
 uniform vec4 u_hazeSun;
 uniform vec4 u_hazeSunColour;
+// The moon's disc: xyz the direction towards it, w the cosine of its radius. The sky that this pass draws keeps it.
+uniform vec4 u_hazeMoon;
 
 vec3 WorldAt(vec2 uv, float depth)
 {
@@ -108,7 +110,10 @@ void main()
 	if (sky)
 	{
 		// Where the dome is not, this pass draws the same sky as the dome does
-		gl_FragColor = empty ? vec4(AirSkyColour(eye, dir, u_hazeApply.z, gl_FragCoord.xy) + glare, 0.0f) : vec4(glare, 1.0f);
+		float moonCos = dot(dir, u_hazeMoon.xyz);
+		float onMoon = u_hazeMoon.w < 1.5f ? smoothstep(u_hazeMoon.w - 2e-5f, u_hazeMoon.w + 2e-5f, moonCos) : 0.0f;
+		gl_FragColor = empty ? vec4(AirSkyColour(eye, dir, u_hazeApply.z, gl_FragCoord.xy) * (1.0f - onMoon) + glare, onMoon)
+		                     : vec4(glare, 1.0f);
 
 		return;
 	}
