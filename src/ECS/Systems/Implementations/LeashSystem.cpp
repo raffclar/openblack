@@ -2246,8 +2246,8 @@ void LeashSystem::UpdateMarkers(float seconds)
 	auto& registry = Locator::entitiesRegistry::value();
 	_markerClockMs = std::fmod(_markerClockMs + (seconds * 1000.0f), static_cast<float>(orders::k_PulsePeriodMs));
 	const auto size = orders::MarkerSize(static_cast<uint32_t>(_markerClockMs));
-	// The footprint is a quarter turn round, in the plane facing the camera
-	const auto quarterTurn = glm::mat3(glm::rotate(-0.5f * std::numbers::pi_v<float>, glm::vec3(0.0f, 0.0f, 1.0f)));
+	// The footprint turns a quarter turn to the left, in the plane that faces the camera
+	const auto quarterTurn = glm::mat3(glm::rotate(orders::k_FootprintTurn, glm::vec3(0.0f, 0.0f, 1.0f)));
 	std::vector<std::pair<entt::entity, CreatureLeash::Order>> marked;
 	registry.Each<const CreatureLeash>([&marked](entt::entity creature, const CreatureLeash& leashes) {
 		if (leashes.order.has_value() && leashes.order->ring != entt::null)
@@ -2268,7 +2268,7 @@ void LeashSystem::UpdateMarkers(float seconds)
 		auto& footprint = registry.Get<Transform>(order.footprint);
 		footprint.position = *at;
 		footprint.rotation = quarterTurn;
-		footprint.scale = glm::vec3(size * orders::k_FootprintShare, 1.0f);
+		footprint.scale = glm::vec3(orders::FootprintSize(size), 1.0f);
 	}
 }
 
