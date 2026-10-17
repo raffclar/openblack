@@ -26,6 +26,21 @@ vec3 WorldAt(vec2 uv, float depth)
 	return p.xyz / p.w;
 }
 
+// The fog that the sky has at the sea's horizon over a direction: the grid's last slice at the place of the horizon on
+// the screen
+vec4 HorizonFog(vec3 eye, vec3 dir, float sea)
+{
+	vec3 towards = normalize(vec3(dir.x, WorldHorizonY(eye.y - sea) + 0.002f, dir.z));
+	vec4 clip = mul(u_viewProj, vec4(eye + towards * 1000.0f, 1.0f));
+	vec2 ndc = clip.xy / max(clip.w, 1e-4f);
+#if BGFX_SHADER_LANGUAGE_GLSL
+	vec2 at = ndc * 0.5f + 0.5f;
+#else
+	vec2 at = vec2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f);
+#endif
+	return texture2DLod(s_fogSum, FogTileUv(clamp(at, vec2_splat(0.0f), vec2_splat(1.0f)), u_fogGrid.z - 1.0f), 0.0f);
+}
+
 void main()
 {
 	vec2 uv = gl_FragCoord.xy * u_viewTexel.xy;
@@ -40,6 +55,7 @@ void main()
 	// its full distance, also past the grid's far end. Thus its fog eases to the sky's share with the distance and does
 	// not change in a step where the sea passes the grid's far end. A ray over the horizon does not meet the sea.
 	float sea = u_fogAmbient.w;
+	bool onSea = false;
 	if (eye.y > sea && dir.y < 0.0f)
 	{
 		float toSea = CurvedSeaDistance(eye.y - sea, dir);
@@ -47,6 +63,7 @@ void main()
 		{
 			range = toSea;
 			sky = false;
+			onSea = true;
 		}
 	}
 	float slice = clamp(FogSliceAt(range), 0.0f, u_fogGrid.z - 1.0f);
@@ -64,5 +81,19 @@ void main()
 	float skyShare = mix(1.0f, u_fogApply.x, smoothstep(0.0f, 0.06f, dir.y));
 	float share = sky ? skyShare : mix(1.0f, skyShare, smoothstep(u_fogGrid.w, u_fogGrid.w * 4.0f, range));
 	fog = mix(vec4(0.0f, 0.0f, 0.0f, 1.0f), fog, share);
+	// The grid ends before the far sea, so a ray to the far sea leaves out the fog past the grid. A ray that goes down
+	// into the low, dense fog over the near sea then has more fog than a ray to the horizon, and a bright stripe shows
+	// under the horizon. Thus the sea never has more fog than the sky at the horizon over it. The far sea and the sky
+	// then meet in one colour, and the fog gets less towards the eye.
+	if (onSea)
+	{
+		vec4 horizonFog = HorizonFog(eye, dir, sea);
+		float most = 1.0f - horizonFog.a;
+		float here = 1.0f - fog.a;
+		if (here > most)
+		{
+			fog = mix(vec4(0.0f, 0.0f, 0.0f, 1.0f), fog, most / max(here, 1e-4f));
+		}
+	}
 	gl_FragColor = fog;
 }
