@@ -128,7 +128,12 @@ void main()
 	// Frozen, a sheen of ice is added over it by how frozen it is, looked up by the way each face points across the view,
 	// so it shows facet by facet
 	// A piece of it drawn on its own, not fizzing, gives how frozen it is in place of the instance
+	// A z of -1 shows no ice at all, as the game mirrors a frozen body without it
 	float frozen = v_haze.w > 0.0f ? v_haze.w : (u_creatureSpellLook.z < 0.5f ? u_creatureSpellLook.w : 0.0f);
+	if (u_creatureSpellLook.z < -0.5f)
+	{
+		frozen = 0.0f;
+	}
 	if (frozen > 0.0f)
 	{
 		vec3 face = normalize(cross(dFdx(v_position.xyz), dFdy(v_position.xyz)));

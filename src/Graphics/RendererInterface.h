@@ -266,6 +266,9 @@ public:
 		/// How frozen the mesh is drawn, 0 to 1, as a piece of a frozen creature that isn't instanced: sheened with ice by
 		/// it, where it isn't fizzing
 		float freeze {0.0f};
+		/// False to show no ice at all, also where the instance says that the creature is frozen. The game's mirrored
+		/// body has no ice.
+		bool iceShown {true};
 	};
 
 	static std::unique_ptr<RendererInterface> Create(GraphicsBackend backend, bool vsync) noexcept;

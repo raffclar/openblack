@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -221,6 +222,8 @@ struct RenderContext
 		entt::id_type mesh;
 		glm::mat4 model;
 		glm::mat4 castModel;
+		/// Its place among the instances, where it has one
+		uint32_t instance {std::numeric_limits<uint32_t>::max()};
 	};
 	std::vector<HighDetailDraw> highDetailDraws;
 	/// The explorers' boat while it is pushed down the beach, which casts its shadow from the same far sun onto the land
