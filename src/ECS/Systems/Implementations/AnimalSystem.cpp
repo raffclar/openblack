@@ -56,6 +56,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFlockRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -105,9 +106,6 @@ constexpr float k_SpeedStateToMetresPerSecond = 100.0f / 65536.0f;
 /// A wolf eats this many mouthfuls, and up to this many more
 constexpr uint32_t k_MouthfulsMin = 15;
 constexpr uint32_t k_MouthfulsRange = 10;
-/// A random point is tried this many times, each with so many cells spiralling out from it, before falling back
-constexpr int k_RandomPosTries = 2;
-constexpr int k_RandomPosCells = 25;
 /// An animal a miracle makes is born up to this many years past this age
 constexpr uint32_t k_BirthAgeRange = 20;
 constexpr uint32_t k_BirthAgeMin = 5;
@@ -434,8 +432,13 @@ float AnimalSystem::GoalHeightOf(entt::entity animal) const
 
 void AnimalSystem::SetupMoveTo(Animal& animal, glm::vec2 goal, float goalHeight, AnimalState finalState)
 {
+	SetupMoveTo(animal, Fixed(goal), goalHeight, finalState);
+}
+
+void AnimalSystem::SetupMoveTo(Animal& animal, glm::ivec2 goal, float goalHeight, AnimalState finalState)
+{
 	animal.goalHeight = goalHeight;
-	Banked(animal, animals::SetUpMove(animal.move, Fixed(goal), TurnAngleOf(animal)));
+	Banked(animal, animals::SetUpMove(animal.move, goal, TurnAngleOf(animal)));
 	animal.finalState = finalState;
 	// It takes its kind's move state, and that state's clip
 	SetTopState(animal, AnimalState::MoveToPos);
@@ -482,7 +485,7 @@ bool AnimalSystem::MoveTo3D(Animal& animal)
 	return result.arrived;
 }
 
-glm::vec2 AnimalSystem::RandomPos(const Animal& animal, glm::vec2 centre, float inner, float outer) const
+glm::ivec2 AnimalSystem::RandomPos(const Animal& animal, glm::ivec2 centre, float inner, float outer) const
 {
 	const auto here = Metres(animal.move.position);
 	// Every bird, seagulls too, keeps over the land's blocks
@@ -494,34 +497,27 @@ glm::vec2 AnimalSystem::RandomPos(const Animal& animal, glm::vec2 centre, float 
 	// A point it may go to: on the map, where its kind can stand, one it can reach without circling, and for a bird, over
 	// the land all the way. (The game also turns down a point the map's walls block; openblack's map has none of them.)
 	const auto mask = static_cast<uint32_t>(InfoOf(animal.type).collideType);
-	const auto valid = [&](glm::vec2 point) {
-		return OnMap(point) && !CellCollides(point, mask) &&
-		       animals::OutsideTurningCircles(here, animal.move.angle, animal.move.speed, TurnAngleOf(animal), point) &&
-		       (!overLandOnly || animals::OverLandAllTheWay(here, point, [&hasLand](glm::ivec2 cell) {
+	const auto reachable = [&](glm::ivec2 point) {
+		return animals::OutsideTurningCircles(here, animal.move.angle, animal.move.speed, TurnAngleOf(animal), Metres(point));
+	};
+	const auto valid = [&](const map_coords::MapCoords& place) {
+		const glm::ivec2 point {place.x, place.z};
+		return !CellCollides(point, mask) && reachable(point) &&
+		       (!overLandOnly || animals::OverLandAllTheWay(here, Metres(point), [&hasLand](glm::ivec2 cell) {
 			       return hasLand(glm::vec2(cell) * 10.0f + 5.0f);
 		       }));
 	};
-	for (int attempt = 0; attempt < k_RandomPosTries; ++attempt)
-	{
-		// The angle then the distance, each a random number of the game's
-		const float angle = Random(k_TwoPi);
-		const float distance = inner + Random(outer - inner);
-		auto point = Metres(Fixed(centre + glm::vec2(std::cos(angle), std::sin(angle)) * distance));
-		// Not there, then cells spiralling out from it
-		map_coords::Spiral spiral;
-		for (int left = k_RandomPosCells; left > 0; --left)
-		{
-			if (valid(point))
-			{
-				return point;
-			}
-			const auto& step = spiral.Next();
-			point += glm::vec2(static_cast<float>(step.x), static_cast<float>(step.z)) * 10.0f;
-		}
-	}
+	// The angle then the distance, each a random number of the game's, then cells spiralling out from the point, all in
+	// map units
+	const auto found = script_flock_rules::CalcRandomPos(
+	    {.x = centre.x, .z = centre.y}, inner, outer, [](float most) { return Random(most); }, valid);
+	const glm::ivec2 point {found.x, found.z};
 	// None: the middle if it can reach it, else where it is
-	return animals::OutsideTurningCircles(here, animal.move.angle, animal.move.speed, TurnAngleOf(animal), centre) ? centre
-	                                                                                                               : here;
+	if (point == centre && !reachable(centre))
+	{
+		return animal.move.position;
+	}
+	return point;
 }
 
 void AnimalSystem::ProcessTurn()
@@ -741,7 +737,7 @@ void AnimalSystem::DecideWhatToDo(entt::entity entity, Animal& animal)
 	}
 	// A follower picks a point near the leader, at its height, and then follows the flock
 	const auto& leader = registry.Get<const Animal>(leaderEntity);
-	const auto point = RandomPos(animal, Metres(leader.move.position), 0.0f, static_cast<float>(flockData->flockDistance));
+	const auto point = RandomPos(animal, leader.move.position, 0.0f, static_cast<float>(flockData->flockDistance));
 	SetupMoveTo(animal, point, leader.height, AnimalState::DecideWhatToDo);
 	SetSpeed(animal, 0);
 	SetState(animal, flockData->followState);
@@ -758,8 +754,8 @@ void AnimalSystem::StartWander(entt::entity entity, Animal& animal)
 	const auto& info = InfoOf(animal.type);
 	SetSpeed(animal, 0);
 	// A point about where the flock was made, between its kind's inner radius and the flock's reach
-	const auto point = RandomPos(animal, map_coords::ToMetres(flockData->place), static_cast<float>(info.domainInnerRadius),
-	                             static_cast<float>(flockData->domainRadius));
+	const auto point = RandomPos(animal, glm::ivec2(flockData->place.x, flockData->place.z),
+	                             static_cast<float>(info.domainInnerRadius), static_cast<float>(flockData->domainRadius));
 	// Higher or lower than its last goal by up to the variance; outside its kind's band about its normal height, back to
 	// the normal height
 	const float height = (animal.goalHeight + info.altitudeVariance) - Random(info.altitudeVariance + info.altitudeVariance);
@@ -1057,10 +1053,10 @@ void AnimalSystem::WolfStartWander(entt::entity /*entity*/, Animal& animal)
 	SetTopState(animal, AnimalState::Wander);
 	if (flockData != nullptr && leaderEntity != entt::null)
 	{
-		const auto centre = Metres(registry.Get<const Animal>(leaderEntity).move.position);
+		const auto centre = registry.Get<const Animal>(leaderEntity).move.position;
 		const auto point = RandomPos(animal, centre, static_cast<float>(InfoOf(animal.type).domainInnerRadius),
 		                             static_cast<float>(flockData->domainRadius));
-		Banked(animal, animals::SetUpMove(animal.move, Fixed(point), TurnAngleOf(animal)));
+		Banked(animal, animals::SetUpMove(animal.move, point, TurnAngleOf(animal)));
 	}
 }
 
@@ -1399,7 +1395,7 @@ void AnimalSystem::FinishPouncing(entt::entity wolf, Animal& animal, entt::entit
 	const auto wolfPoint = Metres(animal.move.position);
 	const glm::vec3 wolf3(wolfPoint.x, animal.height, wolfPoint.y);
 	const auto goal = flock_rules::EatingPosition(prey3, wolf3, registry.Get<const Transform>(wolf).scale.x);
-	SetupMoveTo(animal, {goal.x, goal.z}, 0.0f, AnimalState::StartToEat);
+	SetupMoveTo(animal, glm::vec2(goal.x, goal.z), 0.0f, AnimalState::StartToEat);
 	run.food = prey;
 }
 

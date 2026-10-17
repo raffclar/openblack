@@ -29,6 +29,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/ForestMember.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -103,8 +104,12 @@ std::optional<entt::entity> CreatureMindSystem::BelongsTo(entt::entity thing)
 	{
 		return thing;
 	}
-	// A worship site is a part of its temple, and so is the altar at its head. The temple here is its own heart; the
-	// shipped lands make no creature pen as a thing of its own.
+	// A temple's heart is a part of its temple, and so are a worship site and the altar at its head. The shipped lands
+	// make no creature pen as a thing of its own.
+	if (const auto* heart = registry.TryGet<const TempleHeart>(thing))
+	{
+		return registry.Valid(heart->temple) ? std::optional(heart->temple) : std::nullopt;
+	}
 	if (const auto* site = registry.TryGet<const WorshipSite>(thing))
 	{
 		return registry.Valid(site->temple) ? std::optional(site->temple) : std::nullopt;

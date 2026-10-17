@@ -16,6 +16,7 @@
 
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 // The teleport miracle's rules. Each cast leaves an invisible stone on the land; a player's stones form a network. A
@@ -96,5 +97,9 @@ struct Jump
 /// has another stone to jump to
 
 [[nodiscard]] bool CanDropOnStone(bool samePlayer, size_t playerStones);
+
+/// Where a creature that a stone carries comes out: the far stone's map position goes to a point in metres, and the
+/// point goes to a map position again, which can be one unit less. A villager comes out at the stone's map position.
+[[nodiscard]] map_coords::MapCoords CreatureArrival(const map_coords::MapCoords& stone);
 
 } // namespace openblack::magic::teleport

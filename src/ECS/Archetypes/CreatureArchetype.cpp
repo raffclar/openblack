@@ -13,7 +13,10 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Creature/CreatureMorph.h"
+#include "Creature/TemplePen.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
@@ -138,8 +141,20 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	{
 		Locator::playerSystem::value().AddCreature(entity);
 	}
-	// Its home is its player's temple's pen if the temple stands, else where it was made
-	registry.Assign<CreatureLeash>(entity).home = ecs::creature_home::HomeOf(registry, entity).value_or(position);
+	// Its home is its player's temple's pen if the temple stands, else where it was made. The leash keeps the exact map
+	// position of the home: the pen's, or the map position where the creature was made, with its height above the
+	// ground there.
+	auto& leash = registry.Assign<CreatureLeash>(entity);
+	const auto pen = ecs::creature_home::HomeOf(registry, entity);
+	leash.home = pen.value_or(position);
+	if (pen.has_value() || !Locator::terrainSystem::has_value())
+	{
+		leash.homeOnMap = temple_pen::MapPosition(*leash.home);
+	}
+	else
+	{
+		leash.homeOnMap = map_coords::FromWorld(Locator::terrainSystem::value(), position);
+	}
 	// A player's first creature is the one they can lead on the leash
 	if (Locator::leashSystem::has_value())
 	{

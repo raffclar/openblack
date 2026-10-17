@@ -104,6 +104,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingCircles.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
@@ -3636,8 +3637,17 @@ void CreatureFightSystem::ProcessKnockedOut()
 				{
 					// The temple's pen is taken again now, as the home follows the temple every turn
 					const auto from = registry.Get<const Transform>(entity).position;
-					const auto to = creature_home::HomeOf(registry, entity).value_or(*knockedOut.home);
+					// The creature goes to the exact map position of its home, which the leash keeps
+					const auto* leash = registry.TryGet<const CreatureLeash>(entity);
+					const auto homeOnMap = leash != nullptr ? leash->homeOnMap : std::nullopt;
+					auto to = creature_home::HomeOf(registry, entity).value_or(*knockedOut.home);
+					if (homeOnMap.has_value())
+					{
+						to.x = map_coords::ToMetres(homeOnMap->x);
+						to.z = map_coords::ToMetres(homeOnMap->z);
+					}
 					PlaceAt(*locomotion, registry.Get<Transform>(entity), to);
+					ecs::thing_map_place::Keep(registry, entity, homeOnMap.value_or(map_coords::FromMetres({to.x, to.z})));
 					registry.SetDirty();
 					fight_transcript::Note(entity, "taken_home", [&] {
 						return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)},

@@ -88,6 +88,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "Graphics/Texture2D.h"
 #include "Help/HelpProfile.h"
@@ -844,15 +845,18 @@ void LeashSystem::ConfineToHome(entt::entity creature, float radius)
 	{
 		// Its home is by its player's temple, or where it stands when there is none
 		const auto owner = registry.Get<const Creature>(creature).owner;
-		registry.Each<const Temple, const Transform>([&leashes, owner](const Temple& temple, const Transform& transform) {
-			if (temple.owner == owner && !leashes.home.has_value())
-			{
-				leashes.home = transform.position;
-			}
-		});
+		registry.Each<const Temple, const Transform>(
+		    [&registry, &leashes, owner](entt::entity entity, const Temple& temple, const Transform& transform) {
+			    if (temple.owner == owner && !leashes.home.has_value())
+			    {
+				    leashes.home = transform.position;
+				    leashes.homeOnMap = ecs::thing_map_place::Of(registry, entity);
+			    }
+		    });
 		if (!leashes.home.has_value())
 		{
 			leashes.home = registry.Get<const Transform>(creature).position;
+			leashes.homeOnMap = ecs::thing_map_place::Of(registry, creature);
 		}
 	}
 	leashes.confinementCentre = *leashes.home;

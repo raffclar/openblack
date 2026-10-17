@@ -21,12 +21,15 @@
 
 #include "3D/MapCoords.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/MapPlace.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
+#include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
 
 namespace
@@ -197,4 +200,51 @@ TEST(ThingMapPlace, ACreatureOfARealSaveKeepsItsExactMapPosition)
 		}
 	}
 	EXPECT_GT(creatures, 0u) << "No saved game of the folder has a creature";
+}
+
+TEST(ThingMapPlace, ACreatureMadeAtItsHomeGetsTheExactMapPositionAsItsHome)
+{
+	ecs::Registry registry;
+	const glm::vec3 metres {map_coords::ToMetres(8388870), 0.0f, map_coords::ToMetres(8388870)};
+	const auto creature = registry.Create();
+	Stand(registry, creature, metres);
+	auto& leash = registry.Assign<CreatureLeash>(creature);
+	leash.home = metres;
+	leash.homeOnMap = map_coords::FromMetres({metres.x, metres.z});
+	ASSERT_EQ(leash.homeOnMap->x, 8388871);
+	ecs::thing_map_place::Keep(registry, creature, {.x = 8388870, .z = 8388870});
+	EXPECT_EQ(registry.Get<const CreatureLeash>(creature).homeOnMap, (MapCoords {.x = 8388870, .z = 8388870}));
+	// A later map position does not change its home
+	ecs::thing_map_place::Keep(registry, creature, {.x = 8388869, .z = 8388869});
+	EXPECT_EQ(registry.Get<const CreatureLeash>(creature).homeOnMap, (MapCoords {.x = 8388870, .z = 8388870}));
+}
+
+TEST(ThingMapPlace, ACreatureWithAHomeElsewhereKeepsItsHome)
+{
+	ecs::Registry registry;
+	const auto creature = registry.Create();
+	Stand(registry, creature, {map_coords::ToMetres(8388870), 0.0f, map_coords::ToMetres(8388870)});
+	auto& leash = registry.Assign<CreatureLeash>(creature);
+	leash.home = glm::vec3(10.0f, 0.0f, 10.0f);
+	leash.homeOnMap = map_coords::FromMetres({10.0f, 10.0f});
+	ecs::thing_map_place::Keep(registry, creature, {.x = 8388870, .z = 8388870});
+	EXPECT_EQ(registry.Get<const CreatureLeash>(creature).homeOnMap, map_coords::FromMetres({10.0f, 10.0f}));
+}
+
+TEST(ThingMapPlace, ATemplesHeartIsAThingOfItsOwnThatStandsForTheTemple)
+{
+	ecs::Registry registry;
+	const auto temple = registry.Create();
+	Stand(registry, temple, {0.0f, 0.0f, 0.0f});
+	registry.Assign<Temple>(temple);
+	EXPECT_EQ(ecs::temple_heart::Of(registry, temple), entt::entity {entt::null});
+	const auto other = registry.Create();
+	registry.Assign<TempleHeart>(other, registry.Create());
+	const auto heart = registry.Create();
+	registry.Assign<TempleHeart>(heart, temple);
+	EXPECT_EQ(ecs::temple_heart::Of(registry, temple), heart);
+	// The creature acts on the temple for its heart, and on any other thing for itself
+	EXPECT_EQ(ecs::temple_heart::Acted(registry, heart), temple);
+	EXPECT_EQ(ecs::temple_heart::Acted(registry, temple), temple);
+	EXPECT_EQ(ecs::temple_heart::Acted(registry, entt::null), entt::entity {entt::null});
 }

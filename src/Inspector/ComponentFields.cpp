@@ -1783,6 +1783,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::TeleportTraveller::finalState>("finalState")
 	    .Field<&components::TeleportTraveller::jumped>("jumped")
 	    .Field<&components::TeleportTraveller::arrival>("arrival")
+	    .Field<&components::TeleportTraveller::arrivalOnMap>("arrivalOnMap")
 	    .Field<&components::TeleportTraveller::transportTurns>("transportTurns")
 	    .Field<&components::TeleportTraveller::transported>("transported")
 	    .Field<&components::TeleportTraveller::fadingIn>("fadingIn");
@@ -1804,6 +1805,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Temple::destructionBeamClock>("destructionBeamClock")
 	    .Field<&components::Temple::destructionBeamSource>("destructionBeamSource");
 	Reflect<components::TempleEntrance>(context).Field<&components::TempleEntrance::temple>("temple");
+	Reflect<components::TempleHeart>(context).Field<&components::TempleHeart::temple>("temple");
 	Reflect<components::TempleLantern>(context)
 	    .Field<&components::TempleLantern::temple>("temple")
 	    .Field<&components::TempleLantern::light>("light");
