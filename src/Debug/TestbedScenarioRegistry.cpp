@@ -4997,6 +4997,66 @@ void AddCombat(std::vector<Scenario>& all)
 	}
 
 	{
+		// The Move button is the left button of the mouse
+		constexpr size_t k_LeftButton = 1;
+		all.push_back({
+		    .id = "combat.view_flight_woosh",
+		    .name = "The fight view flies in from far away with a woosh",
+		    .facet = Facet::Combat,
+		    .description = "The player's red tiger and a blue tiger fight by themselves. The camera looks down on the "
+		                   "arena from high above it. The camera shows the fight when the fighters have made their arena.",
+		    .expected = "The camera flies down to the side of the arena through a point half way, and a woosh is heard "
+		                "once as the flight starts. Then the camera follows the duel.",
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 320.0f, 30.0f}, .look = {0.0f, 0.0f, 40.0f}},
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 1, 0.2f), Fight(Kind::FightView, 0, 0, 1.0f)},
+		});
+		all.push_back({
+		    .id = "combat.view_flight_stopped",
+		    .name = "A turn of the wheel stops the flight of the fight view",
+		    .facet = Facet::Combat,
+		    .description = "The same fight, seen from high above. The camera shows the fight when the fighters have made "
+		                   "their arena, and a third of a second later the wheel turns one notch.",
+		    .expected = "The flight stops at once: the camera does not go on through the point half way. It goes "
+		                "straight to the fight on its slow curves and then follows the duel.",
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 320.0f, 30.0f}, .look = {0.0f, 0.0f, 40.0f}},
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 1, 0.2f),
+		                 Fight(Kind::FightView, 0, 0, 1.0f),
+		                 {.kind = Kind::WheelTurn, .delaySeconds = 5.75f, .value = 1}},
+		});
+		all.push_back({
+		    .id = "combat.view_drag_away",
+		    .name = "Dragging the land in the fight view, and away from the fight",
+		    .facet = Facet::Combat,
+		    .description = "A red tiger and a blue tiger that are not the player's fight by themselves. A double click "
+		                   "into the arena makes the camera show the fight. Seven seconds later the hand grips the land "
+		                   "with the Move button and drags it a little, and lets go. Four seconds later it grips the land "
+		                   "again and drags it far.",
+		    .expected = "While the hand grips the land, the camera stops following the fight and moves with the land. "
+		                "When the hand lets go, the camera eases back to the fight with no jump. In the long drag, the "
+		                "fight view ends when the camera is far from the arena, and the land moves on with the hand.",
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+		    .creatures = {red(PlayerNames::PLAYER_TWO, 0.6f, -0.2f), blue(PlayerNames::NEUTRAL, 0.5f, -0.2f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 1, 0.2f),
+		                 Fight(Kind::FightView, 0, 0, 1.0f),
+		                 {.kind = Kind::PointerTo, .delaySeconds = 7.0f, .point = {0.5f, 0.75f}},
+		                 {.kind = Kind::PointerPress, .delaySeconds = 0.1f, .value = k_LeftButton},
+		                 {.kind = Kind::PointerSweep, .delaySeconds = 0.1f, .point = {0.0f, -0.2f}, .amount = 0.5f},
+		                 {.kind = Kind::PointerRelease, .delaySeconds = 0.6f, .value = k_LeftButton},
+		                 {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.5f, 0.8f}},
+		                 {.kind = Kind::PointerPress, .delaySeconds = 0.1f, .value = k_LeftButton},
+		                 {.kind = Kind::PointerSweep, .delaySeconds = 0.1f, .point = {0.0f, -0.7f}, .amount = 2.0f},
+		                 {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = k_LeftButton}},
+		});
+	}
+
+	{
 		// The fight lesson of the guide: no one chooses the moves of either creature, and the guide belongs to no player
 		// The Action button is the right button of the mouse
 		constexpr size_t k_RightButton = 3;
