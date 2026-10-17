@@ -39,6 +39,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/VillagerScriptRules.h"
@@ -382,10 +383,11 @@ uint32_t villager_script::MoveAlongPath(LivingAction& action)
 	{
 		SetYAngle(villager, std::atan2(offset.y, offset.x));
 	}
-	// On the ground, on the land's grid
-	const glm::vec2 placed(map_coords::Quantise(point->x), map_coords::Quantise(point->y));
+	// At the map position there, on the ground
+	const auto place = map_coords::FromMetres(*point);
+	const auto placed = map_coords::ToMetres(place);
 	const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(placed) : 0.0f;
-	transform.position = glm::vec3(placed.x, height, placed.y);
+	ecs::thing_map_place::Put(registry, villager, place, height);
 	registry.SetDirty();
 	return 1;
 }

@@ -40,6 +40,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/MapPlace.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -763,6 +764,12 @@ void DynamicsSystem::SyncObject(const PhysicsEntry& entry, Place place)
 		break;
 	case Place::Kept:
 		break;
+	}
+	// When the body moves the thing, the thing's map position comes from its new metres: it no longer keeps an exact map
+	// position
+	if (place != Place::Kept && registry.AllOf<MapPlace>(entry.entity))
+	{
+		registry.Remove<MapPlace>(entry.entity);
 	}
 	registry.SetDirty();
 }

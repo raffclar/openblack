@@ -248,3 +248,37 @@ TEST(ThingMapPlace, ATemplesHeartIsAThingOfItsOwnThatStandsForTheTemple)
 	EXPECT_EQ(ecs::temple_heart::Acted(registry, temple), temple);
 	EXPECT_EQ(ecs::temple_heart::Acted(registry, entt::null), entt::entity {entt::null});
 }
+
+TEST(ThingMapPlace, TheThingInTheMapsCellsForATempleIsItsHeart)
+{
+	ecs::Registry registry;
+	const auto temple = registry.Create();
+	registry.Assign<Temple>(temple);
+	// Without a heart, the temple stands for itself
+	EXPECT_EQ(ecs::temple_heart::MapThingOf(registry, temple), temple);
+	const auto heart = registry.Create();
+	registry.Assign<TempleHeart>(heart, temple);
+	EXPECT_EQ(ecs::temple_heart::MapThingOf(registry, temple), heart);
+	// Any other thing, and the heart, stand for themselves
+	const auto rock = registry.Create();
+	EXPECT_EQ(ecs::temple_heart::MapThingOf(registry, rock), rock);
+	EXPECT_EQ(ecs::temple_heart::MapThingOf(registry, heart), heart);
+	EXPECT_EQ(ecs::temple_heart::MapThingOf(registry, entt::null), entt::entity {entt::null});
+}
+
+TEST(ThingMapPlace, AThingPutAtThePointsMapPositionKeepsThatPositionNotOneThroughMetres)
+{
+	// A point in metres whose map position, through metres and back, is one unit more
+	constexpr float k_Point = 1792.6961669921875f;
+	constexpr int32_t k_Place = 11748614;
+	ASSERT_EQ(map_coords::ToFixed(k_Point), k_Place);
+	ASSERT_EQ(map_coords::ToFixed(map_coords::Quantise(k_Point)), k_Place + 1);
+	// A thing that a script or a track puts at the point goes to the point's map position, as the game puts it
+	ecs::Registry registry;
+	const auto villager = registry.Create();
+	Stand(registry, villager, {0.0f, 0.0f, 0.0f});
+	registry.Assign<WallHug>(villager);
+	ecs::thing_map_place::Put(registry, villager, map_coords::FromMetres({k_Point, k_Point}), 4.0f);
+	EXPECT_EQ(ecs::thing_map_place::Of(registry, villager), (MapCoords {.x = k_Place, .z = k_Place}));
+	EXPECT_EQ(registry.Get<const WallHug>(villager).position, glm::ivec2(k_Place, k_Place));
+}
