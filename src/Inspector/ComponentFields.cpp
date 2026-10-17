@@ -644,6 +644,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureAnimation::yaw>("yaw")
 	    .Field<&components::CreatureAnimation::pitch>("pitch")
 	    .Field<&components::CreatureAnimation::playbackScale>("playbackScale")
+	    .Field<&components::CreatureAnimation::realTime>("realTime")
 	    .Field<&components::CreatureAnimation::breathPhase>("breathPhase")
 	    .Field<&components::CreatureAnimation::breathPeriod>("breathPeriod")
 	    .Field<&components::CreatureAnimation::breathTarget>("breathTarget")
@@ -719,6 +720,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFighting::faceSeconds>("faceSeconds")
 	    .Field<&components::CreatureFighting::played>("played")
 	    .Field<&components::CreatureFighting::taunted>("taunted")
+	    .Field<&components::CreatureFighting::rude>("rude")
 	    .Field<&components::CreatureFighting::ended>("ended");
 	Reflect<components::CreatureFightRecord>(context)
 	    .Field<&components::CreatureFightRecord::tendency>("tendency")

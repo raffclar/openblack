@@ -1179,7 +1179,7 @@ void CreatureLocomotionSystem::ProcessTurn()
 			    }
 			    break;
 		    case Motion::Turning:
-			    TurnStep(self, moves, creature_layers::PlaybackRate(ShownSize(creature)));
+			    TurnStep(self, moves, creature_layers::BodyRate(ShownSize(creature), animation.realTime));
 			    break;
 		    case Motion::Stepping:
 			    StepOff(self, moves);

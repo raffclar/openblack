@@ -675,16 +675,19 @@ TEST(CreatureIdleMind, CommunicatingTurnsToTheCameraThenShowsWhatItFeels)
 	EXPECT_GE(mind.step, mind.agenda.size());
 }
 
-TEST(CreatureIdleMind, WithNothingToShowACommunicationIsDoneAtOnce)
+TEST(CreatureIdleMind, WithNothingToShowACommunicationStopsAsAFailure)
 {
 	creature_mind::IdleMind mind;
 	creature_mind::Plan(mind, creature_mind::Activity::ShowDesire,
-	                    {{.kind = creature_mind::Step::Kind::Communicate, .seconds = 0.0f}});
+	                    {{.kind = creature_mind::Step::Kind::Communicate, .seconds = 0.0f},
+	                     {.kind = creature_mind::Step::Kind::Wait, .seconds = 5.0f}});
 	const auto commands = creature_mind::Think(mind, FakeBody {}.Senses(), Always(0));
 	// It still counts as a communication, so that it does not want to show its state again for a time
 	EXPECT_TRUE(commands.communicated.has_value());
 	EXPECT_FALSE(commands.playOnce.has_value());
+	// The steps after it do not occur, and the agenda is not done
 	EXPECT_GE(mind.step, mind.agenda.size());
+	EXPECT_TRUE(mind.gaveUp);
 }
 
 TEST(CreatureIdleMind, AnAbandonedSitEnds)

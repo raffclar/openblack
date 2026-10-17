@@ -91,11 +91,10 @@ TEST(CreatureActionMirror, ABusyBodyRefusesACommunication)
 	EXPECT_EQ(draws.Twos(), 3);
 }
 
-// A faint, a communication with no clip and a walk start no clip with a try, so a busy body costs them no draw
+// A communication with no clip and a walk start no clip with a try, so a busy body costs them no draw
 TEST(CreatureActionMirror, StepsWithNoTryPickNoSideWhileTheBodyIsBusy)
 {
 	const std::vector<Step> steps {
-	    {.kind = Step::Kind::Static, .seconds = 5.0f, .sequence = {106, 106, 107}, .holdLoop = true},
 	    {.kind = Step::Kind::Communicate},
 	    {.kind = Step::Kind::Move, .movement = {.kind = creature_mind::Movement::Kind::ToPoint}},
 	};
@@ -147,19 +146,99 @@ TEST(CreatureActionMirror, EachTurnOfADanceMovePicksASide)
 		auto mind = Told({.kind = Step::Kind::Dance, .dance = {.kind = creature_mind::DanceOrder::Kind::Dance}});
 		mind.stepStarted = true;
 		GameDraws draws {.value = 1};
-		creature_mind::Senses senses {.seconds = 0.1f, .bodyPlaying = true};
+		creature_mind::Senses senses {.seconds = 0.1f, .bodyBusy = true};
+		senses.bodyPlaying = true;
 		senses.dance = creature_mind::Senses::DanceView {.exists = true, .inGroup = true, .action = move, .first = 72};
 		for (int turn = 0; turn < 4; ++turn)
 		{
+			// Two turns while the body plays an action, then two while it walks
+			if (turn == 2)
+			{
+				senses.bodyPlaying = false;
+				senses.moving = true;
+			}
 			const auto commands = creature_mind::Think(mind, senses, k_MindRandom, draws.Random());
 			EXPECT_FALSE(commands.playOnce.has_value());
 			EXPECT_FALSE(commands.startSequence.has_value());
 		}
 		EXPECT_EQ(draws.Twos(), 4);
-		senses.bodyPlaying = false;
+		senses.bodyBusy = false;
+		senses.moving = false;
 		const auto commands = creature_mind::Think(mind, senses, k_MindRandom, draws.Random());
 		EXPECT_TRUE(commands.playOnce.has_value() || commands.startSequence.has_value());
 		EXPECT_TRUE(commands.mirrored);
 		EXPECT_EQ(draws.Twos(), 5);
+	}
+}
+
+// A faint does not wait for the body. It starts on the first turn, also while the body plays an action or walks: it
+// stops the walk, cuts the action and picks its side with one draw.
+TEST(CreatureActionMirror, AFaintStartsAtOnceOnABusyBody)
+{
+	for (const uint32_t value : {0u, 1u})
+	{
+		auto mind = Told({.kind = Step::Kind::Static, .seconds = 5.0f, .sequence = {106, 106, 107}, .holdLoop = true});
+		GameDraws draws {.value = value};
+		creature_mind::Senses senses {.seconds = 0.1f, .bodyBusy = true, .moving = true};
+		senses.bodyPlaying = true;
+		const auto commands = creature_mind::Think(mind, senses, k_MindRandom, draws.Random());
+		EXPECT_TRUE(mind.stepStarted);
+		ASSERT_TRUE(commands.startSequence.has_value());
+		EXPECT_TRUE(commands.cutBody);
+		EXPECT_TRUE(commands.stopMoving);
+		EXPECT_EQ(commands.mirrored, value == 1);
+		EXPECT_EQ(draws.Twos(), 1);
+	}
+}
+
+// Other steps do not cut the body
+TEST(CreatureActionMirror, OnlyAFaintCutsTheBody)
+{
+	for (const auto& step : k_StepsThatTryToStart)
+	{
+		auto mind = Told(step);
+		GameDraws draws;
+		creature_mind::Senses senses {.seconds = 0.1f};
+		senses.swap.spellsGone = true;
+		const auto commands = creature_mind::Think(mind, senses, k_MindRandom, draws.Random());
+		ASSERT_TRUE(mind.stepStarted);
+		EXPECT_FALSE(commands.cutBody) << static_cast<int>(step.kind);
+	}
+}
+
+// When a script set real time on the body, each static action, sleep, rest and cast pose starts on the right side. The
+// draw still occurs. An action played once and a faint keep the side of the draw.
+TEST(CreatureActionMirror, RealTimeStartsStaticsAndCastsOnTheRightSide)
+{
+	auto steps = k_StepsThatTryToStart;
+	steps.push_back({.kind = Step::Kind::Static, .seconds = 5.0f, .sequence = {106, 106, 107}, .holdLoop = true});
+	for (const auto& step : steps)
+	{
+		auto mind = Told(step);
+		GameDraws draws {.value = 1};
+		creature_mind::Senses senses {.seconds = 0.1f, .realTime = true};
+		senses.swap.spellsGone = true;
+		const auto commands = creature_mind::Think(mind, senses, k_MindRandom, draws.Random());
+		ASSERT_TRUE(mind.stepStarted);
+		const bool masked = (step.kind == Step::Kind::Static && !step.holdLoop) || step.kind == Step::Kind::Cast;
+		EXPECT_EQ(commands.mirrored, !masked) << static_cast<int>(step.kind);
+		EXPECT_EQ(draws.Twos(), 1) << static_cast<int>(step.kind);
+	}
+}
+
+// In a dance with villagers under real time, the pose starts on the right side and the action keeps its side
+TEST(CreatureActionMirror, RealTimeStartsADancePoseOnTheRightSide)
+{
+	for (const uint32_t move : {35u, 36u})
+	{
+		auto mind = Told({.kind = Step::Kind::Dance, .dance = {.kind = creature_mind::DanceOrder::Kind::Dance}});
+		mind.stepStarted = true;
+		GameDraws draws {.value = 1};
+		creature_mind::Senses senses {.seconds = 0.1f, .realTime = true};
+		senses.dance = creature_mind::Senses::DanceView {.exists = true, .inGroup = true, .action = move, .first = 72};
+		const auto commands = creature_mind::Think(mind, senses, k_MindRandom, draws.Random());
+		ASSERT_TRUE(commands.playOnce.has_value() || commands.startSequence.has_value());
+		EXPECT_EQ(commands.mirrored, move == 35u);
+		EXPECT_EQ(draws.Twos(), 1);
 	}
 }

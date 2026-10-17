@@ -34,6 +34,7 @@ Step StepOf(uint32_t start)
 		return {.kind = Step::Kind::Static, .seconds = 5.0f, .sequence = {27, 28, 29}};
 	case k_Individual:
 		return {.kind = Step::Kind::Action, .animation = 28};
+	case k_Faint:
 	default:
 		return {.kind = Step::Kind::Static, .seconds = 5.0f, .sequence = {28, 28, 29}, .holdLoop = true};
 	}
@@ -41,9 +42,9 @@ Step StepOf(uint32_t start)
 } // namespace
 
 // The mind starts a step as the game's body does: it picks the side from the game's random numbers with the same draw,
-// and it makes the draw also when the busy body refuses the start. The faint and the body that the script slowed are
-// not compared: the mind waits for the body before a faint, and the script cannot slow the body yet. A step with a
-// thing in the hand is not compared: these steps start with empty hands.
+// and it makes the draw also when the busy body refuses the start. A faint starts also on a busy body. On a body that a
+// script set to real time, a static action starts on the right side. A step with a thing in the hand is not compared:
+// these steps start with empty hands.
 TEST(OracleCreatureStartSide, TheMindPicksTheSideAsTheGameDoes)
 {
 	const auto table = oracle::Table::Load("creature_start_side.txt");
@@ -62,7 +63,7 @@ TEST(OracleCreatureStartSide, TheMindPicksTheSideAsTheGameDoes)
 	{
 		const auto kind = table->Bits(row, *start);
 		const bool isBusy = table->Bits(row, *busy) != 0;
-		if (table->Bits(row, *slowed) != 0 || table->Bits(row, *holds) != 0 || (kind == k_Faint && isBusy))
+		if (table->Bits(row, *holds) != 0)
 		{
 			continue;
 		}
@@ -73,7 +74,7 @@ TEST(OracleCreatureStartSide, TheMindPicksTheSideAsTheGameDoes)
 		creature_mind::IdleMind mind;
 		mind.activity = creature_mind::Activity::Told;
 		mind.agenda = {StepOf(kind)};
-		const creature_mind::Senses senses {.seconds = 0.1f, .bodyBusy = isBusy};
+		const creature_mind::Senses senses {.seconds = 0.1f, .bodyBusy = isBusy, .realTime = table->Bits(row, *slowed) != 0};
 		const auto commands = creature_mind::Think(mind, senses, mindRandom, gameRandom);
 		const bool gameStarted = table->Bits(row, *started) != 0;
 		EXPECT_EQ(mind.stepStarted, gameStarted) << "row " << row;
@@ -86,5 +87,5 @@ TEST(OracleCreatureStartSide, TheMindPicksTheSideAsTheGameDoes)
 		EXPECT_EQ(game.GetSeeds().synced, table->Bits(row, *seedAfter)) << "row " << row;
 		++compared;
 	}
-	EXPECT_GE(compared, 30u);
+	EXPECT_GE(compared, 70u);
 }

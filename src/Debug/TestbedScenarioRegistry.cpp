@@ -551,6 +551,23 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.faint_cuts",
+	    .name = "A creature that falls dead stops what it does at once",
+	    .facet = Facet::Mind,
+	    .description = "Two player's tigers. The left tiger walks away to the west and the right tiger plays the impress "
+	                   "action. One second later a script tells each tiger to fall dead.",
+	    .expected = "Each tiger falls down at once. The left tiger stops its walk where it is, and the right tiger stops "
+	                "its action part of the way through. Neither tiger finishes what it did first.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {-20.0f, 60.0f}},
+	                  CreatureSetup {.species = CreatureType::Tiger, .offset = {20.0f, 60.0f}}},
+	    .commands = {Go(Kind::WalkTo, 0, {-160.0f, 60.0f}, 0.5f, false),
+	                 Play(Kind::PlayAction, 1, animations::k_Impress, 0.0f, false),
+	                 {.kind = Kind::DoAction, .creature = 0, .delaySeconds = 1.0f, .action = "DeadForever", .atCreature = 0},
+	                 {.kind = Kind::DoAction, .creature = 1, .delaySeconds = 0.0f, .action = "DeadForever", .atCreature = 1}},
+	});
+
+	all.push_back({
 	    .id = "needs.badly_hurt",
 	    .name = "A badly hurt creature wants to restore its health",
 	    .facet = Facet::Needs,

@@ -586,8 +586,12 @@ float creature_fight::HeightShareOf(float blowHeight, float headHeight)
 	return headHeight > 0.0f ? blowHeight / headHeight : 1.0f;
 }
 
-int32_t creature_fight::TestSpanMs(float turnMs, float size)
+int32_t creature_fight::TestSpanMs(float turnMs, float size, bool realTime)
 {
+	if (realTime)
+	{
+		return static_cast<int32_t>(turnMs);
+	}
 	return static_cast<int32_t>(turnMs * (1.6f - (size * 0.5f * 0.85f)));
 }
 

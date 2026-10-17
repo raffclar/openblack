@@ -739,6 +739,8 @@ struct Senses
 	/// Whether the body does not have a clip that the next step plays as it starts. Then the step does not start, and
 	/// the creature tries to start it again on each turn.
 	bool clipMissing {false};
+	/// Whether a script set real time on the body. Then each static action and cast pose starts on the right side.
+	bool realTime {false};
 	/// Whether the body dances and does not play the finish of the dance yet
 	bool bodyDancing {false};
 	/// Whether it is on its way somewhere or turning, and where it stands
@@ -864,6 +866,8 @@ struct Commands
 	/// A start, loop and end to play, the loop held on its last frame or not, and the end of the loop playing now
 	std::optional<std::array<size_t, 3>> startSequence;
 	bool holdLoop {false};
+	/// The start replaces the action that the body plays now, as a faint does
+	bool cutBody {false};
 	bool endSit {false};
 	/// A dance to start, with the milliseconds of each move; the dance to stop; only a start, loop and end to stop
 	std::optional<float> startDance;

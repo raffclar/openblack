@@ -429,7 +429,7 @@ void PoseBody(CreatureAnimation& animation, const CreatureRig& rig, const creatu
 	{
 		return;
 	}
-	const auto playbackMs = milliseconds * creature_layers::PlaybackRate(size);
+	const auto playbackMs = milliseconds * creature_layers::BodyRate(size, animation.realTime);
 	const auto animationOf = [&](size_t index) { return AnimationOf(animation, rig, morph, index); };
 
 	// A species without the start, the first move or the finish of the dance does not dance
@@ -717,9 +717,9 @@ HeadLook HeadLookOf(ecs::Registry& registry, entt::entity entity, CreatureAnimat
 				return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
 			};
 			const auto rate = animation.body.hurried ? 2 : 1;
-			const auto stepMs =
-			    static_cast<int32_t>(static_cast<float>(milliseconds) * creature_layers::PlaybackRate(ShownSize(creature))) *
-			    rate;
+			const auto stepMs = static_cast<int32_t>(static_cast<float>(milliseconds) *
+			                                         creature_layers::BodyRate(ShownSize(creature), animation.realTime)) *
+			                    rate;
 			walk->routeLook = creature_head_look::StepRouteLook(
 			    walk->routeLook, stepMs, {.searchHead = walk->follower.GetSearchHead(), .destination = *walk->destination},
 			    ground);

@@ -413,7 +413,9 @@ TEST(CreatureFight, BlowsTakeTheirShapeFromTheStrikingBone)
 TEST(CreatureFight, BlowsAreTestedThirtyTimesATurnNearTheirLanding)
 {
 	// A creature of size 1: a turn of 100 ms gives a span of 117 ms, tests 3 ms apart, within 70 ms of the land time
-	EXPECT_EQ(TestSpanMs(100.0f, 1.0f), 117);
+	EXPECT_EQ(TestSpanMs(100.0f, 1.0f, false), 117);
+	// With real time set by a script, the span is the turn's time
+	EXPECT_EQ(TestSpanMs(100.0f, 1.0f, true), 100);
 	EXPECT_EQ(TestWindowMs(117), 70);
 	const auto times = BlowTestTimes(200, 117, 300);
 	ASSERT_FALSE(times.empty());

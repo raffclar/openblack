@@ -82,6 +82,8 @@ struct CreatureFighting
 	/// Whether it has been told what to do in this stage yet, and has taunted its opponent
 	bool played {false};
 	bool taunted {false};
+	/// Whether its taunt before the fight is the rude gesture, chosen as the fight starts
+	bool rude {false};
 	/// Whether its life has paid for the fight and its mind learnt from it
 	bool ended {false};
 };

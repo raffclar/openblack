@@ -158,6 +158,26 @@ Step PickUpLooking(uint32_t object)
 	pickUp.gaze = Gaze {.object = object, .whileGoing = true};
 	return pickUp;
 }
+
+/// The side that a step plays on as it starts: the right side or, one time in two, the left side. The game's random
+/// numbers choose it. The hands are empty when these steps start.
+bool PickSide(const Random& gameRandom)
+{
+	return gameRandom(2) == 1;
+}
+
+/// The side of a static action or a cast pose as it starts. The draw occurs always, but when a script set real time on
+/// the body, the action starts on the right side.
+bool PickStaticSide(const Random& gameRandom, bool realTime)
+{
+	return PickSide(gameRandom) && !realTime;
+}
+
+/// Whether the step is a faint. A faint starts at once, also while the body plays an action or moves.
+bool IsFaint(const Step& step)
+{
+	return step.kind == Step::Kind::Static && step.holdLoop;
+}
 } // namespace
 
 std::string_view creature_mind::Name(Activity activity)
@@ -1030,11 +1050,12 @@ void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Comma
 	{
 		commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = *turn.facePoint};
 	}
-	// Each turn of a move that plays an action or a pose picks a side, also when the body is busy
+	// Each turn of a move that plays an action or a pose picks a side, also when the body is busy. A body that plays an
+	// action or moves refuses the start.
 	if (turn.playOnce.has_value())
 	{
 		const bool mirrored = gameRandom(2) == 1;
-		if (!senses.bodyPlaying)
+		if (!senses.bodyBusy)
 		{
 			commands.playOnce = *turn.playOnce;
 			commands.mirrored = mirrored;
@@ -1053,14 +1074,14 @@ void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Comma
 		commands.gestureInDance = true;
 	}
 	// The dance does not start while the creature walks or turns. It starts when the creature stands still.
-	if (turn.danceMoveMs.has_value() && !senses.bodyPlaying && !senses.moving)
+	if (turn.danceMoveMs.has_value() && !senses.bodyBusy)
 	{
 		commands.startDance = *turn.danceMoveMs;
 	}
 	if (turn.pose.has_value())
 	{
-		const bool mirrored = gameRandom(2) == 1;
-		if (!senses.bodyPlaying)
+		const bool mirrored = PickStaticSide(gameRandom, senses.realTime);
+		if (!senses.bodyBusy)
 		{
 			commands.startSequence = std::array {*turn.pose - 1, *turn.pose, *turn.pose + 1};
 			commands.mirrored = mirrored;
@@ -1186,13 +1207,6 @@ void RefusedStart(IdleMind& mind, const Step& step, const Senses& senses, const 
 		mind.shown = senses.communication.desire;
 	}
 }
-
-/// The side that a step plays on as it starts: the right side or, one time in two, the left side. The game's random
-/// numbers choose it. The hands are empty when these steps start.
-bool PickSide(const Random& gameRandom)
-{
-	return gameRandom(2) == 1;
-}
 } // namespace
 
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
@@ -1280,10 +1294,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.finishSpells = true;
 			return commands;
 		}
-		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it. A step
-		// that tries to start its clip tries again on each turn.
+		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it, and a
+		// faint starts at once. A step that tries to start its clip tries again on each turn.
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
-		    step.kind != Step::Kind::PracticeDance && senses.bodyBusy)
+		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && senses.bodyBusy)
 		{
 			if (TriesToStartClip(step, senses))
 			{
@@ -1333,7 +1347,17 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.fainted = step.faint;
 			// The turn that the rest starts is its first turn
 			mind.restTurns = 1;
-			commands.mirrored = PickSide(gameRandom);
+			if (IsFaint(step))
+			{
+				// A faint stops the walk and cuts the action that the body plays. Real time does not change its side.
+				commands.mirrored = PickSide(gameRandom);
+				commands.stopMoving = true;
+				commands.cutBody = true;
+			}
+			else
+			{
+				commands.mirrored = PickStaticSide(gameRandom, senses.realTime);
+			}
 			if (step.closedEyes)
 			{
 				commands.eyes = Eyes::Closed;
@@ -1355,7 +1379,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::Cast:
 			commands.startSequence = step.sequence;
-			commands.mirrored = PickSide(gameRandom);
+			commands.mirrored = PickStaticSide(gameRandom, senses.realTime);
 			mind.castDone = false;
 			mind.castTurns = 0;
 			break;
@@ -1561,7 +1585,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			}
 			else
 			{
-				FinishStep(mind);
+				// With nothing to show, it stops what it does as a failure
+				GiveUpAgenda(mind);
 			}
 			break;
 		case Step::Kind::Wait:
