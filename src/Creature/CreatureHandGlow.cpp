@@ -11,6 +11,7 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <functional>
 
 #include "Common/ModelInverseSquareRoot.h"
@@ -63,6 +64,47 @@ void creature_hand_glow::Set(Glows& glows, Place place, float scale, float power
 	}
 	glow->power = power;
 	glow->scale = scale;
+}
+
+std::optional<creature_hand_glow::Place> creature_hand_glow::PlaceOf(int32_t number)
+{
+	if (number < 0 || number >= static_cast<int32_t>(k_PlaceCount))
+	{
+		return std::nullopt;
+	}
+	return static_cast<Place>(number);
+}
+
+bool creature_hand_glow::AnyActive(const Glows& glows)
+{
+	return std::ranges::any_of(glows, [](const auto& glow) { return glow.has_value() && glow->power > 0.0f; });
+}
+
+creature_hand_glow::Hum creature_hand_glow::SetCreedPower(Glows& glows, Place place, float scale, float power)
+{
+	const bool before = AnyActive(glows);
+	Set(glows, place, scale, power);
+	const bool after = AnyActive(glows);
+	if (before == after)
+	{
+		return Hum::Unchanged;
+	}
+	return after ? Hum::Start : Hum::Stop;
+}
+
+std::optional<creature_hand_glow::CreedEvent> creature_hand_glow::CreedEventOf(int32_t event)
+{
+	if (event < k_FirstCreedEvent || event > k_LastCreedEvent)
+	{
+		return std::nullopt;
+	}
+	const auto step = static_cast<size_t>(event - k_FirstCreedEvent);
+	const float level = k_CreedEventLevels.at(step % k_CreedEventLevels.size());
+	// The power is the level added to itself
+	return CreedEvent {
+	    .place = k_CreedEventPlaces.at(step / k_CreedEventLevels.size()),
+	    .power = level + level,
+	};
 }
 
 float creature_hand_glow::Zoom(const Glow& glow)

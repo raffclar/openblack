@@ -38,6 +38,8 @@ public:
 	[[nodiscard]] std::optional<creature_kiss::KissPoints> KissPointsOf(entt::entity creature) override;
 	void KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point) override;
 	void PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs) override;
+	void SetCreedPower(entt::entity creature, creature_hand_glow::Place place, float scale, float power) override;
+	void PlayCreedEvent(entt::entity creature, int32_t event) override;
 	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity creature) override;
 	void AddAlignmentMotesOf(entt::entity copy) override;
 

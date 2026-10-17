@@ -40,6 +40,7 @@
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
 #include "ECS/SoundGround.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -273,6 +274,11 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 			    SoundIfAsked(entity, creature, transform, *rig, heard, fired.event, gate);
 			    // After the sound, a footstep throws up dust, heard or not
 			    FootstepPuffs(creature, transform, creature_footstep_puffs::CountOf(fired.event.action));
+			    // Then an event can set a creed glow on the body, heard or not
+			    if (Locator::creatureAnimationSystem::has_value())
+			    {
+				    Locator::creatureAnimationSystem::value().PlayCreedEvent(entity, static_cast<int32_t>(fired.event.action));
+			    }
 		    }
 	    });
 

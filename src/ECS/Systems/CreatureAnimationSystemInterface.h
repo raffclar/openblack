@@ -21,6 +21,11 @@
 
 #include "Creature/CreatureKiss.h"
 
+namespace openblack::creature_hand_glow
+{
+enum class Place : uint8_t;
+}
+
 namespace openblack::ecs::systems
 {
 
@@ -66,6 +71,12 @@ public:
 	/// texture slides on by the real milliseconds of the frame, and the circling glow turns by the game's milliseconds.
 	/// Nothing happens to a creature or copy without glows or a pose.
 	virtual void PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs) = 0;
+	/// A script gives a creature a creed power: a glow of a scale and a power at a place on its body, a power of 0 to
+	/// remove the glow. The creature hums while its glows have power (see creature_hand_glow::SetCreedPower).
+	virtual void SetCreedPower(entt::entity creature, creature_hand_glow::Place place, float scale, float power) = 0;
+	/// An animation event of a creature sets a creed glow, if the event is one that sets a glow. The hum does not
+	/// change.
+	virtual void PlayCreedEvent(entt::entity creature, int32_t event) = 0;
 	/// The middle of a creature's or a copy's groin bone and its lips (the point that kisses, else its head bone), as its
 	/// body is posed now, in the world. Nothing when it has no pose or no such bones.
 	[[nodiscard]] virtual std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity creature) = 0;

@@ -60,6 +60,7 @@
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
+#include "Creature/CreatureHandGlow.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureScriptPlay.h"
@@ -156,6 +157,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
@@ -8042,13 +8044,33 @@ void GetBellyPosition() // 337 GET_BELLY_POSITION
 
 void SetCreatureCreedProperties() // 338 SET_CREATURE_CREED_PROPERTIES
 {
-	// const auto time = Popf();
-	// const auto power = Popf();
-	// const auto scale = Popf();
-	// const auto handGlow = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A creature gets a creed glow of a scale and a power on its body. The time has no effect.
+	[[maybe_unused]] const auto time = Popf();
+	const auto power = Popf();
+	const auto scale = Popf();
+	const auto hand = Pop().intVal;
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		ScriptMessage("Thing not creature!");
+		return;
+	}
+	// The game does not examine the place, and a number out of range changes memory after the glows. Ignore it.
+	const auto place = creature_hand_glow::PlaceOf(hand);
+	if (!place.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_CREATURE_CREED_PROPERTIES: no hand glow {}", hand);
+		return;
+	}
+	if (Locator::creatureAnimationSystem::has_value())
+	{
+		Locator::creatureAnimationSystem::value().SetCreedPower(object, *place, scale, power);
+	}
 }
 
 void GameThingCanViewCamera() // 339 GAME_THING_CAN_VIEW_CAMERA
