@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 
 #include "Common/X87.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::camera_fly;
@@ -100,8 +101,8 @@ Bearing camera_fly::BestBearing(const camera_limits::Ground& ground, const Beari
 Flight camera_fly::Plan(Reason reason, const camera_limits::Ground& ground, const glm::vec3& place, const glm::vec3& origin,
                         const glm::vec3& focus, const glm::vec3& screenCentre)
 {
-	const float focusDistance = glm::distance(place, screenCentre);
-	const float originDistance = glm::distance(place, origin);
+	const float focusDistance = x87::Distance<x87::SumOrder::Zyx>(place, screenCentre);
+	const float originDistance = x87::Distance<x87::SumOrder::Zyx>(place, origin);
 	Flight flight {.focus = place};
 	float distance = originDistance;
 	bool bestBearing = true;

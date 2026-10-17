@@ -29,6 +29,7 @@
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/CreatureInteractCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureLocomotion.h"
@@ -241,8 +242,8 @@ bool CreatureHandSystem::Grab()
 	// The hand starts a little short of the creature, seen from where the camera is before it turns to the creature
 	if (Locator::camera::has_value() && registry.AllOf<Creature, Transform>(*nearest))
 	{
-		const auto cameraToCreature =
-		    glm::distance(Locator::camera::value().GetOrigin(), registry.Get<const Transform>(*nearest).position);
+		const auto cameraToCreature = x87::Distance<x87::SumOrder::Zyx>(Locator::camera::value().GetOrigin(),
+		                                                                registry.Get<const Transform>(*nearest).position);
 		contact.distance.Reset(
 		    feedback::HandStartDistance(cameraToCreature, ShownSize(registry.Get<const Creature>(*nearest))));
 		contact.distanceStarted = true;
@@ -454,10 +455,11 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	const auto middle = parts.has_value() ? parts->at(static_cast<size_t>(feedback::BodyPart::Groin)) : centre;
 	if (!contact->distanceStarted)
 	{
-		contact->distance.Reset(feedback::HandStartDistance(glm::distance(camera, transform.position), ShownSize(creature)));
+		contact->distance.Reset(
+		    feedback::HandStartDistance(x87::Distance<x87::SumOrder::Zyx>(camera, transform.position), ShownSize(creature)));
 		contact->distanceStarted = true;
 	}
-	feedback::KeepHandBack(contact->distance, glm::distance(camera, middle), height);
+	feedback::KeepHandBack(contact->distance, x87::Distance<x87::SumOrder::Zyx>(camera, middle), height);
 	auto handDistance = feedback::HandDistanceFromCamera(contact->distance);
 
 	// The line through the cursor looks for the creature's posed mesh. When it does not touch the mesh, a second line
@@ -497,7 +499,7 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	auto normal = glm::vec3(0.0f, 1.0f, 0.0f);
 	if (onBody && !slapped)
 	{
-		feedback::RestHandOnBody(contact->distance, glm::distance(camera, hit->point), height);
+		feedback::RestHandOnBody(contact->distance, x87::Distance<x87::SumOrder::Xzy>(camera, hit->point), height);
 		handDistance = feedback::HandDistanceFromCamera(contact->distance);
 		normal = hit->windingNormal;
 	}
@@ -541,7 +543,7 @@ glm::vec3 CreatureHandSystem::TurnHand(HandOnCreature& contact, bool onBody, boo
 	}
 	contact.up.Update(seconds);
 	const auto up = contact.up.GetValue();
-	return glm::length(up) > 0.0f ? glm::normalize(up) : glm::vec3(0.0f, 1.0f, 0.0f);
+	return glm::length(up) > 0.0f ? x87::Scaled<x87::SumOrder::Zyx>(up) : glm::vec3(0.0f, 1.0f, 0.0f);
 }
 
 bool CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
@@ -560,7 +562,10 @@ bool CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
 	clocks.sinceHold += input.stepMs;
 	// How fast the hand moves across the land, up and down not counting: between the lines through the cursor now and
 	// at the last step, both at the hand's distance
-	contact.speed = glm::length(glm::xz(input.here) - glm::xz(input.before)) / (input.stepMs / 1000.0f);
+	// The game multiplies each part by one over the seconds before it finds the length
+	const float perSecond = 1.0f / (input.stepMs / 1000.0f);
+	const auto moved = (glm::xz(input.here) - glm::xz(input.before)) * perSecond;
+	contact.speed = std::sqrt((moved.x * moved.x) + (moved.y * moved.y));
 	const bool cursorMoved = input.cursor.x != contact.lastCursor.x;
 	bool stroking = false;
 

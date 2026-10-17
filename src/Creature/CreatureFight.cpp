@@ -619,7 +619,7 @@ std::array<glm::vec3, 5> creature_fight::BlowTestPoints(const glm::vec3& bone, c
 	{
 		if (point != glm::vec3(0.0f))
 		{
-			point *= reach / glm::length(point);
+			point = x87::Scaled<x87::SumOrder::Zyx>(point, reach);
 		}
 		point += bone;
 	}
@@ -1104,12 +1104,13 @@ std::optional<float> creature_fight::DepthToBody(std::span<const physics::Ellips
 
 bool creature_fight::WithinBlowLine(const glm::vec3& point, const glm::vec3& origin, const glm::vec3& direction)
 {
-	const auto length = glm::length(direction);
+	const auto length = x87::LengthZyx(direction);
 	if (length <= 0.0f)
 	{
 		return false;
 	}
-	const auto ahead = glm::dot(point - origin, direction / length);
+	// The game multiplies the direction by one over its length
+	const auto ahead = x87::DotZyx(point - origin, direction * (1.0f / length));
 	return ahead > 0.0f && ahead < length;
 }
 

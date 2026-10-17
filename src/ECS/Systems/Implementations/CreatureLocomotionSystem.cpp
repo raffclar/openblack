@@ -719,6 +719,8 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 		                   ecs::wall_hug::IsFenceModel(
 		                       Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(mobileStatic->type)).meshId);
 		thing.shape = fence ? obstacles::Shape::ModelBox : obstacles::Shape::AtPlace;
+		// A thing that does not move builds its turn and scale as a thing that can lean
+		thing.placement = obstacles::Placement::Leaning;
 	}
 	else if (registry.AnyOf<TeleportStone>(entity))
 	{

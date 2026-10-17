@@ -24,6 +24,7 @@
 #include "3D/MapCoords.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/AbodeNeglectRules.h"
 #include "ECS/Components/Abode.h"
@@ -358,7 +359,7 @@ bool TownSystem::CheckForClearArea(glm::vec2 point, float radius, ClearAreaFilte
 				{
 					continue;
 				}
-				const float gap = glm::distance(glm::vec2(transform->position.x, transform->position.z), point) -
+				const float gap = gutils::GetDistanceInMetres(glm::vec2(transform->position.x, transform->position.z), point) -
 				                  world_objects::SizeOf(thing).radius;
 				if (gap < radius && Blocks(registry, thing, filter))
 				{
@@ -450,7 +451,8 @@ glm::vec2 TownSystem::GetCongregationPos(entt::entity townEntity)
 void TownSystem::BuildingCreated(entt::entity townEntity, glm::vec2 position, float radius)
 {
 	auto& town = Locator::entitiesRegistry::value().Get<Town>(townEntity);
-	if (town.congregationPos.has_value() && glm::distance(position, *town.congregationPos) - radius < k_CongregationBuildingGap)
+	if (town.congregationPos.has_value() &&
+	    gutils::GetDistanceInMetres(*town.congregationPos, position) - radius < k_CongregationBuildingGap)
 	{
 		town.congregationPos.reset();
 	}
