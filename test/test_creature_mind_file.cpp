@@ -391,6 +391,30 @@ TEST(CreatureMindFile, ShippedFilesWriteBackTheSame)
 	EXPECT_GT(physiques, 0u);
 }
 
+/// The mind files of the players' saved games, in a copy of a Profiles folder that OPENBLACK_VANILLA_SAVES gives, read
+/// and write back the same
+TEST(CreatureMindFile, SavedGameMindsWriteBackTheSame)
+{
+	const char* saves = std::getenv("OPENBLACK_VANILLA_SAVES"); // NOLINT(concurrency-mt-unsafe)
+	std::error_code error;
+	if (saves == nullptr || !std::filesystem::is_directory(saves, error))
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(saves))
+	{
+		if (!entry.is_regular_file() || !entry.path().filename().string().starts_with("SavedCreature"))
+		{
+			continue;
+		}
+		const auto bytes = ReadFileBytes(entry.path());
+		ASSERT_TRUE(bytes.has_value()) << entry.path();
+		MindFileData mind;
+		ASSERT_EQ(Read(*bytes, mind), MindResult::Success) << entry.path();
+		EXPECT_EQ(Write(mind), *bytes) << entry.path();
+	}
+}
+
 TEST(CreatureMindFile, FileWritesAndReadsBack)
 {
 	const auto path = std::filesystem::path(TEST_BINARY_DIR) / "creature_mind_file_round_trip.erc";
@@ -470,28 +494,4 @@ TEST(CreatureMindFile, TattooPicturesShareOnePictureForADesign)
 	EXPECT_EQ(ReadTattooPicture(block, 4), picture);
 	EXPECT_FALSE(ReadTattooPicture(block, 6).has_value());
 	EXPECT_FALSE(ReadTattooPicture(std::span(block).first(block.size() - 1), 1).has_value());
-}
-
-/// The mind files of the players' saved games, in a copy of a Profiles folder that OPENBLACK_VANILLA_SAVES gives, read
-/// and write back the same
-TEST(CreatureMindFile, SavedGameMindsWriteBackTheSame)
-{
-	const char* saves = std::getenv("OPENBLACK_VANILLA_SAVES"); // NOLINT(concurrency-mt-unsafe)
-	std::error_code error;
-	if (saves == nullptr || !std::filesystem::is_directory(saves, error))
-	{
-		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
-	}
-	for (const auto& entry : std::filesystem::recursive_directory_iterator(saves))
-	{
-		if (!entry.is_regular_file() || !entry.path().filename().string().starts_with("SavedCreature"))
-		{
-			continue;
-		}
-		const auto bytes = ReadFileBytes(entry.path());
-		ASSERT_TRUE(bytes.has_value()) << entry.path();
-		MindFileData mind;
-		ASSERT_EQ(Read(*bytes, mind), MindResult::Success) << entry.path();
-		EXPECT_EQ(Write(mind), *bytes) << entry.path();
-	}
 }
