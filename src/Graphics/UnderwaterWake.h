@@ -20,6 +20,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Graphics/Underwater.h"
+
 /// EXPERIMENT (not for merge): the rules of the wakes, rings and splashes on the experiment's water. Things that move
 /// in the water write into a field of small waves round the camera. The original game has no such field.
 namespace openblack::graphics::underwater::wake
@@ -124,9 +126,8 @@ struct Impact
 	float mass {0.0f};
 };
 
-/// Units in a metre of the real world. The physics falls at 9.81 units a second squared, so a unit is about a metre.
-/// This is a local value until the game's own scale is known.
-inline constexpr float k_UnitsPerMetre = 1.0f;
+/// Units in a metre of the real world: the water's one scale, from the height of an adult male villager
+using underwater::k_UnitsPerMetre;
 /// Kilograms in a unit of the physics' mass. This is a local value: a barrel has a mass of about 20 to 60.
 inline constexpr float k_KilogramsPerMass = 1.0f;
 /// A thing that falls slower than this makes no splash, only rings

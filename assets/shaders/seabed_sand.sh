@@ -14,7 +14,7 @@ uniform vec4 u_uwSeaFloor;
 #define SEABED_BLOCK_TEXELS 256.0f
 
 // The units of the world in one metre: an adult male villager is 1.661 units and 1.75 metres tall
-#define SEABED_UNITS_PER_METRE 0.949f
+#define SEABED_UNITS_PER_METRE UW_UNITS_PER_METRE
 
 // Gradient (Perlin) noise from about -1 to 1, with a smooth fifth-order fade between its lattice points
 float SeabedPerlin(vec2 p)
