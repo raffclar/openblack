@@ -646,9 +646,9 @@ struct BlowShape
 [[nodiscard]] float HeightShareOf(float blowHeight, float headHeight);
 /// Each game turn a blow is tested at thirty times through a span of the animation from where it was at the turn
 /// before. The span is the turn's time scaled down for a bigger creature, (1.6 - 0.425 size) of it, in whole
-/// milliseconds.
+/// milliseconds. When a script set real time, the span is the turn's time.
 constexpr int32_t k_BlowTests = 30;
-[[nodiscard]] int32_t TestSpanMs(float turnMs, float size);
+[[nodiscard]] int32_t TestSpanMs(float turnMs, float size, bool realTime);
 /// Only the tests within 0.6 of that span of the blow's land time, either way, count, in whole milliseconds
 [[nodiscard]] int32_t TestWindowMs(int32_t spanMs);
 /// The animation times a blow is tested at in a turn, from the time at the turn before, that fall within the window

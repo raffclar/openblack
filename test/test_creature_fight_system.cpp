@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include "Camera/Camera.h"
+#include "Common/GameRandom.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
@@ -132,6 +133,34 @@ public:
 	};
 	std::vector<Forced> forced;
 	std::optional<entt::entity> pooedDirectly;
+};
+
+/// The game's random numbers: they give the numbers in the list in turn, then 0, and count the draws of each range
+class ListedGameRandom final: public GameRandomInterface
+{
+public:
+	uint32_t GameRand(uint32_t range) override
+	{
+		ranges.push_back(range);
+		if (next < numbers.size())
+		{
+			return numbers.at(next++);
+		}
+		return 0;
+	}
+	float GameFloatRand(float) override { return 0.0f; }
+	uint32_t LocalRand(int32_t) override { return 0; }
+	float LocalFloatRand(float) override { return 0.0f; }
+	int32_t CrtRand() override { return 0; }
+	void CrtSrand(uint32_t) override {}
+	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return {}; }
+	void SetSeeds(GameRandomSeeds) override {}
+	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
+	void SetParticleStream(ParticleRandomStream) override {}
+
+	std::vector<uint32_t> numbers;
+	size_t next {0};
+	std::vector<uint32_t> ranges;
 };
 
 /// Two creatures in a duel in an arena on flat land, neither with a body to click on. The camera shows their fight.
@@ -670,4 +699,51 @@ TEST_F(CreatureFightSystemTest, LifeLostOutOfADuelLeavesTheFightHealth)
 	const auto before = registry.Get<const CreatureFighting>(first).fighter.health;
 	fights.LoseFightHealth(first, 0.2f);
 	EXPECT_FLOAT_EQ(registry.Get<const CreatureFighting>(first).fighter.health, before);
+}
+
+// As the fight starts, the game's random numbers choose the taunt of each creature, the other creature's first. Each try
+// to start the taunt draws a side first, and a body that plays an action refuses the try until it is free.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheGameChoosesTheTauntsAndEachTryDrawsASide)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Remove<CreatureFighting>(first);
+	registry.Remove<CreatureFighting>(second);
+	auto& game = static_cast<ListedGameRandom&>(Locator::gameRandom::emplace<ListedGameRandom>());
+	game.numbers = {1, 0};
+	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+	EXPECT_EQ(game.ranges, (std::vector<uint32_t> {2, 2}));
+	EXPECT_TRUE(registry.Get<const CreatureFighting>(second).rude);
+	EXPECT_FALSE(registry.Get<const CreatureFighting>(first).rude);
+
+	registry.Get<CreatureFighting>(first).stage = CreatureFighting::Stage::Taunt;
+	registry.Get<CreatureFighting>(second).stage = CreatureFighting::Stage::Taunt;
+	auto& body = registry.Get<CreatureAnimation>(first).body;
+	body.kind = creature_layers::BodyAction::Kind::Once;
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	// The busy creature draws on each turn and does not taunt; the other draws once, taunts and goes on
+	EXPECT_FALSE(registry.Get<const CreatureFighting>(first).played);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, CreatureFighting::Stage::Taunt);
+	EXPECT_NE(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Taunt);
+	EXPECT_EQ(game.ranges.size(), 2u + 3u + 1u);
+	Locator::gameRandom::reset();
+}
+
+// A faint cuts what the body plays at once and lies on the side that one draw of the game's random numbers chooses
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AFaintCutsTheBodyAndDrawsItsSide)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& game = static_cast<ListedGameRandom&>(Locator::gameRandom::emplace<ListedGameRandom>());
+	game.numbers = {1};
+	registry.Get<CreatureAnimation>(second).body.kind = creature_layers::BodyAction::Kind::Once;
+	fights.ForceFaint(second);
+	const auto& body = registry.Get<const CreatureAnimation>(second).body;
+	EXPECT_EQ(body.kind, creature_layers::BodyAction::Kind::Sequence);
+	EXPECT_TRUE(body.mirrored);
+	EXPECT_EQ(game.ranges, (std::vector<uint32_t> {2}));
+	Locator::gameRandom::reset();
 }

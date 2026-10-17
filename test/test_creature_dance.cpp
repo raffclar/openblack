@@ -271,6 +271,7 @@ TEST(CreatureDance, TheDanceMoveWaitsUntilTheCreatureStandsStill)
 	static_cast<void>(creature_mind::Think(mind, senses, NoRandom()));
 	auto walking = senses;
 	walking.moving = true;
+	walking.bodyBusy = true;
 	EXPECT_FALSE(creature_mind::Think(mind, walking, NoRandom()).startDance.has_value());
 	const auto still = creature_mind::Think(mind, senses, NoRandom());
 	ASSERT_TRUE(still.startDance.has_value());

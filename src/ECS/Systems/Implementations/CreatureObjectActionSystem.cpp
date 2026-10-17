@@ -2368,7 +2368,7 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 		    {
 			    return;
 		    }
-		    const float step = gameTime.count() * creature_layers::PlaybackRate(ShownSize(body));
+		    const float step = gameTime.count() * creature_layers::BodyRate(ShownSize(body), animation.realTime);
 		    if (action.kind == Kind::Catch)
 		    {
 			    using Catching = CreatureObjectAction::Catching;

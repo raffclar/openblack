@@ -115,6 +115,11 @@ float creature_layers::PlaybackRate(float size)
 	return k_PlaybackRateAtSizeZero - (k_PlaybackSlowingPerSize * size);
 }
 
+float creature_layers::BodyRate(float size, bool realTime)
+{
+	return realTime ? 1.0f : PlaybackRate(size);
+}
+
 bool creature_layers::IsPlaying(const BodyAction& body)
 {
 	return body.kind != BodyAction::Kind::Stand;

@@ -79,6 +79,9 @@ struct CreatureAnimation
 
 	/// How fast the body plays its animations and breathes, 1 as it should and 0 frozen still
 	float playbackScale {1.0f};
+	/// A script set real time: the body plays its animations at the usual speed, not at the rate of its size, and each
+	/// static action and cast pose starts on the right side
+	bool realTime {false};
 	/// How far through a breath the creature is, 0 to 1, and the seconds a breath takes now
 	float breathPhase {0.0f};
 	float breathPeriod {0.0f};
