@@ -238,6 +238,13 @@ TEST(StatisticsGlobal, LinesOfCodeAreTheTownsTimesTenThousandAndMore)
 	EXPECT_EQ(LinesOfCodeStep(0, [](int32_t) { return 0u; }), 0u);
 }
 
+TEST(StatisticsGlobal, LinesOfCodeRoundToAFloat)
+{
+	// 2000 towns give 20260000 lines. A float above 2^24 holds only even numbers, so one more line rounds away
+	EXPECT_EQ(LinesOfCodeStep(2000, [](int32_t) { return 1u; }), 20260000u);
+	EXPECT_EQ(LinesOfCodeStep(2000, [](int32_t) { return 3u; }), 20260004u);
+}
+
 TEST(StatisticsGlobal, TheFewestFramesASecondStaysAtNothing)
 {
 	GlobalFigures figures {.townsAtStart = 1};

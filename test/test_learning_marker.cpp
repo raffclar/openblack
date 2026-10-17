@@ -38,6 +38,17 @@ TEST(LearningMarker, ItStartsOverTheHeadSizedByTheCreature)
 	EXPECT_EQ(mark.text, "50%");
 }
 
+TEST(LearningMarker, ItGrowsByTheGamesFloatSteps)
+{
+	// The game multiplies by the float reciprocal of the life, and does not divide
+	auto mark = marker::Start({0.0f, 0.0f, 0.0f}, 10.0f, 1.0f);
+	ASSERT_EQ(mark.size, 1.0f);
+	EXPECT_TRUE(marker::Step(mark, 291.0f));
+	EXPECT_EQ(std::bit_cast<uint32_t>(marker::Grown(mark)), 0x3F86353Fu);
+	EXPECT_TRUE(marker::Step(mark, 109.0f));
+	EXPECT_EQ(std::bit_cast<uint32_t>(marker::Grown(mark)), 0x3F888888u);
+}
+
 TEST(LearningMarker, ItRisesGrowsAndGoesAfterSixSeconds)
 {
 	auto mark = marker::Start({0.0f, 0.0f, 0.0f}, 20.0f, 1.0f);

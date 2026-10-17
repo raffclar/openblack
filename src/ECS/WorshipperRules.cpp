@@ -13,6 +13,7 @@
 #include <numeric>
 
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 
 namespace openblack::ecs::worshipper_rules
 {
@@ -129,7 +130,8 @@ int32_t FoodSpareForWorship(std::optional<uint32_t> pitFood, float foodForDinner
 	{
 		return 0;
 	}
-	const auto spare = static_cast<int32_t>(static_cast<double>(*pitFood) - static_cast<double>(foodForDinner));
+	// The difference rounds to a float before it is cut to a whole amount
+	const auto spare = static_cast<int32_t>(static_cast<int64_t>(x87::Sub(static_cast<double>(*pitFood), foodForDinner)));
 	return std::max(spare, 0);
 }
 

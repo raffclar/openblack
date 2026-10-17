@@ -1723,3 +1723,14 @@ TEST_F(Reactions, ACreatureWithAForcedPlanIsAvailableOnlyWhenTheLeashLeadsIt)
 	registry.Remove<CreatureLeash>(_creature);
 	registry.Remove<CreatureMindState>(_creature);
 }
+
+TEST(DiscipleGlow, TheFrameComesFromTheMillisecondsIntoTheHalfSecond)
+{
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(0), 0u);
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(499), 14u);
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(500), 0u);
+	// The share a millisecond is a float a little less than 0.03, but each product rounds to a float, so 100 ms is 3
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(100), 3u);
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(1400), 12u);
+	EXPECT_EQ(ecs::villager_disciple::GlowFrame(99), 2u);
+}

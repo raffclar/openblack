@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -40,6 +43,9 @@ TEST(ScriptPopulate, TheSpreadGrowsATenthOfAMetreAThing)
 	EXPECT_FLOAT_EQ(SpreadOf(0), 4.0f);
 	EXPECT_FLOAT_EQ(SpreadOf(10), 5.0f);
 	EXPECT_FLOAT_EQ(SpreadOf(20), 6.0f);
+	// The product rounds to a float, then the sum does
+	EXPECT_EQ(std::bit_cast<uint32_t>(SpreadOf(3)), 0x4089999Au);
+	EXPECT_EQ(std::bit_cast<uint32_t>(SpreadOf(123)), 0x41826666u);
 }
 
 TEST(ScriptPopulate, EachThingGoesAcrossThenUpOrDownButNotAlongZ)

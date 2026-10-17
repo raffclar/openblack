@@ -16,13 +16,20 @@ using namespace openblack::gui::world_tooltip;
 TEST(WorldToolTips, BeliefIsAlwaysTheBeliefLeftTooltipInThousandths)
 {
 	// Ahead or behind, the town centre offers the same tooltip, with the signed margin in thousandths
-	const auto ahead = Belief(0.5);
+	const auto ahead = Belief(0.5f);
 	EXPECT_EQ(ahead.index, k_BeliefLeft);
 	EXPECT_DOUBLE_EQ(ahead.first, 500.0);
-	const auto behind = Belief(-0.25);
+	const auto behind = Belief(-0.25f);
 	EXPECT_EQ(behind.index, k_BeliefLeft);
 	EXPECT_DOUBLE_EQ(behind.first, -250.0);
 	EXPECT_FALSE(behind.second.has_value());
+}
+
+TEST(WorldToolTips, TheBeliefInThousandthsRoundsToAFloat)
+{
+	// 0.0025 as a float is a little less than 0.0025. The game's product in float rounds to 2.5 exactly
+	EXPECT_EQ(Belief(0.0025f).first, 2.5);
+	EXPECT_EQ(TempleHealth(0.0025f).first, 0.25);
 }
 
 TEST(WorldToolTips, BeliefReadsNeededWithTheShortfallWhileThePlayerTrails)

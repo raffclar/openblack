@@ -32,7 +32,7 @@ namespace openblack::gui::hand_tooltip
 struct BuildingToolTips
 {
 	BuildingWords wood;
-	double completed;
+	float completed;
 };
 
 /// The tooltips of a building that is not fully built or not fully repaired, none for other things

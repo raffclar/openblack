@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
 #include <vector>
 
 #include <ECS/ScriptWeatherRules.h>
@@ -69,6 +72,13 @@ TEST(ScriptWeather, AStormTheWindBlowsMovesAHundredthOfItsWindATurn)
 	EXPECT_FLOAT_EQ(moved.x, 100.5f);
 	EXPECT_FLOAT_EQ(moved.y, 5.0f);
 	EXPECT_FLOAT_EQ(moved.z, 199.8f);
+}
+
+TEST(ScriptWeather, TheDriftRoundsToAFloatAtEachStep)
+{
+	// The hundredth of the wind rounds to a float before it is added
+	const auto moved = weather::Drift({4.155892848968506f, 0.0f, 0.0f}, {.x = -116, .z = 0});
+	EXPECT_EQ(std::bit_cast<uint32_t>(moved.x), 0x403FBCB6u);
 }
 
 TEST(ScriptWeather, TheLostBrothersDrizzle)

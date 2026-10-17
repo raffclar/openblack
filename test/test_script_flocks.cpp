@@ -81,6 +81,16 @@ TEST(ScriptFlockRules, ARandomPointDrawsTheAngleThenTheDistance)
 	EXPECT_TRUE(draws.values.empty());
 }
 
+TEST(ScriptFlockRules, ARandomPointHasTheGameBits)
+{
+	// Each step rounds to a float. The values come from the game's instructions with exact rounding at each step
+	Draws draws {{2.945753574371338f, 3.9451653957366943f}};
+	const MapCoords centre {.x = 18245586, .z = 3421693, .altitude = 0.0f};
+	const auto point = rules::CalcRandomPos(centre, 4.0f, 20.0f, std::ref(draws), [](const MapCoords&) { return true; });
+	EXPECT_EQ(point.x, 18194512);
+	EXPECT_EQ(point.z, 3431824);
+}
+
 TEST(ScriptFlockRules, APointThatWillNotDoSpiralsThenFallsBackToTheCentre)
 {
 	// Only the cell one to -x of the drawn one will do: the spiral's first step

@@ -94,6 +94,13 @@ TEST(ScriptFind, CellsAroundSpanTheReach)
 	EXPECT_EQ(range.high, glm::ivec2(15, 15));
 }
 
+TEST(ScriptFind, TheReachEdgeIsWorkedInFloat)
+{
+	// Far out, each float step rounds: here the edge one metre on reaches cell 234, where wider sums stay in cell 233
+	const auto range = script_find::CellsAround({.x = 15328870, .z = 0, .altitude = 0.0f}, 1.0f);
+	EXPECT_EQ(range.high.x, 234);
+}
+
 TEST(ScriptFind, CellsLookedAtXByXThenZ)
 {
 	FakeCells cells;
