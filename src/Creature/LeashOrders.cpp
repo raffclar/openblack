@@ -337,6 +337,16 @@ glm::vec2 creature_leash_orders::MarkerSize(uint32_t clockMs)
 	return {swing(clockMs), swing(clockMs + k_PulseLagMs)};
 }
 
+bool creature_leash_orders::MarkerShown(bool inTemple, bool worldHidden)
+{
+	return !inTemple && !worldHidden;
+}
+
+glm::vec2 creature_leash_orders::FootprintSize(glm::vec2 ring)
+{
+	return {k_FootprintShare * ring.y, k_FootprintShare * k_FootprintShare * ring.x};
+}
+
 uint8_t creature_leash_orders::FootprintCell(size_t speciesRow)
 {
 	// The table ends at the chicken; anything past it shows the first picture
