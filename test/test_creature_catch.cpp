@@ -54,6 +54,22 @@ TEST(CreatureCatch, ItMissesWhatPassesBeyondItsReach)
 	EXPECT_TRUE(Reaches(approach));
 }
 
+TEST(CreatureCatch, TheReachKeepsTheGamesOrderOfSteps)
+{
+	// These throws are at the edges of the tests. The game's order of steps decides each one by a few bits.
+	// It reaches by 2e-6 m
+	auto edge = Coming({5.197f, 0.0f, -8.343f});
+	edge.thing = {-30.60541343688965f, 10.0f, 10.425211906433105f};
+	EXPECT_TRUE(Reaches(edge));
+	// It has 0.05000007 s to spare, just enough
+	edge.thing.x = -2.783843994140625f;
+	EXPECT_TRUE(Reaches(edge));
+	// It passes closest in 5.0000005 s, just too late
+	auto late = Coming({6.044f, 0.0f, -5.971f});
+	late.thing = {-38.53909683227539f, 10.0f, 21.434200286865234f};
+	EXPECT_FALSE(Reaches(late));
+}
+
 TEST(CreatureCatch, TheCatchingAnimationsBlendByHeightAndSide)
 {
 	// The hand closes low and to one side, low and to the other, high and to one side, high and to the other

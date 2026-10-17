@@ -36,6 +36,24 @@ float animals::TurnAngleRadians(int turnAngle)
 	return static_cast<float>(turnAngle) * k_TwoPi / k_FullTurn;
 }
 
+bool animals::FrightensCreatures(AnimalInfo type)
+{
+	switch (type)
+	{
+	case AnimalInfo::Bat:
+	case AnimalInfo::SpellBat:
+	case AnimalInfo::Vulture:
+	case AnimalInfo::Lion:
+	case AnimalInfo::Tiger:
+	case AnimalInfo::Leopard:
+	case AnimalInfo::Wolf:
+	case AnimalInfo::SpellWolf:
+		return true;
+	default:
+		return false;
+	}
+}
+
 std::optional<AnimId> animals::DyingClip(AnimalInfo type)
 {
 	switch (type)

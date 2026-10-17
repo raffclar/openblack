@@ -85,18 +85,31 @@ float LandHeightAt(glm::vec3 point)
 	                                           : 0.0f;
 }
 
-/// Striking with a destroying blow, the body doesn't sway
-bool StrikingToDestroy(const ecs::Registry& registry, entt::entity creature)
+/// What the body of a creature does, as far as a kick of its sway is concerned
+creature_sway::BodyFacts SwayFactsOf(const ecs::Registry& registry, entt::entity creature, const CreatureAnimation& animation)
 {
-	const auto* action = registry.TryGet<const CreatureObjectAction>(creature);
-	return action != nullptr && action->kind == creature_object_actions::Kind::Destroy &&
-	       action->phase == CreatureObjectAction::Phase::Playing;
+	creature_sway::BodyFacts facts;
+	// A fight shows its moves as loops, but only a fighter that is down keeps still
+	if (const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+	    fighting != nullptr && fighting->fighter.state != creature_fight::State::Idle)
+	{
+		const auto state = fighting->fighter.state;
+		facts.downInFight = state == creature_fight::State::Faint || state == creature_fight::State::GetUp ||
+		                    state == creature_fight::State::Lying;
+		return facts;
+	}
+	facts.playsStartLoopEnd = creature_layers::IsPlaying(animation.body) &&
+	                          animation.body.kind == creature_layers::BodyAction::Kind::Sequence &&
+	                          !animation.body.timedByPlayer;
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
+	facts.turnsOnTheSpot = walk != nullptr && walk->motion == CreatureLocomotion::Motion::Turning;
+	return facts;
 }
 
-/// The sway kicked at a point, by the force over the creature's last frame
+/// The sway kicked at a point, by the force over the last game turn of the creature
 void Kick(const ecs::Registry& registry, entt::entity entity, CreatureAnimation& animation, glm::vec3 force, glm::vec3 point)
 {
-	if (StrikingToDestroy(registry, entity))
+	if (!creature_sway::TakesKick(SwayFactsOf(registry, entity, animation)))
 	{
 		return;
 	}
@@ -307,8 +320,15 @@ void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimati
 	{
 		return;
 	}
-	const auto side = glm::normalize(transform.rotation[0]);
-	const auto front = glm::normalize(transform.rotation[2]);
+	auto side = glm::normalize(transform.rotation[0]);
+	auto front = glm::normalize(transform.rotation[2]);
+	// A body that turns on the spot leans along the heading that the turn has reached
+	if (animation.sway.turnHeading.has_value())
+	{
+		const float heading = *animation.sway.turnHeading;
+		side = glm::vec3(std::cos(heading), 0.0f, -std::sin(heading));
+		front = glm::vec3(std::sin(heading), 0.0f, std::cos(heading));
+	}
 	const auto lean = [&](uint32_t clip, float amount) {
 		if (std::abs(amount) <= creature_sway::k_DrawnLean)
 		{
@@ -736,7 +756,28 @@ void CreatureAnimationSystem::ProcessTurn()
 		animation.breathPeriod = resting;
 		animation.breathTarget = resting;
 	});
+	StepSway();
 	AddAlignmentMotes();
+}
+
+void CreatureAnimationSystem::StepSway()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// Each game turn the body sways from what kicked it, by the seconds that the creature lived in the turn
+	registry.Each<const Creature, const CreatureMorph, CreatureAnimation>(
+	    [&registry](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation) {
+		    auto& sway = animation.sway;
+		    sway.turnSeconds = creature_sway::TurnSeconds(animation.playbackScale);
+		    creature_sway::Step(sway, sway.turnSeconds, MassOf(creature, &morph));
+		    sway.turnHeading.reset();
+		    const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
+		    if (walk != nullptr && walk->motion == CreatureLocomotion::Motion::Turning && walk->move.has_value() &&
+		        walk->move->animations.has_value() && walk->move->durationMs > 0.0f)
+		    {
+			    sway.turnHeading =
+			        creature_sway::TurnHeading(walk->heading, walk->targetHeading, walk->move->timeMs, walk->move->durationMs);
+		    }
+	    });
 }
 
 void CreatureAnimationSystem::AddAlignmentMotes()
@@ -841,10 +882,6 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    const float scale = animation.playbackScale;
 		    animation.breathPhase =
 		        creature_animation::AdvanceBreath(animation.breathPhase, seconds * scale, animation.breathPeriod);
-
-		    // The body sways from what kicked it
-		    animation.sway.frameSeconds = seconds;
-		    creature_sway::Step(animation.sway, animation.sway.frameSeconds, MassOf(creature, &morph));
 
 		    if (rig != nullptr)
 		    {

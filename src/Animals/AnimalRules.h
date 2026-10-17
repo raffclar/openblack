@@ -93,6 +93,11 @@ struct ReactionFacts
 /// is not in the table gives the empty state (0).
 [[nodiscard]] uint8_t StateAfterReacting(uint8_t stateBefore, std::span<const GAnimalStateTableInfo> table);
 
+/// Whether a kind of animal frightens a creature. Bats, the bats of the evil flock and vultures frighten a creature.
+/// Lions, tigers, leopards, wolves and the wolves that a spell makes also frighten a creature.
+/// The lion and the cow of the puzzles do not frighten a creature.
+[[nodiscard]] bool FrightensCreatures(AnimalInfo type);
+
 /// A killed animal lies dead this many turns, and one more, before it goes
 inline constexpr int16_t k_TurnsToDieOver = 600;
 /// The clip a kind of animal falls dead with, and the one it then lies dead in, once killed; none where its kind keeps

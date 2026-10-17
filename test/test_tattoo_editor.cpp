@@ -168,11 +168,11 @@ TEST(TattooEditor, TheViewTurnsRoundItsFocusAndSlowsDown)
 	EXPECT_NEAR(orbit.turnSpeed, std::exp(100.0f * 0.0003f * -8.0f), 1e-6f);
 }
 
-TEST(TattooEditor, TheViewStaysBetweenAQuarterAndAsHighAsItIsFar)
+TEST(TattooEditor, TheViewStaysBetweenAnEighthAndAsHighAsItIsFar)
 {
 	Orbit low {.eye = {10.0f, 0.0f, 0.0f}, .focus = {0.0f, 0.0f, 0.0f}, .turnSpeed = 0.0f, .tipSpeed = 0.0f};
 	Turn(low, 10.0f);
-	EXPECT_FLOAT_EQ(low.eye.y, 2.5f);
+	EXPECT_FLOAT_EQ(low.eye.y, 1.25f);
 	Orbit high {.eye = {10.0f, 50.0f, 0.0f}, .focus = {0.0f, 0.0f, 0.0f}, .turnSpeed = 0.0f, .tipSpeed = 0.0f};
 	Turn(high, 10.0f);
 	EXPECT_FLOAT_EQ(high.eye.y, 10.0f);

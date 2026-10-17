@@ -354,3 +354,16 @@ TEST(CreatureSpellMaths, ACreaturesCastGivesUpOnceItSwingsTooFar)
 	EXPECT_TRUE(maths::SwungTooFar({1.0f, 0.0f}, {-1.0f, 0.1f}, 40.0f));
 	EXPECT_FALSE(maths::SwungTooFar({0.0f, 0.0f}, {-1.0f, 0.0f}, 40.0f));
 }
+
+TEST(CreatureSpellMaths, TheSwingUsesTheEnginesInverseSquareRootAndAWayOfNoLengthGivesADotOf0)
+{
+	// The table root makes the unit way along x a little short: its dot with itself is 0x3F7FFF40, under the cosine
+	// of 0.004 radians, so a cast that did not swing ends. The way (3, 4) gives 0x3F7FFF96, above that cosine.
+	EXPECT_TRUE(maths::SwungTooFar({1.0f, 0.0f}, {1.0f, 0.0f}, 0.004f));
+	EXPECT_TRUE(maths::SwungTooFar({2.0f, 0.0f}, {2.0f, 0.0f}, 0.004f));
+	EXPECT_FALSE(maths::SwungTooFar({3.0f, 4.0f}, {3.0f, 4.0f}, 0.004f));
+	// A way of no length gives a dot of 0: a limit under a right angle ends the cast, a limit over it does not
+	EXPECT_TRUE(maths::SwungTooFar({0.0f, 0.0f}, {1.0f, 0.0f}, 1.0f));
+	EXPECT_TRUE(maths::SwungTooFar({1.0f, 0.0f}, {0.0f, 0.0f}, 1.0f));
+	EXPECT_FALSE(maths::SwungTooFar({0.0f, 0.0f}, {1.0f, 0.0f}, 2.0f));
+}

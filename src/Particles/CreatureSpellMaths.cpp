@@ -17,6 +17,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/ModelInverseSquareRoot.h"
+
 using namespace openblack::particles;
 
 namespace
@@ -110,11 +112,15 @@ glm::vec3 maths::ItchOrbit(glm::vec3 rightEye, glm::vec3 leftEye, float seconds,
 
 bool maths::SwungTooFar(glm::vec2 began, glm::vec2 now, float limit)
 {
-	const float a = glm::length(began);
-	const float b = glm::length(now);
-	if (!(a > 0.0f) || !(b > 0.0f))
-	{
-		return false;
-	}
-	return glm::dot(began / a, now / b) < std::cos(limit);
+	// The engine's table inverse square root makes each way unit length, so a unit way is a little short.
+	// A way of no length becomes a way of no length, and its dot is 0.
+	const float beganScale = openblack::gutils::ModelInverseSquareRoot((began.x * began.x) + (began.y * began.y));
+	const float beganX = beganScale * began.x;
+	const float beganZ = began.y * beganScale;
+	const float nowScale = openblack::gutils::ModelInverseSquareRoot((now.y * now.y) + (now.x * now.x));
+	const float nowX = now.x * nowScale;
+	const float nowZ = nowScale * now.y;
+	const float dot = (nowX * beganX) + (nowZ * beganZ);
+	// The cosine of the limit keeps its full precision
+	return std::cos(static_cast<double>(limit)) > static_cast<double>(dot);
 }
