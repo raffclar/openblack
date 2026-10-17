@@ -68,8 +68,11 @@ namespace openblack::ecs::systems::mind_detail
 [[nodiscard]] std::optional<uint32_t> BeliefKindOf(const ecs::Registry& registry, entt::entity thing);
 /// The data of a worship site's altar: the data of the worship site of its site's tribe. None for another thing.
 [[nodiscard]] const GWorshipSiteInfo* AltarInfoOf(const ecs::Registry& registry, entt::entity altar);
+/// Where a thing is: where it stands, or a flock's own place
+[[nodiscard]] glm::vec3 ThingPlace(const ecs::Registry& registry, entt::entity thing);
 /// What a creature knows of a thing. When the creature has a belief about the thing, these are the attributes that it
-/// last took in. Else they are the attributes of the thing now.
+/// last took in, and the place where it last came across the thing. Else they are the attributes of the thing and its
+/// place now.
 [[nodiscard]] std::optional<creature_tree::Belief> BeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                             entt::entity self);
 /// What a creature finds of a thing now, as far as the world here tells it

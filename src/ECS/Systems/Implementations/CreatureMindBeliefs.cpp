@@ -276,6 +276,11 @@ entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapC
 }
 } // namespace
 
+glm::vec3 mind_detail::ThingPlace(const ecs::Registry& registry, entt::entity thing)
+{
+	return PlaceOf(registry, thing);
+}
+
 uint16_t mind_detail::LookingAngle(const Transform& transform, const std::optional<glm::vec3>& lookAt)
 {
 	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));

@@ -33,11 +33,13 @@ namespace openblack::creature_mind_model
 {
 using creature_desires::k_DesireCount;
 
-/// The two trees of each desire: which thing to act on, and which thing to use
+/// The two trees of each desire, in the order that a mind file keeps them. The activity tree tells how good the whole
+/// thing that a desire is about is (a town to help, a creature to befriend). The act-on tree tells how good a thing is
+/// to act on for the desire.
 enum class TreeKind : uint8_t
 {
+	Activity,
 	ActOn,
-	Use,
 };
 constexpr size_t k_TreeKinds = 2;
 
@@ -51,11 +53,16 @@ struct TreeHeader
 	int32_t type {0};
 	int32_t desire {0};
 };
-/// The kind number that the game gives a new tree: 0 for the tree of which thing to use, 1 for the tree of which thing
-/// to act on
+/// The kind number that the game gives a new tree: 0 for the activity tree, 1 for the act-on tree
 [[nodiscard]] constexpr int32_t NewTreeType(TreeKind kind)
 {
-	return kind == TreeKind::Use ? 0 : 1;
+	return kind == TreeKind::Activity ? 0 : 1;
+}
+/// The kind of lesson that an example the creature learns keeps in a mind file: 1 for the activity tree, 2 for the
+/// act-on tree
+[[nodiscard]] constexpr int32_t LessonKind(TreeKind kind)
+{
+	return kind == TreeKind::Activity ? 1 : 2;
 }
 
 struct Learnt
@@ -95,9 +102,15 @@ constexpr float k_StartingLessonFeedback = 0.8f;
 void TeachStartingLesson(Learnt& learnt, std::span<const creature_tree::Attribute> hungerAllowed);
 /// Adds a thought, forgetting the oldest
 void Think(Learnt& learnt, std::string thought);
-/// Adds an example to a desire's tree and grows the tree again, testing the attributes allowed
+/// Adds an example to a desire's tree and grows the tree again, testing the attributes allowed. The example gets the
+/// kind of lesson of the tree.
 void Learn(Learnt& learnt, TreeKind kind, creature_desires::Desire desire, creature_tree::Episode episode,
            std::span<const creature_tree::Attribute> allowed);
+/// A lesson about a thing: the desire learns the feedback, and every other desire that depends on it learns the
+/// feedback times how much it depends on it. Each tree grows again with the attributes allowed for its desire.
+void LearnSpread(Learnt& learnt, TreeKind kind, creature_desires::Desire desire, const creature_tree::Belief& belief,
+                 float feedback, const creature_learning::Dependencies& dependencies,
+                 const std::array<std::vector<creature_tree::Attribute>, k_DesireCount>& allowed);
 /// Grows every tree again from its examples
 void RebuildTrees(Learnt& learnt, const std::array<std::vector<creature_tree::Attribute>, k_DesireCount>& allowed);
 
@@ -118,8 +131,7 @@ struct LoadedMind
 };
 /// The mind a file holds, over a fresh mind of its species for what the file doesn't keep (how desires fade, how fast
 /// sources fade, and so on). As the game does it:
-/// - For each desire, the file's first tree goes to the tree of which thing to use, and its second tree to the tree of
-///   which thing to act on.
+/// - For each desire, the file's first tree goes to the activity tree, and its second tree to the act-on tree.
 /// - The examples of a file's tree come after the examples that the mind has, up to the most that a tree keeps. A loaded
 ///   example keeps no kind of lesson (0).
 /// - The opinions, the attitude to the player and the body values are kept as the file has them.
@@ -127,8 +139,9 @@ struct LoadedMind
 [[nodiscard]] LoadedMind FromFile(const creaturemind::MindFileData& file, const creature_desires::Desires& fresh,
                                   const Learnt& freshLearnt);
 /// A mind written as a file of the current version, over the file it was loaded from when there was one, so that
-/// what the mind doesn't use is kept. For each desire, the tree of which thing to use goes first and the tree of which
-/// thing to act on second, each with the kind number and desire that a file gave it.
+/// what the mind doesn't use is kept. For each desire, the activity tree goes first and the act-on tree second, each
+/// with the kind number and desire that a file gave it. A file of an older version gets, for the fields that it does
+/// not have, the values of a new creature.
 [[nodiscard]] creaturemind::MindFileData ToFile(const creature_desires::Desires& desires, const Learnt& learnt,
                                                 uint32_t developmentPhase, float attitudeToPlayer, uint32_t turnsLookedAt,
                                                 uint32_t speciesRow);
