@@ -64,6 +64,8 @@ struct EffectReceiver
 	entt::entity entity {entt::null};
 	/// The middle of its foot and how far its edge is from it, across the land
 	glm::vec3 position {0.0f};
+	/// The point across the land that its edge is measured from, when it is not its position
+	std::optional<glm::vec2> middle;
 	float radius {0.0f};
 	float height {0.0f};
 	/// Its life, 0 to 1; none for what has no life to lose yet (buildings, trees and features until they can be hurt)
@@ -74,8 +76,8 @@ struct EffectReceiver
 	bool crushable {false};
 };
 
-/// Whether an effect at a point reaches an object: its edge within the radius across the land, and its height within
-/// the radius up and down
+/// Whether an effect at a point reaches an object: its edge within the radius across the land from its middle, and its
+/// height within the radius up and down from its position
 [[nodiscard]] bool Reaches(const EffectValues& values, glm::vec3 point, const EffectReceiver& receiver);
 
 /// A crush stronger than this makes the people nearby react to what was crushed

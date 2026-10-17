@@ -776,6 +776,12 @@ void TownSystem::UpdateFrame(float gameSeconds)
 		{
 			return;
 		}
+		// A town centre shows the symbols from when its town finishes it
+		if (const auto* progress = _registry->TryGet<const BuildProgress>(entity);
+		    progress != nullptr && progress->built < 1.0f)
+		{
+			return;
+		}
 		auto found = _beliefSymbols.find(entity);
 		if (found == _beliefSymbols.end() || !particles.IsRunning(found->second))
 		{
