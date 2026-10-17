@@ -2208,8 +2208,8 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 std::unique_ptr<ProviderInterface> ViewProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("view");
-	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell and its "
-	                             "creature, and whether films and 16-bit colour are on"),
+	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, its "
+	                             "creature and its effects, and whether films and 16-bit colour are on"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
 		              if (Locator::videoSystem::has_value())
@@ -2241,6 +2241,24 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 				              creature["colour"] = Point(shown->colour);
 				              creature["added"] = Point(shown->added);
 				              creature["eye"] = Point(glm::vec3(glm::inverse(shown->view)[3]));
+				              creature["shown"] = shown->copyShown;
+				              creature["stars"] = shown->stars.size();
+				              Json stars = Json::array();
+				              for (const auto& star : shown->stars)
+				              {
+					              stars.push_back({{"pixel", {star.pixel.x, star.pixel.y}},
+					                               {"depth", star.depth},
+					                               {"half_size", star.halfSize},
+					                               {"argb", star.argb}});
+				              }
+				              creature["star_sprites"] = std::move(stars);
+				              creature["fans"] = shown->fans.size();
+				              if (!shown->fans.empty() && !shown->fans.front().empty())
+				              {
+					              const auto& middle = shown->fans.front().front();
+					              creature["burst_pixel"] = {middle.pixel.x, middle.pixel.y};
+					              creature["burst_alpha"] = middle.argb >> 24u;
+				              }
 			              }
 			              result["film_creature"] = std::move(creature);
 		              }

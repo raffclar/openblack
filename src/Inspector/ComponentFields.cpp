@@ -44,6 +44,7 @@
 #include "Creature/CreatureGesture.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureHair.h"
+#include "Creature/CreatureHandGlow.h"
 #include "Creature/CreatureHeadLook.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureIdleMind.h"
@@ -111,6 +112,7 @@
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureGestureDrawing.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
@@ -280,6 +282,7 @@
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptTimers.h"
 #include "Video/FilmCreature.h"
+#include "Video/FilmEffects.h"
 
 namespace components = openblack::ecs::components;
 
@@ -750,6 +753,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreatureHair>(context)
 	    .Field<&components::CreatureHair::groups>("groups")
 	    .Field<&components::CreatureHair::started>("started");
+	Reflect<components::CreatureHandGlows>(context)
+	    .Field<&components::CreatureHandGlows::glows>("glows")
+	    .Field<&components::CreatureHandGlows::slidePace>("slidePace")
+	    .Field<&components::CreatureHandGlows::turnPace>("turnPace")
+	    .Field<&components::CreatureHandGlows::placed>("placed");
 	Reflect<components::CreatureHelpMemory>(context).Field<&components::CreatureHelpMemory::memory>("memory");
 	Reflect<components::CreatureLeash>(context)
 	    .Field<&components::CreatureLeash::known>("known")
@@ -1106,7 +1114,16 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::FilmCreature::clock>("clock")
 	    .Field<&components::FilmCreature::look>("look")
 	    .Field<&components::FilmCreature::pace>("pace")
-	    .Field<&components::FilmCreature::shown>("shown");
+	    .Field<&components::FilmCreature::shown>("shown")
+	    .Field<&components::FilmCreature::stars>("stars")
+	    .Field<&components::FilmCreature::starsStarted>("starsStarted")
+	    .Field<&components::FilmCreature::starsOn>("starsOn")
+	    .Field<&components::FilmCreature::burst>("burst")
+	    .Field<&components::FilmCreature::burstOn>("burstOn")
+	    .Field<&components::FilmCreature::burstAlpha>("burstAlpha")
+	    .Field<&components::FilmCreature::effectsPace>("effectsPace")
+	    .Field<&components::FilmCreature::starSprites>("starSprites")
+	    .Field<&components::FilmCreature::fans>("fans");
 	Reflect<components::Fire>(context)
 	    .Field<&components::Fire::state>("state")
 	    .Field<&components::Fire::source>("source")
@@ -2348,6 +2365,11 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_hair::Strand>(context, ValueOnly {})
 	    .Field<&openblack::creature_hair::Strand::positions>("positions")
 	    .Field<&openblack::creature_hair::Strand::velocities>("velocities");
+	Reflect<openblack::creature_hand_glow::Glow>(context, ValueOnly {})
+	    .Field<&openblack::creature_hand_glow::Glow::power>("power")
+	    .Field<&openblack::creature_hand_glow::Glow::scale>("scale")
+	    .Field<&openblack::creature_hand_glow::Glow::turn>("turn")
+	    .Field<&openblack::creature_hand_glow::Glow::slide>("slide");
 	Reflect<openblack::creature_head_look::RouteLook>(context, ValueOnly {})
 	    .Field<&openblack::creature_head_look::RouteLook::countdownMs>("countdownMs")
 	    .Field<&openblack::creature_head_look::RouteLook::point>("point");
@@ -2783,6 +2805,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::CreatureHair::Group::colour>("colour")
 	    .Field<&openblack::ecs::components::CreatureHair::Group::halfWidth>("halfWidth")
 	    .Field<&openblack::ecs::components::CreatureHair::Group::textured>("textured");
+	Reflect<openblack::ecs::components::CreatureHandGlows::Placed>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureHandGlows::Placed::model>("model")
+	    .Field<&openblack::ecs::components::CreatureHandGlows::Placed::zoom>("zoom")
+	    .Field<&openblack::ecs::components::CreatureHandGlows::Placed::slide>("slide");
 	Reflect<openblack::ecs::components::CreatureLeash::Order>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::serial>("serial")
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::fight>("fight")
@@ -2977,6 +3003,35 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::film_creature::Look>(context, ValueOnly {})
 	    .Field<&openblack::film_creature::Look::colour>("colour")
 	    .Field<&openblack::film_creature::Look::added>("added");
+	Reflect<openblack::film_effects::Burst>(context, ValueOnly {})
+	    .Field<&openblack::film_effects::Burst::rays>("rays")
+	    .Field<&openblack::film_effects::Burst::spin>("spin")
+	    .Field<&openblack::film_effects::Burst::open>("open")
+	    .Field<&openblack::film_effects::Burst::grow>("grow");
+	Reflect<openblack::film_effects::FanCorner>(context, ValueOnly {})
+	    .Field<&openblack::film_effects::FanCorner::pixel>("pixel")
+	    .Field<&openblack::film_effects::FanCorner::uv>("uv")
+	    .Field<&openblack::film_effects::FanCorner::argb>("argb");
+	Reflect<openblack::film_effects::Ray>(context, ValueOnly {})
+	    .Field<&openblack::film_effects::Ray::length>("length")
+	    .Field<&openblack::film_effects::Ray::angle>("angle")
+	    .Field<&openblack::film_effects::Ray::speed>("speed")
+	    .Field<&openblack::film_effects::Ray::wobble>("wobble");
+	Reflect<openblack::film_effects::Star>(context, ValueOnly {})
+	    .Field<&openblack::film_effects::Star::screen>("screen")
+	    .Field<&openblack::film_effects::Star::depth>("depth")
+	    .Field<&openblack::film_effects::Star::size>("size")
+	    .Field<&openblack::film_effects::Star::age>("age")
+	    .Field<&openblack::film_effects::Star::spin>("spin")
+	    .Field<&openblack::film_effects::Star::shrink>("shrink")
+	    .Field<&openblack::film_effects::Star::rgb>("rgb");
+	Reflect<openblack::film_effects::StarSprite>(context, ValueOnly {})
+	    .Field<&openblack::film_effects::StarSprite::pixel>("pixel")
+	    .Field<&openblack::film_effects::StarSprite::depth>("depth")
+	    .Field<&openblack::film_effects::StarSprite::halfSize>("halfSize")
+	    .Field<&openblack::film_effects::StarSprite::roll>("roll")
+	    .Field<&openblack::film_effects::StarSprite::frame>("frame")
+	    .Field<&openblack::film_effects::StarSprite::argb>("argb");
 	Reflect<openblack::fire::State>(context, ValueOnly {})
 	    .Field<&openblack::fire::State::temperature>("temperature")
 	    .Field<&openblack::fire::State::previous>("previous")

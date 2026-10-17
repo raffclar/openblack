@@ -466,7 +466,7 @@ bool HandInInfluence()
 	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, *point);
 }
 
-/// Draws the player's creature in the falling spell's film, when the film shows it
+/// Draws the player's creature in the falling spell's film, when the film shows it, and the film's effects
 void DrawFilmCreature(const graphics::RendererInterface::DrawSceneDesc& drawDesc)
 {
 	if (!Locator::filmCreatureSystem::has_value() || !Locator::windowing::has_value() ||
@@ -484,13 +484,17 @@ void DrawFilmCreature(const graphics::RendererInterface::DrawSceneDesc& drawDesc
 	const auto rect = video::LetterboxRect(size.x, size.y);
 	Locator::rendererInterface::value().DrawFilmCreature(
 	    drawDesc, {.copy = shown->copy,
+	               .copyShown = shown->copyShown,
 	               .view = shown->view,
 	               .projection = shown->projection,
 	               .viewOrigin = glm::vec2(static_cast<float>(rect.x), static_cast<float>(rect.y)),
 	               .viewSize = glm::vec2(static_cast<float>(rect.width), static_cast<float>(rect.height)),
 	               .light = shown->light,
 	               .colour = shown->colour,
-	               .added = shown->added});
+	               .added = shown->added,
+	               .stars = shown->stars,
+	               .fans = shown->fans,
+	               .fanDepth = shown->fanDepth});
 }
 
 /// How the game draws its scene into the window, from its camera

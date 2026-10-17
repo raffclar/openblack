@@ -95,6 +95,7 @@
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFriends.h"
+#include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -229,6 +230,7 @@ using namespace openblack::testbed_scenarios;
 using openblack::ecs::archetypes::CreatureArchetype;
 using openblack::ecs::components::Creature;
 using openblack::ecs::components::CreatureAnimation;
+using openblack::ecs::components::CreatureHandGlows;
 using openblack::ecs::components::CreatureMindState;
 using openblack::ecs::components::CreatureNeeds;
 using openblack::ecs::components::Transform;
@@ -2781,6 +2783,19 @@ void Runner::Give(const Command& command)
 	case Kind::OpenTattooEditor:
 		result = GiveCreatureModeCommand(*entity, command);
 		break;
+	case Kind::GiveHandGlows:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		auto& glows = registry.AllOf<CreatureHandGlows>(*entity) ? registry.Get<CreatureHandGlows>(*entity)
+		                                                         : registry.Assign<CreatureHandGlows>(*entity);
+		for (size_t place = 0; place < creature_hand_glow::k_PlaceCount; ++place)
+		{
+			creature_hand_glow::Set(glows.glows, static_cast<creature_hand_glow::Place>(place), 1.0f,
+			                        static_cast<float>(command.value));
+		}
+		result = fmt::format("four glows of power {}", command.value);
+		break;
+	}
 	case Kind::WriteWebPage:
 		if (Locator::creatureWebPageSystem::has_value())
 		{

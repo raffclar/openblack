@@ -1469,25 +1469,7 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 		registry.AssignOrReplace<PhysicsDrawPose>(entry->entity, PhysicsDrawPose {.axes = pose.axes, .origin = pose.origin});
 		drawn = true;
 	}
-	{
-		auto* random = _world->Random();
-		const auto draw = [random]() { return random != nullptr ? static_cast<int32_t>(random->CrtRand()) : 0; };
-		const auto landHeight = [this](glm::vec2 xz) { return _ground != nullptr ? _ground->HeightAt(xz) : 0.0f; };
-		// A drop of blood shows another of its frames at random each time the game drew it: at most 60 times a second
-		const bool redraw =
-		    Locator::time::has_value() && frame_pace::Due(_bloodPace, Locator::time::value().GetFrameRealTime());
-		std::erase_if(_dust, [&](turn::DustPuff& puff) {
-			if (puff.kind != turn::PuffKind::Blood)
-			{
-				return !turn::AdvanceDustPuff(puff, gameSeconds);
-			}
-			if (redraw)
-			{
-				puff.variant = draw();
-			}
-			return !turn::AdvanceBloodDrop(puff, gameSeconds, landHeight, draw);
-		});
-	}
+	AdvanceDust(gameSeconds, true);
 	// The collision sounds follow what made them while they play
 	{
 		std::erase_if(_followingSounds, [this, &registry](const FollowingSound& sound) {
@@ -1509,6 +1491,33 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 	{
 		registry.SetDirty();
 	}
+}
+
+void DynamicsSystem::AdvancePuffs(float seconds)
+{
+	// The frame's own step already gave the drops of blood their frames
+	AdvanceDust(seconds, false);
+}
+
+void DynamicsSystem::AdvanceDust(float seconds, bool redrawBlood)
+{
+	auto* random = _world->Random();
+	const auto draw = [random]() { return random != nullptr ? static_cast<int32_t>(random->CrtRand()) : 0; };
+	const auto landHeight = [this](glm::vec2 xz) { return _ground != nullptr ? _ground->HeightAt(xz) : 0.0f; };
+	// A drop of blood shows another of its frames at random each time the game drew it: at most 60 times a second
+	const bool redraw =
+	    redrawBlood && Locator::time::has_value() && frame_pace::Due(_bloodPace, Locator::time::value().GetFrameRealTime());
+	std::erase_if(_dust, [&](turn::DustPuff& puff) {
+		if (puff.kind != turn::PuffKind::Blood)
+		{
+			return !turn::AdvanceDustPuff(puff, seconds);
+		}
+		if (redraw)
+		{
+			puff.variant = draw();
+		}
+		return !turn::AdvanceBloodDrop(puff, seconds, landHeight, draw);
+	});
 }
 
 void DynamicsSystem::CollectDrawFrame(particles::draw::Frame& frame) const

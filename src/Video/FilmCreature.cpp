@@ -65,6 +65,52 @@ film_creature::Look film_creature::LookAt(int32_t brightness, uint32_t red, uint
 	return {.colour = colour, .added = redAdded | greenAdded | blueAdded | 0xFF000000u};
 }
 
+std::optional<float> film_creature::GlowPower(creature_hand_glow::Place hand, int32_t filmMs)
+{
+	// When a glow starts to rise, starts to fall, ends its fall, and rises again for a second
+	struct Ramp
+	{
+		int32_t riseFromMs;
+		int32_t fallFromMs;
+		int32_t fallToMs;
+		int32_t againFromMs;
+	};
+	constexpr Ramp k_Left {.riseFromMs = 16350, .fallFromMs = 17350, .fallToMs = 19350, .againFromMs = 31650};
+	constexpr Ramp k_Right {.riseFromMs = 17200, .fallFromMs = 18200, .fallToMs = 20200, .againFromMs = 36500};
+	constexpr int32_t k_RampMs = 1000;
+	if (hand != creature_hand_glow::Place::LeftHand && hand != creature_hand_glow::Place::RightHand)
+	{
+		return std::nullopt;
+	}
+	const auto& ramp = hand == creature_hand_glow::Place::LeftHand ? k_Left : k_Right;
+	int32_t level = 0;
+	if (filmMs >= ramp.riseFromMs && filmMs < ramp.fallFromMs)
+	{
+		level = filmMs - ramp.riseFromMs;
+	}
+	else if (filmMs >= ramp.fallFromMs && filmMs < ramp.fallToMs)
+	{
+		level = k_RampMs - ((filmMs - ramp.fallFromMs) / 2);
+	}
+	if (filmMs > ramp.againFromMs - 1 && filmMs < ramp.againFromMs + k_RampMs)
+	{
+		level = filmMs - ramp.againFromMs;
+	}
+	// A level of 0 leaves the glow as it is
+	if (level == 0)
+	{
+		return std::nullopt;
+	}
+	const float scaled = static_cast<float>(level) * 0.001f;
+	float part = 0.0f;
+	if (scaled > 0.0f)
+	{
+		part = scaled >= 1.0f ? 1.0f : scaled;
+	}
+	const float doubled = part + part;
+	return doubled + 1.0f;
+}
+
 glm::mat4 film_creature::View(const FilmCameraPath::Point& point)
 {
 	const auto& m = point.frame;

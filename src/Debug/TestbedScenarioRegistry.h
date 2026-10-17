@@ -821,6 +821,9 @@ struct Command
 		/// The falling spell's film plays as a script's SET_AVI_SEQUENCE 2 starts it, with a copy of the player's first
 		/// creature over the film. Needs no creature of its own
 		PlayFallingSpellFilm,
+		/// The creature gets a glow on its left hand, its belly, its right hand and above its body, each of the power
+		/// that the value gives, as the creed powers give their glows
+		GiveHandGlows,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
