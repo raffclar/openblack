@@ -2668,7 +2668,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_spells::Waiting>(context, ValueOnly {})
 	    .Field<&openblack::creature_spells::Waiting::spell>("spell")
 	    .Field<&openblack::creature_spells::Waiting::holdTurns>("holdTurns")
-	    .Field<&openblack::creature_spells::Waiting::miracle>("miracle");
+	    .Field<&openblack::creature_spells::Waiting::miracle>("miracle")
+	    .Field<&openblack::creature_spells::Waiting::seconds>("seconds");
 	Reflect<openblack::creature_stomp::BodyStart>(context, ValueOnly {})
 	    .Field<&openblack::creature_stomp::BodyStart::stands>("stands")
 	    .Field<&openblack::creature_stomp::BodyStart::animation>("animation")

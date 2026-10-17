@@ -4542,6 +4542,42 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 	return file;
 }
 
+void CreatureMindSystem::RestoreMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind,
+                                     const std::optional<RestoredPlan>& plan)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* state = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (state == nullptr || body == nullptr || mind == nullptr)
+	{
+		return;
+	}
+	// The creature starts as a new creature, with the mind of its file
+	SetUpMind(creature, *body, *state);
+	state->pendingFile = std::move(mind);
+	TakeUpFile(creature, *state);
+	const auto* tables = GetTables();
+	if (!plan.has_value() || tables == nullptr || plan->action >= tables->actions.size())
+	{
+		return;
+	}
+	if (!ForcePlan(creature, {.desire = plan->desire,
+	                          .action = tables->actions[plan->action].name,
+	                          .object = plan->object,
+	                          .instrument = plan->instrument,
+	                          .activityObject = plan->activityObject}))
+	{
+		return;
+	}
+	// It does the step of the agenda that it did again, from the start of the step
+	auto& idle = state->idle;
+	if (!idle.agenda.empty())
+	{
+		idle.step = std::min(plan->step, idle.agenda.size() - 1);
+		idle.stepStarted = false;
+	}
+}
+
 void CreatureMindSystem::ClearLearning(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();

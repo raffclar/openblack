@@ -1194,3 +1194,9 @@ openblack_setup_and_add_test(test_glm_order test_glm_order.cpp)
 openblack_setup_and_add_test(test_town_turn_order test_town_turn_order.cpp)
 openblack_setup_and_add_test(test_creature_missing_clip test_creature_missing_clip.cpp)
 openblack_setup_and_add_test(test_creature_action_mirror test_creature_action_mirror.cpp)
+openblack_setup_and_add_test(
+  test_save_creature_record test_save_creature_record.cpp
+)
+openblack_setup_and_add_test(
+  test_creature_save_state test_creature_save_state.cpp
+)

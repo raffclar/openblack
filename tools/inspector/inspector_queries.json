@@ -1862,6 +1862,45 @@
   "query": "help.hand_demo"
  },
  {
+  "description": "The slots of the current player that have a saved game, for the land that is open",
+  "kind": "list",
+  "parameters": [],
+  "query": "saves.slots"
+ },
+ {
+  "description": "Saves the game into a slot: the land, the turn and every creature with its mind file and its leash. The towns, the villagers, the story and the scripts are not saved yet",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The slot, 0 to 20",
+    "name": "slot",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The name of the save",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "saves.save",
+  "writes": true
+ },
+ {
+  "description": "Puts the creatures of the land that is open back as a slot keeps them: the values of each record, the mind of its mind file, the plan that the save kept and its leash",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The slot, 0 to 20",
+    "name": "slot",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "saves.load",
+  "writes": true
+ },
+ {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
   "kind": "object",
   "parameters": [],

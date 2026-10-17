@@ -192,8 +192,8 @@ void MagicSystem::ReceiveCreatureSpell(entt::entity creature, entt::entity mirac
 	// The creature holds the spell for the miracle's time, made longer by the caster's tribal power; the miracle itself
 	// then runs until the creature lets it go
 	const float seconds = spell.duration > 0.0f ? spell.duration * TribalPower(spell) : spell.duration;
-	const auto result =
-	    creature_spells::Receive(component->spells, *which, creature_spells::TurnsOf(seconds, k_TurnsPerSecond), miracle);
+	const auto result = creature_spells::Receive(component->spells, *which, creature_spells::TurnsOf(seconds, k_TurnsPerSecond),
+	                                             miracle, seconds);
 	spell.duration = magic::k_NoTimeLimit;
 	if (result.replaced != entt::null && result.replaced != miracle)
 	{

@@ -50,6 +50,8 @@ public:
 
 	void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) override;
 	[[nodiscard]] std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const override;
+	void RestoreMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind,
+	                 const std::optional<RestoredPlan>& plan) override;
 	void ClearLearning(entt::entity creature) override;
 	void SeeSkill(const glm::vec3& point, size_t skill) override;
 	void SeeMiracle(const glm::vec3& point, size_t miracle) override;
