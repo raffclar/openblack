@@ -31,6 +31,9 @@ uniform vec4 u_cloudStorms[16];
 #define CLOUD_BASE_TILE 1500.0f
 #define CLOUD_DETAIL_TILE 210.0f
 #define CLOUD_WEATHER_TILE 14000.0f
+// The units that one tile of the wide weather covers (volumetric_clouds::k_WideWeatherTile). This slow field over tens
+// of kilometres moves the cells and changes their cover, so that no repeat of the weather tile shows from high up
+#define CLOUD_WIDE_TILE 47000.0f
 // The top of the layer for each type of cloud, over its bottom
 #define CLOUD_STRATUS_DEPTH 160.0f
 #define CLOUD_CUMULUS_DEPTH 520.0f
@@ -119,14 +122,29 @@ float CloudAltitude(vec3 p)
 float CloudWeatherAt(vec2 xz, out float type, out float rain)
 {
 	vec2 q = xz - u_cloudDrift.xy;
-	// A finer copy of the noise bends the place that the weather is read at, so that the edges of the cells are ragged
-	vec2 bend = texture2DLod(s_cloudWeather, q * (5.3f / CLOUD_WEATHER_TILE), 0.0f).ga - 0.5f;
-	vec4 w = texture2DLod(s_cloudWeather, (q + bend * 900.0f) / CLOUD_WEATHER_TILE, 0.0f);
+	// The wide weather reads the noise at a large scale, on axes that turn about 30 degrees from the cells' axes. Each
+	// read has a different turn, so that no two grids align.
+	vec2 wideAt = vec2(0.866f * q.x - 0.5f * q.y, 0.5f * q.x + 0.866f * q.y) / CLOUD_WIDE_TILE;
+	vec2 otherAt = vec2(0.574f * q.x + 0.819f * q.y, -0.819f * q.x + 0.574f * q.y) / CLOUD_WIDE_TILE;
+	vec4 wide = texture2DLod(s_cloudWeather, wideAt + vec2(0.37f, 0.71f), 0.0f);
+	float wideOther = texture2DLod(s_cloudWeather, otherAt + vec2(0.13f, 0.52f), 0.0f).g;
+	// The wide field moves the cells by some kilometres. Near the eye all the cells move together, so their shapes stay.
+	// From one tile to the next the move is different, so the tiles do not repeat.
+	q += (vec2(wide.g, wideOther) - 0.5f) * 5000.0f;
+	// A smooth copy of the noise bends the place that the weather is read at, so that the cells are not round. The bend
+	// changes slowly across the land. A fast bend would fold the cells into thin columns, which show as streaks on the
+	// sides of the clouds.
+	vec2 bend = texture2DLod(s_cloudWeather, q * (2.3f / CLOUD_WEATHER_TILE), 0.0f).gb - 0.5f;
+	vec4 w = texture2DLod(s_cloudWeather, (q + bend * 500.0f) / CLOUD_WEATHER_TILE, 0.0f);
 	// The field changes slowly between two patterns, so that the clouds form and break up as they move
 	float turn = 0.5f + 0.5f * sin(u_cloudDrift.z * 0.0035f);
 	float field = mix(w.r, w.b, turn);
-	float cover = u_cloudCover.x;
-	type = clamp(u_cloudCover.y + (w.g - 0.5f) * 0.3f, 0.0f, 1.0f);
+	// The wide field also makes large areas of more cloud and of less cloud
+	float cover = min(u_cloudCover.x * (0.65f + 0.7f * wide.r), 1.0f);
+	// The type of cloud changes at its own scale, on its own axes
+	vec2 typeAt = vec2(0.94f * q.x + 0.342f * q.y, -0.342f * q.x + 0.94f * q.y) / (CLOUD_WEATHER_TILE * 1.9f);
+	float typeNoise = texture2DLod(s_cloudWeather, typeAt + vec2(0.61f, 0.27f), 0.0f).g;
+	type = clamp(u_cloudCover.y + (typeNoise - 0.5f) * 0.3f, 0.0f, 1.0f);
 	rain = u_cloudCover.z;
 	// Each storm builds its own towers round its middle
 	for (int i = 0; i < 8; ++i)

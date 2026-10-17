@@ -39,6 +39,9 @@ inline constexpr uint32_t k_BlueNoiseSide = 64;
 inline constexpr float k_BaseNoiseTile = 1500.0f;
 inline constexpr float k_DetailNoiseTile = 210.0f;
 inline constexpr float k_WeatherTile = 14000.0f;
+/// The world units that one tile of the wide weather covers. The shader reads the weather noise again at this size, on
+/// turned axes, so that the weather tile does not repeat when the eye is high.
+inline constexpr float k_WideWeatherTile = 47000.0f;
 
 /// The bottom of the cloud layer, in world units over the sea. The original game puts its clouds 300 to 500 high.
 inline constexpr float k_CloudBase = 300.0f;
