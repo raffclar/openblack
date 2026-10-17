@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include "Common/X87.h"
+
 namespace openblack::ecs::village_totem
 {
 
@@ -117,13 +119,19 @@ float HandTiltAt(float handY)
 	{
 		return k_HandTilt;
 	}
-	return k_HandTilt + std::atan((k_LowHand - handY) / k_HandSize);
+	// The arc tangent keeps its full precision until the sum, which rounds to a float
+	const float lean = (k_LowHand - handY) / k_HandSize;
+	return x87::Add(x87::Atan(lean), static_cast<double>(k_HandTilt));
 }
 
 float GripClosure(float iconHeight)
 {
 	constexpr float k_PalmHoldRadiusShare = 0.75f;
-	const float holdRadius = iconHeight * k_PalmHoldRadiusShare;
+	return ClosureForHoldRadius(iconHeight * k_PalmHoldRadiusShare);
+}
+
+float ClosureForHoldRadius(float holdRadius)
+{
 	return std::min(holdRadius / (k_HandSize * 0.5f), 1.0f);
 }
 

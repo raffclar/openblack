@@ -11,8 +11,12 @@
 
 #include <cmath>
 
+#include <numbers>
+
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+#include "Common/X87.h"
 
 namespace openblack::hand_orientation
 {
@@ -20,6 +24,31 @@ namespace openblack::hand_orientation
 namespace
 {
 constexpr glm::vec3 k_Up {0.0f, 1.0f, 0.0f};
+/// A lean across the land smaller than this, squared, gives no heading
+constexpr float k_MinHeadingLeanSquared = 1.0e-6f;
+constexpr float k_Pi = std::numbers::pi_v<float>;
+constexpr double k_HalfPiWide = static_cast<double>(std::numbers::pi_v<float> * 0.5f);
+constexpr double k_PiWide = static_cast<double>(std::numbers::pi_v<float>);
+
+/// The angle of the point (along, across) from the along axis, worked by eighths of a turn. The ratio rounds to a float
+/// and the arc tangent keeps its full precision until the sum, which rounds to a float.
+float AngleByEighths(float along, float across)
+{
+	if (along >= across && !(-across > along))
+	{
+		return x87::RoundToFloat(x87::Atan(across / along));
+	}
+	if (across >= along && !(-along > across))
+	{
+		return x87::Sub(k_HalfPiWide, x87::Atan(along / across));
+	}
+	if (-across >= along && !(along >= across))
+	{
+		const double arc = x87::Atan(across / along);
+		return across >= 0.0f ? x87::Add(arc, k_PiWide) : x87::Sub(arc, k_PiWide);
+	}
+	return x87::Sub(-k_HalfPiWide, x87::Atan(along / across));
+}
 
 /// A frame of a front and an up square to it, with the side across them
 glm::mat3 Frame(glm::vec3 front, glm::vec3 up)
@@ -28,13 +57,53 @@ glm::mat3 Frame(glm::vec3 front, glm::vec3 up)
 }
 } // namespace
 
+bool LeansAcrossLand(glm::vec3 rayDirection)
+{
+	return !(std::abs(rayDirection.x) <= k_MinHeadingLean && std::abs(rayDirection.z) <= k_MinHeadingLean);
+}
+
 glm::vec3 HeadingAlongRay(glm::vec3 rayDirection, glm::vec3 previousHeading)
 {
-	if (std::abs(rayDirection.x) <= k_MinHeadingLean && std::abs(rayDirection.z) <= k_MinHeadingLean)
+	if (!LeansAcrossLand(rayDirection))
 	{
 		return previousHeading;
 	}
 	return glm::normalize(glm::vec3(rayDirection.x, 0.0f, rayDirection.z));
+}
+
+float HeadingAngle(glm::vec3 rayDirection)
+{
+	const float lean = rayDirection.x * rayDirection.x + rayDirection.z * rayDirection.z;
+	if (!(lean > k_MinHeadingLeanSquared))
+	{
+		return 0.0f;
+	}
+	return AngleByEighths(-rayDirection.z, rayDirection.x);
+}
+
+std::array<glm::vec3, 3> TippedRows(float headingAngle, float tilt)
+{
+	// The sines and cosines keep their full precision until they are stored. The sine of the turn is also used at full
+	// precision in two products, which round to a float.
+	const float tip = -tilt;
+	const float tipCos = x87::RoundToFloat(x87::Cos(tip));
+	const float tipSin = x87::RoundToFloat(x87::Sin(tip));
+	const float turn = headingAngle + k_Pi;
+	const float turnCos = x87::RoundToFloat(x87::Cos(turn));
+	const double turnSinWide = x87::Sin(turn);
+	const float turnSin = x87::RoundToFloat(turnSinWide);
+	const float negativeTipSin = -tipSin;
+	constexpr float k_Zero = 0.0f;
+	return {{
+	    {turnCos - k_Zero, k_Zero, k_Zero + turnSin},
+	    {k_Zero - x87::Mul(negativeTipSin, turnSinWide), tipCos, negativeTipSin * turnCos + k_Zero},
+	    {k_Zero - x87::Mul(tipCos, turnSinWide), tipSin, tipCos * turnCos + k_Zero},
+	}};
+}
+
+glm::mat3 TippedHand(const std::array<glm::vec3, 3>& rows)
+{
+	return {rows[0], rows[2], -rows[1]};
 }
 
 glm::mat3 TurnToHeading(const glm::mat3& facingCamera, glm::vec3 cameraHeading, glm::vec3 heading)
