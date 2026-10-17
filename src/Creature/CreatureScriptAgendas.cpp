@@ -17,6 +17,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureLayers.h"
 
 using namespace openblack::creature_mind;
@@ -183,7 +184,9 @@ std::vector<Step> openblack::creature_mind::MoveForScript(glm::vec2 from, glm::v
 	auto second = distance;
 	if (distance == 0.0f)
 	{
-		first = glm::distance(from, to) * k_FirstLegShare;
+		// The creature's place is its map position in metres
+		const glm::vec2 at {map_coords::Quantise(from.x), map_coords::Quantise(from.y)};
+		first = glm::distance(at, to) * k_FirstLegShare;
 		first = height > first ? height : std::min(first, (k_FirstLegHeightShare * height) + k_FirstLegMost);
 		second = height;
 	}

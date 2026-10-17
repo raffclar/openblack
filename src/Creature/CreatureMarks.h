@@ -12,11 +12,13 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <span>
 #include <vector>
 
 #include <glm/gtc/type_precision.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 /// The marks fights and fire leave on a creature's skin: wounds and burns, each a small picture from an atlas of
 /// damage that starts fresh and fades towards an old scar as it ages, and trails of blood, a texel at a time, darkening
@@ -98,6 +100,10 @@ constexpr uint8_t k_Burn = 6;
 /// A creature catching fire is burnt in this many tries, each wound's column a draw of eight
 constexpr int32_t k_CatchingBurnTries = 3;
 [[nodiscard]] uint8_t CatchingBurnColumn(uint32_t drawOfEight);
+/// The point that a burn's line starts at, about the groin: a draw up to a quarter of the reach across, then up to the
+/// whole reach up, then up to a quarter along. Each draw is added to the groin first, then half of its range comes off.
+/// The draw gives a random float from 0 up to its limit.
+[[nodiscard]] glm::vec3 BurnFrom(glm::vec3 groin, float reach, const std::function<float(float)>& draw);
 /// The texel of a skin 256 wide at a point on a triangle, s along its first side and t along its third, from its corners'
 /// texture coordinates
 [[nodiscard]] glm::u8vec2 TexelAt(const std::array<glm::vec2, 3>& uvs, float s, float t);

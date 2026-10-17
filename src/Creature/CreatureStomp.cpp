@@ -16,6 +16,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
 #include "Common/X87Vector.h"
 
 using namespace openblack;
@@ -99,14 +100,19 @@ float creature_stomp::KickHitStrength(float kickerHeight, float otherHeight)
 	return (ratio + 1.0f) * k_KickHitShare;
 }
 
+glm::vec3 creature_stomp::KickMiddle(glm::vec3 creature, glm::vec3 foot)
+{
+	return ((foot - creature) * 0.5f) + creature;
+}
+
 std::array<Blow, 2> creature_stomp::KickBlows(const BuildingKick& kick, float landHeight)
 {
-	auto middle = kick.creature + ((kick.foot - kick.creature) * 0.5f);
+	auto middle = KickMiddle(kick.creature, kick.foot);
 	middle.y = std::max(middle.y, landHeight);
 	const auto reach = kick.creatureSize * k_BlowReachPerSize;
 	const auto above = std::min(middle.y - landHeight, reach);
 	const auto side = (static_cast<float>(kick.sideDraw) - static_cast<float>(k_SideMiddle)) * k_SideStep;
-	const auto angle = (side * (std::numbers::pi_v<float> / 2.0f)) + kick.yaw;
+	const auto angle = (side * (std::numbers::pi_v<float> / 2.0f)) + kick.heading.Radians();
 	const auto blowReach = std::min(kick.buildingRadius * k_KickReachShare, reach);
 	const auto at = [&](uint32_t draw) {
 		return glm::vec3 {middle.x, landHeight + (above * (static_cast<float>(draw) * k_HeightStep)), middle.z};
@@ -114,7 +120,8 @@ std::array<Blow, 2> creature_stomp::KickBlows(const BuildingKick& kick, float la
 	return {
 	    Blow {.point = at(kick.firstHeightDraw), .velocity = kick.direction * k_KickBlowSpeed, .reach = blowReach},
 	    Blow {.point = at(kick.secondHeightDraw),
-	          .velocity = {k_KickBlowSpeed * std::sin(angle), 0.0f, -k_KickBlowSpeed * std::cos(angle)},
+	          // The FPU's wide sine and cosine go into the products
+	          .velocity = {x87::Mul(x87::Sin(angle), k_KickBlowSpeed), 0.0f, x87::Mul(x87::Cos(angle), -k_KickBlowSpeed)},
 	          .reach = blowReach},
 	};
 }

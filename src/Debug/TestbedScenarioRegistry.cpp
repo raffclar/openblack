@@ -3289,6 +3289,26 @@ void AddObjects(std::vector<Scenario>& all)
 	}
 
 	all.push_back({
+	    .id = "objects.trample_huts",
+	    .name = "Knocking pieces off huts as it lies down",
+	    .facet = Facet::Objects,
+	    .description = "A grown tired tiger with four huts close round it. It sleeps where it stands.",
+	    .expected = "As it lies down, its hands, feet, head and body knock pieces off the huts that they touch. The "
+	                "speed of each piece is about four times the distance that the part of the body moved since its "
+	                "last check: a part that moves slowly pushes a piece off, a part that moves quickly throws it far.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.6f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {0.0f, 0.0f},
+	                                 .needs = {.energy = 1.0f, .exhaustion = 0.75f, .dehydration = 0.0f, .poo = 0.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {8.0f, 0.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {-8.0f, 0.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {0.0f, 8.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {0.0f, -8.0f}}},
+	    .commands = {Act(Kind::Sleep, 0, 1.0f, false)},
+	});
+
+	all.push_back({
 	    .id = "objects.stroke_toy",
 	    .name = "Stroking a cuddly toy",
 	    .facet = Facet::Objects,
