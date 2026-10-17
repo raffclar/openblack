@@ -14,9 +14,11 @@
 
 #include <bit>
 
+#include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
 #include "Camera/TempleCameraModel.h"
+#include "Hand/HandFeel.h"
 #include "Particles/ParticleMaths.h"
 #include "Particles/SurfaceOfRevolution.h"
 
@@ -98,4 +100,70 @@ TEST(GlmOrder5, TheMainRoomOrbitsAsTheGameDoes)
 	EXPECT_EQ(Bits(pose.focus.x), 0xBFD66548u);
 	EXPECT_EQ(Bits(pose.focus.y), 0x40866666u);
 	EXPECT_EQ(Bits(pose.focus.z), 0x3FFE8A1Bu);
+}
+
+namespace
+{
+const glm::vec3 k_Camera {120.5f, 85.25f, -340.75f};
+const glm::vec3 k_NearPoint {121.13f, 84.61f, -339.98f};
+
+void ExpectBits(const glm::vec3& ours, uint32_t x, uint32_t y, uint32_t z)
+{
+	EXPECT_EQ(Bits(ours.x), x);
+	EXPECT_EQ(Bits(ours.y), y);
+	EXPECT_EQ(Bits(ours.z), z);
+}
+} // namespace
+
+TEST(GlmOrder5, TheHandsLineOfSightIsTheWayToTheCursorsPoint)
+{
+	// The cursor's point at the distance, its squares added z, y, x; then the way to it made one long, x, z, y
+	ExpectBits(openblack::hand_feel::CursorDirection(k_Camera, k_NearPoint, 247.3f), 0x3F08560Cu, 0xBF0A802Cu, 0x3F26A1A3u);
+}
+
+TEST(GlmOrder5, HoldingSomethingTheHandFeelsTowardsTheRaisedGroundInTheGamesOrder)
+{
+	// The lift is added to the rise from the camera; the squares are added y, x, z
+	const auto felt = openblack::hand_feel::FeelDirection(
+	    k_Camera, glm::vec3(0.0f), openblack::hand_feel::RaisedGround {.ground = {180.4f, 12.7f, -101.9f}, .lift = 3.6f});
+	ExpectBits(felt, 0x3E6FDD5Bu, 0xBE8A0D67u, 0x3F6F1D26u);
+}
+
+TEST(GlmOrder5, TheHandRestsOnAModelInTheGamesOrder)
+{
+	using namespace openblack::hand_feel;
+	const auto cursor = CursorDirection(glm::vec3(0.0f), glm::vec3(0.31f, -0.62f, 0.72f), 1.0f);
+	const auto felt = FeelDirection(glm::vec3(0.0f), cursor, RaisedGround {.ground = {0.35f, -0.55f, 0.76f}, .lift = 0.0f});
+	const auto rest =
+	    RestOnModel(k_Camera, cursor, felt, {150.2f, 40.9f, -301.3f}, {-0.4f, 2.1f, 0.9f}, true,
+	                Holding {.radius = 4.5f, .creature = CreatureReach {.centre = {140.0f, -295.0f}, .radius = 30.0f}});
+	ExpectBits(rest.point, 0x4302E06Cu, 0x4280FE51u, 0xC39E5320u);
+	ASSERT_TRUE(rest.up.has_value());
+	ExpectBits(*rest.up, 0x3DC25FF6u, 0xBE8025E4u, 0xBF117018u);
+}
+
+TEST(GlmOrder5, TheHandHoversBeforeAVillagerInTheGamesOrder)
+{
+	using namespace openblack::hand_feel;
+	const auto felt =
+	    FeelDirection(glm::vec3(0.0f), glm::vec3(0.0f), RaisedGround {.ground = {0.35f, -0.55f, 0.76f}, .lift = 0.0f});
+	ExpectBits(RestAtPosition(k_Camera, k_NearPoint, felt, {160.3f, 31.2f, -270.4f}, 1.7f), 0x432AAFC8u, 0x420910F6u,
+	           0xC38BB4A8u);
+}
+
+TEST(GlmOrder5, TheHandsHoverInTheGamesOrder)
+{
+	using namespace openblack::hand_feel;
+	// The limit's squares are added z, y, x; the target is the distance to the cursor's point at the limit, x, z, y
+	Hover hover {.camera = k_Camera,
+	             .land = glm::vec3(175.0f, 9.5f, -150.0f),
+	             .handHeight = 2.4f,
+	             .currentDistance = 50.0f,
+	             .minDistance = 2.0f,
+	             .reach = 1800.0f};
+	const float limit = HoverLimit(hover);
+	EXPECT_EQ(Bits(limit), 0x4351F404u);
+	hover.cursorPoint = PointAlongCursor(k_Camera, k_NearPoint, limit);
+	EXPECT_EQ(Bits(HoverDistancesOf(hover).target), 0x4351F406u);
+	ExpectBits(UnitUp({0.3f, 1.7f, -0.45f}), 0x3E2C3397u, 0x3F73F3C1u, 0xBE8126B1u);
 }

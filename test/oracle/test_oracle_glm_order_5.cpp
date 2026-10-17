@@ -23,6 +23,7 @@
 #include "Common/X87Matrix.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureRig.h"
+#include "Hand/HandFeel.h"
 #include "OracleData.h"
 #include "Particles/SurfaceOfRevolution.h"
 #include "Particles/VolumeGlow.h"
@@ -314,6 +315,24 @@ TEST(OracleGlmOrder5, TheCreaturesRoomPlacesATrophy)
 		}
 		std::string text;
 		if (!SameBits(row, names, ours, text) && ++different <= 20)
+		{
+			ADD_FAILURE() << "row " << index << ":" << text;
+		}
+	}
+	EXPECT_EQ(different, 0U);
+}
+
+TEST(OracleGlmOrder5, TheHandsPointOnTheLineThroughTheCursor)
+{
+	const auto table = oracle::Table::Load("cursor_point.txt");
+	ASSERT_TRUE(table.has_value());
+	size_t different = 0;
+	for (size_t index = 0; index < table->Rows(); ++index)
+	{
+		const Row row {*table, index};
+		const auto point = hand_feel::PointAlongCursor(row.Vec("ex", "ey", "ez"), row.Vec("px", "py", "pz"), row.F("distance"));
+		std::string text;
+		if (!SameBits(row, {"hx", "hy", "hz"}, {point.x, point.y, point.z}, text) && ++different <= 20)
 		{
 			ADD_FAILURE() << "row " << index << ":" << text;
 		}

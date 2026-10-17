@@ -19,6 +19,8 @@
   plane comes from the game's own function, with the same camera)
 - trophy_place.txt: where the creature's room places a trophy: the point's axes made unit by the game, then turned a
   quarter back about the x axis (worked here in floats from the game's FPU cosine and sine of the double angle)
+- cursor_point.txt: the hand's point on the line from the camera through the cursor at a distance (the point on the
+  near plane comes from the game's own function, with the same camera)
 - glow_view_normal.txt: a corner's normal in the camera's frame as the glowing shell measures it: the rows of the
   matrix made unit by the 3D engine (the game's function), then summed by the normal in the order the shell's draw adds
   them (worked here in floats, as the draw function cannot be called alone)
@@ -56,6 +58,7 @@ NEAR_EXTENT = 0xC3812C  # half the near plane's width and height
 NEAR_CLIP = 0xE839E0
 CAMERA_AXES = 0xEA1D28  # the camera's 3x3 turn, rows
 CAMERA_EYE = 0xEA1DB8
+POINT_ALONG_CURSOR = 0x74CAF0  # (ECX screen point ints, EDX out), (distance)
 UNIT_ROWS = 0x7FB5C0  # thiscall (3x3 matrix): each row made unit by the engine's inverse square root
 MAKE_INVERSE_SQRT_TABLE = 0x8411D0
 ENGINE_ALLOC = 0x842CE0  # the 3D engine's allocation, for the inverse square root table
@@ -233,6 +236,39 @@ def view_normal_cases(oracle: Oracle) -> list[list[int]]:
     return rows
 
 
+def cursor_point_cases(oracle: Oracle) -> list[list[int]]:
+    import math
+    rng = random.Random(0xC0A5)
+    o = oracle
+    screen = o.alloc(8)
+    near = o.alloc(16)
+    out = o.alloc(16)
+    o.write_u32(HALF_RES, f2u(400.0), f2u(300.0))
+    rows = []
+    for index in range(1000):
+        near_clip = rng.choice([1.0, rng.uniform(0.3, 3.0)])
+        o.write_u32(NEAR_CLIP, f2u(near_clip))
+        o.write_u32(NEAR_EXTENT, f2u(near_clip * 0.7002075), f2u(near_clip * 0.5251556))
+        yaw = rng.uniform(-math.pi, math.pi)
+        pitch = rng.uniform(-1.4, 0.3)
+        ahead = [math.cos(pitch) * math.sin(yaw), math.sin(pitch), math.cos(pitch) * math.cos(yaw)]
+        right = [math.cos(yaw), 0.0, -math.sin(yaw)]
+        up = [ahead[1] * right[2] - ahead[2] * right[1], ahead[2] * right[0] - ahead[0] * right[2],
+              ahead[0] * right[1] - ahead[1] * right[0]]
+        o.write_u32(CAMERA_AXES, *[f2u(v) for v in right + up + ahead])
+        eye = [f2u(rng.uniform(-3000, 3000)), f2u(rng.uniform(10, 900)), f2u(rng.uniform(-3000, 3000))]
+        o.write_u32(CAMERA_EYE, *eye)
+        x = rng.randrange(0, 800)
+        y = rng.randrange(0, 600)
+        o.write_u32(screen, x, y)
+        o.call(NEAR_POINT, ecx=screen, edx=near, args=[0])
+        point = o.read_f32_bits(near, 3)
+        distance = f2u(rng.choice([2.0, 1800.0, rng.uniform(2.0, 1800.0), rng.uniform(1.0, 60.0)]))
+        o.call(POINT_ALONG_CURSOR, ecx=screen, edx=out, args=[distance])
+        rows.append(eye + point + [distance] + o.read_f32_bits(out, 3))
+    return rows
+
+
 def trophy_cases(oracle: Oracle) -> list[list[int]]:
     import math
     rng = random.Random(0x7409)
@@ -315,6 +351,7 @@ def main() -> int:
         views = view_normal_cases(oracle)
         rays = temple_ray_cases(oracle)
         trophies = trophy_cases(oracle)
+        cursors = cursor_point_cases(oracle)
     write_pinned(out / "skin_point.txt", "A point on a skinned creature mesh as it is posed",
                  ["the triangle's three vertices (before the bones), the three bones (rows, then the place), s and t",
                   "in; the point and the normal out"],
@@ -348,7 +385,10 @@ def main() -> int:
     write_pinned(out / "trophy_place.txt", "Where the creature's room places a trophy",
                  ["the point's three axes in; the axes made unit and turned a quarter back out"],
                  [f"m{i}" for i in range(9)] + [f"r{i}" for i in range(9)], trophies)
-    print(f"trophy_place {len(trophies)}, temple_ray {len(rays)}, glow_view_normal {len(views)}, skin_point {len(points)}, engine_inverse {len(inverses)}, mesh_points {len(moved)}, "
+    write_pinned(out / "cursor_point.txt", "The hand's point on the line through the cursor at a distance",
+                 ["the eye, the point on the near plane and the distance in; the point out"],
+                 ["ex", "ey", "ez", "px", "py", "pz", "distance", "hx", "hy", "hz"], cursors)
+    print(f"cursor_point {len(cursors)}, trophy_place {len(trophies)}, temple_ray {len(rays)}, glow_view_normal {len(views)}, skin_point {len(points)}, engine_inverse {len(inverses)}, mesh_points {len(moved)}, "
           f"surface_sway {len(sways)}, surface_normals {len(normals)}")
     return 0
 
