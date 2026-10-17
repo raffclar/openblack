@@ -3,6 +3,8 @@ $input v_texcoord0, v_texcoord1
 #include <bgfx_shader.sh>
 
 #include "atmosphere.sh"
+SAMPLER2D(s_atmosAerial, 0);
+#include "aerial_haze.sh"
 #include "sky_dome.sh"
 
 // EXPERIMENT (not for merge): the haze over the scene and the water. Each pixel reads the haze's grid at the distance of
@@ -10,10 +12,10 @@ $input v_texcoord0, v_texcoord1
 // has no grid: its haze is the horizon's colour over the distance, from the air at the eye. Blended as rgb + the scene
 // times a.
 
-SAMPLER2D(s_atmosAerial, 0);
 SAMPLER2D(s_sceneDepth, 1);
 
-// x: 1 for the grid, 0 for the low tier's haze; y: the low tier's haze for each world unit; zw: unused
+// x: 1 for the grid, 0 for the low tier's haze; y: the low tier's haze for each world unit; z: the sine of the air's
+// sun over the horizon; w: unused
 uniform vec4 u_hazeApply;
 // rgb: the colour of the horizon on the screen, for the low tier; w: unused
 uniform vec4 u_hazeHorizon;
@@ -104,19 +106,7 @@ void main()
 	vec4 haze;
 	if (u_hazeApply.x > 0.5f)
 	{
-		float slice = clamp(AtmosSliceAt(range), 0.0f, ATMOS_AERIAL_SLICES - 1.0f);
-		float first = floor(slice);
-		float second = min(first + 1.0f, ATMOS_AERIAL_SLICES - 1.0f);
-		haze = mix(texture2DLod(s_atmosAerial, AtmosAerialUv(uv, first), 0.0f),
-		           texture2DLod(s_atmosAerial, AtmosAerialUv(uv, second), 0.0f), slice - first);
-		// Nearer than the first slice, the haze is a share of the first slice's
-		float nearShare = clamp(range / AtmosSliceDistance(0.0f), 0.0f, 1.0f);
-		haze = mix(vec4(0.0f, 0.0f, 0.0f, 1.0f), haze, nearShare);
-		// Past the last slice the haze goes on to the horizon's colour
-		float farther = max(range - ATMOS_AERIAL_FARTHEST, 0.0f) * u_hazeApply.y;
-		haze.rgb *= u_atmosSun.rgb;
-		float beyond = exp(-farther);
-		haze = vec4(haze.rgb + haze.a * u_hazeHorizon.rgb * (1.0f - beyond), haze.a * beyond);
+		haze = AtmosHazeAlong(uv, eye, dir, range, u_hazeApply.z);
 	}
 	else
 	{

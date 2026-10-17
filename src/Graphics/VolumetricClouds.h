@@ -58,6 +58,12 @@ inline constexpr size_t k_MaxStorms = 8;
 /// The side of the map of the clouds' shadow, in texels, and the world units that it covers round the eye
 inline constexpr uint32_t k_ShadowTexels = 256;
 inline constexpr float k_ShadowWindow = 6144.0f;
+/// Over this height of the eye over the sea, the shadow's map covers twice the units for each doubling of the height
+inline constexpr float k_ShadowWindowHeight = 1500.0f;
+/// For each unit of the eye's height over the clouds, the farthest cloud is this many units farther away
+inline constexpr float k_FarthestPerHeight = 3.0f;
+/// The farthest cloud for an eye high over the land
+inline constexpr float k_FarthestCloudCap = 200000.0f;
 
 /// The type of cloud: 0 stratus, 0.5 cumulus, 1 cumulonimbus
 inline constexpr float k_Stratus = 0.0f;
@@ -232,9 +238,17 @@ enum class CoverChoice : uint8_t
 /// The weather that a choice gives, or the weather as it is for CoverChoice::Weather
 [[nodiscard]] CloudWeather ChosenWeather(CoverChoice choice, const CloudWeather& weather);
 
+/// The units that the map of the clouds' shadow covers for the eye's height over the sea: k_ShadowWindow near the land,
+/// doubled for each doubling of the height over k_ShadowWindowHeight, so that the shadow reaches as far as the eye sees
+[[nodiscard]] float ShadowWindowFor(float eyeHeight);
+
 /// Where the map of the clouds' shadow starts, on whole texels round the eye, so that the shadow does not crawl as the
-/// eye moves
-[[nodiscard]] glm::vec2 ShadowOrigin(glm::vec2 eye);
+/// eye moves; `window` is the units that the map covers
+[[nodiscard]] glm::vec2 ShadowOrigin(glm::vec2 eye, float window);
+
+/// How far away the clouds show for the eye's height over the sea: k_FarthestCloud near the land, farther from high up
+/// so that the layer under a high eye has no edge, at most k_FarthestCloudCap
+[[nodiscard]] float FarthestCloudFor(float eyeHeight);
 
 /// The shaders' uniforms of the clouds for a frame
 struct CloudUniforms

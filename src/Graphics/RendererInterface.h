@@ -89,6 +89,9 @@ public:
 		std::optional<float> alphaThreshold;
 		/// Every primitive drops its fragments under its material's alpha threshold, even where its material doesn't
 		bool materialAlphaTest {false};
+		/// EXPERIMENT (not for merge): the instances' fade drops a share of the fragments in a fixed screen pattern, and the
+		/// rest are drawn solid. The mesh then writes the scene's depth, so the haze, fog and shadow passes cover it.
+		bool ditherFade {false};
 		const graphics::ShaderProgram* program;
 		/// Draws the submeshes that have a lightmap, with it bound to s_lightmap, when set
 		const graphics::ShaderProgram* lightmapProgram;

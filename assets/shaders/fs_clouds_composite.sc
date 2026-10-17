@@ -2,7 +2,10 @@ $input v_texcoord0, v_texcoord1
 
 #include <bgfx_shader.sh>
 
+#include "atmosphere.sh"
 #include "clouds.sh"
+SAMPLER2D(s_atmosAerial, 6);
+#include "aerial_haze.sh"
 
 // EXPERIMENT (not for merge): the clouds over the scene at the full size of the screen. Of the four pixels of the half
 // size round each pixel, those whose scene is as far as this pixel's count the most, so that no cloud spills over the
@@ -13,8 +16,11 @@ SAMPLER2D(s_cloudHistory, 3);
 SAMPLER2D(s_cloudCurrentDepth, 4);
 SAMPLER2D(s_sceneDepth, 5);
 
-// xy: the size of the clouds' target in pixels; z: how strong the shafts of light are; w: unused
+// xy: the size of the clouds' target in pixels; z: how strong the shafts of light are; w: 1 while the haze's grid is
+// bound
 uniform vec4 u_cloudComposite;
+// x: 1 while the air's sky is ready; y: the sine of the air's sun over the horizon; zw: unused
+uniform vec4 u_skyAtmos;
 
 // How far a ray goes before the scene, or the water when the eye is above it
 float RayLimit(vec2 uv, vec3 dir)
@@ -39,6 +45,7 @@ void main()
 	vec2 base = floor(texel);
 	vec2 f = texel - base;
 	vec4 sum = vec4_splat(0.0f);
+	float cloudDepth = 0.0f;
 	float weights = 0.0f;
 	for (int y = 0; y < 2; ++y)
 	{
@@ -51,10 +58,34 @@ void main()
 			float alike = 1.0f / (0.02f + abs(scene - here) / max(here, 1.0f));
 			float weight = place * alike + 1e-5f;
 			sum += texture2DLod(s_cloudHistory, at, 0.0f) * weight;
+			cloudDepth += texture2DLod(s_cloudCurrentDepth, at, 0.0f).r * weight;
 			weights += weight;
 		}
 	}
 	vec4 clouds = sum / weights;
+	cloudDepth /= weights;
+	// The haze between the eye and the cloud: the same haze as over the scene at the cloud's distance, so the clouds,
+	// the sea and the sky meet at the horizon with no line. It covers only the part of the pixel that the cloud covers.
+	// Without the haze's grid, the cloud fades into the hazy sky at the horizon, or more of the sky behind it shows.
+	float cover = 1.0f - clouds.a;
+	if (u_cloudComposite.w > 0.5f)
+	{
+		vec4 haze = AtmosHazeAlong(uv, u_cloudEye.xyz, dir, cloudDepth, u_skyAtmos.y);
+		clouds.rgb = clouds.rgb * haze.a + haze.rgb * cover;
+	}
+	else
+	{
+		float haze = CloudHaze(u_cloudEye.xyz, dir, cloudDepth);
+		if (u_skyAtmos.x > 0.0f)
+		{
+			vec3 hazeColour = AtmosSkyOnScreen(normalize(vec3(dir.x, max(dir.y, 0.0f), dir.z)), u_skyAtmos.y);
+			clouds.rgb = mix(clouds.rgb, hazeColour * cover, haze);
+		}
+		else
+		{
+			clouds = vec4(clouds.rgb * (1.0f - haze), mix(clouds.a, 1.0f, haze));
+		}
+	}
 	// A scene nearer than the lowest cloud has no cloud in front of it: the half size's pixels round a near hill's edge
 	// can hold the sky's clouds, which would show as a bright line along the hill
 	if (here < CloudNearestAlong(dir) && !CloudOnDome(dir, here))

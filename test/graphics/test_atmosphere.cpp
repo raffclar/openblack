@@ -163,6 +163,22 @@ TEST(Atmosphere, TheHazeThickensWithDistanceAndIsBlue)
 	EXPECT_GT(high.through.b, farHaze.through.b);
 }
 
+TEST(Atmosphere, TheExtraHazeIsInTheLowAirSoTheSeaShowsFromHighUp)
+{
+	EXPECT_FLOAT_EQ(atmos::HazeScaleAt(0.0f), atmos::k_HazeScale);
+	EXPECT_GT(atmos::HazeScaleAt(0.3f), 0.85f * atmos::k_HazeScale);
+	EXPECT_LT(atmos::HazeScaleAt(20.0f), 1.01f);
+	EXPECT_GT(atmos::HazeScaleAt(1.0f), atmos::HazeScaleAt(2.0f));
+	// Straight down from 20 km to the sea, more than half of the light comes through
+	const auto sun = Towards(60.0f);
+	const auto down = atmos::HazeAlong(glm::vec3(0.0f, -1.0f, 0.0f), sun, 20.0f, 20.0f * atmos::k_UnitsPerKilometre, k_Clear);
+	EXPECT_GT(atmos::Luminance(down.through), 0.5f);
+	// Along the sea over 25 km, almost nothing comes through, so the horizon is hidden
+	const glm::vec3 along = glm::normalize(glm::vec3(-1.0f, 0.0f, 0.2f));
+	const auto flat = atmos::HazeAlong(along, sun, 0.02f, 25.0f * atmos::k_UnitsPerKilometre, k_Clear);
+	EXPECT_LT(atmos::Luminance(flat.through), 0.1f);
+}
+
 TEST(Atmosphere, TheSunRisesInTheEastClimbsAtNoonAndSetsInTheWest)
 {
 	const auto degrees = [](glm::vec3 towards) { return std::asin(towards.y) * 180.0f / k_Pi; };

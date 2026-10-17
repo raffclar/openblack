@@ -28,6 +28,7 @@ uniform vec4 u_atmosSun;
 #define ATMOS_OZONE_HALF_WIDTH 15.0f
 #define ATMOS_MULTIPLE_SHARE 0.3f
 #define ATMOS_UNITS_PER_KM 949.0f
+#define ATMOS_HAZE_LAYER_HEIGHT 2.5f
 // The haze's grid (atmosphere::k_Aerial* in Atmosphere.h)
 #define ATMOS_AERIAL_CELLS 32.0f
 #define ATMOS_AERIAL_SLICES 32.0f
@@ -155,6 +156,52 @@ vec3 AtmosSoftClip(vec3 colour)
 {
 	vec3 over = max(colour - 0.8f, vec3_splat(0.0f));
 	return min(colour, vec3_splat(0.8f)) + 0.2f * (vec3_splat(1.0f) - exp(-over / 0.2f));
+}
+
+// How much denser the haze is than the real air at a height (atmosphere::HazeScaleAt): u_atmosParams.y at the sea's
+// level, and near 1 high up
+float AtmosHazeScaleAt(float altitude)
+{
+	return 1.0f + (u_atmosParams.y - 1.0f) * exp(-max(altitude, 0.0f) / ATMOS_HAZE_LAYER_HEIGHT);
+}
+
+// The mean of exp(-h / scaleHeight) along a straight path from the height low to the height high
+float AtmosMeanFalloff(float low, float high, float scaleHeight)
+{
+	float rise = high - low;
+	return rise > 1e-3f ? scaleHeight * (exp(-low / scaleHeight) - exp(-high / scaleHeight)) / rise : exp(-low / scaleHeight);
+}
+
+// The mean of the haze's dimming for each kilometre, as the eye sees it, along a straight path from one height to
+// another (in kilometres). The air thins with the height, the dust faster than the molecules, and the extra haze of
+// the low air faster than both.
+float AtmosMeanExtinction(float fromHeight, float toHeight)
+{
+	float low = max(min(fromHeight, toHeight), 0.0f);
+	float high = max(max(fromHeight, toHeight), 0.0f);
+	float extra = u_atmosParams.y - 1.0f;
+	float rayleighLayer = 1.0f / (1.0f / ATMOS_RAYLEIGH_HEIGHT + 1.0f / ATMOS_HAZE_LAYER_HEIGHT);
+	float mieLayer = 1.0f / (1.0f / ATMOS_MIE_HEIGHT + 1.0f / ATMOS_HAZE_LAYER_HEIGHT);
+	float rayleigh = AtmosMeanFalloff(low, high, ATMOS_RAYLEIGH_HEIGHT) + extra * AtmosMeanFalloff(low, high, rayleighLayer);
+	float mie = AtmosMeanFalloff(low, high, ATMOS_MIE_HEIGHT) + extra * AtmosMeanFalloff(low, high, mieLayer);
+	const vec3 luma = vec3(0.2126f, 0.7152f, 0.0722f);
+	return dot(ATMOS_RAYLEIGH_SCATTERING, luma) * rayleigh + ATMOS_MIE_EXTINCTION * u_atmosParams.x * mie;
+}
+
+// The sky as the dome shows it on the screen in a direction, with `sunHeight` the sine of the air's sun over the
+// horizon. The haze over the far land and the far sea goes to this colour, so the land and the sea fade into the sky.
+vec3 AtmosSkyOnScreen(vec3 dir, float sunHeight)
+{
+	vec3 air = AtmosSky(dir) * u_atmosSun.rgb;
+	// By day the air's sky high up is lighter than the plain model gives, as the original dome is, so the sky does not
+	// go to a deep blue over the eye. The sky at dusk and at night keeps the model's own brightness.
+	const vec3 luma = vec3(0.2126f, 0.7152f, 0.0722f);
+	float lift = 1.0f + 0.8f * smoothstep(0.05f, 0.6f, dir.y) * smoothstep(-0.02f, 0.2f, u_atmosLight.y);
+	air = AtmosSoftClip(air * lift);
+	// After sunset and in the moon's light the model gives a deep, strong blue. The eye sees the dim sky with less
+	// colour, so the sky goes part of the way to grey while the air's sun is low.
+	float grey = dot(air, luma);
+	return mix(vec3_splat(grey), air, mix(0.25f, 1.0f, smoothstep(0.0f, 0.35f, sunHeight)));
 }
 
 // The distance of a slice of the haze's grid from the eye in world units, and the slice at a distance

@@ -53,6 +53,9 @@ inline constexpr float k_MultipleShare = 0.3f;
 /// The haze over the land is this much denser than the real air at the same height. The far islands are a few
 /// kilometres away, and the real air needs some tens of kilometres to fade a hill this much.
 inline constexpr float k_HazeScale = 7.0f;
+/// The extra haze is in the low air: over this height in kilometres it thins to a third, and high up the air is the real
+/// air. The horizon from the land keeps its haze, and the sea from high up is clear through the thin air.
+inline constexpr float k_HazeLayerHeight = 2.5f;
 /// The world units in one kilometre (underwater::k_UnitsPerMetre, 0.949 units a metre)
 inline constexpr float k_UnitsPerKilometre = 949.0f;
 
@@ -142,7 +145,10 @@ struct Haze
 	glm::vec3 light;
 	glm::vec3 through;
 };
-/// The haze along a ray from a height over `distance` world units, at k_HazeScale times the real air's density
+/// How much denser the haze is than the real air at a height in kilometres: k_HazeScale at the sea's level, near 1 high up
+[[nodiscard]] float HazeScaleAt(float altitude);
+
+/// The haze along a ray from a height over `distance` world units, at HazeScaleAt times the real air's density
 [[nodiscard]] Haze HazeAlong(glm::vec3 view, glm::vec3 towardsLight, float altitude, float distance, const Air& air);
 
 /// The light of the sun or the moon at the ground, as a part of its light at the top of the air, for the sine of its

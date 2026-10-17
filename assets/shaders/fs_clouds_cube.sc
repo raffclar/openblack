@@ -14,6 +14,8 @@ void main()
 	vec3 dir = CloudRayAt(uv);
 	float jitter = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898f, 78.233f))) * 43758.547f);
 	float depth;
-	gl_FragColor =
-	    MarchClouds(u_cloudEye.xyz, dir, 1e9f, jitter, 64, false, u_cloudAmbient.rgb * 1.3f, u_cloudAmbient.rgb * 1.6f, depth);
+	vec4 clouds = MarchClouds(u_cloudEye.xyz, dir, 1e9f, jitter, 64, false, u_cloudAmbient.rgb * 1.3f, depth);
+	// The haze hides far clouds: more of the face's sky behind them shows
+	float haze = CloudHaze(u_cloudEye.xyz, dir, depth);
+	gl_FragColor = vec4(clouds.rgb * (1.0f - haze), mix(clouds.a, 1.0f, haze));
 }

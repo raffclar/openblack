@@ -263,10 +263,25 @@ TEST(VolumetricClouds, TheWeatherPicksTheTypeOfCloud)
 	EXPECT_EQ(clouds::ChosenWeather(clouds::CoverChoice::Weather, fair).cover, fair.cover);
 }
 
+TEST(VolumetricClouds, FromHighUpTheCloudsAndTheirShadowReachFarther)
+{
+	EXPECT_FLOAT_EQ(clouds::ShadowWindowFor(100.0f), clouds::k_ShadowWindow);
+	EXPECT_FLOAT_EQ(clouds::ShadowWindowFor(clouds::k_ShadowWindowHeight), clouds::k_ShadowWindow);
+	EXPECT_FLOAT_EQ(clouds::ShadowWindowFor(clouds::k_ShadowWindowHeight * 3.0f), clouds::k_ShadowWindow * 4.0f);
+	EXPECT_GE(clouds::ShadowWindowFor(8000.0f), 8000.0f * 2.0f);
+	EXPECT_FLOAT_EQ(clouds::FarthestCloudFor(100.0f), clouds::k_FarthestCloud);
+	EXPECT_GT(clouds::FarthestCloudFor(10000.0f), clouds::FarthestCloudFor(5000.0f));
+	EXPECT_FLOAT_EQ(clouds::FarthestCloudFor(1e7f), clouds::k_FarthestCloudCap);
+	// A texel of a wide map lies on whole texels too
+	const float window = clouds::ShadowWindowFor(9000.0f);
+	const auto origin = clouds::ShadowOrigin({1234.5f, 2345.6f}, window);
+	EXPECT_NEAR(std::fmod(origin.x, window / static_cast<float>(clouds::k_ShadowTexels)), 0.0f, 1e-2f);
+}
+
 TEST(VolumetricClouds, TheShadowLiesOnWholeTexelsAndThePacksKeepTheStrongStorms)
 {
 	constexpr float k_Texel = clouds::k_ShadowWindow / static_cast<float>(clouds::k_ShadowTexels);
-	const auto origin = clouds::ShadowOrigin({1234.5f, 2345.6f});
+	const auto origin = clouds::ShadowOrigin({1234.5f, 2345.6f}, clouds::k_ShadowWindow);
 	EXPECT_NEAR(std::fmod(origin.x, k_Texel), 0.0f, 1e-3f);
 	EXPECT_LE(std::abs(origin.x + clouds::k_ShadowWindow * 0.5f - 1234.5f), k_Texel);
 

@@ -150,6 +150,10 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_underwater_tap
 #include "ShaderIncluder.h"
+#define SHADER_NAME vs_underwater_jelly
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_underwater_jelly
+#include "ShaderIncluder.h"
 #define SHADER_NAME fs_clouds_shadow
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_clouds_march
@@ -296,7 +300,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 112> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 114> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -344,6 +348,8 @@ const std::array<bgfx::EmbeddedShader, 112> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_underwater_drift),
     BGFX_EMBEDDED_SHADER(vs_underwater_tap),
     BGFX_EMBEDDED_SHADER(fs_underwater_tap),
+    BGFX_EMBEDDED_SHADER(vs_underwater_jelly),
+    BGFX_EMBEDDED_SHADER(fs_underwater_jelly),
     BGFX_EMBEDDED_SHADER(fs_clouds_shadow),
     BGFX_EMBEDDED_SHADER(fs_clouds_march),
     BGFX_EMBEDDED_SHADER(fs_clouds_resolve),

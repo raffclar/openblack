@@ -240,6 +240,11 @@ glm::vec3 atmosphere::SkyRadiance(glm::vec3 view, glm::vec3 towardsLight, float 
 	return light;
 }
 
+float atmosphere::HazeScaleAt(float altitude)
+{
+	return 1.0f + (k_HazeScale - 1.0f) * std::exp(-std::max(altitude, 0.0f) / k_HazeLayerHeight);
+}
+
 Haze atmosphere::HazeAlong(glm::vec3 view, glm::vec3 towardsLight, float altitude, float distance, const Air& air)
 {
 	const float radius = k_GroundRadius + std::max(altitude, 1e-3f);
@@ -255,7 +260,7 @@ Haze atmosphere::HazeAlong(glm::vec3 view, glm::vec3 towardsLight, float altitud
 		{
 			point = glm::normalize(point) * k_GroundRadius;
 		}
-		const auto stretch = ScatterAt(point, view, towardsLight, step, k_HazeScale, air);
+		const auto stretch = ScatterAt(point, view, towardsLight, step, HazeScaleAt(glm::length(point) - k_GroundRadius), air);
 		haze.light += haze.through * stretch.light;
 		haze.through *= stretch.through;
 	}

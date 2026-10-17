@@ -159,7 +159,11 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 	uniforms.eye = {eye, frame.eye.w > 0.5f ? 0.0f : 1.0f};
 	const auto& strike = system.GetSeaStrike();
 	uniforms.strike = {strike.position.x, frame.params.z, strike.position.y, system.GetSeaFlash().y};
-	uniforms.shadow = {clouds::ShadowOrigin({eye.x, eye.z}), clouds::k_ShadowWindow, k_ShadowStrength};
+	// From high up the clouds and their shadow reach farther, so the layer and the shadow have no edge round the eye
+	const float eyeHeight = eye.y - frame.params.z;
+	const float window = clouds::ShadowWindowFor(eyeHeight);
+	uniforms.shadow = {clouds::ShadowOrigin({eye.x, eye.z}, window), window, k_ShadowStrength};
+	uniforms.layer.z = clouds::FarthestCloudFor(eyeHeight);
 	clouds::PackStorms(climate.Storms(), uniforms);
 	_cloudsFrame = uniforms;
 }
@@ -279,13 +283,18 @@ void Renderer::DrawClouds(const DrawSceneDesc& desc, const FrameBuffer& sceneTar
 	{
 		compositeProgram->SetTextureSampler("s_sceneDepth", 5, sceneTarget.GetDepthStencilAttachment());
 	}
+	// The haze between the eye and the clouds: the same haze as over the scene at the clouds' distance
+	BindAtmosphere(*compositeProgram, 1.0f);
+	const bool hazeGrid = BindHazeGrid(*compositeProgram, 6);
 	const glm::vec4 composite {static_cast<float>(size.x), static_cast<float>(size.y), under ? 0.0f : k_ShaftStrength,
-	                           under ? 1.0f : 0.0f};
+	                           hazeGrid ? 1.0f : 0.0f};
 	compositeProgram->SetUniformValue("u_cloudComposite", &composite);
 	BindScreenTriangle();
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_SRC_ALPHA));
-	// The farthest of all that blends, so drawn first
-	compositeProgram->Submit(static_cast<bgfx::ViewId>(compositeView), std::numeric_limits<uint32_t>::max());
+	// Over the water, after the haze and the fog, which find the scene by its depth, and before the rest that blends;
+	// under the water, first of all that blends
+	compositeProgram->Submit(static_cast<bgfx::ViewId>(compositeView),
+	                         under ? std::numeric_limits<uint32_t>::max() : std::numeric_limits<uint32_t>::max() - 2);
 }
 
 void Renderer::DrawCloudsInEnvironment(const glm::vec3& centre) const

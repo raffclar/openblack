@@ -8,7 +8,7 @@ $input v_texcoord0, v_texcoord1
 
 // EXPERIMENT (not for merge): the haze's grid that follows the view, 32 cells across and down and 32 slices into the
 // view (see atmosphere::HazeAlong). Each texel sums the light that the air scatters towards the eye from the eye to its
-// slice's distance, at atmosphere::k_HazeScale times the real air's density. The light of the sun or the moon reaches
+// slice's distance, at atmosphere::HazeScaleAt times the real air's density. The light of the sun or the moon reaches
 // each point through the hills' shadow and the clouds' shadow. rgb: the light that the haze adds, for a light of
 // strength 1; a: the part of the scene behind that shows through.
 
@@ -43,7 +43,6 @@ void main()
 	float stride = reach / steps;
 	float strideKm = stride / ATMOS_UNITS_PER_KM;
 	float sea = u_atmosParams.w;
-	float scale = u_atmosParams.y;
 	// The dust's glow is round the sun that the sky shows
 	float cosAngle = dot(dir, normalize(u_atmosGameLight.xyz));
 	vec3 light = vec3_splat(0.0f);
@@ -61,6 +60,7 @@ void main()
 		{
 			lit = SunVisibilityAbove(p) * CloudShadeAt(p.xz);
 		}
+		float scale = AtmosHazeScaleAt(altitude);
 		vec3 scattered = AtmosScatterAt(altitude, u_atmosLight.y, cosAngle, lit) * scale;
 		vec3 extinction = max(AtmosExtinction(altitude) * scale, vec3_splat(1e-7f));
 		vec3 dimmed = exp(-extinction * strideKm);

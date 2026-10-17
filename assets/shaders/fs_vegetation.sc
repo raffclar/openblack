@@ -45,5 +45,16 @@ void main()
 	}
 	// The distance haze is added after the texture
 	// A tree fading out in the distance is blended by its alpha
-	gl_FragColor = vec4(min(diffuseTex.rgb + v_haze.rgb, vec3_splat(1.0f)), diffuseTex.a * (1.0f - v_haze.w));
+	float alpha = diffuseTex.a * (1.0f - v_haze.w);
+	// EXPERIMENT (not for merge): or it drops a share of its fragments in a fixed screen pattern and the rest are solid
+	if (u_skyAlphaThreshold.z > 0.5f)
+	{
+		float pattern = fract(52.9829189f * fract(dot(gl_FragCoord.xy, vec2(0.06711056f, 0.00583715f))));
+		if (1.0f - v_haze.w <= pattern)
+		{
+			discard;
+		}
+		alpha = 1.0f;
+	}
+	gl_FragColor = vec4(min(diffuseTex.rgb + v_haze.rgb, vec3_splat(1.0f)), alpha);
 }

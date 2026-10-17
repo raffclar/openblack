@@ -20,7 +20,10 @@ float CloudShadeAt(vec2 xz)
 	{
 		return 1.0f;
 	}
-	return texture2DLod(s_cloudShadow, uv, 0.0f).r;
+	// The shadow fades out towards the edge of its map, so the edge does not show
+	vec2 fromMiddle = abs(uv * 2.0f - 1.0f);
+	float inside = 1.0f - smoothstep(0.8f, 1.0f, max(fromMiddle.x, fromMiddle.y));
+	return mix(1.0f, texture2DLod(s_cloudShadow, uv, 0.0f).r, inside);
 }
 
 #endif // CLOUDS_SHADOW_SH

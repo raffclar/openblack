@@ -648,10 +648,21 @@ CloudWeather volumetric_clouds::ChosenWeather(CoverChoice choice, const CloudWea
 	return chosen;
 }
 
-glm::vec2 volumetric_clouds::ShadowOrigin(glm::vec2 eye)
+float volumetric_clouds::ShadowWindowFor(float eyeHeight)
 {
-	constexpr float k_Texel = k_ShadowWindow / static_cast<float>(k_ShadowTexels);
-	return glm::floor((eye - k_ShadowWindow * 0.5f) / k_Texel) * k_Texel;
+	const float doublings = std::ceil(std::log2(std::max(eyeHeight / k_ShadowWindowHeight, 1.0f)));
+	return k_ShadowWindow * std::exp2(std::min(doublings, 6.0f));
+}
+
+glm::vec2 volumetric_clouds::ShadowOrigin(glm::vec2 eye, float window)
+{
+	const float texel = window / static_cast<float>(k_ShadowTexels);
+	return glm::floor((eye - window * 0.5f) / texel) * texel;
+}
+
+float volumetric_clouds::FarthestCloudFor(float eyeHeight)
+{
+	return std::min(k_FarthestCloud + k_FarthestPerHeight * std::max(eyeHeight - k_CloudBase, 0.0f), k_FarthestCloudCap);
 }
 
 void volumetric_clouds::PackStorms(std::span<const StormCell> cells, CloudUniforms& uniforms)
