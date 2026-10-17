@@ -53,6 +53,8 @@ TEST(CreatureSpellCasting, ItTriesAtHalfTheSightingsAndFizzlesShortOfAllButOne)
 	EXPECT_FALSE(MayTry(4.0f, 9.0f));
 	EXPECT_TRUE(MayTry(4.5f, 9.0f));
 	EXPECT_TRUE(MayTry(12.0f, 9.0f));
+	// The share 0 / 0 is not a number, and the creature does not try
+	EXPECT_FALSE(MayTry(0.0f, 0.0f));
 	// Against the times needed less one
 	EXPECT_FALSE(TrySucceeds(7.0f, 9.0f));
 	EXPECT_TRUE(TrySucceeds(8.0f, 9.0f));

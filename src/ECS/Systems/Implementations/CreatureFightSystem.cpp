@@ -2765,16 +2765,15 @@ void CreatureFightSystem::CastFightSpell(entt::entity creature, MagicType type, 
 		    },
 		    fight_transcript::LastOf(creature, "action"));
 	};
+	// Without an opponent the creature casts no miracle, not even one that defends
+	if (opponent == entt::null)
+	{
+		note("no_opponent", entt::null, std::nullopt);
+		return;
+	}
 	if (effect.isAggressiveSpellWhichIsUsedInCreatureFightArena != 0)
 	{
-		if (opponent != entt::null)
-		{
-			note("attack", opponent, Locator::creatureMindSystem::value().TryMiracle(creature, type, opponent));
-		}
-		else
-		{
-			note("attack", opponent, std::nullopt);
-		}
+		note("attack", opponent, Locator::creatureMindSystem::value().TryMiracle(creature, type, opponent));
 	}
 	else if (effect.isDefensiveSpellWhichIsUsedInCreatureFightArena != 0)
 	{

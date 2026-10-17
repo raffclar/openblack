@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -126,15 +127,24 @@ TEST(CreatureCastAgenda, AFireballFromAClearAreaNearItGettingAwayOnlyFromTheLivi
 
 TEST(CreatureCastAgenda, AFizzleEmbarrassesItAndOneTimeInTwoMakesItSadder)
 {
-	const auto sad = ReactToFizzle(Always(0), 0.5f);
+	// The sadness is a draw from 0 to 0.3, and only a sad creature draws it
+	std::vector<float> asked;
+	const auto draw = [&asked](float most) {
+		asked.push_back(most);
+		return most / 2.0f;
+	};
+	const auto sad = ReactToFizzle(Always(0), draw);
 	ASSERT_EQ(sad.agenda.size(), 2u);
 	EXPECT_EQ(sad.agenda[0].animation, 73u);
 	EXPECT_EQ(sad.agenda[1].animation, 56u);
 	ASSERT_TRUE(sad.sadness.has_value());
 	EXPECT_FLOAT_EQ(*sad.sadness, 0.15f);
-	const auto embarrassed = ReactToFizzle(Always(1), 0.5f);
+	ASSERT_EQ(asked.size(), 1u);
+	EXPECT_EQ(asked[0], 0.3f);
+	const auto embarrassed = ReactToFizzle(Always(1), draw);
 	ASSERT_EQ(embarrassed.agenda.size(), 1u);
 	EXPECT_FALSE(embarrassed.sadness.has_value());
+	EXPECT_EQ(asked.size(), 1u);
 }
 
 TEST(CreatureCastAgenda, EachMiracleThatAttacksIsCastItsOwnWay)

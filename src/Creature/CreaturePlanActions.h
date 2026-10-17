@@ -535,6 +535,10 @@ struct Situation
 	/// How far the camera is from it
 	float eyeDistance {0.0f};
 	float chance {0.0f};
+	/// Draws from the random numbers of the game as the agenda is made: the extra time of a look that does not go near
+	/// the thing (0 to 1.2 seconds), and the extra time of a sit (0 to 5 seconds)
+	float lookExtraSeconds {0.0f};
+	float sitExtraSeconds {0.0f};
 	/// A clear place by the thing to sleep there, none when there is none (or it wasn't looked for)
 	std::optional<glm::vec2> clearArea;
 	/// The places that the creature uses when it hangs around at home, and the length of a game turn in seconds

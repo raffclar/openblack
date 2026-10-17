@@ -357,6 +357,9 @@ struct Gaze
 	/// The player: the hand when it moved much lately, else the camera
 	bool player {false};
 	std::optional<glm::vec3> point;
+	/// The look goes to the ground below the point, not to the height of the point. While the creature moves near the
+	/// point, it does not look at the point.
+	bool pointOnGround {false};
 	bool camera {false};
 	/// The look of a creature that walks to the point: at the point, at what it watches, and a sweep from side to side
 	/// (see creature_look::LookWhileGoing). Without a point, the look uses the top of the object, or else the place that
@@ -1020,15 +1023,18 @@ constexpr uint32_t k_FewestRestTurns = 30;
 
 /// A new agenda in place of the current one
 void Plan(IdleMind& mind, Activity activity, std::vector<Step> agenda);
-/// Pulls a face for a reason, if the reason calls for one, and moves the variety of faces on
+/// Pulls a face for a reason, if the reason calls for one, and moves the variety of faces on by a draw from gameRandom
 [[nodiscard]] std::optional<creature_face::Request> PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
-                                                             const Random& random);
+                                                             const Random& random, const Random& gameRandom);
 /// The world carried out a dance stage that the mind ordered: the step is done, or the rest of the agenda is no use
 void DanceOrderDone(IdleMind& mind, bool done);
 /// What the head looks at while the step lasts. A step that picks a thing up, or goes near a thing, looks at that
 /// thing as the creature walks, unless the step gives a look of its own. Without a look, the head looks about.
 [[nodiscard]] std::optional<Gaze> LookOf(const Step& step);
-/// One game turn of the mind
+/// One game turn of the mind. The variety of faces moves on by the random numbers of the game (gameRandom), and all
+/// else draws from random.
+[[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random, const Random& gameRandom);
+/// One game turn of the mind, with one source of random numbers for all draws
 [[nodiscard]] Commands Think(IdleMind& mind, const Senses& senses, const Random& random);
 /// The main step of an agenda: the last step marked as main. A step that casts a miracle is always a main step. When no
 /// step is a main step, the last step is the main step. An empty agenda gives 0.

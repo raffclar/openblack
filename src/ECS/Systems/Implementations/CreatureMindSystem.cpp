@@ -36,6 +36,7 @@
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesireSources.h"
@@ -789,6 +790,20 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 		const auto ground =
 		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : self->position.y;
 		return glm::vec3 {at.x, ground, at.y};
+	}
+	if (!gaze.object.has_value() && gaze.point.has_value() && gaze.pointOnGround)
+	{
+		// The ground below the point. A creature that moves within a few metres of the point does not look at it.
+		const glm::vec2 flat {gaze.point->x, gaze.point->z};
+		const auto* self = registry.TryGet<const Transform>(creature);
+		if (self == nullptr ||
+		    (moving && glm::distance(glm::vec2(self->position.x, self->position.z), flat) < k_NoLookWhileMovingWithin))
+		{
+			return std::nullopt;
+		}
+		const auto ground =
+		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(flat) : gaze.point->y;
+		return glm::vec3 {flat.x, ground, flat.y};
 	}
 	if (!gaze.object.has_value())
 	{
@@ -1757,6 +1772,10 @@ void CreatureMindSystem::ProcessTurn()
 	const auto random = [this](uint32_t range) {
 		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
 	};
+	// The variety of faces moves on by the random numbers of the game
+	const auto gameRandom = [&random](uint32_t range) {
+		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : random(range);
+	};
 	const bool night = IsNight();
 	// The creatures passing out this turn, which are knocked out once every mind has thought
 	std::vector<entt::entity> passingOut;
@@ -2114,7 +2133,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .fighting = registry.AllOf<CreatureFighting>(entity),
 		        .totemShare = mind_town_help::TotemShareOf(registry, mind.idle),
 		    };
-		    const auto commands = creature_mind::Think(mind.idle, senses, random);
+		    const auto commands = creature_mind::Think(mind.idle, senses, random, gameRandom);
 		    NoteStepSeen(entity, mind);
 		    if (commands.communicated.has_value())
 		    {
@@ -2459,8 +2478,12 @@ std::optional<creature_face::Request> CreatureMindSystem::ShowFeeling(entt::enti
 	const auto random = [this](uint32_t range) {
 		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
 	};
+	// The variety of faces moves on by the random numbers of the game
+	const auto gameRandom = [&random](uint32_t range) {
+		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : random(range);
+	};
 	const creature_mind::Senses senses {.feelings = FeelingsOf(*mind)};
-	const auto face = creature_mind::PullFace(mind->idle, cue, senses, random);
+	const auto face = creature_mind::PullFace(mind->idle, cue, senses, random, gameRandom);
 	if (face.has_value())
 	{
 		body->face = creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, cue);

@@ -1120,13 +1120,13 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		// thing, and gives up when there is none.
 		if (situation.controlledByScript)
 		{
-			return creature_emote::SitDownBy(*object, objectPoint, situation.radius, random);
+			return creature_emote::SitDownBy(*object, objectPoint, situation.radius, situation.sitExtraSeconds);
 		}
 		if (!situation.clearArea.has_value())
 		{
 			return std::nullopt;
 		}
-		return creature_emote::SitDownBy(*object, *situation.clearArea, situation.radius, random);
+		return creature_emote::SitDownBy(*object, *situation.clearArea, situation.radius, situation.sitExtraSeconds);
 	case Build::BeIdle:
 		return creature_mind::BeIdle(random);
 	case Build::HangAround:
@@ -1257,7 +1257,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::LookForever:
 		return creature_mind::LookForever(*object);
 	case Build::LookButDontApproach:
-		return creature_mind::LookButDontApproach(*object, situation.chance);
+		return creature_mind::LookButDontApproach(*object, situation.lookExtraSeconds);
 	case Build::LookAtCamera:
 		return creature_mind::LookAtCamera(situation.hasPlayer);
 	case Build::PointAtThing:

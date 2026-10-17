@@ -666,7 +666,7 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 }
 
 std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
-                                                              const Random& random)
+                                                              const Random& random, const Random& gameRandom)
 {
 	mind.faceSeconds = k_FaceRepeatSeconds;
 	auto feelings = senses.feelings;
@@ -675,7 +675,7 @@ std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, cr
 	const auto face = creature_face::Choose(cue, feelings);
 	if (face.has_value())
 	{
-		mind.faceVariety += random(k_FaceVarietyStep);
+		mind.faceVariety += gameRandom(k_FaceVarietyStep);
 	}
 	return face;
 }
@@ -1113,6 +1113,11 @@ std::optional<Gaze> creature_mind::LookOf(const Step& step)
 
 Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random)
 {
+	return Think(mind, senses, random, random);
+}
+
+Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random& random, const Random& gameRandom)
+{
 	Commands commands;
 	mind.movedOn.reset();
 	if (mind.eyesToClear)
@@ -1137,7 +1142,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		mind.faceSeconds -= senses.seconds;
 		if (mind.faceSeconds < k_FaceDue)
 		{
-			commands.face = PullFace(mind, step.face, senses, random);
+			commands.face = PullFace(mind, step.face, senses, random, gameRandom);
 		}
 	}
 	// A sit nobody is waiting on any more ends
@@ -1201,7 +1206,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		mind.movedOn = mind.step;
 		mind.stepSeconds = 0.0f;
 		// Each step pulls the face it is meant to as it starts, held for as long as the face goes with
-		commands.face = PullFace(mind, step.face, senses, random);
+		commands.face = PullFace(mind, step.face, senses, random, gameRandom);
 		if (step.heldEyes.has_value())
 		{
 			commands.eyes = *step.heldEyes;
