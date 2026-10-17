@@ -902,6 +902,20 @@ std::optional<bool> WaitedForInMap(const ecs::Registry& registry, const creature
 	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
 }
 
+/// Whether the creature that the creature's step waits to be still is on its way somewhere or turning. A thing that is
+/// gone, or is not a creature, does not move.
+bool WaitedForMoving(const ecs::Registry& registry, const creature_mind::IdleMind& idle)
+{
+	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WaitForStill ||
+	    !idle.agenda[idle.step].object.has_value())
+	{
+		return false;
+	}
+	const auto object = static_cast<entt::entity>(*idle.agenda[idle.step].object);
+	return registry.Valid(object) && registry.AllOf<Creature>(object) && Locator::creatureLocomotionSystem::has_value() &&
+	       Locator::creatureLocomotionSystem::value().IsMoving(object);
+}
+
 /// Whether the thing a step watches fly is still really in the air: in the physics, and moving fast or clear of the land
 /// The villager a step follows to watch, as the creature sees it, while that step is next or under way
 std::optional<creature_mind::Senses::FollowedView> FollowedViewOf(const ecs::Registry& registry, const glm::vec3& from,
@@ -2097,6 +2111,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .hands = catchStep && catching ? creature_mind::HandsState::Done : HandsOf(entity),
 		        .held = inHand.has_value() ? std::optional(entt::to_integral(*inHand)) : std::nullopt,
 		        .objectInMap = WaitedForInMap(registry, mind.idle),
+		        .objectMoving = WaitedForMoving(registry, mind.idle),
 		        .objectInTheAir = WatchedIsInTheAir(registry, mind.idle),
 		        .objectFlying = StillObjectFlies(registry, mind.idle),
 		        .feelings = FeelingsOf(mind),
@@ -2191,6 +2206,14 @@ void CreatureMindSystem::ProcessTurn()
 		    if (commands.demobilise.has_value())
 		    {
 			    SetDemobilised(static_cast<entt::entity>(commands.demobilise->first), commands.demobilise->second);
+		    }
+		    // A joint action with a town ends in a desire about the town: its plan takes the place of the agenda. The
+		    // action stops as a failure, and so the joint action stops at once for the partner too, before the partner
+		    // takes up the desire of its own step.
+		    if (commands.applyDesire.has_value())
+		    {
+			    EndJointAction(entity);
+			    ForceDesireOn(entity, commands.applyDesire->desire, static_cast<entt::entity>(commands.applyDesire->thing));
 		    }
 		    if (commands.letGo.has_value())
 		    {

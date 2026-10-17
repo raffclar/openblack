@@ -2494,6 +2494,7 @@ void Runner::Give(const Command& command)
 		const auto target = command.atCreature.has_value()                 ? CreatureAt(*command.atCreature)
 		                    : command.onTemple && !_temples.empty()        ? std::optional(_temples.front())
 		                    : command.onGlobe && command.globe.has_value() ? GlobeAt(*command.globe)
+		                    : command.atCreature.has_value()               ? CreatureAt(*command.atCreature)
 		                                                                   : ObjectAt(command.object);
 		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
 		                  : command.with.has_value()                    ? ObjectAt(*command.with)
