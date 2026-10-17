@@ -37,6 +37,8 @@
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "ECS/Registry.h"
+#include "ECS/SoundPoint.h"
+#include "EmitterFollow.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "HearingRange.h"
 #include "ListenerFrame.h"
@@ -260,20 +262,35 @@ float AudioManager::EmitterVolume(const AudioEmitter& emitter) const
 
 void AudioManager::StopOutOfRangeEmitters()
 {
+	// Each 3D sound that follows asks for the point of its owner, moves there, or stops. No sound gets a speed, so
+	// nothing changes pitch as it moves.
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> outOfRange;
-	registry.Each<const AudioEmitter>([&outOfRange](entt::entity entity, const AudioEmitter& emitter) {
-		if (emitter.spatial && emitter.owner != entt::null && emitter.state != AudioStatus::Stopped &&
-		    !IsWithinPlayRange(ListenerDistance(emitter.position), emitter.maxDistance))
+	const auto listener = GetListener().origin;
+	std::vector<entt::entity> stopped;
+	registry.Each<AudioEmitter>([&](entt::entity entity, AudioEmitter& emitter) {
+		if (!emitter.spatial || emitter.follows == Follows::Nothing || emitter.state == AudioStatus::Stopped)
 		{
-			outOfRange.push_back(entity);
+			return;
+		}
+		const auto ownerPoint =
+		    emitter.follows == Follows::Owner ? ecs::SoundPointOf(registry, emitter.owner) : std::optional<glm::vec3> {};
+		const auto step = StepFollowingSound(emitter.follows, ownerPoint, emitter.position, listener, emitter.maxDistance);
+		if (step.stop)
+		{
+			stopped.push_back(entity);
+		}
+		else if (step.moveTo.has_value())
+		{
+			emitter.position = *step.moveTo;
 		}
 	});
-	for (const auto entity : outOfRange)
+	for (const auto entity : stopped)
 	{
 		[[maybe_unused]] const auto& emitter = registry.Get<const AudioEmitter>(entity);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stops: {}", DescribeEmitter(entity, emitter),
-		                    TooFar(emitter.position, emitter.maxDistance));
+		                    emitter.follows == Follows::Owner && !ecs::SoundPointOf(registry, emitter.owner).has_value()
+		                        ? std::string("its owner is gone or has no point")
+		                        : TooFar(emitter.position, emitter.maxDistance));
 		DestroyEmitter(entity);
 	}
 }
@@ -596,6 +613,7 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 	                                          .state = AudioStatus::Initial,
 	                                          .music = false,
 	                                          .owner = options.owner,
+	                                          .follows = options.position.has_value() ? options.follows : Follows::Nothing,
 	                                          .bank = sound->bank,
 	                                          .group = sound->group,
 	                                      });
@@ -612,6 +630,16 @@ void AudioManager::SetEmitterPosition(entt::entity emitter, const glm::vec3& pos
 		return;
 	}
 	Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter).position = position;
+}
+
+void AudioManager::SetEmitterFollows(entt::entity emitter, Follows follows)
+{
+	if (!EmitterExists(emitter))
+	{
+		return;
+	}
+	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
+	component.follows = component.spatial ? follows : Follows::Nothing;
 }
 
 void AudioManager::ReleaseEmitterLoop(entt::entity emitter)

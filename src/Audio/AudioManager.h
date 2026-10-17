@@ -85,6 +85,7 @@ public:
 	[[nodiscard]] bool IsInstalled() const override { return true; }
 	entt::entity StartSoundEffect(entt::id_type id, const SoundEffectOptions& options) override;
 	void SetEmitterPosition(entt::entity emitter, const glm::vec3& position) override;
+	void SetEmitterFollows(entt::entity emitter, Follows follows) override;
 	void ReleaseEmitterLoop(entt::entity emitter) override;
 	[[nodiscard]] bool IsEmitterLooping(entt::entity emitter) override;
 	void SetEmitterVolume(entt::entity emitter, uint32_t volume) override;

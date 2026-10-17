@@ -58,6 +58,7 @@ public:
 		bool released {false};
 		audio::PlayType playType {audio::PlayType::Once};
 		entt::entity owner {entt::null};
+		audio::Follows follows {audio::Follows::Nothing};
 	};
 	std::map<entt::entity, Emitter> emitters;
 	/// The number of times a system moved an emitter
@@ -114,6 +115,7 @@ public:
 		emitters.at(emitter).position = position;
 		++moves;
 	}
+	void SetEmitterFollows(entt::entity emitter, audio::Follows follows) override { emitters.at(emitter).follows = follows; }
 	void ReleaseEmitterLoop(entt::entity emitter) override { emitters.at(emitter).released = true; }
 	[[nodiscard]] bool IsEmitterLooping(entt::entity) override { return false; }
 	void SetEmitterVolume(entt::entity, uint32_t) override {}
@@ -428,6 +430,16 @@ TEST_F(SoundTags, AnObjectsSoundFollowsItEachTurn)
 	EXPECT_EQ(Audio().moves, 1);
 	// It moves the sound that plays, and does not start a new one
 	EXPECT_FALSE(played.stopped);
+	// The audio turn does not move it again, but it stops the sound when the camera goes too far
+	EXPECT_EQ(played.follows, audio::Follows::Place);
+}
+
+// A point's sound stays at its point, and the audio turn stops it when the camera goes too far
+TEST_F(SoundTags, APointSoundStopsWhenTheCameraGoesTooFar)
+{
+	_tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+	EXPECT_EQ(Audio().emitters.begin()->second.follows, audio::Follows::Place);
 }
 
 // A sound of an object in the hand comes from the hand, not from where the object hangs below it

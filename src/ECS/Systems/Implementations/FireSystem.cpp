@@ -1618,15 +1618,15 @@ void FireSystem::PlaySounds()
 			StopSound(slot.fire);
 			continue;
 		}
-		// Played again each turn, which a sound already playing ignores
+		// Played again each turn, which a sound already playing ignores. The audio turn moves the sound with its fire.
 		if (slot.emitter != entt::null && audio.EmitterExists(slot.emitter) &&
 		    audio.GetStatus(slot.emitter) != audio::AudioStatus::Stopped)
 		{
-			audio.SetEmitterPosition(slot.emitter, transform->position);
 			continue;
 		}
-		slot.emitter = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_Fire_01),
-		                                           {.position = transform->position, .owner = slot.fire});
+		slot.emitter = audio::StartGameSoundEffect(
+		    static_cast<entt::id_type>(audio::SoundId::G_Fire_01),
+		    {.position = transform->position, .owner = slot.fire, .follows = audio::Follows::Owner});
 	}
 }
 

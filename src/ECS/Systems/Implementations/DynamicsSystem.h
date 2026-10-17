@@ -159,13 +159,6 @@ private:
 	std::vector<physics::turn::DustPuff> _dust;
 	/// Each creature model's bones' boxes, by the model, worked out once
 	std::unordered_map<entt::id_type, std::vector<physics::shapes::BoneBox>> _creatureBoxes;
-	/// A collision sound that follows the thing that made it while it plays
-	struct FollowingSound
-	{
-		entt::entity emitter {entt::null};
-		entt::entity owner {entt::null};
-	};
-	std::vector<FollowingSound> _followingSounds;
 	/// The machine's milliseconds as the game reads them, which pick the fly-by whoosh
 	std::function<uint64_t()> _ticks {[]() { return static_cast<uint64_t>(machine_clock::Ticks()); }};
 	/// What the dust's puffs are drawn as

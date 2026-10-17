@@ -1248,3 +1248,4 @@ openblack_setup_and_add_test(
   test_creature_reflection graphics/test_creature_reflection.cpp
 )
 openblack_setup_and_add_test(test_glm_order_7 test_glm_order_7.cpp)
+openblack_setup_and_add_test(test_emitter_follow test_emitter_follow.cpp)

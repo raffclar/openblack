@@ -21,6 +21,7 @@
 #include "AudioDecoderInterface.h"
 #include "AudioPlayerInterface.h"
 #include "ECS/Components/AudioEmitter.h"
+#include "EmitterFollow.h"
 #include "HearingRange.h"
 #include "ListenerFrame.h"
 #include "MusicPlayer.h"
@@ -93,6 +94,8 @@ struct SoundEffectOptions
 	/// The distances it is heard at fully and no further, instead of the bank header's
 	std::optional<float> minDistance;
 	std::optional<float> maxDistance;
+	/// What a 3D sound does in each audio turn: it follows its owner or the listener, or it stays where it started
+	Follows follows {Follows::Nothing};
 };
 
 /// A music bank's group, its number of samples and how far it carries
@@ -111,8 +114,8 @@ public:
 	[[nodiscard]] virtual bool IsInstalled() const = 0;
 	virtual void Stop() = 0;
 	virtual void Update() = 0;
-	/// The game's audio turn: a placed sound attached to a thing stops when the camera is at or beyond the maximum
-	/// distance of its voice
+	/// The game's audio turn. Each 3D sound that follows moves to the point of its owner or to the listener. It stops
+	/// when its owner is gone or has no point, or when the camera is at or beyond the maximum distance of its voice.
 	virtual void StopOutOfRangeEmitters() = 0;
 	virtual BufferId CreateBuffer(ChannelLayout layout, const std::vector<int16_t>& buffer, int sampleRate) = 0;
 	virtual void CreateBuffer(Sound& sound) = 0;
@@ -163,6 +166,8 @@ public:
 	virtual entt::entity StartSoundEffect(entt::id_type id, const SoundEffectOptions& options) = 0;
 	/// Moves a 3D emitter, as a loop follows its owner
 	virtual void SetEmitterPosition(entt::entity emitter, const glm::vec3& position) = 0;
+	/// Sets what a 3D emitter does in each audio turn (see StopOutOfRangeEmitters)
+	virtual void SetEmitterFollows(entt::entity emitter, Follows follows) = 0;
 	/// A looping emitter stops looping: the pass playing finishes and the emitter stops
 	virtual void ReleaseEmitterLoop(entt::entity emitter) = 0;
 	/// Whether an emitter loops until stopped

@@ -15,6 +15,7 @@
 #include <entt/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "Audio/EmitterFollow.h"
 #include "Audio/Sound.h"
 
 namespace openblack::ecs::components
@@ -50,6 +51,8 @@ struct AudioEmitter
 	/// What the sound is played for, such as the tree a rustle comes from. A sound whose bank header plays it once
 	/// does not start again for the same owner while it, or another of its voice group, plays.
 	entt::entity owner {entt::null};
+	/// What a 3D emitter does in each audio turn: it follows its owner or the listener, or it stays
+	audio::Follows follows {audio::Follows::Nothing};
 	/// The bank the sound is from and its voice group there (Sound::group)
 	entt::id_type bank {0};
 	uint16_t group {0};

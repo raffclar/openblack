@@ -329,6 +329,9 @@ void GameParticleWorld::Play(PlayingSound& sound) const
 	if (result.emitter != entt::null)
 	{
 		sound.emitter = result.emitter;
+		// The sound moves with its particle each turn (see ProcessSounds), and the audio turn stops it when the camera
+		// goes too far
+		Locator::audio::value().SetEmitterFollows(result.emitter, audio::Follows::Place);
 	}
 }
 

@@ -178,11 +178,10 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> CameraOrigin() const override { return std::nullopt; }
 	[[nodiscard]] GameRandomInterface* Random() override { return nullptr; }
 	void PlaySound(audio::SoundId) override {}
-	std::optional<audio::AnimEffectPlay> PlayCollisionSound(std::span<const int32_t>, entt::entity, glm::vec3) override
+	std::optional<audio::AnimEffectPlay> PlayCollisionSound(std::span<const int32_t>, entt::entity, glm::vec3, bool) override
 	{
 		return std::nullopt;
 	}
-	void MoveSound(entt::entity, glm::vec3) override {}
 	void AddWaterRing(const water_rings::Ring&) override {}
 	void ScareFish(glm::vec3) override {}
 	[[nodiscard]] int32_t SnowAt(glm::vec3) const override { return 0; }

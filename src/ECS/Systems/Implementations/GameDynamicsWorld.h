@@ -43,8 +43,7 @@ public:
 	[[nodiscard]] GameRandomInterface* Random() override;
 	void PlaySound(audio::SoundId sound) override;
 	std::optional<audio::AnimEffectPlay> PlayCollisionSound(std::span<const int32_t> keys, entt::entity owner,
-	                                                        glm::vec3 position) override;
-	void MoveSound(entt::entity emitter, glm::vec3 position) override;
+	                                                        glm::vec3 position, bool follows) override;
 	void AddWaterRing(const water_rings::Ring& ring) override;
 	void ScareFish(glm::vec3 point) override;
 	[[nodiscard]] int32_t SnowAt(glm::vec3 point) const override;

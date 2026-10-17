@@ -21,6 +21,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/ModelSurface.h"
+#include "Audio/EmitterFollow.h"
 #include "Enums.h"
 #include "Particles/PlasmaCommand.h"
 #include "Physics/TempleHeart.h"
@@ -56,8 +57,8 @@ public:
 
 	/// A sound looping at a place until stopped; none when it couldn't be played
 	virtual entt::entity StartLoop(entt::id_type sound, glm::vec3 position, entt::entity owner) = 0;
-	/// A sound played once at a place
-	virtual void PlayOnce(entt::id_type sound, glm::vec3 position, entt::entity owner) = 0;
+	/// A sound played once at a place. It follows its owner or stays, as follows says.
+	virtual void PlayOnce(entt::id_type sound, glm::vec3 position, entt::entity owner, audio::Follows follows) = 0;
 	virtual void StopSound(entt::entity emitter) = 0;
 
 	/// A spot visual at a place for so many turns, given a player; none when there are no spot visuals
