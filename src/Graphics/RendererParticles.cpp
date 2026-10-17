@@ -669,8 +669,7 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 				{
 					continue;
 				}
-				const auto towards = glm::vec3(surface.worldToAtom * glm::vec4(light, 1.0f));
-				const auto towardsLight = glm::length(towards) > 0.0f ? glm::normalize(towards) : towards;
+				const auto towardsLight = particles::surface::TowardsLight(surface.worldToAtom, light);
 				for (uint32_t i = surface.firstVertex; i < surface.firstVertex + surface.vertexCount; ++i)
 				{
 					const auto level = particles::surface::LightLevel(frame.surfaceNormals[i], towardsLight, ambient);

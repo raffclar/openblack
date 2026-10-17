@@ -19,6 +19,7 @@
 #include <glm/geometric.hpp>
 #include <glm/matrix.hpp>
 
+#include "Common/X87Matrix.h"
 #include "Graphics/ZSort.h"
 #include "ParticleCreators.h"
 #include "ParticleSurfaces.h"
@@ -226,7 +227,7 @@ void AddSurface(Frame& frame, const SurfaceCreator& creator, const Effect::DrawA
 	    .indexCount = static_cast<uint32_t>(mesh.indices.size()),
 	    .doubleSided = creator.doubleSided,
 	    .lit = lit,
-	    .worldToAtom = glm::inverse(toWorld),
+	    .worldToAtom = x87::Inverse(toWorld),
 	});
 }
 

@@ -15,6 +15,7 @@
 #include <functional>
 #include <vector>
 
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -129,5 +130,8 @@ void DrapeOverLand(Mesh& worldMesh, glm::vec2 middle, const std::function<float(
 /// The light level, 0..255, of a point facing along a normal lit from a direction: the ambient when it faces away, more
 /// as it faces the light
 [[nodiscard]] uint32_t LightLevel(glm::vec3 normal, glm::vec3 towardsLight, uint32_t ambient);
+/// The light's point moved into the surface's own frame by the inverse of the surface's matrix, then made unit (its
+/// squares added x, z, then y) unless it is zero
+[[nodiscard]] glm::vec3 TowardsLight(const glm::mat4& worldToSurface, glm::vec3 light);
 
 } // namespace openblack::particles::surface
