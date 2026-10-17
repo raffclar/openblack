@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <numbers>
 #include <optional>
+#include <tuple>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -241,4 +242,111 @@ TEST(FightView, AZoomerCarriesTheSpeedItTakesOver)
 	zoomer.Update(0.1f);
 	EXPECT_GT(zoomer.GetValue(), 10.0f);
 	EXPECT_FLOAT_EQ(zoomer.GetElapsed(), 0.1f);
+}
+
+TEST(FightView, AFlightEndingOutsideTheFenceStopsAtItAndWooshesWhenFar)
+{
+	const auto flat = [](glm::vec2) { return 0.0f; };
+	// The fence keeps the camera to x <= 100, along its line of sight
+	const auto keepInside = [](const glm::vec3& origin, const glm::vec3& focus) {
+		if (origin.x <= 100.0f)
+		{
+			return origin;
+		}
+		const auto along = (100.0f - origin.x) / (focus.x - origin.x);
+		return origin + (focus - origin) * along;
+	};
+	const glm::vec3 from {0.0f, 50.0f, 0.0f};
+	const View to {.origin = {200.0f, 50.0f, 0.0f}, .focus = {0.0f, 0.0f, 0.0f}};
+	const auto kept = PlanFlight(from, to, k_StartWayRise, flat, keepInside);
+	EXPECT_NEAR(kept.to.origin.x, 100.0f, 1e-4f);
+	EXPECT_NEAR(kept.to.origin.y, 25.0f, 1e-4f);
+	EXPECT_EQ(kept.to.focus, to.focus);
+	// The way point is half way to where the flight now ends
+	EXPECT_NEAR(kept.way.x, 50.0f, 1e-4f);
+	// It starts less than 150 from there: no woosh
+	EXPECT_FALSE(kept.woosh);
+	const View far {.origin = {-60.0f, 50.0f, 120.0f}, .focus = {0.0f, 0.0f, 0.0f}};
+	EXPECT_TRUE(PlanFlight({100.0f, 50.0f, 0.0f}, far, k_ReturnWayRise, flat, keepInside).woosh);
+	// Exactly 150 away is not far enough
+	const View edge {.origin = {0.0f, 50.0f, 150.0f}, .focus = {0.0f, 0.0f, 0.0f}};
+	EXPECT_FALSE(PlanFlight(from, edge, k_StartWayRise, flat, keepInside).woosh);
+}
+
+TEST(FightView, AControlStopsTheFlightAndTheViewFollowsAtOnce)
+{
+	const View from {.origin = {0.0f, 50.0f, 0.0f}, .focus = {0.0f, 0.0f, 100.0f}};
+	const View still {.origin = glm::vec3(0.0f), .focus = glm::vec3(0.0f)};
+	const View to {.origin = {200.0f, 50.0f, 0.0f}, .focus = {200.0f, 0.0f, 100.0f}};
+	Chase chase;
+	chase.Fly(from, still, to, {100.0f, 80.0f, 0.0f});
+	std::ignore = chase.Step(to, 10.0f, 0.1f);
+	chase.StopFlight();
+	EXPECT_FALSE(chase.Flying());
+	// The wanted view now moves it, never through the way point's height
+	float highest = 0.0f;
+	for (int i = 0; i < 100; ++i)
+	{
+		highest = std::max(highest, chase.Step(to, 10.0f, 0.1f).origin.y);
+	}
+	EXPECT_LT(highest, 60.0f);
+	EXPECT_NEAR(chase.GetValue().origin.x, to.origin.x, 1e-2f);
+}
+
+TEST(FightView, AResumedChaseGoesOnFromWhereTheCameraIs)
+{
+	Chase chase;
+	const View at {.origin = {10.0f, 40.0f, 0.0f}, .focus = {10.0f, 0.0f, 50.0f}};
+	const View speed {.origin = {5.0f, 0.0f, 0.0f}, .focus = {5.0f, 0.0f, 0.0f}};
+	chase.Resume(at, speed);
+	EXPECT_FALSE(chase.Flying());
+	EXPECT_EQ(chase.GetValue().origin, at.origin);
+	EXPECT_EQ(chase.GetHeld().origin, at.origin);
+	EXPECT_NEAR(chase.GetSpeed().origin.x, 5.0f, 1e-4f);
+}
+
+TEST(FightView, ADragTurnsTheViewAndTiltsItTheOtherWay)
+{
+	Tracker tracker;
+	tracker.Dragged(0.5f, 0.1f);
+	EXPECT_FLOAT_EQ(tracker.GetHeadingOffset(), k_StartHeadingOffset + 0.5f);
+	EXPECT_FLOAT_EQ(tracker.GetPitch(), k_StartPitch + 0.1f);
+}
+
+TEST(FightView, DraggingFarFromTheArenaLeavesTheFightAfterTheFlight)
+{
+	const glm::vec2 centre {0.0f, 0.0f};
+	constexpr float k_Radius = 10.0f;
+	// The eye more than 3.2 x 0.75 radii away and where it looks more than 4.2 x 0.75 radii away
+	const glm::vec2 eye {40.0f, 0.0f};
+	const glm::vec2 looking {35.0f, 0.0f};
+	EXPECT_TRUE(DraggedAway(4.6f, true, eye, looking, centre, k_Radius));
+	EXPECT_FALSE(DraggedAway(4.5f, true, eye, looking, centre, k_Radius));
+	EXPECT_FALSE(DraggedAway(10.0f, false, eye, looking, centre, k_Radius));
+	EXPECT_FALSE(DraggedAway(10.0f, true, {20.0f, 0.0f}, {10.0f, 0.0f}, centre, k_Radius));
+	// Where it looks alone further than 6 x 0.75 radii is enough
+	EXPECT_TRUE(DraggedAway(10.0f, true, {0.0f, 0.0f}, {46.0f, 0.0f}, centre, k_Radius));
+}
+
+TEST(FightView, TheMoveButtonGripsTheLandAnywhereWhileTheHandDirectsTheFight)
+{
+	// Off the land the hand does not grip it, unless it directs the fight and the Move button is held
+	EXPECT_FALSE(GripsLand({.gripping = false, .directsFight = false, .move = true}));
+	EXPECT_TRUE(GripsLand({.gripping = false, .directsFight = true, .move = true}));
+	EXPECT_TRUE(GripsLand({.gripping = true}));
+	// While the hand directs the fight, only the Move button counts
+	EXPECT_FALSE(GripsLand({.gripping = true, .directsFight = true, .move = false}));
+	// Both buttons, the Action button, the button that turns round the hand, or a camera held back cancel the grip
+	EXPECT_FALSE(GripsLand({.directsFight = true, .move = true, .action = true}));
+	EXPECT_FALSE(GripsLand({.directsFight = true, .move = true, .bothButtons = true}));
+	EXPECT_FALSE(GripsLand({.gripping = true, .rotateAroundMouse = true}));
+	EXPECT_FALSE(GripsLand({.gripping = true, .heldBack = true}));
+}
+
+TEST(FightView, AGripWithTheKeysTurningStillLeavesTheFightWhenFar)
+{
+	// The leave test reads the grip of the land, also when a key turns the camera and the view still follows the fight
+	EXPECT_TRUE(DraggedAway(5.0f, GripsLand({.gripping = true}), {40.0f, 0.0f}, {35.0f, 0.0f}, {0.0f, 0.0f}, 10.0f));
+	EXPECT_FALSE(
+	    DraggedAway(5.0f, GripsLand({.gripping = true, .action = true}), {40.0f, 0.0f}, {35.0f, 0.0f}, {0.0f, 0.0f}, 10.0f));
 }
