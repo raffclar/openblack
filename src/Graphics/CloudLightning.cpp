@@ -90,11 +90,11 @@ glm::vec2 cloud_lightning::FlashPlace(const Strike& strike, uint32_t seed)
 {
 	const glm::vec2 offset = strike.position - strike.stormCentre;
 	const float distance = glm::length(offset);
-	const float inside = strike.stormRadius * (0.45f + 0.35f * RandomOf(seed, 30));
-	if (distance <= inside)
+	if (distance <= strike.stormRadius)
 	{
 		return strike.position;
 	}
+	const float inside = strike.stormRadius * (0.45f + 0.35f * RandomOf(seed, 30));
 	// With no direction, the flash takes a direction of its own
 	const float angle = RandomOf(seed, 31) * 2.0f * std::numbers::pi_v<float>;
 	const glm::vec2 towards = distance > 1e-3f ? offset / distance : glm::vec2 {std::cos(angle), std::sin(angle)};
@@ -109,11 +109,12 @@ cloud_lightning::FlashKind cloud_lightning::KindAt(float distance)
 cloud_lightning::FlashLight cloud_lightning::LightFor(const FlashEvent& flash, const glm::vec3& eye, float cloudBottom,
                                                       float cloudDepth)
 {
-	// The channel starts low in the cloud over the strike and goes across and up the cloud in a direction of its own
+	// The channel starts near the bottom of the cloud over the strike, so that it lights the bottom brightly. It goes
+	// across and up the cloud in a direction of its own.
 	const float angle = RandomOf(flash.seed, 20) * 2.0f * std::numbers::pi_v<float>;
 	const float length = k_ShortestChannel + (k_LongestChannel - k_ShortestChannel) * RandomOf(flash.seed, 21);
 	const float rise = cloudDepth * (0.2f + 0.25f * RandomOf(flash.seed, 22));
-	const glm::vec3 start {flash.place.x, cloudBottom + cloudDepth * 0.3f, flash.place.y};
+	const glm::vec3 start {flash.place.x, cloudBottom + cloudDepth * 0.15f, flash.place.y};
 	const glm::vec3 end = start + glm::vec3 {std::cos(angle) * length, rise, std::sin(angle) * length};
 	const float distance = glm::distance(eye, (start + end) * 0.5f);
 	const bool sheet = KindAt(distance) == FlashKind::Sheet;

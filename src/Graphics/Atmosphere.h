@@ -14,7 +14,6 @@
 #include <optional>
 #include <span>
 
-#include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -266,11 +265,6 @@ inline constexpr float k_NightGlow = 0.12f;
 /// The direction that the air's light at night comes from. It is the moon while the moon is up. While the moon is
 /// down, the direction goes to the point opposite the sun, so the night sky keeps its soft glow.
 [[nodiscard]] glm::vec3 AirMoonTowards(glm::vec3 sunTowards, glm::vec3 moonTowards);
-
-/// Turns the moon's axes about the line from the eye, so that the lit edge of the moon points to the sun across the
-/// sky. The first axis goes across the moon's face and the third axis goes along the line from the eye. The axes keep
-/// their lengths and their order. When the sun is in line with the moon, the axes do not change.
-[[nodiscard]] glm::mat3 TurnLitEdgeTowards(const glm::mat3& basis, glm::vec3 towardsSun);
 
 /// The number of days that start between two hours of script time from one frame to the next: 1 when the hour goes
 /// past midnight forward, -1 when it goes past midnight back, otherwise 0. A negative earlier hour means none yet.

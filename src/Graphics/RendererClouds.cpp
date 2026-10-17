@@ -162,7 +162,14 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 	const glm::vec3 original = glm::vec3(frame.sky) * k_SkyLight;
 	const glm::vec3 skyLight =
 	    air ? atmosphere::CloudSkyLight(original, _atmosphereFrame->skyFromAbove, _atmosphereFrame->sunHeight) : original;
-	uniforms.ambient = {skyLight, system.GetSeaFlash().x};
+	// The flash of the sky makes the whole sky bright for a moment. The clouds keep the light of the sky from before the
+	// flash, so that each flash lights its own part of the cloud more than the rest.
+	const float skyFlash = system.GetSeaFlash().x;
+	if (skyFlash <= 0.0f || !_clouds->steadySky.has_value())
+	{
+		_clouds->steadySky = skyLight;
+	}
+	uniforms.ambient = {*_clouds->steadySky, skyFlash};
 	uniforms.eye = {eye, frame.eye.w > 0.5f ? 0.0f : 1.0f};
 	// Each flash of the storms lights the clouds from inside, along a channel across the layer of the storm's clouds
 	std::array<cloud_lightning::FlashLight, cloud_lightning::k_MaxFlashes> flashLights {};

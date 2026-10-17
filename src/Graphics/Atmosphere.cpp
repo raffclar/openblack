@@ -395,28 +395,6 @@ glm::vec3 atmosphere::AirMoonTowards(glm::vec3 sunTowards, glm::vec3 moonTowards
 	return glm::normalize(glm::mix(-glm::normalize(sunTowards), moonUnit, up));
 }
 
-glm::mat3 atmosphere::TurnLitEdgeTowards(const glm::mat3& basis, glm::vec3 towardsSun)
-{
-	const float scale = glm::length(basis[2]);
-	if (scale <= 0.0f || glm::length(towardsSun) <= 0.0f)
-	{
-		return basis;
-	}
-	const glm::vec3 line = basis[2] / scale;
-	const glm::vec3 sun = glm::normalize(towardsSun);
-	// The way to the sun across the moon's face
-	const glm::vec3 across = sun - (line * glm::dot(line, sun));
-	const float length = glm::length(across);
-	if (length < 1e-4f)
-	{
-		return basis;
-	}
-	const float handed = glm::dot(glm::cross(basis[2], basis[0]), basis[1]) >= 0.0f ? 1.0f : -1.0f;
-	const glm::vec3 first = across / length;
-	const glm::vec3 second = glm::cross(line, first) * handed;
-	return {first * glm::length(basis[0]), second * glm::length(basis[1]), basis[2]};
-}
-
 int32_t atmosphere::DaysStarted(float earlierHour, float hour)
 {
 	constexpr float k_Late = 18.0f;

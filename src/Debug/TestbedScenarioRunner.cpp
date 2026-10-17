@@ -182,6 +182,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -922,6 +923,16 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	if (environment.snowDepth.has_value() && Locator::snowSystem::has_value())
 	{
 		Locator::snowSystem::value().Cover(*environment.snowDepth);
+	}
+	// EXPERIMENT (not for merge): the choice of cover moves one step at a time, so step it until it is the given choice
+	if (Locator::underwaterSystem::has_value())
+	{
+		auto& underwater = Locator::underwaterSystem::value();
+		const uint8_t cover = environment.cloudCover.value_or(0);
+		for (int step = 0; step < 8 && underwater.GetCloudCover() != cover; ++step)
+		{
+			underwater.CycleCloudCover();
+		}
 	}
 	if (Locator::creaturePhysiologySystem::has_value())
 	{

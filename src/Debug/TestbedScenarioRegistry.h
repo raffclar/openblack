@@ -159,6 +159,9 @@ struct Environment
 	std::optional<int32_t> landNumber;
 	/// The snow lies this deep in every cell of the island as the scenario starts, 0 to 255. A testbed set-up step.
 	std::optional<float> snowDepth;
+	/// EXPERIMENT (not for merge): the cover of the volumetric clouds, as Shift, Alt and F9 choose it (the number of a
+	/// volumetric_clouds::CoverChoice). The weather gives the cover when not given.
+	std::optional<uint8_t> cloudCover;
 };
 
 /// Where the camera looks as the scenario starts

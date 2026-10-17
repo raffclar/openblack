@@ -57,6 +57,10 @@ struct Inputs
 /// last read
 inline constexpr int32_t k_MoonDateReadInterval = 2000;
 
+/// EXPERIMENT (not for merge): the sine of the angle under the horizon down to which the moon on its real path has a
+/// place (about 1.7 degrees)
+inline constexpr float k_MoonSetSine = -0.03f;
+
 /// The date the moon's phase is taken from, in seconds since 1970: the override, or the computer's as last read
 [[nodiscard]] int64_t MoonDate(const ecs::components::Moon& moon);
 

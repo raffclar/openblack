@@ -19,6 +19,7 @@
 #include <bgfx/bgfx.h>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "Graphics/VolumetricClouds.h"
 #include "GraphicsHandle.h"
@@ -73,6 +74,8 @@ public:
 	std::optional<glm::mat4> previousViewProj;
 	/// How far the wind had moved the clouds in the last frame
 	std::optional<glm::vec2> previousDrift;
+	/// The light of the sky on the clouds in the last frame with no flash of the lightning
+	std::optional<glm::vec3> steadySky;
 	/// The frames drawn, for the jitter
 	uint32_t frame {0};
 

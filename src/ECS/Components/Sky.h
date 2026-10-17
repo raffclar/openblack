@@ -98,6 +98,9 @@ struct Moon
 	/// of the last frame (negative before the first frame). These days move the moon forward on its real path.
 	int32_t passedDays {0};
 	float lastHour {-1.0f};
+	/// EXPERIMENT (not for merge): how much of the moon shows through the overcast, 0 to 1, for the moon that looks
+	/// like the real moon
+	float clearSky {1.0f};
 };
 
 } // namespace openblack::ecs::components

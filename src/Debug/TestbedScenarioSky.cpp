@@ -83,4 +83,27 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 700.0f, -410.0f}, .look = {0.0f, 0.0f, -140.0f}},
 	    .objects = TreesToTheEast(),
 	});
+
+	// EXPERIMENT (not for merge): the lightning inside the volumetric clouds
+	all.push_back({
+	    .id = "weather.cloud_lightning",
+	    .name = "Lightning inside the clouds at night",
+	    .facet = Facet::Sky,
+	    .description = "A thunderstorm over the whole island at midnight, the clock stopped, under an overcast layer of "
+	                   "the experiment's volumetric clouds. The storm flashes every one to two seconds round the camera, "
+	                   "which looks up at the bottom of the clouds from 40 up, past the south west corner of the land.",
+	    .expected = "Each flash lights the cloud from inside round its channel: a bright blue white core, then less light "
+	                "through the cloud farther away, with two to five quick pulses in less than a second. The bottom of "
+	                "the cloud over the flash is lit and the clouds round it are lit less. The land under the flash takes "
+	                "a little of its light. Seen from over the clouds, the flash shows as a glow through the tops round "
+	                "it.",
+	    .environment = {.hour = 0.0f,
+	                    .clockRuns = false,
+	                    .weather = Weather::Thunderstorm,
+	                    .boltSeconds = glm::vec2(1.0f, 2.0f),
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(4)},
+	    .framing = {.shot = Shot::Placed, .eye = {-2560.0f, 40.0f, -3460.0f}, .look = {-2560.0f, 600.0f, -2260.0f}},
+	    .objects = TreesToTheEast(),
+	});
 }

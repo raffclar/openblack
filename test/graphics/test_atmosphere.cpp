@@ -16,7 +16,6 @@
 #include <numbers>
 
 #include <glm/geometric.hpp>
-#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
@@ -474,30 +473,6 @@ TEST(Atmosphere, TheNightAirTakesItsLightFromTheMoonWhileItIsUp)
 	const auto down = atmos::MoonTowards(0.0f, 0.02);
 	ASSERT_LT(down.y, -0.1f);
 	EXPECT_NEAR(glm::length(atmos::AirMoonTowards(sun, down) + sun), 0.0f, 1e-4f);
-}
-
-TEST(Atmosphere, TheMoonsLitEdgePointsToTheSun)
-{
-	// The moon's axes from the eye: across, up and along the line from the eye, at the size of the moon
-	const glm::vec3 line = glm::normalize(glm::vec3(0.3f, 0.4f, 1.0f));
-	const glm::vec3 across0 = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), line));
-	const glm::vec3 up0 = glm::cross(line, across0);
-	const glm::mat3 basis(across0 * 4.0f, up0 * 4.0f, line * 4.0f);
-	const glm::vec3 sun = glm::normalize(glm::vec3(-1.0f, 0.5f, 0.2f));
-	const glm::mat3 turned = atmos::TurnLitEdgeTowards(basis, sun);
-	// The line from the eye and the sizes stay
-	EXPECT_NEAR(glm::length(turned[2] - basis[2]), 0.0f, 1e-5f);
-	EXPECT_NEAR(glm::length(turned[0]), 4.0f, 1e-4f);
-	EXPECT_NEAR(glm::length(turned[1]), 4.0f, 1e-4f);
-	// The first axis points to the sun across the face, and the axes stay square and in the same order
-	const glm::vec3 toSun = glm::normalize(sun - (line * glm::dot(line, sun)));
-	EXPECT_NEAR(glm::dot(glm::normalize(turned[0]), toSun), 1.0f, 1e-4f);
-	EXPECT_NEAR(glm::dot(turned[0], turned[1]), 0.0f, 1e-3f);
-	EXPECT_NEAR(glm::dot(turned[0], turned[2]), 0.0f, 1e-3f);
-	EXPECT_GT(glm::dot(glm::cross(turned[2], turned[0]), turned[1]) * glm::dot(glm::cross(basis[2], basis[0]), basis[1]), 0.0f);
-	// A sun in line with the moon leaves the axes as they are
-	const glm::mat3 same = atmos::TurnLitEdgeTowards(basis, line);
-	EXPECT_NEAR(glm::length(same[0] - basis[0]), 0.0f, 1e-5f);
 }
 
 TEST(Atmosphere, TheNightSkyGivesAFaintLightAfterSunset)
