@@ -847,6 +847,10 @@ struct Command
 		/// A script attaches a sound to the scenario's object, as ATTACH_SOUND_TAG does: the value gives the sound.
 		/// Needs no creature.
 		AttachObjectScriptSound,
+		/// A script says a help text's line (value, by the scripts' number) on the first voice, as
+		/// GAME_PLAY_SAY_SOUND_EFFECT does: from the point (from the middle of the map) on the land with ctrl, else heard
+		/// everywhere. Needs no creature.
+		SayLine,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

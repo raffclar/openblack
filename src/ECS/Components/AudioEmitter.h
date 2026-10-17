@@ -33,6 +33,8 @@ struct AudioEmitter
 	bool spatial = false;
 	/// Where a 3D emitter sounds from, in world coordinates
 	glm::vec3 position {0.0f, 0.0f, 0.0f};
+	/// The axes of the position that the bank header locks (audio::LockedAxis bits): moves do not change them
+	uint8_t lockedAxes {0};
 	/// 0 to 1, before the global and the effect or music volume
 	float gain = 1.0f;
 	/// The volume the gain was set from, 0 to 127

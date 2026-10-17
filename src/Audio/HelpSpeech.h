@@ -99,6 +99,16 @@ enum class SpeechVoice : uint8_t
 	Second,
 };
 
+/// The owner number that the voice rules know a voice's lines by. A line that plays once does not start again while
+/// the same line of the same voice plays.
+[[nodiscard]] constexpr uint32_t OwnerNumberOf(SpeechVoice voice)
+{
+	return voice == SpeechVoice::Second ? 9997 : 9999;
+}
+
+/// The owner number that the voice rules know the advisors' lines by
+constexpr uint32_t k_AdvisorOwnerNumber = 9996;
+
 /// The lines the scripts have had said and the sounds saying them, to tell when a voice has finished a line
 class SpeechVoices
 {

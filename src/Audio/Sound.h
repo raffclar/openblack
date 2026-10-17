@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <memory>
 #include <queue>
 #include <string>
@@ -242,6 +243,8 @@ public:
 	/// Play parameters of the bank header, used where the game plays the sample (see pack::AudioBankOverride)
 	uint32_t overrideFlags;
 	uint16_t headerVolume;
+	/// The world position of the bank header, which gives the value of each axis that the header locks
+	std::array<float, 3> headerPosition {};
 	/// When the bank lets the sample be heard (see SoundEffectUse)
 	uint16_t userParam {0};
 	int32_t loop;

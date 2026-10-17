@@ -515,6 +515,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AudioEmitter::priority>("priority")
 	    .Field<&components::AudioEmitter::spatial>("spatial")
 	    .Field<&components::AudioEmitter::position>("position")
+	    .Field<&components::AudioEmitter::lockedAxes>("lockedAxes")
 	    .Field<&components::AudioEmitter::gain>("gain")
 	    .Field<&components::AudioEmitter::volume>("volume")
 	    .Field<&components::AudioEmitter::pitchPercent>("pitchPercent")

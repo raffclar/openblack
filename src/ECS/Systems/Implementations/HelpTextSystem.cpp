@@ -94,8 +94,9 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 		{
 			return false;
 		}
-		// Heard everywhere, wherever the advisor is
-		_advisorLine = Locator::audio::value().StartSoundEffect(*sound, {});
+		// Heard everywhere, wherever the advisor is. The voice rules know the advisors' lines by their own number.
+		_advisorLine = Locator::audio::value().StartSoundEffect(
+		    *sound, {.voiceOwner = audio::VoiceOwner::Number, .ownerNumber = audio::k_AdvisorOwnerNumber});
 		// Its length is known once it has been made ready to play
 		_advisorLineMs = Locator::resources::value().GetSounds().Handle(*sound)->duration * 1000.0f;
 		return _advisorLine != entt::null;
