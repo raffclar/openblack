@@ -143,6 +143,10 @@ struct BodyAction
 	bool hurried {false};
 	/// Each move of a dance lasts this many milliseconds of real time, whatever the size of the creature
 	float danceMoveMs {0.0f};
+	/// An action played once as a blend: its animation, blended keyframe by keyframe towards this animation by the
+	/// weight, as a kiss blends its low and its high kiss
+	std::optional<size_t> blendedWith;
+	float blendWeight {0.0f};
 	/// The dance needs its next move: the first move after the start, or the next move after a move ended
 	bool chooseDanceMove {false};
 	bool firstDanceMove {false};

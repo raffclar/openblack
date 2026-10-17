@@ -7369,6 +7369,7 @@ std::vector<Scenario> Build()
 	AddGlobeScenarios(all);
 	AddLifeLightScenarios(all);
 	AddCreatureCastingScenarios(all);
+	AddFriendActionScenarios(all);
 	AddBenchmark(all);
 	AddCreatureModeScenarios(all);
 	AddGestureScenarios(all);

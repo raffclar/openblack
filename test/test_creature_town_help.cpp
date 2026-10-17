@@ -251,6 +251,7 @@ TEST(CreatureTownHelp, PlayingWithVillagers)
 	const auto kiss = help::KissVillager(3, 10.0f);
 	ASSERT_EQ(kiss.size(), 3);
 	EXPECT_EQ(kiss[2].kind, Step::Kind::Kiss);
-	EXPECT_EQ(kiss[2].animation, 212u);
+	// A kiss of the air has no creature to kiss
+	EXPECT_FALSE(kiss[2].object.has_value());
 	EXPECT_EQ(HandsNeededFor(kiss[2]), HandsNeed::Any);
 }

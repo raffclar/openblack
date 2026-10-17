@@ -487,7 +487,8 @@ struct Step
 		LowerTotem,
 		/// Making the step's object, a villager, a breeder at once
 		MakeDisciple,
-		/// Kissing: once its body plays no action, it plays the step's animation once, with whatever its hand holds
+		/// Kissing: once its body plays no action, it kisses, with whatever its hand holds. With the step's object, another
+		/// creature, it kisses that creature. Else it kisses the air. The step is done when the body plays no action.
 		Kiss,
 		/// Dancing alone: as it starts, once its body plays no action, the creature starts a dance with moves of one
 		/// second each. The step lasts for the step's seconds counted in whole turns. The dance stops when the step
@@ -513,6 +514,10 @@ struct Step
 		/// Making the step's desire fully strong at once and planning it on the step's object, a town. The current
 		/// action stops as a failure. When no plan is found, the creature decides again.
 		ApplyDesire,
+		/// Waiting for the step's object, a creature, to be free. The creature waits for the step's turns after the turn
+		/// that the step starts. Then the step is done on a turn when the body of the object plays no action and does
+		/// not move.
+		WaitForFree,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -719,6 +724,8 @@ struct Senses
 	std::optional<bool> objectInMap;
 	/// Whether the object that a step waits to be still moves
 	bool objectMoving {false};
+	/// Whether the body of the creature that a step waits for plays an action or moves
+	bool objectBusy {false};
 	/// Whether the object a step watches fly is still really in the air
 	bool objectInTheAir {false};
 	/// Whether the living object of a step that makes it still is in its state of flying
@@ -923,6 +930,12 @@ struct Commands
 	std::optional<PartnerOrder> order;
 	/// The partner to make stand still in its mind (true) or to let go free again (false)
 	std::optional<std::pair<uint32_t, bool>> demobilise;
+	/// A kiss to start, with the creature that it kisses, or with no creature for a kiss of the air
+	struct KissOrder
+	{
+		std::optional<uint32_t> partner;
+	};
+	std::optional<KissOrder> kiss;
 	/// A desire to make fully strong and to plan on a thing, by its entity's number
 	struct DesireOn
 	{

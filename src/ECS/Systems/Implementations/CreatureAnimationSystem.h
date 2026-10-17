@@ -35,6 +35,7 @@ public:
 	                                                                std::span<const uint32_t> bones) override;
 	[[nodiscard]] std::optional<float> AnimationDuration(entt::entity creature, size_t animation) override;
 	[[nodiscard]] std::optional<glm::vec3> AnimationTravel(entt::entity creature, size_t animation) override;
+	[[nodiscard]] std::optional<creature_kiss::KissPoints> KissPointsOf(entt::entity creature) override;
 	void KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point) override;
 
 private:

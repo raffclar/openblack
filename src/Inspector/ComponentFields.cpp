@@ -2350,6 +2350,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_layers::BodyAction::timedByPlayer>("timedByPlayer")
 	    .Field<&openblack::creature_layers::BodyAction::hurried>("hurried")
 	    .Field<&openblack::creature_layers::BodyAction::danceMoveMs>("danceMoveMs")
+	    .Field<&openblack::creature_layers::BodyAction::blendedWith>("blendedWith")
+	    .Field<&openblack::creature_layers::BodyAction::blendWeight>("blendWeight")
 	    .Field<&openblack::creature_layers::BodyAction::chooseDanceMove>("chooseDanceMove")
 	    .Field<&openblack::creature_layers::BodyAction::firstDanceMove>("firstDanceMove");
 	Reflect<openblack::creature_layers::FaceLayer>(context, ValueOnly {})

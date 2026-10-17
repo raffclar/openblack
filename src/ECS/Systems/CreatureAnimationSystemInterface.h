@@ -19,6 +19,8 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureKiss.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -52,6 +54,10 @@ public:
 	[[nodiscard]] virtual std::optional<float> AnimationDuration(entt::entity creature, size_t animation) = 0;
 	/// How far one of a creature's animations carries it, in its model's units and axes, if it has it
 	[[nodiscard]] virtual std::optional<glm::vec3> AnimationTravel(entt::entity creature, size_t animation) = 0;
+	/// Where the lips of a creature are at the moment of the kiss in its high and its low kiss animations, in its own space
+	/// at its scale in the world, the animations blended as the body is drawn. Nothing when the creature has not been
+	/// posed yet.
+	[[nodiscard]] virtual std::optional<creature_kiss::KissPoints> KissPointsOf(entt::entity creature) = 0;
 	/// A force kicks a creature's body at a point, swaying its upper body when the point is high on it and its lower
 	/// body otherwise, unless it is striking with a destroying blow
 	virtual void KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point) = 0;
