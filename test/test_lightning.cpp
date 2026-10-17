@@ -63,3 +63,12 @@ TEST(Lightning, FlashLightsTheLandWhite)
 	EXPECT_FLOAT_EQ(table.GetHaze().colour.r, 127.5f);
 	EXPECT_FLOAT_EQ(table.GetHaze().k, 8.0f + 123.0f);
 }
+
+TEST(Lightning, TheClockPicksTheThunderClap)
+{
+	// The milliseconds since the machine started, over the eleven claps, from the third sample of the bank
+	EXPECT_EQ(openblack::lightning::ThunderClap(0), 2);
+	EXPECT_EQ(openblack::lightning::ThunderClap(10), 12);
+	EXPECT_EQ(openblack::lightning::ThunderClap(11), 2);
+	EXPECT_EQ(openblack::lightning::ThunderClap(0xFFFFFFFFu), static_cast<int32_t>(0xFFFFFFFFu % 11u) + 2);
+}

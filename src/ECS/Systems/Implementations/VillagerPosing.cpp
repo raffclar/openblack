@@ -54,8 +54,6 @@ namespace
 {
 /// A clip whose stride is shorter than this stays where it is, and plays by the clock
 constexpr float k_StationaryStride = 0.05f;
-/// The game's speed units in one metre a second
-constexpr float k_SpeedUnitsPerMetrePerSecond = 655.36f;
 /// How far outside the camera's view a villager is still posed, in metres, should the camera move a little more before
 /// the frame is drawn
 constexpr float k_ViewMargin = 2.0f;
@@ -172,7 +170,8 @@ void LivingActionSystem::UpdatePoses(std::chrono::milliseconds frameGameTime, fl
 		    if (const auto* wallHug = registry.TryGet<const WallHug>(entity);
 		        wallHug != nullptr && states.at(state).movesWithGround != 0 && std::abs(timing.stride) >= k_StationaryStride)
 		    {
-			    const auto speed = static_cast<uint16_t>(std::lround(wallHug->speed * k_SpeedUnitsPerMetrePerSecond + 0.5f));
+			    // The whole speed state that the walk speed came from
+			    const auto speed = static_cast<uint16_t>(GetSpeedStateOf(wallHug->speed));
 			    // The part of a millisecond each frame leaves is carried on to the next, so that the legs keep pace with
 			    // the ground at any frame rate (the game dropped it every frame; deviations list)
 			    const auto carried = animals::MovingPlayCarried(timing, speed, elapsed, transform.scale.x, pose.groundCarry);

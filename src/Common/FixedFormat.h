@@ -13,8 +13,8 @@
 #include <string>
 #include <string_view>
 
-/// Numbers written as the game's text writes them: in fixed point, rounded as its C library rounds, half away from
-/// nothing, so 12.5 shows as 13
+/// Numbers written as the game's text writes them: in fixed point, rounded as its C library rounds. The library takes
+/// the first 17 digits of the number and rounds them half up, so 12.5 shows as 13. An exact zero has no sign.
 namespace openblack::fixed_format
 {
 

@@ -280,6 +280,8 @@ struct ObjectSetup
 	VillagerStates walkFinal {VillagerStates::DecideWhatToDo};
 	/// A villager belongs to the scenario's town of the player, rather than to none
 	bool joinTown {false};
+	/// A villager is made at this age, rather than as a grown up of 30
+	std::optional<uint32_t> villagerAge;
 	/// A villager of the town lives in the scenario's object of this index, a building of the town
 	std::optional<size_t> livesIn;
 	/// A villager lives in the scenario's building of this index. The building must come before the villager in the
@@ -693,6 +695,9 @@ struct Command
 		LayGateStone,
 		/// A script's cinema bars slide in (value 1) or out (value 0)
 		WideScreen,
+		/// A script sets the interface level (value), as the script command that sets the interface interaction does:
+		/// the camera's features, its keys and the hand's reach. Needs no creature
+		SetInterfaceLevel,
 		/// Its history, as the Creature Cave's trophies show it: how it leans in fights (amount, -1 defensive to 1
 		/// aggressive) as if it had fought; how many times it has seen a miracle (value, by its magic type; amount, the
 		/// times), which it then knows about

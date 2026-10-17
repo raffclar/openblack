@@ -217,6 +217,18 @@ TEST_F(SoundTags, ADelayedPointSoundWaitsToReachTheCamera)
 	EXPECT_TRUE(Audio().emitters.begin()->second.played);
 }
 
+TEST_F(SoundTags, ADelayedPointSoundAtItsReachNeverStarts)
+{
+	// Arrived at the camera, a delayed sound starts only nearer than its reach
+	const auto point = _tags.CreatePointSound(k_Sound, {k_Reach, 0.0f, 0.0f}, true);
+	for (int turn = 0; turn < 20; ++turn)
+	{
+		_tags.ProcessTurn(glm::vec3(0.0f));
+	}
+	EXPECT_TRUE(Audio().emitters.empty());
+	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(point));
+}
+
 TEST_F(SoundTags, InsideTheTempleOnlyTheTemplesSoundsStart)
 {
 	ecs::systems::SoundTagSystem tags(&InsideTemple);

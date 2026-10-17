@@ -259,6 +259,7 @@ void FaceAngle(Walker& walker, uint16_t angle)
 	wallHug.yAngle = gutils::ConvertGameAngleTo3D(wallHug.gameAngle);
 	walker.transform.rotation = glm::eulerAngleY(-wallHug.yAngle - glm::radians(90.0f));
 	wallHug.step = wall_hug::StepAlong(wallHug.gameAngle, walker.speed);
+	wallHug.stepAltitude = 0.0f;
 }
 
 /// Faces the walker towards its goal
@@ -278,6 +279,7 @@ void StartFinalStep(Walker& walker)
 	walker.state = MoveState::FinalStep;
 	walker.clockwise = MoveStateClockwise::Undefined;
 	walker.wallHug.step = walker.wallHug.position - walker.goal;
+	walker.wallHug.stepAltitude = 0.0f;
 }
 
 /// Looks along the walker's straight way for the circle it will meet, among those in the cell of a map position: where
@@ -656,9 +658,10 @@ void TurnRound(ecs::Registry& registry, Walker& walker)
 	walker.clockwise = walker.clockwise == MoveStateClockwise::Clockwise ? MoveStateClockwise::CounterClockwise
 	                                                                     : MoveStateClockwise::Clockwise;
 	auto& wallHug = walker.wallHug;
-	const auto turned = wall_hug::TurnRound(wallHug.position, wallHug.step, wallHug.gameAngle);
+	const auto turned = wall_hug::TurnRound(wallHug.position, wallHug.step, wallHug.stepAltitude, wallHug.gameAngle);
 	MoveWalker(walker, turned.position);
 	wallHug.step = turned.step;
+	wallHug.stepAltitude = turned.stepAltitude;
 	// Only its walking direction turns: it is drawn facing as before until it is next turned
 	wallHug.gameAngle = turned.gameAngle;
 	if (walker.state == MoveState::Orbit)
@@ -695,6 +698,7 @@ wall_hug::TrialWalk TrialWalk(ecs::Registry& registry, const Walker& walker, boo
 	auto& wallHug = registry.Get<WallHug>(standIn);
 	wallHug.goal = walker.wallHug.goal;
 	wallHug.step = walker.wallHug.step;
+	wallHug.stepAltitude = walker.wallHug.stepAltitude;
 	wallHug.gameAngle = walker.wallHug.gameAngle;
 	wallHug.turnsUntilStepRebuild = 0;
 	wallHug.position = walker.wallHug.position;
@@ -787,7 +791,8 @@ void PathfindingSystem::ProcessLookahead()
 	lookahead->spareTurnedRound = turnedRound.turnsToSpare;
 	// Turned round, it would jump to where it lands: never into a ring of overlapping circles that shuts it in, where
 	// it would loop for good (a deviation from the game, which turns it round all the same)
-	const auto landing = wall_hug::TurnRound(wallHug->position, wallHug->step, wallHug->gameAngle).position;
+	const auto landing =
+	    wall_hug::TurnRound(wallHug->position, wallHug->step, wallHug->stepAltitude, wallHug->gameAngle).position;
 	lookahead->landingShutIn = wall_hug::ShutInByCircles(wall_hug::ToPoint(landing), CirclesNear(registry, landing));
 	lookahead->turnedRound = wall_hug::TurnedRoundIsBetter(turnedRound, asItGoes) && !lookahead->landingShutIn;
 	if (lookahead->turnedRound)

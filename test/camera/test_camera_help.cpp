@@ -51,13 +51,38 @@ TEST(CameraHelp, TheInterfaceLevelsSetTheFeatures)
 	EXPECT_EQ(help.features, 0x4Au);
 }
 
-TEST(CameraHelp, UnknownLevelsChangeNothing)
+TEST(CameraHelp, EveryLevelButTheTwoHandOnlyLevelsSetsTheHandsReach)
+{
+	CameraHelp help;
+	EXPECT_FALSE(help.interfaceLevel.has_value());
+	for (const int32_t level : {0, 2, 3, 4, 5, 6, 7, 10, 11, 13, 14, 15})
+	{
+		help.handReach = 1.0f;
+		ASSERT_TRUE(help.SetInterfaceLevel(level));
+		EXPECT_EQ(help.handReach, 1800.0f) << "level " << level;
+		EXPECT_EQ(help.interfaceLevel, level);
+	}
+	// The first tutorial level gives a short reach
+	ASSERT_TRUE(help.SetInterfaceLevel(1));
+	EXPECT_EQ(help.handReach, 75.0f);
+	// The levels that only move the hand or only let it interact keep the reach
+	for (const int32_t level : {8, 12})
+	{
+		help.handReach = 1.0f;
+		ASSERT_TRUE(help.SetInterfaceLevel(level));
+		EXPECT_EQ(help.handReach, 1.0f) << "level " << level;
+	}
+}
+
+TEST(CameraHelp, UnknownLevelsChangeNothingButAreKept)
 {
 	CameraHelp help;
 	help.Enable(0x26, ~0u);
 	EXPECT_FALSE(help.SetInterfaceLevel(9));
+	EXPECT_EQ(help.interfaceLevel, 9);
 	EXPECT_FALSE(help.SetInterfaceLevel(16));
 	EXPECT_FALSE(help.SetInterfaceLevel(-1));
+	EXPECT_EQ(help.interfaceLevel, -1);
 	EXPECT_EQ(help.features, 0x26u);
 }
 
@@ -116,9 +141,9 @@ TEST(CameraHelp, TheInterfaceLevelsSetTheKeysAndTheHandsReach)
 	EXPECT_EQ(help.BlockedActions(), static_cast<BindableActionMap>(static_cast<uint64_t>(BindableActionMap::ZOOM_TO_TEMPLE) |
 	                                                                static_cast<uint64_t>(BindableActionMap::ZOOM_TO_CREATURE) |
 	                                                                static_cast<uint64_t>(BindableActionMap::ZOOM_TO_REALM)));
-	// Level 2 leaves the reach as it was
+	// Level 2 gives the full reach back
 	ASSERT_TRUE(help.SetInterfaceLevel(2));
-	EXPECT_FLOAT_EQ(help.handReach, 75.0f);
+	EXPECT_FLOAT_EQ(help.handReach, 1800.0f);
 	// Level 8 takes every camera key, but not talking
 	ASSERT_TRUE(help.SetInterfaceLevel(8));
 	const auto blocked = static_cast<uint64_t>(help.BlockedActions());

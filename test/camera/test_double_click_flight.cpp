@@ -97,6 +97,8 @@ public:
 	void FenceHit(const glm::vec3& /*origin*/, const glm::vec3& /*listener*/) override {}
 	[[nodiscard]] const particles::LightSheet& GetForceField() const override { return _sheet; }
 	[[nodiscard]] uint32_t GetFenceHits() const override { return 0; }
+	void SetInclusionDistance(float /*distance*/) override {}
+	[[nodiscard]] float GetInclusionDistance() const override { return 0.0f; }
 
 private:
 	camera_zones::Zones _zones;

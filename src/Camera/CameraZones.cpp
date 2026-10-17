@@ -142,16 +142,22 @@ std::optional<glm::vec3> camera_zones::SlideUnderLimit(const glm::vec3& origin, 
 	return line * -((origin.y - limit) / line.y);
 }
 
-std::optional<glm::vec3> camera_zones::PushInsideFence(std::span<const glm::vec3> fence, bool fenceOn,
-                                                       const glm::vec3& originAtStart, const glm::vec3& origin,
-                                                       const glm::vec3& focus, float searchRadius)
+camera_zones::FenceKeep camera_zones::PushInsideFence(std::span<const glm::vec3> fence, bool fenceOn,
+                                                      const glm::vec3& originAtStart, const glm::vec3& origin,
+                                                      const glm::vec3& focus, float searchRadius)
 {
+	if (!fenceOn)
+	{
+		return {.inclusionDistance = k_NoFenceDistance};
+	}
 	const auto towards = DistanceSquaredAcross(originAtStart, origin) < k_HardlyMoved ? focus : originAtStart;
 	const auto direction = towards - origin;
 	const auto crossing = CrossFence(fence, fenceOn, origin, direction);
 	if (crossing.inside)
 	{
-		return std::nullopt;
+		const float dx = crossing.closest.x - origin.x;
+		const float dz = crossing.closest.z - origin.z;
+		return {.inclusionDistance = std::sqrt(dz * dz + dx * dx)};
 	}
 	// The way across the ground from the camera to the crossing
 	glm::vec3 way {crossing.closest.x - origin.x, 0.0f, crossing.closest.z - origin.z};
@@ -165,9 +171,10 @@ std::optional<glm::vec3> camera_zones::PushInsideFence(std::span<const glm::vec3
 	{
 		for (const int turn : {-step, step})
 		{
-			const double angle = static_cast<double>(turn) * static_cast<double>(k_SearchStep);
-			const auto sine = static_cast<float>(std::sin(angle) * static_cast<double>(searchRadius));
-			const auto cosine = static_cast<float>(std::cos(angle) * static_cast<double>(searchRadius));
+			// The angle is a single precision value. Its sine and cosine are full precision before the radius scales them.
+			const float angle = static_cast<float>(turn) * k_SearchStep;
+			const auto sine = static_cast<float>(std::sin(static_cast<double>(angle)) * static_cast<double>(searchRadius));
+			const auto cosine = static_cast<float>(std::cos(static_cast<double>(angle)) * static_cast<double>(searchRadius));
 			const glm::vec3 candidate =
 			    crossing.closest + glm::vec3(cosine * way.x - sine * way.z, 0.0f, sine * way.x + cosine * way.z);
 			if (CrossFence(fence, fenceOn, candidate, direction).inside)
@@ -178,7 +185,7 @@ std::optional<glm::vec3> camera_zones::PushInsideFence(std::span<const glm::vec3
 			}
 		}
 	}
-	return glm::vec3(target.x - origin.x, 0.0f, target.z - origin.z);
+	return {.target = target, .inclusionDistance = 0.0f};
 }
 
 glm::vec3 camera_zones::FlightOriginInsideFence(std::span<const glm::vec3> fence, bool fenceOn, const glm::vec3& origin,
@@ -187,10 +194,16 @@ glm::vec3 camera_zones::FlightOriginInsideFence(std::span<const glm::vec3> fence
 	auto direction = focus - origin;
 	if (direction != glm::vec3(0.0f))
 	{
-		direction *= 1.0f / std::sqrt(direction.x * direction.x + direction.y * direction.y + direction.z * direction.z);
+		direction *= 1.0f / std::sqrt((direction.z * direction.z + direction.y * direction.y) + direction.x * direction.x);
 	}
 	const auto crossing = CrossFence(fence, fenceOn, origin, direction);
 	return crossing.inside ? origin : crossing.closest;
+}
+
+bool camera_zones::FlightWooshes(const glm::vec3& from, const glm::vec3& to)
+{
+	const glm::vec3 way = from - to;
+	return k_FlightWooshDistance < std::sqrt((way.y * way.y + way.x * way.x) + way.z * way.z);
 }
 
 bool camera_zones::ScriptInfluenceCounts(std::span<const glm::vec3> fence, bool fenceOn, const glm::vec3& point)

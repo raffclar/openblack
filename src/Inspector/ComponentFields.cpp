@@ -2057,6 +2057,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::WallHug>(context)
 	    .Field<&components::WallHug::goal>("goal")
 	    .Field<&components::WallHug::step>("step")
+	    .Field<&components::WallHug::stepAltitude>("stepAltitude")
 	    .Field<&components::WallHug::yAngle>("yAngle")
 	    .Field<&components::WallHug::speed>("speed")
 	    .Field<&components::WallHug::gameAngle>("gameAngle")

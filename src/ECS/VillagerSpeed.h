@@ -45,9 +45,9 @@ struct Inputs
 	/// The land's speed balance and belief speed scale (1 unless the land sets them)
 	float landSpeedBalance {1.0f};
 	float landBeliefSpeedScale {1.0f};
-	/// Its player's Indian tribal power, none without a player
+	/// The most Indian tribal power its player had, none without a player
 	std::optional<float> indianPower;
-	/// For a town of a player but the neutral one: the town's belief in the player and in the neutral player
+	/// For a town of a player but the neutral one: the town's belief in the player, and the town's own neutral belief
 	struct Belief
 	{
 		float player;
@@ -84,6 +84,29 @@ using FloatRandom = std::function<float(float)>;
 [[nodiscard]] constexpr bool StateChangeSetsSpeed(bool controlledByScript, bool dancing)
 {
 	return !controlledByScript && !dancing;
+}
+
+/// The part of the speed that comes from the player of the villager's town
+struct PlayerTerms
+{
+	std::optional<float> indianPower;
+	std::optional<Inputs::Belief> belief;
+};
+/// The player's part of the speed. A town with a player gives the most Indian tribal power that the player had. A town
+/// of a player but the neutral one also gives its belief in the player and its own neutral belief. A town without a
+/// player gives neither.
+[[nodiscard]] constexpr PlayerTerms TermsOfPlayer(std::optional<float> mostIndianPower, bool neutralPlayer,
+                                                  float beliefInPlayer, float townNeutralBelief)
+{
+	if (!mostIndianPower.has_value())
+	{
+		return {};
+	}
+	if (neutralPlayer)
+	{
+		return {.indianPower = mostIndianPower};
+	}
+	return {.indianPower = mostIndianPower, .belief = Inputs::Belief {.player = beliefInPlayer, .neutral = townNeutralBelief}};
 }
 
 /// The speed of the state, before the villager's own way of going

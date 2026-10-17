@@ -111,8 +111,9 @@ void CheckChildGrownUp(LivingAction& action, uint32_t turn)
 	person.lifeStage = Villager::LifeStage::Adult;
 	const auto grownUpAge = villager_age::GrownUpAge(info.grownUpAge);
 	villager_age::SetBirthTurnForAge(person, grownUpAge);
-	SetScale(villager,
-	         GrownScaleFor(person, grownUpAge, villager_age::StartScale(grownUpAge, info.grownUpAge, info.ageToScale.values)));
+	SetScale(villager, GrownScaleFor(person, grownUpAge,
+	                                 villager_age::StartScale(grownUpAge, info.grownUpAge, info.ageToScale.values,
+	                                                          villager_age::BeforeTable(info.dancingSpeed))));
 	// It stops following its mother
 	person.mother = entt::null;
 	ecs::villager_home::LookForBetterHome(action);

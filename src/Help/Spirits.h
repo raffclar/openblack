@@ -234,11 +234,22 @@ struct Trail
 		glm::vec3 velocity {0.0f};
 		float age {0.0f};
 	};
+	/// The sparks at the start: each at rest at the middle, spark i with the age i
+	[[nodiscard]] static constexpr std::array<Spark, k_Sparks> StartSparks()
+	{
+		std::array<Spark, k_Sparks> start {};
+		for (size_t i = 0; i < start.size(); ++i)
+		{
+			start.at(i).age = static_cast<float>(i);
+		}
+		return start;
+	}
 	std::array<glm::vec3, k_Points> points {};
 	/// Where the next point goes; the oldest point is here too
 	size_t head {0};
-	float accumulator {0.0f};
-	std::array<Spark, k_Sparks> sparks {};
+	/// The seconds not yet used for points. It starts full, so the first feeds each add a point.
+	float accumulator {5.0f};
+	std::array<Spark, k_Sparks> sparks {StartSparks()};
 };
 
 /// One vertex of a trail's strip, in hover space with its depth channel

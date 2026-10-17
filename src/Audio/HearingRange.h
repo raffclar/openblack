@@ -9,8 +9,19 @@
 
 #pragma once
 
+#include <cstdint>
+
+#include <glm/vec3.hpp>
+
 namespace openblack::audio
 {
+
+/// The square of the distance from the camera to a point, summed in the game's order: the height, then up, then across
+[[nodiscard]] constexpr float DistanceSquared(const glm::vec3& camera, const glm::vec3& point)
+{
+	const glm::vec3 way = camera - point;
+	return (way.z * way.z + way.y * way.y) + way.x * way.x;
+}
 
 /// The furthest from the camera a placed sound effect may start. The bank's maximum distance for the sample counts
 /// whether or not the bank's header applies it to the voice; a sample whose bank gives none (most of those that keep
@@ -27,10 +38,31 @@ namespace openblack::audio
 	return bankMaxDistance;
 }
 
-/// Whether a placed sound this far from the camera may start, up to and including its range
-[[nodiscard]] constexpr bool IsWithinStartRange(float distance, float range)
+/// Whether a placed sound at this square of the distance from the camera may start. Only a square of the distance
+/// that is more than the square of the range stops it, so a sound right at its range starts.
+[[nodiscard]] constexpr bool IsWithinStartRange(float distanceSquared, float range)
 {
-	return distance <= range;
+	return !(distanceSquared > range * range);
+}
+
+/// How far a sound travels in the turns since it started, in metres: at 347 metres a second
+inline constexpr float k_SpeedOfSound = 347.0f;
+[[nodiscard]] constexpr float SoundTravelled(uint32_t turns, uint32_t millisecondsPerTurn)
+{
+	const float seconds = static_cast<float>(turns) * static_cast<float>(millisecondsPerTurn) * 0.001f;
+	return k_SpeedOfSound * seconds;
+}
+
+/// Whether a sound that waits to travel to the camera has arrived: it has gone at least as far as the camera is
+[[nodiscard]] constexpr bool SoundArrived(float travelled, float distanceSquared)
+{
+	return !(travelled * travelled < distanceSquared);
+}
+
+/// Whether a sound that arrived at the camera starts: only nearer than its range, so a range of nothing never starts
+[[nodiscard]] constexpr bool ArrivedSoundStarts(float distanceSquared, float range)
+{
+	return distanceSquared < range * range;
 }
 
 /// The distances that a bank header gives a placed voice. The scale is the roll-off: how fast the volume falls past
