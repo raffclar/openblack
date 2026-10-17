@@ -12,12 +12,14 @@
 #include <cstdint>
 
 #include <optional>
+#include <utility>
 
 #include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Components/Transform.h"
 #include "Enums.h"
 #include "Magic/WorshipBattery.h"
 
@@ -48,6 +50,13 @@ public:
 	[[nodiscard]] virtual entt::id_type SiteMesh(entt::entity temple) = 0;
 	/// The model of a tribe's altar
 	[[nodiscard]] virtual entt::id_type AltarMesh(Tribe tribe) const = 0;
+	/// The circle on the ground that a model covers, at a place, as for the other things that stay put; none without the
+	/// model
+	[[nodiscard]] virtual std::optional<std::pair<glm::vec2, float>>
+	FixedCircleOf(entt::id_type /*model*/, const components::Transform& /*placed*/) const
+	{
+		return std::nullopt;
+	}
 	[[nodiscard]] virtual float LandHeightAt(glm::vec2 point) const = 0;
 	/// How many people live in a town, with a home or without
 	[[nodiscard]] virtual uint32_t PopulationOf(entt::entity town) const = 0;

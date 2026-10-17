@@ -72,6 +72,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingModel.h"
 #include "ECS/TownAggression.h"
 #include "ECS/TownPlanning.h"
 #include "InfoConstants.h"
@@ -287,14 +288,10 @@ world_objects::Size world_objects::SizeOf(entt::entity object)
 	const auto& registry = Locator::entitiesRegistry::value();
 	Size size {.radius = k_DefaultRadius, .height = k_DefaultHeight};
 	const auto* transform = registry.TryGet<const Transform>(object);
-	const auto* mesh = registry.TryGet<const Mesh>(object);
-	// A one-shot miracle's globe is drawn by the miracles' own pass, with its dome's model
-	std::optional<entt::id_type> model;
-	if (mesh != nullptr)
-	{
-		model = mesh->id;
-	}
-	else if (registry.AllOf<OneOffSpellSeed>(object))
+	// A one-shot miracle's globe is drawn by the miracles' own pass, with its dome's model. An altar has its model
+	// before the model shows.
+	auto model = thing_model::ModelOf(registry, object);
+	if (!model.has_value() && registry.AllOf<OneOffSpellSeed>(object))
 	{
 		model = OneOffSpellSeed::k_MeshId.value();
 	}

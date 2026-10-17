@@ -83,6 +83,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingModel.h"
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -663,11 +664,11 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 		return thing;
 	}
 
-	// The model's box gives most things their size
-	if (const auto* mesh = registry.TryGet<const Mesh>(entity);
-	    mesh != nullptr && Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(mesh->id))
+	// The model's box gives most things their size. An altar has its model's box before the model shows.
+	if (const auto model = ecs::thing_model::ModelOf(registry, entity);
+	    model.has_value() && Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(*model))
 	{
-		const auto box = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox();
+		const auto box = Locator::resources::value().GetMeshes().Handle(*model)->GetBoundingBox();
 		thing.boxCentre = box.Center();
 		thing.boxHalfSize = box.Size() * 0.5f;
 		thing.height = obstacles::ModelHeight(thing.boxHalfSize, thing.scale);
@@ -742,7 +743,7 @@ std::optional<obstacles::Thing> ThingOf(const ecs::Registry& registry, entt::ent
 	{
 		thing.shape = obstacles::Shape::AtPlace;
 	}
-	else if (registry.AnyOf<Abode, Feature, Flowers, SpellDispenser, VillageTotem, WorshipSite>(entity))
+	else if (registry.AnyOf<Abode, Feature, Flowers, SpellDispenser, VillageTotem, WorshipSite, WorshipAltar>(entity))
 	{
 		thing.avoidance = obstacles::Avoidance::Building;
 	}
