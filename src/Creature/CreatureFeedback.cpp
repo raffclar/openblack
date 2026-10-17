@@ -334,6 +334,16 @@ glm::vec3 creature_feedback::HeldLookPoint(const glm::vec3& hand, const glm::vec
 	{
 		return camera;
 	}
-	const auto way = glm::length(lineOfSight) > 0.0f ? glm::normalize(lineOfSight) : glm::vec3(0.0f);
+	// The way is the point at one unit along the line of sight, less the camera
+	const auto way = PointOnSight(camera, lineOfSight, 1.0f) - camera;
 	return hand - (way * (creatureHeight * k_LooksNearerTheCamera));
+}
+
+glm::vec3 creature_feedback::PointOnSight(const glm::vec3& camera, const glm::vec3& lineOfSight, float distance)
+{
+	if (lineOfSight == glm::vec3(0.0f))
+	{
+		return camera;
+	}
+	return camera + x87::Scaled<x87::SumOrder::Zyx>(lineOfSight, distance);
 }

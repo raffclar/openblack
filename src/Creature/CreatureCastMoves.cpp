@@ -17,6 +17,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/GUtilsDistance.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureLocomotion.h"
 
 using namespace openblack;
@@ -82,18 +84,18 @@ float creature_cast_moves::GetAwayDistance(float keep, std::optional<float> thin
 
 glm::vec3 creature_cast_moves::GetAwayPoint(const glm::vec3& creature, const glm::vec3& thing, float distance)
 {
+	// The game measures how far apart they are with its map distance, and adds the squares of the way z, y, x
 	const auto away = creature - thing;
-	const float flat = glm::length(glm::vec2(away.x, away.z));
-	glm::vec3 direction {0.0f};
-	if (!(flat > 0.0001f))
+	glm::vec3 direction {1.0f, 0.0f, 0.0f};
+	if (gutils::GetDistanceInMetres(thing, creature) > 0.0001f)
 	{
-		direction = {1.0f, 0.0f, 0.0f};
+		direction = away;
+		if (away != glm::vec3(0.0f))
+		{
+			direction *= 1.0f / x87::LengthZyx(away);
+		}
 	}
-	else if (const float length = glm::length(away); length > 0.0f)
-	{
-		direction = away / length;
-	}
-	return creature + direction * distance;
+	return (direction * distance) + creature;
 }
 
 std::optional<glm::vec2> creature_cast_moves::FindClearArea(glm::vec2 point, float width, const ClearCell& clear)

@@ -21,6 +21,7 @@
 #include <spdlog/spdlog.h>
 
 #include "AudioManagerInterface.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/X87Vector.h"
 #include "Locator.h"
 
@@ -624,7 +625,10 @@ bool GameMusic::ProcessLand(const TurnInputs& inputs)
 MusicType GameMusic::SelectLandType(const TurnInputs& inputs)
 {
 	const auto alignmentIndex = GetAlignmentIndex(inputs.alignment);
-	const auto distance = [&inputs](const Town& town) { return glm::distance(glm::xz(inputs.camera), glm::xz(town.position)); };
+	// The game's map distance
+	const auto distance = [&inputs](const Town& town) {
+		return gutils::GetDistanceInMetres(glm::xz(inputs.camera), glm::xz(town.position));
+	};
 	const auto townMusic = [alignmentIndex](const Town& town) {
 		if (town.tribe < 0 || static_cast<size_t>(town.tribe) >= k_TribeTownMusic.size())
 		{
@@ -634,12 +638,13 @@ MusicType GameMusic::SelectLandType(const TurnInputs& inputs)
 	};
 
 	const Town* nearest = nullptr;
-	auto nearestDistance = std::numeric_limits<float>::max();
+	// The game takes the nearest town strictly nearer than the off distance
+	auto nearestDistance = k_TownTriggerOffDistance;
 	const Town* remembered = nullptr;
 	for (const auto& town : inputs.towns)
 	{
 		const auto d = distance(town);
-		if (d <= k_TownTriggerOffDistance && d < nearestDistance)
+		if (d < nearestDistance)
 		{
 			nearest = &town;
 			nearestDistance = d;

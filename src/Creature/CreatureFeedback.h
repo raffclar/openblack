@@ -278,6 +278,10 @@ struct HandUpGlide
 [[nodiscard]] std::optional<HandUpGlide> HandUpGlideTo(bool onBody, bool cursorMoved, const glm::vec3& normal,
                                                        const glm::vec3& creaturePosition, const glm::vec3& camera);
 
+/// The point on the line of sight at a distance from the camera. The game divides the distance by the length of the
+/// way one time and multiplies each part of the way by that share. With no way, the point is the camera.
+[[nodiscard]] glm::vec3 PointOnSight(const glm::vec3& camera, const glm::vec3& lineOfSight, float distance);
+
 /// Held by the hand, the creature looks at the hand, at a point a little nearer the camera than it; with the hand near
 /// its middle it looks at the camera instead. Shares of its height.
 constexpr float k_LooksAtCameraWithin = 0.6f;

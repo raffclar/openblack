@@ -1862,7 +1862,8 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	        .playerHasCitadel = home.has_value(),
 	        .exhaustion = needs != nullptr ? needs->needs.exhaustion : 0.0f,
 	        .sleeping = mind != nullptr && mind->idle.activity == creature_mind::Activity::Sleep,
-	        .distanceFromHome = home.has_value() ? std::optional(glm::distance(glm::vec2(home->x, home->z), at)) : std::nullopt,
+	        .distanceFromHome =
+	            home.has_value() ? std::optional(gutils::GetDistanceInMetres(glm::vec2(home->x, home->z), at)) : std::nullopt,
 	        .leash = TypeOf(creature),
 	        .orderInForce = OrderInForce(creature),
 	        .height = height,
@@ -1930,7 +1931,7 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		                         .action = orders::k_MoveAction,
 		                         .agenda = orders::MoveTo(order.point, order.arrival, order.runAndWait, wait)});
 		// Sent far, it says which desire it acts on
-		if (glm::distance(at, position) > orders::k_TellDesireDistance)
+		if (gutils::GetDistanceInMetres(at, position) > orders::k_TellDesireDistance)
 		{
 			desire = Desire::ObeyPlayer;
 		}
@@ -2011,7 +2012,7 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	    .liftable = Locator::creatureObjectActionSystem::has_value() &&
 	                Locator::creatureObjectActionSystem::value().CanPickUp(creature, object),
 	    .creature = isCreature,
-	    .distance = glm::distance(transform.position, objectAt),
+	    .distance = gutils::GetDistanceInMetres(transform.position, objectAt),
 	    .leash = type,
 	    .height = height,
 	});

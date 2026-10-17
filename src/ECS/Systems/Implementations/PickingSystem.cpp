@@ -26,6 +26,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/LandLine.h"
 #include "3D/MapCoords.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureMorph.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -374,7 +375,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 			const auto halfExtents = box.Size() * 0.5f;
 			_candidates.push_back({
 			    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
-			    .radius = glm::length(halfExtents) * transform->scale.x,
+			    .radius = x87::LengthZyx(halfExtents) * transform->scale.x,
 			    .origin = transform->position,
 			    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
 			});
@@ -428,7 +429,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		}
 		_candidates.push_back({
 		    .centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
-		    .radius = glm::length(halfExtents) * scale,
+		    .radius = x87::LengthZyx(halfExtents) * scale,
 		    .origin = glm::vec3(model[3]),
 		    .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
 		});
@@ -644,7 +645,7 @@ void PickingSystem::AddBubbles(glm::vec3 camera)
 		    pushed[3] += glm::vec4(ecs::pick_shapes::BubblePickOffset(middle, camera, halfExtents, scale), 0.0f);
 		    _candidates.push_back({
 		        .centre = glm::vec3(pushed * glm::vec4(box.Center(), 1.0f)),
-		        .radius = glm::length(halfExtents) * scale,
+		        .radius = x87::LengthZyx(halfExtents) * scale,
 		        .origin = transform.position,
 		        .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
 		    });

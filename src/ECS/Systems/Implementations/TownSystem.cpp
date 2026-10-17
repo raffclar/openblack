@@ -12,6 +12,7 @@
 #include "TownSystem.h"
 
 #include <algorithm>
+#include <limits>
 #include <optional>
 #include <tuple>
 #include <utility>
@@ -190,29 +191,15 @@ entt::entity TownSystem::FindAbodeWithSpace(entt::entity town, entt::entity vill
 
 entt::entity TownSystem::FindClosestTown(const glm::vec3& point) const
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-
-	entt::entity result = entt::null;
-	auto closest = std::numeric_limits<float>::infinity();
-
-	registry.Each<const Town, const Transform>(
-	    [&point, &result, &closest](entt::entity entity, [[maybe_unused]] auto& town, [[maybe_unused]] auto& transform) {
-		    const auto delta = point - transform.position;
-		    const float distance2 = glm::dot(delta, delta);
-		    if (distance2 < closest)
-		    {
-			    closest = distance2;
-			    result = entity;
-		    }
-	    });
-
-	return result;
+	// The game's nearest town to a place, of any player and tribe, with no limit on the distance
+	return NearestTown(glm::xz(point), std::numeric_limits<float>::max(), [](entt::entity /*town*/) { return true; });
 }
 
-entt::entity TownSystem::NearestBuilding(glm::vec2 point) const
+namespace
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-	// The players' towns in turn, in the order each gained them, then the neutral towns
+/// The players' towns in turn, in the order each gained them, then the neutral towns
+std::vector<std::pair<entt::entity, const Town*>> TownsInTurn(const ecs::Registry& registry)
+{
 	std::vector<std::pair<entt::entity, const Town*>> towns;
 	registry.Each<const Town>([&towns](entt::entity entity, const Town& town) { towns.emplace_back(entity, &town); });
 	std::ranges::stable_sort(towns, [](const auto& a, const auto& b) {
@@ -221,6 +208,37 @@ entt::entity TownSystem::NearestBuilding(glm::vec2 point) const
 		};
 		return rank(*a.second) < rank(*b.second);
 	});
+	return towns;
+}
+} // namespace
+
+entt::entity TownSystem::NearestTown(glm::vec2 point, float reach, const std::function<bool(entt::entity)>& accepts) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	entt::entity closest = entt::null;
+	float nearest = reach;
+	for (const auto& [entity, town] : TownsInTurn(registry))
+	{
+		const auto* transform = registry.TryGet<const Transform>(entity);
+		if (transform == nullptr)
+		{
+			continue;
+		}
+		// The game's map distance
+		const float distance = gutils::GetDistanceInMetres(point, glm::xz(transform->position));
+		if (distance < nearest && accepts(entity))
+		{
+			nearest = distance;
+			closest = entity;
+		}
+	}
+	return closest;
+}
+
+entt::entity TownSystem::NearestBuilding(glm::vec2 point) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto towns = TownsInTurn(registry);
 	entt::entity closest = entt::null;
 	float nearest = k_FarthestAbode;
 	for (const auto& [entity, town] : towns)
@@ -232,7 +250,8 @@ entt::entity TownSystem::NearestBuilding(glm::vec2 point) const
 			{
 				continue;
 			}
-			const float distance = glm::distance(glm::xz(transform->position), point);
+			// The game's map distance
+			const float distance = gutils::GetDistanceInMetres(glm::xz(transform->position), point);
 			if (distance < nearest)
 			{
 				nearest = distance;

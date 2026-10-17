@@ -610,7 +610,8 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 	    creature_object_actions::LeanOf(height(at + glm::vec2(radius, 0.0f)), height(at - glm::vec2(radius, 0.0f)),
 	                                    height(at + glm::vec2(0.0f, radius)), height(at - glm::vec2(0.0f, radius)), radius);
 	const auto ahead = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-	const auto velocity = creature_object_actions::KickVelocity(glm::normalize(glm::xz(ahead)), lean, ShownSize(body));
+	const auto velocity =
+	    creature_object_actions::KickVelocity(glm::normalize(glm::xz(ahead)), lean, transform.scale.x, ShownSize(body));
 	const auto* points = PointsOf(body);
 	const auto foot = points != nullptr && points->rightFoot < animation.boneMatrices.size()
 	                      ? glm::vec3(creature::PosedBone(points->rightFoot, animation.boneMatrices, PlacementOf(transform))[3])

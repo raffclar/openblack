@@ -76,7 +76,7 @@ void Integrate(Rope& rope, const std::array<glm::vec3, k_NodeCount>& acceleratio
 	{
 		auto& node = rope.nodes.at(i);
 		node.velocity += (k_StepSeconds / k_Mass) * accelerations.at(i);
-		const auto speedSquared = glm::dot(node.velocity, node.velocity);
+		const auto speedSquared = x87::Dot<x87::SumOrder::Zyx>(node.velocity, node.velocity);
 		if (speedSquared > k_MaxSpeedSquared)
 		{
 			node.velocity *= k_MaxSpeed / std::sqrt(speedSquared);
@@ -122,15 +122,18 @@ void leash_rope::Step(Rope& rope, const glm::vec3& start, const glm::vec3& end, 
 {
 	const auto targetStart = ClampEnd(start);
 	const auto targetEnd = ClampEnd(end);
-	const auto steps = std::min(static_cast<uint32_t>(std::ceil(std::max(seconds, 0.0f) * k_StepsPerSecond)), k_MaxSteps);
+	// One step more than the whole steps in the time: the time is scaled by minus the step rate and cut towards zero
+	const auto scaled = std::max(seconds, 0.0f) * -k_StepsPerSecond;
+	const auto steps = 1 - static_cast<int32_t>(scaled);
 	const auto rest = RestLength(rope.slackLength);
-	const auto fromStart = rope.start;
-	const auto fromEnd = rope.end;
-	for (uint32_t step = 0; step < steps; ++step)
+	// The ends move by the same share of the way at each step: the move is added again each time
+	const auto share = 1.0f / static_cast<float>(steps);
+	const auto startMove = (targetStart - rope.start) * share;
+	const auto endMove = (targetEnd - rope.end) * share;
+	for (int32_t step = 0; step < steps; ++step)
 	{
-		const auto t = static_cast<float>(step + 1) / static_cast<float>(steps);
-		rope.start = fromStart + ((targetStart - fromStart) * t);
-		rope.end = fromEnd + ((targetEnd - fromEnd) * t);
+		rope.start = startMove + rope.start;
+		rope.end = endMove + rope.end;
 		Integrate(rope, Accelerations(rope, rest), ground);
 	}
 	rope.start = targetStart;
@@ -141,13 +144,17 @@ void leash_rope::Step(Rope& rope, const glm::vec3& start, const glm::vec3& end, 
 float leash_rope::Tension(const Rope& rope)
 {
 	const auto rest = RestLength(rope.slackLength);
-	const auto taut = rope.maxLength / k_Segments;
-	if (taut <= rest)
+	const auto taut = rope.maxLength * k_RestShare;
+	const auto first = x87::Length<x87::SumOrder::Zyx>(rope.nodes.front().position - rope.start);
+	const auto stretch = first - rest;
+	const auto range = taut - rest;
+	// With no range, the game divides by zero: a stretch gives the full force, else no force
+	const auto share = range != 0.0f ? stretch / range : (stretch > 0.0f ? 1.0f : 0.0f);
+	if (!(share > 0.0f))
 	{
 		return 0.0f;
 	}
-	const auto first = glm::length(rope.nodes.front().position - rope.start);
-	return std::clamp((first - rest) / (taut - rest), 0.0f, 1.0f);
+	return share < 1.0f ? share : 1.0f;
 }
 
 glm::vec3 leash_rope::Point(const Rope& rope, size_t i)

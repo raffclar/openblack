@@ -18,6 +18,7 @@
 
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::creature_obstacles;
@@ -216,7 +217,7 @@ std::vector<Circle> creature_obstacles::CirclesOf(const Thing& thing, const Walk
 	case Shape::Trunk:
 		return {{.centre = thing.position, .radius = Clamped(ReachRadius(thing, walker) + walker.radius + FireMargin(thing))}};
 	case Shape::Scenery:
-		return {{.centre = thing.position, .radius = glm::length(thing.boxHalfSize) * k_SceneryShare}};
+		return {{.centre = thing.position, .radius = x87::LengthZyx(thing.boxHalfSize) * k_SceneryShare}};
 	case Shape::Temple:
 		return TempleCircles(thing.position, thing.yAngle, thing.playerAlignment, thing.worshipSites);
 	case Shape::Creature:

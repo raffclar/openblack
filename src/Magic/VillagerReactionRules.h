@@ -101,7 +101,8 @@ constexpr float k_FollowDistance = 10.0f;
 /// least running distance or the thing moves faster than 3 metres a second, else the row's turns
 [[nodiscard]] uint32_t BurningInHandAgainTurns(float distance, float leastRunDistance, float thingSpeed, uint32_t tableTurns);
 
-/// The distance a villager is from a reaction as it is spread: half the sum of how far apart they are along each axis
+/// The distance a villager is from a reaction as it is spread: half the sum of how far apart they are along each axis.
+/// Each position is first taken as the game keeps it, in map units, and back to metres
 [[nodiscard]] float SpreadDistance(glm::vec2 villager, glm::vec2 reaction);
 
 /// How urgent a reaction is to a villager at a distance, 0 to 255: its kind's priority to the villager, up to half as

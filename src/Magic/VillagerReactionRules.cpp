@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <iterator>
 
+#include "3D/MapCoords.h"
+
 using namespace openblack::magic;
 
 namespace
@@ -95,7 +97,10 @@ uint8_t villager_reaction::DroppedByHandPriority(const DroppedByHandWatch& watch
 
 float villager_reaction::SpreadDistance(glm::vec2 villager, glm::vec2 reaction)
 {
-	return 0.5f * (std::abs(villager.x - reaction.x) + std::abs(villager.y - reaction.y));
+	using map_coords::Quantise;
+	const float across = std::abs(Quantise(villager.y) - Quantise(reaction.y));
+	const float along = std::abs(Quantise(villager.x) - Quantise(reaction.x));
+	return (across + along) * 0.5f;
 }
 
 uint8_t villager_reaction::VillagerInHandPriority(const VillagerInHandWatch& watch, uint32_t breederPriority)

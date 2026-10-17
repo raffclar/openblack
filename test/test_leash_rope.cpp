@@ -109,16 +109,29 @@ TEST(LeashRope, NothingFasterThanItsSpeedCap)
 	    std::ranges::all_of(rope.nodes, [](const Node& node) { return glm::length(node.velocity) <= k_MaxSpeed + 1e-2f; }));
 }
 
-TEST(LeashRope, NoTimeMeansOnlyTheEndsMove)
+TEST(LeashRope, EachFrameStepsOnceMoreThanTheWholeStepsInIt)
 {
-	auto rope = Create(k_Start, k_Start + glm::vec3(10.0f, 0.0f, 0.0f), k_Slack, k_Max, {});
-	const auto before = rope.nodes;
-	Step(rope, k_Start + glm::vec3(0.0f, 5.0f, 0.0f), rope.end, 0.0f, Flat);
-	EXPECT_EQ(rope.start, k_Start + glm::vec3(0.0f, 5.0f, 0.0f));
-	for (size_t i = 0; i < k_NodeCount; ++i)
-	{
-		EXPECT_EQ(rope.nodes.at(i).position, before.at(i).position);
-	}
+	const auto start = Create(k_Start, k_Start + glm::vec3(10.0f, 0.0f, 0.0f), k_Slack, k_Max, {});
+	const auto stepped = [&start](std::initializer_list<float> frames) {
+		auto rope = start;
+		for (const float seconds : frames)
+		{
+			Step(rope, rope.start, rope.end, seconds, Flat);
+		}
+		return rope;
+	};
+	const auto same = [](const Rope& a, const Rope& b) {
+		return std::ranges::equal(a.nodes, b.nodes, [](const Node& x, const Node& y) {
+			return x.position == y.position && x.velocity == y.velocity;
+		});
+	};
+	// No time and less than one step time both step once
+	const auto once = stepped({0.0f});
+	EXPECT_NE(once.nodes.at(k_NodeCount / 2).position, start.nodes.at(k_NodeCount / 2).position);
+	EXPECT_TRUE(same(stepped({0.0049f}), once));
+	// One step time steps twice, two step times three times
+	EXPECT_TRUE(same(stepped({k_StepSeconds}), stepped({0.0f, 0.0f})));
+	EXPECT_TRUE(same(stepped({0.01f}), stepped({0.0f, 0.0f, 0.0f})));
 }
 
 TEST(LeashRope, EndsAreKeptWithinTheWorld)

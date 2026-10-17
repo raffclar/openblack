@@ -40,6 +40,8 @@ public:
 	[[nodiscard]] entt::entity FindAbodeWithSpace(entt::entity town, entt::entity villager, float leastScore) const override;
 	[[nodiscard]] entt::entity FindClosestTown(const glm::vec3& point) const override;
 	[[nodiscard]] entt::entity NearestBuilding(glm::vec2 point) const override;
+	[[nodiscard]] entt::entity NearestTown(glm::vec2 point, float reach,
+	                                       const std::function<bool(entt::entity)>& accepts) const override;
 	bool AddVillagerToTown(entt::entity town, entt::entity villager) override;
 	void AddVillagerToAbode(entt::entity abode, entt::entity villager) override;
 	bool MakeHomeless(entt::entity villager) override;

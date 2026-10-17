@@ -484,15 +484,16 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	if (step.has_value() && *step > 0.0f)
 	{
 		const auto lastDirection = DirectionThrough(contact->lastCursor).value_or(sight);
-		slapped = Step(*contact, {.shownAt = contact->shownAt.value_or(camera + (sight * handDistance)),
-		                          .here = camera + (sight * handDistance),
-		                          .before = camera + (lastDirection * handDistance),
-		                          .touch = touch,
-		                          .cursor = cursor,
-		                          .screenWidth = screenWidth,
-		                          .stepMs = *step,
-		                          .rayOrigin = rayOrigin,
-		                          .rayDirection = rayDirection});
+		slapped =
+		    Step(*contact, {.shownAt = contact->shownAt.value_or(feedback::PointOnSight(camera, rayDirection, handDistance)),
+		                    .here = feedback::PointOnSight(camera, rayDirection, handDistance),
+		                    .before = camera + (lastDirection * handDistance),
+		                    .touch = touch,
+		                    .cursor = cursor,
+		                    .screenWidth = screenWidth,
+		                    .stepMs = *step,
+		                    .rayOrigin = rayOrigin,
+		                    .rayDirection = rayDirection});
 	}
 	// On the body, the hand eases to a place a little short of the mesh. A slap leaves the distance as it is.
 	// The mesh's way out at the touch comes from the order of the triangle's corners. A slap leaves it straight up.
@@ -504,7 +505,7 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 		normal = hit->windingNormal;
 	}
 	contact->distance.UpdateInline(seconds);
-	const auto position = camera + (sight * handDistance);
+	const auto position = feedback::PointOnSight(camera, rayDirection, handDistance);
 	contact->shownAt = position;
 
 	// The hand turns to the body where it touches it, as the cursor moves across the screen

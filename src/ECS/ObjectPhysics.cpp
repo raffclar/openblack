@@ -543,7 +543,8 @@ entt::entity object_physics::FellTree(systems::DynamicsSystemInterface& dynamics
 	registry.Get<Transform>(felled).rotation = transform->rotation;
 	registry.Get<DeadTree>(felled).felled = true;
 	const auto fall = physics::objects::FellingOf(
-	    height, glm::vec2(transform->position.x - from->position.x, transform->position.z - from->position.z));
+	    height, glm::vec2(map_coords::Quantise(transform->position.x) - map_coords::Quantise(from->position.x),
+	                      map_coords::Quantise(transform->position.z) - map_coords::Quantise(from->position.z)));
 	const auto started = dynamics.InitialisePhysics(felled, {.velocity = fall.velocity,
 	                                                         .spin = fall.spin,
 	                                                         .thrower = feller,

@@ -18,6 +18,7 @@
 
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 
@@ -43,13 +44,14 @@ float creature_pointing::Wrap(float angle)
 
 creature_pointing::Aim creature_pointing::AimAt(glm::vec3 origin, glm::vec2 facing, glm::vec3 target)
 {
+	// The game adds the squares z, x, y, and keeps the heading to the target wide into the subtraction
 	const auto offset = target - origin;
-	const auto distance = glm::length(offset);
+	const auto distance = x87::Length<x87::SumOrder::Zxy>(offset);
 	if (distance < k_TooNear)
 	{
 		return {};
 	}
-	const auto across = Wrap(AngleOf(facing) - AngleOf({offset.x, offset.z}));
+	const auto across = Wrap(x87::Sub(AngleOf(facing), x87::GameHeadingOf(offset.x, offset.z)));
 	return {.across = std::clamp(across, -k_AcrossLimit, k_AcrossLimit),
 	        .rise = std::clamp(offset.y / distance, -k_RiseLimit, k_RiseLimit)};
 }
