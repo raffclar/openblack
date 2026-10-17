@@ -14,6 +14,7 @@
 #include <limits>
 
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -85,13 +86,16 @@ std::optional<ScriptType> AnimalType(AnimalInfo info)
 	}
 }
 
-/// A 16.16 value of a search's edge: the position in metres less or plus the reach, back in 16.16, truncated. The game
-/// works it at the FPU's full precision
+/// A 16.16 value of a search's edge: the position in metres less or plus the reach, back in 16.16, truncated. Each
+/// step rounds to a float
 int32_t EdgeFixed(int32_t fixed, float offset)
 {
-	const double metres = static_cast<double>(fixed) * 10.0 * (1.0 / 65536.0) + static_cast<double>(offset);
-	const double value = metres * 65536.0 / 10.0;
-	if (!(value > -2147483648.0 && value < 2147483648.0))
+	constexpr float k_Ten = 10.0f;
+	constexpr float k_FixedOne = 65536.0f;
+	constexpr float k_InverseFixedOne = 1.0f / k_FixedOne;
+	const float metres = x87::Mul(static_cast<double>(fixed), k_Ten) * k_InverseFixedOne + offset;
+	const float value = metres * k_FixedOne / k_Ten;
+	if (!(value > -2147483648.0f && value < 2147483648.0f))
 	{
 		return static_cast<int32_t>(0x80000000u);
 	}

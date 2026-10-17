@@ -490,6 +490,9 @@ TEST(TownHomesShuffle, EachTownEvensOutItsHomesOnItsOwnTurn)
 	EXPECT_TRUE(town_homes::EvenOutDue(3, 4940, 5000));
 	EXPECT_FALSE(town_homes::EvenOutDue(3, 5000, 5000));
 	EXPECT_FALSE(town_homes::EvenOutDue(0, 0, 0));
+	// The game adds the turn as a float: turn 2^24 + 1 rounds to 2^24
+	EXPECT_TRUE(town_homes::EvenOutDue(0, 16777217, 16777216));
+	EXPECT_FALSE(town_homes::EvenOutDue(0, 16777216 + 3, 16777216 + 3));
 }
 
 TEST_F(TownHomesTest, ShufflingSwapsOnlyThoseOutOfDoors)

@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
+#include <bit>
 
 #include <gtest/gtest.h>
 
@@ -159,15 +162,17 @@ TEST(HandToolTips, BuildingToolTipsShowOverAnOwnBuildingThatIsNotWhole)
 
 TEST(HandToolTips, WoodRequiredShowsTheSitesWantOrHowFarItIsBuilt)
 {
-	const auto wanted = WoodRequired(42.4f, 30.0);
+	const auto wanted = WoodRequired(42.4f, 30.0f);
 	EXPECT_EQ(wanted.words, k_WoodRequired);
 	EXPECT_DOUBLE_EQ(wanted.number, static_cast<double>(42.4f));
-	EXPECT_DOUBLE_EQ(WoodRequired(-3.0f, 30.0).number, 0.0);
-	const auto noSite = WoodRequired(std::nullopt, 30.0);
+	EXPECT_DOUBLE_EQ(WoodRequired(-3.0f, 30.0f).number, 0.0);
+	const auto noSite = WoodRequired(std::nullopt, 30.0f);
 	EXPECT_EQ(noSite.words, k_BuildingCompleted);
 	EXPECT_DOUBLE_EQ(noSite.number, 30.0);
 	EXPECT_DOUBLE_EQ(BuildingCompleted(false, 0.25f, 1.0f), 25.0);
 	EXPECT_DOUBLE_EQ(BuildingCompleted(true, 1.0f, 0.5f), 50.0);
+	// The percentage is a float product: 0.0025 as a float gives 0.25 exactly
+	EXPECT_EQ(std::bit_cast<uint32_t>(BuildingCompleted(false, 0.0025f, 1.0f)), std::bit_cast<uint32_t>(0.25f));
 }
 
 TEST(HandToolTips, GrippingTheLandWithBothButtonsOffersToZoom)

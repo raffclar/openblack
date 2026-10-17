@@ -155,7 +155,7 @@ void Renderer::DrawScrollBeams(const DrawSceneDesc& desc) const
 	}
 	const auto& beam = *meshes.Handle(beamId);
 	const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
-	const double pulseShare =
+	const float pulseShare =
 	    ecs::script_highlights::PulseShare(Locator::scriptHighlightSystem::value().GetPulse(), turnFraction);
 
 	// A started scroll stands in a beam the same shape as the temple's column, rising from its model's middle. A
