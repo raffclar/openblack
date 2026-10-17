@@ -94,25 +94,25 @@ TEST(FilmCreature, ItsBrightnessRisesTwiceThenStaysAtNothing)
 	EXPECT_EQ(film_creature::Brightness(40000), 0);
 }
 
-TEST(FilmCreature, ItGlowsWhiteThenOrangeOverAFlickeringDarkRed)
+TEST(FilmCreature, ItsLightGoesFromWhiteToOrangeWithAFlickeringDarkRedAdded)
 {
-	// No brightness: black, with white added
+	// No brightness: a white light on the textured body, with nothing added
 	const auto dark = film_creature::LookAt(0, 31, 7, 3);
-	EXPECT_EQ(dark.colour, 0xFF000000u);
-	EXPECT_EQ(dark.added, 0xFFFFFFFFu);
-	EXPECT_EQ(film_creature::LookAt(1, 0, 0, 0).added, 0xFFFEFEFEu);
+	EXPECT_EQ(dark.colour, 0xFFFFFFFFu);
+	EXPECT_EQ(dark.added, 0xFF000000u);
+	EXPECT_EQ(film_creature::LookAt(1, 0, 0, 0).colour, 0xFFFEFEFEu);
 	// Half way: each channel of the flicker scaled by the brightness of 256
 	const auto half = film_creature::LookAt(128, 31, 7, 3);
-	EXPECT_EQ(half.colour, 0xFF1F0701u);
-	EXPECT_EQ(half.added, 0xFFBF9F7Fu);
+	EXPECT_EQ(half.colour, 0xFFBF9F7Fu);
+	EXPECT_EQ(half.added, 0xFF1F0701u);
 	const auto other = film_creature::LookAt(200, 31, 7, 3);
-	EXPECT_EQ(other.colour, 0xFF310B02u);
-	EXPECT_EQ(other.added, 0xFF9B6937u);
-	// Full brightness: dark red, with orange added
+	EXPECT_EQ(other.colour, 0xFF9B6937u);
+	EXPECT_EQ(other.added, 0xFF310B02u);
+	// Full brightness: an orange light, with dark red added
 	const auto full = film_creature::LookAt(255, 0, 0, 0);
-	EXPECT_EQ(full.colour, 0xFF1F0700u);
-	EXPECT_EQ(full.added, 0xFF804000u);
-	EXPECT_EQ(film_creature::LookAt(255, 31, 7, 3).colour, 0xFF3E0E02u);
+	EXPECT_EQ(full.colour, 0xFF804000u);
+	EXPECT_EQ(full.added, 0xFF1F0700u);
+	EXPECT_EQ(film_creature::LookAt(255, 31, 7, 3).added, 0xFF3E0E02u);
 }
 
 TEST(FilmCreature, TheCameraPathFileHasEighteenFloatsAPoint)
