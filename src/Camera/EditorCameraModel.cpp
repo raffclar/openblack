@@ -101,7 +101,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> EditorCameraModel::Upd
 
 void EditorCameraModel::HandleActions([[maybe_unused]] std::chrono::microseconds dt) {}
 
-void EditorCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
+void EditorCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus, [[maybe_unused]] float rise)
 {
 	_origin = origin;
 	_focus = focus;

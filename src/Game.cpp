@@ -72,6 +72,7 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/DoubleClickFlight.h"
 #include "Camera/FightCameraModel.h"
 #include "Camera/NearClipping.h"
 #include "Camera/ScriptCameraModel.h"
@@ -922,7 +923,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				    entitiesRegistry.TryGet<ecs::components::Transform, ecs::components::CameraBookmark>(entity);
 				if (transform != nullptr && bookmark != nullptr)
 				{
-					camera.GetModel().SetFlight(bookmark->savedOrigin, transform->position);
+					camera.GetModel().SetFlight(bookmark->savedOrigin, transform->position, camera_fly::k_BookmarkRise);
 				}
 			}
 			break;

@@ -47,10 +47,11 @@ public:
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) final;
 	void HandleActions(std::chrono::microseconds dt) final;
 	/// Flies to a place, as a bookmark or a key does. The flight ends at the fence when the place is outside it, and
-	/// wooshes only when it starts more than 150 from its end.
-	void SetFlight(glm::vec3 origin, glm::vec3 focus) final;
-	/// Flies back to where it was, as when the camera is given back after the hand lets go of a creature: as SetFlight,
-	/// wooshing only when asked
+	/// wooshes only when it starts more than 150 from its end. Its half way point rises by the rise times the distance
+	/// across.
+	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) final;
+	/// Flies back to where it was, as when the camera is given back after the hand lets go of a creature: as SetFlight
+	/// with a rise of 0.1, wooshing only when asked
 	void FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh);
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) final;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const final;

@@ -823,6 +823,10 @@ struct Command
 		/// The game writes the web page of the creature into the player's profile folder, as it does each 600 turns of
 		/// the creature's life
 		WriteWebPage,
+		/// A bookmark (value, 0 to 6) is put at a point on the land (point, from the middle of the map), with the camera
+		/// origin 80 metres back and 50 metres up from it. Then the camera flies to it, as the bookmark's number key does.
+		/// Needs no creature
+		FlyToBookmark,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

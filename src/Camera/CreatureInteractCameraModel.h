@@ -75,7 +75,7 @@ public:
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	/// The player's controls don't move it
 	void HandleActions(std::chrono::microseconds /*dt*/) override {}
-	void SetFlight(glm::vec3 origin, glm::vec3 focus) override;
+	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override;
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const override { return std::chrono::seconds::zero(); }
