@@ -40,6 +40,7 @@
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/Underwater.h"
+#include "Graphics/UnderwaterJellyfish.h"
 #include "Graphics/VertexBuffer.h"
 #include "Locator.h"
 #include "Renderer.h"
@@ -596,6 +597,46 @@ void Renderer::DrawFarSeabed(RenderPass landViewId) const
 	               BGFX_STATE_MSAA);
 	// After every block of the land, which is drawn the nearest first
 	program->Submit(static_cast<bgfx::ViewId>(landViewId), UINT32_MAX);
+}
+
+void Renderer::DrawJellyfish() const
+{
+	const auto* program = _shaderManager->GetShader("UnderwaterJelly");
+	if (program == nullptr || _underwater == nullptr || !_underwaterFrame.has_value() ||
+	    !Locator::underwaterSystem::has_value() ||
+	    !Locator::underwaterSystem::value().IsEffectOn(underwater::Effect::Jellyfish))
+	{
+		return;
+	}
+	const auto& system = Locator::underwaterSystem::value();
+	const auto& frame = *_underwaterFrame;
+	const auto& seabed = system.GetSeabed();
+	const auto found =
+	    underwater::jellyfish::Around(glm::vec2(frame.eye.x, frame.eye.z), system.GetSeconds(), system.GetSeaLevel(),
+	                                  [&seabed](glm::vec2 point) { return seabed.DepthAt(point); });
+	if (found.empty())
+	{
+		return;
+	}
+	std::vector<glm::vec4> instances;
+	instances.reserve(found.size() * 2);
+	for (const auto& jellyfish : found)
+	{
+		const auto data = underwater::jellyfish::InstanceData(jellyfish);
+		instances.insert(instances.end(), data.begin(), data.end());
+	}
+	if (!_underwater->BindJellyfish(instances))
+	{
+		return;
+	}
+	program->SetUniformValue("u_uwParams", &frame.params);
+	program->SetUniformValue("u_uwLightColour", &frame.lightColour);
+	program->SetUniformValue("u_uwEye", &frame.eye);
+	// Their light adds to the scene, and they write their depth, so that the water's fog over them is from their own
+	// distance and not from the sea bed's behind them
+	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ADD |
+	               BGFX_STATE_MSAA);
+	program->Submit(static_cast<bgfx::ViewId>(RenderPass::Translucent));
 }
 
 void Renderer::DrawReef(RenderPass landViewId) const

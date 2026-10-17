@@ -219,6 +219,8 @@ enum class Effect : uint8_t
 	AmbientOcclusion,
 	/// The pockets of fog over the swamps and the still water
 	FogPockets,
+	/// The jellyfish that drift up through the deep water and glow (see underwater::jellyfish)
+	Jellyfish,
 	_Count
 };
 

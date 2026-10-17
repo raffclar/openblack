@@ -1086,3 +1086,5 @@ openblack_setup_and_add_test(test_volumetric_fog graphics/test_volumetric_fog.cp
 openblack_setup_and_add_test(test_atmosphere graphics/test_atmosphere.cpp)
 # EXPERIMENT (not for merge): the light of the sky and the land in the shade
 openblack_setup_and_add_test(test_global_illumination graphics/test_global_illumination.cpp)
+# EXPERIMENT (not for merge): the jellyfish in the deep water
+openblack_setup_and_add_test(test_underwater_jellyfish graphics/test_underwater_jellyfish.cpp)

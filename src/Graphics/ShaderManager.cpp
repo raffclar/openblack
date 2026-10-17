@@ -444,6 +444,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"UnderwaterStream", "vs_water", "fs_underwater_stream"},
     ShaderDefinition {"UnderwaterDrift", "vs_underwater_drift", "fs_underwater_drift"},
     ShaderDefinition {"UnderwaterTap", "vs_underwater_tap", "fs_underwater_tap"},
+    ShaderDefinition {"UnderwaterJelly", "vs_underwater_jelly", "fs_underwater_jelly"},
     ShaderDefinition {"CloudShadow", "vs_water", "fs_clouds_shadow"},
     ShaderDefinition {"CloudMarch", "vs_water", "fs_clouds_march"},
     ShaderDefinition {"CloudResolve", "vs_water", "fs_clouds_resolve"},

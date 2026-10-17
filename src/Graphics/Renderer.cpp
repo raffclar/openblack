@@ -6007,6 +6007,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			{
 				DrawFarSeabed(landViewId);
 				DrawReef(landViewId);
+				DrawJellyfish();
 			}
 			_shaderManager->DiscardBindings();
 			DrawCreatureFootprints(desc);

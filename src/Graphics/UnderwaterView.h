@@ -61,6 +61,9 @@ public:
 	/// The reef's instances, made again when the sea bed changes; then binds the coral's crossed quads (or the plants'
 	/// crossed strips) and their instances. False when there are none of the kind.
 	bool BindReef(std::span<const seabed::ReefPlant> reef, uint32_t revision, seabed::ReefPlant::Kind kind);
+	/// Binds the mesh of a jellyfish (made the first time) and these instances (two vectors each) for a draw. False when
+	/// the frame has no room for them.
+	bool BindJellyfish(std::span<const glm::vec4> instances);
 	/// How many triangles one coral and one plant have, and how many of each the reef has
 	[[nodiscard]] uint32_t ReefTriangles(seabed::ReefPlant::Kind kind) const;
 	[[nodiscard]] uint32_t ReefCount(seabed::ReefPlant::Kind kind) const;
@@ -135,6 +138,8 @@ private:
 		uint32_t count {0};
 	};
 	std::array<ReefKind, 2> _reef {};
+	bgfx::VertexBufferHandle _jellyMesh = BGFX_INVALID_HANDLE;
+	bgfx::IndexBufferHandle _jellyIndices = BGFX_INVALID_HANDLE;
 	std::optional<uint32_t> _reefRevision;
 	bgfx::VertexBufferHandle _sprayMesh = BGFX_INVALID_HANDLE;
 	bgfx::IndexBufferHandle _sprayIndices = BGFX_INVALID_HANDLE;

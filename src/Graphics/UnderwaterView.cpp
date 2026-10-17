@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 
 #include <algorithm>
 #include <array>
@@ -30,6 +31,7 @@
 #include "3D/SeabedTiles.h"
 #include "GraphicsHandleBgfx.h"
 #include "Underwater.h"
+#include "UnderwaterJellyfish.h"
 
 using namespace openblack::graphics;
 
@@ -121,14 +123,14 @@ UnderwaterView::~UnderwaterView()
 	{
 		bgfx::destroy(_sprayNoise);
 	}
-	for (auto* buffer : {&_sprayMesh, &_sprayInstances, &_bubbleMesh, &_spoutMesh, &_stormMesh})
+	for (auto* buffer : {&_sprayMesh, &_sprayInstances, &_bubbleMesh, &_spoutMesh, &_stormMesh, &_jellyMesh})
 	{
 		if (bgfx::isValid(*buffer))
 		{
 			bgfx::destroy(*buffer);
 		}
 	}
-	for (auto* indices : {&_sprayIndices, &_bubbleIndices, &_spoutIndices, &_stormIndices})
+	for (auto* indices : {&_sprayIndices, &_bubbleIndices, &_spoutIndices, &_stormIndices, &_jellyIndices})
 	{
 		if (bgfx::isValid(*indices))
 		{
@@ -433,6 +435,36 @@ void PlantMesh(std::vector<ReefVertex>& vertices, std::vector<uint16_t>& indices
 	}
 }
 } // namespace
+
+bool UnderwaterView::BindJellyfish(std::span<const glm::vec4> instances)
+{
+	if (!bgfx::isValid(_jellyMesh))
+	{
+		std::vector<underwater::jellyfish::Vertex> vertices;
+		std::vector<uint16_t> indices;
+		underwater::jellyfish::Mesh(vertices, indices);
+		bgfx::VertexLayout layout;
+		layout.begin().add(bgfx::Attrib::Position, 4, bgfx::AttribType::Float).end();
+		_jellyMesh = bgfx::createVertexBuffer(
+		    bgfx::copy(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(underwater::jellyfish::Vertex))),
+		    layout);
+		_jellyIndices =
+		    bgfx::createIndexBuffer(bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t))));
+	}
+	constexpr auto k_Stride = static_cast<uint16_t>(2 * sizeof(glm::vec4));
+	const auto count = static_cast<uint32_t>(instances.size() / 2);
+	if (count == 0 || bgfx::getAvailInstanceDataBuffer(count, k_Stride) < count)
+	{
+		return false;
+	}
+	bgfx::InstanceDataBuffer buffer {};
+	bgfx::allocInstanceDataBuffer(&buffer, count, k_Stride);
+	std::memcpy(buffer.data, instances.data(), static_cast<size_t>(count) * k_Stride);
+	bgfx::setVertexBuffer(0, _jellyMesh);
+	bgfx::setIndexBuffer(_jellyIndices);
+	bgfx::setInstanceDataBuffer(&buffer);
+	return true;
+}
 
 bool UnderwaterView::BindReef(std::span<const seabed::ReefPlant> reef, uint32_t revision, seabed::ReefPlant::Kind kind)
 {
