@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <numbers>
 #include <optional>
 #include <vector>
 
@@ -264,11 +265,12 @@ TEST(SkyFrame, ColourIsOfTheThreeBytes)
 	EXPECT_EQ(sky_frame::Colour(0xFF8000), glm::vec3(1.0f, 128.0f / 255.0f, 0.0f));
 }
 
-TEST(SkyFrame, OnTheRealPathTheSunClimbsHighAndTheMoonStandsOpposite)
+TEST(SkyFrame, OnTheRealPathTheSunClimbsHighAndTheFullMoonStandsOpposite)
 {
 	SkyDome dome {};
 	Sun sun;
 	Moon moon;
+	moon.dateOverride = graphics::moon::DateAtFraction(k_Date, 0.5);
 	auto noon = Frame(12.0f);
 	noon.solarPath = true;
 	sky_frame::Update(noon, dome, sun, moon);
@@ -286,8 +288,53 @@ TEST(SkyFrame, OnTheRealPathTheSunClimbsHighAndTheMoonStandsOpposite)
 	ASSERT_TRUE(moon.placement.has_value());
 	EXPECT_GT(moon.placement->offset.y, 0.0f);
 	EXPECT_FLOAT_EQ(moon.placement->alpha, 200.0f);
-	// The moon stands opposite the sun: at midnight it is high in the south, as the sun is at noon
-	const auto opposite = -graphics::atmosphere::SunTowards(0.0f) * graphics::atmosphere::k_MoonDistance;
-	EXPECT_NEAR(glm::length(moon.placement->offset - opposite), 0.0f, 1e-2f);
+	// The full moon stands opposite the sun: at midnight it is high in the south, as the sun is at noon
+	const auto opposite = -graphics::atmosphere::SunTowards(0.0f);
+	EXPECT_GT(glm::dot(glm::normalize(moon.placement->offset), opposite), 0.99f);
 	EXPECT_LT(glm::dot(moon.placement->offset, graphics::atmosphere::k_North), 0.0f);
+	EXPECT_NEAR(moon.phase, std::numbers::pi_v<float>, 0.15f);
+}
+
+TEST(SkyFrame, OnTheRealPathTheMoonFollowsItsPhaseAndTheDaysOfTheGame)
+{
+	SkyDome dome {};
+	Sun sun;
+	Moon moon;
+	moon.dateOverride = graphics::moon::DateAtFraction(k_Date, 0.25);
+	auto frame = Frame(18.0f);
+	frame.solarPath = true;
+	sky_frame::Update(frame, dome, sun, moon);
+	// Near a first quarter the moon is about 90 degrees east of the sun, high in the south at sunset. Its angle from
+	// the sun is its part of the moon month, and its phase is the same part.
+	ASSERT_TRUE(moon.placement.has_value());
+	const double fraction = sky_frame::MoonMonthFraction(moon, 18.0f);
+	EXPECT_NEAR(fraction, 0.27, 0.04);
+	const auto towards = glm::normalize(moon.placement->offset);
+	EXPECT_NEAR(glm::dot(towards, graphics::atmosphere::SunTowards(18.0f)),
+	            std::cos(2.0f * std::numbers::pi_v<float> * static_cast<float>(fraction)), 1e-3f);
+	EXPECT_GT(towards.y, 0.8f);
+	const float phase = moon.phase;
+	EXPECT_FLOAT_EQ(phase, graphics::atmosphere::MoonPhase(fraction));
+
+	// The hour goes past midnight: a day of the game starts, and the moon continues towards a full moon
+	frame.scriptHour = 23.9f;
+	sky_frame::Update(frame, dome, sun, moon);
+	frame.scriptHour = 0.1f;
+	sky_frame::Update(frame, dome, sun, moon);
+	EXPECT_EQ(moon.passedDays, 1);
+	EXPECT_LT(moon.phase, phase);
+	// From 18:00 to 00:06 the next day: about a quarter of a day of a month of 29.53 days
+	EXPECT_NEAR(phase - moon.phase, 2.0f * std::numbers::pi_v<float> * (6.1f / 24.0f) / 29.530589f, 1e-3f);
+}
+
+TEST(SkyFrame, WithoutTheRealPathTheMoonIsTheOriginalGames)
+{
+	SkyDome dome {};
+	Sun sun;
+	Moon moon;
+	moon.dateOverride = graphics::moon::DateAtFraction(k_Date, 0.25);
+	sky_frame::Update(Frame(0.0f), dome, sun, moon);
+	ASSERT_TRUE(moon.placement.has_value());
+	EXPECT_EQ(moon.placement->offset, graphics::moon::Offset(0.0f));
+	EXPECT_FLOAT_EQ(moon.phase, graphics::moon::Phase(*moon.dateOverride));
 }

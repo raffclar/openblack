@@ -20,6 +20,8 @@
 #include <glm/exponential.hpp>
 #include <glm/geometric.hpp>
 
+#include "Graphics/Moon.h"
+
 using namespace openblack::graphics;
 using namespace openblack::graphics::atmosphere;
 
@@ -32,6 +34,21 @@ constexpr int k_SkySteps = 24;
 constexpr int k_HazeSteps = 16;
 /// The directions round the horizon that its mean takes
 constexpr int k_HorizonDirections = 8;
+
+/// The direction towards a body in the sky from its hour angle west of the south and its angle north of the equator,
+/// both in radians, at the latitude of the world
+glm::vec3 TowardsInSky(float hourAngle, float declination)
+{
+	constexpr float k_Radians = k_Pi / 180.0f;
+	const float latitude = k_LatitudeDegrees * k_Radians;
+	// The direction in the frame of the ground: east, north and up
+	const float east = -std::cos(declination) * std::sin(hourAngle);
+	const float north =
+	    (std::cos(latitude) * std::sin(declination)) - (std::sin(latitude) * std::cos(declination) * std::cos(hourAngle));
+	const float up =
+	    (std::sin(latitude) * std::sin(declination)) + (std::cos(latitude) * std::cos(declination) * std::cos(hourAngle));
+	return glm::normalize((east * k_East) + (north * k_North) + glm::vec3(0.0f, up, 0.0f));
+}
 
 float Smoothstep(float low, float high, float x)
 {
@@ -323,16 +340,99 @@ glm::vec3 atmosphere::SunTowards(float hour)
 {
 	constexpr float k_Radians = k_Pi / 180.0f;
 	const float h = std::fmod(std::fmod(hour, 24.0f) + 24.0f, 24.0f);
-	const float hourAngle = (h - 12.0f) * 15.0f * k_Radians;
-	const float latitude = k_LatitudeDegrees * k_Radians;
-	const float declination = k_DeclinationDegrees * k_Radians;
-	// The sun's direction in the frame of the ground: east, north and up
-	const float east = -std::cos(declination) * std::sin(hourAngle);
-	const float north =
-	    (std::cos(latitude) * std::sin(declination)) - (std::sin(latitude) * std::cos(declination) * std::cos(hourAngle));
-	const float up =
-	    (std::sin(latitude) * std::sin(declination)) + (std::cos(latitude) * std::cos(declination) * std::cos(hourAngle));
-	return glm::normalize((east * k_East) + (north * k_North) + glm::vec3(0.0f, up, 0.0f));
+	return TowardsInSky((h - 12.0f) * 15.0f * k_Radians, k_DeclinationDegrees * k_Radians);
+}
+
+double atmosphere::MoonMonthFraction(int64_t unixTime, int32_t passedDays, float hour)
+{
+	const int64_t wholeDays = (unixTime / moon::k_SecondsPerDay) - moon::k_NewMoonDay + passedDays;
+	const double days = static_cast<double>(wholeDays) + (static_cast<double>(std::clamp(hour, 0.0f, 24.0f)) / 24.0);
+	const double months = days * moon::k_MonthsPerDay;
+	return months - std::floor(months);
+}
+
+float atmosphere::MoonPhase(double monthFraction)
+{
+	return static_cast<float>((1.0 - monthFraction) * 2.0 * std::numbers::pi);
+}
+
+glm::vec3 atmosphere::MoonTowards(float hour, double monthFraction)
+{
+	constexpr float k_Radians = k_Pi / 180.0f;
+	// The sun is at the start of its yearly path on the day of the equinox. The moon is east of it along the path by
+	// its age. Its angles on the sky come from its place along the path and the tilt of the path to the equator.
+	const auto along = static_cast<float>(monthFraction * 2.0 * std::numbers::pi);
+	const float tilt = k_AxisTiltDegrees * k_Radians;
+	const float eastOfSun = std::atan2(std::cos(tilt) * std::sin(along), std::cos(along));
+	const float declination = std::asin(std::sin(tilt) * std::sin(along));
+	const float h = std::fmod(std::fmod(hour, 24.0f) + 24.0f, 24.0f);
+	return TowardsInSky(((h - 12.0f) * 15.0f * k_Radians) - eastOfSun, declination);
+}
+
+float atmosphere::MoonThroughAir(float elevationSine)
+{
+	if (elevationSine <= 0.0f)
+	{
+		return 0.0f;
+	}
+	// The length of the way through the air, in units of the way straight up (Kasten and Young). The clear air takes
+	// a fifth of the light for each unit of that length.
+	const float degrees = std::asin(std::clamp(elevationSine, 0.0f, 1.0f)) * 180.0f / k_Pi;
+	const float airMass = 1.0f / (elevationSine + (0.50572f * std::pow(degrees + 6.07995f, -1.6364f)));
+	return std::exp(-0.2f * (airMass - 1.0f));
+}
+
+float atmosphere::NightGlow(float sunElevationSine)
+{
+	return k_NightGlow * AirMoonShare(sunElevationSine);
+}
+
+glm::vec3 atmosphere::AirMoonTowards(glm::vec3 sunTowards, glm::vec3 moonTowards)
+{
+	const glm::vec3 moonUnit = glm::normalize(moonTowards);
+	const float up = Smoothstep(-0.05f, 0.1f, moonUnit.y);
+	return glm::normalize(glm::mix(-glm::normalize(sunTowards), moonUnit, up));
+}
+
+glm::mat3 atmosphere::TurnLitEdgeTowards(const glm::mat3& basis, glm::vec3 towardsSun)
+{
+	const float scale = glm::length(basis[2]);
+	if (scale <= 0.0f || glm::length(towardsSun) <= 0.0f)
+	{
+		return basis;
+	}
+	const glm::vec3 line = basis[2] / scale;
+	const glm::vec3 sun = glm::normalize(towardsSun);
+	// The way to the sun across the moon's face
+	const glm::vec3 across = sun - (line * glm::dot(line, sun));
+	const float length = glm::length(across);
+	if (length < 1e-4f)
+	{
+		return basis;
+	}
+	const float handed = glm::dot(glm::cross(basis[2], basis[0]), basis[1]) >= 0.0f ? 1.0f : -1.0f;
+	const glm::vec3 first = across / length;
+	const glm::vec3 second = glm::cross(line, first) * handed;
+	return {first * glm::length(basis[0]), second * glm::length(basis[1]), basis[2]};
+}
+
+int32_t atmosphere::DaysStarted(float earlierHour, float hour)
+{
+	constexpr float k_Late = 18.0f;
+	constexpr float k_Early = 6.0f;
+	if (earlierHour < 0.0f)
+	{
+		return 0;
+	}
+	if (earlierHour >= k_Late && hour < k_Early)
+	{
+		return 1;
+	}
+	if (earlierHour < k_Early && hour >= k_Late)
+	{
+		return -1;
+	}
+	return 0;
 }
 
 float atmosphere::SunStrength(float elevationSine)

@@ -1612,7 +1612,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::Moon::dateOverride>("dateOverride")
 	    .Field<&components::Moon::placement>("placement")
 	    .Field<&components::Moon::colour>("colour")
-	    .Field<&components::Moon::strength>("strength");
+	    .Field<&components::Moon::strength>("strength")
+	    .Field<&components::Moon::passedDays>("passedDays")
+	    .Field<&components::Moon::lastHour>("lastHour");
 	Reflect<components::SnowLevel>(context).Field<&components::SnowLevel::level>("level");
 	Reflect<components::SoundTag>(context)
 	    .Field<&components::SoundTag::sound>("sound")

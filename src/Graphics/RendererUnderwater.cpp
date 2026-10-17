@@ -33,6 +33,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
+#include "Graphics/Atmosphere.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
@@ -77,12 +78,26 @@ underwater::WaterLight SkyLights(const glm::vec3& eye)
 		    .towards = sun->placement->position - eye, .colour = sun->colour * k_SunLight, .strength = sun->strength / 255.0f};
 	}
 	std::optional<underwater::SkyLight> moonLight;
-	if (const auto* moon = registry.TryGet<const ecs::components::Moon>(sky.GetMoon());
-	    moon != nullptr && moon->placement.has_value())
+	if (const auto* moon = registry.TryGet<const ecs::components::Moon>(sky.GetMoon()); moon != nullptr)
 	{
-		moonLight = underwater::SkyLight {.towards = moon->placement->offset,
-		                                  .colour = moon->colour,
-		                                  .strength = moon->strength / 255.0f * underwater::PhaseBrightness(moon->phase)};
+		// The moon's light follows its phase, and the air takes more of it when the moon is low
+		glm::vec3 towardsMoon {0.0f, 1.0f, 0.0f};
+		float moonStrength = 0.0f;
+		if (moon->placement.has_value())
+		{
+			towardsMoon = glm::normalize(moon->placement->offset);
+			moonStrength = moon->strength / 255.0f * underwater::PhaseBrightness(moon->phase) *
+			               graphics::atmosphere::MoonThroughAir(towardsMoon.y);
+		}
+		// The night sky gives a faint light from above when the moon is weak or down
+		const float glow = graphics::atmosphere::NightGlow(graphics::atmosphere::SunTowards(sky.GetClock().GetScriptTime()).y);
+		const float strength = std::max(moonStrength, glow);
+		if (strength > 0.0f)
+		{
+			const glm::vec3 above {0.0f, std::max(glow - moonStrength, 0.0f), 0.0f};
+			moonLight = underwater::SkyLight {
+			    .towards = (towardsMoon * moonStrength) + above, .colour = moon->colour, .strength = strength};
+		}
 	}
 	return underwater::BlendLights(sunLight, moonLight);
 }
@@ -354,6 +369,8 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		motes->Submit(postView);
 	}
+	// The light of the jellyfish, over the water's fog
+	DrawJellyfishGlow(postView, target);
 
 	// The spray at the foot of the cliffs, above and under the water
 	if (const auto* spray = _shaderManager->GetShader("UnderwaterSpray");
@@ -600,15 +617,8 @@ void Renderer::DrawFarSeabed(RenderPass landViewId) const
 	program->Submit(static_cast<bgfx::ViewId>(landViewId), UINT32_MAX);
 }
 
-void Renderer::DrawJellyfish() const
+bool Renderer::BindJellyfish() const
 {
-	const auto* program = _shaderManager->GetShader("UnderwaterJelly");
-	if (program == nullptr || _underwater == nullptr || !_underwaterFrame.has_value() ||
-	    !Locator::underwaterSystem::has_value() ||
-	    !Locator::underwaterSystem::value().IsEffectOn(underwater::Effect::Jellyfish))
-	{
-		return;
-	}
 	const auto& system = Locator::underwaterSystem::value();
 	const auto& frame = *_underwaterFrame;
 	const auto& seabed = system.GetSeabed();
@@ -617,7 +627,7 @@ void Renderer::DrawJellyfish() const
 	                                  [&seabed](glm::vec2 point) { return seabed.DepthAt(point); });
 	if (found.empty())
 	{
-		return;
+		return false;
 	}
 	std::vector<glm::vec4> instances;
 	instances.reserve(found.size() * 2);
@@ -626,19 +636,51 @@ void Renderer::DrawJellyfish() const
 		const auto data = underwater::jellyfish::InstanceData(jellyfish);
 		instances.insert(instances.end(), data.begin(), data.end());
 	}
-	if (!_underwater->BindJellyfish(instances))
+	return _underwater->BindJellyfish(instances);
+}
+
+void Renderer::DrawJellyfish() const
+{
+	const auto* program = _shaderManager->GetShader("UnderwaterJelly");
+	if (program == nullptr || _underwater == nullptr || !_underwaterFrame.has_value() ||
+	    !Locator::underwaterSystem::has_value() ||
+	    !Locator::underwaterSystem::value().IsEffectOn(underwater::Effect::Jellyfish) || !BindJellyfish())
 	{
 		return;
 	}
+	const auto& frame = *_underwaterFrame;
 	program->SetUniformValue("u_uwParams", &frame.params);
 	program->SetUniformValue("u_uwLightColour", &frame.lightColour);
-	program->SetUniformValue("u_uwEye", &frame.eye);
+	const glm::vec4 bodies {glm::vec3(frame.eye), underwater::jellyfish::k_BodyPass};
+	program->SetUniformValue("u_uwEye", &bodies);
 	program->SetUniformValue("u_uwScatter", &frame.scatter);
-	// Their light adds to the scene over what they cover, and they write their depth, so that the water's fog over them
-	// is from their own distance and not from the sea bed's behind them
+	// Their bodies blend over the scene, and they write their depth, so that the water's fog over them is from their
+	// own distance and not from the sea bed's behind them
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
 	               BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA) | BGFX_STATE_MSAA);
 	program->Submit(static_cast<bgfx::ViewId>(RenderPass::Translucent));
+}
+
+void Renderer::DrawJellyfishGlow(bgfx::ViewId viewId, const FrameBuffer& target) const
+{
+	const auto* program = _shaderManager->GetShader("UnderwaterJelly");
+	if (program == nullptr || _underwater == nullptr || !_underwaterFrame.has_value() ||
+	    !Locator::underwaterSystem::has_value() ||
+	    !Locator::underwaterSystem::value().IsEffectOn(underwater::Effect::Jellyfish) || !BindJellyfish())
+	{
+		return;
+	}
+	const auto& frame = *_underwaterFrame;
+	program->SetUniformValue("u_uwParams", &frame.params);
+	program->SetUniformValue("u_uwLightColour", &frame.lightColour);
+	const glm::vec4 glow {glm::vec3(frame.eye), underwater::jellyfish::k_GlowPass};
+	program->SetUniformValue("u_uwEye", &glow);
+	program->SetUniformValue("u_uwScatter", &frame.scatter);
+	program->SetTextureSampler("s_sceneDepth", 0, target.GetDepthStencilAttachment());
+	// Their own light, added after the water's fog. The shader hides the parts behind the scene and removes the
+	// light that the water absorbs on the way to the eye.
+	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_ADD);
+	program->Submit(viewId);
 }
 
 void Renderer::DrawReef(RenderPass landViewId) const

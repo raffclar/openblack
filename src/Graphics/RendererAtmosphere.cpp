@@ -30,6 +30,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/OceanInterface.h"
 #include "3D/SkyDome.h"
+#include "3D/SkyFrame.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Registry.h"
@@ -123,17 +124,22 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	const float altitude = atmos::AltitudeOf(eye.y - seaLevel);
 	const glm::vec3 gameLight =
 	    glm::length(glm::vec3(frame.above)) > 0.0f ? glm::normalize(glm::vec3(frame.above)) : glm::vec3(0.0f, 1.0f, 0.0f);
-	// The air's light comes from the sun on its real path (atmosphere::SunTowards). After sunset it moves round the
-	// south to the moon, which stands on the other side of the sky.
+	// The air's light comes from the sun on its real path (atmosphere::SunTowards). After sunset it moves to the moon
+	// on its real path, or to the point opposite the sun while the moon is down.
 	float hour = 12.0f;
+	const ecs::components::Moon* moon = nullptr;
 	if (Locator::skySystem::has_value())
 	{
-		hour = Locator::skySystem::value().GetClock().GetScriptTime();
+		const auto& sky = Locator::skySystem::value();
+		hour = sky.GetClock().GetScriptTime();
+		moon = Locator::entitiesRegistry::value().TryGet<const ecs::components::Moon>(sky.GetMoon());
 	}
 	const glm::vec3 sunTowards = atmos::SunTowards(hour);
+	const glm::vec3 moonTowards = moon != nullptr ? sky_frame::MoonTowards(*moon, hour) : -sunTowards;
 	const glm::vec3 sunFromEye = glm::normalize((sunTowards * atmos::k_SunDistance) - eye);
 	const float moonShare = atmos::AirMoonShare(sunTowards.y);
-	const glm::vec3 towardsLight = atmos::AirLightTowards(sunFromEye, -sunTowards, moonShare);
+	const glm::vec3 towardsLight =
+	    atmos::AirLightTowards(sunFromEye, atmos::AirMoonTowards(sunTowards, moonTowards), moonShare);
 
 	// The world curves away past the farthest corner of the map from the eye, and the sea's horizon goes down as the eye
 	// climbs

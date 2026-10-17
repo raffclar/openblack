@@ -94,6 +94,10 @@ struct Moon
 	glm::vec3 colour {1.0f};
 	/// How strongly it shows through the overcast, 0 to 255
 	float strength {0.0f};
+	/// EXPERIMENT (not for merge): the days that started in the game since the land opened, and the hour of script time
+	/// of the last frame (negative before the first frame). These days move the moon forward on its real path.
+	int32_t passedDays {0};
+	float lastHour {-1.0f};
 };
 
 } // namespace openblack::ecs::components

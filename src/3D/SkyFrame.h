@@ -42,8 +42,8 @@ struct Inputs
 	const LandLightPalette* palette;
 	/// The fog setting: only with it does an overcast dim the sun and moon
 	bool fog;
-	/// EXPERIMENT (not for merge): with the water experiment on, the sun follows a real path over the sky and the moon
-	/// stands on the other side of the sky. Off, the sun and the moon are the original game's.
+	/// EXPERIMENT (not for merge): with the water experiment on, the sun and the moon follow real paths over the sky.
+	/// The moon's phase sets how far east of the sun it is. Off, the sun and the moon are the original game's.
 	bool solarPath {false};
 };
 
@@ -59,6 +59,14 @@ inline constexpr int32_t k_MoonDateReadInterval = 2000;
 
 /// The date the moon's phase is taken from, in seconds since 1970: the override, or the computer's as last read
 [[nodiscard]] int64_t MoonDate(const ecs::components::Moon& moon);
+
+/// EXPERIMENT (not for merge): how far through its moon month the moon on its real path is at an hour of script time,
+/// from its date and the days that passed in the game
+[[nodiscard]] double MoonMonthFraction(const ecs::components::Moon& moon, float scriptHour);
+
+/// EXPERIMENT (not for merge): the direction from the ground towards the moon on its real path at an hour of script
+/// time, also while it is down
+[[nodiscard]] glm::vec3 MoonTowards(const ecs::components::Moon& moon, float scriptHour);
 
 /// Keeps the frame's land light on the dome, places the sun and moon for the frame, gives the moon its colour and works
 /// out how strongly they show. Only a moon that shows reads the date
