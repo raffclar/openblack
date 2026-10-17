@@ -12,11 +12,13 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "DescriptorSetTally.h"
+#include "DrawWindow.h"
 #include "RenderPass.h"
 #include "ShaderProgram.h"
 
@@ -49,6 +51,12 @@ public:
 
 	void SetCamera(RenderPass viewId, const Camera& camera);
 
+	/// Under Vulkan, lets only the draws first to first + count - 1 into the views go to the GPU. Gives false if the
+	/// renderer does not need the window, which then lets all draws go.
+	bool OpenDrawWindow(uint32_t first, uint32_t count, std::span<const uint16_t> views) const;
+	/// Stops the draw window. Gives the number of draws into its views while it was open, if it was open.
+	[[nodiscard]] std::optional<uint32_t> CloseDrawWindow() const;
+
 	/// Every program's name with the samplers of both its shaders, as their Vulkan builds give them
 	[[nodiscard]] static std::vector<std::pair<std::string, std::vector<shader_samplers::Sampler>>> ProgramSamplers();
 
@@ -60,6 +68,8 @@ private:
 	std::unique_ptr<SamplerDefaults> _samplerDefaults;
 	/// Under Vulkan, which runs out of descriptor sets where the other renderers don't: the sets each frame takes
 	std::unique_ptr<DescriptorSetTally> _descriptorSets;
+	/// Under Vulkan, the window that can divide a frame's draws between some frames
+	std::unique_ptr<DrawWindow> _drawWindow;
 };
 
 } // namespace graphics
