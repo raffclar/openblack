@@ -2010,7 +2010,7 @@
   "query": "screenshot.pending"
  },
  {
-  "description": "The pointer, the buttons held, the hand, what the cursor picks, and the input still to come",
+  "description": "The pointer, the buttons held, the hand, what the cursor picks (with whether the Action button takes it into the hand, or takes hold of a town's totem under it, and why not), and the input still to come",
   "kind": "object",
   "parameters": [],
   "query": "input.state"
