@@ -78,7 +78,10 @@ public:
 	               bool bySampleRules) override
 	{
 		const auto conditions = bySampleRules ? std::optional(audio::CurrentSoundEffectConditions()) : std::nullopt;
-		Locator::audio::value().PlayAnimEffect(std::string(bank), keys, owner, position, conditions);
+		auto& audio = Locator::audio::value();
+		// The sound stays with its owner, and it stops when the owner goes or dies
+		const auto played = audio.PlayAnimEffect(std::string(bank), keys, owner, position, conditions);
+		audio.SetEmitterFollows(played.emitter, audio::Follows::Owner);
 	}
 };
 

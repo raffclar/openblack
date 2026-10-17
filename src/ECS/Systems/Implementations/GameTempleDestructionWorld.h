@@ -28,7 +28,7 @@ public:
 	[[nodiscard]] uint32_t Turn() const override;
 	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override;
 	entt::entity StartLoop(entt::id_type sound, glm::vec3 position, entt::entity owner) override;
-	void PlayOnce(entt::id_type sound, glm::vec3 position, entt::entity owner) override;
+	void PlayOnce(entt::id_type sound, glm::vec3 position, entt::entity owner, audio::Follows follows) override;
 	void StopSound(entt::entity emitter) override;
 	std::optional<uint32_t> StartSpotVisual(SpotVisualType type, glm::vec3 position, int32_t turns,
 	                                        PlayerNames player) override;

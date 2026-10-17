@@ -769,6 +769,8 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 
 	// The two tying sounds play in turn. The local player hears the leash of their own creature without a place. The
 	// leash of each other creature makes its sound at the thing, and the sound belongs to the player of that creature.
+	// That sound follows the player, who has no point in the world, so the next audio turn stops it. The emitter has no
+	// owner entity, and an emitter that follows no owner stops in the same way.
 	const auto tieSound = _secondAttachSound ? audio::SoundId::G_LeashAttach_01_2 : audio::SoundId::G_LeashAttach_01_1;
 	_secondAttachSound = !_secondAttachSound;
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -784,6 +786,7 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 		                                .position = registry.Get<const Transform>(object).position,
 		                                .voiceOwner = audio::VoiceOwner::Number,
 		                                .ownerNumber = static_cast<uint32_t>(PlayerNumber(owner)),
+		                                .follows = audio::Follows::Owner,
 		                            });
 	}
 

@@ -215,7 +215,6 @@ void DynamicsSystem::ResetSimulation()
 	_inTurnUpdate = false;
 	_soundPairs.Clear();
 	_dust.clear();
-	_followingSounds.clear();
 	_creatureBoxes.clear();
 	_hitObject = entt::null;
 	_objectWhichHit = entt::null;
@@ -1392,12 +1391,8 @@ void DynamicsSystem::AttemptCollisionSound(PhysicsEntry& entry)
 	{
 		const auto level = turn::CollisionLevel(entry.impact, infoWeight, hitterType == SoundCollisionType::Grain);
 		const auto keys = turn::CollisionKeys(level, static_cast<int32_t>(hitterType), static_cast<int32_t>(hitType));
-		const auto played = _world->PlayCollisionSound(keys, hitter, centre);
 		// The sound follows the thing that made it, unless its code says it stays where it was made
-		if (played.has_value() && played->emitter != entt::null && turn::CollisionSoundFollows(keys))
-		{
-			_followingSounds.push_back({.emitter = played->emitter, .owner = hitter});
-		}
+		_world->PlayCollisionSound(keys, hitter, centre, turn::CollisionSoundFollows(keys));
 	}
 	_soundPairs.Add(Id(hitter), Id(hit));
 }
@@ -1481,23 +1476,6 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 		drawn = true;
 	}
 	AdvanceDust(gameSeconds, true);
-	// The collision sounds follow what made them while they play
-	{
-		std::erase_if(_followingSounds, [this, &registry](const FollowingSound& sound) {
-			const auto* emitter = registry.Valid(sound.emitter) ? registry.TryGet<const AudioEmitter>(sound.emitter) : nullptr;
-			if (emitter == nullptr || emitter->state == audio::AudioStatus::Stopped || !IsAvailable(sound.owner))
-			{
-				return true;
-			}
-			const auto* drawn = registry.TryGet<const PhysicsDrawPose>(sound.owner);
-			const auto* transform = registry.TryGet<const Transform>(sound.owner);
-			if (drawn != nullptr || transform != nullptr)
-			{
-				_world->MoveSound(sound.emitter, drawn != nullptr ? drawn->origin : transform->position);
-			}
-			return false;
-		});
-	}
 	if (drawn)
 	{
 		registry.SetDirty();
