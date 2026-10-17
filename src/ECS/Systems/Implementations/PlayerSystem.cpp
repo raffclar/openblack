@@ -51,6 +51,16 @@ entt::entity PlayerSystem::GetPlayer(PlayerNames playerName) const
 
 void PlayerSystem::AddCreature(entt::entity creature)
 {
+	Acquire(creature, false);
+}
+
+void PlayerSystem::MakePrimaryCreature(entt::entity creature)
+{
+	Acquire(creature, true);
+}
+
+void PlayerSystem::Acquire(entt::entity creature, bool primary)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const auto player = body != nullptr ? _players.find(body->owner) : _players.end();
@@ -61,7 +71,14 @@ void PlayerSystem::AddCreature(entt::entity creature)
 	auto* list = registry.TryGet<PlayerCreatures>(player->second);
 	auto& creatures = list != nullptr ? *list : registry.Assign<PlayerCreatures>(player->second);
 	const auto before = GetPrimaryCreature(body->owner);
-	primary_creature::Acquire(creatures.acquired, creature);
+	if (primary)
+	{
+		primary_creature::MakePrimary(creatures.acquired, creature);
+	}
+	else
+	{
+		primary_creature::Acquire(creatures.acquired, creature);
+	}
 	// A new primary creature changes the icon on the player's totems
 	if (GetPrimaryCreature(body->owner) != before && Locator::villageTotemSystem::has_value())
 	{

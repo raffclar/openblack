@@ -131,6 +131,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipChants.h"
+#include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/CreatureRemoval.h"
@@ -7942,12 +7943,13 @@ void VortexParameters() // 328 VORTEX_PARAMETERS
 
 void LoadCreature() // 329 LOAD_CREATURE
 {
-	// const auto position = PopVec();
-	// const auto player = Popf();
-	// const auto mindFilename = PopString();
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A creature of the species for the player from a mind file, which becomes the creature of the player
+	const auto position = PopVec();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto fileName = PopString();
+	const auto speciesRow = Pop().uintVal;
+	ecs::creature_from_file::Make(
+	    {.owner = player, .speciesRow = speciesRow, .fileName = fileName, .place = glm::vec2(position.x, position.z)});
 }
 
 void IsSpellCharging() // 330 IS_SPELL_CHARGING

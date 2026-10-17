@@ -32,7 +32,6 @@
 #include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Archetypes/BigForestArchetype.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
-#include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/DeadTreeArchetype.h"
 #include "ECS/Archetypes/DrinkWaypointArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
@@ -55,6 +54,7 @@
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureFromFile.h"
 #include "ECS/FootpathRules.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
@@ -774,8 +774,17 @@ void FeatureScriptCommands::CreateCreature(glm::vec3 position, int32_t param2, i
 void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName, CreatureType creatureType,
                                                    const std::string& creatureMind, glm::vec3 position)
 {
-	// A name that is no player's, such as an eighth player's, makes the creature the neutral player's
-	CreatureArchetype::CreateFromMindFile(position, GetPlayerName(playerName), creatureType, creatureMind);
+	// The name of a player that is not in the game gives the neutral player. The creature then belongs to the neutral
+	// player, as a creature that the challenge scripts load from a file does.
+	auto player = GetPlayerName(playerName);
+	if (!ecs::creature_from_file::PlayerInGame(player))
+	{
+		player = PlayerNames::NEUTRAL;
+	}
+	ecs::creature_from_file::Make({.owner = player,
+	                               .speciesRow = static_cast<uint32_t>(creatureType),
+	                               .fileName = creatureMind,
+	                               .place = glm::vec2(position.x, position.z)});
 }
 
 void FeatureScriptCommands::CreateFlock(int32_t id, glm::vec3 position, glm::vec3 home, int32_t reach, int32_t flockDistance,

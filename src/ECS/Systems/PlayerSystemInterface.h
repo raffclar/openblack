@@ -27,6 +27,8 @@ public:
 	[[nodiscard]] virtual entt::entity GetPlayer(PlayerNames name) const = 0;
 	/// Remembers that the owner of a newly made creature got it, after the creatures they got before
 	virtual void AddCreature(entt::entity creature) = 0;
+	/// Makes the creature the primary creature of its owner, before the creatures that the owner got before
+	virtual void MakePrimaryCreature(entt::entity creature) { AddCreature(creature); }
 	/// The player's primary creature: the earliest they got that is still theirs. Every part of the game that asks for
 	/// "the player's creature" (scripts, the story, the leash, fights, the advisors, the Creature Cave) uses this one.
 	[[nodiscard]] virtual std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const = 0;

@@ -10,6 +10,7 @@
 #include "PrimaryCreature.h"
 
 #include <algorithm>
+#include <vector>
 
 void openblack::primary_creature::Acquire(std::vector<entt::entity>& acquired, entt::entity creature)
 {
@@ -17,4 +18,10 @@ void openblack::primary_creature::Acquire(std::vector<entt::entity>& acquired, e
 	{
 		acquired.push_back(creature);
 	}
+}
+
+void openblack::primary_creature::MakePrimary(std::vector<entt::entity>& acquired, entt::entity creature)
+{
+	std::erase(acquired, creature);
+	acquired.insert(acquired.begin(), creature);
 }

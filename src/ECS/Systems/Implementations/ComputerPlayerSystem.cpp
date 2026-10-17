@@ -11,6 +11,7 @@
 
 #include "ComputerPlayerSystem.h"
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -21,11 +22,13 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -107,7 +110,11 @@ public:
 
 	void MakeCreature(PlayerNames player, CreatureType species, const glm::vec3& position) override
 	{
-		ecs::archetypes::CreatureArchetype::CreateFromMindFile(position, player, species, computer_player::k_CreatureMindFile);
+		// The same steps as a script that loads a creature from a mind file
+		ecs::creature_from_file::Make({.owner = player,
+		                               .speciesRow = script::property_rules::ScriptCreatureType(species),
+		                               .fileName = std::string(computer_player::k_CreatureMindFile),
+		                               .place = glm::vec2(position.x, position.z)});
 	}
 
 	void Teach(entt::entity creature, MagicType miracle) override
