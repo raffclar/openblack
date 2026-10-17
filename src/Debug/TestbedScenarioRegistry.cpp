@@ -3820,6 +3820,40 @@ void AddHand(std::vector<Scenario>& all)
 	    .commands = sweeps,
 	});
 
+	// The carried leash round the wrist while the hand strokes and slaps: slow sweeps stroke, fast sweeps slap
+	std::vector<Command> collarHand {Leash(0, LeashType::Rope, 0.5f),
+	                                 Leash(0, LeashType::Evil, 0.5f),
+	                                 Leash(0, LeashType::Good, 0.5f),
+	                                 Act(Kind::TakeOffLeash, 0, 0.5f),
+	                                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 1.0f, .value = 1},
+	                                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3}};
+	for (int stroke = 0; stroke < 4; ++stroke)
+	{
+		const float down = stroke % 2 == 0 ? 0.08f : -0.08f;
+		collarHand.push_back({.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.0f, down}, .amount = 1.2f});
+	}
+	for (int sweep = 0; sweep < 4; ++sweep)
+	{
+		const float across = sweep % 2 == 0 ? 0.2f : -0.2f;
+		collarHand.push_back({.kind = Kind::PointerSweep, .delaySeconds = 2.0f, .point = {across, 0.0f}, .amount = 0.01f});
+	}
+	collarHand.push_back({.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3});
+	all.push_back({
+	    .id = "hand.carried_leash_touch",
+	    .name = "The carried leash on the stroking and slapping hand",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger faces the camera and knows all three leashes. The learning leash is picked at the "
+	                   "temple, so the hand carries it. The hand holds the tiger by its middle, strokes it up and down "
+	                   "slowly four times, then sweeps fast across the middle of the screen four times, then lets go.",
+	    .expected = "The twisted rope collar stays round the wrist of the hand all the time. It moves and turns with the "
+	                "wrist as the hand rests on the body, strokes and slaps, and it stays in scale with the hand.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .temples = {{.offset = {-60.0f, 60.0f}, .angle = 36.0f}},
+	    .commands = collarHand,
+	});
+
 	all.push_back({
 	    .id = "hand.slap_after_stroke",
 	    .name = "A slap soon after a stroke",
