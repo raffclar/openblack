@@ -61,6 +61,17 @@ public:
 	/// A force kicks a creature's body at a point, swaying its upper body when the point is high on it and its lower
 	/// body otherwise, unless it is striking with a destroying blow
 	virtual void KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point) = 0;
+
+	/// Places the glows on a creature's body (see components::CreatureHandGlows) on its pose as it is now. Each glow's
+	/// texture slides on by the real milliseconds of the frame, and the circling glow turns by the game's milliseconds.
+	/// Nothing happens to a creature or copy without glows or a pose.
+	virtual void PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs) = 0;
+	/// The middle of a creature's or a copy's groin bone and its lips (the point that kisses, else its head bone), as its
+	/// body is posed now, in the world. Nothing when it has no pose or no such bones.
+	[[nodiscard]] virtual std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity creature) = 0;
+	/// A copy of a creature makes its motes or its smoke once, as a creature does each game turn, from the bones of its
+	/// pose now and the alignment that its body shows
+	virtual void AddAlignmentMotesOf(entt::entity copy) = 0;
 };
 
 } // namespace openblack::ecs::systems

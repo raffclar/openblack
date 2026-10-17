@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <span>
 #include <vector>
 
@@ -18,6 +19,8 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+
+#include "Video/FilmEffects.h"
 
 /// The creatures that the interface shows over itself, as the Creature Stats tab of the statistics box shows each
 /// player's creature in its box. One camera turns round all of them. Each creature is moved for its draw to the point in
@@ -66,6 +69,8 @@ struct MenuCreature
 struct FilmCreature
 {
 	entt::entity copy {entt::null};
+	/// Whether the film shows the copy now
+	bool copyShown {false};
 	glm::mat4 view {1.0f};
 	glm::mat4 projection {1.0f};
 	/// Where the film's picture is on the window, in pixels: its top left corner and its size
@@ -76,6 +81,10 @@ struct FilmCreature
 	/// The colour that the light shades, 0 to 255, and the colour added after its texture, 0 to 1
 	glm::vec3 colour {0.0f};
 	glm::vec3 added {0.0f};
+	/// The stars, and the corners of the fans of the burst of light at a depth in front of the camera
+	std::vector<film_effects::StarSprite> stars;
+	std::vector<std::array<film_effects::FanCorner, film_effects::k_FanCorners>> fans;
+	float fanDepth {0.0f};
 };
 
 /// The size of the interface's space, which the creatures are placed and sized in as the game placed them on its

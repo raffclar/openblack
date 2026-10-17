@@ -28,6 +28,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -286,7 +287,31 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 
 void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown) const
 {
-	if (shown.viewSize.x <= 0.0f || shown.viewSize.y <= 0.0f || !desc.entities.Valid(shown.copy))
+	if (shown.viewSize.x <= 0.0f || shown.viewSize.y <= 0.0f)
+	{
+		return;
+	}
+	// The film's camera over the film's picture, with the depth cleared: the renderer draws the creature over the
+	// picture and in front of nothing else
+	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::FilmCreature);
+	bgfx::setViewClear(viewId, BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
+	bgfx::setViewRect(viewId, static_cast<uint16_t>(shown.viewOrigin.x), static_cast<uint16_t>(shown.viewOrigin.y),
+	                  static_cast<uint16_t>(shown.viewSize.x), static_cast<uint16_t>(shown.viewSize.y));
+	bgfx::setViewTransform(viewId, &shown.view, &shown.projection);
+	// The body, its eyes, its hair and the glows on its hands, then the effects, in the order they are given, so each
+	// blends over what is before it
+	_shaderManager->SetViewOrder(RenderPass::FilmCreature, ViewOrder::Sequential);
+	bgfx::touch(viewId);
+	if (shown.copyShown)
+	{
+		DrawFilmCopy(desc, shown);
+	}
+	DrawFilmEffects(shown);
+}
+
+void Renderer::DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown) const
+{
+	if (!desc.entities.Valid(shown.copy))
 	{
 		return;
 	}
@@ -313,17 +338,6 @@ void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creat
 	{
 		return;
 	}
-
-	// The film's camera over the film's picture, with the depth cleared: the renderer draws the creature over the
-	// picture and in front of nothing else
-	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::FilmCreature);
-	bgfx::setViewClear(viewId, BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
-	bgfx::setViewRect(viewId, static_cast<uint16_t>(shown.viewOrigin.x), static_cast<uint16_t>(shown.viewOrigin.y),
-	                  static_cast<uint16_t>(shown.viewSize.x), static_cast<uint16_t>(shown.viewSize.y));
-	bgfx::setViewTransform(viewId, &shown.view, &shown.projection);
-	// The body, its eyes and then its hair, in the order they are given, so the hair blends over the body
-	_shaderManager->SetViewOrder(RenderPass::FilmCreature, ViewOrder::Sequential);
-	bgfx::touch(viewId);
 
 	if (!_filmCreatureInstance.has_value())
 	{
@@ -383,11 +397,18 @@ void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creat
 	{
 		DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
 	}
-	// Its own hair, which hangs from its own pose, faces the film's camera
+	// Its own hair, which hangs from its own pose, faces the film's camera. The hair takes the colour of its own and the
+	// added colour that the body takes.
 	if (const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(shown.copy);
 	    hair != nullptr && Locator::creatureHairSystem::value().IsShown())
 	{
-		DrawCreatureHair(desc, *hair, transform->position, RenderPass::FilmCreature, glm::vec3(glm::inverse(shown.view)[3]));
+		DrawCreatureHair(desc, *hair, transform->position, RenderPass::FilmCreature, glm::vec3(glm::inverse(shown.view)[3]),
+		                 shown.colour, glm::round(shown.added * 255.0f));
+	}
+	// The glows on its hands
+	if (const auto* glows = desc.entities.TryGet<const ecs::components::CreatureHandGlows>(shown.copy); glows != nullptr)
+	{
+		DrawCreatureHandGlows(static_cast<uint16_t>(RenderPass::FilmCreature), *glows, shown.projection, false, 0);
 	}
 }
 

@@ -35,6 +35,7 @@
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureFight.h"
+#include "Creature/CreatureHandGlow.h"
 #include "Creature/CreatureHeadLook.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
@@ -49,6 +50,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Transform.h"
@@ -934,6 +936,20 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 			              [this](uint32_t range) { return std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); });
 		    }
 	    });
+
+	// The glows on the creatures' bodies follow their poses. Their textures slide by the real time and the circling glow
+	// turns by the game's time, at most once a frame of the screen's refresh.
+	const auto realTime = Locator::time::has_value() ? Locator::time::value().GetFrameRealTime() : std::chrono::milliseconds(0);
+	std::vector<entt::entity> glowing;
+	registry.Each<const Creature, CreatureHandGlows>([&glowing](entt::entity entity, const Creature& /*creature*/,
+	                                                            CreatureHandGlows& /*glows*/) { glowing.push_back(entity); });
+	for (const auto entity : glowing)
+	{
+		auto& glows = registry.Get<CreatureHandGlows>(entity);
+		const auto slideMs = frame_pace::Step(glows.slidePace, realTime, realTime);
+		const auto turnMs = frame_pace::Step(glows.turnPace, realTime, std::chrono::milliseconds(milliseconds));
+		PlaceHandGlows(entity, static_cast<int32_t>(slideMs.count()), static_cast<int32_t>(turnMs.count()));
+	}
 }
 
 void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
@@ -1158,5 +1174,195 @@ void CreatureAnimationSystem::KickSway(entt::entity creature, glm::vec3 force, g
 	    animation != nullptr && registry.AllOf<Creature>(creature))
 	{
 		Kick(registry, creature, *animation, force, point);
+	}
+}
+
+namespace
+{
+/// What a creature or a copy of one is drawn from: its species, the morph of its body and the size it shows
+struct BodyOf
+{
+	CreatureType species;
+	const CreatureMorph* morph;
+	float size;
+};
+
+std::optional<BodyOf> FindBody(const ecs::Registry& registry, entt::entity entity)
+{
+	if (const auto* creature = registry.TryGet<const Creature>(entity); creature != nullptr)
+	{
+		const auto* morph = registry.TryGet<const CreatureMorph>(entity);
+		return morph != nullptr ? std::optional(BodyOf {creature->species, morph, ShownSize(*creature)}) : std::nullopt;
+	}
+	const auto* copy = registry.TryGet<const CreatureCopy>(entity);
+	if (copy == nullptr || !registry.Valid(copy->creature))
+	{
+		return std::nullopt;
+	}
+	const auto* creature = registry.TryGet<const Creature>(copy->creature);
+	const auto* morph = registry.TryGet<const CreatureMorph>(copy->creature);
+	if (creature == nullptr || morph == nullptr)
+	{
+		return std::nullopt;
+	}
+	return BodyOf {creature->species, morph, copy->size};
+}
+
+const CreatureRig* RigOf(CreatureType species)
+{
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto id = creature::GetRigId(species);
+	return rigs.Contains(id) ? &*rigs.Handle(id) : nullptr;
+}
+} // namespace
+
+void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs)
+{
+	using creature_hand_glow::Place;
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* hand = registry.TryGet<CreatureHandGlows>(creature);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto body = FindBody(registry, creature);
+	if (hand == nullptr || animation == nullptr || transform == nullptr || !body.has_value())
+	{
+		return;
+	}
+	const auto* rig = RigOf(body->species);
+	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const std::span<const glm::mat4> bones = animation->boneMatrices;
+	const auto posed = [&](uint32_t bone) { return creature::PosedBone(bone, bones, placement); };
+	for (size_t i = 0; i < creature_hand_glow::k_PlaceCount; ++i)
+	{
+		auto& glow = hand->glows.at(i);
+		auto& placed = hand->placed.at(i);
+		placed.reset();
+		if (!glow.has_value())
+		{
+			continue;
+		}
+		const auto place = static_cast<Place>(i);
+		glm::mat3 axes(1.0f);
+		glm::vec3 point(0.0f);
+		if (place == Place::Circling)
+		{
+			// It turns about the up axis above the body
+			creature_hand_glow::Turn(*glow, gameMs);
+			axes = creature_hand_glow::CirclingAxes(glow->turn);
+			point = creature_hand_glow::CirclingPoint(transform->position, body->size);
+		}
+		else
+		{
+			if (rig == nullptr || !rig->actionPoints.has_value())
+			{
+				continue;
+			}
+			auto bone = place == Place::Belly ? rig->actionPoints->belly : rig->actionPoints->rightHand;
+			if (place == Place::LeftHand)
+			{
+				bone = bone < animation->mirror.size() ? animation->mirror[bone] : static_cast<uint32_t>(bones.size());
+			}
+			if (bone >= bones.size())
+			{
+				continue;
+			}
+			const auto world = posed(bone);
+			axes = creature_hand_glow::UnitAxes(glm::mat3(world));
+			point = glm::vec3(world[3]);
+			// A hand glow is at the middle of the ends of the fingers
+			if (place != Place::Belly)
+			{
+				std::vector<glm::vec3> ends;
+				for (const auto end : creature_hand_glow::BranchEnds(animation->skeleton.parents, bone))
+				{
+					if (end < bones.size())
+					{
+						ends.emplace_back(posed(end)[3]);
+					}
+				}
+				point = creature_hand_glow::Middle(ends);
+			}
+		}
+		// The shell reaches out by the power it had when it was drawn, and its texture slides on
+		const float zoom = creature_hand_glow::Zoom(*glow);
+		creature_hand_glow::Slide(*glow, frameMs);
+		placed = CreatureHandGlows::Placed {
+		    .model = creature_hand_glow::ModelMatrix(axes, point, transform->scale.x, glow->scale),
+		    .zoom = zoom,
+		    .slide = glow->slide,
+		};
+	}
+}
+
+std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto body = FindBody(registry, creature);
+	if (animation == nullptr || transform == nullptr || !body.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* rig = RigOf(body->species);
+	const std::span<const glm::mat4> bones = animation->boneMatrices;
+	if (rig == nullptr || !rig->actionPoints.has_value() || rig->actionPoints->groin >= bones.size())
+	{
+		return std::nullopt;
+	}
+	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const auto groin = glm::vec3(creature::PosedBone(rig->actionPoints->groin, bones, placement)[3]);
+	// The lips are the point on the body that kisses, else the head bone
+	glm::vec3 lips(0.0f);
+	if (rig->kissPoint.has_value())
+	{
+		const auto& kiss = *rig->kissPoint;
+		if (std::ranges::any_of(kiss.bones, [&bones](uint32_t bone) { return bone >= bones.size(); }))
+		{
+			return std::nullopt;
+		}
+		const auto triangle = creature::PosedTriangle(kiss.vertices, kiss.bones, body->morph->drawn, bones, placement,
+		                                              creature::k_SkinPointOrder);
+		lips = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], kiss.u, kiss.v).position;
+	}
+	else if (rig->actionPoints->head < bones.size())
+	{
+		lips = glm::vec3(creature::PosedBone(rig->actionPoints->head, bones, placement)[3]);
+	}
+	else
+	{
+		return std::nullopt;
+	}
+	const float half = 0.5f;
+	return glm::vec3((lips.x + groin.x) * half, (groin.y + lips.y) * half, (groin.z + lips.z) * half);
+}
+
+void CreatureAnimationSystem::AddAlignmentMotesOf(entt::entity copy)
+{
+	if (!Locator::dynamicsSystem::has_value() || !Locator::gameRandom::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const CreatureAnimation>(copy);
+	const auto* transform = registry.TryGet<const Transform>(copy);
+	const auto body = FindBody(registry, copy);
+	if (animation == nullptr || transform == nullptr || !body.has_value() || !registry.AllOf<CreatureCopy>(copy) ||
+	    !creature_alignment_motes::MakesAny(body->morph->drawn.evilGood))
+	{
+		return;
+	}
+	auto& random = Locator::gameRandom::value();
+	const creature_alignment_motes::LocalRandom localRandom = [&random](int32_t n) { return random.LocalRand(n); };
+	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const creature_alignment_motes::BonePoint bonePoint = [animation, &placement](uint32_t bone) {
+		return glm::vec3(creature::PosedBone(bone, animation->boneMatrices, placement)[3]);
+	};
+	auto& dynamics = Locator::dynamicsSystem::value();
+	const auto bones = static_cast<uint32_t>(animation->boneMatrices.size());
+	for (const auto& puff :
+	     creature_alignment_motes::PuffsOf(body->morph->drawn.evilGood, body->size, bones, bonePoint, localRandom))
+	{
+		dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
 	}
 }

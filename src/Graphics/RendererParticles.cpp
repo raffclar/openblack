@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <iterator>
 #include <span>
+#include <string>
 #include <vector>
 
 #include <StackedBitmap.h>
@@ -26,6 +27,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/transform.hpp>
 
+#include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
@@ -33,6 +35,8 @@
 #include "3D/Mists.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "Creature/CreatureHandGlow.h"
+#include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
@@ -48,6 +52,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
+#include "Graphics/InterfaceCreatures.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/ModelLight.h"
 #include "Graphics/ShaderManager.h"
@@ -63,7 +68,9 @@
 #include "Particles/VolumeGlow.h"
 #include "Profiler.h"
 #include "Renderer.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Video/FilmEffects.h"
 
 using namespace openblack;
 using namespace openblack::graphics;
@@ -504,19 +511,30 @@ void Renderer::DrawParticleShell(const DrawSceneDesc& desc, const particles::dra
 	{
 		return;
 	}
-	const auto mesh = meshes.Handle(meshComponent->id);
+	SubmitGlowShell(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)), meshComponent->id, placed->model, shell,
+	                desc.camera->GetProjectionMatrix(), desc.viewId == RenderPass::Reflection, depth);
+}
+
+void Renderer::SubmitGlowShell(uint16_t viewId, entt::id_type meshId, const glm::mat4& model,
+                               const particles::draw::ShellDraw& shell, const glm::mat4& projection, bool reflection,
+                               uint32_t depth) const
+{
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto& textures = Locator::resources::value().GetTextures();
+	if (!meshes.Contains(meshId) || !textures.Contains(shell.texture))
+	{
+		return;
+	}
+	const auto mesh = meshes.Handle(meshId);
 	// The band reaches out by the model's half diagonal, scaled
 	const float reach = glm::length(mesh->GetBoundingBox().Size()) * 0.5f * shell.zoom;
-	const bool reflection = desc.viewId == RenderPass::Reflection;
 	const auto texture = textures.Handle(shell.texture);
 	const auto alpha = textures.Contains(shell.alphaTexture) ? textures.Handle(shell.alphaTexture) : texture;
 	const glm::vec4 colour {static_cast<float>((shell.argb >> 16u) & 0xFFu), static_cast<float>((shell.argb >> 8u) & 0xFFu),
 	                        static_cast<float>(shell.argb & 0xFFu), static_cast<float>(shell.argb >> 24u)};
 	const glm::vec4 look {shell.uvOffset, shell.textureFraction};
 	const auto* program = _shaderManager->GetShader("VolumeGlow");
-	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
 	// How much the projection widens the camera's frame across and up, which weighs how side on the shell is seen
-	const auto& projection = desc.camera->GetProjectionMatrix();
 	const auto& subMeshes = mesh->GetSubMeshes();
 	for (uint32_t i = 0; i < subMeshes.size(); ++i)
 	{
@@ -526,7 +544,7 @@ void Renderer::DrawParticleShell(const DrawSceneDesc& desc, const particles::dra
 		{
 			continue;
 		}
-		const auto* band = GlowShellOf(meshComponent->id, i);
+		const auto* band = GlowShellOf(meshId, i);
 		if (band == nullptr || band->indexCount == 0)
 		{
 			continue;
@@ -537,13 +555,182 @@ void Renderer::DrawParticleShell(const DrawSceneDesc& desc, const particles::dra
 		program->SetUniformValue("u_glowTexture", &look);
 		program->SetTextureSampler("s_diffuse", 0, *texture);
 		program->SetTextureSampler("s_alpha", 1, *alpha);
-		bgfx::setTransform(glm::value_ptr(placed->model));
+		bgfx::setTransform(glm::value_ptr(model));
 		band->vertices->Bind();
 		band->triangles->Bind(band->indexCount);
 		// Added to what is behind without writing depth; each band is seen from its front only, as the model is
 		bgfx::setState(BlendState(render_modes::Mode::AlphaTexturedAlphaAdditiveNz) | BGFX_STATE_MSAA |
 		               (reflection ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW));
 		program->Submit(viewId, depth);
+	}
+}
+
+void Renderer::DrawCreatureHandGlows(uint16_t viewId, const ecs::components::CreatureHandGlows& glows,
+                                     const glm::mat4& projection, bool reflection, uint32_t depth) const
+{
+	// Each glow is the shell over the creed model, in white, with its texture
+	const auto name = std::string("raw/") + std::string(particles::volume_glow::k_Textures.at(creature_hand_glow::k_Texture));
+	const auto texture = entt::hashed_string(name.c_str()).value();
+	const auto alpha = entt::hashed_string((name + "a").c_str()).value();
+	for (const auto& placed : glows.placed)
+	{
+		if (!placed.has_value())
+		{
+			continue;
+		}
+		const particles::draw::ShellDraw shell {
+		    .object = entt::null,
+		    .zoom = placed->zoom,
+		    .argb = creature_hand_glow::k_Argb,
+		    .texture = texture,
+		    .alphaTexture = alpha,
+		    .uvOffset = placed->slide,
+		    .textureFraction = creature_hand_glow::k_TextureFraction,
+		};
+		SubmitGlowShell(viewId, resources::HashIdentifier(MeshId::Creed), placed->model, shell, projection, reflection, depth);
+	}
+}
+
+void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) const
+{
+	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::FilmCreature);
+	const auto toWorld = glm::inverse(film.view);
+	const glm::vec2 projectionScale {film.projection[0][0], film.projection[1][1]};
+	const auto worldAt = [&](glm::ivec2 pixel, float depth) {
+		return glm::vec3(toWorld * glm::vec4(film_effects::CameraPoint(pixel, depth, projectionScale), 1.0f));
+	};
+	const auto& textures = Locator::resources::value().GetTextures();
+
+	// The motes and the other puffs, and the stars, sorted by how far they are from the film's camera
+	auto& frame = _filmParticleFrame;
+	frame.Clear();
+	if (Locator::dynamicsSystem::has_value())
+	{
+		Locator::dynamicsSystem::value().CollectDrawFrame(frame);
+	}
+	if (!film.stars.empty())
+	{
+		static constexpr auto k_Smoke = entt::hashed_string("raw/smoke");
+		static constexpr auto k_SmokeAlpha = entt::hashed_string("raw/smokea");
+		// Blended over what is behind, writing no depth
+		const auto material = frame.MaterialIndex({.texture = k_Smoke.value(),
+		                                           .alphaTexture = k_SmokeAlpha.value(),
+		                                           .mode = render_modes::Mode::AlphaTexturedAlphaNz});
+		for (const auto& star : film.stars)
+		{
+			const auto position = worldAt(star.pixel, star.depth);
+			const auto firstItem = static_cast<uint32_t>(frame.items.size());
+			frame.items.push_back(
+			    {.kind = ItemKind::Sprite, .index = static_cast<uint32_t>(frame.sprites.size()), .sortPoint = position});
+			const glm::vec4 colour {static_cast<float>((star.argb >> 16u) & 0xFFu),
+			                        static_cast<float>((star.argb >> 8u) & 0xFFu), static_cast<float>(star.argb & 0xFFu),
+			                        static_cast<float>(star.argb >> 24u)};
+			frame.sprites.push_back({.positionHalfWidth = glm::vec4(position, star.halfSize),
+			                         .shape = glm::vec4(star.halfSize, star.roll, 0.0f, 0.0f),
+			                         .uv = film_effects::SheetCell(star.frame),
+			                         .colour = colour / 255.0f,
+			                         .flags = glm::vec4(0.0f)});
+			frame.spriteMaterials.push_back(material);
+			frame.groups.push_back(
+			    {.path = particles::draw::DrawPath::Sorted, .origin = position, .firstItem = firstItem, .itemCount = 1});
+		}
+	}
+	if (!frame.items.empty())
+	{
+		particles::draw::Order(frame, glm::vec3(toWorld[3]), std::nullopt, _filmParticleCommands, _filmSpriteOrder);
+		constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
+		const auto count = static_cast<uint32_t>(_filmSpriteOrder.size());
+		if (count > 0 && bgfx::getAvailInstanceDataBuffer(count, k_Stride) >= count)
+		{
+			bgfx::InstanceDataBuffer instances {};
+			bgfx::allocInstanceDataBuffer(&instances, count, k_Stride);
+			auto* out = reinterpret_cast<particles::sprites::SpriteInstance*>(instances.data);
+			for (const auto index : _filmSpriteOrder)
+			{
+				*out++ = frame.sprites[index];
+			}
+			glm::vec4 islandExtent(0.0f);
+			if (Locator::terrainSystem::has_value())
+			{
+				const auto extent = Locator::terrainSystem::value().GetExtent();
+				islandExtent = glm::vec4(extent.minimum, extent.maximum);
+			}
+			const auto* program = _shaderManager->GetShader("ParticleInstanced");
+			for (const auto& command : _filmParticleCommands)
+			{
+				const auto& material = frame.materials[command.material];
+				if (command.kind != ItemKind::Sprite || !textures.Contains(material.texture))
+				{
+					continue;
+				}
+				const auto texture = textures.Handle(material.texture);
+				const auto alpha = textures.Contains(material.alphaTexture) ? textures.Handle(material.alphaTexture) : texture;
+				program->SetTextureSampler("s_diffuse", 0, *texture);
+				program->SetTextureSampler("s_alpha", 1, *alpha);
+				program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
+				program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
+				program->SetUniformValue("u_islandExtent", &islandExtent);
+				bgfx::setState(BlendState(material.mode));
+				_plane->GetVertexBuffer().Bind();
+				bgfx::setInstanceDataBuffer(&instances, command.first, command.count);
+				program->Submit(viewId, 0);
+			}
+		}
+	}
+
+	// The fans of the burst of light, added over everything, in the atmosphere texture
+	static constexpr auto k_Atmos = entt::hashed_string("raw/ATMOS");
+	static constexpr auto k_AtmosAlpha = entt::hashed_string("raw/ATMOSA");
+	if (film.fans.empty() || !textures.Contains(k_Atmos.value()) || !textures.Contains(k_AtmosAlpha.value()))
+	{
+		return;
+	}
+	struct Vertex
+	{
+		glm::vec3 position;
+		glm::vec2 uv;
+		uint32_t abgr;
+	};
+	static const auto k_Layout = [] {
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+		    .end();
+		return layout;
+	}();
+	const auto triangles = film_effects::FanTriangles();
+	constexpr auto k_Corners = static_cast<uint32_t>(film_effects::k_FanCorners);
+	constexpr auto k_Indices = static_cast<uint32_t>(film_effects::k_FanIndices);
+	const auto* program = _shaderManager->GetShader("WorldTextured");
+	for (const auto& fan : film.fans)
+	{
+		if (bgfx::getAvailTransientVertexBuffer(k_Corners, k_Layout) < k_Corners ||
+		    bgfx::getAvailTransientIndexBuffer(k_Indices) < k_Indices)
+		{
+			return;
+		}
+		bgfx::TransientVertexBuffer vertexBuffer;
+		bgfx::TransientIndexBuffer indexBuffer;
+		bgfx::allocTransientVertexBuffer(&vertexBuffer, k_Corners, k_Layout);
+		bgfx::allocTransientIndexBuffer(&indexBuffer, k_Indices);
+		const auto vertices = std::span(reinterpret_cast<Vertex*>(vertexBuffer.data), k_Corners);
+		for (size_t i = 0; i < fan.size(); ++i)
+		{
+			const auto& corner = fan.at(i);
+			const auto argb = corner.argb;
+			const auto abgr = (argb & 0xFF00FF00u) | ((argb & 0xFFu) << 16u) | ((argb >> 16u) & 0xFFu);
+			vertices[i] = {worldAt(corner.pixel, film.fanDepth), corner.uv, abgr};
+		}
+		std::memcpy(indexBuffer.data, triangles.data(), sizeof(triangles));
+		program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_Atmos.value()));
+		program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AtmosAlpha.value()));
+		bgfx::setVertexBuffer(0, &vertexBuffer);
+		bgfx::setIndexBuffer(&indexBuffer);
+		// Added to what is behind, tested against the depth but not writing it, seen from both sides
+		bgfx::setState(BlendState(render_modes::Mode::AlphaTexturedAlphaAdditiveNz) | BGFX_STATE_MSAA);
+		program->Submit(viewId, 0);
 	}
 }
 

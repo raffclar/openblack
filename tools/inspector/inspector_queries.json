@@ -1516,7 +1516,7 @@
   "query": "temple.villagers"
  },
  {
-  "description": "The video playing: its frame, frame count and rate, its fade, the falling spell and its creature, and whether films and 16-bit colour are on",
+  "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, its creature and its effects, and whether films and 16-bit colour are on",
   "kind": "object",
   "parameters": [],
   "query": "view.video"

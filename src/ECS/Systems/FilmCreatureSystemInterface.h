@@ -11,12 +11,16 @@
 
 #include <cstdint>
 
+#include <array>
 #include <chrono>
 #include <optional>
+#include <vector>
 
 #include <entt/entity/fwd.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
+
+#include "Video/FilmEffects.h"
 
 namespace openblack::ecs::systems
 {
@@ -39,17 +43,23 @@ public:
 	[[nodiscard]] virtual bool IsRunning() const = 0;
 
 	/// What the renderer draws over the film this frame: the copy, the camera's view and projection, the light, the
-	/// colour that the light shades (0 to 255) and the colour added after (0 to 1)
+	/// colour that the light shades (0 to 255) and the colour added after (0 to 1). Then the stars, and the fans of the
+	/// burst of light at a depth in front of the camera.
 	struct Shown
 	{
 		entt::entity copy;
+		/// Whether the film shows the copy now
+		bool copyShown {false};
 		glm::mat4 view {1.0f};
 		glm::mat4 projection {1.0f};
 		glm::vec3 light {0.0f};
 		glm::vec3 colour {0.0f};
 		glm::vec3 added {0.0f};
+		std::vector<film_effects::StarSprite> stars;
+		std::vector<std::array<film_effects::FanCorner, film_effects::k_FanCorners>> fans;
+		float fanDepth {0.0f};
 	};
-	/// None when there is no copy, or the film does not show the copy now
+	/// None when there is no copy
 	[[nodiscard]] virtual std::optional<Shown> GetShown() const = 0;
 };
 
