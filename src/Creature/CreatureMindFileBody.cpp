@@ -46,6 +46,16 @@ std::optional<CreatureType> creature_mind_body::SpeciesFromRow(uint32_t row)
 	return std::nullopt;
 }
 
+float creature_mind_body::AlignmentFromFile(float alignment)
+{
+	// A value that is not a number, or below -1, becomes -1; a value above 1 becomes 1
+	if (!(alignment >= -1.0f))
+	{
+		return -1.0f;
+	}
+	return alignment > 1.0f ? 1.0f : alignment;
+}
+
 std::optional<Body> creature_mind_body::FromMindFile(const creaturemind::MindFileData& file)
 {
 	const auto species = SpeciesFromRow(file.speciesRow);
@@ -54,18 +64,19 @@ std::optional<Body> creature_mind_body::FromMindFile(const creaturemind::MindFil
 		return std::nullopt;
 	}
 	Body body {.species = *species, .name = file.name};
+	// The body keeps each value as the file has it, as the game does. Only a value that is not a number is not taken.
 	const auto finite = [](float value) { return std::isfinite(value); };
-	if (file.alignment.has_value() && finite(*file.alignment))
+	if (file.alignment.has_value())
 	{
-		body.alignment = std::clamp(*file.alignment, -1.0f, 1.0f);
+		body.alignment = AlignmentFromFile(*file.alignment);
 	}
 	if (finite(file.physique.strength))
 	{
-		body.strength = std::clamp(file.physique.strength, 0.0f, 1.0f);
+		body.strength = file.physique.strength;
 	}
-	if (file.physique.size.has_value() && finite(*file.physique.size) && *file.physique.size > 0.0f)
+	if (file.physique.size.has_value() && finite(*file.physique.size))
 	{
-		body.size = std::clamp(*file.physique.size, creature_morph::k_MinScale, creature_morph::k_MaxScale);
+		body.size = *file.physique.size;
 	}
 	if (file.tattooHeader.has_value())
 	{
@@ -78,15 +89,13 @@ std::optional<Body> creature_mind_body::FromMindFile(const creaturemind::MindFil
 		body.tattooPictures = *file.tattoo;
 	}
 	const auto& physique = file.physique;
-	const auto share = [&finite](float value, float otherwise) {
-		return finite(value) ? std::clamp(value, 0.0f, 1.0f) : otherwise;
-	};
+	const auto share = [&finite](float value, float otherwise) { return finite(value) ? value : otherwise; };
 	body.fatness = share(physique.fatness, body.fatness);
 	body.shownFatness = share(physique.shownFatness, body.shownFatness);
 	creature_physiology::Kept needs {.age = physique.age, .turns = physique.turns};
 	if (finite(physique.energy))
 	{
-		needs.energy = std::max(physique.energy, 0.0f);
+		needs.energy = physique.energy;
 	}
 	needs.exhaustion = share(physique.needs[k_ExhaustionNeed], needs.exhaustion);
 	body.needs = needs;

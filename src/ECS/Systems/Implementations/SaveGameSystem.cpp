@@ -62,6 +62,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
+#include "ECS/SaveGameFiles.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -141,19 +142,7 @@ bool WriteFile(const std::filesystem::path& relativeFolder, std::string_view fil
 
 std::optional<std::vector<uint8_t>> ReadFile(const std::filesystem::path& path)
 {
-	if (!Locator::filesystem::has_value() || !Locator::filesystem::value().Exists(path))
-	{
-		return std::nullopt;
-	}
-	try
-	{
-		return Locator::filesystem::value().ReadAll(path);
-	}
-	catch (const std::exception& error)
-	{
-		SPDLOG_LOGGER_WARN(Log(), "The game could not read {}: {}", path.generic_string(), error.what());
-		return std::nullopt;
-	}
+	return ecs::save_files::ReadFile(path);
 }
 
 uint32_t LandNumber()
@@ -347,7 +336,11 @@ gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, ui
 	const auto* leash = registry.TryGet<const CreatureLeash>(entity);
 	if (leash != nullptr && leash->home.has_value())
 	{
-		record.home = MapPosition(*leash->home);
+		// A home that came from a map position goes back as it was; metres lose units far from the corner of the map
+		record.home = leash->homeOnMap.has_value() ? gamesave::MapCoords {.x = leash->homeOnMap->x,
+		                                                                  .z = leash->homeOnMap->z,
+		                                                                  .altitude = leash->homeOnMap->altitude}
+		                                           : MapPosition(*leash->home);
 	}
 	if (const auto* fight = registry.TryGet<const CreatureFightRecord>(entity))
 	{
@@ -556,6 +549,7 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Saved
 	if (auto* leash = registry.TryGet<CreatureLeash>(entity); leash != nullptr && record.home != gamesave::MapCoords {})
 	{
 		leash->home = WorldPosition(record.home);
+		leash->homeOnMap = map_coords::MapCoords {.x = record.home.x, .z = record.home.z, .altitude = record.home.altitude};
 	}
 	auto& fight = registry.AllOf<CreatureFightRecord>(entity) ? registry.Get<CreatureFightRecord>(entity)
 	                                                          : registry.Assign<CreatureFightRecord>(entity);

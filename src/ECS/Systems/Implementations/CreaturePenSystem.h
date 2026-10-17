@@ -15,6 +15,7 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Systems/CreaturePenSystemInterface.h"
 #include "Enums.h"
 
@@ -36,8 +37,8 @@ public:
 	/// What the pens need from the rest of the game
 	struct World
 	{
-		/// Where a temple's pen is (x, z), from its mesh; none when its mesh marks no pen
-		std::function<std::optional<glm::vec2>(entt::entity temple)> penPlace;
+		/// Where a temple's pen is on the map, from its mesh; none when its mesh marks no pen
+		std::function<std::optional<map_coords::MapCoords>(entt::entity temple)> penPlace;
 		/// The height of the land at a point (x, z)
 		std::function<float(glm::vec2)> groundAt;
 		/// The scale a creature's body is drawn at for a size

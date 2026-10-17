@@ -58,6 +58,9 @@ struct Body
 /// The species of a row of the game's creature tables, which start with the Giant Ape
 [[nodiscard]] std::optional<CreatureType> SpeciesFromRow(uint32_t row);
 
+/// The alignment that a body takes from a mind file: -1 for a value below -1 or not a number, 1 for a value above 1
+[[nodiscard]] float AlignmentFromFile(float alignment);
+
 /// The creature the file describes, or none when its species row isn't one of the game's
 [[nodiscard]] std::optional<Body> FromMindFile(const creaturemind::MindFileData& file);
 

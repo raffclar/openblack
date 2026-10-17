@@ -44,6 +44,20 @@ constexpr size_t k_TreeKinds = 2;
 /// The most thoughts kept, the newest last
 constexpr size_t k_MaxThoughts = 8;
 
+/// The kind number and the desire that a mind file gives a tree. The game reads them into the tree and writes them back
+/// as they are.
+struct TreeHeader
+{
+	int32_t type {0};
+	int32_t desire {0};
+};
+/// The kind number that the game gives a new tree: 0 for the tree of which thing to use, 1 for the tree of which thing
+/// to act on
+[[nodiscard]] constexpr int32_t NewTreeType(TreeKind kind)
+{
+	return kind == TreeKind::Use ? 0 : 1;
+}
+
 struct Learnt
 {
 	/// The opinion of each action, -1 to 1, and turns since each was last done
@@ -52,6 +66,8 @@ struct Learnt
 	/// Each desire's examples, by tree kind, and the trees grown from them
 	std::array<std::array<std::vector<creature_tree::Episode>, k_DesireCount>, k_TreeKinds> episodes {};
 	std::array<std::array<creature_tree::Tree, k_DesireCount>, k_TreeKinds> trees {};
+	/// What a mind file gave each tree; none for a tree that no file set, which has its new kind number and its desire
+	std::array<std::array<std::optional<TreeHeader>, k_DesireCount>, k_TreeKinds> treeHeaders {};
 	std::vector<creature_learning::Context> contexts;
 	std::vector<creature_learning::CreatureAttitude> creatures;
 	creature_watching::Knowledge knowledge;
@@ -101,12 +117,18 @@ struct LoadedMind
 	std::optional<std::vector<uint8_t>> tattoo;
 };
 /// The mind a file holds, over a fresh mind of its species for what the file doesn't keep (how desires fade, how fast
-/// sources fade, and so on). The examples of the file's trees come after the examples of the fresh mind, up to the
-/// most that a tree keeps.
+/// sources fade, and so on). As the game does it:
+/// - For each desire, the file's first tree goes to the tree of which thing to use, and its second tree to the tree of
+///   which thing to act on.
+/// - The examples of a file's tree come after the examples that the mind has, up to the most that a tree keeps. A loaded
+///   example keeps no kind of lesson (0).
+/// - The opinions, the attitude to the player and the body values are kept as the file has them.
+/// - The word after the known actions is 1.
 [[nodiscard]] LoadedMind FromFile(const creaturemind::MindFileData& file, const creature_desires::Desires& fresh,
                                   const Learnt& freshLearnt);
 /// A mind written as a file of the current version, over the file it was loaded from when there was one, so that
-/// what the mind doesn't use is kept
+/// what the mind doesn't use is kept. For each desire, the tree of which thing to use goes first and the tree of which
+/// thing to act on second, each with the kind number and desire that a file gave it.
 [[nodiscard]] creaturemind::MindFileData ToFile(const creature_desires::Desires& desires, const Learnt& learnt,
                                                 uint32_t developmentPhase, float attitudeToPlayer, uint32_t turnsLookedAt,
                                                 uint32_t speciesRow);

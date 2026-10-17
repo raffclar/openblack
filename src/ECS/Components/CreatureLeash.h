@@ -19,6 +19,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/LeashRope.h"
 #include "Creature/LeashRules.h"
@@ -80,6 +81,9 @@ struct CreatureLeash
 	float confinementRadius {0.0f};
 	/// Where its home is, which it is kept at while it starts to grow up
 	std::optional<glm::vec3> home;
+	/// The same home as the map keeps it, in fixed point, when the home came from a map position. A save writes it as
+	/// it is, because metres cannot keep every map position far from the corner of the map.
+	std::optional<map_coords::MapCoords> homeOnMap;
 	/// The place that the creature walks back to, when it walks back into the area that holds it. The place goes when
 	/// the action of the walk ends: the creature arrives, it cannot get there, or a different action starts.
 	std::optional<glm::vec3> returnTo;

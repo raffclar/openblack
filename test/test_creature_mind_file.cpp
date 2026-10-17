@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <span>
 #include <system_error>
@@ -24,6 +25,7 @@
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureDecisionTree.h"
+#include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureMindModel.h"
 
 using namespace openblack;
@@ -244,7 +246,8 @@ TEST(CreatureMindFile, ModelKeepsAFileItWasLoadedFrom)
 	EXPECT_EQ(loaded.turnsLookedAt, 1234u);
 	EXPECT_TRUE(loaded.learnt.knowledge.skillsKnown[0]);
 	EXPECT_TRUE(loaded.learnt.knowledge.miraclesKnown[1]);
-	EXPECT_EQ(loaded.learnt.episodes[0][1].size(), 1u);
+	// The first tree of desire 1 in the file is its tree of which thing to use
+	EXPECT_EQ(loaded.learnt.episodes[static_cast<size_t>(creature_mind_model::TreeKind::Use)][1].size(), 1u);
 	const auto saved = creature_mind_model::ToFile(loaded.desires, loaded.learnt, loaded.developmentPhase,
 	                                               loaded.attitudeToPlayer, loaded.turnsLookedAt, loaded.speciesRow);
 	EXPECT_EQ(Write(saved), Write(mind));
@@ -254,10 +257,15 @@ TEST(CreatureMindFile, FileExamplesComeAfterTheStartingLesson)
 {
 	// A creature made from a file has the starting lesson first; the file's examples come after it, up to 16
 	MindFileData mind;
-	mind.trees.push_back({.type = 0, .desire = 4, .desireAgain = 4});
+	for (int32_t d = 0; d < 5; ++d)
+	{
+		mind.trees.push_back({.type = 0, .desire = d, .desireAgain = d});
+		mind.trees.push_back({.type = 1, .desire = d, .desireAgain = d});
+	}
+	// The second tree of the hunger desire is its tree of which thing to act on
 	for (int32_t i = 0; i < 20; ++i)
 	{
-		mind.trees[0].episodes.push_back(
+		mind.trees[9].episodes.push_back(
 		    {.desire = 4, .belief = {.type = 7, .attributes = {0, 0, 1, 0, 0, 0, 7}}, .feedback = -0.5f});
 	}
 	creature_desires::Desires fresh;
@@ -265,7 +273,7 @@ TEST(CreatureMindFile, FileExamplesComeAfterTheStartingLesson)
 	const std::array k_Allowed {creature_tree::Attribute::Type};
 	creature_mind_model::TeachStartingLesson(freshLearnt, k_Allowed);
 	const auto loaded = creature_mind_model::FromFile(mind, fresh, freshLearnt);
-	const auto& episodes = loaded.learnt.episodes[0][4];
+	const auto& episodes = loaded.learnt.episodes[static_cast<size_t>(creature_mind_model::TreeKind::ActOn)][4];
 	ASSERT_EQ(episodes.size(), creature_tree::k_MaxEpisodes);
 	EXPECT_EQ(episodes[0].belief.type, creature_tree::belief_types::k_Villager);
 	EXPECT_FLOAT_EQ(episodes[0].feedback, 0.8f);
@@ -277,10 +285,14 @@ TEST(CreatureMindFile, ASwappedMindKeepsItsOwnExamplesAndAddsTheFileExamples)
 {
 	// The other creature's mind file has 10 examples for the same tree
 	MindFileData other;
-	other.trees.push_back({.type = 1, .desire = 2, .desireAgain = 2});
+	for (int32_t d = 0; d < 3; ++d)
+	{
+		other.trees.push_back({.type = 0, .desire = d, .desireAgain = d});
+		other.trees.push_back({.type = 1, .desire = d, .desireAgain = d});
+	}
 	for (int32_t i = 0; i < 10; ++i)
 	{
-		other.trees[0].episodes.push_back(
+		other.trees[4].episodes.push_back(
 		    {.desire = 2, .belief = {.type = 7, .attributes = {0, 0, 1, 0, 0, 0, 7}}, .feedback = -0.5f});
 	}
 	// The creature's own mind has 9 examples of its own, and one of them knows a skill
@@ -469,4 +481,276 @@ TEST(CreatureMindFile, TattooPicturesShareOnePictureForADesign)
 	EXPECT_EQ(ReadTattooPicture(block, 4), picture);
 	EXPECT_FALSE(ReadTattooPicture(block, 6).has_value());
 	EXPECT_FALSE(ReadTattooPicture(std::span(block).first(block.size() - 1), 1).has_value());
+}
+
+namespace
+{
+/// The tree of which thing to act on of the hunger desire, the second tree of desire 4 in a file
+constexpr size_t k_HungerActOnTree = 9;
+
+/// The starting lesson as a mind file keeps it, as the game's own files have it
+MindEpisode FileStartingLesson()
+{
+	return {.kind = 2,
+	        .desire = 4,
+	        .action = 0,
+	        .belief = {.type = 6, .x = 0, .z = 0, .attributes = {1, 0, 0, 0, 0, 0, 6, 0, 0, 1, 1}},
+	        .feedback = 0.8f};
+}
+
+/// The mind file that the game writes for a creature after a load of a saved game, with no turn between. The load makes a
+/// new creature, which has the starting lesson, and puts the file over it:
+/// - each example of the file keeps no kind of lesson (0), and follows the examples that the tree has, up to 16
+/// - the word after the known actions is 1
+MindFileData AsTheGameSavesItAfterALoad(MindFileData file)
+{
+	file.unknown1 = 1;
+	for (auto& tree : file.trees)
+	{
+		for (auto& episode : tree.episodes)
+		{
+			episode.kind = 0;
+		}
+	}
+	auto& hunger = file.trees.at(k_HungerActOnTree).episodes;
+	hunger.insert(hunger.begin(), FileStartingLesson());
+	for (auto& tree : file.trees)
+	{
+		if (tree.episodes.size() > creature_tree::k_MaxEpisodes)
+		{
+			tree.episodes.resize(creature_tree::k_MaxEpisodes);
+		}
+	}
+	return file;
+}
+
+/// What openblack writes for a creature that a load of a saved game gives the file to: a new mind with the starting
+/// lesson, the file over it, then the mind and the body written back as the save writes them
+std::vector<uint8_t> LoadedAndSaved(const MindFileData& file)
+{
+	creature_desires::Desires fresh;
+	creature_watching::Knowledge knowledge {
+	    .skillsSeen = std::vector<creature_watching::Sighting>(file.actionsSeen.size()),
+	    .miraclesSeen = std::vector<creature_watching::Sighting>(file.miraclesSeen.size()),
+	    .skillsKnown = std::vector<bool>(file.actionsSeen.size(), false),
+	    .miraclesKnown = std::vector<bool>(file.miraclesSeen.size(), false),
+	};
+	const auto opinions = file.opinions.has_value() ? file.opinions->size() : 0;
+	auto freshLearnt = creature_mind_model::Fresh(fresh, std::vector<float>(opinions, 0.0f), knowledge);
+	const std::array k_Allowed {creature_tree::Attribute::Type};
+	creature_mind_model::TeachStartingLesson(freshLearnt, k_Allowed);
+	const auto loaded = creature_mind_model::FromFile(file, fresh, freshLearnt);
+	auto saved = creature_mind_model::ToFile(loaded.desires, loaded.learnt, loaded.developmentPhase, loaded.attitudeToPlayer,
+	                                         loaded.turnsLookedAt, loaded.speciesRow);
+	const auto body = creature_mind_body::FromMindFile(file);
+	if (body.has_value())
+	{
+		creature_mind_body::ToMindFile(*body, saved);
+		saved.name = body->name;
+	}
+	return Write(saved);
+}
+
+/// A mind with the 40 desires and 80 trees of a current file, and one example in each tree of two desires
+MindFileData FullSampleMind()
+{
+	auto mind = SampleMind();
+	// A wound word of the game always has the two top bits
+	mind.physique.wounds = {0xC0000003u};
+	mind.desires.resize(40, mind.desires[0]);
+	mind.desireMemories.resize(40);
+	mind.treeDesireCount = 40;
+	mind.trees.clear();
+	for (int32_t d = 0; d < 40; ++d)
+	{
+		mind.trees.push_back({.type = 0, .desire = d, .desireAgain = d});
+		mind.trees.push_back({.type = 1, .desire = d, .desireAgain = d});
+	}
+	const MindEpisode example {.kind = 1,
+	                           .desire = 2,
+	                           .action = 17,
+	                           .belief = {.type = 7, .x = 5, .z = -9, .attributes = {0, 0, 1, 0, 0, 0, 7}},
+	                           .feedback = -0.25f};
+	mind.trees[4].episodes.push_back(example);
+	mind.trees[5].episodes.push_back(example);
+	mind.trees[k_HungerActOnTree].episodes.push_back(FileStartingLesson());
+	mind.opinions = std::vector<float>(3, 0.5f);
+	mind.unknown1 = 0;
+	return mind;
+}
+
+/// Every mind file of a saved game in a copy of a Profiles folder (OPENBLACK_VANILLA_SAVES), and every mind of the game
+/// (OPENBLACK_GAME_PATH)
+std::vector<std::filesystem::path> RealMindFiles()
+{
+	std::vector<std::filesystem::path> files;
+	std::error_code error;
+	if (const char* saves = std::getenv("OPENBLACK_VANILLA_SAVES"); // NOLINT(concurrency-mt-unsafe)
+	    saves != nullptr && std::filesystem::is_directory(saves, error))
+	{
+		for (const auto& entry : std::filesystem::recursive_directory_iterator(saves, error))
+		{
+			if (entry.is_regular_file() && entry.path().filename().string().starts_with("SavedCreature"))
+			{
+				files.push_back(entry.path());
+			}
+		}
+	}
+	if (const auto folder = GameMindFolder(); folder.has_value())
+	{
+		for (const auto& entry : std::filesystem::directory_iterator(*folder, error))
+		{
+			if (entry.is_regular_file() && !IsPhysiqueFileName(entry.path().filename().string()))
+			{
+				files.push_back(entry.path());
+			}
+		}
+	}
+	return files;
+}
+} // namespace
+
+TEST(CreatureMindFile, TreesGoByTheirPlaceInTheFile)
+{
+	// For each desire the first tree in the file is the tree of which thing to use, the second of which thing to act on,
+	// whatever kind number and desire the file gives them
+	auto mind = FullSampleMind();
+	mind.trees[4].type = 5;
+	mind.trees[4].desire = 30;
+	mind.trees[4].desireAgain = 31;
+	creature_desires::Desires fresh;
+	const auto freshLearnt = creature_mind_model::Fresh(fresh, std::vector<float>(3, 0.0f), {});
+	const auto loaded = creature_mind_model::FromFile(mind, fresh, freshLearnt);
+	const auto use = static_cast<size_t>(creature_mind_model::TreeKind::Use);
+	const auto actOn = static_cast<size_t>(creature_mind_model::TreeKind::ActOn);
+	EXPECT_EQ(loaded.learnt.episodes[use][2].size(), 1u);
+	EXPECT_EQ(loaded.learnt.episodes[actOn][2].size(), 1u);
+	EXPECT_EQ(loaded.learnt.episodes[actOn][4].size(), 1u);
+	EXPECT_TRUE(loaded.learnt.episodes[use][4].empty());
+	ASSERT_TRUE(loaded.learnt.treeHeaders[use][2].has_value());
+	// The game reads the desire twice into one place, so the second one stays
+	EXPECT_EQ(loaded.learnt.treeHeaders[use][2]->type, 5);
+	EXPECT_EQ(loaded.learnt.treeHeaders[use][2]->desire, 31);
+	const auto saved = creature_mind_model::ToFile(loaded.desires, loaded.learnt, loaded.developmentPhase,
+	                                               loaded.attitudeToPlayer, loaded.turnsLookedAt, loaded.speciesRow);
+	EXPECT_EQ(saved.trees[4].type, 5);
+	EXPECT_EQ(saved.trees[4].desire, 31);
+	EXPECT_EQ(saved.trees[4].desireAgain, 31);
+	EXPECT_EQ(saved.trees[5].type, 1);
+}
+
+TEST(CreatureMindFile, ANewMindWritesItsUseTreeFirst)
+{
+	creature_desires::Desires desires;
+	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
+	const std::array k_Allowed {creature_tree::Attribute::Type};
+	creature_mind_model::TeachStartingLesson(learnt, k_Allowed);
+	const auto file = creature_mind_model::ToFile(desires, learnt, 0, 0.0f, 0, 3);
+	ASSERT_EQ(file.trees.size(), 80u);
+	for (size_t i = 0; i < file.trees.size(); ++i)
+	{
+		EXPECT_EQ(file.trees[i].type, static_cast<int32_t>(i % 2)) << i;
+		EXPECT_EQ(file.trees[i].desire, static_cast<int32_t>(i / 2)) << i;
+	}
+	// The starting lesson is in the second tree of the hunger desire, as in the game's own files
+	const auto& hunger = file.trees[k_HungerActOnTree];
+	ASSERT_EQ(hunger.episodes.size(), 1u);
+	const auto lesson = FileStartingLesson();
+	EXPECT_EQ(hunger.episodes[0].kind, lesson.kind);
+	EXPECT_EQ(hunger.episodes[0].desire, lesson.desire);
+	EXPECT_EQ(hunger.episodes[0].belief.type, lesson.belief.type);
+	EXPECT_EQ(hunger.episodes[0].belief.attributes, lesson.belief.attributes);
+	EXPECT_EQ(hunger.episodes[0].feedback, lesson.feedback);
+}
+
+TEST(CreatureMindFile, ALoadAndASaveChangeTheFileAsTheGameDoes)
+{
+	const auto mind = FullSampleMind();
+	const auto bytes = LoadedAndSaved(mind);
+	EXPECT_EQ(bytes, Write(AsTheGameSavesItAfterALoad(mind)));
+	// Each example keeps the desire and the action that the file gave it, but not its kind of lesson
+	MindFileData read;
+	ASSERT_EQ(Read(bytes, read), MindResult::Success);
+	EXPECT_EQ(read.trees[4].episodes[0].desire, 2);
+	EXPECT_EQ(read.trees[4].episodes[0].action, 17);
+	EXPECT_EQ(read.trees[4].episodes[0].kind, 0);
+	EXPECT_EQ(read.trees[k_HungerActOnTree].episodes.size(), 2u);
+	EXPECT_EQ(read.unknown1, std::optional<uint32_t>(1));
+}
+
+TEST(CreatureMindFile, AFullTreeLosesTheExamplesPastSixteen)
+{
+	auto mind = FullSampleMind();
+	for (int32_t i = 0; i < 20; ++i)
+	{
+		mind.trees[k_HungerActOnTree].episodes.push_back({.desire = 4,
+		                                                  .belief = {.type = 7, .attributes = {0, 0, 1, 0, 0, 0, 7}},
+		                                                  .feedback = 0.1f * static_cast<float>(i)});
+	}
+	const auto expected = AsTheGameSavesItAfterALoad(mind);
+	ASSERT_EQ(expected.trees[k_HungerActOnTree].episodes.size(), creature_tree::k_MaxEpisodes);
+	EXPECT_EQ(LoadedAndSaved(mind), Write(expected));
+}
+
+TEST(CreatureMindFile, ALoadKeepsTheValuesAsTheFileHasThem)
+{
+	// Out of their usual ranges, the opinions, the attitude and the body values come back as they were
+	auto mind = FullSampleMind();
+	(*mind.opinions)[1] = 1.5f;
+	mind.attitudeToPlayer = -3.0f;
+	mind.physique.strength = 2.0f;
+	mind.physique.size = 7.0f;
+	mind.physique.fatness = 1.25f;
+	mind.physique.energy = -0.5f;
+	EXPECT_EQ(LoadedAndSaved(mind), Write(AsTheGameSavesItAfterALoad(mind)));
+}
+
+TEST(CreatureMindFile, ALoadKeepsTheAlignmentFromMinusOneToOne)
+{
+	EXPECT_EQ(creature_mind_body::AlignmentFromFile(0.25f), 0.25f);
+	EXPECT_EQ(creature_mind_body::AlignmentFromFile(-1.5f), -1.0f);
+	EXPECT_EQ(creature_mind_body::AlignmentFromFile(1.5f), 1.0f);
+	EXPECT_EQ(creature_mind_body::AlignmentFromFile(std::numeric_limits<float>::quiet_NaN()), -1.0f);
+	auto mind = FullSampleMind();
+	mind.alignment = 4.0f;
+	auto expected = AsTheGameSavesItAfterALoad(mind);
+	expected.alignment = 1.0f;
+	EXPECT_EQ(LoadedAndSaved(mind), Write(expected));
+}
+
+/// The real minds on this machine: the mind files of the saved games in a copy of a Profiles folder
+/// (OPENBLACK_VANILLA_SAVES) and the game's own minds (OPENBLACK_GAME_PATH). Each one, loaded and saved, is what the game
+/// writes after a load.
+TEST(CreatureMindFile, RealMindsLoadAndSaveAsTheGameDoes)
+{
+	const auto files = RealMindFiles();
+	if (files.empty())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES or OPENBLACK_GAME_PATH to check real mind files";
+	}
+	size_t checked = 0;
+	for (const auto& path : files)
+	{
+		const auto bytes = ReadFileBytes(path);
+		ASSERT_TRUE(bytes.has_value()) << path;
+		MindFileData mind;
+		const auto result = Read(*bytes, mind);
+		if (result == MindResult::ErrNotAMindFile)
+		{
+			continue;
+		}
+		ASSERT_EQ(result, MindResult::Success) << path;
+		ASSERT_EQ(Write(mind), *bytes) << path << " does not write back the same";
+		// The game writes every mind of a saved game and of a player in the current version. Its older computer minds
+		// come out in the current version too, with what the creature has for the fields that they lack.
+		if (mind.version != k_CurrentVersion)
+		{
+			continue;
+		}
+		ASSERT_EQ(mind.trees.size(), 80u) << path;
+		EXPECT_EQ(LoadedAndSaved(mind), Write(AsTheGameSavesItAfterALoad(mind)))
+		    << path << " is not what the game writes after a load";
+		++checked;
+	}
+	EXPECT_GT(checked, 0u);
 }

@@ -6326,6 +6326,7 @@ void SetCreatureHome() // 223 SET_CREATURE_HOME
 		leash = &registry.Assign<ecs::components::CreatureLeash>(creature);
 	}
 	leash->home = home;
+	leash->homeOnMap = temple_pen::MapPosition(position);
 }
 
 void GetHitObject() // 224 GET_HIT_OBJECT

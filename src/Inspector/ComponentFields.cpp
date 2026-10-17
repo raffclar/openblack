@@ -752,6 +752,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureLeash::confinementCentre>("confinementCentre")
 	    .Field<&components::CreatureLeash::confinementRadius>("confinementRadius")
 	    .Field<&components::CreatureLeash::home>("home")
+	    .Field<&components::CreatureLeash::homeOnMap>("homeOnMap")
 	    .Field<&components::CreatureLeash::returnTo>("returnTo")
 	    .Field<&components::CreatureLeash::returnSerial>("returnSerial")
 	    .Field<&components::CreatureLeash::order>("order")
@@ -2566,6 +2567,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind_model::Learnt::turnsSinceDone>("turnsSinceDone")
 	    .Field<&openblack::creature_mind_model::Learnt::episodes>("episodes")
 	    .Field<&openblack::creature_mind_model::Learnt::trees>("trees")
+	    .Field<&openblack::creature_mind_model::Learnt::treeHeaders>("treeHeaders")
 	    .Field<&openblack::creature_mind_model::Learnt::contexts>("contexts")
 	    .Field<&openblack::creature_mind_model::Learnt::creatures>("creatures")
 	    .Field<&openblack::creature_mind_model::Learnt::knowledge>("knowledge")
@@ -2576,6 +2578,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind_model::Learnt::alignment>("alignment")
 	    .Field<&openblack::creature_mind_model::Learnt::developmentTimer>("developmentTimer")
 	    .Field<&openblack::creature_mind_model::Learnt::file>("file");
+	Reflect<openblack::creature_mind_model::TreeHeader>(context, ValueOnly {})
+	    .Field<&openblack::creature_mind_model::TreeHeader::type>("type")
+	    .Field<&openblack::creature_mind_model::TreeHeader::desire>("desire");
 	Reflect<openblack::creature_morph::Morph>(context, ValueOnly {})
 	    .Field<&openblack::creature_morph::Morph::evilGood>("evilGood")
 	    .Field<&openblack::creature_morph::Morph::thinFat>("thinFat")
@@ -2693,7 +2698,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::creature_tree::Episode>(context, ValueOnly {})
 	    .Field<&openblack::creature_tree::Episode::belief>("belief")
 	    .Field<&openblack::creature_tree::Episode::feedback>("feedback")
-	    .Field<&openblack::creature_tree::Episode::saved>("saved");
+	    .Field<&openblack::creature_tree::Episode::saved>("saved")
+	    .Field<&openblack::creature_tree::Episode::savedDesire>("savedDesire");
 	Reflect<openblack::creature_tree::Node>(context, ValueOnly {})
 	    .Field<&openblack::creature_tree::Node::test>("test")
 	    .Field<&openblack::creature_tree::Node::children>("children")
