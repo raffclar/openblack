@@ -121,6 +121,10 @@ vec4 ShoreAt(vec2 xz)
 	return UwOpenSea(texture2DLod(s_shore, UwShoreUv(xz), 0.0f), xz);
 }
 
+// The open sea's colours: the deep body, and the pale green-yellow of the tops of the waves
+#define UW_SEA_DEEP vec3(0.02f, 0.11f, 0.17f)
+#define UW_SEA_TOPS vec3(0.48f, 0.54f, 0.36f)
+
 // The height of the surface at a point near the eye
 float SurfaceHeight(vec2 p, float t)
 {
@@ -129,9 +133,8 @@ float SurfaceHeight(vec2 p, float t)
 	return UwSurface(p, t, 0.0f, ShoreAt(p), slope, face);
 }
 
-// The steps that a ray takes to find the surface: more near a rogue wave, which makes the surface high and steep. The
-// steps after the third go only part of the way, so that they do not jump across the steep face. `onLevel` is where the
-// ray meets the sea's level, and `down` is how steeply the ray goes down.
+// The steps that a ray takes to find the surface: more near a rogue wave, which makes the surface high and steep.
+// `onLevel` is where the ray meets the sea's level, and `down` is how steeply the ray goes down.
 int RogueSteps(vec2 onLevel, float down)
 {
 	vec4 a = u_uwRogue[0];
@@ -149,6 +152,17 @@ int RogueSteps(vec2 onLevel, float down)
 	return abs(side) < 2.2f && u > -1.8f - reach && u < 1.1f + reach ? 8 : 3;
 }
 
+// The next distance along a ray to the surface, from the surface's height and slope at the point that the ray reached.
+// The step uses the change of the gap between the ray and the surface along the ray (a Newton step). Where the surface
+// rises towards the eye the step is shorter, so the steps do not swing from crest to trough on a steep face. The step
+// is never more than about twice a plain step, so it does not go through a crest.
+float NextAlong(float along, float eyeHeight, vec3 direction, float height, vec2 slope)
+{
+	float gap = eyeHeight + direction.y * along - height;
+	float change = clamp((direction.y - dot(slope, direction.xz)) / direction.y, 0.6f, 4.0f);
+	return along - gap / (direction.y * change);
+}
+
 // Where a ray from the eye meets the sea's surface: the surface's height is found again three times at the point the
 // ray reaches, from the sea's level. `along` is how far along the ray, `slope` and `face` as UwSurface gives them,
 // and `shore` the shore map there.
@@ -164,7 +178,7 @@ float RayToSurface(vec3 eye, vec3 direction, float t, out vec2 slope, out float 
 		vec2 at = eye.xz + direction.xz * max(along, 0.0f);
 		shore = ShoreAt(at);
 		float height = UwSurface(at, t, max(along, 0.0f), shore, slope, face);
-		along = mix(along, (height - eye.y) / direction.y, i < 3 ? 1.0f : 0.6f);
+		along = NextAlong(along, eye.y, direction, height, slope);
 	}
 	return along;
 }
@@ -289,15 +303,16 @@ float Shelter(vec2 at)
 }
 
 float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, out float face, out vec4 shore,
-                           out float variance)
+                           out float variance, out float whitecap, out float chopShare)
 {
+	whitecap = 0.0f;
+	chopShare = 0.0f;
 	float along = (u_uwParams.z - eye.y) / direction.y;
 	slope = vec2_splat(0.0f);
 	face = 0.0f;
 	variance = 0.0f;
 	shore = vec4(1000.0f, 0.0f, 0.0f, -160.0f);
-	// High waves seen at a low angle move the point where the ray meets the surface far: more steps, and the later
-	// steps go only part of the way, so the steps do not swing from crest to trough
+	// High waves seen at a low angle move the point where the ray meets the surface far: more steps (see NextAlong)
 	int steps = RogueSteps(eye.xz + direction.xz * max(along, 0.0f), abs(direction.y));
 	float grazing = UwWaveTop() / max(abs(direction.y), 0.02f);
 	float shelter = Shelter(eye.xz + direction.xz * max(along, 0.0f));
@@ -311,8 +326,9 @@ float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, ou
 		vec2 at = eye.xz + direction.xz * max(along, 0.0f);
 		shore = ShoreAt(at);
 		float height =
-		    UwSurfaceSheltered(at, t, FootprintOnWater(direction, max(along, 0.0f)), shore, shelter, slope, face, variance);
-		along = mix(along, (height - eye.y) / direction.y, i < 2 ? 1.0f : 0.6f);
+		    UwSurfaceSheltered(at, t, FootprintOnWater(direction, max(along, 0.0f)), shore, shelter, slope, face, variance,
+		                       whitecap, chopShare);
+		along = NextAlong(along, eye.y, direction, height, slope);
 	}
 	return along;
 }
@@ -502,13 +518,13 @@ float Foam(vec2 p, float depth, float t)
 		return 0.0f;
 	}
 	// Two layers of noise that drift different ways, turned so that their cells do not line up. The chunks are small
-	// (cells of about a metre) and cover a quarter of the water that the foam covered before.
+	// (cells of about a metre) and cover a little more than half of the water that the foam covered at first.
 	vec2 q = vec2(p.x * 0.8f - p.y * 0.6f, p.x * 0.6f + p.y * 0.8f);
 	float patches = UwFoamNoise(q * 1.4f + vec2(t * 0.25f, -t * 0.18f)) * 0.6f + UwFoamNoise(p * 3.8f - vec2(t * 0.4f, t * 0.31f)) * 0.4f;
 	float lines = 0.5f + 0.5f * sin(depth * 9.0f - t * 2.2f + UwNoise(p * 0.8f) * 4.0f);
 	float edge = 1.0f - smoothstep(0.0f, 0.05f, depth);
-	float foam = smoothstep(0.62f, 0.85f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
-	return clamp(max(foam, edge * smoothstep(0.35f, 0.6f, patches)), 0.0f, 1.0f);
+	float foam = smoothstep(0.56f, 0.8f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
+	return clamp(max(foam, edge * smoothstep(0.3f, 0.55f, patches)), 0.0f, 1.0f);
 }
 
 // The storm on the sea: the rogue wave and the lightning.
@@ -739,7 +755,10 @@ void main()
 		float face;
 		vec4 shore;
 		float slopeVariance;
-		float toSurface = RayToSurfaceFiltered(eye, direction, t, surfaceSlope, face, shore, slopeVariance);
+		float whitecapEnvelope;
+		float chopShare;
+		float toSurface = RayToSurfaceFiltered(eye, direction, t, surfaceSlope, face, shore, slopeVariance, whitecapEnvelope,
+		                                       chopShare);
 		// The small ripples on the waves keep the reflection soft, so that the steep faces of the waves do not mirror the
 		// sky like metal
 		float roughness = max(UwRoughness(slopeVariance), 0.17f) + 0.05f * smoothstep(25.0f, 160.0f, toSurface);
@@ -755,6 +774,18 @@ void main()
 			// The filtered waves keep their slope far away: the roughness takes the waves that the pixel cannot show
 			vec3 strike = StrikeRing(surfacePoint.xz);
 			vec2 shownSlope = surfaceSlope + ring.xy + strike.xy;
+			// The slope of the chop of the wind, from all its octaves, found from three heights. The step between the
+			// heights grows with the distance, so far water stays smooth.
+			if (chopShare > 0.0f)
+			{
+				float chopStep = max(0.04f, 0.004f * toSurface);
+				// An octave shorter than a few steps fades out, so the steps do not alias it into noise
+				float chopPixel = max(FootprintOnWater(direction, toSurface).x, chopStep);
+				float chopHere = UwChop(surfacePoint.xz, t, UW_CHOP_SHADING, chopPixel);
+				float chopX = UwChop(surfacePoint.xz + vec2(chopStep, 0.0f), t, UW_CHOP_SHADING, chopPixel);
+				float chopZ = UwChop(surfacePoint.xz + vec2(0.0f, chopStep), t, UW_CHOP_SHADING, chopPixel);
+				shownSlope += vec2(chopX - chopHere, chopZ - chopHere) / chopStep * chopShare;
+			}
 			vec3 normal = u_uwSea.x > 0.5f ? normalize(vec3(-shownSlope.x, 1.0f, -shownSlope.y))
 			                               : UwSurfaceNormalOf(shownSlope, toSurface);
 			// The small ripples on the waves, too small for the sum of waves: they break up the reflection near the eye,
@@ -835,7 +866,9 @@ void main()
 			// where the small waves send part of the reflection away from the eye
 			// The waves near the eye hide part of the grazing reflection with their own crests, so at most 0.65 of the
 			// light is the reflection
-			float fresnel = min((0.02f + 0.98f * pow(max(1.0f - facing, 0.0f), 5.0f)) * mix(1.0f, 0.6f, clamp(roughness * 2.5f, 0.0f, 1.0f)), 0.65f);
+			// The reflection grows as the cube of the angle away from straight down, and at most half of the light is
+			// the reflection, so the colour of the water always shows
+			float fresnel = min(pow(max(1.0f - facing, 0.0f), 3.0f), 0.5f);
 			// The clouds' and the hills' shadows take away the glint and some of the light in the water
 			float cloudShade = CloudShadeAt(surfacePoint.xz) * SunVisibilityAt(surfacePoint.xz);
 			water *= mix(0.8f, 1.0f, cloudShade);
@@ -853,6 +886,16 @@ void main()
 			// Thick water: it reads green-teal, lighter on the crests and darker in the troughs
 			float waveLift = clamp(lift / max(UwWaveTop(), 1e-3f) * 0.5f + 0.5f, 0.0f, 1.0f);
 			water = mix(water, water * vec3(0.85f, 1.05f, 0.92f), 0.6f * (1.0f - pond)) * mix(0.72f, 1.22f, waveLift);
+			// The open sea: a deep blue-green body with a little light that comes through the faces of the waves, and a
+			// pale green-yellow on the tops of the waves, more on the higher tops and less far away
+			vec3 seaLight = u_uwLightColour.rgb * u_uwLightColour.w * cloudShade + u_uwSky.rgb * 0.35f;
+			float openWater = smoothstep(4.0f, 20.0f, u_uwParams.z - shore.w) * (1.0f - pond);
+			float wrap = pow(clamp(dot(normal, u_uwAbove.xyz) * 0.4f + 0.6f, 0.0f, 1.0f), 40.0f);
+			vec3 body = (UW_SEA_DEEP + UW_SEA_TOPS * 0.12f * wrap) * seaLight;
+			water = mix(water, body, openWater * 0.6f);
+			float nearTops = max(1.0f - (toSurface / 220.0f) * (toSurface / 220.0f), 0.0f);
+			water += UW_SEA_TOPS * seaLight * clamp(lift / max(UwWaveTop(), 1e-3f), -0.4f, 1.0f) * 0.18f * nearTops *
+			         (1.0f - pond);
 			// The faces of the waves that turn to the light are lighter, and the faces that turn away are darker, as the
 			// sides of a lit hill are. This gives the waves their shape in the light.
 			vec3 toSun = u_uwAbove.xyz;
@@ -874,6 +917,10 @@ void main()
 			                               : pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f) * 3.0f;
 			float glintShade = CloudShadeAt(surfacePoint.xz) * SunLightAt(surfacePoint.xz);
 			colour += u_uwLightColour.rgb * glint * u_uwLightColour.w * glintShade;
+			// A sharp highlight of the sun on each wave, which fades with the distance
+			float highlight = pow(max(dot(reflected, toSun), 0.0f), 60.0f) * (68.0f / (3.1415927f * 8.0f));
+			colour += u_uwLightColour.rgb * u_uwLightColour.w * glintShade * highlight * 0.5f *
+			          (1.0f - smoothstep(40.0f, 400.0f, toSurface)) * (1.0f - pond);
 			// The glint of the bolt, and the ring where a strike hit the sea
 			colour += LightningGlint(surfacePoint, normal, -direction, roughness);
 			colour += UW_FLASH_COLOUR * strike.z;
@@ -885,11 +932,10 @@ void main()
 				// The foam of the shallows is less where the original game shows its land, so that the edge of the water
 				// does not draw a line that the original coast does not have
 				float foam = Foam(surfacePoint.xz, max(min(thickness, waterDepth), 0.0f), t) * (1.0f - originalLand);
-				float crest = lift / max(UwWaveTop(), 1e-3f);
 				// The shore wave breaks on its face as it comes in, from 20 units out to the edge of the water
-				float breaking = face * (1.0f - smoothstep(1.0f, 10.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth) *
+				float breaking = face * (1.0f - smoothstep(4.0f, 20.0f, shore.x)) * smoothstep(0.0f, 0.15f, waterDepth) *
 				                 (1.0f - cliff);
-				foam = max(foam, breaking * smoothstep(0.4f, 0.7f, UwFoamNoise(surfacePoint.xz * 2.6f + t * 0.3f)));
+				foam = max(foam, breaking * smoothstep(0.33f, 0.63f, UwFoamNoise(surfacePoint.xz * 2.6f + t * 0.3f)));
 				// At the foot of a cliff: a thick band of boiling white water against the rock, and broad sheets of foam
 				// that each crash pushes out and that break up into patches and streaks as the current carries them
 				// away. The foam builds up between the waves, so it never clears at a cliff.
@@ -923,15 +969,21 @@ void main()
 					float capsShown = u_uwSea.x > 0.5f ? 1.0f - smoothstep(1.0f, 3.0f, max(seen.x * seen.w, seen.x)) : 1.0f;
 					float streaksShown = u_uwSea.x > 0.5f ? 1.0f - smoothstep(0.7f, 2.0f, UwFootprintAlong(seen, across)) : 1.0f;
 					vec2 q = surfacePoint.xz;
-					float caps = smoothstep(0.72f, 0.98f, crest) * smoothstep(0.6f, 0.85f, UwNoise(q * 0.7f + t * 0.4f));
+					// The white horses: foam on the crests of the sea's own waves that break, which stays a short time
+					// after the crest (UwWhitecap). The foam breaks up into lace that the wind carries.
+					vec2 laceUv = vec2(dot(q, wind) * 0.45f - t * 0.5f, dot(q, across) * 1.1f);
+					float lace = UwFoamNoise(laceUv) * 0.6f + UwFoamNoise(q * 1.9f + t * 0.15f) * 0.4f;
+					float caps = UwWhitecap(whitecapEnvelope) * mix(0.1f, 1.0f, smoothstep(0.25f, 0.65f, lace));
 					// Two layers, the second turned against the first, so the noise's square cells do not show
 					vec2 streakUv = vec2(dot(q, wind) * 0.08f - t * 0.2f, dot(q, across) * 1.0f);
 					vec2 turned = vec2(streakUv.x * 0.8f - streakUv.y * 0.6f, streakUv.x * 0.6f + streakUv.y * 0.8f);
 					float streaks = smoothstep(0.75f, 0.92f, UwNoise(streakUv) * 0.6f + UwNoise(turned * 1.7f + 3.1f) * 0.4f);
-					caps = mix(0.03f * smoothstep(0.2f, 1.0f, u_uwWaves.y), caps, capsShown);
+					caps = mix(UwWhitecapCover() * 0.8f, caps, capsShown);
 					streaks = mix(0.04f, streaks, streaksShown);
-					// A light wind gives small flecks on the biggest crests; a storm gives caps and streaks
-					foam = max(foam, caps * (0.35f + 0.65f * u_uwWaves.y) + streaks * 0.5f * u_uwWaves.y);
+					// A calm day has few white horses and a wind many. Thin streaks of old foam lie along the wind, a few on
+					// a calm day and more in a storm. Near the coast they are fewer, as the rest of the foam there.
+					float nearCoast = mix(0.3f, 1.0f, smoothstep(30.0f, 150.0f, shore.x));
+					foam = max(foam, (caps + streaks * (0.12f + 0.4f * u_uwWaves.y)) * nearCoast);
 				}
 				foam *= 1.0f - pond;
 				vec3 foamColour = u_uwLightColour.rgb * (0.4f + 0.6f * max(u_uwAbove.y, 0.0f)) + u_uwSky.rgb * 0.7f +

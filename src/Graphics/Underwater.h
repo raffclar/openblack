@@ -349,7 +349,18 @@ struct WaveSample
 {
 	float height;
 	glm::vec2 slope;
+	/// The crest envelope of the wind sea: the sum of each wave's steepness on its crest and for a short time after it
+	/// (k_WhitecapSeconds). WhitecapShare makes it the white horses.
+	float whitecap {0.0f};
 };
+/// How long the foam of a white horse stays after its crest, in seconds
+inline constexpr float k_WhitecapSeconds = 1.5f;
+/// How much of the water is a white horse, 0 to 1, for a crest envelope (WaveSample::whitecap) and a stormy share of 0
+/// to 1. UwWhitecap in underwater.sh is the same.
+[[nodiscard]] float WhitecapShare(float envelope, float storm);
+/// The share of the open sea that white horses cover on average, for a stormy share of 0 to 1: few on a calm day, many
+/// in a wind, about a fifth in the worst storm. UwWhitecapCover in underwater.sh is the same.
+[[nodiscard]] float WhitecapCover(float storm);
 [[nodiscard]] WaveSample WavesAt(glm::vec2 point, float seconds, const WaveState& waves);
 /// The same in water of a depth (units) at a distance from the coast (units, out to sea positive): each wave grows as
 /// the water gets shallow (Shoaling), all of them break together where they are too high for the depth
@@ -377,6 +388,23 @@ inline constexpr float k_CrestSharpness = 1.25f;
 inline constexpr float k_WarpMetres = 6.0f;
 /// The range of the wind sea's groups: the waves are 1 - k_GroupRange / 2 to 1 + k_GroupRange / 2 of their mean
 inline constexpr float k_GroupRange = 1.2f;
+/// The steepest that one wave of the table can be (its height times its wave number), on a calm day and in the worst
+/// storm. Real waves break at about 0.44.
+inline constexpr float k_SteepestWaveCalm = 0.12f;
+inline constexpr float k_SteepestWaveStorm = 0.16f;
+/// The chop of the wind: short waves with pointed crests over the long waves. The height of its first octave on a
+/// calm day and its length, in metres; the octaves in the height of the surface and in its normal
+inline constexpr float k_ChopMetres = 0.25f;
+inline constexpr float k_ChopLengthMetres = 30.0f;
+inline constexpr int k_ChopGeometryOctaves = 3;
+inline constexpr int k_ChopShadingOctaves = 5;
+/// The height of the chop over its mean at a point, from `octaves` octaves. Each octave is a grid of crests that noise
+/// bends, with a round trough and a pointed crest, in two copies that move in opposite directions. The next octave
+/// turns, is 3.8 times shorter, 0.22 times as high and less pointed. UwChop in underwater.sh is the same.
+[[nodiscard]] float ChopAt(glm::vec2 point, float seconds, const WaveState& waves, int octaves);
+/// A wave's height after a soft cap at a limit: about the height while it is low, never more than the limit, and with
+/// no sharp change. `rate` is the change of the result for each change of the height.
+[[nodiscard]] float CapSteepness(float height, float limit, float& rate);
 /// For each wave, x: its direction (radians), y: its length, z: its height, w: its phase
 [[nodiscard]] std::array<glm::vec4, k_WaveCount> WaveTable(const WaveState& waves);
 

@@ -1212,3 +1212,140 @@ TEST(Underwater, TheTiltOfTheWindSeaChangesItsLengthsAndHasItsSlope)
 		EXPECT_NEAR(here.slope.y, (north - south) / (2.0f * k_Step), 1e-3f);
 	}
 }
+
+TEST(UnderwaterWaves, NoWaveIsSteeperThanTheSeaHolds)
+{
+	// The cap keeps a low wave as it is, never goes over the limit, and its rate agrees with its change
+	float rate = 0.0f;
+	EXPECT_NEAR(underwater::CapSteepness(0.01f, 1.0f, rate), 0.01f, 1e-4f);
+	EXPECT_LT(underwater::CapSteepness(50.0f, 1.0f, rate), 1.0f);
+	const float low = underwater::CapSteepness(0.7f - 1e-3f, 1.0f, rate);
+	const float high = underwater::CapSteepness(0.7f + 1e-3f, 1.0f, rate);
+	underwater::CapSteepness(0.7f, 1.0f, rate);
+	EXPECT_NEAR(rate, (high - low) / 2e-3f, 1e-3f);
+	// Over a wide patch of the open sea the surface stays gentle: no faces that are nearly upright
+	for (const float storm : {0.0f, 1.0f})
+	{
+		const auto waves = underwater::WavesFor(storm, 0.3f);
+		float steepest = 0.0f;
+		for (float x = 3000.0f; x < 3200.0f; x += 1.3f)
+		{
+			for (float z = 2000.0f; z < 2200.0f; z += 1.7f)
+			{
+				const auto sample = underwater::WavesInDepth({x, z}, 47.0f, waves, 1000.0f, 200.0f);
+				steepest = std::max(steepest, glm::length(sample.slope));
+			}
+		}
+		EXPECT_LT(steepest, storm > 0.5f ? 2.2f : 1.3f) << "storm " << storm;
+	}
+	// The slope is the change of the height, with the cap. The slope leaves out the slow change of the sets and
+	// patches, so a small difference stays.
+	const auto waves = underwater::WavesFor(0.4f, 0.3f);
+	constexpr float k_Step = 0.01f;
+	for (const glm::vec2 point : {glm::vec2(3100.0f, 2050.0f), glm::vec2(812.0f, 4410.0f), glm::vec2(2500.0f, 2500.0f)})
+	{
+		const auto here = underwater::WavesInDepth(point, 9.0f, waves, 1000.0f, 200.0f);
+		const auto east = underwater::WavesInDepth(point + glm::vec2(k_Step, 0.0f), 9.0f, waves, 1000.0f, 200.0f);
+		const auto west = underwater::WavesInDepth(point - glm::vec2(k_Step, 0.0f), 9.0f, waves, 1000.0f, 200.0f);
+		const auto north = underwater::WavesInDepth(point + glm::vec2(0.0f, k_Step), 9.0f, waves, 1000.0f, 200.0f);
+		const auto south = underwater::WavesInDepth(point - glm::vec2(0.0f, k_Step), 9.0f, waves, 1000.0f, 200.0f);
+		EXPECT_NEAR(here.slope.x, (east.height - west.height) / (2.0f * k_Step), 0.05f);
+		EXPECT_NEAR(here.slope.y, (north.height - south.height) / (2.0f * k_Step), 0.05f);
+	}
+}
+
+TEST(Seabed, TheDistanceToTheCoastIsRound)
+{
+	// One corner of land in the middle of the sea: at the same straight distance, all directions get the same
+	// distance to the coast, so the crests of the shore wave are round and have no corners
+	constexpr glm::ivec2 k_Size {81, 81};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Size.x * k_Size.y), 0);
+	altitudes[static_cast<size_t>(40 * k_Size.x + 40)] = 20;
+	const auto bed = seabed::Build(altitudes, k_Size, {0.0f, 0.0f}, 10.0f);
+	ASSERT_EQ(bed.shore.size(), altitudes.size());
+	const auto distanceAt = [&bed](float angle, float cells) {
+		const int x = 40 + static_cast<int>(std::lround(std::cos(angle) * cells));
+		const int z = 40 + static_cast<int>(std::lround(std::sin(angle) * cells));
+		const float exact = std::hypot(static_cast<float>(x - 40), static_cast<float>(z - 40));
+		return bed.shore[static_cast<size_t>(z * bed.size.x + x)].x - exact * bed.spacing;
+	};
+	// 0, 22.5 and 45 degrees: a distance that steps from corner to corner is about 8 % too long at 22.5 degrees
+	const float straight = distanceAt(0.0f, 20.0f);
+	EXPECT_NEAR(distanceAt(0.3927f, 20.0f), straight, 4.0f);
+	EXPECT_NEAR(distanceAt(0.7854f, 20.0f), straight, 4.0f);
+	// Near the coast the distance is not blurred
+	EXPECT_NEAR(bed.shore[static_cast<size_t>(40 * bed.size.x + 42)].x, 15.0f, 2.5f);
+}
+
+TEST(UnderwaterWaves, WhiteHorsesGrowWithTheWind)
+{
+	// The share of the open sea under white horses: few on a calm day, more in a wind, many in a storm, near the
+	// average cover that a far pixel shows
+	std::array<float, 3> shares {};
+	constexpr std::array<float, 3> k_Storms {0.0f, 0.35f, 1.0f};
+	for (size_t i = 0; i < k_Storms.size(); ++i)
+	{
+		const auto waves = underwater::WavesFor(k_Storms.at(i), 0.3f);
+		float sum = 0.0f;
+		int count = 0;
+		for (float x = 2000.0f; x < 2400.0f; x += 2.3f)
+		{
+			for (float z = 2000.0f; z < 2300.0f; z += 2.9f)
+			{
+				const auto sample = underwater::WavesInDepth({x, z}, 20.0f, waves, 1000.0f, 200.0f);
+				sum += underwater::WhitecapShare(sample.whitecap, k_Storms.at(i));
+				++count;
+			}
+		}
+		shares.at(i) = sum / static_cast<float>(count);
+		EXPECT_LT(shares.at(i), underwater::WhitecapCover(k_Storms.at(i)) * 2.0f + 0.005f) << "storm " << k_Storms.at(i);
+		EXPECT_GT(shares.at(i), underwater::WhitecapCover(k_Storms.at(i)) / 2.0f) << "storm " << k_Storms.at(i);
+	}
+	EXPECT_LT(shares[0], 0.02f);
+	EXPECT_LT(shares[0], shares[1]);
+	EXPECT_LT(shares[1], shares[2]);
+	EXPECT_GT(shares[2], 0.04f);
+}
+
+TEST(UnderwaterWaves, TheChopOfTheWindHasPointedCrestsAndGrowsInAStorm)
+{
+	// The chop stays about its mean, has narrow crests and broad troughs, and a storm makes it higher
+	const auto range = [](float storm, float& mean, float& highShare) {
+		const auto waves = underwater::WavesFor(storm, 0.3f);
+		float low = 1e9f;
+		float high = -1e9f;
+		float sum = 0.0f;
+		std::vector<float> heights;
+		for (float x = 0.0f; x < 120.0f; x += 0.37f)
+		{
+			for (float z = 0.0f; z < 120.0f; z += 0.41f)
+			{
+				const float h = underwater::ChopAt({x, z}, 4.0f, waves, underwater::k_ChopGeometryOctaves);
+				heights.push_back(h);
+				low = std::min(low, h);
+				high = std::max(high, h);
+				sum += h;
+			}
+		}
+		mean = sum / static_cast<float>(heights.size());
+		// The share of the points in the top half of the range: small for narrow crests
+		const float middle = 0.5f * (low + high);
+		highShare = static_cast<float>(std::ranges::count_if(heights, [middle](float h) { return h > middle; })) /
+		            static_cast<float>(heights.size());
+		return high - low;
+	};
+	float calmMean = 0.0f;
+	float calmHigh = 0.0f;
+	float stormMean = 0.0f;
+	float stormHigh = 0.0f;
+	const float calm = range(0.0f, calmMean, calmHigh);
+	const float storm = range(1.0f, stormMean, stormHigh);
+	EXPECT_GT(calm, 0.0f);
+	EXPECT_GT(storm, calm * 2.0f);
+	EXPECT_LT(std::abs(calmMean), calm * 0.1f);
+	EXPECT_LT(calmHigh, 0.4f);
+	// No waves, no chop
+	auto still = underwater::WavesFor(0.0f, 0.3f);
+	still.scale = 0.0f;
+	EXPECT_FLOAT_EQ(underwater::ChopAt({10.0f, 20.0f}, 3.0f, still, 5), 0.0f);
+}

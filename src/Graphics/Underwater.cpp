@@ -23,6 +23,7 @@
 #include <glm/common.hpp>
 #include <glm/exponential.hpp>
 #include <glm/geometric.hpp>
+#include <glm/trigonometric.hpp>
 
 using namespace openblack::graphics;
 
@@ -322,6 +323,62 @@ underwater::WaveTilt underwater::WaveTiltAt(glm::vec2 point, float seconds)
 	                 .slope = std::cos(c1) * std::sin(c2) * h1 * q1 + std::sin(c1) * std::cos(c2) * h2 * q2};
 }
 
+namespace
+{
+/// One octave of the chop at a point of its grid, 0 in the trough to 1 on the crest
+float ChopOctave(glm::vec2 q, float pointed)
+{
+	q += glm::vec2(underwater::Noise(q) * 2.0f - 1.0f);
+	const glm::vec2 edge = glm::vec2(1.0f) - glm::abs(glm::sin(q));
+	const glm::vec2 trough = glm::mix(edge, glm::abs(glm::cos(q)), edge);
+	return std::pow(1.0f - std::pow(trough.x * trough.y, 0.6f), pointed);
+}
+} // namespace
+
+float underwater::ChopAt(glm::vec2 point, float seconds, const WaveState& waves, int octaves)
+{
+	float amplitude = Metres(k_ChopMetres) * (1.0f + 2.0f * waves.storm) * std::min(waves.scale, 1.0f);
+	if (amplitude <= 0.0f)
+	{
+		return 0.0f;
+	}
+	const glm::vec2 wind {std::cos(waves.windAngle), std::sin(waves.windAngle)};
+	float k = 2.0f * std::numbers::pi_v<float> / Metres(k_ChopLengthMetres);
+	glm::vec2 q = glm::vec2(glm::dot(point, wind), wind.x * point.y - wind.y * point.x) * k;
+	float pointed = 4.0f;
+	float height = 0.0f;
+	for (int i = 0; i < std::min(octaves, k_ChopShadingOctaves); ++i)
+	{
+		const float drift = std::sqrt(k_Gravity * k) * seconds;
+		const float pair = ChopOctave(q + glm::vec2(drift, 0.0f), pointed) + ChopOctave(q - glm::vec2(drift, 0.0f), pointed);
+		height += (pair - 2.0f * (0.42f + 0.028f * static_cast<float>(i))) * amplitude;
+		q = glm::vec2(1.6f * q.x + 1.2f * q.y, 1.6f * q.y - 1.2f * q.x) * 1.9f;
+		k *= 3.8f;
+		amplitude *= 0.22f;
+		pointed = glm::mix(pointed, 1.0f, 0.2f);
+	}
+	return height;
+}
+
+float underwater::WhitecapShare(float envelope, float storm)
+{
+	const float start = 0.9f - 0.08f * storm;
+	return glm::smoothstep(start, start + 0.12f, envelope);
+}
+
+float underwater::WhitecapCover(float storm)
+{
+	return 0.005f + 0.2f * std::pow(storm, 1.6f);
+}
+
+float underwater::CapSteepness(float height, float limit, float& rate)
+{
+	const float over = height / limit;
+	const float share = 1.0f / (1.0f + over * over);
+	rate = share * std::sqrt(share);
+	return height * std::sqrt(share);
+}
+
 float underwater::TiltScale(float tilt, float length, float& rate)
 {
 	const float lengthLog = k_TiltStrength * std::log(std::max(length, 1e-3f) / Metres(k_TiltMetres));
@@ -375,7 +432,10 @@ underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, 
 		float tiltRate = 0.0f;
 		const float tiltScale = wind ? TiltScale(tilt.tilt, wave.y, tiltRate) : 1.0f;
 		const float group = wind ? (even ? variation.groups.x : variation.groups.y) * tiltScale : 1.0f;
-		const float amplitude = grown.at(i) * breaking * group;
+		// A soft cap keeps each wave under the steepness that the sea holds
+		const float limit = glm::mix(k_SteepestWaveCalm, k_SteepestWaveStorm, waves.storm) / k;
+		float capRate = 1.0f;
+		const float amplitude = CapSteepness(grown.at(i) * breaking * group, limit, capRate);
 		const float theta = k * glm::dot(along, wind ? warped : point) - omega * seconds + wave.w;
 		const float s = 0.5f + 0.5f * std::sin(theta);
 		const float shape = 2.0f * std::pow(s, sharp) - 1.0f;
@@ -383,12 +443,18 @@ underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, 
 		const float rise = amplitude * sharp * std::pow(std::max(s, 1e-4f), sharp - 1.0f) * std::cos(theta) * k;
 		if (wind)
 		{
+			// The crest envelope: the steepness on the crest, and for a short time after it
+			constexpr float k_Tau = 2.0f * std::numbers::pi_v<float>;
+			const float behind = std::numbers::pi_v<float> / 2.0f - theta;
+			const float age = (behind - k_Tau * std::floor(behind / k_Tau)) / omega;
+			sample.whitecap += amplitude * k * std::max(std::pow(s, sharp), std::exp(-age / k_WhitecapSeconds));
 			windSlope += along * rise;
 			// The height changes with the group too
 			const glm::vec2 groupSlope = even ? glm::vec2(variation.groupSlope.x, variation.groupSlope.z)
 			                                  : glm::vec2(variation.groupSlope.y, variation.groupSlope.w);
 			const float plainGroup = even ? variation.groups.x : variation.groups.y;
-			sample.slope += grown.at(i) * breaking * shape * (groupSlope * tiltScale + plainGroup * tiltRate * tilt.slope);
+			sample.slope +=
+			    grown.at(i) * breaking * capRate * shape * (groupSlope * tiltScale + plainGroup * tiltRate * tilt.slope);
 		}
 		else
 		{
@@ -410,6 +476,13 @@ underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, 
 		sample.height += amplitude * std::sin(theta);
 		sample.slope += along * (amplitude * k * std::cos(theta));
 	}
+	// The chop of the wind, cut by the depth as the other waves are; its slope from three heights
+	constexpr float k_ChopStep = 0.02f;
+	const float chop = ChopAt(point, seconds, waves, k_ChopGeometryOctaves);
+	const float chopX = ChopAt(point + glm::vec2(k_ChopStep, 0.0f), seconds, waves, k_ChopGeometryOctaves);
+	const float chopZ = ChopAt(point + glm::vec2(0.0f, k_ChopStep), seconds, waves, k_ChopGeometryOctaves);
+	sample.height += chop * breaking;
+	sample.slope += glm::vec2(chopX - chop, chopZ - chop) / k_ChopStep * breaking;
 	return sample;
 }
 
