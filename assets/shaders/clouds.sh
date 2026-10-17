@@ -410,4 +410,19 @@ float CloudSceneDistance(vec2 uv, float depth)
 	return length(CloudWorldAt(uv, depth) - u_cloudEye.xyz);
 }
 
+// How far along a ray from the eye the lowest cloud can be: the ray meets the lowest bottom of the layer there, on the
+// curved world. A scene nearer than this has no cloud in front of it. 0 when the eye is in or over the layer.
+float CloudNearestAlong(vec3 dir)
+{
+	float lowest = u_cloudLayer.x - CLOUD_LOWEST_DROP - 60.0f;
+	float below = lowest - u_cloudEye.y;
+	if (below <= 0.0f)
+	{
+		return 0.0f;
+	}
+	// eye.y + t dir.y + t^2 (1 - dir.y^2) / (2 R) = lowest
+	float a = max(1.0f - dir.y * dir.y, 1e-6f) / (2.0f * u_cloudLayer.y);
+	return 2.0f * below / (dir.y + sqrt(max(dir.y * dir.y + 4.0f * a * below, 0.0f)));
+}
+
 #endif // CLOUDS_SH
