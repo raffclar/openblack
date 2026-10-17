@@ -515,7 +515,8 @@ std::optional<Picked> PickAmong(const View& view, std::span<const Candidate> can
 float SphereDistance(const View& view, glm::vec3 origin, float halfHeight, float radius)
 {
 	const auto middle = origin + glm::vec3(0.0f, halfHeight, 0.0f);
-	return glm::length(middle - view.camera) - (radius + view.near);
+	// The game adds the squares y, x, z
+	return x87::Length<x87::SumOrder::Yxz>(middle - view.camera) - (radius + view.near);
 }
 
 bool LandHidesObject(float landDistance, float objectDistance, glm::vec2 landPoint, glm::vec2 objectOrigin,
@@ -546,22 +547,23 @@ std::optional<MeshHit> NearestIntersection(std::span<const glm::vec3> corners, s
 		auto normal = glm::cross(v1 - v0, v2 - v0);
 		if (normal != glm::vec3(0.0f))
 		{
-			normal *= 1.0f / std::sqrt(glm::dot(normal, normal));
+			normal *= 1.0f / x87::LengthZyx(normal);
 		}
-		const float facing = glm::dot(direction, normal);
+		// The game adds every sum here from z to x
+		const float facing = x87::DotZyx(direction, normal);
 		if (!(facing < -k_SideOn || facing > k_SideOn))
 		{
 			continue;
 		}
-		const float distance = (glm::dot(v0, normal) - glm::dot(origin, normal)) / facing;
+		const float distance = (x87::DotZyx(v0, normal) - x87::DotZyx(origin, normal)) / facing;
 		if (!behindAllowed && !(distance > 0.0f))
 		{
 			continue;
 		}
 		const auto point = distance * direction + origin;
-		const int positive = static_cast<int>(glm::dot(glm::cross(v0 - v2, point - v2), normal) > 0.0f) +
-		                     static_cast<int>(glm::dot(glm::cross(v2 - v1, point - v1), normal) > 0.0f) +
-		                     static_cast<int>(glm::dot(glm::cross(v1 - v0, point - v0), normal) > 0.0f);
+		const int positive = static_cast<int>(x87::DotZyx(glm::cross(v0 - v2, point - v2), normal) > 0.0f) +
+		                     static_cast<int>(x87::DotZyx(glm::cross(v2 - v1, point - v1), normal) > 0.0f) +
+		                     static_cast<int>(x87::DotZyx(glm::cross(v1 - v0, point - v0), normal) > 0.0f);
 		if (positive != 0 && positive != 3)
 		{
 			continue;

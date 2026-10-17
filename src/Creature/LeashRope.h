@@ -29,8 +29,6 @@ constexpr size_t k_NodeCount = 40;
 /// The rope is stepped at 200 times a second, however long the frame
 constexpr float k_StepSeconds = 0.005f;
 constexpr float k_StepsPerSecond = 200.0f;
-/// At most this many steps a frame: a long stall moves the ends without making the rope catch up all at once
-constexpr uint32_t k_MaxSteps = 200;
 /// Each mass and how the springs and air act on it
 constexpr float k_Stiffness = 20000.0f;
 constexpr float k_Drag = 0.1f;

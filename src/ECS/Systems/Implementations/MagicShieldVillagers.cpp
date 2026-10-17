@@ -457,7 +457,12 @@ void MagicShieldSystem::ApplyToVillager(entt::entity villager, uint32_t id)
 		return;
 	}
 	const auto& was = found->second;
-	const float a = PriorityFor(villager, was, glm::distance(glm::xz(at), PositionOf(was.object)));
+	// The reaction it has is weighed by the distance to the middle of that reaction's cell
+	const auto cellOfWas = map_coords::Cell(map_coords::FromMetres(PositionOf(was.object)));
+	const float a =
+	    PriorityFor(villager, was,
+	                gutils::GetDistanceInMetresToCell(map_coords::FromMetres(glm::xz(at)),
+	                                                  {static_cast<int16_t>(cellOfWas.x), static_cast<int16_t>(cellOfWas.y)}));
 	const float b = PriorityFor(villager, reaction, distance);
 	const bool reconsiderSame = reaction.type == Reaction::ReactToMagicShieldStruck;
 	if ((reaction.type != was.type || (reconsiderSame && currentId != id)) && a < b)

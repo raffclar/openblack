@@ -91,7 +91,7 @@ struct Speeds
 
 /// An angle brought within -pi to pi
 [[nodiscard]] float WrapAngle(float angle);
-/// The heading a direction on the x, z plane faces
+/// The heading a direction on the x, z plane faces, 0 for a direction too short to turn to
 [[nodiscard]] float HeadingOf(glm::vec2 direction);
 /// The direction on the x, z plane a heading faces
 [[nodiscard]] glm::vec2 DirectionOf(float heading);

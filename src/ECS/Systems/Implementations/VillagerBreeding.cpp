@@ -418,7 +418,8 @@ entt::entity NearestHome(entt::entity town, glm::vec2 point, float reach)
 		{
 			continue;
 		}
-		const float distance = glm::distance(point, PositionOf(abode));
+		// The game's map distance
+		const float distance = gutils::GetDistanceInMetres(point, PositionOf(abode));
 		if (distance < best)
 		{
 			best = distance;

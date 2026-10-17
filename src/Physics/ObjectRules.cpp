@@ -16,6 +16,9 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Angle.h"
+
 using namespace openblack::physics;
 using namespace openblack::physics::objects;
 
@@ -136,13 +139,20 @@ glm::mat4 objects::ShownRootsModel(const glm::mat4& treeModel, float scale, floa
 
 Felling objects::FellingOf(float height, glm::vec2 fellerToTree)
 {
-	// The heading from the feller to the tree, none when they stand together
-	const float heading =
-	    glm::dot(fellerToTree, fellerToTree) > k_FellLeastSquaredDistance ? std::atan2(fellerToTree.x, -fellerToTree.y) : 0.0f;
-	const float speed = k_FellSpeedPerHeight * height;
+	// The heading from the feller to the tree, none when they stand together. The game keeps the heading wide into its
+	// sine and cosine.
+	const double heading = glm::dot(fellerToTree, fellerToTree) > k_FellLeastSquaredDistance
+	                           ? x87::GameHeadingOf(fellerToTree.x, fellerToTree.y)
+	                           : 0.0;
+	const float halfHeight = height * 0.5f;
+	const float speed = halfHeight * k_FellSpin;
+	const float ahead = x87::Mul(x87::Sin(heading), speed);
+	const float across = x87::Mul(x87::Cos(heading), speed);
+	// The spin is the velocity's parts over the half height, turned a quarter
+	const float overHalfHeight = 1.0f / halfHeight;
 	return {
-	    .velocity = {speed * std::sin(heading), 0.0f, -speed * std::cos(heading)},
-	    .spin = {k_FellSpin * std::cos(heading), 0.0f, k_FellSpin * std::sin(heading)},
+	    .velocity = {ahead, 0.0f, -across},
+	    .spin = {across * overHalfHeight, 0.0f, ahead * overHalfHeight},
 	};
 }
 

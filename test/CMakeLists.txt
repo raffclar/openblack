@@ -1200,3 +1200,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_save_state test_creature_save_state.cpp
 )
+openblack_setup_and_add_test(test_glm_order_2 test_glm_order_2.cpp)

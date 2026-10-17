@@ -22,10 +22,11 @@ using namespace openblack::physics::damage;
 
 namespace
 {
+/// The squares of the parts are added z, y, x, as the game does for the edge lengths
 float DistanceSquared(glm::vec3 a, glm::vec3 b)
 {
 	const auto d = a - b;
-	return glm::dot(d, d);
+	return openblack::x87::DotZyx(d, d);
 }
 
 /// Two corners the same, within the tolerance on every axis
