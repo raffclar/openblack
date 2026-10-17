@@ -1139,11 +1139,21 @@ openblack_setup_and_add_test(test_oracle_sigmoid oracle/test_oracle_sigmoid.cpp)
 openblack_setup_and_add_test(
   test_oracle_inverse_square_root oracle/test_oracle_inverse_square_root.cpp
 )
-foreach (oracle_test test_oracle_catch test_oracle_sigmoid
-                     test_oracle_inverse_square_root
+openblack_setup_and_add_test(
+  test_oracle_data_folder oracle/test_oracle_data_folder.cpp
 )
-  target_compile_definitions(
+# The data folder is found at run time (see oracle/OracleData.h), never compiled into an object: ctest sets the
+# environment variable for each test, and the file in the build folder serves a program started by hand from there
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
+     "${CMAKE_CURRENT_SOURCE_DIR}/oracle/data
+"
+)
+foreach (oracle_test test_oracle_catch test_oracle_sigmoid
+                     test_oracle_inverse_square_root test_oracle_data_folder
+)
+  set_tests_properties(
     ${oracle_test}
-    PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+    PROPERTIES ENVIRONMENT
+               "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
   )
 endforeach ()
