@@ -24,11 +24,14 @@
 #include <utility>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <glm/gtx/transform.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Audio/Sound.h"
 #include "Common/FramePace.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAlignmentMotes.h"
@@ -56,6 +59,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "InfoConstants.h"
@@ -1215,6 +1219,47 @@ const CreatureRig* RigOf(CreatureType species)
 	return rigs.Contains(id) ? &*rigs.Handle(id) : nullptr;
 }
 } // namespace
+
+void CreatureAnimationSystem::SetCreedPower(entt::entity creature, creature_hand_glow::Place place, float scale, float power)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return;
+	}
+	auto& glows = registry.AllOf<CreatureHandGlows>(creature) ? registry.Get<CreatureHandGlows>(creature)
+	                                                          : registry.Assign<CreatureHandGlows>(creature);
+	const auto hum = creature_hand_glow::SetCreedPower(glows.glows, place, scale, power);
+	if (hum == creature_hand_glow::Hum::Unchanged || !Locator::soundTagSystem::has_value())
+	{
+		return;
+	}
+	// The creature keeps up the hum while its glows have power. When they lose it, the hum finishes its loop.
+	constexpr auto k_Hum = static_cast<entt::id_type>(audio::SoundId::G_Creed_01);
+	auto& tags = Locator::soundTagSystem::value();
+	if (hum == creature_hand_glow::Hum::Stop)
+	{
+		tags.DetachObjectSound(creature, k_Hum);
+	}
+	else if (const auto logger = spdlog::get("game"); !tags.AttachObjectSound(creature, k_Hum) && logger != nullptr)
+	{
+		SPDLOG_LOGGER_WARN(logger, "Creature {} keeps up another sound, so it does not hum its creed power",
+		                   entt::to_integral(creature));
+	}
+}
+
+void CreatureAnimationSystem::PlayCreedEvent(entt::entity creature, int32_t event)
+{
+	const auto glow = creature_hand_glow::CreedEventOf(event);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!glow.has_value() || !registry.Valid(creature))
+	{
+		return;
+	}
+	auto& glows = registry.AllOf<CreatureHandGlows>(creature) ? registry.Get<CreatureHandGlows>(creature)
+	                                                          : registry.Assign<CreatureHandGlows>(creature);
+	creature_hand_glow::Set(glows.glows, glow->place, creature_hand_glow::k_CreedEventScale, glow->power);
+}
 
 void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs)
 {

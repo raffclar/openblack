@@ -104,3 +104,62 @@ TEST(CreatureHandGlow, TheModelIsScaledWithItsBackAxisInMirrorImage)
 	EXPECT_EQ(model[2], glm::vec4(0.0f, 0.0f, -3.0f, 0.0f));
 	EXPECT_EQ(model[3], glm::vec4(1.0f, 2.0f, 3.0f, 1.0f));
 }
+
+TEST(CreatureHandGlow, AScriptNumberNamesAPlaceOnlyWhenItIsInRange)
+{
+	EXPECT_EQ(creature_hand_glow::PlaceOf(0), Place::LeftHand);
+	EXPECT_EQ(creature_hand_glow::PlaceOf(1), Place::Belly);
+	EXPECT_EQ(creature_hand_glow::PlaceOf(2), Place::RightHand);
+	EXPECT_EQ(creature_hand_glow::PlaceOf(3), Place::Circling);
+	EXPECT_FALSE(creature_hand_glow::PlaceOf(-1).has_value());
+	EXPECT_FALSE(creature_hand_glow::PlaceOf(4).has_value());
+}
+
+TEST(CreatureHandGlow, TheHumStartsAndStopsOnlyWhenTheGlowsGainOrLoseAllPower)
+{
+	using creature_hand_glow::Hum;
+	creature_hand_glow::Glows glows;
+	EXPECT_FALSE(creature_hand_glow::AnyActive(glows));
+
+	EXPECT_EQ(creature_hand_glow::SetCreedPower(glows, Place::LeftHand, 1.0f, 0.5f), Hum::Start);
+	EXPECT_EQ(creature_hand_glow::SetCreedPower(glows, Place::RightHand, 2.0f, 1.0f), Hum::Unchanged);
+	ASSERT_TRUE(glows.at(2).has_value());
+	EXPECT_FLOAT_EQ(glows.at(2)->scale, 2.0f);
+	EXPECT_EQ(creature_hand_glow::SetCreedPower(glows, Place::LeftHand, 1.0f, 0.0f), Hum::Unchanged);
+	EXPECT_EQ(creature_hand_glow::SetCreedPower(glows, Place::RightHand, 1.0f, 0.0f), Hum::Stop);
+	EXPECT_FALSE(glows.at(2).has_value());
+
+	// A glow with a power below 0 stays on the body, but it has no power, so the creature does not hum
+	EXPECT_EQ(creature_hand_glow::SetCreedPower(glows, Place::Belly, 1.0f, -1.0f), Hum::Unchanged);
+	EXPECT_TRUE(glows.at(1).has_value());
+	EXPECT_FALSE(creature_hand_glow::AnyActive(glows));
+
+	// A glow that an animation event gave counts as power before the script's change
+	creature_hand_glow::Set(glows, Place::Circling, 1.0f, 2.0f);
+	EXPECT_EQ(creature_hand_glow::SetCreedPower(glows, Place::LeftHand, 1.0f, 1.0f), Hum::Unchanged);
+}
+
+TEST(CreatureHandGlow, TheCreedEventsSetTheLeftHandThenTheRightHandThenTheBelly)
+{
+	EXPECT_FALSE(creature_hand_glow::CreedEventOf(94).has_value());
+	EXPECT_FALSE(creature_hand_glow::CreedEventOf(110).has_value());
+	EXPECT_FALSE(creature_hand_glow::CreedEventOf(3).has_value());
+
+	constexpr std::array<Place, 3> k_Places {Place::LeftHand, Place::RightHand, Place::Belly};
+	// The powers are exact: two times 0, a quarter, a half, three quarters and 1
+	constexpr std::array<float, 5> k_Powers {0.0f, 0.5f, 1.0f, 1.5f, 2.0f};
+	for (int32_t event = 95; event <= 109; ++event)
+	{
+		const auto glow = creature_hand_glow::CreedEventOf(event);
+		ASSERT_TRUE(glow.has_value()) << event;
+		EXPECT_EQ(glow->place, k_Places.at(static_cast<size_t>((event - 95) / 5))) << event;
+		EXPECT_EQ(glow->power, k_Powers.at(static_cast<size_t>((event - 95) % 5))) << event;
+	}
+
+	// The first event of a place removes its glow
+	creature_hand_glow::Glows glows;
+	creature_hand_glow::Set(glows, Place::RightHand, 1.0f, 1.0f);
+	const auto off = creature_hand_glow::CreedEventOf(100);
+	creature_hand_glow::Set(glows, off->place, creature_hand_glow::k_CreedEventScale, off->power);
+	EXPECT_FALSE(glows.at(2).has_value());
+}

@@ -61,6 +61,7 @@
 #include "Creature/CreatureCreed.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
+#include "Creature/CreatureHandGlow.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureScriptPlay.h"
@@ -158,6 +159,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
@@ -8045,24 +8047,40 @@ void GetBellyPosition() // 337 GET_BELLY_POSITION
 
 void SetCreatureCreedProperties() // 338 SET_CREATURE_CREED_PROPERTIES
 {
-	// The glow's values only: openblack does not show the glows yet. The time has no effect in the game.
+	// A creature gets a creed glow of a scale and a power on its body. The time has no effect.
 	[[maybe_unused]] const auto time = Popf();
 	const auto power = Popf();
 	const auto scale = Popf();
-	const auto glow = Pop().intVal;
-	const auto creature = PopObject();
+	const auto hand = Pop().intVal;
+	const auto object = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
-	if (creature == entt::null || !registry.Valid(creature) || !registry.AllOf<ecs::components::Creature>(creature))
+	if (object == entt::null || !registry.Valid(object))
+	{
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
 	{
 		ScriptMessage("Thing not creature!");
 		return;
 	}
-	auto& powers = registry.AllOf<ecs::components::CreatureCreedPowers>(creature)
-	                   ? registry.Get<ecs::components::CreatureCreedPowers>(creature)
-	                   : registry.Assign<ecs::components::CreatureCreedPowers>(creature);
-	if (glow >= 0)
+	// The saved game keeps the values of the glow
+	if (hand >= 0)
 	{
-		creature_creed::Set(powers, static_cast<size_t>(glow), scale, power);
+		auto& powers = registry.AllOf<ecs::components::CreatureCreedPowers>(object)
+		                   ? registry.Get<ecs::components::CreatureCreedPowers>(object)
+		                   : registry.Assign<ecs::components::CreatureCreedPowers>(object);
+		creature_creed::Set(powers, static_cast<size_t>(hand), scale, power);
+	}
+	// The game does not examine the place, and a number out of range changes memory after the glows. Ignore it.
+	const auto place = creature_hand_glow::PlaceOf(hand);
+	if (!place.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_CREATURE_CREED_PROPERTIES: no hand glow {}", hand);
+		return;
+	}
+	if (Locator::creatureAnimationSystem::has_value())
+	{
+		Locator::creatureAnimationSystem::value().SetCreedPower(object, *place, scale, power);
 	}
 }
 

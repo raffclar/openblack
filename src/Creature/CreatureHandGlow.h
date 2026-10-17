@@ -76,6 +76,46 @@ constexpr float k_HeightPerSize = 15.0f;
 /// Gives a place a glow of a scale and a power. A power of 0 removes the glow. A place without a glow gets a new one.
 void Set(Glows& glows, Place place, float scale, float power);
 
+/// The place of a creed power that a script gives, if the number names a place
+[[nodiscard]] std::optional<Place> PlaceOf(int32_t number);
+/// Whether a glow has a power above 0
+[[nodiscard]] bool AnyActive(const Glows& glows);
+
+/// What the hum of a creed power does after a change to the glows
+enum class Hum : uint8_t
+{
+	/// The glows had power before the change and have power after it, or had none and have none
+	Unchanged,
+	/// The glows had no power before the change and have power after it: the hum starts
+	Start,
+	/// The glows had power before the change and have no power after it: the hum stops
+	Stop,
+};
+/// A script gives a creature a creed power: the place gets a glow of the scale and the power (see Set). The hum starts
+/// or stops when the glows change from no power to some power, or back. The script also gives a time, which has no
+/// effect.
+[[nodiscard]] Hum SetCreedPower(Glows& glows, Place place, float scale, float power);
+
+/// The first of the animation events that set a creed glow. Each place has five events in turn, one for each level.
+constexpr int32_t k_FirstCreedEvent = 95;
+/// The last of the animation events that set a creed glow
+constexpr int32_t k_LastCreedEvent = 109;
+/// The places of the creed glows that the animation events set, five events for each place, in the order of the events
+constexpr std::array<Place, 3> k_CreedEventPlaces {Place::LeftHand, Place::RightHand, Place::Belly};
+/// The level of each of a place's five events. A level of 0 removes the glow.
+constexpr std::array<float, 5> k_CreedEventLevels {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
+/// The scale of a glow that an animation event sets
+constexpr float k_CreedEventScale = 1.0f;
+
+/// The glow that an animation event sets: the place, and a power of two times the event's level
+struct CreedEvent
+{
+	Place place;
+	float power;
+};
+/// The creed glow that an animation event sets, if the event sets one
+[[nodiscard]] std::optional<CreedEvent> CreedEventOf(int32_t event);
+
 /// How far the shell reaches out, in parts of the model's half diagonal
 [[nodiscard]] float Zoom(const Glow& glow);
 /// Slides the texture on by the milliseconds of a frame

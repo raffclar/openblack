@@ -145,6 +145,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
@@ -2823,6 +2824,20 @@ void Runner::Give(const Command& command)
 			                        static_cast<float>(command.value));
 		}
 		result = fmt::format("four glows of power {}", command.value);
+		break;
+	}
+	case Kind::GiveCreedPower:
+	{
+		// Each shipped script that gives a creed power gives this scale
+		constexpr float k_ScriptScale = 5.0f;
+		const auto place = creature_hand_glow::PlaceOf(static_cast<int32_t>(command.value));
+		if (!place.has_value() || !Locator::creatureAnimationSystem::has_value())
+		{
+			result = "no such place";
+			break;
+		}
+		Locator::creatureAnimationSystem::value().SetCreedPower(*entity, *place, k_ScriptScale, command.amount);
+		result = fmt::format("a creed power of {} at place {}", command.amount, command.value);
 		break;
 	}
 	case Kind::WriteWebPage:

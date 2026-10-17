@@ -1819,6 +1819,22 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .commands = {Command {.kind = Kind::GiveHandGlows, .delaySeconds = 1.0f, .value = 2}},
 	});
 
+	all.push_back({
+	    .id = "appearance.creed_glow",
+	    .name = "A creature gets a creed power",
+	    .facet = Facet::Appearance,
+	    .description = "The player's giant ape stands on the land. After a second, a script gives it a weak creed power "
+	                   "above its body. Two seconds later, the script gives it the full power, as the story does when "
+	                   "the creature gets a part of the creed.",
+	    .expected = "A small white glowing shell turns slowly above the head of the ape, and the ape starts to hum. Then the "
+	                "shell becomes larger. The hum continues.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::GiantApe, .needs = Content(), .hold = true, .pauseMind = true}},
+	    .commands = {Command {.kind = Kind::GiveCreedPower, .delaySeconds = 1.0f, .value = 3, .amount = 0.1f},
+	                 Command {.kind = Kind::GiveCreedPower, .delaySeconds = 2.0f, .value = 3, .amount = 1.0f}},
+	});
+
 	// The hair close up while the head moves: the tiger's whiskers, and the wolf's tufts, which use the same material
 	std::vector<Command> headMoves;
 	for (size_t i = 0; i < animations::k_GestureCount; ++i)
@@ -8109,7 +8125,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 146> k_Names {
+	constexpr std::array<std::string_view, 147> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -8256,6 +8272,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "load the game",
 		    "play the falling spell film",
 		    "give hand glows",
+		    "give a creed power",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

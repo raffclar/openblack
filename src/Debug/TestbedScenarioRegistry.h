@@ -837,6 +837,10 @@ struct Command
 		/// The creature gets a glow on its left hand, its belly, its right hand and above its body, each of the power
 		/// that the value gives, as the creed powers give their glows
 		GiveHandGlows,
+		/// A script gives the creature a creed power: the value names the place of the glow (0 the left hand, 1 the
+		/// belly, 2 the right hand, 3 above the body) and the amount gives its power. The scale is 5, as each shipped
+		/// script gives it.
+		GiveCreedPower,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
