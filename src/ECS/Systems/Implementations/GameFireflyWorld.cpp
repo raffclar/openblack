@@ -35,6 +35,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingModel.h"
 #include "Graphics/Texture2D.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -140,17 +141,17 @@ float GameFireflyWorld::HeightOf(entt::entity thing) const
 	// As tall as its model's box at its size; nothing for a thing without a model
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* transform = registry.TryGet<const Transform>(thing);
-	const auto* mesh = registry.TryGet<const Mesh>(thing);
-	if (transform == nullptr || mesh == nullptr || !Locator::resources::has_value())
+	const auto model = ecs::thing_model::ModelOf(registry, thing);
+	if (transform == nullptr || !model.has_value() || !Locator::resources::has_value())
 	{
 		return 0.0f;
 	}
 	auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(mesh->id))
+	if (!meshes.Contains(*model))
 	{
 		return 0.0f;
 	}
-	return meshes.Handle(mesh->id)->GetBoundingBox().Size().y * transform->scale.y;
+	return meshes.Handle(*model)->GetBoundingBox().Size().y * transform->scale.y;
 }
 
 std::optional<size_t> GameFireflyWorld::MagicKindNamed(std::string_view name) const

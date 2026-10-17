@@ -35,6 +35,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
+#include "ECS/ThingModel.h"
 #include "Graphics/Texture2D.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -126,12 +127,12 @@ std::vector<rules::ThingBelow> GameScriptHighlightWorld::ThingsBelow(entt::entit
 		// How far its model reaches across and how tall it stands, at its size
 		float radius = 0.0f;
 		float height = 0.0f;
-		if (const auto* mesh = registry.TryGet<const Mesh>(thing); mesh != nullptr && Locator::resources::has_value())
+		if (const auto model = ecs::thing_model::ModelOf(registry, thing); model.has_value() && Locator::resources::has_value())
 		{
 			const auto& meshes = Locator::resources::value().GetMeshes();
-			if (meshes.Contains(mesh->id))
+			if (meshes.Contains(*model))
 			{
-				const auto size = meshes.Handle(mesh->id)->GetBoundingBox().Size();
+				const auto size = meshes.Handle(*model)->GetBoundingBox().Size();
 				radius = std::max(size.x, size.z) * 0.5f * transform->scale.x;
 				height = size.y * transform->scale.y;
 			}
