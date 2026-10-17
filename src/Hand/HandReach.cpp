@@ -37,11 +37,7 @@ namespace
 /// A 16.16 value moved by some metres, the way the search finds its cells: into metres, moved, and back, truncated
 int32_t Moved(int32_t fixed, float metres)
 {
-	constexpr float k_MetresPerCell = 10.0f;
-	constexpr float k_FixedPerCell = 65536.0f;
-	// The whole value is scaled once before it is rounded to a float
-	const auto inMetres = static_cast<float>(static_cast<double>(fixed) * k_MetresPerCell) / k_FixedPerCell;
-	return map_coords::FtoL((inMetres + metres) * k_FixedPerCell / k_MetresPerCell);
+	return map_coords::ToFixedGUtils(map_coords::ToMetres(fixed) + metres);
 }
 } // namespace
 

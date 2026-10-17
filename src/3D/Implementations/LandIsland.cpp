@@ -52,7 +52,7 @@ namespace
 {
 constexpr int32_t k_MapSize = 0x200;
 // The 1/256 of the game's integer altitude interpolation
-constexpr double k_AltitudeFraction = 1.0 / 256.0;
+constexpr float k_AltitudeFraction = 1.0f / 256.0f;
 // Land at or below this altitude is at sea level. The game draws it at height 0, and GetAltitude treats it the same
 // in cells no higher than k_SeaLevelClampAltitude, unless asked for the land's own altitudes.
 constexpr uint8_t k_SeaLevelAltitude = 3;
@@ -69,18 +69,18 @@ float LandIslandInterface::GetDrawnAltitude(uint8_t altitude)
 	return altitude <= k_SeaLevelAltitude ? 0.0f : static_cast<float>(altitude) * k_HeightUnit;
 }
 
-double LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevelFlat) const
+float LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevelFlat) const
 {
 	const auto cellX = static_cast<int16_t>(static_cast<uint32_t>(mapX) >> 16);
 	const auto cellZ = static_cast<int16_t>(static_cast<uint32_t>(mapZ) >> 16);
 	if (cellX < 0 || cellX >= k_MapSize || cellZ < 0 || cellZ >= k_MapSize)
 	{
-		return 0.0;
+		return 0.0f;
 	}
 	const auto* cell = FindCell({static_cast<uint16_t>(cellX), static_cast<uint16_t>(cellZ)});
 	if (cell == nullptr)
 	{
-		return 0.0;
+		return 0.0f;
 	}
 
 	// Neighbours within the block's 17x17 cell array: +1 is z + 1, +17 is x + 1
@@ -126,7 +126,7 @@ double LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ, bool seaLeve
 	const auto edgeX0 = ((v01 - v00) * z8) + (v00 << 8);
 	const auto edgeX1 = ((v11 - v10) * z8) + (v10 << 8);
 	const auto height = (((edgeX1 - edgeX0) * x8) >> 8) + edgeX0;
-	return static_cast<double>(height) * static_cast<double>(k_HeightUnit) * k_AltitudeFraction;
+	return static_cast<float>(height) * k_HeightUnit * k_AltitudeFraction;
 }
 
 LandIsland::LandIsland(const std::filesystem::path& path)
@@ -322,7 +322,7 @@ void LandIsland::Build(const LandData& data)
 
 float LandIsland::GetHeightAt(glm::vec2 vec) const
 {
-	return static_cast<float>(GetAltitude(ToMapCoords(vec.x), ToMapCoords(vec.y)));
+	return GetAltitude(ToMapCoords(vec.x), ToMapCoords(vec.y));
 }
 
 glm::vec3 LandIsland::GetNormalAt(glm::vec2 vec) const

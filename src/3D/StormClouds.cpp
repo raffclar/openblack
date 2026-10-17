@@ -23,7 +23,7 @@ constexpr float k_StepShare = 1.0f / static_cast<float>(k_StepsPerLeg);
 /// Clouds spread over half the storm's reach either side of its middle
 constexpr float k_HalfReach = 0.5f;
 /// The cloud's opacity at full strength, of 255
-constexpr double k_OpacityAtFullStrength = 0.75;
+constexpr float k_OpacityAtFullStrength = 0.75f;
 /// The storm's shadow: its shade plus this, times its strength
 constexpr float k_ShadowShadeBase = 0.7f;
 constexpr float k_FaintestShadow = 0.01f;
@@ -31,7 +31,7 @@ constexpr float k_FaintestShadow = 0.01f;
 constexpr float k_CellSize = 10.0f;
 
 /// A whole number cut towards nought, kept to its lowest byte as the game's bytes keep it
-uint8_t LowByte(double value) noexcept
+uint8_t LowByte(float value) noexcept
 {
 	return static_cast<uint8_t>(static_cast<int32_t>(value));
 }
@@ -75,22 +75,20 @@ void storm_clouds::Step(Drift& drift, const Random& random, float cloudHeight)
 Placement storm_clouds::Place(const Drift& drift, float sizeFactor, const glm::vec3& stormCentre, float innerRadius,
                               float outerRadius)
 {
-	const double reach = static_cast<double>(outerRadius) + static_cast<double>(innerRadius);
-	const auto across = [reach](float fraction, float middle) {
-		return static_cast<float>((reach * fraction * k_HalfReach) + middle);
-	};
+	const float reach = outerRadius + innerRadius;
+	const auto across = [reach](float fraction, float middle) { return (reach * fraction * k_HalfReach) + middle; };
 	return {
 	    .xz = {across(drift.place.x, stormCentre.x), across(drift.place.z, stormCentre.z)},
 	    .heightAboveGround = drift.place.y,
-	    .size = static_cast<float>(reach * sizeFactor),
+	    .size = reach * sizeFactor,
 	};
 }
 
 uint8_t storm_clouds::Alpha(float strength) noexcept
 {
 	// Three quarters of the land colour's own full opacity
-	constexpr double k_FullOpacity = 255.0;
-	return LowByte(static_cast<double>(strength) * k_OpacityAtFullStrength * k_FullOpacity);
+	constexpr float k_FullOpacity = 255.0f;
+	return LowByte(strength * k_OpacityAtFullStrength * k_FullOpacity);
 }
 
 uint32_t storm_clouds::Tint(uint32_t landColour, float shade) noexcept
@@ -100,11 +98,11 @@ uint32_t storm_clouds::Tint(uint32_t landColour, float shade) noexcept
 	{
 		return colour;
 	}
-	const auto factor = static_cast<double>(1.0f - (shade * 0.5f));
+	const auto factor = 1.0f - (shade * 0.5f);
 	colour = 0;
 	for (const uint32_t shift : {16u, 8u, 0u})
 	{
-		const auto channel = static_cast<double>((landColour >> shift) & 0xFFu);
+		const auto channel = static_cast<float>((landColour >> shift) & 0xFFu);
 		colour |= static_cast<uint32_t>(LowByte(channel * factor)) << shift;
 	}
 	return colour;
@@ -112,23 +110,23 @@ uint32_t storm_clouds::Tint(uint32_t landColour, float shade) noexcept
 
 uint8_t storm_clouds::FlashGrey(float glow) noexcept
 {
-	constexpr double k_Scale = 127.0;
+	constexpr float k_Scale = 127.0f;
 	// Cut to a whole number, at most 255 (a negative one counts as more)
-	const auto grey = static_cast<uint32_t>(static_cast<int32_t>(static_cast<double>(glow) * k_Scale));
+	const auto grey = static_cast<uint32_t>(static_cast<int32_t>(glow * k_Scale));
 	return static_cast<uint8_t>(std::min(grey, 255u));
 }
 
 std::optional<uint8_t> storm_clouds::ShadowAlpha(float shade, float strength) noexcept
 {
-	const double amount = (static_cast<double>(shade) + static_cast<double>(k_ShadowShadeBase)) * static_cast<double>(strength);
+	const float amount = (shade + k_ShadowShadeBase) * strength;
 	float kept = 1.0f;
-	if (!(amount > 1.0))
+	if (!(amount > 1.0f))
 	{
-		if (!(amount > static_cast<double>(k_FaintestShadow)))
+		if (!(amount > k_FaintestShadow))
 		{
 			return std::nullopt;
 		}
-		kept = static_cast<float>(amount);
+		kept = amount;
 	}
 	constexpr float k_Full = 255.0f;
 	return static_cast<uint8_t>(static_cast<int32_t>(std::clamp(kept * k_Full, 0.0f, k_Full)));
