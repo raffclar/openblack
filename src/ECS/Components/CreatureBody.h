@@ -52,6 +52,9 @@ struct CreatureAnimation
 {
 	/// What the body plays: standing and breathing, an action, or sitting
 	creature_layers::BodyAction body {};
+	/// The body got to the moment of its action since the last game turn: the middle of an action played once, the
+	/// start of a kiss, or a blow that hits. The pictures for the creature's web page wait for this moment.
+	bool actionMoment {false};
 	/// Animations played together, each by its weight, in place of the body's own when there are any (as walking
 	/// blends into running)
 	struct Slot

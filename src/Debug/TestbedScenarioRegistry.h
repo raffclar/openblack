@@ -815,6 +815,9 @@ struct Command
 		/// The music of the music type that the value gives starts as a script's "start music" starts it. The value 0
 		/// stops it as "stop music" does. Needs no creature
 		StartScriptMusic,
+		/// The game writes the web page of the creature into the player's profile folder, as it does each 600 turns of
+		/// the creature's life
+		WriteWebPage,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
