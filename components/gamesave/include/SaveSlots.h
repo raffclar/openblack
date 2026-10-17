@@ -67,5 +67,8 @@ inline constexpr std::string_view k_InfoFileName = "SaveGame.inf";
 [[nodiscard]] std::string SavedCreatureFileName(uint32_t index);
 /// The world file of the slot, in openblack's own layout, with a name that the original game does not read
 [[nodiscard]] std::string WorldFileName(uint32_t slot);
+/// The world file of the slot in the game's own layout, and the file of the slot's script machine beside it
+[[nodiscard]] std::string VanillaWorldFileName(uint32_t slot);
+[[nodiscard]] std::string VanillaScriptFileName(uint32_t slot);
 
 } // namespace openblack::gamesave

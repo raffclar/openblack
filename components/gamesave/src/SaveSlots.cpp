@@ -32,3 +32,13 @@ std::string openblack::gamesave::WorldFileName(uint32_t slot)
 {
 	return std::to_string(slot) + ".obsav";
 }
+
+std::string openblack::gamesave::VanillaWorldFileName(uint32_t slot)
+{
+	return std::to_string(slot) + ".sav";
+}
+
+std::string openblack::gamesave::VanillaScriptFileName(uint32_t slot)
+{
+	return "Script_" + std::to_string(slot) + ".sav";
+}

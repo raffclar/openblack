@@ -12,23 +12,28 @@
 using namespace openblack;
 using namespace openblack::creature_save_state;
 
-gamesave::Ref creature_save_state::ToRef(entt::entity entity)
+gamesave::ObjectRef creature_save_state::ToRef(entt::entity entity)
 {
-	return entity == entt::null ? 0u : static_cast<gamesave::Ref>(entt::to_integral(entity)) + 1u;
+	if (entity == entt::null)
+	{
+		return {};
+	}
+	return gamesave::RefTo(gamesave::EntityKey(static_cast<uint32_t>(entt::to_integral(entity))));
 }
 
-gamesave::Ref creature_save_state::ToRef(std::optional<entt::entity> entity)
+gamesave::ObjectRef creature_save_state::ToRef(std::optional<entt::entity> entity)
 {
-	return entity.has_value() ? ToRef(*entity) : 0u;
+	return entity.has_value() ? ToRef(*entity) : gamesave::ObjectRef {};
 }
 
-std::optional<entt::entity> creature_save_state::FromRef(gamesave::Ref ref)
+std::optional<entt::entity> creature_save_state::FromRef(const gamesave::ObjectRef& ref)
 {
-	if (ref == 0)
+	const auto entity = gamesave::EntityOf(ref.key);
+	if (!entity.has_value())
 	{
 		return std::nullopt;
 	}
-	return static_cast<entt::entity>(ref - 1);
+	return static_cast<entt::entity>(*entity);
 }
 
 bool creature_save_state::KeepsPlan(bool scriptControlled, bool fighting, size_t dancers)
@@ -36,9 +41,9 @@ bool creature_save_state::KeepsPlan(bool scriptControlled, bool fighting, size_t
 	return scriptControlled || fighting || dancers > 0;
 }
 
-gamesave::SpellSlot creature_save_state::ToSlot(const creature_spells::Slot& slot)
+gamesave::SpellSlot creature_save_state::ToSlot(const creature_spells::Slot& slot, uint32_t place)
 {
-	return {.start = gamesave::k_SpellSlotStart,
+	return {.spell = place,
 	        .phase = static_cast<uint32_t>(slot.phase),
 	        .turnsLeft = slot.turnsLeft,
 	        .found = slot.before,
@@ -110,14 +115,18 @@ std::bitset<creature_leash::k_Types.size()> creature_save_state::FromKnown(const
 
 uint8_t creature_save_state::PlayerNumber(std::optional<PlayerNames> player)
 {
-	return player.has_value() ? static_cast<uint8_t>(*player) : gamesave::k_None;
+	if (!player.has_value() || *player == PlayerNames::NEUTRAL)
+	{
+		return gamesave::k_None;
+	}
+	return static_cast<uint8_t>(*player);
 }
 
 std::optional<PlayerNames> creature_save_state::PlayerFromNumber(uint8_t number)
 {
-	if (number >= static_cast<uint8_t>(PlayerNames::_COUNT))
+	if (number >= static_cast<uint8_t>(PlayerNames::NEUTRAL))
 	{
-		return std::nullopt;
+		return PlayerNames::NEUTRAL;
 	}
 	return static_cast<PlayerNames>(number);
 }
@@ -153,4 +162,162 @@ gamesave::Agenda creature_save_state::AgendaAfterLoad(gamesave::Agenda agenda)
 	agenda.state = 0;
 	agenda.word20 = 1;
 	return agenda;
+}
+
+namespace
+{
+template <typename T>
+void Pick(T& out, const T& baseline, const T& now)
+{
+	if (!(now == baseline))
+	{
+		out = now;
+	}
+}
+} // namespace
+
+gamesave::CreatureObject creature_save_state::MergeOnto(const gamesave::CreatureObject& loaded,
+                                                        const gamesave::CreatureObject& baseline,
+                                                        const gamesave::CreatureObject& now)
+{
+	auto merged = loaded;
+	Pick(merged.thing, baseline.thing, now.thing);
+	Pick(merged.position.position, baseline.position.position, now.position.position);
+	Pick(merged.position.flags, baseline.position.flags, now.position.flags);
+	auto& object = merged.object;
+	Pick(object.info, baseline.object.info, now.object.info);
+	Pick(object.coords, baseline.object.coords, now.object.coords);
+	Pick(object.creationIndex, baseline.object.creationIndex, now.object.creationIndex);
+	Pick(object.life, baseline.object.life, now.object.life);
+	Pick(object.scale, baseline.object.scale, now.object.scale);
+	Pick(object.heading, baseline.object.heading, now.object.heading);
+	Pick(object.fire, baseline.object.fire, now.object.fire);
+	Pick(object.physics, baseline.object.physics, now.object.physics);
+	Pick(merged.move, baseline.move, now.move);
+	Pick(merged.living, baseline.living, now.living);
+
+	auto& record = merged.creature;
+	const auto& was = baseline.creature;
+	const auto& is = now.creature;
+	Pick(record.version, was.version, is.version);
+	Pick(record.savedInTemple, was.savedInTemple, is.savedInTemple);
+	Pick(record.index, was.index, is.index);
+	Pick(record.owner, was.owner, is.owner);
+	for (size_t i = 0; i < record.spells.size(); ++i)
+	{
+		Pick(record.spells.at(i), was.spells.at(i), is.spells.at(i));
+	}
+	Pick(record.queued, was.queued, is.queued);
+	Pick(record.mindProcessing, was.mindProcessing, is.mindProcessing);
+	Pick(record.largestSize, was.largestSize, is.largestSize);
+	Pick(record.smallestSize, was.smallestSize, is.smallestSize);
+	Pick(record.mayGoThroughVortex, was.mayGoThroughVortex, is.mayGoThroughVortex);
+	Pick(record.fizzedForGood, was.fizzedForGood, is.fizzedForGood);
+	Pick(record.fizz, was.fizz, is.fizz);
+	Pick(record.fizzTarget, was.fizzTarget, is.fizzTarget);
+	Pick(record.fizzPerSecond, was.fizzPerSecond, is.fizzPerSecond);
+	Pick(record.freeze, was.freeze, is.freeze);
+	Pick(record.word12C0, was.word12C0, is.word12C0);
+	Pick(record.spellVisuals, was.spellVisuals, is.spellVisuals);
+	Pick(record.handParticles, was.handParticles, is.handParticles);
+	Pick(record.targetPoint, was.targetPoint, is.targetPoint);
+	Pick(record.targetParticles, was.targetParticles, is.targetParticles);
+	Pick(record.targetObject, was.targetObject, is.targetObject);
+	Pick(record.hasTarget, was.hasTarget, is.hasTarget);
+	Pick(record.arena, was.arena, is.arena);
+	Pick(record.home, was.home, is.home);
+	Pick(record.fightHealth, was.fightHealth, is.fightHealth);
+	Pick(record.autoFight, was.autoFight, is.autoFight);
+	Pick(record.dancePartners, was.dancePartners, is.dancePartners);
+	Pick(record.dance, was.dance, is.dance);
+	Pick(record.canDie, was.canDie, is.canDie);
+	Pick(record.strength, was.strength, is.strength);
+	Pick(record.size, was.size, is.size);
+	Pick(record.alignment, was.alignment, is.alignment);
+	Pick(record.animationPace, was.animationPace, is.animationPace);
+	Pick(record.autoScale, was.autoScale, is.autoScale);
+	Pick(record.autoScaleShare, was.autoScaleShare, is.autoScaleShare);
+	Pick(record.plan, was.plan, is.plan);
+	Pick(record.creedPowers, was.creedPowers, is.creedPowers);
+	return merged;
+}
+
+std::optional<uint32_t> creature_save_state::CreatureInfo(CreatureType /*species*/)
+{
+	// The game numbers its kinds in the order that it reads them from its tables. That order is not known yet for the
+	// creatures, so a creature that openblack made writes no kind.
+	return std::nullopt;
+}
+
+gamesave::Agenda creature_save_state::AgendaToSave(const creature_mind::IdleMind& idle, const gamesave::ObjectRef& creature)
+{
+	// A new agenda of the game has the first word 1 and no main step. The first word is 0 once a step started.
+	gamesave::Agenda agenda {.word08 = idle.stepStarted ? 0u : 1u,
+	                         .current = static_cast<uint32_t>(idle.step),
+	                         .state = idle.stepStarted ? 1u : 0u,
+	                         .count = static_cast<uint32_t>(idle.agenda.size()),
+	                         .word18 = 0,
+	                         .word1C = 0xFFFFFFFFu,
+	                         .word20 = 0,
+	                         .steps = {},
+	                         .creature = creature,
+	                         .other = {}};
+	for (size_t i = 0; i < idle.agenda.size(); ++i)
+	{
+		if (idle.agenda[i].main)
+		{
+			agenda.word1C = static_cast<uint32_t>(i);
+		}
+	}
+	for (size_t i = idle.step; i < idle.agenda.size(); ++i)
+	{
+		const auto& step = idle.agenda[i];
+		if (!step.saved.has_value())
+		{
+			agenda.steps.clear();
+			agenda.count = agenda.current;
+			return agenda;
+		}
+		const auto& saved = *step.saved;
+		agenda.steps.push_back(
+		    {.action = saved.kind,
+		     .object = step.object.has_value() ? ToRef(static_cast<entt::entity>(*step.object)) : gamesave::ObjectRef {},
+		     .integer = saved.integer,
+		     .point = {saved.point.x, saved.point.y, saved.point.z},
+		     .real = saved.real});
+	}
+	return agenda;
+}
+
+gamesave::LeashStatusObject creature_save_state::MergeLeashOnto(const gamesave::LeashStatusObject& loaded,
+                                                                const gamesave::LeashStatusObject& baseline,
+                                                                const gamesave::LeashStatusObject& now)
+{
+	auto merged = loaded;
+	auto& leash = merged.leash;
+	const auto& was = baseline.leash;
+	const auto& is = now.leash;
+	Pick(merged.thing, baseline.thing, now.thing);
+	Pick(leash.on, was.on, is.on);
+	Pick(leash.works, was.works, is.works);
+	Pick(leash.type, was.type, is.type);
+	Pick(leash.player, was.player, is.player);
+	Pick(leash.word20, was.word20, is.word20);
+	Pick(leash.tiedTo, was.tiedTo, is.tiedTo);
+	Pick(leash.length, was.length, is.length);
+	Pick(leash.fullLength, was.fullLength, is.fullLength);
+	Pick(leash.holder, was.holder, is.holder);
+	Pick(leash.word34, was.word34, is.word34);
+	return merged;
+}
+
+void creature_save_state::Rekey(gamesave::CreatureObject& creature,
+                                const std::function<gamesave::ObjectKey(gamesave::ObjectKey)>& rekey)
+{
+	gamesave::ForEachReference(creature, [&rekey](gamesave::ObjectRef& ref) {
+		if (!ref.Empty())
+		{
+			ref.key = rekey(ref.key);
+		}
+	});
 }

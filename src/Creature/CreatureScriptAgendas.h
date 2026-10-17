@@ -77,6 +77,9 @@ constexpr uint32_t k_CutSceneConfusedLots = 3;
 /// Sitting down where a script says: it walks there until within its own radius, turns to face the place, turns to
 /// face down the slope, then sits for ten seconds and up to five more
 [[nodiscard]] std::vector<Step> SitDownAt(uint32_t place, glm::vec2 point, float radius, const Random& random);
+/// The numbers of the game's steps that a saved game keeps for a walk to a point and for a turn to face a point
+constexpr uint32_t k_SavedTurnToFacePoint = 7;
+constexpr uint32_t k_SavedMoveToPoint = 8;
 /// Turning to face a point, watching it, as a script asks
 [[nodiscard]] std::vector<Step> FaceForScript(glm::vec3 point);
 /// Turning to face a thing, as a script asks: it turns, holding still two seconds once it does

@@ -559,6 +559,17 @@ struct Step
 	creature_friendship::RequestKind request {creature_friendship::RequestKind::Play};
 	/// The step that an order step tells the partner to do
 	std::shared_ptr<const Step> ordered;
+	/// The step of the game that this step stands for, as a saved game keeps it in the plan of a creature that a script
+	/// controls. Only the steps that such a plan has keep it.
+	struct Saved
+	{
+		/// The number of the game's step
+		uint32_t kind {0};
+		uint32_t integer {0};
+		glm::vec3 point {0.0f};
+		float real {0.0f};
+	};
+	std::optional<Saved> saved;
 };
 
 struct IdleMind
