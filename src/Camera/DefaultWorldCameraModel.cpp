@@ -1248,7 +1248,7 @@ CameraModel::HandCues DefaultWorldCameraModel::GetHandCues() const
 	return {.tricons = _tricons, .icons = _iconFrame, .clearView = _clearView.GetValue()};
 }
 
-void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
+void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus, float rise)
 {
 	// A flight ending outside the fence ends where the line from there to what it looks at meets the fence
 	if (Locator::cameraZoneSystem::has_value())
@@ -1256,7 +1256,7 @@ void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
 		origin = camera_zones::FlightOriginInsideFence(zones.fence, zones.fenceOn, origin, focus);
 	}
-	_flightPath = CharterFlight(origin, focus, _currentOrigin, k_FlightHeightFactor);
+	_flightPath = CharterFlight(origin, focus, _currentOrigin, rise);
 	if (camera_zones::FlightWooshes(_currentOrigin, origin))
 	{
 		Woosh();

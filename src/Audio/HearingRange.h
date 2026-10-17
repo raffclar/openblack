@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 
 #include <glm/vec3.hpp>
@@ -31,11 +32,42 @@ namespace openblack::audio
 	return bankMaxDistance != 0.0f ? bankMaxDistance : playMaxDistance;
 }
 
-/// The furthest from the camera an animation effect (a knock, a crash, a footstep) may start: the bank's maximum
-/// distance for the sample, with no fallback, so a sample whose bank gives none is only heard from right on top of it
-[[nodiscard]] constexpr float AnimEffectStartRange(float bankMaxDistance)
+/// An animation effect (a knock, a crash, a footstep) never starts further than this from the camera, in metres
+inline constexpr float k_AnimEffectHearingLimit = 800.0f;
+
+/// How the thing that plays an animation effect measures its distance from the camera
+enum class AnimEffectMeasure : uint8_t
 {
-	return bankMaxDistance;
+	/// The straight distance. The squares add in this order: z, then y, then x. Most things use this
+	Straight,
+	/// The straight distance. The squares add in this order: x, then z, then y. A tree that bends and a kick use this
+	AcrossFirst,
+	/// No distance: the effect counts as at the camera. A creature's spell sound uses this
+	AtCamera,
+};
+
+/// The distance from the camera to a point that plays an animation effect, as the measure finds it
+[[nodiscard]] inline float AnimEffectDistance(const glm::vec3& camera, const glm::vec3& point, AnimEffectMeasure measure)
+{
+	const glm::vec3 way = camera - point;
+	switch (measure)
+	{
+	case AnimEffectMeasure::Straight:
+		return std::sqrt(DistanceSquared(camera, point));
+	case AnimEffectMeasure::AcrossFirst:
+		return std::sqrt((way.x * way.x + way.z * way.z) + way.y * way.y);
+	case AnimEffectMeasure::AtCamera:
+		break;
+	}
+	return 0.0f;
+}
+
+/// Whether an animation effect at this distance from the camera may start. The distance must not be more than the
+/// hearing limit, and not more than the bank's maximum distance for the sample. There is no fallback, so a sample
+/// whose bank gives no distance starts only at the camera. A distance that is not a number does not stop it.
+[[nodiscard]] constexpr bool IsAnimEffectWithinReach(float distance, float bankMaxDistance)
+{
+	return !(distance > k_AnimEffectHearingLimit) && !(distance > bankMaxDistance);
 }
 
 /// Whether a placed sound at this square of the distance from the camera may start. Only a square of the distance

@@ -52,6 +52,8 @@
 #include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraModel.h"
+#include "Camera/DoubleClickFlight.h"
 #include "Common/FileDialog.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureActivity.h"
@@ -139,6 +141,7 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
+#include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
@@ -2496,6 +2499,20 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
 		return;
 	}
+	if (command.kind == Kind::FlyToBookmark)
+	{
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 focus {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+		const glm::vec3 origin = focus + glm::vec3(0.0f, 50.0f, -80.0f);
+		if (Locator::cameraBookmarkSystem::has_value())
+		{
+			Locator::cameraBookmarkSystem::value().SetBookmark(static_cast<uint8_t>(command.value), focus, origin);
+		}
+		Locator::camera::value().GetModel().SetFlight(origin, focus, camera_fly::k_BookmarkRise);
+		Log(fmt::format("{:.1f}s: the camera flies to bookmark {} at ({:.0f}, {:.0f}, {:.0f})", _seconds, command.value + 1,
+		                focus.x, focus.y, focus.z));
+		return;
+	}
 	if (command.kind == Kind::SetInterfaceLevel)
 	{
 		if (Locator::cameraHelpSystem::has_value())
@@ -2798,6 +2815,7 @@ void Runner::Give(const Command& command)
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
 	case Kind::SetInterfaceLevel:
+	case Kind::FlyToBookmark:
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
 	case Kind::ProfileFolderCheck:

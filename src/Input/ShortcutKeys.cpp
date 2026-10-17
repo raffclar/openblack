@@ -19,6 +19,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
+#include "Camera/DoubleClickFlight.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
@@ -185,7 +186,8 @@ void ShortcutKeys::Update()
 	}
 	if (flight.has_value())
 	{
-		camera.GetModel().SetFlight(flight->origin, flight->focus);
+		camera.GetModel().SetFlight(flight->origin, flight->focus,
+		                            flyingToPlace ? camera_fly::k_ZoomToRise : camera_fly::k_SingleTapRise);
 	}
 	if (flyingToPlace && Locator::helpProfileSystem::has_value())
 	{

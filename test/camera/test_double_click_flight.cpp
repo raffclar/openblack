@@ -70,7 +70,7 @@ public:
 		return CameraInterpolationUpdateInfo {.origin = _origin, .focus = _focus, .duration = _duration};
 	}
 	void HandleActions(std::chrono::microseconds /*dt*/) override {}
-	void SetFlight(glm::vec3 /*origin*/, glm::vec3 /*focus*/) override {}
+	void SetFlight(glm::vec3 /*origin*/, glm::vec3 /*focus*/, float /*rise*/) override {}
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override { return _origin; }
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override { return _focus; }
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const override { return std::chrono::seconds::zero(); }
@@ -217,6 +217,30 @@ TEST(DoubleClickFlight, TheHighPointClearsTheLand)
 	EXPECT_FLOAT_EQ(point.y, 80.0f);
 	const auto low = HalfWayPoint({100.0f, 50.0f, 0.0f}, {0.0f, 50.0f, 0.0f}, 0.1f, [](glm::vec2) { return 0.0f; });
 	EXPECT_FLOAT_EQ(low.y, 60.0f);
+}
+
+TEST(DoubleClickFlight, EachFlightRisesAsTheGamesDo)
+{
+	// The bits as the game pushes them: a bookmark, the temple and realm keys, the flight back
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_BookmarkRise), 0x3E99999Au);
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_ZoomToRise), 0x3ECCCCCDu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_HalfWayRise), 0x3DCCCCCDu);
+	EXPECT_EQ(k_SingleTapRise, 0.0f);
+}
+
+TEST(DoubleClickFlight, TheHighPointRisesByTheSingleStepDistanceAcross)
+{
+	// Worked by hand in single precision: the half way height plus the root of (z * z + x * x) times 0.3. A distance
+	// with extra precision gives one bit less.
+	const auto bits = [](uint32_t x, uint32_t y, uint32_t z) {
+		return glm::vec3 {std::bit_cast<float>(x), std::bit_cast<float>(y), std::bit_cast<float>(z)};
+	};
+	const auto end = bits(0x44F118C2u, 0x42535A3Eu, 0x4419EC2Bu);
+	const auto current = bits(0x43E7201Bu, 0x40BE9044u, 0xC4F27FE8u);
+	const auto point = HalfWayPoint(end, current, k_BookmarkRise, [](glm::vec2) { return 0.0f; });
+	EXPECT_EQ(std::bit_cast<uint32_t>(point.x), 0x44957064u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(point.y), 0x44645760u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(point.z), 0xC42589D2u);
 }
 
 TEST(CameraWorldBall, TheEyeIsSentBackIntoTheBallOverThreeSecondsOnItsOwnClock)

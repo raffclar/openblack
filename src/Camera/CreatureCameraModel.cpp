@@ -112,7 +112,7 @@ void CreatureCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 }
 
-void CreatureCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
+void CreatureCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus, [[maybe_unused]] float rise)
 {
 	// Sent somewhere, it keeps looking at the creature from the way the flight would have it look
 	const auto turned = creature_follow::HeadingPitchOf(origin, focus);

@@ -584,7 +584,8 @@ void PlayKickSound(const ecs::Registry& registry, entt::entity target, glm::vec3
 		return;
 	}
 	const std::array<int32_t, 5> keys {0, 0, *object, 0, k_BeenKicked};
-	Locator::audio::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot);
+	Locator::audio::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot,
+	                                       openblack::audio::AnimEffectMeasure::AcrossFirst);
 }
 
 /// The foot meets what the creature kicks. The order of the rules is:
