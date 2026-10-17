@@ -1758,9 +1758,7 @@ void AnimalSystem::SetScale(entt::entity animal, float scale)
 bool AnimalSystem::IsFrighteningToCreature(entt::entity animal) const
 {
 	const auto* data = EntityRegistry().TryGet<const Animal>(animal);
-	// Bats, the evil flock's bats, vultures and lions frighten creatures
-	return data != nullptr && (data->type == AnimalInfo::Bat || data->type == AnimalInfo::SpellBat ||
-	                           data->type == AnimalInfo::Vulture || data->type == AnimalInfo::Lion);
+	return data != nullptr && animals::FrightensCreatures(data->type);
 }
 
 bool AnimalSystem::IsAvailableForReaction(entt::entity entity) const

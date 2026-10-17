@@ -79,14 +79,13 @@ TEST(OracleSigmoid, CreatureSigmoidAsTheGameDoes)
 	EXPECT_EQ(CountDifferent("creature", gutils::CreatureSigmoidThreshold), 0u);
 }
 
-// The desires use a table with decimal values, and 14 of its 41 steps are not the game's values. Turn these tests on
-// when the desires use the shared sigmoid.
-TEST(OracleSigmoid, DISABLED_DesireSigmoidAsTheGameDoes)
+// The desires use the shared sigmoid, so all 41 steps have the game's values
+TEST(OracleSigmoid, DesireSigmoidAsTheGameDoes)
 {
 	EXPECT_EQ(CountDifferent("creature", creature_desires::Sigmoid), 0u);
 }
 
-TEST(OracleSigmoid, DISABLED_DesireSigmoidStepAsTheGameDoes)
+TEST(OracleSigmoid, DesireSigmoidStepAsTheGameDoes)
 {
 	EXPECT_EQ(CountDifferent("shared", creature_desires::SigmoidStep), 0u);
 }

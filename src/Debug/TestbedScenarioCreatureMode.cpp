@@ -297,6 +297,27 @@ void AddCaveTattooOnBody(std::vector<Scenario>& all)
 	});
 }
 
+/// The tattoo editor's view tips down as far as it can go. The points are for a screen of 1600 by 900.
+void AddTattooEditorLowestView(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "creature_mode.tattoo_editor_lowest_view",
+	    .name = "The tattoo editor's lowest view",
+	    .facet = Facet::CreatureMode,
+	    .description = "The tattoo editor is opened on the player's tiger. The pointer holds the round rotation button "
+	                   "and moves far up from it, so the view tips down for four seconds.",
+	    .expected = "The view tips down until it is an eighth as high above the middle of the tiger as it is far from "
+	                "it across the land. Then it stops tipping.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {{.kind = Kind::OpenTattooEditor, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.83f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.3f, .value = 1},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.2f, .point = {0.5f, 0.2f}, .amount = 0.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 4.0f, .value = 1}},
+	});
+}
+
 /// The main menu's tattoo editor over the menu, with the creature it shows. The points are for a screen of 1600 by 900.
 void AddMenuTattooEditor(std::vector<Scenario>& all)
 {
@@ -500,4 +521,5 @@ void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 	AddCaveScrollZoom(all);
 	AddCaveCopyHair(all);
 	AddCaveTrophies(all);
+	AddTattooEditorLowestView(all);
 }

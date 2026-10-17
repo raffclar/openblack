@@ -7620,6 +7620,43 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	});
 }
 
+/// A blow that sways the creature, and a wolf that frightens it
+void AddSwayAndFrightScenarios(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "objects.sway_from_a_thrown_rock",
+	    .name = "A thrown rock sways the creature",
+	    .facet = Facet::Objects,
+	    .description = "A tiger stands still, and a rock flies at its legs from the west every five seconds.",
+	    .expected = "Each rock that hits the tiger sways its body. The body swings back on its spring once a game "
+	                "turn and settles. A body that turns on the spot or sits does not sway.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 0.0f}, {10.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}, 90.0f)},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {-25.0f, 0.0f}}},
+	    .throws =
+	        {{.object = 0, .height = 14.0f, .velocity = {14.0f, 4.0f, 0.0f}, .delaySeconds = 2.0f, .repeatSeconds = 5.0f}},
+	});
+
+	all.push_back({
+	    .id = "senses.creature_runs_from_a_wolf",
+	    .name = "A wolf frightens the creature",
+	    .facet = Facet::Senses,
+	    .description = "A tiger with its fear as strong as it gets, and a wolf fifteen metres east of it.",
+	    .expected = "The tiger runs away from the wolf. Tigers, leopards, wolves and the wolves of a spell frighten a "
+	                "creature as lions do.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 0.0f}, {20.0f, 0.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {0.0f, 0.0f},
+	        .needs = Content(),
+	        .desires = {{.desire = Desire::Fear, .fraction = 1.0f}},
+	    }},
+	    .objects = {{.type = AnimalInfo::Wolf, .offset = {15.0f, 0.0f}, .living = true}},
+	});
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -7683,6 +7720,7 @@ std::vector<Scenario> Build()
 	AddTownMiracleScenarios(all);
 	AddCreatureExplorationScenarios(all);
 	AddScriptTaskRelease(all);
+	AddSwayAndFrightScenarios(all);
 	return all;
 }
 

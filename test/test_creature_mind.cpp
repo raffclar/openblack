@@ -8,9 +8,11 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <numbers>
 #include <optional>
 #include <vector>
@@ -101,6 +103,16 @@ TEST(CreatureDesires, TheSigmoidSteps)
 	EXPECT_FLOAT_EQ(creature_desires::Sigmoid(0.5f, 0.5f), 0.5f);
 	EXPECT_FLOAT_EQ(creature_desires::Sigmoid(0.0f, 1.0f), 1.0f);
 	EXPECT_LT(creature_desires::Sigmoid(0.9f, 0.1f), 1e-6f);
+}
+
+TEST(CreatureDesires, TheSigmoidStepsHaveTheBitsOfTheGameTable)
+{
+	// These values read the steps 16, 24 and 32 of the table
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_desires::Sigmoid(0.5f, 0.29f)), 0x3C868D9Bu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_desires::Sigmoid(0.0f, 0.18f)), 0x3F7BCB93u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(creature_desires::SigmoidStep(-0.6f, 0.0f)), 0x3F7FFFB2u);
+	// The step without the cut off still gives 0 for a threshold of 1
+	EXPECT_EQ(creature_desires::SigmoidStep(1.0f, 0.5f), 0.0f);
 }
 
 TEST(CreatureDesires, ADesireGrowsByItsDriveOverItsIncreaseTime)

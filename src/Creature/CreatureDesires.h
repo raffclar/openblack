@@ -118,7 +118,7 @@ constexpr uint32_t k_MissedFriends = 58;
 /// The game's sigmoid of how far a source's value is past its threshold, 0 to 1 by a table of 41 steps; 0 for a value
 /// of 0 or less, or a threshold of 1
 [[nodiscard]] float Sigmoid(float threshold, float value);
-/// The same sigmoid without the cut off: a value of 0 still reads its step of the table
+/// The same sigmoid without the cut off for a value of 0 or less. A threshold of 1 still gives 0
 [[nodiscard]] float SigmoidStep(float threshold, float value);
 
 struct Source
