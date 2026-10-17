@@ -44,7 +44,9 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureBodyFile.h"
@@ -334,8 +336,15 @@ gamesave::CreatureChunk Capture(ecs::Registry& registry, entt::entity entity, ui
 
 /// The mind file that a load gives the creature: the profile's file for the local player's creature, the saved game's
 /// file for any other creature
-std::shared_ptr<const creaturemind::MindFileData> MindToLoad(const gamesave::CreatureRecord& record,
-                                                             const std::filesystem::path& mindFolder)
+struct MindForLoad
+{
+	/// The file opened and is not empty, so the load puts the creature back on the map
+	bool resolves {false};
+	/// The mind that the file holds, when openblack could read it
+	std::shared_ptr<const creaturemind::MindFileData> mind;
+};
+
+MindForLoad MindToLoad(const gamesave::CreatureRecord& record, const std::filesystem::path& mindFolder)
 {
 	std::optional<std::filesystem::path> path;
 	if (save_state::PlayerFromNumber(record.owner) == LocalPlayer())
@@ -349,22 +358,20 @@ std::shared_ptr<const creaturemind::MindFileData> MindToLoad(const gamesave::Cre
 	{
 		path = mindFolder / gamesave::SavedCreatureFileName(record.index);
 	}
-	if (!path.has_value())
+	const auto bytes = path.has_value() ? ReadFile(*path) : std::nullopt;
+	MindForLoad found {.resolves = save_state::ResolvesOnLoad(bytes.has_value() ? std::optional(bytes->size()) : std::nullopt)};
+	if (!found.resolves)
 	{
-		return nullptr;
-	}
-	const auto bytes = ReadFile(*path);
-	if (!bytes.has_value() || bytes->empty())
-	{
-		return nullptr;
+		return found;
 	}
 	auto mind = std::make_shared<creaturemind::MindFileData>();
 	if (creaturemind::Read(*bytes, *mind) != creaturemind::MindResult::Success)
 	{
 		SPDLOG_LOGGER_WARN(Log(), "The mind file {} could not be read", path->generic_string());
-		return nullptr;
+		return found;
 	}
-	return mind;
+	found.mind = std::move(mind);
+	return found;
 }
 
 /// Puts the creature back as the save keeps it: the values of its record, then the mind of its mind file over them,
@@ -447,15 +454,19 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Creat
 	body.alignment = record.alignment;
 	body.autoScale = record.autoScale != 0 ? std::optional(record.autoScaleShare) : std::nullopt;
 
-	// The mind file's physique and mind come over the record's values. Without a mind file the creature keeps the
-	// record's values and its own mind.
-	const auto mind = MindToLoad(record, mindFolder);
-	if (mind == nullptr)
+	// The mind file's physique and mind come over the record's values. When the mind file is missing or empty, the
+	// game does not put the creature back on the map, and the creature is lost from the land.
+	const auto found = MindToLoad(record, mindFolder);
+	if (!found.resolves)
 	{
-		SPDLOG_LOGGER_WARN(Log(), "The creature {} has no mind file to load", entt::to_integral(entity));
+		SPDLOG_LOGGER_WARN(Log(), "The creature {} has no mind file to load, so it is not put back on the map",
+		                   entt::to_integral(entity));
+		registry.Remove<MapCellResident, MapCellMover>(entity);
+		registry.AssignOrReplace<HiddenByState>(entity);
 	}
-	else
+	else if (found.mind != nullptr)
 	{
+		const auto& mind = found.mind;
 		if (const auto kept = creature_mind_body::FromMindFile(*mind); kept.has_value())
 		{
 			ecs::creature_body_file::Apply(registry, entity, *kept);

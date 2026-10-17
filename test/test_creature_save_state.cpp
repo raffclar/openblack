@@ -106,3 +106,11 @@ TEST(CreatureSaveState, ALoadStartsTheCurrentStepAgain)
 	EXPECT_EQ(agenda.state, 0u);
 	EXPECT_EQ(agenda.word20, 1u);
 }
+
+TEST(CreatureSaveState, OnlyAMindFileThatOpensAndIsNotEmptyPutsTheCreatureBackOnTheMap)
+{
+	EXPECT_FALSE(ResolvesOnLoad(std::nullopt));
+	EXPECT_FALSE(ResolvesOnLoad(0));
+	EXPECT_TRUE(ResolvesOnLoad(1));
+	EXPECT_TRUE(ResolvesOnLoad(4096));
+}
