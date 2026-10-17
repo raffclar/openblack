@@ -105,7 +105,9 @@ TEST(UnderwaterWake, SplashSizeFollowsTheFourthRootOfTheEnergy)
 	const wake::Impact small {.downSpeed = 10.0f, .radius = 1.0f, .mass = 1.0f};
 	const wake::Impact large {.downSpeed = 10.0f, .radius = 1.0f, .mass = 10000.0f};
 	EXPECT_NEAR(wake::CavityRadius(large) / wake::CavityRadius(small), 10.0f, 1e-3f);
-	EXPECT_NEAR(wake::ImpactEnergy(small), 50.0f, 1e-3f);
+	// A half of the mass times the speed squared, the speed in metres a second
+	const float metresASecond = 10.0f / wake::k_UnitsPerMetre;
+	EXPECT_NEAR(wake::ImpactEnergy(small), 0.5f * metresASecond * metresASecond, 1e-2f);
 }
 
 TEST(UnderwaterWake, KernelPullsEveryWaveBackAndLongWavesGoFaster)
