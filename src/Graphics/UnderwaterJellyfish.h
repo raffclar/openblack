@@ -28,7 +28,7 @@ namespace openblack::graphics::underwater::jellyfish
 {
 
 /// The side of a cell of the grid, in units: one jellyfish at most in each cell
-inline constexpr float k_Cell = 18.0f;
+inline constexpr float k_Cell = 12.0f;
 /// How far from the eye they are, in units; they fade out over the last part of it
 inline constexpr float k_Range = 170.0f;
 /// The share of the range over which they fade out

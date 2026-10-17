@@ -632,10 +632,11 @@ void Renderer::DrawJellyfish() const
 	program->SetUniformValue("u_uwParams", &frame.params);
 	program->SetUniformValue("u_uwLightColour", &frame.lightColour);
 	program->SetUniformValue("u_uwEye", &frame.eye);
-	// Their light adds to the scene, and they write their depth, so that the water's fog over them is from their own
-	// distance and not from the sea bed's behind them
-	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ADD |
-	               BGFX_STATE_MSAA);
+	program->SetUniformValue("u_uwScatter", &frame.scatter);
+	// Their light adds to the scene over what they cover, and they write their depth, so that the water's fog over them
+	// is from their own distance and not from the sea bed's behind them
+	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER |
+	               BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA) | BGFX_STATE_MSAA);
 	program->Submit(static_cast<bgfx::ViewId>(RenderPass::Translucent));
 }
 
