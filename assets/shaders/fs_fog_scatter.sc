@@ -164,7 +164,7 @@ void main()
 	float sigma = (haze + groundFog + lowMist + pockets) * step(-0.5f, overGround) * smoothstep(-0.5f, 0.5f, y);
 
 	// The light of the sun or the moon through the shadows
-	float visibility = SunVisibilityAbove(p) * CloudShadeAt(p.xz);
+	float visibility = SunVisibilityAbove(p) * CloudShadeInAir(p, u_fogLight.xyz, u_fogAmbient.w);
 	if (u_fogShadows.x > 0.5f)
 	{
 		float nearMap = FogShadow0(u_fogShadow0, p);

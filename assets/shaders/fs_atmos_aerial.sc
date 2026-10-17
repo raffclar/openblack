@@ -58,7 +58,7 @@ void main()
 		float lit = 1.0f;
 		if (u_atmosAerial.x > 0.5f)
 		{
-			lit = SunVisibilityAbove(p) * CloudShadeAt(p.xz);
+			lit = SunVisibilityAbove(p) * CloudShadeInAir(p, normalize(u_atmosGameLight.xyz), sea);
 		}
 		float scale = AtmosHazeScaleAt(altitude);
 		vec3 scattered = AtmosScatterAt(altitude, u_atmosLight.y, cosAngle, lit) * scale;
