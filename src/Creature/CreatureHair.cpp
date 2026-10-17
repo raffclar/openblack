@@ -19,6 +19,7 @@
 #include "Common/ModelInverseSquareRoot.h"
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
+#include "Common/X87Matrix.h"
 #include "Common/X87Vector.h"
 
 using namespace openblack;
@@ -34,8 +35,6 @@ constexpr float k_HeadScalePerSize = 0.5f;
 constexpr float k_MaxHeadScaleSize = 2.0f;
 /// The springs' stiffness is given in thousandths
 constexpr float k_StiffnessScale = 1000.0f;
-/// The 3D engine keeps the determinant of a matrix it inverts at least this far from zero
-constexpr float k_SmallestDeterminant = 1e-10f;
 
 /// The value made no faster than the most, its squares added in the given order
 template <x87::SumOrder Order>
@@ -53,33 +52,6 @@ glm::vec3 Capped(const glm::vec3& value)
 glm::vec3 Unit(const glm::vec3& value)
 {
 	return value * gutils::ModelInverseSquareRoot(x87::Dot<x87::SumOrder::Xyz>(value, value));
-}
-
-/// The inverse of a frame's turn, by the 3D engine's steps. The frame's columns are its rows in the game, and so are
-/// the inverse's.
-glm::mat3 Inverse(const glm::mat3& frame)
-{
-	const auto m = [&frame](int row, int column) { return frame[row][column]; };
-	const float first = (m(2, 2) * m(1, 1)) - (m(2, 1) * m(1, 2));
-	const float across = (m(0, 2) * m(2, 1)) - (m(2, 2) * m(0, 1));
-	const float down = (m(1, 2) * m(0, 1)) - (m(0, 2) * m(1, 1));
-	float determinant = ((across * m(1, 0)) + (down * m(2, 0))) + (first * m(0, 0));
-	if (std::abs(determinant) < k_SmallestDeterminant)
-	{
-		determinant = determinant < 0.0f ? -k_SmallestDeterminant : k_SmallestDeterminant;
-	}
-	const float share = 1.0f / determinant;
-	glm::mat3 inverse;
-	inverse[0][0] = first * share;
-	inverse[1][0] = ((m(2, 0) * m(1, 2)) - (m(2, 2) * m(1, 0))) * share;
-	inverse[2][0] = ((m(2, 1) * m(1, 0)) - (m(2, 0) * m(1, 1))) * share;
-	inverse[0][1] = across * share;
-	inverse[1][1] = ((m(2, 2) * m(0, 0)) - (m(2, 0) * m(0, 2))) * share;
-	inverse[2][1] = ((m(2, 0) * m(0, 1)) - (m(0, 0) * m(2, 1))) * share;
-	inverse[0][2] = down * share;
-	inverse[1][2] = ((m(0, 2) * m(1, 0)) - (m(0, 0) * m(1, 2))) * share;
-	inverse[2][2] = ((m(0, 0) * m(1, 1)) - (m(1, 0) * m(0, 1))) * share;
-	return inverse;
 }
 
 /// A row vector times a matrix whose columns are the game's rows, with the products added first, third, second for the
@@ -158,7 +130,7 @@ glm::vec3 creature_hair::GrowthDirection(const glm::vec3& inwardNormal, const gl
 	// multiplies a row vector by the matrix. The columns here are the rows of the game's turn.
 	const auto rows = x87::GameTurnYxz(angles.y, angles.x, angles.z);
 	const glm::mat3 turn(rows[0], rows[1], rows[2]);
-	const auto inFrame = Times(-inwardNormal, Inverse(frame));
+	const auto inFrame = Times(-inwardNormal, x87::InverseTurn(frame));
 	return Unit(Times(Times(inFrame, turn), frame));
 }
 

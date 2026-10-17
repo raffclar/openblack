@@ -180,7 +180,7 @@ TEST(OracleGlmOrder4, AStepOfATurnedHairStrand)
 			const auto& m = frames.at(b);
 			const glm::mat4 bone {glm::vec4(m[0], 0.0f), glm::vec4(m[1], 0.0f), glm::vec4(m[2], 0.0f),
 			                      glm::vec4(places.at(b), 1.0f)};
-			return creature::PlaceByBone(bone, row.Indexed("t", 3 * b), creature::k_TurnedHairOrder.at(b));
+			return x87::TransformPoint(bone, row.Indexed("t", 3 * b), creature::k_TurnedHairOrder.at(b));
 		};
 		const auto point = creature_eyes::PointOnTriangle(placed(0), placed(1), placed(2), row.F("s"), row.F("t"));
 		const auto alignment = row.F("alignment");

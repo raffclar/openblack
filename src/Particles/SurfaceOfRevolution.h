@@ -101,8 +101,8 @@ struct Mesh
 /// The surface in its own frame: numV rings of numU points, the first ring at the middle, each shining in the specular
 /// colour where it is dark when the shape asks
 [[nodiscard]] Mesh Build(const Shape& shape, Argb specularColour);
-/// The normals of a surface to be lit: each point's is the sum of the faces' it is on, made unit only when it is on more
-/// than one
+/// The normals of a surface to be lit: each point's is the sum of the unit normals of the faces it is on, made unit only
+/// when it is on more than one. A face of no area adds a zero normal, but it counts.
 void ComputeNormals(Mesh& mesh);
 
 /// The surface swaying: each ring turned about the vertical by its share of the way out times maxTwist times sway, and

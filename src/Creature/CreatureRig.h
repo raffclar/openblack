@@ -23,6 +23,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/SkeletalAnimation.h"
+#include "Common/X87Matrix.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureHair.h"
@@ -178,7 +179,7 @@ struct CreatureRig
 /// The order in which a vertex's three products with the axes of its bone are added, for each vertex of a triangle and
 /// each world axis: three axis indices (0 x, 1 y, 2 z) each. The game adds them in different orders in different places,
 /// and the order changes the last bit of the sum.
-using PlacingOrder = std::array<std::array<std::array<uint8_t, 3>, 3>, 3>;
+using PlacingOrder = std::array<x87::AxisOrders, 3>;
 
 /// The order for a point on the skin: the eyes, the hair that is not turned
 inline constexpr PlacingOrder k_SkinPointOrder {{
@@ -193,11 +194,6 @@ inline constexpr PlacingOrder k_TurnedHairOrder {{
     {{{0, 2, 1}, {0, 2, 1}, {0, 2, 1}}},
     {{{0, 2, 1}, {0, 2, 1}, {0, 2, 1}}},
 }};
-
-/// A vertex placed by the world matrix of its bone: for each axis the three products are added in the order given,
-/// then the bone's place is added
-[[nodiscard]] glm::vec3 PlaceByBone(const glm::mat4& bone, const glm::vec3& vertex,
-                                    const std::array<std::array<uint8_t, 3>, 3>& order);
 
 /// A triangle of the body as it is drawn this frame, in the world: each vertex blended between the meshes as the body
 /// is, then placed by its bone's posed matrix and the creature's placement, with the sums in the given order. vertices

@@ -19,6 +19,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack::particles;
 
@@ -115,6 +116,16 @@ float maths::ChakraFade(float age, float ageMax, float ageZero)
 		return 0.0f;
 	}
 	return std::min(t, 1.0f);
+}
+
+glm::vec3 maths::BurstVelocity(glm::vec3 direction, float speed, float scaleY, bool upwards)
+{
+	if (upwards)
+	{
+		direction.y = std::abs(direction.y);
+	}
+	direction = x87::Scaled<x87::SumOrder::Zxy>(direction);
+	return {direction.x * speed, (direction.y * speed) * scaleY, direction.z * speed};
 }
 
 int maths::SoundSizeFromRadius(float radius, float small, float medium)
