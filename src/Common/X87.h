@@ -207,6 +207,15 @@ struct Exact
 	return std::atan2(y, x);
 }
 
+/// The C library's arccosine of the game, kept wide. The library keeps the FPU at 24-bit precision, so 1 + x, 1 - x,
+/// their product and its square root each round to a float. Then the FPU's arctangent of the root over x is wide. A
+/// value more than 1 or less than -1 gives not a number.
+[[nodiscard]] inline double Acos(float x)
+{
+	const float root = std::sqrt((1.0f + x) * (1.0f - x));
+	return Atan2(root, x);
+}
+
 namespace detail
 {
 

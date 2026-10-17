@@ -20,13 +20,13 @@
 
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
-#include <glm/gtx/rotate_vector.hpp>
 
 #include "ParticleClassRegistry.h"
 #include "ParticleMiracleMaths.h"
 #include "ParticleShields.h"
 #include "ParticleSounds.h"
 
+using namespace openblack;
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
 
@@ -58,30 +58,6 @@ constexpr size_t k_AtomsWithoutPoints = 5;
 glm::vec3 LastMove(const Atom& atom)
 {
 	return atom.steps >= 2 ? atom.current.position - atom.previous.position : glm::vec3(0.0f);
-}
-
-/// The rotation that turns the vertical towards a point from the centre
-glm::mat3 OrientAlong(const glm::vec3& p, const glm::mat3& start)
-{
-	const float yaw = std::atan2(p.z, p.x);
-	const float colatitude = std::numbers::pi_v<float> / 2.0f - std::atan2(p.y, std::sqrt(p.z * p.z + p.x * p.x));
-	glm::mat3 m = start;
-	const float cc = std::cos(colatitude);
-	const float sc = std::sin(colatitude);
-	const float cy = std::cos(yaw);
-	const float sy = std::sin(yaw);
-	for (int i = 0; i < 3; ++i)
-	{
-		const float x = m[i].x;
-		const float y = m[i].y;
-		m[i].x = cc * x + sc * y;
-		m[i].y = cc * y - sc * x;
-		const float x2 = m[i].x;
-		const float z = m[i].z;
-		m[i].x = cy * x2 - sy * z;
-		m[i].z = cy * z + sy * x2;
-	}
-	return m;
 }
 
 /// The first time its collection runs, the shield's sphere at the parent atom (or the origin), as big as the radius
@@ -236,7 +212,7 @@ public:
 		const float scale =
 		    ((std::sin(phase - k_SparkPulseSpeed * t) + 1.0f) * k_SparkPulse + k_SparkPulseBase) * k_SparkScale * r;
 		const float alpha = std::clamp((1.0f - t / sparkLife) * k_SparkAlphaScale, 0.0f, 255.0f);
-		const auto m = OrientAlong(spark.position, glm::mat3(1.0f));
+		const auto m = maths::OrientAlong(spark.position, glm::mat3(1.0f));
 		const float pi = std::numbers::pi_v<float>;
 		float index = n;
 		for (auto& joint : arc.atoms)
@@ -287,14 +263,7 @@ public:
 			data.started = true;
 		}
 		const float fade = std::clamp(effect.AtomAge(atom) / timeToFade, 0.0f, 1.0f);
-		const float angle = data.a.x * (1.0f - fade) * effect.GetDt();
-		const float c = std::cos(angle);
-		const float s = std::sin(angle);
-		auto& m = atom.rotation;
-		const auto r0 = m[0];
-		const auto r2 = m[2];
-		m[0] = c * r0 + s * r2;
-		m[2] = c * r2 - s * r0;
+		atom.rotation = maths::SpinAboutVertical(atom.rotation, maths::FadedSpinAngle(data.a.x, fade, effect.GetDt()));
 		return true;
 	}
 
@@ -326,7 +295,7 @@ public:
 		if (!data.started)
 		{
 			data.started = true;
-			m = OrientAlong(p, m);
+			m = maths::OrientAlong(p, m);
 		}
 		else
 		{
@@ -334,17 +303,7 @@ public:
 			const auto moved = glm::abs(last - p);
 			if (moved.x > k_StillMove || moved.y > k_StillMove || moved.z > k_StillMove)
 			{
-				const float lengths = glm::length(last) * glm::length(p);
-				const auto axis = glm::cross(last, p);
-				if (lengths > 0.0f && glm::dot(axis, axis) > 0.0f)
-				{
-					const float angle = std::acos(std::clamp(glm::dot(last, p) / lengths, -1.0f, 1.0f));
-					const auto n = glm::normalize(axis);
-					for (int i = 0; i < 3; ++i)
-					{
-						m[i] = glm::rotate(m[i], angle, n);
-					}
-				}
+				m = maths::TurnWithMove(m, last, p);
 			}
 		}
 		atom.position = p;

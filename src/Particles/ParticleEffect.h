@@ -855,8 +855,12 @@ public:
 	/// whose group is a hierarchy, each with its position, rotation and scale; elsewhere the world.
 	[[nodiscard]] glm::vec3 LocalToGlobal(const Collection& collection, const glm::vec3& local) const;
 	[[nodiscard]] glm::vec3 GlobalToLocal(const Collection& collection, const glm::vec3& global) const;
+	/// The frames of a collection's ancestor atoms whose groups are hierarchies, nearest first
+	[[nodiscard]] std::vector<glm::mat4> HierarchyFrames(const Collection& collection) const;
 	/// The scale of an atom's frame: its two scales, the vertical also stretched
 	[[nodiscard]] static glm::vec3 FrameScale(const Atom& atom);
+	/// An atom's frame as one matrix: its rotation, each axis scaled, and its position
+	[[nodiscard]] static glm::mat4 FrameMatrix(const Atom& atom);
 	[[nodiscard]] float AtomAge(const Atom& atom) const { return _age - atom.birth; }
 	[[nodiscard]] float CollectionAge(const Collection& collection) const { return _age - collection.birth; }
 	[[nodiscard]] bool IsHierarchy(int group) const;

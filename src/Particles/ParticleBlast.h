@@ -88,7 +88,7 @@ struct ExplosionRules
 [[nodiscard]] glm::vec3 FragmentOrigin(const glm::vec3& centre);
 /// A piece's velocity: out from the origin at the speed, plus a random part of it, less of it upwards
 [[nodiscard]] glm::vec3 FragmentVelocity(const glm::vec3& piece, const glm::vec3& origin, float speed, float randomFactor,
-                                         const glm::vec3& randomUnit);
+                                         const glm::vec3& random);
 
 /// How far along a move an atom is at an age, none outside its time; it reaches the end on the step that takes it past.
 /// Moving smoothly it eases in and out.
