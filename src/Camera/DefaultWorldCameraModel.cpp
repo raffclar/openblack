@@ -1232,8 +1232,9 @@ CameraModel::HandCues DefaultWorldCameraModel::GetHandCues() const
 
 void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 {
-	// A flight ending outside the fence ends where the line from there to what it looks at meets the fence
-	if (Locator::cameraZoneSystem::has_value())
+	// A flight ending outside the fence ends where the line from there to what it looks at meets the fence. EXPERIMENT
+	// (not for merge): with the map's boundary off, it ends where it was sent.
+	if (Locator::cameraZoneSystem::has_value() && !underwater_boundary::Off())
 	{
 		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
 		origin = camera_zones::FlightOriginInsideFence(zones.fence, zones.fenceOn, origin, focus);
@@ -1244,7 +1245,7 @@ void DefaultWorldCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus)
 
 void DefaultWorldCameraModel::FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh)
 {
-	if (Locator::cameraZoneSystem::has_value())
+	if (Locator::cameraZoneSystem::has_value() && !underwater_boundary::Off())
 	{
 		const auto& zones = Locator::cameraZoneSystem::value().GetZones();
 		origin = camera_zones::FlightOriginInsideFence(zones.fence, zones.fenceOn, origin, focus);
