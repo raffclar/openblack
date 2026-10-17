@@ -19,6 +19,8 @@
 #include <array>
 #include <numbers>
 #include <optional>
+#include <utility>
+#include <vector>
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
@@ -27,6 +29,7 @@
 
 #include "3D/L3DMesh.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Mesh.h"
@@ -34,12 +37,14 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "Graphics/Underwater.h"
 #include "Locator.h"
+#include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack::ecs::systems;
@@ -75,6 +80,47 @@ WorldBox BoxIn(const glm::mat4& model, glm::vec3 low, glm::vec3 high)
 		box.high = glm::max(box.high, at);
 	}
 	return box;
+}
+/// The mass of a thing that goes into the water: its body's mass in the physics, else a mass from the size of its box,
+/// at half the density of water
+std::vector<std::pair<entt::entity, glm::vec3>> NearThings(glm::vec3 focus, float reach)
+{
+	std::vector<std::pair<entt::entity, glm::vec3>> near;
+	auto& registry = openblack::Locator::entitiesRegistry::value();
+	const auto take = [&](entt::entity entity, const openblack::ecs::components::Transform& transform) {
+		if (glm::distance(glm::vec2(transform.position.x, transform.position.z), glm::vec2(focus.x, focus.z)) < reach)
+		{
+			near.emplace_back(entity, transform.position);
+		}
+	};
+	registry.Each<const openblack::ecs::components::MobileObject, const openblack::ecs::components::Transform>(
+	    [&](entt::entity entity, const openblack::ecs::components::MobileObject& /*mobile*/,
+	        const openblack::ecs::components::Transform& transform) { take(entity, transform); });
+	registry.Each<const openblack::ecs::components::MobileStatic, const openblack::ecs::components::Transform>(
+	    [&](entt::entity entity, const openblack::ecs::components::MobileStatic& /*mobile*/,
+	        const openblack::ecs::components::Transform& transform) { take(entity, transform); });
+	registry.Each<const openblack::ecs::components::Villager, const openblack::ecs::components::Transform>(
+	    [&](entt::entity entity, const openblack::ecs::components::Villager& /*villager*/,
+	        const openblack::ecs::components::Transform& transform) { take(entity, transform); });
+	registry.Each<const openblack::ecs::components::Animal, const openblack::ecs::components::Transform>(
+	    [&](entt::entity entity, const openblack::ecs::components::Animal& /*animal*/,
+	        const openblack::ecs::components::Transform& transform) { take(entity, transform); });
+	return near;
+}
+
+float MassOf(entt::entity entity, glm::vec3 low, glm::vec3 high)
+{
+	if (openblack::Locator::dynamicsSystem::has_value())
+	{
+		if (const auto* entry = openblack::Locator::dynamicsSystem::value().Find(entity);
+		    entry != nullptr && entry->body != nullptr)
+		{
+			return entry->body->Mass();
+		}
+	}
+	constexpr float k_HalfWaterDensity = 500.0f;
+	const glm::vec3 metres = (high - low) / wake::k_UnitsPerMetre;
+	return metres.x * metres.y * metres.z * k_HalfWaterDensity / wake::k_KilogramsPerMass;
 }
 } // namespace
 
@@ -253,17 +299,22 @@ void WaterWakeSystem::Follow(const Candidate& candidate, float frameSeconds, flo
 	if (before > wasWater && box.low.y <= water && fall > 0.0f)
 	{
 		const glm::vec2 at {track.position.x, track.position.z};
-		if (const auto splash = wake::SplashFor(fall, radius); splash.has_value())
+		const wake::Impact impact {.downSpeed = fall,
+		                           .acrossSpeed = glm::length(glm::vec2(track.velocity.x, track.velocity.z)),
+		                           .radius = radius,
+		                           .mass = MassOf(candidate.entity, box.low, box.high)};
+		const float ringRadius = std::max(radius, 0.1f);
+		if (const auto splash = wake::SplashFor(impact); splash.has_value())
 		{
 			if (_splashes.size() < wake::k_MostSplashes)
 			{
 				_splashes.push_back({.position = {at.x, water, at.y}, .start = seconds, .splash = *splash});
 			}
-			_rings.push_back({.position = at, .radius = std::max(radius, 0.4f), .depth = splash->ringDepth, .foam = 1.0f});
+			_rings.push_back({.position = at, .radius = ringRadius, .depth = splash->ringDepth, .foam = splash->foam});
 		}
 		else
 		{
-			_rings.push_back({.position = at, .radius = std::max(radius, 0.4f), .depth = wake::RingDepthFor(fall, radius)});
+			_rings.push_back({.position = at, .radius = ringRadius, .depth = wake::RingDepthFor(impact)});
 		}
 	}
 
@@ -350,14 +401,7 @@ void WaterWakeSystem::DropDebugThings()
 	}
 	const auto focus = Locator::camera::value().GetFocus();
 	const float seaLevel = Locator::underwaterSystem::value().GetSeaLevel();
-	std::vector<std::pair<entt::entity, glm::vec3>> near;
-	Locator::entitiesRegistry::value().Each<const components::MobileObject, const components::Transform>(
-	    [&](entt::entity entity, const components::MobileObject& /*mobile*/, const components::Transform& transform) {
-		    if (glm::distance(glm::vec2(transform.position.x, transform.position.z), glm::vec2(focus.x, focus.z)) < 80.0f)
-		    {
-			    near.emplace_back(entity, transform.position);
-		    }
-	    });
+	const auto near = NearThings(focus, 80.0f);
 	// Each thing is thrown up and over to a point near the focus, so that it falls into the water there from high
 	constexpr float k_Flight = 2.2f;
 	constexpr float k_G = 9.8f;
@@ -374,6 +418,29 @@ void WaterWakeSystem::DropDebugThings()
 		    near[i].first, ecs::systems::PhysicsStart {.velocity = velocity, .spin = {1.0f, 0.5f, 0.0f}});
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: threw {} things into the water", near.size());
+}
+
+void WaterWakeSystem::DropDebugRow(float height)
+{
+	if (!Locator::dynamicsSystem::has_value() || !Locator::camera::has_value() || !Locator::underwaterSystem::has_value())
+	{
+		return;
+	}
+	const auto focus = Locator::camera::value().GetFocus();
+	const float seaLevel = Locator::underwaterSystem::value().GetSeaLevel();
+	auto near = NearThings(focus, 40.0f);
+	std::ranges::sort(near, {}, [](const auto& thing) { return thing.first; });
+	// In a row along x, 6 units apart, with the focus in the middle
+	constexpr float k_Spacing = 6.0f;
+	auto& registry = Locator::entitiesRegistry::value();
+	const float first = -0.5f * k_Spacing * static_cast<float>(near.empty() ? 0 : near.size() - 1);
+	for (size_t i = 0; i < near.size(); ++i)
+	{
+		auto& transform = registry.Get<components::Transform>(near[i].first);
+		transform.position = {focus.x + first + k_Spacing * static_cast<float>(i), seaLevel + height, focus.z};
+		Locator::dynamicsSystem::value().InitialisePhysics(near[i].first, ecs::systems::PhysicsStart {});
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: dropped {} things from {} units", near.size(), height);
 }
 
 void WaterWakeSystem::PlayDebugBoat()

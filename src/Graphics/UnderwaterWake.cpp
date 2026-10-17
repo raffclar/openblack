@@ -49,35 +49,63 @@ Write WriteFor(const Mover& mover)
 	return {.depth = depth, .foam = foam};
 }
 
-std::optional<Splash> SplashFor(float fallSpeed, float radius)
+float ImpactEnergy(const Impact& impact)
 {
-	if (fallSpeed < k_LeastSplashSpeed || radius <= 0.0f)
+	constexpr float k_AcrossShare = 0.5f;
+	const float down = std::max(impact.downSpeed, 0.0f) / k_UnitsPerMetre;
+	const float across = k_AcrossShare * std::max(impact.acrossSpeed, 0.0f) / k_UnitsPerMetre;
+	const float kilograms = std::max(impact.mass, 0.0f) * k_KilogramsPerMass;
+	return 0.5f * kilograms * (down * down + across * across);
+}
+
+float CavityRadius(const Impact& impact)
+{
+	// The hole of an impact in water: about 0.6 of the fourth root of the energy over the weight of a cubic metre of water
+	constexpr float k_WaterWeight = 1000.0f * 9.81f;
+	constexpr float k_HoleShare = 0.6f;
+	return k_HoleShare * std::pow(ImpactEnergy(impact) / k_WaterWeight, 0.25f) * k_UnitsPerMetre;
+}
+
+std::optional<Splash> SplashFor(const Impact& impact)
+{
+	const float energy = ImpactEnergy(impact);
+	if (impact.downSpeed < k_LeastSplashSpeed || impact.radius <= 0.0f || energy < k_LeastSplashEnergy)
 	{
 		return std::nullopt;
 	}
-	constexpr float k_G = 9.8f;
-	// The crown takes a part of the height that the thing fell from, and a wide thing pushes up more water
-	const float crown = std::min(0.35f * fallSpeed * fallSpeed / (2.0f * k_G) + 0.3f * radius, k_HighestCrown);
-	const auto drops = static_cast<uint32_t>(std::clamp(std::round(12.0f + 6.0f * radius * fallSpeed),
-	                                                    static_cast<float>(k_FewestDrops), static_cast<float>(k_MostDrops)));
-	const float dropSpeed = 1.0f + 0.5f * fallSpeed;
+	constexpr float k_G = 9.81f;
+	const float hole = CavityRadius(impact);
+	// The crown rises to about two times the radius of the hole. It starts at the rim of the hole or of the thing.
+	const float crown = std::min(2.2f * hole, k_HighestCrown);
+	const float crownRadius = std::max(1.1f * impact.radius, 1.4f * hole);
+	// The number of drops grows with the fourth root of the energy. A thing that skims throws more spray.
+	const float skim = impact.acrossSpeed / (impact.acrossSpeed + impact.downSpeed + 1e-3f);
+	const float dropCount = 3.0f * std::pow(energy, 0.25f) * (1.0f + 0.5f * skim);
+	const auto drops = static_cast<uint32_t>(std::clamp(std::round(dropCount), 2.0f, static_cast<float>(k_MostDrops)));
+	// The drops leave the rim fast enough to go a little higher than the crown
+	const float dropSpeed = 1.1f * std::sqrt(2.0f * k_G * crown);
 	// The drops go up at about two thirds of their speed: they show until they fall back, with half a second more
 	const float seconds = 2.0f * dropSpeed * 0.7f / k_G + 0.5f;
+	// A hole of half a metre or more leaves all the foam
+	const float share = std::clamp(hole / (0.5f * k_UnitsPerMetre), 0.0f, 1.0f);
 	return Splash {.crownHeight = crown,
-	               .crownRadius = radius * (1.2f + 0.08f * fallSpeed),
+	               .crownRadius = crownRadius,
 	               .drops = drops,
 	               .dropSpeed = dropSpeed,
-	               .ringDepth = RingDepthFor(fallSpeed, radius),
-	               .seconds = seconds};
+	               .ringDepth = RingDepthFor(impact),
+	               .seconds = seconds,
+	               .foam = std::max(share, 0.15f)};
 }
 
-float RingDepthFor(float fallSpeed, float radius)
+float RingDepthFor(const Impact& impact)
 {
-	if (fallSpeed <= 0.0f || radius <= 0.0f)
+	if (impact.downSpeed <= 0.0f || impact.radius <= 0.0f)
 	{
 		return 0.0f;
 	}
-	return std::min(0.06f * radius * fallSpeed, k_DeepestRing);
+	// A slow thing also pushes the water aside by its own size
+	const float pushed = 0.05f * impact.radius * std::min(impact.downSpeed, k_LeastSplashSpeed);
+	return std::min(std::max(0.5f * CavityRadius(impact), pushed), k_DeepestRing);
 }
 
 Kernel WaveKernel()

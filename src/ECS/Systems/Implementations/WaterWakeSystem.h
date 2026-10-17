@@ -35,6 +35,7 @@ public:
 	void Update(std::chrono::milliseconds frameRealTime) override;
 	[[nodiscard]] Frame GetFrame() const override;
 	void DropDebugThings() override;
+	void DropDebugRow(float height) override;
 	void PlayDebugBoat() override;
 
 private:

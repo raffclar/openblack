@@ -908,11 +908,18 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			{
 				auto& underwater = Locator::underwaterSystem::value();
 				const bool shift = (event.key.keysym.mod & KMOD_SHIFT) != 0;
-				// Shift, alt and F10 throw the mobile objects near the focus into the water; shift, control and F10
+				// Shift, alt and F10 throw the things near the focus into the water; shift, control and F10
 				// play the explorers' boat film, for the wakes, the splashes and the hulls
-				if (shift && (event.key.keysym.mod & KMOD_ALT) != 0 && Locator::waterWakeSystem::has_value())
+				const bool control = (event.key.keysym.mod & KMOD_CTRL) != 0;
+				if (shift && !control && (event.key.keysym.mod & KMOD_ALT) != 0 && Locator::waterWakeSystem::has_value())
 				{
 					Locator::waterWakeSystem::value().DropDebugThings();
+				}
+				else if ((event.key.keysym.mod & KMOD_CTRL) != 0 && (event.key.keysym.mod & KMOD_ALT) != 0 &&
+				         Locator::waterWakeSystem::has_value())
+				{
+					// Control, alt and F10 drop the things near the focus in a row from 15 units; with shift, from 3
+					Locator::waterWakeSystem::value().DropDebugRow(shift ? 3.0f : 15.0f);
 				}
 				else if (shift && (event.key.keysym.mod & KMOD_CTRL) != 0 && Locator::waterWakeSystem::has_value())
 				{
