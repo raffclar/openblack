@@ -86,7 +86,11 @@ private:
 		uint32_t vertexCount;
 	};
 
+	/// The render state of a draw that blends in a way: it writes colour and alpha and does not test depth
+	[[nodiscard]] static uint64_t StateOf(Blend blend) noexcept;
+
 	graphics::RenderPass _view;
+	bool _warmedUp {false};
 	glm::u16vec2 _resolution {0, 0};
 	Blend _blend {Blend::Alpha};
 	glm::vec2 _origin {0.0f, 0.0f};

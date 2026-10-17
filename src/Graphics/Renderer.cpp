@@ -2759,6 +2759,19 @@ void Renderer::DrawVortexDepthWalls(const DrawSceneDesc& desc, RenderPass viewId
 		submitDesc.matrixCount = 1;
 		DrawMesh(walls, submitDesc, std::numeric_limits<uint8_t>::max());
 	});
+	// A warm-up draws the walls at no size, so that the first vortex does not make their pipeline in a frame of the game
+	if (_warmingUp)
+	{
+		const glm::mat4 hidden(0.0f);
+		L3DMeshSubmitDesc submitDesc = {};
+		submitDesc.viewId = viewId;
+		submitDesc.program = _shaderManager->GetShader("Object");
+		submitDesc.state = BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA;
+		submitDesc.useMaterialCulling = true;
+		submitDesc.modelMatrices = &hidden;
+		submitDesc.matrixCount = 1;
+		DrawMesh(walls, submitDesc, std::numeric_limits<uint8_t>::max());
+	}
 }
 
 void Renderer::DrawMists(const DrawSceneDesc& desc) const
@@ -3142,6 +3155,23 @@ void Renderer::DrawInfluenceRipples(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
+	// A warm-up draws the blended marks on the land with no area: the influence's ripples and border, and the
+	// creature's footprints. The first mark then does not make its pipeline in a frame of the game.
+	if (_warmingUp)
+	{
+		bgfx::VertexLayout marks;
+		marks.begin()
+		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+		    .end();
+		const auto& marksProgram = *_shaderManager->GetShader("WorldTextured");
+		const auto translucent = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+		constexpr uint64_t k_Blended = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA;
+		SubmitWarmUp(marksProgram, translucent, k_Blended, marks);
+		SubmitWarmUp(marksProgram, translucent, k_Blended | BGFX_STATE_MSAA, marks);
+		SubmitWarmUp(marksProgram, static_cast<bgfx::ViewId>(desc.viewId), k_Blended, marks);
+	}
 	const auto& textures = Locator::resources::value().GetTextures();
 	const auto ripples = Locator::influenceSystem::value().GetRipples();
 	if (ripples.empty() || !textures.Contains(Mist::k_TextureId) || !textures.Contains(Mist::k_AlphaTextureId))
@@ -3314,6 +3344,21 @@ void Renderer::DrawChimneySmoke(const DrawSceneDesc& desc) const
 	const auto origin = desc.camera->GetOrigin();
 	// Turned to face the camera, with the texture's own alpha, blended over what is behind
 	const glm::vec4 u_spriteParams {1.0f, 1.0f, 0.0f, 0.0f};
+	// A warm-up draws a puff of no size in each way that the smoke and the scene's sprites blend
+	if (_warmingUp)
+	{
+		const glm::mat4 hidden(0.0f);
+		for (const auto blend : {BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA),
+		                         BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE)})
+		{
+			bgfx::setTransform(glm::value_ptr(hidden));
+			spriteShader->SetTextureSampler("s_diffuse", 0, *texture);
+			spriteShader->SetTextureSampler("s_alpha", 1, *alphaTexture);
+			_plane->GetVertexBuffer().Bind();
+			bgfx::setState(BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | blend);
+			spriteShader->Submit(viewId);
+		}
+	}
 	desc.entities.Each<const ChimneySmoke>([&](const ChimneySmoke& smoke) {
 		if (smoke.state == ChimneySmoke::State::Out)
 		{
@@ -3831,7 +3876,18 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	const auto resolution =
 	    Locator::windowing::has_value() ? static_cast<glm::vec2>(Locator::windowing::value().GetSize()) : glm::vec2(0.0f);
 	const auto toClip = camera.GetViewProjectionMatrix();
-	// A warm-up does not look at the samples: it asks nothing of the drawing, as the next frames read the answers
+	// A warm-up does not look at the samples: it asks nothing of the drawing, as the next frames read the answers. It
+	// draws a square of no area as a sample does, so that the first sample does not make its pipeline in the game.
+	if (_warmingUp && asksDrawing)
+	{
+		bgfx::VertexLayout corners;
+		corners.begin()
+		    .add(bgfx::Attrib::Position, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Float)
+		    .end();
+		SubmitWarmUp(*_shaderManager->GetShader("DebugLine"), static_cast<bgfx::ViewId>(TranslucentView(RenderPass::Main)),
+		             BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA, corners);
+	}
 	for (size_t i = 0; i < samples.size() && !_warmingUp; ++i)
 	{
 		bool isHidden = Locator::pickingSystem::has_value() &&
@@ -4197,6 +4253,13 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 			                            (transform.position.z - village_lights::k_VillageReach) + light.flicker.y};
 			    stamp(village_lights::k_VillageImageId.value(), corner, strength);
 		    });
+	}
+	// A warm-up draws a light of no area, so that the first night does not make its pipeline in a frame of the game
+	if (_warmingUp)
+	{
+		submitQuad(shadeView, shadeProgram, glm::vec2(0.0f), glm::vec2(0.0f), glm::vec2(0.0f), glm::vec2(0.0f),
+		           BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
+		               BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MAX));
 	}
 
 	// The luminosity as the land was laid, under its shade
@@ -4636,6 +4699,19 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 			stamp(image->GetNativeHandle(), light.pitch, land_colour_stamps::CentredCorner(light.centre, light.pitch),
 			      land_colour_stamps::Strength(light.strength),
 			      light.shadow ? land_colour_stamps::Combine::Shade : land_colour_stamps::Combine::Add);
+		}
+	}
+	// A warm-up draws a stamp of no area in each of the three ways that stamps combine. The first lightning or light of
+	// a particle then does not make its pipeline in a frame of the game.
+	if (_warmingUp)
+	{
+		const auto add = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE);
+		for (const auto state : {add | BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_ADD),
+		                         add | BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MAX),
+		                         BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ZERO, BGFX_STATE_BLEND_SRC_COLOR)})
+		{
+			SubmitLandQuad(viewId, program, glm::vec2(0.0f), glm::vec2(0.0f), glm::vec2(0.0f), glm::vec2(0.0f),
+			               BGFX_STATE_WRITE_RGB | state);
 		}
 	}
 }
@@ -5521,6 +5597,23 @@ void Renderer::WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept
 	DrawScene(drawDesc);
 	_warmingUp = false;
 	_warmUpInFrame = true;
+}
+
+void Renderer::SubmitWarmUp(const ShaderProgram& program, bgfx::ViewId viewId, uint64_t state,
+                            const bgfx::VertexLayout& layout) const
+{
+	// Three points at one place make a triangle of no area
+	constexpr uint32_t k_Points = 3;
+	if (bgfx::getAvailTransientVertexBuffer(k_Points, layout) < k_Points)
+	{
+		return;
+	}
+	bgfx::TransientVertexBuffer vertices {};
+	bgfx::allocTransientVertexBuffer(&vertices, k_Points, layout);
+	std::memset(vertices.data, 0, vertices.size);
+	bgfx::setVertexBuffer(0, &vertices);
+	bgfx::setState(state);
+	program.Submit(viewId);
 }
 
 void Renderer::WarmUpUnderwater(const DrawSceneDesc& drawDesc) const noexcept
@@ -6924,6 +7017,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 
 				// The game lights the hand as it poses it, with the posed models' rule rather than the usual model light
 				submitDesc.posedModelLight = true;
+				// A warm-up also draws the hand with its faces turned the other way, as the hand draws when it is mirrored
+				if (_warmingUp)
+				{
+					submitDesc.state = (opaqueState & ~(BGFX_STATE_CULL_MASK | BGFX_STATE_WRITE_Z)) | cullBack;
+					drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);
+					submitDesc.state = (opaqueState & ~BGFX_STATE_CULL_MASK) | cullFront;
+					drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);
+				}
 				// The inside does not write depth so the outside is never hidden behind it
 				submitDesc.state = (opaqueState & ~(BGFX_STATE_CULL_MASK | BGFX_STATE_WRITE_Z)) | cullFront;
 				drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);

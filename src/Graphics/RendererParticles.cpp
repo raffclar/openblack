@@ -105,6 +105,18 @@ bgfx::VertexLayout ChainLayout()
 	return layout;
 }
 
+bgfx::VertexLayout SurfaceLayout()
+{
+	bgfx::VertexLayout layout;
+	layout.begin()
+	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+	    .add(bgfx::Attrib::Color1, 4, bgfx::AttribType::Uint8, true)
+	    .end();
+	return layout;
+}
+
 /// Where the hand is drawn this frame, which the miracle in it is drawn just after
 std::optional<glm::vec3> HandPoint()
 {
@@ -559,7 +571,7 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	}
 	if (_warmingUp)
 	{
-		WarmUpParticleSprites(desc);
+		WarmUpParticles(desc);
 	}
 	if (_particleFrame.items.empty())
 	{
@@ -645,13 +657,7 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	bool haveSurfaces = false;
 	if (!frame.surfaces.empty())
 	{
-		bgfx::VertexLayout layout;
-		layout.begin()
-		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-		    .add(bgfx::Attrib::Color1, 4, bgfx::AttribType::Uint8, true)
-		    .end();
+		const auto layout = SurfaceLayout();
 		const auto vertexCount = static_cast<uint32_t>(frame.surfaceVertices.size());
 		const auto indexCount = static_cast<uint32_t>(frame.surfaceIndices.size());
 		haveSurfaces = bgfx::getAvailTransientVertexBuffer(vertexCount, layout) >= vertexCount &&
@@ -777,9 +783,10 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	}
 }
 
-void Renderer::WarmUpParticleSprites(const DrawSceneDesc& desc) const
+void Renderer::WarmUpParticles(const DrawSceneDesc& desc) const
 {
-	// A sprite of no size and no colour for each way that sprites blend
+	// Each way that particles blend, for each kind of particle that the sky's pass and the blended pass can show. A
+	// vortex draws its sprites, ribbons and surfaces in the sky's pass, the rest draw in the blended pass.
 	std::vector<uint64_t> states;
 	for (uint32_t mode = 0; mode < render_modes::k_ModeCount; ++mode)
 	{
@@ -789,24 +796,36 @@ void Renderer::WarmUpParticleSprites(const DrawSceneDesc& desc) const
 			states.push_back(state);
 		}
 	}
-	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
-	const auto count = static_cast<uint32_t>(states.size());
-	if (bgfx::getAvailInstanceDataBuffer(count, k_Stride) < count)
+	const bool reflection = desc.viewId == RenderPass::Reflection;
+	std::vector<bgfx::ViewId> views {static_cast<bgfx::ViewId>(TranslucentView(desc.viewId))};
+	if (!reflection)
 	{
-		return;
+		views.push_back(static_cast<bgfx::ViewId>(SkyPassOf(desc.viewId)));
 	}
-	bgfx::InstanceDataBuffer instances {};
-	bgfx::allocInstanceDataBuffer(&instances, count, k_Stride);
-	std::fill_n(reinterpret_cast<particles::sprites::SpriteInstance*>(instances.data), count,
-	            particles::sprites::SpriteInstance {});
-	const auto* program = _shaderManager->GetShader("ParticleInstanced");
-	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
-	for (uint32_t i = 0; i < count; ++i)
+	const auto* spriteProgram = _shaderManager->GetShader("ParticleInstanced");
+	const auto* chainProgram = _shaderManager->GetShader("ParticleChain");
+	const auto* surfaceProgram = _shaderManager->GetShader("ParticleSurface");
+	const auto chainLayout = ChainLayout();
+	const auto surfaceLayout = SurfaceLayout();
+	const uint64_t culled = reflection ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW;
+	for (const auto view : views)
 	{
-		bgfx::setState(states.at(i));
-		_plane->GetVertexBuffer().Bind();
-		bgfx::setInstanceDataBuffer(&instances, i, 1);
-		program->Submit(viewId);
+		for (const auto state : states)
+		{
+			// A sprite of no size. The warm-up's own buffer holds the instance, because the frame's buffer of instances
+			// can be full after the other draws of a warm-up.
+			if (_warmUpInstances.has_value())
+			{
+				bgfx::setState(state);
+				_plane->GetVertexBuffer().Bind();
+				bgfx::setInstanceDataBuffer(toBgfx(*_warmUpInstances), 0, 1);
+				spriteProgram->Submit(view);
+			}
+			SubmitWarmUp(*chainProgram, view, state, chainLayout);
+			// A surface is drawn on both sides, or on its front only
+			SubmitWarmUp(*surfaceProgram, view, state, surfaceLayout);
+			SubmitWarmUp(*surfaceProgram, view, state | culled, surfaceLayout);
+		}
 	}
 }
 

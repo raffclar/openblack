@@ -135,6 +135,16 @@ void Canvas::DrawLine(glm::ivec2 from, glm::ivec2 to, glm::vec4 colour)
 	DrawQuad(min, max, {0.0f, 0.0f}, {1.0f, 1.0f}, colour, nullptr);
 }
 
+uint64_t Canvas::StateOf(Blend blend) noexcept
+{
+	const auto function = blend == Blend::Additive
+	                          ? BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE,
+	                                                           BGFX_STATE_BLEND_ZERO, BGFX_STATE_BLEND_ONE)
+	                          : BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA,
+	                                                           BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+	return BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | function;
+}
+
 void Canvas::End()
 {
 	const auto view = static_cast<bgfx::ViewId>(_view);
@@ -146,13 +156,28 @@ void Canvas::End()
 	             1.0f, 0.0f, bgfx::getCaps()->homogeneousDepth);
 	bgfx::setViewTransform(view, nullptr, projection.data());
 	bgfx::touch(view);
+	const auto* program = Locator::rendererInterface::value().GetShaderManager().GetShader("Interface");
+	auto& layout = GetLayout();
+	// The first frame of each canvas draws a triangle of no area in each way that the canvas blends. The loading
+	// screen's canvas thus makes the pipelines before the game starts, and the first added draw does not make one.
+	if (!_warmedUp && program != nullptr && bgfx::getAvailTransientVertexBuffer(3, layout) >= 3)
+	{
+		_warmedUp = true;
+		for (const auto blend : {Blend::Alpha, Blend::Additive})
+		{
+			bgfx::TransientVertexBuffer vertices;
+			bgfx::allocTransientVertexBuffer(&vertices, 3, layout);
+			std::fill_n(reinterpret_cast<Vertex*>(vertices.data), 3, Vertex {});
+			bgfx::setVertexBuffer(0, &vertices);
+			bgfx::setState(StateOf(blend));
+			program->Submit(view);
+		}
+	}
 	if (_vertices.empty())
 	{
 		return;
 	}
 
-	const auto* program = Locator::rendererInterface::value().GetShaderManager().GetShader("Interface");
-	auto& layout = GetLayout();
 	for (const auto& batch : _batches)
 	{
 		if (bgfx::getAvailTransientVertexBuffer(batch.vertexCount, layout) < batch.vertexCount)
@@ -164,12 +189,7 @@ void Canvas::End()
 		std::copy_n(_vertices.begin() + batch.firstVertex, batch.vertexCount, reinterpret_cast<Vertex*>(vertices.data));
 		bgfx::setVertexBuffer(0, &vertices);
 		program->SetTextureSampler("s_texture", 0, *batch.texture);
-		const auto blend = batch.blend == Blend::Additive
-		                       ? BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE,
-		                                                        BGFX_STATE_BLEND_ZERO, BGFX_STATE_BLEND_ONE)
-		                       : BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA,
-		                                                        BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
-		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | blend);
+		bgfx::setState(StateOf(batch.blend));
 		program->Submit(view);
 	}
 }

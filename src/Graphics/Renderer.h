@@ -178,8 +178,13 @@ private:
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
-	/// For a warm-up, a sprite of no size for each way that sprites blend, into the pass's blended view
-	void WarmUpParticleSprites(const DrawSceneDesc& desc) const;
+	/// For a warm-up, a sprite, a ribbon and a surface of no size for each way that particles blend, into the pass's
+	/// blended view and its sky's view
+	void WarmUpParticles(const DrawSceneDesc& desc) const;
+	/// For a warm-up, a triangle of no area with the program, the state and the layout of points that a draw uses. It
+	/// covers no pixel, but the renderer makes the draw's pipeline before the draw first shows.
+	void SubmitWarmUp(const ShaderProgram& program, bgfx::ViewId viewId, uint64_t state,
+	                  const bgfx::VertexLayout& layout) const;
 	/// The opening's light falling from the sky, and its flash where it lands
 	void DrawIntroLight(const DrawSceneDesc& desc) const;
 	/// The ghosts of the buildings effects destroyed, each laying its depth through a scrolling pattern and then added
