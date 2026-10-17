@@ -53,6 +53,18 @@ void Timings::AddFrame(float ms)
 	frameLongestMs = std::max(frameLongestMs, ms);
 }
 
+void Timings::AddStages(std::span<const float> ms)
+{
+	if (stageTotalMs.size() < ms.size())
+	{
+		stageTotalMs.resize(ms.size(), 0.0f);
+	}
+	for (size_t i = 0; i < ms.size(); ++i)
+	{
+		stageTotalMs[i] += ms[i];
+	}
+}
+
 float Timings::TurnAverageMs() const
 {
 	return turns == 0 ? 0.0f : turnTotalMs / static_cast<float>(turns);

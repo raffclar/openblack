@@ -1112,3 +1112,7 @@ openblack_setup_and_add_test(
                    ${CMAKE_SOURCE_DIR}/tools/sim/test_sim_report.py
   )
 openblack_setup_and_add_test(test_creature_kiss test_creature_kiss.cpp)
+  add_test(NAME test_sim_run_training
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tools/sim/test_sim_run.py
+  )

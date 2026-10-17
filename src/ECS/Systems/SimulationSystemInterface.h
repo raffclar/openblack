@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 
 #include "Debug/SimRun.h"
 
@@ -31,6 +32,8 @@ public:
 	virtual void TurnPlayed(float ms) = 0;
 	/// The frame ended, and the frame took this time
 	virtual void FrameEnded(float ms) = 0;
+	/// The time that each stage of the profiler took in the frame, by the stage's number
+	virtual void StagesEnded(std::span<const float> ms) = 0;
 	/// The times since the last call; the count starts again from none
 	[[nodiscard]] virtual sim_run::Timings TakeTimings() = 0;
 	/// The memory that the game's process uses, in bytes, where the system can tell it
