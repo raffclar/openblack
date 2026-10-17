@@ -337,6 +337,44 @@ TEST(Atmosphere, TheCloudsShadeTakesTheUpperSkyWhileTheSunIsLow)
 	EXPECT_EQ(atmos::DimSkyColour(deepBlue, 0.5f), deepBlue);
 }
 
+TEST(Atmosphere, TheFarWorldCurvesAwayAndTheHorizonGoesDownWithTheHeight)
+{
+	constexpr float k_Map = 5120.0f;
+	// From the middle of the map the flat reach is the distance to a corner
+	EXPECT_NEAR(atmos::FlatReach({2560.0f, 2560.0f}, k_Map), 3620.4f, 0.1f);
+	EXPECT_NEAR(atmos::FlatReach({0.0f, 0.0f}, k_Map), 7240.8f, 0.1f);
+	// Nothing on the map goes down
+	EXPECT_EQ(atmos::WorldDrop(3000.0f, 3620.0f), 0.0f);
+	EXPECT_GT(atmos::WorldDrop(100000.0f, 3620.0f), 700.0f);
+	// A ray that meets the sea inside the flat reach meets it where the flat sea is
+	const glm::vec3 steep = glm::normalize(glm::vec3(1.0f, -0.5f, 0.0f));
+	ASSERT_TRUE(atmos::CurvedSeaDistance(100.0f, steep, 3620.0f).has_value());
+	EXPECT_NEAR(*atmos::CurvedSeaDistance(100.0f, steep, 3620.0f), 100.0f / 0.5f * std::sqrt(1.25f), 1e-2f);
+	// The angle under the eye's level at which the rays stop to meet the sea
+	const auto dip = [](float height) {
+		float low = 0.0f;
+		float high = 0.5f;
+		for (int i = 0; i < 40; ++i)
+		{
+			const float mid = 0.5f * (low + high);
+			const glm::vec3 ray {std::cos(mid), -std::sin(mid), 0.0f};
+			(atmos::CurvedSeaDistance(height, ray, 3620.0f).has_value() ? high : low) = mid;
+		}
+		return high;
+	};
+	const float low = dip(50.0f);
+	const float high = dip(30000.0f);
+	EXPECT_GT(low, 0.0f);
+	EXPECT_GT(high, 10.0f * low);
+	// From high up the horizon is near the real planet's, under the eye's level by the angle acos(R / (R + h))
+	EXPECT_NEAR(high, std::acos(atmos::k_WorldRadius / (atmos::k_WorldRadius + 30000.0f)), 0.002f);
+	// The direction to the horizon is the same as the rays find
+	EXPECT_NEAR(atmos::WorldHorizonY(30000.0f, 3620.0f), -std::sin(high), 0.002f);
+	EXPECT_NEAR(atmos::WorldHorizonY(50.0f, 3620.0f), -std::sin(low), 0.002f);
+	// A ray over the horizon never meets the sea
+	EXPECT_FALSE(atmos::CurvedSeaDistance(30000.0f, glm::vec3(std::cos(0.05f), -std::sin(0.05f), 0.0f), 3620.0f).has_value());
+}
+
 TEST(Atmosphere, TheMoonStandsEastOfTheSunByItsPhase)
 {
 	const auto angle = [](glm::vec3 a, glm::vec3 b) {

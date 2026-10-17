@@ -176,6 +176,7 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 void Renderer::SetCloudUniforms(const ShaderProgram& program, const clouds::CloudUniforms& uniforms) const
 {
 	program.SetUniformValue("u_cloudLayer", &uniforms.layer);
+	SetWorldCurve(program);
 	program.SetUniformValue("u_cloudCover", &uniforms.cover);
 	program.SetUniformValue("u_cloudDrift", &uniforms.drift);
 	program.SetUniformValue("u_cloudLight", &uniforms.light);

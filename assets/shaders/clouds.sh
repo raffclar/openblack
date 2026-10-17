@@ -2,12 +2,14 @@
 #define CLOUDS_SH
 
 #include "sky_dome.sh"
+#include "world_curve.sh"
 
 // EXPERIMENT (not for merge): the volumetric clouds. The rays go through a layer of cloud over the land and add the
 // light that the cloud scatters towards the eye. The original game has billboards for its clouds. The formulas match
 // the CPU twins in src/Graphics/VolumetricClouds.cpp, which the tests check.
 
-// x: the bottom of the layer; y: the radius of the world's curve; z: the farthest cloud; w: the sea's level
+// x: the bottom of the layer; y: not used (world_curve.sh has the curve of the world); z: the farthest cloud; w: the
+// sea's level
 uniform vec4 u_cloudLayer;
 // x: how much of the sky has cloud; y: the type of cloud (0 stratus, 0.5 cumulus, 1 cumulonimbus); z: the rain; w: the
 // number of storms
@@ -111,11 +113,10 @@ float CloudPowder(float localDepth, float cosAngle)
 	return mix(1.0f, powder, 0.8f * (0.5f - 0.5f * cosAngle));
 }
 
-// The height of a point over the curved world under the eye: the world falls away with the square of the distance
+// The height of a point over the curved world under the eye: the layer is a shell round the planet, as the sea is
 float CloudAltitude(vec3 p)
 {
-	vec2 away = p.xz - u_cloudEye.xz;
-	return p.y + dot(away, away) / (2.0f * u_cloudLayer.y);
+	return p.y + WorldDrop(p.xz);
 }
 
 // The weather at a point across the land: the cloud's cover there (0 none), its type and its rain
@@ -239,18 +240,42 @@ vec2 CloudRoots(float a, float b, float c)
 	return vec2((-b - s) / (2.0f * a), (-b + s) / (2.0f * a));
 }
 
+// The part of a ray from the eye where its height over the curved world, c + t dir.y + the world's drop, is under 0.
+// Inside the flat reach the height changes in a line, and past it on a curve. The height bends up smoothly, so the two
+// parts make one span.
+vec2 CloudUnder(float c, vec3 dir)
+{
+	float across = length(dir.xz);
+	float reach = u_worldCurve.w > 0.0f && across > 1e-6f ? u_worldCurve.z / across : 1e9f;
+	vec2 straight = abs(dir.y) < 1e-9f ? (c < 0.0f ? vec2(-1e9f, 1e9f) : vec2(1.0f, -1.0f)) : CloudRoots(0.0f, dir.y, c);
+	straight.y = min(straight.y, reach);
+	if (reach >= 1e9f)
+	{
+		return straight;
+	}
+	float a = across * across / (2.0f * u_worldCurve.w);
+	float d = u_worldCurve.z;
+	vec2 curved = CloudRoots(a, dir.y - across * d / u_worldCurve.w, c + d * d / (2.0f * u_worldCurve.w));
+	curved.x = max(curved.x, reach);
+	bool hasStraight = straight.x < straight.y;
+	bool hasCurved = curved.x < curved.y;
+	if (hasStraight && hasCurved)
+	{
+		return vec2(straight.x, curved.y);
+	}
+	return hasStraight ? straight : curved;
+}
+
 // The part of a ray inside the layer, from the eye, up to a limit: x where it goes in, y where it comes out. None when
 // x >= y. The world's curve brings every ray up into the layer far away.
 vec2 CloudSpan(vec3 eye, vec3 dir, float limit)
 {
-	float a = dot(dir.xz, dir.xz) / (2.0f * u_cloudLayer.y);
-	float b = dir.y;
 	// The lowest that a rain cloud's ragged bottom hangs
 	float bottom = u_cloudLayer.x - CLOUD_LOWEST_DROP;
 	float top = u_cloudLayer.x + CLOUD_CUMULONIMBUS_DEPTH;
 	// Under the top between these, over the bottom outside these
-	vec2 underTop = CloudRoots(a, b, eye.y - top);
-	vec2 underBottom = CloudRoots(a, b, eye.y - bottom);
+	vec2 underTop = CloudUnder(eye.y - top, dir);
+	vec2 underBottom = CloudUnder(eye.y - bottom, dir);
 	if (underTop.x >= underTop.y)
 	{
 		return vec2(1.0f, 0.0f);
@@ -462,9 +487,8 @@ float CloudNearestAlong(vec3 dir)
 	{
 		return 0.0f;
 	}
-	// eye.y + t dir.y + t^2 (1 - dir.y^2) / (2 R) = lowest
-	float a = max(1.0f - dir.y * dir.y, 1e-6f) / (2.0f * u_cloudLayer.y);
-	return 2.0f * below / (dir.y + sqrt(max(dir.y * dir.y + 4.0f * a * below, 0.0f)));
+	// The eye is under the lowest bottom: the span under it starts behind the eye and ends where the ray meets it
+	return max(CloudUnder(-below, dir).y, 0.0f);
 }
 
 #endif // CLOUDS_SH

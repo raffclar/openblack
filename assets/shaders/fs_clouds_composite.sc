@@ -28,7 +28,8 @@ float RayLimit(vec2 uv, vec3 dir)
 	float scene = CloudSceneDistance(uv, texture2DLod(s_sceneDepth, uv, 0.0f).r);
 	if (u_cloudEye.w > 0.5f && dir.y < 0.0f)
 	{
-		scene = min(scene, (u_cloudEye.y - u_cloudLayer.w) / -dir.y);
+		float toSea = CurvedSeaDistance(u_cloudEye.y - u_cloudLayer.w, dir);
+		scene = toSea >= 0.0f ? min(scene, toSea) : scene;
 	}
 	return min(scene, 60000.0f);
 }
@@ -78,7 +79,8 @@ void main()
 		float haze = CloudHaze(u_cloudEye.xyz, dir, cloudDepth);
 		if (u_skyAtmos.x > 0.0f)
 		{
-			vec3 hazeColour = AtmosSkyOnScreen(normalize(vec3(dir.x, max(dir.y, 0.0f), dir.z)), u_skyAtmos.y);
+			float horizonY = WorldHorizonY(u_cloudEye.y - u_cloudLayer.w);
+			vec3 hazeColour = AtmosSkyOnScreen(normalize(vec3(dir.x, max(dir.y, horizonY), dir.z)), u_skyAtmos.y);
 			clouds.rgb = mix(clouds.rgb, hazeColour * cover, haze);
 		}
 		else

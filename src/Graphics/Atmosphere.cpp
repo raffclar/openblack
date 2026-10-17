@@ -289,13 +289,13 @@ glm::vec3 atmosphere::LightAtGround(float elevationSine, const Air& air)
 	return Transmittance(0.0f, std::max(elevationSine, 0.0f), air) * Smoothstep(-0.02f, 0.0f, elevationSine);
 }
 
-glm::vec3 atmosphere::HorizonRadiance(glm::vec3 towardsLight, float altitude, const Air& air)
+glm::vec3 atmosphere::HorizonRadiance(glm::vec3 towardsLight, float altitude, const Air& air, float horizonY)
 {
 	glm::vec3 sum {0.0f};
 	for (int i = 0; i < k_HorizonDirections; ++i)
 	{
 		const float angle = 2.0f * k_Pi * (static_cast<float>(i) + 0.5f) / static_cast<float>(k_HorizonDirections);
-		const glm::vec3 view = glm::normalize(glm::vec3(std::cos(angle), 0.02f, std::sin(angle)));
+		const glm::vec3 view = glm::normalize(glm::vec3(std::cos(angle), horizonY + 0.02f, std::sin(angle)));
 		sum += SkyRadiance(view, towardsLight, altitude, air);
 	}
 	return sum / static_cast<float>(k_HorizonDirections);
@@ -500,4 +500,48 @@ glm::vec3 atmosphere::PlaceTint(std::span<const glm::vec3> colours, float share)
 float atmosphere::AltitudeOf(float heightOverSea)
 {
 	return std::max(heightOverSea, 0.5f) / k_UnitsPerKilometre;
+}
+
+float atmosphere::FlatReach(glm::vec2 eye, float mapSize)
+{
+	const glm::vec2 far {std::max(eye.x, mapSize - eye.x), std::max(eye.y, mapSize - eye.y)};
+	return glm::length(far);
+}
+
+float atmosphere::WorldDrop(float distance, float flatReach)
+{
+	const float past = std::max(distance - flatReach, 0.0f);
+	return past * past / (2.0f * k_WorldRadius);
+}
+
+std::optional<float> atmosphere::CurvedSeaDistance(float heightOverSea, glm::vec3 direction, float flatReach)
+{
+	if (direction.y >= 0.0f || heightOverSea <= 0.0f)
+	{
+		return std::nullopt;
+	}
+	const float across = glm::length(glm::vec2(direction.x, direction.z));
+	const float flat = heightOverSea / -direction.y;
+	if (flat * across <= flatReach)
+	{
+		return flat;
+	}
+	// Past the flat reach the gap between the ray and the sea is c - k u + u^2 / (2 R), with u the distance across
+	// the ground past the reach
+	const float k = -direction.y / across;
+	const float c = heightOverSea - k * flatReach;
+	const float disc = k * k - 2.0f * c / k_WorldRadius;
+	if (disc < 0.0f)
+	{
+		return std::nullopt;
+	}
+	const float u = 2.0f * c / (k + std::sqrt(disc));
+	return (u + flatReach) / across;
+}
+
+float atmosphere::WorldHorizonY(float heightOverSea, float flatReach)
+{
+	const float d = flatReach / k_WorldRadius;
+	const float k = std::sqrt(d * d + 2.0f * std::max(heightOverSea, 0.0f) / k_WorldRadius) - d;
+	return -k / std::sqrt(1.0f + k * k);
 }

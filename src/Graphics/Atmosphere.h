@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <span>
 
 #include <glm/mat3x3.hpp>
@@ -156,8 +157,9 @@ struct Haze
 /// height over the horizon. It is warm and dim low down, and none under the horizon.
 [[nodiscard]] glm::vec3 LightAtGround(float elevationSine, const Air& air);
 
-/// The mean of the sky's light round the horizon, for a light of strength 1
-[[nodiscard]] glm::vec3 HorizonRadiance(glm::vec3 towardsLight, float altitude, const Air& air);
+/// The mean of the sky's light round the horizon, for a light of strength 1. `horizonY` is the y of the direction to
+/// the sea's horizon, which goes down under the eye's level as the eye climbs (WorldHorizonY).
+[[nodiscard]] glm::vec3 HorizonRadiance(glm::vec3 towardsLight, float altitude, const Air& air, float horizonY = 0.0f);
 
 /// What the air's light is scaled by so that the horizon is as bright as `target` (the original game's haze colour
 /// at this time of day): the ratio of their luminances
@@ -281,5 +283,27 @@ inline constexpr float k_PlaceShare = 0.3f;
 
 /// The height of the eye over the sea, in kilometres, from its height in world units over the sea's level
 [[nodiscard]] float AltitudeOf(float heightOverSea);
+
+/// The curve of the world far away. The world is a ball with the radius of the real planet (the radius that the sky's
+/// textures use), so the far sea goes down under the horizon at the same angle as the ground in the sky's texture.
+/// From 50 units up the horizon is 0.2 degrees under the eye's level, and from 30000 units up it is about 6 degrees.
+inline constexpr float k_WorldRadius = k_GroundRadius * k_UnitsPerKilometre;
+
+/// The distance from the eye, across the ground, inside which the world stays flat: the distance to the farthest
+/// corner of the map, which is `mapSize` units on each side. The land, the sea bed and all the things on the map stay
+/// where they are, so the coast and the near game do not change. Past this distance the world curves away.
+[[nodiscard]] float FlatReach(glm::vec2 eye, float mapSize);
+
+/// How far a point of the world goes down at `distance` units from the eye across the ground, for the flat reach
+/// `flatReach`: none inside the flat reach, and the square of the distance past it over twice the world's radius
+[[nodiscard]] float WorldDrop(float distance, float flatReach);
+
+/// The distance along a ray from the eye, `heightOverSea` units over the sea's level, to the curved sea. None when the
+/// ray goes over the horizon and does not meet the sea.
+[[nodiscard]] std::optional<float> CurvedSeaDistance(float heightOverSea, glm::vec3 direction, float flatReach);
+
+/// The y of the direction from the eye to the curved sea's horizon, from the eye's height over the sea's level: near 0
+/// low down, and under 0 as the eye climbs
+[[nodiscard]] float WorldHorizonY(float heightOverSea, float flatReach);
 
 } // namespace openblack::graphics::atmosphere

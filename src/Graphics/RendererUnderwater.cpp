@@ -284,6 +284,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	mesh.GetVertexBuffer().Bind();
 	setUniforms(*post);
 	post->SetUniformValue("u_uwSky", &frame.sky);
+	SetWorldCurve(*post);
 	const auto pond = underwater::ProfileUniform(underwater::k_PondProfile);
 	post->SetUniformArray("u_uwPond", pond.data(), static_cast<uint16_t>(pond.size()));
 	const glm::vec4 grade {underwater::k_Grade,
