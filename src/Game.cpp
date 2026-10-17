@@ -223,6 +223,7 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
+#include "ECS/Systems/UnderwaterBoundary.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
@@ -5645,8 +5646,10 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		// water over the sea; holding something, the land itself. Over a thing it eases to where it rests on the thing,
 		// touching it.
 		const bool holding = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldPose().has_value();
-		const auto overSea =
-		    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
+		// EXPERIMENT (not for merge): while the experiment's view is on, the land under the cursor is the sea bed under
+		// the water, and the hand hangs over it as over the land
+		const auto overSea = !underwater_boundary::Off() && _cursorLand.has_value() &&
+		                     Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
 		const auto hover = hand_feel::HoverDistancesOf({
 		    .camera = eye,
 		    .land = _cursorLand,
@@ -5879,9 +5882,11 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 			// land where the hand is
 			const float handHeight = k_HandHeight * HandAnimation::SizeAtDistance(_handDistance);
 			const auto handPoint = map_coords::ToMetres(map_coords::FromMetres(glm::xz(handTransform.position)));
-			const float aboveLand = Locator::terrainSystem::has_value()
-			                            ? handTransform.position.y - Locator::terrainSystem::value().GetHeightAt(handPoint)
-			                            : 0.0f;
+			const float aboveLand =
+			    Locator::terrainSystem::has_value()
+			        ? handTransform.position.y -
+			              underwater_boundary::FloorAt(handPoint, Locator::terrainSystem::value().GetHeightAt(handPoint))
+			        : 0.0f;
 			auto up = !hand_feel::TurnsToLand(_handSurfaceUp.has_value(), _handOverObject, aboveLand, handHeight)
 			              ? surfaceUp
 			              : (Locator::terrainSystem::has_value()

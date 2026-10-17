@@ -97,6 +97,7 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/UnderwaterBoundary.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -1096,7 +1097,10 @@ void GameHandGrabWorld::StopScoopSound()
 
 float GameHandGrabWorld::LandHeightAt(glm::vec3 point) const
 {
-	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({point.x, point.z}) : 0.0f;
+	// EXPERIMENT (not for merge): while the experiment's view is on, the sea bed under the water
+	const float land =
+	    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({point.x, point.z}) : 0.0f;
+	return underwater_boundary::FloorAt({point.x, point.z}, land);
 }
 
 bool GameHandGrabWorld::StoresResource(entt::entity store, ResourceType resource) const
