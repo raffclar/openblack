@@ -141,7 +141,9 @@ TEST(VillageTotemRules, TheHandTipsOverNearTheLandAndClosesOnTheIcon)
 	EXPECT_FLOAT_EQ(vt::HandTiltAt(10.0f), upright);
 	EXPECT_FLOAT_EQ(vt::HandTiltAt(2.5f), upright);
 	EXPECT_FLOAT_EQ(vt::HandTiltAt(-0.7f), upright + std::atan(1.0f));
-	EXPECT_FLOAT_EQ(vt::GripClosure(0.8f), 0.5f);
+	// The icon spreads out of the palm by three quarters of its height, against half the hand of 3.2
+	EXPECT_FLOAT_EQ(vt::GripClosure(1.0f), 0.46875f);
+	EXPECT_FLOAT_EQ(vt::GripClosure(2.0f), 0.9375f);
 	EXPECT_FLOAT_EQ(vt::GripClosure(3.0f), 1.0f);
 	EXPECT_FLOAT_EQ(vt::GripY(10.0f, 2.0f), 11.4f);
 	EXPECT_FLOAT_EQ(vt::RiseOf(0.5f), 4.0f);
@@ -163,7 +165,8 @@ public:
 	}
 	[[nodiscard]] Size SizeOf(entt::entity /*unused*/) const override { return {.radius = 0.8f, .height = 2.0f}; }
 	[[nodiscard]] float LandHeightAt(glm::vec2 /*unused*/) const override { return 0.0f; }
-	[[nodiscard]] bool TempleBuilt(PlayerNames player) const override { return temple && player == PlayerNames::PLAYER_ONE; }
+	[[nodiscard]] bool HeartBuilt(PlayerNames player) const override { return heart && player == PlayerNames::PLAYER_ONE; }
+	[[nodiscard]] float LifeOf(entt::entity /*unused*/) const override { return life; }
 	[[nodiscard]] bool Built(entt::entity /*unused*/) const override { return true; }
 	void SetMovingSound(entt::entity /*unused*/, bool on) override { moving.push_back(on); }
 	void RingBell(glm::vec3 /*unused*/) override { ++bells; }
@@ -198,7 +201,8 @@ public:
 	std::vector<Reacted> reactions;
 	std::vector<Empathy> empathies;
 	std::vector<Number> numbers;
-	bool temple {true};
+	bool heart {true};
+	float life {1.0f};
 	std::vector<bool> moving;
 	entt::id_type playerOneIcon {k_ApeIcon};
 	int bells {0};
@@ -325,10 +329,22 @@ TEST(VillageTotemSystem, OnlyTheTownsPlayerWithTheirTempleAndAWorshipSiteMayTake
 	EXPECT_FALSE(noSite.system->Grip(noSite.totem, PlayerNames::PLAYER_ONE));
 	auto village = MakeVillage(true);
 	EXPECT_FALSE(village.system->Grip(village.totem, PlayerNames::PLAYER_TWO));
-	village.world->temple = false;
+	village.world->heart = false;
 	EXPECT_FALSE(village.system->Grip(village.totem, PlayerNames::PLAYER_ONE));
-	village.world->temple = true;
+	village.world->heart = true;
+	// A totem with three quarters of its life or less does not work
+	village.world->life = 0.75f;
+	EXPECT_FALSE(village.system->Grip(village.totem, PlayerNames::PLAYER_ONE));
+	village.world->life = 0.76f;
 	EXPECT_TRUE(village.system->Grip(village.totem, PlayerNames::PLAYER_ONE));
+}
+
+TEST(VillageTotemRules, ATotemWorksWhenBuiltWithMoreThanThreeQuartersOfItsLife)
+{
+	EXPECT_TRUE(vt::Functional(true, 1.0f));
+	EXPECT_FALSE(vt::Functional(true, 0.75f));
+	EXPECT_TRUE(vt::Functional(true, std::nextafter(0.75f, 1.0f)));
+	EXPECT_FALSE(vt::Functional(false, 1.0f));
 }
 
 TEST(VillageTotemSystem, ATownWithNowhereToWorshipKeepsNoOneAtWorship)
@@ -357,6 +373,8 @@ TEST(VillageTotemRules, TheHandClosesOnTheIconAtMostAQuarterOfTheWayIntoItsSideH
 	// Cut, not rounded
 	EXPECT_EQ(vt::GripTimeMs(0.3f, 1000), 75u);
 	EXPECT_EQ(vt::GripTimeMs(0.0f, 1000), 0u);
+	// Each step rounds to a float: 0.02 x 0.5 x 500 comes to 5 as a float, though it is just under 5 in double
+	EXPECT_EQ(vt::GripTimeMs(0.02f, 1000), 5u);
 }
 
 TEST(VillageTotemRules, TheSecondTotemShowsTheOtherShareWhileTheyStandApart)

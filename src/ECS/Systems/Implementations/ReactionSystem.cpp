@@ -58,6 +58,7 @@
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -86,6 +87,7 @@
 #include "Magic/Impressiveness.h"
 #include "Magic/ReactionRules.h"
 #include "Magic/ReactionTimingRules.h"
+#include "Magic/ShieldRules.h"
 #include "Magic/TownBelief.h"
 #include "Magic/VillagerReactionRules.h"
 #include "ObjectMeasures.h"
@@ -1785,7 +1787,16 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 		auto& boredom = impression->boredom.try_emplace(source.type, 1.0f).first->second;
 		const float share = villager_reactions::TownShare(villager->town);
 		const auto creature = CreatureImpressiveValue(reaction, living, villager->town, boredom);
-		const float belief = creature.value_or(value(boredom, villager->town)) * share;
+		// A town that the shield's player attacked last takes nothing from the shield
+		const auto* shieldObject = source.initiator != entt::null && registry.Valid(source.initiator)
+		                               ? registry.TryGet<const MagicShield>(source.initiator)
+		                               : nullptr;
+		const auto* aggression = registry.TryGet<const TownAggression>(villager->town);
+		const bool attackedByShieldPlayer = aggression != nullptr && aggression->record.lastAggressor == source.player;
+		const bool ignored =
+		    shieldObject != nullptr && magic::shield::TownIgnoresShield(source.type, attackedByShieldPlayer,
+		                                                                shieldObject->kind == MagicShield::Kind::Physical);
+		const float belief = ignored ? 0.0f : creature.value_or(value(boredom, villager->town)) * share;
 		magic::town_belief::Add(impression->belief, source.player, belief);
 		impression->lastImpression = belief;
 		villager_reactions::ShowBelief(living, source.player, belief, info->alignmentForSFX, _voice, _turn);

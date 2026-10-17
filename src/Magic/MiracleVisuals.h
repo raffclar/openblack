@@ -32,8 +32,11 @@ namespace openblack::magic::visuals
 /// The glint on the globe's dome runs through the 16 cells of a 4 by 4 sheet, 18 a second, round and round
 inline constexpr float k_GlintFrameRate = 18.0f;
 inline constexpr int k_GlintCells = 16;
-/// The globe is added over what is behind it at 150 of 255
-inline constexpr uint8_t k_GlobeAlpha = 150;
+/// The globe's own alpha is 150 of 255. The land's light, which is fully opaque, multiplies it by 255 and divides it by
+/// 256, so the globe is added over what is behind it at 149.
+inline constexpr uint8_t k_GlobeOwnAlpha = 150;
+inline constexpr uint8_t k_GlobeAlpha = static_cast<uint8_t>((255u * k_GlobeOwnAlpha) >> 8u);
+static_assert(k_GlobeAlpha == 149);
 /// The miracle in a globe is drawn at this share of the globe's size
 inline constexpr float k_GlobeSeedScale = 0.6f;
 
@@ -55,7 +58,7 @@ inline constexpr uint32_t k_RingSpecular = 0x141414u;
 
 /// One ring for the first power-up, two for the second; none for a plain miracle
 [[nodiscard]] int RingCount(int powerUp);
-/// A ring's alpha in something drawn at the given alpha: 35 in a globe, 59 above an icon
+/// A ring's alpha in something drawn at the given alpha: 34 in a globe, 59 above an icon
 [[nodiscard]] uint8_t RingAlpha(uint8_t drawnAlpha);
 /// The ring's turn before the camera's: laid flat, turned about the vertical by the spin (and half a radian more for the
 /// second ring), tipped by 0.3, turned back or on by one radian, and tipped by 0.2 more

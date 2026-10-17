@@ -137,9 +137,8 @@ std::optional<fire::Material> MaterialOf(entt::entity object)
 	}
 	if (const auto* ball = registry.TryGet<const MagicFireBall>(object))
 	{
-		// Every fireball burns as the first row of the fireball's table, whatever its power-up: the game picks the row
-		// by a power-up type no fireball has
-		const auto& info = Locator::infoConstants::value().magicFireBall.at(0);
+		// A fireball burns as the row of the fireball table that its miracle selected
+		const auto& info = Locator::infoConstants::value().magicFireBall.at(ball->infoRow);
 		return fire::Material {
 		    .combustion = info.combustionTemperature,
 		    .capacity = ball->radius * ball->radius * k_FireBallCapacityScale * info.heatCapacity * ball->strength,

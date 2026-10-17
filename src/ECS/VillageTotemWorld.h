@@ -44,8 +44,10 @@ public:
 	};
 	[[nodiscard]] virtual Size SizeOf(entt::entity object) const = 0;
 	[[nodiscard]] virtual float LandHeightAt(glm::vec2 point) const = 0;
-	/// Whether a player's temple stands built
-	[[nodiscard]] virtual bool TempleBuilt(PlayerNames player) const = 0;
+	/// Whether the heart of a player's temple stands built
+	[[nodiscard]] virtual bool HeartBuilt(PlayerNames player) const = 0;
+	/// The life of an object, 0 to 1
+	[[nodiscard]] virtual float LifeOf(entt::entity object) const = 0;
 	/// Whether a building stands built and working
 	[[nodiscard]] virtual bool Built(entt::entity building) const = 0;
 	/// The totem's moving sound loops while on

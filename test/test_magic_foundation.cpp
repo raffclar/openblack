@@ -546,6 +546,16 @@ TEST(Impressiveness, ItMultipliesTheLandsBalanceTheMiracleTheReactionAndTheBored
 	                                     .power = 1.0f,
 	                                     .boredom = 0.25f});
 	EXPECT_FLOAT_EQ(value, 2.0f * 3.0f * 0.5f * 0.25f);
+	// The game multiplies the boredom, the power and the distance first, then the multiplier, the value and the land's
+	// balance. Each step rounds to a float, so the other order gives a different last bit.
+	const float ordered = ImpressiveValue({.landBalance = 0.54f,
+	                                       .impressiveValue = 1.94f,
+	                                       .reactionMultiplier = 2.62f,
+	                                       .distance = 0.0f,
+	                                       .maxDistance = 60.0f,
+	                                       .power = 1.62f,
+	                                       .boredom = 2.25f});
+	EXPECT_EQ(ordered, 10.004476f);
 	// Each impression adds the belief table's boredom, -0.02, by the villager's share of its town; never below 0
 	EXPECT_FLOAT_EQ(BoredomAfterImpression(1.0f, -0.02f * 0.5f), 0.99f);
 	EXPECT_FLOAT_EQ(BoredomAfterImpression(0.005f, -0.02f), 0.0f);

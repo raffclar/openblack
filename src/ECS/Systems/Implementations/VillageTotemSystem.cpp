@@ -327,9 +327,11 @@ bool VillageTotemSystem::Grip(entt::entity totem, PlayerNames player)
 		return false;
 	}
 	const auto& townComponent = registry.Get<const Town>(town);
-	// Only a player's own town's, standing and working, with their temple and the town's worship site built
-	if (townComponent.owner != player || !_world->Built(totemComponent->townCentre) || !_world->TempleBuilt(player) ||
-	    !registry.Valid(townComponent.worshipSite) || !_world->Built(townComponent.worshipSite))
+	// Only a totem of the player's own town that works, with the heart of their temple and the town's worship site
+	// built. The totem stands built when its town centre stands built.
+	if (townComponent.owner != player ||
+	    !village_totem::Functional(_world->Built(totemComponent->townCentre), _world->LifeOf(totem)) ||
+	    !_world->HeartBuilt(player) || !registry.Valid(townComponent.worshipSite) || !_world->Built(townComponent.worshipSite))
 	{
 		return false;
 	}
@@ -440,6 +442,6 @@ std::optional<VillageTotemSystemInterface::HandHold> VillageTotemSystem::GetHand
 	return HandHold {
 	    .position = {position.x, y, position.z},
 	    .tilt = village_totem::HandTiltAt(y),
-	    .closure = village_totem::GripClosure(_world->SizeOf(totemComponent.icon).radius),
+	    .closure = village_totem::GripClosure(_world->SizeOf(totemComponent.icon).height),
 	};
 }

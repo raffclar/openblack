@@ -120,15 +120,24 @@ float HandTiltAt(float handY)
 	return k_HandTilt + std::atan((k_LowHand - handY) / k_HandSize);
 }
 
-float GripClosure(float iconRadius)
+float GripClosure(float iconHeight)
 {
-	return std::min(iconRadius / (k_HandSize * 0.5f), 1.0f);
+	constexpr float k_PalmHoldRadiusShare = 0.75f;
+	const float holdRadius = iconHeight * k_PalmHoldRadiusShare;
+	return std::min(holdRadius / (k_HandSize * 0.5f), 1.0f);
+}
+
+bool Functional(bool built, float life)
+{
+	constexpr float k_LifeForNonFunctional = 0.75f;
+	return built && life > k_LifeForNonFunctional;
 }
 
 uint32_t GripTimeMs(float closure, uint32_t durationMs)
 {
-	// Worked in double, as the game's maths is worked wider than a float before it is cut
-	return static_cast<uint32_t>(static_cast<double>(closure) * 0.5 * static_cast<double>(durationMs >> 1u));
+	// Each step rounds to a float, and the result is cut to whole milliseconds
+	const float halfDuration = static_cast<float>(durationMs >> 1u);
+	return static_cast<uint32_t>((closure * 0.5f) * halfDuration);
 }
 
 Shown ShownShares(float current, float held, bool gripped)

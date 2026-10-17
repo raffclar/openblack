@@ -905,13 +905,9 @@ uint32_t villager_reactions::WaitForMate(LivingAction& action)
 float villager_reactions::TownShare(entt::entity town)
 {
 	auto& registry = EntityRegistry();
-	uint32_t people = 0;
-	registry.Each<const Villager>([&](entt::entity, const Villager& villager) {
-		if (villager.town == town)
-		{
-			++people;
-		}
-	});
+	// The town's people are its adults and children as its statistics last counted them
+	const auto* stats = registry.Valid(town) ? registry.TryGet<const TownStats>(town) : nullptr;
+	const uint32_t people = stats != nullptr ? stats->adults + stats->children : 0;
 	const float unmodified = Locator::infoConstants::value().town.populationForUnmodifiedBelief;
 	return (unmodified + k_BeliefShareSmall) / (static_cast<float>(people) + k_BeliefShareSmall);
 }
