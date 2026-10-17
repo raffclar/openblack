@@ -30,6 +30,10 @@ constexpr size_t k_Counters = 7;
 constexpr size_t k_PlayerDesires = 40;
 constexpr size_t k_TownDesires = 17;
 constexpr size_t k_LearningCounts = 45;
+/// The tattoo word of a new creature's empty slot: no design, no site, no colour
+constexpr uint32_t k_EmptyTattoo = 0xF0;
+/// The two numbers at the end of a new creature's file
+constexpr std::array<int32_t, 2> k_NewCreatureLast {0, -1};
 
 creaturemind::MindFileData Skeleton(size_t skills, size_t miracles)
 {
@@ -57,12 +61,14 @@ creaturemind::MindFileData Skeleton(size_t skills, size_t miracles)
 	file.database = std::vector<creaturemind::MindDatabaseEntry> {};
 	file.unknown2 = 0;
 	file.unknown3 = std::array<uint32_t, 4> {};
-	file.tattooHeader = std::array<uint32_t, 8> {};
+	std::array<uint32_t, 8> tattoos {};
+	tattoos.fill(k_EmptyTattoo);
+	file.tattooHeader = tattoos;
 	file.tattoo = std::vector<uint8_t> {};
 	file.learningCounts = std::vector<creaturemind::MindLearningCount>(k_LearningCounts, {.c = 0});
 	file.drawnScale = 1.0f;
 	file.unknown4 = 0.0f;
-	file.unknown5 = std::array<int32_t, 2> {};
+	file.unknown5 = k_NewCreatureLast;
 	return file;
 }
 
@@ -125,12 +131,11 @@ creature_tree::Episode creature_mind_model::StartingLesson()
 	constexpr std::array<uint32_t, 11> k_Slots {
 	    allegiance::k_Enemy, origin::k_Natural, 0, 0, 0, 0, belief_types::k_Villager, 0, 0, 1, 1,
 	};
-	// The example is of the lesson kind 2. A mind file keeps it with no action and no place.
-	constexpr int32_t k_LessonKind = 2;
+	// The example is of the act-on tree. A mind file keeps it with no action and no place.
 	return {
 	    .belief = FromSlots(belief_types::k_Villager, k_Slots),
 	    .feedback = k_StartingLessonFeedback,
-	    .saved = {k_LessonKind, 0, 0, 0},
+	    .lessonKind = LessonKind(TreeKind::ActOn),
 	};
 }
 
@@ -158,8 +163,19 @@ void creature_mind_model::Learn(Learnt& learnt, TreeKind kind, Desire desire, cr
 	const auto k = static_cast<size_t>(kind);
 	const auto d = static_cast<size_t>(desire);
 	auto& episodes = learnt.episodes.at(k).at(d);
+	episode.lessonKind = LessonKind(kind);
 	creature_tree::AddEpisode(episodes, std::move(episode));
 	learnt.trees.at(k).at(d) = creature_tree::Build(episodes, allowed);
+}
+
+void creature_mind_model::LearnSpread(Learnt& learnt, TreeKind kind, Desire desire, const creature_tree::Belief& belief,
+                                      float feedback, const creature_learning::Dependencies& dependencies,
+                                      const std::array<std::vector<creature_tree::Attribute>, k_DesireCount>& allowed)
+{
+	for (const auto& [other, share] : creature_learning::Spread(desire, feedback, dependencies))
+	{
+		Learn(learnt, kind, other, {.belief = belief, .feedback = share}, allowed.at(static_cast<size_t>(other)));
+	}
 }
 
 void creature_mind_model::RebuildTrees(Learnt& learnt,
@@ -200,12 +216,12 @@ LoadedMind creature_mind_model::FromFile(const creaturemind::MindFileData& file,
 			});
 		}
 	}
-	// The file's trees go by their place in the file, two to each desire: which thing to use, then which thing to act on.
-	// The kind number and the desire in the file go into the tree as they are.
+	// The file's trees go by their place in the file, two to each desire: the activity tree, then the act-on tree. The
+	// kind number and the desire in the file go into the tree as they are.
 	for (size_t i = 0; i < file.trees.size() && i / k_TreeKinds < k_DesireCount; ++i)
 	{
 		const auto& tree = file.trees[i];
-		const auto kind = static_cast<size_t>(i % k_TreeKinds == 0 ? TreeKind::Use : TreeKind::ActOn);
+		const auto kind = static_cast<size_t>(i % k_TreeKinds == 0 ? TreeKind::Activity : TreeKind::ActOn);
 		const auto desire = i / k_TreeKinds;
 		mind.learnt.treeHeaders.at(kind).at(desire) = TreeHeader {.type = tree.type, .desire = tree.desireAgain};
 		// The file's examples come after the examples that the mind has, such as the starting lesson. When the tree is
@@ -217,10 +233,13 @@ LoadedMind creature_mind_model::FromFile(const creaturemind::MindFileData& file,
 			{
 				continue;
 			}
+			auto belief = creature_tree::FromSlots(saved.belief.type, saved.belief.attributes);
+			belief.x = saved.belief.x;
+			belief.z = saved.belief.z;
 			episodes.push_back({
-			    .belief = creature_tree::FromSlots(saved.belief.type, saved.belief.attributes),
+			    .belief = std::move(belief),
 			    .feedback = saved.feedback,
-			    .saved = {0, saved.action, saved.belief.x, saved.belief.z},
+			    .action = saved.action,
 			    .savedDesire = saved.desire,
 			});
 		}
@@ -279,7 +298,9 @@ creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::D
 {
 	const auto& knowledge = learnt.knowledge;
 	auto file = learnt.file != nullptr ? *learnt.file : Skeleton(knowledge.skillsSeen.size(), knowledge.miraclesSeen.size());
-	// Written as the current version, filling what older versions lacked
+	// Written as the current version. For each field that an older version lacks, the game writes the value of the new
+	// creature that the file was loaded over: no leash known, empty tattoo slots, no learning counts, a drawn scale of 1
+	// and the last two numbers 0 and -1.
 	if (file.version != creaturemind::k_CurrentVersion)
 	{
 		const auto skeleton = Skeleton(knowledge.skillsSeen.size(), knowledge.miraclesSeen.size());
@@ -339,7 +360,7 @@ creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::D
 	file.trees.clear();
 	for (size_t d = 0; d < k_DesireCount; ++d)
 	{
-		for (const auto treeKind : {TreeKind::Use, TreeKind::ActOn})
+		for (const auto treeKind : {TreeKind::Activity, TreeKind::ActOn})
 		{
 			const auto k = static_cast<size_t>(treeKind);
 			const auto header = learnt.treeHeaders.at(k).at(d).value_or(
@@ -351,12 +372,12 @@ creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::D
 			for (const auto& episode : learnt.episodes.at(k).at(d))
 			{
 				tree.episodes.push_back({
-				    .kind = episode.saved[0],
+				    .kind = episode.lessonKind,
 				    .desire = episode.savedDesire.value_or(static_cast<int32_t>(d)),
-				    .action = episode.saved[1],
+				    .action = episode.action,
 				    .belief = {.type = episode.belief.type,
-				               .x = episode.saved[2],
-				               .z = episode.saved[3],
+				               .x = episode.belief.x,
+				               .z = episode.belief.z,
 				               .attributes = creature_tree::ToSlots(episode.belief)},
 				    .feedback = episode.feedback,
 				});

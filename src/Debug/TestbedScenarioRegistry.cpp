@@ -6581,6 +6581,22 @@ void AddMind(std::vector<Scenario>& all)
 	                 OnObject(Kind::LeashOrderOn, 0, 0, 0.5f, false), Act(Kind::TakeOffLeash, 0, 20.0f)},
 	    .repeatFrom = 0,
 	});
+	all.push_back({
+	    .id = "leash.aggression_lesson_saved",
+	    .name = "A hut shown on the aggression leash, then saved",
+	    .facet = Facet::Leash,
+	    .description = "The player's tiger on the aggression leash looks north at a village of the player: a hut and three "
+	                   "villagers. The Action button of the leash orders it onto the hut, then the leash comes off. Save "
+	                   "the game and read the creature's mind file.",
+	    .expected = "The tiger learns anger towards the village of the hut and less compassion for it. In the saved mind "
+	                "file, the activity trees of those desires (and of the desires that depend on them) hold a new example "
+	                "of lesson kind 1: the village, with the place of the village, action 0 and the desire of its tree.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {ownTiger},
+	    .objects = village,
+	    .commands = {Leash(0, LeashType::Evil, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 0.5f, false),
+	                 Act(Kind::TakeOffLeash, 0, 5.0f)},
+	});
 	// The player's evil, big tiger swaps minds with a small, neutral sheep that belongs to nobody, as The Lost Flock's
 	// sheep offers; then back again
 	auto swapper = Content(CreatureType::Tiger, {-15.0f, 0.0f}, 90.0f, "player's tiger");
