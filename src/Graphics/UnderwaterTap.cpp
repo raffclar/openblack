@@ -40,14 +40,14 @@ TapSplash SplashFor(float strength, float calm, glm::vec3 seed)
 	const float hard = std::clamp(strength, k_SoftestTap, k_HardestTap);
 	const float still = std::clamp(calm, 0.0f, 1.0f);
 	TapSplash splash;
-	splash.sheetRadius = (0.9f + 0.4f * hard) * k_Metre;
-	splash.sheetHeight = 1.4f * hard * (1.0f - 0.5f * still) * k_Metre;
-	splash.dropSpeed = (3.0f + 2.0f * hard) * (1.0f - 0.35f * still) * k_Metre;
+	splash.sheetRadius = (1.6f + 0.6f * hard) * k_Metre;
+	splash.sheetHeight = 2.4f * hard * (1.0f - 0.5f * still) * k_Metre;
+	splash.dropSpeed = (4.0f + 2.5f * hard) * (1.0f - 0.35f * still) * k_Metre;
 	const float many = (30.0f + 50.0f * (hard - k_SoftestTap)) * (1.0f - 0.5f * still);
 	splash.drops = static_cast<uint32_t>(std::clamp(many, 12.0f, static_cast<float>(k_DropParticles)));
 	splash.spray = std::clamp(0.6f * hard * (1.0f - 0.7f * still), 0.0f, 1.0f);
-	splash.ringDepth = 0.5f * hard * (1.0f - 0.3f * still) * k_Metre;
-	splash.ringRadius = splash.sheetRadius * 0.8f;
+	splash.ringDepth = 0.06f * hard * (1.0f - 0.3f * still) * k_Metre;
+	splash.ringRadius = splash.sheetRadius * 0.35f;
 	// The splash shows until its last drop is down and its spray has gone
 	const float flight = 2.0f * splash.dropSpeed / k_G;
 	splash.seconds = std::max(flight + 0.8f, 2.6f);

@@ -41,7 +41,7 @@ namespace streams = openblack::graphics::underwater::streams;
 namespace
 {
 /// How many leaves and twigs drift down the rivers at once
-constexpr size_t k_Drifters = 48;
+constexpr size_t k_Drifters = 128;
 /// How long a drifter lives at most, and how long it floats on the sea after it leaves a river
 constexpr float k_DrifterLife = 150.0f;
 constexpr float k_SeaLife = 30.0f;

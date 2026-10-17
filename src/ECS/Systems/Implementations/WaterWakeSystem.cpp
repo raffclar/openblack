@@ -253,14 +253,14 @@ void WaterWakeSystem::Tap(glm::vec3 position, float strength, float calm)
 	_taps.push_back({.position = position, .start = seconds, .splash = splash});
 	const glm::vec2 at {position.x, position.z};
 	_pendingRings.push_back(
-	    {.due = seconds, .ring = {.position = at, .radius = splash.ringRadius, .depth = splash.ringDepth, .foam = 1.0f}});
+	    {.due = seconds, .ring = {.position = at, .radius = splash.ringRadius, .depth = splash.ringDepth, .foam = 0.05f}});
 	for (const auto& landing : tap::RingLandings(splash))
 	{
 		_pendingRings.push_back({.due = seconds + landing.seconds,
 		                         .ring = {.position = at + landing.position,
 		                                  .radius = std::max(landing.size * 3.0f, 0.3f),
 		                                  .depth = tap::DropRingDepth(landing.size),
-		                                  .foam = 0.15f}});
+		                                  .foam = 0.0f}});
 	}
 }
 

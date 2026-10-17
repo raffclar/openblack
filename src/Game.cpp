@@ -934,6 +934,21 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				}
 			}
 			break;
+		// EXPERIMENT (not for merge): with the experiment's water on, F12 makes the hand tap the water where the middle
+		// of the view meets the sea's level, to show the splash
+		case SDLK_F12:
+			if (Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled())
+			{
+				const auto cursor = _cursorWorldPosition;
+				const auto origin = camera.GetOrigin();
+				const auto forward = camera.GetForward();
+				const float level = Locator::underwaterSystem::value().GetSeaLevel();
+				_cursorWorldPosition =
+				    forward.y < -0.01f ? origin + forward * ((level - origin.y) / forward.y) : camera.GetFocus();
+				PlayHandGrabSound();
+				_cursorWorldPosition = cursor;
+			}
+			break;
 		// F1 is the game's Help key, so the renderer's statistics are on F11
 		case SDLK_F11:
 			Locator::rendererInterface::value().SetDebug(!Locator::rendererInterface::value().GetDebug());
@@ -6042,14 +6057,14 @@ bool TapExperimentWater(glm::vec3 position, std::optional<float> riverSurface)
 	}
 	else
 	{
-		// On the sea the splash is on the waves. Near a coast, as in a pond, the water is calm.
+		// On the sea the splash is on the waves. Near a coast the water is a little calmer.
 		const auto& seabed = underwater.GetSeabed();
 		const auto shore = seabed.shore.empty()
 		                       ? glm::vec4(1000.0f, 0.0f, 0.0f, 0.0f)
 		                       : uw::ShoreAt(seabed.shore, seabed.cliff, seabed.size, seabed.spacing, xz - seabed.origin);
 		surface +=
 		    uw::WavesAt(xz, underwater.GetSeconds(), underwater.GetWaves()).height * std::clamp(shore.x / 40.0f, 0.0f, 1.0f);
-		calm = 1.0f - std::clamp(shore.x / 60.0f, 0.0f, 1.0f);
+		calm = 0.3f * (1.0f - std::clamp(shore.x / 60.0f, 0.0f, 1.0f));
 	}
 	Locator::waterWakeSystem::value().Tap({position.x, surface, position.z}, strength, calm);
 	return true;

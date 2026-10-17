@@ -157,9 +157,11 @@ float MouthFoam(vec2 onLevel, float t)
 		vec2 away = onLevel - mouth.xy;
 		float forward = dot(away, along);
 		float side = dot(away, vec2(-along.y, along.x));
-		// A fan of water that spreads as it goes out, about 18 units long
-		float width = 1.5f + 0.35f * max(forward, 0.0f);
-		float fan = exp(-side * side / (width * width)) * smoothstep(-2.0f, 1.0f, forward) * exp(-max(forward, 0.0f) / 9.0f);
+		// A fan of water that spreads as it goes out, about 12 units long; a slow river pushes out less
+		float width = 1.2f + 0.25f * max(forward, 0.0f);
+		float strength = clamp(speed / (1.2f * u_streamParams.x), 0.3f, 1.0f);
+		float fan = exp(-side * side / (width * width)) * smoothstep(-2.0f, 1.0f, forward) * exp(-max(forward, 0.0f) / 6.0f) *
+		            strength;
 		if (fan < 0.01f)
 		{
 			continue;
@@ -173,7 +175,7 @@ float MouthFoam(vec2 onLevel, float t)
 		float b = FoamPattern(q * 0.6f - vec2(fract(phase + 0.5f) * drift * 0.6f, 0.0f) + 4.7f);
 		float w = 1.0f - abs(2.0f * phase - 1.0f);
 		float pattern = mix(b, a, w);
-		foam += fan * smoothstep(0.55f, 0.85f, pattern);
+		foam += fan * smoothstep(0.62f, 0.9f, pattern);
 	}
 	return clamp(foam, 0.0f, 1.0f);
 }
@@ -198,7 +200,7 @@ void main()
 	{
 		float along = (u_uwParams.z - eye.y) / view.y;
 		vec3 onLevel = eye + view * along;
-		float foam = UwStreamFlowAt(onLevel.xz).w < 16.0f ? MouthFoam(onLevel.xz, t) * 0.65f : 0.0f;
+		float foam = UwStreamFlowAt(onLevel.xz).w < 16.0f ? MouthFoam(onLevel.xz, t) * 0.35f : 0.0f;
 		if (foam > 0.004f)
 		{
 			vec3 colour = vec3(0.92f, 0.95f, 0.95f) * light;

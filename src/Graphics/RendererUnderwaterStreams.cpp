@@ -259,7 +259,7 @@ void Renderer::DrawDrifters() const
 		const float kind = static_cast<float>(drifter.seed % 1000u) / 1000.0f;
 		const float fade =
 		    std::clamp(drifter.age / 1.5f, 0.0f, 1.0f) * std::clamp((drifter.life - drifter.age) / 3.0f, 0.0f, 1.0f);
-		const float length = (kind < 0.7f ? 0.14f + 0.1f * kind : 0.35f) * streams::k_UnitsPerMetre;
+		const float length = (kind < 0.7f ? 0.25f + 0.15f * kind : 0.8f) * streams::k_UnitsPerMetre;
 		data[i * 2] = {drifter.position.x, system.DrifterHeight(drifter), drifter.position.y, drifter.angle};
 		data[i * 2 + 1] = {length, kind, fade, 0.0f};
 	}

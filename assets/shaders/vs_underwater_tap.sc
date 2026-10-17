@@ -70,11 +70,11 @@ void main()
 		float v = corner.y * 0.5f + 0.5f;
 		float y = mix(min(bottom, top), top, v) * (0.75f + 0.5f * TapHash(floor(index) + seed.y * 37.0f));
 		// The sheet opens out as it rises, and its top leans out more as it breaks
-		float radius = sheetRadius * (0.45f + 0.75f * (1.0f - exp(-since * 6.0f))) + v * v * sheetHeight * (0.2f + 0.6f * breakup);
+		float radius = sheetRadius * (0.45f + 0.75f * (1.0f - exp(-since * 6.0f))) + v * v * sheetHeight * (0.1f + 0.3f * breakup);
 		vec3 world = centre + out_ * radius;
 		placed = world + upDir * y;
 		normal = normalize(out_ + upDir * (0.35f - v * 0.7f));
-		alpha = since > 0.0f && since < life && top - bottom > 0.02f ? (1.0f - smoothstep(0.55f, 1.0f, age)) * 0.75f : 0.0f;
+		alpha = since > 0.0f && since < life && top - bottom > 0.02f ? (1.0f - smoothstep(0.55f, 1.0f, age)) * 0.6f : 0.0f;
 		v_texcoord1 = vec4(angle * sheetRadius * 0.15f + seed.z * 7.0f, y * 0.2f / metre - since * 0.2f, h0 * 0.3f, breakup);
 		corner.x = 0.0f;
 	}
