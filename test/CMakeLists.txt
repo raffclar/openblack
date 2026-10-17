@@ -1158,13 +1158,6 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
   )
 endforeach ()
 openblack_setup_and_add_test(test_x87 test_x87.cpp)
-foreach (oracle_test test_oracle_catch test_oracle_sigmoid
-                     test_oracle_inverse_square_root
-)
-  target_compile_definitions(
-    ${oracle_test}
-    PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
-  )
 openblack_setup_and_add_test(
   test_oracle_creature_camera_maths
   oracle/test_oracle_creature_camera_maths.cpp
