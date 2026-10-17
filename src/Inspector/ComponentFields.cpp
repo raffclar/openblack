@@ -100,6 +100,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureCopy.h"
+#include "ECS/Components/CreatureCreedPowers.h"
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureDestruction.h"
 #include "ECS/Components/CreatureDrawnFeet.h"
@@ -123,6 +124,8 @@
 #include "ECS/Components/CreatureSquat.h"
 #include "ECS/Components/CreatureSwap.h"
 #include "ECS/Components/CreatureTallies.h"
+#include "ECS/Components/CreatureTarget.h"
+#include "ECS/Components/CreatureVanillaRecord.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
@@ -681,6 +684,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CaveCreature::state>("state")
 	    .Field<&components::CaveCreature::light>("light")
 	    .Field<&components::CaveCreature::tattooSites>("tattooSites");
+	Reflect<components::CreatureCreedPowers>(context).Field<&components::CreatureCreedPowers::glows>("glows");
 	Reflect<components::CreatureDance>(context)
 	    .Field<&components::CreatureDance::dance>("dance")
 	    .Field<&components::CreatureDance::startedBy>("startedBy")
@@ -995,6 +999,17 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureTallies::meals>("meals")
 	    .Field<&components::CreatureTallies::poos>("poos")
 	    .Field<&components::CreatureTallies::mushroomsEaten>("mushroomsEaten");
+	Reflect<components::CreatureTarget>(context)
+	    .Field<&components::CreatureTarget::point>("point")
+	    .Field<&components::CreatureTarget::object>("object")
+	    .Field<&components::CreatureTarget::has>("has");
+	Reflect<components::CreatureVanillaRecord>(context)
+	    .Field<&components::CreatureVanillaRecord::number>("number")
+	    .Field<&components::CreatureVanillaRecord::loaded>("loaded")
+	    .Field<&components::CreatureVanillaRecord::baseline>("baseline")
+	    .Field<&components::CreatureVanillaRecord::loadedLeash>("loadedLeash")
+	    .Field<&components::CreatureVanillaRecord::baselineLeash>("baselineLeash")
+	    .Field<&components::CreatureVanillaRecord::leashNumber>("leashNumber");
 	Reflect<components::DanceMove>(context)
 	    .Field<&components::DanceMove::action>("action")
 	    .Field<&components::DanceMove::first>("first")
@@ -2568,7 +2583,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::Step::main>("main")
 	    .Field<&openblack::creature_mind::Step::request>("request")
 	    .Field<&openblack::creature_mind::Step::ordered>("ordered")
-	    .Field<&openblack::creature_mind::Step::desire>("desire");
+	    .Field<&openblack::creature_mind::Step::desire>("desire")
+	    .Field<&openblack::creature_mind::Step::saved>("saved");
+	Reflect<openblack::creature_mind::Step::Saved>(context, ValueOnly {})
+	    .Field<&openblack::creature_mind::Step::Saved::kind>("kind")
+	    .Field<&openblack::creature_mind::Step::Saved::integer>("integer")
+	    .Field<&openblack::creature_mind::Step::Saved::point>("point")
+	    .Field<&openblack::creature_mind::Step::Saved::real>("real");
 	Reflect<openblack::creature_mind_model::Learnt>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind_model::Learnt::opinions>("opinions")
 	    .Field<&openblack::creature_mind_model::Learnt::turnsSinceDone>("turnsSinceDone")
@@ -2763,6 +2784,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::components::CreatureCasting::Fizzle>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureCasting::Fizzle::target>("target")
 	    .Field<&openblack::ecs::components::CreatureCasting::Fizzle::magicType>("magicType");
+	Reflect<openblack::ecs::components::CreatureCreedPowers::Glow>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureCreedPowers::Glow::scale>("scale")
+	    .Field<&openblack::ecs::components::CreatureCreedPowers::Glow::power>("power");
 	Reflect<openblack::ecs::components::CreatureDance::Place>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureDance::Place::dancer>("dancer")
 	    .Field<&openblack::ecs::components::CreatureDance::Place::position>("position");

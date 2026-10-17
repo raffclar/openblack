@@ -1901,6 +1901,12 @@
   "writes": true
  },
  {
+  "description": "After a load of a slot of the game itself: each creature of the game's file, and whether the record that a save writes for it now has the same bytes as the file's record",
+  "kind": "list",
+  "parameters": [],
+  "query": "saves.vanilla_check"
+ },
+ {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
   "kind": "object",
   "parameters": [],

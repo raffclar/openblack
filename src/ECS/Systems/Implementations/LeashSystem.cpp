@@ -41,6 +41,7 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureSaveState.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashOwnership.h"
@@ -56,6 +57,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/CreatureTarget.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Forest.h"
@@ -87,6 +89,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "Graphics/Texture2D.h"
 #include "Help/HelpProfile.h"
 #include "Input/GameActionMapInterface.h"
@@ -2173,6 +2176,10 @@ void LeashSystem::MarkOrder(entt::entity creature, std::optional<entt::entity> o
 		}
 	}
 	leashes.order = order;
+	// The creature keeps the point and the thing that the order aims at, for as long as it does the order
+	const float height = object.has_value() && registry.Valid(*object) ? world_objects::SizeOf(*object).height : 0.0f;
+	registry.AssignOrReplace<CreatureTarget>(
+	    creature, CreatureTarget {.point = creature_save_state::TargetPoint(point, height), .object = object, .has = true});
 	registry.SetDirty();
 }
 
@@ -2186,6 +2193,12 @@ void LeashSystem::EndOrder(entt::entity creature)
 	}
 	const auto order = *leashes->order;
 	leashes->order.reset();
+	// The creature stops the order: the point stays, but it aims at nothing now
+	if (auto* target = registry.TryGet<CreatureTarget>(creature))
+	{
+		target->object.reset();
+		target->has = false;
+	}
 	if (order.sparkles != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value() &&
 	    Locator::particleSystem::value().IsRunning(order.sparkles))
 	{

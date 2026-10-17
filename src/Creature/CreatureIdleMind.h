@@ -589,6 +589,17 @@ struct Step
 	std::shared_ptr<const Step> ordered;
 	/// The desire that a step that applies a desire makes strong
 	creature_desires::Desire desire {creature_desires::Desire::Compassion};
+	/// The step of the game that this step stands for, as a saved game keeps it in the plan of a creature that a script
+	/// controls. Only the steps that such a plan has keep it.
+	struct Saved
+	{
+		/// The number of the game's step
+		uint32_t kind {0};
+		uint32_t integer {0};
+		glm::vec3 point {0.0f};
+		float real {0.0f};
+	};
+	std::optional<Saved> saved;
 };
 
 struct IdleMind

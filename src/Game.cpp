@@ -5436,6 +5436,7 @@ void Game::LoadLandscape(const std::filesystem::path& path)
 		throw std::runtime_error("Could not find landscape " + path.generic_string());
 	}
 	LoadTimer timer(fmt::format("landscape {}", path.stem().string()));
+	_landscapePath = path;
 	InitializeLevel(fixedName);
 	SetUpLandscape();
 }

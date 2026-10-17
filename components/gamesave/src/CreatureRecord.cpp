@@ -9,6 +9,8 @@
 
 #include "CreatureRecord.h"
 
+#include "SavedObjects.h"
+
 using namespace openblack::gamesave;
 
 namespace
@@ -18,39 +20,39 @@ constexpr uint32_t k_MostListed = 0x10000;
 /// The most steps that an agenda has
 constexpr uint32_t k_MostSteps = 32;
 
-void Put(ByteWriter& writer, const SubAction& step)
+void Put(StreamWriter& writer, const SubAction& step)
 {
 	writer.Put(step.action);
-	writer.Put(step.object);
-	writer.Put(step.word10);
+	Write(writer, step.object);
+	writer.Put(step.integer);
 	writer.Put(step.point);
-	writer.Put(step.word20);
-	writer.Put(step.word24);
+	writer.Put(step.real);
+	writer.Put(step.spell);
 	writer.Put(step.word28);
-	writer.Put(step.other);
-	writer.Put(step.word30);
+	Write(writer, step.other);
+	writer.Put(step.orderKind);
 }
 
-void Get(ByteReader& reader, SubAction& step)
+void Get(StreamReader& reader, SubAction& step)
 {
 	reader.Get(step.action);
-	reader.Get(step.object);
-	reader.Get(step.word10);
+	Read(reader, step.object);
+	reader.Get(step.integer);
 	reader.Get(step.point);
-	reader.Get(step.word20);
-	reader.Get(step.word24);
+	reader.Get(step.real);
+	reader.Get(step.spell);
 	reader.Get(step.word28);
-	reader.Get(step.other);
-	reader.Get(step.word30);
+	Read(reader, step.other);
+	reader.Get(step.orderKind);
 }
 
-void Put(ByteWriter& writer, const KeptPlan& plan)
+void Put(StreamWriter& writer, const KeptPlan& plan)
 {
 	writer.Put(plan.desire);
 	writer.Put(plan.action);
-	for (const auto object : plan.objects)
+	for (const auto& object : plan.objects)
 	{
-		writer.Put(object);
+		Write(writer, object);
 	}
 	const auto& agenda = plan.agenda;
 	writer.Put(agenda.word08);
@@ -66,17 +68,17 @@ void Put(ByteWriter& writer, const KeptPlan& plan)
 	{
 		Put(writer, i < agenda.steps.size() ? agenda.steps[i] : SubAction {});
 	}
-	writer.Put(agenda.creature);
-	writer.Put(agenda.other);
+	Write(writer, agenda.creature);
+	Write(writer, agenda.other);
 }
 
-bool Get(ByteReader& reader, KeptPlan& plan)
+bool Get(StreamReader& reader, KeptPlan& plan)
 {
 	reader.Get(plan.desire);
 	reader.Get(plan.action);
 	for (auto& object : plan.objects)
 	{
-		reader.Get(object);
+		Read(reader, object);
 	}
 	auto& agenda = plan.agenda;
 	reader.Get(agenda.word08);
@@ -96,13 +98,23 @@ bool Get(ByteReader& reader, KeptPlan& plan)
 	{
 		Get(reader, step);
 	}
-	reader.Get(agenda.creature);
-	reader.Get(agenda.other);
+	Read(reader, agenda.creature);
+	Read(reader, agenda.other);
 	return !reader.Failed();
 }
 } // namespace
 
-void openblack::gamesave::Write(ByteWriter& writer, const CreatureRecord& record)
+std::array<SpellSlot, k_CreatureSpellCount> openblack::gamesave::NewSpellSlots()
+{
+	std::array<SpellSlot, k_CreatureSpellCount> slots {};
+	for (uint32_t i = 0; i < slots.size(); ++i)
+	{
+		slots.at(i).spell = i;
+	}
+	return slots;
+}
+
+void openblack::gamesave::Write(StreamWriter& writer, const CreatureRecord& record)
 {
 	writer.Put(record.version);
 	writer.Put(record.savedInTemple);
@@ -110,19 +122,19 @@ void openblack::gamesave::Write(ByteWriter& writer, const CreatureRecord& record
 	writer.Put(record.owner);
 	for (const auto& slot : record.spells)
 	{
-		writer.Put(slot.start);
+		writer.Put(slot.spell);
 		writer.Put(slot.phase);
 		writer.Put(slot.turnsLeft);
 		writer.Put(slot.found);
 		writer.Put(slot.holdTurns);
-		writer.Put(slot.miracle);
+		Write(writer, slot.miracle);
 	}
 	writer.Put(static_cast<uint32_t>(record.queued.size()));
 	for (const auto& queued : record.queued)
 	{
 		writer.Put(queued.spell);
 		writer.Put(queued.seconds);
-		writer.Put(queued.miracle);
+		Write(writer, queued.miracle);
 	}
 	writer.Put(record.mindProcessing);
 	writer.Put(record.largestSize);
@@ -134,28 +146,28 @@ void openblack::gamesave::Write(ByteWriter& writer, const CreatureRecord& record
 	writer.Put(record.fizzPerSecond);
 	writer.Put(record.freeze);
 	writer.Put(record.word12C0);
-	for (const auto visual : record.spellVisuals)
+	for (const auto& visual : record.spellVisuals)
 	{
-		writer.Put(visual);
+		Write(writer, visual);
 	}
-	for (const auto particles : record.handParticles)
+	for (const auto& particles : record.handParticles)
 	{
-		writer.Put(particles);
+		Write(writer, particles);
 	}
 	writer.Put(record.targetPoint);
-	writer.Put(record.targetParticles);
-	writer.Put(record.targetObject);
+	Write(writer, record.targetParticles);
+	Write(writer, record.targetObject);
 	writer.Put(record.hasTarget);
-	writer.Put(record.arena);
+	Write(writer, record.arena);
 	writer.Put(record.home);
 	writer.Put(record.fightHealth);
 	writer.Put(record.autoFight);
 	writer.Put(static_cast<uint32_t>(record.dancePartners.size()));
-	for (const auto partner : record.dancePartners)
+	for (const auto& partner : record.dancePartners)
 	{
-		writer.Put(partner);
+		Write(writer, partner);
 	}
-	writer.Put(record.dance);
+	Write(writer, record.dance);
 	writer.Put(record.canDie);
 	writer.Put(record.strength);
 	writer.Put(record.size);
@@ -175,14 +187,7 @@ void openblack::gamesave::Write(ByteWriter& writer, const CreatureRecord& record
 	}
 }
 
-std::vector<uint8_t> openblack::gamesave::Write(const CreatureRecord& record)
-{
-	ByteWriter writer;
-	Write(writer, record);
-	return writer.Take();
-}
-
-std::optional<CreatureRecord> openblack::gamesave::ReadCreatureRecord(ByteReader& reader)
+std::optional<CreatureRecord> openblack::gamesave::ReadCreatureRecord(StreamReader& reader)
 {
 	CreatureRecord record;
 	reader.Get(record.version);
@@ -191,12 +196,12 @@ std::optional<CreatureRecord> openblack::gamesave::ReadCreatureRecord(ByteReader
 	reader.Get(record.owner);
 	for (auto& slot : record.spells)
 	{
-		reader.Get(slot.start);
+		reader.Get(slot.spell);
 		reader.Get(slot.phase);
 		reader.Get(slot.turnsLeft);
 		reader.Get(slot.found);
 		reader.Get(slot.holdTurns);
-		reader.Get(slot.miracle);
+		Read(reader, slot.miracle);
 	}
 	uint32_t count = 0;
 	if (!reader.Get(count) || count > k_MostListed)
@@ -208,7 +213,7 @@ std::optional<CreatureRecord> openblack::gamesave::ReadCreatureRecord(ByteReader
 	{
 		reader.Get(queued.spell);
 		reader.Get(queued.seconds);
-		reader.Get(queued.miracle);
+		Read(reader, queued.miracle);
 	}
 	// Older records have no processing word, and the mind processes
 	if (record.version > k_LastVersionWithoutProcessing)
@@ -226,17 +231,17 @@ std::optional<CreatureRecord> openblack::gamesave::ReadCreatureRecord(ByteReader
 	reader.Get(record.word12C0);
 	for (auto& visual : record.spellVisuals)
 	{
-		reader.Get(visual);
+		Read(reader, visual);
 	}
 	for (auto& particles : record.handParticles)
 	{
-		reader.Get(particles);
+		Read(reader, particles);
 	}
 	reader.Get(record.targetPoint);
-	reader.Get(record.targetParticles);
-	reader.Get(record.targetObject);
+	Read(reader, record.targetParticles);
+	Read(reader, record.targetObject);
 	reader.Get(record.hasTarget);
-	reader.Get(record.arena);
+	Read(reader, record.arena);
 	reader.Get(record.home);
 	reader.Get(record.fightHealth);
 	reader.Get(record.autoFight);
@@ -247,9 +252,9 @@ std::optional<CreatureRecord> openblack::gamesave::ReadCreatureRecord(ByteReader
 	record.dancePartners.resize(count);
 	for (auto& partner : record.dancePartners)
 	{
-		reader.Get(partner);
+		Read(reader, partner);
 	}
-	reader.Get(record.dance);
+	Read(reader, record.dance);
 	reader.Get(record.canDie);
 	reader.Get(record.strength);
 	reader.Get(record.size);
@@ -280,27 +285,21 @@ std::optional<CreatureRecord> openblack::gamesave::ReadCreatureRecord(ByteReader
 	return record;
 }
 
-std::optional<CreatureRecord> openblack::gamesave::ReadCreatureRecord(std::span<const uint8_t> bytes)
-{
-	ByteReader reader(bytes);
-	return ReadCreatureRecord(reader);
-}
-
-void openblack::gamesave::Write(ByteWriter& writer, const LeashRecord& record)
+void openblack::gamesave::Write(StreamWriter& writer, const LeashRecord& record)
 {
 	writer.Put(record.on);
 	writer.Put(record.works);
 	writer.Put(record.type);
 	writer.Put(record.player);
 	writer.Put(record.word20);
-	writer.Put(record.tiedTo);
+	Write(writer, record.tiedTo);
 	writer.Put(record.length);
 	writer.Put(record.fullLength);
-	writer.Put(record.holder);
+	Write(writer, record.holder);
 	writer.Put(record.word34);
 }
 
-std::optional<LeashRecord> openblack::gamesave::ReadLeashRecord(ByteReader& reader)
+std::optional<LeashRecord> openblack::gamesave::ReadLeashRecord(StreamReader& reader)
 {
 	LeashRecord record;
 	reader.Get(record.on);
@@ -308,10 +307,10 @@ std::optional<LeashRecord> openblack::gamesave::ReadLeashRecord(ByteReader& read
 	reader.Get(record.type);
 	reader.Get(record.player);
 	reader.Get(record.word20);
-	reader.Get(record.tiedTo);
+	Read(reader, record.tiedTo);
 	reader.Get(record.length);
 	reader.Get(record.fullLength);
-	reader.Get(record.holder);
+	Read(reader, record.holder);
 	reader.Get(record.word34);
 	if (reader.Failed())
 	{
