@@ -1146,3 +1146,4 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
     ${oracle_test}
     PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
   )
+endforeach ()
