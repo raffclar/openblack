@@ -19,9 +19,11 @@
 #include <gtest/gtest.h>
 
 #include "Common/X87.h"
+#include "Common/X87Vector.h"
 #include "Common/Zoomer.h"
 #include "Creature/CreatureEyes.h"
 #include "OracleData.h"
+#include "Particles/ParticleFlocking.h"
 
 using namespace openblack;
 
@@ -109,6 +111,51 @@ TEST(OracleGlmOrder3, TheCreaturesEyeAsTheGameDrawsIt)
 		if (!same && ++different <= 20)
 		{
 			ADD_FAILURE() << "row " << row << " mode " << u("mode") << " blink " << u("blink") << " eye " << eye << ":" << text;
+		}
+	}
+	EXPECT_EQ(different, 0U);
+}
+
+TEST(OracleGlmOrder3, TheFlockRulesFalloff)
+{
+	const auto table = oracle::Table::Load("flock_falloff.txt");
+	ASSERT_TRUE(table.has_value());
+	const auto distance = table->Column("distance").value_or(0);
+	const auto modifier = table->Column("modifier").value_or(0);
+	const auto type = table->Column("type").value_or(0);
+	const auto invert = table->Column("invert").value_or(0);
+	const auto falloff = table->Column("falloff").value_or(0);
+	size_t different = 0;
+	for (size_t row = 0; row < table->Rows(); ++row)
+	{
+		const float ours = particles::flocking::Falloff(table->Float(row, distance), static_cast<int>(table->Bits(row, type)),
+		                                                table->Bits(row, invert) != 0, table->Float(row, modifier));
+		if (std::bit_cast<uint32_t>(ours) != table->Bits(row, falloff) && ++different <= 20)
+		{
+			ADD_FAILURE() << "row " << row << " game " << oracle::Hex(table->Float(row, falloff)) << " ours "
+			              << oracle::Hex(ours);
+		}
+	}
+	EXPECT_EQ(different, 0U);
+}
+
+TEST(OracleGlmOrder3, AVectorMadeALengthLong)
+{
+	const auto table = oracle::Table::Load("set_length.txt");
+	ASSERT_TRUE(table.has_value());
+	const auto c = [&](const char* name) { return table->Column(name).value_or(0); };
+	size_t different = 0;
+	for (size_t row = 0; row < table->Rows(); ++row)
+	{
+		const glm::vec3 v {table->Float(row, c("x")), table->Float(row, c("y")), table->Float(row, c("z"))};
+		const auto ours = x87::Scaled<x87::SumOrder::Zyx>(v, table->Float(row, c("length")));
+		const bool same = std::bit_cast<uint32_t>(ours.x) == table->Bits(row, c("rx")) &&
+		                  std::bit_cast<uint32_t>(ours.y) == table->Bits(row, c("ry")) &&
+		                  std::bit_cast<uint32_t>(ours.z) == table->Bits(row, c("rz"));
+		if (!same && ++different <= 20)
+		{
+			ADD_FAILURE() << "row " << row << " game " << oracle::Hex(table->Float(row, c("rx"))) << " ours "
+			              << oracle::Hex(ours.x);
 		}
 	}
 	EXPECT_EQ(different, 0U);

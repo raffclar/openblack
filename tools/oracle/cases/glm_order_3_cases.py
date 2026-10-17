@@ -12,6 +12,8 @@
 - creature_eye.txt: the creature's eye drawing step (eyeball and eyelid matrices) for one eye, on chosen and random
   inputs. The eye points are on a mesh that is not skinned, with a bone matrix that is the identity, so that the
   surface points are the vertices as given.
+- flock_falloff.txt: the flock rule's falloff of a pull with distance
+- set_length.txt: the particle code's "make a vector this long" (the squares added z first)
 
 Usage: python tools/oracle/cases/glm_order_3_cases.py [output folder]   (default: test/oracle/data)
 The random inputs come from a fixed seed, so a second run gives the same files (except the date line).
@@ -170,10 +172,50 @@ def eye_cases(oracle: Oracle) -> list[list[int]]:
     return rows
 
 
+FLOCK_FALLOFF = 0x683520  # thiscall (rule: scale modifier at +0x4C), (distance, type, invert) -> ST0
+SET_LENGTH = 0x6805F0  # thiscall (vector), (length) -> the vector made that long
+
+
+def falloff_cases(oracle: Oracle) -> list[list[int]]:
+    rng = random.Random(0xFA11)
+    rule = oracle.alloc(0x80)
+    rows = []
+    chosen = [0.0, 0.005, 0.0099999, 0.01, 0.010001, 0.5, 1.0, 2.0, 3.0, 10.0, 123.456]
+    cases = [(f2u(d), f2u(m)) for d in chosen for m in (1.0, 0.4, 0.5, 2.5)]
+    cases += [(f2u(10 ** rng.uniform(-3, 3)), f2u(rng.uniform(0.1, 4.0))) for _ in range(400)]
+    for distance, modifier in cases:
+        oracle.write_u32(rule + 0x4C, modifier)
+        for kind in range(3):
+            for invert in range(2):
+                result = oracle.call(FLOCK_FALLOFF, this=rule, args=[distance, kind, invert])
+                rows.append([distance, modifier, kind, invert, result.st0f])
+    return rows
+
+
+def set_length_cases(oracle: Oracle) -> list[list[int]]:
+    rng = random.Random(0x5E71)
+    vector = oracle.alloc(16)
+    rows = []
+    for _ in range(1500):
+        v = [f2u(rng.uniform(-100, 100) * 10 ** rng.uniform(-3, 1)) for _ in range(3)]
+        length = f2u(10 ** rng.uniform(-2, 3))
+        oracle.write_u32(vector, *v)
+        oracle.call(SET_LENGTH, this=vector, args=[length])
+        rows.append(v + [length] + oracle.read_f32_bits(vector, 3))
+    return rows
+
+
 def main() -> int:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "test" / "oracle" / "data"
     with Oracle() as oracle:
         rows = eye_cases(oracle)
+        falloffs = falloff_cases(oracle)
+        lengths = set_length_cases(oracle)
+    write_pinned(out / "flock_falloff.txt", "The flock rule's falloff of a pull with distance",
+                 ["distance, scale modifier, type and invert in; the falloff out"],
+                 ["distance", "modifier", "type", "invert", "falloff"], falloffs)
+    write_pinned(out / "set_length.txt", "A vector made a length long by the particle code",
+                 ["x, y, z and the length in; the vector out"], ["x", "y", "z", "length", "rx", "ry", "rz"], lengths)
     count = write_pinned(
         out / "creature_eye.txt", "The creature's eye drawing step, one eye at a time",
         ["Inputs: twelve vertices (three for each surface point), each point's s and t, the eye, its depth, the",
