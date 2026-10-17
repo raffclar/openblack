@@ -410,3 +410,26 @@ TEST(CreatureReactionRules, AnIconMiracleWithNoSeedTeachesNothing)
 	EXPECT_FALSE(creature_reaction::MadeByIconWithoutSeed(false, false));
 	EXPECT_FALSE(creature_reaction::MadeByIconWithoutSeed(false, true));
 }
+
+TEST(CreatureReactionRules, TheLeashCastStartsAtThePointThatTheInterfacePicked)
+{
+	const glm::vec2 picked {1200.0f, 900.0f};
+	const auto centre = creature_reaction::LeashCastCentre({.leashOn = true, .knowsMiracle = true, .pickedPoint = picked});
+	ASSERT_TRUE(centre.has_value());
+	EXPECT_EQ(*centre, picked);
+	// Without a leash on, or without the miracle, the creature does not cast
+	EXPECT_FALSE(creature_reaction::LeashCastCentre({.leashOn = false, .knowsMiracle = true, .pickedPoint = picked}));
+	EXPECT_FALSE(creature_reaction::LeashCastCentre({.leashOn = true, .knowsMiracle = false, .pickedPoint = picked}));
+	// With no point picked, it does not cast
+	EXPECT_FALSE(creature_reaction::LeashCastCentre({.leashOn = true, .knowsMiracle = true}));
+}
+
+TEST(CreatureReactionRules, ALeashTiedToAPostStillMakesTheCreatureCastFromThePickedPoint)
+{
+	const glm::vec2 picked {300.0f, 700.0f};
+	const auto centre =
+	    creature_reaction::LeashCastCentre({.leashOn = true, .tied = true, .knowsMiracle = true, .pickedPoint = picked});
+	ASSERT_TRUE(centre.has_value());
+	// The search does not start at the post: the range and the centre are as with the leash in the hand
+	EXPECT_EQ(*centre, picked);
+}

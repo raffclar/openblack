@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <map>
 #include <memory>
 #include <optional>
@@ -240,6 +242,14 @@ struct CreatureMindState
 	std::optional<uint32_t> clearingWaySerial;
 	/// Where the creature walks on to after it clears a thing out of its way
 	glm::vec2 walkOnTo {0.0f};
+	/// The cast that waits for the end of a reaction to a nasty miracle on the leash: the thing to cast at and the
+	/// miracle
+	struct LeashCast
+	{
+		entt::entity thing {entt::null};
+		uint32_t miracle {0};
+	};
+	std::optional<LeashCast> leashCast;
 };
 
 } // namespace openblack::ecs::components

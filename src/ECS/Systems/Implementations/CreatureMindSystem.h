@@ -100,6 +100,7 @@ public:
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
 	void ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
+	void CastOnLeashAfterReaction(entt::entity creature, size_t miracle) override;
 	void ReactToNiceMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
 	void StartReacting(entt::entity creature) override;
 	void TakeUpReaction(entt::entity creature, entt::entity thing, const creature_reaction::Setup& setup) override;
@@ -464,6 +465,8 @@ private:
 	              std::span<const uint32_t> met);
 	/// The creature cleared its way and walks on to the destination
 	void WalkOn(entt::entity creature, const components::CreatureMindState& mind);
+	/// What waited after the reaction on the leash: the creature casts the miracle at the thing it found
+	void CastOnLeash(entt::entity creature, components::CreatureMindState& mind);
 	/// Each turn: the mark of a creature that clears its way stays while the plan that clears it runs. The movement of
 	/// the creature gets the mark.
 	void StepClearingWay(entt::entity creature, components::CreatureMindState& mind);

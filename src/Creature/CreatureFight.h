@@ -367,6 +367,9 @@ struct MindInFight
 /// Whether the creature obeys the creature that started its fight: its desires stand still until the fight is over, or
 /// until it wins by a knock-out
 [[nodiscard]] bool ObeysInFight(const MindInFight& mind);
+/// The priority of the plan of the creature that obeys in a fight, before the planner's scale. The plan is an order, but
+/// it is not forced.
+constexpr float k_ObeyPlanPriority = 1.0f;
 /// A creature asked to fight agrees only to one between half and twice its own height, not while it lies dead, and only
 /// when both or neither of them are under a script's control
 constexpr float k_SmallestOpponentShare = 0.5f;
