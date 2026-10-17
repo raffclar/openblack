@@ -116,6 +116,22 @@ Numbers are hexadecimal with no prefix. Commands: `info`, `reset`, `alloc <size>
 `call <addr> [cw=v] [eax=v] [ecx=v] [edx=v] [arg ...]`, `quit`. A call answers
 `ok eax=.. edx=.. esp=.. fsw=.. depth=.. st0=<20 hex digits, high first>|- st0f=..`.
 
+## Rule: where vanilla test data comes from
+
+Make each "expected vanilla" value in a test with the oracle: the game's own code on the real FPU, at the game's
+24-bit precision. Do not make vanilla data with a CPU emulator (Unicorn or other), unless a proof shows that its x87
+obeys the precision control bits. A Python or numpy float32 model is not vanilla data. Use a model only for code that
+the oracle cannot call, and write in the test where the values come from.
+
+The cause of this rule: the scripts in `test/audio/scripts` run the game and the sound DLL under Unicorn. They did not
+set the FPU control word, thus the code ran at 64-bit precision. The sound map volumes that they made were not the
+game's values (`cases/atmos_volumes_cases.py` made them again).
+
+Data from an emulator can stay only when each x87 step of the code gives the same result at all precisions. Write
+that proof in the script that makes the data. An example is the atmosphere scheduler
+(`test/audio/scenarios/scheduler_*.json`): its float steps change small integers to floats, add them, multiply them
+by 4 and compare them with 0 and 1. Each of these steps is exact at all precisions.
+
 ## Pinned data for the unit tests
 
 `write_pinned(path, title, notes, columns, rows)` writes a data file: `#` lines (the title, the date and the
@@ -124,7 +140,7 @@ Put only inputs and results in it, never bytes of the executable.
 
 In a test, `test/oracle/OracleData.h` reads it: `oracle::Table::Load("name.txt")`, then `Column("x")`,
 `Rows()`, `Bits(row, column)` and `Float(row, column)`. Register the test in `test/CMakeLists.txt` with
-`openblack_setup_and_add_test` and give it `OPENBLACK_ORACLE_DATA` (see the oracle tests there).
+`openblack_setup_and_add_test` and add it to the list of oracle tests that get `OPENBLACK_ORACLE_DATA`.
 
 ## Guide for lanes
 
