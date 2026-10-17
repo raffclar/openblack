@@ -131,8 +131,20 @@ public:
 		entt::entity object;
 		std::optional<entt::entity> activityObject;
 	};
+	creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity) override
+	{
+		++handChecks;
+		if (handChecks <= hands.size())
+		{
+			return hands.at(handChecks - 1);
+		}
+		return creature_mind::HandsCheck::Free;
+	}
 	std::vector<Forced> forced;
 	std::optional<entt::entity> pooedDirectly;
+	/// What the checks of the hands before a faint do in turn, then Free
+	std::vector<creature_mind::HandsCheck> hands;
+	size_t handChecks {0};
 };
 
 /// The game's random numbers: they give the numbers in the list in turn, then 0, and count the draws of each range
@@ -753,4 +765,57 @@ TEST_F(CreatureFightSystemTest, AFaintCutsTheBodyAndDrawsItsSide)
 	EXPECT_TRUE(body.mirrored);
 	EXPECT_EQ(game.ranges, (std::vector<uint32_t> {2}));
 	Locator::gameRandom::reset();
+}
+
+// A faint that does not come from the mind first checks the hands. With a thing in the hand, the creature starts to let
+// go, and the faint starts on the next turn with no new check. While the body or the hands are busy, the faint waits.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AFaintWaitsForTheLetGoOfTheThingInTheHand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	auto& game = static_cast<ListedGameRandom&>(Locator::gameRandom::emplace<ListedGameRandom>());
+	using creature_mind::HandsCheck;
+	minds.hands = {HandsCheck::Wait, HandsCheck::Wait, HandsCheck::LetGo};
+	fights.ForceFaint(second);
+	const auto faints = [&] {
+		return registry.Get<const CreatureAnimation>(second).body.kind == creature_layers::BodyAction::Kind::Sequence;
+	};
+	// Two turns busy, then the let-go starts
+	for (size_t turn = 1; turn <= 3; ++turn)
+	{
+		fights.ProcessTurn();
+		EXPECT_FALSE(faints());
+		EXPECT_EQ(minds.handChecks, turn);
+		EXPECT_TRUE(game.ranges.empty());
+	}
+	EXPECT_TRUE(registry.Get<const CreatureKnockedOut>(second).handsChecked);
+	// The faint starts with no new check and draws its side
+	fights.ProcessTurn();
+	EXPECT_TRUE(faints());
+	EXPECT_EQ(minds.handChecks, 3u);
+	EXPECT_EQ(game.ranges, (std::vector<uint32_t> {2}));
+	EXPECT_FALSE(registry.Get<const CreatureKnockedOut>(second).fainting);
+	Locator::gameRandom::reset();
+	Locator::creatureMindSystem::reset();
+}
+
+// The knocked-out creature counts the time that it lies only from when it lies still: not while the faint waits for the
+// hands, and not while the faint plays before it lies still.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AKnockedOutCreatureCountsItsTimeFromWhenItLiesStill)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	fights.ForceFaint(second);
+	fights.ProcessTurn();
+	fights.ProcessTurn();
+	const auto& knockedOut = registry.Get<const CreatureKnockedOut>(second);
+	EXPECT_LT(knockedOut.seconds, 0.0f);
+	// It lies still: from now its time counts on each turn
+	registry.Get<CreatureAnimation>(second).body.phase = creature_layers::BodyAction::Phase::Loop;
+	fights.ProcessTurn();
+	const auto first = knockedOut.seconds;
+	fights.ProcessTurn();
+	EXPECT_GT(knockedOut.seconds, first);
+	EXPECT_EQ(knockedOut.stage, CreatureKnockedOut::Stage::Lying);
 }

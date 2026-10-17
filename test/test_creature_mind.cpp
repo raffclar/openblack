@@ -660,6 +660,18 @@ TEST(CreatureIdleMind, AStepThatNeedsNothingKeepsWhatItHolds)
 	EXPECT_TRUE(commands.move.has_value());
 }
 
+// With empty hands nothing waits. With a thing in the hand, the let-go starts only when the body and the hands are free.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureIdleMind, TheCheckOfTheHandsLetsGoOnlyWhenTheBodyAndHandsAreFree)
+{
+	using creature_mind::HandsCheck;
+	EXPECT_EQ(creature_mind::CheckHands(false, true, true), HandsCheck::Free);
+	EXPECT_EQ(creature_mind::CheckHands(false, false, false), HandsCheck::Free);
+	EXPECT_EQ(creature_mind::CheckHands(true, false, false), HandsCheck::LetGo);
+	EXPECT_EQ(creature_mind::CheckHands(true, true, false), HandsCheck::Wait);
+	EXPECT_EQ(creature_mind::CheckHands(true, false, true), HandsCheck::Wait);
+}
+
 TEST(CreatureIdleMind, ItPutsDownACreatureOrAThingForImpressCompassionOrCuriosity)
 {
 	EXPECT_TRUE(creature_mind::PutsDownGently(true, std::nullopt));

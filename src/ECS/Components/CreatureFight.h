@@ -145,6 +145,9 @@ struct CreatureKnockedOut
 	/// The faint is still to start on the body. It starts on the next turn that the knock-out is looked after: then the
 	/// side of the faint is chosen, and those near it react as to a death.
 	bool fainting {true};
+	/// The creature started to let go of what it held before the faint. The faint starts on the next turn without a new
+	/// check of the hands.
+	bool handsChecked {false};
 	/// Decided as it faints: whether it rests to get better before it gets up
 	bool rest {false};
 	/// Only a script kills a creature for good: it never gets up

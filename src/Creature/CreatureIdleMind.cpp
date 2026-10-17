@@ -34,9 +34,6 @@ namespace
 constexpr uint32_t k_FractionSteps = 1000;
 /// A face is due again once its wait is within this much of over, so that the turns' rounding doesn't delay it
 constexpr float k_FaceDue = 1e-3f;
-/// The turns between when a fainted creature lies still and when its wait starts, plus the turn between the end of
-/// the wait and the start of the get-up
-constexpr float k_FaintWaitTurnsLate = 3.0f;
 
 float RandomFraction(const Random& random)
 {
@@ -969,6 +966,16 @@ bool creature_mind::PutsDownGently(bool heldIsCreature, std::optional<creature_d
 	       (use.has_value() && (*use == Desire::Impress || *use == Desire::Compassion || *use == Desire::Curiosity));
 }
 
+creature_mind::HandsCheck creature_mind::CheckHands(bool holds, bool bodyBusy, bool handsBusy)
+{
+	if (!holds)
+	{
+		return HandsCheck::Free;
+	}
+	// It starts to let go only when its body and hands are free
+	return bodyBusy || handsBusy ? HandsCheck::Wait : HandsCheck::LetGo;
+}
+
 namespace
 {
 /// The rest of the agenda is no use
@@ -1293,8 +1300,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 				FinishStep(mind);
 				return commands;
 			}
-			// It starts to let go only when its body and hands are free. If it cannot start, it tries again next turn.
-			if (!senses.bodyBusy && senses.hands != HandsState::Busy)
+			// If it cannot start to let go, it tries again next turn
+			if (CheckHands(true, senses.bodyBusy, senses.hands == HandsState::Busy) == HandsCheck::LetGo)
 			{
 				commands.letGo = need == HandsNeed::Free ? LetGo::AsItChooses : LetGo::PutDown;
 				mind.handsChecked = IdleMind::StepRef {.serial = mind.serial, .step = mind.step};

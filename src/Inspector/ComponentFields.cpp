@@ -722,6 +722,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureKnockedOut::stage>("stage")
 	    .Field<&components::CreatureKnockedOut::seconds>("seconds")
 	    .Field<&components::CreatureKnockedOut::fainting>("fainting")
+	    .Field<&components::CreatureKnockedOut::handsChecked>("handsChecked")
 	    .Field<&components::CreatureKnockedOut::rest>("rest")
 	    .Field<&components::CreatureKnockedOut::permanent>("permanent")
 	    .Field<&components::CreatureKnockedOut::home>("home")

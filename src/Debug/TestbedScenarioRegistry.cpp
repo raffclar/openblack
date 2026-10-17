@@ -588,6 +588,20 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "combat.knockout_holding",
+	    .name = "A creature knocked out while it holds a thing keeps the thing",
+	    .facet = Facet::Combat,
+	    .description = "A player's tiger picks up a rock. Half a second after it holds the rock, it is knocked out as a "
+	                   "fight's loser is.",
+	    .expected = "The tiger starts to let go of the rock. On the next turn it falls down at once, before the rock "
+	                "leaves its hand, and it lies out cold with the rock still in its hand.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {4.0f, 54.0f}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::KnockOut, 0, 0.5f, true)},
+	});
+
+	all.push_back({
 	    .id = "needs.badly_hurt",
 	    .name = "A badly hurt creature wants to restore its health",
 	    .facet = Facet::Needs,

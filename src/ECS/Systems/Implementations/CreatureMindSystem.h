@@ -93,6 +93,7 @@ public:
 	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;
 	[[nodiscard]] bool IsTakingFromHand(entt::entity creature) const override;
 	[[nodiscard]] bool IsLyingDead(entt::entity creature) override;
+	creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity creature) override;
 	[[nodiscard]] bool SeemsFriendly(entt::entity creature, entt::entity other) override;
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
@@ -222,8 +223,8 @@ private:
 	[[nodiscard]] std::optional<creature_desires::Desire>
 	DesireForThingInHand(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
 	/// The creature lets go of the thing that it holds because the next step needs empty hands: it puts the thing down,
-	/// or it tosses the thing away (CreatureMindLearning.cpp)
-	void LetGoOfHeld(entt::entity creature, components::CreatureMindState& mind, creature_mind::LetGo how);
+	/// or it tosses the thing away. Whether the let-go started (CreatureMindLearning.cpp)
+	bool LetGoOfHeld(entt::entity creature, components::CreatureMindState& mind, creature_mind::LetGo how);
 	/// Uniform random numbers from 0 to n - 1, and from 0 to 1
 	uint32_t Random(uint32_t range);
 	float Chance();
