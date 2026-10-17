@@ -94,10 +94,10 @@ TEST(GlmOrder6, AHeldThingsAxesAtItsSize)
 {
 	for (const auto& c : k_AxisCases)
 	{
-		// Each axis of the matrix is the same case, so every column is checked
+		// The second and third axes are the same case; the first axis adds its squares in another order (GlmOrder7)
 		const glm::mat3 axes(Vec(c.axis), Vec(c.axis), Vec(c.axis));
 		const auto sized = hand_grab::AxesAtSize(axes, std::bit_cast<float>(c.size));
-		for (int column = 0; column < 3; ++column)
+		for (int column = 1; column < 3; ++column)
 		{
 			for (int part = 0; part < 3; ++part)
 			{

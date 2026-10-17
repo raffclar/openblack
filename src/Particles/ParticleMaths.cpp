@@ -325,7 +325,8 @@ glm::mat3 maths::TurnWithMove(const glm::mat3& rotation, const glm::vec3& last, 
 		return rotation;
 	}
 	const float between = x87::Dot<x87::SumOrder::Yzx>(last, p) / lengths;
-	// The game gives not a number when rounding takes the cosine past 1; the clamp keeps the turn whole
+	// Rounding can take the share past 1, where the arccosine gives not a number. Unlike the game, openblack holds the
+	// share in [-1, 1], so the patch always draws (a deviation). A parent at the centre has no turn, for the same reason.
 	const float angle = x87::RoundToFloat(x87::Acos(std::clamp(between, -1.0f, 1.0f)));
 	const auto turn = x87::AxisTurn(axis, angle);
 	auto turned = rotation;
