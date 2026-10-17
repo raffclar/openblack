@@ -38,6 +38,7 @@
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/MapPlace.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -227,13 +228,18 @@ struct Walker
 	bool standIn {false};
 };
 
-/// Where the walk holds a walker: its whole map position, taken up afresh when something else has moved it
-glm::ivec2 HeldPosition(WallHug& wallHug, const Transform& transform)
+/// Where the walk holds a walker: its whole map position. When something else moved it, the walk takes its place again:
+/// the exact map position that the game put it at, else the map position of its metres.
+glm::ivec2 HeldPosition(const ecs::Registry& registry, entt::entity entity, WallHug& wallHug, const Transform& transform)
 {
 	const auto metres = glm::xz(transform.position);
 	if (metres != wallHug.placedAt)
 	{
 		wallHug.position = wall_hug::ToWhole(metres);
+		if (const auto* kept = registry.TryGet<const MapPlace>(entity); kept != nullptr && kept->placedAt == metres)
+		{
+			wallHug.position = {kept->place.x, kept->place.z};
+		}
 		wallHug.placedAt = metres;
 	}
 	return wallHug.position;
@@ -743,7 +749,7 @@ void PathfindingSystem::Update()
 	CollectWalkers<MoveState::ExitCircle>(registry, walkers);
 	for (auto& walker : walkers)
 	{
-		HeldPosition(walker.wallHug, walker.transform);
+		HeldPosition(registry, walker.entity, walker.wallHug, walker.transform);
 		Walk(registry, walker);
 		Retag(registry, walker);
 		// One that came up against water, the land's edge or a fence waits for its trial of both ways round, unless it

@@ -173,6 +173,7 @@
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/MapPlace.h"
 #include "ECS/Components/MapScriptGlobals.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
@@ -1439,6 +1440,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::MapCellResident::cells>("cells")
 	    .Field<&components::MapCellResident::filedAt>("filedAt");
 	Reflect<components::MapCellMover> {context};
+	Reflect<components::MapPlace>(context).Field<&components::MapPlace::place>("place").Field<&components::MapPlace::placedAt>(
+	    "placedAt");
 	Reflect<components::Mesh>(context)
 	    .Field<&components::Mesh::id>("id")
 	    .Field<&components::Mesh::submeshId>("submeshId")
@@ -2351,7 +2354,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_help::Memory::tutorialTurn>("tutorialTurn")
 	    .Field<&openblack::creature_help::Memory::tutorialDone>("tutorialDone")
 	    .Field<&openblack::creature_help::Memory::tutorialToldTurn>("tutorialToldTurn")
-	    .Field<&openblack::creature_help::Memory::handOver>("handOver");
+	    .Field<&openblack::creature_help::Memory::handOver>("handOver")
+	    .Field<&openblack::creature_help::Memory::clearedAtStage>("clearedAtStage");
 	Reflect<openblack::creature_layers::BodyAction>(context, ValueOnly {})
 	    .Field<&openblack::creature_layers::BodyAction::kind>("kind")
 	    .Field<&openblack::creature_layers::BodyAction::phase>("phase")

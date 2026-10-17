@@ -72,6 +72,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Gui/TextDatabase.h"
@@ -236,6 +237,16 @@ gamesave::MapCoords MapPosition(const glm::vec3& point)
 	return {.x = coords.x, .z = coords.z, .altitude = coords.altitude};
 }
 
+/// The height of a world point above the ground at a map position
+float AltitudeAt(const map_coords::MapCoords& place, float height)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return 0.0f;
+	}
+	return height - map_coords::ToWorld(Locator::terrainSystem::value(), {.x = place.x, .z = place.z, .altitude = 0.0f}).y;
+}
+
 /// The game's map position as a world point, on the ground plus the altitude
 glm::vec3 WorldPosition(const gamesave::MapCoords& position)
 {
@@ -276,7 +287,9 @@ gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, ui
 	auto& object = saved.creature;
 	if (const auto* transform = registry.TryGet<const Transform>(entity))
 	{
-		object.position.position = MapPosition(transform->position);
+		// The creature's exact map position, and its height above the ground there
+		const auto place = ecs::thing_map_place::Of(registry, entity);
+		object.position.position = {.x = place.x, .z = place.z, .altitude = AltitudeAt(place, transform->position.y)};
 		saved.heading = HeadingOf(transform->rotation);
 	}
 	object.position.flags = save_state::k_CreaturePositionFlags;
@@ -503,6 +516,9 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Saved
 	{
 		transform->position = WorldPosition(object.position.position);
 		transform->rotation = glm::eulerAngleY(saved.heading);
+		// It keeps the exact map position of the save, which its metres cannot keep far from the corner of the map
+		ecs::thing_map_place::Keep(registry, entity,
+		                           {.x = object.position.position.x, .z = object.position.position.z, .altitude = 0.0f});
 	}
 	if (auto* locomotion = registry.TryGet<CreatureLocomotion>(entity))
 	{

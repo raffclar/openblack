@@ -766,7 +766,7 @@ void Runner::Start(const Scenario& scenario)
 	PlaceFootpaths(scenario, _middle);
 	if (!scenario.landScript.empty())
 	{
-		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y});
+		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y}, map_coords::FromMetres(_middle));
 		landScript.Load(std::string(scenario.landScript));
 	}
 	PlaceBirds(scenario, _middle);

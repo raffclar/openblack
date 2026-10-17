@@ -55,6 +55,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
 #include "Game.h"
@@ -394,6 +395,8 @@ entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesir
 	const auto temple =
 	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, 0.0f);
 	registry.Get<Temple>(temple).town = planned.townId;
+	// The heart takes the exact map position of the plan
+	thing_map_place::Keep(registry, temple, thing_map_place::Of(registry, plan));
 	// Move the footpaths of the plan to the heart. Then remove the plan.
 	villager_footpath::HandOverFootpaths(plan, temple);
 	registry.Destroy(plan);

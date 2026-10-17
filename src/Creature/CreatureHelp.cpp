@@ -198,6 +198,11 @@ Outcome creature_help::Decide(const Message& message, const Situation& situation
 	return Outcome::Tell;
 }
 
+void creature_help::MovedToStage(Memory& memory)
+{
+	memory.clearedAtStage = 0;
+}
+
 uint32_t creature_help::WholeSeconds(uint32_t now, uint32_t then, uint32_t turnsPerSecond)
 {
 	return turnsPerSecond == 0 ? 0 : (now - then) / turnsPerSecond;
