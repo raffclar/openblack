@@ -110,6 +110,10 @@ struct Belief
 {
 	uint32_t type {belief_types::k_Other};
 	std::array<std::optional<uint32_t>, k_AttributeCount> values {};
+	/// Where the thing was when the creature last came across it, in the map's fixed point units. The trees do not test
+	/// it. A mind file keeps it with each example.
+	int32_t x {0};
+	int32_t z {0};
 
 	[[nodiscard]] std::optional<uint32_t> Value(Attribute attribute) const { return values.at(static_cast<size_t>(attribute)); }
 	void Set(Attribute attribute, uint32_t value) { values.at(static_cast<size_t>(attribute)) = value; }
@@ -188,9 +192,11 @@ struct Episode
 {
 	Belief belief;
 	float feedback {0.0f};
-	/// What a mind file keeps with an example and the trees don't use: the kind of lesson, the action, and where the
-	/// thing was
-	std::array<int32_t, 4> saved {};
+	/// What a mind file keeps with an example and the trees do not use. The kind of lesson is 1 for an example of the tree
+	/// of the whole thing that a desire is about, 2 for an example of the tree of the thing acted on, and 0 for an example
+	/// that came from a mind file. The action is 0 for an example that the creature learnt.
+	int32_t lessonKind {0};
+	int32_t action {0};
 	/// The desire that the mind file gave with the example, which the game writes back as it read it. None for an
 	/// example that the creature learnt: the desire of its tree
 	std::optional<int32_t> savedDesire;

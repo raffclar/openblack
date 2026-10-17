@@ -2763,11 +2763,14 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_town_compassion::State::choosesFreely>("choosesFreely");
 	Reflect<openblack::creature_tree::Belief>(context, ValueOnly {})
 	    .Field<&openblack::creature_tree::Belief::type>("type")
-	    .Field<&openblack::creature_tree::Belief::values>("values", {k_CreatureTreeAttributeNames});
+	    .Field<&openblack::creature_tree::Belief::values>("values", {k_CreatureTreeAttributeNames})
+	    .Field<&openblack::creature_tree::Belief::x>("x")
+	    .Field<&openblack::creature_tree::Belief::z>("z");
 	Reflect<openblack::creature_tree::Episode>(context, ValueOnly {})
 	    .Field<&openblack::creature_tree::Episode::belief>("belief")
 	    .Field<&openblack::creature_tree::Episode::feedback>("feedback")
-	    .Field<&openblack::creature_tree::Episode::saved>("saved")
+	    .Field<&openblack::creature_tree::Episode::lessonKind>("lessonKind")
+	    .Field<&openblack::creature_tree::Episode::action>("action")
 	    .Field<&openblack::creature_tree::Episode::savedDesire>("savedDesire");
 	Reflect<openblack::creature_tree::Node>(context, ValueOnly {})
 	    .Field<&openblack::creature_tree::Node::test>("test")

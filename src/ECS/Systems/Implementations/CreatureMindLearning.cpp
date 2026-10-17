@@ -679,7 +679,7 @@ float Usefulness(const creature_mind_model::Learnt& learnt, Desire desire, const
 	{
 		return creature_planner::k_DefaultUsefulness;
 	}
-	const auto& tree = learnt.trees.at(static_cast<size_t>(TreeKind::ActOn)).at(static_cast<size_t>(desire));
+	const auto& tree = learnt.trees.at(static_cast<size_t>(TreeKind::Activity)).at(static_cast<size_t>(desire));
 	return creature_tree::Usefulness(creature_tree::Evaluate(tree, *belief));
 }
 
@@ -1067,7 +1067,10 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 	if (const auto* known = mind != nullptr ? mind->beliefs.Find(entity) : nullptr;
 	    known != nullptr && known->attributes.has_value())
 	{
-		return known->attributes;
+		auto belief = *known->attributes;
+		belief.x = map_coords::ToFixed(known->place.x);
+		belief.z = map_coords::ToFixed(known->place.z);
+		return belief;
 	}
 	return BeliefNowOf(registry, entity, self);
 }
@@ -1096,6 +1099,9 @@ std::optional<creature_tree::Belief> mind_detail::BeliefNowOf(const ecs::Registr
 	    .creatureType = creature != nullptr ? static_cast<uint32_t>(creature::InfoRow(creature->species)) : 0,
 	});
 	SetKindAttributes(registry, entity, me, belief);
+	const auto place = ThingPlace(registry, entity);
+	belief.x = map_coords::ToFixed(place.x);
+	belief.z = map_coords::ToFixed(place.z);
 	return belief;
 }
 
@@ -1111,11 +1117,15 @@ std::optional<creature_tree::Belief> mind_detail::ActedOnBeliefOf(const ecs::Reg
 	if (const auto* temple = registry.Valid(entity) ? registry.TryGet<const Temple>(entity) : nullptr)
 	{
 		const auto* me = registry.TryGet<const Creature>(self);
-		return creature_tree::CommonBelief({
+		auto heart = creature_tree::CommonBelief({
 		    .type = creature_tree::belief_types::k_CitadelPart,
 		    .player = PlayerNumberOf(temple->owner),
 		    .creaturesPlayer = me != nullptr ? std::optional(PlayerNumberOf(me->owner)) : std::nullopt,
 		});
+		const auto place = ThingPlace(registry, entity);
+		heart.x = map_coords::ToFixed(place.x);
+		heart.z = map_coords::ToFixed(place.z);
+		return heart;
 	}
 	return BeliefOf(registry, entity, self);
 }
@@ -2003,7 +2013,7 @@ float CreatureMindSystem::ObjectToActOnUsefulness(entt::entity creature, const C
 	float learnt = creature_planner::k_DefaultUsefulness;
 	if (belief.has_value())
 	{
-		const auto& tree = mind.learnt->trees.at(static_cast<size_t>(TreeKind::Use)).at(static_cast<size_t>(desire));
+		const auto& tree = mind.learnt->trees.at(static_cast<size_t>(TreeKind::ActOn)).at(static_cast<size_t>(desire));
 		learnt = creature_tree::Usefulness(creature_tree::Evaluate(tree, *belief));
 	}
 	return learnt * distance * share;
@@ -3941,8 +3951,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 			creature_learning::MakeFullyDominant(desires, Desire::Hunger, mind_detail::DesireFloorOf(creature));
 			if (const auto belief = BeliefOf(registry, *held, creature); belief.has_value() && tables != nullptr)
 			{
-				creature_mind_model::Learn(learnt, TreeKind::Use, Desire::Hunger, {.belief = *belief, .feedback = 1.0f},
-				                           tables->attributes.at(static_cast<size_t>(Desire::Hunger)));
+				creature_mind_model::LearnSpread(learnt, TreeKind::ActOn, Desire::Hunger, *belief, 1.0f, tables->dependencies,
+				                                 tables->attributes);
 			}
 			creature_mind_model::Think(learnt, "I've learnt to eat what I'm given");
 			// It must eat the thing alive. The feedback for this meal goes to eating that thing alive. The meal is not a
@@ -4059,22 +4069,14 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 		const auto lessons = creature_learning::ThingLessonsFor(*context, entt::to_integral(creature));
 		if (lessons.activity)
 		{
-			for (const auto& [other, share] : creature_learning::Spread(desire, strength, tables->dependencies))
-			{
-				creature_mind_model::Learn(learnt, TreeKind::ActOn, other,
-				                           {.belief = *context->activityBelief, .feedback = std::clamp(share, -1.0f, 1.0f)},
-				                           tables->attributes.at(static_cast<size_t>(other)));
-			}
+			creature_mind_model::LearnSpread(learnt, TreeKind::Activity, desire, *context->activityBelief, strength,
+			                                 tables->dependencies, tables->attributes);
 		}
 		if (lessons.actedOn)
 		{
 			const auto acted = desire == Desire::Poo ? std::clamp(strength, -k_PooUseFeedback, k_PooUseFeedback) : strength;
-			for (const auto& [other, share] : creature_learning::Spread(desire, acted, tables->dependencies))
-			{
-				creature_mind_model::Learn(learnt, TreeKind::Use, other,
-				                           {.belief = *context->belief, .feedback = std::clamp(share, -1.0f, 1.0f)},
-				                           tables->attributes.at(static_cast<size_t>(other)));
-			}
+			creature_mind_model::LearnSpread(learnt, TreeKind::ActOn, desire, *context->belief, acted, tables->dependencies,
+			                                 tables->attributes);
 		}
 		if (context->belief.has_value())
 		{
@@ -4087,8 +4089,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 			const auto leaf = creature_tree::LeafOf(tree, belief);
 			return leaf.has_value() && *leaf != 0;
 		};
-		const bool opinionChanged = (lessons.activity && belowRoot(TreeKind::ActOn, *context->activityBelief)) ||
-		                            (lessons.actedOn && belowRoot(TreeKind::Use, *context->belief));
+		const bool opinionChanged = (lessons.activity && belowRoot(TreeKind::Activity, *context->activityBelief)) ||
+		                            (lessons.actedOn && belowRoot(TreeKind::ActOn, *context->belief));
 		auto& opinion = learnt.opinions.at(context->action);
 		opinion = creature_learning::OpinionAfter(opinion, strength);
 		creature_mind_model::Think(
@@ -4127,18 +4129,23 @@ void CreatureMindSystem::LearnTurn()
 		// What the player showed it on a leash: anger or compassion towards such things
 		for (const auto& shown : mind->leash.shown)
 		{
-			// It comes across the thing first, so the lesson has the thing as it is now
-			ComeAcross(creature, *mind, static_cast<entt::entity>(shown.object));
-			const auto belief = BeliefOf(registry, static_cast<entt::entity>(shown.object), creature);
-			if (!belief.has_value())
+			// It comes across the thing first, so the lesson has the thing as it is now. The lesson is about the whole
+			// thing that the thing is part of (the town of a villager); a creature is its own whole thing. A thing that is
+			// part of nothing teaches nothing.
+			const auto thing = static_cast<entt::entity>(shown.object);
+			ComeAcross(creature, *mind, thing);
+			const auto whole =
+			    registry.AllOf<Creature>(thing) ? std::optional(thing) : WholeOfShownThing(creature, *mind, thing);
+			const auto wholeBelief = whole.has_value() ? BeliefOf(registry, *whole, creature) : std::nullopt;
+			const auto belief = BeliefOf(registry, thing, creature);
+			if (!wholeBelief.has_value() || !belief.has_value())
 			{
 				continue;
 			}
 			for (const auto& lesson : shown.lessons)
 			{
-				creature_mind_model::Learn(learnt, TreeKind::ActOn, lesson.desire,
-				                           {.belief = *belief, .feedback = lesson.change},
-				                           tables->attributes.at(static_cast<size_t>(lesson.desire)));
+				creature_mind_model::LearnSpread(learnt, TreeKind::Activity, lesson.desire, *wholeBelief, lesson.change,
+				                                 tables->dependencies, tables->attributes);
 				creature_mind_model::Think(
 				    learnt, creature_learning::ObjectLessonText(lesson.change, ObjectName(belief),
 				                                                tables->texts.at(static_cast<size_t>(lesson.desire)).trying));
@@ -4156,8 +4163,8 @@ void CreatureMindSystem::LearnTurn()
 			{
 				for (const auto& [desire, amount] : lessons)
 				{
-					creature_mind_model::Learn(learnt, TreeKind::ActOn, desire, {.belief = *belief, .feedback = amount},
-					                           tables->attributes.at(static_cast<size_t>(desire)));
+					creature_mind_model::LearnSpread(learnt, TreeKind::Activity, desire, *belief, amount, tables->dependencies,
+					                                 tables->attributes);
 				}
 			}
 		}
@@ -5135,19 +5142,16 @@ void CreatureMindSystem::LearnFromDeedSeen(entt::entity creature, CreatureMindSt
 	auto& learnt = *mind.learnt;
 	const auto lessons = creature_learning::ThingLessonsFor(context, entt::to_integral(creature));
 	const auto teach = [&](creature_mind_model::TreeKind kind, const creature_tree::Belief& belief) {
-		for (const auto& [other, share] : creature_learning::Spread(desire, k_DeedSeenLesson, tables->dependencies))
-		{
-			creature_mind_model::Learn(learnt, kind, other, {.belief = belief, .feedback = std::clamp(share, -1.0f, 1.0f)},
-			                           tables->attributes.at(static_cast<size_t>(other)));
-		}
+		creature_mind_model::LearnSpread(learnt, kind, desire, belief, k_DeedSeenLesson, tables->dependencies,
+		                                 tables->attributes);
 	};
 	if (lessons.activity)
 	{
-		teach(creature_mind_model::TreeKind::ActOn, *context.activityBelief);
+		teach(creature_mind_model::TreeKind::Activity, *context.activityBelief);
 	}
 	if (lessons.actedOn)
 	{
-		teach(creature_mind_model::TreeKind::Use, *context.belief);
+		teach(creature_mind_model::TreeKind::ActOn, *context.belief);
 	}
 	creature_mind_model::Think(learnt, creature_learning::ObjectLessonText(k_DeedSeenLesson, ObjectName(context.belief),
 	                                                                       tables->texts.at(rule.desire).trying));
@@ -5230,19 +5234,15 @@ void CreatureMindSystem::RememberAction(entt::entity creature, CreatureMindState
 	}
 	const auto lessons = creature_learning::ThingLessonsFor(*forgotten, entt::to_integral(creature));
 	const auto teach = [&](TreeKind kind, const creature_tree::Belief& belief, float feedback) {
-		for (const auto& [other, share] : creature_learning::Spread(desire, feedback, tables->dependencies))
-		{
-			creature_mind_model::Learn(learnt, kind, other, {.belief = belief, .feedback = std::clamp(share, -1.0f, 1.0f)},
-			                           tables->attributes.at(static_cast<size_t>(other)));
-		}
+		creature_mind_model::LearnSpread(learnt, kind, desire, belief, feedback, tables->dependencies, tables->attributes);
 	};
 	if (lessons.activity)
 	{
-		teach(TreeKind::ActOn, *forgotten->activityBelief, *approval);
+		teach(TreeKind::Activity, *forgotten->activityBelief, *approval);
 	}
 	if (lessons.actedOn)
 	{
-		teach(TreeKind::Use, *forgotten->belief,
+		teach(TreeKind::ActOn, *forgotten->belief,
 		      desire == Desire::Poo ? std::clamp(*approval, -k_PooUseFeedback, k_PooUseFeedback) : *approval);
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} forgets action {} that it was made to do and approves it by {}",
