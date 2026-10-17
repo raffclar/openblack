@@ -35,6 +35,8 @@ namespace
 {
 /// The invisible spell's kind, which fades the wisps as the creature fades
 constexpr int k_InvisibleKind = 7;
+/// The kind of the anti-spell. The game's data has no creature spell of this kind, but the wisps let go of one.
+constexpr int k_AntiSpellKind = 16;
 /// Points about a bone the hearts and steam start from lie within this share of the creature's size of it. The value
 /// is one step under 0.3f, as the game has it.
 constexpr float k_AboutBone = std::bit_cast<float>(0x3E999999u);
@@ -163,8 +165,8 @@ public:
 		const auto body = creature.has_value() ? world.CreatureBody(*creature) : std::nullopt;
 		const auto* sink = effect.GetSink();
 		const int kind = sink != nullptr ? sink->CreatureSpellKind() : -1;
-		// With its creature gone, the rule lets go
-		if (!body.has_value())
+		// The rule lets go when its creature has gone, when it has no creature spell, or for an anti-spell
+		if (!body.has_value() || kind < 0 || kind == k_AntiSpellKind)
 		{
 			return false;
 		}
