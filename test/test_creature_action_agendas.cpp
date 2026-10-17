@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureActionAgendas.h"
+#include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreatureThrow.h"
@@ -352,6 +353,25 @@ TEST(CreatureActionAgendas, LookedOverKindsAreFarLessInteresting)
 	EXPECT_FLOAT_EQ(CuriosityShare(true, true), 1.0f);
 }
 
+// Only objects can be of a kind that the creature examined: towns, forests, temples, miracles, flocks and mists are
+// not objects
+TEST(CreatureActionAgendas, OnlyObjectsHaveTheirKindLookedOver)
+{
+	namespace types = creature_tree::belief_types;
+	for (const auto type : {types::k_Town, types::k_Forest, types::k_Citadel, types::k_Spell, types::k_Flock})
+	{
+		EXPECT_FALSE(IsLookedOverAsAKind(type, false)) << type;
+	}
+	for (const auto type :
+	     {types::k_Abode, types::k_CitadelPart, types::k_Tree, types::k_Villager, types::k_Animal, types::k_Creature,
+	      types::k_Field, types::k_Rock, types::k_Pot, types::k_SpellIcon, types::k_MobileObject, types::k_TotemStatue})
+	{
+		EXPECT_TRUE(IsLookedOverAsAKind(type, false)) << type;
+	}
+	EXPECT_TRUE(IsLookedOverAsAKind(types::k_SpellSeed, false));
+	EXPECT_FALSE(IsLookedOverAsAKind(types::k_SpellSeed, true));
+}
+
 // A villager is up to something interesting when its state teaches a skill the creature does not know yet: building,
 // farming, the totem, the storage pit, fishing or dancing
 TEST(CreatureActionAgendas, AVillagerIsInterestingAtASkillTheCreatureDoesNotKnow)
@@ -546,13 +566,23 @@ TEST(CreatureActionAgendas, AFartIsDoneByTheThingThatThePlannerGives)
 TEST(CreatureActionAgendas, ExaminingByPickingUpKeepsWhatItHolds)
 {
 	const auto empty = ExamineByPickingUp(4, false, NeverFirst);
-	ASSERT_EQ(empty.size(), 3);
+	ASSERT_EQ(empty.size(), 4);
 	EXPECT_EQ(empty[0].order.kind, ObjectOrder::Kind::PickUp);
 	EXPECT_EQ(empty[0].order.object, 4u);
 	const auto holding = ExamineByPickingUp(4, true, NeverFirst);
-	ASSERT_EQ(holding.size(), 2);
+	ASSERT_EQ(holding.size(), 3);
 	EXPECT_EQ(holding[0].order.kind, ObjectOrder::Kind::Keep);
 	EXPECT_EQ(holding[0].effect, Effect::Examined);
+}
+
+// After it releases a thing that it picked up to examine, it knows the kind of thing, as after it examines by looking
+TEST(CreatureActionAgendas, ExaminingByPickingUpEndsByTakingInTheKind)
+{
+	const auto agenda = ExamineByPickingUp(4, false, NeverFirst);
+	ASSERT_FALSE(agenda.empty());
+	EXPECT_EQ(agenda.back().kind, Step::Kind::Observe);
+	EXPECT_EQ(agenda.back().object, 4u);
+	EXPECT_EQ(ExamineByLooking(4, 1.0f, 1.0f).back().kind, Step::Kind::Observe);
 }
 
 // Examining by looking is done to things that are not creatures, fields or fish farms; by following, to a villager

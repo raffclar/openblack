@@ -110,6 +110,7 @@
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
@@ -1870,11 +1871,12 @@ bool DoingSomethingInteresting(const ecs::Registry& registry, const CreatureMind
 }
 
 /// Curious, a creature cares little for a kind of thing it has had a good look at, unless the thing does something it
-/// finds interesting. Towns aren't things it looks at that way.
+/// finds interesting. Only objects are looked at that way.
 float ObservedShare(const ecs::Registry& registry, const CreatureMindState& mind, Desire desire, entt::entity object,
                     const std::optional<creature_tree::Belief>& belief)
 {
-	if (desire != Desire::Curiosity || !belief.has_value() || registry.AnyOf<Town>(object))
+	if (desire != Desire::Curiosity || !belief.has_value() ||
+	    !creature_mind::IsLookedOverAsAKind(belief->type, registry.AllOf<Mist>(object)))
 	{
 		return 1.0f;
 	}
