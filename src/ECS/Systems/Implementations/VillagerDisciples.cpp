@@ -1072,8 +1072,14 @@ bool villager_disciple::SetDiscipleNothingToDo(LivingAction& action, std::option
 
 uint32_t villager_disciple::GlowFrame(uint64_t gameMilliseconds)
 {
-	// The game milliseconds into the cycle, times the frames over the cycle. The share rounds to a float
-	const auto intoCycle = static_cast<int32_t>(gameMilliseconds % k_GlowCycleMs);
+	// The game milliseconds into the cycle, times the frames over the cycle. The share rounds to a float. The game's
+	// count goes back into the cycle only when it is more than the cycle, so a count of a whole cycle shows the frame
+	// after the last
+	auto intoCycle = static_cast<int32_t>(gameMilliseconds % k_GlowCycleMs);
+	if (intoCycle == 0 && gameMilliseconds > 0)
+	{
+		intoCycle = static_cast<int32_t>(k_GlowCycleMs);
+	}
 	const float framesPerMillisecond = static_cast<float>(k_GlowFrames) / static_cast<float>(k_GlowCycleMs);
 	return static_cast<uint32_t>(framesPerMillisecond * static_cast<float>(intoCycle));
 }

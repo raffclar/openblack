@@ -20,6 +20,7 @@
 #include <ParticleFile.h>
 #include <glm/gtx/transform.hpp>
 
+#include "Common/X87.h"
 #include "KeyPointSpline.h"
 #include "Magic/ForestRules.h"
 #include "ParticleClassRegistry.h"
@@ -171,10 +172,14 @@ public:
 glm::vec3 forest_path::PathPoint(float radius, float atomAge, float thetaSpeed, float phiSpeed, float theta0, float phi0,
                                  glm::vec3 scale)
 {
-	const auto theta = static_cast<float>(std::fmod((static_cast<double>(atomAge) * thetaSpeed) + theta0, k_TwoPi));
-	const auto phi = static_cast<float>(std::fmod((static_cast<double>(atomAge) * phiSpeed) + phi0, k_TwoPi));
-	return radius * glm::vec3(scale.x * std::cos(theta) * std::cos(phi), scale.y * std::sin(phi),
-	                          scale.z * std::sin(theta) * std::cos(phi));
+	// The remainders are exact. The cosine of phi stays wide for the two multiplies that use it
+	const float theta = std::fmod(atomAge * thetaSpeed + theta0, k_TwoPi);
+	const float phi = std::fmod(atomAge * phiSpeed + phi0, k_TwoPi);
+	const double cosPhi = x87::Cos(phi);
+	const float x = x87::Mul(cosPhi, x87::Mul(x87::Cos(theta), scale.x));
+	const float y = x87::Mul(x87::Sin(phi), scale.y);
+	const float z = x87::Mul(cosPhi, x87::Mul(x87::Sin(theta), scale.z));
+	return {x * radius, y * radius, z * radius};
 }
 
 void openblack::particles::RegisterForestRules(ParticleClassRegistry& registry)

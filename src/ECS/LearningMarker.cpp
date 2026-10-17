@@ -32,8 +32,9 @@ constexpr float k_FullAlpha = 255.0f;
 
 std::string Text(float share)
 {
-	// In hundredths, with no point, rounded as the game's C library does
-	return fixed_format::Fixed(static_cast<double>(share) * 100.0, 0, 0) + "%";
+	// In hundredths, with no point, rounded as the game's C library does. The share times 100 rounds to a float first
+	constexpr float k_Hundred = 100.0f;
+	return fixed_format::Fixed(static_cast<double>(share * k_Hundred), 0, 0) + "%";
 }
 
 components::LearningMarker Start(const glm::vec3& head, float creatureHeight, float share)

@@ -53,9 +53,10 @@ uint8_t GroundShadow::ScaledAlpha(float fade)
 	{
 		return 255;
 	}
-	// A 255th as a single-precision number is a hair over the true one
-	constexpr auto k_Step = static_cast<double>(1.0f / 255.0f);
-	return static_cast<uint8_t>(std::clamp(255.0 * static_cast<double>(fade) * k_Step, 0.0, 255.0));
+	// The game multiplies by a 255th as a float, which is a little more than the true one
+	constexpr float k_Full = 255.0f;
+	constexpr float k_Step = 1.0f / 255.0f;
+	return static_cast<uint8_t>(std::clamp(static_cast<int32_t>(k_Full * fade * k_Step), 0, 255));
 }
 
 glm::vec3 GroundShadow::CreatureLight(const glm::vec3& sceneLight, const glm::vec3& standsAt, float radius)
@@ -72,7 +73,7 @@ glm::vec3 GroundShadow::CreatureLight(const glm::vec3& sceneLight, const glm::ve
 		}
 		if (towards != glm::vec3(0.0f))
 		{
-			towards *= nearest / glm::length(towards);
+			towards *= nearest / std::sqrt((towards.y * towards.y) + (towards.z * towards.z) + (towards.x * towards.x));
 		}
 		across = std::sqrt((towards.x * towards.x) + (towards.z * towards.z));
 	}
@@ -86,16 +87,14 @@ glm::vec3 GroundShadow::CreatureLight(const glm::vec3& sceneLight, const glm::ve
 
 glm::vec2 GroundShadow::OnLevel(const Point& point, const Cast& cast)
 {
-	// Worked out at double precision: a far light would lose a 32nd of a unit on the way at single precision
-	auto height = static_cast<double>(point.position.y - cast.level);
+	auto height = point.position.y - cast.level;
 	if (point.keptAboveLevel)
 	{
-		height = std::max(height, 0.0);
+		height = std::max(height, 0.0f);
 	}
-	const auto light = glm::dvec3(cast.light);
-	const auto along = light.y / (light.y - height);
-	return {static_cast<float>(light.x + ((static_cast<double>(point.position.x) - light.x) * along)),
-	        static_cast<float>(light.z + ((static_cast<double>(point.position.z) - light.z) * along))};
+	const auto& light = cast.light;
+	const float along = -light.y / (height - light.y);
+	return {((point.position.x - light.x) * along) + light.x, ((point.position.z - light.z) * along) + light.z};
 }
 
 glm::vec2 GroundShadow::LightWay(const glm::vec3& standsAt, const glm::vec3& light)
@@ -202,18 +201,18 @@ void Edge(GroundShadow::Coverage& coverage, int32_t& first, int32_t& last, const
 	{
 		return;
 	}
-	const auto slope = (static_cast<double>(bottomX) - static_cast<double>(topX)) / static_cast<double>(bottom - top);
+	const float slope = (bottomX - topX) / static_cast<float>(bottom - top);
 	bottom = std::min(bottom, k_Rows);
 	if (top < 0)
 	{
-		topX = static_cast<float>(static_cast<double>(topX) - (static_cast<double>(top) * slope));
+		topX = topX - (static_cast<float>(top) * slope);
 		top = 0;
 	}
 	first = std::min(first, top);
 	last = std::max(last, bottom);
-	constexpr double k_One = 65536.0;
+	constexpr float k_One = 65536.0f;
 	const auto step = static_cast<int32_t>(slope * k_One);
-	auto x = static_cast<int32_t>(static_cast<double>(topX) * k_One);
+	auto x = static_cast<int32_t>(topX * k_One);
 	for (auto row = top; row < bottom; ++row)
 	{
 		(*rows)[static_cast<size_t>(row)] = x >> 16;
@@ -306,12 +305,12 @@ std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels> GroundShado
 glm::vec4 GroundShadow::Receiver(const Footprint& footprint, const Cast& cast)
 {
 	// The land is flattened onto the level along the light's rays as if it all stood at the ground's height
-	const auto light = glm::dvec3(cast.light);
-	const auto along = (static_cast<double>(cast.level) - light.y) / (static_cast<double>(cast.ground) - light.y);
-	const auto low = glm::dvec2(footprint.low);
-	const auto size = glm::dvec2(footprint.high) - low;
-	return {static_cast<float>(along / size.x), static_cast<float>(((light.x * (1.0 - along)) - low.x) / size.x),
-	        static_cast<float>(along / size.y), static_cast<float>(((light.z * (1.0 - along)) - low.y) / size.y)};
+	const auto& light = cast.light;
+	const float along = (cast.level - light.y) / (cast.ground - light.y);
+	const auto& low = footprint.low;
+	const auto size = footprint.high - low;
+	return {along / size.x, ((light.x * (1.0f - along)) - low.x) / size.x, along / size.y,
+	        ((light.z * (1.0f - along)) - low.y) / size.y};
 }
 
 bool GroundShadow::ReachesBlock(const Footprint& footprint, const glm::vec2& block)

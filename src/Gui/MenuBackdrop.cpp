@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/X87.h"
+
 namespace openblack::gui::menu_backdrop
 {
 namespace
@@ -21,11 +23,11 @@ namespace
 constexpr float k_HalfTurn = std::numbers::pi_v<float>;
 constexpr float k_Turn = 2.0f * std::numbers::pi_v<float>;
 /// A swirl's place: (sin a + 1) and (cos b + 1) times 20 grid squares
-constexpr double k_Reach = 20.0;
+constexpr float k_Reach = 20.0f;
 /// Its strength, (2 cos c + 3) * 3, over its distance plus 10
-constexpr double k_StrengthBase = 3.0;
-constexpr double k_StrengthScale = 3.0;
-constexpr double k_DistanceBase = 10.0;
+constexpr float k_StrengthBase = 3.0f;
+constexpr float k_StrengthScale = 3.0f;
+constexpr float k_DistanceBase = 10.0f;
 constexpr float k_SpeedRange = 1.0f;
 constexpr float k_AngleRange = 8.0f;
 /// The grid's squares across and down
@@ -80,25 +82,24 @@ void PlaceLayer(Swirls& swirls, int layer, float turn, std::span<glm::vec2, k_Po
 			for (size_t k = first; k < first + k_SwirlsPerLayer; ++k)
 			{
 				auto& swirl = swirls.at(k);
-				const auto across = (std::sin(static_cast<double>(swirl.angles.x)) + 1.0) * k_Reach;
-				const auto down = (std::cos(static_cast<double>(swirl.angles.y)) + 1.0) * k_Reach;
-				const auto dy = static_cast<double>(static_cast<float>(row - down));
-				const auto dx = column - across;
-				const auto strength =
-				    ((2.0 * std::cos(static_cast<double>(swirl.angles.z))) + k_StrengthBase) * k_StrengthScale;
-				const auto pull = strength / (std::sqrt((dx * dx) + (dy * dy)) + k_DistanceBase);
+				// Each sine and cosine stays wide until the next add or multiply
+				const float across = x87::Add(x87::Sin(swirl.angles.x), 1.0) * k_Reach;
+				const float down = x87::Add(x87::Cos(swirl.angles.y), 1.0) * k_Reach;
+				const float dy = static_cast<float>(row) - down;
+				const float dx = static_cast<float>(column) - across;
+				const float strength = (x87::Mul(x87::Cos(swirl.angles.z), 2.0) + k_StrengthBase) * k_StrengthScale;
+				const float pull = strength / (std::sqrt((dx * dx) + (dy * dy)) + k_DistanceBase);
 				if (k % 2 == 1)
 				{
-					odd = static_cast<float>(pull + odd);
+					odd = pull + odd;
 				}
 				else
 				{
-					even = static_cast<float>(pull + even);
+					even = pull + even;
 				}
 				for (int axis = 0; axis < 3; ++axis)
 				{
-					swirl.angles[axis] =
-					    static_cast<float>((static_cast<double>(turn) * swirl.speeds[axis]) + swirl.angles[axis]);
+					swirl.angles[axis] = (turn * swirl.speeds[axis]) + swirl.angles[axis];
 				}
 				for (int axis = 0; axis < 3; ++axis)
 				{

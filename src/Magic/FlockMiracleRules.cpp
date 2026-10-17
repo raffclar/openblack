@@ -15,12 +15,15 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+
 using namespace openblack::magic;
 
 int flock::NumberToCreate(uint32_t number, float tribalPower)
 {
-	// Rounded half to even, as the game's rounding does
-	return static_cast<int>(std::nearbyint(static_cast<double>(number) * static_cast<double>(tribalPower)));
+	// The game takes the number as a signed one and keeps it as a float, then rounds the product half to even
+	const float count = x87::RoundToFloat(static_cast<double>(static_cast<int32_t>(number)));
+	return static_cast<int>(std::nearbyint(tribalPower * count));
 }
 
 bool flock::IsEvil(float alignment, float alignmentSwitch)
