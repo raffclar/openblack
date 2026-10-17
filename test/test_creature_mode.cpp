@@ -377,7 +377,7 @@ TEST(CreatureMode, TemplePenMapPositionIsAFloatProductTruncated)
 	// is 26836758
 	const auto places = FakeMarkedPlaces(16, {0.0f, 0.0f, 0.0f});
 	const float x = std::bit_cast<float>(0x457FEF6Du);
-	const auto pen = creature_mode::TemplePen({x, 0.0f, 0.0f}, glm::mat3(1.0f), glm::vec3(1.0f), places);
+	const auto pen = creature_mode::TemplePen({x, 0.0f, 0.0f}, 0.0f, 1.0f, places);
 	ASSERT_TRUE(pen.has_value());
 	EXPECT_EQ(std::bit_cast<uint32_t>(pen->x), 0x457FEF6Eu);
 }
