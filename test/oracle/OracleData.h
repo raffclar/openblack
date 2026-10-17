@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cctype>
 #include <cstdint>
 #include <cstdlib>
 
@@ -28,9 +29,38 @@
 namespace openblack::oracle
 {
 
-#ifndef OPENBLACK_ORACLE_DATA
-#error Define OPENBLACK_ORACLE_DATA as the folder of the pinned data files
+// The data folder is found when the test runs, never when it is compiled: a compiled object can be reused from another
+// checkout (the shared compiler cache), and a path in it would then point at the wrong folder.
+#ifdef OPENBLACK_ORACLE_DATA
+#error Do not define OPENBLACK_ORACLE_DATA: the data folder is found at run time (see DataFolder)
 #endif
+
+/// The folder of the pinned data files. It is the value of the environment variable OPENBLACK_ORACLE_DATA, which ctest
+/// sets for each test. When the variable is not set, it is the first line of the file oracle_data_folder.txt in the
+/// working directory (the build folder of the tests has one). It gives no value when neither exists.
+[[nodiscard]] inline std::optional<std::filesystem::path> DataFolder()
+{
+	// NOLINTNEXTLINE(concurrency-mt-unsafe): read only, and no other thread changes the environment
+	const char* const folder = std::getenv("OPENBLACK_ORACLE_DATA");
+	if (folder != nullptr && std::string_view(folder).size() > 0)
+	{
+		return std::filesystem::path(folder);
+	}
+	std::ifstream stream("oracle_data_folder.txt");
+	std::string line;
+	if (stream && std::getline(stream, line))
+	{
+		while (!line.empty() && std::isspace(static_cast<unsigned char>(line.back())) != 0)
+		{
+			line.pop_back();
+		}
+		if (!line.empty())
+		{
+			return std::filesystem::path(line);
+		}
+	}
+	return std::nullopt;
+}
 
 class Table
 {
@@ -38,7 +68,12 @@ public:
 	/// Reads a data file from the pinned data folder. It gives no value when the file is missing or not valid.
 	[[nodiscard]] static std::optional<Table> Load(std::string_view name)
 	{
-		std::ifstream stream(std::filesystem::path(OPENBLACK_ORACLE_DATA) / name);
+		const auto folder = DataFolder();
+		if (!folder)
+		{
+			return std::nullopt;
+		}
+		std::ifstream stream(*folder / name);
 		if (!stream)
 		{
 			return std::nullopt;
