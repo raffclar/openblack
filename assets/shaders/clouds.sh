@@ -22,8 +22,9 @@ uniform vec4 u_cloudLightColour;
 uniform vec4 u_cloudAmbient;
 // xyz: the eye; w: 1 while the eye is above the water
 uniform vec4 u_cloudEye;
-// xyz: where the lightning struck; w: the light of its bolt, 0 to 1
-uniform vec4 u_cloudStrike;
+// The flashes of the lightning inside the clouds (cloud_lightning::Pack): [i] xyz the start of the channel, w its light
+// now; [4 + i] xyz the end of the channel, w how far its light spreads through the cloud
+uniform vec4 u_cloudFlashes[8];
 // The storms: [i] xy the middle, z the inner radius, w the outer radius; [8 + i] x the strength, y the rain
 uniform vec4 u_cloudStorms[16];
 
@@ -289,14 +290,47 @@ float CloudLightDepth(vec3 p, int samples)
 	return depth * CLOUD_EXTINCTION;
 }
 
-// The light of the lightning inside a storm's cloud at a point: the flash of the sky lights all of the storm's cloud,
-// and the bolt lights the cloud round the place that it struck
+// The light of the lightning inside a storm's cloud at a point. The flash of the sky lights all of the storm's cloud.
+// Each flash lights the cloud round its channel: brightly near the channel, and dimly farther away, where more cloud
+// is between the point and the channel. The cloud round the channel and under it thus lights up from inside.
 vec3 CloudLightning(vec3 p, float rain)
 {
-	vec3 core = vec3(u_cloudStrike.x, u_cloudLayer.x + 350.0f, u_cloudStrike.z);
-	float near = exp(-length(p - core) / 450.0f);
-	float glow = u_cloudAmbient.w * (0.08f + 0.3f * rain) + u_cloudStrike.w * near * 1.6f;
+	float glow = u_cloudAmbient.w * (0.08f + 0.3f * rain);
+	for (int i = 0; i < 4; ++i)
+	{
+		vec4 start = u_cloudFlashes[i];
+		if (start.w <= 0.0f)
+		{
+			continue;
+		}
+		vec4 end = u_cloudFlashes[4 + i];
+		// The distance from the point to the nearest point of the channel
+		vec3 along = end.xyz - start.xyz;
+		float share = clamp(dot(p - start.xyz, along) / max(dot(along, along), 1.0f), 0.0f, 1.0f);
+		float distance = length(p - start.xyz - along * share);
+		glow += start.w * (1.8f * exp(-distance / end.w) + 0.25f * exp(-distance / (3.0f * end.w)));
+	}
 	return CLOUD_FLASH_COLOUR * glow;
+}
+
+// The light of the flashes inside the clouds on the ground at a point. The lit bottom of each cloud lights a wide area
+// under it, most of all straight under the flash.
+float CloudFlashOnGround(vec3 p)
+{
+	float light = 0.0f;
+	for (int i = 0; i < 4; ++i)
+	{
+		vec4 start = u_cloudFlashes[i];
+		if (start.w <= 0.0f)
+		{
+			continue;
+		}
+		vec3 middle = (start.xyz + u_cloudFlashes[4 + i].xyz) * 0.5f;
+		vec3 toFlash = middle - p;
+		float height = max(toFlash.y, 100.0f);
+		light += start.w * height * height / (height * height + dot(toFlash.xz, toFlash.xz));
+	}
+	return light;
 }
 
 // The haze that hides far clouds: the distance through the air at the sea's level that hides all but a third of a

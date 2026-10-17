@@ -60,6 +60,10 @@ public:
 	[[nodiscard]] const std::optional<graphics::underwater::RogueWave>& GetRogueWave() const override { return _rogue; }
 	[[nodiscard]] const graphics::underwater::SeaStrike& GetSeaStrike() const override { return _strike; }
 	[[nodiscard]] glm::vec2 GetSeaFlash() const override { return _seaFlash; }
+	[[nodiscard]] std::span<const graphics::cloud_lightning::FlashEvent> GetCloudFlashes() const override
+	{
+		return _cloudFlashes.All();
+	}
 	[[nodiscard]] const graphics::underwater::CurrentState& GetCurrent() const override { return _current; }
 	[[nodiscard]] float FloorAt(glm::vec2 point, float landHeight) const override;
 
@@ -99,6 +103,7 @@ private:
 	bool _rogueCertain {false};
 	graphics::underwater::SeaStrike _strike;
 	glm::vec2 _seaFlash {0.0f};
+	graphics::cloud_lightning::FlashEvents _cloudFlashes;
 	graphics::underwater::CurrentState _current;
 	float _tideRate {0.0f};
 	/// How far the debug tour has gone, in seconds; none while it does not run

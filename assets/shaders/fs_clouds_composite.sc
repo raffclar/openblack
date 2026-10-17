@@ -93,6 +93,17 @@ void main()
 		clouds = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	}
 
+	// The flashes inside the clouds light the land under them a little. The post pass lights the water.
+	if (u_cloudEye.w > 0.5f)
+	{
+		float land = CloudSceneDistance(uv, texture2DLod(s_sceneDepth, uv, 0.0f).r);
+		bool water = dir.y < 0.0f && (u_cloudEye.y - u_cloudLayer.w) / -dir.y < land;
+		if (!water && land < 60000.0f && !CloudOnDome(dir, land))
+		{
+			clouds.rgb += CLOUD_FLASH_COLOUR * CloudFlashOnGround(u_cloudEye.xyz + dir * land) * 0.12f * clouds.a;
+		}
+	}
+
 	// The shafts of light: along the line to the sun on the screen, the share of the samples where the sky shows through
 	// the clouds
 	vec3 shafts = vec3_splat(0.0f);
