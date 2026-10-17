@@ -28,6 +28,8 @@ public:
 	virtual ~TownDesireSystemInterface() = default;
 	/// Once a game turn: every town counts its people and buildings and works out its desires
 	virtual void ProcessTurn() = 0;
+	/// In its town's turn: the town counts its people and buildings and works out its desires
+	virtual void ProcessTown(entt::entity town) = 0;
 	/// Offers a villager to its town's desires, most wanted first, past its trigger; `satisfy` tries a desire and
 	/// returns 1 when the villager took it up. 1 when one did.
 	virtual uint32_t OfferVillager(entt::entity town, bool child, float trigger,

@@ -36,6 +36,7 @@ public:
 	void AddToSite(entt::entity object, entt::entity site, PlayerNames player) override;
 	void Taken(entt::entity object, PlayerNames player) override;
 	void ProcessTurn() override;
+	void ProcessTown(entt::entity town) override;
 	bool OfferRelaxation(entt::entity town, entt::entity villager) override;
 	void PowerUpSite(entt::entity site, uint32_t dancers) override;
 	void UpdateFrame(float gameMilliseconds) override;

@@ -107,6 +107,9 @@ void StepTo(Ease& ease, uint32_t realMs);
 /// How far the hand closes on the icon. The hand holds the icon on its palm, so the icon spreads out of the hand by
 /// three quarters of its height. The closure is that spread against half the hand, at most fully.
 [[nodiscard]] float GripClosure(float iconHeight);
+/// How far the hand closes on a thing that spreads out of it by a hold radius: that radius against half the hand, at
+/// most fully
+[[nodiscard]] float ClosureForHoldRadius(float holdRadius);
 
 /// Whether a totem works, so that the hand can take it: it stands built and has more than three quarters of its life
 [[nodiscard]] bool Functional(bool built, float life);

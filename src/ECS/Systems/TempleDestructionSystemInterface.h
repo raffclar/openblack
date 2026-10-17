@@ -11,6 +11,8 @@
 
 #include <entt/entity/fwd.hpp>
 
+#include "Enums.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -24,7 +26,12 @@ public:
 	/// The temple's heart has lost the last of its life: its destruction starts, or starts again from
 	/// nothing
 	virtual void Start(entt::entity temple) = 0;
-	/// At the start of each game turn, before anything else takes its turn: each temple being destroyed moves on a turn
+	/// At the start of each game turn: the sound loops of temples that went some other way stop
+	virtual void StartTurn() = 0;
+	/// At the start of a player's turn: the player's temple, if it is being destroyed, moves on a turn, and then its
+	/// heart beams if it is hurt
+	virtual void ProcessPlayerTurn(PlayerNames player) = 0;
+	/// The start of the turn, then each player's temple in the order of the players
 	virtual void ProcessTurn() = 0;
 	/// At the end of each game turn, after the physics: the game ends for the local player whose temple is being
 	/// destroyed, in the turn its heart lost the last of its life

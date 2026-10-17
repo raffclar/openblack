@@ -1110,3 +1110,11 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
     PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
   )
 endforeach ()
+openblack_setup_and_add_test(
+  test_oracle_totem_hand oracle/test_oracle_totem_hand.cpp
+)
+target_compile_definitions(
+  test_oracle_totem_hand
+  PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_town_turn_order test_town_turn_order.cpp)

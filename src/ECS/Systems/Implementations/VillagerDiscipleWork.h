@@ -46,9 +46,9 @@ uint32_t ArrivesAtStoragePitForWorkshopMaterials(components::LivingAction& actio
 /// A missionary put down: it moves into the nearest building of any town, starts preaching there for its player, and
 /// goes to its new home
 uint32_t MissionaryDisciple(components::LivingAction& action);
-/// Once a game turn: each missionary's preaching follows it about, and stops once it no longer preaches (gone, dead,
-/// held or set to other work), freeing it
-void ProcessMissionaries();
+/// In a town's turn: each missionary's preaching in the town follows it about, and stops once it no longer preaches
+/// (gone, dead, held or set to other work), freeing it. A preaching whose town has gone stops too.
+void ProcessMissionaries(entt::entity town);
 /// A town changed hands or went: the missionaries preaching in it stop and are freed
 void StopMissionariesIn(entt::entity town);
 

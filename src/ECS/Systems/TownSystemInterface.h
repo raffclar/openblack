@@ -83,10 +83,20 @@ public:
 	[[nodiscard]] virtual bool IsInStateOfEmergency(entt::entity town) const = 0;
 	/// Calls an emergency in a town: the first call has its people gather
 	virtual void SetInStateOfEmergency(entt::entity town) = 0;
-	/// Once a game turn: a burning store or village centre calls an emergency; during one, an attack on the town renews
-	/// it and its worship stops, coming back once the emergency has run its time and ends; the missionaries preaching in
-	/// each town follow their villagers or stop; a town's mark of changed wants comes down once it has been up a whole turn
+	/// The town steps of a game turn for every town, by player and in the order each player gained them: its buildings,
+	/// then the rest of its turn. A burning store or village centre calls an emergency; during one, an attack on the
+	/// town renews it and its worship stops, coming back once the emergency has run its time and ends; the missionaries
+	/// preaching in each town follow their villagers or stop; a town's mark of changed wants comes down once it has been
+	/// up a whole turn
 	virtual void ProcessTurn() = 0;
+	/// The start of a town's turn: every so many turns it passes over its buildings, which age by it
+	virtual void ProcessTownBuildings(entt::entity town) = 0;
+	/// The rest of a town's turn, after its desires and its artefacts: it sends worshippers every tenth turn, mends a
+	/// building, calls or ends an emergency, judges the creatures it watches, its missionaries follow their villagers,
+	/// its mark of changed wants comes down, and now and then it evens out its homes
+	virtual void ProcessTownTurn(entt::entity town) = 0;
+	/// A player's towns in the order the player gained them, which is the order they take their turns in
+	[[nodiscard]] virtual std::vector<entt::entity> TownsInGainedOrder(PlayerNames player) const = 0;
 	/// A town's wants have changed: a store stocked from empty, a building site added, a death. Its disciples waiting for
 	/// work look again soon.
 	virtual void MarkDesiresChanged(entt::entity town) = 0;

@@ -1700,17 +1700,10 @@ bool Game::GameLogicLoop() noexcept
 	{
 		scriptCamera->LetGoOfGoneThings();
 	}
-	// The players' temples take their turn first: one whose heart lost all its life moves on through its destruction
-	if (Locator::templeDestructionSystem::has_value())
-	{
-		Locator::templeDestructionSystem::value().ProcessTurn();
-	}
+	// The players take their turns, each its temple and then its towns
+	ProcessPlayerTurns();
 	// The sharks' turns start where they are, then the things the scripts walk along tracks go on, before the living
 	Locator::sharkSystem::value().ProcessTurn();
-	// The towns work out what they want and look after their artefacts as their players take their turns, before the
-	// dances go on
-	Locator::townDesireSystem::value().ProcessTurn();
-	Locator::artefactSystem::value().ProcessTurn();
 	// The dances go on after the players and before the things walking tracks and the living
 	Locator::danceSystem::value().ProcessTurn();
 	Locator::walkPathSystem::value().ProcessTurn();
@@ -1721,8 +1714,6 @@ bool Game::GameLogicLoop() noexcept
 		auto pathfinding = profiler.BeginScoped(Profiler::Stage::PathfindingUpdate);
 		Locator::pathfindingSystem::value().Update();
 	}
-	// A town's storage pit or village centre on fire calls its people together
-	Locator::townSystem::value().ProcessTurn();
 	// A town totem that arrives at its share rings the village bell
 	Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 	Locator::chimneySmokeSystem::value().ProcessTurn();
@@ -2840,11 +2831,8 @@ bool Game::Update() noexcept
 						handTransform.position = hold->position;
 						TraceHand("totem", handTransform.position);
 						// It faces the way it always does, tipped forwards over the icon
-						using namespace hand_orientation;
-						const auto facingCamera = glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection);
-						const auto cameraHeading = HeadingAlongRay(camera.GetForward(), _handHeading);
 						handTransform.rotation =
-						    TipForwards(TurnToHeading(facingCamera, cameraHeading, _handHeading), _handHeading, hold->tilt);
+						    hand_orientation::TippedHand(hand_orientation::TippedRows(_handHeadingAngle, hold->tilt));
 						// The pointer goes where the hand is on the screen, while it is on it
 						glm::vec3 screen;
 						if (camera.ProjectWorldToScreen(hold->position, glm::vec4(0.0f, 0.0f, glm::vec2(screenSize)), screen))
@@ -5887,6 +5875,11 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 		                              rayDirection);
 		if (!glm::any(glm::isnan(rayDirection)))
 		{
+			// Both forms of the heading change together, only when the line of sight leans across the land
+			if (LeansAcrossLand(rayDirection))
+			{
+				_handHeadingAngle = HeadingAngle(rayDirection);
+			}
 			_handHeading = HeadingAlongRay(rayDirection, _handHeading);
 		}
 	}
@@ -5945,6 +5938,35 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	const auto onLevelLand = TurnToHeading(facingCamera, cameraHeading, _handHeading);
 	_handOnLevelLand = onLevelLand;
 	handTransform.rotation = glm::length(up) > 0.0f ? StandOnSlope(onLevelLand, _handHeading, up) : onLevelLand;
+}
+
+void Game::ProcessPlayerTurns()
+{
+	// Each player takes its turn in the order of the players, the neutral player last. First its temple: one whose heart
+	// lost all its life moves on through its destruction, and a hurt heart beams. Then each of its towns, in the order
+	// the player gained them: the town passes over its buildings, works out what it wants, looks after its artefacts,
+	// and goes on with the rest of its turn. So the game's random numbers are drawn in the same order as the game draws
+	// them.
+	if (Locator::templeDestructionSystem::has_value())
+	{
+		Locator::templeDestructionSystem::value().StartTurn();
+	}
+	auto& towns = Locator::townSystem::value();
+	for (uint8_t index = 0; index < static_cast<uint8_t>(PlayerNames::_COUNT); ++index)
+	{
+		const auto player = static_cast<PlayerNames>(index);
+		if (Locator::templeDestructionSystem::has_value())
+		{
+			Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
+		}
+		for (const auto town : towns.TownsInGainedOrder(player))
+		{
+			towns.ProcessTownBuildings(town);
+			Locator::townDesireSystem::value().ProcessTown(town);
+			Locator::artefactSystem::value().ProcessTown(town);
+			towns.ProcessTownTurn(town);
+		}
+	}
 }
 
 std::chrono::milliseconds Game::CameraStepTime() const

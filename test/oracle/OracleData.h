@@ -35,10 +35,12 @@ namespace openblack::oracle
 class Table
 {
 public:
-	/// Reads a data file from the pinned data folder. It gives no value when the file is missing or not valid.
-	[[nodiscard]] static std::optional<Table> Load(std::string_view name)
+	/// Reads a data file from the pinned data folder. It gives no value when the file is missing or not valid. The
+	/// folder is a default argument, so that each test reads the folder it was compiled with: the body of this inline
+	/// function is the same in every test, and one copy of it is kept for all of them.
+	[[nodiscard]] static std::optional<Table> Load(std::string_view name, std::string_view folder = OPENBLACK_ORACLE_DATA)
 	{
-		std::ifstream stream(std::filesystem::path(OPENBLACK_ORACLE_DATA) / name);
+		std::ifstream stream(std::filesystem::path(folder) / name);
 		if (!stream)
 		{
 			return std::nullopt;
