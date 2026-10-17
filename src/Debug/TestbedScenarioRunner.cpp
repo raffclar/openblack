@@ -83,6 +83,7 @@
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
+#include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
@@ -773,6 +774,11 @@ void Runner::Start(const Scenario& scenario)
 		                                          glm::vec3(1.0f));
 	}
 	PlaceObjects(scenario, _middle);
+	for (const auto& offset : scenario.sharks)
+	{
+		const auto at = MapPoint(_middle, offset);
+		ecs::archetypes::SharkArchetype::Create({at.x, 0.0f, at.y}, 1.0f);
+	}
 	PlaceHighlights(scenario, _middle);
 	PlaceFootpaths(scenario, _middle);
 	if (!scenario.landScript.empty())

@@ -1048,6 +1048,9 @@ struct Scenario
 	std::function<void(ecs::components::PlayerStatistics&)> playerStatistics;
 	/// What the first player's creature has counted of its life
 	std::optional<statistics::CreatureTallies> creatureTallies;
+	/// Sharks that a script makes as the game's whales, each at a point from the middle of the map. A shark that swims
+	/// on no path shows only its body under the sea.
+	std::vector<glm::vec2> sharks;
 };
 
 /// A town centre's totem
