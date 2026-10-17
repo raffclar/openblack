@@ -7520,9 +7520,9 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
-	       kind == Kind::PlayCustomMusic || kind == Kind::StartScriptMusic || IsPointerCommand(kind);
-	kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	    kind == Kind::OpenTattooMenu || kind == Kind::StopScript || IsPointerCommand(kind);
+	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
+	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -7549,9 +7549,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 130> k_Names
-	{
-		constexpr std::array<std::string_view, 138> k_Names {
+	constexpr std::array<std::string_view, 139> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7685,12 +7683,12 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "give the player a picture of their own",
 		    "open the tattoo editor from the menu",
 		    "play custom music",
-		    "start script music",
 		    "show the custom music controls",
 		    "script reaction",
 		    "script place",
 		    "stop script",
 		    "pointer on creature",
+		    "start script music",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}
