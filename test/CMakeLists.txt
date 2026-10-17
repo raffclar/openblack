@@ -1174,3 +1174,13 @@ target_compile_definitions(
   PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_glm_order_7 test_glm_order_7.cpp)
+openblack_setup_and_add_test(
+  test_oracle_held_frame_heading oracle/test_oracle_held_frame_heading.cpp
+)
+target_compile_definitions(
+  test_oracle_held_frame_heading
+  PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_held_frame_heading test_held_frame_heading.cpp
+)

@@ -102,7 +102,7 @@ bool HandHoldPoser::Pose(const std::optional<HeldSeed>& seed, const Frame& frame
 	// The hand and its seed roll with the pour and sway with the cursor about the line to the camera, at once
 	const auto sway = CursorSway(animation != nullptr ? animation->GetCursorLag() : glm::vec2(0.0f));
 	const auto up = HeldUp(frame.camera, hand.position, frame.tilt + sway.x, sway.y);
-	const auto basis = HeldBasis(frame.levelTurn, up);
+	const auto basis = HeldBasis(HeldFacing(frame.heading), up);
 	hand.rotation = basis * frame.modelCorrection;
 
 	auto& registry = Locator::entitiesRegistry::value();

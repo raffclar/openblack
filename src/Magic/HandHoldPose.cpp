@@ -12,12 +12,15 @@
 #include <cmath>
 
 #include <algorithm>
+#include <numbers>
+#include <optional>
 #include <utility>
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/matrix.hpp>
 
+#include "Common/X87Angle.h"
 #include "Common/X87Matrix.h"
 #include "Common/X87Vector.h"
 
@@ -168,10 +171,26 @@ glm::vec3 hand_hold::HeldUp(glm::vec3 camera, glm::vec3 hand, float roll, float 
 	return x87::TransformPoint(turn, glm::vec3(0.0f, 1.0f, 0.0f), k_UpOrders);
 }
 
-glm::mat3 hand_hold::HeldBasis(const glm::mat3& levelTurn, glm::vec3 up)
+std::optional<float> hand_hold::HeadingOfSight(glm::vec3 lineOfSight)
 {
-	// The way the hand faces, kept level
-	const auto facing = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), levelTurn[0]);
+	constexpr float k_LeastLean = 0.01f;
+	if (!(std::abs(lineOfSight.x) > k_LeastLean) && !(std::abs(lineOfSight.z) > k_LeastLean))
+	{
+		return std::nullopt;
+	}
+	return x87::RoundToFloat(x87::GameHeadingOf(lineOfSight.x, lineOfSight.z));
+}
+
+glm::vec3 hand_hold::HeldFacing(float heading)
+{
+	// Add the half turn as a float. Keep the sine and the cosine of the sum as floats.
+	constexpr float k_HalfTurn = std::numbers::pi_v<float>;
+	const float turn = heading + k_HalfTurn;
+	return {x87::RoundToFloat(x87::Sin(turn)), 0.0f, -x87::RoundToFloat(x87::Cos(turn))};
+}
+
+glm::mat3 hand_hold::HeldBasis(glm::vec3 facing, glm::vec3 up)
+{
 	auto side = glm::cross(facing, up);
 	if (side != glm::vec3(0.0f))
 	{

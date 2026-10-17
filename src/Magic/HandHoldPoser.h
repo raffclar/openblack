@@ -66,8 +66,9 @@ public:
 		/// The cursor in window pixels
 		glm::ivec2 cursor {0};
 		glm::vec3 camera {0.0f};
-		/// The hand's turn about the vertical, the way it faces
-		glm::mat3 levelTurn {1.0f};
+		/// The hand's heading about the vertical, from the line of sight through the cursor (see
+		/// hand_hold::HeadingOfSight)
+		float heading {0.0f};
 		/// The hand model's turn upright
 		glm::mat3 modelCorrection {1.0f};
 		/// How far a pour tips the hand
