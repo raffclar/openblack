@@ -546,15 +546,78 @@ TEST(CreatureIdleMind, AnActionWaitsWhileTheCreatureLetsGoOfWhatItHolds)
 	commands = creature_mind::Think(mind, senses, Always(0));
 	EXPECT_FALSE(commands.letGo.has_value());
 	EXPECT_FALSE(commands.playOnce.has_value());
-	// It tries again when its body is free but it still holds the thing
-	senses.hands = creature_mind::HandsState::Failed;
-	EXPECT_EQ(creature_mind::Think(mind, senses, Always(0)).letGo, creature_mind::LetGo::AsItChooses);
 	// With empty hands the action starts
 	senses.held.reset();
 	senses.hands = creature_mind::HandsState::Done;
 	commands = creature_mind::Think(mind, senses, Always(0));
 	EXPECT_FALSE(commands.letGo.has_value());
 	EXPECT_EQ(commands.playOnce, 60u);
+}
+
+TEST(CreatureIdleMind, TheHandsAreCheckedOnlyUntilTheLetGoStarts)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told, {{.kind = creature_mind::Step::Kind::Action, .animation = 60}});
+	auto senses = FakeBody {}.Senses();
+	senses.held = 7u;
+	senses.heldLeft = true;
+	uint32_t draws = 0;
+	const creature_mind::Random counted = [&draws](uint32_t) {
+		++draws;
+		return 1u;
+	};
+	EXPECT_EQ(creature_mind::Think(mind, senses, Always(0), counted).letGo, creature_mind::LetGo::AsItChooses);
+	// The let-go was cut and the thing is still in the left hand: the action starts with no draw, on the right side
+	auto commands = creature_mind::Think(mind, senses, Always(0), counted);
+	EXPECT_FALSE(commands.letGo.has_value());
+	EXPECT_EQ(commands.playOnce, 60u);
+	EXPECT_FALSE(commands.mirrored);
+	EXPECT_EQ(draws, 0u);
+}
+
+TEST(CreatureIdleMind, AStaticStepDrawsASideEachTurnWhileTheHandsLetGo)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Told,
+	                    {{.kind = creature_mind::Step::Kind::Static, .seconds = 5.0f, .sequence = {27, 28, 29}}});
+	auto senses = FakeBody {}.Senses();
+	senses.held = 7u;
+	uint32_t draws = 0;
+	const creature_mind::Random counted = [&draws](uint32_t) {
+		++draws;
+		return 0u;
+	};
+	EXPECT_TRUE(creature_mind::Think(mind, senses, Always(0), counted).letGo.has_value());
+	EXPECT_EQ(draws, 0u);
+	// The let-go keeps the body busy: each turn the start is refused after its draw
+	senses.hands = creature_mind::HandsState::Busy;
+	for (uint32_t turn = 1; turn <= 3; ++turn)
+	{
+		const auto commands = creature_mind::Think(mind, senses, Always(0), counted);
+		EXPECT_FALSE(commands.startSequence.has_value());
+		EXPECT_EQ(draws, turn);
+	}
+	// Free again, the static action starts with its draw
+	senses.held.reset();
+	senses.hands = creature_mind::HandsState::Done;
+	EXPECT_TRUE(creature_mind::Think(mind, senses, Always(0), counted).startSequence.has_value());
+	EXPECT_EQ(draws, 4u);
+}
+
+TEST(CreatureIdleMind, AFaintCutsTheLetGoAndKeepsTheThingInTheHand)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Faint, creature_mind::Faint(1.0f));
+	auto senses = FakeBody {}.Senses();
+	senses.held = 7u;
+	EXPECT_TRUE(creature_mind::Think(mind, senses, Always(0)).letGo.has_value());
+	senses.hands = creature_mind::HandsState::Busy;
+	const auto commands = creature_mind::Think(mind, senses, Always(0), Always(1));
+	ASSERT_TRUE(commands.startSequence.has_value());
+	EXPECT_TRUE(commands.cutBody);
+	EXPECT_TRUE(commands.mirrored);
+	EXPECT_TRUE(commands.fainted);
+	EXPECT_FALSE(commands.letGo.has_value());
 }
 
 TEST(CreatureIdleMind, APickUpPutsDownADifferentThingAndSkipsTheThingItHolds)
@@ -572,6 +635,7 @@ TEST(CreatureIdleMind, APickUpPutsDownADifferentThingAndSkipsTheThingItHolds)
 	EXPECT_EQ(commands.letGo, creature_mind::LetGo::PutDown);
 	EXPECT_FALSE(commands.object.has_value());
 	// It holds the thing that it was to pick up: it does not do the pick-up
+	creature_mind::Plan(mind, creature_mind::Activity::Examine, {pickUp, examine});
 	senses.held = 3u;
 	commands = creature_mind::Think(mind, senses, Always(0));
 	EXPECT_FALSE(commands.letGo.has_value());
@@ -1217,6 +1281,8 @@ TEST(CreatureNeedsMind, FaintedItLiesFourSecondsASizeAndEightMoreThenComesRound)
 	EXPECT_EQ((*commands.startSequence)[0], animations::k_Faint);
 	EXPECT_EQ((*commands.startSequence)[2], animations::k_GetUp);
 	EXPECT_TRUE(creature_mind::IsUnconscious(mind));
+	// Those near it react as to a death
+	EXPECT_TRUE(commands.fainted);
 	body.Obey(commands, 1);
 	std::optional<int> cameRound;
 	for (int turn = 1; turn < 200 && !cameRound; ++turn)

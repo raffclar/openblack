@@ -721,6 +721,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreatureKnockedOut>(context)
 	    .Field<&components::CreatureKnockedOut::stage>("stage")
 	    .Field<&components::CreatureKnockedOut::seconds>("seconds")
+	    .Field<&components::CreatureKnockedOut::fainting>("fainting")
 	    .Field<&components::CreatureKnockedOut::rest>("rest")
 	    .Field<&components::CreatureKnockedOut::permanent>("permanent")
 	    .Field<&components::CreatureKnockedOut::home>("home")
@@ -2482,6 +2483,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::shown>("shown")
 	    .Field<&openblack::creature_mind::IdleMind::wakeWanted>("wakeWanted")
 	    .Field<&openblack::creature_mind::IdleMind::serial>("serial")
+	    .Field<&openblack::creature_mind::IdleMind::handsChecked>("handsChecked")
 	    .Field<&openblack::creature_mind::IdleMind::gaveUp>("gaveUp")
 	    .Field<&openblack::creature_mind::IdleMind::stoppedByScript>("stoppedByScript")
 	    .Field<&openblack::creature_mind::IdleMind::stoppedSeen>("stoppedSeen")
@@ -2500,6 +2502,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_mind::IdleMind::danceSet>("danceSet")
 	    .Field<&openblack::creature_mind::IdleMind::followCameraTurns>("followCameraTurns")
 	    .Field<&openblack::creature_mind::IdleMind::movedOn>("movedOn");
+	Reflect<openblack::creature_mind::IdleMind::StepRef>(context, ValueOnly {})
+	    .Field<&openblack::creature_mind::IdleMind::StepRef::serial>("serial")
+	    .Field<&openblack::creature_mind::IdleMind::StepRef::step>("step");
 	Reflect<openblack::creature_mind::Movement>(context, ValueOnly {})
 	    .Field<&openblack::creature_mind::Movement::kind>("kind")
 	    .Field<&openblack::creature_mind::Movement::point>("point")

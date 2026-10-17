@@ -418,6 +418,8 @@ TEST(CreatureActionAgendas, FrightenedPuttingDownAndLyingDead)
 	EXPECT_TRUE(dead[0].holdLoop);
 	EXPECT_FLOAT_EQ(dead[0].seconds, 864000.0f);
 	EXPECT_EQ(dead[0].effect, Effect::None);
+	// It is a faint: those near it react as to a death, and its time counts from when it lies still
+	EXPECT_TRUE(dead[0].faint);
 }
 
 // The actions Land 1's scripts force have an agenda, a casting one once it knows what it casts

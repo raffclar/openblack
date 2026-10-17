@@ -8,8 +8,10 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <numbers>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -268,4 +270,40 @@ TEST(CreatureLocomotion, ATurnWithoutSpinsClosesTheGapByTheShareOfTheTimeBeforeE
 	heading = LerpHeading(heading, 1.0f, 200.0f, 300.0f);
 	EXPECT_NEAR(heading, (1.0f / 3.0f) + ((2.0f / 3.0f) * (2.0f / 3.0f)), k_Tolerance);
 	EXPECT_NEAR(LerpHeading(heading, 1.0f, 300.0f, 300.0f), 1.0f, k_Tolerance);
+}
+
+// While it waits for its route, the creature fidgets when the wait falls below zero. The wait counts down by the body's
+// clip step. The first fidget is a look about with no draw. Each later fidget draws one of three from the game's random
+// numbers, and the confused clip draws its side after that.
+TEST(CreatureLocomotion, TheWaitForARouteFidgetsWithTheGamesDraws)
+{
+	std::vector<uint32_t> ranges;
+	std::vector<uint32_t> numbers;
+	const Random game = [&ranges, &numbers](uint32_t range) {
+		ranges.push_back(range);
+		const auto number = numbers.front();
+		numbers.erase(numbers.begin());
+		return number;
+	};
+	FidgetWait wait;
+	// At zero it does not fidget yet
+	EXPECT_EQ(WaitTurn(wait, k_FidgetMs, true, game).fidget, Fidget::None);
+	EXPECT_EQ(WaitTurn(wait, 1.0f, true, game).fidget, Fidget::LookAbout);
+	EXPECT_TRUE(ranges.empty());
+	EXPECT_FLOAT_EQ(wait.ms, k_LookAboutFidgetMs);
+	// The look about gives a longer wait. Then a puzzled face.
+	numbers = {1};
+	EXPECT_EQ(WaitTurn(wait, k_LookAboutFidgetMs + 1.0f, true, game).fidget, Fidget::Puzzled);
+	EXPECT_FLOAT_EQ(wait.ms, k_FidgetMs);
+	// Then the confused clip, on the left side
+	numbers = {2, 1};
+	const auto confused = WaitTurn(wait, k_FidgetMs + 1.0f, true, game);
+	EXPECT_EQ(confused.fidget, Fidget::Confused);
+	EXPECT_TRUE(confused.mirrored);
+	EXPECT_EQ(ranges, (std::vector<uint32_t> {3, 3, 2}));
+	// A body that plays something else plays no confused clip and draws no side
+	numbers = {2};
+	EXPECT_EQ(WaitTurn(wait, k_FidgetMs + 1.0f, false, game).fidget, Fidget::None);
+	EXPECT_EQ(ranges.size(), 4u);
+	EXPECT_FLOAT_EQ(wait.ms, k_FidgetMs);
 }

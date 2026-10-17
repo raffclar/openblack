@@ -160,10 +160,21 @@ Step PickUpLooking(uint32_t object)
 }
 
 /// The side that a step plays on as it starts: the right side or, one time in two, the left side. The game's random
-/// numbers choose it. The hands are empty when these steps start.
+/// numbers choose it.
 bool PickSide(const Random& gameRandom)
 {
 	return gameRandom(2) == 1;
+}
+
+/// The side of an action that the body plays once, as it starts. While the hand holds a thing, the free hand does the
+/// action and no draw occurs: a thing in the left hand gives the right side. Else the draw chooses the side.
+bool PickIndividualSide(const Random& gameRandom, const Senses& senses)
+{
+	if (senses.held.has_value())
+	{
+		return !senses.heldLeft;
+	}
+	return PickSide(gameRandom);
 }
 
 /// The side of a static action or a cast pose as it starts. The draw occurs always, but when a script set real time on
@@ -459,6 +470,7 @@ std::vector<Step> creature_mind::Faint(float size)
 	faint.holdLoop = true;
 	faint.closedEyes = true;
 	faint.effect = Effect::CameRound;
+	faint.faint = true;
 	return {faint};
 }
 
@@ -1048,7 +1060,7 @@ void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Comma
 	// action or moves refuses the start.
 	if (turn.playOnce.has_value())
 	{
-		const bool mirrored = gameRandom(2) == 1;
+		const bool mirrored = PickIndividualSide(gameRandom, senses);
 		if (!senses.bodyBusy)
 		{
 			commands.playOnce = *turn.playOnce;
@@ -1257,6 +1269,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	{
 		commands.lookAbout = step.kind == Step::Kind::Wait && !step.gaze.has_value();
 		const auto need = HandsNeededFor(step);
+		const bool handsChecked =
+		    mind.handsChecked.has_value() && mind.handsChecked->serial == mind.serial && mind.handsChecked->step == mind.step;
+		// The hands that let go keep the body busy
+		const bool bodyBusy = senses.bodyBusy || (handsChecked && senses.hands == HandsState::Busy);
 		// A step that needs a thing in the hand stops the rest of the agenda when the hand is empty
 		if (need == HandsNeed::Held)
 		{
@@ -1266,8 +1282,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 				return commands;
 			}
 		}
-		// A step that needs empty hands waits while the creature lets go of the thing that it holds
-		else if (need != HandsNeed::Any && senses.held.has_value())
+		// A step that needs empty hands first makes the creature let go of the thing that it holds. The hands are checked
+		// only until the let-go starts. From the next turn the step tries to start: the let-go keeps the body busy, but a
+		// faint starts at once and cuts it.
+		else if (need != HandsNeed::Any && senses.held.has_value() && !handsChecked)
 		{
 			if (need == HandsNeed::FreeOrTarget && step.order.object == senses.held)
 			{
@@ -1279,6 +1297,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			if (!senses.bodyBusy && senses.hands != HandsState::Busy)
 			{
 				commands.letGo = need == HandsNeed::Free ? LetGo::AsItChooses : LetGo::PutDown;
+				mind.handsChecked = IdleMind::StepRef {.serial = mind.serial, .step = mind.step};
 			}
 			return commands;
 		}
@@ -1291,7 +1310,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it, and a
 		// faint starts at once. A step that tries to start its clip tries again on each turn.
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
-		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && senses.bodyBusy)
+		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && bodyBusy)
 		{
 			if (TriesToStartClip(step, senses))
 			{
@@ -1312,6 +1331,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			return commands;
 		}
 		mind.stepStarted = true;
+		mind.handsChecked.reset();
 		mind.movedOn = mind.step;
 		mind.stepSeconds = 0.0f;
 		// Each step pulls the face it is meant to as it starts, held for as long as the face goes with
@@ -1329,7 +1349,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		{
 		case Step::Kind::Action:
 			commands.playOnce = step.animation;
-			commands.mirrored = PickSide(gameRandom);
+			commands.mirrored = PickIndividualSide(gameRandom, senses);
 			if (step.sleepyEyes)
 			{
 				commands.eyes = Eyes::Sleepy;
@@ -1450,7 +1470,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::SwapMind:
 			commands.playOnce = step.animation;
-			commands.mirrored = PickSide(gameRandom);
+			commands.mirrored = PickIndividualSide(gameRandom, senses);
 			commands.startSwapBeam = true;
 			break;
 		case Step::Kind::Overlay:
@@ -1548,7 +1568,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			if (senses.communication.animation.has_value())
 			{
 				commands.playOnce = senses.communication.animation;
-				commands.mirrored = PickSide(gameRandom);
+				commands.mirrored = PickIndividualSide(gameRandom, senses);
 			}
 			else
 			{

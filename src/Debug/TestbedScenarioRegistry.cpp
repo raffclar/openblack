@@ -568,6 +568,26 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.faint_holding",
+	    .name = "A creature that falls dead while it lets go of a thing keeps the thing",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger picks up a rock. Half a second after it holds the rock, a script tells it to fall "
+	                   "dead.",
+	    .expected = "The tiger starts to let go of the rock. On the next turn it falls down at once, before the rock "
+	                "leaves its hand, and it lies out cold with the rock still in its hand.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {4.0f, 54.0f}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f),
+	                 {.kind = Kind::DoAction,
+	                  .creature = 0,
+	                  .delaySeconds = 0.5f,
+	                  .waitUntilFree = true,
+	                  .action = "DeadForever",
+	                  .atCreature = 0}},
+	});
+
+	all.push_back({
 	    .id = "needs.badly_hurt",
 	    .name = "A badly hurt creature wants to restore its health",
 	    .facet = Facet::Needs,
