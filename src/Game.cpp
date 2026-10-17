@@ -233,6 +233,7 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WaterWakeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WindSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/TreeRoots.h"
@@ -2404,6 +2405,11 @@ bool Game::Update() noexcept
 	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+	// EXPERIMENT (not for merge): the one wind of the experiment follows the weather at the camera
+	if (Locator::windSystem::has_value())
+	{
+		Locator::windSystem::value().Update(clock.GetFrameRealTime());
+	}
 	// EXPERIMENT (not for merge): the sea bed of the open land, for the view under the sea
 	if (Locator::underwaterSystem::has_value())
 	{

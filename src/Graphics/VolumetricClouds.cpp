@@ -588,7 +588,7 @@ CloudWeather CloudClimate::Current() const
 	return {.cover = _cover.y, .type = _type.y, .rain = _rain.y, .wind = _wind};
 }
 
-CloudWeather volumetric_clouds::WeatherFor(float overcast, float rain, glm::vec2 weatherWind)
+CloudWeather volumetric_clouds::WeatherFor(float overcast, float rain, glm::vec2 cloudWind)
 {
 	const float o = std::clamp(overcast, 0.0f, 1.0f);
 	const float r = std::clamp(rain, 0.0f, 1.0f);
@@ -598,11 +598,16 @@ CloudWeather volumetric_clouds::WeatherFor(float overcast, float rain, glm::vec2
 	weather.type = std::clamp(
 	    k_Cumulus - 0.5f * o * (1.0f - std::clamp(r * 2.0f, 0.0f, 1.0f)) + 0.5f * std::clamp(r * 1.5f, 0.0f, 1.0f), 0.0f, 1.0f);
 	weather.rain = r;
-	// The calm wind blows along the original game's track of the clouds, three eighths of a turn round. The weather's
-	// wind adds to it.
-	constexpr glm::vec2 k_CalmDirection {-0.70710678f, 0.70710678f};
-	weather.wind = k_CalmDirection * k_CalmWind + weatherWind * 1.5f;
+	weather.wind = cloudWind;
 	return weather;
+}
+
+glm::vec2 volumetric_clouds::CloudWind(glm::vec2 direction, float groundSpeed)
+{
+	// A calm day's wind at the ground is 3 world units a second; each unit a second more moves the clouds 8 more
+	constexpr float k_CalmGround = 3.0f;
+	constexpr float k_PerUnit = 8.0f;
+	return direction * std::max(k_CalmWind + (groundSpeed - k_CalmGround) * k_PerUnit, 0.0f);
 }
 
 glm::vec3 volumetric_clouds::SunThroughAir(float elevation)

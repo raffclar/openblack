@@ -204,9 +204,14 @@ private:
 [[nodiscard]] glm::vec2 EaseTwoStage(glm::vec2 stages, float target, float seconds, float riseSeconds, float fallSeconds);
 
 /// What the weather at the eye asks of the clouds: the overcast and the rain, 0 to 1 and a little over in a storm,
-/// and the wind of the weather (its percent along x and z). No overcast gives the fair weather's scattered cumulus.
-/// Overcast with no rain gives a wide, flat layer; rain gives the towers of a storm.
-[[nodiscard]] CloudWeather WeatherFor(float overcast, float rain, glm::vec2 weatherWind);
+/// and the wind at the clouds (see CloudWind). No overcast gives the fair weather's scattered cumulus. Overcast with no
+/// rain gives a wide, flat layer; rain gives the towers of a storm.
+[[nodiscard]] CloudWeather WeatherFor(float overcast, float rain, glm::vec2 cloudWind);
+
+/// The wind at the clouds for the wind at the ground (a direction across the ground and a speed, in world units a
+/// second). The clouds move faster than the wind at the ground: a calm day's wind moves them at k_CalmWind, as fast
+/// as the original game's clouds move.
+[[nodiscard]] glm::vec2 CloudWind(glm::vec2 direction, float groundSpeed);
 
 /// The share of the sun's or the moon's light, for each of red, green and blue, that comes through the air to the
 /// clouds at an elevation (the sine of the angle over the horizon), as a share of the light from straight above. The

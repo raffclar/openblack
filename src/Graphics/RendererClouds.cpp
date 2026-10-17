@@ -27,6 +27,7 @@
 #include "Camera/Camera.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WindSystemInterface.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
@@ -93,6 +94,13 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 	const auto& frame = *_underwaterFrame;
 	const glm::vec3 eye {frame.eye};
 
+	// The one wind of the experiment, at the clouds
+	glm::vec2 cloudWind {0.0f};
+	if (Locator::windSystem::has_value())
+	{
+		const auto& wind = Locator::windSystem::value().GetWind();
+		cloudWind = clouds::CloudWind(wind::Direction(wind), wind.speed);
+	}
 	// The weather at the eye and the storms over the land
 	clouds::CloudWeather target;
 	std::vector<clouds::StormInput> storms;
@@ -101,7 +109,7 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 		auto& weatherSystem = Locator::weatherSystem::value();
 		const auto weather = weatherSystem.GetWeatherSmooth(desc.camera->GetOrigin());
 		target = clouds::WeatherFor(static_cast<float>(weather.overcast) / 100.0f, static_cast<float>(weather.rain) / 100.0f,
-		                            {static_cast<float>(weather.windX), static_cast<float>(weather.windZ)});
+		                            cloudWind);
 		for (const auto& storm : weatherSystem.GetActiveStorms())
 		{
 			if (storm.dead)
@@ -118,7 +126,7 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 	}
 	else
 	{
-		target = clouds::WeatherFor(0.0f, 0.0f, glm::vec2(0.0f));
+		target = clouds::WeatherFor(0.0f, 0.0f, cloudWind);
 	}
 	const auto chosen = clouds::ChosenWeather(static_cast<clouds::CoverChoice>(system.GetCloudCover()), target);
 

@@ -1072,3 +1072,5 @@ openblack_setup_and_add_test(test_underwater_foam graphics/test_underwater_foam.
 openblack_setup_and_add_test(
   test_volumetric_clouds graphics/test_volumetric_clouds.cpp
 )
+# EXPERIMENT (not for merge): the one wind of the experiment
+openblack_setup_and_add_test(test_wind test_wind.cpp)

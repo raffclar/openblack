@@ -248,11 +248,12 @@ TEST(VolumetricClouds, AStormsCellBuildsAndCalmsAfterItsStormGoes)
 
 TEST(VolumetricClouds, TheWeatherPicksTheTypeOfCloud)
 {
-	const auto fair = clouds::WeatherFor(0.0f, 0.0f, {0.0f, 0.0f});
+	const auto fair = clouds::WeatherFor(0.0f, 0.0f, clouds::CloudWind({1.0f, 0.0f}, 3.0f));
 	EXPECT_NEAR(fair.cover, clouds::k_FairCover, 1e-6f);
 	EXPECT_NEAR(fair.type, clouds::k_Cumulus, 1e-6f);
-	// The calm wind blows along the original game's track of the clouds at its speed
+	// A calm day's wind moves the clouds as fast as the original game's clouds, and a strong wind faster
 	EXPECT_NEAR(glm::length(fair.wind), clouds::k_CalmWind, 1e-3f);
+	EXPECT_GT(glm::length(clouds::CloudWind({0.0f, 1.0f}, 15.0f)), 2.0f * clouds::k_CalmWind);
 	// Overcast with no rain gives a sheet; rain gives towers
 	EXPECT_LT(clouds::WeatherFor(1.0f, 0.0f, {}).type, 0.1f);
 	EXPECT_GT(clouds::WeatherFor(1.0f, 1.0f, {}).type, 0.95f);
