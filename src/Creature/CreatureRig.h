@@ -186,4 +186,10 @@ PosedTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCoun
 /// The world matrix of a bone as posed this frame, the creature's placement included; the placement alone for a bone
 /// the pose lacks
 [[nodiscard]] glm::mat4 PosedBone(uint32_t bone, std::span<const glm::mat4> boneMatrices, const glm::mat4& placement);
+
+/// Where each bone was in the world at the end of the last game turn, as the game's effects on a creature read them.
+/// Before the first turn ends (no bones kept, or not one for each bone of the pose), the bones of this frame are the
+/// only pose there is.
+[[nodiscard]] std::vector<glm::vec3> TurnPoseBones(std::span<const glm::vec3> lastTurnBones,
+                                                   std::span<const glm::mat4> boneMatrices, const glm::mat4& placement);
 } // namespace openblack::creature

@@ -19,6 +19,7 @@
 
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "Common/GameRandom.h"
@@ -343,6 +344,22 @@ TEST_F(CreatureSpellParticles, TheFliesWaitAtTheHandThenCircleTheHead)
 	EXPECT_NEAR(glm::distance(atoms[0].position, middle), 1.5f, k_Epsilon);
 }
 
+// The flies' place in the world goes in as their position in the space of their parent atom, with no change between
+// the spaces. In an effect whose groups form a hierarchy, the flies are drawn away from the hand, moved by the parent.
+TEST_F(CreatureSpellParticles, TheFliesTakeTheirPlaceAsTheirPositionInTheEffect)
+{
+	header = Header("1 0 0 0 0 0");
+	const auto itch = Object("UR_CreatureSpellItch", "Itch",
+	                         "PROPERTY Group INTEGER 4\nPROPERTY NumAtoms INTEGER 1\nPROPERTY PCreator PERSIS_PNTR Point\n"
+	                         "PROPERTY PauseBeforeGotoCreature FLOAT 5\n");
+	auto effect = Make(First("1 4") + itch + k_Point);
+	effect->Step(k_Step);
+	effect->Step(k_Step);
+	const auto atoms = Atoms(*effect, Creator::Kind::Sprite);
+	ASSERT_EQ(atoms.size(), 1u);
+	EXPECT_NEAR(glm::distance(atoms[0].position, k_Hand + world.body.origin), 0.0f, k_Epsilon);
+}
+
 TEST_F(CreatureSpellParticles, HeartsRiseFromAllOverANiceCreatureFourASecond)
 {
 	const auto hearts = Object("UR_CreatureSpellCompassion", "Hearts",
@@ -376,6 +393,53 @@ TEST_F(CreatureSpellParticles, HeartsWithNoneToMakeMakeNone)
 		effect->Step(k_Step);
 	}
 	EXPECT_EQ(effect->AtomCount(), 1u);
+}
+
+// Once the creature has gone, the hearts and the steam let go of their rules: they make no more, and the old ones are
+// not taken away
+TEST_F(CreatureSpellParticles, HeartsAndSteamLetGoOnceTheCreatureHasGone)
+{
+	const auto hearts = Object("UR_CreatureSpellCompassion", "Hearts",
+	                           "PROPERTY DieAge FLOAT 5\nPROPERTY Group INTEGER 4\nPROPERTY InitSpeed FLOAT 6\n"
+	                           "PROPERTY MaxAtoms INTEGER 20\nPROPERTY PCreator PERSIS_PNTR Point\n");
+	const auto steam =
+	    Object("UR_CreatureSpellFreeze", "Steam",
+	           "PROPERTY DieAge FLOAT 5\nPROPERTY Group INTEGER 4\nPROPERTY InitSpeed FLOAT 1\n"
+	           "PROPERTY MaxAtoms INTEGER 20\nPROPERTY MinHeight FLOAT 1\nPROPERTY PCreator PERSIS_PNTR Point\n");
+	for (const auto& rule : {hearts, steam})
+	{
+		world.gone = false;
+		auto effect = Make(First("1 4") + rule + k_Point);
+		for (int i = 0; i < 10; ++i)
+		{
+			effect->Step(k_Step);
+		}
+		const auto made = effect->AtomCount();
+		ASSERT_GT(made, 1u);
+		world.gone = true;
+		for (int i = 0; i < 60; ++i)
+		{
+			effect->Step(k_Step);
+		}
+		EXPECT_EQ(effect->AtomCount(), made);
+	}
+}
+
+// The effects on a creature read its bones as they were at the end of the last game turn. Before the first turn ends,
+// they read the bones of this frame.
+TEST(CreatureRigPose, EffectsReadTheBonesOfTheLastTurn)
+{
+	const std::vector<glm::mat4> matrices {glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 2.0f, 3.0f)), glm::mat4(1.0f)};
+	const auto placement = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 0.0f, 0.0f));
+	const std::vector<glm::vec3> last {{5.0f, 5.0f, 5.0f}, {6.0f, 6.0f, 6.0f}};
+	EXPECT_EQ(creature::TurnPoseBones(last, matrices, placement), last);
+	const auto frame = creature::TurnPoseBones({}, matrices, placement);
+	ASSERT_EQ(frame.size(), 2u);
+	EXPECT_EQ(frame[0], glm::vec3(11.0f, 2.0f, 3.0f));
+	EXPECT_EQ(frame[1], glm::vec3(10.0f, 0.0f, 0.0f));
+	// Kept bones of another pose (a body with a different bone count) are not used
+	const std::vector<glm::vec3> other {{5.0f, 5.0f, 5.0f}};
+	EXPECT_EQ(creature::TurnPoseBones(other, matrices, placement), frame);
 }
 
 // The land test of the steam reads the position of each atom in the space of its parent atom as a place in the world.

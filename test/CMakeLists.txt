@@ -1122,3 +1122,10 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_script_task_release PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_x87 test_x87.cpp)
+openblack_setup_and_add_test(
+  test_oracle_wisp_orbit oracle/test_oracle_wisp_orbit.cpp
+)
+target_compile_definitions(
+  test_oracle_wisp_orbit
+  PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
