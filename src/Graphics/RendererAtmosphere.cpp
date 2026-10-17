@@ -215,7 +215,7 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		}
 	}
 	const auto medium = atmos::MediumAt(altitude, air);
-	atmosphere.lowTierDensity = atmos::Luminance(medium.extinction) * atmos::k_HazeScale / atmos::k_UnitsPerKilometre;
+	atmosphere.lowTierDensity = atmos::Luminance(medium.extinction) * atmos::HazeScaleAt(altitude) / atmos::k_UnitsPerKilometre;
 	_atmosphereFrame = atmosphere;
 
 	const auto setUniforms = [&atmosphere](const ShaderProgram& program) {
@@ -276,6 +276,18 @@ void Renderer::BindAtmosphere(const ShaderProgram& program, float skyShare) cons
 	program.SetUniformValue("u_atmosSun", &atmosphere.sun);
 	program.SetTextureSampler("s_atmosTransmittance", 13, _atmosphere->transmittance.Texture());
 	program.SetTextureSampler("s_atmosSkyView", 14, _atmosphere->skyView.Texture());
+}
+
+bool Renderer::BindHazeGrid(const ShaderProgram& program, uint8_t stage) const
+{
+	if (!_atmosphereFrame.has_value() || _atmosphere == nullptr || !_atmosphereFrame->haze ||
+	    _atmosphereFrame->hazeDetail == underwater::LightDetail::Basic || !_underwaterFrame.has_value() ||
+	    _underwaterFrame->eye.w > 0.5f)
+	{
+		return false;
+	}
+	program.SetTextureSampler("s_atmosAerial", stage, _atmosphere->aerial.Texture());
+	return true;
 }
 
 void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const
