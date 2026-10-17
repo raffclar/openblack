@@ -58,7 +58,7 @@ void Store::MarkBlocked(entt::entity thing, uint32_t turn)
 	}
 }
 
-Store::Added Store::Add(entt::entity thing, uint32_t kind, glm::vec3 place)
+Store::Added Store::Add(entt::entity thing, uint32_t kind, map_coords::MapCoords place)
 {
 	if (const auto known = _index.find(thing); known != _index.end())
 	{

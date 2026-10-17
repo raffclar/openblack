@@ -229,8 +229,9 @@ struct MindFileData
 	std::optional<std::vector<MindDatabaseEntry>> database;
 	/// From version 24 on
 	std::optional<uint32_t> unknown2;
-	/// From version 27 on
-	std::optional<std::array<uint32_t, 4>> unknown3;
+	/// From version 27 on, a word for each leash type by the number of the type: not 0 when the creature knows the
+	/// leash. The first type is no leash.
+	std::optional<std::array<uint32_t, 4>> leashWords;
 	/// From version 28 on: eight numbers and the tattoo's bytes
 	std::optional<std::array<uint32_t, 8>> tattooHeader;
 	std::optional<std::vector<uint8_t>> tattoo;

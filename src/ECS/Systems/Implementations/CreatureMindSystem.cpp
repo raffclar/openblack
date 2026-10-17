@@ -41,6 +41,7 @@
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureEmergencies.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
@@ -77,6 +78,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureGestureDrawing.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -115,6 +117,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -3525,7 +3528,24 @@ void CreatureMindSystem::MoveToStage(entt::entity creature, uint32_t stage)
 	{
 		return;
 	}
+	// A creature that its home keeps it near, with no leash on, is let go when it reaches the stage it may leave home
+	// from
+	if (Locator::leashSystem::has_value())
+	{
+		auto& leashes = Locator::leashSystem::value();
+		const auto* leash = registry.TryGet<const CreatureLeash>(creature);
+		if (leash != nullptr &&
+		    creature_development::ReleasedFromHome(stage, leash->confinementRadius, leashes.IsLeashed(creature)))
+		{
+			leashes.ClearConfinement(creature);
+		}
+	}
 	mind->developmentPhase = stage;
+	// The time at the stage starts again
+	if (mind->learnt.has_value())
+	{
+		mind->learnt->developmentTimer = 0;
+	}
 	// Its desires are set for the stage at once, even for the stage it is at already; a mind yet to think sets them up
 	// for the stage when it first does
 	if (mind->desires.has_value())

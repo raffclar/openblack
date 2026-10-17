@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <span>
@@ -26,6 +27,7 @@
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureDecisionTree.h"
+#include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureMindModel.h"
@@ -91,7 +93,7 @@ MindFileData SampleMind()
 	mind.database = std::vector<MindDatabaseEntry> {
 	    {.id = 5, .time = 6, .count = 3, .pairs = {{.number = 1, .mood = 0.5f, .fear = 0.25f}, {.number = 3, .mood = 1.0f}}}};
 	mind.unknown2 = 8;
-	mind.unknown3 = std::array<uint32_t, 4> {1, 2, 3, 4};
+	mind.leashWords = std::array<uint32_t, 4> {1, 2, 3, 4};
 	mind.tattooHeader = std::array<uint32_t, 8> {};
 	mind.tattoo = std::vector<uint8_t> {9, 8, 7};
 	mind.learningCounts = std::vector<MindLearningCount>(45, {.a = 1, .b = 2, .c = 3});
@@ -550,7 +552,7 @@ MindFileData AsTheGameSavesItAfterALoad(MindFileData file)
 	if (file.version != k_CurrentVersion)
 	{
 		file.version = k_CurrentVersion;
-		file.unknown3 = file.unknown3.value_or(std::array<uint32_t, 4> {});
+		file.leashWords = file.leashWords.value_or(std::array<uint32_t, 4> {});
 		file.tattooHeader = file.tattooHeader.has_value() ? file.tattooHeader : k_EmptyTattoos;
 		file.tattoo = file.tattoo.value_or(std::vector<uint8_t> {});
 		file.learningCounts = file.learningCounts.value_or(std::vector<MindLearningCount>(45));
@@ -583,7 +585,8 @@ MindFileData AsTheGameSavesItAfterALoad(MindFileData file)
 
 /// What openblack writes for a creature that a load of a saved game gives the file to: a new mind with the starting
 /// lesson, the file over it, then the mind and the body written back as the save writes them
-std::vector<uint8_t> LoadedAndSaved(const MindFileData& file)
+std::vector<uint8_t> LoadedAndSaved(const MindFileData& file,
+                                    const std::function<void(creature_mind_model::LoadedMind&)>& afterLoad = {})
 {
 	creature_desires::Desires fresh;
 	creature_watching::Knowledge knowledge {
@@ -596,7 +599,11 @@ std::vector<uint8_t> LoadedAndSaved(const MindFileData& file)
 	auto freshLearnt = creature_mind_model::Fresh(fresh, std::vector<float>(opinions, k_FreshOpinion), knowledge);
 	const std::array k_Allowed {creature_tree::Attribute::Type};
 	creature_mind_model::TeachStartingLesson(freshLearnt, k_Allowed);
-	const auto loaded = creature_mind_model::FromFile(file, fresh, freshLearnt);
+	auto loaded = creature_mind_model::FromFile(file, fresh, freshLearnt);
+	if (afterLoad)
+	{
+		afterLoad(loaded);
+	}
 	auto saved = creature_mind_model::ToFile(loaded.desires, loaded.learnt, loaded.developmentPhase, loaded.attitudeToPlayer,
 	                                         loaded.turnsLookedAt, loaded.speciesRow);
 	const auto body = creature_mind_body::FromMindFile(file);
@@ -814,7 +821,7 @@ TEST(CreatureMindFile, AnOldMindIsWrittenWithTheValuesOfANewCreature)
 	// last numbers, and fewer opinions than the game has now
 	auto old = FullSampleMind();
 	old.version = 25;
-	old.unknown3.reset();
+	old.leashWords.reset();
 	old.tattooHeader.reset();
 	old.tattoo.reset();
 	old.learningCounts.reset();
@@ -853,7 +860,7 @@ TEST(CreatureMindFile, AVersion30MindKeepsItsOwnFieldsAndGetsTheRest)
 	EXPECT_EQ(saved, Write(AsTheGameSavesItAfterALoad(read)));
 	MindFileData now;
 	ASSERT_EQ(Read(saved, now), MindResult::Success);
-	EXPECT_EQ(now.unknown3, old.unknown3);
+	EXPECT_EQ(now.leashWords, old.leashWords);
 	ASSERT_TRUE(now.learningCounts.has_value());
 	EXPECT_EQ((*now.learningCounts)[0].a, 4u);
 	EXPECT_EQ((*now.learningCounts)[0].c, std::optional<uint32_t>(0));
@@ -868,7 +875,7 @@ TEST(CreatureMindFile, ANewCreatureWritesEmptyTattooSlotsAndItsLastNumbers)
 	const auto file = creature_mind_model::ToFile(desires, learnt, 0, 0.0f, 0, 3);
 	EXPECT_EQ(file.tattooHeader, k_EmptyTattoos);
 	EXPECT_EQ(file.unknown5, (std::array<int32_t, 2> {0, -1}));
-	EXPECT_EQ(file.unknown3, (std::array<uint32_t, 4> {}));
+	EXPECT_EQ(file.leashWords, (std::array<uint32_t, 4> {}));
 }
 
 namespace
@@ -960,4 +967,67 @@ TEST(CreatureMindFile, ALessonSpreadsToTheDesiresThatDependOnIt)
 	EXPECT_EQ(trees[2][0].feedback, 1.5f * 0.8f);
 	EXPECT_EQ(trees[2][0].belief.x, 1);
 	EXPECT_TRUE(learnt.episodes[static_cast<size_t>(TreeKind::Activity)][4].empty());
+}
+
+TEST(CreatureMindFile, ALoadKeepsTheLeashWordsAndASaveWritesThem)
+{
+	creature_desires::Desires desires;
+	auto base = creature_mind_model::Fresh(desires, std::vector<float>(k_GameOpinions, 0.0f), {});
+	// The words of a file are kept as they are, the word of no leash too
+	auto file = FullSampleMind();
+	file.leashWords = std::array<uint32_t, 4> {7, 1, 0, 2};
+	const auto loaded = creature_mind_model::FromFile(file, desires, base);
+	EXPECT_EQ(loaded.learnt.leashWords, (std::array<uint32_t, 4> {7, 1, 0, 2}));
+	EXPECT_EQ(creature_mind_model::ToFile(desires, loaded.learnt, 0, 0.0f, 0, 3).leashWords, file.leashWords);
+	// A file without the words keeps the words of the mind that it is loaded over, and the save writes them
+	base.leashWords = {0, 1, 1, 1};
+	file.version = 26;
+	file.leashWords.reset();
+	const auto old = creature_mind_model::FromFile(file, desires, base);
+	EXPECT_EQ(old.learnt.leashWords, base.leashWords);
+	EXPECT_EQ(creature_mind_model::ToFile(desires, old.learnt, 0, 0.0f, 0, 3).leashWords, base.leashWords);
+}
+
+TEST(CreatureMindFile, ALeashWordFollowsWhatTheCreatureKnows)
+{
+	using creature_mind_model::LeashWord;
+	EXPECT_EQ(LeashWord(7, true), 7u);
+	EXPECT_EQ(LeashWord(0, false), 0u);
+	EXPECT_EQ(LeashWord(0, true), 1u);
+	EXPECT_EQ(LeashWord(7, false), 0u);
+}
+
+/// A script makes a computer player's creature from a real mind file: the file goes over a new creature, which then
+/// knows every leash and moves to the last stage of growing up, with its time at the stage started again. A save writes
+/// what the game writes for that creature.
+TEST(CreatureMindFile, ACreatureMadeFromARealMindKnowsEveryLeashAndIsFullyGrown)
+{
+	const auto files = RealMindFiles();
+	if (files.empty())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES or OPENBLACK_GAME_PATH to check real mind files";
+	}
+	size_t checked = 0;
+	for (const auto& path : files)
+	{
+		const auto bytes = ReadFileBytes(path);
+		ASSERT_TRUE(bytes.has_value()) << path;
+		MindFileData mind;
+		if (Read(*bytes, mind) != MindResult::Success)
+		{
+			continue;
+		}
+		const auto saved = LoadedAndSaved(mind, [](creature_mind_model::LoadedMind& loaded) {
+			loaded.learnt.leashWords.fill(1);
+			loaded.learnt.developmentTimer = 0;
+			loaded.developmentPhase = creature_development::k_FullyGrownUp;
+		});
+		auto expected = AsTheGameSavesItAfterALoad(mind);
+		expected.leashWords = std::array<uint32_t, 4> {1, 1, 1, 1};
+		expected.developmentPhase = 13;
+		expected.developmentTimer = 0;
+		EXPECT_EQ(saved, Write(expected)) << path;
+		++checked;
+	}
+	EXPECT_GT(checked, 0u);
 }

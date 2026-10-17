@@ -426,7 +426,7 @@
   "query": "creature.learnt"
  },
  {
-  "description": "A creature's beliefs about things: kind, last place, the whole thing, the attributes it last took in, which its decision trees test; and how nice it finds other creatures",
+  "description": "A creature's beliefs about things: kind, last place (in metres, and in map units as place_map), the whole thing, the attributes it last took in, which its decision trees test; and how nice it finds other creatures",
   "kind": "object",
   "parameters": [
    {

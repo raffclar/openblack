@@ -155,6 +155,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
 #include "Graphics/Moon.h"
@@ -1058,6 +1059,13 @@ void SetKindAttributes(const ecs::Registry& registry, entt::entity entity, const
 		break;
 	}
 }
+
+/// The leash word of a mind file for a leash type: the word of the type's number
+size_t LeashWordOf(LeashType type)
+{
+	return static_cast<size_t>(type);
+}
+
 } // namespace
 
 std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& registry, entt::entity entity,
@@ -1068,8 +1076,8 @@ std::optional<creature_tree::Belief> mind_detail::BeliefOf(const ecs::Registry& 
 	    known != nullptr && known->attributes.has_value())
 	{
 		auto belief = *known->attributes;
-		belief.x = map_coords::ToFixed(known->place.x);
-		belief.z = map_coords::ToFixed(known->place.z);
+		belief.x = known->place.x;
+		belief.z = known->place.z;
 		return belief;
 	}
 	return BeliefNowOf(registry, entity, self);
@@ -1099,9 +1107,9 @@ std::optional<creature_tree::Belief> mind_detail::BeliefNowOf(const ecs::Registr
 	    .creatureType = creature != nullptr ? static_cast<uint32_t>(creature::InfoRow(creature->species)) : 0,
 	});
 	SetKindAttributes(registry, entity, me, belief);
-	const auto place = ThingPlace(registry, entity);
-	belief.x = map_coords::ToFixed(place.x);
-	belief.z = map_coords::ToFixed(place.z);
+	const auto place = ecs::thing_map_place::Of(registry, entity);
+	belief.x = place.x;
+	belief.z = place.z;
 	return belief;
 }
 
@@ -1122,9 +1130,9 @@ std::optional<creature_tree::Belief> mind_detail::ActedOnBeliefOf(const ecs::Reg
 		    .player = PlayerNumberOf(temple->owner),
 		    .creaturesPlayer = me != nullptr ? std::optional(PlayerNumberOf(me->owner)) : std::nullopt,
 		});
-		const auto place = ThingPlace(registry, entity);
-		heart.x = map_coords::ToFixed(place.x);
-		heart.z = map_coords::ToFixed(place.z);
+		const auto place = ecs::thing_map_place::Of(registry, entity);
+		heart.x = place.x;
+		heart.z = place.z;
 		return heart;
 	}
 	return BeliefOf(registry, entity, self);
@@ -1292,8 +1300,36 @@ void CreatureMindSystem::ApplyLoaded(entt::entity creature, CreatureMindState& m
 	mind.desiresPhase = mind.developmentPhase;
 	mind.attitudeToPlayer = loaded.attitudeToPlayer;
 	mind.turnsLookedAt = loaded.turnsLookedAt;
+	auto& registry = Locator::entitiesRegistry::value();
+	// The leash words of the file tell which leashes the creature knows
+	if (auto* leashes = registry.TryGet<CreatureLeash>(creature); leashes != nullptr && file.leashWords.has_value())
+	{
+		for (size_t i = 0; i < creature_leash::k_Types.size(); ++i)
+		{
+			leashes->known.set(i, mind.learnt->leashWords.at(LeashWordOf(creature_leash::k_Types.at(i))) != 0);
+		}
+	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} took up a mind file: version {}, stage {}",
 	                   entt::to_integral(creature), file.version, mind.developmentPhase);
+	// A creature that a script made from a mind file knows every leash and is fully grown
+	if (mind.growUpAfterFile)
+	{
+		mind.growUpAfterFile = false;
+		mind.learnt->leashWords.fill(1);
+		if (auto* leashes = registry.TryGet<CreatureLeash>(creature))
+		{
+			leashes->known.set();
+		}
+		MoveToStage(creature, CreatureMindState::k_FullyGrownUp);
+	}
+}
+
+void CreatureMindSystem::GrowUpAfterFile(entt::entity creature)
+{
+	if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature))
+	{
+		mind->growUpAfterFile = true;
+	}
 }
 
 void CreatureMindSystem::Abandon(CreatureMindState& mind)
@@ -1559,7 +1595,7 @@ bool OutsideConfinement(const ecs::Registry& registry, entt::entity creature, en
 }
 
 /// Whether a creature kept within an area by its leash has a place farther from the area's centre than the area's radius
-bool OutsideConfinedArea(const ecs::Registry& registry, entt::entity creature, glm::vec3 place)
+bool OutsideConfinedArea(const ecs::Registry& registry, entt::entity creature, const map_coords::MapCoords& place)
 {
 	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
 	if (leashes == nullptr)
@@ -1569,19 +1605,21 @@ bool OutsideConfinedArea(const ecs::Registry& registry, entt::entity creature, g
 	const bool leashed = leashes->worn.has_value();
 	const bool works = !leashed || leashes->worn->works;
 	return creature_leash::IsConfined(leashes->confinementRadius, leashed, works) &&
-	       gutils::GetDistanceInMetres(place, leashes->confinementCentre) > leashes->confinementRadius;
+	       gutils::GetDistanceInMetres(place, map_coords::FromMetres(glm::xz(leashes->confinementCentre))) >
+	           leashes->confinementRadius;
 }
 
 /// Where the creature believes that a thing is: where it last came across the thing, else where the thing is now
-std::optional<glm::vec3> BelievedPlaceOf(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing)
+std::optional<map_coords::MapCoords> BelievedPlaceOf(const ecs::Registry& registry, const CreatureMindState& mind,
+                                                     entt::entity thing)
 {
 	if (const auto* belief = mind.beliefs.Find(thing))
 	{
 		return belief->place;
 	}
-	if (const auto* at = registry.TryGet<const Transform>(thing))
+	if (registry.AllOf<Transform>(thing))
 	{
-		return at->position;
+		return ecs::thing_map_place::Of(registry, thing);
 	}
 	return std::nullopt;
 }
@@ -1613,7 +1651,7 @@ std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Targe
 		}
 		const auto* held = registry.TryGet<const HeldByCreature>(thing);
 		candidates.push_back({.id = entt::to_integral(thing),
-		                      .distance = glm::distance(glm::vec2 {belief.place.x, belief.place.z}, position),
+		                      .distance = glm::distance(map_coords::ToMetres(belief.place), position),
 		                      .held = held != nullptr && held->creature == creature});
 	}
 	return creature_planner::ChooseUsed(candidates, distanceWeight, goal);
@@ -1926,7 +1964,7 @@ float ObjectUsefulness(const ecs::Registry& registry, const creature_mind_model:
 } // namespace
 
 float mind_detail::Nearness(const ecs::Registry& registry, entt::entity creature, const glm::vec3& at, entt::entity object,
-                            const glm::vec3& place, float distanceWeight)
+                            const map_coords::MapCoords& place, float distanceWeight)
 {
 	glm::vec3 from = at;
 	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
@@ -1940,7 +1978,8 @@ float mind_detail::Nearness(const ecs::Registry& registry, entt::entity creature
 	}
 	const auto* held = registry.TryGet<const HeldByCreature>(object);
 	return creature_planner::DistancePriority(held != nullptr && held->creature == creature,
-	                                          gutils::GetDistanceInMetres(place, from), distanceWeight);
+	                                          gutils::GetDistanceInMetres(place, map_coords::FromMetres(glm::xz(from))),
+	                                          distanceWeight);
 }
 
 float CreatureMindSystem::ActivityUsefulness(entt::entity creature, const CreatureMindState& mind, Desire desire,
@@ -1998,7 +2037,7 @@ float CreatureMindSystem::ObjectToActOnUsefulness(entt::entity creature, const C
 		const bool leashed = leashes->worn.has_value();
 		const bool works = !leashed || leashes->worn->works;
 		if (creature_leash::IsConfined(leashes->confinementRadius, leashed, works) &&
-		    gutils::GetDistanceInMetres(at, *place) > leashes->confinementRadius)
+		    gutils::GetDistanceInMetres(map_coords::FromMetres(glm::xz(at)), *place) > leashes->confinementRadius)
 		{
 			return 0.0f;
 		}
@@ -4392,11 +4431,12 @@ bool CreatureMindSystem::ContinueKeptPlanWith(entt::entity creature, CreatureMin
 	    .needsThingToUse = needsThingToUse,
 	    .giftSuitsActOn = !(action.notOnWhatItHolds && holdsGift) &&
 	                      (executor->target == Target::None || Accepts(registry, executor->target, gift, creature)),
-	    .giftSuitsUse = !NoWayLately(registry, mind, gift) &&
-	                    !BelievedPlaceOf(registry, mind, gift)
-	                         .transform([&](glm::vec3 place) { return OutsideConfinedArea(registry, creature, place); })
-	                         .value_or(false) &&
-	                    LetsCreatureAct(registry, gift) && Accepts(registry, use, gift, creature),
+	    .giftSuitsUse =
+	        !NoWayLately(registry, mind, gift) &&
+	        !BelievedPlaceOf(registry, mind, gift)
+	             .transform([&](const map_coords::MapCoords& place) { return OutsideConfinedArea(registry, creature, place); })
+	             .value_or(false) &&
+	        LetsCreatureAct(registry, gift) && Accepts(registry, use, gift, creature),
 	};
 	const auto chosen = creature_giving::UseForKeptPlan(facts);
 	if (chosen == creature_giving::KeptPlanUse::None)
@@ -4517,6 +4557,15 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 	}
 	auto file = creature_mind_model::ToFile(*mind->desires, *mind->learnt, mind->developmentPhase, mind->attitudeToPlayer,
 	                                        mind->turnsLookedAt, static_cast<uint32_t>(creature::InfoRow(body->species)));
+	// The leash words tell which leashes the creature knows now
+	if (const auto* leashes = registry.TryGet<const CreatureLeash>(creature); leashes != nullptr && file.leashWords.has_value())
+	{
+		for (size_t i = 0; i < creature_leash::k_Types.size(); ++i)
+		{
+			auto& word = file.leashWords->at(LeashWordOf(creature_leash::k_Types.at(i)));
+			word = creature_mind_model::LeashWord(word, leashes->known.test(i));
+		}
+	}
 	// The mind file keeps the records of the custom music tracks. The current track's record first gets what the local
 	// player's creature feels now.
 	if (Locator::musicMoodSystem::has_value())

@@ -134,6 +134,7 @@ public:
 	void ChangeDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change) override;
 	void SetAgendaPriority(entt::entity creature, float priority) override;
 	void MoveToStage(entt::entity creature, uint32_t stage) override;
+	void GrowUpAfterFile(entt::entity creature) override;
 	void ForceFinish(entt::entity creature) override;
 	bool PointOutHighlight(entt::entity creature) override;
 
@@ -417,7 +418,8 @@ private:
 	/// thing is not new. Another creature is its own whole thing.
 	void ComeAcrossWithWhole(entt::entity creature, components::CreatureMindState& mind, entt::entity thing);
 	/// Where it believes a thing is: where it last came across it; nothing when it has never come across it
-	[[nodiscard]] static std::optional<glm::vec3> BelievedPlace(const components::CreatureMindState& mind, entt::entity thing);
+	[[nodiscard]] static std::optional<map_coords::MapCoords> BelievedPlace(const components::CreatureMindState& mind,
+	                                                                        entt::entity thing);
 	/// It forgets what it believed about things gone from the world, and its last try that fizzled when the thing of
 	/// that try goes
 	void ForgetGoneThings(entt::entity creature, components::CreatureMindState& mind);

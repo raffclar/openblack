@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
@@ -68,8 +69,6 @@ namespace openblack::ecs::systems::mind_detail
 [[nodiscard]] std::optional<uint32_t> BeliefKindOf(const ecs::Registry& registry, entt::entity thing);
 /// The data of a worship site's altar: the data of the worship site of its site's tribe. None for another thing.
 [[nodiscard]] const GWorshipSiteInfo* AltarInfoOf(const ecs::Registry& registry, entt::entity altar);
-/// Where a thing is: where it stands, or a flock's own place
-[[nodiscard]] glm::vec3 ThingPlace(const ecs::Registry& registry, entt::entity thing);
 /// What a creature knows of a thing. When the creature has a belief about the thing, these are the attributes that it
 /// last took in, and the place where it last came across the thing. Else they are the attributes of the thing and its
 /// place now.
@@ -91,7 +90,7 @@ namespace openblack::ecs::systems::mind_detail
 /// player is tied to a thing, the distance starts at that thing. If not, the distance starts at the creature. A thing
 /// that the creature holds has the highest value.
 [[nodiscard]] float Nearness(const ecs::Registry& registry, entt::entity creature, const glm::vec3& at, entt::entity object,
-                             const glm::vec3& place, float distanceWeight);
+                             const map_coords::MapCoords& place, float distanceWeight);
 /// The town nearest a point along the ground, of any player or none; none when there is no town
 [[nodiscard]] entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point);
 /// Whether a creature lies dead: knocked out, or with a plan that has the action of dying or of lying dead for good
