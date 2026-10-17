@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <array>
 
 #include <gtest/gtest.h>
@@ -98,4 +100,14 @@ TEST(LeashSnap, TheHeldRopesLengthsAndThePinch)
 	EXPECT_EQ(k_TiedRopeLengths.max, 2.0f);
 	EXPECT_EQ(PinchShare(Hand::Over), 0.0f);
 	EXPECT_EQ(PinchShare(Hand::Holding), 0.5f);
+}
+
+// The game adds the squares of the way from the tied thing to the hand from z to x
+TEST(LeashSnap, LettingGoLengthAddsTheSquaresFromZToX)
+{
+	const glm::vec3 hand {13.37f, 7.21f, -9.83f};
+	const glm::vec3 tied {1.13f, 0.57f, 2.71f};
+	const auto d = hand - tied;
+	const float expected = std::sqrt(((d.z * d.z) + (d.y * d.y)) + (d.x * d.x));
+	EXPECT_EQ(LengthsOnLettingGo(hand, tied, 0.5f).max, expected);
 }

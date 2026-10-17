@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <algorithm>
 
 #include <glm/geometric.hpp>
@@ -233,4 +235,41 @@ TEST(LeashRope, HangingFromAHandAboveItIsSlackAtTheCollarButNotAtTheHand)
 	EXPECT_LT(atCollar, 0.8f);
 	const auto atHand = largestTension(Create(hand, collar, k_Slack, k_Max, {}), hand, collar);
 	EXPECT_GT(atHand, atCollar);
+}
+
+// The ribbon's corners come from float steps in the game's order: the line from the eye and the rope's direction are
+// each made one long first, and the side across them is made one long with its squares added z, x, y
+TEST(LeashRope, RibbonCornersFollowTheGameOrder)
+{
+	auto rope = Create(k_Start, k_Start + glm::vec3(41.0f, 0.0f, 0.0f), k_Slack, k_Max, {});
+	rope.nodes.at(3).position = k_Start + glm::vec3(3.3f, 0.7f, -0.9f);
+	rope.nodes.at(4).position = k_Start + glm::vec3(4.1f, 1.3f, 0.35f);
+	rope.nodes.at(5).position = k_Start + glm::vec3(5.7f, 0.2f, 1.1f);
+	const glm::vec3 eye {113.7f, 171.3f, 61.9f};
+	const auto ribbon = BuildRibbon(rope, eye, Flat);
+
+	// Point 5 is the fourth mass (index 4); the points either side are the third and fifth masses
+	const auto point = rope.nodes.at(4).position;
+	const auto before = rope.nodes.at(3).position;
+	const auto after = rope.nodes.at(5).position;
+	glm::vec3 v = point - eye;
+	const float vShare = 1.0f / std::sqrt(((v.z * v.z) + (v.y * v.y)) + (v.x * v.x));
+	v = glm::vec3(vShare * v.x, v.y * vShare, v.z * vShare);
+	glm::vec3 t = after - before;
+	const float tShare = 1.0f / std::sqrt(((t.x * t.x) + (t.y * t.y)) + (t.z * t.z));
+	t = glm::vec3(t.x * tShare, t.y * tShare, t.z * tShare);
+	const glm::vec3 across {(v.z * t.y) - (v.y * t.z), (t.z * v.x) - (v.z * t.x), (v.y * t.x) - (t.y * v.x)};
+	const float aShare = 1.0f / std::sqrt(((across.z * across.z) + (across.x * across.x)) + (across.y * across.y));
+	const float half = Look {}.halfWidth;
+	const glm::vec3 side {(across.x * aShare) * half, (across.y * aShare) * half, (across.z * aShare) * half};
+	EXPECT_EQ(ribbon.rope.at(10).position, point + side);
+	EXPECT_EQ(ribbon.rope.at(11).position, point - side);
+}
+
+// A rope that runs straight at the eye has no width there: the game keeps the side at zero
+TEST(LeashRope, RibbonHasNoWidthWhereTheRopePointsAtTheEye)
+{
+	const auto rope = Create(k_Start, k_Start + glm::vec3(41.0f, 0.0f, 0.0f), k_Slack, k_Max, {});
+	const auto ribbon = BuildRibbon(rope, k_Start + glm::vec3(-10.0f, 0.0f, 0.0f), Flat);
+	EXPECT_EQ(ribbon.rope.at(10).position, ribbon.rope.at(11).position);
 }
