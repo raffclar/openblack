@@ -59,6 +59,9 @@ public:
 	                    std::optional<PlayerNames> player, MagicType magic) override;
 	[[nodiscard]] const creature_mind_tables::Tables* GetTables() override;
 	[[nodiscard]] std::optional<creature_tree::Belief> BeliefAbout(entt::entity creature, entt::entity thing) const override;
+	[[nodiscard]] bool IsCellClearFor(entt::entity creature, int32_t x, int32_t z, bool livingBlocks) const override;
+	[[nodiscard]] std::optional<glm::vec2> FindClearAreaFor(entt::entity creature, glm::vec2 point, float width,
+	                                                        bool livingBlocks) const override;
 
 	bool PlayAction(entt::entity creature, size_t animation) override;
 	bool PlayGesture(entt::entity creature, size_t animation) override;

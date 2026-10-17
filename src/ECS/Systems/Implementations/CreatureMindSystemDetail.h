@@ -120,6 +120,9 @@ void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::s
 /// standing in its way there (nor anything living, when asked), inside any area it is kept within. None without one.
 [[nodiscard]] std::optional<glm::vec2> ClearAreaFor(const ecs::Registry& registry, entt::entity creature, glm::vec2 point,
                                                     float width, bool livingBlocks);
+/// Whether a cell of the land is clear for a creature: land it can walk on, with nothing standing in its way there (nor
+/// anything living, when asked)
+[[nodiscard]] bool CellClearFor(const ecs::Registry& registry, entt::entity creature, int32_t x, int32_t z, bool livingBlocks);
 /// The way a creature looks, as a game angle: towards what its head is turned to, or else the way its body faces
 [[nodiscard]] uint16_t LookingAngle(const components::Transform& transform, const std::optional<glm::vec3>& lookAt);
 /// Whether the body of the creature can pay for a miracle of a type

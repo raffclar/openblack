@@ -93,6 +93,20 @@ public:
 		return std::nullopt;
 	}
 
+	/// Whether a cell of the land, by its column and row, is clear for a creature to go to: land it can walk on with
+	/// nothing in the way (nor anything living, when asked)
+	[[nodiscard]] virtual bool IsCellClearFor(entt::entity /*creature*/, int32_t /*x*/, int32_t /*z*/,
+	                                          bool /*livingBlocks*/) const
+	{
+		return false;
+	}
+	/// The middle of the nearest clear area so wide about a point that the creature may go to, none without one
+	[[nodiscard]] virtual std::optional<glm::vec2> FindClearAreaFor(entt::entity /*creature*/, glm::vec2 /*point*/,
+	                                                                float /*width*/, bool /*livingBlocks*/) const
+	{
+		return std::nullopt;
+	}
+
 	/// Plays an action once, unless the creature's body already plays one
 	virtual bool PlayAction(entt::entity creature, size_t animation) = 0;
 	/// Plays a gesture on top of the body, unless one already plays
