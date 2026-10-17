@@ -45,3 +45,12 @@ TEST(PrimaryCreature, ACreatureGoneOrGivenAwayPassesItOnToTheNext)
 	EXPECT_FALSE(primary_creature::Primary(acquired, [](entt::entity) { return false; }).has_value());
 	EXPECT_FALSE(primary_creature::Primary({}, [](entt::entity) { return true; }).has_value());
 }
+
+TEST(PrimaryCreature, ACreatureMadePrimaryComesBeforeThoseGotBefore)
+{
+	std::vector<entt::entity> acquired {k_First, k_Second};
+	primary_creature::MakePrimary(acquired, k_Third);
+	EXPECT_EQ(acquired, (std::vector<entt::entity> {k_Third, k_First, k_Second}));
+	primary_creature::MakePrimary(acquired, k_Second);
+	EXPECT_EQ(acquired, (std::vector<entt::entity> {k_Second, k_Third, k_First}));
+}

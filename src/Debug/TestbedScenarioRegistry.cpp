@@ -1327,6 +1327,55 @@ void AddBreederOffers(std::vector<Scenario>& all)
 	});
 }
 
+/// The computer gods' creatures of the third and fifth lands: the game's own scripts load each from its mind file for
+/// player two, as the two lands do. The player's Cow stands near, for the scripts that wait for it.
+void AddRivalCreatureLoads(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	constexpr glm::vec2 k_Place {20.0f, 0.0f};
+	const auto load = [](std::string_view script, float scale) {
+		return Command {.kind = Kind::RunScript,
+		                .delaySeconds = 0.5f,
+		                .script = script,
+		                // The player, the place and the scale of the creature
+		                .scriptArguments = {{.kind = Argument::Kind::Number, .number = 2.0f},
+		                                    {.kind = Argument::Kind::Marker, .point = k_Place},
+		                                    {.kind = Argument::Kind::Number, .number = scale}}};
+	};
+	const auto cow = Content(CreatureType::Cow, {-15.0f, 0.0f}, 90.0f, "player's cow");
+	all.push_back({
+	    .id = "creature.load_lethys",
+	    .name = "The third land loads the creature of Lethys from his mind file",
+	    .facet = Facet::Story,
+	    .description = "The game's SetupLethysCreature script runs for player two with the scale 1.5, as the third land "
+	                   "runs it.",
+	    .expected = "A Wolf of player two appears on the ground at the place, fully grown. It takes the body, the "
+	                "alignment and the tattoos of the LethysCreature mind file. It knows every leash, and it is the "
+	                "creature of player two.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, -55.0f}, .look = {10.0f, 8.0f, 0.0f}},
+	    .creatures = {cow},
+	    .commands = {load("SetupLethysCreature", 1.5f)},
+	});
+	// As in the big fight of the fifth land, player two has a creature already, which the new creature replaces
+	auto old = Content(CreatureType::Lion, {20.0f, 25.0f}, 180.0f, "player two's old lion");
+	old.owner = PlayerNames::PLAYER_TWO;
+	all.push_back({
+	    .id = "creature.load_nemesis",
+	    .name = "The fifth land loads the creature of Nemesis from his mind file over his old creature",
+	    .facet = Facet::Story,
+	    .description = "Player two has a Lion. The game's SetupNemesisCreature script runs for player two with the scale "
+	                   "2, as the fifth land runs it.",
+	    .expected = "A second Lion of player two appears on the ground at the place, fully grown, from the "
+	                "NemesisCreature mind file. The script log says that the player has a creature already and that the "
+	                "game overwrites it. The new Lion is now the creature of player two.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -60.0f}, .look = {10.0f, 8.0f, 10.0f}},
+	    .creatures = {cow, old},
+	    .commands = {load("SetupNemesisCreature", 2.0f)},
+	});
+}
+
 /// The Ogre quest of the first land. The game's script runs at the same map positions as on the first land. The
 /// player's Cow is in the valley below the lair, where the script sends it. The scenario sets the flag of the fight
 /// lesson, thus the script makes the Ogre at the lair immediately. The scenario clicks the scroll after ten seconds.
@@ -1559,6 +1608,7 @@ void AddStory(std::vector<Scenario>& all)
 	AddBreederOffers(all);
 	AddOgreLair(all);
 	AddGuideStorm(all);
+	AddRivalCreatureLoads(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)
