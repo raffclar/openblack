@@ -2386,6 +2386,24 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::WideScreen, .delaySeconds = 12.0f, .value = 0}},
 	});
 
+	// The music type number that the creature choice script gives for the third epic music
+	constexpr size_t k_ThirdEpicMusic = 63;
+	all.push_back({
+	    .id = "audio.script_music_once",
+	    .name = "A script's music playing once in a cinema",
+	    .facet = Facet::Audio,
+	    .description = "As in the creature choice on Land 1, a script's cinema bars slide in and the script starts the "
+	                   "third epic music. Forty seconds later the bars slide out. The audio log gives when the music "
+	                   "starts and stops.",
+	    .expected = "The epic music plays once from its start and stops after about 32 seconds. Then there is no "
+	                "music while the bars are up. When the bars are gone, the land's music comes back.",
+	    .environment = {.playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 2.0f, .value = 1},
+	                 {.kind = Kind::StartScriptMusic, .delaySeconds = 1.0f, .value = k_ThirdEpicMusic},
+	                 {.kind = Kind::WideScreen, .delaySeconds = 40.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "audio.temple_music",
 	    .name = "The temple's music following the player's alignment",
@@ -7502,8 +7520,9 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
 	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
-	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || IsPointerCommand(kind);
+	       kind == Kind::PlayCustomMusic || kind == Kind::StartScriptMusic || IsPointerCommand(kind);
+	kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
+	    kind == Kind::OpenTattooMenu || kind == Kind::StopScript || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -7530,7 +7549,9 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 138> k_Names {
+	constexpr std::array<std::string_view, 130> k_Names
+	{
+		constexpr std::array<std::string_view, 138> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -7664,6 +7685,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "give the player a picture of their own",
 		    "open the tattoo editor from the menu",
 		    "play custom music",
+		    "start script music",
 		    "show the custom music controls",
 		    "script reaction",
 		    "script place",

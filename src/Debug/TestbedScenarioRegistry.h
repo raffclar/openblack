@@ -794,6 +794,9 @@ struct Command
 		/// moods look at the music on this turn. The value k_StopCustomMusic stops the music. The game reads the folder again
 		/// first. Needs no creature
 		PlayCustomMusic,
+		/// The music of the music type that the value gives starts as a script's "start music" starts it. The value 0
+		/// stops it as "stop music" does. Needs no creature
+		StartScriptMusic,
 		/// The custom music controls at the top right of the screen show their buttons (value 1), and also the play
 		/// list (value 2), as the music button and the play list button show them. Value 0 hides them. Needs no
 		/// creature

@@ -129,6 +129,47 @@ TEST(MusicPlayer, PlaysEveryChunkInOrderThenTheLoopsThenFinishes)
 	EXPECT_FALSE(music.IsActive());
 }
 
+TEST(MusicPlayer, MusicWithoutLoopsFinishesOnlyWhenItsLastChunkHasBeenHeard)
+{
+	FakeMusicBackend backend;
+	MusicPlayer music(backend);
+	bool finished = false;
+	music.Play({.bank = MakeBank(6, 0), .onFinished = [&finished]() { finished = true; }});
+	// The player queues all six chunks after two chunks play. The music ends only after the sixth chunk plays
+	for (int i = 0; i < 5; ++i)
+	{
+		backend.Advance();
+		music.Update(k_Frame);
+	}
+	EXPECT_EQ(backend.heard, (std::vector<uint32_t> {0, 1, 2, 3, 4, 5}));
+	EXPECT_FALSE(finished);
+	EXPECT_TRUE(music.IsActive());
+	backend.Advance();
+	music.Update(k_Frame);
+	EXPECT_TRUE(finished);
+	EXPECT_EQ(backend.heard.size(), 6U);
+}
+
+TEST(MusicPlayer, TheBanksOwnLoopCountWinsOverTheCallers)
+{
+	FakeMusicBackend backend;
+	MusicPlayer music(backend);
+	auto looping = MakeBank(3, 0);
+	looping->loopOverride = -1;
+	bool finished = false;
+	music.Play({.bank = looping, .onFinished = [&finished]() { finished = true; }});
+	for (int i = 0; i < 20; ++i)
+	{
+		backend.Advance();
+		music.Update(k_Frame);
+	}
+	EXPECT_FALSE(finished);
+	EXPECT_TRUE(music.IsActive());
+	EXPECT_GT(backend.heard.size(), 12U);
+	EXPECT_EQ(std::vector<uint32_t>(backend.heard.begin(), backend.heard.begin() + 6),
+	          (std::vector<uint32_t> {0, 1, 2, 0, 1, 2}));
+}
+
 TEST(MusicPlayer, KeepsFourChunksQueued)
 {
 	FakeMusicBackend backend;
