@@ -305,6 +305,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	BindUnderwaterDepth(*post, 9, 10);
 	BindCloudShadow(*post, 11);
 	BindSunVisibility(*post, 12);
+	BindLighting(*post, 15);
 	// The post pass also writes the depth of the scene and of the water's surface, so that what blends over the water
 	// after it is hidden by the land, the models and the water
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_ALWAYS);

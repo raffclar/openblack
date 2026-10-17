@@ -39,6 +39,7 @@
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandShadow.h"
 #include "Graphics/LandDetail.h"
+#include "Graphics/LightProbesView.h"
 #include "Graphics/PartialBuildCap.h"
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
@@ -457,6 +458,14 @@ private:
 	/// EXPERIMENT (not for merge): the air's uniforms and textures for one program; `skyShare` is how much of the air's
 	/// sky the sky's dome shows near the horizon
 	void BindAtmosphere(const ShaderProgram& program, float skyShare) const;
+	/// EXPERIMENT (not for merge): the light probes, a band of rows a frame after each new set of shadows, and the blend
+	/// of the old grid into the new
+	void DrawLightProbes(const DrawSceneDesc& desc, bool newShadows) const;
+	/// EXPERIMENT (not for merge): the shade from the scene's depth, at half the screen's size
+	void DrawAmbientOcclusion(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const;
+	/// EXPERIMENT (not for merge): the light in the shade for one program: the grid of light probes in a sampler stage,
+	/// and the sky's light as uniforms
+	void BindLighting(const ShaderProgram& program, uint8_t stage) const;
 	/// EXPERIMENT (not for merge): the sea bed past the land's blocks, in the land's pass of the main view
 	void DrawFarSeabed(RenderPass landViewId) const;
 	/// EXPERIMENT (not for merge): the reef's coral and plants, in the land's pass of the main view
@@ -684,6 +693,7 @@ private:
 	mutable std::optional<volumetric_fog::FogUniforms> _fogFrame;
 	/// EXPERIMENT (not for merge): the air's textures and the light probes, made when they first show
 	mutable std::unique_ptr<AtmosphereView> _atmosphere;
+	mutable std::unique_ptr<LightProbesView> _lightProbes;
 	/// EXPERIMENT (not for merge): the air's light of this frame, while the experiment shows
 	mutable std::optional<AtmosphereFrame> _atmosphereFrame;
 	/// EXPERIMENT (not for merge): whether the scene's views are bound to the underwater target

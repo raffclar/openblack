@@ -646,6 +646,7 @@ Renderer::~Renderer() noexcept
 	_sunShadows.reset();
 	_fog.reset();
 	_atmosphere.reset();
+	_lightProbes.reset();
 	_shaderManager.reset();
 	bgfx::frame();
 	bgfx::shutdown();

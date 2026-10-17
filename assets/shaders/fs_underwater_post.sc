@@ -48,6 +48,8 @@ uniform vec4 u_uwEnvironment;
 // The shadow of the volumetric clouds on the water, and the hills' shadow from the map of the sun's visibility
 #include "clouds_shadow.sh"
 #include "sun_visibility.sh"
+// EXPERIMENT (not for merge): the light in the shade, at sampler stage 15
+#include "lighting.sh"
 
 // Where a point of the screen (0 to 1, as the textures are read) is in the world, at a depth of the depth buffer
 vec3 WorldAt(vec2 uv, float depth)
@@ -699,6 +701,15 @@ void main()
 			// by its distance, the red first
 			float targetDepth = max(u_uwParams.z - world.y, 0.0f);
 			vec3 litScene = farFloor ? floorColour : (sky ? vec3_splat(0.0f) : scene * UwTransmittance(targetDepth * 0.4f));
+			// The reefs in the shade of cliffs and overhangs are cooler and darker: less of the sky's light reaches
+			// them through the water (EXPERIMENT, not for merge)
+			if (u_lightParams.y > 0.5f && !sky)
+			{
+				float open = SkyOpennessAt(world.xz);
+				vec3 up = vec3(0.0f, 1.0f, 0.0f);
+				float lit = dot(LightShadeTint(LightSkyAt(up) * open + LightBounceAt(world, up)), vec3(0.2126f, 0.7152f, 0.0722f));
+				litScene *= mix(vec3(0.55f, 0.72f, 0.9f), vec3_splat(1.0f), clamp(lit, 0.0f, 1.0f));
+			}
 			vec3 left = UwTransmittance(sceneDistance);
 			colour = litScene * left + scatter * (1.0f - left);
 		}
@@ -806,11 +817,23 @@ void main()
 			// The clouds' and the hills' shadows take away the glint and some of the light in the water
 			float cloudShade = CloudShadeAt(surfacePoint.xz) * SunVisibilityAt(surfacePoint.xz);
 			water *= mix(0.8f, 1.0f, cloudShade);
+			// The light in the shade: under a cliff the water sees less of the sky, so its colour and the sky that it
+			// reflects are darker; over a lit beach the sand's light comes up through the shallows (EXPERIMENT, not for
+			// merge)
+			if (u_lightParams.y > 0.5f)
+			{
+				float open = SkyOpennessAt(surfacePoint.xz);
+				vec3 up = vec3(0.0f, 1.0f, 0.0f);
+				vec3 shade = LightShadeTint(LightSkyAt(up) * open + LightBounceAt(surfacePoint, -up) * 0.5f);
+				water *= mix(vec3_splat(1.0f), shade, 1.0f - left * 0.5f);
+				mirror *= mix(1.0f, mix(0.55f, 1.0f, open), 1.0f - screenShare);
+			}
 			colour = mix(water, mirror, fresnel);
-			// The glint of the sun or the moon on the waves
+			// The glint of the sun or the moon on the waves: none where the hills hide the light
 			float glint = u_uwSea.x > 0.5f ? min(SeaGlint(normal, -direction, u_uwAbove.xyz, roughness), 12.0f)
 			                               : pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f) * 3.0f;
-			colour += u_uwLightColour.rgb * glint * u_uwLightColour.w * cloudShade;
+			float glintShade = CloudShadeAt(surfacePoint.xz) * SunLightAt(surfacePoint.xz);
+			colour += u_uwLightColour.rgb * glint * u_uwLightColour.w * glintShade;
 			// The glint of the bolt, and the ring where a strike hit the sea
 			colour += LightningGlint(surfacePoint, normal, -direction, roughness);
 			colour += UW_FLASH_COLOUR * strike.z;

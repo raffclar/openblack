@@ -168,6 +168,8 @@ void Renderer::DrawSunShadows(const DrawSceneDesc& desc, const FrameBuffer& scen
 		blendProgram->Submit(pass);
 		_sunVisibilityReady = true;
 	}
+	// EXPERIMENT (not for merge): the light probes, a band of rows a frame after each new set of shadows
+	DrawLightProbes(desc, clock.update);
 
 	// The light's maps: the environment's two cascades when they are made again, and the moving things each frame
 	const auto drawFromLight = [&](RenderPass pass, bgfx::FrameBufferHandle target, float width, bool vegetation) {
@@ -206,6 +208,9 @@ void Renderer::DrawSunShadows(const DrawSceneDesc& desc, const FrameBuffer& scen
 	}
 	drawFromLight(RenderPass::SunShadowMoving, view.MovingTarget(), shadows::k_CascadeWidths.front(), false);
 
+	// EXPERIMENT (not for merge): the shade from the scene's depth
+	DrawAmbientOcclusion(desc, sceneTarget);
+
 	// The things' shadows over the scene's colour
 	const auto* stats = bgfx::getStats();
 	const glm::u16vec2 screen {stats->width, stats->height};
@@ -230,6 +235,20 @@ void Renderer::DrawSunShadows(const DrawSceneDesc& desc, const FrameBuffer& scen
 	applyProgram->SetUniformValue("u_shadowMoving", &view.movingMatrix);
 	const glm::vec4 params {clock.blend, shadowFrame.darkness, olderReady ? 1.0f : 0.0f, 1.0f};
 	applyProgram->SetUniformValue("u_shadowParams", &params);
+	// EXPERIMENT (not for merge): the light of the sky and of the land in the shade
+	BindSunVisibility(*applyProgram, 12);
+	BindLighting(*applyProgram, 15);
+	const auto* occlusion = _lightProbes != nullptr ? _lightProbes->occlusion.get() : nullptr;
+	const bool occluded = occlusion != nullptr && occlusion->drawn;
+	const glm::vec4 occlusionParams {occluded ? 1.0f : 0.0f, occluded ? occlusion->Width() : 1.0f,
+	                                 occluded ? occlusion->Height() : 1.0f, 0.0f};
+	applyProgram->SetUniformValue("u_shadowOcclusion", &occlusionParams);
+	const glm::vec4 noDome {0.0f, 0.0f, 1e9f, 1e9f};
+	applyProgram->SetUniformValue("u_hazeDome", _atmosphereFrame.has_value() ? &_atmosphereFrame->skyDome : &noDome);
+	if (occluded)
+	{
+		applyProgram->SetTextureSampler("s_occlusion", 6, occlusion->Texture());
+	}
 	BindScreenTriangle();
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_DST_COLOR, BGFX_STATE_BLEND_ZERO));
 	applyProgram->Submit(pass);
