@@ -198,6 +198,11 @@ enum class Effect : uint8_t
 	WaterMask,
 	/// The last grade of the colour (exposure, saturation and contrast) that keeps the original game's colours
 	Grading,
+	/// The water in the rivers: its flow, its foam, its sound and the leaves that drift down it (see
+	/// underwater::streams). When it is off, the rivers show only their beds.
+	Streams,
+	/// The splash where the hand taps the water (see underwater::tap). When it is off, the tap makes the original ring.
+	TapSplash,
 	_Count
 };
 

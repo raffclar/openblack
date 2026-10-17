@@ -139,6 +139,17 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_underwater_foam
 #include "ShaderIncluder.h"
+// EXPERIMENT (not for merge): the water in the rivers, the leaves that drift on it and the hand's splash
+#define SHADER_NAME fs_underwater_stream
+#include "ShaderIncluder.h"
+#define SHADER_NAME vs_underwater_drift
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_underwater_drift
+#include "ShaderIncluder.h"
+#define SHADER_NAME vs_underwater_tap
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_underwater_tap
+#include "ShaderIncluder.h"
 
 #define SHADER_NAME vs_sprite
 #include "ShaderIncluder.h"
@@ -249,7 +260,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 89> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 94> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -292,6 +303,11 @@ const std::array<bgfx::EmbeddedShader, 89> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_underwater_splash),
     BGFX_EMBEDDED_SHADER(vs_underwater_storm),
     BGFX_EMBEDDED_SHADER(fs_underwater_foam), //
+    BGFX_EMBEDDED_SHADER(fs_underwater_stream),
+    BGFX_EMBEDDED_SHADER(vs_underwater_drift),
+    BGFX_EMBEDDED_SHADER(fs_underwater_drift),
+    BGFX_EMBEDDED_SHADER(vs_underwater_tap),
+    BGFX_EMBEDDED_SHADER(fs_underwater_tap), //
     BGFX_EMBEDDED_SHADER(vs_sprite),
     BGFX_EMBEDDED_SHADER(fs_sprite), //
     BGFX_EMBEDDED_SHADER(vs_footprint_instanced),
@@ -371,6 +387,9 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"UnderwaterSplash", "vs_underwater_splash", "fs_underwater_spray"},
     ShaderDefinition {"UnderwaterStorm", "vs_underwater_storm", "fs_underwater_spout"},
     ShaderDefinition {"UnderwaterFoam", "vs_water", "fs_underwater_foam"},
+    ShaderDefinition {"UnderwaterStream", "vs_water", "fs_underwater_stream"},
+    ShaderDefinition {"UnderwaterDrift", "vs_underwater_drift", "fs_underwater_drift"},
+    ShaderDefinition {"UnderwaterTap", "vs_underwater_tap", "fs_underwater_tap"},
     ShaderDefinition {"Sprite", "vs_sprite", "fs_sprite"},
     ShaderDefinition {"FootprintInstanced", "vs_footprint_paint_instanced", "fs_footprint"},
     ShaderDefinition {"ParticleInstanced", "vs_particle_instanced", "fs_particle"},

@@ -298,6 +298,9 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	// after it is hidden by the land, the models and the water
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_ALWAYS);
 	post->Submit(postView);
+	// EXPERIMENT (not for merge): the water in the rivers, and what drifts on it
+	DrawStreams(target, *desc.camera);
+	DrawDrifters();
 
 	// What blends over the water, after it, the farthest first
 	const auto overView = static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver);
@@ -402,6 +405,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 
 	// The splashes where things fall into the water
 	DrawSplashes(target);
+	DrawTaps(target);
 }
 
 namespace

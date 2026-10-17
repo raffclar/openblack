@@ -119,6 +119,7 @@
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
 #include "ECS/Systems/Implementations/SoundTagSystem.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
+#include "ECS/Systems/Implementations/StreamWaterSystem.h"
 #include "ECS/Systems/Implementations/TattooEditorSystem.h"
 #include "ECS/Systems/Implementations/TeleportSystem.h"
 #include "ECS/Systems/Implementations/TempleDestructionSystem.h"
@@ -241,6 +242,7 @@ using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
 using openblack::ecs::systems::SoundTagSystem;
 using openblack::ecs::systems::SpellIconSystem;
+using openblack::ecs::systems::StreamWaterSystem;
 using openblack::ecs::systems::TattooEditorSystem;
 using openblack::ecs::systems::TeleportSystem;
 using openblack::ecs::systems::TempleDestructionSystem;
@@ -350,6 +352,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::waterRingSystem::emplace<WaterRingSystem>();
 	Locator::underwaterSystem::emplace<UnderwaterSystem>();
 	Locator::waterWakeSystem::emplace<WaterWakeSystem>();
+	Locator::streamWaterSystem::emplace<StreamWaterSystem>();
 	Locator::creatureAnimationSystem::emplace<CreatureAnimationSystem>();
 	Locator::creatureMindSystem::emplace<CreatureMindSystem>();
 	Locator::creaturePhysiologySystem::emplace<CreaturePhysiologySystem>();
@@ -556,6 +559,7 @@ void openblack::ShutDownServices()
 	Locator::waterRingSystem::reset();
 	Locator::underwaterSystem::reset();
 	Locator::waterWakeSystem::reset();
+	Locator::streamWaterSystem::reset();
 	Locator::tattooEditorSystem::reset();
 	Locator::creatureCaveSystem::reset();
 	Locator::creatureModeSystem::reset();
