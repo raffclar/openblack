@@ -18,7 +18,6 @@
 
 #include <algorithm>
 #include <bit>
-#include <numbers>
 #include <string>
 #include <vector>
 
@@ -34,7 +33,6 @@ using openblack::psys::ParticleObject;
 
 namespace
 {
-constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 /// The invisible spell's kind, which fades the wisps as the creature fades
 constexpr int k_InvisibleKind = 7;
 /// Points about a bone the hearts and steam start from lie within this share of the creature's size of it. The value
@@ -165,9 +163,10 @@ public:
 		const auto body = creature.has_value() ? world.CreatureBody(*creature) : std::nullopt;
 		const auto* sink = effect.GetSink();
 		const int kind = sink != nullptr ? sink->CreatureSpellKind() : -1;
+		// With its creature gone, the rule lets go
 		if (!body.has_value())
 		{
-			return true;
+			return false;
 		}
 		const auto hand = effect.GetProcessInfo().handPosition;
 		// Where the creature and the caster's hands were as the wisps began
@@ -224,11 +223,12 @@ public:
 				continue;
 			}
 			auto& angles = found->second.a;
-			angles.x = std::fmod(angles.x + dt * angles.z, k_TwoPi);
-			angles.y = std::fmod(angles.y + dt * angles.w, k_TwoPi);
+			angles.x = maths::WispTurn(angles.x, angles.z, dt);
+			angles.y = maths::WispTurn(angles.y, angles.w, dt);
 			const float age = effect.AtomAge(*atom);
 			const auto orbit = maths::WispOrbit(box, angles.x, angles.y, taperFrac, age);
-			atom->position = effect.GlobalToLocal(collection, maths::WispPosition(hand, orbit, age));
+			// The place in the world goes in as the position in the collection's space, with no change between them
+			atom->position = maths::WispPosition(hand, orbit, age);
 			atom->baseScale = found->second.b.x * body->size;
 			atom->rgba[3] = maths::WispAlpha(age);
 		}
@@ -275,7 +275,11 @@ public:
 	{
 		const auto creature = CreatureOf(collection);
 		const auto body = creature.has_value() ? effect.Services().world.CreatureBody(*creature) : std::nullopt;
-		// A rule that makes no hearts a second lets go
+		// With its creature gone, or with no hearts to make a second, the rule lets go
+		if (!body.has_value())
+		{
+			return false;
+		}
 		const float rate = static_cast<float>(maxAtoms) / dieAge;
 		if (!(rate > 0.0f))
 		{
@@ -284,7 +288,7 @@ public:
 		auto& due = slot.state.x;
 		auto& made = slot.state.y;
 		due += effect.GetDt() * rate;
-		if (body.has_value() && !effect.Closing())
+		if (!effect.Closing())
 		{
 			while (made < due && collection.atoms.size() < static_cast<size_t>(std::max(0, maxAtoms)))
 			{
@@ -332,7 +336,12 @@ public:
 		}
 		const auto creature = CreatureOf(collection);
 		const auto body = creature.has_value() ? effect.Services().world.CreatureBody(*creature) : std::nullopt;
-		if (!body.has_value() || !body->rightEye.has_value() || *body->rightEye >= body->bones.size())
+		// With its creature gone, the rule lets go
+		if (!body.has_value())
+		{
+			return false;
+		}
+		if (!body->rightEye.has_value() || *body->rightEye >= body->bones.size())
 		{
 			return true;
 		}
@@ -345,7 +354,8 @@ public:
 		                                                  : maths::ItchOrbit(rightEye, leftEye, age, orbitSpeed);
 		for (auto& atom : collection.atoms)
 		{
-			atom->position = effect.GlobalToLocal(collection, point);
+			// The place in the world goes in as the position in the collection's space, with no change between them
+			atom->position = point;
 		}
 		return true;
 	}
@@ -378,10 +388,15 @@ public:
 		const auto creature = CreatureOf(collection);
 		auto& world = effect.Services().world;
 		const auto body = creature.has_value() ? world.CreatureBody(*creature) : std::nullopt;
+		// With its creature gone, the rule lets go
+		if (!body.has_value())
+		{
+			return false;
+		}
 		auto& due = slot.state.x;
 		auto& made = slot.state.y;
 		due += (static_cast<float>(maxAtoms) / dieAge) * effect.GetDt();
-		if (body.has_value() && body->rightFoot.has_value() && *body->rightFoot < body->bones.size() && !effect.Closing())
+		if (body->rightFoot.has_value() && *body->rightFoot < body->bones.size() && !effect.Closing())
 		{
 			while (made < due && collection.atoms.size() < static_cast<size_t>(std::max(0, maxAtoms)))
 			{
@@ -396,7 +411,7 @@ public:
 		}
 		// It stays above the land, and goes when old. The land test reads the position of the atom in the space of its
 		// collection as if it were a place in the world, as the game does.
-		const float lift = minHeight * (body.has_value() ? body->size : 1.0f);
+		const float lift = minHeight * body->size;
 		for (auto& atom : collection.atoms)
 		{
 			auto& at = atom->position;
