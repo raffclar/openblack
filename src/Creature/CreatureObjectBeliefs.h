@@ -22,6 +22,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureDecisionTree.h"
 
 /// What a creature believes about the things it has come across. Each thing it sees, carries, is shown or acts on is
@@ -49,7 +50,9 @@ struct Belief
 {
 	entt::entity thing {entt::null};
 	uint32_t kind {0};
-	glm::vec3 place {0.0f};
+	/// Where the thing was, as a map position. The altitude is 0. A mind file keeps this place with each example, so it
+	/// stays in map units: metres cannot keep every map position far from the corner of the map.
+	map_coords::MapCoords place {};
 	/// For another creature: the game turn it last looked that creature over, none before it ever has
 	std::optional<uint32_t> inspected;
 	/// The thing that this thing is part of (a villager's town, a tree's forest), as the creature knew it when the belief
@@ -94,7 +97,7 @@ public:
 		Belief* belief {nullptr};
 		bool isNew {false};
 	};
-	Added Add(entt::entity thing, uint32_t kind, glm::vec3 place);
+	Added Add(entt::entity thing, uint32_t kind, map_coords::MapCoords place);
 	[[nodiscard]] const Belief* Find(entt::entity thing) const;
 	[[nodiscard]] Belief* Find(entt::entity thing);
 	/// Forgets the belief about a thing; whether there was one

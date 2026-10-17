@@ -42,6 +42,8 @@ enum class TreeKind : uint8_t
 	ActOn,
 };
 constexpr size_t k_TreeKinds = 2;
+/// A mind file keeps a word for each leash type, by the number of the type
+constexpr size_t k_LeashWords = 4;
 
 /// The most thoughts kept, the newest last
 constexpr size_t k_MaxThoughts = 8;
@@ -85,6 +87,9 @@ struct Learnt
 	std::u16string name;
 	float alignment {0.0f};
 	uint32_t developmentTimer {0};
+	/// A word for each leash type, as a mind file keeps them: not 0 when the creature knows the leash. The first type is
+	/// no leash, which only the file uses.
+	std::array<uint32_t, k_LeashWords> leashWords {};
 	/// The mind file it was loaded from, for what the file keeps that the mind doesn't use, written back as it was
 	std::shared_ptr<const creaturemind::MindFileData> file;
 };
@@ -111,6 +116,12 @@ void Learn(Learnt& learnt, TreeKind kind, creature_desires::Desire desire, creat
 void LearnSpread(Learnt& learnt, TreeKind kind, creature_desires::Desire desire, const creature_tree::Belief& belief,
                  float feedback, const creature_learning::Dependencies& dependencies,
                  const std::array<std::vector<creature_tree::Attribute>, k_DesireCount>& allowed);
+/// The word to write for a leash type. The word stays as it is while it agrees with what the creature knows. Else it
+/// is 1 for a leash that the creature knows and 0 for a leash that it does not know.
+[[nodiscard]] constexpr uint32_t LeashWord(uint32_t word, bool known)
+{
+	return (word != 0) == known ? word : (known ? 1u : 0u);
+}
 /// Grows every tree again from its examples
 void RebuildTrees(Learnt& learnt, const std::array<std::vector<creature_tree::Attribute>, k_DesireCount>& allowed);
 
@@ -136,6 +147,7 @@ struct LoadedMind
 ///   example keeps no kind of lesson (0).
 /// - The opinions, the attitude to the player and the body values are kept as the file has them.
 /// - The word after the known actions is 1.
+/// - The leash words are kept as the file has them. A file without them keeps the words of the mind under it.
 [[nodiscard]] LoadedMind FromFile(const creaturemind::MindFileData& file, const creature_desires::Desires& fresh,
                                   const Learnt& freshLearnt);
 /// A mind written as a file of the current version, over the file it was loaded from when there was one, so that

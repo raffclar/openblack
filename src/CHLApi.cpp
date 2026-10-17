@@ -6011,24 +6011,12 @@ void PlayGesture() // 204 PLAY_GESTURE
 	NotImplemented();
 }
 
-/// The story moves a creature to a stage of growing up: its mind takes up the stage, and reaching the stage it may
-/// leave home from, a creature kept near its home off the leash is let go
+/// The story moves a creature to a stage of growing up
 void MoveCreatureToStage(entt::entity creature, uint32_t stage)
 {
 	if (Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().MoveToStage(creature, stage);
-	}
-	if (!Locator::leashSystem::has_value())
-	{
-		return;
-	}
-	auto& leashes = Locator::leashSystem::value();
-	const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(creature);
-	if (leash != nullptr &&
-	    creature_development::ReleasedFromHome(stage, leash->confinementRadius, leashes.IsLeashed(creature)))
-	{
-		leashes.ClearConfinement(creature);
 	}
 }
 

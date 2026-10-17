@@ -60,7 +60,7 @@ creaturemind::MindFileData Skeleton(size_t skills, size_t miracles)
 	file.physique.size = 1.0f;
 	file.database = std::vector<creaturemind::MindDatabaseEntry> {};
 	file.unknown2 = 0;
-	file.unknown3 = std::array<uint32_t, 4> {};
+	file.leashWords = std::array<uint32_t, 4> {};
 	std::array<uint32_t, 8> tattoos {};
 	tattoos.fill(k_EmptyTattoo);
 	file.tattooHeader = tattoos;
@@ -278,6 +278,10 @@ LoadedMind creature_mind_model::FromFile(const creaturemind::MindFileData& file,
 	mind.learnt.name = file.name;
 	mind.learnt.alignment = file.alignment.value_or(0.0f);
 	mind.learnt.developmentTimer = file.developmentTimer;
+	if (file.leashWords.has_value())
+	{
+		mind.learnt.leashWords = *file.leashWords;
+	}
 	// The word after the known actions is always 1 after a load
 	auto kept = std::make_shared<creaturemind::MindFileData>(file);
 	kept->unknown1 = 1;
@@ -322,7 +326,7 @@ creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::D
 		file.physique.size = file.physique.size.value_or(1.0f);
 		file.database = file.database.value_or(*skeleton.database);
 		file.unknown2 = file.unknown2.value_or(0);
-		file.unknown3 = file.unknown3.value_or(*skeleton.unknown3);
+		file.leashWords = file.leashWords.value_or(*skeleton.leashWords);
 		file.tattooHeader = file.tattooHeader.value_or(*skeleton.tattooHeader);
 		file.tattoo = file.tattoo.value_or(*skeleton.tattoo);
 		file.learningCounts = file.learningCounts.value_or(*skeleton.learningCounts);
@@ -395,5 +399,6 @@ creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::D
 	file.alignment = learnt.alignment;
 	file.developmentTimer = learnt.developmentTimer;
 	file.developmentPhase = static_cast<int32_t>(developmentPhase);
+	file.leashWords = learnt.leashWords;
 	return file;
 }

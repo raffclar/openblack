@@ -207,6 +207,8 @@ struct CreatureMindState
 	/// resource has been looked at
 	std::shared_ptr<const creaturemind::MindFileData> pendingFile;
 	bool resourceChecked {false};
+	/// A script made the creature from a mind file: once it takes up the file, it knows every leash and is fully grown
+	bool growUpAfterFile {false};
 	/// What scripts taught it or made it forget before its learning was set up or while a mind file waits, kept to be
 	/// applied in order over what it learns from the file
 	struct Teaching

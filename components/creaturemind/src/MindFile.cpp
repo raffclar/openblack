@@ -430,7 +430,7 @@ void Layout(Stream& stream, MindFileData& data)
 	stream.Optional(version > 17, data.database,
 	                [&stream](std::vector<MindDatabaseEntry>& entries) { Database(stream, entries); });
 	stream.Optional(version > 23, data.unknown2);
-	stream.Optional(version > 26, data.unknown3, [&stream](std::array<uint32_t, 4>& values) {
+	stream.Optional(version > 26, data.leashWords, [&stream](std::array<uint32_t, 4>& values) {
 		for (auto& value : values)
 		{
 			stream.Value(value);
