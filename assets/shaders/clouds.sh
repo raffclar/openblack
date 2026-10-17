@@ -315,12 +315,13 @@ float CloudLightDepth(vec3 p, int samples)
 	return depth * CLOUD_EXTINCTION;
 }
 
-// The light of the lightning inside a storm's cloud at a point. The flash of the sky lights all of the storm's cloud.
-// Each flash lights the cloud round its channel: brightly near the channel, and dimly farther away, where more cloud
-// is between the point and the channel. The cloud round the channel and under it thus lights up from inside.
+// The light of the lightning inside a storm's cloud at a point. The flash of the sky lights all of the storm's cloud a
+// little. Each flash lights the cloud round its channel: brightly near the channel, and dimly farther away, where more
+// cloud is between the point and the channel. The cloud round the channel, under it and over it thus lights up from
+// inside.
 vec3 CloudLightning(vec3 p, float rain)
 {
-	float glow = u_cloudAmbient.w * (0.08f + 0.3f * rain);
+	float glow = u_cloudAmbient.w * (0.03f + 0.08f * rain);
 	for (int i = 0; i < 4; ++i)
 	{
 		vec4 start = u_cloudFlashes[i];
@@ -332,8 +333,16 @@ vec3 CloudLightning(vec3 p, float rain)
 		// The distance from the point to the nearest point of the channel
 		vec3 along = end.xyz - start.xyz;
 		float share = clamp(dot(p - start.xyz, along) / max(dot(along, along), 1.0f), 0.0f, 1.0f);
-		float distance = length(p - start.xyz - along * share);
-		glow += start.w * (1.8f * exp(-distance / end.w) + 0.25f * exp(-distance / (3.0f * end.w)));
+		vec3 offset = p - start.xyz - along * share;
+		float distance = length(offset);
+		// The light goes up and down through the tall cloud more easily than across it, so that it shows through the
+		// tops and the bottom
+		float spread = length(vec3(offset.x, offset.y * 0.35f, offset.z));
+		// A thin bright line at the channel, a bright core round it, and a wide glow through the cloud
+		float thin = 2.5f * exp(-distance / (0.09f * end.w));
+		float core = 2.0f * exp(-spread / (0.28f * end.w));
+		float wide = 0.8f * exp(-spread / end.w);
+		glow += start.w * (thin + core + wide);
 	}
 	return CLOUD_FLASH_COLOUR * glow;
 }

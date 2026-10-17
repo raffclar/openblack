@@ -28,7 +28,7 @@ namespace openblack::graphics::cloud_lightning
 /// The most flashes that light the clouds at one time
 inline constexpr size_t k_MaxFlashes = 4;
 /// The distance from the eye past which a flash is sheet lightning
-inline constexpr float k_SheetDistance = 6000.0f;
+inline constexpr float k_SheetDistance = 12000.0f;
 /// The shortest and the longest time that the pulses of a flash take, in seconds
 inline constexpr float k_ShortestFlicker = 0.2f;
 inline constexpr float k_LongestFlicker = 1.0f;
@@ -37,17 +37,18 @@ inline constexpr uint32_t k_FewestPulses = 2;
 inline constexpr uint32_t k_MostPulses = 5;
 /// The seconds for a pulse to rise to its peak, and for it to fall to a third
 inline constexpr float k_PulseRise = 0.008f;
-inline constexpr float k_PulseFade = 0.045f;
+inline constexpr float k_PulseFade = 0.06f;
 /// The seconds after its strike that a flash stays known, after its last pulse
 inline constexpr float k_FlashMemory = k_LongestFlicker + 0.3f;
-/// How far the light of a flash spreads through the cloud: a near flash, and sheet lightning
-inline constexpr float k_BoltRadius = 420.0f;
-inline constexpr float k_SheetRadius = 1800.0f;
+/// How far the light of a flash spreads through the cloud: a near flash, and sheet lightning. The light falls to a third
+/// over this distance; the bright core round the channel is a quarter of it.
+inline constexpr float k_BoltRadius = 900.0f;
+inline constexpr float k_SheetRadius = 2400.0f;
 /// The light of sheet lightning, as a part of the light of a near flash
 inline constexpr float k_SheetShare = 0.6f;
 /// The shortest and the longest channel of a flash across the cloud
-inline constexpr float k_ShortestChannel = 500.0f;
-inline constexpr float k_LongestChannel = 1400.0f;
+inline constexpr float k_ShortestChannel = 800.0f;
+inline constexpr float k_LongestChannel = 2500.0f;
 
 /// The kind of flash that the eye sees
 enum class FlashKind : uint8_t
@@ -67,7 +68,7 @@ struct Strike
 	float time {0.0f};
 	/// Its strength (a flash with thunder is stronger than one with a bolt)
 	float strength {0.0f};
-	/// The middle and the inner radius of the storm's own cloud
+	/// The middle and the outer radius of the storm's own cloud
 	glm::vec2 stormCentre {0.0f};
 	float stormRadius {0.0f};
 };
@@ -119,8 +120,8 @@ struct FlashLight
 /// How bright a flash is at a time since it struck, 0 to 1: a full first pulse, weaker pulses after it, and a dim glow
 /// between them. It is 0 before the strike and after the last pulse fades.
 [[nodiscard]] float FlickerEnvelope(float seconds, uint32_t seed);
-/// Where a strike lights the cloud, across the ground. A strike inside the storm's cloud lights the cloud over it. A
-/// strike outside the cloud (a storm can strike near the camera, away from its cloud) lights the storm's cloud on the
+/// Where a strike lights the cloud, across the ground. A strike inside the storm's reach lights the cloud over it. A
+/// strike outside the reach (a storm can strike near the camera, away from its cloud) lights the storm's cloud on the
 /// side towards the strike, at a place inside the cloud's edge.
 [[nodiscard]] glm::vec2 FlashPlace(const Strike& strike, uint32_t seed);
 /// The kind of flash at a distance from the eye

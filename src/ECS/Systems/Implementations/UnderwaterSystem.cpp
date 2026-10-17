@@ -313,7 +313,7 @@ void UnderwaterSystem::UpdateStorm(float frameSeconds, const std::function<float
 			                   .time = storm.flash.time,
 			                   .strength = storm.flash.strength,
 			                   .stormCentre = {storm.position.x, storm.position.z},
-			                   .stormRadius = storm.innerRadius});
+			                   .stormRadius = storm.outerRadius});
 			if (flash.has_value() && flash->time <= storm.flash.time)
 			{
 				return;
