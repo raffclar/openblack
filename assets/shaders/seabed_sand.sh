@@ -236,7 +236,8 @@ vec3 SeabedLit(vec3 albedo, vec3 world, vec3 landLight, vec3 normal)
 	vec3 towards = u_uwLight.xyz;
 	vec2 surface = p + towards.xz / max(towards.y, 0.2f) * depth;
 	float sharpness = 1.0f - smoothstep(4.0f, 40.0f, depth);
-	float caustics = u_uwAbove.w > 0.5f ? UwCaustics(surface * UW_CAUSTIC_FREQUENCY, t * 1.4f, sharpness) : 0.5f;
+	// The caustics come from the waves over the bed (UwCausticsFromWaves); 0.55 is the even light
+	float caustics = u_uwAbove.w > 0.5f ? 0.55f * mix(1.0f, UwCausticsFromWaves(surface, t, depth), sharpness) : 0.55f;
 	// A storm's rough surface spreads the caustics out
 	caustics = mix(caustics, 0.55f, 0.4f * u_uwWaves.y);
 	// The caustics too become an even light where their lines would be smaller than a pixel

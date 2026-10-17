@@ -109,7 +109,7 @@ float UwWakeFoam(vec2 xz, float t)
 		return 0.0f;
 	}
 	float pattern = UwFoamNoise(xz * 3.2f + vec2(t * 0.05f, -t * 0.04f)) * 0.7f + UwFoamNoise(xz * 8.2f - t * 0.1f) * 0.3f;
-	float threshold = 1.0f - 0.5f * clamp(amount, 0.0f, 1.0f);
+	float threshold = 1.0f - 0.7f * clamp(amount, 0.0f, 1.0f);
 	return smoothstep(threshold - 0.12f, threshold + 0.12f, pattern) * min(amount * 1.2f, 0.9f);
 }
 

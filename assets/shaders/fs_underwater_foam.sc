@@ -75,8 +75,8 @@ void main()
 	float crest = (height - level) / max(UwWaveTop(), 1e-3f);
 	float caps = storm * smoothstep(0.72f, 0.98f, crest) * smoothstep(0.6f, 0.85f, UwNoise(p * 0.7f + t * 0.4f)) *
 	             smoothstep(20.0f, 40.0f, shore.x);
-	// A quarter of the foam that the field made before; none on a pond
-	float made = (5.0f * breaking + 1.0f * edge + 3.0f * band + 6.0f * push + 3.0f * caps) * wet * 0.25f *
+	// Less than half of the foam that the field made before; none on a pond
+	float made = (5.0f * breaking + 1.0f * edge + 3.0f * band + 6.0f * push + 3.0f * caps) * wet * 0.4f *
 	             (1.0f - UwShorePond(shore));
 	float air = 3.0f * breaking + 1.0f * band + 5.0f * push + 2.0f * caps;
 

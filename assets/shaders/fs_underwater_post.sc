@@ -496,7 +496,7 @@ vec3 Shafts(vec3 eye, vec3 direction, float range, float t, float jitter)
 float Foam(vec2 p, float depth, float t)
 {
 	// The shallows of a gentle beach go down slowly, so the bands are thin in depth: a wide band of foam would cover them
-	float shallow = 1.0f - smoothstep(0.0f, 0.25f, depth);
+	float shallow = 1.0f - smoothstep(0.0f, 0.35f, depth);
 	if (shallow <= 0.0f)
 	{
 		return 0.0f;
@@ -506,9 +506,9 @@ float Foam(vec2 p, float depth, float t)
 	vec2 q = vec2(p.x * 0.8f - p.y * 0.6f, p.x * 0.6f + p.y * 0.8f);
 	float patches = UwFoamNoise(q * 1.4f + vec2(t * 0.25f, -t * 0.18f)) * 0.6f + UwFoamNoise(p * 3.8f - vec2(t * 0.4f, t * 0.31f)) * 0.4f;
 	float lines = 0.5f + 0.5f * sin(depth * 9.0f - t * 2.2f + UwNoise(p * 0.8f) * 4.0f);
-	float edge = 1.0f - smoothstep(0.0f, 0.03f, depth);
-	float foam = smoothstep(0.7f, 0.9f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
-	return clamp(max(foam, edge * smoothstep(0.45f, 0.7f, patches)), 0.0f, 1.0f);
+	float edge = 1.0f - smoothstep(0.0f, 0.05f, depth);
+	float foam = smoothstep(0.62f, 0.85f, patches * 0.8f + lines * 0.3f) * shallow * shallow;
+	return clamp(max(foam, edge * smoothstep(0.35f, 0.6f, patches)), 0.0f, 1.0f);
 }
 
 // The storm on the sea: the rogue wave and the lightning.
@@ -872,7 +872,7 @@ void main()
 				// The shore wave breaks on its face as it comes in, from 20 units out to the edge of the water
 				float breaking = face * (1.0f - smoothstep(1.0f, 10.0f, shore.x)) * smoothstep(0.0f, 0.3f, waterDepth) *
 				                 (1.0f - cliff);
-				foam = max(foam, breaking * smoothstep(0.5f, 0.75f, UwFoamNoise(surfacePoint.xz * 2.6f + t * 0.3f)));
+				foam = max(foam, breaking * smoothstep(0.4f, 0.7f, UwFoamNoise(surfacePoint.xz * 2.6f + t * 0.3f)));
 				// At the foot of a cliff: a thick band of boiling white water against the rock, and broad sheets of foam
 				// that each crash pushes out and that break up into patches and streaks as the current carries them
 				// away. The foam builds up between the waves, so it never clears at a cliff.
@@ -882,11 +882,11 @@ void main()
 					vec2 flow = UwCurrent(vec3(surfacePoint.x, u_uwParams.z, surfacePoint.z), t, shift);
 					vec2 carried = surfacePoint.xz - shift - u_uwCurrent.xy * t;
 					float boil = UwFoamNoise(carried * 1.4f - t * 0.5f);
-					float band = (1.0f - smoothstep(1.5f, 5.0f, shore.x)) * smoothstep(0.35f, 0.6f, boil);
+					float band = (1.0f - smoothstep(2.5f, 8.0f, shore.x)) * smoothstep(0.25f, 0.55f, boil);
 					float since = fract((u_uwPhase.x + UwNoise(surfacePoint.xz * 0.008f) * 1.2f) / 6.2831853f);
 					float front = 6.0f + since * (40.0f + 40.0f * u_uwWaves.y);
 					float push = smoothstep(front - 25.0f, front, shore.x) * (1.0f - smoothstep(front, front + 4.0f, shore.x));
-					float spread = 1.0f - smoothstep(5.0f, 25.0f + 15.0f * u_uwWaves.y, shore.x);
+					float spread = 1.0f - smoothstep(8.0f, 35.0f + 15.0f * u_uwWaves.y, shore.x);
 					float pieces = smoothstep(0.55f, 0.75f, UwFoamNoise(carried * 0.36f) * 0.7f + UwFoamNoise(carried * 1.2f) * 0.3f);
 					float sheets = spread * pieces * (1.0f + push * 0.5f);
 					float strength = 0.7f + 0.3f * u_uwWaves.y + 0.15f * min(u_uwWaves.x, 2.0f);
@@ -897,7 +897,7 @@ void main()
 				foam = max(foam, max(UwWakeFoam(surfacePoint.xz, t), UwHullLine(surfacePoint.xz, t) * 0.6f));
 				foam = max(foam, RogueFoam(surfacePoint.xz, shore, t));
 				foam = max(foam, min(strike.z, 1.0f) * 0.5f);
-				if (u_uwFlags2.x > 0.5f && u_uwWaves.y > 0.05f)
+				if (u_uwFlags2.x > 0.5f && u_uwWaves.x > 0.0f)
 				{
 					vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
 					vec2 across = vec2(-wind.y, wind.x);
@@ -913,7 +913,8 @@ void main()
 					float streaks = smoothstep(0.75f, 0.92f, UwNoise(streakUv) * 0.6f + UwNoise(turned * 1.7f + 3.1f) * 0.4f);
 					caps = mix(0.03f * smoothstep(0.2f, 1.0f, u_uwWaves.y), caps, capsShown);
 					streaks = mix(0.04f, streaks, streaksShown);
-					foam = max(foam, (caps + streaks * 0.5f) * u_uwWaves.y);
+					// A light wind gives small flecks on the biggest crests; a storm gives caps and streaks
+					foam = max(foam, caps * (0.35f + 0.65f * u_uwWaves.y) + streaks * 0.5f * u_uwWaves.y);
 				}
 				foam *= 1.0f - pond;
 				vec3 foamColour = u_uwLightColour.rgb * (0.4f + 0.6f * max(u_uwAbove.y, 0.0f)) + u_uwSky.rgb * 0.7f +

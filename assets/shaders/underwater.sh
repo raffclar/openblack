@@ -303,6 +303,58 @@ float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float
 	return height;
 }
 
+// The caustics on the bed under a point of the surface, from the waves themselves: the surface focuses the light that
+// it bends where it curves up, as a lens, and the bed at `depth` takes about 1 / |1 - depth (n - 1) / n c| of it, where
+// c is the curvature of the surface and (n - 1) / n is 0.25 for water. The waves set the caustics' strength (the depth
+// times the curvature that they give), their size (the length of the waves that bring the light to a focus near this
+// depth: the ripples in the shallows, the longer waves deeper down) and their speed
+// (those waves' speed); the cells of UwCaustics give the shape of the lines. The short ripples on the waves are the
+// short end of the same spectrum (0.23 to 1.2 m, at the wind sea's steepness). Under small chop the caustics are fine
+// and fast; under a big swell, broad and slow; with no waves, none. 1 is the even light.
+float UwCausticsFromWaves(vec2 p, float t, float depth)
+{
+	vec2 sets = UwWaveSets(p, t);
+	float curvature = 0.0f;
+	float weight = 0.0f;
+	float weightedLength = 0.0f;
+	for (int i = 0; i < 14; i++)
+	{
+		vec4 wave = u_uwWaveTable[i];
+		float k = 6.2831853f / wave.y;
+		float c = wave.z * (i < 2 ? sets.y : sets.x) * k * k;
+		// A wave shows most in the caustics at the depth where it brings the light to a focus
+		float near = 0.25f * c * depth - 1.0f;
+		float w = c / (1.0f + near * near);
+		curvature += c;
+		weight += w;
+		weightedLength += w * wave.y;
+	}
+	float on = u_uwWaves.x > 0.0f ? 1.0f : 0.0f;
+	float steepness = (0.012f + 0.013f * u_uwWaves.y) * on;
+	for (int r = 0; r < 6; r++)
+	{
+		float rippleLength = 1.2f * UW_UNITS_PER_METRE * pow(0.72f, float(r));
+		float k = 6.2831853f / rippleLength;
+		float c = steepness * rippleLength * sets.x * k * k;
+		float near = 0.25f * c * depth - 1.0f;
+		float w = c / (1.0f + near * near);
+		curvature += c;
+		weight += w;
+		weightedLength += w * rippleLength;
+	}
+	if (curvature <= 1e-5f || weight <= 1e-6f)
+	{
+		return 1.0f;
+	}
+	// The waves that focus the light at this depth, and how strongly the waves focus it there
+	float focusLength = weightedLength / weight;
+	float strength = clamp(depth * 0.25f * curvature * 0.35f, 0.0f, 1.0f);
+	float k = 6.2831853f / focusLength;
+	float speed = sqrt(UW_GRAVITY * k) / 6.2831853f;
+	float lines = UwCaustics(p / (focusLength * 0.8f), t * speed * 1.5f, 1.0f) / 0.55f;
+	return mix(1.0f, clamp(lines, 0.2f, 3.0f), strength);
+}
+
 // The height of the waves of the open sea, far from the coast, as a pixel of the size `footprint` shows them
 float UwWavesFiltered(vec2 p, float t, vec4 footprint, out vec2 slope, out float variance)
 {
