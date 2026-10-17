@@ -76,6 +76,10 @@ TEST(VillagerLabels, DetailsTextIsTheGamesFormat)
 	const Details sick {.doing = u"Dying", .age = 70, .life = 0.125f, .food = 0.0f, .pregnant = true, .poisoned = true};
 	// 12.5 rounds away from zero, as the game's runtime does
 	EXPECT_EQ(DetailsText(sick, k_Words), u"Dying\n A:70  L:13%  F:0% P: S:");
+
+	// The percent is a float product: 0.145 as a float is a little under, but its percent rounds to 14.5
+	const Details fed {.doing = u"Dying", .age = 70, .life = 1.0f, .food = 0.145f};
+	EXPECT_EQ(DetailsText(fed, k_Words), u"Dying\n A:70  L:100%  F:15%");
 }
 
 TEST(VillagerLabels, DebugDetailsForAStateWithoutText)

@@ -151,7 +151,7 @@ script_weather::Wind script_weather::DriftWind(Wind air, const ClimateWind& glob
 			continue;
 		}
 		const auto add = [share](float wind, int8_t sum) {
-			const double part = (static_cast<double>(WholeByte(wind)) * static_cast<double>(*share)) + sum;
+			const float part = (static_cast<float>(WholeByte(wind)) * *share) + static_cast<float>(sum);
 			return static_cast<int8_t>(static_cast<uint8_t>(static_cast<int32_t>(part) & 0xff));
 		};
 		climatesPart.x = add(climate.windX, climatesPart.x);
@@ -165,9 +165,7 @@ script_weather::Wind script_weather::DriftWind(Wind air, const ClimateWind& glob
 
 glm::vec3 script_weather::Drift(glm::vec3 position, Wind wind)
 {
-	const auto along = [](int8_t byte, float from) {
-		return static_cast<float>((static_cast<double>(byte) * static_cast<double>(k_WindDrift)) + static_cast<double>(from));
-	};
+	const auto along = [](int8_t byte, float from) { return (static_cast<float>(byte) * k_WindDrift) + from; };
 	return {along(wind.x, position.x), position.y, along(wind.z, position.z)};
 }
 

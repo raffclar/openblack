@@ -14,6 +14,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <bit>
 #include <map>
 #include <optional>
 #include <string>
@@ -90,6 +91,10 @@ TEST(DialogueText, ReadSpeedFactor)
 	EXPECT_FLOAT_EQ(ReadSpeedFactor(0.5f), 1.0f);
 	EXPECT_FLOAT_EQ(ReadSpeedFactor(0.75f), 0.6f);
 	EXPECT_FLOAT_EQ(ReadSpeedFactor(1.0f), 0.2f);
+	// Each step rounds to a float with the double constants
+	EXPECT_EQ(std::bit_cast<uint32_t>(ReadSpeedFactor(0.75f)), 0x3F19999Au);
+	EXPECT_EQ(std::bit_cast<uint32_t>(ReadSpeedFactor(0.9f)), 0x3EB851EDu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(ReadSpeedFactor(0.6f)), 0x3F570A3Du);
 	// Not a number counts as slow
 	EXPECT_TRUE(std::isnan(ReadSpeedFactor(std::nanf(""))));
 }

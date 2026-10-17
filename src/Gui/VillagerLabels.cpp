@@ -173,8 +173,11 @@ std::u16string DetailsText(const Details& details, const DetailWords& words)
 		text += *details.name;
 		text += u'\n';
 	}
-	// Life and food as whole percents of the single precision values
-	const auto percent = [](float value) { return FormatFixed(static_cast<double>(value) * 100.0, 0); };
+	// Life and food as whole percents. The percent is a float product
+	const auto percent = [](float value) {
+		constexpr float k_Percent = 100.0f;
+		return FormatFixed(static_cast<double>(value * k_Percent), 0);
+	};
 	const std::array<std::u16string, 7> arguments {
 	    std::u16string(details.doing), std::u16string(words.age), Widen(std::to_string(details.age)),
 	    std::u16string(words.life),    percent(details.life),     std::u16string(words.food),

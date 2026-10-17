@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <bit>
 
+#include "Common/X87.h"
+
 namespace openblack::statistics
 {
 
@@ -310,10 +312,11 @@ uint32_t LinesOfCodeStep(uint32_t townsAtStart, const LocalRandom& random)
 {
 	constexpr double k_LinesPerTown = 10130.0;
 	constexpr double k_RandomShare = 0.2;
-	const double lines = static_cast<double>(townsAtStart) * k_LinesPerTown;
-	const auto extra = random(static_cast<int32_t>(static_cast<int64_t>(lines * k_RandomShare)));
+	// Each step rounds to a float. The two constants are doubles
+	const float lines = x87::Mul(static_cast<double>(townsAtStart), k_LinesPerTown);
+	const auto extra = random(static_cast<int32_t>(static_cast<int64_t>(x87::Mul(lines, k_RandomShare))));
 	// Cut towards nothing, and kept to the low 32 bits as the game adds it
-	return static_cast<uint32_t>(static_cast<int64_t>(static_cast<double>(extra) + lines));
+	return static_cast<uint32_t>(static_cast<int64_t>(x87::Add(static_cast<double>(extra), lines)));
 }
 
 void StepGlobalFigures(GlobalFigures& figures, int32_t frameRate, const LocalRandom& random)

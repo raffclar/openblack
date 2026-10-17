@@ -81,14 +81,14 @@ std::vector<uint8_t> challenge_pictures::Take(const graphics::ScreenView& screen
 	std::array<uint32_t, k_Width> columns {};
 	for (uint32_t x = 0; x < k_Width; ++x)
 	{
-		columns.at(x) = region.x + static_cast<uint32_t>(static_cast<double>(x) * columnStep);
+		columns.at(x) = region.x + static_cast<uint32_t>(static_cast<float>(x) * columnStep);
 	}
 
 	std::vector<uint8_t> picture(static_cast<size_t>(k_Width) * k_Height * k_BytesPerPixel);
 	auto out = picture.begin();
 	for (uint32_t y = 0; y < k_Height; ++y)
 	{
-		const auto down = region.y + static_cast<uint32_t>(static_cast<double>(y) * rowStep);
+		const auto down = region.y + static_cast<uint32_t>(static_cast<float>(y) * rowStep);
 		const auto row = screen.yflip ? screen.height - 1 - down : down;
 		auto previous = ScreenPixel(screen, region.x, row);
 		for (const auto across : columns)

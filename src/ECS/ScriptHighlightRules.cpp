@@ -17,6 +17,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/X87.h"
 
 namespace openblack::ecs::script_highlights
 {
@@ -60,16 +61,15 @@ void StepPulse(Pulse& pulse, float millisecondsPerTurn)
 		pulse.phase -= k_TwoPi;
 	}
 	pulse.previous = pulse.level;
-	// Worked out in full precision and only then kept as a float, so the beat reaches a whole 1 as the game's does
-	pulse.level = static_cast<float>((1.0 - std::cos(static_cast<double>(pulse.phase))) * 0.5);
+	// One less the cosine rounds to a float, then it is halved
+	constexpr float k_Half = 0.5f;
+	pulse.level = x87::Sub(1.0, x87::Cos(pulse.phase)) * k_Half;
 }
 
-double PulseShare(const Pulse& pulse, float turnFraction)
+float PulseShare(const Pulse& pulse, float turnFraction)
 {
-	// Worked out in full precision throughout: whether the share reaches a whole 1 decides the yellow beam
-	const double previous = pulse.previous;
-	const double blended = std::clamp(((pulse.level - previous) * turnFraction) + previous, 0.0, 1.0);
-	return (blended * static_cast<double>(k_PulseRise)) + static_cast<double>(k_PulseLeast);
+	const float blended = std::clamp(((pulse.level - pulse.previous) * turnFraction) + pulse.previous, 0.0f, 1.0f);
+	return (blended * k_PulseRise) + k_PulseLeast;
 }
 
 bool BeamShown(HighlightInfo kind, bool active)
@@ -77,7 +77,7 @@ bool BeamShown(HighlightInfo kind, bool active)
 	return active && !IsTipSign(kind);
 }
 
-uint32_t BeamColour(HighlightInfo kind, double pulseShare)
+uint32_t BeamColour(HighlightInfo kind, float pulseShare)
 {
 	if (kind == HighlightInfo::Silver)
 	{
@@ -85,7 +85,7 @@ uint32_t BeamColour(HighlightInfo kind, double pulseShare)
 	}
 	// The beam beats with the scroll, from 0.4 to all of its strength. The game cuts the beat to a whole number before
 	// scaling it, which leaves the beam unseen; openblack scales it first (see docs/deviations.md)
-	const auto alpha = static_cast<uint8_t>(static_cast<int32_t>(pulseShare * static_cast<double>(k_YellowBeamAlpha)));
+	const auto alpha = static_cast<uint8_t>(static_cast<int32_t>(pulseShare * static_cast<float>(k_YellowBeamAlpha)));
 	return (static_cast<uint32_t>(alpha) << 24u) | k_YellowBeam;
 }
 

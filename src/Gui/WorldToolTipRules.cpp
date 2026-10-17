@@ -19,9 +19,9 @@
 namespace openblack::gui::world_tooltip
 {
 
-Numbered Belief(double margin)
+Numbered Belief(float margin)
 {
-	return {.index = k_BeliefLeft, .first = margin * k_BeliefScale, .second = std::nullopt};
+	return {.index = k_BeliefLeft, .first = static_cast<double>(margin * k_BeliefScale), .second = std::nullopt};
 }
 
 Wording Worded(uint32_t index, double number)
@@ -35,7 +35,7 @@ Wording Worded(uint32_t index, double number)
 
 Numbered TempleHealth(float life)
 {
-	return {.index = k_TempleHealth, .first = static_cast<double>(life) * k_PercentScale, .second = std::nullopt};
+	return {.index = k_TempleHealth, .first = static_cast<double>(life * k_PercentScale), .second = std::nullopt};
 }
 
 Numbered PrayerEnergy(float stored)

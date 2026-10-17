@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#include "Common/X87.h"
+
 namespace openblack::ecs::script_populate
 {
 
@@ -41,7 +43,8 @@ uint32_t CountOf(float quantity)
 
 float SpreadOf(uint32_t count)
 {
-	return static_cast<float>(static_cast<double>(count) * k_SpreadPerThing + k_SpreadBase);
+	// The product rounds to a float, then the sum does. Both constants are doubles
+	return x87::Add(x87::Mul(static_cast<double>(count), k_SpreadPerThing), k_SpreadBase);
 }
 
 glm::vec3 PlaceOf(glm::vec3 centre, float spread, const std::function<float(float)>& floatRand)

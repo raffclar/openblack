@@ -125,9 +125,9 @@ constexpr uint32_t k_ToolTipCount = 170;
 [[nodiscard]] std::optional<uint32_t> ScaffoldDrop(std::optional<uint32_t> plannedBuildText);
 
 /// A belief tooltip is shown in thousandths
-constexpr double k_BeliefScale = 1000.0;
+constexpr float k_BeliefScale = 1000.0f;
 /// Shares and lives show as percentages
-constexpr double k_PercentScale = 100.0;
+constexpr float k_PercentScale = 100.0f;
 
 /// A tooltip and the numbers written into its words
 struct Numbered
@@ -140,7 +140,7 @@ struct Numbered
 /// A village centre's belief tooltip, from how much more the town believes in the player than in the player it believes
 /// in most besides, in thousandths. It is always the "Belief Left" tooltip, whoever is ahead; only its words change
 /// when it is drawn (see Worded).
-[[nodiscard]] Numbered Belief(double margin);
+[[nodiscard]] Numbered Belief(float margin);
 
 /// The words a tooltip is drawn with and the number written into them
 struct Wording
