@@ -1099,3 +1099,6 @@ openblack_setup_and_add_test(
   test_script_task_release test_script_task_release.cpp
 )
 target_link_libraries(test_script_task_release PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_creature_joint_actions test_creature_joint_actions.cpp
+)

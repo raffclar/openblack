@@ -1806,6 +1806,10 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 		SituateDance(creature, *executor, point, situated);
 	}
 	mind_town_help::Situate(Locator::entitiesRegistry::value(), creature, *executor, object, situated);
+	if (object.has_value())
+	{
+		SituateFriend(creature, *executor, static_cast<entt::entity>(*object), situated);
+	}
 	if (executor->build == creature_plan_actions::Build::Drink)
 	{
 		situated.drink = DrinkPlaceOf(creature);
@@ -3208,6 +3212,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			mind_town_help::Situate(registry, creature, *executor,
 			                        plan.object.has_value() ? std::optional(entt::to_integral(*plan.object)) : std::nullopt,
 			                        situation);
+			if (plan.object.has_value())
+			{
+				SituateFriend(creature, *executor, *plan.object, situation);
+			}
 			const auto actionIndex = creature_mind_tables::FindAction(*tables, plan.action);
 			const auto cast = creature_plan_actions::IsCast(*executor) && actionIndex.has_value()
 			                      ? CastInfoFor(creature, *actionIndex, plan.object)
@@ -3441,6 +3449,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	SituatePlayer(creature, situation);
 	SituateHome(creature, situation);
 	SituateEmotes(creature, situation);
+	SituateFriends(creature, situation);
 	if (body != nullptr)
 	{
 		situation.sacrificeAltar = SacrificeAltarOf(registry, body->owner);

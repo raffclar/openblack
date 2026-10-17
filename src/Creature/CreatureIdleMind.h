@@ -506,6 +506,13 @@ struct Step
 		/// Making the partner (the step's object) stand still in its mind, or letting its mind go free again, at once
 		Demobilise,
 		Remobilise,
+		/// Waiting while the step's object moves. The step is done on a turn when the object does not move.
+		WaitForStill,
+		/// The step's effect occurs at once, with no animation, as the drink or the poo after the animation of it
+		Apply,
+		/// Making the step's desire fully strong at once and planning it on the step's object, a town. The current
+		/// action stops as a failure. When no plan is found, the creature decides again.
+		ApplyDesire,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -559,6 +566,8 @@ struct Step
 	creature_friendship::RequestKind request {creature_friendship::RequestKind::Play};
 	/// The step that an order step tells the partner to do
 	std::shared_ptr<const Step> ordered;
+	/// The desire that a step that applies a desire makes strong
+	creature_desires::Desire desire {creature_desires::Desire::Compassion};
 };
 
 struct IdleMind
@@ -708,6 +717,8 @@ struct Senses
 	std::optional<uint32_t> held;
 	/// Whether the object a step waits for is on the map, none when the object is gone
 	std::optional<bool> objectInMap;
+	/// Whether the object that a step waits to be still moves
+	bool objectMoving {false};
 	/// Whether the object a step watches fly is still really in the air
 	bool objectInTheAir {false};
 	/// Whether the living object of a step that makes it still is in its state of flying
@@ -912,6 +923,13 @@ struct Commands
 	std::optional<PartnerOrder> order;
 	/// The partner to make stand still in its mind (true) or to let go free again (false)
 	std::optional<std::pair<uint32_t, bool>> demobilise;
+	/// A desire to make fully strong and to plan on a thing, by its entity's number
+	struct DesireOn
+	{
+		creature_desires::Desire desire {creature_desires::Desire::Compassion};
+		uint32_t thing {0};
+	};
+	std::optional<DesireOn> applyDesire;
 };
 
 /// random(n) is a whole number from 0 to n - 1

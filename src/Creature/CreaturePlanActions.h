@@ -22,6 +22,7 @@
 
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureDrink.h"
+#include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureIdleMind.h"
 
 /// The actions of the game's table that a creature can carry out here, and the agenda of steps each becomes. The planner
@@ -196,6 +197,15 @@ enum class Build : uint8_t
 	HowlAtFriend,
 	PineForFriend,
 	LookForFriend,
+	/// The joint actions side by side with a friend, and with a friend at a town (see creature_mind::BeHappyWithFriend
+	/// and the others)
+	BeHappyWithFriend,
+	PooWithFriend,
+	SitWithFriend,
+	SleepWithFriend,
+	DrinkWithFriend,
+	HelpTownWithFriend,
+	AttackTownWithFriend,
 	RunFromObject,
 	RunFromPlayer,
 	LookAbout,
@@ -457,6 +467,9 @@ struct Executor
 
 /// From this stage of growing up the creature is old enough to leave its home
 constexpr uint32_t k_LeaveHomeStage = 3;
+/// Some joint actions with a friend start only when a desire of the creature is stronger than this, or its sadness is
+/// less
+constexpr float k_SlightDesire = 0.1f;
 
 /// Every action that can be carried out
 [[nodiscard]] std::span<const Executor> All();
@@ -597,6 +610,24 @@ struct Situation
 	/// For the theft that takes a thing to a town: the storage pit of the nearest town of its player, by its entity's
 	/// number. None when the player has no town, or that town has no storage pit.
 	std::optional<uint32_t> ownTownPit;
+	/// For the joint actions with a friend: how strong its desires to drink, to have a poo and to sleep are, and how
+	/// sad it is (the value of the source of sadness)
+	float water {0.0f};
+	float pooDesire {0.0f};
+	float tiredness {0.0f};
+	float sadness {0.0f};
+	/// The nearest town, when the creature believes something about it: whether it wants to attack it more than to
+	/// help it. None without a town, or without a belief about the nearest town.
+	std::optional<bool> attackNearestTown;
+	/// The friend of a joint action: where it stands and how tall it is
+	struct Friend
+	{
+		glm::vec2 point {0.0f};
+		float height {0.0f};
+	};
+	std::optional<Friend> friendly;
+	/// The town of a joint action with a town, none without a town that has a storage pit
+	std::optional<creature_mind::FriendsTown> friendsTown;
 };
 /// What a casting action casts, from its row of the game's table and the creature
 struct CastInfo
