@@ -25,6 +25,7 @@ public:
 	void SetSettings(const sim_run::Settings& settings) override { _settings = settings; }
 	void TurnPlayed(float ms) override { _timings.AddTurn(ms); }
 	void FrameEnded(float ms) override { _timings.AddFrame(ms); }
+	void StagesEnded(std::span<const float> ms) override { _timings.AddStages(ms); }
 	[[nodiscard]] sim_run::Timings TakeTimings() override;
 	[[nodiscard]] std::optional<uint64_t> ProcessMemoryBytes() const override;
 

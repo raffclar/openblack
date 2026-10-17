@@ -48,7 +48,9 @@
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EntityDescription.h"
+#include "InfoConstants.h"
 #include "Locator.h"
+#include "Profiler.h"
 #include "SystemProviders.h"
 
 using namespace openblack;
@@ -232,6 +234,21 @@ std::string ActionName(uint32_t action, const creature_mind_tables::Tables* tabl
 	}
 	return std::to_string(action);
 }
+
+/// The action that the creature carries out now and the number of the plan or agenda it is part of: its plan's action
+/// while a plan is active, else the action that its idle mind started
+std::optional<CreatureMindState::ActionUnderway> CurrentAction(const CreatureMindState& mind)
+{
+	if (mind.planActive && mind.planner.current.has_value())
+	{
+		return CreatureMindState::ActionUnderway {.serial = mind.planSerial,
+		                                          .action = static_cast<uint32_t>(mind.planner.current->action)};
+	}
+	return mind.underway;
+}
+
+/// A stage of the profiler that takes less time than this each turn is left out of the record
+constexpr float k_LeastStageMs = 0.005f;
 
 } // namespace
 
@@ -679,6 +696,20 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 	    {"frames", timings.frames},
 	    {"memory_mb", memory.has_value() ? Json(static_cast<double>(*memory) / k_BytesPerMegabyte) : Json(nullptr)},
 	};
+	// The stages of the profiler that took the most time, in milliseconds for each turn
+	if (timings.turns > 0)
+	{
+		Json stages = Json::object();
+		for (size_t i = 0; i < timings.stageTotalMs.size() && i < Profiler::k_StageNames.size(); ++i)
+		{
+			const auto perTurn = timings.stageTotalMs[i] / static_cast<float>(timings.turns);
+			if (perTurn >= k_LeastStageMs)
+			{
+				stages[fmt::format("{}:{}", i, Profiler::k_StageNames.at(i))] = perTurn;
+			}
+		}
+		record["stages"] = std::move(stages);
+	}
 	if (track && timings.turns > 0)
 	{
 		if (auto flag = _turnTime.Observe(timings.TurnAverageMs(), turn); flag.has_value())
@@ -720,8 +751,7 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 				flags.push_back(std::move(*flag));
 			}
 		}
-		if (type == entt::type_id<Creature>() || type == entt::type_id<CreatureMindState>() || name == "Villager" ||
-		    name == "Tree" || name == "Abode" || name == "Town")
+		if (!storage.empty())
 		{
 			counts[std::string(name)] = storage.size();
 		}
@@ -857,7 +887,10 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 	creature["plan_serial"] = mind.planSerial;
 	creature["activity"] = plan["activity"];
 	creature["agenda_steps"] = plan["agenda_steps"];
-	creature["action"] = mind.underway.has_value() ? Json(ActionName(mind.underway->action, tables)) : Json(nullptr);
+	// The action it is carrying out: its plan's while a plan is active, else the one the idle mind started
+	const auto action = CurrentAction(mind);
+	creature["action"] = action.has_value() ? Json(ActionName(action->action, tables)) : Json(nullptr);
+	creature["idle_action"] = mind.underway.has_value() ? Json(ActionName(mind.underway->action, tables)) : Json(nullptr);
 	creature["last_action_done"] =
 	    mind.lastActionDone.has_value() ? Json(ActionName(*mind.lastActionDone, tables)) : Json(nullptr);
 	// What the player's hand last told it
@@ -872,11 +905,10 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 	{
 		const auto planName =
 		    mind.planner.current.has_value() ? ActionName(mind.planner.current->action, tables) : std::string("none");
-		for (auto flag :
-		     {_stuck.Observe("plan", planName, mind.planSerial, turn),
-		      _stuck.Observe("activity", plan["activity"].get<std::string>(), 0, turn),
-		      _stuck.Observe("action", mind.underway.has_value() ? ActionName(mind.underway->action, tables) : "none",
-		                     mind.underway.has_value() ? mind.underway->serial : 0, turn)})
+		for (auto flag : {_stuck.Observe("plan", planName, mind.planSerial, turn),
+		                  _stuck.Observe("activity", plan["activity"].get<std::string>(), 0, turn),
+		                  _stuck.Observe("action", action.has_value() ? ActionName(action->action, tables) : "none",
+		                                 action.has_value() ? action->serial : 0, turn)})
 		{
 			if (flag.has_value())
 			{
@@ -923,7 +955,15 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 		}
 		beliefs.push_back({{"thing", ToId(belief.thing)}, {"kind", belief.kind}});
 	}
-	creature["beliefs"] = {{"count", mind.beliefs.Size()}, {"newest", std::move(beliefs)}};
+	Json byKind = Json::object();
+	for (uint32_t kind = 0; kind < creature_object_beliefs::k_KindCount; ++kind)
+	{
+		if (const auto count = mind.beliefs.Count(kind); count > 0)
+		{
+			byKind[std::to_string(kind)] = count;
+		}
+	}
+	creature["beliefs"] = {{"count", mind.beliefs.Size()}, {"by_kind", std::move(byKind)}, {"newest", std::move(beliefs)}};
 	if (mind.learnt.has_value())
 	{
 		const auto& learnt = *mind.learnt;
@@ -939,6 +979,36 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 		creature["opinions"] = std::move(opinions);
 		creature["attitudes"] = learnt.creatures.size();
 		creature["thoughts"] = learnt.thoughts.size();
+		// The newest thing it did that feedback can be credited to, as a player sees it: the action, its desire, the kind
+		// of thing it acted on, and whether it can learn from it
+		if (!learnt.contexts.empty())
+		{
+			const auto& newest = learnt.contexts.back();
+			// How the game's table of desires says a plan for the desire moves the creature's alignment each turn
+			std::optional<float> alignmentChange;
+			if (Locator::infoConstants::has_value())
+			{
+				const auto& desires = Locator::infoConstants::value().creatureInitialDesire;
+				if (const auto index = static_cast<size_t>(newest.desire); index < desires.size())
+				{
+					alignmentChange = desires.at(index).alignmentChange;
+				}
+			}
+			creature["context"] = {
+			    {"action", ActionName(newest.action, tables)},
+			    {"desire", std::string(creature_desires::Name(newest.desire))},
+			    {"object_kind", newest.belief.has_value() ? Json(newest.belief->type) : Json(nullptr)},
+			    {"alignment_change", alignmentChange.has_value() ? Json(*alignmentChange) : Json(nullptr)},
+			    {"learnable", newest.learnable},
+			    {"running", newest.running},
+			    {"done", newest.done},
+			    {"seconds_since", newest.secondsSince},
+			};
+		}
+		else
+		{
+			creature["context"] = nullptr;
+		}
 		check("learnt.alignment", learnt.alignment, k_Signed);
 		for (size_t i = 0; i < learnt.opinions.size(); ++i)
 		{

@@ -14,6 +14,8 @@
 #include <chrono>
 #include <filesystem>
 #include <optional>
+#include <span>
+#include <vector>
 
 /// The fast simulation mode for long tool runs, such as a creature's whole life. Each frame takes a fixed game time, so a
 /// frame plays the same turns at any speed. In fast mode the game plays its frames one after the other as fast as the
@@ -82,9 +84,13 @@ struct Timings
 	uint32_t frames {0};
 	float frameTotalMs {0.0f};
 	float frameLongestMs {0.0f};
+	/// The time of each stage of the profiler over the frames, by the stage's number
+	std::vector<float> stageTotalMs;
 
 	void AddTurn(float ms);
 	void AddFrame(float ms);
+	/// Adds the time that each stage took in a frame, by the stage's number
+	void AddStages(std::span<const float> ms);
 	[[nodiscard]] float TurnAverageMs() const;
 	[[nodiscard]] float FrameAverageMs() const;
 };

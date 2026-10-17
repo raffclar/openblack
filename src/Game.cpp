@@ -13,6 +13,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <optional>
 #include <span>
@@ -4443,6 +4444,15 @@ bool Game::Run() noexcept
 		}
 		const auto frameEnd = std::chrono::steady_clock::now();
 		simulation.FrameEnded(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count());
+		{
+			// The run record keeps the time of each stage too, to find what costs more as a run goes on
+			const auto& entry = profiler.GetEntries().at(profiler.GetEntryIndex(0));
+			std::array<float, static_cast<size_t>(Profiler::Stage::_count)> stageMs {};
+			std::ranges::transform(entry.stages, stageMs.begin(), [](const Profiler::Scope& scope) {
+				return std::chrono::duration<float, std::milli>(scope.total).count();
+			});
+			simulation.StagesEnded(stageMs);
+		}
 		if (frameStats.has_value())
 		{
 			frameStats->Frame(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(), profiler,
