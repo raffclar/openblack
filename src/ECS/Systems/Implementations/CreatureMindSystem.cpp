@@ -1310,7 +1310,9 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 	if (commands.startSequence.has_value())
 	{
 		const auto& sequence = *commands.startSequence;
-		if (auto body = creature_layers::PlaySequence(animation.body, sequence[0], sequence[1], sequence[2], commands.holdLoop,
+		// A start that cuts the body plays from a body that stands
+		const auto from = commands.cutBody ? creature_layers::BodyAction {} : animation.body;
+		if (auto body = creature_layers::PlaySequence(from, sequence[0], sequence[1], sequence[2], commands.holdLoop,
 		                                              commands.mirrored))
 		{
 			animation.body = *body;
@@ -2215,6 +2217,7 @@ void CreatureMindSystem::ProcessTurn()
 		        .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
 		        .bodyLooping = creature_layers::IsLooping(animation.body),
 		        .clipMissing = ClipMissing(entity, animation, mind.idle, communication.animation),
+		        .realTime = animation.realTime,
 		        .bodyDancing = creature_layers::IsDancing(animation.body),
 		        .moving = moving,
 		        .subMove = SubMoveOf(entity),

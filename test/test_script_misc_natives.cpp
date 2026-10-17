@@ -22,6 +22,8 @@
 #include "Audio/AudioManagerNoOp.h"
 #include "Audio/GameMusic.h"
 #include "CHLApi.h"
+#include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -112,6 +114,7 @@ protected:
 };
 
 constexpr uint32_t k_RestartMusic = 190;
+constexpr uint32_t k_SetAnimationModify = 202;
 constexpr uint32_t k_MusicPlayedOnObject = 191;
 constexpr uint32_t k_ImmersionExists = 304;
 constexpr uint32_t k_LastMusicLine = 335;
@@ -277,4 +280,30 @@ TEST(ScriptMusic, AttachedMusicFinishesOnlyWhenTakenOff)
 	EXPECT_FALSE(music.IsAttachedMusicFinished(7));
 	music.DetachMusic(7);
 	EXPECT_TRUE(music.IsAttachedMusicFinished(7));
+}
+
+// SET_ANIMATION_MODIFY sets real time on a creature's body only for the value 1. Other values clear it, and a thing that
+// is not a creature does not change.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptMiscNatives, OnlyOneSetsRealTimeOnACreature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature);
+	registry.Assign<ecs::components::CreatureAnimation>(creature);
+	const auto& animation = registry.Get<const ecs::components::CreatureAnimation>(creature);
+	EXPECT_TRUE(Call(k_SetAnimationModify, {Int(1), Object(creature)}).empty());
+	EXPECT_TRUE(animation.realTime);
+	EXPECT_TRUE(Call(k_SetAnimationModify, {Int(2), Object(creature)}).empty());
+	EXPECT_FALSE(animation.realTime);
+	EXPECT_TRUE(Call(k_SetAnimationModify, {Int(1), Object(creature)}).empty());
+	EXPECT_TRUE(Call(k_SetAnimationModify, {Int(0), Object(creature)}).empty());
+	EXPECT_FALSE(animation.realTime);
+	// A villager is not a creature
+	const auto villager = CreateVillager(ecs::components::Villager::Sex::MALE);
+	registry.Assign<ecs::components::CreatureAnimation>(villager);
+	EXPECT_TRUE(Call(k_SetAnimationModify, {Int(1), Object(villager)}).empty());
+	EXPECT_FALSE(registry.Get<const ecs::components::CreatureAnimation>(villager).realTime);
+	EXPECT_TRUE(Call(k_SetAnimationModify, {Int(1), Object(entt::null)}).empty());
+	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
 }

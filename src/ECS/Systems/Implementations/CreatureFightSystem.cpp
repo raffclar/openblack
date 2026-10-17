@@ -986,6 +986,14 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		fighter.tendency = record.choosingTendency;
 		registry.AssignOrReplace<CreatureFighting>(self, std::move(fighting));
 	}
+	// The taunt of each creature is chosen now from the game's random numbers, the other creature's first. One time in
+	// two it is the rude gesture.
+	if (Locator::gameRandom::has_value())
+	{
+		auto& game = Locator::gameRandom::value();
+		registry.Get<CreatureFighting>(opponent).rude = game.GameRand(2) != 0;
+		registry.Get<CreatureFighting>(creature).rude = game.GameRand(2) != 0;
+	}
 	const bool planned = _startReason == "plan" || _startReason == "anger";
 	registry.Get<CreatureFighting>(creature).planned = planned;
 	// The fight has the minds of both creatures
@@ -2006,12 +2014,15 @@ void CreatureFightSystem::Faint(entt::entity creature)
 	{
 		Locator::leashSystem::value().TakeOff(creature);
 	}
+	// The faint cuts what the body plays at once. The game's random numbers choose its side, one time in two the left
+	// side.
 	auto& animation = registry.Get<CreatureAnimation>(creature);
+	const bool mirrored = Locator::gameRandom::has_value() && Locator::gameRandom::value().GameRand(2) == 1;
 	animation.body = {
 	    .kind = creature_layers::BodyAction::Kind::Sequence,
 	    .phase = creature_layers::BodyAction::Phase::Start,
 	    .animations = {fight::animations::k_Faint, fight::animations::k_Faint, fight::animations::k_GetUp},
-	    .mirrored = std::bernoulli_distribution(0.5)(_random),
+	    .mirrored = mirrored,
 	    .holdLoop = true,
 	};
 	animation.face = creature_layers::RelaxFace(animation.face);
@@ -2348,18 +2359,21 @@ void CreatureFightSystem::ProcessStages()
 		case CreatureFighting::Stage::Taunt:
 			if (!fighting->played)
 			{
-				fighting->played = true;
-				if (locomotion != nullptr)
+				// Each try to start the taunt picks a side from the game's random numbers first. A body that plays an
+				// action or moves, or that does not have the clip, refuses the start, and the creature tries again on
+				// the next turn. With no bodies loaded, nothing plays.
+				const auto clip = fight::FaceOffAnimation(fighting->rude);
+				const bool mirrored = Locator::gameRandom::has_value() && Locator::gameRandom::value().GameRand(2) == 1;
+				const bool loaded = Locator::creatureAnimationSystem::has_value();
+				if (creature_layers::IsPlaying(animation.body) || moving(entity) || (loaded && !Has(entity, clip)))
 				{
-					locomotion->Stop(entity);
+					break;
 				}
-				// Each creature plays the taunt or the rude gesture, half and half. A species without the action plays
-				// nothing.
-				const auto clip = fight::FaceOffAnimation(std::bernoulli_distribution(0.5)(_random));
-				fighting->taunted = Has(entity, clip);
-				if (fighting->taunted)
+				fighting->played = true;
+				fighting->taunted = loaded;
+				if (loaded)
 				{
-					PlayOnce(animation, clip);
+					PlayOnce(animation, clip, mirrored);
 				}
 				fight_transcript::Note(entity, "face_off", [&] {
 					return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)},
@@ -3130,7 +3144,8 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	const auto groin = rig->actionPoints->groin;
 	const auto size = ShownSize(body);
 	const bool special = attacker.animation == fight::animations::k_AttackSpecial;
-	const auto spanMs = fight::TestSpanMs(k_TurnMs, size);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto spanMs = fight::TestSpanMs(k_TurnMs, size, animation != nullptr && animation->realTime);
 	const auto landMs = static_cast<int32_t>(fighting.hitTimesMs.at(blow));
 	const auto times = fight::BlowTestTimes(fromMs, spanMs, landMs);
 	if (times.empty())

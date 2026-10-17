@@ -315,7 +315,10 @@ lhvm::ScriptType TaskType(uint32_t task)
 /// A script's mistake the game tells of, and carries on
 void ScriptMessage(std::string_view message)
 {
-	SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "{}", message);
+	if (const auto logger = spdlog::get("scripting"))
+	{
+		SPDLOG_LOGGER_WARN(logger, "{}", message);
+	}
 }
 
 /// Nothing outside is in view while the player is inside the temple
@@ -5954,10 +5957,18 @@ void ShakeCamera() // 201 SHAKE_CAMERA
 
 void SetAnimationModify() // 202 SET_ANIMATION_MODIFY
 {
-	// const auto creature = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature comes off the stack first. Only the value 1 sets real time; all other values clear it.
+	const auto thing = PopObject();
+	const bool realTime = Pop().uintVal == 1;
+	const auto creature = CreatureForNative(thing);
+	if (!creature.has_value())
+	{
+		return;
+	}
+	if (auto* animation = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureAnimation>(*creature))
+	{
+		animation->realTime = realTime;
+	}
 }
 
 void SetAviSequence() // 203 SET_AVI_SEQUENCE
