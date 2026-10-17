@@ -1142,7 +1142,17 @@ void DynamicsSystem::Step(const physics::Ground& ground)
 		auto result = body.Integrate();
 		if (turn::NearSeaLevel(body.resting, body.Centre().y, body.Radius()))
 		{
-			if (body.density > 1.0f && IsAvailable(entry.entity) && Hooks().HasSunk(*this, entry))
+			// EXPERIMENT (not for merge): with the sea bed under it, its kind is told once that it sank, and the body sinks on
+			// to rest on the sea bed
+			const bool seaBedUnder = _ground != nullptr && _ground->SeaFloorAt({body.Centre().x, body.Centre().z}).has_value();
+			if (seaBedUnder)
+			{
+				if (!entry.sankInSea && body.density > 1.0f && IsAvailable(entry.entity))
+				{
+					entry.sankInSea = Hooks().SinkToSeaBed(*this, entry);
+				}
+			}
+			else if (body.density > 1.0f && IsAvailable(entry.entity) && Hooks().HasSunk(*this, entry))
 			{
 				body.velocity = glm::vec3(0.0f);
 				body.angularMomentum = glm::vec3(0.0f);
@@ -1354,7 +1364,10 @@ void DynamicsSystem::AttemptCollisionSound(PhysicsEntry& entry)
 	{
 		return;
 	}
-	if (hitType == SoundCollisionType::Ground)
+	// EXPERIMENT (not for merge): a thing that strikes the sea bed under the water throws up no dust, ring or foam on the
+	// surface
+	const bool onSeaBed = _ground != nullptr && centre.y < 0.0f && _ground->SeaFloorAt({centre.x, centre.z}).has_value();
+	if (hitType == SoundCollisionType::Ground && !onSeaBed)
 	{
 		// Over land it throws up dust; over water a ring and foam
 		const auto* land = Land();
@@ -1453,8 +1466,10 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 			}
 			continue;
 		}
-		// Sunk wholly under the sea it is drawn no more; it is told so once, so nothing is uploaded again each frame
-		if (turn::SunkOutOfSight(body.Centre().y, body.Radius()))
+		// Sunk wholly under the sea it is drawn no more; it is told so once, so nothing is uploaded again each frame.
+		// EXPERIMENT (not for merge): with the sea bed under it, it stays drawn as it sinks to the sea bed.
+		const bool seaFloorUnder = _ground != nullptr && _ground->SeaFloorAt({body.Centre().x, body.Centre().z}).has_value();
+		if (!seaFloorUnder && turn::SunkOutOfSight(body.Centre().y, body.Radius()))
 		{
 			const auto* drawnPose = registry.TryGet<const PhysicsDrawPose>(entry->entity);
 			if (drawnPose == nullptr || !drawnPose->underSea)

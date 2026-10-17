@@ -57,30 +57,55 @@ TEST(UnderwaterWake, FasterBiggerAndDeeperThingsWriteMore)
 	EXPECT_GT(wake::WriteFor(bobbing).depth, 0.0f);
 }
 
-TEST(UnderwaterWake, SplashesGrowWithSpeedAndSize)
+TEST(UnderwaterWake, SplashesGrowWithSpeedSizeAndMass)
 {
-	EXPECT_FALSE(wake::SplashFor(wake::k_LeastSplashSpeed * 0.5f, 1.0f).has_value());
-	EXPECT_FALSE(wake::SplashFor(10.0f, 0.0f).has_value());
-	const auto small = wake::SplashFor(4.0f, 0.5f);
-	const auto fast = wake::SplashFor(12.0f, 0.5f);
-	const auto big = wake::SplashFor(4.0f, 3.0f);
-	ASSERT_TRUE(small.has_value() && fast.has_value() && big.has_value());
-	EXPECT_GT(fast->crownHeight, small->crownHeight);
-	EXPECT_GT(fast->drops, small->drops);
-	EXPECT_GT(fast->dropSpeed, small->dropSpeed);
-	EXPECT_GT(fast->seconds, small->seconds);
-	EXPECT_GT(big->crownRadius, small->crownRadius);
-	EXPECT_GT(big->ringDepth, small->ringDepth);
-	EXPECT_GE(small->drops, wake::k_FewestDrops);
+	EXPECT_FALSE(wake::SplashFor({.downSpeed = wake::k_LeastSplashSpeed * 0.5f, .radius = 1.0f, .mass = 50.0f}).has_value());
+	EXPECT_FALSE(wake::SplashFor({.downSpeed = 10.0f, .radius = 0.0f, .mass = 50.0f}).has_value());
+	const auto slow = wake::SplashFor({.downSpeed = 4.0f, .radius = 0.5f, .mass = 20.0f});
+	const auto fast = wake::SplashFor({.downSpeed = 12.0f, .radius = 0.5f, .mass = 20.0f});
+	const auto heavy = wake::SplashFor({.downSpeed = 4.0f, .radius = 0.5f, .mass = 500.0f});
+	const auto wide = wake::SplashFor({.downSpeed = 4.0f, .radius = 3.0f, .mass = 20.0f});
+	ASSERT_TRUE(slow.has_value() && fast.has_value() && heavy.has_value() && wide.has_value());
+	EXPECT_GT(fast->crownHeight, slow->crownHeight);
+	EXPECT_GT(fast->drops, slow->drops);
+	EXPECT_GT(fast->dropSpeed, slow->dropSpeed);
+	EXPECT_GT(fast->seconds, slow->seconds);
+	EXPECT_GT(heavy->crownHeight, slow->crownHeight);
+	EXPECT_GT(heavy->foam, slow->foam);
+	EXPECT_GT(wide->crownRadius, slow->crownRadius);
+	// A thing that skims throws more spray than one that drops at the same speed down
+	const auto skims = wake::SplashFor({.downSpeed = 4.0f, .acrossSpeed = 12.0f, .radius = 0.5f, .mass = 20.0f});
+	ASSERT_TRUE(skims.has_value());
+	EXPECT_GT(skims->drops, slow->drops);
 	// A huge fall has its caps
-	const auto huge = wake::SplashFor(200.0f, 50.0f);
+	const auto huge = wake::SplashFor({.downSpeed = 200.0f, .radius = 50.0f, .mass = 1e6f});
 	ASSERT_TRUE(huge.has_value());
 	EXPECT_EQ(huge->drops, wake::k_MostDrops);
 	EXPECT_FLOAT_EQ(huge->crownHeight, wake::k_HighestCrown);
 	EXPECT_FLOAT_EQ(huge->ringDepth, wake::k_DeepestRing);
 	// A slow fall still makes rings
-	EXPECT_GT(wake::RingDepthFor(1.0f, 1.0f), 0.0f);
-	EXPECT_FLOAT_EQ(wake::RingDepthFor(0.0f, 1.0f), 0.0f);
+	EXPECT_GT(wake::RingDepthFor({.downSpeed = 1.0f, .radius = 1.0f, .mass = 20.0f}), 0.0f);
+	EXPECT_FLOAT_EQ(wake::RingDepthFor({.downSpeed = 0.0f, .radius = 1.0f, .mass = 20.0f}), 0.0f);
+}
+
+TEST(UnderwaterWake, SplashSizeFollowsTheFourthRootOfTheEnergy)
+{
+	// From the same height (10 units, about 14 units a second): a pebble, a villager and a boulder
+	constexpr float k_Speed = 14.0f;
+	const auto pebble = wake::SplashFor({.downSpeed = k_Speed, .radius = 0.05f, .mass = 0.1f});
+	const auto villager = wake::SplashFor({.downSpeed = k_Speed, .radius = 0.3f, .mass = 70.0f});
+	const auto boulder = wake::SplashFor({.downSpeed = k_Speed, .radius = 1.5f, .mass = 3000.0f});
+	ASSERT_TRUE(pebble.has_value() && villager.has_value() && boulder.has_value());
+	EXPECT_LT(pebble->crownHeight, 0.4f);
+	EXPECT_GT(villager->crownHeight, 0.8f);
+	EXPECT_LT(villager->crownHeight, 2.5f);
+	EXPECT_GT(boulder->crownHeight, 2.5f);
+	EXPECT_LT(pebble->drops, 10u);
+	// Ten thousand times the energy makes a hole ten times as wide
+	const wake::Impact small {.downSpeed = 10.0f, .radius = 1.0f, .mass = 1.0f};
+	const wake::Impact large {.downSpeed = 10.0f, .radius = 1.0f, .mass = 10000.0f};
+	EXPECT_NEAR(wake::CavityRadius(large) / wake::CavityRadius(small), 10.0f, 1e-3f);
+	EXPECT_NEAR(wake::ImpactEnergy(small), 50.0f, 1e-3f);
 }
 
 TEST(UnderwaterWake, KernelPullsEveryWaveBackAndLongWavesGoFaster)

@@ -14,6 +14,8 @@
 #include <LNDFile.h>
 
 #include "3D/LandIslandInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
+#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -90,4 +92,16 @@ bool PhysicsGround::IsDeepWater(glm::vec2 xz) const
 {
 	const auto altitude = CellAltitudeNearest(xz);
 	return !altitude.has_value() || *altitude < k_HighestWater;
+}
+
+std::optional<float> PhysicsGround::SeaFloorAt(glm::vec2 xz) const
+{
+	if (!Locator::underwaterSystem::has_value() || !Locator::underwaterSystem::value().IsEnabled())
+	{
+		return std::nullopt;
+	}
+	const float land = HeightAt(xz);
+	const float floor = Locator::underwaterSystem::value().FloorAt(xz, land);
+	// Over dry land there is no sea bed: the land is the floor
+	return floor < land ? std::optional<float>(floor) : std::nullopt;
 }

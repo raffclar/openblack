@@ -69,8 +69,12 @@ public:
 	/// and the field's plan for the frame
 	virtual void Update(std::chrono::milliseconds frameRealTime) = 0;
 	[[nodiscard]] virtual Frame GetFrame() const = 0;
-	/// Drops the mobile objects near what the camera looks at from high over the water there, so that they splash
+	/// Throws the things near what the camera looks at (mobile objects, mobile statics, villagers and animals) high over
+	/// the water there, so that they splash
 	virtual void DropDebugThings() = 0;
+	/// Drops the things near what the camera looks at from rest, from a height over the water, in a row across the
+	/// focus, so that their splashes show side by side
+	virtual void DropDebugRow(float height) = 0;
 	/// Plays the explorers' boat film where it plays on the first land, so that the boat makes its wake
 	virtual void PlayDebugBoat() = 0;
 };

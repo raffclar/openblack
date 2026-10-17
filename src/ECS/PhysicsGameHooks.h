@@ -43,6 +43,7 @@ public:
 	void ReactToImpact(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry, const ImpactInfo& impact) override;
 	void ImpactFeedback(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry, bool hit) override;
 	bool HasSunk(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry) override;
+	bool SinkToSeaBed(systems::DynamicsSystemInterface& dynamics, PhysicsEntry& entry) override;
 	void DropSound(entt::entity object) override;
 	void OfferToCatchingCreatures(entt::entity object, PhysicsEntry& entry) override;
 	void DropCarriedResource(systems::DynamicsSystemInterface& dynamics, entt::entity villager,

@@ -242,6 +242,8 @@ public:
 	bool justSetUp {false};
 
 private:
+	/// EXPERIMENT (not for merge): the points under the sea bed touch it, as points under the land touch the land
+	void TouchSeaFloor(const Ground& ground);
 	void SetUpInertia();
 	[[nodiscard]] glm::vec3 BodyOmega() const;
 	/// The nearest face entry behind a point along a direction, at most one direction length back
@@ -268,6 +270,8 @@ private:
 	float _radius {0.0f};
 	bool _dynamic {true};
 	int _contacts {0};
+	/// EXPERIMENT (not for merge): the sea bed is under it, so it is not deleted deep under the sea
+	bool _keptOnSeaFloor {false};
 	int _restCounter {0};
 	glm::vec3 _force {0.0f};
 	glm::vec3 _torque {0.0f};

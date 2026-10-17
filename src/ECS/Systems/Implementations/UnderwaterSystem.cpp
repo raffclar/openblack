@@ -296,11 +296,17 @@ glm::mat4 UnderwaterSystem::FloatOnWaves(const glm::mat4& model) const
 	                                         : graphics::underwater::ShoreAt(_seabed.shore, _seabed.cliff, _seabed.size,
 	                                                                         _seabed.spacing, ground - _seabed.origin);
 	const auto wave = graphics::underwater::WavesAt(ground, _seconds, _waves, _rogue, shore.x, _seaLevel - shore.w);
-	const float lift = _seaLevel - graphics::underwater::k_SeaLevel + wave.height;
+	// A thing that sinks rides the waves less as it goes down, and not at all from 3 units under the surface, so it goes
+	// on down smoothly to the sea bed
+	constexpr float k_FullRideDepth = 1.0f;
+	constexpr float k_NoRideDepth = 3.0f;
+	const float ride = glm::clamp(
+	    (origin.y - graphics::underwater::k_SeaLevel + k_NoRideDepth) / (k_NoRideDepth - k_FullRideDepth), 0.0f, 1.0f);
+	const float lift = (_seaLevel - graphics::underwater::k_SeaLevel + wave.height) * ride;
 	// It tilts with the surface, a little less than the surface does
 	const glm::vec3 up {0.0f, 1.0f, 0.0f};
 	const auto normal = glm::normalize(glm::vec3(-wave.slope.x, 1.0f, -wave.slope.y));
-	const auto tilt = glm::rotation(up, glm::normalize(glm::mix(up, normal, 0.7f)));
+	const auto tilt = glm::rotation(up, glm::normalize(glm::mix(up, normal, 0.7f * ride)));
 	return glm::translate(glm::mat4(1.0f), origin + glm::vec3(0.0f, lift, 0.0f)) * glm::mat4_cast(tilt) *
 	       glm::translate(glm::mat4(1.0f), -origin) * model;
 }

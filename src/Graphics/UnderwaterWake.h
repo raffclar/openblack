@@ -107,25 +107,55 @@ struct Splash
 	float ringDepth {0.0f};
 	/// How long the splash shows, in seconds
 	float seconds {0.0f};
+	/// How much foam the rings of the splash leave, 0 to 1
+	float foam {0.0f};
 };
 
+/// A thing that goes into the water: how fast it goes down and across at the surface, how wide it is and its mass
+struct Impact
+{
+	/// Units a second, down
+	float downSpeed {0.0f};
+	/// Units a second, across the surface
+	float acrossSpeed {0.0f};
+	/// Half its width across the surface, in units
+	float radius {0.0f};
+	/// Its mass as the physics has it
+	float mass {0.0f};
+};
+
+/// Units in a metre of the real world. The physics falls at 9.81 units a second squared, so a unit is about a metre.
+/// This is a local value until the game's own scale is known.
+inline constexpr float k_UnitsPerMetre = 1.0f;
+/// Kilograms in a unit of the physics' mass. This is a local value: a barrel has a mass of about 20 to 60.
+inline constexpr float k_KilogramsPerMass = 1.0f;
 /// A thing that falls slower than this makes no splash, only rings
 inline constexpr float k_LeastSplashSpeed = 1.5f;
+/// A thing that strikes the water with less energy than this (joules) makes no splash, only rings
+inline constexpr float k_LeastSplashEnergy = 0.05f;
 /// The most drops in one splash
 inline constexpr uint32_t k_MostDrops = 80;
-/// The fewest drops in a splash
-inline constexpr uint32_t k_FewestDrops = 12;
 /// The highest crown
 inline constexpr float k_HighestCrown = 8.0f;
 /// The deepest hole that a splash makes in the field
 inline constexpr float k_DeepestRing = 1.2f;
 
-/// The splash of a thing that falls into the water at a speed (units a second, down) with a radius. No splash when it is
-/// too slow. A faster or a bigger thing throws a higher and wider crown and more drops.
-[[nodiscard]] std::optional<Splash> SplashFor(float fallSpeed, float radius);
+/// The energy (joules) with which a thing strikes the water. The speed across counts for a quarter of its energy, because
+/// a thing that skims pushes less water up than a thing that drops.
+[[nodiscard]] float ImpactEnergy(const Impact& impact);
+
+/// The radius of the hole that a thing opens in the water, in units. It grows with the fourth root of the impact energy
+/// over the weight of the water, as the holes of real impacts in water do. Ten thousand times the energy makes a hole
+/// ten times as wide.
+[[nodiscard]] float CavityRadius(const Impact& impact);
+
+/// The splash of a thing that goes into the water. No splash when it is too slow or strikes with too little energy. The
+/// crown, the drops, the rings and the foam all grow with the size of the hole. Thus a pebble makes a small
+/// splash, a villager a medium splash and a boulder or a tree a big splash.
+[[nodiscard]] std::optional<Splash> SplashFor(const Impact& impact);
 
 /// The rings that a thing makes as it falls in slowly or bobs, with no splash: the depth of the hole in the field
-[[nodiscard]] float RingDepthFor(float fallSpeed, float radius);
+[[nodiscard]] float RingDepthFor(const Impact& impact);
 
 /// The weights of the kernel that gives the waves of the field their speed: the long waves go faster than the short
 /// waves, as on deep water, which gives a wake its V shape behind a thing. The weight at the middle is 1.

@@ -18,6 +18,7 @@
 
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/Seabed.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HighDetail.h"
@@ -25,6 +26,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "Graphics/LandDetail.h"
 #include "Locator.h"
 
@@ -127,10 +129,16 @@ void ObjectDrawListSystem::Update(uint32_t turn)
 	                                .focalHeight = projection[1][1],
 	                                .aspect = projection[0][0] != 0.0f ? projection[1][1] / projection[0][0] : 1.0f,
 	                                .eye = camera.GetOrigin()};
+	// EXPERIMENT (not for merge): with the underwater view on, the blocks reach down to the sea bed, so that the things
+	// that rest on it are drawn
+	const float seabedDepth = Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled()
+	                              ? seabed::k_MaxDepth + seabed::k_EdgeDepth
+	                              : 0.0f;
 	// A block in view that starts or stops to show triangles makes the list again
 	bool changed = false;
 	for (auto& block : _blocks)
 	{
+		block.block.seabedDepth = seabedDepth;
 		block.inView = object_draw_list::BlockInView(_view->viewProjection, _view->nearPlane, block.block);
 		if (block.inView)
 		{

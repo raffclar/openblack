@@ -54,6 +54,8 @@ struct Block
 	glm::vec2 corner {0.0f};
 	uint8_t highestAltitude {0};
 	bool reflected {true};
+	/// EXPERIMENT (not for merge): how deep the sea bed goes under the block, so that things that rest on it are listed
+	float seabedDepth {0.0f};
 };
 
 /// Whether any of a block can be seen: false only when all eight corners of the box over it lie beyond the same side
