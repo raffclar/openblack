@@ -18,25 +18,20 @@
 #include <glm/geometric.hpp>
 #include <glm/matrix.hpp>
 
+#include "Common/X87Matrix.h"
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::magic;
 using namespace openblack::magic::hand_hold;
 
 namespace
 {
-/// A vector turned by an angle about an axis, right-handedly; an axis of no length only shrinks it by the angle's cosine
-glm::vec3 Turned(glm::vec3 v, glm::vec3 axis, float angle)
+/// A vector of unit length with its squares added in the game's order, kept as it is when all its parts are zero
+template <x87::SumOrder Order>
+glm::vec3 UnitInOrder(glm::vec3 v)
 {
-	const float c = std::cos(angle);
-	const float s = std::sin(angle);
-	return v * c + glm::cross(axis, v) * s + axis * (glm::dot(axis, v) * (1.0f - c));
-}
-
-/// A vector of unit length, or of none when it has none
-glm::vec3 UnitOrNone(glm::vec3 v)
-{
-	const float length = glm::length(v);
-	return length > 0.0f ? v / length : glm::vec3(0.0f);
+	return v != glm::vec3(0.0f) ? x87::Scaled<Order>(v) : v;
 }
 } // namespace
 
@@ -147,12 +142,30 @@ glm::vec2 hand_hold::CursorSway(glm::vec2 cursorLag)
 	return glm::clamp(cursorLag, -k_SwayLag, k_SwayLag) * (k_MaxSway / k_SwayLag);
 }
 
+float hand_hold::DistanceFromView(glm::vec3 camera, glm::vec3 hand, bool holding)
+{
+	// The game adds the squares in two orders: x, y, z while the hand holds a thing, and x, z, y when it holds nothing
+	return holding ? x87::Distance<x87::SumOrder::Xyz>(camera, hand) : x87::Distance<x87::SumOrder::Xzy>(camera, hand);
+}
+
 glm::vec3 hand_hold::HeldUp(glm::vec3 camera, glm::vec3 hand, float roll, float pitch)
 {
-	const auto toCamera = UnitOrNone(camera - hand);
-	const auto across = UnitOrNone(glm::vec3(-toCamera.z, 0.0f, toCamera.x));
-	const auto rolled = Turned(glm::vec3(0.0f, 1.0f, 0.0f), toCamera, -roll);
-	return Turned(rolled, across, -pitch);
+	// The line to the camera and the level line across it are made unit unless they have no length. The game turns
+	// straight up by a matrix for each turn, multiplies the two matrices and moves straight up through the product.
+	auto toCamera = camera - hand;
+	if (toCamera != glm::vec3(0.0f))
+	{
+		toCamera = x87::Scaled<x87::SumOrder::Xyz>(toCamera);
+	}
+	auto across = glm::vec3(0.0f - toCamera.z, 0.0f, toCamera.x - 0.0f);
+	if (across != glm::vec3(0.0f))
+	{
+		across = x87::Scaled<x87::SumOrder::Xzy>(across);
+	}
+	const auto turn = x87::Product(x87::TurnAbout(toCamera, roll), x87::TurnAbout(across, pitch));
+	// The products for x are added for rows 1, 2, 0, and for y and z in the rows' order
+	constexpr x87::AxisOrders k_UpOrders {{{1, 2, 0}, {0, 1, 2}, {0, 1, 2}}};
+	return x87::TransformPoint(turn, glm::vec3(0.0f, 1.0f, 0.0f), k_UpOrders);
 }
 
 glm::mat3 hand_hold::HeldBasis(const glm::mat3& levelTurn, glm::vec3 up)
@@ -176,11 +189,15 @@ glm::mat3 hand_hold::SeedTurn(const glm::mat3& basis, float yRotate, bool rightH
 		x = -x;
 		z = -z;
 	}
-	const float c = std::cos(yRotate);
-	const float s = std::sin(yRotate);
-	const auto turnedX = x * c + z * s;
-	const auto turnedZ = z * c - x * s;
-	return {UnitOrNone(turnedX), UnitOrNone(basis[1]), UnitOrNone(turnedZ)};
+	// The cosine is stored as a float and the sine stays wide
+	const float c = x87::RoundToFloat(x87::Cos(yRotate));
+	const double s = x87::Sin(yRotate);
+	const auto timesSine = [s](glm::vec3 v) { return glm::vec3(x87::Mul(s, v.x), x87::Mul(s, v.y), x87::Mul(s, v.z)); };
+	const auto turnedX = x * c + timesSine(z);
+	const auto turnedZ = z * c - timesSine(x);
+	// The game adds the squares of the first axis z, x, y and of the other two z, y, x
+	return {UnitInOrder<x87::SumOrder::Zxy>(turnedX), UnitInOrder<x87::SumOrder::Zyx>(basis[1]),
+	        UnitInOrder<x87::SumOrder::Zyx>(turnedZ)};
 }
 
 void WorldPoseFade::Change()

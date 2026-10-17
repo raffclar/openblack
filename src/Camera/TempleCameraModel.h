@@ -101,6 +101,9 @@ public:
 	[[nodiscard]] static float EdgeLeanStep(float dt, float ramp, float speed);
 	/// A pose about the main room's centre turned to face one of its doors
 	[[nodiscard]] static Pose TurnToDoor(const Pose& pose, uint32_t door);
+	/// A pose about the main room's centre turned to face one of its doors, as a room other than the main room turns its
+	/// way back: the sine of the turn is not stored as a float
+	[[nodiscard]] static Pose TurnToDoorBack(const Pose& pose, uint32_t door);
 	/// Whether a room is one of the rooms of pictures, which share one kind of camera
 	[[nodiscard]] static bool IsPictureRoom(Room room);
 	/// The view of a room of pictures at a turn about its centre, a lean between looking up, at 0, and

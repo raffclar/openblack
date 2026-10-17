@@ -131,6 +131,34 @@ inline constexpr AxisOrders k_MeshPointOrder {{{2, 1, 0}, {0, 2, 1}, {0, 2, 1}}}
 	return turn;
 }
 
+/// A turn by an angle about a unit axis, as the engine makes it from the angle's sine and cosine directly. A row vector
+/// times this matrix turns the other way to a right-handed turn by the angle. The sine and the cosine stay wide, and
+/// each product with one of them rounds to a float. The place is zero.
+[[nodiscard]] inline glm::mat4 TurnAbout(const glm::vec3& axis, float angle)
+{
+	const double cosine = Cos(angle);
+	const double sine = Sin(angle);
+	const float xx = axis.x * axis.x;
+	const float yy = axis.y * axis.y;
+	const float zz = axis.z * axis.z;
+	const float xy = axis.x * axis.y;
+	const float xz = axis.x * axis.z;
+	const float yz = axis.z * axis.y;
+	const float sx = Mul(sine, axis.x);
+	const float sy = Mul(sine, axis.y);
+	const float sz = Mul(sine, axis.z);
+	const auto diagonal = [cosine](float square) { return Mul(cosine, 1.0f - square) + square; };
+	const float sideXy = xy - Mul(cosine, xy);
+	const float sideXz = xz - Mul(cosine, xz);
+	const float sideYz = yz - Mul(cosine, yz);
+	glm::mat4 turn {1.0f};
+	turn[0] = {diagonal(xx), sideXy - sz, sideXz + sy, 0.0f};
+	turn[1] = {sideXy + sz, diagonal(yy), sideYz - sx, 0.0f};
+	turn[2] = {sideXz - sy, sideYz + sx, diagonal(zz), 0.0f};
+	turn[3] = {0.0f, 0.0f, 0.0f, 1.0f};
+	return turn;
+}
+
 /// The inverse of a matrix's turn, as the engine finds it: from the cofactors, with the determinant kept at least
 /// 1e-10 from zero
 [[nodiscard]] inline glm::mat3 InverseTurn(const glm::mat3& frame)
