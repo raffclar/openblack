@@ -1072,3 +1072,13 @@ openblack_setup_and_add_test(test_underwater_foam graphics/test_underwater_foam.
 openblack_setup_and_add_test(
   test_underwater_streams graphics/test_underwater_streams.cpp
 )
+# EXPERIMENT (not for merge): the volumetric clouds' noise, weather and light
+openblack_setup_and_add_test(
+  test_volumetric_clouds graphics/test_volumetric_clouds.cpp
+)
+# EXPERIMENT (not for merge): the one wind of the experiment
+openblack_setup_and_add_test(test_wind test_wind.cpp)
+# EXPERIMENT (not for merge): the shadows of the sun and the moon
+openblack_setup_and_add_test(test_sun_shadows graphics/test_sun_shadows.cpp)
+# EXPERIMENT (not for merge): the volumetric fog
+openblack_setup_and_add_test(test_volumetric_fog graphics/test_volumetric_fog.cpp)

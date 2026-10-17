@@ -923,12 +923,15 @@ bool underwater::InQuality(Effect effect, Quality quality)
 	case Effect::FoamVolume:
 	case Effect::SprayMist:
 	case Effect::Sediment:
+	case Effect::Fog:
 		return quality == Quality::High;
 	case Effect::Reflections:
 	case Effect::Shafts:
 	case Effect::Bubbles:
 	case Effect::Filtering:
 	case Effect::Motes:
+	case Effect::Shadows:
+	case Effect::Clouds:
 		return quality != Quality::Low;
 	default:
 		return true;

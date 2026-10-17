@@ -42,10 +42,14 @@
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/SeaRows.h"
+#include "Graphics/SunShadowView.h"
 #include "Graphics/UnderwaterStreamView.h"
 #include "Graphics/UnderwaterView.h"
 #include "Graphics/UnderwaterWakeField.h"
 #include "Graphics/VolumeGlowShell.h"
+#include "Graphics/VolumetricCloudsView.h"
+#include "Graphics/VolumetricFog.h"
+#include "Graphics/VolumetricFogView.h"
 #include "Particles/ParticleDrawFrame.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -415,6 +419,35 @@ private:
 	/// EXPERIMENT (not for merge): the foam field and the silt for one of the water's programs. The foam field goes in
 	/// sampler stage `foamStage`, and the silt's noise in `noiseStage` when it is given.
 	void BindUnderwaterDepth(const ShaderProgram& program, uint8_t foamStage, std::optional<uint8_t> noiseStage) const;
+	/// EXPERIMENT (not for merge): the volumetric clouds of this frame: their weather eases, and their uniforms are kept.
+	/// None while the clouds are off; the original game's clouds show then.
+	void BeginClouds(const DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): whether the volumetric clouds take the place of the original clouds this frame
+	[[nodiscard]] bool VolumetricCloudsShown() const { return _cloudsFrame.has_value(); }
+	/// EXPERIMENT (not for merge): the map of the clouds' shadow, the rays through the clouds and their blend with the
+	/// frames before, then the clouds over the scene: into the scene's target under the water, else over the water
+	void DrawClouds(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const;
+	/// EXPERIMENT (not for merge): the clouds in one face of the cube of the far scene, seen from its middle
+	void DrawCloudsInEnvironment(const glm::vec3& centre) const;
+	/// EXPERIMENT (not for merge): the clouds' uniforms and their textures for one program
+	void SetCloudUniforms(const ShaderProgram& program, const volumetric_clouds::CloudUniforms& uniforms) const;
+	/// EXPERIMENT (not for merge): the map of the clouds' shadow for the water, in a sampler stage; none when the
+	/// clouds are off
+	void BindCloudShadow(const ShaderProgram& program, uint8_t stage) const;
+	/// EXPERIMENT (not for merge): the shadows of the sun and the moon this frame: whether the maps of the environment
+	/// are made again, and the light. None while the shadows are off.
+	void BeginShadows(const DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): the map of the sun's visibility, the light's maps and the things' shadows over the
+	/// scene's colour
+	void DrawSunShadows(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const;
+	/// EXPERIMENT (not for merge): the map of the sun's visibility for one program, in a sampler stage; off while the
+	/// shadows are off
+	void BindSunVisibility(const ShaderProgram& program, uint8_t stage) const;
+	/// EXPERIMENT (not for merge): the volumetric fog of this frame: its layers for the time of day, the wetness and
+	/// the storm, and its light. None while the fog is off.
+	void BeginFog(const DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): the fog's grid, its sum from the eye, then the fog over the scene and the water
+	void DrawFog(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const;
 	/// EXPERIMENT (not for merge): the sea bed past the land's blocks, in the land's pass of the main view
 	void DrawFarSeabed(RenderPass landViewId) const;
 	/// EXPERIMENT (not for merge): the reef's coral and plants, in the land's pass of the main view
@@ -618,6 +651,28 @@ private:
 	mutable std::unique_ptr<UnderwaterStreamView> _streamView;
 	/// EXPERIMENT (not for merge): the underwater uniforms of this frame, while the view is under the sea
 	mutable std::optional<UnderwaterUniforms> _underwaterFrame;
+	/// EXPERIMENT (not for merge): the volumetric clouds' textures, targets and weather, made when they first show
+	mutable std::unique_ptr<VolumetricCloudsView> _clouds;
+	/// EXPERIMENT (not for merge): the clouds' uniforms of this frame, while the volumetric clouds show
+	mutable std::optional<volumetric_clouds::CloudUniforms> _cloudsFrame;
+	/// EXPERIMENT (not for merge): the shadows' maps and targets, made when they first show
+	mutable std::unique_ptr<SunShadowView> _sunShadows;
+	/// EXPERIMENT (not for merge): the shadows of this frame, while they show
+	struct SunShadowFrame
+	{
+		sun_shadows::ShadowClock::Frame clock;
+		glm::vec3 light;
+		glm::vec3 focus;
+		/// How dark a full shadow of a thing makes the scene, 0 to 1
+		float darkness;
+	};
+	mutable std::optional<SunShadowFrame> _shadowsFrame;
+	/// EXPERIMENT (not for merge): whether the blend of the maps of the sun's visibility has been drawn once
+	mutable bool _sunVisibilityReady {false};
+	/// EXPERIMENT (not for merge): the fog's grids and its state, made when it first shows
+	mutable std::unique_ptr<VolumetricFogView> _fog;
+	/// EXPERIMENT (not for merge): the fog's uniforms of this frame, while the fog shows
+	mutable std::optional<volumetric_fog::FogUniforms> _fogFrame;
 	/// EXPERIMENT (not for merge): whether the scene's views are bound to the underwater target
 	mutable bool _underwaterBound {false};
 	/// The colours the sky's dome is drawn in this frame

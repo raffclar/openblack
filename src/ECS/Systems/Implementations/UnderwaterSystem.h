@@ -35,6 +35,9 @@ public:
 	[[nodiscard]] graphics::underwater::Quality GetQuality() const override { return _quality; }
 	void CycleQuality() override;
 	void CycleEffectOff() override;
+	void CycleEffectOffBack() override;
+	[[nodiscard]] uint8_t GetCloudCover() const override { return _cloudCover; }
+	void CycleCloudCover() override;
 	void StartTour(graphics::underwater::Tour tour) override
 	{
 		_tour = tour;
@@ -100,6 +103,7 @@ private:
 	std::optional<float> _tourSeconds;
 	graphics::underwater::Tour _tour {graphics::underwater::Tour::Shore};
 	graphics::underwater::Effect _effectOff {graphics::underwater::Effect::None};
+	uint8_t _cloudCover {0};
 	seabed::Seabed _seabed;
 	uint32_t _revision {0};
 	/// The land the sea bed was made for: its height map, as each land makes its own

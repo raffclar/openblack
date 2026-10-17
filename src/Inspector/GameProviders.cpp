@@ -203,6 +203,7 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WaterWakeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WindSystemInterface.h"
 #include "EditProviders.h"
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
@@ -295,6 +296,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"underwaterSystem", "land.underwater"},
     LocatorCoverage {"waterWakeSystem", "land.wake"},
     LocatorCoverage {"streamWaterSystem", "land.streams"},
+    LocatorCoverage {"windSystem", "land.wind"},
     LocatorCoverage {"creatureAnimationSystem", "creatures.status"},
     LocatorCoverage {"creatureMindSystem", "creature.desires"},
     LocatorCoverage {"creatureLocomotionSystem", "creatures.status"},
@@ -762,6 +764,22 @@ std::unique_ptr<ProviderInterface> LandProvider()
 			                  }
 			                  return feet;
 		                  }()}};
+	    }));
+	provider->Add(
+	    Query("wind",
+	          "EXPERIMENT (not for merge): the one wind of the experiment: the way it blows (radians, from +x towards "
+	          "+z), its mean speed, how stormy it is, its clock, and its velocity with the gusts at a point (params "
+	          "position [x, z])",
+	          {{.name = "position", .type = "point", .description = "[x, z] or [x, y, z], optional", .required = false}}),
+	    Serve<Locator::windSystem>("the wind", [](const ecs::systems::WindSystemInterface& wind, const QueryContext& c) {
+		    const auto& now = wind.GetWind();
+		    Json result {{"angle", now.angle}, {"speed", now.speed}, {"storm", now.storm}, {"seconds", wind.GetSeconds()}};
+		    if (const auto position = PositionParam(c.params); position.has_value())
+		    {
+			    const auto velocity = wind.VelocityAt({position->x, position->z});
+			    result["velocity"] = {velocity.x, velocity.y};
+		    }
+		    return result;
 	    }));
 	provider->Add(
 	    Query("streams",

@@ -978,6 +978,18 @@
   "query": "land.underwater"
  },
  {
+  "description": "EXPERIMENT (not for merge): the one wind of the experiment: the way it blows (radians, from +x towards +z), its mean speed, how stormy it is, its clock, and its velocity with the gusts at a point (params position [x, z])",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "[x, z] or [x, y, z], optional",
+    "name": "position",
+    "type": "point"
+   }
+  ],
+  "query": "land.wind"
+ },
+ {
   "description": "EXPERIMENT (not for merge): the water in the rivers: how many river stretches and mouths, the box they lie in, the flow map's revision, the leaves that drift, and the water at a point (params position [x, z]): its surface, depth and flow",
   "kind": "object",
   "parameters": [

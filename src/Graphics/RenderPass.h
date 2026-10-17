@@ -20,6 +20,17 @@ namespace openblack::graphics
 
 enum class RenderPass : uint8_t
 {
+	/// EXPERIMENT (not for merge): the map of the volumetric clouds' shadow round the eye, before the land's shade reads it
+	CloudShadow,
+	/// EXPERIMENT (not for merge): the map of the sun's visibility over the land, made again as the light moves, and its
+	/// blend from the old map to the new
+	SunVisibility,
+	SunVisibilityBlend,
+	/// EXPERIMENT (not for merge): the maps of the environment's shadows seen from the light, two cascades made again
+	/// about every 3 seconds, and the map of the moving things' shadows, made each frame
+	SunShadowEnvironment0,
+	SunShadowEnvironment1,
+	SunShadowMoving,
 	/// The clouds' shadows over the land this frame, and the lights at night
 	LandShade,
 	/// The land's luminosity this frame: as it was laid, shaded by the clouds and lit by the lights
@@ -48,6 +59,16 @@ enum class RenderPass : uint8_t
 	/// it is clear over the sea, so what is under the sea's surface behind it is hidden
 	Land,
 	Main,
+	/// EXPERIMENT (not for merge): the rays through the volumetric clouds at half the screen's size, after the scene's
+	/// depth is known, and their blend with the frames before
+	CloudMarch,
+	CloudResolve,
+	/// EXPERIMENT (not for merge): the shadows of the things from the light's maps, over the scene's colour
+	ShadowApply,
+	/// EXPERIMENT (not for merge): the volumetric fog's grid of the light that each cell scatters, and its sum from the
+	/// eye
+	FogScatter,
+	FogIntegrate,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
 	/// EXPERIMENT (not for merge): one step of the foam that builds up on the water and decays
@@ -90,6 +111,12 @@ enum class RenderPass : uint8_t
 };
 
 static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_count)> k_RenderPassNames {
+    "Cloud Shadow Pass",           //
+    "Sun Visibility Pass",         //
+    "Sun Visibility Blend Pass",   //
+    "Sun Shadow Environment 0",    //
+    "Sun Shadow Environment 1",    //
+    "Sun Shadow Moving Pass",      //
     "Land Shade Pass",             //
     "Land Luminosity Pass",        //
     "Land Colour Pass",            //
@@ -105,6 +132,11 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Sky Pass",                    //
     "Land Pass",                   //
     "Main Pass",                   //
+    "Cloud March Pass",            //
+    "Cloud Resolve Pass",          //
+    "Shadow Apply Pass",           //
+    "Fog Scatter Pass",            //
+    "Fog Integrate Pass",          //
     "Translucent Pass",            //
     "Underwater Foam Pass",        //
     "Underwater Cube Sky Pass",    //

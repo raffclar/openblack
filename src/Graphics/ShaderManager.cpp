@@ -150,6 +150,28 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_underwater_tap
 #include "ShaderIncluder.h"
+#define SHADER_NAME fs_clouds_shadow
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_clouds_march
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_clouds_resolve
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_clouds_composite
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_clouds_cube
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_sun_visibility
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_sun_visibility_blend
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_shadow_apply
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_fog_scatter
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_fog_integrate
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_fog_apply
+#include "ShaderIncluder.h"
 
 #define SHADER_NAME vs_sprite
 #include "ShaderIncluder.h"
@@ -260,7 +282,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 94> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 105> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -307,7 +329,18 @@ const std::array<bgfx::EmbeddedShader, 94> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_underwater_drift),
     BGFX_EMBEDDED_SHADER(fs_underwater_drift),
     BGFX_EMBEDDED_SHADER(vs_underwater_tap),
-    BGFX_EMBEDDED_SHADER(fs_underwater_tap), //
+    BGFX_EMBEDDED_SHADER(fs_underwater_tap),
+    BGFX_EMBEDDED_SHADER(fs_clouds_shadow),
+    BGFX_EMBEDDED_SHADER(fs_clouds_march),
+    BGFX_EMBEDDED_SHADER(fs_clouds_resolve),
+    BGFX_EMBEDDED_SHADER(fs_clouds_composite),
+    BGFX_EMBEDDED_SHADER(fs_clouds_cube),
+    BGFX_EMBEDDED_SHADER(fs_sun_visibility),
+    BGFX_EMBEDDED_SHADER(fs_sun_visibility_blend),
+    BGFX_EMBEDDED_SHADER(fs_shadow_apply),
+    BGFX_EMBEDDED_SHADER(fs_fog_scatter),
+    BGFX_EMBEDDED_SHADER(fs_fog_integrate),
+    BGFX_EMBEDDED_SHADER(fs_fog_apply), //
     BGFX_EMBEDDED_SHADER(vs_sprite),
     BGFX_EMBEDDED_SHADER(fs_sprite), //
     BGFX_EMBEDDED_SHADER(vs_footprint_instanced),
@@ -390,6 +423,17 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"UnderwaterStream", "vs_water", "fs_underwater_stream"},
     ShaderDefinition {"UnderwaterDrift", "vs_underwater_drift", "fs_underwater_drift"},
     ShaderDefinition {"UnderwaterTap", "vs_underwater_tap", "fs_underwater_tap"},
+    ShaderDefinition {"CloudShadow", "vs_water", "fs_clouds_shadow"},
+    ShaderDefinition {"CloudMarch", "vs_water", "fs_clouds_march"},
+    ShaderDefinition {"CloudResolve", "vs_water", "fs_clouds_resolve"},
+    ShaderDefinition {"CloudComposite", "vs_water", "fs_clouds_composite"},
+    ShaderDefinition {"CloudCube", "vs_water", "fs_clouds_cube"},
+    ShaderDefinition {"SunVisibility", "vs_water", "fs_sun_visibility"},
+    ShaderDefinition {"SunVisibilityBlend", "vs_water", "fs_sun_visibility_blend"},
+    ShaderDefinition {"ShadowApply", "vs_water", "fs_shadow_apply"},
+    ShaderDefinition {"FogScatter", "vs_water", "fs_fog_scatter"},
+    ShaderDefinition {"FogIntegrate", "vs_water", "fs_fog_integrate"},
+    ShaderDefinition {"FogApply", "vs_water", "fs_fog_apply"},
     ShaderDefinition {"Sprite", "vs_sprite", "fs_sprite"},
     ShaderDefinition {"FootprintInstanced", "vs_footprint_paint_instanced", "fs_footprint"},
     ShaderDefinition {"ParticleInstanced", "vs_particle_instanced", "fs_particle"},

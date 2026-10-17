@@ -203,11 +203,18 @@ enum class Effect : uint8_t
 	Streams,
 	/// The splash where the hand taps the water (see underwater::tap). When it is off, the tap makes the original ring.
 	TapSplash,
+	/// The volumetric clouds in place of the original game's clouds (the original clouds show when it is off)
+	Clouds,
+	/// The shadows of the sun and the moon: the hills' shadows over the land and the water, and the things' shadows
+	Shadows,
+	/// The volumetric fog: the haze, the ground fog at dawn, the mist and the shafts of light
+	Fog,
 	_Count
 };
 
 /// How much of the experiment's water a machine draws. The lower tiers drop the costliest parts that have a cheaper
-/// stand-in (the sky for the far cube, flat foam for the foam's thickness), so no part of the water goes away.
+/// stand-in (the sky for the far cube, flat foam for the foam's thickness, the original haze for the fog, the
+/// original clouds and shadows for the new ones), so no part of the scene goes away.
 enum class Quality : uint8_t
 {
 	High,

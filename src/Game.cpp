@@ -235,6 +235,7 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WaterWakeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WindSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/TreeRoots.h"
@@ -883,15 +884,26 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			Locator::time::value().SetPaused(!IsPaused());
 			break;
 		// EXPERIMENT (not for merge): F9 puts the camera under the sea by the shore of the first land; shift and F9
-		// turn the experiment's water on or off; control and F9 turn off its effects one at a time, to measure them; alt
-		// and F9 step through its quality tiers
+		// turn the experiment's water on or off; control and F9 turn off its effects one at a time, to measure them;
+		// control, alt and F9 turn them off the other way round; alt and F9 step through its quality tiers; shift,
+		// alt and F9 change the cover of the volumetric clouds
 		case SDLK_F9:
 			if (Locator::underwaterSystem::has_value())
 			{
 				auto& underwater = Locator::underwaterSystem::value();
-				if ((event.key.keysym.mod & KMOD_SHIFT) != 0)
+				if ((event.key.keysym.mod & KMOD_SHIFT) != 0 && (event.key.keysym.mod & KMOD_ALT) != 0)
+				{
+					// The next debug choice of the volumetric clouds' cover
+					underwater.CycleCloudCover();
+				}
+				else if ((event.key.keysym.mod & KMOD_SHIFT) != 0)
 				{
 					underwater.SetEnabled(!underwater.IsEnabled());
+				}
+				else if ((event.key.keysym.mod & KMOD_CTRL) != 0 && (event.key.keysym.mod & KMOD_ALT) != 0)
+				{
+					// Back through the effects: the newest effects are a step or two from none
+					underwater.CycleEffectOffBack();
 				}
 				else if ((event.key.keysym.mod & KMOD_CTRL) != 0)
 				{
@@ -2427,6 +2439,11 @@ bool Game::Update() noexcept
 	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+	// EXPERIMENT (not for merge): the one wind of the experiment follows the weather at the camera
+	if (Locator::windSystem::has_value())
+	{
+		Locator::windSystem::value().Update(clock.GetFrameRealTime());
+	}
 	// EXPERIMENT (not for merge): the sea bed of the open land, for the view under the sea
 	if (Locator::underwaterSystem::has_value())
 	{

@@ -119,6 +119,7 @@ class SnowSystemInterface;
 class SnowfallSystemInterface;
 class WaterRingSystemInterface;
 class UnderwaterSystemInterface;
+class WindSystemInterface;
 class WaterWakeSystemInterface;
 class StreamWaterSystemInterface;
 class CreatureAnimationSystemInterface;
@@ -284,6 +285,8 @@ struct Locator
 	using waterRingSystem = entt::locator<ecs::systems::WaterRingSystemInterface>;
 	/// EXPERIMENT (not for merge): the view under the sea
 	using underwaterSystem = entt::locator<ecs::systems::UnderwaterSystemInterface>;
+	/// EXPERIMENT (not for merge): the one wind of the experiment
+	using windSystem = entt::locator<ecs::systems::WindSystemInterface>;
 	using waterWakeSystem = entt::locator<ecs::systems::WaterWakeSystemInterface>;
 	using streamWaterSystem = entt::locator<ecs::systems::StreamWaterSystemInterface>;
 	using creatureAnimationSystem = entt::locator<ecs::systems::CreatureAnimationSystemInterface>;
