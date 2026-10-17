@@ -256,6 +256,12 @@ public:
 
 	/// The height of the land at a point of the ground
 	[[nodiscard]] virtual float LandHeight(glm::vec2 xz) const = 0;
+	/// The height of the land at a map position, x and z in 16.16 fixed point (a 10 m cell to 0x10000)
+	[[nodiscard]] virtual float LandHeightAtMap(int32_t x, int32_t z) const
+	{
+		constexpr float k_MetresPerFixed = 10.0f / 65536.0f;
+		return LandHeight({static_cast<float>(x) * k_MetresPerFixed, static_cast<float>(z) * k_MetresPerFixed});
+	}
 	/// A player's colour as 0xRRGGBB
 	[[nodiscard]] virtual uint32_t PlayerColour(int player) const = 0;
 	/// The camera's right and up, for rules that line sprites up with what the camera sees

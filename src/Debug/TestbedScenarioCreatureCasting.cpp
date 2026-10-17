@@ -83,6 +83,24 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	    .commands = {Know(MagicType::CreatureSpellItchy), CastAtCreature(MagicType::CreatureSpellItchy, 1, 0.5f)},
 	});
 
+	// The particles of two creature spells: the hearts of compassion and the steam of a freeze
+	all.push_back({
+	    .id = "miracles.creature_spell_hearts_and_steam",
+	    .name = "Creature casting: the hearts of compassion and the steam of a freeze",
+	    .facet = Facet::Miracles,
+	    .description = "A tiger that knows the compassion and the freeze spells casts compassion at a cow sixty metres "
+	                   "away, then freeze at the same cow.",
+	    .expected = "Wisps fly from the tiger to the cow. Hearts come from points near the bones of the cow, four a "
+	                "second, and fly out in all directions. After the freeze, steam comes from the feet of the cow and "
+	                "stays above the land. The first atom of each spell stays at the place where it started.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 70.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "caster"), Other({0.0f, 60.0f}, "target")},
+	    .commands = {Know(MagicType::CreatureSpellCompassion), Know(MagicType::CreatureSpellFreeze),
+	                 CastAtCreature(MagicType::CreatureSpellCompassion, 1, 0.5f),
+	                 CastAtCreature(MagicType::CreatureSpellFreeze, 1, 12.0f)},
+	});
+
 	all.push_back({
 	    .id = "miracles.creature_casts_amusing_spell",
 	    .name = "Creature casting: a spell to amuse another creature",

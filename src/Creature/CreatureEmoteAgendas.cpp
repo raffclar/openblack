@@ -267,9 +267,9 @@ std::vector<Step> creature_emote::SleepAtClearPlace(glm::vec2 place, float radiu
 	return agenda;
 }
 
-std::vector<Step> creature_emote::SitDownBy(uint32_t thing, glm::vec2 place, float radius, const Random& random)
+std::vector<Step> creature_emote::SitDownBy(uint32_t thing, glm::vec2 place, float radius, float extraSeconds)
 {
-	const float sit = k_SitSeconds + FloatRandom(random, k_SitExtraSeconds);
+	const float sit = extraSeconds + k_SitSeconds;
 	return {
 	    {.kind = Step::Kind::Move,
 	     .movement = {.kind = Movement::Kind::ToPoint, .point = place, .maxDistance = radius},

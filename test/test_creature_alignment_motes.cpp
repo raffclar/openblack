@@ -130,7 +130,9 @@ TEST(CreatureAlignmentMotes, SmokeGrowsAndShrinksOverTwoSeconds)
 	puff.velocity = glm::vec3(0.0f, 2.0f, 0.0f);
 	EXPECT_TRUE(physics::turn::AdvanceDustPuff(puff, 0.5f));
 	EXPECT_FLOAT_EQ(puff.position.y, 1.0f);
-	EXPECT_FALSE(physics::turn::AdvanceDustPuff(puff, 0.5f));
+	// At an age of exactly two seconds it stays, and it goes only after that
+	EXPECT_TRUE(physics::turn::AdvanceDustPuff(puff, 0.5f));
+	EXPECT_FALSE(physics::turn::AdvanceDustPuff(puff, 0.0625f));
 }
 
 TEST(CreatureAlignmentMotes, AMotePulsesWhileItFadesAndPlaysItsFramesQuickly)

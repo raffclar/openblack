@@ -23,7 +23,6 @@ using namespace openblack::particles;
 
 namespace
 {
-constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 /// How sharply a wisp narrows above its full width
 constexpr float k_TaperSteepness = 3.3333333f;
 /// A wisp's opacity comes up from the least by the rise over this many seconds
@@ -100,14 +99,22 @@ glm::vec3 maths::ItchOrbit(glm::vec3 rightEye, glm::vec3 leftEye, float seconds,
 {
 	const auto centre = (rightEye + leftEye) * 0.5f;
 	const auto out = (rightEye - centre) * k_ItchReach;
-	glm::vec3 across(out.z, 0.0f, -out.x);
-	const float acrossLength = glm::length(across);
-	if (acrossLength > 0.0f)
+	glm::vec3 across(out.z - 0.0f, 0.0f, 0.0f - out.x);
+	// The lengths add the squares in the order of the game: y, then z, then x
+	const float outLength = std::sqrt((out.y * out.y + out.z * out.z) + out.x * out.x);
+	if (across.x != 0.0f || across.y != 0.0f || across.z != 0.0f)
 	{
-		across *= glm::length(out) / acrossLength;
+		const float acrossLength = std::sqrt((across.z * across.z + across.y * across.y) + across.x * across.x);
+		across *= outLength / acrossLength;
 	}
-	const float angle = std::fmod(seconds * orbitSpeed, k_TwoPi);
-	return centre + out * std::cos(angle) + across * std::sin(angle);
+	// The angle wraps at the full turn of double precision. The sine uses the angle as it is. The cosine uses the angle
+	// cut to a float, and the result is cut to a float too.
+	const double angle = std::fmod(static_cast<double>(seconds * orbitSpeed), 2.0 * std::numbers::pi);
+	const auto sine = std::sin(angle);
+	const auto cosine = static_cast<float>(std::cos(static_cast<double>(static_cast<float>(angle))));
+	const glm::vec3 acrossPart(static_cast<float>(across.x * sine), static_cast<float>(across.y * sine),
+	                           static_cast<float>(across.z * sine));
+	return (centre + out * cosine) + acrossPart;
 }
 
 bool maths::SwungTooFar(glm::vec2 began, glm::vec2 now, float limit)

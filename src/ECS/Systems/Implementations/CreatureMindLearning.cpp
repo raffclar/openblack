@@ -38,6 +38,7 @@
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureActionHistory.h"
 #include "Creature/CreatureActivity.h"
@@ -47,6 +48,7 @@
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureEmoteAgendas.h"
 #include "Creature/CreatureExplorationMap.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureGiving.h"
@@ -68,6 +70,7 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureSacrifice.h"
+#include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Creature/CreatureSpellMind.h"
 #include "Creature/CreatureTownCompassion.h"
@@ -1606,6 +1609,26 @@ std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Targe
 	return creature_planner::ChooseUsed(candidates, distanceWeight, goal);
 }
 
+/// Draws the lengths of a look and of a sit from the random numbers of the game, as the agenda is made. A sit that has
+/// no place to sit draws nothing.
+void DrawAgendaLengths(const creature_plan_actions::Executor& executor, creature_plan_actions::Situation& situation)
+{
+	if (!Locator::gameRandom::has_value())
+	{
+		return;
+	}
+	auto& random = Locator::gameRandom::value();
+	if (executor.build == creature_plan_actions::Build::LookButDontApproach)
+	{
+		situation.lookExtraSeconds = random.GameFloatRand(creature_mind::k_LookButDontApproachExtraSeconds);
+	}
+	if (executor.build == creature_plan_actions::Build::SitDown &&
+	    (situation.controlledByScript || situation.clearArea.has_value()))
+	{
+		situation.sitExtraSeconds = random.GameFloatRand(creature_emote::k_SitExtraSeconds);
+	}
+}
+
 } // namespace
 
 bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, const creature_planner::Plan& plan,
@@ -1797,8 +1820,7 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 		situated.clearArea = *clear;
 	}
 	SituateExploration(creature, *executor, situated);
-	if (executor->build == creature_plan_actions::Build::LookButDontApproach ||
-	    executor->build == creature_plan_actions::Build::SmileAt)
+	if (executor->build == creature_plan_actions::Build::SmileAt)
 	{
 		situated.chance = Chance();
 	}
@@ -1815,6 +1837,7 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	{
 		situated.drink = DrinkPlaceOf(creature);
 	}
+	DrawAgendaLengths(*executor, situated);
 	auto agenda = creature_plan_actions::Agenda(
 	    *executor, object, point, situated, [this](uint32_t range) { return Random(range); }, cast);
 	if (!agenda.has_value())
@@ -3247,6 +3270,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				SituateFriend(creature, *executor, *plan.object, situation);
 			}
+			DrawAgendaLengths(*executor, situation);
 			const auto actionIndex = creature_mind_tables::FindAction(*tables, plan.action);
 			const auto cast = creature_plan_actions::IsCast(*executor) && actionIndex.has_value()
 			                      ? CastInfoFor(creature, *actionIndex, plan.object)
@@ -4279,7 +4303,11 @@ void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindStat
 		for (const auto action : copyActions)
 		{
 			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
-			if (executor == nullptr || !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs))
+			// The creature copies a miracle only when it may cast that miracle now, as in its own plans
+			if (executor == nullptr ||
+			    (creature_plan_actions::IsCast(*executor) &&
+			     !MayCast(creature, mind, action, IsPowerUpCast(tables->actions.at(action).name))) ||
+			    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs))
 			{
 				continue;
 			}
