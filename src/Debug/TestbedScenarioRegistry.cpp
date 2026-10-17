@@ -6644,6 +6644,19 @@ void AddParticles(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "particles.tumble",
+	    .name = "Tumbling streamers and wood",
+	    .facet = Facet::Particles,
+	    .description = "Effects whose particles tumble as they move: the paper streamers of the ticker tape and the planks of "
+	                   "wood that a store gives out. Each turns about its forward axis when it moves more east to west, else "
+	                   "about its east to west axis.",
+	    .expected = "Streamers fall from a disk and planks fly out, each turning as it goes, faster the faster it moves.",
+	    .framing = {.shot = Shot::Overview, .include = {{-12.0f, 0.0f}, {12.0f, 0.0f}}, .distance = 0.25f},
+	    .particles = {{.file = "SF_TickerTape", .offset = {-8.0f, 0.0f}, .height = 15.0f, .restartSeconds = 6.0f},
+	                  {.file = "SF_Wood", .offset = {8.0f, 0.0f}, .height = 2.0f, .magnitude = 1.0f, .restartSeconds = 4.0f}},
+	});
+
+	all.push_back({
 	    .id = "particles.light_maps",
 	    .name = "Light on the land",
 	    .facet = Facet::Particles,
