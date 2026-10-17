@@ -26,6 +26,8 @@ public:
 
 	/// At value, still
 	void Reset(float value);
+	/// At value, moving at speed: it continues a value that a different zoomer or camera moved
+	void Carry(float value, float speed);
 	/// Eases to destination over seconds, arriving at speed. Under a millisecond puts it there.
 	void SetDestination(float destination, float seconds, float speed = 0.0f);
 	/// Moves the value on along its path
@@ -39,6 +41,8 @@ public:
 	[[nodiscard]] float GetDestination() const { return _destination; }
 	/// How long its move to the destination takes
 	[[nodiscard]] float GetDuration() const { return _duration; }
+	/// How long it has moved since it was last sent to a destination
+	[[nodiscard]] float GetElapsed() const { return _elapsed; }
 	/// Its time is up: it is at its destination, or was put somewhere and not sent on
 	[[nodiscard]] bool HasArrived() const { return _elapsed == _duration; }
 
@@ -64,9 +68,11 @@ struct Zoomer3
 
 	explicit Zoomer3(glm::vec3 point = glm::vec3(0.0f));
 	void Reset(glm::vec3 point);
+	void Carry(glm::vec3 point, glm::vec3 speed);
 	void SetDestination(glm::vec3 destination, float seconds);
 	void Update(float deltaSeconds);
 	[[nodiscard]] glm::vec3 GetValue() const;
+	[[nodiscard]] glm::vec3 GetSpeed() const;
 };
 
 } // namespace openblack

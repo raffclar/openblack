@@ -11,6 +11,7 @@
 
 #include <functional>
 #include <numbers>
+#include <optional>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -126,6 +127,8 @@ public:
 	[[nodiscard]] float GetScale() const { return _scale; }
 	[[nodiscard]] float GetPitch() const { return _pitch; }
 	[[nodiscard]] float GetHeadingOffset() const { return _headingOffset; }
+	/// The next frame puts its heading and where it looks where they should be at once, as when the view comes back
+	void Resnap() { _snap = true; }
 
 private:
 	float _headingOffset {k_StartHeadingOffset};
@@ -135,6 +138,60 @@ private:
 	Zoomer3 _focus;
 	/// The first frame puts it where it should be at once
 	bool _snap {true};
+};
+
+/// The camera itself goes to the view on curves, sent again each frame. Each curve takes 5 seconds when the camera's
+/// model has just taken control. This time falls evenly to 2 seconds over the first 2 seconds of the model's time, and
+/// then stays at 2 seconds.
+constexpr float k_BlendFirstScale = 2.0f;
+constexpr float k_BlendLastScale = 0.8f;
+constexpr float k_BlendFallSeconds = 2.0f;
+constexpr float k_BlendSecondsPerScale = 2.5f;
+/// The seconds of the camera's curve to the view, from the seconds since the camera's model took control
+[[nodiscard]] float BlendSeconds(float modelSeconds);
+
+/// A flight to the view first goes to a point on the way. The camera starts to that point on a curve of 0.9 of the
+/// flight's 1.5 seconds. After more than half the flight on that curve, it goes to the view on a curve of 1.5 seconds,
+/// and the view's own curves then continue from there.
+constexpr float k_FlightSeconds = 1.5f;
+constexpr float k_WayShare = 0.9f;
+constexpr float k_OnWayShare = 0.5f;
+/// The point on the way is half way between the camera and where it flies to. It is raised by a share of the distance
+/// across the land between them (none at the start of the view, a tenth when the view comes back), and stays at least
+/// this high above the land.
+constexpr float k_StartWayRise = 0.0f;
+constexpr float k_ReturnWayRise = 0.1f;
+constexpr float k_WayAboveLand = 10.0f;
+[[nodiscard]] glm::vec3 WayPoint(const glm::vec3& from, const glm::vec3& to, float rise, const GroundHeight& ground);
+
+/// The camera itself, chasing the view the fight wants: where it is and how fast it moves, as it flies to the view and then
+/// follows it
+class Chase
+{
+public:
+	/// Starts from where the camera is and how fast it moves, and flies to the view through the point on the way
+	void Fly(const View& from, const View& speed, const View& to, const glm::vec3& way);
+	/// Moves on for a step of the camera. The fight's view is sent again each frame after the flight, on a curve of the
+	/// blend's seconds. With no view, the camera continues along its curves.
+	View Step(const std::optional<View>& wanted, float modelSeconds, float seconds);
+
+	[[nodiscard]] View GetValue() const { return {.origin = _origin.GetValue(), .focus = _focus.GetValue()}; }
+	[[nodiscard]] View GetSpeed() const { return {.origin = _origin.GetSpeed(), .focus = _focus.GetSpeed()}; }
+	/// Where the camera was when the last step started
+	[[nodiscard]] const View& GetHeld() const { return _held; }
+	[[nodiscard]] bool Flying() const { return _flight.has_value(); }
+
+private:
+	struct Flight
+	{
+		View to;
+		glm::vec3 way;
+		bool wayGiven {false};
+	};
+	Zoomer3 _origin;
+	Zoomer3 _focus;
+	View _held {};
+	std::optional<Flight> _flight;
 };
 
 } // namespace openblack::fight_view

@@ -40,6 +40,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
+#include "Camera/CreatureInteractCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
 #include "Common/GameRandom.h"
@@ -1105,7 +1106,13 @@ void CreatureFightSystem::UpdateView(float seconds)
 		auto* model = dynamic_cast<FightCameraModel*>(&camera.GetModel());
 		if (model == nullptr)
 		{
-			_view.reset();
+			// While the hand holds a creature, the fight view waits under the camera of the hand. It does not count its
+			// time, and it continues when the hand lets go.
+			const auto* held = dynamic_cast<const CreatureInteractCameraModel*>(&camera.GetModel());
+			if (held == nullptr || dynamic_cast<const FightCameraModel*>(held->GetPlayerModel()) == nullptr)
+			{
+				_view.reset();
+			}
 			return;
 		}
 		_lookSeconds = 0.0f;
@@ -1235,9 +1242,13 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 	const auto normal = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetNormalAt(arena.centre)
 	                                                        : glm::vec3(0.0f, 1.0f, 0.0f);
 	const auto start = fight_view::Start(arena.centre, arena.radius, ground, GroundAt, normal);
-	auto model = std::make_unique<FightCameraModel>(nullptr, start);
+	const auto way = fight_view::WayPoint(camera.GetOrigin(), start.origin, fight_view::k_StartWayRise, GroundAt);
+	auto model = std::make_unique<FightCameraModel>(nullptr, start, way);
 	auto* view = model.get();
+	// The fight view is a part of the player's camera, so the count of the camera's time continues
+	const auto modelSeconds = camera.GetModelSeconds();
 	view->SetPlayerModel(camera.SetModel(std::move(model)));
+	camera.SetModelSeconds(modelSeconds);
 	_view = Watched {.first = first, .second = second, .lingerSeconds = std::nullopt};
 	_lookSeconds = 0.0f;
 }
@@ -1258,7 +1269,18 @@ void CreatureFightSystem::EndView(std::string_view why)
 	{
 		if (auto player = model->TakePlayerModel())
 		{
+			const auto modelSeconds = camera.GetModelSeconds();
 			camera.SetModel(std::move(player));
+			camera.SetModelSeconds(modelSeconds);
+		}
+		return;
+	}
+	// A view that waits under the camera of the hand stops there. The hand then gives back the player's own camera
+	if (auto* held = dynamic_cast<CreatureInteractCameraModel*>(&camera.GetModel()))
+	{
+		if (auto* waiting = dynamic_cast<FightCameraModel*>(held->GetPlayerModel()))
+		{
+			held->SetPlayerModel(waiting->TakePlayerModel());
 		}
 	}
 }
