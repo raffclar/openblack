@@ -191,8 +191,7 @@ std::optional<glm::vec2> camera_track::WalkTurn(Walk& walk, const edt::EDTTrack&
 		return std::nullopt;
 	}
 	walk.current = std::min(walk.current + walk.step, static_cast<float>(duration));
-	// On the land's grid
-	return glm::vec2(map_coords::Quantise(point.x), map_coords::Quantise(point.z));
+	return glm::vec2(point.x, point.z);
 }
 
 float camera_track::WayLength(const edt::EDTWay& way)

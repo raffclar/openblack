@@ -216,6 +216,7 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/ThingOnScreen.h"
 #include "ECS/TownDesire.h"
 #include "ECS/TownPlanning.h"
@@ -2230,8 +2231,11 @@ void SetPosition() // 024 SET_POSITION
 
 	if (objId != 0)
 	{
+		// The thing goes to the map position of the point, on the land there
 		const auto& island = Locator::terrainSystem::value();
-		position.y = island.GetHeightAt(glm::vec2(position.x, position.z));
+		const auto place = map_coords::FromMetres({position.x, position.z});
+		const auto placed = map_coords::ToMetres(place);
+		position = {placed.x, island.GetHeightAt(placed), placed.y};
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto object = static_cast<entt::entity>(objId);
 		if (IsDirectableVillager(object))
@@ -2244,6 +2248,7 @@ void SetPosition() // 024 SET_POSITION
 			}
 			// Its walk takes up the new place, and one under the script's control stops there and waits for it
 			ecs::walker_placement::Place(registry, object, position);
+			ecs::thing_map_place::Keep(registry, object, place);
 			if (registry.AllOf<ecs::components::ScriptControlled>(object))
 			{
 				ecs::walker_placement::Stop(registry, object);
@@ -2261,13 +2266,10 @@ void SetPosition() // 024 SET_POSITION
 				return;
 			}
 			Locator::creatureLocomotionSystem::value().PlaceWithoutWalking(object, position);
+			ecs::thing_map_place::Keep(registry, object, place);
 			return;
 		}
-		auto* transform = registry.TryGet<Transform>(object);
-		if (transform != nullptr)
-		{
-			transform->position = position;
-		}
+		ecs::thing_map_place::Put(registry, object, place, position.y);
 	}
 }
 

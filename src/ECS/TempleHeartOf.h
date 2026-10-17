@@ -30,6 +30,17 @@ namespace openblack::ecs::temple_heart
 	return found;
 }
 
+/// The thing that stands in the map's cells for a thing: the heart for a temple that has a heart, else the thing
+[[nodiscard]] inline entt::entity MapThingOf(const Registry& registry, entt::entity thing)
+{
+	if (!registry.Valid(thing) || !registry.AllOf<components::Temple>(thing))
+	{
+		return thing;
+	}
+	const auto heart = Of(registry, thing);
+	return heart != entt::null ? heart : thing;
+}
+
 /// The thing that a creature acts on for a thing that it believes in: the temple for the temple's heart, else the thing
 [[nodiscard]] inline entt::entity Acted(const Registry& registry, entt::entity thing)
 {

@@ -23,6 +23,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Registry.h"
+#include "ECS/ThingMapPlace.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -52,7 +53,7 @@ void WalkPathSystem::ProcessTurn()
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& land = Locator::terrainSystem::value();
 	std::vector<entt::entity> done;
-	registry.Each<WalkPath, Transform>([&](entt::entity entity, WalkPath& path, Transform& transform) {
+	registry.Each<WalkPath, Transform>([&](entt::entity entity, WalkPath& path, Transform& /*unused*/) {
 		// A living walks its own track in its state
 		if (path.living)
 		{
@@ -64,15 +65,17 @@ void WalkPathSystem::ProcessTurn()
 			done.push_back(entity);
 			return;
 		}
-		// On the land there; a shark moves for its turn and is drawn getting there
-		const glm::vec3 position(at->x, land.GetHeightAt(*at), at->y);
+		// The map position there, on the land; a shark moves for its turn and is drawn getting there
+		const auto place = map_coords::FromMetres(*at);
+		const auto metres = map_coords::ToMetres(place);
+		const glm::vec3 position(metres.x, land.GetHeightAt(metres), metres.y);
 		if (auto* shark = registry.TryGet<Shark>(entity))
 		{
 			shark->position = position;
 		}
 		else
 		{
-			transform.position = position;
+			ecs::thing_map_place::Put(registry, entity, place, position.y);
 		}
 	});
 	for (const auto entity : done)

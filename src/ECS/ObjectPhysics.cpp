@@ -70,6 +70,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -474,12 +475,16 @@ void object_physics::SplitRock(systems::DynamicsSystemInterface& dynamics, entt:
 		spin = entry->body->angularMomentum * objects::k_RockHalfSpin;
 	}
 	const auto heading = objects::HeadingOnly(transform.rotation);
-	const auto at = map_coords::FromWorld(land, transform.position);
+	// The halves are made about the rock's own map position, at its altitude
+	auto at = ecs::thing_map_place::Of(registry, rock);
+	at.altitude = map_coords::FromWorld(land, transform.position).altitude;
 	for (const auto& place : {at + offset, at - offset})
 	{
 		const auto half =
 		    archetypes::MobileStaticArchetype::Create(map_coords::ToWorld(land, place), type, 0.0f, 0.0f, 0.0f, 0.0f, scale);
 		registry.Get<Transform>(half).rotation = heading;
+		// Each half keeps its exact map position until its body moves it
+		ecs::thing_map_place::Keep(registry, half, place);
 		registry.AssignOrReplace<ObjectLife>(half, ObjectLife {.life = 1.0f});
 		const auto started = dynamics.InitialisePhysics(half, {.velocity = velocity, .add = true});
 		if (started.entry != nullptr && started.entry->body != nullptr)

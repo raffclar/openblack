@@ -65,6 +65,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VortexCrossingLines.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -833,6 +834,8 @@ void VortexSystem::ThrowOut(entt::entity entity, Vortex& vortex)
 	                                                            archetypes::VillagerArchetype::Joins::Nobody);
 	if (villager != entt::null)
 	{
+		// It comes out at the exact map position about the vortex until its throw moves it
+		ecs::thing_map_place::Keep(registry, villager, place);
 		JoinAndThrow(entity, vortex, villager, angle);
 	}
 }
