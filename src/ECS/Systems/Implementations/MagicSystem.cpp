@@ -30,6 +30,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/WaterRings.h"
+#include "Animals/FishFarmRules.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
@@ -46,6 +47,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/Ball.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -56,6 +58,7 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
@@ -72,6 +75,7 @@
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
@@ -232,6 +236,12 @@ std::optional<magic::EffectReceiver> ReceiverOf(entt::entity entity)
 			receiver.radius = std::max(size.x, size.z) * 0.5f;
 			receiver.height = size.y;
 		}
+	}
+	// A fish farm has no model: it reaches its own radius across the land, and has no height
+	if (registry.AllOf<FishFarm>(entity))
+	{
+		receiver.radius = fish_farm::k_Radius;
+		receiver.height = 0.0f;
 	}
 	if (const auto* info = InfoOfLiving(entity))
 	{
@@ -509,8 +519,8 @@ std::vector<magic::EffectReceiver> GameMagicWorld::ReceiversIn(const magic::Cell
 			{
 				if (!registry.Valid(entity) ||
 				    !registry.AnyOf<Creature, Villager, Animal, Tree, Abode, Feature, Pot, Field, DeadTree, MobileStatic,
-				                    MobileObject, AnimatedStatic, BigForest, Flowers, SpellDispenser, WorshipSite, Temple>(
-				        entity))
+				                    MobileObject, AnimatedStatic, BigForest, Flowers, SpellDispenser, WorshipSite, Temple,
+				                    StreetLantern, FishFarm, Ball>(entity))
 				{
 					continue;
 				}

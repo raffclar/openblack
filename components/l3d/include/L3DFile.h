@@ -366,6 +366,20 @@ struct L3DEBone
 };
 static_assert(sizeof(L3DEBone) == 836);
 
+/// A point of the effect-point block (ContainsNewEP), the last block after the TnL data: a place on the model that the
+/// game puts a thing at, by its kind
+struct L3DNewEffectPoint
+{
+	std::array<float, 3 * 4> matrix; ///< 3x3 rotation then position
+	uint32_t unknown;
+	uint32_t kind;
+};
+static_assert(sizeof(L3DNewEffectPoint) == 0x38);
+
+/// Decodes the points of an effect-point block: block holds the block from its size and count on. False when the block
+/// doesn't hold them.
+bool DecodeNewEffectPoints(std::span<const uint8_t> block, std::vector<L3DNewEffectPoint>& points) noexcept;
+
 /**
   This class is used to read L3Ds.
  */
@@ -406,6 +420,7 @@ protected:
 	std::vector<L3DSubmeshName> _submeshNames;
 	std::vector<std::array<float, 3 * 4>> _extraMetrics;
 	std::optional<L3DEBone> _eBone;
+	std::vector<L3DNewEffectPoint> _newEffectPoints;
 
 	/// Write file to the input source
 	L3DResult WriteFile(std::ostream& stream) const noexcept;
@@ -453,6 +468,7 @@ public:
 	[[nodiscard]] const std::vector<L3DPoint2D>& GetLightmapCoordinates() const noexcept { return _lightmapCoordinates; }
 	[[nodiscard]] const std::vector<L3DLightmap>& GetLightmaps() const noexcept { return _lightmaps; }
 	[[nodiscard]] const std::optional<L3DEBone>& GetEBone() const noexcept { return _eBone; }
+	[[nodiscard]] const std::vector<L3DNewEffectPoint>& GetNewEffectPoints() const noexcept { return _newEffectPoints; }
 	void SetFootprint(const L3DFootprint& footprint) noexcept { _footprint = footprint; }
 	void SetExtraMetrics(const std::vector<std::array<float, 3 * 4>>& metrics) noexcept { _extraMetrics = metrics; }
 	void SetUv2Data(std::vector<uint8_t>& uv2Data) noexcept { _uv2Data = uv2Data; }

@@ -56,6 +56,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TownCentreParts.h"
 #include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
 #include "ECS/VillagerRoutine.h"
@@ -777,8 +778,8 @@ void TownSystem::UpdateFrame(float gameSeconds)
 			return;
 		}
 		// A town centre shows the symbols from when its town finishes it
-		if (const auto* progress = _registry->TryGet<const BuildProgress>(entity);
-		    progress != nullptr && progress->built < 1.0f)
+		const auto* progress = _registry->TryGet<const BuildProgress>(entity);
+		if (!ecs::town_centre_parts::ShowsBeliefSymbols(progress != nullptr ? std::optional(progress->built) : std::nullopt))
 		{
 			return;
 		}

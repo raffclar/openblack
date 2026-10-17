@@ -1747,7 +1747,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::StormCloud::flashGrey>("flashGrey");
 	Reflect<components::Stream>(context).Field<&components::Stream::id>("id").Field<&components::Stream::points>("points");
 	Reflect<components::StreamSegment> {context};
-	Reflect<components::StreetLantern>(context).Field<&components::StreetLantern::country>("country");
+	Reflect<components::StreetLantern>(context)
+	    .Field<&components::StreetLantern::country>("country")
+	    .Field<&components::StreetLantern::info>("info");
 	Reflect<components::Swayable>(context).Field<&components::Swayable::swaySlot>("swaySlot");
 	Reflect<components::TattooMenuCreature>(context)
 	    .Field<&components::TattooMenuCreature::state>("state")
@@ -1917,7 +1919,8 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::VillageLight::kind>("kind")
 	    .Field<&components::VillageLight::flickerTimer>("flickerTimer")
 	    .Field<&components::VillageLight::flicker>("flicker")
-	    .Field<&components::VillageLight::glowSize>("glowSize");
+	    .Field<&components::VillageLight::glowSize>("glowSize")
+	    .Field<&components::VillageLight::owner>("owner");
 	Reflect<components::VillageLightSprite>(context)
 	    .Field<&components::VillageLightSprite::light>("light")
 	    .Field<&components::VillageLightSprite::index>("index");
