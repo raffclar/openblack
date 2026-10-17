@@ -390,10 +390,17 @@ vec3 EnvironmentHit(vec3 o, vec3 r)
 // The reflection of the far scene on the water at p along r, from the cube. The cube shows the scene from its middle,
 // not from p, so the shader reads the cube in the direction of the point where the ray meets the scene. A rough
 // surface takes the light from a wider cone of directions.
+// A direction turned up to just over the horizon if it is under it: the cube has no water under its horizon
+vec3 AboveHorizon(vec3 direction)
+{
+	return vec3(direction.x, max(direction.y, 0.004f * length(direction)), direction.z);
+}
+
 vec3 EnvironmentReflection(vec3 p, vec3 r, float roughness)
 {
 	vec3 hit = EnvironmentHit(p - u_uwEnvironment.xyz, r);
-	bool met = dot(hit, hit) > 0.0f;
+	// The cube has the sea bed under the sea's level and no water over it: a hit there is not what the water reflects
+	bool met = dot(hit, hit) > 0.0f && u_uwEnvironment.y + hit.y > u_uwParams.z - 0.5f;
 	// The cube has no water under its horizon: the reflection reads no lower than the horizon
 	vec3 lookup = met ? normalize(hit) : r;
 	lookup = normalize(vec3(lookup.x, max(lookup.y, 0.004f), lookup.z));
@@ -407,10 +414,10 @@ vec3 EnvironmentReflection(vec3 p, vec3 r, float roughness)
 		colour = textureCubeLod(s_environment, lookup, 0.0f).rgb;
 		if (roughness > 0.1f)
 		{
-			colour += textureCubeLod(s_environment, lookup + side * spread, 0.0f).rgb;
-			colour += textureCubeLod(s_environment, lookup - side * spread, 0.0f).rgb;
-			colour += textureCubeLod(s_environment, lookup + up * spread, 0.0f).rgb;
-			colour += textureCubeLod(s_environment, lookup - up * spread, 0.0f).rgb;
+			colour += textureCubeLod(s_environment, AboveHorizon(lookup + side * spread), 0.0f).rgb;
+			colour += textureCubeLod(s_environment, AboveHorizon(lookup - side * spread), 0.0f).rgb;
+			colour += textureCubeLod(s_environment, AboveHorizon(lookup + up * spread), 0.0f).rgb;
+			colour += textureCubeLod(s_environment, AboveHorizon(lookup - up * spread), 0.0f).rgb;
 			colour *= 0.2f;
 		}
 	}
@@ -420,10 +427,10 @@ vec3 EnvironmentReflection(vec3 p, vec3 r, float roughness)
 		colour = textureCubeLod(s_environmentSky, lookup, 0.0f).rgb;
 		if (roughness > 0.1f)
 		{
-			colour += textureCubeLod(s_environmentSky, lookup + side * spread, 0.0f).rgb;
-			colour += textureCubeLod(s_environmentSky, lookup - side * spread, 0.0f).rgb;
-			colour += textureCubeLod(s_environmentSky, lookup + up * spread, 0.0f).rgb;
-			colour += textureCubeLod(s_environmentSky, lookup - up * spread, 0.0f).rgb;
+			colour += textureCubeLod(s_environmentSky, AboveHorizon(lookup + side * spread), 0.0f).rgb;
+			colour += textureCubeLod(s_environmentSky, AboveHorizon(lookup - side * spread), 0.0f).rgb;
+			colour += textureCubeLod(s_environmentSky, AboveHorizon(lookup + up * spread), 0.0f).rgb;
+			colour += textureCubeLod(s_environmentSky, AboveHorizon(lookup - up * spread), 0.0f).rgb;
 			colour *= 0.2f;
 		}
 	}
