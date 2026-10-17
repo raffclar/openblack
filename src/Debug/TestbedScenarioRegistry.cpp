@@ -501,6 +501,56 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.cast_sides",
+	    .name = "Creatures cast from the pose on the two sides",
+	    .facet = Facet::Mind,
+	    .description = "Four player's tigers in a row know the water miracle well. Each one catches fire.",
+	    .expected = "Each tiger casts the water miracle on itself from the cast pose. Some tigers cast with the right "
+	                "arm and some with the left arm, about one time in two.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {-90.0f, 60.0f}},
+	                  CreatureSetup {.species = CreatureType::Tiger, .offset = {-30.0f, 60.0f}},
+	                  CreatureSetup {.species = CreatureType::Tiger, .offset = {30.0f, 60.0f}},
+	                  CreatureSetup {.species = CreatureType::Tiger, .offset = {90.0f, 60.0f}}},
+	    .commands =
+	        {{.kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)},
+	         {.kind = Kind::KnowMiracle, .creature = 1, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)},
+	         {.kind = Kind::KnowMiracle, .creature = 2, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)},
+	         {.kind = Kind::KnowMiracle, .creature = 3, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)},
+	         {.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 1.0f},
+	         {.kind = Kind::SetAlight, .creature = 1, .delaySeconds = 1.0f},
+	         {.kind = Kind::SetAlight, .creature = 2, .delaySeconds = 1.0f},
+	         {.kind = Kind::SetAlight, .creature = 3, .delaySeconds = 1.0f}},
+	});
+	all.push_back({
+	    .id = "mind.sleep_sides",
+	    .name = "Creatures sleep on the two sides",
+	    .facet = Facet::Mind,
+	    .description = "Four worn out tigers in a row at midday, each with a strong desire to sleep, their bodies' time "
+	                   "ten times as fast.",
+	    .expected = "Each tiger lies down and sleeps until it is rested. Some tigers lie on the right side and some on "
+	                "the left side, about one time in two.",
+	    .environment = {.bodyTimeScale = 10.0f},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {-90.0f, 60.0f},
+	                                 .needs = {.energy = 1.0f, .exhaustion = 0.75f, .dehydration = 0.0f, .poo = 0.0f},
+	                                 .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}}},
+	                  CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {-30.0f, 60.0f},
+	                                 .needs = {.energy = 1.0f, .exhaustion = 0.75f, .dehydration = 0.0f, .poo = 0.0f},
+	                                 .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}}},
+	                  CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {30.0f, 60.0f},
+	                                 .needs = {.energy = 1.0f, .exhaustion = 0.75f, .dehydration = 0.0f, .poo = 0.0f},
+	                                 .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}}},
+	                  CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {90.0f, 60.0f},
+	                                 .needs = {.energy = 1.0f, .exhaustion = 0.75f, .dehydration = 0.0f, .poo = 0.0f},
+	                                 .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}}}},
+	});
+
+	all.push_back({
 	    .id = "needs.badly_hurt",
 	    .name = "A badly hurt creature wants to restore its health",
 	    .facet = Facet::Needs,

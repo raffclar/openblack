@@ -98,8 +98,8 @@ TEST(CreatureMissingClip, EachTurnTheCreatureTriesAgainAndPicksASide)
 	}
 }
 
-// While the body is busy, the creature waits for it and does not test the clip
-TEST(CreatureMissingClip, ABusyBodyWaitsBeforeTheTry)
+// While the body is busy, the body refuses the try before it tests the clip. The try picks a side one time only.
+TEST(CreatureMissingClip, ABusyBodyRefusesTheTryBeforeTheClipTest)
 {
 	creature_mind::IdleMind mind;
 	mind.activity = creature_mind::Activity::Told;
@@ -107,7 +107,7 @@ TEST(CreatureMissingClip, ABusyBodyWaitsBeforeTheTry)
 	GameDraws draws;
 	const creature_mind::Senses senses {.seconds = 0.1f, .bodyBusy = true, .clipMissing = true};
 	static_cast<void>(creature_mind::Think(mind, senses, k_MindRandom, draws.Random()));
-	EXPECT_EQ(draws.count, 0);
+	EXPECT_EQ(draws.count, 1);
 	EXPECT_FALSE(mind.stepStarted);
 }
 

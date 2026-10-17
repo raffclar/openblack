@@ -321,10 +321,10 @@ void Show(CreatureAnimation& animation, const fight::Fighter& fighter, bool powe
 	animation.slots.clear();
 }
 
-void PlayOnce(CreatureAnimation& animation, size_t played)
+void PlayOnce(CreatureAnimation& animation, size_t played, bool mirrored = false)
 {
 	animation.body = {};
-	if (const auto once = creature_layers::PlayOnce(animation.body, played, false))
+	if (const auto once = creature_layers::PlayOnce(animation.body, played, mirrored))
 	{
 		animation.body = *once;
 	}
@@ -2391,7 +2391,9 @@ void CreatureFightSystem::ProcessStages()
 				fighting->played = true;
 				const auto life = LifeOf(registry, entity);
 				const auto otherLife = opponentHere ? LifeOf(registry, opponent) : 0.0f;
-				PlayOnce(animation, fight::Response(life, otherLife));
+				// The game's random numbers choose the side of the response, one time in two the left side
+				const bool mirrored = Locator::gameRandom::has_value() && Locator::gameRandom::value().GameRand(2) == 1;
+				PlayOnce(animation, fight::Response(life, otherLife), mirrored);
 			}
 			else if (!creature_layers::IsPlaying(animation.body))
 			{

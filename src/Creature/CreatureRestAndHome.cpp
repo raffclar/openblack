@@ -81,7 +81,6 @@ Step creature_mind::RestStep()
 	return {.kind = Step::Kind::Static,
 	        .sequence = {animations::k_StartSleep, animations::k_Sleep, animations::k_EndSleep},
 	        .untilBetter = true,
-	        .mirrorAtRandom = true,
 	        .closedEyes = true,
 	        .effect = Effect::Completed,
 	        .main = true};

@@ -38,8 +38,7 @@ std::vector<creature_mind::Step> creature_script_play::Agenda(const Request& req
 			agenda.push_back({.kind = Step::Kind::Static,
 			                  .seconds = k_StaticActionSeconds,
 			                  .animation = animation,
-			                  .sequence = {animation - 1, animation, animation + 1},
-			                  .mirrorAtRandom = true});
+			                  .sequence = {animation - 1, animation, animation + 1}});
 		}
 		else
 		{

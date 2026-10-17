@@ -1130,3 +1130,11 @@ target_compile_definitions(
   PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_creature_missing_clip test_creature_missing_clip.cpp)
+openblack_setup_and_add_test(test_creature_action_mirror test_creature_action_mirror.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_start_side oracle/test_oracle_creature_start_side.cpp
+)
+target_compile_definitions(
+  test_oracle_creature_start_side
+  PRIVATE OPENBLACK_ORACLE_DATA="${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

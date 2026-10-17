@@ -599,7 +599,6 @@ std::vector<Step> creature_mind::HangAround(const HangAroundPlaces& places, floa
 	const auto sit = [&random]() {
 		auto step = Static({animations::k_StartSit, animations::k_Sit, animations::k_EndSit},
 		                   k_HangAroundSitSeconds + (k_HangAroundSitExtraSeconds * RandomFraction(random)));
-		step.mirrorAtRandom = true;
 		return step;
 	};
 	const auto face = [](glm::vec3 point) {
@@ -990,7 +989,7 @@ void StartDanceStep(IdleMind& mind, const Step& step, const Senses& senses, Comm
 }
 
 /// A turn of a dance step under way
-void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands, const Random& random)
+void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Commands& commands, const Random& gameRandom)
 {
 	if (step.dance.kind == DanceOrder::Kind::WaitUntilStill)
 	{
@@ -1025,10 +1024,15 @@ void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Comma
 	{
 		commands.move = Movement {.kind = Movement::Kind::TurnToFace, .point = *turn.facePoint};
 	}
-	if (turn.playOnce.has_value() && !senses.bodyPlaying)
+	// Each turn of a move that plays an action or a pose picks a side, also when the body is busy
+	if (turn.playOnce.has_value())
 	{
-		commands.playOnce = *turn.playOnce;
-		commands.mirrored = random(2) == 1;
+		const bool mirrored = gameRandom(2) == 1;
+		if (!senses.bodyPlaying)
+		{
+			commands.playOnce = *turn.playOnce;
+			commands.mirrored = mirrored;
+		}
 	}
 	if (turn.overlay.has_value() && !senses.overlayPlaying)
 	{
@@ -1047,10 +1051,14 @@ void DanceStepTurn(IdleMind& mind, const Step& step, const Senses& senses, Comma
 	{
 		commands.startDance = *turn.danceMoveMs;
 	}
-	if (turn.pose.has_value() && !senses.bodyPlaying)
+	if (turn.pose.has_value())
 	{
-		commands.startSequence = std::array {*turn.pose - 1, *turn.pose, *turn.pose + 1};
-		commands.mirrored = random(2) == 1;
+		const bool mirrored = gameRandom(2) == 1;
+		if (!senses.bodyPlaying)
+		{
+			commands.startSequence = std::array {*turn.pose - 1, *turn.pose, *turn.pose + 1};
+			commands.mirrored = mirrored;
+		}
 	}
 	if (turn.face.has_value())
 	{
@@ -1137,10 +1145,29 @@ std::optional<Gaze> creature_mind::LookOf(const Step& step)
 
 namespace
 {
-/// One try to start a step that the body does not have a clip for. Each try picks a side first from the game's random
-/// numbers: a static action or a cast always, other actions only while the hand holds nothing. Each try to communicate
-/// also stops the desire to show its state for a time.
-void RetryClipStart(IdleMind& mind, const Step& step, const Senses& senses, const Random& gameRandom, Commands& commands)
+/// Whether the step starts its clip with a try that the body can refuse. A refused try comes again on each turn. A
+/// faint is not refused, and a communication with no clip starts no clip.
+bool TriesToStartClip(const Step& step, const Senses& senses)
+{
+	switch (step.kind)
+	{
+	case Step::Kind::Action:
+	case Step::Kind::Cast:
+	case Step::Kind::SwapMind:
+		return true;
+	case Step::Kind::Static:
+		return !step.holdLoop;
+	case Step::Kind::Communicate:
+		return senses.communication.animation.has_value();
+	default:
+		return false;
+	}
+}
+
+/// One try to start a step that the body refuses, because the body is busy or does not have the clip. Each try picks a
+/// side first from the game's random numbers: a static action or a cast always, other actions only while the hand
+/// holds nothing. Each try to communicate also stops the desire to show its state for a time.
+void RefusedStart(IdleMind& mind, const Step& step, const Senses& senses, const Random& gameRandom, Commands& commands)
 {
 	const bool always = step.kind == Step::Kind::Static || step.kind == Step::Kind::Cast;
 	if (always || !senses.held.has_value())
@@ -1152,6 +1179,13 @@ void RetryClipStart(IdleMind& mind, const Step& step, const Senses& senses, cons
 		commands.communicated = senses.communication;
 		mind.shown = senses.communication.desire;
 	}
+}
+
+/// The side that a step plays on as it starts: the right side or, one time in two, the left side. The game's random
+/// numbers choose it. The hands are empty when these steps start.
+bool PickSide(const Random& gameRandom)
+{
+	return gameRandom(2) == 1;
 }
 } // namespace
 
@@ -1240,10 +1274,15 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.finishSpells = true;
 			return commands;
 		}
-		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it.
+		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it. A step
+		// that tries to start its clip tries again on each turn.
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
 		    step.kind != Step::Kind::PracticeDance && senses.bodyBusy)
 		{
+			if (TriesToStartClip(step, senses))
+			{
+				RefusedStart(mind, step, senses, gameRandom, commands);
+			}
 			return commands;
 		}
 		// A dance alone waits only while the body plays an action
@@ -1255,7 +1294,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		// until a new plan or its death replaces the agenda.
 		if (senses.clipMissing)
 		{
-			RetryClipStart(mind, step, senses, gameRandom, commands);
+			RefusedStart(mind, step, senses, gameRandom, commands);
 			return commands;
 		}
 		mind.stepStarted = true;
@@ -1276,7 +1315,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		{
 		case Step::Kind::Action:
 			commands.playOnce = step.animation;
-			commands.mirrored = random(2) == 1;
+			commands.mirrored = PickSide(gameRandom);
 			if (step.sleepyEyes)
 			{
 				commands.eyes = Eyes::Sleepy;
@@ -1288,10 +1327,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			commands.fainted = step.faint;
 			// The turn that the rest starts is its first turn
 			mind.restTurns = 1;
-			if (step.mirrorAtRandom)
-			{
-				commands.mirrored = random(2) == 1;
-			}
+			commands.mirrored = PickSide(gameRandom);
 			if (step.closedEyes)
 			{
 				commands.eyes = Eyes::Closed;
@@ -1313,6 +1349,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::Cast:
 			commands.startSequence = step.sequence;
+			commands.mirrored = PickSide(gameRandom);
 			mind.castDone = false;
 			mind.castTurns = 0;
 			break;
@@ -1389,7 +1426,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::SwapMind:
 			commands.playOnce = step.animation;
-			commands.mirrored = random(2) == 1;
+			commands.mirrored = PickSide(gameRandom);
 			commands.startSwapBeam = true;
 			break;
 		case Step::Kind::Overlay:
@@ -1487,7 +1524,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			if (senses.communication.animation.has_value())
 			{
 				commands.playOnce = senses.communication.animation;
-				commands.mirrored = random(2) == 1;
+				commands.mirrored = PickSide(gameRandom);
 			}
 			else
 			{
@@ -1709,7 +1746,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		}
 		break;
 	case Step::Kind::Dance:
-		DanceStepTurn(mind, step, senses, commands, random);
+		DanceStepTurn(mind, step, senses, commands, gameRandom);
 		break;
 	case Step::Kind::FollowWatching:
 		FollowWatching(mind, step, senses, random, commands);
