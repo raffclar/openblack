@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <vector>
 
 #include <bgfx/bgfx.h>
 #include <glm/common.hpp>
@@ -23,6 +24,8 @@
 
 #include "3D/OceanInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/FogPocket.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -124,6 +127,16 @@ void Renderer::BeginFog(const DrawSceneDesc& desc) const
 	const glm::vec3 tint = glm::mix(throughAir, k_MoonTint, frame.light.w);
 	uniforms.lightColour = {glm::vec3(frame.lightColour) * tint, frame.lightColour.w};
 	uniforms.ambient = {glm::vec3(frame.sky) * k_SkyLight, frame.params.z};
+	// EXPERIMENT (not for merge): the pockets of fog nearest to the eye
+	if (system.IsEffectOn(underwater::Effect::FogPockets) && Locator::entitiesRegistry::has_value())
+	{
+		std::vector<ecs::components::FogPocket> pockets;
+		Locator::entitiesRegistry::value().Each<const ecs::components::FogPocket>(
+		    [&pockets](const ecs::components::FogPocket& pocket) { pockets.push_back(pocket); });
+		const auto packed = fog::PackPockets(pockets, desc.camera->GetOrigin(), fog::DawnFog(hour));
+		uniforms.pockets = packed.pockets;
+		uniforms.pocketEdges = packed.edges;
+	}
 	_fogFrame = uniforms;
 }
 
@@ -159,6 +172,9 @@ void Renderer::DrawFog(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget
 		program.SetUniformValue("u_fogAmbient", &uniforms.ambient);
 		program.SetUniformValue("u_fogGrid", &uniforms.grid);
 	};
+	scatterProgram->SetUniformArray("u_fogPockets", uniforms.pockets.data(), static_cast<uint16_t>(uniforms.pockets.size()));
+	scatterProgram->SetUniformArray("u_fogPocketEdges", uniforms.pocketEdges.data(),
+	                                static_cast<uint16_t>(uniforms.pocketEdges.size()));
 
 	// The fog of each cell and the light that it scatters
 	const glm::mat4 viewProj = desc.camera->GetProjectionMatrix() * desc.camera->GetViewMatrix(Camera::Interpolation::Current);

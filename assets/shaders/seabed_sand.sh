@@ -201,6 +201,29 @@ float SeabedFootprint(vec3 world, vec3 normal)
 	return 0.0015f * viewDistance / max(abs(dot(normal, toEye)), 0.12f);
 }
 
+// How much of the sun's or the moon's light comes past the hills to a point of the sea's surface, 0 to 1. A few steps go
+// towards the light over the land's heights from the shore map, as the map of the sun's visibility is made, so the
+// caustics go where the hills' shadow lies on the water.
+float SeabedSunLight(vec2 surface)
+{
+	vec3 towards = u_uwAbove.xyz;
+	float across = length(towards.xz);
+	if (towards.y <= 0.01f || across < 1e-4f)
+	{
+		return towards.y > 0.01f ? 1.0f : 0.0f;
+	}
+	vec2 dir = towards.xz / across;
+	float rise = towards.y / across;
+	float lit = 1.0f;
+	for (int i = 1; i <= 8; ++i)
+	{
+		float d = float(i * i) * 6.0f;
+		float over = u_uwParams.z + rise * d - SeabedHeightAt(surface + dir * d);
+		lit = min(lit, clamp(over / 6.0f + 0.5f, 0.0f, 1.0f));
+	}
+	return lit;
+}
+
 // The light on the ground under the sea, for a colour of the ground: the land's light (landLight), and the light from
 // the surface along its bent direction, with the caustics where it went through the surface
 vec3 SeabedLit(vec3 albedo, vec3 world, vec3 landLight, vec3 normal)
@@ -225,7 +248,8 @@ vec3 SeabedLit(vec3 albedo, vec3 world, vec3 landLight, vec3 normal)
 	float facing = max(dot(normal, towards), 0.0f);
 	// The lit and shaded sides, and the light the water lets down to this depth
 	vec3 light = u_uwLightColour.rgb * UwTransmittance(depth * 0.6f / max(towards.y, 0.2f));
-	vec3 sun = light * facing * (0.6f + 1.0f * caustics);
+	// No caustics where the hills' shadow lies on the water above
+	vec3 sun = light * facing * (0.6f + 1.0f * caustics * SeabedSunLight(surface));
 	return albedo * (landLight * (0.6f + 0.4f * facing) + sun);
 }
 

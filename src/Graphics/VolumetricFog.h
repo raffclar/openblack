@@ -11,8 +11,15 @@
 
 #include <cstdint>
 
+#include <array>
+#include <span>
+#include <vector>
+
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
+
+#include "ECS/Components/FogPocket.h"
 
 /// EXPERIMENT (not for merge): the rules of the volumetric fog. The original game has a haze by distance only. The fog
 /// fills a grid of cells that follows the view (160 across, 96 down, 48 deep), and the light of the sun or the moon,
@@ -79,6 +86,33 @@ struct FogUniforms
 	glm::vec4 ambient {0.0f};
 	/// x the cells across, y the cells down, z the slices, w the farthest distance
 	glm::vec4 grid {k_CellsAcross, k_CellsDown, k_Slices, k_Farthest};
+	/// The pockets of fog nearest to the eye (see PackPockets)
+	std::array<glm::vec4, 16> pockets {};
+	std::array<glm::vec4, 2> pocketEdges {};
 };
+
+/// The pockets of fog that the grid takes at most: the nearest to the eye
+inline constexpr size_t k_MostPockets = 8;
+
+/// The fog for each world unit that a pocket gives at a point, with `dawnFog` the time of day's ground fog (0 to 1,
+/// see DawnFog) for a pocket that comes at dawn
+[[nodiscard]] float PocketDensity(const ecs::components::FogPocket& pocket, glm::vec3 point, float dawnFog);
+
+/// The pockets as the fog's shader takes them, the nearest to the eye first: pockets[i] xyz the middle, w the shape (0 a
+/// ball, 1 a box); pockets[k_MostPockets + i] xyz the half size, w the density now (0 for no pocket)
+struct PocketUniforms
+{
+	std::array<glm::vec4, k_MostPockets * 2> pockets {};
+	/// The soft edge of each pocket, four to an element
+	std::array<glm::vec4, k_MostPockets / 4> edges {};
+};
+[[nodiscard]] PocketUniforms PackPockets(std::span<const ecs::components::FogPocket> pockets, glm::vec3 eye, float dawnFog);
+
+/// The cells of the land that hold still water or swamp, from the ambient sound type of each cell (2 still fresh
+/// water, 8 swamp), grouped into one box for each block of 16 by 16 cells that has at least `fewest` of them. Each
+/// box lies low over the cells, from their lowest ground to a little over their highest. `heights` is the ground's
+/// height at each cell; both spans are `side` by `side`, row by row along z.
+[[nodiscard]] std::vector<ecs::components::FogPocket>
+StillWaterPockets(std::span<const uint8_t> soundTypes, std::span<const float> heights, int side, float cellSize, int fewest);
 
 } // namespace openblack::graphics::volumetric_fog

@@ -14,7 +14,12 @@
 #include <cmath>
 
 #include <algorithm>
+#include <ranges>
 
+#include <glm/common.hpp>
+#include <glm/geometric.hpp>
+
+using namespace openblack;
 using namespace openblack::graphics;
 using namespace openblack::graphics::volumetric_fog;
 
@@ -78,4 +83,104 @@ FogState volumetric_fog::FogFor(float hour, float wetness, float storm)
 	fog.groundDensity = 0.016f * DawnFog(hour) * (1.0f + 1.5f * std::clamp(wetness, 0.0f, 1.0f)) * calm;
 	fog.groundTop = FogTop(hour);
 	return fog;
+}
+
+float volumetric_fog::PocketDensity(const ecs::components::FogPocket& pocket, glm::vec3 point, float dawnFog)
+{
+	using Shape = ecs::components::FogPocket::Shape;
+	// How far inside the surface the point is (negative outside it)
+	float inside = 0.0f;
+	if (pocket.shape == Shape::Ball)
+	{
+		inside = pocket.halfSize.x - glm::length(point - pocket.centre);
+	}
+	else
+	{
+		const glm::vec3 q = glm::abs(point - pocket.centre) - pocket.halfSize;
+		inside = -std::max({q.x, q.y, q.z});
+	}
+	const float time = pocket.atDawn ? std::clamp(dawnFog, 0.0f, 1.0f) : 1.0f;
+	return pocket.density * time * Smoothstep(0.0f, std::max(pocket.edge, 1e-3f), inside);
+}
+
+PocketUniforms volumetric_fog::PackPockets(std::span<const ecs::components::FogPocket> pockets, glm::vec3 eye, float dawnFog)
+{
+	std::vector<const ecs::components::FogPocket*> nearest;
+	nearest.reserve(pockets.size());
+	for (const auto& pocket : pockets)
+	{
+		nearest.push_back(&pocket);
+	}
+	std::ranges::sort(nearest, {}, [&eye](const auto* pocket) { return glm::length(pocket->centre - eye); });
+	PocketUniforms uniforms;
+	for (size_t i = 0; i < std::min(nearest.size(), k_MostPockets); ++i)
+	{
+		const auto& pocket = *nearest[i];
+		const float time = pocket.atDawn ? std::clamp(dawnFog, 0.0f, 1.0f) : 1.0f;
+		const float shape = pocket.shape == ecs::components::FogPocket::Shape::Box ? 1.0f : 0.0f;
+		uniforms.pockets.at(i) = {pocket.centre, shape};
+		uniforms.pockets.at(k_MostPockets + i) = {pocket.halfSize, pocket.density * time};
+		uniforms.edges.at(i / 4)[static_cast<int>(i % 4)] = std::max(pocket.edge, 1e-3f);
+	}
+	return uniforms;
+}
+
+std::vector<ecs::components::FogPocket> volumetric_fog::StillWaterPockets(std::span<const uint8_t> soundTypes,
+                                                                          std::span<const float> heights, int side,
+                                                                          float cellSize, int fewest)
+{
+	constexpr uint8_t k_StillWater = 2;
+	constexpr uint8_t k_Swamp = 8;
+	constexpr int k_BlockCells = 16;
+	std::vector<ecs::components::FogPocket> pockets;
+	const auto count = static_cast<size_t>(side) * static_cast<size_t>(side);
+	if (side <= 0 || soundTypes.size() < count || heights.size() < count)
+	{
+		return pockets;
+	}
+	for (int blockZ = 0; blockZ < side; blockZ += k_BlockCells)
+	{
+		for (int blockX = 0; blockX < side; blockX += k_BlockCells)
+		{
+			int found = 0;
+			glm::ivec2 low {side, side};
+			glm::ivec2 high {-1, -1};
+			float lowest = 1e9f;
+			float highest = -1e9f;
+			for (int z = blockZ; z < std::min(blockZ + k_BlockCells, side); ++z)
+			{
+				for (int x = blockX; x < std::min(blockX + k_BlockCells, side); ++x)
+				{
+					const auto i = static_cast<size_t>(z) * static_cast<size_t>(side) + static_cast<size_t>(x);
+					if (soundTypes[i] != k_StillWater && soundTypes[i] != k_Swamp)
+					{
+						continue;
+					}
+					++found;
+					low = glm::min(low, glm::ivec2(x, z));
+					high = glm::max(high, glm::ivec2(x, z));
+					lowest = std::min(lowest, heights[i]);
+					highest = std::max(highest, heights[i]);
+				}
+			}
+			if (found < fewest)
+			{
+				continue;
+			}
+			// The box covers the cells and a cell round them, and lies from the lowest ground to 8 units over the highest
+			const glm::vec2 from = (glm::vec2(low) - 1.0f) * cellSize;
+			const glm::vec2 to = (glm::vec2(high) + 2.0f) * cellSize;
+			const float bottom = lowest - 2.0f;
+			const float top = highest + 8.0f;
+			ecs::components::FogPocket pocket;
+			pocket.shape = ecs::components::FogPocket::Shape::Box;
+			pocket.centre = {(from.x + to.x) * 0.5f, (bottom + top) * 0.5f, (from.y + to.y) * 0.5f};
+			pocket.halfSize = {(to.x - from.x) * 0.5f, (top - bottom) * 0.5f, (to.y - from.y) * 0.5f};
+			pocket.density = 0.03f;
+			pocket.edge = 4.0f;
+			pocket.atDawn = true;
+			pockets.push_back(pocket);
+		}
+	}
+	return pockets;
 }

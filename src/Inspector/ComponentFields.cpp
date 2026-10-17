@@ -136,6 +136,7 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/Flowers.h"
+#include "ECS/Components/FogPocket.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/ForestMember.h"
@@ -1156,6 +1157,13 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::FlockSpell::evil>("evil")
 	    .Field<&components::FlockSpell::closedDown>("closedDown");
 	Reflect<components::Flowers>(context).Field<&components::Flowers::type>("type");
+	Reflect<components::FogPocket>(context)
+	    .Field<&components::FogPocket::shape>("shape")
+	    .Field<&components::FogPocket::centre>("centre")
+	    .Field<&components::FogPocket::halfSize>("halfSize")
+	    .Field<&components::FogPocket::density>("density")
+	    .Field<&components::FogPocket::edge>("edge")
+	    .Field<&components::FogPocket::atDawn>("atDawn");
 	Reflect<components::Footpath>(context).Field<&components::Footpath::nodes>("nodes").Field<&components::Footpath::walkable>(
 	    "walkable");
 	Reflect<components::FootpathLink>(context)
