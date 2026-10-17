@@ -188,7 +188,7 @@ std::optional<creature_eyes::SurfacePoint> EyePointOf(const CreatureRig::EyePoin
 	{
 		return std::nullopt;
 	}
-	const auto world = creature::PosedTriangle(point.vertices, point.bones, morph, bones, model);
+	const auto world = creature::PosedTriangle(point.vertices, point.bones, morph, bones, model, creature::k_SkinPointOrder);
 	return creature_eyes::PointOnTriangle(world[0], world[1], world[2], point.u, point.v);
 }
 

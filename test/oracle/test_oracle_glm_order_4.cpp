@@ -15,11 +15,13 @@
 #include <vector>
 
 #include <glm/mat3x3.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureHair.h"
+#include "Creature/CreatureRig.h"
 #include "OracleData.h"
 #include "Particles/ParticleFlocking.h"
 #include "Particles/ParticleMiracleMaths.h"
@@ -174,29 +176,13 @@ TEST(OracleGlmOrder4, AStepOfATurnedHairStrand)
 			frames.at(b) = glm::mat3(row.Indexed("bone", base), row.Indexed("bone", base + 3), row.Indexed("bone", base + 6));
 			places.at(b) = row.Indexed("bone", base + 9);
 		}
-		// The game places the triangle's first vertex by its bone with the products added z, y, x, and the other two
-		// with them added x, z, y
-		const auto first = [&]() {
-			const auto& m = frames[0];
-			const auto p = row.Indexed("t", 0);
-			glm::vec3 out;
-			for (glm::length_t c = 0; c < 3; ++c)
-			{
-				out[c] = (((m[2][c] * p.z) + (m[1][c] * p.y)) + (m[0][c] * p.x)) + places[0][c];
-			}
-			return out;
-		}();
-		const auto later = [&](size_t b) {
+		const auto placed = [&](size_t b) {
 			const auto& m = frames.at(b);
-			const auto p = row.Indexed("t", 3 * b);
-			glm::vec3 out;
-			for (glm::length_t c = 0; c < 3; ++c)
-			{
-				out[c] = (((m[0][c] * p.x) + (m[2][c] * p.z)) + (m[1][c] * p.y)) + places.at(b)[c];
-			}
-			return out;
+			const glm::mat4 bone {glm::vec4(m[0], 0.0f), glm::vec4(m[1], 0.0f), glm::vec4(m[2], 0.0f),
+			                      glm::vec4(places.at(b), 1.0f)};
+			return creature::PlaceByBone(bone, row.Indexed("t", 3 * b), creature::k_TurnedHairOrder.at(b));
 		};
-		const auto point = creature_eyes::PointOnTriangle(first, later(1), later(2), row.F("s"), row.F("t"));
+		const auto point = creature_eyes::PointOnTriangle(placed(0), placed(1), placed(2), row.F("s"), row.F("t"));
 		const auto alignment = row.F("alignment");
 		const auto blend = [&](const std::string& prefix, size_t firstIndex) {
 			return creature_hair::ByAlignment(std::array {row.F(prefix + std::to_string(firstIndex)),
