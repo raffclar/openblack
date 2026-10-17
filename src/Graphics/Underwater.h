@@ -196,8 +196,54 @@ enum class Effect : uint8_t
 	Sediment,
 	/// Not an effect: the water is drawn as a flat colour where it shows, to compare it with the original sea
 	WaterMask,
+	/// The last grade of the colour (exposure, saturation and contrast) that keeps the original game's colours
+	Grading,
 	_Count
 };
+
+/// How much of the experiment's water a machine draws. The lower tiers drop the costliest parts that have a cheaper
+/// stand-in (the sky for the far cube, flat foam for the foam's thickness), so no part of the water goes away.
+enum class Quality : uint8_t
+{
+	High,
+	Medium,
+	Low,
+	_Count
+};
+/// Whether a tier draws an effect
+[[nodiscard]] bool InQuality(Effect effect, Quality quality);
+/// The next tier, High after Low
+[[nodiscard]] Quality NextQuality(Quality quality);
+
+/// The last grade of the colour: x the exposure, y the saturation, z the contrast about middle grey. The default
+/// keeps the original game's colours: it only takes back the extra brightness and colour that the new light adds.
+inline constexpr glm::vec3 k_Grade {0.97f, 0.93f, 1.02f};
+
+/// How a body of water looks: what it takes out of the light for each unit (red, green, blue), the colour that it
+/// scatters back, how much it reflects against the sea and how smooth it is (GGX roughness, used when it is calm),
+/// and how much of the sea's waves it has
+struct WaterProfile
+{
+	glm::vec3 absorption;
+	glm::vec3 scatter;
+	float reflection;
+	float roughness;
+	float waveScale;
+};
+/// The open sea: clear blue-green water (the post pass's own constants and lit colour)
+inline constexpr WaterProfile k_SeaProfile {.absorption = {0.085f, 0.032f, 0.018f},
+                                            .scatter = {1.0f, 1.0f, 1.0f},
+                                            .reflection = 1.0f,
+                                            .roughness = 0.06f,
+                                            .waveScale = 1.0f};
+/// A still pond: brown water that holds what falls in it and takes the blue first, smooth as a mirror, no waves
+inline constexpr WaterProfile k_PondProfile {.absorption = {0.45f, 0.55f, 0.8f},
+                                             .scatter = {0.07f, 0.08f, 0.04f},
+                                             .reflection = 1.0f,
+                                             .roughness = 0.025f,
+                                             .waveScale = 0.0f};
+/// A profile as the shaders take it: [0] xyz the absorption, w the reflection; [1] xyz the scatter, w the roughness
+[[nodiscard]] std::array<glm::vec4, 2> ProfileUniform(const WaterProfile& profile);
 
 /// The tides: the sea is at its usual height at a full moon's high tide, and lower at every other time. The high tides
 /// away from a full moon are lower by up to this much.

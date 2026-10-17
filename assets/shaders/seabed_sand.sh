@@ -86,7 +86,9 @@ vec3 SeabedLit(vec3 albedo, vec3 world, vec3 landLight, vec3 normal)
 	caustics = mix(caustics, 0.55f, 0.4f * u_uwWaves.y);
 	// The caustics too become an even light where their lines would be smaller than a pixel
 	caustics = mix(caustics, 0.55f, smoothstep(0.08f, 0.3f, footprint));
-	// They show from just under the surface, in the shallows and on the beaches
+	// They show from just under the surface, in the shallows and on the beaches, and they fade with the depth as the
+	// water takes the light that makes them
+	caustics = mix(0.55f, caustics, exp(-0.04f * depth));
 	caustics *= smoothstep(0.0f, 0.15f, depth) * (1.0f - smoothstep(30.0f, 60.0f, viewDistance) * 0.6f);
 	float facing = max(dot(normal, towards), 0.0f);
 	// The lit and shaded sides, and the light the water lets down to this depth

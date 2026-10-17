@@ -16,6 +16,12 @@ $input v_texcoord0, v_texcoord1
 // the screen, and the line where the surface cuts the view as the camera goes through it.
 
 SAMPLER2D(s_sceneColour, 0);
+
+// The still pond's water (see underwater::ProfileUniform): [0] xyz what it takes out of the light, w its reflection;
+// [1] xyz the colour it scatters back, w its roughness
+uniform vec4 u_uwPond[2];
+// The last grade of the colour: x the exposure, y the saturation, z the contrast, w 1 while it is on
+uniform vec4 u_uwGrade;
 SAMPLER2D(s_sceneDepth, 1);
 // The shore map (see UwShoreUv): the distance to the coast, the direction to it and the height of the ground
 SAMPLER2D(s_shore, 2);
@@ -260,6 +266,23 @@ vec4 FootprintOnWater(vec3 direction, float along)
 
 // Where a ray from the eye meets the sea's surface from above, as RayToSurface finds it, with the waves as the pixel
 // shows them. `variance` is the variance of the slope that the pixel cannot show.
+// How much of the open sea's waves reach a point past the land upwind of it, 0.2 to 1: the shore map read at three
+// places up the swell and up the wind. Land near upwind (a headland, the far side of a bay) shelters the point.
+float ShelterAlong(vec2 at, vec2 from)
+{
+	float a = smoothstep(-5.0f, 30.0f, ShoreAt(at - from * 80.0f).x);
+	float b = smoothstep(-5.0f, 30.0f, ShoreAt(at - from * 200.0f).x);
+	float c = smoothstep(-5.0f, 30.0f, ShoreAt(at - from * 450.0f).x);
+	return 0.2f + 0.8f * (0.25f * a + 0.35f * b + 0.4f * c);
+}
+
+float Shelter(vec2 at)
+{
+	vec2 swell = vec2(cos(2.4f), sin(2.4f));
+	vec2 wind = vec2(cos(u_uwWaves.z), sin(u_uwWaves.z));
+	return 0.5f * (ShelterAlong(at, swell) + ShelterAlong(at, wind));
+}
+
 float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, out float face, out vec4 shore,
                            out float variance)
 {
@@ -268,13 +291,23 @@ float RayToSurfaceFiltered(vec3 eye, vec3 direction, float t, out vec2 slope, ou
 	face = 0.0f;
 	variance = 0.0f;
 	shore = vec4(1000.0f, 0.0f, 0.0f, -160.0f);
+	// High waves seen at a low angle move the point where the ray meets the surface far: more steps, and the later
+	// steps go only part of the way, so the steps do not swing from crest to trough
 	int steps = RogueSteps(eye.xz + direction.xz * max(along, 0.0f), abs(direction.y));
-	for (int i = 0; i < steps; i++)
+	float grazing = UwWaveTop() / max(abs(direction.y), 0.02f);
+	float shelter = Shelter(eye.xz + direction.xz * max(along, 0.0f));
+	steps = max(steps, grazing > 30.0f ? 6 : (grazing > 10.0f ? 5 : 3));
+	for (int i = 0; i < 8; i++)
 	{
+		if (i >= steps)
+		{
+			break;
+		}
 		vec2 at = eye.xz + direction.xz * max(along, 0.0f);
 		shore = ShoreAt(at);
-		float height = UwSurfaceFiltered(at, t, FootprintOnWater(direction, max(along, 0.0f)), shore, slope, face, variance);
-		along = mix(along, (height - eye.y) / direction.y, i < 3 ? 1.0f : 0.6f);
+		float height =
+		    UwSurfaceSheltered(at, t, FootprintOnWater(direction, max(along, 0.0f)), shore, shelter, slope, face, variance);
+		along = mix(along, (height - eye.y) / direction.y, i < 2 ? 1.0f : 0.6f);
 	}
 	return along;
 }
@@ -707,7 +740,7 @@ void main()
 			float cliff = UwShoreCliff(shore);
 			// A still pond: smooth water that mirrors the sky, brown and dark from what it holds
 			float pond = UwShorePond(shore);
-			roughness = mix(roughness, 0.025f, pond);
+			roughness = mix(roughness, u_uwPond[1].w, pond);
 			// The scene under the surface, bent by the waves: the bend is less where the water is thin, and none
 			// where it would show what is above the water
 			vec3 below = world;
@@ -735,8 +768,8 @@ void main()
 			vec3 water = through * left + scatter * (1.0f - left);
 			if (pond > 0.0f)
 			{
-				vec3 pondLeft = exp(-vec3(0.45f, 0.55f, 0.8f) * (path + down * 0.6f + 0.3f));
-				vec3 pondColour = vec3(0.07f, 0.08f, 0.04f) * (0.3f + 0.7f * u_uwLightColour.rgb * u_uwLightColour.w);
+				vec3 pondLeft = exp(-u_uwPond[0].xyz * (path + down * 0.6f + 0.3f));
+				vec3 pondColour = u_uwPond[1].xyz * (0.3f + 0.7f * u_uwLightColour.rgb * u_uwLightColour.w);
 				water = mix(water, through * pondLeft + pondColour * (1.0f - pondLeft), pond);
 			}
 			// The silt in the water under the surface, on the way to what the pixel shows
@@ -873,6 +906,14 @@ void main()
 	// The surface that cuts the view, as the camera goes through it: a thin dark line with water running down it
 	float meniscus = 1.0f - smoothstep(0.0f, lineWidth * 3.0f, abs(underBy));
 	colour = mix(colour, scatter * 0.35f, meniscus * 0.8f);
+	// The last grade, which keeps the original game's colours
+	if (u_uwGrade.w > 0.5f)
+	{
+		colour *= u_uwGrade.x;
+		float grey = dot(colour, vec3(0.299f, 0.587f, 0.114f));
+		colour = mix(vec3_splat(grey), colour, u_uwGrade.y);
+		colour = max((colour - 0.5f) * u_uwGrade.z + 0.5f, vec3_splat(0.0f));
+	}
 	gl_FragColor = vec4(colour, 1.0f);
 	// What blends over the water is drawn after this pass, tested against this depth
 	gl_FragDepth = outDepth;

@@ -28,6 +28,12 @@ public:
 	[[nodiscard]] bool IsEnabled() const override { return _enabled; }
 	void SetEnabled(bool enabled) override { _enabled = enabled; }
 	[[nodiscard]] graphics::underwater::Effect GetEffectOff() const override { return _effectOff; }
+	[[nodiscard]] bool IsEffectOn(graphics::underwater::Effect effect) const override
+	{
+		return effect != _effectOff && graphics::underwater::InQuality(effect, _quality);
+	}
+	[[nodiscard]] graphics::underwater::Quality GetQuality() const override { return _quality; }
+	void CycleQuality() override;
 	void CycleEffectOff() override;
 	void StartTour(graphics::underwater::Tour tour) override
 	{
@@ -72,6 +78,7 @@ private:
 	float _seaLevel {0.0f};
 	float _seconds {0.0f};
 	float _storm {0.0f};
+	graphics::underwater::Quality _quality {graphics::underwater::Quality::High};
 	/// The shore wave's phase, which grows each frame (see underwater::AdvanceShorePhase)
 	float _shorePhase {0.0f};
 	float _windAngle {0.0f};

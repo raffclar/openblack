@@ -248,16 +248,21 @@ float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float
 	float open = smoothstep(60.0f * UW_UNITS_PER_METRE, 500.0f * UW_UNITS_PER_METRE, shoreDistance);
 	sets = pow(max(sets, vec2_splat(1e-3f)), vec2_splat(1.0f + 0.8f * open));
 	float size = UwOpenSeaSize(p, t, shoreDistance);
+	// Each wave's growth in this depth, found once
+	float grown[14];
+	float grownFar[3];
 	float total = 0.0f;
 	for (int n = 0; n < 14; n++)
 	{
 		vec4 wave = u_uwWaveTable[n];
-		total += wave.z * (n < 2 ? sets.y : sets.x) * UwShoaling(6.2831853f / max(wave.y, 1.0f), depth);
+		grown[n] = UwShoaling(6.2831853f / max(wave.y, 1.0f), depth);
+		total += wave.z * (n < 2 ? sets.y : sets.x) * grown[n];
 	}
 	for (int m = 0; m < 3; m++)
 	{
 		vec4 wave = u_uwFarWaves[m];
-		total += wave.z * sets.y * UwShoaling(6.2831853f / max(wave.y, 1.0f), depth);
+		grownFar[m] = UwShoaling(6.2831853f / max(wave.y, 1.0f), depth);
+		total += wave.z * sets.y * grownFar[m];
 	}
 	total *= size;
 	float kept = total > 0.0f ? min(1.0f, 0.39f * max(depth, 0.0f) / total) : 0.0f;
@@ -273,7 +278,7 @@ float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float
 		float pixel = u_uwSea.x > 0.5f ? UwFootprintAlong(footprint, along) : footprint.x;
 		// A sharp crest holds shorter waves than the wave's own length: the filter takes the length of the shortest
 		vec2 shown = UwWaveShown(u_uwSea.x > 0.5f ? wave.y / sharp : wave.y, pixel);
-		float a = wave.z * (i < 2 ? sets.y : sets.x) * size * UwShoaling(k, depth) * kept;
+		float a = wave.z * (i < 2 ? sets.y : sets.x) * size * grown[i] * kept;
 		float theta = k * dot(along, p) - omega * t + wave.w;
 		float s = 0.5f + 0.5f * sin(theta);
 		height += a * shown.x * (2.0f * pow(max(s, 0.0f), sharp) - 1.0f);
@@ -289,7 +294,7 @@ float UwWavesInDepth(vec2 p, float t, vec4 footprint, float shoreDistance, float
 		float omega = sqrt(UW_GRAVITY * k);
 		float pixel = u_uwSea.x > 0.5f ? UwFootprintAlong(footprint, along) : footprint.x;
 		vec2 shown = UwWaveShown(wave.y, pixel);
-		float a = wave.z * sets.y * size * UwShoaling(k, depth) * kept;
+		float a = wave.z * sets.y * size * grownFar[j] * kept;
 		float theta = k * dot(along, p) - omega * t + wave.w;
 		height += a * shown.x * sin(theta);
 		slope += along * (a * shown.y * k * cos(theta));
@@ -515,7 +520,18 @@ float UwRogueWave(vec2 xz, float shoreDistance, float depth, out vec2 slope, out
 // surface from the open sea to the edge of the run up the beach. `shore` is the shore map at the point, `footprint`
 // the size of the pixel on the water (see UwFootprint); `slope` is the surface's slope, `face` the shore wave's face
 // and `variance` the variance of the slope that the pixel cannot show.
+float UwSurfaceSheltered(vec2 xz, float t, vec4 footprint, vec4 shore, float shelter, out vec2 slope, out float face,
+                         out float variance);
+
 float UwSurfaceFiltered(vec2 xz, float t, vec4 footprint, vec4 shore, out vec2 slope, out float face, out float variance)
+{
+	return UwSurfaceSheltered(xz, t, footprint, shore, 1.0f, slope, face, variance);
+}
+
+// The same, with `shelter` (0 to 1) the share of the open sea's waves that reach the point past the land upwind of it:
+// a bay behind a headland has less swell
+float UwSurfaceSheltered(vec2 xz, float t, vec4 footprint, vec4 shore, float shelter, out vec2 slope, out float face,
+                         out float variance)
 {
 	float level = u_uwParams.z;
 	float depth = level - shore.w;
@@ -525,7 +541,7 @@ float UwSurfaceFiltered(vec2 xz, float t, vec4 footprint, vec4 shore, out vec2 s
 	float breaking;
 	vec2 deepSlope;
 	float height = UwWavesInDepth(xz, t, footprint, shore.x, depth, deepSlope, variance, breaking);
-	float deep = smoothstep(0.05f, 0.6f, depth) * (1.0f - 0.7f * UwShoreReach(depth)) * (1.0f - pond);
+	float deep = smoothstep(0.05f, 0.6f, depth) * (1.0f - 0.7f * UwShoreReach(depth)) * (1.0f - pond) * shelter;
 	height *= deep;
 	variance *= deep * deep;
 	float cliff = UwShoreCliff(shore);

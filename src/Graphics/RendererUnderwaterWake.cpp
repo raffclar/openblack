@@ -42,7 +42,7 @@ namespace
 /// Whether an effect of the experiment is on
 bool EffectOn(underwater::Effect effect)
 {
-	return !Locator::underwaterSystem::has_value() || Locator::underwaterSystem::value().GetEffectOff() != effect;
+	return !Locator::underwaterSystem::has_value() || Locator::underwaterSystem::value().IsEffectOn(effect);
 }
 } // namespace
 

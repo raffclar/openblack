@@ -169,23 +169,22 @@ std::array<glm::vec4, underwater::k_WaveCount> underwater::WaveTable(const WaveS
 	// The lengths of the waves stay the same in all weather, so a change of the weather never moves their crests. The
 	// weather changes only how high each wave is. scale is 1 for the usual sea and 0 for no waves.
 	const float on = std::min(waves.scale, 1.0f);
-	// The swell from far away: 160 m and 115 m long, 0.6 m and 0.4 m high on a calm day, two and a half times that
-	// in a storm
-	const float swell = on * (1.0f + 1.5f * waves.storm);
-	table.at(0) = {k_SwellAngle, Metres(160.0f), Metres(0.6f) * swell, 0.7f};
-	table.at(1) = {k_SwellAngle + 0.15f, Metres(115.0f), Metres(0.4f) * swell, 3.9f};
+	// The swell from far away: 160 m and 115 m long, 1 m and 0.7 m high on a calm day, three times that in a storm
+	const float swell = on * (1.0f + 2.0f * waves.storm);
+	table.at(0) = {k_SwellAngle, Metres(160.0f), Metres(1.0f) * swell, 0.7f};
+	table.at(1) = {k_SwellAngle + 0.15f, Metres(115.0f), Metres(0.7f) * swell, 3.9f};
 	// The wind sea: 75 m long to 5 m, each 0.78 of the one before, directions spread about the wind's. The steepness
-	// (height for each length) grows from 0.0035 on a calm day to 0.015 in a storm, and the short chop grows more.
+	// (height for each length) grows from 0.0035 on a calm day to 0.012 in a storm, and the short chop grows more.
 	constexpr std::array<float, 12> k_Spread {0.0f, 0.35f, -0.45f, 0.6f, -0.2f, 0.85f, -0.7f, 0.3f, -1.0f, 0.95f, -0.5f, 0.65f};
 	constexpr std::array<float, 12> k_Phase {0.0f, 1.7f, 4.1f, 2.3f, 5.2f, 0.9f, 3.3f, 6.0f, 1.2f, 4.6f, 2.8f, 5.7f};
-	const float steepness = 0.0035f + 0.0115f * waves.storm;
+	const float steepness = 0.0035f + 0.0085f * waves.storm;
 	for (size_t i = 0; i < 12; ++i)
 	{
 		const float length = Metres(75.0f) * std::pow(0.78f, static_cast<float>(i));
 		float height = length * steepness * on;
 		if (length < Metres(12.0f))
 		{
-			height *= 1.0f + waves.storm * 1.5f;
+			height *= 1.0f + waves.storm;
 		}
 		table.at(i + 2) = {waves.windAngle + k_Spread.at(i), length, height, k_Phase.at(i)};
 	}
@@ -312,12 +311,12 @@ underwater::WaveSample underwater::WavesInDepth(glm::vec2 point, float seconds, 
 std::array<glm::vec4, underwater::k_FarWaveCount> underwater::FarWaveTable(const WaveState& waves)
 {
 	// A storm makes the long waves longer and much higher, so that the storm shows far out
-	// Their lengths stay the same in all weather; a storm makes them five times higher
-	const float higher = (1.0f + 4.0f * waves.storm) * std::min(waves.scale, 1.0f);
+	// Their lengths stay the same in all weather; a storm makes them six times higher
+	const float higher = (1.0f + 5.0f * waves.storm) * std::min(waves.scale, 1.0f);
 	return {{
-	    {waves.windAngle + 0.2f, Metres(180.0f), Metres(0.25f) * higher, 2.1f},
-	    {waves.windAngle - 0.35f, Metres(250.0f), Metres(0.3f) * higher, 4.9f},
-	    {k_SwellAngle + 0.4f, Metres(340.0f), Metres(0.35f) * higher, 0.4f},
+	    {waves.windAngle + 0.2f, Metres(180.0f), Metres(0.4f) * higher, 2.1f},
+	    {waves.windAngle - 0.35f, Metres(250.0f), Metres(0.5f) * higher, 4.9f},
+	    {k_SwellAngle + 0.4f, Metres(340.0f), Metres(0.6f) * higher, 0.4f},
 	}};
 }
 
@@ -914,4 +913,34 @@ underwater::SeaStrike underwater::TrackStrike(const SeaStrike& before, const std
 float underwater::StrikeRingRadius(float since)
 {
 	return 2.0f + 30.0f * std::sqrt(std::max(since, 0.0f));
+}
+
+bool underwater::InQuality(Effect effect, Quality quality)
+{
+	switch (effect)
+	{
+	case Effect::Environment:
+	case Effect::FoamVolume:
+	case Effect::SprayMist:
+	case Effect::Sediment:
+		return quality == Quality::High;
+	case Effect::Reflections:
+	case Effect::Shafts:
+	case Effect::Bubbles:
+	case Effect::Filtering:
+	case Effect::Motes:
+		return quality != Quality::Low;
+	default:
+		return true;
+	}
+}
+
+underwater::Quality underwater::NextQuality(Quality quality)
+{
+	return static_cast<Quality>((static_cast<uint8_t>(quality) + 1) % static_cast<uint8_t>(Quality::_Count));
+}
+
+std::array<glm::vec4, 2> underwater::ProfileUniform(const WaterProfile& profile)
+{
+	return {glm::vec4(profile.absorption, profile.reflection), glm::vec4(profile.scatter, profile.roughness)};
 }

@@ -132,24 +132,25 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	// The effects, with the one turned off to measure it
 	using underwater::Effect;
 	const auto off = Locator::underwaterSystem::value().GetEffectOff();
-	const auto on = [off](Effect effect) { return off == effect ? 0.0f : 1.0f; };
+	const auto& effects = Locator::underwaterSystem::value();
+	const auto on = [&effects](Effect effect) { return effects.IsEffectOn(effect) ? 1.0f : 0.0f; };
 	auto& frame = *_underwaterFrame;
 	frame.flags = {on(Effect::Reflections), on(Effect::Foam), on(Effect::Refraction), on(Effect::Shafts)};
 	frame.above = {light.aboveTowards, on(Effect::Caustics)};
-	frame.motes = off != Effect::Motes;
+	frame.motes = on(Effect::Motes) > 0.5f;
 	frame.eyeNearOrUnder = underwater::IsActive(eye.y, seaLevel);
 	// The eye's w says whether the eye is under the surface
 	frame.eye.w = eye.y < seaLevel ? 1.0f : 0.0f;
 	const auto& waves = system.GetWaves();
-	frame.waves = {off == Effect::Waves ? 0.0f : waves.scale, waves.storm, waves.windAngle,
-	               off == Effect::Waves ? 0.0f : waves.swash};
-	frame.phase = {waves.shorePhase, off == Effect::Waves ? 0.0f : waves.swellHeight, 0.0f, 0.0f};
+	frame.waves = {on(Effect::Waves) < 0.5f ? 0.0f : waves.scale, waves.storm, waves.windAngle,
+	               on(Effect::Waves) < 0.5f ? 0.0f : waves.swash};
+	frame.phase = {waves.shorePhase, on(Effect::Waves) < 0.5f ? 0.0f : waves.swellHeight, 0.0f, 0.0f};
 	frame.flags2 = {on(Effect::Whitecaps), on(Effect::Reef), 0.0f, off == Effect::WaterMask ? 1.0f : 0.0f};
 	frame.flags3 = {on(Effect::WetRock), on(Effect::SprayMist), 0.0f, 0.0f};
 	auto tableWaves = waves;
-	tableWaves.scale = off == Effect::Waves ? 0.0f : waves.scale;
+	tableWaves.scale = on(Effect::Waves) < 0.5f ? 0.0f : waves.scale;
 	frame.waveTable = underwater::WaveTable(tableWaves);
-	if (off == Effect::Waves)
+	if (on(Effect::Waves) < 0.5f)
 	{
 		for (auto& wave : frame.waveTable)
 		{
@@ -160,7 +161,7 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	const float pixelAngle = 2.0f * std::tan(desc.camera->GetVerticalFieldOfView() * 0.5f) / static_cast<float>(size.y);
 	frame.sea = {on(Effect::Filtering), on(Effect::FarWaves), pixelAngle, 0.0f};
 	frame.farWaves = underwater::FarWaveTable(tableWaves);
-	if (off == Effect::FarWaves || off == Effect::Waves)
+	if (on(Effect::FarWaves) < 0.5f || on(Effect::Waves) < 0.5f)
 	{
 		for (auto& wave : frame.farWaves)
 		{
@@ -168,14 +169,14 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 		}
 	}
 	const auto& current = system.GetCurrent();
-	const bool still = off == Effect::Current;
+	const bool still = on(Effect::Current) < 0.5f;
 	frame.current = still ? glm::vec4(0.0f) : glm::vec4(current.flow, current.swirl, current.gust);
 	// The storm on the sea: the rogue wave and the lightning, each with its own switch
-	if (off != Effect::RogueWaves && off != Effect::Waves)
+	if (on(Effect::RogueWaves) > 0.5f && on(Effect::Waves) > 0.5f)
 	{
 		frame.rogue = underwater::RogueUniform(system.GetRogueWave());
 	}
-	if (off != Effect::LightningOnWater)
+	if (on(Effect::LightningOnWater) > 0.5f)
 	{
 		const auto& strike = system.GetSeaStrike();
 		const auto flash = system.GetSeaFlash();
@@ -251,6 +252,11 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	mesh.GetVertexBuffer().Bind();
 	setUniforms(*post);
 	post->SetUniformValue("u_uwSky", &frame.sky);
+	const auto pond = underwater::ProfileUniform(underwater::k_PondProfile);
+	post->SetUniformArray("u_uwPond", pond.data(), static_cast<uint16_t>(pond.size()));
+	const glm::vec4 grade {underwater::k_Grade,
+	                       Locator::underwaterSystem::value().IsEffectOn(underwater::Effect::Grading) ? 1.0f : 0.0f};
+	post->SetUniformValue("u_uwGrade", &grade);
 	post->SetUniformArray("u_uwWaveTable", frame.waveTable.data(), static_cast<uint16_t>(frame.waveTable.size()));
 	post->SetUniformArray("u_uwFloaters", frame.floaters.data(), static_cast<uint16_t>(frame.floaters.size()));
 	post->SetUniformValue("u_uwSea", &frame.sea);
@@ -322,7 +328,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 
 	// The spray at the foot of the cliffs, above and under the water
 	if (const auto* spray = _shaderManager->GetShader("UnderwaterSpray");
-	    spray != nullptr && frame.flags.y > 0.5f && system.GetEffectOff() != underwater::Effect::Spray &&
+	    spray != nullptr && frame.flags.y > 0.5f && system.IsEffectOn(underwater::Effect::Spray) &&
 	    _underwater->BindSpray(system.GetSeabed().cliffFoot, system.GetSeabedRevision()))
 	{
 		setUniforms(*spray);
@@ -336,7 +342,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	}
 	// The waterspouts over the open sea in a strong storm
 	if (const auto* spout = _shaderManager->GetShader("UnderwaterSpout");
-	    spout != nullptr && system.GetEffectOff() != underwater::Effect::Waterspouts)
+	    spout != nullptr && system.IsEffectOn(underwater::Effect::Waterspouts))
 	{
 		const auto spouts = system.GetWaterspouts();
 		std::vector<glm::vec4> instances;
@@ -382,7 +388,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	}
 	// The air under the water at the foot of the cliffs
 	if (const auto* bubbles = _shaderManager->GetShader("UnderwaterBubbles");
-	    bubbles != nullptr && system.GetEffectOff() != underwater::Effect::Bubbles &&
+	    bubbles != nullptr && system.IsEffectOn(underwater::Effect::Bubbles) &&
 	    _underwater->BindBubbles(system.GetSeabed().cliffFoot, system.GetSeabedRevision()))
 	{
 		setUniforms(*bubbles);
@@ -427,7 +433,7 @@ private:
 void Renderer::DrawUnderwaterEnvironment(const DrawSceneDesc& desc) const
 {
 	if (!_underwaterFrame.has_value() || _underwater == nullptr || !Locator::underwaterSystem::has_value() ||
-	    Locator::underwaterSystem::value().GetEffectOff() == underwater::Effect::Environment)
+	    !Locator::underwaterSystem::value().IsEffectOn(underwater::Effect::Environment))
 	{
 		return;
 	}

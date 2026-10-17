@@ -101,7 +101,7 @@ void WaterWakeSystem::Update(std::chrono::milliseconds frameRealTime)
 	_centre = wake::FieldCentre(camera.GetOrigin(), camera.GetFocus(), k_CentreReach);
 	const float seaLevel = underwater.GetSeaLevel();
 	const float seconds = underwater.GetSeconds();
-	const bool off = underwater.GetEffectOff() == graphics::underwater::Effect::WakeField;
+	const bool off = !underwater.IsEffectOn(graphics::underwater::Effect::WakeField);
 
 	// The things that can be in the water near the field: the bodies in the physics, the creatures, the villagers and
 	// the explorers' boat

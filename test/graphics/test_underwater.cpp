@@ -248,8 +248,8 @@ TEST(Underwater, AStormMakesTheWavesHigher)
 		stormHighest = std::max(stormHighest, std::abs(underwater::WavesAt({x, 0.0f}, 3.0f, storm).height));
 	}
 	EXPECT_GT(stormHighest, calmHighest * 2.0f);
-	// The open sea on a calm day: crests of a metre or two, not more than four
-	EXPECT_LT(calmHighest, underwater::Metres(4.0f));
+	// The open sea on a calm day: crests of some metres, not more than eight
+	EXPECT_LT(calmHighest, underwater::Metres(8.0f));
 	EXPECT_GT(calmHighest, underwater::Metres(0.8f));
 	// The slope agrees with the height's change along x
 	const auto here = underwater::WavesAt({10.0f, 5.0f}, 2.0f, calm);
@@ -1042,4 +1042,32 @@ TEST(Seabed, WaterThatDoesNotJoinTheSeaIsAPond)
 	EXPECT_NEAR(underwater::ShorePond(underwater::ShoreTexel(shore, 0.0f, 1.0f)), 1.0f, 1e-5f);
 	EXPECT_FLOAT_EQ(underwater::ShoreCliff(underwater::ShoreTexel(shore, 0.0f, 1.0f)), 0.0f);
 	EXPECT_FLOAT_EQ(underwater::ShorePond(underwater::ShoreTexel(shore, 1.0f, 0.0f)), 0.0f);
+}
+
+TEST(UnderwaterQuality, LowerTiersDropOnlyThePartsWithAStandIn)
+{
+	using underwater::Effect;
+	using underwater::Quality;
+	for (uint8_t i = 0; i < static_cast<uint8_t>(Effect::_Count); ++i)
+	{
+		EXPECT_TRUE(underwater::InQuality(static_cast<Effect>(i), Quality::High));
+	}
+	EXPECT_FALSE(underwater::InQuality(Effect::Environment, Quality::Medium));
+	EXPECT_TRUE(underwater::InQuality(Effect::Reflections, Quality::Medium));
+	EXPECT_FALSE(underwater::InQuality(Effect::Reflections, Quality::Low));
+	// The water itself, its waves and its foam stay in every tier
+	EXPECT_TRUE(underwater::InQuality(Effect::Waves, Quality::Low));
+	EXPECT_TRUE(underwater::InQuality(Effect::Foam, Quality::Low));
+	EXPECT_EQ(underwater::NextQuality(Quality::Low), Quality::High);
+	EXPECT_EQ(underwater::NextQuality(Quality::High), Quality::Medium);
+}
+
+TEST(UnderwaterQuality, AProfileGoesToTheShadersAsTwoVectors)
+{
+	const auto pond = underwater::ProfileUniform(underwater::k_PondProfile);
+	EXPECT_FLOAT_EQ(pond.at(0).x, underwater::k_PondProfile.absorption.x);
+	EXPECT_FLOAT_EQ(pond.at(1).w, underwater::k_PondProfile.roughness);
+	// A pond takes the blue first and has no waves
+	EXPECT_GT(underwater::k_PondProfile.absorption.z, underwater::k_PondProfile.absorption.x);
+	EXPECT_FLOAT_EQ(underwater::k_PondProfile.waveScale, 0.0f);
 }

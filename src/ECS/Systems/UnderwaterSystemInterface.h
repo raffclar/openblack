@@ -37,6 +37,11 @@ public:
 	virtual void SetEnabled(bool enabled) = 0;
 	/// The effect turned off to measure its cost, or none
 	[[nodiscard]] virtual graphics::underwater::Effect GetEffectOff() const = 0;
+	/// Whether an effect is drawn: the effect turned off to measure it is not, nor what the quality tier leaves out
+	[[nodiscard]] virtual bool IsEffectOn(graphics::underwater::Effect effect) const = 0;
+	[[nodiscard]] virtual graphics::underwater::Quality GetQuality() const = 0;
+	/// The next quality tier, High after Low
+	virtual void CycleQuality() = 0;
 	/// Turns the next effect off, and the one before on again, in turn
 	virtual void CycleEffectOff() = 0;
 	/// Starts a debug tour of the camera: by the shore of the first land (see underwater::TourAt), or out along the sea

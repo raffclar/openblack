@@ -358,6 +358,13 @@ void UnderwaterSystem::CycleEffectOff()
 	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: effect {} turned off (0 is none)", next);
 }
 
+void UnderwaterSystem::CycleQuality()
+{
+	_quality = graphics::underwater::NextQuality(_quality);
+	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: quality tier {} (0 high, 1 medium, 2 low)",
+	                   static_cast<int>(_quality));
+}
+
 void UnderwaterSystem::LoadSand()
 {
 	// The coral atlas, with its alpha, through the texture cache

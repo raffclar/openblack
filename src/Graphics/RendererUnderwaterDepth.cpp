@@ -41,9 +41,9 @@ using namespace openblack::graphics;
 namespace
 {
 /// Whether the foam field shows with the effect that is off
-bool FoamFieldOn(underwater::Effect off)
+bool FoamFieldOn(const ecs::systems::UnderwaterSystemInterface& system)
 {
-	return off != underwater::Effect::FoamVolume && off != underwater::Effect::Foam;
+	return system.IsEffectOn(underwater::Effect::FoamVolume) && system.IsEffectOn(underwater::Effect::Foam);
 }
 } // namespace
 
@@ -56,7 +56,7 @@ void Renderer::StepUnderwaterFoam(const DrawSceneDesc& desc) const
 	}
 	const auto& system = Locator::underwaterSystem::value();
 	const auto* program = _shaderManager->GetShader("UnderwaterFoam");
-	if (program == nullptr || !FoamFieldOn(system.GetEffectOff()))
+	if (program == nullptr || !FoamFieldOn(system))
 	{
 		return;
 	}
@@ -106,9 +106,8 @@ void Renderer::BindUnderwaterDepth(const ShaderProgram& program, uint8_t foamSta
 		return;
 	}
 	const auto& system = Locator::underwaterSystem::value();
-	const auto off = system.GetEffectOff();
 	const auto& clock = _underwater->Foam();
-	const bool foamOn = FoamFieldOn(off) && clock.Ready();
+	const bool foamOn = FoamFieldOn(system) && clock.Ready();
 	const glm::vec4 field {clock.Origin(), foamOn ? 1.0f : 0.0f, underwater::k_FoamWindow};
 	program.SetUniformValue("u_uwFoam", &field);
 	if (foamOn)
@@ -118,7 +117,7 @@ void Renderer::BindUnderwaterDepth(const ShaderProgram& program, uint8_t foamSta
 	if (noiseStage.has_value())
 	{
 		const auto& frame = *_underwaterFrame;
-		const bool sedimentOn = off != underwater::Effect::Sediment;
+		const bool sedimentOn = system.IsEffectOn(underwater::Effect::Sediment);
 		const glm::vec4 sediment {sedimentOn ? 1.0f : 0.0f, underwater::SedimentStir(frame.waves.w, frame.waves.y), 0.0f, 0.0f};
 		program.SetUniformValue("u_uwSediment", &sediment);
 		program.SetTextureSampler("s_sedimentNoise", *noiseStage, _underwater->SprayNoise());
