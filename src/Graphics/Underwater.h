@@ -184,6 +184,8 @@ enum class Effect : uint8_t
 	WaterMask,
 	/// The volumetric clouds in place of the original game's clouds (the original clouds show when it is off)
 	Clouds,
+	/// The shadows of the sun and the moon: the hills' shadows over the land and the water, and the things' shadows
+	Shadows,
 	_Count
 };
 

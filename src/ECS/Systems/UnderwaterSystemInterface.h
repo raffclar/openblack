@@ -39,6 +39,8 @@ public:
 	[[nodiscard]] virtual graphics::underwater::Effect GetEffectOff() const = 0;
 	/// Turns the next effect off, and the one before on again, in turn
 	virtual void CycleEffectOff() = 0;
+	/// Turns the effect before off, and the one after on again: from none, one step reaches the last effect
+	virtual void CycleEffectOffBack() = 0;
 	/// The debug choice of the volumetric clouds' cover (volumetric_clouds::CoverChoice), 0 for the weather's own
 	[[nodiscard]] virtual uint8_t GetCloudCover() const = 0;
 	/// Moves on to the next choice of the clouds' cover, in turn

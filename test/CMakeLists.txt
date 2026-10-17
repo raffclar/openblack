@@ -1074,3 +1074,5 @@ openblack_setup_and_add_test(
 )
 # EXPERIMENT (not for merge): the one wind of the experiment
 openblack_setup_and_add_test(test_wind test_wind.cpp)
+# EXPERIMENT (not for merge): the shadows of the sun and the moon
+openblack_setup_and_add_test(test_sun_shadows graphics/test_sun_shadows.cpp)

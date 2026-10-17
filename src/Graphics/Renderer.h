@@ -42,6 +42,7 @@
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/SeaRows.h"
+#include "Graphics/SunShadowView.h"
 #include "Graphics/UnderwaterView.h"
 #include "Graphics/UnderwaterWakeField.h"
 #include "Graphics/VolumeGlowShell.h"
@@ -430,6 +431,15 @@ private:
 	/// EXPERIMENT (not for merge): the map of the clouds' shadow for the water, in a sampler stage; none when the
 	/// clouds are off
 	void BindCloudShadow(const ShaderProgram& program, uint8_t stage) const;
+	/// EXPERIMENT (not for merge): the shadows of the sun and the moon this frame: whether the maps of the environment
+	/// are made again, and the light. None while the shadows are off.
+	void BeginShadows(const DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): the map of the sun's visibility, the light's maps and the things' shadows over the
+	/// scene's colour
+	void DrawSunShadows(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const;
+	/// EXPERIMENT (not for merge): the map of the sun's visibility for one program, in a sampler stage; off while the
+	/// shadows are off
+	void BindSunVisibility(const ShaderProgram& program, uint8_t stage) const;
 	/// EXPERIMENT (not for merge): the sea bed past the land's blocks, in the land's pass of the main view
 	void DrawFarSeabed(RenderPass landViewId) const;
 	/// EXPERIMENT (not for merge): the reef's coral and plants, in the land's pass of the main view
@@ -626,6 +636,20 @@ private:
 	mutable std::unique_ptr<VolumetricCloudsView> _clouds;
 	/// EXPERIMENT (not for merge): the clouds' uniforms of this frame, while the volumetric clouds show
 	mutable std::optional<volumetric_clouds::CloudUniforms> _cloudsFrame;
+	/// EXPERIMENT (not for merge): the shadows' maps and targets, made when they first show
+	mutable std::unique_ptr<SunShadowView> _sunShadows;
+	/// EXPERIMENT (not for merge): the shadows of this frame, while they show
+	struct SunShadowFrame
+	{
+		sun_shadows::ShadowClock::Frame clock;
+		glm::vec3 light;
+		glm::vec3 focus;
+		/// How dark a full shadow of a thing makes the scene, 0 to 1
+		float darkness;
+	};
+	mutable std::optional<SunShadowFrame> _shadowsFrame;
+	/// EXPERIMENT (not for merge): whether the blend of the maps of the sun's visibility has been drawn once
+	mutable bool _sunVisibilityReady {false};
 	/// EXPERIMENT (not for merge): whether the scene's views are bound to the underwater target
 	mutable bool _underwaterBound {false};
 	/// The colours the sky's dome is drawn in this frame

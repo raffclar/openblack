@@ -641,6 +641,7 @@ Renderer::~Renderer() noexcept
 	_underwater.reset();
 	_wakeField.reset();
 	_clouds.reset();
+	_sunShadows.reset();
 	_shaderManager.reset();
 	bgfx::frame();
 	bgfx::shutdown();
@@ -4081,6 +4082,21 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 			               BGFX_STATE_WRITE_R | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
 			                   BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN));
 		    });
+	}
+
+	// EXPERIMENT (not for merge): the hills' shadows from the map of the sun's visibility, which follows the sun and the
+	// moon. The map has a texel for each corner of the land; a texel's middle falls on each cell's corner.
+	if (_shadowsFrame.has_value() && _sunShadows != nullptr && _sunVisibilityReady)
+	{
+		const glm::vec2 from = -firstCell;
+		const glm::vec2 to = from + static_cast<float>(sun_shadows::k_VisibilityTexels);
+		constexpr float k_HillShade = 190.0f;
+		const glm::vec4 u_landShade {0.0f, k_HillShade, 0.0f, 0.0f};
+		shadeProgram.SetTextureSampler("s_texture", 0, _sunShadows->Visibility(2));
+		shadeProgram.SetUniformValue("u_landShade", &u_landShade);
+		submitQuad(shadeView, shadeProgram, from, to, glm::vec2(0.0f), glm::vec2(1.0f),
+		           BGFX_STATE_WRITE_R | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
+		               BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN));
 	}
 
 	// A storm with clouds of its own darkens the land under it by its shade and strength, its shadow centred on it

@@ -29,6 +29,7 @@ public:
 	void SetEnabled(bool enabled) override { _enabled = enabled; }
 	[[nodiscard]] graphics::underwater::Effect GetEffectOff() const override { return _effectOff; }
 	void CycleEffectOff() override;
+	void CycleEffectOffBack() override;
 	[[nodiscard]] uint8_t GetCloudCover() const override { return _cloudCover; }
 	void CycleCloudCover() override;
 	void StartTour(graphics::underwater::Tour tour) override

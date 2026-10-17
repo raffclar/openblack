@@ -149,6 +149,12 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_clouds_cube
 #include "ShaderIncluder.h"
+#define SHADER_NAME fs_sun_visibility
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_sun_visibility_blend
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_shadow_apply
+#include "ShaderIncluder.h"
 
 #define SHADER_NAME vs_sprite
 #include "ShaderIncluder.h"
@@ -259,7 +265,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 94> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 97> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -306,7 +312,10 @@ const std::array<bgfx::EmbeddedShader, 94> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_clouds_march),
     BGFX_EMBEDDED_SHADER(fs_clouds_resolve),
     BGFX_EMBEDDED_SHADER(fs_clouds_composite),
-    BGFX_EMBEDDED_SHADER(fs_clouds_cube), //
+    BGFX_EMBEDDED_SHADER(fs_clouds_cube),
+    BGFX_EMBEDDED_SHADER(fs_sun_visibility),
+    BGFX_EMBEDDED_SHADER(fs_sun_visibility_blend),
+    BGFX_EMBEDDED_SHADER(fs_shadow_apply), //
     BGFX_EMBEDDED_SHADER(vs_sprite),
     BGFX_EMBEDDED_SHADER(fs_sprite), //
     BGFX_EMBEDDED_SHADER(vs_footprint_instanced),
@@ -391,6 +400,9 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"CloudResolve", "vs_water", "fs_clouds_resolve"},
     ShaderDefinition {"CloudComposite", "vs_water", "fs_clouds_composite"},
     ShaderDefinition {"CloudCube", "vs_water", "fs_clouds_cube"},
+    ShaderDefinition {"SunVisibility", "vs_water", "fs_sun_visibility"},
+    ShaderDefinition {"SunVisibilityBlend", "vs_water", "fs_sun_visibility_blend"},
+    ShaderDefinition {"ShadowApply", "vs_water", "fs_shadow_apply"},
     ShaderDefinition {"Sprite", "vs_sprite", "fs_sprite"},
     ShaderDefinition {"FootprintInstanced", "vs_footprint_paint_instanced", "fs_footprint"},
     ShaderDefinition {"ParticleInstanced", "vs_particle_instanced", "fs_particle"},

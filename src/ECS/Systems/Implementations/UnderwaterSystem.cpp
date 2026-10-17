@@ -355,6 +355,15 @@ void UnderwaterSystem::CycleEffectOff()
 	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: effect {} turned off (0 is none)", next);
 }
 
+void UnderwaterSystem::CycleEffectOffBack()
+{
+	using graphics::underwater::Effect;
+	constexpr auto k_Count = static_cast<uint8_t>(Effect::_Count);
+	const auto next = static_cast<uint8_t>((static_cast<uint8_t>(_effectOff) + k_Count - 1) % k_Count);
+	_effectOff = static_cast<Effect>(next);
+	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: effect {} turned off (0 is none)", next);
+}
+
 void UnderwaterSystem::CycleCloudCover()
 {
 	// The weather's own cover, then clear, scattered, broken and overcast (volumetric_clouds::CoverChoice)
