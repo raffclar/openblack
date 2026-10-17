@@ -326,14 +326,20 @@ void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarge
 		view.aerial.drawn = true;
 	}
 
-	// The haze over the scene and the water, after the clouds and before the fog
+	// The haze over the scene and the water, first of what blends over them. The clouds come after it and fade with
+	// their own distance, so a cloud in front of the far sea gets no haze of the sea's distance.
 	setUniforms(*applyProgram);
 	if (grid)
 	{
 		applyProgram->SetTextureSampler("s_atmosAerial", 0, view.aerial.Texture());
 	}
 	applyProgram->SetTextureSampler("s_sceneDepth", 1, sceneTarget.GetDepthStencilAttachment());
-	const glm::vec4 apply {grid ? 1.0f : 0.0f, atmosphere.lowTierDensity, 0.0f, 0.0f};
+	if (grid)
+	{
+		// The scene far away fades into the sky that the dome shows at the horizon
+		applyProgram->SetTextureSampler("s_atmosSkyView", 14, view.skyView.Texture());
+	}
+	const glm::vec4 apply {grid ? 1.0f : 0.0f, atmosphere.lowTierDensity, atmosphere.sunHeight, 0.0f};
 	applyProgram->SetUniformValue("u_hazeApply", &apply);
 	applyProgram->SetUniformValue("u_hazeHorizon", &atmosphere.horizon);
 	applyProgram->SetUniformValue("u_hazeDome", &atmosphere.skyDome);
@@ -341,7 +347,7 @@ void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarge
 	applyProgram->SetUniformValue("u_hazeSunColour", &atmosphere.sunColour);
 	BindScreenTriangle();
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_SRC_ALPHA));
-	applyProgram->Submit(static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver), std::numeric_limits<uint32_t>::max() - 1);
+	applyProgram->Submit(static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver), std::numeric_limits<uint32_t>::max());
 }
 
 void Renderer::BindFoliageLight(const ShaderProgram& program) const

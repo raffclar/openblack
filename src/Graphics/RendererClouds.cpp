@@ -282,10 +282,14 @@ void Renderer::DrawClouds(const DrawSceneDesc& desc, const FrameBuffer& sceneTar
 	const glm::vec4 composite {static_cast<float>(size.x), static_cast<float>(size.y), under ? 0.0f : k_ShaftStrength,
 	                           under ? 1.0f : 0.0f};
 	compositeProgram->SetUniformValue("u_cloudComposite", &composite);
+	// The haze between the eye and the far clouds has the colour of the air's sky at the horizon
+	BindAtmosphere(*compositeProgram, 1.0f);
 	BindScreenTriangle();
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_SRC_ALPHA));
-	// The farthest of all that blends, so drawn first
-	compositeProgram->Submit(static_cast<bgfx::ViewId>(compositeView), std::numeric_limits<uint32_t>::max());
+	// Over the water, after the haze and the fog, which find the scene by its depth, and before the rest that blends;
+	// under the water, first of all that blends
+	compositeProgram->Submit(static_cast<bgfx::ViewId>(compositeView),
+	                         under ? std::numeric_limits<uint32_t>::max() : std::numeric_limits<uint32_t>::max() - 2);
 }
 
 void Renderer::DrawCloudsInEnvironment(const glm::vec3& centre) const

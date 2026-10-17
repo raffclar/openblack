@@ -157,6 +157,37 @@ vec3 AtmosSoftClip(vec3 colour)
 	return min(colour, vec3_splat(0.8f)) + 0.2f * (vec3_splat(1.0f) - exp(-over / 0.2f));
 }
 
+// The mean of the air's dimming for each kilometre, as the light sees it, along a straight path from one height to
+// another (in kilometres). The air thins with the height, the dust faster than the molecules.
+float AtmosMeanExtinction(float fromHeight, float toHeight)
+{
+	float low = max(min(fromHeight, toHeight), 0.0f);
+	float high = max(max(fromHeight, toHeight), 0.0f);
+	float rise = high - low;
+	float rayleigh = rise > 1e-3f ? ATMOS_RAYLEIGH_HEIGHT * (exp(-low / ATMOS_RAYLEIGH_HEIGHT) - exp(-high / ATMOS_RAYLEIGH_HEIGHT)) / rise
+	                              : exp(-low / ATMOS_RAYLEIGH_HEIGHT);
+	float mie = rise > 1e-3f ? ATMOS_MIE_HEIGHT * (exp(-low / ATMOS_MIE_HEIGHT) - exp(-high / ATMOS_MIE_HEIGHT)) / rise
+	                         : exp(-low / ATMOS_MIE_HEIGHT);
+	const vec3 luma = vec3(0.2126f, 0.7152f, 0.0722f);
+	return dot(ATMOS_RAYLEIGH_SCATTERING, luma) * rayleigh + ATMOS_MIE_EXTINCTION * u_atmosParams.x * mie;
+}
+
+// The sky as the dome shows it on the screen in a direction, with `sunHeight` the sine of the air's sun over the
+// horizon. The haze over the far land and the far sea goes to this colour, so the land and the sea fade into the sky.
+vec3 AtmosSkyOnScreen(vec3 dir, float sunHeight)
+{
+	vec3 air = AtmosSky(dir) * u_atmosSun.rgb;
+	// By day the air's sky high up is lighter than the plain model gives, as the original dome is, so the sky does not
+	// go to a deep blue over the eye. The sky at dusk and at night keeps the model's own brightness.
+	const vec3 luma = vec3(0.2126f, 0.7152f, 0.0722f);
+	float lift = 1.0f + 0.8f * smoothstep(0.05f, 0.6f, dir.y) * smoothstep(-0.02f, 0.2f, u_atmosLight.y);
+	air = AtmosSoftClip(air * lift);
+	// After sunset and in the moon's light the model gives a deep, strong blue. The eye sees the dim sky with less
+	// colour, so the sky goes part of the way to grey while the air's sun is low.
+	float grey = dot(air, luma);
+	return mix(vec3_splat(grey), air, mix(0.25f, 1.0f, smoothstep(0.0f, 0.35f, sunHeight)));
+}
+
 // The distance of a slice of the haze's grid from the eye in world units, and the slice at a distance
 float AtmosSliceDistance(float slice)
 {

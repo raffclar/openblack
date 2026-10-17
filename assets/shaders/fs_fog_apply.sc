@@ -5,9 +5,9 @@ $input v_texcoord0, v_texcoord1
 #include "fog.sh"
 #include "sky_dome.sh"
 
-// EXPERIMENT (not for merge): the fog over the scene, the water and the clouds. Each pixel reads the summed fog at the
-// distance of its scene, between the two slices round it. Where the screen shows the sky, a thinner share of the fog
-// shows, so that the sky and the clouds stay clear. Blended as rgb + the scene times a.
+// EXPERIMENT (not for merge): the fog over the scene and the water, before the clouds. Each pixel reads the summed fog
+// at the distance of its scene, between the two slices round it. Where the screen shows the sky, a thinner share of the
+// fog shows, so that the sky stays clear. Blended as rgb + the scene times a.
 
 SAMPLER2D(s_fogSum, 0);
 SAMPLER2D(s_sceneDepth, 1);
@@ -50,9 +50,9 @@ void main()
 	// Nearer than the first slice, the fog is a share of the first slice's
 	float nearShare = clamp(range / FogSliceDistance(0.0f), 0.0f, 1.0f);
 	fog = mix(vec4(0.0f, 0.0f, 0.0f, 1.0f), fog, nearShare);
-	if (sky)
-	{
-		fog = mix(vec4(0.0f, 0.0f, 0.0f, 1.0f), fog, u_fogApply.x);
-	}
+	// Past the grid's far end the scene eases to the sky's thinner share, so the far sea at the horizon has the same
+	// fog as the sky over it and the line between them does not show
+	float share = sky ? u_fogApply.x : mix(1.0f, u_fogApply.x, smoothstep(u_fogGrid.w, u_fogGrid.w * 4.0f, range));
+	fog = mix(vec4(0.0f, 0.0f, 0.0f, 1.0f), fog, share);
 	gl_FragColor = fog;
 }

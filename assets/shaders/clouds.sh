@@ -281,13 +281,16 @@ vec3 CloudLightning(vec3 p, float rain)
 	return CLOUD_FLASH_COLOUR * glow;
 }
 
+// The haze that hides far clouds: the distance through the air at the sea's level that hides all but a third of a
+// cloud (near the haze's own, see atmosphere.sh), and the height over which the air thins to a third
+#define CLOUD_HAZE_REACH 7000.0f
+#define CLOUD_HAZE_HEIGHT 2000.0f
+
 // The clouds along a ray from the eye up to a limit: rgb the light that they scatter towards the eye, a how much of the
 // light behind them goes through. `depth` is where the cloud is along the ray, weighted by how much each part shows,
 // or the end of the ray when there is no cloud. `steps` is the most samples, `jitter` (0 to 1) moves the first one.
-// `sky` is the light of the sky from above, `behind` the colour of the sky behind the ray, which the far clouds fade
-// into.
-vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool detail, vec3 sky, vec3 behind,
-                 out float depth)
+// `sky` is the light of the sky from above.
+vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool detail, vec3 sky, out float depth)
 {
 	vec2 span = CloudSpan(eye, dir, limit);
 	depth = min(limit, u_cloudLayer.z);
@@ -365,10 +368,18 @@ vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool 
 	{
 		depth = weightedDepth / weights;
 	}
-	// The air between the eye and far clouds fades them into the colour of the sky
-	float haze = 1.0f - exp(-depth / 9000.0f);
-	colour = mix(colour, behind * (1.0f - transmittance), haze * 0.9f);
 	return vec4(colour, transmittance);
+}
+
+// How much of a cloud at a distance along a ray the haze hides, 0 to 1. The air thins with the height, so a path high
+// over the land holds less haze than one near the sea.
+float CloudHaze(vec3 eye, vec3 dir, float depth)
+{
+	float low = max(eye.y - u_cloudLayer.w, 0.0f) / CLOUD_HAZE_HEIGHT;
+	float high = max(eye.y + dir.y * depth - u_cloudLayer.w, 0.0f) / CLOUD_HAZE_HEIGHT;
+	float rise = high - low;
+	float meanAir = abs(rise) > 1e-3f ? (exp(-low) - exp(-high)) / rise : exp(-low);
+	return 1.0f - exp(-depth * meanAir / CLOUD_HAZE_REACH);
 }
 
 // Where a point of the screen (0 to 1, as the textures are read) is in the world, at a depth of the depth buffer

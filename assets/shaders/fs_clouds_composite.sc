@@ -2,6 +2,7 @@ $input v_texcoord0, v_texcoord1
 
 #include <bgfx_shader.sh>
 
+#include "atmosphere.sh"
 #include "clouds.sh"
 
 // EXPERIMENT (not for merge): the clouds over the scene at the full size of the screen. Of the four pixels of the half
@@ -15,6 +16,8 @@ SAMPLER2D(s_sceneDepth, 5);
 
 // xy: the size of the clouds' target in pixels; z: how strong the shafts of light are; w: unused
 uniform vec4 u_cloudComposite;
+// x: 1 while the air's sky is ready; y: the sine of the air's sun over the horizon; zw: unused
+uniform vec4 u_skyAtmos;
 
 // How far a ray goes before the scene, or the water when the eye is above it
 float RayLimit(vec2 uv, vec3 dir)
@@ -39,6 +42,7 @@ void main()
 	vec2 base = floor(texel);
 	vec2 f = texel - base;
 	vec4 sum = vec4_splat(0.0f);
+	float cloudDepth = 0.0f;
 	float weights = 0.0f;
 	for (int y = 0; y < 2; ++y)
 	{
@@ -51,10 +55,26 @@ void main()
 			float alike = 1.0f / (0.02f + abs(scene - here) / max(here, 1.0f));
 			float weight = place * alike + 1e-5f;
 			sum += texture2DLod(s_cloudHistory, at, 0.0f) * weight;
+			cloudDepth += texture2DLod(s_cloudCurrentDepth, at, 0.0f).r * weight;
 			weights += weight;
 		}
 	}
 	vec4 clouds = sum / weights;
+	cloudDepth /= weights;
+	// The haze between the eye and a far cloud: the cloud goes to the colour of the hazy sky at the horizon in the same
+	// direction, the colour that the far sea and the far land go to. So the clouds, the sea and the sky meet at the
+	// horizon with no line. Without the air's sky, more of the sky behind a far cloud shows.
+	float haze = CloudHaze(u_cloudEye.xyz, dir, cloudDepth);
+	vec3 hazeColour = vec3_splat(0.0f);
+	if (u_skyAtmos.x > 0.0f)
+	{
+		hazeColour = AtmosSkyOnScreen(normalize(vec3(dir.x, max(dir.y, 0.0f), dir.z)), u_skyAtmos.y) * (1.0f - clouds.a);
+	}
+	else
+	{
+		clouds.a = mix(clouds.a, 1.0f, haze);
+	}
+	clouds.rgb = mix(clouds.rgb, hazeColour, haze);
 	// A scene nearer than the lowest cloud has no cloud in front of it: the half size's pixels round a near hill's edge
 	// can hold the sky's clouds, which would show as a bright line along the hill
 	if (here < CloudNearestAlong(dir) && !CloudOnDome(dir, here))

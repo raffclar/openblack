@@ -249,7 +249,7 @@ void Renderer::DrawFog(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget
 		sumProgram->Submit(pass);
 	}
 
-	// The fog over the scene, the water and the clouds, after the clouds
+	// The fog over the scene and the water, after the haze and before the clouds
 	setFogUniforms(*applyProgram);
 	applyProgram->SetTextureSampler("s_fogSum", 0, view.Sum());
 	applyProgram->SetTextureSampler("s_sceneDepth", 1, sceneTarget.GetDepthStencilAttachment());
@@ -260,5 +260,5 @@ void Renderer::DrawFog(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget
 	applyProgram->SetUniformValue("u_hazeDome", _atmosphereFrame.has_value() ? &_atmosphereFrame->skyDome : &noDome);
 	BindScreenTriangle();
 	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_SRC_ALPHA));
-	applyProgram->Submit(static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver), std::numeric_limits<uint32_t>::max() - 2);
+	applyProgram->Submit(static_cast<bgfx::ViewId>(RenderPass::UnderwaterOver), std::numeric_limits<uint32_t>::max() - 1);
 }

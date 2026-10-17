@@ -13,7 +13,8 @@ $input v_texcoord0, v_texcoord1
 SAMPLER2D(s_atmosAerial, 0);
 SAMPLER2D(s_sceneDepth, 1);
 
-// x: 1 for the grid, 0 for the low tier's haze; y: the low tier's haze for each world unit; zw: unused
+// x: 1 for the grid, 0 for the low tier's haze; y: the low tier's haze for each world unit; z: the sine of the air's
+// sun over the horizon; w: unused
 uniform vec4 u_hazeApply;
 // rgb: the colour of the horizon on the screen, for the low tier; w: unused
 uniform vec4 u_hazeHorizon;
@@ -112,11 +113,21 @@ void main()
 		// Nearer than the first slice, the haze is a share of the first slice's
 		float nearShare = clamp(range / AtmosSliceDistance(0.0f), 0.0f, 1.0f);
 		haze = mix(vec4(0.0f, 0.0f, 0.0f, 1.0f), haze, nearShare);
-		// Past the last slice the haze goes on to the horizon's colour
-		float farther = max(range - ATMOS_AERIAL_FARTHEST, 0.0f) * u_hazeApply.y;
-		haze.rgb *= u_atmosSun.rgb;
-		float beyond = exp(-farther);
-		haze = vec4(haze.rgb + haze.a * u_hazeHorizon.rgb * (1.0f - beyond), haze.a * beyond);
+		// Past the middle of the last slice the grid does not change. From there the haze goes on, and the scene fades
+		// into the sky that the dome shows at the horizon in the same direction. At the horizon the far sea is all
+		// haze and has the colour of the sky above it, so the line between them does not show.
+		// The air is thinner high up, so a path from a high eye down to the sea holds less haze than one along the sea.
+		float fromHeight = (eye.y - sea) / ATMOS_UNITS_PER_KM;
+		float toHeight = (eye.y + dir.y * range - sea) / ATMOS_UNITS_PER_KM;
+		float farther = max(range - AtmosSliceDistance(ATMOS_AERIAL_SLICES - 1.0f), 0.0f) / ATMOS_UNITS_PER_KM *
+		                AtmosMeanExtinction(fromHeight, toHeight) * u_atmosParams.y;
+		float hidden = 1.0f - exp(-farther);
+		vec3 horizonSky = AtmosSkyOnScreen(normalize(vec3(dir.x, max(dir.y, 0.0f), dir.z)), u_hazeApply.z);
+		// A thick haze has the colour of the sky at the horizon, as the dome shows it. A thin haze near the eye keeps
+		// the grid's own light, with the shadows of the hills and the clouds in it.
+		float opacity = 1.0f - haze.a;
+		vec3 added = mix(haze.rgb * u_atmosSun.rgb, horizonSky * opacity, opacity);
+		haze = vec4(mix(added, horizonSky, hidden), haze.a * (1.0f - hidden));
 	}
 	else
 	{
