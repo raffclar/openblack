@@ -121,9 +121,13 @@ struct ChainCreator final: Creator
 	/// The texture coordinates of a segment's four corners: its first joint's two sides, then its next joint's, the
 	/// first side of each ahead. U runs across the ribbon, V along it.
 	/// A ribbon may repeat its frame a number of times of its own in place of the creator's (-1 for the creator's), and
-	/// its texture may have slid along it by a scroll in sheet heights, which wraps round at one repeat of the frame.
+	/// its texture may have slid along it by a scroll in sheet heights. The game adds the scroll to V twice: once to each
+	/// corner, then again as the texture's offset for the whole draw, so the texture slides at twice the scroll.
 	[[nodiscard]] std::array<glm::vec2, 4> SegmentUv(int segment, int segments, int repeatsOverride = -1,
 	                                                 float scroll = 0.0f) const;
+	/// A ribbon's scroll after a drawn frame of this many game milliseconds at a speed in sheet heights a second: moved
+	/// on, then wrapped round at one repeat of the frame, never backwards. Each step is a float.
+	[[nodiscard]] float ScrolledOn(float scroll, float milliseconds, float speed) const;
 };
 
 /// A puff of mist for each atom, the mist mesh facing the camera and shrinking edge on

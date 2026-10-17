@@ -2346,6 +2346,11 @@ bool Game::Update() noexcept
 	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+	// The ribbons' textures slide on the frames that draw them
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().ScrollChains(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+	}
 	{
 		// The flames, steam and smoke of what burns move on
 		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);

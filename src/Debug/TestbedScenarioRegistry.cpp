@@ -1556,6 +1556,22 @@ void AddStory(std::vector<Scenario>& all)
 	                .distance = 1.0f},
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .life = 0.3f}},
 	});
+	all.push_back({
+	    .id = "particles.ribbon_slide",
+	    .name = "A ribbon's corners and its texture sliding along it",
+	    .facet = Facet::Particles,
+	    .description = "The hurt temple's heart beaming across itself, as in temple.damage_beam, seen close up so that the "
+	                   "beams' ribbons fill the view.",
+	    .expected = "Each beam is a ribbon that faces the camera from every side, its corners meeting half way where two "
+	                "segments join. Its texture slides along it at twice the speed of its data, as the game adds the "
+	                "slide to the texture twice. The slide moves on only by the frames drawn, and stops while the game is "
+	                "paused.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {20.0f}, k_Temple + glm::vec2 {20.0f}},
+	                .distance = 0.6f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .life = 0.3f}},
+	});
 	AddBreederOffers(all);
 	AddOgreLair(all);
 	AddGuideStorm(all);
