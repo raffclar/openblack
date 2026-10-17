@@ -50,9 +50,10 @@ TEST(WarmUpViews, CoverComesAfterTheScene)
 // The views that draw into targets of their own are drawn whole: the next frames draw them again
 TEST(WarmUpViews, TargetViewsAreDrawnWhole)
 {
-	for (const auto view : {RenderPass::LandShade, RenderPass::LandLuminosity, RenderPass::LandColour, RenderPass::SkyDome,
-	                        RenderPass::Footprint, RenderPass::LandAlpha, RenderPass::ObjectShadow, RenderPass::Reflection,
-	                        RenderPass::ReflectionSky, RenderPass::ReflectionTranslucent, RenderPass::UnderSea})
+	for (const auto view :
+	     {RenderPass::LandShade, RenderPass::LandLuminosity, RenderPass::LandColour, RenderPass::SkyDome, RenderPass::Footprint,
+	      RenderPass::LandAlpha, RenderPass::ObjectShadow, RenderPass::Reflection, RenderPass::ReflectionSky,
+	      RenderPass::ReflectionTranslucent, RenderPass::ReflectionMirrored, RenderPass::UnderSea})
 	{
 		EXPECT_FALSE(Kept(view));
 	}

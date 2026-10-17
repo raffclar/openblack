@@ -1184,3 +1184,6 @@ openblack_setup_and_add_test(test_town_turn_order test_town_turn_order.cpp)
 openblack_setup_and_add_test(
   test_creature_reflection graphics/test_creature_reflection.cpp
 )
+openblack_setup_and_add_test(
+  test_hand_reflection graphics/test_hand_reflection.cpp
+)
