@@ -23,10 +23,20 @@ using namespace openblack::ecs::components;
 std::pair<glm::vec2, float> openblack::ecs::archetypes::GetFixedObstacleBoundingCircle(MeshId meshId,
                                                                                        const Transform& transform)
 {
-	auto resourceId = resources::HashIdentifier(meshId);
-	const auto l3dMesh = Locator::resources::value().GetMeshes().Handle(resourceId);
-	assert(l3dMesh);
-	const auto& bb = l3dMesh->GetBoundingBox();
+	const auto circle = GetFixedObstacleBoundingCircle(resources::HashIdentifier(meshId), transform);
+	assert(circle.has_value());
+	return circle.value_or(std::make_pair(glm::xz(transform.position), 0.0f));
+}
+
+std::optional<std::pair<glm::vec2, float>>
+openblack::ecs::archetypes::GetFixedObstacleBoundingCircle(entt::id_type meshId, const Transform& transform)
+{
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(meshId))
+	{
+		return std::nullopt;
+	}
+	const auto& bb = meshes.Handle(meshId)->GetBoundingBox();
 	const auto bbSize = glm::max(glm::vec2(1.0f, 1.0f), glm::xz(bb.Size() * 0.5f * transform.scale));
 	glm::mat4 modelMatrix = glm::mat4(1.0f);
 	modelMatrix = glm::translate(modelMatrix, transform.position);

@@ -104,6 +104,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingCircles.h"
+#include "ECS/ThingModel.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
@@ -574,7 +575,7 @@ arena::ThingInCell ThingInCellOf(const ecs::Registry& registry, entt::entity thi
 {
 	arena::ThingInCell seen {.kind = arena::ThingKind::Fixed,
 	                         .living = registry.AnyOf<Villager, Creature, Animal>(thing),
-	                         .hasModel = registry.AllOf<Mesh>(thing),
+	                         .hasModel = ecs::thing_model::ModelOf(registry, thing).has_value(),
 	                         .height = ecs::world_objects::SizeOf(thing).height,
 	                         .circles = {}};
 	if (registry.AllOf<Temple>(thing))

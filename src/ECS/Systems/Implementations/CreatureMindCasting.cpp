@@ -68,6 +68,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
@@ -76,6 +77,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingModel.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -144,14 +146,15 @@ bool HeadingFor(const Transform& transform, glm::vec2 point)
 /// The circles a fixed thing keeps creatures off, from its model's box and its place
 std::vector<cast_moves::CollideCircle> ModelCircles(const ecs::Registry& registry, entt::entity entity)
 {
-	const auto* mesh = registry.TryGet<const Mesh>(entity);
+	// An altar has its model's box before the model shows
+	const auto model = ecs::thing_model::ModelOf(registry, entity);
 	const auto* transform = registry.TryGet<const Transform>(entity);
-	if (mesh == nullptr || transform == nullptr || !Locator::resources::has_value() ||
-	    !Locator::resources::value().GetMeshes().Contains(mesh->id))
+	if (!model.has_value() || transform == nullptr || !Locator::resources::has_value() ||
+	    !Locator::resources::value().GetMeshes().Contains(*model))
 	{
 		return {};
 	}
-	const auto& box = Locator::resources::value().GetMeshes().Handle(mesh->id)->GetBoundingBox();
+	const auto& box = Locator::resources::value().GetMeshes().Handle(*model)->GetBoundingBox();
 	const auto half = (box.maxima - box.minima) * 0.5f * transform->scale.x;
 	const auto centre = transform->position + transform->rotation * (box.Center() * transform->scale);
 	const glm::mat2 turn(transform->rotation[0].x, transform->rotation[0].z, transform->rotation[2].x,
@@ -161,7 +164,7 @@ std::vector<cast_moves::CollideCircle> ModelCircles(const ecs::Registry& registr
 
 /// Whether a thing standing in a cell of the land keeps it from being clear for a creature to go to: a temple always; the
 /// trees and fields always by the circles they keep clear, anything else fixed when the creature must go round it (a
-/// building, feature or static thing when as tall as a tenth of the creature or burning, a dead tree only burning), and
+/// building, feature, altar or static thing when as tall as a tenth of the creature or burning, a dead tree only burning), and
 /// nothing that moves; and, when asked, anything living, the creature itself included
 bool CellBlocked(const ecs::Registry& registry, entt::entity creature, int32_t x, int32_t z, bool livingBlocks = false)
 {
@@ -208,7 +211,7 @@ bool CellBlocked(const ecs::Registry& registry, entt::entity creature, int32_t x
 			{
 				test = burning(entity);
 			}
-			else if (registry.AnyOf<Abode, Feature, MobileStatic>(entity))
+			else if (registry.AnyOf<Abode, Feature, MobileStatic, WorshipAltar>(entity))
 			{
 				test = tallEnough || burning(entity);
 			}
