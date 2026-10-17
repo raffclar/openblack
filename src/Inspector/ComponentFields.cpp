@@ -2143,7 +2143,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Worshipper>(context)
 	    .Field<&components::Worshipper::atWorship>("atWorship")
 	    .Field<&components::Worshipper::onTheWay>("onTheWay");
-	Reflect<components::WorshipAltar>(context).Field<&components::WorshipAltar::site>("site");
+	Reflect<components::WorshipAltar>(context)
+	    .Field<&components::WorshipAltar::site>("site")
+	    .Field<&components::WorshipAltar::model>("model");
 
 	// The values the components' fields hold
 	Reflect<openblack::LandLightInputs>(context, ValueOnly {})

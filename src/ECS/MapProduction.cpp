@@ -11,6 +11,7 @@
 #include "MapProduction.h"
 
 #include <algorithm>
+#include <utility>
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -50,6 +51,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
+#include "ECS/ThingModel.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
@@ -76,6 +78,8 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<SpellDispenser>();
 	func.template operator()<TeleportStone>();
 	func.template operator()<WorshipSite>();
+	// A worship site's altar, which stands in the land as a building does from when the game makes its site
+	func.template operator()<WorshipAltar>();
 	// A vortex, standing in the land as a rock does, over its unseen cylinder
 	func.template operator()<Vortex>();
 	// A temple's heart, which stands in the land as a building does
@@ -97,15 +101,15 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<RewardOnLand>();
 }
 
-/// The model whose box a thing covers: its own, or a vortex's cylinder, which is never drawn
+/// The model whose box a thing covers: its own, or a vortex's cylinder, which is never drawn. An altar has its model
+/// before the model shows.
 std::optional<entt::id_type> OutlineMeshOf(const Registry& registry, entt::entity entity)
 {
 	if (registry.AllOf<Vortex>(entity))
 	{
 		return resources::HashIdentifier(MeshId::SpellVortexCylinder);
 	}
-	const auto* mesh = registry.TryGet<const Mesh>(entity);
-	return mesh != nullptr ? std::optional(mesh->id) : std::nullopt;
+	return thing_model::ModelOf(registry, entity);
 }
 
 /// A building's outline on the ground, from its model's box as it is placed
@@ -123,9 +127,21 @@ std::optional<map_cells::Outline> OutlineOf(const Transform& transform, std::opt
 	const auto box = meshes.Handle(*meshId)->GetBoundingBox();
 	return map_cells::OutlineOfBox(transform.position, transform.rotation, transform.scale.x, box.Center(), box.Size() * 0.5f);
 }
+
+/// The outline of a thing from its model in the resources
+std::optional<map_cells::Outline> ModelOutlineOf(const Registry& registry, entt::entity entity)
+{
+	return OutlineOf(registry.Get<const Transform>(entity), OutlineMeshOf(registry, entity));
+}
 } // namespace
 
 MapProduction::MapProduction()
+    : MapProduction(&ModelOutlineOf)
+{
+}
+
+MapProduction::MapProduction(OutlineSource outlines)
+    : _outlines(std::move(outlines))
 {
 	if (!Locator::entitiesRegistry::has_value())
 	{
@@ -163,8 +179,8 @@ MapProduction::~MapProduction()
 
 std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registry, entt::entity entity)
 {
-	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, BigForest, SpellDispenser, TeleportStone, WorshipSite, Temple>(
-	        entity))
+	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, BigForest, SpellDispenser, TeleportStone, WorshipSite,
+	                   WorshipAltar, Temple>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = false};
 	}
@@ -246,7 +262,7 @@ std::vector<uint32_t> MapProduction::CellsFor(entt::entity entity, const Kind& k
 	std::vector<uint32_t> cells;
 	if (kind.coversOutline)
 	{
-		const auto outline = OutlineOf(transform, OutlineMeshOf(*_registry, entity));
+		const auto outline = _outlines(*_registry, entity);
 		if (!outline.has_value())
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Map: a building without a model can't be put in the map's cells");
