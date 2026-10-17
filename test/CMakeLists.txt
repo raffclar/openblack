@@ -1092,3 +1092,6 @@ openblack_setup_and_add_test(
   test_creature_temple_parts test_creature_temple_parts.cpp
 )
 openblack_setup_and_add_test(test_creature_owner test_creature_owner.cpp)
+openblack_setup_and_add_test(
+  test_creature_action_coverage test_creature_action_coverage.cpp
+)
