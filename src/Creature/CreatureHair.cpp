@@ -233,8 +233,13 @@ void creature_hair::BuildRibbon(std::span<const glm::vec3> points, const glm::ve
 	{
 		const auto from = i == 0 ? size_t {0} : i - 1;
 		const auto across = glm::cross(points[from + 1] - points[from], points[from] - eye);
-		const auto length = glm::length(across);
-		const auto side = length > 0.0f ? across * (halfWidth / length) : glm::vec3(0.0f);
+		// The game adds the squares z first at the root, and x, z then y further along
+		auto side = across;
+		if (across != glm::vec3(0.0f))
+		{
+			side = i == 0 ? x87::Scaled<x87::SumOrder::Zyx>(across, halfWidth)
+			              : x87::Scaled<x87::SumOrder::Xzy>(across, halfWidth);
+		}
 		const auto u = static_cast<float>(i) / last;
 		out[i * 2] = {.position = points[i] + side, .uv = {u, 0.0f}};
 		out[(i * 2) + 1] = {.position = points[i] - side, .uv = {u, k_RibbonTextureHeight}};
