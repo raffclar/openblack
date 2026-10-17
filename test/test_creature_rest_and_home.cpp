@@ -112,7 +112,6 @@ TEST(CreatureRestAndHome, RestingToGetBetterFacesDownTheSlopeRestsAndGetsUpDazed
 	EXPECT_EQ(agenda[1].sequence,
 	          (std::array<size_t, 3> {animations::k_StartSleep, animations::k_Sleep, animations::k_EndSleep}));
 	EXPECT_TRUE(agenda[1].untilBetter);
-	EXPECT_TRUE(agenda[1].mirrorAtRandom);
 	EXPECT_EQ(agenda[1].effect, Effect::Completed);
 	EXPECT_EQ(agenda[2].animation, animations::k_Confused);
 	EXPECT_EQ(agenda[2].face, creature_face::Cue::Grimace);

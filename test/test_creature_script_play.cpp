@@ -45,7 +45,6 @@ TEST(CreatureScriptPlay, AStaticActionStartsLoopsTenSecondsAndEnds)
 		EXPECT_EQ(step.kind, creature_mind::Step::Kind::Static);
 		EXPECT_EQ(step.sequence, (std::array<size_t, 3> {46, 47, 48}));
 		EXPECT_FLOAT_EQ(step.seconds, 10.0f);
-		EXPECT_TRUE(step.mirrorAtRandom);
 		EXPECT_FALSE(step.untilRested);
 	}
 	// The last static action is 51; the next is played once

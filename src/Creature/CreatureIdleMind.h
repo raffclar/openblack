@@ -554,8 +554,6 @@ struct Step
 	bool untilBetter {false};
 	/// A static step's loop holds the last frame of its start, as lying out cold
 	bool holdLoop {false};
-	/// A static step plays left to right half the time, chosen as it starts
-	bool mirrorAtRandom {false};
 	/// The action that a never-ending wait tries to start each turn
 	RetriedClip retriedClip {RetriedClip::None};
 	/// Played with the eyes closed

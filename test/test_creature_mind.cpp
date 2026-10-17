@@ -922,12 +922,11 @@ TEST(CreatureIdleMind, HangingAroundGoesOutFromHomeAwayFromTheTemple)
 	ASSERT_TRUE(agenda[4].order.seconds.has_value());
 	EXPECT_NEAR(*agenda[4].order.seconds, 1.0f, k_Tolerance);
 	EXPECT_EQ(agenda[4].face, creature_face::Cue::Amazed);
-	// Then it turns to the temple and sits for ten seconds and a little more, mirrored half the time
+	// Then it turns to the temple and sits for ten seconds and a little more
 	EXPECT_EQ(agenda[5].movement.kind, Movement::Kind::FacePoint);
 	EXPECT_NEAR(agenda[5].movement.point.y, 100.0f, k_Tolerance);
 	EXPECT_EQ(agenda[6].kind, Kind::Static);
 	EXPECT_EQ(agenda[6].sequence[1], animations::k_Sit);
-	EXPECT_TRUE(agenda[6].mirrorAtRandom);
 	EXPECT_NEAR(agenda[6].seconds, 10.0f + (5.0f * 0.005f), k_Tolerance);
 	EXPECT_EQ(agenda[6].face, creature_face::Cue::None);
 }
