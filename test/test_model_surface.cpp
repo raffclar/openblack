@@ -18,6 +18,7 @@
 
 #include "3D/ModelSurface.h"
 #include "Common/GameRandom.h"
+#include "Common/ModelInverseSquareRoot.h"
 
 using namespace openblack;
 using namespace openblack::model_surface;
@@ -128,9 +129,11 @@ TEST(ModelSurface, ARandomPointIsBlendedFromItsTriangleAndPlaced)
 	EXPECT_NEAR(point->position.x, 11.0f, 1e-5f);
 	EXPECT_NEAR(point->position.y, 20.0f, 1e-5f);
 	EXPECT_NEAR(point->position.z, 28.0f, 1e-5f);
-	// The normal is blended as the point is, turned and made of unit length
+	// The code blends the normal as it blends the point, turns it, and makes it of unit length with the 3D engine's
+	// inverse square root
 	const auto blended = glm::vec3(0.5f + 0.25f * slanted.x, 1.0f - 0.5f + 0.25f * (slanted.y - 1.0f), 0.0f);
-	const auto expected = glm::normalize(glm::vec3(0.0f, blended.y, -blended.x));
+	const auto turned = glm::vec3(0.0f, blended.y, -blended.x) * 2.0f;
+	const auto expected = turned * gutils::ModelInverseSquareRoot(glm::dot(turned, turned));
 	EXPECT_NEAR(point->normal.x, expected.x, 1e-5f);
 	EXPECT_NEAR(point->normal.y, expected.y, 1e-5f);
 	EXPECT_NEAR(point->normal.z, expected.z, 1e-5f);

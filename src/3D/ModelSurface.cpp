@@ -14,6 +14,7 @@
 #include <L3DFile.h>
 
 #include "Common/GameRandom.h"
+#include "Common/ModelInverseSquareRoot.h"
 
 namespace openblack::model_surface
 {
@@ -90,7 +91,7 @@ std::optional<Point> RandomPoint(std::span<const Triangle> triangles, const glm:
 	auto toB = random.LocalFloatRand(1.0f);
 	auto toC = random.LocalFloatRand(1.0f);
 	// Past the far edge the point is folded back into the triangle
-	if (static_cast<double>(toC) + static_cast<double>(toB) > 1.0)
+	if (toC + toB > 1.0f)
 	{
 		toB = 1.0f - toB;
 		toC = 1.0f - toC;
@@ -102,12 +103,20 @@ std::optional<Point> RandomPoint(std::span<const Triangle> triangles, const glm:
 	const glm::vec3 y {placement[1]};
 	const glm::vec3 z {placement[2]};
 	const glm::vec3 at {placement[3]};
-	const auto turn = [&](const glm::vec3& v) { return x * v.x + y * v.y + z * v.z; };
+	// The game adds the three axes' parts in this order, a different order for z
+	const auto turn = [&](const glm::vec3& v) {
+		return glm::vec3 {
+		    (v.x * x.x + v.z * z.x) + v.y * y.x,
+		    (v.x * x.y + v.z * z.y) + v.y * y.y,
+		    (v.z * z.z + v.y * y.z) + v.x * x.z,
+		};
+	};
 	const auto turned = turn(normal);
-	const auto length = std::sqrt(glm::dot(turned, turned));
+	const float inverseLength =
+	    gutils::ModelInverseSquareRoot((turned.z * turned.z + turned.y * turned.y) + turned.x * turned.x);
 	return Point {
 	    .position = turn(position) + at,
-	    .normal = length > 0.0f ? turned / length : turned,
+	    .normal = turned * inverseLength,
 	};
 }
 

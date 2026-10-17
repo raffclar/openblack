@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <bit>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -167,4 +168,11 @@ TEST(Rain, FarBlocksComeFirst)
 	const glm::vec3 eye {0.0f, 30.0f, 0.0f};
 	EXPECT_FLOAT_EQ(rain::DrawKey({30.0f, 40.0f}, 30.0f, eye), 2500.0f);
 	EXPECT_GT(rain::DrawKey({0.0f, 300.0f}, 0.0f, eye), rain::DrawKey({0.0f, 100.0f}, 0.0f, eye));
+}
+
+TEST(Rain, AStreakFadesWithEachStepRoundedToAFloat)
+{
+	// The fade's share times 20 rounds to a float before the product with the alpha. A product in double precision
+	// gives 152
+	EXPECT_EQ(rain::StreakAlpha(175, std::bit_cast<float>(0x3F74CF24u)), 153);
 }

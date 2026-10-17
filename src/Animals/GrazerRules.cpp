@@ -19,6 +19,7 @@
 #include "Animals/AnimalMove.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::animals;
@@ -73,9 +74,15 @@ KindClips ClipsOf(AnimalInfo type)
 }
 
 /// The truncation the game's float-to-whole conversion makes
-int32_t Truncate(double value)
+int32_t Truncate(float value)
 {
-	return static_cast<int32_t>(std::trunc(value));
+	return map_coords::FtoL(value);
+}
+
+/// The product of two whole numbers, which rounds to a float one time, as in the game
+float Product(int32_t a, int32_t b)
+{
+	return x87::RoundToFloat(static_cast<double>(a) * static_cast<double>(b));
 }
 
 int32_t LargerSide(glm::ivec2 v)
@@ -150,7 +157,7 @@ AnimId grazers::Clip(AnimalInfo type, ClipSlot slot, uint16_t speed, SpeedThresh
 
 int32_t grazers::Scale(int32_t value, int32_t num, int32_t den)
 {
-	return Truncate(static_cast<double>(value) * static_cast<double>(num) / static_cast<double>(den));
+	return Truncate(Product(value, num) / static_cast<float>(den));
 }
 
 bool grazers::AddSteer(glm::ivec2& step, glm::ivec2 push, uint16_t speed)
@@ -161,11 +168,8 @@ bool grazers::AddSteer(glm::ivec2& step, glm::ivec2 push, uint16_t speed)
 		return true;
 	}
 	const int32_t taken = std::min(LargerSide(push), left);
-	const auto share = [&](int32_t value) {
-		return static_cast<double>(value) * static_cast<double>(taken) / static_cast<double>(speed);
-	};
-	// The game keeps the z share as a float before truncating it, and truncates the x share as it is
-	step.y += Truncate(static_cast<double>(static_cast<float>(share(push.y))));
+	const auto share = [&](int32_t value) { return Product(value, taken) / static_cast<float>(speed); };
+	step.y += Truncate(share(push.y));
 	step.x += Truncate(share(push.x));
 	return taken == left;
 }
@@ -234,7 +238,7 @@ glm::ivec2 grazers::NewWanderStep(const WanderSetup& setup, std::span<const Herd
 	if (setup.centre.has_value())
 	{
 		// The distance in whole metres, compared with the whole distances
-		const int32_t distance = Truncate(static_cast<double>(gutils::GetDistanceInMetres(*setup.centre, setup.position)));
+		const int32_t distance = Truncate(gutils::GetDistanceInMetres(*setup.centre, setup.position));
 		std::optional<uint16_t> angle;
 		if (distance > setup.outer)
 		{
@@ -321,7 +325,7 @@ Need grazers::NeedToSee(Needs& needs, const NeedLimits& limits, uint32_t age, st
 int32_t grazers::GrazeSearchCells(uint16_t domainRadius)
 {
 	const float tenth = static_cast<float>(domainRadius) / 10.0f;
-	return Truncate(static_cast<double>(tenth) * static_cast<double>(tenth));
+	return Truncate(tenth * tenth);
 }
 
 std::optional<glm::ivec2> grazers::FindGrazeSpot(glm::ivec2 position, uint16_t domainRadius,

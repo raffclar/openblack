@@ -13,7 +13,9 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "AudioManagerInterface.h"
+#include "Common/X87.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
@@ -27,7 +29,7 @@ namespace
 // Ambience stays silent for the first turns of a level
 constexpr uint32_t k_FirstAudibleTurn = 6;
 
-// Banks switch to their evil samples at or below this alignment
+// Banks switch to their evil samples at or below this alignment. The game keeps it as a double
 constexpr double k_EvilAlignment = -0.6;
 
 constexpr float k_FastFadeStep = 0.04f;
@@ -38,15 +40,6 @@ constexpr float k_BankVolumeScale = 127.0f;
 
 constexpr uint32_t k_GoodGroup = 1;
 constexpr uint32_t k_EvilGroup = 2;
-
-int32_t Ftol(double value)
-{
-	if (value <= -2147483649.0 || value >= 2147483648.0)
-	{
-		return INT32_MIN;
-	}
-	return static_cast<int32_t>(value);
-}
 } // namespace
 
 void AtmosAudio::Init()
@@ -118,19 +111,19 @@ void AtmosAudio::SetAlignment(float alignment)
 
 float AtmosAudio::CalculateAlignmentValue(float alignment)
 {
-	const auto goodness = static_cast<float>((static_cast<double>(alignment) + 1.0) * 0.5);
+	const auto goodness = (alignment + 1.0f) * 0.5f;
 	auto clamped = 0.0f;
 	if (goodness >= 0.0f)
 	{
 		clamped = goodness > 1.0f ? 1.0f : goodness;
 	}
-	const auto evilness = (1.0 - clamped) + (1.0 - clamped);
-	return static_cast<float>((2.0 - evilness) - 1.0);
+	const auto evilness = (1.0f - clamped) + (1.0f - clamped);
+	return (2.0f - evilness) - 1.0f;
 }
 
 uint32_t AtmosAudio::GetGroup() const
 {
-	return static_cast<double>(_alignment) <= k_EvilAlignment ? k_EvilGroup : k_GoodGroup;
+	return x87::LessEqual(_alignment, k_EvilAlignment) ? k_EvilGroup : k_GoodGroup;
 }
 
 float AtmosAudio::CalculateSkyType(float time, const DayNightTimes& times)
@@ -138,7 +131,7 @@ float AtmosAudio::CalculateSkyType(float time, const DayNightTimes& times)
 	// Mirrored around midday
 	if (time > 12.0f)
 	{
-		time = static_cast<float>(24.0 - time);
+		time = 24.0f - time;
 	}
 
 	if (time < times.nightFull)
@@ -147,8 +140,7 @@ float AtmosAudio::CalculateSkyType(float time, const DayNightTimes& times)
 	}
 	if (time < times.duskStart)
 	{
-		return static_cast<float>(
-		    2.0 - ((static_cast<double>(time) - times.nightFull) / (static_cast<double>(times.duskStart) - times.nightFull)));
+		return 2.0f - ((time - times.nightFull) / (times.duskStart - times.nightFull));
 	}
 	if (time < times.duskEnd)
 	{
@@ -156,8 +148,7 @@ float AtmosAudio::CalculateSkyType(float time, const DayNightTimes& times)
 	}
 	if (time < times.dayFull)
 	{
-		return static_cast<float>(
-		    1.0 - ((static_cast<double>(time) - times.duskEnd) / (static_cast<double>(times.dayFull) - times.duskEnd)));
+		return 1.0f - ((time - times.duskEnd) / (times.dayFull - times.duskEnd));
 	}
 	return 0.0f;
 }
@@ -220,24 +211,24 @@ std::pair<float, int32_t> AtmosAudio::StepBankVolume(float current, float target
 {
 	const auto step = current > k_FastFadeMax || current <= k_FastFadeMin ? k_SlowFadeStep : k_FastFadeStep;
 
-	double volume;
+	float volume;
 	if (target <= current)
 	{
-		volume = static_cast<double>(current) - step;
-		if (!(static_cast<double>(target) <= volume))
+		volume = current - step;
+		if (!(target <= volume))
 		{
 			volume = target;
 		}
 	}
 	else
 	{
-		volume = static_cast<double>(current) + step;
-		if (static_cast<double>(target) < volume)
+		volume = current + step;
+		if (target < volume)
 		{
 			volume = target;
 		}
 	}
-	return {static_cast<float>(volume), Ftol(volume * k_BankVolumeScale)};
+	return {volume, map_coords::FtoL(volume * k_BankVolumeScale)};
 }
 
 } // namespace openblack::audio

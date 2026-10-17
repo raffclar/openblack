@@ -32,42 +32,42 @@ bool IsDark(uint32_t landColour)
 
 float Intensity(float scriptHour)
 {
-	const double hour = scriptHour;
+	const float hour = scriptHour;
 	if (hour > k_On)
 	{
-		return k_On + k_Ramp < hour ? 255.0f : static_cast<float>((hour - k_On) * 255.0 / k_Ramp);
+		return k_On + k_Ramp < hour ? 255.0f : (hour - k_On) * 255.0f / k_Ramp;
 	}
 	if (hour > k_Off)
 	{
 		return 0.0f;
 	}
-	return k_Off - k_Ramp > hour ? 255.0f : static_cast<float>((k_Off - hour) * 255.0 / k_Ramp);
+	return k_Off - k_Ramp > hour ? 255.0f : (k_Off - hour) * 255.0f / k_Ramp;
 }
 
 int32_t Strength(float intensity)
 {
-	return static_cast<int32_t>(static_cast<double>(intensity) * 255.0);
+	return static_cast<int32_t>(intensity * 255.0f);
 }
 
 int32_t VillageStrength(float intensity)
 {
 	// The brightness is taken to 0 to 1 in single precision first
-	return Strength(static_cast<float>(static_cast<double>(intensity) * k_InverseByte));
+	return Strength(intensity * k_InverseByte);
 }
 
 Placement Place(glm::vec2 xz)
 {
 	// A cell is 10 units; each axis gives its cell, rounded towards zero and then down, and the weight of the next texel
 	const auto axis = [](float position, int32_t& cell, int32_t& weight) {
-		const double cells = static_cast<double>(position) * static_cast<double>(0.1f);
+		const float cells = position * 0.1f;
 		cell = static_cast<int32_t>(cells);
-		if (cells >= 0.0)
+		if (cells >= 0.0f)
 		{
-			weight = static_cast<int32_t>(255.0 - (cells - cell) * 255.0);
+			weight = static_cast<int32_t>(255.0f - (cells - static_cast<float>(cell)) * 255.0f);
 		}
 		else
 		{
-			weight = static_cast<int32_t>((cell - cells) * 255.0);
+			weight = static_cast<int32_t>((static_cast<float>(cell) - cells) * 255.0f);
 			--cell;
 		}
 		weight &= 0xFF;
@@ -80,13 +80,13 @@ Placement Place(glm::vec2 xz)
 
 FlickerStep AdvanceFlicker(float timer, float milliseconds)
 {
-	timer = static_cast<float>(static_cast<double>(milliseconds) + timer);
+	timer = milliseconds + timer;
 	if (timer <= k_FlickerMilliseconds)
 	{
 		return {.timer = timer, .flickers = false};
 	}
-	const auto periods = static_cast<int32_t>(static_cast<double>(timer) * k_InverseFlicker);
-	timer = static_cast<float>(timer - static_cast<double>(periods) * k_FlickerMilliseconds);
+	const auto periods = static_cast<int32_t>(timer * k_InverseFlicker);
+	timer = timer - static_cast<float>(periods) * k_FlickerMilliseconds;
 	return {.timer = timer, .flickers = true};
 }
 

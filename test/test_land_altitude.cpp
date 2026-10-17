@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
+#include <bit>
 #include <stdexcept>
 
 #include <LNDFile.h>
@@ -67,10 +70,11 @@ private:
 	std::array<lnd::LNDCell, 17 * 17> _cells {};
 };
 
-/// The height in the game's integer steps of 1/256 of a height unit
-double Steps(double steps)
+/// The height in the game's integer steps of 1/256 of a height unit: the steps times the height unit round to a
+/// float, and the division by 256 is exact
+float Steps(int32_t steps)
 {
-	return steps * static_cast<double>(LandIslandInterface::k_HeightUnit) / 256.0;
+	return static_cast<float>(steps) * LandIslandInterface::k_HeightUnit / 256.0f;
 }
 } // namespace
 
@@ -79,45 +83,45 @@ double Steps(double steps)
 TEST(LandAltitude, ACornerIsItsAltitudeInHeightUnits)
 {
 	const OneCellIsland island(40, 48, 56, 72, false);
-	EXPECT_DOUBLE_EQ(island.GetAltitude(0, 0), Steps(10240));
-	EXPECT_NEAR(island.GetAltitude(0, 0), 26.8, 1e-5);
+	EXPECT_EQ(island.GetAltitude(0, 0), Steps(10240));
+	EXPECT_EQ(std::bit_cast<uint32_t>(island.GetAltitude(0, 0)), 0x41D66667u);
 }
 
 TEST(LandAltitude, ACellWithoutTheSplitFlagIsCutFromCornerToCorner)
 {
 	const OneCellIsland island(40, 48, 56, 72, false);
 	// Further along x than z, and further along z than x: two different planes
-	EXPECT_DOUBLE_EQ(island.GetAltitude(0xC000, 0x4000), Steps(14336));
-	EXPECT_DOUBLE_EQ(island.GetAltitude(0x4000, 0xC000), Steps(13312));
+	EXPECT_EQ(island.GetAltitude(0xC000, 0x4000), Steps(14336));
+	EXPECT_EQ(island.GetAltitude(0x4000, 0xC000), Steps(13312));
 }
 
 TEST(LandAltitude, ACellWithTheSplitFlagIsCutAcrossTheOtherCorners)
 {
 	const OneCellIsland island(40, 48, 56, 72, true);
-	EXPECT_DOUBLE_EQ(island.GetAltitude(0x4000, 0x4000), Steps(11776));
-	EXPECT_DOUBLE_EQ(island.GetAltitude(0xC000, 0xC000), Steps(15872));
+	EXPECT_EQ(island.GetAltitude(0x4000, 0x4000), Steps(11776));
+	EXPECT_EQ(island.GetAltitude(0xC000, 0xC000), Steps(15872));
 }
 
 TEST(LandAltitude, LowLandAtTheShoreIsFlattenedToTheSea)
 {
 	// A cell no higher than 4 counts its corners no higher than 3 as the sea's height
 	const OneCellIsland shore(3, 4, 3, 4, false);
-	EXPECT_DOUBLE_EQ(shore.GetAltitude(0x8000, 0x8000), Steps(512));
+	EXPECT_EQ(shore.GetAltitude(0x8000, 0x8000), Steps(512));
 	// This does not occur when the caller asks for the land's own altitudes
-	EXPECT_DOUBLE_EQ(shore.GetAltitude(0x8000, 0x8000, false), Steps(896));
+	EXPECT_EQ(shore.GetAltitude(0x8000, 0x8000, false), Steps(896));
 
 	const OneCellIsland lowCorner(4, 3, 3, 8, false);
-	EXPECT_DOUBLE_EQ(lowCorner.GetAltitude(0x8000, 0x8000), Steps(1536));
+	EXPECT_EQ(lowCorner.GetAltitude(0x8000, 0x8000), Steps(1536));
 
 	// A cell of 5 or more keeps all its corners
 	const OneCellIsland higher(5, 3, 3, 3, false);
-	EXPECT_DOUBLE_EQ(higher.GetAltitude(0x8000, 0x8000), Steps(1024));
+	EXPECT_EQ(higher.GetAltitude(0x8000, 0x8000), Steps(1024));
 }
 
 TEST(LandAltitude, OffTheMapOrOffTheBlocksIsAtSeaLevel)
 {
 	const OneCellIsland island(40, 48, 56, 72, false);
-	EXPECT_DOUBLE_EQ(island.GetAltitude(-1, 0), 0.0);
-	EXPECT_DOUBLE_EQ(island.GetAltitude(512 * k_Fixed, 0), 0.0);
-	EXPECT_DOUBLE_EQ(island.GetAltitude(20 * k_Fixed, 0), 0.0);
+	EXPECT_EQ(island.GetAltitude(-1, 0), 0.0f);
+	EXPECT_EQ(island.GetAltitude(512 * k_Fixed, 0), 0.0f);
+	EXPECT_EQ(island.GetAltitude(20 * k_Fixed, 0), 0.0f);
 }

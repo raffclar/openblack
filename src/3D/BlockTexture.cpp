@@ -42,23 +42,21 @@ ConeWeights block_texture::ComputeConeWeights()
 	{
 		for (int j = 0; j < k_TexelsPerCell; ++j)
 		{
-			const auto distance = [](int a, int b) { return std::sqrt(static_cast<double>((a * a) + (b * b))); };
-			const std::array<double, 4> distances = {distance(i, j), distance(i, k_TexelsPerCell - j),
-			                                         distance(k_TexelsPerCell - i, k_TexelsPerCell - j),
-			                                         distance(k_TexelsPerCell - i, j)};
-			std::array<double, 4> cone {};
-			double sum = 0.0;
-			for (size_t k = 0; k < cone.size(); ++k)
-			{
-				cone.at(k) = std::max(0.0, 14.0 - distances.at(k));
-				sum += cone.at(k);
-			}
+			const auto distance = [](int a, int b) { return std::sqrt(static_cast<float>((a * a) + (b * b))); };
+			const std::array<float, 4> distances = {distance(i, j), distance(i, k_TexelsPerCell - j),
+			                                        distance(k_TexelsPerCell - i, k_TexelsPerCell - j),
+			                                        distance(k_TexelsPerCell - i, j)};
+			std::array<float, 4> cone {};
+			std::ranges::transform(distances, cone.begin(), [](float d) { return d <= 14.0f ? 14.0f - d : 0.0f; });
+			// The sum starts from the last corner
+			const float sum = ((cone[3] + cone[2]) + cone[1]) + cone[0];
+			const float scale = 255.0f / sum;
 			// Scaled to 255 and truncated, then the largest weight, the last of equal ones, takes what is left one by one
 			std::array<int, 4> scaled {};
 			int total = 0;
 			for (size_t k = 0; k < scaled.size(); ++k)
 			{
-				scaled.at(k) = static_cast<int>(255.0 / sum * cone.at(k));
+				scaled.at(k) = static_cast<int>(scale * cone.at(k));
 				total += scaled.at(k);
 			}
 			for (; total < 255; ++total)
