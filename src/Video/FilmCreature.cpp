@@ -50,19 +50,19 @@ int32_t film_creature::Brightness(int32_t filmMs)
 film_creature::Look film_creature::LookAt(int32_t brightness, uint32_t red, uint32_t green, uint32_t blue)
 {
 	const auto k = static_cast<uint32_t>(brightness);
-	// A dark red that flickers, each channel scaled by the brightness, of 256
+	// The added colour: a dark red that flickers, each channel scaled by the brightness, of 256
 	const uint32_t flicker = ((((red << 8u) + green + 0xFF2008u) << 8u) + blue);
-	const uint32_t colour = ((((flicker & 0xFF0000u) * k) & 0xFF0000FFu) | (((flicker & 0xFF00u) * k) & 0xFF0000u) |
-	                         (((flicker & 0xFFu) * k) & 0xFF00u)) >>
-	                            8u |
-	                        (flicker & 0xFF000000u);
+	const uint32_t added = ((((flicker & 0xFF0000u) * k) & 0xFF0000FFu) | (((flicker & 0xFF00u) * k) & 0xFF0000u) |
+	                        (((flicker & 0xFFu) * k) & 0xFF00u)) >>
+	                           8u |
+	                       (flicker & 0xFF000000u);
 
-	// The colour added falls from white as the brightness rises: the red by 127/256 of it, the green by 191/256 and
+	// The light's colour falls from white as the brightness rises: the red by 127/256 of it, the green by 191/256 and
 	// the blue by 255/256, each step in whole numbers
-	const uint32_t redAdded = ((((0u - (k * 127u)) << 16u) >> 8u) - 0x10000u) & 0xFFFF0000u;
-	const uint32_t greenAdded = ((((((0u - (k * 191u)) << 8u) >> 8u) - 0x100u) >> 8u) & 0xFFu) << 8u;
-	const uint32_t blueAdded = (((0u - (k * 255u)) >> 8u) - 1u) & 0xFFu;
-	return {.colour = colour, .added = redAdded | greenAdded | blueAdded | 0xFF000000u};
+	const uint32_t redLight = ((((0u - (k * 127u)) << 16u) >> 8u) - 0x10000u) & 0xFFFF0000u;
+	const uint32_t greenLight = ((((((0u - (k * 191u)) << 8u) >> 8u) - 0x100u) >> 8u) & 0xFFu) << 8u;
+	const uint32_t blueLight = (((0u - (k * 255u)) >> 8u) - 1u) & 0xFFu;
+	return {.colour = redLight | greenLight | blueLight | 0xFF000000u, .added = added};
 }
 
 glm::mat4 film_creature::View(const FilmCameraPath::Point& point)

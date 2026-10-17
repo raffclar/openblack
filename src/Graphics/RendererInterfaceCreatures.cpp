@@ -368,6 +368,8 @@ void Renderer::DrawFilmCreature(const DrawSceneDesc& desc, const interface_creat
 	submitDesc.snow = false;
 	submitDesc.landLightAndHaze = false;
 	submitDesc.modelLight = shown.light;
+	// The game lights the copy's posed body vertex by vertex, as it lights all the bodies it poses
+	submitDesc.posedModelLight = true;
 	submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = shown.colour, .alpha = 1.0f};
 	submitDesc.lightAdd = shown.added;
 	submitDesc.instanceDesc = std::make_unique<graphics::InstanceDesc>(*_filmCreatureInstance, 0, 1);

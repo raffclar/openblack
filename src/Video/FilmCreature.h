@@ -22,8 +22,9 @@
 /// The player's creature in the falling spell's film. The film shows a copy of the creature: its body, size, skin,
 /// tattoos and alignment look. The copy holds nothing and never faints. It stands at the world's origin, facing as its
 /// mesh does, and plays one action once from the start of the film, on the right side and at the pace of real time. A
-/// camera path moves round it, and the renderer draws it over the film's picture. It glows white, then orange in a dark
-/// red light that flickers, and the film does not show it for a time in the middle. The creature itself stays where it
+/// camera path moves round it, and the renderer draws it over the film's picture. Its textured body is lit by a white
+/// light that becomes orange, with a dark red that flickers added, and the film does not show it for a time in the
+/// middle. The creature itself stays where it
 /// is, with the game paused under the film.
 namespace openblack::film_creature
 {
@@ -62,15 +63,16 @@ struct Clock
 /// The copy's brightness at a time into the film, 0 to 255: it rises twice, and stays 0 after the second rise
 [[nodiscard]] int32_t Brightness(int32_t filmMs);
 
-/// The colours of the copy, 0xAARRGGBB: the colour that its light shades, and the colour added after
+/// The colours of the copy, 0xAARRGGBB: the colour of the light that shades its textured body, and the colour added
+/// after the texture
 struct Look
 {
 	uint32_t colour {0};
 	uint32_t added {0};
 };
-/// The copy's colours at a brightness. Three local random draws in this order give the flicker of the red, the green and
-/// the blue: 0 to 31, 0 to 7 and 0 to 3. At brightness 0 it is black with white added; at 255 it is a dark red with
-/// orange added.
+/// The copy's colours at a brightness. At brightness 0 the light is white and nothing is added, so the body shows its
+/// own texture. As the brightness rises, the light becomes orange and a dark red that flickers is added. Three local
+/// random draws in this order give the flicker of the red, the green and the blue: 0 to 31, 0 to 7 and 0 to 3.
 [[nodiscard]] Look LookAt(int32_t brightness, uint32_t red, uint32_t green, uint32_t blue);
 
 /// The camera's view at a point of its path: its axes from the point's frame, kept unit long, at the point's position
