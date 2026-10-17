@@ -38,7 +38,7 @@ uint32_t store_rules::TreeWood(float life, float multiplier, uint32_t woodValue,
 
 uint32_t store_rules::DeadTreeWood(float scale, uint32_t woodValue, float multiplier)
 {
-	return Truncated(scale * static_cast<float>(woodValue) * multiplier);
+	return Truncated(static_cast<float>(woodValue) * multiplier * scale);
 }
 
 uint32_t store_rules::FenceWood(float life, uint32_t woodValue, float scale)

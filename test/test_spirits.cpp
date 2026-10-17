@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -585,4 +586,11 @@ TEST(Spirits, ZoomerSolvesAsTheGameDoes)
 	EXPECT_LT(z.GetValue() - 2.0f, 0.01f);
 	z.Update(0.01f);
 	EXPECT_EQ(z.GetValue(), 3.0f);
+}
+
+TEST(Spirits, TheAdvisorsMoveApartInDepthInsideTheGamesOwnSquaredDistance)
+{
+	// One float step above 0.81, so a squared distance of exactly 0.81 still counts as close
+	EXPECT_EQ(std::bit_cast<uint32_t>(openblack::help::spirits::k_PartnerCloseSquared), 0x3F4F5C2Au);
+	EXPECT_LT(0.81f, openblack::help::spirits::k_PartnerCloseSquared);
 }

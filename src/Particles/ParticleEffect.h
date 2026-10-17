@@ -703,6 +703,9 @@ struct Collection
 	int textureRepeats {-1};
 	/// How fast its ribbon's texture slides along it, in sheet heights a second
 	float textureSpeed {0.0f};
+	/// How far its ribbon's texture has slid along it, in sheet heights, wrapped round at one repeat of the frame. It moves
+	/// on only on the frames that draw the ribbon.
+	float textureScroll {0.0f};
 	std::vector<std::unique_ptr<Atom>> atoms;
 	std::vector<Slot> modifiers;
 };
@@ -928,6 +931,8 @@ public:
 	void Walk(float t, DrawWalk& out) const;
 	/// Each shower of sparks of an atom that is drawn, for a frame's time to pass on it
 	void ForEachDrawnShower(const std::function<void(ObjectShower&)>& visit);
+	/// Slides the texture of each ribbon that shows, by a drawn frame of this many game milliseconds
+	void ScrollChains(float milliseconds);
 	[[nodiscard]] size_t AtomCount() const { return _atomCount; }
 	[[nodiscard]] size_t CollectionCount() const;
 

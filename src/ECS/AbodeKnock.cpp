@@ -43,17 +43,17 @@ uint32_t abode_knock::Knock(uint32_t remaining)
 float abode_knock::ReadoutScale(uint32_t remaining)
 {
 	int32_t steps = k_FullSteps;
-	// The game works the steps out at a higher precision than a float and cuts off the fraction
+	// Each product is a float. The change to a whole number of steps drops the fraction.
 	if (remaining > k_ReadoutMs - k_ReadoutGrowMs)
 	{
-		const double grown = static_cast<double>(remaining - (k_ReadoutMs - k_ReadoutGrowMs)) * k_StepsPerMs;
-		steps = static_cast<int32_t>(static_cast<double>(k_FullSteps) - grown);
+		const float grown = static_cast<float>(remaining - (k_ReadoutMs - k_ReadoutGrowMs)) * k_StepsPerMs;
+		steps = static_cast<int32_t>(static_cast<float>(k_FullSteps) - grown);
 	}
 	else if (remaining <= k_ReadoutShrinkMs)
 	{
-		steps = static_cast<int32_t>(static_cast<double>(remaining) * k_StepsPerMs);
+		steps = static_cast<int32_t>(static_cast<float>(remaining) * k_StepsPerMs);
 	}
-	return static_cast<float>(static_cast<double>(steps) * k_StepShare);
+	return static_cast<float>(steps) * k_StepShare;
 }
 
 std::vector<abode_knock::Marker> abode_knock::Readout(uint32_t places, uint32_t adults, float scale)

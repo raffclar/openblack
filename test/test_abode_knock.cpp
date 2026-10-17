@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <bit>
+
 #include <gtest/gtest.h>
 
 #include "ECS/AbodeKnock.h"
@@ -70,12 +72,23 @@ TEST(AbodeKnock, TheMarkersGrowInHoldAndShrinkAway)
 	EXPECT_FLOAT_EQ(ReadoutScale(8000), 0.0f);
 	EXPECT_FLOAT_EQ(ReadoutScale(7000), 1.0f);
 	EXPECT_FLOAT_EQ(ReadoutScale(4000), 1.0f);
-	// The game's step per millisecond is a little under 0.255, so the last second starts a step down
-	EXPECT_FLOAT_EQ(ReadoutScale(1000), 254.0f / 255.0f);
+	// 1000 x 0.255 is 255 as a float, so the last second starts at full size
+	EXPECT_FLOAT_EQ(ReadoutScale(1000), 1.0f);
 	EXPECT_FLOAT_EQ(ReadoutScale(0), 0.0f);
 	// Half way through growing or shrinking: 127 of 255 steps, the fraction cut off
 	EXPECT_FLOAT_EQ(ReadoutScale(500), 127.0f / 255.0f);
 	EXPECT_FLOAT_EQ(ReadoutScale(7500), 127.0f / 255.0f);
+}
+
+TEST(AbodeKnock, TheReadoutStepsAreFloatProducts)
+{
+	// Each fifth of a second of shrinking is a whole number of steps as a float: 51, 102, 153, 204 and 255
+	EXPECT_EQ(std::bit_cast<uint32_t>(ReadoutScale(200)), 0x3E4CCCCEu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(ReadoutScale(400)), 0x3ECCCCCEu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(ReadoutScale(1000)), 0x3F800000u);
+	// Growing in: 255 less 200 x 0.255 is 204 steps
+	EXPECT_EQ(std::bit_cast<uint32_t>(ReadoutScale(7200)), 0x3F4CCCCEu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(ReadoutScale(7001)), 0x3F7EFF00u);
 }
 
 TEST(AbodeKnock, AHouseShowsGoldForItsAdultsAndGreenForItsFreePlaces)

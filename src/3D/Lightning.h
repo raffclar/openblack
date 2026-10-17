@@ -47,8 +47,8 @@ struct Flash
 /// A flash after `seconds` more; it goes out once it is older than k_FlashSeconds
 [[nodiscard]] Flash Advance(Flash flash, float seconds);
 
-/// How bright a flash is now, 0 to its strength: it fades from full as it ages, but flickers down to a tenth between a
-/// tenth and half of a second
+/// How bright a flash is now, 0 to its strength: it fades from full as it ages, but flickers down to a tenth when it
+/// is older than a fifth of a second and younger than half a second
 [[nodiscard]] float Brightness(const Flash& flash);
 
 /// How strongly a flash's glow lights the ground around where it struck, 0 to its strength: as Brightness, but cubed

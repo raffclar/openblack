@@ -239,6 +239,8 @@ TEST_F(ParticlePlasmaTest, EachBeamIsTwoRibbonsOfTwentyJointsFromStartToEnd)
 	// The beam's own atom and the joints of its two ribbons
 	EXPECT_EQ(effect->AtomCount(), 1u + (2u * 20u));
 	Effect::DrawWalk walk;
+	// A tenth of a second of drawn frames
+	effect->ScrollChains(100.0f);
 	effect->Walk(1.0f, walk);
 	ASSERT_EQ(walk.chains.size(), 2u);
 	for (const auto& chain : walk.chains)
@@ -250,8 +252,8 @@ TEST_F(ParticlePlasmaTest, EachBeamIsTwoRibbonsOfTwentyJointsFromStartToEnd)
 		EXPECT_NEAR(glm::distance(first.position, end), 0.0f, 1e-3f);
 		EXPECT_NEAR(glm::distance(last.position, start), 0.0f, 1e-3f);
 		EXPECT_NEAR(first.scale, 0.1f * 3.0f, 1e-3f);
-		// The texture slides at the beam's speed times the rule's
-		EXPECT_NEAR(chain.textureScroll, effect->GetAge() * 1.5f * 0.3f, 1e-3f);
+		// The texture slides at the beam's speed times the rule's, by the frames it is drawn
+		EXPECT_NEAR(chain.textureScroll, 0.1f * 1.5f * 0.3f, 1e-3f);
 	}
 }
 

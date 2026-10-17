@@ -14,16 +14,17 @@
 
 using namespace openblack;
 
-TEST(LandColourStamps, PlacedWithRoundedWeights)
+TEST(LandColourStamps, PlacedWithTruncatedFloatWeights)
 {
-	// Halfway into cell 12: 127.5 rounds to the even 128
+	// Halfway into cell 12: 127.5 is cut to 127
 	const auto placement = land_colour_stamps::Place({125.0f, 0.0f});
 	EXPECT_EQ(placement.cell, glm::ivec2(12, 0));
-	EXPECT_EQ(placement.weight, glm::ivec2(128, 255));
-	// A little before cell 0 along x, in cell -1 most of the way to 0: 76.5 rounds to the even 76
+	EXPECT_EQ(placement.weight, glm::ivec2(127, 255));
+	// A little before cell 0 along x, in cell -1 most of the way to 0: 76.5 is cut to 76. Along z, 104 x 0.1 is a
+	// float a little over 10.4, so the weight is 152.99985, cut to 152
 	const auto before = land_colour_stamps::Place({-3.0f, 104.0f});
 	EXPECT_EQ(before.cell, glm::ivec2(-1, 10));
-	EXPECT_EQ(before.weight, glm::ivec2(76, 153));
+	EXPECT_EQ(before.weight, glm::ivec2(76, 152));
 }
 
 TEST(LandColourStamps, CentredOnAPoint)
@@ -59,6 +60,9 @@ TEST(LandColourStamps, LightningGlowFadesCubed)
 	EXPECT_FLOAT_EQ(lightning::GlowStrength(flash), 1.0f);
 	flash = lightning::Advance(flash, 0.1f);
 	EXPECT_NEAR(lightning::GlowStrength(flash), 0.9f * 0.9f * 0.9f, 1e-6f);
+	// At 0.2 s it still fades; past 0.2 s it dips to a tenth
+	flash = lightning::Advance(flash, 0.1f);
+	EXPECT_NEAR(lightning::GlowStrength(flash), 0.8f * 0.8f * 0.8f, 1e-6f);
 	flash = lightning::Advance(flash, 0.1f);
 	EXPECT_NEAR(lightning::GlowStrength(flash), 0.1f, 1e-6f);
 	const auto bolt = lightning::Strike(glm::vec3(0.0f), 500.0f, lightning::k_BoltStrength);
