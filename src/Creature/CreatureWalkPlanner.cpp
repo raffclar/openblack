@@ -190,6 +190,11 @@ float creature_walk_planner::StepSpeed(const glm::vec3& displacement, int32_t tu
 	return std::sqrt((turnedX * turnedX) + (turnedZ * turnedZ)) * k_TurnsPerSecond;
 }
 
+float creature_walk_planner::StepJoinAhead(const glm::vec3& displacement, float scale, float travelled)
+{
+	return (LengthZyx(displacement) * scale) - travelled;
+}
+
 int32_t creature_walk_planner::WalkTimeAfterStep(int32_t stepTimeMs, int32_t stepMs, int32_t walkMs,
                                                  creature_locomotion::Side side)
 {

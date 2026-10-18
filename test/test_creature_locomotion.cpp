@@ -41,9 +41,9 @@ TEST(CreatureLocomotion, SpeedsGrowWithSize)
 	EXPECT_NEAR(one.run, 20.0f * 1.125f, k_Tolerance);
 	const auto two = SpeedsFor(2.0f);
 	EXPECT_NEAR(two.walk, 8.0f * 2.0f, k_Tolerance);
-	// Sizes are kept within 0.05 and 4
-	EXPECT_NEAR(SpeedsFor(10.0f).run, SpeedsFor(4.0f).run, k_Tolerance);
-	EXPECT_NEAR(SpeedsFor(0.0f).walk, 8.0f * ((0.875f * 0.05f) + 0.25f), k_Tolerance);
+	// The speeds do not keep the size within 0.05 and 4
+	EXPECT_EQ(SpeedsFor(10.0f).walk, 8.0f * ((10.0f * 0.5f * 1.75f) + 0.25f));
+	EXPECT_EQ(SpeedsFor(0.0f).walk, 8.0f * 0.25f);
 }
 
 TEST(CreatureLocomotion, TargetSpeedIsAFractionOfALittleOverRunning)
@@ -99,46 +99,6 @@ TEST(CreatureLocomotion, HeadingsFaceTheWayTheyPoint)
 	EXPECT_NEAR(std::abs(LerpHeading(GameHeading(Degrees(170.0f)), GameHeading(Degrees(-170.0f)), 500.0f, 1000.0f).Radians()),
 	            k_Pi, k_Tolerance);
 	EXPECT_NEAR(LerpHeading(GameHeading(0.0f), GameHeading(1.0f), 2000.0f, 1000.0f).Radians(), 1.0f, k_Tolerance);
-}
-
-TEST(CreatureLocomotion, AnglesPickTheirPairOfAnimations)
-{
-	const auto ahead = PairFor(animations::k_RightSpin, 0.0f);
-	EXPECT_EQ(ahead.from, animations::k_RightSpin);
-	EXPECT_NEAR(ahead.weight, 0.0f, k_Tolerance);
-	const auto side = PairFor(animations::k_RightSpin, Degrees(45.0f));
-	EXPECT_EQ(side.from, animations::k_RightSpin);
-	EXPECT_EQ(side.to, animations::k_RightSpin + 1);
-	EXPECT_NEAR(side.weight, 0.5f, k_Tolerance);
-	const auto behind = PairFor(animations::k_RightSpin, Degrees(-135.0f));
-	EXPECT_EQ(behind.from, animations::k_RightSpin + 1);
-	EXPECT_EQ(behind.to, animations::k_RightSpin + 2);
-	EXPECT_NEAR(behind.weight, 0.5f, k_Tolerance);
-}
-
-TEST(CreatureLocomotion, StartsByStepWalkOrTurn)
-{
-	const StartOptions steps {.stepStrides = std::array {46.0f, 42.0f, 40.0f}, .hasSpins = true, .moving = true};
-	// Far enough for every step: it steps off, right for negative angles
-	const auto step = ChooseStart(Degrees(-100.0f), 50.0f, steps);
-	EXPECT_EQ(step.kind, Start::Kind::Step);
-	EXPECT_EQ(step.side, Side::Right);
-	ASSERT_TRUE(step.animations.has_value());
-	EXPECT_EQ(step.animations->from, animations::k_RightStep + 1);
-	const auto left = ChooseStart(Degrees(30.0f), 50.0f, steps);
-	EXPECT_EQ(left.side, Side::Left);
-	EXPECT_EQ(left.animations->from, animations::k_LeftStep);
-	// Too close for a step: nearly facing it walks straight on, otherwise turns on the spot
-	EXPECT_EQ(ChooseStart(Degrees(10.0f), 45.0f, steps).kind, Start::Kind::Walk);
-	const auto turn = ChooseStart(Degrees(60.0f), 45.0f, steps);
-	EXPECT_EQ(turn.kind, Start::Kind::Turn);
-	EXPECT_EQ(turn.animations->from, animations::k_LeftSpin);
-	// Without spins the turn has no animations
-	EXPECT_FALSE(ChooseStart(Degrees(60.0f), 10.0f, {.stepStrides = std::nullopt, .hasSpins = false, .moving = true})
-	                 .animations.has_value());
-	// Only turning to face, it never steps
-	EXPECT_EQ(ChooseStart(Degrees(100.0f), 500.0f, {.stepStrides = steps.stepStrides, .hasSpins = true, .moving = false}).kind,
-	          Start::Kind::Turn);
 }
 
 TEST(CreatureLocomotion, ArrivalRings)

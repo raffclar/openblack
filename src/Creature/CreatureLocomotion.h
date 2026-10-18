@@ -48,13 +48,8 @@ constexpr size_t k_LeftStep = 13;
 
 /// Running flat out, a creature goes this much faster than its running speed
 constexpr float k_TopSpeedMargin = 1.1f;
-/// Starting off, a creature this nearly facing its way walks straight on
-constexpr float k_WalkStraightAngle = std::numbers::pi_v<float> / 12.0f;
 /// A creature this exhausted only goes slowly
 constexpr float k_ExhaustedAt = 0.8f;
-/// The smallest and largest sizes speeds are worked out for
-constexpr float k_MinSize = 0.05f;
-constexpr float k_MaxSize = 4.0f;
 
 /// How fast a creature of a size walks and runs, in units a second
 struct Speeds
@@ -62,7 +57,8 @@ struct Speeds
 	float walk;
 	float run;
 };
-/// Walking is 8 and running 20 units a second for each unit of 0.875 size + 0.25
+/// Walking is 8 and running 20 units a second for each unit of 0.875 size + 0.25. The size is not kept within its
+/// limits for this.
 [[nodiscard]] Speeds SpeedsFor(float size);
 
 /// The speed a creature heads for when asked for a fraction of its top speed
@@ -87,9 +83,6 @@ enum class Side : uint8_t
 	Left,
 };
 
-/// Which side a target is on, from the turn to it (GameHeading::TurnFrom): a turn towards the creature's right is
-/// negative
-[[nodiscard]] Side SideOf(float angle);
 /// The side of the spins for a turn on the spot to a heading. A turn of none uses the spins to the right.
 [[nodiscard]] Side SpinSideOf(float angle);
 
@@ -100,44 +93,9 @@ struct Pair
 	size_t to;
 	float weight;
 };
-/// The pair showing an angle, from the side's first animation: up to 90 degrees between 0 and 90, beyond it between 90
-/// and 180
-[[nodiscard]] Pair PairFor(size_t first, float angle);
 /// The pair of spins that shows a turn on the spot, as the game blends them: the turn made positive, then between the
 /// 0 and 90 degree spins below a quarter turn, else between the 90 and 180 degree spins
 [[nodiscard]] Pair SpinPairFor(size_t first, float angle);
-
-/// How a creature sets off towards a point, or turns to face one
-struct Start
-{
-	enum class Kind : uint8_t
-	{
-		/// Stepping off sideways or backwards into a walk
-		Step,
-		/// Walking straight on
-		Walk,
-		/// Turning on the spot first, by the spin animations when there are any
-		Turn,
-	};
-	Kind kind;
-	Side side;
-	std::optional<Pair> animations;
-};
-
-/// What the creature has to start with
-struct StartOptions
-{
-	/// The strides of the side's 0, 90 and 180 degree steps in mesh units, when the species has all three
-	std::optional<std::array<float, 3>> stepStrides;
-	/// Whether the species has the side's spins
-	bool hasSpins {false};
-	/// Whether it may step or walk off at all, rather than only turn to face the point
-	bool moving {true};
-};
-
-/// Steps when it has the steps and the point is further than every one of them takes it; else walks straight on when
-/// nearly facing the point; else turns on the spot
-[[nodiscard]] Start ChooseStart(float angle, float distanceInMesh, const StartOptions& options);
 
 /// The distances around a destination that count as arriving: anywhere from min to max
 struct Ring

@@ -2179,6 +2179,50 @@ void AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	all.push_back({
+	    .id = "movement.face_slight_turn",
+	    .name = "Turn a little to face a point",
+	    .facet = Facet::Movement,
+	    .description = "A tiger turns to face a point a little to its left, then a point a little to its right, again "
+	                   "and again.",
+	    .expected = "Each time it turns on the spot to the point, also for a turn this small. It does not jump to "
+	                "the new heading.",
+	    .framing = {.shot = Shot::Overview, .include = {{20.0f, 20.0f}, {-20.0f, -20.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    .commands = {Go(Kind::TurnToFace, 0, {6.0f, 40.0f}, 1.0f), Go(Kind::TurnToFace, 0, {-6.0f, 40.0f}, 1.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "movement.walk_join_new_route",
+	    .name = "Join a new route while walking",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks towards a far point. On its way it is sent to a point off to one side, then back "
+	                   "to where it started.",
+	    .expected = "It finds the new route while it walks and joins it from where it is, with no stop to search. A "
+	                "sharp turn of the new route stops it and it starts again from the turn.",
+	    .framing = {.shot = Shot::Overview, .include = {{60.0f, 100.0f}, {-60.0f, -100.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -90.0f}, 180.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 0.5f), Go(Kind::WalkTo, 0, {50.0f, 40.0f}, 3.0f, false),
+	                 Go(Kind::WalkTo, 0, {0.0f, -90.0f}, 1.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "movement.step_join_new_route",
+	    .name = "Join a new route during a step",
+	    .facet = Facet::Movement,
+	    .description = "A tiger steps off to the side towards a far point. During the step it is sent to a point "
+	                   "ahead of it, then back to where it started.",
+	    .expected = "It finds the new route during the step and joins it from the end of the step's move, so it does "
+	                "not go back to where the step started.",
+	    .framing = {.shot = Shot::Overview, .include = {{90.0f, 90.0f}, {-90.0f, -20.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {90.0f, 0.0f}, 0.5f), Go(Kind::WalkTo, 0, {60.0f, 80.0f}, 0.3f, false),
+	                 Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 1.0f)},
+	    .repeatFrom = 0,
+	});
+
 	std::vector<ObjectSetup> copse;
 	for (int x = -2; x <= 2; ++x)
 	{

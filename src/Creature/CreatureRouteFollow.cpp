@@ -251,7 +251,6 @@ void Follower::Join(size_t chosen, float joinAhead)
 		stepAhead = true;
 	}
 	current.from = _position;
-	const auto currentCost = current.cost;
 	_route.travelled = 0.0f;
 	if (_route.segment > 0)
 	{
@@ -265,9 +264,11 @@ void Follower::Join(size_t chosen, float joinAhead)
 	{
 		const auto index = *next;
 		next = index + 1 < legs.size() ? std::optional<size_t>(index + 1) : std::nullopt;
-		Search join(
-		    _obstacles, {.point = joinFrom},
-		    {.point = legs[index].to, .arriveWithin = k_JoinArrival, .mostCost = legs[index].cost - currentCost + length});
+		// The cost allowed counts from the leg that the creature is on now, which is the first leg of the route after a
+		// join. The length stays that of the leg before the first join.
+		const auto mostCost = (legs[index].cost - legs[_route.segment].cost) + length;
+		Search join(_obstacles, {.point = joinFrom},
+		            {.point = legs[index].to, .arriveWithin = k_JoinArrival, .mostCost = mostCost});
 		for (int32_t step = 0; step < k_JoinSteps && join.GetStatus() == Search::Status::Searching; ++step)
 		{
 			join.Step(_obstacles);
