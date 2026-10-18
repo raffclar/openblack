@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <set>
 #include <span>
@@ -213,6 +214,8 @@ private:
 	bool _failed {false};
 };
 
+/// Whether the archive can write a value of the type: it has registered fields or a codec of its own
+[[nodiscard]] bool IsRegistered(const entt::meta_ctx& context, const entt::type_info& info);
 /// Writes a value of a type that has registered fields, or a codec of its own. A type with neither goes into the list
 /// of unsaved values.
 void SaveRegistered(BinaryWriter& out, const entt::meta_any& value);
@@ -390,6 +393,21 @@ void Save(BinaryWriter& out, const Type& value)
 	{
 		out.WriteSize(value.index());
 		std::visit([&out](const auto& alternative) { Save(out, alternative); }, value);
+	}
+	else if constexpr (detail::k_IsSharedValue<Type>)
+	{
+		// A shared value goes in whole, and a load makes a value of its own; one of a type with no fields cannot go in
+		using Held = std::remove_const_t<typename Type::element_type>;
+		const bool kept = value != nullptr && IsRegistered(out.Context(), entt::type_id<Held>());
+		if (value != nullptr && !kept)
+		{
+			out.Unsupported(entt::type_id<Type>().name());
+		}
+		Save(out, kept);
+		if (kept)
+		{
+			Save(out, static_cast<const Held&>(*value));
+		}
 	}
 	else if constexpr (detail::k_IsIndirect<Type>)
 	{
@@ -587,6 +605,19 @@ void Load(BinaryReader& in, Type& value)
 		{
 			detail::LoadAlternative(in, value, *index);
 		}
+	}
+	else if constexpr (detail::k_IsSharedValue<Type>)
+	{
+		bool kept = false;
+		Load(in, kept);
+		if (!kept)
+		{
+			value = nullptr;
+			return;
+		}
+		auto made = std::make_shared<std::remove_const_t<typename Type::element_type>>();
+		Load(in, *made);
+		value = std::move(made);
 	}
 	else if constexpr (detail::k_IsIndirect<Type>)
 	{

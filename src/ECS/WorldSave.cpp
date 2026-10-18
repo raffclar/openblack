@@ -26,6 +26,8 @@
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "ECS/Archetypes/ArenaArchetype.h"
+#include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/WalkPath.h"
@@ -35,6 +37,7 @@
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
+#include "Particles/LightSheet.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -57,8 +60,8 @@ std::string GeneratorText(const std::mt19937& generator)
 
 /// The block of the game clock and the random numbers: the speed of the clock, whether the player paused it and the time
 /// past the last turn, the two
-/// seeds of the game, the stream that particle effects draw from, the seed of the run and the state of each stream of the
-/// run
+/// seeds of the game, the stream that particle effects draw from, the seed of the C library's generator, the seed of the run
+/// and the state of each stream of the run
 gamesave::Chunk ClockChunk()
 {
 	const entt::meta_ctx context;
@@ -73,12 +76,14 @@ gamesave::Chunk ClockChunk()
 		reflection::Save(out, seeds.synced);
 		reflection::Save(out, seeds.local);
 		reflection::Save(out, random.GetParticleStream());
+		reflection::Save(out, random.GetCrtSeed());
 	}
 	else
 	{
 		reflection::Save(out, game_random::k_InitialSeed);
 		reflection::Save(out, game_random::k_InitialSeed);
 		reflection::Save(out, ParticleRandomStream::None);
+		reflection::Save(out, std::optional<uint32_t> {});
 	}
 	std::vector<std::string> streams;
 	uint32_t runSeed = 0;
@@ -106,6 +111,7 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 	int32_t remainderMs = 0;
 	GameRandomSeeds seeds;
 	auto particles = ParticleRandomStream::None;
+	std::optional<uint32_t> crtSeed;
 	uint32_t runSeed = 0;
 	std::vector<std::string> streams;
 	reflection::Load(in, speed);
@@ -114,6 +120,7 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 	reflection::Load(in, seeds.synced);
 	reflection::Load(in, seeds.local);
 	reflection::Load(in, particles);
+	reflection::Load(in, crtSeed);
 	reflection::Load(in, runSeed);
 	reflection::Load(in, streams);
 	if (in.Failed())
@@ -131,6 +138,10 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 	{
 		Locator::gameRandom::value().SetSeeds(seeds);
 		Locator::gameRandom::value().SetParticleStream(particles);
+		if (crtSeed.has_value())
+		{
+			Locator::gameRandom::value().CrtSrand(*crtSeed);
+		}
 	}
 	if (Locator::rng::has_value() && streams.size() == static_cast<size_t>(RandomStream::Count))
 	{
@@ -252,6 +263,9 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 		RegistryContext loaded;
 		if (reflection::LoadValue(reflection, *context, loaded, result->remap))
 		{
+			// The maps that the game works out from the land are made again when they are next needed
+			loaded.landAvoid.reset();
+			loaded.explorationMap.reset();
 			registry.Context() = std::move(loaded);
 		}
 		else
@@ -273,6 +287,12 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 		}
 	}
 	registry.Underlying().remove<components::WalkPath>(lost.begin(), lost.end());
+	// An arena makes its ring of light again, shown while a fight is on in it
+	for (auto&& [entity, arena] : registry.Underlying().view<components::CreatureArena>().each())
+	{
+		arena.ring = archetypes::ArenaArchetype::MakeRing(arena.place, arena.radius);
+		arena.ring->SetHidden(!arena.fightOn);
+	}
 	SPDLOG_LOGGER_INFO(Log(), "Loaded the saved world: {} entities with {} components", result->report.entities,
 	                   result->report.components);
 	LogNames("components that this build does not know", result->report.unknownComponents);

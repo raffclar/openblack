@@ -30,6 +30,7 @@ public:
 	int32_t CrtRand() override;
 	void CrtSrand(uint32_t seed) override;
 
+	[[nodiscard]] std::optional<uint32_t> GetCrtSeed() const override { return _crtSeed; }
 	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return _seeds; }
 	void SetSeeds(GameRandomSeeds seeds) override { _seeds = seeds; }
 

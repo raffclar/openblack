@@ -1022,7 +1022,7 @@ const entt::meta_ctx& SaveGameSystem::Reflection()
 bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game)
 {
 	auto* instance = Game::Instance();
-	if (instance == nullptr || game.landscapeFile.empty())
+	if (instance == nullptr || (game.landscapeFile.empty() && game.landscape.empty()))
 	{
 		SPDLOG_LOGGER_WARN(Log(), "Slot {} keeps no landscape, so its world cannot load", slot);
 		return false;

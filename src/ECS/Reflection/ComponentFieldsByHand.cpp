@@ -13,6 +13,8 @@
 
 #include <vector>
 
+#include <LHVMTypes.h>
+
 #include "3D/CameraTrack.h"
 #include "3D/DayNightClock.h"
 #include "3D/SkyDome.h"
@@ -20,9 +22,14 @@
 #include "Common/Zoomer.h"
 #include "ComponentReflection.h"
 #include "Creature/CreatureFight.h"
+#include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureRouteFollow.h"
+#include "ECS/Components/WallHug.h"
+#include "ECS/StatisticsRules.h"
+#include "Enums.h"
 #include "Hand/HandGrabRules.h"
+#include "Magic/VillagerReactionRules.h"
 
 namespace
 {
@@ -45,6 +52,27 @@ std::vector<fight::marks::Mark> FightMarks(const fight::marks::MarkList& list)
 {
 	const auto marks = list.Marks();
 	return {marks.begin(), marks.end()};
+}
+
+namespace components = openblack::ecs::components;
+
+/// A step of a villager's walk round an obstacle, one component for each state of the step
+template <typename Tag>
+void ReflectMoveState(entt::meta_ctx& context)
+{
+	openblack::ecs::reflection::Reflect<Tag>(context)
+	    .template Field<&Tag::clockwise>("clockwise")
+	    .template Field<&Tag::stepGoal>("stepGoal");
+}
+
+/// The highest and lowest of a figure of a player's statistics
+template <typename Type>
+void ReflectExtremes(entt::meta_ctx& context)
+{
+	using Extremes = openblack::statistics::Extremes<Type>;
+	openblack::ecs::reflection::Reflect<Extremes>(context, openblack::ecs::reflection::ValueOnly {})
+	    .template Field<&Extremes::highest>("highest")
+	    .template Field<&Extremes::lowest>("lowest");
 }
 
 /// A smooth change's value, set as one at rest there
@@ -95,6 +123,26 @@ void openblack::ecs::reflection::RegisterHandWrittenFields(entt::meta_ctx& conte
 	// A walk along a camera track keeps where it is on the track: the saved world keeps it whole
 	Reflect<camera_track::WayRunner>(context, ValueOnly {})
 	    .Codec<&SaveBytes<camera_track::WayRunner>, &LoadBytes<camera_track::WayRunner>>();
+	// A town's tribe is a component of its own, which is only the tribe's number
+	Reflect<Tribe>(context).Codec<&SaveBytes<Tribe>, &LoadBytes<Tribe>>();
+	ReflectMoveState<components::MoveStateLinearTag>(context);
+	ReflectMoveState<components::MoveStateOrbitTag>(context);
+	ReflectMoveState<components::MoveStateExitCircleTag>(context);
+	ReflectMoveState<components::MoveStateStepThroughTag>(context);
+	ReflectMoveState<components::MoveStateFinalStepTag>(context);
+	ReflectMoveState<components::MoveStateArrivedTag>(context);
+	ReflectExtremes<uint32_t>(context);
+	ReflectExtremes<float>(context);
+	// A value that a script gave keeps its bits, whatever type the script gave it as
+	Reflect<lhvm::VMValue>(context, ValueOnly {}).Codec<&SaveBytes<lhvm::VMValue>, &LoadBytes<lhvm::VMValue>>();
+	namespace reaction = magic::villager_reaction;
+	Reflect<reaction::Memory::Entry>(context, ValueOnly {})
+	    .Field<&reaction::Memory::Entry::type>("type")
+	    .Field<&reaction::Memory::Entry::turn>("turn");
+	Reflect<reaction::Memory>(context, ValueOnly {})
+	    .Property<&reaction::Memory::Records, &reaction::Memory::SetRecords>("records");
+	Reflect<creature_object_beliefs::Store>(context, ValueOnly {})
+	    .Property<&creature_object_beliefs::Store::Contents, &creature_object_beliefs::Store::SetContents>("contents");
 	Reflect<creature_route::Follower>(context, ValueOnly {})
 	    .Property<&creature_route::Follower::GetState, nullptr>("state")
 	    .Property<&creature_route::Follower::GetRoute, nullptr>("route")

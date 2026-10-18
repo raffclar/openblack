@@ -27,9 +27,13 @@
 #include <gtest/gtest.h>
 
 #include "Common/GameHeading.h"
+#include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/PlayerStatistics.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Reflection/WorldArchive.h"
+#include "Enums.h"
 
 using namespace openblack;
 using namespace openblack::ecs::reflection;
@@ -472,4 +476,62 @@ TEST(WorldArchive, ACodecKeepsTheFieldsOfItsType)
 		found = found || (info != nullptr && info->name == "total");
 	}
 	EXPECT_TRUE(found);
+}
+
+TEST(WorldArchive, TheGamesTemplatesEnumsAndPrivateValuesAreKept)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry original;
+	const auto town = original.create();
+	original.emplace<Tribe>(town, Tribe::NORSE);
+	original.emplace<ecs::components::MoveStateOrbitTag>(
+	    town, ecs::components::MoveStateOrbitTag {.clockwise = ecs::components::MoveStateClockwise::Clockwise,
+	                                              .stepGoal = {3.0f, 4.0f}});
+	auto& statistics = original.emplace<ecs::components::PlayerStatistics>(town);
+	statistics.belief.Check(5.0f);
+	statistics.population.Check(12u);
+	auto& reaction = original.emplace<ecs::components::LivingReaction>(town);
+	reaction.creatureMemory.Record(7, 120);
+
+	WorldSaveReport report;
+	const auto bytes = SaveWorld(original, context, &report);
+	EXPECT_TRUE(report.unregisteredComponents.empty());
+	for (const auto& value : report.unsavedValues)
+	{
+		ADD_FAILURE() << value.place << " (" << value.type << ")";
+	}
+	entt::registry loaded;
+	ASSERT_TRUE(LoadWorld(loaded, context, bytes, WorldLoadMode::Exact).has_value());
+	EXPECT_EQ(loaded.get<Tribe>(town), Tribe::NORSE);
+	EXPECT_EQ(loaded.get<ecs::components::MoveStateOrbitTag>(town).stepGoal, glm::vec2(3.0f, 4.0f));
+	EXPECT_EQ(loaded.get<ecs::components::PlayerStatistics>(town).belief.highest, 5.0f);
+	EXPECT_EQ(loaded.get<ecs::components::PlayerStatistics>(town).population.highest, 12u);
+	EXPECT_EQ(loaded.get<ecs::components::LivingReaction>(town).creatureMemory.LastReacted(7), 120u);
+}
+
+TEST(WorldArchive, SharedValuesOfRegisteredTypesComeBackAsValues)
+{
+	struct Holder
+	{
+		std::shared_ptr<const FakeSpot> spot;
+		std::shared_ptr<const FakeSpot> none;
+	};
+	entt::meta_ctx context;
+	Register(context);
+	Reflect<Holder>(context, ValueOnly {}).Field<&Holder::spot>("spot").Field<&Holder::none>("none");
+	Holder holder {.spot = std::make_shared<const FakeSpot>(FakeSpot {.position = {1.0f, 2.0f, 3.0f}, .heat = 4.0f}),
+	               .none = nullptr};
+	BinaryWriter out(context);
+	Save(out, holder);
+	EXPECT_TRUE(out.Unsaved().empty());
+	const EntityRemap identity;
+	BinaryReader in(context, out.Bytes(), identity);
+	Holder read {.spot = nullptr, .none = std::make_shared<const FakeSpot>()};
+	Load(in, read);
+	ASSERT_FALSE(in.Failed());
+	ASSERT_NE(read.spot, nullptr);
+	EXPECT_EQ(*read.spot, *holder.spot);
+	EXPECT_NE(read.spot, holder.spot);
+	EXPECT_EQ(read.none, nullptr);
 }

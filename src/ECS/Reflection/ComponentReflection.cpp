@@ -174,6 +174,12 @@ bool Kept(const reflection::FieldInfo* info)
 
 } // namespace
 
+bool reflection::IsRegistered(const entt::meta_ctx& context, const entt::type_info& info)
+{
+	const auto type = entt::resolve(context, info);
+	return type && (CodecOf(type) != nullptr || type.data().begin() != type.data().end());
+}
+
 void reflection::SaveRegistered(BinaryWriter& out, const entt::meta_any& value)
 {
 	const auto type = entt::resolve(out.Context(), value.type().info());
@@ -193,6 +199,11 @@ void reflection::SaveRegistered(BinaryWriter& out, const entt::meta_any& value)
 		if (Kept(info))
 		{
 			info->save(data.get(value), out);
+		}
+		else if (info != nullptr)
+		{
+			// A value that only a function reads cannot come back: the list of unsaved values names it
+			out.Unsupported(info->name);
 		}
 	}
 }

@@ -41,9 +41,11 @@ SKIPPED = {
 }
 
 SOURCES = ROOT / "src"
+# The headers of libraries whose types the saved world keeps, included by their names
+LIBRARY_HEADERS = [ROOT / "components" / "creaturemind" / "include"]
 
 # Values that no component holds but that the saved world keeps, registered with the types they hold
-VALUE_ROOTS = ["openblack::ecs::RegistryContext"]
+VALUE_ROOTS = ["openblack::ecs::RegistryContext", "openblack::creaturemind::MindFileData"]
 
 # Types with private data, registered by hand in src/ECS/Reflection/ComponentFieldsByHand.cpp, and the types their functions
 # give, which are registered here
@@ -56,6 +58,10 @@ BY_HAND = {
     "openblack::hand_grab::HandSpring": [],
     "openblack::sky_dome::Follow": [],
     "openblack::creature_route::Follower": ["openblack::creature_route::Route"],
+    "openblack::creature_object_beliefs::Store": ["openblack::creature_object_beliefs::StoreContents"],
+    "openblack::camera_track::WayRunner": [],
+    "openblack::magic::villager_reaction::Memory": [],
+    "openblack::statistics::Extremes": [],
 }
 
 # Namespaces of libraries, whose types aren't followed
@@ -258,7 +264,8 @@ class Index:
         self.types = {}
         self.constants = {}
         self.aliases = {}
-        for header in sorted(SOURCES.rglob("*.h")):
+        headers = sorted(SOURCES.rglob("*.h")) + [header for folder in LIBRARY_HEADERS for header in sorted(folder.glob("*.h"))]
+        for header in headers:
             text = strip_preprocessor(strip_comments(header.read_text(encoding="utf-8", errors="replace")))
             self.read_scope(text, [], header, None)
 
@@ -540,7 +547,8 @@ def main():
 
     includes = {"ComponentReflection.h"} | {f"ECS/Components/{header.name}" for header in headers}
     for name in list(values) + sorted(enums):
-        includes.add(index.types[name].header.relative_to(SOURCES).as_posix())
+        header = index.types[name].header
+        includes.add(header.relative_to(SOURCES).as_posix() if header.is_relative_to(SOURCES) else header.name)
     lines = [HEADER]
     for include in sorted(includes):
         lines.append(f'#include "{include}"\n')

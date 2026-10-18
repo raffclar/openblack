@@ -9,8 +9,15 @@
 
 #pragma once
 
+#include <memory>
+
 #include <entt/fwd.hpp>
 #include <glm/fwd.hpp>
+
+namespace openblack::particles
+{
+class LightSheet;
+} // namespace openblack::particles
 
 namespace openblack::ecs::archetypes
 {
@@ -20,6 +27,8 @@ public:
 	/// An arena for creature fights with its middle at a place in 16.16 map units (x, z) and a radius. A temporary one is
 	/// made for one fight. Its ring of light stands round it from the start, hidden until a fight is on in it.
 	static entt::entity Create(const glm::ivec2& place, float radius, bool temporary);
+	/// The ring of light of an arena, hidden, which the particles draw. The load of a saved world makes the ring again.
+	static std::shared_ptr<particles::LightSheet> MakeRing(const glm::ivec2& place, float radius);
 	ArenaArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

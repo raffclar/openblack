@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -103,6 +104,27 @@ template <typename>
 inline constexpr bool k_IsVariant = false;
 template <typename... Types>
 inline constexpr bool k_IsVariant<std::variant<Types...>> = true;
+
+/// Whether a shared value can hold a value made with no arguments: a class that the component's header defines
+template <typename Type>
+[[nodiscard]] constexpr bool MadeWhole()
+{
+	if constexpr (requires { sizeof(Type); })
+	{
+		return std::is_class_v<Type> && std::is_default_constructible_v<std::remove_const_t<Type>>;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+/// A shared value of a type with fields, which the binary archive keeps as the value when the type is registered. A
+/// type that the component's header only declares stays a pointer that the archive cannot keep.
+template <typename>
+inline constexpr bool k_IsSharedValue = false;
+template <typename Type>
+inline constexpr bool k_IsSharedValue<std::shared_ptr<Type>> = MadeWhole<Type>();
 
 /// A value that only points to data that is somewhere else: the binary archive cannot keep it
 template <typename Type>

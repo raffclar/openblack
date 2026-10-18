@@ -83,6 +83,32 @@ inline constexpr uint32_t k_BlockedTurnsFixed = 600;
 /// Whether the creature found no way to the thing in the time before this turn
 [[nodiscard]] bool BlockedRecently(const Belief& belief, uint32_t turn, bool fixed);
 
+/// Where the belief about a thing is: its kind and its place among the kind's places
+struct BeliefPlace
+{
+	uint32_t kind {0};
+	size_t slot {0};
+};
+
+/// The places of one kind of belief
+struct BeliefPool
+{
+	/// Its places, made when the kind is first believed in
+	std::vector<std::optional<Belief>> slots;
+	size_t used {0};
+	/// The place the next belief replaces once all are taken: the first place taken, moving on to the next place when
+	/// the belief there is forgotten; none while nothing is held
+	std::optional<size_t> oldest;
+};
+
+/// Everything that a store of beliefs holds, for a saved world
+struct StoreContents
+{
+	std::array<BeliefPool, k_KindCount> pools {};
+	std::unordered_map<entt::entity, BeliefPlace> index;
+	uint64_t made {0};
+};
+
 /// A creature's beliefs about things, a fixed number of places for each kind
 class Store
 {
@@ -136,21 +162,19 @@ public:
 	/// Every belief, kind by kind, each kind in the order of its places
 	[[nodiscard]] std::vector<Belief> All() const;
 
+	/// Everything that the store holds, for a saved world
+	[[nodiscard]] StoreContents Contents() const { return {.pools = _pools, .index = _index, .made = _made}; }
+	/// Puts back what a saved world holds
+	void SetContents(const StoreContents& contents)
+	{
+		_pools = contents.pools;
+		_index = contents.index;
+		_made = contents.made;
+	}
+
 private:
-	struct Place
-	{
-		uint32_t kind;
-		size_t slot;
-	};
-	struct Pool
-	{
-		/// Its places, made when the kind is first believed in
-		std::vector<std::optional<Belief>> slots;
-		size_t used {0};
-		/// The place the next belief replaces once all are taken: the first place taken, moving on to the next place when
-		/// the belief there is forgotten; none while nothing is held
-		std::optional<size_t> oldest;
-	};
+	using Place = BeliefPlace;
+	using Pool = BeliefPool;
 
 	std::array<Pool, k_KindCount> _pools {};
 	std::unordered_map<entt::entity, Place> _index;

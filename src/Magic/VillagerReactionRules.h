@@ -149,12 +149,18 @@ public:
 	/// When the villager last took up a kind of reaction, 0 for not lately
 	[[nodiscard]] uint32_t LastReacted(uint32_t type) const;
 
-private:
+	/// A kind of reaction and the turn when the villager took it up
 	struct Entry
 	{
-		uint32_t type;
-		uint32_t turn;
+		uint32_t type {0};
+		uint32_t turn {0};
 	};
+	/// What the villager remembers, oldest first, for a saved world
+	[[nodiscard]] const std::vector<Entry>& Records() const { return _records; }
+	/// Puts back what a saved world remembers
+	void SetRecords(const std::vector<Entry>& records) { _records = records; }
+
+private:
 	/// A new kind is added once this many are remembered, the oldest going first
 	static constexpr size_t k_Records = 3;
 	static constexpr uint32_t k_ForgetAfter = 1800;

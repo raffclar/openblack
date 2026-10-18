@@ -4790,7 +4790,16 @@ bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::files
 	RenderLoadingFrame();
 	try
 	{
-		LoadLandscape(landscape);
+		// The testbed's flat land comes from no file: it is built again
+		if (landPath == k_TestbedLandPath)
+		{
+			InitializeLevel(flat_land::Build());
+			SetUpLandscape();
+		}
+		else
+		{
+			LoadLandscape(landscape);
+		}
 	}
 	catch (const std::exception& e)
 	{

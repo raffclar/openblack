@@ -255,8 +255,8 @@ public:
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures
 	void LoadTestbed() noexcept;
-	/// Loads a saved game: the saved land's landscape with no map script, then `restore` puts the saved entities in place
-	/// of the land's own. The systems then find their entities again and the land starts. Returns whether the landscape
+	/// Loads a saved game: the saved land's landscape with no map script (the flat land for the testbed), then `restore`
+	/// puts the saved entities in place of the land's own. The systems then find their entities again and the land starts. Returns whether the landscape
 	/// loaded and `restore` gave true.
 	bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
 	                   const std::function<bool()>& restore) noexcept;

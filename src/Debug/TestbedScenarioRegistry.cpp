@@ -7103,6 +7103,30 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "saves.world_back",
+	    .name = "Save and load: the whole world comes back",
+	    .facet = Facet::Mind,
+	    .description = "A content tiger of the second player. A script tells it to hold a rock 250 metres away, so the "
+	                   "tiger walks to the rock. 3 seconds later the game saves into slot 0. The tiger walks on. 5 "
+	                   "seconds after the save the game loads slot 0: the testbed's flat land is built again and the "
+	                   "saved world takes its place.",
+	    .expected = "At the load the whole testbed is as it was at the save: the tiger, the rock, the dispensers and "
+	                "the camera are where they were, and the clock shows the turn of the save. The tiger walks to the "
+	                "rock again. The log shows the saved world with its count of entities, then the load of the whole "
+	                "world of slot 0.",
+	    .framing = {.shot = Shot::Overview, .include = {{100.0f, -15.0f}, {260.0f, 15.0f}}},
+	    .creatures = {[] {
+		    auto tiger = Content(CreatureType::Tiger, {100.0f, 0.0f});
+		    tiger.owner = PlayerNames::PLAYER_TWO;
+		    return tiger;
+	    }()},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {350.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "HoldObject"},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 3.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 5.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "mind.hand_free_pick_up",
 	    .name = "Put down a thing before a pick-up",
 	    .facet = Facet::Mind,
