@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -58,6 +59,9 @@ struct FakeWorld final: World
 		bool deletedWhenReleased {false};
 		bool highlight {false};
 		bool keptInView {false};
+		bool atHome {false};
+		float life {1.0f};
+		bool hasTown {true};
 	};
 	std::map<entt::entity, Object> objects;
 	std::vector<entt::entity> decided;
@@ -66,6 +70,8 @@ struct FakeWorld final: World
 	std::vector<entt::entity> deleted;
 	/// The members that left a container, waiting for their script
 	std::vector<entt::entity> waiting;
+	/// What happened to released villagers, in order
+	std::vector<std::pair<std::string, entt::entity>> released;
 
 	entt::entity Add(uint32_t id, Object object)
 	{
@@ -132,6 +138,15 @@ struct FakeWorld final: World
 	}
 	[[nodiscard]] bool IsHighlight(entt::entity object) const override { return objects.at(object).highlight; }
 	void KeepInView(entt::entity object) override { objects.at(object).keptInView = true; }
+	void LeaveFlock(entt::entity living) override { released.emplace_back("leaves flock", living); }
+	[[nodiscard]] openblack::ecs::villager_script_rules::ReleaseFacts VillagerReleaseFacts(entt::entity villager) const override
+	{
+		const auto& object = objects.at(villager);
+		return {.inPhysics = object.inPhysics, .atHome = object.atHome, .life = object.life, .hasTown = object.hasTown};
+	}
+	void VillagerDecideNow(entt::entity villager) override { released.emplace_back("decides in town", villager); }
+	void VillagerStartVagrant(entt::entity villager) override { released.emplace_back("vagrant", villager); }
+	void VillagerDie(entt::entity villager) override { released.emplace_back("dies", villager); }
 };
 
 struct System
@@ -327,7 +342,7 @@ TEST(ScriptObjectsSystem, AReleasedVillagerInThePhysicsDecidesWhatToDoOnceOut)
 	EXPECT_EQ(world->decideAfterPhysics, std::vector {villager});
 }
 
-TEST(ScriptObjectsSystem, AReleasedVillagerHeldOutOfTheMapOnlyLosesControl)
+TEST(ScriptObjectsSystem, AReleasedVillagerHeldOutOfTheMapIsNotSetToDecide)
 {
 	auto [world, system] = MakeSystem();
 	const auto held = world->Add(4, {.kind = Kind::Villager, .controlled = true, .inMap = false});
@@ -645,4 +660,56 @@ TEST(ScriptObjectsSystem, AControlledVillagerIsReleasedWhenTheLastTaskThatHoldsI
 	EXPECT_FALSE(world->objects.at(villager).controlled);
 	EXPECT_FALSE(world->objects.at(villager).inScript);
 	EXPECT_EQ(world->decided, std::vector {villager});
+}
+
+namespace
+{
+using Released = std::vector<std::pair<std::string, entt::entity>>;
+} // namespace
+
+TEST(ScriptObjectsSystem, AReleasedVillagerLeavesItsFlockThenGoesBackToItsTown)
+{
+	auto [world, system] = MakeSystem();
+	const auto villager = world->Add(4, {.kind = Kind::Villager, .controlled = true});
+	system->ReleaseFromScript(villager);
+	// The decide state comes first, then the flock, then the decision in its town
+	EXPECT_EQ(world->decided, std::vector {villager});
+	EXPECT_EQ(world->released, (Released {{"leaves flock", villager}, {"decides in town", villager}}));
+}
+
+TEST(ScriptObjectsSystem, AReleasedVillagerWithoutATownBecomesAVagrant)
+{
+	auto [world, system] = MakeSystem();
+	const auto villager = world->Add(4, {.kind = Kind::Villager, .controlled = true, .hasTown = false});
+	system->ReleaseFromScript(villager);
+	EXPECT_EQ(world->released, (Released {{"leaves flock", villager}, {"vagrant", villager}}));
+}
+
+TEST(ScriptObjectsSystem, AReleasedVillagerWithNoLifeDies)
+{
+	auto [world, system] = MakeSystem();
+	const auto villager = world->Add(4, {.kind = Kind::Villager, .controlled = true, .life = 0.0f});
+	system->ReleaseFromScript(villager);
+	EXPECT_EQ(world->released, (Released {{"leaves flock", villager}, {"dies", villager}}));
+}
+
+TEST(ScriptObjectsSystem, AReleasedVillagerInThePhysicsOrAtHomeOnlyLeavesItsFlock)
+{
+	auto [world, system] = MakeSystem();
+	const auto flying =
+	    world->Add(4, {.kind = Kind::Villager, .controlled = true, .inPhysics = true, .inMap = false, .life = 0.0f});
+	const auto home = world->Add(5, {.kind = Kind::Villager, .controlled = true, .atHome = true, .hasTown = false});
+	system->ReleaseFromScript(flying);
+	system->ReleaseFromScript(home);
+	EXPECT_EQ(world->released, (Released {{"leaves flock", flying}, {"leaves flock", home}}));
+}
+
+TEST(ScriptObjectsSystem, AReleasedAnimalOrCreatureHasNoVillagerRelease)
+{
+	auto [world, system] = MakeSystem();
+	const auto animal = world->Add(4, {.kind = Kind::Animal, .controlled = true});
+	const auto creature = world->Add(5, {.kind = Kind::Creature, .controlled = true});
+	system->ReleaseFromScript(animal);
+	system->ReleaseFromScript(creature);
+	EXPECT_TRUE(world->released.empty());
 }

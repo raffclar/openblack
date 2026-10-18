@@ -14,6 +14,7 @@
 #include <spdlog/spdlog.h>
 
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/AtHome.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Flock.h"
@@ -33,6 +34,8 @@
 #include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerFire.h"
+#include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -149,6 +152,70 @@ public:
 		}
 		Locator::livingActionSystem::value().VillagerSetState(*action, LivingAction::Index::Previous,
 		                                                      VillagerStates::DecideWhatToDo, true);
+	}
+
+	void LeaveFlock(entt::entity living) override
+	{
+		auto& registry = Registry();
+		const auto flock = ecs::script_flocks::FlockOf(registry, living);
+		if (flock == entt::null)
+		{
+			return;
+		}
+		if (auto& data = registry.Get<Flock>(flock); data.shepherd == living)
+		{
+			data.shepherd = entt::null;
+		}
+		ecs::script_flocks::Remove(registry, living, false);
+	}
+
+	[[nodiscard]] ecs::villager_script_rules::ReleaseFacts VillagerReleaseFacts(entt::entity villager) const override
+	{
+		const auto& registry = Registry();
+		const auto* person = registry.TryGet<const Villager>(villager);
+		return {
+		    .inPhysics = registry.AllOf<InPhysics>(villager),
+		    .atHome = registry.AllOf<AtHome>(villager),
+		    .life = ecs::world_objects::LifeOf(villager),
+		    .hasTown = person != nullptr && person->town != entt::null && registry.Valid(person->town),
+		};
+	}
+
+	void VillagerDecideNow(entt::entity villager) override
+	{
+		if (auto* action = Registry().TryGet<LivingAction>(villager); action != nullptr)
+		{
+			ecs::villager_home::DecideWhatToDo(*action);
+		}
+	}
+
+	void VillagerStartVagrant(entt::entity villager) override
+	{
+		auto* action = Registry().TryGet<LivingAction>(villager);
+		if (action == nullptr || !Locator::livingActionSystem::has_value())
+		{
+			return;
+		}
+		Locator::livingActionSystem::value().VillagerSetState(*action, LivingAction::Index::Top, VillagerStates::VagrantStart,
+		                                                      false);
+		ecs::villager_home::VagrantStart(*action);
+	}
+
+	void VillagerDie(entt::entity villager) override
+	{
+		ecs::villager_fire::DieByEffect(villager, ecs::villager_fire::DeathCause {});
+		auto* action = Registry().TryGet<LivingAction>(villager);
+		if (action == nullptr || !Locator::livingActionSystem::has_value())
+		{
+			return;
+		}
+		// A villager that the death did not put in a death state lies dead at once
+		auto& living = Locator::livingActionSystem::value();
+		const auto top = living.VillagerGetState(*action, LivingAction::Index::Top);
+		if (top < VillagerStates::SetDying || top > VillagerStates::Downed)
+		{
+			living.VillagerSetState(*action, LivingAction::Index::Top, VillagerStates::Dead, false);
+		}
 	}
 
 	void AbandonCreatureAction(entt::entity creature) override
@@ -382,8 +449,23 @@ void ScriptObjectsSystem::ReleaseIntoGame(entt::entity object)
 			// Only a villager standing in the map is set to decide what to do at once
 			_world->SetVillagerDecideWhatToDo(object);
 		}
-		// TODO(physics): the villager then leaves the flock it was in and finds its town again, or wanders homeless;
-		// openblack keeps no villager flocks or homeless list yet
+		// It leaves the flock that it was in. Then it goes back to its town, wanders as a vagrant or dies.
+		_world->LeaveFlock(object);
+		switch (ecs::villager_script_rules::ReleaseOutcomeOf(_world->VillagerReleaseFacts(object)))
+		{
+		case ecs::villager_script_rules::ReleaseOutcome::Stays:
+			// A villager with no town counts as a vagrant, so a villager in the physics or at home needs no change
+			break;
+		case ecs::villager_script_rules::ReleaseOutcome::DecidesInTown:
+			_world->VillagerDecideNow(object);
+			break;
+		case ecs::villager_script_rules::ReleaseOutcome::BecomesVagrant:
+			_world->VillagerStartVagrant(object);
+			break;
+		case ecs::villager_script_rules::ReleaseOutcome::Dies:
+			_world->VillagerDie(object);
+			break;
+		}
 		break;
 	case Kind::Creature:
 		// It gives up whatever the script had it doing
