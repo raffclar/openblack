@@ -11,6 +11,7 @@
 
 #include <vector>
 
+#include "Input/BindableActions.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -26,6 +27,10 @@ constexpr glm::vec2 k_Temple {0.0f, -60.0f};
 constexpr float k_TownBelief = 1000.0f;
 /// The first land, which has no worship sites in a normal game
 constexpr int32_t k_FirstLand = 1;
+/// The part of its miracle's charge that each worship site icon holds
+constexpr float k_IconCharge = 0.45f;
+/// The temple's main room, the one the entrance leads to
+constexpr size_t k_MainRoom = 3;
 
 [[nodiscard]] std::vector<ObjectSetup> Town()
 {
@@ -141,6 +146,42 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .framing = {.shot = Shot::Placed, .eye = {-25.0f, 8.0f, 25.0f}, .look = {-10.0f, 3.0f, 37.0f}},
 	    .objects = Town(),
 	    .temples = {{.offset = k_Temple}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "hand.tooltips_worship_icons",
+	    .name = "The hand over a worship site's icons, part charged",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given. When the town's worship site has its heal and "
+	                   "water icons, each icon holds 45% of its miracle's charge. Put the hand over each icon of the site.",
+	    .expected = "Over each icon the tooltip shows at once the name of the icon's miracle, then a space, the charge "
+	                "right aligned to three places and a percent sign (\"Heal Miracle  45%\"), with no mouse button drawn. "
+	                "Over a stone hand on the village centre it shows only the name.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::FillSiteIcons, .delaySeconds = 3.0f, .amount = k_IconCharge}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "advisors.help_key_in_temple",
+	    .name = "The Help key inside the temple",
+	    .facet = Facet::Advisors,
+	    .description = "The town and temple of town.miracle_debug_given. The player goes into the temple's main room, "
+	                   "and the Help key is pressed on the keyboard after two seconds. Press F1 again in any room.",
+	    .expected = "Inside the temple the Help key does nothing: the advisors say nothing and no dialogue box opens. "
+	                "Outside the temple the Help key works as before.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = TownAndTemple(),
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = k_MainRoom},
+	                 {.kind = Kind::PressKey,
+	                  .delaySeconds = 2.0f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::HELP)}},
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});

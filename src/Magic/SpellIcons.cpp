@@ -9,6 +9,8 @@
 
 #include "SpellIcons.h"
 
+#include <cmath>
+
 #include <algorithm>
 
 namespace openblack::magic::spell_icons
@@ -133,6 +135,23 @@ std::vector<SpellSeedType> SiteSeeds(std::span<const std::vector<SpellSeedType>>
 float Need(const IconCharge& icon)
 {
 	return icon.required - icon.store;
+}
+
+float ShownRequired(float required, std::optional<float> heldSeedCharge)
+{
+	return heldSeedCharge.has_value() ? required - *heldSeedCharge : required;
+}
+
+std::optional<float> ShownCharge(float store, float shownRequired)
+{
+	constexpr float k_Percent = 100.0f;
+	const float charge = (store / shownRequired) * k_Percent;
+	// A charge that is not a number compares as equal to zero, so it also shows only the name
+	if (std::isnan(charge) || charge == 0.0f)
+	{
+		return std::nullopt;
+	}
+	return charge;
 }
 
 bool ReadyForHand(const IconCharge& icon, bool handReady)

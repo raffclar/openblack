@@ -163,6 +163,21 @@ void ToolTips::SubmitInWords(uint32_t index, uint32_t words, float number)
 	}
 }
 
+void ToolTips::ForceWithCharge(uint32_t index, std::optional<float> charge)
+{
+	Submit(index, ToolTipAction::None, ToolTipArrows::k_None, true);
+	if (charge.has_value())
+	{
+		_number = Numbered {
+		    .index = index, .number = *charge, .second = std::nullopt, .words = std::nullopt, .chargeAfterWords = true};
+	}
+	else if (_number.has_value() && _number->index == index)
+	{
+		// A charge that went back to zero leaves only the words
+		_number.reset();
+	}
+}
+
 void ToolTips::SubmitNumbered(uint32_t index, ToolTipAction action, double number, std::optional<double> second, bool force)
 {
 	// The numbers are worked out for the tooltip that is shown, so one turned away (as a village centre's population
@@ -188,5 +203,6 @@ std::optional<ToolTips::Shown> ToolTips::GetShown() const
 	              .alpha = alpha,
 	              .number = numbered ? std::optional(_number->number) : std::nullopt,
 	              .second = numbered ? _number->second : std::nullopt,
-	              .words = numbered ? _number->words : std::nullopt};
+	              .words = numbered ? _number->words : std::nullopt,
+	              .chargeAfterWords = numbered && _number->chargeAfterWords};
 }
