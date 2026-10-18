@@ -257,7 +257,15 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std:
 		                bgfx::copy(packed.data(), static_cast<uint32_t>(packed.size() * sizeof(packed[0]))));
 		return texture;
 	}
+	// The small grey images that the game also reads itself keep their texels as the file has them
+	constexpr uint16_t k_LargestKeptSide = 64;
+	std::vector<uint8_t> kept;
+	if (channels == 1 && *side <= k_LargestKeptSide)
+	{
+		kept.assign(data.begin(), data.end());
+	}
 	graphics::texel_depth::Reduce(data, depth);
+	texture->SetTexels(std::move(kept));
 	texture->Create(*side, *side, 1, channels == 3 ? graphics::TextureFormat::RGB8 : graphics::TextureFormat::R8,
 	                graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                bgfx::copy(data.data(), static_cast<uint32_t>(data.size())));

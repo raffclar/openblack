@@ -24,6 +24,7 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureDecisionTree.h"
+#include "ECS/Systems/LandShadeSystemInterface.h"
 #include "EntityDescription.h"
 
 namespace openblack::creature_desires
@@ -126,9 +127,12 @@ struct MapSources
 {
 	WorldSources world;
 	std::function<const ecs::MapInterface*()> map;
+	std::function<const ecs::systems::LandShadeSystemInterface*()> shade;
 };
 
 ///   map.cell  {position | cell}         what stands in a cell, as a search meets it
+///   map.shade [position]                the land's shading of the last frame: shadows, lights, the blocks they
+///                                       changed, and the shaded luminosity of a cell's corners
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeMapProvider(MapSources sources);
 
 // The towns

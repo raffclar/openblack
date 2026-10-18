@@ -507,6 +507,18 @@
   "query": "map.cell"
  },
  {
+  "description": "The land's shading of the last drawn frame: the clouds' shadows and the lights cast, the blocks they changed and those in view, and the shaded luminosity of the corners of a point's cell",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "A point on the land, [x, z] or [x, y, z]",
+    "name": "position",
+    "type": "point"
+   }
+  ],
+  "query": "map.shade"
+ },
+ {
   "description": "The towns: number, owner, buildings and people without a home",
   "kind": "list",
   "parameters": [],

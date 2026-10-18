@@ -598,6 +598,15 @@ TOOLS = [
         "params": ["position", "cell"],
     },
     {
+        "name": "map_shade",
+        "description": "The land's shading of the last drawn frame: the clouds' shadows and the lights cast, the "
+                       "blocks they changed and those in view, and the shaded luminosity of the corners of a point's "
+                       "cell.",
+        "inputSchema": schema({"position": {"type": "array", "items": {"type": "number"}}, **SHAPING}),
+        "query": "map.shade",
+        "params": ["position"],
+    },
+    {
         "name": "town_homes",
         "description": "A town's buildings with who lives in each (town ids from town.list).",
         "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}, ["id"]),

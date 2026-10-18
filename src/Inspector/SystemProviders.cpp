@@ -826,6 +826,40 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeMapProvider(MapSour
 		    }
 		    return QueryResult::Value(std::move(items));
 	    });
+	provider->Add(
+	    Query("shade",
+	          "The land's shading of the last drawn frame: the clouds' shadows and the lights cast, the blocks "
+	          "they changed and those in view, and the shaded luminosity of the corners of a point's cell",
+	          {Parameter("position", "point", "A point on the land, [x, z] or [x, y, z]", false)}, ResultKind::Object),
+	    [sources](const QueryContext& context) {
+		    const auto* shade = sources.shade ? sources.shade() : nullptr;
+		    if (shade == nullptr)
+		    {
+			    return QueryResult::Error("there is no land shading");
+		    }
+		    const auto& land = shade->Land();
+		    const auto blocks = land.Blocks();
+		    const auto inView = std::ranges::count_if(blocks, [&land](glm::ivec2 block) { return land.InView(block); });
+		    Json result = {{"shadows", shade->ShadowCount()},
+		                   {"lights", shade->LightCount()},
+		                   {"blocks", blocks.size()},
+		                   {"blocksInView", inView},
+		                   {"blocksChanged", land.Changed().size()}};
+		    if (const auto position = context.params.find("position"); position != context.params.end())
+		    {
+			    if (const auto point = ReadPoint(*position); point.has_value())
+			    {
+				    constexpr double k_CellSize = 10.0;
+				    const auto x = static_cast<int32_t>(std::floor((*point)[0] / k_CellSize));
+				    const auto z = static_cast<int32_t>(std::floor((*point)[2] / k_CellSize));
+				    result["cell"] = {x, z};
+				    const auto corners = land.CornersAt(x, z);
+				    result["corners"] =
+				        corners.has_value() ? Json {(*corners)[0], (*corners)[1], (*corners)[2], (*corners)[3]} : Json(nullptr);
+			    }
+		    }
+		    return QueryResult::Value(std::move(result));
+	    });
 	return provider;
 }
 
