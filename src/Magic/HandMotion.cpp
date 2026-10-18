@@ -170,8 +170,10 @@ void openblack::magic::StepPour(PourState& pour, float seconds)
 
 PourPose openblack::magic::PourPoseAt(const PourState& pour, float fraction)
 {
+	// The game adds the last turn's value to the change times the fraction
 	const float t = std::clamp(fraction, 0.0f, 1.0f);
-	return {.raise = glm::mix(pour.previous.raise, pour.current.raise, t),
-	        .tilt = glm::mix(pour.previous.tilt, pour.current.tilt, t),
+	const auto between = [t](float last, float now) { return ((now - last) * t) + last; };
+	return {.raise = between(pour.previous.raise, pour.current.raise),
+	        .tilt = between(pour.previous.tilt, pour.current.tilt),
 	        .pinned = pour.active ? pour.pinned : std::nullopt};
 }

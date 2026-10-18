@@ -5096,6 +5096,26 @@ void AddLeash(std::vector<Scenario>& all)
 	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 1.0f, false)},
 	});
 
+	// The hand that holds the rope of the tied leash stands straight up, also when the pointer leaves the rope
+	all.push_back({
+	    .id = "hand.rope_hold_stand",
+	    .name = "The hand that holds the rope of the tied leash",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger's leash is tied to a tree. The pointer goes onto the rope and the Action button takes "
+	                   "hold of it. The pointer then moves away from the rope over the land for three seconds, and the "
+	                   "button comes up.",
+	    .expected = "Holding the rope, the hand pinches it and stands straight up, not turned to the slope of the land, "
+	                "also away from the rope. It does not offer to turn the camera. Let go, it turns to the land again.",
+	    .framing = {.shot = Shot::Placed, .eye = {-20.0f, 45.0f, -30.0f}, .look = {-20.0f, 0.0f, 40.0f}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 20.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 60.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 1.0f, false),
+	                 {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.25f, 0.2f}, .amount = 3.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.5f, .value = 3}},
+	});
+
 	all.push_back({
 	    .id = "leash.hand",
 	    .name = "Leash your creature with the hand",
@@ -5517,6 +5537,30 @@ void AddCombat(std::vector<Scenario>& all)
 		                 {.kind = Kind::PointerPress, .delaySeconds = 0.1f, .value = k_RightButton},
 		                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = k_RightButton},
 		                 Fight(Kind::PointerOnOpponent, 0, 0, 3.8f)},
+		    .repeatFrom = 5,
+		});
+		// While a press on the opponent's body is held, the hand goes to the sparkle that the press put there
+		all.push_back({
+		    .id = "hand.fight_sparkle",
+		    .name = "The hand on the sparkle of a held press in a fight",
+		    .facet = Facet::Hand,
+		    .description = "The player's red tiger fights a lion that belongs to no player, as the guide's fight lesson "
+		                   "starts it. A double click into the arena makes the camera show the fight. Then every five "
+		                   "seconds the hand presses the Action button on the middle of the lion's body and holds it for "
+		                   "two seconds.",
+		    .expected = "While the button is down, the hand sits on the sparkle on the lion's body and moves with the "
+		                "body. When the button comes up, or a blow takes the sparkle away, the hand goes back under the "
+		                "pointer.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), guide},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAuto, 0, 0, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 0, 0.2f),
+		                 Fight(Kind::FightView, 0, 0, k_ViewAfterArena),
+		                 Fight(Kind::PointerOnOpponent, 0, 0, k_PressAfterDuel),
+		                 {.kind = Kind::PointerPress, .delaySeconds = 0.1f, .value = k_RightButton},
+		                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = k_RightButton},
+		                 Fight(Kind::PointerOnOpponent, 0, 0, 2.9f)},
 		    .repeatFrom = 5,
 		});
 		{

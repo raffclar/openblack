@@ -104,6 +104,23 @@ void MarkList::Animate()
 	}
 }
 
+std::optional<size_t> openblack::creature_fight::marks::HandMark(std::span<const Mark> marks, bool pressHeld)
+{
+	if (!pressHeld)
+	{
+		return std::nullopt;
+	}
+	std::optional<size_t> last;
+	for (size_t place = 0; place < marks.size(); ++place)
+	{
+		if (marks[place].anchor == Anchor::Opponent)
+		{
+			last = place;
+		}
+	}
+	return last;
+}
+
 uint32_t openblack::creature_fight::marks::NextFrame(uint32_t frame, float chargeMs)
 {
 	// Whole milliseconds, as the game counted them

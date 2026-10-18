@@ -1258,3 +1258,9 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_held_frame_heading test_held_frame_heading.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_hand_feel_rest_2 oracle/test_oracle_hand_feel_rest_2.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_feel_rest_2 hand/test_hand_feel_rest_2.cpp
+)
