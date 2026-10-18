@@ -20,6 +20,7 @@
 #include "3D/ScreenPick.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureInteractCameraModel.h"
+#include "Common/ModelInverseSquareRoot.h"
 #include "Common/Zoomer.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
@@ -163,20 +164,20 @@ TEST(CreatureTouch, TheCameraLooksAtTheCreaturesMiddleFromInFront)
 	const glm::vec3 position {100.0f, 20.0f, 300.0f};
 	for (const float heading : {0.0f, 0.7f, 2.0f, -2.5f})
 	{
-		const auto view = creature_interact::ViewOf(position, k_Height, heading);
+		const auto view = creature_interact::ViewOf(position, k_Height, GameHeading(heading));
 		EXPECT_NEAR(glm::distance(view.focus, position + glm::vec3(0.0f, 7.5f, 0.0f)), 0.0f, k_Tolerance);
 		// One and a half heights from what it looks at
 		EXPECT_NEAR(glm::distance(view.origin, view.focus), 22.5f, k_Tolerance);
 		// Ahead of the creature, the way it faces
 		const auto across = glm::normalize(glm::vec2(view.origin.x - position.x, view.origin.z - position.z));
-		EXPECT_NEAR(glm::dot(across, creature_locomotion::DirectionOf(heading)), 1.0f, k_Tolerance);
+		EXPECT_NEAR(glm::dot(across, creature_locomotion::DirectionOf(GameHeading(heading))), 1.0f, k_Tolerance);
 		// A little above its middle: 15 up, less 0.7 of its height, for every 30 ahead
 		const auto offset = view.origin - view.focus;
 		EXPECT_NEAR(offset.y / glm::length(glm::vec2(offset.x, offset.z)), (15.0f - (0.7f * k_Height)) / 30.0f, k_Tolerance);
 	}
 	// It looks down on a small creature and up at a big one
-	EXPECT_GT(creature_interact::ViewOf(position, 7.5f, 0.0f).origin.y, position.y + 3.75f);
-	EXPECT_LT(creature_interact::ViewOf(position, 45.0f, 0.0f).origin.y, position.y + 22.5f);
+	EXPECT_GT(creature_interact::ViewOf(position, 7.5f, GameHeading()).origin.y, position.y + 3.75f);
+	EXPECT_LT(creature_interact::ViewOf(position, 45.0f, GameHeading()).origin.y, position.y + 22.5f);
 }
 
 TEST(CreatureTouch, TheCameraGlidesToTheCreatureInSevenTenthsOfASecond)
@@ -184,7 +185,7 @@ TEST(CreatureTouch, TheCameraGlidesToTheCreatureInSevenTenthsOfASecond)
 	using namespace std::chrono_literals;
 	const Camera camera;
 	CreatureInteractCameraModel model({0.0f, 100.0f, 0.0f}, {0.0f, 0.0f, 100.0f});
-	const auto target = creature_interact::ViewOf({50.0f, 0.0f, 50.0f}, k_Height, 0.0f);
+	const auto target = creature_interact::ViewOf({50.0f, 0.0f, 50.0f}, k_Height, GameHeading());
 	model.SetTarget(target);
 	// Held still, half way through the first glide it is on its way
 	auto pose = model.Update(16ms, camera);
@@ -346,23 +347,27 @@ TEST(CreatureTouch, ALetGoThingStartsWhereItHangsAndAThrownThingAtTheFingerEnds)
 
 TEST(CreatureTouch, AHeldThingTurnsWithTheHandAndHangsBelowTheFingerEnds)
 {
-	// A hand bone at twice the size, with its axes along x, y and z
+	// A hand bone at twice the size, with its axes along x, y and z. The 3D engine's inverse square root makes each axis
+	// nearly a unit vector.
 	const glm::mat3 hand(glm::vec3(2.0f, 0.0f, 0.0f), glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(0.0f, 0.0f, 2.0f));
+	const float unit = 2.0f * gutils::ModelInverseSquareRoot(4.0f);
 	const glm::vec3 fingerEnds(1.0f, 10.0f, 3.0f);
-	const auto right = creature_throw::HeldPlacement(hand, fingerEnds, false, 4.0f);
-	EXPECT_EQ(right.rotation[0], glm::vec3(-1.0f, 0.0f, 0.0f));
-	EXPECT_EQ(right.rotation[1], glm::vec3(0.0f, 0.0f, 1.0f));
-	EXPECT_EQ(right.rotation[2], glm::vec3(0.0f, -1.0f, 0.0f));
+	const auto right = creature_throw::HeldPlacement(hand, fingerEnds, false, 4.0f, 1.0f);
+	EXPECT_EQ(right.rotation[0], glm::vec3(-unit, 0.0f, 0.0f));
+	EXPECT_EQ(right.rotation[1], glm::vec3(0.0f, 0.0f, unit));
+	EXPECT_EQ(right.rotation[2], glm::vec3(0.0f, -unit, 0.0f));
+	// The hang is measured along the up axis made the hang long again, whatever the thing's scale
 	EXPECT_EQ(right.position, glm::vec3(1.0f, 10.0f, -1.0f));
+	EXPECT_EQ(creature_throw::HeldPlacement(hand, fingerEnds, false, 4.0f, 3.0f).position, glm::vec3(1.0f, 10.0f, -1.0f));
 	// In the other hand the up and forward axes change direction
-	const auto left = creature_throw::HeldPlacement(hand, fingerEnds, true, 4.0f);
-	EXPECT_EQ(left.rotation[0], glm::vec3(-1.0f, 0.0f, 0.0f));
-	EXPECT_EQ(left.rotation[1], glm::vec3(0.0f, 0.0f, -1.0f));
-	EXPECT_EQ(left.rotation[2], glm::vec3(0.0f, 1.0f, 0.0f));
+	const auto left = creature_throw::HeldPlacement(hand, fingerEnds, true, 4.0f, 1.0f);
+	EXPECT_EQ(left.rotation[0], glm::vec3(-unit, 0.0f, 0.0f));
+	EXPECT_EQ(left.rotation[1], glm::vec3(0.0f, 0.0f, -unit));
+	EXPECT_EQ(left.rotation[2], glm::vec3(0.0f, unit, 0.0f));
 	EXPECT_EQ(left.position, glm::vec3(1.0f, 10.0f, 7.0f));
 	// A negative hang puts the thing above the finger ends, and no hang puts its origin on them
-	EXPECT_EQ(creature_throw::HeldPlacement(hand, fingerEnds, false, -1.0f).position, glm::vec3(1.0f, 10.0f, 4.0f));
-	EXPECT_EQ(creature_throw::HeldPlacement(hand, fingerEnds, false, 0.0f).position, fingerEnds);
+	EXPECT_EQ(creature_throw::HeldPlacement(hand, fingerEnds, false, -1.0f, 1.0f).position, glm::vec3(1.0f, 10.0f, 4.0f));
+	EXPECT_EQ(creature_throw::HeldPlacement(hand, fingerEnds, false, 0.0f, 1.0f).position, fingerEnds);
 }
 
 TEST(CreatureTouch, HeldTheCreatureLooksAtTheHandOrAtTheCameraWithTheHandNearItsMiddle)

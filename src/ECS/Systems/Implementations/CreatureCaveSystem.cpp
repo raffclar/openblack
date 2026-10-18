@@ -396,7 +396,7 @@ void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 	const auto heading = cave_creature::HeadingTowards(position, places->fire);
 
 	const auto copy = registry.Create();
-	registry.Assign<Transform>(copy, position, glm::mat3(glm::eulerAngleY(heading)),
+	registry.Assign<Transform>(copy, position, glm::mat3(glm::eulerAngleY(heading.Yaw())),
 	                           glm::vec3(archetypes::CreatureArchetype::DrawnScale(body->species, size)));
 	registry.Assign<CreatureCopy>(copy, creature, size);
 	// Its fidgets in the tattoo editor start 20 to 40 seconds away
@@ -508,7 +508,7 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 		                            .blendedWith = turn.blendedWith,
 		                            .blendWeight = turn.blendWeight});
 	}
-	transform->rotation = glm::mat3(glm::eulerAngleY(state.heading));
+	transform->rotation = glm::mat3(glm::eulerAngleY(state.heading.Yaw()));
 	if (Locator::creatureAnimationSystem::has_value())
 	{
 		Locator::creatureAnimationSystem::value().PoseCopy(*_caveCreature, frameMs);
@@ -569,14 +569,14 @@ void CreatureCaveSystem::HoverTattooSites(entt::entity copyEntity, glm::ivec2 po
 	editor.Hover(_tattooSitesOnScreen, pointer);
 }
 
-void CreatureCaveSystem::StartCaveTurn(const CreatureCopy& copy, cave_creature::State& state, float heading)
+void CreatureCaveSystem::StartCaveTurn(const CreatureCopy& copy, cave_creature::State& state, GameHeading heading)
 {
 	// It turns on the spot by two of its 0, 90 and 180 degree spins to the side it turns to, blended for the angle
 	namespace locomotion = creature_locomotion;
-	const auto angle = locomotion::WrapAngle(heading - state.heading);
-	const auto first = locomotion::SideOf(angle) == locomotion::Side::Right ? locomotion::animations::k_RightSpin
-	                                                                        : locomotion::animations::k_LeftSpin;
-	const auto pair = locomotion::PairFor(first, std::abs(angle));
+	const auto angle = heading.TurnFrom(state.heading);
+	const auto first = locomotion::SpinSideOf(angle) == locomotion::Side::Right ? locomotion::animations::k_RightSpin
+	                                                                            : locomotion::animations::k_LeftSpin;
+	const auto pair = locomotion::SpinPairFor(first, angle);
 	std::optional<float> from;
 	std::optional<float> to;
 	if (Locator::creatureAnimationSystem::has_value())

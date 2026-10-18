@@ -1107,7 +1107,7 @@ TEST_F(Reactions, ACreaturesReactionFollowsIt)
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& locomotion = registry.Assign<CreatureLocomotion>(_creature);
 	locomotion.started = true;
-	locomotion.heading = 1.0f;
+	locomotion.heading = GameHeading(1.0f);
 	const auto id = _reactions.Create({.initiator = _creature,
 	                                   .type = Reaction::FleeFromObject,
 	                                   .player = PlayerNames::NEUTRAL,
@@ -1119,7 +1119,7 @@ TEST_F(Reactions, ACreaturesReactionFollowsIt)
 	const auto reaction = _reactions.Find(id);
 	ASSERT_TRUE(reaction.has_value());
 	EXPECT_EQ(reaction->source.position, moved);
-	const auto facing = creature_locomotion::DirectionOf(1.0f) * 10.0f;
+	const auto facing = creature_locomotion::DirectionOf(GameHeading(1.0f)) * 10.0f;
 	EXPECT_FLOAT_EQ(reaction->velocity.x, facing.x);
 	EXPECT_FLOAT_EQ(reaction->velocity.y, 0.0f);
 	EXPECT_FLOAT_EQ(reaction->velocity.z, facing.y);

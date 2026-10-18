@@ -19,6 +19,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/GameHeading.h"
+
 /// Where a creature can walk, and the routes it takes there.
 ///
 /// The land is a grid of 512 by 512 cells of 10 units, sorted once a land is loaded: cells steeper than about 45
@@ -175,8 +177,8 @@ struct Route
 	[[nodiscard]] glm::vec2 Position() const;
 	/// Where the route ends
 	[[nodiscard]] glm::vec2 End() const;
-	/// The heading along this leg where the creature is (see creature_locomotion::HeadingOf)
-	[[nodiscard]] float Heading() const;
+	/// The heading along this leg where the creature is
+	[[nodiscard]] GameHeading Heading() const;
 	/// How far the route turns at the end of this leg, 0 at the last
 	[[nodiscard]] float TurnAtEnd() const;
 	/// Points along the route, arcs in steps of at most an angle, for drawing it
@@ -187,12 +189,12 @@ struct Route
 [[nodiscard]] float LengthOf(const Leg& leg);
 /// Where along a leg a distance from its start is, and the heading there
 [[nodiscard]] glm::vec2 PointAlong(const Leg& leg, float distance);
-[[nodiscard]] float HeadingAlong(const Leg& leg, float distance);
+[[nodiscard]] GameHeading HeadingAlong(const Leg& leg, float distance);
 
 struct Advanced
 {
 	glm::vec2 position;
-	float heading;
+	GameHeading heading;
 	/// Whether it went on to a new leg
 	bool segmentChanged;
 	bool finished;

@@ -518,7 +518,7 @@ std::optional<glm::vec3> LookWhileGoing(entt::entity entity, const Creature& cre
 	const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
 	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 	// The direction the body faces, as the game keeps it: a quarter turn on from the map's
-	const auto heading = walk != nullptr && walk->started ? walk->heading : std::atan2(ahead.x, -ahead.z);
+	const auto heading = walk != nullptr && walk->started ? walk->heading.Radians() : std::atan2(ahead.x, -ahead.z);
 	const auto groundAt = [](glm::vec2 at) {
 		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
 	};
@@ -605,7 +605,7 @@ void FaceForScript(entt::entity creature, const creature_mind::Movement& move)
 		});
 	}
 	const auto offset = point - from;
-	const auto turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading);
+	const auto turn = creature_locomotion::HeadingOf(offset).TurnFrom(self->heading);
 	// Down the slope it turns unless it stands on top of the place; to a script's point, unless it nearly faces it
 	const bool turns = move.kind == creature_mind::Movement::Kind::FaceDownSlope
 	                       ? glm::length(offset) >= creature_mind::k_OnTopOf
@@ -1075,7 +1075,7 @@ std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registr
 	    .distance = glm::distance(eye, transform->position),
 	    .groundDistance = glm::length(offset),
 	    .point = point,
-	    .turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading),
+	    .turn = creature_locomotion::HeadingOf(offset).TurnFrom(self->heading),
 	    .handStillTurns = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandStillTurns() : 0,
 	};
 }
@@ -1133,7 +1133,7 @@ std::optional<creature_mind::Senses::CameraView> HandViewOf(const ecs::Registry&
 	    .distance = glm::distance(*hand, transform->position),
 	    .groundDistance = glm::length(offset),
 	    .point = point,
-	    .turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading),
+	    .turn = creature_locomotion::HeadingOf(offset).TurnFrom(self->heading),
 	};
 }
 
@@ -1203,7 +1203,7 @@ WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const Cr
 		return creature_player_attention::WatchPlayerView::Target {
 		    .point = {point.x, point.z},
 		    .distance = glm::distance(point, transform->position),
-		    .turn = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - self->heading),
+		    .turn = creature_locomotion::HeadingOf(offset).TurnFrom(self->heading),
 		};
 	};
 	if (const auto hand = NearestHand(registry, creature); hand.has_value())

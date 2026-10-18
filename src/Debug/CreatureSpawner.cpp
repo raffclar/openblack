@@ -373,7 +373,7 @@ void CreatureSpawner::DrawMovement(entt::entity entity) noexcept
 		ImGui::SetTooltip("Asked for %.2f of its top speed, %.1f units/s", static_cast<double>(self->fraction),
 		                  static_cast<double>(creature_locomotion::TargetSpeed(self->fraction, self->speeds.run)));
 	}
-	ImGui::Text("Heading %.0f degrees, radius %.1f, scale %.3f", static_cast<double>(glm::degrees(self->heading)),
+	ImGui::Text("Heading %.0f degrees, radius %.1f, scale %.3f", static_cast<double>(glm::degrees(self->heading.Radians())),
 	            static_cast<double>(self->radius), static_cast<double>(self->scale));
 	if (const auto& route = self->follower.GetRoute(); !route.legs.empty())
 	{

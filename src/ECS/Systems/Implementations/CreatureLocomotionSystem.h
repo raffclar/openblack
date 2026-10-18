@@ -42,7 +42,7 @@ public:
 	MoveResult Follow(entt::entity creature, entt::entity target, float distance, Pace pace) override;
 	MoveResult FleeFrom(entt::entity creature, glm::vec2 threat) override;
 	bool TurnToFace(entt::entity creature, glm::vec2 point) override;
-	bool TurnToHeading(entt::entity creature, float heading) override;
+	bool TurnToHeading(entt::entity creature, GameHeading heading) override;
 	void Stop(entt::entity creature) override;
 	void ResetPace(entt::entity creature) override;
 	void Place(entt::entity creature, glm::vec3 position) override;

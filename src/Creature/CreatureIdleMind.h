@@ -23,6 +23,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/GameHeading.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFriendship.h"
@@ -843,9 +844,9 @@ struct Senses
 		float danceRate {1.0f};
 		glm::vec2 groupCentre {0.0f};
 		glm::vec2 place {0.0f};
-		/// How far it is from its place, in metres, and the way it faces (radians, as its movement measures it)
+		/// How far it is from its place, in metres, and the way it faces
 		float placeDistance {0.0f};
-		float heading {0.0f};
+		GameHeading heading {};
 	};
 	std::optional<DanceView> dance;
 	/// The villager a step follows to watch, while that step is next or under way: whether it still does a skill the

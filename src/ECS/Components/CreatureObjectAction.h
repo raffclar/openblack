@@ -138,11 +138,11 @@ struct CatchHands
 	std::array<glm::vec3, 4> hands {};
 };
 
-/// How far the creature's hand gets at its furthest stretch when picking up, measured straight at the model's own size:
-/// measured the first time it is wanted and never again, whatever its shape becomes
+/// Where the creature's hand gets in its pick-up animations, at the model's own size: measured the first time it is
+/// wanted and never again, whatever its shape becomes
 struct PickUpReach
 {
-	float straightReach {0.0f};
+	creature_reach::Points points {};
 };
 
 /// How fast the creature's hand moves as it tosses something away, in the model's units a second at the model's own

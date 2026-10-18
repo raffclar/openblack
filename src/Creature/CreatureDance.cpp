@@ -262,7 +262,7 @@ DanceTurn creature_dance::Turn(const creature_mind::Senses::DanceView& view, glm
 	if (turn.facePoint.has_value())
 	{
 		const auto offset = *turn.facePoint - position;
-		const auto difference = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - view.heading);
+		const auto difference = creature_locomotion::HeadingOf(offset).TurnFrom(view.heading);
 		if (!(std::abs(difference) > turn.turnWithin))
 		{
 			turn.facePoint.reset();

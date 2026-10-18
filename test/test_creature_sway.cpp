@@ -110,8 +110,9 @@ TEST(CreatureSway, ABodyThatPlaysAStartLoopAndEndTurnsOnTheSpotOrIsDownInAFightT
 
 TEST(CreatureSway, ATurnOnTheSpotLeansAlongTheHeadingThatItHasReached)
 {
-	EXPECT_FLOAT_EQ(TurnHeading(0.0f, 1.0f, 250.0f, 1000.0f), 0.25f);
+	using openblack::GameHeading;
+	EXPECT_FLOAT_EQ(TurnHeading(GameHeading(0.0f), GameHeading(1.0f), 250.0f, 1000.0f).Radians(), 0.25f);
 	// The turn goes the short way round
 	const float pi = std::numbers::pi_v<float>;
-	EXPECT_NEAR(TurnHeading(0.9f * pi, -0.9f * pi, 500.0f, 1000.0f), pi, 1e-5f);
+	EXPECT_NEAR(TurnHeading(GameHeading(0.9f * pi), GameHeading(-0.9f * pi), 500.0f, 1000.0f).Radians(), pi, 1e-5f);
 }

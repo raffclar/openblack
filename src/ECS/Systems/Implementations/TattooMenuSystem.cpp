@@ -109,7 +109,7 @@ void TattooMenuSystem::Open()
 	registry.Assign<CreatureEyes>(copy);
 	// It has hair of its own. The hair starts again each time that the editor opens.
 	registry.Assign<CreatureHair>(copy);
-	cave_creature::State state {.rest = cave_creature::Rest::Sit, .heading = 0.0f};
+	cave_creature::State state {.rest = cave_creature::Rest::Sit, .heading = GameHeading()};
 	// It is shown from the start, so it does not turn round as the cave's creature does when the camera comes to it
 	state.zoomed = true;
 	cave_creature::StartIdle(state, [this](uint32_t range) {

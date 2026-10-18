@@ -67,7 +67,7 @@ Aim creature_head_look::AimOf(const AimFacts& facts)
 	return catching ? Aim::Thing : Aim::LookPoint;
 }
 
-Angles creature_head_look::AnglesTowards(const glm::vec3& eyes, float facing, const glm::vec3& target)
+Angles creature_head_look::AnglesTowards(const glm::vec3& eyes, GameHeading facing, const glm::vec3& target)
 {
 	auto direction = target - eyes;
 	if (direction != glm::vec3(0.0f))
@@ -78,8 +78,7 @@ Angles creature_head_look::AnglesTowards(const glm::vec3& eyes, float facing, co
 	// A target straight along a map axis gives no sideways turn
 	if (std::abs(direction.x) > k_Hair && std::abs(direction.z) > k_Hair)
 	{
-		angles.yaw =
-		    creature_locomotion::WrapAngle(facing - creature_locomotion::HeadingOf(glm::vec2(direction.x, direction.z)));
+		angles.yaw = creature_locomotion::HeadingOf(glm::vec2(direction.x, direction.z)).TurnFrom(facing);
 	}
 	angles.pitch = std::asin(std::clamp(direction.y, -1.0f, 1.0f));
 	return angles;

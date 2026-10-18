@@ -16,6 +16,8 @@
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::creature_reach;
 
@@ -102,7 +104,7 @@ float creature_reach::MaxReach(const Points& points)
 	return glm::length(glm::vec2(furthest.x, furthest.z));
 }
 
-float creature_reach::StraightReach(const Points& points)
+float creature_reach::StraightReach(const Points& points, float scale)
 {
 	// The two back corners weigh in at just under minus four tenths, the front two at nine tenths, added up in corner
 	// order
@@ -110,9 +112,10 @@ float creature_reach::StraightReach(const Points& points)
 	glm::vec3 furthest {0.0f};
 	for (size_t i = 0; i < k_CornerCount; ++i)
 	{
-		furthest += k_Weights.at(i) * points.at(i);
+		furthest += (k_Weights.at(i) * scale) * points.at(i);
 	}
-	return glm::length(furthest);
+	// The squares are added from z to x
+	return x87::LengthZyx(furthest);
 }
 
 glm::vec2 creature_reach::HandfulPoint(glm::vec2 creature, glm::vec2 pile, float reach)

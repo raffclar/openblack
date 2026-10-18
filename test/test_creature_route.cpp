@@ -103,7 +103,7 @@ TEST(CreatureRoute, FollowsTheRoute)
 	EXPECT_FALSE(advanced.segmentChanged);
 	EXPECT_NEAR(advanced.position.y, 4.0f, k_Tolerance);
 	// Heading along +z
-	EXPECT_NEAR(std::abs(advanced.heading), k_Pi, k_Tolerance);
+	EXPECT_NEAR(std::abs(advanced.heading.Radians()), k_Pi, k_Tolerance);
 	advanced = Advance(route, 8.0f);
 	EXPECT_TRUE(advanced.segmentChanged);
 	EXPECT_NEAR(advanced.position.x, 2.0f, k_Tolerance);

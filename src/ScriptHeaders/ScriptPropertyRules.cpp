@@ -129,16 +129,16 @@ glm::mat3 PlacedRotation(const Angles& angles)
 	return glm::mat3(glm::eulerAngleXYZ(-angles.x, -angles.y, -angles.z));
 }
 
-float CreatureHeadingToLivingAngle(float heading)
+float CreatureHeadingToLivingAngle(GameHeading heading)
 {
 	constexpr float k_Turn = 2.0f * std::numbers::pi_v<float>;
-	const float angle = std::fmod(-heading - (std::numbers::pi_v<float> * 0.5f), k_Turn);
+	const float angle = std::fmod(heading.Radians() - (std::numbers::pi_v<float> * 0.5f), k_Turn);
 	return angle < 0.0f ? angle + k_Turn : angle;
 }
 
-float LivingAngleToCreatureHeading(float angle)
+GameHeading LivingAngleToCreatureHeading(float angle)
 {
-	return -angle - (std::numbers::pi_v<float> * 0.5f);
+	return GameHeading(angle + (std::numbers::pi_v<float> * 0.5f));
 }
 
 bool MovedAcross(const glm::vec3& before, const glm::vec3& after)

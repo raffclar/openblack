@@ -36,10 +36,10 @@ bool Standable(Ground ground)
 	return ground == Ground::Open || ground == Ground::Water;
 }
 
-float HeadingBetween(glm::vec2 from, glm::vec2 to)
+GameHeading HeadingBetween(glm::vec2 from, glm::vec2 to)
 {
 	const auto d = to - from;
-	return std::atan2(-d.x, -d.y);
+	return GameHeading(std::atan2(d.x, -d.y));
 }
 } // namespace
 
@@ -264,14 +264,14 @@ glm::vec2 creature_route::PointAlong(const Leg& leg, float distance)
 	return length > k_ShortestLeg ? leg.from + ((leg.to - leg.from) * (distance / length)) : leg.from;
 }
 
-float creature_route::HeadingAlong(const Leg& leg, float distance)
+GameHeading creature_route::HeadingAlong(const Leg& leg, float distance)
 {
 	if (leg.arc && leg.round.has_value())
 	{
 		const auto angle = ArcAngleAt(leg, distance);
 		const auto tangent = leg.roundWay == Way::Anticlockwise ? glm::vec2(-std::sin(angle), std::cos(angle))
 		                                                        : glm::vec2(std::sin(angle), -std::cos(angle));
-		return std::atan2(-tangent.x, -tangent.y);
+		return GameHeading(std::atan2(tangent.x, -tangent.y));
 	}
 	return HeadingBetween(leg.from, leg.to);
 }
@@ -314,11 +314,11 @@ glm::vec2 Route::End() const
 	return legs.empty() ? glm::vec2(0.0f) : legs.back().to;
 }
 
-float Route::Heading() const
+GameHeading Route::Heading() const
 {
 	if (legs.empty())
 	{
-		return 0.0f;
+		return {};
 	}
 	if (Finished())
 	{
@@ -335,7 +335,7 @@ float Route::TurnAtEnd() const
 	}
 	const auto here = HeadingAlong(legs[segment], LengthOf(legs[segment]));
 	const auto next = HeadingAlong(legs[segment + 1], 0.0f);
-	auto turn = std::fmod(next - here + k_Pi, 2.0f * k_Pi);
+	auto turn = std::fmod(next.Radians() - here.Radians() + k_Pi, 2.0f * k_Pi);
 	if (turn < 0.0f)
 	{
 		turn += 2.0f * k_Pi;

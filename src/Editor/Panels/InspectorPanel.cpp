@@ -111,7 +111,7 @@ const std::vector<ComponentView>& ComponentViews()
 	    View<CreatureLocomotion>("Creature movement",
 	                             [](const CreatureLocomotion& locomotion) {
 		                             return fmt::format("speed {:.1f}, heading {:.0f} degrees", locomotion.speed,
-		                                                glm::degrees(locomotion.heading));
+		                                                glm::degrees(locomotion.heading.Radians()));
 	                             }),
 	    View<CreatureMindState>("Creature mind",
 	                            [](const CreatureMindState& mind) {

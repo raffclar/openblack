@@ -15,6 +15,9 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::creature_throw;
 
@@ -56,14 +59,23 @@ glm::vec3 creature_throw::HandVelocity(const glm::vec3& atRelease, const glm::ve
 	return spanMs > 0.0f ? (atRelease - before) * (1000.0f / spanMs) : glm::vec3(0.0f);
 }
 
-HeldPose creature_throw::HeldPlacement(const glm::mat3& hand, const glm::vec3& fingerEnds, bool mirrored, float hang)
+HeldPose creature_throw::HeldPlacement(const glm::mat3& hand, const glm::vec3& fingerEnds, bool mirrored, float hang,
+                                       float thingScale)
 {
-	const auto side = glm::normalize(hand[0]);
-	const auto ahead = glm::normalize(hand[1]);
-	const auto up = glm::normalize(hand[2]);
+	// The squares of each axis are added from x to z
+	const auto unit = [](const glm::vec3& axis) {
+		return axis * gutils::ModelInverseSquareRoot(x87::Dot<x87::SumOrder::Xyz>(axis, axis));
+	};
+	const auto side = unit(hand[0]);
+	const auto ahead = unit(hand[1]);
+	const auto up = unit(hand[2]);
 	const auto heldUp = mirrored ? -up : up;
 	const auto heldAhead = mirrored ? ahead : -ahead;
-	return {.rotation = glm::mat3(-side, heldUp, heldAhead), .position = fingerEnds - heldUp * hang};
+	// The scaled up axis is made the hang distance long, its squares added from y to z, then x. An axis of no length
+	// stays so.
+	const auto scaledUp = heldUp * thingScale;
+	const auto drop = scaledUp == glm::vec3(0.0f) ? scaledUp : x87::Scaled<x87::SumOrder::Yzx>(scaledUp, hang);
+	return {.rotation = glm::mat3(-side, heldUp, heldAhead), .position = fingerEnds - drop};
 }
 
 HeldPose creature_throw::ReleaseStart(const HeldPose& held, const glm::vec3& fingerEnds, bool thrown)
