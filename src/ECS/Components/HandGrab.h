@@ -31,6 +31,21 @@ struct InHand
 	entt::entity hand {entt::null};
 };
 
+/// The light of a thing in a hand, as the game keeps it from the last time that it drew the thing in the hand. The sea
+/// mirrors the thing in this light, which is thus one frame old.
+struct HeldLight
+{
+	/// Where the thing was on the map when the hand took it: a tree takes its light there
+	glm::vec3 takenAt {0.0f};
+	/// The light that the last draw took (see graphics::hand_reflection::HeldLook), none before the first draw
+	bool drawn {false};
+	glm::vec3 point {0.0f};
+	float viewDepth {0.0f};
+	uint32_t tint {0};
+	uint32_t added {0};
+	uint32_t treeGrey {0};
+};
+
 /// A thing a script has said the hand may not pick up
 struct CannotBePickedUp
 {

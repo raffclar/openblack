@@ -304,7 +304,7 @@ struct ObjectSetup
 	/// A tree belongs to the land's forest of this number, none for 0; and grows to this size, its scale when not given
 	uint32_t forest {0};
 	std::optional<float> fullSize;
-	/// A villager or animal that has eaten poison
+	/// A villager or animal that has eaten poison; a pot whose food is poisoned
 	bool poisoned {false};
 	/// Made indestructible, as a script makes one
 	bool indestructible {false};
@@ -1081,6 +1081,9 @@ struct Scenario
 	std::function<void(ecs::components::PlayerStatistics&)> playerStatistics;
 	/// What the first player's creature has counted of its life
 	std::optional<statistics::CreatureTallies> creatureTallies;
+	/// Sharks that a script makes as the game's whales, each at a point from the middle of the map. A shark that swims
+	/// on no path shows only its body under the sea.
+	std::vector<glm::vec2> sharks;
 };
 
 /// A town centre's totem

@@ -25,6 +25,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "HandReflection.h"
 #include "InstanceDesc.h"
 #include "InterfaceCreatures.h"
 #include "RenderPass.h"
@@ -162,6 +163,10 @@ public:
 		/// whose land light, land colour and haze it takes, w its shade of 255 in place of the sun's on each vertex. w 0 for
 		/// none.
 		glm::vec4 shadeAt {0.0f};
+		/// A held thing mirrored in the sea, flat in the light that its draw in the hand took on the frame before: the land's
+		/// light and colour at the kept point, the haze of the kept distance, and the kept colours of a fire or poison. The
+		/// land's light, the haze and the trees' brightness are those of the frame before.
+		std::optional<hand_reflection::HeldLook> heldMirror;
 		/// Inside the temple, the mesh fades with the temple's depth fog: a model once where it stands, the lightmapped
 		/// walls at each vertex. Off for the hand, which the game leaves unfogged.
 		bool templeFog {false};

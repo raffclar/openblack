@@ -616,6 +616,7 @@ Renderer::~Renderer() noexcept
 	{
 		bgfx::destroy(toBgfx(*_landLightTexture));
 	}
+	ReleaseLightOfFrameBefore();
 	if (_iconsTexture)
 	{
 		bgfx::destroy(toBgfx(*_iconsTexture));
@@ -1393,9 +1394,21 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				    desc.unlit || (!desc.alwaysLit && !detail_level::For(Locator::config::value().detailLevel).objectLighting);
 				const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, desc.landLightScale, unlit ? 1.0f : 0.0f,
 				                             desc.landColourAdded ? 0.0f : 1.0f};
-				program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
-				program->SetTextureSampler("s_landLight", 7, GetLandLightTexture());
-				program->SetTextureSampler("s_landColour", 8, GetLandColour());
+				// A held thing mirrored in the sea takes the land's light of the frame before
+				const bool before = desc.heldMirror.has_value() && _before.texturesKept;
+				if (before)
+				{
+					program->SetTextureSampler("s_landLuminosity", 6, *_before.luminosity);
+					program->SetTextureSampler("s_landColour", 8, *_before.colour);
+				}
+				else
+				{
+					program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
+					program->SetTextureSampler("s_landColour", 8, GetLandColour());
+				}
+				program->SetTextureSampler(
+				    "s_landLight", 7,
+				    desc.heldMirror.has_value() && _before.landLight.has_value() ? *_before.landLight : GetLandLightTexture());
 				setUniform(MeshUniform::IslandExtent, &islandExtent);
 				setUniform(MeshUniform::LandLight, &u_landLight);
 			}
@@ -1414,9 +1427,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				}
 				else
 				{
-					const auto u_haze = hazed ? _haze[0] : glm::vec4(0.0f);
+					// A held thing mirrored in the sea takes the haze of the frame before
+					const auto& haze = desc.heldMirror.has_value() ? _before.haze.Or(_haze) : _haze;
+					const auto u_haze = hazed ? haze[0] : glm::vec4(0.0f);
 					setUniform(MeshUniform::Haze, &u_haze);
-					setUniform(MeshUniform::HazeColour, &_haze[1]);
+					setUniform(MeshUniform::HazeColour, &haze[1]);
 				}
 			}
 			if (has(MeshUniform::FogAt))
@@ -1427,6 +1442,14 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				    !subMesh.GetSurfacePoints().empty())
 				{
 					u_fogAt = glm::vec4(*desc.fogFromFirstVertex + subMesh.GetSurfacePoints().front().position, 1.0f);
+				}
+				// A held thing mirrored in the sea: w 2, x the distance of its haze, y the colour that multiplies its light (a
+				// tree's grey of 1), z the colour added to it
+				if (const auto& held = desc.heldMirror; held.has_value())
+				{
+					const float multiply =
+					    held->treeGrey > 0 ? static_cast<float>(held->treeGrey) / 256.0f : static_cast<float>(held->tint);
+					u_fogAt = glm::vec4(held->viewDepth, multiply, static_cast<float>(held->added), 2.0f);
 				}
 				setUniform(MeshUniform::FogAt, &u_fogAt);
 			}
@@ -4863,6 +4886,68 @@ void Renderer::SetObjectShadowUniforms(const ShaderProgram& program) const
 	program.SetUniformValue("u_objectShadows", &u_objectShadows);
 }
 
+void Renderer::KeepLightOfFrameBefore() const
+{
+	_before.haze.StartFrame(_landLightTable ? std::optional(_haze) : std::nullopt);
+	_before.treeBrightness.StartFrame(_treeBrightnessMade ? std::optional(_treeBrightness) : std::nullopt);
+	constexpr uint64_t k_Flags = BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP | BGFX_SAMPLER_POINT;
+	// The table that the frame before built
+	if (_landLightTable)
+	{
+		if (!_before.landLight.has_value())
+		{
+			_before.landLight =
+			    fromBgfx(bgfx::createTexture2D(LandLightTable::k_Size, 1, false, 1, bgfx::TextureFormat::RGBA8, k_Flags));
+			bgfx::setName(toBgfx(*_before.landLight), "Land Light Before");
+		}
+		const auto& texels = _landLightTable->GetTexels();
+		bgfx::updateTexture2D(toBgfx(*_before.landLight), 0, 0, 0, 0, LandLightTable::k_Size, 1,
+		                      bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
+	}
+	// The luminosity and the colours that the frame before drew, copied before the first pass of this frame draws over
+	// them
+	_before.texturesKept = false;
+	const bool blits = (bgfx::getCaps()->supported & BGFX_CAPS_TEXTURE_BLIT) != 0;
+	if (!blits || !_landLuminosityFrameBuffer || !_landColourFrameBuffer)
+	{
+		return;
+	}
+	const auto copy = [](const FrameBuffer& from, std::optional<TextureHandle>& to, glm::u16vec2& size,
+	                     bgfx::TextureFormat::Enum format, const char* name) {
+		glm::u16vec2 fromSize {0};
+		from.GetSize(fromSize.x, fromSize.y);
+		if (!to.has_value() || size != fromSize)
+		{
+			if (to.has_value())
+			{
+				bgfx::destroy(toBgfx(*to));
+			}
+			to = fromBgfx(bgfx::createTexture2D(fromSize.x, fromSize.y, false, 1, format, BGFX_TEXTURE_BLIT_DST | k_Flags));
+			bgfx::setName(toBgfx(*to), name);
+			size = fromSize;
+		}
+		bgfx::blit(static_cast<bgfx::ViewId>(RenderPass::LandShade), toBgfx(*to), 0, 0,
+		           toBgfx(from.GetColorAttachment().GetNativeHandle()));
+	};
+	copy(*_landLuminosityFrameBuffer, _before.luminosity, _before.luminositySize, bgfx::TextureFormat::R8,
+	     "Land Luminosity Before");
+	copy(*_landColourFrameBuffer, _before.colour, _before.colourSize, bgfx::TextureFormat::RGBA8, "Land Colour Before");
+	_before.texturesKept = true;
+}
+
+void Renderer::ReleaseLightOfFrameBefore() const
+{
+	for (auto* texture : {&_before.landLight, &_before.luminosity, &_before.colour})
+	{
+		if (texture->has_value())
+		{
+			bgfx::destroy(toBgfx(**texture));
+			texture->reset();
+		}
+	}
+	_before.texturesKept = false;
+}
+
 TextureHandle Renderer::UpdateLandLight() const
 {
 	if (!_landLightTable)
@@ -5630,6 +5715,8 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	}
 	// What the particle effects draw, once for the land's colours and every pass
 	CollectParticles();
+	// The land's light of the frame that ended, before this frame makes its own
+	KeepLightOfFrameBefore();
 	// TODO(bwrsandman): Footprint framebuffer doesn't need to be updated each frame
 	DrawLandLuminosityPass(drawDesc);
 	DrawLandColourPass(drawDesc);
@@ -5755,6 +5842,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		_treeBrightness =
 		    static_cast<float>(tree_brightness::Factor(camera.GetFocus(), camera.GetForward(), glm::vec3(_modelLight))) /
 		    256.0f;
+		_treeBrightnessMade = true;
 	}
 
 	const auto* skyShader = _shaderManager->GetShader("Sky");
@@ -6108,6 +6196,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				glm::vec3 added;
 			};
 			std::optional<FlatLook> flatReflection;
+			// The thing that the hand holds, mirrored in the sea: flat in the land's light, the land's colour and the haze that
+			// it kept the frame before, with nothing of its own added
+			std::optional<hand_reflection::HeldLook> heldReflection;
 			const auto drawInstances = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
 			                               bool useMaterialBlending, uint32_t first, uint32_t count,
 			                               const EntityPose* pose = nullptr,
@@ -6276,11 +6367,23 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.snow = false;
 					submitDesc.groundShadows = false;
 				}
+				if (heldReflection.has_value())
+				{
+					submitDesc.shadeAt = glm::vec4(heldReflection->point, hand_reflection::k_HeldShade);
+					submitDesc.heldMirror = heldReflection;
+					submitDesc.unlit = true;
+					submitDesc.landLightScale = 1.0f;
+					submitDesc.objectLook.reset();
+					submitDesc.snow = false;
+					submitDesc.groundShadows = false;
+				}
 
 				// TODO(bwrsandman): choose the correct LOD
 				DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				submitDesc.morphTargets = nullptr;
 				submitDesc.landLightAndHaze = true;
+				submitDesc.shadeAt = glm::vec4(0.0f);
+				submitDesc.heldMirror.reset();
 				if (templeLit)
 				{
 					submitDesc.objectLook.reset();
@@ -6901,13 +7004,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					drawPosedStill(entity, instance, false);
 				});
 			}
-			// The game mirrors what the hand holds just after the hand, in its own look
+			// The game mirrors what the hand holds just after the hand, flat in the light that it kept
 			if (mirroredViewId != desc.viewId && handReflected)
 			{
 				submitDesc.viewId = mirroredViewId;
 				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Held);
 				for (const auto& held : renderCtx.inHandDraws)
 				{
+					heldReflection = held.heldLight;
 					const auto posed =
 					    std::ranges::find(renderCtx.entityDraws, held.entity, &RenderContext::EntityDraw::entity);
 					if (posed != renderCtx.entityDraws.end())
@@ -6925,6 +7029,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						              placers->second.translucent || placers->second.materialBlending, held.instance, 1);
 					}
 				}
+				heldReflection.reset();
 				submitDesc.sortDepth = 0;
 				submitDesc.viewId = desc.viewId;
 			}
@@ -7345,7 +7450,63 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						submitDesc.viewId = TranslucentView(desc.viewId);
 						submitDesc.sortDepth = graphics::fizz_draw_order::SegmentDepth(run.segment);
 					}
+					// The sea mirrors a tree in a hand only with the hand, not with the land
+					if (desc.viewId == RenderPass::Reflection && !renderCtx.heldTreeDraws.empty())
+					{
+						uint32_t from = run.first;
+						const uint32_t end = run.first + run.count;
+						while (from < end)
+						{
+							uint32_t to = end;
+							for (const auto& held : renderCtx.heldTreeDraws)
+							{
+								if (held.instance >= from && held.instance < to)
+								{
+									to = held.instance;
+								}
+							}
+							if (to > from)
+							{
+								submitDesc.instanceDesc = std::make_unique<graphics::InstanceDesc>(
+								    renderCtx.treeInstanceUniformBuffer, from, to - from);
+								DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+							}
+							from = to + 1;
+						}
+						continue;
+					}
 					DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+				}
+				// The game mirrors a tree in the hand right after the hand, flat in the light that the tree kept: the land's
+				// light at its place on the map, the haze there and the grey of a fire on it, of the frame before
+				if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
+				    desc.viewId == RenderPass::Reflection && !inTemple && desc.drawHand &&
+				    hand != renderCtx.instancedDrawDescs.end() && hand->second.count > 0 && !hand->second.hiddenFromReflection)
+				{
+					for (const auto& held : renderCtx.heldTreeDraws)
+					{
+						const auto run = std::ranges::find_if(renderCtx.treeRuns, [&held](const auto& each) {
+							return each.mesh == held.mesh && held.instance >= each.first &&
+							       held.instance < each.first + each.count;
+						});
+						if (!held.heldLight.has_value() || !meshManager.Contains(held.mesh) || run == renderCtx.treeRuns.end())
+						{
+							continue;
+						}
+						submitDesc.instanceDesc =
+						    std::make_unique<graphics::InstanceDesc>(renderCtx.treeInstanceUniformBuffer, held.instance, 1);
+						submitDesc.detailLevel = run->level;
+						submitDesc.viewId = RenderPass::ReflectionMirrored;
+						submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Held);
+						submitDesc.state = opaqueState;
+						submitDesc.snow = false;
+						submitDesc.landLightScale = _before.treeBrightness.Or(_treeBrightness);
+						submitDesc.shadeAt = glm::vec4(held.heldLight->point, hand_reflection::k_HeldShade);
+						submitDesc.heldMirror = held.heldLight;
+						DrawMesh(*meshManager.Handle(held.mesh), submitDesc, std::numeric_limits<uint8_t>::max());
+						submitDesc.shadeAt = glm::vec4(0.0f);
+						submitDesc.heldMirror.reset();
+					}
 				}
 				submitDesc.detailLevel = 1;
 				submitDesc.viewId = desc.viewId;

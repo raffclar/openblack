@@ -1449,7 +1449,9 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		                            .group = group,
 		                            .segment = _renderContext.fizzOrder.SegmentOf(entity),
 		                            .data = {.modelMatrix = drawnMatrix, .burning = burning},
-		                            .box = boxMatrix});
+		                            .box = boxMatrix,
+		                            .entity = entity,
+		                            .held = registry.AllOf<InHand>(entity)});
 	    });
 
 	// Laid out within each mesh's instances by detail, each run drawn in its own: counted by mesh and detail first, then
@@ -1479,6 +1481,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		++tree.slots->treeGroups.at(group);
 	}
 	_renderContext.treeRuns.clear();
+	_renderContext.heldTreeDraws.clear();
 	bool fits = true;
 	const auto low = graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::Low);
 	for (auto& [meshId, slots] : _treeSlots)
@@ -1521,6 +1524,15 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		}
 		const uint32_t idx = tree.slots->treeGroups.at(groupOf(tree))++;
 		_renderContext.treeInstanceData[idx] = tree.data;
+		// A tree in a hand is mirrored in the sea with the hand
+		if (tree.held)
+		{
+			_renderContext.heldTreeDraws.push_back({.entity = tree.entity,
+			                                        .mesh = tree.mesh,
+			                                        .model = tree.data.modelMatrix,
+			                                        .castModel = tree.data.modelMatrix,
+			                                        .instance = idx});
+		}
 		if (drawBoundingBox && idx + _renderContext.treeInstanceData.size() / 2 < _renderContext.treeInstanceData.size())
 		{
 			// Bounding box matrices in the second half of the instance data

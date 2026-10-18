@@ -110,6 +110,9 @@ private:
 		uint32_t segment {0};
 		RenderContext::TreeInstanceData data;
 		glm::mat4 box;
+		/// The tree, and whether it is in a hand
+		entt::entity entity {entt::null};
+		bool held {false};
 	};
 	std::vector<PlacedTree> _placedTrees;
 	/// The bounding box of each mesh the distance bands have looked at, kept while the draw lists are
