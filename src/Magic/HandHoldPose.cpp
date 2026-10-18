@@ -171,16 +171,6 @@ glm::vec3 hand_hold::HeldUp(glm::vec3 camera, glm::vec3 hand, float roll, float 
 	return x87::TransformPoint(turn, glm::vec3(0.0f, 1.0f, 0.0f), k_UpOrders);
 }
 
-std::optional<float> hand_hold::HeadingOfSight(glm::vec3 lineOfSight)
-{
-	constexpr float k_LeastLean = 0.01f;
-	if (!(std::abs(lineOfSight.x) > k_LeastLean) && !(std::abs(lineOfSight.z) > k_LeastLean))
-	{
-		return std::nullopt;
-	}
-	return x87::RoundToFloat(x87::GameHeadingOf(lineOfSight.x, lineOfSight.z));
-}
-
 glm::vec3 hand_hold::HeldFacing(float heading)
 {
 	// Add the half turn as a float. Keep the sine and the cosine of the sum as floats.
@@ -189,25 +179,40 @@ glm::vec3 hand_hold::HeldFacing(float heading)
 	return {x87::RoundToFloat(x87::Sin(turn)), 0.0f, -x87::RoundToFloat(x87::Cos(turn))};
 }
 
-glm::mat3 hand_hold::HeldBasis(glm::vec3 facing, glm::vec3 up)
+glm::mat3 hand_hold::HeldBasis(glm::vec3 facing, glm::vec3 up, bool mirrored)
 {
-	auto side = glm::cross(facing, up);
-	if (side != glm::vec3(0.0f))
+	// The side is the facing across the up. The facing is level, so the first part is only a negated product.
+	glm::vec3 side {-(facing.z * up.y), facing.z * up.x - facing.x * up.z, facing.x * up.y};
+	if (side.x != 0.0f || side.y != 0.0f || side.z != 0.0f)
 	{
-		side = glm::normalize(side);
+		const float share = 1.0f / std::sqrt((side.x * side.x + side.y * side.y) + side.z * side.z);
+		side = {side.x * share, side.y * share, side.z * share};
 	}
-	return {side, up, glm::cross(side, up)};
+	// The forward axis is the up across the side, negated unless the hand is mirrored
+	glm::vec3 forward {side.z * up.y - side.y * up.z, side.x * up.z - side.z * up.x, side.y * up.x - side.x * up.y};
+	if (!mirrored)
+	{
+		constexpr float k_Negate = -1.0f;
+		forward = {forward.x * k_Negate, forward.y * k_Negate, forward.z * k_Negate};
+	}
+	return {side, up, forward};
 }
 
-glm::mat3 hand_hold::SeedTurn(const glm::mat3& basis, float yRotate, bool rightHanded)
+glm::mat3 hand_hold::HeldFrame(float heading, glm::vec3 up, float handScale, bool mirrored)
 {
-	auto x = basis[0];
-	auto z = basis[2];
-	if (rightHanded)
-	{
-		x = -x;
-		z = -z;
-	}
+	// The size is a matrix with zeros off its diagonal. The full product adds the zero terms, which can change the sign
+	// of a zero part of the frame.
+	glm::mat3 size {0.0f};
+	size[0][0] = mirrored ? -handScale : handScale;
+	size[1][1] = handScale;
+	size[2][2] = handScale;
+	return x87::TurnProduct(size, HeldBasis(HeldFacing(heading), up, mirrored));
+}
+
+glm::mat3 hand_hold::SeedTurn(const glm::mat3& frame, float yRotate)
+{
+	const auto& x = frame[0];
+	const auto& z = frame[2];
 	// The cosine is stored as a float and the sine stays wide
 	const float c = x87::RoundToFloat(x87::Cos(yRotate));
 	const double s = x87::Sin(yRotate);
@@ -215,7 +220,7 @@ glm::mat3 hand_hold::SeedTurn(const glm::mat3& basis, float yRotate, bool rightH
 	const auto turnedX = x * c + timesSine(z);
 	const auto turnedZ = z * c - timesSine(x);
 	// The game adds the squares of the first axis z, x, y and of the other two z, y, x
-	return {UnitInOrder<x87::SumOrder::Zxy>(turnedX), UnitInOrder<x87::SumOrder::Zyx>(basis[1]),
+	return {UnitInOrder<x87::SumOrder::Zxy>(turnedX), UnitInOrder<x87::SumOrder::Zyx>(frame[1]),
 	        UnitInOrder<x87::SumOrder::Zyx>(turnedZ)};
 }
 

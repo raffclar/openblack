@@ -81,18 +81,18 @@ struct HoldFrame
 /// The held seed's up, and the hand's: straight up, rolled back by the roll about the line from the hand to the camera,
 /// then pitched back by the pitch about the level line across it
 [[nodiscard]] glm::vec3 HeldUp(glm::vec3 camera, glm::vec3 hand, float roll, float pitch);
-/// The hand's heading from the line of sight through the cursor: the angle about the vertical, 0 along -z and positive
-/// towards +x. When the line leans 0.01 or less both east-west and north-south, there is no new heading and the hand
-/// keeps the heading it had.
-[[nodiscard]] std::optional<float> HeadingOfSight(glm::vec3 lineOfSight);
 /// The level way that a held thing faces, from the hand's heading: half a turn from the heading, back towards the camera
 [[nodiscard]] glm::vec3 HeldFacing(float heading);
 /// The seed's axes for an up: its forward kept as level as it can be along the way the hand faces (see HeldFacing), its
-/// side across the two. The hand's own turn is these axes with its model turned upright.
-[[nodiscard]] glm::mat3 HeldBasis(glm::vec3 facing, glm::vec3 up);
-/// The seed model's turn in the hand: its axes, half a turn about its up for a right hand, then its own extra turn
-/// about its up
-[[nodiscard]] glm::mat3 SeedTurn(const glm::mat3& basis, float yRotate, bool rightHanded);
+/// side across the two. The hand's own turn is these axes with its model turned upright. For a mirrored hand, the
+/// forward axis points the other way.
+[[nodiscard]] glm::mat3 HeldBasis(glm::vec3 facing, glm::vec3 up, bool mirrored = false);
+/// The frame of a held thing: its axes from the hand's heading and the up (see HeldBasis), multiplied by the drawn size
+/// of the hand. For a mirrored hand, the size of the side axis is negative.
+[[nodiscard]] glm::mat3 HeldFrame(float heading, glm::vec3 up, float handScale, bool mirrored);
+/// The seed model's turn in the hand: the frame of the held thing (see HeldFrame) turned by the seed's own extra turn
+/// about its up, each axis then made unit
+[[nodiscard]] glm::mat3 SeedTurn(const glm::mat3& frame, float yRotate);
 
 /// The blend of the drawn hand. The blend keeps two poses of the hand: the drawn pose and a kept pose. Each pose has
 /// the world matrices of all the bones. For k_FadeSeconds after a change, each bone moves in a straight line in the

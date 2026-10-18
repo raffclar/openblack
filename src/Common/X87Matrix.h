@@ -91,6 +91,22 @@ inline constexpr AxisOrders k_MeshPointOrder {{{2, 1, 0}, {0, 2, 1}, {0, 2, 1}}}
 	return product;
 }
 
+/// The order in which the engine adds the products when it multiplies two turns of three rows: z, y, x for the x and y
+/// axes and x, z, y for the z axis
+inline constexpr AxisOrders k_TurnProductOrder {{{2, 1, 0}, {2, 1, 0}, {0, 2, 1}}};
+
+/// The product of two turns of three rows: each row of `first` moved through `second`, in the turn product order
+[[nodiscard]] inline glm::mat3 TurnProduct(const glm::mat3& first, const glm::mat3& second)
+{
+	const glm::mat4 through {second};
+	glm::mat3 product {};
+	for (glm::length_t row = 0; row < 3; ++row)
+	{
+		product[row] = TurnPoint(through, first[row], k_TurnProductOrder);
+	}
+	return product;
+}
+
 /// A turn by an angle about an axis, as the engine makes it: the axis made unit (its squares added z first) unless it is
 /// zero, a quaternion of the half angle with its sine and cosine stored as floats, then the matrix of that quaternion.
 /// The place is zero.

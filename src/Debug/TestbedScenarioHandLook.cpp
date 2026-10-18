@@ -8,7 +8,8 @@
  *******************************************************************************/
 
 // The testbed's scenarios of how the hand looks for its player's alignment: evil, neutral and good, and turning from
-// one to the other
+// one to the other. Also how the hand holds a thing across the screen, and how it hovers over the icons of miracles,
+// over the help's text bubble, at the edge of the screen and while it offers a thing to a creature.
 
 #include <cstddef>
 
@@ -149,5 +150,95 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-25.0f, 10.0f}, .inScript = true}},
 	    .commands = holding,
 	    .repeatFrom = 0,
+	});
+
+	// The hand over the stone hands of a village centre: it rests nearer than each icon by its own height and opens
+	constexpr glm::vec2 k_Centre {0.0f, 40.0f};
+	constexpr float k_IconRest = 3.0f;
+	all.push_back({
+	    .id = "hand.icon_rest",
+	    .name = "The hand over the stone hands of a village centre",
+	    .facet = Facet::Hand,
+	    .description = "A Norse town of the player on the first land, given the heal and the water miracles, so that "
+	                   "its village centre shows two stone hands. The pointer moves onto the left stone hand, onto the "
+	                   "land before the centre, onto the right stone hand and back to the land, three seconds at each.",
+	    .expected = "On a stone hand, the hand does not go into the icon: it stays nearer to the camera than the icon by "
+	                "its own height, turns to the slope of the land, and opens its fingers to take the miracle. On the "
+	                "land it hangs over the land in its ordinary pose.",
+	    .environment = {.dispenserGrid = false, .landNumber = 1},
+	    .framing = {.shot = Shot::Placed, .eye = {-28.0f, 9.5f, 37.0f}, .look = {-11.0f, 1.5f, 37.0f}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre},
+	                {.type = VillagerInfo::NorseFarmerMale, .offset = k_Centre + glm::vec2(5.0f, -15.0f), .joinTown = true}},
+	    .temples = {{.offset = {0.0f, -60.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.267f, 0.393f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = k_IconRest, .point = {0.25f, 0.8f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = k_IconRest, .point = {0.661f, 0.358f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = k_IconRest, .point = {0.75f, 0.8f}}},
+	    .repeatFrom = 0,
+	    .townBeliefInPlayer = 1000.0f,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+
+	// At the edge of the screen the empty hand offers to turn the camera and stands up towards where the camera looks
+	all.push_back({
+	    .id = "hand.focus_lean",
+	    .name = "The hand standing towards the camera's focus at the edge of the screen",
+	    .facet = Facet::Hand,
+	    .description = "The pointer rests on open land in the middle of the screen, then at the right edge, then at the "
+	                   "left edge, three seconds at each.",
+	    .expected = "At each edge the hand shows the turning pose and stands up towards the point the camera looks at, "
+	                "leaning up by three tenths of the distance to that point. In the middle it hangs over the land.",
+	    .environment = {.dispenserGrid = false, .cursor = k_Cursor},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, -14.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.98f, 0.6f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.6f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.02f, 0.6f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.6f}}},
+	    .repeatFrom = 0,
+	});
+
+	// Offering a thing to a creature, the hand eases away from the camera over two seconds, not 0.28 seconds
+	CreatureSetup hungry {.species = CreatureType::Tiger, .offset = {0.0f, 0.0f}, .needs = {.energy = 0.3f}, .hold = true};
+	all.push_back({
+	    .id = "hand.offer_slow_ease",
+	    .name = "The hand easing away slowly while it offers food to a creature",
+	    .facet = Facet::Hand,
+	    .description = "The player's hand takes a pile of food. The pointer moves onto a hungry tiger for a second, so that "
+	                   "the hand offers the food, then onto the land far behind the tiger. Three seconds later it moves to "
+	                   "the land in front of the tiger, and after two more seconds to the far land again.",
+	    .expected = "Moved off the tiger while it offers the food, the hand eases away to the far land over two seconds. "
+	                "When the offer has ended, it eases away to the far land in about a quarter of a second, as usual.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.8f)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 25.0f, -40.0f}, .look = {0.0f, 5.0f, 0.0f}},
+	    .creatures = {hungry},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {15.0f, -25.0f}}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Kind::PointerOnCreature, .creature = 0, .delaySeconds = 1.0f},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.25f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.85f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.25f}},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f, .velocity = {0.0f, 0.0f, 0.0f}}},
+	});
+
+	// Over the help's text bubble, the hand stands straight up and eases to the bubble
+	constexpr size_t k_ActionButton = 3;
+	all.push_back({
+	    .id = "hand.bubble_stand",
+	    .name = "The hand over the help's text bubble",
+	    .facet = Facet::Hand,
+	    .description = "A \"did you know\" sign near the camera. The pointer taps the sign, so that its tip opens in the "
+	                   "blue bubble. Then the pointer moves onto the bubble, onto the land beside the sign and onto the "
+	                   "bubble again, three seconds at each.",
+	    .expected = "On the bubble the hand stands straight up, not turned to the slope of the land, and stays at the "
+	                "distance of the bubble from the camera. On the land it hangs over the land, turned to its slope.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -15.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .highlights = {{.kind = 1, .offset = {0.0f, 0.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.46f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = k_ActionButton},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = k_ActionButton},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.5f, .point = {0.625f, 0.225f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.2f, 0.8f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.625f, 0.225f}}},
 	});
 }

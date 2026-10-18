@@ -481,7 +481,8 @@ private:
 	input::ShortcutKeys _shortcutKeys;
 	/// Which way the hand faces across the land, and its up, easing to the slope under it
 	glm::vec3 _handHeading {0.0f, 0.0f, 1.0f};
-	/// The same heading as an angle about the up axis, from -z towards +x, which turns the hand that holds a totem and the frame of a held thing
+	/// The same heading as an angle about the up axis, from -z towards +x, which turns the frame of a held thing and the
+	/// hand that holds a totem
 	float _handHeadingAngle {std::numbers::pi_v<float>};
 	Zoomer3 _handUp {glm::vec3(0.0f, 1.0f, 0.0f)};
 	/// How the hand stands facing along its heading on level land, from which it is stood on a slope or a creature's body
@@ -505,6 +506,20 @@ private:
 	std::optional<glm::vec3> _cursorLand;
 	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land
 	std::optional<glm::vec3> _handRestOnThing;
+	/// How much nearer to the camera than its resting point the hand stays, for a miracle's icon
+	float _handRestNearer {0.0f};
+	/// The cursor is on a miracle's icon: the hand opens to take it
+	bool _handOverSpellIcon {false};
+	/// How far along the line of sight the help's text bubble is, while the bubble has the cursor
+	std::optional<float> _handBubbleDistance;
+	/// The help's text bubble or the tied leash's rope has the cursor: the hand stands straight up
+	bool _handStandsStraight {false};
+	/// Nothing is under the cursor but the land or the sea, so the hand may stand towards the camera's focus to offer to
+	/// turn the camera
+	bool _handMayOfferTurn {false};
+	/// The cursor's point at the furthest the hand may be this frame, which the hand stands towards the camera's focus
+	/// from when it offers to turn the camera
+	std::optional<glm::vec3> _handLimitPoint;
 	/// Where the hand is and how it is posed while it is held to a creature
 	std::optional<ecs::systems::CreatureHandSystemInterface::HandPose> _handOnCreature;
 	/// The creature the hand is over this frame, if any
@@ -541,6 +556,8 @@ private:
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
 	/// What sets how far from the camera the hand may hover this frame, without where it rests
 	[[nodiscard]] hand_feel::Hover HandHoverInputs(glm::vec3 eye) const;
+	/// The drawn size of the hand at a place, from its distance to the camera, larger on a creature
+	[[nodiscard]] float HandDrawnScale(glm::vec3 eye, glm::vec3 handPosition, bool holding) const;
 	/// A knock on a house: the hand's tap starts, waits while the hand holds something, and the houses' read-out runs
 	void UpdateHandKnock(const ecs::components::Transform& handTransform);
 	/// Loads the hand animations of Data/CTR/hh.hbn for the hand mesh
