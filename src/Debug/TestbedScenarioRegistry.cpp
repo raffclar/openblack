@@ -5832,6 +5832,22 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "combat.gesture_view_moves",
+	    .name = "Drawing a gesture while the fight view moves",
+	    .facet = Facet::Combat,
+	    .description = "The player's red tiger and a blue tiger fight by themselves, while the camera looks at the arena "
+	                   "from within it. When the fight view follows the duel and moves each frame, the hand draws the "
+	                   "star of the special move across the middle of the screen.",
+	    .expected = "The camera flies to the side of the arena and follows the duel. The star drawn while the view "
+	                "moves is recognised: the red tiger does its special move. Another camera that moves would wipe "
+	                "the path, but the fight view lets the hand draw on.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 8.0f, .value = static_cast<size_t>(GestureType::Star)}},
+	});
+
 	{
 		// Two creatures that are not the player's fight by themselves, and the player's own lion stands near the arena
 		// The Action button is the right button of the mouse

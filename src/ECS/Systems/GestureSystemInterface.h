@@ -51,7 +51,7 @@ public:
 		/// Which way is right on the screen, in the world
 		glm::vec3 cameraRight {1.0f, 0.0f, 0.0f};
 		/// Where the camera's eye is. The path is forgotten when it has moved since the last frame, unless the camera
-		/// is shaking
+		/// is shaking or lets the hand draw on
 		glm::vec3 cameraEye {0.0f};
 		/// Which way the camera looks
 		glm::vec3 cameraForward {0.0f, 0.0f, 1.0f};
@@ -74,6 +74,12 @@ public:
 		View view;
 		/// Whether a camera shake is going on anywhere, near the camera or not
 		bool cameraShaking {false};
+		/// Whether the camera lets the hand draw on while it moves: the fight view while it shows a fight in its arena, and
+		/// the camera that follows the creature in Creature Mode
+		bool cameraLetsHandDraw {false};
+		/// Whether the Move button is held while the hand directs the fight of the player's creature. The path is
+		/// forgotten, and nothing is recognised, while it is.
+		bool moveHeldInFight {false};
 	};
 
 	/// The last gesture recognised, for the debug window

@@ -190,6 +190,9 @@ public:
 	[[nodiscard]] virtual bool GetCameraWatches() const = 0;
 	/// Whether the camera's fight view is watching a fight now
 	[[nodiscard]] virtual bool IsCameraOnFight() const = 0;
+	/// Whether the camera's fight view shows a fight that goes on in its arena: not while the view stays a little after
+	/// the fight
+	[[nodiscard]] virtual bool IsCameraOnFightInArena() const { return false; }
 	/// Whether the player may zoom out of the fight view, and the view ends by itself after the fight (scripts may forbid
 	/// it)
 	virtual void SetFightExit(bool /*allowed*/) {}
