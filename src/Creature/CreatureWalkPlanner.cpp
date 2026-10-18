@@ -195,6 +195,14 @@ float creature_walk_planner::StepJoinAhead(const glm::vec3& displacement, float 
 	return (LengthZyx(displacement) * scale) - travelled;
 }
 
+float creature_walk_planner::StopAhead(float speed, float stillNeeded)
+{
+	// The slow-down is the walk's, in the order of the game's operations
+	const float share = speed / k_Acceleration;
+	const float stop = ((k_Acceleration * share) * share) * 0.5f;
+	return stillNeeded > stop ? stillNeeded : stop;
+}
+
 int32_t creature_walk_planner::WalkTimeAfterStep(int32_t stepTimeMs, int32_t stepMs, int32_t walkMs,
                                                  creature_locomotion::Side side)
 {

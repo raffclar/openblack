@@ -1820,7 +1820,8 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		}
 		break;
 	case Step::Kind::StopMoving:
-		if (!senses.bodyPlaying)
+		// It waits until it stands still: its walk slows to a stop and no action plays
+		if (!senses.bodyPlaying && !senses.moving)
 		{
 			FinishStep(mind);
 		}

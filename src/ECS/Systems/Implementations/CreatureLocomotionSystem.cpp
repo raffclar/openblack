@@ -790,6 +790,20 @@ bool IsMovingMotion(Motion motion)
 {
 	return motion != Motion::Standing;
 }
+
+/// Whether it is on its way somewhere: waiting for its route, or turning, stepping or walking along it. A turn on the
+/// spot to face a point is not.
+bool IsOnItsWay(const CreatureLocomotion& self)
+{
+	return IsMovingMotion(self.motion) && !(self.motion == Motion::Turning && self.facingOnly);
+}
+
+/// Stops it at once where it is, as a new body action or a placement does
+void Halt(CreatureLocomotion& self)
+{
+	ClearWalk(self);
+	self.following.reset();
+}
 } // namespace
 
 float CreatureLocomotionSystem::BodyRadius(CreatureType species)
@@ -1046,6 +1060,16 @@ bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point
 	return TurnToHeading(creature, locomotion::HeadingOf(offset));
 }
 
+bool CreatureLocomotionSystem::TurnToFaceAtOnce(entt::entity creature, glm::vec2 point)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* self = registry.TryGet<CreatureLocomotion>(creature); self != nullptr && self->started)
+	{
+		Halt(*self);
+	}
+	return TurnToFace(creature, point);
+}
+
 bool CreatureLocomotionSystem::TurnToHeading(entt::entity creature, GameHeading heading)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1055,8 +1079,13 @@ bool CreatureLocomotionSystem::TurnToHeading(entt::entity creature, GameHeading 
 	{
 		return false;
 	}
+	// It stops first. While it is on its way or turns, the turn does not start: it walks on to its stop.
+	Stop(creature);
+	if (IsMovingMotion(self->motion))
+	{
+		return false;
+	}
 	ClearWalk(*self);
-	self->following.reset();
 	self->facingOnly = true;
 	// The target is kept as it is given, and the turn to it is wrapped once
 	BeginTurn(*self, MovesOf(body->species), heading);
@@ -1106,12 +1135,40 @@ void CreatureLocomotionSystem::PlaceWithoutWalking(entt::entity creature, glm::v
 void CreatureLocomotionSystem::Stop(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	BreatheAtRest(creature);
+	auto* self = registry.TryGet<CreatureLocomotion>(creature);
+	if (self == nullptr)
+	{
+		return;
+	}
+	self->following.reset();
+	if (!IsOnItsWay(*self))
+	{
+		return;
+	}
+	// Its route ends where its speed lets it slow to a stand, or where its turn or step ends. Its walk then slows to
+	// that end, as at the end of any route.
+	self->follower.Stop(planner::StopAhead(self->speed, JoinAhead(*self)));
+	if (self->follower.IsFollowing())
+	{
+		self->destination = self->follower.GetRouteEnd();
+	}
+}
+
+void CreatureLocomotionSystem::StopAtOnce(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	if (auto* self = registry.TryGet<CreatureLocomotion>(creature))
 	{
-		ClearWalk(*self);
-		self->following.reset();
+		Halt(*self);
 	}
+	BreatheAtRest(creature);
+}
+
+void CreatureLocomotionSystem::BreatheAtRest(entt::entity creature)
+{
 	// Stopped, it breathes at its resting period again
+	auto& registry = Locator::entitiesRegistry::value();
 	if (auto* animation = registry.TryGet<CreatureAnimation>(creature); animation != nullptr)
 	{
 		if (const auto* body = registry.TryGet<const Creature>(creature))
@@ -1301,6 +1358,12 @@ void CreatureLocomotionSystem::ProcessTurn()
 		    case Motion::Walking:
 			    Walk(self, walkTurn);
 			    break;
+		    }
+		    // A stop while it waited for its route ended the search: it stands
+		    if (self.motion == Motion::Planning && self.follower.GetState() == route::Follower::State::Standing)
+		    {
+			    StandPose(self, moves);
+			    Arrive(self);
 		    }
 
 		    // A step or the walk put it somewhere it cannot stand: it is put back where it can, or stays where it is when

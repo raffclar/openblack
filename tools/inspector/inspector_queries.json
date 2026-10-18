@@ -1661,7 +1661,7 @@
     "type": "array"
    },
    {
-    "description": "walk (the default), run, or face to turn on the spot towards the point",
+    "description": "walk (the default), run, face to turn on the spot towards the point, stop to stop as the game stops a walk (the point is not used), or stop_at_once to stop dead",
     "name": "pace",
     "type": "string"
    }
