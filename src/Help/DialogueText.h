@@ -214,6 +214,22 @@ private:
 	int32_t _startMs {0};
 	/// Moved on while the narration is still sounding
 	mutable int32_t _endMs {0};
+
+public:
+	/// Gives the values that a saved game keeps to a visitor. The real times stay as the clock had them: see
+	/// ShiftRealTime.
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._display, self._texts, self._waitClick, self._noClick, self._clickCueSeconds, self._keyIconSeconds,
+		      self._actionIconSeconds, self._startTurn, self._endTurn, self._startMs, self._endMs);
+	}
+	/// Moves the real times of the text by an amount, as a load of a saved game puts them on the clock of this run
+	void ShiftRealTime(int32_t milliseconds)
+	{
+		_startMs += milliseconds;
+		_endMs += milliseconds;
+	}
 };
 
 } // namespace openblack::help

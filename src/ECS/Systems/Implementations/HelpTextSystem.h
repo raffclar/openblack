@@ -33,6 +33,9 @@ public:
 	[[nodiscard]] bool IsStarted() const override { return _dialogue != nullptr; }
 	void SetTextChoices(const TextChoices& choices) override;
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
+
 	void StopVoices() override;
 	void Update(const Frame& frame) override;
 	bool RunText(bool singleLine, uint32_t text, int32_t withInteraction) override;

@@ -99,6 +99,8 @@ public:
 	virtual void SetRunSeed(uint32_t seed) = 0;
 	/// A stream's generator
 	[[nodiscard]] virtual std::mt19937& Stream(RandomStream stream) = 0;
+	/// The general stream of the thread that calls, which a saved game keeps for the game's thread
+	[[nodiscard]] std::mt19937& GeneralStream() { return Generator(); }
 
 protected:
 	virtual std::mt19937& Generator() = 0;

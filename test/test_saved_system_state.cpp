@@ -36,6 +36,7 @@
 #include "ECS/Systems/Implementations/ForestSystem.h"
 #include "ECS/Systems/Implementations/GuidanceSystem.h"
 #include "ECS/Systems/Implementations/HelpMessageSystem.h"
+#include "ECS/Systems/Implementations/HelpTextSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
@@ -43,6 +44,7 @@
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/SavedStateInterface.h"
+#include "Help/StoryHistory.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -189,4 +191,27 @@ TEST(SavedSystemState, TheStateOfANewLandComesBack)
 	check(HelpMessageSystem {}, HelpMessageSystem {});
 	check(InfluenceSystem {}, InfluenceSystem {});
 	check(TeleportSystem {}, TeleportSystem {});
+}
+
+TEST(SavedSystemState, TheStoryHistoryComesBack)
+{
+	help::StoryHistory history;
+	history.Add({.text = 12, .interaction = 1, .number = 2.5f, .narrator = 3});
+	history.Add({.text = 40, .interaction = 0, .number = 0.0f, .narrator = 2});
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, history);
+	help::StoryHistory loaded;
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(Context(), out.Bytes(), identity);
+	reflection::Load(in, loaded);
+	ASSERT_FALSE(in.Failed());
+	EXPECT_EQ(loaded.Count(), 2u);
+	ASSERT_TRUE(loaded.Back(1).has_value());
+	EXPECT_EQ(loaded.Back(1)->text, 12u);
+	EXPECT_EQ(loaded.Back(1)->number, 2.5f);
+
+	// The help's texts with no dialogue started give the same bytes after a load
+	HelpTextSystem texts;
+	HelpTextSystem loadedTexts;
+	LoadInto(loadedTexts, StateOf(texts));
 }

@@ -51,6 +51,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SavedStateInterface.h"
@@ -123,6 +124,8 @@ gamesave::Chunk ClockChunk()
 	}
 	reflection::Save(out, runSeed);
 	reflection::Save(out, streams);
+	// The general stream of the game's thread, which the weather and other systems draw from
+	reflection::Save(out, Locator::rng::has_value() ? GeneratorText(Locator::rng::value().GeneralStream()) : std::string {});
 	return {.tag = gamesave::k_ClockTag, .bytes = std::move(out.Bytes())};
 }
 
@@ -148,6 +151,12 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 	reflection::Load(in, crtSeed);
 	reflection::Load(in, runSeed);
 	reflection::Load(in, streams);
+	// A save of an older build has no general stream
+	std::string general;
+	if (in.Remaining() > 0)
+	{
+		reflection::Load(in, general);
+	}
 	if (in.Failed())
 	{
 		return false;
@@ -176,6 +185,12 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 		{
 			std::istringstream text(streams[stream]);
 			text >> rng.Stream(static_cast<RandomStream>(stream));
+		}
+		// The new run seed starts the general stream again first; then it takes the saved state
+		if (!general.empty())
+		{
+			std::istringstream text(general);
+			text >> rng.GeneralStream();
 		}
 	}
 	return true;
@@ -217,7 +232,7 @@ systems::SavedStateInterface* FindSystem()
 /// The systems that keep running state of their own, by the names of their sections. A new system goes at the end. A
 /// load gives each system its state in this order.
 using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 23> k_SavedSystems {{
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 24> k_SavedSystems {{
     {"creatureLocomotion", &FindSystem<Locator::creatureLocomotionSystem>},
     {"fire", &FindSystem<Locator::fireSystem>},
     {"weather", &FindSystem<Locator::weatherSystem>},
@@ -230,6 +245,7 @@ constexpr std::array<std::pair<std::string_view, SystemFinder>, 23> k_SavedSyste
     {"scriptSwitches", &FindSystem<Locator::chlapi>},
     {"creatureAudio", &FindSystem<Locator::creatureAudioSystem>},
     {"dynamics", &FindSystem<Locator::dynamicsSystem>},
+    {"helpText", &FindSystem<Locator::helpTextSystem>},
     {"forest", &FindSystem<Locator::forestSystem>},
     {"teleport", &FindSystem<Locator::teleportSystem>},
     {"animals", &FindSystem<Locator::animalSystem>},

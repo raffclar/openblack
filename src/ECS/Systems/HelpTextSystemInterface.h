@@ -16,6 +16,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Help/DialogueText.h"
 #include "Help/HelpTextDisplay.h"
 #include "Help/StoryHistory.h"
@@ -35,7 +36,7 @@ namespace openblack::ecs::systems
 
 /// The dialogue the scripts show and have spoken: the help texts at the bottom of the screen, the advisors' and the
 /// narrators' voices saying them, and the player clicking them on
-class HelpTextSystemInterface
+class HelpTextSystemInterface: public SavedStateInterface
 {
 public:
 	/// What a frame gives the dialogue
