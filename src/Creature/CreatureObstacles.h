@@ -172,6 +172,15 @@ constexpr float k_TeleportStoneWidth = 6.0f;
 /// The circles the creature plans its route round, for a thing it must avoid
 [[nodiscard]] std::vector<creature_route::Circle> CirclesOf(const Thing& thing, const Walker& walker);
 
+/// Whether a route that no creature walks, such as a footpath's, goes round the thing: buildings, trees, the temple,
+/// animated scenery, a vortex out of the land and anything else fixed or lying on the land always; a forest only while
+/// it burns; never villagers, animals, other creatures, fields, crops, dead trees, piles of food, fragments, shields or
+/// the things a creature never goes round
+[[nodiscard]] bool MustAvoidWithoutWalker(const Thing& thing);
+/// The circles such a route goes round, for a thing it must avoid: as a creature's with the whole margin added and no
+/// share of a creature's radius taken off, no fire margin, and no circles over the temple's worship sites
+[[nodiscard]] std::vector<creature_route::Circle> CirclesWithoutWalker(const Thing& thing, float margin);
+
 /// The temple's circles, the same whatever its model and size: a wide one over its middle; seven spokes of small circles
 /// round it, the first two longer with their ends bent towards each other, the other five longer the better its player
 /// (two circles for the most evil, three for the middling, four for the good); and, beyond each spoke after the first, a

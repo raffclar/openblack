@@ -108,12 +108,24 @@ std::optional<Tangent> creature_route::TangentBetween(const Circle& from, Way fr
 void Obstacles::Reset(glm::vec2 walker, float margin, Gatherer gatherer)
 {
 	_walker = walker;
+	_leftOutAround = {};
 	_margin = margin;
 	_gatherer = std::move(gatherer);
 	_obstacles.clear();
 	_blocks.assign(static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide), {});
 	_gathered.assign(static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide), false);
 	_filings = 0;
+}
+
+void Obstacles::ResetWithoutWalker(float margin, Gatherer gatherer)
+{
+	Reset(glm::vec2(0.0f), margin, std::move(gatherer));
+	_walker.reset();
+}
+
+void Obstacles::LeaveOutCirclesHolding(glm::vec2 first, glm::vec2 second)
+{
+	_leftOutAround = {first, second};
 }
 
 void Obstacles::Clear()
@@ -132,17 +144,28 @@ size_t Obstacles::BlockIndex(int32_t x, int32_t z) const
 
 bool Obstacles::Add(std::optional<uint32_t> thing, glm::vec2 centre, float radius)
 {
-	if (_obstacles.size() >= k_MostCircles || _blocks.empty())
+	const auto holds = [&](const std::optional<glm::vec2>& point) {
+		if (!point.has_value())
+		{
+			return false;
+		}
+		const auto apart = *point - centre;
+		return radius * radius > (apart.x * apart.x) + (apart.y * apart.y);
+	};
+	if (std::ranges::any_of(_leftOutAround, holds) || _obstacles.size() >= k_MostCircles || _blocks.empty())
 	{
 		return false;
 	}
-	// One about a point right under the walker is no use; one it stands in reaches just to it so it can walk out
-	const auto fromWalker = glm::distance(_walker, centre);
-	if (fromWalker < k_TooCloseToWalker)
+	if (_walker.has_value())
 	{
-		return false;
+		// One about a point right under the walker is no use; one it stands in reaches just to it so it can walk out
+		const auto fromWalker = glm::distance(*_walker, centre);
+		if (fromWalker < k_TooCloseToWalker)
+		{
+			return false;
+		}
+		radius = std::min(radius, fromWalker);
 	}
-	radius = std::min(radius, fromWalker);
 
 	const auto lowX = BlockOf(centre.x - radius);
 	const auto highX = BlockOf(centre.x + radius);
@@ -984,7 +1007,7 @@ void Search::Splice(Obstacles& obstacles, Route& route, size_t candidate, const 
 	route.legs = std::move(joined);
 }
 
-void creature_route::AddLandCircles(const WalkableLand& land, glm::ivec2 cell, Obstacles& obstacles)
+void creature_route::AddLandCircles(const WalkableLand& land, glm::ivec2 cell, Obstacles& obstacles, bool roundWater)
 {
 	const auto inLand = [](int32_t i) { return i >= 0 && i < k_CellsPerSide; };
 	if (!inLand(cell.x) || !inLand(cell.y))
@@ -995,7 +1018,7 @@ void creature_route::AddLandCircles(const WalkableLand& land, glm::ivec2 cell, O
 	{
 		for (auto z = cell.y - 1; z <= cell.y + 1; ++z)
 		{
-			if (inLand(x) && inLand(z) && land.At(x, z) == Ground::Blocked)
+			if (inLand(x) && inLand(z) && (land.At(x, z) == Ground::Blocked || (roundWater && land.At(x, z) == Ground::Water)))
 			{
 				obstacles.Add(std::nullopt,
 				              {(static_cast<float>(x) * k_CellSize) + (0.5f * k_CellSize),

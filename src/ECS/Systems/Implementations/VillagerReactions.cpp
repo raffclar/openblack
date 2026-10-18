@@ -320,7 +320,7 @@ void MakeTownCelebrationDance(uint32_t reactionId)
 	}
 	const auto& info = Locator::infoConstants::value().dance.at(static_cast<size_t>(DanceInfo::DanceAroundPerson));
 	const auto dance = Locator::danceSystem::value().Create(
-	    DanceInfo::DanceAroundPerson, registry.Get<const Transform>(town).position, entt::null, info.duration, false);
+	    DanceInfo::DanceAroundPerson, registry.Get<const Transform>(town).position, entt::null, info.duration, false, town);
 	if (dance != entt::null)
 	{
 		reactions.SetDance(reactionId, dance);
@@ -354,8 +354,9 @@ std::optional<bool> JoinNewBuildingDance(entt::entity villager, uint32_t reactio
 		const auto type = object_measures::TwoDRadius(registry, building) < k_LargeBuildingRadius ? DanceInfo::BuildingSmall
 		                                                                                          : DanceInfo::BuildingLarge;
 		const auto& info = Locator::infoConstants::value().dance.at(static_cast<size_t>(type));
+		// The dance's footpath comes from the storage pit of the first dancer's town
 		dance = Locator::danceSystem::value().Create(type, registry.Get<const Transform>(building).position, building,
-		                                             info.duration, false);
+		                                             info.duration, false, registry.Get<const Villager>(villager).town);
 		if (dance == entt::null)
 		{
 			return std::nullopt;
