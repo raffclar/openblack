@@ -12,6 +12,7 @@
 
 #include <vector>
 
+#include "3D/TempleInteriorInterface.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -105,5 +106,35 @@ void testbed_scenarios::AddWorldSoundScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, 2.0f}, .look = {0.0f, 0.0f, 30.0f}},
 	    .objects = SoundVillage(),
 	    .townBeliefInPlayer = 1000.0f,
+	});
+	// The village again with a rock thrown down in the wood again and again, then the cinema bars and the temple
+	auto quietVillage = SoundVillage();
+	quietVillage.push_back({.type = MobileStaticInfo::Rock, .offset = {-26.0f, 30.0f}});
+	all.push_back({
+	    .id = "audio.world_sounds_quiet",
+	    .name = "The world's sounds as a cut scene and the temple allow",
+	    .facet = Facet::Audio,
+	    .description = "The village of audio.village_day at noon. The camera stands low in the wood of oaks, and a rock "
+	                   "falls from 6 metres beside it every 4 seconds. After 15 seconds a script's cinema bars slide in; "
+	                   "after 30 seconds they slide out. After 40 seconds the player goes into the temple's main room.",
+	    .expected = "Before the bars, the oaks rustle, the rock thuds, the axes chop and the buildings and animals make "
+	                "their sounds. While a script holds the bars, a sound whose sample is quiet in cut scenes does not "
+	                "start. Inside the temple, no rustle, thud, crash or building sound of the world outside starts. "
+	                "The audio log tells each sound that does not start: \"its sample may not be heard now\".",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-26.0f, 3.0f, 4.0f}, .look = {-26.0f, 0.0f, 30.0f}},
+	    .objects = quietVillage,
+	    .commands = {{.kind = Command::Kind::WideScreen, .delaySeconds = 15.0f, .value = 1},
+	                 {.kind = Command::Kind::WideScreen, .delaySeconds = 15.0f, .value = 0},
+	                 {.kind = Command::Kind::EnterTemple,
+	                  .delaySeconds = 10.0f,
+	                  .value = static_cast<size_t>(TempleRoom::Main)}},
+	    .townBeliefInPlayer = 1000.0f,
+	    .throws = {{.object = quietVillage.size() - 1,
+	                .from = glm::vec2 {-26.0f, 30.0f},
+	                .height = 6.0f,
+	                .velocity = {0.0f, -1.0f, 0.0f},
+	                .delaySeconds = 2.0f,
+	                .repeatSeconds = 4.0f}},
 	});
 }

@@ -21,6 +21,7 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
@@ -211,7 +212,8 @@ void GameBuildingDamageWorld::PlaySound(std::span<const int32_t> keys, entt::ent
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlayAnimEffect(std::string(k_BuildingSoundBank), keys, building, position);
+		Locator::audio::value().PlayAnimEffect(std::string(k_BuildingSoundBank), keys, building, position,
+		                                       audio::CurrentSoundEffectConditions());
 	}
 }
 

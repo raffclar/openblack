@@ -23,6 +23,7 @@
 
 #include "3D/CreatureBody.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureAudio.h"
@@ -373,8 +374,10 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 			leash->ChangeType(entity, event.spell == Spell::Nice ? LeashType::Good : LeashType::Evil);
 		}
 		// The spell's own sound starts on the creature as the spell takes hold, from the spells' bank: the growing
-		// creature's as it grows, the shrinking one's as it shrinks
-		if (effect.soundAction != 0 && Locator::audio::has_value())
+		// creature's as it grows, the shrinking one's as it shrinks. It plays only as its sample allows, and never while
+		// the camera is inside the temple.
+		if (effect.soundAction != 0 && Locator::audio::has_value() &&
+		    !openblack::audio::CurrentSoundEffectConditions().insideTemple)
 		{
 			const std::array<int32_t, 5> keys {0, 0, 0, 0, effect.soundAction};
 			if (const auto* transform = registry.TryGet<const Transform>(entity))
@@ -382,6 +385,7 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 				// The sound counts as at the camera, so the distance never stops it
 				auto& audio = Locator::audio::value();
 				const auto played = audio.PlayAnimEffect(std::string(k_SpellSoundBank), keys, entity, transform->position,
+				                                         openblack::audio::CurrentSoundEffectConditions(),
 				                                         openblack::audio::AnimEffectMeasure::AtCamera);
 				// The sound stays with the creature while it plays
 				audio.SetEmitterFollows(played.emitter, audio::Follows::Owner);
