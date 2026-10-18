@@ -1522,6 +1522,8 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 	{
 		return false;
 	}
+	// A new action stops an eat that waits to swallow
+	SwallowStoppedEat(creature);
 	const auto& body = registry.Get<const Creature>(creature);
 	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
 	action.status = Status::Running;
@@ -1906,11 +1908,24 @@ std::optional<glm::vec3> CreatureObjectActionSystem::GetPointingHand(entt::entit
 	return glm::vec3(creature::PosedBone(hand, pose.bones, pose.placement)[3]);
 }
 
+void CreatureObjectActionSystem::SwallowStoppedEat(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* action = registry.Valid(creature) ? registry.TryGet<CreatureObjectAction>(creature) : nullptr;
+	if (action == nullptr || action->kind != Kind::Eat || !action->eaten.has_value())
+	{
+		return;
+	}
+	Swallow(creature, *action, FoodValueOf(*action->eaten));
+}
+
 void CreatureObjectActionSystem::Cancel(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (registry.Valid(creature))
 	{
+		// A stopped eat swallows what left the hand at the bite
+		SwallowStoppedEat(creature);
 		registry.Remove<CreatureObjectAction>(creature);
 		if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
 		{
@@ -2453,17 +2468,45 @@ void CreatureObjectActionSystem::ProcessTurn()
 	}
 
 	// What is held by a creature that is gone, or no longer holds it, falls. What left its hand to be eaten stays out of
-	// sight until the creature swallows it, as in the game also when the eat stops before the swallow.
+	// sight until the creature swallows it. If the eat stopped some other way, the creature swallows it now, and if the
+	// creature is gone, it comes back into sight and falls.
 	std::vector<entt::entity> loose;
+	std::vector<entt::entity> stoppedEats;
 	registry.Each<const HeldByCreature>([&](entt::entity entity, const HeldByCreature& by) {
-		const auto* held = registry.Valid(by.creature) ? registry.TryGet<const CreatureHeldObject>(by.creature) : nullptr;
-		if ((held == nullptr || held->object != entity) && !registry.AllOf<HiddenByState>(entity))
+		const bool creatureExists = registry.Valid(by.creature);
+		const auto* held = creatureExists ? registry.TryGet<const CreatureHeldObject>(by.creature) : nullptr;
+		if (held != nullptr && held->object == entity)
+		{
+			return;
+		}
+		if (!registry.AllOf<HiddenByState>(entity))
 		{
 			loose.push_back(entity);
+			return;
+		}
+		const auto* eat = creatureExists ? registry.TryGet<const CreatureObjectAction>(by.creature) : nullptr;
+		const bool eatGoesOn = eat != nullptr && eat->kind == Kind::Eat && eat->eaten == entity;
+		switch (creature_object_actions::EatenThingEndFor(eatGoesOn, creatureExists))
+		{
+		case creature_object_actions::EatenThingEnd::Wait:
+			break;
+		case creature_object_actions::EatenThingEnd::Swallow:
+			stoppedEats.push_back(entity);
+			break;
+		case creature_object_actions::EatenThingEnd::Fall:
+			loose.push_back(entity);
+			break;
 		}
 	});
+	for (const auto entity : stoppedEats)
+	{
+		const auto creature = registry.Get<const HeldByCreature>(entity).creature;
+		CreatureObjectAction ended {.kind = Kind::Eat, .eaten = entity};
+		Swallow(creature, ended, FoodValueOf(entity));
+	}
 	for (const auto entity : loose)
 	{
+		registry.Remove<HiddenByState>(entity);
 		registry.Remove<HeldByCreature>(entity);
 		LetGo(entt::null, entity, glm::vec3(0.0f));
 	}

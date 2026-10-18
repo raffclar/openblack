@@ -298,6 +298,19 @@ TEST(CreatureObjectActions, APersonOrAnimalInACreaturesHandGoesIntoItsStateForTh
 	EXPECT_EQ(HoldStartFor(true, true, false), HoldStart::NoChange);
 }
 
+TEST(CreatureObjectActions, AThingLeftOutOfSightByAStoppedEatIsSwallowedOrFalls)
+{
+	using creature_object_actions::EatenThingEnd;
+	using creature_object_actions::EatenThingEndFor;
+	// Between the bite and the end of the eat, the thing waits out of sight
+	EXPECT_EQ(EatenThingEndFor(true, true), EatenThingEnd::Wait);
+	// The eat stopped early: the creature swallows it at once
+	EXPECT_EQ(EatenThingEndFor(false, true), EatenThingEnd::Swallow);
+	// The creature is gone: the thing comes back into sight and falls
+	EXPECT_EQ(EatenThingEndFor(false, false), EatenThingEnd::Fall);
+	EXPECT_EQ(EatenThingEndFor(true, false), EatenThingEnd::Fall);
+}
+
 TEST(CreatureObjectActions, ACreatureBringsBackUpWhatCantBeEaten)
 {
 	EXPECT_FALSE(creature_object_actions::BringsBackUp(false, false));

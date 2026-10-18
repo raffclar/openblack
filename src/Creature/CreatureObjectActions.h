@@ -322,6 +322,20 @@ enum class HoldStart : uint8_t
 /// A creature held by another creature keeps its own state.
 [[nodiscard]] HoldStart HoldStartFor(bool living, bool creature, bool acceptsHandState);
 
+/// What happens to a thing that left a creature's hand at the bite of an eat, when the eat ends
+enum class EatenThingEnd : uint8_t
+{
+	/// It is still to be swallowed as the eat animation ends
+	Wait,
+	/// The eat ended or stopped: the creature swallows it now
+	Swallow,
+	/// The creature is gone: the thing comes back into sight and falls
+	Fall,
+};
+/// The end of a thing between the bite and the swallow. The game left such a thing out of sight for good when the eat
+/// stopped early; openblack swallows it as the eat would have (deviations list).
+[[nodiscard]] EatenThingEnd EatenThingEndFor(bool eatGoesOn, bool creatureExists);
+
 /// How long a creature that brought its food back up isn't hungry for
 constexpr float k_NotHungryAfterBringingUpSeconds = 20.0f;
 
