@@ -10,12 +10,14 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include <array>
 #include <optional>
 #include <span>
 #include <vector>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 // The lightning bolt's maths: how many of the land's cells it searches, how a creature in its cone draws every fork to
@@ -33,6 +35,29 @@ inline constexpr float k_StrikeCellSize = 10.0f;
 [[nodiscard]] size_t CloudSearchCells(float radius);
 /// The forks a bolt keeps ready: two for each target that it found
 [[nodiscard]] size_t ForkCount(size_t targets);
+
+/// Which search a ground point is for. Each search makes the offset of the point with different float steps.
+enum class GroundPointSearch : uint8_t
+{
+	/// In front of a hand: the cosine becomes a float before it multiplies the distance
+	Hand,
+	/// Round a cloud or a parent: the sine and the cosine multiply the distance at their full precision
+	Around,
+	/// Round the targets of a miracle: the sine becomes a float before it multiplies the distance
+	SpellTargets,
+};
+/// The offset across the land from the origin of a bolt to a ground point at an angle and a distance
+[[nodiscard]] glm::vec2 GroundPointOffset(GroundPointSearch search, float angle, float distance);
+
+/// The middle of the target tips of a bolt or a fork: the sum of the tips times the inverse of their count
+[[nodiscard]] glm::vec3 TipsMiddle(std::span<const glm::vec3> tips);
+
+/// Whether the land stops a fork: the line from the start of the fork through its split point meets the land (or the
+/// sea) nearer across the land than the split point
+[[nodiscard]] bool LandHitsFirst(glm::vec3 from, glm::vec3 split, glm::vec3 hit);
+
+/// The square of the distance that a bolt has moved since its last search, with the squares added z first
+[[nodiscard]] float MovedSquared(glm::vec3 searchOrigin, glm::vec3 origin);
 
 /// A creature less faded away than this draws the bolt
 inline constexpr float k_DrawsBoltBelowFizz = 0.5f;

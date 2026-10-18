@@ -57,12 +57,14 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Particles/LightningMaths.h"
 #include "Particles/ParticleClassRegistry.h"
 #include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleSoundRelease.h"
@@ -118,8 +120,6 @@ constexpr int k_ShallowWaterSurface = 7;
 /// A ground of no sound of its own sounds hard
 constexpr int k_HardSurface = 3;
 constexpr int k_LastSurface = 8;
-/// Points along a way tested for the land rising across it
-constexpr int k_LandBlockSamples = 16;
 /// Any rain or snow makes a fireball steam
 constexpr int k_SteamingRain = 0;
 /// The land's cells are this many units across
@@ -601,22 +601,14 @@ void GameParticleWorld::RemoveRainStorm(uint32_t storm)
 
 bool GameParticleWorld::LandBlocks(glm::vec3 from, glm::vec3 to) const
 {
-	if (!Locator::terrainSystem::has_value())
+	if (!Locator::pickingSystem::has_value())
 	{
 		return false;
 	}
-	const auto& land = Locator::terrainSystem::value();
-	// The ends themselves may touch the land
-	for (int i = 1; i < k_LandBlockSamples; ++i)
-	{
-		const float t = static_cast<float>(i) / static_cast<float>(k_LandBlockSamples);
-		const auto p = from + (to - from) * t;
-		if (land.GetHeightAt({p.x, p.z}) > p.y)
-		{
-			return true;
-		}
-	}
-	return false;
+	// The line continues past its end. Thus the land or the sea after the end does not stop the fork.
+	const auto camera = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : from;
+	const auto hit = Locator::pickingSystem::value().LandOrSeaAlong(from, to, camera);
+	return hit.has_value() && particles::maths::LandHitsFirst(from, to, *hit);
 }
 
 void GameParticleWorld::AddShield(const std::shared_ptr<particles::ShieldSphere>& shield)

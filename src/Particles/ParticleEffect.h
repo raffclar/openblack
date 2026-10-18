@@ -334,7 +334,7 @@ public:
 	/// The live bolts from hands, and the number the next one takes
 	[[nodiscard]] virtual std::vector<std::shared_ptr<BoltShare>> Bolts() const { return {}; }
 	[[nodiscard]] virtual uint64_t NextBoltOrder() { return 0; }
-	/// Whether the land rises across the straight way between two points
+	/// Whether the line from one point through another meets the land or the sea before the second point
 	[[nodiscard]] virtual bool LandBlocks(glm::vec3 /*from*/, glm::vec3 /*to*/) const { return false; }
 	/// A shield is raised; the effect keeps the sphere, the world finds it while it lives
 	virtual void AddShield(const std::shared_ptr<ShieldSphere>& /*shield*/) {}
