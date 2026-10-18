@@ -150,3 +150,9 @@ Texts help_query::SeedTexts(Texts miracle, Texts object)
 {
 	return {.first = miracle.first != 0 ? miracle.first : object.first, .last = miracle.last != 0 ? miracle.last : object.last};
 }
+
+Texts help_query::LeashTexts(uint32_t toolTip)
+{
+	const auto text = k_FirstToolTipText + toolTip;
+	return {.first = text, .last = text};
+}

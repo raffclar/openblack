@@ -137,4 +137,9 @@ constexpr uint32_t k_FoodPileText = 2872;
 /// A miracle seed's texts: its miracle's, each of the two falling back to the seed object's when the miracle has none
 [[nodiscard]] Texts SeedTexts(Texts miracle, Texts object);
 
+/// A leash hanging at the temple tells what its tooltip tells, by the tooltip's place among the game's tooltips
+[[nodiscard]] Texts LeashTexts(uint32_t toolTip);
+/// The text of the first of the game's tooltips
+constexpr uint32_t k_FirstToolTipText = 0xE73;
+
 } // namespace openblack::help_query
