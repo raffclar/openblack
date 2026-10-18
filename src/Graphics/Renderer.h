@@ -30,12 +30,14 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/fwd.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/SkyDome.h"
 #include "Enums.h"
 #include "Graphics/DescriptorSetTally.h"
 #include "Graphics/GroundShadow.h"
+#include "Graphics/HandReflection.h"
 #include "Graphics/HandShadow.h"
 #include "Graphics/LandDetail.h"
 #include "Graphics/PartialBuildCap.h"
@@ -665,8 +667,28 @@ private:
 	std::array<uint8_t, 4> _readBackTexel {};
 	/// u_modelLight: where the game's model light is this frame, and its ambient
 	mutable glm::vec4 _modelLight {0.0f};
-	/// What the land's light is scaled by for the trees this frame, of 1
+	/// What the land's light is scaled by for the trees this frame, of 1, once a frame has worked it out
 	mutable float _treeBrightness {1.0f};
+	mutable bool _treeBrightnessMade {false};
+	/// The land's light of the frame before. The sea mirrors a held thing in it, as the draw of the thing in the hand
+	/// took it on that frame.
+	struct LightOfFrameBefore
+	{
+		/// Copies of the land light table, the land's luminosity and the land cells' colours of the frame before
+		std::optional<TextureHandle> landLight;
+		std::optional<TextureHandle> luminosity;
+		std::optional<TextureHandle> colour;
+		glm::u16vec2 luminositySize {0};
+		glm::u16vec2 colourSize {0};
+		/// The luminosity and the colours were copied at the start of this frame
+		bool texturesKept {false};
+		hand_reflection::FrameBefore<std::array<glm::vec4, 2>> haze;
+		hand_reflection::FrameBefore<float> treeBrightness;
+	};
+	mutable LightOfFrameBefore _before;
+	/// At the start of a frame, before the frame makes its own land light, keeps the land's light of the frame that ended
+	void KeepLightOfFrameBefore() const;
+	void ReleaseLightOfFrameBefore() const;
 	/// u_modelLight: the game's model light this frame
 	[[nodiscard]] glm::vec4 GetModelLight() const;
 	/// Rebuilds the land's light for this frame from the palette; the texture of it

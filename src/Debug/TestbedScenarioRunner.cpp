@@ -85,6 +85,7 @@
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
+#include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
@@ -117,6 +118,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Poisoned.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
@@ -549,7 +551,14 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	}
 	if (object.poisoned)
 	{
-		registry.AssignOrReplace<ecs::components::Poisoned>(entity);
+		if (auto* pot = registry.TryGet<ecs::components::Pot>(entity); pot != nullptr)
+		{
+			pot->poisoned = true;
+		}
+		else
+		{
+			registry.AssignOrReplace<ecs::components::Poisoned>(entity);
+		}
 	}
 	if (object.indestructible)
 	{
@@ -784,6 +793,11 @@ void Runner::Start(const Scenario& scenario)
 		                                          glm::vec3(1.0f));
 	}
 	PlaceObjects(scenario, _middle);
+	for (const auto& offset : scenario.sharks)
+	{
+		const auto at = MapPoint(_middle, offset);
+		ecs::archetypes::SharkArchetype::Create({at.x, 0.0f, at.y}, 1.0f);
+	}
 	PlaceHighlights(scenario, _middle);
 	PlaceFootpaths(scenario, _middle);
 	if (!scenario.landScript.empty())

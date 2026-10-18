@@ -44,6 +44,8 @@ private:
 protected:
 	/// The bones of the villagers placed with the instances, for the vertex shader to read
 	void UploadBonePalette();
+	/// Each thing in a hand keeps the light at its point, which the sea mirrors it in on the next frame
+	void KeepHeldLights();
 
 	RenderContext _renderContext;
 };

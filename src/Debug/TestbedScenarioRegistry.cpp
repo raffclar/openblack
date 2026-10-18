@@ -2009,6 +2009,78 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .commands = headMoves,
 	    .repeatFrom = 0,
 	});
+	// The thing that the hand holds, mirrored in the lake with the hand: flat in the light that it took in the hand
+	all.push_back({
+	    .id = "appearance.held_thing_sea_reflection",
+	    .name = "Held thing reflection in the sea",
+	    .facet = Facet::Appearance,
+	    .description = "At four in the afternoon, the clock stopped, the camera looks down over the lake of the testbed "
+	                   "near its far shallows, with the player's hand over the water. After a second the hand takes a "
+	                   "barrel.",
+	    .expected = "The barrel shows upside down in the water under the hand. The low sun shades the barrel in the hand, "
+	                "but its reflection is flat, in the light of the land under it, with no shade.",
+	    .environment = {.hour = 16.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.45f)},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 25.0f}}, .distance = 0.2f},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {k_Lake.x + 10.0f, k_FarShallows + 10.0f}}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0}},
+	});
+	// A tree in the hand, mirrored in the lake with the hand: in the light of its place on the map, where the hand took it
+	all.push_back({
+	    .id = "appearance.held_tree_sea_reflection",
+	    .name = "Held tree reflection in the sea",
+	    .facet = Facet::Appearance,
+	    .description = "At four in the afternoon, the clock stopped, the camera looks down over the lake of the testbed near "
+	                   "its far shallows, with the player's hand over the water. After a second the hand takes a young oak "
+	                   "from the bank.",
+	    .expected = "The oak shows upside down in the water under the hand, with the hand's reflection. Its reflection is "
+	                "flat, in the light of the bank where the hand took it, and not in the light of the land under the "
+	                "hand.",
+	    .environment = {.hour = 16.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.45f)},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 25.0f}}, .distance = 0.3f},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {k_Lake.x + 10.0f, k_FarShallows + 14.0f}, .fullSize = 0.4f}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0}},
+	});
+	// A burning barrel, then a pot of poisoned food, in the hand over the lake: the reflection carries the colours of the
+	// fire and of the poison
+	all.push_back({
+	    .id = "appearance.held_burning_and_poisoned_sea_reflection",
+	    .name = "Held burning and poisoned things in the sea reflection",
+	    .facet = Facet::Appearance,
+	    .description = "At four in the afternoon, the clock stopped, the camera looks down over the lake of the testbed near "
+	                   "its far shallows, with the player's hand over the water. After a second the hand takes a burning "
+	                   "barrel. Six seconds later it lets the barrel go and takes a pot of poisoned food.",
+	    .expected = "The reflection of the burning barrel is darker by its charring and flickers with the red glow of the "
+	                "fire, as the barrel in the hand does. The reflection of the poisoned pot is a little green.",
+	    .environment = {.hour = 16.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.45f)},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 25.0f}}, .distance = 0.2f},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel,
+	                 .offset = {k_Lake.x + 10.0f, k_FarShallows + 10.0f},
+	                 .alight = true},
+	                {.type = PotInfo::FoodPot, .offset = {k_Lake.x - 10.0f, k_FarShallows + 10.0f}, .poisoned = true}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 6.0f},
+	                 {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 1}},
+	});
+	// Sharks under the lake near the far shore, with the player's creature and the hand mirrored in the water over them
+	all.push_back({
+	    .id = "appearance.sharks_under_sea_reflection",
+	    .name = "Sharks under the sea reflection",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, the camera looks across the lake of the testbed to its far shallows. "
+	                   "The player's giant ape stands in the shallows and the hand holds a villager over the water. Three "
+	                   "sharks lie under the water: one under the ape's reflection, one under the hand's reflection and one "
+	                   "near the bank, under the reflection of the land.",
+	    .expected = "Each shark shows dark blue under the water. The shark near the bank shows over the reflection of the "
+	                "land. The reflections of the ape and the hand hide the parts of the sharks that are behind them.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.45f)},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 25.0f}}, .distance = 0.3f},
+	    .creatures = {Posed(CreatureType::GiantApe, {k_Lake.x - 8.0f, k_FarShallows}, 0.0f, "player's ape")},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x + 10.0f, k_FarShallows + 10.0f}}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0}},
+	    .sharks = {{k_Lake.x - 8.0f, k_FarShallows - 14.0f},
+	               {k_Lake.x + 4.0f, k_FarShallows - 22.0f},
+	               {k_Lake.x + 22.0f, k_FarShallows - 2.0f}},
+	});
 	// The eyes close up by day and at night, with the glass environment map added over each eyeball
 	const auto eyesClose = [&all, &headMoves](std::string_view id, std::string_view name, float hour,
 	                                          std::string_view description, std::string_view expected) {
