@@ -115,6 +115,25 @@ void PutPicture(std::span<std::array<uint8_t, 3>> atlas, uint32_t atlasWidth, ui
 /// The design that a slot paints from the block of pictures, when the slot's bit is set and the block holds the picture
 [[nodiscard]] std::optional<Design> DesignInBlock(std::span<const uint8_t> block, size_t slot);
 
+/// The masks that the slots of a player's creatures paint with, one for each slot. The game makes them again only at
+/// some moments (see RemakeMasks). A slot paints with its mask, also when the slot now names another design.
+using Masks = std::array<std::optional<Design>, k_SlotCount>;
+
+/// Where the masks get the designs from
+enum class Sheet : uint8_t
+{
+	/// The designs that the game ships with: a creature file that loads uses these
+	Shipped,
+	/// The designs with the player's own pictures in place of some of them: the tattoo editor uses these
+	OwnPictures,
+};
+
+/// Makes the masks again from a creature's tattoos and its block of pictures. When the block is empty, nothing changes.
+/// A slot on a site gets the picture of its bit in the block, else its design in the sheet. A slot without a site keeps
+/// its old mask.
+void RemakeMasks(Masks& masks, const Slots& slots, std::span<const uint8_t> block,
+                 std::span<const Design, k_DesignCount> sheet);
+
 /// Which of a design's masks a tattoo of a size is painted from: the largest for a quarter of the skin's width or more,
 /// smaller for smaller tattoos
 [[nodiscard]] size_t MaskLevel(float size);

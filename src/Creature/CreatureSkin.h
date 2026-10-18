@@ -51,7 +51,10 @@ constexpr uint8_t k_MaxWeight = 255;
 /// What tattoos and marks are painted with: the designs, the damage atlases and the tattoo palette
 struct Art
 {
+	/// The designs with the player's own pictures in place of some of them
 	std::array<creature_tattoo::Design, creature_tattoo::k_DesignCount> designs;
+	/// The designs that the game ships with
+	std::array<creature_tattoo::Design, creature_tattoo::k_DesignCount> shippedDesigns;
 	creature_marks::DamageArt damage;
 	/// k_PaletteColumns by k_PaletteRows colours
 	std::vector<std::array<uint8_t, 3>> palette;
@@ -74,12 +77,13 @@ struct Layers
 	const creature_marks::Marks& marks;
 	/// None before the art is loaded, which leaves the tattoos and marks off
 	const Art* art;
-	/// The creature's block of pictures (see creature_tattoo::PicturesBlock), empty when it has none
-	std::span<const uint8_t> pictures;
+	/// The masks that the slots paint with, which belong to the creature's player. None leaves the tattoos off.
+	const creature_tattoo::Masks* masks;
 };
 
 /// One of a creature's skins, 256 by 256 texels: the base skin blended towards the variant's by weight (the base alone
-/// without a variant), then the tattoos on enabled sites of this skin in slot order, the wounds and the blood on it
+/// without a variant), then the tattoos on enabled sites of this skin in slot order, the wounds and the blood on it.
+/// Each slot paints with its mask, not with the design that the slot names. A slot without a mask paints nothing.
 void Compose(std::span<uint16_t> out, std::span<const uint16_t> base, std::span<const uint16_t> variant, uint8_t weight,
              const Layers& layers);
 } // namespace openblack::creature_skin

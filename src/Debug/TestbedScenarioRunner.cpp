@@ -1527,9 +1527,15 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 		if (Locator::creatureSkinSystem::has_value())
 		{
 			auto& skins = Locator::creatureSkinSystem::value();
-			for (size_t slot = 0; slot < setup.tattoos.size(); ++slot)
+			// The tattoos go on as the end of a drag in the tattoo editor puts them on
+			if (!setup.tattoos.empty())
 			{
-				skins.SetTattoo(entity, slot, setup.tattoos[slot]);
+				creature_tattoo::Slots slots {};
+				std::copy_n(setup.tattoos.begin(), std::min(setup.tattoos.size(), slots.size()), slots.begin());
+				const auto pictures = Locator::tattooEditorSystem::has_value()
+				                          ? Locator::tattooEditorSystem::value().GetPictures()
+				                          : creature_tattoo::Pictures {};
+				skins.PutOnTattoos(entity, slots, pictures);
 			}
 			for (const auto& wound : setup.wounds)
 			{

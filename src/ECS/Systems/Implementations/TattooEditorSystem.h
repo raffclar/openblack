@@ -25,15 +25,24 @@ namespace openblack::ecs::systems
 class TattooEditorSystem final: public TattooEditorSystemInterface
 {
 public:
-	/// Where the creature's tattoos are read from and written to: its skin, painted again as they change
+	/// Where the creature's tattoos are read from and written to, and the skins that show them
 	class Skin
 	{
 	public:
 		virtual ~Skin() = default;
 		[[nodiscard]] virtual std::optional<creature_tattoo::Slots> Read(entt::entity creature) const = 0;
-		virtual void Write(entt::entity creature, size_t slot, const creature_tattoo::Slot& tattoo) = 0;
+		/// The creature's slots change, but its skin does not
+		virtual void Write(entt::entity creature, const creature_tattoo::Slots& slots) = 0;
 		/// The creature keeps the block of pictures that its tattoos use, in place of the block that it had
 		virtual void WritePictures(entt::entity creature, std::vector<uint8_t> pictures) = 0;
+		/// The tattoos that a skin shows in place of its slots, or none to show its slots again
+		virtual void Show(entt::entity shown, std::optional<creature_tattoo::Slots> slots) = 0;
+		/// The masks of the creature's player are made again from the creature's tattoos
+		virtual void RemakeMasks(entt::entity creature, creature_tattoo::Sheet sheet) = 0;
+		/// The skin is painted again
+		virtual void Paint(entt::entity creature) = 0;
+		/// The copy of the creature that the Creature Cave shows, with a skin of its own
+		[[nodiscard]] virtual std::optional<entt::entity> CaveCopy(entt::entity creature) const = 0;
 	};
 
 	/// The creatures' skins in the registry
@@ -65,17 +74,19 @@ public:
 	[[nodiscard]] const creature_tattoo::Pictures& GetPictures() const override { return _pictures; }
 
 private:
-	/// The creatures wear the tattoos as they are now
-	void Write(const creature_tattoo::Slots& slots);
-	/// The creatures keep the block of pictures that the tattoos use
-	void WritePictures(const creature_tattoo::Slots& slots);
-	/// The creatures that wear the tattoos: the player's, and the one the main menu shows
-	[[nodiscard]] std::vector<entt::entity> Wearers() const;
+	/// The player's creature gets the tattoos as they are now, and the masks are made again. The creature that the
+	/// editor shows is painted again.
+	void Remake();
+	/// The creature that the editor shows: the copy in the Creature Cave, or the creature of the main menu
+	[[nodiscard]] std::optional<entt::entity> Shown() const;
 
 	std::unique_ptr<Skin> _skin;
 	bool _open {false};
 	std::optional<entt::entity> _creature;
+	/// The creature of the main menu
 	std::optional<entt::entity> _shown;
+	/// The copy of the creature in the Creature Cave
+	std::optional<entt::entity> _caveCopy;
 	creature_tattoo_editor::Session _session;
 	creature_tattoo_editor::Orbit _view;
 	std::optional<uint8_t> _hovered;

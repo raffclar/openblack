@@ -12,6 +12,7 @@
 #include <cassert>
 
 #include <algorithm>
+#include <utility>
 
 #include <MindBody.h>
 
@@ -181,6 +182,25 @@ std::optional<Design> creature_tattoo::DesignInBlock(std::span<const uint8_t> bl
 	return DesignFromLevels(*picture);
 }
 
+void creature_tattoo::RemakeMasks(Masks& masks, const Slots& slots, std::span<const uint8_t> block,
+                                  std::span<const Design, k_DesignCount> sheet)
+{
+	if (block.empty())
+	{
+		return;
+	}
+	for (size_t i = 0; i < slots.size(); ++i)
+	{
+		const auto& slot = slots.at(i);
+		if (slot.Empty())
+		{
+			continue;
+		}
+		auto own = DesignInBlock(block, i);
+		masks.at(i) = own.has_value() ? std::move(own) : std::optional(sheet[slot.design % k_DesignCount]);
+	}
+}
+
 size_t creature_tattoo::MaskLevel(float size)
 {
 	// Truncated, as the game converts it
@@ -268,20 +288,28 @@ void creature_tattoo::Paint(std::span<uint16_t> skin, const Design& design, cons
 	{
 		return;
 	}
+	// The game moves along the mask by a step in float for each texel and truncates the sum. The sum can differ from
+	// the exact product, so a texel can come from the next texel of the mask.
+	const auto step = static_cast<float>(mask.size) / static_cast<float>(extent);
+	float maskY = 0.0f;
 	for (int32_t y = 0; y < extent; ++y)
 	{
-		const auto maskY = static_cast<uint32_t>((y * static_cast<int32_t>(mask.size)) / extent);
+		const auto row = static_cast<uint32_t>(maskY) * mask.size;
+		float maskX = 0.0f;
 		for (int32_t x = 0; x < extent; ++x)
 		{
-			const auto maskX = static_cast<uint32_t>((x * static_cast<int32_t>(mask.size)) / extent);
+			const auto from = row + static_cast<uint32_t>(maskX);
+			maskX += step;
 			const auto index = static_cast<size_t>(((top + y) * k_Size) + left + x);
-			if (index >= skin.size())
+			// A sum at the end of a row reads the first texel of the next row. A texel after the mask stays as it is.
+			if (index >= skin.size() || from >= mask.levels.size())
 			{
 				continue;
 			}
 			auto& texel = skin[index];
-			texel = PaintTexel(texel, mask.At(maskX, maskY), colour);
+			texel = PaintTexel(texel, mask.levels[from], colour);
 		}
+		maskY += step;
 	}
 }
 
