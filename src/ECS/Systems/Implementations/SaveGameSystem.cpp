@@ -1345,9 +1345,9 @@ bool SaveGameSystem::SaveOnExit()
 {
 	const auto* game = Game::Instance();
 	const auto& context = Locator::entitiesRegistry::value().Context();
-	// No save as the player leaves the testbed, a playground land, or a game that is over
+	// No save as the player leaves the testbed, the Gods' Playground, or a game that is over
 	if (game == nullptr || game->GetLandPath().empty() || game->GetLandPath() == "testbed" || context.gameOver ||
-	    context.skirmish || LandNumber() == gamesave::k_PlaygroundLand)
+	    LandNumber() == gamesave::k_PlaygroundLand)
 	{
 		return false;
 	}
