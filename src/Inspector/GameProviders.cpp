@@ -163,6 +163,7 @@
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -349,6 +350,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"saveGameSystem", "saves.slots"},
     LocatorCoverage {"creaturePenSystem", "creatures.systems"},
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
+    LocatorCoverage {"liquidParticleSystem", "particles.liquid"},
     LocatorCoverage {"creatureWebPageSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tattooMenuSystem", "creatures.systems"},
@@ -3646,6 +3648,13 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return {};
 		    }
 		    return Locator::particleSystem::value().GetEffects();
+	    },
+	    .liquids = []() -> std::span<const liquid_particles::Particle> {
+		    if (!Locator::liquidParticleSystem::has_value())
+		    {
+			    return {};
+		    }
+		    return Locator::liquidParticleSystem::value().Particles();
 	    },
 	}));
 

@@ -928,9 +928,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureNeeds::faint>("faint")
 	    .Field<&components::CreatureNeeds::carriedWeight>("carriedWeight")
 	    .Field<&components::CreatureNeeds::moving>("moving");
-	Reflect<components::CreaturePukeDrop>(context)
-	    .Field<&components::CreaturePukeDrop::velocity>("velocity")
-	    .Field<&components::CreaturePukeDrop::seconds>("seconds");
 	Reflect<components::CreatureObjectAction>(context)
 	    .Field<&components::CreatureObjectAction::kind>("kind")
 	    .Field<&components::CreatureObjectAction::phase>("phase")

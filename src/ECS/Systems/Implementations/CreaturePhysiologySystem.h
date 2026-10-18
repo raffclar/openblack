@@ -9,9 +9,6 @@
 
 #pragma once
 
-#include <random>
-
-#include "Common/RandomNumberManager.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -25,13 +22,11 @@ class CreaturePhysiologySystem final: public CreaturePhysiologySystemInterface
 {
 public:
 	void ProcessTurn() override;
-	void Update(float seconds) override;
 
 	[[nodiscard]] float Eat(entt::entity creature, float foodValue) override;
 	void Drink(entt::entity creature) override;
 	void EmptyBowels(entt::entity creature) override;
 	void SitTurn(entt::entity creature) override;
-	void Puke(entt::entity creature) override;
 	void WakeFromFaint(entt::entity creature) override;
 	void FinishAction(entt::entity creature, std::string_view action) override;
 	void ModifyStrength(entt::entity creature, float amount) override;
@@ -54,7 +49,6 @@ private:
 	/// Turns of the body owed from a fractional time scale
 	float _owedTurns {0.0f};
 	bool _fainting {true};
-	RandomStreamSource _random {RandomStream::CreaturePhysiology};
 };
 
 } // namespace openblack::ecs::systems

@@ -58,6 +58,8 @@ private:
 	void PoseForTurn(entt::entity entity, float milliseconds);
 	/// The creature starts or stops its creed hum after a change to its glows
 	static void ApplyHum(entt::entity creature, creature_hand_glow::Hum hum);
+	/// While the body of a creature plays the loop of the puke animation, twelve drops of sick come out of its lips
+	static void AddPukeDrops(entt::entity creature);
 
 	/// The eyes blink at random, apart from the game's own random numbers
 	RandomStreamSource _random {RandomStream::CreatureAnimation};

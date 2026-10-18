@@ -307,7 +307,7 @@ TEST_F(DynamicsSystemTest, AThrownRockComesToRestGoesBackIntoTheMapAndLeavesTheP
 	for (int turn = 0; turn < 50; ++turn)
 	{
 		_dynamics->ProcessTurn();
-		_dynamics->UpdateFrame(0.5f, 0.0f);
+		_dynamics->UpdateFrame(0.5f);
 		ASSERT_EQ(Entries(), 0u);
 	}
 	EXPECT_EQ(_world->Entities().Get<const Transform>(rock).position, rested);
@@ -372,7 +372,7 @@ TEST_F(DynamicsSystemTest, ARockSinkingInTheSeaIsDrawnUntilWhollyUnderAndDeleted
 	for (int turn = 0; turn < 600 && _world->Entities().Valid(rock); ++turn)
 	{
 		_dynamics->ProcessTurn();
-		_dynamics->UpdateFrame(0.5f, 0.0f);
+		_dynamics->UpdateFrame(0.5f);
 		std::optional<glm::vec3> centre;
 		float radius = 0.0f;
 		float highest = -1e9f;

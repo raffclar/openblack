@@ -108,94 +108,14 @@ struct CellRange
 /// the ground
 [[nodiscard]] CellRange WakeCells(glm::vec3 centre, glm::vec3 velocity, float radius);
 
-/// The kinds of puff the shared pool of puffs holds. Each kind has its own life, growth and frames.
-enum class PuffKind : uint8_t
-{
-	/// Dust that a landing, a footstep or a fart throws up. It lives one second.
-	Dust,
-	/// Dark smoke that rises off an evil creature. It lives two seconds.
-	Smoke,
-	/// A light mote that shows on a good creature. It lives two seconds and is added to what is behind it.
-	Mote,
-	/// The same mote, but its frames play in the opposite order
-	MoteReversed,
-	/// A drop of blood thrown by a blow. It falls until it meets the land, then slides on it, slowing, and lives three
-	/// seconds from each of those starts. It shows one of eight frames at random each time it is drawn, keeps its size,
-	/// and hides what is behind it.
-	Blood,
-};
-
-/// One of the puffs in the shared pool: dust, smoke or a mote
-struct DustPuff
-{
-	glm::vec3 position {0.0f};
-	glm::vec3 velocity {0.0f};
-	/// Its full size
-	float size {0.0f};
-	/// Seconds of game time it has lived
-	float age {0.0f};
-	/// Which of its sixteen looks it starts on
-	int32_t variant {0};
-	/// 0xAARRGGBB
-	uint32_t argb {0};
-	PuffKind kind {PuffKind::Dust};
-	/// A drop of blood that has met the land and slides on it
-	bool onLand {false};
-};
-/// How many puffs a landing makes, the most there can be at once, and how long one lives
+/// How many puffs of dust a landing makes
 inline constexpr int32_t k_PuffsPerLanding = 6;
-inline constexpr size_t k_MostPuffs = 1024;
-inline constexpr float k_PuffLife = 1.0f;
-/// Smoke and motes live this long
-inline constexpr float k_LongPuffLife = 2.0f;
-/// Dust and smoke grow to their size over the first eighth of their life, then shrink away
-inline constexpr float k_PuffGrowth = 0.125f;
-/// A mote grows over its first quarter second, shrinks away over its life, and pulses once a second about a third of
-/// its size
-inline constexpr float k_MoteGrowth = 0.25f;
-inline constexpr float k_MotePulse = 0.33f;
-/// A drop of blood lives this long, falls at this many units a second each second, and slides on the land at a speed
-/// that keeps a quarter of itself each second
-inline constexpr float k_BloodLife = 3.0f;
-inline constexpr float k_BloodGravity = 9.81f;
-inline constexpr float k_BloodSlideKeptPerSecond = 0.25f;
-/// As it meets the land, a drop takes a speed along x and along z of a draw of 0 to 99 times 0.6 of its size, less 30
-/// of its size
-inline constexpr float k_BloodSlidePerDraw = 0.6f;
-inline constexpr float k_BloodSlideLeast = 30.0f;
-/// The first of the eight frames a drop of blood shows
-inline constexpr int32_t k_BloodFirstFrame = 32;
-/// How long a puff of a kind lives, in seconds of game time
-[[nodiscard]] constexpr float PuffLife(PuffKind kind)
-{
-	if (kind == PuffKind::Blood)
-	{
-		return k_BloodLife;
-	}
-	return kind == PuffKind::Dust ? k_PuffLife : k_LongPuffLife;
-}
-/// Whether a puff of a kind is added to what is behind it, rather than blended over it
-[[nodiscard]] constexpr bool IsAdditive(PuffKind kind)
-{
-	return kind == PuffKind::Mote || kind == PuffKind::MoteReversed;
-}
 /// The biggest a landing's puffs are, and their colours over land and over the sea
 inline constexpr float k_LargestPuff = 5.0f;
 inline constexpr uint32_t k_LandDust = 0x50806040u;
 inline constexpr uint32_t k_SeaFoam = 0x28C8F0F4u;
 /// Each axis of a puff's speed is (r - 100) times this, r a random number from 0 to 200
 inline constexpr float k_PuffSpeed = 0.02f;
-/// A puff's size now
-[[nodiscard]] float DustPuffSize(const DustPuff& puff);
-/// The frame of the puffs' sheet a puff shows. Dust and smoke show one of the sixteen after the first sixteen, changing
-/// twice a second. Motes show one of the first sixteen, changing eight times a second.
-[[nodiscard]] int32_t DustPuffFrame(const DustPuff& puff);
-/// A puff after more seconds of game time: it flies straight on with its speed; false once it has gone
-bool AdvanceDustPuff(DustPuff& puff, float seconds);
-/// A drop of blood after more seconds of game time, given the height of the land under a point and two draws of 0 to
-/// 99 for its slide (along x, then along z) that it takes only as it meets the land; false once it has gone
-bool AdvanceBloodDrop(DustPuff& drop, float seconds, const std::function<float(glm::vec2)>& landHeight,
-                      const std::function<int32_t()>& draw);
 /// The size of a landing's puffs for a body of a radius
 [[nodiscard]] float LandingPuffSize(float radius);
 /// A colour blended towards another by an amount from 0 to 255, keeping its own alpha

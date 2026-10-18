@@ -33,17 +33,9 @@ namespace ecs::components
 {
 struct Transform;
 }
-namespace particles::draw
-{
-struct Frame;
-}
 namespace physics
 {
 class Ground;
-namespace turn
-{
-enum class PuffKind : uint8_t;
-}
 } // namespace physics
 
 } // namespace openblack
@@ -174,10 +166,8 @@ public:
 	virtual void SetClassHooks([[maybe_unused]] std::unique_ptr<PhysicsClassHooks> hooks) {}
 	/// Once a game turn while the game runs: the turn's start, its twenty steps and its end
 	virtual void ProcessTurn() {}
-	/// Every frame: where the moving bodies are drawn between turns, and the dust ageing with the game's time
-	virtual void UpdateFrame([[maybe_unused]] float turnFraction, [[maybe_unused]] float gameSeconds) {}
-	/// The dust the landings throw up, drawn with the particles
-	virtual void CollectDrawFrame([[maybe_unused]] particles::draw::Frame& frame) const {}
+	/// Every frame: where the moving bodies are drawn between turns
+	virtual void UpdateFrame([[maybe_unused]] float turnFraction) {}
 
 	/// An object starts to move, through its kind's own start
 	virtual PhysicsStarted InitialisePhysics([[maybe_unused]] entt::entity object, [[maybe_unused]] const PhysicsStart& start)
@@ -241,21 +231,6 @@ public:
 	}
 	/// A living thing pushes an object out of its way, which moves in the physics
 	virtual float PushObject([[maybe_unused]] entt::entity object) { return 0.0f; }
-	/// A puff of dust at a point, drifting by a velocity, of a size and colour (0xAARRGGBB), living a second of the game's
-	/// time with the landings' dust
-	virtual void AddPuff([[maybe_unused]] glm::vec3 position, [[maybe_unused]] glm::vec3 velocity, [[maybe_unused]] float size,
-	                     [[maybe_unused]] uint32_t argb)
-	{
-	}
-	/// A puff of a kind (dust, smoke or a mote) in the same pool as the dust, which lives, grows and shows its frames as
-	/// its kind does
-	virtual void AddPuff([[maybe_unused]] glm::vec3 position, [[maybe_unused]] glm::vec3 velocity, [[maybe_unused]] float size,
-	                     [[maybe_unused]] uint32_t argb, [[maybe_unused]] physics::turn::PuffKind kind)
-	{
-	}
-	/// The puffs in the pool live, grow and move on by some seconds. Each frame moves them on by the game's time; a film
-	/// that pauses the game moves them on by the real time.
-	virtual void AdvancePuffs([[maybe_unused]] float seconds) {}
 	/// The land as the physics feels it, none without a land
 	[[nodiscard]] virtual const physics::Ground* GetGround() const { return nullptr; }
 	/// The creature's bones as the ellipsoids that thrown things and fight blows hit, posed as they are now. Each is the

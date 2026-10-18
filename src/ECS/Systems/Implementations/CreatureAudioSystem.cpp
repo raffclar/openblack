@@ -43,6 +43,7 @@
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "InfoConstants.h"
@@ -196,7 +197,7 @@ creature_audio::Layers LayersOf(const CreatureAnimation& animation)
 /// the land's light
 void FootstepPuffs(const Creature& creature, const Transform& transform, int32_t count)
 {
-	if (count <= 0 || !Locator::dynamicsSystem::has_value() || !Locator::gameRandom::has_value())
+	if (count <= 0 || !Locator::liquidParticleSystem::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
@@ -206,7 +207,8 @@ void FootstepPuffs(const Creature& creature, const Transform& transform, int32_t
 	for (int32_t i = 0; i < count; ++i)
 	{
 		const auto velocity = creature_footstep_puffs::VelocityOf(size, [&random](int32_t n) { return random.LocalRand(n); });
-		Locator::dynamicsSystem::value().AddPuff(transform.position, velocity, creature_footstep_puffs::SizeOf(size), colour);
+		Locator::liquidParticleSystem::value().Add(transform.position, velocity, creature_footstep_puffs::SizeOf(size), colour,
+		                                           liquid_particles::Kind::Dust);
 	}
 }
 } // namespace

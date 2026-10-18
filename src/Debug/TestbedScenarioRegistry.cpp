@@ -986,11 +986,29 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .name = "Puke",
 	    .facet = Facet::Needs,
 	    .description = "A tiger is told to be sick every so often, as eating something bad would make it.",
-	    .expected = "It retches and is sick, drops of it flying out in front of it and landing on the ground, where they "
-	                "fade.",
+	    .expected = "It bends down and is sick. During the loop of the puke animation, twelve drops come out of its lips "
+	                "each game turn. They fall down and to the sides, meet the ground, slide a short way and go after "
+	                "three seconds.",
 	    .framing = {.shot = Shot::Follow},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .commands = {Act(Kind::Puke, 0, 2.0f), Act(Kind::Puke, 0, 10.0f, true)},
+	    .repeatFrom = 1,
+	});
+
+	all.push_back({
+	    .id = "liquid.puke",
+	    .name = "Sick as liquid particles",
+	    .facet = Facet::Needs,
+	    .description = "From behind, a tiger is sick at once, and again eight seconds after each puke ends.",
+	    .expected = "During the loop of the puke animation, twelve drops come out of the lips each game turn. Each drop "
+	                "has a random speed down and to the sides, in no relation to where the tiger looks. The drops have "
+	                "brown and yellow shades of the light of the land where the tiger stands. They fall, meet the "
+	                "ground, slide a short way, slow down and go three seconds after they meet the ground. Each drop "
+	                "shows a different blob frame at random each time the game draws it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Act(Kind::Puke, 0, 0.5f), Act(Kind::Puke, 0, 8.0f, true)},
 	    .repeatFrom = 1,
 	});
 

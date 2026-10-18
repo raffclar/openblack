@@ -17,7 +17,7 @@
 
 #include <glm/vec3.hpp>
 
-#include "Physics/TurnRules.h"
+#include "Particles/LiquidParticles.h"
 
 /// The rules for the motes and the smoke that a creature makes because of its alignment. Each game turn, a creature
 /// whose body looks good makes three light motes of pale colours, and a creature whose body looks evil makes three puffs
@@ -54,7 +54,7 @@ using LocalRandom = std::function<uint32_t(int32_t)>;
 /// Gives the point of a bone of the posed body in the world, by its index
 using BonePoint = std::function<glm::vec3(uint32_t)>;
 
-/// One mote or puff of smoke, as the shared pool of puffs takes it
+/// One mote or puff of smoke, as the pool of liquid particles takes it
 struct Puff
 {
 	glm::vec3 position {0.0f};
@@ -62,7 +62,7 @@ struct Puff
 	float size {0.0f};
 	/// 0xAARRGGBB
 	uint32_t argb {0};
-	physics::turn::PuffKind kind {physics::turn::PuffKind::Mote};
+	liquid_particles::Kind kind {liquid_particles::Kind::Mote};
 };
 
 /// Whether a body of this shown alignment makes motes or smoke

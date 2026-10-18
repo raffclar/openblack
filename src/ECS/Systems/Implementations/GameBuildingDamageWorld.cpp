@@ -27,6 +27,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -190,6 +191,14 @@ void GameBuildingDamageWorld::EraseModel(entt::id_type mesh)
 DynamicsSystemInterface* GameBuildingDamageWorld::Dynamics()
 {
 	return Locator::dynamicsSystem::has_value() ? &Locator::dynamicsSystem::value() : nullptr;
+}
+
+void GameBuildingDamageWorld::AddDust(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb)
+{
+	if (Locator::liquidParticleSystem::has_value())
+	{
+		Locator::liquidParticleSystem::value().Add(position, velocity, size, argb, liquid_particles::Kind::Dust);
+	}
 }
 
 GameRandomInterface* GameBuildingDamageWorld::Random()
