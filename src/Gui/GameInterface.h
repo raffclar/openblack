@@ -31,6 +31,7 @@
 #include "GameFont.h"
 #include "GameMenu.h"
 #include "Hand/HandTricons.h"
+#include "Help/SingAlong.h"
 #include "MenuBackdrop.h"
 #include "NewPlayerBox.h"
 #include "ScreenFade.h"
@@ -235,6 +236,13 @@ public:
 		float seconds {0.0f};
 	};
 	void SetHandTricons(std::optional<HandTricons> tricons) { _handTricons = tricons; }
+	/// The word of the newest dialogue text that a sung verse has reached, none while no verse plays, and the frame step
+	/// of the glow's glide in milliseconds
+	void SetSingAlong(std::optional<int32_t> word, int32_t stepMs)
+	{
+		_singAlongWord = word;
+		_singAlongStepMs = stepMs;
+	}
 	/// The numbers floating up this frame, drawn the furthest first, under the interface
 	void SetFloatingNumbers(std::vector<FloatingNumber> numbers) { _floatingNumbers = std::move(numbers); }
 	void SetLearningTexts(std::vector<LearningText> texts) { _learningTexts = std::move(texts); }
@@ -332,6 +340,10 @@ private:
 	std::unique_ptr<graphics::Texture2D> _hintDotSheet;
 	/// Whether the advisors' words were drawn at the last frame
 	bool _dialogueWordsDrawn {false};
+	/// The sing-along's glow under the word of a sung verse
+	help::sing_along::Highlight _singAlong;
+	std::optional<int32_t> _singAlongWord;
+	int32_t _singAlongStepMs {0};
 	/// The good advisor's font f1 and the evil one's f3, which their words in the dialogue are in
 	std::optional<FontFace> _goodAdvisorFont;
 	std::optional<FontFace> _evilAdvisorFont;

@@ -524,3 +524,20 @@ TEST(HelpTextDisplay, CachedLayoutMatchesLayout)
 		}
 	}
 }
+
+TEST(HelpTextDisplay, OnlyTheNewestTextsWordsKeepTheirNumbers)
+{
+	HelpTextDisplay display = Settled();
+	display.Add(u"Old words", 0.0f, 1, true);
+	display.Add(u"Row the boat", 0.0f, 1, true);
+	display.Advance(1000.0f);
+	const TextFrame frame = display.Layout(1920, 1080, 0, 1, false, k_Fixed);
+	ASSERT_EQ(frame.runs.size(), 5U);
+	// The newest text comes first, its words numbered from 1; the older text's words have no number
+	EXPECT_EQ(frame.runs[0].text, u"Row");
+	EXPECT_EQ(frame.runs[0].word, 1);
+	EXPECT_EQ(frame.runs[1].word, 2);
+	EXPECT_EQ(frame.runs[2].word, 3);
+	EXPECT_EQ(frame.runs[3].word, 0);
+	EXPECT_EQ(frame.runs[4].word, 0);
+}

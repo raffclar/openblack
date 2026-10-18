@@ -3171,6 +3171,27 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::WideScreen, .delaySeconds = 40.0f, .value = 0}},
 	});
 
+	// The music type number of the missionaries' first sung verse
+	constexpr size_t k_FirstVerseMusic = 51;
+	all.push_back({
+	    .id = "audio.sing_along_glow",
+	    .name = "The glow under the words of a sung verse",
+	    .facet = Facet::Audio,
+	    .description = "A script starts the missionaries' first sung verse and shows a dialogue text at each of its "
+	                   "first four line cues. Help texts stand in for the verse's words. The audio log gives the cues.",
+	    .expected = "A glow box in the colour of the words shows under the word that the song has reached. It glides "
+	                "from word to word in about a fifth of a second as the word cues come, and goes back to the first "
+	                "word of the newest text at each line cue. The older texts get no glow. When the verse ends, the "
+	                "glow goes.",
+	    .environment = {.playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::StartScriptMusic, .delaySeconds = 1.0f, .value = k_FirstVerseMusic},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.05f, .value = 1009},
+	                 {.kind = Kind::RunText, .delaySeconds = 3.1f, .value = 1250},
+	                 {.kind = Kind::RunText, .delaySeconds = 2.27f, .value = 1717},
+	                 {.kind = Kind::RunText, .delaySeconds = 5.05f, .value = 1240}},
+	});
+
 	all.push_back({
 	    .id = "audio.temple_music",
 	    .name = "The temple's music following the player's alignment",

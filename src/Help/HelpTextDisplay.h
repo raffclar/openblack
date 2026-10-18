@@ -59,6 +59,8 @@ struct TextRun
 	uint8_t a;
 	float clipTop;
 	float clipBottom;
+	/// The number of the word in the newest text, from 1. It is 0 in the older texts.
+	int32_t word {0};
 };
 
 /// What one frame draws: the background box (black at alpha 0x80) and the words
