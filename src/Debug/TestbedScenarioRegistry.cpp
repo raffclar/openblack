@@ -4610,6 +4610,23 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "creature.give_villager_eaten",
+	    .name = "Giving a villager to a hungry creature",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a villager and, held in front of a hungry tiger, gives her to it.",
+	    .expected = "The tiger reaches out with its take clip and takes her; in its hand she plays her scared stiff clip. "
+	                "It looks her over the first time it is given a villager, then plays its eat clip: at the moment of "
+	                "the bite she is gone from its hand, and it swallows her as the clip ends. Then she dies and its "
+	                "hunger falls.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungryThinking},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
+	all.push_back({
 	    .id = "creature.give_villager_by_hand",
 	    .name = "Giving a villager by hand",
 	    .facet = Facet::Objects,
