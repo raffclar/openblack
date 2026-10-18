@@ -1851,6 +1851,16 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return HandTakeFireBall();
 	case Kind::HandTapObject:
 		return HandTapObject(command.object);
+	case Kind::FinishBuilding:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value())
+		{
+			return "nothing to finish";
+		}
+		ecs::construction::SetBuilt(*object, 1.0f);
+		return "finished";
+	}
 	case Kind::RemoveObject:
 	{
 		const auto object = ObjectAt(command.object);
@@ -2380,7 +2390,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
-	    command.kind == Kind::PlayGuidanceVoice)
+	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::FinishBuilding)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2991,6 +3001,7 @@ void Runner::Give(const Command& command)
 	case Kind::SayLine:
 	case Kind::PlayGuidanceVoice:
 	case Kind::RemoveObject:
+	case Kind::FinishBuilding:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:

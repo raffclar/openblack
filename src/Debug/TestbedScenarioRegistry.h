@@ -864,6 +864,9 @@ struct Command
 		/// The creature turns to face the point (from the middle of the map) as the game's turn stages tell it to. While it
 		/// walks to its stop, the turn does not start, and the command asks again each frame until the turn starts.
 		TurnToFaceWhenStill,
+		/// The scenario's object, a building going up, is finished at once, as when its builders put on the last of
+		/// it. Needs no creature.
+		FinishBuilding,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

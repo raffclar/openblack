@@ -8945,7 +8945,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
 	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::PlayFallingSpellFilm ||
-	       kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice || IsPointerCommand(kind);
+	       kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice || kind == Kind::FinishBuilding ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -8972,7 +8973,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 154> k_Names {
+	constexpr std::array<std::string_view, 155> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -9127,6 +9128,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "play a guidance voice",
 		    "stop at once",
 		    "turn to face when still",
+		    "finish the building",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}
