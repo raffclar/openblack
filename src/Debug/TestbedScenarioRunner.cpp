@@ -384,7 +384,7 @@ void KeepDebugWindowsOffTheMouse(bool off)
 bool HasPoint(Kind kind)
 {
 	return kind == Kind::WalkTo || kind == Kind::RunTo || kind == Kind::FleeFrom || kind == Kind::TurnToFace ||
-	       kind == Kind::ThrowAt || kind == Kind::PointAt;
+	       kind == Kind::ThrowAt || kind == Kind::PointAt || kind == Kind::TurnToFaceWhenStill;
 }
 
 std::string_view Started(bool started)
@@ -713,6 +713,7 @@ void Runner::Start(const Scenario& scenario)
 	_globes.clear();
 	_temples.clear();
 	_throwsDue.clear();
+	_turnsAsked.clear();
 	for (const auto& setup : scenario.throws)
 	{
 		_throwsDue.emplace_back(setup.delaySeconds);
@@ -2680,6 +2681,20 @@ void Runner::Give(const Command& command)
 	case Kind::Stop:
 		locomotion.Stop(*entity);
 		break;
+	case Kind::StopAtOnce:
+		locomotion.StopAtOnce(*entity);
+		break;
+	case Kind::TurnToFaceWhenStill:
+		if (locomotion.TurnToFace(*entity, point))
+		{
+			result = "turning";
+		}
+		else
+		{
+			_turnsAsked.emplace_back(*entity, point);
+			result = "waits until it stands";
+		}
+		break;
 	case Kind::ScriptPlace:
 		locomotion.PlaceWithoutWalking(*entity, {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y});
 		break;
@@ -3253,6 +3268,7 @@ void Runner::Update(float seconds)
 	UpdateRewards();
 	UpdateMiracles(seconds);
 	UpdateVillagerWalks();
+	UpdateTurnsAsked();
 	UpdateThrows();
 	WatchGesture();
 	FinishTakingFireBall();
@@ -3271,6 +3287,21 @@ void Runner::Update(float seconds)
 	{
 		Give(_scenario->commands[index]);
 	}
+}
+
+void Runner::UpdateTurnsAsked()
+{
+	if (!Locator::creatureLocomotionSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		_turnsAsked.clear();
+		return;
+	}
+	auto& locomotion = Locator::creatureLocomotionSystem::value();
+	const auto& registry = Locator::entitiesRegistry::value();
+	// A turn asked for again starts once the creature stands. A creature that is gone asks no more.
+	std::erase_if(_turnsAsked, [&](const std::pair<entt::entity, glm::vec2>& asked) {
+		return !registry.Valid(asked.first) || locomotion.TurnToFace(asked.first, asked.second);
+	});
 }
 
 void Runner::UpdateThrows()

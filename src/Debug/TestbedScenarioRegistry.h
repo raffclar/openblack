@@ -831,6 +831,12 @@ struct Command
 		/// origin 80 metres back and 50 metres up from it. Then the camera flies to it, as the bookmark's number key does.
 		/// Needs no creature
 		FlyToBookmark,
+		/// The creature stops at once where it is, as a new body action or a placement stops it. The Stop command stops
+		/// it as the game stops a walk.
+		StopAtOnce,
+		/// The creature turns to face the point (from the middle of the map) as the game's turn stages tell it to. While it
+		/// walks to its stop, the turn does not start, and the command asks again each frame until the turn starts.
+		TurnToFaceWhenStill,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

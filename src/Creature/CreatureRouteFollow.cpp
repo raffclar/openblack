@@ -354,6 +354,28 @@ void Follower::RestartLeg()
 	_obstacles.SetWalker(_position);
 }
 
+void Follower::Stop(float ahead)
+{
+	switch (_state)
+	{
+	case State::Planning:
+		_searches.clear();
+		_pending = false;
+		_route = {};
+		_state = State::Standing;
+		return;
+	case State::Walking:
+	case State::Replanning:
+		_searches.clear();
+		_pending = false;
+		_state = State::Walking;
+		_routeEnd = EndAhead(_route, ahead);
+		return;
+	default:
+		return;
+	}
+}
+
 void Follower::PlaceOnRoute()
 {
 	if (_route.Finished())

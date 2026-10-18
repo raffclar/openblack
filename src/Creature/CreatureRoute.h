@@ -216,4 +216,8 @@ struct Advanced
 };
 /// Moves a distance along the route
 Advanced Advance(Route& route, float distance);
+/// Ends the route a distance ahead of the creature, as a creature does when something tells it to stop. The leg that it
+/// is on ends there when more than that distance is left of the leg. No leg after it is walked. Gives the new end of
+/// the route.
+glm::vec2 EndAhead(Route& route, float ahead);
 } // namespace openblack::creature_route

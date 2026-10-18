@@ -201,7 +201,7 @@ TEST(CreatureDance, TheMusicIsTheTribesChantWithVoicesForMoreThanEightDancers)
 	EXPECT_EQ(creature_dance::MusicType(9, 9), 5);
 }
 
-TEST(CreatureDance, AStopStartsWhileTheBodyMovesAndEndsOnceItPlaysNoAction)
+TEST(CreatureDance, AStopStartsWhileTheBodyMovesAndEndsOnceItStandsStill)
 {
 	creature_mind::IdleMind mind;
 	creature_mind::Plan(mind, creature_mind::Activity::Planned, {{.kind = Step::Kind::StopMoving}, {.kind = Step::Kind::Wait}});
@@ -215,6 +215,10 @@ TEST(CreatureDance, AStopStartsWhileTheBodyMovesAndEndsOnceItPlaysNoAction)
 	static_cast<void>(creature_mind::Think(mind, senses, NoRandom()));
 	EXPECT_EQ(mind.step, 0U);
 	senses.bodyPlaying = false;
+	static_cast<void>(creature_mind::Think(mind, senses, NoRandom()));
+	// It still walks on to its stop
+	EXPECT_EQ(mind.step, 0U);
+	senses.moving = false;
 	static_cast<void>(creature_mind::Think(mind, senses, NoRandom()));
 	EXPECT_EQ(mind.step, 1U);
 }

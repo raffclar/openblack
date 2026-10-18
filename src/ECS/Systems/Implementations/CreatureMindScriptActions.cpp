@@ -138,7 +138,8 @@ void CreatureMindSystem::ForceFinish(entt::entity creature)
 	{
 		body->body = creature_layers::Hurry(body->body);
 	}
-	// What it was doing stops as a failure: it stops where it is, drops what it does with a thing, and forgets its agenda
+	// What it was doing stops as a failure: it stops as the game stops a walk, drops what it does with a thing, and
+	// forgets its agenda
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{

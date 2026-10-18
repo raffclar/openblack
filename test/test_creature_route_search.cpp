@@ -425,3 +425,77 @@ TEST(CreatureRouteSearch, ANearNewDestinationWaitsForTheSearchUnderWay)
 	ASSERT_EQ(restarted.Update(16, false, 0.0f), Follower::Outcome::Found);
 	EXPECT_EQ(restarted.GetRoute().End(), glm::vec2(900.0f, 1000.0f));
 }
+
+TEST(CreatureRouteSearch, AStopEndsTheLegItIsOnAheadOfIt)
+{
+	Route route;
+	route.legs = {{.from = {0.0f, 0.0f}, .to = {128.0f, 0.0f}}, {.from = {128.0f, 0.0f}, .to = {128.0f, 50.0f}}};
+	route.travelled = 32.0f;
+	EXPECT_EQ(EndAhead(route, 32.0f), glm::vec2(64.0f, 0.0f));
+	ASSERT_EQ(route.legs.size(), 1u);
+	EXPECT_EQ(route.legs[0].to, glm::vec2(64.0f, 0.0f));
+	EXPECT_EQ(route.End(), glm::vec2(64.0f, 0.0f));
+}
+
+TEST(CreatureRouteSearch, AStopNearTheEndOfTheLegKeepsTheEndOfTheLeg)
+{
+	Route route;
+	route.legs = {{.from = {0.0f, 0.0f}, .to = {100.0f, 0.0f}}, {.from = {100.0f, 0.0f}, .to = {100.0f, 50.0f}}};
+	route.travelled = 90.0f;
+	// Only a little more than the stop distance left: the leg keeps its end, and the legs after it go
+	EXPECT_EQ(EndAhead(route, 9.995f), glm::vec2(100.0f, 0.0f));
+	EXPECT_EQ(route.legs.size(), 1u);
+	route.legs.push_back({.from = {100.0f, 0.0f}, .to = {100.0f, 50.0f}});
+	EXPECT_EQ(EndAhead(route, 9.9f), glm::vec2(99.9f, 0.0f));
+}
+
+TEST(CreatureRouteSearch, AStopRoundAnArcEndsOnTheCircle)
+{
+	const Circle circle {.centre = {0.0f, 0.0f}, .radius = 10.0f};
+	Route route;
+	route.legs = {{.from = {10.0f, 0.0f}, .to = {-10.0f, 0.0f}, .arc = true, .round = circle, .roundWay = Way::Anticlockwise}};
+	const auto end = EndAhead(route, 10.0f * std::numbers::pi_v<float> * 0.5f);
+	EXPECT_NEAR(glm::length(end), 10.0f, 1e-3f);
+	EXPECT_NEAR(LengthOf(route.legs[0]), 10.0f * std::numbers::pi_v<float> * 0.5f, 1e-3f);
+}
+
+TEST(CreatureRouteSearch, AStopWhileSearchingFromWhereItStandsStands)
+{
+	Follower follower;
+	follower.Reset({1000.0f, 1000.0f}, 2.0f);
+	follower.SetDestination({.point = {1100.0f, 1000.0f}, .arriveWithin = 1.0f, .mostCost = 5200.0f});
+	ASSERT_EQ(follower.GetState(), Follower::State::Planning);
+	follower.Stop(3.0f);
+	EXPECT_EQ(follower.GetState(), Follower::State::Standing);
+	EXPECT_EQ(follower.GetSearchCount(), 0u);
+	EXPECT_TRUE(follower.GetRoute().legs.empty());
+	EXPECT_EQ(follower.GetRouteEnd(), glm::vec2(1000.0f, 1000.0f));
+}
+
+TEST(CreatureRouteSearch, AStopOnTheWayWalksOnToANearEnd)
+{
+	Follower follower;
+	follower.Reset({1000.0f, 1000.0f}, 2.0f);
+	follower.SetDestination({.point = {1100.0f, 1000.0f}, .arriveWithin = 1.0f, .mostCost = 5200.0f});
+	while (follower.Update(16, false, 0.0f) == Follower::Outcome::None)
+	{
+	}
+	follower.Advance(5.0f);
+	// Searching for a new destination as it walks: the searches end too
+	follower.SetDestination({.point = {1000.0f, 1100.0f}, .arriveWithin = 1.0f, .mostCost = 5200.0f});
+	ASSERT_EQ(follower.GetState(), Follower::State::Replanning);
+	const auto from = follower.GetPosition();
+	follower.Stop(3.0f);
+	EXPECT_EQ(follower.GetState(), Follower::State::Walking);
+	EXPECT_EQ(follower.GetSearchCount(), 0u);
+	EXPECT_NEAR(glm::distance(follower.GetRouteEnd(), from), 3.0f, 1e-3f);
+	EXPECT_EQ(follower.GetRoute().End(), follower.GetRouteEnd());
+	Advanced advanced {};
+	for (int turn = 0; turn < 100 && !advanced.finished; ++turn)
+	{
+		advanced = follower.Advance(1.0f);
+	}
+	EXPECT_TRUE(advanced.finished);
+	EXPECT_EQ(follower.GetState(), Follower::State::Standing);
+	EXPECT_NEAR(glm::distance(follower.GetPosition(), from), 3.0f, 1e-3f);
+}

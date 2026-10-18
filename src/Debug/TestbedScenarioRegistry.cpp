@@ -2223,6 +2223,50 @@ void AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	all.push_back({
+	    .id = "movement.stop_while_walking",
+	    .name = "Stop while walking",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks towards a far point. On its way it is told to stop. Then it walks back and is told "
+	                   "to stop again.",
+	    .expected = "It does not stop dead. It walks on a short distance, slows down and stands. A faster creature walks "
+	                "on further.",
+	    .framing = {.shot = Shot::Overview, .include = {{40.0f, 100.0f}, {-40.0f, -100.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -90.0f}, 180.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 0.5f), Go(Kind::Stop, 0, {0.0f, 0.0f}, 4.0f, false),
+	                 Go(Kind::WalkTo, 0, {0.0f, -90.0f}, 1.0f), Go(Kind::Stop, 0, {0.0f, 0.0f}, 4.0f, false)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "movement.turn_while_walking",
+	    .name = "Turn while walking",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks towards a far point. On its way it is told to turn to face a point to its side, "
+	                   "as the game's turn stages tell it. Then it walks back and turns again.",
+	    .expected = "It does not stop dead to turn. It walks on a short distance and slows down to a stand. Then it "
+	                "turns on the spot to face the point.",
+	    .framing = {.shot = Shot::Overview, .include = {{60.0f, 100.0f}, {-60.0f, -100.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -90.0f}, 180.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 0.5f), Go(Kind::TurnToFaceWhenStill, 0, {60.0f, 0.0f}, 4.0f, false),
+	                 Go(Kind::WalkTo, 0, {0.0f, -90.0f}, 2.0f), Go(Kind::TurnToFaceWhenStill, 0, {-60.0f, 0.0f}, 4.0f, false)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "movement.stop_at_once_while_walking",
+	    .name = "Stop at once while walking",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks towards a far point. On its way it stops at once, as a new body action or a "
+	                   "placement stops it. Then it walks back and stops at once again.",
+	    .expected = "It stops dead where it is, with no walk on. Compare with Stop while walking.",
+	    .framing = {.shot = Shot::Overview, .include = {{40.0f, 100.0f}, {-40.0f, -100.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -90.0f}, 180.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 0.5f), Go(Kind::StopAtOnce, 0, {0.0f, 0.0f}, 4.0f, false),
+	                 Go(Kind::WalkTo, 0, {0.0f, -90.0f}, 1.0f), Go(Kind::StopAtOnce, 0, {0.0f, 0.0f}, 4.0f, false)},
+	    .repeatFrom = 0,
+	});
+
 	std::vector<ObjectSetup> copse;
 	for (int x = -2; x <= 2; ++x)
 	{
@@ -8113,7 +8157,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 144> k_Names {
+	constexpr std::array<std::string_view, 146> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -8258,6 +8302,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "fly to a bookmark",
 		    "save the game",
 		    "load the game",
+		    "stop at once",
+		    "turn to face when still",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

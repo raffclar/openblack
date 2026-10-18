@@ -352,7 +352,7 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 			}
 			if (Locator::creatureLocomotionSystem::has_value())
 			{
-				Locator::creatureLocomotionSystem::value().Stop(entity);
+				Locator::creatureLocomotionSystem::value().StopAtOnce(entity);
 			}
 			component.freeze = 0.0f;
 		}

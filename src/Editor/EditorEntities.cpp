@@ -605,7 +605,7 @@ void MoveTo(entt::entity entity, glm::vec3 position)
 	{
 		if (Locator::creatureLocomotionSystem::has_value())
 		{
-			Locator::creatureLocomotionSystem::value().Stop(entity);
+			Locator::creatureLocomotionSystem::value().StopAtOnce(entity);
 		}
 		// The creature is placed between where it was and is going each frame, so both are where it is put
 		locomotion->fromPosition = position;

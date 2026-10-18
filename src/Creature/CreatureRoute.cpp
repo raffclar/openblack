@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <limits>
 #include <numbers>
 #include <ranges>
@@ -407,6 +408,26 @@ Advanced creature_route::Advance(Route& route, float distance)
 		changed = true;
 	}
 	return {.position = route.Position(), .heading = route.Heading(), .segmentChanged = changed, .finished = route.Finished()};
+}
+
+glm::vec2 creature_route::EndAhead(Route& route, float ahead)
+{
+	// A little more than the stop distance must be left of the leg, else the leg keeps its end
+	constexpr float k_LeftOver = std::bit_cast<float>(0x3C23D70Au);
+	if (route.Finished())
+	{
+		return route.End();
+	}
+	auto& leg = route.legs[route.segment];
+	if ((LengthOf(leg) - route.travelled) - k_LeftOver > ahead)
+	{
+		if (const auto placed = PlaceAlong(leg, ahead + route.travelled))
+		{
+			leg.to = placed->position;
+		}
+	}
+	route.legs.resize(route.segment + 1);
+	return leg.to;
 }
 
 glm::ivec2 creature_route::StepBlock(glm::vec3 end)
