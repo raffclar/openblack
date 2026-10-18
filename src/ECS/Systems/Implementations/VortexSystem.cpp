@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <iterator>
 #include <optional>
 #include <stdexcept>
@@ -375,11 +376,6 @@ void VortexSystem::ProcessTurn()
 		DeleteEffects(registry.Get<Vortex>(entity));
 		LetGoOfThrown(registry.Get<Vortex>(entity));
 		registry.Destroy(entity);
-		if (entity == _crossingVortex)
-		{
-			_crossing.close();
-			_crossingVortex = entt::null;
-		}
 	}
 	RemoveTheTaken();
 	if (levelled)
@@ -524,7 +520,7 @@ std::optional<VortexSystemInterface::Taken> VortexSystem::EnterVortex(const std:
 	{
 		Locator::animalSystem::value().LeaveFlock(thing);
 	}
-	if (vortexEntity == _crossingVortex)
+	if (vortexEntity == _crossing.Owner())
 	{
 		WriteCrossing(*vortex, thing);
 	}
@@ -623,9 +619,7 @@ void VortexSystem::Throw(entt::entity object, float angle, float scale, entt::en
 
 void VortexSystem::StartCrossingFile(entt::entity vortex)
 {
-	_crossing.close();
-	_crossingVortex = entt::null;
-	_written.clear();
+	_crossing.Close();
 	if (!Locator::playerProfileSystem::has_value())
 	{
 		return;
@@ -637,22 +631,29 @@ void VortexSystem::StartCrossingFile(entt::entity vortex)
 	}
 	std::error_code error;
 	std::filesystem::create_directories(*folder, error);
-	// Emptied by every new vortex that leads away
-	_crossing.open(*folder / k_CrossingFile, std::ios::out | std::ios::trunc | std::ios::binary);
-	if (_crossing.is_open())
+	if (!_crossing.Start(vortex, *folder / k_CrossingFile))
 	{
-		_crossingVortex = vortex;
+		if (const auto logger = spdlog::get("game"); logger != nullptr)
+		{
+			logger->warn("Vortex: could not write the crossing file in {}", folder->string());
+		}
+		return;
 	}
-	else if (const auto logger = spdlog::get("game"); logger != nullptr)
+	if (!_vortexGone)
 	{
-		logger->warn("Vortex: could not write the crossing file in {}", folder->string());
+		_vortexGone = Locator::entitiesRegistry::value().OnDestroy<Vortex>().connect<&VortexSystem::OnVortexGone>(*this);
 	}
+}
+
+void VortexSystem::OnVortexGone(entt::registry& /*registry*/, entt::entity vortex)
+{
+	_crossing.OwnerGone(vortex);
 }
 
 void VortexSystem::WriteCrossing(const Vortex& vortex, entt::entity thing)
 {
 	// Each thing once
-	if (!_crossing.is_open() || !_written.insert(thing).second)
+	if (!_crossing.MarkWritten(thing))
 	{
 		return;
 	}
@@ -689,13 +690,12 @@ void VortexSystem::WriteCrossing(const Vortex& vortex, entt::entity thing)
 	if (const auto line = ecs::vortex_crossing::LineFor(registry, thing, place, world))
 	{
 		const auto text = vortex::crossing::Text(*line);
-		_crossing.write(text.data(), static_cast<std::streamsize>(text.size()));
-		_crossing.flush();
+		_crossing.Write(text);
 		if (std::holds_alternative<vortex::crossing::MobileStaticLine>(*line))
 		{
 			for (const auto identical : ecs::vortex_crossing::IdenticalStatics(registry, thing, world))
 			{
-				_written.insert(identical);
+				std::ignore = _crossing.MarkWritten(identical);
 			}
 		}
 	}
