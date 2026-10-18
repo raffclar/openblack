@@ -252,6 +252,7 @@
 #include "Magic/TownBelief.h"
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptCameraLookups.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptCreateRules.h"
 #include "ScriptHeaders/ScriptCreatureRules.h"
@@ -4804,7 +4805,7 @@ void RunCameraPath() // 119 RUN_CAMERA_PATH
 		return;
 	}
 	// The script's camera runs the camera editor's track of that number; one the file doesn't have runs nothing
-	camera->RunTrack(camera_edits::FindTrack(track));
+	camera->RunTrack(camera_edits::FindTrack(track), track);
 }
 
 void StartDialogue() // 120 START_DIALOGUE
@@ -9999,6 +10000,15 @@ void CHLApi::InitFunctionsTable4()
 	CREATE_FUNCTION_BINDING("CAN_SKIP_CREATURE_TRAINING", 0, 1, CanSkipCreatureTraining);
 	CREATE_FUNCTION_BINDING("IS_KEEPING_OLD_CREATURE", 0, 1, IsKeepingOldCreature);
 	CREATE_FUNCTION_BINDING("CURRENT_PROFILE_HAS_CREATURE", 0, 1, CurrentProfileHasCreature);
+}
+
+ScriptCameraModel::Lookups ScriptCameraLookups()
+{
+	return {
+	    .thing = [](uint32_t id) { return FollowedThing(static_cast<entt::entity>(id)); },
+	    .dual = [](uint32_t id) { return DualSubjectOf(static_cast<entt::entity>(id)).lookup; },
+	    .track = [](int32_t number) { return camera_edits::FindTrack(number); },
+	};
 }
 
 } // namespace openblack::chlapi

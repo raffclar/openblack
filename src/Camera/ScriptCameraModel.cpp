@@ -199,6 +199,68 @@ ScriptCameraModel::ScriptCameraModel(const glm::vec3& origin, const glm::vec3& f
 
 ScriptCameraModel::~ScriptCameraModel() = default;
 
+ScriptCameraModel::Saved ScriptCameraModel::GetSaved() const
+{
+	Saved saved {.origin = _origin,
+	             .focus = _focus,
+	             .followedId = _followedId,
+	             .lookedAtId = _lookedAtId,
+	             .follow = _follow,
+	             .seconds = _seconds,
+	             .trackNumber = _track != nullptr ? _trackNumber : std::nullopt,
+	             .trackRunner = nullptr,
+	             .trackTime = _trackTime,
+	             .duals = {}};
+	if (_track != nullptr && _trackRunner != nullptr)
+	{
+		saved.trackRunner = std::make_shared<camera_track::WayRunner>(*_trackRunner);
+	}
+	for (const auto& dual : _duals)
+	{
+		saved.duals.push_back({.first = dual.first.id,
+		                       .second = dual.second.id,
+		                       .settings = dual.settings,
+		                       .lastFirst = dual.lastFirst,
+		                       .lastSecond = dual.lastSecond});
+	}
+	return saved;
+}
+
+void ScriptCameraModel::Restore(const Saved& saved, const Lookups& lookups)
+{
+	_origin = saved.origin;
+	_focus = saved.focus;
+	_followedId = saved.followedId;
+	_lookedAtId = saved.lookedAtId;
+	_followed = saved.followedId.has_value() && lookups.thing ? lookups.thing(*saved.followedId) : ThingLookup {};
+	_lookedAt = saved.lookedAtId.has_value() && lookups.thing ? lookups.thing(*saved.lookedAtId) : ThingLookup {};
+	_follow = saved.follow;
+	_seconds = saved.seconds;
+	_track = nullptr;
+	_trackRunner.reset();
+	_trackNumber.reset();
+	_trackTime = saved.trackTime;
+	if (saved.trackNumber.has_value() && saved.trackRunner != nullptr && lookups.track)
+	{
+		_track = lookups.track(*saved.trackNumber);
+		if (_track != nullptr)
+		{
+			_trackNumber = saved.trackNumber;
+			_trackRunner = std::make_unique<camera_track::WayRunner>(*saved.trackRunner);
+		}
+	}
+	_duals.clear();
+	for (const auto& dual : saved.duals)
+	{
+		const auto lookup = [&lookups](uint32_t id) { return lookups.dual ? lookups.dual(id) : DualLookup {}; };
+		_duals.push_back({.first = {.id = dual.first, .lookup = lookup(dual.first)},
+		                  .second = {.id = dual.second, .lookup = lookup(dual.second)},
+		                  .settings = dual.settings,
+		                  .lastFirst = dual.lastFirst,
+		                  .lastSecond = dual.lastSecond});
+	}
+}
+
 void ScriptCameraModel::SetOrigin(const glm::vec3& origin)
 {
 	StopTrack();
@@ -305,7 +367,7 @@ void ScriptCameraModel::StopTrack()
 	_trackRunner.reset();
 }
 
-void ScriptCameraModel::RunTrack(std::shared_ptr<const edt::EDTTrack> track)
+void ScriptCameraModel::RunTrack(std::shared_ptr<const edt::EDTTrack> track, std::optional<int32_t> number)
 {
 	StopLookingAt();
 	StopTrack();
@@ -315,6 +377,7 @@ void ScriptCameraModel::RunTrack(std::shared_ptr<const edt::EDTTrack> track)
 		return;
 	}
 	_track = std::move(track);
+	_trackNumber = number;
 	_trackRunner = std::make_unique<camera_track::WayRunner>(_track->position);
 }
 

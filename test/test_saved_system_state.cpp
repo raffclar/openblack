@@ -21,7 +21,9 @@
 #include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/CameraTrack.h"
 #include "3D/WaterRings.h"
+#include "Camera/ScriptCameraModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
@@ -214,4 +216,29 @@ TEST(SavedSystemState, TheStoryHistoryComesBack)
 	HelpTextSystem texts;
 	HelpTextSystem loadedTexts;
 	LoadInto(loadedTexts, StateOf(texts));
+}
+
+TEST(SavedSystemState, TheScriptsCameraComesBackAsItWas)
+{
+	const auto flat = [](float, float) { return 0.0f; };
+	ScriptCameraModel saved({0.0f, 50.0f, 0.0f}, {10.0f, 0.0f, 10.0f}, flat);
+	saved.MoveOrigin({100.0f, 60.0f, 40.0f}, 3.0f);
+	saved.SetFollowSettings(30.0f, 0.5f, 1.0f, false);
+	const auto bytes = [](const ScriptCameraModel& model) {
+		reflection::BinaryWriter out(Context());
+		reflection::Save(out, model.GetSaved());
+		return std::move(out.Bytes());
+	};
+	const auto savedBytes = bytes(saved);
+	ScriptCameraModel::Saved read;
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(Context(), savedBytes, identity);
+	reflection::Load(in, read);
+	ASSERT_FALSE(in.Failed());
+	EXPECT_EQ(in.Remaining(), 0u);
+	ScriptCameraModel loaded({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, flat);
+	loaded.Restore(read, {});
+	EXPECT_EQ(bytes(loaded), savedBytes);
+	EXPECT_EQ(loaded.GetTargetOrigin(), saved.GetTargetOrigin());
+	EXPECT_FALSE(loaded.Arrived());
 }

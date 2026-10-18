@@ -33,6 +33,7 @@
 #include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/WalkPath.h"
+#include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
@@ -229,10 +230,11 @@ systems::SavedStateInterface* FindSystem()
 	return Service::has_value() ? &Service::value() : nullptr;
 }
 
-/// The systems that keep running state of their own, by the names of their sections. A new system goes at the end. A
-/// load gives each system its state in this order.
+/// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
+/// in this order: the map's lists first, then the systems that use them.
 using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 24> k_SavedSystems {{
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 25> k_SavedSystems {{
+    {"map", &FindSystem<Locator::entitiesMap>},
     {"creatureLocomotion", &FindSystem<Locator::creatureLocomotionSystem>},
     {"fire", &FindSystem<Locator::fireSystem>},
     {"weather", &FindSystem<Locator::weatherSystem>},
