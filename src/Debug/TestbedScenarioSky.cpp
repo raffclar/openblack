@@ -323,4 +323,42 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {426824.0f, 300.0f, 426824.0f}, .look = {428238.0f, 0.0f, 428238.0f}},
 	    .objects = TreesToTheEast(),
 	});
+
+	// EXPERIMENT (not for merge): the stars of the catalogue at their true places on a clear moonless night
+	all.push_back({
+	    .id = "sky.constellations",
+	    .name = "The northern stars on a moonless night",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at 21:00 at the equinox on a night with a new moon, under a clear sky. The "
+	                   "camera stands 10 up on the land and looks north, 48 degrees up.",
+	    .expected = "Many stars of different brightness and colour, crisp and small, with no grid and no blocks. Polaris "
+	                "is 40 degrees over the north horizon. The Plough is high on the right of Polaris, Cassiopeia is low "
+	                "on its left. The stars near the horizon are dimmer and redder and twinkle; the stars high up do not "
+	                "twinkle.",
+	    .environment = {.hour = 21.0f,
+	                    .clockRuns = false,
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1),
+	                    .moonDate = int64_t {1768765920}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 10.0f, 0.0f}, .look = {473.0f, 753.0f, 473.0f}},
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
+	    .id = "sky.orion",
+	    .name = "Orion in the south west on a moonless night",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at 21:00 at the equinox on a night with a new moon, under a clear sky. The "
+	                   "camera stands 10 up on the land and looks west south west, 28 degrees up.",
+	    .expected = "Orion stands in the middle of the view: the orange Betelgeuse at about 38 degrees up, the blue-white "
+	                "Rigel at about 19 degrees up, and the three stars of the belt between them. Sirius, the brightest "
+	                "star, is low on the left. The low stars are dimmer, redder and twinkle.",
+	    .environment = {.hour = 21.0f,
+	                    .clockRuns = false,
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1),
+	                    .moonDate = int64_t {1768765920}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 10.0f, 0.0f}, .look = {-853.0f, 479.0f, 229.0f}},
+	    .objects = TreesToTheEast(),
+	});
 }

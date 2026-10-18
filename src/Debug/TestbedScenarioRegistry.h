@@ -169,6 +169,9 @@ struct Environment
 	/// EXPERIMENT (not for merge): how strong the noctilucent clouds are, 0 to 1, whatever the night. The night's own
 	/// strength shows when not given.
 	std::optional<float> noctilucent;
+	/// EXPERIMENT (not for merge): the date that the moon takes its phase from, in seconds since 1970, as the Moon debug
+	/// window sets it. The moon keeps its date when not given.
+	std::optional<int64_t> moonDate;
 };
 
 /// Where the camera looks as the scenario starts

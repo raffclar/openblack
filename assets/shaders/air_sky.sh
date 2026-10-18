@@ -7,6 +7,7 @@
 
 #include "world_curve.sh"
 #include "celestial.sh"
+#include "stars.sh"
 
 // xyz: the direction towards the real sun; w: how strong the noctilucent clouds are tonight, 0 to 1
 uniform vec4 u_airSun;
@@ -354,23 +355,12 @@ vec3 AirGlow(vec3 eye, vec3 dir)
 vec3 AirSkyColour(vec3 eye, vec3 dir, float sunHeight, vec2 pixel)
 {
 	vec3 air = AtmosSkyOnScreen(dir, sunHeight);
-	const vec3 luma = vec3(0.2126f, 0.7152f, 0.0722f);
 	float altitude = u_atmosParams.z;
-	// Where the air is dark, small stars show. Above the air they are brighter, and they show to the limb.
-	float dark = 1.0f - smoothstep(0.02f, 0.12f, dot(air, luma));
-	vec3 starDir = WorldDirection(dir);
-	vec3 cell = floor(starDir * 260.0f);
-	vec3 q = fract(cell * vec3(0.1031f, 0.1030f, 0.0973f));
-	q += dot(q, q.yzx + 33.33f);
-	vec3 h = fract((q.xxy + q.yzz) * q.zyx);
-	vec3 star = cell + 0.2f + 0.6f * h - starDir * 260.0f;
-	float glint = h.x > 0.985f ? smoothstep(0.06f, 0.0f, dot(star, star)) * (0.4f + 0.6f * h.y) : 0.0f;
-	// The stars show over the limb of the world's ball, in the air's own frame
+	// The stars, on the sky's sphere. They show over the limb of the world's ball, in the air's own frame.
 	float ballRadius = ATMOS_GROUND_RADIUS + max(altitude, 0.0f);
 	float horizonUp = -sqrt(max(altitude, 0.0f) * (2.0f * ATMOS_GROUND_RADIUS + max(altitude, 0.0f))) / ballRadius;
 	float aboveAir = smoothstep(15.0f, 80.0f, altitude);
-	air += vec3(0.85f, 0.9f, 1.0f) * glint * dark * smoothstep(horizonUp + 0.02f, horizonUp + 0.2f, dot(dir, AtmosUp())) *
-	       (1.0f + 1.5f * aboveAir);
+	air += AirStars(dir, air, sunHeight, max(altitude, 0.0f), aboveAir, AtmosUp(), horizonUp, u_airPlanet.w);
 	// Above the air the sun is a hard white disc
 	float sunCos = dot(dir, normalize(u_airSun.xyz));
 	if (aboveAir > 0.0f && sunCos > cos(AIR_SUN_RADIUS * 1.5f))
