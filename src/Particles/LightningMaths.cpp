@@ -14,6 +14,7 @@
 
 #include <algorithm>
 
+#include "3D/MapCoords.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
 
@@ -184,6 +185,12 @@ float maths::MovedSquared(glm::vec3 searchOrigin, glm::vec3 origin)
 {
 	const auto moved = searchOrigin - origin;
 	return x87::DotZyx(moved, moved);
+}
+
+int maths::TextureRepeats(int texturesToTile, float length, float centroidDistance)
+{
+	const float repeats = (static_cast<float>(texturesToTile) * length) / centroidDistance;
+	return std::max(1, openblack::map_coords::FtoL(repeats));
 }
 
 int maths::SkyStrikeThunderSize(float random)

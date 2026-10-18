@@ -608,10 +608,9 @@ private:
 		const auto joints = static_cast<int>(fork.atoms.size());
 		const auto way = split - origin;
 		const float length = x87::LengthZyx(way);
-		if (texturesToTile != -1 && bolt.centroidDistance > 0.0f)
+		if (texturesToTile != -1)
 		{
-			fork.textureRepeats =
-			    std::max(1, static_cast<int>(static_cast<float>(texturesToTile) * length / bolt.centroidDistance));
+			fork.textureRepeats = maths::TextureRepeats(texturesToTile, length, bolt.centroidDistance);
 		}
 		const bool trunk = depth == 0 && &fork == bolt.root->subCollections.front().get();
 		const bool glued = trunk && castingFromHand && effect.IsMyInterfaceCasting();

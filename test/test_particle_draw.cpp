@@ -316,21 +316,27 @@ TEST(ParticleDraw, RibbonsMatchTheGamesStrip)
 TEST(ParticleDraw, RibbonCornersAreTheGamesFloats)
 {
 	// Each side made about one long by the 3D engine's inverse square root, then as long as the half width, then the
-	// corners where the two segments meet put half way: the bits the game's float steps give
-	const std::array<ChainJoint, 3> joints {ChainJoint {.position = {0.0f, 0.0f, 0.0f}, .halfWidth = 1.0f},
+	// corners where two segments meet put half way. The bits come from the game's own code (the first row of
+	// test/oracle/data/ribbon_corners.txt, made by tools/oracle/cases/sway_ribbon_cases.py).
+	const std::array<ChainJoint, 4> joints {ChainJoint {.position = {0.0f, 0.0f, 0.0f}, .halfWidth = 1.0f},
 	                                        ChainJoint {.position = {10.0f, 2.0f, 0.0f}, .halfWidth = 2.0f},
-	                                        ChainJoint {.position = {20.0f, 0.0f, 5.0f}, .halfWidth = 1.5f}};
-	std::array<ChainVertex, 8> corners {};
+	                                        ChainJoint {.position = {20.0f, 0.0f, 5.0f}, .halfWidth = 1.5f},
+	                                        ChainJoint {.position = {30.0f, 5.0f, 5.0f}, .halfWidth = 0.5f}};
+	std::array<ChainVertex, 12> corners {};
 	PlaceChainCorners(corners, joints, {5.0f, 50.0f, -40.0f});
-	constexpr std::array<std::array<uint32_t, 3>, 8> k_Expected {{
+	constexpr std::array<std::array<uint32_t, 3>, 12> k_Expected {{
 	    {0x3E007CB6u, 0xBF209BE4u, 0xBF44BEF7u},
 	    {0xBE007CB6u, 0x3F209BE4u, 0x3F44BEF7u},
 	    {0x41261F41u, 0x3F451927u, 0xBFC31029u},
 	    {0x4119E0BFu, 0x404EB9B6u, 0x3FC31029u},
 	    {0x41261F41u, 0x3F451927u, 0xBFC31029u},
 	    {0x4119E0BFu, 0x404EB9B6u, 0x3FC31029u},
-	    {0x41A315FBu, 0xBF67706Fu, 0x40777B7Eu},
-	    {0x419CEA05u, 0x3F67706Fu, 0x40C44241u},
+	    {0x41A34F54u, 0xBF64CDAAu, 0x40779E02u},
+	    {0x419CB0ACu, 0x3F64CDAAu, 0x40C43100u},
+	    {0x41A34F54u, 0xBF64CDAAu, 0x40779E02u},
+	    {0x419CB0ACu, 0x3F64CDAAu, 0x40C43100u},
+	    {0x41F12D8Fu, 0x4096938Cu, 0x4093F56Cu},
+	    {0x41EED271u, 0x40A96C74u, 0x40AC0A94u},
 	}};
 	for (size_t i = 0; i < corners.size(); ++i)
 	{

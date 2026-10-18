@@ -795,7 +795,12 @@ public:
 	/// The miracle behind it; it is told the effect has started
 	void SetSink(SpellSink* sink);
 	[[nodiscard]] SpellSink* GetSink() const { return _sink; }
-	void SetProcessInfo(const ProcessInfo& info) { _info = info; }
+	/// Keeps what the miracle gives it this step, with the heading across the land only
+	void SetProcessInfo(const ProcessInfo& info)
+	{
+		_info = info;
+		_info.cameraForward = FlatHeading(info.cameraForward);
+	}
 	[[nodiscard]] const ProcessInfo& GetProcessInfo() const { return _info; }
 	/// Whether the miracle acted on it; false without a miracle
 	bool SendSpellEvent(const SpellEventInfo& event) const;

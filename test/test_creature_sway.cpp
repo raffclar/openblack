@@ -85,7 +85,8 @@ TEST(CreatureSway, AGameTurnLastsATenthOfASecondAtTheUsualPaceInWholeMillisecond
 
 TEST(CreatureSway, ATurnOfTheSpringHasTheBitsOfTheGame)
 {
-	// The speed is above its limit at the start, so the first step scales it down
+	// The speed is above its limit at the start, so the first step scales it down. The bits come from the game's own
+	// code (the first row of test/oracle/data/creature_sway_spring.txt, made by tools/oracle/cases/sway_ribbon_cases.py).
 	Sway sway;
 	sway.active = true;
 	sway.lowerVelocity = {5.0f, 3.0f, 2.0f};
