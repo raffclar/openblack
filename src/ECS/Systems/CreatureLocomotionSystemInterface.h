@@ -67,8 +67,8 @@ public:
 	virtual MoveResult MoveToObject(entt::entity creature, entt::entity target, Pace pace, float extra) = 0;
 	/// Keeps within a distance of something, following it as it moves, until stopped
 	virtual MoveResult Follow(entt::entity creature, entt::entity target, float distance, Pace pace) = 0;
-	/// Runs away from a point
-	virtual MoveResult FleeFrom(entt::entity creature, glm::vec2 threat) = 0;
+	/// Runs away from a point, at a pace. It arrives anywhere within five times its height of the point that it runs to.
+	virtual MoveResult FleeFrom(entt::entity creature, glm::vec2 threat, Pace pace) = 0;
 	/// Turns on the spot to face a point
 	virtual bool TurnToFace(entt::entity creature, glm::vec2 point) = 0;
 	/// Turns on the spot to a heading, also when the turn is very small or none

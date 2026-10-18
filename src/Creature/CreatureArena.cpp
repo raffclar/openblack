@@ -19,6 +19,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/X87.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::creature_arena;
@@ -171,10 +172,11 @@ bool creature_arena::KeepsArenaOff(const ThingInCell& thing, float creatureSize,
 	{
 		return false;
 	}
-	// The cell's middle, on the ground the circles lie on
-	const glm::vec2 middle {static_cast<float>(cell.x * 10 + 5), static_cast<float>(cell.y * 10 + 5)};
+	// The cell's middle at a height of zero. The game adds the squares from z to x.
+	const glm::vec3 middle {static_cast<float>(cell.x * 10 + 5), 0.0f, static_cast<float>(cell.y * 10 + 5)};
 	return std::ranges::any_of(thing.circles, [&middle](const GroundCircle& circle) {
-		return glm::length(middle - circle.centre) - circle.radius < k_ThingClearance;
+		const glm::vec3 centre {circle.centre.x, circle.height, circle.centre.y};
+		return x87::Distance<x87::SumOrder::Zyx>(middle, centre) - circle.radius < k_ThingClearance;
 	});
 }
 

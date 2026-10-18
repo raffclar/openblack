@@ -2654,6 +2654,30 @@ void AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A tiger hurls a rock at a cow that walks across in front of it
+	all.push_back({
+	    .id = "objects.throw_ahead_of_a_walker",
+	    .name = "Throwing ahead of a walker",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a rock in front of it. A cow walks east and west across the land 60 units to "
+	                   "the north. A script tells the tiger to hurl the rock at the cow, again and again.",
+	    .expected = "The tiger aims ahead of the cow, by the time that the rock takes to get there. The rock comes down "
+	                "near where the cow has got to, not behind it. It aims at the full height of the cow.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-70.0f, -80.0f}, {70.0f, 10.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f}), Posed(CreatureType::Cow, {-60.0f, -60.0f}, 90.0f, "walks")},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, -10.0f}}},
+	    .commands = {{.kind = Kind::DoAction,
+	                  .delaySeconds = 1.0f,
+	                  .waitUntilFree = true,
+	                  .action = "Hurl",
+	                  .with = 0,
+	                  .atCreature = 1},
+	                 Go(Kind::WalkTo, 1, {60.0f, -60.0f}, 0.5f, false),
+	                 Go(Kind::WalkTo, 1, {-60.0f, -60.0f}, 12.0f, true)},
+	    .repeatFrom = 0,
+	});
+
 	// A ring of fence round a pen, with two villagers walking to the far side of it, one aiming a little to each side
 	constexpr glm::vec2 k_Pen {-60.0f, -40.0f};
 	constexpr float k_PenRadius = 12.0f;

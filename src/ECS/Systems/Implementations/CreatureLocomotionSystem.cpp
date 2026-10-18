@@ -133,8 +133,6 @@ uint32_t GameRand(uint32_t range)
 
 /// Following something, the walk is pointed anew once it has moved this far from where the walk heads
 constexpr float k_FollowRetarget = 1.0f;
-/// Arriving where it ran away to, anywhere within this
-constexpr float k_RunAwayArrival = 5.0f;
 /// Routes' corners are rounded at the creature's radius, and no tighter than this
 constexpr float k_MinCornerRadius = 6.0f;
 /// What is known of a species without the game's creature tables: the ape's speeds
@@ -858,7 +856,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::Follow(entt::enti
 	return result;
 }
 
-CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::FleeFrom(entt::entity creature, glm::vec2 threat)
+CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::FleeFrom(entt::entity creature, glm::vec2 threat, Pace pace)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* self = registry.TryGet<CreatureLocomotion>(creature);
@@ -889,8 +887,10 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::FleeFrom(entt::en
 	const auto point = glm::xz(locomotion::RunAwayPoint(map_coords::FromWorld(island, transform->position), threat, draw,
 	                                                    fractions.runAway, runAwayLand));
 	self->following.reset();
-	BreatheForWalk(creature, *body, fractions.run, fractions);
-	return StartMove(creature, *self, point, fractions.run, 0.0f, k_RunAwayArrival, false);
+	const auto fraction = PaceFraction(pace, self->fraction, fractions);
+	BreatheForWalk(creature, *body, fraction, fractions);
+	const float height = ShownSize(*body) * locomotion::k_RunAwayHeightOfSizeOne;
+	return StartMove(creature, *self, point, fraction, 0.0f, height * locomotion::k_RunAwayArrivalHeights, false);
 }
 
 bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point)
