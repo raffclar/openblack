@@ -16,6 +16,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Help/GuidanceRules.h"
 #include "Help/VillageVoices.h"
@@ -26,7 +27,7 @@ namespace openblack::ecs::systems
 /// The guidance of the player at this machine (see guidance): when each kind may be heard again, and the advisors'
 /// remarks on what the player does to towns and buildings, how their alignment drifts and the full moon. A remark is
 /// said through the help's messages, so a story script holding the dialogue keeps it, and is then simply lost.
-class GuidanceSystemInterface
+class GuidanceSystemInterface: public SavedStateInterface
 {
 public:
 	/// A remark the advisors were asked to say, for the inspector
@@ -37,6 +38,13 @@ public:
 		uint32_t turn;
 		/// False when the dialogue was held by a story script
 		bool started;
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.kind, self.text, self.turn, self.started);
+		}
 	};
 
 	virtual ~GuidanceSystemInterface() = default;

@@ -50,6 +50,8 @@ inline constexpr Tag k_CameraTag {'C', 'A', 'M', 'R'};
 inline constexpr Tag k_ScriptTag {'L', 'H', 'V', 'M'};
 /// The table of the objects that the scripts hold
 inline constexpr Tag k_ScriptObjectsTag {'S', 'O', 'B', 'J'};
+/// The running state that the systems of the game keep beside the entities, one section for each system by its name
+inline constexpr Tag k_SystemsTag {'S', 'Y', 'S', 'T'};
 
 struct Chunk
 {

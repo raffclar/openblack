@@ -185,6 +185,39 @@ std::vector<entt::entity> CellLists::All(uint32_t cell) const
 	return all;
 }
 
+std::vector<CellLists::SavedCell> CellLists::SavedCells() const
+{
+	std::vector<SavedCell> saved;
+	saved.reserve(_used.size());
+	for (const auto cell : _used)
+	{
+		const auto& lists = _cells.at(cell);
+		saved.push_back({.cell = cell, .fixed = lists.fixed, .mobile = lists.mobile});
+	}
+	return saved;
+}
+
+bool CellLists::RestoreCells(std::span<const SavedCell> cells)
+{
+	if (std::ranges::any_of(cells, [this](const SavedCell& saved) { return saved.cell >= _cells.size(); }))
+	{
+		return false;
+	}
+	for (const auto cell : _used)
+	{
+		_cells.at(cell).fixed.clear();
+		_cells.at(cell).mobile.clear();
+	}
+	_used.clear();
+	for (const auto& saved : cells)
+	{
+		_used.push_back(saved.cell);
+		_cells.at(saved.cell).fixed = saved.fixed;
+		_cells.at(saved.cell).mobile = saved.mobile;
+	}
+	return true;
+}
+
 void CellLists::Clear()
 {
 	for (const auto cell : _used)

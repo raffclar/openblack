@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "ECS/Reflection/BinaryArchive.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -128,6 +129,31 @@ void CinematicDirectorSystem::FadeAllTexts(float seconds)
 void CinematicDirectorSystem::UpdateTexts(int32_t milliseconds)
 {
 	std::erase_if(_texts, [milliseconds](auto& text) { return !gui::script_text::Step(text, milliseconds); });
+}
+
+void CinematicDirectorSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _fade);
+	reflection::Save(out, _bars);
+	reflection::Save(out, _wideScreenOwner);
+	reflection::Save(out, _interfaceActive);
+	reflection::Save(out, _hideDialogs);
+	reflection::Save(out, _closeClipping);
+	reflection::Save(out, _texts);
+	reflection::Save(out, _textColour);
+}
+
+bool CinematicDirectorSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _fade);
+	reflection::Load(in, _bars);
+	reflection::Load(in, _wideScreenOwner);
+	reflection::Load(in, _interfaceActive);
+	reflection::Load(in, _hideDialogs);
+	reflection::Load(in, _closeClipping);
+	reflection::Load(in, _texts);
+	reflection::Load(in, _textColour);
+	return !in.Failed();
 }
 
 void CinematicDirectorSystem::Reset()

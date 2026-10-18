@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -28,7 +29,7 @@ namespace openblack::ecs::systems
 /// packs of wolves the miracles make. A bird flock's leader flies legs about its home or where it is sent and its followers
 /// keep a formation behind it; a wolf runs where it is sent, hunting what crosses its way. The miracle's animals fade out
 /// rather than die.
-class AnimalSystemInterface
+class AnimalSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~AnimalSystemInterface() = default;

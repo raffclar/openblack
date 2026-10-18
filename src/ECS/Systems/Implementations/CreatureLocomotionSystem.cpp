@@ -82,6 +82,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureObstacleThings.h"
 #include "ECS/Map.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
@@ -301,6 +302,7 @@ void ClearWalk(CreatureLocomotion& self)
 {
 	SetIdle(self);
 	self.follower.Reset(glm::xz(self.toPosition), self.radius);
+	self.routeWalker.reset();
 	self.firstSearchTurn = false;
 	self.routeReady = false;
 	self.destination.reset();
@@ -809,6 +811,24 @@ void Halt(CreatureLocomotion& self)
 }
 } // namespace
 
+void CreatureLocomotionSystem::SaveState(reflection::BinaryWriter& /*out*/) const
+{
+	// Each creature's walk is in its component, with the creature as its route search saw it
+}
+
+bool CreatureLocomotionSystem::LoadState(reflection::BinaryReader& /*in*/)
+{
+	// A loaded walk finds the things in its way again, from the creature as its route search saw it
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<CreatureLocomotion>([](entt::entity creature, CreatureLocomotion& self) {
+		if (self.routeWalker.has_value())
+		{
+			self.follower.GetObstacles().SetGatherer(GathererFor(creature, *self.routeWalker));
+		}
+	});
+	return true;
+}
+
 float CreatureLocomotionSystem::BodyRadius(CreatureType species)
 {
 	if (const auto found = _bodyRadii.find(species); found != _bodyRadii.end())
@@ -914,8 +934,8 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 				self.fromPosition = self.toPosition;
 			}
 		}
-		self.follower.Reset(position, self.radius,
-		                    GathererFor(creature, things::WalkerOf(registry, creature, *body, self.radius, position)));
+		self.routeWalker = things::WalkerOf(registry, creature, *body, self.radius, position);
+		self.follower.Reset(position, self.radius, GathererFor(creature, *self.routeWalker));
 		// While it clears a thing out of its way, its first turn searches no further and notes nothing that it meets
 		self.firstSearchTurn = !self.clearingWay;
 	}

@@ -48,6 +48,9 @@ public:
 	[[nodiscard]] std::span<const gui::script_text::ScreenText> GetTexts() const override { return _texts; }
 
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
+
 	void ProcessTurn() override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 

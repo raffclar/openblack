@@ -45,6 +45,9 @@ public:
 	[[nodiscard]] const fireflies::RewardTable& GetRewards() const override { return _rewards; }
 	[[nodiscard]] std::span<const entt::entity> GetFireflies() const override { return _order; }
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
+
 	[[nodiscard]] FrameCount GetLastFrame() const override { return _lastFrame; }
 	[[nodiscard]] bool IsTopUpDue() const override { return _topUpDue; }
 	[[nodiscard]] size_t GetTreeCount() const override { return _trees.size(); }

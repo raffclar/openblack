@@ -17,6 +17,7 @@
 #include <entt/entity/fwd.hpp>
 
 #include "3D/MapCoords.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::fireflies
 {
@@ -30,7 +31,7 @@ namespace openblack::ecs::systems
 /// past dusk, they come out one a turn to hover by the buildings, and each morning, once it brightens past dawn, they go
 /// back one a turn to the nearest tree or rock. Each nightfall after a morning tops them up to the land's most. A hand
 /// lifting the tree or rock one hides in catches it, for a one-shot miracle from the land's reward table.
-class FireflySystemInterface
+class FireflySystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~FireflySystemInterface() = default;

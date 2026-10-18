@@ -49,6 +49,13 @@ struct Puff
 	uint32_t colour {k_Colour};
 	std::array<glm::vec3, k_Sprites> positions {};
 	std::array<glm::vec3, k_Sprites> velocities {};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.kind, self.life, self.size, self.colour, self.positions, self.velocities);
+	}
 };
 
 /// random(a, b) draws a number between them. Without a colour the puff takes its kind's

@@ -26,6 +26,9 @@ class GuidanceSystem final: public GuidanceSystemInterface
 {
 public:
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
+
 	void ProcessTurn() override;
 	bool PlayNow(guidance::Kind kind) override;
 	bool RemarkNow(guidance::Kind kind) override;

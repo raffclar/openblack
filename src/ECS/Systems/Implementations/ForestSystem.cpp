@@ -55,6 +55,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/LandForests.h"
 #include "ECS/Map.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScenicForest.h"
 #include "ECS/StoreRules.h"
@@ -309,6 +310,23 @@ void RemoveTree(entt::entity tree)
 	EntityRegistry().Destroy(tree);
 }
 } // namespace
+
+void ForestSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _lastTreeAddedTurn);
+	reflection::Save(out, _nextLandForestId);
+	reflection::Save(out, _forestsMade);
+	reflection::Save(out, _treesListed);
+}
+
+bool ForestSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _lastTreeAddedTurn);
+	reflection::Load(in, _nextLandForestId);
+	reflection::Load(in, _forestsMade);
+	reflection::Load(in, _treesListed);
+	return !in.Failed();
+}
 
 uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPower)
 {

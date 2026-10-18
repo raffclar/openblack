@@ -45,6 +45,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -236,6 +237,21 @@ std::optional<std::string_view> PlanActionOf(const ecs::Registry& registry, entt
 	return std::string_view(tables->actions[action].name);
 }
 } // namespace
+
+void CreaturePhysiologySystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _timeScale);
+	reflection::Save(out, _owedTurns);
+	reflection::Save(out, _fainting);
+}
+
+bool CreaturePhysiologySystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _timeScale);
+	reflection::Load(in, _owedTurns);
+	reflection::Load(in, _fainting);
+	return !in.Failed();
+}
 
 void CreaturePhysiologySystem::ProcessTurn()
 {

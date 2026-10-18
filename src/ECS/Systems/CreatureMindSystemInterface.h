@@ -27,6 +27,7 @@
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureReactionRules.h"
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
 namespace openblack::creaturemind
@@ -44,7 +45,7 @@ namespace openblack::ecs::systems
 /// The creatures' minds: once a game turn their desires grow and fade, and each decides what its body does while it
 /// has nothing better to do, and what it looks at (see components::CreatureMindState). Creatures can also be told to
 /// do things, which the debug tools use.
-class CreatureMindSystemInterface
+class CreatureMindSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~CreatureMindSystemInterface() = default;

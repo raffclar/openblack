@@ -57,6 +57,7 @@
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureObjectBeliefs.h"
+#include "Creature/CreatureObstacles.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreaturePlayerAttention.h"
@@ -815,6 +816,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureLocomotion::ring>("ring")
 	    .Field<&components::CreatureLocomotion::ontoDestination>("ontoDestination")
 	    .Field<&components::CreatureLocomotion::follower>("follower")
+	    .Field<&components::CreatureLocomotion::routeWalker>("routeWalker")
 	    .Field<&components::CreatureLocomotion::firstSearchTurn>("firstSearchTurn")
 	    .Field<&components::CreatureLocomotion::routeReady>("routeReady")
 	    .Field<&components::CreatureLocomotion::failed>("failed")
@@ -2707,6 +2709,13 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_object_beliefs::Sweep::left>("left")
 	    .Field<&openblack::creature_object_beliefs::Sweep::ring>("ring")
 	    .Field<&openblack::creature_object_beliefs::Sweep::step>("step");
+	Reflect<openblack::creature_obstacles::Walker>(context, ValueOnly {})
+	    .Field<&openblack::creature_obstacles::Walker::position>("position")
+	    .Field<&openblack::creature_obstacles::Walker::height>("height")
+	    .Field<&openblack::creature_obstacles::Walker::radius>("radius")
+	    .Field<&openblack::creature_obstacles::Walker::scriptControlled>("scriptControlled")
+	    .Field<&openblack::creature_obstacles::Walker::owner>("owner")
+	    .Field<&openblack::creature_obstacles::Walker::mayBeTakenByVortex>("mayBeTakenByVortex");
 	Reflect<openblack::creature_perceived_desires::PerceivedDesires>(context, ValueOnly {})
 	    .Field<&openblack::creature_perceived_desires::PerceivedDesires::player>("player")
 	    .Field<&openblack::creature_perceived_desires::PerceivedDesires::town>("town");

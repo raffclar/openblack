@@ -12,30 +12,63 @@
 #include <cstddef>
 #include <cstdlib>
 
+#include <algorithm>
+#include <array>
+#include <chrono>
 #include <exception>
+#include <functional>
+#include <iterator>
+#include <memory>
 #include <random>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <LHVM.h>
+#include <LHVMFile.h>
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/CameraEdits.h"
+#include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Components/CreatureArena.h"
-#include "ECS/Components/HandGrab.h"
-#include "ECS/Components/Physics.h"
 #include "ECS/Components/WalkPath.h"
+#include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureAudioSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/CreaturePhysiologySystemInterface.h"
+#include "ECS/Systems/DialogueControlSystemInterface.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/ExplosionSystemInterface.h"
+#include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/SavedStateInterface.h"
+#include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SnowSystemInterface.h"
+#include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WaterRingSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
 
@@ -62,8 +95,22 @@ std::string GeneratorText(const std::mt19937& generator)
 /// past the last turn, the two
 /// seeds of the game, the stream that particle effects draw from, the seed of the C library's generator, the seed of the run
 /// and the state of each stream of the run
-gamesave::Chunk ClockChunk()
+world_save::PendingChunk ClockChunk()
 {
+	// The generators are copied now. Their text, which takes long to make, is made on the thread of the writer.
+	std::vector<std::mt19937> generators;
+	uint32_t runSeed = 0;
+	if (Locator::rng::has_value())
+	{
+		auto& rng = Locator::rng::value();
+		runSeed = rng.GetRunSeed();
+		for (size_t stream = 0; stream < static_cast<size_t>(RandomStream::Count); ++stream)
+		{
+			generators.push_back(rng.Stream(static_cast<RandomStream>(stream)));
+		}
+		// Last, the general stream of the game's thread, which the weather and other systems draw from
+		generators.push_back(rng.GeneralStream());
+	}
 	const entt::meta_ctx context;
 	reflection::BinaryWriter out(context);
 	reflection::Save(out, Locator::time::has_value() ? Locator::time::value().GetSpeed() : 1.0f);
@@ -85,20 +132,24 @@ gamesave::Chunk ClockChunk()
 		reflection::Save(out, ParticleRandomStream::None);
 		reflection::Save(out, std::optional<uint32_t> {});
 	}
-	std::vector<std::string> streams;
-	uint32_t runSeed = 0;
-	if (Locator::rng::has_value())
-	{
-		auto& rng = Locator::rng::value();
-		runSeed = rng.GetRunSeed();
-		for (size_t stream = 0; stream < static_cast<size_t>(RandomStream::Count); ++stream)
-		{
-			streams.push_back(GeneratorText(rng.Stream(static_cast<RandomStream>(stream))));
-		}
-	}
 	reflection::Save(out, runSeed);
-	reflection::Save(out, streams);
-	return {.tag = gamesave::k_ClockTag, .bytes = std::move(out.Bytes())};
+	auto head = std::make_shared<std::vector<uint8_t>>(std::move(out.Bytes()));
+	auto copies = std::make_shared<const std::vector<std::mt19937>>(std::move(generators));
+	return {.tag = gamesave::k_ClockTag, .bytes = [head, copies]() {
+		        const entt::meta_ctx later;
+		        reflection::BinaryWriter rest(later);
+		        rest.Write(*head);
+		        std::vector<std::string> streams;
+		        std::string general;
+		        if (!copies->empty())
+		        {
+			        std::transform(copies->begin(), copies->end() - 1, std::back_inserter(streams), GeneratorText);
+			        general = GeneratorText(copies->back());
+		        }
+		        reflection::Save(rest, streams);
+		        reflection::Save(rest, general);
+		        return std::move(rest.Bytes());
+	        }};
 }
 
 bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
@@ -123,6 +174,12 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 	reflection::Load(in, crtSeed);
 	reflection::Load(in, runSeed);
 	reflection::Load(in, streams);
+	// A save of an older build has no general stream
+	std::string general;
+	if (in.Remaining() > 0)
+	{
+		reflection::Load(in, general);
+	}
 	if (in.Failed())
 	{
 		return false;
@@ -151,6 +208,12 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 		{
 			std::istringstream text(streams[stream]);
 			text >> rng.Stream(static_cast<RandomStream>(stream));
+		}
+		// The new run seed starts the general stream again first; then it takes the saved state
+		if (!general.empty())
+		{
+			std::istringstream text(general);
+			text >> rng.GeneralStream();
 		}
 	}
 	return true;
@@ -183,6 +246,86 @@ bool LoadCamera(std::span<const uint8_t> bytes)
 	return true;
 }
 
+template <typename Service>
+systems::SavedStateInterface* FindSystem()
+{
+	return Service::has_value() ? &Service::value() : nullptr;
+}
+
+/// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
+/// in this order: the map's lists first, then the systems that use them.
+using SystemFinder = systems::SavedStateInterface* (*)();
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 25> k_SavedSystems {{
+    {"map", &FindSystem<Locator::entitiesMap>},
+    {"creatureLocomotion", &FindSystem<Locator::creatureLocomotionSystem>},
+    {"fire", &FindSystem<Locator::fireSystem>},
+    {"weather", &FindSystem<Locator::weatherSystem>},
+    {"snow", &FindSystem<Locator::snowSystem>},
+    {"waterRings", &FindSystem<Locator::waterRingSystem>},
+    {"reactions", &FindSystem<Locator::reactionSystem>},
+    {"cinematicDirector", &FindSystem<Locator::cinematicDirectorSystem>},
+    {"dialogueControl", &FindSystem<Locator::dialogueControlSystem>},
+    {"scriptControl", &FindSystem<Locator::scriptControlSystem>},
+    {"scriptSwitches", &FindSystem<Locator::chlapi>},
+    {"creatureAudio", &FindSystem<Locator::creatureAudioSystem>},
+    {"dynamics", &FindSystem<Locator::dynamicsSystem>},
+    {"helpText", &FindSystem<Locator::helpTextSystem>},
+    {"forest", &FindSystem<Locator::forestSystem>},
+    {"teleport", &FindSystem<Locator::teleportSystem>},
+    {"animals", &FindSystem<Locator::animalSystem>},
+    {"creaturePhysiology", &FindSystem<Locator::creaturePhysiologySystem>},
+    {"creatureMind", &FindSystem<Locator::creatureMindSystem>},
+    {"guidance", &FindSystem<Locator::guidanceSystem>},
+    {"helpMessages", &FindSystem<Locator::helpMessageSystem>},
+    {"creatureHelp", &FindSystem<Locator::creatureHelpSystem>},
+    {"fireflies", &FindSystem<Locator::fireflySystem>},
+    {"explosions", &FindSystem<Locator::explosionSystem>},
+    {"influence", &FindSystem<Locator::influenceSystem>},
+}};
+
+gamesave::Chunk SystemsChunk(const entt::meta_ctx& reflection)
+{
+	std::vector<reflection::NamedSection> sections;
+	for (const auto& [name, find] : k_SavedSystems)
+	{
+		if (const auto* system = find(); system != nullptr)
+		{
+			reflection::BinaryWriter out(reflection);
+			out.SetPlace(name, "");
+			system->SaveState(out);
+			sections.push_back({.name = std::string(name), .bytes = std::move(out.Bytes())});
+		}
+	}
+	return {.tag = gamesave::k_SystemsTag, .bytes = reflection::SaveSections(sections)};
+}
+
+bool LoadSystems(const entt::meta_ctx& reflection, std::span<const uint8_t> bytes)
+{
+	const auto sections = reflection::LoadSections(bytes);
+	if (!sections.has_value())
+	{
+		return false;
+	}
+	bool read = true;
+	const reflection::EntityRemap identity;
+	for (const auto& [name, find] : k_SavedSystems)
+	{
+		auto* system = find();
+		const auto section = std::ranges::find(*sections, name, &reflection::NamedSection::name);
+		if (system == nullptr || section == sections->end())
+		{
+			continue;
+		}
+		reflection::BinaryReader in(reflection, section->bytes, identity);
+		if (!system->LoadState(in) || in.Failed() || in.Remaining() != 0)
+		{
+			SPDLOG_LOGGER_WARN(Log(), "The saved state of the system {} does not read", name);
+			read = false;
+		}
+	}
+	return read;
+}
+
 /// Lists what the archive did not keep or did not read, one line for each kind
 template <typename Range>
 void LogNames(std::string_view what, const Range& names)
@@ -201,27 +344,50 @@ void LogNames(std::string_view what, const Range& names)
 
 } // namespace
 
-std::vector<gamesave::Chunk> world_save::SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary)
+std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary)
 {
-	std::vector<gamesave::Chunk> chunks;
+	std::vector<PendingChunk> chunks;
 	const auto& registry = Locator::entitiesRegistry::value();
-	chunks.push_back(
-	    {.tag = gamesave::k_EntitiesTag, .bytes = reflection::SaveWorld(registry.Underlying(), reflection, &summary.world)});
-	chunks.push_back(
-	    {.tag = gamesave::k_ContextTag, .bytes = reflection::SaveValue(reflection, registry.Context(), &summary.context)});
-	chunks.push_back(ClockChunk());
+	// The time that each block takes on the game's thread
+	auto last = std::chrono::steady_clock::now();
+	std::string times;
+	const auto timed = [&last, &times, &chunks](PendingChunk chunk) {
+		const auto now = std::chrono::steady_clock::now();
+		times += fmt::format(" {}={:.1f}", std::string_view(chunk.tag.data(), chunk.tag.size()),
+		                     std::chrono::duration<float, std::milli>(now - last).count());
+		last = now;
+		chunks.push_back(std::move(chunk));
+	};
+	const auto ready = [](gamesave::Tag tag, std::vector<uint8_t> bytes) {
+		return PendingChunk {
+		    .tag = tag, .bytes = [made = std::make_shared<const std::vector<uint8_t>>(std::move(bytes))]() { return *made; }};
+	};
+	timed(ready(gamesave::k_EntitiesTag, reflection::SaveWorld(registry.Underlying(), reflection, &summary.world)));
+	timed(ready(gamesave::k_ContextTag, reflection::SaveValue(reflection, registry.Context(), &summary.context)));
+	timed(ClockChunk());
 	if (Locator::camera::has_value())
 	{
-		chunks.push_back(CameraChunk());
+		const auto camera = CameraChunk();
+		timed(ready(camera.tag, camera.bytes));
 	}
 	if (Locator::vm::has_value())
 	{
-		chunks.push_back({.tag = gamesave::k_ScriptTag, .bytes = Locator::vm::value().SaveState()});
+		// The scripts' program and state are copied now, and written out as a script file on the thread of the writer
+		timed({.tag = gamesave::k_ScriptTag,
+		       .bytes = [file = std::make_shared<const lhvm::LHVMFile>(Locator::vm::value().StateFile())]() {
+			       std::ostringstream stream(std::ios::binary);
+			       file->Write(stream);
+			       const auto text = stream.str();
+			       return std::vector<uint8_t>(text.begin(), text.end());
+		       }});
 	}
 	if (Locator::scriptObjects::has_value())
 	{
-		chunks.push_back({.tag = gamesave::k_ScriptObjectsTag, .bytes = Locator::scriptObjects::value().SaveTable()});
+		timed(ready(gamesave::k_ScriptObjectsTag, Locator::scriptObjects::value().SaveTable()));
 	}
+	const auto systems = SystemsChunk(reflection);
+	timed(ready(systems.tag, systems.bytes));
+	SPDLOG_LOGGER_INFO(Log(), "The saved world's blocks took (ms):{}", times);
 	SPDLOG_LOGGER_INFO(Log(), "The saved world keeps {} entities with {} components", summary.world.entities,
 	                   summary.world.components);
 	LogNames("components with no registration", summary.world.unregisteredComponents);
@@ -273,9 +439,8 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 			SPDLOG_LOGGER_WARN(Log(), "The context of the saved world does not read; the land keeps a new context");
 		}
 	}
-	// The physics and the hand do not keep their bodies and held things in a save: what was in flight or in the hand
-	// stays where it was
-	registry.Underlying().clear<components::InPhysics, components::InHand>();
+	// What the hand holds stays in the hand: the hand's grab and the held thing are components. The physics takes its
+	// bodies back with the running state of the systems.
 	// A walk along a camera track takes its track again from the land's tracks, by its number
 	std::vector<entt::entity> lost;
 	for (auto&& [entity, path] : registry.Underlying().view<components::WalkPath>().each())
@@ -302,7 +467,7 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 	return result->report;
 }
 
-bool world_save::LoadRunningState(const gamesave::WorldFile& file, uint32_t turn)
+bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn)
 {
 	bool read = true;
 	if (const auto clock = gamesave::FindChunk(file, gamesave::k_ClockTag); clock.has_value())
@@ -333,6 +498,11 @@ bool world_save::LoadRunningState(const gamesave::WorldFile& file, uint32_t turn
 	{
 		SPDLOG_LOGGER_WARN(Log(), "The table of the scripts' objects in the saved world does not fit");
 		read = false;
+	}
+	// The systems take their running state last, with every entity and the clock back
+	if (const auto systems = gamesave::FindChunk(file, gamesave::k_SystemsTag); systems.has_value())
+	{
+		read = LoadSystems(reflection, *systems) && read;
 	}
 	return read;
 }

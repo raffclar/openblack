@@ -17,6 +17,7 @@
 
 #include "3D/InfluenceCircle.h"
 #include "3D/MapCoords.h"
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -49,7 +50,7 @@ struct PlayerInfluenceAt
 } // namespace influence_rules
 
 /// The players' influence: how far their citadels and towns reach, and the border drawn round it
-class InfluenceSystemInterface
+class InfluenceSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~InfluenceSystemInterface() = default;

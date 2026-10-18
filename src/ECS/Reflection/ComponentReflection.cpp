@@ -196,7 +196,11 @@ void reflection::SaveRegistered(BinaryWriter& out, const entt::meta_any& value)
 	for (const auto& [id, data] : type.data())
 	{
 		const FieldInfo* info = data.custom();
-		if (Kept(info))
+		if (Kept(info) && info->saveFrom != nullptr)
+		{
+			info->saveFrom(value.base().data(), out);
+		}
+		else if (Kept(info))
 		{
 			info->save(data.get(value), out);
 		}

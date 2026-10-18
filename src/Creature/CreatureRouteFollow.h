@@ -54,6 +54,12 @@ public:
 		float arriveWithin {0.0f};
 		/// Routes costing more than this are given up
 		float mostCost {0.0f};
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.point, self.stopShort, self.arriveWithin, self.mostCost);
+		}
 	};
 
 	enum class Outcome : uint8_t
@@ -108,6 +114,12 @@ private:
 		Search search;
 		/// The leg of the route followed it starts from the end of, none for a search from where it stands
 		std::optional<size_t> fromLeg;
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.search, self.fromLeg);
+		}
 	};
 
 	void Succeed(size_t chosen, float joinAhead);
@@ -130,5 +142,14 @@ private:
 	/// The search that it took on last
 	size_t _chosen {0};
 	std::vector<uint32_t> _met;
+
+public:
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._obstacles, self._state, self._route, self._position, self._routeEnd, self._destination, self._pending,
+		      self._searches, self._chosen, self._met);
+	}
 };
 } // namespace openblack::creature_route

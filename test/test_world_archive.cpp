@@ -27,6 +27,8 @@
 #include <gtest/gtest.h>
 
 #include "Common/GameHeading.h"
+#include "Creature/CreatureRouteFollow.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/WallHug.h"
@@ -534,4 +536,113 @@ TEST(WorldArchive, SharedValuesOfRegisteredTypesComeBackAsValues)
 	EXPECT_EQ(*read.spot, *holder.spot);
 	EXPECT_NE(read.spot, holder.spot);
 	EXPECT_EQ(read.none, nullptr);
+}
+
+namespace
+{
+
+/// A walk part of the way along its route, with a new destination that it searches for as it walks on
+creature_route::Follower WalkSearchingAgain()
+{
+	using creature_route::Follower;
+	Follower follower;
+	follower.Reset({1000.0f, 1000.0f}, 2.0f);
+	follower.GetObstacles().Add(1u, {1050.0f, 1000.0f}, 10.0f);
+	follower.SetDestination({.point = {1100.0f, 1000.0f}, .arriveWithin = 1.0f, .mostCost = 5200.0f});
+	while (follower.Update(16, false, 0.0f) == Follower::Outcome::None)
+	{
+	}
+	follower.Advance(5.0f);
+	follower.SetDestination({.point = {1100.0f, 1100.0f}, .arriveWithin = 1.0f, .mostCost = 5200.0f});
+	return follower;
+}
+
+std::vector<uint8_t> FollowerBytes(const entt::meta_ctx& context, const creature_route::Follower& follower)
+{
+	BinaryWriter out(context);
+	Save(out, follower);
+	return std::move(out.Bytes());
+}
+
+} // namespace
+
+TEST(WorldArchive, AWalkCarriesOnFromTheSavedSearch)
+{
+	using creature_route::Follower;
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	auto walking = WalkSearchingAgain();
+	ASSERT_EQ(walking.GetState(), Follower::State::Replanning);
+	ASSERT_GE(walking.GetSearchCount(), 2u);
+	const auto bytes = FollowerBytes(context, walking);
+
+	Follower loaded;
+	const EntityRemap identity;
+	BinaryReader in(context, bytes, identity);
+	Load(in, loaded);
+	ASSERT_FALSE(in.Failed());
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_EQ(FollowerBytes(context, loaded), bytes);
+
+	// The loaded walk and the walk that was not saved take the same steps to the same place
+	auto first = Follower::Outcome::None;
+	auto second = Follower::Outcome::None;
+	for (int turn = 0; turn < 100 && first == Follower::Outcome::None; ++turn)
+	{
+		first = walking.Update(16, false, 0.0f);
+		second = loaded.Update(16, false, 0.0f);
+		ASSERT_EQ(first, second);
+	}
+	ASSERT_EQ(first, Follower::Outcome::Found);
+	EXPECT_EQ(FollowerBytes(context, loaded), FollowerBytes(context, walking));
+	for (int step = 0; step < 50; ++step)
+	{
+		const auto a = walking.Advance(3.0f);
+		const auto b = loaded.Advance(3.0f);
+		ASSERT_EQ(a.position, b.position);
+	}
+}
+
+TEST(WorldArchive, ACreaturesWalkIsKeptWithItsComponent)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry original;
+	const auto creature = original.create();
+	auto& locomotion = original.emplace<ecs::components::CreatureLocomotion>(creature);
+	locomotion.follower = WalkSearchingAgain();
+	locomotion.routeWalker = creature_obstacles::Walker {.position = {1000.0f, 1000.0f},
+	                                                     .height = 30.0f,
+	                                                     .radius = 2.0f,
+	                                                     .scriptControlled = false,
+	                                                     .owner = PlayerNames::PLAYER_ONE};
+	WorldSaveReport report;
+	const auto bytes = SaveWorld(original, context, &report);
+	for (const auto& value : report.unsavedValues)
+	{
+		EXPECT_EQ(value.place.find("CreatureLocomotion"), std::string::npos) << value.place << " (" << value.type << ")";
+	}
+	entt::registry loaded;
+	ASSERT_TRUE(LoadWorld(loaded, context, bytes, WorldLoadMode::Exact).has_value());
+	const auto& read = loaded.get<ecs::components::CreatureLocomotion>(creature);
+	EXPECT_EQ(FollowerBytes(context, read.follower), FollowerBytes(context, locomotion.follower));
+	ASSERT_TRUE(read.routeWalker.has_value());
+	EXPECT_EQ(read.routeWalker->height, 30.0f);
+	EXPECT_EQ(SaveWorld(loaded, context), bytes);
+}
+
+TEST(WorldArchive, SectionsKeepTheirNamesAndBytes)
+{
+	const std::vector<NamedSection> sections {
+	    {.name = "fire", .bytes = {1, 2, 3}}, {.name = "empty", .bytes = {}}, {.name = "weather", .bytes = {9}}};
+	const auto bytes = SaveSections(sections);
+	const auto read = LoadSections(bytes);
+	ASSERT_TRUE(read.has_value());
+	EXPECT_EQ(*read, sections);
+	EXPECT_EQ(SaveSections(*read), bytes);
+	// Bytes that stop short, or that have more after the sections, are damaged
+	EXPECT_FALSE(LoadSections(std::span(bytes).first(bytes.size() - 1)).has_value());
+	auto longer = bytes;
+	longer.push_back(0);
+	EXPECT_FALSE(LoadSections(longer).has_value());
 }

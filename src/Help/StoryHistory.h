@@ -30,6 +30,13 @@ struct StoryLine
 	float number {0.0f};
 	/// The narrator of the text, from the help texts
 	int32_t narrator {0};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.text, self.interaction, self.number, self.narrator);
+	}
 };
 
 /// The story history: the last 1024 help texts that the scripts showed, which the library's last scroll shows.
@@ -50,6 +57,14 @@ private:
 	/// Where the next line goes
 	size_t _next {0};
 	size_t _count {0};
+
+public:
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._lines, self._next, self._count);
+	}
 };
 
 /// The buttons of the story history in the library turn the first line that it shows

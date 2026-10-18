@@ -19,6 +19,7 @@
 #include "Audio/SoundDecoder.h"
 #include "Audio/WaveCueLabels.h"
 #include "Common/GameRandom.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
@@ -219,6 +220,44 @@ void HelpTextSystem::SetTextChoices(const TextChoices& choices)
 	{
 		_dialogue->SetPlayerChoices(choices.textDraw, choices.topToBottom, choices.readSpeed);
 	}
+}
+
+namespace
+{
+/// The screen height of a box that only takes the bytes of a saved dialogue
+constexpr int k_DroppedScreenHeight = 480;
+} // namespace
+
+void HelpTextSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	// The voices that speak the texts are sounds, which a save does not keep
+	const auto now = Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetElapsedTime().count()) : 0;
+	reflection::Save(out, now);
+	reflection::Save(out, _dialogue != nullptr);
+	if (_dialogue != nullptr)
+	{
+		reflection::Save(out, *_dialogue);
+	}
+	reflection::Save(out, _storyHistory);
+}
+
+bool HelpTextSystem::LoadState(reflection::BinaryReader& in)
+{
+	int32_t savedNow = 0;
+	bool hasDialogue = false;
+	reflection::Load(in, savedNow);
+	reflection::Load(in, hasDialogue);
+	if (hasDialogue)
+	{
+		// A dialogue that has not started yet reads into a box of its own, which is then dropped
+		help::DialogueText dropped(k_DroppedScreenHeight, false, {}, {}, {});
+		auto& dialogue = _dialogue != nullptr ? *_dialogue : dropped;
+		reflection::Load(in, dialogue);
+		const auto now = Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetElapsedTime().count()) : 0;
+		dialogue.ShiftRealTime(now - savedNow);
+	}
+	reflection::Load(in, _storyHistory);
+	return !in.Failed();
 }
 
 void HelpTextSystem::Reset()

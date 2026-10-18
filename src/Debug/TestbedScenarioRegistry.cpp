@@ -7672,6 +7672,26 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "saves.fire_and_walk_back",
+	    .name = "Save and load: the fires burn on and the walk continues",
+	    .facet = Facet::Mind,
+	    .description = "Three oaks burn. A content tiger walks to a rock 250 metres away. 3 seconds later the game saves "
+	                   "into slot 0. 5 seconds after the save the game loads slot 0.",
+	    .expected = "At the load the oaks burn as they did at the save, with the same flames, and their fire continues "
+	                "to grow and spread. The tiger continues on the same route to the rock. The log shows the running "
+	                "state of the systems in the save and no section that does not read.",
+	    .framing = {.shot = Shot::Overview, .include = {{-60.0f, -40.0f}, {260.0f, 15.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {100.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {350.0f, 0.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-40.0f, -30.0f}, .alight = true},
+	                {.type = TreeInfo::Oak, .offset = {-50.0f, -20.0f}, .alight = true},
+	                {.type = TreeInfo::Oak, .offset = {-30.0f, -40.0f}, .alight = true}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "HoldObject"},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 3.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 5.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "mind.hand_free_pick_up",
 	    .name = "Put down a thing before a pick-up",
 	    .facet = Facet::Mind,

@@ -16,6 +16,7 @@
 #include <glm/vec3.hpp>
 
 #include "Blast/DustPuff.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::particles::draw
 {
@@ -27,7 +28,7 @@ namespace openblack::ecs::systems
 
 /// What explosions leave after them besides their particles: the heap of rubble on the land with its puff of dust, and the
 /// camera shaking as they land near it
-class ExplosionSystemInterface
+class ExplosionSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~ExplosionSystemInterface() = default;
