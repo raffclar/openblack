@@ -4745,6 +4745,7 @@ std::string Runner::RecordChallenge(const Command& command) const
 	snapshot.challenge = static_cast<uint32_t>(command.value);
 	snapshot.reminderScript = "";
 	snapshot.success = command.amount;
+	snapshot.alignment = command.alignment;
 	snapshot.position = position;
 	snapshot.focus = focus;
 	snapshot.quest = command.ctrl;

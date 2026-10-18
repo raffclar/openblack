@@ -78,6 +78,7 @@
 #include "Creature/TempleLeashes.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Alignment.h"
+#include "ECS/Components/AlignmentHistory.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AppleBarrel.h"
@@ -435,6 +436,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::Alignment>(context)
 	    .Field<&components::Alignment::value>("value")
 	    .Field<&components::Alignment::pending>("pending");
+	Reflect<components::AlignmentHistory>(context)
+	    .Field<&components::AlignmentHistory::totals>("totals")
+	    .Field<&components::AlignmentHistory::counts>("counts");
 	Reflect<components::Animal>(context)
 	    .Field<&components::Animal::type>("type")
 	    .Field<&components::Animal::owner>("owner")

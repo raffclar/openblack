@@ -3304,6 +3304,38 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.alignment_history",
+	    .name = "The totals of the alignment changes that challenges make",
+	    .facet = Facet::Story,
+	    .description = "The Lost Brother challenge is recorded three times, one second apart, with a good alignment. "
+	                   "The Alignment History debug window opens as the scenario starts.",
+	    .expected = "The first record does not change the alignment. The second and third records each make the "
+	                "player's alignment better. Each one adds its change to the Script line of the window, and its "
+	                "count goes to 2. The Current and Change lines show the alignment now and how far it moved. The "
+	                "other lines stay at 0.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::RecordChallenge,
+	                  .delaySeconds = 1.0f,
+	                  .value = 19,
+	                  .amount = 0.0f,
+	                  .alignment = 1.0f,
+	                  .title = "HELP_TEXT_TITLE_19"},
+	                 {.kind = Kind::RecordChallenge,
+	                  .delaySeconds = 1.0f,
+	                  .value = 19,
+	                  .amount = 0.5f,
+	                  .alignment = 1.0f,
+	                  .title = "HELP_TEXT_TITLE_19"},
+	                 {.kind = Kind::RecordChallenge,
+	                  .delaySeconds = 1.0f,
+	                  .value = 19,
+	                  .amount = 1.0f,
+	                  .alignment = 1.0f,
+	                  .title = "HELP_TEXT_TITLE_19"}},
+	    .debugWindow = "Alignment History",
+	});
+
+	all.push_back({
 	    .id = "temple.challenge_markers",
 	    .name = "The temple's map marking the challenges not done",
 	    .facet = Facet::Story,
