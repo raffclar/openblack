@@ -14,6 +14,7 @@
 // hour and the jellyfish in the deep sea
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
 #include <vector>
@@ -29,6 +30,9 @@ namespace
 /// A camera low on the land looking a little north of east and a little up, so the moon at midnight, 4000 east and 950
 /// up, stands right of the middle of the screen, clear of the scenario window
 const Framing k_LookingEast {.shot = Shot::Placed, .eye = {0.0f, 10.0f, 0.0f}, .look = {400.0f, 105.0f, 90.0f}};
+
+/// A date of a new moon (6 January 2000), for a night with no moonlight
+constexpr int64_t k_NewMoonDate = 947116800;
 
 /// A few trees to the east, dark against the sky, which the moon shows behind
 std::vector<ObjectSetup> TreesToTheEast()
@@ -217,6 +221,29 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	                    .cloudCover = static_cast<uint8_t>(1),
 	                    .auroraStrength = graphics::atmosphere::k_StrongAurora},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -600.0f}, .look = {-1400.0f, 500.0f, -1000.0f}},
+	    .objects = TreesToTheEast(),
+	});
+
+	// EXPERIMENT (not for merge): the Milky Way and the faint nebulae
+	all.push_back({
+	    .id = "sky.milky_way",
+	    .name = "The Milky Way on a moonless night",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at 03:30, with the sun 28 degrees under the horizon, under a clear sky with no "
+	                   "aurora. The moon is new, so it gives no light. The camera is low on the land and looks south "
+	                   "south east and a little up, where the middle of the galaxy is 14 degrees over the horizon.",
+	    .expected = "The Milky Way goes up from the horizon in the south south east, through the east, to the north. "
+	                "Low in the south south east, the bulge round Sagittarius is a warm yellow-orange glow with bright, "
+	                "mottled star clouds. Dark lanes of dust cut the band: the Great Rift goes from Sagittarius through "
+	                "Aquila to Cygnus. Farther from the middle the band is blue-white and fainter. It is dimmer and "
+	                "redder near the horizon. Small, very faint pink patches show at the Lagoon Nebula and over it.",
+	    .environment = {.hour = 3.5f,
+	                    .clockRuns = false,
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1),
+	                    .auroraStrength = 0.0f,
+	                    .moonDate = k_NewMoonDate},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 10.0f, 0.0f}, .look = {-104.0f, 140.0f, -386.0f}},
 	    .objects = TreesToTheEast(),
 	});
 

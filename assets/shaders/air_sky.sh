@@ -7,6 +7,7 @@
 
 #include "world_curve.sh"
 #include "celestial.sh"
+#include "galaxy.sh"
 #include "stars.sh"
 
 // xyz: the direction towards the real sun; w: how strong the noctilucent clouds are tonight, 0 to 1
@@ -370,6 +371,7 @@ vec3 AirSkyColour(vec3 eye, vec3 dir, float sunHeight, vec2 pixel)
 	}
 	air += AirGlow(eye, dir);
 	air += AirNoctilucent(eye, dir);
+	air += AirGalaxy(CelestialDirection(dir), dir, air, (eye - u_airPlanet.xyz) / ATMOS_UNITS_PER_KM);
 	// A little noise of about one step of the screen's colours, so the dim sky at dusk shows no bands
 	air += vec3_splat((AirHash(pixel) + AirHash(pixel + 31.7f) - 1.0f) / 255.0f);
 	return max(air, vec3_splat(0.0f));

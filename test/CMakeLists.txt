@@ -1100,5 +1100,7 @@ openblack_setup_and_add_test(test_planet_weather graphics/test_planet_weather.cp
 openblack_setup_and_add_test(test_planet_navigation camera/test_planet_navigation.cpp)
 # EXPERIMENT (not for merge): the weather of the regions between 20 and 500 km for the clouds
 openblack_setup_and_add_test(test_cloud_regions graphics/test_cloud_regions.cpp)
+# EXPERIMENT (not for merge): the Milky Way and the faint nebulae
+openblack_setup_and_add_test(test_galaxy graphics/test_galaxy.cpp)
 # EXPERIMENT (not for merge): the stars of the night sky
 openblack_setup_and_add_test(test_stars graphics/test_stars.cpp)
