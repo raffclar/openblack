@@ -44,6 +44,8 @@ uniform vec4 u_cloudStorms[16];
 // middle, z the radius, 0 with no anvil, w the bottom), up to the tower's top. A cell with no height or no fade is not
 // there.
 uniform vec4 u_cloudCells[16];
+// x: the direction that the wind blows towards now, in radians about the up axis from +x towards +z; yzw: unused
+uniform vec4 u_cloudWind;
 
 // The world units that one tile of each noise covers (volumetric_clouds::k_BaseNoiseTile and the others)
 #define CLOUD_BASE_TILE 1500.0f
@@ -74,6 +76,8 @@ uniform vec4 u_cloudCells[16];
 #define CLOUD_RING_WIDTH 0.3f
 // How much longer the cells of a street are along the wind than across it
 #define CLOUD_STREET_STRETCH 3.5f
+// The streets lie along the two nearest of this many fixed axes round the half turn (cloud_regions::k_StreetAxes)
+#define CLOUD_STREET_AXES 8.0f
 // How much the edge of a cell softens for each width of a cell in one pixel, and the softest edge
 #define CLOUD_EDGE_PER_PIXEL 1.2f
 #define CLOUD_SOFTEST_EDGE 1.5f
@@ -83,6 +87,17 @@ uniform vec4 u_cloudCells[16];
 #define CLOUD_STRATUS_DEPTH 160.0f
 #define CLOUD_CUMULUS_DEPTH 520.0f
 #define CLOUD_CUMULONIMBUS_DEPTH 1500.0f
+// The tiles of the three reads of the base noise that add detail to the far sheet under the planet's map: shapes about
+// 25 km, 9 km and 3 km wide. Each read shows only where a pixel is smaller than a part of its shapes.
+#define CLOUD_SHEET_WIDE_TILE 100000.0f
+#define CLOUD_SHEET_COARSE_TILE 34000.0f
+#define CLOUD_SHEET_FINE_TILE 11000.0f
+// The far sheet shows its cells while a pixel holds less than the first share of a cell's width, and only their mean
+// past the second share. The edges of the cells there soften with this share of a pixel; the blend of the frames does
+// the rest.
+#define CLOUD_SHEET_FINE_FROM 0.6f
+#define CLOUD_SHEET_FINE_TO 1.6f
+#define CLOUD_SHEET_EDGE_SHARE 0.4f
 // The heights of the eye over the sea between which the layer turns into a thin sheet (CloudSheet)
 #define CLOUD_SHEET_LOW 40000.0f
 #define CLOUD_SHEET_HIGH 90000.0f
@@ -114,6 +129,15 @@ uniform vec4 u_cloudCells[16];
 #define CB_NOISE_TILE 3600.0f
 // The farthest that a ray goes to a thunderstorm cell: a tower shows from much farther than the layer's clouds
 #define CB_FARTHEST 60000.0f
+// The values of a choice of cells: no cell, or all the cells. A value from 0 to 3 chooses that one cell.
+#define CB_NO_CELLS -1
+#define CB_ALL_CELLS 4
+// The shortest step of a ray inside a tower. The shapes of a tower are hundreds of units wide, so shorter steps near
+// the eye add cost and no shape.
+#define CB_LEAST_STEP 30.0f
+// How far across the ground the rays towards the light go from a point of the layer at most. Out of this distance of
+// a cell, the cell cannot shade the point.
+#define CB_SHADE_REACH 1200.0f
 // How much light the cloud takes out for each unit, at a density of 1
 #define CLOUD_EXTINCTION 0.06f
 // The colour of the flash of the lightning
@@ -227,6 +251,18 @@ float CloudMixPatterns(vec3 values, vec3 weights)
 	return norm > 0.0f ? clamp(0.5f + dot(weights, values - 0.5f) / norm, 0.0f, 1.0f) : 0.5f;
 }
 
+// The street pattern along one of the fixed axes (cloud_regions::StreetAxisAngle). Each axis has its own place in the
+// noise. The axes go round a half turn, so the axis after the last is the first again.
+float CloudStreetAlong(vec2 at, float axis, float turn)
+{
+	float index = mod(axis, CLOUD_STREET_AXES);
+	float angle = index * (CLOUD_PI / CLOUD_STREET_AXES);
+	vec2 along = vec2(cos(angle), sin(angle));
+	vec2 s = vec2(dot(at, along) / CLOUD_STREET_STRETCH, dot(at, vec2(-along.y, along.x))) / (CLOUD_WEATHER_TILE * 0.6f);
+	vec4 n = texture2DLod(s_cloudWeather, s + vec2(0.83f, 0.36f) + index * vec2(0.137f, 0.291f), 0.0f);
+	return mix(n.r, n.b, turn);
+}
+
 // The field of open cells: cloud in rings round clear middles (cloud_regions::OpenRing)
 float CloudOpenRing(float field)
 {
@@ -337,13 +373,17 @@ float CloudCellsAt(vec2 xz, vec4 region, vec4 cells, float pixel)
 		largeCells = mix(n.r, n.b, turn);
 	}
 	float field = CloudMixPatterns(vec3(smallCells, usual, largeCells), weights);
-	// Streets: cells that are long along the wind. The wind of the island blows mostly from the west.
+	// Streets: cells that are long along the live wind. The streets blend the patterns of the two nearest fixed axes
+	// (cloud_regions::StreetAxes). Thus they turn smoothly with the wind, and the streets far away do not swing round
+	// the eye.
 	if (region.w > 0.0f)
 	{
-		vec2 along = vec2(0.94f, 0.342f);
-		vec2 s = vec2(dot(at, along) / CLOUD_STREET_STRETCH, dot(at, vec2(-along.y, along.x))) / (CLOUD_WEATHER_TILE * 0.6f);
-		vec4 n = texture2DLod(s_cloudWeather, s + vec2(0.83f, 0.36f), 0.0f);
-		field = CloudMixPatterns(vec3(field, mix(n.r, n.b, turn), 0.5f), vec3(1.0f - region.w, region.w, 0.0f));
+		float place = fract(u_cloudWind.x / CLOUD_PI) * CLOUD_STREET_AXES;
+		float first = floor(place);
+		float share = place - first;
+		float streets = CloudMixPatterns(vec3(CloudStreetAlong(at, first, turn), CloudStreetAlong(at, first + 1.0f, turn), 0.5f),
+		                                 vec3(1.0f - share, share, 0.0f));
+		field = CloudMixPatterns(vec3(field, streets, 0.5f), vec3(1.0f - region.w, region.w, 0.0f));
 	}
 	field = mix(field, CloudOpenRing(field), cells.z);
 	// The edge goes over more of the field when a pixel holds more of a cell (cloud_regions::EdgeSoftness)
@@ -405,18 +445,20 @@ bool CloudHasCells()
 // to 1; w the rain of that cell. Each cell is a tower from a flat bottom that leans downwind with the height, with a
 // dome over its top and an anvil that spreads out downwind. The anvil has a sharp edge upwind and a soft plume
 // downwind. `soft` is 0 in the tower, which boils, and goes up to 1 in the thin plume of the anvil. `plain` leaves out the
-// bulges of the towers and the roughness of the anvils, for the rays towards the light.
-vec4 CumulonimbusAt(vec3 p, float altitude, bool plain, out float soft)
+// bulges of the towers and the roughness of the anvils, for the rays towards the light. `only` is CB_ALL_CELLS, or
+// the one cell to look at. `which` is the cell that the point is in.
+vec4 CumulonimbusAt(vec3 p, float altitude, bool plain, int only, out float soft, out int which)
 {
 	vec4 result = vec4_splat(0.0f);
 	soft = 0.0f;
+	which = CB_NO_CELLS;
 	float span = CB_TOP - CB_BASE;
 	float h = (altitude - CB_BASE) / span;
 	for (int i = 0; i < 4; ++i)
 	{
 		vec4 cell = u_cloudCells[i];
 		vec4 more = u_cloudCells[4 + i];
-		if (cell.w * more.z <= 0.0f)
+		if (cell.w * more.z <= 0.0f || (only < CB_ALL_CELLS && i != only))
 		{
 			continue;
 		}
@@ -451,7 +493,8 @@ vec4 CumulonimbusAt(vec3 p, float altitude, bool plain, out float soft)
 		float towerRadius = radius * (0.85f + 0.2f * smoothstep(0.0f, 0.3f, h) - 0.3f * smoothstep(0.55f, 1.0f, h));
 		// The towers are a group of turrets, so their sides bulge in and out up the height and round the axis. A circle
 		// in the noise round the axis has no seam.
-		if (!plain)
+		// The bulges make the tower at most 1.37 radii wide: farther out, no read of the noise is necessary
+		if (!plain && across < 1.37f * radius)
 		{
 			vec2 offAxis = (p.xz - axis) / radius;
 			vec2 ring = offAxis / max(across / radius, 1e-3f);
@@ -484,7 +527,10 @@ vec4 CumulonimbusAt(vec3 p, float altitude, bool plain, out float soft)
 			float level = (1.0f - smoothstep(mix(0.9f, 0.0f, share), 1.0f, outside)) * (1.0f - 0.8f * smoothstep(0.1f, 1.0f, share));
 			anvilSoft = smoothstep(-0.25f, 0.45f, share);
 			// The top of the anvil and its ragged bottom rise and fall a little
-			float rough = plain ? 0.0f : texture2DLod(s_cloudWeather, fromTop / 21000.0f + vec2(float(i) * 0.29f, 0.61f), 0.0f).b - 0.5f;
+			// Out of the anvil's outline, the roughness changes nothing
+			float rough = plain || outside >= 1.0f
+			                  ? 0.0f
+			                  : texture2DLod(s_cloudWeather, fromTop / 21000.0f + vec2(float(i) * 0.29f, 0.61f), 0.0f).b - 0.5f;
 			float roof = topAltitude + rough * 300.0f;
 			float bottom = topAltitude - CB_ANVIL_DEPTH * grown * (1.0f - 0.7f * share) - rough * 500.0f;
 			anvil = level * smoothstep(bottom, bottom + 300.0f, altitude) * (1.0f - smoothstep(roof - 200.0f, roof + 50.0f, altitude));
@@ -496,23 +542,103 @@ vec4 CumulonimbusAt(vec3 p, float altitude, bool plain, out float soft)
 			result.y = h;
 			result.w = more.w;
 			soft = anvil > max(tower, dome) ? anvilSoft : 0.0f;
+			which = i;
 		}
 	}
 	return result;
+}
+
+// How far a ray from a point in the direction `dir` can go before it can meet a thunderstorm cell, at the least. The ray
+// goes across the ground no faster than along itself, so the distance across the ground to a cell's outline is safe.
+// Over or under the shapes, the distance up or down along the ray is safe too.
+float CumulonimbusClearance(vec3 p, float altitude, vec3 dir)
+{
+	float clearance = 1e9f;
+	float span = CB_TOP - CB_BASE;
+	float h = clamp((altitude - CB_BASE) / span, 0.0f, 1.0f);
+	for (int i = 0; i < 4; ++i)
+	{
+		vec4 cell = u_cloudCells[i];
+		vec4 more = u_cloudCells[4 + i];
+		if (cell.w * more.z <= 0.0f)
+		{
+			continue;
+		}
+		float radius = cell.z;
+		vec2 down = more.xy;
+		float topAltitude = CB_BASE + span * cell.w;
+		// The tower, its dome and its rain stay in 1.37 radii of the axis. The axis leans more higher up, by less than
+		// half a unit for each unit up, so a part of the distance goes to that lean.
+		vec2 axis = cell.xy + down * (CB_LEAN * radius * h * h);
+		float tower = length(p.xz - axis) - 1.4f * radius;
+		float overTower = altitude - topAltitude - CB_DOME;
+		tower = max(tower, overTower > 0.0f ? (dir.y < 0.0f ? overTower / -dir.y : 1e9f) : 0.0f);
+		clearance = min(clearance, tower * 0.7f);
+		float grown = smoothstep(0.75f, 1.0f, cell.w);
+		if (grown > 0.0f)
+		{
+			// The anvil: out of its outline across the ground, or over its roof, or under its lowest bottom
+			float top = cell.w;
+			vec2 fromTop = p.xz - (cell.xy + down * (CB_LEAN * radius * top * top));
+			float along = dot(fromTop, down);
+			float side = dot(fromTop, vec2(-down.y, down.x));
+			float upwind = CB_ANVIL_UP * radius * mix(0.7f, 1.0f, grown);
+			float reach = max(CB_ANVIL_DOWN * radius * grown, 1.0f);
+			float share = clamp(along / reach, 0.0f, 1.0f);
+			float halfWidth = upwind * (1.0f + (CB_ANVIL_WIDE / CB_ANVIL_UP - 1.0f) * share);
+			float outside = along < 0.0f ? length(vec2(along, side)) / upwind : length(vec2(along / reach, side / halfWidth));
+			float anvil = max(outside - 1.0f, 0.0f) * min(upwind, reach);
+			float overRoof = altitude - topAltitude - 200.0f;
+			float underBottom = topAltitude - CB_ANVIL_DEPTH * grown - 250.0f - altitude;
+			if (overRoof > 0.0f)
+			{
+				anvil = max(anvil, dir.y < 0.0f ? overRoof / -dir.y : 1e9f);
+			}
+			if (underBottom > 0.0f)
+			{
+				anvil = max(anvil, dir.y > 0.0f ? underBottom / dir.y : 1e9f);
+			}
+			clearance = min(clearance, anvil);
+		}
+	}
+	return clearance;
+}
+
+// Whether a point of the layer is near a thunderstorm cell, so that the cell can shade it
+bool CumulonimbusNear(vec3 p)
+{
+	for (int i = 0; i < 4; ++i)
+	{
+		vec4 bound = u_cloudCells[8 + i];
+		vec4 anvil = u_cloudCells[12 + i];
+		vec2 toTower = p.xz - bound.xy;
+		vec2 toAnvil = p.xz - anvil.xy;
+		float tower = bound.z + CB_SHADE_REACH;
+		float wide = anvil.z + CB_SHADE_REACH;
+		bool shown = u_cloudCells[i].w * u_cloudCells[4 + i].z > 0.0f;
+		if (shown && (dot(toTower, toTower) < tower * tower || (anvil.z > 0.0f && dot(toAnvil, toAnvil) < wide * wide)))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 // The density of the cloud at a point at a height over the curved world. `detail` adds the small shapes that wear away
 // the edges; the light's rays leave them out. `h` is the height in the cloud for its light, 0 at its bottom and 1 at its
 // top, and `rain` its rain. `shaft` is how much rain falls at the point under a thunderstorm cell, 0 to 1. `tower` is
 // 1 where the cloud is a thunderstorm cell's, else 0. `layerShare` thins the layer's own clouds, and not the cells.
-float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, float pixel, out float h, out float rain, out float shaft,
-                     out float tower, out vec4 region, out vec4 cells)
+// `cellsHere` is the choice of cells that can be at the point (CB_NO_CELLS, CB_ALL_CELLS or one cell), and `which` the
+// cell that the point is in.
+float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, float pixel, int cellsHere, out float h, out float rain,
+                     out float shaft, out float tower, out vec4 region, out vec4 cells, out int which)
 {
 	float soft = 0.0f;
 	vec4 storm = vec4_splat(0.0f);
-	if (CloudHasCells())
+	which = CB_NO_CELLS;
+	if (cellsHere != CB_NO_CELLS)
 	{
-		storm = CumulonimbusAt(p, altitude, false, soft);
+		storm = CumulonimbusAt(p, altitude, false, cellsHere, soft, which);
 	}
 	shaft = storm.z;
 	tower = 0.0f;
@@ -527,9 +653,11 @@ float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, floa
 	float fieldH = 0.0f;
 	float fieldRain = 0.0f;
 	bool inLayer = altitude < u_cloudLayer.x + CLOUD_FIELD_DEPTH && altitude > u_cloudLayer.x - CLOUD_LOWEST_DROP;
-	// The light's samples near the point take the same region (CloudDensityIn)
+	// The light's samples near the point take the same region (CloudDensityIn). The rays towards the light from a tower
+	// go up 400 units at most, so only the low part of a tower needs the region.
 	cells = vec4_splat(0.0f);
-	region = inLayer || storm.x > 0.0f ? CloudRegionAt(p.xz, cells) : vec4(0.0f, 0.5f, 0.5f, 0.0f);
+	bool towerNearLayer = storm.x > 0.0f && altitude < u_cloudLayer.x + CLOUD_FIELD_DEPTH + 400.0f;
+	region = inLayer || towerNearLayer ? CloudRegionAt(p.xz, cells) : vec4(0.0f, 0.5f, 0.5f, 0.0f);
 	if (inLayer)
 	{
 		cover = CloudWeatherIn(p.xz, region, cells, pixel, type, fieldRain);
@@ -553,6 +681,8 @@ float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, floa
 	q.xz -= u_cloudDrift.xy * (1.0f + fieldH * 0.15f);
 	q.y -= u_cloudDrift.z;
 	float shape = 0.0f;
+	// How much of the shape is the thin plume of an anvil
+	float veilShare = 0.0f;
 	// The layer's noise, which the towers also take for their small turrets
 	vec4 n = vec4_splat(0.0f);
 	vec3 fromEye = p - u_cloudEye.xyz;
@@ -596,6 +726,8 @@ float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, floa
 		if (tall > shape)
 		{
 			shape = tall;
+			// The edge upwind keeps its small shapes; only the plume downwind is a smooth veil
+			veilShare = smoothstep(0.5f, 1.0f, soft);
 			h = clamp(storm.y, 0.0f, 1.0f);
 			shapeH = h;
 			tower = 1.0f;
@@ -613,7 +745,10 @@ float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, floa
 		float fine = d.r * 0.625f + d.g * 0.25f + d.b * 0.125f;
 		// Wisps at the bottom, billows at the top
 		float wear = mix(fine, 1.0f - fine, clamp(shapeH * 5.0f, 0.0f, 1.0f));
-		shape = clamp(CloudRemap(shape, wear * mix(0.4f, 0.6f, shapeH), 1.0f, 0.0f, 1.0f), 0.0f, 1.0f);
+		float worn = clamp(CloudRemap(shape, wear * mix(0.4f, 0.6f, shapeH), 1.0f, 0.0f, 1.0f), 0.0f, 1.0f);
+		// The plume of an anvil is thinner than the wear of the small shapes, which would cut it into specks. There the
+		// small shapes only vary the plume round its density, so that it looks the same near and far.
+		shape = mix(worn, shape * (1.25f - 0.5f * wear), veilShare);
 	}
 	// Rain clouds are denser and darker at the bottom
 	return shape * (1.0f + rain * 0.8f * (1.0f - shapeH));
@@ -621,8 +756,8 @@ float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, floa
 
 // The density of the cloud at a point at a height over the curved world, with no small shapes, for the rays towards the
 // light and the map of the shadow. The layer's clouds have the shape of CloudDensityAt. In the thunderstorm cells only
-// the large turrets shade the light.
-float CloudDensityIn(vec3 p, float altitude, vec4 region, vec4 cells, float pixel)
+// the large turrets shade the light. `cellsHere` is the choice of cells that can shade the point.
+float CloudDensityIn(vec3 p, float altitude, vec4 region, vec4 cells, float pixel, int cellsHere)
 {
 	float density = 0.0f;
 	if (altitude < u_cloudLayer.x + CLOUD_FIELD_DEPTH && altitude > u_cloudLayer.x - CLOUD_LOWEST_DROP)
@@ -650,10 +785,11 @@ float CloudDensityIn(vec3 p, float altitude, vec4 region, vec4 cells, float pixe
 			}
 		}
 	}
-	if (CloudHasCells())
+	if (cellsHere != CB_NO_CELLS)
 	{
 		float soft;
-		vec4 storm = CumulonimbusAt(p, altitude, true, soft);
+		int which;
+		vec4 storm = CumulonimbusAt(p, altitude, true, cellsHere, soft, which);
 		if (storm.x > 0.0f)
 		{
 			// The large turrets shade each other: the light goes through the gaps between them
@@ -673,7 +809,7 @@ float CloudDensity(vec3 p, float altitude, bool detail)
 {
 	vec4 cells;
 	vec4 region = CloudRegionAt(p.xz, cells);
-	return CloudDensityIn(p, altitude, region, cells, 0.0f);
+	return CloudDensityIn(p, altitude, region, cells, 0.0f, CloudHasCells() ? CB_ALL_CELLS : CB_NO_CELLS);
 }
 
 // The two roots of a t^2 + b t + c = 0, the smaller first; none (x > y) when there are none
@@ -839,8 +975,9 @@ vec2 CloudSpan(vec3 eye, vec3 dir, float limit)
 }
 
 // The optical depth from a point towards the light through the cloud, from a few samples that go farther apart. The
-// first sample is `firstStep` from the point. The samples are near the point, so they take the point's region.
-float CloudLightDepth(vec3 p, int samples, float firstStep, vec4 region, vec4 cells, float pixel)
+// first sample is `firstStep` from the point. The samples are near the point, so they take the point's region and its
+// choice of cells.
+float CloudLightDepth(vec3 p, int samples, float firstStep, vec4 region, vec4 cells, float pixel, int cellsHere)
 {
 	vec3 towards = u_cloudLight.xyz;
 	float depth = 0.0f;
@@ -854,7 +991,7 @@ float CloudLightDepth(vec3 p, int samples, float firstStep, vec4 region, vec4 ce
 		}
 		along += step;
 		vec3 at = p + towards * (along - step * 0.5f);
-		depth += CloudDensityIn(at, CloudAltitude(at), region, cells, pixel) * step;
+		depth += CloudDensityIn(at, CloudAltitude(at), region, cells, pixel, cellsHere) * step;
 		step *= 2.0f;
 	}
 	return depth * CLOUD_EXTINCTION;
@@ -935,6 +1072,9 @@ vec4 MarchCloudVolume(vec3 eye, vec3 dir, float limit, float jitter, int steps, 
 	{
 		CumulonimbusSpans(eye, dir, min(limit, cellsFarthest), second, third);
 	}
+	// Only the samples in this part of the ray can be inside a cell
+	vec2 cellSpan = vec2(min(second.x, third.x), max(second.y, third.y));
+
 	CloudOrderSpans(first, second, third);
 	if (first.x >= 1e9f)
 	{
@@ -1005,8 +1145,10 @@ vec4 MarchCloudVolume(vec3 eye, vec3 dir, float limit, float jitter, int steps, 
 		float tower;
 		vec4 region;
 		vec4 cells;
+		int which;
 		float pixel = t * CLOUD_PIXEL_ANGLE;
-		float density = CloudDensityAt(p, altitude, detail, far, pixel, h, rain, shaft, tower, region, cells) *
+		int cellsHere = CloudHasCells() && t >= cellSpan.x && t <= cellSpan.y ? CB_ALL_CELLS : CB_NO_CELLS;
+		float density = CloudDensityAt(p, altitude, detail, far, pixel, cellsHere, h, rain, shaft, tower, region, cells, which) *
 		                (1.0f - smoothstep(cellsFarthest * 0.7f, cellsFarthest, t));
 		bool empty = density <= 0.0f && shaft <= 0.0f;
 		if (!empty && doubled)
@@ -1031,8 +1173,10 @@ vec4 MarchCloudVolume(vec3 eye, vec3 dir, float limit, float jitter, int steps, 
 			float sigma = density * CLOUD_EXTINCTION;
 			// The sun's or the moon's light that comes through the cloud, scattered once and many times. A tower is
 			// kilometres wide, so fewer samples farther apart find its shade.
-			float lightDepth = tower > 0.5f ? CloudLightDepth(p, 4, 25.0f, region, cells, pixel)
-			                                : CloudLightDepth(p, lightSamples, 18.0f, region, cells, pixel);
+			// A point of a tower is shaded by its own cell. A point of the layer is shaded by the cells only near them.
+			int shadeCells = tower > 0.5f ? which : (CloudHasCells() && CumulonimbusNear(p) ? CB_ALL_CELLS : CB_NO_CELLS);
+			float lightDepth = tower > 0.5f ? CloudLightDepth(p, 4, 25.0f, region, cells, pixel, shadeCells)
+			                                : CloudLightDepth(p, lightSamples, 18.0f, region, cells, pixel, shadeCells);
 			vec3 direct = sun * CloudMultipleScattering(lightDepth, cosAngle) * CloudPowder(sigma * 40.0f, cosAngle) * 32.0f;
 			// The sky lights the tops more than the bottoms; the bottoms of rain clouds are dark
 			// The game darkens its sky and its haze in a storm, so the storm's clouds take more of the dim light they
@@ -1051,7 +1195,7 @@ vec4 MarchCloudVolume(vec3 eye, vec3 dir, float limit, float jitter, int steps, 
 				for (int k = 1; k <= 3; ++k)
 				{
 					vec3 up = p + vec3(0.0f, float(k * k) * 45.0f, 0.0f);
-					above += CloudDensityIn(up, CloudAltitude(up), region, cells, pixel) * float(k * 2 - 1) * 45.0f;
+					above += CloudDensityIn(up, CloudAltitude(up), region, cells, pixel, shadeCells) * float(k * 2 - 1) * 45.0f;
 				}
 				ambient *= 0.55f + 0.45f * exp(-above * CLOUD_EXTINCTION * 0.35f);
 			}
@@ -1067,8 +1211,22 @@ vec4 MarchCloudVolume(vec3 eye, vec3 dir, float limit, float jitter, int steps, 
 		}
 		doubled = empty && singles <= 0 && weights <= 0.0f && altitude > layerTop && altitude + 2.0f * dt * dir.y < anvilLow;
 		singles -= 1;
-		t += doubled ? 2.0f * dt : dt;
+		// In the clear air inside the bounds of the cells, the ray jumps to where it can first meet a cell or the layer
+		float jump = 0.0f;
+		if (empty && cellsHere != CB_NO_CELLS)
+		{
+			float layerLow = u_cloudLayer.x - CLOUD_LOWEST_DROP;
+			float overLayer = altitude - layerTop;
+			float underLayer = layerLow - altitude;
+			float layer = overLayer > 0.0f ? (dir.y < 0.0f ? overLayer / -dir.y : 1e9f)
+			                               : (underLayer > 0.0f ? (dir.y > 0.0f ? underLayer / dir.y : 1e9f) : 0.0f);
+			jump = min(CumulonimbusClearance(p, altitude, dir), layer);
+		}
+		doubled = doubled && jump <= 2.0f * dt;
+		t += max(doubled ? 2.0f * dt : dt, jump);
 		dt = clamp(t * growth, shortest, longest);
+		// Inside a tower the steps are never very short
+		dt = tower > 0.5f ? max(dt, CB_LEAST_STEP) : dt;
 		// The plumes of the anvils are thin: short steps there, so that each ray finds them
 		if (altitude > anvilLow - 200.0f)
 		{
@@ -1105,9 +1263,43 @@ float CloudWeatherOnBall(vec3 p, vec3 up, vec4 region, vec4 cells, float pixel, 
 	return fromAbove * w.y + alongX * w.x + alongZ * w.z;
 }
 
+// The change of the far sheet's cover from its own detail, as a share of the cover (cloud_regions::SheetDetailWeight).
+// The planet's map has texels about 20 km wide. Three finer reads of the base noise on the planet's sphere add groups of
+// cloud about 25 km, 9 km and 3 km wide. A read shows only where a pixel is small enough for its shapes, so that no
+// shape shimmers.
+float CloudSheetDetail(vec3 p, float pixel)
+{
+	float wideWeight = 1.0f - smoothstep(0.12f, 0.45f, pixel * (4.0f / CLOUD_SHEET_WIDE_TILE));
+	if (wideWeight <= 0.0f)
+	{
+		return 1.0f;
+	}
+	float coarseWeight = 1.0f - smoothstep(0.12f, 0.45f, pixel * (4.0f / CLOUD_SHEET_COARSE_TILE));
+	float fineWeight = 1.0f - smoothstep(0.12f, 0.45f, pixel * (4.0f / CLOUD_SHEET_FINE_TILE));
+	vec2 q = p.xz - u_cloudDrift.xy - u_cloudPlanet.xy;
+	vec3 onSphere = WorldDirection(normalize(vec3(q.x, p.y - u_cloudLayer.w + u_cloudLayer.y, q.y)));
+	// Turned axes, other than the axes of the regions, so that no tiles line up
+	vec3 a = vec3(dot(onSphere, vec3(0.7071f, 0.0f, 0.7071f)), dot(onSphere, vec3(-0.4082f, 0.8165f, 0.4082f)),
+	              dot(onSphere, vec3(-0.5774f, -0.5774f, 0.5774f)));
+	vec3 b = vec3(dot(onSphere, vec3(0.8165f, 0.4082f, -0.4082f)), dot(onSphere, vec3(0.0f, 0.7071f, 0.7071f)),
+	              dot(onSphere, vec3(0.5774f, -0.5774f, 0.5774f)));
+	float wide = texture3DLod(s_cloudBase, b.zxy * (u_cloudLayer.y / CLOUD_SHEET_WIDE_TILE) + vec3(0.15f, 0.66f, 0.42f), 0.0f).r;
+	float coarse = coarseWeight > 0.0f
+	                   ? texture3DLod(s_cloudBase, a * (u_cloudLayer.y / CLOUD_SHEET_COARSE_TILE) + vec3(0.37f, 0.12f, 0.71f), 0.0f).r
+	                   : CLOUD_BILLOW_MEAN;
+	float fine = fineWeight > 0.0f
+	                 ? texture3DLod(s_cloudBase, b * (u_cloudLayer.y / CLOUD_SHEET_FINE_TILE) + vec3(0.93f, 0.48f, 0.26f), 0.0f).r
+	                 : CLOUD_BILLOW_MEAN;
+	float billows = 0.15f *
+	                ((wide - CLOUD_BILLOW_MEAN) * wideWeight + 0.8f * (coarse - CLOUD_BILLOW_MEAN) * coarseWeight +
+	                 0.6f * (fine - CLOUD_BILLOW_MEAN) * fineWeight) /
+	                CLOUD_BILLOW_SPREAD;
+	return clamp(1.0f + CLOUD_COVER_CONTRAST * billows, CLOUD_LEAST_SHARE, CLOUD_MOST_SHARE);
+}
+
 // From high up a cloud is less than a pixel deep, so the layer is a thin sheet: its cover where the ray meets the middle
-// of the layer, lit by the sun and the sky
-vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
+// of the layer, lit by the sun and the sky. `jitter` (0 to 1) moves the place that the cells are read at inside the pixel.
+vec4 CloudSheet(vec3 eye, vec3 dir, float limit, float jitter, vec3 sky, out float depth)
 {
 	depth = min(limit, u_cloudLayer.z);
 	float middle = u_cloudLayer.x + 0.5f * CLOUD_CUMULUS_DEPTH;
@@ -1127,15 +1319,22 @@ vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
 	// A pixel far away covers many cells of cloud: there the sheet shows the mean cover of the region, so the far
 	// layer has no grain. Small cells go into the mean nearer than large cells.
 	float pixel = t * CLOUD_PIXEL_ANGLE;
-	float fine = 1.0f - smoothstep(0.25f, 0.9f, pixel / CloudCellWidth(region, cells));
+	region.x = min(region.x * CloudSheetDetail(p, pixel), 1.0f);
+	// The cells are read at a place that moves inside the pixel from frame to frame, with sharp edges. The blend of the
+	// frames then gives the mean of the cells over the pixel with their full contrast, so that small cells far away do
+	// not turn into a grey haze.
+	float fine = 1.0f - smoothstep(CLOUD_SHEET_FINE_FROM, CLOUD_SHEET_FINE_TO, pixel / CloudCellWidth(region, cells));
 	float mean = clamp(region.x - 0.05f, 0.0f, 1.0f) * smoothstep(0.0f, 0.05f, u_cloudCover.x);
 	vec3 up = WorldUpAt(p - eye, eye.y - u_cloudLayer.w);
-	float cover = fine > 0.0f ? mix(mean, CloudWeatherOnBall(p, up, region, cells, pixel, type, rain), fine) : mean;
+	vec2 within = vec2(jitter, fract(jitter * 1.618034f + 0.5f)) - 0.5f;
+	vec3 at = p + vec3(within.x, 0.0f, within.y) * pixel;
+	float cover = fine > 0.0f ? mix(mean, CloudWeatherOnBall(at, up, region, cells, pixel * CLOUD_SHEET_EDGE_SHARE, type, rain), fine) : mean;
 	// The anvils of the thunderstorm cells show over the layer
 	if (CloudHasCells())
 	{
 		float soft;
-		cover = max(cover, CumulonimbusAt(p, CB_TOP - 600.0f, false, soft).x);
+		int which;
+		cover = max(cover, CumulonimbusAt(p, CB_TOP - 600.0f, false, CB_ALL_CELLS, soft, which).x);
 	}
 	cover *= 1.0f - smoothstep(u_cloudLayer.z * 0.7f, u_cloudLayer.z, t);
 	// Thick and tall clouds are brighter and hide more of the sea than thin flat sheets
@@ -1157,7 +1356,7 @@ vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool 
 {
 	float fromAbove = smoothstep(CLOUD_SHEET_LOW, CLOUD_SHEET_HIGH, WorldEyeHeight(eye.y - u_cloudLayer.w));
 	float sheetDepth;
-	vec4 sheet = fromAbove > 0.0f ? CloudSheet(eye, dir, limit, sky, sheetDepth) : vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	vec4 sheet = fromAbove > 0.0f ? CloudSheet(eye, dir, limit, jitter, sky, sheetDepth) : vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	if (fromAbove >= 1.0f)
 	{
 		depth = sheetDepth;

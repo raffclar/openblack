@@ -102,10 +102,12 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 
 	// The one wind of the experiment, at the clouds
 	glm::vec2 cloudWind {0.0f};
+	float windAngle = wind::k_CalmAngle;
 	if (Locator::windSystem::has_value())
 	{
 		const auto& wind = Locator::windSystem::value().GetWind();
 		cloudWind = clouds::CloudWind(wind::Direction(wind), wind.speed);
+		windAngle = wind.angle;
 	}
 	// The weather at the eye and the storms over the land
 	clouds::CloudWeather target;
@@ -209,6 +211,8 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 		uniforms.planet = {planet_weather::k_MapMiddle, overIsland.cover, 1.0f};
 	}
 	uniforms.cells = cumulonimbus::Pack(cumulonimbus::CellsFor(sites, seconds).All(), current.wind);
+	// The streets of cells lie along the wind, which turns slowly
+	uniforms.wind = {windAngle, 0.0f, 0.0f, 0.0f};
 	_cloudsFrame = uniforms;
 }
 
@@ -228,6 +232,7 @@ void Renderer::SetCloudUniforms(const ShaderProgram& program, const clouds::Clou
 	program.SetUniformValue("u_hazeDome", _atmosphereFrame.has_value() ? &_atmosphereFrame->skyDome : &noDome);
 	program.SetUniformArray("u_cloudStorms", uniforms.storms.data(), static_cast<uint16_t>(uniforms.storms.size()));
 	program.SetUniformArray("u_cloudCells", uniforms.cells.data(), static_cast<uint16_t>(uniforms.cells.size()));
+	program.SetUniformValue("u_cloudWind", &uniforms.wind);
 	program.SetTextureSampler("s_cloudBase", 0, _clouds->BaseNoise());
 	program.SetTextureSampler("s_cloudDetail", 1, _clouds->DetailNoise());
 	program.SetTextureSampler("s_cloudWeather", 2, _clouds->WeatherNoise());

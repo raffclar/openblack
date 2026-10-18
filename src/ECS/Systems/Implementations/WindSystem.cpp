@@ -34,5 +34,7 @@ void WindSystem::Update(std::chrono::milliseconds frameRealTime)
 	const auto weather = Locator::weatherSystem::value().GetWeatherSmooth(Locator::camera::value().GetOrigin());
 	const glm::vec2 weatherWind {static_cast<float>(weather.windX), static_cast<float>(weather.windZ)};
 	const float storm = graphics::underwater::Storminess(weather.rain, weather.overcast, weatherWind);
-	_wind = wind::Step(_wind, wind::Target(weatherWind, storm), seconds);
+	auto target = wind::Target(weatherWind, storm);
+	target.angle = _directionOverride.value_or(target.angle);
+	_wind = wind::Step(_wind, target, seconds);
 }
