@@ -17,6 +17,7 @@
 #include <span>
 #include <vector>
 
+#include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -275,6 +276,11 @@ inline constexpr float k_MoonDistance = 4100.0f;
 /// The direction from the ground towards the sun at an hour of script time (0 to 24), from the latitude, the
 /// declination and the hour angle (15 degrees for each hour from noon)
 [[nodiscard]] glm::vec3 SunTowards(float hour);
+
+/// The turn from the world's frame to the frame of the sky's sphere at an hour of script time. The result has x
+/// towards a right ascension of 0 on the sky's equator, y towards a right ascension of 6 hours, and z towards the
+/// north pole of the sky. The sun of the equinox has a right ascension of 0, so the sky turns with the sun's path.
+[[nodiscard]] glm::mat3 CelestialFrame(float hour);
 
 /// How strongly the sun shows, 0 to 255, from the sine of its angle over the horizon: none 1 degree under the horizon,
 /// all at 4 degrees over it

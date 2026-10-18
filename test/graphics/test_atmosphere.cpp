@@ -208,6 +208,26 @@ TEST(Atmosphere, TheSunRisesInTheEastClimbsAtNoonAndSetsInTheWest)
 	EXPECT_LT(glm::dot(atmos::SunTowards(15.0f), atmos::k_East), 0.0f);
 }
 
+TEST(Atmosphere, TheSkysSphereTurnsWithTheSun)
+{
+	// The sun of the equinox stands at a right ascension of 0 on the sky's equator at every hour
+	for (const float hour : {0.0f, 6.0f, 9.5f, 12.0f, 18.0f, 23.0f})
+	{
+		const glm::vec3 sun = atmos::CelestialFrame(hour) * atmos::SunTowards(hour);
+		EXPECT_NEAR(sun.x, 1.0f, 1e-4f);
+		EXPECT_NEAR(sun.y, 0.0f, 1e-4f);
+		EXPECT_NEAR(sun.z, 0.0f, 1e-4f);
+	}
+	// The pole of the sky stands in the north at the height of the latitude
+	const glm::vec3 pole = glm::transpose(atmos::CelestialFrame(3.0f)) * glm::vec3(0.0f, 0.0f, 1.0f);
+	EXPECT_NEAR(std::asin(pole.y) * 180.0f / k_Pi, atmos::k_LatitudeDegrees, 1e-3f);
+	EXPECT_GT(glm::dot(pole, atmos::k_North), 0.7f);
+	// A point at a right ascension of 6 hours rises 6 hours after the sun
+	const glm::vec3 later = glm::transpose(atmos::CelestialFrame(12.0f)) * glm::vec3(0.0f, 1.0f, 0.0f);
+	EXPECT_NEAR(later.y, 0.0f, 1e-4f);
+	EXPECT_NEAR(glm::dot(later, atmos::k_East), 1.0f, 1e-4f);
+}
+
 TEST(Atmosphere, TheSunShowsOnlyNearAndOverTheHorizon)
 {
 	const auto sine = [](float degrees) { return std::sin(degrees * k_Pi / 180.0f); };

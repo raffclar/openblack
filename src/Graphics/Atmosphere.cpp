@@ -21,6 +21,7 @@
 #include <glm/common.hpp>
 #include <glm/exponential.hpp>
 #include <glm/geometric.hpp>
+#include <glm/matrix.hpp>
 
 #include "Graphics/Moon.h"
 
@@ -483,6 +484,19 @@ glm::vec3 atmosphere::SunTowards(float hour)
 	constexpr float k_Radians = k_Pi / 180.0f;
 	const float h = std::fmod(std::fmod(hour, 24.0f) + 24.0f, 24.0f);
 	return TowardsInSky((h - 12.0f) * 15.0f * k_Radians, k_DeclinationDegrees * k_Radians);
+}
+
+glm::mat3 atmosphere::CelestialFrame(float hour)
+{
+	constexpr float k_Radians = k_Pi / 180.0f;
+	const float h = std::fmod(std::fmod(hour, 24.0f) + 24.0f, 24.0f);
+	const float hourAngle = (h - 12.0f) * 15.0f * k_Radians;
+	// The three axes of the sky in the world's frame. A point of the sky with a larger right ascension has a smaller
+	// hour angle.
+	const glm::vec3 x = TowardsInSky(hourAngle, 0.0f);
+	const glm::vec3 y = TowardsInSky(hourAngle - (k_Pi * 0.5f), 0.0f);
+	const glm::vec3 z = TowardsInSky(0.0f, k_Pi * 0.5f);
+	return glm::transpose(glm::mat3(x, y, z));
 }
 
 double atmosphere::MoonMonthFraction(int64_t unixTime, int32_t passedDays, float hour)

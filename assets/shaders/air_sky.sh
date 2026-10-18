@@ -6,6 +6,7 @@
 // use it, so the sky has one colour where the dome stops. Include atmosphere.sh first.
 
 #include "world_curve.sh"
+#include "celestial.sh"
 
 // xyz: the direction towards the real sun; w: how strong the noctilucent clouds are tonight, 0 to 1
 uniform vec4 u_airSun;

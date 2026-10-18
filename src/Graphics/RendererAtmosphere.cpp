@@ -262,6 +262,10 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.planetMoon = {moonTowards, moon != nullptr ? k_MoonShare * underwater::PhaseBrightness(moon->phase) : 0.0f};
 	atmosphere.worldTurn = {glm::vec4(glm::row(turn, 0), 0.0f), glm::vec4(glm::row(turn, 1), 0.0f),
 	                        glm::vec4(glm::row(turn, 2), 0.0f)};
+	// The stars, the Milky Way and the nebulae have fixed places on the sky's sphere, which turns with the hour
+	const glm::mat3 celestial = atmos::CelestialFrame(hour) * turn;
+	atmosphere.celestial = {glm::vec4(glm::row(celestial, 0), 0.0f), glm::vec4(glm::row(celestial, 1), 0.0f),
+	                        glm::vec4(glm::row(celestial, 2), 0.0f)};
 	atmosphere.airPlanet = {eye.x - cap.eyeFromMiddle.x, seaLevel - atmos::k_WorldRadius, eye.z - cap.eyeFromMiddle.y, seconds};
 	if (moon != nullptr && moon->placement.has_value())
 	{
@@ -563,6 +567,13 @@ void Renderer::SetWorldCurve(const ShaderProgram& program) const
 		                                                  glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
 		const auto& turn = _atmosphereFrame.has_value() ? _atmosphereFrame->worldTurn : k_Same;
 		program.SetUniformArray("u_worldTurn", turn.data(), static_cast<uint16_t>(turn.size()));
+	}
+	if (program.HasUniform("u_celestial"))
+	{
+		static constexpr std::array<glm::vec4, 3> k_Same {glm::vec4(1.0f, 0.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 0.0f),
+		                                                  glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
+		const auto& celestial = _atmosphereFrame.has_value() ? _atmosphereFrame->celestial : k_Same;
+		program.SetUniformArray("u_celestial", celestial.data(), static_cast<uint16_t>(celestial.size()));
 	}
 }
 

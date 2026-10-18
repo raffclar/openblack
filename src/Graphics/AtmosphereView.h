@@ -91,6 +91,10 @@ struct AtmosphereFrame
 	glm::vec4 planetMoon {0.0f, -1.0f, 0.0f, 0.0f};
 	std::array<glm::vec4, 3> worldTurn {glm::vec4(1.0f, 0.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 0.0f),
 	                                    glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
+	/// The rows of the turn from the frame that the camera works in to the frame of the sky's sphere (celestial.sh): x
+	/// towards a right ascension of 0, y towards 6 hours and z towards the north pole of the sky
+	std::array<glm::vec4, 3> celestial {glm::vec4(1.0f, 0.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 0.0f),
+	                                    glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
 	/// The air's own up (atmosphere::AirFrame), and the light turned into the air's frame for the sky round the eye
 	glm::vec4 airUp {0.0f, 1.0f, 0.0f, 0.0f};
 	glm::vec4 skyViewLight {0.0f, 1.0f, 0.0f, 0.0f};
