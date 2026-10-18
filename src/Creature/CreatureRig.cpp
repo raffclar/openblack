@@ -64,6 +64,16 @@ glm::mat4 creature::PosedBone(uint32_t bone, std::span<const glm::mat4> boneMatr
 	return bone < boneMatrices.size() ? placement * boneMatrices[bone] : placement;
 }
 
+creature::RulePose creature::TurnPose(std::span<const glm::mat4> newerTurnPose, std::span<const glm::mat4> boneMatrices,
+                                      const glm::mat4& placement)
+{
+	if (!newerTurnPose.empty() && newerTurnPose.size() == boneMatrices.size())
+	{
+		return {.bones = newerTurnPose, .placement = glm::mat4(1.0f)};
+	}
+	return {.bones = boneMatrices, .placement = placement};
+}
+
 std::vector<glm::vec3> creature::TurnPoseBones(std::span<const glm::vec3> lastTurnBones,
                                                std::span<const glm::mat4> boneMatrices, const glm::mat4& placement)
 {

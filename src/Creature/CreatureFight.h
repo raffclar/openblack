@@ -508,6 +508,9 @@ constexpr float k_CastHoldMs = 2.0f;
 /// Whether a state is done: its animation has played through (by the animation's own time), or, for the casting pose,
 /// more than a moment of game time has passed in it
 [[nodiscard]] bool StateDone(State state, float animationMs, float durationMs, float stateMs);
+/// Whether an action, or a reel in a block, ends in this turn: its animation would reach its end when it moves on by the
+/// turn's advance. One that ends does not move on: it makes no root move and no blow test in the turn.
+[[nodiscard]] bool ActionEnds(float animationMs, int32_t advanceMs, float durationMs);
 /// Whether the creature is blocking: while blocking, once half way into starting to block, and until half way out of
 /// it again
 [[nodiscard]] bool IsBlocking(State state, float timeMs, float startBlockDurationMs);

@@ -903,6 +903,11 @@ bool creature_fight::StateDone(State state, float animationMs, float durationMs,
 	return durationMs <= 0.0f || animationMs >= durationMs;
 }
 
+bool creature_fight::ActionEnds(float animationMs, int32_t advanceMs, float durationMs)
+{
+	return durationMs <= 0.0f || static_cast<int32_t>(animationMs) + advanceMs >= static_cast<int32_t>(durationMs);
+}
+
 bool creature_fight::IsBlocking(State state, float timeMs, float startBlockDurationMs)
 {
 	const auto half = startBlockDurationMs * 0.5f;

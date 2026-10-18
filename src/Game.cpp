@@ -1855,7 +1855,10 @@ bool Game::GameLogicLoop() noexcept
 		Locator::creatureHelpSystem::value().ProcessTurn();
 	}
 	// At the end of their turns the creatures take their poses, and each frame draws their bodies between the last two
-	Locator::creatureAnimationSystem::value().PoseTurns();
+	{
+		auto turnPose = profiler.BeginScoped(Profiler::Stage::CreatureTurnPose);
+		Locator::creatureAnimationSystem::value().PoseTurns();
+	}
 	{
 		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
 		Locator::livingActionSystem::value().Update();

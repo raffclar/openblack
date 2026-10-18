@@ -199,7 +199,8 @@ GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature, cons
 	const auto ahead = AheadOf(transform);
 	return GameHeading::Of(ahead.x, ahead.z);
 }
-/// Where the creature's groin is as its body is posed this frame; its feet when its species' bones aren't known
+/// Where the creature's groin is as its body is posed at the end of its newest game turn; its feet when its species' bones
+/// aren't known
 glm::vec3 GroinOf(const ecs::Registry& registry, entt::entity creature, const Creature& self, const Transform& transform)
 {
 	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
@@ -213,9 +214,10 @@ glm::vec3 GroinOf(const ecs::Registry& registry, entt::entity creature, const Cr
 	{
 		return transform.position;
 	}
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
 	const auto groin = rigs.Handle(rigId)->actionPoints->groin;
-	return glm::vec3(creature::PosedBone(groin, animation->boneMatrices, placement)[3]);
+	return glm::vec3(creature::PosedBone(groin, pose.bones, pose.placement)[3]);
 }
 /// The name of the action that the creature's plan carries out, none without a plan
 std::optional<std::string_view> PlanActionOf(const ecs::Registry& registry, entt::entity creature)

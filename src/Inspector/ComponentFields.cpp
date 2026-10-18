@@ -724,8 +724,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFighting::reaches>("reaches")
 	    .Field<&components::CreatureFighting::hitTimesMs>("hitTimesMs")
 	    .Field<&components::CreatureFighting::measured>("measured")
-	    .Field<&components::CreatureFighting::blowTestFromMs>("blowTestFromMs")
-	    .Field<&components::CreatureFighting::blowTestAnimation>("blowTestAnimation")
 	    .Field<&components::CreatureFighting::stageSeconds>("stageSeconds")
 	    .Field<&components::CreatureFighting::faceSeconds>("faceSeconds")
 	    .Field<&components::CreatureFighting::played>("played")
