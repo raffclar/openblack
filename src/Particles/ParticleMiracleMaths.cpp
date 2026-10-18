@@ -167,10 +167,18 @@ glm::vec3 maths::BounceOffSlope(glm::vec3 velocity, glm::vec3 normal, float grou
 	return slide * horizontalBounce - normalPart * verticalBounce;
 }
 
-bool maths::InStrikeCone(glm::vec3 origin, float heading, float cosHalfAngle, glm::vec3 point)
+bool maths::InStrikeCone(glm::vec3 origin, float cosHeading, float sinHeading, float cosHalfAngle, glm::vec3 point)
 {
-	const auto across = NormaliseOrZero(glm::vec3(point.x - origin.x, 0.0f, point.z - origin.z));
-	return across.x * std::cos(heading) + across.z * std::sin(heading) > cosHalfAngle;
+	float x = point.x - origin.x;
+	float z = point.z - origin.z;
+	// The way across the land becomes unit length by the inverse of its length. A way of no length stays as it is.
+	if (x != 0.0f || z != 0.0f)
+	{
+		const float inverse = 1.0f / std::sqrt((x * x) + (z * z));
+		x *= inverse;
+		z *= inverse;
+	}
+	return (x * cosHeading) + (sinHeading * z) > cosHalfAngle;
 }
 
 int maths::StrikesAtOnce(int limit, int targets)
@@ -203,11 +211,11 @@ maths::ForkSplit maths::SplitTargets(std::span<const glm::vec3> tips, glm::vec3 
 	return result;
 }
 
-float maths::ForkJointScale(float scale, int depth, float t)
+float maths::ForkJointScale(float scale, int depth, int joint, float step)
 {
-	const float from = scale / static_cast<float>(depth + 1);
-	const float to = scale / static_cast<float>(depth + 2);
-	return from + (to - from) * t;
+	const float from = scale / (static_cast<float>(depth) + 1.0f);
+	const float to = scale / (static_cast<float>(depth + 1) + 1.0f);
+	return (to - from) * static_cast<float>(joint) * step + from;
 }
 
 bool maths::InsideSphere(glm::vec3 point, glm::vec3 centre, float radius, float margin)

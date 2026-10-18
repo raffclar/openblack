@@ -14,9 +14,11 @@
 
 #include <algorithm>
 
-#include <glm/geometric.hpp>
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack::particles;
+namespace x87 = openblack::x87;
 
 namespace
 {
@@ -27,12 +29,6 @@ int32_t CellsAcross(float radius)
 	return static_cast<int32_t>(std::ceil(static_cast<double>(radius / maths::k_StrikeCellSize)));
 }
 
-/// The length of a vector, with the squares added z first, then y, then x, each step rounded to a float
-float Length(glm::vec3 v)
-{
-	return std::sqrt(((v.z * v.z) + (v.y * v.y)) + (v.x * v.x));
-}
-
 /// Make a vector unit length in place, by its length's inverse, and give its length. A zero vector stays as it is.
 float Normalise(glm::vec3& v)
 {
@@ -40,7 +36,7 @@ float Normalise(glm::vec3& v)
 	{
 		return 0.0f;
 	}
-	const float length = Length(v);
+	const float length = x87::LengthZyx(v);
 	const float inverse = 1.0f / length;
 	v = {v.x * inverse, v.y * inverse, v.z * inverse};
 	return length;
@@ -84,9 +80,10 @@ std::vector<size_t> maths::PreferCreatures(const std::vector<bool>& isCreature)
 
 std::optional<glm::vec3> maths::ClashPoint(const BoltPose& newer, const BoltPose& older, float reach)
 {
-	const glm::vec3 heading(std::cos(newer.heading), 0.0f, std::sin(newer.heading));
+	// Keep the sine and the cosine of the newer heading as floats. Keep the older ones wide until they multiply.
+	const glm::vec3 heading(x87::RoundToFloat(x87::Cos(newer.heading)), 0.0f, x87::RoundToFloat(x87::Sin(newer.heading)));
 	// They must point the same way across the land
-	if (!(std::cos(older.heading) * heading.x + std::sin(older.heading) * heading.z > 0.0f))
+	if (!(x87::Mul(x87::Cos(older.heading), heading.x) + x87::Mul(x87::Sin(older.heading), heading.z) > 0.0f))
 	{
 		return std::nullopt;
 	}
@@ -106,7 +103,7 @@ std::optional<glm::vec3> maths::ClashPoint(const BoltPose& newer, const BoltPose
 	// The meeting is in front of the newer bolt, at a true angle off its heading. The cosine of the widest angle keeps
 	// its full precision.
 	const float along = (fromNewer.z * heading.z) + (fromNewer.x * heading.x);
-	if (!(std::cos(static_cast<double>(k_ClashWidestAngle)) < static_cast<double>(along)))
+	if (!(x87::Cos(k_ClashWidestAngle) < static_cast<double>(along)))
 	{
 		return std::nullopt;
 	}
@@ -120,7 +117,7 @@ glm::vec3 maths::ArcTangent(glm::vec3 normal, glm::vec3 nudge, float randomTange
 
 float maths::ArcLength(const ArcEnds& ends)
 {
-	return Length(ends.from - ends.to);
+	return x87::LengthZyx(ends.from - ends.to);
 }
 
 std::vector<glm::vec3> maths::ArcJoints(const ArcEnds& ends, glm::vec3 fromTangent, glm::vec3 toTangent,
@@ -147,6 +144,46 @@ std::vector<glm::vec3> maths::ArcJoints(const ArcEnds& ends, glm::vec3 fromTange
 		joints.push_back(point + jitters[k] * length * randomFrac);
 	}
 	return joints;
+}
+
+glm::vec2 maths::GroundPointOffset(GroundPointSearch search, float angle, float distance)
+{
+	switch (search)
+	{
+	case GroundPointSearch::Hand:
+		return {x87::RoundToFloat(x87::Cos(angle)) * distance, x87::Mul(x87::Sin(angle), distance)};
+	case GroundPointSearch::SpellTargets:
+		return {x87::Mul(x87::Cos(angle), distance), x87::RoundToFloat(x87::Sin(angle)) * distance};
+	case GroundPointSearch::Around:
+	default:
+		return {x87::Mul(x87::Cos(angle), distance), x87::Mul(x87::Sin(angle), distance)};
+	}
+}
+
+glm::vec3 maths::TipsMiddle(std::span<const glm::vec3> tips)
+{
+	glm::vec3 sum(0.0f);
+	for (const auto& tip : tips)
+	{
+		sum += tip;
+	}
+	const float inverse = 1.0f / static_cast<float>(tips.size());
+	return sum * inverse;
+}
+
+bool maths::LandHitsFirst(glm::vec3 from, glm::vec3 split, glm::vec3 hit)
+{
+	const float splitX = split.x - from.x;
+	const float splitZ = split.z - from.z;
+	const float hitX = hit.x - from.x;
+	const float hitZ = hit.z - from.z;
+	return (hitX * hitX) + (hitZ * hitZ) < (splitZ * splitZ) + (splitX * splitX);
+}
+
+float maths::MovedSquared(glm::vec3 searchOrigin, glm::vec3 origin)
+{
+	const auto moved = searchOrigin - origin;
+	return x87::DotZyx(moved, moved);
 }
 
 int maths::SkyStrikeThunderSize(float random)

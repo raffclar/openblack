@@ -66,8 +66,9 @@ struct Launch
 
 // Lightning
 
-/// Whether a point lies within a cone about a heading on the ground, of a half angle by its cosine
-[[nodiscard]] bool InStrikeCone(glm::vec3 origin, float heading, float cosHalfAngle, glm::vec3 point);
+/// Whether a point lies within a cone about a heading on the ground. The heading comes as its cosine and sine, and the
+/// half angle as its cosine, each kept as a float.
+[[nodiscard]] bool InStrikeCone(glm::vec3 origin, float cosHeading, float sinHeading, float cosHalfAngle, glm::vec3 point);
 /// How many of a bolt's targets it strikes at once: at most the limit and at most half of them, rounded up
 [[nodiscard]] int StrikesAtOnce(int limit, int targets);
 /// The two sides a fork's targets are split into, by which side of its split point they lie along its way; neither side
@@ -79,8 +80,8 @@ struct ForkSplit
 };
 [[nodiscard]] ForkSplit SplitTargets(std::span<const glm::vec3> tips, glm::vec3 origin, glm::vec3 centroid, glm::vec3 split);
 /// The scale of a fork joint: from the bolt's scale over its depth plus one at its start to over its depth plus two at
-/// its end
-[[nodiscard]] float ForkJointScale(float scale, int depth, float t);
+/// its end. The joint's number times the step between joints gives how far along the fork it is.
+[[nodiscard]] float ForkJointScale(float scale, int depth, int joint, float step);
 
 // Shields
 

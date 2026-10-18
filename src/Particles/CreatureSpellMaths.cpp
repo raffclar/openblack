@@ -119,13 +119,12 @@ glm::vec3 maths::ItchOrbit(glm::vec3 rightEye, glm::vec3 leftEye, float seconds,
 		const float acrossLength = std::sqrt((across.z * across.z + across.y * across.y) + across.x * across.x);
 		across *= outLength / acrossLength;
 	}
-	// The angle wraps at the full turn of double precision. The sine uses the angle as it is. The cosine uses the angle
-	// cut to a float, and the result is cut to a float too.
-	const double angle = std::fmod(static_cast<double>(seconds * orbitSpeed), 2.0 * std::numbers::pi);
-	const auto sine = std::sin(angle);
-	const auto cosine = static_cast<float>(std::cos(static_cast<double>(static_cast<float>(angle))));
-	const glm::vec3 acrossPart(static_cast<float>(across.x * sine), static_cast<float>(across.y * sine),
-	                           static_cast<float>(across.z * sine));
+	// The angle wraps at a full turn that is the float of two pi, held as a double. The sine uses the wrapped angle as
+	// it is and multiplies at its full precision. The cosine uses the angle as a float, and the result becomes a float.
+	const double angle = std::fmod(static_cast<double>(seconds * orbitSpeed), static_cast<double>(k_TwoPi));
+	const double sine = x87::Sin(angle);
+	const float cosine = x87::RoundToFloat(x87::Cos(x87::RoundToFloat(angle)));
+	const glm::vec3 acrossPart(x87::Mul(across.x, sine), x87::Mul(across.y, sine), x87::Mul(across.z, sine));
 	return (centre + out * cosine) + acrossPart;
 }
 
