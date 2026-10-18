@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <variant>
@@ -211,6 +212,18 @@ int LHVM::RestoreState(const std::filesystem::path& filepath)
 {
 	auto file = LHVMFile();
 	file.Open(filepath);
+	return RestoreState(file);
+}
+
+int LHVM::RestoreState(const std::vector<uint8_t>& buffer)
+{
+	auto file = LHVMFile();
+	file.Open(buffer);
+	return RestoreState(file);
+}
+
+int LHVM::RestoreState(const LHVMFile& file)
+{
 	if (!file.IsLoaded() || !file.HasStatus())
 	{
 		return EXIT_FAILURE;
@@ -343,7 +356,7 @@ int LHVM::SaveBinary(const std::filesystem::path& filepath)
 	return EXIT_SUCCESS;
 }
 
-int LHVM::SaveState(const std::filesystem::path& filepath)
+LHVMFile LHVM::StateFile() const
 {
 	std::vector<VMTask> tasks;
 	tasks.reserve(_tasks.size());
@@ -352,10 +365,22 @@ int LHVM::SaveState(const std::filesystem::path& filepath)
 		tasks.emplace_back(task);
 	}
 
-	LHVMFile file(LHVMVersion::BlackAndWhite, _variablesNames, _instructions, _auto, _scripts, _data, _mainStack, _variables,
-	              tasks, _ticks, _currentLineNumber, _highestTaskId, _highestScriptId, _executedInstructions);
-	file.Write(filepath);
+	return LHVMFile(LHVMVersion::BlackAndWhite, _variablesNames, _instructions, _auto, _scripts, _data, _mainStack, _variables,
+	                tasks, _ticks, _currentLineNumber, _highestTaskId, _highestScriptId, _executedInstructions);
+}
+
+int LHVM::SaveState(const std::filesystem::path& filepath)
+{
+	StateFile().Write(filepath);
 	return EXIT_SUCCESS;
+}
+
+std::vector<uint8_t> LHVM::SaveState() const
+{
+	std::ostringstream stream(std::ios::binary);
+	StateFile().Write(stream);
+	const auto text = stream.str();
+	return {text.begin(), text.end()};
 }
 
 void LHVM::LookIn(const ScriptType allowedScriptTypesMask)

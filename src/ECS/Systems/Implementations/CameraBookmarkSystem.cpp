@@ -29,6 +29,17 @@ bool CameraBookmarkSystem::Initialize()
 	return true;
 }
 
+void CameraBookmarkSystem::FindAfterLoad()
+{
+	_bookmarks.fill(entt::null);
+	Locator::entitiesRegistry::value().Each<const CameraBookmark>([this](entt::entity entity, const CameraBookmark& bookmark) {
+		if (bookmark.number < _bookmarks.size())
+		{
+			_bookmarks.at(bookmark.number) = entity;
+		}
+	});
+}
+
 void CameraBookmarkSystem::Update(const std::chrono::microseconds& dt) const
 {
 	Locator::entitiesRegistry::value().Each<CameraBookmark, Transform>([&dt](CameraBookmark& bookmark, Transform& transform) {

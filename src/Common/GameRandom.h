@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <bit>
+#include <optional>
 
 #include <glm/vec3.hpp>
 
@@ -89,6 +90,9 @@ public:
 	virtual int32_t CrtRand() = 0;
 	/// The C runtime's srand()
 	virtual void CrtSrand(uint32_t seed) = 0;
+
+	/// The seed of the C library's generator, for a saved world; none for a source that keeps none
+	[[nodiscard]] virtual std::optional<uint32_t> GetCrtSeed() const { return std::nullopt; }
 
 	[[nodiscard]] virtual GameRandomSeeds GetSeeds() const = 0;
 	/// Both are k_InitialSeed when the game starts and 0 from every map loaded, and saved games keep and restore them

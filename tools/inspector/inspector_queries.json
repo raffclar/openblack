@@ -1886,7 +1886,7 @@
   "query": "saves.slots"
  },
  {
-  "description": "Saves the game into a slot: the land, the turn and every creature with its mind file and its leash. The towns, the villagers, the story and the scripts are not saved yet",
+  "description": "Saves the game into a slot: the whole world (every entity and its components, the clock, the random numbers, the camera and the scripts) and every creature with its mind file and its leash",
   "kind": "object",
   "parameters": [
    {
@@ -1905,7 +1905,7 @@
   "writes": true
  },
  {
-  "description": "Puts the creatures of the land that is open back as a slot keeps them: the values of each record, the mind of its mind file, the plan that the save kept and its leash",
+  "description": "Loads a slot. A save of the whole world loads its land and its world in place of the open land. An older save puts the creatures of the land that is open back: the values of each record, the mind of its mind file, the plan that the save kept and its leash",
   "kind": "object",
   "parameters": [
    {

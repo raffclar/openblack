@@ -298,9 +298,8 @@ std::vector<uint32_t> MapProduction::CellsFor(entt::entity entity, const Kind& k
 	return cells;
 }
 
-void MapProduction::File(entt::entity entity, const Kind& kind) const
+void MapProduction::KnowLandBlocks() const
 {
-	// The land's blocks are known before anything goes on them
 	if (!_lists.Blocks().LandBlocksKnown() && Locator::terrainSystem::has_value())
 	{
 		std::vector<glm::ivec2> blocks;
@@ -313,6 +312,12 @@ void MapProduction::File(entt::entity entity, const Kind& kind) const
 		}
 		_lists.Blocks().SetLandBlocks(blocks);
 	}
+}
+
+void MapProduction::File(entt::entity entity, const Kind& kind) const
+{
+	// The land's blocks are known before anything goes on them
+	KnowLandBlocks();
 	auto cells = CellsFor(entity, kind);
 	for (const auto cell : cells)
 	{
@@ -415,6 +420,22 @@ void MapProduction::Sync()
 	{
 		Refile(entity);
 	}
+}
+
+void MapProduction::FileResidents()
+{
+	if (_registry == nullptr)
+	{
+		return;
+	}
+	_lists.Clear();
+	KnowLandBlocks();
+	_registry->Each<const MapCellResident>([this](entt::entity entity, const MapCellResident& resident) {
+		for (const auto cell : resident.cells)
+		{
+			_lists.Insert(cell, entity, resident.placement);
+		}
+	});
 }
 
 void MapProduction::Refile(entt::entity entity)

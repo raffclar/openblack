@@ -23,6 +23,8 @@ class CameraBookmarkSystemInterface
 {
 public:
 	virtual bool Initialize() = 0;
+	/// After the load of a saved world: the system finds the bookmarks among the loaded entities, by their numbers
+	virtual void FindAfterLoad() = 0;
 	virtual void Update(const std::chrono::microseconds& dt) const = 0;
 	[[nodiscard]] virtual const std::array<entt::entity, 8>& GetBookmarks() const = 0;
 	/// When flying to a bookmark, the bookmark position becomes the camera focus

@@ -54,6 +54,8 @@ public:
 
 	void StartGameClock(bool paused) override;
 	void RestartTurns() override;
+	void ResumeAtTurn(uint32_t turn, int32_t remainderMs) override;
+	[[nodiscard]] int32_t GetTurnRemainderMs() const override { return _turnRemainderMs; }
 	[[nodiscard]] bool IsTurnDue() override;
 	void StartTurn() override;
 	void UpdateFrame() override;

@@ -28,6 +28,7 @@ public:
 	void Update(std::chrono::milliseconds frameGameTime) override;
 	[[nodiscard]] entt::entity GetBarrel() const override { return _barrel; }
 	void Reset() override;
+	void FindAfterLoad() override;
 
 private:
 	/// The storage pit that carries the barrel now, none while none does

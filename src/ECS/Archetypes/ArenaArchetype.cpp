@@ -31,6 +31,25 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
+std::shared_ptr<particles::LightSheet> ArenaArchetype::MakeRing(const glm::ivec2& place, float radius)
+{
+	const auto ground = [](glm::vec2 point) {
+		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+	};
+	const glm::vec2 centre {map_coords::ToMetres(place.x), map_coords::ToMetres(place.y)};
+	auto ring = std::make_shared<particles::LightSheet>();
+	ring->Start(creature_arena::RingPoints(centre, radius, ground), creature_arena::k_RingRgb,
+	            radius * creature_arena::k_RingHeightShare, creature_arena::k_RingShiftSeconds);
+	ring->SetSpread(creature_arena::k_RingSpread);
+	ring->SetStrength(creature_arena::k_RingStrength);
+	ring->SetHidden(true);
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().AddLightSheet(ring);
+	}
+	return ring;
+}
+
 entt::entity ArenaArchetype::Create(const glm::ivec2& place, float radius, bool temporary)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -42,16 +61,7 @@ entt::entity ArenaArchetype::Create(const glm::ivec2& place, float radius, bool 
 	registry.Assign<Transform>(entity, glm::vec3(centre.x, ground(centre), centre.y), glm::mat3(1.0f), glm::vec3(1.0f));
 	ecs::thing_map_place::Keep(registry, entity, {.x = place.x, .z = place.y});
 
-	auto ring = std::make_shared<particles::LightSheet>();
-	ring->Start(creature_arena::RingPoints(centre, radius, ground), creature_arena::k_RingRgb,
-	            radius * creature_arena::k_RingHeightShare, creature_arena::k_RingShiftSeconds);
-	ring->SetSpread(creature_arena::k_RingSpread);
-	ring->SetStrength(creature_arena::k_RingStrength);
-	ring->SetHidden(true);
-	if (Locator::particleSystem::has_value())
-	{
-		Locator::particleSystem::value().AddLightSheet(ring);
-	}
+	auto ring = MakeRing(place, radius);
 	registry.Assign<CreatureArena>(entity, CreatureArena {.place = place,
 	                                                      .radius = radius,
 	                                                      .temporary = temporary,

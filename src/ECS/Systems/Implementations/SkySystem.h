@@ -29,6 +29,7 @@ public:
 
 	void Initialize() override;
 	void KeepForNextLand() override;
+	void FindAfterLoad() override;
 	void ProcessTurn() override;
 	void UpdateFrame(bool skyDrawn) override;
 	void SetTime(float time) override;

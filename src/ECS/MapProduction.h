@@ -57,6 +57,7 @@ public:
 
 	void Sync() override;
 	void Refile(entt::entity entity) override;
+	void FileResidents() override;
 
 	/// How a thing goes into the cells, by what it is
 	struct Kind
@@ -75,6 +76,8 @@ private:
 
 	/// Files the things made since the last look, in the order they were made
 	void FileMade() const;
+	/// Gives the lists the land's blocks, before anything goes on them
+	void KnowLandBlocks() const;
 	void File(entt::entity entity, const Kind& kind) const;
 	void TakeOut(entt::entity entity) const;
 	[[nodiscard]] std::vector<uint32_t> CellsFor(entt::entity entity, const Kind& kind) const;

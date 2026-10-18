@@ -32,6 +32,8 @@ struct LivingAction
 	    "Previous",
 	};
 
+	/// An empty value, which the load of a saved world fills
+	LivingAction() = default;
 	LivingAction(VillagerStates topState, uint16_t turnsUntilStateChange)
 	    : states {static_cast<uint8_t>(topState), static_cast<uint8_t>(VillagerStates::InvalidState),
 	              static_cast<uint8_t>(VillagerStates::InvalidState)}
@@ -50,8 +52,8 @@ struct LivingAction
 	}
 
 	// LivingState or VillagerState
-	std::array<uint8_t, static_cast<size_t>(Index::_Count)> states;
-	uint16_t turnsUntilStateChange;
-	uint16_t turnsSinceStateChange;
+	std::array<uint8_t, static_cast<size_t>(Index::_Count)> states {};
+	uint16_t turnsUntilStateChange {0};
+	uint16_t turnsSinceStateChange {0};
 };
 } // namespace openblack::ecs::components
