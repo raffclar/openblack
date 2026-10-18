@@ -938,7 +938,7 @@ void CreatureSpawner::Command(glm::vec2 screenCoord) noexcept
 	}
 	case Order::Flee:
 		_lastOrder = fmt::format("Away from {:.0f}, {:.0f}: {}", point.x, point.y,
-		                         MoveResultName(locomotion.FleeFrom(*_selected, point)));
+		                         MoveResultName(locomotion.FleeFrom(*_selected, point, Pace::Run)));
 		break;
 	case Order::Face:
 		_lastOrder = fmt::format("Facing {:.0f}, {:.0f}: {}", point.x, point.y,

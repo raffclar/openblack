@@ -238,6 +238,10 @@ using Random = std::function<uint32_t(uint32_t)>;
 
 /// A creature that runs away goes this far plus a random number of units below k_RunAwayExtra
 constexpr uint32_t k_RunAwayExtra = 40;
+/// A creature that runs away arrives anywhere within this many times its height of the point that it runs to
+constexpr float k_RunAwayArrivalHeights = 5.0f;
+/// The height of a creature of size 1
+constexpr float k_RunAwayHeightOfSizeOne = 15.0f;
 /// The cells that the search for a clear cell tries, out from the cell it aims at
 constexpr int32_t k_RunAwaySearchCells = 1600;
 /// The nearest place to stand is used only nearer than this to the point that the run aims at

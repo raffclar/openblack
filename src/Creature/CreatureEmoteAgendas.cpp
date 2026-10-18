@@ -152,7 +152,7 @@ std::vector<Step> creature_emote::RunAway(const RunFrom& from, const Random& ran
 		agenda.push_back(FrightenedStart());
 	}
 	Step run {.kind = Step::Kind::Move,
-	          .movement = {.kind = Movement::Kind::FleeFrom, .point = from.point, .run = true},
+	          .movement = {.kind = Movement::Kind::FleeFrom, .point = from.point, .run = from.object.has_value()},
 	          .effect = Effect::RanAway,
 	          .face = Cue::Fear,
 	          .gaze = Gaze {.object = from.object, .hand = !from.object.has_value(), .runningAway = true}};

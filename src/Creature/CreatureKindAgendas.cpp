@@ -11,6 +11,7 @@
 
 #include <algorithm>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureThrow.h"
@@ -59,7 +60,10 @@ std::vector<Step> creature_mind::PracticeThrow(std::optional<uint32_t> pickUp, g
 	{
 		agenda.push_back(PickUp(*pickUp));
 	}
-	const auto at = from + glm::vec2(k_PracticeThrowHeights * height);
+	const float ahead = height * k_PracticeThrowHeights;
+	const auto mapFrom = map_coords::ToMetres(map_coords::FromMetres(from));
+	const glm::vec2 at {map_coords::ToMetres(map_coords::ToFixedGUtils(ahead + mapFrom.x)),
+	                    map_coords::ToMetres(map_coords::ToFixedGUtils(ahead + mapFrom.y))};
 	agenda.push_back(
 	    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Throw, .point = at}, .gaze = GoingLook(at)});
 	return agenda;

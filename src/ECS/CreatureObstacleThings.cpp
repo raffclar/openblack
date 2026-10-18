@@ -15,6 +15,7 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
+#include "Common/X87Angle.h"
 #include "ECS/BuildingSiteList.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -201,8 +202,12 @@ std::optional<obstacles::Thing> creature_obstacle_things::ThingOf(const Registry
 		                   ecs::wall_hug::IsFenceModel(
 		                       Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(mobileStatic->type)).meshId);
 		thing.shape = fence ? obstacles::Shape::ModelBox : obstacles::Shape::AtPlace;
-		// A thing that does not move builds its turn and scale as a thing that can lean
+		// A thing that does not move builds its turn and scale as a thing that can lean, from its three angles
 		thing.placement = obstacles::Placement::Leaning;
+		const auto angles = x87::GameAnglesYxz(transform->rotation[0], transform->rotation[2]);
+		thing.yAngle = angles.y;
+		thing.xAngle = angles.x;
+		thing.zAngle = angles.z;
 	}
 	else if (registry.AnyOf<TeleportStone>(entity))
 	{

@@ -69,6 +69,8 @@ public:
 	/// Throws what it holds at a point, to take the given seconds to get there, as into a store: done only once the thing
 	/// has stopped flying
 	virtual bool ThrowTaking(entt::entity creature, const glm::vec3& target, float flightSeconds) = 0;
+	/// Throws what it holds at a point, to take the given seconds to get there, as at a thing that it aims ahead of
+	virtual bool ThrowAimed(entt::entity creature, const glm::vec3& target, float flightSeconds) = 0;
 	virtual bool Destroy(entt::entity creature, entt::entity target) = 0;
 	/// Kicks a thing at its feet, which flies off ahead of it as the foot meets it; fails when the thing is in its own or
 	/// the player's hand, or the species has no kick

@@ -42,6 +42,7 @@ public:
 	bool Keep(entt::entity creature, size_t animation) override;
 	bool Throw(entt::entity creature, const glm::vec3& target) override;
 	bool ThrowTaking(entt::entity creature, const glm::vec3& target, float flightSeconds) override;
+	bool ThrowAimed(entt::entity creature, const glm::vec3& target, float flightSeconds) override;
 	bool Destroy(entt::entity creature, entt::entity target) override;
 	bool Kick(entt::entity creature, entt::entity target) override;
 	bool PointAt(entt::entity creature, const glm::vec3& point) override;

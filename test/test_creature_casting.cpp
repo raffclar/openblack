@@ -612,8 +612,7 @@ TEST(CreatureCastMoves, ABallIsMeasuredThroughTheAirFromTheCellsMiddle)
 
 TEST(CreatureCastMoves, AWorshipSitesTenBallsStandAlongItsModelAtTheirHeights)
 {
-	const glm::mat3 still(1.0f);
-	const auto spheres = cast_moves::WorshipSiteSpheres({100.0f, 30.0f, 200.0f}, still, 1.0f);
+	const auto spheres = cast_moves::WorshipSiteSpheres({100.0f, 30.0f, 200.0f}, 0.0f, 1.0f);
 	ASSERT_EQ(spheres.size(), 10U);
 	EXPECT_FLOAT_EQ(spheres[0].centre.x, 102.448f);
 	EXPECT_FLOAT_EQ(spheres[0].centre.y, 31.4f);
@@ -623,8 +622,7 @@ TEST(CreatureCastMoves, AWorshipSitesTenBallsStandAlongItsModelAtTheirHeights)
 	EXPECT_FLOAT_EQ(spheres[9].radius, 1.3f * 3.0f);
 
 	// A site turned a quarter turn about the up axis, at twice the size: the balls turn and spread, but keep their widths
-	const glm::mat3 quarter(glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
-	const auto turned = cast_moves::WorshipSiteSpheres({0.0f, 0.0f, 0.0f}, quarter, 2.0f);
+	const auto turned = cast_moves::WorshipSiteSpheres({0.0f, 0.0f, 0.0f}, std::numbers::pi_v<float> / 2.0f, 2.0f);
 	EXPECT_NEAR(turned[4].centre.x, 2.0f * 39.084f, 1e-4f);
 	EXPECT_NEAR(turned[4].centre.y, 4.0f, 1e-5f);
 	EXPECT_NEAR(turned[4].centre.z, 2.0f * 3.93f, 1e-4f);

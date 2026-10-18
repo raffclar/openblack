@@ -89,8 +89,9 @@ std::vector<Circle> BoxCircles(const Thing& thing, const Walker& walker)
 	const auto margin = walker.radius - (RadiusShare(thing.height, walker.height) * walker.radius);
 	const auto fire = FireMargin(thing);
 	// The middle of the box goes through the thing's turn and scale as the game builds them
-	const auto rows = thing.placement == Placement::Leaning ? LeaningPlacement(thing.yAngle, 0.0f, 0.0f, thing.scale)
-	                                                        : UprightPlacement(thing.yAngle, thing.scale);
+	const auto rows = thing.placement == Placement::Leaning
+	                      ? LeaningPlacement(thing.yAngle, thing.xAngle, thing.zAngle, thing.scale)
+	                      : UprightPlacement(thing.yAngle, thing.scale);
 	const auto centre = PlacedOnLand(rows, thing.boxCentre, thing.position);
 	auto sizeX = ((thing.boxHalfSize.x * thing.scale) + margin) + fire;
 	auto sizeZ = ((thing.boxHalfSize.z * thing.scale) + margin) + fire;
@@ -307,7 +308,7 @@ float creature_obstacles::BodyRadius(std::span<const glm::mat4> boneMatrices)
 
 float creature_obstacles::YAngleOf(const glm::mat3& rotation)
 {
-	return std::atan2(rotation[0].z, rotation[0].x);
+	return x87::GameAnglesYxz(rotation[0], rotation[2]).y;
 }
 
 PlacementRows creature_obstacles::UprightPlacement(float yAngle, float scale)

@@ -99,6 +99,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/Map.h"
@@ -175,6 +176,45 @@ openblack::creature_object_actions::Kind HandsKindOf(openblack::creature_mind::O
 	default:
 		return Kind::Keep;
 	}
+}
+
+/// A thing as a target to throw at: where it stands, how tall it is, and how it moves. A creature goes on along its
+/// heading. A villager goes on by the step of its walk while its state is not a final state.
+openblack::creature_throw::ThrowTarget ThrowTargetOf(const openblack::ecs::Registry& registry, entt::entity thing,
+                                                     const glm::vec3& standing)
+{
+	using namespace openblack;
+	using namespace openblack::ecs::components;
+	using Target = creature_throw::ThrowTarget;
+	Target target {.kind = Target::Kind::Thing,
+	               .mapPosition = {map_coords::ToFixed(standing.x), map_coords::ToFixed(standing.z)},
+	               .height = ecs::systems::object_measures::Height(registry, thing)};
+	if (const auto* walk = registry.TryGet<const CreatureLocomotion>(thing);
+	    walk != nullptr && registry.AllOf<Creature, Transform>(thing))
+	{
+		const auto& transform = registry.Get<const Transform>(thing);
+		const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+		target.kind = Target::Kind::Creature;
+		target.position = transform.position;
+		target.heading = walk->started ? walk->heading.Radians() : GameHeading::Of(ahead.x, ahead.z).Radians();
+		target.speed = walk->speed;
+	}
+	else if (registry.AllOf<Villager>(thing))
+	{
+		target.kind = Target::Kind::Villager;
+		if (const auto* hug = registry.TryGet<const WallHug>(thing))
+		{
+			target.step = hug->step;
+		}
+		if (const auto* action = registry.TryGet<const LivingAction>(thing);
+		    action != nullptr && Locator::infoConstants::has_value())
+		{
+			const auto top = action->states.at(static_cast<size_t>(LivingAction::Index::Top));
+			const auto& table = Locator::infoConstants::value().villagerStateTable;
+			target.walking = top < table.size() && table.at(top).isFinalState == 0;
+		}
+	}
+	return target;
 }
 } // namespace
 using creature_desires::Desire;
@@ -691,7 +731,7 @@ bool Move(entt::entity creature, const creature_mind::Commands& commands)
 		}
 		break;
 	case Kind::FleeFrom:
-		locomotion.FleeFrom(creature, move.point);
+		locomotion.FleeFrom(creature, move.point, pace);
 		break;
 	case Kind::TurnToFace:
 		locomotion.TurnToFace(creature, move.point);
@@ -1727,9 +1767,15 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		{
 			const auto* held = registry.TryGet<const HeldByCreature>(*object);
 			const auto place = held != nullptr && registry.Valid(held->creature) ? held->creature : *object;
-			if (const auto* at = registry.TryGet<const Transform>(place))
+			const auto* at = registry.TryGet<const Transform>(place);
+			const auto* self = registry.TryGet<const Transform>(creature);
+			if (at != nullptr && self != nullptr && Locator::terrainSystem::has_value())
 			{
-				hands.Throw(creature, at->position);
+				// The game aims ahead of a thing that moves, by the time that the throw takes to get there
+				const auto& island = Locator::terrainSystem::value();
+				const auto aim = creature_throw::AimAt(self->position, ThrowTargetOf(registry, *object, at->position),
+				                                       [&island](int32_t x, int32_t z) { return island.GetAltitude(x, z); });
+				hands.ThrowAimed(creature, aim.point, aim.seconds);
 				break;
 			}
 		}
