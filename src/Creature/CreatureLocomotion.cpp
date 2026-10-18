@@ -18,6 +18,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/X87.h"
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::creature_locomotion;
@@ -242,10 +243,66 @@ float creature_locomotion::TimeLimitMs(float distance)
 	return (k_TimeLimitPerUnitMs * distance) + k_TimeLimitBaseMs;
 }
 
-glm::vec2 creature_locomotion::RunAwayPoint(glm::vec2 creature, glm::vec2 threat, float distance)
+glm::vec3 creature_locomotion::RunAwayPoint(const map_coords::MapCoords& creature, glm::vec2 threat, uint32_t draw,
+                                            float runAwayDistance, const RunAwayLand& land)
 {
-	auto away = creature - threat;
-	// Fleeing something right on top of it, it runs away along x
-	away = glm::length(away) > 0.0f ? glm::normalize(away) : glm::vec2(1.0f, 0.0f);
-	return creature + (away * distance);
+	constexpr float k_CellSize = 10.0f;
+	constexpr float k_TooShort = 0.001f;
+	const float distance = static_cast<float>(draw) + runAwayDistance;
+	const auto cellX = map_coords::CellX(creature);
+	const auto cellZ = map_coords::CellZ(creature);
+	float awayX = (static_cast<float>(cellX) * k_CellSize) - threat.x;
+	float awayZ = (static_cast<float>(cellZ) * k_CellSize) - threat.y;
+	if (!(std::abs(awayX) > k_TooShort) && !(std::abs(awayZ) > k_TooShort))
+	{
+		awayX = 1.0f;
+		awayZ = 0.0f;
+	}
+	else if (awayX != 0.0f || awayZ != 0.0f)
+	{
+		const float share = 1.0f / std::sqrt((awayZ * awayZ) + (awayX * awayX));
+		awayX = share * awayX;
+		awayZ = share * awayZ;
+	}
+	const float offsetX = awayX * distance;
+	const float offsetZ = awayZ * distance;
+
+	// The aimed cell replaces the cell in each map value; the place in the cell stays
+	const auto withCell = [](int32_t value, int32_t cell) {
+		return static_cast<int32_t>((static_cast<uint32_t>(static_cast<uint16_t>(cell)) << 16u) |
+		                            (static_cast<uint32_t>(value) & 0xFFFFu));
+	};
+	auto at = creature;
+	at.x = withCell(creature.x, map_coords::FtoL(((static_cast<float>(cellX) * k_CellSize) + offsetX) / k_CellSize));
+	at.z = withCell(creature.z, map_coords::FtoL(((static_cast<float>(cellZ) * k_CellSize) + offsetZ) / k_CellSize));
+
+	std::optional<map_coords::MapCoords> found;
+	map_coords::Spiral spiral;
+	for (int32_t left = k_RunAwaySearchCells; left != 0; --left)
+	{
+		if (map_coords::InBounds(at) && land.cellClear(map_coords::CellX(at), map_coords::CellZ(at)))
+		{
+			found = map_coords::MapCoords {
+			    .x = withCell(0, map_coords::CellX(at)), .z = withCell(0, map_coords::CellZ(at)), .altitude = 0.0f};
+			break;
+		}
+		map_coords::AddCells(at, spiral.Next());
+	}
+	const auto& place = found.value_or(creature);
+	const glm::vec3 point {map_coords::ToMetres(place.x), land.ground(place) + place.altitude, map_coords::ToMetres(place.z)};
+	if (land.canStand({point.x, point.z}))
+	{
+		return point;
+	}
+
+	// The search gives a point on no height. When it finds none, the test reads what the game left in its place: the
+	// creature's cell across as the bits of a float, and the run's distance along z.
+	const auto nearest = land.nearestStand({point.x, point.z});
+	const glm::vec3 other = nearest.has_value() ? glm::vec3(nearest->x, 0.0f, nearest->y)
+	                                            : glm::vec3(std::bit_cast<float>(static_cast<uint32_t>(cellX)), 0.0f, offsetZ);
+	if (land.canStand({other.x, other.z}) && x87::Distance<x87::SumOrder::Zyx>(point, other) < k_RunAwayStandReach)
+	{
+		return other;
+	}
+	return point;
 }

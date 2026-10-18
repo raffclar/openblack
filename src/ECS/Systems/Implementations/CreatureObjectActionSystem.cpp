@@ -35,6 +35,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Angle.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureCatch.h"
@@ -44,6 +45,7 @@
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureOwner.h"
 #include "Creature/CreaturePointing.h"
 #include "Creature/CreatureReach.h"
@@ -1000,7 +1002,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		if (action.kind == Kind::Throw)
 		{
 			action.flightSeconds =
-			    action.givenFlightSeconds.value_or(creature_throw::FlightTime(glm::distance(transform.position, action.point)));
+			    action.givenFlightSeconds.value_or(creature_throw::FlightTime(transform.position, action.point));
 			const auto weights = ThrowWeights(creature, transform, *points, action.point);
 			const std::array<size_t, 2> animations {creature_throw::k_HurlFlat, creature_throw::k_HurlHigh};
 			SetSlots(action, animations, weights);
@@ -1232,8 +1234,7 @@ void StepFrame(ecs::Registry& registry, entt::entity creature, CreatureAnimation
 		{
 			// TODO(physics): the game also puts the creature at height 0 when it moves it here; what its placing does
 			// with that height wasn't traced, so the height is kept
-			if (const auto valid = land.NearestValid(glm::xz(position), creature_catch::k_StepSearchClearance,
-			                                         creature_catch::k_StepSearchDistance))
+			if (const auto valid = land.NearestStandable(glm::xz(position)))
 			{
 				position.x = valid->x;
 				position.z = valid->y;
@@ -2561,24 +2562,21 @@ bool ModelTouches(const ecs::Registry& registry, entt::entity thing, glm::vec3 c
 	{
 		return false;
 	}
-	const auto limit = radius * radius;
-	for (const auto& subMesh : model.GetSubMeshes())
-	{
-		if ((subMesh->GetFlags().lodMask & 1U) == 0)
+	// Things that can move or lean build their turn from three angles and scale it after; the others turn upright only
+	const auto rows = [&] {
+		if (registry.AnyOf<MobileStatic, MobileObject, Pot, Ball>(thing))
 		{
-			continue;
+			const auto angles = x87::GameAnglesYxz(at->rotation[0], at->rotation[2]);
+			return creature_obstacles::LeaningPlacement(angles.y, angles.x, angles.z, at->scale.x);
 		}
-		for (const auto& corner : subMesh->GetSurface().positions)
-		{
-			const auto world = at->position + (at->rotation * (at->scale * corner));
-			const auto away = world - centre;
-			if (glm::dot(away, away) < limit)
-			{
-				return true;
-			}
-		}
-	}
-	return false;
+		return creature_obstacles::UprightPlacement(creature_obstacles::YAngleOf(at->rotation), at->scale.x);
+	}();
+	return std::ranges::any_of(model.GetSubMeshes(), [&](const auto& subMesh) {
+		return (subMesh->GetFlags().lodMask & 1U) != 0 &&
+		       std::ranges::any_of(subMesh->GetSurface().positions, [&](const glm::vec3& corner) {
+			       return creature_stomp::CornerInSphere(rows, at->position, corner, centre, radius);
+		       });
+	});
 }
 
 /// What a sphere of the body does to a thing in its cell

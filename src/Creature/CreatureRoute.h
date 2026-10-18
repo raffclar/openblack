@@ -67,14 +67,19 @@ public:
 	/// of land joined up side by side is open and the rest cut off, and open cells with water in them or none at all
 	/// are water
 	[[nodiscard]] static WalkableLand Build(const CornerHeight& height, const CellWater& water);
+	/// A land with the sorts given cell by cell, row after row of x; any cell not given is open
+	[[nodiscard]] static WalkableLand OfCells(std::vector<Ground> cells);
 
 	[[nodiscard]] Ground At(int32_t x, int32_t z) const;
 	[[nodiscard]] Ground AtPoint(glm::vec2 point) const;
-	/// Whether a creature may stand at a point: its cell is open or water, and no cell it may not stand on has its
-	/// centre within the radius
+	/// Whether a creature may stand at a point: its cell is open or water, and no cell next to it that it may not stand
+	/// on has its centre within the radius. The cell is the point times a tenth, truncated. A cell next to it that is off
+	/// the land does not count. The squares of the distance and the radius are compared.
 	[[nodiscard]] bool IsValid(glm::vec2 point, float radius) const;
-	/// The nearest point where a creature may stand, searching outwards in 16 directions half a unit at a time
-	[[nodiscard]] std::optional<glm::vec2> NearestValid(glm::vec2 point, float radius, float maxDistance) const;
+	/// The game's search for a place to stand near a point, at the destination clearance. It does not try the point
+	/// itself. It goes out from half a unit to 999.5 units, half a unit at a time. At each distance it tries 16
+	/// directions in turn, the first along x and then a sixteenth of a turn towards z each time.
+	[[nodiscard]] std::optional<glm::vec2> NearestStandable(glm::vec2 point) const;
 
 private:
 	std::vector<Ground> _cells;

@@ -111,8 +111,4 @@ constexpr float k_LateArrival = 0.1f;
 /// game does (where the step ends is judged with only the sideways part turned round).
 [[nodiscard]] glm::vec3 StepMove(glm::vec3 travel, const glm::mat3& rotation, float modelScale, float stepMs, float durationMs,
                                  bool mirrored);
-/// After a frame of the step, a creature that stands too near ground it may not stand on is put at the nearest place it
-/// may, searched for from half a unit out to below a thousand, with a little more room than the test needs
-constexpr float k_StepSearchClearance = 7.1f;
-constexpr float k_StepSearchDistance = 999.5f;
 } // namespace openblack::creature_catch

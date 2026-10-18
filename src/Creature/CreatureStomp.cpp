@@ -242,3 +242,10 @@ Blow creature_stomp::TrampleBlow(const glm::vec3& point, const glm::vec3& move, 
 	const auto speed = (length * k_TrampleBlowPerMove) * k_TrampleBlowShare;
 	return {.point = point, .velocity = way * speed, .reach = sphereRadius};
 }
+
+bool creature_stomp::CornerInSphere(const creature_obstacles::PlacementRows& rows, const glm::vec3& position,
+                                    const glm::vec3& corner, const glm::vec3& centre, float radius)
+{
+	const auto away = creature_obstacles::PlacedInWorld(rows, corner, position) - centre;
+	return x87::DotZyx(away, away) < radius * radius;
+}

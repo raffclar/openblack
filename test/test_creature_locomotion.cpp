@@ -12,6 +12,8 @@
 
 #include <bit>
 #include <numbers>
+#include <optional>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -244,12 +246,64 @@ TEST(CreatureLocomotion, ArrivalRings)
 	EXPECT_NEAR(TimeLimitMs(100.0f), 5200.0f, k_Tolerance);
 }
 
-TEST(CreatureLocomotion, RunsAwayFromTheThreat)
+namespace
 {
-	const auto point = RunAwayPoint({10.0f, 0.0f}, {0.0f, 0.0f}, 50.0f);
-	EXPECT_NEAR(point.x, 60.0f, k_Tolerance);
-	EXPECT_NEAR(point.y, 0.0f, k_Tolerance);
-	EXPECT_NEAR(glm::length(RunAwayPoint({3.0f, 3.0f}, {3.0f, 3.0f}, 20.0f) - glm::vec2(3.0f, 3.0f)), 20.0f, k_Tolerance);
+/// A creature in the middle of map cell (100, 100)
+constexpr map_coords::MapCoords k_InCell {.x = (100 << 16) | 0x8000, .z = (100 << 16) | 0x8000, .altitude = 2.0f};
+
+RunAwayLand OpenLand(float ground = 7.0f)
+{
+	return {.cellClear = [](int32_t, int32_t) { return true; },
+	        .ground = [ground](const map_coords::MapCoords&) { return ground; },
+	        .canStand = [](glm::vec2) { return true; },
+	        .nearestStand = [](glm::vec2) { return std::optional<glm::vec2>(); }};
+}
+} // namespace
+
+TEST(CreatureLocomotion, RunsAwayToTheCornerOfTheCellItAimsAt)
+{
+	// The way from the threat to the cell corner (1000, 1000) is along x; 10 + 40 units on is cell 105
+	const auto point = RunAwayPoint(k_InCell, {950.0f, 1000.0f}, 10, 40.0f, OpenLand());
+	EXPECT_EQ(point, glm::vec3(1050.0f, 7.0f, 1000.0f));
+	// A threat on the corner sends it along x too
+	EXPECT_EQ(RunAwayPoint(k_InCell, {1000.0f, 1000.0f}, 0, 20.0f, OpenLand()), glm::vec3(1020.0f, 7.0f, 1000.0f));
+}
+
+TEST(CreatureLocomotion, RunsAwayToTheFirstClearCellOfTheSpiral)
+{
+	auto land = OpenLand();
+	// The aimed cell is not clear; the spiral's first step goes one cell back along x
+	land.cellClear = [](int32_t x, int32_t z) { return !(x == 105 && z == 100); };
+	EXPECT_EQ(RunAwayPoint(k_InCell, {950.0f, 1000.0f}, 10, 40.0f, land), glm::vec3(1040.0f, 7.0f, 1000.0f));
+	// With no clear cell it stays where it is, at its own height above the ground
+	land.cellClear = [](int32_t, int32_t) { return false; };
+	EXPECT_EQ(RunAwayPoint(k_InCell, {950.0f, 1000.0f}, 10, 40.0f, land), glm::vec3(1005.0f, 9.0f, 1005.0f));
+}
+
+TEST(CreatureLocomotion, RunsAwayToTheNearestPlaceToStandOnlyWhenNearEnough)
+{
+	auto land = OpenLand(3.0f);
+	land.canStand = [](glm::vec2 at) { return at.x < 1045.0f; };
+	land.nearestStand = [](glm::vec2) { return std::optional<glm::vec2>(glm::vec2(1040.0f, 1000.0f)); };
+	EXPECT_EQ(RunAwayPoint(k_InCell, {950.0f, 1000.0f}, 10, 40.0f, land), glm::vec3(1040.0f, 0.0f, 1000.0f));
+	// The search's point has no height, so high ground puts it out of reach
+	land.ground = [](const map_coords::MapCoords&) { return 40.0f; };
+	EXPECT_EQ(RunAwayPoint(k_InCell, {950.0f, 1000.0f}, 10, 40.0f, land), glm::vec3(1050.0f, 40.0f, 1000.0f));
+}
+
+TEST(CreatureLocomotion, RunsAwayWithNoPlaceToStandTestsWhatTheSearchLeft)
+{
+	auto land = OpenLand();
+	std::vector<glm::vec2> tested;
+	land.canStand = [&tested](glm::vec2 at) {
+		tested.push_back(at);
+		return false;
+	};
+	EXPECT_EQ(RunAwayPoint(k_InCell, {950.0f, 1000.0f}, 10, 40.0f, land), glm::vec3(1050.0f, 7.0f, 1000.0f));
+	ASSERT_EQ(tested.size(), 2u);
+	// The cell across as the bits of a float, and the distance along z
+	EXPECT_EQ(std::bit_cast<uint32_t>(tested[1].x), 100u);
+	EXPECT_EQ(tested[1].y, 0.0f);
 }
 
 TEST(CreatureLocomotion, ATurnOnTheSpotOfNoneUsesTheSpinsToTheRight)

@@ -1859,7 +1859,7 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		placeReachable = walkable.IsValid(at, creature_route::k_DestinationClearance);
 		if (!placeReachable)
 		{
-			reachable = walkable.NearestValid(at, creature_route::k_DestinationClearance, orders::k_NearestReachableSearch);
+			reachable = walkable.NearestStandable(at);
 		}
 	}
 	const auto home = CitadelHome(registry, creature);

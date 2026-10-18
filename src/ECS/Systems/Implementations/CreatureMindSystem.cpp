@@ -1783,7 +1783,7 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		}
 		const glm::vec2 at {store->position.x, store->position.z};
 		const auto height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
-		const auto flight = creature_throw::FlightTime(glm::distance(at, glm::vec2(self->position.x, self->position.z)));
+		const auto flight = creature_throw::FlightTime(self->position, {at.x, height, at.y});
 		hands.ThrowTaking(creature, {at.x, height, at.y}, flight);
 		break;
 	}
