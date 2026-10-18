@@ -132,15 +132,20 @@ TEST(HandHoldPose, UprightTheSeedTakesTheHandsTurn)
 
 TEST(HandHoldPose, TheSeedTurnsHalfRoundForARightHandAndByItsOwnTurn)
 {
-	const glm::mat3 basis {1.0f};
-	const auto left = SeedTurn(basis, 0.0f, false);
-	ExpectNear(left[0], {1.0f, 0.0f, 0.0f});
-	const auto right = SeedTurn(basis, 0.0f, true);
-	ExpectNear(right[0], {-1.0f, 0.0f, 0.0f});
-	ExpectNear(right[2], {0.0f, 0.0f, -1.0f});
-	ExpectNear(right[1], {0.0f, 1.0f, 0.0f});
+	// With the hand's heading at zero, the frame faces along +z and its side is -x
+	const glm::vec3 up {0.0f, 1.0f, 0.0f};
+	const auto left = SeedTurn(HeldFrame(0.0f, up, 2.5f, false), 0.0f);
+	ExpectNear(left[0], {-1.0f, 0.0f, 0.0f});
+	ExpectNear(left[1], up);
+	ExpectNear(left[2], {0.0f, 0.0f, -1.0f});
+	// A mirrored hand turns the seed half round about its up
+	const auto right = SeedTurn(HeldFrame(0.0f, up, 2.5f, true), 0.0f);
+	ExpectNear(right[0], {1.0f, 0.0f, 0.0f});
+	ExpectNear(right[2], {0.0f, 0.0f, 1.0f});
+	ExpectNear(right[1], up);
 	// The ground flock turned a quarter round
-	const auto quarter = SeedTurn(basis, std::numbers::pi_v<float> * 0.5f, false);
+	const glm::mat3 basis {1.0f};
+	const auto quarter = SeedTurn(basis, std::numbers::pi_v<float> * 0.5f);
 	ExpectNear(quarter[0], {0.0f, 0.0f, 1.0f});
 	ExpectNear(quarter[2], {-1.0f, 0.0f, 0.0f});
 }

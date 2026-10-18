@@ -206,3 +206,68 @@ TEST(HandFeel, PullingAThingOutOfTheGroundLeavesTheHoverWhereItWas)
 	EXPECT_GT(hover.GetValue(), 110.0f);
 	EXPECT_LT(hover.GetValue(), 112.0f);
 }
+
+TEST(HandFeel, AMiraclesIconIsRestedNearerByTheHandsHeight)
+{
+	EXPECT_EQ(hand_feel::FeelOf({.spellIcon = true}), hand_feel::Feel::AtIcon);
+	// What the hand holds is still no thing to it
+	EXPECT_EQ(hand_feel::FeelOf({.ignored = true, .spellIcon = true}), hand_feel::Feel::Nothing);
+	// An icon 40 along the line: the hand eases to 3.2 nearer, so it does not go into the icon
+	const auto hover = hand_feel::HoverDistancesOf({.camera = {},
+	                                                .land = glm::vec3(0.0f, 0.0f, -60.0f),
+	                                                .restOnThing = glm::vec3(0.0f, 0.0f, -40.0f),
+	                                                .restNearer = hand_feel::k_IconGap,
+	                                                .handHeight = 3.2f,
+	                                                .minDistance = 2.0f,
+	                                                .reach = 1000.0f});
+	EXPECT_EQ(hover.target, 40.0f - 3.2f);
+	// An icon nearer than the gap still keeps the hand a unit out
+	const auto close = hand_feel::HoverDistancesOf({.camera = {},
+	                                                .land = glm::vec3(0.0f, 0.0f, -60.0f),
+	                                                .restOnThing = glm::vec3(0.0f, 0.0f, -2.0f),
+	                                                .restNearer = hand_feel::k_IconGap,
+	                                                .handHeight = 3.2f,
+	                                                .minDistance = 2.0f,
+	                                                .reach = 1000.0f});
+	EXPECT_EQ(close.target, 1.0f);
+}
+
+TEST(HandFeel, OverTheHelpsTextBubbleTheHandEasesToTheBubble)
+{
+	const auto hover = hand_feel::HoverDistancesOf({.camera = {},
+	                                                .land = glm::vec3(0.0f, 0.0f, -60.0f),
+	                                                .bubbleDistance = 12.5f,
+	                                                .cursorPoint = glm::vec3(0.0f, 0.0f, -56.8f),
+	                                                .handHeight = 3.2f,
+	                                                .minDistance = 2.0f,
+	                                                .reach = 1000.0f});
+	EXPECT_EQ(hover.target, 12.5f);
+	// The land still limits how far it may be
+	EXPECT_NEAR(hover.limit, 56.8f, 1e-4f);
+	const auto touching = hand_feel::HoverDistancesOf({.camera = {}, .bubbleDistance = 0.5f, .currentDistance = 20.0f});
+	EXPECT_EQ(touching.target, 1.0f);
+}
+
+TEST(HandFeel, WatchingAFightOrOfferingTheHoverEasesOutOverTwoSeconds)
+{
+	Zoomer usual(100.0f);
+	Zoomer slow(100.0f);
+	hand_feel::EaseHover(usual, 150.0f, 0.016f, false, false);
+	hand_feel::EaseHover(slow, 150.0f, 0.016f, false, true);
+	EXPECT_FLOAT_EQ(usual.GetDuration(), hand_feel::k_HoverEaseOutSeconds);
+	EXPECT_FLOAT_EQ(slow.GetDuration(), hand_feel::k_HoverSlowEaseOutSeconds);
+	EXPECT_LT(slow.GetValue() - 100.0f, usual.GetValue() - 100.0f);
+	// Towards the camera it eases in quickly all the same
+	Zoomer in(100.0f);
+	hand_feel::EaseHover(in, 50.0f, 0.016f, false, true);
+	EXPECT_FLOAT_EQ(in.GetDuration(), hand_feel::k_HoverEaseInSeconds);
+	// Already moving in at a unit a second or faster, it eases out at the usual time
+	Zoomer fast(100.0f);
+	fast.Carry(100.0f, -1.0f);
+	hand_feel::EaseHover(fast, 150.0f, 0.016f, false, true);
+	EXPECT_FLOAT_EQ(fast.GetDuration(), hand_feel::k_HoverEaseOutSeconds);
+	Zoomer drifting(100.0f);
+	drifting.Carry(100.0f, -0.5f);
+	hand_feel::EaseHover(drifting, 150.0f, 0.016f, false, true);
+	EXPECT_FLOAT_EQ(drifting.GetDuration(), hand_feel::k_HoverSlowEaseOutSeconds);
+}

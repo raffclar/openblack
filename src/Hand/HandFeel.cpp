@@ -45,6 +45,10 @@ hand_feel::Feel hand_feel::FeelOf(const Picked& picked)
 	{
 		return Feel::Nothing;
 	}
+	if (picked.spellIcon)
+	{
+		return Feel::AtIcon;
+	}
 	if (picked.living)
 	{
 		return picked.creature ? Feel::OnModel : Feel::AtPosition;
@@ -157,8 +161,17 @@ hand_feel::HoverDistances hand_feel::HoverDistancesOf(const Hover& hover)
 {
 	const float limit = HoverLimit(hover);
 	// The hand eases to the distance of the point it rests at, or else of the cursor's point at the limit
+	// Over the help's text bubble it eases to the bubble's distance
 	const auto at = hover.restOnThing.has_value() ? hover.restOnThing : hover.cursorPoint;
-	const float target = at.has_value() ? x87::Distance<x87::SumOrder::Xzy>(hover.camera, *at) : limit;
+	float target = limit;
+	if (hover.bubbleDistance.has_value())
+	{
+		target = *hover.bubbleDistance;
+	}
+	else if (at.has_value())
+	{
+		target = x87::Distance<x87::SumOrder::Xzy>(hover.camera, *at) - hover.restNearer;
+	}
 	return {.target = std::max(target, 1.0f), .limit = limit};
 }
 
@@ -167,13 +180,19 @@ glm::vec3 hand_feel::UnitUp(glm::vec3 up)
 	return Unit<x87::SumOrder::Zyx>(up);
 }
 
-void hand_feel::EaseHover(Zoomer& hover, float target, float seconds, bool pulling)
+void hand_feel::EaseHover(Zoomer& hover, float target, float seconds, bool pulling, bool slowOut)
 {
 	if (pulling)
 	{
 		return;
 	}
-	hover.SetDestination(target, hover.GetValue() <= target ? k_HoverEaseOutSeconds : k_HoverEaseInSeconds);
+	auto easeSeconds = k_HoverEaseInSeconds;
+	if (hover.GetValue() <= target)
+	{
+		easeSeconds =
+		    slowOut && !(hover.GetSpeed() <= k_HoverSlowEaseSpeedLimit) ? k_HoverSlowEaseOutSeconds : k_HoverEaseOutSeconds;
+	}
+	hover.SetDestination(target, easeSeconds);
 	hover.Update(seconds);
 	if (hover.GetValue() < 1.0f)
 	{

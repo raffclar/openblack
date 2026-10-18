@@ -90,6 +90,8 @@ public:
 	virtual bool LetGoAt(glm::vec3 /*velocity*/) { return false; }
 	/// The creature the hand offers what it holds to, while it does; the creature reaching for it once given
 	[[nodiscard]] virtual std::optional<entt::entity> GetOfferedCreature() const { return std::nullopt; }
+	/// Whether the hand holds a thing and offers it to a creature while the offer lasts
+	[[nodiscard]] virtual bool OffersToCreature() const { return false; }
 	/// How far round what the hand holds is turned as it is offered, rolled with the hand about the line to the camera,
 	/// in radians
 	[[nodiscard]] virtual float GetOfferTurn() const { return 0.0f; }

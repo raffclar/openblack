@@ -109,7 +109,7 @@ bool HandHoldPoser::Pose(const std::optional<HeldSeed>& seed, const Frame& frame
 	if (auto* transform = registry.TryGet<Transform>(seed->entity))
 	{
 		transform->position = hand.position - up * seed->hang;
-		transform->rotation = SeedTurn(basis, seed->yRotate, frame.rightHanded);
+		transform->rotation = SeedTurn(HeldFrame(frame.heading, up, frame.handScale, frame.rightHanded), seed->yRotate);
 	}
 	return true;
 }

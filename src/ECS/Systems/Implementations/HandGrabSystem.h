@@ -68,6 +68,7 @@ public:
 	bool LetGoAt(glm::vec3 velocity) override;
 	bool GiveHeldTo(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> GetOfferedCreature() const override;
+	[[nodiscard]] bool OffersToCreature() const override;
 	[[nodiscard]] float GetOfferTurn() const override;
 
 private:
