@@ -202,3 +202,37 @@ TEST(WorshipBattery, AStrainedSiteChargesNoIcons)
 	EXPECT_FLOAT_EQ(icons[0].store, 0.0f);
 	EXPECT_FLOAT_EQ(site.strain, 2.0f);
 }
+
+TEST(WorshipBattery, AnIconWhoseFullSeedIsHeldGetsNoShare)
+{
+	const WorshipBatteryRules rules {.chantsPerVillager = 2.0f, .chantsToFillBattery = 100.0f};
+	WorshipBattery site {.available = 20.0f};
+	// The first icon's seed is in the hand and needs nothing more. The second icon's seed is in the hand and needs 6,
+	// whatever the icon stored. The third icon has no seed in the hand and needs 10.
+	std::array<WorshipIconCharge, 3> icons {
+	    WorshipIconCharge {.charging = true, .seedHeld = true, .required = 0.0f, .store = 3.0f},
+	    WorshipIconCharge {.charging = true, .seedHeld = true, .required = 6.0f, .store = 5.0f},
+	    WorshipIconCharge {.charging = true, .required = 10.0f, .store = 0.0f},
+	};
+	EXPECT_EQ(IconNeed(icons[0]), 0.0f);
+	EXPECT_EQ(IconNeed(icons[1]), 6.0f);
+	// Two icons need 16 in all, of 20 available: 8 each. The second icon fills to its 6 and the site is charged the 7
+	// that overflowed.
+	const float drawn = ChargeWorshipIcons(site, rules, 5, icons);
+	EXPECT_EQ(icons[0].store, 3.0f);
+	EXPECT_EQ(icons[1].store, 6.0f);
+	EXPECT_EQ(icons[2].store, 8.0f);
+	EXPECT_EQ(drawn, 15.0f);
+}
+
+TEST(WorshipBattery, ChargingTheIconsLeavesTheTurnOpen)
+{
+	const WorshipBatteryRules rules {.chantsPerVillager = 2.0f, .chantsToFillBattery = 100.0f};
+	WorshipBattery site {.battery = 4.0f, .available = 20.0f};
+	std::array<WorshipIconCharge, 1> icons {WorshipIconCharge {.charging = true, .required = 10.0f}};
+	EXPECT_EQ(ChargeWorshipIcons(site, rules, 5, icons), 10.0f);
+	// The battery and what is available close only when the turn ends
+	EXPECT_EQ(site.used, 10.0f);
+	EXPECT_EQ(site.available, 20.0f);
+	EXPECT_EQ(site.battery, 4.0f);
+}
