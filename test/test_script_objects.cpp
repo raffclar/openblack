@@ -624,3 +624,25 @@ TEST(ScriptObjectsSystem, AnObjectLetGoOfStaysInAScriptUntilTheScriptsTurnEnds)
 	EXPECT_FALSE(world->objects.at(found).inScript);
 	EXPECT_TRUE(system->Places().empty());
 }
+
+TEST(ScriptObjectsSystem, AControlledVillagerIsReleasedWhenTheLastTaskThatHoldsItEnds)
+{
+	auto [world, system] = MakeSystem();
+	const auto villager = world->Add(4, {.kind = Kind::Villager});
+	system->EnterNative(k_MoveNative);
+	ASSERT_TRUE(system->Fetch(villager) == villager);
+	system->AddReference(villager);
+	system->AddReference(villager);
+	ASSERT_TRUE(world->objects.at(villager).controlled);
+	// One task ends: the other task holds the villager still
+	system->RemoveReference(villager);
+	system->ReleaseUnreferenced();
+	EXPECT_TRUE(world->objects.at(villager).controlled);
+	EXPECT_TRUE(world->decided.empty());
+	// The last task ends or is stopped: the villager goes back to the game and decides what to do
+	system->RemoveReference(villager);
+	system->ReleaseUnreferenced();
+	EXPECT_FALSE(world->objects.at(villager).controlled);
+	EXPECT_FALSE(world->objects.at(villager).inScript);
+	EXPECT_EQ(world->decided, std::vector {villager});
+}

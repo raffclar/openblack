@@ -1788,3 +1788,29 @@ TEST(DiscipleGlow, TheFrameComesFromTheMillisecondsIntoTheHalfSecond)
 	EXPECT_EQ(ecs::villager_disciple::GlowFrame(1400), 12u);
 	EXPECT_EQ(ecs::villager_disciple::GlowFrame(99), 2u);
 }
+
+TEST(VillagerAvailability, AVillagerThatAScriptControlsReactsAgainWhenTheScriptReleasesIt)
+{
+	magic::villager_reaction::Availability facts {.stateLetsItReact = true, .life = 0.8f, .crawlLife = 0.1f};
+	ASSERT_TRUE(magic::villager_reaction::Available(facts, Reaction::FleeFromObject));
+	// The script takes control: the villager takes up no reaction, also not food
+	facts.scriptControlled = true;
+	EXPECT_FALSE(magic::villager_reaction::Available(facts, Reaction::FleeFromObject));
+	EXPECT_FALSE(magic::villager_reaction::Available(facts, Reaction::ReactToFood));
+	// The script releases it: it reacts again
+	facts.scriptControlled = false;
+	EXPECT_TRUE(magic::villager_reaction::Available(facts, Reaction::FleeFromObject));
+}
+
+TEST(VillagerAvailability, AWeakVillagerReactsOnlyToFoodAndADyingOneToNothing)
+{
+	magic::villager_reaction::Availability facts {.stateLetsItReact = true, .life = 0.1f, .crawlLife = 0.1f};
+	EXPECT_FALSE(magic::villager_reaction::Available(facts, Reaction::FleeFromObject));
+	EXPECT_TRUE(magic::villager_reaction::Available(facts, Reaction::ReactToFood));
+	facts.life = 0.5f;
+	facts.dyingNow = true;
+	EXPECT_FALSE(magic::villager_reaction::Available(facts, Reaction::ReactToFood));
+	facts.dyingNow = false;
+	facts.stateLetsItReact = false;
+	EXPECT_FALSE(magic::villager_reaction::Available(facts, Reaction::ReactToFood));
+}

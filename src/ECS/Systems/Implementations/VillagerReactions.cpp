@@ -382,10 +382,7 @@ bool villager_reactions::Available(entt::entity villager, Reaction type)
 	}
 	// Judged by the state it is to end up in, which must let it react, and not be dying, dead or past reacting
 	const auto state = FinalStateOf(*action);
-	if (StateInfo(state).availableForReaction == 0)
-	{
-		return false;
-	}
+	bool stateLetsItReact = StateInfo(state).availableForReaction != 0;
 	switch (state)
 	{
 	case VillagerStates::InDance:
@@ -396,21 +393,21 @@ bool villager_reactions::Available(entt::entity villager, Reaction type)
 	case VillagerStates::Downed:
 	case VillagerStates::BeingEaten:
 	case VillagerStates::WaitForAnimation:
-		return false;
+		stateLetsItReact = false;
+		break;
 	default:
 		break;
 	}
-	// Nor dying where it is now
+	// Nor dying where it is now, nor under the control of a script, and too weak to react to anything but food
 	const auto now = StateOf(*action, LivingAction::Index::Top);
-	if (now == VillagerStates::SetDying || now == VillagerStates::Dying)
-	{
-		return false;
-	}
-	// Too weak to react to anything but food
-	// TODO(raffclar): the game also keeps these villagers from reacting: one that a script controls, one on a structure
-	// and one in a football match. openblack does not set or clear the script control as the game does, and has no
-	// structures or football yet.
-	return type == Reaction::ReactToFood || component->life > InfoOf(*component).lifeWhenCrawlsWounded;
+	// TODO(raffclar): the game also keeps these villagers from reacting: one on a structure and one in a football match.
+	// openblack has no structures or football yet.
+	return magic::villager_reaction::Available({.stateLetsItReact = stateLetsItReact,
+	                                            .dyingNow = now == VillagerStates::SetDying || now == VillagerStates::Dying,
+	                                            .scriptControlled = registry.AllOf<ScriptControlled>(villager),
+	                                            .life = component->life,
+	                                            .crawlLife = InfoOf(*component).lifeWhenCrawlsWounded},
+	                                           type);
 }
 
 villager_reactions::Taken villager_reactions::Start(entt::entity villager, Reaction type, LivingReaction& state,

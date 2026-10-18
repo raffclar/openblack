@@ -103,6 +103,15 @@ float villager_reaction::SpreadDistance(glm::vec2 villager, glm::vec2 reaction)
 	return (across + along) * 0.5f;
 }
 
+bool villager_reaction::Available(const Availability& facts, openblack::Reaction type)
+{
+	if (!facts.stateLetsItReact || facts.dyingNow || facts.scriptControlled)
+	{
+		return false;
+	}
+	return type == openblack::Reaction::ReactToFood || facts.life > facts.crawlLife;
+}
+
 uint8_t villager_reaction::VillagerInHandPriority(const VillagerInHandWatch& watch, uint32_t breederPriority)
 {
 	if (!watch.heldIsVillager || !watch.heldInHand || !watch.watcherSexuallyActive || !watch.otherSex || !watch.samePlayer ||

@@ -590,6 +590,10 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	{
 		Locator::livingActionSystem::value().VillagerSetScriptState(entity, VillagerStates::InScript);
 	}
+	if (object.scriptControlled && registry.AllOf<ecs::components::Villager>(entity))
+	{
+		registry.AssignOrReplace<ecs::components::ScriptControlled>(entity);
+	}
 	if (object.disciple != VillagerDisciple::None && registry.AllOf<ecs::components::Villager>(entity))
 	{
 		ecs::villager_disciple::SetType(entity, object.disciple);
@@ -1851,6 +1855,17 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return HandTakeFireBall();
 	case Kind::HandTapObject:
 		return HandTapObject(command.object);
+	case Kind::ScriptRelease:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::scriptObjects::has_value())
+		{
+			return "nothing to release";
+		}
+		Locator::scriptObjects::value().ReleaseFromScript(*object);
+		return Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptControlled>(*object) ? "still controlled"
+		                                                                                            : "released";
+	}
 	case Kind::RemoveObject:
 	{
 		const auto object = ObjectAt(command.object);
@@ -2380,7 +2395,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
-	    command.kind == Kind::PlayGuidanceVoice)
+	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2990,6 +3005,7 @@ void Runner::Give(const Command& command)
 	case Kind::AttachObjectScriptSound:
 	case Kind::SayLine:
 	case Kind::PlayGuidanceVoice:
+	case Kind::ScriptRelease:
 	case Kind::RemoveObject:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
