@@ -112,8 +112,12 @@ AudioManager::~AudioManager()
 	_customMusic.reset();
 	_musicPlayer.reset();
 	_musicStreams.reset();
-	auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<AudioEmitter>([this](entt::entity entity, const AudioEmitter&) { DestroyEmitter(entity); });
+	// The sound can go before the game has made its registry, or after the game removed it
+	if (Locator::entitiesRegistry::has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		registry.Each<AudioEmitter>([this](entt::entity entity, const AudioEmitter&) { DestroyEmitter(entity); });
+	}
 
 	// Stops the atmosphere voices before their buffers go
 	_atmos.reset();

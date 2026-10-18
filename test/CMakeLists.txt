@@ -1394,3 +1394,5 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_vortex_crossing_file test_vortex_crossing_file.cpp)
 openblack_setup_and_add_test(test_world_archive test_world_archive.cpp)
+openblack_setup_and_add_test(test_help_without_sound test_help_without_sound.cpp)
+target_link_libraries(test_help_without_sound PRIVATE pack lnd)
