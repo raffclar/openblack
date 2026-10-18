@@ -37,10 +37,14 @@ using namespace openblack::help;
 
 namespace
 {
-/// A sound device that plays nothing
+/// A sound device that plays nothing. The test can lose it, as the machine can lose its sound device.
 class FakeSoundDevice final: public AudioPlayerInterface
 {
 public:
+	explicit FakeSoundDevice(std::shared_ptr<bool> connected)
+	    : _connected(std::move(connected))
+	{
+	}
 	void Initialize() override {}
 	void UpdateListener(glm::vec3, glm::vec3, glm::vec3) const override {}
 	BufferId CreateBuffer(ChannelLayout, const std::vector<int16_t>&, int) override { return _nextBuffer++; }
@@ -66,18 +70,20 @@ public:
 	[[nodiscard]] float GetProgress(size_t, SourceId) const override { return 0.0f; }
 	std::vector<BufferId> UnqueueProcessedBuffers(SourceId) override { return {}; }
 	[[nodiscard]] uint32_t GetSampleOffset(SourceId) const override { return 0; }
+	[[nodiscard]] bool IsDeviceConnected() const override { return *_connected; }
 
 private:
+	std::shared_ptr<bool> _connected;
 	BufferId _nextBuffer {1};
 	SourceId _nextSource {1};
 };
 
 /// The game's sound: with the fake device, or with no device, as the game starts when it cannot open one
-std::unique_ptr<AudioManagerInterface> MakeSound(bool withDevice)
+std::unique_ptr<AudioManagerInterface> MakeSound(bool withDevice, const std::shared_ptr<bool>& connected)
 {
 	if (withDevice)
 	{
-		return std::make_unique<AudioManager>(std::make_unique<FakeSoundDevice>());
+		return std::make_unique<AudioManager>(std::make_unique<FakeSoundDevice>(connected));
 	}
 	return std::make_unique<AudioManagerNoOp>();
 }
@@ -86,12 +92,14 @@ std::unique_ptr<AudioManagerInterface> MakeSound(bool withDevice)
 struct Fixture
 {
 	explicit Fixture(bool withDevice)
-	    : audio(MakeSound(withDevice))
+	    : audio(MakeSound(withDevice, connected))
 	{
 		texts[4364] = {.narrator = k_NarratorGoodAdvisor, .text = u"one two three"};
 		texts[4365] = {.narrator = k_NarratorEvilAdvisor, .text = u"four five"};
 	}
 
+	/// The fake device works while this is true
+	std::shared_ptr<bool> connected = std::make_shared<bool>(true);
 	std::unique_ptr<AudioManagerInterface> audio;
 	std::map<uint32_t, DialogueText::Text> texts;
 	int32_t nowMs {10000};
@@ -167,5 +175,27 @@ TEST(HelpWithoutSound, WithNoDeviceEachLineWaitsForItsReadingTime)
 	dialogue.RunText(true, 4365, 0);
 	EXPECT_FALSE(dialogue.IsTextRead());
 	f.nowMs = 12301 + 1801;
+	EXPECT_TRUE(dialogue.IsTextRead());
+}
+
+TEST(HelpWithoutSound, TheSoundIsNotInstalledOnceTheDeviceIsLost)
+{
+	Fixture f(true);
+	EXPECT_TRUE(f.audio->IsInstalled());
+	*f.connected = false;
+	EXPECT_FALSE(f.audio->IsInstalled());
+}
+
+TEST(HelpWithoutSound, ALineIsReadOnItsReadingTimeWhenTheDeviceIsLostWhileItIsSaid)
+{
+	Fixture f(true);
+	auto dialogue = f.Make();
+	dialogue.RunText(true, 4364, 0);
+	EXPECT_EQ(f.advisorSaid, std::vector<uint32_t> {4364});
+	// The device goes and its line stops playing
+	*f.connected = false;
+	f.nowMs = 11000;
+	EXPECT_FALSE(dialogue.IsTextRead());
+	f.nowMs = 12301;
 	EXPECT_TRUE(dialogue.IsTextRead());
 }

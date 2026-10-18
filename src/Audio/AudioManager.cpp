@@ -80,6 +80,11 @@ AudioManager::AudioManager()
 {
 }
 
+bool AudioManager::IsInstalled() const
+{
+	return _audioPlayer->IsDeviceConnected();
+}
+
 AudioManager::AudioManager(std::unique_ptr<AudioPlayerInterface> player)
     : _audioPlayer(std::move(player))
 {
