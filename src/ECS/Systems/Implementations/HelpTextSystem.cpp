@@ -48,6 +48,12 @@ bool Sounding(entt::entity emitter)
 	return audio.EmitterExists(emitter) && audio.GetStatus(emitter) != audio::AudioStatus::Stopped;
 }
 
+/// The real time since the game started, in milliseconds
+uint32_t NowMs()
+{
+	return static_cast<uint32_t>(Locator::time::value().GetElapsedTime().count());
+}
+
 /// A line's recording decoded once more, as the sound plays it, with the cue labels its gestures are read from
 help::AdvisorVoices::Recording LineRecording(const audio::Sound& sound)
 {
@@ -95,14 +101,23 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 			return false;
 		}
 		// Heard everywhere, wherever the advisor is. The voice rules know the advisors' lines by their own number.
-		_advisorLine = Locator::audio::value().StartSoundEffect(
+		auto& sounds = Locator::audio::value();
+		_advisorLine = sounds.StartSoundEffect(
 		    *sound, {.voiceOwner = audio::VoiceOwner::Number, .ownerNumber = audio::k_AdvisorOwnerNumber});
 		// Its length is known once it has been made ready to play
-		_advisorLineMs = Locator::resources::value().GetSounds().Handle(*sound)->duration * 1000.0f;
-		return _advisorLine != entt::null;
+		_advisorPlayback = {
+		    .startMs = NowMs(),
+		    .lengthMs = Locator::resources::value().GetSounds().Handle(*sound)->duration * 1000.0f,
+		};
+		// With the sound device lost, the line starts as if the device is still there
+		return _advisorLine != entt::null || sounds.IsDeviceLost();
 	};
-	audio.isPlaying = [this](uint32_t) { return Sounding(_advisorLine); };
+	audio.isPlaying = [this](uint32_t) { return AdvisorLinePlays(); };
 	audio.percentageDone = [this](uint32_t) {
+		if (Locator::audio::value().IsDeviceLost())
+		{
+			return _advisorPlayback.Progress(NowMs());
+		}
 		return Sounding(_advisorLine) ? Locator::audio::value().GetProgress(_advisorLine) : 1.0f;
 	};
 	audio.stop = [this](uint32_t) {
@@ -111,6 +126,7 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 			Locator::audio::value().StopEmitter(_advisorLine);
 		}
 		_advisorLine = entt::null;
+		_advisorPlayback = {};
 	};
 	audio.recording = [](uint32_t line) -> std::optional<help::AdvisorVoices::Recording> {
 		const auto sound = Locator::helpSpeechSystem::value().GetTable().FindSound(audio::SpeechBank::HelpSprites, line);
@@ -130,15 +146,24 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 		return recording;
 	};
 	audio.playPositionMs = [this](uint32_t) -> int64_t {
-		if (!Sounding(_advisorLine))
+		if (!AdvisorLinePlays())
 		{
 			return -1;
 		}
-		return static_cast<int64_t>(Locator::audio::value().GetProgress(_advisorLine) * _advisorLineMs);
+		if (Locator::audio::value().IsDeviceLost())
+		{
+			return static_cast<int64_t>(NowMs() - _advisorPlayback.startMs);
+		}
+		return static_cast<int64_t>(Locator::audio::value().GetProgress(_advisorLine) * _advisorPlayback.lengthMs);
 	};
-	audio.tickMs = []() { return static_cast<uint32_t>(Locator::time::value().GetElapsedTime().count()); };
+	audio.tickMs = []() { return NowMs(); };
 	audio.localRand = [](int32_t n) { return Locator::gameRandom::value().LocalRand(n); };
 	return audio;
+}
+
+bool HelpTextSystem::AdvisorLinePlays() const
+{
+	return audio::PlaysOn(Sounding(_advisorLine), Locator::audio::value().IsDeviceLost(), _advisorPlayback, NowMs());
 }
 
 help::AdvisorVoices::Hooks HelpTextSystem::VoiceHooks()

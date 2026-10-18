@@ -15,6 +15,7 @@
 #include <array>
 #include <random>
 
+#include <AL/alext.h>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
@@ -330,6 +331,18 @@ uint32_t AudioPlayer::GetSampleOffset(SourceId id) const
 	ALint offset = 0;
 	alCheckCall(alGetSourcei(id, AL_SAMPLE_OFFSET, &offset));
 	return static_cast<uint32_t>(std::max(offset, 0));
+}
+
+bool AudioPlayer::IsDeviceConnected() const
+{
+	// A device that cannot tell of a loss stays connected
+	if (alcIsExtensionPresent(_device.get(), "ALC_EXT_disconnect") == ALC_FALSE)
+	{
+		return true;
+	}
+	ALCint connected = ALC_TRUE;
+	alcGetIntegerv(_device.get(), ALC_CONNECTED, 1, &connected);
+	return connected != ALC_FALSE;
 }
 
 float AudioPlayer::GetProgress(size_t sizeInBytes, SourceId sourceId) const

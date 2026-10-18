@@ -207,10 +207,15 @@ struct AudioSources
 {
 	WorldSources world;
 	std::function<std::optional<AudioState>()> state;
+	/// For tools: the game acts as if the machine lost the sound device (true), or has it again (false)
+	std::function<void(bool lost)> simulateDeviceLoss;
+	/// The machine lost the sound device, or a tool acts as if it did
+	std::function<bool()> deviceLost;
 };
 
 ///   audio.state                          the volumes, the music, how many sounds play and where they're heard from
 ///   audio.sounds near, radius            the sounds playing about a point, nearest first
+///   audio.lose_device lost               (writes) act as if the machine lost the sound device, or has it again
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeAudioProvider(AudioSources sources);
 
 } // namespace openblack::inspector
