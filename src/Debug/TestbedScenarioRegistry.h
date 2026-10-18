@@ -1066,6 +1066,8 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town feels so about each of the scenario's creatures from the start, as if
 	/// the creature had just shown it, rather than first seeing them as it plays
 	std::optional<ecs::creature_attitude::Attitude> townFeelingAboutCreatures;
+	/// A testbed set-up step: the scenario's town belongs to this player from the start, rather than to the player
+	std::optional<PlayerNames> townOwner;
 	/// A crowd spawned a batch a frame, after the creatures and objects above; the runner measures the frames once it
 	/// is all there
 	std::optional<Crowd> crowd;

@@ -438,6 +438,30 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                "they stand. Thirty seconds after the tiger last frightened the town its fear lapses into "
 	                "indifference and they go back to what they were doing.");
 
+	// A town with no centre won over by the player
+	all.push_back({
+	    .id = "villagers.town_celebration",
+	    .name = "Villagers of a town with no centre won over",
+	    .facet = Facet::Objects,
+	    .description = "A neutral village of six by its hut, with no village centre. The town believes in the player so "
+	                   "much from the start that the player wins it at its first turn of belief.",
+	    .expected = "As the player wins the town, fireworks and the player's symbols rise from the town, and the town makes "
+	                "its celebration. The villagers within reach take it up and turn to look at the town until their time "
+	                "with it ends, then go back to what they were doing. The town's dance is made about the town (the "
+	                "inspector's game entities show one Dance with no owner), but no villager joins it, as in the game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 25.0f}, {10.0f, 55.0f}}, .distance = 0.7f},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-10.0f, 40.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-2.0f, 34.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, 46.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 40.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 30.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {-14.0f, 50.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-18.0f, 34.0f}, .joinTown = true}},
+	    .townBeliefInPlayer = 1000.0f,
+	    .townOwner = PlayerNames::NEUTRAL,
+	});
+
 	// Animals near a creature
 	all.push_back({
 	    .id = "animals.flee_creature",

@@ -229,6 +229,25 @@ struct EmergencyTurnOutcome
 
 /// A villager sat about goes on sitting once its time is up, one time in ten it thinks of something else to do
 constexpr uint32_t k_ChillOutRethinkChance = 10;
+
+/// What a villager sat about does when its time is up
+enum class ChillOut : uint8_t
+{
+	/// Its town has an emergency: it goes to gather in the town
+	GatherForEmergency,
+	/// Something it is needed for took it: that need set its next state
+	Needed,
+	/// It thinks of something else to do, as when it has nothing to do
+	ThinkAgain,
+	/// It sits for one more period
+	SitOn,
+};
+
+/// What a villager sat about does when its time is up. An emergency comes first, then a need. Then one time in ten it
+/// thinks again, else it sits for the next period. The need check is made only when there is no emergency, and the
+/// random number is drawn only when no need took it.
+[[nodiscard]] ChillOut ChillOutTimeUp(bool emergency, const std::function<bool()>& needed, const IntRandom& random);
+
 /// A villager at home with nothing to do goes to bed one time in this many
 constexpr uint32_t k_GoToBedChance = 4;
 

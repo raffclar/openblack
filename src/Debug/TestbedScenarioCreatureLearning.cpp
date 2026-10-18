@@ -129,4 +129,39 @@ void openblack::testbed_scenarios::AddCreatureLearningScenarios(std::vector<Scen
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 1.0f,
 	});
+
+	// The same worshipping town, with a miracle of food cast by the worship site once they worship there
+	std::vector<ObjectSetup> worshippers {
+	    {.type = AbodeInfo::CelticTownCentre, .offset = k_DanceCentre},
+	    {.type = AbodeInfo::CelticHut, .offset = k_DanceCentre + glm::vec2(-16.0f, 6.0f), .yawDegrees = 160.0f},
+	    {.type = AbodeInfo::CelticHut, .offset = k_DanceCentre + glm::vec2(16.0f, 6.0f), .yawDegrees = 200.0f},
+	};
+	for (auto& person : People(k_DanceCentre + glm::vec2(0.0f, -10.0f), k_Couples))
+	{
+		worshippers.push_back(std::move(person));
+	}
+	all.push_back({
+	    .id = "villagers.worshippers_ignore_miracle",
+	    .name = "Worshippers taking no notice of a miracle",
+	    .facet = Facet::Objects,
+	    .description = "The player's temple with a Celtic town of the player's north of it, the town's worship site put up "
+	                   "built and its totem raised to all its people. Forty seconds in, when they worship at the site, a "
+	                   "food miracle is cast beside the worship site for three seconds.",
+	    .expected = "The town's people go to the worship site and dance round its altar. When the food falls, the "
+	                "villagers that the site counts as worshippers take no notice of it and go on worshipping (the "
+	                "inspector's LivingReaction shows no reaction for them). A villager that is not yet at the site can "
+	                "go for the food.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Temple, k_DanceCentre}, .distance = 0.7f},
+	    .objects = std::move(worshippers),
+	    .temples = {{.offset = k_Temple}},
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = {12.0f, 5.0f},
+	                  .handOffset = {12.0f, 5.0f},
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 40.0f,
+	                  .holdSeconds = 3.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 1.0f,
+	});
 }

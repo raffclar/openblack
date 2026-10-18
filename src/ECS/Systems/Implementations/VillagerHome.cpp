@@ -1311,6 +1311,7 @@ uint32_t villager_home::GoAndChilloutInTown(LivingAction& action)
 
 uint32_t villager_home::SitAndChillout(LivingAction& action)
 {
+	// The count goes down every turn, also on the turn that it was at zero
 	const auto turns = static_cast<int16_t>(action.turnsUntilStateChange);
 	action.turnsUntilStateChange = static_cast<uint16_t>(turns - 1);
 	if (turns > 0)
@@ -1319,21 +1320,22 @@ uint32_t villager_home::SitAndChillout(LivingAction& action)
 	}
 	action.turnsUntilStateChange = 0;
 	const auto villager = EntityOf(action);
-	if (InEmergency(TownOf(villager)))
+	switch (routine::ChillOutTimeUp(
+	    InEmergency(TownOf(villager)), [&action] { return CheckNeededForSomething(action) != 0; },
+	    [](uint32_t limit) { return Locator::gameRandom::value().GameRand(limit); }))
 	{
+	case routine::ChillOut::GatherForEmergency:
 		SetTopState(action, VillagerStates::GotoCongregateInTownAfterEmergency);
-		return 1;
-	}
-	if (CheckNeededForSomething(action) == 1)
-	{
-		return 1;
-	}
-	if (Locator::gameRandom::value().GameRand(routine::k_ChillOutRethinkChance) == 0)
-	{
+		break;
+	case routine::ChillOut::Needed:
+		break;
+	case routine::ChillOut::ThinkAgain:
 		SetupNothingToDo(action);
-		return 1;
+		break;
+	case routine::ChillOut::SitOn:
+		action.turnsUntilStateChange = InfoOf(villager).subsequentChillOutTime;
+		break;
 	}
-	action.turnsUntilStateChange = InfoOf(villager).subsequentChillOutTime;
 	return 1;
 }
 

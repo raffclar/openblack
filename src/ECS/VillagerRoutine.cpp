@@ -70,6 +70,20 @@ villager_routine::Idle villager_routine::NothingToDo(bool hasAbode, bool abodeFu
 	return hasTown ? Idle::SitInTown : Idle::GoHome;
 }
 
+villager_routine::ChillOut villager_routine::ChillOutTimeUp(bool emergency, const std::function<bool()>& needed,
+                                                            const IntRandom& random)
+{
+	if (emergency)
+	{
+		return ChillOut::GatherForEmergency;
+	}
+	if (needed())
+	{
+		return ChillOut::Needed;
+	}
+	return random(k_ChillOutRethinkChance) == 0 ? ChillOut::ThinkAgain : ChillOut::SitOn;
+}
+
 villager_routine::SleepResult villager_routine::CheckSleep(const Sleep& sleep)
 {
 	if (sleep.poisoned)
