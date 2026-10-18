@@ -178,6 +178,11 @@ struct CreatureMindState
 	/// The turns that the agenda (by the idle mind's count of them) has run steps for
 	uint32_t agendaTurns {0};
 	uint32_t agendaTurnsSerial {0};
+	/// For each action, whether the area that holds the creature refused a walk of its agenda (see
+	/// creature_leash::RefusesWalk). The creature forgets these when a leash comes off it.
+	std::vector<bool> leftAreaActions;
+	/// The area refused a walk of the agenda that the mind made last: the creature gives up that agenda as it takes it
+	bool agendaRefused {false};
 	/// The agenda (by the idle mind's count of them) that the creature last set its kept speed for
 	uint32_t paceSerial {0};
 	/// The actions of the desire of the plan that it carries out, in the order of the list that the plan came from; and

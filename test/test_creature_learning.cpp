@@ -393,6 +393,39 @@ TEST(CreaturePlanner, TriesTheNextActionWhenNoThingIsFound)
 	                 .has_value());
 }
 
+TEST(CreaturePlanner, AnActionThatLeftTheAreaHasNoPriority)
+{
+	// Chosen first, the action that the area refused counts only its novelty, so the other action wins
+	const std::vector<creature_planner::ActionCandidate> actions {
+	    {.action = 1, .turnsSinceDone = 0},
+	    {.action = 2, .opinion = 1.0f, .turnsSinceDone = 0, .leftArea = true},
+	};
+	const auto noThing = [](const creature_planner::ActionCandidate&) {
+		return std::optional<creature_planner::ObjectCandidate> {
+		    creature_planner::ObjectCandidate {.id = 5, .usefulness = 1.0f}};
+	};
+	const auto noUse = [](const creature_planner::ActionCandidate&, std::optional<uint32_t>) {
+		return std::optional<creature_planner::UsedChoice> {};
+	};
+	const auto first = creature_planner::PlanDesire(
+	    {.desire = Desire::Poo, .strength = 1.0f, .actions = actions, .findObject = noThing, .findUsed = noUse});
+	ASSERT_TRUE(first.has_value());
+	EXPECT_EQ(first->action, 1u);
+	EXPECT_FLOAT_EQ(creature_planner::ActionPriority(1.0f, true), 0.0f);
+	// For a thing chosen first, the creature does not take the action at all
+	const std::vector<creature_planner::ActionCandidate> refused {{.action = 2, .opinion = 1.0f, .leftArea = true}};
+	for (const auto order : {creature_planner::PlanOrder::ActionThenPart, creature_planner::PlanOrder::PartThenAction})
+	{
+		EXPECT_FALSE(creature_planner::PlanDesire({.desire = Desire::Anger,
+		                                           .strength = 1.0f,
+		                                           .order = order,
+		                                           .actions = refused,
+		                                           .findObject = noThing,
+		                                           .findUsed = noUse})
+		                 .has_value());
+	}
+}
+
 TEST(CreaturePlanner, AnActionNotOnAThingActsOnTheCreatureItself)
 {
 	// With the action first, an action that does not act on a thing gets the creature itself, with the default

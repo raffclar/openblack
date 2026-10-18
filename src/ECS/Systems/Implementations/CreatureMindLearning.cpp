@@ -1628,6 +1628,62 @@ bool OutsideConfinedArea(const ecs::Registry& registry, entt::entity creature, c
 	           leashes->confinementRadius;
 }
 
+/// The action that takes the creature to a teleport stone, whose walks the area that holds the creature never refuses
+constexpr std::string_view k_GoToTeleportAction = "GoToTeleport";
+
+/// Whether the area that holds the creature refuses a walk of a new agenda for an action. The area refuses only a walk
+/// to a point, not a walk to a thing.
+bool AgendaLeavesArea(const ecs::Registry& registry, entt::entity creature, std::string_view action,
+                      std::span<const creature_mind::Step> agenda)
+{
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (leashes == nullptr || at == nullptr)
+	{
+		return false;
+	}
+	const bool leashed = leashes->worn.has_value();
+	const creature_leash::AgendaArea area {
+	    .radius = leashes->confinementRadius,
+	    .leashed = leashed,
+	    .leashWorks = !leashed || leashes->worn->works,
+	    .centre = glm::xz(leashes->confinementCentre),
+	    .walkingBack = leashes->returnTo.has_value(),
+	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
+	    .toTeleport = action == k_GoToTeleportAction,
+	};
+	using Kind = creature_mind::Movement::Kind;
+	return std::ranges::any_of(agenda, [&area, &at](const creature_mind::Step& step) {
+		if (step.kind != creature_mind::Step::Kind::Move || step.movement.object.has_value())
+		{
+			return false;
+		}
+		switch (step.movement.kind)
+		{
+		case Kind::ToPoint:
+			return creature_leash::RefusesWalk(area, step.movement.point);
+		case Kind::Nearby:
+			// A walk to a place near the creature starts from the place of the creature when the mind makes the agenda
+			return creature_leash::RefusesWalk(area, glm::xz(at->position) + step.movement.point);
+		default:
+			return false;
+		}
+	});
+}
+
+/// Whether the creature does not want an action now: the area that holds it refused a walk of the action's agenda,
+/// and the area holds it still
+bool LeftAreaFor(const ecs::Registry& registry, entt::entity creature, const CreatureMindState& mind, uint32_t action)
+{
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	if (leashes == nullptr || action >= mind.leftAreaActions.size() || !mind.leftAreaActions[action])
+	{
+		return false;
+	}
+	const bool leashed = leashes->worn.has_value();
+	return creature_leash::IsConfined(leashes->confinementRadius, leashed, !leashed || leashes->worn->works);
+}
+
 /// Where the creature believes that a thing is: where it last came across the thing, else where the thing is now
 std::optional<map_coords::MapCoords> BelievedPlaceOf(const ecs::Registry& registry, const CreatureMindState& mind,
                                                      entt::entity thing)
@@ -1854,6 +1910,10 @@ std::optional<std::pair<const creature_plan_actions::Executor*, std::vector<crea
 CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::optional<uint32_t> object,
                                const creature_plan_actions::Situation& situation)
 {
+	if (auto* mind = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature))
+	{
+		mind->agendaRefused = false;
+	}
 	const auto* tables = GetTables();
 	if (tables == nullptr || action >= tables->actions.size())
 	{
@@ -1962,6 +2022,19 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 			{
 				mind->plantedBy.erase(mind->plantedBy.begin());
 			}
+		}
+	}
+	// The area that holds the creature refuses a walk of the agenda: the plan fails as the creature takes it, and the
+	// creature does not want the action while the area holds it
+	if (auto* mind = registry.TryGet<CreatureMindState>(creature))
+	{
+		mind->agendaRefused = AgendaLeavesArea(registry, creature, tables->actions[action].name, *agenda);
+		if (mind->agendaRefused)
+		{
+			mind->leftAreaActions.resize(std::max(mind->leftAreaActions.size(), tables->actions.size()), false);
+			mind->leftAreaActions[action] = true;
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} cannot walk out of its area to {}",
+			                    entt::to_integral(creature), tables->actions[action].name);
 		}
 	}
 	return std::pair {executor, std::move(*agenda)};
@@ -2091,10 +2164,19 @@ float CreatureMindSystem::ObjectToActOnUsefulness(entt::entity creature, const C
 		}
 	}
 	const auto belief = ActedOnBeliefOf(registry, object, creature);
-	// Curious, a kind it has had a good look at is a hundredth as useful
-	// TODO(creature-reactions-2): the game makes a thing five times as useful to a curious creature while it does
-	// something the creature finds interesting (only a villager can), and has a rule of its own for one more desire
-	const float share = ObservedShare(registry, mind, desire, object, belief);
+	// Curious, it finds a thing that does something interesting five times as useful. Playful, it finds a toy three
+	// times as useful. Curious, it finds a kind that it has had a good look at a hundredth as useful, in place of the
+	// multiplier.
+	// TODO(creature-coverage-check): a playful creature finds a villager that plays football five times as useful. The
+	// villagers of openblack do not play football yet.
+	const float observed = ObservedShare(registry, mind, desire, object, belief);
+	const float share = observed < 1.0f
+	                        ? observed
+	                        : creature_mind::DesireMultiplier(
+	                              desire, {.doingSomethingInteresting =
+	                                           desire == Desire::Curiosity && DoingSomethingInteresting(registry, mind, object),
+	                                       .playingFootball = false,
+	                                       .toy = desire == Desire::Play && ToyOf(registry, object).has_value()});
 	const auto distance =
 	    Nearness(registry, creature, at, object, *place, tables->rules.at(static_cast<size_t>(desire)).distanceWeight);
 	float learnt = creature_planner::k_DefaultUsefulness;
@@ -3023,6 +3105,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			    .opinion = learnt.opinions.at(action),
 			    .turnsSinceDone = learnt.turnsSinceDone.at(action),
 			    .servesFirstDesire = tables->actions.at(action).desire == 0,
+			    .leftArea = LeftAreaFor(registry, creature, mind, action),
 			    .disabled =
 			        !creature_plan_actions::Possible(*executor, situation) ||
 			        !creature_plan_actions::Allowed(*executor, situation) ||
@@ -4418,7 +4501,8 @@ void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindStat
 			if (executor == nullptr ||
 			    (creature_plan_actions::IsCast(*executor) &&
 			     !MayCast(creature, mind, action, IsPowerUpCast(tables->actions.at(action).name))) ||
-			    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs))
+			    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(action).needs) ||
+			    LeftAreaFor(registry, creature, mind, action))
 			{
 				continue;
 			}
@@ -5144,9 +5228,11 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 		return;
 	}
 	const auto object = static_cast<entt::entity>(*chosen);
-	// It must be able to do the action now and know what the action needs
+	// It must be able to do the action now and know what the action needs. It does not do an action again that the area
+	// that holds it refused.
 	if (!creature_plan_actions::Allowed(*executor, situation) ||
-	    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(*actionIndex).needs))
+	    !creature_watching::KnowsWhatItNeeds(learnt.knowledge, tables->actions.at(*actionIndex).needs) ||
+	    LeftAreaFor(registry, creature, mind, static_cast<uint32_t>(*actionIndex)))
 	{
 		return;
 	}

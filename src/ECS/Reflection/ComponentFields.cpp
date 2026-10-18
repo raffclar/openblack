@@ -894,6 +894,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureMindState::stepTurns>("stepTurns")
 	    .Field<&components::CreatureMindState::agendaTurns>("agendaTurns")
 	    .Field<&components::CreatureMindState::agendaTurnsSerial>("agendaTurnsSerial")
+	    .Field<&components::CreatureMindState::leftAreaActions>("leftAreaActions")
+	    .Field<&components::CreatureMindState::agendaRefused>("agendaRefused")
 	    .Field<&components::CreatureMindState::paceSerial>("paceSerial")
 	    .Field<&components::CreatureMindState::planActions>("planActions")
 	    .Field<&components::CreatureMindState::plannedActions>("plannedActions", {k_CreatureDesiresDesireNames})

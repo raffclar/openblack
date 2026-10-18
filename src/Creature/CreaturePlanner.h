@@ -98,6 +98,9 @@ struct ActionCandidate
 	uint32_t turnsSinceDone {k_NoveltyTurns};
 	/// Whether the table says it serves the first desire, which the game counts for less novelty
 	bool servesFirstDesire {false};
+	/// The area that holds the creature refused a walk of its agenda, and holds it still. Chosen first, the action
+	/// has no priority, only its novelty. For a thing chosen first, the creature does not take the action.
+	bool leftArea {false};
 	bool disabled {false};
 };
 

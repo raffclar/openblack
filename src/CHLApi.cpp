@@ -5745,6 +5745,11 @@ void DetachObjectLeash() // 187 DETACH_OBJECT_LEASH
 		Locator::leashSystem::value().TakeOff(creature);
 		return;
 	}
+	// It also forgets the actions that the area that held it refused
+	if (auto* mind = registry.TryGet<ecs::components::CreatureMindState>(creature))
+	{
+		mind->leftAreaActions.clear();
+	}
 	if (auto* leash = registry.TryGet<ecs::components::CreatureLeash>(creature))
 	{
 		leash->confinementRadius = 0.0f;
