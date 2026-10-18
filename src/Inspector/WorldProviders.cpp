@@ -170,6 +170,23 @@ Json openblack::inspector::EmitterItems(std::span<const ParticleEffectInfo> effe
 	return items;
 }
 
+Json openblack::inspector::LiquidSummary(std::span<const liquid_particles::Particle> particles)
+{
+	using liquid_particles::Kind;
+	const auto count = [particles](Kind kind) {
+		return std::ranges::count_if(particles, [kind](const auto& particle) { return particle.kind == kind; });
+	};
+	return {
+	    {"count", particles.size()},
+	    {"most", liquid_particles::k_MostParticles},
+	    {"liquid", count(Kind::Liquid)},
+	    {"liquidOnLand", std::ranges::count_if(particles, [](const auto& particle) { return particle.onLand; })},
+	    {"motes", count(Kind::Mote) + count(Kind::MoteReversed)},
+	    {"smoke", count(Kind::Smoke)},
+	    {"dust", count(Kind::Dust)},
+	};
+}
+
 ParticlesProvider::ParticlesProvider(ParticleSources sources)
     : _sources(std::move(sources))
 {
@@ -197,6 +214,12 @@ std::vector<QueryDescription> ParticlesProvider::Describe() const
 	     .parameters = {{.name = "owner", .type = "integer", .description = "The object's entity id", .required = true}},
 	     .kind = ResultKind::List,
 	     .needsNear = false},
+	    {.name = "liquid",
+	     .description = "The pool of liquid particles (drops of blood and sick, dust, smoke, motes): the count of each "
+	                    "kind and the drops that lie on the land",
+	     .parameters = {},
+	     .kind = ResultKind::Object,
+	     .needsNear = false},
 	};
 }
 
@@ -223,6 +246,11 @@ QueryResult ParticlesProvider::Run(std::string_view query, const QueryContext& c
 			return QueryResult::Error("owner must be an entity's id");
 		}
 		return QueryResult::Value(EmitterItems(effects, *entity));
+	}
+	if (query == "liquid")
+	{
+		const auto liquids = _sources.liquids ? _sources.liquids() : std::span<const liquid_particles::Particle> {};
+		return QueryResult::Value(LiquidSummary(liquids));
 	}
 	return QueryResult::Error("no query particles." + std::string(query));
 }

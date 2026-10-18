@@ -642,6 +642,13 @@ TOOLS = [
         "params": ["owner"],
     },
     {
+        "name": "particles_liquid",
+        "description": "The pool of liquid particles (drops of blood and sick, dust, smoke, motes): the count of each "
+                       "kind and the drops that lie on the land.",
+        "inputSchema": schema(SHAPING),
+        "query": "particles.liquid",
+    },
+    {
         "name": "camera_state",
         "description": "Where the camera is (origin), what it looks at (focus), its yaw, pitch (degrees below the "
                        "horizon) and distance, field of view, what moves it (world, creature, fight, temple, editor) "
