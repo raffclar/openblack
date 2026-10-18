@@ -230,6 +230,9 @@ public:
 	{
 		return entt::null;
 	}
+	/// An icon that charged a seed held in a hand sets the power-up level of that seed. When the seed holds more than the
+	/// miracle at that level costs, the seed gives the rest back to its worship site.
+	virtual void SetIconSeedPowerUp(entt::entity /*seed*/, int /*powerUp*/) {}
 	/// The hand drops the miracle it holds, as a scribble or a shake does: what was started is called off and what the
 	/// seed still holds goes back to the player's worship
 	virtual void DiscardHeldSeed() = 0;

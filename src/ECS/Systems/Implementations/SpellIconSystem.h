@@ -20,6 +20,7 @@
 
 namespace openblack::ecs::components
 {
+struct SpellSeed;
 struct WorshipIcon;
 } // namespace openblack::ecs::components
 
@@ -78,12 +79,18 @@ private:
 	[[nodiscard]] bool HandReady(PlayerNames player) const;
 	/// What an icon's miracle needs to be charged full, at the level it charges
 	[[nodiscard]] float Required(const components::WorshipIcon& icon) const;
+	/// What the miracle of a seed costs to create, at the power-up level of the seed
+	[[nodiscard]] float SeedCost(const components::SpellSeed& seed) const;
+	/// The seed made from an icon that a hand of the icon's player holds, none if no hand holds one
+	[[nodiscard]] entt::entity HeldSeedOf(const components::WorshipIcon& icon) const;
+	/// What an icon needs to be charged full: its miracle's cost, or what its held seed still needs
+	[[nodiscard]] float RequiredNow(const components::WorshipIcon& icon, entt::entity heldSeed) const;
 	[[nodiscard]] magic::spell_icons::IconCharge ChargeOf(const components::WorshipIcon& icon, PlayerNames tapping) const;
 	/// A site icon is tapped by a hand: what the tap did
 	magic::spell_icons::TapResult TapSiteIcon(entt::entity icon, PlayerNames player);
 	/// An icon's charged miracle goes into its player's hand, carrying what the icon stored
 	bool GiveSeed(entt::entity icon);
-	/// Deletes an icon and forgets it, with the seed out from it; what it was charging and what it stored are lost
+	/// Deletes an icon and forgets it, with the seeds out from it; what it was charging and what it stored are lost
 	void Destroy(entt::entity icon);
 };
 

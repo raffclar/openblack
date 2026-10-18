@@ -10,16 +10,19 @@
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "Locator.h"
+#include "Magic/WorshipBattery.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -72,7 +75,8 @@ public:
 	[[nodiscard]] bool IsHandBusy() const override { return false; }
 	[[nodiscard]] magic::PourPose GetHandPour(float) const override { return {}; }
 	[[nodiscard]] HandCastState GetHandCastState() const override { return {}; }
-	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return std::nullopt; }
+	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return held; }
+	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override { poweredUp.emplace_back(seed, powerUp); }
 	[[nodiscard]] HandResult GetLastHandResult() const override { return {}; }
 	bool SendSpellEvent(entt::entity, const particles::SpellEventInfo&) override { return false; }
 	float ForcePayForSpell(entt::entity, float) override { return 0.0f; }
@@ -89,6 +93,8 @@ public:
 	[[nodiscard]] std::vector<DispenserInfo> GetDispensers() const override { return {}; }
 
 	std::vector<entt::entity> deleted;
+	std::optional<entt::entity> held;
+	std::vector<std::pair<entt::entity, int>> poweredUp;
 };
 
 class SpellIconSystemTest: public ::testing::Test
@@ -112,12 +118,13 @@ protected:
 	{
 		auto& registry = Entities();
 		const auto icon = registry.Create();
-		registry.Assign<WorshipIcon>(icon, WorshipIcon {.site = site,
-		                                                .seed = seed,
-		                                                .charging = true,
-		                                                .charger = PlayerNames::PLAYER_ONE,
-		                                                .store = 50.0f,
-		                                                .seedOut = seedOut});
+		registry.Assign<WorshipIcon>(
+		    icon,
+		    WorshipIcon {.site = site, .seed = seed, .charging = true, .charger = PlayerNames::PLAYER_ONE, .store = 50.0f});
+		if (seedOut != entt::null)
+		{
+			registry.Get<WorshipIcon>(icon).seedsOut.push_back(seedOut);
+		}
 		registry.Get<SiteIcons>(site).icons.push_back(icon);
 		return icon;
 	}
@@ -177,5 +184,61 @@ TEST_F(SpellIconSystemTest, ASiteWithoutIconsLosesNothing)
 	_system.SiteRemoved(site);
 	_system.SiteRemoved(entt::null);
 	EXPECT_TRUE(_magic->deleted.empty());
+}
+TEST_F(SpellIconSystemTest, AnIconWhoseSeedIsHeldAndFullStopsChargingAndKeepsItsStore)
+{
+	auto& registry = Entities();
+	const auto site = registry.Create();
+	registry.Assign<SiteIcons>(site);
+	registry.Assign<WorshipSite>(site, WorshipSite {.player = PlayerNames::PLAYER_ONE});
+	const auto seed = registry.Create();
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .chantStore = 10.0f});
+	const auto icon = Icon(site, SpellSeedType::Heal, seed);
+	registry.Get<WorshipIcon>(icon).powerUp = 1;
+	_magic->held = seed;
+
+	// The held seed holds more than the miracle costs, so the icon needs nothing
+	auto charges = _system.ChargesAt(site);
+	ASSERT_EQ(charges.size(), 1u);
+	EXPECT_TRUE(charges[0].seedHeld);
+	EXPECT_TRUE(charges[0].seedOut);
+	EXPECT_LE(magic::IconNeed(charges[0]), 0.0f);
+	_system.ChargedAt(site, charges);
+
+	const auto& after = registry.Get<const WorshipIcon>(icon);
+	EXPECT_FALSE(after.charging);
+	EXPECT_EQ(after.store, 50.0f);
+	EXPECT_EQ(registry.Get<const SpellSeed>(seed).chantStore, 10.0f);
+	EXPECT_EQ(_magic->poweredUp, (std::vector<std::pair<entt::entity, int>> {{seed, 1}}));
+}
+
+TEST_F(SpellIconSystemTest, ASeedOutOfTheHandIsOutButNotHeld)
+{
+	auto& registry = Entities();
+	const auto site = registry.Create();
+	registry.Assign<SiteIcons>(site);
+	registry.Assign<WorshipSite>(site, WorshipSite {.player = PlayerNames::PLAYER_ONE});
+	const auto seed = registry.Create();
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal});
+	Icon(site, SpellSeedType::Heal, seed);
+
+	const auto charges = _system.ChargesAt(site);
+	ASSERT_EQ(charges.size(), 1u);
+	EXPECT_TRUE(charges[0].seedOut);
+	EXPECT_FALSE(charges[0].seedHeld);
+}
+
+TEST_F(SpellIconSystemTest, ASeedHeldByTheHandOfAnotherPlayerDoesNotCount)
+{
+	auto& registry = Entities();
+	const auto site = registry.Create();
+	registry.Assign<SiteIcons>(site);
+	registry.Assign<WorshipSite>(site, WorshipSite {.player = PlayerNames::PLAYER_ONE});
+	const auto seed = registry.Create();
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .player = PlayerNames::PLAYER_TWO});
+	Icon(site, SpellSeedType::Heal, seed);
+	_magic->held = seed;
+
+	EXPECT_FALSE(_system.ChargesAt(site).at(0).seedHeld);
 }
 } // namespace

@@ -382,15 +382,17 @@ void WorshipSiteSystem::ProcessChants()
 			}
 			const auto& component = registry.Get<const WorshipSite>(site);
 			auto& chants = registry.Get<WorshipChants>(site);
-			// Its charging icons share what the dancers chant, and those charged full send their miracles to the hand
+			// Its charging icons share what the dancers chant. Then each icon does its own turn before the site's turn
+			// ends, because a seed powered up at an icon gives what it does not need back to the battery.
 			auto icons = Locator::spellIconSystem::has_value() ? Locator::spellIconSystem::value().ChargesAt(site)
 			                                                   : std::vector<magic::WorshipIconCharge> {};
-			const float drawn =
-			    magic::ProcessWorshipTurn(chants, _world->ChantRules(component.tribe, component.player), Dancers(site), icons);
+			const auto rules = _world->ChantRules(component.tribe, component.player);
+			const float drawn = magic::ChargeWorshipIcons(chants, rules, Dancers(site), icons);
 			if (Locator::spellIconSystem::has_value())
 			{
 				Locator::spellIconSystem::value().ChargedAt(site, icons);
 			}
+			magic::EndWorshipTurn(chants, rules, Dancers(site));
 			// The artefacts put down by it are powered up as its turn ends, every thousand turns
 			_world->PowerUpArtefacts(site, Dancers(site));
 			CountChantsUsed(site, drawn);
