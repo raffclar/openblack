@@ -673,6 +673,11 @@ float volumetric_clouds::FarthestCloudFor(float eyeHeight)
 	return near + (std::max(horizon, near) - near) * share;
 }
 
+float volumetric_clouds::StormCloudShare(int32_t overcast, int32_t rain)
+{
+	return std::clamp(static_cast<float>(std::max(overcast, rain)) / 100.0f, 0.0f, 1.0f);
+}
+
 void volumetric_clouds::PackStorms(std::span<const StormCell> cells, CloudUniforms& uniforms)
 {
 	uniforms.storms.fill(glm::vec4(0.0f));

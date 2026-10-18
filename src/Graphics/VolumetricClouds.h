@@ -279,9 +279,16 @@ struct CloudUniforms
 	glm::vec4 shadow {0.0f};
 	/// The storms: [i] xy the middle, z the inner radius, w the outer radius; [k_MaxStorms + i] x the strength, y the rain
 	std::array<glm::vec4, k_MaxStorms * 2> storms {};
+	/// The planet's weather: xy the middle of the map, z the cover of the planet's map over the island, w 1 while the
+	/// map is ready
+	glm::vec4 planet {0.0f};
 	/// The thunderstorm cells (see cumulonimbus::Pack)
 	std::array<glm::vec4, cumulonimbus::k_MaxCells * 4> cells {};
 };
+
+/// How much cloud a storm builds, 0 to 1, from the cloud and the rain that it brings in percent. A storm of mild weather
+/// with no cloud and no rain builds no storm clouds.
+[[nodiscard]] float StormCloudShare(int32_t overcast, int32_t rain);
 
 /// The storms' part of the uniforms, from the cells as eased now. Cells with no strength are left out.
 void PackStorms(std::span<const StormCell> cells, CloudUniforms& uniforms);

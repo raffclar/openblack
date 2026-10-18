@@ -13,9 +13,12 @@
 // light that the cloud scatters towards the eye. The original game has billboards for its clouds. The formulas match
 // the CPU twins in src/Graphics/VolumetricClouds.cpp, which the tests check.
 
-// x: the bottom of the layer; y: not used (world_curve.sh has the curve of the world); z: the farthest cloud; w: the
-// sea's level
+// x: the bottom of the layer; y: the radius of the planet, for its weather map (world_curve.sh has the curve of the
+// world); z: the farthest cloud; w: the sea's level
 uniform vec4 u_cloudLayer;
+// The planet's weather map (planet_weather): xy the middle of the map, over the planet's middle; z the map's cover over
+// the island; w 1 while the map is ready
+uniform vec4 u_cloudPlanet;
 // x: how much of the sky has cloud; y: the type of cloud (0 stratus, 0.5 cumulus, 1 cumulonimbus); z: the rain; w: the
 // number of storms
 uniform vec4 u_cloudCover;
@@ -94,6 +97,9 @@ uniform vec4 u_cloudCells[16];
 SAMPLER3D(s_cloudBase, 0);
 SAMPLER3D(s_cloudDetail, 1);
 SAMPLER2D(s_cloudWeather, 2);
+// The planet's weather map, a cube round the planet's middle: r the cover, g the type, b the fronts, a the choice of
+// the pattern of the cells
+SAMPLERCUBE(s_cloudPlanet, 8);
 
 float CloudRemap(float value, float fromLow, float fromHigh, float toLow, float toHigh)
 {
@@ -161,9 +167,40 @@ float CloudAltitude(vec3 p)
 	return WorldAltitude(p, u_cloudLayer.w);
 }
 
+// The planet's weather at a point, as the clouds drift over the planet. The point's height over the sea moves it out
+// from the planet's middle; the map is the same from every height.
+vec4 CloudPlanetAt(vec3 p)
+{
+	if (u_cloudPlanet.w < 0.5f)
+	{
+		return vec4(0.5f, 0.5f, 0.0f, 0.5f);
+	}
+	vec2 q = p.xz - u_cloudDrift.xy - u_cloudPlanet.xy;
+	vec3 fromMiddle = vec3(q.x, p.y - u_cloudLayer.w + u_cloudLayer.y, q.y);
+	return textureCubeLod(s_cloudPlanet, normalize(fromMiddle), 0.0f);
+}
+
+// How much the planet's map changes the cover at a place, as a share of the cover over the island. Over the island it
+// is 1, so the game's weather there stays as it is. Clear areas of the map have almost no cloud.
+float CloudPlanetShare(float planetCover)
+{
+	// The share has limits, so that a clear or a cloudy island does not change the whole planet too much
+	float island = u_cloudPlanet.w > 0.5f ? u_cloudPlanet.z : 0.5f;
+	return clamp((0.05f + 1.9f * planetCover) / (0.05f + 1.9f * island), 0.1f, 2.2f);
+}
+
+// The cover of the sky before the cells are cut out of it: the game's cover and the planet's map. `planet` is the
+// planet's weather there (CloudPlanetAt). The map has no repeat, so the large areas of cloud and of clear sky do not
+// repeat from any height.
+float CloudCoverAt(vec4 planet)
+{
+	return min(u_cloudCover.x * CloudPlanetShare(planet.r), 1.0f);
+}
+
 // The weather at a point across the land: the cloud's cover there (0 none), its type and its rain
 float CloudWeatherAt(vec2 xz, out float type, out float rain)
 {
+	vec4 planet = CloudPlanetAt(vec3(xz.x, u_cloudLayer.w, xz.y));
 	vec2 q = xz - u_cloudDrift.xy;
 	// The wide weather reads the noise at a large scale, on axes that turn about 30 degrees from the cells' axes. Each
 	// read has a different turn, so that no two grids align.
@@ -178,16 +215,24 @@ float CloudWeatherAt(vec2 xz, out float type, out float rain)
 	// changes slowly across the land. A fast bend would fold the cells into thin columns, which show as streaks on the
 	// sides of the clouds.
 	vec2 bend = texture2DLod(s_cloudWeather, q * (2.3f / CLOUD_WEATHER_TILE), 0.0f).gb - 0.5f;
-	vec4 w = texture2DLod(s_cloudWeather, (q + bend * 500.0f) / CLOUD_WEATHER_TILE, 0.0f);
+	vec2 at = q + bend * 500.0f;
+	vec4 w = texture2DLod(s_cloudWeather, at / CLOUD_WEATHER_TILE, 0.0f);
 	// The field changes slowly between two patterns, so that the clouds form and break up as they move
 	float turn = 0.5f + 0.5f * sin(u_cloudDrift.z * 0.0035f);
 	float field = mix(w.r, w.b, turn);
-	// The wide field also makes large areas of more cloud and of less cloud
-	float cover = min(u_cloudCover.x * (0.65f + 0.7f * wide.r), 1.0f);
+	// A second pattern of cells, smaller and on turned axes, joins the first. The two tiles do not line up, so the cells
+	// do not repeat. The planet's map changes how much of each shows over large areas. The sum is spread out again, so
+	// that it has the contrast of one pattern.
+	vec2 turned = vec2(0.602f * at.x - 0.799f * at.y, 0.799f * at.x + 0.602f * at.y) / (CLOUD_WEATHER_TILE * 0.71f);
+	vec4 other = texture2DLod(s_cloudWeather, turned + vec2(0.29f, 0.83f), 0.0f);
+	float share = 0.3f + 0.4f * planet.a;
+	field = clamp(0.5f + (mix(field, mix(other.r, other.b, turn), share) - 0.5f) * 1.45f, 0.0f, 1.0f);
+	// The planet's map makes large areas of more cloud and of less cloud
+	float cover = CloudCoverAt(planet);
 	// The type of cloud changes at its own scale, on its own axes
 	vec2 typeAt = vec2(0.94f * q.x + 0.342f * q.y, -0.342f * q.x + 0.94f * q.y) / (CLOUD_WEATHER_TILE * 1.9f);
 	float typeNoise = texture2DLod(s_cloudWeather, typeAt + vec2(0.61f, 0.27f), 0.0f).g;
-	type = clamp(u_cloudCover.y + (typeNoise - 0.5f) * 0.3f, 0.0f, 1.0f);
+	type = clamp(u_cloudCover.y + (typeNoise - 0.5f) * 0.3f + (planet.g - 0.5f) * 0.2f, 0.0f, 1.0f);
 	rain = u_cloudCover.z;
 	// Each storm builds its own towers round its middle
 	for (int i = 0; i < 8; ++i)
@@ -887,18 +932,6 @@ vec4 MarchCloudVolume(vec3 eye, vec3 dir, float limit, float jitter, int steps, 
 	return vec4(colour, transmittance);
 }
 
-// A smooth noise from 0 to 1 over a point across the land, with cells of size 1
-float CloudSmoothNoise(vec2 x)
-{
-	vec2 i = floor(x);
-	vec2 f = x - i;
-	vec2 u = f * f * (3.0f - 2.0f * f);
-	vec4 corners = vec4(dot(i, vec2(127.1f, 311.7f)), dot(i + vec2(1.0f, 0.0f), vec2(127.1f, 311.7f)),
-	                    dot(i + vec2(0.0f, 1.0f), vec2(127.1f, 311.7f)), dot(i + vec2(1.0f, 1.0f), vec2(127.1f, 311.7f)));
-	vec4 h = fract(sin(mod(corners, 6283.0f)) * 43758.5453f);
-	return mix(mix(h.x, h.y, u.x), mix(h.z, h.w, u.x), u.y);
-}
-
 // From high up a cloud is less than a pixel deep, so the layer is a thin sheet: its cover where the ray meets the middle
 // of the layer, lit by the sun and the sky
 vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
@@ -918,14 +951,17 @@ vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
 	// layer has no grain
 	float footprint = t * 0.0012f;
 	float fine = 1.0f - smoothstep(60.0f, 600.0f, footprint);
-	// The large weather systems, hundreds of kilometres across, from a smooth noise with no repeat
+	// The large weather systems come from the planet's map, as the volume's clouds do. The cells cut out of the cover
+	// leave about this share of the sky under cloud.
+	float mean = CloudCoverAt(CloudPlanetAt(p)) - 0.05f;
+	// Under the map's texels, two octaves of smooth noise add the weather of some tens of kilometres. Each octave has
+	// its own size and turn, so that their tiles do not line up and no grid shows from space.
 	vec2 q = p.xz - u_cloudDrift.xy;
-	// Each octave turns on its own axes, so that no grid shows
-	vec2 turned = vec2(0.8f * q.x - 0.6f * q.y, 0.6f * q.x + 0.8f * q.y);
-	vec2 other = vec2(0.28f * q.x + 0.96f * q.y, -0.96f * q.x + 0.28f * q.y);
-	float systems = 0.5f * CloudSmoothNoise(q / 700000.0f) + 0.3f * CloudSmoothNoise(turned / 260000.0f + 7.3f) +
-	                0.2f * CloudSmoothNoise(other / 90000.0f + 3.1f);
-	float mean = clamp(u_cloudCover.x * (0.3f + 1.4f * systems) - 0.15f, 0.0f, 1.0f) * smoothstep(0.0f, 0.05f, u_cloudCover.x);
+	vec2 first = vec2(0.934f * q.x - 0.358f * q.y, 0.358f * q.x + 0.934f * q.y) / 157000.0f;
+	vec2 second = vec2(0.391f * q.x + 0.921f * q.y, -0.921f * q.x + 0.391f * q.y) / 61300.0f;
+	float detail = 0.6f * (texture2DLod(s_cloudWeather, first + vec2(0.19f, 0.47f), 0.0f).g - 0.5f) +
+	               0.4f * (texture2DLod(s_cloudWeather, second + vec2(0.71f, 0.05f), 0.0f).g - 0.5f);
+	mean = clamp(mean + detail * 0.3f * (1.0f - fine), 0.0f, 1.0f) * smoothstep(0.0f, 0.05f, u_cloudCover.x);
 	float cover = fine > 0.0f ? mix(mean, CloudWeatherAt(p.xz, type, rain), fine) : mean;
 	// The anvils of the thunderstorm cells show over the layer
 	if (CloudHasCells())

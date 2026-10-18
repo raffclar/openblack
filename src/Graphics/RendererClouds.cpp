@@ -35,6 +35,7 @@
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
+#include "Graphics/PlanetWeather.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/Underwater.h"
@@ -124,7 +125,8 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 			                  .centre = {storm.currentPosition.x, storm.currentPosition.z},
 			                  .innerRadius = storm.currentInnerRadius,
 			                  .outerRadius = storm.outerRadius,
-			                  .strength = std::clamp(storm.currentStrength, 0.0f, 1.0f),
+			                  .strength = std::clamp(storm.currentStrength, 0.0f, 1.0f) *
+			                              clouds::StormCloudShare(storm.effect.overcast, storm.effect.rain),
 			                  .rain = std::clamp(static_cast<float>(storm.effect.rain) / 100.0f, 0.0f, 1.0f)});
 		}
 	}
@@ -195,6 +197,14 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 		                                .strength = clouds::CloudClimate::Strength(cell),
 		                                .rain = clouds::CloudClimate::Rain(cell)};
 	});
+	// The planet's weather map, round the middle of the map, as the clouds drift over it. The layer's cover is the
+	// game's cover over the island, so the map's cover over the island is the one that the shaders compare with.
+	if (_clouds->PlanetReady())
+	{
+		const auto overIsland =
+		    planet_weather::WeatherAt(planet_weather::DirectionAt(-climate.Drift(), clouds::k_PlanetRadius));
+		uniforms.planet = {planet_weather::k_MapMiddle, overIsland.cover, 1.0f};
+	}
 	uniforms.cells = cumulonimbus::Pack(cumulonimbus::CellsFor(sites, seconds).All(), current.wind);
 	_cloudsFrame = uniforms;
 }
@@ -218,6 +228,11 @@ void Renderer::SetCloudUniforms(const ShaderProgram& program, const clouds::Clou
 	program.SetTextureSampler("s_cloudBase", 0, _clouds->BaseNoise());
 	program.SetTextureSampler("s_cloudDetail", 1, _clouds->DetailNoise());
 	program.SetTextureSampler("s_cloudWeather", 2, _clouds->WeatherNoise());
+	program.SetUniformValue("u_cloudPlanet", &uniforms.planet);
+	if (_clouds->PlanetReady())
+	{
+		program.SetTextureSampler("s_cloudPlanet", 8, _clouds->PlanetWeather());
+	}
 }
 
 void Renderer::DrawClouds(const DrawSceneDesc& desc, const FrameBuffer& sceneTarget) const

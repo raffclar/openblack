@@ -46,6 +46,9 @@ public:
 	[[nodiscard]] TextureHandle DetailNoise() const;
 	[[nodiscard]] TextureHandle WeatherNoise() const;
 	[[nodiscard]] TextureHandle BlueNoise() const;
+	/// The cube map of the planet's weather (planet_weather::CubeTexels), once it is ready
+	[[nodiscard]] bool PlanetReady() const { return bgfx::isValid(_planet); }
+	[[nodiscard]] TextureHandle PlanetWeather() const;
 
 	/// Makes the targets of the rays again when the screen changes size. Gives the size of the targets.
 	glm::u16vec2 Fit(glm::u16vec2 screen);
@@ -87,11 +90,13 @@ private:
 	std::future<std::vector<uint8_t>> _detailTexels;
 	std::future<std::vector<uint8_t>> _weatherTexels;
 	std::future<std::vector<uint8_t>> _blueTexels;
+	std::future<std::vector<uint8_t>> _planetTexels;
 
 	bgfx::TextureHandle _base = BGFX_INVALID_HANDLE;
 	bgfx::TextureHandle _detail = BGFX_INVALID_HANDLE;
 	bgfx::TextureHandle _weather = BGFX_INVALID_HANDLE;
 	bgfx::TextureHandle _blue = BGFX_INVALID_HANDLE;
+	bgfx::TextureHandle _planet = BGFX_INVALID_HANDLE;
 	glm::u16vec2 _size {0, 0};
 	std::array<bgfx::TextureHandle, 2> _march {{BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE}};
 	bgfx::FrameBufferHandle _marchTarget = BGFX_INVALID_HANDLE;
