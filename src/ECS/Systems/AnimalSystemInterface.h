@@ -73,8 +73,8 @@ public:
 	virtual void JoinFlock(entt::entity animal, entt::entity flock) = 0;
 	/// An animal leaves its flock, which goes once it has no one left
 	virtual void LeaveFlock([[maybe_unused]] entt::entity animal) {}
-	/// A script sets what an animal does: held still, or going about with its flock. False for anything else, which
-	/// openblack's animals can't do yet.
+	/// A script sets the state of an animal by its number in the game's animal state table, for example held still or
+	/// with its flock. False for a state that openblack does not have, or a state with a start of its own.
 	virtual bool SetScriptState(entt::entity animal, LivingStates state) = 0;
 	/// A script sends an animal to a point on the land, where it is held still for the script; one already there is held
 	/// at once. One held in a hand, carried off or flying through the air isn't sent.
@@ -154,6 +154,18 @@ public:
 	                                      [[maybe_unused]] float speed)
 	{
 		return false;
+	}
+	/// An animal takes up a reaction to look at a thing: it stands and turns to the thing. False when it is not an animal
+	virtual bool SetupLookAtObject([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity object) { return false; }
+	/// An animal takes up a reaction to food: it goes to the food and then stops the reaction. False when it is not an
+	/// animal
+	virtual bool SetupGotoFood([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity food) { return false; }
+	/// The priority of a reaction to food for an animal. The table priority applies only when the food interests the
+	/// animal, holds food and is near enough. Else the priority is 0
+	[[nodiscard]] virtual uint32_t ReactToFoodPriority([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity food,
+	                                                   [[maybe_unused]] uint32_t tablePriority) const
+	{
+		return 0;
 	}
 	/// An animal that does not react now remembers its state before it takes up a reaction
 	virtual void RememberStateBeforeReaction([[maybe_unused]] entt::entity animal) {}

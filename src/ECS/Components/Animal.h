@@ -91,6 +91,12 @@ enum class AnimalState : uint8_t
 	Flying,
 	/// Came down on the land: its flock gets a new home, then it gets up
 	Landed,
+	/// Turned towards a thing that it looks at, while the thing stays near enough
+	LookingAtObject,
+	/// Going to food that interests it
+	GotoFood,
+	/// At the food: it stops the reaction
+	ArrivesAtFood,
 	/// The empty state: the animal does nothing and plays its move clip. It goes into it when a reaction ends and the
 	/// state before the reaction has no state to go back to
 	Invalid,
@@ -105,10 +111,11 @@ struct Animal
 	entt::entity flock {entt::null};
 	/// The town it belongs to, none for none
 	entt::entity town {entt::null};
-	/// The thing it flees, none when fleeing nothing
-	entt::entity fleeing {entt::null};
-	/// The kind of reaction it flees: the reaction's own table row says how far it runs from the thing
-	Reaction fleeReaction {Reaction::ReactToFlyingObject};
+	/// The thing of its reaction: the thing that it flees, looks at or goes to. None when it reacts to nothing
+	entt::entity reactingTo {entt::null};
+	/// The kind of its reaction. The table row of the reaction gives how far it runs from the thing, and how far the
+	/// thing can be before it stops the reaction
+	Reaction reaction {Reaction::ReactToFlyingObject};
 	AnimalState state {AnimalState::DecideWhatToDo};
 	/// The state it goes into once it gets where it is going, and once its clip has played while it waits
 	AnimalState finalState {AnimalState::DecideWhatToDo};

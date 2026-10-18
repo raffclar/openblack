@@ -121,6 +121,8 @@ inline size_t GameStateOf(AnimalState state)
 		return 4;
 	case AnimalState::FleeingFromObject:
 		return 6;
+	case AnimalState::LookingAtObject:
+		return 7;
 	case AnimalState::Flying:
 		return 10;
 	case AnimalState::Landed:
@@ -135,6 +137,10 @@ inline size_t GameStateOf(AnimalState state)
 		return 17;
 	case AnimalState::BeingEaten:
 		return 18;
+	case AnimalState::GotoFood:
+		return 19;
+	case AnimalState::ArrivesAtFood:
+		return 20;
 	case AnimalState::WaitForClip:
 		return 23;
 	case AnimalState::InHand:
@@ -191,7 +197,7 @@ inline std::optional<AnimalState> AnimalStateOfGame(size_t gameState)
 	return std::nullopt;
 }
 
-/// A grazer's clip of a state: it stands to decide, to be born, while a script holds it, watching what it fled and
+/// A grazer's clip of a state: it stands to decide, to be born, while a script holds it, while it looks at a thing and
 /// once up from a landing; it grazes, lowers and raises its head, sleeps, falls dead, and otherwise moves, walking or
 /// running by its speed
 inline AnimId GrazerClipFor(const Animal& animal, AnimalState state)
@@ -203,6 +209,7 @@ inline AnimId GrazerClipFor(const Animal& animal, AnimalState state)
 	case AnimalState::DecideWhatToDo:
 	case AnimalState::InScript:
 	case AnimalState::FleeingAndLookingAtObject:
+	case AnimalState::LookingAtObject:
 	case AnimalState::InteractDecideWhatToDo:
 	case AnimalState::GivesBirth:
 		slot = ClipSlot::Stand;

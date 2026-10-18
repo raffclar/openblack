@@ -72,6 +72,9 @@ public:
 	[[nodiscard]] std::optional<uint8_t> TopGameStateOf(entt::entity animal) const override;
 	bool SetupReactToFlyingObject(entt::entity animal, entt::entity object, float speed) override;
 	void RememberStateBeforeReaction(entt::entity animal) override;
+	bool SetupLookAtObject(entt::entity animal, entt::entity object) override;
+	bool SetupGotoFood(entt::entity animal, entt::entity food) override;
+	[[nodiscard]] uint32_t ReactToFoodPriority(entt::entity animal, entt::entity food, uint32_t tablePriority) const override;
 	void StopReaction(entt::entity animal, bool resetState) override;
 
 	[[nodiscard]] bool IsFrighteningToCreature(entt::entity animal) const override;
@@ -149,6 +152,10 @@ private:
 	// Fleeing what it reacts to, for any animal on the land
 	/// A turn of its flight or its watching; whether it was fleeing at all
 	bool Flee(entt::entity entity, components::Animal& animal);
+	/// A turn of a reaction that does not flee: it looks at a thing, or it goes to food. Whether it had such a reaction
+	bool LookOrGoToFood(entt::entity entity, components::Animal& animal);
+	/// It turns towards the thing of its reaction, or stops the reaction when the thing is too far
+	void LookAtThing(entt::entity entity, components::Animal& animal);
 	/// A step away from the hunter it fled, at its fleeing speed; it goes on fleeing the hunter as any other thing
 	void FleeFromPredator(entt::entity entity, components::Animal& animal);
 	/// It stops being frightened: the reaction is let go and it decides again

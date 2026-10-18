@@ -1299,7 +1299,11 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 			{
 				CreatureCarriesOutScriptPlay(member);
 			}
-			// TODO(opening): animals in a group
+			else if (registry.Valid(member) && registry.AllOf<ecs::components::Animal>(member) &&
+			         Locator::animalSystem::has_value() && state >= 0)
+			{
+				static_cast<void>(Locator::animalSystem::value().SetScriptState(member, static_cast<LivingStates>(state)));
+			}
 		}
 		return;
 	}
@@ -1320,8 +1324,19 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 		CreatureCarriesOutScriptPlay(object);
 		return;
 	}
-	// TODO(opening): animals
-	NotImplemented();
+	// An animal takes the state of its own table
+	if (registry.AllOf<ecs::components::Animal>(object) && Locator::animalSystem::has_value())
+	{
+		if (state < 0 || !Locator::animalSystem::value().SetScriptState(object, static_cast<LivingStates>(state)))
+		{
+			if (const auto logger = spdlog::get("scripting"))
+			{
+				SPDLOG_LOGGER_WARN(logger, "SET_SCRIPT_STATE: animal state {} is not done", state);
+			}
+		}
+		return;
+	}
+	ScriptMessage("Object not living for set state");
 }
 
 void SetScriptStatePos() // 018 SET_SCRIPT_STATE_POS
