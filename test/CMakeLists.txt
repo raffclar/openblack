@@ -1262,3 +1262,12 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(test_creature_walk_planner test_creature_walk_planner.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_walk_planner oracle/test_oracle_creature_walk_planner.cpp
+)
+set_tests_properties(
+  test_oracle_creature_walk_planner
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

@@ -2125,6 +2125,60 @@ void AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	all.push_back({
+	    .id = "movement.walk_step_off",
+	    .name = "Step off into the walk",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks to a far point on its one side, then to a far point on its other side, again "
+	                   "and again.",
+	    .expected = "At each start it steps off to the side into the walk without a turn on the spot first. The step "
+	                "lasts as long as the step takes at its walking speed, and the walk then continues from the step.",
+	    .framing = {.shot = Shot::Overview, .include = {{90.0f, 20.0f}, {-90.0f, -20.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}, 0.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {90.0f, 0.0f}, 0.5f), Go(Kind::WalkTo, 0, {-90.0f, 0.0f}, 0.5f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "movement.walk_turn_first",
+	    .name = "Turn on the spot before a short walk",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks to a point a short way behind it, then back to where it started, again and again.",
+	    .expected = "The point is nearer than its steps go and it does not face it, so it turns on the spot first. "
+	                "Then it walks at once, from the start of its walk, and slows to stop at the point.",
+	    .framing = {.shot = Shot::Overview, .include = {{25.0f, 25.0f}, {-25.0f, -25.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -8.0f}, 0.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, {0.0f, 8.0f}, 0.5f), Go(Kind::WalkTo, 0, {0.0f, -8.0f}, 0.5f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "movement.walk_run_and_arrive",
+	    .name = "Run, then slow down to arrive",
+	    .facet = Facet::Movement,
+	    .description = "A tiger runs a long way across the plain to a point, then walks back to where it started.",
+	    .expected = "It speeds up to its run and its legs blend from the walk to the run. Near the end of the route it "
+	                "slows down so that it stops at the point, and its legs blend back to the walk and the stand.",
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 120.0f}, {0.0f, -120.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -110.0f}, 180.0f)},
+	    .commands = {Go(Kind::RunTo, 0, {0.0f, 110.0f}, 1.0f), Go(Kind::WalkTo, 0, {0.0f, -110.0f}, 1.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "movement.walk_round_rock",
+	    .name = "Walk round a rock",
+	    .facet = Facet::Movement,
+	    .description = "A tiger runs to and fro past a pillar of rock that stands in the middle of its way.",
+	    .expected = "Its route goes round the rock on an arc. It slows down before the arc to the speed that the arc "
+	                "allows, and it does not stop and start again on the arc.",
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 90.0f}, {0.0f, -90.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -80.0f}, 180.0f)},
+	    .objects = {{.type = FeatureInfo::FatPilarChalk, .offset = {0.0f, 0.0f}}},
+	    .commands = {Go(Kind::RunTo, 0, {0.0f, 80.0f}, 1.0f), Go(Kind::RunTo, 0, {0.0f, -80.0f}, 1.0f)},
+	    .repeatFrom = 0,
+	});
+
 	std::vector<ObjectSetup> copse;
 	for (int x = -2; x <= 2; ++x)
 	{

@@ -52,7 +52,28 @@ bool OnLand(int32_t x, int32_t z)
 GameHeading HeadingBetween(glm::vec2 from, glm::vec2 to)
 {
 	const auto d = to - from;
-	return GameHeading(std::atan2(d.x, -d.y));
+	return GameHeading::Of(d.x, d.y);
+}
+
+/// The angles round a circle at the two ends of an arc, as the FPU gives them. The end that is behind the other one,
+/// the way that the arc goes, moves a whole turn further round. A moved angle is rounded to a float.
+struct ArcEnds
+{
+	double start;
+	double end;
+};
+
+ArcEnds ArcEndsOf(const Circle& circle, Way way, glm::vec2 from, glm::vec2 to)
+{
+	const double start = x87::Atan2(from.y - circle.centre.y, from.x - circle.centre.x);
+	const double end = x87::Atan2(to.y - circle.centre.y, to.x - circle.centre.x);
+	// A whole turn is the sum of two half turns, which is exact
+	constexpr float k_WholeTurn = k_Pi + k_Pi;
+	if (way == Way::Anticlockwise)
+	{
+		return {.start = start, .end = end < start ? x87::Add(end, k_WholeTurn) : end};
+	}
+	return {.start = start < end ? x87::Add(start, k_WholeTurn) : start, .end = end};
 }
 } // namespace
 
@@ -223,21 +244,9 @@ float creature_route::DistanceToSegment(glm::vec2 point, glm::vec2 from, glm::ve
 
 float creature_route::ArcLength(const Circle& circle, Way way, glm::vec2 from, glm::vec2 to)
 {
-	auto start = std::atan2(from.y - circle.centre.y, from.x - circle.centre.x);
-	auto end = std::atan2(to.y - circle.centre.y, to.x - circle.centre.x);
-	if (way == Way::Anticlockwise)
-	{
-		if (end < start)
-		{
-			end += 2.0f * k_Pi;
-		}
-		return (end - start) * circle.radius;
-	}
-	if (start < end)
-	{
-		start += 2.0f * k_Pi;
-	}
-	return (start - end) * circle.radius;
+	const auto [start, end] = ArcEndsOf(circle, way, from, to);
+	const auto turn = way == Way::Anticlockwise ? x87::Sub(end, start) : x87::Sub(start, end);
+	return turn * circle.radius;
 }
 
 float creature_route::LengthOf(const Leg& leg)
@@ -249,58 +258,43 @@ float creature_route::LengthOf(const Leg& leg)
 	return glm::distance(leg.from, leg.to);
 }
 
-namespace
-{
-/// The angles round an arc's circle where it starts and ends, the end taken round past the start the way it goes
-std::array<float, 2> ArcAngles(const Leg& leg)
-{
-	const auto& circle = *leg.round;
-	auto start = std::atan2(leg.from.y - circle.centre.y, leg.from.x - circle.centre.x);
-	auto end = std::atan2(leg.to.y - circle.centre.y, leg.to.x - circle.centre.x);
-	if (leg.roundWay == Way::Anticlockwise)
-	{
-		if (end < start)
-		{
-			end += 2.0f * k_Pi;
-		}
-	}
-	else if (start < end)
-	{
-		start += 2.0f * k_Pi;
-	}
-	return {start, end};
-}
-
-float ArcAngleAt(const Leg& leg, float distance)
+std::optional<Placed> creature_route::PlaceAlong(const Leg& leg, float distance)
 {
 	const auto length = LengthOf(leg);
-	const auto [start, end] = ArcAngles(leg);
-	return length > 0.0f ? start + ((distance / length) * (end - start)) : start;
+	if (leg.arc && leg.round.has_value())
+	{
+		// The angle moves from the start by the share of the arc that the distance is. The heading is that angle going
+		// clockwise, and a half turn more going anticlockwise.
+		const auto& circle = *leg.round;
+		const auto [start, end] = ArcEndsOf(circle, leg.roundWay, leg.from, leg.to);
+		const float span = x87::Sub(end, start);
+		const float angle = x87::Add((distance / length) * span, start);
+		const float heading = leg.roundWay == Way::Anticlockwise ? k_Pi + angle : angle;
+		return Placed {.position = {x87::Add(x87::Mul(x87::Cos(angle), circle.radius), circle.centre.x),
+		                            x87::Add(x87::Mul(x87::Sin(angle), circle.radius), circle.centre.y)},
+		               .heading = GameHeading(heading)};
+	}
+	// A straight leg too short to measure gives nothing: the creature keeps its place and heading
+	if (!(length > k_ShortestLeg))
+	{
+		return std::nullopt;
+	}
+	const auto along = leg.to - leg.from;
+	const auto share = distance / length;
+	return Placed {.position = {(along.x * share) + leg.from.x, (along.y * share) + leg.from.y},
+	               .heading = GameHeading::Of(along.x, along.y)};
 }
-} // namespace
 
 glm::vec2 creature_route::PointAlong(const Leg& leg, float distance)
 {
-	if (leg.arc && leg.round.has_value())
-	{
-		const auto angle = ArcAngleAt(leg, distance);
-		return leg.round->centre + (leg.round->radius * glm::vec2(std::cos(angle), std::sin(angle)));
-	}
-	const auto length = glm::distance(leg.from, leg.to);
-	// A straight leg too short to measure keeps the creature at its start
-	return length > k_ShortestLeg ? leg.from + ((leg.to - leg.from) * (distance / length)) : leg.from;
+	const auto placed = PlaceAlong(leg, distance);
+	return placed.has_value() ? placed->position : leg.from;
 }
 
 GameHeading creature_route::HeadingAlong(const Leg& leg, float distance)
 {
-	if (leg.arc && leg.round.has_value())
-	{
-		const auto angle = ArcAngleAt(leg, distance);
-		const auto tangent = leg.roundWay == Way::Anticlockwise ? glm::vec2(-std::sin(angle), std::cos(angle))
-		                                                        : glm::vec2(std::sin(angle), -std::cos(angle));
-		return GameHeading(std::atan2(tangent.x, -tangent.y));
-	}
-	return HeadingBetween(leg.from, leg.to);
+	const auto placed = PlaceAlong(leg, distance);
+	return placed.has_value() ? placed->heading : HeadingBetween(leg.from, leg.to);
 }
 
 float Route::SegmentLength() const
@@ -381,8 +375,9 @@ std::vector<glm::vec2> Route::Points(float maxStepAngle) const
 		}
 		if (leg.arc && leg.round.has_value() && maxStepAngle > 0.0f)
 		{
-			const auto [start, end] = ArcAngles(leg);
-			const auto steps = std::max(static_cast<int32_t>(std::ceil(std::abs(end - start) / maxStepAngle)), 1);
+			const auto [start, end] = ArcEndsOf(*leg.round, leg.roundWay, leg.from, leg.to);
+			const auto turn = static_cast<float>(std::abs(end - start));
+			const auto steps = std::max(static_cast<int32_t>(std::ceil(turn / maxStepAngle)), 1);
 			const auto length = LengthOf(leg);
 			for (int32_t k = 1; k <= steps; ++k)
 			{
