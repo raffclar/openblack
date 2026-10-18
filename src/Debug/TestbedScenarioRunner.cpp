@@ -2669,7 +2669,7 @@ void Runner::Give(const Command& command)
 		}
 		break;
 	case Kind::FleeFrom:
-		result = MoveResultName(locomotion.FleeFrom(*entity, point));
+		result = MoveResultName(locomotion.FleeFrom(*entity, point, Pace::Run));
 		break;
 	case Kind::TurnToFace:
 		result = locomotion.TurnToFace(*entity, point) ? "turning" : "can't";

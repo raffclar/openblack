@@ -12,10 +12,12 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 #include <span>
 #include <vector>
 
+#include <glm/ext/vector_int2.hpp>
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -74,6 +76,51 @@ constexpr float k_FlightTimePerUnit = 0.10193679481744766f;
 /// ground times one over g. The game takes the distance from the target to the creature, with the square of z first.
 [[nodiscard]] float FlightTime(const glm::vec3& creature, const glm::vec3& target);
 
+/// The height of the land at a map position (x and z in 16.16 map units)
+using MapAltitude = std::function<float(int32_t x, int32_t z)>;
+
+/// A thing that a creature throws at, and how it moves. The game leads a villager that walks and a creature that walks.
+/// It aims at the middle of the height of anything else, where it stands.
+struct ThrowTarget
+{
+	enum class Kind : uint8_t
+	{
+		/// Anything that is not a villager or a creature
+		Thing,
+		Villager,
+		Creature,
+	};
+	Kind kind {Kind::Thing};
+	/// Where it stands, in 16.16 map units
+	glm::ivec2 mapPosition {0};
+	/// The height of a thing or a villager from its model, or the height of a creature from its size
+	float height {0.0f};
+	/// A villager: the step that its walk makes each turn, in map units. The game leads it only when its state is not a
+	/// final state.
+	glm::ivec2 step {0};
+	bool walking {false};
+	/// A creature: where its body is, its heading, and its speed in units a second
+	glm::vec3 position {0.0f};
+	float heading {0.0f};
+	float speed {0.0f};
+};
+/// The game turns in one second, for the lead of a villager
+constexpr int32_t k_LeadTurnsPerSecond = 10;
+/// Where a target is after some seconds
+[[nodiscard]] glm::vec3 PlaceIn(const ThrowTarget& target, float seconds, const MapAltitude& altitude);
+
+/// Where a creature throws at a target, and how long the throw takes
+struct ThrowAim
+{
+	glm::vec3 point;
+	float seconds;
+};
+/// The aim at a target that can move:
+/// 1. The flight time to where the target stands, and where the target is after that time.
+/// 2. The flight time to that place, and where the target is after that second time.
+/// The creature throws at that last place, and the throw takes the second time.
+[[nodiscard]] ThrowAim AimAt(const glm::vec3& creature, const ThrowTarget& target, const MapAltitude& altitude);
+
 /// The velocity that takes something from where the hand lets go of it to the target in a time, falling as it goes
 [[nodiscard]] glm::vec3 ReleaseVelocity(const glm::vec3& target, const glm::vec3& release, float seconds);
 
@@ -117,12 +164,10 @@ struct HeldPose
 /// to the other side when tossed by the other hand and turned with the creature
 [[nodiscard]] glm::vec3 TossVelocity(const glm::vec3& handVelocity, bool mirrored, const glm::mat3& rotation, float share);
 
-/// Going to throw into something, a creature stands no nearer to it than the distance it was given, twice its height
-/// and the thing's radius together, and no further than three and a half times its height
-constexpr float k_ThrowStandHeights = 2.0f;
+/// Going to throw into something, a creature stands no nearer to it than the distance it was given, the thing's radius
+/// and twice its height together. It stands no further than three and a half times its height. When it backs away to
+/// throw, it goes to within twice its height of the point that it backs away to.
 constexpr float k_ThrowReachHeights = 3.5f;
-/// Backing away to throw, it goes to within twice its height of the point it backs away to
-constexpr float k_ThrowBackOffHeights = 2.0f;
 /// Walking up to throw where it may go no nearer than it may stand off, it may stand off this much more
 constexpr float k_ThrowWalkUpSpare = 0.01f;
 
@@ -141,8 +186,8 @@ struct ThrowStand
 	float minDistance {0.0f};
 	float maxDistance {0.0f};
 };
-/// Where a creature of a height goes to throw into a thing of a radius, keeping the distance it was given; none when it
-/// stands right on the thing's centre, with no way to back away
+/// Where a creature of a height goes to throw into a thing of a radius, keeping the distance it was given. The game works
+/// from the map positions of the two. None when the creature stands right on the thing's centre, with no way to back away.
 [[nodiscard]] std::optional<ThrowStand> WhereToThrowFrom(glm::vec2 creature, glm::vec2 target, float height, float targetRadius,
                                                          float keep);
 

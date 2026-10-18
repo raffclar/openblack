@@ -44,7 +44,8 @@ constexpr float k_FaceStoreForWoodSeconds = 0.1f;
 [[nodiscard]] std::vector<Step> PlantTreeBy(std::optional<uint32_t> tree, uint32_t by);
 
 /// Practising a throw: unless its hand holds something, picking the thing up; then throwing what it holds at the point
-/// three times its height further along both of the land's axes than where it stood as it set about it
+/// three times its height further along both of the land's axes than where it stood as it set about it. The game adds
+/// the distance to the creature's map position and makes the sum a map position again.
 [[nodiscard]] std::vector<Step> PracticeThrow(std::optional<uint32_t> pickUp, glm::vec2 from, float height);
 constexpr float k_PracticeThrowHeights = 3.0f;
 

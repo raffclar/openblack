@@ -40,7 +40,7 @@ public:
 	MoveResult LeadTo(entt::entity creature, glm::vec2 point, float extraSpeed, float maxDistance) override;
 	MoveResult MoveToObject(entt::entity creature, entt::entity target, Pace pace, float extra) override;
 	MoveResult Follow(entt::entity creature, entt::entity target, float distance, Pace pace) override;
-	MoveResult FleeFrom(entt::entity creature, glm::vec2 threat) override;
+	MoveResult FleeFrom(entt::entity creature, glm::vec2 threat, Pace pace) override;
 	bool TurnToFace(entt::entity creature, glm::vec2 point) override;
 	bool TurnToHeading(entt::entity creature, GameHeading heading) override;
 	void Stop(entt::entity creature) override;

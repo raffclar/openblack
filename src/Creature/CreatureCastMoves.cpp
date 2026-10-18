@@ -261,15 +261,19 @@ bool creature_cast_moves::BlocksCell(const CollideSphere& sphere, int32_t x, int
 }
 
 std::array<CollideSphere, creature_cast_moves::k_WorshipSiteSpheres>
-creature_cast_moves::WorshipSiteSpheres(const glm::vec3& position, const glm::mat3& rotation, float scale)
+creature_cast_moves::WorshipSiteSpheres(const glm::vec3& position, float yAngle, float scale)
 {
 	std::array<CollideSphere, k_WorshipSiteSpheres> spheres {};
+	// The site's turn and scale as the game builds them: the cosine and the sine each times the scale
+	const float c = x87::Mul(x87::Cos(yAngle), scale);
+	const float s = x87::Mul(x87::Sin(yAngle), scale);
+	const std::array<glm::vec3, 3> rows {glm::vec3(c, 0.0f, s), glm::vec3(0.0f, scale, 0.0f), glm::vec3(-s, 0.0f, c)};
 	std::ranges::transform(k_WorshipSiteSpherePoints, spheres.begin(), [&](const glm::vec3& point) {
-		// The sums of the products are made at a higher precision before they are kept, as the game's are
-		const glm::dvec3 local = glm::dvec3(point) * static_cast<double>(scale);
-		const glm::dvec3 world = glm::dvec3(rotation[0]) * local.x + glm::dvec3(rotation[1]) * local.y +
-		                         glm::dvec3(rotation[2]) * local.z + glm::dvec3(position);
-		return CollideSphere {.centre = glm::vec3(world), .radius = k_WorshipSiteSphereWidth * point.y};
+		// Each part adds the products of z, then y, then x, and then the place
+		const auto part = [&](int axis) {
+			return (((rows[2][axis] * point.z) + (rows[1][axis] * point.y)) + (rows[0][axis] * point.x)) + position[axis];
+		};
+		return CollideSphere {.centre = {part(0), part(1), part(2)}, .radius = k_WorshipSiteSphereWidth * point.y};
 	});
 	return spheres;
 }

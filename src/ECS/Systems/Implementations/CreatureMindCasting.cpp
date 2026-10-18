@@ -128,6 +128,21 @@ GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature, cons
 	return GameHeading::Of(ahead.x, ahead.z);
 }
 
+/// The map position of a point across the land
+glm::vec2 MapPosition(glm::vec2 point)
+{
+	return map_coords::ToMetres(map_coords::FromMetres(point));
+}
+
+/// How far the nearest place to stand is from a point. Both are at a height of zero, and the game adds the square of z
+/// first.
+float NearestStandDistance(glm::vec2 point, glm::vec2 nearest)
+{
+	const float acrossX = point.x - nearest.x;
+	const float acrossZ = point.y - nearest.y;
+	return std::sqrt((acrossZ * acrossZ) + (acrossX * acrossX));
+}
+
 /// The map position of a point as a point, with the height of the land under it
 glm::vec3 MapPoint(glm::vec2 point)
 {
@@ -151,7 +166,8 @@ std::vector<cast_moves::CollideSphere> CollideSpheres(const ecs::Registry& regis
 	}
 	if (registry.AllOf<WorshipSite>(entity))
 	{
-		const auto spheres = cast_moves::WorshipSiteSpheres(transform->position, transform->rotation, transform->scale.x);
+		const auto spheres = cast_moves::WorshipSiteSpheres(
+		    transform->position, creature_obstacles::YAngleOf(transform->rotation), transform->scale.x);
 		return {spheres.begin(), spheres.end()};
 	}
 	if (!registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, SpellDispenser, TeleportStone, WorshipAltar, Vortex,
@@ -1041,9 +1057,10 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 			fail();
 			break;
 		}
-		const auto stand =
-		    creature_throw::WhereToThrowFrom(here, Flat(*at), object_measures::Height(registry, creature),
-		                                     object_measures::TwoDRadius(registry, casting->target), casting->keep);
+		// The game works from the map positions of the creature and of the thing
+		const auto stand = creature_throw::WhereToThrowFrom(
+		    MapPosition(here), MapPosition(Flat(*at)), object_measures::Height(registry, creature),
+		    object_measures::TwoDRadius(registry, casting->target), casting->keep);
 		if (!stand.has_value())
 		{
 			fail();
@@ -1062,7 +1079,7 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 			if (!land.IsValid(point, creature_route::k_DestinationClearance))
 			{
 				const auto valid = land.NearestStandable(point);
-				if (!valid.has_value() || glm::distance(*valid, point) >= creature_route::k_ValidPointReach)
+				if (!valid.has_value() || !(NearestStandDistance(point, *valid) < creature_route::k_ValidPointReach))
 				{
 					fail();
 					break;

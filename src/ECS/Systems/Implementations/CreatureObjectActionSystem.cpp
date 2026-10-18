@@ -1715,6 +1715,13 @@ bool CreatureObjectActionSystem::ThrowTaking(entt::entity creature, const glm::v
 	return Start(creature, std::move(action));
 }
 
+bool CreatureObjectActionSystem::ThrowAimed(entt::entity creature, const glm::vec3& target, float flightSeconds)
+{
+	CreatureObjectAction action {.kind = Kind::Throw, .point = target};
+	action.givenFlightSeconds = flightSeconds;
+	return Start(creature, std::move(action));
+}
+
 bool CreatureObjectActionSystem::Destroy(entt::entity creature, entt::entity target)
 {
 	return Start(creature, {.kind = Kind::Destroy, .target = target});

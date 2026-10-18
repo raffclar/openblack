@@ -152,10 +152,11 @@ struct CollideSphere
 /// Whether a ball comes within the reach of a cell's middle (at the height of zero) that makes the cell not clear
 [[nodiscard]] bool BlocksCell(const CollideSphere& sphere, int32_t x, int32_t z);
 /// The ten balls a worship site keeps creatures off: along the edges of its model, each at a height above the site
-/// given by the model and as wide as 1.3 times that height, placed by the site's place in the world, turn and scale
+/// given by the model and as wide as 1.3 times that height. The site's place in the world, its angle about the upright
+/// axis and its scale put them in the world, and they keep their height in the world.
 inline constexpr size_t k_WorshipSiteSpheres = 10;
-[[nodiscard]] std::array<CollideSphere, k_WorshipSiteSpheres> WorshipSiteSpheres(const glm::vec3& position,
-                                                                                 const glm::mat3& rotation, float scale);
+[[nodiscard]] std::array<CollideSphere, k_WorshipSiteSpheres> WorshipSiteSpheres(const glm::vec3& position, float yAngle,
+                                                                                 float scale);
 
 /// What a thing in a cell of the land is to the test of whether the cell is clear for a creature
 struct ThingInCell

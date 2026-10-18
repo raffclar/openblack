@@ -137,6 +137,9 @@ struct Thing
 	PlayerNames owner;
 	/// How the game builds its turn and scale, which moves the middle of its model's box
 	Placement placement {Placement::Upright};
+	/// A thing that can lean: how far it leans about x and about z (radians)
+	float xAngle {0.0f};
+	float zAngle {0.0f};
 };
 
 /// Anything burning is kept this much further off
@@ -180,7 +183,7 @@ constexpr float k_TeleportStoneWidth = 6.0f;
 /// across the ground, at the start of its stand
 [[nodiscard]] float BodyRadius(std::span<const glm::mat4> boneMatrices);
 
-/// The way a thing's model's x axis points across the land, from its rotation
+/// The way a thing's model's x axis points across the land, from its rotation: the game's angle about the upright axis
 [[nodiscard]] float YAngleOf(const glm::mat3& rotation);
 
 /// The turn and scale of a thing that turns about the upright axis only. The wide cosine and sine of the angle are

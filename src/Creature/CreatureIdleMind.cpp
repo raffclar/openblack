@@ -527,13 +527,6 @@ std::vector<Step> creature_mind::LookAt(glm::vec2 point, float seconds)
 	return WithFace({turn, {.kind = Step::Kind::Wait, .seconds = seconds}}, creature_face::Cue::Amazed);
 }
 
-std::vector<Step> creature_mind::RunFrom(glm::vec2 point)
-{
-	Step flee {.kind = Step::Kind::Move};
-	flee.movement = {.kind = Movement::Kind::FleeFrom, .point = point, .run = true};
-	return WithFace({flee}, creature_face::Cue::Fear);
-}
-
 std::vector<Step> creature_mind::DestroyThing(uint32_t object)
 {
 	auto stomp = Object({.kind = ObjectOrder::Kind::Destroy, .object = object}, Effect::Stomped);

@@ -46,6 +46,7 @@
 #include "Common/GameRandom.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureArena.h"
+#include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFizz.h"
 #include "Creature/CreatureIdleMind.h"
@@ -54,6 +55,7 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMode.h"
+#include "Creature/CreatureObstacles.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureRig.h"
@@ -83,6 +85,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureScars.h"
 #include "ECS/Map.h"
@@ -599,6 +602,19 @@ arena::ThingInCell ThingInCellOf(const ecs::Registry& registry, entt::entity thi
 	{
 		// Trees, dead trees and statics can all be thrown about
 		seen.kind = arena::ThingKind::Movable;
+	}
+	// A worship site keeps creatures off with ten balls that keep their height in the world
+	if (const auto* transform = registry.TryGet<const Transform>(thing);
+	    transform != nullptr && registry.AllOf<WorshipSite>(thing))
+	{
+		const auto spheres = creature_cast_moves::WorshipSiteSpheres(
+		    transform->position, creature_obstacles::YAngleOf(transform->rotation), transform->scale.x);
+		for (const auto& sphere : spheres)
+		{
+			seen.circles.push_back(
+			    {.centre = {sphere.centre.x, sphere.centre.z}, .radius = sphere.radius, .height = sphere.centre.y});
+		}
+		return seen;
 	}
 	for (const auto& circle : ecs::thing_circles::CirclesOf(registry, thing))
 	{
