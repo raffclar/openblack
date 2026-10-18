@@ -6673,6 +6673,21 @@ void AddCombat(std::vector<Scenario>& all)
 		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
+		all.push_back({
+		    .id = "combat.queued_blows",
+		    .name = "Queued blows follow each other at once",
+		    .facet = Facet::Combat,
+		    .description = "The player's red tiger fights a blue tiger that fights by itself. The red tiger gets three "
+		                   "blows in the middle quickly, so the second blow and the third blow wait in its queue.",
+		    .expected = "Each queued blow starts in the game turn in which the blow before it ends, and it moves in that "
+		                "turn. The last part of each blow, less than one turn, does not play. The original game does the "
+		                "same.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.3f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightBlow, 0, k_Mid, 14.0f, 0.0f),
+		                 Fight(Kind::FightBlow, 0, k_Mid, 0.1f, 0.0f), Fight(Kind::FightBlow, 0, k_Mid, 0.1f, 0.0f)},
+		    .repeatFrom = 1,
+		});
 	}
 }
 

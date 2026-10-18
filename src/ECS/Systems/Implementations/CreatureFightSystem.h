@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
 #include <optional>
 #include <random>
 #include <string_view>
@@ -103,9 +106,18 @@ private:
 	/// A fighter's turn in the duel: it faces its opponent, keeps in the arena, moves apart from its opponent and
 	/// chooses or makes its next move
 	void DuelTurn(entt::entity creature);
-	/// A fighter's animation moves on by one game turn. An action first moves the creature as far as its animation's root
-	/// moves in the turn. Then the fight goes to its next state when the animation ends.
-	void StepAnimation(entt::entity creature);
+	/// The action that moved on in a fighter's turn, and where its animation was before it moved on
+	struct ActionStep
+	{
+		size_t animation;
+		int32_t fromMs;
+	};
+	/// A fighter's animation moves on by one game turn. An action (or a reel in a block) whose animation reaches its end
+	/// in the turn ends first: the fighter goes back to its stance (or its block), and a move that the player put in the
+	/// queue starts at once. An action first
+	/// moves the creature as far as its animation's root moves in the turn. Other states go to their next state when the
+	/// animation ends. Returns the action that moved on, if one did.
+	std::optional<ActionStep> StepAnimation(entt::entity creature);
 	void ProcessKnockedOut();
 	/// Makes the move at the front of a fighter's queue, if it can
 	void CheckQueue(entt::entity creature);
@@ -113,9 +125,9 @@ private:
 	/// The spell a fighter casts as its cast's start ends: an attacking one at the opponent, a defending one on itself
 	void CastFightSpell(entt::entity creature, MagicType type, entt::entity opponent);
 	void AttemptBlow(entt::entity creature, creature_fight::Band band, float speed);
-	/// A fighter's blow in its turn: tested along its swing since the last turn, then the two bodies move apart when they
-	/// overlap. Only a blow that was under way as the turn started is tested.
-	void BlowTurn(entt::entity creature, bool wasInAction, size_t actionAtStart);
+	/// A fighter's blow in its turn: tested along its swing in the turn, then the two bodies move apart when they overlap.
+	/// Only a blow that moved on in the fighter's step of the turn is tested.
+	void BlowTurn(entt::entity creature, std::optional<ActionStep> step);
 	/// A blow tested from where its animation was at the last turn: it marks its swing and, where it meets the
 	/// opponent's body, lands there
 	void TestBlow(entt::entity creature, int32_t fromMs);

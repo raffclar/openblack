@@ -385,7 +385,7 @@ std::optional<creature_plan_actions::Situation::FoodPile> NearestBelievedField(c
 	return nearest;
 }
 
-/// Where the head bone of the creature is in the world, as its body is posed now
+/// Where the head bone of the creature is in the world, as its body is posed at the end of its newest game turn
 std::optional<glm::vec3> HeadOf(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* self = registry.TryGet<const Creature>(creature);
@@ -401,8 +401,9 @@ std::optional<glm::vec3> HeadOf(const ecs::Registry& registry, entt::entity crea
 	{
 		return std::nullopt;
 	}
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	return glm::vec3(creature::PosedBone(points->head, body->boneMatrices, placement)[3]);
+	const auto pose = creature::TurnPose(body->newerTurnPose, body->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
 }
 } // namespace
 

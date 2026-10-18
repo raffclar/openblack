@@ -71,10 +71,6 @@ struct CreatureFighting
 	std::vector<creature_fight::Reach> reaches;
 	std::array<float, creature_fight::animations::k_AttackCount> hitTimesMs {};
 	bool measured {false};
-	/// Where the action's animation was at the last game turn, which this turn's tests of a blow start from, and which
-	/// animation that was
-	float blowTestFromMs {0.0f};
-	size_t blowTestAnimation {0};
 	/// Seconds in the stage, and until it next shows its anger in its face
 	float stageSeconds {0.0f};
 	float faceSeconds {0.0f};

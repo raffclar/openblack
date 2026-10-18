@@ -452,13 +452,14 @@ std::vector<physics::Ellipsoid> DynamicsSystem::CreatureSkeleton(entt::entity cr
 		boxes =
 		    _creatureBoxes.emplace(meshId, physics::shapes::BoneBoxes(positions, bones, animation->boneMatrices.size())).first;
 	}
-	// Placed by the bones as they are posed now
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	// Placed by the bones as the body is posed at the end of its newest game turn
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
 	std::vector<physics::Ellipsoid> skeleton;
 	skeleton.reserve(animation->boneMatrices.size());
 	for (uint32_t bone = 0; bone < animation->boneMatrices.size(); ++bone)
 	{
-		const auto posed = creature::PosedBone(bone, animation->boneMatrices, placement);
+		const auto posed = creature::PosedBone(bone, pose.bones, pose.placement);
 		const auto box = bone < boxes->second.size() ? boxes->second[bone] : physics::shapes::BoneBox {};
 		skeleton.push_back({.boxMin = box.min, .boxMax = box.max, .localToWorld = posed, .worldToLocal = glm::inverse(posed)});
 	}
@@ -965,7 +966,7 @@ void DynamicsSystem::BeginTurn()
 			entry.body->density += turn::k_CorpseSoaking;
 		}
 		entry.body->BeginTurn();
-		// A creature's skeleton is hit as it is posed now
+		// A creature's skeleton is hit as it is posed at the end of its newest game turn
 		if (Entities().AllOf<Creature>(entry.entity))
 		{
 			if (auto skeleton = CreatureSkeleton(entry.entity); !skeleton.empty())
