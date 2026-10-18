@@ -19,6 +19,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Audio/GameSoundEffects.h"
+#include "Audio/HeaderOverrides.h"
 #include "CHLApi.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/GuidanceHeard.h"
@@ -298,7 +299,8 @@ void GuidanceSystem::TownAttackCry(entt::entity town, const guidance::TownAttack
 	                             .volume = guidance::k_VoiceVolume,
 	                             .voicePlayType = pack::AudioBankLoop::Once,
 	                             .minDistance = reach * guidance::k_VoiceNearShare,
-	                             .maxDistance = reach});
+	                             .maxDistance = reach,
+	                             .callerWins = audio::k_CallerDistancesWin});
 }
 
 void GuidanceSystem::BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining)

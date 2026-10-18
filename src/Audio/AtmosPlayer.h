@@ -50,6 +50,8 @@ struct VoiceStart
 	float distanceScale;
 	/// What the sample does about the voices that play already, after the bank header
 	pack::AudioBankLoop playType {pack::AudioBankLoop::Restart};
+	/// The settings (bits of pack::AudioBankOverride) that the bank header set, which later changes do not change
+	uint32_t headerSet {0};
 };
 
 /// Where LHAudioDLL voices are actually played
@@ -110,6 +112,9 @@ public:
 	void SetMasterVolume(uint32_t volume) { _masterVolume = volume; }
 	/// Linear gain QMixer plays a volume at
 	[[nodiscard]] float VolumeToGain(uint32_t volume) const;
+	/// The next number of the sound library's random stream, from 0 to AudioRandom::k_RandMax. Each start of a bank
+	/// sample takes one, and the stream gets a new seed at the first start.
+	[[nodiscard]] uint32_t NextPlayRandom();
 
 	// Introspection for debugging tools
 	struct LoopState

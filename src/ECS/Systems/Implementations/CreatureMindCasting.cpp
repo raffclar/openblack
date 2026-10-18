@@ -18,7 +18,6 @@
 
 #include <algorithm>
 #include <limits>
-#include <numbers>
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/norm.hpp>
@@ -26,7 +25,10 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
+#include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameHeading.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureCastMoves.h"
@@ -99,11 +101,6 @@ using creature_desires::Desire;
 using Kind = creature_mind::Movement::Kind;
 
 constexpr float k_TurnsPerSecond = 10.0f;
-/// It sets off again only for somewhere further than this from where it set off for
-constexpr float k_SameDestination = 0.1f;
-/// It heads for what it goes near within this share of a whole turn, measured in the game's 2048 to a turn
-constexpr int32_t k_AngleUnits = 2048;
-constexpr int32_t k_HeadingTolerance = 6;
 /// The miracles a creature casts are numbered from the first to the last magic type
 constexpr uint32_t k_LastCreatureMagic = 41;
 /// A creature tries a power-up miracle only once grown past this stage
@@ -119,30 +116,22 @@ glm::vec2 Flat(const glm::vec3& point)
 	return {point.x, point.z};
 }
 
-/// The game's heading of a creature, from the way it faces: 0 facing -z, a quarter turn facing +x
-float GameHeading(const Transform& transform)
+/// The heading of a creature: the heading that its movement keeps. A creature that has not moved yet has the heading of
+/// the way that its model faces.
+GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature, const Transform& transform)
 {
+	if (const auto* moving = registry.TryGet<const CreatureLocomotion>(creature); moving != nullptr && moving->started)
+	{
+		return GameHeading::FromYaw(moving->heading);
+	}
 	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-	return std::atan2(ahead.x, -ahead.z);
+	return GameHeading::Of(ahead.x, ahead.z);
 }
 
-/// Whether a creature heads for a point near enough, or stands in the same cell of the land as it
-bool HeadingFor(const Transform& transform, glm::vec2 point)
+/// The map position of a point as a point, with the height of the land under it
+glm::vec3 MapPoint(glm::vec2 point)
 {
-	const auto at = Flat(transform.position);
-	if (std::floor(at.x / cast_moves::k_CellSize) == std::floor(point.x / cast_moves::k_CellSize) &&
-	    std::floor(at.y / cast_moves::k_CellSize) == std::floor(point.y / cast_moves::k_CellSize))
-	{
-		return true;
-	}
-	constexpr float k_UnitsPerRadian = static_cast<float>(k_AngleUnits) / (2.0f * std::numbers::pi_v<float>);
-	const auto heading = static_cast<int32_t>((GameHeading(transform) - std::numbers::pi_v<float> * 0.5f) * k_UnitsPerRadian) &
-	                     (k_AngleUnits - 1);
-	const auto d = point - at;
-	const auto towards =
-	    (k_AngleUnits / 4 + static_cast<int32_t>(std::atan2(-d.x, d.y) * k_UnitsPerRadian)) & (k_AngleUnits - 1);
-	// The game takes the difference without going round
-	return std::abs(heading - towards) < k_AngleUnits / k_HeadingTolerance;
+	return map_coords::ToWorld(Locator::terrainSystem::value(), map_coords::FromMetres(point));
 }
 
 /// The balls a thing in a cell keeps creatures off, as the cell test looks at them: a tree a small one at its trunk, a
@@ -336,7 +325,7 @@ std::optional<glm::vec2> mind_detail::ClearAreaFor(const ecs::Registry& registry
 	{
 		const bool leashed = leashes->worn.has_value();
 		if (creature_leash::IsConfined(leashes->confinementRadius, leashed, !leashed || leashes->worn->works) &&
-		    glm::distance(*found, Flat(leashes->confinementCentre)) > leashes->confinementRadius)
+		    gutils::GetDistanceInMetres(*found, Flat(leashes->confinementCentre)) > leashes->confinementRadius)
 		{
 			return std::nullopt;
 		}
@@ -723,8 +712,7 @@ bool CreatureMindSystem::CastGivenGlobe(entt::entity creature, CreatureMindState
 			{
 				continue;
 			}
-			const auto distance =
-			    glm::distance(glm::vec2(at->position.x, at->position.z), glm::vec2(other->position.x, other->position.z));
+			const auto distance = gutils::GetDistanceInMetres(Flat(at->position), Flat(other->position));
 			if (distance < nearest)
 			{
 				nearest = distance;
@@ -869,7 +857,7 @@ std::optional<creature_cast_moves::WalkStart> CreatureMindSystem::GoNear(entt::e
 	const float clear =
 	    object_measures::RoutePlanRadius(registry, casting.target, creature) + object_measures::TwoDRadius(registry, creature);
 	const auto target = Flat(*at);
-	if (reissue && casting.destination.has_value() && glm::distance(*casting.destination, target) < k_SameDestination)
+	if (reissue && casting.destination.has_value() && cast_moves::SameDestination(*casting.destination, target))
 	{
 		return creature_cast_moves::WalkStart::Walking;
 	}
@@ -933,13 +921,13 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		                                         : object_measures::TwoDRadius(registry, creature);
 		const auto target = at.has_value() ? Flat(*at) : here;
 		const float selfRadius = object_measures::TwoDRadius(registry, creature);
-		if (cast_moves::Arrived(glm::distance(here, target), selfRadius, routeRadius, casting->keep))
+		if (cast_moves::Arrived(gutils::GetDistanceInMetres(here, target), selfRadius, routeRadius, casting->keep))
 		{
 			locomotion.Stop(creature);
 			done();
 			break;
 		}
-		if (!locomotion.IsMoving(creature) || !HeadingFor(*transform, target))
+		if (!locomotion.IsMoving(creature) || !cast_moves::HeadsFor(here, target, HeadingOf(registry, creature, *transform)))
 		{
 			const auto walk = GoNear(creature, *casting, locomotion.IsMoving(creature));
 			// Where it cannot stand at the thing, it does not choose the thing again for a time. When it cannot walk
@@ -999,17 +987,20 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 			}
 			const float far =
 			    cast_moves::GetAwayDistance(casting->keep, object_measures::TwoDRadius(registry, casting->target));
-			if (!(glm::distance(Flat(*at), here) < far))
+			const float apart = gutils::GetDistanceInMetres(Flat(*at), here);
+			if (!(apart < far))
 			{
 				done();
 				break;
 			}
-			const auto away = cast_moves::GetAwayPoint(transform->position, *at, far);
+			// The game works from the map positions of both, and the area it clears is about a map position too
+			const auto away = cast_moves::GetAwayPoint(MapPoint(here), MapPoint(Flat(*at)), apart, far);
 			const auto clear =
-			    cast_moves::FindClearArea(Flat(away), object_measures::Height(registry, creature), [&](int32_t x, int32_t z) {
-				    return locomotion.GetWalkableLand().At(x, z) == creature_route::Ground::Open &&
-				           !CellBlocked(registry, creature, x, z);
-			    });
+			    cast_moves::FindClearArea(map_coords::ToMetres(map_coords::FromMetres(Flat(away))),
+			                              object_measures::Height(registry, creature), [&](int32_t x, int32_t z) {
+				                              return locomotion.GetWalkableLand().At(x, z) == creature_route::Ground::Open &&
+				                                     !CellBlocked(registry, creature, x, z);
+			                              });
 			if (!clear.has_value() || locomotion.MoveTo(creature, *clear, KeptOrRun(*casting), 0.0f, 1.0f) !=
 			                              CreatureLocomotionSystemInterface::MoveResult::Started)
 			{
@@ -1092,9 +1083,8 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 			break;
 		}
 		const auto target = Flat(*at);
-		const auto* moving = registry.TryGet<const CreatureLocomotion>(creature);
-		const float heading = moving != nullptr ? moving->heading : 0.0f;
-		const bool onTop = glm::distance(here, target) < cast_moves::k_OnTopDistance;
+		const auto heading = HeadingOf(registry, creature, *transform);
+		const bool onTop = cast_moves::MapPointDistance(target, here) < cast_moves::k_OnTopDistance;
 		if (casting->phase == 0)
 		{
 			// Right on top of it there is nothing to turn to, but it still settles as it would
@@ -1153,7 +1143,7 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		if (casting->phase == 0)
 		{
 			// Right on top of the thing, or with the thing gone, it does not turn
-			if (!at.has_value() || glm::distance(here, Flat(*at)) < cast_moves::k_OnTopDistance)
+			if (!at.has_value() || cast_moves::MapPointDistance(Flat(*at), here) < cast_moves::k_OnTopDistance)
 			{
 				casting->phase = 1;
 				break;

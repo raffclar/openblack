@@ -174,6 +174,9 @@ struct SwirlParams
 [[nodiscard]] float SwirlRadius(float radius, float age, float dt, const SwirlParams& params);
 /// How fast the swirl turns at its radius: fast when tight
 [[nodiscard]] float SwirlTurning(float radius, const SwirlParams& params);
+/// The velocity the swirl sets off with: the cast heading scaled to the top speed, with the squares added from z to x.
+/// A heading of no length gives no velocity
+[[nodiscard]] glm::vec3 SwirlVelocity(glm::vec3 heading, float maxSpeed);
 /// The share of its full speed the swirl moves at: none until it starts, building up to all of it
 [[nodiscard]] float SwirlAcceleration(float age, const SwirlParams& params);
 /// The wind a storm drifts by: the wind where it is, or none for a storm a script cast, which stays where it was put

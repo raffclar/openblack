@@ -49,6 +49,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/CustomMusicPlayerInterface.h"
 #include "Audio/GameMusic.h"
+#include "Audio/HeaderOverrides.h"
 #include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
@@ -219,6 +220,7 @@
 #include "Gui/TextDatabase.h"
 #include "Help/HelpProfileFile.h"
 #include "Help/Spirits.h"
+#include "Help/VillageVoices.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
@@ -229,6 +231,7 @@
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
 #include "Magic/SpellRules.h"
+#include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "TestbedDispenserGrid.h"
 #include "Windowing/WindowingInterface.h"
@@ -1945,6 +1948,29 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		Locator::helpSpeechSystem::value().Say(text, audio::SpeechVoice::First, point);
 		return fmt::format("line of text {} said at ({:.1f}, {:.1f})", text, at.x, at.y);
 	}
+	case Kind::PlayGuidanceVoice:
+	{
+		if (!Locator::audio::has_value())
+		{
+			return "no audio";
+		}
+		const auto sample = fmt::format("Guidance.sad/{}", command.value);
+		audio::SoundEffectOptions options {.pitchPercent = guidance::k_VoicePitch,
+		                                   .volume = guidance::k_VoiceVolume,
+		                                   .voicePlayType = pack::AudioBankLoop::Once};
+		if (command.ctrl)
+		{
+			const auto at = MapPoint(_middle, command.point);
+			options.position = glm::vec3 {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+			options.minDistance = command.radius * guidance::k_VoiceNearShare;
+			options.maxDistance = command.radius;
+			options.callerWins = audio::k_CallerDistancesWin;
+		}
+		const auto started = Locator::audio::value().StartSoundEffect(resources::HashIdentifier(sample), options);
+		return fmt::format("{} asked for at volume {} and pitch {}%{}{}", sample, guidance::k_VoiceVolume,
+		                   guidance::k_VoicePitch, command.ctrl ? ", placed" : ", heard everywhere",
+		                   started == entt::null ? ", not started" : "");
+	}
 	case Kind::HandRelease:
 		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
 		{
@@ -2343,7 +2369,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
-	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine)
+	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
+	    command.kind == Kind::PlayGuidanceVoice)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2925,6 +2952,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandRelease:
 	case Kind::AttachObjectScriptSound:
 	case Kind::SayLine:
+	case Kind::PlayGuidanceVoice:
 	case Kind::RemoveObject:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:

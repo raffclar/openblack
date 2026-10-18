@@ -93,3 +93,13 @@ TEST(LightningSpellOrder, TheItchFliesWrapAtTheFloatOfTwoPiAndMultiplyTheSineWid
 	EXPECT_EQ(Bits(point.y), 0x4264D53Cu);
 	EXPECT_EQ(Bits(point.z), 0x44FA7EACu);
 }
+
+TEST(LightningSpellOrder, AForksTextureRepeatsAreCutToAWholeNumberAndAtLeastOne)
+{
+	EXPECT_EQ(maths::TextureRepeats(3, 50.0f, 40.0f), 3);
+	EXPECT_EQ(maths::TextureRepeats(2, 10.0f, 40.0f), 1);
+	// The middle of the targets at the origin: the division gives no number or an infinite one, which the game makes 1
+	EXPECT_EQ(maths::TextureRepeats(3, 50.0f, 0.0f), 1);
+	EXPECT_EQ(maths::TextureRepeats(3, 0.0f, 0.0f), 1);
+	EXPECT_EQ(maths::TextureRepeats(3, 1e30f, 1e-30f), 1);
+}

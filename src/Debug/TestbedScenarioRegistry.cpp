@@ -1920,6 +1920,42 @@ void AddAppearance(std::vector<Scenario>& all)
 	                 {.kind = Kind::RunText, .delaySeconds = 6.0f, .value = 1009}},
 	});
 
+	// Guidance voices whose callers give a volume and a pitch, with bank headers that do and do not set them
+	constexpr size_t k_AttackVoice = 130;
+	constexpr size_t k_DeathLine = 1;
+	constexpr size_t k_DiscipleLine = 6;
+	all.push_back({
+	    .id = "audio.header_wins_over_callers",
+	    .name = "Bank headers win over the volume and pitch of callers",
+	    .facet = Facet::Audio,
+	    .description = "Every five seconds, a guidance voice plays with volume 127 and pitch 100, as the guidance's voices "
+	                   "do: a villager's attack voice (its bank header gives volume 50 and 10% pitch change), a death "
+	                   "line (only the 10% pitch change), a disciple line (neither), then the attack voice twice from a "
+	                   "point 40 metres to the east, heard to 200 metres. The audio log gives the volume, the pitch and "
+	                   "the distances of each sound.",
+	    .expected = "The attack voice starts at volume 50, the other two lines at volume 127. The attack voice and the "
+	                "death line start at a pitch from 90% to 110%, which changes on each play; the disciple line starts "
+	                "at 100%. The placed attack voice comes from the right speaker, has volume 50, and has the distances "
+	                "66.6 and 200 metres that its caller gives, not the 15 and 150 metres of its bank header.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 0.0f}, {40.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::PlayGuidanceVoice, .delaySeconds = 1.0f, .value = k_AttackVoice},
+	                 {.kind = Kind::PlayGuidanceVoice, .delaySeconds = 5.0f, .value = k_DeathLine},
+	                 {.kind = Kind::PlayGuidanceVoice, .delaySeconds = 5.0f, .value = k_DiscipleLine},
+	                 {.kind = Kind::PlayGuidanceVoice,
+	                  .delaySeconds = 5.0f,
+	                  .point = {40.0f, 0.0f},
+	                  .value = k_AttackVoice,
+	                  .radius = 200.0f,
+	                  .ctrl = true},
+	                 {.kind = Kind::PlayGuidanceVoice,
+	                  .delaySeconds = 5.0f,
+	                  .point = {40.0f, 0.0f},
+	                  .value = k_AttackVoice,
+	                  .radius = 200.0f,
+	                  .ctrl = true}},
+	});
+
 	// The hair close up while the head moves: the tiger's whiskers, and the wolf's tufts, which use the same material
 	std::vector<Command> headMoves;
 	for (size_t i = 0; i < animations::k_GestureCount; ++i)
@@ -8385,7 +8421,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
 	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::PlayFallingSpellFilm ||
-	       kind == Kind::SayLine || IsPointerCommand(kind);
+	       kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -8412,7 +8448,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 150> k_Names {
+	constexpr std::array<std::string_view, 151> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -8563,6 +8599,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "attach a script sound",
 		    "attach a script sound to the object",
 		    "say a line",
+		    "play a guidance voice",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

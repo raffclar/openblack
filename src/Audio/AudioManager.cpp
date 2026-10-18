@@ -41,6 +41,7 @@
 #include "ECS/SoundPoint.h"
 #include "EmitterFollow.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "HeaderOverrides.h"
 #include "HearingRange.h"
 #include "ListenerFrame.h"
 #include "Locator.h"
@@ -152,8 +153,8 @@ void LogEmitterStart([[maybe_unused]] entt::entity entity, [[maybe_unused]] cons
 		}
 		const auto listener = Locator::audio::value().GetListener();
 		const auto at = audio::ToListenerFrame(emitter.position, listener.origin, listener.forward, listener.up);
-		return fmt::format(", heard {:.1f} m {}, {:.1f} m ahead, {:.1f} m up", std::abs(at.x), at.x < 0.0f ? "left" : "right",
-		                   at.y, at.z);
+		return fmt::format(", heard {:.1f} m {}, {:.1f} m ahead, {:.1f} m up, distances {:.1f} to {:.1f} m", std::abs(at.x),
+		                   at.x < 0.0f ? "left" : "right", at.y, at.z, emitter.minDistance, emitter.maxDistance);
 	};
 	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} starts: volume {} pitch {}%{}{}", DescribeEmitter(entity, emitter),
 	                    emitter.volume, emitter.pitchPercent, emitter.loop == PlayType::Repeat ? ", looping" : "", heard());
@@ -358,20 +359,29 @@ void AudioManager::DestroyEmitter(entt::entity emitter)
 	registry.Destroy(emitter);
 }
 
-VoiceStart AudioManager::MakeVoiceStart(const Sound& sound, std::optional<glm::vec3> worldPosition, PlayType playType)
+VoiceStart AudioManager::MakeVoiceStart(const Sound& sound, std::optional<glm::vec3> worldPosition, PlayType playType,
+                                        const CallerPlaySettings& caller)
 {
 	const auto overrides = [&sound](pack::AudioBankOverride flag) {
 		return (sound.overrideFlags & static_cast<uint32_t>(flag)) != 0;
 	};
-
-	// Playback rate in percent with a random deviation of up to pitchDeviation percent either way
-	auto pitch = overrides(pack::AudioBankOverride::Pitch) && sound.pitch != 0 ? static_cast<uint32_t>(sound.pitch)
-	                                                                           : k_DefaultPitchPercent;
-	const auto deviation = (pitch * static_cast<uint32_t>(sound.pitchDeviation)) / 100;
-	if (deviation != 0)
-	{
-		pitch = pitch - deviation + Locator::rng::value().NextValue(0u, deviation * 2);
-	}
+	// Every start of a bank sample takes a random number for the deviation of its playback rate, also when it has none
+	const auto settings = ResolveStartSettings(
+	    {
+	        .overrideFlags = sound.overrideFlags,
+	        .volume = sound.headerVolume,
+	        .pitchPercent = static_cast<uint32_t>(sound.pitch),
+	        .pitchDeviation = static_cast<uint32_t>(sound.pitchDeviation),
+	        .minDistance = sound.minDistance,
+	        .maxDistance = sound.maxDistance,
+	        .distanceScale = sound.distanceScale,
+	    },
+	    caller, _atmos->NextPlayRandom());
+	// The mixer plays the sample at a whole number of samples a second
+	const auto baseFrequency = static_cast<uint32_t>(sound.sampleRate);
+	const auto frequency = (baseFrequency * settings.pitchPercent) / 100;
+	const auto rate = baseFrequency != 0 ? static_cast<float>(frequency) / static_cast<float>(baseFrequency)
+	                                     : static_cast<float>(settings.pitchPercent) / 100.0f;
 
 	int32_t loopCount = overrides(pack::AudioBankOverride::Loop) ? sound.loop : 0;
 	if (playType == PlayType::Repeat)
@@ -382,16 +392,16 @@ VoiceStart AudioManager::MakeVoiceStart(const Sound& sound, std::optional<glm::v
 	return VoiceStart {
 	    .bankName = {},
 	    .sampleId = sound.id,
-	    .volume =
-	        overrides(pack::AudioBankOverride::Volume) ? std::min<uint32_t>(sound.headerVolume, k_MaxVolume) : k_MaxVolume,
-	    .pitchPercent = pitch,
-	    .pitch = static_cast<float>(pitch) / 100.0f,
+	    .volume = settings.volume,
+	    .pitchPercent = settings.pitchPercent,
+	    .pitch = rate,
 	    .loopCount = loopCount,
 	    .positional = worldPosition.has_value(),
 	    .position = worldPosition ? ToListenerFrame(*worldPosition) : glm::zero<glm::vec3>(),
-	    .minDistance = overrides(pack::AudioBankOverride::MinDist) ? sound.minDistance : k_DefaultMinDistance,
-	    .maxDistance = overrides(pack::AudioBankOverride::MaxDist) ? sound.maxDistance : k_DefaultMaxDistance,
-	    .distanceScale = overrides(pack::AudioBankOverride::Scale) ? sound.distanceScale : k_DefaultDistanceScale,
+	    .minDistance = settings.minDistance,
+	    .maxDistance = settings.maxDistance,
+	    .distanceScale = settings.distanceScale,
+	    .headerSet = settings.headerSet,
 	};
 }
 
@@ -420,7 +430,7 @@ entt::entity AudioManager::CreateVoiceEmitter(entt::id_type id, std::optional<gl
 		return entt::null;
 	}
 	const auto placed = PlacedPosition(*sound, worldPosition);
-	const auto start = MakeVoiceStart(*sound, placed, playType);
+	const auto start = MakeVoiceStart(*sound, placed, playType, {});
 	const auto source = CreateSource(*sound, start);
 
 	auto& registry = Locator::entitiesRegistry::value();
@@ -438,6 +448,7 @@ entt::entity AudioManager::CreateVoiceEmitter(entt::id_type id, std::optional<gl
 	                                          .minDistance = start.minDistance,
 	                                          .maxDistance = start.maxDistance,
 	                                          .distanceScale = start.distanceScale,
+	                                          .headerSet = start.headerSet,
 	                                          .loop = start.loopCount < 0 ? PlayType::Repeat : PlayType::Once,
 	                                          .state = AudioStatus::Initial,
 	                                          .music = false,
@@ -598,18 +609,14 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 		return entt::null;
 	}
 	const auto placed = PlacedPosition(*sound, options.position);
-	auto start = MakeVoiceStart(*sound, placed, options.playType);
-	if (options.pitchPercent.has_value())
-	{
-		start.pitchPercent = *options.pitchPercent;
-		start.pitch = static_cast<float>(start.pitchPercent) / 100.0f;
-	}
-	if (options.volume.has_value())
-	{
-		start.volume = std::min<uint32_t>(*options.volume, k_MaxVolume);
-	}
-	start.minDistance = options.minDistance.value_or(start.minDistance);
-	start.maxDistance = options.maxDistance.value_or(start.maxDistance);
+	const auto start = MakeVoiceStart(*sound, placed, options.playType,
+	                                  {
+	                                      .volume = options.volume,
+	                                      .pitchPercent = options.pitchPercent,
+	                                      .minDistance = options.minDistance,
+	                                      .maxDistance = options.maxDistance,
+	                                      .callerWins = options.callerWins,
+	                                  });
 	const auto source = CreateSource(*sound, start);
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
@@ -626,6 +633,7 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 	                                          .minDistance = start.minDistance,
 	                                          .maxDistance = start.maxDistance,
 	                                          .distanceScale = start.distanceScale,
+	                                          .headerSet = start.headerSet,
 	                                          .loop = start.loopCount < 0 ? PlayType::Repeat : PlayType::Once,
 	                                          .state = AudioStatus::Initial,
 	                                          .music = false,
@@ -686,6 +694,12 @@ void AudioManager::SetEmitterVolume(entt::entity emitter, uint32_t volume)
 		return;
 	}
 	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
+	// The bank header's volume stays for the whole play
+	const auto clamped = std::min<uint32_t>(volume, k_MaxVolume);
+	if (!VolumeChangeApplies(component.headerSet) || component.volume == clamped)
+	{
+		return;
+	}
 	SPDLOG_LOGGER_TRACE(spdlog::get("audio"), "Emitter {} volume {} -> {}", DescribeEmitter(emitter, component),
 	                    component.volume, std::min<uint32_t>(volume, k_MaxVolume));
 	component.volume = std::min<uint32_t>(volume, k_MaxVolume);
@@ -700,7 +714,8 @@ void AudioManager::SetEmitterPitch(entt::entity emitter, uint32_t pitchPercent)
 		return;
 	}
 	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
-	if (component.pitchPercent == pitchPercent)
+	// The bank header's playback rate stays for the whole play
+	if (!PitchChangeApplies(component.headerSet, pitchPercent) || component.pitchPercent == pitchPercent)
 	{
 		return;
 	}

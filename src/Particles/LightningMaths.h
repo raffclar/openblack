@@ -59,6 +59,11 @@ enum class GroundPointSearch : uint8_t
 /// The square of the distance that a bolt has moved since its last search, with the squares added z first
 [[nodiscard]] float MovedSquared(glm::vec3 searchOrigin, glm::vec3 origin);
 
+/// How many times a fork repeats its texture: the textures to tile times the fork's length, divided by the distance from
+/// the bolt's origin to the middle of its targets, cut to a whole number towards zero. A count below 1, or one that is
+/// not a number or is too large for an integer (as when the distance is zero), gives 1.
+[[nodiscard]] int TextureRepeats(int texturesToTile, float length, float centroidDistance);
+
 /// A creature less faded away than this draws the bolt
 inline constexpr float k_DrawsBoltBelowFizz = 0.5f;
 /// Every one of a bolt's targets is pointed at the creatures among them in turn, when there are any: a creature in the

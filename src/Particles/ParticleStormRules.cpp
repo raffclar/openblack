@@ -49,8 +49,8 @@ constexpr int k_TornadoLevel = 1;
 /// A float provider the file doesn't name gives this
 constexpr float k_Missing = std::numeric_limits<float>::quiet_NaN();
 
-/// The way the storm is pushed: the way the camera looks across the ground when it is cast, as long as it is; none when
-/// the camera looks straight down
+/// The way the storm is pushed: the way the camera looks across the ground when it is cast, as long as it is. The effect
+/// keeps a heading that is almost straight down as one along x.
 glm::vec3 Heading(const Effect& effect)
 {
 	glm::vec3 heading = effect.GetProcessInfo().cameraForward;
@@ -568,9 +568,8 @@ private:
 	void Start(Effect& effect, Collection& collection, Swirl& swirl, Atom& parent) const
 	{
 		swirl.radius = params.maxRadius;
-		// It heads the way it was cast at its top speed; cast looking straight down, it stays where it is
-		const auto heading = Heading(effect);
-		swirl.velocity = heading != glm::vec3(0.0f) ? x87::Scaled<x87::SumOrder::Zyx>(heading, maxSpeed) : glm::vec3(0.0f);
+		// It heads the way it was cast at its top speed
+		swirl.velocity = storm::SwirlVelocity(Heading(effect), maxSpeed);
 		const auto* spriteCreator = effect.FindCreator(creator);
 		for (int i = 0; i < count; ++i)
 		{
