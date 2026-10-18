@@ -116,13 +116,19 @@ void main()
 	vec3 glare = u_hazeSun.w > 0.0f ? SunGlare(dir, SunOpen(eye)) : vec3_splat(0.0f);
 	if (sky)
 	{
-		// Where the dome is not, this pass draws the same sky as the dome does
-		float moonCos = dot(dir, u_hazeMoon.xyz);
-		float onMoon = u_hazeMoon.w < 1.5f ? smoothstep(u_hazeMoon.w - 2e-5f, u_hazeMoon.w + 2e-5f, moonCos) : 0.0f;
-		vec3 airAurora = u_hazeHorizon.w > 0.5f ? AirAurora(eye, dir, 1e9f, gl_FragCoord.xy, AIR_AURORA_STEPS, false)
-		                                        : AirAuroraOnScreen(uv);
-		vec3 airSky = AirSkyColour(eye, dir, u_hazeApply.z, gl_FragCoord.xy) + airAurora;
-		gl_FragColor = empty ? vec4(airSky * (1.0f - onMoon) + glare, onMoon) : vec4(glare, 1.0f);
+		// Where the dome is not, this pass draws the same sky as the dome does. Over the dome it adds only the glare, so
+		// it does not find the sky's colour there.
+		vec4 colour = vec4(glare, 1.0f);
+		if (empty)
+		{
+			float moonCos = dot(dir, u_hazeMoon.xyz);
+			float onMoon = u_hazeMoon.w < 1.5f ? smoothstep(u_hazeMoon.w - 2e-5f, u_hazeMoon.w + 2e-5f, moonCos) : 0.0f;
+			vec3 airAurora = u_hazeHorizon.w > 0.5f ? AirAurora(eye, dir, 1e9f, gl_FragCoord.xy, AIR_AURORA_STEPS, false)
+			                                        : AirAuroraOnScreen(uv);
+			vec3 airSky = AirSkyColour(eye, dir, u_hazeApply.z, gl_FragCoord.xy) + airAurora;
+			colour = vec4(airSky * (1.0f - onMoon) + glare, onMoon);
+		}
+		gl_FragColor = colour;
 
 		return;
 	}

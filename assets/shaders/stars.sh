@@ -7,7 +7,7 @@
 // - Each star is a small spot at its exact place, to less than a pixel, so it moves smoothly.
 // - The light of the sky behind a star sets the faintest star that shows. The air near the horizon dims the stars,
 //   makes them redder and makes them twinkle. Above the air they do not twinkle, and more of them show.
-// Include atmosphere.sh first.
+// Include atmosphere.sh and galaxy.sh first.
 
 #include "celestial.sh"
 
@@ -47,11 +47,11 @@ uniform vec4 u_starsMoon;
 // The angle within which a star goes into the cells round it (stars::k_CellMargin)
 #define STARS_CELL_MARGIN 0.004f
 
-// How many more faint stars show in a direction of the sky's sphere: 1 everywhere for now. The band of the Milky Way can
-// give more here.
+// How many more faint stars show in a direction of the sky's sphere: 1 far from the band of the Milky Way, and up to 3
+// to 4 on its bright star clouds (galaxy.sh, which the includer includes first)
 float StarDensityGain(vec3 celestialDir)
 {
-	return 1.0f;
+	return GalaxyStarDensity(celestialDir);
 }
 
 // The texel of the texture of the stars at a place in its texels, row after row
