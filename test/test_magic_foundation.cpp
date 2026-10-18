@@ -410,6 +410,23 @@ TEST(AreaEffect, TheCellsSearchedSpanTheSquareOfTheRadius)
 	EXPECT_EQ(EffectCellOf({-0.5f, 0.0f, 19.9f}), glm::ivec2(-1, 1));
 }
 
+TEST(AreaEffect, AnObjectWithAMiddleOfItsOwnIsReachedAcrossTheLandFromItsMiddle)
+{
+	EffectValues values;
+	values.radius = 3.0f;
+	// As a worship site: its middle is to one side of its position, with a radius of its own
+	EffectReceiver site {.entity = static_cast<entt::entity>(1),
+	                     .position = {0.0f, 0.0f, 0.0f},
+	                     .middle = glm::vec2(30.0f, 0.0f),
+	                     .radius = 14.0f,
+	                     .height = 5.0f};
+	EXPECT_TRUE(Reaches(values, {46.5f, 0.0f, 0.0f}, site));
+	EXPECT_FALSE(Reaches(values, {47.5f, 0.0f, 0.0f}, site));
+	EXPECT_FALSE(Reaches(values, {-10.0f, 0.0f, 0.0f}, site));
+	// Up and down it is still measured from its position
+	EXPECT_FALSE(Reaches(values, {30.0f, 8.5f, 0.0f}, site));
+}
+
 TEST(AreaEffect, EveryObjectInReachTakesItNotOnlyTheNearest)
 {
 	EffectValues values;
@@ -546,6 +563,16 @@ TEST(Impressiveness, ItMultipliesTheLandsBalanceTheMiracleTheReactionAndTheBored
 	                                     .power = 1.0f,
 	                                     .boredom = 0.25f});
 	EXPECT_FLOAT_EQ(value, 2.0f * 3.0f * 0.5f * 0.25f);
+	// The game multiplies the boredom, the power and the distance first, then the multiplier, the value and the land's
+	// balance. Each step rounds to a float, so the other order gives a different last bit.
+	const float ordered = ImpressiveValue({.landBalance = 0.54f,
+	                                       .impressiveValue = 1.94f,
+	                                       .reactionMultiplier = 2.62f,
+	                                       .distance = 0.0f,
+	                                       .maxDistance = 60.0f,
+	                                       .power = 1.62f,
+	                                       .boredom = 2.25f});
+	EXPECT_EQ(ordered, 10.004476f);
 	// Each impression adds the belief table's boredom, -0.02, by the villager's share of its town; never below 0
 	EXPECT_FLOAT_EQ(BoredomAfterImpression(1.0f, -0.02f * 0.5f), 0.99f);
 	EXPECT_FLOAT_EQ(BoredomAfterImpression(0.005f, -0.02f), 0.0f);

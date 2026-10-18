@@ -68,4 +68,20 @@ constexpr float k_RestoreHealthLife = 0.5f;
 constexpr float k_FullLife = 1.0f;
 [[nodiscard]] Completion CompletionOf(creature_desires::Desire desire, bool forced, bool forcedCounts, bool fullRecovery,
                                       float life);
+
+/// What the creature has when it is about to decide what to do
+struct DecisionState
+{
+	/// An agenda runs, with steps still to do
+	bool planRuns {false};
+	/// The plan that runs is a forced plan
+	bool planForced {false};
+	/// The creature has a reaction
+	bool reacting {false};
+};
+/// With no agenda that runs, the creature stops the reaction that it has before it decides
+[[nodiscard]] bool StopsReactionBeforeDecision(const DecisionState& state);
+/// The creature does not decide, and does not do what waits for the end of its work, while it has a forced plan or a
+/// reaction. The check of the copy of the player comes before this and still occurs.
+[[nodiscard]] bool SkipsDecision(const DecisionState& state);
 } // namespace openblack::creature_turn_order

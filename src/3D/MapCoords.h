@@ -115,6 +115,13 @@ struct MapCoords
 	return FtoL(metres * 65536.0f / 10.0f);
 }
 
+/// A place that a land script gives as text, as the game reads it. The game reads each number at double precision, then
+/// rounds it to a float and changes it as ToFixedGUtils does. The altitude is 0
+[[nodiscard]] constexpr MapCoords ScriptPlace(double x, double z)
+{
+	return {.x = ToFixedGUtils(static_cast<float>(x)), .z = ToFixedGUtils(static_cast<float>(z)), .altitude = 0.0f};
+}
+
 /// A metre value through a map position and back: what a position stored as one becomes. Another round trip may lose
 /// one more unit (ToFixed(ToMetres(8090858)) = 8090857), as in the game
 [[nodiscard]] constexpr float Quantise(float metres)

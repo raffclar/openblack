@@ -27,6 +27,8 @@ struct CreaturePartner
 	/// agenda that had steps left has none.
 	uint32_t agenda {0};
 	bool agendaRunning {false};
+	/// The creature saw that the agenda came to an end with an order. The joint action stops on the next turn.
+	bool endSeen {false};
 };
 
 /// The asker of a joint action made its partner stand still in its mind: the partner does not update its desires or

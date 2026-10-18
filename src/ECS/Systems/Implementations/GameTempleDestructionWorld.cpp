@@ -66,16 +66,20 @@ entt::entity GameTempleDestructionWorld::StartLoop(entt::id_type sound, glm::vec
 	{
 		return entt::null;
 	}
-	return audio::StartGameSoundEffect(
-	    sound,
-	    {.position = position, .playType = audio::PlayType::Repeat, .owner = owner, .voiceOwner = audio::VoiceOwner::OwnSound});
+	// The loop stays with the temple, and it stops when the temple goes
+	return audio::StartGameSoundEffect(sound, {.position = position,
+	                                           .playType = audio::PlayType::Repeat,
+	                                           .owner = owner,
+	                                           .voiceOwner = audio::VoiceOwner::OwnSound,
+	                                           .follows = audio::Follows::Owner});
 }
 
-void GameTempleDestructionWorld::PlayOnce(entt::id_type sound, glm::vec3 position, entt::entity owner)
+void GameTempleDestructionWorld::PlayOnce(entt::id_type sound, glm::vec3 position, entt::entity owner, audio::Follows follows)
 {
 	if (Locator::audio::has_value())
 	{
-		audio::StartGameSoundEffect(sound, {.position = position, .owner = owner, .voiceOwner = audio::VoiceOwner::OwnSound});
+		audio::StartGameSoundEffect(
+		    sound, {.position = position, .owner = owner, .voiceOwner = audio::VoiceOwner::OwnSound, .follows = follows});
 	}
 }
 

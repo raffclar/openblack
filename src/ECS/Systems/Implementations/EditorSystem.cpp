@@ -17,6 +17,7 @@
 
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "Camera/DoubleClickFlight.h"
 #include "Camera/EditorCameraModel.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -179,7 +180,7 @@ void EditorSystem::FrameSelection()
 	auto orbit = editor::OrbitFrom(camera.GetOrigin(), focus);
 	orbit.pitch = 0.45f;
 	orbit.distance = distance;
-	camera.GetModel().SetFlight(editor::OrbitOrigin(focus, orbit), focus);
+	camera.GetModel().SetFlight(editor::OrbitOrigin(focus, orbit), focus, camera_fly::k_HalfWayRise);
 }
 
 void EditorSystem::StepTurn()

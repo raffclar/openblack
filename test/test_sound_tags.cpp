@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <map>
 #include <optional>
 #include <string>
@@ -17,6 +18,7 @@
 
 #include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -54,8 +56,13 @@ public:
 		bool played {false};
 		bool stopped {false};
 		bool released {false};
+		audio::PlayType playType {audio::PlayType::Once};
+		entt::entity owner {entt::null};
+		audio::Follows follows {audio::Follows::Nothing};
 	};
 	std::map<entt::entity, Emitter> emitters;
+	/// The number of times a system moved an emitter
+	int moves {0};
 
 	void Stop() override {}
 	void Update() override {}
@@ -66,10 +73,13 @@ public:
 	void PauseEmitter(entt::entity) override {}
 	void StopEmitter(entt::entity emitter) override { emitters.at(emitter).stopped = true; }
 	void DestroyEmitter(entt::entity emitter) override { emitters.erase(emitter); }
-	entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, audio::PlayType, entt::entity) override
+	entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, audio::PlayType playType,
+	                           entt::entity owner) override
 	{
-		const auto entity = static_cast<entt::entity>(emitters.size() + 1);
-		emitters.emplace(entity, Emitter {.sound = id, .position = worldPosition.value_or(glm::vec3(0.0f))});
+		const auto entity = static_cast<entt::entity>(++_made);
+		emitters.emplace(
+		    entity,
+		    Emitter {.sound = id, .position = worldPosition.value_or(glm::vec3(0.0f)), .playType = playType, .owner = owner});
 		return entity;
 	}
 	bool EmitterExists(entt::entity emitter) override { return emitters.contains(emitter); }
@@ -100,7 +110,12 @@ public:
 	[[nodiscard]] bool IsInstalled() const override { return true; }
 	void StopAllSoundEffects() override {}
 	entt::entity StartSoundEffect(entt::id_type, const audio::SoundEffectOptions&) override { return entt::null; }
-	void SetEmitterPosition(entt::entity, const glm::vec3&) override {}
+	void SetEmitterPosition(entt::entity emitter, const glm::vec3& position) override
+	{
+		emitters.at(emitter).position = position;
+		++moves;
+	}
+	void SetEmitterFollows(entt::entity emitter, audio::Follows follows) override { emitters.at(emitter).follows = follows; }
 	void ReleaseEmitterLoop(entt::entity emitter) override { emitters.at(emitter).released = true; }
 	[[nodiscard]] bool IsEmitterLooping(entt::entity) override { return false; }
 	void SetEmitterVolume(entt::entity, uint32_t) override {}
@@ -110,7 +125,7 @@ public:
 	void AddAnimEffects(const std::string&, audio::AnimEffectTable) override {}
 	using audio::AudioManagerInterface::PlayAnimEffect;
 	audio::AnimEffectPlay PlayAnimEffect(const std::string&, std::span<const int32_t>, entt::entity, const glm::vec3&,
-	                                     const std::optional<audio::SoundEffectConditions>&) override
+	                                     const std::optional<audio::SoundEffectConditions>&, audio::AnimEffectMeasure) override
 	{
 		return {};
 	}
@@ -134,6 +149,7 @@ public:
 	void SetListenerOverride(std::optional<audio::Listener>) override {}
 
 private:
+	uint32_t _made {0};
 	audio::Sound _sound;
 	audio::SoundGroup _group;
 	std::map<std::string, audio::SoundGroup> _groups;
@@ -217,6 +233,18 @@ TEST_F(SoundTags, ADelayedPointSoundWaitsToReachTheCamera)
 	EXPECT_TRUE(Audio().emitters.begin()->second.played);
 }
 
+TEST_F(SoundTags, ADelayedPointSoundAtItsReachNeverStarts)
+{
+	// Arrived at the camera, a delayed sound starts only nearer than its reach
+	const auto point = _tags.CreatePointSound(k_Sound, {k_Reach, 0.0f, 0.0f}, true);
+	for (int turn = 0; turn < 20; ++turn)
+	{
+		_tags.ProcessTurn(glm::vec3(0.0f));
+	}
+	EXPECT_TRUE(Audio().emitters.empty());
+	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(point));
+}
+
 TEST_F(SoundTags, InsideTheTempleOnlyTheTemplesSoundsStart)
 {
 	ecs::systems::SoundTagSystem tags(&InsideTemple);
@@ -248,51 +276,202 @@ entt::entity CreateObjectAt(const glm::vec3& position)
 }
 } // namespace
 
-// The phone box's ring: a script attaches a looping sound to an object, heard from it while the camera is in reach
-TEST_F(SoundTags, AScriptsSoundOnAnObjectLoopsFromIt)
+namespace
+{
+/// The emitters that play a sound
+std::vector<FakeAudio::Emitter> PlayingOf(const FakeAudio& audio, entt::id_type sound)
+{
+	std::vector<FakeAudio::Emitter> playing;
+	for (const auto& [entity, emitter] : audio.emitters)
+	{
+		if (emitter.sound == sound && emitter.played && !emitter.stopped)
+		{
+			playing.push_back(emitter);
+		}
+	}
+	return playing;
+}
+} // namespace
+
+// The phone box's ring: a script attaches a sound to an object, heard from it while the camera is in range. Each start
+// plays it one time, and the next turn starts it again when it is finished.
+TEST_F(SoundTags, AScriptsSoundOnAnObjectPlaysFromIt)
 {
 	const auto box = CreateObjectAt({20.0f, 0.0f, 0.0f});
-	EXPECT_TRUE(_tags.AttachObjectSound(box, k_Sound));
+	const auto tag = _tags.AttachObjectSound(box, k_Sound, false);
+	EXPECT_EQ(Locator::entitiesRegistry::value().Get<ecs::components::SoundTag>(tag).owner, box);
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	ASSERT_EQ(Audio().emitters.size(), 1u);
-	const auto& played = Audio().emitters.begin()->second;
+	auto& played = Audio().emitters.begin()->second;
 	EXPECT_TRUE(played.played);
 	EXPECT_EQ(played.sound, k_Sound);
 	EXPECT_EQ(played.position, glm::vec3(20.0f, 0.0f, 0.0f));
-	// Once is enough while it plays
+	EXPECT_EQ(played.playType, audio::PlayType::Once);
+	// The tag owns its sound, not the object
+	EXPECT_EQ(played.owner, tag);
+	// One start is enough while it plays
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	EXPECT_EQ(Audio().emitters.size(), 1u);
-}
-
-TEST_F(SoundTags, AnObjectKeepsUpOneSound)
-{
-	const auto box = CreateObjectAt({20.0f, 0.0f, 0.0f});
-	EXPECT_TRUE(_tags.AttachObjectSound(box, k_Sound));
-	// The same sound again changes nothing; another sound is refused and the first is kept
-	EXPECT_TRUE(_tags.AttachObjectSound(box, k_Sound));
-	EXPECT_FALSE(_tags.AttachObjectSound(box, k_TempleSound));
-	EXPECT_EQ(Locator::entitiesRegistry::value().Get<ecs::components::SoundTag>(box).sound, k_Sound);
-}
-
-// Taken off, a playing sound finishes the pass it is in and is not started again
-TEST_F(SoundTags, ASoundTakenOffAnObjectPlaysOutItsPass)
-{
-	const auto box = CreateObjectAt({20.0f, 0.0f, 0.0f});
-	_tags.AttachObjectSound(box, k_Sound);
+	// When it is finished, the next turn starts it again
+	played.stopped = true;
 	_tags.ProcessTurn(glm::vec3(0.0f));
-	ASSERT_EQ(Audio().emitters.size(), 1u);
+	EXPECT_EQ(PlayingOf(Audio(), k_Sound).size(), 1u);
+}
 
-	// Another sound's number takes nothing off
-	_tags.DetachObjectSound(box, k_TempleSound);
-	EXPECT_TRUE(Locator::entitiesRegistry::value().AllOf<ecs::components::SoundTag>(box));
+// A creature with a script's sound starts its creed hum: both play, each from its own tag
+TEST_F(SoundTags, AnObjectKeepsUpManySounds)
+{
+	const auto creature = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	const auto script = _tags.AttachObjectSound(creature, k_Sound, false);
+	const auto hum = _tags.AttachObjectSound(creature, k_TempleSound, true);
+	EXPECT_NE(script, hum);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	const auto scriptSounds = PlayingOf(Audio(), k_Sound);
+	const auto humSounds = PlayingOf(Audio(), k_TempleSound);
+	ASSERT_EQ(scriptSounds.size(), 1u);
+	ASSERT_EQ(humSounds.size(), 1u);
+	EXPECT_EQ(scriptSounds[0].owner, script);
+	EXPECT_EQ(humSounds[0].owner, hum);
+	EXPECT_EQ(humSounds[0].playType, audio::PlayType::Repeat);
+}
+
+// The same sound attached two times is two tags, and taking the sound off removes both
+TEST_F(SoundTags, TheSameSoundTwiceIsTwoTags)
+{
+	const auto box = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	_tags.AttachObjectSound(box, k_Sound, true);
+	_tags.AttachObjectSound(box, k_Sound, true);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(PlayingOf(Audio(), k_Sound).size(), 2u);
 
 	_tags.DetachObjectSound(box, k_Sound);
-	EXPECT_FALSE(Locator::entitiesRegistry::value().AllOf<ecs::components::SoundTag>(box));
+	size_t tags = 0;
+	Locator::entitiesRegistry::value().Each<const ecs::components::SoundTag>(
+	    [&tags](entt::entity, const ecs::components::SoundTag&) { ++tags; });
+	EXPECT_EQ(tags, 0u);
+	EXPECT_TRUE(std::ranges::all_of(Audio().emitters, [](const auto& entry) { return entry.second.released; }));
+}
+
+// Taken off, a looping sound finishes the loop it is in and does not start again. The other sounds stay.
+TEST_F(SoundTags, ASoundTakenOffAnObjectPlaysOutItsPass)
+{
+	const auto creature = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	_tags.AttachObjectSound(creature, k_Sound, false);
+	_tags.AttachObjectSound(creature, k_TempleSound, true);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 2u);
+
+	_tags.DetachObjectSound(creature, k_TempleSound);
+	ASSERT_EQ(Audio().emitters.size(), 2u);
+	for (const auto& [entity, emitter] : Audio().emitters)
+	{
+		// The hum is released and plays on; the script's sound is not touched
+		EXPECT_EQ(emitter.released, emitter.sound == k_TempleSound);
+		EXPECT_FALSE(emitter.stopped);
+	}
+
+	// Its tag is gone, so it does not start again; the script's sound does
+	for (auto& [entity, emitter] : Audio().emitters)
+	{
+		emitter.stopped = true;
+	}
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_TRUE(PlayingOf(Audio(), k_TempleSound).empty());
+	EXPECT_EQ(PlayingOf(Audio(), k_Sound).size(), 1u);
+
+	// A sound that plays one time is not released: it plays to its end
+	_tags.DetachObjectSound(creature, k_Sound);
+	const auto script = PlayingOf(Audio(), k_Sound);
+	ASSERT_EQ(script.size(), 1u);
+	EXPECT_FALSE(script[0].released);
+}
+
+// Taking a sound off an object also removes the object's own tag of that sound
+TEST_F(SoundTags, AnObjectsOwnTagGoesWithItsSound)
+{
+	const auto lantern = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	Locator::entitiesRegistry::value().Assign<ecs::components::SoundTag>(lantern, k_Sound, glm::vec3(0.0f), true);
+	_tags.DetachObjectSound(lantern, k_TempleSound);
+	EXPECT_TRUE(Locator::entitiesRegistry::value().AllOf<ecs::components::SoundTag>(lantern));
+	_tags.DetachObjectSound(lantern, k_Sound);
+	EXPECT_FALSE(Locator::entitiesRegistry::value().AllOf<ecs::components::SoundTag>(lantern));
+}
+
+// When the object is gone, its attached tags go, and a looping sound finishes its loop
+TEST_F(SoundTags, TheTagsOfAGoneObjectGo)
+{
+	const auto creature = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	const auto hum = _tags.AttachObjectSound(creature, k_Sound, true);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+
+	Locator::entitiesRegistry::value().Destroy(creature);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(hum));
 	ASSERT_EQ(Audio().emitters.size(), 1u);
 	EXPECT_TRUE(Audio().emitters.begin()->second.released);
-	EXPECT_FALSE(Audio().emitters.begin()->second.stopped);
+}
 
-	Audio().emitters.begin()->second.stopped = true;
+// The creed hum on a creature that walks: each game turn its sound moves to where the creature is now
+TEST_F(SoundTags, AnObjectsSoundFollowsItEachTurn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	_tags.AttachObjectSound(creature, k_Sound, true);
 	_tags.ProcessTurn(glm::vec3(0.0f));
-	EXPECT_EQ(Audio().emitters.size(), 1u);
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+	EXPECT_EQ(Audio().moves, 0);
+
+	registry.Get<ecs::components::Transform>(creature).position = {30.0f, 2.0f, -5.0f};
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+	const auto& played = Audio().emitters.begin()->second;
+	EXPECT_EQ(played.position, glm::vec3(30.0f, 2.0f, -5.0f));
+	EXPECT_EQ(Audio().moves, 1);
+	// It moves the sound that plays, and does not start a new one
+	EXPECT_FALSE(played.stopped);
+	// The audio turn does not move it again, but it stops the sound when the camera goes too far
+	EXPECT_EQ(played.follows, audio::Follows::Place);
+}
+
+// A point's sound stays at its point, and the audio turn stops it when the camera goes too far
+TEST_F(SoundTags, APointSoundStopsWhenTheCameraGoesTooFar)
+{
+	_tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+	EXPECT_EQ(Audio().emitters.begin()->second.follows, audio::Follows::Place);
+}
+
+// A sound of an object in the hand comes from the hand, not from where the object hangs below it
+TEST_F(SoundTags, AnObjectInTheHandSoundsFromTheHand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto box = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	const auto hand = CreateObjectAt({40.0f, 10.0f, 0.0f});
+	_tags.AttachObjectSound(box, k_Sound, true);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_EQ(Audio().emitters.size(), 1u);
+
+	registry.Assign<ecs::components::InHand>(box, ecs::components::InHand {.hand = hand});
+	registry.Get<ecs::components::Transform>(box).position = {40.0f, 8.0f, 0.0f};
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(Audio().emitters.begin()->second.position, glm::vec3(40.0f, 10.0f, 0.0f));
+
+	// Let go, it sounds from its own place again
+	registry.Remove<ecs::components::InHand>(box);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(Audio().emitters.begin()->second.position, glm::vec3(40.0f, 8.0f, 0.0f));
+}
+
+// A tag's offset stays above the object as the object moves
+TEST_F(SoundTags, AMovedSoundKeepsItsOffset)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto box = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	const auto tag = _tags.AttachObjectSound(box, k_Sound, true);
+	registry.Get<ecs::components::SoundTag>(tag).offset = {0.0f, 3.0f, 0.0f};
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	registry.Get<ecs::components::Transform>(box).position = {25.0f, 1.0f, 0.0f};
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(Audio().emitters.begin()->second.position, glm::vec3(25.0f, 4.0f, 0.0f));
 }

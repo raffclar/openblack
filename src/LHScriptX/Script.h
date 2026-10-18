@@ -14,6 +14,7 @@
 
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Lexer.h"
 
 namespace openblack::lhscriptx
@@ -24,8 +25,9 @@ class Script
 public:
 	Script();
 	/// A script whose places are all moved by an offset across the land (x, z) and raised by its height (y), as the
-	/// lines of the crossing file are read about the place the vortex throws things out
-	explicit Script(glm::vec3 origin);
+	/// lines of the crossing file are read about the place the vortex throws things out. The game adds `originOnMap` to
+	/// the map position of each place.
+	Script(glm::vec3 origin, const map_coords::MapCoords& originOnMap);
 
 	/// Carries out the commands of a map script, calling `afterCommand`, when given, after each one
 	void Load(const std::string& source, const std::function<void()>& afterCommand = {});
@@ -39,6 +41,8 @@ private:
 
 	/// What every place the script gives is moved by
 	glm::vec3 _origin {0.0f};
+	/// What the map position of every place the script gives is moved by
+	map_coords::MapCoords _originOnMap {};
 
 	// The current token.
 	Token _token {Token::MakeInvalidToken()};

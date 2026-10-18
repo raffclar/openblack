@@ -557,16 +557,26 @@ TEST(SpellBehaviours, AFireballsStepMovesItButBurnsNothingByItself)
 	EXPECT_FLOAT_EQ(services.world.appliedAt[0].second[EffectKind::Burn], 0.0f);
 }
 
-TEST(SpellBehaviours, EveryFireballBurnsAsTheFirstRow)
+TEST(SpellBehaviours, OnlyTheFirstFireballPowerUpBurnsAsTheSecondRow)
 {
 	auto info = MakeTables();
 	info->magicFireBall.at(0).initialTemperature = 6000.0f;
 	info->magicFireBall.at(1).initialTemperature = 10000.0f;
 	info->magicFireBall.at(2).initialTemperature = 14000.0f;
-	for (const auto type : {MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo})
-	{
-		EXPECT_FLOAT_EQ(spells::FireballTemperature(*info, type), 6000.0f);
-	}
+	// The fire seed of the game data: the plain fireball, then the power-ups at levels 0 and 1
+	auto& fire = info->spellSeed.at(static_cast<size_t>(SpellSeedType::Fire));
+	fire.magicTypes = {MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo, MagicType::None};
+	EXPECT_FLOAT_EQ(spells::FireballTemperature(*info, MagicType::Fireball), 6000.0f);
+	EXPECT_FLOAT_EQ(spells::FireballTemperature(*info, MagicType::FireballPowerUpOne), 10000.0f);
+	EXPECT_FLOAT_EQ(spells::FireballTemperature(*info, MagicType::FireballPowerUpTwo), 6000.0f);
+}
+
+TEST(SpellBehaviours, FireBallInfoRowIsTheSecondOnlyForPowerUpLevelZero)
+{
+	EXPECT_EQ(magic::FireBallInfoRow(magic::k_BasePowerUpLevel), 0u);
+	EXPECT_EQ(magic::FireBallInfoRow(0), 1u);
+	EXPECT_EQ(magic::FireBallInfoRow(1), 0u);
+	EXPECT_EQ(magic::FireBallInfoRow(2), 0u);
 }
 
 TEST(SpellBehaviours, FoodLandsOnDryLandAsPilesAndPaysForEveryGrain)

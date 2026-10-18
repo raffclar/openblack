@@ -12,10 +12,13 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <vector>
 
 #include <glm/geometric.hpp>
+#include <glm/mat3x3.hpp>
+#include <glm/vec3.hpp>
 
 #include "Common/GUtilsDistance.h"
 #include "Common/X87Vector.h"
@@ -37,6 +40,20 @@ constexpr float k_TreeShare = 0.1f;
 constexpr float k_TreeMost = 0.25f;
 /// A thing longer than this many times its width keeps a row of circles clear
 constexpr float k_LongThing = 1.4f;
+/// Where a worship site's ten balls stand in its model, across, up and along; each is as wide as 1.3 times its height
+constexpr std::array<glm::vec3, creature_cast_moves::k_WorshipSiteSpheres> k_WorshipSiteSpherePoints {{
+    {2.448f, 1.4f, -34.171f},
+    {3.348f, 1.4f, -36.551f},
+    {24.71f, 1.4f, -24.133f},
+    {26.359f, 1.4f, -25.951f},
+    {3.93f, 2.0f, -39.084f},
+    {27.452f, 2.0f, -28.503f},
+    {7.405f, 3.0f, -40.707f},
+    {12.317f, 3.0f, -39.988f},
+    {22.537f, 3.0f, -35.073f},
+    {26.905f, 3.0f, -33.063f},
+}};
+constexpr float k_WorshipSiteSphereWidth = 1.3f;
 } // namespace
 
 float creature_cast_moves::BoneReach(const skeletal_animation::Animation& animation,
@@ -196,6 +213,37 @@ bool creature_cast_moves::BlocksCell(const CollideCircle& circle, int32_t x, int
 	const glm::vec2 middle {static_cast<float>(x) * k_CellSize + k_CellSize * 0.5f,
 	                        static_cast<float>(z) * k_CellSize + k_CellSize * 0.5f};
 	return glm::distance(middle, circle.centre) - circle.radius < k_ClearOfThings;
+}
+
+bool creature_cast_moves::BlocksCell(const CollideSphere& sphere, int32_t x, int32_t z)
+{
+	const glm::vec3 middle {static_cast<float>(x) * k_CellSize + k_CellSize * 0.5f, 0.0f,
+	                        static_cast<float>(z) * k_CellSize + k_CellSize * 0.5f};
+	return glm::distance(middle, sphere.centre) - sphere.radius < k_ClearOfThings;
+}
+
+std::array<CollideSphere, creature_cast_moves::k_WorshipSiteSpheres>
+creature_cast_moves::WorshipSiteSpheres(const glm::vec3& position, const glm::mat3& rotation, float scale)
+{
+	std::array<CollideSphere, k_WorshipSiteSpheres> spheres {};
+	std::ranges::transform(k_WorshipSiteSpherePoints, spheres.begin(), [&](const glm::vec3& point) {
+		// The sums of the products are made at a higher precision before they are kept, as the game's are
+		const glm::dvec3 local = glm::dvec3(point) * static_cast<double>(scale);
+		const glm::dvec3 world = glm::dvec3(rotation[0]) * local.x + glm::dvec3(rotation[1]) * local.y +
+		                         glm::dvec3(rotation[2]) * local.z + glm::dvec3(position);
+		return CollideSphere {.centre = glm::vec3(world), .radius = k_WorshipSiteSphereWidth * point.y};
+	});
+	return spheres;
+}
+
+bool creature_cast_moves::BlocksCell(const ThingInCell& thing, int32_t x, int32_t z, bool livingBlocks)
+{
+	if (thing.temple || (livingBlocks && thing.living))
+	{
+		return true;
+	}
+	return thing.tested &&
+	       std::ranges::any_of(thing.spheres, [x, z](const CollideSphere& sphere) { return BlocksCell(sphere, x, z); });
 }
 
 creature_cast_moves::Stall creature_cast_moves::CheckStall(uint32_t turns, float moved, bool scripted)

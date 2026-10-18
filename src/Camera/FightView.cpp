@@ -227,3 +227,90 @@ Tracker::Step Tracker::Follow(const Fighter& first, const Fighter& second, const
 	return {.view = {.origin = PointFrom(looking, distance, _headingOffset - _heading.GetValue(), _pitch), .focus = looking},
 	        .zoomedOut = zoomedOut};
 }
+
+float fight_view::BlendSeconds(float modelSeconds)
+{
+	const auto scale = modelSeconds > k_BlendFallSeconds
+	                       ? k_BlendLastScale
+	                       : (modelSeconds / k_BlendFallSeconds) * (k_BlendLastScale - k_BlendFirstScale) + k_BlendFirstScale;
+	return scale * k_BlendSecondsPerScale;
+}
+
+glm::vec3 fight_view::WayPoint(const glm::vec3& from, const glm::vec3& to, float rise, const GroundHeight& ground)
+{
+	auto way = (to + from) * 0.5f;
+	way.y += glm::distance(glm::vec2(from.x, from.z), glm::vec2(to.x, to.z)) * rise;
+	const auto lowest = ground(glm::vec2(way.x, way.z)) + k_WayAboveLand;
+	if (lowest > way.y)
+	{
+		way.y = lowest;
+	}
+	return way;
+}
+
+Flight fight_view::PlanFlight(const glm::vec3& from, View to, float rise, const GroundHeight& ground,
+                              const KeepInside& keepInside)
+{
+	to.origin = keepInside(to.origin, to.focus);
+	return {
+	    .to = to, .way = WayPoint(from, to.origin, rise, ground), .woosh = glm::distance(from, to.origin) > k_WooshDistance};
+}
+
+bool fight_view::GripsLand(const GripInput& input)
+{
+	const bool held = input.directsFight ? input.move : input.gripping;
+	return held && !input.action && !input.bothButtons && !input.rotateAroundMouse && !input.heldBack;
+}
+
+bool fight_view::DraggedAway(float secondsSinceFlight, bool landGripped, glm::vec2 eye, glm::vec2 looking,
+                             glm::vec2 arenaCentre, float arenaRadius)
+{
+	return k_DragLeaveSeconds < secondsSinceFlight && landGripped &&
+	       TooFar(eye, looking, arenaCentre, arenaRadius, k_DragLeaveScale);
+}
+
+void Chase::Resume(const View& from, const View& speed)
+{
+	_origin.Carry(from.origin, speed.origin);
+	_focus.Carry(from.focus, speed.focus);
+	_held = from;
+	_flight.reset();
+}
+
+void Chase::Fly(const View& from, const View& speed, const View& to, const glm::vec3& way)
+{
+	_origin.Carry(from.origin, speed.origin);
+	_focus.Carry(from.focus, speed.focus);
+	_held = from;
+	_flight = Flight {.to = to, .way = way};
+}
+
+View Chase::Step(const std::optional<View>& wanted, float modelSeconds, float seconds)
+{
+	_held = GetValue();
+	if (_flight.has_value())
+	{
+		// Far enough on the way, it goes to the view itself; on the next step the view's own curves move it
+		if (k_FlightSeconds * k_OnWayShare < _origin.x.GetElapsed())
+		{
+			_origin.SetDestination(_flight->to.origin, k_FlightSeconds);
+			_focus.SetDestination(_flight->to.focus, k_FlightSeconds);
+			_flight.reset();
+		}
+		else if (!_flight->wayGiven)
+		{
+			_origin.SetDestination(_flight->way, k_FlightSeconds * k_WayShare);
+			_focus.SetDestination(_flight->to.focus, k_FlightSeconds * k_WayShare);
+			_flight->wayGiven = true;
+		}
+	}
+	else if (wanted.has_value())
+	{
+		const auto blend = BlendSeconds(modelSeconds);
+		_origin.SetDestination(wanted->origin, blend);
+		_focus.SetDestination(wanted->focus, blend);
+	}
+	_origin.Update(seconds);
+	_focus.Update(seconds);
+	return GetValue();
+}

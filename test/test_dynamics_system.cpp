@@ -26,6 +26,7 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/LandIslandInterface.h"
+#include "ECS/Components/MapPlace.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
@@ -177,11 +178,10 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> CameraOrigin() const override { return std::nullopt; }
 	[[nodiscard]] GameRandomInterface* Random() override { return nullptr; }
 	void PlaySound(audio::SoundId) override {}
-	std::optional<audio::AnimEffectPlay> PlayCollisionSound(std::span<const int32_t>, entt::entity, glm::vec3) override
+	std::optional<audio::AnimEffectPlay> PlayCollisionSound(std::span<const int32_t>, entt::entity, glm::vec3, bool) override
 	{
 		return std::nullopt;
 	}
-	void MoveSound(entt::entity, glm::vec3) override {}
 	void AddWaterRing(const water_rings::Ring&) override {}
 	void ScareFish(glm::vec3) override {}
 	[[nodiscard]] int32_t SnowAt(glm::vec3) const override { return 0; }
@@ -311,6 +311,20 @@ TEST_F(DynamicsSystemTest, AThrownRockComesToRestGoesBackIntoTheMapAndLeavesTheP
 		ASSERT_EQ(Entries(), 0u);
 	}
 	EXPECT_EQ(_world->Entities().Get<const Transform>(rock).position, rested);
+}
+
+TEST_F(DynamicsSystemTest, AThingThatItsBodyMovesNoLongerKeepsAnExactMapPosition)
+{
+	const auto rock = Rock({1000.0f, 1000.0f});
+	auto& registry = _world->Entities();
+	registry.Assign<MapPlace>(rock, MapPlace {.place = {.x = 6553601, .z = 6553601}, .placedAt = {1000.0f, 1000.0f}});
+	registry.Get<Transform>(rock).position.y += 3.0f;
+	ASSERT_TRUE(_dynamics->InitialisePhysics(rock, {.velocity = {4.0f, 2.0f, 0.0f}}).started);
+	// It keeps the map position until its body moves it
+	EXPECT_TRUE(registry.AllOf<MapPlace>(rock));
+	ASSERT_TRUE(RunUntilEmpty(600).has_value());
+	// Then its map position comes from where it lies
+	EXPECT_FALSE(registry.AllOf<MapPlace>(rock));
 }
 
 TEST_F(DynamicsSystemTest, ARestingRockWakesOnlyWhileSomethingMovingIsNear)

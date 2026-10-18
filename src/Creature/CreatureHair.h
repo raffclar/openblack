@@ -127,6 +127,17 @@ struct Strand
 /// it; the speeds become how far each point really moved.
 void Step(Strand& strand, const Root& root, const Physics& physics, float seconds);
 
+/// The longest step that hair takes at once, in seconds
+constexpr float k_MaxStepSeconds = 1.0f;
+
+/// The seconds that hair moves for a frame of some milliseconds: none for a time that runs back, at most the longest
+/// step
+[[nodiscard]] constexpr float StepSeconds(float milliseconds)
+{
+	const auto seconds = milliseconds / 1000.0f;
+	return seconds < 0.0f ? 0.0f : (seconds > k_MaxStepSeconds ? k_MaxStepSeconds : seconds);
+}
+
 /// A corner of a strand's ribbon
 struct RibbonVertex
 {

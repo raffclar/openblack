@@ -71,6 +71,18 @@ TEST(CreatureFriendship, AvailabilityOfTheAskedCreature)
 	EXPECT_EQ(AvailabilityOf({.partner = 3U, .asker = k_Asker}), Availability::Refuses);
 }
 
+// A creature in a fight has its opponent as its partner: it refuses a third creature and stays free for its opponent
+TEST(CreatureFriendship, ACreatureInAFightIsTakenUpWithItsOpponent)
+{
+	constexpr uint32_t k_Third = 9U;
+	EXPECT_EQ(PartnerNow(std::nullopt, std::nullopt), std::nullopt);
+	EXPECT_EQ(PartnerNow(3U, std::nullopt), std::optional(3U));
+	EXPECT_EQ(PartnerNow(std::nullopt, k_Asker), std::optional(k_Asker));
+	EXPECT_EQ(PartnerNow(3U, k_Asker), std::optional(3U));
+	EXPECT_EQ(AvailabilityOf({.partner = PartnerNow(std::nullopt, k_Third), .asker = k_Asker}), Availability::Refuses);
+	EXPECT_EQ(AvailabilityOf({.partner = PartnerNow(std::nullopt, k_Asker), .asker = k_Asker}), Availability::AlreadyPartner);
+}
+
 TEST(CreatureFriendship, AFightIsAgreedToOnlyNearInHeight)
 {
 	AnswerFacts fight {.kind = RequestKind::Fight, .availability = Availability::Free, .heightRatio = 0.5f};
@@ -221,4 +233,28 @@ TEST(CreatureFriendship, TheStepsOfAJointActionAreDoneAsTheyStart)
 	ASSERT_TRUE(order.order.has_value());
 	EXPECT_EQ(order.order->partner, k_Asked);
 	EXPECT_EQ(mind.step, 3U);
+}
+
+TEST(CreatureFriendship, AJointActionThatEndsWithAnOrderStopsOnTheNextTurn)
+{
+	const JointFacts running {
+	    .otherAgenda = false, .hadStepsLeft = true, .hasStepsLeft = true, .endedWithOrder = false, .endSeen = false};
+	EXPECT_EQ(JointTurnOf(running), JointTurn::Continues);
+	auto other = running;
+	other.otherAgenda = true;
+	EXPECT_EQ(JointTurnOf(other), JointTurn::Ends);
+	// The last step was not an order: the joint action stops at once
+	auto done = running;
+	done.hasStepsLeft = false;
+	EXPECT_EQ(JointTurnOf(done), JointTurn::Ends);
+	// The last step gave an order: the partner gets one turn to start it
+	done.endedWithOrder = true;
+	EXPECT_EQ(JointTurnOf(done), JointTurn::EndsNextTurn);
+	done.endSeen = true;
+	EXPECT_EQ(JointTurnOf(done), JointTurn::Ends);
+	// An agenda that had no steps left when the joint action noted it does not stop the joint action
+	auto empty = running;
+	empty.hadStepsLeft = false;
+	empty.hasStepsLeft = false;
+	EXPECT_EQ(JointTurnOf(empty), JointTurn::Continues);
 }

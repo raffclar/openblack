@@ -278,10 +278,15 @@ glm::vec2 shield::LookOut(glm::vec2 centre, glm::vec2 villager, float turn)
 	return villager + glm::vec2(std::cos(angle), std::sin(angle));
 }
 
+bool shield::TownIgnoresShield(Reaction reaction, bool townAttackedByShieldPlayer, bool physical)
+{
+	return townAttackedByShieldPlayer &&
+	       (reaction == Reaction::ReactToMagicShield || (!physical && reaction == Reaction::ReactToMagicShieldStruck));
+}
+
 float shield::ImpressiveMultiplier(Reaction reaction, bool townAttackedByShieldPlayer, bool physical)
 {
-	if (townAttackedByShieldPlayer &&
-	    (reaction == Reaction::ReactToMagicShield || (!physical && reaction == Reaction::ReactToMagicShieldStruck)))
+	if (TownIgnoresShield(reaction, townAttackedByShieldPlayer, physical))
 	{
 		return 0.0f;
 	}

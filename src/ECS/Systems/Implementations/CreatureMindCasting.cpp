@@ -26,8 +26,8 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
-#include "3D/L3DMesh.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureGiving.h"
@@ -58,16 +58,22 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
-#include "ECS/Components/Forest.h"
-#include "ECS/Components/Mesh.h"
+#include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Flowers.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureObstacleThings.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
@@ -76,12 +82,10 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
-#include "ECS/ThingModel.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "ObjectMeasures.h"
-#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -90,6 +94,7 @@ using namespace openblack::ecs::systems;
 namespace
 {
 namespace cast_moves = openblack::creature_cast_moves;
+namespace obstacle_things = openblack::ecs::creature_obstacle_things;
 using creature_desires::Desire;
 using Kind = creature_mind::Movement::Kind;
 
@@ -99,8 +104,6 @@ constexpr float k_SameDestination = 0.1f;
 /// It heads for what it goes near within this share of a whole turn, measured in the game's 2048 to a turn
 constexpr int32_t k_AngleUnits = 2048;
 constexpr int32_t k_HeadingTolerance = 6;
-/// A creature goes round a thing at least this share of its height
-constexpr float k_LowObjectShare = 0.1f;
 /// The miracles a creature casts are numbered from the first to the last magic type
 constexpr uint32_t k_LastCreatureMagic = 41;
 /// A creature tries a power-up miracle only once grown past this stage
@@ -142,85 +145,86 @@ bool HeadingFor(const Transform& transform, glm::vec2 point)
 	return std::abs(heading - towards) < k_AngleUnits / k_HeadingTolerance;
 }
 
-/// The circles a fixed thing keeps creatures off, from its model's box and its place
-std::vector<cast_moves::CollideCircle> ModelCircles(const ecs::Registry& registry, entt::entity entity)
+/// The balls a thing in a cell keeps creatures off, as the cell test looks at them: a tree a small one at its trunk, a
+/// worship site its own ten, anything else fixed the outline of its model's box; nothing for a forest as a whole, for
+/// the temple (it keeps the cell from being clear in any case), or for what moves about
+std::vector<cast_moves::CollideSphere> CollideSpheres(const ecs::Registry& registry, entt::entity entity,
+                                                      const creature_obstacles::Thing& thing)
 {
-	// An altar has its model's box before the model shows
-	const auto model = ecs::thing_model::ModelOf(registry, entity);
 	const auto* transform = registry.TryGet<const Transform>(entity);
-	if (!model.has_value() || transform == nullptr || !Locator::resources::has_value() ||
-	    !Locator::resources::value().GetMeshes().Contains(*model))
+	if (transform == nullptr)
 	{
 		return {};
 	}
-	const auto& box = Locator::resources::value().GetMeshes().Handle(*model)->GetBoundingBox();
-	const auto half = (box.maxima - box.minima) * 0.5f * transform->scale.x;
-	const auto centre = transform->position + transform->rotation * (box.Center() * transform->scale);
+	if (registry.AllOf<Tree>(entity))
+	{
+		return {{.centre = {transform->position.x, 0.0f, transform->position.z}, .radius = cast_moves::k_TreeCollideRadius}};
+	}
+	if (registry.AllOf<WorshipSite>(entity))
+	{
+		const auto spheres = cast_moves::WorshipSiteSpheres(transform->position, transform->rotation, transform->scale.x);
+		return {spheres.begin(), spheres.end()};
+	}
+	if (!registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, SpellDispenser, TeleportStone, WorshipAltar, Vortex,
+	                    MobileStatic, DeadTree, MagicShield, ShieldDome, ScriptHighlight, FishFarm>(entity))
+	{
+		return {};
+	}
+	// The outline of its model's box, at the size it is kept at; a shield's is its solid dome's
 	const glm::mat2 turn(transform->rotation[0].x, transform->rotation[0].z, transform->rotation[2].x,
 	                     transform->rotation[2].z);
-	return cast_moves::CollideCircles({half.x, half.z}, Flat(centre), turn);
+	const auto centre = thing.position + turn * (glm::vec2(thing.boxCentre.x, thing.boxCentre.z) * thing.scale);
+	const auto half = glm::vec2(thing.boxHalfSize.x, thing.boxHalfSize.z) * thing.scale;
+	std::vector<cast_moves::CollideSphere> spheres;
+	for (const auto& circle : cast_moves::CollideCircles(half, centre, turn))
+	{
+		spheres.push_back({.centre = {circle.centre.x, 0.0f, circle.centre.y}, .radius = circle.radius});
+	}
+	return spheres;
 }
 
-/// Whether a thing standing in a cell of the land keeps it from being clear for a creature to go to: a temple always; the
-/// trees and fields always by the circles they keep clear, anything else fixed when the creature must go round it (a
-/// building, feature, altar or static thing when as tall as a tenth of the creature or burning, a dead tree only burning), and
-/// nothing that moves; and, when asked, anything living, the creature itself included
+/// Whether a thing standing in a cell of the land keeps it from being clear for a creature to go to: the temple always;
+/// a tree or a field by the balls it keeps creatures off; anything else by its balls when the creature must go round it
+/// by the rule of its routes; and, when asked, anything living, the creature itself included. Things that move about
+/// keep no balls, so only the temple and, when asked, the living among them count.
 bool CellBlocked(const ecs::Registry& registry, entt::entity creature, int32_t x, int32_t z, bool livingBlocks = false)
 {
 	if (!Locator::entitiesMap::has_value() || x < 0 || z < 0)
 	{
 		return false;
 	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* at = registry.TryGet<const Transform>(creature);
+	if (body == nullptr || at == nullptr)
+	{
+		return false;
+	}
+	const auto* locomotion = registry.TryGet<const CreatureLocomotion>(creature);
+	const auto walker = obstacle_things::WalkerOf(registry, creature, *body, locomotion != nullptr ? locomotion->radius : 0.0f,
+	                                              Flat(at->position));
 	const auto& map = Locator::entitiesMap::value();
 	const ecs::MapInterface::CellId cell {static_cast<uint16_t>(x), static_cast<uint16_t>(z)};
-	const float creatureHeight = object_measures::Height(registry, creature);
-	const auto burning = [](entt::entity entity) {
-		return Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity);
-	};
 	const auto blocks = [&](entt::entity entity) {
 		if (!registry.Valid(entity))
 		{
 			return false;
 		}
-		if (registry.AllOf<Temple>(entity) || (livingBlocks && registry.AnyOf<Villager, Creature, Animal>(entity)))
+		cast_moves::ThingInCell inCell {.temple = registry.AllOf<Temple>(entity),
+		                                .living = registry.AnyOf<Villager, Creature, Animal>(entity),
+		                                .tested = false,
+		                                .spheres = {}};
+		if (!inCell.temple)
 		{
-			return true;
-		}
-		if (registry.AllOf<Forest>(entity))
-		{
-			return false;
-		}
-		std::vector<cast_moves::CollideCircle> circles;
-		if (registry.AllOf<Tree>(entity) && !registry.AllOf<DeadTree>(entity))
-		{
-			if (const auto* at = registry.TryGet<const Transform>(entity))
+			if (const auto thing = obstacle_things::ThingOf(registry, entity))
 			{
-				circles.push_back({.centre = Flat(at->position), .radius = cast_moves::k_TreeCollideRadius});
+				inCell.tested = registry.AnyOf<Tree, Field>(entity) || creature_obstacles::MustAvoid(*thing, walker);
+				if (inCell.tested)
+				{
+					inCell.spheres = CollideSpheres(registry, entity, *thing);
+				}
 			}
 		}
-		else
-		{
-			const bool tallEnough = object_measures::Height(registry, entity) >= k_LowObjectShare * creatureHeight;
-			bool test = false;
-			if (registry.AnyOf<Field, AnimatedStatic>(entity))
-			{
-				test = true;
-			}
-			else if (registry.AllOf<DeadTree>(entity))
-			{
-				test = burning(entity);
-			}
-			else if (registry.AnyOf<Abode, Feature, MobileStatic, WorshipAltar>(entity))
-			{
-				test = tallEnough || burning(entity);
-			}
-			if (!test)
-			{
-				return false;
-			}
-			circles = ModelCircles(registry, entity);
-		}
-		return std::ranges::any_of(circles, [x, z](const auto& circle) { return cast_moves::BlocksCell(circle, x, z); });
+		return cast_moves::BlocksCell(inCell, x, z, livingBlocks);
 	};
 	return std::ranges::any_of(map.GetFixedInGridCell(cell), blocks) ||
 	       std::ranges::any_of(map.GetMobileInGridCell(cell), blocks);
@@ -296,6 +300,27 @@ std::optional<uint32_t> CreatureMindSystem::CastMagicOf(uint32_t action)
 	return magic;
 }
 
+bool mind_detail::CellClearFor(const ecs::Registry& registry, entt::entity creature, int32_t x, int32_t z, bool livingBlocks)
+{
+	if (!Locator::creatureLocomotionSystem::has_value())
+	{
+		return false;
+	}
+	const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+	return land.At(x, z) == creature_route::Ground::Open && !CellBlocked(registry, creature, x, z, livingBlocks);
+}
+
+bool CreatureMindSystem::IsCellClearFor(entt::entity creature, int32_t x, int32_t z, bool livingBlocks) const
+{
+	return mind_detail::CellClearFor(Entities(), creature, x, z, livingBlocks);
+}
+
+std::optional<glm::vec2> CreatureMindSystem::FindClearAreaFor(entt::entity creature, glm::vec2 point, float width,
+                                                              bool livingBlocks) const
+{
+	return mind_detail::ClearAreaFor(Entities(), creature, point, width, livingBlocks);
+}
+
 std::optional<glm::vec2> mind_detail::ClearAreaFor(const ecs::Registry& registry, entt::entity creature, glm::vec2 point,
                                                    float width, bool livingBlocks)
 {
@@ -303,10 +328,8 @@ std::optional<glm::vec2> mind_detail::ClearAreaFor(const ecs::Registry& registry
 	{
 		return std::nullopt;
 	}
-	const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
-	const auto found = cast_moves::FindClearArea(point, width, [&](int32_t x, int32_t z) {
-		return land.At(x, z) == creature_route::Ground::Open && !CellBlocked(registry, creature, x, z, livingBlocks);
-	});
+	const auto found = cast_moves::FindClearArea(
+	    point, width, [&](int32_t x, int32_t z) { return CellClearFor(registry, creature, x, z, livingBlocks); });
 	// Kept within an area, a place outside it is no use
 	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
 	if (found.has_value() && leashes != nullptr)
@@ -544,7 +567,6 @@ bool CreatureMindSystem::StartTry(entt::entity creature, MagicType type, std::op
 	{
 		return false;
 	}
-	Locator::magicSystem::value().ReleaseCreatureCast(creature);
 	// A try short of all but one of the sightings it needs fizzles, and counts as one more
 	const auto magicType = static_cast<uint32_t>(type);
 	const auto sightings = SightingsOf(*mind, *tables, body->species, magicType);
@@ -638,10 +660,12 @@ bool CreatureMindSystem::TryMiracle(entt::entity creature, MagicType type, entt:
 
 bool CreatureMindSystem::TryMiracleAt(entt::entity creature, MagicType type, glm::vec3 place)
 {
+	// A try at a place that fizzles keeps the miracle in the hand. Only a try that does not fizzle lets go of it.
 	if (!StartTry(creature, type, std::nullopt))
 	{
 		return false;
 	}
+	Locator::magicSystem::value().ReleaseCreatureCast(creature);
 	// It is frustrated only when it does not have the energy for the miracle, or the miracle cannot go to the place
 	if (Locator::magicSystem::value().CastByCreatureAt(creature, type, place))
 	{
@@ -752,14 +776,17 @@ bool CreatureMindSystem::CastGivenGlobe(entt::entity creature, CreatureMindState
 void CreatureMindSystem::ShowFizzle(entt::entity creature, CreatureMindState& mind)
 {
 	auto* casting = Entities().TryGet<CreatureCasting>(creature);
-	if (casting == nullptr || !casting->fizzle.has_value())
+	if (casting == nullptr || !casting->fizzle.has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
 	const auto fizzle = *casting->fizzle;
 	casting->fizzle.reset();
 	// Embarrassed, then one time in two sad as well, and sadder for it
-	auto reaction = creature_mind::ReactToFizzle([this](uint32_t range) { return Random(range); }, Chance());
+	// The reaction draws from the random numbers of the game
+	auto& gameRandom = Locator::gameRandom::value();
+	auto reaction = creature_mind::ReactToFizzle([&gameRandom](uint32_t range) { return gameRandom.GameRand(range); },
+	                                             [&gameRandom](float most) { return gameRandom.GameFloatRand(most); });
 	if (reaction.sadness.has_value() && mind.desires.has_value())
 	{
 		creature_desires::ChangeSource(*mind.desires, creature_desires::sources::k_Sadness, *reaction.sadness);

@@ -68,7 +68,8 @@ public:
 	using AudioManagerInterface::PlayAnimEffect;
 	AnimEffectPlay PlayAnimEffect([[maybe_unused]] const std::string& bankName, [[maybe_unused]] std::span<const int32_t> keys,
 	                              [[maybe_unused]] entt::entity owner, [[maybe_unused]] const glm::vec3& position,
-	                              [[maybe_unused]] const std::optional<SoundEffectConditions>& heardUnder) override
+	                              [[maybe_unused]] const std::optional<SoundEffectConditions>& heardUnder,
+	                              [[maybe_unused]] AnimEffectMeasure measure) override
 	{
 		return {};
 	}
@@ -82,6 +83,7 @@ public:
 		return entt::null;
 	}
 	void SetEmitterPosition([[maybe_unused]] entt::entity emitter, [[maybe_unused]] const glm::vec3& position) override {}
+	void SetEmitterFollows([[maybe_unused]] entt::entity emitter, [[maybe_unused]] Follows follows) override {}
 	void ReleaseEmitterLoop([[maybe_unused]] entt::entity emitter) override {}
 	[[nodiscard]] bool IsEmitterLooping([[maybe_unused]] entt::entity emitter) override { return false; }
 	void SetEmitterVolume([[maybe_unused]] entt::entity emitter, [[maybe_unused]] uint32_t volume) override {}

@@ -56,6 +56,11 @@ public:
 		std::function<void(video::FallingSpellCue cue)> fallingSpellCue;
 		/// The white fade the falling spell started has reached white
 		std::function<bool()> whiteFadeReached;
+		/// The falling spell's film starts, moves on to a time in milliseconds at a time of the real clock, and ends: its
+		/// copy of the player's creature follows it. A hook can be empty.
+		std::function<void()> fallingSpellStarted;
+		std::function<void(int32_t filmMs, std::chrono::steady_clock::time_point now)> fallingSpellFrame;
+		std::function<void()> fallingSpellEnded;
 	};
 
 	/// The game's: the time system's pause, the cinematic director's bars, the scripts' music, the resource cache
@@ -109,7 +114,7 @@ private:
 	void Delete();
 	/// The update after a video ended: the pause and the bars as they were before it
 	void Finished();
-	void UpdateFallingSpell();
+	void UpdateFallingSpell(std::chrono::steady_clock::time_point now);
 
 	Hooks _hooks;
 	video::DecodeMode _decodeMode;

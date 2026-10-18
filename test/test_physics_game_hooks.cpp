@@ -25,6 +25,7 @@
 
 #include "3D/ModelSurface.h"
 #include "Common/GameRandom.h"
+#include "Common/ModelInverseSquareRoot.h"
 #include "Creature/CreatureDesires.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -37,11 +38,13 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PhysicsGameHooks.h"
 #include "ECS/PhysicsHooksWorld.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/TempleHeartPassOn.h"
 #include "Physics/Body.h"
 #include "Physics/LivingRules.h"
 #include "Physics/TempleHeart.h"
@@ -128,7 +131,11 @@ public:
 	[[nodiscard]] uint32_t Turn() const override { return turn; }
 	[[nodiscard]] GameRandomInterface* Random() override { return random; }
 	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override { return PlayerNames::PLAYER_ONE; }
-	[[nodiscard]] float LifeOf(entt::entity /*object*/) const override { return 1.0f; }
+	[[nodiscard]] float LifeOf(entt::entity object) const override
+	{
+		const auto life = lives.find(object);
+		return life != lives.end() ? life->second : 1.0f;
+	}
 	[[nodiscard]] float HeightOf(entt::entity /*object*/) const override { return 10.0f; }
 	[[nodiscard]] const GAbodeInfo* AbodeInfoOf(entt::entity /*object*/) const override { return nullptr; }
 	[[nodiscard]] bool IsToy(entt::entity object) const override { return std::ranges::find(toys, object) != toys.end(); }
@@ -258,6 +265,7 @@ public:
 	std::vector<std::pair<uint32_t, particles::PlasmaCommand>> plasma;
 	std::vector<entt::id_type> sounds;
 	std::vector<entt::entity> passedOn;
+	std::map<entt::entity, float> lives;
 	std::vector<entt::entity> struckBuildings;
 	struct StruckVortex
 	{
@@ -484,7 +492,8 @@ TEST(PhysicsGameHooks, ATemplesHeartWithNothingToPassABlowToBeamsAtAPointOnItsel
 	EXPECT_EQ(beam.start, glm::vec3(0.0f, 10.0f, 0.0f));
 	EXPECT_EQ(beam.end, glm::vec3(101.0f, 4.0f, 2.0f));
 	EXPECT_EQ(beam.startTangent, up);
-	EXPECT_EQ(beam.endTangent, down);
+	// The 3D engine's inverse square root makes the unit normal a little shorter than one
+	EXPECT_EQ(beam.endTangent, down * gutils::ModelInverseSquareRoot(1.0f));
 	EXPECT_EQ(beam.life, particles::k_HeartPlasmaLife);
 	EXPECT_EQ(beam.speed, particles::k_HeartPlasmaSpeed);
 	EXPECT_EQ(beam.alpha, particles::k_HeartPlasmaAlpha);
@@ -636,4 +645,59 @@ TEST(PhysicsGameHooks, ACreatureThatTakesNoNoticeOfReactionsCatchesNothing)
 	fixture.hooks->OfferToCatchingCreatures(rock, entry);
 	ASSERT_EQ(world.catches.size(), 1U);
 	EXPECT_EQ(world.catches.front(), std::make_pair(creature, rock));
+}
+
+TEST(TempleHeartPassOn, AWorshipSiteTakesWhatItsHeartChoseOrItselfWhenTheHeartChoseItself)
+{
+	const auto heart = static_cast<entt::entity>(1);
+	const auto site = static_cast<entt::entity>(2);
+	const auto building = static_cast<entt::entity>(3);
+	EXPECT_EQ(temple_heart_pass_on::SiteTaker(building, heart, site, 1.0f), building);
+	EXPECT_EQ(temple_heart_pass_on::SiteTaker(heart, heart, site, 0.5f), site);
+	// A site with no life left gives it to the heart
+	EXPECT_EQ(temple_heart_pass_on::SiteTaker(heart, heart, site, 0.0f), heart);
+}
+
+TEST(TempleHeartPassOn, AnEffectOnAWorshipSiteGoesToItsHeartsBuildingWithABeamWhenItBreaksBuildings)
+{
+	FakeWorld world;
+	auto& registry = world.registry;
+	const auto heart = registry.Create();
+	registry.Assign<Transform>(heart, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Temple>(heart, PlayerNames::PLAYER_TWO);
+	const auto site = registry.Create();
+	registry.Assign<WorshipSite>(site).temple = heart;
+	const auto building = registry.Create();
+	registry.Assign<Transform>(building, glm::vec3(50.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, 1U, PlayerNames::PLAYER_TWO).abodes.push_back(building);
+	world.turn = temple_heart::BeamInterval(100) + 1;
+
+	// An effect that does not break buildings goes on with no beam
+	EXPECT_EQ(temple_heart_pass_on::TakerOf(world, site, false), building);
+	EXPECT_TRUE(world.plasma.empty());
+	EXPECT_EQ(temple_heart_pass_on::TakerOf(world, site, true), building);
+	ASSERT_EQ(world.plasma.size(), 1U);
+	EXPECT_EQ(world.plasma[0].second.end, glm::vec3(50.0f, 10.0f, 0.0f));
+	// The heart gives what comes to it the same way, and anything else takes it itself
+	EXPECT_EQ(temple_heart_pass_on::TakerOf(world, heart, true), building);
+	EXPECT_EQ(temple_heart_pass_on::TakerOf(world, building, true), building);
+}
+
+TEST(TempleHeartPassOn, AWorshipSiteTakesAnEffectItselfWhileItHasLifeAndItsHeartHasNothingToGiveItTo)
+{
+	FakeWorld world;
+	auto& registry = world.registry;
+	const auto heart = registry.Create();
+	registry.Assign<Transform>(heart, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Temple>(heart, PlayerNames::PLAYER_TWO);
+	const auto site = registry.Create();
+	registry.Assign<WorshipSite>(site).temple = heart;
+	EXPECT_EQ(temple_heart_pass_on::TakerOf(world, site, false), site);
+	EXPECT_EQ(temple_heart_pass_on::TakerOf(world, heart, false), heart);
+	world.lives[site] = 0.0f;
+	EXPECT_EQ(temple_heart_pass_on::TakerOf(world, site, false), heart);
+	// A site with no temple takes it itself
+	registry.Get<WorshipSite>(site).temple = entt::null;
+	EXPECT_EQ(temple_heart_pass_on::TakerOf(world, site, false), site);
 }

@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <array>
 
 #include "3D/MapCoords.h"
 
@@ -71,16 +72,53 @@ std::optional<creature_physiology::Faint> PassOutFrom(const creature_panel::Valu
 	return std::nullopt;
 }
 
-std::optional<glm::vec3> TemplePen(glm::vec3 templePosition, const glm::mat3& templeRotation, glm::vec3 templeScale,
-                                   std::span<const glm::mat4> markedPlaces)
+namespace
+{
+/// The marked place of the pen in the world, as the game turns, scales and moves it. Each step is a float step, in the
+/// game's order of operations.
+std::optional<glm::vec3> PenInWorld(glm::vec3 templePosition, float yAngle, float scale,
+                                    std::span<const glm::mat4> markedPlaces)
 {
 	if (markedPlaces.size() <= k_TemplePenPlace)
 	{
 		return std::nullopt;
 	}
 	const auto local = glm::vec3(markedPlaces[k_TemplePenPlace][3]);
-	const auto world = templePosition + (templeRotation * (local * templeScale));
-	return glm::vec3(map_coords::Quantise(world.x), world.y, map_coords::Quantise(world.z));
+	// The rows of the turn about the vertical, each scaled by the size of the temple
+	const auto cosine = static_cast<float>(std::cos(static_cast<double>(yAngle)));
+	const auto sine = static_cast<float>(std::sin(static_cast<double>(yAngle)));
+	const std::array<glm::vec3, 3> rows {
+	    glm::vec3(scale * cosine, scale * -0.0f, scale * sine),
+	    glm::vec3(scale * 0.0f, scale * 1.0f, scale * 0.0f),
+	    glm::vec3(scale * -sine, scale * 0.0f, scale * cosine),
+	};
+	const float x = ((local.y * rows[1].x + local.z * rows[2].x) + local.x * rows[0].x) + templePosition.x;
+	const float y = ((local.x * rows[0].y + local.y * rows[1].y) + local.z * rows[2].y) + templePosition.y;
+	const float z = ((local.x * rows[0].z + local.y * rows[1].z) + local.z * rows[2].z) + templePosition.z;
+	return glm::vec3(x, y, z);
+}
+} // namespace
+
+std::optional<map_coords::MapCoords> TemplePenOnMap(glm::vec3 templePosition, float yAngle, float scale,
+                                                    std::span<const glm::mat4> markedPlaces)
+{
+	const auto world = PenInWorld(templePosition, yAngle, scale, markedPlaces);
+	if (!world.has_value())
+	{
+		return std::nullopt;
+	}
+	return map_coords::MapCoords {.x = map_coords::ToFixed(world->x), .z = map_coords::ToFixed(world->z), .altitude = 0.0f};
+}
+
+std::optional<glm::vec3> TemplePen(glm::vec3 templePosition, float yAngle, float scale, std::span<const glm::mat4> markedPlaces)
+{
+	const auto world = PenInWorld(templePosition, yAngle, scale, markedPlaces);
+	const auto onMap = TemplePenOnMap(templePosition, yAngle, scale, markedPlaces);
+	if (!world.has_value() || !onMap.has_value())
+	{
+		return std::nullopt;
+	}
+	return glm::vec3(map_coords::ToMetres(onMap->x), world->y, map_coords::ToMetres(onMap->z));
 }
 
 glm::vec3 PenOf(std::optional<glm::vec3> home, std::optional<glm::vec3> temple, glm::vec3 noPen)

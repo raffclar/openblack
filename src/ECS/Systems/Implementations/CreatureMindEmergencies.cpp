@@ -109,7 +109,8 @@ void CreatureMindSystem::StepEmergencies(entt::entity creature, const Creature& 
 	    !creature_emergencies::LooksAtEmergencies({.emergencyRunning = mind.emergencyRunning,
 	                                               .scripted = scripted,
 	                                               .planForced = mind.planForced,
-	                                               .fighting = registry.AllOf<CreatureFighting>(creature)}))
+	                                               .fighting = registry.AllOf<CreatureFighting>(creature),
+	                                               .knockedOut = registry.AllOf<CreatureKnockedOut>(creature)}))
 	{
 		return;
 	}

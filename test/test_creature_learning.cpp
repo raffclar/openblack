@@ -1444,6 +1444,13 @@ TEST(CreatureMindModel, FreshOpinionsComeFromTheActionTable)
 	EXPECT_EQ(learnt.turnsSinceDone.size(), k_Opinions.size());
 }
 
+namespace
+{
+/// The places of the two trees of a desire
+constexpr auto k_ActivityTree = static_cast<size_t>(creature_mind_model::TreeKind::Activity);
+constexpr auto k_ActOnTree = static_cast<size_t>(creature_mind_model::TreeKind::ActOn);
+} // namespace
+
 TEST(CreatureMindModel, StartingLessonIsAnEnemyVillagerGoodToEat)
 {
 	const auto lesson = creature_mind_model::StartingLesson();
@@ -1458,7 +1465,10 @@ TEST(CreatureMindModel, StartingLessonIsAnEnemyVillagerGoodToEat)
 	EXPECT_EQ(lesson.belief.Value(Attribute::VillagerJob), 0u);
 	EXPECT_FALSE(lesson.belief.Value(Attribute::Tribe).has_value());
 	EXPECT_FLOAT_EQ(lesson.feedback, 0.8f);
-	EXPECT_EQ(lesson.saved[0], 2);
+	EXPECT_EQ(lesson.lessonKind, 2);
+	EXPECT_EQ(lesson.action, 0);
+	EXPECT_EQ(lesson.belief.x, 0);
+	EXPECT_EQ(lesson.belief.z, 0);
 }
 
 TEST(CreatureMindModel, StartingLessonMakesEverythingGoodToEat)
@@ -1466,16 +1476,16 @@ TEST(CreatureMindModel, StartingLessonMakesEverythingGoodToEat)
 	creature_desires::Desires desires;
 	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
 	creature_mind_model::TeachStartingLesson(learnt, k_HungerAttributes);
-	const auto& episodes = learnt.episodes[0][static_cast<size_t>(Desire::Hunger)];
+	const auto& episodes = learnt.episodes[k_ActOnTree][static_cast<size_t>(Desire::Hunger)];
 	ASSERT_EQ(episodes.size(), 1u);
 	// One example makes the tree one leaf, so each thing scores as the example does. The feedback 0.8 is within a
 	// quarter of the 0.6 step, which comes first.
-	const auto& tree = learnt.trees[0][static_cast<size_t>(Desire::Hunger)];
+	const auto& tree = learnt.trees[k_ActOnTree][static_cast<size_t>(Desire::Hunger)];
 	EXPECT_FLOAT_EQ(creature_tree::Evaluate(tree, Thing(k_Food, 0)), 0.6f);
 	EXPECT_FLOAT_EQ(creature_tree::Evaluate(tree, Thing(k_Villager, 1)), 0.6f);
 	// The other trees stay empty
-	EXPECT_TRUE(learnt.episodes[1][static_cast<size_t>(Desire::Hunger)].empty());
-	EXPECT_TRUE(learnt.episodes[0][static_cast<size_t>(Desire::Anger)].empty());
+	EXPECT_TRUE(learnt.episodes[k_ActivityTree][static_cast<size_t>(Desire::Hunger)].empty());
+	EXPECT_TRUE(learnt.episodes[k_ActOnTree][static_cast<size_t>(Desire::Anger)].empty());
 }
 
 TEST(CreatureMindModel, StartingLessonOnlyWhenNothingIsKnownAboutWhatToEat)
@@ -1485,23 +1495,23 @@ TEST(CreatureMindModel, StartingLessonOnlyWhenNothingIsKnownAboutWhatToEat)
 	creature_mind_model::Learn(learnt, creature_mind_model::TreeKind::ActOn, Desire::Hunger,
 	                           {.belief = Thing(k_Food, 0), .feedback = -1.0f}, k_HungerAttributes);
 	creature_mind_model::TeachStartingLesson(learnt, k_HungerAttributes);
-	const auto& episodes = learnt.episodes[0][static_cast<size_t>(Desire::Hunger)];
+	const auto& episodes = learnt.episodes[k_ActOnTree][static_cast<size_t>(Desire::Hunger)];
 	ASSERT_EQ(episodes.size(), 1u);
 	EXPECT_FLOAT_EQ(episodes[0].feedback, -1.0f);
 	// A second time adds nothing either
 	auto fresh = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
 	creature_mind_model::TeachStartingLesson(fresh, k_HungerAttributes);
 	creature_mind_model::TeachStartingLesson(fresh, k_HungerAttributes);
-	EXPECT_EQ(fresh.episodes[0][static_cast<size_t>(Desire::Hunger)].size(), 1u);
+	EXPECT_EQ(fresh.episodes[k_ActOnTree][static_cast<size_t>(Desire::Hunger)].size(), 1u);
 }
 
 TEST(CreatureMindModel, LearningRebuildsTrees)
 {
 	creature_desires::Desires desires;
 	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(10, 0.0f), {});
-	creature_mind_model::Learn(learnt, creature_mind_model::TreeKind::ActOn, Desire::Hunger,
+	creature_mind_model::Learn(learnt, creature_mind_model::TreeKind::Activity, Desire::Hunger,
 	                           {.belief = Thing(k_Food, 0), .feedback = -1.0f}, k_HungerAttributes);
-	creature_mind_model::Learn(learnt, creature_mind_model::TreeKind::ActOn, Desire::Hunger,
+	creature_mind_model::Learn(learnt, creature_mind_model::TreeKind::Activity, Desire::Hunger,
 	                           {.belief = Thing(k_Villager, 1), .feedback = 1.0f}, k_HungerAttributes);
 	const auto& tree = learnt.trees[0][static_cast<size_t>(Desire::Hunger)];
 	EXPECT_LT(creature_tree::Evaluate(tree, Thing(k_Food, 0)), 0.0f);

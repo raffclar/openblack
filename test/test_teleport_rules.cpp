@@ -127,3 +127,11 @@ TEST(TeleportRules, ACreatureFadesOutAndInOverTwoSeconds)
 	EXPECT_FLOAT_EQ(CreatureFadeIn(19, 20), 0.95f);
 	EXPECT_FLOAT_EQ(CreatureFadeIn(0, 20), 0.0f);
 }
+
+TEST(TeleportRules, ACarriedCreatureComesOutWhereTheStonesPlaceGoesThroughMetres)
+{
+	using openblack::map_coords::MapCoords;
+	// Through metres and back, these map positions change by one unit; this one does not
+	EXPECT_EQ(CreatureArrival({.x = 8090858, .z = 8388870}), (MapCoords {.x = 8090857, .z = 8388871}));
+	EXPECT_EQ(CreatureArrival({.x = 0x01000001, .z = 0x00FC131F}), (MapCoords {.x = 0x01000002, .z = 0x00FC131F}));
+}

@@ -482,7 +482,9 @@ TEST(PhysicsTurn, DustPuffsGrowThenShrinkOverASecond)
 	EXPECT_EQ(turn::DustPuffFrame(puff), 16 + ((15 + 1) & 15));
 	EXPECT_TRUE(turn::AdvanceDustPuff(puff, 0.25f));
 	EXPECT_FLOAT_EQ(puff.position.x, 0.25f);
-	EXPECT_FALSE(turn::AdvanceDustPuff(puff, 0.25f));
+	// At an age of exactly its life it stays, and it goes only after that
+	EXPECT_TRUE(turn::AdvanceDustPuff(puff, 0.25f));
+	EXPECT_FALSE(turn::AdvanceDustPuff(puff, 0.0625f));
 	EXPECT_FLOAT_EQ(turn::LandingPuffSize(1.0f), 2.0f);
 	EXPECT_FLOAT_EQ(turn::LandingPuffSize(10.0f), 5.0f);
 }

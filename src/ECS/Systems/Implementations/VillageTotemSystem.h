@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <unordered_map>
 
 #include "ECS/Components/VillageTotem.h"
@@ -41,6 +42,7 @@ public:
 
 	[[nodiscard]] std::optional<entt::entity> TotemOf(entt::entity picked) const override;
 	bool Grip(entt::entity totem, PlayerNames player) override;
+	[[nodiscard]] std::string_view WhyNotGrip(entt::entity totem, PlayerNames player) const override;
 	void Slide(float upPixels, float screenHeight) override;
 	void LetGo() override;
 	[[nodiscard]] std::optional<entt::entity> GetGripped() const override;

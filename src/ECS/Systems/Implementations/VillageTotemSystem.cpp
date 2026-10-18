@@ -12,6 +12,7 @@
 #include "VillageTotemSystem.h"
 
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include <glm/gtx/euler_angles.hpp>
@@ -317,25 +318,48 @@ std::optional<entt::entity> VillageTotemSystem::TotemOf(entt::entity picked) con
 	return found;
 }
 
-bool VillageTotemSystem::Grip(entt::entity totem, PlayerNames player)
+std::string_view VillageTotemSystem::WhyNotGrip(entt::entity totem, PlayerNames player) const
 {
-	auto& registry = _world->Entities();
-	auto* totemComponent = registry.TryGet<VillageTotem>(totem);
-	const auto town = TownOf(totem);
-	if (totemComponent == nullptr || town == entt::null)
+	const auto& registry = _world->Entities();
+	const auto* totemComponent = registry.Valid(totem) ? registry.TryGet<const VillageTotem>(totem) : nullptr;
+	const auto town = totemComponent != nullptr ? TownOf(totem) : entt::null;
+	if (town == entt::null)
 	{
-		return false;
+		return "the totem has no town";
 	}
 	const auto& townComponent = registry.Get<const Town>(town);
-	// Only a player's own town's, standing and working, with their temple and the town's worship site built
-	if (townComponent.owner != player || !_world->Built(totemComponent->townCentre) || !_world->TempleBuilt(player) ||
-	    !registry.Valid(townComponent.worshipSite) || !_world->Built(townComponent.worshipSite))
+	if (townComponent.owner != player)
+	{
+		return "the totem's town is not the player's";
+	}
+	// The totem stands built when its town centre stands built
+	if (!village_totem::Functional(_world->Built(totemComponent->townCentre), _world->LifeOf(totem)))
+	{
+		return "the totem does not work: it is not built, or it has three quarters of its life or less";
+	}
+	if (!_world->HeartBuilt(player))
+	{
+		return "the heart of the player's temple is not built";
+	}
+	if (!registry.Valid(townComponent.worshipSite) || !_world->Built(townComponent.worshipSite))
+	{
+		return "the town's worship site is not built";
+	}
+	return {};
+}
+
+bool VillageTotemSystem::Grip(entt::entity totem, PlayerNames player)
+{
+	// Only a totem of the player's own town that works, with the heart of their temple and the town's worship site
+	// built
+	if (!WhyNotGrip(totem, player).empty())
 	{
 		return false;
 	}
+	auto& totemComponent = _world->Entities().Get<VillageTotem>(totem);
 	// The hand takes it at the share it was last set to
-	totemComponent->held = totemComponent->ease.target;
-	totemComponent->gripped = true;
+	totemComponent.held = totemComponent.ease.target;
+	totemComponent.gripped = true;
 	_gripped = totem;
 	Place(totem);
 	// The player's creature sees the hand take the totem first, then the living near it react to the hand
@@ -440,6 +464,6 @@ std::optional<VillageTotemSystemInterface::HandHold> VillageTotemSystem::GetHand
 	return HandHold {
 	    .position = {position.x, y, position.z},
 	    .tilt = village_totem::HandTiltAt(y),
-	    .closure = village_totem::GripClosure(_world->SizeOf(totemComponent.icon).radius),
+	    .closure = village_totem::GripClosure(_world->SizeOf(totemComponent.icon).height),
 	};
 }

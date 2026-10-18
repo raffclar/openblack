@@ -75,6 +75,8 @@ TEST(TempleHeart, TheHeartIsHarmedByTheBlowsMomentumUpToAFifth)
 {
 	EXPECT_FLOAT_EQ(Harm({0.0f, 3.0f, 4.0f}, 1000.0f), 0.025f);
 	EXPECT_FLOAT_EQ(Harm({0.0f, 30.0f, 40.0f}, 1000.0f), 0.2f);
+	// Each step rounds to a float, so the result is one unit below the value that double maths gives
+	EXPECT_EQ(Harm({9.120686f, 8.95655f, -8.868973f}, 128.22311f), 0.009974764f);
 }
 
 TEST(TempleHeartBeam, EveryTwoSecondsAtTheSameTargetAndAtOnceAtANewOne)

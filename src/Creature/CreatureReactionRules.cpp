@@ -75,7 +75,7 @@ uint16_t creature_reaction::LookAngle(glm::vec2 way)
 
 bool creature_reaction::BlocksInspecting(const Facts& facts)
 {
-	return facts.thingIsSelf || facts.thingGone || !facts.thingIsCreature || facts.orderedByPlayer || facts.hasOpponent ||
+	return facts.thingIsSelf || facts.thingGone || !facts.thingIsCreature || facts.planForced || facts.hasOpponent ||
 	       facts.planActsOnThing;
 }
 
@@ -252,6 +252,11 @@ bool creature_reaction::BodyFree(const BodyState& body)
 	return body.life != 0.0f && !body.heldByHand && !body.teleporting;
 }
 
+bool creature_reaction::PlanFree(const PlanState& plan)
+{
+	return !plan.forced || plan.ledByLeash;
+}
+
 bool creature_reaction::OfAnotherGod(PlayerNames caster, PlayerNames creatureOwner)
 {
 	return caster != PlayerNames::NEUTRAL && caster != creatureOwner;
@@ -260,4 +265,13 @@ bool creature_reaction::OfAnotherGod(PlayerNames caster, PlayerNames creatureOwn
 bool creature_reaction::MadeByIconWithoutSeed(bool madeBySpellIcon, bool seedLinked)
 {
 	return madeBySpellIcon && !seedLinked;
+}
+
+std::optional<glm::vec2> creature_reaction::LeashCastCentre(const LeashCastState& state)
+{
+	if (!state.leashOn || !state.knowsMiracle)
+	{
+		return std::nullopt;
+	}
+	return state.pickedPoint;
 }

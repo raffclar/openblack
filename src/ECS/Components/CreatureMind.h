@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <map>
 #include <memory>
 #include <optional>
@@ -137,6 +139,10 @@ struct CreatureMindState
 	/// An order forced the plan. A forced plan counts at its end only when the order said so.
 	bool planForced {false};
 	bool forcedPlanCounts {false};
+	/// The leash leads the plan: an order on the leash, or a walk back into its area while the leash is on. A forced
+	/// plan that the leash leads does not stop the creature from taking up reactions. The mark goes when the creature
+	/// stops what it does, or when the leash comes off.
+	bool ledByLeash {false};
 	/// An emergency started, and the creature did not stop what it does since then. It does not react to things then.
 	bool emergencyRunning {false};
 
@@ -201,6 +207,8 @@ struct CreatureMindState
 	/// resource has been looked at
 	std::shared_ptr<const creaturemind::MindFileData> pendingFile;
 	bool resourceChecked {false};
+	/// A script made the creature from a mind file: once it takes up the file, it knows every leash and is fully grown
+	bool growUpAfterFile {false};
 	/// What scripts taught it or made it forget before its learning was set up or while a mind file waits, kept to be
 	/// applied in order over what it learns from the file
 	struct Teaching
@@ -236,6 +244,14 @@ struct CreatureMindState
 	std::optional<uint32_t> clearingWaySerial;
 	/// Where the creature walks on to after it clears a thing out of its way
 	glm::vec2 walkOnTo {0.0f};
+	/// The cast that waits for the end of a reaction to a nasty miracle on the leash: the thing to cast at and the
+	/// miracle
+	struct LeashCast
+	{
+		entt::entity thing {entt::null};
+		uint32_t miracle {0};
+	};
+	std::optional<LeashCast> leashCast;
 };
 
 } // namespace openblack::ecs::components

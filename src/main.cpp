@@ -83,9 +83,18 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
 		("profile-folder", "For developers and tests: keep the players' profiles and their creatures in this folder rather than the Profiles folder in the working folder, as on a first start when it is empty. Without it, a developer's or a tool's run (a level, the testbed, a scenario, --skip-opening, --skip-logos, the inspector, a seed, a video, a number of frames or a screenshot asked for) plays as a profile of its own, kept apart, and never sees the new player's box.", cxxopts::value<std::string>())
 		("seed", "Start every random number the game draws from this seed and pin the date the game reads (1 January 2001), so that two runs of the same scenario with a fixed frame time and the same input go the same way.", cxxopts::value<uint32_t>())
+		("sim-fast", "Tools: the fast simulation mode. The game plays its frames one after the other as fast as the processor can and draws none of them (see --sim-draw-every). Each frame takes the fixed game time of --sim-frame-ms, 20 ms by default in this mode, so the turns are the same as at the normal speed.")
+		("sim-frame-ms", "Tools: each frame takes this fixed game time in milliseconds (1 to 1000) from the first frame. Without --sim-fast, each frame also waits until it took this time in real time, so the run goes at the normal speed.", cxxopts::value<uint32_t>())
+		("sim-draw-every", "Tools: with --sim-fast, draw one frame in this many (0, the default, for no frame).", cxxopts::value<uint32_t>()->default_value("0"))
+		("sim-until-turn", "Tools: stop the game once it gets to this game turn.", cxxopts::value<uint32_t>())
 	;
 #if defined(OPENBLACK_INSPECTOR)
 	options.add_options()
+		("sim-record", "Tools: write the run record to this file, as JSON lines: the player's creature, the counts, the times and the problems that the stability checks find. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
+		("sim-record-every", "Tools: with --sim-record, write a record each time this many game turns go by.", cxxopts::value<uint32_t>()->default_value("100"))
+		("sim-start-paused", "Tools: each land starts paused, before any of its frames, for a tool that steps the run through the inspector.")
+		("sim-hash-parts", "Tools: with --sim-record, also keep in each record the hash of the transforms of the entities of each component, to find what made two runs part.")
+		("sim-limits", "Tools: with --sim-record, the JSON table of how long a plan or an activity can stay the same (tools/sim/stuck_limits.json).", cxxopts::value<std::string>())
 		("inspect-port", "Start the debug inspector on this port of 127.0.0.1 (0 for any free port), for agents and tools to query and control the game. The player's mouse and keyboard are kept out while a client is connected; Ctrl+Alt+Shift+F12 takes the game back.", cxxopts::value<uint16_t>())
 		("inspect-lock-input", "With --inspect-port, keep the player's mouse and keyboard out from the start, as for a headless scenario run.")
 		("inspect-allow-player-input", "With --inspect-port, never keep the player's mouse and keyboard out.")
@@ -208,6 +217,31 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		{
 			args.seed = result["seed"].as<uint32_t>();
 		}
+		if (result.count("sim-fast") != 0 || result.count("sim-frame-ms") != 0 || result.count("sim-until-turn") != 0)
+		{
+			openblack::sim_run::Request simulation {};
+			simulation.settings.fast = result["sim-fast"].as<bool>();
+			simulation.settings.drawEvery = result["sim-draw-every"].as<uint32_t>();
+			if (result.count("sim-frame-ms") != 0)
+			{
+				const auto ms = result["sim-frame-ms"].as<uint32_t>();
+				if (ms == 0 || ms > openblack::sim_run::k_LongestFrameMs)
+				{
+					throw cxxopts::exceptions::parsing("--sim-frame-ms is a whole number of milliseconds from 1 to 1000");
+				}
+				simulation.frameMs = ms;
+			}
+			else if (simulation.settings.fast)
+			{
+				simulation.frameMs = openblack::sim_run::k_DefaultFastFrameMs;
+			}
+			simulation.settings.paceToWallClock = !simulation.settings.fast && simulation.frameMs.has_value();
+			if (result.count("sim-until-turn") != 0)
+			{
+				simulation.settings.untilTurn = result["sim-until-turn"].as<uint32_t>();
+			}
+			args.simulation = simulation;
+		}
 
 		if (result.count("screenshot-frame") != 0)
 		{
@@ -276,6 +310,25 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    .sequence =
 			        result.count("fight-autopilot-sequence") != 0 ? result["fight-autopilot-sequence"].as<std::string>() : "",
 			};
+		}
+		if (result.count("sim-record") != 0)
+		{
+			if (!args.simulation.has_value())
+			{
+				args.simulation = openblack::sim_run::Request {};
+			}
+			args.simulation->recordPath = std::filesystem::path(result["sim-record"].as<std::string>());
+			args.simulation->recordEvery = std::max(1u, result["sim-record-every"].as<uint32_t>());
+			args.simulation->hashParts = result["sim-hash-parts"].as<bool>();
+			args.simulation->startPaused = result["sim-start-paused"].as<bool>();
+			if (result.count("sim-limits") != 0)
+			{
+				args.simulation->limitsPath = std::filesystem::path(result["sim-limits"].as<std::string>());
+			}
+			if (!args.inspectPort.has_value())
+			{
+				args.inspectPort = 0;
+			}
 		}
 		if (result.count("fight-transcript-dir") != 0)
 		{

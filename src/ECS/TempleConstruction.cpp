@@ -26,6 +26,7 @@
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
+#include "ECS/Archetypes/VillageTotemArchetype.h"
 #include "ECS/BuildingConstruction.h"
 #include "ECS/BuildingSiteList.h"
 #include "ECS/BuildingSiteRules.h"
@@ -41,6 +42,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
@@ -53,8 +55,12 @@
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TempleHeartOf.h"
+#include "ECS/ThingMapPlace.h"
+#include "ECS/TownCentreParts.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
 #include "Game.h"
@@ -262,6 +268,29 @@ void construction::CloseTownsSite(entt::entity building, entt::entity town)
 namespace
 {
 
+/// A town centre that its town finished gets its totem and its stone hands, when it has no totem yet
+void StartTownCentre(entt::entity building)
+{
+	auto& registry = Entities();
+	const auto* info = world_objects::AbodeInfoOf(building);
+	if (info == nullptr)
+	{
+		return;
+	}
+	bool hasTotem = false;
+	registry.Each<const VillageTotem>(
+	    [&hasTotem, building](const VillageTotem& totem) { hasTotem = hasTotem || totem.townCentre == building; });
+	if (!town_centre_parts::PartsWhenFinished(info->abodeType == AbodeType::TownCentre, hasTotem))
+	{
+		return;
+	}
+	archetypes::VillageTotemArchetype::Create(building, *info);
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().CentreWorking(building);
+	}
+}
+
 /// A building is finished: no longer under construction, its site gone. A temple's heart is whole again.
 void Finish(entt::entity building)
 {
@@ -283,6 +312,8 @@ void Finish(entt::entity building)
 	}
 	else
 	{
+		// A finished town centre gets its totem and its stone hands, which show the miracles its town offers
+		StartTownCentre(building);
 		// A finished graveyard starts working
 		graveyards::StartsWorking(building);
 		// A finished crèche starts working
@@ -394,6 +425,13 @@ entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesir
 	const auto temple =
 	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, 0.0f);
 	registry.Get<Temple>(temple).town = planned.townId;
+	// The temple and its heart take the exact map position of the plan
+	const auto place = thing_map_place::Of(registry, plan);
+	thing_map_place::Keep(registry, temple, place);
+	if (const auto heart = temple_heart::Of(registry, temple); heart != entt::null)
+	{
+		thing_map_place::Keep(registry, heart, place);
+	}
 	// Move the footpaths of the plan to the heart. Then remove the plan.
 	villager_footpath::HandOverFootpaths(plan, temple);
 	registry.Destroy(plan);

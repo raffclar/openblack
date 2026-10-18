@@ -19,29 +19,45 @@
 #include <string_view>
 #include <vector>
 
+#include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/CreatureBody.h"
+#include "3D/LandIslandInterface.h"
+#include "Common/GUtilsDistance.h"
+#include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureFriendship.h"
 #include "Creature/CreatureHelp.h"
+#include "Creature/CreatureKiss.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureReactionRules.h"
+#include "Creature/CreatureRig.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreaturePartner.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreatureExplorationLand.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "Locator.h"
+#include "ObjectMeasures.h"
+#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 using creature_desires::Desire;
+namespace land = openblack::ecs::creature_exploration_land;
 
 namespace
 {
@@ -50,6 +66,8 @@ constexpr std::string_view k_ObeyCreatureAction = "ObeyCreature";
 /// The actions of dying and of lying dead for good: a creature that does either, or did either last, refuses
 constexpr std::string_view k_DieAction = "Die";
 constexpr std::string_view k_DeadForeverAction = "DeadForever";
+/// The height of a creature of size one
+constexpr float k_FriendHeightOfSizeOne = 15.0f;
 /// The priority of the plan of a partner that obeys the asker, in the planner's units
 constexpr float k_ObeyPriority = 1.0f * creature_planner::k_PriorityScale;
 
@@ -97,12 +115,18 @@ bool CreatureMindSystem::RequestPartner(entt::entity asker, entt::entity asked, 
 	    askedMind->planner.current.has_value() ? askedMind->planner.current->action : askedMind->planner.lastAction;
 	const bool dead = action < tables->actions.size() &&
 	                  (tables->actions[action].name == k_DieAction || tables->actions[action].name == k_DeadForeverAction);
+	// A creature in a fight has its opponent as its partner until the fight is over
 	const auto* askedLink = registry.TryGet<const CreaturePartner>(asked);
+	const auto* askedFight = registry.TryGet<const CreatureFighting>(asked);
+	const auto askedPartner = creature_friendship::PartnerNow(
+	    askedLink != nullptr ? std::optional(entt::to_integral(askedLink->partner)) : std::nullopt,
+	    askedFight != nullptr && registry.Valid(askedFight->opponent) ? std::optional(entt::to_integral(askedFight->opponent))
+	                                                                  : std::nullopt);
 	const auto availability = creature_friendship::AvailabilityOf({
 	    .dead = dead,
 	    .scriptControlled = registry.AllOf<ScriptControlled>(asked),
 	    .askerScriptControlled = registry.AllOf<ScriptControlled>(asker),
-	    .partner = askedLink != nullptr ? std::optional(entt::to_integral(askedLink->partner)) : std::nullopt,
+	    .partner = askedPartner,
 	    .asker = entt::to_integral(asker),
 	});
 	// The asked creature weighs its desires about the asker, as it sees it now
@@ -266,11 +290,27 @@ void CreatureMindSystem::KeepJointActions()
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> ended;
-	registry.Each<const CreaturePartner>([&](entt::entity creature, const CreaturePartner& link) {
+	registry.Each<CreaturePartner>([&](entt::entity creature, CreaturePartner& link) {
 		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-		// The joint action stops when the creature took up another agenda, or its agenda came to an end
-		if (mind == nullptr || !registry.Valid(link.partner) || mind->idle.serial != link.agenda ||
-		    (link.agendaRunning && !AgendaRunning(*mind)))
+		if (mind == nullptr || !registry.Valid(link.partner))
+		{
+			ended.push_back(creature);
+			return;
+		}
+		const auto& idle = mind->idle;
+		const auto turn = creature_friendship::JointTurnOf({
+		    .otherAgenda = idle.serial != link.agenda,
+		    .hadStepsLeft = link.agendaRunning,
+		    .hasStepsLeft = AgendaRunning(*mind),
+		    .endedWithOrder =
+		        !idle.gaveUp && !idle.agenda.empty() && idle.agenda.back().kind == creature_mind::Step::Kind::Order,
+		    .endSeen = link.endSeen,
+		});
+		if (turn == creature_friendship::JointTurn::EndsNextTurn)
+		{
+			link.endSeen = true;
+		}
+		else if (turn == creature_friendship::JointTurn::Ends)
 		{
 			ended.push_back(creature);
 		}
@@ -308,5 +348,229 @@ void CreatureMindSystem::NoteAttention(entt::entity creature, CreatureMindState&
 	{
 		creature_friendship::ChangeAttention(creature_learning::AttitudeTo(mind.learnt->creatures, entt::to_integral(other)),
 		                                     creature_friendship::k_AttentionStep);
+	}
+}
+
+namespace
+{
+/// The field nearest the creature, at any distance, that the creature believes in
+std::optional<creature_plan_actions::Situation::FoodPile> NearestBelievedField(const ecs::Registry& registry,
+                                                                               entt::entity creature, glm::vec3 from)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr)
+	{
+		return std::nullopt;
+	}
+	std::optional<creature_plan_actions::Situation::FoodPile> nearest;
+	float nearestDistance = std::numeric_limits<float>::max();
+	for (const auto& belief : mind->beliefs.InListOrder())
+	{
+		const auto thing = belief.thing;
+		const auto* at =
+		    registry.Valid(thing) && registry.AllOf<Field>(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
+		if (at == nullptr)
+		{
+			continue;
+		}
+		const float distance =
+		    gutils::GetDistanceInMetres(glm::vec2(from.x, from.z), glm::vec2(at->position.x, at->position.z));
+		if (distance < nearestDistance)
+		{
+			nearestDistance = distance;
+			nearest = {.pile = entt::to_integral(thing), .point = glm::vec2(at->position.x, at->position.z)};
+		}
+	}
+	return nearest;
+}
+
+/// Where the head bone of the creature is in the world, as its body is posed now
+std::optional<glm::vec3> HeadOf(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* self = registry.TryGet<const Creature>(creature);
+	const auto* body = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	if (self == nullptr || body == nullptr || transform == nullptr || !rigs.Contains(creature::GetRigId(self->species)))
+	{
+		return std::nullopt;
+	}
+	const auto& points = rigs.Handle(creature::GetRigId(self->species))->actionPoints;
+	if (!points.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	return glm::vec3(creature::PosedBone(points->head, body->boneMatrices, placement)[3]);
+}
+} // namespace
+
+void CreatureMindSystem::SituateFriends(entt::entity creature, creature_plan_actions::Situation& situation)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (mind == nullptr || transform == nullptr || !mind->desires.has_value())
+	{
+		return;
+	}
+	const auto& desires = *mind->desires;
+	situation.water = desires.desires.at(static_cast<size_t>(Desire::Water)).value;
+	situation.pooDesire = desires.desires.at(static_cast<size_t>(Desire::Poo)).value;
+	situation.tiredness = desires.desires.at(static_cast<size_t>(Desire::Tiredness)).value;
+	const auto sadDesire = creature_desires::DesireOfSource(desires, creature_desires::sources::k_Sadness);
+	situation.sadness = sadDesire.has_value()
+	                        ? creature_desires::SourceValue(desires.desires.at(static_cast<size_t>(*sadDesire)),
+	                                                        creature_desires::sources::k_Sadness)
+	                              .value_or(0.0f)
+	                        : 0.0f;
+	// The nearest town at any distance, when the creature believes something about it. It wants to attack it when the
+	// town is more useful to its anger than to its compassion.
+	const auto town = mind_detail::NearestTown(registry, transform->position);
+	if (town == entt::null || mind->beliefs.Find(town) == nullptr)
+	{
+		return;
+	}
+	situation.attackNearestTown = ActivityUsefulness(creature, *mind, Desire::Compassion, town) <
+	                              ActivityUsefulness(creature, *mind, Desire::Anger, town);
+}
+
+void CreatureMindSystem::SituateFriend(entt::entity creature, const creature_plan_actions::Executor& executor,
+                                       entt::entity friendly, creature_plan_actions::Situation& situation)
+{
+	using creature_plan_actions::Build;
+	switch (executor.build)
+	{
+	case Build::BeHappyWithFriend:
+	case Build::PooWithFriend:
+	case Build::SitWithFriend:
+	case Build::SleepWithFriend:
+	case Build::DrinkWithFriend:
+	case Build::HelpTownWithFriend:
+	case Build::AttackTownWithFriend:
+	case Build::KissFriend:
+	case Build::TalkToFriend:
+	case Build::TellFriendAJoke:
+	case Build::DanceWithFriend:
+	case Build::ArgueWithFriend:
+	case Build::MopeAboutWithFriend:
+	case Build::ShowOffToFriend:
+	case Build::GetAttentionFromFriend:
+	case Build::TellCreatureToSodOff:
+	case Build::ExamineOtherCreatureWithFriend:
+	case Build::SitOnTopOfHillWithFriend:
+	case Build::EatFromFieldWithFriend:
+	case Build::PlayThrowingGameWithFriend:
+	case Build::GiveFriendToy:
+	case Build::ShowFriendCitadel:
+		break;
+	default:
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(friendly) ? registry.TryGet<const Creature>(friendly) : nullptr;
+	const auto* at = body != nullptr ? registry.TryGet<const Transform>(friendly) : nullptr;
+	const auto* self = registry.TryGet<const Transform>(creature);
+	if (at == nullptr || self == nullptr)
+	{
+		return;
+	}
+	situation.friendly = creature_plan_actions::Situation::Friend {
+	    .point = glm::vec2(at->position.x, at->position.z),
+	    .height = k_FriendHeightOfSizeOne * ShownSize(*body),
+	    .position = at->position,
+	    .radius = object_measures::TwoDRadius(registry, friendly),
+	};
+	const auto selfPoint = glm::vec2(self->position.x, self->position.z);
+	// It sees the friend when the friend is near, or near for the height of the friend
+	situation.seesFriend = creature_mind::CanSee(glm::distance(self->position, at->position), situation.friendly->height);
+	switch (executor.build)
+	{
+	case Build::SitWithFriend:
+		// A clear place about the point halfway between the two, with nothing standing in it
+		situation.clearArea =
+		    mind_detail::ClearAreaFor(registry, creature, selfPoint + (situation.friendly->point - selfPoint) * 0.5f,
+		                              creature_mind::SitTogetherRadius(situation.height, situation.friendly->height), false);
+		break;
+	case Build::SleepWithFriend:
+		// A clear place about the creature itself
+		situation.clearArea =
+		    mind_detail::ClearAreaFor(registry, creature, selfPoint,
+		                              creature_mind::SleepTogetherRadius(situation.height, situation.friendly->height), false);
+		break;
+	case Build::DrinkWithFriend:
+		// The coast nearest the creature, and the sea nearest that coast, by its map of the land
+		situation.explorePlace = land::FindPlace(creature, creature_exploration::Kind::Coast, selfPoint, false);
+		situation.exploreSea = situation.explorePlace.has_value()
+		                           ? land::FindPlace(creature, creature_exploration::Kind::Sea, *situation.explorePlace, false)
+		                           : std::nullopt;
+		break;
+	case Build::KissFriend:
+		// Each kisser stands the mean of the two kissing distances from the point halfway between them
+		if (Locator::creatureAnimationSystem::has_value())
+		{
+			auto& bodies = Locator::creatureAnimationSystem::value();
+			const auto lips = bodies.KissPointsOf(creature);
+			const auto friendLips = bodies.KissPointsOf(friendly);
+			if (lips.has_value() && friendLips.has_value())
+			{
+				situation.kissingDistance = creature_kiss::MeanKissingDistance(*lips, *friendLips);
+				SPDLOG_LOGGER_DEBUG(
+				    spdlog::get("game"),
+				    "Creature {} kisses creature {} from {:.2f} each side (lips {:.2f} {:.2f} {:.2f} and {:.2f} "
+				    "{:.2f} {:.2f})",
+				    entt::to_integral(creature), entt::to_integral(friendly), *situation.kissingDistance, lips->high.y,
+				    lips->low.y, lips->high.z, friendLips->high.y, friendLips->low.y, friendLips->high.z);
+			}
+		}
+		break;
+	case Build::SitOnTopOfHillWithFriend:
+	{
+		// A clear place on the hill nearest the creature, by its map of the land, big enough for the two
+		const auto hill = land::FindPlace(creature, creature_exploration::Kind::Hill, selfPoint, false);
+		situation.clearArea = hill.has_value()
+		                          ? mind_detail::ClearAreaFor(
+		                                registry, creature, *hill,
+		                                creature_mind::HillTogetherRadius(situation.radius, situation.friendly->radius), false)
+		                          : std::nullopt;
+		break;
+	}
+	case Build::EatFromFieldWithFriend:
+		situation.friendsField = NearestBelievedField(registry, creature, self->position);
+		break;
+	case Build::ShowOffToFriend:
+		if (situation.home.has_value())
+		{
+			const float ground = Locator::terrainSystem::has_value()
+			                         ? Locator::terrainSystem::value().GetHeightAt(*situation.home)
+			                         : self->position.y;
+			situation.homePlace = glm::vec3(situation.home->x, ground, situation.home->y);
+		}
+		break;
+	case Build::ShowFriendCitadel:
+		situation.head = HeadOf(registry, creature);
+		break;
+	case Build::HelpTownWithFriend:
+	case Build::AttackTownWithFriend:
+	{
+		// The nearest town at any distance, with a storage pit, when the creature believes something about the town
+		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+		const auto town = mind_detail::NearestTown(registry, self->position);
+		const auto pit = town != entt::null ? ecs::construction::StoragePitOf(town) : std::nullopt;
+		const auto* townAt = town != entt::null ? registry.TryGet<const Transform>(town) : nullptr;
+		if (mind == nullptr || !pit.has_value() || townAt == nullptr || mind->beliefs.Find(town) == nullptr)
+		{
+			break;
+		}
+		situation.friendsTown = creature_mind::FriendsTown {
+		    .town = entt::to_integral(town),
+		    .pit = entt::to_integral(*pit),
+		    .townPoint = glm::vec2(townAt->position.x, townAt->position.z),
+		    .pitRadius = object_measures::TwoDRadius(registry, *pit),
+		};
+		break;
+	}
+	default:
+		break;
 	}
 }

@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "Animals/AnimalRules.h"
 #include "Magic/FlockMiracleRules.h"
 
@@ -243,8 +244,11 @@ TEST(AnimalRules, FormationSlots)
 	EXPECT_EQ(fifth.row, -2);
 	EXPECT_EQ(fifth.column, 2);
 	// A slot about the leader is as far as its row and column say
-	const auto goal = animals::FormationGoal({0.0f, 0.0f}, {-10.0f, 0.0f}, {.row = -3, .column = 0});
-	EXPECT_NEAR(glm::length(goal), 30.0f, k_Epsilon);
+	const glm::ivec2 leader {map_coords::ToFixed(1000.0f), map_coords::ToFixed(1000.0f)};
+	const glm::ivec2 follower {map_coords::ToFixed(990.0f), map_coords::ToFixed(1000.0f)};
+	const auto goal = animals::FormationGoal(leader, follower, {.row = -3, .column = 0});
+	const glm::vec2 offset {map_coords::ToMetres(goal.x) - 1000.0f, map_coords::ToMetres(goal.y) - 1000.0f};
+	EXPECT_NEAR(glm::length(offset), 30.0f, 1e-3f);
 }
 
 TEST(AnimalRules, AKilledAnimalFallsAndLiesInItsKindsClips)

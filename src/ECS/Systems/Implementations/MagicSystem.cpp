@@ -30,6 +30,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/WaterRings.h"
+#include "Animals/FishFarmRules.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
@@ -46,6 +47,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/Ball.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -56,7 +58,9 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
+#include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicPile.h"
@@ -71,6 +75,7 @@
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
@@ -79,6 +84,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureSight.h"
+#include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
@@ -106,7 +112,9 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/TempleHeartPassOn.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/WorshipSites.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Hand/HandGrabRules.h"
 #include "Help/HelpProfile.h"
@@ -229,6 +237,12 @@ std::optional<magic::EffectReceiver> ReceiverOf(entt::entity entity)
 			receiver.height = size.y;
 		}
 	}
+	// A fish farm has no model: it reaches its own radius across the land, and has no height
+	if (registry.AllOf<FishFarm>(entity))
+	{
+		receiver.radius = fish_farm::k_Radius;
+		receiver.height = 0.0f;
+	}
 	if (const auto* info = InfoOfLiving(entity))
 	{
 		receiver.life = LifeOf(entity);
@@ -245,7 +259,7 @@ std::optional<magic::EffectReceiver> ReceiverOf(entt::entity entity)
 		receiver.alignmentType = heart.alignmentType;
 		receiver.crushable = ecs::world_objects::CanBeCrushed(entity);
 	}
-	else if (const auto* objectInfo = ecs::world_objects::InfoOf(entity))
+	else if (const auto* objectInfo = ecs::world_objects::EffectInfoOf(entity))
 	{
 		// Every object loses life to a crush or a hit by its own defence, but a field: crushing or hitting it takes nothing
 		if (!registry.AnyOf<Field>(entity))
@@ -255,6 +269,12 @@ std::optional<magic::EffectReceiver> ReceiverOf(entt::entity entity)
 		receiver.defence = magic::EffectDefence::From(*objectInfo);
 		receiver.alignmentType = objectInfo->alignmentType;
 		receiver.crushable = ecs::world_objects::CanBeCrushed(entity);
+		// A worship site takes effects round its middle, by a radius of its own
+		if (registry.AllOf<WorshipSite>(entity))
+		{
+			receiver.middle = ecs::worship_site::CentreOnLand(transform->position, transform->rotation, transform->scale.x);
+			receiver.radius = ecs::worship_site::k_EffectRadius;
+		}
 	}
 	else
 	{
@@ -451,19 +471,36 @@ bool GameMagicWorld::ApplyEffect(entt::entity object, const magic::EffectValues&
 std::vector<entt::entity> GameMagicWorld::ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values,
                                                         const magic::EffectSource& source)
 {
-	// Everything in the cells round the point that the effect reaches takes it
-	auto receivers = ReceiversIn(magic::EffectCellsAround(point, values.radius));
-	// A creature takes some effects its own way, such as a heal in a fight
-	std::erase_if(receivers, [&](const magic::EffectReceiver& receiver) {
-		return magic::Reaches(values, point, receiver) && magic_living::TakesEffectItsOwnWay(receiver.entity, values, source);
-	});
+	// Everything in the cells round the point that the effect reaches takes it, one after another. A temple's heart or a
+	// worship site gives it to what its heart chooses, which takes it as it is when its turn comes.
+	const auto receivers = ReceiversIn(magic::EffectCellsAround(point, values.radius));
 	const auto& info = Locator::infoConstants::value();
-	const auto outcomes = magic::ApplyEffectToAll(values, point, receivers, info.alignment,
-	                                              info.player.applyEffectAlignmentChangeAddition, AlignmentOf(source));
-	Apply(values, outcomes, source);
+	const float casterAlignment = AlignmentOf(source);
+	const bool breaksBuildings = values.IsDestructive();
+	ecs::GamePhysicsHooksWorld hooksWorld;
 	std::vector<entt::entity> reached;
-	reached.reserve(outcomes.size());
-	std::ranges::transform(outcomes, std::back_inserter(reached), &magic::EffectOutcome::entity);
+	for (const auto& receiver : receivers)
+	{
+		if (!magic::Reaches(values, point, receiver))
+		{
+			continue;
+		}
+		const auto taker = ecs::temple_heart_pass_on::TakerOf(hooksWorld, receiver.entity, breaksBuildings);
+		// A creature takes some effects its own way, such as a heal in a fight
+		if (!EntityRegistry().Valid(taker) || magic_living::TakesEffectItsOwnWay(taker, values, source))
+		{
+			continue;
+		}
+		const auto takerReceiver = ReceiverOf(taker);
+		if (!takerReceiver.has_value())
+		{
+			continue;
+		}
+		const std::array outcomes {magic::ApplyEffectTo(values, *takerReceiver, info.alignment,
+		                                                info.player.applyEffectAlignmentChangeAddition, casterAlignment)};
+		Apply(values, outcomes, source);
+		reached.push_back(taker);
+	}
 	return reached;
 }
 
@@ -482,7 +519,8 @@ std::vector<magic::EffectReceiver> GameMagicWorld::ReceiversIn(const magic::Cell
 			{
 				if (!registry.Valid(entity) ||
 				    !registry.AnyOf<Creature, Villager, Animal, Tree, Abode, Feature, Pot, Field, DeadTree, MobileStatic,
-				                    MobileObject, AnimatedStatic, BigForest>(entity))
+				                    MobileObject, AnimatedStatic, BigForest, Flowers, SpellDispenser, WorshipSite, Temple,
+				                    StreetLantern, FishFarm, Ball>(entity))
 				{
 					continue;
 				}
@@ -538,16 +576,20 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 	{
 		cry = guidance::TownAttackVoice {.fire = *fire, .attacker = CryAttacker(registry, source)};
 	}
+	ecs::GamePhysicsHooksWorld hooksWorld;
 	for (const auto& outcome : outcomes)
 	{
 		if (!registry.Valid(outcome.entity))
 		{
 			continue;
 		}
+		// The heat of an effect goes where heat that comes to the object goes: a temple's heart or a worship site asks
+		// the heart, and beams as heat breaks buildings, also when the effect has no heat
+		const auto heatTaker = ecs::temple_heart_pass_on::TakerOf(hooksWorld, outcome.entity, true);
 		// A burn heats what it reaches, which may catch and burn; a negative one, as water's, cools what is hot
-		if (burn != 0.0f && Locator::fireSystem::has_value())
+		if (burn != 0.0f && Locator::fireSystem::has_value() && registry.Valid(heatTaker))
 		{
-			Locator::fireSystem::value().ApplyBurn(outcome.entity, burn, source.player);
+			Locator::fireSystem::value().ApplyBurn(heatTaker, burn, source.player);
 		}
 		if (outcome.lifeAfter.has_value())
 		{
@@ -1480,6 +1522,11 @@ void MagicSystem::Delete(entt::entity entity)
 
 void MagicSystem::ProcessTurn()
 {
+	// The hum of an armed seed follows the hand one time each turn, before the audio turn
+	if (_holdLoop != entt::null && Locator::audio::has_value())
+	{
+		Locator::audio::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
+	}
 	if (!Locator::infoConstants::has_value() || !Locator::particleSystem::has_value())
 	{
 		return;
@@ -1571,11 +1618,6 @@ void MagicSystem::Update(float /*seconds*/)
 	auto& registry = EntityRegistry();
 	TakeGestures();
 	KeepCreatureSpellSounds();
-	// The hum of an armed seed follows the hand
-	if (_holdLoop != entt::null && Locator::audio::has_value())
-	{
-		Locator::audio::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
-	}
 	// A seed out of the hand stays with its miracle, shown over it or not
 	ShowSeedsWithSpells();
 	// The held seed itself is placed in the hand as the hand is posed, and its in-hand effect with it
@@ -2102,7 +2144,8 @@ void MagicSystem::StartHoldLoop()
 		                                        {.position = _hand.handPosition,
 		                                         .playType = audio::PlayType::Repeat,
 		                                         .owner = *_held,
-		                                         .voiceOwner = audio::VoiceOwner::OwnSound});
+		                                         .voiceOwner = audio::VoiceOwner::OwnSound,
+		                                         .follows = audio::Follows::Place});
 	}
 }
 
@@ -2597,8 +2640,9 @@ bool MagicSystem::AbsorbFireBall(entt::entity ball)
 	{
 		return false;
 	}
-	// Every fireball takes the table's first row
-	seed.power *= 1.0f + Info().magicFireBall.at(0).catchIncreaseFactor;
+	// The catch uses the row of the fireball table that the ball uses
+	const auto row = EntityRegistry().Get<const MagicFireBall>(ball).infoRow;
+	seed.power *= 1.0f + Info().magicFireBall.at(row).catchIncreaseFactor;
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: the fire seed took in fireball #{}, its power now {:.4f}",
 	                    entt::to_integral(ball), seed.power);
 	if (Locator::fireSystem::has_value())

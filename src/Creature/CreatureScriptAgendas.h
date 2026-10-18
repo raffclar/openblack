@@ -32,9 +32,11 @@ namespace openblack::creature_mind
 /// for a day
 constexpr float k_FaceThingSeconds = 2.0f;
 constexpr float k_LookForeverSeconds = 86400.0f;
-/// Looking at a thing without going up to it: watching its foot for 1.1 seconds and up to 1.2 more
+/// Looking at a thing without going up to it: watching its foot for 1.1 seconds and a draw of up to 1.2 more, cut to
+/// whole game turns
 constexpr float k_LookButDontApproachSeconds = 1.1f;
 constexpr float k_LookButDontApproachExtraSeconds = 1.2f;
+constexpr uint32_t k_LookButDontApproachTurnsPerSecond = 10;
 /// Looking at the camera lasts until more than five whole seconds of turns have gone by (sixty turns at ten a second)
 constexpr float k_LookAtCameraSeconds = 5.0f;
 /// Pointing at a thing lasts five seconds, and at the camera one; pointing never lasts less than a second
@@ -47,7 +49,9 @@ constexpr float k_FacePlaceSeconds = 0.1f;
 /// Turning to face a thing and watching it for a day
 [[nodiscard]] std::vector<Step> LookForever(uint32_t thing);
 /// Turning to face a thing and watching its foot a little while; chance is from 0 to 1 and picks how long
-[[nodiscard]] std::vector<Step> LookButDontApproach(uint32_t thing, float chance);
+[[nodiscard]] std::vector<Step> LookButDontApproach(uint32_t thing, float extraSeconds);
+/// The length of that look: the extra time and 1.1 seconds, cut to whole game turns
+[[nodiscard]] float LookButDontApproachSeconds(float extraSeconds);
 /// Watching the camera, curious, turning to it when it is more than a quarter turn away, for six seconds or until the
 /// camera is overhead or more than 100 away, for a creature with a player; done at once for one without
 [[nodiscard]] std::vector<Step> LookAtCamera(bool hasPlayer);
@@ -77,6 +81,9 @@ constexpr uint32_t k_CutSceneConfusedLots = 3;
 /// Sitting down where a script says: it walks there until within its own radius, turns to face the place, turns to
 /// face down the slope, then sits for ten seconds and up to five more
 [[nodiscard]] std::vector<Step> SitDownAt(uint32_t place, glm::vec2 point, float radius, const Random& random);
+/// The numbers of the game's steps that a saved game keeps for a walk to a point and for a turn to face a point
+constexpr uint32_t k_SavedTurnToFacePoint = 7;
+constexpr uint32_t k_SavedMoveToPoint = 8;
 /// Turning to face a point, watching it, as a script asks
 [[nodiscard]] std::vector<Step> FaceForScript(glm::vec3 point);
 /// Turning to face a thing, as a script asks: it turns, holding still two seconds once it does

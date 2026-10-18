@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -75,6 +76,7 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSkin.h"
 #include "Creature/CreatureSpells.h"
+#include "Creature/LeashOrders.h"
 #include "ECS/AbodeKnock.h"
 #include "ECS/BoatLaunchRules.h"
 #include "ECS/Components/Abode.h"
@@ -88,6 +90,8 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureHair.h"
+#include "ECS/Components/CreatureHandGlows.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DestructionGhost.h"
@@ -126,12 +130,14 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -139,14 +145,17 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Graphics/BoneBudget.h"
+#include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
 #include "Graphics/DrawOrder.h"
+#include "Graphics/DrawWindow.h"
 #include "Graphics/FizzDrawOrder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
 #include "Graphics/HandLight.h"
+#include "Graphics/HandReflection.h"
 #include "Graphics/HandWaterGlow.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/LandShadowBake.h"
@@ -175,6 +184,7 @@
 #include "Renderer.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Scenery/ObjectDrawList.h"
 #include "Windowing/WindowingInterface.h"
 #include "entt/locator/locator.hpp"
 
@@ -638,6 +648,10 @@ Renderer::~Renderer() noexcept
 	{
 		bgfx::destroy(toBgfx(*_menuCreatureInstance));
 	}
+	if (_filmCreatureInstance.has_value())
+	{
+		bgfx::destroy(toBgfx(*_filmCreatureInstance));
+	}
 	for (auto& query : _glareQueries)
 	{
 		if (bgfx::isValid(query))
@@ -675,6 +689,7 @@ void SetSceneViewRects(RenderPass viewId, glm::u16vec2 resolution) noexcept
 	}
 	if (viewId == RenderPass::Reflection)
 	{
+		setRect(RenderPass::ReflectionMirrored);
 		setRect(RenderPass::UnderSea);
 	}
 	if (const auto translucentId = TranslucentPassOf(viewId); translucentId != viewId)
@@ -706,9 +721,11 @@ void Renderer::ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolutio
 	{
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::Advisors), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 	}
-	// What is under the sea's surface is drawn over the mirrored world, into the same target
+	// The hand and the creature that the game mirrors are drawn over the mirrored world with its depth cleared, as the
+	// game draws its mirrored land without depth. What is under the sea's surface is then drawn over it all.
 	if (viewId == RenderPass::Reflection)
 	{
+		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::ReflectionMirrored), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::UnderSea), BGFX_CLEAR_NONE);
 	}
 	// And what blends in it is drawn over it after
@@ -764,7 +781,48 @@ namespace
 float CreatureLandLightScale(RenderPass viewId)
 {
 	constexpr float k_ReflectionLight = 0.5f;
-	return viewId == RenderPass::Reflection || viewId == RenderPass::ReflectionTranslucent ? k_ReflectionLight : 1.0f;
+	return viewId == RenderPass::Reflection || viewId == RenderPass::ReflectionTranslucent ||
+	               viewId == RenderPass::ReflectionMirrored
+	           ? k_ReflectionLight
+	           : 1.0f;
+}
+
+/// Whether the game mirrors a creature's body in the sea this frame (see creature_reflection). The block under the
+/// creature is tested against the main camera's view. Its box reaches below the water when the land is mirrored.
+bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
+{
+	if (!Locator::playerSystem::has_value() || !Locator::terrainSystem::has_value() || !Locator::camera::has_value())
+	{
+		return false;
+	}
+	const auto& players = Locator::playerSystem::value();
+	creature_reflection::Situation situation {
+	    .primaryCreature = players.GetPrimaryCreature(players.GetLocalPlayer()) == entity,
+	    .height = position.y,
+	    .fizz = fizz,
+	};
+	const auto under = creature_reflection::BlockUnder(position);
+	if (situation.primaryCreature && under.has_value())
+	{
+		const auto& blocks = Locator::terrainSystem::value().GetBlocks();
+		const auto block = std::ranges::find_if(blocks, [&under](const LandBlock& candidate) {
+			return candidate.GetLndBlock() != nullptr && candidate.GetBlockPosition() == *under;
+		});
+		if (block != blocks.end())
+		{
+			const auto& cells = block->GetLndBlock()->cells;
+			const object_draw_list::Block box {
+			    .corner = block->GetMapPosition(),
+			    .highestAltitude = std::ranges::max(cells, {}, &lnd::LNDCell::altitude).altitude,
+			    .reflected = detail_level::For(Locator::config::value().detailLevel).landReflection,
+			};
+			const auto& camera = Locator::camera::value();
+			situation.onBlock = true;
+			situation.blockInView = object_draw_list::BlockInView(camera.GetViewProjectionMatrix(), camera.GetNearClip(), box);
+			situation.blockDistance = object_draw_list::BlockDistance(camera.GetOrigin(), box);
+		}
+	}
+	return creature_reflection::Shown(situation);
 }
 
 /// Binds the submeshes of a creature's variant meshes that match one of its base mesh as the second to fourth vertex
@@ -853,13 +911,15 @@ void BindCreatureSpellLooks(const ShaderProgram& program)
 
 /// How a creature fizzing out of sight is drawn in the pass at hand: xy how far the static has slid across its skin, z
 /// 0 for none, 1 for its depth through the static, with w the least alpha the static must have, or 2 for its body over
-/// that depth, blended at w. With z 0, w is how frozen it is.
-glm::vec4 CreatureSpellLookOf(const std::optional<RendererInterface::L3DMeshSubmitDesc::Fizz>& fizz, float freeze)
+/// that depth, blended at w. With z 0, w is how frozen it is. With z -1, the mesh shows no ice, also where its instance
+/// is frozen.
+glm::vec4 CreatureSpellLookOf(const std::optional<RendererInterface::L3DMeshSubmitDesc::Fizz>& fizz, float freeze,
+                              bool iceShown)
 {
 	using Pass = RendererInterface::L3DMeshSubmitDesc::Fizz::Pass;
 	if (!fizz.has_value())
 	{
-		return {0.0f, 0.0f, 0.0f, freeze};
+		return {0.0f, 0.0f, iceShown ? 0.0f : -1.0f, iceShown ? freeze : 0.0f};
 	}
 	const bool depth = fizz->pass == Pass::Depth;
 	const float w = depth ? static_cast<float>(creature_fizz_look::StaticThreshold(fizz->level)) / 255.0f
@@ -1181,7 +1241,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			// Set for every mesh, so that none is drawn with another's fizz
 			if (has(MeshUniform::CreatureSpellLook))
 			{
-				const auto u_creatureSpellLook = CreatureSpellLookOf(desc.fizz, desc.freeze);
+				const auto u_creatureSpellLook = CreatureSpellLookOf(desc.fizz, desc.freeze, desc.iceShown);
 				setUniform(MeshUniform::CreatureSpellLook, &u_creatureSpellLook);
 			}
 			if (has(MeshUniform::ShadeAt))
@@ -1222,8 +1282,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (has(MeshUniform::SeaClip))
 			{
 				// The sea mirrors only what stands above it
-				const bool reflection =
-				    desc.viewId == RenderPass::Reflection || desc.viewId == RenderPass::ReflectionTranslucent;
+				const bool reflection = desc.viewId == RenderPass::Reflection ||
+				                        desc.viewId == RenderPass::ReflectionTranslucent ||
+				                        desc.viewId == RenderPass::ReflectionMirrored;
 				// and a mesh cut by a plane shows nothing below it
 				float height = desc.cutBelow.value_or(0.0f);
 				if (reflection)
@@ -2002,6 +2063,21 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components
 	submitDesc.groundShadows = false;
 	submitDesc.sortDepth = bodyDesc.sortDepth;
 	submitDesc.modelLight = bodyDesc.modelLight;
+	// A body that has colours of its own alone, and no light of the land, gives its eyes the same colours. Its eyelids
+	// take its colour times the skin's colour under them, over 255 in whole steps, and its added colour.
+	std::optional<L3DMeshSubmitDesc::ObjectLook> lidLook;
+	if (!bodyDesc.landLightAndHaze)
+	{
+		submitDesc.landLightAndHaze = false;
+		submitDesc.objectLook = bodyDesc.objectLook;
+		submitDesc.alwaysLit = bodyDesc.alwaysLit;
+		if (bodyDesc.objectLook.has_value())
+		{
+			const auto skin = glm::round(glm::clamp(eyes.lidColour, 0.0f, 1.0f) * 255.0f);
+			lidLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::floor(bodyDesc.objectLook->colour * skin / 255.0f),
+			                                         .alpha = bodyDesc.objectLook->alpha};
+		}
+	}
 	auto tint = glm::vec4(bodyDesc.tint.r, bodyDesc.tint.g, bodyDesc.tint.b, 0.0f);
 	// Frozen, each piece takes the body's freeze: its light tinted towards the icy colour and a sheen of ice over it
 	if (freeze > 0.0f)
@@ -2016,6 +2092,13 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components
 	const bool fizzing = creature_fizz_look::EyesFizz(fizz, freeze) && Locator::creatureFizzSystem::has_value();
 	const auto scroll = fizzing ? Locator::creatureFizzSystem::value().EyeStaticScroll() : glm::vec2(0.0f);
 	auto sortDepth = fizzSortDepth;
+	// Drawn as usual, the eyeball adds the glass environment map, as each of its primitives' materials says. A fizzing or
+	// frozen eye is drawn without it.
+	const auto& textures = Locator::resources::value().GetTextures();
+	constexpr auto k_Glass = entt::hashed_string("raw/envmap_glass_fx");
+	const auto glass = k_Glass.value();
+	const auto* eyeballEnvironment =
+	    !fizzing && freeze <= 0.0f && textures.Contains(glass) ? &*textures.Handle(glass) : nullptr;
 	const auto draw = [&](const L3DMesh& piece) {
 		if (!fizzing)
 		{
@@ -2042,14 +2125,35 @@ void Renderer::DrawCreatureEyes(const DrawSceneDesc& desc, const ecs::components
 		{
 			submitDesc.modelMatrices = &*eye.eyeball;
 			submitDesc.tint = tint;
+			if (eyeballEnvironment != nullptr)
+			{
+				submitDesc.program = _shaderManager->GetShader("ObjectEnvironment");
+				submitDesc.environment = eyeballEnvironment;
+			}
 			draw(*eyeball);
+			submitDesc.program = _shaderManager->GetShader("Object");
+			submitDesc.environment = nullptr;
 		}
 		if (eye.eyelid.has_value())
 		{
 			submitDesc.modelMatrices = &*eye.eyelid;
 			// Wholly frozen, the eyelids are white rather than the colour of the skin under them
-			submitDesc.tint = creature_fizz_look::EyelidsWhite(freeze) ? tint : tint * glm::vec4(eyes.lidColour, 1.0f);
+			const bool white = creature_fizz_look::EyelidsWhite(freeze);
+			if (lidLook.has_value() && !white)
+			{
+				submitDesc.objectLook = lidLook;
+				submitDesc.tint = tint;
+			}
+			else
+			{
+				submitDesc.tint = white ? tint : tint * glm::vec4(eyes.lidColour, 1.0f);
+			}
 			draw(*eyelid);
+			// The next eyeball takes the body's colours again
+			if (lidLook.has_value())
+			{
+				submitDesc.objectLook = bodyDesc.objectLook;
+			}
 		}
 	}
 }
@@ -2060,7 +2164,8 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 }
 
 void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin,
-                                RenderPass pass, glm::vec3 eye) const
+                                RenderPass pass, glm::vec3 eye, std::optional<glm::vec3> ownLight,
+                                std::optional<glm::vec3> ownAdded) const
 {
 	using ecs::components::CreatureHair;
 	const auto& textures = Locator::resources::value().GetTextures();
@@ -2091,6 +2196,9 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 	const glm::vec4 u_hairOrigin {origin, 0.0f};
 	const glm::vec4 u_hairAlphaCutOff {creature_hair::k_AlphaCutOff, 0.0f, 0.0f, 0.0f};
 	const auto u_haze = inTemple ? glm::vec4(0.0f) : _haze[0];
+	// Each strand's colour times the creature's own light over 255, plus its added colour, at most 255
+	const glm::vec4 u_hairLight {ownLight.value_or(glm::vec3(255.0f)), ownLight.has_value() ? 1.0f : 0.0f};
+	const glm::vec4 u_hairAdded {ownAdded.value_or(glm::vec3(0.0f)), 0.0f};
 	std::vector<creature_hair::RibbonVertex> ribbon;
 	for (const auto& group : hair.groups)
 	{
@@ -2168,6 +2276,8 @@ void Renderer::DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components
 		program->SetUniformValue("u_landLight", &u_landLight);
 		program->SetUniformValue("u_hairOrigin", &u_hairOrigin);
 		program->SetUniformValue("u_hairAlphaCutOff", &u_hairAlphaCutOff);
+		program->SetUniformValue("u_hairLight", &u_hairLight);
+		program->SetUniformValue("u_hairAdded", &u_hairAdded);
 		program->SetUniformValue("u_haze", &u_haze);
 		program->SetUniformValue("u_hazeColour", &_haze[1]);
 		bgfx::setVertexBuffer(0, &vertexBuffer);
@@ -3517,12 +3627,25 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 	const auto& infos = Locator::infoConstants::value().abode;
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const float scale = knocks.GetReadoutScale();
-	for (const auto abode : townData->abodes)
+	const auto origin = desc.camera->GetOrigin();
+	// Each house of the town shows its read-out when the renderer draws the house. Only the houses that this frame draws
+	// show one, in the order of the draw, and each takes its own place among what blends.
+	struct Row
 	{
+		uint32_t firstVertex;
+		uint32_t vertexCount;
+		uint32_t depth;
+	};
+	std::vector<Row> rows;
+	const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
+	for (const auto& object : drawn)
+	{
+		const auto abode = object.entity;
 		const auto* data = desc.entities.TryGet<const ecs::components::Abode>(abode);
 		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(abode);
 		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(abode);
-		if (data == nullptr || transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id))
+		if (data == nullptr || transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id) ||
+		    std::ranges::find(townData->abodes, abode) == townData->abodes.end())
 		{
 			continue;
 		}
@@ -3534,6 +3657,7 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 		auto point = transform->position;
 		point.y += meshes.Handle(mesh->id)->GetBoundingBox().Size().y + ecs::abode_knock::k_RaisedAbove;
 		const auto places = infos.at(static_cast<size_t>(data->type)).maxVillagersInAbode;
+		const auto first = static_cast<uint32_t>(vertices.size());
 		for (const auto& marker : ecs::abode_knock::Readout(places, adults, scale))
 		{
 			const auto centre = point + right * marker.offset;
@@ -3546,9 +3670,14 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 				                    k_Person + k_Uvs.at(c), abgr});
 			}
 		}
+		const auto rowCount = static_cast<uint32_t>(vertices.size()) - first;
+		if (rowCount != 0)
+		{
+			rows.push_back({.firstVertex = first, .vertexCount = rowCount, .depth = zsort::Depth(point, origin)});
+		}
 	}
 	const auto count = static_cast<uint32_t>(vertices.size());
-	const auto quads = count / 4;
+	const auto quads = rows.empty() ? 0u : std::ranges::max(rows, {}, &Row::vertexCount).vertexCount / 4;
 	bgfx::VertexLayout layout;
 	layout.begin()
 	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
@@ -3565,6 +3694,7 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 	bgfx::allocTransientVertexBuffer(&vertexBuffer, count, layout);
 	bgfx::allocTransientIndexBuffer(&indexBuffer, quads * 6);
 	std::memcpy(vertexBuffer.data, vertices.data(), count * sizeof(Vertex));
+	// The quads of a row, counted from the row's first vertex
 	const auto indices = std::span(reinterpret_cast<uint16_t*>(indexBuffer.data), quads * 6);
 	constexpr std::array<uint16_t, 6> k_Triangles = {0, 1, 2, 2, 3, 0};
 	for (uint32_t q = 0; q < quads; ++q)
@@ -3575,13 +3705,17 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 		}
 	}
 	const auto* program = _shaderManager->GetShader("WorldTextured");
-	program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
-	program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
-	bgfx::setVertexBuffer(0, &vertexBuffer);
-	bgfx::setIndexBuffer(&indexBuffer);
-	// Blended over what is behind, both sides, tested against depth but leaving none
-	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
-	program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)));
+	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	for (const auto& row : rows)
+	{
+		program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
+		program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
+		bgfx::setVertexBuffer(0, &vertexBuffer, row.firstVertex, row.vertexCount);
+		bgfx::setIndexBuffer(&indexBuffer, 0, row.vertexCount / 4 * 6);
+		// Blended over what is behind, both sides, tested against depth but leaving none
+		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
+		program->Submit(viewId, row.depth);
+	}
 }
 
 void Renderer::DrawRain(const DrawSceneDesc& desc) const
@@ -5441,7 +5575,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	}
 }
 
-void Renderer::WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept
+bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept
 {
 	// The draws into the window keep to one pixel. The renderer makes a pipeline for each draw that has pixels.
 	for (const auto view : warm_up::k_WindowSceneViews)
@@ -5461,10 +5595,22 @@ void Renderer::WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept
 		const RenderContext::ObjectInstance hidden {.model = glm::mat4(0.0f), .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
 		_warmUpInstances = fromBgfx(bgfx::createDynamicVertexBuffer(bgfx::copy(&hidden, sizeof(hidden)), layout));
 	}
+	// Under Vulkan, one frame with all the draws can use all of the descriptor sets, so each part does some of them
+	constexpr auto k_PartedViews = [] {
+		std::array<uint16_t, warm_up::k_PartedViews.size()> views {};
+		std::ranges::transform(warm_up::k_PartedViews, views.begin(),
+		                       [](RenderPass view) { return static_cast<uint16_t>(view); });
+		return views;
+	}();
+	const auto window = WarmUpPartWindow(part, warm_up::k_DrawsPerPart);
+	const bool parted = _shaderManager->OpenDrawWindow(window.first, window.count, k_PartedViews);
 	_warmingUp = true;
 	DrawScene(drawDesc);
 	_warmingUp = false;
 	_warmUpInFrame = true;
+	const auto draws = _shaderManager->CloseDrawWindow();
+	return parted && draws.has_value() && part + 1 < warm_up::k_MaxParts &&
+	       WarmUpPartsLeft(part, *draws, warm_up::k_DrawsPerPart);
 }
 
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
@@ -5582,6 +5728,20 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		}
 		_shaderManager->SetViewOrder(translucentViewId, ViewOrder::DepthDescending);
 		_shaderManager->SetCamera(translucentViewId, *desc.camera);
+	}
+	// Outside the temple, the hand, the thing that it holds and the creature that the game mirrors in the sea are drawn
+	// over all of the mirrored world, in their order
+	const auto mirroredViewId =
+	    desc.viewId == RenderPass::Reflection && !inTemple ? RenderPass::ReflectionMirrored : desc.viewId;
+	if (mirroredViewId != desc.viewId)
+	{
+		if (desc.frameBuffer != nullptr)
+		{
+			desc.frameBuffer->Bind(mirroredViewId);
+		}
+		bgfx::touch(static_cast<bgfx::ViewId>(mirroredViewId));
+		_shaderManager->SetViewOrder(mirroredViewId, ViewOrder::DepthAscending);
+		_shaderManager->SetCamera(mirroredViewId, *desc.camera);
 	}
 	const auto cameraOrigin = desc.camera->GetOrigin();
 
@@ -5940,6 +6100,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			};
 			// The creatures are drawn with a light of their own, at every detail level
 			bool drawingCreatures = false;
+			// A thing that the game mirrors in the sea by itself is drawn in one flat colour with a colour added, and with no
+			// light, haze, snow or shadows
+			struct FlatLook
+			{
+				glm::vec3 colour;
+				glm::vec3 added;
+			};
+			std::optional<FlatLook> flatReflection;
 			const auto drawInstances = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
 			                               bool useMaterialBlending, uint32_t first, uint32_t count,
 			                               const EntityPose* pose = nullptr,
@@ -6100,9 +6268,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					                    static_cast<float>(size.x), static_cast<float>(size.y)};
 				}
 
+				if (flatReflection.has_value())
+				{
+					submitDesc.tint = glm::vec4(flatReflection->colour, 1.0f);
+					submitDesc.lightAdd = flatReflection->added;
+					submitDesc.landLightAndHaze = false;
+					submitDesc.snow = false;
+					submitDesc.groundShadows = false;
+				}
+
 				// TODO(bwrsandman): choose the correct LOD
 				DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				submitDesc.morphTargets = nullptr;
+				submitDesc.landLightAndHaze = true;
 				if (templeLit)
 				{
 					submitDesc.objectLook.reset();
@@ -6127,13 +6305,44 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.viewId = view;
 				submitDesc.sortDepth = depth;
 			};
+			// What the hand holds is mirrored with the hand, after it, so the rest of the mirrored world leaves it out
+			const auto mirroredWithHand = [&](uint32_t instance) {
+				return mirroredViewId != desc.viewId &&
+				       std::ranges::any_of(renderCtx.inHandDraws,
+				                           [instance](const auto& held) { return held.instance == instance; });
+			};
+			// Call `draw(first, count)` for each run of instances that the hand does not hold
+			const auto withoutHeld = [&](uint32_t first, uint32_t count, const auto& draw) {
+				if (mirroredViewId == desc.viewId || renderCtx.inHandDraws.empty())
+				{
+					draw(first, count);
+					return;
+				}
+				uint32_t start = first;
+				for (uint32_t instance = first; instance < first + count; ++instance)
+				{
+					if (mirroredWithHand(instance))
+					{
+						if (instance > start)
+						{
+							draw(start, instance - start);
+						}
+						start = instance + 1;
+					}
+				}
+				if (first + count > start)
+				{
+					draw(start, first + count - start);
+				}
+			};
 			// Call `draw(first, count)` for the placed instances of each segment, each in the place of its segment
 			const auto inSegments = [&](const RenderContext::InstancedDrawDesc& placers, const auto& draw) {
 				const auto starts =
 				    splitByFizz ? std::span<const uint32_t>(placers.segmentStarts) : std::span<const uint32_t>();
-				graphics::fizz_draw_order::ForEachSegment(
-				    placers.offset, placers.filled, starts,
-				    [&](uint32_t first, uint32_t count, uint32_t segment) { inSegment(segment, [&] { draw(first, count); }); });
+				graphics::fizz_draw_order::ForEachSegment(placers.offset, placers.filled, starts,
+				                                          [&](uint32_t first, uint32_t count, uint32_t segment) {
+					                                          inSegment(segment, [&] { withoutHeld(first, count, draw); });
+				                                          });
 			};
 			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own
 			const auto drawPlaced = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
@@ -6309,16 +6518,33 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.modelLight = drawn.light;
 				if (desc.viewId == RenderPass::Reflection)
 				{
-					// The sea reflects the body alone, without its eyes or hair, whole, and only until it has fizzed a
-					// fifth of the way out
-					if (creature_fizz_look::ReflectionShown(fizz))
+					// The sea reflects the body of the local player's creature alone, without its eyes or hair, whole.
+					// It does so only while the creature stands low on a near land block in view, and until it has fizzed
+					// a fifth of the way out.
+					const auto position = instance < renderCtx.instanceUniforms.size()
+					                          ? glm::vec3(renderCtx.instanceUniforms.at(instance).model[3])
+					                          : glm::vec3(0.0f);
+					// It shows none of the creature's frozen look. It comes after the hand and what the hand holds.
+					if (!copy && CreatureMirrored(entity, position, fizz))
 					{
+						flatReflection =
+						    FlatLook {.colour = creature_reflection::Colour(), .added = creature_reflection::Added()};
+						submitDesc.iceShown = false;
+						submitDesc.viewId = mirroredViewId;
+						submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Creature);
 						drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
+						submitDesc.sortDepth = 0;
+						submitDesc.viewId = desc.viewId;
+						submitDesc.iceShown = true;
+						flatReflection.reset();
 					}
 					submitDesc.modelLight.reset();
 					continue;
 				}
 				uint32_t eyesSortDepth = 0;
+				// The game lights the body as it poses it, with the posed models' rule, also while the body fizzes. The
+				// eyes keep the usual model light.
+				submitDesc.posedModelLight = true;
 				if (creature_fizz_look::Fizzing(fizz) && instance < renderCtx.instanceUniforms.size())
 				{
 					// A creature in the land's draw list takes its place in the order of the list. Any other creature
@@ -6336,6 +6562,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						drawInstances(mesh->id, placers->second, placers->second.materialBlending, instance, 1, &pose);
 					});
 				}
+				submitDesc.posedModelLight = false;
 				const float freeze = spells != nullptr ? spells->freeze : 0.0f;
 				if (const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
 				{
@@ -6350,6 +6577,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				    Locator::creatureHairSystem::value().IsShown())
 				{
 					DrawCreatureHair(desc, *hair, transform->position);
+				}
+				// The glows on its body, where its pose put them
+				if (const auto* glows = desc.entities.TryGet<const ecs::components::CreatureHandGlows>(poser);
+				    glows != nullptr && transform != nullptr)
+				{
+					DrawCreatureHandGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), *glows,
+					                      desc.camera->GetProjectionMatrix(), desc.viewId == RenderPass::Reflection,
+					                      zsort::Depth(transform->position, cameraOrigin));
 				}
 			}
 			// The creatures that the interface shows over itself, each moved for its draw to its place before the
@@ -6366,8 +6601,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 					const EntityPose pose {.bones = bones, .morphTargets = targets};
 					submitDesc.viewId = RenderPass::InterfaceCreatures;
+					// The body takes the posed models' light, as in the world
+					submitDesc.posedModelLight = true;
 					drawInstances(meshId, placers->second, placers->second.materialBlending, instance, 1, &pose, nullptr,
 					              _interfaceCreatureInstances);
+					submitDesc.posedModelLight = false;
 					if (eyes != nullptr)
 					{
 						DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
@@ -6389,7 +6627,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					const RenderContext::InstancedDrawDesc placers {0, 1, false};
 					const EntityPose pose {.bones = bones, .morphTargets = targets};
 					submitDesc.viewId = RenderPass::MenuCreature;
+					// The body takes the posed models' light, as in the world
+					submitDesc.posedModelLight = true;
 					drawInstances(meshId, placers, false, instance, 1, &pose, nullptr, _menuCreatureInstance);
+					submitDesc.posedModelLight = false;
 					if (eyes != nullptr)
 					{
 						DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
@@ -6425,6 +6666,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					{
 						continue;
 					}
+					// The body takes the posed models' light, as in the world, but not in the reflection
+					submitDesc.posedModelLight = desc.viewId != RenderPass::Reflection;
 					drawInstances(ids.base, placers, false, 0, 1, &pose, nullptr, *_warmUpInstances);
 					// And fizzing, as it comes into sight
 					if (desc.viewId != RenderPass::Reflection)
@@ -6432,6 +6675,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						drawFizzing(ids.base, placers, 0, *_warmUpInstances, pose,
 						            creature_fizz_look::Level(warm_up::k_CreatureFizz), glm::vec2(0.0f), 0);
 					}
+					submitDesc.posedModelLight = false;
 				}
 				if (desc.viewId != RenderPass::Reflection)
 				{
@@ -6647,11 +6891,42 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			}
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
+				if (mirroredWithHand(instance))
+				{
+					continue;
+				}
 				inSegment(renderCtx.fizzOrder.SegmentOf(entity), [&] {
 					drawAnimal(entity, instance, false);
 					drawVillager(entity, instance);
 					drawPosedStill(entity, instance, false);
 				});
+			}
+			// The game mirrors what the hand holds just after the hand, in its own look
+			if (mirroredViewId != desc.viewId && handReflected)
+			{
+				submitDesc.viewId = mirroredViewId;
+				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Held);
+				for (const auto& held : renderCtx.inHandDraws)
+				{
+					const auto posed =
+					    std::ranges::find(renderCtx.entityDraws, held.entity, &RenderContext::EntityDraw::entity);
+					if (posed != renderCtx.entityDraws.end())
+					{
+						drawAnimal(held.entity, held.instance, false);
+						drawVillager(held.entity, held.instance);
+						drawPosedStill(held.entity, held.instance, false);
+						continue;
+					}
+					const auto placers = renderCtx.instancedDrawDescs.find(held.mesh);
+					if (placers != renderCtx.instancedDrawDescs.end() && held.instance >= placers->second.offset &&
+					    held.instance < placers->second.offset + placers->second.filled)
+					{
+						drawInstances(held.mesh, placers->second,
+						              placers->second.translucent || placers->second.materialBlending, held.instance, 1);
+					}
+				}
+				submitDesc.sortDepth = 0;
+				submitDesc.viewId = desc.viewId;
 			}
 			// The villagers, a draw for each of their meshes, each instance posed by its own bones in the bone palette
 			if (renderCtx.bonePaletteTexture)
@@ -6713,6 +6988,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
+						if (mirroredWithHand(instance))
+						{
+							continue;
+						}
 						const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
 						submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
 						if (placers.partsByLevel)
@@ -6734,7 +7013,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				for (const auto& [entity, instance] : renderCtx.entityDraws)
 				{
-					if (instance < renderCtx.instanceUniforms.size())
+					if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
 					{
 						submitDesc.sortDepth =
 						    zsort::Depth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
@@ -6773,6 +7052,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
+						if (mirroredWithHand(instance))
+						{
+							continue;
+						}
 						const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
 						submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
 						drawInstances(meshId, placers, true, instance, 1);
@@ -6781,7 +7064,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			}
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
-				if (instance < renderCtx.instanceUniforms.size())
+				if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
 				{
 					const auto position = glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]);
 					submitDesc.sortDepth = zsort::Depth(position, cameraOrigin);
@@ -6864,11 +7147,37 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			// The mists blend over the rest, the farthest first
 			DrawMists(desc);
 
+			// The game mirrors the hand in the sea while the hand shows, wherever it is: in one flat grey, with no light
+			// and no glow, and only its front faces. Its texture alone gives its alpha.
+			if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
+			    mirroredViewId != desc.viewId && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
+			    !hand->second.hiddenFromReflection &&
+			    hand_reflection::Shown(hand->second.count > 0, meshManager.Contains(hand->first)))
+			{
+				// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
+				const bool facesTurned = desc.cullBack != renderCtx.handMirrored;
+				const auto opaqueState = submitDesc.state;
+				submitDesc.viewId = mirroredViewId;
+				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Hand);
+				submitDesc.state =
+				    (opaqueState & ~BGFX_STATE_CULL_MASK) | (facesTurned ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW);
+				auto mirrored = hand->second;
+				mirrored.additiveShare.reset();
+				mirrored.instanceAlpha = false;
+				const auto handMorph = HandMorphTargets();
+				flatReflection = FlatLook {.colour = hand_reflection::Colour(), .added = hand_reflection::Added()};
+				drawInstances(hand->first, mirrored, true, mirrored.offset, mirrored.count, nullptr,
+				              handMorph ? &*handMorph : nullptr);
+				flatReflection.reset();
+				submitDesc.state = opaqueState;
+				submitDesc.viewId = desc.viewId;
+				submitDesc.sortDepth = 0;
+			}
 			// The game draws the hand after the rest of the scene, blended by its translucent texture. Black & White
 			// culls its back faces; here both sides are drawn, the inside first so that the outside blends over it.
 			// The game's reflection of the main room has no hand in it
 			if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
-			    desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
+			    mirroredViewId == desc.viewId && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
 			    !(desc.viewId == RenderPass::Reflection && hand->second.hiddenFromReflection))
 			{
 				// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
@@ -7078,6 +7387,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				    (!Locator::cameraBookmarkSystem::has_value() || Locator::cameraBookmarkSystem::value().IsEnabled()) &&
 				    (!Locator::cinematicDirectorSystem::has_value() ||
 				     Locator::cinematicDirectorSystem::value().IsInterfaceActive());
+				// The markers of leash orders show only while the land shows
+				const bool leashMarkersShown = creature_leash_orders::MarkerShown(
+				    Locator::temple::has_value() && Locator::temple::value().Active(),
+				    Locator::videoSystem::has_value() &&
+				        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld()));
 				// A warm-up draws a sprite of no size for each way that sprites blend, as the first sprites draw
 				if (_warmingUp)
 				{
@@ -7091,9 +7405,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 				}
 				registry.Each<const Sprite, const Transform>(
-				    [this, &spriteShader, &desc, translucentViewId, cameraOrigin, &registry,
-				     bookmarksShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+				    [this, &spriteShader, &desc, translucentViewId, cameraOrigin, &registry, bookmarksShown,
+				     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
 					    if (!bookmarksShown && registry.AllOf<CameraBookmark>(entity))
+					    {
+						    return;
+					    }
+					    if (!leashMarkersShown && registry.AllOf<LeashMarker>(entity))
 					    {
 						    return;
 					    }
@@ -7235,6 +7553,11 @@ void Renderer::Frame() noexcept
 	if (const auto sets = _shaderManager->FrameEnded(); sets.has_value() && !warmUp)
 	{
 		WatchDescriptorSets(*sets);
+	}
+	else if (sets.has_value())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"), "A warm-up frame took {} Vulkan descriptor sets ({} draws)", sets->sets,
+		                    sets->draws);
 	}
 	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures, _bgfxCallback->pictures);
 }

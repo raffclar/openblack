@@ -7,9 +7,13 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <ECS/Components/Abode.h>
 #include <ECS/Components/MiracleImpression.h>
+#include <ECS/Components/Temple.h>
 #include <ECS/Components/Town.h>
 #include <ECS/Registry.h>
+#include <ECS/TempleHeartOf.h>
+#include <ECS/ThingMapPlace.h>
 #include <Game.h>
 #include <LHScriptX/Script.h>
 #include <Locator.h>
@@ -73,6 +77,45 @@ VERSION(2.300000)
 LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
 CREATE_ABODE(0, "2224.63,2372.52", "CELTIC_ABODE_F", 11100, 1095, 0, 0)
 )"""");
+}
+
+TEST_F(LoadScene, a_thing_made_at_a_place_keeps_the_map_position_that_the_game_reads)
+{
+	// Far from the corner of the map, the game reads 1280.04 one unit less than the metres give
+	LoadTestScene(R""""(
+VERSION(2.300000)
+LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
+CREATE_TOWN(0, "1300.00,1300.00", "PLAYER_ONE", 0, "CELTIC")
+CREATE_ABODE(0, "1280.04,1280.04", "CELTIC_ABODE_F", 11100, 1095, 0, 0)
+)"""");
+	const auto& registry = openblack::Locator::entitiesRegistry::value();
+	size_t abodes = 0;
+	registry.Each<const openblack::ecs::components::Abode>([&](entt::entity abode, const auto&) {
+		EXPECT_EQ(openblack::ecs::thing_map_place::Of(registry, abode),
+		          (openblack::map_coords::MapCoords {.x = 8388870, .z = 8388870}));
+		++abodes;
+	});
+	EXPECT_EQ(abodes, 1u);
+}
+
+TEST_F(LoadScene, a_temple_and_its_heart_keep_the_map_position_that_the_game_reads)
+{
+	// The game makes the temple and its heart at the same map position, the script's
+	LoadTestScene(R""""(
+VERSION(2.300000)
+LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
+CREATE_CITADEL("1280.04,1280.04", 0, "PLAYER_ONE", 0, 1000)
+)"""");
+	const auto& registry = openblack::Locator::entitiesRegistry::value();
+	const openblack::map_coords::MapCoords place {.x = 8388870, .z = 8388870};
+	size_t hearts = 0;
+	registry.Each<const openblack::ecs::components::TempleHeart>([&](entt::entity heart, const auto& part) {
+		EXPECT_EQ(openblack::ecs::thing_map_place::Of(registry, heart), place);
+		EXPECT_EQ(openblack::ecs::thing_map_place::Of(registry, part.temple), place);
+		EXPECT_EQ(openblack::ecs::temple_heart::Of(registry, part.temple), heart);
+		++hearts;
+	});
+	EXPECT_EQ(hearts, 1u);
 }
 
 TEST_F(LoadScene, unknown_command_is_skipped)

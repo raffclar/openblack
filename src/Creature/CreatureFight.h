@@ -122,6 +122,8 @@ struct Arena
 /// Whether a point is not inside the range. When either fighter is not inside it, the fighters stop their moves and
 /// step back to the middle.
 [[nodiscard]] bool OutsideRange(const Arena& arena, glm::vec2 point);
+/// Whether the arena keeps the fighters from their moves: when either fighter is not inside the range
+[[nodiscard]] bool KeepsInArena(const Arena& arena, glm::vec2 self, glm::vec2 opponent);
 /// How far the body of a fighter reaches in front of its feet, from the points of its posed bones relative to its feet
 /// and the direction that it faces. It is never less than zero.
 [[nodiscard]] float ForwardExtent(std::span<const glm::vec2> bones, glm::vec2 forward);
@@ -365,6 +367,9 @@ struct MindInFight
 /// Whether the creature obeys the creature that started its fight: its desires stand still until the fight is over, or
 /// until it wins by a knock-out
 [[nodiscard]] bool ObeysInFight(const MindInFight& mind);
+/// The priority of the plan of the creature that obeys in a fight, before the planner's scale. The plan is an order, but
+/// it is not forced.
+constexpr float k_ObeyPlanPriority = 1.0f;
 /// A creature asked to fight agrees only to one between half and twice its own height, not while it lies dead, and only
 /// when both or neither of them are under a script's control
 constexpr float k_SmallestOpponentShare = 0.5f;
@@ -646,9 +651,9 @@ struct BlowShape
 [[nodiscard]] float HeightShareOf(float blowHeight, float headHeight);
 /// Each game turn a blow is tested at thirty times through a span of the animation from where it was at the turn
 /// before. The span is the turn's time scaled down for a bigger creature, (1.6 - 0.425 size) of it, in whole
-/// milliseconds.
+/// milliseconds. When a script set real time, the span is the turn's time.
 constexpr int32_t k_BlowTests = 30;
-[[nodiscard]] int32_t TestSpanMs(float turnMs, float size);
+[[nodiscard]] int32_t TestSpanMs(float turnMs, float size, bool realTime);
 /// Only the tests within 0.6 of that span of the blow's land time, either way, count, in whole milliseconds
 [[nodiscard]] int32_t TestWindowMs(int32_t spanMs);
 /// The animation times a blow is tested at in a turn, from the time at the turn before, that fall within the window
@@ -744,6 +749,11 @@ struct StepLengths
 /// Whether the living around the winner see a fight won: only when a blow knocked the loser out and the winner has a
 /// player. A loser that a miracle or a loss of life knocked out gives no such sight.
 [[nodiscard]] bool FightWonIsSeen(bool byBlow, bool winnerHasPlayer);
+/// The priority of the winner's plan after a knock out, before the planner's scale
+constexpr float k_WinPlanPriority = 1.0f;
+/// Whether the winner's plan after a knock out is forced. It is not forced when a blow knocked the loser out, and it is
+/// forced when a miracle or a loss of life knocked the loser out. Both are orders.
+[[nodiscard]] bool WinPlanForced(bool byBlow);
 /// After a fight that ended otherwise, the creature with more life is happy and the other sad. When the two have the
 /// same life, both are sad.
 [[nodiscard]] size_t Response(float life, float otherLife);

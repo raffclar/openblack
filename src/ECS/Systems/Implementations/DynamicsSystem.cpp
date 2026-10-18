@@ -40,6 +40,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/MapPlace.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -214,7 +215,6 @@ void DynamicsSystem::ResetSimulation()
 	_inTurnUpdate = false;
 	_soundPairs.Clear();
 	_dust.clear();
-	_followingSounds.clear();
 	_creatureBoxes.clear();
 	_hitObject = entt::null;
 	_objectWhichHit = entt::null;
@@ -763,6 +763,12 @@ void DynamicsSystem::SyncObject(const PhysicsEntry& entry, Place place)
 		break;
 	case Place::Kept:
 		break;
+	}
+	// When the body moves the thing, the thing's map position comes from its new metres: it no longer keeps an exact map
+	// position
+	if (place != Place::Kept && registry.AllOf<MapPlace>(entry.entity))
+	{
+		registry.Remove<MapPlace>(entry.entity);
 	}
 	registry.SetDirty();
 }
@@ -1385,12 +1391,8 @@ void DynamicsSystem::AttemptCollisionSound(PhysicsEntry& entry)
 	{
 		const auto level = turn::CollisionLevel(entry.impact, infoWeight, hitterType == SoundCollisionType::Grain);
 		const auto keys = turn::CollisionKeys(level, static_cast<int32_t>(hitterType), static_cast<int32_t>(hitType));
-		const auto played = _world->PlayCollisionSound(keys, hitter, centre);
 		// The sound follows the thing that made it, unless its code says it stays where it was made
-		if (played.has_value() && played->emitter != entt::null && turn::CollisionSoundFollows(keys))
-		{
-			_followingSounds.push_back({.emitter = played->emitter, .owner = hitter});
-		}
+		_world->PlayCollisionSound(keys, hitter, centre, turn::CollisionSoundFollows(keys));
 	}
 	_soundPairs.Add(Id(hitter), Id(hit));
 }
@@ -1473,46 +1475,38 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 		registry.AssignOrReplace<PhysicsDrawPose>(entry->entity, PhysicsDrawPose {.axes = pose.axes, .origin = pose.origin});
 		drawn = true;
 	}
-	{
-		auto* random = _world->Random();
-		const auto draw = [random]() { return random != nullptr ? static_cast<int32_t>(random->CrtRand()) : 0; };
-		const auto landHeight = [this](glm::vec2 xz) { return _ground != nullptr ? _ground->HeightAt(xz) : 0.0f; };
-		// A drop of blood shows another of its frames at random each time the game drew it: at most 60 times a second
-		const bool redraw =
-		    Locator::time::has_value() && frame_pace::Due(_bloodPace, Locator::time::value().GetFrameRealTime());
-		std::erase_if(_dust, [&](turn::DustPuff& puff) {
-			if (puff.kind != turn::PuffKind::Blood)
-			{
-				return !turn::AdvanceDustPuff(puff, gameSeconds);
-			}
-			if (redraw)
-			{
-				puff.variant = draw();
-			}
-			return !turn::AdvanceBloodDrop(puff, gameSeconds, landHeight, draw);
-		});
-	}
-	// The collision sounds follow what made them while they play
-	{
-		std::erase_if(_followingSounds, [this, &registry](const FollowingSound& sound) {
-			const auto* emitter = registry.Valid(sound.emitter) ? registry.TryGet<const AudioEmitter>(sound.emitter) : nullptr;
-			if (emitter == nullptr || emitter->state == audio::AudioStatus::Stopped || !IsAvailable(sound.owner))
-			{
-				return true;
-			}
-			const auto* drawn = registry.TryGet<const PhysicsDrawPose>(sound.owner);
-			const auto* transform = registry.TryGet<const Transform>(sound.owner);
-			if (drawn != nullptr || transform != nullptr)
-			{
-				_world->MoveSound(sound.emitter, drawn != nullptr ? drawn->origin : transform->position);
-			}
-			return false;
-		});
-	}
+	AdvanceDust(gameSeconds, true);
 	if (drawn)
 	{
 		registry.SetDirty();
 	}
+}
+
+void DynamicsSystem::AdvancePuffs(float seconds)
+{
+	// The frame's own step already gave the drops of blood their frames
+	AdvanceDust(seconds, false);
+}
+
+void DynamicsSystem::AdvanceDust(float seconds, bool redrawBlood)
+{
+	auto* random = _world->Random();
+	const auto draw = [random]() { return random != nullptr ? static_cast<int32_t>(random->CrtRand()) : 0; };
+	const auto landHeight = [this](glm::vec2 xz) { return _ground != nullptr ? _ground->HeightAt(xz) : 0.0f; };
+	// A drop of blood shows another of its frames at random each time the game drew it: at most 60 times a second
+	const bool redraw =
+	    redrawBlood && Locator::time::has_value() && frame_pace::Due(_bloodPace, Locator::time::value().GetFrameRealTime());
+	std::erase_if(_dust, [&](turn::DustPuff& puff) {
+		if (puff.kind != turn::PuffKind::Blood)
+		{
+			return !turn::AdvanceDustPuff(puff, seconds);
+		}
+		if (redraw)
+		{
+			puff.variant = draw();
+		}
+		return !turn::AdvanceBloodDrop(puff, seconds, landHeight, draw);
+	});
 }
 
 void DynamicsSystem::CollectDrawFrame(particles::draw::Frame& frame) const

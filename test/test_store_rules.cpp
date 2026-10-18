@@ -26,6 +26,12 @@ TEST(StoreRules, ADeadTreesWoodIgnoresItsLife)
 	EXPECT_EQ(store_rules::DeadTreeWood(2.0f, 100, 1.0f), 200u);
 }
 
+TEST(StoreRules, ADeadTreesWoodMultipliesTheWorthFirstAndTheScaleLast)
+{
+	// 100 x 0.7 is 70 as a float, and 70 x 2.1 is 147.0; the other order gives 146.99998
+	EXPECT_EQ(store_rules::DeadTreeWood(2.1f, 100, 0.7f), 147u);
+}
+
 TEST(StoreRules, AFencesWoodGrowsWithTheCubeOfItsSize)
 {
 	EXPECT_EQ(store_rules::FenceWood(1.0f, 10, 2.0f), 80u);

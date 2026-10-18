@@ -29,6 +29,11 @@ inline constexpr float k_BoltStrength = 0.5f;
 inline constexpr int32_t k_ThunderClaps = 11;
 inline constexpr int32_t k_FirstThunderClap = 2;
 [[nodiscard]] entt::id_type ThunderSound(int32_t clap);
+/// The clap that the clock picks: the milliseconds since the machine started, over the eleven claps
+[[nodiscard]] constexpr int32_t ThunderClap(uint32_t ticks)
+{
+	return static_cast<int32_t>(ticks % static_cast<uint32_t>(k_ThunderClaps)) + k_FirstThunderClap;
+}
 
 /// A flash of lightning where it struck
 struct Flash
@@ -47,8 +52,8 @@ struct Flash
 /// A flash after `seconds` more; it goes out once it is older than k_FlashSeconds
 [[nodiscard]] Flash Advance(Flash flash, float seconds);
 
-/// How bright a flash is now, 0 to its strength: it fades from full as it ages, but flickers down to a tenth between a
-/// tenth and half of a second
+/// How bright a flash is now, 0 to its strength: it fades from full as it ages, but flickers down to a tenth when it
+/// is older than a fifth of a second and younger than half a second
 [[nodiscard]] float Brightness(const Flash& flash);
 
 /// How strongly a flash's glow lights the ground around where it struck, 0 to its strength: as Brightness, but cubed

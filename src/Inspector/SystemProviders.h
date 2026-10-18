@@ -105,6 +105,9 @@ struct CreatureSources
 	std::function<std::optional<creature_tree::Belief>(entt::entity creature, entt::entity thing)> beliefAbout;
 	/// A debug tool: the creature starts or stops to take notice of reactions; none when the inspector may not set it
 	std::function<void(entt::entity creature, bool notice)> setReactionNotice;
+	/// Whether a cell is clear for a creature to go to, and the nearest clear area so wide about a point
+	std::function<bool(entt::entity creature, int32_t x, int32_t z, bool livingBlocks)> cellClear;
+	std::function<std::optional<glm::vec2>(entt::entity creature, glm::vec2 point, float width, bool livingBlocks)> clearArea;
 };
 
 ///   creature.list                       the creatures, what each does and its strongest desire
@@ -113,6 +116,8 @@ struct CreatureSources
 ///   creature.plan    {id?}              a creature's plan and agenda
 ///   creature.reactions {id?}            whether a creature takes notice of reactions
 ///   creature.set_reactions {id?, notice} a debug tool: the creature starts or stops to take notice of reactions
+///   creature.clear_area {id?, position, width, living?}  the cells about a point that are not clear for the creature,
+///                                       and the nearest clear area so wide
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeCreatureProvider(CreatureSources sources);
 
 // The map's cells

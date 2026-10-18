@@ -24,6 +24,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
@@ -85,6 +86,11 @@ float BoneReachOf(const ecs::Registry& registry, CreatureType species)
 /// A model's half width, height and length, times the thing's scale
 std::optional<glm::vec3> HalfExtentsOf(const ecs::Registry& registry, entt::entity entity)
 {
+	// A temple's heart has the model of its temple, as the temple is scaled
+	if (const auto* heart = registry.TryGet<const TempleHeart>(entity))
+	{
+		return registry.Valid(heart->temple) ? HalfExtentsOf(registry, heart->temple) : std::nullopt;
+	}
 	const auto* transform = registry.TryGet<const Transform>(entity);
 	// A one-shot globe has no mesh of its own to draw, but it measures as the model of its dome. An altar measures as
 	// its model before the model shows.

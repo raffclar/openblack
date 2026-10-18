@@ -286,7 +286,7 @@ TEST(CreatureReactionRules, AnotherCreatureIsUrgentOnceDueALookOver)
 	facts.inspectDue = false;
 	EXPECT_EQ(rules::Priority(Reaction::ReactToCreature, facts, NoDraw), std::optional<uint8_t>(0));
 	facts.inspectDue = true;
-	for (auto busy : {&rules::Facts::thingIsSelf, &rules::Facts::orderedByPlayer, &rules::Facts::hasOpponent,
+	for (auto busy : {&rules::Facts::thingIsSelf, &rules::Facts::planForced, &rules::Facts::hasOpponent,
 	                  &rules::Facts::planActsOnThing, &rules::Facts::thingGone})
 	{
 		auto blocked = facts;
@@ -383,6 +383,24 @@ TEST(CreatureReactionRules, NoLifeTheHandOrATeleportKeepsAllReactionsOff)
 	EXPECT_FALSE(creature_reaction::BodyFree({.teleporting = true}));
 }
 
+TEST(CreatureReactionRules, AForcedPlanKeepsAllReactionsOffUnlessTheLeashLeadsIt)
+{
+	EXPECT_TRUE(creature_reaction::PlanFree({}));
+	EXPECT_FALSE(creature_reaction::PlanFree({.forced = true}));
+	// An order on the leash and a walk back on the leash are forced, but the creature still takes up reactions
+	EXPECT_TRUE(creature_reaction::PlanFree({.forced = true, .ledByLeash = true}));
+	// The leash alone changes nothing for a plan that is not forced
+	EXPECT_TRUE(creature_reaction::PlanFree({.ledByLeash = true}));
+}
+
+TEST(CreatureReactionRules, AForcedPlanBlocksLookingOverACreatureEvenWhenTheLeashLeadsIt)
+{
+	creature_reaction::Facts facts {.thingIsCreature = true, .planForced = true};
+	EXPECT_TRUE(creature_reaction::BlocksInspecting(facts));
+	facts.planForced = false;
+	EXPECT_FALSE(creature_reaction::BlocksInspecting(facts));
+}
+
 TEST(CreatureReactionRules, AnIconMiracleWithNoSeedTeachesNothing)
 {
 	// A miracle from a seed made at an icon counts while the seed is still linked to it
@@ -391,4 +409,27 @@ TEST(CreatureReactionRules, AnIconMiracleWithNoSeedTeachesNothing)
 	// A miracle that no icon made counts with or without a seed
 	EXPECT_FALSE(creature_reaction::MadeByIconWithoutSeed(false, false));
 	EXPECT_FALSE(creature_reaction::MadeByIconWithoutSeed(false, true));
+}
+
+TEST(CreatureReactionRules, TheLeashCastStartsAtThePointThatTheInterfacePicked)
+{
+	const glm::vec2 picked {1200.0f, 900.0f};
+	const auto centre = creature_reaction::LeashCastCentre({.leashOn = true, .knowsMiracle = true, .pickedPoint = picked});
+	ASSERT_TRUE(centre.has_value());
+	EXPECT_EQ(*centre, picked);
+	// Without a leash on, or without the miracle, the creature does not cast
+	EXPECT_FALSE(creature_reaction::LeashCastCentre({.leashOn = false, .knowsMiracle = true, .pickedPoint = picked}));
+	EXPECT_FALSE(creature_reaction::LeashCastCentre({.leashOn = true, .knowsMiracle = false, .pickedPoint = picked}));
+	// With no point picked, it does not cast
+	EXPECT_FALSE(creature_reaction::LeashCastCentre({.leashOn = true, .knowsMiracle = true}));
+}
+
+TEST(CreatureReactionRules, ALeashTiedToAPostStillMakesTheCreatureCastFromThePickedPoint)
+{
+	const glm::vec2 picked {300.0f, 700.0f};
+	const auto centre =
+	    creature_reaction::LeashCastCentre({.leashOn = true, .tied = true, .knowsMiracle = true, .pickedPoint = picked});
+	ASSERT_TRUE(centre.has_value());
+	// The search does not start at the post: the range and the centre are as with the leash in the hand
+	EXPECT_EQ(*centre, picked);
 }

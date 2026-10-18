@@ -19,6 +19,7 @@
 #include <utility>
 
 #include <BinkFile.h>
+#include <CM2File.h>
 #include <DanceFile.h>
 #include <DanceShapeFile.h>
 #include <EDTFile.h>
@@ -681,9 +682,15 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 		}
 	}
 
-	// The eyes and the hair sit on triangles of the meshes
+	if (const auto& points = file.GetCreatureActionPoints(); points.has_value() && points->kissTime >= 0)
+	{
+		rig->kissMs = static_cast<float>(points->kissTime);
+	}
+
+	// The eyes, the hair and the point that kisses sit on triangles of the meshes
 	const auto& eyes = file.GetCreatureEyes();
-	if (eyes.has_value() || !file.GetHairGroups().empty())
+	const auto& kiss = file.GetCreatureKissPoint();
+	if (eyes.has_value() || !file.GetHairGroups().empty() || kiss.has_value())
 	{
 		auto& fileSystem = Locator::filesystem::value();
 		std::array<std::optional<l3d::L3DFile>, CreatureRig::k_MeshCount> meshes;
@@ -705,6 +712,14 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 			rig->eyes = LoadEyes(*eyes, meshes);
 		}
 		rig->hairGroups = LoadHair(file.GetHairGroups(), meshes);
+		if (kiss.has_value())
+		{
+			if (const auto triangle = TriangleInMeshes(*kiss, meshes))
+			{
+				rig->kissPoint = CreatureRig::KissPoint {
+				    .vertices = triangle->vertices, .bones = triangle->bones, .u = kiss->u, .v = kiss->v};
+			}
+		}
 	}
 	return rig;
 }
@@ -836,6 +851,17 @@ CameraPathLoader::result_type CameraPathLoader::operator()(FromDiskTag, const st
 	}
 
 	return cameraPath;
+}
+
+FilmCameraPathLoader::result_type FilmCameraPathLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	const auto bytes = Locator::filesystem::value().ReadAll(path);
+	const auto file = cam::ReadCM2(bytes);
+	if (!file.has_value())
+	{
+		throw std::runtime_error("Unable to load film camera path");
+	}
+	return std::make_shared<FilmCameraPath>(*file);
 }
 
 CameraEditLoader::result_type CameraEditLoader::operator()(FromDiskTag, const std::filesystem::path& path) const

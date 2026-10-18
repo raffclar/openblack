@@ -39,6 +39,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/VillagerScriptRules.h"
@@ -256,7 +257,8 @@ void villager_script::SetAge(entt::entity villager, uint32_t age)
 	// Its size starts at its age's and then grows, as a newly made villager's does
 	if (auto* transform = registry.TryGet<Transform>(villager); transform != nullptr)
 	{
-		const auto start = villager_age::StartScale(setting.age, info.grownUpAge, info.ageToScale.values);
+		const auto start = villager_age::StartScale(setting.age, info.grownUpAge, info.ageToScale.values,
+		                                            villager_age::BeforeTable(info.dancingSpeed));
 		const auto grown =
 		    villager_age::GrownScale(setting.age, info.grownUpAge, info.ageToScale.values, start, [](float limit) {
 			    return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(limit) : 0.0f;
@@ -381,10 +383,11 @@ uint32_t villager_script::MoveAlongPath(LivingAction& action)
 	{
 		SetYAngle(villager, std::atan2(offset.y, offset.x));
 	}
-	// On the ground, on the land's grid
-	const glm::vec2 placed(map_coords::Quantise(point->x), map_coords::Quantise(point->y));
+	// At the map position there, on the ground
+	const auto place = map_coords::FromMetres(*point);
+	const auto placed = map_coords::ToMetres(place);
 	const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(placed) : 0.0f;
-	transform.position = glm::vec3(placed.x, height, placed.y);
+	ecs::thing_map_place::Put(registry, villager, place, height);
 	registry.SetDirty();
 	return 1;
 }

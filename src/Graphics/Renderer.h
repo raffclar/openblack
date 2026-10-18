@@ -68,6 +68,7 @@ namespace components
 {
 struct CreatureEyes;
 struct CreatureHair;
+struct CreatureHandGlows;
 } // namespace components
 } // namespace ecs
 
@@ -93,12 +94,13 @@ public:
 
 	void DrawScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void BakeLandShadows(bool drawVegetation) const noexcept final;
-	void WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept final;
+	[[nodiscard]] bool WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept final;
 	void PrepareCreatureSkins(size_t count) const noexcept final;
 	void ReleaseGpuWorkMemory() noexcept final;
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
 	void ShowInterfaceCreatures(interface_creatures::Request request) noexcept final;
 	void ShowMenuCreature(interface_creatures::MenuCreature creature) noexcept final;
+	void DrawFilmCreature(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& creature) const final;
 	void Frame() noexcept final;
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;
 	[[nodiscard]] std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept final;
@@ -238,6 +240,16 @@ private:
 	void DrawParticleFragment(const DrawSceneDesc& desc, const particles::draw::FragmentDraw& fragment, uint32_t depth) const;
 	/// A glowing shell over an object's model, by the object as it is drawn this frame
 	void DrawParticleShell(const DrawSceneDesc& desc, const particles::draw::ShellDraw& shell, uint32_t depth) const;
+	/// A glowing shell over a model at a placement, in a view (a bgfx view id), seen through a projection
+	void SubmitGlowShell(uint16_t viewId, entt::id_type meshId, const glm::mat4& model, const particles::draw::ShellDraw& shell,
+	                     const glm::mat4& projection, bool reflection, uint32_t depth) const;
+	/// The copy of the creature in the falling spell's film, in the film's view
+	void DrawFilmCopy(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown) const;
+	/// The motes, the stars and the burst of light of the falling spell's film, in the film's view
+	void DrawFilmEffects(const interface_creatures::FilmCreature& film) const;
+	/// The glows on a creature's body where its pose put them, in a view (a bgfx view id)
+	void DrawCreatureHandGlows(uint16_t viewId, const ecs::components::CreatureHandGlows& glows, const glm::mat4& projection,
+	                           bool reflection, uint32_t depth) const;
 	/// The band of a glowing shell over a part of a model, made when first drawn; nullptr for a part without one
 	[[nodiscard]] const VolumeGlowShell* GlowShellOf(entt::id_type mesh, uint32_t subMesh) const;
 	/// A frame of a particle light map as a texture of its colours, made when first stamped
@@ -421,9 +433,11 @@ private:
 	                      const L3DMeshSubmitDesc& bodyDesc, float fizz, float freeze, uint32_t fizzSortDepth) const;
 	/// A creature's strands of hair, as ribbons facing the camera blended over the scene, lit from where the creature is
 	void DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin) const;
-	/// The same, in the given pass, with the ribbons turned to the given eye, for a creature in a view of its own
+	/// The same, in the given pass, with the ribbons turned to the given eye, for a creature in a view of its own. A
+	/// creature with a look of its own gives its hair its light and added colour (0 to 255) in place of the land's.
 	void DrawCreatureHair(const DrawSceneDesc& desc, const ecs::components::CreatureHair& hair, glm::vec3 origin,
-	                      RenderPass pass, glm::vec3 eye) const;
+	                      RenderPass pass, glm::vec3 eye, std::optional<glm::vec3> ownLight = std::nullopt,
+	                      std::optional<glm::vec3> ownAdded = std::nullopt) const;
 	/// Draws the body of a creature that the interface shows: its mesh, its instance among those of the interface's
 	/// creatures, its pose, its shape and its eyes
 	using InterfaceCreatureBody =
@@ -635,6 +649,7 @@ private:
 	mutable std::optional<DynamicVertexBufferHandle> _interfaceCreatureInstances;
 	mutable std::optional<interface_creatures::MenuCreature> _menuCreature;
 	mutable std::optional<DynamicVertexBufferHandle> _menuCreatureInstance;
+	mutable std::optional<DynamicVertexBufferHandle> _filmCreatureInstance;
 	mutable bool _warnedCreatureCap {false};
 	/// Found by trial in a debug build, whose backends check the uploads: Vulkan overflowed with 65 creatures drawn and
 	/// Direct3D 12 with 850, and both held with 50 and 600
@@ -667,6 +682,10 @@ private:
 	mutable std::vector<uint32_t> _particleSpriteOrder;
 	mutable std::vector<particles::draw::Command> _particleBeforeLandCommands;
 	mutable std::vector<uint32_t> _particleBeforeLandSprites;
+	/// What the falling spell's film draws of the particles this frame, and their order
+	mutable particles::draw::Frame _filmParticleFrame;
+	mutable std::vector<particles::draw::Command> _filmParticleCommands;
+	mutable std::vector<uint32_t> _filmSpriteOrder;
 	/// The particle light maps' frames stamped so far, by light map and frame
 	mutable std::unordered_map<uint64_t, std::unique_ptr<Texture2D>> _particleLightMaps;
 	/// The glowing shells' bands made so far, by model and part; none for a part that has no triangles to glow

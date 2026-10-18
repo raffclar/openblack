@@ -41,6 +41,7 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureSaveState.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashOwnership.h"
@@ -56,6 +57,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/CreatureTarget.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Forest.h"
@@ -87,6 +89,8 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
+#include "ECS/WorldObjects.h"
 #include "Graphics/Texture2D.h"
 #include "Help/HelpProfile.h"
 #include "Input/GameActionMapInterface.h"
@@ -603,6 +607,8 @@ void LeashSystem::TakeOff(entt::entity creature)
 	{
 		mind->leash.learningInHand = false;
 		mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
+		// The leash no longer leads what the creature does
+		mind->ledByLeash = false;
 	}
 	// Off any leash but the learning leash, the desire it made dominant lets go
 	if (leash::TakingOffEndsDominantDesire(leashes->selected) && Locator::creatureMindSystem::has_value())
@@ -763,6 +769,8 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 
 	// The two tying sounds play in turn. The local player hears the leash of their own creature without a place. The
 	// leash of each other creature makes its sound at the thing, and the sound belongs to the player of that creature.
+	// That sound follows the player, who has no point in the world, so the next audio turn stops it. The emitter has no
+	// owner entity, and an emitter that follows no owner stops in the same way.
 	const auto tieSound = _secondAttachSound ? audio::SoundId::G_LeashAttach_01_2 : audio::SoundId::G_LeashAttach_01_1;
 	_secondAttachSound = !_secondAttachSound;
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -778,6 +786,7 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 		                                .position = registry.Get<const Transform>(object).position,
 		                                .voiceOwner = audio::VoiceOwner::Number,
 		                                .ownerNumber = static_cast<uint32_t>(PlayerNumber(owner)),
+		                                .follows = audio::Follows::Owner,
 		                            });
 	}
 
@@ -842,15 +851,18 @@ void LeashSystem::ConfineToHome(entt::entity creature, float radius)
 	{
 		// Its home is by its player's temple, or where it stands when there is none
 		const auto owner = registry.Get<const Creature>(creature).owner;
-		registry.Each<const Temple, const Transform>([&leashes, owner](const Temple& temple, const Transform& transform) {
-			if (temple.owner == owner && !leashes.home.has_value())
-			{
-				leashes.home = transform.position;
-			}
-		});
+		registry.Each<const Temple, const Transform>(
+		    [&registry, &leashes, owner](entt::entity entity, const Temple& temple, const Transform& transform) {
+			    if (temple.owner == owner && !leashes.home.has_value())
+			    {
+				    leashes.home = transform.position;
+				    leashes.homeOnMap = ecs::thing_map_place::Of(registry, entity);
+			    }
+		    });
 		if (!leashes.home.has_value())
 		{
 			leashes.home = registry.Get<const Transform>(creature).position;
+			leashes.homeOnMap = ecs::thing_map_place::Of(registry, creature);
 		}
 	}
 	leashes.confinementCentre = *leashes.home;
@@ -1280,6 +1292,11 @@ void LeashSystem::WalkBack(entt::entity creature)
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} walks back to ({:.1f}, {:.1f}), {:.1f} away",
 	                   entt::to_integral(creature), centre.x, centre.y, distance);
 	Force(creature, {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = std::vector {walk}});
+	// While the leash is on, the leash leads the walk back
+	if (auto* led = MindOf(registry, creature))
+	{
+		led->ledByLeash = leashes.worn.has_value();
+	}
 	// The creature keeps the place until the action of the walk ends
 	leashes.returnTo = leashes.confinementCentre;
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
@@ -1958,6 +1975,11 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} couldn't carry out the order", entt::to_integral(creature));
 		return false;
 	}
+	// The leash leads the order that the player gave
+	if (auto* led = MindOf(registry, creature))
+	{
+		led->ledByLeash = true;
+	}
 	if (desire.has_value())
 	{
 		leashes.help = CreatureLeash::Help::CurrentDesire;
@@ -2096,6 +2118,11 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	leashes.helpDesire = desire;
 	TellHelp(creature,
 	         {.kind = creature_help::Kind::CurrentDesire, .parameter = static_cast<uint32_t>(*desire), .thing = object});
+	// The leash leads the order that the player gave
+	if (mind != nullptr)
+	{
+		mind->ledByLeash = true;
+	}
 	MarkOrder(creature, object, objectAt, fight);
 	// What it is shown on the aggression and compassion leashes teaches it which desire to act on such things with
 	if (auto lessons = leash::LessonsFor(type, isCreature); mind != nullptr && !lessons.empty())
@@ -2157,6 +2184,10 @@ void LeashSystem::MarkOrder(entt::entity creature, std::optional<entt::entity> o
 		}
 	}
 	leashes.order = order;
+	// The creature keeps the point and the thing that the order aims at, for as long as it does the order
+	const float height = object.has_value() && registry.Valid(*object) ? world_objects::SizeOf(*object).height : 0.0f;
+	registry.AssignOrReplace<CreatureTarget>(
+	    creature, CreatureTarget {.point = creature_save_state::TargetPoint(point, height), .object = object, .has = true});
 	registry.SetDirty();
 }
 
@@ -2170,6 +2201,12 @@ void LeashSystem::EndOrder(entt::entity creature)
 	}
 	const auto order = *leashes->order;
 	leashes->order.reset();
+	// The creature stops the order: the point stays, but it aims at nothing now
+	if (auto* target = registry.TryGet<CreatureTarget>(creature))
+	{
+		target->object.reset();
+		target->has = false;
+	}
 	if (order.sparkles != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value() &&
 	    Locator::particleSystem::value().IsRunning(order.sparkles))
 	{
@@ -2231,8 +2268,8 @@ void LeashSystem::UpdateMarkers(float seconds)
 	auto& registry = Locator::entitiesRegistry::value();
 	_markerClockMs = std::fmod(_markerClockMs + (seconds * 1000.0f), static_cast<float>(orders::k_PulsePeriodMs));
 	const auto size = orders::MarkerSize(static_cast<uint32_t>(_markerClockMs));
-	// The footprint is a quarter turn round, in the plane facing the camera
-	const auto quarterTurn = glm::mat3(glm::rotate(-0.5f * std::numbers::pi_v<float>, glm::vec3(0.0f, 0.0f, 1.0f)));
+	// The footprint turns a quarter turn to the left, in the plane that faces the camera
+	const auto quarterTurn = glm::mat3(glm::rotate(orders::k_FootprintTurn, glm::vec3(0.0f, 0.0f, 1.0f)));
 	std::vector<std::pair<entt::entity, CreatureLeash::Order>> marked;
 	registry.Each<const CreatureLeash>([&marked](entt::entity creature, const CreatureLeash& leashes) {
 		if (leashes.order.has_value() && leashes.order->ring != entt::null)
@@ -2253,7 +2290,7 @@ void LeashSystem::UpdateMarkers(float seconds)
 		auto& footprint = registry.Get<Transform>(order.footprint);
 		footprint.position = *at;
 		footprint.rotation = quarterTurn;
-		footprint.scale = glm::vec3(size * orders::k_FootprintShare, 1.0f);
+		footprint.scale = glm::vec3(orders::FootprintSize(size), 1.0f);
 	}
 }
 

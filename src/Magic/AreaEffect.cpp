@@ -55,8 +55,9 @@ CellRange magic::EffectCellsAround(glm::vec3 point, float radius)
 
 bool magic::Reaches(const EffectValues& values, glm::vec3 point, const EffectReceiver& receiver)
 {
+	const auto middle = receiver.middle.value_or(glm::vec2(receiver.position.x, receiver.position.z));
 	// The game measures the map distance between the two places
-	const float across = gutils::GetDistanceInMetres(point, receiver.position);
+	const float across = gutils::GetDistanceInMetres(glm::vec2(point.x, point.z), middle);
 	return across <= receiver.radius + values.radius &&
 	       std::abs(point.y - receiver.position.y) <= receiver.height + values.radius;
 }

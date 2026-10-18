@@ -93,6 +93,8 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TempleHeartOf.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
@@ -171,9 +173,14 @@ bool MovedLastTurn(const ecs::Registry& registry, entt::entity thing)
 	return false;
 }
 
-/// How tall a thing is: a creature by its size, anything else by its model as the thing is scaled, and 0 without a model
+/// How tall a thing is: a creature by its size, anything else by its model as the thing is scaled, and 0 without a model.
+/// A temple's heart has the model of its temple.
 float HeightOf(const ecs::Registry& registry, entt::entity thing)
 {
+	if (const auto* heart = registry.TryGet<const ecs::components::TempleHeart>(thing))
+	{
+		return registry.Valid(heart->temple) ? HeightOf(registry, heart->temple) : 0.0f;
+	}
 	if (const auto* creature = registry.TryGet<const Creature>(thing))
 	{
 		return k_CreatureHeightOfSizeOne * ShownSize(*creature);
@@ -346,8 +353,8 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 	{
 		return kinds::k_Tree;
 	}
-	// A worship site and the altar at its head are parts of their player's temple
-	if (registry.AnyOf<WorshipSite, WorshipAltar>(thing))
+	// A temple's heart, a worship site and the altar at its head are parts of their player's temple
+	if (registry.AnyOf<TempleHeart, WorshipSite, WorshipAltar>(thing))
 	{
 		return kinds::k_CitadelPart;
 	}
@@ -444,7 +451,7 @@ void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureM
 	{
 		return;
 	}
-	const auto added = mind.beliefs.Add(thing, *kind, PlaceOf(registry, thing));
+	const auto added = mind.beliefs.Add(thing, *kind, ecs::thing_map_place::Of(registry, thing));
 	// The belief takes in the attributes of the thing now
 	if (added.belief != nullptr)
 	{
@@ -582,7 +589,8 @@ bool CreatureMindSystem::CanSteal(entt::entity creature, entt::entity thing)
 	});
 }
 
-std::optional<glm::vec3> CreatureMindSystem::BelievedPlace(const components::CreatureMindState& mind, entt::entity thing)
+std::optional<map_coords::MapCoords> CreatureMindSystem::BelievedPlace(const components::CreatureMindState& mind,
+                                                                       entt::entity thing)
 {
 	if (const auto* known = mind.beliefs.Find(thing))
 	{
@@ -689,6 +697,11 @@ void CreatureMindSystem::LookFarAbout(entt::entity creature, CreatureMindState& 
 	{
 		mind.nearestTemple = temple;
 		ComeAcross(creature, mind, temple);
+		// Then the temple's heart
+		if (const auto heart = ecs::temple_heart::Of(registry, temple); heart != entt::null)
+		{
+			ComeAcross(creature, mind, heart);
+		}
 	}
 }
 
@@ -790,13 +803,16 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 		// The things that stay put, then the things that move
 		for (const auto thing : map.GetAllInCell(cell))
 		{
-			ComeAcross(entity, mind, thing);
+			// The thing in the map's cells for a temple is the temple's heart. The creature believes in the heart and
+			// watches the heart.
+			const auto seen = ecs::temple_heart::MapThingOf(registry, thing);
+			ComeAcross(entity, mind, seen);
 			// Each thing in view that it sees may take over what it watches
-			if (thing == entity || !registry.Valid(thing))
+			if (seen == entity || !registry.Valid(seen))
 			{
 				continue;
 			}
-			const auto [inView, distance] = view(thing);
+			const auto [inView, distance] = view(seen);
 			if (!inView)
 			{
 				continue;
@@ -804,7 +820,7 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 			const auto watched = WatchedPlace(registry, mind.look);
 			const auto watchedDistance = watched.has_value() ? viewOf(*watched).second : 0.0f;
 			creature_look::Consider(
-			    mind.look, {.id = entt::to_integral(thing), .kind = LookInterestOf(registry, thing), .distance = distance},
+			    mind.look, {.id = entt::to_integral(seen), .kind = LookInterestOf(registry, seen), .distance = distance},
 			    watchedDistance, range, weights, k_TurnsPerSecond);
 		}
 	}

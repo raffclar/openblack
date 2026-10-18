@@ -76,9 +76,11 @@ void CameraZoneSystem::PlaceForceField()
 void CameraZoneSystem::FenceHit(const glm::vec3& origin, const glm::vec3& listener)
 {
 	++_fenceHits;
-	// The sound of going out of bounds, heard from where the camera is
-	audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_OutOfBounds),
-	                            {.position = listener, .voicePlayType = pack::AudioBankLoop::Once});
+	// The sound of going out of bounds, heard from where the camera is. It has no owner, so it follows the listener
+	// each turn.
+	audio::StartGameSoundEffect(
+	    static_cast<entt::id_type>(audio::SoundId::G_OutOfBounds),
+	    {.position = listener, .voicePlayType = pack::AudioBankLoop::Once, .follows = audio::Follows::Listener});
 	if (Locator::explosionSystem::has_value())
 	{
 		Locator::explosionSystem::value().AddShake(origin, k_ShakeRadius, k_ShakeStrength, k_ShakeSeconds, false);

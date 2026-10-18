@@ -234,19 +234,24 @@ std::array<glm::vec2, 4> ChainCreator::SegmentUv(int segment, int segments, int 
 	const int n = std::max(1, ((k + 1) * s / repeats) - b);
 	const int j = segment - b;
 	const int frame = fileOffset + (k == repeats - 1 ? frameOfHead : (k == 0 ? frameOfTail : 0));
-	// The slide wraps round at one repeat of the frame, never backwards
-	const float period = static_cast<float>(frameHeight) / k_SheetTexels;
-	float slid = scroll != 0.0f ? std::fmod(scroll, period) : 0.0f;
-	if (slid < 0.0f)
-	{
-		slid += period;
-	}
-	const float v0 = (static_cast<float>(frameHeight) * (static_cast<float>(j) / static_cast<float>(n)) / k_SheetTexels) + slid;
+	// The scroll goes on each corner, and then again on the whole draw
+	const float v0 =
+	    ((static_cast<float>(frameHeight) * (static_cast<float>(j) / static_cast<float>(n)) / k_SheetTexels) + scroll) + scroll;
 	const float v1 =
-	    (static_cast<float>(frameHeight) * (static_cast<float>(j + 1) / static_cast<float>(n)) / k_SheetTexels) + slid;
+	    ((static_cast<float>(frameHeight) * (static_cast<float>(j + 1) / static_cast<float>(n)) / k_SheetTexels) + scroll) +
+	    scroll;
 	const float u0 = static_cast<float>(frame * frameWidth) / k_SheetTexels;
 	const float u1 = u0 + (static_cast<float>(frameWidth) / k_SheetTexels);
 	return {glm::vec2(u0, v0), glm::vec2(u1, v0), glm::vec2(u0, v1), glm::vec2(u1, v1)};
+}
+
+float ChainCreator::ScrolledOn(float scroll, float milliseconds, float speed) const
+{
+	constexpr float k_SecondsPerMillisecond = 0.001f;
+	const float moved = (milliseconds * speed * k_SecondsPerMillisecond) + scroll;
+	const float period = static_cast<float>(frameHeight) / k_SheetTexels;
+	const float wrapped = std::fmod(moved, period);
+	return wrapped < 0.0f ? wrapped + period : wrapped;
 }
 
 void MistCreator::InitAtom(Effect& effect, Atom& atom) const

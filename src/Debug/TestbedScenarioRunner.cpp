@@ -48,9 +48,12 @@
 #include "Animals/GrazerRules.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/CustomMusicPlayerInterface.h"
+#include "Audio/GameMusic.h"
 #include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraModel.h"
+#include "Camera/DoubleClickFlight.h"
 #include "Common/FileDialog.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureActivity.h"
@@ -76,10 +79,13 @@
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
 #include "ECS/Archetypes/FishFarmArchetype.h"
+#include "ECS/Archetypes/FlowersArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
+#include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
@@ -91,6 +97,7 @@
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFriends.h"
+#include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -114,6 +121,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -124,6 +132,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
@@ -133,7 +142,10 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
+#include "ECS/Systems/CameraBookmarkSystemInterface.h"
+#include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
@@ -144,6 +156,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -177,16 +190,19 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
+#include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -221,6 +237,7 @@ using namespace openblack::testbed_scenarios;
 using openblack::ecs::archetypes::CreatureArchetype;
 using openblack::ecs::components::Creature;
 using openblack::ecs::components::CreatureAnimation;
+using openblack::ecs::components::CreatureHandGlows;
 using openblack::ecs::components::CreatureMindState;
 using openblack::ecs::components::CreatureNeeds;
 using openblack::ecs::components::Transform;
@@ -503,6 +520,11 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 		{
 			villager->life = std::clamp(*object.life, 0.0f, 1.0f);
 		}
+		// A street lantern starts with that much life
+		if (registry.AllOf<ecs::components::StreetLantern>(entity))
+		{
+			ecs::world_objects::SetLife(entity, std::clamp(*object.life, 0.0f, 1.0f));
+		}
 		// A building is hurt down to it, as anything that hurts it does, which opens a site for its repair
 		if (registry.AllOf<ecs::components::Abode>(entity))
 		{
@@ -765,7 +787,7 @@ void Runner::Start(const Scenario& scenario)
 	PlaceFootpaths(scenario, _middle);
 	if (!scenario.landScript.empty())
 	{
-		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y});
+		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y}, map_coords::FromMetres(_middle));
 		landScript.Load(std::string(scenario.landScript));
 	}
 	PlaceBirds(scenario, _middle);
@@ -894,6 +916,23 @@ void Runner::Stop()
 		Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = *_landNumberBefore;
 	}
 	_landNumberBefore.reset();
+	// The players that the scenario added go
+	if (Locator::entitiesRegistry::has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		for (const auto player : _addedPlayers)
+		{
+			if (registry.Valid(player))
+			{
+				registry.Destroy(player);
+			}
+		}
+		if (!_addedPlayers.empty() && Locator::playerSystem::has_value())
+		{
+			Locator::playerSystem::value().RegisterPlayers();
+		}
+	}
+	_addedPlayers.clear();
 	// The mouse is the player's again
 	_sweep.reset();
 	if (Locator::gameActionSystem::has_value())
@@ -1054,6 +1093,19 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		}
 		landNumber = *environment.landNumber;
 	}
+	// The other players that the scenario puts in the game
+	if (Locator::entitiesRegistry::has_value() && Locator::playerSystem::has_value())
+	{
+		for (const auto name : environment.players)
+		{
+			if (!ecs::creature_from_file::PlayerInGame(name))
+			{
+				const auto player = ecs::archetypes::PlayerArchetype::Create(name);
+				Locator::playerSystem::value().AddPlayer(player);
+				_addedPlayers.push_back(player);
+			}
+		}
+	}
 	if (environment.cursor && Locator::windowing::has_value())
 	{
 		const auto size = glm::vec2(Locator::windowing::value().GetSize());
@@ -1189,7 +1241,8 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, VillagerInfo>)
 			    {
 				    constexpr uint32_t k_AdultAge = 30;
-				    const auto villager = ecs::archetypes::VillagerArchetype::Create(position, position, type, k_AdultAge);
+				    const auto villager = ecs::archetypes::VillagerArchetype::Create(position, position, type,
+				                                                                     object.villagerAge.value_or(k_AdultAge));
 				    if (object.joinTown)
 				    {
 					    auto& registry = Locator::entitiesRegistry::value();
@@ -1237,6 +1290,11 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    }
 			    else if constexpr (std::is_same_v<T, MobileStaticInfo>)
 			    {
+				    // A lantern is made as the land scripts make it, with its light
+				    if (type == MobileStaticInfo::StreetLantern || type == MobileStaticInfo::CountryLantern)
+				    {
+					    return ecs::archetypes::StreetLanternArchetype::Create(position, type);
+				    }
 				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f, 0.0f, yaw, 0.0f, object.scale);
 			    }
 			    else if constexpr (std::is_same_v<T, AnimatedStaticInfo>)
@@ -1246,6 +1304,10 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, FishFarmInfo>)
 			    {
 				    return ecs::archetypes::FishFarmArchetype::Create(position);
+			    }
+			    else if constexpr (std::is_same_v<T, FlowersInfo>)
+			    {
+				    return ecs::archetypes::FlowersArchetype::Create(position, type, yaw, object.scale);
 			    }
 			    else
 			    {
@@ -1807,23 +1869,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		auto& totems = Locator::villageTotemSystem::value();
 		if (!totems.Grip(*totem, command.player))
 		{
-			// Say what the town lacks
-			const auto& registry = Locator::entitiesRegistry::value();
-			const auto* abode = registry.TryGet<const ecs::components::Abode>(*centre);
-			const auto& towns = registry.Context().towns;
-			const auto found = abode != nullptr ? towns.find(abode->townId) : towns.end();
-			const auto townEntity = found != towns.end() ? found->second : entt::null;
-			const auto* townComponent =
-			    registry.Valid(townEntity) ? registry.TryGet<const ecs::components::Town>(townEntity) : nullptr;
-			const auto built = [&registry](entt::entity building) {
-				return registry.Valid(building) && !registry.AllOf<ecs::components::BuildProgress>(building);
-			};
-			return fmt::format("the hand can't take hold of the totem (town {}, owner {}, centre built {}, worship site built "
-			                   "{}, temples {})",
-			                   entt::to_integral(townEntity),
-			                   townComponent != nullptr ? static_cast<int>(townComponent->owner) : -1, built(*centre),
-			                   townComponent != nullptr && built(townComponent->worshipSite),
-			                   registry.Size<ecs::components::Temple>());
+			return fmt::format("the hand can't take hold of the totem: {}", totems.WhyNotGrip(*totem, command.player));
 		}
 		totems.LetGo();
 		return "gripped and let go";
@@ -1838,6 +1884,17 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		auto& hand = Locator::handGrabSystem::value();
 		const auto why = hand.WhyNotTake(*object);
 		return hand.TakeIntoHand(*object) ? std::string("taken into the hand") : fmt::format("the hand can't take it: {}", why);
+	}
+	case Kind::AttachObjectScriptSound:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::soundTagSystem::has_value())
+		{
+			return "nothing to attach a sound to";
+		}
+		const auto sound = static_cast<entt::id_type>(command.value);
+		const auto tag = Locator::soundTagSystem::value().AttachObjectSound(*object, sound, false);
+		return fmt::format("sound {} attached to the object as tag {}", sound, entt::to_integral(tag));
 	}
 	case Kind::HandPour:
 	{
@@ -2253,7 +2310,8 @@ void Runner::Give(const Command& command)
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
-	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem)
+	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
+	    command.kind == Kind::AttachObjectScriptSound)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2300,6 +2358,22 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: buttons {}, play list {}, the controls {}", _seconds, Name(command.kind),
 		                controls.GetPanel().controlsShown ? "shown" : "hidden",
 		                controls.GetPanel().playListShown ? "shown" : "hidden", controls.IsActive() ? "show" : "hide now"));
+		return;
+	}
+	if (command.kind == Kind::StartScriptMusic)
+	{
+		if (command.value >= static_cast<size_t>(audio::MusicType::_COUNT))
+		{
+			Log(fmt::format("{:.1f}s: {}: no music type {}", _seconds, Name(command.kind), command.value));
+			return;
+		}
+		const auto type = static_cast<audio::MusicType>(command.value);
+		if (auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		{
+			game->GetGameMusic()->ResetMusicLyrics();
+			game->GetGameMusic()->StartScriptMusic(type);
+		}
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), audio::GetMusicTypeName(type)));
 		return;
 	}
 	if (command.kind == Kind::PlayCustomMusic)
@@ -2374,6 +2448,20 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the alignment is {:.2f}", _seconds, command.alignment));
 		return;
 	}
+	if (command.kind == Kind::SaveGame || command.kind == Kind::LoadGame)
+	{
+		const auto slot = static_cast<uint32_t>(command.value);
+		const bool saving = command.kind == Kind::SaveGame;
+		bool done = false;
+		if (Locator::saveGameSystem::has_value())
+		{
+			auto& saves = Locator::saveGameSystem::value();
+			done = saving ? saves.Save(slot, u"Testbed") : saves.Load(slot);
+		}
+		Log(fmt::format("{:.1f}s: {} slot {}: {}", _seconds, saving ? "save into" : "load from", slot,
+		                done ? "done" : "failed"));
+		return;
+	}
 	if (command.kind == Kind::EndGuidanceWaits)
 	{
 		if (Locator::guidanceSystem::has_value())
@@ -2443,6 +2531,45 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the hand demonstration {} plays", _seconds, command.handDemo));
 		return;
 	}
+	if (command.kind == Kind::FlyToBookmark)
+	{
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 focus {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+		const glm::vec3 origin = focus + glm::vec3(0.0f, 50.0f, -80.0f);
+		if (Locator::cameraBookmarkSystem::has_value())
+		{
+			Locator::cameraBookmarkSystem::value().SetBookmark(static_cast<uint8_t>(command.value), focus, origin);
+		}
+		Locator::camera::value().GetModel().SetFlight(origin, focus, camera_fly::k_BookmarkRise);
+		Log(fmt::format("{:.1f}s: the camera flies to bookmark {} at ({:.0f}, {:.0f}, {:.0f})", _seconds, command.value + 1,
+		                focus.x, focus.y, focus.z));
+		return;
+	}
+	if (command.kind == Kind::SetInterfaceLevel)
+	{
+		if (Locator::cameraHelpSystem::has_value())
+		{
+			auto& help = Locator::cameraHelpSystem::value().Get();
+			const bool known = help.SetInterfaceLevel(static_cast<int32_t>(command.value));
+			Log(fmt::format("{:.1f}s: the interface level is {}{}, the hand reaches {:.0f}", _seconds, command.value,
+			                known ? "" : " (a level the game does not know)", help.handReach));
+		}
+		return;
+	}
+	if (command.kind == Kind::PlayFallingSpellFilm)
+	{
+		// The script's film starts and the script's fade goes at once
+		if (Locator::videoSystem::has_value())
+		{
+			Locator::videoSystem::value().StartFallingSpell();
+		}
+		if (Locator::cinematicDirectorSystem::has_value())
+		{
+			Locator::cinematicDirectorSystem::value().FadeBackToNormal(0);
+		}
+		Log(fmt::format("{:.1f}s: the falling spell's film starts", _seconds));
+		return;
+	}
 	if (command.kind == Kind::WideScreen)
 	{
 		// Held by a script, as the land's scripts hold them, under a number no script task has: a task of that number
@@ -2494,8 +2621,10 @@ void Runner::Give(const Command& command)
 		const auto target = command.atCreature.has_value()                 ? CreatureAt(*command.atCreature)
 		                    : command.onTemple && !_temples.empty()        ? std::optional(_temples.front())
 		                    : command.onGlobe && command.globe.has_value() ? GlobeAt(*command.globe)
+		                    : command.atCreature.has_value()               ? CreatureAt(*command.atCreature)
 		                                                                   : ObjectAt(command.object);
 		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
+		                  : command.usesCreature.has_value()            ? CreatureAt(*command.usesCreature)
 		                  : command.with.has_value()                    ? ObjectAt(*command.with)
 		                                                                : std::nullopt;
 		result = !action.has_value()                                     ? "no such action"
@@ -2697,6 +2826,56 @@ void Runner::Give(const Command& command)
 	case Kind::OpenTattooEditor:
 		result = GiveCreatureModeCommand(*entity, command);
 		break;
+	case Kind::GiveHandGlows:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		auto& glows = registry.AllOf<CreatureHandGlows>(*entity) ? registry.Get<CreatureHandGlows>(*entity)
+		                                                         : registry.Assign<CreatureHandGlows>(*entity);
+		for (size_t place = 0; place < creature_hand_glow::k_PlaceCount; ++place)
+		{
+			creature_hand_glow::Set(glows.glows, static_cast<creature_hand_glow::Place>(place), 1.0f,
+			                        static_cast<float>(command.value));
+		}
+		result = fmt::format("four glows of power {}", command.value);
+		break;
+	}
+	case Kind::GiveCreedPower:
+	{
+		// Each shipped script that gives a creed power gives this scale
+		constexpr float k_ScriptScale = 5.0f;
+		const auto place = creature_hand_glow::PlaceOf(static_cast<int32_t>(command.value));
+		if (!place.has_value() || !Locator::creatureAnimationSystem::has_value())
+		{
+			result = "no such place";
+			break;
+		}
+		Locator::creatureAnimationSystem::value().SetCreedPower(*entity, *place, k_ScriptScale, command.amount);
+		result = fmt::format("a creed power of {} at place {}", command.amount, command.value);
+		break;
+	}
+	case Kind::AttachScriptSound:
+	{
+		if (!Locator::soundTagSystem::has_value())
+		{
+			result = "no sound tags";
+			break;
+		}
+		const auto sound = static_cast<entt::id_type>(command.value);
+		const auto tag = Locator::soundTagSystem::value().AttachObjectSound(*entity, sound, false);
+		result = fmt::format("sound {} attached as tag {}", sound, entt::to_integral(tag));
+		break;
+	}
+	case Kind::WriteWebPage:
+		if (Locator::creatureWebPageSystem::has_value())
+		{
+			Locator::creatureWebPageSystem::value().WritePage(*entity);
+			result = "written";
+		}
+		else
+		{
+			result = "no web page system";
+		}
+		break;
 	case Kind::HandGive:
 		result = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GiveHeldTo(*entity)
 		             ? "given"
@@ -2712,6 +2891,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTake:
 	case Kind::HandPour:
 	case Kind::HandRelease:
+	case Kind::AttachObjectScriptSound:
 	case Kind::RemoveObject:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
@@ -2720,6 +2900,9 @@ void Runner::Give(const Command& command)
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::SetInterfaceLevel:
+	case Kind::FlyToBookmark:
+	case Kind::PlayFallingSpellFilm:
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
 	case Kind::ProfileFolderCheck:
@@ -2727,7 +2910,10 @@ void Runner::Give(const Command& command)
 	case Kind::OpenTattooMenu:
 	case Kind::PlayCustomMusic:
 	case Kind::ShowCustomMusicControls:
+	case Kind::SaveGame:
+	case Kind::LoadGame:
 	case Kind::StopScript:
+	case Kind::StartScriptMusic:
 	case Kind::RunText:
 	case Kind::ReadTip:
 	case Kind::LookAtTempleScroll:
@@ -2744,6 +2930,7 @@ void Runner::Give(const Command& command)
 	case Kind::WheelTurn:
 	case Kind::PointerOnOpponent:
 	case Kind::PointerOnCaveCreature:
+	case Kind::PointerOnCreature:
 	case Kind::PointerOnAltar:
 		break;
 	case Kind::SetDesire:
@@ -3808,11 +3995,20 @@ std::optional<glm::ivec2> Runner::OpponentOnScreen(size_t creature, glm::vec2 si
 	{
 		return std::nullopt;
 	}
-	// The middle of the body is half the height of the creature above its feet
+	return BodyOnScreen(*opponent, size);
+}
+
+std::optional<glm::ivec2> Runner::BodyOnScreen(entt::entity creature, glm::vec2 size)
+{
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto& feet = registry.Get<const ecs::components::Transform>(*opponent).position;
+	if (!Locator::camera::has_value() || !registry.AllOf<ecs::components::Transform, ecs::components::Creature>(creature))
+	{
+		return std::nullopt;
+	}
+	// The middle of the body is half the height of the creature above its feet
+	const auto& feet = registry.Get<const ecs::components::Transform>(creature).position;
 	const auto height = creature_feedback::k_HeightAtSizeOne *
-	                    ecs::components::ShownSize(registry.Get<const ecs::components::Creature>(*opponent));
+	                    ecs::components::ShownSize(registry.Get<const ecs::components::Creature>(creature));
 	glm::vec3 screen;
 	if (!Locator::camera::value().ProjectWorldToScreen(feet + glm::vec3(0.0f, height * 0.5f, 0.0f),
 	                                                   {0.0f, 0.0f, size.x, size.y}, screen))
@@ -3924,6 +4120,21 @@ std::string Runner::GivePointerCommand(const Command& command)
 		if (!to.has_value())
 		{
 			return "no opponent on the screen";
+		}
+		const auto moved = *to - pointer.position;
+		pointer.position = *to;
+		_framesSincePointerMoved = 0;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerOnCreature:
+	{
+		const auto self = CreatureAt(command.creature);
+		const auto to = self.has_value() ? BodyOnScreen(*self, size) : std::nullopt;
+		if (!to.has_value())
+		{
+			return "no creature on the screen";
 		}
 		const auto moved = *to - pointer.position;
 		pointer.position = *to;

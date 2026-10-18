@@ -35,9 +35,17 @@ public:
 	                                                                std::span<const uint32_t> bones) override;
 	[[nodiscard]] std::optional<float> AnimationDuration(entt::entity creature, size_t animation) override;
 	[[nodiscard]] std::optional<glm::vec3> AnimationTravel(entt::entity creature, size_t animation) override;
+	[[nodiscard]] std::optional<creature_kiss::KissPoints> KissPointsOf(entt::entity creature) override;
 	void KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point) override;
+	void PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs) override;
+	void SetCreedPower(entt::entity creature, creature_hand_glow::Place place, float scale, float power) override;
+	void PlayCreedEvent(entt::entity creature, int32_t event) override;
+	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity creature) override;
+	void AddAlignmentMotesOf(entt::entity copy) override;
 
 private:
+	/// Each creature steps the sway of its body by the seconds that it lived in this game turn
+	static void StepSway();
 	/// Each creature whose body looks good or evil adds its motes or its smoke for this game turn
 	static void AddAlignmentMotes();
 

@@ -142,21 +142,47 @@ TEST(CameraZones, ACameraOutsideTheFenceIsPutBackPastWhereItsLineCrossesIt)
 	// Moved out across the right side from where it started: back along the way it came, 20 past the fence
 	const auto pushed =
 	    PushInsideFence(k_Square, true, {90.0f, 30.0f, 50.0f}, {110.0f, 30.0f, 50.0f}, {120.0f, 0.0f, 50.0f}, k_SearchRadius);
-	ASSERT_TRUE(pushed.has_value());
-	EXPECT_FLOAT_EQ(pushed->x, -30.0f);
-	EXPECT_FLOAT_EQ(pushed->y, 0.0f);
-	EXPECT_NEAR(pushed->z, 0.0f, 1e-4f);
+	ASSERT_TRUE(pushed.target.has_value());
+	EXPECT_FLOAT_EQ(pushed.target->x, 80.0f);
+	EXPECT_NEAR(pushed.target->z, 50.0f, 1e-4f);
+	// Put back, the inclusion distance is nothing
+	EXPECT_EQ(pushed.inclusionDistance, 0.0f);
 
 	// Hardly moved, it is tested towards what it looks at
 	const auto still =
 	    PushInsideFence(k_Square, true, {110.0f, 30.0f, 50.0f}, {110.0f, 30.0f, 50.0f}, {50.0f, 0.0f, 50.0f}, k_SearchRadius);
-	ASSERT_TRUE(still.has_value());
-	EXPECT_FLOAT_EQ(still->x, -30.0f);
+	ASSERT_TRUE(still.target.has_value());
+	EXPECT_FLOAT_EQ(still.target->x, 80.0f);
 
-	// Inside, it stays
-	EXPECT_FALSE(
-	    PushInsideFence(k_Square, true, {50.0f, 30.0f, 50.0f}, {60.0f, 30.0f, 50.0f}, {120.0f, 0.0f, 50.0f}, k_SearchRadius)
-	        .has_value());
+	// Inside, it stays. The inclusion distance is the distance across the ground to the fence along the line of the test.
+	const auto inside =
+	    PushInsideFence(k_Square, true, {50.0f, 30.0f, 50.0f}, {60.0f, 30.0f, 50.0f}, {120.0f, 0.0f, 50.0f}, k_SearchRadius);
+	EXPECT_FALSE(inside.target.has_value());
+	EXPECT_EQ(inside.inclusionDistance, 60.0f);
+
+	// With the fence off the inclusion distance is very far
+	const auto off =
+	    PushInsideFence(k_Square, false, {50.0f, 30.0f, 50.0f}, {160.0f, 30.0f, 50.0f}, {120.0f, 0.0f, 50.0f}, k_SearchRadius);
+	EXPECT_FALSE(off.target.has_value());
+	EXPECT_EQ(off.inclusionDistance, 1e10f);
+}
+
+TEST(CameraZones, APointThatMovesWithThePushedCameraKeepsItsPlaceFromItOneAxisAtATime)
+{
+	// The point's place from the old camera, added to the new camera, in single precision steps: 0.1 comes back a
+	// little less
+	const auto moved = MovedWithOrigin({5.0f, 0.1f, 7.0f}, {10.0f, 1000.3f, 20.0f}, {12.0f, 1000.3f, 21.0f});
+	EXPECT_EQ(moved.x, 7.0f);
+	EXPECT_EQ(moved.y, 0.0999755859375f);
+	EXPECT_EQ(moved.z, 8.0f);
+}
+
+TEST(CameraZones, AFlightWooshesOnlyWhenItStartsMoreThan150FromItsEnd)
+{
+	EXPECT_FALSE(FlightWooshes({0.0f, 0.0f, 0.0f}, {150.0f, 0.0f, 0.0f}));
+	EXPECT_TRUE(FlightWooshes({0.0f, 0.0f, 0.0f}, {150.01f, 0.0f, 0.0f}));
+	EXPECT_TRUE(FlightWooshes({0.0f, 100.0f, 0.0f}, {0.0f, 0.0f, 120.0f}));
+	EXPECT_FALSE(FlightWooshes({10.0f, 10.0f, 10.0f}, {60.0f, 60.0f, 60.0f}));
 }
 
 TEST(CameraZones, TheCameraIsHeldUnderItsHeightAboveTheLandOrItsHighest)

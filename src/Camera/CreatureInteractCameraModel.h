@@ -67,17 +67,25 @@ public:
 	void SetPlayerModel(std::unique_ptr<CameraModel> model) { _playerModel = std::move(model); }
 	[[nodiscard]] std::unique_ptr<CameraModel> TakePlayerModel() { return std::move(_playerModel); }
 	[[nodiscard]] const CameraModel* GetPlayerModel() const { return _playerModel.get(); }
+	[[nodiscard]] CameraModel* GetPlayerModel() { return _playerModel.get(); }
+	/// How fast the camera moves now
+	[[nodiscard]] glm::vec3 GetOriginSpeed() const { return SpeedOf(_origin); }
+	[[nodiscard]] glm::vec3 GetFocusSpeed() const { return SpeedOf(_focus); }
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	/// The player's controls don't move it
 	void HandleActions(std::chrono::microseconds /*dt*/) override {}
-	void SetFlight(glm::vec3 origin, glm::vec3 focus) override;
+	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override;
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const override { return std::chrono::seconds::zero(); }
 
 private:
 	using Zoomers = std::array<camera::Zoomer, 3>;
+	[[nodiscard]] static glm::vec3 SpeedOf(const Zoomers& zoomers)
+	{
+		return {zoomers[0].Speed(), zoomers[1].Speed(), zoomers[2].Speed()};
+	}
 	Zoomers _origin;
 	Zoomers _focus;
 	std::optional<creature_interact::View> _target;

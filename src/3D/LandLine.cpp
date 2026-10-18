@@ -14,14 +14,15 @@
 #include <algorithm>
 
 #include "Camera/CameraPan.h"
+#include "Common/X87.h"
 
 namespace openblack::land_line
 {
 namespace
 {
 /// A triangle's plane closer to level with the line than this, in height units per cell, is not met by it, and the cell
-/// is passed over
-constexpr double k_LevelWithLine = 0.0001;
+/// is passed over. The game keeps it as the double of the float 0.0001
+constexpr double k_LevelWithLine = static_cast<double>(0.0001f);
 /// How far, in cells, a cell's triangles reach past its edges and their shared diagonal
 constexpr float k_Reach = 1.1f;
 constexpr float k_ReachBefore = -0.1f;
@@ -121,7 +122,7 @@ std::optional<glm::vec2> HitInCell(int32_t x, int32_t z, glm::vec3 from, glm::ve
 	const auto slopeX = static_cast<float>(acrossX - here);
 	const auto slopeZ = static_cast<float>(acrossZ - here);
 	const float near = (climb - slopeX * alongX) - slopeZ * alongZ;
-	if (std::abs(near) < k_LevelWithLine)
+	if (x87::Less(std::abs(near), k_LevelWithLine))
 	{
 		return std::nullopt;
 	}
@@ -135,7 +136,7 @@ std::optional<glm::vec2> HitInCell(int32_t x, int32_t z, glm::vec3 from, glm::ve
 	const auto farSlopeX = static_cast<float>(acrossBoth - acrossZ);
 	const auto farSlopeZ = static_cast<float>(acrossBoth - acrossX);
 	const float far = (climb - farSlopeX * alongX) - farSlopeZ * alongZ;
-	if (std::abs(far) < k_LevelWithLine)
+	if (x87::Less(std::abs(far), k_LevelWithLine))
 	{
 		return std::nullopt;
 	}
@@ -381,8 +382,8 @@ namespace
 {
 [[nodiscard]] glm::vec3 ToCells(glm::vec3 metres)
 {
-	constexpr double k_PerMetre = 0.1;
-	return {static_cast<float>(metres.x * k_PerMetre), metres.y / k_HeightUnit, static_cast<float>(metres.z * k_PerMetre)};
+	constexpr float k_PerMetre = 0.1f;
+	return {metres.x * k_PerMetre, metres.y / k_HeightUnit, metres.z * k_PerMetre};
 }
 } // namespace
 

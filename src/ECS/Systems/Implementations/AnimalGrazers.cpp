@@ -251,7 +251,7 @@ bool AnimalSystem::KeepLeaderWithinDomain(entt::entity entity, Animal& animal)
 	{
 		return false;
 	}
-	const auto goal = RandomPos(animal, map_coords::ToMetres(herd->place), static_cast<float>(info.domainInnerRadius),
+	const auto goal = RandomPos(animal, glm::ivec2(herd->place.x, herd->place.z), static_cast<float>(info.domainInnerRadius),
 	                            static_cast<float>(herd->domainRadius));
 	SetupMoveTo(animal, goal, 0.0f, AnimalState::DecideWhatToDo);
 	herd->turnsOnLeg = 0;
@@ -273,8 +273,8 @@ bool AnimalSystem::KeepMemberWithinFlockArea(entt::entity /*entity*/, Animal& an
 	}
 	// Too far from its leader, it goes back to somewhere near it, unless that is out of the herd's reach while the
 	// leader is within it; either way it is busy this turn
-	const auto goal = RandomPos(animal, Metres(leader), 0.0f, distance);
-	if (WithinDomain(animal, Fixed(goal)) || !WithinDomain(animal, leader))
+	const auto goal = RandomPos(animal, leader, 0.0f, distance);
+	if (WithinDomain(animal, goal) || !WithinDomain(animal, leader))
 	{
 		SetupMoveTo(animal, goal, 0.0f, AnimalState::DecideWhatToDo);
 	}
@@ -440,9 +440,14 @@ void AnimalSystem::GivesBirth(entt::entity entity, Animal& animal)
 {
 	auto& registry = EntityRegistry();
 	// A young one a year old joins the herd and decides what to do at once; then the mother wanders off
-	const auto young = CreateGrazer(animal.type, Metres(animal.move.position), 1, animal.flock, animal.town);
+	const auto mother = animal.move.position;
+	const auto young = CreateGrazer(animal.type, Metres(mother), 1, animal.flock, animal.town);
 	if (registry.Valid(young))
 	{
+		// It is born at the exact map position of its mother
+		auto& born = registry.Get<Animal>(young);
+		born.move.position = mother;
+		born.move.goal = mother;
 		GrazerDecide(young, registry.Get<Animal>(young), registry.Get<Grazer>(young));
 	}
 	SetTopState(registry.Get<Animal>(entity), AnimalState::StartWander);

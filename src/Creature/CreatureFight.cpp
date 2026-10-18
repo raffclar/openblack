@@ -100,6 +100,11 @@ bool creature_fight::OutsideRange(const Arena& arena, glm::vec2 point)
 	return !(glm::distance(point, arena.centre) < k_RangeShare * arena.radius);
 }
 
+bool creature_fight::KeepsInArena(const Arena& arena, glm::vec2 self, glm::vec2 opponent)
+{
+	return OutsideRange(arena, opponent) || OutsideRange(arena, self);
+}
+
 float creature_fight::ForwardExtent(std::span<const glm::vec2> bones, glm::vec2 forward)
 {
 	float extent = 0.0f;
@@ -581,8 +586,12 @@ float creature_fight::HeightShareOf(float blowHeight, float headHeight)
 	return headHeight > 0.0f ? blowHeight / headHeight : 1.0f;
 }
 
-int32_t creature_fight::TestSpanMs(float turnMs, float size)
+int32_t creature_fight::TestSpanMs(float turnMs, float size, bool realTime)
 {
+	if (realTime)
+	{
+		return static_cast<int32_t>(turnMs);
+	}
 	return static_cast<int32_t>(turnMs * (1.6f - (size * 0.5f * 0.85f)));
 }
 
@@ -1198,6 +1207,11 @@ bool creature_fight::WinnerPoos(float alignment)
 bool creature_fight::FightWonIsSeen(bool byBlow, bool winnerHasPlayer)
 {
 	return byBlow && winnerHasPlayer;
+}
+
+bool creature_fight::WinPlanForced(bool byBlow)
+{
+	return !byBlow;
 }
 
 size_t creature_fight::Response(float life, float otherLife)

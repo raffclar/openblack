@@ -105,9 +105,7 @@ glm::ivec2 FishingSpot(glm::ivec2 farm, glm::vec2 offset)
 {
 	// Each axis goes out to metres, moves, and comes back, truncated
 	const auto axis = [](int32_t fixed, float metres) {
-		const double moved =
-		    (static_cast<double>(fixed) * 10.0 * (1.0 / 65536.0) + static_cast<double>(metres)) * 65536.0 / 10.0;
-		return static_cast<int32_t>(moved);
+		return map_coords::ToFixedGUtils(map_coords::ToMetres(fixed) + metres);
 	};
 	return {axis(farm.x, offset.x), axis(farm.y, offset.y)};
 }

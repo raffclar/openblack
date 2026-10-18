@@ -28,6 +28,7 @@
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureHairStep.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -38,9 +39,6 @@ using openblack::creature::CreatureRig;
 
 namespace
 {
-/// The longest step the hair takes at once, in seconds
-constexpr float k_MaxStepSeconds = 1.0f;
-
 /// Where a strand is rooted this frame and which way it grows out, or none where its triangle has no area. The root
 /// is sunk along the triangle's normal as it comes, unnormalised.
 std::optional<creature_hair::Root> RootOf(const CreatureRig::HairStrand& strand, const creature_morph::Morph& morph,
@@ -74,8 +72,8 @@ std::optional<creature_hair::Root> RootOf(const CreatureRig::HairStrand& strand,
 }
 
 /// Moves the hair of a body for a number of seconds: the body has a species, a shape, a pose, a place and a size
-void StepHair(const resources::CreatureRigManager& rigs, CreatureType species, const creature_morph::Morph& morph,
-              const CreatureAnimation& animation, const Transform& transform, float size, CreatureHair& hair, float seconds)
+void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType species, const creature_morph::Morph& morph,
+                  const CreatureAnimation& animation, const Transform& transform, float size, CreatureHair& hair, float seconds)
 {
 	const auto rigId = creature::GetRigId(species);
 	if (!rigs.Contains(rigId) || animation.boneMatrices.empty())
@@ -84,41 +82,23 @@ void StepHair(const resources::CreatureRigManager& rigs, CreatureType species, c
 		return;
 	}
 	const auto& rig = *rigs.Handle(rigId);
-	if (hair.groups.size() != rig.hairGroups.size())
-	{
-		hair = {};
-		hair.groups.resize(rig.hairGroups.size());
-	}
 	// The hair takes the look of the alignment the body is drawn with
 	const auto alignment = morph.evilGood;
 	const auto scale = creature_hair::HairScale(size);
 	const auto model = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-	for (size_t g = 0; g < rig.hairGroups.size(); ++g)
-	{
-		const auto& source = rig.hairGroups[g];
-		auto& group = hair.groups[g];
-		const auto look = creature_hair::LookFor(source.looks, alignment);
-		const auto physics = creature_hair::PhysicsFor(look, scale, source.segmentCount);
-		group.colour = look.colour;
-		group.halfWidth = physics.halfWidth;
-		group.textured = source.textured;
-		group.strands.resize(source.strands.size());
-		for (size_t s = 0; s < source.strands.size(); ++s)
-		{
-			const auto root = RootOf(source.strands[s], morph, animation.boneMatrices, model);
-			if (!root)
-			{
-				continue;
-			}
-			auto& strand = group.strands[s];
-			if (!hair.started || strand.positions.size() != source.segmentCount)
-			{
-				strand = creature_hair::FromZero(source.segmentCount);
-			}
-			creature_hair::Step(strand, *root, physics, seconds);
-		}
-	}
-	hair.started = true;
+	StepHair(
+	    hair, rig.hairGroups.size(),
+	    [&](size_t g) {
+		    const auto& source = rig.hairGroups[g];
+		    const auto look = creature_hair::LookFor(source.looks, alignment);
+		    return HairGroupShape {.strandCount = source.strands.size(),
+		                           .segmentCount = source.segmentCount,
+		                           .physics = creature_hair::PhysicsFor(look, scale, source.segmentCount),
+		                           .colour = look.colour,
+		                           .textured = source.textured};
+	    },
+	    [&](size_t g, size_t s) { return RootOf(rig.hairGroups[g].strands[s], morph, animation.boneMatrices, model); },
+	    seconds);
 }
 } // namespace
 
@@ -139,12 +119,12 @@ void CreatureHairSystem::Update(std::chrono::duration<float, std::milli> gameTim
 	}
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& rigs = Locator::resources::value().GetCreatureRigs();
-	const auto seconds = std::clamp(std::chrono::duration<float>(gameTime).count(), 0.0f, k_MaxStepSeconds);
+	const auto seconds = creature_hair::StepSeconds(std::chrono::duration<float, std::milli>(gameTime).count());
 
 	registry.Each<const Creature, const CreatureMorph, const CreatureAnimation, const Transform, CreatureHair>(
 	    [&](const Creature& creature, const CreatureMorph& morph, const CreatureAnimation& animation,
 	        const Transform& transform, CreatureHair& hair) {
-		    StepHair(rigs, creature.species, morph.drawn, animation, transform, ShownSize(creature), hair, seconds);
+		    StepBodyHair(rigs, creature.species, morph.drawn, animation, transform, ShownSize(creature), hair, seconds);
 	    });
 }
 
@@ -170,7 +150,7 @@ void CreatureHairSystem::StepCopy(entt::entity copy, std::chrono::duration<float
 		return;
 	}
 	// A copy's hair moves by the time of the frame, as the game is paused while the copy is shown
-	const auto seconds = std::clamp(std::chrono::duration<float>(frameTime).count(), 0.0f, k_MaxStepSeconds);
-	StepHair(Locator::resources::value().GetCreatureRigs(), creature->species, morph->drawn, *animation, *transform, body->size,
-	         *hair, seconds);
+	const auto seconds = creature_hair::StepSeconds(frameTime.count());
+	StepBodyHair(Locator::resources::value().GetCreatureRigs(), creature->species, morph->drawn, *animation, *transform,
+	             body->size, *hair, seconds);
 }

@@ -41,7 +41,6 @@
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
-#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -58,6 +57,7 @@
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -86,6 +86,7 @@
 #include "Magic/Impressiveness.h"
 #include "Magic/ReactionRules.h"
 #include "Magic/ReactionTimingRules.h"
+#include "Magic/ShieldRules.h"
 #include "Magic/TownBelief.h"
 #include "Magic/VillagerReactionRules.h"
 #include "ObjectMeasures.h"
@@ -380,8 +381,9 @@ creature_reaction::Facts CreatureFactsOf(const ecs::Registry& registry, entt::en
 	}
 	if (source.type == Reaction::ReactToCreature)
 	{
-		const auto* leash = registry.TryGet<const CreatureLeash>(creature);
-		facts.orderedByPlayer = leash != nullptr && leash->order.has_value();
+		// A forced plan keeps it from looking over another creature, even when the leash leads the plan
+		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+		facts.planForced = mind != nullptr && mind->planForced;
 		facts.hasOpponent =
 		    Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().OpponentOf(creature).has_value();
 		const auto* plan = CurrentPlanOf(registry, creature);
@@ -476,8 +478,8 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 			return false;
 		}
 	}
-	// Nor does one a script has told to take no notice, or controls, one carrying out its player's order, one in a fight
-	// or whose opponent is, or one out cold in a faint
+	// Nor does one a script has told to take no notice, or controls, one in a fight or whose opponent is, or one out cold
+	// in a faint
 	if (registry.AnyOf<CreatureReactionsOff, ScriptControlled>(entity))
 	{
 		return false;
@@ -502,7 +504,9 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	{
 		return false;
 	}
-	if (const auto* leash = registry.TryGet<const CreatureLeash>(entity); leash != nullptr && leash->order.has_value())
+	// Nor does one with a forced plan, unless the leash leads the plan
+	if (const auto* mind = registry.TryGet<const CreatureMindState>(entity);
+	    mind != nullptr && !creature_reaction::PlanFree({.forced = mind->planForced, .ledByLeash = mind->ledByLeash}))
 	{
 		return false;
 	}
@@ -1345,9 +1349,6 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} ignores miracle #{}: an icon made it and no seed holds it",
 		                    entt::to_integral(living), entt::to_integral(source.initiator));
 	}
-	// TODO(creature-reactions-2): on any leash, a creature seeing a nasty miracle it knows is also set to cast it at the
-	// first thing other than itself within 64 cells of the hand, carried out by the leash later; that needs the leash's
-	// waiting action, which isn't here yet. bw1-decomp docs/openblack/creature/creature_reactions.md
 	if (source.type == Reaction::FleeFromSpell)
 	{
 		const bool learnable =
@@ -1356,6 +1357,12 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		if (learnable && magic.has_value() && seed != nullptr)
 		{
 			seed->learnedFrom = true;
+		}
+		// On the leash, a creature that knows the miracle casts it after the reaction. A miracle that an icon made with
+		// no seed does not make it cast.
+		if (!iconWithoutSeed && magic.has_value())
+		{
+			minds.CastOnLeashAfterReaction(living, *magic);
 		}
 	}
 	else if ((nice || shield) && magic.has_value() && (byCreature || !computer) && !seedSpent && !iconWithoutSeed &&
@@ -1785,7 +1792,16 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 		auto& boredom = impression->boredom.try_emplace(source.type, 1.0f).first->second;
 		const float share = villager_reactions::TownShare(villager->town);
 		const auto creature = CreatureImpressiveValue(reaction, living, villager->town, boredom);
-		const float belief = creature.value_or(value(boredom, villager->town)) * share;
+		// A town that the shield's player attacked last takes nothing from the shield
+		const auto* shieldObject = source.initiator != entt::null && registry.Valid(source.initiator)
+		                               ? registry.TryGet<const MagicShield>(source.initiator)
+		                               : nullptr;
+		const auto* aggression = registry.TryGet<const TownAggression>(villager->town);
+		const bool attackedByShieldPlayer = aggression != nullptr && aggression->record.lastAggressor == source.player;
+		const bool ignored =
+		    shieldObject != nullptr && magic::shield::TownIgnoresShield(source.type, attackedByShieldPlayer,
+		                                                                shieldObject->kind == MagicShield::Kind::Physical);
+		const float belief = ignored ? 0.0f : creature.value_or(value(boredom, villager->town)) * share;
 		magic::town_belief::Add(impression->belief, source.player, belief);
 		impression->lastImpression = belief;
 		villager_reactions::ShowBelief(living, source.player, belief, info->alignmentForSFX, _voice, _turn);

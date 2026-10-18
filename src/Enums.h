@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 
 #include <array>
@@ -763,6 +764,8 @@ enum class FlowersInfo
 	WhiteOne = 0,
 	Pink = 1,
 	// Sun      = 2, // CREATUREISLE
+
+	_COUNT
 };
 
 enum class AnimatedStaticInfo : int32_t
@@ -3297,6 +3300,15 @@ constexpr float GetSpeedStateSpeed(SpeedState state)
 	constexpr float ms1 = static_cast<float>(ms100) * 0.01f;
 	float scaled = static_cast<uint32_t>(state) - 0.5f;
 	return scaled / ms1;
+}
+
+/// The speed state that a speed from GetSpeedStateSpeed came from. The half that GetSpeedStateSpeed takes off comes
+/// back, so each state from 0 to 65535 comes back exactly.
+inline SpeedState GetSpeedStateOf(float speed)
+{
+	constexpr uint32_t ms100 = 0x10000;
+	constexpr float ms1 = static_cast<float>(ms100) * 0.01f;
+	return static_cast<SpeedState>(std::lround(speed * ms1 + 0.5f));
 }
 
 constexpr uint32_t MakeTurnAngleState(float degrees)

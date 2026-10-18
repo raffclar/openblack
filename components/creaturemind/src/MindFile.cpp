@@ -430,7 +430,7 @@ void Layout(Stream& stream, MindFileData& data)
 	stream.Optional(version > 17, data.database,
 	                [&stream](std::vector<MindDatabaseEntry>& entries) { Database(stream, entries); });
 	stream.Optional(version > 23, data.unknown2);
-	stream.Optional(version > 26, data.unknown3, [&stream](std::array<uint32_t, 4>& values) {
+	stream.Optional(version > 26, data.leashWords, [&stream](std::array<uint32_t, 4>& values) {
 		for (auto& value : values)
 		{
 			stream.Value(value);
@@ -537,15 +537,40 @@ MindResult openblack::creaturemind::Read(std::span<const uint8_t> bytes, MindFil
 	return stream.Result();
 }
 
-MindResult openblack::creaturemind::ReadFile(const std::filesystem::path& path, MindFileData& data)
+std::optional<std::vector<uint8_t>> openblack::creaturemind::ReadFileBytes(const std::filesystem::path& path)
 {
 	std::ifstream file(path, std::ios::binary);
 	if (!file)
 	{
+		return std::nullopt;
+	}
+	std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	if (file.bad())
+	{
+		return std::nullopt;
+	}
+	return bytes;
+}
+
+bool openblack::creaturemind::WriteFileBytes(const std::filesystem::path& path, std::span<const uint8_t> bytes)
+{
+	std::ofstream file(path, std::ios::binary | std::ios::trunc);
+	if (!file)
+	{
+		return false;
+	}
+	file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	return static_cast<bool>(file);
+}
+
+MindResult openblack::creaturemind::ReadFile(const std::filesystem::path& path, MindFileData& data)
+{
+	const auto bytes = ReadFileBytes(path);
+	if (!bytes.has_value())
+	{
 		return MindResult::ErrCantOpen;
 	}
-	const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-	return Read(bytes, data);
+	return Read(*bytes, data);
 }
 
 std::vector<uint8_t> openblack::creaturemind::Write(const MindFileData& data)
@@ -562,12 +587,5 @@ std::vector<uint8_t> openblack::creaturemind::Write(const MindFileData& data)
 
 MindResult openblack::creaturemind::WriteFile(const std::filesystem::path& path, const MindFileData& data)
 {
-	const auto bytes = Write(data);
-	std::ofstream file(path, std::ios::binary | std::ios::trunc);
-	if (!file)
-	{
-		return MindResult::ErrCantWrite;
-	}
-	file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-	return file ? MindResult::Success : MindResult::ErrCantWrite;
+	return WriteFileBytes(path, Write(data)) ? MindResult::Success : MindResult::ErrCantWrite;
 }

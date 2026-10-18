@@ -20,6 +20,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/FilmCreatureSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -95,6 +96,12 @@ VideoSystem::Hooks GameHooks()
 		        return game != nullptr && game->GetInterface() != nullptr &&
 		               game->GetInterface()->GetScreenFade().GetTurns() > 0;
 	        },
+	    .fallingSpellStarted = []() { Locator::filmCreatureSystem::value().Start(); },
+	    .fallingSpellFrame =
+	        [](int32_t filmMs, std::chrono::steady_clock::time_point now) {
+		        Locator::filmCreatureSystem::value().Update(filmMs, now);
+	        },
+	    .fallingSpellEnded = []() { Locator::filmCreatureSystem::value().End(); },
 	};
 }
 } // namespace
@@ -178,6 +185,10 @@ void VideoSystem::StartFallingSpell()
 	_fallingSpell = true;
 	_timeline = {};
 	Play(_hooks.fallingSpellPath());
+	if (_hooks.fallingSpellStarted)
+	{
+		_hooks.fallingSpellStarted();
+	}
 	if (_video)
 	{
 		_schedule = video::WithoutFade(_schedule);
@@ -191,6 +202,10 @@ void VideoSystem::EndFallingSpell()
 		return;
 	}
 	_fallingSpell = false;
+	if (_hooks.fallingSpellEnded)
+	{
+		_hooks.fallingSpellEnded();
+	}
 	// The film then fades as Escape would fade any other
 	Skip();
 }
@@ -228,11 +243,11 @@ void VideoSystem::Update(std::chrono::steady_clock::time_point now)
 	}
 	if (_fallingSpell)
 	{
-		UpdateFallingSpell();
+		UpdateFallingSpell(now);
 	}
 }
 
-void VideoSystem::UpdateFallingSpell()
+void VideoSystem::UpdateFallingSpell(std::chrono::steady_clock::time_point now)
 {
 	if (!_video)
 	{
@@ -241,8 +256,14 @@ void VideoSystem::UpdateFallingSpell()
 	else
 	{
 		const int32_t fps = _video->fps > 0 ? _video->fps : k_FallbackFps;
+		const auto filmMs = video::FilmMilliseconds(_video->frame, fps);
+		// The film's creature moves on and its camera follows the path before the sounds of the time
+		if (_hooks.fallingSpellFrame)
+		{
+			_hooks.fallingSpellFrame(filmMs, now);
+		}
 		_cues.clear();
-		_timeline.Advance(video::FilmMilliseconds(_video->frame, fps), _hooks.whiteFadeReached(), _cues);
+		_timeline.Advance(filmMs, _hooks.whiteFadeReached(), _cues);
 		for (const auto cue : _cues)
 		{
 			_hooks.fallingSpellCue(cue);

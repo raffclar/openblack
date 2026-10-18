@@ -241,29 +241,42 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 
 void TownDesireSystem::ProcessTurn()
 {
+	std::vector<entt::entity> towns;
+	Locator::entitiesRegistry::value().Each<const Town>([&towns](entt::entity town, const Town&) { towns.push_back(town); });
+	for (const auto town : towns)
+	{
+		ProcessTown(town);
+	}
+}
+
+void TownDesireSystem::ProcessTown(entt::entity entity)
+{
 	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity) || !registry.AllOf<Town, Tribe, TownDesire, TownStats>(entity))
+	{
+		return;
+	}
 	const auto& info = Locator::infoConstants::value();
 	// The game takes a villager's load from its African farmer
 	const auto& farmer = info.villager.at(10);
-	registry.Each<const Town, const Tribe, TownDesire, TownStats>(
-	    [&](entt::entity entity, const Town& town, const Tribe tribe, TownDesire& desire, TownStats& stats) {
-		    const auto inputs = GatherInputs(entity, town, tribe);
-		    stats = inputs.stats;
-		    const town_desire::DesireContext context {
-		        .desire = desire,
-		        .in = inputs,
-		        .town = info.town,
-		        .info = info.townDesire,
-		        .farmerMaxFood = farmer.maxFoodCarried,
-		        .farmerMaxWood = farmer.maxWoodCarried,
-		    };
-		    town_desire::Process(desire, context);
-		    // Then the attacks on it fade and are summed for its next turn's desires
-		    if (auto* aggression = registry.TryGet<TownAggression>(entity))
-		    {
-			    town_aggression::ProcessTurn(aggression->record, town.owner);
-		    }
-	    });
+	const auto& town = registry.Get<const Town>(entity);
+	auto& desire = registry.Get<TownDesire>(entity);
+	const auto inputs = GatherInputs(entity, town, registry.Get<const Tribe>(entity));
+	registry.Get<TownStats>(entity) = inputs.stats;
+	const town_desire::DesireContext context {
+	    .desire = desire,
+	    .in = inputs,
+	    .town = info.town,
+	    .info = info.townDesire,
+	    .farmerMaxFood = farmer.maxFoodCarried,
+	    .farmerMaxWood = farmer.maxWoodCarried,
+	};
+	town_desire::Process(desire, context);
+	// Then the attacks on it fade and are summed for its next turn's desires
+	if (auto* aggression = registry.TryGet<TownAggression>(entity))
+	{
+		town_aggression::ProcessTurn(aggression->record, town.owner);
+	}
 }
 
 uint32_t TownDesireSystem::OfferVillager(entt::entity town, bool child, float trigger,

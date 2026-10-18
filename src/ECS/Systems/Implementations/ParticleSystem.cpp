@@ -138,6 +138,11 @@ float GameParticleWorld::LandHeight(glm::vec2 xz) const
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(xz) : 0.0f;
 }
 
+float GameParticleWorld::LandHeightAtMap(int32_t x, int32_t z) const
+{
+	return Locator::terrainSystem::has_value() ? static_cast<float>(Locator::terrainSystem::value().GetAltitude(x, z)) : 0.0f;
+}
+
 uint32_t GameParticleWorld::PlayerColour(int player) const
 {
 	return ecs::components::Player::k_Colours.at(static_cast<size_t>(player) &
@@ -324,6 +329,9 @@ void GameParticleWorld::Play(PlayingSound& sound) const
 	if (result.emitter != entt::null)
 	{
 		sound.emitter = result.emitter;
+		// The sound moves with its particle each turn (see ProcessSounds), and the audio turn stops it when the camera
+		// goes too far
+		Locator::audio::value().SetEmitterFollows(result.emitter, audio::Follows::Place);
 	}
 }
 

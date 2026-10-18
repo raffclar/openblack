@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
@@ -69,7 +70,8 @@ namespace openblack::ecs::systems::mind_detail
 /// The data of a worship site's altar: the data of the worship site of its site's tribe. None for another thing.
 [[nodiscard]] const GWorshipSiteInfo* AltarInfoOf(const ecs::Registry& registry, entt::entity altar);
 /// What a creature knows of a thing. When the creature has a belief about the thing, these are the attributes that it
-/// last took in. Else they are the attributes of the thing now.
+/// last took in, and the place where it last came across the thing. Else they are the attributes of the thing and its
+/// place now.
 [[nodiscard]] std::optional<creature_tree::Belief> BeliefOf(const ecs::Registry& registry, entt::entity entity,
                                                             entt::entity self);
 /// What a creature finds of a thing now, as far as the world here tells it
@@ -88,7 +90,7 @@ namespace openblack::ecs::systems::mind_detail
 /// player is tied to a thing, the distance starts at that thing. If not, the distance starts at the creature. A thing
 /// that the creature holds has the highest value.
 [[nodiscard]] float Nearness(const ecs::Registry& registry, entt::entity creature, const glm::vec3& at, entt::entity object,
-                             const glm::vec3& place, float distanceWeight);
+                             const map_coords::MapCoords& place, float distanceWeight);
 /// The town nearest a point along the ground, of any player or none; none when there is no town
 [[nodiscard]] entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point);
 /// Whether a creature lies dead: knocked out, or with a plan that has the action of dying or of lying dead for good
@@ -120,6 +122,9 @@ void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::s
 /// standing in its way there (nor anything living, when asked), inside any area it is kept within. None without one.
 [[nodiscard]] std::optional<glm::vec2> ClearAreaFor(const ecs::Registry& registry, entt::entity creature, glm::vec2 point,
                                                     float width, bool livingBlocks);
+/// Whether a cell of the land is clear for a creature: land it can walk on, with nothing standing in its way there (nor
+/// anything living, when asked)
+[[nodiscard]] bool CellClearFor(const ecs::Registry& registry, entt::entity creature, int32_t x, int32_t z, bool livingBlocks);
 /// The way a creature looks, as a game angle: towards what its head is turned to, or else the way its body faces
 [[nodiscard]] uint16_t LookingAngle(const components::Transform& transform, const std::optional<glm::vec3>& lookAt);
 /// Whether the body of the creature can pay for a miracle of a type

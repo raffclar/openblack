@@ -10,6 +10,12 @@ deviation's random draw.
 
 Regenerate a scenario (Python 3 with unicorn installed):
     python emu_scheduler.py <seed> <turns> ../scenarios/scheduler_<seed>.json
+
+The emulator's FPU runs at 64-bit precision, not at the game's 24-bit precision. The results are still the game's,
+because each x87 step in the scheduler code is exact at all precisions. The only float steps are in the place of a
+positional atmosphere: two random integers from -2 to 2 change to floats, the sum of their absolute values is
+compared with 1.0, each is multiplied by 4.0 and compared with 0. The sound DLL is not callable by tools/oracle (it
+loads only runblack.exe). If this script calls more of the DLL, check its x87 steps again (tools/oracle/README.md).
 """
 import json
 import os

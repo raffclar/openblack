@@ -426,7 +426,7 @@
   "query": "creature.learnt"
  },
  {
-  "description": "A creature's beliefs about things: kind, last place, the whole thing, the attributes it last took in, which its decision trees test; and how nice it finds other creatures",
+  "description": "A creature's beliefs about things: kind, last place (in metres, and in map units as place_map), the whole thing, the attributes it last took in, which its decision trees test; and how nice it finds other creatures",
   "kind": "object",
   "parameters": [
    {
@@ -453,6 +453,35 @@
    }
   ],
   "query": "creature.plan"
+ },
+ {
+  "description": "The cells about a point that are not clear for a creature to go to (land it can't walk on, or things in its way), and the middle of the nearest clear area so wide, as its search for a place to cast, sit or get away finds it",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The point searched about, [x, z] or [x, y, z]",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   },
+   {
+    "description": "How wide the area must be, in metres",
+    "name": "width",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "description": "Whether anything living also keeps a cell from being clear",
+    "name": "living",
+    "type": "boolean"
+   }
+  ],
+  "query": "creature.clear_area"
  },
  {
   "description": "What stands in a map cell (10 by 10) as a search meets it: the things that stay put, then those that move",
@@ -1217,7 +1246,7 @@
   "query": "living.chimneys"
  },
  {
-  "description": "The sounds tagged to things: sound, whether active, and its emitter",
+  "description": "The sounds tagged to things: sound, whether active, its emitter, the object it is attached to, whether it loops",
   "kind": "list",
   "parameters": [],
   "query": "living.sound_tags"
@@ -1292,7 +1321,7 @@
   "query": "players.custom_music"
  },
  {
-  "description": "The players: their entities, primary creatures and alignment",
+  "description": "The players: their entities, primary creatures, computer minds and alignment",
   "kind": "list",
   "parameters": [],
   "query": "players.list"
@@ -1487,7 +1516,7 @@
   "query": "temple.villagers"
  },
  {
-  "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, and whether films and 16-bit colour are on",
+  "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, its creature and its effects, and whether films and 16-bit colour are on",
   "kind": "object",
   "parameters": [],
   "query": "view.video"
@@ -1547,7 +1576,7 @@
   "query": "advisors.draws"
  },
  {
-  "description": "The creature systems' own state: the creature followed or in the cave, the hand on a creature, the hair, voices, footprints, physiology and the mind kept between lands",
+  "description": "The creature systems' own state: the creature followed or in the cave, the hand on a creature, the hair, voices, footprints, physiology, the mind kept between lands and the web page",
   "kind": "object",
   "parameters": [],
   "query": "creatures.systems"
@@ -1833,6 +1862,51 @@
   "query": "help.hand_demo"
  },
  {
+  "description": "The slots of the current player that have a saved game, for the land that is open",
+  "kind": "list",
+  "parameters": [],
+  "query": "saves.slots"
+ },
+ {
+  "description": "Saves the game into a slot: the land, the turn and every creature with its mind file and its leash. The towns, the villagers, the story and the scripts are not saved yet",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The slot, 0 to 20",
+    "name": "slot",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The name of the save",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "saves.save",
+  "writes": true
+ },
+ {
+  "description": "Puts the creatures of the land that is open back as a slot keeps them: the values of each record, the mind of its mind file, the plan that the save kept and its leash",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The slot, 0 to 20",
+    "name": "slot",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "saves.load",
+  "writes": true
+ },
+ {
+  "description": "After a load of a slot of the game itself: each creature of the game's file, and whether the record that a save writes for it now has the same bytes as the file's record",
+  "kind": "list",
+  "parameters": [],
+  "query": "saves.vanilla_check"
+ },
+ {
   "description": "Whether the game is paused, its turn, the frames served, its speed and any stepping",
   "kind": "object",
   "parameters": [],
@@ -2010,7 +2084,7 @@
   "query": "screenshot.pending"
  },
  {
-  "description": "The pointer, the buttons held, the hand, what the cursor picks, and the input still to come",
+  "description": "The pointer, the buttons held, the hand, what the cursor picks (with whether the Action button takes it into the hand, or takes hold of a town's totem under it, and why not), and the input still to come",
   "kind": "object",
   "parameters": [],
   "query": "input.state"
@@ -2245,5 +2319,130 @@
   ],
   "query": "input.replay",
   "writes": true
+ },
+ {
+  "description": "The fast simulation mode, the fixed frame time and the run record that the game writes",
+  "kind": "object",
+  "parameters": [],
+  "query": "sim.state"
+ },
+ {
+  "description": "Turns the fast simulation mode on or off. In the mode the game plays its frames one after the other and draws none or only some. Each frame takes the fixed frame time, so that the turns are the same at any speed. The state after",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The fast mode on or off",
+    "name": "on",
+    "required": true,
+    "type": "boolean"
+   },
+   {
+    "description": "Draw one frame in this many (0 for no frame)",
+    "name": "draw_every",
+    "type": "integer"
+   },
+   {
+    "description": "The fixed game time of each frame, 1 to 1000 (20 by default when the mode turns on with no fixed frame time; 0 for the wall clock)",
+    "name": "frame_ms",
+    "type": "integer"
+   },
+   {
+    "description": "Stop the game at this turn (0 for never)",
+    "name": "until_turn",
+    "type": "integer"
+   }
+  ],
+  "query": "sim.fast",
+  "writes": true
+ },
+ {
+  "description": "Starts the run record in a file of JSON lines, or stops it with stop. The state after",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The file to write",
+    "name": "path",
+    "type": "string"
+   },
+   {
+    "description": "Write a record each time this many turns go by (100 by default)",
+    "name": "every",
+    "type": "integer"
+   },
+   {
+    "description": "The JSON table of how long a plan or an activity can stay the same",
+    "name": "limits",
+    "type": "string"
+   },
+   {
+    "description": "Also keep the hash of the transforms of the entities of each component",
+    "name": "parts",
+    "type": "boolean"
+   },
+   {
+    "description": "Stop the record",
+    "name": "stop",
+    "type": "boolean"
+   }
+  ],
+  "query": "sim.record",
+  "writes": true
+ },
+ {
+  "description": "The player's hand strokes or slaps the player's creature, as the button would: it takes hold of the creature by a command first. With release, or kind release, it lets go, and the creature learns from the sum. A stroke waits for the clocks of the last one, and a slap needs the hand to hold the creature for a second first: an answer of busy is no stroke or slap",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "stroke, slap or release",
+    "name": "kind",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The creature (the player's creature by default)",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The part stroked, 0 (the head) to 8 (the left hand); 3, the belly, by default",
+    "name": "part",
+    "type": "integer"
+   },
+   {
+    "description": "Where the slap lands, as a share of the creature's height (0.5 by default)",
+    "name": "height",
+    "type": "number"
+   },
+   {
+    "description": "A gentle slap",
+    "name": "gentle",
+    "type": "boolean"
+   },
+   {
+    "description": "Let go afterwards",
+    "name": "release",
+    "type": "boolean"
+   }
+  ],
+  "query": "sim.feedback",
+  "writes": true
+ },
+ {
+  "description": "The record of the game now: the player's creature, the counts, the times, and the problems in its values. Only the records keep the times of the turns and the frames",
+  "kind": "object",
+  "parameters": [],
+  "query": "sim.sample"
+ },
+ {
+  "description": "The problems that the stability checks found since the record started",
+  "kind": "list",
+  "parameters": [],
+  "query": "sim.flags"
+ },
+ {
+  "description": "The limits of how long a plan or an activity can stay the same, and the longest time that each stayed the same in this record",
+  "kind": "object",
+  "parameters": [],
+  "query": "sim.limits"
  }
 ]

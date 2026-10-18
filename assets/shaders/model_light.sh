@@ -39,7 +39,8 @@ float ModelLightFactor(vec3 localNormal, vec3 localLight)
 // nothing below 0.4 nor above 1, in whole 255ths
 float PosedModelLightFactor(vec3 localNormal, vec3 localLight)
 {
-	float facing = dot(localNormal, localLight);
+	// The z and x parts first, then the y part, as the game adds them
+	float facing = (localNormal.z * localLight.z + localNormal.x * localLight.x) + localNormal.y * localLight.y;
 	return floor(min((facing < 0.0f ? 0.0f : facing * 1.3f) + 0.4f, 1.0f) * 255.0f);
 }
 

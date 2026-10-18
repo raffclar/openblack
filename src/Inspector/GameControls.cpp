@@ -38,6 +38,7 @@
 #include "Camera/CameraDrag.h"
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/DoubleClickFlight.h"
 #include "Camera/EditorCameraModel.h"
 #include "Camera/FightCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
@@ -381,7 +382,7 @@ std::string GameCamera::Fly(const CameraPose& pose)
 	{
 		return "a script holds the camera and moves it itself";
 	}
-	Locator::camera::value().GetModel().SetFlight(pose.origin, pose.focus);
+	Locator::camera::value().GetModel().SetFlight(pose.origin, pose.focus, camera_fly::k_HalfWayRise);
 	return {};
 }
 

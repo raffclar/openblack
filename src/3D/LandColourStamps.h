@@ -35,7 +35,7 @@ enum class Combine : uint8_t
 };
 
 /// Where a stamp's first texel falls on the land's cells, from a point in the world's x and z: its cell, and the
-/// weights, of 255, its image is blended with along x and z, rounded to the nearest
+/// weights, of 255, its image is blended with along x and z, each worked out as a float and cut towards zero
 struct Placement
 {
 	glm::ivec2 cell;

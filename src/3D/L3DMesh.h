@@ -157,6 +157,14 @@ public:
 	/// The top of the chimney the smoke rises from, in the mesh
 	[[nodiscard]] const std::optional<glm::vec3>& GetChimneyPos() const { return _chimneyPos; }
 	[[nodiscard]] const std::vector<glm::mat4>& GetExtraMetrics() const { return _extraMetrics; }
+	/// A place on the model that the game puts a thing at, by the kind of thing
+	struct EffectPoint
+	{
+		glm::vec3 position;
+		uint32_t kind;
+	};
+	/// The model's effect points, in the model's space, in the order the model keeps them
+	[[nodiscard]] const std::vector<EffectPoint>& GetEffectPoints() const { return _effectPoints; }
 	/// A point fixed to one of the model's bones, in that bone's space
 	struct BonePoint
 	{
@@ -225,6 +233,7 @@ private:
 	std::optional<glm::vec3> _doorPos;
 	std::optional<glm::vec3> _chimneyPos;
 	std::vector<glm::mat4> _extraMetrics;
+	std::vector<EffectPoint> _effectPoints;
 	/// Bounding box if no physics mesh was found
 	std::vector<std::array<glm::vec3, 3>> _physicsTriangles;
 	std::vector<Surface> _surfaces;

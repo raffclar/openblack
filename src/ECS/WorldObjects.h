@@ -39,6 +39,9 @@ namespace openblack::ecs::world_objects
 /// The table row of an object's kind: a villager's, a creature's species', a tree's, a building's and so on; none for
 /// an object the tables don't cover
 [[nodiscard]] const GObjectInfo* InfoOf(entt::entity object);
+/// The table row that sets how an object takes the effects of miracles and heat: the row of its kind, and also the rows
+/// of flowers, worship sites and the temple's heart
+[[nodiscard]] const GObjectInfo* EffectInfoOf(entt::entity object);
 /// A building's own row, found by its number and model
 [[nodiscard]] const GAbodeInfo* AbodeInfoOf(entt::entity object);
 

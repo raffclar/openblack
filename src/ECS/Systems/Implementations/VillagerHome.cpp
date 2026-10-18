@@ -775,6 +775,7 @@ void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, Walk
 	wallHug.goal = goal;
 	// A fresh step is worked out on the next pathfinding turn
 	wallHug.step = {0, 0};
+	wallHug.stepAltitude = 0.0f;
 	registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
 	                MoveStateFinalStepTag, MoveStateArrivedTag>(villager);
 	registry.Remove<WallHugObjectReference>(villager);

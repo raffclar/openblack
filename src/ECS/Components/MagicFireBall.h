@@ -28,6 +28,8 @@ struct MagicFireBall
 	/// The miracle's strength as its particle last moved it, and the ball's radius, which is its sprite's size
 	float strength {1.0f};
 	float radius {1.0f};
+	/// The row of the fireball table that the ball uses, from the power-up level of its miracle
+	uint8_t infoRow {0};
 	/// A fireball a script casts is not cooled by the rain
 	bool affectedByRain {true};
 	/// Whose fireball it is

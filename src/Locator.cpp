@@ -20,9 +20,11 @@
 #include "3D/LandData.h"
 #include "Audio/AudioManager.h"
 #include "Audio/AudioManagerNoOp.h"
+#include "Audio/ClockedAudioPlayer.h"
 #include "CHLApi.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
+#include "Common/MachineClock.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
 #include "Debug/DebugGuiInterface.h"
@@ -61,6 +63,7 @@
 #include "ECS/Systems/Implementations/CreaturePenSystem.h"
 #include "ECS/Systems/Implementations/CreaturePhysiologySystem.h"
 #include "ECS/Systems/Implementations/CreatureSkinSystem.h"
+#include "ECS/Systems/Implementations/CreatureWebPageSystem.h"
 #include "ECS/Systems/Implementations/DialogueControlSystem.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
 #include "ECS/Systems/Implementations/EditorSystem.h"
@@ -85,6 +88,7 @@
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/IntroSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
+#include "ECS/Systems/Implementations/SaveGameSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 #include "ECS/Systems/Implementations/TipBubbleSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
@@ -92,7 +96,9 @@
 #endif
 #include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/ArtefactSystem.h"
+#include "ECS/Systems/Implementations/ComputerPlayerSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
+#include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -115,6 +121,7 @@
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
 #include "ECS/Systems/Implementations/SharkSystem.h"
+#include "ECS/Systems/Implementations/SimulationSystem.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
@@ -141,6 +148,7 @@
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "Graphics/RendererInterface.h"
+#include "Gui/TextDatabase.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
 #include "Profiler.h"
@@ -179,6 +187,7 @@ using openblack::ecs::systems::CameraZoneSystem;
 using openblack::ecs::systems::ChimneySmokeSystem;
 using openblack::ecs::systems::CinematicDirectorSystem;
 using openblack::ecs::systems::CloudSystem;
+using openblack::ecs::systems::ComputerPlayerSystem;
 using openblack::ecs::systems::CreatureAnimationSystem;
 using openblack::ecs::systems::CreatureAudioSystem;
 using openblack::ecs::systems::CreatureCarryOverSystem;
@@ -195,11 +204,13 @@ using openblack::ecs::systems::CreatureObjectActionSystem;
 using openblack::ecs::systems::CreaturePenSystem;
 using openblack::ecs::systems::CreaturePhysiologySystem;
 using openblack::ecs::systems::CreatureSkinSystem;
+using openblack::ecs::systems::CreatureWebPageSystem;
 using openblack::ecs::systems::DanceSystem;
 using openblack::ecs::systems::DialogueControlSystem;
 using openblack::ecs::systems::DynamicsSystem;
 using openblack::ecs::systems::EditorSystem;
 using openblack::ecs::systems::FieldSystem;
+using openblack::ecs::systems::FilmCreatureSystem;
 using openblack::ecs::systems::FireflySystem;
 using openblack::ecs::systems::FishFarmSystem;
 using openblack::ecs::systems::FootprintSystem;
@@ -236,6 +247,7 @@ using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
+using openblack::ecs::systems::SaveGameSystem;
 using openblack::ecs::systems::ScriptControlSystem;
 using openblack::ecs::systems::SharkSystem;
 using openblack::ecs::systems::SnowfallSystem;
@@ -299,7 +311,16 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	Locator::gameRandom::emplace<GameRandomProduction>();
 	try
 	{
-		Locator::audio::emplace<AudioManager>();
+		// A simulation run with a fixed frame time times its sounds by the game's clock
+		if (Locator::config::has_value() && Locator::config::value().clockedAudio)
+		{
+			Locator::audio::emplace<AudioManager>(
+			    std::make_unique<audio::ClockedAudioPlayer>([] { return machine_clock::Ticks(); }));
+		}
+		else
+		{
+			Locator::audio::emplace<AudioManager>();
+		}
 	}
 	catch (std::runtime_error& error)
 	{
@@ -333,7 +354,9 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::musicMoodSystem::emplace<MusicMoodSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
+	Locator::computerPlayerSystem::emplace<ComputerPlayerSystem>();
 	Locator::time::emplace<TimeSystem>();
+	Locator::simulation::emplace<ecs::systems::SimulationSystem>();
 	Locator::vegetation::emplace<VegetationSystem>();
 	Locator::mistSystem::emplace<MistSystem>();
 	Locator::cloudSystem::emplace<CloudSystem>();
@@ -366,6 +389,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::creatureCaveSystem::emplace<CreatureCaveSystem>();
 	Locator::tattooEditorSystem::emplace<TattooEditorSystem>();
 	Locator::tattooMenuSystem::emplace<TattooMenuSystem>();
+	Locator::filmCreatureSystem::emplace<FilmCreatureSystem>();
 	Locator::cinematicDirectorSystem::emplace<CinematicDirectorSystem>();
 	Locator::scriptControlSystem::emplace<ScriptControlSystem>();
 	Locator::dialogueControlSystem::emplace<DialogueControlSystem>();
@@ -399,6 +423,16 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	// The player's creature is kept under their profile's file
 	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(
 	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); });
+	Locator::saveGameSystem::emplace<SaveGameSystem>();
+	// The creature's web page and its pictures go to the folder of the profile picked now
+	Locator::creatureWebPageSystem::emplace<CreatureWebPageSystem>([]() -> std::optional<std::u16string> {
+		if (!Locator::playerProfileSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+		return profile.has_value() ? std::optional(gui::ToUtf16(profile->name)) : std::nullopt;
+	});
 	Locator::tornadoSystem::emplace<TornadoSystem>();
 	Locator::magicShieldSystem::emplace<MagicShieldSystem>();
 	Locator::forestSystem::emplace<ForestSystem>();
@@ -512,6 +546,7 @@ void openblack::ShutDownServices()
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();
+	Locator::computerPlayerSystem::reset();
 	Locator::pickingSystem::reset();
 	Locator::editorSystem::reset();
 	Locator::cameraBookmarkSystem::reset();
@@ -543,6 +578,7 @@ void openblack::ShutDownServices()
 	Locator::helpTextSystem::reset();
 	Locator::helpProfileSystem::reset();
 	Locator::musicMoodSystem::reset();
+	Locator::simulation::reset();
 	Locator::profileFolderSystem::reset();
 	Locator::creatureHelpSystem::reset();
 	Locator::guidanceSystem::reset();
@@ -555,6 +591,7 @@ void openblack::ShutDownServices()
 	Locator::rainSystem::reset();
 	Locator::snowfallSystem::reset();
 	Locator::waterRingSystem::reset();
+	Locator::filmCreatureSystem::reset();
 	Locator::tattooMenuSystem::reset();
 	Locator::tattooEditorSystem::reset();
 	Locator::creatureCaveSystem::reset();
@@ -594,7 +631,9 @@ void openblack::ShutDownServices()
 	Locator::teleportSystem::reset();
 	Locator::vortexSystem::reset();
 	Locator::creatureFizzSystem::reset();
+	Locator::creatureWebPageSystem::reset();
 	Locator::creatureCarryOverSystem::reset();
+	Locator::saveGameSystem::reset();
 	Locator::tornadoSystem::reset();
 	Locator::magicShieldSystem::reset();
 	Locator::forestSystem::reset();

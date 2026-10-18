@@ -212,7 +212,13 @@ struct Memory
 	std::array<uint32_t, k_TutorialCount> tutorialToldTurn {};
 	/// How steadily the hand has been over it, 0 to 1
 	float handOver {0.0f};
+	/// A value that the game sets to 0 when it makes the creature and when the creature moves to a stage. Nothing in the
+	/// game reads it or sets it to another value.
+	uint32_t clearedAtStage {0};
 };
+
+/// The creature moved to a stage: the help clears the value that it keeps for that
+void MovedToStage(Memory& memory);
 
 /// Whole seconds between two game turns
 [[nodiscard]] uint32_t WholeSeconds(uint32_t now, uint32_t then, uint32_t turnsPerSecond);

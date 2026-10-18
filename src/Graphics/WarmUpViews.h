@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <array>
 
 #include "RenderPass.h"
@@ -29,6 +31,29 @@ constexpr std::array k_WindowSceneViews {RenderPass::Sky,
                                          RenderPass::GestureHintCollar2,
                                          RenderPass::GestureHints,
                                          RenderPass::Advisors};
+
+/// The views of the scene that the next frames draw again. Under Vulkan, a warm-up can divide the draws into these
+/// views between some frames, because one frame with all of them can use all of the renderer's descriptor sets.
+constexpr std::array k_PartedViews {RenderPass::ReflectionSky,
+                                    RenderPass::Reflection,
+                                    RenderPass::ReflectionTranslucent,
+                                    RenderPass::ReflectionMirrored,
+                                    RenderPass::Sky,
+                                    RenderPass::Land,
+                                    RenderPass::Main,
+                                    RenderPass::Translucent,
+                                    RenderPass::GestureHintCollar0,
+                                    RenderPass::GestureHintCollar1,
+                                    RenderPass::GestureHintCollar2,
+                                    RenderPass::GestureHints,
+                                    RenderPass::Advisors};
+
+/// The most draws into k_PartedViews that one frame of a warm-up does under Vulkan. Each draw takes one descriptor set
+/// at most. Thus a frame keeps in its share of the sets, with space for the other views and the loading screen.
+constexpr uint32_t k_DrawsPerPart = 768;
+
+/// The most frames that one warm-up uses
+constexpr uint32_t k_MaxParts = 64;
 
 /// The view that the loading screen draws in. In a warm-up's frame it first clears all of the window again, as the
 /// main view clears it. It comes after every view in k_WindowSceneViews.

@@ -19,6 +19,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "ECS/AbodeFoundation.h"
+#include "ECS/AbodeSurroundings.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Fixed.h"
@@ -37,6 +38,7 @@
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/TownCentreParts.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
@@ -50,6 +52,7 @@ using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace abode_foundation = openblack::ecs::abode_foundation;
+namespace abode_surroundings = openblack::ecs::abode_surroundings;
 
 void AddStoragePitComponents(entt::entity entity, const Mesh& pitMesh, const GAbodeInfo& info, const glm::vec3& position,
                              float yAngleRadians, uint32_t foodAmount, uint32_t woodAmount)
@@ -221,11 +224,15 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 		AddStoragePitComponents(entity, mesh, info, position, yAngleRadians, foodAmount, woodAmount);
 		break;
 	case AbodeType::TownCentre:
-		// A town centre standing built carries its town's totem, and its stone hands show the miracles its town offers
-		VillageTotemArchetype::Create(entity, info);
-		if (Locator::spellIconSystem::has_value())
+		// A town centre standing built carries its town's totem, and its stone hands show the miracles its town offers.
+		// A town centre not yet built gets them when its town finishes it.
+		if (ecs::town_centre_parts::PartsWhenMade(built))
 		{
-			Locator::spellIconSystem::value().CentreWorking(entity);
+			VillageTotemArchetype::Create(entity, info);
+			if (Locator::spellIconSystem::has_value())
+			{
+				Locator::spellIconSystem::value().CentreWorking(entity);
+			}
 		}
 		break;
 	case AbodeType::Graveyard:
@@ -239,6 +246,9 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	default:
 		break;
 	}
+
+	// A building puts up the things it has round itself, built or not
+	abode_surroundings::Create(entity);
 
 	return entity;
 }

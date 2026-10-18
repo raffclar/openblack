@@ -17,7 +17,7 @@
 #include <cstdint>
 
 #include <algorithm>
-#include <numbers>
+#include <bit>
 #include <string>
 #include <vector>
 
@@ -33,11 +33,23 @@ using openblack::psys::ParticleObject;
 
 namespace
 {
-constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
 /// The invisible spell's kind, which fades the wisps as the creature fades
 constexpr int k_InvisibleKind = 7;
-/// Points about a bone the hearts and steam start from lie within this share of the creature's size of it
-constexpr float k_AboutBone = 0.3f;
+/// The kind of the anti-spell. The game's data has no creature spell of this kind, but the wisps let go of one.
+constexpr int k_AntiSpellKind = 16;
+/// Points about a bone the hearts and steam start from lie within this share of the creature's size of it. The value
+/// is one step under 0.3f, as the game has it.
+constexpr float k_AboutBone = std::bit_cast<float>(0x3E999999u);
+/// The map position of a metre value, as the land test of the steam makes it: times 65536, then times 0.1
+[[nodiscard]] int32_t SteamMapFixed(float metres)
+{
+	const float fixed = metres * 65536.0f * 0.1f;
+	if (!(fixed > -2147483648.0f && fixed < 2147483648.0f))
+	{
+		return static_cast<int32_t>(0x80000000u);
+	}
+	return static_cast<int32_t>(fixed);
+}
 /// A creature casting a spell plays this sound for it rather than the spell's own
 constexpr std::string_view k_CastByCreatureSound = "SOUND_SPELL_CREATURE_SPELL_CAST_BY_OTHER_CREATURE";
 
@@ -52,12 +64,13 @@ public:
 	{
 	}
 
-	[[nodiscard]] bool Creates() const override { return true; }
+	/// It waits for its target until the effect closes down
+	[[nodiscard]] bool KeepsAlive() const override { return true; }
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
 	{
 		auto& world = effect.Services().world;
-		// Once: an atom at the feet of the creature the spell was cast on
+		// Once: an atom at the feet of the creature the spell was cast on. The atom stays at that place.
 		if (slot.first)
 		{
 			slot.first = false;
@@ -90,12 +103,8 @@ public:
 			{
 				continue;
 			}
-			// It stays at the creature's feet, and lets go of it once it has gone
-			if (const auto body = world.CreatureBody(found->second.object); body.has_value())
-			{
-				atom->position = body->origin;
-			}
-			else
+			// It lets go of the creature once the creature has gone
+			if (!world.CreatureBody(found->second.object).has_value())
 			{
 				found->second.object = entt::null;
 			}
@@ -156,9 +165,10 @@ public:
 		const auto body = creature.has_value() ? world.CreatureBody(*creature) : std::nullopt;
 		const auto* sink = effect.GetSink();
 		const int kind = sink != nullptr ? sink->CreatureSpellKind() : -1;
-		if (!body.has_value())
+		// The rule lets go when its creature has gone, when it has no creature spell, or for an anti-spell
+		if (!body.has_value() || kind < 0 || kind == k_AntiSpellKind)
 		{
-			return true;
+			return false;
 		}
 		const auto hand = effect.GetProcessInfo().handPosition;
 		// Where the creature and the caster's hands were as the wisps began
@@ -215,11 +225,12 @@ public:
 				continue;
 			}
 			auto& angles = found->second.a;
-			angles.x = std::fmod(angles.x + dt * angles.z, k_TwoPi);
-			angles.y = std::fmod(angles.y + dt * angles.w, k_TwoPi);
+			angles.x = maths::WispTurn(angles.x, angles.z, dt);
+			angles.y = maths::WispTurn(angles.y, angles.w, dt);
 			const float age = effect.AtomAge(*atom);
 			const auto orbit = maths::WispOrbit(box, angles.x, angles.y, taperFrac, age);
-			atom->position = effect.GlobalToLocal(collection, maths::WispPosition(hand, orbit, age));
+			// The place in the world goes in as the position in the collection's space, with no change between them
+			atom->position = maths::WispPosition(hand, orbit, age);
 			atom->baseScale = found->second.b.x * body->size;
 			atom->rgba[3] = maths::WispAlpha(age);
 		}
@@ -266,10 +277,20 @@ public:
 	{
 		const auto creature = CreatureOf(collection);
 		const auto body = creature.has_value() ? effect.Services().world.CreatureBody(*creature) : std::nullopt;
+		// With its creature gone, or with no hearts to make a second, the rule lets go
+		if (!body.has_value())
+		{
+			return false;
+		}
+		const float rate = static_cast<float>(maxAtoms) / dieAge;
+		if (!(rate > 0.0f))
+		{
+			return false;
+		}
 		auto& due = slot.state.x;
 		auto& made = slot.state.y;
-		due += effect.GetDt() * static_cast<float>(maxAtoms) / dieAge;
-		if (body.has_value() && !effect.Closing())
+		due += effect.GetDt() * rate;
+		if (!effect.Closing())
 		{
 			while (made < due && collection.atoms.size() < static_cast<size_t>(std::max(0, maxAtoms)))
 			{
@@ -277,7 +298,7 @@ public:
 				auto& atom = effect.NewAtom(collection, effect.FindCreator(creator), nextGroups);
 				atom.baseScale *= body->size;
 				atom.position = effect.GlobalToLocal(collection, AboutRandomBone(effect, *body));
-				atom.velocity = effect.RandomInBall() * initSpeed * body->size;
+				atom.velocity = effect.RandomInBall() * (initSpeed * body->size);
 			}
 		}
 		std::erase_if(collection.atoms, [&](const auto& atom) { return effect.AtomAge(*atom) > dieAge; });
@@ -317,7 +338,12 @@ public:
 		}
 		const auto creature = CreatureOf(collection);
 		const auto body = creature.has_value() ? effect.Services().world.CreatureBody(*creature) : std::nullopt;
-		if (!body.has_value() || !body->rightEye.has_value() || *body->rightEye >= body->bones.size())
+		// With its creature gone, the rule lets go
+		if (!body.has_value())
+		{
+			return false;
+		}
+		if (!body->rightEye.has_value() || *body->rightEye >= body->bones.size())
 		{
 			return true;
 		}
@@ -330,7 +356,8 @@ public:
 		                                                  : maths::ItchOrbit(rightEye, leftEye, age, orbitSpeed);
 		for (auto& atom : collection.atoms)
 		{
-			atom->position = effect.GlobalToLocal(collection, point);
+			// The place in the world goes in as the position in the collection's space, with no change between them
+			atom->position = point;
 		}
 		return true;
 	}
@@ -363,10 +390,15 @@ public:
 		const auto creature = CreatureOf(collection);
 		auto& world = effect.Services().world;
 		const auto body = creature.has_value() ? world.CreatureBody(*creature) : std::nullopt;
+		// With its creature gone, the rule lets go
+		if (!body.has_value())
+		{
+			return false;
+		}
 		auto& due = slot.state.x;
 		auto& made = slot.state.y;
-		due += effect.GetDt() * static_cast<float>(maxAtoms) / dieAge;
-		if (body.has_value() && body->rightFoot.has_value() && *body->rightFoot < body->bones.size() && !effect.Closing())
+		due += (static_cast<float>(maxAtoms) / dieAge) * effect.GetDt();
+		if (body->rightFoot.has_value() && *body->rightFoot < body->bones.size() && !effect.Closing())
 		{
 			while (made < due && collection.atoms.size() < static_cast<size_t>(std::max(0, maxAtoms)))
 			{
@@ -376,19 +408,19 @@ public:
 				const auto bone = effect.Random(1.0f) >= 0.5f ? body->Mirror(*body->rightFoot) : *body->rightFoot;
 				const auto foot = bone < body->bones.size() ? body->bones.at(bone) : body->origin;
 				atom.position = effect.GlobalToLocal(collection, foot + effect.RandomInBall() * (body->size * k_AboutBone));
-				atom.velocity = effect.RandomInBall() * initSpeed * body->size;
+				atom.velocity = effect.RandomInBall() * (initSpeed * body->size);
 			}
 		}
-		// It stays above the land, and goes when old
-		const float lift = minHeight * (body.has_value() ? body->size : 1.0f);
+		// It stays above the land, and goes when old. The land test reads the position of the atom in the space of its
+		// collection as if it were a place in the world, as the game does.
+		const float lift = minHeight * body->size;
 		for (auto& atom : collection.atoms)
 		{
-			auto at = effect.LocalToGlobal(collection, atom->position);
-			const float least = world.LandHeight({at.x, at.z}) + lift;
-			if (at.y < least)
+			auto& at = atom->position;
+			const float ground = world.LandHeightAtMap(SteamMapFixed(at.x), SteamMapFixed(at.z));
+			if (at.y - ground < lift)
 			{
-				at.y = least;
-				atom->position = effect.GlobalToLocal(collection, at);
+				at.y = lift + ground;
 			}
 		}
 		std::erase_if(collection.atoms, [&](const auto& atom) { return effect.AtomAge(*atom) > dieAge; });

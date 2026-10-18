@@ -207,6 +207,9 @@ constexpr size_t k_AhaAnimation = 220;
 /// thing of that kind, unless the thing is doing something it finds interesting
 constexpr float k_ObservedCuriosityShare = 0.01f;
 [[nodiscard]] float CuriosityShare(bool observedKind, bool doingSomethingInteresting);
+/// Only an object can be of a kind that the creature examined: towns, forests, temples, miracles, flocks and mists are
+/// not objects
+[[nodiscard]] bool IsLookedOverAsAKind(uint32_t beliefType, bool mist);
 /// A villager does something interesting to a creature when its state teaches a skill (an index in the creature's list
 /// of skills, the last index plus one for none) that the creature does not know
 constexpr uint32_t k_NoSkillTaught = 6;

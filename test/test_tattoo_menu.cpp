@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <optional>
+#include <vector>
 
 #include <PhysiqueFile.h>
 #include <glm/ext/matrix_clip_space.hpp>
@@ -15,8 +16,11 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureHair.h"
 #include "Creature/TattooEditor.h"
 #include "Creature/TattooMenu.h"
+#include "ECS/Components/CreatureHair.h"
+#include "ECS/Systems/CreatureHairStep.h"
 
 using namespace openblack;
 using namespace openblack::tattoo_menu;
@@ -110,4 +114,75 @@ TEST(TattooMenu, PointerPointIsTenIntoTheScreen)
 	// Up and to the left of the eye
 	EXPECT_GT(corner->y, expected.y);
 	EXPECT_FALSE(PointerPoint(view, projection, {0.0f, 600.0f}, {0.0f, 0.0f}).has_value());
+}
+
+namespace
+{
+using openblack::ecs::components::CreatureHair;
+using openblack::ecs::systems::HairGroupShape;
+
+// A mesh with two tufts: one of three strands and one of one strand
+HairGroupShape FakeShape(size_t group)
+{
+	return {.strandCount = group == 0 ? 3u : 1u, .segmentCount = 4, .physics = {}, .colour = {10, 20, 30}, .textured = true};
+}
+
+std::optional<openblack::creature_hair::Root> FakeRoot(size_t /*group*/, size_t strand)
+{
+	return openblack::creature_hair::Root {.position = {static_cast<float>(strand), 2.0f, 0.0f},
+	                                       .inwardNormal = {0.0f, -1.0f, 0.0f},
+	                                       .direction = {0.0f, 1.0f, 0.0f}};
+}
+} // namespace
+
+TEST(TattooMenuHair, TheMenuCreatureTakesItsGroupsAndStrandsFromItsMesh)
+{
+	CreatureHair hair;
+	EXPECT_FALSE(hair.started);
+	EXPECT_TRUE(hair.groups.empty());
+	openblack::ecs::systems::StepHair(hair, 2, FakeShape, FakeRoot, 0.01f);
+	ASSERT_EQ(hair.groups.size(), 2u);
+	EXPECT_EQ(hair.groups[0].strands.size(), 3u);
+	EXPECT_EQ(hair.groups[1].strands.size(), 1u);
+	EXPECT_EQ(hair.groups[0].strands[0].positions.size(), 4u);
+	EXPECT_EQ(hair.groups[0].colour, glm::ivec3(10, 20, 30));
+	EXPECT_TRUE(hair.groups[0].textured);
+	EXPECT_TRUE(hair.started);
+}
+
+TEST(TattooMenuHair, TheStrandsStartFreshAtEachOpening)
+{
+	CreatureHair first;
+	openblack::ecs::systems::StepHair(first, 2, FakeShape, FakeRoot, 0.5f);
+	const auto moved = first.groups[0].strands[1].positions;
+	// The editor opens again: the creature is new and has new hair, so it moves as the first one did, not on from it
+	CreatureHair second;
+	EXPECT_FALSE(second.started);
+	openblack::ecs::systems::StepHair(second, 2, FakeShape, FakeRoot, 0.5f);
+	EXPECT_EQ(second.groups[0].strands[1].positions, moved);
+	// Hair that goes on moves from where it was
+	const auto liftedRoot = [](size_t group, size_t strand) {
+		auto root = FakeRoot(group, strand);
+		root->position.y += 1.0f;
+		return root;
+	};
+	openblack::ecs::systems::StepHair(first, 2, FakeShape, liftedRoot, 0.5f);
+	EXPECT_NE(first.groups[0].strands[1].positions, moved);
+}
+
+TEST(TattooMenuHair, TheHairMovesByTheRealFrameTimeToAtMostOneSecond)
+{
+	using openblack::creature_hair::StepSeconds;
+	EXPECT_FLOAT_EQ(StepSeconds(10.0f), 0.01f);
+	EXPECT_FLOAT_EQ(StepSeconds(1000.0f), 1.0f);
+	EXPECT_FLOAT_EQ(StepSeconds(2500.0f), 1.0f);
+	EXPECT_FLOAT_EQ(StepSeconds(-5.0f), 0.0f);
+	EXPECT_FLOAT_EQ(StepSeconds(0.0f), 0.0f);
+}
+
+TEST(TattooMenuHair, TheHairIsDrawnAfterTheBody)
+{
+	EXPECT_EQ(DrawOrder(true, true), (std::vector<Layer> {Layer::Body, Layer::Hair}));
+	EXPECT_EQ(DrawOrder(true, false), (std::vector<Layer> {Layer::Body}));
+	EXPECT_EQ(DrawOrder(false, true), (std::vector<Layer> {Layer::Body}));
 }

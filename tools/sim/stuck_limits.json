@@ -1,0 +1,8 @@
+{
+  "about": "The longest time, in game turns, that the creature's plan, activity or action can stay the same before the run record flags it as stuck. The key is plan:, activity: or action: and the name the record shows; plan:* and the like apply to every name without a row of its own. A null limit flags nothing: the record only keeps the longest time it saw. The audit fills each limit from the game's own rules, with the evidence in source; no limit is tuned.",
+  "limits": [
+    {"key": "plan:*", "turns": null, "source": "todo: vanilla"},
+    {"key": "activity:*", "turns": null, "source": "todo: vanilla"},
+    {"key": "action:*", "turns": null, "source": "todo: vanilla"}
+  ]
+}

@@ -19,12 +19,14 @@
 #include <gtest/gtest.h>
 
 #include "Camera/Camera.h"
+#include "Common/GameRandom.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -130,8 +132,48 @@ public:
 		entt::entity object;
 		std::optional<entt::entity> activityObject;
 	};
+	creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity) override
+	{
+		++handChecks;
+		if (handChecks <= hands.size())
+		{
+			return hands.at(handChecks - 1);
+		}
+		return creature_mind::HandsCheck::Free;
+	}
 	std::vector<Forced> forced;
 	std::optional<entt::entity> pooedDirectly;
+	/// What the checks of the hands before a faint do in turn, then Free
+	std::vector<creature_mind::HandsCheck> hands;
+	size_t handChecks {0};
+};
+
+/// The game's random numbers: they give the numbers in the list in turn, then 0, and count the draws of each range
+class ListedGameRandom final: public GameRandomInterface
+{
+public:
+	uint32_t GameRand(uint32_t range) override
+	{
+		ranges.push_back(range);
+		if (next < numbers.size())
+		{
+			return numbers.at(next++);
+		}
+		return 0;
+	}
+	float GameFloatRand(float) override { return 0.0f; }
+	uint32_t LocalRand(int32_t) override { return 0; }
+	float LocalFloatRand(float) override { return 0.0f; }
+	int32_t CrtRand() override { return 0; }
+	void CrtSrand(uint32_t) override {}
+	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return {}; }
+	void SetSeeds(GameRandomSeeds) override {}
+	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
+	void SetParticleStream(ParticleRandomStream) override {}
+
+	std::vector<uint32_t> numbers;
+	size_t next {0};
+	std::vector<uint32_t> ranges;
 };
 
 /// Two creatures in a duel in an arena on flat land, neither with a body to click on. The camera shows their fight.
@@ -333,8 +375,11 @@ TEST_F(CreatureFightSystemTest, AKnockOutThatNoBlowMadeGivesNoSightOfAFightWon)
 {
 	Locator::reactionSystem::emplace<RecordedReactions>();
 	auto& reactions = static_cast<RecordedReactions&>(Locator::reactionSystem::value());
-	// A miracle or a loss of life knocks the loser out, not a blow. The faint alone makes a reaction, as to a death.
+	// A miracle or a loss of life knocks the loser out, not a blow. The faint alone makes a reaction, as to a death, on
+	// the turn that it starts on the body.
 	fights.KnockOut(second);
+	EXPECT_TRUE(reactions.made.empty());
+	fights.ProcessTurn();
 	ASSERT_EQ(reactions.made.size(), 1u);
 	EXPECT_EQ(reactions.made.front().type, Reaction::ReactToDeath);
 	EXPECT_EQ(reactions.made.front().initiator, second);
@@ -504,6 +549,21 @@ TEST_F(CreatureFightSystemTest, ACreatureRefusesAFightWithOneTooBigOrTooSmall)
 	EXPECT_EQ(fights.StartFight(big, small), Start::Refused);
 }
 
+// A creature that does a joint action with a third creature refuses a fight; its partner may still ask it
+TEST_F(CreatureFightSystemTest, ACreatureTakenUpWithAThirdCreatureRefusesAFight)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto asker = MakeCreature(registry, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 0.0f});
+	const auto asked = MakeCreature(registry, PlayerNames::PLAYER_TWO, {130.0f, 0.0f, 0.0f});
+	const auto third = MakeCreature(registry, PlayerNames::PLAYER_TWO, {160.0f, 0.0f, 0.0f});
+	using Start = ecs::systems::CreatureFightSystemInterface::StartResult;
+	registry.Assign<CreaturePartner>(asked, CreaturePartner {.partner = third});
+	EXPECT_EQ(fights.StartFight(asker, asked), Start::Refused);
+	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(asked));
+	registry.AssignOrReplace<CreaturePartner>(asked, CreaturePartner {.partner = asker});
+	EXPECT_EQ(fights.StartFight(asker, asked), Start::Started);
+}
+
 TEST_F(CreatureFightSystemTest, AKnockOutKeepsTheWinnerAndTheLoserFromReactions)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -670,4 +730,108 @@ TEST_F(CreatureFightSystemTest, LifeLostOutOfADuelLeavesTheFightHealth)
 	const auto before = registry.Get<const CreatureFighting>(first).fighter.health;
 	fights.LoseFightHealth(first, 0.2f);
 	EXPECT_FLOAT_EQ(registry.Get<const CreatureFighting>(first).fighter.health, before);
+}
+
+// As the fight starts, the game's random numbers choose the taunt of each creature, the other creature's first. Each try
+// to start the taunt draws a side first, and a body that plays an action refuses the try until it is free.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheGameChoosesTheTauntsAndEachTryDrawsASide)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Remove<CreatureFighting>(first);
+	registry.Remove<CreatureFighting>(second);
+	auto& game = static_cast<ListedGameRandom&>(Locator::gameRandom::emplace<ListedGameRandom>());
+	game.numbers = {1, 0};
+	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+	EXPECT_EQ(game.ranges, (std::vector<uint32_t> {2, 2}));
+	EXPECT_TRUE(registry.Get<const CreatureFighting>(second).rude);
+	EXPECT_FALSE(registry.Get<const CreatureFighting>(first).rude);
+
+	registry.Get<CreatureFighting>(first).stage = CreatureFighting::Stage::Taunt;
+	registry.Get<CreatureFighting>(second).stage = CreatureFighting::Stage::Taunt;
+	auto& body = registry.Get<CreatureAnimation>(first).body;
+	body.kind = creature_layers::BodyAction::Kind::Once;
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	// The busy creature draws on each turn and does not taunt; the other draws once, taunts and goes on
+	EXPECT_FALSE(registry.Get<const CreatureFighting>(first).played);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, CreatureFighting::Stage::Taunt);
+	EXPECT_NE(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Taunt);
+	EXPECT_EQ(game.ranges.size(), 2u + 3u + 1u);
+	Locator::gameRandom::reset();
+}
+
+// A faint starts on the body on the next turn of the knock-out. It cuts what the body plays and lies on the side that
+// one draw of the game's random numbers chooses then.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AFaintCutsTheBodyAndDrawsItsSide)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& game = static_cast<ListedGameRandom&>(Locator::gameRandom::emplace<ListedGameRandom>());
+	game.numbers = {1};
+	registry.Get<CreatureAnimation>(second).body.kind = creature_layers::BodyAction::Kind::Once;
+	fights.ForceFaint(second);
+	EXPECT_TRUE(game.ranges.empty());
+	EXPECT_EQ(registry.Get<const CreatureAnimation>(second).body.kind, creature_layers::BodyAction::Kind::Once);
+	fights.ProcessTurn();
+	const auto& body = registry.Get<const CreatureAnimation>(second).body;
+	EXPECT_EQ(body.kind, creature_layers::BodyAction::Kind::Sequence);
+	EXPECT_TRUE(body.mirrored);
+	EXPECT_EQ(game.ranges, (std::vector<uint32_t> {2}));
+	Locator::gameRandom::reset();
+}
+
+// A faint that does not come from the mind first checks the hands. With a thing in the hand, the creature starts to let
+// go, and the faint starts on the next turn with no new check. While the body or the hands are busy, the faint waits.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AFaintWaitsForTheLetGoOfTheThingInTheHand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	auto& game = static_cast<ListedGameRandom&>(Locator::gameRandom::emplace<ListedGameRandom>());
+	using creature_mind::HandsCheck;
+	minds.hands = {HandsCheck::Wait, HandsCheck::Wait, HandsCheck::LetGo};
+	fights.ForceFaint(second);
+	const auto faints = [&] {
+		return registry.Get<const CreatureAnimation>(second).body.kind == creature_layers::BodyAction::Kind::Sequence;
+	};
+	// Two turns busy, then the let-go starts
+	for (size_t turn = 1; turn <= 3; ++turn)
+	{
+		fights.ProcessTurn();
+		EXPECT_FALSE(faints());
+		EXPECT_EQ(minds.handChecks, turn);
+		EXPECT_TRUE(game.ranges.empty());
+	}
+	EXPECT_TRUE(registry.Get<const CreatureKnockedOut>(second).handsChecked);
+	// The faint starts with no new check and draws its side
+	fights.ProcessTurn();
+	EXPECT_TRUE(faints());
+	EXPECT_EQ(minds.handChecks, 3u);
+	EXPECT_EQ(game.ranges, (std::vector<uint32_t> {2}));
+	EXPECT_FALSE(registry.Get<const CreatureKnockedOut>(second).fainting);
+	Locator::gameRandom::reset();
+	Locator::creatureMindSystem::reset();
+}
+
+// The knocked-out creature counts the time that it lies only from when it lies still: not while the faint waits for the
+// hands, and not while the faint plays before it lies still.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AKnockedOutCreatureCountsItsTimeFromWhenItLiesStill)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	fights.ForceFaint(second);
+	fights.ProcessTurn();
+	fights.ProcessTurn();
+	const auto& knockedOut = registry.Get<const CreatureKnockedOut>(second);
+	EXPECT_LT(knockedOut.seconds, 0.0f);
+	// It lies still: from now its time counts on each turn
+	registry.Get<CreatureAnimation>(second).body.phase = creature_layers::BodyAction::Phase::Loop;
+	fights.ProcessTurn();
+	const auto first = knockedOut.seconds;
+	fights.ProcessTurn();
+	EXPECT_GT(knockedOut.seconds, first);
+	EXPECT_EQ(knockedOut.stage, CreatureKnockedOut::Stage::Lying);
 }

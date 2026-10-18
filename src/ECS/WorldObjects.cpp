@@ -18,6 +18,8 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
+#include "Animals/FishFarmRules.h"
+#include "ECS/AbodeSurroundings.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -32,6 +34,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Indestructible.h"
@@ -47,6 +50,7 @@
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -63,6 +67,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -261,6 +266,47 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	return nullptr;
 }
 
+const GObjectInfo* world_objects::EffectInfoOf(entt::entity object)
+{
+	if (const auto* kind = InfoOf(object))
+	{
+		return kind;
+	}
+	if (!Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		return nullptr;
+	}
+	const auto& info = Locator::infoConstants::value();
+	if (const auto* flowers = registry.TryGet<const Flowers>(object))
+	{
+		return Row(info.flowers, flowers->type);
+	}
+	// A worship site has the row of its tribe
+	if (const auto* site = registry.TryGet<const WorshipSite>(object))
+	{
+		return Row(info.worshipSite, site->tribe);
+	}
+	if (registry.AllOf<Temple>(object))
+	{
+		return &info.citadelHeart;
+	}
+	if (registry.AllOf<FishFarm>(object))
+	{
+		return &info.fishFarm;
+	}
+	// A street lantern takes effects and fire by its row of the statics' table
+	if (const auto* lantern = registry.TryGet<const StreetLantern>(object))
+	{
+		return Row(info.mobileStatic, lantern->info);
+	}
+	return nullptr;
+}
+
 std::vector<model_surface::Triangle> world_objects::DrawnTrianglesOf(entt::entity object)
 {
 	const auto* mesh = Locator::entitiesRegistry::value().TryGet<const Mesh>(object);
@@ -286,6 +332,11 @@ glm::mat4 world_objects::PlacementOf(entt::entity object)
 world_objects::Size world_objects::SizeOf(entt::entity object)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	// A fish farm has no model: it reaches its own radius across the land, and has no height
+	if (registry.AllOf<FishFarm>(object))
+	{
+		return {.radius = fish_farm::k_Radius, .height = 0.0f};
+	}
 	Size size {.radius = k_DefaultRadius, .height = k_DefaultHeight};
 	const auto* transform = registry.TryGet<const Transform>(object);
 	// A one-shot miracle's globe is drawn by the miracles' own pass, with its dome's model. An altar has its model
@@ -522,9 +573,10 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 		needs->needs.life = std::max(needs->needs.life - damage, 0.0f);
 		return needs->needs.life;
 	}
-	// A building not yet built loses what is built of it rather than life, and all its life once nothing is
+	// A building, a worship site or a temple not yet built loses what is built of it rather than life, and all its life
+	// once nothing is
 	if (auto* progress = registry.TryGet<BuildProgress>(object);
-	    progress != nullptr && progress->built < 1.0f && registry.AnyOf<Abode, SpellDispenser>(object))
+	    progress != nullptr && progress->built < 1.0f && registry.AnyOf<Abode, SpellDispenser, WorshipSite, Temple>(object))
 	{
 		progress->built = progress->built - damage <= 0.0f ? 0.0f : progress->built - damage;
 		if (progress->built != 0.0f)
@@ -661,6 +713,11 @@ void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& de
 		}
 		return;
 	}
+	// A worship site with no life left stays as it is
+	if (registry.AllOf<WorshipSite>(object))
+	{
+		return;
+	}
 	if (registry.AnyOf<Abode, SpellDispenser>(object))
 	{
 		// A ghost of it flickers out where it stood, and it goes
@@ -685,6 +742,12 @@ void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& de
 		{
 			Locator::animalSystem::value().SetDying(object);
 		}
+		return;
+	}
+	// A fish farm goes from the land, its fishermen deciding afresh
+	if (registry.AllOf<FishFarm>(object) && Locator::fishFarmSystem::has_value())
+	{
+		Locator::fishFarmSystem::value().RemoveFarm(object);
 		return;
 	}
 	if (auto* field = registry.TryGet<Field>(object))
@@ -728,10 +791,11 @@ void world_objects::Remove(entt::entity object)
 	graveyards::Lost(object);
 	// A crèche going hands its town's children over to another of the town's buildings
 	creches::Lost(object);
-	// A town's building going is planned again by its town, where it stood
+	// A town's building going is planned again by its town, where it stood, and the things it put round itself go
 	if (registry.AllOf<Abode>(object))
 	{
 		town_planning::PlanAgain(object);
+		abode_surroundings::Delete(object);
 	}
 	// A building's people are made homeless as it goes, the newest first
 	if (const auto* abode = registry.TryGet<const Abode>(object); abode != nullptr && Locator::townSystem::has_value())
@@ -767,6 +831,18 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 		// A pile is its store's or its building's, and burning it attacks that town as much as its own kind says
 		town = *pileTown;
 		kind = InfoOf(object);
+	}
+	else if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object))
+	{
+		// A miracle dispenser is a building of its town, by its own row
+		town = dispenser->town;
+		kind = AbodeInfoOf(object);
+	}
+	else if (const auto* farm = registry.TryGet<const FishFarm>(object))
+	{
+		// A fish farm is its town's, by its own row
+		town = farm->town;
+		kind = &info.fishFarm;
 	}
 	else if (const auto* abode = registry.TryGet<const Abode>(object))
 	{
@@ -861,7 +937,7 @@ bool world_objects::CanBeCrushed(entt::entity object)
 		return false;
 	}
 	return registry.AnyOf<Villager, Creature, Animal, Abode, Tree, DeadTree, Feature, Field, AnimatedStatic, BigForest,
-	                      MobileStatic, Flowers>(object);
+	                      MobileStatic, Flowers, SpellDispenser, WorshipSite, Temple, FishFarm>(object);
 }
 
 PlayerNames world_objects::IconPlayer(const Registry& registry, entt::entity icon)
@@ -928,10 +1004,21 @@ std::optional<PlayerNames> world_objects::PlayerOf(entt::entity object)
 		const auto* town = registry.Valid(dispenser->town) ? registry.TryGet<const Town>(dispenser->town) : nullptr;
 		return town != nullptr ? town->owner : PlayerNames::NEUTRAL;
 	}
+	// A fish farm is its town's player's, and a farm of no town is no player's
+	if (const auto* farm = registry.TryGet<const FishFarm>(object))
+	{
+		const auto* town = registry.Valid(farm->town) ? registry.TryGet<const Town>(farm->town) : nullptr;
+		return town != nullptr ? std::optional(town->owner) : std::nullopt;
+	}
 	// A temple is its player's
 	if (const auto* temple = registry.TryGet<const Temple>(object))
 	{
 		return temple->owner;
+	}
+	// A worship site is its temple's player's
+	if (const auto* site = registry.TryGet<const WorshipSite>(object))
+	{
+		return site->player;
 	}
 	if (const auto* magic = registry.TryGet<const MagicTree>(object))
 	{

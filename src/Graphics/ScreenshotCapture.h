@@ -132,6 +132,8 @@ public:
 	                                              RenderPass::CinemaBars,
 	                                              RenderPass::Advisors,
 	                                              RenderPass::Interface,
+	                                              RenderPass::FilmCreature,
+	                                              RenderPass::FilmOverlay,
 	                                              RenderPass::MenuCreature,
 	                                              RenderPass::MenuCreatureOverlay,
 	                                              RenderPass::InterfaceCreatures,

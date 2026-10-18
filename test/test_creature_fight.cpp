@@ -413,7 +413,9 @@ TEST(CreatureFight, BlowsTakeTheirShapeFromTheStrikingBone)
 TEST(CreatureFight, BlowsAreTestedThirtyTimesATurnNearTheirLanding)
 {
 	// A creature of size 1: a turn of 100 ms gives a span of 117 ms, tests 3 ms apart, within 70 ms of the land time
-	EXPECT_EQ(TestSpanMs(100.0f, 1.0f), 117);
+	EXPECT_EQ(TestSpanMs(100.0f, 1.0f, false), 117);
+	// With real time set by a script, the span is the turn's time
+	EXPECT_EQ(TestSpanMs(100.0f, 1.0f, true), 100);
 	EXPECT_EQ(TestWindowMs(117), 70);
 	const auto times = BlowTestTimes(200, 117, 300);
 	ASSERT_FALSE(times.empty());
@@ -659,6 +661,10 @@ TEST(CreatureFight, OutcomesAndStarting)
 	EXPECT_TRUE(FightWonIsSeen(true, true));
 	EXPECT_FALSE(FightWonIsSeen(false, true));
 	EXPECT_FALSE(FightWonIsSeen(true, false));
+	// The winner's plan is an order, forced only when a miracle or a loss of life knocked the loser out
+	EXPECT_FALSE(WinPlanForced(true));
+	EXPECT_TRUE(WinPlanForced(false));
+	EXPECT_FLOAT_EQ(k_WinPlanPriority, 1.0f);
 	EXPECT_EQ(Response(0.8f, 0.5f), animations::k_Happy);
 	EXPECT_EQ(Response(0.4f, 0.5f), animations::k_Sad);
 }
@@ -885,6 +891,11 @@ TEST(CreatureFight, AFighterOnTheEdgeOfTheRangeIsOutsideIt)
 
 TEST(CreatureFight, AFighterStepsBackToTheMiddle)
 {
+	// Both fighters inside the range: the arena lets them fight. Either one at the range or past it stops both.
+	const Arena ring {.centre = {0.0f, 0.0f}, .radius = 10.0f};
+	EXPECT_FALSE(KeepsInArena(ring, {7.99f, 0.0f}, {0.0f, -7.99f}));
+	EXPECT_TRUE(KeepsInArena(ring, {8.0f, 0.0f}, {0.0f, 0.0f}));
+	EXPECT_TRUE(KeepsInArena(ring, {0.0f, 0.0f}, {0.0f, -8.01f}));
 	// Within its body radius of the middle it takes no step
 	EXPECT_FALSE(StepToMiddle({0.0f, 2.0f}, 2.0f, 2.0f).has_value());
 	// Ahead or behind when the middle is 1.5 times farther that way than to the side

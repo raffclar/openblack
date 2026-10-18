@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <numbers>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -316,6 +317,15 @@ constexpr uint32_t k_PulseLagMs = 200;
 [[nodiscard]] glm::vec2 MarkerSize(uint32_t clockMs);
 /// The footprint inside the ring is this much the ring's size, turned a quarter turn
 constexpr float k_FootprintShare = 0.7f;
+/// The footprint turns a quarter turn to the left on the screen, so the top of its picture points to the left
+constexpr float k_FootprintTurn = 0.5f * std::numbers::pi_v<float>;
+/// The half width and half height of the footprint before its quarter turn, from the half size of the ring. Its width
+/// comes from the height of the ring, so after the turn it stands as tall as 0.7 of the ring. Its height takes the
+/// share two times, so after the turn it is only 0.49 of the width of the ring (see the vanilla bugs list).
+[[nodiscard]] glm::vec2 FootprintSize(glm::vec2 ring);
+/// The player sees the marker only while the land shows: not in the temple, and not while a video covers the screen or
+/// the falling spell hides the world
+[[nodiscard]] bool MarkerShown(bool inTemple, bool worldHidden);
 /// The sheet's picture of the plain ring, and the footprint of a species, by its row in the game's creature tables
 constexpr uint8_t k_RingCell = 56;
 [[nodiscard]] uint8_t FootprintCell(size_t speciesRow);

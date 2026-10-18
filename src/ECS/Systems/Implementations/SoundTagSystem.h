@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "Audio/ScriptSoundEffect.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 
@@ -36,16 +38,17 @@ public:
 	void ProcessTurn(const glm::vec3& camera) override;
 	void SetActive(entt::entity entity, bool active) override;
 	entt::entity CreatePointSound(entt::id_type sound, const glm::vec3& position, bool delayed) override;
-	bool AttachObjectSound(entt::entity entity, entt::id_type sound) override;
+	entt::entity AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops) override;
 	void DetachObjectSound(entt::entity entity, entt::id_type sound) override;
 
 private:
 	/// Whether a tag's sound is heard if it starts now
 	[[nodiscard]] bool Heard(entt::id_type sound) const;
-	/// Starts a point's sound once, if it is switched on, heard and the camera is within the sound's reach. The tag
-	/// owns its sound, so the voice rules never find the voice of another sound for it.
+	/// Starts a point's sound once, if it is switched on, heard and the camera is within the sound's reach. With no
+	/// camera the caller already did the test of the reach. The tag owns its sound, so the voice rules never find the
+	/// voice of another sound for it.
 	void StartPointSound(entt::entity entity, components::SoundTag& tag, const glm::vec3& position,
-	                     const glm::vec3& camera) const;
+	                     std::optional<glm::vec3> camera) const;
 
 	ConditionsSource _conditions;
 };

@@ -75,8 +75,14 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	{
 		return FightForScript(creature, target);
 	}
-	if (!ForcePlan(creature,
-	               {.desire = Desire::ObeyPlayer, .action = name, .object = target, .instrument = with, .ordered = true}))
+	// The order of the script is not a forced plan. When the script lets the creature go, it can take up reactions while
+	// it does the order
+	if (!ForcePlan(creature, {.desire = Desire::ObeyPlayer,
+	                          .action = name,
+	                          .object = target,
+	                          .instrument = with,
+	                          .ordered = true,
+	                          .forced = false}))
 	{
 		return false;
 	}
@@ -99,6 +105,31 @@ bool CreatureMindSystem::IsLyingDead(entt::entity creature)
 	const auto* tables = GetTables();
 	const auto& registry = Locator::entitiesRegistry::value();
 	return tables != nullptr && registry.Valid(creature) && mind_detail::IsDead(registry, creature, *tables);
+}
+
+creature_mind::HandsCheck CreatureMindSystem::CheckHandsBeforeFaint(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	const auto* animation = mind != nullptr ? registry.TryGet<const CreatureAnimation>(creature) : nullptr;
+	if (animation == nullptr || !Locator::creatureObjectActionSystem::has_value())
+	{
+		return creature_mind::HandsCheck::Free;
+	}
+	auto& hands = Locator::creatureObjectActionSystem::value();
+	// The body is busy while it plays an action, moves or catches, and the hands while they do a thing
+	const bool moving =
+	    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(creature);
+	const bool bodyBusy = creature_layers::IsPlaying(animation->body) || moving || hands.IsCatching(creature);
+	const bool handsBusy = hands.GetState(creature) == CreatureObjectActionSystemInterface::State::Busy;
+	const auto check = creature_mind::CheckHands(hands.GetHeld(creature).has_value(), bodyBusy, handsBusy);
+	if (check != creature_mind::HandsCheck::LetGo)
+	{
+		return check;
+	}
+	// It puts the thing down or tosses it away, as before a step that needs empty hands
+	return LetGoOfHeld(creature, *mind, creature_mind::LetGo::AsItChooses) ? creature_mind::HandsCheck::LetGo
+	                                                                       : creature_mind::HandsCheck::Wait;
 }
 
 bool CreatureMindSystem::FightForScript(entt::entity creature, entt::entity opponent)

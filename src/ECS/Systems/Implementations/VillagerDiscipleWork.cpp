@@ -424,12 +424,17 @@ uint32_t villager_disciple_work::MissionaryDisciple(LivingAction& action)
 	return 1;
 }
 
-void villager_disciple_work::ProcessMissionaries()
+void villager_disciple_work::ProcessMissionaries(entt::entity town)
 {
 	auto& registry = Entities();
 	std::vector<entt::entity> stopping;
 	registry.Each<const MissionaryControl, Transform>(
 	    [&](entt::entity control, const MissionaryControl& preaching, Transform& transform) {
+		    // A preaching whose town has gone stops in any town's turn
+		    if (preaching.town != town && ValidTown(preaching.town).has_value())
+		    {
+			    return;
+		    }
 		    const bool reactionLives =
 		        Locator::reactionSystem::has_value() && Locator::reactionSystem::value().IsActive(preaching.reaction);
 		    if (!reactionLives || !ValidTown(preaching.town).has_value() || !IsAvailable(preaching.villager) ||

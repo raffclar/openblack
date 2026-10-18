@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Common/X87.h"
+
 using namespace openblack;
 
 namespace
@@ -20,7 +22,7 @@ constexpr float k_WetShare = 0.01f;
 /// The land's alignment adds half of itself
 constexpr float k_AlignmentShare = 0.5f;
 /// The spreading roll: this, and a draw below 1000
-constexpr double k_SpreadRollBase = 2000.0;
+constexpr float k_SpreadRollBase = 2000.0f;
 /// Each grown tree adds a twentieth to the spreading chance
 constexpr float k_SpreadPerGrownTree = 0.05f;
 /// The turns since a forest last gained a tree count in three hundredths
@@ -37,13 +39,9 @@ int forest_growth::Wetness(int8_t rain, int8_t snowCover)
 
 float forest_growth::Growth(const Kind& kind, int wetness, float landAlignment)
 {
-	// Worked out in double precision, rounded to a float after the sum and again after the product
-	const auto amount = static_cast<double>(kind.amount);
-	const auto wet = static_cast<float>(static_cast<double>(wetness) * static_cast<double>(k_WetShare) *
-	                                        static_cast<double>(kind.rainAccelerator) * amount +
-	                                    amount);
-	return static_cast<float>((static_cast<double>(landAlignment) * static_cast<double>(k_AlignmentShare) + 1.0) *
-	                          static_cast<double>(wet));
+	const auto amount = kind.amount;
+	const auto wet = ((static_cast<float>(wetness) * k_WetShare) * kind.rainAccelerator) * amount + amount;
+	return (landAlignment * k_AlignmentShare + 1.0f) * wet;
 }
 
 float forest_growth::Grown(float size, float amount, float largest)
@@ -58,13 +56,13 @@ uint16_t forest_growth::FirstWait(uint32_t draw)
 
 bool forest_growth::Spreads(float roll, uint16_t& counter, uint32_t turnsSinceLastGain, size_t grownTrees)
 {
-	// Worked out in double precision, the grown trees' share in a float
-	const double bar = static_cast<double>(roll) + k_SpreadRollBase;
-	const double share =
-	    std::min(static_cast<double>(static_cast<float>(grownTrees)) * static_cast<double>(k_SpreadPerGrownTree), 1.0);
+	const float bar = roll + k_SpreadRollBase;
+	const float grownShare = x87::Mul(static_cast<double>(grownTrees), static_cast<double>(k_SpreadPerGrownTree));
+	const float share = grownShare < 1.0f ? grownShare : 1.0f;
 	++counter;
-	const double chance =
-	    static_cast<double>(counter) * (static_cast<double>(turnsSinceLastGain) * static_cast<double>(k_SpreadPerTurn) * share);
+	// The turns can be more than a float holds exactly: their product rounds one time
+	const float perCount = x87::Mul(static_cast<double>(turnsSinceLastGain), static_cast<double>(k_SpreadPerTurn)) * share;
+	const float chance = static_cast<float>(counter) * perCount;
 	if (!(bar < chance))
 	{
 		return false;

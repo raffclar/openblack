@@ -46,17 +46,29 @@ public:
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) final;
 	void HandleActions(std::chrono::microseconds dt) final;
-	void SetFlight(glm::vec3 origin, glm::vec3 focus) final;
-	/// Flies back to where it was, as when the camera is given back after the hand lets go of a creature: as SetFlight,
-	/// wooshing only when asked
+	/// Flies to a place, as a bookmark or a key does. The flight ends at the fence when the place is outside it, and
+	/// wooshes only when it starts more than 150 from its end. Its half way point rises by the rise times the distance
+	/// across.
+	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) final;
+	/// Flies back to where it was, as when the camera is given back after the hand lets go of a creature: as SetFlight
+	/// with a rise of 0.1, wooshing only when asked
 	void FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh);
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) final;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const final;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const final;
 	[[nodiscard]] Asked GetAsked() const final
 	{
-		return {.turn = _rotateAroundDelta.y, .tilt = _rotateAroundDelta.x, .zoom = _rotateAroundDelta.z};
+		return {.turn = _rotateAroundDelta.y,
+		        .tilt = _rotateAroundDelta.x,
+		        .zoom = _rotateAroundDelta.z,
+		        .controlsUsed = _controlsUsed,
+		        .landGripped = _landGripped,
+		        .landHeld = _landHeld,
+		        .dragTurn = _dragTurn,
+		        .dragTilt = _dragTilt};
 	}
+	/// One of the four wooshes of a flight
+	static void Woosh();
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const final;
 	[[nodiscard]] HandCues GetHandCues() const final;
 
@@ -83,8 +95,6 @@ private:
 	/// Flies to the thing under the hand, else the land or sea under the cursor, for a double click or land gripped too far
 	/// ahead; nothing happens without such a place. Whether it flies.
 	bool FlyTo(camera_fly::Reason reason);
-	/// One of the four wooshes of a flight
-	static void Woosh();
 
 	/// Updates the model's focus point parameters after a change in position or focus point of view
 	void UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, glm::vec3 eulerAngles, const Camera& camera);
@@ -204,6 +214,12 @@ private:
 	bool _heldBack {false};
 	/// The angle the player turned the camera by this frame, in radians, none when the player didn't turn it
 	std::optional<float> _turnedThisFrame;
+	/// What the player did with the controls this frame, as GetAsked gives it
+	bool _controlsUsed {false};
+	bool _landGripped {false};
+	bool _landHeld {false};
+	float _dragTurn {0.0f};
+	float _dragTilt {0.0f};
 	/// The self-tilting camera goes back over where it stood at the start of the frame: it tilted itself, or nothing was
 	/// asked of it
 	bool _keepsToItsPlace {true};

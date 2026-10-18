@@ -79,10 +79,11 @@ struct Crossing
 /// a height limit it is above; nothing when it isn't above it, or the line is too flat for sliding to bring it down
 [[nodiscard]] std::optional<glm::vec3> SlideUnderLimit(const glm::vec3& origin, const glm::vec3& focus, float limit);
 
-/// How far across the ground a camera outside the fence is put back inside it: tested along the line towards where it
+/// Where across the ground a camera outside the fence is put back inside it: tested along the line towards where it
 /// started the frame, or towards what it looks at when it has hardly moved; it goes past the fence where that line
 /// crosses it by `searchRadius`, or the first of the points round there, turning a 64th of a turn at a time either
-/// way, that is inside; onto the crossing itself when none is. Nothing when it is inside.
+/// way, that is inside; onto the crossing itself when none is. The test also gives the inclusion distance that the
+/// scripts read.
 inline constexpr float k_SearchRadius = 20.0f;
 /// While the player turns the camera by dragging round the edge of the screen it is put back further in
 inline constexpr float k_EdgeTurnSearchRadius = 50.0f;
@@ -90,14 +91,38 @@ inline constexpr float k_EdgeTurnSearchRadius = 50.0f;
 {
 	return edgeTurning ? k_EdgeTurnSearchRadius : k_SearchRadius;
 }
-[[nodiscard]] std::optional<glm::vec3> PushInsideFence(std::span<const glm::vec3> fence, bool fenceOn,
-                                                       const glm::vec3& originAtStart, const glm::vec3& origin,
-                                                       const glm::vec3& focus, float searchRadius);
+struct FenceKeep
+{
+	/// The point that the camera goes to across the ground (its x and z), none when the camera is inside
+	std::optional<glm::vec3> target;
+	/// Inside the fence, the distance across the ground from the camera to the fence along the line of the test.
+	/// Nothing when the fence puts the camera back, and k_NoFenceDistance when the fence is off.
+	float inclusionDistance {0.0f};
+};
+/// The inclusion distance when the fence is off
+inline constexpr float k_NoFenceDistance = 1e10f;
+[[nodiscard]] FenceKeep PushInsideFence(std::span<const glm::vec3> fence, bool fenceOn, const glm::vec3& originAtStart,
+                                        const glm::vec3& origin, const glm::vec3& focus, float searchRadius);
+
+/// What the fence does to the camera when it puts the camera back to `target`. The camera moves to the target across
+/// the ground and keeps its height. Each point that moves with the camera keeps its place from the camera, one axis at
+/// a time.
+[[nodiscard]] constexpr glm::vec3 MovedWithOrigin(const glm::vec3& point, const glm::vec3& origin, const glm::vec3& newOrigin)
+{
+	return (point - origin) + newOrigin;
+}
 
 /// Where a camera flight that would end outside the fence ends instead: where the line from its end towards what it will
 /// look at crosses the fence (or the corner nearer than that); unchanged when the end is inside
 [[nodiscard]] glm::vec3 FlightOriginInsideFence(std::span<const glm::vec3> fence, bool fenceOn, const glm::vec3& origin,
                                                 const glm::vec3& focus);
+
+/// A flight wooshes only when it starts more than this far from where it ends: one and a half times the distance of
+/// the flight sound
+inline constexpr float k_FlightSoundDistance = 100.0f;
+inline constexpr float k_FlightWooshDistance = k_FlightSoundDistance * 1.5f;
+/// Whether a flight from where the camera is now to where it ends wooshes
+[[nodiscard]] bool FlightWooshes(const glm::vec3& from, const glm::vec3& to);
 
 /// Whether the influence the scripts give the player counts at a point: only inside the fence, tested along the
 /// ground's first axis. The player's temple and towns give influence on both sides of it.

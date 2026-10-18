@@ -29,6 +29,7 @@
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
+#include "Creature/CreatureCreed.h"
 #include "Creature/CreatureFootstepPuffs.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureRig.h"
@@ -36,10 +37,12 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureAudio.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCreedPowers.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
 #include "ECS/SoundGround.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -102,8 +105,11 @@ void Sound(entt::entity entity, const Creature& creature, const Transform& trans
 		else if (Locator::audio::has_value())
 		{
 			// The sample has its say in when it is heard, as for every sound effect
-			const auto result = Locator::audio::value().PlayAnimEffect(bank, keys.ToArray(), entity, transform.position,
-			                                                           audio::CurrentSoundEffectConditions());
+			auto& audio = Locator::audio::value();
+			const auto result =
+			    audio.PlayAnimEffect(bank, keys.ToArray(), entity, transform.position, audio::CurrentSoundEffectConditions());
+			// The sound stays with the creature while it plays
+			audio.SetEmitterFollows(result.emitter, audio::Follows::Owner);
 			note.sample = result.sample;
 			note.played = result.outcome == AnimEffectPlay::Outcome::Played;
 			switch (result.outcome)
@@ -271,8 +277,20 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 				    Locator::footprintSystem::value().Step(entity);
 			    }
 			    SoundIfAsked(entity, creature, transform, *rig, heard, fired.event, gate);
+			    // A creed event sets a glow of the hands, heard or not
+			    if (const auto glow = creature_creed::FromAnimationEvent(static_cast<int32_t>(fired.event.action)))
+			    {
+				    auto& powers = registry.AllOf<CreatureCreedPowers>(entity) ? registry.Get<CreatureCreedPowers>(entity)
+				                                                               : registry.Assign<CreatureCreedPowers>(entity);
+				    creature_creed::Set(powers, glow->glow, glow->scale, glow->power);
+			    }
 			    // After the sound, a footstep throws up dust, heard or not
 			    FootstepPuffs(creature, transform, creature_footstep_puffs::CountOf(fired.event.action));
+			    // Then an event can set a creed glow on the body, heard or not
+			    if (Locator::creatureAnimationSystem::has_value())
+			    {
+				    Locator::creatureAnimationSystem::value().PlayCreedEvent(entity, static_cast<int32_t>(fired.event.action));
+			    }
 		    }
 	    });
 

@@ -229,8 +229,9 @@ struct MindFileData
 	std::optional<std::vector<MindDatabaseEntry>> database;
 	/// From version 24 on
 	std::optional<uint32_t> unknown2;
-	/// From version 27 on
-	std::optional<std::array<uint32_t, 4>> unknown3;
+	/// From version 27 on, a word for each leash type by the number of the type: not 0 when the creature knows the
+	/// leash. The first type is no leash.
+	std::optional<std::array<uint32_t, 4>> leashWords;
 	/// From version 28 on: eight numbers and the tattoo's bytes
 	std::optional<std::array<uint32_t, 8>> tattooHeader;
 	std::optional<std::vector<uint8_t>> tattoo;
@@ -248,6 +249,12 @@ struct MindFileData
 	[[nodiscard]] std::string SavedAsText() const;
 	[[nodiscard]] std::u16string ProfileText() const;
 };
+
+/// The bytes of a file of this component, or none when the file cannot be opened. Only this component opens the
+/// files: other code reads and writes them through the functions here.
+[[nodiscard]] std::optional<std::vector<uint8_t>> ReadFileBytes(const std::filesystem::path& path);
+/// Writes the bytes to the file at the path, in place of what it had
+[[nodiscard]] bool WriteFileBytes(const std::filesystem::path& path, std::span<const uint8_t> bytes);
 
 /// Reads a mind file into data
 [[nodiscard]] MindResult Read(std::span<const uint8_t> bytes, MindFileData& data);

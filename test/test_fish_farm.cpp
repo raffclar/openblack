@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <bit>
 #include <numbers>
 #include <optional>
 #include <utility>
@@ -106,6 +107,16 @@ TEST(FishFarm, AFishermansSpotIsTheFarmMovedByMetres)
 	EXPECT_EQ(spot.x, farm.x + 16384);
 	// Truncated towards 0 after the move: 6553.6 units back is 6554 whole ones
 	EXPECT_EQ(spot.y, farm.y - 6554);
+}
+
+TEST(FishFarm, AFishermansSpotRoundsToAFloatAtEachStep)
+{
+	// The farm's place in metres and the moved place both round to floats before the truncation. In double precision
+	// the spot is one unit less along x and two units more along z
+	const auto spot =
+	    fish_farm::FishingSpot({31813194, 31558849}, {std::bit_cast<float>(0x3FA0EC07u), std::bit_cast<float>(0x3ED1C94Bu)});
+	EXPECT_EQ(spot.x, 31821434);
+	EXPECT_EQ(spot.y, 31561532);
 }
 
 TEST(FishFarm, AFishermanCatchesAQuarterOfWhatHeCarriesLessOutOfSeason)

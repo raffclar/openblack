@@ -37,6 +37,7 @@ public:
 	SoundManager& GetSounds() override { return _sounds; }
 	GlowManager& GetGlows() override { return _glows; }
 	CameraPathManager& GetCameraPaths() override { return _cameraPaths; }
+	FilmCameraPathManager& GetFilmCameraPaths() override { return _filmCameraPaths; }
 	CameraEditManager& GetCameraEdits() override { return _cameraEdits; }
 	CameraZoneManager& GetCameraZones() override { return _cameraZones; }
 	DanceFileManager& GetDanceFiles() override { return _danceFiles; }
@@ -127,6 +128,7 @@ private:
 	SoundManager _sounds;
 	GlowManager _glows;
 	CameraPathManager _cameraPaths;
+	FilmCameraPathManager _filmCameraPaths;
 	CameraEditManager _cameraEdits;
 	CameraZoneManager _cameraZones;
 	DanceFileManager _danceFiles;

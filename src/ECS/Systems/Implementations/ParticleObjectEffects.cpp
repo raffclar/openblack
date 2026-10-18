@@ -49,6 +49,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 #include "Particles/ParticleBlast.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -71,25 +72,28 @@ ecs::Registry& Entities()
 } // namespace
 
 std::optional<entt::entity> GameObjectEffects::AttachFireBall(glm::vec3 position, float strength, float radius,
-                                                              bool affectedByRain, std::optional<PlayerNames> player)
+                                                              bool affectedByRain, std::optional<PlayerNames> player,
+                                                              int powerUpLevel)
 {
 	if (!Locator::fireSystem::has_value() || !Locator::infoConstants::has_value())
 	{
 		return std::nullopt;
 	}
 	auto& registry = Entities();
+	const auto row = magic::FireBallInfoRow(powerUpLevel);
 	const auto ball = registry.Create();
 	registry.Assign<Transform>(ball, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	registry.Assign<MagicFireBall>(ball, MagicFireBall {
 	                                         .strength = strength,
 	                                         .radius = radius,
+	                                         .infoRow = static_cast<uint8_t>(row),
 	                                         .affectedByRain = affectedByRain,
 	                                         .player = player.value_or(PlayerNames::NEUTRAL),
 	                                         .hasPlayer = player.has_value(),
 	                                         .lastTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0,
 	                                     });
-	// As hot as its miracle is strong; every fireball takes the table's first row
-	const float temperature = strength * Locator::infoConstants::value().magicFireBall.at(0).initialTemperature;
+	// The ball is as hot as its miracle is strong, times the start heat of its row
+	const float temperature = strength * Locator::infoConstants::value().magicFireBall.at(row).initialTemperature;
 	Locator::fireSystem::value().SetTemperature(ball, temperature, entt::null);
 	if (!registry.AllOf<Fire>(ball))
 	{
@@ -118,7 +122,7 @@ GameObjectEffects::FireBallState GameObjectEffects::FollowFireBall(entt::entity 
 	magic.strength = strength;
 	magic.handTarget = handTarget;
 	magic.lastTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	const float deletion = Locator::infoConstants::value().magicFireBall.at(0).deletionTemperature;
+	const float deletion = Locator::infoConstants::value().magicFireBall.at(magic.infoRow).deletionTemperature;
 	return registry.Get<Fire>(ball).state.temperature < deletion ? FireBallState::Cooled : FireBallState::Burning;
 }
 

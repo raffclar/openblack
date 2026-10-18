@@ -82,3 +82,13 @@ std::optional<glm::vec3> tattoo_menu::PointerPoint(const glm::mat4& view, const 
 	const glm::vec4 local {onRay.x * scale, onRay.y * scale, k_PointerDepth, 1.0f};
 	return glm::vec3(glm::inverse(view) * local);
 }
+
+std::vector<tattoo_menu::Layer> tattoo_menu::DrawOrder(bool hasHair, bool hairShown)
+{
+	std::vector<Layer> layers {Layer::Body};
+	if (hasHair && hairShown)
+	{
+		layers.push_back(Layer::Hair);
+	}
+	return layers;
+}

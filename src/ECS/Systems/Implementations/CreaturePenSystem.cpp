@@ -42,11 +42,12 @@ namespace
 CreaturePenSystem::World GameWorld()
 {
 	return {
-	    .penPlace = [](entt::entity temple) -> std::optional<glm::vec2> {
+	    .penPlace = [](entt::entity temple) -> std::optional<map_coords::MapCoords> {
 		    const auto& registry = Locator::entitiesRegistry::value();
 		    const auto* transform = registry.TryGet<const Transform>(temple);
 		    const auto* mesh = registry.TryGet<const Mesh>(temple);
-		    if (transform == nullptr || mesh == nullptr || !Locator::resources::has_value())
+		    const auto* building = registry.TryGet<const Temple>(temple);
+		    if (transform == nullptr || mesh == nullptr || building == nullptr || !Locator::resources::has_value())
 		    {
 			    return std::nullopt;
 		    }
@@ -56,9 +57,8 @@ CreaturePenSystem::World GameWorld()
 			    return std::nullopt;
 		    }
 		    // The pen the carry home takes a creature to
-		    const auto pen = creature_mode::TemplePen(transform->position, transform->rotation, transform->scale,
-		                                              meshes.Handle(mesh->id)->GetExtraMetrics());
-		    return pen.has_value() ? std::optional<glm::vec2>(glm::vec2(pen->x, pen->z)) : std::nullopt;
+		    return creature_mode::TemplePenOnMap(transform->position, building->yAngle, transform->scale.x,
+		                                         meshes.Handle(mesh->id)->GetExtraMetrics());
 	    },
 	    .groundAt =
 	        [](glm::vec2 point) {
@@ -112,7 +112,9 @@ void CreaturePenSystem::ProcessTurn(ecs::Registry& registry) const
 				{
 					leash = &registry.Assign<CreatureLeash>(entity);
 				}
-				leash->home = glm::vec3(pen->x, _world.groundAt(*pen), pen->y);
+				const glm::vec2 place {map_coords::ToMetres(pen->x), map_coords::ToMetres(pen->z)};
+				leash->home = glm::vec3(place.x, _world.groundAt(place), place.y);
+				leash->homeOnMap = *pen;
 			}
 			// The home follows a temple still going up, but the pen only shrinks the creature once the temple is built
 			const auto* templeTransform = registry.TryGet<const Transform>(*temple);

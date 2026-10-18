@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
+
 #include <gtest/gtest.h>
 
 #include "ECS/VillagerSpeed.h"
@@ -45,6 +47,30 @@ TEST(VillagerSpeed, AStatesSpeedScaledByThePlayerAndItsTown)
 	// Not beyond it: the whole belief counts
 	in.belief = Inputs::Belief {.player = 0.5f, .neutral = 1.0f};
 	EXPECT_EQ(StateSpeed(in, Zero), static_cast<int32_t>(2000.0f * (0.5f * 0.5f + 1.0f)));
+}
+
+TEST(VillagerSpeed, ThePlayerTermsComeFromThePlayerAndTheTownsOwnNeutralBelief)
+{
+	// A town without a player: no terms
+	const auto none = TermsOfPlayer(std::nullopt, false, 3.0f, 1.0f);
+	EXPECT_FALSE(none.indianPower.has_value());
+	EXPECT_FALSE(none.belief.has_value());
+	// The neutral player: the power only
+	const auto neutral = TermsOfPlayer(1.5f, true, 3.0f, 1.0f);
+	ASSERT_TRUE(neutral.indianPower.has_value());
+	EXPECT_EQ(*neutral.indianPower, 1.5f);
+	EXPECT_FALSE(neutral.belief.has_value());
+	// Another player: the power, the belief in the player and the town's own neutral belief
+	const auto player = TermsOfPlayer(1.0f, false, 3.0f, 0.25f);
+	ASSERT_TRUE(player.belief.has_value());
+	EXPECT_EQ(player.belief->player, 3.0f);
+	EXPECT_EQ(player.belief->neutral, 0.25f);
+	// The power of the neutral player's town scales the speed too, at least a tenth
+	auto in = Fleeing();
+	in.indianPower = neutral.indianPower;
+	EXPECT_EQ(StateSpeed(in, Zero), 3000);
+	in.indianPower = 0.0f;
+	EXPECT_EQ(StateSpeed(in, Zero), static_cast<int32_t>(2000.0f * 0.1f));
 }
 
 TEST(VillagerSpeed, WoundedLoadedNeededAndSpedUp)

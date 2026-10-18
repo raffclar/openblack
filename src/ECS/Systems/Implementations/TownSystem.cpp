@@ -58,8 +58,10 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TownCentreParts.h"
 #include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
+#include "ECS/TownTurnOrder.h"
 #include "ECS/VillagerRoutine.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -556,113 +558,128 @@ void NeglectAbode(entt::entity town, entt::entity abode)
 
 void TownSystem::ProcessTurn()
 {
+	for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
+	{
+		for (const auto town : TownsInGainedOrder(static_cast<PlayerNames>(player)))
+		{
+			ProcessTownBuildings(town);
+			ProcessTownTurn(town);
+		}
+	}
+}
+
+std::vector<entt::entity> TownSystem::TownsInGainedOrder(PlayerNames player) const
+{
+	return town_turns::TownsInGainedOrder(Locator::entitiesRegistry::value(), player);
+}
+
+void TownSystem::ProcessTownBuildings(entt::entity townEntity)
+{
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> towns;
-	registry.Each<const Town>([&towns](entt::entity town, const Town&) { towns.push_back(town); });
-	const auto& infos = Locator::infoConstants::value().abode;
-	const auto* fire = Locator::fireSystem::has_value() ? &Locator::fireSystem::value() : nullptr;
+	if (!registry.Valid(townEntity) || !registry.AllOf<Town>(townEntity))
+	{
+		return;
+	}
 	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	const bool passOverBuildings =
-	    statistics::TownPassesItsBuildings(turn, Locator::infoConstants::value().town.processAbodeEvery);
-	for (const auto townEntity : towns)
+	// Every so many turns it passes over its buildings, which age by it; a football pitch never ages
+	if (!statistics::TownPassesItsBuildings(turn, Locator::infoConstants::value().town.processAbodeEvery))
 	{
-		// Every so many turns it passes over its buildings, which age by it; a football pitch never ages
-		if (passOverBuildings)
-		{
-			const auto abodes = registry.Get<const Town>(townEntity).abodes;
-			for (const auto abode : abodes)
-			{
-				if (const auto* data = registry.TryGet<const Abode>(abode);
-				    data == nullptr || data->type == AbodeNumber::FootballPitch)
-				{
-					continue;
-				}
-				NeglectAbode(townEntity, abode);
-				// The loss of life can remove the building
-				if (auto* data = registry.Valid(abode) ? registry.TryGet<Abode>(abode) : nullptr)
-				{
-					data->age = statistics::AgedOnePass(data->age);
-				}
-			}
-		}
-		// It puts up at most one of its buildings, or a finished one that went, for mending
-		town_planning::MendBest(townEntity);
-		const bool inEmergency = IsInStateOfEmergency(townEntity);
-		// Out of an emergency, its storage pit or village centre on fire calls one
-		bool burning = false;
-		for (const auto abode : registry.Get<const Town>(townEntity).abodes)
-		{
-			const auto* data = registry.TryGet<const Abode>(abode);
-			if (inEmergency || fire == nullptr || data == nullptr)
-			{
-				continue;
-			}
-			const auto type = infos.at(static_cast<size_t>(data->type)).abodeType;
-			if ((type == AbodeType::StoragePit || type == AbodeType::TownCentre) && fire->IsOnFire(abode))
-			{
-				burning = true;
-				break;
-			}
-		}
-		const auto* aggression = registry.TryGet<const TownAggression>(townEntity);
-		const auto& town = registry.Get<const Town>(townEntity);
-		const auto outcome = villager_routine::EmergencyTurn({
-		    .inEmergency = inEmergency,
-		    .attackedThisTurn = aggression != nullptr && aggression->record.lastTurn == turn,
-		    .storeOrCentreBurning = burning,
-		    .worshipShare = town.worshipShare,
-		    .worshipShareBefore = town.worshipShareBeforeEmergency,
-		});
-		if (outcome.call)
-		{
-			SetInStateOfEmergency(townEntity);
-		}
-		if (outcome.setWorshipShare.has_value() && Locator::villageTotemSystem::has_value())
-		{
-			// Its worshippers leave the worship site while it lasts, and come back after
-			Locator::villageTotemSystem::value().SetTownShare(townEntity, *outcome.setWorshipShare);
-		}
-		auto& changed = registry.Get<Town>(townEntity);
-		changed.worshipShareBeforeEmergency = outcome.worshipShareBefore;
-		if (outcome.end)
-		{
-			changed.emergencyTurn = 0;
-		}
-		// Then it judges the creatures it watches
-		ecs::villager_creature::TownTurn(townEntity, turn);
+		return;
 	}
-	// Every tenth turn each town short of worshippers sends more
-	if (Locator::worshipSiteSystem::has_value())
+	const auto abodes = registry.Get<const Town>(townEntity).abodes;
+	for (const auto abode : abodes)
 	{
-		for (const auto townEntity : towns)
-		{
-			if (registry.Valid(townEntity))
-			{
-				ecs::villager_worship::TownTurn(townEntity, turn);
-			}
-		}
-	}
-	// Now and then each town evens out its homes, moving a man for a woman between two, or one villager
-	const auto every = Locator::infoConstants::value().town.shuffleVillagersEvery;
-	const auto homes = GameHomes();
-	for (const auto townEntity : towns)
-	{
-		if (registry.Valid(townEntity) && town_homes::EvenOutDue(registry.Get<const Town>(townEntity).id, turn, every))
-		{
-			town_homes::EvenOutHomes(registry, homes, townEntity);
-		}
-	}
-	// The missionaries preaching in the towns follow their villagers, or stop; then a mark of changed wants that has
-	// been up a whole turn comes down
-	villager_disciple_work::ProcessMissionaries();
-	for (const auto townEntity : towns)
-	{
-		if (!registry.Valid(townEntity))
+		if (const auto* data = registry.TryGet<const Abode>(abode); data == nullptr || data->type == AbodeNumber::FootballPitch)
 		{
 			continue;
 		}
-		auto& town = registry.Get<Town>(townEntity);
-		disciple_work::EndTownTurn(town.desiresChanged, town.desiresChangedLastTurn);
+		NeglectAbode(townEntity, abode);
+		// The loss of life can remove the building
+		if (auto* data = registry.Valid(abode) ? registry.TryGet<Abode>(abode) : nullptr)
+		{
+			data->age = statistics::AgedOnePass(data->age);
+		}
+	}
+}
+
+void TownSystem::ProcessTownTurn(entt::entity townEntity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(townEntity) || !registry.AllOf<Town>(townEntity))
+	{
+		return;
+	}
+	const auto& infos = Locator::infoConstants::value().abode;
+	const auto* fire = Locator::fireSystem::has_value() ? &Locator::fireSystem::value() : nullptr;
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	// Every tenth turn a town short of worshippers sends more
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		ecs::villager_worship::TownTurn(townEntity, turn);
+	}
+	if (!registry.Valid(townEntity))
+	{
+		return;
+	}
+	// It puts up at most one of its buildings, or a finished one that went, for mending
+	town_planning::MendBest(townEntity);
+	const bool inEmergency = IsInStateOfEmergency(townEntity);
+	// Out of an emergency, its storage pit or village centre on fire calls one
+	bool burning = false;
+	for (const auto abode : registry.Get<const Town>(townEntity).abodes)
+	{
+		const auto* data = registry.TryGet<const Abode>(abode);
+		if (inEmergency || fire == nullptr || data == nullptr)
+		{
+			continue;
+		}
+		const auto type = infos.at(static_cast<size_t>(data->type)).abodeType;
+		if ((type == AbodeType::StoragePit || type == AbodeType::TownCentre) && fire->IsOnFire(abode))
+		{
+			burning = true;
+			break;
+		}
+	}
+	const auto* aggression = registry.TryGet<const TownAggression>(townEntity);
+	const auto& town = registry.Get<const Town>(townEntity);
+	const auto outcome = villager_routine::EmergencyTurn({
+	    .inEmergency = inEmergency,
+	    .attackedThisTurn = aggression != nullptr && aggression->record.lastTurn == turn,
+	    .storeOrCentreBurning = burning,
+	    .worshipShare = town.worshipShare,
+	    .worshipShareBefore = town.worshipShareBeforeEmergency,
+	});
+	if (outcome.call)
+	{
+		SetInStateOfEmergency(townEntity);
+	}
+	if (outcome.setWorshipShare.has_value() && Locator::villageTotemSystem::has_value())
+	{
+		// Its worshippers leave the worship site while it lasts, and come back after
+		Locator::villageTotemSystem::value().SetTownShare(townEntity, *outcome.setWorshipShare);
+	}
+	auto& changed = registry.Get<Town>(townEntity);
+	changed.worshipShareBeforeEmergency = outcome.worshipShareBefore;
+	if (outcome.end)
+	{
+		changed.emergencyTurn = 0;
+	}
+	// Then it judges the creatures it watches
+	ecs::villager_creature::TownTurn(townEntity, turn);
+	// The missionaries preaching in it follow their villagers, or stop
+	villager_disciple_work::ProcessMissionaries(townEntity);
+	if (!registry.Valid(townEntity))
+	{
+		return;
+	}
+	// A mark of changed wants that has been up a whole turn comes down
+	auto& marked = registry.Get<Town>(townEntity);
+	disciple_work::EndTownTurn(marked.desiresChanged, marked.desiresChangedLastTurn);
+	// Now and then it evens out its homes, moving a man for a woman between two, or one villager
+	const auto every = Locator::infoConstants::value().town.shuffleVillagersEvery;
+	if (town_homes::EvenOutDue(marked.id, turn, every))
+	{
+		town_homes::EvenOutHomes(registry, GameHomes(), townEntity);
 	}
 }
 
@@ -794,6 +811,12 @@ void TownSystem::UpdateFrame(float gameSeconds)
 	});
 	_registry->Each<const Abode>([&](entt::entity entity, const Abode& abode) {
 		if (abode.type != AbodeNumber::TownCentre)
+		{
+			return;
+		}
+		// A town centre shows the symbols from when its town finishes it
+		const auto* progress = _registry->TryGet<const BuildProgress>(entity);
+		if (!ecs::town_centre_parts::ShowsBeliefSymbols(progress != nullptr ? std::optional(progress->built) : std::nullopt))
 		{
 			return;
 		}

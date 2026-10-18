@@ -25,6 +25,7 @@
 namespace openblack::graphics
 {
 class DescriptorSetTally;
+class DrawWindow;
 class SamplerDefaults;
 class Texture2D;
 
@@ -40,10 +41,11 @@ public:
 
 	ShaderProgram() = delete;
 	/// The samplers are those the program's shaders declare, which it keeps bound on every submit with the defaults.
-	/// The tally, when there is one, counts the descriptor sets its draws take.
+	/// The tally, when there is one, counts the descriptor sets its draws take. The window, when there is one, can hold
+	/// back its draws.
 	ShaderProgram(const std::string& name, ShaderHandle vertexShader, ShaderHandle fragmentShader,
 	              std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults,
-	              DescriptorSetTally* tally = nullptr);
+	              DescriptorSetTally* tally = nullptr, DrawWindow* window = nullptr);
 	~ShaderProgram();
 	ShaderProgram(const ShaderProgram&) = delete;
 	ShaderProgram& operator=(const ShaderProgram&) = delete;
@@ -67,7 +69,8 @@ public:
 	void SetUniformValue(UniformHandle uniform, const void* value) const;
 
 	/// Draws with this program in the given view. Each sampler it declares that no texture was set for since the
-	/// bindings were last discarded gets a white texture of its kind first, so that no sampler is left unbound.
+	/// bindings were last discarded gets a white texture of its kind first, so that no sampler is left unbound. If the
+	/// draw window holds back the draw, the draw discards the same state and does not go to the GPU.
 	void Submit(uint16_t viewId, uint32_t depth = 0, uint8_t discardFlags = k_DiscardAll) const;
 
 	[[nodiscard]] ProgramHandle GetRawHandle() const { return _program; }
@@ -86,6 +89,7 @@ private:
 	std::vector<shader_samplers::Sampler> _samplers;
 	SamplerDefaults& _samplerDefaults;
 	DescriptorSetTally* _tally;
+	DrawWindow* _window;
 	/// The uniforms set on this shader that it doesn't have, already warned about
 	mutable std::set<std::string, std::less<>> _warnedMissing;
 };

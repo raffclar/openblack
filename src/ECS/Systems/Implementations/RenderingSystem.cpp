@@ -1007,7 +1007,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    {
 			    // What a hand holds joins the hand's shadow
 			    _renderContext.inHandDraws.push_back(
-			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = modelMatrix});
+			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = modelMatrix, .instance = idx});
 		    }
 		    if (slots->second.perEntity && placed.has_value())
 		    {

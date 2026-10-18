@@ -157,3 +157,8 @@ bool teleport::CanDropOnStone(bool samePlayer, size_t playerStones)
 {
 	return samePlayer && playerStones != 1;
 }
+
+openblack::map_coords::MapCoords teleport::CreatureArrival(const map_coords::MapCoords& stone)
+{
+	return map_coords::FromMetres(map_coords::ToMetres(stone));
+}

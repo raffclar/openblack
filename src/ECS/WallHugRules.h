@@ -220,16 +220,18 @@ struct TrialWalk
 /// Whether the walk turned round beats the walk as it goes
 [[nodiscard]] bool TurnedRoundIsBetter(const TrialWalk& turnedRound, const TrialWalk& asItGoes);
 
-/// A walker turned round: it jumps three steps on, then faces back the way it came. Its new step keeps only the
-/// across part of the old one, backwards, as the game's does (its along-the-map part comes out nothing), until it is
-/// next aimed.
+/// A walker turned round: it jumps three steps on, then faces back the way it came. Its new step has the x part of the
+/// old one backwards. The z part and the height part of the step change places, both backwards: the new z part is the
+/// old height cut to a whole number, and the new height is the old z part. After an aim the height is nothing, so the
+/// first turn round gives a z part of nothing, and a second turn round gives the z part back.
 struct TurnedRound
 {
 	glm::ivec2 position;
 	glm::ivec2 step;
+	float stepAltitude;
 	uint16_t gameAngle;
 };
-[[nodiscard]] TurnedRound TurnRound(glm::ivec2 position, glm::ivec2 step, uint16_t gameAngle);
+[[nodiscard]] TurnedRound TurnRound(glm::ivec2 position, glm::ivec2 step, float stepAltitude, uint16_t gameAngle);
 
 /// Whether a point is shut in by a closed ring of overlapping circles (openblack's own rule, not the game's): the
 /// circles that overlap one another are joined middle to middle, and the point is shut in when some ring of such joins

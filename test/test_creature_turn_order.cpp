@@ -131,3 +131,19 @@ TEST(CreatureTurnOrder, FullRecoveryGivesFullLifeAndTheClimateTemperature)
 	EXPECT_TRUE(completion.climateTemperature);
 	EXPECT_FALSE(turn::CompletionOf(Desire::Hunger, false, false, false, 0.2f).life.has_value());
 }
+
+TEST(CreatureTurnOrder, AReactionStopsBeforeTheDecisionOnlyWhenNoAgendaRuns)
+{
+	EXPECT_TRUE(turn::StopsReactionBeforeDecision({.planRuns = false, .reacting = true}));
+	EXPECT_FALSE(turn::StopsReactionBeforeDecision({.planRuns = true, .reacting = true}));
+	EXPECT_FALSE(turn::StopsReactionBeforeDecision({.planRuns = false, .reacting = false}));
+}
+
+TEST(CreatureTurnOrder, AForcedPlanOrAReactionKeepsTheCreatureFromDeciding)
+{
+	EXPECT_TRUE(turn::SkipsDecision({.planRuns = true, .planForced = true}));
+	EXPECT_TRUE(turn::SkipsDecision({.planRuns = true, .reacting = true}));
+	EXPECT_FALSE(turn::SkipsDecision({.planRuns = true}));
+	// With no agenda that runs, the mark and the reaction are gone and the creature decides
+	EXPECT_FALSE(turn::SkipsDecision({.planRuns = false, .planForced = true, .reacting = true}));
+}

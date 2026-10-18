@@ -26,7 +26,8 @@ public:
 	[[nodiscard]] entt::id_type IconMeshFor(PlayerNames player) const override;
 	[[nodiscard]] Size SizeOf(entt::entity object) const override;
 	[[nodiscard]] float LandHeightAt(glm::vec2 point) const override;
-	[[nodiscard]] bool TempleBuilt(PlayerNames player) const override;
+	[[nodiscard]] bool HeartBuilt(PlayerNames player) const override;
+	[[nodiscard]] float LifeOf(entt::entity object) const override;
 	[[nodiscard]] bool Built(entt::entity building) const override;
 	void SetMovingSound(entt::entity totem, bool on) override;
 	void RingBell(glm::vec3 position) override;

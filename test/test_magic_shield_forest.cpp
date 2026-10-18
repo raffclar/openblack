@@ -226,6 +226,15 @@ TEST(ShieldRules, ADestroyedShieldImpressesFourTimesAndAnAttackersShieldNotAtAll
 	EXPECT_FLOAT_EQ(shield::ImpressiveMultiplier(Reaction::ReactToMagicShieldStruck, true, true), 1.0f);
 }
 
+TEST(ShieldRules, ATownThatTheShieldsPlayerAttackedLastIgnoresTheShield)
+{
+	EXPECT_TRUE(shield::TownIgnoresShield(Reaction::ReactToMagicShield, true, false));
+	EXPECT_TRUE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldStruck, true, false));
+	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldStruck, true, true));
+	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShieldDestroyed, true, false));
+	EXPECT_FALSE(shield::TownIgnoresShield(Reaction::ReactToMagicShield, false, false));
+}
+
 // The forest
 
 TEST(ForestRules, EighteenTreesSpiralOutFromTwoToEleven)

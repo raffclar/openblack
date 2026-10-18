@@ -84,3 +84,18 @@ creature_turn_order::Completion creature_turn_order::CompletionOf(creature_desir
 	}
 	return completion;
 }
+
+bool creature_turn_order::StopsReactionBeforeDecision(const DecisionState& state)
+{
+	return !state.planRuns && state.reacting;
+}
+
+bool creature_turn_order::SkipsDecision(const DecisionState& state)
+{
+	// With no agenda that runs, the forced mark is clear and the reaction stopped
+	if (!state.planRuns)
+	{
+		return false;
+	}
+	return state.planForced || state.reacting;
+}

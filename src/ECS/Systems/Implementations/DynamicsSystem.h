@@ -137,6 +137,7 @@ private:
 public:
 	void AddPuff(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb) override;
 	void AddPuff(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb, physics::turn::PuffKind kind) override;
+	void AdvancePuffs(float seconds) override;
 
 private:
 	[[nodiscard]] PhysicsClassHooks& Hooks();
@@ -153,16 +154,11 @@ private:
 	/// While the physics runs its turn, bodies aren't taken out of it from outside
 	bool _inTurnUpdate {false};
 	physics::turn::SoundPairs _soundPairs;
+	/// The puffs live, grow and move on by some seconds; the drops of blood show new frames when told to
+	void AdvanceDust(float seconds, bool redrawBlood);
 	std::vector<physics::turn::DustPuff> _dust;
 	/// Each creature model's bones' boxes, by the model, worked out once
 	std::unordered_map<entt::id_type, std::vector<physics::shapes::BoneBox>> _creatureBoxes;
-	/// A collision sound that follows the thing that made it while it plays
-	struct FollowingSound
-	{
-		entt::entity emitter {entt::null};
-		entt::entity owner {entt::null};
-	};
-	std::vector<FollowingSound> _followingSounds;
 	/// The machine's milliseconds as the game reads them, which pick the fly-by whoosh
 	std::function<uint64_t()> _ticks {[]() { return static_cast<uint64_t>(machine_clock::Ticks()); }};
 	/// What the dust's puffs are drawn as

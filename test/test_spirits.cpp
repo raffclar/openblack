@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -521,31 +522,57 @@ TEST(Spirits, AnimSoundsPlayAsTheirPointsArePassed)
 	EXPECT_EQ(CrossedSounds(events, last, 0.5f).size(), 1u);
 }
 
-TEST(Spirits, TrailTakesAPointEveryFifthAndSparksDrawRandoms)
+TEST(Spirits, TrailStartsFullAndItsSparksAtStaggeredAges)
 {
 	Fixture f;
 	AdvisorSpirit& d = f.control.Dude(0);
+	// At the start the trail has five seconds to use, and spark i has the age i
+	EXPECT_EQ(d.GetTrail().accumulator, 5.0f);
+	for (size_t i = 0; i < Trail::k_Sparks; ++i)
+	{
+		EXPECT_EQ(d.GetTrail().sparks.at(i).age, static_cast<float>(i));
+	}
 	d.ResetTrail();
 	const glm::vec3 start = d.GetTrail().points[0];
 	EXPECT_TRUE(std::ranges::all_of(d.GetTrail().points, [&](const glm::vec3& p) { return p == start; }));
 	f.randomCalls.clear();
-	d.UpdateTrail(0.1f);
-	d.UpdateTrail(0.1f);
-	EXPECT_EQ(d.GetTrail().head, 0u); // 0.2 is not past 0.2
+	// The full trail takes a point at each feed, even a short one
 	d.UpdateTrail(0.1f);
 	EXPECT_EQ(d.GetTrail().head, 1u);
+	d.UpdateTrail(0.1f);
+	EXPECT_EQ(d.GetTrail().head, 2u);
 	EXPECT_TRUE(f.randomCalls.empty());
-	// The sparks respawn every 16, each with five draws in this order
-	d.UpdateTrail(16.0f);
-	ASSERT_EQ(f.randomCalls.size(), 5u * Trail::k_Sparks);
+	// After 1.2 seconds only the oldest spark is past 16: it alone draws its five randoms, in this order
+	d.UpdateTrail(1.0f);
+	ASSERT_EQ(f.randomCalls.size(), 5u);
 	EXPECT_EQ(f.randomCalls[0], glm::vec2(-0.5f, 0.0f));
 	EXPECT_EQ(f.randomCalls[1], glm::vec2(-0.1f, 0.1f));
 	EXPECT_EQ(f.randomCalls[2], glm::vec2(-0.1f, 0.1f));
 	EXPECT_EQ(f.randomCalls[3], glm::vec2(-0.3f, 0.3f));
 	EXPECT_EQ(f.randomCalls[4], glm::vec2(-0.1f, 0.1f));
-	// A reset leaves where the next point goes
+	// A reset keeps the time to use, the sparks and where the next point goes
+	const float left = d.GetTrail().accumulator;
 	d.ResetTrail();
-	EXPECT_EQ(d.GetTrail().head, 2u);
+	EXPECT_EQ(d.GetTrail().head, 3u);
+	EXPECT_EQ(d.GetTrail().accumulator, left);
+}
+
+TEST(Spirits, TrailTakesAPointEveryFifthOnceItsStartIsUsed)
+{
+	Fixture f;
+	AdvisorSpirit& d = f.control.Dude(0);
+	// Use the start: feeds of nothing take a point while more than a fifth is left
+	while (d.GetTrail().accumulator > 0.2f)
+	{
+		d.UpdateTrail(0.0f);
+	}
+	// The five seconds of the start gave 25 points
+	const auto head = d.GetTrail().head;
+	EXPECT_EQ(head, 25u);
+	d.UpdateTrail(0.0f);
+	EXPECT_EQ(d.GetTrail().head, head);
+	d.UpdateTrail(0.25f);
+	EXPECT_EQ(d.GetTrail().head, head + 1);
 }
 
 TEST(Spirits, TrailStripNarrowAndFaintWhenStill)
@@ -585,4 +612,11 @@ TEST(Spirits, ZoomerSolvesAsTheGameDoes)
 	EXPECT_LT(z.GetValue() - 2.0f, 0.01f);
 	z.Update(0.01f);
 	EXPECT_EQ(z.GetValue(), 3.0f);
+}
+
+TEST(Spirits, TheAdvisorsMoveApartInDepthInsideTheGamesOwnSquaredDistance)
+{
+	// One float step above 0.81, so a squared distance of exactly 0.81 still counts as close
+	EXPECT_EQ(std::bit_cast<uint32_t>(openblack::help::spirits::k_PartnerCloseSquared), 0x3F4F5C2Au);
+	EXPECT_LT(0.81f, openblack::help::spirits::k_PartnerCloseSquared);
 }

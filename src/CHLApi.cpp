@@ -58,8 +58,10 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureActivity.h"
+#include "Creature/CreatureCreed.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
+#include "Creature/CreatureHandGlow.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureScriptPlay.h"
@@ -85,6 +87,7 @@
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
+#include "ECS/Components/CreatureCreedPowers.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -131,6 +134,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipChants.h"
+#include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/CreatureRemoval.h"
@@ -155,6 +159,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
@@ -214,6 +219,7 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/ThingOnScreen.h"
 #include "ECS/TownDesire.h"
 #include "ECS/TownPlanning.h"
@@ -312,7 +318,10 @@ lhvm::ScriptType TaskType(uint32_t task)
 /// A script's mistake the game tells of, and carries on
 void ScriptMessage(std::string_view message)
 {
-	SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "{}", message);
+	if (const auto logger = spdlog::get("scripting"))
+	{
+		SPDLOG_LOGGER_WARN(logger, "{}", message);
+	}
 }
 
 /// Nothing outside is in view while the player is inside the temple
@@ -2228,8 +2237,11 @@ void SetPosition() // 024 SET_POSITION
 
 	if (objId != 0)
 	{
+		// The thing goes to the map position of the point, on the land there
 		const auto& island = Locator::terrainSystem::value();
-		position.y = island.GetHeightAt(glm::vec2(position.x, position.z));
+		const auto place = map_coords::FromMetres({position.x, position.z});
+		const auto placed = map_coords::ToMetres(place);
+		position = {placed.x, island.GetHeightAt(placed), placed.y};
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto object = static_cast<entt::entity>(objId);
 		if (IsDirectableVillager(object))
@@ -2242,6 +2254,7 @@ void SetPosition() // 024 SET_POSITION
 			}
 			// Its walk takes up the new place, and one under the script's control stops there and waits for it
 			ecs::walker_placement::Place(registry, object, position);
+			ecs::thing_map_place::Keep(registry, object, place);
 			if (registry.AllOf<ecs::components::ScriptControlled>(object))
 			{
 				ecs::walker_placement::Stop(registry, object);
@@ -2259,13 +2272,10 @@ void SetPosition() // 024 SET_POSITION
 				return;
 			}
 			Locator::creatureLocomotionSystem::value().PlaceWithoutWalking(object, position);
+			ecs::thing_map_place::Keep(registry, object, place);
 			return;
 		}
-		auto* transform = registry.TryGet<Transform>(object);
-		if (transform != nullptr)
-		{
-			transform->position = position;
-		}
+		ecs::thing_map_place::Put(registry, object, place, position.y);
 	}
 }
 
@@ -5235,9 +5245,8 @@ void MoveMusic() // 149 MOVE_MUSIC
 
 void GetInclusionDistance() // 150 GET_INCLUSION_DISTANCE
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The world camera's distance to the fence from its last fence test
+	Pushf(Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f);
 }
 
 void GetLandHeight() // 151 GET_LAND_HEIGHT
@@ -5952,10 +5961,18 @@ void ShakeCamera() // 201 SHAKE_CAMERA
 
 void SetAnimationModify() // 202 SET_ANIMATION_MODIFY
 {
-	// const auto creature = Pop().uintVal;
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The creature comes off the stack first. Only the value 1 sets real time; all other values clear it.
+	const auto thing = PopObject();
+	const bool realTime = Pop().uintVal == 1;
+	const auto creature = CreatureForNative(thing);
+	if (!creature.has_value())
+	{
+		return;
+	}
+	if (auto* animation = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureAnimation>(*creature))
+	{
+		animation->realTime = realTime;
+	}
 }
 
 void SetAviSequence() // 203 SET_AVI_SEQUENCE
@@ -5998,24 +6015,12 @@ void PlayGesture() // 204 PLAY_GESTURE
 	NotImplemented();
 }
 
-/// The story moves a creature to a stage of growing up: its mind takes up the stage, and reaching the stage it may
-/// leave home from, a creature kept near its home off the leash is let go
+/// The story moves a creature to a stage of growing up
 void MoveCreatureToStage(entt::entity creature, uint32_t stage)
 {
 	if (Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().MoveToStage(creature, stage);
-	}
-	if (!Locator::leashSystem::has_value())
-	{
-		return;
-	}
-	auto& leashes = Locator::leashSystem::value();
-	const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(creature);
-	if (leash != nullptr &&
-	    creature_development::ReleasedFromHome(stage, leash->confinementRadius, leashes.IsLeashed(creature)))
-	{
-		leashes.ClearConfinement(creature);
 	}
 }
 
@@ -6324,6 +6329,7 @@ void SetCreatureHome() // 223 SET_CREATURE_HOME
 		leash = &registry.Assign<ecs::components::CreatureLeash>(creature);
 	}
 	leash->home = home;
+	leash->homeOnMap = temple_pen::MapPosition(position);
 }
 
 void GetHitObject() // 224 GET_HIT_OBJECT
@@ -7942,12 +7948,13 @@ void VortexParameters() // 328 VORTEX_PARAMETERS
 
 void LoadCreature() // 329 LOAD_CREATURE
 {
-	// const auto position = PopVec();
-	// const auto player = Popf();
-	// const auto mindFilename = PopString();
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A creature of the species for the player from a mind file, which becomes the creature of the player
+	const auto position = PopVec();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto fileName = PopString();
+	const auto speciesRow = Pop().uintVal;
+	ecs::creature_from_file::Make(
+	    {.owner = player, .speciesRow = speciesRow, .fileName = fileName, .place = glm::vec2(position.x, position.z)});
 }
 
 void IsSpellCharging() // 330 IS_SPELL_CHARGING
@@ -8040,13 +8047,41 @@ void GetBellyPosition() // 337 GET_BELLY_POSITION
 
 void SetCreatureCreedProperties() // 338 SET_CREATURE_CREED_PROPERTIES
 {
-	// const auto time = Popf();
-	// const auto power = Popf();
-	// const auto scale = Popf();
-	// const auto handGlow = Pop().intVal;
-	// const auto creature = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A creature gets a creed glow of a scale and a power on its body. The time has no effect.
+	[[maybe_unused]] const auto time = Popf();
+	const auto power = Popf();
+	const auto scale = Popf();
+	const auto hand = Pop().intVal;
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Creature>(object))
+	{
+		ScriptMessage("Thing not creature!");
+		return;
+	}
+	// The saved game keeps the values of the glow
+	if (hand >= 0)
+	{
+		auto& powers = registry.AllOf<ecs::components::CreatureCreedPowers>(object)
+		                   ? registry.Get<ecs::components::CreatureCreedPowers>(object)
+		                   : registry.Assign<ecs::components::CreatureCreedPowers>(object);
+		creature_creed::Set(powers, static_cast<size_t>(hand), scale, power);
+	}
+	// The game does not examine the place, and a number out of range changes memory after the glows. Ignore it.
+	const auto place = creature_hand_glow::PlaceOf(hand);
+	if (!place.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "SET_CREATURE_CREED_PROPERTIES: no hand glow {}", hand);
+		return;
+	}
+	if (Locator::creatureAnimationSystem::has_value())
+	{
+		Locator::creatureAnimationSystem::value().SetCreedPower(object, *place, scale, power);
+	}
 }
 
 void GameThingCanViewCamera() // 339 GAME_THING_CAN_VIEW_CAMERA
@@ -9094,8 +9129,7 @@ void StopImmersion() // 430 STOP_IMMERSION
 
 void StopAllImmersion() // 431 STOP_ALL_IMMERSION
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// Stopping every force-feedback effect does nothing without the device either
 }
 
 void SetCreatureInTemple() // 432 SET_CREATURE_IN_TEMPLE
@@ -9264,7 +9298,7 @@ void GetDeadLiving() // 446 GET_DEAD_LIVING
 
 void AttachSoundTag() // 447 ATTACH_SOUND_TAG
 {
-	// An object keeps up a sound from a script bank: it plays from the object while the camera is in its reach
+	// An object keeps up a sound from a script bank: it plays from the object while the camera is in its range
 	const auto object = PopObject();
 	const auto bank = Pop().intVal;
 	const auto sample = Pop().intVal;
@@ -9285,11 +9319,9 @@ void AttachSoundTag() // 447 ATTACH_SOUND_TAG
 	{
 		return;
 	}
-	if (!Locator::soundTagSystem::value().AttachObjectSound(object, *sound))
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "ATTACH_SOUND_TAG: object {} already keeps up another sound",
-		                   entt::to_integral(object));
-	}
+	// A script's tag plays its sound one time each start, and the next turn starts it again when it is finished. It
+	// adds to the sounds that the object keeps up already.
+	Locator::soundTagSystem::value().AttachObjectSound(object, *sound, false);
 }
 
 void DetachSoundTag() // 448 DETACH_SOUND_TAG

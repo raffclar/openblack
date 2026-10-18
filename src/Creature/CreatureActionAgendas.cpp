@@ -14,6 +14,7 @@
 #include <iterator>
 #include <utility>
 
+#include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureStomp.h"
 #include "Creature/CreatureThrow.h"
@@ -405,7 +406,8 @@ std::vector<Step> creature_mind::DeadForever()
 	         .seconds = k_DeadForeverSeconds,
 	         .sequence = {animations::k_Faint, animations::k_Faint, animations::k_GetUp},
 	         .holdLoop = true,
-	         .closedEyes = true}};
+	         .closedEyes = true,
+	         .faint = true}};
 }
 
 std::vector<Step> creature_mind::PointOutHighlight(uint32_t highlight, float cameraDistance)
@@ -501,6 +503,24 @@ std::vector<Step> creature_mind::Notice(NoticeKind kind, uint32_t thing, bool ha
 float creature_mind::CuriosityShare(bool observedKind, bool doingSomethingInteresting)
 {
 	return observedKind && !doingSomethingInteresting ? k_ObservedCuriosityShare : 1.0f;
+}
+
+bool creature_mind::IsLookedOverAsAKind(uint32_t beliefType, bool mist)
+{
+	namespace types = creature_tree::belief_types;
+	switch (beliefType)
+	{
+	case types::k_Town:
+	case types::k_Forest:
+	case types::k_Citadel:
+	case types::k_Spell:
+	case types::k_Flock:
+		return false;
+	case types::k_SpellSeed:
+		return !mist;
+	default:
+		return true;
+	}
 }
 
 bool creature_mind::DoingSomethingInteresting(uint32_t taughtSkill, const std::vector<bool>& skillsKnown)

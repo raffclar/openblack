@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <MindFile.h>
+#include <PhysiqueFile.h>
 #include <fmt/format.h>
 #include <imgui.h>
 
@@ -62,7 +63,7 @@ std::vector<std::filesystem::path> MindFilesIn(const std::filesystem::path& fold
 	for (const auto& entry : std::filesystem::directory_iterator(folder, error))
 	{
 		const auto name = entry.path().filename().string();
-		if (entry.is_regular_file(error) && !name.starts_with("Physique"))
+		if (entry.is_regular_file(error) && !creaturemind::IsPhysiqueFileName(name))
 		{
 			files.push_back(entry.path());
 		}
@@ -290,7 +291,7 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 				}
 				const auto label =
 				    fmt::format("{} - {}: {} examples##tree{}_{}", creature_desires::Name(static_cast<Desire>(d)),
-				                k == 0 ? "what to act on" : "what to use", episodes.size(), k, d);
+				                k == 0 ? "the whole thing" : "what to act on", episodes.size(), k, d);
 				if (ImGui::TreeNode(label.c_str()))
 				{
 					for (const auto& line : creature_tree::Describe(learnt.trees.at(k).at(d)))

@@ -64,6 +64,22 @@ glm::mat4 creature::PosedBone(uint32_t bone, std::span<const glm::mat4> boneMatr
 	return bone < boneMatrices.size() ? placement * boneMatrices[bone] : placement;
 }
 
+std::vector<glm::vec3> creature::TurnPoseBones(std::span<const glm::vec3> lastTurnBones,
+                                               std::span<const glm::mat4> boneMatrices, const glm::mat4& placement)
+{
+	if (!lastTurnBones.empty() && lastTurnBones.size() == boneMatrices.size())
+	{
+		return {lastTurnBones.begin(), lastTurnBones.end()};
+	}
+	std::vector<glm::vec3> bones;
+	bones.reserve(boneMatrices.size());
+	for (uint32_t bone = 0; bone < boneMatrices.size(); ++bone)
+	{
+		bones.emplace_back(PosedBone(bone, boneMatrices, placement)[3]);
+	}
+	return bones;
+}
+
 std::array<glm::vec3, 3> creature::PosedTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCount>& vertices,
                                                  const std::array<uint32_t, 3>& bones, const creature_morph::Morph& morph,
                                                  std::span<const glm::mat4> boneMatrices, const glm::mat4& placement,

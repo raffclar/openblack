@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <bit>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -49,6 +50,9 @@ constexpr int k_GoodDude = 0;
 constexpr int k_EvilDude = 1;
 constexpr size_t k_AnimSlots = 80; ///< The size of the anim name table
 constexpr size_t k_Zones = 6;      ///< The hover zones the dude feels
+/// The two advisors move apart in depth when the square of their distance on the screen is less than this. It is the
+/// float one step above 0.81.
+constexpr float k_PartnerCloseSquared = std::bit_cast<float>(0x3F4F5C2Au);
 
 /// The anim indices AdvisorSpirit uses by number
 namespace anim
@@ -230,11 +234,22 @@ struct Trail
 		glm::vec3 velocity {0.0f};
 		float age {0.0f};
 	};
+	/// The sparks at the start: each at rest at the middle, spark i with the age i
+	[[nodiscard]] static constexpr std::array<Spark, k_Sparks> StartSparks()
+	{
+		std::array<Spark, k_Sparks> start {};
+		for (size_t i = 0; i < start.size(); ++i)
+		{
+			start.at(i).age = static_cast<float>(i);
+		}
+		return start;
+	}
 	std::array<glm::vec3, k_Points> points {};
 	/// Where the next point goes; the oldest point is here too
 	size_t head {0};
-	float accumulator {0.0f};
-	std::array<Spark, k_Sparks> sparks {};
+	/// The seconds not yet used for points. It starts full, so the first feeds each add a point.
+	float accumulator {5.0f};
+	std::array<Spark, k_Sparks> sparks {StartSparks()};
 };
 
 /// One vertex of a trail's strip, in hover space with its depth channel

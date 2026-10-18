@@ -82,6 +82,8 @@ struct CreatureFighting
 	/// Whether it has been told what to do in this stage yet, and has taunted its opponent
 	bool played {false};
 	bool taunted {false};
+	/// Whether its taunt before the fight is the rude gesture, chosen as the fight starts
+	bool rude {false};
 	/// Whether its life has paid for the fight and its mind learnt from it
 	bool ended {false};
 };
@@ -140,6 +142,12 @@ struct CreatureKnockedOut
 	};
 	Stage stage {Stage::Lying};
 	float seconds {0.0f};
+	/// The faint is still to start on the body. It starts on the next turn that the knock-out is looked after: then the
+	/// side of the faint is chosen, and those near it react as to a death.
+	bool fainting {true};
+	/// The creature started to let go of what it held before the faint. The faint starts on the next turn without a new
+	/// check of the hands.
+	bool handsChecked {false};
 	/// Decided as it faints: whether it rests to get better before it gets up
 	bool rest {false};
 	/// Only a script kills a creature for good: it never gets up

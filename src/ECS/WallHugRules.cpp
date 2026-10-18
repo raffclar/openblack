@@ -471,13 +471,14 @@ bool TurnedRoundIsBetter(const TrialWalk& turnedRound, const TrialWalk& asItGoes
 	return turnedRound.distanceSq < asItGoes.distanceSq;
 }
 
-TurnedRound TurnRound(glm::ivec2 position, glm::ivec2 step, uint16_t gameAngle)
+TurnedRound TurnRound(glm::ivec2 position, glm::ivec2 step, float stepAltitude, uint16_t gameAngle)
 {
 	constexpr int32_t k_StepsOn = 3;
 	constexpr uint16_t k_HalfTurn = 0x400;
 	return {
 	    .position = position + step * k_StepsOn,
-	    .step = {-step.x, 0},
+	    .step = {-step.x, static_cast<int32_t>(-stepAltitude)},
+	    .stepAltitude = static_cast<float>(-step.y),
 	    .gameAngle = static_cast<uint16_t>((gameAngle - k_HalfTurn) & gutils::k_GameAngleMask),
 	};
 }

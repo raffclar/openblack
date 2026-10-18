@@ -38,6 +38,8 @@ public:
 	void FenceHit(const glm::vec3& origin, const glm::vec3& listener) override;
 	[[nodiscard]] const particles::LightSheet& GetForceField() const override { return *_forceField; }
 	[[nodiscard]] uint32_t GetFenceHits() const override { return _fenceHits; }
+	void SetInclusionDistance(float distance) override { _inclusionDistance = distance; }
+	[[nodiscard]] float GetInclusionDistance() const override { return _inclusionDistance; }
 
 	/// The zones a file holds, switched on as a script's are
 	[[nodiscard]] static camera_zones::Zones FromFile(const exc::EXCZones& file);
@@ -51,6 +53,7 @@ private:
 	std::shared_ptr<particles::LightSheet> _forceField;
 	bool _forceFieldShown {false};
 	uint32_t _fenceHits {0};
+	float _inclusionDistance {0.0f};
 };
 
 } // namespace openblack::ecs::systems
