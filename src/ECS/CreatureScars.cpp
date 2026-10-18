@@ -16,6 +16,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
@@ -75,7 +76,7 @@ std::optional<glm::vec3> creature_scars::BellyOf(entt::entity creature)
 	return PosedPointOf(creature, &creature::CreatureRig::ActionPoints::belly);
 }
 
-void creature_scars::MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 groin, uint8_t kind, uint8_t column)
+void creature_scars::MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 direction, uint8_t kind, uint8_t column)
 {
 	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value() ||
 	    !Locator::creatureSkinSystem::has_value())
@@ -91,8 +92,9 @@ void creature_scars::MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 
 		return;
 	}
 	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	const auto hit = posed_model::NearestSkinHit(registry, creature, *meshes.Handle(mesh->id), placement, from,
-	                                             glm::normalize(groin - from));
+	// The unit direction adds the squares from z to x. A direction of no length stays as it is.
+	const auto unit = direction == glm::vec3(0.0f) ? direction : x87::Scaled<x87::SumOrder::Zyx>(direction);
+	const auto hit = posed_model::NearestSkinHit(registry, creature, *meshes.Handle(mesh->id), placement, from, unit);
 	if (!hit.has_value())
 	{
 		return;
@@ -122,15 +124,20 @@ void creature_scars::BurnOnCatching(entt::entity creature)
 	const glm::vec3 groin = posedGroin.value_or(standing != nullptr ? standing->position : glm::vec3(0.0f));
 	auto& random = Locator::gameRandom::value();
 	const float reach = ShownSize(*body) * creature_marks::scar::k_BurnReachPerSize;
+	const float half = reach * 0.5f;
+	const float eighth = reach * 0.125f;
+	const float quarter = eighth + eighth;
 	for (int32_t i = 0; i < creature_marks::scar::k_CatchingBurnTries; ++i)
 	{
-		// Each try's point is drawn across, then up, then along
-		glm::vec3 from = groin;
-		from.x += random.GameFloatRand(reach * 0.25f) - reach * 0.125f;
-		from.y += random.GameFloatRand(reach) - reach * 0.5f;
-		from.z += random.GameFloatRand(reach * 0.25f) - reach * 0.125f;
+		// Each try's point is drawn across, then up, then along. The draw is added to the groin first, then the half
+		// range comes off.
+		glm::vec3 from;
+		from.x = (random.GameFloatRand(quarter) + groin.x) - eighth;
+		from.y = (random.GameFloatRand(reach) + groin.y) - half;
+		from.z = (random.GameFloatRand(quarter) + groin.z) - eighth;
 		const auto direction = groin - from;
-		if (!(glm::dot(direction, direction) > creature_marks::scar::k_LeastReachSquared))
+		// The squares add y, x, then z
+		if (!(x87::Dot<x87::SumOrder::Yxz>(direction, direction) > creature_marks::scar::k_LeastReachSquared))
 		{
 			continue;
 		}
@@ -138,7 +145,7 @@ void creature_scars::BurnOnCatching(entt::entity creature)
 		const auto column = creature_marks::scar::CatchingBurnColumn(random.GameRand(8));
 		if (posedGroin.has_value())
 		{
-			MarkAlong(creature, from, groin, kind, column);
+			MarkAlong(creature, from, direction, kind, column);
 		}
 	}
 }

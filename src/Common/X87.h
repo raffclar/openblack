@@ -216,6 +216,14 @@ struct Exact
 	return Atan2(root, x);
 }
 
+/// The C library's arcsine of the game, kept wide. The library makes the square root of (1 + x) times (1 - x) with float
+/// steps, then gives x and that root to the FPU's arctangent.
+[[nodiscard]] inline double Asin(float value)
+{
+	const float across = std::sqrt((1.0f + value) * (1.0f - value));
+	return Atan2(value, across);
+}
+
 namespace detail
 {
 

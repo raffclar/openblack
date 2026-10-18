@@ -17,6 +17,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+
 using namespace openblack;
 using namespace openblack::creature_locomotion;
 
@@ -111,7 +113,8 @@ GameHeading creature_locomotion::HeadingOf(glm::vec2 direction)
 
 glm::vec2 creature_locomotion::DirectionOf(GameHeading heading)
 {
-	return {std::sin(heading.Radians()), -std::cos(heading.Radians())};
+	// The FPU's sine and cosine, each rounded to a float
+	return {x87::RoundToFloat(x87::Sin(heading.Radians())), -x87::RoundToFloat(x87::Cos(heading.Radians()))};
 }
 
 GameHeading creature_locomotion::LerpHeading(GameHeading heading, GameHeading target, float timeMs, float durationMs)

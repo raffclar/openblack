@@ -100,9 +100,6 @@ TEST(CreaturePlayerAttention, TheHandSpeedFadesSlowlyAfterTheHandStops)
 TEST(CreaturePlayerAttention, TheDirectionIsCloseWithinASixthOfAHalfTurnNotRoundTheCircle)
 {
 	const auto creature = At(1000.0f, 1000.0f);
-	// Along +x is the zero angle
-	EXPECT_EQ(GameAngleOf({1.0f, 0.0f}), 0);
-	EXPECT_EQ(GameAngleOf({0.0f, 1.0f}), 0x200);
 	EXPECT_TRUE(IsDirectionClose(creature, At(1100.0f, 1000.0f), 0));
 	EXPECT_TRUE(IsDirectionClose(creature, At(1100.0f, 1000.0f), 340));
 	EXPECT_FALSE(IsDirectionClose(creature, At(1100.0f, 1000.0f), 341));

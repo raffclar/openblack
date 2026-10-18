@@ -16,6 +16,8 @@
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
 
@@ -70,9 +72,10 @@ Aim creature_head_look::AimOf(const AimFacts& facts)
 Angles creature_head_look::AnglesTowards(const glm::vec3& eyes, GameHeading facing, const glm::vec3& target)
 {
 	auto direction = target - eyes;
+	// The length adds the squares of y, z, then x. A direction of no length stays as it is.
 	if (direction != glm::vec3(0.0f))
 	{
-		direction = glm::normalize(direction);
+		direction = x87::Scaled<x87::SumOrder::Yzx>(direction);
 	}
 	Angles angles {};
 	// A target straight along a map axis gives no sideways turn
@@ -80,7 +83,7 @@ Angles creature_head_look::AnglesTowards(const glm::vec3& eyes, GameHeading faci
 	{
 		angles.yaw = creature_locomotion::HeadingOf(glm::vec2(direction.x, direction.z)).TurnFrom(facing);
 	}
-	angles.pitch = std::asin(std::clamp(direction.y, -1.0f, 1.0f));
+	angles.pitch = x87::RoundToFloat(x87::Asin(direction.y));
 	return angles;
 }
 

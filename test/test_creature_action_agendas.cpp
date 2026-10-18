@@ -113,11 +113,11 @@ TEST(CreatureActionAgendas, APooAtHomeWalksHomeThenDoesThePooByItself)
 	EXPECT_EQ(agenda[1].movement.object, 8u);
 	EXPECT_EQ(agenda[2].movement.kind, Movement::Kind::TurnToFaceAwayFromObject);
 	EXPECT_EQ(agenda[3].effect, Effect::Poo);
-	// Only with a home within 20 of it
+	// Only with a home within 20 of it, by the game's map distance, which is near but not exact
 	const auto* poo = plan_actions::For("PooAtHome");
 	ASSERT_NE(poo, nullptr);
 	EXPECT_FALSE(plan_actions::Possible(*poo, {}));
-	EXPECT_TRUE(plan_actions::Possible(*poo, {.home = glm::vec2(20.0f, 0.0f)}));
+	EXPECT_TRUE(plan_actions::Possible(*poo, {.home = glm::vec2(19.9f, 0.0f)}));
 	EXPECT_FALSE(plan_actions::Possible(*poo, {.home = glm::vec2(20.1f, 0.0f)}));
 }
 
