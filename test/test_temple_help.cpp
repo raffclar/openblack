@@ -208,6 +208,13 @@ TEST(TempleHelp, ARoomNotOpenStopsTheHelpAndSaysSo)
 	EXPECT_EQ(scripts.calls, (std::vector<std::string> {"stop help", "start CitadelWorldRoomNotAvailable"}));
 }
 
+TEST(TempleHelp, ASaveIntoAnEmptySlotStartsTheHelpOnLoadingWithoutAStop)
+{
+	FakeScripts scripts;
+	SavedIntoEmptySlot(scripts);
+	EXPECT_EQ(scripts.calls, (std::vector<std::string> {"start CitadelSaveGameRoomLoadHelp"}));
+}
+
 TEST(TempleHelp, AScriptsDialogueIsKeptWhileInsideAndGivenBackOnLeaving)
 {
 	FakeScripts scripts;

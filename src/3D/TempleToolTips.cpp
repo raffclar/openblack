@@ -20,6 +20,8 @@ namespace Arrows = gui::ToolTipArrows;
 namespace
 {
 /// The temple's tooltips, by their text less 0xE73
+/// The first tooltip's help text
+constexpr uint32_t k_FirstText = 0xE73;
 constexpr uint32_t k_ZoomIn = 0xE75 - 0xE73;
 constexpr uint32_t k_Move = 0xE7E - 0xE73;
 constexpr uint32_t k_ZoomOut = 0xE8B - 0xE73;
@@ -102,9 +104,105 @@ void UpdateChallengeControl(TempleToolTip& toolTip, const TempleToolTipInput& in
 		toolTip = {.index = k_ZoomOut, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
 	}
 }
+/// The save game room: moving about and the way back, then its controls' callbacks in the order of their submeshes: the
+/// pictures, the buttons and the scroll. A button hovered keeps the pictures after it from choosing. A picture that
+/// zooms in keeps the scroll from zooming out.
+void UpdateSaveGameRoom(TempleToolTip& toolTip, const TempleToolTipInput& input, bool overWayBack,
+                        std::u16string* savedGameName)
+{
+	namespace rules = temple::save_game_room;
+	toolTip = {.index = k_Move, .action = ToolTipAction::Select, .arrows = Arrows::k_All};
+	if (overWayBack)
+	{
+		toolTip = {.index = k_WorldRoom, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
+	}
+	std::vector<uint32_t> controls;
+	for (const auto& control : input.savedGames)
+	{
+		controls.push_back(control.subMesh);
+	}
+	for (const auto& scroll : input.scrolls)
+	{
+		controls.push_back(scroll.subMesh);
+	}
+	std::ranges::sort(controls);
+	bool buttonHovered = false;
+	bool pictureZoomsIn = false;
+	for (const auto subMesh : controls)
+	{
+		const bool hovered = input.hoveredSubMesh == subMesh;
+		const auto control = std::ranges::find(input.savedGames, subMesh, &TempleSaveGameControl::subMesh);
+		if (control == input.savedGames.end())
+		{
+			// The scroll: close up it can be dragged, from afar it tells of the saves; looked at, the way back, unless a
+			// picture zooms in
+			if (hovered)
+			{
+				if (IsZoomed(input) && !input.pictureLookedAt)
+				{
+					toolTip = {.index = k_Scroll, .action = ToolTipAction::Select, .arrows = Arrows::k_UpDown};
+				}
+				else if (input.zoom == 0.0f)
+				{
+					toolTip = {.index = k_SaveGameStats, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
+				}
+			}
+			else if (input.lookingAtScroll && IsZoomed(input) && !input.pictureLookedAt && !pictureZoomsIn)
+			{
+				toolTip = {.index = k_ZoomOut, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
+			}
+			continue;
+		}
+		switch (control->control.part)
+		{
+		case rules::Part::Picture:
+		{
+			const rules::PictureToolTipInput picture {
+			    .slot = control->control.slot,
+			    .hovered = hovered,
+			    .zoom = input.zoom,
+			    .pictureLookedAt = input.pictureLookedAt,
+			    .highDetail = input.savedGameHighDetail,
+			    .buttonHovered = buttonHovered,
+			    .saveName =
+			        control->saveName.has_value() ? std::optional<std::u16string_view>(*control->saveName) : std::nullopt,
+			    .multiplayer = input.multiplayer,
+			};
+			pictureZoomsIn = pictureZoomsIn || rules::PictureZoomsIn(picture);
+			if (const auto chosen = rules::PictureToolTipOf(picture); chosen.has_value())
+			{
+				toolTip = {.index = chosen->text - k_FirstText, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
+				if (chosen->text == rules::k_ZoomInNamedText && savedGameName != nullptr)
+				{
+					*savedGameName = chosen->name;
+				}
+			}
+			break;
+		}
+		case rules::Part::Save:
+		case rules::Part::Delete:
+			if (hovered)
+			{
+				const auto text = control->control.part == rules::Part::Save ? rules::k_SaveText : rules::k_DeleteText;
+				toolTip = {.index = text - k_FirstText, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
+				buttonHovered = true;
+			}
+			break;
+		case rules::Part::Load:
+			// The load button leaves the arrows of the tooltip before it
+			if (hovered)
+			{
+				toolTip.index = rules::k_LoadText - k_FirstText;
+				toolTip.action = ToolTipAction::Select;
+				buttonHovered = true;
+			}
+			break;
+		}
+	}
+}
 } // namespace
 
-void openblack::UpdateTempleToolTip(TempleToolTip& toolTip, const TempleToolTipInput& input)
+void openblack::UpdateTempleToolTip(TempleToolTip& toolTip, const TempleToolTipInput& input, std::u16string* savedGameName)
 {
 	const bool overWayBack = input.overWayBack && !input.controlHeld;
 	switch (input.room)
@@ -199,20 +297,14 @@ void openblack::UpdateTempleToolTip(TempleToolTip& toolTip, const TempleToolTipI
 		break;
 	}
 	case TempleRoom::SaveGame:
+		UpdateSaveGameRoom(toolTip, input, overWayBack, savedGameName);
+		break;
 	case TempleRoom::Credits:
-		// The save game and credits rooms: moving about, and the way back
+		// The credits room: moving about, and the way back
 		toolTip = {.index = k_Move, .action = ToolTipAction::Select, .arrows = Arrows::k_All};
 		if (overWayBack)
 		{
 			toolTip = {.index = k_WorldRoom, .action = ToolTipAction::Select, .arrows = Arrows::k_None};
-		}
-		// TODO(raffclar): the save game room's pictures and buttons have tooltips of their own
-		if (input.room != TempleRoom::Credits)
-		{
-			for (const auto& scroll : input.scrolls)
-			{
-				UpdateRoomScroll(toolTip, input, scroll, k_SaveGameStats);
-			}
 		}
 		break;
 	case TempleRoom::CreatureCave:

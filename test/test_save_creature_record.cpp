@@ -648,6 +648,42 @@ TEST(SaveSlots, TheLandSlotsHaveAFolderForEachLand)
 	EXPECT_FALSE(IsSlot(21));
 }
 
+TEST(SaveSlots, TheRoomReadsTheAutosavesOfTheLandAndTheLandsBeforeAndAfter)
+{
+	const auto folderOf = [](std::string_view name, uint32_t land) {
+		const auto found = RoomFolderOf(name, land);
+		return found.has_value() ? found->folder : std::filesystem::path("none");
+	};
+	EXPECT_EQ(folderOf("3", 2), std::filesystem::path("3"));
+	EXPECT_EQ(folderOf("15", 2), std::filesystem::path("15") / "2");
+	EXPECT_EQ(folderOf("17", 0), std::filesystem::path("17") / "0");
+	EXPECT_EQ(folderOf("14", 2), std::filesystem::path("14") / "1");
+	EXPECT_EQ(folderOf("18", 2), std::filesystem::path("18") / "3");
+	EXPECT_EQ(folderOf("20", 2), std::filesystem::path("20"));
+	// The previous land's folder only from the second land, the next land's only up to the fourth
+	EXPECT_EQ(folderOf("14", 1), std::filesystem::path("14"));
+	EXPECT_EQ(folderOf("18", 4), std::filesystem::path("18") / "5");
+	EXPECT_EQ(folderOf("18", 5), std::filesystem::path("18"));
+	EXPECT_EQ(folderOf("18", 0), std::filesystem::path("18"));
+	EXPECT_EQ(folderOf(".", 1), std::filesystem::path("none"));
+	EXPECT_EQ(folderOf("..", 1), std::filesystem::path("none"));
+	// The file's number comes from the start of the folder's name
+	EXPECT_EQ(RoomFolderOf("15", 1)->fileSlot, 15);
+	EXPECT_EQ(RoomFolderOf("Pictures", 1)->fileSlot, 0);
+	EXPECT_EQ(LeadingNumber(" 07x"), 7);
+	EXPECT_EQ(LeadingNumber("-3"), -3);
+	EXPECT_EQ(LeadingNumber(""), 0);
+}
+
+TEST(SaveSlots, TheFoldersAreReadInTheOrderOfTheirNames)
+{
+	std::vector<std::string> names {"3", "20", "Pictures", "10", "1", "0", "15"};
+	std::ranges::sort(names, ListedBefore);
+	EXPECT_EQ(names, (std::vector<std::string> {"0", "1", "10", "15", "20", "3", "Pictures"}));
+	EXPECT_TRUE(ListedBefore("abc", "ABD"));
+	EXPECT_FALSE(ListedBefore("ABC", "abc"));
+}
+
 TEST(SaveWorldFile, TheCreaturesReadBackWithTheirLeashesAndTheirReferences)
 {
 	SavedCreature first {.key = EntityKey(40), .creature = AFullCreature(), .leash = std::nullopt, .agendaStep = 2};

@@ -34,6 +34,7 @@
 #include "Help/SingAlong.h"
 #include "MenuBackdrop.h"
 #include "NewPlayerBox.h"
+#include "SaveGameBoxes.h"
 #include "ScreenFade.h"
 #include "SkipBox.h"
 #include "StoryHistoryBox.h"
@@ -139,6 +140,12 @@ public:
 	void ShowNewPlayerBoxOverGame(bool canCancel, NewPlayerBox::CheckName checkName);
 	bool ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec2 resolution);
 	[[nodiscard]] NewPlayerBox& GetNewPlayerBox() noexcept { return *_newPlayerBox; }
+	/// The save game room's question and name box, over the temple
+	[[nodiscard]] SaveGameBoxes& GetSaveGameBoxes() noexcept { return *_saveGameBoxes; }
+	/// The save game room's boxes take the mouse and the keyboard while one is up; true when they took the event
+	bool ProcessSaveGameBoxesEvent(const SDL_Event& event);
+	/// The name of a saved game that the named zoom tooltip shows. The tooltip keeps the last name given.
+	void SetToolTipName(std::u16string name) { _toolTipName = std::move(name); }
 	/// The new player's screen: the backdrop, swirling on by the frame's milliseconds, the box and the pointer, under
 	/// black of an alpha
 	void DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, float frameMilliseconds,
@@ -364,6 +371,8 @@ private:
 	std::unique_ptr<StoryHistoryBox> _storyHistoryBox;
 	std::unique_ptr<TattooEditorDialog> _tattooEditor;
 	std::unique_ptr<NewPlayerBox> _newPlayerBox;
+	std::unique_ptr<SaveGameBoxes> _saveGameBoxes;
+	std::u16string _toolTipName;
 	std::unique_ptr<CustomMusicControls> _musicControls;
 	/// The front end's backdrop: its texture, repeating, its swirls and the two layers' texture coordinates
 	std::unique_ptr<graphics::Texture2D> _backdrop;

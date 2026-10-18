@@ -3336,6 +3336,22 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.save_game_room",
+	    .name = "The temple's save game room with a saved game",
+	    .facet = Facet::Story,
+	    .description = "The game is saved into slot 2 with the name Testbed. Then the player goes through the temple's "
+	                   "main room into the save game room. Click a picture, then the picture again or a button under it.",
+	    .expected = "The scroll lists the saved games, the time played and the counts of saves and loads. The empty "
+	                "pictures show half of the empty picture. A click on a picture takes the camera close to it, and "
+	                "the save, load and delete buttons show. A click on an empty picture asks for a name; OK saves, the "
+	                "save count goes up and the help on loading starts. Load and delete ask Yes or No first.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 1.0f, .value = 2},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
+	});
+
+	all.push_back({
 	    .id = "temple.library_history",
 	    .name = "The temple's library with tips read and a story history",
 	    .facet = Facet::Story,
