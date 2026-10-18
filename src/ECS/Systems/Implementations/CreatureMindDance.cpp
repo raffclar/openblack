@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <bit>
 #include <optional>
+#include <utility>
 
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
@@ -27,6 +28,7 @@
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
@@ -35,6 +37,7 @@
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -73,6 +76,32 @@ entt::entity DanceOf(const CreatureDance& record)
 uint32_t Turn()
 {
 	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+}
+
+/// The villagers that the creature called leave its list. One in the hand, dancing for it or under its control stops
+/// its dance and decides what to do.
+void ReleaseDancers(CreatureDance& record)
+{
+	auto& registry = Entities();
+	for (const auto villager : std::exchange(record.dancers, {}))
+	{
+		auto* action = registry.Valid(villager) ? registry.TryGet<LivingAction>(villager) : nullptr;
+		if (action == nullptr || !Locator::livingActionSystem::has_value())
+		{
+			continue;
+		}
+		auto& living = Locator::livingActionSystem::value();
+		if (!creature_dance::DecidesWhenReleased(living.VillagerGetState(*action, LivingAction::Index::Top)))
+		{
+			continue;
+		}
+		if (ecs::dances::DanceOf(registry, villager) != entt::null)
+		{
+			ecs::dances::RemoveDancer(registry, villager);
+		}
+		static_cast<void>(living.VillagerChangeTopState(*action, VillagerStates::DecideWhatToDo));
+	}
+	record.calledBy.reset();
 }
 
 /// The dance goes, and its dancers decide what to do
@@ -267,6 +296,7 @@ void CreatureMindSystem::CarryOutDance(entt::entity creature, creature_mind::Idl
 		break;
 	}
 	case DanceOrder::Kind::Summon:
+		record.calledBy = idle.serial;
 		creature_mind::DanceOrderDone(idle, Summon(creature, record, order.villager, order.count));
 		break;
 	case DanceOrder::Kind::StopLooking:
@@ -327,6 +357,12 @@ void CreatureMindSystem::KeepDanceWithAgenda(entt::entity creature, const creatu
 {
 	auto& registry = Entities();
 	auto* record = registry.TryGet<CreatureDance>(creature);
+	// The creature stopped the agenda that called its dancers: they leave its list
+	if (record != nullptr && !record->dancers.empty() &&
+	    !creature_dance::DanceGoesOn(record->calledBy, idle.serial, idle.step < idle.agenda.size()))
+	{
+		ReleaseDancers(*record);
+	}
 	const auto dance = record != nullptr ? DanceOf(*record) : entt::null;
 	if (dance == entt::null || registry.Get<const Dance>(dance).state != Dance::State::Dancing)
 	{
