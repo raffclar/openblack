@@ -87,6 +87,7 @@
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/IntroSystem.h"
+#include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
 #include "ECS/Systems/Implementations/SaveGameSystem.h"
@@ -230,6 +231,7 @@ using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::IntroSystem;
+using openblack::ecs::systems::LandShadeSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LiquidParticleSystem;
 using openblack::ecs::systems::LivingActionSystem;
@@ -423,6 +425,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::vortexSystem::emplace<VortexSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
 	Locator::liquidParticleSystem::emplace<LiquidParticleSystem>();
+	Locator::landShadeSystem::emplace<LandShadeSystem>();
 	// The player's creature is kept under their profile's file
 	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(
 	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); });
@@ -635,6 +638,7 @@ void openblack::ShutDownServices()
 	Locator::vortexSystem::reset();
 	Locator::creatureFizzSystem::reset();
 	Locator::liquidParticleSystem::reset();
+	Locator::landShadeSystem::reset();
 	Locator::creatureWebPageSystem::reset();
 	Locator::creatureCarryOverSystem::reset();
 	Locator::saveGameSystem::reset();

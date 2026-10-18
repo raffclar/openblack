@@ -351,6 +351,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"creaturePenSystem", "creatures.systems"},
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
     LocatorCoverage {"liquidParticleSystem", "particles.liquid"},
+    LocatorCoverage {"landShadeSystem", "map.shade"},
     LocatorCoverage {"creatureWebPageSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tattooMenuSystem", "creatures.systems"},
@@ -3687,6 +3688,9 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	    .world = World(),
 	    .map = []() -> const ecs::MapInterface* {
 		    return Locator::entitiesMap::has_value() ? &Locator::entitiesMap::value() : nullptr;
+	    },
+	    .shade = []() -> const ecs::systems::LandShadeSystemInterface* {
+		    return Locator::landShadeSystem::has_value() ? &Locator::landShadeSystem::value() : nullptr;
 	    },
 	}));
 	inspector.Add(MakeTownProvider(World()));

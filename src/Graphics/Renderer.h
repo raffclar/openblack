@@ -566,10 +566,13 @@ private:
 	mutable std::unique_ptr<LandLightTable> _landLightTable;
 	/// The sea's ripple, moving on with the frames the sea's rows are drawn in while the game's time goes on
 	mutable sea_rows::Ripple _seaRipple;
-	/// The land's luminosity this frame, sized to the land's
-	mutable std::unique_ptr<FrameBuffer> _landLuminosityFrameBuffer;
-	/// What shades the land this frame: the clouds' shadows and the lights at night
-	mutable std::unique_ptr<FrameBuffer> _landShadeFrameBuffer;
+	/// The land's luminosity of this frame and of the frame before, a copy of the shaded land (see land_shade) sized to
+	/// the land's. Each frame changes the other one and keeps the rows it changed: the next frame changes those too.
+	mutable std::array<std::unique_ptr<Texture2D>, 2> _landLuminosity;
+	mutable size_t _landLuminosityNow {0};
+	mutable glm::u16vec2 _landLuminosityRowsBefore {0};
+	/// The land's luminosity of the frame before
+	[[nodiscard]] const Texture2D& GetLandLuminosityBefore() const;
 	/// The land cells' colours this frame, sized to the land's
 	mutable std::unique_ptr<FrameBuffer> _landColourFrameBuffer;
 	/// The sky's dome for each alignment, one above the other, kept from frame to frame
@@ -674,13 +677,11 @@ private:
 	/// took it on that frame.
 	struct LightOfFrameBefore
 	{
-		/// Copies of the land light table, the land's luminosity and the land cells' colours of the frame before
+		/// Copies of the land light table and the land cells' colours of the frame before
 		std::optional<TextureHandle> landLight;
-		std::optional<TextureHandle> luminosity;
 		std::optional<TextureHandle> colour;
-		glm::u16vec2 luminositySize {0};
 		glm::u16vec2 colourSize {0};
-		/// The luminosity and the colours were copied at the start of this frame
+		/// The colours were copied at the start of this frame
 		bool texturesKept {false};
 		hand_reflection::FrameBefore<std::array<glm::vec4, 2>> haze;
 		hand_reflection::FrameBefore<float> treeBrightness;

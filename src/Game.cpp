@@ -279,6 +279,7 @@
 #include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Parsers/InfoFile.h"
+#include "Particles/LiquidParticles.h"
 #include "Physics/Materials.h"
 #include "Profiler.h"
 #include "Resources/Loaders.h"
@@ -2444,10 +2445,13 @@ bool Game::Update() noexcept
 	{
 		Locator::dynamicsSystem::value().UpdateFrame(clock.GetTurnFraction());
 	}
-	// The drops, the dust, the smoke and the motes move on and fade
+	// The drops, the dust, the smoke and the motes move on and fade by the frame's game time, and in the temple, where the
+	// world stops, by its real time
 	if (Locator::liquidParticleSystem::has_value())
 	{
-		Locator::liquidParticleSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count(), true);
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const auto milliseconds = inTemple ? clock.GetFrameRealTime() : clock.GetFrameGameTime();
+		Locator::liquidParticleSystem::value().UpdateFrame(liquid_particles::FrameSeconds(milliseconds.count()), true);
 	}
 	{
 		// The fight animations play, blows land and the fighters move as their animations carry them
