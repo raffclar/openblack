@@ -160,7 +160,8 @@ struct Environment
 	/// The snow lies this deep in every cell of the island as the scenario starts, 0 to 255. A testbed set-up step.
 	std::optional<float> snowDepth;
 	/// EXPERIMENT (not for merge): the cover of the volumetric clouds, as Shift, Alt and F9 choose it (the number of a
-	/// volumetric_clouds::CoverChoice). The weather gives the cover when not given.
+	/// volumetric_clouds::CoverChoice). The weather gives the cover when not given. With clear weather and a cover given,
+	/// the island has no mild storm, so the clouds do not build a storm's towers over it. The cover shows at once.
 	std::optional<uint8_t> cloudCover;
 	/// EXPERIMENT (not for merge): how strong the aurora is, 0 to 1 (atmosphere::AuroraTonight), such as
 	/// atmosphere::k_StrongAurora for its oval over the island. The night gives the strength when not given.
@@ -210,6 +211,9 @@ struct Framing
 	glm::vec3 look {0.0f};
 	/// A placed shot's climb, when it climbs
 	std::optional<Climb> climb;
+	/// EXPERIMENT (not for merge): a placed shot that keeps the camera at its place, or at the top of its climb, until
+	/// the scenario stops. The camera's own limits then do not move it, such as far over the land or under the sea.
+	bool hold {false};
 };
 
 /// A creature's body as the scenario wants it; what is not given is as the creature's species starts

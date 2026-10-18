@@ -166,6 +166,16 @@ struct StormCell
 	bool alive {true};
 };
 
+/// A debug choice of the cloud cover that takes the place of the weather's: none, clear, scattered, broken, overcast
+enum class CoverChoice : uint8_t
+{
+	Weather,
+	Clear,
+	Scattered,
+	Broken,
+	Overcast,
+	_Count
+};
 /// What the weather asks of the clouds this frame
 struct CloudWeather
 {
@@ -177,10 +187,13 @@ struct CloudWeather
 	float rain {0.0f};
 	/// The wind at the clouds, in world units a second
 	glm::vec2 wind {0.0f};
+	/// The choice of cover that gave this weather
+	CoverChoice choice {CoverChoice::Weather};
 };
 
 /// The weather of the clouds over time. It eases each change over a build-up or a calm-down time, so that nothing
-/// jumps. It adds the wind's travel to a drift each frame and changes the shapes of the clouds slowly.
+/// jumps, but a new choice of cover puts its weather and the storms at once. It adds the wind's travel to a drift each frame
+/// and changes the shapes of the clouds slowly.
 class CloudClimate
 {
 public:
@@ -208,6 +221,7 @@ private:
 	glm::vec2 _wind {0.0f};
 	glm::vec2 _drift {0.0f};
 	float _evolution {0.0f};
+	CoverChoice _choice {CoverChoice::Weather};
 	std::vector<StormCell> _storms;
 };
 
@@ -230,16 +244,6 @@ private:
 /// at sunrise and sunset.
 [[nodiscard]] glm::vec3 SunThroughAir(float elevation);
 
-/// A debug choice of the cloud cover that takes the place of the weather's: none, clear, scattered, broken, overcast
-enum class CoverChoice : uint8_t
-{
-	Weather,
-	Clear,
-	Scattered,
-	Broken,
-	Overcast,
-	_Count
-};
 /// The weather that a choice gives, or the weather as it is for CoverChoice::Weather
 [[nodiscard]] CloudWeather ChosenWeather(CoverChoice choice, const CloudWeather& weather);
 
