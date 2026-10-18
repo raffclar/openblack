@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/constants.hpp>
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureFight.h"
@@ -913,6 +914,33 @@ TEST(CreatureFight, TheForwardExtentIsTheFarthestBoneAhead)
 	EXPECT_FLOAT_EQ(ForwardExtent(bones, {0.0f, 1.0f}), 3.0f);
 	EXPECT_FLOAT_EQ(ForwardExtent(bones, {0.0f, -1.0f}), 2.0f);
 	EXPECT_FLOAT_EQ(ForwardExtent({}, {0.0f, 1.0f}), 0.0f);
+}
+
+TEST(CreatureFight, TheForwardExtentComesFromTheLastTurnsBonesAndThePlaceNow)
+{
+	// Heading 0 faces towards -z; a heading of pi/2 faces towards +x
+	const std::array<glm::vec2, 3> bones {glm::vec2 {10.0f, 17.0f}, glm::vec2 {10.0f, 22.0f}, glm::vec2 {14.0f, 20.0f}};
+	EXPECT_FLOAT_EQ(ForwardExtentFromLastTurn(bones, {10.0f, 20.0f}, 0.0f), 3.0f);
+	EXPECT_NEAR(ForwardExtentFromLastTurn(bones, {10.0f, 20.0f}, glm::half_pi<float>()), 4.0f, 1e-5f);
+	// A creature that moved 2 ahead since the last turn reaches 2 less in front of it
+	EXPECT_FLOAT_EQ(ForwardExtentFromLastTurn(bones, {10.0f, 18.0f}, 0.0f), 1.0f);
+	// It is never less than zero, also when all the bones are behind the place now
+	EXPECT_FLOAT_EQ(ForwardExtentFromLastTurn(bones, {10.0f, 10.0f}, 0.0f), 0.0f);
+	EXPECT_FLOAT_EQ(ForwardExtentFromLastTurn({}, {0.0f, 0.0f}, 0.0f), 0.0f);
+}
+
+TEST(CreatureFight, TheForwardExtentRoundsEachStepToAFloat)
+{
+	// Each difference and product is rounded to a float before the sum
+	const float heading = 0.7f;
+	const auto ahead = static_cast<float>(std::sin(static_cast<double>(heading)));
+	const auto across = static_cast<float>(-std::cos(static_cast<double>(heading)));
+	const std::array<glm::vec2, 1> bones {glm::vec2 {1234.567f, 2345.678f}};
+	const glm::vec2 at {1230.123f, 2349.987f};
+	const auto x = bones[0].x - at.x;
+	const auto z = bones[0].y - at.y;
+	const float expected = (x * ahead) + (across * z);
+	EXPECT_EQ(std::bit_cast<uint32_t>(ForwardExtentFromLastTurn(bones, at, heading)), std::bit_cast<uint32_t>(expected));
 }
 
 TEST(CreatureFight, OverlappingFightersMoveApartInsideTheRange)

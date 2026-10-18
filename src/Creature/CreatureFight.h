@@ -127,6 +127,10 @@ struct Arena
 /// How far the body of a fighter reaches in front of its feet, from the points of its posed bones relative to its feet
 /// and the direction that it faces. It is never less than zero.
 [[nodiscard]] float ForwardExtent(std::span<const glm::vec2> bones, glm::vec2 forward);
+/// How far the body of a fighter reaches in front of the place where it stands now, in the direction of its heading now.
+/// The bones are the points on the land where the bones of its body were at the end of its last game turn, so a move
+/// since then (its own step or a push) changes the result. It is never less than zero.
+[[nodiscard]] float ForwardExtentFromLastTurn(std::span<const glm::vec2> bones, glm::vec2 at, float heading);
 /// Where two fighters go when their bodies overlap. Each one moves by half the overlap, along the direction that the
 /// first one faces: the first one moves back, the other one moves away. A fighter only moves to a point inside the range.
 struct PullApart
