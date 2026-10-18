@@ -1285,3 +1285,12 @@ openblack_setup_and_add_test(test_hand_throw_speed test_hand_throw_speed.cpp)
 openblack_setup_and_add_test(
   test_object_tint graphics/test_object_tint.cpp
 )
+openblack_setup_and_add_test(test_creature_turn_pose test_creature_turn_pose.cpp)
+openblack_setup_and_add_test(
+  test_oracle_turn_pose oracle/test_oracle_turn_pose.cpp
+)
+set_tests_properties(
+  test_oracle_turn_pose
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

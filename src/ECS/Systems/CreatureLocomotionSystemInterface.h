@@ -57,6 +57,8 @@ public:
 	/// Once a frame: the creatures are placed and their legs posed between the last two turns, by how far through the
 	/// turn the frame is, 0 to 1
 	virtual void Update(float turnFraction) = 0;
+	/// A creature is placed and its legs posed where they are at the end of this turn, for the pose of the turn
+	virtual void ShowTurnEnd(entt::entity creature) = 0;
 
 	/// Walks or runs to anywhere from minDistance to maxDistance away from a point
 	virtual MoveResult MoveTo(entt::entity creature, glm::vec2 point, Pace pace, float minDistance, float maxDistance) = 0;

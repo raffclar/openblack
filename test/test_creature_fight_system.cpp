@@ -797,20 +797,22 @@ TEST_F(CreatureFightSystemTest, AFaintWaitsForTheLetGoOfTheThingInTheHand)
 	const auto faints = [&] {
 		return registry.Get<const CreatureAnimation>(second).body.kind == creature_layers::BodyAction::Kind::Sequence;
 	};
-	// Two turns busy, then the let-go starts
+	// Two turns busy, then the let-go starts. The other creature, which stays in the fight, can draw the side of its
+	// response in these turns.
 	for (size_t turn = 1; turn <= 3; ++turn)
 	{
 		fights.ProcessTurn();
 		EXPECT_FALSE(faints());
 		EXPECT_EQ(minds.handChecks, turn);
-		EXPECT_TRUE(game.ranges.empty());
 	}
 	EXPECT_TRUE(registry.Get<const CreatureKnockedOut>(second).handsChecked);
 	// The faint starts with no new check and draws its side
+	const auto drawn = game.ranges.size();
 	fights.ProcessTurn();
 	EXPECT_TRUE(faints());
 	EXPECT_EQ(minds.handChecks, 3u);
-	EXPECT_EQ(game.ranges, (std::vector<uint32_t> {2}));
+	ASSERT_EQ(game.ranges.size(), drawn + 1);
+	EXPECT_EQ(game.ranges.back(), 2u);
 	EXPECT_FALSE(registry.Get<const CreatureKnockedOut>(second).fainting);
 	Locator::gameRandom::reset();
 	Locator::creatureMindSystem::reset();

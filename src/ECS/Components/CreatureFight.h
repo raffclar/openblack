@@ -75,11 +75,6 @@ struct CreatureFighting
 	/// animation that was
 	float blowTestFromMs {0.0f};
 	size_t blowTestAnimation {0};
-	/// How far the action's own movement had carried it, as a share of the action
-	float movedShare {0.0f};
-	/// The points on the land where the bones of its body were at the end of its last game turn. How far its body reaches
-	/// in front of it, when the fighters move apart, comes from these points and from where it stands now.
-	std::vector<glm::vec2> lastTurnBones;
 	/// Seconds in the stage, and until it next shows its anger in its face
 	float stageSeconds {0.0f};
 	float faceSeconds {0.0f};

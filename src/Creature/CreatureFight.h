@@ -461,6 +461,15 @@ constexpr float k_FightSpeed = 1.1f;
 constexpr float k_StepSpeedShare = 0.9f;
 constexpr float k_OtherSpeedShare = 0.6f;
 [[nodiscard]] float PlaybackSpeed(size_t animation, float actionSpeed);
+/// The whole milliseconds that a fight animation moves on in one game turn: the turn's milliseconds at the speed, with
+/// the fraction removed
+[[nodiscard]] int32_t TurnAdvance(float speed, int32_t turnMs);
+/// How far an action's animation moves the creature across the land in one game turn. The root's travel in the
+/// animation (x and the z of the mesh, ahead being -z) moves by the share of the animation that the turn plays, at
+/// the creature's scale, turned to the heading. Each step rounds to a float. A move does not stop at the end of the
+/// animation.
+[[nodiscard]] glm::vec2 TurnRootMove(glm::vec2 travel, float speed, int32_t turnMs, float scale, int32_t durationMs,
+                                     float heading);
 
 enum class State : uint8_t
 {

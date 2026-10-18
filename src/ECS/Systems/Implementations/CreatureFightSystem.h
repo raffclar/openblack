@@ -99,6 +99,9 @@ private:
 	/// A fighter's turn in the duel: it faces its opponent, keeps in the arena, moves apart from its opponent and
 	/// chooses or makes its next move
 	void DuelTurn(entt::entity creature);
+	/// A fighter's animation moves on by one game turn. An action first moves the creature as far as its animation's root
+	/// moves in the turn. Then the fight goes to its next state when the animation ends.
+	void StepAnimation(entt::entity creature);
 	void ProcessKnockedOut();
 	/// Makes the move at the front of a fighter's queue, if it can
 	void CheckQueue(entt::entity creature);

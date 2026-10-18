@@ -48,6 +48,7 @@
 #include "Creature/CreatureProportions.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSway.h"
+#include "Creature/CreatureTurnPose.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -58,6 +59,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -813,7 +815,7 @@ void CreatureAnimationSystem::AddAlignmentMotes()
 	// While the falling spell plays, no creature in the world makes motes
 	const bool fallingSpell = Locator::videoSystem::has_value() && Locator::videoSystem::value().HidesWorld();
 	// Each game turn, a creature whose body is to look good or evil makes motes or smoke near the bones of the pose of the
-	// turn before. Then it keeps the bones of this turn for the next turn.
+	// turn before. The body takes the pose of this turn after the motes.
 	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
 	    [&](const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation, const Transform& transform) {
 		    const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
@@ -834,7 +836,6 @@ void CreatureAnimationSystem::AddAlignmentMotes()
 				    dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
 			    }
 		    }
-		    animation.lastTurnBones = std::move(bones);
 	    });
 }
 
@@ -849,6 +850,9 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 	// The breath moves towards its target period one step a frame, at most 60 times a second
 	const bool breathSteps = frame_pace::Due(_breathPace, std::chrono::milliseconds {milliseconds});
 	constexpr auto k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
+	// The body is drawn between the poses of the last two game turns, by the part of the turn that has passed
+	const auto weight =
+	    creature_turn_pose::DrawWeight(Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 1.0f);
 
 	registry.Each<const Creature, CreatureMorph, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, CreatureMorph& morph, CreatureAnimation& animation,
@@ -910,16 +914,22 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    animation.breathPhase =
 		        creature_animation::AdvanceBreath(animation.breathPhase, seconds * scale, animation.breathPeriod);
 
-		    if (rig != nullptr)
+		    // Before its first game turn, the body takes its first pose now, and the animations do not move on
+		    if (animation.newerTurnPose.empty() || animation.newerTurnPose.size() != animation.skeleton.parents.size())
 		    {
-			    const auto look = HeadLookOf(registry, entity, animation, rig, morph.drawn, transform, creature, milliseconds);
-			    PoseBody(
-			        animation, *rig, morph.drawn, transform, ShownSize(creature), gameTime.count() * scale, seconds * scale,
-			        look,
-			        [this](uint32_t range) {
-				        return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-			        },
-			        HoldingHandOf(registry, entity));
+			    animation.olderTurnPose.clear();
+			    animation.newerTurnPose.clear();
+			    PoseForTurn(entity, 0.0f);
+		    }
+		    if (!animation.newerTurnPose.empty() && animation.olderTurnPose.size() == animation.newerTurnPose.size() &&
+		        transform.scale.x != 0.0f && transform.scale.y != 0.0f && transform.scale.z != 0.0f)
+		    {
+			    std::vector<glm::mat4> drawn(animation.newerTurnPose.size());
+			    creature_turn_pose::Blend(animation.olderTurnPose, animation.newerTurnPose, weight, drawn);
+			    animation.boneMatrices.resize(drawn.size());
+			    creature_turn_pose::ToMesh(drawn,
+			                               creature::PlacementMatrix(transform.position, transform.rotation, transform.scale),
+			                               animation.boneMatrices);
 		    }
 		    if (animation.boneMatrices.size() != base->GetBoneMatrices().size())
 		    {
@@ -954,6 +964,88 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		const auto slideMs = frame_pace::Step(glows.slidePace, realTime, realTime);
 		const auto turnMs = frame_pace::Step(glows.turnPace, realTime, std::chrono::milliseconds(milliseconds));
 		PlaceHandGlows(entity, static_cast<int32_t>(slideMs.count()), static_cast<int32_t>(turnMs.count()));
+	}
+}
+
+void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float milliseconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* creature = registry.TryGet<const Creature>(entity);
+	const auto* morph = registry.TryGet<const CreatureMorph>(entity);
+	auto* animation = registry.TryGet<CreatureAnimation>(entity);
+	const auto* transform = registry.TryGet<const Transform>(entity);
+	if (creature == nullptr || morph == nullptr || animation == nullptr || transform == nullptr || animation->skeleton.Empty())
+	{
+		return;
+	}
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(creature->species);
+	if (rigs.Contains(rigId))
+	{
+		const auto& rig = *rigs.Handle(rigId);
+		// A frozen creature plays slower, down to not at all
+		const float scale = animation->playbackScale;
+		const auto look = HeadLookOf(registry, entity, *animation, &rig, morph->drawn, *transform, *creature,
+		                             static_cast<int32_t>(std::lround(milliseconds)));
+		PoseBody(
+		    *animation, rig, morph->drawn, *transform, ShownSize(*creature), milliseconds * scale,
+		    milliseconds * scale / 1000.0f, look,
+		    [this](uint32_t range) { return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); },
+		    HoldingHandOf(registry, entity));
+	}
+	if (animation->boneMatrices.empty())
+	{
+		return;
+	}
+	// The pose of the last turn becomes the older pose. The first pose is both poses.
+	auto pose = creature_turn_pose::ToWorld(
+	    animation->boneMatrices, creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	animation->olderTurnPose = animation->newerTurnPose.empty() ? pose : std::move(animation->newerTurnPose);
+	animation->newerTurnPose = std::move(pose);
+	animation->lastTurnBones.resize(animation->newerTurnPose.size());
+	std::ranges::transform(animation->newerTurnPose, animation->lastTurnBones.begin(),
+	                       [](const glm::mat4& bone) { return glm::vec3(bone[3]); });
+	animation->posedThisTurn = true;
+}
+
+void CreatureAnimationSystem::PoseTurn(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* animation = registry.TryGet<CreatureAnimation>(creature);
+	if (animation == nullptr || animation->posedThisTurn)
+	{
+		return;
+	}
+	// The body takes its pose where its turn took it
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		Locator::creatureLocomotionSystem::value().ShowTurnEnd(creature);
+	}
+	constexpr auto k_TurnMs = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
+	PoseForTurn(creature, k_TurnMs);
+}
+
+void CreatureAnimationSystem::PoseTurns()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> creatures;
+	registry.Each<const Creature, CreatureAnimation>(
+	    [&creatures](entt::entity entity, const Creature& /*creature*/, CreatureAnimation& /*animation*/) {
+		    creatures.push_back(entity);
+	    });
+	for (const auto entity : creatures)
+	{
+		PoseTurn(entity);
+	}
+	registry.Each<CreatureAnimation>([](CreatureAnimation& animation) { animation.posedThisTurn = false; });
+}
+
+void CreatureAnimationSystem::HoldTurnPose(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature); animation != nullptr)
+	{
+		animation->olderTurnPose = animation->newerTurnPose;
 	}
 }
 
