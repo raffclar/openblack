@@ -24,10 +24,12 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/FlatLand.h"
 #include "3D/Seabed.h"
 #include "3D/SeabedTiles.h"
 #include "Enums.h"
 #include "Graphics/Underwater.h"
+#include "Graphics/UnderwaterJellyfish.h"
 
 namespace underwater = openblack::graphics::underwater;
 namespace seabed = openblack::seabed;
@@ -1348,4 +1350,36 @@ TEST(UnderwaterWaves, TheChopOfTheWindHasPointedCrestsAndGrowsInAStorm)
 	auto still = underwater::WavesFor(0.0f, 0.3f);
 	still.scale = 0.0f;
 	EXPECT_FLOAT_EQ(underwater::ChopAt({10.0f, 20.0f}, 3.0f, still, 5), 0.0f);
+}
+
+TEST(UnderwaterSeabed, TheTestbedsDeepSeaHasRoomForTheJellyfish)
+{
+	// The testbed's land as the experiment reads it, a corner a value
+	constexpr int k_Corners = openblack::flat_land::k_CellsPerSide + 1;
+	const glm::ivec2 size {k_Corners, k_Corners};
+	std::vector<uint8_t> altitudes(static_cast<size_t>(k_Corners) * static_cast<size_t>(k_Corners));
+	for (int z = 0; z < k_Corners; ++z)
+	{
+		for (int x = 0; x < k_Corners; ++x)
+		{
+			altitudes[static_cast<size_t>(z) * static_cast<size_t>(k_Corners) + static_cast<size_t>(x)] =
+			    openblack::flat_land::Altitude(x, z);
+		}
+	}
+	const auto bed =
+	    seabed::Build(altitudes, size, {0.0f, 0.0f}, openblack::flat_land::k_CellSize, {}, seabed::k_EdgeRingCells);
+	// The sea bed under the sea.jellyfish_deep scenario's camera, 1906 east and 1908 north of the middle of the map, is
+	// deep enough for the jellyfish
+	const glm::vec2 eye {4466.1f, 4467.85f};
+	EXPECT_GT(bed.DepthAt(eye), underwater::jellyfish::k_LeastDepth + underwater::jellyfish::k_DepthFade);
+	// Near the shore the sea is not as deep
+	EXPECT_LT(bed.DepthAt({4100.0f, 4100.0f}), underwater::jellyfish::k_LeastDepth);
+	// One rises 4 units from the camera, through the camera's depth of 31 units
+	const auto found = underwater::jellyfish::Around(eye, 0.0f, 0.0f, [&bed](glm::vec2 point) { return bed.DepthAt(point); });
+	ASSERT_FALSE(found.empty());
+	const auto& nearest = found.front();
+	EXPECT_NEAR(glm::distance(glm::vec2(nearest.position.x, nearest.position.z), eye), 4.0f, 0.2f);
+	const float bedUnderIt = bed.DepthAt({nearest.position.x, nearest.position.z});
+	EXPECT_LT(underwater::jellyfish::k_TopDepth, 31.0f);
+	EXPECT_GT(bedUnderIt - underwater::jellyfish::k_BedGap, 31.0f);
 }

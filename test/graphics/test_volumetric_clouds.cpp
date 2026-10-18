@@ -246,6 +246,39 @@ TEST(VolumetricClouds, AStormsCellBuildsAndCalmsAfterItsStormGoes)
 	EXPECT_TRUE(climate.Storms().empty());
 }
 
+TEST(VolumetricClouds, ANewChoiceOfCoverShowsAtOnce)
+{
+	clouds::CloudClimate climate;
+	clouds::CloudWeather weather;
+	weather.cover = 0.6f;
+	climate.Reset(weather);
+	const std::array storms {clouds::StormInput {
+	    .serial = 3, .centre = {0.0f, 0.0f}, .innerRadius = 300.0f, .outerRadius = 900.0f, .strength = 1.0f, .rain = 0.5f}};
+	for (int frame = 0; frame < 12000; ++frame)
+	{
+		climate.Step(0.01f, weather, storms);
+	}
+	ASSERT_EQ(climate.Storms().size(), 1u);
+	// The clear choice puts its cover at once, and the storm that has gone takes its cell with it
+	const auto clear = clouds::ChosenWeather(clouds::CoverChoice::Clear, weather);
+	EXPECT_EQ(clear.choice, clouds::CoverChoice::Clear);
+	climate.Step(0.01f, clear, {});
+	EXPECT_FLOAT_EQ(climate.Current().cover, clear.cover);
+	EXPECT_EQ(climate.Current().choice, clouds::CoverChoice::Clear);
+	EXPECT_TRUE(climate.Storms().empty());
+	// Back to the weather's own cover: it is put at once too, with the storm's cell at its strength
+	const auto own = clouds::ChosenWeather(clouds::CoverChoice::Weather, weather);
+	climate.Step(0.01f, own, storms);
+	EXPECT_FLOAT_EQ(climate.Current().cover, weather.cover);
+	ASSERT_EQ(climate.Storms().size(), 1u);
+	EXPECT_FLOAT_EQ(clouds::CloudClimate::Strength(climate.Storms()[0]), 1.0f);
+	// A change of the weather with the same choice eases as before
+	auto heavier = own;
+	heavier.cover = 0.9f;
+	climate.Step(0.01f, heavier, storms);
+	EXPECT_LT(climate.Current().cover, 0.61f);
+}
+
 TEST(VolumetricClouds, TheWeatherPicksTheTypeOfCloud)
 {
 	const auto fair = clouds::WeatherFor(0.0f, 0.0f, clouds::CloudWind({1.0f, 0.0f}, 3.0f));

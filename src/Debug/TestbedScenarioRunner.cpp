@@ -804,6 +804,8 @@ void Runner::Stop()
 		return;
 	}
 	_running = false;
+	// A held shot lets the camera go
+	_shot.reset();
 	// The debug option's bonus creatures are as they were
 	if (_unlockedBefore.has_value() && Locator::config::has_value())
 	{
@@ -914,11 +916,18 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		weather.ClearStorms();
 		weather.SetStormCreationEnabled(false);
 		const auto thunder = environment.weather == Weather::Thunderstorm;
-		weather.ForceStorm({.effect = WeatherOf(environment.weather),
-		                    .seconds = k_WeatherSeconds,
-		                    .fadeSeconds = 0.5f,
-		                    .thunderWait = thunder ? glm::vec2(3.0f, 15.0f) : glm::vec2(0.0f),
-		                    .boltWait = thunder ? environment.boltSeconds.value_or(glm::vec2(2.0f, 8.0f)) : glm::vec2(0.0f)});
+		// EXPERIMENT (not for merge): a clear day with its own cover of the volumetric clouds has no storm. The mild
+		// storm of a clear day covers the whole island, and the clouds build the towers of a storm under each storm.
+		const bool ownSky = environment.weather == Weather::Clear && environment.cloudCover.has_value();
+		if (!ownSky)
+		{
+			weather.ForceStorm(
+			    {.effect = WeatherOf(environment.weather),
+			     .seconds = k_WeatherSeconds,
+			     .fadeSeconds = 0.5f,
+			     .thunderWait = thunder ? glm::vec2(3.0f, 15.0f) : glm::vec2(0.0f),
+			     .boltWait = thunder ? environment.boltSeconds.value_or(glm::vec2(2.0f, 8.0f)) : glm::vec2(0.0f)});
+		}
 	}
 	if (environment.snowDepth.has_value() && Locator::snowSystem::has_value())
 	{
@@ -2947,11 +2956,12 @@ void Runner::UpdateCamera()
 	{
 		camera.SetOrigin(placement->origin).SetFocus(placement->focus);
 	}
-	// A shot of everything is taken once; following and close ups keep up with the creature, and a climb lasts until
-	// its top
+	// A shot of everything is taken once; following and close ups keep up with the creature, a climb lasts until its
+	// top, and a held shot lasts until the scenario stops
 	const auto& climb = _scenario->framing.climb;
 	const bool climbing = *_shot == Shot::Placed && climb.has_value() && _shotSeconds < climb->seconds;
-	if ((*_shot == Shot::Overview || *_shot == Shot::Testbed || *_shot == Shot::Placed) && !climbing)
+	const bool held = *_shot == Shot::Placed && _scenario->framing.hold;
+	if ((*_shot == Shot::Overview || *_shot == Shot::Testbed || *_shot == Shot::Placed) && !climbing && !held)
 	{
 		_shot.reset();
 	}

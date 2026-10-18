@@ -22,12 +22,15 @@ constexpr int k_TexelsPerCell = lnd::LNDMaterial::k_Width / k_CellsPerBlock;
 /// A block holds the corners along both its edges, 17 a side
 constexpr int k_BlockCornersPerSide = k_CellsPerBlock + 1;
 
-/// How many cells out from the lake's open water the map's corner (x, z) lies, 0 on or inside its edge
+/// How many cells out from the open water of the lake or the deep sea the map's corner (x, z) lies, 0 on or inside its edge
 int CellsFromOpenWater(int x, int z)
 {
 	const auto outside = [](int v, int min, int max) { return std::max({min - v, v - max, 0}); };
-	return std::max(outside(x, flat_land::k_LakeMinX, flat_land::k_LakeMaxX),
-	                outside(z, flat_land::k_LakeMinZ, flat_land::k_LakeMaxZ));
+	const auto fromLake = std::max(outside(x, flat_land::k_LakeMinX, flat_land::k_LakeMaxX),
+	                               outside(z, flat_land::k_LakeMinZ, flat_land::k_LakeMaxZ));
+	// EXPERIMENT (not for merge): the deep sea in the north-east corner
+	const auto fromDeepSea = std::max({flat_land::k_DeepSeaMinX - x, flat_land::k_DeepSeaMinZ - z, 0});
+	return std::min(fromLake, fromDeepSea);
 }
 
 /// How many corners out from the pond's strip the map's corner (x, z) lies, 0 on it
