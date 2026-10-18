@@ -28,6 +28,7 @@
 #include "Common/RandomNumberManager.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Components/CreatureArena.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/WalkPath.h"
@@ -276,6 +277,7 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 	// The physics and the hand do not keep their bodies and held things in a save: what was in flight or in the hand
 	// stays where it was
 	registry.Underlying().clear<components::InPhysics, components::InHand>();
+	ForgetUnsavedState(registry.Underlying());
 	// A walk along a camera track takes its track again from the land's tracks, by its number
 	std::vector<entt::entity> lost;
 	for (auto&& [entity, path] : registry.Underlying().view<components::WalkPath>().each())
@@ -300,6 +302,14 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 	LogNames("fields that did not read", result->report.damagedFields);
 	LogNames("components that the load could not add", result->report.refusedComponents);
 	return result->report;
+}
+
+void world_save::ForgetUnsavedState(entt::registry& registry)
+{
+	registry.view<components::CreatureMindState>().each([](components::CreatureMindState& mind) {
+		mind.leftAreaActions.clear();
+		mind.agendaRefused = false;
+	});
 }
 
 bool world_save::LoadRunningState(const gamesave::WorldFile& file, uint32_t turn)

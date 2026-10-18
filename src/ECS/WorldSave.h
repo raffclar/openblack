@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <WorldFile.h>
+#include <entt/entity/fwd.hpp>
 #include <entt/meta/context.hpp>
 
 #include "ECS/Reflection/WorldArchive.h"
@@ -44,6 +45,10 @@ struct SaveSummary
 /// Returns nothing when the blocks do not read.
 [[nodiscard]] std::optional<reflection::WorldLoadReport> LoadEntities(const entt::meta_ctx& reflection,
                                                                       const gamesave::WorldFile& file);
+
+/// Forgets what the game does not keep in a save: the actions that the area that holds a creature refused. After a load
+/// the creature wants them again.
+void ForgetUnsavedState(entt::registry& registry);
 
 /// After the land starts again: puts back the game clock at the turn, the streams of random numbers, the camera, the
 /// scripts and the table of the objects that they hold. Returns whether every block that the file has read.
