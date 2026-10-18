@@ -20,6 +20,7 @@
 #include <glm/vec4.hpp>
 
 #include "CloudLightning.h"
+#include "Cumulonimbus.h"
 
 /// EXPERIMENT (not for merge): the rules of the volumetric clouds. The original game has billboards for its clouds.
 /// The shaders march rays through a layer of cloud over the land. The density in that layer comes from noise volumes,
@@ -278,6 +279,8 @@ struct CloudUniforms
 	glm::vec4 shadow {0.0f};
 	/// The storms: [i] xy the middle, z the inner radius, w the outer radius; [k_MaxStorms + i] x the strength, y the rain
 	std::array<glm::vec4, k_MaxStorms * 2> storms {};
+	/// The thunderstorm cells (see cumulonimbus::Pack)
+	std::array<glm::vec4, cumulonimbus::k_MaxCells * 4> cells {};
 };
 
 /// The storms' part of the uniforms, from the cells as eased now. Cells with no strength are left out.

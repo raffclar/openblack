@@ -19,13 +19,24 @@ void main()
 	towards = normalize(towards);
 	float ground = u_cloudLayer.w;
 	float enter = (u_cloudLayer.x - CLOUD_LOWEST_DROP - ground) / towards.y;
-	float leave = (u_cloudLayer.x + CLOUD_CUMULONIMBUS_DEPTH - ground) / towards.y;
+	float leave = (u_cloudLayer.x + CLOUD_FIELD_DEPTH - ground) / towards.y;
 	float dt = (leave - enter) / 12.0f;
 	float depth = 0.0f;
 	for (int i = 0; i < 12; ++i)
 	{
 		vec3 p = vec3(xz.x, ground, xz.y) + towards * (enter + dt * (float(i) + 0.5f));
 		depth += CloudDensity(p, p.y, false) * dt;
+	}
+	// The thunderstorm cells go up to the tropopause over the layer
+	if (CloudHasCells())
+	{
+		float high = (CB_TOP + CB_DOME - ground) / towards.y;
+		float step = (high - leave) / 10.0f;
+		for (int k = 0; k < 10; ++k)
+		{
+			vec3 p = vec3(xz.x, ground, xz.y) + towards * (leave + step * (float(k) + 0.5f));
+			depth += CloudDensity(p, p.y, false) * step;
+		}
 	}
 	float through = exp(-depth * CLOUD_EXTINCTION * 0.6f);
 	float lit = mix(1.0f, through, u_cloudShadow.w);

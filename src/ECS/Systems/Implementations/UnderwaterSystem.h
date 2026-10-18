@@ -64,6 +64,7 @@ public:
 	{
 		return _cloudFlashes.All();
 	}
+	[[nodiscard]] std::optional<glm::vec3> StormStrikePlace(uint32_t stormSerial, glm::vec2 wanted) const override;
 	[[nodiscard]] const graphics::underwater::CurrentState& GetCurrent() const override { return _current; }
 	[[nodiscard]] float FloorAt(glm::vec2 point, float landHeight) const override;
 

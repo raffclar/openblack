@@ -1092,3 +1092,5 @@ openblack_setup_and_add_test(test_underwater_jellyfish graphics/test_underwater_
 openblack_setup_and_add_test(test_cloud_lightning graphics/test_cloud_lightning.cpp)
 # EXPERIMENT (not for merge): the moon that looks like the real moon
 openblack_setup_and_add_test(test_real_moon graphics/test_real_moon.cpp)
+# EXPERIMENT (not for merge): the thunderstorm clouds and where their lightning strikes
+openblack_setup_and_add_test(test_cumulonimbus graphics/test_cumulonimbus.cpp)

@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <limits>
 #include <span>
 #include <vector>
@@ -171,11 +172,11 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 	}
 	uniforms.ambient = {*_clouds->steadySky, skyFlash};
 	uniforms.eye = {eye, frame.eye.w > 0.5f ? 0.0f : 1.0f};
-	// Each flash of the storms lights the clouds from inside, along a channel across the layer of the storm's clouds
+	// Each flash of the storms lights the clouds from inside, along a channel up through a thunderstorm cell's tower
 	std::array<cloud_lightning::FlashLight, cloud_lightning::k_MaxFlashes> flashLights {};
 	const auto flashes = system.GetCloudFlashes();
 	std::ranges::transform(flashes, flashLights.begin(), [&eye](const cloud_lightning::FlashEvent& flash) {
-		return cloud_lightning::LightFor(flash, eye, clouds::k_CloudBase, clouds::k_CumulonimbusDepth);
+		return cloud_lightning::LightFor(flash, eye, cumulonimbus::k_Base, cumulonimbus::k_Tropopause - cumulonimbus::k_Base);
 	});
 	uniforms.flashes = cloud_lightning::Pack(std::span(flashLights).first(flashes.size()));
 	// From high up the clouds and their shadow reach farther, so the layer and the shadow have no edge round the eye
@@ -184,6 +185,17 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 	uniforms.shadow = {clouds::ShadowOrigin({eye.x, eye.z}, window), window, k_ShadowStrength};
 	uniforms.layer.z = clouds::FarthestCloudFor(eyeHeight);
 	clouds::PackStorms(climate.Storms(), uniforms);
+	// The thunderstorm cells of the storms, from the same storms and time as the lightning's strikes use. Their anvils
+	// spread out downwind.
+	std::vector<cumulonimbus::StormSite> sites;
+	std::ranges::transform(climate.Storms(), std::back_inserter(sites), [](const clouds::StormCell& cell) {
+		return cumulonimbus::StormSite {.serial = cell.serial,
+		                                .centre = cell.centre,
+		                                .outerRadius = cell.outerRadius,
+		                                .strength = clouds::CloudClimate::Strength(cell),
+		                                .rain = clouds::CloudClimate::Rain(cell)};
+	});
+	uniforms.cells = cumulonimbus::Pack(cumulonimbus::CellsFor(sites, seconds).All(), current.wind);
 	_cloudsFrame = uniforms;
 }
 
@@ -202,6 +214,7 @@ void Renderer::SetCloudUniforms(const ShaderProgram& program, const clouds::Clou
 	const glm::vec4 noDome {0.0f, 0.0f, 1e9f, 1e9f};
 	program.SetUniformValue("u_hazeDome", _atmosphereFrame.has_value() ? &_atmosphereFrame->skyDome : &noDome);
 	program.SetUniformArray("u_cloudStorms", uniforms.storms.data(), static_cast<uint16_t>(uniforms.storms.size()));
+	program.SetUniformArray("u_cloudCells", uniforms.cells.data(), static_cast<uint16_t>(uniforms.cells.size()));
 	program.SetTextureSampler("s_cloudBase", 0, _clouds->BaseNoise());
 	program.SetTextureSampler("s_cloudDetail", 1, _clouds->DetailNoise());
 	program.SetTextureSampler("s_cloudWeather", 2, _clouds->WeatherNoise());
@@ -214,7 +227,13 @@ void Renderer::DrawClouds(const DrawSceneDesc& desc, const FrameBuffer& sceneTar
 		return;
 	}
 	const auto* shadowProgram = _shaderManager->GetShader("CloudShadow");
-	const auto* marchProgram = _shaderManager->GetShader("CloudMarch");
+	// The rays through the thunderstorm cells take a shader of their own: the cells' code would slow down the rays when
+	// no cell is there
+	const auto cellShown = [](const glm::vec4& cell) { return cell.w > 0.0f; };
+	const bool cells = std::ranges::any_of(std::span(_cloudsFrame->cells).first(cumulonimbus::k_MaxCells), cellShown);
+	const auto* plainMarch = _shaderManager->GetShader("CloudMarch");
+	const auto* cellsMarch = _shaderManager->GetShader("CloudMarchCells");
+	const auto* marchProgram = cells && cellsMarch != nullptr ? cellsMarch : plainMarch;
 	const auto* resolveProgram = _shaderManager->GetShader("CloudResolve");
 	const auto* compositeProgram = _shaderManager->GetShader("CloudComposite");
 	if (shadowProgram == nullptr || marchProgram == nullptr || resolveProgram == nullptr || compositeProgram == nullptr)
@@ -249,20 +268,29 @@ void Renderer::DrawClouds(const DrawSceneDesc& desc, const FrameBuffer& sceneTar
 		bgfx::setViewRect(view, 0, 0, size.x, size.y);
 		bgfx::setViewClear(view, BGFX_CLEAR_NONE);
 		_shaderManager->SetCamera(RenderPass::CloudMarch, *desc.camera);
-		SetCloudUniforms(*marchProgram, uniforms);
-		marchProgram->SetTextureSampler("s_cloudBlueNoise", 3, _clouds->BlueNoise());
-		marchProgram->SetTextureSampler("s_sceneDepth", 4, sceneTarget.GetDepthStencilAttachment());
 		// The light of the sky comes from the cube of the sky that the water reflects, once it is drawn
 		const bool skyReady = _underwater != nullptr && _underwaterFrame->sea.w > 0.5f;
-		if (skyReady)
-		{
-			marchProgram->SetTextureSampler("s_cloudSky", 5, _underwater->EnvironmentSky());
-		}
 		const glm::vec4 screenSize {static_cast<float>(screen.x), static_cast<float>(screen.y), skyReady ? 1.0f : 0.0f, 0.0f};
-		marchProgram->SetUniformValue("u_cloudScreen", &screenSize);
-		BindScreenTriangle();
-		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
-		marchProgram->Submit(view);
+		const auto submitMarch = [&](const ShaderProgram& program) {
+			SetCloudUniforms(program, uniforms);
+			program.SetTextureSampler("s_cloudBlueNoise", 3, _clouds->BlueNoise());
+			program.SetTextureSampler("s_sceneDepth", 4, sceneTarget.GetDepthStencilAttachment());
+			if (skyReady)
+			{
+				program.SetTextureSampler("s_cloudSky", 5, _underwater->EnvironmentSky());
+			}
+			program.SetUniformValue("u_cloudScreen", &screenSize);
+			BindScreenTriangle();
+			bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+			program.Submit(view);
+		};
+		// The warm-up draws the other shader of the rays first, so that the first storm makes no new pipeline
+		const auto* otherMarch = marchProgram == plainMarch ? cellsMarch : plainMarch;
+		if (_warmingUp && otherMarch != nullptr)
+		{
+			submitMarch(*otherMarch);
+		}
+		submitMarch(*marchProgram);
 	}
 
 	// The blend with the frames before, where each cloud was in the last frame

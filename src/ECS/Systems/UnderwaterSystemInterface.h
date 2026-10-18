@@ -91,6 +91,10 @@ public:
 	[[nodiscard]] virtual glm::vec2 GetSeaFlash() const = 0;
 	/// The flashes of the storms' lightning that light the clouds from inside now
 	[[nodiscard]] virtual std::span<const graphics::cloud_lightning::FlashEvent> GetCloudFlashes() const = 0;
+	/// Where a strike of a storm comes down while the view is on: under the core of one of the storm's thunderstorm
+	/// cells (graphics::cumulonimbus), at the height of the bottom of the cell. `wanted` is the place that the storm
+	/// chose. None while the view is off, or when the storm has no cell.
+	[[nodiscard]] virtual std::optional<glm::vec3> StormStrikePlace(uint32_t stormSerial, glm::vec2 wanted) const = 0;
 	/// The sea's currents now (see underwater::CurrentAt)
 	[[nodiscard]] virtual const graphics::underwater::CurrentState& GetCurrent() const = 0;
 	/// A number that changes each time the sea bed is made again

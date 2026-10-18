@@ -101,31 +101,41 @@ TEST(CloudLightning, FarFlashesAreSheetLightning)
 
 	const lightning::FlashEvent flash {
 	    .position = {0.0f, 0.0f}, .place = {0.0f, 0.0f}, .since = 0.008f, .strength = 1.0f, .seed = 5u};
-	const auto near = lightning::LightFor(flash, {0.0f, 40.0f, 500.0f}, 300.0f, 1500.0f);
-	const auto far = lightning::LightFor(flash, {0.0f, 40.0f, 20000.0f}, 300.0f, 1500.0f);
+	const auto near = lightning::LightFor(flash, {0.0f, 40.0f, 500.0f}, 1000.0f, 9400.0f);
+	const auto far = lightning::LightFor(flash, {0.0f, 40.0f, 20000.0f}, 1000.0f, 9400.0f);
 	EXPECT_EQ(near.radius, lightning::k_BoltRadius);
 	EXPECT_EQ(far.radius, lightning::k_SheetRadius);
 	EXPECT_NEAR(far.brightness, near.brightness * lightning::k_SheetShare, 1e-5f);
 }
 
-TEST(CloudLightning, ChannelLiesInsideTheCloudLayer)
+TEST(CloudLightning, ChannelRisesInsideTheTowerFromItsBottom)
 {
 	for (uint32_t seed = 1; seed < 50; ++seed)
 	{
 		const lightning::FlashEvent flash {
 		    .position = {10.0f, 20.0f}, .place = {10.0f, 20.0f}, .since = 0.0f, .strength = 1.0f, .seed = seed};
-		const auto light = lightning::LightFor(flash, {0.0f, 40.0f, 0.0f}, 300.0f, 1500.0f);
+		const auto light = lightning::LightFor(flash, {0.0f, 40.0f, 0.0f}, 1000.0f, 9400.0f);
+		// The channel starts at the bottom of the tower, over the place of the flash
 		EXPECT_FLOAT_EQ(light.start.x, 10.0f);
 		EXPECT_FLOAT_EQ(light.start.z, 20.0f);
-		for (const auto& end : {light.start, light.end})
-		{
-			EXPECT_GT(end.y, 300.0f);
-			EXPECT_LT(end.y, 1800.0f);
-		}
-		const float across = glm::distance(glm::vec2(light.start.x, light.start.z), glm::vec2(light.end.x, light.end.z));
-		EXPECT_GE(across, lightning::k_ShortestChannel - 1e-3f);
-		EXPECT_LE(across, lightning::k_LongestChannel + 1e-3f);
+		EXPECT_GT(light.start.y, 1000.0f);
+		EXPECT_LE(light.start.y, 1150.0f);
+		// It goes up through the tower, and stays under its top
+		const glm::vec3 along = light.end - light.start;
+		EXPECT_GE(glm::length(along), lightning::k_ShortestChannel - 1e-2f);
+		EXPECT_LE(glm::length(along), lightning::k_LongestChannel + 1e-2f);
+		EXPECT_LT(light.end.y, 1000.0f + 9400.0f);
+		EXPECT_LE(glm::length(glm::vec2(along.x, along.z)), along.y * lightning::k_MostLean + 1e-2f);
 	}
+}
+
+TEST(CloudLightning, ChannelStaysInsideAShallowCloud)
+{
+	const lightning::FlashEvent flash {
+	    .position = {0.0f, 0.0f}, .place = {0.0f, 0.0f}, .since = 0.0f, .strength = 1.0f, .seed = 3u};
+	const auto light = lightning::LightFor(flash, {0.0f, 40.0f, 0.0f}, 300.0f, 1500.0f);
+	EXPECT_GT(light.start.y, 300.0f);
+	EXPECT_LT(light.end.y, 1800.0f);
 }
 
 TEST(CloudLightning, StrikeAwayFromTheStormLightsTheStormsCloud)

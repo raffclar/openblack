@@ -42,13 +42,15 @@ inline constexpr float k_PulseFade = 0.06f;
 inline constexpr float k_FlashMemory = k_LongestFlicker + 0.3f;
 /// How far the light of a flash spreads through the cloud: a near flash, and sheet lightning. The light falls to a third
 /// over this distance; the bright core round the channel is a quarter of it.
-inline constexpr float k_BoltRadius = 900.0f;
-inline constexpr float k_SheetRadius = 2400.0f;
+inline constexpr float k_BoltRadius = 2200.0f;
+inline constexpr float k_SheetRadius = 3500.0f;
 /// The light of sheet lightning, as a part of the light of a near flash
 inline constexpr float k_SheetShare = 0.6f;
-/// The shortest and the longest channel of a flash across the cloud
-inline constexpr float k_ShortestChannel = 800.0f;
-inline constexpr float k_LongestChannel = 2500.0f;
+/// The shortest and the longest channel of a flash. The channel goes up through the storm's tower from its bottom.
+inline constexpr float k_ShortestChannel = 2500.0f;
+inline constexpr float k_LongestChannel = 6000.0f;
+/// The channel goes up at most this far from the vertical, as the tangent of the angle
+inline constexpr float k_MostLean = 0.6f;
 
 /// The kind of flash that the eye sees
 enum class FlashKind : uint8_t
@@ -126,7 +128,8 @@ struct FlashLight
 [[nodiscard]] glm::vec2 FlashPlace(const Strike& strike, uint32_t seed);
 /// The kind of flash at a distance from the eye
 [[nodiscard]] FlashKind KindAt(float distance);
-/// The light of a flash inside a cloud layer, from its bottom up through its depth, as the eye sees it
+/// The light of a flash inside a storm's tower, from the tower's bottom up through its depth, as the eye sees it. The
+/// channel starts at the bottom of the tower over the strike and goes up through the tower, at most 0.8 of its depth.
 [[nodiscard]] FlashLight LightFor(const FlashEvent& flash, const glm::vec3& eye, float cloudBottom, float cloudDepth);
 /// The flashes after `seconds` more, with the storms' strikes this frame. A strike at a new place, or a younger strike at
 /// a known place, starts a new flash. When all the places are full, the new flash takes the place of the oldest.

@@ -162,6 +162,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_clouds_march
 #include "ShaderIncluder.h"
+#define SHADER_NAME fs_clouds_march_cells
+#include "ShaderIncluder.h"
 #define SHADER_NAME fs_clouds_resolve
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_clouds_composite
@@ -304,7 +306,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 116> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 117> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -358,6 +360,7 @@ const std::array<bgfx::EmbeddedShader, 116> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_real_moon),
     BGFX_EMBEDDED_SHADER(fs_clouds_shadow),
     BGFX_EMBEDDED_SHADER(fs_clouds_march),
+    BGFX_EMBEDDED_SHADER(fs_clouds_march_cells),
     BGFX_EMBEDDED_SHADER(fs_clouds_resolve),
     BGFX_EMBEDDED_SHADER(fs_clouds_composite),
     BGFX_EMBEDDED_SHADER(fs_clouds_cube),
@@ -460,6 +463,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"RealMoon", "vs_real_moon", "fs_real_moon"},
     ShaderDefinition {"CloudShadow", "vs_water", "fs_clouds_shadow"},
     ShaderDefinition {"CloudMarch", "vs_water", "fs_clouds_march"},
+    ShaderDefinition {"CloudMarchCells", "vs_water", "fs_clouds_march_cells"},
     ShaderDefinition {"CloudResolve", "vs_water", "fs_clouds_resolve"},
     ShaderDefinition {"CloudComposite", "vs_water", "fs_clouds_composite"},
     ShaderDefinition {"CloudCube", "vs_water", "fs_clouds_cube"},

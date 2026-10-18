@@ -9,7 +9,8 @@
 
 // The testbed's scenarios of the sky: the moon at night, looked at from low on the land towards the east, where it
 // keeps its place beside the camera, for trying its phases and its path through the night with the moon debug window;
-// and a storm's forked bolts coming down round the camera
+// a storm's forked bolts coming down round the camera; and, for the experiment, the lightning and the thunderstorm
+// cells of the volumetric clouds
 
 #include <vector>
 
@@ -104,6 +105,29 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	                    .dispenserGrid = false,
 	                    .cloudCover = static_cast<uint8_t>(4)},
 	    .framing = {.shot = Shot::Placed, .eye = {-2560.0f, 40.0f, -3460.0f}, .look = {-2560.0f, 600.0f, -2260.0f}},
+	    .objects = TreesToTheEast(),
+	});
+
+	// EXPERIMENT (not for merge): the thunderstorm cells of the volumetric clouds
+	all.push_back({
+	    .id = "weather.cumulonimbus",
+	    .name = "A thunderstorm cell from 8 km away",
+	    .facet = Facet::Sky,
+	    .description = "A thunderstorm over the island at 16:30, the clock stopped. The camera stands on the sea 8500 west "
+	                   "of the middle of the land, under a clear sky (the experiment's clear cover), and looks up at the "
+	                   "storm. The storm flashes every one to two seconds.",
+	    .expected = "One or two tall towers stand over the island, from a dark flat bottom about 1 km up to the "
+	                "tropopause, about 10 km up. A flat anvil spreads out downwind at the top, with a sharp edge upwind "
+	                "and a soft plume downwind. A dome rises over the top of the tallest tower. A dark grey haze of rain "
+	                "comes down under each tower. Each flash lights the tower from inside and the bolt comes down from "
+	                "the bottom of a tower, never from the clear air.",
+	    .environment = {.hour = 16.5f,
+	                    .clockRuns = false,
+	                    .weather = Weather::Thunderstorm,
+	                    .boltSeconds = glm::vec2(1.0f, 2.0f),
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1)},
+	    .framing = {.shot = Shot::Placed, .eye = {-8500.0f, 30.0f, 0.0f}, .look = {0.0f, 4500.0f, 0.0f}},
 	    .objects = TreesToTheEast(),
 	});
 }

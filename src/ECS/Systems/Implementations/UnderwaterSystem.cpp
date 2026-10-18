@@ -15,6 +15,7 @@
 #include <cstddef>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <functional>
 #include <numbers>
@@ -45,6 +46,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "Graphics/Cumulonimbus.h"
 #include "Graphics/RealMoon.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/Underwater.h"
@@ -334,6 +336,37 @@ void UnderwaterSystem::UpdateStorm(float frameSeconds, const std::function<float
 	_strike = underwater::TrackStrike(_strike, flash, frameSeconds, flash.has_value() ? seaDistance(flash->position) : 0.0f);
 	_seaFlash = {sky, bolt};
 	_cloudFlashes = graphics::cloud_lightning::TrackFlashes(_cloudFlashes, strikes, frameSeconds);
+}
+
+std::optional<glm::vec3> UnderwaterSystem::StormStrikePlace(uint32_t stormSerial, glm::vec2 wanted) const
+{
+	if (!_enabled || !Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	// The same storms and the same time as the clouds use, so that the strike comes down from a cell that shows
+	std::vector<graphics::cumulonimbus::StormSite> sites;
+	Locator::entitiesRegistry::value().Each<const ecs::components::Storm>([&sites](const ecs::components::Storm& storm) {
+		if (storm.dead)
+		{
+			return;
+		}
+		sites.push_back({.serial = storm.serial,
+		                 .centre = {storm.currentPosition.x, storm.currentPosition.z},
+		                 .outerRadius = storm.outerRadius,
+		                 .strength = std::clamp(storm.currentStrength, 0.0f, 1.0f),
+		                 .rain = std::clamp(static_cast<float>(storm.effect.rain) / 100.0f, 0.0f, 1.0f)});
+	});
+	const auto cells = graphics::cumulonimbus::CellsFor(sites, _seconds);
+	const uint32_t seed = graphics::cloud_lightning::SeedAt(wanted) ^ static_cast<uint32_t>(_seconds * 1000.0f);
+	const std::array randoms {graphics::cumulonimbus::RandomOf(seed, 0), graphics::cumulonimbus::RandomOf(seed, 1),
+	                          graphics::cumulonimbus::RandomOf(seed, 2)};
+	const auto place = graphics::cumulonimbus::StrikePlace(cells.All(), stormSerial, wanted, randoms);
+	if (!place.has_value())
+	{
+		return std::nullopt;
+	}
+	return glm::vec3 {place->x, _seaLevel + graphics::cumulonimbus::k_Base, place->y};
 }
 
 bool UnderwaterSystem::Floats(const glm::vec3& origin) const
