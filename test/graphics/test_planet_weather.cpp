@@ -126,3 +126,23 @@ TEST(PlanetWeather, CubeHoldsTheMap)
 	const auto weather = planet::WeatherAt(planet::CubeDirection(2, {0.5f / k_Side, 0.5f / k_Side}));
 	EXPECT_NEAR(static_cast<float>(texels.at(2 * k_Side * k_Side * 4)) / 255.0f, weather.cover, 1.0f / 255.0f);
 }
+
+TEST(PlanetWeather, CoverChangesFromRegionToRegionNearTheIsland)
+{
+	// The cover along a line through the island, every 20 km over 3000 km
+	constexpr float k_Radius = 6371.0f * 949.0f;
+	constexpr float k_Step = 20.0f * 949.0f;
+	std::vector<float> cover;
+	for (int i = -75; i <= 75; ++i)
+	{
+		cover.push_back(planet::WeatherAt(planet::DirectionAt({static_cast<float>(i) * k_Step, 0.0f}, k_Radius)).cover);
+	}
+	// From one place to the place 100 km away the cover changes much: there is no even cover over the regions
+	float difference = 0.0f;
+	constexpr size_t k_Lag = 5;
+	for (size_t i = 0; i + k_Lag < cover.size(); ++i)
+	{
+		difference += std::abs(cover.at(i + k_Lag) - cover.at(i));
+	}
+	EXPECT_GT(difference / static_cast<float>(cover.size() - k_Lag), 0.2f);
+}
