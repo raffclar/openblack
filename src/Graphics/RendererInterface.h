@@ -167,6 +167,9 @@ public:
 		/// light and colour at the kept point, the haze of the kept distance, and the kept colours of a fire or poison. The
 		/// land's light, the haze and the trees' brightness are those of the frame before.
 		std::optional<hand_reflection::HeldLook> heldMirror;
+		/// For a held tree mirrored in the sea, the factor that brings the width of its matrix back to the mirrored
+		/// width (see hand_reflection::MirroredWidthFactor)
+		float heldTreeWidth {1.0f};
 		/// Inside the temple, the mesh fades with the temple's depth fog: a model once where it stands, the lightmapped
 		/// walls at each vertex. Off for the hand, which the game leaves unfogged.
 		bool templeFog {false};

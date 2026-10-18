@@ -2641,6 +2641,19 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: the cinema bars slide {}", _seconds, command.value != 0 ? "in" : "out"));
 		return;
 	}
+	// With a value of 1, the scenario's object catches fire, with or without a creature. With a value of 2, it catches
+	// at the most heat of its fire, so that it burns for a time.
+	if (command.kind == Kind::SetAlight && (command.value == 1 || command.value == 2))
+	{
+		const auto burning = ObjectAt(command.object);
+		if (Locator::fireSystem::has_value() && burning.has_value())
+		{
+			Locator::fireSystem::value().SetOnFire(*burning, command.value == 2 ? 1.0f : 0.0f);
+		}
+		Log(fmt::format("{:.1f}s: object {} {}", _seconds, command.object,
+		                Locator::fireSystem::has_value() && burning.has_value() ? "alight" : "no fire"));
+		return;
+	}
 	const auto entity = CreatureAt(command.creature);
 	if (!entity.has_value() || !Locator::creatureLocomotionSystem::has_value() || !Locator::creatureMindSystem::has_value())
 	{

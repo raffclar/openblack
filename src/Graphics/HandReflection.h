@@ -15,6 +15,8 @@
 
 #include <glm/vec3.hpp>
 
+#include "ObjectTint.h"
+
 /// How the game mirrors the player's hand in the sea. It mirrors the hand on each frame of the land while the hand
 /// shows, wherever the hand is. It draws the hand in one flat grey, with no light, no glow and only its front faces. The
 /// game mirrors the thing that the hand holds with it, flat in the light that the thing took in the hand.
@@ -57,9 +59,9 @@ enum class MirroredThing : uint8_t
 }
 
 /// The colour that poison multiplies the light of a poisoned pot by, 0xRRGGBB
-inline constexpr uint32_t k_PoisonTint = 0xE8FFDDu;
+inline constexpr uint32_t k_PoisonTint = object_tint::k_PoisonTint;
 /// The colour that poison adds to a poisoned pot, 0xRRGGBB
-inline constexpr uint32_t k_PoisonAdded = 0x001000u;
+inline constexpr uint32_t k_PoisonAdded = object_tint::k_PoisonAdded;
 
 /// The light of a held thing, as the draw of the thing in the hand works it out on one frame
 struct HeldLook
@@ -117,6 +119,17 @@ struct HeldLightStep
 [[nodiscard]] constexpr HeldLightStep StepHeldLight(const std::optional<HeldLook>& kept, const HeldLook& now) noexcept
 {
 	return {.mirrored = kept.value_or(now), .kept = now};
+}
+
+/// The game sets the fire's look of a burning tree only for the draw of the tree in the hand, after the sea. The grey of
+/// the fire stays on the tree, so the sea mirrors it. The thinning foliage and the narrowing do not stay: the sea cuts
+/// the mirrored foliage at the alpha of the tree's own material, and mirrors the tree at its whole width.
+/// The share of its width that the sea mirrors a held tree at
+inline constexpr float k_MirroredTreeWidth = 1.0f;
+/// The factor that brings the width of a held tree, narrowed by a fire to a share of it, back to the mirrored width
+[[nodiscard]] constexpr float MirroredWidthFactor(float widthShare) noexcept
+{
+	return widthShare > 0.0f ? k_MirroredTreeWidth / widthShare : 1.0f;
 }
 
 /// The shade of 256 that each vertex of the mirrored held thing takes: all of its colour, as the sun does not shade it

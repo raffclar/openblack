@@ -1449,7 +1449,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				{
 					const float multiply =
 					    held->treeGrey > 0 ? static_cast<float>(held->treeGrey) / 256.0f : static_cast<float>(held->tint);
-					u_fogAt = glm::vec4(held->viewDepth, multiply, static_cast<float>(held->added), 2.0f);
+					// A tree has no colour added: z is the factor that brings its width back, 0 for none
+					const float added = desc.heldTreeWidth != 1.0f ? desc.heldTreeWidth : static_cast<float>(held->added);
+					u_fogAt = glm::vec4(held->viewDepth, multiply, added, 2.0f);
 				}
 				setUniform(MeshUniform::FogAt, &u_fogAt);
 			}
@@ -7503,9 +7505,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						submitDesc.landLightScale = _before.treeBrightness.Or(_treeBrightness);
 						submitDesc.shadeAt = glm::vec4(held.heldLight->point, hand_reflection::k_HeldShade);
 						submitDesc.heldMirror = held.heldLight;
+						submitDesc.heldTreeWidth = hand_reflection::MirroredWidthFactor(held.widthShare);
 						DrawMesh(*meshManager.Handle(held.mesh), submitDesc, std::numeric_limits<uint8_t>::max());
 						submitDesc.shadeAt = glm::vec4(0.0f);
 						submitDesc.heldMirror.reset();
+						submitDesc.heldTreeWidth = 1.0f;
 					}
 				}
 				submitDesc.detailLevel = 1;

@@ -58,10 +58,10 @@ HeldLook HeldLookOf(const HeldThing& thing) noexcept
 		look.tint = (grey << 16u) | (grey << 8u) | grey;
 		look.added = thing.glow;
 	}
-	else if (thing.poisonedPot)
+	else if (const auto poison = object_tint::PotColours(thing.poisonedPot, false))
 	{
-		look.tint = k_PoisonTint;
-		look.added = k_PoisonAdded;
+		look.tint = poison->tint;
+		look.added = poison->added;
 	}
 	return look;
 }

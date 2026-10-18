@@ -2097,6 +2097,64 @@ void AddAppearance(std::vector<Scenario>& all)
 	                 {.kind = Kind::HandRelease, .delaySeconds = 6.0f},
 	                 {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 1}},
 	});
+	// A pot of poisoned food beside a clean one on the bank, then the poisoned pot in the hand
+	all.push_back({
+	    .id = "appearance.poisoned_pot_tint",
+	    .name = "Poisoned pot tint on the ground and in the hand",
+	    .facet = Facet::Appearance,
+	    .description = "At four in the afternoon, the clock stopped, the camera looks down at the bank of the lake of the "
+	                   "testbed. A pot of poisoned food stands beside a clean pot of food. After three seconds the hand "
+	                   "takes the poisoned pot.",
+	    .expected = "The poisoned pot is a little green beside the clean pot, on the ground and in the hand.",
+	    .environment = {.hour = 16.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.45f)},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows + 6.0f}}, .distance = 0.15f},
+	    .objects = {{.type = PotInfo::FoodPot, .offset = {k_Lake.x - 4.0f, k_FarShallows + 10.0f}, .poisoned = true},
+	                {.type = PotInfo::FoodPot, .offset = {k_Lake.x + 4.0f, k_FarShallows + 10.0f}}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0}},
+	});
+	// A burning pot in the hand over the lake: it glows as a burning barrel does
+	all.push_back({
+	    .id = "appearance.burning_pot_in_hand",
+	    .name = "Burning pot in the hand",
+	    .facet = Facet::Appearance,
+	    .description = "At four in the afternoon, the clock stopped, the camera looks down over the lake of the testbed "
+	                   "near its far shallows. After a second a pot of wood on the bank catches fire. A second later the "
+	                   "hand takes it. A pot burns out fast, so it is set alight again in the hand every two seconds.",
+	    .expected = "The burning pot flickers with the red glow of the fire and goes darker as it chars, on the ground "
+	                "and in the hand, as a burning barrel does.",
+	    .environment = {.hour = 16.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.45f)},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x + 6.0f, k_FarShallows + 40.0f}}, .distance = 0.15f},
+	    .objects = {{.type = PotInfo::WoodPot, .offset = {k_Lake.x + 6.0f, k_FarShallows + 44.0f}}},
+	    .commands = {{.kind = Kind::SetAlight, .delaySeconds = 1.0f, .value = 2, .object = 0},
+	                 {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Kind::SetAlight, .delaySeconds = 1.0f, .value = 2, .object = 0},
+	                 {.kind = Kind::SetAlight, .delaySeconds = 2.0f, .value = 2, .object = 0},
+	                 {.kind = Kind::SetAlight, .delaySeconds = 2.0f, .value = 2, .object = 0},
+	                 {.kind = Kind::SetAlight, .delaySeconds = 2.0f, .value = 2, .object = 0}},
+	});
+	// Two burning trees: one stays on the bank, the hand holds the other over the lake
+	all.push_back({
+	    .id = "appearance.held_burning_tree_sea_reflection",
+	    .name = "Held burning tree in the sea reflection",
+	    .facet = Facet::Appearance,
+	    .description = "At four in the afternoon, the clock stopped, the camera looks down over the lake of the testbed "
+	                   "near its far shallows, with the player's hand over the water. After a second two young oaks on the "
+	                   "bank catch fire. Four seconds later the hand takes one of them, which is set alight again every "
+	                   "two seconds.",
+	    .expected = "In the hand, the burning oak is grey and its leaves become thin as it burns. Its reflection in the "
+	                "water is grey too, but the reflection keeps all of its leaves and its full width.",
+	    .environment = {.hour = 16.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.4f)},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 20.0f}}, .distance = 0.3f},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {k_Lake.x + 10.0f, k_FarShallows + 26.0f}, .fullSize = 0.4f},
+	                {.type = TreeInfo::Oak, .offset = {k_Lake.x - 10.0f, k_FarShallows + 26.0f}, .fullSize = 0.4f}},
+	    .commands = {{.kind = Kind::SetAlight, .delaySeconds = 1.0f, .value = 2, .object = 0},
+	                 {.kind = Kind::SetAlight, .delaySeconds = 0.0f, .value = 2, .object = 1},
+	                 {.kind = Kind::HandTake, .delaySeconds = 4.0f, .object = 0},
+	                 {.kind = Kind::SetAlight, .delaySeconds = 1.0f, .value = 2, .object = 0},
+	                 {.kind = Kind::SetAlight, .delaySeconds = 2.0f, .value = 2, .object = 0},
+	                 {.kind = Kind::SetAlight, .delaySeconds = 2.0f, .value = 2, .object = 0},
+	                 {.kind = Kind::SetAlight, .delaySeconds = 2.0f, .value = 2, .object = 0}},
+	});
 	// Sharks under the lake near the far shore, with the player's creature and the hand mirrored in the water over them
 	all.push_back({
 	    .id = "appearance.sharks_under_sea_reflection",
@@ -8809,7 +8867,13 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		{
 			const auto& command = scenario.commands.at(i);
 			const auto what = fmt::format("command {} ({})", i, Name(command.kind));
-			if (!NeedsNoCreature(command.kind) && command.creature >= creatures)
+			// An object set alight (value 1 or 2) needs no creature, but the object must be there
+			const bool objectAlight = command.kind == Kind::SetAlight && (command.value == 1 || command.value == 2);
+			if (objectAlight && command.object >= scenario.objects.size())
+			{
+				problems.push_back(fmt::format("{}: no such object", what));
+			}
+			if (!NeedsNoCreature(command.kind) && !objectAlight && command.creature >= creatures)
 			{
 				problems.push_back(fmt::format("{}: no such creature", what));
 			}

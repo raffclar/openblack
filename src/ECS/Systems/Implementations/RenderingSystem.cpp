@@ -46,6 +46,7 @@
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Graveyard.h"
 #include "ECS/Components/GroundMark.h"
 #include "ECS/Components/HandGrab.h"
@@ -93,6 +94,7 @@
 #include "Graphics/GroundBlobs.h"
 #include "Graphics/InstanceLightPoint.h"
 #include "Graphics/MeshDetail.h"
+#include "Graphics/ObjectTint.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "InfoConstants.h"
@@ -110,6 +112,8 @@ using openblack::physics::objects::TreePlace;
 
 namespace
 {
+static_assert(openblack::graphics::object_tint::k_MostGrainFlow == openblack::magic::piles::k_GrainFlowSpan);
+
 /// Whether an object is drawn whole with the others: a building drawn as far up as it stands is drawn by itself
 bool DrawnWhole(entt::entity entity)
 {
@@ -764,6 +768,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 
 		    // A pile of food or wood is drawn as far under the ground as it has sunk, not at all once wholly under, and the
 		    // grain of a pile of food flows down it as it rises. A handful in the hand is drawn whole where it is held.
+		    float grainFlow = 0.0f;
 		    if (const auto* pile = registry.TryGet<const ResourcePile>(entity); pile != nullptr && pile->height > 0.0f)
 		    {
 			    const auto sink = magic::piles::DrawnSink(pile->rise, pile->height, registry.AllOf<InHand>(entity));
@@ -777,7 +782,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    const auto* pot = registry.TryGet<const Pot>(entity);
 				    if (pot != nullptr && magic::piles::GrainFlows(pot->type))
 				    {
-					    look.x = -magic::piles::GrainFlow(*sink, pile->height);
+					    grainFlow = magic::piles::GrainFlow(*sink, pile->height);
 				    }
 			    }
 		    }
@@ -793,11 +798,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A glow added over it, as the heal lights the people it heals, as a negative x: a house's positive x is its
-		    // windows' light
+		    // A colour added over it after its texture: the heal's glow on the people it heals, the glow of a fire on it
+		    // and the poison on a pot. A house's positive x is its windows' light, and a house's glow goes above it: 1 plus
+		    // the glow while someone is home.
+		    const bool onFire = registry.AllOf<Fire>(entity);
+		    uint32_t added = 0;
 		    if (const auto* glow = registry.TryGet<const ObjectGlow>(entity); glow != nullptr && abode == nullptr)
 		    {
-			    look.x = -static_cast<float>(glow->Packed());
+			    added = glow->Packed();
 		    }
 		    // A blast's rubble fades by its alpha in its last second
 		    if (const auto* mark = registry.TryGet<const GroundMark>(entity); mark != nullptr && mark->alpha.has_value())
@@ -809,6 +817,15 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    {
 			    look.z = -(1.0f - static_cast<float>(seeThrough->alpha) / 255.0f);
 		    }
+		    // A poisoned pot with no fire on it is tinted green, on the ground and in the hand
+		    if (const auto* pot = registry.TryGet<const Pot>(entity); pot != nullptr)
+		    {
+			    if (const auto poison = graphics::object_tint::PotColours(pot->poisoned, onFire))
+			    {
+				    look.y = static_cast<float>(poison->tint);
+				    added = graphics::object_tint::SumAdded(added, poison->added);
+			    }
+		    }
 		    // Something charred by fire is drawn grey
 		    if (look.y == 0.0f && Locator::fireSystem::has_value())
 		    {
@@ -817,9 +834,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    look.y = static_cast<float>(*charred);
 			    }
 		    }
-		    // Something hot glows red-orange, added as the heal's glow is (a pile or pot doesn't). A house's glow goes
-		    // above its windows' light: 1 plus the glow while someone is home
-		    if (Locator::fireSystem::has_value() && !registry.AllOf<Pot>(entity))
+		    // Something hot glows red-orange, a pot or a pile too
+		    if (onFire && Locator::fireSystem::has_value())
 		    {
 			    if (const auto heat = Locator::fireSystem::value().GetGlowColour(entity); heat.has_value() && *heat != 0)
 			    {
@@ -827,21 +843,15 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    {
 					    look.x = look.x > 0.5f ? 1.0f + static_cast<float>(*heat) : -static_cast<float>(*heat);
 				    }
-				    else if (look.x <= 0.0f && look.x >= -0.5f)
+				    else
 				    {
-					    look.x = -static_cast<float>(*heat);
-				    }
-				    else if (look.x < -0.5f)
-				    {
-					    const auto glow = static_cast<uint32_t>(-look.x);
-					    uint32_t sum = 0;
-					    for (const uint32_t shift : {16u, 8u, 0u})
-					    {
-						    sum |= std::min(((glow >> shift) & 0xFFu) + ((*heat >> shift) & 0xFFu), 0xFFu) << shift;
-					    }
-					    look.x = -static_cast<float>(sum);
+					    added = graphics::object_tint::SumAdded(added, *heat);
 				    }
 			    }
+		    }
+		    if (abode == nullptr)
+		    {
+			    look.x = graphics::object_tint::PackAdded(added, grainFlow);
 		    }
 
 		    // A flag over a town's store is not there at all while it does not show
@@ -1405,12 +1415,14 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    // A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
 		    // keeping its height
 		    glm::vec4 burning(0.0f);
+		    float widthShare = 1.0f;
 		    if (Locator::fireSystem::has_value())
 		    {
 			    if (const auto look = Locator::fireSystem::value().GetBurningTreeLook(entity))
 			    {
 				    burning = {static_cast<float>(look->grey) / 256.0f, look->alphaReference / 255.0f, 0.0f, 0.0f};
 				    modelMatrix = glm::scale(modelMatrix, glm::vec3(look->scale, 1.0f, look->scale));
+				    widthShare = look->scale;
 			    }
 		    }
 		    if (fade.has_value())
@@ -1451,7 +1463,8 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		                            .data = {.modelMatrix = drawnMatrix, .burning = burning},
 		                            .box = boxMatrix,
 		                            .entity = entity,
-		                            .held = registry.AllOf<InHand>(entity)});
+		                            .held = registry.AllOf<InHand>(entity),
+		                            .widthShare = widthShare});
 	    });
 
 	// Laid out within each mesh's instances by detail, each run drawn in its own: counted by mesh and detail first, then
@@ -1531,7 +1544,8 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			                                        .mesh = tree.mesh,
 			                                        .model = tree.data.modelMatrix,
 			                                        .castModel = tree.data.modelMatrix,
-			                                        .instance = idx});
+			                                        .instance = idx,
+			                                        .widthShare = tree.widthShare});
 		}
 		if (drawBoundingBox && idx + _renderContext.treeInstanceData.size() / 2 < _renderContext.treeInstanceData.size())
 		{
