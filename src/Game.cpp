@@ -2376,9 +2376,9 @@ bool Game::Update() noexcept
 	if (Locator::temple::has_value())
 	{
 		Locator::temple::value().Update(deltaTime);
-		// Leaving the save game room the player was kept in once the game was over ends the game.
-		// TODO(game-over): the game goes back to its front end here, which openblack doesn't have during play yet, so
-		// it closes as the menu's quit does
+		// When the player leaves the save game room after the game is over, the game stops. The program closes. It
+		// does not go back to a front end. Because the game is over, it does not write an autosave and does not draw
+		// black frames before it closes.
 		if (Locator::temple::value().TakeGameEnded())
 		{
 			RequestQuit();
