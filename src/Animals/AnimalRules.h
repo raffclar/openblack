@@ -109,6 +109,20 @@ struct ReactionFacts
 	return gameState == 32 || gameState == 35 || gameState == 51 || gameState == 52;
 }
 
+/// An animal at most this high above the land leans its model to the slope of the land when it is drawn
+inline constexpr float k_HighestToFollowSlope = 0.2f;
+/// The most that the model of an animal lifts or drops along one of its axes for the slope of the land
+inline constexpr float k_MostSlopeLift = 0.3f;
+/// A position in metres as the map unit that the land's height is read at for the slope: the metres times 65536,
+/// then times 0.1, each as a float, then cut to a whole number
+[[nodiscard]] int32_t SlopeSampleUnit(float metres);
+/// The lift of the model along one axis: the height of the land at the end of the axis less the height of the
+/// animal, kept between -0.3 and 0.3
+[[nodiscard]] float SlopeLift(float landHeight, float animalHeight);
+/// The lean of the model in its own axes: its x axis lifts by `alongX` and its z axis by `alongZ`, as a part of its
+/// up axis. The heading turn comes before it and the bank after it
+[[nodiscard]] glm::mat3 SlopeLean(float alongX, float alongZ);
+
 /// What decides whether food interests an animal
 struct FoodInterest
 {

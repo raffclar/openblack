@@ -203,6 +203,34 @@ glm::vec3 animals::DeadBodySmokePlace(const glm::vec3& position, float heading, 
 	return position + glm::vec3(std::cos(heading) * out, 0.0f, std::sin(heading) * out);
 }
 
+int32_t animals::SlopeSampleUnit(float metres)
+{
+	constexpr float k_Units = 65536.0f;
+	constexpr float k_Tenth = 0.1f;
+	const float units = metres * k_Units;
+	return map_coords::FtoL(units * k_Tenth);
+}
+
+float animals::SlopeLift(float landHeight, float animalHeight)
+{
+	float lift = landHeight - animalHeight;
+	// The game keeps a lift that is not below the top at the top, then a lift at the bottom or below at the bottom
+	if (!(lift < k_MostSlopeLift))
+	{
+		lift = k_MostSlopeLift;
+	}
+	if (lift <= -k_MostSlopeLift)
+	{
+		lift = -k_MostSlopeLift;
+	}
+	return lift;
+}
+
+glm::mat3 animals::SlopeLean(float alongX, float alongZ)
+{
+	return {glm::vec3(1.0f, alongX, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, alongZ, 1.0f)};
+}
+
 bool animals::InterestedInFood(const FoodInterest& facts)
 {
 	if (!facts.available || facts.inPhysics || facts.hungerLimit == 0)

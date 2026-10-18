@@ -20,6 +20,7 @@
 #include <numbers>
 
 #include <glm/geometric.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DAnim.h"
@@ -2276,7 +2277,23 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 			transform.position = animal.previousPosition + ((animal.position - animal.previousPosition) * t);
 			const float heading =
 			    animal.previousHeading + (std::remainder(animal.heading - animal.previousHeading, k_TwoPi) * t);
-			transform.rotation = animals::Orientation(heading, animal.bank.Step(elapsedSeconds));
+			const float bank = animal.bank.Step(elapsedSeconds);
+			transform.rotation = animals::Orientation(heading, bank);
+			// An animal on the land leans to its slope: each of its x and z axes lifts or drops to the land at its end
+			if (!(animal.height > animals::k_HighestToFollowSlope) && Locator::terrainSystem::has_value())
+			{
+				const auto turned = animals::Orientation(heading, 0.0f);
+				const float scale = transform.scale.x;
+				const auto& at = transform.position;
+				const auto& land = Locator::terrainSystem::value();
+				const auto landAt = [&](const glm::vec3& axis) {
+					return land.GetAltitude(animals::SlopeSampleUnit(at.x + (axis.x * scale)),
+					                        animals::SlopeSampleUnit(at.z + (axis.z * scale)));
+				};
+				const float alongX = animals::SlopeLift(landAt(turned[0]), at.y);
+				const float alongZ = animals::SlopeLift(landAt(turned[2]), at.y);
+				transform.rotation = turned * animals::SlopeLean(alongX, alongZ) * glm::mat3(glm::eulerAngleZ(bank));
+			}
 		}
 		auto* pose = registry.TryGet<AnimalPose>(entity);
 		// The clips are kept by the hash of their number in the animation pack

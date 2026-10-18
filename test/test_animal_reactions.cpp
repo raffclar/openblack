@@ -146,3 +146,28 @@ TEST(AnimalReactions, OnlyWanderSleepLairAndSeekFoodHaveAStartOfTheirOwn)
 		EXPECT_EQ(animals::StateHasOwnStart(state), ownStart) << state;
 	}
 }
+
+TEST(AnimalSlope, TheLiftIsTheLandLessTheAnimalKeptBetweenTheLimits)
+{
+	EXPECT_FLOAT_EQ(animals::SlopeLift(10.1f, 10.0f), 10.1f - 10.0f);
+	EXPECT_FLOAT_EQ(animals::SlopeLift(11.0f, 10.0f), 0.3f);
+	EXPECT_FLOAT_EQ(animals::SlopeLift(9.0f, 10.0f), -0.3f);
+	EXPECT_FLOAT_EQ(animals::SlopeLift(10.3f, 10.0f), 0.3f);
+}
+
+TEST(AnimalSlope, TheLandIsReadAtTheMetresTimes65536ThenATenth)
+{
+	EXPECT_EQ(animals::SlopeSampleUnit(1.0f), 6553);
+	EXPECT_EQ(animals::SlopeSampleUnit(100.0f), 655360);
+	EXPECT_EQ(animals::SlopeSampleUnit(-1.0f), -6553);
+}
+
+TEST(AnimalSlope, TheLeanLiftsTheXAndZAxesAlongTheUpAxis)
+{
+	const auto lean = animals::SlopeLean(0.1f, -0.2f);
+	EXPECT_FLOAT_EQ(lean[0].y, 0.1f);
+	EXPECT_FLOAT_EQ(lean[2].y, -0.2f);
+	EXPECT_FLOAT_EQ(lean[1].y, 1.0f);
+	EXPECT_FLOAT_EQ(lean[0].x, 1.0f);
+	EXPECT_FLOAT_EQ(lean[2].z, 1.0f);
+}
