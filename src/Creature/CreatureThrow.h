@@ -68,8 +68,11 @@ constexpr float k_HandSpeedSpanMs = 100.0f;
 constexpr float k_MinThrowHeightShare = 0.66f;
 constexpr float k_HeightAtSizeOne = 15.0f;
 
-/// How long something thrown at a target a distance away takes to get there: the time it would take to fall that far
-[[nodiscard]] float FlightTime(float distance);
+/// The game's flight time takes the distance along the ground times this, one over g as the game keeps it
+constexpr float k_FlightTimePerUnit = 0.10193679481744766f;
+/// How long something that a creature throws at a target takes to get there: the square root of the distance along the
+/// ground times one over g. The game takes the distance from the target to the creature, with the square of z first.
+[[nodiscard]] float FlightTime(const glm::vec3& creature, const glm::vec3& target);
 
 /// The velocity that takes something from where the hand lets go of it to the target in a time, falling as it goes
 [[nodiscard]] glm::vec3 ReleaseVelocity(const glm::vec3& target, const glm::vec3& release, float seconds);

@@ -207,7 +207,7 @@ std::optional<glm::vec3> DirectionThrough(glm::vec2 cursor)
 	glm::vec3 origin;
 	glm::vec3 direction;
 	Locator::camera::value().DeprojectScreenToWorld(cursor / glm::vec2(screenSize), origin, direction);
-	return glm::length(direction) > 0.0f ? std::optional(glm::normalize(direction)) : std::nullopt;
+	return glm::length(direction) > 0.0f ? std::optional(direction) : std::nullopt;
 }
 
 /// What the hand needs to know about a creature to take hold of it; none for what isn't a creature
@@ -464,8 +464,8 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	}
 
 	// The hand stays on the line of sight through the cursor, at a distance from the camera that eases to the body
-	const auto sight = glm::normalize(rayDirection);
 	const auto camera = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : rayOrigin;
+	const auto sight = feedback::SightWay(camera, rayDirection);
 	const auto parts = PartsOf(creature, animation, transform);
 	const auto middle = parts.has_value() ? parts->at(static_cast<size_t>(feedback::BodyPart::Groin)) : centre;
 	if (!contact->distanceStarted)
@@ -486,7 +486,7 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 		const auto between = feedback::SecondTryCursor(cursorPixel, contact->frameCursor.value_or(cursorPixel));
 		if (const auto direction = DirectionThrough(glm::vec2(between)))
 		{
-			hit = SkinAlong(creatureEntity, transform, camera, *direction);
+			hit = SkinAlong(creatureEntity, transform, camera, feedback::SightWay(camera, *direction));
 		}
 	}
 	const bool onBody = hit.has_value();
@@ -498,11 +498,11 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	const auto step = feedback::Pace(contact->sinceStepMs, ms);
 	if (step.has_value() && *step > 0.0f)
 	{
-		const auto lastDirection = DirectionThrough(contact->lastCursor).value_or(sight);
+		const auto lastDirection = DirectionThrough(contact->lastCursor).value_or(rayDirection);
 		slapped =
 		    Step(*contact, {.shownAt = contact->shownAt.value_or(feedback::PointOnSight(camera, rayDirection, handDistance)),
 		                    .here = feedback::PointOnSight(camera, rayDirection, handDistance),
-		                    .before = camera + (lastDirection * handDistance),
+		                    .before = feedback::PointOnSight(camera, lastDirection, handDistance),
 		                    .touch = touch,
 		                    .cursor = cursor,
 		                    .screenWidth = screenWidth,

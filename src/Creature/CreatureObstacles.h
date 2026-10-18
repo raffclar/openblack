@@ -192,5 +192,7 @@ constexpr float k_TeleportStoneWidth = 6.0f;
 /// Where a point of a model goes on the land, through the rows and the position. Each part adds the y, x and z terms
 /// in that order, then the position.
 [[nodiscard]] glm::vec2 PlacedOnLand(const PlacementRows& rows, const glm::vec3& point, glm::vec2 position);
+/// Where a point of a model goes in the world, through the rows and the position, each part in the same order
+[[nodiscard]] glm::vec3 PlacedInWorld(const PlacementRows& rows, const glm::vec3& point, const glm::vec3& position);
 
 } // namespace openblack::creature_obstacles

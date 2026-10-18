@@ -73,9 +73,7 @@ std::optional<creature_drink::Place> ecs::systems::mind_detail::DrinkPlaceOf(ent
 	const auto standAt = [&walkable, &terrain](glm::vec2 wanted) {
 		const glm::vec3 at {wanted.x, terrain.GetHeightAt(wanted), wanted.y};
 		const bool valid = walkable.IsValid(wanted, creature_route::k_DestinationClearance);
-		const auto found =
-		    valid ? std::nullopt
-		          : walkable.NearestValid(wanted, creature_route::k_DestinationClearance, creature_route::k_ValidPointSearch);
+		const auto found = valid ? std::nullopt : walkable.NearestStandable(wanted);
 		return creature_drink::StandingPoint(at, valid, found);
 	};
 

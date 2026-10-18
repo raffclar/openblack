@@ -26,9 +26,12 @@ namespace
 constexpr float k_Tiny = 1e-4f;
 } // namespace
 
-float creature_throw::FlightTime(float distance)
+float creature_throw::FlightTime(const glm::vec3& creature, const glm::vec3& target)
 {
-	return std::sqrt(std::max(distance, 0.0f) / k_Gravity);
+	const float acrossX = creature.x - target.x;
+	const float acrossZ = creature.z - target.z;
+	const float distance = std::sqrt((acrossZ * acrossZ) + (acrossX * acrossX));
+	return std::sqrt(distance * k_FlightTimePerUnit);
 }
 
 glm::vec3 creature_throw::ReleaseVelocity(const glm::vec3& target, const glm::vec3& release, float seconds)

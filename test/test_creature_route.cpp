@@ -88,9 +88,9 @@ TEST(CreatureRoute, CreaturesStandClearOfBlockedCells)
 	// Within 7.05 of a blocked cell's centre is not allowed either
 	EXPECT_FALSE(land.IsValid({1999.0f, 2005.0f}, k_Clearance));
 	EXPECT_TRUE(land.IsValid({1990.0f, 2005.0f}, k_Clearance));
-	const auto nearest = land.NearestValid({2005.0f, 2005.0f}, k_Clearance, 100.0f);
+	const auto nearest = land.NearestStandable({2005.0f, 2005.0f});
 	ASSERT_TRUE(nearest.has_value());
-	EXPECT_TRUE(land.IsValid(*nearest, k_Clearance));
+	EXPECT_TRUE(land.IsValid(*nearest, k_DestinationClearance));
 	EXPECT_LT(glm::distance(*nearest, glm::vec2(2005.0f, 2005.0f)), 20.0f);
 }
 

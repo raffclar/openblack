@@ -2639,6 +2639,21 @@ void AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 1,
 	});
 
+	// A wolf runs away from a point beside it, then walks back, again and again
+	all.push_back({
+	    .id = "movement.run_away_point",
+	    .name = "Run away point",
+	    .facet = Facet::Movement,
+	    .description = "A wolf stands still. Every few seconds it runs away from a point 15 units to its west, then walks "
+	                   "back to where it started.",
+	    .expected = "The wolf runs east by its species' distance and up to 39 units more, and stops at the corner of a map "
+	                "cell. Then it walks back.",
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -40.0f}, {160.0f, 40.0f}}},
+	    .creatures = {Posed(CreatureType::Wolf, {0.0f, 0.0f}, 0.0f, "runs")},
+	    .commands = {Go(Kind::FleeFrom, 0, {-15.0f, 0.0f}, 1.0f, false), Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 2.0f, true)},
+	    .repeatFrom = 0,
+	});
+
 	// A ring of fence round a pen, with two villagers walking to the far side of it, one aiming a little to each side
 	constexpr glm::vec2 k_Pen {-60.0f, -40.0f};
 	constexpr float k_PenRadius = 12.0f;
