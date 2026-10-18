@@ -1051,7 +1051,7 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .id = "liquid.temple",
 	    .name = "The drops go on in the temple",
 	    .facet = Facet::Needs,
-	    .description = "The player has a temple west of the middle. A tiger is sick at once. Two seconds later the "
+	    .description = "The player has a temple west of the middle. A tiger is sick at once. Five seconds later the "
 	                   "player is put in the temple's main room while the drops are on the land.",
 	    .expected = "The world stops in the temple, but the drops do not: they step on by the time of the frames and "
 	                "are drawn there. The inspector's particles.liquid count falls to no drops within three seconds in "
@@ -1060,7 +1060,7 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Follow},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
-	    .commands = {Act(Kind::Puke, 0, 0.5f), {.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	    .commands = {Act(Kind::Puke, 0, 0.5f), {.kind = Kind::EnterTemple, .delaySeconds = 5.0f, .value = 3}},
 	});
 
 	all.push_back({
@@ -3152,7 +3152,7 @@ void AddAudio(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
 	                 {.kind = Kind::RunText, .delaySeconds = 0.5f, .value = 5128},
 	                 {.kind = Kind::RunText, .delaySeconds = 1.0f, .value = 5129},
-	                 {.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 5.0f, .value = 3}},
 	});
 
 	// The camera looks out across the north edge of the player's influence: the bottom of the screen is inside it,
@@ -8143,7 +8143,7 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview},
 	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
-	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 5.0f, .value = 3}},
 	});
 }
 
