@@ -1096,3 +1096,5 @@ openblack_setup_and_add_test(test_real_moon graphics/test_real_moon.cpp)
 openblack_setup_and_add_test(test_cumulonimbus graphics/test_cumulonimbus.cpp)
 # EXPERIMENT (not for merge): the weather of the whole planet for the clouds
 openblack_setup_and_add_test(test_planet_weather graphics/test_planet_weather.cpp)
+# EXPERIMENT (not for merge): the camera over the world's ball
+openblack_setup_and_add_test(test_planet_navigation camera/test_planet_navigation.cpp)

@@ -21,6 +21,7 @@
 #include "CameraPan.h"
 #include "Common/Zoomer.h"
 #include "DoubleClickFlight.h"
+#include "PlanetNavigation.h"
 
 class TestDefaultCameraModel;
 class TestDefaultCameraModel_single_line_Test;
@@ -59,6 +60,8 @@ public:
 	}
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const final;
 	[[nodiscard]] HandCues GetHandCues() const final;
+	/// EXPERIMENT (not for merge): over the planet the camera goes round the world's ball, away from the land
+	[[nodiscard]] bool HeldInsideTheWorld() const final { return !_overPlanet; }
 
 private:
 	void UpdateCameraInterpolationValues(const Camera& camera);
@@ -131,6 +134,23 @@ private:
 
 	[[nodiscard]] std::optional<CameraInterpolationUpdateInfo> ComputeUpdateReturnInfo(LimitsMoved moved,
 	                                                                                   std::chrono::microseconds t);
+
+	/// EXPERIMENT (not for merge): the camera over the planet. The model works on a camera over the map (the local
+	/// camera). The world's camera is the local camera blended to the orbit view by the height, then turned about the
+	/// ball's middle by _planetTurn.
+	[[nodiscard]] static std::optional<planet_nav::Ball> PlanetBall();
+	/// The world's camera for the local camera, none when it is the local camera itself
+	[[nodiscard]] std::optional<planet_nav::Pose> PlanetPose() const;
+	/// Changes the camera that the frame draws back to the local camera
+	void ToLocal(const planet_nav::Ball& ball);
+	/// Where the line through a point of the screen meets the curved sea, as the frame draws it, from the kept view
+	[[nodiscard]] static std::optional<glm::vec3> CurvedSeaUnder(const Camera& camera, glm::vec2 screenCoord);
+	/// The hand grips the planet or the far sea as a drag starts; whether it did
+	bool GripPlanet(const Camera& camera);
+	/// A drag of the planet or the far sea; whether it was one
+	bool DragPlanet(glm::u16vec2 mouseCurrent);
+	/// The turn and the zoom over the planet, before the local camera takes them
+	void TurnAndZoomOverPlanet(const planet_nav::Ball& ball, float& zoomDelta);
 
 	Mode _mode = Mode::Cartesian;
 	Mode _modePrev = _mode;
@@ -217,6 +237,31 @@ private:
 	hand_tricons::WorldCameraFrame _iconFrame;
 	/// Time spent handling the controls, for timing the start of a drag
 	std::chrono::microseconds _controlsTime {std::chrono::microseconds::zero()};
+
+	/// EXPERIMENT (not for merge): the turn of the world's camera about the ball's middle
+	glm::quat _planetTurn {1.0f, 0.0f, 0.0f, 0.0f};
+	/// The share of the orbit view in the last frame
+	float _orbitShare {0.0f};
+	/// The last frame gave the world's camera, not the local camera
+	bool _overPlanet {false};
+	/// The local camera as the last frame gave it, and the world's eye that the last frame gave for it. While the
+	/// camera's destination stays at that eye, the local camera comes back exactly, with no loss in the turn.
+	glm::vec3 _localOrigin {0.0f};
+	glm::vec3 _localFocus {0.0f};
+	glm::vec3 _worldOrigin {0.0f};
+	/// The hand gripped the planet (globe drag) or the far sea (curved drag): the world's camera then and the inverse of
+	/// its view and projection, the gripped point (for the globe, a direction from the ball's middle), the turn then
+	struct PlanetGrip
+	{
+		bool globe;
+		planet_nav::Pose pose;
+		glm::mat4 inverseViewProjection;
+		glm::vec3 gripped;
+		glm::quat turn;
+	};
+	std::optional<PlanetGrip> _planetGrip;
+	/// The line through the cursor and the middle of the screen meet the curved sea here, where they meet no land
+	std::optional<glm::vec3> _curvedMouseHit;
 
 	// For unit testing
 	friend TestDefaultCameraModel;

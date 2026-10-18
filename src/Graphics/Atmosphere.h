@@ -369,8 +369,12 @@ inline constexpr float k_CapFollowsEyeBelow = 20000.0f;
 inline constexpr float k_CapOnMapAbove = 200000.0f;
 
 /// The flat cap for an eye at `eye` across the ground and `heightOverSea` units over the sea, for a map that is
-/// `mapSize` units on each side
+/// `mapSize` units on each side. The cap moves by the eye's height over the ball under the map's middle, so an eye far
+/// round the planet (under the sea's level) is over the ball too.
 [[nodiscard]] WorldCap MapCap(glm::vec2 eye, float heightOverSea, float mapSize);
+
+/// The height of the eye over the ball under the map's middle, with no loss of the small terms
+[[nodiscard]] float HeightOverMapBall(glm::vec3 eye, float seaLevel, float mapSize);
 
 /// The world in the upright plane through the eye along a direction on the ground. The ground is flat along the cap's
 /// chord, from `chordFrom` to `chordTo` units along the plane from the eye. Past each end of the chord it is a circle

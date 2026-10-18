@@ -39,6 +39,8 @@ public:
 		glm::vec3 origin;
 		glm::vec3 focus;
 		std::chrono::microseconds duration;
+		/// EXPERIMENT (not for merge): the direction of the top of the screen, the world's up except over the planet
+		glm::vec3 up {0.0f, 1.0f, 0.0f};
 	};
 
 	struct FlightPath

@@ -260,4 +260,23 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 10.0f, 0.0f}, .look = {-400.0f, 150.0f, 0.0f}},
 	    .objects = TreesToTheEast(),
 	});
+	// EXPERIMENT (not for merge): the camera that goes round the planet
+	all.push_back({
+	    .id = "space.orbit_navigation",
+	    .name = "The hand turns the planet from space",
+	    .facet = Facet::Sky,
+	    .description = "Noon with the clock stopped. The camera is 15000 km over the sea a little to the south west of "
+	                   "the island and looks down at the planet's middle. Drag the planet with the hand: it turns as a "
+	                   "globe under the hand. Drag it down the screen four times (inspector input.path, from the middle "
+	                   "of the screen 90 pixels down) to go north over the pole. Then turn the wheel towards the screen, "
+	                   "one notch at a time, to go down to the island.",
+	    .expected = "The planet stays in the middle of the screen. The point that the hand grips stays under the cursor, "
+	                "and the camera goes round the planet past the pole with no flip and no roll. Each wheel notch takes "
+	                "the camera a fifth nearer to the sea. From 400 km to 200 km up the view turns from the planet's middle "
+	                "to the normal camera, with no jump, and the camera comes down at the point under the middle of the "
+	                "screen.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-300000.0f, 1.5e7f, -300000.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = TreesToTheEast(),
+	});
 }
