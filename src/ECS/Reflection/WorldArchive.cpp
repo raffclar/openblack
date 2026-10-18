@@ -121,12 +121,19 @@ void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSav
 			out.EndLength(at);
 			continue;
 		}
-		const auto instance = component.type.from_void(value);
 		for (const auto& field : fields)
 		{
 			const auto at = out.BeginLength();
 			out.SetPlace(component.name, field.info->name);
-			field.info->save(field.data.get(instance), out);
+			if (field.info->saveFrom != nullptr)
+			{
+				field.info->saveFrom(value, out);
+			}
+			else
+			{
+				auto instance = component.type.from_void(value);
+				field.info->save(field.data.get(instance), out);
+			}
 			out.EndLength(at);
 		}
 	}

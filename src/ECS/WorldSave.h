@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 #include <set>
 #include <vector>
@@ -34,8 +35,16 @@ struct SaveSummary
 	std::set<reflection::UnsavedValue> context;
 };
 
+/// A block of the whole world. The game's thread takes what the block needs now; the function makes the bytes of the
+/// block later, on the thread of the writer.
+struct PendingChunk
+{
+	gamesave::Tag tag {};
+	std::function<std::vector<uint8_t>()> bytes;
+};
+
 /// The blocks of the whole world, from the services of the game
-[[nodiscard]] std::vector<gamesave::Chunk> SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary);
+[[nodiscard]] std::vector<PendingChunk> SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary);
 
 /// Whether the file keeps the whole world, or only the creatures of an older save
 [[nodiscard]] bool HasWholeWorld(const gamesave::WorldFile& file);

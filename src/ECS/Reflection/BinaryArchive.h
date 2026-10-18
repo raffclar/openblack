@@ -323,6 +323,11 @@ void Save(BinaryWriter& out, const Type& value)
 		out.WriteSize(value.size());
 		out.Write({reinterpret_cast<const uint8_t*>(value.data()), value.size() * sizeof(typename Type::value_type)});
 	}
+	else if constexpr (detail::PlainBits<Type>())
+	{
+		// A glm vector or matrix of numbers: its bytes in memory are its numbers in order
+		out.WriteRaw(value);
+	}
 	else if constexpr (detail::k_IsGlmVector<Type> || detail::k_IsGlmMatrix<Type>)
 	{
 		for (glm::length_t i = 0; i < Type::length(); ++i)
@@ -337,6 +342,12 @@ void Save(BinaryWriter& out, const Type& value)
 		{
 			Save(out, *value);
 		}
+	}
+	else if constexpr (detail::k_IsPlainList<Type>)
+	{
+		// The same bytes as one value after the other, in one block
+		out.WriteSize(value.size());
+		out.Write({reinterpret_cast<const uint8_t*>(value.data()), value.size() * sizeof(typename Type::value_type)});
 	}
 	else if constexpr (detail::k_IsStdArray<Type>)
 	{
@@ -480,6 +491,10 @@ void Load(BinaryReader& in, Type& value)
 			std::memcpy(value.data(), taken->data(), taken->size());
 		}
 	}
+	else if constexpr (detail::PlainBits<Type>())
+	{
+		in.ReadRaw(value);
+	}
 	else if constexpr (detail::k_IsGlmVector<Type> || detail::k_IsGlmMatrix<Type>)
 	{
 		for (glm::length_t i = 0; i < Type::length(); ++i)
@@ -503,6 +518,25 @@ void Load(BinaryReader& in, Type& value)
 		{
 			in.Fail();
 		}
+	}
+	else if constexpr (detail::k_IsPlainList<Type>)
+	{
+		const auto size = in.ReadSize();
+		if (!size.has_value() || (detail::k_IsStdArray<Type> && *size != value.size()))
+		{
+			in.Fail();
+			return;
+		}
+		const auto taken = in.Take(*size * sizeof(typename Type::value_type));
+		if (!taken.has_value())
+		{
+			return;
+		}
+		if constexpr (detail::k_IsVector<Type>)
+		{
+			value.resize(*size);
+		}
+		std::memcpy(value.data(), taken->data(), taken->size());
 	}
 	else if constexpr (detail::k_IsStdArray<Type>)
 	{

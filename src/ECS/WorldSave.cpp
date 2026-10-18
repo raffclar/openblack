@@ -14,7 +14,11 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <exception>
+#include <functional>
+#include <iterator>
+#include <memory>
 #include <random>
 #include <sstream>
 #include <string>
@@ -23,6 +27,8 @@
 #include <vector>
 
 #include <LHVM.h>
+#include <LHVMFile.h>
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/CameraEdits.h"
@@ -89,8 +95,22 @@ std::string GeneratorText(const std::mt19937& generator)
 /// past the last turn, the two
 /// seeds of the game, the stream that particle effects draw from, the seed of the C library's generator, the seed of the run
 /// and the state of each stream of the run
-gamesave::Chunk ClockChunk()
+world_save::PendingChunk ClockChunk()
 {
+	// The generators are copied now. Their text, which takes long to make, is made on the thread of the writer.
+	std::vector<std::mt19937> generators;
+	uint32_t runSeed = 0;
+	if (Locator::rng::has_value())
+	{
+		auto& rng = Locator::rng::value();
+		runSeed = rng.GetRunSeed();
+		for (size_t stream = 0; stream < static_cast<size_t>(RandomStream::Count); ++stream)
+		{
+			generators.push_back(rng.Stream(static_cast<RandomStream>(stream)));
+		}
+		// Last, the general stream of the game's thread, which the weather and other systems draw from
+		generators.push_back(rng.GeneralStream());
+	}
 	const entt::meta_ctx context;
 	reflection::BinaryWriter out(context);
 	reflection::Save(out, Locator::time::has_value() ? Locator::time::value().GetSpeed() : 1.0f);
@@ -112,22 +132,24 @@ gamesave::Chunk ClockChunk()
 		reflection::Save(out, ParticleRandomStream::None);
 		reflection::Save(out, std::optional<uint32_t> {});
 	}
-	std::vector<std::string> streams;
-	uint32_t runSeed = 0;
-	if (Locator::rng::has_value())
-	{
-		auto& rng = Locator::rng::value();
-		runSeed = rng.GetRunSeed();
-		for (size_t stream = 0; stream < static_cast<size_t>(RandomStream::Count); ++stream)
-		{
-			streams.push_back(GeneratorText(rng.Stream(static_cast<RandomStream>(stream))));
-		}
-	}
 	reflection::Save(out, runSeed);
-	reflection::Save(out, streams);
-	// The general stream of the game's thread, which the weather and other systems draw from
-	reflection::Save(out, Locator::rng::has_value() ? GeneratorText(Locator::rng::value().GeneralStream()) : std::string {});
-	return {.tag = gamesave::k_ClockTag, .bytes = std::move(out.Bytes())};
+	auto head = std::make_shared<std::vector<uint8_t>>(std::move(out.Bytes()));
+	auto copies = std::make_shared<const std::vector<std::mt19937>>(std::move(generators));
+	return {.tag = gamesave::k_ClockTag, .bytes = [head, copies]() {
+		        const entt::meta_ctx later;
+		        reflection::BinaryWriter rest(later);
+		        rest.Write(*head);
+		        std::vector<std::string> streams;
+		        std::string general;
+		        if (!copies->empty())
+		        {
+			        std::transform(copies->begin(), copies->end() - 1, std::back_inserter(streams), GeneratorText);
+			        general = GeneratorText(copies->back());
+		        }
+		        reflection::Save(rest, streams);
+		        reflection::Save(rest, general);
+		        return std::move(rest.Bytes());
+	        }};
 }
 
 bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
@@ -322,28 +344,50 @@ void LogNames(std::string_view what, const Range& names)
 
 } // namespace
 
-std::vector<gamesave::Chunk> world_save::SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary)
+std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary)
 {
-	std::vector<gamesave::Chunk> chunks;
+	std::vector<PendingChunk> chunks;
 	const auto& registry = Locator::entitiesRegistry::value();
-	chunks.push_back(
-	    {.tag = gamesave::k_EntitiesTag, .bytes = reflection::SaveWorld(registry.Underlying(), reflection, &summary.world)});
-	chunks.push_back(
-	    {.tag = gamesave::k_ContextTag, .bytes = reflection::SaveValue(reflection, registry.Context(), &summary.context)});
-	chunks.push_back(ClockChunk());
+	// The time that each block takes on the game's thread
+	auto last = std::chrono::steady_clock::now();
+	std::string times;
+	const auto timed = [&last, &times, &chunks](PendingChunk chunk) {
+		const auto now = std::chrono::steady_clock::now();
+		times += fmt::format(" {}={:.1f}", std::string_view(chunk.tag.data(), chunk.tag.size()),
+		                     std::chrono::duration<float, std::milli>(now - last).count());
+		last = now;
+		chunks.push_back(std::move(chunk));
+	};
+	const auto ready = [](gamesave::Tag tag, std::vector<uint8_t> bytes) {
+		return PendingChunk {
+		    .tag = tag, .bytes = [made = std::make_shared<const std::vector<uint8_t>>(std::move(bytes))]() { return *made; }};
+	};
+	timed(ready(gamesave::k_EntitiesTag, reflection::SaveWorld(registry.Underlying(), reflection, &summary.world)));
+	timed(ready(gamesave::k_ContextTag, reflection::SaveValue(reflection, registry.Context(), &summary.context)));
+	timed(ClockChunk());
 	if (Locator::camera::has_value())
 	{
-		chunks.push_back(CameraChunk());
+		const auto camera = CameraChunk();
+		timed(ready(camera.tag, camera.bytes));
 	}
 	if (Locator::vm::has_value())
 	{
-		chunks.push_back({.tag = gamesave::k_ScriptTag, .bytes = Locator::vm::value().SaveState()});
+		// The scripts' program and state are copied now, and written out as a script file on the thread of the writer
+		timed({.tag = gamesave::k_ScriptTag,
+		       .bytes = [file = std::make_shared<const lhvm::LHVMFile>(Locator::vm::value().StateFile())]() {
+			       std::ostringstream stream(std::ios::binary);
+			       file->Write(stream);
+			       const auto text = stream.str();
+			       return std::vector<uint8_t>(text.begin(), text.end());
+		       }});
 	}
 	if (Locator::scriptObjects::has_value())
 	{
-		chunks.push_back({.tag = gamesave::k_ScriptObjectsTag, .bytes = Locator::scriptObjects::value().SaveTable()});
+		timed(ready(gamesave::k_ScriptObjectsTag, Locator::scriptObjects::value().SaveTable()));
 	}
-	chunks.push_back(SystemsChunk(reflection));
+	const auto systems = SystemsChunk(reflection);
+	timed(ready(systems.tag, systems.bytes));
+	SPDLOG_LOGGER_INFO(Log(), "The saved world's blocks took (ms):{}", times);
 	SPDLOG_LOGGER_INFO(Log(), "The saved world keeps {} entities with {} components", summary.world.entities,
 	                   summary.world.components);
 	LogNames("components with no registration", summary.world.unregisteredComponents);
