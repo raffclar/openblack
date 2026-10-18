@@ -17,6 +17,7 @@
 #include <glm/vec2.hpp>
 
 #include "ECS/Components/Weather.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::ecs
 {
@@ -29,7 +30,7 @@ namespace openblack::ecs::systems
 class ObjectDrawListSystemInterface;
 
 /// The snow lying on the island (see snow_cover): the storms that snow pile it up and it melts away
-class SnowSystemInterface
+class SnowSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~SnowSystemInterface() = default;

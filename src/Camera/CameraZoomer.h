@@ -46,6 +46,15 @@ private:
 	float _c1 {0.0f};
 	float _c2 {0.0f};
 	float _c3 {0.0f};
+
+public:
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._value, self._speed, self._destination, self._destinationSpeed, self._time, self._duration, self._startValue,
+		      self._startSpeed, self._c1, self._c2, self._c3);
+	}
 };
 
 } // namespace openblack::camera

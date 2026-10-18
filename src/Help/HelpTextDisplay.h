@@ -147,6 +147,13 @@ private:
 		std::u16string text;
 		float number {0.0f}; ///< The value of $P / $D
 		int32_t narrator {0};
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.used, self.text, self.number, self.narrator);
+		}
 	};
 
 	/// Everything Layout reads, as of the frame in _layoutFrame
@@ -186,6 +193,15 @@ private:
 	// CachedLayout's last frame and its inputs (none before the first call)
 	mutable std::optional<LayoutInputs> _layoutInputs;
 	mutable TextFrame _layoutFrame;
+
+public:
+	/// Gives the values that a saved game keeps to a visitor. The layout is worked out again when it is next drawn.
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._entries, self._newest, self._baseLineHeight, self._lineHeightFraction, self._anim, self._hidden,
+		      self._singleLine, self._boxShown, self._drawable, self._f1Loaded, self._f3Loaded);
+	}
 };
 
 } // namespace openblack::help

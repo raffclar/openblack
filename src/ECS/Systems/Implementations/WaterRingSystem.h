@@ -23,6 +23,8 @@ namespace openblack::ecs::systems
 class WaterRingSystem final: public WaterRingSystemInterface
 {
 public:
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	void Reset() override
 	{
 		_rings.clear();

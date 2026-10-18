@@ -46,6 +46,13 @@ struct ScreenText
 	float alpha {0.0f};
 	float target {0.0f};
 	float rate {0.0f};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.words, self.corner, self.extent, self.size, self.colour, self.alpha, self.target, self.rate);
+	}
 };
 
 /// A text in the scripts' colour, fading in over `fadeSeconds`, or shown at once for none

@@ -17,6 +17,7 @@
 #include <glm/vec2.hpp>
 
 #include "Common/GameHeading.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::creature_route
 {
@@ -30,7 +31,7 @@ namespace openblack::ecs::systems
 /// Gets the creatures about the land: they plan routes round what is in their way, walk and run along them, turn and
 /// step off, and are drawn moving smoothly between game turns (see components::CreatureLocomotion). Minds and the
 /// debug tools tell them where to go.
-class CreatureLocomotionSystemInterface
+class CreatureLocomotionSystemInterface: public SavedStateInterface
 {
 public:
 	/// What became of a request to move

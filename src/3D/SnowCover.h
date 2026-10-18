@@ -50,6 +50,13 @@ struct Melting
 {
 	float clock {0.0f};
 	int32_t band {0};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.clock, self.band);
+	}
 };
 /// The melting clock after `seconds` more, melting each band whose turn has come
 void Melt(std::span<float> grid, Melting& melting, float seconds);

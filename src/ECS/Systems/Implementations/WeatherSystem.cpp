@@ -27,6 +27,7 @@
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptWeatherRules.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -275,6 +276,38 @@ WeatherSystem::WeatherSystem()
 	_startTurn = start;
 
 	_grid.resize(k_GridSize * k_GridSize);
+}
+
+void WeatherSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	// The grid of the atmosphere is worked out again from the storms and the climates when it is next needed
+	reflection::Save(out, _climateSystemEnabled);
+	reflection::Save(out, _stormCreationEnabled);
+	reflection::Save(out, _turn);
+	reflection::Save(out, _day);
+	reflection::Save(out, _season);
+	reflection::Save(out, _activeStorms);
+	reflection::Save(out, _nextStormSerial);
+	reflection::Save(out, _forcedStorm);
+}
+
+bool WeatherSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _climateSystemEnabled);
+	reflection::Load(in, _stormCreationEnabled);
+	reflection::Load(in, _turn);
+	reflection::Load(in, _day);
+	reflection::Load(in, _season);
+	reflection::Load(in, _activeStorms);
+	reflection::Load(in, _nextStormSerial);
+	reflection::Load(in, _forcedStorm);
+	// Every cell of the atmosphere is stale
+	for (auto& cell : _grid)
+	{
+		cell.stamp = 0;
+	}
+	_stamp = 1;
+	return !in.Failed();
 }
 
 void WeatherSystem::Reset()

@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -118,6 +119,9 @@ struct FieldInfo
 	/// Writes the value of the field to the binary archive; none for a field that the archive does not keep, such as a
 	/// value that is only read through a function
 	void (*save)(const entt::meta_any& value, BinaryWriter& out) {nullptr};
+	/// Writes the value of the field straight from the value that holds it, with no reflection on the way: the same
+	/// bytes as save, at a lower cost. None when only save can write it.
+	void (*saveFrom)(const void* owner, BinaryWriter& out) {nullptr};
 	/// Reads the value of the field of the instance from the binary archive
 	void (*load)(const entt::meta_data& data, entt::meta_any& instance, BinaryReader& in) {nullptr};
 #if defined(OPENBLACK_INSPECTOR)
@@ -324,6 +328,7 @@ public:
 				        Save(out, *value);
 			        }
 		        },
+		    .saveFrom = [](const void* owner, BinaryWriter& out) { Save(out, static_cast<const Type*>(owner)->*Member); },
 		    .load =
 		        [](const entt::meta_data& data, entt::meta_any& instance, BinaryReader& in) {
 			        auto field = data.get(instance);
@@ -372,6 +377,9 @@ public:
 				{
 					Save(out, *value);
 				}
+			};
+			info.saveFrom = [](const void* owner, BinaryWriter& out) {
+				Save(out, static_cast<Value>(std::invoke(Getter, *static_cast<const Type*>(owner))));
 			};
 			info.load = [](const entt::meta_data& data, entt::meta_any& instance, BinaryReader& in) {
 				Value value {};

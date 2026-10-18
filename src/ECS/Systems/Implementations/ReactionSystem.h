@@ -46,6 +46,9 @@ public:
 	void ProcessTurn() override;
 	[[nodiscard]] uint32_t CurrentTurn() const override { return _turn; }
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
+
 	void GiveTownBelief(entt::entity town, PlayerNames player, float amount, entt::entity from,
 	                    GuidanceAlignment alignment) override;
 	void SetLandBalance(Balance which, float balance) override { _landBalances.at(static_cast<size_t>(which)) = balance; }

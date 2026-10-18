@@ -26,6 +26,8 @@ namespace openblack::ecs::systems
 class HelpMessageSystem final: public HelpMessageSystemInterface
 {
 public:
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	bool RunMessage(uint32_t first, uint32_t last, help_messages::Script script,
 	                std::optional<std::pair<uint32_t, float>> townNeed = std::nullopt) override;
 	bool RunMessageSet(size_t set, std::optional<help_messages::Texts> thing = std::nullopt) override;

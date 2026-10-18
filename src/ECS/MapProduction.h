@@ -58,6 +58,9 @@ public:
 	void Sync() override;
 	void Refile(entt::entity entity) override;
 	void FileResidents() override;
+	/// Keeps the order of the things in each cell and each block, and the things made since the last sync
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 	/// How a thing goes into the cells, by what it is
 	struct Kind

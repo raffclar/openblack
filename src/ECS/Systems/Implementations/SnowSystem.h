@@ -30,6 +30,9 @@ public:
 	SnowSystem();
 
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
+
 	void ProcessTurn(std::span<const components::Storm> storms) override;
 	void Cover(float depth) override;
 	void StepObjects(Registry& registry, const ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,

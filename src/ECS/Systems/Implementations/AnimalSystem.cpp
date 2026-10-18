@@ -56,6 +56,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlockRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -124,6 +125,21 @@ constexpr float k_ScriptAnimalTownReach = 500.0f;
 } // namespace
 
 /// By the game's table of the animals' states
+void AnimalSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _turn);
+	reflection::Save(out, _flocksMade);
+	reflection::Save(out, _soundPace);
+}
+
+bool AnimalSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _turn);
+	reflection::Load(in, _flocksMade);
+	reflection::Load(in, _soundPace);
+	return !in.Failed();
+}
+
 bool AnimalSystem::SeesToNeedsIn(AnimalState state)
 {
 	return Locator::infoConstants::value().animalStateTable.at(GameStateOf(state)).field0xa4 != 0;

@@ -68,6 +68,7 @@
 #include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/Map.h"
 #include "ECS/PosedModel.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -1883,6 +1884,22 @@ std::vector<FireSystemInterface::FireInfo> FireSystem::GetFires() const
 		});
 	}
 	return fires;
+}
+
+void FireSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	// The sounds are not kept: the next turn gives the nearest fires their sounds again
+	reflection::Save(out, _fires);
+	reflection::Save(out, _burnPointTurn);
+	reflection::Save(out, _pace);
+}
+
+bool FireSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _fires);
+	reflection::Load(in, _burnPointTurn);
+	reflection::Load(in, _pace);
+	return !in.Failed();
 }
 
 void FireSystem::Reset()

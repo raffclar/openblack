@@ -143,9 +143,11 @@ void openblack::ecs::reflection::RegisterHandWrittenFields(entt::meta_ctx& conte
 	    .Property<&reaction::Memory::Records, &reaction::Memory::SetRecords>("records");
 	Reflect<creature_object_beliefs::Store>(context, ValueOnly {})
 	    .Property<&creature_object_beliefs::Store::Contents, &creature_object_beliefs::Store::SetContents>("contents");
+	// A creature's walk keeps its route, its searches and what it walks round whole, so that a load carries on the walk
 	Reflect<creature_route::Follower>(context, ValueOnly {})
 	    .Property<&creature_route::Follower::GetState, nullptr>("state")
 	    .Property<&creature_route::Follower::GetRoute, nullptr>("route")
 	    .Property<&creature_route::Follower::GetPosition, nullptr>("position")
-	    .Property<&creature_route::Follower::GetSearchCount, nullptr>("searches");
+	    .Property<&creature_route::Follower::GetSearchCount, nullptr>("searches")
+	    .Codec<&SaveVisited<creature_route::Follower>, &LoadVisited<creature_route::Follower>>();
 }

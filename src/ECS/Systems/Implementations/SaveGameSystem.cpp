@@ -136,21 +136,6 @@ std::optional<std::filesystem::path> PlayerFolder()
 	return player->lexically_relative(*root);
 }
 
-bool WriteFile(const std::filesystem::path& relativeFolder, std::string_view file, std::span<const uint8_t> bytes)
-{
-	const auto folder = Locator::profileFolderSystem::value().MakeFolder(relativeFolder);
-	if (!folder.has_value() || !Locator::filesystem::has_value())
-	{
-		return false;
-	}
-	const auto written = Locator::filesystem::value().WriteAll(*folder / file, bytes);
-	if (!written)
-	{
-		SPDLOG_LOGGER_WARN(Log(), "The game could not write {}", (*folder / file).generic_string());
-	}
-	return written;
-}
-
 std::optional<std::vector<uint8_t>> ReadFile(const std::filesystem::path& path)
 {
 	return ecs::save_files::ReadFile(path);
@@ -197,20 +182,19 @@ std::u16string DateNow()
 	}
 }
 
-/// Writes a mind file of the saved game through the mind file component
-bool WriteMind(const std::filesystem::path& relativeFolder, std::string_view file, const creaturemind::MindFileData& mind)
+/// Gives the writer of the saved game a job that writes a mind file through the mind file component
+bool QueueMind(ecs::save_files::BackgroundWriter& writer, const std::filesystem::path& relativeFolder, std::string_view file,
+               creaturemind::MindFileData mind)
 {
 	const auto folder = Locator::profileFolderSystem::value().MakeFolder(relativeFolder);
 	if (!folder.has_value())
 	{
 		return false;
 	}
-	const auto result = creaturemind::WriteFile(*folder / file, mind);
-	if (result != creaturemind::MindResult::Success)
-	{
-		SPDLOG_LOGGER_WARN(Log(), "The game could not write the mind file {}", (*folder / file).generic_string());
-		return false;
-	}
+	auto path = *folder / file;
+	writer.Queue(path.generic_string(), [path, mind = std::make_shared<const creaturemind::MindFileData>(std::move(mind))]() {
+		return creaturemind::WriteFile(path, *mind) == creaturemind::MindResult::Success;
+	});
 	return true;
 }
 
@@ -733,6 +717,41 @@ bool IsOpenLand(std::string_view landscape)
 }
 } // namespace
 
+ecs::save_files::BackgroundWriter& SaveGameSystem::Writer() const
+{
+	if (!_writer)
+	{
+		_writer = std::make_unique<ecs::save_files::BackgroundWriter>(
+		    [](const std::string& name) { SPDLOG_LOGGER_WARN(Log(), "The game could not write {}", name); });
+	}
+	return *_writer;
+}
+
+void SaveGameSystem::FlushWrites() const
+{
+	if (_writer)
+	{
+		_writer->Flush();
+	}
+}
+
+bool SaveGameSystem::QueueFile(const std::filesystem::path& relativeFolder, std::string_view file,
+                               std::function<std::vector<uint8_t>()> contents)
+{
+	const auto folder = Locator::profileFolderSystem::value().MakeFolder(relativeFolder);
+	if (!folder.has_value() || !Locator::filesystem::has_value())
+	{
+		return false;
+	}
+	auto* files = &Locator::filesystem::value();
+	auto path = *folder / file;
+	Writer().Queue(path.generic_string(), [files, path, contents = std::move(contents)]() {
+		const auto bytes = contents();
+		return files->WriteAll(path, bytes);
+	});
+	return true;
+}
+
 bool SaveGameSystem::Save(uint32_t slot, std::u16string_view name)
 {
 	return SaveSlot(slot, name, true);
@@ -746,6 +765,7 @@ bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putP
 		SPDLOG_LOGGER_WARN(Log(), "The game cannot save into slot {}: no slot or no player folder", slot);
 		return false;
 	}
+	const auto started = std::chrono::steady_clock::now();
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto land = LandNumber();
 	const auto slotFolder = *player / gamesave::SlotFolder(slot, land);
@@ -794,22 +814,35 @@ bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putP
 		// Each creature's mind goes in a mind file of its own beside the world file, named by the creature's index
 		if (Locator::creatureMindSystem::has_value())
 		{
-			if (const auto mind = Locator::creatureMindSystem::value().SaveMind(entity); mind.has_value())
+			if (auto mind = Locator::creatureMindSystem::value().SaveMind(entity); mind.has_value())
 			{
-				written =
-				    WriteMind(mindFolder, gamesave::SavedCreatureFileName(creature.creature.creature.index), *mind) && written;
+				written = QueueMind(Writer(), mindFolder, gamesave::SavedCreatureFileName(creature.creature.creature.index),
+				                    std::move(*mind)) &&
+				          written;
 			}
 		}
 		saved.push_back(std::move(creature));
 		savedEntities.push_back(entity);
 	}
 	const auto chunks = gamesave::ToChunks(saved);
+	const auto creaturesDone = std::chrono::steady_clock::now();
 	world.chunks.insert(world.chunks.end(), chunks.begin(), chunks.end());
 	// Then the whole world in openblack's own layout
 	ecs::world_save::SaveSummary summary;
-	const auto whole = ecs::world_save::SaveWorld(Reflection(), summary);
-	world.chunks.insert(world.chunks.end(), whole.begin(), whole.end());
-	written = WriteFile(slotFolder, gamesave::WorldFileName(slot), gamesave::Write(world)) && written;
+	const auto worldStarted = std::chrono::steady_clock::now();
+	auto whole =
+	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
+	// The writer makes the last blocks and puts the blocks together into the file on its own thread
+	written = QueueFile(slotFolder, gamesave::WorldFileName(slot),
+	                    [world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole]() {
+		                    for (const auto& pending : *whole)
+		                    {
+			                    world->chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
+		                    }
+		                    whole->clear();
+		                    return gamesave::Write(*world);
+	                    }) &&
+	          written;
 
 	// A game that came from a file of the game also goes back into that file's layout: the file as it was, with the
 	// records of its creatures and their leashes as openblack has them now
@@ -823,9 +856,14 @@ bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putP
 		PutSlotPicture(slot);
 	}
 	const gamesave::SaveGameInfo info {.slot = slot, .date = DateNow(), .name = std::u16string(name)};
-	written = WriteFile(slotFolder, gamesave::k_InfoFileName, gamesave::Write(info)) && written;
-	SPDLOG_LOGGER_INFO(Log(), "Saved the game into slot {} with {} creatures{}", slot, creatures.size(),
-	                   written ? "" : ", but a file could not be written");
+	written = QueueFile(slotFolder, gamesave::k_InfoFileName, [bytes = gamesave::Write(info)]() { return bytes; }) && written;
+	const auto ms = [](auto from, auto to) { return std::chrono::duration<float, std::milli>(to - from).count(); };
+	const auto ended = std::chrono::steady_clock::now();
+	SPDLOG_LOGGER_INFO(Log(),
+	                   "Saved the game into slot {} with {} creatures in {:.1f} ms on the game's thread (creatures {:.1f}, "
+	                   "world {:.1f}){}",
+	                   slot, creatures.size(), ms(started, ended), ms(started, creaturesDone), ms(worldStarted, ended),
+	                   written ? "" : ", but a folder could not be made");
 	return written;
 }
 
@@ -907,12 +945,16 @@ bool SaveGameSystem::WriteVanilla(uint32_t slot, const std::filesystem::path& sl
 	}
 	// A complete save has no attempt to load it yet
 	std::fill_n(bytes.begin(), std::min<size_t>(bytes.size(), sizeof(uint32_t)), uint8_t {0});
-	bool written = WriteFile(slotFolder, gamesave::VanillaWorldFileName(slot), bytes);
+	bool written = QueueFile(slotFolder, gamesave::VanillaWorldFileName(slot), [kept = std::move(bytes)]() { return kept; });
 	// The game loads the script machine from the file beside the world file. openblack does not write it yet, so the
-	// save keeps the file of the game's save as it was.
-	if (const auto script = ReadFile(origin.folder / gamesave::VanillaScriptFileName(origin.slot)); script.has_value())
+	// save keeps the file of the game's save as it was. The file of the game's save can be a file that the writer
+	// writes now.
+	FlushWrites();
+	if (auto script = ReadFile(origin.folder / gamesave::VanillaScriptFileName(origin.slot)); script.has_value())
 	{
-		written = WriteFile(slotFolder, gamesave::VanillaScriptFileName(slot), *script) && written;
+		written =
+		    QueueFile(slotFolder, gamesave::VanillaScriptFileName(slot), [kept = std::move(*script)]() { return kept; }) &&
+		    written;
 	}
 	SPDLOG_LOGGER_INFO(Log(), "Wrote {} records into the game's file of slot {}", edits.size(), slot);
 	return written;
@@ -920,6 +962,7 @@ bool SaveGameSystem::WriteVanilla(uint32_t slot, const std::filesystem::path& sl
 
 bool SaveGameSystem::Load(uint32_t slot)
 {
+	FlushWrites();
 	const auto player = PlayerFolder();
 	if (!gamesave::IsSlot(slot) || !player.has_value())
 	{
@@ -1043,7 +1086,7 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 		return false;
 	}
 	// The clock, the random numbers and the scripts go on from the saved turn once the land has started
-	if (!ecs::world_save::LoadRunningState(world, game.turn))
+	if (!ecs::world_save::LoadRunningState(reflection, world, game.turn))
 	{
 		SPDLOG_LOGGER_WARN(Log(), "A part of the running state of slot {} did not read", slot);
 	}
@@ -1231,6 +1274,7 @@ std::vector<SaveGameSystem::VanillaCheck> SaveGameSystem::CheckVanillaRecords() 
 
 std::vector<SaveGameSystem::Slot> SaveGameSystem::Slots() const
 {
+	FlushWrites();
 	std::vector<Slot> slots;
 	const auto player = PlayerFolder();
 	if (!player.has_value())
@@ -1322,6 +1366,8 @@ bool SaveGameSystem::Delete(uint32_t slot)
 
 std::optional<std::vector<uint8_t>> SaveGameSystem::ReadPictureFile(std::string_view name) const
 {
+	// The writer can still write a picture file
+	FlushWrites();
 	const auto player = PlayerFolder();
 	if (!player.has_value())
 	{
@@ -1415,7 +1461,10 @@ bool SaveGameSystem::SaveOnExit()
 	const std::vector<uint8_t> black(
 	    static_cast<size_t>(gamesave::k_ScreenPictureWidth) * gamesave::k_ScreenPictureHeight * gamesave::k_TexelSize, 0);
 	WriteTemporaryPicture(black);
-	return SaveSlot(gamesave::k_ExitSlot, InstantName(gamesave::k_ExitSlot), true);
+	// The game closes next: every file is on the disk before it does
+	const bool written = SaveSlot(gamesave::k_ExitSlot, InstantName(gamesave::k_ExitSlot), true);
+	FlushWrites();
+	return written;
 }
 
 void SaveGameSystem::EndTurn()
@@ -1536,8 +1585,19 @@ void SaveGameSystem::WriteTemporaryPicture(std::span<const uint8_t> screenPictur
 	{
 		return;
 	}
-	const auto old = ReadPictureFile(gamesave::k_TemporaryPictureFileName);
-	WriteFile(*folder, gamesave::k_TemporaryPictureFileName, gamesave::MakeTemporaryPicture(View(old), screenPicture));
+	const auto made = Locator::profileFolderSystem::value().MakeFolder(*folder);
+	if (!made.has_value() || !Locator::filesystem::has_value())
+	{
+		return;
+	}
+	// The writer reads the old picture file and writes the new one on its own thread, after the files before it
+	auto* files = &Locator::filesystem::value();
+	const auto path = *made / gamesave::k_TemporaryPictureFileName;
+	Writer().Queue(path.generic_string(),
+	               [files, path, screen = std::vector<uint8_t>(screenPicture.begin(), screenPicture.end())]() {
+		               const auto old = ReadFile(path);
+		               return files->WriteAll(path, gamesave::MakeTemporaryPicture(View(old), screen));
+	               });
 }
 
 void SaveGameSystem::PutSlotPicture(uint32_t slot)
@@ -1547,12 +1607,22 @@ void SaveGameSystem::PutSlotPicture(uint32_t slot)
 	{
 		return;
 	}
-	const auto largeName = gamesave::LargePictureFileName(slot);
-	const auto smallName = gamesave::SmallPictureFileName(slot);
-	const auto temporary = ReadPictureFile(gamesave::k_TemporaryPictureFileName);
-	const auto large = ReadPictureFile(largeName);
-	const auto small = ReadPictureFile(smallName);
-	const auto files = gamesave::PutSlotPictures(View(temporary), View(large), View(small), slot);
-	WriteFile(*folder, largeName, files.large);
-	WriteFile(*folder, smallName, files.small);
+	const auto made = Locator::profileFolderSystem::value().MakeFolder(*folder);
+	if (!made.has_value() || !Locator::filesystem::has_value())
+	{
+		return;
+	}
+	// The writer copies the temporary picture into the slot's cells on its own thread, after the files before it
+	auto* files = &Locator::filesystem::value();
+	const auto pictures = *made;
+	Writer().Queue((pictures / gamesave::LargePictureFileName(slot)).generic_string(), [files, pictures, slot]() {
+		const auto largePath = pictures / gamesave::LargePictureFileName(slot);
+		const auto smallPath = pictures / gamesave::SmallPictureFileName(slot);
+		const auto temporary = ReadFile(pictures / gamesave::k_TemporaryPictureFileName);
+		const auto large = ReadFile(largePath);
+		const auto small = ReadFile(smallPath);
+		const auto put = gamesave::PutSlotPictures(View(temporary), View(large), View(small), slot);
+		const bool largeWritten = files->WriteAll(largePath, put.large);
+		return files->WriteAll(smallPath, put.small) && largeWritten;
+	});
 }

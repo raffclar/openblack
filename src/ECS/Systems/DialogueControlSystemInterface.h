@@ -13,12 +13,14 @@
 
 #include <functional>
 
+#include "ECS/Systems/SavedStateInterface.h"
+
 namespace openblack::ecs::systems
 {
 
 /// Which script task has the dialogue: the advisors' talk and the help text. A task takes it for its cut scenes and
 /// help, and gives it back when done or when it stops. The help system hears of it through the hooks.
-class DialogueControlSystemInterface
+class DialogueControlSystemInterface: public SavedStateInterface
 {
 public:
 	/// What the help system does as the dialogue changes hands

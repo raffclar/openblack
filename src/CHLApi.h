@@ -18,6 +18,7 @@
 #include <LHVMTypes.h>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "ScriptHeaders/NativeStubCalls.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 
@@ -32,7 +33,7 @@ namespace openblack::chlapi
 using openblack::lhvm::DataType;
 using openblack::lhvm::VMValue;
 
-class CHLApi
+class CHLApi: public ecs::systems::SavedStateInterface
 {
 public:
 	CHLApi();
@@ -72,6 +73,9 @@ public:
 	/// The scripts start again: their switches go back to how a new game has them, the game's sound effects on, every
 	/// creature heard in its own voice and no lesson of growing up running for the local player's creature
 	void ResetSwitches();
+	/// Keeps the switches that the scripts set: the game's sounds, the highlights and the scripts' help
+	void SaveState(ecs::reflection::BinaryWriter& out) const override;
+	bool LoadState(ecs::reflection::BinaryReader& in) override;
 
 	/// Whether the scripts show the challenge scrolls; the signs always show
 	[[nodiscard]] bool IsHighlightDrawOn() const { return _highlightDrawOn; }

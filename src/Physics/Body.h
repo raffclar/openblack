@@ -61,6 +61,13 @@ struct Ellipsoid
 	glm::vec3 boxMax {0.0f};
 	glm::mat4 localToWorld {1.0f};
 	glm::mat4 worldToLocal {1.0f};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.boxMin, self.boxMax, self.localToWorld, self.worldToLocal);
+	}
 };
 
 /// Where a line through a point first meets something
@@ -134,6 +141,15 @@ public:
 		glm::vec3 anchor {0.0f};
 		/// The body whose face it hits, none for the land
 		Body* other {nullptr};
+
+		/// Gives the values that a saved game keeps to a visitor. The body that it hits is kept apart, by its place in the
+		/// physics.
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.local, self.length, self.aheadLength, self.world, self.contact, self.normal, self.depth, self.firstDepth,
+			      self.anchor);
+		}
 	};
 
 	struct Face
@@ -141,6 +157,13 @@ public:
 		std::array<uint32_t, 3> indices {};
 		glm::vec3 localNormal {0.0f};
 		glm::vec3 worldNormal {0.0f};
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.indices, self.localNormal, self.worldNormal);
+		}
 	};
 
 	Body(const BodySetup& setup, const Shape& shape);
@@ -199,6 +222,8 @@ public:
 	[[nodiscard]] glm::vec3 AngularVelocity() const;
 
 	[[nodiscard]] const std::vector<Point>& Points() const { return _points; }
+	/// Sets the body whose face a point hits, as a load of a saved game links the bodies again
+	void SetPointOther(size_t index, Body* other) { _points.at(index).other = other; }
 	[[nodiscard]] const std::vector<Face>& Faces() const { return _faces; }
 	[[nodiscard]] const std::vector<Ellipsoid>& Skeleton() const { return _bones; }
 	/// Unit axes of the body in the world
@@ -276,6 +301,20 @@ private:
 	std::vector<Point> _points;
 	std::vector<Face> _faces;
 	std::vector<Ellipsoid> _bones;
+
+public:
+	/// Gives the values that a saved game keeps to a visitor. The last body that it touched is kept apart, by its place
+	/// in the physics.
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.velocity, self.angularMomentum, self.externalForce, self.externalTorque, self.density, self.resting,
+		      self.touched, self.inWater, self.justSetUp, self._scale, self._axes, self._centre, self._turnStartAxes,
+		      self._turnStartCentre, self._aheadCentre, self._centreOfMass, self._speed, self._mass, self._stiffness,
+		      self._damping, self._friction, self._spinKeptPerStep, self._drag, self._radius, self._dynamic, self._contacts,
+		      self._restCounter, self._force, self._torque, self._inertia, self._inverseInertia, self._points, self._faces,
+		      self._bones);
+	}
 };
 
 /// The cosine and sine of a quarter turn as the game rounds them to floats: the cosine is not quite zero

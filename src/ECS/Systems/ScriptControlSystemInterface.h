@@ -15,6 +15,8 @@
 
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
+
 namespace openblack
 {
 class Camera;
@@ -27,7 +29,7 @@ namespace openblack::ecs::systems
 /// Which script task has the camera and which has the game's speed. A task takes the camera for a cut scene: its model
 /// replaces the player's, the script moves it, and the player gets a camera of their own back from where it is when the
 /// task is done or stops. Inside the temple the temple's own scripts may take control without the camera changing.
-class ScriptControlSystemInterface
+class ScriptControlSystemInterface: public SavedStateInterface
 {
 public:
 	using GroundHeight = std::function<float(float x, float z)>;
@@ -77,6 +79,13 @@ public:
 	{
 		glm::vec3 origin {0.0f};
 		glm::vec3 focus {0.0f};
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.origin, self.focus);
+		}
 	};
 	/// A script keeps where the camera is and where it looks. A new store replaces the last one.
 	virtual void StoreCameraDetails(const CameraDetails& details) = 0;

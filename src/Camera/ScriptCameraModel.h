@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <numbers>
@@ -114,6 +115,13 @@ struct FollowSettings
 	float zoomTimeScale {k_ScriptFollowSeconds};
 	/// The heading turns with the way the thing faces
 	bool relativeHeading {true};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.heading, self.pitch, self.viewingDistance, self.zoomTimeScale, self.relativeHeading);
+	}
 };
 
 /// The seconds a following camera's glides take, some seconds after it began
@@ -170,6 +178,13 @@ struct DualThing
 	float height;
 	/// Its radius on the ground
 	float radius;
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.position, self.height, self.radius);
+	}
 };
 /// How the two-thing camera is turned and how far it is zoomed out
 struct DualSettings
@@ -177,6 +192,13 @@ struct DualSettings
 	float heading {k_DualHeading};
 	float pitch {k_DualPitch};
 	float zoom {k_DualZoom};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.heading, self.pitch, self.zoom);
+	}
 };
 /// The seconds the two-thing camera's glides take, some seconds after it began
 [[nodiscard]] float DualSeconds(float secondsSinceBegun);
@@ -218,7 +240,7 @@ public:
 	/// The camera runs one of the camera editor's tracks from its start: each frame it is put where the track's camera is
 	/// after the time run so far, looking where the track's look-at way is at the same point of its curve. It stops
 	/// looking at a thing; any following goes on. With no track it only stops looking at a thing.
-	void RunTrack(std::shared_ptr<const edt::EDTTrack> track);
+	void RunTrack(std::shared_ptr<const edt::EDTTrack> track, std::optional<int32_t> number = std::nullopt);
 	/// Whether it is running a track
 	[[nodiscard]] bool OnTrack() const { return _track != nullptr; }
 	/// A track runs on the game's time, not the camera's: the frame's game time is passed on before the frame's update,
@@ -269,6 +291,58 @@ public:
 	/// last seen. When the one on top lets go, the one below, or the script's own, takes over again.
 	void LetGoOfGoneThings();
 
+	/// What a saved game keeps of a two-thing camera: its two things by their numbers, how it is turned, and where it
+	/// last saw the things
+	struct SavedDual
+	{
+		uint32_t first {0};
+		uint32_t second {0};
+		script_camera::DualSettings settings;
+		std::optional<script_camera::DualThing> lastFirst;
+		std::optional<script_camera::DualThing> lastSecond;
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.first, self.second, self.settings, self.lastFirst, self.lastSecond);
+		}
+	};
+	/// What a saved game keeps of the script's camera. The things that it follows and looks at are kept by their
+	/// numbers, and its track by the number of the track in the camera editor's file.
+	struct Saved
+	{
+		std::array<camera::Zoomer, 3> origin;
+		std::array<camera::Zoomer, 3> focus;
+		std::optional<uint32_t> followedId;
+		std::optional<uint32_t> lookedAtId;
+		script_camera::FollowSettings follow;
+		float seconds {0.0f};
+		std::optional<int32_t> trackNumber;
+		/// Where the runner is along the track. A save needs the definition of the runner, in "3D/CameraTrack.h".
+		std::shared_ptr<camera_track::WayRunner> trackRunner;
+		std::chrono::milliseconds trackTime {0};
+		std::vector<SavedDual> duals;
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.origin, self.focus, self.followedId, self.lookedAtId, self.follow, self.seconds, self.trackNumber,
+			      self.trackRunner, self.trackTime, self.duals);
+		}
+	};
+	/// How a load finds the things and the track of a saved camera again, by their numbers
+	struct Lookups
+	{
+		std::function<ThingLookup(uint32_t id)> thing;
+		std::function<DualLookup(uint32_t id)> dual;
+		std::function<std::shared_ptr<const edt::EDTTrack>(int32_t number)> track;
+	};
+	[[nodiscard]] Saved GetSaved() const;
+	/// Puts the camera back as a save kept it. A track that the file no longer has stops.
+	void Restore(const Saved& saved, const Lookups& lookups);
+
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	void HandleActions(std::chrono::microseconds dt) override;
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
@@ -307,6 +381,8 @@ private:
 	float _seconds {0.0f};
 	/// The track it runs, the runner along the track's camera way, and the game time run on it
 	std::shared_ptr<const edt::EDTTrack> _track;
+	/// The number of the track in the camera editor's file, when the script gave one
+	std::optional<int32_t> _trackNumber;
 	std::unique_ptr<camera_track::WayRunner> _trackRunner;
 	std::chrono::milliseconds _trackTime {0};
 	/// The two-thing cameras that have taken over, the last on top

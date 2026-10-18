@@ -23,6 +23,8 @@ namespace openblack::ecs::systems
 class DialogueControlSystem final: public DialogueControlSystemInterface
 {
 public:
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	void SetHooks(Hooks hooks) override { _hooks = std::move(hooks); }
 
 	[[nodiscard]] uint32_t GetOwner() const override { return _owner; }

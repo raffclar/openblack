@@ -11,7 +11,12 @@
 
 #include "DynamicsSystem.h"
 
+#include <algorithm>
 #include <chrono>
+#include <iterator>
+#include <memory>
+#include <optional>
+#include <unordered_map>
 #include <vector>
 
 #include <glm/gtx/euler_angles.hpp>
@@ -53,6 +58,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/PhysicsGround.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
@@ -169,6 +175,154 @@ bool DynamicsSystem::IsAvailable(entt::entity object) const
 DynamicsSystem::~DynamicsSystem() = default;
 
 // The objects' physics
+
+void DynamicsSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	// A body that one body points to is kept as its place in the list of bodies
+	std::unordered_map<const PhysicsEntry*, uint32_t> entryPlaces;
+	std::unordered_map<const physics::Body*, uint32_t> bodyPlaces;
+	for (uint32_t i = 0; i < _entries.size(); ++i)
+	{
+		entryPlaces.emplace(_entries[i].get(), i);
+		if (_entries[i]->body != nullptr)
+		{
+			bodyPlaces.emplace(_entries[i]->body.get(), i);
+		}
+	}
+	const auto placeOf = [](const auto& places, const auto* pointer) -> std::optional<uint32_t> {
+		const auto found = places.find(pointer);
+		return found != places.end() ? std::optional(found->second) : std::nullopt;
+	};
+	reflection::Save(out, _capacity);
+	reflection::Save(out, _entries.size());
+	for (const auto& entry : _entries)
+	{
+		reflection::Save(out, entry->entity);
+		reflection::Save(out, entry->thrower);
+		reflection::Save(out, entry->player);
+		reflection::Save(out, entry->impact);
+		reflection::Save(out, entry->forceSum);
+		reflection::Save(out, entry->kind);
+		reflection::Save(out, entry->flags);
+		reflection::Save(out, entry->checksPoints);
+		reflection::Save(out, entry->animated);
+		reflection::Save(out, entry->upright);
+		reflection::Save(out, placeOf(entryPlaces, entry->hitBy));
+		reflection::Save(out, entry->body != nullptr);
+		if (entry->body != nullptr)
+		{
+			reflection::Save(out, *entry->body);
+			reflection::Save(out, placeOf(bodyPlaces, entry->body->lastHit));
+			std::vector<std::optional<uint32_t>> touched;
+			std::ranges::transform(entry->body->Points(), std::back_inserter(touched),
+			                       [&](const physics::Body::Point& point) { return placeOf(bodyPlaces, point.other); });
+			reflection::Save(out, touched);
+		}
+	}
+	reflection::Save(out, _soundPairs);
+	reflection::Save(out, _dust);
+	reflection::Save(out, _bloodPace);
+	reflection::Save(out, _hitObject);
+	reflection::Save(out, _objectWhichHit);
+}
+
+bool DynamicsSystem::LoadState(reflection::BinaryReader& in)
+{
+	auto& registry = Entities();
+	_entries.clear();
+	reflection::Load(in, _capacity);
+	size_t count = 0;
+	reflection::Load(in, count);
+	struct Links
+	{
+		std::optional<uint32_t> hitBy;
+		std::optional<uint32_t> lastHit;
+		std::vector<std::optional<uint32_t>> touched;
+	};
+	std::vector<Links> links;
+	bool complete = true;
+	for (size_t i = 0; i < count && !in.Failed(); ++i)
+	{
+		auto entry = std::make_unique<PhysicsEntry>();
+		Links link;
+		bool hasBody = false;
+		reflection::Load(in, entry->entity);
+		reflection::Load(in, entry->thrower);
+		reflection::Load(in, entry->player);
+		reflection::Load(in, entry->impact);
+		reflection::Load(in, entry->forceSum);
+		reflection::Load(in, entry->kind);
+		reflection::Load(in, entry->flags);
+		reflection::Load(in, entry->checksPoints);
+		reflection::Load(in, entry->animated);
+		reflection::Load(in, entry->upright);
+		reflection::Load(in, link.hitBy);
+		reflection::Load(in, hasBody);
+		if (hasBody)
+		{
+			// The body takes its shape from its object again, then every value that the save kept
+			entry->body = IsAvailable(entry->entity) ? MakeBody(entry->entity, FactsOf(entry->entity)) : nullptr;
+			if (entry->body == nullptr)
+			{
+				complete = false;
+				entry->body = std::make_unique<physics::Body>(physics::BodySetup {}, physics::Shape {});
+			}
+			reflection::Load(in, *entry->body);
+			reflection::Load(in, link.lastHit);
+			reflection::Load(in, link.touched);
+		}
+		_entries.push_back(std::move(entry));
+		links.push_back(std::move(link));
+	}
+	reflection::Load(in, _soundPairs);
+	reflection::Load(in, _dust);
+	reflection::Load(in, _bloodPace);
+	reflection::Load(in, _hitObject);
+	reflection::Load(in, _objectWhichHit);
+	if (in.Failed())
+	{
+		_entries.clear();
+		return false;
+	}
+	// A body whose object did not come back, such as one from a save of an older build, leaves the physics. Nothing
+	// points to it.
+	const auto kept = [this](std::optional<uint32_t> place) {
+		return place.has_value() && *place < _entries.size() && IsAvailable(_entries[*place]->entity);
+	};
+	const auto bodyAt = [this, &kept](std::optional<uint32_t> place) -> physics::Body* {
+		return kept(place) ? _entries[*place]->body.get() : nullptr;
+	};
+	for (size_t i = 0; i < _entries.size(); ++i)
+	{
+		auto& entry = *_entries[i];
+		const auto& link = links[i];
+		entry.hitBy = kept(link.hitBy) ? _entries[*link.hitBy].get() : nullptr;
+		if (entry.body != nullptr)
+		{
+			entry.body->lastHit = bodyAt(link.lastHit);
+			const auto points = entry.body->Points().size();
+			for (size_t p = 0; p < points && p < link.touched.size(); ++p)
+			{
+				entry.body->SetPointOther(p, bodyAt(link.touched[p]));
+			}
+		}
+	}
+	std::erase_if(_entries, [this](const std::unique_ptr<PhysicsEntry>& entry) { return !IsAvailable(entry->entity); });
+	// What a save of an older build had in flight, with no body, stays where it was
+	std::vector<entt::entity> lost;
+	for (const auto object : registry.Underlying().view<InPhysics>())
+	{
+		if (!IndexOf(object).has_value())
+		{
+			lost.push_back(object);
+		}
+	}
+	for (const auto object : lost)
+	{
+		registry.Remove<InPhysics>(object);
+	}
+	return complete;
+}
 
 void DynamicsSystem::ResetSimulation()
 {

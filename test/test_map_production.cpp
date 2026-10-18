@@ -8,7 +8,9 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <vector>
 
+#include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
@@ -18,6 +20,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 
@@ -85,4 +88,40 @@ TEST_F(MapProductionFiling, AStoneHandOfAVillageCentreIsNeverPutOnTheMap)
 	EXPECT_FALSE(registry.AllOf<MapCellResident>(hand));
 	const auto inCell = map.GetAllInCell(map_coords::CellOf(glm::vec3(500.0f, 0.0f, 500.0f)));
 	EXPECT_EQ(std::ranges::count(inCell, hand), 0);
+}
+
+TEST_F(MapProductionFiling, ASavedGameKeepsTheOrderOfTheThingsInACell)
+{
+	namespace reflection = openblack::ecs::reflection;
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	std::vector<entt::entity> balls;
+	for (int i = 0; i < 3; ++i)
+	{
+		const auto ball = registry.Create();
+		registry.Assign<Transform>(ball, glm::vec3(500.0f, 0.0f, 500.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<Mobile>(ball);
+		registry.Assign<Ball>(ball);
+		map.Sync();
+		balls.push_back(ball);
+	}
+	// The first ball moves, and so goes to the front of its cell again
+	map.Refile(balls.front());
+	const auto cell = map_coords::CellOf(glm::vec3(500.0f, 0.0f, 500.0f));
+	const auto before = map.GetAllInCell(cell);
+	ASSERT_EQ(before.size(), 3u);
+	const entt::meta_ctx context;
+	reflection::BinaryWriter out(context);
+	map.SaveState(out);
+
+	// A load files the things again in the order of the registry, and then puts back the order of the save
+	map.FileResidents();
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(context, out.Bytes(), identity);
+	ASSERT_TRUE(map.LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_EQ(map.GetAllInCell(cell), before);
+	reflection::BinaryWriter again(context);
+	map.SaveState(again);
+	EXPECT_EQ(again.Bytes(), out.Bytes());
 }

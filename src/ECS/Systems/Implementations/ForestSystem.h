@@ -45,6 +45,8 @@ public:
 	void GrowForests() override;
 	void ProcessTurn() override;
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
 	/// The forest miracles' forests' turn: growing while their miracles last, withering once they have gone

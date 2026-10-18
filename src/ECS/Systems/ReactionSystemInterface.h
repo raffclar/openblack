@@ -18,6 +18,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -31,7 +32,7 @@ namespace openblack::ecs::systems
 /// one that pleases; a creature runs from one or examines it, and learns it. Taking up a reaction that impresses gives
 /// belief in its player to a villager's town and impresses a creature; a town grows weary of seeing the same kind again
 /// and again.
-class ReactionSystemInterface
+class ReactionSystemInterface: public SavedStateInterface
 {
 public:
 	/// A reaction as it is made
@@ -68,6 +69,14 @@ public:
 		bool onCast {false};
 		/// The land's balance its impressiveness is scaled by
 		Balance balance {Balance::Things};
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.initiator, self.type, self.player, self.position, self.impressiveValue, self.power, self.strength,
+			      self.magicType, self.casterCreature, self.reach, self.playerless, self.onCast, self.balance);
+		}
 	};
 
 	/// A reaction going on
@@ -87,6 +96,13 @@ public:
 		/// The dance the villagers taking it up dance round its thing, made as the first of them joins; it goes with
 		/// the reaction
 		entt::entity dance {entt::null};
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.id, self.source, self.age, self.reach, self.velocity, self.firstTaken, self.dance);
+		}
 	};
 
 	virtual ~ReactionSystemInterface() = default;

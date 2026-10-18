@@ -29,6 +29,9 @@ class InfluenceSystem final: public InfluenceSystemInterface
 {
 public:
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
+
 	void ProcessTurn(uint32_t turn) override;
 	void BordersChanged() override { _bordersDirty = true; }
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;

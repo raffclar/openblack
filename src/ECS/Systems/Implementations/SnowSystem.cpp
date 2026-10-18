@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <iterator>
 
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowLevels.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
@@ -30,6 +31,28 @@ constexpr float k_TurnSeconds = 0.1f;
 SnowSystem::SnowSystem()
     : _depths(snow_cover::k_Cells, 0.0f)
 {
+}
+
+void SnowSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _depths);
+	reflection::Save(out, _melting);
+	reflection::Save(out, _objectPace);
+}
+
+bool SnowSystem::LoadState(reflection::BinaryReader& in)
+{
+	std::vector<float> depths;
+	reflection::Load(in, depths);
+	reflection::Load(in, _melting);
+	reflection::Load(in, _objectPace);
+	if (in.Failed() || depths.size() != _depths.size())
+	{
+		return false;
+	}
+	_depths = std::move(depths);
+	++_revision;
+	return true;
 }
 
 void SnowSystem::Reset()
