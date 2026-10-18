@@ -14,6 +14,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureBringHome.h"
 #include "Creature/CreatureCastAgenda.h"
@@ -958,7 +959,7 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 		return situation.heldOneShot.has_value() && situation.heldOneShot->Is(executor.oneShot);
 	case Build::PooAtHome:
 		return situation.home.has_value() &&
-		       !(glm::distance(situation.position, *situation.home) > creature_mind::k_NearHomeToPoo);
+		       !(gutils::GetDistanceInMetres(situation.position, *situation.home) > creature_mind::k_NearHomeToPoo);
 	case Build::SleepByObject:
 		// Told by a script, it needs a clear place by the thing or a home. Left to itself, the conditions are below.
 		return !situation.controlledByScript || situation.clearArea.has_value() || situation.home.has_value();

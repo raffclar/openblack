@@ -15,6 +15,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::creature_giving;
 
@@ -82,7 +84,8 @@ std::optional<glm::vec3> creature_giving::DrawToCreature(glm::vec3 creatureHand,
 
 bool creature_giving::CallsOff(glm::vec3 hand, glm::vec3 target, float creatureSize)
 {
-	return glm::distance(target, hand) > creatureSize * k_CallOffSizes;
+	// The distance adds the squares from z to x
+	return x87::Length<x87::SumOrder::Zyx>(target - hand) > creatureSize * k_CallOffSizes;
 }
 
 Choice creature_giving::ChooseUse(const GiftFacts& facts)

@@ -426,7 +426,7 @@ creature_desire_sources::State SourceStateOf(entt::entity entity, const Creature
 	// without a home here, the sources of going home keep their own values
 	if (const auto home = ecs::creature_home::HomeOf(registry, entity); home.has_value() && transform != nullptr)
 	{
-		state.homeDistance = glm::distance(glm::xz(transform->position), glm::xz(*home));
+		state.homeDistance = gutils::GetDistanceInMetres(glm::xz(transform->position), glm::xz(*home));
 	}
 	if (Locator::infoConstants::has_value())
 	{
@@ -518,7 +518,8 @@ std::optional<glm::vec3> LookWhileGoing(entt::entity entity, const Creature& cre
 	const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
 	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 	// The direction the body faces, as the game keeps it: a quarter turn on from the map's
-	const auto heading = walk != nullptr && walk->started ? walk->heading.Radians() : std::atan2(ahead.x, -ahead.z);
+	const auto heading =
+	    walk != nullptr && walk->started ? walk->heading.Radians() : GameHeading::Of(ahead.x, ahead.z).Radians();
 	const auto groundAt = [](glm::vec2 at) {
 		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
 	};
@@ -1071,8 +1072,9 @@ std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registr
 	const auto eye = Locator::camera::value().GetOrigin();
 	const glm::vec2 point {eye.x, eye.z};
 	const auto offset = point - glm::vec2(transform->position.x, transform->position.z);
+	// How far away the camera is: the game's table distance along the ground
 	return creature_mind::Senses::CameraView {
-	    .distance = glm::distance(eye, transform->position),
+	    .distance = gutils::GetDistance(transform->position, eye),
 	    .groundDistance = glm::length(offset),
 	    .point = point,
 	    .turn = creature_locomotion::HeadingOf(offset).TurnFrom(self->heading),
@@ -1100,10 +1102,11 @@ std::pair<std::optional<glm::vec3>, bool> CameraFocusOf(const ecs::Registry& reg
 	const auto focus = Locator::camera::value().GetFocus();
 	const auto from = map_coords::FromMetres(glm::vec2(transform->position.x, transform->position.z));
 	const auto to = map_coords::FromMetres(glm::vec2(focus.x, focus.z));
-	// The way the body faces, as the game turns it: a quarter turn on from the map's
+	// The way the body faces: its heading, or the way its rotation faces before it walks
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
 	const auto ahead = -(transform->rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-	const auto facing = static_cast<int32_t>(gutils::ConvertScawenAngleToGameAngle(
-	    static_cast<float>(std::atan2(static_cast<double>(ahead.x), -static_cast<double>(ahead.z)))));
+	const auto heading = walk != nullptr && walk->started ? walk->heading : GameHeading::Of(ahead.x, ahead.z);
+	const auto facing = static_cast<int32_t>(gutils::ConvertScawenAngleToGameAngle(heading.Radians()));
 	// The game takes the difference of the two angles with no wrap at a full turn
 	const auto apart = std::abs(facing - static_cast<int32_t>(gutils::GetAngleFromXZ(from, to)));
 	const bool inView =
@@ -1169,8 +1172,7 @@ std::optional<creature_player_attention::FollowHandView> FollowHandViewOf(const 
 	view.distance = gutils::GetDistanceInMetres(at, handAt);
 	view.reach = creature_player_attention::FollowHandReach(object_measures::TwoDRadius(registry, creature));
 	view.bodyPlaying = bodyPlaying;
-	view.directionClose = creature_player_attention::IsDirectionClose(
-	    at, handAt, creature_player_attention::GameAngleOf(creature_locomotion::DirectionOf(self->heading)));
+	view.directionClose = creature_player_attention::IsDirectionClose(at, handAt, self->heading.GameAngle());
 	return view;
 }
 
@@ -1200,9 +1202,10 @@ WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const Cr
 	}
 	const auto targetOf = [transform, self](glm::vec3 point) {
 		const auto offset = glm::vec2(point.x, point.z) - glm::vec2(transform->position.x, transform->position.z);
+		// The distance is the length along the ground
 		return creature_player_attention::WatchPlayerView::Target {
 		    .point = {point.x, point.z},
-		    .distance = glm::distance(point, transform->position),
+		    .distance = glm::length(offset),
 		    .turn = creature_locomotion::HeadingOf(offset).TurnFrom(self->heading),
 		};
 	};

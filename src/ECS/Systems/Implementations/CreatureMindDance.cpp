@@ -20,6 +20,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureDance.h"
 #include "CreatureMindSystem.h"
 #include "CreatureMindSystemDetail.h"
@@ -233,9 +234,9 @@ std::optional<creature_mind::Senses::DanceView> CreatureMindSystem::DanceViewOf(
 	view.danceAngle = data.angle;
 	view.danceRate = data.rate;
 	view.groupCentre = map_coords::ToMetres(ecs::dance_moves::GroupCentre(data, dancer->group));
-	view.place =
-	    map_coords::ToMetres(ecs::dance_moves::SlotPosition(data, dancer->group, slot, Locator::danceSystem::value().Shapes()));
-	view.placeDistance = glm::distance(position, view.place);
+	const auto slotAt = ecs::dance_moves::SlotPosition(data, dancer->group, slot, Locator::danceSystem::value().Shapes());
+	view.place = map_coords::ToMetres(slotAt);
+	view.placeDistance = gutils::GetDistanceInMetres(map_coords::FromMetres(position), slotAt);
 	if (const auto* locomotion = registry.TryGet<const CreatureLocomotion>(creature))
 	{
 		view.heading = locomotion->heading;

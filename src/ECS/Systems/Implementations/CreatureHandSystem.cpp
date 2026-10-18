@@ -407,7 +407,7 @@ void CreatureHandSystem::Bruise(entt::entity creature, const glm::vec3& rayOrigi
 	// hit on the slapped one's skin; only a bruise on the slapped creature itself is drawn here (docs/vanilla-bugs.md)
 	if (*own == creature)
 	{
-		creature_scars::MarkAlong(creature, rayOrigin, rayOrigin + rayDirection, 0, column);
+		creature_scars::MarkAlong(creature, rayOrigin, rayDirection, 0, column);
 	}
 }
 

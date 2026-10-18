@@ -13,6 +13,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureLayers.h"
 
@@ -132,7 +133,7 @@ FollowCameraAction creature_emote::FollowCameraTurn(const FollowCameraView& view
 		return view.focusAhead ? FollowCameraAction::Continue : FollowCameraAction::MoveAgain;
 	}
 	const glm::vec2 focus {view.focus->x, view.focus->z};
-	if (glm::distance(view.position, focus) < reach)
+	if (gutils::GetDistanceInMetres(view.position, focus) < reach)
 	{
 		return FollowCameraAction::Done;
 	}

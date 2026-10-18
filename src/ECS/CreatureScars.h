@@ -25,9 +25,9 @@ namespace openblack::ecs::creature_scars
 /// Where the creature's belly bone is, as its body is posed now; none for a creature without a posed rig
 [[nodiscard]] std::optional<glm::vec3> BellyOf(entt::entity creature);
 
-/// A wound of a kind and column where the line from a point to the groin first meets the creature's skin; nothing
-/// where it misses
-void MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 groin, uint8_t kind, uint8_t column);
+/// A wound of a kind and column where the line from a point along a direction first meets the creature's skin;
+/// nothing where it misses
+void MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 direction, uint8_t kind, uint8_t column);
 
 /// A creature that catches fire is burnt on its skin in three tries, each from a random point about its groin
 void BurnOnCatching(entt::entity creature);

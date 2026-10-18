@@ -1699,7 +1699,7 @@ std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Targe
 		}
 		const auto* held = registry.TryGet<const HeldByCreature>(thing);
 		candidates.push_back({.id = entt::to_integral(thing),
-		                      .distance = glm::distance(map_coords::ToMetres(belief.place), position),
+		                      .distance = gutils::GetDistanceInMetres(map_coords::ToMetres(belief.place), position),
 		                      .held = held != nullptr && held->creature == creature});
 	}
 	return creature_planner::ChooseUsed(candidates, distanceWeight, goal);
@@ -3603,7 +3603,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	}
 	if (const auto* transform = registry.TryGet<const Transform>(creature); transform != nullptr && situation.eye.has_value())
 	{
-		situation.eyeDistance = glm::distance(*situation.eye, transform->position);
+		situation.eyeDistance = x87::Length<x87::SumOrder::Zyx>(*situation.eye - transform->position);
 	}
 	situation.hangAround = HangAroundPlacesOf(creature);
 	situation.turnSeconds = k_TurnSeconds;
@@ -3664,7 +3664,7 @@ void CreatureMindSystem::SituateEmotes(entt::entity creature, creature_plan_acti
 	const auto* at = registry.TryGet<const Transform>(creature);
 	if (situation.playerHand.has_value() && at != nullptr)
 	{
-		situation.handDistance = glm::distance(*situation.playerHand, at->position);
+		situation.handDistance = gutils::GetDistance(*situation.playerHand, at->position);
 	}
 	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature))
 	{

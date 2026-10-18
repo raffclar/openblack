@@ -132,12 +132,12 @@ TEST(CreatureGesture, TheShapeStandsInFrontOfTheHead)
 {
 	using namespace creature_gesture;
 	const glm::vec3 head {10.0f, 20.0f, 30.0f};
-	// Facing along -z with a radius of 5: the square is 6.5 wide and 10 ahead
-	const auto topStart = HandTarget(head, {0.0f, -1.0f}, 5.0f, {0.0f, 0.0f, 0.0f});
+	// Facing along -z (the zero heading) with a radius of 5: the square is 6.5 wide and 10 ahead
+	const auto topStart = HandTarget(head, GameHeading(0.0f), 5.0f, {0.0f, 0.0f, 0.0f});
 	EXPECT_NEAR(topStart.x, 10.0f, k_Near);
 	EXPECT_NEAR(topStart.y, 26.5f, k_Near);
 	EXPECT_NEAR(topStart.z, 20.0f, k_Near);
-	const auto bottomSide = HandTarget(head, {0.0f, -1.0f}, 5.0f, {1.0f, 0.0f, 1.0f});
+	const auto bottomSide = HandTarget(head, GameHeading(0.0f), 5.0f, {1.0f, 0.0f, 1.0f});
 	EXPECT_NEAR(bottomSide.x, 3.5f, k_Near);
 	EXPECT_NEAR(bottomSide.y, 20.0f, k_Near);
 	EXPECT_NEAR(bottomSide.z, 20.0f, k_Near);

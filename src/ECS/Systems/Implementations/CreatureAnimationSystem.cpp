@@ -34,6 +34,7 @@
 #include "Audio/Sound.h"
 #include "Common/FramePace.h"
 #include "Common/GameRandom.h"
+#include "Common/X87.h"
 #include "Creature/CreatureAlignmentMotes.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureEyes.h"
@@ -335,12 +336,15 @@ void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimati
 	}
 	auto side = glm::normalize(transform.rotation[0]);
 	auto front = glm::normalize(transform.rotation[2]);
-	// A body that turns on the spot leans along the heading that the turn has reached
-	if (animation.sway.turnHeading.has_value())
+	// The body leans along its heading, or the heading that a turn on the spot has reached: the FPU's cosine and sine,
+	// each rounded to a float
+	if (animation.sway.heading.has_value())
 	{
-		const float heading = animation.sway.turnHeading->Radians();
-		side = glm::vec3(std::cos(heading), 0.0f, std::sin(heading));
-		front = glm::vec3(-std::sin(heading), 0.0f, std::cos(heading));
+		const auto heading = static_cast<double>(animation.sway.heading->Radians());
+		const auto cosine = x87::RoundToFloat(x87::Cos(heading));
+		const auto sine = x87::RoundToFloat(x87::Sin(heading));
+		side = glm::vec3(cosine, 0.0f, sine);
+		front = glm::vec3(-sine, 0.0f, cosine);
 	}
 	const auto lean = [&](uint32_t clip, float amount) {
 		if (std::abs(amount) <= creature_sway::k_DrawnLean)
@@ -357,8 +361,9 @@ void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimati
 	     {std::tuple {animation.sway.lowerOffset, creature_sway::k_LowerSide, creature_sway::k_LowerFrontBack},
 	      std::tuple {animation.sway.upperOffset, creature_sway::k_UpperSide, creature_sway::k_UpperFrontBack}})
 	{
-		lean(sideClip, glm::dot(offset, side));
-		lean(frontClip, glm::dot(offset, front));
+		// Only the parts on the ground count, each lean the two products added
+		lean(sideClip, (side.x * offset.x) + (side.z * offset.z));
+		lean(frontClip, (front.z * offset.z) + (front.x * offset.x));
 	}
 }
 
@@ -789,13 +794,17 @@ void CreatureAnimationSystem::StepSway()
 		    auto& sway = animation.sway;
 		    sway.turnSeconds = creature_sway::TurnSeconds(animation.playbackScale);
 		    creature_sway::Step(sway, sway.turnSeconds, MassOf(creature, &morph));
-		    sway.turnHeading.reset();
+		    sway.heading.reset();
 		    const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
 		    if (walk != nullptr && walk->motion == CreatureLocomotion::Motion::Turning && walk->move.has_value() &&
 		        walk->move->animations.has_value() && walk->move->durationMs > 0.0f)
 		    {
-			    sway.turnHeading =
+			    sway.heading =
 			        creature_sway::TurnHeading(walk->heading, walk->targetHeading, walk->move->timeMs, walk->move->durationMs);
+		    }
+		    else if (walk != nullptr)
+		    {
+			    sway.heading = walk->heading;
 		    }
 	    });
 }

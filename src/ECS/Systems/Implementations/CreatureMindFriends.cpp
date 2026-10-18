@@ -25,6 +25,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureFriendship.h"
 #include "Creature/CreatureHelp.h"
@@ -483,7 +484,8 @@ void CreatureMindSystem::SituateFriend(entt::entity creature, const creature_pla
 	};
 	const auto selfPoint = glm::vec2(self->position.x, self->position.z);
 	// It sees the friend when the friend is near, or near for the height of the friend
-	situation.seesFriend = creature_mind::CanSee(glm::distance(self->position, at->position), situation.friendly->height);
+	situation.seesFriend =
+	    creature_mind::CanSee(x87::Distance<x87::SumOrder::Zyx>(at->position, self->position), situation.friendly->height);
 	switch (executor.build)
 	{
 	case Build::SitWithFriend:

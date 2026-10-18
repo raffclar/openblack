@@ -217,13 +217,15 @@ struct VictimFacts
 };
 [[nodiscard]] Victim VictimOf(const VictimFacts& facts);
 /// A villager, an animal or a thing goes when its distance on the ground is less than three tenths of the sphere radius
-/// added to its own radius. A building breaks when its distance is less than the two radii added.
+/// added to its own radius. A building breaks when its distance is less than the two radii added. The distance comes
+/// squared, and the game compares it with the square of the reach.
 constexpr float k_KnockReachShare = 0.3f;
-[[nodiscard]] bool InReach(Victim victim, float groundDistance, float sphereRadius, float thingRadius);
+[[nodiscard]] bool InReach(Victim victim, float groundDistanceSquared, float sphereRadius, float thingRadius);
 /// The speed of a knocked thing is this number of times the move of the part
 constexpr float k_KnockSpeedPerMove = 7.0f;
 [[nodiscard]] glm::vec3 KnockVelocity(const glm::vec3& move);
-/// The blow on a building goes the way the part moved, at this speed
-constexpr float k_TrampleBlowSpeed = 4.0f;
+/// The blow on a building goes the way the part moved, at the length of the move times this scale, times this share
+constexpr float k_TrampleBlowPerMove = 10.0f;
+constexpr float k_TrampleBlowShare = 0.4f;
 [[nodiscard]] Blow TrampleBlow(const glm::vec3& point, const glm::vec3& move, float sphereRadius);
 } // namespace openblack::creature_stomp
