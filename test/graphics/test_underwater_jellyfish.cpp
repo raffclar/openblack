@@ -12,8 +12,10 @@
 #include <cmath>
 #include <cstdint>
 
+#include <array>
 #include <vector>
 
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
@@ -153,13 +155,19 @@ TEST(UnderwaterJellyfish, TheirLightFadesFasterThanTheWatersLight)
 
 TEST(UnderwaterJellyfish, NoneOfTheirLightComesToTheSurface)
 {
-	// The shortest way from a jellyfish to the surface is straight up from its top. The brightest glow and the brightest
-	// halo, through that water, are less than one step of an 8-bit colour, in each colour.
+	// The shortest way from a jellyfish to the surface is straight up from its top. The brightest glow of the brightest
+	// flash and the brightest halo, through that water, are less than one step of an 8-bit colour, in each colour.
 	const glm::vec3 left = jelly::GlowThroughWater(jelly::k_TopDepth);
-	const float brightest = jelly::k_MostGlow * (1.0f + jelly::k_HaloStrength);
-	for (int colour = 0; colour < 3; ++colour)
+	for (const float hue : {0.0f, 0.5f, 1.0f})
 	{
-		EXPECT_LT(brightest * left[colour], 1.0f / 255.0f);
+		const glm::vec3 brightest = jelly::LightColour(hue) * jelly::Emission(1.0f, 1.0f) * (1.0f + jelly::k_HaloStrength);
+		const glm::vec3 lit = jelly::LightColour(hue) * jelly::Emission(1.0f, 1.0f) * jelly::LightAt(jelly::k_TopDepth);
+		for (int colour = 0; colour < 3; ++colour)
+		{
+			EXPECT_LT(brightest[colour] * left[colour], 1.0f / 255.0f);
+			// The light that falls on the water at the surface
+			EXPECT_LT(lit[colour], 1.0f / 255.0f);
+		}
 	}
 	// And they are all at least that deep
 	for (const float seconds : {0.0f, 50.0f, 900.0f})
@@ -169,6 +177,160 @@ TEST(UnderwaterJellyfish, NoneOfTheirLightComesToTheSurface)
 			EXPECT_LE(one.position.y, k_SeaLevel - jelly::k_TopDepth + 1e-3f);
 		}
 	}
+}
+
+TEST(UnderwaterJellyfish, TheirLightIsBlueGreenAndSoft)
+{
+	for (const float hue : {0.0f, 0.25f, 0.5f, 0.75f, 1.0f})
+	{
+		const glm::vec3 colour = jelly::LightColour(hue);
+		EXPECT_LT(colour.r, 0.1f);
+		EXPECT_GT(colour.g, 0.5f);
+		EXPECT_GT(colour.b, 0.5f);
+		EXPECT_LE(glm::max(colour.r, glm::max(colour.g, colour.b)), 1.0f);
+	}
+	// The colour that goes furthest through the water is the most of the light at rest
+	EXPECT_GT(jelly::LightColour(0.0f).b, jelly::LightColour(0.0f).g);
+}
+
+TEST(UnderwaterJellyfish, TheyAreDimAtRestPulseAndFlashBrighter)
+{
+	const float rest = jelly::Emission(0.0f, 0.0f);
+	const float squeezed = jelly::Emission(1.0f, 0.0f);
+	const float flash = jelly::Emission(0.0f, 1.0f);
+	EXPECT_GT(rest, 0.0f);
+	EXPECT_GT(squeezed, rest);
+	EXPECT_GT(flash, 2.5f * rest);
+	EXPECT_GT(flash, 1.5f * squeezed);
+	for (const float squeeze : {0.0f, 0.5f, 1.0f})
+	{
+		for (const float strength : {0.0f, 0.5f, 1.0f, 3.0f})
+		{
+			EXPECT_LE(jelly::Emission(squeeze, strength), jelly::k_MostGlow);
+		}
+	}
+	EXPECT_LE(jelly::k_MostGlow, 1.0f);
+	// The squeeze of the beat: none at its start, all at the quick squeeze, then a slow release
+	EXPECT_FLOAT_EQ(jelly::Squeeze(0.0f), 0.0f);
+	EXPECT_FLOAT_EQ(jelly::Squeeze(0.16f), 1.0f);
+	EXPECT_GT(jelly::Squeeze(0.5f), 0.0f);
+	EXPECT_LT(jelly::Squeeze(0.5f), 1.0f);
+	EXPECT_FLOAT_EQ(jelly::Squeeze(0.95f), 0.0f);
+	const jelly::Jellyfish one {.phase = 0.3f, .seed = 0.5f};
+	for (const float seconds : {0.0f, 1.3f, 77.0f})
+	{
+		const float cycle = jelly::BeatCycle(one, seconds);
+		EXPECT_GE(cycle, 0.0f);
+		EXPECT_LT(cycle, 1.0f);
+	}
+}
+
+TEST(UnderwaterJellyfish, TheirLightFallsOffWithTheSquareOfTheDistanceAndTheWater)
+{
+	EXPECT_NEAR(jelly::LightAt(0.0f).b, 1.0f, 1e-5f);
+	float last = 1.0f;
+	for (const float distance : {0.2f, 0.5f, 1.0f, 2.0f, 4.0f})
+	{
+		const glm::vec3 lit = jelly::LightAt(distance);
+		EXPECT_LT(lit.b, last);
+		last = lit.b;
+		// The water takes the red first, as the rest of the water
+		EXPECT_LT(lit.r, lit.g);
+		EXPECT_LT(lit.g, lit.b);
+		// Not more than the square of the distance alone
+		const float spread = jelly::k_LightRadius * jelly::k_LightRadius;
+		EXPECT_LE(lit.b, spread / (distance * distance + spread));
+	}
+	// It makes the water bright for about half a metre to one metre: half of it at half a metre, a little at two metres
+	const float metre = openblack::graphics::underwater::k_UnitsPerMetre;
+	EXPECT_GT(jelly::LightAt(0.5f * metre).b, 0.4f);
+	EXPECT_GT(jelly::LightAt(1.0f * metre).b, 0.15f);
+	EXPECT_LT(jelly::LightAt(2.0f * metre).b, 0.05f);
+	// Past its reach, the brightest flash gives less than one step of an 8-bit colour
+	const glm::vec3 far = jelly::LightAt(jelly::k_LightReach) * jelly::k_MostGlow;
+	EXPECT_LT(far.b, 1.0f / 255.0f);
+}
+
+TEST(UnderwaterJellyfish, ThingsNearByStirThem)
+{
+	EXPECT_FLOAT_EQ(jelly::Stir({}), 0.0f);
+	const auto stir = [](float distance, float reach, float since = 0.0f) {
+		const std::array<jelly::Touch, 1> touches {{{.distance = distance, .reach = reach, .since = since}}};
+		return jelly::Stir(touches);
+	};
+	EXPECT_FLOAT_EQ(stir(0.0f, 6.0f), 1.0f);
+	EXPECT_FLOAT_EQ(stir(2.0f, 6.0f), 1.0f);
+	EXPECT_GT(stir(4.0f, 6.0f), 0.0f);
+	EXPECT_LT(stir(4.0f, 6.0f), 1.0f);
+	EXPECT_FLOAT_EQ(stir(6.0f, 6.0f), 0.0f);
+	EXPECT_FLOAT_EQ(stir(20.0f, 6.0f), 0.0f);
+	// A splash stirs them only while its wave goes past
+	EXPECT_FLOAT_EQ(stir(10.0f, jelly::k_SplashReach, 0.2f), 1.0f);
+	EXPECT_FLOAT_EQ(stir(10.0f, jelly::k_SplashReach, jelly::k_StirWindow + 0.1f), 0.0f);
+	// The nearest thing for its reach counts
+	const std::array<jelly::Touch, 2> two {{{.distance = 5.0f, .reach = 6.0f}, {.distance = 1.0f, .reach = 6.0f}}};
+	EXPECT_FLOAT_EQ(jelly::Stir(two), 1.0f);
+}
+
+TEST(UnderwaterJellyfish, AFlashComesUpQuicklyAndGoesInASecondOrTwo)
+{
+	constexpr float k_Step = 1.0f / 60.0f;
+	float flash = 0.0f;
+	float time = 0.0f;
+	for (; time < 0.2f; time += k_Step)
+	{
+		flash = jelly::StepFlash(flash, 1.0f, k_Step);
+	}
+	EXPECT_GT(flash, 0.9f);
+	EXPECT_LE(flash, 1.0f);
+	// The stir stops: the flash goes down
+	float after = 0.0f;
+	float atOne = 0.0f;
+	for (; after < 2.0f; after += k_Step)
+	{
+		flash = jelly::StepFlash(flash, 0.0f, k_Step);
+		if (std::abs(after - 1.0f) < 0.5f * k_Step)
+		{
+			atOne = flash;
+		}
+	}
+	EXPECT_GT(atOne, 0.05f);
+	EXPECT_LT(atOne, 0.25f);
+	EXPECT_LT(flash, 0.03f);
+	// A weak stir does not take a flash down under it
+	EXPECT_FLOAT_EQ(jelly::StepFlash(0.3f, 0.3f, 1.0f), 0.3f);
+}
+
+TEST(UnderwaterJellyfish, EachKeepsItsOwnFlash)
+{
+	const std::array<jelly::Jellyfish, 2> two {{{.position = {0.0f, -40.0f, 0.0f}, .size = 1.0f, .shows = 1.0f, .id = 7},
+	                                            {.position = {30.0f, -40.0f, 0.0f}, .size = 1.0f, .shows = 1.0f, .id = 9}}};
+	const std::array<jelly::Disturber, 1> near {{{.position = {1.0f, -40.0f, 0.0f}, .reach = jelly::k_HandReach}}};
+	jelly::Flashes flashes;
+	// The first step has no time
+	flashes.Update(two, near, 10.0f);
+	EXPECT_FLOAT_EQ(flashes.Of(7), 0.0f);
+	float seconds = 10.0f;
+	for (int i = 0; i < 30; ++i)
+	{
+		seconds += 1.0f / 60.0f;
+		flashes.Update(two, near, seconds);
+	}
+	EXPECT_GT(flashes.Of(7), 0.9f);
+	EXPECT_FLOAT_EQ(flashes.Of(9), 0.0f);
+	// The hand goes away: the flash goes in a few seconds, and the jellyfish is not kept
+	for (int i = 0; i < 300; ++i)
+	{
+		seconds += 1.0f / 60.0f;
+		flashes.Update(two, {}, seconds);
+	}
+	EXPECT_FLOAT_EQ(flashes.Of(7), 0.0f);
+	// Its light is brighter in a flash, in its own colour
+	const auto rest = jelly::LightOf(two[0], seconds, 0.0f);
+	const auto flashed = jelly::LightOf(two[0], seconds, 1.0f);
+	EXPECT_GT(flashed.colour.b, rest.colour.b);
+	EXPECT_NEAR(flashed.colour.g / flashed.colour.b, rest.colour.g / rest.colour.b, 1e-4f);
+	EXPECT_LT(flashed.position.y, two[0].position.y);
 }
 
 TEST(UnderwaterJellyfish, TheirHaloIsAboutOneCubicMetre)

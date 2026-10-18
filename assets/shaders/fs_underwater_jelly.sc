@@ -1,36 +1,36 @@
-$input v_world, v_texcoord0, v_color0, v_normal
+$input v_world, v_texcoord0, v_texcoord1, v_color0, v_normal
 
 #include <bgfx_shader.sh>
 
 #include "underwater.sh"
+#include "jelly_light.sh"
 
 // EXPERIMENT (not for merge): a jellyfish, in two passes (u_uwEye.w):
-// - 0, in the scene: the clear hood lit by the daylight, and the far water's colour behind it, as much as the
-//   jellyfish covers. The water's pass then sees the jellyfish as near and puts its fog over it from its own distance.
-// - 1, after the water's pass: its own light, added over the water. The outer shell glows at its rim; the inner shell
-//   has bands of light in pink to orange that move slowly; the tentacles are faint, and their tips glow as the bell
-//   beats. The light is soft (no colour brighter than underwater::jellyfish::k_MostGlow), a little brighter at night.
-//   The water absorbs it and scatters it out of its way to the eye (underwater::jellyfish::GlowThroughWater), so it
-//   fades faster than the light of the scene. They are deep, so no light comes to the surface. The scene in front of
-//   the jellyfish hides the light.
+// - 0, in the scene: the clear hood lit by the daylight and by the light of the jellyfish near it, and the far water's
+//   colour behind it, as much as the jellyfish covers. The water's pass then sees the jellyfish as near and puts its
+//   fog over it from its own distance.
+// - 1, after the water's pass: its own light, added over the water. The light is blue-green, as the light of deep sea
+//   animals. It is dim at rest and pulses with the beat of the bell. Small waves of light go round the rim of the bell
+//   and down the tentacles, faster and brighter in a flash. No colour of it is brighter than
+//   underwater::jellyfish::k_MostGlow. The water absorbs it and scatters it out of its way to the eye
+//   (underwater::jellyfish::GlowThroughWater), so it fades faster than the light of the scene. They are deep, so no
+//   light comes to the surface. The scene in front of the jellyfish hides the light.
 // - The halo (part 4, in the second pass only): the water in a ball of half a metre round the bell scatters some of the
 //   light to the eye, most at its middle and none at its edge. The shader adds up the light along the part of the ray
 //   from the eye that is in the ball and in front of the scene.
 
 SAMPLER2D(s_sceneDepth, 0);
 
-// The brightest colour of their light, the water that scatters it out of its way, the radius of the halo and its
-// strength (underwater::jellyfish::k_MostGlow, k_GlowScatter, k_LightRadius and k_HaloStrength)
-#define JELLY_MOST_GLOW 0.6f
-#define JELLY_GLOW_SCATTER 0.2f
+// The brightest colour of their light, the radius of the halo and its strength (underwater::jellyfish::k_MostGlow,
+// k_LightRadius and k_HaloStrength)
+#define JELLY_MOST_GLOW 0.8f
 #define JELLY_LIGHT_RADIUS (0.5f * UW_UNITS_PER_METRE)
 #define JELLY_HALO_STRENGTH 0.35f
-
-// The part of each colour of the light that comes through a length of water (underwater::jellyfish::GlowThroughWater)
-vec3 JellyGlowThroughWater(float path)
-{
-	return exp(-(UW_ABSORPTION + vec3_splat(JELLY_GLOW_SCATTER)) * max(path, 0.0f));
-}
+// The colour of their light, blue-green and a little more green, and the most that it moves to the green
+// (underwater::jellyfish::k_LightColour, k_GreenColour and k_MostGreen)
+#define JELLY_LIGHT_COLOUR vec3(0.04f, 0.62f, 1.0f)
+#define JELLY_GREEN_COLOUR vec3(0.10f, 0.95f, 0.70f)
+#define JELLY_MOST_GREEN 0.4f
 
 // The sum of (1 - r^2 / R^2)^2 along a ray from s0 to s1. s is along the ray from its nearest point to the middle, b2 is
 // the square of the distance from the ray to the middle, and R2 is the square of the radius.
@@ -72,26 +72,28 @@ void main()
 	float along = v_texcoord0.x;
 	float down = v_texcoord0.y;
 	float part = v_texcoord0.z;
-	float squeeze = v_texcoord0.w;
 	float hue = v_color0.x;
 	float shows = v_color0.y;
+	float seed = v_color0.w;
+	float flash = v_texcoord1.x;
+	float ownLight = v_texcoord1.y;
+	float emission = v_texcoord1.z;
 	float t = u_uwParams.y;
 
 	vec3 view = normalize(u_uwEye.xyz - v_world);
 	float depth = max(u_uwParams.z - v_world.y, 0.0f);
 	// The daylight in the water, from the light's colour and how much it shows
 	float daylight = clamp(dot(u_uwLightColour.rgb, vec3(0.3f, 0.5f, 0.2f)), 0.0f, 1.0f) * u_uwLightColour.w;
-	float night = 1.0f - smoothstep(0.05f, 0.6f, daylight);
-	// Their own light is soft, a little brighter at night
-	float glow = mix(1.0f, 1.6f, night);
-	// The colour of its light, between pink and orange, that changes slowly
-	vec3 accent = mix(vec3(1.0f, 0.32f, 0.62f), vec3(1.0f, 0.56f, 0.16f), 0.5f + 0.5f * sin(t * 0.25f + hue * 6.283f));
+	// The colour of its light (underwater::jellyfish::LightColour)
+	vec3 accent = mix(JELLY_LIGHT_COLOUR, JELLY_GREEN_COLOUR, JELLY_MOST_GREEN * hue);
 	vec3 hood = vec3(0.55f, 0.78f, 0.92f);
+	// A flash makes the waves of light go faster
+	float speed = 1.0f + 4.0f * flash;
 
-	// lit: the daylight on it; own: its own light
-	vec3 lit = vec3_splat(0.0f);
-	vec3 own = vec3_splat(0.0f);
+	// pattern: how much of its light each point sends, about 0 to 1; facing: the hood's normal to the eye
+	float pattern = 0.0f;
 	float covers = 0.0f;
+	float rim = 0.0f;
 	if (part > 3.5f)
 	{
 		// The halo is only in the pass of their own light
@@ -102,39 +104,44 @@ void main()
 	}
 	else if (part < 0.5f)
 	{
-		// The hood: clear in its middle, bright at its rim
-		float rim = pow(1.0f - abs(dot(normalize(v_normal), view)), 3.0f);
-		lit = hood * (0.1f + 0.8f * rim) * daylight;
-		own = hood * (0.1f + 0.8f * rim) * 0.3f * glow + accent * rim * 0.45f * glow;
+		// The hood: clear in its middle, bright at its edge seen from the side. The rim of the bell glows, and waves of
+		// light go round it.
+		rim = pow(1.0f - abs(dot(normalize(v_normal), view)), 3.0f);
+		float wave = pow(0.5f + 0.5f * sin(along * 6.2831853f * 4.0f - t * 1.3f * speed + seed * 6.0f), 6.0f);
+		float edge = smoothstep(0.65f, 0.95f, down);
+		pattern = 0.25f + 0.6f * rim + edge * (0.35f + wave * (0.6f + 0.8f * flash));
 		covers = 0.55f + 0.4f * rim;
 	}
 	else if (part < 1.5f)
 	{
 		// The bands inside the bell: rings that move down it, in four lobes round it
-		float bands = smoothstep(0.55f, 1.0f, 0.5f + 0.5f * sin(down * 22.0f - t * 1.5f + hue * 5.0f));
-		float lobes = 0.55f + 0.45f * cos(along * 6.283f * 4.0f);
+		float bands = smoothstep(0.55f, 1.0f, 0.5f + 0.5f * sin(down * 22.0f - t * 1.5f * speed + hue * 5.0f));
+		float lobes = 0.55f + 0.45f * cos(along * 6.2831853f * 4.0f);
 		float under = smoothstep(0.08f, 0.4f, down);
-		own = accent * bands * lobes * under * glow * (0.7f + 0.6f * squeeze);
+		pattern = bands * lobes * under;
 		covers = 0.3f;
 	}
 	else
 	{
-		// A tentacle: faint along it, its tip lit by the beat; the thin outer ones fainter
-		float tip = smoothstep(0.6f, 1.0f, along) * squeeze;
+		// A tentacle: faint along it, with waves of light that go down from the bell to its tip; the thin outer ones are
+		// fainter
+		float which = v_texcoord1.w;
 		float edge = 1.0f - abs(down);
-		float strength = (part < 2.5f ? 1.0f : 0.7f) * (0.12f * (1.0f - 0.5f * along) + 1.3f * tip);
-		own = mix(hood, accent, 0.4f + 0.5f * tip) * strength * glow * (0.4f + 0.6f * edge);
+		float wave = pow(0.5f + 0.5f * sin(along * 10.0f - t * 2.5f * speed - seed * 9.0f - which * 1.3f), 8.0f);
+		pattern = (part < 2.5f ? 1.0f : 0.7f) * (0.18f * (1.0f - 0.5f * along) + wave * (0.5f + 0.9f * flash)) *
+		          (0.4f + 0.6f * edge);
 		covers = 0.5f * edge;
 	}
 	covers *= shows;
-	own = min(own, vec3_splat(JELLY_MOST_GLOW));
-	// The daylight comes down through the water to them
-	lit *= UwTransmittance(depth * 0.6f);
+	vec3 own = min(accent * emission * pattern, vec3_splat(JELLY_MOST_GLOW));
 
 	if (u_uwEye.w < 0.5f)
 	{
-		// In the scene: the daylight on it, and the far water where it covers what is behind it
-		gl_FragColor = vec4(lit * shows + u_uwScatter.rgb * covers, covers);
+		// In the scene: the daylight on it, the light of the other jellyfish near it, and the far water where it covers
+		// what is behind it
+		vec3 lit = hood * (0.1f + 0.8f * rim) * daylight * UwTransmittance(depth * 0.6f);
+		vec3 others = JellyLightAt(v_world, normalize(v_normal), 0.5f, ownLight) * covers;
+		gl_FragColor = vec4((lit + hood * others) * shows + u_uwScatter.rgb * covers, covers);
 	}
 	else
 	{
@@ -176,7 +183,7 @@ void main()
 			}
 			// 1 through the middle of the ball
 			float share = JellyHaloSum(s0, s1, b2, R2) / (16.0f / 15.0f * JELLY_LIGHT_RADIUS);
-			vec3 halo = accent * min(glow, 1.0f) * JELLY_MOST_GLOW * JELLY_HALO_STRENGTH * share;
+			vec3 halo = accent * emission * JELLY_HALO_STRENGTH * share;
 			gl_FragColor = vec4(halo * shows * JellyGlowThroughWater(JellyWaterPath(middle, seaLevel)) * through, 0.0f);
 		}
 		else

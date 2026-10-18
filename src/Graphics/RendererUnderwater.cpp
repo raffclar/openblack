@@ -14,7 +14,9 @@
 #include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -29,10 +31,14 @@
 #include "3D/OceanInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Sky.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
+#include "ECS/Systems/WaterWakeSystemInterface.h"
 #include "Graphics/Atmosphere.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -222,6 +228,8 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 		frame.floaters.at(i) = i < floaters.size() ? glm::vec4(floaters[i], 1.0f) : glm::vec4(0.0f);
 	}
 
+	PrepareJellyfish();
+
 	// The scene goes into the target, with no sea and no reflection of it, and is drawn through the water after
 	desc.frameBuffer = &_underwater->Target(size);
 	desc.drawWater = false;
@@ -370,6 +378,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 	{
 		_underwater->BindMotes();
 		setUniforms(*motes);
+		SetJellyLights(*motes);
 		motes->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_ADD);
 		motes->Submit(postView);
@@ -378,6 +387,7 @@ void Renderer::EndUnderwater(const DrawSceneDesc& desc) const
 		setUniforms(*motes);
 		const glm::vec4 debris {frame.flags2.x, frame.flags2.y, 1.0f, 0.0f};
 		motes->SetUniformValue("u_uwFlags2", &debris);
+		SetJellyLights(*motes);
 		motes->SetTextureSampler("s_sceneDepth", 1, target.GetDepthStencilAttachment());
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA));
 		motes->Submit(postView);
@@ -550,10 +560,12 @@ void Renderer::SetTerrainUnderwater(const ShaderProgram& program, bool active) c
 	{
 		const glm::vec4 off {0.0f};
 		program.SetUniformValue("u_uwParams", &off);
+		program.SetUniformValue("u_jellyLightInfo", &off);
 		return;
 	}
 	const auto& frame = *_underwaterFrame;
 	program.SetUniformValue("u_uwParams", &frame.params);
+	SetJellyLights(program);
 	program.SetUniformValue("u_uwLight", &frame.light);
 	program.SetUniformValue("u_uwLightColour", &frame.lightColour);
 	program.SetUniformValue("u_uwEye", &frame.eye);
@@ -616,6 +628,7 @@ void Renderer::DrawFarSeabed(RenderPass landViewId) const
 	program->SetUniformValue("u_uwAbove", &frame.above);
 	program->SetUniformValue("u_uwWaves", &frame.waves);
 	program->SetUniformValue("u_uwPhase", &frame.phase);
+	SetJellyLights(*program);
 	program->SetTextureSampler("s_sand", 0, *textures.Handle(underwater::k_SandTextureId.value()));
 	program->SetTextureSampler("s_landLight", 1, GetLandLightTexture());
 	// The same shore map and sea floor texture as the land's blocks, so the two match where they meet
@@ -630,32 +643,103 @@ void Renderer::DrawFarSeabed(RenderPass landViewId) const
 	program->Submit(static_cast<bgfx::ViewId>(landViewId), UINT32_MAX);
 }
 
+void Renderer::PrepareJellyfish() const
+{
+	namespace jelly = underwater::jellyfish;
+	auto& frame = *_underwaterFrame;
+	frame.jellyfish.clear();
+	frame.jellyLightInfo = glm::vec4(0.0f);
+	const auto& system = Locator::underwaterSystem::value();
+	// They are deep: none of their light or shape comes through the water above them, so with the eye above the water
+	// there is nothing to find
+	if (frame.eye.w < 0.5f || !system.IsEffectOn(underwater::Effect::Jellyfish))
+	{
+		return;
+	}
+	const glm::vec3 eye {frame.eye};
+	const float seconds = system.GetSeconds();
+	const auto& seabed = system.GetSeabed();
+	auto found = jelly::Around(glm::vec2(eye.x, eye.z), seconds, system.GetSeaLevel(),
+	                           [&seabed](glm::vec2 point) { return seabed.DepthAt(point); });
+	// The nearest to the eye come first, so that they have the lights
+	std::ranges::sort(found, {}, [&eye](const jelly::Jellyfish& one) { return glm::distance(jelly::Middle(one), eye); });
+
+	// The things that make them flash: the camera very near, the hand, the creatures and the splashes
+	std::vector<jelly::Disturber> disturbers {{.position = eye, .reach = jelly::k_CameraReach, .since = 0.0f}};
+	if (Locator::entitiesRegistry::has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		if (Locator::handSystem::has_value())
+		{
+			const auto hand = Locator::handSystem::value()
+			                      .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			if (const auto* transform = registry.TryGet<ecs::components::Transform>(hand))
+			{
+				disturbers.push_back({.position = transform->position, .reach = jelly::k_HandReach, .since = 0.0f});
+			}
+		}
+		registry.Each<const ecs::components::Creature, const ecs::components::Transform>(
+		    [&disturbers](const ecs::components::Creature& /*creature*/, const ecs::components::Transform& transform) {
+			    disturbers.push_back({.position = transform.position, .reach = jelly::k_CreatureReach, .since = 0.0f});
+		    });
+	}
+	if (Locator::waterWakeSystem::has_value())
+	{
+		const auto wake = Locator::waterWakeSystem::value().GetFrame();
+		for (const auto& splash : wake.splashes)
+		{
+			disturbers.push_back({.position = splash.position, .reach = jelly::k_SplashReach, .since = seconds - splash.start});
+		}
+		for (const auto& tap : wake.taps)
+		{
+			disturbers.push_back({.position = tap.position, .reach = jelly::k_SplashReach, .since = seconds - tap.start});
+		}
+	}
+	auto& flashes = _underwater->jellyFlashes;
+	flashes.Update(found, disturbers, seconds);
+
+	frame.jellyfish.reserve(found.size() * 3);
+	uint32_t lights = 0;
+	float highest = -std::numeric_limits<float>::max();
+	for (const auto& one : found)
+	{
+		const float flash = flashes.Of(one.id);
+		int32_t light = -1;
+		if (lights < jelly::k_Lights)
+		{
+			const auto lit = jelly::LightOf(one, seconds, flash);
+			frame.jellyLights.at(lights * 2) = glm::vec4(lit.position, 0.0f);
+			frame.jellyLights.at(lights * 2 + 1) = glm::vec4(lit.colour, 0.0f);
+			highest = std::max(highest, lit.position.y);
+			light = static_cast<int32_t>(lights);
+			++lights;
+		}
+		const auto data = jelly::InstanceData(one, flash, light);
+		frame.jellyfish.insert(frame.jellyfish.end(), data.begin(), data.end());
+	}
+	if (lights > 0)
+	{
+		frame.jellyLightInfo = {static_cast<float>(lights), highest + jelly::k_LightReach,
+		                        1.0f / (jelly::k_LightRadius * jelly::k_LightRadius), 0.0f};
+	}
+}
+
+void Renderer::SetJellyLights(const ShaderProgram& program) const
+{
+	const glm::vec4 none {0.0f};
+	const auto* info = _underwaterFrame.has_value() ? &_underwaterFrame->jellyLightInfo : &none;
+	program.SetUniformValue("u_jellyLightInfo", info);
+	if (info->x > 0.5f)
+	{
+		program.SetUniformArray("u_jellyLights", _underwaterFrame->jellyLights.data(),
+		                        static_cast<uint16_t>(_underwaterFrame->jellyLights.size()));
+	}
+}
+
 bool Renderer::BindJellyfish() const
 {
-	const auto& system = Locator::underwaterSystem::value();
-	const auto& frame = *_underwaterFrame;
-	// They are deep: none of their light or shape comes through the water above them, so with the eye above the water
-	// there is nothing to draw
-	if (frame.eye.w < 0.5f)
-	{
-		return false;
-	}
-	const auto& seabed = system.GetSeabed();
-	const auto found =
-	    underwater::jellyfish::Around(glm::vec2(frame.eye.x, frame.eye.z), system.GetSeconds(), system.GetSeaLevel(),
-	                                  [&seabed](glm::vec2 point) { return seabed.DepthAt(point); });
-	if (found.empty())
-	{
-		return false;
-	}
-	std::vector<glm::vec4> instances;
-	instances.reserve(found.size() * 2);
-	for (const auto& jellyfish : found)
-	{
-		const auto data = underwater::jellyfish::InstanceData(jellyfish);
-		instances.insert(instances.end(), data.begin(), data.end());
-	}
-	return _underwater->BindJellyfish(instances);
+	const auto& instances = _underwaterFrame->jellyfish;
+	return !instances.empty() && _underwater->BindJellyfish(instances);
 }
 
 void Renderer::DrawJellyfish() const
@@ -670,6 +754,7 @@ void Renderer::DrawJellyfish() const
 	const auto& frame = *_underwaterFrame;
 	program->SetUniformValue("u_uwParams", &frame.params);
 	program->SetUniformValue("u_uwLightColour", &frame.lightColour);
+	SetJellyLights(*program);
 	const glm::vec4 bodies {glm::vec3(frame.eye), underwater::jellyfish::k_BodyPass};
 	program->SetUniformValue("u_uwEye", &bodies);
 	program->SetUniformValue("u_uwScatter", &frame.scatter);
@@ -692,6 +777,7 @@ void Renderer::DrawJellyfishGlow(bgfx::ViewId viewId, const FrameBuffer& target)
 	const auto& frame = *_underwaterFrame;
 	program->SetUniformValue("u_uwParams", &frame.params);
 	program->SetUniformValue("u_uwLightColour", &frame.lightColour);
+	SetJellyLights(*program);
 	const glm::vec4 glow {glm::vec3(frame.eye), underwater::jellyfish::k_GlowPass};
 	program->SetUniformValue("u_uwEye", &glow);
 	program->SetUniformValue("u_uwScatter", &frame.scatter);

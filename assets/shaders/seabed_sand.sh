@@ -6,6 +6,8 @@
 // SEABED_SAND_TEXTURE (the sand texture), SEABED_FLOOR_TEXTURE (the land's block textures, an array) and
 // SEABED_SHORE_TEXTURE (the shore map).
 
+#include "jelly_light.sh"
+
 // x: the layer of SEABED_FLOOR_TEXTURE that holds the ground under the sea, painted with the land's own material
 uniform vec4 u_uwSeaFloor;
 
@@ -224,8 +226,8 @@ float SeabedSunLight(vec2 surface)
 	return lit;
 }
 
-// The light on the ground under the sea, for a colour of the ground: the land's light (landLight), and the light from
-// the surface along its bent direction, with the caustics where it went through the surface
+// The light on the ground under the sea, for a colour of the ground: the land's light (landLight), the light from the
+// surface along its bent direction with the caustics where it went through the surface, and the light of the jellyfish
 vec3 SeabedLit(vec3 albedo, vec3 world, vec3 landLight, vec3 normal)
 {
 	vec2 p = world.xz;
@@ -257,7 +259,9 @@ vec3 SeabedLit(vec3 albedo, vec3 world, vec3 landLight, vec3 normal)
 	vec3 light = u_uwLightColour.rgb * UwTransmittance(depth * 0.6f / max(towards.y, 0.2f));
 	// No caustics where the hills' shadow lies on the water above
 	vec3 sun = light * facing * (0.6f + 1.0f * caustics * SeabedSunLight(surface));
-	return albedo * (landLight * (0.6f + 0.4f * facing) + sun);
+	// The light of the jellyfish near the ground
+	vec3 jellyfish = JellyLightAt(world, normal, 0.0f, -1.0f);
+	return albedo * (landLight * (0.6f + 0.4f * facing) + sun + jellyfish);
 }
 
 // The sand of the sea bed at a point, lit by the light under the water and its caustics. Layers of noise change all of

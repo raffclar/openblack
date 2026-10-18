@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include <bgfx/bgfx.h>
 #include <glm/vec2.hpp>
@@ -24,6 +25,7 @@
 #include "FrameBuffer.h"
 #include "Graphics/Underwater.h"
 #include "Graphics/UnderwaterFoam.h"
+#include "Graphics/UnderwaterJellyfish.h"
 #include "GraphicsHandle.h"
 #include "Texture2D.h"
 
@@ -61,8 +63,8 @@ public:
 	/// The reef's instances, made again when the sea bed changes; then binds the coral's crossed quads (or the plants'
 	/// crossed strips) and their instances. False when there are none of the kind.
 	bool BindReef(std::span<const seabed::ReefPlant> reef, uint32_t revision, seabed::ReefPlant::Kind kind);
-	/// Binds the mesh of a jellyfish (made the first time) and these instances (two vectors each) for a draw. False when
-	/// the frame has no room for them.
+	/// Binds the mesh of a jellyfish (made the first time) and these instances (three vectors each) for a draw. False
+	/// when the frame has no room for them.
 	bool BindJellyfish(std::span<const glm::vec4> instances);
 	/// How many triangles one coral and one plant have, and how many of each the reef has
 	[[nodiscard]] uint32_t ReefTriangles(seabed::ReefPlant::Kind kind) const;
@@ -107,6 +109,8 @@ public:
 	void ResetEnvironment() { _environmentDrawn = 0; }
 	/// The light and the eye of the last frame, to find a jump of the time of day or of the eye
 	std::optional<underwater::FrameLight> lastLight;
+	/// The flashes of the jellyfish, kept from frame to frame
+	underwater::jellyfish::Flashes jellyFlashes;
 
 	/// The foam field (see underwater::FoamClock): the target that one step writes, 0 or 1. The two targets are made
 	/// the first time one is asked for.
@@ -211,6 +215,13 @@ struct UnderwaterUniforms
 	bool motes {true};
 	/// Whether the eye is under the surface, or near enough to it that the surface can cut the view
 	bool eyeNearOrUnder {false};
+	/// The jellyfish round the eye this frame, three vectors each (see underwater::jellyfish::InstanceData)
+	std::vector<glm::vec4> jellyfish;
+	/// The lights of the nearest jellyfish: two vectors each, xyz where it is, then rgb its colour times how bright
+	std::array<glm::vec4, 2 * underwater::jellyfish::k_Lights> jellyLights {};
+	/// x how many lights there are, y the highest point that their light comes to, z 1 / the square of the radius of
+	/// their light (underwater::jellyfish::k_LightRadius)
+	glm::vec4 jellyLightInfo {0.0f};
 };
 
 } // namespace openblack::graphics

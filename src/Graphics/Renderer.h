@@ -500,6 +500,11 @@ private:
 	void DrawJellyfishGlow(bgfx::ViewId viewId, const FrameBuffer& target) const;
 	/// EXPERIMENT (not for merge): binds the jellyfish round the eye this frame for a draw; false when there are none
 	[[nodiscard]] bool BindJellyfish() const;
+	/// EXPERIMENT (not for merge): finds the jellyfish round the eye this frame, steps their flashes and finds the
+	/// lights of the nearest
+	void PrepareJellyfish() const;
+	/// EXPERIMENT (not for merge): sets the lights of the jellyfish on a program that reads them (jelly_light.sh)
+	void SetJellyLights(const ShaderProgram& program) const;
 	/// EXPERIMENT (not for merge): the steps of the water's field of small waves this frame, before the water reads it
 	void StepWakeField() const;
 	/// EXPERIMENT (not for merge): the field of small waves and the hulls, for the water's pass

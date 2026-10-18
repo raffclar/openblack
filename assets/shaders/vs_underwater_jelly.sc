@@ -1,5 +1,5 @@
-$input a_position, i_data0, i_data1
-$output v_world, v_texcoord0, v_color0, v_normal
+$input a_position, i_data0, i_data1, i_data2
+$output v_world, v_texcoord0, v_texcoord1, v_color0, v_normal
 
 #include <bgfx_shader.sh>
 
@@ -13,11 +13,17 @@ $output v_world, v_texcoord0, v_color0, v_normal
 // the side of the tentacle, or -1 to 1 up the halo), z the part (0 outer shell, 1 inner shell, 2 inner tentacle,
 // 3 outer tentacle, 4 halo), w which tentacle.
 // i_data0: xyz the top of the bell, w its size. i_data1: x the phase of the beat, y the colour, z how much it shows,
-// w its seed. u_uwEye: xyz the eye, w the pass (0 the bodies in the scene, 1 their own light after the water).
+// w its seed. i_data2: x its flash, 0 to 1, y the number of its light (-1 when it has none). u_uwEye: xyz the eye, w the
+// pass (0 the bodies in the scene, 1 their own light after the water).
 
 #define JELLY_TAU 6.2831853f
 // The radius of the ball of water that the light of a jellyfish makes bright (underwater::jellyfish::k_LightRadius)
 #define JELLY_LIGHT_RADIUS (0.5f * UW_UNITS_PER_METRE)
+// Their light at rest, the most that a flash adds and the brightest that it can be (underwater::jellyfish::k_RestLight,
+// k_FlashLight and k_MostGlow)
+#define JELLY_REST_LIGHT 0.4f
+#define JELLY_FLASH_LIGHT 0.5f
+#define JELLY_MOST_GLOW 0.8f
 
 void main()
 {
@@ -27,7 +33,7 @@ void main()
 	float seed = i_data1.w;
 	float part = a_position.z;
 
-	// The beat: a quick squeeze, then a slow release
+	// The beat: a quick squeeze, then a slow release (underwater::jellyfish::BeatCycle and Squeeze)
 	float cycle = fract(t * (0.45f + 0.25f * seed) + i_data1.x);
 	float squeeze = smoothstep(0.0f, 0.16f, cycle) * (1.0f - smoothstep(0.16f, 0.9f, cycle));
 	top.y += 0.12f * size * squeeze;
@@ -94,6 +100,11 @@ void main()
 	v_normal = normal;
 	v_texcoord0 = vec4(a_position.x, a_position.y, part, squeeze);
 	v_color0 = vec4(i_data1.y, i_data1.z, cycle, seed);
+	// How bright its light is: dim at rest, a little brighter as the bell squeezes, brighter in a flash
+	// (underwater::jellyfish::Emission)
+	float flash = clamp(i_data2.x, 0.0f, 1.0f);
+	float emission = min(JELLY_REST_LIGHT * (0.75f + 0.5f * squeeze) + JELLY_FLASH_LIGHT * flash, JELLY_MOST_GLOW);
+	v_texcoord1 = vec4(flash, i_data2.y, emission, a_position.w);
 	// In the pass of their own light (u_uwEye.w 1), each point moves along the line to the eye by more than the
 	// jellyfish's size. It stays at the same place on the screen, and its depth is in front of the jellyfish's own
 	// parts, so that only the scene in front of the jellyfish hides its light.

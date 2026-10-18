@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <utility>
 
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
@@ -88,7 +89,8 @@ std::vector<Jellyfish> Around(glm::vec2 eye, float seconds, float seaLevel, cons
 			                 .phase = Hash(cell.x, cell.y, 6u),
 			                 .hue = Hash(cell.x, cell.y, 7u),
 			                 .shows = shows,
-			                 .seed = seed});
+			                 .seed = seed,
+			                 .id = static_cast<uint32_t>(cell.x) * 0x9E3779B1u ^ static_cast<uint32_t>(cell.y) * 0x85EBCA77u});
 		}
 	}
 	std::ranges::sort(found, [eye](const Jellyfish& a, const Jellyfish& b) {
@@ -102,10 +104,109 @@ std::vector<Jellyfish> Around(glm::vec2 eye, float seconds, float seaLevel, cons
 	return found;
 }
 
-std::array<glm::vec4, 2> InstanceData(const Jellyfish& jellyfish)
+std::array<glm::vec4, 3> InstanceData(const Jellyfish& jellyfish, float flash, int32_t light)
 {
 	return {glm::vec4(jellyfish.position, jellyfish.size),
-	        glm::vec4(jellyfish.phase, jellyfish.hue, jellyfish.shows, jellyfish.seed)};
+	        glm::vec4(jellyfish.phase, jellyfish.hue, jellyfish.shows, jellyfish.seed),
+	        glm::vec4(flash, static_cast<float>(light), 0.0f, 0.0f)};
+}
+
+float BeatCycle(const Jellyfish& jellyfish, float seconds)
+{
+	const float beat = seconds * (0.45f + 0.25f * jellyfish.seed) + jellyfish.phase;
+	return beat - std::floor(beat);
+}
+
+float Squeeze(float cycle)
+{
+	return SmoothStep(0.0f, 0.16f, cycle) * (1.0f - SmoothStep(0.16f, 0.9f, cycle));
+}
+
+glm::vec3 Middle(const Jellyfish& jellyfish)
+{
+	// The bell is about three quarters of its size high: its light comes from a little under its top
+	return jellyfish.position - glm::vec3(0.0f, 0.3f * jellyfish.size, 0.0f);
+}
+
+glm::vec3 LightColour(float hue)
+{
+	return glm::mix(k_LightColour, k_GreenColour, k_MostGreen * std::clamp(hue, 0.0f, 1.0f));
+}
+
+float Emission(float squeeze, float flash)
+{
+	const float rest = k_RestLight * (0.75f + 0.5f * std::clamp(squeeze, 0.0f, 1.0f));
+	return std::min(rest + k_FlashLight * std::clamp(flash, 0.0f, 1.0f), k_MostGlow);
+}
+
+glm::vec3 LightAt(float distance)
+{
+	const float d = std::max(distance, 0.0f);
+	constexpr float k_Spread = k_LightRadius * k_LightRadius;
+	return GlowThroughWater(d) * (k_Spread / (d * d + k_Spread));
+}
+
+Light LightOf(const Jellyfish& jellyfish, float seconds, float flash)
+{
+	const float strength = Emission(Squeeze(BeatCycle(jellyfish, seconds)), flash) * jellyfish.shows;
+	return {.position = Middle(jellyfish), .colour = LightColour(jellyfish.hue) * strength};
+}
+
+float Stir(std::span<const Touch> touches)
+{
+	float stir = 0.0f;
+	for (const auto& touch : touches)
+	{
+		if (touch.since < 0.0f || touch.since > k_StirWindow || touch.reach <= 0.0f)
+		{
+			continue;
+		}
+		stir = std::max(stir, 1.0f - SmoothStep(touch.reach / 3.0f, touch.reach, touch.distance));
+	}
+	return stir;
+}
+
+float StepFlash(float flash, float stir, float step)
+{
+	const float dt = std::max(step, 0.0f);
+	if (stir > flash)
+	{
+		return flash + (stir - flash) * (1.0f - std::exp(-dt / k_FlashRise));
+	}
+	// It goes down to the stir, not under it
+	return stir + (flash - stir) * std::exp(-dt / k_FlashFade);
+}
+
+void Flashes::Update(std::span<const Jellyfish> jellyfish, std::span<const Disturber> disturbers, float seconds)
+{
+	// A long step (a pause or a jump of the clock) is one short step
+	constexpr float k_LongestStep = 0.1f;
+	const float step = _seconds < 0.0f ? 0.0f : std::clamp(seconds - _seconds, 0.0f, k_LongestStep);
+	_seconds = seconds;
+	std::unordered_map<uint32_t, float> next;
+	std::vector<Touch> touches(disturbers.size());
+	for (const auto& one : jellyfish)
+	{
+		const glm::vec3 middle = Middle(one);
+		std::ranges::transform(disturbers, touches.begin(), [&middle](const Disturber& disturber) {
+			return Touch {
+			    .distance = glm::distance(disturber.position, middle), .reach = disturber.reach, .since = disturber.since};
+		});
+		const float flash = StepFlash(Of(one.id), Stir(touches), step);
+		// Less than this shows as nothing
+		constexpr float k_Least = 1e-3f;
+		if (flash > k_Least)
+		{
+			next.emplace(one.id, flash);
+		}
+	}
+	_flashes = std::move(next);
+}
+
+float Flashes::Of(uint32_t id) const
+{
+	const auto found = _flashes.find(id);
+	return found != _flashes.end() ? found->second : 0.0f;
 }
 
 void Mesh(std::vector<Vertex>& vertices, std::vector<uint16_t>& indices)
