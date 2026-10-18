@@ -357,32 +357,25 @@ void MorphFile::ReadCreatureBlock(std::istream& stream) noexcept
 		return;
 	}
 	// Then up to two points on the body, each after whether it is there
-	const auto skipOptionalPoint = [&stream, &skip]() {
+	const auto readOptionalPoint = [&stream]() -> std::optional<MeshIntersect> {
 		uint32_t present = 0;
 		stream.read(reinterpret_cast<char*>(&present), sizeof(present));
-		if (present != 0)
+		if (present == 0)
 		{
-			skip(sizeof(MeshIntersect));
+			return std::nullopt;
 		}
+		MeshIntersect point {};
+		stream.read(reinterpret_cast<char*>(&point), sizeof(point));
+		return stream.good() ? std::optional(point) : std::nullopt;
 	};
-	// The first point is the point that kisses
+	// The first point is the point that kisses, the second the point that sick comes out of
 	if (version > 7)
 	{
-		uint32_t present = 0;
-		stream.read(reinterpret_cast<char*>(&present), sizeof(present));
-		if (present != 0)
-		{
-			MeshIntersect kiss {};
-			stream.read(reinterpret_cast<char*>(&kiss), sizeof(kiss));
-			if (stream.good())
-			{
-				_creatureKissPoint = kiss;
-			}
-		}
+		_creatureKissPoint = readOptionalPoint();
 	}
 	if (version > 17)
 	{
-		skipOptionalPoint();
+		_creaturePukePoint = readOptionalPoint();
 	}
 
 	CreatureEyes eyes {};

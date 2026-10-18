@@ -149,6 +149,9 @@ struct CreatureRig
 		float v;
 	};
 	std::optional<KissPoint> kissPoint;
+	/// The point on the body at the lips that sick comes out of, as the point that kisses. None when the file has no such
+	/// point. Then the sick comes out of the head bone.
+	std::optional<KissPoint> pukePoint;
 	/// The moment of the high and the low kiss animations when the lips meet, in milliseconds from their starts
 	std::optional<float> kissMs;
 	/// The type of wound each of its twelve fight blows leaves, in the order of the blow animations, when its file gives

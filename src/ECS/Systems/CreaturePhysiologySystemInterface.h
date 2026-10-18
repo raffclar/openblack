@@ -27,8 +27,6 @@ public:
 
 	/// Once a game turn
 	virtual void ProcessTurn() = 0;
-	/// Once a frame: drops of sick fly and fall
-	virtual void Update(float seconds) = 0;
 
 	/// The creature ate something of a food value. Returns the energy the meal gave it, by its size and species.
 	[[nodiscard]] virtual float Eat(entt::entity creature, float foodValue) = 0;
@@ -38,8 +36,6 @@ public:
 	virtual void EmptyBowels(entt::entity creature) = 0;
 	/// Sat for a game turn, resting a little
 	virtual void SitTurn(entt::entity creature) = 0;
-	/// Was sick, spraying drops of it in front
-	virtual void Puke(entt::entity creature) = 0;
 	/// Came round from a faint
 	virtual void WakeFromFaint(entt::entity creature) = 0;
 	/// Finished an action, by its name in the game's creature action table: it costs energy and tires it, and hard

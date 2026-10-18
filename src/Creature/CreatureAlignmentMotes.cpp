@@ -13,7 +13,7 @@ namespace openblack::creature_alignment_motes
 {
 namespace
 {
-using physics::turn::PuffKind;
+using liquid_particles::Kind;
 
 /// A start point near a random bone. The offsets come first on x, then on y, then on z, and the bone comes last.
 glm::vec3 StartPoint(float shownSize, uint32_t boneCount, const BonePoint& bonePoint, const LocalRandom& random)
@@ -52,7 +52,7 @@ std::vector<Puff> PuffsOf(float alignment, float shownSize, uint32_t boneCount, 
 			const auto position = StartPoint(shownSize, boneCount, bonePoint, random);
 			const auto alpha = AlphaOf(alignment * k_MoteAlphaPerAlignment);
 			const auto colour = k_MoteColours.at(random(static_cast<int32_t>(k_MoteColours.size())));
-			const auto kind = random(2) != 0 ? PuffKind::Mote : PuffKind::MoteReversed;
+			const auto kind = random(2) != 0 ? Kind::Mote : Kind::MoteReversed;
 			puffs.push_back({
 			    .position = position,
 			    .velocity = glm::vec3(0.0f),
@@ -73,7 +73,7 @@ std::vector<Puff> PuffsOf(float alignment, float shownSize, uint32_t boneCount, 
 		    .velocity = k_SmokeVelocity,
 		    .size = shownSize * k_SmokeSizePerSize,
 		    .argb = alpha + colour,
-		    .kind = PuffKind::Smoke,
+		    .kind = Kind::Smoke,
 		});
 	}
 	return puffs;

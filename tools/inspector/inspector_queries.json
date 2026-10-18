@@ -322,6 +322,12 @@
   "query": "particles.emitters"
  },
  {
+  "description": "The pool of liquid particles (drops of blood and sick, dust, smoke, motes): the count of each kind and the drops that lie on the land",
+  "kind": "object",
+  "parameters": [],
+  "query": "particles.liquid"
+ },
+ {
   "description": "How many bodies the physics has: flying, resting and in water",
   "kind": "object",
   "parameters": [],

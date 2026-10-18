@@ -687,10 +687,11 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 		rig->kissMs = static_cast<float>(points->kissTime);
 	}
 
-	// The eyes, the hair and the point that kisses sit on triangles of the meshes
+	// The eyes, the hair, the point that kisses and the point that sick comes out of sit on triangles of the meshes
 	const auto& eyes = file.GetCreatureEyes();
 	const auto& kiss = file.GetCreatureKissPoint();
-	if (eyes.has_value() || !file.GetHairGroups().empty() || kiss.has_value())
+	const auto& puke = file.GetCreaturePukePoint();
+	if (eyes.has_value() || !file.GetHairGroups().empty() || kiss.has_value() || puke.has_value())
 	{
 		auto& fileSystem = Locator::filesystem::value();
 		std::array<std::optional<l3d::L3DFile>, CreatureRig::k_MeshCount> meshes;
@@ -718,6 +719,14 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 			{
 				rig->kissPoint = CreatureRig::KissPoint {
 				    .vertices = triangle->vertices, .bones = triangle->bones, .u = kiss->u, .v = kiss->v};
+			}
+		}
+		if (puke.has_value())
+		{
+			if (const auto triangle = TriangleInMeshes(*puke, meshes))
+			{
+				rig->pukePoint = CreatureRig::KissPoint {
+				    .vertices = triangle->vertices, .bones = triangle->bones, .u = puke->u, .v = puke->v};
 			}
 		}
 	}
