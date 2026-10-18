@@ -136,10 +136,9 @@ TEST(OracleGlmOrder7, TheFrameOfAHeldThing)
 	for (size_t index = 0; index < table->Rows(); ++index)
 	{
 		const Row row {*table, index};
-		// The level turn whose facing is the game's: its first column is (minus the negative cosine, 0, the sine)
-		glm::mat3 levelTurn {1.0f};
-		levelTurn[0] = {-row.F("cosine"), 0.0f, row.F("sine")};
-		const auto basis = magic::hand_hold::HeldBasis(levelTurn, row.Vec("ux", "uy", "uz"));
+		// The game's facing: the sine, 0 and the negative cosine
+		const auto basis =
+		    magic::hand_hold::HeldBasis(glm::vec3(row.F("sine"), 0.0f, row.F("cosine")), row.Vec("ux", "uy", "uz"));
 		std::vector<float> values;
 		for (int i = 0; i < 3; ++i)
 		{

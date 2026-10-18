@@ -112,20 +112,22 @@ TEST(HandHoldPose, TheHandRollsBackAboutTheLineToTheCamera)
 TEST(HandHoldPose, UprightTheSeedTakesTheHandsTurn)
 {
 	const auto turn = glm::mat3(glm::eulerAngleY(0.7f));
-	const auto basis = HeldBasis(turn, {0.0f, 1.0f, 0.0f});
+	// The level way the hand faces, square to the turn's first axis
+	const auto facing = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), turn[0]);
+	const auto basis = HeldBasis(facing, {0.0f, 1.0f, 0.0f});
 	for (glm::length_t c = 0; c < 3; ++c)
 	{
 		ExpectNear(basis[c], turn[c]);
 	}
 	// Tipped, its up is the up given and its axes stay square
 	const auto up = glm::normalize(glm::vec3(0.3f, 1.0f, 0.1f));
-	const auto tipped = HeldBasis(turn, up);
+	const auto tipped = HeldBasis(facing, up);
 	ExpectNear(tipped[1], up);
 	EXPECT_NEAR(glm::dot(tipped[0], tipped[1]), 0.0f, k_Epsilon);
 	EXPECT_NEAR(glm::dot(tipped[0], tipped[2]), 0.0f, k_Epsilon);
 	EXPECT_NEAR(glm::length(tipped[0]), 1.0f, k_Epsilon);
 	// Its side lies across the level way the hand faces
-	EXPECT_NEAR(glm::dot(tipped[0], glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), turn[0])), 0.0f, k_Epsilon);
+	EXPECT_NEAR(glm::dot(tipped[0], facing), 0.0f, k_Epsilon);
 }
 
 TEST(HandHoldPose, TheSeedTurnsHalfRoundForARightHandAndByItsOwnTurn)

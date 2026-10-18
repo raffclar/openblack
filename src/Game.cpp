@@ -2977,7 +2977,7 @@ bool Game::Update() noexcept
 				    .dt = deltaTime,
 				    .cursor = _mousePosition,
 				    .camera = camera.GetOrigin(),
-				    .levelTurn = glm::mat3(glm::eulerAngleY(camera.GetRotation().y)),
+				    .heading = _handHeadingAngle,
 				    .modelCorrection = glm::mat3(glm::eulerAngleX(glm::radians(90.0f))),
 				    // A pour tips the hand; offering what it holds to a creature turns it over too
 				    .tilt = Locator::magicSystem::value().GetHandPour(Locator::time::value().GetTurnFraction()).tilt +

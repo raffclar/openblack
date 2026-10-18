@@ -481,7 +481,7 @@ private:
 	input::ShortcutKeys _shortcutKeys;
 	/// Which way the hand faces across the land, and its up, easing to the slope under it
 	glm::vec3 _handHeading {0.0f, 0.0f, 1.0f};
-	/// The same heading as an angle about the up axis, from -z towards +x, which the hand that holds a totem turns by
+	/// The same heading as an angle about the up axis, from -z towards +x, which turns the hand that holds a totem and the frame of a held thing
 	float _handHeadingAngle {std::numbers::pi_v<float>};
 	Zoomer3 _handUp {glm::vec3(0.0f, 1.0f, 0.0f)};
 	/// How the hand stands facing along its heading on level land, from which it is stood on a slope or a creature's body
