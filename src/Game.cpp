@@ -605,7 +605,8 @@ Game::Game(Arguments&& args) noexcept
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	config.resolution = {args.windowWidth, args.windowHeight};
 	config.displayMode = args.displayMode;
-	config.graphicsBackend = args.graphicsBackend;
+	config.noDraw = args.noDraw;
+	config.graphicsBackend = args.noDraw ? GraphicsBackend::Noop : args.graphicsBackend;
 	config.vsync = args.vsync;
 	config.clockedAudio = args.simulation.has_value() && args.simulation->frameMs.has_value();
 	config.detailLevel = args.detailLevel;
@@ -3352,7 +3353,7 @@ bool Game::Initialize() noexcept
 	_startupTimer.emplace("startup", _launchTime);
 	_startupTimer->Step("launch");
 
-	if (config.graphicsBackend != GraphicsBackend::Noop)
+	if (config.graphicsBackend != GraphicsBackend::Noop || config.noDraw)
 	{
 		uint32_t extraFlags = 0;
 		if (config.graphicsBackend == GraphicsBackend::Metal)

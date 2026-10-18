@@ -157,6 +157,9 @@ struct Arguments
 	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
 	bool warmUpFirstFrame {true};
 	bool dynamicTreeShadows {false};
+	/// Tools: open the window but draw nothing on the graphics card (the no-renderer backend), so that a long run driven
+	/// through the inspector does not wait on a busy graphics card
+	bool noDraw {false};
 	/// Debug: the Creature Breeder's bonus creatures taken as unlocked (none by default, as on a normal install)
 	creature_swap::Unlocked unlockedBonusCreatures;
 	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder
@@ -481,7 +484,8 @@ private:
 	input::ShortcutKeys _shortcutKeys;
 	/// Which way the hand faces across the land, and its up, easing to the slope under it
 	glm::vec3 _handHeading {0.0f, 0.0f, 1.0f};
-	/// The same heading as an angle about the up axis, from -z towards +x, which turns the hand that holds a totem and the frame of a held thing
+	/// The same heading as an angle about the up axis, from -z towards +x, which turns the hand that holds a totem and the
+	/// frame of a held thing
 	float _handHeadingAngle {std::numbers::pi_v<float>};
 	Zoomer3 _handUp {glm::vec3(0.0f, 1.0f, 0.0f)};
 	/// How the hand stands facing along its heading on level land, from which it is stood on a slope or a creature's body

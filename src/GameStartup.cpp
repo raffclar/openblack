@@ -254,6 +254,8 @@ void Game::PlayStartupScreens()
 {
 	if (!Locator::windowing::has_value() || Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
 	{
+		// With no window there are no screens and no window events, so the game is running at once
+		Locator::config::value().running = true;
 		return;
 	}
 	_loadingScreen = gui::LoadingScreen::Create();
