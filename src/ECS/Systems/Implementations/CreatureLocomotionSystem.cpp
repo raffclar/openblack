@@ -1398,7 +1398,7 @@ void CreatureLocomotionSystem::ProcessTurn()
 			    if (!creature_layers::IsPlaying(animation.body))
 			    {
 				    self.motion = Motion::Planning;
-				    self.fidgetMs = k_FidgetMs;
+				    self.fidgetMs = locomotion::k_FidgetMs;
 			    }
 			    break;
 		    case Motion::Turning:
