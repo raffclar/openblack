@@ -1250,6 +1250,10 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::FootpathFinder::to>("to")
 	    .Field<&components::FootpathFinder::footpath>("footpath")
 	    .Field<&components::FootpathFinder::plan>("plan");
+	Reflect<components::FootpathObstacleChange>(context)
+	    .Field<&components::FootpathObstacleChange::put>("put")
+	    .Field<&components::FootpathObstacleChange::radius>("radius")
+	    .Field<&components::FootpathObstacleChange::place>("place");
 	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::wood>(
 	    "wood");
 	Reflect<components::Forest>(context).Field<&components::Forest::type>("type");

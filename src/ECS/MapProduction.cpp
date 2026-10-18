@@ -53,6 +53,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/ThingModel.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -328,6 +329,11 @@ void MapProduction::File(entt::entity entity, const Kind& kind) const
 	{
 		_registry->Assign<MapCellMover>(entity);
 	}
+	// A thing that stays put, coming onto the map, may send the footpaths round it
+	if (kind.placement != Placement::MobileFront && Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().ThingPut(entity);
+	}
 }
 
 void MapProduction::TakeOut(entt::entity entity) const
@@ -346,6 +352,11 @@ void MapProduction::TakeOut(entt::entity entity) const
 		_lists.Remove(cell, entity);
 	}
 	resident->cells.clear();
+	// A thing that stays put, going off the map, may bring the footpaths back from going round it
+	if (resident->placement != Placement::MobileFront && Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().ThingRemoved(entity, resident->filedAt);
+	}
 }
 
 std::span<const entt::entity> MapProduction::GetFixedInGridCell(const CellId& cellId) const

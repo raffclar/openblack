@@ -4657,6 +4657,13 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	}
 
 	timer.Step("map script");
+	// The game puts each thing on the map as the script makes it, before the footpaths load: the things go into their
+	// map cells now, and no footpath goes round them
+	Locator::entitiesMap::value().Sync();
+	if (Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().ProcessObstacleChanges();
+	}
 	// Each released map comes with an optional .fot file which contains the footpath information for the map
 	const auto stem = string_utils::LowerCase(path.stem().generic_string());
 	const auto fotPath = fileSystem.GetPath<filesystem::Path::Landscape>() / fmt::format("{}.fot", stem);

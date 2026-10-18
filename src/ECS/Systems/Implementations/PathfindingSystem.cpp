@@ -815,3 +815,48 @@ void PathfindingSystem::ProcessLookahead()
 		                                         walker.clockwise == MoveStateClockwise::Clockwise));
 	}
 }
+
+void PathfindingSystem::LookAgain(entt::entity walker)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* wallHug = registry.Valid(walker) ? registry.TryGet<WallHug>(walker) : nullptr;
+	auto* transform = registry.TryGet<Transform>(walker);
+	if (wallHug == nullptr || transform == nullptr)
+	{
+		return;
+	}
+	HeldPosition(registry, walker, *wallHug, *transform);
+	auto walking = WalkerOf(registry, walker, *wallHug, *transform);
+	walking.state = MoveState::Linear;
+	walking.clockwise = MoveStateClockwise::Undefined;
+	// A walk with no step yet faces its goal and looks on its next turn
+	if (wallHug->step != glm::ivec2(0, 0))
+	{
+		ScanAhead(registry, walking);
+	}
+	else
+	{
+		registry.Remove<WallHugObjectReference>(walker);
+	}
+	Retag(registry, walking);
+}
+
+void PathfindingSystem::WalkTo(entt::entity walker, glm::ivec2 goal)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* wallHug = registry.Valid(walker) ? registry.TryGet<WallHug>(walker) : nullptr;
+	auto* transform = registry.TryGet<Transform>(walker);
+	if (wallHug == nullptr || transform == nullptr)
+	{
+		return;
+	}
+	HeldPosition(registry, walker, *wallHug, *transform);
+	wallHug->goal = wall_hug::ToPoint(goal);
+	auto walking = WalkerOf(registry, walker, *wallHug, *transform);
+	walking.goal = goal;
+	walking.state = MoveState::Linear;
+	walking.clockwise = MoveStateClockwise::Undefined;
+	FaceGoal(walking);
+	ScanAhead(registry, walking);
+	Retag(registry, walking);
+}

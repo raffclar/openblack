@@ -14,6 +14,7 @@
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 namespace openblack::ecs::systems
 {
@@ -21,7 +22,9 @@ namespace openblack::ecs::systems
 /// The footpaths laid in play (components::Footpath, components::FootpathLink, components::FootpathFinder). A town's
 /// building that starts working gets a path from the town's storage pit; a town that joins a worship site gets a path
 /// from its pit to the site, found over a few turns; a dance away from a temple gets a path from the nearest town's pit.
-/// Each path goes round what stands between its ends, by the creatures' route search for a route that no one walks.
+/// Each path goes round what stands between its ends, by the creatures' route search for a route that no one walks. A
+/// thing that the creatures' route rule makes them go round, put on the map or removed from it, sends the paths round it or
+/// back on their next turn, and the villagers on the changed paths find their way again.
 class FootpathSystemInterface
 {
 public:
@@ -36,7 +39,17 @@ public:
 	/// A dance is made: one that is not a worship site's or a temple's gets a path from the storage pit of its town, or
 	/// of the town nearest it
 	virtual void DanceMade(entt::entity dance, entt::entity town) = 0;
-	/// Once a turn: the paths being found take a few more steps, and those found are laid
+	/// A thing that stays put comes onto the map: when the creatures' route rule makes them go round it, the paths go
+	/// round it from their next turn
+	virtual void ThingPut(entt::entity thing) = 0;
+	/// A thing that stays put leaves the map from where it stood: when the paths went round it, they stop going round it
+	/// on their next turn
+	virtual void ThingRemoved(entt::entity thing, glm::vec3 position) = 0;
+	/// The paths go round the things that came onto the map, and stop going round those that left it, in turn. A land's
+	/// things come onto the map before its footpaths load, so no path goes round them.
+	virtual void ProcessObstacleChanges() = 0;
+	/// Once a turn: the obstacle changes are done; then the paths being found take a few more steps, and those found are
+	/// laid
 	virtual void ProcessTurn() = 0;
 
 	/// The places of the nodes of a path laid at once between two places, none when no way is found
