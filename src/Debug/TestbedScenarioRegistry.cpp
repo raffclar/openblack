@@ -7005,6 +7005,34 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "saves.creed_glow",
+	    .name = "Save and load: the load restores the creed glows",
+	    .facet = Facet::Mind,
+	    .description = "A tiger of the second player stands on the land. After a second, a script gives it a full creed "
+	                   "power above its body and a half power on its left hand. 2 seconds later the game saves into "
+	                   "slot 0. 1 second after that, the script removes the two powers. 3 seconds later the game loads "
+	                   "slot 0.",
+	    .expected = "The tiger gets a glowing shell above its head and one on its left hand, and it starts to hum. The "
+	                "shells go and the hum stops. At the load the two shells appear again with the same size, and the "
+	                "tiger hums again. The log shows the save and the load.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{80.0f, -15.0f}, {120.0f, 15.0f}}},
+	    .creatures = {[] {
+		    auto tiger = Content(CreatureType::Tiger, {100.0f, 0.0f});
+		    tiger.owner = PlayerNames::PLAYER_TWO;
+		    tiger.hold = true;
+		    tiger.pauseMind = true;
+		    return tiger;
+	    }()},
+	    .commands = {{.kind = Kind::GiveCreedPower, .delaySeconds = 1.0f, .value = 3, .amount = 1.0f},
+	                 {.kind = Kind::GiveCreedPower, .delaySeconds = 0.0f, .value = 0, .amount = 0.5f},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 2.0f, .value = 0},
+	                 {.kind = Kind::GiveCreedPower, .delaySeconds = 1.0f, .value = 3, .amount = 0.0f},
+	                 {.kind = Kind::GiveCreedPower, .delaySeconds = 0.0f, .value = 0, .amount = 0.0f},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "mind.hand_free_pick_up",
 	    .name = "Put down a thing before a pick-up",
 	    .facet = Facet::Mind,

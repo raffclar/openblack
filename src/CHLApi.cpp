@@ -58,7 +58,6 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureActivity.h"
-#include "Creature/CreatureCreed.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureHandGlow.h"
@@ -87,7 +86,6 @@
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
-#include "ECS/Components/CreatureCreedPowers.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -8063,14 +8061,6 @@ void SetCreatureCreedProperties() // 338 SET_CREATURE_CREED_PROPERTIES
 	{
 		ScriptMessage("Thing not creature!");
 		return;
-	}
-	// The saved game keeps the values of the glow
-	if (hand >= 0)
-	{
-		auto& powers = registry.AllOf<ecs::components::CreatureCreedPowers>(object)
-		                   ? registry.Get<ecs::components::CreatureCreedPowers>(object)
-		                   : registry.Assign<ecs::components::CreatureCreedPowers>(object);
-		creature_creed::Set(powers, static_cast<size_t>(hand), scale, power);
 	}
 	// The game does not examine the place, and a number out of range changes memory after the glows. Ignore it.
 	const auto place = creature_hand_glow::PlaceOf(hand);

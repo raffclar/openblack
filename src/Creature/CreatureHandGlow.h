@@ -96,6 +96,21 @@ enum class Hum : uint8_t
 /// effect.
 [[nodiscard]] Hum SetCreedPower(Glows& glows, Place place, float scale, float power);
 
+/// The creed power of a place as a saved game keeps it: the scale and the power of its glow
+struct SavedPower
+{
+	float scale {0.0f};
+	float power {0.0f};
+
+	bool operator==(const SavedPower&) const = default;
+};
+/// The creed power that a save keeps for a place. A place without a glow keeps a scale and a power of 0.
+[[nodiscard]] SavedPower SavedPowerOf(const Glows& glows, Place place);
+/// A load gives the creature the creed powers of the saved game. The creature starts again with no glows, then each
+/// place in turn gets its saved power (see SetCreedPower), so a place with a power of 0 has no glow. The hum starts when
+/// a glow has power after the load and the glows had no power before it, and stops in the opposite case.
+[[nodiscard]] Hum LoadCreedPowers(Glows& glows, std::span<const SavedPower, k_PlaceCount> powers);
+
 /// The first of the animation events that set a creed glow. Each place has five events in turn, one for each level.
 constexpr int32_t k_FirstCreedEvent = 95;
 /// The last of the animation events that set a creed glow

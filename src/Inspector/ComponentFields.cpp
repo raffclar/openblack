@@ -102,7 +102,6 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
 #include "ECS/Components/CreatureCopy.h"
-#include "ECS/Components/CreatureCreedPowers.h"
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureDestruction.h"
 #include "ECS/Components/CreatureDrawnFeet.h"
@@ -695,7 +694,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CaveCreature::state>("state")
 	    .Field<&components::CaveCreature::light>("light")
 	    .Field<&components::CaveCreature::tattooSites>("tattooSites");
-	Reflect<components::CreatureCreedPowers>(context).Field<&components::CreatureCreedPowers::glows>("glows");
 	Reflect<components::CreatureDance>(context)
 	    .Field<&components::CreatureDance::dance>("dance")
 	    .Field<&components::CreatureDance::startedBy>("startedBy")
@@ -2853,9 +2851,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<openblack::ecs::components::CreatureCasting::Fizzle>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureCasting::Fizzle::target>("target")
 	    .Field<&openblack::ecs::components::CreatureCasting::Fizzle::magicType>("magicType");
-	Reflect<openblack::ecs::components::CreatureCreedPowers::Glow>(context, ValueOnly {})
-	    .Field<&openblack::ecs::components::CreatureCreedPowers::Glow::scale>("scale")
-	    .Field<&openblack::ecs::components::CreatureCreedPowers::Glow::power>("power");
 	Reflect<openblack::ecs::components::CreatureDance::Place>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureDance::Place::dancer>("dancer")
 	    .Field<&openblack::ecs::components::CreatureDance::Place::position>("position");

@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -25,6 +26,8 @@
 #include <VanillaSaveFile.h>
 #include <WorldFile.h>
 #include <gtest/gtest.h>
+
+#include "Creature/CreatureHandGlow.h"
 
 using namespace openblack::gamesave;
 
@@ -323,6 +326,56 @@ TEST(SaveCreatureRecord, AFullRecordReadsBackAsItWasWritten)
 	ASSERT_TRUE(read.has_value());
 	EXPECT_EQ(*read, record);
 	EXPECT_EQ(Bytes(*read), bytes);
+}
+
+TEST(SaveCreatureRecord, AGlowingCreatureGetsItsCreedGlowsBackAndWritesTheSameBytes)
+{
+	namespace glow = openblack::creature_hand_glow;
+	using glow::Place;
+	glow::Glows glows;
+	glow::Set(glows, Place::LeftHand, 1.0f, 1.5f);
+	glow::Set(glows, Place::Circling, 5.0f, 0.1f);
+
+	auto record = AFullRecord();
+	for (size_t place = 0; place < record.creedPowers.size(); ++place)
+	{
+		const auto kept = glow::SavedPowerOf(glows, static_cast<Place>(place));
+		record.creedPowers.at(place) = {.scale = kept.scale, .power = kept.power};
+	}
+	const auto bytes = Bytes(record);
+	// Each place keeps its scale, then its power, in the order of the places. A place without a glow keeps 0 and 0.
+	const size_t creed = bytes.size() - 4 * 8;
+	EXPECT_EQ(At<float>(bytes, creed + 0), 1.0f);
+	EXPECT_EQ(At<float>(bytes, creed + 4), 1.5f);
+	EXPECT_EQ(At<float>(bytes, creed + 8), 0.0f);
+	EXPECT_EQ(At<float>(bytes, creed + 12), 0.0f);
+	EXPECT_EQ(At<float>(bytes, creed + 24), 5.0f);
+	EXPECT_EQ(At<float>(bytes, creed + 28), 0.1f);
+
+	const auto read = Read(bytes);
+	ASSERT_TRUE(read.has_value());
+	std::array<glow::SavedPower, glow::k_PlaceCount> kept {};
+	std::ranges::transform(read->creedPowers, kept.begin(), [](const CreedPower& power) {
+		return glow::SavedPower {.scale = power.scale, .power = power.power};
+	});
+	glow::Glows loaded;
+	EXPECT_EQ(glow::LoadCreedPowers(loaded, kept), glow::Hum::Start);
+	ASSERT_TRUE(loaded[0].has_value());
+	EXPECT_EQ(loaded[0]->scale, 1.0f);
+	EXPECT_EQ(loaded[0]->power, 1.5f);
+	EXPECT_FALSE(loaded[1].has_value());
+	EXPECT_FALSE(loaded[2].has_value());
+	ASSERT_TRUE(loaded[3].has_value());
+	EXPECT_EQ(loaded[3]->power, 0.1f);
+
+	// A save of the loaded creature writes the same bytes again
+	auto again = *read;
+	for (size_t place = 0; place < again.creedPowers.size(); ++place)
+	{
+		const auto power = glow::SavedPowerOf(loaded, static_cast<Place>(place));
+		again.creedPowers.at(place) = {.scale = power.scale, .power = power.power};
+	}
+	EXPECT_EQ(Bytes(again), bytes);
 }
 
 TEST(SaveCreatureRecord, TheAgendaKeepsOnlyTheStepsFromTheCurrentOne)
