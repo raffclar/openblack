@@ -9,6 +9,8 @@
 
 #include "DefaultWorldCameraModel.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <array>
 #include <functional>
@@ -19,6 +21,7 @@
 
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/norm.hpp>
 #include <glm/gtx/polar_coordinates.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -42,6 +45,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/UnderwaterBoundary.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
+#include "Graphics/Atmosphere.h"
 #include "Help/HelpProfile.h"
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
@@ -138,6 +142,43 @@ std::optional<glm::vec3> FocusThroughSea(glm::vec3 eye, glm::vec3 focus, const s
 /// # Returns
 ///
 /// The projection length of `p3` onto the direction from `p1` to `p2`.
+/// EXPERIMENT (not for merge): the disc of the open sea, which gets larger with the height over the curved world. Low
+/// down it is the open sea's own disc.
+std::optional<glm::vec3> KeepInsideFarSea(glm::vec3 origin)
+{
+	const float sea = Locator::underwaterSystem::has_value() ? Locator::underwaterSystem::value().GetSeaLevel() : 0.0f;
+	const float reach = planet_nav::FarSeaReach(origin.y - sea);
+	if (reach <= planet_nav::k_NearSeaRadius)
+	{
+		return camera_limits::KeepInsideOpenSea(origin);
+	}
+	const glm::vec2 across = glm::xz(origin) - camera_limits::k_AllowedAreaCentre;
+	const float distance = glm::length(across);
+	if (!(distance > reach))
+	{
+		return std::nullopt;
+	}
+	const glm::vec2 kept = camera_limits::k_AllowedAreaCentre + across * (reach / distance);
+	return glm::vec3(kept.x, origin.y, kept.y);
+}
+
+/// EXPERIMENT (not for merge): the ray through a point of the screen (a pixel), from a camera's inverse view and
+/// projection made with the eye at the origin, so that it keeps its precision far from the map
+glm::vec3 RayThrough(const glm::mat4& inverseViewProjection, glm::vec2 cursor, glm::vec2 screenSize)
+{
+	const auto ndc = glm::vec2((cursor.x / screenSize.x - 0.5f) * 2.0f, ((1.0f - cursor.y / screenSize.y) - 0.5f) * 2.0f);
+	const auto near = inverseViewProjection * glm::vec4(ndc, 0.0f, 1.0f);
+	const auto far = inverseViewProjection * glm::vec4(ndc, 0.5f, 1.0f);
+	return glm::normalize(glm::vec3(far) / far.w - glm::vec3(near) / near.w);
+}
+
+/// EXPERIMENT (not for merge): the inverse of a camera's view and projection, with the eye at the origin
+glm::mat4 EyeRelativeInverse(const glm::mat4& projection, const planet_nav::Pose& pose)
+{
+	const auto line = glm::vec3(glm::dvec3(pose.focus) - glm::dvec3(pose.eye));
+	return glm::inverse(projection * glm::lookAt(glm::vec3(0.0f), line, pose.up));
+}
+
 float PointDistanceAlongLineSegment(const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3)
 {
 	const glm::vec3 v12 = p2 - p1; // Vector from p1 to p2
@@ -323,8 +364,9 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 		moved.pushed = true;
 	}
 
-	// Above its ceiling it slides down the line it looks along, what it looks at with it
-	if (zones.exclusionsOn)
+	// Above its ceiling it slides down the line it looks along, what it looks at with it. EXPERIMENT (not for merge):
+	// with the map's boundary off, the camera can climb to space.
+	if (zones.exclusionsOn && !underwater_boundary::Off())
 	{
 		const auto ceiling = camera_zones::HeightLimit(zones, groundAtStart);
 		if (_targetOrigin.y > ceiling)
@@ -349,16 +391,25 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 
 	// Within the disc round the island; what it looks at stays where it is. EXPERIMENT (not for merge): with the map's
 	// boundary off, within the much larger disc of the open sea.
-	if (const auto inside = underwater_boundary::Off() ? camera_limits::KeepInsideOpenSea(_targetOrigin)
-	                                                   : camera_limits::KeepInsideAllowedArea(_targetOrigin);
+	if (const auto inside =
+	        underwater_boundary::Off() ? KeepInsideFarSea(_targetOrigin) : camera_limits::KeepInsideAllowedArea(_targetOrigin);
 	    inside.has_value())
 	{
+		// EXPERIMENT (not for merge): over the open sea, what it looks at moves with it, so the view does not turn as the
+		// camera goes down and back towards the island
+		if (underwater_boundary::Off())
+		{
+			_targetFocus += *inside - _targetOrigin;
+			_focusAtClick += *inside - _targetOrigin;
+		}
 		_targetOrigin = *inside;
 		moved.focusMoved = true;
 	}
 
-	// No further in a frame than the limit, except on a flight's first frame or zooming
-	if (!_flewThisFrame && zoomDelta == 0.0f)
+	// No further in a frame than the limit, except on a flight's first frame or zooming. EXPERIMENT (not for merge): a
+	// drag of the curved sea keeps the gripped point under the cursor, however far it goes.
+	const bool curvedDrag = _dragging && _planetGrip.has_value() && !_planetGrip->globe;
+	if (!_flewThisFrame && zoomDelta == 0.0f && !curvedDrag)
 	{
 		const auto seconds = std::chrono::duration_cast<std::chrono::duration<float>>(dt).count();
 		const auto limit = camera_limits::FrameMoveLimit(_focusDistance, seconds);
@@ -512,6 +563,13 @@ void DefaultWorldCameraModel::UpdateModeArcBall(glm::vec3 eulerAngles, glm::u16v
 
 void DefaultWorldCameraModel::UpdateModeDragging(const Camera& camera, glm::u16vec2 mouseCurrent)
 {
+	// EXPERIMENT (not for merge): the hand drags the planet or the curved sea
+	if ((_features & camera_help::feature::k_Strafe) != 0 && DragPlanet(mouseCurrent))
+	{
+		SendHelpEvents(camera_help::events::LandDragEvents(_helpControls));
+		_helpControls = {};
+		return;
+	}
 	// Panning is strafing, and the land must be under the cursor now and where the land was gripped
 	if ((_features & camera_help::feature::k_Strafe) == 0 || !_screenSpaceMouseRaycastHit.has_value() ||
 	    (_landGrip.has_value() && !_landGrip->land))
@@ -569,7 +627,8 @@ void DefaultWorldCameraModel::UpdateModeDragging(const Camera& camera, glm::u16v
 
 bool DefaultWorldCameraModel::FlyTo(camera_fly::Reason reason)
 {
-	if (!Locator::terrainSystem::has_value())
+	// EXPERIMENT (not for merge): over the planet the camera does not fly
+	if (!Locator::terrainSystem::has_value() || _overPlanet)
 	{
 		return false;
 	}
@@ -659,14 +718,46 @@ void DefaultWorldCameraModel::UpdateRaycastHitPoints(const Camera& camera)
 	{
 		const auto hit = camera.RaycastScreenCoordToLand({0.5f, 0.5f}, true, Camera::Interpolation::Drawn);
 		_screenSpaceCenterRaycastHit = hit.and_then(ecs::components::GetTransformPosition);
+		// EXPERIMENT (not for merge): past the land and the near sea, the middle of the screen shows the curved sea. Over
+		// the planet it is the point that the local camera looks at.
+		if (!_screenSpaceCenterRaycastHit.has_value() && PlanetBall().has_value())
+		{
+			if (!_overPlanet)
+			{
+				_screenSpaceCenterRaycastHit = CurvedSeaUnder(camera, {0.5f, 0.5f});
+			}
+			else if (_targetFocus != _targetOrigin)
+			{
+				const float sea = Locator::underwaterSystem::value().GetSeaLevel();
+				const float mapSize =
+				    static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+				const auto ahead = glm::normalize(_targetFocus - _targetOrigin);
+				if (const auto along = planet_nav::DrawnSeaDistance(_targetOrigin, ahead, sea, mapSize))
+				{
+					_screenSpaceCenterRaycastHit = _targetOrigin + ahead * *along;
+				}
+			}
+		}
 		_lastScreenCentreHit = _screenSpaceCenterRaycastHit.value_or(_lastScreenCentreHit);
+	}
+	// EXPERIMENT (not for merge): past the land and the near sea, the cursor shows the curved sea
+	_curvedMouseHit.reset();
+	if (!_screenSpaceMouseRaycastHit.has_value() && !_overPlanet && PlanetBall().has_value() && Locator::windowing::has_value())
+	{
+		const auto screenSize = glm::vec2(Locator::windowing::value().GetSize());
+		_curvedMouseHit = CurvedSeaUnder(camera, glm::vec2(Locator::gameActionSystem::value().GetMousePosition()) / screenSize);
 	}
 }
 
 float DefaultWorldCameraModel::GetZoomScale() const
 {
 	// Zooming speeds up with height, so a wheel notch covers about the same share of the view at any altitude
-	const auto heightAboveFocus = _targetOrigin.y - _targetFocus.y;
+	auto heightAboveFocus = _targetOrigin.y - _targetFocus.y;
+	// EXPERIMENT (not for merge): over the planet the zoom goes by the height over the ball
+	if (const auto ball = PlanetBall(); ball.has_value() && _orbitShare > 0.0f)
+	{
+		heightAboveFocus = glm::max(heightAboveFocus, planet_nav::HeightOver(*ball, _targetOrigin));
+	}
 	const auto maxScale = heightAboveFocus < 0.0f ? k_ZoomScaleMaxBelowFocus
 	                                              : (underwater_boundary::Off() ? k_ZoomScaleMaxToSpace : k_ZoomScaleMax);
 	return glm::clamp(k_StepScaleHeightFactor * glm::abs(heightAboveFocus), k_StepScaleMin, maxScale);
@@ -710,11 +801,28 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	_flewThisFrame = false;
 
 	UpdateCameraInterpolationValues(camera);
+	// EXPERIMENT (not for merge): over the planet the model works on the local camera
+	const auto ball = PlanetBall();
+	if (!ball.has_value())
+	{
+		_planetTurn = glm::identity<glm::quat>();
+		_orbitShare = 0.0f;
+		_overPlanet = false;
+	}
+	else if (_overPlanet)
+	{
+		ToLocal(*ball);
+	}
 	const auto originAtFrameStart = _targetOrigin;
 	UpdateRaycastHitPoints(camera);
 	UpdateFocusDistance();
 
-	// A drag just pressed grips the land under the cursor, or the focus with no land there
+	// A drag just pressed grips the land under the cursor, or the focus with no land there. EXPERIMENT (not for merge):
+	// over the planet or the far sea, the hand grips the planet or the curved sea.
+	if (_dragging && !_landGrip.has_value() && !_planetGrip.has_value())
+	{
+		std::ignore = GripPlanet(camera);
+	}
 	if (_dragging && !_landGrip.has_value())
 	{
 		const auto gripped = _screenSpaceMouseRaycastHit.value_or(_targetFocus);
@@ -736,8 +844,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 
 	if (_mode != _modePrev && _mode != Mode::FlyingToPoint && _modePrev != Mode::FlyingToPoint)
 	{
-		UpdateFocusPointInteractionParameters(camera.GetOrigin(Camera::Interpolation::Target),
-		                                      camera.GetFocus(Camera::Interpolation::Target), eulerAngles, camera);
+		UpdateFocusPointInteractionParameters(_targetOrigin, _targetFocus, eulerAngles, camera);
 		// The camera turns and tilts about the point it now looks at, not the one it looked at before the change
 		eulerAngles = EulerFromPoints(_targetOrigin, _focusAtClick);
 	}
@@ -747,17 +854,29 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	// Get step size
 	const auto scalingFactor = k_StepScaleMin;
 	const auto zoomDelta = _rotateAroundDelta.z * 0.0015f * GetZoomScale();
+	// EXPERIMENT (not for merge): over the planet the turn spins the view, the zoom moves the eye towards the middle
+	// of the screen, and a drag turns the globe. The local camera then keeps its look and takes no other control.
+	const bool orbiting = ball.has_value() && planet_nav::OrbitShare(planet_nav::HeightOver(*ball, _targetOrigin)) > 0.0f;
+	auto groundZoom = zoomDelta;
+	if (orbiting)
+	{
+		TurnAndZoomOverPlanet(*ball, groundZoom);
+		if (_mode == Mode::DraggingLandscape)
+		{
+			UpdateModeDragging(camera, Locator::gameActionSystem::value().GetMousePosition());
+		}
+	}
 
-	if (_mode == Mode::Polar || _mode == Mode::ArcBall)
+	if (!orbiting && (_mode == Mode::Polar || _mode == Mode::ArcBall))
 	{
 		// Adjust camera's orientation based on user input. Call will reset deltas.
-		TiltZoom(eulerAngles, scalingFactor, zoomDelta);
+		TiltZoom(eulerAngles, scalingFactor, groundZoom);
 	}
 
 	// EXPERIMENT (not for merge): zoomed in as close as it comes to the sea's surface, the camera looks through the water
 	// at the sea bed on the same line, so the zoom goes on down under the water and back up the same way
-	if (_mode == Mode::Polar && zoomDelta < 0.0f &&
-	    _originFocusDistanceAtInteractionStart + zoomDelta < camera_limits::k_ClosestZoom &&
+	if (!orbiting && _mode == Mode::Polar && groundZoom < 0.0f &&
+	    _originFocusDistanceAtInteractionStart + groundZoom < camera_limits::k_ClosestZoom &&
 	    Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled() &&
 	    Locator::terrainSystem::has_value())
 	{
@@ -775,9 +894,19 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 
 	const auto mouseCurrent = Locator::gameActionSystem::value().GetMousePosition();
 	_originFocusDistanceAtInteractionStart =
-	    glm::max(_originFocusDistanceAtInteractionStart + zoomDelta, camera_limits::k_ClosestZoom);
+	    glm::max(_originFocusDistanceAtInteractionStart + groundZoom, camera_limits::k_ClosestZoom);
 
-	UpdateMode(camera, eulerAngles, zoomDelta, mouseCurrent);
+	if (orbiting)
+	{
+		// The ground's controls start again from the local camera as it now is
+		_focusAtClick = _targetFocus;
+		_originFocusDistanceAtInteractionStart =
+		    glm::max(glm::distance(_targetOrigin, _targetFocus), camera_limits::k_ClosestZoom);
+	}
+	else
+	{
+		UpdateMode(camera, eulerAngles, zoomDelta, mouseCurrent);
+	}
 	// Land gripped too far ahead flies the camera there, and the double click waiting is taken with it
 	if (_flyToGrip)
 	{
@@ -790,7 +919,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 
 	// The self-tilting camera keeps to its height over the land, where it was at the start of the frame, looking the way
 	// it now does, while it tilts itself or nothing is asked of it
-	if ((_features & camera_help::feature::k_AutoPitch) != 0 && _keepsToItsPlace)
+	if (!orbiting && (_features & camera_help::feature::k_AutoPitch) != 0 && _keepsToItsPlace)
 	{
 		const auto height = Locator::cameraHelpSystem::has_value() ? Locator::cameraHelpSystem::value().Get().autoPitchHeight
 		                                                           : camera_help::k_DefaultAutoPitchHeight;
@@ -813,7 +942,209 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	_selfTiltEase = (_features & camera_help::feature::k_AutoPitch) != 0 && (_keepsToItsPlace || tilting || turnedFromBelow) &&
 	                !(_flewThisFrame && moved.pushed);
 
-	return ComputeUpdateReturnInfo(moved, camera.GetInterpolatorTime());
+	// EXPERIMENT (not for merge): the turn of the world gets smaller on the way down, and the world's camera follows.
+	// The camera goes no higher than the top of the orbit.
+	if (ball.has_value())
+	{
+		if (const auto kept = planet_nav::KeepUnderOrbitTop(*ball, _targetOrigin); kept.has_value())
+		{
+			_targetFocus += *kept - _targetOrigin;
+			_focusAtClick += *kept - _targetOrigin;
+			_targetOrigin = *kept;
+		}
+		const float share = planet_nav::OrbitShare(planet_nav::HeightOver(*ball, _targetOrigin));
+		_planetTurn = planet_nav::Unwind(_planetTurn, _orbitShare, share);
+		_orbitShare = share;
+	}
+	auto world = PlanetPose();
+	// A camera with a part that is not a number is not given to the frame
+	const auto finite = [](glm::vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); };
+	if (world.has_value() && !(finite(world->eye) && finite(world->focus) && finite(world->up)))
+	{
+		_planetTurn = glm::identity<glm::quat>();
+		world.reset();
+	}
+	_overPlanet = world.has_value();
+	if (world.has_value())
+	{
+		_localOrigin = _targetOrigin;
+		_localFocus = _targetFocus;
+		_worldOrigin = world->eye;
+	}
+	auto info = ComputeUpdateReturnInfo(moved, camera.GetInterpolatorTime());
+	if (info.has_value() && world.has_value() && !_flightPath.has_value())
+	{
+		info->origin = world->eye;
+		info->focus = world->focus;
+		info->up = world->up;
+	}
+	return info;
+}
+
+std::optional<planet_nav::Ball> DefaultWorldCameraModel::PlanetBall()
+{
+	if (!underwater_boundary::Off())
+	{
+		return std::nullopt;
+	}
+	const float sea = Locator::underwaterSystem::value().GetSeaLevel();
+	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+	return planet_nav::WorldBall(sea, glm::vec2(0.5f * mapSize), graphics::atmosphere::k_WorldRadius);
+}
+
+std::optional<planet_nav::Pose> DefaultWorldCameraModel::PlanetPose() const
+{
+	const auto ball = PlanetBall();
+	if (!ball.has_value() || (_orbitShare <= 0.0f && _planetTurn == glm::identity<glm::quat>()))
+	{
+		return std::nullopt;
+	}
+	const planet_nav::Pose local {.eye = _targetOrigin, .focus = _targetFocus, .up = glm::vec3(0.0f, 1.0f, 0.0f)};
+	const auto blended = planet_nav::Blend(local, planet_nav::OrbitPose(*ball, local), _orbitShare);
+	return planet_nav::TurnAbout(*ball, _planetTurn, blended);
+}
+
+void DefaultWorldCameraModel::ToLocal(const planet_nav::Ball& ball)
+{
+	const auto back = glm::conjugate(_planetTurn);
+	const auto local = [&ball, &back](glm::vec3 point) {
+		return planet_nav::TurnAbout(ball, back, {.eye = point, .focus = point}).eye;
+	};
+	// Something else put the camera (a scenario or a tool): its place is the local camera, with no turn of the world
+	if (_targetOrigin != _worldOrigin)
+	{
+		_planetTurn = glm::identity<glm::quat>();
+		_overPlanet = false;
+		return;
+	}
+	// While the destination stays where the last frame put it, the local camera is the one that the last frame kept
+	_targetOrigin = _localOrigin;
+	_currentOrigin = local(_currentOrigin);
+	_targetFocus = _localFocus;
+	_currentFocus = _localFocus;
+}
+
+std::optional<glm::vec3> DefaultWorldCameraModel::CurvedSeaUnder(const Camera& camera, glm::vec2 screenCoord)
+{
+	glm::vec3 nearPoint;
+	glm::vec3 direction;
+	camera.DeprojectScreenToWorld(screenCoord, nearPoint, direction, Camera::Interpolation::Drawn);
+	const auto eye = camera.GetOrigin(Camera::Interpolation::Drawn);
+	const float sea = Locator::underwaterSystem::value().GetSeaLevel();
+	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+	const auto along = planet_nav::DrawnSeaDistance(eye, direction, sea, mapSize);
+	if (!along.has_value())
+	{
+		return std::nullopt;
+	}
+	return eye + direction * *along;
+}
+
+bool DefaultWorldCameraModel::GripPlanet(const Camera& camera)
+{
+	const auto ball = PlanetBall();
+	if (!ball.has_value() || !Locator::windowing::has_value())
+	{
+		return false;
+	}
+	const auto cursor = glm::vec2(Locator::gameActionSystem::value().GetMousePosition());
+	const auto screenSize = glm::vec2(Locator::windowing::value().GetSize());
+	const auto& projection = camera.GetProjectionMatrix(Camera::Projection::Normal);
+	// Over the planet the hand grips the ball, as a globe
+	if (_overPlanet)
+	{
+		const planet_nav::Pose pose {
+		    .eye = camera.GetOrigin(Camera::Interpolation::Drawn),
+		    .focus = camera.GetFocus(Camera::Interpolation::Drawn),
+		    .up = camera.GetViewUp(Camera::Interpolation::Drawn),
+		};
+		const auto inverse = EyeRelativeInverse(projection, pose);
+		_planetGrip = PlanetGrip {
+		    .globe = true,
+		    .pose = pose,
+		    .inverseViewProjection = inverse,
+		    .gripped = planet_nav::GripOnBall(*ball, pose.eye, RayThrough(inverse, cursor, screenSize)),
+		    .turn = _planetTurn,
+		};
+		return true;
+	}
+	// Past the land and the near sea, the hand grips the curved sea
+	if (_screenSpaceMouseRaycastHit.has_value() || !_curvedMouseHit.has_value())
+	{
+		return false;
+	}
+	const planet_nav::Pose pose {.eye = _targetOrigin, .focus = _targetFocus};
+	_planetGrip = PlanetGrip {
+	    .globe = false,
+	    .pose = pose,
+	    .inverseViewProjection = EyeRelativeInverse(projection, pose),
+	    .gripped = *_curvedMouseHit,
+	    .turn = _planetTurn,
+	};
+	return true;
+}
+
+bool DefaultWorldCameraModel::DragPlanet(glm::u16vec2 mouseCurrent)
+{
+	const auto ball = PlanetBall();
+	if (!_planetGrip.has_value() || !ball.has_value() || !Locator::windowing::has_value())
+	{
+		return false;
+	}
+	const auto& grip = *_planetGrip;
+	const auto ray =
+	    RayThrough(grip.inverseViewProjection, glm::vec2(mouseCurrent), glm::vec2(Locator::windowing::value().GetSize()));
+	if (grip.globe)
+	{
+		_planetTurn = glm::normalize(planet_nav::GlobeDrag(*ball, grip.pose.eye, grip.gripped, ray) * grip.turn);
+		return true;
+	}
+	const float sea = Locator::underwaterSystem::value().GetSeaLevel();
+	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+	const planet_nav::SeaDistance seaDistance = [sea, mapSize](glm::vec3 eye, glm::vec3 direction) {
+		return planet_nav::DrawnSeaDistance(eye, direction, sea, mapSize);
+	};
+	if (const auto move = planet_nav::CurvedSeaDrag(seaDistance, grip.pose.eye, grip.gripped, ray); move.has_value())
+	{
+		const glm::vec3 across {move->x, 0.0f, move->y};
+		_targetOrigin = grip.pose.eye + across;
+		_targetFocus = grip.pose.focus + across;
+	}
+	return true;
+}
+
+void DefaultWorldCameraModel::TurnAndZoomOverPlanet(const planet_nav::Ball& ball, float& zoomDelta)
+{
+	const float share = planet_nav::OrbitShare(planet_nav::HeightOver(ball, _targetOrigin));
+	if (share <= 0.0f)
+	{
+		return;
+	}
+	// The turn spins the view about the line from the ball's middle through the eye
+	if (glm::abs(_rotateAroundDelta.y) > glm::epsilon<float>() && Locator::windowing::has_value())
+	{
+		const float angle =
+		    _rotateAroundDelta.y * glm::pi<float>() / static_cast<float>(Locator::windowing::value().GetSize().x);
+		const auto world = PlanetPose();
+		const auto eye = world.has_value() ? world->eye : _targetOrigin;
+		_planetTurn = glm::normalize(planet_nav::SpinAbout(ball, eye, angle) * _planetTurn);
+		_rotateAroundDelta.y = 0.0f;
+	}
+	// The zoom moves the eye and what it looks at towards the middle of the screen: the local camera's look blended
+	// to the line to the ball's middle
+	if (zoomDelta != 0.0f && _targetFocus != _targetOrigin)
+	{
+		const auto look = glm::normalize(_targetFocus - _targetOrigin);
+		const auto toMiddle = glm::vec3(glm::normalize(glm::dvec3(ball.centre) - glm::dvec3(_targetOrigin)));
+		const auto along = glm::normalize(glm::mix(look, toMiddle, share));
+		// Each notch changes the height over the ball by the same factor, so the zoom never goes past the ground
+		const float height = planet_nav::HeightOver(ball, _targetOrigin);
+		const float drop = height - planet_nav::OrbitZoomHeight(height, _rotateAroundDelta.z);
+		const auto shift = along * (drop / glm::max(glm::dot(along, toMiddle), 0.1f));
+		_targetFocus += shift;
+		_targetOrigin += shift;
+		zoomDelta = 0.0f;
+	}
 }
 
 std::optional<CameraModel::CameraInterpolationUpdateInfo>
@@ -1052,7 +1383,8 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		const auto& windowing = Locator::windowing::value();
 		const auto screenSize = windowing.GetSize();
 		const auto cursor = camera_drag::AreaCursor(glm::ivec2(actionSystem.GetMousePosition()), EdgeArea(screenSize));
-		_tricons = camera_drag::IdleTricons(cursor, _screenSpaceMouseRaycastHit.has_value(), windowing.IsWindowed());
+		const bool landUnderCursor = _screenSpaceMouseRaycastHit.has_value() || _curvedMouseHit.has_value() || _overPlanet;
+		_tricons = camera_drag::IdleTricons(cursor, landUnderCursor, windowing.IsWindowed());
 		// Watching a fight, the camera offers no tilting
 		if (onFight)
 		{
@@ -1208,11 +1540,13 @@ DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)
 		_ring.Start(cursor, EdgeArea(screenSize));
 		// The land is gripped as the camera next looks at it
 		_landGrip.reset();
+		_planetGrip.reset();
 	}
 	else
 	{
-		_drag.Move(actionSystem.GetMouseDelta(), EdgeArea(screenSize), milliseconds, _screenSpaceMouseRaycastHit.has_value(),
-		           _features);
+		// EXPERIMENT (not for merge): the planet and the curved sea count as land under the cursor
+		const bool landUnderCursor = _screenSpaceMouseRaycastHit.has_value() || _curvedMouseHit.has_value() || _overPlanet;
+		_drag.Move(actionSystem.GetMouseDelta(), EdgeArea(screenSize), milliseconds, landUnderCursor, _features);
 	}
 
 	const auto mode = _drag.GetMode();
@@ -1317,6 +1651,9 @@ void DefaultWorldCameraModel::PlaceAt(glm::vec3 origin, glm::vec3 focus)
 	_currentFocus = focus;
 	_targetOrigin = origin;
 	_targetFocus = focus;
+	// EXPERIMENT (not for merge): the camera that the command puts is the local camera, with no turn of the world
+	_planetTurn = glm::identity<glm::quat>();
+	_overPlanet = false;
 	// The command puts only the camera. The controls that the player holds keep their state and continue:
 	// - A turn or a tilt keeps the point that it turns about and its distance. The camera thus looks from the place
 	//   towards that point.

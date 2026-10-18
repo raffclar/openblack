@@ -21,6 +21,8 @@ struct Pose
 {
 	glm::vec3 eye;
 	glm::vec3 focus;
+	/// The direction of the top of the screen. It is the world's up, except for the experiment's camera over the planet.
+	glm::vec3 up {0.0f, 1.0f, 0.0f};
 };
 
 /// An eye nearer to its focus than this square of the distance moves away from the focus

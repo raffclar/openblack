@@ -69,6 +69,9 @@ public:
 	[[nodiscard]] glm::vec3 GetOrigin(Interpolation interpolation = Interpolation::Current) const;
 	[[nodiscard]] glm::vec3 GetOriginVelocity(Interpolation interpolation = Interpolation::Current) const;
 	[[nodiscard]] glm::vec3 GetFocus(Interpolation interpolation = Interpolation::Current) const;
+	/// EXPERIMENT (not for merge): the direction of the top of the screen, a unit vector. It is the world's up, except
+	/// for the camera over the planet.
+	[[nodiscard]] glm::vec3 GetViewUp(Interpolation interpolation = Interpolation::Current) const;
 	[[nodiscard]] glm::vec3 GetFocusVelocity(Interpolation interpolation = Interpolation::Current) const;
 
 	/// Get rotation as euler angles in radians
@@ -156,6 +159,7 @@ public:
 	{
 		ZoomInterpolator3f origin;
 		ZoomInterpolator3f focus;
+		ZoomInterpolator3f up;
 		std::chrono::microseconds time;
 		std::chrono::microseconds duration;
 		std::chrono::microseconds focusTime;
@@ -165,6 +169,7 @@ public:
 	{
 		return {.origin = _originInterpolators,
 		        .focus = _focusInterpolators,
+		        .up = _upInterpolators,
 		        .time = _interpolatorTime,
 		        .duration = _interpolatorDuration,
 		        .focusTime = _focusInterpolatorTime,
@@ -174,6 +179,7 @@ public:
 	{
 		_originInterpolators = motion.origin;
 		_focusInterpolators = motion.focus;
+		_upInterpolators = motion.up;
 		_interpolatorTime = motion.time;
 		_interpolatorDuration = motion.duration;
 		_focusInterpolatorTime = motion.focusTime;
@@ -196,6 +202,9 @@ protected:
 
 	ZoomInterpolator3f _originInterpolators;
 	ZoomInterpolator3f _focusInterpolators;
+	/// EXPERIMENT (not for merge): the top of the screen moves on the eye's clock. It is the world's up, except for the
+	/// camera over the planet.
+	ZoomInterpolator3f _upInterpolators {glm::vec3(0.0f, 1.0f, 0.0f)};
 	// As a value between 0 and _interpolatorDuration
 	std::chrono::microseconds _interpolatorTime = std::chrono::microseconds::zero();
 	std::chrono::microseconds _interpolatorDuration = std::chrono::microseconds::zero();
@@ -219,6 +228,7 @@ protected:
 		glm::vec3 focus;
 		glm::mat4 projection;
 		float nearClip;
+		glm::vec3 up {0.0f, 1.0f, 0.0f};
 	};
 	std::optional<View> _drawnView;
 	/// The kept view, or the view now when there is no kept view

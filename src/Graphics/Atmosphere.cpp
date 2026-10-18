@@ -622,10 +622,21 @@ float atmosphere::AltitudeOf(float heightOverSea)
 	return std::max(heightOverSea, 0.5f) / k_UnitsPerKilometre;
 }
 
+float atmosphere::HeightOverMapBall(glm::vec3 eye, float seaLevel, float mapSize)
+{
+	const glm::dvec2 across = glm::dvec2(eye.x, eye.z) - glm::dvec2(0.5 * mapSize);
+	const double height = static_cast<double>(eye.y) - seaLevel;
+	const double radius = k_WorldRadius;
+	const double squared = glm::dot(across, across) + height * (height + 2.0 * radius);
+	// distance - R, with no loss of the small terms
+	return static_cast<float>(squared / (std::sqrt(glm::dot(across, across) + (height + radius) * (height + radius)) + radius));
+}
+
 atmosphere::WorldCap atmosphere::MapCap(glm::vec2 eye, float heightOverSea, float mapSize)
 {
 	const glm::vec2 mapMiddle {0.5f * mapSize};
-	const float followsEye = 1.0f - Smoothstep(k_CapFollowsEyeBelow, k_CapOnMapAbove, heightOverSea);
+	const float overBall = HeightOverMapBall({eye.x, heightOverSea, eye.y}, 0.0f, mapSize);
+	const float followsEye = 1.0f - Smoothstep(k_CapFollowsEyeBelow, k_CapOnMapAbove, std::max(heightOverSea, overBall));
 	const glm::vec2 middle = glm::mix(mapMiddle, eye, followsEye);
 	const glm::vec2 far {std::max(middle.x, mapSize - middle.x), std::max(middle.y, mapSize - middle.y)};
 	return {.eyeFromMiddle = eye - middle, .radius = glm::length(far)};

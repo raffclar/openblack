@@ -27,6 +27,7 @@
 #include "3D/LandLine.h"
 #include "3D/MapCoords.h"
 #include "3D/Seabed.h"
+#include "Camera/PlanetNavigation.h"
 #include "Creature/CreatureMorph.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -159,6 +160,14 @@ float HeightAt(glm::vec2 point)
 	return HeightWith(SeabedToPick(), point);
 }
 
+/// EXPERIMENT (not for merge): a line from far round the planet starts where it comes near the map, so that the line
+/// tests stay short. Lines that start near the map stay as they are.
+std::optional<planet_nav::Line> NearMap(glm::vec3 from, glm::vec3 to)
+{
+	const float middle = 0.5f * static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+	return planet_nav::LineNearMap(from, to, {middle, 0.0f, middle}, planet_nav::k_PickReach);
+}
+
 /// The land or sea under a pixel, from the camera through the pixel's point on the near plane, as land_line::UnderPixel
 /// finds it with the sea, kept within the reach round the map's middle. EXPERIMENT (not for merge): while the
 /// experiment's view is on, the line goes through the water to the sea bed, from above the sea or under it. A line that
@@ -166,6 +175,14 @@ float HeightAt(glm::vec2 point)
 /// greatest depth. The point is not kept within the reach, and its height is that of the floor there.
 std::optional<glm::vec3> PickUnderPixel(glm::vec3 camera, glm::vec3 nearPoint)
 {
+	// EXPERIMENT (not for merge): from far round the planet the line starts near the map
+	const auto near = NearMap(camera, nearPoint);
+	if (!near.has_value())
+	{
+		return std::nullopt;
+	}
+	camera = near->from;
+	nearPoint = near->to;
 	const auto* seabed = SeabedWhileOn();
 	if (seabed == nullptr)
 	{
@@ -221,7 +238,12 @@ glm::vec3 HalfExtentsOf(entt::id_type mesh)
 
 std::optional<glm::vec3> PickingSystem::LandAlong(glm::vec3 from, glm::vec3 to) const
 {
-	if (const auto hit = land_line::LandAlong(from, to, CornersOf))
+	const auto near = NearMap(from, to);
+	if (!near.has_value())
+	{
+		return std::nullopt;
+	}
+	if (const auto hit = land_line::LandAlong(near->from, near->to, CornersOf))
 	{
 		return glm::vec3(hit->x, HeightAt(*hit), hit->y);
 	}
@@ -230,7 +252,12 @@ std::optional<glm::vec3> PickingSystem::LandAlong(glm::vec3 from, glm::vec3 to) 
 
 std::optional<glm::vec3> PickingSystem::LandOrSeaAlong(glm::vec3 from, glm::vec3 to, glm::vec3 camera) const
 {
-	if (const auto hit = land_line::LandOrSeaAlong(from, to, camera, CornersOf))
+	const auto near = NearMap(from, to);
+	if (!near.has_value())
+	{
+		return std::nullopt;
+	}
+	if (const auto hit = land_line::LandOrSeaAlong(near->from, near->to, camera, CornersOf))
 	{
 		return glm::vec3(hit->x, HeightAt(*hit), hit->y);
 	}
@@ -249,7 +276,12 @@ std::optional<glm::vec3> PickingSystem::LandUnderPixel(glm::vec3 camera, glm::ve
 	{
 		return PickUnderPixel(camera, nearPoint);
 	}
-	if (const auto point = land_line::UnderPixel(camera, nearPoint, false, CornersOf, HeightAt))
+	const auto near = NearMap(camera, nearPoint);
+	if (!near.has_value())
+	{
+		return std::nullopt;
+	}
+	if (const auto point = land_line::UnderPixel(near->from, near->to, false, CornersOf, HeightAt))
 	{
 		return land_line::KeptInReach(*point);
 	}

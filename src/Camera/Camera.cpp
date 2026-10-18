@@ -9,6 +9,8 @@
 
 #include "Camera.h"
 
+#include <algorithm>
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/intersect.hpp>
@@ -36,6 +38,28 @@ constexpr auto k_DefaultCameraOriginOffset = glm::vec3(0.0f, 0.0f, 120.0f);
 // depth runs from w at the near plane down to 0 at the far plane, the range the renderer clips to, so that nothing beyond
 // the near plane is lost. Without a far plane the reversed depth is the near plane's distance over the depth, as the
 // game's
+/// EXPERIMENT (not for merge): the top of the screen for a view. A top along the line of sight (as the world's up for a
+/// camera that looks straight down at the planet) gives no view, so the view then takes `fallback`, or a direction
+/// square to the line of sight.
+glm::vec3 SquareUp(glm::vec3 eye, glm::vec3 focus, glm::vec3 up, glm::vec3 fallback)
+{
+	const auto line = focus - eye;
+	const auto side = glm::cross(line, up);
+	if (glm::dot(side, side) > 1e-10f * glm::dot(line, line) * glm::dot(up, up))
+	{
+		return up;
+	}
+	for (const auto& other : {fallback, glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(1.0f, 0.0f, 0.0f)})
+	{
+		const auto across = glm::cross(line, other);
+		if (glm::dot(across, across) > 1e-6f * glm::dot(line, line))
+		{
+			return other;
+		}
+	}
+	return up;
+}
+
 constexpr auto k_ReverseZMatrix =
     glm::mat4(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.5f, 1.0f);
 } // namespace
@@ -70,15 +94,16 @@ glm::mat4 Camera::GetViewMatrix(Interpolation interpolation) const
 	if (interpolation == Interpolation::Drawn)
 	{
 		const auto drawn = GetDrawnView();
-		return glm::lookAt(drawn.eye, drawn.focus, glm::vec3(0.0f, 1.0f, 0.0f));
+		return glm::lookAt(drawn.eye, drawn.focus, SquareUp(drawn.eye, drawn.focus, drawn.up, _upInterpolators.p1));
 	}
 	const auto pose = DrawnPose(interpolation);
-	return glm::lookAt(pose.eye, pose.focus, glm::vec3(0.0f, 1.0f, 0.0f));
+	return glm::lookAt(pose.eye, pose.focus, SquareUp(pose.eye, pose.focus, pose.up, _upInterpolators.p1));
 }
 
 camera_drawn::Pose Camera::DrawnPose(Interpolation interpolation) const
 {
-	auto pose = camera_drawn::Pose {.eye = GetOrigin(interpolation), .focus = GetFocus(interpolation)};
+	auto pose =
+	    camera_drawn::Pose {.eye = GetOrigin(interpolation), .focus = GetFocus(interpolation), .up = GetViewUp(interpolation)};
 	// The frame draws the world from an eye that is not on its focus and not below the land. The temple draws its inside
 	// from its own camera. The editor's camera goes anywhere.
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
@@ -138,6 +163,7 @@ void Camera::KeepDrawnView()
 	    .focus = pose.focus,
 	    .projection = _projectionMatrix,
 	    .nearClip = _nearClip,
+	    .up = pose.up,
 	};
 }
 
@@ -148,7 +174,7 @@ Camera::View Camera::GetDrawnView() const
 		return *_drawnView;
 	}
 	const auto pose = DrawnPose(Interpolation::Current);
-	return {.eye = pose.eye, .focus = pose.focus, .projection = _projectionMatrix, .nearClip = _nearClip};
+	return {.eye = pose.eye, .focus = pose.focus, .projection = _projectionMatrix, .nearClip = _nearClip, .up = pose.up};
 }
 
 std::optional<ecs::components::Transform> Camera::RaycastMouseToLand(bool includeWater, Interpolation interpolation) const
@@ -371,6 +397,20 @@ void Camera::Update(std::chrono::microseconds dt)
 		const auto durationSeconds = std::chrono::duration_cast<std::chrono::duration<float>>(updateInfo->duration);
 		SetOriginInterpolator(GetOrigin(), updateInfo->origin, GetOriginVelocity() * durationSeconds.count(), m1);
 		SetFocusInterpolator(GetFocus(), updateInfo->focus, GetFocusVelocity() * durationSeconds.count(), m1);
+		// EXPERIMENT (not for merge): the top of the screen moves on the eye's clock. A top that does not change stays
+		// exactly the same, so the world's camera draws as before.
+		const auto up = GetViewUp();
+		if (up == updateInfo->up && _upInterpolators.p1 == updateInfo->up)
+		{
+			_upInterpolators = ZoomInterpolator3f(up);
+		}
+		else
+		{
+			const auto upVelocity =
+			    _upInterpolators.VelocityAt(GetInterpolatorT()) /
+			    std::max(std::chrono::duration_cast<std::chrono::duration<float>>(_interpolatorDuration).count(), 1e-6f);
+			_upInterpolators = ZoomInterpolator3f(up, updateInfo->up, upVelocity * durationSeconds.count(), m1);
+		}
 		SetInterpolatorDuration(updateInfo->duration);
 		SetInterpolatorTime(0us);
 	}
@@ -474,6 +514,35 @@ glm::vec3 Camera::GetFocus(Interpolation interpolation) const
 	}
 }
 
+glm::vec3 Camera::GetViewUp(Interpolation interpolation) const
+{
+	glm::vec3 up;
+	switch (interpolation)
+	{
+	case Interpolation::Current:
+		up = _upInterpolators.PositionAt(GetInterpolatorT());
+		break;
+	case Interpolation::Start:
+		up = _upInterpolators.p0;
+		break;
+	case Interpolation::Target:
+		up = _upInterpolators.p1;
+		break;
+	case Interpolation::Drawn:
+		return GetDrawnView().up;
+	default:
+		assert(false);
+		std::unreachable();
+	}
+	// The world's up stays exactly as it is
+	if (up == glm::vec3(0.0f, 1.0f, 0.0f))
+	{
+		return up;
+	}
+	const float length = glm::length(up);
+	return length > 1e-6f ? up / length : glm::vec3(0.0f, 1.0f, 0.0f);
+}
+
 glm::vec3 Camera::GetOriginVelocity(Interpolation interpolation) const
 {
 	glm::vec3 result;
@@ -572,6 +641,8 @@ Camera& Camera::Place(const glm::vec3& origin, const glm::vec3& focus)
 		return *this;
 	}
 	SetOrigin(origin).SetFocus(focus);
+	// The top of the screen goes back to the world's up
+	_upInterpolators = ZoomInterpolator3f(glm::vec3(0.0f, 1.0f, 0.0f));
 	SetInterpolatorDuration(std::chrono::microseconds::zero());
 	SetInterpolatorTime(std::chrono::microseconds::zero());
 	_model->PlaceAt(origin, focus);
