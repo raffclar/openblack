@@ -32,6 +32,7 @@
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "GameFireflyWorld.h"
 
@@ -87,6 +88,27 @@ FireflySystem::FireflySystem(std::unique_ptr<fireflies::FireflyWorldInterface> w
 }
 
 FireflySystem::~FireflySystem() = default;
+
+void FireflySystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _order);
+	reflection::Save(out, _trees);
+	reflection::Save(out, _fixed);
+	reflection::Save(out, _most);
+	reflection::Save(out, _topUpDue);
+	reflection::Save(out, _rewards);
+}
+
+bool FireflySystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _order);
+	reflection::Load(in, _trees);
+	reflection::Load(in, _fixed);
+	reflection::Load(in, _most);
+	reflection::Load(in, _topUpDue);
+	reflection::Load(in, _rewards);
+	return !in.Failed();
+}
 
 void FireflySystem::OnTreeMade(entt::registry& /*registry*/, entt::entity entity)
 {

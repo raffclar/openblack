@@ -13,6 +13,8 @@
 
 #include <entt/entity/fwd.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -20,7 +22,7 @@ namespace openblack::ecs::systems
 /// warm or cold, heal and rest while asleep, and may faint; their fatness, strength and size follow, which their
 /// bodies show. Minds tell it what the creature ate, drank and did. Its own time can be sped up to watch a creature
 /// grow and get hungry.
-class CreaturePhysiologySystemInterface
+class CreaturePhysiologySystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~CreaturePhysiologySystemInterface() = default;

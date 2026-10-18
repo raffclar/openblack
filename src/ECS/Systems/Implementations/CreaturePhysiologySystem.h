@@ -24,6 +24,8 @@ namespace openblack::ecs::systems
 class CreaturePhysiologySystem final: public CreaturePhysiologySystemInterface
 {
 public:
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	void ProcessTurn() override;
 	void Update(float seconds) override;
 

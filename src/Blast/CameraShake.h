@@ -33,6 +33,13 @@ struct Shake
 	float millisecondsLeft {0.0f};
 	/// It jitters the camera up and down only, not along every axis
 	bool verticalOnly {true};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.position, self.radius, self.strength, self.milliseconds, self.millisecondsLeft, self.verticalOnly);
+	}
 };
 
 /// The shakes count down by the frame's time; those with less than a millisecond left go

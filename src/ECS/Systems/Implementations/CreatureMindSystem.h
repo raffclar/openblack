@@ -44,6 +44,8 @@ namespace openblack::ecs::systems
 class CreatureMindSystem final: public CreatureMindSystemInterface
 {
 public:
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	void ProcessTurn() override;
 	void PlanTurn() override;
 	void LearnTurn() override;

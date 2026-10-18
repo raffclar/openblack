@@ -24,12 +24,22 @@
 #include "3D/WaterRings.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
 #include "ECS/Systems/Implementations/CreatureAudioSystem.h"
+#include "ECS/Systems/Implementations/CreatureHelpSystem.h"
+#include "ECS/Systems/Implementations/CreatureMindSystem.h"
+#include "ECS/Systems/Implementations/CreaturePhysiologySystem.h"
 #include "ECS/Systems/Implementations/DialogueControlSystem.h"
+#include "ECS/Systems/Implementations/ExplosionSystem.h"
 #include "ECS/Systems/Implementations/FireSystem.h"
+#include "ECS/Systems/Implementations/ForestSystem.h"
+#include "ECS/Systems/Implementations/GuidanceSystem.h"
+#include "ECS/Systems/Implementations/HelpMessageSystem.h"
+#include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
+#include "ECS/Systems/Implementations/TeleportSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/SavedStateInterface.h"
@@ -150,4 +160,33 @@ TEST(SavedSystemState, AFireListWithNoFireComesBack)
 	FireSystem saved;
 	FireSystem loaded;
 	LoadInto(loaded, StateOf(saved));
+}
+
+TEST(SavedSystemState, TheShakesOfTheCameraAndTheCreaturesHelpComeBack)
+{
+	ExplosionSystem explosions;
+	explosions.AddShake({1.0f, 2.0f, 3.0f}, 50.0f, 2.0f, 1.0f, false);
+	ExplosionSystem loadedExplosions;
+	LoadInto(loadedExplosions, StateOf(explosions));
+	EXPECT_TRUE(loadedExplosions.IsShaking());
+
+	CreatureHelpSystem help;
+	help.SetHelpOn(false);
+	CreatureHelpSystem loadedHelp;
+	LoadInto(loadedHelp, StateOf(help));
+	EXPECT_FALSE(loadedHelp.IsHelpOn());
+}
+
+TEST(SavedSystemState, TheStateOfANewLandComesBack)
+{
+	// Each system as a new land has it gives the same bytes after a load
+	const auto check = [](auto saved, auto loaded) { LoadInto(loaded, StateOf(saved)); };
+	check(AnimalSystem {}, AnimalSystem {});
+	check(CreatureMindSystem {}, CreatureMindSystem {});
+	check(CreaturePhysiologySystem {}, CreaturePhysiologySystem {});
+	check(ForestSystem {}, ForestSystem {});
+	check(GuidanceSystem {}, GuidanceSystem {});
+	check(HelpMessageSystem {}, HelpMessageSystem {});
+	check(InfluenceSystem {}, InfluenceSystem {});
+	check(TeleportSystem {}, TeleportSystem {});
 }

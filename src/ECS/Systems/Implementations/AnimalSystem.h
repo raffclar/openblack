@@ -28,6 +28,8 @@ public:
 	void ProcessTurn() override;
 	void Update(std::chrono::milliseconds frameGameTime, float turnFraction) override;
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 	entt::entity CreateFlock(glm::vec2 centre, float domainRadius, float flockDistance) override;
 	entt::entity CreateSpellAnimal(AnimalInfo type, glm::vec2 position, float heightAboveLand, uint16_t angle,

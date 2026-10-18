@@ -75,6 +75,13 @@ struct RefreshPace
 	/// The real time since the last refresh that counts towards the next
 	float sinceStep {0.0f};
 
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.sinceStep);
+	}
+
 	/// Whether a frame of so many real milliseconds brings a refresh: one a frame at most, a long frame leaving no more
 	/// owed, only its share of the next
 	[[nodiscard]] bool Step(float frameMilliseconds);

@@ -27,6 +27,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -199,6 +200,21 @@ help::Memory& MemoryOf(ecs::Registry& registry, entt::entity creature)
 	return registry.Assign<CreatureHelpMemory>(creature).memory;
 }
 } // namespace
+
+void CreatureHelpSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _helpOn);
+	reflection::Save(out, _toldTurn);
+	reflection::Save(out, _told);
+}
+
+bool CreatureHelpSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _helpOn);
+	reflection::Load(in, _toldTurn);
+	reflection::Load(in, _told);
+	return !in.Failed();
+}
 
 void CreatureHelpSystem::Raise(entt::entity creature, const help::Message& message)
 {

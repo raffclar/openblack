@@ -97,6 +97,13 @@ struct Ripple
 	std::array<float, k_Puffs> angles {};
 	/// Each puff's opacity, of 255, as it last moved on
 	std::array<uint8_t, k_Puffs> alphas {};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.point, self.life, self.rgb, self.along, self.sizes, self.angles, self.alphas);
+	}
 };
 
 /// Draws a number between two, as the game's random numbers for the ripples

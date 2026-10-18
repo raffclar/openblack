@@ -15,6 +15,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -24,7 +25,7 @@ namespace openblack::ecs::systems
 /// form a network. Villagers and creatures walking past one of them turn aside into it when jumping to another of the
 /// player's stones saves them enough of their walk, and come out of the stone that leaves them closest to where they
 /// were going. A stone goes with its miracle.
-class TeleportSystemInterface
+class TeleportSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~TeleportSystemInterface() = default;

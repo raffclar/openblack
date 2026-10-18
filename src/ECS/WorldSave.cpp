@@ -32,23 +32,32 @@
 #include "Common/RandomNumberManager.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Components/CreatureArena.h"
-#include "ECS/Components/HandGrab.h"
-#include "ECS/Components/Physics.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
+#include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -208,7 +217,7 @@ systems::SavedStateInterface* FindSystem()
 /// The systems that keep running state of their own, by the names of their sections. A new system goes at the end. A
 /// load gives each system its state in this order.
 using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 12> k_SavedSystems {{
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 23> k_SavedSystems {{
     {"creatureLocomotion", &FindSystem<Locator::creatureLocomotionSystem>},
     {"fire", &FindSystem<Locator::fireSystem>},
     {"weather", &FindSystem<Locator::weatherSystem>},
@@ -221,6 +230,17 @@ constexpr std::array<std::pair<std::string_view, SystemFinder>, 12> k_SavedSyste
     {"scriptSwitches", &FindSystem<Locator::chlapi>},
     {"creatureAudio", &FindSystem<Locator::creatureAudioSystem>},
     {"dynamics", &FindSystem<Locator::dynamicsSystem>},
+    {"forest", &FindSystem<Locator::forestSystem>},
+    {"teleport", &FindSystem<Locator::teleportSystem>},
+    {"animals", &FindSystem<Locator::animalSystem>},
+    {"creaturePhysiology", &FindSystem<Locator::creaturePhysiologySystem>},
+    {"creatureMind", &FindSystem<Locator::creatureMindSystem>},
+    {"guidance", &FindSystem<Locator::guidanceSystem>},
+    {"helpMessages", &FindSystem<Locator::helpMessageSystem>},
+    {"creatureHelp", &FindSystem<Locator::creatureHelpSystem>},
+    {"fireflies", &FindSystem<Locator::fireflySystem>},
+    {"explosions", &FindSystem<Locator::explosionSystem>},
+    {"influence", &FindSystem<Locator::influenceSystem>},
 }};
 
 gamesave::Chunk SystemsChunk(const entt::meta_ctx& reflection)
@@ -357,9 +377,8 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 			SPDLOG_LOGGER_WARN(Log(), "The context of the saved world does not read; the land keeps a new context");
 		}
 	}
-	// The hand does not keep what it holds in a save: what was in the hand stays where it was. The physics takes its
+	// What the hand holds stays in the hand: the hand's grab and the held thing are components. The physics takes its
 	// bodies back with the running state of the systems.
-	registry.Underlying().clear<components::InHand>();
 	// A walk along a camera track takes its track again from the land's tracks, by its number
 	std::vector<entt::entity> lost;
 	for (auto&& [entity, path] : registry.Underlying().view<components::WalkPath>().each())

@@ -24,6 +24,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -135,6 +136,19 @@ void AdvanceRoots(ecs::Registry& registry, float seconds)
 	}
 }
 } // namespace
+
+void ExplosionSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _shakes);
+	reflection::Save(out, _puffs);
+}
+
+bool ExplosionSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _shakes);
+	reflection::Load(in, _puffs);
+	return !in.Failed();
+}
 
 void ExplosionSystem::AddRubble(const glm::vec3& centre, float yaw, float scale)
 {
