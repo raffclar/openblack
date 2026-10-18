@@ -53,7 +53,7 @@ struct BuildingToolTips
 /// The tooltip over a scroll that a script put in the world, none for other things
 [[nodiscard]] std::optional<Offer> ScrollOf(entt::entity object);
 
-/// What a village centre's stone hand or a worship site's icon offers: its miracle's name, at once
+/// What a village centre's stone hand offers: its miracle's name, at once
 [[nodiscard]] std::optional<Offer> SpellIconOf(entt::entity object);
 
 /// What the hand can do with the thing that it holds at the thing under the pointer

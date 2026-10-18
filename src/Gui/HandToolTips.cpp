@@ -206,19 +206,13 @@ std::optional<Offer> SpellIconOf(entt::entity object)
 	{
 		return std::nullopt;
 	}
-	auto seed = SpellSeedType::None;
-	if (const auto* hand = registry.TryGet<const TownCentreIcon>(object))
-	{
-		seed = hand->seed;
-	}
-	else if (const auto* icon = registry.TryGet<const WorshipIcon>(object))
-	{
-		seed = icon->seed;
-	}
-	else
+	// A worship site's icon also writes its charge into the words: not done here
+	const auto* hand = registry.TryGet<const TownCentreIcon>(object);
+	if (hand == nullptr)
 	{
 		return std::nullopt;
 	}
+	const auto seed = hand->seed;
 	const auto& seeds = Locator::infoConstants::value().spellSeed;
 	const auto row = static_cast<size_t>(seed);
 	if (row >= seeds.size())
