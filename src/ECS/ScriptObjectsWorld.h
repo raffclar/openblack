@@ -16,6 +16,8 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "ECS/VillagerScriptRules.h"
+
 namespace openblack::ecs::script_objects
 {
 
@@ -60,6 +62,17 @@ public:
 	virtual void SetVillagerDecideWhatToDo(entt::entity villager) = 0;
 	/// A villager in the physics goes back to deciding what to do when it is out: its previous state is set to that
 	virtual void SetVillagerPreviousDecideWhatToDo(entt::entity villager) = 0;
+	/// A living leaves the flock that it is in, and an empty flock stays. A flock that it was the shepherd of then has no
+	/// shepherd.
+	virtual void LeaveFlock(entt::entity living) = 0;
+	/// The facts that decide what a villager does when a script lets it go
+	[[nodiscard]] virtual villager_script_rules::ReleaseFacts VillagerReleaseFacts(entt::entity villager) const = 0;
+	/// A villager decides at once what to do in its town
+	virtual void VillagerDecideNow(entt::entity villager) = 0;
+	/// A villager with no town starts to wander as a vagrant
+	virtual void VillagerStartVagrant(entt::entity villager) = 0;
+	/// A villager dies with no cause and no player to blame. It drops the wood that it shows as a log.
+	virtual void VillagerDie(entt::entity villager) = 0;
 	/// A creature gives up what it is doing as a failure
 	virtual void AbandonCreatureAction(entt::entity creature) = 0;
 	/// The object goes from the world at once

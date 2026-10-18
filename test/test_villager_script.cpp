@@ -222,3 +222,28 @@ TEST(VillagerScriptRules, AWandererStandsFromTheFewestToOneUnderTheMostTurns)
 	EXPECT_EQ(asked, 16u);
 	EXPECT_EQ(rules::WanderPause(4, 20, highest), 19);
 }
+
+TEST(VillagerScriptRules, AReleasedVillagerWithLifeGoesBackToItsTown)
+{
+	EXPECT_EQ(rules::ReleaseOutcomeOf({.life = 0.5f, .hasTown = true}), rules::ReleaseOutcome::DecidesInTown);
+}
+
+TEST(VillagerScriptRules, AReleasedVillagerWithoutATownBecomesAVagrant)
+{
+	EXPECT_EQ(rules::ReleaseOutcomeOf({.life = 0.5f, .hasTown = false}), rules::ReleaseOutcome::BecomesVagrant);
+}
+
+TEST(VillagerScriptRules, AReleasedVillagerWithNoLifeDies)
+{
+	// The limit is zero: a small life above zero keeps the villager alive
+	EXPECT_EQ(rules::ReleaseOutcomeOf({.life = 0.0f, .hasTown = true}), rules::ReleaseOutcome::Dies);
+	EXPECT_EQ(rules::ReleaseOutcomeOf({.life = -1.0f, .hasTown = false}), rules::ReleaseOutcome::Dies);
+	EXPECT_EQ(rules::ReleaseOutcomeOf({.life = 4.0f, .hasTown = true}), rules::ReleaseOutcome::DecidesInTown);
+	EXPECT_EQ(rules::ReleaseOutcomeOf({.life = 1.0e-6f, .hasTown = true}), rules::ReleaseOutcome::DecidesInTown);
+}
+
+TEST(VillagerScriptRules, AReleasedVillagerInThePhysicsOrAtHomeStays)
+{
+	EXPECT_EQ(rules::ReleaseOutcomeOf({.inPhysics = true, .life = 0.0f, .hasTown = false}), rules::ReleaseOutcome::Stays);
+	EXPECT_EQ(rules::ReleaseOutcomeOf({.atHome = true, .life = 0.5f, .hasTown = true}), rules::ReleaseOutcome::Stays);
+}
