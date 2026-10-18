@@ -1525,7 +1525,9 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 	}
 	if (_tipsLandGrip)
 	{
-		const bool actionHeld = bothButtons;
+		// The Action button counts as held from its press until it is let go, by itself or with the Move button
+		const bool actionHeld = bothButtons || (Locator::gameActionSystem::has_value() &&
+		                                        Locator::gameActionSystem::value().Get(input::BindableActionMap::ACTION));
 		const auto camera = tips::CameraNow();
 		if (const auto zoom = tips::GrippingLand(actionHeld, camera); zoom.index == tips::k_Zoom)
 		{
