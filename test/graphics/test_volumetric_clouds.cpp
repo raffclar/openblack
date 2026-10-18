@@ -349,3 +349,11 @@ TEST(VolumetricClouds, TheLowSunGoesRed)
 	EXPECT_LT(sunset.r, evening.r);
 	EXPECT_LT(sunset.b, 0.05f);
 }
+
+TEST(VolumetricClouds, MildStormsBuildNoStormClouds)
+{
+	EXPECT_FLOAT_EQ(clouds::StormCloudShare(0, 0), 0.0f);
+	EXPECT_FLOAT_EQ(clouds::StormCloudShare(50, 0), 0.5f);
+	EXPECT_FLOAT_EQ(clouds::StormCloudShare(20, 100), 1.0f);
+	EXPECT_FLOAT_EQ(clouds::StormCloudShare(-10, 0), 0.0f);
+}

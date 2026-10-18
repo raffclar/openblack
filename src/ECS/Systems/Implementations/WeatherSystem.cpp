@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <numbers>
+#include <optional>
 
 #include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
@@ -32,6 +33,7 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -689,18 +691,36 @@ void WeatherSystem::UpdateStorms()
 				strikeAt.x = camera.x + local.NextValue(-k_StrikeNearCamera, k_StrikeNearCamera);
 				strikeAt.z = camera.z + local.NextValue(-k_StrikeNearCamera, k_StrikeNearCamera);
 			}
+			// EXPERIMENT (not for merge): with the underwater view on, the strike comes down from under the core of a
+			// thunderstorm cell of the volumetric clouds, and the bolt starts at the bottom of that cell
+			std::optional<float> boltTop;
+			const auto strikeFromCell = [&storm, &strikeAt, &boltTop]() {
+				if (!Locator::underwaterSystem::has_value())
+				{
+					return;
+				}
+				const auto cell = Locator::underwaterSystem::value().StormStrikePlace(storm.serial, {strikeAt.x, strikeAt.z});
+				if (cell.has_value())
+				{
+					strikeAt.x = cell->x;
+					strikeAt.z = cell->z;
+					boltTop = cell->y;
+				}
+			};
 			if (storm.boltWait.y != 0.0f)
 			{
 				storm.boltTimer -= k_TurnDuration;
 				if (storm.boltTimer <= 0.0f)
 				{
 					storm.boltTimer = random.GameFloatRange(storm.boltWait.x, storm.boltWait.y);
+					strikeFromCell();
 					storm.flash = lightning::Strike(strikeAt, storm.outerRadius, lightning::k_BoltStrength);
 					// Its forked bolt comes down from under the cloud
 					if (Locator::particleSystem::has_value())
 					{
 						const auto ground = Locator::terrainSystem::value().GetHeightAt({strikeAt.x, strikeAt.z});
-						Locator::particleSystem::value().AddStormBolt({strikeAt.x, ground + storm.cloudHeight, strikeAt.z});
+						Locator::particleSystem::value().AddStormBolt(
+						    {strikeAt.x, boltTop.value_or(ground + storm.cloudHeight), strikeAt.z});
 					}
 				}
 			}
@@ -710,6 +730,7 @@ void WeatherSystem::UpdateStorms()
 				if (storm.thunderTimer <= 0.0f)
 				{
 					storm.thunderTimer = random.GameFloatRange(storm.thunderWait.x, storm.thunderWait.y);
+					strikeFromCell();
 					storm.flash = lightning::Strike(strikeAt, storm.outerRadius, lightning::k_ThunderStrength);
 					// Its thunder rolls from the cloud, one of eleven claps picked from the C runtime's numbers, heard
 					// once the sound has travelled to the camera

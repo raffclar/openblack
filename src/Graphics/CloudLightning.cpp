@@ -109,13 +109,15 @@ cloud_lightning::FlashKind cloud_lightning::KindAt(float distance)
 cloud_lightning::FlashLight cloud_lightning::LightFor(const FlashEvent& flash, const glm::vec3& eye, float cloudBottom,
                                                       float cloudDepth)
 {
-	// The channel starts near the bottom of the cloud over the strike, so that it lights the bottom brightly. It goes
-	// across and up the cloud in a direction of its own.
+	// The channel starts at the bottom of the tower over the strike, so that it lights the dark bottom brightly. It goes
+	// up through the tower and leans in a direction of its own.
 	const float angle = RandomOf(flash.seed, 20) * 2.0f * std::numbers::pi_v<float>;
-	const float length = k_ShortestChannel + (k_LongestChannel - k_ShortestChannel) * RandomOf(flash.seed, 21);
-	const float rise = cloudDepth * (0.2f + 0.25f * RandomOf(flash.seed, 22));
-	const glm::vec3 start {flash.place.x, cloudBottom + cloudDepth * 0.15f, flash.place.y};
-	const glm::vec3 end = start + glm::vec3 {std::cos(angle) * length, rise, std::sin(angle) * length};
+	const float length =
+	    std::min(k_ShortestChannel + (k_LongestChannel - k_ShortestChannel) * RandomOf(flash.seed, 21), cloudDepth * 0.8f);
+	const float lean = k_MostLean * RandomOf(flash.seed, 22);
+	const glm::vec3 start {flash.place.x, cloudBottom + std::min(cloudDepth * 0.03f, 150.0f), flash.place.y};
+	const glm::vec3 along = glm::normalize(glm::vec3 {std::cos(angle) * lean, 1.0f, std::sin(angle) * lean});
+	const glm::vec3 end = start + along * length;
 	const float distance = glm::distance(eye, (start + end) * 0.5f);
 	const bool sheet = KindAt(distance) == FlashKind::Sheet;
 	return {

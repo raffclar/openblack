@@ -15,6 +15,7 @@
 #include <chrono>
 
 #include "Graphics/GraphicsHandleBgfx.h"
+#include "Graphics/PlanetWeather.h"
 
 using namespace openblack::graphics;
 namespace clouds = openblack::graphics::volumetric_clouds;
@@ -46,13 +47,14 @@ VolumetricCloudsView::VolumetricCloudsView()
     , _detailTexels(std::async(std::launch::async, [] { return clouds::DetailNoiseVolume(); }))
     , _weatherTexels(std::async(std::launch::async, [] { return clouds::WeatherNoise(); }))
     , _blueTexels(std::async(std::launch::async, [] { return clouds::BlueNoise(); }))
+    , _planetTexels(std::async(std::launch::async, [] { return planet_weather::CubeTexels(); }))
 {
 }
 
 VolumetricCloudsView::~VolumetricCloudsView()
 {
 	// The threads finish before the noise goes
-	for (auto* future : {&_baseTexels, &_detailTexels, &_weatherTexels, &_blueTexels})
+	for (auto* future : {&_baseTexels, &_detailTexels, &_weatherTexels, &_blueTexels, &_planetTexels})
 	{
 		if (future->valid())
 		{
@@ -64,6 +66,7 @@ VolumetricCloudsView::~VolumetricCloudsView()
 	Release(_detail);
 	Release(_weather);
 	Release(_blue);
+	Release(_planet);
 	Release(_shadowTarget);
 	Release(_shadow);
 }
@@ -102,6 +105,14 @@ bool VolumetricCloudsView::Ready()
 		                              bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));
 		bgfx::setName(_blue, "Cloud Blue Noise");
 	}
+	if (Finished(_planetTexels))
+	{
+		const auto texels = _planetTexels.get();
+		constexpr auto k_Side = static_cast<uint16_t>(planet_weather::k_CubeSide);
+		_planet = bgfx::createTextureCube(k_Side, false, 1, bgfx::TextureFormat::RGBA8, k_Clamp,
+		                                  bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));
+		bgfx::setName(_planet, "Cloud Planet Weather");
+	}
 	return bgfx::isValid(_base) && bgfx::isValid(_detail) && bgfx::isValid(_weather) && bgfx::isValid(_blue);
 }
 
@@ -118,6 +129,11 @@ TextureHandle VolumetricCloudsView::DetailNoise() const
 TextureHandle VolumetricCloudsView::WeatherNoise() const
 {
 	return fromBgfx(_weather);
+}
+
+TextureHandle VolumetricCloudsView::PlanetWeather() const
+{
+	return fromBgfx(_planet);
 }
 
 TextureHandle VolumetricCloudsView::BlueNoise() const
