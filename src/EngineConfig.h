@@ -94,6 +94,8 @@ struct EngineConfig
 	creature_swap::Unlocked unlockedBonusCreatures;
 
 	bool vsync {false};
+	/// Tools: the window is open but the renderer draws nothing (the no-renderer backend)
+	bool noDraw {false};
 	bool running {false};
 	/// Tools: the sounds make no noise and last their length by the game's machine clock, so that a run with a fixed
 	/// frame time goes the same way at any speed
