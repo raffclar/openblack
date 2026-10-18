@@ -531,3 +531,20 @@ bool creature_mind::DoingSomethingInteresting(uint32_t taughtSkill, const std::v
 	}
 	return taughtSkill >= skillsKnown.size() || !skillsKnown[taughtSkill];
 }
+
+float creature_mind::DesireMultiplier(creature_desires::Desire desire, const DesireMultiplierFacts& facts)
+{
+	switch (desire)
+	{
+	case creature_desires::Desire::Curiosity:
+		return facts.doingSomethingInteresting ? k_InterestingCuriosityMultiplier : 1.0f;
+	case creature_desires::Desire::Play:
+		if (facts.playingFootball)
+		{
+			return k_FootballPlayMultiplier;
+		}
+		return facts.toy ? k_ToyPlayMultiplier : 1.0f;
+	default:
+		return 1.0f;
+	}
+}

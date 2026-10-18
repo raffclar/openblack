@@ -214,4 +214,23 @@ constexpr float k_ObservedCuriosityShare = 0.01f;
 /// of skills, the last index plus one for none) that the creature does not know
 constexpr uint32_t k_NoSkillTaught = 6;
 [[nodiscard]] bool DoingSomethingInteresting(uint32_t taughtSkill, const std::vector<bool>& skillsKnown);
+
+/// The facts about a thing that make it more useful to act on for some desires
+struct DesireMultiplierFacts
+{
+	/// The thing does something that the creature finds interesting. Only a villager can.
+	bool doingSomethingInteresting {false};
+	/// The thing is a villager that plays football
+	bool playingFootball {false};
+	/// The thing is a toy: a ball or a static toy
+	bool toy {false};
+};
+/// A curious creature finds a thing that does something interesting five times as useful
+constexpr float k_InterestingCuriosityMultiplier = 5.0f;
+/// A playful creature finds a villager that plays football five times as useful, and a toy three times as useful
+constexpr float k_FootballPlayMultiplier = 5.0f;
+constexpr float k_ToyPlayMultiplier = 3.0f;
+/// How many times as useful a thing is to act on for a desire. Only curiosity and play have a multiplier. For all other
+/// desires, the multiplier is 1.
+[[nodiscard]] float DesireMultiplier(creature_desires::Desire desire, const DesireMultiplierFacts& facts);
 } // namespace openblack::creature_mind
