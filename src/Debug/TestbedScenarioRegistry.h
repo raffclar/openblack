@@ -855,6 +855,9 @@ struct Command
 		/// everywhere, or with ctrl from the point (from the middle of the map) on the land, heard as far as radius with
 		/// the distances of a placed guidance voice. Needs no creature.
 		PlayGuidanceVoice,
+		/// Each icon of the player's worship sites holds a part of the charge of its miracle (amount, 0 to 1), as if the
+		/// worshippers charged it that far. Needs no creature.
+		FillSiteIcons,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

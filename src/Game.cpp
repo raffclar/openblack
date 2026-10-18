@@ -1675,10 +1675,13 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		overNothing();
 		return;
 	}
-	// Over a miracle icon, whoever's it is, the hand names its miracle at once
+	// Over a miracle icon, whoever's it is, the hand names its miracle at once. A worship site's icon also shows how full
+	// its miracle is.
 	if (const auto icon = tips::SpellIconOf(*pointed); icon.has_value())
 	{
-		toolTips.Submit(icon->index, icon->action, icon->arrows, true);
+		const auto charge =
+		    Locator::spellIconSystem::has_value() ? Locator::spellIconSystem::value().ShownCharge(*pointed) : std::nullopt;
+		toolTips.ForceWithCharge(icon->index, charge);
 		return;
 	}
 	// Over a thing that the hand can take: "Catch" while it moves, else "Pick Up" and what a tap does to it

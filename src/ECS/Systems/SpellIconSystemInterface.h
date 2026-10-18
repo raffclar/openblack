@@ -59,6 +59,9 @@ public:
 	[[nodiscard]] virtual bool HasIconFor(PlayerNames player, SpellSeedType seed) const = 0;
 	/// Whether something is an icon or a stone hand
 	[[nodiscard]] virtual bool IsIcon(entt::entity entity) const = 0;
+	/// The charge that a worship site's icon shows after the name of its miracle, in percent. None for a thing that is
+	/// not such an icon, and for an icon whose charge is zero.
+	[[nodiscard]] virtual std::optional<float> ShownCharge(entt::entity icon) const = 0;
 
 	/// A worship site's icons as its turn shares out its prayer power, in a fixed order
 	[[nodiscard]] virtual std::vector<magic::WorshipIconCharge> ChargesAt(entt::entity site) const = 0;

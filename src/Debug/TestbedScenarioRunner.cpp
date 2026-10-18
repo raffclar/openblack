@@ -124,6 +124,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
@@ -1971,6 +1972,28 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		                   guidance::k_VoicePitch, command.ctrl ? ", placed" : ", heard everywhere",
 		                   started == entt::null ? ", not started" : "");
 	}
+	case Kind::FillSiteIcons:
+	{
+		if (!Locator::infoConstants::has_value())
+		{
+			return "no info";
+		}
+		const auto& info = Locator::infoConstants::value();
+		auto& registry = Locator::entitiesRegistry::value();
+		size_t filled = 0;
+		registry.Each<ecs::components::WorshipIcon>([&](ecs::components::WorshipIcon& icon) {
+			const auto* site =
+			    registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+			if (site == nullptr || site->player != command.player || icon.seed == SpellSeedType::None)
+			{
+				return;
+			}
+			const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, icon.seed), icon.powerUp);
+			icon.store = magic::GetChantsRequiredToCreate(info, type) * command.amount;
+			++filled;
+		});
+		return fmt::format("{} icons filled to {:.0f}%", filled, command.amount * 100.0f);
+	}
 	case Kind::HandRelease:
 		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
 		{
@@ -2370,7 +2393,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
-	    command.kind == Kind::PlayGuidanceVoice)
+	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::FillSiteIcons)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2966,6 +2989,7 @@ void Runner::Give(const Command& command)
 	case Kind::AttachObjectScriptSound:
 	case Kind::SayLine:
 	case Kind::PlayGuidanceVoice:
+	case Kind::FillSiteIcons:
 	case Kind::RemoveObject:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:

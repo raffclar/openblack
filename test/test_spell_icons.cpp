@@ -195,3 +195,22 @@ TEST(SpellIcons, AnIconWorksWhenBuiltWithMoreThanThreeQuartersOfItsLife)
 	EXPECT_FALSE(Functional(0.5f, true));
 	EXPECT_FALSE(Functional(1.0f, false));
 }
+
+TEST(SpellIcons, AWorshipIconShowsItsStoreAsAPercentOfItsMiracle)
+{
+	// A quarter of the charge shows as 25, worked out in float as store over need, then times 100
+	ASSERT_TRUE(ShownCharge(250.0f, 1000.0f).has_value());
+	EXPECT_EQ(*ShownCharge(250.0f, 1000.0f), 25.0f);
+	EXPECT_EQ(*ShownCharge(1.0f, 3.0f), (1.0f / 3.0f) * 100.0f);
+	// An empty icon, or one with no charge to show at all, shows only the name
+	EXPECT_FALSE(ShownCharge(0.0f, 1000.0f).has_value());
+	EXPECT_FALSE(ShownCharge(0.0f, 0.0f).has_value());
+}
+
+TEST(SpellIcons, TheSeedInTheHandTakesItsChargeOffTheNeedThatTheIconShows)
+{
+	EXPECT_EQ(ShownRequired(1000.0f, std::nullopt), 1000.0f);
+	EXPECT_EQ(ShownRequired(1000.0f, 600.0f), 400.0f);
+	// The icon charges what the held seed still needs: 100 of the 400 left shows as 25
+	EXPECT_EQ(*ShownCharge(100.0f, ShownRequired(1000.0f, 600.0f)), 25.0f);
+}

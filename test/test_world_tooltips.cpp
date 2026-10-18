@@ -252,3 +252,11 @@ TEST(WorldToolTips, TheWayIntoTheOwnBuiltTempleShowsOnlyInTheInfluence)
 	EXPECT_TRUE(OffersEnterTemple(true, true, true));
 	EXPECT_FALSE(OffersEnterTemple(true, true, false));
 }
+
+TEST(WorldToolTips, AWorshipIconWritesItsChargeAfterTheWords)
+{
+	// The charge is a whole number right aligned to three places, then a percent sign
+	EXPECT_EQ(WithCharge(u"Heal Miracle", 45.0), u"Heal Miracle  45%");
+	EXPECT_EQ(WithCharge(u"Heal Miracle", 100.0), u"Heal Miracle 100%");
+	EXPECT_EQ(WithCharge(u"Heal Miracle", 7.5), u"Heal Miracle   8%");
+}

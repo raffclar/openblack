@@ -174,6 +174,10 @@ struct Wording
 /// A tooltip's words with its numbers written in, as the game writes them
 [[nodiscard]] std::u16string Compose(uint32_t index, std::u16string_view words, double first, std::optional<double> second);
 
+/// A tooltip's words with a charge after them, as a worship site's icon shows it: the words, a space, the charge as a
+/// whole number right aligned to three places, and a percent sign
+[[nodiscard]] std::u16string WithCharge(std::u16string_view words, double charge);
+
 /// Where the hand's tooltip hangs: the whole pixel the drawn hand's origin (at its fingertips) projects to, wherever
 /// the pointer is. While the hand stays put and the pointer moves on (pouring food or wood, gripping the land, holding a
 /// totem) the tooltip stays with the hand. None while the hand is behind the camera; off the screen it still counts,

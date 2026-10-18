@@ -1782,8 +1782,16 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	const auto worded =
 	    shown->number.has_value() ? std::optional(world_tooltip::Worded(shown->index, *shown->number)) : std::nullopt;
 	const auto words = _texts.Get(ToolTips::TextName(shown->words.value_or(worded.has_value() ? worded->words : shown->index)));
-	const std::u16string text =
-	    worded.has_value() ? world_tooltip::Compose(shown->index, words, worded->number, shown->second) : std::u16string(words);
+	std::u16string text;
+	if (shown->chargeAfterWords && shown->number.has_value())
+	{
+		text = world_tooltip::WithCharge(words, *shown->number);
+	}
+	else
+	{
+		text = worded.has_value() ? world_tooltip::Compose(shown->index, words, worded->number, shown->second)
+		                          : std::u16string(words);
+	}
 	const glm::vec4 yellow {1.0f, 1.0f, 0.0f, alpha};
 	const glm::vec4 white {1.0f, 1.0f, 1.0f, alpha};
 	const glm::vec4 shadow {0.0f, 0.0f, 0.0f, alpha};

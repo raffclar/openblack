@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <optional>
 
 #include <gtest/gtest.h>
 
@@ -352,4 +353,26 @@ TEST(TempleToolTips, NoneOnTheWayIn)
 	// The options room leaves it so
 	UpdateTempleToolTip(toolTip, {.room = TempleRoom::Options, .inControl = true});
 	EXPECT_FALSE(toolTip.index.has_value());
+}
+
+TEST(ToolTips, AChargeComesAfterTheWordsOfAForcedTooltip)
+{
+	ToolTips toolTips(Info());
+	toolTips.ForceWithCharge(k_Move, 45.0f);
+	toolTips.ProcessTurn();
+	toolTips.Update(0.1f);
+	auto shown = toolTips.GetShown();
+	ASSERT_TRUE(shown.has_value());
+	EXPECT_EQ(shown->index, k_Move);
+	EXPECT_EQ(shown->action, ToolTipAction::None);
+	EXPECT_TRUE(shown->chargeAfterWords);
+	ASSERT_TRUE(shown->number.has_value());
+	EXPECT_EQ(*shown->number, 45.0);
+	// A charge that goes back to zero leaves only the words
+	toolTips.ForceWithCharge(k_Move, std::nullopt);
+	toolTips.ProcessTurn();
+	shown = toolTips.GetShown();
+	ASSERT_TRUE(shown.has_value());
+	EXPECT_FALSE(shown->chargeAfterWords);
+	EXPECT_FALSE(shown->number.has_value());
 }
