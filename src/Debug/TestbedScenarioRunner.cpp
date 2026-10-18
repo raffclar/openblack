@@ -2932,6 +2932,7 @@ void Runner::Give(const Command& command)
 	case Kind::PointerOnCaveCreature:
 	case Kind::PointerOnCreature:
 	case Kind::PointerOnAltar:
+	case Kind::PointerOnRope:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:
@@ -4043,6 +4044,49 @@ std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size) const
 	return glm::ivec2(glm::round(glm::vec2(screen)));
 }
 
+std::optional<glm::ivec2> Runner::RopeOnScreen(size_t creature, glm::vec2 size) const
+{
+	const auto entity = CreatureAt(creature);
+	if (!entity.has_value() || !Locator::camera::has_value() || !Locator::leashSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
+	if (leash == nullptr || !leash->worn.has_value())
+	{
+		return std::nullopt;
+	}
+	// The rope runs from the collar to the thing it is tied to, and it sags below the straight line between them. The
+	// points of the straight line are tried from its middle out, away from the collar and the thing. Below each point
+	// on the screen, the first pixel that touches the rope is taken.
+	const auto& camera = Locator::camera::value();
+	const auto& rope = leash->worn->rope;
+	auto& leashes = Locator::leashSystem::value();
+	constexpr int k_Steps = 16;
+	constexpr int k_MostPixelsBelow = 200;
+	for (int tried = 0; tried < k_Steps - 1; ++tried)
+	{
+		const int step = (k_Steps / 2) + ((tried % 2 == 0) ? tried / 2 : -((tried + 1) / 2));
+		const auto point = rope.end + (rope.start - rope.end) * (static_cast<float>(step) / static_cast<float>(k_Steps));
+		glm::vec3 screen;
+		if (!camera.ProjectWorldToScreen(point, {0.0f, 0.0f, size.x, size.y}, screen))
+		{
+			continue;
+		}
+		const auto pixel = glm::ivec2(glm::round(glm::vec2(screen)));
+		for (int below = 0; below < k_MostPixelsBelow; ++below)
+		{
+			const ecs::systems::LeashSystemInterface::RopeFrame frame {
+			    .viewProjection = camera.GetViewProjectionMatrix(), .screenSize = size, .cursor = pixel + glm::ivec2(0, below)};
+			if (leashes.RopeUnderCursor(PlayerNames::PLAYER_ONE, frame).has_value())
+			{
+				return frame.cursor;
+			}
+		}
+	}
+	return std::nullopt;
+}
+
 std::optional<glm::ivec2> Runner::CaveCreatureOnScreen(glm::vec2 size)
 {
 	if (!Locator::creatureCaveSystem::has_value() || !Locator::camera::has_value())
@@ -4152,6 +4196,20 @@ std::string Runner::GivePointerCommand(const Command& command)
 		}
 		const auto moved = *to - pointer.position;
 		pointer.position = *to;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerOnRope:
+	{
+		const auto to = RopeOnScreen(command.creature, size);
+		if (!to.has_value())
+		{
+			return "no tied rope on the screen";
+		}
+		const auto moved = *to - pointer.position;
+		pointer.position = *to;
+		_framesSincePointerMoved = 0;
 		actions.SetScriptedPointer(pointer);
 		PushMotion(pointer, moved);
 		break;

@@ -5101,19 +5101,25 @@ void AddLeash(std::vector<Scenario>& all)
 	    .id = "hand.rope_hold_stand",
 	    .name = "The hand that holds the rope of the tied leash",
 	    .facet = Facet::Hand,
-	    .description = "Your tiger's leash is tied to a tree. The pointer goes onto the rope and the Action button takes "
-	                   "hold of it. The pointer then moves away from the rope over the land for three seconds, and the "
-	                   "button comes up.",
-	    .expected = "Holding the rope, the hand pinches it and stands straight up, not turned to the slope of the land, "
-	                "also away from the rope. It does not offer to turn the camera. Let go, it turns to the land again.",
-	    .framing = {.shot = Shot::Placed, .eye = {-20.0f, 45.0f, -30.0f}, .look = {-20.0f, 0.0f, 40.0f}},
-	    .creatures = {Content(CreatureType::Tiger, {0.0f, 20.0f})},
-	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 60.0f}}},
-	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 1.0f, false),
-	                 {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.5f, 0.5f}},
-	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
-	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.25f, 0.2f}, .amount = 3.0f},
-	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.5f, .value = 3}},
+	    .description = "Your tiger's leash is tied to a tree, and the tiger lies down to sleep. The pointer goes onto the "
+	                   "rope and the Action button takes hold of it. The pointer then moves away from the rope, across "
+	                   "the lake onto its far bank, and the button comes up. Then the pointer moves a little to the "
+	                   "right.",
+	    .expected = "Holding the rope, the hand pinches it and stands straight up, not turned to the slope of the bank, "
+	                "also away from the rope. It does not offer to turn the camera. Let go, it turns to the slope when the "
+	                "pointer moves across the screen.",
+	    .framing = {.shot = Shot::Placed, .eye = {-20.0f, 40.0f, 20.0f}, .look = {-20.0f, 0.0f, 120.0f}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 75.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 100.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f),
+	                 OnObject(Kind::TieLeash, 0, 0, 1.0f, false),
+	                 Act(Kind::Sleep, 0, 0.5f),
+	                 {.kind = Kind::PointerOnRope, .creature = 0, .delaySeconds = 5.0f},
+	                 {.kind = Kind::PointerOnRope, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.05f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.12f, -0.3f}, .amount = 4.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 5.5f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.03f, 0.0f}, .amount = 0.5f}},
 	});
 
 	all.push_back({
@@ -8346,7 +8352,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 149> k_Names {
+	constexpr std::array<std::string_view, 150> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -8476,6 +8482,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "set alight",
 		    "hand grips totem",
 		    "pointer on altar",
+		    "pointer on rope",
 		    "set fizz",
 		    "check the profile folder",
 		    "give the player a picture of their own",
@@ -8504,7 +8511,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	{
 		return kind == Kind::PointerTo || kind == Kind::PointerPress || kind == Kind::PointerRelease ||
 		       kind == Kind::PointerSweep || kind == Kind::WheelTurn || kind == Kind::PointerOnOpponent ||
-		       kind == Kind::PointerOnCaveCreature || kind == Kind::PointerOnCreature || kind == Kind::PointerOnAltar;
+		       kind == Kind::PointerOnCaveCreature || kind == Kind::PointerOnCreature || kind == Kind::PointerOnAltar ||
+		       kind == Kind::PointerOnRope;
 	}
 
 	bool NeedOverrides::Empty() const

@@ -254,7 +254,7 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	                "hand stays rolled over as the last pour left it. It stands up to the land again over 0.4 seconds "
 	                "only when the pointer moves across the screen.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f)},
-	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 20.0f, -30.0f}, .look = {0.0f, 5.0f, 20.0f}},
+	    .framing = {.shot = Shot::Placed, .eye = {6.0f, 42.0f, -2.0f}, .look = {0.0f, 33.0f, 20.0f}},
 	    .miracles = {{.type = MagicType::Food,
 	                  .point = {0.0f, 20.0f},
 	                  .handOffset = {0.0f, 20.0f},
@@ -272,15 +272,16 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	    .id = "hand.ring_turn_holding",
 	    .name = "The hand that holds a thing while the camera turns by the ring",
 	    .facet = Facet::Hand,
-	    .description = "The hand takes a rock. The left button is pressed at the right edge of the screen and the mouse "
-	                   "moves down slowly, which turns the camera by the ring. Then the button comes up, the hand puts "
-	                   "the rock down with the pointer still, and two seconds later the pointer moves to the middle.",
-	    .expected = "While the camera turns, the hand holds the rock. After it puts the rock down, the empty hand stands "
+	    .description =
+	        "The hand takes a pile of food. The left button is pressed at the right edge of the screen and the mouse "
+	        "moves down slowly, which turns the camera by the ring. Then the button comes up, the hand puts "
+	        "the food down with the pointer still, and two seconds later the pointer moves to the middle.",
+	    .expected = "While the camera turns, the hand holds the food. After it puts the food down, the empty hand stands "
 	                "up towards the point the camera looks at, leaning up by three tenths of the distance. It turns to "
 	                "the land again only when the pointer moves across the screen.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f)},
 	    .framing = {.shot = Shot::Testbed},
-	    .objects = {{.type = FeatureInfo::FatPilarChalk, .offset = {0.0f, 30.0f}}},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {0.0f, 30.0f}}},
 	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.98f, 0.55f}},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = k_LeftButton},
