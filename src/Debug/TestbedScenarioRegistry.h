@@ -933,7 +933,8 @@ struct Command
 	std::optional<size_t> atCreature;
 	/// The creature that a script's action uses, in place of the object (with), by its place in the scenario's creatures
 	std::optional<size_t> usesCreature;
-	/// The player's alignment jumped to, from -1 (evil) to 1 (good)
+	/// The player's alignment jumped to, from -1 (evil) to 1 (good). For a recorded challenge, the alignment of the
+	/// challenge, which moves the player's alignment on each record after the first.
 	float alignment {0.0f};
 	/// What an advisor is told: to come out of its corner, or to appear in a puff of smoke; to go home, or to vanish; to
 	/// cling to or fly to a point on the screen (point, from 0 to 1 across and down); to point at that point on the

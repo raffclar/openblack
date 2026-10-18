@@ -1383,3 +1383,4 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_save_game_room temple/test_save_game_room.cpp)
 openblack_setup_and_add_test(test_instant_saves test_instant_saves.cpp)
+openblack_setup_and_add_test(test_alignment_history test_alignment_history.cpp)
