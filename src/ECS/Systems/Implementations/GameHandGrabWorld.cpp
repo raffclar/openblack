@@ -589,7 +589,7 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		}
 		if (tap.enters && Locator::temple::has_value())
 		{
-			Locator::temple::value().Activate();
+			Locator::temple::value().ActivateAfterFrame(TempleRoom::Main);
 		}
 		return tap.tapped;
 	}

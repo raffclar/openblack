@@ -217,6 +217,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -2055,6 +2056,11 @@ bool Game::GameLogicLoop() noexcept
 		Locator::musicMoodSystem::value().UpdateOnGameTurn(false);
 	}
 	Locator::influenceSystem::value().SetInGameTurn(false);
+	// At the end of the turn the game autosaves when an autosave is due
+	if (Locator::saveGameSystem::has_value())
+	{
+		Locator::saveGameSystem::value().EndTurn();
+	}
 
 	_lastGameLoopTime = currentTime;
 	_turnDeltaTime = delta;
@@ -2144,7 +2150,7 @@ void Game::ProcessTempleRoomKeys()
 		}
 		else
 		{
-			temple.Activate(room);
+			temple.ActivateAfterFrame(room);
 		}
 		return;
 	}
@@ -4481,7 +4487,8 @@ bool Game::Run() noexcept
 			const bool hiddenThisFrame =
 			    _debugGuiHiddenFrame == _frameCount ||
 			    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
-			    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting());
+			    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
+			    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
 			if (drawsFrame && (!screenshotThisFrame || !_screenshotHidesDebugGui) && !hiddenThisFrame)
 			{
 				Locator::debugGui::value().Draw();
@@ -4498,6 +4505,18 @@ bool Game::Run() noexcept
 		    Locator::entitiesRegistry::value(),
 		    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
 		     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
+		// The pictures of the saved games whose screens are back
+		if (Locator::saveGameSystem::has_value())
+		{
+			Locator::saveGameSystem::value().CollectPictures(
+			    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
+			     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
+		}
+		// The player goes into the temple after the frame that the game took the picture of
+		if (Locator::temple::has_value())
+		{
+			Locator::temple::value().FrameDrawn();
+		}
 		// The pictures of the player's creature whose screens are back
 		if (Locator::creatureWebPageSystem::has_value())
 		{
@@ -4558,6 +4577,11 @@ bool Game::Run() noexcept
 		frameStart = frameEnd;
 	}
 
+	// As the player leaves the game, the game saves it into the slot of the save on exit
+	if (Locator::saveGameSystem::has_value())
+	{
+		Locator::saveGameSystem::value().SaveOnExit();
+	}
 	// As the game ends, the player's creature is written to their files as it is now
 	if (Locator::creatureCarryOverSystem::has_value())
 	{
@@ -4887,6 +4911,11 @@ void Game::PrepareNewLand(land_change::Kind change)
 	}
 	Locator::guidanceSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
+	// The turns of a new land start from zero, and so does the turn of the last autosave
+	if (Locator::saveGameSystem::has_value())
+	{
+		Locator::saveGameSystem::value().NewLand();
+	}
 	Locator::influenceSystem::value().Reset();
 	// Nor a scare of its fish. The creatures' footprints stay and fade on the new land, as in the game.
 	Locator::fishFarmSystem::value().Reset();

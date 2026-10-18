@@ -3102,6 +3102,23 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.save_room_pictures",
+	    .name = "The save game room shows the picture of a quick save",
+	    .facet = Facet::Story,
+	    .description = "The game quick saves, as the quick save key does. Then the player goes into the temple's main room, "
+	                   "and the game takes a picture of the land. The game saves into slot 0, as the save game room does. "
+	                   "Then the player goes into the save game room.",
+	    .expected = "The pictures of the Quick Save slot and of slot 0 show the land, not a white picture: the quick save "
+	                "its own picture, slot 0 the picture from the entry into the temple. Slot 0 is low on the wall in "
+	                "front. The scroll lists the saves as Quick Save and Testbed.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::QuickSave, .delaySeconds = 1.0f},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 0},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
+	});
+
+	all.push_back({
 	    .id = "temple.library_history",
 	    .name = "The temple's library with tips read and a story history",
 	    .facet = Facet::Story,
@@ -8541,7 +8558,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
-	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::PlayFallingSpellFilm ||
+	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::PlayFallingSpellFilm ||
 	       kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice || IsPointerCommand(kind);
 }
 
@@ -8569,7 +8586,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 151> k_Names {
+	constexpr std::array<std::string_view, 152> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -8721,6 +8738,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "attach a script sound to the object",
 		    "say a line",
 		    "play a guidance voice",
+		    "quick save",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

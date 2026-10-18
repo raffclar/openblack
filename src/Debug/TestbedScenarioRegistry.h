@@ -855,6 +855,9 @@ struct Command
 		/// everywhere, or with ctrl from the point (from the middle of the map) on the land, heard as far as radius with
 		/// the distances of a placed guidance voice. Needs no creature.
 		PlayGuidanceVoice,
+		/// The game saves into the quick save slot, as the quick save key does: a new picture of the screen and the
+		/// slot's own name. Needs no creature
+		QuickSave,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

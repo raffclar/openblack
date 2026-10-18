@@ -66,6 +66,9 @@ public:
 	/// The player saved or loaded a game in the save game room. The profile keeps the count with its next change.
 	virtual void CountSave() = 0;
 	virtual void CountLoad() = 0;
+	/// An autosave on the land: gives how many autosaves the profile played counts for the land, then counts one more
+	/// and keeps the profile. Zero without a profile.
+	virtual uint32_t TakeLandAutosave(uint32_t land) = 0;
 };
 
 } // namespace openblack::ecs::systems

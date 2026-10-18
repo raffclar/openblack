@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -80,6 +81,9 @@ struct Profile
 	double alignment {0.0};
 	/// The time played and the saves and loads, which the game keeps as the game ends and with each other change
 	Statistics statistics;
+	/// For each land, how many times the game autosaved on it: the autosaves of a land go in turn into the three
+	/// autosave slots
+	std::map<uint32_t, uint32_t> landAutosaves;
 
 	bool operator==(const Profile&) const = default;
 };

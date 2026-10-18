@@ -126,8 +126,8 @@ inline constexpr KeyBindingTable k_DefaultKeyBindings {{
 	{BindableActionMap::LEASH_UNLEASH_CREATURE, "Leash/UnLeash Creature",      BindCategory::Creature,  KeyChord {SDL_SCANCODE_L},      MouseInput::None,         BindStatus::OwnedByLeashWork},
 	{BindableActionMap::SHOW_VILLAGER_NAMES,    "Show Villager Names",         BindCategory::Villagers, KeyChord {SDL_SCANCODE_N},      MouseInput::None,         BindStatus::Implemented},
 	{BindableActionMap::SHOW_VILLAGER_DETAILS,  "Show Villager Details",       BindCategory::Villagers, KeyChord {SDL_SCANCODE_S},      MouseInput::None,         BindStatus::Implemented},
-	{BindableActionMap::QUICK_SAVE,             "Quick Save",                  BindCategory::Game,      KeyChord {SDL_SCANCODE_S, Modifier::Ctrl}, MouseInput::None, BindStatus::NotYetImplemented},
-	{BindableActionMap::QUICK_LOAD,             "Quick Load",                  BindCategory::Game,      KeyChord {SDL_SCANCODE_L, Modifier::Ctrl}, MouseInput::None, BindStatus::NotYetImplemented},
+	{BindableActionMap::QUICK_SAVE,             "Quick Save",                  BindCategory::Game,      KeyChord {SDL_SCANCODE_S, Modifier::Ctrl}, MouseInput::None, BindStatus::Implemented},
+	{BindableActionMap::QUICK_LOAD,             "Quick Load",                  BindCategory::Game,      KeyChord {SDL_SCANCODE_L, Modifier::Ctrl}, MouseInput::None, BindStatus::Implemented},
 	{BindableActionMap::PREVIOUS_LEASH,         "Previous Leash",              BindCategory::Creature,  KeyChord {SDL_SCANCODE_V},      MouseInput::None,         BindStatus::OwnedByLeashWork},
 	{BindableActionMap::NEXT_LEASH,             "Next Leash",                  BindCategory::Creature,  KeyChord {SDL_SCANCODE_B},      MouseInput::None,         BindStatus::OwnedByLeashWork},
 }};

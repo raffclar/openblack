@@ -32,6 +32,7 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "GameActionMapInterface.h"
 #include "Gui/VillagerLabels.h"
 #include "Help/HelpProfile.h"
@@ -135,6 +136,19 @@ void ShortcutKeys::Update()
 	if (pressed(BindableActionMap::HELP) && Locator::helpMessageSystem::has_value())
 	{
 		Locator::helpMessageSystem::value().HelpQuery();
+	}
+
+	// The quick save and the quick load keys
+	if (Locator::saveGameSystem::has_value())
+	{
+		if (pressed(BindableActionMap::QUICK_SAVE))
+		{
+			Locator::saveGameSystem::value().QuickSave();
+		}
+		if (pressed(BindableActionMap::QUICK_LOAD))
+		{
+			Locator::saveGameSystem::value().QuickLoad();
+		}
 	}
 
 	// The villagers' names and details are toggled, as the game does

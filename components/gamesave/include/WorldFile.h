@@ -70,6 +70,9 @@ struct GameChunk
 	uint8_t knownLeashes {0};
 	/// 1 when the local player's creature is in the temple's Creature Cave
 	uint32_t creatureInTemple {0};
+	/// The turn of the last autosave and the turn of the last quick save
+	uint32_t lastAutosaveTurn {0};
+	uint32_t lastQuickSaveTurn {0};
 
 	bool operator==(const GameChunk&) const = default;
 };
