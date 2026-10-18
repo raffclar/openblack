@@ -16,6 +16,8 @@
 
 #include <MorphFile.h>
 
+#include "Common/X87.h"
+
 namespace openblack
 {
 
@@ -101,7 +103,7 @@ float HandAnimation::SizeAtDistance(float distanceFromCamera)
 	auto size = 1.0f;
 	if (distance < k_ShrinkDistance)
 	{
-		size = std::pow(distance / k_ShrinkDistance, 0.8f);
+		size = x87::Pow(distance / k_ShrinkDistance, static_cast<double>(0.8f));
 	}
 	if (distance > k_GrowDistance)
 	{
@@ -123,9 +125,14 @@ float HandAnimation::RestHeight(std::span<const glm::mat4> restMatrices)
 	return highest - lowest;
 }
 
+float HandAnimation::DrawnScale(float restHeight, float size)
+{
+	return (k_StandardHeight / restHeight) * size;
+}
+
 float HandAnimation::ScaleAtDistance(float distanceFromCamera) const
 {
-	return k_StandardHeight * SizeAtDistance(distanceFromCamera) / _restHeight;
+	return DrawnScale(SizeAtDistance(distanceFromCamera));
 }
 
 const HandAnimation::Animation* HandAnimation::GetAnimation(size_t specIndex) const

@@ -9,9 +9,11 @@
 
 #pragma once
 
+#include <optional>
 #include <random>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/CreatureFight.h"
@@ -72,6 +74,7 @@ public:
 	bool GestureSpecialMove() override;
 	bool GestureSpell(MagicType type) override;
 	void DrawMarks(float realMs, const glm::vec3& eye) override;
+	std::optional<glm::vec3> TakeHandSparkle() override { return std::exchange(_handSparkle, std::nullopt); }
 
 	[[nodiscard]] bool IsBlocking(entt::entity creature) const override;
 	void Recoil(entt::entity creature) override;
@@ -209,6 +212,8 @@ private:
 	bool _fightExit {true};
 	/// A press on a body is held: the sparkle added last charges
 	bool _markHeld {false};
+	/// The point on the opponent's body that the hand goes to, from the last drawing
+	std::optional<glm::vec3> _handSparkle;
 	/// The sparkles flicker at most 60 times a second
 	creature_fight::marks::Pace _marksPace;
 	RandomStreamSource _random {RandomStream::CreatureFight};

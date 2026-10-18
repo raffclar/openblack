@@ -15,6 +15,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Matrix.h"
 #include "Common/X87Vector.h"
 
 using namespace openblack;
@@ -26,6 +27,9 @@ constexpr float k_TowardsCamera = 0.25f;
 constexpr float k_Upwards = 0.5f;
 /// Holding something, the hand is kept out from the face by this share of the held thing's radius
 constexpr float k_HeldShare = 0.5f;
+/// The order of the sums when the game turns the straight up: x and y add the products of x, z, then y; z adds y, x,
+/// then z
+constexpr x87::AxisOrders k_PourUpOrder {{{0, 2, 1}, {0, 2, 1}, {1, 0, 2}}};
 
 /// The vector made one long with its squares added in the given order; a vector of no length stays as it is
 template <x87::SumOrder Order>
@@ -178,6 +182,12 @@ hand_feel::HoverDistances hand_feel::HoverDistancesOf(const Hover& hover)
 glm::vec3 hand_feel::UnitUp(glm::vec3 up)
 {
 	return Unit<x87::SumOrder::Zyx>(up);
+}
+
+glm::vec3 hand_feel::PourUp(glm::vec3 camera, glm::vec3 hand, float tilt)
+{
+	const auto axis = Unit<x87::SumOrder::Xzy>(camera - hand);
+	return x87::TransformPoint(x87::TurnAbout(axis, tilt), glm::vec3(0.0f, 1.0f, 0.0f), k_PourUpOrder);
 }
 
 void hand_feel::EaseHover(Zoomer& hover, float target, float seconds, bool pulling, bool slowOut)

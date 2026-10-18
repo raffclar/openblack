@@ -1105,11 +1105,18 @@ void CreatureFightSystem::DrawMarks(float realMs, const glm::vec3& eye)
 		}
 		const auto halfSize = ShownSize(registry.Get<const Creature>(*self));
 		const auto shown = list.Marks();
+		// While a press on a body is held, the hand goes to a sparkle on the opponent, where it sits before it is drawn
+		// nearer the camera
+		const auto handMark = marks::HandMark(shown, _markHeld);
 		for (size_t place = 0; place < shown.size(); ++place)
 		{
 			const auto& mark = shown[place];
 			if (const auto at = MarkPosition(registry, *self, fighting->opponent, mark))
 			{
+				if (handMark == place)
+				{
+					_handSparkle = *at;
+				}
 				drawn.push_back({.position = marks::DrawnAt(*at, eye),
 				                 .halfSize = halfSize,
 				                 .uv = marks::FrameUv(mark.frame),

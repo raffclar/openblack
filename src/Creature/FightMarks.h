@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 #include <span>
 
 #include <glm/mat4x4.hpp>
@@ -95,6 +96,10 @@ constexpr float k_TowardsCamera = 0.5f;
 
 /// The frame a blow's sparkle moves on to at a drawing: one frame for each whole eighth of the full charge held
 [[nodiscard]] uint32_t NextFrame(uint32_t frame, float chargeMs);
+/// While a press on a body is held, the hand goes to the last sparkle on the opponent's body. It goes there also when
+/// the press is on the player's own creature and an earlier sparkle sits on the opponent. The place of that sparkle in
+/// the list, if any.
+[[nodiscard]] std::optional<size_t> HandMark(std::span<const Mark> marks, bool pressHeld);
 /// A sparkle's colour by its place in the queue, 0xAARRGGBB, always somewhat see-through. The front one's blue spills
 /// over into its green, so it shows yellow rather than white.
 [[nodiscard]] uint32_t ColourOf(size_t place, size_t capacity = MarkList::k_Capacity);

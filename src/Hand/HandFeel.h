@@ -154,6 +154,10 @@ struct HoverDistances
 /// The way the hand stands up, one long, its squares added z, y, x; no way stays none
 [[nodiscard]] glm::vec3 UnitUp(glm::vec3 up);
 
+/// The way the hand stands up while a pour tips the miracle it holds: straight up, turned by the tilt about the line
+/// from the hand to the camera. The line is made unit with its squares added x, z, y, unless it has no length.
+[[nodiscard]] glm::vec3 PourUp(glm::vec3 camera, glm::vec3 hand, float tilt);
+
 /// How much nearer than a miracle's icon the hand rests: the hand's standard height
 inline constexpr float k_IconGap = 3.2f;
 
