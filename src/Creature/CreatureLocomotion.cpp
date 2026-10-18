@@ -36,8 +36,6 @@ constexpr float k_RunPerSize = 20.0f;
 /// The size factor is size times this plus the offset
 constexpr float k_SizeSlope = 0.875f;
 constexpr float k_SizeOffset = 0.25f;
-/// A creature going slower than this isn't moving its feet
-constexpr float k_Still = 1e-4f;
 /// The arrival ring never reaches past the destination by less than this, and is never thinner than this
 constexpr float k_RingInside = 0.05f;
 constexpr float k_RingThickness = 0.001f;
@@ -45,15 +43,6 @@ constexpr float k_RingThickness = 0.001f;
 constexpr float k_TimeLimitBaseMs = 5000.0f;
 constexpr float k_TimeLimitPerUnitMs = 2.0f;
 
-float Loop(float time, float duration)
-{
-	if (duration <= 0.0f)
-	{
-		return 0.0f;
-	}
-	const auto looped = std::fmod(time, duration);
-	return looped < 0.0f ? looped + duration : looped;
-}
 } // namespace
 
 Speeds creature_locomotion::SpeedsFor(float size)
@@ -77,36 +66,6 @@ float creature_locomotion::RequiredFraction(float kept, float slowFraction, floa
 	return !held && exhaustion >= k_ExhaustedAt ? slowFraction : kept;
 }
 
-float creature_locomotion::StopCap(float remaining)
-{
-	return std::max(std::sqrt(2.0f * k_Acceleration * std::max(remaining, 0.0f)), k_MinSpeed);
-}
-
-float creature_locomotion::CornerCap(float remaining, float cornerAllowance)
-{
-	return std::max(
-	    std::sqrt((k_Acceleration * std::max(cornerAllowance, 0.0f)) + (2.0f * k_Acceleration * std::max(remaining, 0.0f))),
-	    k_MinSpeed);
-}
-
-float creature_locomotion::SlopeFactor(float altitudeAhead, float altitude, float radius)
-{
-	if (radius <= 0.0f)
-	{
-		return 1.0f;
-	}
-	return std::clamp(1.0f - (k_SlopeSlowing * (altitudeAhead - altitude) / radius), k_MinSlopeFactor, k_MaxSlopeFactor);
-}
-
-float creature_locomotion::Accelerate(float speed, float target, float seconds)
-{
-	if (speed < target)
-	{
-		return std::min(target, speed + (k_Acceleration * seconds));
-	}
-	return speed;
-}
-
 GameHeading creature_locomotion::HeadingOf(glm::vec2 direction)
 {
 	return GameHeading::Of(direction.x, direction.y);
@@ -127,45 +86,6 @@ GameHeading creature_locomotion::LerpHeading(GameHeading heading, GameHeading ta
 	// The gap is wrapped once, scaled by the time and then divided by the length, and the result is wrapped once more
 	const auto eased = ((target.TurnFrom(heading) * std::max(timeMs, 0.0f)) / durationMs) + heading.Radians();
 	return GameHeading(GameHeading::Wrap(eased));
-}
-
-Gait creature_locomotion::BlendGait(float speed, const Speeds& speeds, float distance, float scale, const Cycle& stand,
-                                    const Cycle& walk, const Cycle& run, float walkTimeMs, float breathPhase)
-{
-	const auto standTime = stand.durationMs * breathPhase;
-	if (speed <= k_Still || speeds.walk <= 0.0f)
-	{
-		return {.slots = {{{.animation = animations::k_Stand, .timeMs = standTime, .weight = 1.0f},
-		                   {.animation = animations::k_Walk, .timeMs = walkTimeMs, .weight = 0.0f}}},
-		        .walkTimeMs = walkTimeMs,
-		        .walkAdvanceMs = 0.0f};
-	}
-
-	if (speed < speeds.walk)
-	{
-		const auto walkWeight = speed / speeds.walk;
-		// The blend's stride shrinks with the walk's weight, so the feet don't slide
-		const auto stride = walkWeight * walk.stride * scale;
-		const auto advance = stride > 0.0f ? walk.durationMs * distance / stride : 0.0f;
-		const auto time = Loop(walkTimeMs + advance, walk.durationMs);
-		return {.slots = {{{.animation = animations::k_Stand, .timeMs = standTime, .weight = 1.0f - walkWeight},
-		                   {.animation = animations::k_Walk, .timeMs = time, .weight = walkWeight}}},
-		        .walkTimeMs = time,
-		        .walkAdvanceMs = advance};
-	}
-
-	const auto range = speeds.run - speeds.walk;
-	const auto runWeight = range > 0.0f ? std::clamp((speed - speeds.walk) / range, 0.0f, 1.0f) : 1.0f;
-	const auto walkWeight = 1.0f - runWeight;
-	const auto stride = ((walkWeight * walk.stride) + (runWeight * run.stride)) * scale;
-	const auto advance = stride > 0.0f ? walk.durationMs * distance / stride : 0.0f;
-	const auto time = Loop(walkTimeMs + advance, walk.durationMs);
-	// The run keeps in step with the walk
-	const auto runTime = walk.durationMs > 0.0f ? run.durationMs * time / walk.durationMs : 0.0f;
-	return {.slots = {{{.animation = animations::k_Run, .timeMs = runTime, .weight = runWeight},
-	                   {.animation = animations::k_Walk, .timeMs = time, .weight = walkWeight}}},
-	        .walkTimeMs = time,
-	        .walkAdvanceMs = advance};
 }
 
 Side creature_locomotion::SideOf(float angle)

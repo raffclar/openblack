@@ -2900,8 +2900,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::timeMs>("timeMs")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::durationMs>("durationMs")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::displacement>("displacement")
-	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::startHeading>("startHeading")
-	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::startRouteHeading>("startRouteHeading");
+	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::blendDurationMs>("blendDurationMs")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::side>("side")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::routeHeading>("routeHeading");
 	Reflect<openblack::ecs::components::CreatureLocomotion::Track>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::animation>("animation")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::fromMs>("fromMs")

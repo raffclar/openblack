@@ -78,6 +78,8 @@ public:
 	Outcome Update(int32_t steps, bool recordMet, float joinAhead);
 	/// Moves a distance along the route followed
 	Advanced Advance(float distance);
+	/// Goes back to the start of the leg that it is on, as a walk that a sharp turn stops does
+	void RestartLeg();
 
 	[[nodiscard]] State GetState() const { return _state; }
 	[[nodiscard]] bool IsFollowing() const { return _state == State::Walking || _state == State::Replanning; }
@@ -87,6 +89,8 @@ public:
 	[[nodiscard]] const Obstacles& GetObstacles() const { return _obstacles; }
 	[[nodiscard]] const Destination& GetDestination() const { return _destination; }
 	[[nodiscard]] glm::vec2 GetPosition() const { return _position; }
+	/// The heading along the route where it is. A straight leg too short to measure keeps the heading from before.
+	[[nodiscard]] GameHeading GetHeading() const { return _heading; }
 	[[nodiscard]] size_t GetSearchCount() const { return _searches.size(); }
 	/// Where the best route of the search that it took on last has got to, while it searches
 	[[nodiscard]] std::optional<glm::vec2> GetSearchHead() const;
@@ -104,11 +108,14 @@ private:
 	void Succeed(size_t chosen, float joinAhead);
 	Outcome Fail(size_t chosen);
 	void Join(size_t chosen, float joinAhead);
+	/// Puts it where it is along the leg that it is on, unless that leg is too short to measure
+	void PlaceOnRoute();
 
 	Obstacles _obstacles;
 	State _state {State::Idle};
 	Route _route;
 	glm::vec2 _position {0.0f};
+	GameHeading _heading {};
 	/// Where it will be once the route followed ends
 	glm::vec2 _routeEnd {0.0f};
 	Destination _destination;
