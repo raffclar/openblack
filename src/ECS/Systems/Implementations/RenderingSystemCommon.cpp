@@ -190,10 +190,20 @@ void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths
 			registry.Each<const Footpath>([&edges](const Footpath& ent) {
 				const auto color = glm::vec4(0, 1, 0, 1);
 				const auto offset = glm::vec3(0, 1, 0);
-				for (int i = 0; i < static_cast<int>(ent.nodes.size()) - 1; ++i)
+				// The line goes through the nodes that walkers walk to, past those hidden under things and the markers
+				const Footpath::Node* last = nullptr;
+				for (const auto& node : ent.nodes)
 				{
-					edges.push_back({glm::vec4(ent.nodes[i].position + offset, 1.0f), color});
-					edges.push_back({glm::vec4(ent.nodes[i + 1].position + offset, 1.0f), color});
+					if (node.hidden || node.marker)
+					{
+						continue;
+					}
+					if (last != nullptr)
+					{
+						edges.push_back({glm::vec4(last->position + offset, 1.0f), color});
+						edges.push_back({glm::vec4(node.position + offset, 1.0f), color});
+					}
+					last = &node;
 				}
 			});
 			if (!edges.empty())

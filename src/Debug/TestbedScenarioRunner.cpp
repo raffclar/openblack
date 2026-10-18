@@ -139,6 +139,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureReactionNotice.h"
+#include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -166,6 +167,7 @@
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -810,6 +812,15 @@ void Runner::Start(const Scenario& scenario)
 		ecs::archetypes::SharkArchetype::Create({at.x, 0.0f, at.y}, 1.0f);
 	}
 	PlaceHighlights(scenario, _middle);
+	// As on a land, the things are on the map before the footpaths come, so no footpath goes round them
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Sync();
+	}
+	if (Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().ProcessObstacleChanges();
+	}
 	PlaceFootpaths(scenario, _middle);
 	if (!scenario.landScript.empty())
 	{

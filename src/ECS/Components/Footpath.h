@@ -81,4 +81,13 @@ struct FootpathFinder
 	std::shared_ptr<Plan> plan;
 };
 
+/// A thing that the footpaths go round, put on the map or removed from it: its radius across the ground in metres and its
+/// place in whole map units. On their next turn the footpaths go round it, or stop going round it.
+struct FootpathObstacleChange
+{
+	bool put {true};
+	float radius {0.0f};
+	glm::ivec2 place {0, 0};
+};
+
 } // namespace openblack::ecs::components

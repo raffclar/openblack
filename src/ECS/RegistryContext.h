@@ -37,6 +37,10 @@ struct RegistryContext
 	std::vector<entt::entity> scriptFootpaths;
 	/// The thing that the land's script made last, if it can keep footpaths. A footpath link command goes to it.
 	entt::entity scriptThingMadeLast {entt::null};
+	/// The things that the footpaths go round, put on the map or removed from it since the footpaths' last turn, in order
+	std::vector<components::FootpathObstacleChange> footpathObstacleChanges;
+	/// Each thing on the map that the footpaths go round, as it was when it was put there
+	std::unordered_map<entt::entity, components::FootpathObstacleChange> footpathObstacles;
 	std::unordered_map<components::Stream::Id, entt::entity> streams;
 	std::unordered_map<uint32_t, entt::entity> towns;
 	components::VillageLightFlames villageLightFlames {.clock = 0, .starts = village_lights::k_FlameStarts};

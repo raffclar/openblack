@@ -202,6 +202,34 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	    .footpaths = ShoreFootpaths(),
 	});
 
+	{
+		// The hand puts a rock down on the hut's path, half way between two of its nodes, under the middle of the screen
+		const auto drop = k_ShoreFarm + glm::vec2(-7.5f, -43.0f);
+		auto objects = ShoreFarmWithFootpaths();
+		objects.push_back(
+		    {.type = MobileStaticInfo::RockChalk, .offset = k_ShoreFarm + glm::vec2(-50.0f, -30.0f), .scale = 2.5f});
+		all.push_back({
+		    .id = "footpaths.rock_on_path",
+		    .name = "A rock put down on a footpath",
+		    .facet = Facet::Movement,
+		    .description = "The lake-shore farm, hut and storage pit with their two footpaths (drawn with the Footpaths debug "
+		                   "lines), and the fisherman by the hut. After 8 seconds the hand takes a rock from beside the "
+		                   "town, and 2 seconds later it puts the rock on the hut's path, half way between two nodes. 65 "
+		                   "seconds later the hand takes the rock again.",
+		    .expected = "On the next turn after the rock is put down, the hut's path bends round it: the line goes round the "
+		                "rock, by a route that the creatures' planner finds or by nodes a tenth of a half turn apart on a "
+		                "circle about it. The fisherman, who walks the hut's path to the pit, goes round the rock with the "
+		                "path. When the hand takes the rock, the path goes straight between its nodes again.",
+		    .environment = {.dispenserGrid = false, .drawFootpaths = true, .cursor = glm::vec2(0.5f, 0.5f)},
+		    .framing = {.shot = Shot::Placed, .eye = {drop.x, 22.0f, drop.y - 24.0f}, .look = {drop.x, 0.0f, drop.y}},
+		    .objects = objects,
+		    .footpaths = ShoreFootpaths(),
+		    .commands = {{.kind = Kind::HandTake, .delaySeconds = 8.0f, .object = 4},
+		                 {.kind = Kind::HandRelease, .delaySeconds = 2.0f},
+		                 {.kind = Kind::HandTake, .delaySeconds = 65.0f, .object = 4}},
+		});
+	}
+
 	all.push_back({
 	    .id = "villagers.script_footpaths",
 	    .name = "Footpaths made by the land's script",
