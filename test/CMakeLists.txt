@@ -1288,3 +1288,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_sing_along help/test_sing_along.cpp)
 openblack_setup_and_add_test(test_save_game_room temple/test_save_game_room.cpp)
 openblack_setup_and_add_test(test_instant_saves test_instant_saves.cpp)
+openblack_setup_and_add_test(test_world_archive test_world_archive.cpp)

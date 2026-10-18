@@ -54,7 +54,7 @@ void ResetZoomer(openblack::Zoomer& zoomer, float value)
 
 } // namespace
 
-void openblack::inspector::reflection::RegisterHandWrittenFields(entt::meta_ctx& context)
+void openblack::ecs::reflection::RegisterHandWrittenFields(entt::meta_ctx& context)
 {
 	Reflect<fight::MoveQueue>(context, ValueOnly {})
 	    .Property<&QueuedMoves, &SetQueuedMoves>("moves")

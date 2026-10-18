@@ -418,7 +418,7 @@ static_assert(static_cast<size_t>(openblack::ecs::components::LivingAction::Inde
 
 } // namespace
 
-void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& context)
+void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context)
 {
 	Reflect<components::Abode>(context)
 	    .Field<&components::Abode::type>("type")

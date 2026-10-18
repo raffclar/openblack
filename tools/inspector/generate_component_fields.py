@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes src/Inspector/ComponentFields.cpp: every component of src/ECS/Components and its data members registered
+"""Writes src/ECS/Reflection/ComponentFields.cpp: every component of src/ECS/Components and its data members registered
 with the inspector's reflection, so that the inspector writes them out as JSON and sets them by name.
 
 Run it again after adding or changing a component (with clang-format on the PATH, it formats the file too):
@@ -17,7 +17,7 @@ struct of src/ (public members, no base, not a template) that a field holds, dir
 those their own fields hold in turn. A list indexed by an enumeration (std::array<T, static_cast<size_t>(E::_Count)>, or
 a constant of that) is given its enumeration's names, which the inspector reads and writes its elements by.
 
-Types whose data is private are registered by hand in src/Inspector/ComponentFieldsByHand.cpp (BY_HAND below says
+Types whose data is private are registered by hand in src/ECS/Reflection/ComponentFieldsByHand.cpp (BY_HAND below says
 which types they give, to be registered here). With --report it lists the types fields hold that it can't register,
 and why.
 """
@@ -30,7 +30,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMPONENTS = ROOT / "src" / "ECS" / "Components"
-OUTPUT = ROOT / "src" / "Inspector" / "ComponentFields.cpp"
+OUTPUT = ROOT / "src" / "ECS" / "Reflection" / "ComponentFields.cpp"
 NAMESPACE = "openblack::ecs::components"
 
 # Types that aren't components, though they are declared beside them
@@ -42,7 +42,7 @@ SKIPPED = {
 
 SOURCES = ROOT / "src"
 
-# Types with private data, registered by hand in src/Inspector/ComponentFieldsByHand.cpp, and the types their functions
+# Types with private data, registered by hand in src/ECS/Reflection/ComponentFieldsByHand.cpp, and the types their functions
 # give, which are registered here
 BY_HAND = {
     "openblack::creature_fight::MoveQueue": ["openblack::creature_fight::QueuedMove"],
@@ -511,7 +511,7 @@ def main():
         if held in component_names or held in values or held in refused:
             continue
         if held in BY_HAND:
-            refused[held] = (f"registered by hand in src/Inspector/ComponentFieldsByHand.cpp", holder)
+            refused[held] = (f"registered by hand in src/ECS/Reflection/ComponentFieldsByHand.cpp", holder)
             for given in BY_HAND[held]:
                 pending.append((given, held))
             continue
@@ -551,7 +551,7 @@ def main():
                 lines.append(f"static_assert(static_cast<size_t>({enum}::{index.types[enum].enumerators[-1]}) == "
                              f"{names_array(enum)}.size());\n")
         lines.append("\n} // namespace\n\n")
-    lines.append("void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& context)\n{\n")
+    lines.append("void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context)\n{\n")
     count = 0
     for header, name, members in components:
         count += 1
