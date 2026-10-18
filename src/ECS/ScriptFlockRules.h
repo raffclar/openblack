@@ -76,4 +76,9 @@ struct FlockStep
 [[nodiscard]] FlockStep MoveInFlock(const map_coords::MapCoords& position, const FlockView& flock, const FloatRandom& random,
                                     const Accepts& accepts);
 
+/// The random point that a living of one kind picks between two distances of a centre
+using PickPos = std::function<map_coords::MapCoords(const map_coords::MapCoords& centre, float least, float most)>;
+/// The same rule, with the random point from the living's own pick
+[[nodiscard]] FlockStep MoveInFlock(const map_coords::MapCoords& position, const FlockView& flock, const PickPos& pick);
+
 } // namespace openblack::ecs::script_flock_rules
