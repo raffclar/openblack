@@ -18,9 +18,12 @@
 
 #include "Common/GameHeading.h"
 #include "Creature/CreatureAnimation.h"
+#include "Creature/CreatureFart.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureHeadLook.h"
 #include "Creature/CreatureLocomotion.h"
+#include "Creature/CreatureMarks.h"
+#include "Creature/CreaturePhysiology.h"
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureStomp.h"
 #include "Creature/TattooEditor.h"
@@ -155,4 +158,57 @@ TEST(CreatureFilesOrder, TheDirectionOfAHeadingIsTheRoundedWideSineAndCosine)
 	const auto direction = creature_locomotion::DirectionOf(GameHeading(Bits(0x3FEAF9BAu)));
 	EXPECT_EQ(BitsOf(direction.x), 0x3F77112Au);
 	EXPECT_EQ(BitsOf(direction.y), 0x3E86129Du);
+}
+
+// The lump of a poo goes back along the heading turned by a half turn. The FPU's wide sine and cosine go into the
+// products with 5 and -5: a sine rounded to a float first gives other bits on both parts here.
+TEST(CreatureFilesOrder, ThePooLumpGoesBackWithTheWideSineAndCosine)
+{
+	const auto lump = creature_physiology::PooLumpOf(glm::vec3(0.0f), GameHeading(Bits(0x3D3F44BBu)), 1.0f);
+	ExpectBits(lump.velocity, {Bits(0xBE6EFFD0u), 0.0f, Bits(0x409FD35Au)});
+}
+
+// The puffs of a fart go back along the heading turned by a half turn, by the spread (size x 15). With every draw at
+// half its limit, each puff moves only by that back way: the wide sine and cosine go into the products with the spread.
+TEST(CreatureFilesOrder, TheFartPuffsGoBackWithTheWideSineAndCosine)
+{
+	const auto random = [](float limit) { return limit * 0.5f; };
+	const auto velocities = creature_fart::PuffVelocities(GameHeading(Bits(0xBFEA1B99u)), Bits(0x3F67DFC1u), random);
+	for (const auto& velocity : velocities)
+	{
+		ExpectBits(velocity, {Bits(0x41522D75u), 0.0f, Bits(0xC05E004Eu)});
+	}
+}
+
+// A burn's line starts at the groin plus a draw less half the range of the draw. The draw is added to the groin
+// first: the draw less the eighth first gives other bits here.
+TEST(CreatureFilesOrder, TheBurnPointAddsTheDrawToTheGroinFirst)
+{
+	const float groin = Bits(0xC3CF0EC3u);
+	const float reach = Bits(0x4109399Eu);
+	const auto draw = [](float) { return Bits(0x3F3C12AAu); };
+	const auto from = creature_marks::scar::BurnFrom(glm::vec3(groin), reach, draw);
+	EXPECT_EQ(BitsOf(from.x), 0xC3CF39F4u);
+	EXPECT_EQ(BitsOf(from.z), 0xC3CF39F4u);
+}
+
+// A kick's second blow on a building goes sideways from the heading by the side draw: (draw - 5) x 0.1 of a quarter
+// turn. Its velocity is the wide sine x 2 and the wide cosine x -2, each rounded one time.
+TEST(CreatureFilesOrder, TheSideBlowOfAKickUsesTheHeading)
+{
+	const creature_stomp::BuildingKick kick {
+	    .creature = glm::vec3(0.0f),
+	    .foot = glm::vec3(0.0f),
+	    .direction = {0.0f, 0.6f, -0.8f},
+	    .heading = GameHeading(Bits(0x3F1A2B3Cu)),
+	    .creatureSize = 1.0f,
+	    .buildingRadius = 10.0f,
+	    .sideDraw = 7,
+	    .firstHeightDraw = 0,
+	    .secondHeightDraw = 0,
+	};
+	const auto blows = creature_stomp::KickBlows(kick, 0.0f);
+	ExpectBits(blows[1].velocity, {Bits(0x3FCB1C8Au), 0.0f, Bits(0xBF9BD371u)});
+	// The first blow goes the way of the kick at twice its length
+	ExpectBits(blows[0].velocity, {0.0f, 1.2f, -1.6f});
 }

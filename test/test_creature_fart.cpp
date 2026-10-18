@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <numbers>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -77,12 +78,13 @@ TEST(CreatureFart, TheCloudBlowsOutBehindByItsSize)
 		limits.push_back(limit);
 		return limit * 0.5f;
 	};
-	const auto velocities = PuffVelocities(glm::vec2(0.0f, -1.0f), 2.0f, random);
+	// Heading 0 faces -z
+	const auto velocities = PuffVelocities(openblack::GameHeading(0.0f), 2.0f, random);
 	ASSERT_EQ(limits.size(), 3 * k_Puffs);
 	EXPECT_FLOAT_EQ(limits.front(), 30.0f);
 	for (const auto& velocity : velocities)
 	{
-		EXPECT_FLOAT_EQ(velocity.x, 0.0f);
+		EXPECT_NEAR(velocity.x, 0.0f, 1e-5f);
 		EXPECT_FLOAT_EQ(velocity.y, 0.0f);
 		EXPECT_FLOAT_EQ(velocity.z, 30.0f);
 	}
@@ -93,11 +95,12 @@ TEST(CreatureFart, EachPuffDrawsAlongZThenUpThenAlongX)
 	std::vector<float> draws {1.0f, 2.0f, 3.0f};
 	size_t next = 0;
 	const auto random = [&](float) { return draws[next++ % draws.size()]; };
-	const auto velocities = PuffVelocities(glm::vec2(1.0f, 0.0f), 1.0f, random);
+	// A quarter turn faces +x
+	const auto velocities = PuffVelocities(openblack::GameHeading(std::numbers::pi_v<float> / 2.0f), 1.0f, random);
 	// The spread is 15, thus each offset is the random number minus 7.5. The puff moves 15 back along -x
-	EXPECT_FLOAT_EQ(velocities[0].z, 1.0f - 7.5f);
+	EXPECT_NEAR(velocities[0].z, 1.0f - 7.5f, 1e-5f);
 	EXPECT_FLOAT_EQ(velocities[0].y, 2.0f - 7.5f);
-	EXPECT_FLOAT_EQ(velocities[0].x, 3.0f - 7.5f - 15.0f);
+	EXPECT_NEAR(velocities[0].x, 3.0f - 7.5f - 15.0f, 1e-5f);
 }
 
 TEST(CreatureFart, OnlyAnEvilLookingBodyStinks)

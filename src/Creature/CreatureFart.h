@@ -17,6 +17,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/GameHeading.h"
 #include "Creature/CreatureLayers.h"
 
 /// The rules for a creature fart. The creature squats as for a poo. On each fifth game turn of the squat loop, a cloud
@@ -54,9 +55,9 @@ enum class Burst : uint8_t
 {
 	return farting ? Burst::Cloud : Burst::Lump;
 }
-/// Gives the velocity of each puff. Each puff moves straight back from the direction that the creature faces. A random
-/// offset of up to half the spread changes each velocity: first on z, then up, then on x
-[[nodiscard]] std::array<glm::vec3, k_Puffs> PuffVelocities(glm::vec2 ahead, float shownSize, const FloatRandom& random);
+/// Gives the velocity of each puff. Each puff moves straight back from the heading of the creature: along the heading
+/// turned by a half turn. A random offset of up to half the spread changes each velocity: first on z, then up, then on x
+[[nodiscard]] std::array<glm::vec3, k_Puffs> PuffVelocities(GameHeading heading, float shownSize, const FloatRandom& random);
 /// Tells if the smoke of a fart continues. The smoke continues only while the creature does the plan that made it. When
 /// that plan stops, because it is complete or for another cause, the smoke stops at once
 [[nodiscard]] constexpr bool SmokeContinues(uint32_t smokePlan, bool planActive, uint32_t planNow)

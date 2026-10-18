@@ -4839,11 +4839,11 @@ void CreatureMindSystem::WatchVillagerSkill(entt::entity creature, CreatureMindS
 	{
 		return;
 	}
-	// How far a walking villager still has to go
+	// How far a walking villager still has to go: the table distance between the two map positions
 	float toGoal = 0.0f;
 	if (const auto* walk = registry.TryGet<const WallHug>(villager); walk != nullptr)
 	{
-		toGoal = glm::distance(glm::xz(registry.Get<const Transform>(villager).position), walk->goal);
+		toGoal = gutils::GetDistanceInMetres(glm::vec2(glm::xz(registry.Get<const Transform>(villager).position)), walk->goal);
 	}
 	const auto state = creature_watching::StateToLearnFrom({
 	    .state = action->states.at(static_cast<size_t>(LivingAction::Index::Top)),

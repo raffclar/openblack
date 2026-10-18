@@ -43,10 +43,11 @@ TEST(CreatureLookWhileGoing, WithinRangeItLooksAtThePlace)
 	auto state = StartWhileGoing(k_Info);
 	state.look = WhileGoing::Look::Sweep;
 	auto view = k_Far;
-	view.place = {0.0f, 25.0f};
+	// The table distance at 25 m is just over 25, so the place is a little nearer
+	view.place = {0.0f, 24.9f};
 	const auto point = LookWhileGoing(state, k_Info, view);
 	ASSERT_TRUE(point.has_value());
-	EXPECT_NEAR(point->at.y, 25.0f, k_Tolerance);
+	EXPECT_NEAR(point->at.y, 24.9f, k_Tolerance);
 	EXPECT_FALSE(point->height.has_value());
 	// The look does not count a turn
 	EXPECT_EQ(state.turns, 0u);
