@@ -1223,7 +1223,7 @@ TEST(UnderwaterWaves, NoWaveIsSteeperThanTheSeaHolds)
 	EXPECT_LT(underwater::CapSteepness(50.0f, 1.0f, rate), 1.0f);
 	const float low = underwater::CapSteepness(0.7f - 1e-3f, 1.0f, rate);
 	const float high = underwater::CapSteepness(0.7f + 1e-3f, 1.0f, rate);
-	underwater::CapSteepness(0.7f, 1.0f, rate);
+	[[maybe_unused]] const float middle = underwater::CapSteepness(0.7f, 1.0f, rate);
 	EXPECT_NEAR(rate, (high - low) / 2e-3f, 1e-3f);
 	// Over a wide patch of the open sea the surface stays gentle: no faces that are nearly upright
 	for (const float storm : {0.0f, 1.0f})
