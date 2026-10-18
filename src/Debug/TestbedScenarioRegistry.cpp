@@ -5474,6 +5474,49 @@ void AddLeash(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// Worn out and wanting to sleep more than anything, far from its player's temple
+	CreatureSetup tired {.species = CreatureType::Tiger,
+	                     .offset = {0.0f, 20.0f},
+	                     .needs = {.energy = 1.0f, .exhaustion = 0.95f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                     .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}}};
+	all.push_back({
+	    .id = "leash.tired_orders",
+	    .name = "Orders given with the leash to a tired creature",
+	    .facet = Facet::Leash,
+	    .description = "A worn out tiger (exhaustion 0.95) that wants to sleep is on the learning leash, far from its "
+	                   "player's temple. After eight seconds it is told to go to a point to the east, and after twenty "
+	                   "seconds to a point to the west.",
+	    .expected = "It sets off home to sleep. Each order stops that: it nods and walks to the place it is told. Once "
+	                "there and the order is done, it sets off home to sleep again.",
+	    .framing = {.shot = Shot::Overview, .include = {{60.0f, 40.0f}, {-60.0f, 40.0f}}},
+	    .creatures = {tired},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), Go(Kind::LeashOrderAt, 0, {60.0f, 40.0f}, 7.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {-60.0f, 40.0f}, 12.0f, false)},
+	});
+
+	// Wholly exhausted, and as young as a creature on the first land, too young to faint
+	auto exhausted = tired;
+	exhausted.needs.exhaustion = 1.0f;
+	exhausted.phase = 4;
+	// It stays exhausted though it sleeps
+	exhausted.hold = true;
+	all.push_back({
+	    .id = "leash.exhausted_orders",
+	    .name = "Orders given with the leash to a wholly exhausted creature",
+	    .facet = Facet::Leash,
+	    .description = "A young, wholly exhausted tiger (exhaustion 1) is on the learning leash, far from its player's "
+	                   "temple. It is too young to faint, and stays exhausted. After eight seconds it is told to go to a "
+	                   "point to the east.",
+	    .expected = "It takes no order: no nod, no marker, and it does not go east. The leash still keeps it near: if "
+	                "it strays too far on its way to sleep, it walks back. Then it sleeps. An older creature this "
+	                "exhausted faints and lies out cold.",
+	    .framing = {.shot = Shot::Overview, .include = {{60.0f, 40.0f}, {-60.0f, 40.0f}}},
+	    .creatures = {exhausted},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), Go(Kind::LeashOrderAt, 0, {60.0f, 40.0f}, 7.0f, false)},
+	});
+
 	all.push_back({
 	    .id = "leash.marker_flat_and_slope",
 	    .name = "The marker of a leash order on flat land and on a slope",
@@ -8755,6 +8798,21 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	                  .scriptArguments = {{.kind = Argument::Kind::Object, .index = 0}}},
 	                 stop(1.0f),
 	                 stop(1.0f)},
+	});
+
+	all.push_back({
+	    .id = "temple.room_help_without_sound",
+	    .name = "The temple's room help when no sound can play",
+	    .facet = Facet::Story,
+	    .description = "Start the game with no sound device (for example with the environment ALSOFT_DRIVERS=none). "
+	                   "The player has a temple, and is put in its main room for the first time.",
+	    .expected = "The advisors come out and the help shows its lines one at a time, with no voice. Each line stays for "
+	                "its reading time: 5 game turns for each word and 8 more. The help shows all nine lines, then the "
+	                "advisors go home. With a sound device, each line stays until the advisor stops talking.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
 	});
 
 	all.push_back({

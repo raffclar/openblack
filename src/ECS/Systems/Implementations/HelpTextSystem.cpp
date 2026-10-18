@@ -168,11 +168,9 @@ help::DialogueText::Queries HelpTextSystem::DialogueQueries()
 	};
 	queries.voice = [](uint32_t number) -> std::optional<help::DialogueVoice> {
 		const auto sample = Locator::helpSpeechSystem::value().GetTable().Find(number);
-		if (!sample || !Locator::resources::value().GetSounds().Contains(sample->sound))
-		{
-			return std::nullopt;
-		}
-		return help::DialogueVoice {.advisorsBank = sample->bank == audio::SpeechBank::HelpSprites};
+		const bool known = sample && Locator::resources::value().GetSounds().Contains(sample->sound);
+		const bool deviceWorks = Locator::audio::has_value() && Locator::audio::value().IsInstalled();
+		return help::VoiceFor(known, known && sample->bank == audio::SpeechBank::HelpSprites, deviceWorks);
 	};
 	queries.turn = []() { return Locator::time::value().GetTurn(); };
 	// The texts are timed in milliseconds by the real time since the game started, which runs on whatever the game's
