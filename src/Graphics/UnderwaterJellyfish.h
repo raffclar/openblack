@@ -39,9 +39,9 @@ inline constexpr float k_Cell = 12.0f;
 inline constexpr float k_Range = 170.0f;
 /// The share of the range over which they fade out
 inline constexpr float k_FadeShare = 0.3f;
-/// The least depth of their tops under the sea's level, in units (about 27 m): the water between them and the
-/// surface takes out all of their light
-inline constexpr float k_TopDepth = 26.0f;
+/// The least depth of their tops under the sea's level, in units (about 30 m): the water between them and the
+/// surface takes out all of their light, with a margin of more than a third of an 8-bit step
+inline constexpr float k_TopDepth = 28.0f;
 /// The least depth of the sea bed where they are, in units: their band under the top depth must have space for them
 inline constexpr float k_LeastDepth = 33.0f;
 /// The depth over which they come in past the least depth
@@ -86,6 +86,19 @@ inline constexpr float k_FlashLight = 0.5f;
 inline constexpr float k_LightReach = 5.0f;
 /// The most jellyfish that light the water, the sea bed, the motes and the other jellyfish: the nearest to the eye
 inline constexpr uint32_t k_Lights = 16;
+/// The pool of light on the sea bed under a jellyfish. The water scatters a part of the light (k_GlowScatter in each
+/// unit) out of its straight way. This light comes to the sea bed from all of the water round the jellyfish, so it
+/// spreads as one over the distance, not as the square. The water absorbs it on the way. Thus a soft pool, a few units
+/// across, shows on the bed under each jellyfish and pulses with its light. The pool starts to fade at the radius and
+/// stops at the reach. The pool is k_PoolStrength times brighter than this scattered light alone, so that it shows on
+/// the dark bed at night.
+inline constexpr float k_PoolRadius = 1.0f;
+inline constexpr float k_PoolReach = 8.0f;
+inline constexpr float k_PoolStrength = 8.0f;
+/// The squeeze of the bell sends more of its light down onto the bed: the pool is this much at rest and this much more
+/// at the full squeeze
+inline constexpr float k_PoolPulseRest = 0.6f;
+inline constexpr float k_PoolPulse = 0.8f;
 
 /// The reach of each thing that makes them flash, in units: a jellyfish nearer than a third of the reach flashes fully.
 /// The camera must come very near: it does not show what is nearer than about 3.5 units. A splash on the surface sends
@@ -161,12 +174,19 @@ using DepthAt = std::function<float(glm::vec2 point)>;
 /// The part of each colour of a jellyfish's light that comes to a point at a distance from its middle. The light
 /// spreads out as the square of the distance (from the size of the bell) and the water takes it out on the way.
 [[nodiscard]] glm::vec3 LightAt(float distance);
+/// The part of each colour of a jellyfish's light that comes to the sea bed at a distance from its middle as the soft
+/// pool of light that the water scatters (see k_PoolRadius). It is none past k_PoolReach.
+[[nodiscard]] glm::vec3 PoolAt(float distance);
+/// How much of the pool there is at a squeeze of the bell, 0 to 1: less at rest, more as the bell squeezes
+[[nodiscard]] float PoolPulse(float squeeze);
 
 /// One light of a jellyfish this frame: where it is, and its colour times how bright it is
 struct Light
 {
 	glm::vec3 position {0.0f};
 	glm::vec3 colour {0.0f};
+	/// How much the bell squeezes now, 0 to 1 (see Squeeze)
+	float squeeze {0.0f};
 };
 [[nodiscard]] Light LightOf(const Jellyfish& jellyfish, float seconds, float flash);
 

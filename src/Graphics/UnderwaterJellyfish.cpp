@@ -146,10 +146,26 @@ glm::vec3 LightAt(float distance)
 	return GlowThroughWater(d) * (k_Spread / (d * d + k_Spread));
 }
 
+glm::vec3 PoolAt(float distance)
+{
+	const float d = std::max(distance, 0.0f);
+	// The window takes the pool smoothly to none at its reach
+	const float share = std::min(d / k_PoolReach, 1.0f);
+	const float edge = 1.0f - (share * share * share * share);
+	const float window = edge * edge;
+	return k_PoolStrength * k_GlowScatter * glm::exp(-k_Absorption * d) * (k_PoolRadius / (d + k_PoolRadius)) * window;
+}
+
+float PoolPulse(float squeeze)
+{
+	return k_PoolPulseRest + (k_PoolPulse * std::clamp(squeeze, 0.0f, 1.0f));
+}
+
 Light LightOf(const Jellyfish& jellyfish, float seconds, float flash)
 {
-	const float strength = Emission(Squeeze(BeatCycle(jellyfish, seconds)), flash) * jellyfish.shows;
-	return {.position = Middle(jellyfish), .colour = LightColour(jellyfish.hue) * strength};
+	const float squeeze = Squeeze(BeatCycle(jellyfish, seconds));
+	const float strength = Emission(squeeze, flash) * jellyfish.shows;
+	return {.position = Middle(jellyfish), .colour = LightColour(jellyfish.hue) * strength, .squeeze = squeeze};
 }
 
 float Stir(std::span<const Touch> touches)

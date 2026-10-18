@@ -1115,7 +1115,7 @@ void Game::WarmUpUnderwater()
 	}
 	// The sea bed and the rivers are built in their systems' first steps after the land opens; a step of no time builds
 	// them now
-	Locator::underwaterSystem::value().Update(std::chrono::milliseconds(0));
+	Locator::underwaterSystem::value().Update(std::chrono::milliseconds(0), std::chrono::milliseconds(0));
 	if (Locator::streamWaterSystem::has_value())
 	{
 		Locator::streamWaterSystem::value().Update(std::chrono::milliseconds(0));
@@ -1206,7 +1206,7 @@ void Game::WarmUpUnderwater()
 		constexpr int k_FramesAtEachPlace = 12;
 		for (int frame = 0; frame < k_FramesAtEachPlace; ++frame)
 		{
-			Locator::underwaterSystem::value().Update(std::chrono::milliseconds(1000));
+			Locator::underwaterSystem::value().Update(std::chrono::milliseconds(1000), std::chrono::milliseconds(1000));
 			RenderLoadingFrame(true, [&renderer, &desc]() { renderer.WarmUpUnderwater(desc); });
 		}
 	}
@@ -2576,7 +2576,7 @@ bool Game::Update() noexcept
 	// EXPERIMENT (not for merge): the sea bed of the open land, for the view under the sea
 	if (Locator::underwaterSystem::has_value())
 	{
-		Locator::underwaterSystem::value().Update(clock.GetFrameRealTime());
+		Locator::underwaterSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 		// The waves that crash at the cliffs near the camera are heard
 		if (_atmosAudio)
 		{
@@ -2585,12 +2585,12 @@ bool Game::Update() noexcept
 		// The water in the rivers and the leaves that drift down them
 		if (Locator::streamWaterSystem::has_value())
 		{
-			Locator::streamWaterSystem::value().Update(clock.GetFrameRealTime());
+			Locator::streamWaterSystem::value().Update(clock.GetFrameGameTime());
 		}
 		// The things in the water and what they write into the water's field of small waves
 		if (Locator::waterWakeSystem::has_value())
 		{
-			Locator::waterWakeSystem::value().Update(clock.GetFrameRealTime());
+			Locator::waterWakeSystem::value().Update(clock.GetFrameGameTime());
 		}
 	}
 	{
@@ -6233,7 +6233,7 @@ bool TapExperimentWater(glm::vec3 position, std::optional<float> riverSurface)
 			    glm::clamp(glm::ivec2(glm::round((xz - seabed.origin) / seabed.spacing)), glm::ivec2(0), seabed.size - 1);
 			pond = seabed.pond[static_cast<size_t>((corner.y * seabed.size.x) + corner.x)];
 		}
-		surface += uw::WavesAt(xz, underwater.GetSeconds(), underwater.GetWaves()).height *
+		surface += uw::WavesAt(xz, underwater.GetSeaSeconds(), underwater.GetWaves()).height *
 		           std::clamp(shore.x / 40.0f, 0.0f, 1.0f) * (1.0f - pond);
 		calm = glm::mix(0.3f * (1.0f - std::clamp(shore.x / 60.0f, 0.0f, 1.0f)), 1.0f, pond);
 	}

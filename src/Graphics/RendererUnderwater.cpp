@@ -153,7 +153,7 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	const float overWorld = atmosphere::EyeOverWorld(eye, seaLevel, mapSize, desc.camera->IsIslandFar());
 	const float eyeDepth = underwater::EyeDepth(overWorld, 0.0f);
 	const auto scatter = underwater::AmbientAtDepth(underwater::ScatterColour(skyColour, light), eyeDepth);
-	const float time = system.GetSeconds();
+	const float time = system.GetSeaSeconds();
 	const float lightShows = glm::length(light.colour) > 0.0f ? 1.0f : 0.0f;
 	_underwaterFrame = UnderwaterUniforms {
 	    .params = {1.0f, time, seaLevel, eyeDepth},
@@ -663,7 +663,7 @@ void Renderer::PrepareJellyfish() const
 		return;
 	}
 	const glm::vec3 eye {frame.eye};
-	const float seconds = system.GetSeconds();
+	const float seconds = system.GetSeaSeconds();
 	const auto& seabed = system.GetSeabed();
 	auto found = jelly::Around(glm::vec2(eye.x, eye.z), seconds, system.GetSeaLevel(),
 	                           [&seabed](glm::vec2 point) { return seabed.DepthAt(point); });
@@ -714,7 +714,7 @@ void Renderer::PrepareJellyfish() const
 		if (lights < jelly::k_Lights)
 		{
 			const auto lit = jelly::LightOf(one, seconds, flash);
-			frame.jellyLights.at(lights * 2) = glm::vec4(lit.position, 0.0f);
+			frame.jellyLights.at(lights * 2) = glm::vec4(lit.position, lit.squeeze);
 			frame.jellyLights.at(lights * 2 + 1) = glm::vec4(lit.colour, 0.0f);
 			highest = std::max(highest, lit.position.y);
 			light = static_cast<int32_t>(lights);
@@ -726,7 +726,7 @@ void Renderer::PrepareJellyfish() const
 	if (lights > 0)
 	{
 		frame.jellyLightInfo = {static_cast<float>(lights), highest + jelly::k_LightReach,
-		                        1.0f / (jelly::k_LightRadius * jelly::k_LightRadius), 0.0f};
+		                        1.0f / (jelly::k_LightRadius * jelly::k_LightRadius), highest + jelly::k_PoolReach};
 	}
 }
 

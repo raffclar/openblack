@@ -40,8 +40,9 @@ public:
 
 	virtual ~StreamWaterSystemInterface() = default;
 
-	/// Once a frame, with the frame's real time: finds the rivers again when another land opens, and moves the drifters
-	virtual void Update(std::chrono::milliseconds frameRealTime) = 0;
+	/// Once a frame, with the frame's game time: finds the rivers again when another land opens, and moves the drifters.
+	/// The drifters stay still while the game is paused.
+	virtual void Update(std::chrono::milliseconds frameGameTime) = 0;
 	/// The rivers of the open land, empty before a land is open
 	[[nodiscard]] virtual const graphics::underwater::streams::Network& GetNetwork() const = 0;
 	/// The rivers' flow map

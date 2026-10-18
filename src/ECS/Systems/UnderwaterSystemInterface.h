@@ -66,9 +66,10 @@ public:
 	/// Starts a debug tour of the camera: by the shore of the first land (see underwater::TourAt), or out along the sea
 	/// bed (see underwater::FarTourGround)
 	virtual void StartTour(graphics::underwater::Tour tour) = 0;
-	/// Once a frame, with the frame's real time: makes the sea bed again when another land is open, finds how deep the
-	/// camera is, and turns the land's sounds and the music down while it is under the sea
-	virtual void Update(std::chrono::milliseconds frameRealTime) = 0;
+	/// Once a frame, with the frame's real time and game time: makes the sea bed again when another land is open, finds
+	/// how deep the camera is, and turns the land's sounds and the music down while it is under the sea. The sea moves
+	/// by the game time, so a paused game has still water.
+	virtual void Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) = 0;
 	/// How far under the sea's surface the camera is, 0 above it or while the view is off
 	[[nodiscard]] virtual float GetEyeDepth() const = 0;
 	/// Whether the camera is under the sea's surface and the view is on
@@ -77,8 +78,11 @@ public:
 	[[nodiscard]] virtual float GetSeaLevel() const = 0;
 	/// How the sea moves now, from the weather
 	[[nodiscard]] virtual const graphics::underwater::WaveState& GetWaves() const = 0;
-	/// The clock the waves move by, in seconds
+	/// The clock of the sky's effects, in seconds: it follows the real time, also while the game is paused
 	[[nodiscard]] virtual float GetSeconds() const = 0;
+	/// The clock the sea moves by, in seconds: the waves, the foam, the currents, the jellyfish, the caustics and the
+	/// spray. It follows the game time, so it stops while the game is paused. It never goes back.
+	[[nodiscard]] virtual float GetSeaSeconds() const = 0;
 	/// Where the things that float on the sea are now, at most a few, the nearest to the camera first
 	[[nodiscard]] virtual std::span<const glm::vec3> GetFloaters() const = 0;
 	/// A thing that floats on the sea, drawn on the waves: lifted to the sea's height with the tide and the waves, and

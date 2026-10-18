@@ -162,11 +162,14 @@ TEST(UnderwaterJellyfish, NoneOfTheirLightComesToTheSurface)
 	{
 		const glm::vec3 brightest = jelly::LightColour(hue) * jelly::Emission(1.0f, 1.0f) * (1.0f + jelly::k_HaloStrength);
 		const glm::vec3 lit = jelly::LightColour(hue) * jelly::Emission(1.0f, 1.0f) * jelly::LightAt(jelly::k_TopDepth);
+		const glm::vec3 pool = jelly::LightColour(hue) * jelly::Emission(1.0f, 1.0f) * jelly::PoolAt(jelly::k_TopDepth);
 		for (int colour = 0; colour < 3; ++colour)
 		{
-			EXPECT_LT(brightest[colour] * left[colour], 1.0f / 255.0f);
+			// With a margin: at most 0.7 of the step
+			EXPECT_LT(brightest[colour] * left[colour], 0.7f / 255.0f);
 			// The light that falls on the water at the surface
-			EXPECT_LT(lit[colour], 1.0f / 255.0f);
+			EXPECT_LT(lit[colour], 0.7f / 255.0f);
+			EXPECT_LT(pool[colour], 0.7f / 255.0f);
 		}
 	}
 	// And they are all at least that deep
@@ -337,4 +340,33 @@ TEST(UnderwaterJellyfish, TheirHaloIsAboutOneCubicMetre)
 {
 	const float side = 2.0f * jelly::k_LightRadius / openblack::graphics::underwater::k_UnitsPerMetre;
 	EXPECT_NEAR(side, 1.0f, 1e-4f);
+}
+
+TEST(UnderwaterJellyfish, TheirLightMakesASoftPoolOnTheSeaBed)
+{
+	// Under the bell it is all there, and it goes down with the distance to none at its reach
+	float last = jelly::PoolAt(0.0f).b;
+	for (const float distance : {0.5f, 1.0f, 2.0f, 3.0f, 5.0f, 7.0f})
+	{
+		const float pool = jelly::PoolAt(distance).b;
+		EXPECT_LT(pool, last);
+		EXPECT_GT(pool, 0.0f);
+		last = pool;
+	}
+	EXPECT_EQ(jelly::PoolAt(jelly::k_PoolReach).b, 0.0f);
+	EXPECT_EQ(jelly::PoolAt(jelly::k_PoolReach + 3.0f).b, 0.0f);
+	// From a bell 2 to 3 units over the bed, the pool gives the bed more light than the light that comes straight, so
+	// the bed shows the pool at night
+	for (const float height : {2.0f, 2.5f, 3.0f})
+	{
+		EXPECT_GT(jelly::PoolAt(height).b, 1.5f * jelly::LightAt(height).b);
+	}
+	// The pool is soft: at 4 units to the side of the bed under a bell 2.5 units up it keeps more than a third of its
+	// light at the middle
+	EXPECT_GT(jelly::PoolAt(std::sqrt(2.5f * 2.5f + 4.0f * 4.0f)).b, jelly::PoolAt(2.5f).b / 3.0f);
+	// The bed at rest takes more than an 8-bit step of blue from a bell 2.5 units up, and it pulses with the beat
+	const float rest = jelly::LightColour(0.0f).b * jelly::Emission(0.0f, 0.0f) * jelly::PoolAt(2.5f).b;
+	const float squeezed = jelly::LightColour(0.0f).b * jelly::Emission(1.0f, 0.0f) * jelly::PoolAt(2.5f).b;
+	EXPECT_GT(rest * jelly::PoolPulse(0.0f), 6.0f / 255.0f);
+	EXPECT_GT(squeezed * jelly::PoolPulse(1.0f), 3.0f * rest * jelly::PoolPulse(0.0f));
 }

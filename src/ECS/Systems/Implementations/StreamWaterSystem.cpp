@@ -215,7 +215,7 @@ void StreamWaterSystem::MoveDrifters(float seconds)
 		return;
 	}
 	const auto& underwater = Locator::underwaterSystem::value();
-	const float clock = underwater.GetSeconds();
+	const float clock = underwater.GetSeaSeconds();
 	for (size_t i = 0; i < _drifters.size(); ++i)
 	{
 		auto& drifter = _drifters[i];
@@ -264,7 +264,7 @@ void StreamWaterSystem::MoveDrifters(float seconds)
 	}
 }
 
-void StreamWaterSystem::Update(std::chrono::milliseconds frameRealTime)
+void StreamWaterSystem::Update(std::chrono::milliseconds frameGameTime)
 {
 	Rebuild();
 	if (!WaterOn())
@@ -272,7 +272,7 @@ void StreamWaterSystem::Update(std::chrono::milliseconds frameRealTime)
 		return;
 	}
 	// A slow frame moves the drifters no more than a tenth of a second
-	MoveDrifters(std::min(std::chrono::duration<float>(frameRealTime).count(), 0.1f));
+	MoveDrifters(std::min(std::chrono::duration<float>(frameGameTime).count(), 0.1f));
 }
 
 std::optional<StreamWaterSystemInterface::Water> StreamWaterSystem::WaterAt(glm::vec2 point) const
@@ -301,7 +301,7 @@ float StreamWaterSystem::DrifterHeight(const streams::Drifter& drifter) const
 	{
 		const auto& underwater = Locator::underwaterSystem::value();
 		const auto wave =
-		    graphics::underwater::WavesAt(drifter.position, underwater.GetSeconds(), underwater.GetWaves()).height;
+		    graphics::underwater::WavesAt(drifter.position, underwater.GetSeaSeconds(), underwater.GetWaves()).height;
 		// The waves are smaller in the shallow water near the coast
 		const float depth = underwater.GetSeabed().DepthAt(drifter.position) + underwater.GetSeaLevel();
 		return underwater.GetSeaLevel() + wave * std::clamp((depth - 0.2f) / 3.8f, 0.0f, 1.0f) + 0.03f;

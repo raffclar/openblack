@@ -77,8 +77,8 @@ public:
 	virtual ~WaterWakeSystemInterface() = default;
 
 	/// Once a frame, after the view under the sea: finds the things in the water, how they move, the splashes they make
-	/// and the field's plan for the frame
-	virtual void Update(std::chrono::milliseconds frameRealTime) = 0;
+	/// and the field's plan for the frame. The field steps by the game time, so it stays still while the game is paused.
+	virtual void Update(std::chrono::milliseconds frameGameTime) = 0;
 	[[nodiscard]] virtual Frame GetFrame() const = 0;
 	/// Throws the things near what the camera looks at (mobile objects, mobile statics, villagers and animals) high over
 	/// the water there, so that they splash

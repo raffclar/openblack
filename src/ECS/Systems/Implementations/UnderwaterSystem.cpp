@@ -58,10 +58,13 @@
 
 using namespace openblack::ecs::systems;
 
-void UnderwaterSystem::Update(std::chrono::milliseconds frameRealTime)
+void UnderwaterSystem::Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
 {
-	const float frameSeconds = std::chrono::duration<float>(frameRealTime).count();
-	UpdateSea(frameSeconds);
+	// The sky's effects step by the real time. The sea steps by the game time: it is still while the game is paused,
+	// and a step of the game moves it on by exactly that step.
+	_skyClock.Advance(frameRealTime);
+	_seaClock.Advance(frameGameTime);
+	UpdateSea(std::chrono::duration<float>(frameGameTime).count(), std::chrono::duration<float>(frameRealTime).count());
 	// The debug tour puts the camera where it is now on its way
 	if (_tourSeconds.has_value() && Locator::camera::has_value())
 	{
@@ -198,10 +201,9 @@ void UnderwaterSystem::PlaceFogPockets()
 	                   pockets.size());
 }
 
-void UnderwaterSystem::UpdateSea(float frameSeconds)
+void UnderwaterSystem::UpdateSea(float frameSeconds, float realSeconds)
 {
 	namespace underwater = graphics::underwater;
-	_seconds = std::fmod(_seconds + frameSeconds, 3600.0f);
 	// The tide, from the hour and the moon's phase
 	float hour = 12.0f;
 	float phase = std::numbers::pi_v<float>;
@@ -256,9 +258,9 @@ void UnderwaterSystem::UpdateSea(float frameSeconds)
 	};
 	{
 		const glm::vec2 centre = bed.origin + glm::vec2(bed.size - 1) * bed.spacing * 0.5f;
-		_waterspouts = underwater::WaterspoutsAt(_seconds, _storm, centre, seaDistance);
+		_waterspouts = underwater::WaterspoutsAt(_seaClock.GetSeconds(), _storm, centre, seaDistance);
 	}
-	UpdateStorm(frameSeconds, seaDistance);
+	UpdateStorm(frameSeconds, realSeconds, seaDistance);
 	_current = underwater::CurrentFor(_tideRate, _windAngle, _storm);
 
 	// The things that float: the bodies in the physics over the sea, near its surface
@@ -283,7 +285,7 @@ void UnderwaterSystem::UpdateSea(float frameSeconds)
 	}
 }
 
-void UnderwaterSystem::UpdateStorm(float frameSeconds, const std::function<float(glm::vec2)>& seaDistance)
+void UnderwaterSystem::UpdateStorm(float frameSeconds, float realSeconds, const std::function<float(glm::vec2)>& seaDistance)
 {
 	namespace underwater = graphics::underwater;
 	// The rogue wave comes near what the camera looks at. The point stays the same while a wave lives.
@@ -338,9 +340,9 @@ void UnderwaterSystem::UpdateStorm(float frameSeconds, const std::function<float
 			      255.0f;
 		}
 	}
-	_strike = underwater::TrackStrike(_strike, flash, frameSeconds, flash.has_value() ? seaDistance(flash->position) : 0.0f);
+	_strike = underwater::TrackStrike(_strike, flash, realSeconds, flash.has_value() ? seaDistance(flash->position) : 0.0f);
 	_seaFlash = {sky, bolt};
-	_cloudFlashes = graphics::cloud_lightning::TrackFlashes(_cloudFlashes, strikes, frameSeconds);
+	_cloudFlashes = graphics::cloud_lightning::TrackFlashes(_cloudFlashes, strikes, realSeconds);
 }
 
 std::optional<glm::vec3> UnderwaterSystem::StormStrikePlace(uint32_t stormSerial, glm::vec2 wanted) const
@@ -362,8 +364,8 @@ std::optional<glm::vec3> UnderwaterSystem::StormStrikePlace(uint32_t stormSerial
 		                 .strength = std::clamp(storm.currentStrength, 0.0f, 1.0f),
 		                 .rain = std::clamp(static_cast<float>(storm.effect.rain) / 100.0f, 0.0f, 1.0f)});
 	});
-	const auto cells = graphics::cumulonimbus::CellsFor(sites, _seconds);
-	const uint32_t seed = graphics::cloud_lightning::SeedAt(wanted) ^ static_cast<uint32_t>(_seconds * 1000.0f);
+	const auto cells = graphics::cumulonimbus::CellsFor(sites, _skyClock.GetSeconds());
+	const uint32_t seed = graphics::cloud_lightning::SeedAt(wanted) ^ static_cast<uint32_t>(_skyClock.GetMilliseconds());
 	const std::array randoms {graphics::cumulonimbus::RandomOf(seed, 0), graphics::cumulonimbus::RandomOf(seed, 1),
 	                          graphics::cumulonimbus::RandomOf(seed, 2)};
 	const auto place = graphics::cumulonimbus::StrikePlace(cells.All(), stormSerial, wanted, randoms);
@@ -392,7 +394,8 @@ glm::mat4 UnderwaterSystem::FloatOnWaves(const glm::mat4& model) const
 	const auto shore = _seabed.shore.empty() ? glm::vec4(1000.0f, 0.0f, 0.0f, -160.0f)
 	                                         : graphics::underwater::ShoreAt(_seabed.shore, _seabed.cliff, _seabed.size,
 	                                                                         _seabed.spacing, ground - _seabed.origin);
-	const auto wave = graphics::underwater::WavesAt(ground, _seconds, _waves, _rogue, shore.x, _seaLevel - shore.w);
+	const auto wave =
+	    graphics::underwater::WavesAt(ground, _seaClock.GetSeconds(), _waves, _rogue, shore.x, _seaLevel - shore.w);
 	// A thing that sinks rides the waves less as it goes down, and not at all from 3 units under the surface, so it goes
 	// on down smoothly to the sea bed
 	constexpr float k_FullRideDepth = 1.0f;
