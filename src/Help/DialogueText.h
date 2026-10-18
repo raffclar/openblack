@@ -46,6 +46,10 @@ struct DialogueVoice
 	bool advisorsBank {false};
 };
 
+/// A help text's voice, if it has one. A text has a voice only when the game knows its sample and the sound device works.
+/// Without a working device the game loads no sound bank, so every text then waits for its reading time.
+[[nodiscard]] std::optional<DialogueVoice> VoiceFor(bool sampleKnown, bool advisorsBank, bool soundDeviceWorks);
+
 /// The dialogue the scripts show at the bottom of the screen, a line at a time: which texts are shown, how long each
 /// takes to read or whether it waits for a click, the voice saying it, and the player clicking it on.
 ///
