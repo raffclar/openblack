@@ -451,8 +451,8 @@ bool UnderwaterView::BindJellyfish(std::span<const glm::vec4> instances)
 		_jellyIndices =
 		    bgfx::createIndexBuffer(bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t))));
 	}
-	constexpr auto k_Stride = static_cast<uint16_t>(2 * sizeof(glm::vec4));
-	const auto count = static_cast<uint32_t>(instances.size() / 2);
+	constexpr auto k_Stride = static_cast<uint16_t>(3 * sizeof(glm::vec4));
+	const auto count = static_cast<uint32_t>(instances.size() / 3);
 	if (count == 0 || bgfx::getAvailInstanceDataBuffer(count, k_Stride) < count)
 	{
 		return false;

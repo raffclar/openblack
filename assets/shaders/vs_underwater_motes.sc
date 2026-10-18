@@ -4,6 +4,7 @@ $output v_texcoord0, v_color0
 #include <bgfx_shader.sh>
 
 #include "underwater.sh"
+#include "jelly_light.sh"
 
 // EXPERIMENT (not for merge): the motes in the water, plankton and grains of sediment that catch the light. Each mote
 // is a small square that faces the camera. They fill a box round the eye that moves with it: a mote that leaves the box
@@ -52,13 +53,16 @@ void main()
 	float shaft = UwSurfaceLight(surface, t);
 	vec3 light = u_uwLightColour.rgb * UwTransmittance(max(depth, 0.0f) / towards.y) * (0.25f + 1.6f * shaft);
 	vec3 colour = light + u_uwScatter.rgb * 1.6f;
+	// The light of the jellyfish near it: a mote sends it towards the eye from each side
+	vec3 jellyfish = JellyLightAt(world, vec3(0.0f, 1.0f, 0.0f), 1.0f, -1.0f);
+	colour += jellyfish * 2.5f;
 	// Plankton is a little green, the sediment a little brown
 	colour *= kind > 0.6f ? vec3(0.85f, 1.0f, 0.8f) : vec3(1.0f, 0.95f, 0.85f);
 	if (debrisPass)
 	{
 		// Bits of weed and leaf, lit by the light and the water's own
 		vec3 leaf = mix(vec3(0.22f, 0.30f, 0.10f), vec3(0.40f, 0.30f, 0.16f), fract(seed.z * 17.0f));
-		colour = leaf * (light * 0.6f + u_uwScatter.rgb * 1.5f);
+		colour = leaf * (light * 0.6f + u_uwScatter.rgb * 1.5f + jellyfish);
 	}
 	// They fade far away and very near, and do not show above the surface
 	float alpha = (1.0f - smoothstep(6.0f, MOTE_BOX * 0.5f, range)) * smoothstep(1.5f, 3.5f, range);
