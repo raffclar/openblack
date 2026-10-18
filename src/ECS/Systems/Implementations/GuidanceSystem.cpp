@@ -28,6 +28,7 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
@@ -94,6 +95,21 @@ bool ComputerNight()
 	return guidance::ClockSaysNight(local.tm_hour, local.tm_min);
 }
 } // namespace
+
+void GuidanceSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _stampsDue);
+	reflection::Save(out, _moonWait);
+	reflection::Save(out, _remarks);
+}
+
+bool GuidanceSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _stampsDue);
+	reflection::Load(in, _moonWait);
+	reflection::Load(in, _remarks);
+	return !in.Failed();
+}
 
 GuidanceHeard* GuidanceSystem::Heard()
 {

@@ -30,8 +30,17 @@ struct CreatureTattoos
 	/// The block of the player's own pictures that the slots use (see creature_tattoo::PicturesBlock), empty when the
 	/// creature has none
 	std::vector<uint8_t> pictures;
-	/// Goes up with each change, which paints the skins again
+	/// The tattoos that the skin shows in place of the slots: the tattoos being edited, while the tattoo editor shows
+	/// this creature
+	std::optional<creature_tattoo::Slots> shown;
+	/// Goes up each time that the game paints the tattoos again. A change of the slots alone does not paint them.
 	uint32_t revision {0};
+};
+
+/// On a player's entity: the masks that the tattoos of the player's creatures paint with (see creature_tattoo::Masks)
+struct TattooMasks
+{
+	creature_tattoo::Masks masks {};
 };
 
 /// The wounds, burns and blood on a creature's skins

@@ -92,8 +92,23 @@ private:
 		uint32_t a;
 		uint32_t b;
 		int32_t turns;
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.a, self.b, self.turns);
+		}
 	};
 	std::vector<Pair> _pairs;
+
+public:
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._pairs);
+	}
 };
 
 /// A range of the map's cells, both ends included

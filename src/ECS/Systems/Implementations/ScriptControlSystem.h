@@ -36,6 +36,8 @@ public:
 	[[nodiscard]] const CameraDetails& GetCameraDetails() const override { return _cameraDetails; }
 
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
 	/// The camera goes back to the player, from where it is

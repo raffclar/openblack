@@ -1001,6 +1001,20 @@
   "query": "audio.sounds"
  },
  {
+  "description": "A debug tool, not a rule of the game: the game acts as if the machine lost its sound device (lost true), or has it again (lost false); answers whether the device counts as lost",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Whether the device counts as lost",
+    "name": "lost",
+    "required": true,
+    "type": "boolean"
+   }
+  ],
+  "query": "audio.lose_device",
+  "writes": true
+ },
+ {
   "description": "The engine's settings: what is drawn, the display and the camera's clip",
   "kind": "object",
   "parameters": [],
@@ -1183,6 +1197,28 @@
   "kind": "object",
   "parameters": [],
   "query": "living.abode_sounds"
+ },
+ {
+  "description": "The footpaths: how many there are and how many are being found; with an id, the paths that lead from that thing; with from and to (metres), the nodes of a path the game would lay at once between them",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "A thing's entity id",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] in metres",
+    "name": "from",
+    "type": "point"
+   },
+   {
+    "description": "[x, z] in metres",
+    "name": "to",
+    "type": "point"
+   }
+  ],
+  "query": "living.footpaths"
  },
  {
   "description": "A field's crop as it is drawn: its tint, height and sway",

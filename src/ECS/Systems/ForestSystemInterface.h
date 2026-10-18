@@ -17,6 +17,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -33,7 +34,7 @@ namespace openblack::ecs::systems
 /// beside one of its grown trees (see Nature/ForestGrowth.h); trees in no forest never grow. A forest miracle's forest
 /// is a forest like any other, and besides, while the miracle lasts all its trees grow a little each turn; once it has
 /// gone they wither away. A forest left with no trees goes some while later.
-class ForestSystemInterface
+class ForestSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~ForestSystemInterface() = default;

@@ -37,6 +37,7 @@
 #include "ECS/Components/CreatureAudio.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
 #include "ECS/SoundGround.h"
@@ -212,6 +213,19 @@ void FootstepPuffs(const Creature& creature, const Transform& transform, int32_t
 	}
 }
 } // namespace
+
+void CreatureAudioSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _muted);
+	reflection::Save(out, _otherVoices);
+}
+
+bool CreatureAudioSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _muted);
+	reflection::Load(in, _otherVoices);
+	return !in.Failed();
+}
 
 creature_audio::Gate CreatureAudioSystem::GateOf(entt::entity creature) const
 {

@@ -1527,9 +1527,15 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 		if (Locator::creatureSkinSystem::has_value())
 		{
 			auto& skins = Locator::creatureSkinSystem::value();
-			for (size_t slot = 0; slot < setup.tattoos.size(); ++slot)
+			// The tattoos go on as the end of a drag in the tattoo editor puts them on
+			if (!setup.tattoos.empty())
 			{
-				skins.SetTattoo(entity, slot, setup.tattoos[slot]);
+				creature_tattoo::Slots slots {};
+				std::copy_n(setup.tattoos.begin(), std::min(setup.tattoos.size(), slots.size()), slots.begin());
+				const auto pictures = Locator::tattooEditorSystem::has_value()
+				                          ? Locator::tattooEditorSystem::value().GetPictures()
+				                          : creature_tattoo::Pictures {};
+				skins.PutOnTattoos(entity, slots, pictures);
 			}
 			for (const auto& wound : setup.wounds)
 			{
@@ -1868,6 +1874,16 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		Locator::scriptObjects::value().ReleaseFromScript(*object);
 		return Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptControlled>(*object) ? "still controlled"
 		                                                                                            : "released";
+	}
+	case Kind::FinishBuilding:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value())
+		{
+			return "nothing to finish";
+		}
+		ecs::construction::SetBuilt(*object, 1.0f);
+		return "finished";
 	}
 	case Kind::RemoveObject:
 	{
@@ -2468,7 +2484,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
-	    command.kind == Kind::ChargeIconWithSeedHeld)
+	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3088,6 +3104,7 @@ void Runner::Give(const Command& command)
 	case Kind::FillSiteIcons:
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::RemoveObject:
+	case Kind::FinishBuilding:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:

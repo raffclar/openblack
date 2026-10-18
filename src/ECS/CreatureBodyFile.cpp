@@ -20,6 +20,8 @@
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -111,6 +113,12 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 	{
 		tattoos->slots = *body.tattoos;
 		tattoos->pictures = body.tattooPictures.value_or(std::vector<uint8_t> {});
+		// A creature of a player makes the player's masks again from the designs that the game ships with
+		const auto* owner = registry.TryGet<const Creature>(creature);
+		if (owner != nullptr && owner->owner != PlayerNames::NEUTRAL && Locator::creatureSkinSystem::has_value())
+		{
+			Locator::creatureSkinSystem::value().RemakeTattooMasks(creature, creature_tattoo::Sheet::Shipped);
+		}
 		++tattoos->revision;
 	}
 	if (auto* marks = registry.TryGet<CreatureMarks>(creature))

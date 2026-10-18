@@ -32,6 +32,8 @@ public:
 	void Update(float milliseconds) override;
 	void CollectDrawFrame(particles::draw::Frame& frame) const override;
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
 	std::vector<camera_shake::Shake> _shakes;

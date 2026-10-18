@@ -43,6 +43,14 @@ private:
 	float _timer {-std::numeric_limits<float>::max()};
 	float _transitionSeconds {0.0f};
 	float _fraction {0.0f};
+
+public:
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._on, self._timer, self._transitionSeconds, self._fraction);
+	}
 };
 
 } // namespace openblack::gui

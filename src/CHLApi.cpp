@@ -145,6 +145,7 @@
 #include "ECS/DiscipleRules.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
@@ -253,6 +254,7 @@
 #include "Magic/TownBelief.h"
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptCameraLookups.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptCreateRules.h"
 #include "ScriptHeaders/ScriptCreatureRules.h"
@@ -977,6 +979,21 @@ CHLApi::CHLApi()
 	InitFunctionsTable4();
 }
 
+void CHLApi::SaveState(ecs::reflection::BinaryWriter& out) const
+{
+	ecs::reflection::Save(out, _gameSoundOn);
+	ecs::reflection::Save(out, _highlightDrawOn);
+	ecs::reflection::Save(out, _scriptHelpOn);
+}
+
+bool CHLApi::LoadState(ecs::reflection::BinaryReader& in)
+{
+	ecs::reflection::Load(in, _gameSoundOn);
+	ecs::reflection::Load(in, _highlightDrawOn);
+	ecs::reflection::Load(in, _scriptHelpOn);
+	return !in.Failed();
+}
+
 void CHLApi::ResetSwitches()
 {
 	_gameSoundOn = true;
@@ -1299,7 +1316,11 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 			{
 				CreatureCarriesOutScriptPlay(member);
 			}
-			// TODO(opening): animals in a group
+			else if (registry.Valid(member) && registry.AllOf<ecs::components::Animal>(member) &&
+			         Locator::animalSystem::has_value() && state >= 0)
+			{
+				static_cast<void>(Locator::animalSystem::value().SetScriptState(member, static_cast<LivingStates>(state)));
+			}
 		}
 		return;
 	}
@@ -1320,8 +1341,19 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 		CreatureCarriesOutScriptPlay(object);
 		return;
 	}
-	// TODO(opening): animals
-	NotImplemented();
+	// An animal takes the state of its own table
+	if (registry.AllOf<ecs::components::Animal>(object) && Locator::animalSystem::has_value())
+	{
+		if (state < 0 || !Locator::animalSystem::value().SetScriptState(object, static_cast<LivingStates>(state)))
+		{
+			if (const auto logger = spdlog::get("scripting"))
+			{
+				SPDLOG_LOGGER_WARN(logger, "SET_SCRIPT_STATE: animal state {} is not done", state);
+			}
+		}
+		return;
+	}
+	ScriptMessage("Object not living for set state");
 }
 
 void SetScriptStatePos() // 018 SET_SCRIPT_STATE_POS
@@ -3476,8 +3508,8 @@ void DanceCreate() // 054 DANCE_CREATE
 	const auto type = Pop().intVal;
 	const auto centre = PopObject();
 	// What it is danced about may be nothing
-	const auto dance = Locator::danceSystem::value().Create(static_cast<DanceInfo>(type), position, centre,
-	                                                        static_cast<uint32_t>(map_coords::FtoL(duration)), true);
+	const auto dance = Locator::danceSystem::value().Create(
+	    static_cast<DanceInfo>(type), position, centre, static_cast<uint32_t>(map_coords::FtoL(duration)), true, entt::null);
 	if (dance == entt::null)
 	{
 		ScriptMessage("Dance not created");
@@ -4804,7 +4836,7 @@ void RunCameraPath() // 119 RUN_CAMERA_PATH
 		return;
 	}
 	// The script's camera runs the camera editor's track of that number; one the file doesn't have runs nothing
-	camera->RunTrack(camera_edits::FindTrack(track));
+	camera->RunTrack(camera_edits::FindTrack(track), track);
 }
 
 void StartDialogue() // 120 START_DIALOGUE
@@ -9999,6 +10031,15 @@ void CHLApi::InitFunctionsTable4()
 	CREATE_FUNCTION_BINDING("CAN_SKIP_CREATURE_TRAINING", 0, 1, CanSkipCreatureTraining);
 	CREATE_FUNCTION_BINDING("IS_KEEPING_OLD_CREATURE", 0, 1, IsKeepingOldCreature);
 	CREATE_FUNCTION_BINDING("CURRENT_PROFILE_HAS_CREATURE", 0, 1, CurrentProfileHasCreature);
+}
+
+ScriptCameraModel::Lookups ScriptCameraLookups()
+{
+	return {
+	    .thing = [](uint32_t id) { return FollowedThing(static_cast<entt::entity>(id)); },
+	    .dual = [](uint32_t id) { return DualSubjectOf(static_cast<entt::entity>(id)).lookup; },
+	    .track = [](int32_t number) { return camera_edits::FindTrack(number); },
+	};
 }
 
 } // namespace openblack::chlapi

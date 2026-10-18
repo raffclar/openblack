@@ -18,12 +18,14 @@
 #include <glm/fwd.hpp>
 #include <glm/vec2.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
+
 namespace openblack::ecs
 {
 
 /// What stands in each of the map's cells, kept in the game's order as things come, move and go (see MapCells.h): the
 /// things that stay put, then the things that move. Searches of a cell meet them in that order.
-class MapInterface
+class MapInterface: public systems::SavedStateInterface
 {
 public:
 	using CellId = glm::u16vec2;

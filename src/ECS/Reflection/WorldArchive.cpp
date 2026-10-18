@@ -121,12 +121,19 @@ void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSav
 			out.EndLength(at);
 			continue;
 		}
-		const auto instance = component.type.from_void(value);
 		for (const auto& field : fields)
 		{
 			const auto at = out.BeginLength();
 			out.SetPlace(component.name, field.info->name);
-			field.info->save(field.data.get(instance), out);
+			if (field.info->saveFrom != nullptr)
+			{
+				field.info->saveFrom(value, out);
+			}
+			else
+			{
+				auto instance = component.type.from_void(value);
+				field.info->save(field.data.get(instance), out);
+			}
 			out.EndLength(at);
 		}
 	}
@@ -433,4 +440,44 @@ std::optional<WorldLoadResult> openblack::ecs::reflection::LoadWorld(entt::regis
 		return std::nullopt;
 	}
 	return result;
+}
+
+std::vector<uint8_t> openblack::ecs::reflection::SaveSections(std::span<const NamedSection> sections)
+{
+	const entt::meta_ctx context;
+	BinaryWriter out(context);
+	out.WriteSize(sections.size());
+	for (const auto& section : sections)
+	{
+		Save(out, section.name);
+		out.WriteSize(section.bytes.size());
+		out.Write(section.bytes);
+	}
+	return std::move(out.Bytes());
+}
+
+std::optional<std::vector<NamedSection>> openblack::ecs::reflection::LoadSections(std::span<const uint8_t> bytes)
+{
+	const entt::meta_ctx context;
+	const EntityRemap identity;
+	BinaryReader in(context, bytes, identity);
+	const auto count = in.ReadSize();
+	std::vector<NamedSection> sections;
+	for (size_t i = 0; count.has_value() && i < *count && !in.Failed(); ++i)
+	{
+		NamedSection section;
+		Load(in, section.name);
+		const auto length = in.ReadSize();
+		const auto taken = length.has_value() ? in.Take(*length) : std::nullopt;
+		if (taken.has_value())
+		{
+			section.bytes.assign(taken->begin(), taken->end());
+			sections.push_back(std::move(section));
+		}
+	}
+	if (!count.has_value() || in.Failed() || in.Remaining() != 0)
+	{
+		return std::nullopt;
+	}
+	return sections;
 }

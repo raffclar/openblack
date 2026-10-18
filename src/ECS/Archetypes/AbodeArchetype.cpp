@@ -36,6 +36,7 @@
 #include "ECS/Registry.h"
 #include "ECS/ShepherdRules.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TownCentreParts.h"
@@ -245,6 +246,12 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 		break;
 	default:
 		break;
+	}
+
+	// A building made standing in play gets its footpath from its town's storage pit
+	if (built >= 1.0f && Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().BuildingWorking(entity);
 	}
 
 	// A building puts up the things it has round itself, built or not

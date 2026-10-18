@@ -935,6 +935,22 @@ void AddNeeds(std::vector<Scenario>& all)
 	                {.type = AnimalInfo::Crow, .offset = {10.0f, 0.0f}, .living = true}},
 	});
 
+	// A cart that makes a reaction to look at it, with two cows near it
+	all.push_back({
+	    .id = "animals.cows_look_at_cart",
+	    .name = "Cows look at a thing to look at",
+	    .facet = Facet::Animals,
+	    .description = "A cart in open land makes a reaction to look at it, of the kind a thing that came to rest makes. "
+	                   "Two free cows stand 8 and 16 metres east of it.",
+	    .expected = "Each cow stops and stands. It turns to the cart a little at a time until it faces the cart. When "
+	                "its reaction ends, it goes back to what it did before.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-4.0f, -8.0f}, {20.0f, 8.0f}}, .distance = 0.6f},
+	    .objects = {{.type = MobileObjectInfo::Cart, .offset = {0.0f, 0.0f}, .reaction = Reaction::LookAtObject},
+	                {.type = AnimalInfo::Cow, .offset = {8.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {16.0f, 0.0f}, .living = true}},
+	});
+
 	all.push_back({
 	    .id = "needs.starving",
 	    .name = "Starving creature faints",
@@ -2387,6 +2403,8 @@ void AddAppearance(std::vector<Scenario>& all)
 		tattooed.blood.push_back({.u = 128, .v = v, .skin = 0});
 	}
 	auto plain = Posed(CreatureType::Tiger, {25.0f, 0.0f}, 330.0f, "unmarked");
+	// A second creature of the player would show the tattoos of the player's first creature, as in the game
+	plain.owner = PlayerNames::NEUTRAL;
 	all.push_back({
 	    .id = "appearance.tattoos_wounds",
 	    .name = "Tattoos and wounds showcase",
@@ -2844,6 +2862,20 @@ void AddMovement(std::vector<Scenario>& all)
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -90.0f}, 180.0f)},
 	    .miracles = {{.type = MagicType::CreatureSpellFreeze, .target = MiracleCast::Target::Creature, .delaySeconds = 4.0f}},
 	    .commands = {Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 0.5f)},
+	});
+
+	all.push_back({
+	    .id = "appearance.body_spread",
+	    .name = "Three new tigers of one species",
+	    .facet = Facet::Appearance,
+	    .description = "Three tigers are made one after the other. Each new creature draws its strength and its fatness "
+	                   "from the random numbers of the game, as the game makes a creature.",
+	    .expected = "The three tigers are not all the same. Each one is a little stronger or weaker, and a little fatter "
+	                "or thinner, than the tiger of the species' table.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 20.0f, -60.0f}, .look = {0.0f, 8.0f, 0.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-20.0f, 0.0f}, 180.0f), Posed(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f),
+	                  Posed(CreatureType::Tiger, {20.0f, 0.0f}, 180.0f)},
 	});
 
 	std::vector<ObjectSetup> copse;
@@ -5488,6 +5520,49 @@ void AddLeash(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// Worn out and wanting to sleep more than anything, far from its player's temple
+	CreatureSetup tired {.species = CreatureType::Tiger,
+	                     .offset = {0.0f, 20.0f},
+	                     .needs = {.energy = 1.0f, .exhaustion = 0.95f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                     .desires = {{.desire = Desire::Tiredness, .fraction = 1.0f}}};
+	all.push_back({
+	    .id = "leash.tired_orders",
+	    .name = "Orders given with the leash to a tired creature",
+	    .facet = Facet::Leash,
+	    .description = "A worn out tiger (exhaustion 0.95) that wants to sleep is on the learning leash, far from its "
+	                   "player's temple. After eight seconds it is told to go to a point to the east, and after twenty "
+	                   "seconds to a point to the west.",
+	    .expected = "It sets off home to sleep. Each order stops that: it nods and walks to the place it is told. Once "
+	                "there and the order is done, it sets off home to sleep again.",
+	    .framing = {.shot = Shot::Overview, .include = {{60.0f, 40.0f}, {-60.0f, 40.0f}}},
+	    .creatures = {tired},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), Go(Kind::LeashOrderAt, 0, {60.0f, 40.0f}, 7.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {-60.0f, 40.0f}, 12.0f, false)},
+	});
+
+	// Wholly exhausted, and as young as a creature on the first land, too young to faint
+	auto exhausted = tired;
+	exhausted.needs.exhaustion = 1.0f;
+	exhausted.phase = 4;
+	// It stays exhausted though it sleeps
+	exhausted.hold = true;
+	all.push_back({
+	    .id = "leash.exhausted_orders",
+	    .name = "Orders given with the leash to a wholly exhausted creature",
+	    .facet = Facet::Leash,
+	    .description = "A young, wholly exhausted tiger (exhaustion 1) is on the learning leash, far from its player's "
+	                   "temple. It is too young to faint, and stays exhausted. After eight seconds it is told to go to a "
+	                   "point to the east.",
+	    .expected = "It takes no order: no nod, no marker, and it does not go east. The leash still keeps it near: if "
+	                "it strays too far on its way to sleep, it walks back. Then it sleeps. An older creature this "
+	                "exhausted faints and lies out cold.",
+	    .framing = {.shot = Shot::Overview, .include = {{60.0f, 40.0f}, {-60.0f, 40.0f}}},
+	    .creatures = {exhausted},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), Go(Kind::LeashOrderAt, 0, {60.0f, 40.0f}, 7.0f, false)},
+	});
+
 	all.push_back({
 	    .id = "leash.marker_flat_and_slope",
 	    .name = "The marker of a leash order on flat land and on a slope",
@@ -7643,6 +7718,26 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "saves.fire_and_walk_back",
+	    .name = "Save and load: the fires burn on and the walk continues",
+	    .facet = Facet::Mind,
+	    .description = "Three oaks burn. A content tiger walks to a rock 250 metres away. 3 seconds later the game saves "
+	                   "into slot 0. 5 seconds after the save the game loads slot 0.",
+	    .expected = "At the load the oaks burn as they did at the save, with the same flames, and their fire continues "
+	                "to grow and spread. The tiger continues on the same route to the rock. The log shows the running "
+	                "state of the systems in the save and no section that does not read.",
+	    .framing = {.shot = Shot::Overview, .include = {{-60.0f, -40.0f}, {260.0f, 15.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {100.0f, 0.0f})},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {350.0f, 0.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-40.0f, -30.0f}, .alight = true},
+	                {.type = TreeInfo::Oak, .offset = {-50.0f, -20.0f}, .alight = true},
+	                {.type = TreeInfo::Oak, .offset = {-30.0f, -40.0f}, .alight = true}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "HoldObject"},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 3.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 5.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "mind.hand_free_pick_up",
 	    .name = "Put down a thing before a pick-up",
 	    .facet = Facet::Mind,
@@ -8772,6 +8867,21 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.room_help_without_sound",
+	    .name = "The temple's room help when no sound can play",
+	    .facet = Facet::Story,
+	    .description = "Start the game with no sound device (for example with the environment ALSOFT_DRIVERS=none). "
+	                   "The player has a temple, and is put in its main room for the first time.",
+	    .expected = "The advisors come out and the help shows its lines one at a time, with no voice. Each line stays for "
+	                "its reading time: 5 game turns for each word and 8 more. The help shows all nine lines, then the "
+	                "advisors go home. With a sound device, each line stays until the advisor stops talking.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	all.push_back({
 	    .id = "temple.main_room_lean",
 	    .name = "The temple's main room leans at the screen's edge and as the floor is dragged",
 	    .facet = Facet::Story,
@@ -9113,7 +9223,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
 	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::PlayFallingSpellFilm ||
 	       kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease ||
-	       kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld || IsPointerCommand(kind);
+	       kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -9140,7 +9251,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 158> k_Names {
+	constexpr std::array<std::string_view, 159> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -9299,6 +9410,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "fill the worship site icons",
 		    "quick save",
 		    "charge an icon with its seed in the hand",
+		    "finish the building",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

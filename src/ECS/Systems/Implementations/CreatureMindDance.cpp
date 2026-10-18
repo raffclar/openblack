@@ -259,8 +259,9 @@ void CreatureMindSystem::CarryOutDance(entt::entity creature, creature_mind::Idl
 		if (known && Locator::danceSystem::has_value())
 		{
 			const auto height = registry.Get<const Transform>(creature).position.y;
-			record.dance = Locator::danceSystem::value().Create(
-			    static_cast<DanceInfo>(order.type), glm::vec3(order.point.x, height, order.point.y), creature, 0, false);
+			record.dance = Locator::danceSystem::value().Create(static_cast<DanceInfo>(order.type),
+			                                                    glm::vec3(order.point.x, height, order.point.y), creature, 0,
+			                                                    false, entt::null);
 		}
 		creature_mind::DanceOrderDone(idle, known);
 		break;

@@ -42,6 +42,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -208,6 +209,58 @@ influence::Ground LandHeight()
 	};
 }
 } // namespace
+
+void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	// Each circle of the borders keeps its place, its size and its hidden columns. Its curtain is made again from the land.
+	reflection::Save(out, _turn);
+	reflection::Save(out, _circles.size());
+	for (const auto& circle : _circles)
+	{
+		reflection::Save(out, circle.player);
+		reflection::Save(out, circle.centre);
+		reflection::Save(out, circle.radius);
+		reflection::Save(out, circle.hidden);
+		reflection::Save(out, circle.dead);
+	}
+	reflection::Save(out, _borderShown);
+	reflection::Save(out, _bordersDirty);
+	reflection::Save(out, _scrollClock);
+	reflection::Save(out, _scrollRemainder);
+	reflection::Save(out, _ripples);
+	reflection::Save(out, _handWasInside);
+	reflection::Save(out, _handSeen);
+	reflection::Save(out, _handBefore);
+}
+
+bool InfluenceSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _turn);
+	size_t count = 0;
+	reflection::Load(in, count);
+	_circles.clear();
+	const auto ground = LandHeight();
+	for (size_t i = 0; i < count && !in.Failed(); ++i)
+	{
+		influence::Circle circle {};
+		reflection::Load(in, circle.player);
+		reflection::Load(in, circle.centre);
+		reflection::Load(in, circle.radius);
+		reflection::Load(in, circle.hidden);
+		reflection::Load(in, circle.dead);
+		circle.curtain = influence::MakeCurtain(ground, circle.centre, circle.radius);
+		_circles.push_back(std::move(circle));
+	}
+	reflection::Load(in, _borderShown);
+	reflection::Load(in, _bordersDirty);
+	reflection::Load(in, _scrollClock);
+	reflection::Load(in, _scrollRemainder);
+	reflection::Load(in, _ripples);
+	reflection::Load(in, _handWasInside);
+	reflection::Load(in, _handSeen);
+	reflection::Load(in, _handBefore);
+	return !in.Failed();
+}
 
 void InfluenceSystem::Reset()
 {

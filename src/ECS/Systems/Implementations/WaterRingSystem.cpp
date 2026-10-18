@@ -13,7 +13,22 @@
 
 #include <algorithm>
 
+#include "ECS/Reflection/BinaryArchive.h"
+
 using namespace openblack::ecs::systems;
+
+void WaterRingSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _rings);
+	reflection::Save(out, _pace);
+}
+
+bool WaterRingSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _rings);
+	reflection::Load(in, _pace);
+	return !in.Failed();
+}
 
 bool WaterRingSystem::Add(const water_rings::Ring& ring)
 {

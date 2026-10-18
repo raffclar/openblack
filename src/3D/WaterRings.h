@@ -49,6 +49,13 @@ struct Ring
 	uint8_t cell {0x30};
 	/// Its colour, 0xAARRGGBB, as it was made: one taking the land's light keeps that of when it was made
 	uint32_t argb {0xFFFFFFFFu};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.position, self.age, self.growth, self.angle, self.aspect, self.rate, self.cell, self.argb);
+	}
 };
 
 /// The splash the hand makes going into the water where it grips the land: on the surface, a little above, turned at
@@ -74,6 +81,13 @@ struct Pace
 	std::chrono::duration<float, std::milli> sinceStep {0.0f};
 	/// The game time since the last step, which the next step ages the rings by
 	std::chrono::milliseconds gameSinceStep {0};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.sinceStep, self.gameSinceStep);
+	}
 };
 
 /// The game time the rings age by after a frame of this real and game time: nothing on a frame they don't step

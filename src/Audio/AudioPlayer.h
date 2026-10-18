@@ -50,6 +50,7 @@ public:
 	[[nodiscard]] float GetProgress(size_t sizeInBytes, SourceId sourceId) const override;
 	[[nodiscard]] std::vector<BufferId> UnqueueProcessedBuffers(SourceId id) override;
 	[[nodiscard]] uint32_t GetSampleOffset(SourceId id) const override;
+	[[nodiscard]] bool IsDeviceConnected() const override;
 
 private:
 	static void SetupLogging();

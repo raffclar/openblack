@@ -13,6 +13,7 @@
 
 #include <array>
 #include <bitset>
+#include <chrono>
 #include <deque>
 #include <map>
 #include <memory>
@@ -79,6 +80,12 @@ inline constexpr bool k_IsSequence<std::vector<Type, Allocator>> = true;
 template <typename Type, typename Allocator>
 inline constexpr bool k_IsSequence<std::deque<Type, Allocator>> = true;
 
+/// A vector, whose elements lie one after the other in memory
+template <typename>
+inline constexpr bool k_IsVector = false;
+template <typename Type, typename Allocator>
+inline constexpr bool k_IsVector<std::vector<Type, Allocator>> = true;
+
 /// A map from keys to values, in order or by hash
 template <typename>
 inline constexpr bool k_IsMap = false;
@@ -135,5 +142,50 @@ template <typename Type, typename Deleter>
 inline constexpr bool k_IsIndirect<std::unique_ptr<Type, Deleter>> = true;
 template <typename Type>
 inline constexpr bool k_IsIndirect<std::weak_ptr<Type>> = true;
+
+/// A value whose bytes in memory are the bytes that the binary archive writes for it: a number (not a bool), or a glm
+/// vector or matrix of such numbers with no padding. A list of such values goes in and out as one block of bytes.
+template <typename Type>
+[[nodiscard]] constexpr bool PlainBits()
+{
+	if constexpr (std::is_arithmetic_v<Type>)
+	{
+		return !std::is_same_v<Type, bool>;
+	}
+	else if constexpr (k_IsGlmVector<Type>)
+	{
+		return PlainBits<typename Type::value_type>() &&
+		       sizeof(Type) == sizeof(typename Type::value_type) * static_cast<size_t>(Type::length());
+	}
+	else if constexpr (k_IsGlmMatrix<Type>)
+	{
+		return PlainBits<typename Type::value_type>() && sizeof(Type) == sizeof(typename Type::value_type) *
+		                                                                     static_cast<size_t>(Type::length()) *
+		                                                                     static_cast<size_t>(Type::col_type::length());
+	}
+	else
+	{
+		return false;
+	}
+}
+
+/// A vector or an array of values with plain bits, which go in and out as one block of bytes
+template <typename>
+inline constexpr bool k_IsPlainList = false;
+template <typename Type, size_t Size>
+inline constexpr bool k_IsPlainList<std::array<Type, Size>> = PlainBits<Type>();
+template <typename Type, typename Allocator>
+inline constexpr bool k_IsPlainList<std::vector<Type, Allocator>> = PlainBits<Type>();
+
+/// A length of time, which the binary archive keeps as its count
+template <typename>
+inline constexpr bool k_IsDuration = false;
+template <typename Rep, typename Period>
+inline constexpr bool k_IsDuration<std::chrono::duration<Rep, Period>> = true;
+
+/// A value type that gives the values that it keeps to a visitor, in a fixed order, through its static member
+/// VisitSaved(self, visitor). The binary archive keeps such a value as these values. Private data stays private.
+template <typename Type>
+inline constexpr bool k_IsVisited = requires(Type& value) { Type::VisitSaved(value, [](auto & ...) {}); };
 
 } // namespace openblack::ecs::reflection::detail

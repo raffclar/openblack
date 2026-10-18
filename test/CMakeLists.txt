@@ -1394,3 +1394,24 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_vortex_crossing_file test_vortex_crossing_file.cpp)
 openblack_setup_and_add_test(test_world_archive test_world_archive.cpp)
+openblack_setup_and_add_test(test_help_without_sound test_help_without_sound.cpp)
+target_link_libraries(test_help_without_sound PRIVATE pack lnd)
+openblack_setup_and_add_test(test_footpath_planning test_footpath_planning.cpp)
+openblack_setup_and_add_test(
+  test_oracle_footpath_planning oracle/test_oracle_footpath_planning.cpp
+)
+set_tests_properties(
+  test_oracle_footpath_planning
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_saved_system_state test_saved_system_state.cpp)
+openblack_setup_and_add_test(test_save_file_writer test_save_file_writer.cpp)
+target_link_libraries(test_saved_system_state PRIVATE edt)
+openblack_setup_and_add_test(test_oracle_game_random oracle/test_oracle_game_random.cpp)
+set_tests_properties(
+  test_oracle_game_random
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_creature_load_after_draws test_creature_load_after_draws.cpp)

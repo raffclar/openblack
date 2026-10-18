@@ -39,6 +39,9 @@ FotFile::FotFile(Game& game)
 namespace
 {
 
+/// The bit of a node's flags that says a plan laid it
+constexpr uint8_t k_PlannedNode = 0x2;
+
 /// A link holds the paths of the building standing within this of it (the square of 0.05 m)
 constexpr float k_LinkReachSq = 0.0025f;
 
@@ -108,7 +111,9 @@ void FotFile::Load(const std::filesystem::path& path)
 			// Drawn on the land, raised by the node's height above it
 			const auto ground = map_coords::ToMetres(coords);
 			const glm::vec3 position {ground.x, coords.altitude + island.GetHeightAt(ground), ground.y};
-			footpathEntt.nodes.push_back({.position = position, .place = {coords.x, coords.z}});
+			// The file's nodes keep whether a plan laid them; none of them is hidden or a marker
+			footpathEntt.nodes.push_back(
+			    {.position = position, .place = {coords.x, coords.z}, .planned = (node.unknown & k_PlannedNode) != 0});
 		}
 		footpathEntities.push_back(static_cast<ecs::components::Footpath::Id>(entity));
 	}

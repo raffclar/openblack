@@ -19,6 +19,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Common/GameRandom.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
@@ -183,7 +184,7 @@ TEST(CreatureDesires, CreatedFromTheSetup)
 	    .sources = {{.type = 14, .value = 0.0f, .threshold = 0.4f, .multiplier = 1.0f},
 	                {.type = creature_desires::k_NoSource, .value = 0.0f, .threshold = 0.0f, .multiplier = 1.0f}},
 	};
-	const auto desires = creature_desires::Create(setup, [](float low, float high) { return (low + high) / 2.0f; });
+	const auto desires = creature_desires::Create(setup, [](float most) { return most / 2.0f; });
 	const auto& hunger = desires[Desire::Hunger];
 	EXPECT_FLOAT_EQ(hunger.max, 2.0f);
 	EXPECT_FLOAT_EQ(hunger.decay, 0.95f);
@@ -431,6 +432,37 @@ TEST(CreatureIdleMind, EachFacePulledMovesTheVarietyOn)
 	// A reason that pulls no face leaves it be
 	EXPECT_FALSE(creature_mind::PullFace(mind, creature_face::Cue::None, senses, Always(0), Always(3)).has_value());
 	EXPECT_EQ(mind.faceVariety, 6u);
+}
+
+TEST(CreatureIdleMind, OnlyTheIdleFaceDrawsItsPick)
+{
+	// The game draws the pick of ten faces only for the idle face, then the variety of every face pulled
+	creature_mind::IdleMind mind;
+	const creature_mind::Senses senses {};
+	std::vector<uint32_t> ranges;
+	const creature_mind::Random record = [&ranges](uint32_t range) {
+		ranges.push_back(range);
+		return 0u;
+	};
+	static_cast<void>(creature_mind::PullFace(mind, creature_face::Cue::Fear, senses, record, record));
+	EXPECT_EQ(ranges, (std::vector<uint32_t> {creature_mind::k_FaceVarietyStep}));
+	ranges.clear();
+	static_cast<void>(creature_mind::PullFace(mind, creature_face::Cue::Idle, senses, record, record));
+	EXPECT_EQ(ranges, (std::vector<uint32_t> {creature_face::k_IdleFaceCount, creature_mind::k_FaceVarietyStep}));
+}
+
+TEST(CreatureIdleMind, TheFloatDrawIsTheGamesFloatDraw)
+{
+	// A float draw moves the seed as one draw of 0xFFFF does, and a most of 0 draws nothing
+	std::vector<uint32_t> ranges;
+	const creature_mind::Random record = [&ranges](uint32_t range) {
+		ranges.push_back(range);
+		return 65534u;
+	};
+	EXPECT_FLOAT_EQ(creature_mind::FloatRand(record, 0.0f), 0.0f);
+	EXPECT_TRUE(ranges.empty());
+	EXPECT_EQ(creature_mind::FloatRand(record, 5.0f), game_random::FloatOf(65534u, 5.0f));
+	EXPECT_EQ(ranges, (std::vector<uint32_t> {0xFFFF}));
 }
 
 TEST(CreatureIdleMind, NothingStartsWhileTheBodyIsBusy)
@@ -1005,7 +1037,8 @@ TEST(CreatureIdleMind, HangingAroundGoesOutFromHomeAwayFromTheTemple)
 	EXPECT_NEAR(agenda[5].movement.point.y, 100.0f, k_Tolerance);
 	EXPECT_EQ(agenda[6].kind, Kind::Static);
 	EXPECT_EQ(agenda[6].sequence[1], animations::k_Sit);
-	EXPECT_NEAR(agenda[6].seconds, 10.0f + (5.0f * 0.005f), k_Tolerance);
+	// The extra sit is a float draw of up to 5: a draw of 5 out of 65535 gives (5 x 5) / 65535 seconds
+	EXPECT_NEAR(agenda[6].seconds, 10.0f + (25.0f / 65535.0f), k_Tolerance);
 	EXPECT_EQ(agenda[6].face, creature_face::Cue::None);
 }
 

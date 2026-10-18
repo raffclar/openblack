@@ -94,6 +94,64 @@ struct ReactionFacts
 /// is not in the table gives the empty state (0).
 [[nodiscard]] uint8_t StateAfterReacting(uint8_t stateBefore, std::span<const GAnimalStateTableInfo> table);
 
+/// Whether a state, by its number in the game's animal state table, is the state of a reaction: fleeing (6), looking
+/// (7), following (8), inspecting (9), going to food or wood and arriving (19 to 22), going to a ball and arriving (25
+/// and 26), watching what it fled (30) and fleeing a hunter (49). An animal leaves its reaction when it leaves one
+[[nodiscard]] constexpr bool IsReactionState(uint8_t gameState)
+{
+	return (gameState >= 6 && gameState <= 9) || (gameState >= 19 && gameState <= 22) || gameState == 25 || gameState == 26 ||
+	       gameState == 30 || gameState == 49;
+}
+/// Whether a state, by its number in the game's animal state table, has a start of its own: wandering (32), sleep (35),
+/// hiding in a lair (51) and looking for food (52)
+[[nodiscard]] constexpr bool StateHasOwnStart(size_t gameState)
+{
+	return gameState == 32 || gameState == 35 || gameState == 51 || gameState == 52;
+}
+
+/// An animal at most this high above the land leans its model to the slope of the land when it is drawn
+inline constexpr float k_HighestToFollowSlope = 0.2f;
+/// The most that the model of an animal lifts or drops along one of its axes for the slope of the land
+inline constexpr float k_MostSlopeLift = 0.3f;
+/// A position in metres as the map unit that the land's height is read at for the slope: the metres times 65536,
+/// then times 0.1, each as a float, then cut to a whole number
+[[nodiscard]] int32_t SlopeSampleUnit(float metres);
+/// The lift of the model along one axis: the height of the land at the end of the axis less the height of the
+/// animal, kept between -0.3 and 0.3
+[[nodiscard]] float SlopeLift(float landHeight, float animalHeight);
+/// The lean of the model in its own axes: its x axis lifts by `alongX` and its z axis by `alongZ`, as a part of its
+/// up axis. The heading turn comes before it and the bank after it
+[[nodiscard]] glm::mat3 SlopeLean(float alongX, float alongZ);
+
+/// What decides whether food interests an animal
+struct FoodInterest
+{
+	/// The food is in the world and nothing takes it away now
+	bool available {false};
+	/// The physics moves the food now
+	bool inPhysics {false};
+	/// The hunger of the kind of animal at which it looks for food. A kind with 0 never looks for food
+	uint32_t hungerLimit {0};
+	/// How hungry the animal is now
+	int16_t hunger {0};
+	/// The kinds of food that the kind of animal eats, and the kinds of the food
+	FoodType eats {FoodType::None};
+	FoodType food {FoodType::None};
+};
+/// Whether food interests an animal. The food must be available and out of the physics. The animal must have a hunger
+/// limit, be at that limit or more, and eat a kind of the food
+[[nodiscard]] bool InterestedInFood(const FoodInterest& facts);
+
+/// The priority of a reaction to food for an animal: the table priority when the food holds some food, is not farther
+/// than the furthest distance of the reaction and interests the animal; else 0
+[[nodiscard]] uint32_t FoodPriority(bool holdsFood, float distance, float furthest, bool interested, uint32_t tablePriority);
+
+/// The largest turn of an animal to a thing that it looks at, in game angles each turn
+inline constexpr uint16_t k_LookTurnStep = 0x80;
+/// The angle that an animal faces after a turn to a thing that it looks at. Nearer than the step, it faces the thing.
+/// Else it turns by the step, on the shorter side
+[[nodiscard]] uint16_t LookTowards(uint16_t facing, uint16_t target, uint16_t step);
+
 /// Whether a kind of animal frightens a creature. Bats, the bats of the evil flock and vultures frighten a creature.
 /// Lions, tigers, leopards, wolves and the wolves that a spell makes also frighten a creature.
 /// The lion and the cow of the puzzles do not frighten a creature.

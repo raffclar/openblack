@@ -46,7 +46,7 @@ std::vector<Step> creature_follow_up::ShowHappy()
 }
 
 std::vector<Step> creature_follow_up::ShowSlapFeeling(const Feelings& feelings, const std::function<uint32_t(uint32_t)>& random,
-                                                      float chance, uint32_t turnsPerSecond)
+                                                      const std::function<float(float)>& upTo, uint32_t turnsPerSecond)
 {
 	switch (random(4))
 	{
@@ -62,7 +62,7 @@ std::vector<Step> creature_follow_up::ShowSlapFeeling(const Feelings& feelings, 
 		return {Clip(k_Cry)};
 	default:
 	{
-		const auto turns = static_cast<uint32_t>((chance + 1.0f) * static_cast<float>(turnsPerSecond));
+		const auto turns = static_cast<uint32_t>((upTo(1.0f) + 1.0f) * static_cast<float>(turnsPerSecond));
 		return {{.kind = Step::Kind::WatchCamera,
 		         .turns = turns,
 		         .face = creature_face::Cue::Sad,

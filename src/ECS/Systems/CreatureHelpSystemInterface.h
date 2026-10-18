@@ -17,6 +17,7 @@
 #include <entt/entity/entity.hpp>
 
 #include "Creature/CreatureHelp.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::ecs::systems
 {
@@ -24,7 +25,7 @@ namespace openblack::ecs::systems
 /// The good advisor's messages about the player's creature (see creature_help): what the rest of the game raises, the
 /// waiting messages told in their turn, and what the help watches of the creature each turn by itself (its body's
 /// problems, what it wants while the hand stays over it, and the prompts on how to look after it)
-class CreatureHelpSystemInterface
+class CreatureHelpSystemInterface: public SavedStateInterface
 {
 public:
 	/// A message told, for the inspector
@@ -35,6 +36,13 @@ public:
 		uint32_t parameter;
 		std::optional<uint32_t> text;
 		uint32_t turn;
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.creature, self.kind, self.parameter, self.text, self.turn);
+		}
 	};
 
 	virtual ~CreatureHelpSystemInterface() = default;

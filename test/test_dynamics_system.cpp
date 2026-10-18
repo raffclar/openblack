@@ -21,6 +21,7 @@
 #include <vector>
 
 #include <LNDFile.h>
+#include <entt/meta/context.hpp>
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
@@ -34,6 +35,9 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/DynamicsWorld.h"
+#include "ECS/Reflection/BinaryArchive.h"
+#include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Reflection/WorldArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
 #include "InfoConstants.h"
@@ -496,4 +500,57 @@ TEST_F(DynamicsSystemTest, AThrownGlobeFliesAsItsDomesShapeAndComesToRestWhereIt
 	ASSERT_TRUE(RunUntilEmpty(600).has_value()) << "it never left the physics";
 	EXPECT_FALSE(registry.AllOf<InPhysics>(globe));
 	EXPECT_GT(registry.Get<const Transform>(globe).position.x, made.x);
+}
+
+TEST_F(DynamicsSystemTest, ASavedPhysicsCarriesOnAsTheUnsavedOneDoes)
+{
+	namespace reflection = openblack::ecs::reflection;
+	entt::meta_ctx context;
+	reflection::RegisterComponents(context);
+	auto& registry = _world->Entities();
+	const auto thrown = Rock({1000.0f, 1000.0f});
+	const auto hit = Rock({1004.0f, 1000.0f});
+	registry.Get<Transform>(thrown).position.y += 2.0f;
+	ASSERT_TRUE(_dynamics->InitialisePhysics(thrown, {.velocity = {6.0f, 1.0f, 0.0f}, .spin = {0.0f, 1.0f, 0.5f}}).started);
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		_dynamics->ProcessTurn();
+	}
+	ASSERT_GE(Entries(), 1u);
+	const auto state = [this, &context]() {
+		reflection::BinaryWriter out(context);
+		_dynamics->SaveState(out);
+		return std::move(out.Bytes());
+	};
+	const auto savedWorld = reflection::SaveWorld(registry.Underlying(), context);
+	const auto savedPhysics = state();
+
+	// The game that was not saved runs on
+	const auto positions = [&registry, thrown, hit]() {
+		return std::array {registry.Get<const Transform>(thrown).position, registry.Get<const Transform>(hit).position};
+	};
+	for (int turn = 0; turn < 40; ++turn)
+	{
+		_dynamics->ProcessTurn();
+	}
+	const auto unsavedPositions = positions();
+	const auto unsavedPhysics = state();
+
+	// The saved game loads, gives the same bytes again, and runs on to the same places
+	registry.Reset();
+	ASSERT_TRUE(
+	    reflection::LoadWorld(registry.Underlying(), context, savedWorld, reflection::WorldLoadMode::Exact).has_value());
+	_dynamics->ResetSimulation();
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(context, savedPhysics, identity);
+	ASSERT_TRUE(_dynamics->LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_EQ(state(), savedPhysics);
+	EXPECT_TRUE(_dynamics->IsFlying(thrown));
+	for (int turn = 0; turn < 40; ++turn)
+	{
+		_dynamics->ProcessTurn();
+	}
+	EXPECT_EQ(positions(), unsavedPositions);
+	EXPECT_EQ(state(), unsavedPhysics);
 }

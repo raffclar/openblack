@@ -15,6 +15,7 @@
 #include <array>
 #include <functional>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -38,6 +39,12 @@ struct Obstacle
 	std::optional<uint32_t> thing;
 	/// A later circle covering this one wholly puts it out of use
 	bool active {true};
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.circle, self.thing, self.active);
+	}
 };
 
 /// Where a route's way round a circle leaves it, heading for a point: the tangent from the point, or where the point lies
@@ -75,16 +82,24 @@ public:
 
 	/// Starts afresh for a walk from a point, keeping clear of things by a margin
 	void Reset(glm::vec2 walker, float margin, Gatherer gatherer = {});
+	/// Starts afresh for a route that no one walks, such as a footpath: no circle is left out or shrunk for a walker
+	void ResetWithoutWalker(float margin, Gatherer gatherer = {});
+	/// Circles that hold either point (the square of the distance is less than the square of the radius) are left out
+	void LeaveOutCirclesHolding(glm::vec2 first, glm::vec2 second);
 	/// Forgets every circle, keeping how blocks are gathered
 	void Clear();
+	/// Sets what fills a block the first time that a search reaches it. A load of a saved game sets it again, because a
+	/// save does not keep it.
+	void SetGatherer(Gatherer gatherer) { _gatherer = std::move(gatherer); }
 	/// Where the creature walking is now: circles added later are kept clear of it
 	void SetWalker(glm::vec2 walker) { _walker = walker; }
-	[[nodiscard]] glm::vec2 GetWalker() const { return _walker; }
+	[[nodiscard]] glm::vec2 GetWalker() const { return _walker.value_or(glm::vec2(0.0f)); }
 	[[nodiscard]] float GetMargin() const { return _margin; }
 
-	/// Adds a circle. One about a point within a tenth of the walker is left out and one the walker stands in reaches
-	/// just to it; one inside a circle already kept is left out, and one already kept wholly inside the new one is put out
-	/// of use. The land's circles are kept once at each centre. Returns whether it was kept.
+	/// Adds a circle. One that holds a point given to LeaveOutCirclesHolding is left out. One about a point within a
+	/// tenth of the walker is left out and one the walker stands in reaches just to it; one inside a circle already kept
+	/// is left out, and one already kept wholly inside the new one is put out of use. The land's circles are kept once
+	/// at each centre. Returns whether it was kept.
 	bool Add(std::optional<uint32_t> thing, glm::vec2 centre, float radius);
 	/// Whether a thing's circles are already filed in the block of a cell
 	[[nodiscard]] bool BlockHas(uint32_t thing, glm::ivec2 cell) const;
@@ -108,7 +123,9 @@ private:
 	void Gather(int32_t x, int32_t z);
 	[[nodiscard]] size_t BlockIndex(int32_t x, int32_t z) const;
 
-	glm::vec2 _walker {0.0f};
+	std::optional<glm::vec2> _walker;
+	/// Circles that hold these points are left out
+	std::array<std::optional<glm::vec2>, 2> _leftOutAround;
 	float _margin {0.0f};
 	Gatherer _gatherer;
 	std::vector<Obstacle> _obstacles;
@@ -116,6 +133,14 @@ private:
 	std::vector<std::vector<uint32_t>> _blocks;
 	std::vector<bool> _gathered;
 	size_t _filings {0};
+
+public:
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._walker, self._margin, self._obstacles, self._blocks, self._gathered, self._filings);
+	}
 };
 
 /// A leg's length: an arc's round the circle the leg before heads for, else straight
@@ -146,6 +171,12 @@ public:
 		std::optional<uint32_t> circle {};
 		std::optional<uint32_t> second {};
 		Way way {Way::None};
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.point, self.circle, self.second, self.way);
+		}
 	};
 	/// Where a search goes: a point, stopping short of it by a distance and arriving anywhere within another, or (searching
 	/// back along a route) a circle met at a point, gone round a way. Routes costing more than the most are dropped.
@@ -159,10 +190,19 @@ public:
 		Way way {Way::None};
 		float mostCost {0.0f};
 		glm::vec2 metAt {0.0f};
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.point, self.stopShort, self.arriveWithin, self.startCost, self.circle, self.way, self.mostCost,
+			      self.metAt);
+		}
 	};
 
 	/// Starts a search. When recordMet is set, the things whose circles are met are noted.
 	Search(Obstacles& obstacles, const Start& start, const Goal& goal, bool recordMet = false);
+	/// An empty search, which a load of a saved game fills
+	Search() = default;
 
 	/// Takes the most promising route one step further. Routes are improved by searching back along them, which nests
 	/// up to a depth.
@@ -189,6 +229,12 @@ private:
 		std::vector<Leg> legs;
 		/// No better way back along it is looked for
 		bool settled {true};
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.legs, self.settled);
+		}
 	};
 
 	void Begin(Obstacles& obstacles);
@@ -204,7 +250,7 @@ private:
 
 	Start _start;
 	Goal _goal;
-	bool _recordMet;
+	bool _recordMet {false};
 	Status _status {Status::Searching};
 	/// Routes side by side; the newest is at the back and wins ties
 	std::vector<Route> _routes;
@@ -213,8 +259,18 @@ private:
 	std::vector<glm::vec2> _reached;
 	std::vector<uint32_t> _met;
 	float _mostRevisitCost {0.0f};
+
+public:
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._start, self._goal, self._recordMet, self._status, self._routes, self._best, self._estimate, self._reached,
+		      self._met, self._mostRevisitCost);
+	}
 };
 
-/// The land's circles round a cell: one at the centre of each of the cell and its eight neighbours that is blocked
-void AddLandCircles(const WalkableLand& land, glm::ivec2 cell, Obstacles& obstacles);
+/// The land's circles round a cell: one at the centre of each of the cell and its eight neighbours that is blocked, and
+/// that has water when the water is to be gone round too (a route that no one walks, such as a footpath's)
+void AddLandCircles(const WalkableLand& land, glm::ivec2 cell, Obstacles& obstacles, bool roundWater = false);
 } // namespace openblack::creature_route

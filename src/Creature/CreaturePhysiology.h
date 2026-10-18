@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 #include <string_view>
 
@@ -27,6 +28,12 @@
 /// Everything here works a game turn at a time, from the species' rates in the game's creature tables.
 namespace openblack::creature_physiology
 {
+/// A new creature's strength and fatness each spread by up to this either way, with no limit to 0 to 1
+constexpr float k_StartSpread = 0.1f;
+/// A new creature's strength or fatness from its species' value. upTo(x) is a draw from 0 to x (GameFloatRand in the
+/// game). The game draws the strength first, then the fatness
+[[nodiscard]] float SpreadStart(float value, const std::function<float(float)>& upTo);
+
 /// Growth is this many times faster while the plan is to sleep at home or by a thing
 constexpr float k_SleepGrowthFactor = 3.0f;
 /// The slowest a creature ever grows, in size a game turn

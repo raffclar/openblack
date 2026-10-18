@@ -36,6 +36,14 @@ private:
 	/// 0 to 255
 	float _alpha {0.0f};
 	uint32_t _colour {0};
+
+public:
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._rate, self._alpha, self._colour);
+	}
 };
 
 } // namespace openblack::gui

@@ -39,6 +39,8 @@ public:
 	bool RouteWorshipper(entt::entity villager, glm::vec3 site) override;
 	void ProcessTurn() override;
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
 	/// A turn of a creature the stone carries: fading out, coming out of the far stone, fading back in, walking on

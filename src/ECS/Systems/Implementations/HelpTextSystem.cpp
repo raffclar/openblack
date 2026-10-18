@@ -19,6 +19,7 @@
 #include "Audio/SoundDecoder.h"
 #include "Audio/WaveCueLabels.h"
 #include "Common/GameRandom.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
@@ -46,6 +47,12 @@ bool Sounding(entt::entity emitter)
 	}
 	auto& audio = Locator::audio::value();
 	return audio.EmitterExists(emitter) && audio.GetStatus(emitter) != audio::AudioStatus::Stopped;
+}
+
+/// The real time since the game started, in milliseconds
+uint32_t NowMs()
+{
+	return static_cast<uint32_t>(Locator::time::value().GetElapsedTime().count());
 }
 
 /// A line's recording decoded once more, as the sound plays it, with the cue labels its gestures are read from
@@ -95,14 +102,23 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 			return false;
 		}
 		// Heard everywhere, wherever the advisor is. The voice rules know the advisors' lines by their own number.
-		_advisorLine = Locator::audio::value().StartSoundEffect(
+		auto& sounds = Locator::audio::value();
+		_advisorLine = sounds.StartSoundEffect(
 		    *sound, {.voiceOwner = audio::VoiceOwner::Number, .ownerNumber = audio::k_AdvisorOwnerNumber});
 		// Its length is known once it has been made ready to play
-		_advisorLineMs = Locator::resources::value().GetSounds().Handle(*sound)->duration * 1000.0f;
-		return _advisorLine != entt::null;
+		_advisorPlayback = {
+		    .startMs = NowMs(),
+		    .lengthMs = Locator::resources::value().GetSounds().Handle(*sound)->duration * 1000.0f,
+		};
+		// With the sound device lost, the line starts as if the device is still there
+		return _advisorLine != entt::null || sounds.IsDeviceLost();
 	};
-	audio.isPlaying = [this](uint32_t) { return Sounding(_advisorLine); };
+	audio.isPlaying = [this](uint32_t) { return AdvisorLinePlays(); };
 	audio.percentageDone = [this](uint32_t) {
+		if (Locator::audio::value().IsDeviceLost())
+		{
+			return _advisorPlayback.Progress(NowMs());
+		}
 		return Sounding(_advisorLine) ? Locator::audio::value().GetProgress(_advisorLine) : 1.0f;
 	};
 	audio.stop = [this](uint32_t) {
@@ -111,6 +127,7 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 			Locator::audio::value().StopEmitter(_advisorLine);
 		}
 		_advisorLine = entt::null;
+		_advisorPlayback = {};
 	};
 	audio.recording = [](uint32_t line) -> std::optional<help::AdvisorVoices::Recording> {
 		const auto sound = Locator::helpSpeechSystem::value().GetTable().FindSound(audio::SpeechBank::HelpSprites, line);
@@ -130,15 +147,24 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 		return recording;
 	};
 	audio.playPositionMs = [this](uint32_t) -> int64_t {
-		if (!Sounding(_advisorLine))
+		if (!AdvisorLinePlays())
 		{
 			return -1;
 		}
-		return static_cast<int64_t>(Locator::audio::value().GetProgress(_advisorLine) * _advisorLineMs);
+		if (Locator::audio::value().IsDeviceLost())
+		{
+			return static_cast<int64_t>(NowMs() - _advisorPlayback.startMs);
+		}
+		return static_cast<int64_t>(Locator::audio::value().GetProgress(_advisorLine) * _advisorPlayback.lengthMs);
 	};
-	audio.tickMs = []() { return static_cast<uint32_t>(Locator::time::value().GetElapsedTime().count()); };
+	audio.tickMs = []() { return NowMs(); };
 	audio.localRand = [](int32_t n) { return Locator::gameRandom::value().LocalRand(n); };
 	return audio;
+}
+
+bool HelpTextSystem::AdvisorLinePlays() const
+{
+	return audio::PlaysOn(Sounding(_advisorLine), Locator::audio::value().IsDeviceLost(), _advisorPlayback, NowMs());
 }
 
 help::AdvisorVoices::Hooks HelpTextSystem::VoiceHooks()
@@ -168,11 +194,9 @@ help::DialogueText::Queries HelpTextSystem::DialogueQueries()
 	};
 	queries.voice = [](uint32_t number) -> std::optional<help::DialogueVoice> {
 		const auto sample = Locator::helpSpeechSystem::value().GetTable().Find(number);
-		if (!sample || !Locator::resources::value().GetSounds().Contains(sample->sound))
-		{
-			return std::nullopt;
-		}
-		return help::DialogueVoice {.advisorsBank = sample->bank == audio::SpeechBank::HelpSprites};
+		const bool known = sample && Locator::resources::value().GetSounds().Contains(sample->sound);
+		const bool deviceWorks = Locator::audio::has_value() && Locator::audio::value().IsInstalled();
+		return help::VoiceFor(known, known && sample->bank == audio::SpeechBank::HelpSprites, deviceWorks);
 	};
 	queries.turn = []() { return Locator::time::value().GetTurn(); };
 	// The texts are timed in milliseconds by the real time since the game started, which runs on whatever the game's
@@ -221,6 +245,44 @@ void HelpTextSystem::SetTextChoices(const TextChoices& choices)
 	{
 		_dialogue->SetPlayerChoices(choices.textDraw, choices.topToBottom, choices.readSpeed);
 	}
+}
+
+namespace
+{
+/// The screen height of a box that only takes the bytes of a saved dialogue
+constexpr int k_DroppedScreenHeight = 480;
+} // namespace
+
+void HelpTextSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	// The voices that speak the texts are sounds, which a save does not keep
+	const auto now = Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetElapsedTime().count()) : 0;
+	reflection::Save(out, now);
+	reflection::Save(out, _dialogue != nullptr);
+	if (_dialogue != nullptr)
+	{
+		reflection::Save(out, *_dialogue);
+	}
+	reflection::Save(out, _storyHistory);
+}
+
+bool HelpTextSystem::LoadState(reflection::BinaryReader& in)
+{
+	int32_t savedNow = 0;
+	bool hasDialogue = false;
+	reflection::Load(in, savedNow);
+	reflection::Load(in, hasDialogue);
+	if (hasDialogue)
+	{
+		// A dialogue that has not started yet reads into a box of its own, which is then dropped
+		help::DialogueText dropped(k_DroppedScreenHeight, false, {}, {}, {});
+		auto& dialogue = _dialogue != nullptr ? *_dialogue : dropped;
+		reflection::Load(in, dialogue);
+		const auto now = Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetElapsedTime().count()) : 0;
+		dialogue.ShiftRealTime(now - savedNow);
+	}
+	reflection::Load(in, _storyHistory);
+	return !in.Failed();
 }
 
 void HelpTextSystem::Reset()

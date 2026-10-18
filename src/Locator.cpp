@@ -73,6 +73,7 @@
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/FireflySystem.h"
 #include "ECS/Systems/Implementations/FishFarmSystem.h"
+#include "ECS/Systems/Implementations/FootpathSystem.h"
 #include "ECS/Systems/Implementations/FootprintSystem.h"
 #include "ECS/Systems/Implementations/ForestSystem.h"
 #include "ECS/Systems/Implementations/GestureSystem.h"
@@ -215,6 +216,7 @@ using openblack::ecs::systems::FieldSystem;
 using openblack::ecs::systems::FilmCreatureSystem;
 using openblack::ecs::systems::FireflySystem;
 using openblack::ecs::systems::FishFarmSystem;
+using openblack::ecs::systems::FootpathSystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
 using openblack::ecs::systems::GestureEventsInterface;
@@ -384,6 +386,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::creatureObjectActionSystem::emplace<CreatureObjectActionSystem>();
 	Locator::creatureHandSystem::emplace<CreatureHandSystem>();
 	Locator::footprintSystem::emplace<FootprintSystem>();
+	Locator::footpathSystem::emplace<FootpathSystem>();
 	Locator::editorSystem::emplace<EditorSystem>();
 	Locator::creatureSkinSystem::emplace<CreatureSkinSystem>();
 	Locator::creaturePenSystem::emplace<CreaturePenSystem>();
@@ -610,6 +613,7 @@ void openblack::ShutDownServices()
 	Locator::creatureSkinSystem::reset();
 	Locator::creatureHairSystem::reset();
 	Locator::footprintSystem::reset();
+	Locator::footpathSystem::reset();
 	Locator::creatureAudioSystem::reset();
 	Locator::creatureObjectActionSystem::reset();
 	Locator::creatureHandSystem::reset();

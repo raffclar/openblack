@@ -127,6 +127,13 @@ struct BeliefVoice
 	uint32_t lastVoice {0};
 	uint32_t lastGuidance {0};
 	uint32_t gap {0};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.started, self.lastVoice, self.lastGuidance, self.gap);
+	}
 };
 /// The belief a villager gained shows as a symbol rising from it, and the awe of its people may be heard: a good or evil
 /// voice, more awed the nearer the player is to leading its town, when the player isn't leading it already, now and then,

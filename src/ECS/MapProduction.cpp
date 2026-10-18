@@ -52,6 +52,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ThingModel.h"
 #include "Locator.h"
@@ -420,6 +421,31 @@ void MapProduction::Sync()
 	{
 		Refile(entity);
 	}
+}
+
+void MapProduction::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _lists.SavedCells());
+	reflection::Save(out, _lists.Blocks());
+	reflection::Save(out, _made);
+}
+
+bool MapProduction::LoadState(reflection::BinaryReader& in)
+{
+	// The load filed the things in the cells in the order of the registry. The order that the game had comes back.
+	std::vector<map_cells::CellLists::SavedCell> cells;
+	map_cells::BlockLists blocks;
+	std::vector<entt::entity> made;
+	reflection::Load(in, cells);
+	reflection::Load(in, blocks);
+	reflection::Load(in, made);
+	if (in.Failed() || !_lists.RestoreCells(cells))
+	{
+		return false;
+	}
+	_lists.Blocks() = std::move(blocks);
+	_made = std::move(made);
+	return true;
 }
 
 void MapProduction::FileResidents()

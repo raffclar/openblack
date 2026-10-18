@@ -84,6 +84,8 @@ public:
 	void StopSoundEffect(entt::id_type id) override;
 	[[nodiscard]] bool IsSoundEffectPlaying(entt::id_type id) const override;
 	[[nodiscard]] bool IsInstalled() const override { return true; }
+	[[nodiscard]] bool IsDeviceLost() const override;
+	void SimulateDeviceLoss(bool lost) override { _simulatedLoss = lost; }
 	entt::entity StartSoundEffect(entt::id_type id, const SoundEffectOptions& options) override;
 	void SetEmitterPosition(entt::entity emitter, const glm::vec3& position) override;
 	void SetEmitterFollows(entt::entity emitter, Follows follows) override;
@@ -187,6 +189,8 @@ private:
 	[[nodiscard]] static glm::vec3 ToListenerFrame(glm::vec3 worldPosition);
 
 	std::unique_ptr<AudioPlayerInterface> _audioPlayer;
+	/// A tool acts as if the machine lost the sound device
+	bool _simulatedLoss {false};
 	/// The listener while it is put somewhere other than the camera
 	std::optional<Listener> _listenerOverride;
 	/// All sounds are loaded

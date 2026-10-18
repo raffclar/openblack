@@ -31,15 +31,8 @@ namespace animations = openblack::creature_layers::animations;
 
 namespace
 {
-/// Random fractions of a second are drawn in this many steps
-constexpr uint32_t k_FractionSteps = 1000;
 /// A face is due again once its wait is within this much of over, so that the turns' rounding doesn't delay it
 constexpr float k_FaceDue = 1e-3f;
-
-float RandomFraction(const Random& random)
-{
-	return static_cast<float>(random(k_FractionSteps)) / static_cast<float>(k_FractionSteps);
-}
 
 /// The movements that the creature's movement says are done or have failed
 bool IsSubMove(Movement::Kind kind)
@@ -236,7 +229,7 @@ std::vector<Step> creature_mind::BeIdle(const Random& random)
 	std::vector<Step> agenda;
 	for (int i = 0; i < k_IdleRepeats; ++i)
 	{
-		Step wait {.kind = Step::Kind::Wait, .seconds = k_IdleWaitSeconds + RandomFraction(random)};
+		Step wait {.kind = Step::Kind::Wait, .seconds = FloatRand(random, 1.0f) + k_IdleWaitSeconds};
 		wait.face = creature_face::Cue::Idle;
 		agenda.push_back(wait);
 		auto yawn = Action(animations::k_Tired, true);
@@ -604,7 +597,7 @@ std::vector<Step> creature_mind::HangAround(const HangAroundPlaces& places, floa
 	                               .maxDistance = std::min(places.height, k_HangAroundHomeReach)},
 	                  .gaze = GoingLook()});
 	// The wait counts whole turns
-	auto wait = k_HangAroundWaitSeconds + (k_HangAroundWaitExtraSeconds * RandomFraction(random));
+	auto wait = FloatRand(random, k_HangAroundWaitExtraSeconds) + k_HangAroundWaitSeconds;
 	if (turnSeconds > 0.0f)
 	{
 		const auto turnsPerSecond = std::round(1.0f / turnSeconds);
@@ -623,7 +616,7 @@ std::vector<Step> creature_mind::HangAround(const HangAroundPlaces& places, floa
 	const auto temple = *places.temple;
 	const auto sit = [&random]() {
 		auto step = Static({animations::k_StartSit, animations::k_Sit, animations::k_EndSit},
-		                   k_HangAroundSitSeconds + (k_HangAroundSitExtraSeconds * RandomFraction(random)));
+		                   FloatRand(random, k_HangAroundSitExtraSeconds) + k_HangAroundSitSeconds);
 		return step;
 	};
 	const auto face = [](glm::vec3 point) {
@@ -690,13 +683,26 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.eyesToClear = true;
 }
 
+float creature_mind::FloatRand(const Random& random, float most)
+{
+	if (most == 0.0f || std::isnan(most))
+	{
+		return 0.0f;
+	}
+	return game_random::FloatOf(random(game_random::k_FloatRandRange), most);
+}
+
 std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, creature_face::Cue cue, const Senses& senses,
                                                               const Random& random, const Random& gameRandom)
 {
 	mind.faceSeconds = k_FaceRepeatSeconds;
 	auto feelings = senses.feelings;
 	feelings.variety = mind.faceVariety;
-	feelings.idlePick = random(creature_face::k_IdleFaceCount);
+	// Only the idle face draws its pick
+	if (cue == creature_face::Cue::Idle)
+	{
+		feelings.idlePick = random(creature_face::k_IdleFaceCount);
+	}
 	const auto face = creature_face::Choose(cue, feelings);
 	if (face.has_value())
 	{

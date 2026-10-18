@@ -10,10 +10,12 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <SavedObjects.h>
@@ -23,6 +25,7 @@
 #include <entt/meta/context.hpp>
 
 #include "ECS/Registry.h"
+#include "ECS/SaveFileWriter.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -95,7 +98,17 @@ private:
 	                       const gamesave::CreatureObject& loaded,
 	                       const std::optional<gamesave::LeashStatusObject>& loadedLeash);
 
+	/// Gives the writer a job that writes a file of a saved game into a folder of the profile, which it makes now. The
+	/// contents come from a function that the writer calls on its own thread. False when the folder cannot be made.
+	bool QueueFile(const std::filesystem::path& relativeFolder, std::string_view file,
+	               std::function<std::vector<uint8_t>()> contents);
+	/// Waits until the writer has written every file that it was given, before the game reads saved games
+	void FlushWrites() const;
+	[[nodiscard]] ecs::save_files::BackgroundWriter& Writer() const;
+
 	std::unique_ptr<entt::meta_ctx> _reflection;
+	/// Writes the files of each save on a thread of its own
+	mutable std::unique_ptr<ecs::save_files::BackgroundWriter> _writer;
 	std::optional<VanillaOrigin> _vanilla;
 	std::vector<WaitingPicture> _waitingPictures;
 	uint32_t _pictureRequests {0};

@@ -180,6 +180,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -2008,6 +2009,11 @@ bool Game::GameLogicLoop() noexcept
 	if (Locator::tipBubbleSystem::has_value())
 	{
 		Locator::tipBubbleSystem::value().ProcessTurn();
+	}
+	// The footpaths being found between things take a few more steps, and those found are laid
+	if (Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().ProcessTurn();
 	}
 	// Then the physics, after the living, the fires, the reactions, the miracles and the particles have had their turn,
 	// so a body any of them sets moving this turn flies this turn: what was thrown, dropped, knocked or pushed flies,
@@ -5550,6 +5556,11 @@ void Game::ReadTattooPictures()
 	if (Locator::resources::value().GetCreatureSkinArt().Contains(creature_skin::k_ArtId))
 	{
 		LoadCreatureSkinArt();
+		// The masks of the player's creature take the new pictures, and every creature is painted again
+		if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(PlayerNames::PLAYER_ONE))
+		{
+			Locator::creatureSkinSystem::value().RemakeTattooMasks(*creature, creature_tattoo::Sheet::OwnPictures);
+		}
 		Locator::entitiesRegistry::value().Each<ecs::components::CreatureTattoos>(
 		    [](ecs::components::CreatureTattoos& tattoos) { ++tattoos.revision; });
 	}

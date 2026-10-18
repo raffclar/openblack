@@ -508,6 +508,100 @@ void AddCaveTrophies(std::vector<Scenario>& all)
 	                 seen(MagicType::LightningBolt, 5.0f), main(0.5f), cave(0.5f)},
 	});
 }
+/// The player puts three symbols on the same place of the creature in the Creature Cave, then lifts the last one off and
+/// cancels. The points after the click on the creature are for a screen of 1600 by 900.
+void AddCaveTattooLayers(std::vector<Scenario>& all)
+{
+	const auto at = [](float x, float y, float delay) {
+		return Command {.kind = Kind::PointerTo, .delaySeconds = delay, .point = {x / 1600.0f, y / 900.0f}};
+	};
+	const auto press = [](float delay) { return Command {.kind = Kind::PointerPress, .delaySeconds = delay, .value = 1}; };
+	const auto release = [](float delay) { return Command {.kind = Kind::PointerRelease, .delaySeconds = delay, .value = 1}; };
+	std::vector<Command> commands {
+	    {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	    {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	    {.kind = Kind::PointerOnCaveCreature, .delaySeconds = 14.0f},
+	    press(0.5f),
+	    release(0.2f)};
+	// A colour from the palette, then a symbol from the left column dragged to the chest
+	const auto putOn = [&](float paletteY, float symbolY, float delay) {
+		for (const auto& command : {at(246.0f, paletteY, delay), press(0.2f), release(0.2f), at(368.0f, symbolY, 0.5f),
+		                            press(0.2f), at(600.0f, 600.0f, 0.2f), at(799.0f, 404.0f, 0.2f), release(1.0f)})
+		{
+			commands.push_back(command);
+		}
+	};
+	// The heart in blue, the star in red, the moon in yellow
+	putOn(330.0f, 783.0f, 5.0f);
+	putOn(80.0f, 685.5f, 2.0f);
+	putOn(180.0f, 588.0f, 2.0f);
+	// The last one comes off and is dropped away from the body, then Cancel
+	for (const auto& command : {at(799.0f, 404.0f, 3.0f), press(0.2f), at(700.0f, 350.0f, 0.2f), at(560.0f, 300.0f, 0.2f),
+	                            release(1.0f), at(1067.0f, 772.0f, 3.0f), press(0.2f), release(0.2f)})
+	{
+		commands.push_back(command);
+	}
+	all.push_back({
+	    .id = "creature_mode.cave_tattoo_layers",
+	    .name = "Three tattoos on one place in the cave",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player clicks the tiger in the Creature Cave and drags three symbols onto its chest, each in "
+	                   "another colour: a blue heart, a red star and a yellow moon. Then the player presses the chest, "
+	                   "drops the symbol away from the body, and clicks Cancel.",
+	    .expected = "Each symbol goes into the skin of the chest over the one before it, in its own colour, so the moon "
+	                "shows on top. The press lifts the moon, the last one, and the star shows again. After Cancel the "
+	                "tiger's tattoos go back as they were, and the copy in the cave paints them again as the camera "
+	                "zooms out.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = commands,
+	});
+}
+
+/// The player turns the tattoo editor's view round to the back of the creature in the Creature Cave, then presses the
+/// button away from the controls. The points are for a screen of 1600 by 900.
+void AddCaveTattooLookBehind(std::vector<Scenario>& all)
+{
+	const auto at = [](float x, float y, float delay) {
+		return Command {.kind = Kind::PointerTo, .delaySeconds = delay, .point = {x / 1600.0f, y / 900.0f}};
+	};
+	const auto press = [](float delay) { return Command {.kind = Kind::PointerPress, .delaySeconds = delay, .value = 1}; };
+	const auto release = [](float delay) { return Command {.kind = Kind::PointerRelease, .delaySeconds = delay, .value = 1}; };
+	all.push_back({
+	    .id = "creature_mode.cave_tattoo_look_behind",
+	    .name = "The creature looks behind it in the tattoo editor",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player clicks the tiger in the Creature Cave. The player holds the round rotation button and "
+	                   "moves the pointer to the side, so that the view turns round to the tiger's back. Then the player "
+	                   "presses the button at the left and at the right of the screen.",
+	    .expected = "The tiger turns to face the camera when the editor opens, and does not turn again as the view goes "
+	                "round it. After each press, for one and a half seconds, it turns its head round as far as it can "
+	                "towards the point under the pointer, which is now behind it, near the camera.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands =
+	        {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	         {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	         {.kind = Kind::PointerOnCaveCreature, .delaySeconds = 14.0f},
+	         press(0.5f),
+	         release(0.2f),
+	         // The pointer first looks in front of the tiger
+	         at(1100.0f, 300.0f, 4.0f),
+	         press(0.2f),
+	         release(1.0f),
+	         // The view turns round
+	         at(800.0f, 747.0f, 2.0f),
+	         press(0.3f),
+	         {.kind = Kind::PointerTo, .delaySeconds = 0.2f, .point = {500.0f / 1600.0f, 747.0f / 900.0f}, .amount = 0.5f},
+	         release(2.5f),
+	         at(400.0f, 300.0f, 4.0f),
+	         press(0.2f),
+	         release(1.0f),
+	         at(1200.0f, 300.0f, 2.0f),
+	         press(0.2f),
+	         release(1.0f)},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
@@ -522,4 +616,6 @@ void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 	AddCaveCopyHair(all);
 	AddCaveTrophies(all);
 	AddTattooEditorLowestView(all);
+	AddCaveTattooLayers(all);
+	AddCaveTattooLookBehind(all);
 }

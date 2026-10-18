@@ -42,6 +42,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -156,6 +157,17 @@ void ResumeVillager(entt::entity villager, const TeleportTraveller& traveller)
 	}
 }
 } // namespace
+
+void TeleportSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _nextSerial);
+}
+
+bool TeleportSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _nextSerial);
+	return !in.Failed();
+}
 
 entt::entity TeleportSystem::CreateStone(glm::vec3 point, PlayerNames player, entt::entity spell)
 {

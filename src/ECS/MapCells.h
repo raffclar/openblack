@@ -92,6 +92,13 @@ private:
 		std::vector<entt::entity> things;
 		entt::entity lastIn {entt::null};
 		entt::entity lastOut {entt::null};
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.things, self.lastIn, self.lastOut);
+		}
 	};
 	[[nodiscard]] List& ListOf(glm::ivec2 cell);
 
@@ -99,6 +106,14 @@ private:
 	std::vector<bool> _onLand;
 	bool _landBlocksKnown {false};
 	List _off;
+
+public:
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._blocks, self._onLand, self._landBlocksKnown, self._off);
+	}
 };
 
 /// The two lists of every cell of the map
@@ -124,6 +139,26 @@ public:
 	void Clear();
 
 	[[nodiscard]] uint32_t CellsPerSide() const { return _cellsPerSide; }
+
+	/// The two lists of a cell, as a saved game keeps them
+	struct SavedCell
+	{
+		uint32_t cell {0};
+		std::vector<entt::entity> fixed;
+		std::vector<entt::entity> mobile;
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.cell, self.fixed, self.mobile);
+		}
+	};
+	/// Every cell that holds things, in the order that the cells took their first things, with its lists in order
+	[[nodiscard]] std::vector<SavedCell> SavedCells() const;
+	/// Puts back the cells that SavedCells gave, in place of every list of a cell. The lists of the blocks stay.
+	/// Returns false, with no change, when a cell is not on the map.
+	bool RestoreCells(std::span<const SavedCell> cells);
 
 private:
 	struct Cell

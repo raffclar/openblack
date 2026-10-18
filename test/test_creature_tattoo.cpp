@@ -146,6 +146,61 @@ TEST(CreatureTattoo, TattoosSpanTheirSizeOfTheLargestMask)
 	EXPECT_EQ(at(84, 136), 0x0000);
 }
 
+TEST(CreatureTattoo, TattoosStepAlongTheMaskBySumsInFloat)
+{
+	std::vector<uint16_t> skin(k_SkinTexels, 0x0000);
+	// Each column of the largest mask has its own level: the column's number, a 16th of it
+	Design design = Solid(0);
+	for (uint32_t y = 0; y < k_DesignSize; ++y)
+	{
+		for (uint32_t x = 0; x < k_DesignSize; ++x)
+		{
+			design.at(0).levels.at((y * k_DesignSize) + x) = static_cast<uint8_t>(x % 16);
+		}
+	}
+	// Three quarters: 48 texels from the 64 texel mask, from 104 to 151. The step 64 / 48 in float, added nine times, is
+	// a little under 12, so the tenth texel takes column 11, not 12.
+	const Site site {.enabled = true, .u = 128, .v = 128, .skin = 0, .size = 0.75f, .mirror = false, .rotation = 0};
+	Paint(skin, design, {0xFF, 0xFF, 0xFF}, site);
+	const auto at = [&skin](int x, int y) { return skin.at(static_cast<size_t>((y * 256) + x)); };
+	EXPECT_EQ(at(104 + 9, 128), 0xFBBB);
+	EXPECT_EQ(at(104 + 3, 128), 0xF444);
+	EXPECT_EQ(at(104 + 12, 128), 0xFFFF);
+}
+
+TEST(CreatureTattoo, MasksAreMadeAgainOnlyFromABlockOfPictures)
+{
+	std::array<Design, k_DesignCount> sheet;
+	for (uint8_t d = 0; d < k_DesignCount; ++d)
+	{
+		sheet.at(d) = Solid(d);
+	}
+	Slots slots {};
+	slots[0] = {.design = 4, .site = 1, .colour = {}};
+	slots[2] = {.design = 9, .site = 3, .colour = {}};
+	Masks masks {};
+	masks[1] = Solid(7);
+	// No block: nothing changes
+	RemakeMasks(masks, slots, {}, sheet);
+	EXPECT_FALSE(masks[0].has_value());
+	// A block without pictures: each slot on a site takes its design; a slot without a site keeps its old mask
+	const auto block = PicturesBlock(slots, Pictures {});
+	RemakeMasks(masks, slots, block, sheet);
+	ASSERT_TRUE(masks[0].has_value());
+	EXPECT_EQ(masks[0]->at(0).At(0, 0), 4);
+	EXPECT_EQ(masks[2]->at(0).At(0, 0), 9);
+	ASSERT_TRUE(masks[1].has_value());
+	EXPECT_EQ(masks[1]->at(0).At(0, 0), 7);
+	EXPECT_FALSE(masks[3].has_value());
+	// A slot whose design has a picture of the player's own takes the picture from the block
+	Pictures pictures {};
+	pictures.at(9) = Picture {};
+	pictures.at(9)->fill(0xC0);
+	RemakeMasks(masks, slots, PicturesBlock(slots, pictures), sheet);
+	EXPECT_EQ(masks[2]->at(0).At(5, 5), 0xC);
+	EXPECT_EQ(masks[0]->at(0).At(0, 0), 4);
+}
+
 TEST(CreatureTattoo, TattoosOverAnEdgeArentPainted)
 {
 	std::vector<uint16_t> skin(k_SkinTexels, 0x0000);

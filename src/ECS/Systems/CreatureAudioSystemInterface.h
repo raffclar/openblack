@@ -14,6 +14,7 @@
 #include <entt/entity/fwd.hpp>
 
 #include "Creature/CreatureAudio.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::ecs::systems
 {
@@ -21,7 +22,7 @@ namespace openblack::ecs::systems
 /// Sounds the creatures' animations as they play past the moments their sounds are placed on: footsteps and blows from
 /// the bank all creatures share, roars and cries from the species' own, each played from the creature and following it
 /// (see creature_audio and components::CreatureAudio)
-class CreatureAudioSystemInterface
+class CreatureAudioSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~CreatureAudioSystemInterface() = default;

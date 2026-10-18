@@ -205,6 +205,14 @@ public:
 private:
 	std::array<float, k_RewardKinds> _weights {};
 	std::array<float, k_RewardKinds> _totals {};
+
+public:
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._weights, self._totals);
+	}
 };
 
 } // namespace openblack::fireflies

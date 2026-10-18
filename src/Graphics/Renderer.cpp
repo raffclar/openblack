@@ -6562,7 +6562,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					    .skins = {},
 					    .blendSeams = Locator::config::value().blendCreatureSeams,
 					};
-					if (const auto skins = _creatureSkins.find(entity); skins != _creatureSkins.end())
+					// A copy with a skin of its own, as the Creature Cave's copy has, shows that skin
+					auto skins = copy ? _creatureSkins.find(poser) : _creatureSkins.end();
+					if (skins == _creatureSkins.end())
+					{
+						skins = _creatureSkins.find(entity);
+					}
+					if (skins != _creatureSkins.end())
 					{
 						targets->skins = skins->second.drawn;
 					}

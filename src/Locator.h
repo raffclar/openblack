@@ -126,6 +126,7 @@ class CreatureAudioSystemInterface;
 class CreatureObjectActionSystemInterface;
 class CreatureHandSystemInterface;
 class FootprintSystemInterface;
+class FootpathSystemInterface;
 class CreatureSkinSystemInterface;
 class EditorSystemInterface;
 class CreaturePhysiologySystemInterface;
@@ -299,6 +300,7 @@ struct Locator
 	using creatureObjectActionSystem = entt::locator<ecs::systems::CreatureObjectActionSystemInterface>;
 	using creatureHandSystem = entt::locator<ecs::systems::CreatureHandSystemInterface>;
 	using footprintSystem = entt::locator<ecs::systems::FootprintSystemInterface>;
+	using footpathSystem = entt::locator<ecs::systems::FootpathSystemInterface>;
 	using creatureSkinSystem = entt::locator<ecs::systems::CreatureSkinSystemInterface>;
 	using editorSystem = entt::locator<ecs::systems::EditorSystemInterface>;
 	using creaturePhysiologySystem = entt::locator<ecs::systems::CreaturePhysiologySystemInterface>;

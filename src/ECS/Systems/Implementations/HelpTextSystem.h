@@ -13,6 +13,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Audio/SilentPlayback.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "Help/AdvisorVoices.h"
 #include "Help/DialogueText.h"
@@ -33,6 +34,9 @@ public:
 	[[nodiscard]] bool IsStarted() const override { return _dialogue != nullptr; }
 	void SetTextChoices(const TextChoices& choices) override;
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
+
 	void StopVoices() override;
 	void Update(const Frame& frame) override;
 	bool RunText(bool singleLine, uint32_t text, int32_t withInteraction) override;
@@ -61,6 +65,8 @@ private:
 
 	/// The voices' sounds and clock, from the game's audio
 	[[nodiscard]] help::AdvisorVoices::Audio VoiceAudio();
+	/// The advisors' line plays: as the sound device tells, or by the length of its sample once the device is lost
+	[[nodiscard]] bool AdvisorLinePlays() const;
 	/// The voices' gestures, given to the advisors' bodies
 	[[nodiscard]] static help::AdvisorVoices::Hooks VoiceHooks();
 	/// What the dialogue reads and has done
@@ -76,8 +82,9 @@ private:
 	TextChoices _textChoices;
 	/// The sound saying the advisors' line
 	entt::entity _advisorLine {entt::null};
-	/// That sound's length in milliseconds
-	float _advisorLineMs {0.0f};
+	/// When that sound started and its length. Once the machine loses the sound device, the line lasts this long with no
+	/// sound.
+	audio::SilentPlayback _advisorPlayback;
 	bool _inTemple {false};
 };
 

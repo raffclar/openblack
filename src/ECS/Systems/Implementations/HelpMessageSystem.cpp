@@ -20,6 +20,7 @@
 #include "CHLApi.h"
 #include "Common/GameRandom.h"
 #include "ECS/HelpQueryFacts.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
@@ -88,6 +89,29 @@ bool InScriptCutScene()
 	return director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
 }
 } // namespace
+
+void HelpMessageSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _sent);
+	reflection::Save(out, _sentTurn);
+	reflection::Save(out, _categoryTurn);
+	reflection::Save(out, _banterUsed);
+	reflection::Save(out, _lastSet);
+	reflection::Save(out, _messageTurn);
+	reflection::Save(out, _started);
+}
+
+bool HelpMessageSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _sent);
+	reflection::Load(in, _sentTurn);
+	reflection::Load(in, _categoryTurn);
+	reflection::Load(in, _banterUsed);
+	reflection::Load(in, _lastSet);
+	reflection::Load(in, _messageTurn);
+	reflection::Load(in, _started);
+	return !in.Failed();
+}
 
 void HelpMessageSystem::Remember(Started started)
 {

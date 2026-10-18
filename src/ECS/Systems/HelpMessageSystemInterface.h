@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Help/HelpMessages.h"
 
 namespace openblack::ecs::systems
@@ -23,7 +24,7 @@ namespace openblack::ecs::systems
 /// The help the game starts by itself (see help_messages): the answers to the Help key and the advisors' banter, said
 /// through the help scripts. A new message stops a help script already talking; a story script holding the dialogue
 /// keeps it.
-class HelpMessageSystemInterface
+class HelpMessageSystemInterface: public SavedStateInterface
 {
 public:
 	/// A help script started, for the inspector
@@ -36,6 +37,13 @@ public:
 		std::optional<uint32_t> statText;
 		std::optional<float> need;
 		uint32_t turn;
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.script, self.first, self.last, self.statText, self.need, self.turn);
+		}
 	};
 
 	virtual ~HelpMessageSystemInterface() = default;

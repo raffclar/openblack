@@ -57,6 +57,7 @@
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureObjectBeliefs.h"
+#include "Creature/CreatureObstacles.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreaturePlayerAttention.h"
@@ -446,8 +447,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Animal::owner>("owner")
 	    .Field<&components::Animal::flock>("flock")
 	    .Field<&components::Animal::town>("town")
-	    .Field<&components::Animal::fleeing>("fleeing")
-	    .Field<&components::Animal::fleeReaction>("fleeReaction")
+	    .Field<&components::Animal::reactingTo>("reactingTo")
+	    .Field<&components::Animal::reaction>("reaction")
 	    .Field<&components::Animal::state>("state")
 	    .Field<&components::Animal::finalState>("finalState")
 	    .Field<&components::Animal::afterClip>("afterClip")
@@ -815,6 +816,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureLocomotion::ring>("ring")
 	    .Field<&components::CreatureLocomotion::ontoDestination>("ontoDestination")
 	    .Field<&components::CreatureLocomotion::follower>("follower")
+	    .Field<&components::CreatureLocomotion::routeWalker>("routeWalker")
 	    .Field<&components::CreatureLocomotion::firstSearchTurn>("firstSearchTurn")
 	    .Field<&components::CreatureLocomotion::routeReady>("routeReady")
 	    .Field<&components::CreatureLocomotion::failed>("failed")
@@ -993,7 +995,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::CreatureTattoos>(context)
 	    .Field<&components::CreatureTattoos::slots>("slots")
 	    .Field<&components::CreatureTattoos::pictures>("pictures")
+	    .Field<&components::CreatureTattoos::shown>("shown")
 	    .Field<&components::CreatureTattoos::revision>("revision");
+	Reflect<components::TattooMasks>(context).Field<&components::TattooMasks::masks>("masks");
 	Reflect<components::CreatureMarks>(context)
 	    .Field<&components::CreatureMarks::marks>("marks")
 	    .Field<&components::CreatureMarks::revision>("revision");
@@ -1253,6 +1257,11 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::FootpathWalk::towardsStart>("towardsStart")
 	    .Field<&components::FootpathWalk::node>("node")
 	    .Field<&components::FootpathWalk::then>("then");
+	Reflect<components::FootpathFinder>(context)
+	    .Field<&components::FootpathFinder::from>("from")
+	    .Field<&components::FootpathFinder::to>("to")
+	    .Field<&components::FootpathFinder::footpath>("footpath")
+	    .Field<&components::FootpathFinder::plan>("plan");
 	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::wood>(
 	    "wood");
 	Reflect<components::Forest>(context).Field<&components::Forest::type>("type");
@@ -2702,6 +2711,13 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_object_beliefs::Sweep::left>("left")
 	    .Field<&openblack::creature_object_beliefs::Sweep::ring>("ring")
 	    .Field<&openblack::creature_object_beliefs::Sweep::step>("step");
+	Reflect<openblack::creature_obstacles::Walker>(context, ValueOnly {})
+	    .Field<&openblack::creature_obstacles::Walker::position>("position")
+	    .Field<&openblack::creature_obstacles::Walker::height>("height")
+	    .Field<&openblack::creature_obstacles::Walker::radius>("radius")
+	    .Field<&openblack::creature_obstacles::Walker::scriptControlled>("scriptControlled")
+	    .Field<&openblack::creature_obstacles::Walker::owner>("owner")
+	    .Field<&openblack::creature_obstacles::Walker::mayBeTakenByVortex>("mayBeTakenByVortex");
 	Reflect<openblack::creature_perceived_desires::PerceivedDesires>(context, ValueOnly {})
 	    .Field<&openblack::creature_perceived_desires::PerceivedDesires::player>("player")
 	    .Field<&openblack::creature_perceived_desires::PerceivedDesires::town>("town");
@@ -2795,6 +2811,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_sway::Sway::active>("active")
 	    .Field<&openblack::creature_sway::Sway::turnSeconds>("turnSeconds")
 	    .Field<&openblack::creature_sway::Sway::heading>("heading");
+	Reflect<openblack::creature_tattoo::Mask>(context, ValueOnly {})
+	    .Field<&openblack::creature_tattoo::Mask::size>("size")
+	    .Field<&openblack::creature_tattoo::Mask::levels>("levels");
 	Reflect<openblack::creature_tattoo::Slot>(context, ValueOnly {})
 	    .Field<&openblack::creature_tattoo::Slot::design>("design")
 	    .Field<&openblack::creature_tattoo::Slot::site>("site")
@@ -3097,7 +3116,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::DrawnIntoVortex::Flight::rotation>("rotation");
 	Reflect<openblack::ecs::components::Footpath::Node>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Footpath::Node::position>("position")
-	    .Field<&openblack::ecs::components::Footpath::Node::place>("place");
+	    .Field<&openblack::ecs::components::Footpath::Node::place>("place")
+	    .Field<&openblack::ecs::components::Footpath::Node::planned>("planned")
+	    .Field<&openblack::ecs::components::Footpath::Node::hidden>("hidden")
+	    .Field<&openblack::ecs::components::Footpath::Node::marker>("marker");
 	Reflect<openblack::ecs::components::HandGrab::Throw>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HandGrab::Throw::velocity>("velocity")
 	    .Field<&openblack::ecs::components::HandGrab::Throw::springVelocity>("springVelocity")

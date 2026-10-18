@@ -43,6 +43,10 @@ inline constexpr float k_CrtRandomScale = std::bit_cast<float>(0x38000100u);
 	return seed % n;
 }
 
+/// The float of a draw u up to x, as the game's FPU computes it: (u * x) * k. The FPU keeps a wider exponent than a float,
+/// so a product above the float range does not become infinite before the multiply by k
+[[nodiscard]] float FloatOf(uint32_t u, float x) noexcept;
+
 /// A float draw up to x: 0 for +-0 or NaN without a draw, else (u * x) * k with u = LHRand(0xFFFF), so it has the sign of
 /// x and |r| <= 65534/65535 |x|
 [[nodiscard]] float FloatRand(float x, uint32_t& seed) noexcept;
@@ -117,6 +121,35 @@ public:
 	/// (z^2 + y^2) + x^2 <= 1. Outside an effect's step the game would loop forever, which it never does; here it gives
 	/// (-1, -1, -1)
 	glm::vec3 ParticleRandR3();
+};
+
+/// The game's random numbers for one system. It draws on the game's seeds when the locator has them. Else it draws on a
+/// copy of the starting seeds of its own, for tests that make the system alone
+class GameRandomSource
+{
+public:
+	/// LHRand(n) on the synced seed, and 0 for 0 without a draw
+	uint32_t GameRand(uint32_t n);
+	/// FloatRand(x) on the synced seed
+	float GameFloatRand(float x);
+	/// LHRand(n) on the local seed, and 0 for 0 without a draw
+	uint32_t LocalRand(int32_t n);
+	/// FloatRand(x) on the local seed
+	float LocalFloatRand(float x);
+
+	/// GameRand as a function, for the rules that take the draw as a parameter
+	[[nodiscard]] auto Game()
+	{
+		return [this](uint32_t n) { return GameRand(n); };
+	}
+	/// GameFloatRand as a function, for the rules that take the draw as a parameter
+	[[nodiscard]] auto GameFloat()
+	{
+		return [this](float x) { return GameFloatRand(x); };
+	}
+
+private:
+	GameRandomSeeds _own;
 };
 
 /// An effect's step drawing from the synced or local seed, by whether the effect is synced across the network, and then
