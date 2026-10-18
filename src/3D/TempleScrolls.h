@@ -213,6 +213,8 @@ public:
 		LibraryDidYouKnow,
 		LibraryHistory,
 	};
+	/// Writes the scrolls of a content again, as the save game room writes its scroll after a save, a load or a delete
+	void Rewrite(Content content, const Facts& facts);
 	/// The text for a scroll, or none when the room leaves the scroll unwritten. The story history starts at the line
 	/// historyStart lines back from the newest line.
 	[[nodiscard]] static std::optional<std::u16string> Write(Content content, const gui::TextDatabase& texts,

@@ -183,6 +183,17 @@ void TempleScrolls::Create(const Facts& facts)
 	}
 }
 
+void TempleScrolls::Rewrite(Content content, const Facts& facts)
+{
+	for (auto& scroll : _scrolls)
+	{
+		if (scroll.content == content)
+		{
+			Redraw(scroll, facts);
+		}
+	}
+}
+
 void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 {
 	if (!scroll.texture)

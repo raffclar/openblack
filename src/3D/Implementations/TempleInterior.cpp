@@ -19,6 +19,7 @@
 #include <unordered_map>
 
 #include <PackFile.h>
+#include <SDL_keyboard.h>
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -32,6 +33,7 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleChallengeRoom.h"
+#include "3D/TempleSaveGameRoom.h"
 #include "3D/TempleScrolls.h"
 #include "3D/TempleSigns.h"
 #include "Audio/AudioManagerInterface.h"
@@ -75,6 +77,7 @@
 #include "Graphics/DetailLevel.h"
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
+#include "Gui/SaveGameBoxes.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
@@ -237,6 +240,12 @@ TempleInterior::TempleInterior()
 
 namespace
 {
+/// A file of the saved games' pictures in the player's folder
+std::optional<std::vector<uint8_t>> ReadSavedGamePicture(std::string_view fileName)
+{
+	return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().ReadPictureFile(fileName) : std::nullopt;
+}
+
 /// What the rooms' scrolls tell of the game: the world's statistics, the time played and the creature, and made up for
 /// the rest
 TempleScrolls::Facts GatherScrollFacts()
@@ -339,6 +348,8 @@ void TempleInterior::SetInterface(gui::GameInterface* interface)
 	_scrolls.reset();
 	_signs.reset();
 	_challengeRoom.reset();
+	_saveGameRoom.reset();
+	_saveGameQuestion.reset();
 	_text.clear();
 	if (_active)
 	{
@@ -384,6 +395,194 @@ void TempleInterior::CreateScrolls()
 	{
 		_challengeRoom->Find(*meshes.Handle(challengeMeshId));
 	}
+
+	// The save game room finds its pictures and buttons, makes the empty picture from its colours and alpha, and reads
+	// the small pictures of the saved games
+	_saveGameRoom = std::make_unique<TempleSaveGameRoom>();
+	const entt::id_type saveGameMeshId = entt::hashed_string("temple/interior/savegame_l3d").value();
+	if (meshes.Contains(saveGameMeshId))
+	{
+		_saveGameRoom->Find(*meshes.Handle(saveGameMeshId));
+	}
+	const auto colours = fileSystem.GetPath<filesystem::Path::Textures>() / "PictureTexture.raw";
+	const auto alpha = fileSystem.GetPath<filesystem::Path::Textures>() / "PictureTexturea.raw";
+	if (fileSystem.Exists(colours) && fileSystem.Exists(alpha))
+	{
+		const auto rgb = fileSystem.ReadAll(colours);
+		const auto a = fileSystem.ReadAll(alpha);
+		const size_t texels = std::min(rgb.size() / 3, a.size());
+		std::vector<uint8_t> rgba(texels * 4);
+		for (size_t i = 0; i < texels; ++i)
+		{
+			rgba[(i * 4) + 0] = rgb[(i * 3) + 0];
+			rgba[(i * 4) + 1] = rgb[(i * 3) + 1];
+			rgba[(i * 4) + 2] = rgb[(i * 3) + 2];
+			rgba[(i * 4) + 3] = a[i];
+		}
+		_saveGameRoom->SetEmptyPicture(rgba);
+	}
+	_saveGameRoom->ReadSmallPictures(ReadSavedGamePicture);
+	ListSavedGames();
+}
+
+void TempleInterior::ListSavedGames()
+{
+	if (_saveGameRoom == nullptr)
+	{
+		return;
+	}
+	std::vector<TempleSaveGameRoom::Save> saves;
+	if (Locator::saveGameSystem::has_value())
+	{
+		for (const auto& saved : Locator::saveGameSystem::value().Slots())
+		{
+			saves.push_back({.slot = saved.slot % 100, .name = saved.name});
+		}
+	}
+	_saveGameRoom->SetSaves(std::move(saves));
+}
+
+temple::save_game_room::View TempleInterior::SaveGameRoomView() const
+{
+	// openblack has no network game: the player is never in one
+	return {.closeUp = _cameraModel != nullptr && _cameraModel->GetSubMeshZoom() == 1.0f,
+	        .pictureLookedAt = _saveGameRoom != nullptr && _saveGameRoom->IsPictureLookedAt(),
+	        .keptInRoom = _lock.GetRoom().has_value(),
+	        .multiplayer = false};
+}
+
+void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t slot)
+{
+	using Click = temple::save_game_room::Click;
+	if (_interface == nullptr || _saveGameRoom == nullptr || click == Click::Nothing || click == Click::LookCloser)
+	{
+		return;
+	}
+	auto& boxes = _interface->GetSaveGameBoxes();
+	if (boxes.IsActive())
+	{
+		return;
+	}
+	const auto& texts = _interface->GetTexts();
+	_saveGameQuestion = SaveGameQuestion {.click = click, .slot = slot};
+	switch (click)
+	{
+	case Click::AskLoad:
+		boxes.Ask(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_LOADREQUEST")));
+		break;
+	case Click::AskOverwrite:
+		boxes.Ask(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_SAVEREQUEST")));
+		break;
+	case Click::AskDelete:
+		boxes.Ask(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_DELETEREQUEST")));
+		break;
+	case Click::AskName:
+		// A new save's name starts empty
+		boxes.AskName(u"");
+		break;
+	default:
+		break;
+	}
+	SDL_StartTextInput();
+}
+
+void TempleInterior::UpdateSaveGameRoom()
+{
+	using Click = temple::save_game_room::Click;
+	using Answer = gui::SaveGameBoxes::Answer;
+	if (_saveGameRoom == nullptr || _interface == nullptr)
+	{
+		return;
+	}
+	// The empty pictures show the half for the player's alignment
+	if (Locator::playerSystem::has_value() && Locator::alignmentSystem::has_value())
+	{
+		const auto local = Locator::playerSystem::value().GetLocalPlayer();
+		_saveGameRoom->SetAlignment(Locator::alignmentSystem::value().GetPlayerAlignment(local));
+	}
+	auto& boxes = _interface->GetSaveGameBoxes();
+	const auto answer = boxes.TakeAnswer();
+	if (!answer.has_value() || !_saveGameQuestion.has_value())
+	{
+		return;
+	}
+	const auto question = *_saveGameQuestion;
+	_saveGameQuestion.reset();
+	if (*answer == Answer::No || *answer == Answer::Cancelled)
+	{
+		return;
+	}
+	switch (question.click)
+	{
+	case Click::AskOverwrite:
+		// Yes to saving over a save asks for its name, the box holding the save's name
+		_saveGameQuestion = SaveGameQuestion {.click = Click::AskName, .slot = question.slot};
+		boxes.AskName(_saveGameRoom->SaveName(question.slot).value_or(std::u16string_view()));
+		return;
+	case Click::AskName:
+		SaveIntoSlot(question.slot, boxes.GetName());
+		return;
+	case Click::AskLoad:
+		// TODO(raffclar): the game starts again from the save. The save keeps only the creatures yet, so the land that is
+		// open takes the save's creatures.
+		if (Locator::playerProfileSystem::has_value())
+		{
+			Locator::playerProfileSystem::value().CountLoad();
+		}
+		if (_scrolls != nullptr)
+		{
+			_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
+		}
+		if (Locator::saveGameSystem::has_value())
+		{
+			Locator::saveGameSystem::value().Load(question.slot);
+		}
+		return;
+	case Click::AskDelete:
+		if (Locator::saveGameSystem::has_value())
+		{
+			Locator::saveGameSystem::value().Delete(question.slot);
+		}
+		ListSavedGames();
+		if (_scrolls != nullptr)
+		{
+			_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
+		}
+		return;
+	default:
+		return;
+	}
+}
+
+void TempleInterior::SaveIntoSlot(uint32_t slot, std::u16string_view name)
+{
+	if (!Locator::saveGameSystem::has_value() || _saveGameRoom == nullptr)
+	{
+		return;
+	}
+	const bool newSave = !_saveGameRoom->HasSave(slot);
+	// A save that fails is not listed and not counted
+	if (!Locator::saveGameSystem::value().Save(slot, name))
+	{
+		ListSavedGames();
+		return;
+	}
+	if (Locator::playerProfileSystem::has_value())
+	{
+		Locator::playerProfileSystem::value().CountSave();
+	}
+	ListSavedGames();
+	_saveGameRoom->ReadSmallPictures(ReadSavedGamePicture);
+	if (_scrolls != nullptr)
+	{
+		_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
+	}
+	// A save into an empty slot starts the help on loading
+	if (newSave)
+	{
+		temple_help::GameScripts scripts;
+		temple_help::SavedIntoEmptySlot(scripts);
+	}
 }
 
 bool TempleInterior::HoldControl(bool pressed, float mouseY)
@@ -402,6 +601,10 @@ bool TempleInterior::HoldControl(bool pressed, float mouseY)
 			if (_challengeRoom != nullptr)
 			{
 				_challengeRoom->LookedAtScroll();
+			}
+			if (_saveGameRoom != nullptr)
+			{
+				_saveGameRoom->LookedAtScroll();
 			}
 			// Sent to look at a scroll, the camera starts the scroll's help
 			if (const auto content = _scrolls->GetFocusedContent(); content.has_value())
@@ -425,6 +628,20 @@ bool TempleInterior::HoldControl(bool pressed, float mouseY)
 		{
 			ReplayChallenge(*outcome.replay);
 		}
+	}
+	// While a question or the name box is up, the save game room's controls take no clicks
+	const bool boxUp = _interface != nullptr && _interface->GetSaveGameBoxes().IsActive();
+	if (_saveGameRoom != nullptr && _cameraModel != nullptr && !boxUp)
+	{
+		const auto hoveredSaveSubMesh =
+		    hit.has_value() && hit->room == TempleRoom::SaveGame ? hit->subMesh : std::optional<uint32_t> {};
+		TempleSaveGameRoom::Outcome outcome;
+		held = _saveGameRoom->Hold(pressed, hoveredSaveSubMesh, SaveGameRoomView(), ReadSavedGamePicture, outcome) || held;
+		if (outcome.lookAt.has_value())
+		{
+			_cameraModel->LookAtSubMesh(outcome.lookAt->position, outcome.lookAt->lookAt);
+		}
+		AskAboutSlot(outcome.click, outcome.slot);
 	}
 	return held;
 }
@@ -476,6 +693,10 @@ std::vector<uint32_t> TempleInterior::GetHiddenSubMeshes(TempleRoom room) const
 	{
 		return _challengeRoom->GetHidden();
 	}
+	if (room == TempleRoom::SaveGame && _saveGameRoom != nullptr)
+	{
+		return _saveGameRoom->GetHidden(SaveGameRoomView());
+	}
 	return room == TempleRoom::Main ? _toggles.GetHidden() : std::vector<uint32_t> {};
 }
 
@@ -483,13 +704,14 @@ bool TempleInterior::IsControl(TempleRoom room, uint32_t subMesh) const
 {
 	return (room == TempleRoom::Main && _toggles.IsControl(subMesh)) ||
 	       (_scrolls != nullptr && _scrolls->IsControl(room, subMesh)) ||
-	       (room == TempleRoom::Challenge && _challengeRoom != nullptr && _challengeRoom->IsControl(subMesh));
+	       (room == TempleRoom::Challenge && _challengeRoom != nullptr && _challengeRoom->IsControl(subMesh)) ||
+	       (room == TempleRoom::SaveGame && _saveGameRoom != nullptr && _saveGameRoom->IsControl(subMesh, SaveGameRoomView()));
 }
 
 bool TempleInterior::IsControlHeld() const
 {
 	return _toggles.IsHeld() || (_scrolls != nullptr && _scrolls->IsHeld()) ||
-	       (_challengeRoom != nullptr && _challengeRoom->IsHeld());
+	       (_challengeRoom != nullptr && _challengeRoom->IsHeld()) || (_saveGameRoom != nullptr && _saveGameRoom->IsHeld());
 }
 
 std::vector<TempleSubMeshTexture> TempleInterior::GetScrollTextures(TempleRoom room) const
@@ -499,6 +721,11 @@ std::vector<TempleSubMeshTexture> TempleInterior::GetScrollTextures(TempleRoom r
 	if (room == TempleRoom::Challenge && _challengeRoom != nullptr)
 	{
 		std::ranges::copy(_challengeRoom->GetTextures(), std::back_inserter(textures));
+	}
+	// And the save game room's
+	if (room == TempleRoom::SaveGame && _saveGameRoom != nullptr)
+	{
+		std::ranges::copy(_saveGameRoom->GetTextures(), std::back_inserter(textures));
 	}
 	return textures;
 }
@@ -522,6 +749,10 @@ std::vector<TempleSubMeshOffset> TempleInterior::GetControlOffsets(TempleRoom ro
 	if (room == TempleRoom::Challenge && _challengeRoom != nullptr)
 	{
 		return _challengeRoom->GetOffsets();
+	}
+	if (room == TempleRoom::SaveGame && _saveGameRoom != nullptr)
+	{
+		return _saveGameRoom->GetOffsets();
 	}
 	return {};
 }
@@ -644,6 +875,9 @@ void TempleInterior::UpdateToolTips(float milliseconds)
 	const auto toggles = _currentRoom == TempleRoom::Main ? _toggles.GetControls() : std::vector<TempleToggles::Control> {};
 	const bool inChallengeRoom = _currentRoom == TempleRoom::Challenge && _challengeRoom != nullptr;
 	const auto challenges = inChallengeRoom ? _challengeRoom->GetToolTipControls() : std::vector<TempleChallengeControl> {};
+	const bool inSaveGameRoom = _currentRoom == TempleRoom::SaveGame && _saveGameRoom != nullptr;
+	const auto savedGames =
+	    inSaveGameRoom ? _saveGameRoom->GetToolTipControls(SaveGameRoomView()) : std::vector<TempleSaveGameControl> {};
 	const TempleToolTipInput input {
 	    .room = _currentRoom,
 	    .inControl = _cameraModel->IsInControl() && !_transitionRoom.has_value(),
@@ -661,9 +895,18 @@ void TempleInterior::UpdateToolTips(float milliseconds)
 	    .toggles = toggles,
 	    .challenges = challenges,
 	    .challengeHighDetail = inChallengeRoom ? _challengeRoom->GetHighDetailPlace() : std::nullopt,
-	    .pictureLookedAt = inChallengeRoom && _challengeRoom->IsPictureLookedAt(),
+	    .pictureLookedAt =
+	        (inChallengeRoom && _challengeRoom->IsPictureLookedAt()) || (inSaveGameRoom && _saveGameRoom->IsPictureLookedAt()),
+	    .savedGames = savedGames,
+	    .savedGameHighDetail = inSaveGameRoom ? _saveGameRoom->GetHighDetailSlot() : std::nullopt,
+	    .multiplayer = false,
 	};
-	UpdateTempleToolTip(_toolTip, input);
+	std::u16string savedGameName;
+	UpdateTempleToolTip(_toolTip, input, &savedGameName);
+	if (!savedGameName.empty())
+	{
+		_interface->SetToolTipName(std::move(savedGameName));
+	}
 
 	// Every 100 milliseconds the temple's game turn submits the room's tooltip, or none under a dialog, and the help
 	// system keeps it or ends it
@@ -1123,6 +1366,17 @@ void TempleInterior::SetCurrentRoom(TempleRoom room)
 		{
 			_challengeRoom->Enter();
 		}
+		// Coming into the save game room, the room reads the saved games and writes its scroll again, and no picture is
+		// shown in high detail
+		if (room == TempleRoom::SaveGame && _saveGameRoom != nullptr)
+		{
+			_saveGameRoom->Enter();
+			ListSavedGames();
+			if (_scrolls != nullptr)
+			{
+				_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
+			}
+		}
 		// Coming into the library, the story history shows its newest line first
 		if (room == TempleRoom::Credits && _scrolls != nullptr)
 		{
@@ -1363,6 +1617,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		}
 
 		UpdateChallengeRoom();
+		UpdateSaveGameRoom();
 		UpdateToolTips(milliseconds);
 
 		// The main room takes the land's heights and brightness for the map every frame the main room is drawn
@@ -1614,6 +1869,8 @@ void TempleInterior::Close()
 	_scrolls.reset();
 	_signs.reset();
 	_challengeRoom.reset();
+	_saveGameRoom.reset();
+	_saveGameQuestion.reset();
 	_replay.reset();
 	_text.clear();
 	if (_interface != nullptr)

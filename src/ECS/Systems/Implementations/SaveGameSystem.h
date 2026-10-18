@@ -34,6 +34,8 @@ class SaveGameSystem final: public SaveGameSystemInterface
 public:
 	bool Save(uint32_t slot, std::u16string_view name) override;
 	bool Load(uint32_t slot) override;
+	bool Delete(uint32_t slot) override;
+	[[nodiscard]] std::optional<std::vector<uint8_t>> ReadPictureFile(std::string_view name) const override;
 	[[nodiscard]] std::vector<Slot> Slots() const override;
 	[[nodiscard]] std::vector<VanillaCheck> CheckVanillaRecords() const override;
 

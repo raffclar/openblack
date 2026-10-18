@@ -13,10 +13,12 @@
 
 #include <optional>
 #include <span>
+#include <string>
 
 #include "3D/CreatureCaveTargets.h"
 #include "3D/TempleChallengeRoom.h"
 #include "3D/TempleInteriorInterface.h"
+#include "3D/TempleSaveGameRoom.h"
 #include "3D/TempleScrolls.h"
 #include "3D/TempleToggles.h"
 #include "Gui/ToolTips.h"
@@ -62,6 +64,10 @@ struct TempleToolTipInput
 	std::span<const TempleChallengeControl> challenges;
 	std::optional<uint32_t> challengeHighDetail;
 	bool pictureLookedAt {false};
+	/// The save game room's pictures and buttons drawn, and the slot of the picture shown in high detail
+	std::span<const TempleSaveGameControl> savedGames;
+	std::optional<uint32_t> savedGameHighDetail;
+	bool multiplayer {false};
 };
 
 /// The tooltip before the temple has set one: Rotate, with the left button
@@ -69,6 +75,7 @@ constexpr TempleToolTip k_FirstTempleToolTip {.index = 4, .action = gui::ToolTip
 
 /// What the hand shows in the temple for what it is over, as each room, its scrolls and then the temple as a whole
 /// decide it
-void UpdateTempleToolTip(TempleToolTip& toolTip, const TempleToolTipInput& input);
+/// The save game room's named zoom also gives the name of the saved game it shows, which stays as it was otherwise
+void UpdateTempleToolTip(TempleToolTip& toolTip, const TempleToolTipInput& input, std::u16string* savedGameName = nullptr);
 
 } // namespace openblack

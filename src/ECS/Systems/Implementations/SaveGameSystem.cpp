@@ -18,6 +18,7 @@
 #include <array>
 #include <chrono>
 #include <exception>
+#include <filesystem>
 #include <format>
 #include <memory>
 #include <optional>
@@ -31,6 +32,7 @@
 #include <LHVM.h>
 #include <MindFile.h>
 #include <SaveGameInfo.h>
+#include <SavePictures.h>
 #include <SaveSlots.h>
 #include <SavedObjects.h>
 #include <VanillaSaveFile.h>
@@ -1191,4 +1193,60 @@ std::vector<SaveGameSystem::Slot> SaveGameSystem::Slots() const
 		}
 	}
 	return slots;
+}
+
+bool SaveGameSystem::Delete(uint32_t slot)
+{
+	const auto player = PlayerFolder();
+	if (!player.has_value())
+	{
+		return false;
+	}
+	const auto listed = Slots();
+	if (std::ranges::none_of(listed, [slot](const Slot& saved) { return saved.slot % 100 == slot; }))
+	{
+		return false;
+	}
+	// The folder of the slot, as the room reads it: the land's folder for an autosave, the previous land's or the next
+	// land's folder for theirs
+	const auto found = gamesave::RoomFolderOf(std::to_string(slot), LandNumber());
+	if (!found.has_value())
+	{
+		return false;
+	}
+	const auto root = Locator::profileFolderSystem::value().GetFolder();
+	const auto folder = *root / *player / gamesave::k_SavedGamesFolder / found->folder;
+	// The files go. A folder in it stays, and then the folder stays too.
+	std::error_code error;
+	std::vector<std::filesystem::path> files;
+	for (std::filesystem::directory_iterator it(folder, error), end; !error && it != end; it.increment(error))
+	{
+		if (!it->is_directory(error))
+		{
+			files.push_back(it->path());
+		}
+	}
+	for (const auto& file : files)
+	{
+		std::filesystem::remove(file, error);
+	}
+	std::filesystem::remove(folder, error);
+	SPDLOG_LOGGER_INFO(Log(), "Deleted the saved game in slot {}", slot);
+	return true;
+}
+
+std::optional<std::vector<uint8_t>> SaveGameSystem::ReadPictureFile(std::string_view name) const
+{
+	const auto player = PlayerFolder();
+	if (!player.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto root = Locator::profileFolderSystem::value().GetFolder();
+	const auto path = *root / *player / gamesave::k_SavedGamesFolder / gamesave::k_PicturesFolder / name;
+	if (!Locator::filesystem::value().Exists(path))
+	{
+		return std::nullopt;
+	}
+	return ReadFile(path);
 }
