@@ -6421,6 +6421,29 @@ void AddCombat(std::vector<Scenario>& all)
 	}
 
 	{
+		// The first fight on the first land is the guide's lesson. The guide starts the fight and takes the east place, so
+		// the tiger to its east walks past it to the west place.
+		auto guide = Fighter(left, 90.0f, "guide", PlayerNames::NEUTRAL, 0.5f, 0.0f);
+		guide.species = CreatureType::Lion;
+		auto tiger = Fighter(right, 270.0f, "red", PlayerNames::PLAYER_ONE, 0.5f, 0.0f);
+		all.push_back({
+		    .id = "combat.lesson_bodies",
+		    .name = "The guide's fight: bodies on the walk and in the duel",
+		    .facet = Facet::Combat,
+		    .description = "The guide lion starts a fight with the player's red tiger to its east, and both fight by "
+		                   "themselves. The camera looks at the arena from the side.",
+		    .expected = "On the walk to their places, the lion and the tiger go through each other, because the lion takes "
+		                "the east place. The original game does the same. In the duel, a body can reach into the other "
+		                "body for a moment during a blow or a step, because the fighters measure their bodies as they were "
+		                "at the last game turn. Then both move apart.",
+		    .framing = ringside,
+		    .creatures = {guide, tiger},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 1, 0.2f)},
+		});
+	}
+
+	{
 		all.push_back({
 		    .id = "combat.start_turn",
 		    .name = "Fighters turn on the spot as the duel starts",
