@@ -44,6 +44,7 @@ public:
 	bool TurnToFace(entt::entity creature, glm::vec2 point) override;
 	bool TurnToHeading(entt::entity creature, GameHeading heading) override;
 	bool TurnToFaceAtOnce(entt::entity creature, glm::vec2 point) override;
+	bool TurnToHeadingAtOnce(entt::entity creature, GameHeading heading) override;
 	void Stop(entt::entity creature) override;
 	void StopAtOnce(entt::entity creature) override;
 	void ResetPace(entt::entity creature) override;
@@ -54,6 +55,12 @@ public:
 	[[nodiscard]] std::vector<creature_route::Circle> ThingCirclesIn(entt::entity creature, glm::ivec2 cell) override;
 
 private:
+	/// The heading to face a point from where the creature is, or none when the point is where it is
+	[[nodiscard]] static std::optional<GameHeading> HeadingToFace(entt::entity creature, glm::vec2 point);
+	/// Whether its body plays an action, as an action from its mind or an action with a thing
+	[[nodiscard]] bool PlaysBodyAction(entt::entity creature) const;
+	/// Its walk stops, and it turns on the spot to the heading
+	bool StartTurnOnTheSpot(entt::entity creature, GameHeading heading);
 	/// Starts a move for a fraction of top speed, the creature's state already gathered, to a point or up to a thing
 	MoveResult StartMove(entt::entity creature, components::CreatureLocomotion& locomotion, glm::vec2 point, float fraction,
 	                     float minDistance, float maxDistance, bool ontoDestination);
