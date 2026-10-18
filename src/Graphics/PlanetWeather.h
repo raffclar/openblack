@@ -41,7 +41,7 @@ struct Weather
 	float type {0.5f};
 	/// How strong a front or the arm of a cyclone is there, 0 to 1
 	float front {0.0f};
-	/// A slow value from 0 to 1 that chooses between the two patterns of the cells of cloud
+	/// A slow value from 0 to 1 that chooses the size of the cells of cloud: 0 small, 1 large
 	float pattern {0.5f};
 };
 

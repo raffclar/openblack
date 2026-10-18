@@ -189,6 +189,20 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "sky.cloud_regions",
+	    .name = "The regions of cloud from 100 km up",
+	    .facet = Facet::Sky,
+	    .description = "The camera is 100 km over the sea, 28 km to the south west of the island, at noon with the clock "
+	                   "stopped, under scattered clouds. It looks down at the island and stays there.",
+	    .expected = "The clouds are not one even carpet. There are clear areas, groups of thick cloud, streets of cells in "
+	                "lines along the wind, open cells with rings of cloud, and areas of small cells and of large cells. "
+	                "The edges of the far clouds are soft. Near the island the clouds are the same as before.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .cloudCover = static_cast<uint8_t>(2)},
+	    .framing = {.shot = Shot::Placed, .eye = {-20000.0f, 94900.0f, -20000.0f}, .look = {0.0f, 0.0f, 0.0f}, .hold = true},
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
 	    .id = "sky.aurora_night",
 	    .name = "A strong aurora over the island",
 	    .facet = Facet::Sky,

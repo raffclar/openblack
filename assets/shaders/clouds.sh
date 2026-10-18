@@ -49,9 +49,36 @@ uniform vec4 u_cloudCells[16];
 #define CLOUD_BASE_TILE 1500.0f
 #define CLOUD_DETAIL_TILE 210.0f
 #define CLOUD_WEATHER_TILE 14000.0f
-// The units that one tile of the wide weather covers (volumetric_clouds::k_WideWeatherTile). This slow field over tens
-// of kilometres moves the cells and changes their cover, so that no repeat of the weather tile shows from high up
-#define CLOUD_WIDE_TILE 47000.0f
+// The weather of the regions between 20 and 500 km (cloud_regions, the CPU twins in CloudRegions.cpp). Near the
+// island the clouds keep the game's own weather. The regions start at the first distance from the map's middle and are
+// complete at the second.
+#define CLOUD_KEEP_NEAR 10000.0f
+#define CLOUD_KEEP_FAR 30000.0f
+// The tiles of the two reads of the base noise on the planet's sphere: groups of cloud about 100 km and 30 km wide
+#define CLOUD_REGION_TILE 380000.0f
+#define CLOUD_DISTRICT_TILE 125000.0f
+// The mean and the spread of the billows (the red channel of the base noise) and of its cellular channels
+#define CLOUD_BILLOW_MEAN 0.67f
+#define CLOUD_BILLOW_SPREAD 0.084f
+#define CLOUD_CELLULAR_MEAN 0.48f
+#define CLOUD_CELLULAR_SPREAD 0.12f
+// How much each unit of the billows changes the cover, as a share of the cover, and the limits of the share
+#define CLOUD_COVER_CONTRAST 2.4f
+#define CLOUD_LEAST_SHARE 0.03f
+#define CLOUD_MOST_SHARE 2.5f
+// The small and the large cells, as a part of the usual cells, and the width of the usual cells
+#define CLOUD_SMALL_CELLS 0.38f
+#define CLOUD_LARGE_CELLS 2.3f
+#define CLOUD_USUAL_CELL_WIDTH 2333.0f
+// The part of the field round its middle that the ring of an open cell holds
+#define CLOUD_RING_WIDTH 0.3f
+// How much longer the cells of a street are along the wind than across it
+#define CLOUD_STREET_STRETCH 3.5f
+// How much the edge of a cell softens for each width of a cell in one pixel, and the softest edge
+#define CLOUD_EDGE_PER_PIXEL 1.2f
+#define CLOUD_SOFTEST_EDGE 1.5f
+// The angle of one pixel of the rays, which have half the screen's size, in radians
+#define CLOUD_PIXEL_ANGLE 0.0018f
 // The top of the layer for each type of cloud, over its bottom
 #define CLOUD_STRATUS_DEPTH 160.0f
 #define CLOUD_CUMULUS_DEPTH 520.0f
@@ -197,42 +224,132 @@ float CloudCoverAt(vec4 planet)
 	return min(u_cloudCover.x * CloudPlanetShare(planet.r), 1.0f);
 }
 
-// The weather at a point across the land: the cloud's cover there (0 none), its type and its rain
-float CloudWeatherAt(vec2 xz, out float type, out float rain)
+// The weights of the small, the usual and the large cells for the size of the cells of a region, 0 (small) to 1
+// (large). Two sizes next to each other share the weight (cloud_regions::SizeWeights).
+vec3 CloudSizeWeights(float size)
+{
+	float s = clamp(size, 0.0f, 1.0f);
+	return s < 0.5f ? vec3(1.0f - 2.0f * s, 2.0f * s, 0.0f) : vec3(0.0f, 2.0f - 2.0f * s, 2.0f * s - 1.0f);
+}
+
+// Patterns of cells, each 0 to 1 round a middle of 0.5, mixed by weights. The mix keeps the contrast of one pattern
+// (cloud_regions::MixPatterns).
+float CloudMixPatterns(vec3 values, vec3 weights)
+{
+	float norm = sqrt(dot(weights, weights));
+	return norm > 0.0f ? clamp(0.5f + dot(weights, values - 0.5f) / norm, 0.0f, 1.0f) : 0.5f;
+}
+
+// The field of open cells: cloud in rings round clear middles (cloud_regions::OpenRing)
+float CloudOpenRing(float field)
+{
+	return 1.0f - smoothstep(0.0f, CLOUD_RING_WIDTH, abs(field - 0.5f));
+}
+
+// The weather of the region round a point across the land, as the clouds drift over the planet. Each region between
+// 20 and 500 km has its own cover, size of cells and pattern, so that no one size of cell repeats to the horizon.
+// The result: x the cover before the cells cut it, y the type of cloud, z the size of the cells (0 small, 1 large), w
+// how much the cells line up in streets along the wind. `cells`: xy how far the slow field moves the cells, z how much
+// of the pattern is open cells, w how much of the region's own weather shows (0 near the island).
+vec4 CloudRegionAt(vec2 xz, out vec4 cells)
 {
 	vec4 planet = CloudPlanetAt(vec3(xz.x, u_cloudLayer.w, xz.y));
-	vec2 q = xz - u_cloudDrift.xy;
-	// The wide weather reads the noise at a large scale, on axes that turn about 30 degrees from the cells' axes. Each
-	// read has a different turn, so that no two grids align.
-	vec2 wideAt = vec2(0.866f * q.x - 0.5f * q.y, 0.5f * q.x + 0.866f * q.y) / CLOUD_WIDE_TILE;
-	vec2 otherAt = vec2(0.574f * q.x + 0.819f * q.y, -0.819f * q.x + 0.574f * q.y) / CLOUD_WIDE_TILE;
-	vec4 wide = texture2DLod(s_cloudWeather, wideAt + vec2(0.37f, 0.71f), 0.0f);
-	float wideOther = texture2DLod(s_cloudWeather, otherAt + vec2(0.13f, 0.52f), 0.0f).g;
-	// The wide field moves the cells by some kilometres. Near the eye all the cells move together, so their shapes stay.
-	// From one tile to the next the move is different, so the tiles do not repeat.
-	q += (vec2(wide.g, wideOther) - 0.5f) * 5000.0f;
+	float share = smoothstep(CLOUD_KEEP_NEAR, CLOUD_KEEP_FAR, length(xz - u_cloudPlanet.xy)) * step(0.5f, u_cloudPlanet.w);
+	// Two reads of the base noise on the planet's sphere. Each read has its own size and turned axes, so that their tiles
+	// never line up and no grid shows from space.
+	vec2 q = xz - u_cloudDrift.xy - u_cloudPlanet.xy;
+	vec3 onSphere = normalize(vec3(q.x, u_cloudLayer.y, q.y));
+	vec3 a = vec3(dot(onSphere, vec3(0.5038f, -0.3163f, 0.8038f)), dot(onSphere, vec3(0.5839f, 0.8104f, -0.0471f)),
+	              dot(onSphere, vec3(-0.6366f, 0.4931f, 0.593f)));
+	vec3 b = vec3(dot(onSphere, vec3(0.2511f, -0.7364f, -0.6282f)), dot(onSphere, vec3(0.2122f, -0.5914f, 0.778f)),
+	              dot(onSphere, vec3(-0.9444f, -0.3286f, 0.0077f)));
+	vec4 large = texture3DLod(s_cloudBase, a * (u_cloudLayer.y / CLOUD_REGION_TILE) + vec3(0.21f, 0.63f, 0.37f), 0.0f);
+	vec4 small = texture3DLod(s_cloudBase, b * (u_cloudLayer.y / CLOUD_DISTRICT_TILE) + vec3(0.58f, 0.11f, 0.86f), 0.0f);
+	// Each value as spreads round 0: the billows of about 100 km and 30 km, and two cellular values
+	vec4 spread = (vec4(large.r, small.r, large.g, small.g) -
+	               vec4(CLOUD_BILLOW_MEAN, CLOUD_BILLOW_MEAN, CLOUD_CELLULAR_MEAN, CLOUD_CELLULAR_MEAN)) /
+	              vec4(CLOUD_BILLOW_SPREAD, CLOUD_BILLOW_SPREAD, CLOUD_CELLULAR_SPREAD, CLOUD_CELLULAR_SPREAD);
+	// Clear regions, groups of cloud and thick areas over the large weather of the map (cloud_regions::CoverShare)
+	float billows = 0.15f * (spread.x + 0.7f * spread.y);
+	float cover =
+	    min(CloudCoverAt(planet) * clamp(1.0f + CLOUD_COVER_CONTRAST * billows * share, CLOUD_LEAST_SHARE, CLOUD_MOST_SHARE), 1.0f);
+	// The type changes a little at about 30 km near the island too, as the game's weather tile did
+	float type = clamp(u_cloudCover.y + (planet.g - 0.5f) * mix(0.2f, 0.5f, share) + spread.w * mix(0.05f, 0.12f, share), 0.0f, 1.0f);
+	// Small cells in thin fair weather, large cells where the cover is thick: congestus groups and flat sheets
+	float size = clamp(planet.a + 0.25f * spread.z + 0.2f * spread.w + 0.6f * (cover - 0.45f) * share, 0.0f, 1.0f);
+	// Flat clouds of a middle cover make open cells; cumulus of a low cover lines up in streets. Each shows in its own
+	// regions.
+	float layered = 1.0f - smoothstep(0.35f, 0.55f, type);
+	float middle = smoothstep(0.2f, 0.4f, cover) * (1.0f - smoothstep(0.7f, 0.9f, cover));
+	float open = share * layered * middle * smoothstep(0.5f, 0.62f, large.b);
+	float streets = share * (1.0f - layered) * (1.0f - smoothstep(0.5f, 0.75f, cover)) * smoothstep(0.46f, 0.34f, large.b);
+	// The slow field moves the cells by about a kilometre. Near the eye all the cells move together, so their shapes stay.
+	cells = vec4((vec2(large.a, large.g) - CLOUD_CELLULAR_MEAN) * (1200.0f / CLOUD_CELLULAR_SPREAD), open, share);
+	return vec4(cover, type, size, streets);
+}
+
+// The width of the cells of a region, in world units (cloud_regions::CellWidth)
+float CloudCellWidth(vec4 region, vec4 cells)
+{
+	return dot(CloudSizeWeights(mix(0.5f, region.z, cells.w)), vec3(CLOUD_SMALL_CELLS, 1.0f, CLOUD_LARGE_CELLS)) * CLOUD_USUAL_CELL_WIDTH;
+}
+
+// The cells of cloud at a point across the land, 0 (none) to 1, for the weather of its region (CloudRegionAt). `pixel`
+// is the width of a pixel on the clouds, in world units: the edges of the cells soften with it.
+float CloudCellsAt(vec2 xz, vec4 region, vec4 cells, float pixel)
+{
+	vec2 q = xz - u_cloudDrift.xy + cells.xy;
 	// A smooth copy of the noise bends the place that the weather is read at, so that the cells are not round. The bend
 	// changes slowly across the land. A fast bend would fold the cells into thin columns, which show as streaks on the
 	// sides of the clouds.
 	vec2 bend = texture2DLod(s_cloudWeather, q * (2.3f / CLOUD_WEATHER_TILE), 0.0f).gb - 0.5f;
 	vec2 at = q + bend * 500.0f;
-	vec4 w = texture2DLod(s_cloudWeather, at / CLOUD_WEATHER_TILE, 0.0f);
 	// The field changes slowly between two patterns, so that the clouds form and break up as they move
 	float turn = 0.5f + 0.5f * sin(u_cloudDrift.z * 0.0035f);
-	float field = mix(w.r, w.b, turn);
-	// A second pattern of cells, smaller and on turned axes, joins the first. The two tiles do not line up, so the cells
-	// do not repeat. The planet's map changes how much of each shows over large areas. The sum is spread out again, so
-	// that it has the contrast of one pattern.
+	// The usual cells: two patterns on turned axes, so that the tiles do not line up and the cells do not repeat. The
+	// sum is spread out again, so that it has the contrast of one pattern.
+	vec4 w = texture2DLod(s_cloudWeather, at / CLOUD_WEATHER_TILE, 0.0f);
 	vec2 turned = vec2(0.602f * at.x - 0.799f * at.y, 0.799f * at.x + 0.602f * at.y) / (CLOUD_WEATHER_TILE * 0.71f);
 	vec4 other = texture2DLod(s_cloudWeather, turned + vec2(0.29f, 0.83f), 0.0f);
-	float share = 0.3f + 0.4f * planet.a;
-	field = clamp(0.5f + (mix(field, mix(other.r, other.b, turn), share) - 0.5f) * 1.45f, 0.0f, 1.0f);
-	// The planet's map makes large areas of more cloud and of less cloud
-	float cover = CloudCoverAt(planet);
-	// The type of cloud changes at its own scale, on its own axes
-	vec2 typeAt = vec2(0.94f * q.x + 0.342f * q.y, -0.342f * q.x + 0.94f * q.y) / (CLOUD_WEATHER_TILE * 1.9f);
-	float typeNoise = texture2DLod(s_cloudWeather, typeAt + vec2(0.61f, 0.27f), 0.0f).g;
-	type = clamp(u_cloudCover.y + (typeNoise - 0.5f) * 0.3f + (planet.g - 0.5f) * 0.2f, 0.0f, 1.0f);
+	float usual = mix(mix(w.r, w.b, turn), mix(other.r, other.b, turn), 0.3f + 0.4f * region.z);
+	usual = clamp(0.5f + (usual - 0.5f) * 1.45f, 0.0f, 1.0f);
+	// Far from the island the size of the cells changes with the region. Only the sizes with a weight are read.
+	vec3 weights = CloudSizeWeights(mix(0.5f, region.z, cells.w));
+	float smallCells = 0.5f;
+	float largeCells = 0.5f;
+	if (weights.x > 0.0f)
+	{
+		vec2 s = vec2(0.799f * at.x + 0.602f * at.y, -0.602f * at.x + 0.799f * at.y) / (CLOUD_WEATHER_TILE * CLOUD_SMALL_CELLS);
+		vec4 n = texture2DLod(s_cloudWeather, s + vec2(0.47f, 0.19f), 0.0f);
+		smallCells = mix(n.r, n.b, turn);
+	}
+	if (weights.z > 0.0f)
+	{
+		vec2 l = vec2(0.423f * at.x - 0.906f * at.y, 0.906f * at.x + 0.423f * at.y) / (CLOUD_WEATHER_TILE * CLOUD_LARGE_CELLS);
+		vec4 n = texture2DLod(s_cloudWeather, l + vec2(0.71f, 0.53f), 0.0f);
+		largeCells = mix(n.r, n.b, turn);
+	}
+	float field = CloudMixPatterns(vec3(smallCells, usual, largeCells), weights);
+	// Streets: cells that are long along the wind. The wind of the island blows mostly from the west.
+	if (region.w > 0.0f)
+	{
+		vec2 along = vec2(0.94f, 0.342f);
+		vec2 s = vec2(dot(at, along) / CLOUD_STREET_STRETCH, dot(at, vec2(-along.y, along.x))) / (CLOUD_WEATHER_TILE * 0.6f);
+		vec4 n = texture2DLod(s_cloudWeather, s + vec2(0.83f, 0.36f), 0.0f);
+		field = CloudMixPatterns(vec3(field, mix(n.r, n.b, turn), 0.5f), vec3(1.0f - region.w, region.w, 0.0f));
+	}
+	field = mix(field, CloudOpenRing(field), cells.z);
+	// The edge goes over more of the field when a pixel holds more of a cell (cloud_regions::EdgeSoftness)
+	float soft = clamp(CLOUD_EDGE_PER_PIXEL * pixel / CloudCellWidth(region, cells), 0.0f, CLOUD_SOFTEST_EDGE);
+	float cover = region.x;
+	return smoothstep(1.0f - cover - 0.12f - soft, 1.0f - cover + 0.3f + soft, field) * smoothstep(0.0f, 0.05f, cover);
+}
+
+// The weather at a point across the land in its region (CloudRegionAt): the cloud's cover there (0 none), its type and
+// its rain
+float CloudWeatherIn(vec2 xz, vec4 region, vec4 cells, float pixel, out float type, out float rain)
+{
+	type = region.y;
 	rain = u_cloudCover.z;
 	// Each storm builds its own towers round its middle
 	for (int i = 0; i < 8; ++i)
@@ -246,13 +363,21 @@ float CloudWeatherAt(vec2 xz, out float type, out float rain)
 		float reach = 1.0f - smoothstep(storm.z, storm.w, length(xz - storm.xy));
 		float s = strength.x * reach;
 		// Round the thunderstorm cells the layer is broken and low, so that the towers and their bottoms show
-		cover = mix(cover, 0.75f, s * 0.55f);
+		region.x = mix(region.x, 0.75f, s * 0.55f);
 		type = mix(type, 0.65f, s);
 		rain = max(rain, strength.y * reach);
 	}
 	// The layer's own clouds stay lower than the thunderstorm cells, which go up to the tropopause
 	type = min(type, CLOUD_FIELD_TYPE);
-	return smoothstep(1.0f - cover - 0.12f, 1.0f - cover + 0.3f, field) * smoothstep(0.0f, 0.05f, cover);
+	return CloudCellsAt(xz, region, cells, pixel);
+}
+
+// The weather at a point across the land, in the point's own region (CloudWeatherIn)
+float CloudWeatherAt(vec2 xz, out float type, out float rain)
+{
+	vec4 cells;
+	vec4 region = CloudRegionAt(xz, cells);
+	return CloudWeatherIn(xz, region, cells, 0.0f, type, rain);
 }
 
 // Whether a thunderstorm cell is there now. A shader made with CLOUD_CELLS 0 has none of the cells' code: the
@@ -373,8 +498,8 @@ vec4 CumulonimbusAt(vec3 p, float altitude, bool plain, out float soft)
 // the edges; the light's rays leave them out. `h` is the height in the cloud for its light, 0 at its bottom and 1 at its
 // top, and `rain` its rain. `shaft` is how much rain falls at the point under a thunderstorm cell, 0 to 1. `tower` is
 // 1 where the cloud is a thunderstorm cell's, else 0. `layerShare` thins the layer's own clouds, and not the cells.
-float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, out float h, out float rain, out float shaft,
-                     out float tower)
+float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, float pixel, out float h, out float rain, out float shaft,
+                     out float tower, out vec4 region, out vec4 cells)
 {
 	float soft = 0.0f;
 	vec4 storm = vec4_splat(0.0f);
@@ -394,9 +519,13 @@ float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, out 
 	float type = 0.0f;
 	float fieldH = 0.0f;
 	float fieldRain = 0.0f;
-	if (altitude < u_cloudLayer.x + CLOUD_FIELD_DEPTH && altitude > u_cloudLayer.x - CLOUD_LOWEST_DROP)
+	bool inLayer = altitude < u_cloudLayer.x + CLOUD_FIELD_DEPTH && altitude > u_cloudLayer.x - CLOUD_LOWEST_DROP;
+	// The light's samples near the point take the same region (CloudDensityIn)
+	cells = vec4_splat(0.0f);
+	region = inLayer || storm.x > 0.0f ? CloudRegionAt(p.xz, cells) : vec4(0.0f, 0.5f, 0.5f, 0.0f);
+	if (inLayer)
 	{
-		cover = CloudWeatherAt(p.xz, type, fieldRain);
+		cover = CloudWeatherIn(p.xz, region, cells, pixel, type, fieldRain);
 		if (cover > 0.001f)
 		{
 			// The bottom of the cloud rises and falls a little; under rain it hangs lower, in soft lumps. The lumps are
@@ -436,6 +565,8 @@ float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, out 
 		// The threshold also rises with the height, so that the sides lean in to round tops and no cell has walls
 		float threshold = mix(0.85f, 0.25f, cover) + fieldH * 0.15f;
 		shape = clamp(CloudRemap(base * profile, threshold, 1.0f, 0.0f, 1.0f), 0.0f, 1.0f) * smoothstep(0.0f, 0.3f, cover) * layerShare;
+		// A far cloud is thin at its edges, so that its edge is soft and not a cut-out shape
+		shape *= detail ? 1.0f : cover;
 		shapeH = fieldH;
 		h = clamp((altitude - u_cloudLayer.x) / CloudLayerDepth(type), 0.0f, 1.0f);
 		rain = fieldRain;
@@ -484,14 +615,14 @@ float CloudDensityAt(vec3 p, float altitude, bool detail, float layerShare, out 
 // The density of the cloud at a point at a height over the curved world, with no small shapes, for the rays towards the
 // light and the map of the shadow. The layer's clouds have the shape of CloudDensityAt. In the thunderstorm cells only
 // the large turrets shade the light.
-float CloudDensity(vec3 p, float altitude, bool detail)
+float CloudDensityIn(vec3 p, float altitude, vec4 region, vec4 cells, float pixel)
 {
 	float density = 0.0f;
 	if (altitude < u_cloudLayer.x + CLOUD_FIELD_DEPTH && altitude > u_cloudLayer.x - CLOUD_LOWEST_DROP)
 	{
 		float type;
 		float rain;
-		float cover = CloudWeatherAt(p.xz, type, rain);
+		float cover = CloudWeatherIn(p.xz, region, cells, pixel, type, rain);
 		if (cover > 0.001f)
 		{
 			float lumps = texture2DLod(s_cloudWeather, (p.xz - u_cloudDrift.xy) * (2.2f / CLOUD_WEATHER_TILE), 0.0f).a - 0.5f;
@@ -528,6 +659,14 @@ float CloudDensity(vec3 p, float altitude, bool detail)
 		}
 	}
 	return density;
+}
+
+// The density of the cloud at a point, with the point's own region (CloudDensityIn), for the map of the shadow
+float CloudDensity(vec3 p, float altitude, bool detail)
+{
+	vec4 cells;
+	vec4 region = CloudRegionAt(p.xz, cells);
+	return CloudDensityIn(p, altitude, region, cells, 0.0f);
 }
 
 // The two roots of a t^2 + b t + c = 0, the smaller first; none (x > y) when there are none
@@ -693,8 +832,8 @@ vec2 CloudSpan(vec3 eye, vec3 dir, float limit)
 }
 
 // The optical depth from a point towards the light through the cloud, from a few samples that go farther apart. The
-// first sample is `firstStep` from the point.
-float CloudLightDepth(vec3 p, int samples, float firstStep)
+// first sample is `firstStep` from the point. The samples are near the point, so they take the point's region.
+float CloudLightDepth(vec3 p, int samples, float firstStep, vec4 region, vec4 cells, float pixel)
 {
 	vec3 towards = u_cloudLight.xyz;
 	float depth = 0.0f;
@@ -708,7 +847,7 @@ float CloudLightDepth(vec3 p, int samples, float firstStep)
 		}
 		along += step;
 		vec3 at = p + towards * (along - step * 0.5f);
-		depth += CloudDensity(at, CloudAltitude(at), false) * step;
+		depth += CloudDensityIn(at, CloudAltitude(at), region, cells, pixel) * step;
 		step *= 2.0f;
 	}
 	return depth * CLOUD_EXTINCTION;
@@ -857,8 +996,11 @@ vec4 MarchCloudVolume(vec3 eye, vec3 dir, float limit, float jitter, int steps, 
 		float rain;
 		float shaft;
 		float tower;
-		float density =
-		    CloudDensityAt(p, altitude, detail, far, h, rain, shaft, tower) * (1.0f - smoothstep(cellsFarthest * 0.7f, cellsFarthest, t));
+		vec4 region;
+		vec4 cells;
+		float pixel = t * CLOUD_PIXEL_ANGLE;
+		float density = CloudDensityAt(p, altitude, detail, far, pixel, h, rain, shaft, tower, region, cells) *
+		                (1.0f - smoothstep(cellsFarthest * 0.7f, cellsFarthest, t));
 		bool empty = density <= 0.0f && shaft <= 0.0f;
 		if (!empty && doubled)
 		{
@@ -882,7 +1024,8 @@ vec4 MarchCloudVolume(vec3 eye, vec3 dir, float limit, float jitter, int steps, 
 			float sigma = density * CLOUD_EXTINCTION;
 			// The sun's or the moon's light that comes through the cloud, scattered once and many times. A tower is
 			// kilometres wide, so fewer samples farther apart find its shade.
-			float lightDepth = tower > 0.5f ? CloudLightDepth(p, 4, 25.0f) : CloudLightDepth(p, lightSamples, 18.0f);
+			float lightDepth = tower > 0.5f ? CloudLightDepth(p, 4, 25.0f, region, cells, pixel)
+			                                : CloudLightDepth(p, lightSamples, 18.0f, region, cells, pixel);
 			vec3 direct = sun * CloudMultipleScattering(lightDepth, cosAngle) * CloudPowder(sigma * 40.0f, cosAngle) * 32.0f;
 			// The sky lights the tops more than the bottoms; the bottoms of rain clouds are dark
 			// The game darkens its sky and its haze in a storm, so the storm's clouds take more of the dim light they
@@ -901,7 +1044,7 @@ vec4 MarchCloudVolume(vec3 eye, vec3 dir, float limit, float jitter, int steps, 
 				for (int k = 1; k <= 3; ++k)
 				{
 					vec3 up = p + vec3(0.0f, float(k * k) * 45.0f, 0.0f);
-					above += CloudDensity(up, CloudAltitude(up), false) * float(k * 2 - 1) * 45.0f;
+					above += CloudDensityIn(up, CloudAltitude(up), region, cells, pixel) * float(k * 2 - 1) * 45.0f;
 				}
 				ambient *= 0.55f + 0.45f * exp(-above * CLOUD_EXTINCTION * 0.35f);
 			}
@@ -947,22 +1090,16 @@ vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
 	vec3 p = eye + dir * t;
 	float type;
 	float rain;
-	// A pixel far away covers many cells of cloud: there the sheet shows the mean cover of the wide weather, so the far
-	// layer has no grain
-	float footprint = t * 0.0012f;
-	float fine = 1.0f - smoothstep(60.0f, 600.0f, footprint);
-	// The large weather systems come from the planet's map, as the volume's clouds do. The cells cut out of the cover
-	// leave about this share of the sky under cloud.
-	float mean = CloudCoverAt(CloudPlanetAt(p)) - 0.05f;
-	// Under the map's texels, two octaves of smooth noise add the weather of some tens of kilometres. Each octave has
-	// its own size and turn, so that their tiles do not line up and no grid shows from space.
-	vec2 q = p.xz - u_cloudDrift.xy;
-	vec2 first = vec2(0.934f * q.x - 0.358f * q.y, 0.358f * q.x + 0.934f * q.y) / 157000.0f;
-	vec2 second = vec2(0.391f * q.x + 0.921f * q.y, -0.921f * q.x + 0.391f * q.y) / 61300.0f;
-	float detail = 0.6f * (texture2DLod(s_cloudWeather, first + vec2(0.19f, 0.47f), 0.0f).g - 0.5f) +
-	               0.4f * (texture2DLod(s_cloudWeather, second + vec2(0.71f, 0.05f), 0.0f).g - 0.5f);
-	mean = clamp(mean + detail * 0.3f * (1.0f - fine), 0.0f, 1.0f) * smoothstep(0.0f, 0.05f, u_cloudCover.x);
-	float cover = fine > 0.0f ? mix(mean, CloudWeatherAt(p.xz, type, rain), fine) : mean;
+	// The large weather systems and the regions come from the same map as the volume's clouds. The cells cut out of the
+	// cover leave about this share of the sky under cloud.
+	vec4 cells;
+	vec4 region = CloudRegionAt(p.xz, cells);
+	// A pixel far away covers many cells of cloud: there the sheet shows the mean cover of the region, so the far
+	// layer has no grain. Small cells go into the mean nearer than large cells.
+	float pixel = t * CLOUD_PIXEL_ANGLE;
+	float fine = 1.0f - smoothstep(0.25f, 0.9f, pixel / CloudCellWidth(region, cells));
+	float mean = clamp(region.x - 0.05f, 0.0f, 1.0f) * smoothstep(0.0f, 0.05f, u_cloudCover.x);
+	float cover = fine > 0.0f ? mix(mean, CloudWeatherIn(p.xz, region, cells, pixel, type, rain), fine) : mean;
 	// The anvils of the thunderstorm cells show over the layer
 	if (CloudHasCells())
 	{
@@ -970,9 +1107,11 @@ vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
 		cover = max(cover, CumulonimbusAt(p, CB_TOP - 600.0f, false, soft).x);
 	}
 	cover *= 1.0f - smoothstep(u_cloudLayer.z * 0.7f, u_cloudLayer.z, t);
-	float shown = smoothstep(0.05f, 0.6f, cover);
+	// Thick and tall clouds are brighter and hide more of the sea than thin flat sheets
+	float thick = smoothstep(0.15f, 0.8f, region.x) * mix(0.7f, 1.0f, region.y);
+	float shown = smoothstep(0.05f, 0.6f, cover) * mix(0.75f, 1.0f, thick);
 	vec3 sun = u_cloudLightColour.rgb * u_cloudLightColour.w;
-	vec3 colour = sun * (0.25f + 0.75f * clamp(u_cloudLight.y * 3.0f, 0.0f, 1.0f)) * 0.9f + sky * 0.6f;
+	vec3 colour = (sun * (0.25f + 0.75f * clamp(u_cloudLight.y * 3.0f, 0.0f, 1.0f)) * 0.9f + sky * 0.6f) * mix(0.85f, 1.05f, thick);
 	depth = t;
 	return vec4(colour * shown, 1.0f - shown);
 }

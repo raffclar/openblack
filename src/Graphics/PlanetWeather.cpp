@@ -62,6 +62,8 @@ const std::array<glm::mat3, 8>& OctaveTurns()
 
 /// Each octave of the weather's noise is this much as strong as the one before: the small weather has much contrast
 constexpr float k_Roughness = 0.62f;
+/// How much the octaves of some hundred kilometres change the cover
+constexpr float k_RegionContrast = 1.8f;
 
 /// Octaves of gradient noise at a point in space, from `frequency` up, each weaker by k_Roughness: about -0.5 to 0.5
 float Octaves(glm::vec3 point, float frequency, int octaves, uint32_t seed)
@@ -187,14 +189,19 @@ planet_weather::Weather planet_weather::WeatherAt(glm::vec3 direction)
 	const float slow = Octaves(bent, 1.6f, 3, k_Seed + 400);
 	const float fronts =
 	    std::exp(-slow * slow * 900.0f) * Smooth(0.0f, 0.3f, std::abs(Octaves(bent, 4.0f, 2, k_Seed + 500)) + 0.1f);
+	// The weather of some hundred kilometres: clear areas and groups of cloud between the large systems. The map's texels
+	// are about 20 km wide, so the smallest of these octaves is about 60 km wide.
+	const float regions = Octaves(bent, 24.0f, 3, k_Seed + 800);
 	const float latitude = LatitudeOf(d);
 	Weather weather;
 	weather.front = std::clamp(std::max(arms, fronts * 0.8f), 0.0f, 1.0f);
-	weather.cover = std::clamp(0.5f + 2.6f * noise + LatitudeBands(latitude) + 0.45f * weather.front, 0.0f, 1.0f);
+	weather.cover = std::clamp(
+	    0.5f + 2.6f * noise + k_RegionContrast * regions + LatitudeBands(latitude) + 0.45f * weather.front, 0.0f, 1.0f);
 	const float tropics = std::exp(-(latitude / 14.0f) * (latitude / 14.0f));
 	weather.type =
 	    std::clamp(0.5f + 0.8f * Octaves(bent, 5.0f, 3, k_Seed + 600) + 0.25f * tropics + 0.2f * weather.front, 0.0f, 1.0f);
-	weather.pattern = Smooth(-0.08f, 0.08f, Octaves(q, 45.0f, 2, k_Seed + 700));
+	// The size of the cells changes slowly from region to region, with no hard change
+	weather.pattern = std::clamp(0.5f + 2.2f * Octaves(q, 30.0f, 2, k_Seed + 700), 0.0f, 1.0f);
 	return weather;
 }
 
