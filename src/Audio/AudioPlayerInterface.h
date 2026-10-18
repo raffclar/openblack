@@ -63,5 +63,7 @@ public:
 	[[nodiscard]] virtual std::vector<BufferId> UnqueueProcessedBuffers(SourceId id) = 0;
 	/// Frames played into the oldest buffer queued on a source
 	[[nodiscard]] virtual uint32_t GetSampleOffset(SourceId id) const = 0;
+	/// The sound device works. It stops when the machine loses the device, and then the device plays no sound.
+	[[nodiscard]] virtual bool IsDeviceConnected() const { return true; }
 };
 } // namespace openblack::audio

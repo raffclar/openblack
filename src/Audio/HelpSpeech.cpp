@@ -88,17 +88,18 @@ std::optional<entt::id_type> HelpSpeechTable::FindSound(SpeechBank bank, uint32_
 	return found != sounds.end() ? std::optional(found->second) : std::nullopt;
 }
 
-void SpeechVoices::Add(SpeechVoice voice, SpeechSample sample, entt::entity emitter)
+void SpeechVoices::Add(SpeechVoice voice, SpeechSample sample, entt::entity emitter, SilentPlayback playback, bool deviceLost)
 {
-	if (emitter != entt::null)
+	if (emitter != entt::null || deviceLost)
 	{
-		_lines.push_back({.voice = voice, .sample = sample, .emitter = emitter});
+		_lines.push_back({.voice = voice, .sample = sample, .emitter = emitter, .playback = playback});
 	}
 }
 
-bool SpeechVoices::IsSaying(SpeechVoice voice, SpeechSample sample, const std::function<bool(entt::entity)>& isPlaying)
+bool SpeechVoices::IsSaying(SpeechVoice voice, SpeechSample sample,
+                            const std::function<bool(entt::entity, const SilentPlayback&)>& isPlaying)
 {
-	std::erase_if(_lines, [&isPlaying](const Line& line) { return !isPlaying(line.emitter); });
+	std::erase_if(_lines, [&isPlaying](const Line& line) { return !isPlaying(line.emitter, line.playback); });
 	return std::ranges::any_of(_lines,
 	                           [voice, sample](const Line& line) { return line.voice == voice && line.sample == sample; });
 }
