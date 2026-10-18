@@ -1382,3 +1382,12 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_save_game_room temple/test_save_game_room.cpp)
+openblack_setup_and_add_test(test_footpath_planning test_footpath_planning.cpp)
+openblack_setup_and_add_test(
+  test_oracle_footpath_planning oracle/test_oracle_footpath_planning.cpp
+)
+set_tests_properties(
+  test_oracle_footpath_planning
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

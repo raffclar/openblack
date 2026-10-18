@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -32,6 +33,12 @@ struct Footpath
 		glm::vec3 position;
 		/// Its place on the map, x and z in whole map units (a 65536th of a ten metre cell), as villagers walk to it
 		glm::ivec2 place {0, 0};
+		/// Laid by a plan made in play, and may be planned again when something is put down on the path
+		bool planned {false};
+		/// Under something put down on the path: walkers pass it by
+		bool hidden {false};
+		/// Where a path sent round something comes back to its old line: walkers pass it by
+		bool rejoin {false};
 	};
 
 	std::vector<Node> nodes;
@@ -59,6 +66,19 @@ struct FootpathWalk
 	/// The node it is walking to, none once the path has ended
 	std::optional<uint32_t> node;
 	entt::entity then {entt::null};
+};
+
+/// A footpath being laid between two things over several game turns: the creatures' route search finds its way a few
+/// steps a turn, and the path is laid once the way is found. The path keeps only its two ends until then.
+struct FootpathFinder
+{
+	/// The search and what it goes round, kept from turn to turn
+	struct Plan;
+
+	entt::entity from {entt::null};
+	entt::entity to {entt::null};
+	entt::entity footpath {entt::null};
+	std::shared_ptr<Plan> plan;
 };
 
 } // namespace openblack::ecs::components

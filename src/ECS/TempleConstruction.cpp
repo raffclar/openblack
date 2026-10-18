@@ -50,6 +50,7 @@
 #include "ECS/Statistics.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerBuild.h"
 #include "ECS/Systems/Implementations/VillagerFootpath.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -331,6 +332,11 @@ void Finish(entt::entity building)
 				player_statistics::CountBuilt(registry, *owner, info.abodeType);
 			}
 		}
+		// A finished building of a town gets its footpath from the town's storage pit
+		if (registry.AllOf<Abode>(building) && TownOf(building).has_value() && Locator::footpathSystem::has_value())
+		{
+			Locator::footpathSystem::value().BuildingWorking(building);
+		}
 		// The people about a new building of the town's own come to dance round it
 		if (const auto* abode = registry.TryGet<const Abode>(building);
 		    abode != nullptr && abode->info != AbodeInfo::None && TownOf(building).has_value() &&
@@ -365,6 +371,11 @@ void Repaired(entt::entity building)
 	if (!TownOf(building).has_value())
 	{
 		return;
+	}
+	// A repaired building of a town gets another footpath from the town's storage pit, as when it was first built
+	if (registry.AllOf<Abode>(building) && Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().BuildingWorking(building);
 	}
 	// A repaired graveyard counts a burial and takes its town back if the town has none
 	graveyards::StartsWorking(building);

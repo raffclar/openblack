@@ -24,8 +24,8 @@ namespace openblack::ecs::systems
 class DanceSystem final: public DanceSystemInterface
 {
 public:
-	entt::entity Create(DanceInfo type, const glm::vec3& place, entt::entity owner, uint32_t duration,
-	                    bool madeByScript) override;
+	entt::entity Create(DanceInfo type, const glm::vec3& place, entt::entity owner, uint32_t duration, bool madeByScript,
+	                    entt::entity town) override;
 	void Destroy(entt::entity dance) override;
 	void ProcessTurn() override;
 	[[nodiscard]] const std::array<dance_shapes::Shape, dance_shapes::k_ShapeCount>& Shapes() override;
