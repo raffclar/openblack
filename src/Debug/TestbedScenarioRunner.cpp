@@ -1875,6 +1875,16 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptControlled>(*object) ? "still controlled"
 		                                                                                            : "released";
 	}
+	case Kind::FinishBuilding:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value())
+		{
+			return "nothing to finish";
+		}
+		ecs::construction::SetBuilt(*object, 1.0f);
+		return "finished";
+	}
 	case Kind::RemoveObject:
 	{
 		const auto object = ObjectAt(command.object);
@@ -2474,7 +2484,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
-	    command.kind == Kind::ChargeIconWithSeedHeld)
+	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3094,6 +3104,7 @@ void Runner::Give(const Command& command)
 	case Kind::FillSiteIcons:
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::RemoveObject:
+	case Kind::FinishBuilding:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:

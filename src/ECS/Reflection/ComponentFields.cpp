@@ -1253,6 +1253,11 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::FootpathWalk::towardsStart>("towardsStart")
 	    .Field<&components::FootpathWalk::node>("node")
 	    .Field<&components::FootpathWalk::then>("then");
+	Reflect<components::FootpathFinder>(context)
+	    .Field<&components::FootpathFinder::from>("from")
+	    .Field<&components::FootpathFinder::to>("to")
+	    .Field<&components::FootpathFinder::footpath>("footpath")
+	    .Field<&components::FootpathFinder::plan>("plan");
 	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::wood>(
 	    "wood");
 	Reflect<components::Forest>(context).Field<&components::Forest::type>("type");
@@ -3100,7 +3105,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::DrawnIntoVortex::Flight::rotation>("rotation");
 	Reflect<openblack::ecs::components::Footpath::Node>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Footpath::Node::position>("position")
-	    .Field<&openblack::ecs::components::Footpath::Node::place>("place");
+	    .Field<&openblack::ecs::components::Footpath::Node::place>("place")
+	    .Field<&openblack::ecs::components::Footpath::Node::planned>("planned")
+	    .Field<&openblack::ecs::components::Footpath::Node::hidden>("hidden")
+	    .Field<&openblack::ecs::components::Footpath::Node::marker>("marker");
 	Reflect<openblack::ecs::components::HandGrab::Throw>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HandGrab::Throw::velocity>("velocity")
 	    .Field<&openblack::ecs::components::HandGrab::Throw::springVelocity>("springVelocity")

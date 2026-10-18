@@ -880,6 +880,9 @@ struct Command
 		/// a part of its charge (amount, 0 to 1), and the icon charges again for the hand, as when the hand takes a seed
 		/// of an icon that charges. The battery of the site gets the full cost of the miracle. Needs no creature.
 		ChargeIconWithSeedHeld,
+		/// The scenario's object, a building going up, is finished at once, as when its builders put on the last of
+		/// it. Needs no creature.
+		FinishBuilding,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

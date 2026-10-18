@@ -32,6 +32,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -141,7 +142,7 @@ bool Available(entt::entity thing)
 } // namespace
 
 entt::entity DanceSystem::Create(DanceInfo type, const glm::vec3& place, entt::entity owner, uint32_t duration,
-                                 bool madeByScript)
+                                 bool madeByScript, entt::entity town)
 {
 	if (!Locator::infoConstants::has_value())
 	{
@@ -161,15 +162,19 @@ entt::entity DanceSystem::Create(DanceInfo type, const glm::vec3& place, entt::e
 	{
 		return entt::null;
 	}
-	// TODO(opening): a town's dance makes footpaths to it from the town's storage pit
-	return dances::Create(Locator::entitiesRegistry::value(),
-	                      {.type = type,
-	                       .autostart = info.startsAutomatically != 0,
-	                       .place = map_coords::FromMetres(glm::xz(place)),
-	                       .owner = owner,
-	                       .duration = duration,
-	                       .madeByScript = madeByScript},
-	                      std::move(file));
+	const auto dance = dances::Create(Locator::entitiesRegistry::value(),
+	                                  {.type = type,
+	                                   .autostart = info.startsAutomatically != 0,
+	                                   .place = map_coords::FromMetres(glm::xz(place)),
+	                                   .owner = owner,
+	                                   .duration = duration,
+	                                   .madeByScript = madeByScript},
+	                                  std::move(file));
+	if (dance != entt::null && Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().DanceMade(dance, town);
+	}
+	return dance;
 }
 
 void DanceSystem::Destroy(entt::entity dance)

@@ -44,6 +44,7 @@
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/WorshipSites.h"
 #include "ECS/WorshipperRules.h"
@@ -735,7 +736,7 @@ void WorshipSiteSystem::AddTown(entt::entity site, entt::entity town)
 		}
 	}
 	// A town with a storage pit, built or planned, is linked to the site by a footpath from its pit to the site's gate.
-	// The site keeps the link; finding the footpath's way between them isn't done yet, so it holds none.
+	// The site keeps the link. Unless one of its paths already comes from the pit, the path is found over the next turns.
 	const auto& abodes = registry.Get<const Town>(town).abodes;
 	const bool hasPit = std::ranges::any_of(
 	    abodes, [&registry](entt::entity abode) { return registry.Valid(abode) && registry.AllOf<StoragePit>(abode); });
@@ -746,6 +747,10 @@ void WorshipSiteSystem::AddTown(entt::entity site, entt::entity town)
 		                    _world->SitePoint(ws::k_PlacePoint).value_or(glm::vec3(0.0f)));
 		registry.Assign<FootpathLink>(site, glm::vec3(gate.x, _world->LandHeightAt(gate), gate.y),
 		                              std::vector<Footpath::Id> {});
+	}
+	if (hasPit && Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().TownJoinedSite(site, town);
 	}
 	auto& towns = registry.Get<WorshipSite>(site).towns;
 	towns.insert(towns.begin(), town);

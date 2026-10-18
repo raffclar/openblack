@@ -28,9 +28,10 @@ public:
 
 	/// A dance of a row of the dances' table about a place, for a thing, dancing `duration` turns at a time (none for
 	/// no end); none when the row is out of the table or its file can't be read. Worship sites', towns' and scripts'
-	/// dances are all made here.
+	/// dances are all made here. A dance that is not a worship site's or a temple's gets a footpath from the storage pit
+	/// of the town given, or of the town nearest it when none is given.
 	virtual entt::entity Create(DanceInfo type, const glm::vec3& place, entt::entity owner, uint32_t duration,
-	                            bool madeByScript) = 0;
+	                            bool madeByScript, entt::entity town) = 0;
 	/// A dance goes, its dancers going back to deciding what to do
 	virtual void Destroy(entt::entity dance) = 0;
 	/// Each turn, after the players and before the living: each dance's turn

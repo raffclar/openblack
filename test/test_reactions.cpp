@@ -106,7 +106,7 @@ public:
 class OneGroupDances final: public ecs::systems::DanceSystemInterface
 {
 public:
-	entt::entity Create(DanceInfo type, const glm::vec3&, entt::entity owner, uint32_t, bool) override
+	entt::entity Create(DanceInfo type, const glm::vec3&, entt::entity owner, uint32_t, bool, entt::entity) override
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto dance = registry.Create();

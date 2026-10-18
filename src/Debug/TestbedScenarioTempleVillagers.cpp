@@ -103,6 +103,29 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .debugWindow = debug::gui::k_TempleVillagersWindow,
 	});
 	all.push_back({
+	    .id = "footpaths.town_joins_site",
+	    .name = "A town that joins its worship site gets a footpath to it",
+	    .facet = Facet::Movement,
+	    .description = "The Celtic town of the temple scenarios with a built storage pit north of it. The town's worship "
+	                   "site is put up built, no one is sent to worship, and the Footpaths debug lines show the footpaths.",
+	    .expected = "No footpath shows at first. A few turns after the site is put up, a footpath from the pit's door to "
+	                "the site's gate shows. It goes round the town's buildings and the temple's spokes. Its ends are moved "
+	                "out of the pit and the site.",
+	    .environment = {.dispenserGrid = false, .drawFootpaths = true},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2(30.0f), k_Centre + glm::vec2(20.0f, 50.0f)},
+	                .distance = 0.6f},
+	    .objects =
+	        [] {
+		        auto objects = Town();
+		        objects.push_back({.type = AbodeInfo::CelticStoragePit, .offset = k_Centre + glm::vec2(0.0f, 40.0f)});
+		        return objects;
+	        }(),
+	    .temples = {{.offset = k_Temple}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
+	all.push_back({
 	    .id = "debug.temple_villagers_inside",
 	    .name = "Villagers inside the temple",
 	    .facet = Facet::Movement,

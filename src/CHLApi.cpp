@@ -3491,8 +3491,8 @@ void DanceCreate() // 054 DANCE_CREATE
 	const auto type = Pop().intVal;
 	const auto centre = PopObject();
 	// What it is danced about may be nothing
-	const auto dance = Locator::danceSystem::value().Create(static_cast<DanceInfo>(type), position, centre,
-	                                                        static_cast<uint32_t>(map_coords::FtoL(duration)), true);
+	const auto dance = Locator::danceSystem::value().Create(
+	    static_cast<DanceInfo>(type), position, centre, static_cast<uint32_t>(map_coords::FtoL(duration)), true, entt::null);
 	if (dance == entt::null)
 	{
 		ScriptMessage("Dance not created");
