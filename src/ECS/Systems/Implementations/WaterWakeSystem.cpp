@@ -125,9 +125,9 @@ float MassOf(entt::entity entity, glm::vec3 low, glm::vec3 high)
 }
 } // namespace
 
-void WaterWakeSystem::Update(std::chrono::milliseconds frameRealTime)
+void WaterWakeSystem::Update(std::chrono::milliseconds frameGameTime)
 {
-	const float frameSeconds = std::chrono::duration<float>(frameRealTime).count();
+	const float frameSeconds = std::chrono::duration<float>(frameGameTime).count();
 	_movers.clear();
 	_rings.clear();
 	_hulls.clear();
@@ -149,7 +149,7 @@ void WaterWakeSystem::Update(std::chrono::milliseconds frameRealTime)
 	const auto& camera = Locator::camera::value();
 	_centre = wake::FieldCentre(camera.GetOrigin(), camera.GetFocus(), k_CentreReach);
 	const float seaLevel = underwater.GetSeaLevel();
-	const float seconds = underwater.GetSeconds();
+	const float seconds = underwater.GetSeaSeconds();
 	const bool off = !underwater.IsEffectOn(graphics::underwater::Effect::WakeField);
 
 	// The things that can be in the water near the field: the bodies in the physics, the creatures, the villagers and
@@ -285,7 +285,7 @@ void WaterWakeSystem::Tap(glm::vec3 position, float strength, float calm)
 		return;
 	}
 	namespace tap = graphics::underwater::tap;
-	const float seconds = Locator::underwaterSystem::value().GetSeconds();
+	const float seconds = Locator::underwaterSystem::value().GetSeaSeconds();
 	// Each tap has numbers of its own, from its count and its place
 	++_tapCount;
 	const auto n = static_cast<float>(_tapCount);

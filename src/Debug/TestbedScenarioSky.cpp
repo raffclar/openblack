@@ -39,6 +39,46 @@ std::vector<ObjectSetup> TreesToTheEast()
 	    {.type = TreeInfo::Conifer, .offset = {90.0f, 30.0f}},
 	};
 }
+
+/// EXPERIMENT (not for merge): the player's mouse drags the land with the left button: the pointer goes to a point (a
+/// share of the screen from its top left), the button goes down, the mouse moves by a share of the screen over some
+/// seconds, and the button comes up. The drag starts some seconds after the command before it.
+std::vector<Command> HandDrag(glm::vec2 from, glm::vec2 by, float seconds, float delay)
+{
+	using Kind = Command::Kind;
+	constexpr size_t k_LeftButton = 1;
+	constexpr float k_Settle = 0.2f;
+	return {
+	    {.kind = Kind::PointerTo, .delaySeconds = delay, .point = from},
+	    {.kind = Kind::PointerPress, .delaySeconds = k_Settle, .value = k_LeftButton},
+	    {.kind = Kind::PointerSweep, .delaySeconds = k_Settle, .point = by, .amount = seconds},
+	    {.kind = Kind::PointerRelease, .delaySeconds = seconds + k_Settle, .value = k_LeftButton},
+	};
+}
+
+/// EXPERIMENT (not for merge): the drags and the wheel of the camera's way from space down to the island. The hand
+/// drags the planet down the screen four times, from the middle of the screen. Then the wheel turns away from the
+/// player one notch at a time.
+std::vector<Command> OrbitPath()
+{
+	constexpr int k_Drags = 4;
+	// About 90 pixels of a screen 1024 high
+	constexpr glm::vec2 k_DragBy {0.0f, 0.088f};
+	constexpr int k_Notches = 26;
+	constexpr float k_NotchSeconds = 0.5f;
+	std::vector<Command> path;
+	for (int drag = 0; drag < k_Drags; ++drag)
+	{
+		const auto commands = HandDrag({0.5f, 0.45f}, k_DragBy, 0.6f, drag == 0 ? 2.0f : 0.5f);
+		path.insert(path.end(), commands.begin(), commands.end());
+	}
+	for (int notch = 0; notch < k_Notches; ++notch)
+	{
+		path.push_back(
+		    {.kind = Command::Kind::WheelTurn, .delaySeconds = notch == 0 ? 1.0f : k_NotchSeconds, .value = 1, .ctrl = false});
+	}
+	return path;
+}
 } // namespace
 
 CameraPlacement testbed_scenarios::Climbing(const CameraPlacement& start, const Climb& climb, float seaLevel, float elapsed)
@@ -257,6 +297,24 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .objects = TreesToTheEast(),
 	});
 
+	// EXPERIMENT (not for merge): the pools of the jellyfish's light on the deep sea bed
+	all.push_back({
+	    .id = "sea.jellyfish_bed",
+	    .name = "Pools of jellyfish light on the deep sea bed at night",
+	    .facet = Facet::Sky,
+	    .description = "Midnight, the clock stopped, under a clear sky. The camera is 35 under the sea in the testbed's "
+	                   "deep sea in the north-east corner of the map, about 5 units over the sea bed, and looks down at "
+	                   "the bed under a jellyfish 4 units away.",
+	    .expected = "A dark sea bed with soft blue-green pools of light under the jellyfish near the camera. Each pool is a "
+	                "few units across, brightest under its jellyfish, and fades smoothly at its edge. It pulses with the "
+	                "beat of the bell and moves as the jellyfish rises. A jellyfish that rises far up leaves only a faint "
+	                "pool.",
+	    .environment = {.hour = 0.0f, .clockRuns = false, .dispenserGrid = false, .cloudCover = static_cast<uint8_t>(1)},
+	    .framing =
+	        {.shot = Shot::Placed, .eye = {1903.0f, -35.0f, 1904.0f}, .look = {1908.92f, -40.0f, 1910.65f}, .hold = true},
+	    .objects = TreesToTheEast(),
+	});
+
 	all.push_back({
 	    .id = "sky.ozone_twilight",
 	    .name = "The blue hour",
@@ -280,10 +338,10 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .name = "The hand turns the planet from space",
 	    .facet = Facet::Sky,
 	    .description = "Noon with the clock stopped. The camera is 15000 km over the sea a little to the south west of "
-	                   "the island and looks down at the planet's middle. Drag the planet with the hand: it turns as a "
-	                   "globe under the hand. Drag it down the screen four times (inspector input.path, from the middle "
-	                   "of the screen 90 pixels down) to go north over the pole. Then turn the wheel towards the screen, "
-	                   "one notch at a time, to go down to the island.",
+	                   "the island and looks down at the planet's middle. The scenario plays the hand by itself. After "
+	                   "2 seconds the hand drags the planet down the screen four times, from the middle of the screen "
+	                   "about 90 pixels down, to go north over the pole. Then the wheel turns towards the screen one "
+	                   "notch each half second, 26 notches, to go down to the island.",
 	    .expected = "The planet stays in the middle of the screen. The point that the hand grips stays under the cursor, "
 	                "and the camera goes round the planet past the pole with no flip and no roll. Each wheel notch takes "
 	                "the camera a fifth nearer to the sea. From 400 km to 200 km up the view turns from the planet's middle "
@@ -292,6 +350,7 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {-300000.0f, 1.5e7f, -300000.0f}, .look = {0.0f, 0.0f, 0.0f}},
 	    .objects = TreesToTheEast(),
+	    .commands = OrbitPath(),
 	});
 	// EXPERIMENT (not for merge): the planet from far round it, where the eye is under the sea's level
 	all.push_back({

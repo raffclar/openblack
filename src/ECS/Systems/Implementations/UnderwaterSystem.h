@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "ECS/Systems/UnderwaterSystemInterface.h"
+#include "Graphics/WaterClock.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -49,12 +50,13 @@ public:
 		_tour = tour;
 		_tourSeconds = 0.0f;
 	}
-	void Update(std::chrono::milliseconds frameRealTime) override;
+	void Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) override;
 	[[nodiscard]] float GetEyeDepth() const override { return _eyeDepth; }
 	[[nodiscard]] bool IsEyeUnder() const override { return _eyeUnder; }
 	[[nodiscard]] float GetSeaLevel() const override { return _seaLevel; }
 	[[nodiscard]] const graphics::underwater::WaveState& GetWaves() const override { return _waves; }
-	[[nodiscard]] float GetSeconds() const override { return _seconds; }
+	[[nodiscard]] float GetSeconds() const override { return _skyClock.GetSeconds(); }
+	[[nodiscard]] float GetSeaSeconds() const override { return _seaClock.GetSeconds(); }
 	[[nodiscard]] std::span<const glm::vec3> GetFloaters() const override { return _floaters; }
 	[[nodiscard]] glm::mat4 FloatOnWaves(const glm::mat4& model) const override;
 	void StartDebugStorm() override;
@@ -80,9 +82,9 @@ private:
 	/// EXPERIMENT (not for merge): pockets of fog over the land's still water and swamps, made again for each land
 	static void PlaceFogPockets();
 	/// The tide, the storm and the waves, and the things that float
-	void UpdateSea(float frameSeconds);
+	void UpdateSea(float frameSeconds, float realSeconds);
 	/// The rogue wave and the lightning on the sea. `seaDistance` gives the distance from the coast at a point.
-	void UpdateStorm(float frameSeconds, const std::function<float(glm::vec2)>& seaDistance);
+	void UpdateStorm(float frameSeconds, float realSeconds, const std::function<float(glm::vec2)>& seaDistance);
 	/// Whether a thing whose physics body is drawn here floats on the sea
 	[[nodiscard]] bool Floats(const glm::vec3& origin) const;
 
@@ -92,7 +94,9 @@ private:
 	/// How much the land's sounds and the music are turned down now, eased towards its target
 	float _duck {1.0f};
 	float _seaLevel {0.0f};
-	float _seconds {0.0f};
+	/// The clock of the sky's effects (real time) and the clock of the sea (game time)
+	graphics::underwater::WaterClock _skyClock;
+	graphics::underwater::WaterClock _seaClock;
 	float _storm {0.0f};
 	graphics::underwater::Quality _quality {graphics::underwater::Quality::High};
 	/// The shore wave's phase, which grows each frame (see underwater::AdvanceShorePhase)

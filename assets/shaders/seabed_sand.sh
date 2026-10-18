@@ -259,8 +259,8 @@ vec3 SeabedLit(vec3 albedo, vec3 world, vec3 landLight, vec3 normal)
 	vec3 light = u_uwLightColour.rgb * UwTransmittance(depth * 0.6f / max(towards.y, 0.2f));
 	// No caustics where the hills' shadow lies on the water above
 	vec3 sun = light * facing * (0.6f + 1.0f * caustics * SeabedSunLight(surface));
-	// The light of the jellyfish near the ground
-	vec3 jellyfish = JellyLightAt(world, normal, 0.0f, -1.0f);
+	// The light of the jellyfish near the ground, and the soft pools of their light that the water scatters
+	vec3 jellyfish = JellyLightAt(world, normal, 0.0f, -1.0f) + JellyPoolAt(world, normal);
 	return albedo * (landLight * (0.6f + 0.4f * facing) + sun + jellyfish);
 }
 

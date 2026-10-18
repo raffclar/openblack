@@ -334,7 +334,7 @@ void AtmosAudio::UpdateCliffCrashes()
 		return;
 	}
 	const auto& system = Locator::underwaterSystem::value();
-	const float seconds = system.GetSeconds();
+	const float seconds = system.GetSeaSeconds();
 	const bool moved = seconds != _crashSeconds;
 	_crashSeconds = seconds;
 	const auto& seabed = system.GetSeabed();

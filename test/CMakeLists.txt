@@ -1102,3 +1102,5 @@ openblack_setup_and_add_test(test_planet_navigation camera/test_planet_navigatio
 openblack_setup_and_add_test(test_cloud_regions graphics/test_cloud_regions.cpp)
 # EXPERIMENT (not for merge): the stars of the night sky
 openblack_setup_and_add_test(test_stars graphics/test_stars.cpp)
+# EXPERIMENT (not for merge): the clock of the sea
+openblack_setup_and_add_test(test_water_clock graphics/test_water_clock.cpp)

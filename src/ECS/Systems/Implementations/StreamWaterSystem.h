@@ -24,7 +24,7 @@ namespace openblack::ecs::systems
 class StreamWaterSystem final: public StreamWaterSystemInterface
 {
 public:
-	void Update(std::chrono::milliseconds frameRealTime) override;
+	void Update(std::chrono::milliseconds frameGameTime) override;
 	[[nodiscard]] const graphics::underwater::streams::Network& GetNetwork() const override { return _network; }
 	[[nodiscard]] const graphics::underwater::streams::FlowMap& GetFlowMap() const override { return _flowMap; }
 	[[nodiscard]] uint32_t GetRevision() const override { return _revision; }

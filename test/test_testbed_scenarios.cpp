@@ -834,3 +834,53 @@ TEST(TestbedScenarios, AClimbGoesUpToItsTopAndKeepsItsLook)
 		EXPECT_EQ(placement.focus, start.focus);
 	}
 }
+
+// EXPERIMENT (not for merge): the scenario plays the drags and the wheel of the camera's way from space by itself
+TEST(TestbedScenarios, TheOrbitScenarioPlaysItsDragsAndWheel)
+{
+	using Kind = openblack::testbed_scenarios::Command::Kind;
+	const auto* orbit = Find("space.orbit_navigation");
+	ASSERT_NE(orbit, nullptr);
+	int presses = 0;
+	int releases = 0;
+	int sweepsDown = 0;
+	int notchesIn = 0;
+	bool held = false;
+	for (const auto& command : orbit->commands)
+	{
+		switch (command.kind)
+		{
+		case Kind::PointerPress:
+			EXPECT_FALSE(held);
+			held = true;
+			++presses;
+			break;
+		case Kind::PointerRelease:
+			EXPECT_TRUE(held);
+			held = false;
+			++releases;
+			break;
+		case Kind::PointerSweep:
+			// Each sweep is a drag: the button is down, and it ends before the button comes up
+			EXPECT_TRUE(held);
+			EXPECT_GT(command.point.y, 0.0f);
+			EXPECT_GT(command.amount, 0.0f);
+			++sweepsDown;
+			break;
+		case Kind::WheelTurn:
+			// The wheel turns only after the drags, towards the screen
+			EXPECT_FALSE(held);
+			EXPECT_FALSE(command.ctrl);
+			notchesIn += static_cast<int>(command.value);
+			break;
+		default:
+			break;
+		}
+		EXPECT_TRUE(openblack::testbed_scenarios::IsPointerCommand(command.kind));
+	}
+	EXPECT_EQ(presses, 4);
+	EXPECT_EQ(releases, 4);
+	EXPECT_EQ(sweepsDown, 4);
+	// Each notch takes the camera a fifth nearer: 26 notches take it from 15000 km to under 200 km
+	EXPECT_GE(notchesIn, 20);
+}

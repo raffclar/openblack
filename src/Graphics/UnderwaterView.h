@@ -217,10 +217,12 @@ struct UnderwaterUniforms
 	bool eyeNearOrUnder {false};
 	/// The jellyfish round the eye this frame, three vectors each (see underwater::jellyfish::InstanceData)
 	std::vector<glm::vec4> jellyfish;
-	/// The lights of the nearest jellyfish: two vectors each, xyz where it is, then rgb its colour times how bright
+	/// The lights of the nearest jellyfish: two vectors each, xyz where it is and w how much its bell squeezes, then rgb
+	/// its colour times how bright
 	std::array<glm::vec4, 2 * underwater::jellyfish::k_Lights> jellyLights {};
 	/// x how many lights there are, y the highest point that their light comes to, z 1 / the square of the radius of
-	/// their light (underwater::jellyfish::k_LightRadius)
+	/// their light (underwater::jellyfish::k_LightRadius), w the highest point that their pools of light on the sea bed
+	/// come to
 	glm::vec4 jellyLightInfo {0.0f};
 };
 

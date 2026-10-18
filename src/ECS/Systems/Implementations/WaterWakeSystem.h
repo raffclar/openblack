@@ -32,7 +32,7 @@ namespace openblack::ecs::systems
 class WaterWakeSystem final: public WaterWakeSystemInterface
 {
 public:
-	void Update(std::chrono::milliseconds frameRealTime) override;
+	void Update(std::chrono::milliseconds frameGameTime) override;
 	[[nodiscard]] Frame GetFrame() const override;
 	void DropDebugThings() override;
 	void DropDebugRow(float height) override;
