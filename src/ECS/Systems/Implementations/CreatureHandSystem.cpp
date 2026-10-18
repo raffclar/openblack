@@ -229,6 +229,8 @@ std::optional<creature_hand::Holdable> HoldableOf(const ecs::Registry& registry,
 	    .asleep = mind != nullptr && creature_mind::IsAsleep(mind->idle),
 	    .frozen = spells != nullptr && spells->spells.IsActive(creature_spells::Spell::Freeze),
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
+	    .fainting = mind != nullptr && mind->idle.activity == creature_mind::Activity::Faint &&
+	                creature_mind::IsUnconscious(mind->idle),
 	};
 }
 } // namespace
