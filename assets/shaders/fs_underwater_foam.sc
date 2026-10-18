@@ -78,6 +78,8 @@ void main()
 	// A little more than half of the foam that the field made at first; none on a pond
 	float made = (5.0f * breaking + 1.0f * edge + 3.0f * band + 6.0f * push + 3.0f * caps) * wet * 0.55f *
 	             (1.0f - UwShorePond(shore));
+	// The part of the new foam that is shore foam: the breaking face and the edge of the run up the beach, not the cliffs
+	float madeAtShore = (5.0f * breaking + 1.0f * edge) * (1.0f - cliff) * wet * 0.55f * (1.0f - UwShorePond(shore));
 	float air = 3.0f * breaking + 1.0f * band + 5.0f * push + 2.0f * caps;
 
 	// The foam decays: slowly at the cliffs and in the shallows, sooner on the open sea, and soon on dry sand
@@ -90,5 +92,7 @@ void main()
 	// The age of the foam is the age of the foam that was there, made younger by the new foam
 	float age = min((before.y + dt) * thick / max(thick + added, 1e-4f), 60.0f);
 	float held = min(before.z * exp(-dt / 1.2f) + air * dt, min(total, 2.0f));
-	gl_FragColor = vec4(total, age, held, 1.0f);
+	// What share of the foam is shore foam (w): the old share carries on, the new shore foam adds to it
+	float shoreShare = clamp((before.w * thick + madeAtShore * dt) / max(thick + added, 1e-4f), 0.0f, 1.0f);
+	gl_FragColor = vec4(total, age, held, shoreShare);
 }

@@ -81,6 +81,23 @@ private:
 	uint8_t _target {0};
 };
 
+/// How much of its first height the shore foam keeps (the foam where the waves break and run up the beach), 1 for the
+/// full height. The foam of the crests, the white horses and the cliffs keeps its full height. Change it together with
+/// UW_SHORE_FOAM_HEIGHT_SCALE in underwater_foam_shade.sh.
+inline constexpr float k_ShoreFoamHeightScale = 2.0f / 3.0f;
+
+/// The height in units that foam stands on the water for a thickness of 1, before any scale
+inline constexpr float k_FoamFullHeight = 0.45f;
+
+/// How high in units foam stands on the water where it has this thickness (0 or more). `shoreShare` is the part of the
+/// foam that is shore foam, 0 to 1.
+[[nodiscard]] constexpr float FoamStandHeight(float thickness, float shoreShare)
+{
+	const float share = shoreShare < 0.0f ? 0.0f : (shoreShare > 1.0f ? 1.0f : shoreShare);
+	const float scale = 1.0f + (k_ShoreFoamHeightScale - 1.0f) * share;
+	return (thickness > 0.0f ? thickness : 0.0f) * k_FoamFullHeight * scale;
+}
+
 /// The run of the waves up the beach in a calm sea, in height (see WaveState)
 inline constexpr float k_CalmSwash = 0.25f;
 /// The most that the waves stir the sea bed

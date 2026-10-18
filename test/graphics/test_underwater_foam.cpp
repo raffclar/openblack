@@ -110,6 +110,21 @@ TEST(UnderwaterFoam, ANewLandOrAJumpStartsTheFieldAgain)
 	EXPECT_TRUE(relanded->clear);
 }
 
+TEST(UnderwaterFoam, ShoreFoamStandsAtTwoThirdsOfItsFirstHeight)
+{
+	EXPECT_NEAR(underwater::FoamStandHeight(1.0f, 1.0f), 0.45f * 2.0f / 3.0f, 1e-6f);
+	EXPECT_NEAR(underwater::FoamStandHeight(1.5f, 1.0f), 1.5f * 0.3f, 1e-6f);
+	EXPECT_NEAR(underwater::FoamStandHeight(1.0f, 0.5f), 0.45f * 5.0f / 6.0f, 1e-6f);
+	EXPECT_FLOAT_EQ(underwater::FoamStandHeight(0.0f, 1.0f), 0.0f);
+	EXPECT_FLOAT_EQ(underwater::FoamStandHeight(-1.0f, 1.0f), 0.0f);
+}
+
+TEST(UnderwaterFoam, OtherFoamKeepsItsFullHeight)
+{
+	EXPECT_FLOAT_EQ(underwater::FoamStandHeight(1.0f, 0.0f), 0.45f);
+	EXPECT_FLOAT_EQ(underwater::FoamStandHeight(2.0f, 0.0f), 0.9f);
+}
+
 TEST(UnderwaterSediment, StormsAndBigWavesStirMoreSilt)
 {
 	const float calm = underwater::SedimentStir(underwater::k_CalmSwash, 0.0f);
