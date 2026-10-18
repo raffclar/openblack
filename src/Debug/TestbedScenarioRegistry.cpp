@@ -2275,7 +2275,8 @@ void AddMovement(std::vector<Scenario>& all)
 	                   "side, as the game's turn stages tell it. Then it plays the action again and turns back.",
 	    .expected = "It does not turn while it plays the action. The action plays to its end. Then it turns on the spot "
 	                "to face the point.",
-	    .framing = {.shot = Shot::Overview, .include = {{60.0f, 40.0f}, {-60.0f, -40.0f}}},
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
 	    .commands = {Play(Kind::PlayAction, 0, animations::k_Impress, 0.5f, false),
 	                 Go(Kind::TurnToFaceWhenStill, 0, {60.0f, 0.0f}, 0.3f, false),
@@ -2291,7 +2292,8 @@ void AddMovement(std::vector<Scenario>& all)
 	    .description = "A tiger walks towards a far point. On its way the player casts the freeze spell on it.",
 	    .expected = "It does not stop dead. It walks on a short distance and slows to a stand, while the ice grows on it. "
 	                "The freeze does not slow its walk to the stand.",
-	    .framing = {.shot = Shot::Overview, .include = {{40.0f, 100.0f}, {-40.0f, -100.0f}}},
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -90.0f}, 180.0f)},
 	    .miracles = {{.type = MagicType::CreatureSpellFreeze, .target = MiracleCast::Target::Creature, .delaySeconds = 4.0f}},
 	    .commands = {Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 0.5f)},
