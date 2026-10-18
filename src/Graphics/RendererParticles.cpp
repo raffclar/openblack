@@ -154,6 +154,8 @@ glm::mat3 FacingCamera(glm::mat3 axes, const glm::vec3& position, const glm::vec
 void Renderer::CollectParticles() const
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::ParticlesGather);
+	// The light maps and shadows of the frame that ended stamp the land in this frame
+	_landStamps.swap(_particleFrame.lightStamps);
 	if (!Locator::particleSystem::has_value() || !Locator::time::has_value())
 	{
 		_particleFrame.Clear();
@@ -203,17 +205,12 @@ const Texture2D* Renderer::ParticleLightMap(entt::id_type bitmap, int frame) con
 	{
 		return found->second.get();
 	}
-	auto& bitmaps = Locator::resources::value().GetParticleBitmaps();
-	if (!bitmaps.Contains(bitmap))
+	const auto texels = ParticleLightMapTexels(bitmap, frame);
+	if (texels.empty())
 	{
 		return nullptr;
 	}
-	const auto& stacked = *bitmaps.Handle(bitmap);
-	const auto texels = stacked.Frame(frame);
-	if ((stacked.channels != 3 && stacked.channels != 1) || texels.empty())
-	{
-		return nullptr;
-	}
+	const auto& stacked = *Locator::resources::value().GetParticleBitmaps().Handle(bitmap);
 	// A shadow map's one byte a texel is spread over red, green and blue
 	std::vector<uint8_t> rgb;
 	if (stacked.channels == 1)
@@ -230,6 +227,21 @@ const Texture2D* Renderer::ParticleLightMap(entt::id_type bitmap, int frame) con
 	texture->CreateWithinFrame(side, side, 1, TextureFormat::RGB8, Wrapping::ClampEdge, Filter::Nearest,
 	                           bgfx::copy(image.data(), static_cast<uint32_t>(image.size())));
 	return _particleLightMaps.emplace(key, std::move(texture)).first->second.get();
+}
+
+std::span<const uint8_t> Renderer::ParticleLightMapTexels(entt::id_type bitmap, int frame) const
+{
+	auto& bitmaps = Locator::resources::value().GetParticleBitmaps();
+	if (!bitmaps.Contains(bitmap))
+	{
+		return {};
+	}
+	const auto& stacked = *bitmaps.Handle(bitmap);
+	if (stacked.channels != 3 && stacked.channels != 1)
+	{
+		return {};
+	}
+	return stacked.Frame(frame);
 }
 
 void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw::MistDraw& mist, uint32_t depth) const

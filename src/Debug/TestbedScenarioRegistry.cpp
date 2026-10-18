@@ -7969,6 +7969,19 @@ void AddParticles(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "particles.mist_shadows",
+	    .name = "Shadows of a storm's mist",
+	    .facet = Facet::Particles,
+	    .description = "The lightning storm effect over the land at noon. Each puff of its cloud stamps a grey light map on "
+	                   "the land that darkens the land's luminosity, as the sky's clouds do, for the frame after it is drawn.",
+	    .expected = "Dark patches move on the ground under the storm's clouds and fade with them. The ground goes darker, "
+	                "not a different colour, and the things that stand on it go darker with it.",
+	    .environment = {.hour = 12.0f},
+	    .framing = {.shot = Shot::Overview, .include = {{-120.0f, -120.0f}, {120.0f, 120.0f}}, .distance = 0.5f},
+	    .particles = {{.file = "SF_LightningStorm", .offset = {0.0f, 0.0f}, .magnitude = 1.0f, .restartSeconds = 20.0f}},
+	});
+
+	all.push_back({
 	    .id = "particles.vortex_and_flies_sounds",
 	    .name = "The landscape vortex's and the flies' sounds",
 	    .facet = Facet::Particles,

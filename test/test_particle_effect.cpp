@@ -10,6 +10,7 @@
 #include <cstdlib>
 
 #include <algorithm>
+#include <bit>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -616,6 +617,90 @@ TEST_F(ParticleEffectTest, DrawnCreatorsMakeTheirAtoms)
 	EXPECT_TRUE(frame.lightStamps.empty());
 	ASSERT_EQ(frame.groups.size(), 1u);
 	EXPECT_EQ(frame.groups[0].itemCount, 4u);
+}
+
+namespace
+{
+/// Light maps that load: each takes the next id and keeps the bytes a texel that it was asked for
+class FakeCreatorResources final: public CreatorResourcesInterface
+{
+public:
+	std::optional<entt::id_type> MeshByName(std::string_view /*unused*/) override { return std::nullopt; }
+	std::optional<entt::id_type> MeshByFile(std::string_view /*unused*/) override { return std::nullopt; }
+	std::optional<entt::id_type> LightMap(std::string_view /*unused*/, int /*unused*/, int channels, int /*unused*/,
+	                                      int /*unused*/) override
+	{
+		lastChannels = channels;
+		return ++lastId;
+	}
+
+	entt::id_type lastId {0};
+	int lastChannels {0};
+};
+
+draw::Frame DrawMistWithLightMap(bool shadowMap, FakeCreatorResources& resources)
+{
+	const auto classes = ParticleClassRegistry::WithAllClasses(&resources);
+	FakeWorld world;
+	FakeRandom random;
+	maths::ValueNoise noise;
+	const auto text =
+	    Header() +
+	    Object("ParticleMistCreator", "Mist0",
+	           std::string("PROPERTY ColorA INTEGER 144\nPROPERTY LoadLightMap BOOL 1\nPROPERTY Pitch INTEGER 16\n"
+	                       "PROPERTY TextureFileName STRING .\\Data\\SPELLS\\LightMaps\\S_SMClouds16.raw\n"
+	                       "PROPERTY IsShadowMap BOOL ") +
+	               (shadowMap ? "1" : "0") + "\n") +
+	    Object("CreateRuleAnAtom", "A", "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Mist0\n");
+	auto file = psys::ParticleFile::Parse(text);
+	EXPECT_TRUE(file.has_value());
+	Effect effect(std::make_shared<const psys::ParticleFile>(std::move(*file)), EffectServices {classes, world, random, noise},
+	              glm::vec3(100.0f, 20.0f, 200.0f), 1.0f, false);
+	effect.Step(k_Step);
+	effect.Step(k_Step);
+	Effect::DrawWalk walk;
+	effect.Walk(1.0f, walk);
+	draw::Frame frame;
+	draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), -1,
+	                {.textures = [](std::string_view) { return std::optional(std::pair<entt::id_type, entt::id_type>(1, 2)); },
+	                 .playerColour = [](int) { return 0x00FF00u; },
+	                 .random = {}});
+	return frame;
+}
+} // namespace
+
+TEST(ParticleDrawFrame, AMistWithAShadowMapStampsAShadowPastItsPoint)
+{
+	FakeCreatorResources resources;
+	const auto frame = DrawMistWithLightMap(true, resources);
+	EXPECT_EQ(resources.lastChannels, 1);
+	ASSERT_EQ(frame.mists.size(), 1u);
+	ASSERT_EQ(frame.lightStamps.size(), 1u);
+	const auto& stamp = frame.lightStamps[0];
+	EXPECT_TRUE(stamp.shadow);
+	EXPECT_EQ(stamp.bitmap, resources.lastId);
+	EXPECT_EQ(stamp.frame, 0);
+	EXPECT_EQ(stamp.pitch, 16);
+	// Centred 10 units past the mist along x and z, as strong as the mist's colour is opaque
+	const auto& mist = frame.mists[0];
+	EXPECT_EQ(stamp.centre, mist.position + glm::vec3(10.0f, 0.0f, 10.0f));
+	EXPECT_EQ(stamp.strength, draw::StampStrength(static_cast<uint8_t>(mist.argb >> 24u)));
+}
+
+TEST(ParticleDrawFrame, AMistWithAColourLightMapLightsTheLand)
+{
+	FakeCreatorResources resources;
+	const auto frame = DrawMistWithLightMap(false, resources);
+	EXPECT_EQ(resources.lastChannels, 3);
+	ASSERT_EQ(frame.lightStamps.size(), 1u);
+	EXPECT_FALSE(frame.lightStamps[0].shadow);
+}
+
+TEST(ParticleDrawFrame, AStampsStrengthIsItsAlphaTimesTheGamesInverseOf255)
+{
+	EXPECT_EQ(draw::StampStrength(0), 0.0f);
+	EXPECT_EQ(std::bit_cast<uint32_t>(draw::StampStrength(1)), 0x3B808081u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(draw::StampStrength(3)), 0x3C40C0C2u);
 }
 
 TEST_F(ParticleEffectTest, RandomNumbersAreDrawnOnlyInASteps)

@@ -185,6 +185,11 @@ glm::vec2 Centred(glm::vec2 centre, int32_t side)
 	return {centre.x - back, centre.y - back};
 }
 
+Shadow ParticleShadow(glm::vec3 centre, std::span<const uint8_t> image, int32_t side, float strength)
+{
+	return {.corner = Centred({centre.x, centre.z}, side), .image = image, .side = side, .alpha = Alpha(strength)};
+}
+
 ShadowPlace PlaceShadow(glm::vec2 corner, int32_t side)
 {
 	// Each axis gives its cell, cut towards zero and then down for a point before the map, and the weight of the next

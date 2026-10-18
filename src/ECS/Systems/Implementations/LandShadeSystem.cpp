@@ -187,11 +187,7 @@ void LandShadeSystem::Shade(const LandShadeFrame& frame)
 void LandShadeSystem::CastShadows(const LandShadeFrame& frame, Registry& registry)
 {
 	_shadows = 0;
-	size_t room = land_shade::k_MostStamps - std::min(frame.stampsBefore, land_shade::k_MostStamps);
-	if (!frame.cloudShadows)
-	{
-		return;
-	}
+	size_t room = land_shade::k_MostStamps;
 	const auto cast = [this, &room](const land_shade::Shadow& shadow) {
 		if (room == 0)
 		{
@@ -201,6 +197,26 @@ void LandShadeSystem::CastShadows(const LandShadeFrame& frame, Registry& registr
 		++_shadows;
 		land_shade::CastShadow(_land, shadow);
 	};
+
+	// The particles' stamps come first: their shadows darken the land, their colours only take places
+	for (const auto& stamp : frame.particleStamps)
+	{
+		if (stamp.has_value())
+		{
+			cast(*stamp);
+		}
+		else if (room > 0)
+		{
+			--room;
+		}
+	}
+	// Then the flashes of lightning, which also only take places
+	room -= std::min(frame.flashes, room);
+
+	if (!frame.cloudShadows)
+	{
+		return;
+	}
 
 	// The sky's clouds in the order they were made: the registry walks the newest first
 	const auto cloudImage = _sources.image(k_CloudShadowId.value());

@@ -14,6 +14,7 @@
 
 #include <optional>
 #include <span>
+#include <vector>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -44,9 +45,11 @@ struct LandShadeFrame
 	std::optional<glm::vec3> hand;
 	/// The hour of script time, which the village lights follow
 	float scriptHour {12.0f};
-	/// The stamps of light and shadow that the frame already has before the clouds': the particles' light maps and the
-	/// flashes of lightning
-	size_t stampsBefore {0};
+	/// The particles' stamps in the order that the frame before drew them, which come first in the game's list: a light
+	/// map of grey is a shadow, none is a light map of colour, which only takes a place in the list
+	std::vector<std::optional<land_shade::Shadow>> particleStamps;
+	/// The flashes of lightning, which take the next places in the list
+	size_t flashes {0};
 };
 
 /// The land's luminosity of the frame as one picture, laid out as the land's luminosity map: a texel for each cell of
@@ -60,9 +63,9 @@ struct LandShadeMap
 	uint16_t lastChangedRow {0};
 };
 
-/// The land's luminosity while a frame is drawn (see land_shade): laid, darkened by the shadows of the sky's clouds and
-/// the storms, and at night brightened by the lights of the hand and the villages. Things lit as the frame is drawn
-/// read it; the land's luminosity map for the GPU is a copy of it.
+/// The land's luminosity while a frame is drawn (see land_shade): laid, darkened by the shadows of the particles, the
+/// sky's clouds and the storms, and at night brightened by the lights of the hand and the villages. Things lit as the frame is
+/// drawn read it; the land's luminosity map for the GPU is a copy of it.
 class LandShadeSystemInterface
 {
 public:

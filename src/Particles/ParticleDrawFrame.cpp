@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <bit>
 #include <numbers>
 #include <string>
 
@@ -56,6 +57,9 @@ constexpr float k_MillisecondsPerSecond = 1000.0f;
 constexpr float k_ByteMax = 255.0f;
 /// A model's shape comes from its axes only when they are this long
 constexpr float k_MinimumAxis = 1e-4f;
+
+/// The game's float for 1 / 255, which a stamp's alpha is multiplied by
+constexpr float k_InverseByte = std::bit_cast<float>(0x3B808081u);
 
 uint32_t Abgr(const std::array<uint8_t, 3>& rgb, float alpha)
 {
@@ -351,16 +355,17 @@ void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, 
 		    .shape = shape,
 		    .counter = (static_cast<int>(atom.creatorValue.y) + counted) % k_MistCountWrap,
 		});
-		// A storm's cloud shades the land under it, as strongly as it is opaque
-		if (mist.shadow.has_value())
+		// A mist with a light map stamps its first frame on the land under it, as strongly as it is opaque. A grey map
+		// is a shadow, as a storm's clouds cast.
+		if (mist.lightMap.has_value())
 		{
 			frame.lightStamps.push_back({
-			    .bitmap = *mist.shadow,
+			    .bitmap = *mist.lightMap,
 			    .frame = 0,
-			    .pitch = mist.shadowPitch,
-			    .centre = atom.position,
-			    .strength = static_cast<float>(alpha) / k_ByteMax,
-			    .shadow = true,
+			    .pitch = mist.lightMapPitch,
+			    .centre = atom.position + k_LightMapOffset,
+			    .strength = StampStrength(static_cast<uint8_t>(alpha)),
+			    .shadow = mist.shadowMap,
 			});
 		}
 		break;
@@ -386,7 +391,7 @@ void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, 
 		    .frame = maths::FrameIndex(atom.frame, light.numFrames, light.loopAnim) & 0xFF,
 		    .pitch = light.pitch,
 		    .centre = position + k_LightMapOffset,
-		    .strength = std::trunc(std::clamp(atom.alpha, 0.0f, k_ByteMax)) / k_ByteMax,
+		    .strength = StampStrength(static_cast<uint8_t>(std::clamp(atom.alpha, 0.0f, k_ByteMax))),
 		});
 		break;
 	}
@@ -415,6 +420,11 @@ void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, 
 	}
 }
 } // namespace
+
+float openblack::particles::draw::StampStrength(uint8_t alpha)
+{
+	return static_cast<float>(alpha) * k_InverseByte;
+}
 
 void Frame::Clear()
 {
