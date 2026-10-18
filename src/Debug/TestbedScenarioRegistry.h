@@ -785,6 +785,9 @@ struct Command
 		/// The pointer moves onto the middle of the foot of the scenario's town's worship site altar on the screen, as the
 		/// mouse moves it. Needs no creature
 		PointerOnAltar,
+		/// The pointer moves onto the rope of the leash of the creature, tied to a thing, a quarter of the way from the
+		/// thing, as the mouse moves it
+		PointerOnRope,
 		/// The creature fizzes to a share (amount: 0 in sight, 1 out of sight) over some milliseconds (value), as a
 		/// script's fade does. It stays at that share.
 		SetFizz,

@@ -30,6 +30,7 @@
 #include "Camera/CreatureInteractCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
+#include "Common/X87.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
@@ -434,8 +435,9 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	const auto ms = seconds * 1000.0f;
 	const auto height = feedback::k_HeightAtSizeOne * ShownSize(creature);
 	const auto centre = transform.position + glm::vec3(0.0f, height * 0.5f, 0.0f);
-	// The hand is drawn larger on a bigger creature, by the square root of its size
-	const auto handScale = std::sqrt(std::max(ShownSize(creature), 0.0f));
+	// The hand is drawn larger on a bigger creature, by its size to the power of a half, as the game's power makes it
+	const auto shownSize = ShownSize(creature);
+	const auto handScale = shownSize > 0.0f ? x87::Pow(shownSize, 0.5) : 0.0f;
 
 	// The camera follows the creature, until the player has no creature
 	if (_cameraModel != nullptr)

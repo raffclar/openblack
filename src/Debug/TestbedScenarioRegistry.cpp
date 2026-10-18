@@ -5438,6 +5438,32 @@ void AddLeash(std::vector<Scenario>& all)
 	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 1.0f, false)},
 	});
 
+	// The hand that holds the rope of the tied leash stands straight up, also when the pointer leaves the rope
+	all.push_back({
+	    .id = "hand.rope_hold_stand",
+	    .name = "The hand that holds the rope of the tied leash",
+	    .facet = Facet::Hand,
+	    .description = "Your tiger's leash is tied to a tree, and the tiger lies down to sleep. The pointer goes onto the "
+	                   "rope and the Action button takes hold of it. The pointer then moves away from the rope, across "
+	                   "the lake onto its far bank, and the button comes up. Then the pointer moves a little to the "
+	                   "right.",
+	    .expected = "Holding the rope, the hand pinches it and stands straight up, not turned to the slope of the bank, "
+	                "also away from the rope. It does not offer to turn the camera. Let go, it turns to the slope when the "
+	                "pointer moves across the screen.",
+	    .framing = {.shot = Shot::Placed, .eye = {-20.0f, 40.0f, 20.0f}, .look = {-20.0f, 0.0f, 120.0f}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 75.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 100.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f),
+	                 OnObject(Kind::TieLeash, 0, 0, 1.0f, false),
+	                 Act(Kind::Sleep, 0, 0.5f),
+	                 {.kind = Kind::PointerOnRope, .creature = 0, .delaySeconds = 5.0f},
+	                 {.kind = Kind::PointerOnRope, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.05f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.12f, -0.3f}, .amount = 4.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 5.5f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.03f, 0.0f}, .amount = 0.5f}},
+	});
+
 	all.push_back({
 	    .id = "leash.hand",
 	    .name = "Leash your creature with the hand",
@@ -5859,6 +5885,30 @@ void AddCombat(std::vector<Scenario>& all)
 		                 {.kind = Kind::PointerPress, .delaySeconds = 0.1f, .value = k_RightButton},
 		                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = k_RightButton},
 		                 Fight(Kind::PointerOnOpponent, 0, 0, 3.8f)},
+		    .repeatFrom = 5,
+		});
+		// While a press on the opponent's body is held, the hand goes to the sparkle that the press put there
+		all.push_back({
+		    .id = "hand.fight_sparkle",
+		    .name = "The hand on the sparkle of a held press in a fight",
+		    .facet = Facet::Hand,
+		    .description = "The player's red tiger fights a lion that belongs to no player, as the guide's fight lesson "
+		                   "starts it. A double click into the arena makes the camera show the fight. Then every five "
+		                   "seconds the hand presses the Action button on the middle of the lion's body and holds it for "
+		                   "two seconds.",
+		    .expected = "While the button is down, the hand sits on the sparkle on the lion's body and moves with the "
+		                "body. When the button comes up, or a blow takes the sparkle away, the hand goes back under the "
+		                "pointer.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), guide},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAuto, 0, 0, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 0, 0.2f),
+		                 Fight(Kind::FightView, 0, 0, k_ViewAfterArena),
+		                 Fight(Kind::PointerOnOpponent, 0, 0, k_PressAfterDuel),
+		                 {.kind = Kind::PointerPress, .delaySeconds = 0.1f, .value = k_RightButton},
+		                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = k_RightButton},
+		                 Fight(Kind::PointerOnOpponent, 0, 0, 2.9f)},
 		    .repeatFrom = 5,
 		});
 		{
@@ -8712,7 +8762,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 151> k_Names {
+	constexpr std::array<std::string_view, 152> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -8842,6 +8892,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "set alight",
 		    "hand grips totem",
 		    "pointer on altar",
+		    "pointer on rope",
 		    "set fizz",
 		    "check the profile folder",
 		    "give the player a picture of their own",
@@ -8872,7 +8923,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	{
 		return kind == Kind::PointerTo || kind == Kind::PointerPress || kind == Kind::PointerRelease ||
 		       kind == Kind::PointerSweep || kind == Kind::WheelTurn || kind == Kind::PointerOnOpponent ||
-		       kind == Kind::PointerOnCaveCreature || kind == Kind::PointerOnCreature || kind == Kind::PointerOnAltar;
+		       kind == Kind::PointerOnCaveCreature || kind == Kind::PointerOnCreature || kind == Kind::PointerOnAltar ||
+		       kind == Kind::PointerOnRope;
 	}
 
 	bool NeedOverrides::Empty() const

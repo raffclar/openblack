@@ -1338,3 +1338,9 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(
+  test_oracle_hand_feel_rest_2 oracle/test_oracle_hand_feel_rest_2.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_feel_rest_2 hand/test_hand_feel_rest_2.cpp
+)

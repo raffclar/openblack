@@ -241,4 +241,53 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.2f, 0.8f}},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.625f, 0.225f}}},
 	});
+
+	// A pour tips the hand that holds the miracle; once the seed goes, the empty hand keeps the tipped up until the
+	// pointer moves across the screen
+	all.push_back({
+	    .id = "hand.pour_tilt_up",
+	    .name = "The hand stays tipped after a pour",
+	    .facet = Facet::Hand,
+	    .description = "The hand pours food for three seconds and then lets go of the seed, with the pointer still. Three "
+	                   "seconds later the pointer moves a little to the right.",
+	    .expected = "While it pours, the hand rises and rolls about the line to the camera. When the seed goes, the empty "
+	                "hand stays rolled over as the last pour left it. It stands up to the land again over 0.4 seconds "
+	                "only when the pointer moves across the screen.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f)},
+	    .framing = {.shot = Shot::Placed, .eye = {6.0f, 42.0f, -2.0f}, .look = {0.0f, 33.0f, 20.0f}},
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = {0.0f, 20.0f},
+	                  .handOffset = {0.0f, 20.0f},
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .holdSeconds = 3.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 8.0f, .point = {0.55f, 0.6f}}},
+	});
+
+	// The hand that holds a thing while the camera turns by the ring stands towards the focus, and keeps that up
+	// once it lets go
+	constexpr size_t k_LeftButton = 1;
+	all.push_back({
+	    .id = "hand.ring_turn_holding",
+	    .name = "The hand that holds a thing while the camera turns by the ring",
+	    .facet = Facet::Hand,
+	    .description =
+	        "The hand takes a pile of food. The left button is pressed at the right edge of the screen and the mouse "
+	        "moves down slowly, which turns the camera by the ring. Then the button comes up, the hand puts "
+	        "the food down with the pointer still, and two seconds later the pointer moves to the middle.",
+	    .expected = "While the camera turns, the hand holds the food. After it puts the food down, the empty hand stands "
+	                "up towards the point the camera looks at, leaning up by three tenths of the distance. It turns to "
+	                "the land again only when the pointer moves across the screen.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f)},
+	    .framing = {.shot = Shot::Testbed},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {0.0f, 30.0f}}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.98f, 0.55f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = k_LeftButton},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.2f, .point = {0.0f, 0.3f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.6f, .value = k_LeftButton},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 0.1f, .velocity = {0.0f, 0.0f, 0.0f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.6f}}},
+	});
 }
