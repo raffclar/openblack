@@ -115,6 +115,25 @@ float creature_fight::ForwardExtent(std::span<const glm::vec2> bones, glm::vec2 
 	return extent;
 }
 
+float creature_fight::ForwardExtentFromLastTurn(std::span<const glm::vec2> bones, glm::vec2 at, float heading)
+{
+	// The direction is kept as floats, and each difference, product and sum is rounded to a float in this order
+	const auto ahead = x87::RoundToFloat(x87::Sin(heading));
+	const auto across = x87::RoundToFloat(-x87::Cos(heading));
+	float extent = 0.0f;
+	for (const auto& bone : bones)
+	{
+		const auto x = x87::Sub(bone.x, at.x);
+		const auto z = x87::Sub(bone.y, at.y);
+		const auto reach = x87::Add(x87::Mul(x, ahead), x87::Mul(across, z));
+		if (extent <= reach)
+		{
+			extent = reach;
+		}
+	}
+	return extent;
+}
+
 creature_fight::PullApart creature_fight::PullApartOf(const Arena& arena, glm::vec2 first, glm::vec2 second, glm::vec2 forward,
                                                       float extents)
 {

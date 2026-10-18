@@ -771,7 +771,8 @@ bool DrawArenaFor(ecs::Registry& registry, entt::entity creature, entt::entity o
 	return true;
 }
 
-/// How far the posed body of a creature reaches in front of its feet, in the direction that it faces
+/// How far the posed body of a creature reaches in front of its feet, in the direction that it faces. A fighter uses its
+/// bones as they were at the end of its last game turn, measured from where it stands now.
 float ForwardExtentOf(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
@@ -781,6 +782,12 @@ float ForwardExtentOf(const ecs::Registry& registry, entt::entity creature)
 	{
 		return 0.0f;
 	}
+	if (const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+	    fighting != nullptr && !fighting->lastTurnBones.empty())
+	{
+		return fight::ForwardExtentFromLastTurn(fighting->lastTurnBones, Flat(locomotion->toPosition),
+		                                        locomotion->heading.Radians());
+	}
 	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
 	std::vector<glm::vec2> bones;
 	bones.reserve(animation->boneMatrices.size());
@@ -789,6 +796,28 @@ float ForwardExtentOf(const ecs::Registry& registry, entt::entity creature)
 		bones.push_back(Flat(glm::vec3(placement * bone[3])) - Flat(transform->position));
 	}
 	return fight::ForwardExtent(bones, creature_locomotion::DirectionOf(locomotion->heading));
+}
+
+/// Keeps the points on the land where the bones of a fighter's body are at the end of its game turn: its pose, at the
+/// place where it stands and with the heading that it has now
+void KeepLastTurnBones(ecs::Registry& registry, entt::entity creature)
+{
+	auto* fighting = registry.TryGet<CreatureFighting>(creature);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto* locomotion = registry.TryGet<const CreatureLocomotion>(creature);
+	if (fighting == nullptr || animation == nullptr || transform == nullptr || locomotion == nullptr)
+	{
+		return;
+	}
+	const auto placement = creature::PlacementMatrix(locomotion->toPosition,
+	                                                 glm::mat3(glm::eulerAngleY(locomotion->heading.Yaw())), transform->scale);
+	fighting->lastTurnBones.clear();
+	fighting->lastTurnBones.reserve(animation->boneMatrices.size());
+	for (const auto& bone : animation->boneMatrices)
+	{
+		fighting->lastTurnBones.push_back(Flat(glm::vec3(placement * bone[3])));
+	}
 }
 
 /// When the bodies of two fighters overlap, both move apart by half the overlap, along the direction that the first one
@@ -2167,8 +2196,29 @@ void CreatureFightSystem::ProcessTurn()
 {
 	StartFightsFromMinds();
 	ProcessStages();
-	ProcessDuels();
-	ProcessBlows();
+	// One fighter after the other makes all of its turn: its move in the duel and its blow. Then the fight keeps the pose
+	// of its body for the next turn. When the other fighter moves it after its turn, the kept pose does not change.
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> fighters;
+	registry.Each<CreatureFighting>([&fighters](entt::entity entity, CreatureFighting&) { fighters.push_back(entity); });
+	for (const auto entity : fighters)
+	{
+		const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
+		if (fighting == nullptr)
+		{
+			continue;
+		}
+		// Only an action that was under way as the turn started tests its blow. An action that the duel starts in this
+		// turn makes its first test in the next turn.
+		const bool striking = fighting->fighter.state == fight::State::Action;
+		const auto action = fighting->fighter.animation;
+		if (fighting->stage == CreatureFighting::Stage::Duel)
+		{
+			DuelTurn(entity);
+		}
+		BlowTurn(entity, striking, action);
+		KeepLastTurnBones(registry, entity);
+	}
 	ProcessDrips();
 	ProcessKnockedOut();
 	NoteActions();
@@ -2627,25 +2677,17 @@ void CreatureFightSystem::MeasureBlows(entt::entity creature)
 	fighting.measured = true;
 }
 
-void CreatureFightSystem::ProcessDuels()
+void CreatureFightSystem::DuelTurn(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> duelling;
-	registry.Each<CreatureFighting>([&duelling](entt::entity entity, CreatureFighting& fighting) {
-		if (fighting.stage == CreatureFighting::Stage::Duel)
-		{
-			duelling.push_back(entity);
-		}
-	});
 	const auto random = [this](uint32_t range) {
 		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
 	};
-	for (const auto entity : duelling)
 	{
 		auto* fighting = registry.TryGet<CreatureFighting>(entity);
 		if (fighting == nullptr || fighting->stage != CreatureFighting::Stage::Duel)
 		{
-			continue;
+			return;
 		}
 		// Its opponent gone or out of the fight, it finishes
 		const auto opponent = fighting->opponent;
@@ -2658,7 +2700,7 @@ void CreatureFightSystem::ProcessDuels()
 			fighting->stage = CreatureFighting::Stage::Respond;
 			fighting->played = false;
 			fight::Enter(fighting->fighter, fight::State::Finish);
-			continue;
+			return;
 		}
 		auto& fighter = fighting->fighter;
 		const auto staminaBefore = fighter.stamina;
@@ -3107,29 +3149,24 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 	NoteActions();
 }
 
-void CreatureFightSystem::ProcessBlows()
+void CreatureFightSystem::BlowTurn(entt::entity entity, bool wasInAction, size_t actionAtStart)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<std::pair<entt::entity, int32_t>> blows;
-	registry.Each<CreatureFighting>([&registry, &blows](entt::entity entity, CreatureFighting& fighting) {
-		const auto& fighter = fighting.fighter;
-		const bool striking = fighting.stage == CreatureFighting::Stage::Duel && fighter.state == fight::State::Action &&
-		                      fight::IsAttack(fighter.animation) && InDuel(registry, fighting.opponent);
-		// The tests start where the animation was at the last turn, or at its start when it began since
-		const bool same = fighting.blowTestAnimation == fighter.animation && fighter.timeMs >= fighting.blowTestFromMs;
-		const auto from = same ? static_cast<int32_t>(fighting.blowTestFromMs) : 0;
-		fighting.blowTestFromMs = fighter.timeMs;
-		fighting.blowTestAnimation = fighter.animation;
-		if (striking)
-		{
-			blows.emplace_back(entity, from);
-		}
-	});
-	for (const auto& [entity, from] : blows)
+	auto& fighting = registry.Get<CreatureFighting>(entity);
+	const auto& fighter = fighting.fighter;
+	const bool striking = wasInAction && fighter.animation == actionAtStart &&
+	                      fighting.stage == CreatureFighting::Stage::Duel && fighter.state == fight::State::Action &&
+	                      fight::IsAttack(fighter.animation) && InDuel(registry, fighting.opponent);
+	// The tests start where the animation was at the last turn, or at its start when it began since
+	const bool same = fighting.blowTestAnimation == fighter.animation && fighter.timeMs >= fighting.blowTestFromMs;
+	const auto from = same ? static_cast<int32_t>(fighting.blowTestFromMs) : 0;
+	fighting.blowTestFromMs = fighter.timeMs;
+	fighting.blowTestAnimation = fighter.animation;
+	if (striking)
 	{
+		TestBlow(entity, from);
 		if (registry.Valid(entity) && registry.AllOf<CreatureFighting>(entity))
 		{
-			TestBlow(entity, from);
 			PushApartOnBlow(registry, entity, registry.Get<const CreatureFighting>(entity).opponent);
 		}
 	}

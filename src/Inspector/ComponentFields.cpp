@@ -724,6 +724,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFighting::blowTestFromMs>("blowTestFromMs")
 	    .Field<&components::CreatureFighting::blowTestAnimation>("blowTestAnimation")
 	    .Field<&components::CreatureFighting::movedShare>("movedShare")
+	    .Field<&components::CreatureFighting::lastTurnBones>("lastTurnBones")
 	    .Field<&components::CreatureFighting::stageSeconds>("stageSeconds")
 	    .Field<&components::CreatureFighting::faceSeconds>("faceSeconds")
 	    .Field<&components::CreatureFighting::played>("played")

@@ -96,7 +96,9 @@ private:
 	/// duel, the duel's moves, and the creatures knocked out
 	void StartFightsFromMinds();
 	void ProcessStages();
-	void ProcessDuels();
+	/// A fighter's turn in the duel: it faces its opponent, keeps in the arena, moves apart from its opponent and
+	/// chooses or makes its next move
+	void DuelTurn(entt::entity creature);
 	void ProcessKnockedOut();
 	/// Makes the move at the front of a fighter's queue, if it can
 	void CheckQueue(entt::entity creature);
@@ -104,9 +106,9 @@ private:
 	/// The spell a fighter casts as its cast's start ends: an attacking one at the opponent, a defending one on itself
 	void CastFightSpell(entt::entity creature, MagicType type, entt::entity opponent);
 	void AttemptBlow(entt::entity creature, creature_fight::Band band, float speed);
-	/// A fighter's action landing on its opponent this frame, if it does
-	/// Each game turn: the blows that are landing are tested along their swing since the last turn
-	void ProcessBlows();
+	/// A fighter's blow in its turn: tested along its swing since the last turn, then the two bodies move apart when they
+	/// overlap. Only a blow that was under way as the turn started is tested.
+	void BlowTurn(entt::entity creature, bool wasInAction, size_t actionAtStart);
 	/// A blow tested from where its animation was at the last turn: it marks its swing and, where it meets the
 	/// opponent's body, lands there
 	void TestBlow(entt::entity creature, int32_t fromMs);
