@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 /// EXPERIMENT (not for merge): the weather of the regions between 20 and 500 km for the volumetric clouds. Each region
@@ -27,6 +28,8 @@ inline constexpr float k_SmallCells = 0.38f;
 inline constexpr float k_LargeCells = 2.3f;
 /// The width of the usual cells, in world units (the weather tile has six cells across)
 inline constexpr float k_UsualCellWidth = 14000.0f / 6.0f;
+/// The streets lie along the two nearest of this many fixed axes round a half turn
+inline constexpr int k_StreetAxes = 8;
 /// The share of the field round its middle that the ring of an open cell holds
 inline constexpr float k_RingWidth = 0.3f;
 
@@ -48,5 +51,29 @@ inline constexpr float k_RingWidth = 0.3f;
 /// The change of the cover in a region, as a share of the cover, for two octaves of billows (each about -0.3 to 0.3
 /// round 0) and the region's share. Clear regions keep a little cloud.
 [[nodiscard]] float CoverShare(float billows, float regionShare);
+
+/// How much a read of the noise that adds detail to the far sheet shows, 0 to 1, for the size of a pixel on the clouds
+/// and the tile of the read, in world units. The shapes of the noise are about a quarter of its tile wide. A read shows
+/// fully where a pixel is smaller than 0.12 of its shapes, and not at all where it is larger than 0.45, so that no shape
+/// shimmers.
+[[nodiscard]] float SheetDetailWeight(float pixel, float tile);
+
+/// The two fixed axes that the streets of a region lie along, and how much of the second one shows
+struct StreetBlend
+{
+	/// The first axis, 0 to k_StreetAxes - 1
+	int first {0};
+	/// The second axis, the next one round the half turn
+	int second {1};
+	/// How much of the second axis's pattern shows, 0 to 1
+	float share {0.0f};
+};
+
+/// The two fixed axes nearest to the direction of the wind, in radians, which the streets lie along. A street has no front and
+/// back, so a half turn gives the same axes. As the direction turns, the share moves smoothly from one axis to the next.
+[[nodiscard]] StreetBlend StreetAxes(float angle);
+/// The direction along a fixed axis of the streets, a unit vector across the ground. The axis after the last is the
+/// first again.
+[[nodiscard]] glm::vec2 StreetAxisDirection(int axis);
 
 } // namespace openblack::graphics::cloud_regions

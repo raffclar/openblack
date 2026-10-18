@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <numbers>
 
 #include <glm/geometric.hpp>
 
@@ -80,4 +81,26 @@ float cloud_regions::OpenRing(float field)
 float cloud_regions::CoverShare(float billows, float regionShare)
 {
 	return std::clamp(1.0f + k_CoverContrast * billows * regionShare, k_LeastShare, k_MostShare);
+}
+
+cloud_regions::StreetBlend cloud_regions::StreetAxes(float angle)
+{
+	constexpr float k_HalfTurn = std::numbers::pi_v<float>;
+	const float turns = angle / k_HalfTurn;
+	const float place = (turns - std::floor(turns)) * static_cast<float>(k_StreetAxes);
+	const float first = std::floor(place);
+	const int index = static_cast<int>(first) % k_StreetAxes;
+	return {.first = index, .second = (index + 1) % k_StreetAxes, .share = place - first};
+}
+
+glm::vec2 cloud_regions::StreetAxisDirection(int axis)
+{
+	const int index = ((axis % k_StreetAxes) + k_StreetAxes) % k_StreetAxes;
+	const float angle = static_cast<float>(index) * (std::numbers::pi_v<float> / static_cast<float>(k_StreetAxes));
+	return {std::cos(angle), std::sin(angle)};
+}
+
+float cloud_regions::SheetDetailWeight(float pixel, float tile)
+{
+	return 1.0f - Smooth(0.12f, 0.45f, pixel * 4.0f / tile);
 }

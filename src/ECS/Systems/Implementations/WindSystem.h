@@ -25,9 +25,11 @@ public:
 	[[nodiscard]] const wind::Wind& GetWind() const override { return _wind; }
 	[[nodiscard]] float GetSeconds() const override { return _seconds; }
 	[[nodiscard]] glm::vec2 VelocityAt(glm::vec2 point) const override { return wind::VelocityAt(_wind, point, _seconds); }
+	void SetDirectionOverride(std::optional<float> angle) override { _directionOverride = angle; }
 
 private:
 	wind::Wind _wind;
+	std::optional<float> _directionOverride;
 	float _seconds {0.0f};
 };
 

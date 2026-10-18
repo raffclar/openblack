@@ -186,6 +186,7 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WindSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
@@ -944,6 +945,10 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			underwater.CycleCloudCover();
 		}
 		underwater.SetAuroraChoice(environment.auroraStrength);
+		if (Locator::windSystem::has_value())
+		{
+			Locator::windSystem::value().SetDirectionOverride(environment.windAngle);
+		}
 		underwater.SetNoctilucentOverride(environment.noctilucent);
 	}
 	// EXPERIMENT (not for merge): the moon's phase from the scenario's date

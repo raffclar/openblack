@@ -10,6 +10,7 @@
 #pragma once
 
 #include <chrono>
+#include <optional>
 
 #include <glm/vec2.hpp>
 
@@ -33,6 +34,9 @@ public:
 	[[nodiscard]] virtual float GetSeconds() const = 0;
 	/// The wind's velocity at a point across the ground now, with its gust, in world units a second
 	[[nodiscard]] virtual glm::vec2 VelocityAt(glm::vec2 point) const = 0;
+	/// A testbed scenario's direction of the wind, in radians, in place of the weather's. The wind turns to it at its
+	/// usual rate. With no direction, the weather gives the direction again.
+	virtual void SetDirectionOverride(std::optional<float> angle) = 0;
 };
 
 } // namespace openblack::ecs::systems

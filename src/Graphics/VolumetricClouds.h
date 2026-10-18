@@ -288,6 +288,9 @@ struct CloudUniforms
 	glm::vec4 planet {0.0f};
 	/// The thunderstorm cells (see cumulonimbus::Pack)
 	std::array<glm::vec4, cumulonimbus::k_MaxCells * 4> cells {};
+	/// x the direction that the wind blows towards now, in radians about the up axis from +x towards +z, for the
+	/// streets of cells; yzw unused
+	glm::vec4 wind {0.0f};
 };
 
 /// How much cloud a storm builds, 0 to 1, from the cloud and the rain that it brings in percent. A storm of mild weather

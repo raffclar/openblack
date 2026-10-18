@@ -246,6 +246,90 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .objects = TreesToTheEast(),
 	});
 
+	// EXPERIMENT (not for merge): the thunderstorm cells and the far clouds of the volumetric clouds, close up
+	all.push_back({
+	    .id = "weather.storm_inside",
+	    .name = "Inside the anvil of a thunderstorm cell",
+	    .facet = Facet::Sky,
+	    .description = "The thunderstorm of weather.cumulonimbus at 16:30, the clock stopped. The camera is 9800 up, in "
+	                   "the anvil of the cell over the island, and looks along the anvil downwind.",
+	    .expected = "A bright grey mist of cloud all round, lit from over the anvil. The mist has soft shapes and no "
+	                "specks or stripes. The frame time stays under 14.3 ms.",
+	    .environment = {.hour = 16.5f,
+	                    .clockRuns = false,
+	                    .weather = Weather::Thunderstorm,
+	                    .boltSeconds = glm::vec2(1.0f, 2.0f),
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1)},
+	    .framing =
+	        {.shot = Shot::Placed, .eye = {3000.0f, 9800.0f, 3000.0f}, .look = {8000.0f, 9600.0f, 8000.0f}, .hold = true},
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
+	    .id = "weather.anvil_edge",
+	    .name = "The plume of an anvil from 7 km",
+	    .facet = Facet::Sky,
+	    .description = "The thunderstorm of weather.cumulonimbus at 16:30, the clock stopped. The camera is 7000 up to the "
+	                   "south of the cell and looks up at its anvil, where the plume spreads out downwind.",
+	    .expected = "The anvil has a sharp edge upwind. Downwind its plume is a thin smooth veil that thins out to its "
+	                "end. The edge of the plume has no specks, steps or stripes, also as the camera moves.",
+	    .environment = {.hour = 16.5f,
+	                    .clockRuns = false,
+	                    .weather = Weather::Thunderstorm,
+	                    .boltSeconds = glm::vec2(1.0f, 2.0f),
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 7000.0f, -9000.0f}, .look = {0.0f, 9500.0f, 0.0f}, .hold = true},
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
+	    .id = "sky.cloud_streets_wind",
+	    .name = "Streets of cloud that turn with the wind",
+	    .facet = Facet::Sky,
+	    .description = "The camera is 200 km over the sea to the south west of the island at noon, the clock stopped, "
+	                   "under scattered clouds, and looks down to the north east. The wind is made to blow towards the "
+	                   "east, so it turns from its calm direction over about 12 seconds.",
+	    .expected = "Far from the island the streets of cells lie along the wind. As the wind turns, the streets turn "
+	                "smoothly with it: no street jumps to a new direction and the far streets do not swing round.",
+	    .environment = {.hour = 12.0f,
+	                    .clockRuns = false,
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(2),
+	                    .windAngle = 0.0f},
+	    .framing =
+	        {.shot = Shot::Placed, .eye = {-60000.0f, 189829.0f, -60000.0f}, .look = {40000.0f, 0.0f, 40000.0f}, .hold = true},
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
+	    .id = "sky.orbit_cells",
+	    .name = "Small cells of cloud from 300 km up",
+	    .facet = Facet::Sky,
+	    .description = "The camera is 300 km over the sea to the south west of the island at noon, the clock stopped, "
+	                   "under scattered clouds, and looks down to the north east.",
+	    .expected = "The areas of small cells show as small white cells or fine white specks over the sea, with their "
+	                "contrast. They do not turn into a flat grey haze.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .cloudCover = static_cast<uint8_t>(2)},
+	    .framing =
+	        {.shot = Shot::Placed, .eye = {-60000.0f, 284743.0f, -60000.0f}, .look = {40000.0f, 0.0f, 40000.0f}, .hold = true},
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
+	    .id = "sky.orbit_sheet",
+	    .name = "The cloud sheet from 1000 km up",
+	    .facet = Facet::Sky,
+	    .description = "The camera is 1000 km over the sea to the south west of the island at noon, the clock stopped, "
+	                   "under scattered clouds, and looks at the island.",
+	    .expected = "The clouds show groups and clear gaps down to a few kilometres across, not soft blobs about 20 km "
+	                "wide. Nothing shimmers as the camera moves.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .cloudCover = static_cast<uint8_t>(2)},
+	    .framing = {.shot = Shot::Placed, .eye = {-300000.0f, 949143.0f, -300000.0f}, .look = {0.0f, 0.0f, 0.0f}, .hold = true},
+	    .objects = TreesToTheEast(),
+	});
+
 	all.push_back({
 	    .id = "sky.aurora_night",
 	    .name = "A strong aurora over the island",
