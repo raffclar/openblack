@@ -2370,6 +2370,8 @@ void AddAppearance(std::vector<Scenario>& all)
 		tattooed.blood.push_back({.u = 128, .v = v, .skin = 0});
 	}
 	auto plain = Posed(CreatureType::Tiger, {25.0f, 0.0f}, 330.0f, "unmarked");
+	// A second creature of the player would show the tattoos of the player's first creature, as in the game
+	plain.owner = PlayerNames::NEUTRAL;
 	all.push_back({
 	    .id = "appearance.tattoos_wounds",
 	    .name = "Tattoos and wounds showcase",

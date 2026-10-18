@@ -989,7 +989,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	Reflect<components::CreatureTattoos>(context)
 	    .Field<&components::CreatureTattoos::slots>("slots")
 	    .Field<&components::CreatureTattoos::pictures>("pictures")
+	    .Field<&components::CreatureTattoos::shown>("shown")
 	    .Field<&components::CreatureTattoos::revision>("revision");
+	Reflect<components::TattooMasks>(context).Field<&components::TattooMasks::masks>("masks");
 	Reflect<components::CreatureMarks>(context)
 	    .Field<&components::CreatureMarks::marks>("marks")
 	    .Field<&components::CreatureMarks::revision>("revision");
@@ -2770,6 +2772,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::creature_sway::Sway::active>("active")
 	    .Field<&openblack::creature_sway::Sway::turnSeconds>("turnSeconds")
 	    .Field<&openblack::creature_sway::Sway::heading>("heading");
+	Reflect<openblack::creature_tattoo::Mask>(context, ValueOnly {})
+	    .Field<&openblack::creature_tattoo::Mask::size>("size")
+	    .Field<&openblack::creature_tattoo::Mask::levels>("levels");
 	Reflect<openblack::creature_tattoo::Slot>(context, ValueOnly {})
 	    .Field<&openblack::creature_tattoo::Slot::design>("design")
 	    .Field<&openblack::creature_tattoo::Slot::site>("site")

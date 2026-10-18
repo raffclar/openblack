@@ -164,10 +164,14 @@ TEST(CreatureMarks, SkinsArePaintedTattoosThenWoundsThenBlood)
 	// A wound on another skin isn't painted on this one
 	Add(marks.wounds, {.u = 10, .v = 10, .skin = 1, .age = 0, .type = 3, .column = 0});
 
+	creature_tattoo::Masks masks {};
+	masks[0] = art->designs.at(1);
+
 	const std::vector<uint16_t> base(k_SkinTexels, 0x0000);
 	const std::vector<uint16_t> variant(k_SkinTexels, 0x0FFF);
 	std::vector<uint16_t> out(k_SkinTexels);
-	Compose(out, base, variant, 255, {.skinIndex = 0, .tattoos = tattoos, .sites = sites, .marks = marks, .art = art.get()});
+	Compose(out, base, variant, 255,
+	        {.skinIndex = 0, .tattoos = tattoos, .sites = sites, .marks = marks, .art = art.get(), .masks = &masks});
 	const auto at = [&out](int x, int y) { return out.at(static_cast<size_t>((y * 256) + x)); };
 	// The variant at full weight, white; a white tattoo over the middle; a black wound over that; blood on top
 	EXPECT_EQ(at(5, 5), 0x0FFF);
@@ -177,8 +181,52 @@ TEST(CreatureMarks, SkinsArePaintedTattoosThenWoundsThenBlood)
 	EXPECT_EQ(at(10, 10), 0x0FFF);
 
 	// Without the art, the blend alone
-	Compose(out, base, variant, 0, {.skinIndex = 0, .tattoos = tattoos, .sites = sites, .marks = marks, .art = nullptr});
+	Compose(out, base, variant, 0,
+	        {.skinIndex = 0, .tattoos = tattoos, .sites = sites, .marks = marks, .art = nullptr, .masks = &masks});
 	EXPECT_EQ(at(128, 128), 0x0000);
+}
+
+TEST(CreatureMarks, EachSlotPaintsWithItsMaskAndALaterSlotPaintsOver)
+{
+	using namespace openblack::creature_skin;
+	auto art = std::make_unique<Art>();
+	art->damage = FakeArt({0, 0, 0}, 255, {0, 0, 0}, 255);
+	const auto solid = [](uint8_t level) {
+		creature_tattoo::Design design;
+		for (size_t i = 0; i < creature_tattoo::k_MaskLevels; ++i)
+		{
+			const auto size = creature_tattoo::k_DesignSize >> i;
+			design.at(i) = {.size = size, .levels = std::vector<uint8_t>(static_cast<size_t>(size) * size, level)};
+		}
+		return design;
+	};
+	std::optional<creature_tattoo::Sites> sites = creature_tattoo::Sites {};
+	sites->at(0) = {.enabled = true, .u = 128, .v = 128, .skin = 0, .size = 1.0f, .mirror = false, .rotation = 0};
+	sites->at(1) = {.enabled = true, .u = 140, .v = 128, .skin = 0, .size = 1.0f, .mirror = false, .rotation = 0};
+	creature_tattoo::Slots tattoos {};
+	// Slot 3 on site 0 in red, then slot 5 on site 1 in blue, which overlaps it
+	tattoos[3] = {.design = 0, .site = 0, .colour = {0xFF, 0x00, 0x00}};
+	tattoos[5] = {.design = 0, .site = 1, .colour = {0x00, 0x00, 0xFF}};
+	// Slot 6 names a design but has no mask
+	tattoos[6] = {.design = 2, .site = 0, .colour = {0x00, 0xFF, 0x00}};
+	creature_tattoo::Masks masks {};
+	// The slots paint with their masks, whatever design they name
+	masks[3] = solid(15);
+	masks[5] = solid(15);
+	const Marks marks;
+	const std::vector<uint16_t> base(k_SkinTexels, 0x0000);
+	std::vector<uint16_t> out(k_SkinTexels);
+	Compose(out, base, {}, 0,
+	        {.skinIndex = 0, .tattoos = tattoos, .sites = sites, .marks = marks, .art = art.get(), .masks = &masks});
+	const auto at = [&out](int x, int y) { return out.at(static_cast<size_t>((y * 256) + x)); };
+	EXPECT_EQ(at(100, 128), 0xFF00);
+	// Where they overlap, the later slot shows
+	EXPECT_EQ(at(130, 128), 0xF00F);
+	EXPECT_EQ(at(170, 128), 0xF00F);
+	// Without masks, no tattoos
+	Compose(out, base, {}, 0,
+	        {.skinIndex = 0, .tattoos = tattoos, .sites = sites, .marks = marks, .art = art.get(), .masks = nullptr});
+	EXPECT_EQ(at(130, 128), 0x0000);
 }
 
 TEST(CreatureScars, AHardBlowCutsDeepAndFurtherAlongItsRow)

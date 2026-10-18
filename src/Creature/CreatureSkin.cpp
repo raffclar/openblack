@@ -82,12 +82,14 @@ void creature_skin::Compose(std::span<uint16_t> out, std::span<const uint16_t> b
 	{
 		return;
 	}
-	if (layers.sites.has_value())
+	if (layers.sites.has_value() && layers.masks != nullptr)
 	{
+		// A later slot paints over an earlier slot
 		for (size_t i = 0; i < layers.tattoos.size(); ++i)
 		{
 			const auto& slot = layers.tattoos.at(i);
-			if (slot.Empty() || slot.design >= layers.art->designs.size())
+			const auto& mask = layers.masks->at(i);
+			if (slot.Empty() || !mask.has_value())
 			{
 				continue;
 			}
@@ -96,15 +98,7 @@ void creature_skin::Compose(std::span<uint16_t> out, std::span<const uint16_t> b
 			{
 				continue;
 			}
-			// A slot with its bit in the creature's block of pictures paints the picture in the block
-			if (const auto own = creature_tattoo::DesignInBlock(layers.pictures, i); own.has_value())
-			{
-				creature_tattoo::Paint(out, *own, slot.colour, site);
-			}
-			else
-			{
-				creature_tattoo::Paint(out, layers.art->designs.at(slot.design), slot.colour, site);
-			}
+			creature_tattoo::Paint(out, *mask, slot.colour, site);
 		}
 	}
 	for (const auto& wound : layers.marks.wounds)
