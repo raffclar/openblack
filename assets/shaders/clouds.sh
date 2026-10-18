@@ -1141,11 +1141,18 @@ vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
 	// Thick and tall clouds are brighter and hide more of the sea than thin flat sheets
 	float thick = smoothstep(0.15f, 0.8f, region.x) * mix(0.7f, 1.0f, region.y);
 	float shown = smoothstep(0.05f, 0.6f, cover) * mix(0.75f, 1.0f, thick);
-	vec3 sun = u_cloudLightColour.rgb * u_cloudLightColour.w;
-	// The light's height over the sheet's own horizon: the night side of the planet has no sun on its clouds
-	float lightUp = dot(up, u_cloudLight.xyz);
-	float day = WorldLightShare(up);
-	vec3 colour = (sun * (0.25f + 0.75f * clamp(lightUp * 3.0f, 0.0f, 1.0f)) * 0.9f * day + sky * 0.6f * day) *
+	// Each place of the sheet has the light of its own sun height: far round the planet the day side has the light of
+	// day while the island has its night. Near the island the sheet keeps the island's light.
+	vec3 placeWater;
+	vec3 placeSky;
+	vec3 placeCloud;
+	PlaceLightAt(up, placeWater, placeSky, placeCloud);
+	float island = PlaceIslandShare(up);
+	vec3 sun = mix(placeCloud, u_cloudLightColour.rgb, island) * u_cloudLightColour.w;
+	vec3 skyHere = mix(placeSky * 0.95f, sky, island);
+	// The light's height over the sheet's own horizon
+	float lightUp = mix(PlaceAirLightHeight(up), dot(up, u_cloudLight.xyz), island);
+	vec3 colour = (sun * (0.25f + 0.75f * clamp(lightUp * 3.0f, 0.0f, 1.0f)) * 0.9f + skyHere * 0.6f) *
 	              mix(0.85f, 1.05f, thick);
 	depth = t;
 	return vec4(colour * shown, 1.0f - shown);

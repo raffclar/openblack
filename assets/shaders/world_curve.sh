@@ -18,6 +18,12 @@ uniform vec4 u_worldTurn[3];
 uniform vec4 u_planetSun;
 // xyz: the direction towards the real moon; w: the share of the island's light that it gives at its highest
 uniform vec4 u_planetMoon;
+// The light of each place on the ball by the height of its own sun (graphics::place_light): four vectors for each of
+// the 18 sun heights. They are the sun's light on the water and the night glow, the sky colour, the air's tint of the
+// sun's light and the air's brightness on the screen.
+uniform vec4 u_placeLight[72];
+// rgb: the moon's colour on the water; w: its full strength with its phase
+uniform vec4 u_placeMoon;
 
 // A direction in the camera's frame as a direction in the world's frame, for what has its place on the planet
 vec3 WorldDirection(vec3 dir)
@@ -52,16 +58,72 @@ vec3 WorldUpAt(vec3 fromEye, float heightOverSea)
 	return normalize(WorldMiddleToEye(heightOverSea) + fromEye);
 }
 
-// How much of the island's light lights a point of the ball with the up `up`, 0 to 1, from the height of the real sun
-// there and over the island. A point with the sun as high as over the island takes all of the light. On the night side
-// the moon gives a share of the light where it is up.
-float WorldLightShare(vec3 up)
+// Where a sun height (a sine) lies in the table of the place light: x the first knot, y the share of the next knot.
+// The knots are every 3 degrees from 21 under the horizon to 27 over it, then straight up.
+vec2 PlaceKnotAt(float sunHeight)
 {
-	float here = smoothstep(-0.12f, 0.05f, dot(up, u_planetSun.xyz));
-	float overIsland = smoothstep(-0.12f, 0.05f, u_planetSun.y);
-	float sun = overIsland > 1e-3f ? min(here / overIsland, 1.0f) : here;
-	float moon = u_planetMoon.w * smoothstep(-0.05f, 0.3f, dot(up, u_planetMoon.xyz));
-	return max(sun, moon);
+	float degrees = asin(clamp(sunHeight, -1.0f, 1.0f)) * 57.29578f;
+	if (degrees >= 27.0f)
+	{
+		return vec2(16.0f, clamp((degrees - 27.0f) / 63.0f, 0.0f, 1.0f));
+	}
+	float along = max((degrees + 21.0f) / 3.0f, 0.0f);
+	float knot = min(floor(along), 15.0f);
+	return vec2(knot, clamp(along - knot, 0.0f, 1.0f));
+}
+
+// One vector of the place light's table at a place in it (PlaceKnotAt): 0 the sun on the water and the glow, 1 the
+// sky, 2 the air's tint, 3 the air's brightness
+vec4 PlaceVector(vec2 at, int part)
+{
+	// The knot is kept in the table also for a height that is not a number
+	int first = clamp(int(at.x), 0, 16) * 4 + part;
+	return mix(u_placeLight[first], u_placeLight[first + 4], at.y);
+}
+
+// How much of the island's own light a point of the ball takes, from its up: all of it within about 200 km of the
+// middle of the camera's frame, none past about 1000 km. Farther away the point takes the light of its own sun.
+float PlaceIslandShare(vec3 up)
+{
+	return smoothstep(0.98769f, 0.99951f, up.y);
+}
+
+// The moon's light at a point of the ball with the up `up`, with the night sky's glow under it
+vec3 PlaceMoonLight(vec3 up, float glow)
+{
+	float through = smoothstep(-0.05f, 0.3f, dot(up, u_planetMoon.xyz));
+	return u_placeMoon.rgb * max(u_placeMoon.w * through, glow);
+}
+
+// The light of a point of the ball with the up `up`, by the height of its own sun: the sun's and the moon's light on
+// the water, the sky colour, and the light on the clouds
+void PlaceLightAt(vec3 up, out vec3 water, out vec3 sky, out vec3 cloud)
+{
+	vec2 at = PlaceKnotAt(dot(up, u_planetSun.xyz));
+	vec4 sun = PlaceVector(at, 0);
+	vec3 moon = PlaceMoonLight(up, sun.w);
+	water = sun.rgb + moon;
+	sky = PlaceVector(at, 1).rgb;
+	// The moon's light is cool and silver, as the clouds have it over the island
+	cloud = sun.rgb * PlaceVector(at, 2).rgb + moon * vec3(0.72f, 0.84f, 1.1f);
+}
+
+// The height (a sine) of the air's light over the horizon at a point of the ball with the up `up`: the sun by day, and
+// after sunset the moon, or the point opposite the sun while the moon is down (atmosphere::AirLightTowards)
+float PlaceAirLightHeight(vec3 up)
+{
+	float sunHeight = dot(up, u_planetSun.xyz);
+	float t = clamp((-asin(clamp(sunHeight, -1.0f, 1.0f)) * 57.29578f - 2.0f) / 6.0f, 0.0f, 1.0f);
+	float moonShare = t * t * (3.0f - 2.0f * t);
+	float moonUp = smoothstep(-0.05f, 0.1f, dot(up, u_planetMoon.xyz));
+	float night = mix(-sunHeight, dot(up, u_planetMoon.xyz), moonUp);
+	return mix(sunHeight, night, moonShare);
+}
+
+// How bright the air's light is on the screen at a point of the ball with the up `up`, by the height of its own sun
+vec3 PlaceAirScale(vec3 up)
+{
+	return PlaceVector(PlaceKnotAt(dot(up, u_planetSun.xyz)), 3).rgb;
 }
 
 // The direction of the ray from the eye through a point of the screen (0 to 1). It comes from the view's turn alone,

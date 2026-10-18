@@ -293,6 +293,14 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 	{
 		return {};
 	}
+	// EXPERIMENT (not for merge): in the orbit view the camera is far over the ball, and the limits of the land do not
+	// hold it. A camera that a command put there has no limits on its first frame too. On the frame that it comes
+	// down out of the orbit view, it settles first (planet_nav::Settle), and the limits hold it from the next frame.
+	if (const auto ball = PlanetBall();
+	    ball.has_value() && (_orbitShare > 0.0f || planet_nav::OrbitShare(planet_nav::HeightOver(*ball, _targetOrigin)) > 0.0f))
+	{
+		return {};
+	}
 	const auto& terrain = Locator::terrainSystem::value();
 	const auto zones = CurrentZones();
 	// The floor and the ceiling are those over where the camera was at the start of the frame
@@ -952,7 +960,8 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 		// screen. Out of the orbit view it settles there: near the island as the local camera with no turn, far round
 		// the planet in the frame of that point.
 		const float share = planet_nav::OrbitShare(planet_nav::HeightOver(*ball, _targetOrigin));
-		if (share <= 0.0f && _orbitShare > 0.0f && _planetTurn != glm::identity<glm::quat>())
+		// A camera that a command put far round the planet has no turn yet, and it settles in the same way
+		if (share <= 0.0f && _orbitShare > 0.0f)
 		{
 			const auto settled = planet_nav::Settle(
 			    *ball, _planetTurn, {.eye = _targetOrigin, .focus = _targetFocus, .up = glm::vec3(0.0f, 1.0f, 0.0f)});
@@ -990,20 +999,37 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 		info->focus = world->focus;
 		info->up = world->up;
 	}
-	// The frame changes between the world's frame and the frame of a point far round the planet: the camera takes the
-	// new place at once, as the two places show the same view
-	const bool islandFar = IslandFar();
-	if (info.has_value() && islandFar != _wasIslandFar)
+	// The frame changes between the world's frame and the frame of a point far round the planet. The two places show
+	// the same view, so the camera turns its place and movement into the new frame and moves on with no jump.
+	const auto frame = PlanetFrame();
+	// With no update this frame, the camera turns on the next frame that has one.
+	if (info.has_value())
 	{
-		info->jump = true;
+		if (ball.has_value() && frame != _shownFrame)
+		{
+			info->reframe =
+			    CameraInterpolationUpdateInfo::Reframe {.turn = glm::conjugate(frame) * _shownFrame, .centre = ball->centre};
+		}
+		_shownFrame = frame;
 	}
-	_wasIslandFar = islandFar;
 	return info;
 }
 
 glm::quat DefaultWorldCameraModel::PlanetFrame() const
 {
 	return IslandFar() ? _planetTurn : glm::identity<glm::quat>();
+}
+
+glm::vec3 DefaultWorldCameraModel::ToWorldFrame(glm::vec3 point) const
+{
+	const auto ball = PlanetBall();
+	return ball.has_value() && IslandFar() ? planet_nav::ToWorldFrame(*ball, _planetTurn, point) : point;
+}
+
+glm::vec3 DefaultWorldCameraModel::FromWorldFrame(glm::vec3 point) const
+{
+	const auto ball = PlanetBall();
+	return ball.has_value() && IslandFar() ? planet_nav::ToWorldFrame(*ball, glm::conjugate(_planetTurn), point) : point;
 }
 
 bool DefaultWorldCameraModel::IslandFar() const
@@ -1681,10 +1707,25 @@ void DefaultWorldCameraModel::PlaceAt(glm::vec3 origin, glm::vec3 focus)
 	_currentFocus = focus;
 	_targetOrigin = origin;
 	_targetFocus = focus;
-	// EXPERIMENT (not for merge): the camera that the command puts is the local camera, with no turn of the world
+	// EXPERIMENT (not for merge): the command puts the camera in the world's frame. Near the island and high up, that is
+	// the local camera with no turn of the world. Far round the planet and low down, the camera settles in the frame
+	// of that point, as it does when it comes down from the orbit.
 	_planetTurn = glm::identity<glm::quat>();
 	_overPlanet = false;
 	_anchorSpot.reset();
+	if (const auto ball = PlanetBall(); ball.has_value())
+	{
+		if (const auto settled = planet_nav::SettleWorldPose(*ball, {.eye = origin, .focus = focus}); settled.has_value())
+		{
+			_currentOrigin = settled->local.eye;
+			_currentFocus = settled->local.focus;
+			_targetOrigin = settled->local.eye;
+			_targetFocus = settled->local.focus;
+			_planetTurn = settled->turn;
+			_anchorSpot = settled->spot;
+			_orbitShare = 0.0f;
+		}
+	}
 	// The command puts only the camera. The controls that the player holds keep their state and continue:
 	// - A turn or a tilt keeps the point that it turns about and its distance. The camera thus looks from the place
 	//   towards that point.

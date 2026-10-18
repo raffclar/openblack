@@ -80,6 +80,16 @@ public:
 	}
 	/// EXPERIMENT (not for merge): the camera works in the frame of a point far round the planet, where no island is near
 	[[nodiscard]] bool IsIslandFar() const { return GetPlanetFrame() != glm::identity<glm::quat>(); }
+	/// EXPERIMENT (not for merge): a point in the camera's frame as a point in the world's frame, and the opposite
+	/// (CameraModel::ToWorldFrame)
+	[[nodiscard]] glm::vec3 ToWorldFrame(glm::vec3 point) const
+	{
+		return _model != nullptr ? _model->ToWorldFrame(point) : point;
+	}
+	[[nodiscard]] glm::vec3 FromWorldFrame(glm::vec3 point) const
+	{
+		return _model != nullptr ? _model->FromWorldFrame(point) : point;
+	}
 	[[nodiscard]] glm::vec3 GetFocusVelocity(Interpolation interpolation = Interpolation::Current) const;
 
 	/// Get rotation as euler angles in radians

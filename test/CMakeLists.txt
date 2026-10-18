@@ -1100,3 +1100,5 @@ openblack_setup_and_add_test(test_planet_weather graphics/test_planet_weather.cp
 openblack_setup_and_add_test(test_planet_navigation camera/test_planet_navigation.cpp)
 # EXPERIMENT (not for merge): the weather of the regions between 20 and 500 km for the clouds
 openblack_setup_and_add_test(test_cloud_regions graphics/test_cloud_regions.cpp)
+# EXPERIMENT (not for merge): the light of each place on the planet by the height of its own sun
+openblack_setup_and_add_test(test_place_light graphics/test_place_light.cpp)

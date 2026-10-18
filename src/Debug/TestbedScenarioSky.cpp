@@ -310,6 +310,20 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {7173000.0f, -2.361e7f, 7173000.0f}, .look = {2560.0f, -6046079.0f, 2560.0f}},
 	    .objects = TreesToTheEast(),
 	});
+	// EXPERIMENT (not for merge): the far day side of the planet while the island has its night
+	all.push_back({
+	    .id = "space.day_night_line",
+	    .name = "The far day side at the island's midnight",
+	    .facet = Facet::Sky,
+	    .description = "Midnight with the clock stopped. The camera is 15000 km over the planet, 150 degrees round from "
+	                   "the island over the north pole, and looks at the planet's middle, where it is day.",
+	    .expected = "The side of the planet under the camera is in full daylight: a blue-green sea with bright white clouds "
+	                "and the sun's glint. It is not dim in the moon's light of the island. Where the sun is low, the "
+	                "light goes warm, then the night side is dark.",
+	    .environment = {.hour = 0.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {7173000.0f, -2.361e7f, 7173000.0f}, .look = {2560.0f, -6046079.0f, 2560.0f}},
+	    .objects = TreesToTheEast(),
+	});
 	// EXPERIMENT (not for merge): the camera low over the open sea far from the island
 	all.push_back({
 	    .id = "space.far_sea",

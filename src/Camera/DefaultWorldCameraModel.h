@@ -64,6 +64,8 @@ public:
 	[[nodiscard]] bool HeldInsideTheWorld() const final { return !_overPlanet; }
 	/// EXPERIMENT (not for merge): far round the planet the camera has the frame of the point where it came down
 	[[nodiscard]] glm::quat PlanetFrame() const final;
+	[[nodiscard]] glm::vec3 ToWorldFrame(glm::vec3 point) const final;
+	[[nodiscard]] glm::vec3 FromWorldFrame(glm::vec3 point) const final;
 
 private:
 	void UpdateCameraInterpolationValues(const Camera& camera);
@@ -251,7 +253,8 @@ private:
 	/// Far round the planet: the place of the local camera across the ground where it came down (planet_nav::Settle)
 	std::optional<glm::vec2> _anchorSpot;
 	/// The last frame was far round the planet
-	bool _wasIslandFar {false};
+	/// The frame that the camera worked in on the last frame (PlanetFrame)
+	glm::quat _shownFrame {1.0f, 0.0f, 0.0f, 0.0f};
 	/// The local camera as the last frame gave it, and the world's eye that the last frame gave for it. While the
 	/// camera's destination stays at that eye, the local camera comes back exactly, with no loss in the turn.
 	glm::vec3 _localOrigin {0.0f};

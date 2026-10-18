@@ -32,6 +32,8 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/LandLightFrame.h"
+#include "3D/LandLightTable.h"
 #include "3D/OceanInterface.h"
 #include "3D/SkyDome.h"
 #include "3D/SkyFrame.h"
@@ -41,10 +43,13 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "EngineConfig.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Moon.h"
+#include "Graphics/PlaceLight.h"
 #include "Graphics/RealMoon.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
@@ -78,6 +83,8 @@ constexpr float k_HazeBrightness = 1.3f;
 /// The height in kilometres over which the sky's exposure does not change (a little over the eye's highest height
 /// before the experiment let it climb to space)
 constexpr float k_HighestExposure = 32.0f;
+/// How strongly the moon shows high in a clear sky, 0 to 255
+constexpr float k_MoonFullAlpha = 200.0f;
 
 void BindScreenTriangle()
 {
@@ -97,6 +104,135 @@ bool Stale(const std::optional<AtmosphereView::SkyCache>& cache, glm::vec3 towar
 	const bool moved = glm::dot(cache->towardsLight, towardsLight) < 0.99999f ||
 	                   std::abs(cache->turbidity - turbidity) > 0.05f || std::abs(cache->altitude - altitude) > 0.05f;
 	return moved && seconds - cache->seconds >= k_SkySeconds;
+}
+
+/// The colour that the air gives to the light at a height of the light, at the brightness that the clouds and the fog
+/// have without the haze, and the same light in the colours of the screen
+struct AirTint
+{
+	glm::vec3 tint {1.0f};
+	glm::vec3 onScreen {1.0f};
+};
+AirTint AirLightTint(float lightHeight, const atmos::Air& air)
+{
+	const glm::vec3 airLight = atmos::LightAtGround(lightHeight, air);
+	const float brightness = atmos::Luminance(volumetric_clouds::SunThroughAir(lightHeight));
+	const glm::vec3 tint = airLight * (brightness / std::max(atmos::Luminance(airLight), 1e-4f));
+	// The strongest colour on the screen stays as strong, so a low sun stays bright
+	const glm::vec3 onScreen = atmos::OnScreen(airLight);
+	const float peak = std::max({tint.r, tint.g, tint.b});
+	const float peakOnScreen = std::max({onScreen.r, onScreen.g, onScreen.b, 1e-4f});
+	return {.tint = tint, .onScreen = onScreen * (peak / peakOnScreen)};
+}
+
+/// A direction with the height `height` (a sine) and the same direction across the ground as `towards`
+glm::vec3 AtHeight(glm::vec3 towards, float height)
+{
+	const glm::vec2 across {towards.x, towards.z};
+	const glm::vec2 unit = glm::length(across) > 1e-6f ? glm::normalize(across) : glm::vec2(1.0f, 0.0f);
+	const float flat = std::sqrt(std::max(1.0f - (height * height), 0.0f));
+	return {unit.x * flat, height, unit.y * flat};
+}
+
+/// What the table of the light of each place is made from
+struct PlaceInputs
+{
+	atmos::Air air;
+	glm::vec3 sunTowards {0.0f, 1.0f, 0.0f};
+	glm::vec3 moonTowards {0.0f, -1.0f, 0.0f};
+	/// The island's own sky colour as the game shows it. It is also the sky when the land's palette is not loaded.
+	glm::vec3 island {0.0f};
+	/// The tint of the land's colours on the island's haze
+	glm::vec3 placeTint {1.0f};
+	/// The height of the eye for the sky's exposure, in kilometres, and the height of the sea's horizon there
+	float altitude {0.0f};
+	float horizonY {0.0f};
+};
+
+/// The table of the light of each place by the height of its own sun (place_light), and the moon's light there. The
+/// sun, the night glow and the sky colour follow the same rules as the island's light. The air's brightness at each
+/// height costs a march, so the renderer works out two heights again each frame, in turn.
+void PlaceLightTable(AtmosphereView& view, AtmosphereFrame& atmosphere, const PlaceInputs& inputs)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* sky = Locator::skySystem::has_value() ? &Locator::skySystem::value() : nullptr;
+	const auto* dome = sky != nullptr ? registry.TryGet<const ecs::components::SkyDome>(sky->GetDome()) : nullptr;
+	const auto* sun = sky != nullptr ? registry.TryGet<const ecs::components::Sun>(sky->GetSun()) : nullptr;
+	const auto* moon = sky != nullptr ? registry.TryGet<const ecs::components::Moon>(sky->GetMoon()) : nullptr;
+	const auto& palettes = Locator::resources::value().GetLandLightPalettes();
+	const LandLightPalette* palette =
+	    palettes.Contains(LandLightPalette::k_Id.value()) ? &*palettes.Handle(LandLightPalette::k_Id.value()) : nullptr;
+	const bool fog = detail_level::Fog(Locator::config::value().detailLevel);
+	const LandLightInputs land = dome != nullptr ? dome->landLight : LandLightInputs {};
+	const float overcast = dome != nullptr ? dome->overcast : 0.0f;
+	LandLightTable table;
+	const place_light::Inputs knotInputs {
+	    .sunColour = (sun != nullptr ? sun->colour : glm::vec3(1.0f)) * underwater::k_SunLight,
+	    .sunStrength =
+	        [overcast, fog](float height) {
+		        return sky_dome::ThroughOvercast(atmos::SunStrength(height), overcast, fog) / 255.0f;
+	        },
+	    .nightGlow = [](float height) { return atmos::NightGlow(height); },
+	    .skyColour =
+	        [&](float height) {
+		        if (palette == nullptr)
+		        {
+			        return inputs.island;
+		        }
+		        table.Build(*palette, atmos::SkyTypeFromSun(height), land.alignment, land.overcast);
+		        return table.GetHaze().colour / 255.0f;
+	        },
+	    .airTint = [&inputs](float height) { return AirLightTint(height, inputs.air).onScreen; },
+	};
+	const auto heightOf = [](int knot) {
+		return std::sin(place_light::KnotDegrees(knot) * std::numbers::pi_v<float> / 180.0f);
+	};
+	std::array<place_light::Knot, place_light::k_Knots> knots {};
+	for (int i = 0; i < place_light::k_Knots; ++i)
+	{
+		knots[static_cast<size_t>(i)] = place_light::KnotAt(heightOf(i), knotInputs);
+	}
+	// The air's brightness on the screen at each height, as the island's exposure finds it for its own light
+	const auto scaleOf = [&](int knot) {
+		const float height = heightOf(knot);
+		const glm::vec3 sunThere = AtHeight(inputs.sunTowards, height);
+		const float moonShare = atmos::AirMoonShare(height);
+		const glm::vec3 light =
+		    atmos::AirLightTowards(sunThere, atmos::AirMoonTowards(sunThere, inputs.moonTowards), moonShare);
+		const glm::vec3 horizon = atmos::HorizonRadiance(light, inputs.altitude, inputs.air, inputs.horizonY);
+		const glm::vec3 tint = glm::mix(glm::vec3(1.0f), k_MoonTint, moonShare);
+		return atmos::ScreenScale(horizon, knots[static_cast<size_t>(knot)].sky, tint, atmos::k_OriginalHue) * k_HazeBrightness;
+	};
+	constexpr int k_ScalesPerFrame = 2;
+	const int count = view.placeScaleReady ? k_ScalesPerFrame : place_light::k_Knots;
+	for (int i = 0; i < count; ++i)
+	{
+		const int knot = view.nextPlaceScale;
+		view.placeScale[static_cast<size_t>(knot)] = scaleOf(knot);
+		view.nextPlaceScale = (knot + 1) % place_light::k_Knots;
+	}
+	view.placeScaleReady = true;
+	// The island's haze has the tint of the land's colours, and the game's sky colour can differ from the palette's.
+	// Each knot takes the same change, so the table gives the island's own light at the island's sun height.
+	glm::vec3 skyRatio {1.0f};
+	if (palette != nullptr)
+	{
+		const glm::vec3 tableSky = knotInputs.skyColour(inputs.sunTowards.y);
+		skyRatio = glm::clamp(inputs.island / glm::max(tableSky, glm::vec3(1e-3f)), glm::vec3(0.5f), glm::vec3(2.0f));
+	}
+	for (size_t i = 0; i < knots.size(); ++i)
+	{
+		knots[i].airScale = view.placeScale[i] * inputs.placeTint;
+		knots[i].sky *= skyRatio;
+	}
+	atmosphere.placeLight = place_light::Pack(knots);
+	// The moon's light at full strength, with its phase; each place takes a share by the moon's height there
+	if (moon != nullptr)
+	{
+		const float full =
+		    sky_dome::ThroughOvercast(k_MoonFullAlpha, overcast, fog) / 255.0f * underwater::PhaseBrightness(moon->phase);
+		atmosphere.placeMoon = {moon->colour * underwater::k_MoonLight, full};
+	}
 }
 } // namespace
 
@@ -227,14 +363,9 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.sun = {glm::vec3(atmosphere.sun) * atmosphere.placeTint * k_HazeBrightness, 0.0f};
 	atmosphere.horizon = {cache.horizon * glm::vec3(atmosphere.sun), 0.0f};
 	// The clouds and the fog take the air's colour of the light, at the brightness that they have without the haze
-	const glm::vec3 airLight = atmos::LightAtGround(towardsLight.y, air);
-	const float brightness = atmos::Luminance(volumetric_clouds::SunThroughAir(towardsLight.y));
-	atmosphere.lightTint = airLight * (brightness / std::max(atmos::Luminance(airLight), 1e-4f));
-	// The same light in the colours of the screen. Its strongest colour stays as strong, so a low sun stays bright.
-	const glm::vec3 airLightOnScreen = atmos::OnScreen(airLight);
-	const float peak = std::max({atmosphere.lightTint.r, atmosphere.lightTint.g, atmosphere.lightTint.b});
-	const float peakOnScreen = std::max({airLightOnScreen.r, airLightOnScreen.g, airLightOnScreen.b, 1e-4f});
-	atmosphere.lightTintOnScreen = airLightOnScreen * (peak / peakOnScreen);
+	const auto airTint = AirLightTint(towardsLight.y, air);
+	atmosphere.lightTint = airTint.tint;
+	atmosphere.lightTintOnScreen = airTint.onScreen;
 	atmosphere.lightAtGround = atmos::LightAtGround(towardsLight.y, air);
 	// The game's own sun or moon in the sky, for its glare and for the light through the leaves
 	atmosphere.sunDisc = {gameLight, frame.lightColour.w * glm::mix(1.0f, 0.35f, frame.light.w)};
@@ -260,6 +391,14 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	// The moon lights the night side of the ball with a share of the island's light, by its phase
 	constexpr float k_MoonShare = 0.35f;
 	atmosphere.planetMoon = {moonTowards, moon != nullptr ? k_MoonShare * underwater::PhaseBrightness(moon->phase) : 0.0f};
+	PlaceLightTable(view, atmosphere,
+	                {.air = air,
+	                 .sunTowards = sunTowards,
+	                 .moonTowards = moonTowards,
+	                 .island = glm::vec3(frame.sky),
+	                 .placeTint = atmosphere.placeTint,
+	                 .altitude = skyAltitude,
+	                 .horizonY = atmos::WorldHorizonY(cap, skyHeight)});
 	atmosphere.worldTurn = {glm::vec4(glm::row(turn, 0), 0.0f), glm::vec4(glm::row(turn, 1), 0.0f),
 	                        glm::vec4(glm::row(turn, 2), 0.0f)};
 	// The stars, the Milky Way and the nebulae have fixed places on the sky's sphere, which turns with the hour
@@ -560,6 +699,14 @@ void Renderer::SetWorldCurve(const ShaderProgram& program) const
 	{
 		const glm::vec4 none {0.0f, -1.0f, 0.0f, 0.0f};
 		program.SetUniformValue("u_planetMoon", _atmosphereFrame.has_value() ? &_atmosphereFrame->planetMoon : &none);
+	}
+	if (program.HasUniform("u_placeLight"))
+	{
+		static constexpr std::array<glm::vec4, place_light::k_Knots * place_light::k_VectorsPerKnot> k_None {};
+		const auto& table = _atmosphereFrame.has_value() ? _atmosphereFrame->placeLight : k_None;
+		program.SetUniformArray("u_placeLight", table.data(), static_cast<uint16_t>(table.size()));
+		const glm::vec4 noMoon {0.0f};
+		program.SetUniformValue("u_placeMoon", _atmosphereFrame.has_value() ? &_atmosphereFrame->placeMoon : &noMoon);
 	}
 	if (program.HasUniform("u_worldTurn"))
 	{

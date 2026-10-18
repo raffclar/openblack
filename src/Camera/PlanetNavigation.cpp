@@ -217,6 +217,26 @@ planet_nav::Settled planet_nav::Settle(const Ball& ball, const glm::quat& turn, 
 	};
 }
 
+std::optional<planet_nav::Settled> planet_nav::SettleWorldPose(const Ball& ball, const Pose& world)
+{
+	if (HeightOver(ball, world.eye) >= k_OrbitFrom || ArcFromMap(ball, world.eye) <= k_FarSeaLimit)
+	{
+		return std::nullopt;
+	}
+	return Settle(ball, glm::identity<glm::quat>(), world);
+}
+
+glm::vec3 planet_nav::TurnPointAbout(glm::vec3 centre, const glm::quat& turn, glm::vec3 point)
+{
+	const glm::dvec3 middle {centre};
+	return glm::vec3(middle + glm::dquat(turn) * (glm::dvec3(point) - middle));
+}
+
+glm::vec3 planet_nav::ToWorldFrame(const Ball& ball, const glm::quat& frame, glm::vec3 point)
+{
+	return TurnAbout(ball, frame, {.eye = point, .focus = point}).eye;
+}
+
 std::optional<glm::vec2> planet_nav::CurvedSeaDrag(const SeaDistance& sea, glm::vec3 eyeAtGrip, glm::vec3 gripped,
                                                    glm::vec3 ray)
 {

@@ -59,14 +59,24 @@ void main()
 		}
 		vec3 p = eye + dir * ((float(i) + 0.5f) * stride);
 		float altitude = max((overBall ? WorldAltitude(p, sea) : p.y) - sea, 0.0f) / ATMOS_UNITS_PER_KM;
-		float lightY = overBall ? dot(WorldUpAt(p - eye, eye.y - sea), u_atmosLight.xyz) : u_atmosLight.y;
+		// From high up each place has the air's light of its own sun height: far round the planet the day side has the
+		// light of day while the island has its night. Near the island the air keeps the island's light.
+		float lightY = u_atmosLight.y;
+		vec3 placeScale = vec3_splat(1.0f);
+		if (overBall)
+		{
+			vec3 up = WorldUpAt(p - eye, eye.y - sea);
+			float island = PlaceIslandShare(up);
+			lightY = mix(PlaceAirLightHeight(up), dot(up, u_atmosLight.xyz), island);
+			placeScale = mix(PlaceAirScale(up) / max(u_atmosSun.rgb, vec3_splat(1e-4f)), vec3_splat(1.0f), island);
+		}
 		float lit = 1.0f;
 		if (u_atmosAerial.x > 0.5f)
 		{
 			lit = SunVisibilityAbove(p) * CloudShadeInAir(p, normalize(u_atmosGameLight.xyz), sea);
 		}
 		float scale = AtmosHazeScaleAt(altitude);
-		vec3 scattered = AtmosScatterAt(altitude, lightY, cosAngle, lit) * scale;
+		vec3 scattered = AtmosScatterAt(altitude, lightY, cosAngle, lit) * scale * placeScale;
 		vec3 extinction = max(AtmosExtinction(altitude) * scale, vec3_splat(1e-7f));
 		vec3 dimmed = exp(-extinction * strideKm);
 		light += through * scattered * (1.0f - dimmed) / extinction;

@@ -79,10 +79,9 @@ underwater::WaterLight SkyLights(const glm::vec3& eye)
 	if (const auto* sun = registry.TryGet<const ecs::components::Sun>(sky.GetSun());
 	    sun != nullptr && sun->placement.has_value())
 	{
-		// The sun's colour is dark, as the game blends its square over the sky: its light on the water is brighter
-		constexpr float k_SunLight = 1.7f;
-		sunLight = underwater::SkyLight {
-		    .towards = sun->placement->position - eye, .colour = sun->colour * k_SunLight, .strength = sun->strength / 255.0f};
+		sunLight = underwater::SkyLight {.towards = sun->placement->position - eye,
+		                                 .colour = sun->colour * underwater::k_SunLight,
+		                                 .strength = sun->strength / 255.0f};
 	}
 	std::optional<underwater::SkyLight> moonLight;
 	if (const auto* moon = registry.TryGet<const ecs::components::Moon>(sky.GetMoon()); moon != nullptr)
