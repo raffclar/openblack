@@ -194,4 +194,42 @@ struct WanderTurn
 	return {.setsOff = false, .turnsLeft = static_cast<uint16_t>(turnsLeft - 1)};
 }
 
+/// What a villager does when a script lets it go, after it leaves its flock
+enum class ReleaseOutcome : uint8_t
+{
+	/// It stays as it is: it is in the physics or in its home
+	Stays,
+	/// It decides at once what to do in its town
+	DecidesInTown,
+	/// It has no town, so it starts to wander as a vagrant
+	BecomesVagrant,
+	/// It has no life, so it dies
+	Dies,
+};
+
+/// The facts about a villager that the release rule reads
+struct ReleaseFacts
+{
+	bool inPhysics {false};
+	bool atHome {false};
+	float life {0.0f};
+	bool hasTown {false};
+};
+
+/// What a villager does when a script lets it go. A villager in the physics or in its home stays as it is. Other
+/// villagers with life go back to their town, or wander when they have no town. Villagers with no life die.
+[[nodiscard]] constexpr ReleaseOutcome ReleaseOutcomeOf(const ReleaseFacts& facts)
+{
+	if (facts.inPhysics || facts.atHome)
+	{
+		return ReleaseOutcome::Stays;
+	}
+	// A life that is not more than zero (or not a number) kills the villager
+	if (!(facts.life > 0.0f))
+	{
+		return ReleaseOutcome::Dies;
+	}
+	return facts.hasTown ? ReleaseOutcome::DecidesInTown : ReleaseOutcome::BecomesVagrant;
+}
+
 } // namespace openblack::ecs::villager_script_rules

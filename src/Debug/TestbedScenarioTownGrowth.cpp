@@ -548,8 +548,8 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                   "villagers stand 6 metres east of it. A script controls the north one. Eight seconds in, the "
 	                   "script releases it, as RELEASE_FROM_SCRIPT does.",
 	    .expected = "The south villager takes the reaction up and turns to watch the cart. The north villager does not "
-	                "watch the cart while the script controls it. When the script releases it, it decides what to do, "
-	                "takes the reaction up and turns to watch the cart too.",
+	                "watch the cart while the script controls it. When the script releases it, it has no town, so it "
+	                "starts as a vagrant. Then it takes the reaction up and turns to watch the cart too.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-4.0f, -8.0f}, {10.0f, 8.0f}}, .distance = 0.5f},
 	    .objects =
@@ -557,6 +557,40 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	         {.type = VillagerInfo::CelticFarmerMale, .offset = {6.0f, -3.0f}, .yawDegrees = 0.0f},
 	         {.type = VillagerInfo::CelticForesterMale, .offset = {6.0f, 3.0f}, .yawDegrees = 0.0f, .scriptControlled = true}},
 	    .commands = {{.kind = Command::Kind::ScriptRelease, .delaySeconds = 8.0f, .object = 2}},
+	});
+
+	// The three things that a villager does when a script releases it
+	all.push_back({
+	    .id = "villagers.script_release_outcomes",
+	    .name = "What a villager does when a script releases it",
+	    .facet = Facet::Objects,
+	    .description = "A town has a town centre and a hut. A script controls three villagers that stand in a line east of "
+	                   "the hut. The north villager belongs to the town. The middle villager has no town. The south "
+	                   "villager belongs to the town and has no life. Four seconds in, the script releases all three.",
+	    .expected = "Before the release, the three villagers stand still. After the release, the north villager decides "
+	                "at once what to do in its town, and goes to sit in the town. The middle villager starts as a vagrant. "
+	                "The town is near, so the vagrant joins the town and also goes to sit there. The south villager "
+	                "dies, falls and lies dead.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-14.0f, -10.0f}, {14.0f, 10.0f}}, .distance = 0.6f},
+	    .objects =
+	        {{.type = AbodeInfo::CelticTownCentre, .offset = {-10.0f, 0.0f}},
+	         {.type = AbodeInfo::CelticHut, .offset = {0.0f, 0.0f}, .yawDegrees = 90.0f},
+	         {.type = VillagerInfo::CelticFarmerMale,
+	          .offset = {8.0f, -4.0f},
+	          .yawDegrees = 0.0f,
+	          .joinTown = true,
+	          .scriptControlled = true},
+	         {.type = VillagerInfo::CelticForesterMale, .offset = {8.0f, 0.0f}, .yawDegrees = 0.0f, .scriptControlled = true},
+	         {.type = VillagerInfo::CelticHousewifeFemale,
+	          .offset = {8.0f, 4.0f},
+	          .yawDegrees = 0.0f,
+	          .joinTown = true,
+	          .life = 0.0f,
+	          .scriptControlled = true}},
+	    .commands = {{.kind = Command::Kind::ScriptRelease, .delaySeconds = 4.0f, .object = 2},
+	                 {.kind = Command::Kind::ScriptRelease, .delaySeconds = 0.0f, .object = 3},
+	                 {.kind = Command::Kind::ScriptRelease, .delaySeconds = 0.0f, .object = 4}},
 	});
 
 	// Villagers watching a thing that the hand then takes up
