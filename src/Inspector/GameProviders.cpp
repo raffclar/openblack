@@ -2998,7 +2998,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 	                   {.name = "point", .type = "array", .description = "[x, z] on the land", .required = true},
 	                   {.name = "pace",
 	                    .type = "string",
-	                    .description = "walk (the default), run, or face to turn on the spot towards the point",
+	                    .description = "walk (the default), run, face to turn on the spot towards the point, stop to stop "
+	                                   "as the game stops a walk (the point is not used), or stop_at_once to stop dead",
 	                    .required = false}});
 	move.writes = true;
 	provider->Add(std::move(move), [](const QueryContext& context) {
@@ -3023,9 +3024,21 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		{
 			return QueryResult::Value({{"result", locomotion.TurnToFace(*creature, target) ? "started" : "refused"}});
 		}
+		if (pace == "stop" || pace == "stop_at_once")
+		{
+			if (pace == "stop")
+			{
+				locomotion.Stop(*creature);
+			}
+			else
+			{
+				locomotion.StopAtOnce(*creature);
+			}
+			return QueryResult::Value({{"result", "stopped"}});
+		}
 		if (pace != "walk" && pace != "run")
 		{
-			return QueryResult::Error("pace is walk, run or face");
+			return QueryResult::Error("pace is walk, run, face, stop or stop_at_once");
 		}
 		using Locomotion = ecs::systems::CreatureLocomotionSystemInterface;
 		constexpr std::array<std::string_view, 3> k_Results {"invalid_destination", "busy", "started"};

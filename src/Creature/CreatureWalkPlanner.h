@@ -147,6 +147,11 @@ struct NextLeg
 /// (with its height) at the creature's scale, less how far along the route the step went
 [[nodiscard]] float StepJoinAhead(const glm::vec3& displacement, float scale, float travelled);
 
+/// How far ahead along its route a walking creature stops when something tells it to stop. It is the distance in which
+/// it slows from its speed to a stand. When the turn or the step that it plays needs a longer distance, it is that
+/// distance.
+[[nodiscard]] float StopAhead(float speed, float stillNeeded);
+
 /// The walk animation's time when a step ends and the walk starts: the share of the step played, in the walk. After a
 /// left step the walk starts half a cycle on.
 [[nodiscard]] int32_t WalkTimeAfterStep(int32_t stepTimeMs, int32_t stepMs, int32_t walkMs, creature_locomotion::Side side);

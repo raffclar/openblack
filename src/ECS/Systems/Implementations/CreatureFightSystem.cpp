@@ -970,7 +970,7 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		const auto& body = registry.Get<const Creature>(self);
 		if (Locator::creatureLocomotionSystem::has_value())
 		{
-			Locator::creatureLocomotionSystem::value().Stop(self);
+			Locator::creatureLocomotionSystem::value().StopAtOnce(self);
 		}
 		if (Locator::creatureObjectActionSystem::has_value())
 		{
@@ -2023,7 +2023,7 @@ void CreatureFightSystem::Faint(entt::entity creature)
 	auto& registry = Locator::entitiesRegistry::value();
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
-		Locator::creatureLocomotionSystem::value().Stop(creature);
+		Locator::creatureLocomotionSystem::value().StopAtOnce(creature);
 	}
 	// The action that its body plays ends at two times the usual speed. What its hands do goes on, and it keeps what it
 	// holds: before the faint starts, it lets go of the thing as before any action that needs empty hands.
@@ -2417,7 +2417,7 @@ void CreatureFightSystem::ProcessStages()
 				fighting->played = true;
 				if (locomotion != nullptr)
 				{
-					locomotion->Stop(entity);
+					locomotion->StopAtOnce(entity);
 					locomotion->TurnToFace(entity, Flat(registry.Get<const Transform>(opponent).position));
 				}
 			}
@@ -2613,7 +2613,7 @@ void CreatureFightSystem::BeginDuel(entt::entity creature)
 	++record.fights;
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
-		Locator::creatureLocomotionSystem::value().Stop(creature);
+		Locator::creatureLocomotionSystem::value().StopAtOnce(creature);
 	}
 	MeasureBlows(creature);
 	fight::Enter(fighting.fighter, fight::State::Start);

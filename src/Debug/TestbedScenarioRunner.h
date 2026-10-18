@@ -23,6 +23,7 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 
 #include "BenchmarkRecorder.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -133,6 +134,8 @@ private:
 	void UpdateVillagerWalks();
 	/// The scenario's objects thrown when their throws are due
 	void UpdateThrows();
+	/// Asks again for the turns that did not start while their creatures walked to a stop
+	void UpdateTurnsAsked();
 	/// Casts the scenario's miracle of that index; the running miracle, or none
 	entt::entity CastMiracle(size_t index);
 	void UpdateParticles(float seconds);
@@ -230,6 +233,8 @@ private:
 	std::vector<entt::entity> _temples;
 	/// When each of the scenario's throws is next due, in seconds; none once done
 	std::vector<std::optional<float>> _throwsDue;
+	/// The turns to face a point that wait until their creatures stand
+	std::vector<std::pair<entt::entity, glm::vec2>> _turnsAsked;
 	/// For each object, when it next walks, whether it next walks out or back, and whether it has been dropped yet; and
 	/// the walk it is on: where to and the game turn it set off, until it gets there
 	struct ObjectWalk

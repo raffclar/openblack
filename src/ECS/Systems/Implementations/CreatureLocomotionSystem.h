@@ -44,7 +44,9 @@ public:
 	MoveResult FleeFrom(entt::entity creature, glm::vec2 threat, Pace pace) override;
 	bool TurnToFace(entt::entity creature, glm::vec2 point) override;
 	bool TurnToHeading(entt::entity creature, GameHeading heading) override;
+	bool TurnToFaceAtOnce(entt::entity creature, glm::vec2 point) override;
 	void Stop(entt::entity creature) override;
+	void StopAtOnce(entt::entity creature) override;
 	void ResetPace(entt::entity creature) override;
 	void Place(entt::entity creature, glm::vec3 position) override;
 	void PlaceWithoutWalking(entt::entity creature, glm::vec3 position) override;
@@ -58,6 +60,8 @@ private:
 	                     float minDistance, float maxDistance, bool ontoDestination);
 	/// How far round its middle a species' body reaches at a drawn scale of one, worked out once
 	float BodyRadius(CreatureType species);
+	/// Sets the breath of a creature that stops back to its resting period
+	static void BreatheAtRest(entt::entity creature);
 
 	/// Where creatures can walk, sorted from the land the first time it is wanted. The system is made anew with each
 	/// land.

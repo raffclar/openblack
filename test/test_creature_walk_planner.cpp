@@ -188,3 +188,23 @@ TEST(CreatureWalkPlanner, ARouteFoundDuringAStepIsJoinedFromTheEndOfTheStep)
 	// A turn on the spot joins from a little way ahead
 	EXPECT_EQ(k_TurnJoinAhead, 0.05f);
 }
+
+TEST(CreatureWalkPlanner, AStopSlowsFromTheSpeedToAStand)
+{
+	// At 12 units a second the walk's slow-down of 12 a second each second needs 6 units
+	EXPECT_EQ(StopAhead(12.0f, 0.0f), 6.0f);
+	EXPECT_EQ(StopAhead(0.0f, 0.0f), 0.0f);
+	// In single precision, in the game's order
+	const float speed = 7.3f;
+	const float share = speed / 12.0f;
+	EXPECT_EQ(StopAhead(speed, 0.0f), ((12.0f * share) * share) * 0.5f);
+}
+
+TEST(CreatureWalkPlanner, AStopGoesOnForWhatTheTurnOrStepStillNeeds)
+{
+	EXPECT_EQ(StopAhead(0.0f, k_TurnJoinAhead), k_TurnJoinAhead);
+	EXPECT_EQ(StopAhead(12.0f, 9.0f), 9.0f);
+	EXPECT_EQ(StopAhead(12.0f, 3.0f), 6.0f);
+	// A distance that is not a number does not count
+	EXPECT_EQ(StopAhead(12.0f, std::nanf("")), 6.0f);
+}

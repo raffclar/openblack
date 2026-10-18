@@ -131,7 +131,7 @@ public:
 		}
 		if (Locator::creatureLocomotionSystem::has_value())
 		{
-			Locator::creatureLocomotionSystem::value().Stop(creature);
+			Locator::creatureLocomotionSystem::value().StopAtOnce(creature);
 		}
 	}
 

@@ -80,6 +80,9 @@ public:
 	Advanced Advance(float distance);
 	/// Goes back to the start of the leg that it is on, as a walk that a sharp turn stops does
 	void RestartLeg();
+	/// Stops, as a creature that something tells to stop does. A search from where it stands ends, and it stands. On
+	/// its way, its searches end and its route ends a distance ahead (see EndAhead). It then walks on to that end.
+	void Stop(float ahead);
 
 	[[nodiscard]] State GetState() const { return _state; }
 	[[nodiscard]] bool IsFollowing() const { return _state == State::Walking || _state == State::Replanning; }
@@ -89,6 +92,8 @@ public:
 	[[nodiscard]] const Obstacles& GetObstacles() const { return _obstacles; }
 	[[nodiscard]] const Destination& GetDestination() const { return _destination; }
 	[[nodiscard]] glm::vec2 GetPosition() const { return _position; }
+	/// Where it will be once the route that it follows ends
+	[[nodiscard]] glm::vec2 GetRouteEnd() const { return _routeEnd; }
 	/// The heading along the route where it is. A straight leg too short to measure keeps the heading from before.
 	[[nodiscard]] GameHeading GetHeading() const { return _heading; }
 	[[nodiscard]] size_t GetSearchCount() const { return _searches.size(); }

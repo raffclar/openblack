@@ -769,7 +769,7 @@ void BeginPlaying(entt::entity creature, CreatureObjectAction& action, CreatureA
 {
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
-		Locator::creatureLocomotionSystem::value().Stop(creature);
+		Locator::creatureLocomotionSystem::value().StopAtOnce(creature);
 	}
 	animation.body = {};
 	action.phase = Phase::Playing;

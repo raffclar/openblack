@@ -2843,7 +2843,7 @@ void CreatureMindSystem::HandTookHold(entt::entity creature)
 	if (Locator::creatureLocomotionSystem::has_value() && Locator::camera::has_value())
 	{
 		const auto eye = Locator::camera::value().GetOrigin();
-		Locator::creatureLocomotionSystem::value().TurnToFace(creature, glm::vec2(eye.x, eye.z));
+		Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature, glm::vec2(eye.x, eye.z));
 	}
 	mind->showDesireOnHold = true;
 }
@@ -2923,7 +2923,7 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	}
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
-		Locator::creatureLocomotionSystem::value().Stop(creature);
+		Locator::creatureLocomotionSystem::value().StopAtOnce(creature);
 	}
 	mind->idle.agenda.clear();
 	mind->idle.step = 0;
@@ -2943,7 +2943,7 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 		if (Locator::creatureLocomotionSystem::has_value() && Locator::camera::has_value())
 		{
 			const auto eye = Locator::camera::value().GetOrigin();
-			Locator::creatureLocomotionSystem::value().TurnToFace(creature, glm::vec2(eye.x, eye.z));
+			Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature, glm::vec2(eye.x, eye.z));
 		}
 		return;
 	}
@@ -2998,7 +2998,7 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 	}
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
-		Locator::creatureLocomotionSystem::value().Stop(creature);
+		Locator::creatureLocomotionSystem::value().StopAtOnce(creature);
 	}
 	body->body = *played;
 	// Only the body is taken: the mind goes on with what it was doing once the action has played, as its agenda waits for
