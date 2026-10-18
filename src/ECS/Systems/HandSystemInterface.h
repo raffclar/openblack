@@ -36,6 +36,8 @@ public:
 		_Count
 	};
 	virtual bool Initialize() noexcept = 0;
+	/// After the load of a saved world: the system finds the hands among the loaded entities
+	virtual void FindAfterLoad() {}
 	[[nodiscard]] virtual std::array<entt::entity, static_cast<size_t>(Side::_Count)> GetPlayerHands() const noexcept = 0;
 	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)>
 	GetPlayerHandPositions() const noexcept = 0;

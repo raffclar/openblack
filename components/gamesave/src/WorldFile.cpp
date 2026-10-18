@@ -92,7 +92,18 @@ Chunk openblack::gamesave::ToChunk(const GameChunk& game)
 	writer.Put(game.creatureInTemple);
 	writer.Put(game.lastAutosaveTurn);
 	writer.Put(game.lastQuickSaveTurn);
+	PutText(writer, game.landscapeFile);
 	return {.tag = k_GameTag, .bytes = writer.Take()};
+}
+
+std::optional<std::span<const uint8_t>> openblack::gamesave::FindChunk(const WorldFile& file, const Tag& tag)
+{
+	const auto found = std::ranges::find(file.chunks, tag, &Chunk::tag);
+	if (found == file.chunks.end())
+	{
+		return std::nullopt;
+	}
+	return std::span<const uint8_t>(found->bytes);
 }
 
 std::optional<GameChunk> openblack::gamesave::ReadGameChunk(std::span<const uint8_t> bytes)
@@ -118,6 +129,16 @@ std::optional<GameChunk> openblack::gamesave::ReadGameChunk(std::span<const uint
 	{
 		reader.Get(game.lastAutosaveTurn);
 		reader.Get(game.lastQuickSaveTurn);
+	}
+	// A block from before the whole world has no landscape file
+	if (reader.Left() > 0)
+	{
+		auto landscapeFile = GetText(reader);
+		if (!landscapeFile.has_value())
+		{
+			return std::nullopt;
+		}
+		game.landscapeFile = std::move(*landscapeFile);
 	}
 	return game;
 }

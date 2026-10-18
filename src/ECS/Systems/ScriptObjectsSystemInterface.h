@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <span>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -65,6 +66,10 @@ public:
 	/// A new land: its objects have gone already, so nothing is let go back into the game; each place forgets its
 	/// object but keeps its count of references
 	virtual void ClearForNewLand() = 0;
+	/// The bytes of the whole table, for a saved world; none for a system that keeps no table
+	[[nodiscard]] virtual std::vector<uint8_t> SaveTable() const { return {}; }
+	/// Puts back the table of a saved world from the bytes of SaveTable. Returns whether the bytes fit the table.
+	virtual bool LoadTable(std::span<const uint8_t> bytes) { return bytes.empty(); }
 };
 
 } // namespace openblack::ecs::systems

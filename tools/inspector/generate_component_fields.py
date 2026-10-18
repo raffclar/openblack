@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes src/Inspector/ComponentFields.cpp: every component of src/ECS/Components and its data members registered
+"""Writes src/ECS/Reflection/ComponentFields.cpp: every component of src/ECS/Components and its data members registered
 with the inspector's reflection, so that the inspector writes them out as JSON and sets them by name.
 
 Run it again after adding or changing a component (with clang-format on the PATH, it formats the file too):
@@ -17,7 +17,7 @@ struct of src/ (public members, no base, not a template) that a field holds, dir
 those their own fields hold in turn. A list indexed by an enumeration (std::array<T, static_cast<size_t>(E::_Count)>, or
 a constant of that) is given its enumeration's names, which the inspector reads and writes its elements by.
 
-Types whose data is private are registered by hand in src/Inspector/ComponentFieldsByHand.cpp (BY_HAND below says
+Types whose data is private are registered by hand in src/ECS/Reflection/ComponentFieldsByHand.cpp (BY_HAND below says
 which types they give, to be registered here). With --report it lists the types fields hold that it can't register,
 and why.
 """
@@ -30,7 +30,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMPONENTS = ROOT / "src" / "ECS" / "Components"
-OUTPUT = ROOT / "src" / "Inspector" / "ComponentFields.cpp"
+OUTPUT = ROOT / "src" / "ECS" / "Reflection" / "ComponentFields.cpp"
 NAMESPACE = "openblack::ecs::components"
 
 # Types that aren't components, though they are declared beside them
@@ -41,8 +41,13 @@ SKIPPED = {
 }
 
 SOURCES = ROOT / "src"
+# The headers of libraries whose types the saved world keeps, included by their names
+LIBRARY_HEADERS = [ROOT / "components" / "creaturemind" / "include"]
 
-# Types with private data, registered by hand in src/Inspector/ComponentFieldsByHand.cpp, and the types their functions
+# Values that no component holds but that the saved world keeps, registered with the types they hold
+VALUE_ROOTS = ["openblack::ecs::RegistryContext", "openblack::creaturemind::MindFileData"]
+
+# Types with private data, registered by hand in src/ECS/Reflection/ComponentFieldsByHand.cpp, and the types their functions
 # give, which are registered here
 BY_HAND = {
     "openblack::creature_fight::MoveQueue": ["openblack::creature_fight::QueuedMove"],
@@ -53,6 +58,10 @@ BY_HAND = {
     "openblack::hand_grab::HandSpring": [],
     "openblack::sky_dome::Follow": [],
     "openblack::creature_route::Follower": ["openblack::creature_route::Route"],
+    "openblack::creature_object_beliefs::Store": ["openblack::creature_object_beliefs::StoreContents"],
+    "openblack::camera_track::WayRunner": [],
+    "openblack::magic::villager_reaction::Memory": [],
+    "openblack::statistics::Extremes": [],
 }
 
 # Namespaces of libraries, whose types aren't followed
@@ -255,7 +264,8 @@ class Index:
         self.types = {}
         self.constants = {}
         self.aliases = {}
-        for header in sorted(SOURCES.rglob("*.h")):
+        headers = sorted(SOURCES.rglob("*.h")) + [header for folder in LIBRARY_HEADERS for header in sorted(folder.glob("*.h"))]
+        for header in headers:
             text = strip_preprocessor(strip_comments(header.read_text(encoding="utf-8", errors="replace")))
             self.read_scope(text, [], header, None)
 
@@ -506,12 +516,14 @@ def main():
             if member in members:
                 follow(type_text, component_scope + [name], full)
         component_fields[name] = registered_members(definition, members)
+    for root in VALUE_ROOTS:
+        pending.append((root, "the saved world"))
     while pending:
         held, holder = pending.pop()
         if held in component_names or held in values or held in refused:
             continue
         if held in BY_HAND:
-            refused[held] = (f"registered by hand in src/Inspector/ComponentFieldsByHand.cpp", holder)
+            refused[held] = (f"registered by hand in src/ECS/Reflection/ComponentFieldsByHand.cpp", holder)
             for given in BY_HAND[held]:
                 pending.append((given, held))
             continue
@@ -535,7 +547,8 @@ def main():
 
     includes = {"ComponentReflection.h"} | {f"ECS/Components/{header.name}" for header in headers}
     for name in list(values) + sorted(enums):
-        includes.add(index.types[name].header.relative_to(SOURCES).as_posix())
+        header = index.types[name].header
+        includes.add(header.relative_to(SOURCES).as_posix() if header.is_relative_to(SOURCES) else header.name)
     lines = [HEADER]
     for include in sorted(includes):
         lines.append(f'#include "{include}"\n')
@@ -551,7 +564,7 @@ def main():
                 lines.append(f"static_assert(static_cast<size_t>({enum}::{index.types[enum].enumerators[-1]}) == "
                              f"{names_array(enum)}.size());\n")
         lines.append("\n} // namespace\n\n")
-    lines.append("void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& context)\n{\n")
+    lines.append("void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context)\n{\n")
     count = 0
     for header, name, members in components:
         count += 1

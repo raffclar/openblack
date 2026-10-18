@@ -11,6 +11,10 @@
 
 #include "ScriptObjectsSystem.h"
 
+#include <cstring>
+
+#include <type_traits>
+
 #include <spdlog/spdlog.h>
 
 #include "ECS/Components/Animal.h"
@@ -615,6 +619,25 @@ bool ScriptObjectsSystem::Disband(entt::entity container)
 	{
 		RemoveReference(member);
 	}
+	return true;
+}
+
+std::vector<uint8_t> ScriptObjectsSystem::SaveTable() const
+{
+	// The table is plain data: its bytes keep it whole
+	static_assert(std::is_trivially_copyable_v<script_objects::Table>);
+	std::vector<uint8_t> bytes(sizeof(_table));
+	std::memcpy(bytes.data(), &_table, sizeof(_table));
+	return bytes;
+}
+
+bool ScriptObjectsSystem::LoadTable(std::span<const uint8_t> bytes)
+{
+	if (bytes.size() != sizeof(_table))
+	{
+		return false;
+	}
+	std::memcpy(&_table, bytes.data(), sizeof(_table));
 	return true;
 }
 

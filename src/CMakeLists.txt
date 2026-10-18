@@ -221,7 +221,7 @@ else ()
 endif ()
 
 if (OPENBLACK_INSPECTOR)
-  target_link_libraries(openblack_lib PRIVATE inspector)
+  target_link_libraries(openblack_lib PUBLIC inspector)
   target_compile_definitions(openblack_lib PUBLIC OPENBLACK_INSPECTOR)
   # The worktree the game is built from, which the inspector names it by wherever the build lives
   target_compile_definitions(
@@ -231,12 +231,12 @@ if (OPENBLACK_INSPECTOR)
   target_compile_definitions(
     openblack_lib PRIVATE OPENBLACK_BUILD_TYPE="$<CONFIG>"
   )
-  # Every component's reflection in one file outgrows an object file's sections
-  if (MSVC)
-    set_source_files_properties(
-      Inspector/ComponentFields.cpp PROPERTIES COMPILE_OPTIONS /bigobj
-    )
-  endif ()
+endif ()
+# The reflection of every component in one file has more sections than a usual object file can keep
+if (MSVC)
+  set_source_files_properties(
+    ECS/Reflection/ComponentFields.cpp PROPERTIES COMPILE_OPTIONS /bigobj
+  )
 endif ()
 
 # The library's headers do their maths left-handed in radians, so everything that includes them must too: glm's inline

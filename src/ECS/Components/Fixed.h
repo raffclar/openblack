@@ -16,14 +16,16 @@ namespace openblack::ecs::components
 
 struct Fixed
 {
+	/// An empty value, which the load of a saved world fills
+	Fixed() = default;
 	Fixed(const glm::vec2& boundingCenter, float boundingRadius)
 	    : boundingCenter(boundingCenter)
 	    , boundingRadius(boundingRadius)
 	{
 	}
 
-	glm::vec2 boundingCenter;
-	float boundingRadius;
+	glm::vec2 boundingCenter {0.0f};
+	float boundingRadius {0.0f};
 };
 
 } // namespace openblack::ecs::components

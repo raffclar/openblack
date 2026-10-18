@@ -62,6 +62,16 @@ void SkySystem::KeepForNextLand()
 	};
 }
 
+void SkySystem::FindAfterLoad()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	_entities = {};
+	_kept.reset();
+	registry.Each<const SkyDome>([this](entt::entity entity, const SkyDome& /*dome*/) { _entities.dome = entity; });
+	registry.Each<const Sun>([this](entt::entity entity, const Sun& /*sun*/) { _entities.sun = entity; });
+	registry.Each<const Moon>([this](entt::entity entity, const Moon& /*moon*/) { _entities.moon = entity; });
+}
+
 void SkySystem::ProcessTurn()
 {
 	GetClock().ProcessTurn();

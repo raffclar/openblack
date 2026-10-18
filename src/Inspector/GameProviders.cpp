@@ -3298,8 +3298,8 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 	    .name = "slot", .type = "integer", .description = "The slot, 0 to 20", .required = true};
 	auto save =
 	    Query("save",
-	          "Saves the game into a slot: the land, the turn and every creature with its mind file and its "
-	          "leash. The towns, the villagers, the story and the scripts are not saved yet",
+	          "Saves the game into a slot: the whole world (every entity and its components, the clock, the random "
+	          "numbers, the camera and the scripts) and every creature with its mind file and its leash",
 	          {slotParameter, {.name = "name", .type = "string", .description = "The name of the save", .required = false}});
 	save.writes = true;
 	provider->Add(std::move(save), [](const QueryContext& context) {
@@ -3313,8 +3313,9 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 		return QueryResult::Value({{"saved", saved}, {"slot", static_cast<uint32_t>(*slot)}});
 	});
 	auto load = Query("load",
-	                  "Puts the creatures of the land that is open back as a slot keeps them: the values of each record, "
-	                  "the mind of its mind file, the plan that the save kept and its leash",
+	                  "Loads a slot. A save of the whole world loads its land and its world in place of the open land. An "
+	                  "older save puts the creatures of the land that is open back: the values of each record, the mind of "
+	                  "its mind file, the plan that the save kept and its leash",
 	                  {slotParameter});
 	load.writes = true;
 	provider->Add(std::move(load), [](const QueryContext& context) {

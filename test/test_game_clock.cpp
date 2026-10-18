@@ -356,3 +356,35 @@ TEST(GameClock, TheTempleHoldStopsTheClockAtOnceAndKeepsThePause)
 	EXPECT_TRUE(clock.Frame());
 	EXPECT_EQ(clock.time.GetTurn(), 2);
 }
+
+TEST(GameClock, ASavedGameResumesAtItsTurnWithTheTimePastIt)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	clock.Frame();
+	clock.time.ResumeAtTurn(500, 40);
+	EXPECT_EQ(clock.time.GetTurn(), 500u);
+	EXPECT_EQ(clock.time.GetTurnRemainderMs(), 40);
+	// The next turn comes when the rest of the turn's time has gone
+	clock.now += 59;
+	EXPECT_FALSE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 500u);
+	clock.now += 1;
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 501u);
+}
+
+TEST(GameClock, ASavedGameResumesPausedAsItWasSaved)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	clock.time.SetPaused(true);
+	clock.time.ResumeAtTurn(20, 0);
+	clock.now += 1000;
+	EXPECT_FALSE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 20u);
+	clock.time.SetPaused(false);
+	clock.now += 100;
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 21u);
+}

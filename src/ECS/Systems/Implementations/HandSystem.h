@@ -25,6 +25,7 @@ class HandSystem final: public HandSystemInterface
 {
 public:
 	bool Initialize() noexcept override;
+	void FindAfterLoad() override;
 	[[nodiscard]] std::array<entt::entity, static_cast<size_t>(Side::_Count)> GetPlayerHands() const noexcept override;
 	[[nodiscard]] std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)>
 	GetPlayerHandPositions() const noexcept override;

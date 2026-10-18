@@ -56,6 +56,8 @@ public:
 	virtual void Sync() = 0;
 	/// A thing moved by a hand, a tool or a miracle goes into the cells it now stands in
 	virtual void Refile(entt::entity entity) = 0;
+	/// After the load of a saved world: each thing goes back into the cells that it keeps, in the order of the things
+	virtual void FileResidents() = 0;
 };
 
 } // namespace openblack::ecs

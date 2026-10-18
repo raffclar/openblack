@@ -42,6 +42,11 @@ public:
 	/// clock keeps its speed and whether it is paused. Far ahead of the new turn, the next turn gives up the time it is
 	/// ahead by; and the frame clock, going back with the turn, gives its next frame no time.
 	virtual void RestartTurns() = 0;
+	/// A saved game continues: the game clock starts again at the saved turn, with the saved time past that turn. The
+	/// clock keeps its speed and whether it is paused.
+	virtual void ResumeAtTurn(uint32_t turn, int32_t remainderMs) = 0;
+	/// The time past the last turn that the frames have drawn, in milliseconds
+	[[nodiscard]] virtual int32_t GetTurnRemainderMs() const = 0;
 	/// Whether the game is to play a turn now
 	[[nodiscard]] virtual bool IsTurnDue() = 0;
 	/// The turn number goes up as a turn starts, unless the game is paused

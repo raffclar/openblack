@@ -17,6 +17,7 @@
 
 #include "3D/HandMorph.h"
 #include "ECS/Archetypes/HandArchetype.h"
+#include "ECS/Components/Hand.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Mesh.h"
@@ -41,6 +42,14 @@ bool HandSystem::Initialize() noexcept
 	    HandArchetype::Create(glm::vec3(0.0f), glm::half_pi<float>(), 0.0f, glm::half_pi<float>(), 0.01f, true);
 
 	return false;
+}
+
+void HandSystem::FindAfterLoad()
+{
+	_hands = {entt::null, entt::null};
+	Locator::entitiesRegistry::value().Each<const Hand>([this](entt::entity entity, const Hand& hand) {
+		_hands.at(static_cast<size_t>(hand.rightHanded ? Side::Right : Side::Left)) = entity;
+	});
 }
 
 void HandSystem::ProcessTurn()

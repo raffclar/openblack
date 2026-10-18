@@ -154,6 +154,9 @@ public:
 
 	/// Read SAV file from the filesystem
 	int RestoreState(const std::filesystem::path& filepath);
+	/// Reads the running state from the bytes of a SAV file
+	int RestoreState(const std::vector<uint8_t>& buffer);
+	int RestoreState(const LHVMFile& file);
 
 	/// Take a newer build of the loaded program that keeps the existing code where it is and adds to it, as recompiling
 	/// a script does: the instructions, scripts and data are replaced and new globals added, while running tasks and
@@ -177,6 +180,10 @@ public:
 
 	/// Write SAV file to filesystem
 	int SaveState(const std::filesystem::path& filepath);
+	/// The bytes of a SAV file with the running state
+	[[nodiscard]] std::vector<uint8_t> SaveState() const;
+	/// The program and its running state, as a SAV file has them
+	[[nodiscard]] LHVMFile StateFile() const;
 
 	void LookIn(ScriptType allowedScriptTypesMask);
 

@@ -10,6 +10,7 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -19,6 +20,7 @@
 #include <VanillaSaveFile.h>
 #include <WorldFile.h>
 #include <entt/entity/fwd.hpp>
+#include <entt/meta/context.hpp>
 
 #include "ECS/Registry.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
@@ -78,6 +80,11 @@ private:
 	/// Copies the pictures of the temporary picture file into the picture files of the slot
 	void PutSlotPicture(uint32_t slot);
 
+	/// The reflection of the components, which the system registers at its first use
+	[[nodiscard]] const entt::meta_ctx& Reflection();
+	/// Loads the whole world of a slot: the saved land, its entities, its clock and its scripts
+	bool LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game);
+
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);
 	bool WriteVanilla(uint32_t slot, const std::filesystem::path& slotFolder, std::span<const gamesave::SavedCreature> saved,
@@ -88,6 +95,7 @@ private:
 	                       const gamesave::CreatureObject& loaded,
 	                       const std::optional<gamesave::LeashStatusObject>& loadedLeash);
 
+	std::unique_ptr<entt::meta_ctx> _reflection;
 	std::optional<VanillaOrigin> _vanilla;
 	std::vector<WaitingPicture> _waitingPictures;
 	uint32_t _pictureRequests {0};

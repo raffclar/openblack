@@ -31,6 +31,8 @@ namespace openblack::camera_track
 class WayRunner
 {
 public:
+	/// On no way yet: the load of a saved world fills it
+	WayRunner() = default;
 	/// At the start of the way
 	explicit WayRunner(const edt::EDTWay& way);
 
