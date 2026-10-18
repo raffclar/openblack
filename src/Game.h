@@ -506,6 +506,20 @@ private:
 	std::optional<glm::vec3> _cursorLand;
 	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land
 	std::optional<glm::vec3> _handRestOnThing;
+	/// How much nearer to the camera than its resting point the hand stays, for a miracle's icon
+	float _handRestNearer {0.0f};
+	/// The cursor is on a miracle's icon: the hand opens to take it
+	bool _handOverSpellIcon {false};
+	/// How far along the line of sight the help's text bubble is, while the bubble has the cursor
+	std::optional<float> _handBubbleDistance;
+	/// The help's text bubble or the tied leash's rope has the cursor: the hand stands straight up
+	bool _handStandsStraight {false};
+	/// Nothing is under the cursor but the land or the sea, so the hand may stand towards the camera's focus to offer to
+	/// turn the camera
+	bool _handMayOfferTurn {false};
+	/// The cursor's point at the furthest the hand may be this frame, which the hand stands towards the camera's focus
+	/// from when it offers to turn the camera
+	std::optional<glm::vec3> _handLimitPoint;
 	/// Where the hand is and how it is posed while it is held to a creature
 	std::optional<ecs::systems::CreatureHandSystemInterface::HandPose> _handOnCreature;
 	/// The creature the hand is over this frame, if any

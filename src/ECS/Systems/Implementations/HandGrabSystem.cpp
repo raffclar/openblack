@@ -1385,6 +1385,13 @@ std::optional<entt::entity> HandGrabSystem::GetOfferedCreature() const
 	return grab->offer.Active() && grab->offeredTo != entt::null ? std::optional(grab->offeredTo) : std::nullopt;
 }
 
+bool HandGrabSystem::OffersToCreature() const
+{
+	const auto* grab = Grab();
+	return grab != nullptr && (grab->state == HandGrab::State::Holding || grab->state == HandGrab::State::ReadyToThrow) &&
+	       grab->offer.Active() && grab->offeredTo != entt::null;
+}
+
 float HandGrabSystem::GetOfferTurn() const
 {
 	const auto* grab = Grab();

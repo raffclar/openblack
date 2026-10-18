@@ -117,6 +117,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -2676,6 +2677,16 @@ bool Game::Update() noexcept
 					    hand_feel::CursorDirection(eye, nearPoint, hand_feel::HoverLimit(HandHoverInputs(eye)));
 					_handSurfaceUp.reset();
 					_handOverObject = false;
+					_handRestNearer = 0.0f;
+					_handOverSpellIcon = false;
+					// Over the help's text bubble or the leash's rope, the hand stands straight up; over the bubble it
+					// eases to the bubble's distance
+					_handStandsStraight = !pick.object.has_value() && (pick.textBubble || pick.rope);
+					_handBubbleDistance =
+					    !pick.object.has_value() && pick.textBubble && !pick.rope ? std::optional(pick.distance) : std::nullopt;
+					// Only the empty hand offers to turn the camera
+					_handMayOfferTurn = !pick.object.has_value() && !pick.textBubble && !pick.rope &&
+					                    !Locator::handGrabSystem::value().GetHeld().has_value();
 					std::optional<glm::vec3> rest;
 					if (pick.object.has_value())
 					{
@@ -2694,6 +2705,7 @@ bool Game::Update() noexcept
 						    .posedModel = posed,
 						    .animatedStatic = registry.AllOf<ecs::components::AnimatedStatic>(object),
 						    .ignored = registry.AllOf<ecs::components::CarriedByTornado>(object) || held == object,
+						    .spellIcon = registry.AllOf<ecs::components::IconSeed>(object),
 						});
 						// Holding something, the hand feels along the line to the cursor's point on the land, raised by
 						// its lift for what it holds
@@ -2704,7 +2716,14 @@ bool Game::Update() noexcept
 							                                        .lift = grab.GetCursorRaise()};
 						}
 						const auto feltDirection = hand_feel::FeelDirection(eye, cursorDirection, raisedGround);
-						if (feel == hand_feel::Feel::AtPosition)
+						if (feel == hand_feel::Feel::AtIcon)
+						{
+							// The hand rests nearer than a miracle's icon by its own height, turned to the land
+							rest = registry.Get<const ecs::components::Transform>(object).position;
+							_handRestNearer = hand_feel::k_IconGap;
+							_handOverSpellIcon = true;
+						}
+						else if (feel == hand_feel::Feel::AtPosition)
 						{
 							rest = hand_feel::RestAtPosition(eye, nearPoint, feltDirection,
 							                                 registry.Get<const ecs::components::Transform>(object).position,
@@ -2741,6 +2760,9 @@ bool Game::Update() noexcept
 					}
 					_cursorLand = pick.land;
 					_handRestOnThing = rest;
+					// The cursor's point at the furthest the hand may be this frame, which it stands towards the camera's
+					// focus from
+					_handLimitPoint = hand_feel::PointAlongCursor(eye, nearPoint, hand_feel::HoverLimit(HandHoverInputs(eye)));
 					const auto restPoint = rest.has_value() ? rest : pick.point;
 					if (restPoint.has_value())
 					{
@@ -3037,6 +3059,11 @@ bool Game::Update() noexcept
 			if (!_handCameraState && HandOverThing())
 			{
 				cycle = HandCycle::Stroke;
+			}
+			// Over a miracle's icon it opens to take it
+			if (!_handCameraState && _handOverSpellIcon)
+			{
+				cycle = HandCycle::CanPickUp;
 			}
 			// Over the rope of the tied leash the fingers open to pinch it, and holding it they pinch it
 			const auto ropeHand = Locator::leashSystem::value().RopeHand(PlayerNames::PLAYER_ONE);
@@ -5833,9 +5860,10 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	// always under the cursor on screen. How far along it depends on the land the cursor is over. Turning the camera
 	// with the mouse holds the cursor still, so the hand stays where it is on screen and eases to the land coming under
 	// it.
-	if (_cursorLand.has_value() || _handRestOnThing.has_value())
+	if (_cursorLand.has_value() || _handRestOnThing.has_value() || _handBubbleDistance.has_value())
 	{
 		// Over the land the hand points at it; over a thing, at where it rests on the thing
+		// Over the help's text bubble it eases to the bubble, even with the sky behind it
 		const auto toward = _handRestOnThing.value_or(_cursorLand.value_or(eye)) - eye;
 		if (const auto length = glm::length(toward); length > 0.0f)
 		{
@@ -5847,6 +5875,8 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		// touching it.
 		auto inputs = HandHoverInputs(lineEye);
 		inputs.restOnThing = _handRestOnThing;
+		inputs.restNearer = _handRestNearer;
+		inputs.bubbleDistance = _handBubbleDistance;
 		if (cursorNearPoint.has_value())
 		{
 			inputs.cursorPoint = hand_feel::PointAlongCursor(lineEye, *cursorNearPoint, hand_feel::HoverLimit(inputs));
@@ -5854,9 +5884,12 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		const auto hover = hand_feel::HoverDistancesOf(inputs);
 
 		// The hand eases out slowly away from the camera and quickly towards it, but not while it pulls a thing out of
-		// the ground: the pull places it then
+		// the ground: the pull places it then. While the camera watches a fight or the hand offers what it holds to a
+		// creature, it eases out more slowly.
 		const bool pulling = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().IsPulling();
-		hand_feel::EaseHover(_handHoverZoomer, hover.target, deltaSeconds, pulling);
+		const bool watchesFight = dynamic_cast<const FightCameraModel*>(&camera.GetModel()) != nullptr;
+		const bool offers = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().OffersToCreature();
+		hand_feel::EaseHover(_handHoverZoomer, hover.target, deltaSeconds, pulling, watchesFight || offers);
 		_handDistance = glm::clamp(glm::min(_handHoverZoomer.GetValue(), hover.limit), k_HandMinDistance, handReach);
 	}
 	// The hand is on the line of sight through the cursor at its distance
@@ -6106,18 +6139,26 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 			// The face of a model the hand rests on, unless it is lower over the thing than half its own height; else the
 			// land where the hand is
 			const float handHeight = k_HandHeight * HandAnimation::SizeAtDistance(_handDistance);
-			const auto handPoint = map_coords::ToMetres(map_coords::FromMetres(glm::xz(handTransform.position)));
-			const float aboveLand = Locator::terrainSystem::has_value()
-			                            ? handTransform.position.y - Locator::terrainSystem::value().GetHeightAt(handPoint)
-			                            : 0.0f;
+			// The land's height under the hand is taken at the hand's map position
+			const auto handPoint = map_coords::FromMetres(glm::xz(handTransform.position));
+			const float aboveLand =
+			    Locator::terrainSystem::has_value()
+			        ? handTransform.position.y - Locator::terrainSystem::value().GetAltitude(handPoint.x, handPoint.z)
+			        : 0.0f;
 			auto up = !hand_feel::TurnsToLand(_handSurfaceUp.has_value(), _handOverObject, aboveLand, handHeight)
 			              ? surfaceUp
 			              : (Locator::terrainSystem::has_value()
 			                     ? Locator::terrainSystem::value().GetNormalAt(glm::xz(handTransform.position))
 			                     : glm::vec3(0.0f, 1.0f, 0.0f));
-			if (_handPose == Pose::Rotate)
+			// Over the help's text bubble or the leash's rope it stands straight up. Offering to turn the camera over the
+			// land with nothing in it, it stands towards the camera's focus from the cursor's point at its furthest.
+			if (_handStandsStraight)
 			{
-				up = hand_navigation_pose::UpTowardsFocus(_cursorWorldPosition.value_or(_handPosition), camera.GetFocus());
+				up = glm::vec3(0.0f, 1.0f, 0.0f);
+			}
+			else if (_handPose == Pose::Rotate && _handMayOfferTurn)
+			{
+				up = hand_navigation_pose::UpTowardsFocus(_handLimitPoint.value_or(_handPosition), camera.GetFocus());
 			}
 			_handUp.SetDestination(hand_feel::UnitUp(up), k_UpEaseSeconds);
 		}
