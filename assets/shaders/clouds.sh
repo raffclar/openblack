@@ -607,29 +607,17 @@ void CloudOrderSpans(inout vec2 a, inout vec2 b, inout vec2 c)
 	}
 }
 
-// The part of a ray from the eye where it is under the height eye.y - c over the curved world. Inside the flat reach
-// the height changes in a line, and past it the layer is a shell round the ball of the world. The world bends down
-// smoothly, so the two parts make one span.
+// The part of a ray from the eye where it is under the height eye.y - c over the curved world. Over the flat cap the
+// height changes in a line, and past it the layer is a shell round the ball of the world (WorldBallSpan). The world
+// bends down smoothly, so the parts make one span.
 vec2 CloudUnder(float c, vec3 dir)
 {
-	float across = length(dir.xz);
-	float reach = u_worldCurve.w > 0.0f && across > 1e-6f ? u_worldCurve.z / across : 1e9f;
-	vec2 straight = abs(dir.y) < 1e-9f ? (c < 0.0f ? vec2(-1e9f, 1e9f) : vec2(1.0f, -1.0f)) : CloudRoots(0.0f, dir.y, c);
-	straight.y = min(straight.y, reach);
-	if (reach >= 1e9f)
+	if (u_worldCurve.w <= 0.0f)
 	{
-		return straight;
+		return abs(dir.y) < 1e-9f ? (c < 0.0f ? vec2(-1e9f, 1e9f) : vec2(1.0f, -1.0f)) : CloudRoots(0.0f, dir.y, c);
 	}
 	float overSea = u_cloudEye.y - u_cloudLayer.w;
-	vec2 curved = WorldBallSpan(overSea, dir, overSea - c);
-	curved.x = max(curved.x, reach);
-	bool hasStraight = straight.x < straight.y;
-	bool hasCurved = curved.x < curved.y;
-	if (hasStraight && hasCurved)
-	{
-		return vec2(straight.x, curved.y);
-	}
-	return hasStraight ? straight : curved;
+	return WorldBallSpan(overSea, dir, overSea - c);
 }
 
 // The part of a ray inside the layer, from the eye, up to a limit: x where it goes in, y where it comes out. None when

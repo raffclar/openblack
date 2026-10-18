@@ -11,9 +11,11 @@
 
 #include <cstdint>
 
+#include <memory>
 #include <optional>
 
 #include <bgfx/bgfx.h>
+#include <glm/ext/vector_uint2_sized.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
@@ -76,8 +78,13 @@ struct AtmosphereFrame
 	glm::vec3 lightAtGround {1.0f};
 	/// The light of the air's sky from above on the screen, as the dome shows the sky (for the shade of the clouds)
 	glm::vec3 skyFromAbove {0.0f};
-	/// The curve of the world far away (world_curve.sh): xy the eye's x and z, z the flat reach, w the world's radius
+	/// The curve of the world far away (world_curve.sh): xy the eye's x and z, z the radius of the flat cap, w the
+	/// world's radius; and xy the eye's x and z less the cap's middle
 	glm::vec4 worldCurve {0.0f};
+	glm::vec4 worldCap {0.0f};
+	/// The air's own up (atmosphere::AirFrame), and the light turned into the air's frame for the sky round the eye
+	glm::vec4 airUp {0.0f, 1.0f, 0.0f, 0.0f};
+	glm::vec4 skyViewLight {0.0f, 1.0f, 0.0f, 0.0f};
 	/// The sky above the air and the aurora (air_sky.sh): the direction towards the real sun; the magnetic pole and the
 	/// aurora's strength tonight; the planet's middle and the seconds of the game
 	glm::vec4 airSun {0.0f, 1.0f, 0.0f, 0.0f};
@@ -113,10 +120,18 @@ public:
 	AtmosphereView();
 
 	OwnedTarget transmittance;
+	/// The table of the light that the air scatters more than once, made with the texture of the light that gets through
+	OwnedTarget multiple;
 	OwnedTarget skyView;
 	OwnedTarget aerial;
+	/// The aurora at half the screen's size (fs_aurora.sc), made again when the screen's size changes
+	[[nodiscard]] OwnedTarget& Aurora(glm::u16vec2 size);
+	[[nodiscard]] const OwnedTarget* Aurora() const { return _aurora.get(); }
 	/// The dust in the air that the texture of the light that gets through was made for
 	std::optional<float> transmittanceFor;
+	/// The processor's own table of the light that the air scatters more than once, and the dust that it was made for
+	std::shared_ptr<const atmosphere::MultipleTable> multipleTable;
+	std::optional<float> multipleFor;
 
 	/// The sky's light as the processor last worked it out, and what for
 	struct SkyCache
@@ -132,6 +147,9 @@ public:
 	/// How wet the land is after rain, and the seconds of the last frame
 	float wetness {0.0f};
 	std::optional<float> lastSeconds;
+
+private:
+	std::unique_ptr<OwnedTarget> _aurora;
 };
 
 } // namespace openblack::graphics

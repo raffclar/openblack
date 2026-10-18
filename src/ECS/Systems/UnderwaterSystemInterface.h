@@ -51,6 +51,18 @@ public:
 	[[nodiscard]] virtual uint8_t GetCloudCover() const = 0;
 	/// Moves on to the next choice of the clouds' cover, in turn
 	virtual void CycleCloudCover() = 0;
+	/// The debug choice of how strong the aurora is, 0 to 1 (atmosphere::AuroraTonight); none for the night's own
+	/// strength
+	[[nodiscard]] virtual std::optional<float> GetAuroraChoice() const = 0;
+	virtual void SetAuroraChoice(std::optional<float> strength) = 0;
+	/// Whether the aurora has its full march at the screen's full size, for a debug comparison with its pass at half
+	/// size
+	[[nodiscard]] virtual bool IsAuroraFullSize() const = 0;
+	virtual void SetAuroraFullSize(bool fullSize) = 0;
+	/// The debug choice of how strong the noctilucent clouds are, 0 to 1. Without it the night's own strength shows
+	/// (graphics::atmosphere::NoctilucentStrength).
+	[[nodiscard]] virtual std::optional<float> GetNoctilucentOverride() const = 0;
+	virtual void SetNoctilucentOverride(std::optional<float> strength) = 0;
 	/// Starts a debug tour of the camera: by the shore of the first land (see underwater::TourAt), or out along the sea
 	/// bed (see underwater::FarTourGround)
 	virtual void StartTour(graphics::underwater::Tour tour) = 0;

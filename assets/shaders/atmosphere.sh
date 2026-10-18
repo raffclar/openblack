@@ -13,6 +13,8 @@ uniform vec4 u_atmosParams;
 uniform vec4 u_atmosLight;
 // rgb: what the air's light is scaled by on the screen (the light's colour and the exposure); w: unused
 uniform vec4 u_atmosSun;
+// xyz: the air's own up, the line from the middle of the world's ball through the eye (atmosphere::AirFrame); w: unused
+uniform vec4 u_atmosUp;
 
 #define ATMOS_PI 3.14159265f
 #define ATMOS_GROUND_RADIUS 6371.0f
@@ -27,6 +29,11 @@ uniform vec4 u_atmosSun;
 #define ATMOS_OZONE_MIDDLE 25.0f
 #define ATMOS_OZONE_HALF_WIDTH 15.0f
 #define ATMOS_MULTIPLE_SHARE 0.3f
+// The table of the light that the air scatters more than once (atmosphere::k_Multiple*)
+#define ATMOS_MULTIPLE_DAY_LOW -0.1f
+#define ATMOS_MULTIPLE_DAY_HIGH -0.02f
+#define ATMOS_MULTIPLE_WIDTH 32.0f
+#define ATMOS_MULTIPLE_HEIGHT 32.0f
 #define ATMOS_UNITS_PER_KM 949.0f
 #define ATMOS_HAZE_LAYER_HEIGHT 2.5f
 // The haze's grid (atmosphere::k_Aerial* in Atmosphere.h)
@@ -112,12 +119,34 @@ vec3 AtmosTransmittance(float altitude, float mu)
 	return texture2DLod(s_atmosTransmittance, AtmosTransmittanceUv(altitude, mu), 0.0f).rgb;
 }
 
-// The light that the air scatters more than once, for each steradian, at a height with the light at mu
-vec3 AtmosMultipleScattering(float altitude, float mu)
+// The day's simple share of the light that the air scatters more than once, for each steradian, at a height with the
+// light at mu
+vec3 AtmosDayMultipleScattering(float altitude, float mu)
 {
 	return ATMOS_MULTIPLE_SHARE * AtmosTransmittance(altitude, max(mu, 0.05f)) * smoothstep(-0.25f, 0.05f, mu) /
 	       (4.0f * ATMOS_PI);
 }
+
+#ifdef ATMOS_MULTIPLE_TABLE
+// The table of the light that the air scatters more than once (fs_atmos_multiscatter.sc), at sampler stage 15
+SAMPLER2D(s_atmosMultiple, 15);
+
+// The light that the air scatters more than once (atmosphere::MultipleScattering): the day's simple share while the
+// light is high, and the table's light while it is low, so the low air in the earth's shadow at dusk does not glow
+vec3 AtmosMultipleScattering(float altitude, float mu)
+{
+	float day = smoothstep(ATMOS_MULTIPLE_DAY_LOW, ATMOS_MULTIPLE_DAY_HIGH, mu);
+	vec2 size = vec2(ATMOS_MULTIPLE_WIDTH, ATMOS_MULTIPLE_HEIGHT);
+	vec2 at = vec2(clamp(mu * 0.5f + 0.5f, 0.0f, 1.0f), clamp(altitude / (ATMOS_TOP_RADIUS - ATMOS_GROUND_RADIUS), 0.0f, 1.0f));
+	vec3 table = texture2DLod(s_atmosMultiple, (at * (size - 1.0f) + 0.5f) / size, 0.0f).rgb;
+	return day > 0.0f ? mix(table, AtmosDayMultipleScattering(altitude, mu), day) : table;
+}
+#else
+vec3 AtmosMultipleScattering(float altitude, float mu)
+{
+	return AtmosDayMultipleScattering(altitude, mu);
+}
+#endif
 
 // The light that the air at a height scatters towards the eye for each kilometre, with the light at lightMu and the
 // angle between the ray and the light at cosAngle, and `lit` of the direct light reaching it
@@ -142,11 +171,32 @@ vec2 AtmosSkyViewUv(float viewMu, float lightCos, float altitude)
 	return vec2(u, v);
 }
 
-// The sky's light from a world direction, for a light of strength 1
-vec3 AtmosSky(vec3 dir)
+// The air's own up, or straight up when it is not known
+vec3 AtmosUp()
 {
+	return dot(u_atmosUp.xyz, u_atmosUp.xyz) > 0.5f ? u_atmosUp.xyz : vec3(0.0f, 1.0f, 0.0f);
+}
+
+// A world direction in the air's own frame, where the air's up is y (atmosphere::TurnToUp). Low down the two frames
+// are the same. From high over a place away from the map the frame turns, so the sky's texture sees the same planet
+// as the sea.
+vec3 AtmosToLocal(vec3 v)
+{
+	vec3 up = AtmosUp();
+	vec3 axis = vec3(-up.z, 0.0f, up.x);
+	if (dot(axis, axis) < 1e-12f || up.y <= -0.999999f)
+	{
+		return v;
+	}
+	return v * up.y + cross(axis, v) + axis * (dot(axis, v) / (1.0f + up.y));
+}
+
+// The sky's light from a world direction, for a light of strength 1
+vec3 AtmosSky(vec3 worldDir)
+{
+	vec3 dir = AtmosToLocal(worldDir);
 	vec2 across = dir.xz;
-	vec2 light = u_atmosLight.xz;
+	vec2 light = AtmosToLocal(u_atmosLight.xyz).xz;
 	float lightCos = dot(across, across) > 1e-8f && dot(light, light) > 1e-8f ? dot(normalize(across), normalize(light)) : 1.0f;
 	return texture2DLod(s_atmosSkyView, AtmosSkyViewUv(dir.y, lightCos, u_atmosParams.z), 0.0f).rgb;
 }
@@ -196,12 +246,14 @@ vec3 AtmosSkyOnScreen(vec3 dir, float sunHeight)
 	// By day the air's sky high up is lighter than the plain model gives, as the original dome is, so the sky does not
 	// go to a deep blue over the eye. The sky at dusk and at night keeps the model's own brightness.
 	const vec3 luma = vec3(0.2126f, 0.7152f, 0.0722f);
-	float lift = 1.0f + 0.8f * smoothstep(0.05f, 0.6f, dir.y) * smoothstep(-0.02f, 0.2f, u_atmosLight.y);
+	float lift = 1.0f + 0.8f * smoothstep(0.05f, 0.6f, dot(dir, AtmosUp())) *
+	              smoothstep(-0.02f, 0.2f, dot(u_atmosLight.xyz, AtmosUp()));
 	air = AtmosSoftClip(air * lift);
-	// After sunset and in the moon's light the model gives a deep, strong blue. The eye sees the dim sky with less
-	// colour, so the sky goes part of the way to grey while the air's sun is low.
+	// While the sun sets and in the moon's light the sky goes part of the way to grey, as the eye sees a dim sky with
+	// less colour. In the blue hour the sky keeps most of its deep blue (atmosphere::SkyColourKept).
 	float grey = dot(air, luma);
-	return mix(vec3_splat(grey), air, mix(0.25f, 1.0f, smoothstep(0.0f, 0.35f, sunHeight)));
+	float blueHour = (1.0f - smoothstep(-0.1f, 0.0f, sunHeight)) * smoothstep(-0.29f, -0.16f, sunHeight);
+	return mix(vec3_splat(grey), air, 0.25f + 0.75f * max(smoothstep(0.0f, 0.35f, sunHeight), 0.7f * blueHour));
 }
 
 // The distance of a slice of the haze's grid from the eye in world units, and the slice at a distance

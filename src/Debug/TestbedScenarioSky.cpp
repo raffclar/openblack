@@ -10,10 +10,15 @@
 // The testbed's scenarios of the sky: the moon at night, looked at from low on the land towards the east, where it
 // keeps its place beside the camera, for trying its phases and its path through the night with the moon debug window;
 // a storm's forked bolts coming down round the camera; and, for the experiment, the lightning and the thunderstorm
-// cells of the volumetric clouds
+// cells of the volumetric clouds, the planet and the aurora from the ground to space, the noctilucent clouds and the
+// blue hour
 
+#include <cmath>
+
+#include <algorithm>
 #include <vector>
 
+#include "Graphics/Atmosphere.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -35,6 +40,18 @@ std::vector<ObjectSetup> TreesToTheEast()
 	};
 }
 } // namespace
+
+CameraPlacement testbed_scenarios::Climbing(const CameraPlacement& start, const Climb& climb, float seaLevel, float elapsed)
+{
+	constexpr float k_LowestHeight = 1.0f;
+	const float from = std::max(start.origin.y - seaLevel, k_LowestHeight);
+	const float to = std::max(climb.top, from);
+	const float share = std::clamp(elapsed / std::max(climb.seconds, 1e-3f), 0.0f, 1.0f);
+	const float eased = share * share * (3.0f - (2.0f * share));
+	CameraPlacement placement = start;
+	placement.origin.y = seaLevel + (from * std::pow(to / from, eased));
+	return placement;
+}
 
 void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 {
@@ -128,6 +145,101 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	                    .dispenserGrid = false,
 	                    .cloudCover = static_cast<uint8_t>(1)},
 	    .framing = {.shot = Shot::Placed, .eye = {-8500.0f, 30.0f, 0.0f}, .look = {0.0f, 4500.0f, 0.0f}},
+	    .objects = TreesToTheEast(),
+	});
+
+	// EXPERIMENT (not for merge): the planet, the air and the aurora from space and from the ground
+	all.push_back({
+	    .id = "space.planet",
+	    .name = "The planet from space at night",
+	    .facet = Facet::Sky,
+	    .description = "The camera is 10000 km over the sea to the south west of the island at 22:30 on a night with a "
+	                   "strong aurora, the clock stopped, under the experiment's clear sky. It looks down at the planet "
+	                   "past the island.",
+	    .expected = "One round planet against the stars. The night side is dark, with the thin blue limb of the air round "
+	                "its edge and a faint green glow of the high air along the limb. The aurora is a green ring round the "
+	                "magnetic pole, with red over it. There is no second, paler ball inside the planet.",
+	    .environment = {.hour = 22.5f,
+	                    .clockRuns = false,
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1),
+	                    .auroraStrength = graphics::atmosphere::k_StrongAurora},
+	    .framing = {.shot = Shot::Placed, .eye = {-3.8e6f, 9.0e6f, -3.8e6f}, .look = {1.4e6f, -1.8e6f, 1.4e6f}},
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
+	    .id = "space.climb",
+	    .name = "A climb from the sea to space",
+	    .facet = Facet::Sky,
+	    .description = "The camera starts 40 over the sea, 20 km to the south west of the island, at 17:30 with the "
+	                   "clock stopped. It climbs straight up to 10000 km in 20 seconds, faster as it gets higher, and "
+	                   "keeps its look at the island.",
+	    .expected = "The horizon goes down and curves. The sky goes from blue to deep blue to black, the stars come out "
+	                "and the thin blue limb of the air shows round the planet. The sea, the clouds and the air stay one "
+	                "ball all the way up: no jump in the sea or the haze between 20 km and 200 km up, where the world's "
+	                "flat cap moves to the island, and no second ball inside the planet from space.",
+	    .environment = {.hour = 17.5f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {-14000.0f, 40.0f, -14000.0f},
+	                .look = {0.0f, 0.0f, 0.0f},
+	                .climb = Climb {.top = 9.5e6f, .seconds = 20.0f}},
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
+	    .id = "sky.aurora_night",
+	    .name = "A strong aurora over the island",
+	    .facet = Facet::Sky,
+	    .description = "Midnight on a night with a strong aurora, the clock stopped, under the experiment's clear sky. "
+	                   "The camera stands 40 up on the land and looks west and up, where the curtains hang at midnight.",
+	    .expected = "Green curtains of the aurora fill the western sky and come up over the island, with thin upright "
+	                "rays, slow folds and a fast flicker. Their bottom edge is sharp with a little purple in it, and high "
+	                "up they go red. They show behind the few trees to the east and in the sea's reflection.",
+	    .environment = {.hour = 0.0f,
+	                    .clockRuns = false,
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1),
+	                    .auroraStrength = graphics::atmosphere::k_StrongAurora},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -600.0f}, .look = {-1400.0f, 500.0f, -1000.0f}},
+	    .objects = TreesToTheEast(),
+	});
+
+	// EXPERIMENT (not for merge): the noctilucent clouds and the blue hour of the air model
+	all.push_back({
+	    .id = "sky.noctilucent",
+	    .name = "Noctilucent clouds at dusk",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at 18:45, with the sun 9 degrees under the horizon, under a clear sky. The "
+	                   "noctilucent clouds show at full strength whatever the night. The camera is low on the land and "
+	                   "looks west, towards the sun, a little up.",
+	    .expected = "Thin silver-blue bands and small billows of cloud fill a low part of the western sky, over the last "
+	                "glow of the sunset, and the darker sky round them. They are brightest near the horizon and towards "
+	                "the sun. They drift slowly. They are gone overhead, where the earth's shadow covers them.",
+	    .environment = {.hour = 18.75f,
+	                    .clockRuns = false,
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1),
+	                    .noctilucent = 1.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 10.0f, 0.0f}, .look = {-400.0f, 70.0f, 0.0f}},
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
+	    .id = "sky.ozone_twilight",
+	    .name = "The blue hour",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at 18:30, with the sun 6 degrees under the horizon, under a clear sky with no "
+	                   "noctilucent clouds. The camera is low on the land and looks up to the west.",
+	    .expected = "The sky over the camera is a deep blue, not grey or yellow: the ozone takes the red and the green "
+	                "out of the sun's light that goes through the high air. Low in the west a band of warm glow stays "
+	                "over the horizon. The east is darker, with the earth's shadow low over the horizon.",
+	    .environment = {.hour = 18.5f,
+	                    .clockRuns = false,
+	                    .dispenserGrid = false,
+	                    .cloudCover = static_cast<uint8_t>(1),
+	                    .noctilucent = 0.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 10.0f, 0.0f}, .look = {-300.0f, 400.0f, 0.0f}},
 	    .objects = TreesToTheEast(),
 	});
 }

@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <chrono>
 #include <limits>
 #include <numbers>
 
@@ -65,12 +66,6 @@ float SafeSqrt(float x)
 float DistanceToGround(float radius, float mu)
 {
 	return -radius * mu - SafeSqrt(radius * radius * (mu * mu - 1.0f) + k_GroundRadius * k_GroundRadius);
-}
-
-/// The light that the air scatters more than once, for each steradian, at a height with the light at mu
-glm::vec3 MultipleScattering(float altitude, float mu, const Air& air)
-{
-	return k_MultipleShare * Transmittance(altitude, std::max(mu, 0.05f), air) * Smoothstep(-0.25f, 0.05f, mu) / (4.0f * k_Pi);
 }
 
 /// The light that one stretch of a ray scatters towards its start, and what the stretch lets through
@@ -182,6 +177,145 @@ HeightAngle atmosphere::FromTransmittanceUv(glm::vec2 uv)
 	const float d = dMin + uv.x * (dMax - dMin);
 	const float mu = d <= 0.0f ? 1.0f : (horizon * horizon - rho * rho - d * d) / (2.0f * radius * d);
 	return {radius - k_GroundRadius, std::clamp(mu, -1.0f, 1.0f)};
+}
+
+glm::vec3 atmosphere::DayMultipleScattering(float altitude, float lightMu, const Air& air)
+{
+	return k_MultipleShare * Transmittance(altitude, std::max(lightMu, 0.05f), air) * Smoothstep(-0.25f, 0.05f, lightMu) /
+	       (4.0f * k_Pi);
+}
+
+glm::vec3 atmosphere::MultipleScattering(float altitude, float lightMu, const Air& air)
+{
+	const float day = Smoothstep(k_MultipleDayLow, k_MultipleDayHigh, lightMu);
+	if (air.multiple == nullptr || day >= 1.0f)
+	{
+		return DayMultipleScattering(altitude, lightMu, air);
+	}
+	const glm::vec3 table = air.multiple->At(altitude, lightMu);
+	return day <= 0.0f ? table : glm::mix(table, DayMultipleScattering(altitude, lightMu, air), day);
+}
+
+glm::vec3 atmosphere::MultipleScatteringAt(float altitude, float lightMu, const Air& air, int directions, int steps,
+                                           const ThroughFunction& through)
+{
+	const float radius = k_GroundRadius + std::clamp(altitude, 1e-3f, k_TopRadius - k_GroundRadius - 1e-3f);
+	const glm::vec3 eye {0.0f, radius, 0.0f};
+	const float mu = std::clamp(lightMu, -1.0f, 1.0f);
+	const glm::vec3 light {std::sqrt(1.0f - (mu * mu)), mu, 0.0f};
+	// The directions are on a Fibonacci spiral, so that they cover the ball evenly
+	const float golden = k_Pi * (3.0f - std::sqrt(5.0f));
+	glm::vec3 second {0.0f};
+	glm::vec3 share {0.0f};
+	for (int i = 0; i < directions; ++i)
+	{
+		const float y = 1.0f - (2.0f * (static_cast<float>(i) + 0.5f) / static_cast<float>(directions));
+		const float across = std::sqrt(std::max(1.0f - (y * y), 0.0f));
+		const float angle = golden * static_cast<float>(i);
+		const glm::vec3 direction {across * std::cos(angle), y, across * std::sin(angle)};
+		const bool ground = HitsGround(radius, y);
+		const float length = ground ? DistanceToGround(radius, y) : DistanceToTop(radius, y);
+		const float step = length / static_cast<float>(steps);
+		glm::vec3 throughput {1.0f};
+		for (int k = 0; k < steps; ++k)
+		{
+			const glm::vec3 point = eye + (direction * ((static_cast<float>(k) + 0.5f) * step));
+			const float r = glm::length(point);
+			const float h = r - k_GroundRadius;
+			const auto medium = MediumAt(h, air);
+			const glm::vec3 scattering = medium.rayleigh + glm::vec3(medium.mie);
+			const glm::vec3 extinction = glm::max(medium.extinction, glm::vec3(1e-7f));
+			const glm::vec3 dimmed = glm::exp(-extinction * step);
+			const glm::vec3 part = throughput * (1.0f - dimmed) / extinction;
+			second += part * scattering * through(h, glm::dot(point / r, light)) / (4.0f * k_Pi);
+			share += part * scattering;
+			throughput *= dimmed;
+		}
+		// The ground sends back some of the sun's light that reaches it
+		if (ground)
+		{
+			const glm::vec3 normal = glm::normalize(eye + (direction * length));
+			const float lit = glm::dot(normal, light);
+			second += throughput * through(0.0f, lit) * std::max(lit, 0.0f) * k_GroundAlbedo / k_Pi;
+		}
+	}
+	second /= static_cast<float>(directions);
+	share /= static_cast<float>(directions);
+	// Each scattering after the second gives the same share of the one before it: a series
+	return second / glm::max(1.0f - share, glm::vec3(1e-3f));
+}
+
+HeightAngle atmosphere::FromMultipleTexel(int column, int row, uint16_t width, uint16_t height)
+{
+	const float mu = -1.0f + (2.0f * static_cast<float>(column) / static_cast<float>(width - 1));
+	const float altitude = (k_TopRadius - k_GroundRadius) * static_cast<float>(row) / static_cast<float>(height - 1);
+	return {altitude, mu};
+}
+
+glm::vec3 atmosphere::MultipleTable::At(float altitude, float lightMu) const
+{
+	if (width < 2 || height < 2 || texels.size() < static_cast<size_t>(width) * height)
+	{
+		return glm::vec3(0.0f);
+	}
+	const float x = std::clamp((lightMu + 1.0f) * 0.5f, 0.0f, 1.0f) * static_cast<float>(width - 1);
+	const float y = std::clamp(altitude / (k_TopRadius - k_GroundRadius), 0.0f, 1.0f) * static_cast<float>(height - 1);
+	const int x0 = std::min(static_cast<int>(x), width - 2);
+	const int y0 = std::min(static_cast<int>(y), height - 2);
+	const float fx = x - static_cast<float>(x0);
+	const float fy = y - static_cast<float>(y0);
+	const auto texel = [this](int column, int row) { return texels[static_cast<size_t>(row) * width + column]; };
+	const glm::vec3 low = glm::mix(texel(x0, y0), texel(x0 + 1, y0), fx);
+	const glm::vec3 high = glm::mix(texel(x0, y0 + 1), texel(x0 + 1, y0 + 1), fx);
+	return glm::mix(low, high, fy);
+}
+
+std::shared_ptr<const MultipleTable> atmosphere::MakeMultipleTable(const Air& air)
+{
+	// A small table of the light that gets through, in the same layout as the texture of the graphics card
+	constexpr int k_Across = 64;
+	constexpr int k_Down = 32;
+	std::vector<glm::vec3> through(static_cast<size_t>(k_Across) * k_Down);
+	for (int row = 0; row < k_Down; ++row)
+	{
+		for (int column = 0; column < k_Across; ++column)
+		{
+			const glm::vec2 uv {static_cast<float>(column) / (k_Across - 1), static_cast<float>(row) / (k_Down - 1)};
+			const auto at = FromTransmittanceUv(uv);
+			through[static_cast<size_t>(row) * k_Across + column] = Transmittance(at.altitude, at.mu, air);
+		}
+	}
+	const auto lookUp = [&through](float altitude, float mu) {
+		const float radius = k_GroundRadius + std::max(altitude, 0.0f);
+		if (HitsGround(radius, mu))
+		{
+			return glm::vec3(0.0f);
+		}
+		const glm::vec2 uv = glm::clamp(TransmittanceUv(altitude, mu), glm::vec2(0.0f), glm::vec2(1.0f));
+		const float x = uv.x * (k_Across - 1);
+		const float y = uv.y * (k_Down - 1);
+		const int x0 = std::min(static_cast<int>(x), k_Across - 2);
+		const int y0 = std::min(static_cast<int>(y), k_Down - 2);
+		const float fx = x - static_cast<float>(x0);
+		const float fy = y - static_cast<float>(y0);
+		const auto texel = [&through](int column, int row) { return through[static_cast<size_t>(row) * k_Across + column]; };
+		return glm::mix(glm::mix(texel(x0, y0), texel(x0 + 1, y0), fx), glm::mix(texel(x0, y0 + 1), texel(x0 + 1, y0 + 1), fx),
+		                fy);
+	};
+	auto table = std::make_shared<MultipleTable>();
+	table->width = k_MultipleCpuWidth;
+	table->height = k_MultipleCpuHeight;
+	table->texels.resize(static_cast<size_t>(table->width) * table->height);
+	for (int row = 0; row < table->height; ++row)
+	{
+		for (int column = 0; column < table->width; ++column)
+		{
+			const auto at = FromMultipleTexel(column, row, table->width, table->height);
+			table->texels[static_cast<size_t>(row) * table->width + column] =
+			    MultipleScatteringAt(at.altitude, at.mu, air, k_MultipleCpuDirections, k_MultipleCpuSteps, lookUp);
+		}
+	}
+	return table;
 }
 
 glm::vec2 atmosphere::SkyViewUv(float viewMu, float lightCos, float altitude)
@@ -319,10 +453,17 @@ float atmosphere::Luminance(glm::vec3 colour)
 	return glm::dot(colour, glm::vec3(0.2126f, 0.7152f, 0.0722f));
 }
 
+float atmosphere::SkyColourKept(float sunHeight)
+{
+	// The blue hour: the sky gets back most of its colour as the sun goes down to 6 degrees under the horizon, keeps it
+	// to 9 degrees, and loses it again by 17 degrees, when the night starts
+	const float blueHour = Smoothstep(0.0f, -0.1f, sunHeight) * Smoothstep(-0.29f, -0.16f, sunHeight);
+	return 0.25f + 0.75f * std::max(Smoothstep(0.0f, 0.35f, sunHeight), k_BlueHourColour * blueHour);
+}
+
 glm::vec3 atmosphere::DimSkyColour(glm::vec3 colour, float sunHeight)
 {
-	const float kept = 0.25f + 0.75f * Smoothstep(0.0f, 0.35f, sunHeight);
-	return glm::mix(glm::vec3(Luminance(colour)), colour, kept);
+	return glm::mix(glm::vec3(Luminance(colour)), colour, SkyColourKept(sunHeight));
 }
 
 glm::vec3 atmosphere::OnScreen(glm::vec3 linear)
@@ -481,62 +622,167 @@ float atmosphere::AltitudeOf(float heightOverSea)
 	return std::max(heightOverSea, 0.5f) / k_UnitsPerKilometre;
 }
 
-float atmosphere::FlatReach(glm::vec2 eye, float mapSize)
+atmosphere::WorldCap atmosphere::MapCap(glm::vec2 eye, float heightOverSea, float mapSize)
 {
-	const glm::vec2 far {std::max(eye.x, mapSize - eye.x), std::max(eye.y, mapSize - eye.y)};
-	return glm::length(far);
+	const glm::vec2 mapMiddle {0.5f * mapSize};
+	const float followsEye = 1.0f - Smoothstep(k_CapFollowsEyeBelow, k_CapOnMapAbove, heightOverSea);
+	const glm::vec2 middle = glm::mix(mapMiddle, eye, followsEye);
+	const glm::vec2 far {std::max(middle.x, mapSize - middle.x), std::max(middle.y, mapSize - middle.y)};
+	return {.eyeFromMiddle = eye - middle, .radius = glm::length(far)};
 }
 
-float atmosphere::WorldDrop(float distance, float flatReach)
+atmosphere::WorldSection atmosphere::SectionToward(const WorldCap& cap, glm::vec2 across)
 {
-	const float past = std::max(distance - flatReach, 0.0f);
-	if (past >= k_WorldRadius)
+	const float b = glm::dot(cap.eyeFromMiddle, across);
+	const float side = std::max(glm::dot(cap.eyeFromMiddle, cap.eyeFromMiddle) - (b * b), 0.0f);
+	if (side < cap.radius * cap.radius)
+	{
+		const float half = std::sqrt((cap.radius * cap.radius) - side);
+		return {.chordFrom = -b - half, .chordTo = -b + half, .pastSquared = 0.0f};
+	}
+	const float past = std::sqrt(side) - cap.radius;
+	return {.chordFrom = -b, .chordTo = -b, .pastSquared = past * past};
+}
+
+namespace
+{
+// The direction on the ground of a ray, or, for a ray straight up or down, the direction towards the cap
+glm::vec2 AcrossOf(const atmosphere::WorldCap& cap, glm::vec2 direction)
+{
+	const float length = glm::length(direction);
+	if (length > 1e-6f)
+	{
+		return direction / length;
+	}
+	const float fromMiddle = glm::length(cap.eyeFromMiddle);
+	return fromMiddle > 1e-3f ? -cap.eyeFromMiddle / fromMiddle : glm::vec2(1.0f, 0.0f);
+}
+
+// Where a ray meets a circle in its upright plane, the circle's middle `middle` units along the plane and the world's
+// radius under the sea, with `c` the square of the eye's distance from the middle less the square of the radius
+std::optional<glm::vec2> CircleSpan(float middle, float c, float across, float up, float heightOverSea)
+{
+	const float b = (-across * middle) + (up * (heightOverSea + atmosphere::k_WorldRadius));
+	const float disc = (b * b) - c;
+	if (disc < 0.0f)
+	{
+		return std::nullopt;
+	}
+	const float s = std::sqrt(disc);
+	// The roots of t^2 + 2 b t + c, kept exact for a small c
+	const float q = b < 0.0f ? -b + s : -b - s;
+	const glm::vec2 roots = std::abs(q) > 1e-20f ? glm::vec2(c / q, q) : glm::vec2(-b);
+	return glm::vec2(std::min(roots.x, roots.y), std::max(roots.x, roots.y));
+}
+
+// Where a ray from the eye is inside the world with `lift` added to its height: the slab over the cap's chord with a
+// circle at each end in the ray's upright plane. The shape is convex, so the span joins the spans of its parts.
+std::optional<glm::vec2> WorldSpan(const atmosphere::WorldCap& cap, float heightOverSea, glm::vec3 direction, float lift)
+{
+	constexpr float k_Radius = atmosphere::k_WorldRadius;
+	const glm::vec2 flat {direction.x, direction.z};
+	const float across = glm::length(flat);
+	const auto section = atmosphere::SectionToward(cap, AcrossOf(cap, flat));
+	const float c0 = ((heightOverSea - lift) * (heightOverSea + lift + (2.0f * k_Radius))) + section.pastSquared;
+	std::optional<glm::vec2> span;
+	const auto join = [&span](glm::vec2 part) {
+		span = span.has_value() ? glm::vec2(std::min(span->x, part.x), std::max(span->y, part.y)) : part;
+	};
+	for (const float middle : {section.chordFrom, section.chordTo})
+	{
+		if (const auto part = CircleSpan(middle, (middle * middle) + c0, across, direction.y, heightOverSea))
+		{
+			join(*part);
+		}
+	}
+	if (section.chordTo > section.chordFrom)
+	{
+		glm::vec2 slab {-1e30f, 1e30f};
+		if (across > 1e-6f)
+		{
+			slab = {section.chordFrom / across, section.chordTo / across};
+		}
+		else if (section.chordFrom > 0.0f || section.chordTo < 0.0f)
+		{
+			slab = {1.0f, -1.0f};
+		}
+		const float top = heightOverSea - lift;
+		const float bottom = heightOverSea + lift + (2.0f * k_Radius);
+		if (direction.y < 0.0f)
+		{
+			slab = {std::max(slab.x, top / -direction.y), std::min(slab.y, bottom / -direction.y)};
+		}
+		else if (direction.y > 0.0f)
+		{
+			slab = {std::max(slab.x, -bottom / direction.y), std::min(slab.y, -top / direction.y)};
+		}
+		else if (top > 0.0f)
+		{
+			slab = {1.0f, -1.0f};
+		}
+		if (slab.x < slab.y)
+		{
+			join(slab);
+		}
+	}
+	return span;
+}
+} // namespace
+
+float atmosphere::WorldDrop(const WorldCap& cap, glm::vec2 fromEye)
+{
+	const auto section = SectionToward(cap, AcrossOf(cap, fromEye));
+	const float along = glm::length(fromEye);
+	const float past = along > section.chordTo ? along - section.chordTo : std::max(section.chordFrom - along, 0.0f);
+	const float square = (past * past) + section.pastSquared;
+	if (square >= k_WorldRadius * k_WorldRadius)
 	{
 		return std::numeric_limits<float>::max();
 	}
-	return past * past / (k_WorldRadius + std::sqrt((k_WorldRadius * k_WorldRadius) - (past * past)));
+	return square / (k_WorldRadius + std::sqrt((k_WorldRadius * k_WorldRadius) - square));
 }
 
-std::optional<float> atmosphere::CurvedSeaDistance(float heightOverSea, glm::vec3 direction, float flatReach)
+std::optional<float> atmosphere::CurvedSeaDistance(const WorldCap& cap, float heightOverSea, glm::vec3 direction)
 {
-	if (heightOverSea <= 0.0f)
+	const auto span = WorldSpan(cap, heightOverSea, direction, 0.0f);
+	if (!span.has_value() || span->x >= span->y || span->x <= 0.0f)
 	{
 		return std::nullopt;
 	}
-	const float across = glm::length(glm::vec2(direction.x, direction.z));
-	if (direction.y < 0.0f)
-	{
-		const float straight = heightOverSea / -direction.y;
-		if (straight * across <= flatReach)
-		{
-			return straight;
-		}
-	}
-	// In the ray's upright plane the eye is at (-flatReach, heightOverSea + R) from the ball's middle, and the ray meets
-	// the ball where t^2 + 2 b t + c = 0
-	const float up = heightOverSea + k_WorldRadius;
-	const float b = (-across * flatReach) + (direction.y * up);
-	const float c = (flatReach * flatReach) + (heightOverSea * (heightOverSea + (2.0f * k_WorldRadius)));
-	const float disc = (b * b) - c;
-	if (disc < 0.0f || b >= 0.0f)
-	{
-		return std::nullopt;
-	}
-	const float q = -b + std::sqrt(disc);
-	const float t = c / q;
-	if (t * across < flatReach * 0.999f)
-	{
-		return std::nullopt;
-	}
-	return t;
+	return span->x;
 }
 
-float atmosphere::WorldHorizonY(float heightOverSea, float flatReach)
+float atmosphere::WorldHorizonY(const WorldCap& cap, float heightOverSea)
 {
+	const float fromMiddle = glm::length(cap.eyeFromMiddle);
+	const float chord = fromMiddle < cap.radius ? std::sqrt((cap.radius * cap.radius) - (fromMiddle * fromMiddle)) : 0.0f;
+	const float past = std::max(fromMiddle - cap.radius, 0.0f);
+	const float circle = std::sqrt(std::max((k_WorldRadius * k_WorldRadius) - (past * past), 0.0f));
 	const float up = std::max(heightOverSea, 0.0f) + k_WorldRadius;
-	const float toMiddle = std::sqrt((flatReach * flatReach) + (up * up));
-	const float down = std::atan2(up, flatReach) - std::asin(std::min(k_WorldRadius / toMiddle, 1.0f));
+	const float toMiddle = std::sqrt((chord * chord) + (up * up));
+	const float down = std::atan2(up, chord) - std::asin(std::min(circle / toMiddle, 1.0f));
 	return -std::sin(down);
+}
+
+atmosphere::AirFrame atmosphere::AirFrameFor(const WorldCap& cap, float heightOverSea)
+{
+	const glm::vec3 fromMiddle {cap.eyeFromMiddle.x, heightOverSea + k_WorldRadius, cap.eyeFromMiddle.y};
+	const float distance = glm::length(fromMiddle);
+	const float across = glm::dot(cap.eyeFromMiddle, cap.eyeFromMiddle);
+	// distance - R, with no loss of the small terms
+	const float height = (across + (heightOverSea * (heightOverSea + (2.0f * k_WorldRadius)))) / (distance + k_WorldRadius);
+	return {.up = fromMiddle / distance, .height = height};
+}
+
+glm::vec3 atmosphere::TurnToUp(glm::vec3 up, glm::vec3 direction)
+{
+	// Turn about the line up x (0, 1, 0) by the angle between them: v cos + k x v + k (k . v) / (1 + cos)
+	const glm::vec3 axis {-up.z, 0.0f, up.x};
+	if (glm::dot(axis, axis) < 1e-12f || up.y <= -1.0f + 1e-6f)
+	{
+		return direction;
+	}
+	return (direction * up.y) + glm::cross(axis, direction) + (axis * (glm::dot(axis, direction) / (1.0f + up.y)));
 }
 
 glm::vec3 atmosphere::MagneticPole()
@@ -559,6 +805,50 @@ float atmosphere::AuroraStrength(int night)
 	bits ^= bits >> 13u;
 	const float random = static_cast<float>(bits & 0xFFFFu) / 65535.0f;
 	return std::pow(random, 1.8f);
+}
+
+float atmosphere::AuroraTonight(int night, std::optional<float> chosen)
+{
+	return chosen.has_value() ? std::clamp(*chosen, 0.0f, 1.0f) : AuroraStrength(night);
+}
+
+int atmosphere::DayOfYear(int64_t unixTime, int32_t passedDays)
+{
+	using namespace std::chrono;
+	const auto day = sys_days {} + days {(unixTime / moon::k_SecondsPerDay) + passedDays};
+	const year_month_day date {day};
+	return static_cast<int>((day - sys_days {date.year() / January / 1}).count());
+}
+
+float atmosphere::NoctilucentChance(int dayOfYear)
+{
+	if (dayOfYear <= k_NoctilucentSeasonStart || dayOfYear >= k_NoctilucentSeasonEnd)
+	{
+		return 0.0f;
+	}
+	const float through = static_cast<float>(dayOfYear - k_NoctilucentSeasonStart) /
+	                      static_cast<float>(k_NoctilucentSeasonEnd - k_NoctilucentSeasonStart);
+	const float shape = std::sin(k_Pi * through);
+	return k_NoctilucentPeakChance * shape * shape;
+}
+
+float atmosphere::NoctilucentStrength(int64_t night, int dayOfYear)
+{
+	// Two hashes of the night's number: one for whether the clouds form and one for how strong they are
+	const auto hash = [night](uint32_t salt) {
+		auto bits = (static_cast<uint32_t>(night) * 2246822519u) ^ salt;
+		bits ^= bits >> 16u;
+		bits *= 2654435761u;
+		bits ^= bits >> 13u;
+		bits *= 3266489917u;
+		bits ^= bits >> 16u;
+		return static_cast<float>(bits & 0xFFFFu) / 65535.0f;
+	};
+	if (hash(0x5BD1E995u) >= NoctilucentChance(dayOfYear))
+	{
+		return 0.0f;
+	}
+	return 0.5f + (0.5f * hash(0x27D4EB2Fu));
 }
 
 glm::vec3 atmosphere::LightEye(glm::vec3 eye, float seaLevel)

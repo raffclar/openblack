@@ -813,3 +813,24 @@ TEST(TestbedScenarios, CoversCastingThroughTheHand)
 		EXPECT_TRUE(withoutEffects.contains(type)) << static_cast<int>(type);
 	}
 }
+
+TEST(TestbedScenarios, AClimbGoesUpToItsTopAndKeepsItsLook)
+{
+	const CameraPlacement start {.origin = {100.0f, 50.0f, -200.0f}, .focus = {0.0f, 10.0f, 0.0f}};
+	const Climb climb {.top = 1.0e6f, .seconds = 20.0f};
+	EXPECT_NEAR(Climbing(start, climb, 10.0f, 0.0f).origin.y, 50.0f, 1e-3f);
+	EXPECT_NEAR(Climbing(start, climb, 10.0f, 20.0f).origin.y, 10.0f + 1.0e6f, 1.0f);
+	EXPECT_NEAR(Climbing(start, climb, 10.0f, 99.0f).origin.y, 10.0f + 1.0e6f, 1.0f);
+	// Halfway up the height over the sea is the middle of the two by ratio
+	EXPECT_NEAR(Climbing(start, climb, 10.0f, 10.0f).origin.y - 10.0f, std::sqrt(40.0f * 1.0e6f), 1.0f);
+	float last = 0.0f;
+	for (float t = 0.0f; t <= 20.0f; t += 0.5f)
+	{
+		const auto placement = Climbing(start, climb, 10.0f, t);
+		EXPECT_GE(placement.origin.y, last);
+		last = placement.origin.y;
+		EXPECT_EQ(placement.origin.x, start.origin.x);
+		EXPECT_EQ(placement.origin.z, start.origin.z);
+		EXPECT_EQ(placement.focus, start.focus);
+	}
+}

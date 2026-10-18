@@ -634,6 +634,12 @@ bool Renderer::BindJellyfish() const
 {
 	const auto& system = Locator::underwaterSystem::value();
 	const auto& frame = *_underwaterFrame;
+	// They are deep: none of their light or shape comes through the water above them, so with the eye above the water
+	// there is nothing to draw
+	if (frame.eye.w < 0.5f)
+	{
+		return false;
+	}
 	const auto& seabed = system.GetSeabed();
 	const auto found =
 	    underwater::jellyfish::Around(glm::vec2(frame.eye.x, frame.eye.z), system.GetSeconds(), system.GetSeaLevel(),

@@ -19,11 +19,15 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-/// EXPERIMENT (not for merge): the jellyfish in the deep water. They are not in the original game. They drift slowly up
+#include "Graphics/Underwater.h"
+
+/// EXPERIMENT (not for merge): the jellyfish in the deep sea. They are not in the original game. They drift slowly up
 /// through the deep water in a loose grid round the eye, one at most in each cell, and a new one starts near the sea bed
-/// when one gets near the surface. Each is one instance of a small mesh: a bell (an outer and an inner shell) with
-/// thick inner tentacles and thin outer ones. The shaders vs_underwater_jelly.sc and fs_underwater_jelly.sc make the
-/// beat of the bell, the sway of the tentacles and the glow.
+/// when one gets near the top of their band. They stay deep: the water hides them fully from the surface and from
+/// above it, and they show only to an eye under the water near them. Each is one instance of a small mesh: a bell (an
+/// outer and an inner shell) with thick inner tentacles and thin outer ones, and a halo of their soft light in the
+/// water round them. The shaders vs_underwater_jelly.sc and fs_underwater_jelly.sc make the beat of the bell, the sway
+/// of the tentacles, the glow and the halo.
 namespace openblack::graphics::underwater::jellyfish
 {
 
@@ -33,17 +37,19 @@ inline constexpr float k_Cell = 12.0f;
 inline constexpr float k_Range = 170.0f;
 /// The share of the range over which they fade out
 inline constexpr float k_FadeShare = 0.3f;
-/// The least depth of the sea bed where they are, in units: never in the shallows where the creatures walk
-inline constexpr float k_LeastDepth = 7.0f;
+/// The least depth of their tops under the sea's level, in units (about 27 m): the water between them and the
+/// surface takes out all of their light
+inline constexpr float k_TopDepth = 26.0f;
+/// The least depth of the sea bed where they are, in units: their band under the top depth must have space for them
+inline constexpr float k_LeastDepth = 33.0f;
 /// The depth over which they come in past the least depth
 inline constexpr float k_DepthFade = 5.0f;
 /// The share of the deep cells that have one
 inline constexpr float k_Share = 0.55f;
 /// How fast they rise, in units a second
 inline constexpr float k_Rise = 0.22f;
-/// The space they keep from the sea bed and from the surface, in units
+/// The space they keep from the sea bed, in units
 inline constexpr float k_BedGap = 1.0f;
-inline constexpr float k_SurfaceGap = 1.8f;
 /// The size of the bell across, the least and the most, in units
 inline constexpr float k_LeastSize = 0.5f;
 inline constexpr float k_MostSize = 1.4f;
@@ -54,10 +60,15 @@ inline constexpr uint32_t k_Most = 320;
 /// water's pass
 inline constexpr float k_BodyPass = 0.0f;
 inline constexpr float k_GlowPass = 1.0f;
-/// Their own light after the water's pass. The water takes it out over this share of the way only, and the light keeps
-/// most of its colour: only this share of the change of colour by the water stays, the rest is a grey loss.
-inline constexpr float k_GlowPathShare = 0.5f;
-inline constexpr float k_GlowTint = 0.15f;
+/// Their own light is soft: no colour of it is brighter than this
+inline constexpr float k_MostGlow = 0.6f;
+/// The water that scatters their light out of its straight way to the eye, in each unit, the same for each colour.
+/// With the absorption, it takes out a small light in about 25 units.
+inline constexpr float k_GlowScatter = 0.2f;
+/// The radius of the water round each jellyfish that its light makes bright: half a metre, so about one cubic metre
+inline constexpr float k_LightRadius = 0.5f * k_UnitsPerMetre;
+/// How bright the halo of water is through its middle, against the glow of the jellyfish
+inline constexpr float k_HaloStrength = 0.35f;
 
 /// The parts of the mesh: the outer shell of the bell, its inner shell, the inner tentacles and the outer tentacles
 enum class Part : uint8_t
@@ -66,6 +77,7 @@ enum class Part : uint8_t
 	InnerShell,
 	InnerTentacle,
 	OuterTentacle,
+	Halo,
 };
 inline constexpr uint32_t k_InnerTentacles = 6;
 inline constexpr uint32_t k_OuterTentacles = 13;
@@ -106,8 +118,8 @@ using DepthAt = std::function<float(glm::vec2 point)>;
 /// and the part under the sea's level with the eye above it
 [[nodiscard]] float WaterPath(glm::vec3 eye, glm::vec3 point, float seaLevel);
 
-/// The part of each colour of a jellyfish's own light that comes to the eye through a length of water. It fades with
-/// the distance as the water's light does, but more slowly, and it keeps its colour longer: pink stays pink far away.
+/// The part of each colour of a jellyfish's own light that comes to the eye through a length of water. The water absorbs
+/// it and scatters it out of its way, so a small light fades faster than the light of the scene round it.
 [[nodiscard]] glm::vec3 GlowThroughWater(float path);
 
 /// A vertex of the mesh: x along (round the shell, or down the tentacle, 0 to 1), y across (down the shell 0 to 1, or
@@ -116,8 +128,8 @@ struct Vertex
 {
 	glm::vec4 data {0.0f};
 };
-/// The mesh of one jellyfish, with the inner shell and the tentacles first and the outer shell last, so that the outer
-/// shell glows over the rest
+/// The mesh of one jellyfish, with the inner shell, the tentacles and the halo (a square that turns to face the eye)
+/// first and the outer shell last, so that the outer shell glows over the rest
 void Mesh(std::vector<Vertex>& vertices, std::vector<uint16_t>& indices);
 
 } // namespace openblack::graphics::underwater::jellyfish

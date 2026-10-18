@@ -472,6 +472,13 @@ void UnderwaterSystem::CycleEffectOffBack()
 	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: effect {} turned off (0 is none)", next);
 }
 
+void UnderwaterSystem::SetAuroraFullSize(bool fullSize)
+{
+	_auroraFullSize = fullSize;
+	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Underwater experiment: aurora full march at full size {}",
+	                   fullSize ? "on" : "off");
+}
+
 void UnderwaterSystem::CycleCloudCover()
 {
 	// The weather's own cover, then clear, scattered, broken and overcast (volumetric_clouds::CoverChoice)

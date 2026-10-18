@@ -70,8 +70,8 @@ std::vector<Jellyfish> Around(glm::vec2 eye, float seconds, float seaLevel, cons
 				continue;
 			}
 			const float size = k_LeastSize + (k_MostSize - k_LeastSize) * Hash(cell.x, cell.y, 4u);
-			// The water column it rises through, from over the sea bed to under the surface, and where it is in it now
-			const float column = std::max(depth - k_BedGap - k_SurfaceGap - size, 0.5f);
+			// The water column it rises through, from over the sea bed to its least depth, and where it is in it now
+			const float column = std::max(depth - k_BedGap - k_TopDepth - size, 0.5f);
 			const float seed = Hash(cell.x, cell.y, 5u);
 			const float risen = seed + seconds * k_Rise / column;
 			const float along = risen - std::floor(risen);
@@ -160,6 +160,18 @@ void Mesh(std::vector<Vertex>& vertices, std::vector<uint16_t>& indices)
 	shell(Part::InnerShell);
 	tentacles(Part::InnerTentacle, k_InnerTentacles);
 	tentacles(Part::OuterTentacle, k_OuterTentacles);
+	// The halo: a square of four corners round the middle of the bell
+	const auto halo = static_cast<uint16_t>(vertices.size());
+	for (const float y : {-1.0f, 1.0f})
+	{
+		for (const float x : {-1.0f, 1.0f})
+		{
+			vertices.push_back({.data = {x, y, static_cast<float>(Part::Halo), 0.0f}});
+		}
+	}
+	indices.insert(indices.end(),
+	               {halo, static_cast<uint16_t>(halo + 2), static_cast<uint16_t>(halo + 1), static_cast<uint16_t>(halo + 1),
+	                static_cast<uint16_t>(halo + 2), static_cast<uint16_t>(halo + 3)});
 	shell(Part::OuterShell);
 }
 
@@ -178,9 +190,7 @@ float WaterPath(glm::vec3 eye, glm::vec3 point, float seaLevel)
 
 glm::vec3 GlowThroughWater(float path)
 {
-	const glm::vec3 left = Transmittance(path * k_GlowPathShare);
-	const float grey = glm::dot(left, glm::vec3(0.2126f, 0.7152f, 0.0722f));
-	return glm::mix(glm::vec3(grey), left, k_GlowTint);
+	return glm::exp(-(k_Absorption + glm::vec3(k_GlowScatter)) * std::max(path, 0.0f));
 }
 
 } // namespace openblack::graphics::underwater::jellyfish

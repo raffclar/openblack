@@ -14,8 +14,10 @@
 #include <algorithm>
 #include <array>
 #include <numbers>
+#include <optional>
 
 #include <glm/geometric.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
@@ -328,9 +330,9 @@ TEST(Atmosphere, TheCloudsShadeTakesTheUpperSkyWhileTheSunIsLow)
 	const glm::vec3 dusk = atmos::CloudSkyLight(horizonRed, upperBlue, 0.02f);
 	EXPECT_GT(dusk.b, dusk.r);
 	EXPECT_NEAR(atmos::Luminance(dusk), atmos::Luminance(horizonRed), 1e-4f);
-	// The dim sky after sunset has less colour
+	// The dim sky in the night has less colour (the blue hour between keeps it)
 	const glm::vec3 deepBlue {0.0f, 0.1f, 1.0f};
-	const glm::vec3 dim = atmos::DimSkyColour(deepBlue, -0.1f);
+	const glm::vec3 dim = atmos::DimSkyColour(deepBlue, -0.3f);
 	EXPECT_NEAR(atmos::Luminance(dim), atmos::Luminance(deepBlue), 1e-4f);
 	EXPECT_LT(dim.b - dim.r, 0.5f * (deepBlue.b - deepBlue.r));
 	EXPECT_EQ(atmos::DimSkyColour(deepBlue, 0.5f), deepBlue);
@@ -339,25 +341,29 @@ TEST(Atmosphere, TheCloudsShadeTakesTheUpperSkyWhileTheSunIsLow)
 TEST(Atmosphere, TheFarWorldCurvesAwayAndTheHorizonGoesDownWithTheHeight)
 {
 	constexpr float k_Map = 5120.0f;
-	// From the middle of the map the flat reach is the distance to a corner
-	EXPECT_NEAR(atmos::FlatReach({2560.0f, 2560.0f}, k_Map), 3620.4f, 0.1f);
-	EXPECT_NEAR(atmos::FlatReach({0.0f, 0.0f}, k_Map), 7240.8f, 0.1f);
+	// Low down the cap is round the eye and reaches the farthest corner of the map
+	const auto middle = atmos::MapCap({2560.0f, 2560.0f}, 50.0f, k_Map);
+	EXPECT_NEAR(middle.radius, 3620.4f, 0.1f);
+	EXPECT_EQ(middle.eyeFromMiddle, glm::vec2(0.0f));
+	const auto corner = atmos::MapCap({0.0f, 0.0f}, 50.0f, k_Map);
+	EXPECT_NEAR(corner.radius, 7240.8f, 0.1f);
+	EXPECT_EQ(corner.eyeFromMiddle, glm::vec2(0.0f));
 	// Nothing on the map goes down
-	EXPECT_EQ(atmos::WorldDrop(3000.0f, 3620.0f), 0.0f);
-	EXPECT_GT(atmos::WorldDrop(100000.0f, 3620.0f), 700.0f);
-	// A ray that meets the sea inside the flat reach meets it where the flat sea is
+	EXPECT_EQ(atmos::WorldDrop(middle, {3000.0f, 0.0f}), 0.0f);
+	EXPECT_GT(atmos::WorldDrop(middle, {100000.0f, 0.0f}), 700.0f);
+	// A ray that meets the sea on the cap meets it where the flat sea is
 	const glm::vec3 steep = glm::normalize(glm::vec3(1.0f, -0.5f, 0.0f));
-	ASSERT_TRUE(atmos::CurvedSeaDistance(100.0f, steep, 3620.0f).has_value());
-	EXPECT_NEAR(*atmos::CurvedSeaDistance(100.0f, steep, 3620.0f), 100.0f / 0.5f * std::sqrt(1.25f), 1e-2f);
+	ASSERT_TRUE(atmos::CurvedSeaDistance(middle, 100.0f, steep).has_value());
+	EXPECT_NEAR(*atmos::CurvedSeaDistance(middle, 100.0f, steep), 100.0f / 0.5f * std::sqrt(1.25f), 1e-2f);
 	// The angle under the eye's level at which the rays stop to meet the sea
-	const auto dip = [](float height) {
+	const auto dip = [&middle](float height) {
 		float low = 0.0f;
 		float high = 0.5f;
 		for (int i = 0; i < 40; ++i)
 		{
 			const float mid = 0.5f * (low + high);
 			const glm::vec3 ray {std::cos(mid), -std::sin(mid), 0.0f};
-			(atmos::CurvedSeaDistance(height, ray, 3620.0f).has_value() ? high : low) = mid;
+			(atmos::CurvedSeaDistance(middle, height, ray).has_value() ? high : low) = mid;
 		}
 		return high;
 	};
@@ -368,10 +374,106 @@ TEST(Atmosphere, TheFarWorldCurvesAwayAndTheHorizonGoesDownWithTheHeight)
 	// From high up the horizon is near the real planet's, under the eye's level by the angle acos(R / (R + h))
 	EXPECT_NEAR(high, std::acos(atmos::k_WorldRadius / (atmos::k_WorldRadius + 30000.0f)), 0.002f);
 	// The direction to the horizon is the same as the rays find
-	EXPECT_NEAR(atmos::WorldHorizonY(30000.0f, 3620.0f), -std::sin(high), 0.002f);
-	EXPECT_NEAR(atmos::WorldHorizonY(50.0f, 3620.0f), -std::sin(low), 0.002f);
+	EXPECT_NEAR(atmos::WorldHorizonY(middle, 30000.0f), -std::sin(high), 0.002f);
+	EXPECT_NEAR(atmos::WorldHorizonY(middle, 50.0f), -std::sin(low), 0.002f);
 	// A ray over the horizon never meets the sea
-	EXPECT_FALSE(atmos::CurvedSeaDistance(30000.0f, glm::vec3(std::cos(0.05f), -std::sin(0.05f), 0.0f), 3620.0f).has_value());
+	EXPECT_FALSE(atmos::CurvedSeaDistance(middle, 30000.0f, glm::vec3(std::cos(0.05f), -std::sin(0.05f), 0.0f)).has_value());
+}
+
+TEST(Atmosphere, TheMapStaysFlatForEveryEye)
+{
+	constexpr float k_Map = 5120.0f;
+	constexpr std::array<glm::vec2, 4> k_Corners {{{0.0f, 0.0f}, {k_Map, 0.0f}, {0.0f, k_Map}, {k_Map, k_Map}}};
+	for (const float height : {50.0f, 30000.0f, 100000.0f, 1.0e6f, 9.0e6f})
+	{
+		for (const glm::vec2 eye : {glm::vec2(2560.0f), glm::vec2(-50000.0f, 9000.0f), glm::vec2(-3.8e6f, -3.8e6f)})
+		{
+			const auto cap = atmos::MapCap(eye, height, k_Map);
+			for (const auto& point : k_Corners)
+			{
+				EXPECT_LT(atmos::WorldDrop(cap, point - eye), 0.01f) << height << " " << eye.x;
+			}
+		}
+	}
+}
+
+TEST(Atmosphere, FromSpaceTheSeaIsTheBallUnderTheMapsMiddle)
+{
+	constexpr float k_Map = 5120.0f;
+	constexpr float k_Radius = atmos::k_WorldRadius;
+	// An eye far from the map, as the camera is when it zooms out to space at a slant
+	const glm::vec3 eye {-3.8e6f, 9.0e6f, -3.8e6f};
+	const auto cap = atmos::MapCap({eye.x, eye.z}, eye.y, k_Map);
+	EXPECT_NEAR(cap.radius, 3620.4f, 0.1f);
+	// The true ball, in double precision: its middle is under the map's middle
+	const glm::dvec3 ballMiddle {2560.0, -static_cast<double>(k_Radius), 2560.0};
+	const auto trueDistance = [&](glm::dvec3 dir) -> std::optional<double> {
+		const glm::dvec3 from = glm::dvec3(eye) - ballMiddle;
+		const double b = glm::dot(from, dir);
+		const double c = glm::dot(from, from) - (static_cast<double>(k_Radius) * k_Radius);
+		const double disc = (b * b) - c;
+		if (disc < 0.0)
+		{
+			return std::nullopt;
+		}
+		return -b - std::sqrt(disc);
+	};
+	int hits = 0;
+	for (int i = 0; i <= 40; ++i)
+	{
+		for (int j = 0; j <= 40; ++j)
+		{
+			// Rays round the line to the ball's middle, past its limb on all sides
+			const glm::dvec3 towards = glm::normalize(ballMiddle - glm::dvec3(eye));
+			const glm::dvec3 side = glm::normalize(glm::cross(towards, glm::dvec3(0.0, 1.0, 0.0)));
+			const glm::dvec3 up = glm::cross(side, towards);
+			const double a = (i - 20) * 0.025;
+			const double e = (j - 20) * 0.025;
+			const glm::dvec3 dir = glm::normalize(towards + (side * a) + (up * e));
+			const auto expected = trueDistance(dir);
+			const auto found = atmos::CurvedSeaDistance(cap, eye.y, glm::vec3(dir));
+			// Near the limb the cap's few kilometres can move the edge by a ray or so
+			const double limbAngle = std::asin(k_Radius / glm::length(glm::dvec3(eye) - ballMiddle));
+			const double angle = std::acos(std::clamp(glm::dot(dir, towards), -1.0, 1.0));
+			if (std::abs(angle - limbAngle) < 0.002)
+			{
+				continue;
+			}
+			ASSERT_EQ(found.has_value(), expected.has_value()) << i << " " << j;
+			if (found.has_value())
+			{
+				++hits;
+				// The point that the ray finds is on the true ball, but for the cap's few kilometres
+				const glm::dvec3 point = glm::dvec3(eye) + (dir * static_cast<double>(*found));
+				EXPECT_NEAR(glm::length(point - ballMiddle), k_Radius, 1.05 * cap.radius) << i << " " << j;
+			}
+		}
+	}
+	EXPECT_GT(hits, 100);
+}
+
+TEST(Atmosphere, TheCapMovesToTheMapsMiddleAsTheEyeClimbs)
+{
+	constexpr float k_Map = 5120.0f;
+	const glm::vec2 eye {-50000.0f, 2560.0f};
+	EXPECT_EQ(atmos::MapCap(eye, 1000.0f, k_Map).eyeFromMiddle, glm::vec2(0.0f));
+	EXPECT_NEAR(glm::length(atmos::MapCap(eye, 1.0e6f, k_Map).eyeFromMiddle), 52560.0f, 0.5f);
+	// No step in the cap as the eye climbs
+	glm::vec2 last = atmos::MapCap(eye, 0.0f, k_Map).eyeFromMiddle;
+	for (float height = 0.0f; height < 300000.0f; height += 1000.0f)
+	{
+		const glm::vec2 now = atmos::MapCap(eye, height, k_Map).eyeFromMiddle;
+		EXPECT_LT(glm::length(now - last), 1000.0f);
+		last = now;
+	}
+	// The ground has no step where the plane of a ray passes the cap's edge
+	const auto cap = atmos::MapCap(eye, 1.0e6f, k_Map);
+	const float toMiddle = glm::length(cap.eyeFromMiddle);
+	const auto dropPast = [&cap, toMiddle](float side) {
+		const float angle = std::asin(side / toMiddle);
+		return atmos::WorldDrop(cap, glm::vec2(std::cos(angle), std::sin(angle)) * 400000.0f);
+	};
+	EXPECT_NEAR(dropPast(cap.radius - 0.01f), dropPast(cap.radius + 0.01f), 1.0f);
 }
 
 TEST(Atmosphere, TheMoonStandsEastOfTheSunByItsPhase)
@@ -504,4 +606,151 @@ TEST(Atmosphere, TheIslandSitsUnderTheAurorasOvalOnStrongNights)
 	EXPECT_GT(strong, 50);
 	// The same night always has the same strength
 	EXPECT_EQ(atmos::AuroraStrength(7), atmos::AuroraStrength(7));
+}
+
+TEST(Atmosphere, AChosenAuroraTakesThePlaceOfTheNightsOwn)
+{
+	EXPECT_EQ(atmos::AuroraTonight(3, std::nullopt), atmos::AuroraStrength(3));
+	EXPECT_EQ(atmos::AuroraTonight(3, atmos::k_StrongAurora), atmos::k_StrongAurora);
+	EXPECT_EQ(atmos::AuroraTonight(3, 2.0f), 1.0f);
+	EXPECT_EQ(atmos::AuroraTonight(3, -1.0f), 0.0f);
+	// On a strong night the middle of the oval is near the island's magnetic latitude of 58 degrees
+	EXPECT_NEAR(67.0f - (10.0f * atmos::k_StrongAurora), 58.0f, 1.0f);
+}
+
+TEST(Atmosphere, TheAirsFrameIsUpLowDownAndTurnsFromSpace)
+{
+	constexpr float k_Map = 5120.0f;
+	// Low down the frame is the world's own
+	const auto low = atmos::AirFrameFor(atmos::MapCap({-40000.0f, 900.0f}, 50.0f, k_Map), 50.0f);
+	EXPECT_EQ(low.up, glm::vec3(0.0f, 1.0f, 0.0f));
+	EXPECT_NEAR(low.height, 50.0f, 1e-3f);
+	// From space away from the map the frame's up is the line from the ball's middle under the map
+	const glm::vec3 eye {-3.8e6f, 9.0e6f, -3.8e6f};
+	const auto cap = atmos::MapCap({eye.x, eye.z}, eye.y, k_Map);
+	const auto high = atmos::AirFrameFor(cap, eye.y);
+	const glm::vec3 middle {2560.0f, -atmos::k_WorldRadius, 2560.0f};
+	EXPECT_LT(glm::length(high.up - glm::normalize(eye - middle)), 1e-4f);
+	EXPECT_NEAR(high.height, glm::length(eye - middle) - atmos::k_WorldRadius, 50.0f);
+	// The turn makes the frame's up point straight up and keeps the angles between directions
+	const glm::vec3 turned = atmos::TurnToUp(high.up, high.up);
+	EXPECT_LT(glm::length(turned - glm::vec3(0.0f, 1.0f, 0.0f)), 1e-5f);
+	const glm::vec3 a = glm::normalize(glm::vec3(0.3f, -0.8f, 0.2f));
+	const glm::vec3 b = glm::normalize(glm::vec3(-0.5f, 0.1f, 0.7f));
+	EXPECT_NEAR(glm::dot(atmos::TurnToUp(high.up, a), atmos::TurnToUp(high.up, b)), glm::dot(a, b), 1e-5f);
+	EXPECT_NEAR(glm::dot(atmos::TurnToUp(high.up, a), glm::vec3(0.0f, 1.0f, 0.0f)), glm::dot(a, high.up), 1e-5f);
+}
+
+TEST(Atmosphere, TheDayOfTheYearCountsFromTheFirstOfJanuary)
+{
+	EXPECT_EQ(atmos::DayOfYear(1767225600, 0), 0);
+	EXPECT_EQ(atmos::DayOfYear(1782864000, 0), 181);
+	EXPECT_EQ(atmos::DayOfYear(1782864000 + 3600, 0), 181);
+	EXPECT_EQ(atmos::DayOfYear(1767225600, 181), 181);
+	// The last day of a leap year
+	EXPECT_EQ(atmos::DayOfYear(1735603200, 0), 365);
+	EXPECT_EQ(atmos::DayOfYear(1735603200, 1), 0);
+}
+
+TEST(Atmosphere, NoctilucentCloudsComeOnlyInTheirSummerSeason)
+{
+	EXPECT_EQ(atmos::NoctilucentChance(0), 0.0f);
+	EXPECT_EQ(atmos::NoctilucentChance(atmos::k_NoctilucentSeasonStart), 0.0f);
+	EXPECT_EQ(atmos::NoctilucentChance(289), 0.0f);
+	EXPECT_NEAR(atmos::NoctilucentChance((atmos::k_NoctilucentSeasonStart + atmos::k_NoctilucentSeasonEnd) / 2),
+	            atmos::k_NoctilucentPeakChance, 1e-4f);
+	EXPECT_GT(atmos::NoctilucentChance(160), 0.0f);
+	EXPECT_LT(atmos::NoctilucentChance(160), atmos::NoctilucentChance(185));
+	// No night out of the season has them
+	for (int64_t night = 20000; night < 20400; ++night)
+	{
+		EXPECT_EQ(atmos::NoctilucentStrength(night, 20), 0.0f);
+		EXPECT_EQ(atmos::NoctilucentStrength(night, 300), 0.0f);
+	}
+}
+
+TEST(Atmosphere, NoctilucentCloudsAreRareOnSummerNights)
+{
+	int seen = 0;
+	constexpr int k_Nights = 4000;
+	for (int64_t night = 0; night < k_Nights; ++night)
+	{
+		const float strength = atmos::NoctilucentStrength(night, 185);
+		if (strength > 0.0f)
+		{
+			++seen;
+			EXPECT_GE(strength, 0.5f);
+			EXPECT_LE(strength, 1.0f);
+		}
+	}
+	// About the peak share of the nights at the middle of the season
+	const float share = static_cast<float>(seen) / k_Nights;
+	EXPECT_GT(share, atmos::k_NoctilucentPeakChance * 0.7f);
+	EXPECT_LT(share, atmos::k_NoctilucentPeakChance * 1.3f);
+	// The same night always has the same clouds
+	EXPECT_EQ(atmos::NoctilucentStrength(20630, 185), atmos::NoctilucentStrength(20630, 185));
+}
+
+TEST(Atmosphere, TheSkyKeepsItsColourInTheBlueHour)
+{
+	const auto sine = [](float degrees) { return std::sin(degrees * k_Pi / 180.0f); };
+	// By day all of it, at sunset only a part
+	EXPECT_FLOAT_EQ(atmos::SkyColourKept(sine(30.0f)), 1.0f);
+	EXPECT_LT(atmos::SkyColourKept(sine(1.0f)), 0.4f);
+	// The blue hour keeps most of its colour, and the night has less again
+	const float blueHour = 0.25f + (0.75f * atmos::k_BlueHourColour);
+	EXPECT_FLOAT_EQ(atmos::SkyColourKept(sine(-6.5f)), blueHour);
+	EXPECT_FLOAT_EQ(atmos::SkyColourKept(sine(-8.0f)), blueHour);
+	EXPECT_GT(atmos::SkyColourKept(sine(-6.5f)), atmos::SkyColourKept(sine(1.0f)));
+	EXPECT_FLOAT_EQ(atmos::SkyColourKept(sine(-20.0f)), 0.25f);
+	// The blue of the blue hour stays blue, and the blue of the night goes part of the way to grey
+	const glm::vec3 blue {0.1f, 0.2f, 0.6f};
+	const glm::vec3 dusk = atmos::DimSkyColour(blue, sine(-6.0f));
+	EXPECT_GT(dusk.b - dusk.r, 0.7f * (blue.b - blue.r));
+	const glm::vec3 night = atmos::DimSkyColour(blue, sine(-25.0f));
+	EXPECT_LT(night.b - night.r, blue.b - blue.r);
+}
+
+TEST(Atmosphere, TheAirScattersLessLightMoreThanOnceInTheEarthsShadow)
+{
+	// The table, made from the real light that gets through
+	const atmos::ThroughFunction through = [](float altitude, float mu) { return atmos::Transmittance(altitude, mu, k_Clear); };
+	const glm::vec3 noon = atmos::MultipleScatteringAt(1.0f, 0.9f, k_Clear, 32, 12, through);
+	const glm::vec3 sunset = atmos::MultipleScatteringAt(1.0f, 0.0f, k_Clear, 32, 12, through);
+	const glm::vec3 dusk = atmos::MultipleScatteringAt(1.0f, -0.15f, k_Clear, 32, 12, through);
+	// The light of the many scatterings is blue by day
+	EXPECT_GT(noon.b, noon.r);
+	EXPECT_GT(noon.b, 0.0f);
+	// It goes down as the sun goes down, and the low air in the earth's shadow has almost none
+	EXPECT_LT(sunset.g, noon.g * 0.3f);
+	EXPECT_LT(dusk.g, noon.g * 0.01f);
+	// The day's simple share does not go dark as fast, which made the low air glow at dusk
+	EXPECT_GT(atmos::DayMultipleScattering(1.0f, -0.15f, k_Clear).g, dusk.g * 10.0f);
+}
+
+TEST(Atmosphere, TheMultipleScatteringTableKeepsTheDaysLightAndFollowsTheTableAtDusk)
+{
+	auto air = k_Clear;
+	air.multiple = atmos::MakeMultipleTable(air);
+	ASSERT_NE(air.multiple, nullptr);
+	EXPECT_EQ(air.multiple->texels.size(), static_cast<size_t>(atmos::k_MultipleCpuWidth) * atmos::k_MultipleCpuHeight);
+	// While the light is high, the sky has the day's simple share as before
+	for (const float mu : {0.4f, 0.7f, 1.0f})
+	{
+		const glm::vec3 before = atmos::DayMultipleScattering(2.0f, mu, k_Clear);
+		const glm::vec3 after = atmos::MultipleScattering(2.0f, mu, air);
+		EXPECT_NEAR(after.r, before.r, 1e-6f);
+		EXPECT_NEAR(after.b, before.b, 1e-6f);
+	}
+	// While it is low, the sky has the table's light
+	const glm::vec3 low = atmos::MultipleScattering(2.0f, -0.1f, air);
+	const glm::vec3 table = air.multiple->At(2.0f, -0.1f);
+	EXPECT_NEAR(low.g, table.g, 1e-7f);
+	// The texels hold the light of their own height and angle
+	const auto at = atmos::FromMultipleTexel(3, 5, air.multiple->width, air.multiple->height);
+	const glm::vec3 texel = air.multiple->texels[static_cast<size_t>(5) * air.multiple->width + 3];
+	const glm::vec3 between = air.multiple->At(at.altitude, at.mu);
+	EXPECT_NEAR(between.g, texel.g, 1e-6f);
+	// Without a table the air has the day's share at all angles
+	EXPECT_EQ(atmos::MultipleScattering(2.0f, -0.1f, k_Clear), atmos::DayMultipleScattering(2.0f, -0.1f, k_Clear));
 }

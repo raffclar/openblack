@@ -5833,7 +5833,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			skyShader->SetUniformValue("u_skyModulate", &u_skyModulate);
 			skyShader->SetUniformValue("u_skyAdd", &u_skyAdd);
 			// EXPERIMENT (not for merge): the air's sky near the horizon
-			BindAtmosphere(*skyShader, 1.0f);
+			BindAtmosphere(*skyShader, 1.0f, desc.viewId == RenderPass::Main);
 
 			L3DMeshSubmitDesc submitDesc = {};
 			submitDesc.viewId = skyViewId;
