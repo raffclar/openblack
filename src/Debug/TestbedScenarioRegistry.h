@@ -315,6 +315,9 @@ struct ObjectSetup
 	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes. An animal
 	/// is made as a land's script makes one, and the script controls it.
 	bool inScript {false};
+	/// A villager is under the control of a script, as a script controls a villager that it moves: it takes up no
+	/// reaction until the script releases it
+	bool scriptControlled {false};
 	/// A villager is the named person of this row in the game's table of named people, whose name the Show Villager
 	/// Names key shows
 	std::optional<uint8_t> nameRow;
@@ -858,6 +861,9 @@ struct Command
 		/// everywhere, or with ctrl from the point (from the middle of the map) on the land, heard as far as radius with
 		/// the distances of a placed guidance voice. Needs no creature.
 		PlayGuidanceVoice,
+		/// A script releases the scenario's object (object) into the game, as RELEASE_FROM_SCRIPT does. A villager
+		/// that the script controls then decides what to do, and reacts again. Needs no creature.
+		ScriptRelease,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

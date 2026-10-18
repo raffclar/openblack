@@ -515,6 +515,26 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {52.0f, 0.0f}, .yawDegrees = 0.0f}},
 	});
 
+	// A villager under the control of a script takes up no reaction until the script releases it
+	all.push_back({
+	    .id = "villagers.script_release_reacts",
+	    .name = "A villager that a script releases reacts again",
+	    .facet = Facet::Objects,
+	    .description = "A cart in the middle of open land makes a reaction to look at it, of the kind a miracle makes. Two "
+	                   "villagers stand 6 metres east of it. A script controls the north one. Eight seconds in, the "
+	                   "script releases it, as RELEASE_FROM_SCRIPT does.",
+	    .expected = "The south villager takes the reaction up and turns to watch the cart. The north villager does not "
+	                "watch the cart while the script controls it. When the script releases it, it decides what to do, "
+	                "takes the reaction up and turns to watch the cart too.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-4.0f, -8.0f}, {10.0f, 8.0f}}, .distance = 0.5f},
+	    .objects =
+	        {{.type = MobileObjectInfo::Cart, .offset = {0.0f, 0.0f}, .reaction = Reaction::LookAtSpell},
+	         {.type = VillagerInfo::CelticFarmerMale, .offset = {6.0f, -3.0f}, .yawDegrees = 0.0f},
+	         {.type = VillagerInfo::CelticForesterMale, .offset = {6.0f, 3.0f}, .yawDegrees = 0.0f, .scriptControlled = true}},
+	    .commands = {{.kind = Command::Kind::ScriptRelease, .delaySeconds = 8.0f, .object = 2}},
+	});
+
 	// Villagers watching a thing that the hand then takes up
 	all.push_back({
 	    .id = "villagers.look_until_taken",
