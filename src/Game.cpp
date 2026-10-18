@@ -5550,6 +5550,11 @@ void Game::ReadTattooPictures()
 	if (Locator::resources::value().GetCreatureSkinArt().Contains(creature_skin::k_ArtId))
 	{
 		LoadCreatureSkinArt();
+		// The masks of the player's creature take the new pictures, and every creature is painted again
+		if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(PlayerNames::PLAYER_ONE))
+		{
+			Locator::creatureSkinSystem::value().RemakeTattooMasks(*creature, creature_tattoo::Sheet::OwnPictures);
+		}
 		Locator::entitiesRegistry::value().Each<ecs::components::CreatureTattoos>(
 		    [](ecs::components::CreatureTattoos& tattoos) { ++tattoos.revision; });
 	}

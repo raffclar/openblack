@@ -24,6 +24,7 @@
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "EngineConfig.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -116,9 +117,17 @@ void CreatureSpawner::DrawAppearance(entt::entity entity) noexcept
 	    .site = static_cast<uint8_t>(_tattooSite),
 	    .colour = colour,
 	};
+	// Each change goes on as the end of a drag in the tattoo editor puts it on
+	const auto putOn = [&skins, &tattoos, entity](size_t index, const creature_tattoo::Slot& tattoo) {
+		auto slots = tattoos->slots;
+		slots.at(index) = tattoo;
+		const auto pictures = Locator::tattooEditorSystem::has_value() ? Locator::tattooEditorSystem::value().GetPictures()
+		                                                               : creature_tattoo::Pictures {};
+		skins.PutOnTattoos(entity, slots, pictures);
+	};
 	if (ImGui::Button("Set slot"))
 	{
-		skins.SetTattoo(entity, static_cast<size_t>(_tattooSlot), edited);
+		putOn(static_cast<size_t>(_tattooSlot), edited);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Put on"))
@@ -126,7 +135,7 @@ void CreatureSpawner::DrawAppearance(entt::entity entity) noexcept
 		// As the game's tattoo editor drops a design on a site
 		if (const auto slot = creature_tattoo::SlotFor(tattoos->slots, edited.site, edited.design); slot.has_value())
 		{
-			skins.SetTattoo(entity, *slot, edited);
+			putOn(*slot, edited);
 		}
 	}
 	if (ImGui::IsItemHovered())
@@ -136,7 +145,7 @@ void CreatureSpawner::DrawAppearance(entt::entity entity) noexcept
 	ImGui::SameLine();
 	if (ImGui::Button("Clear slot"))
 	{
-		skins.SetTattoo(entity, static_cast<size_t>(_tattooSlot), creature_tattoo::Slot {});
+		putOn(static_cast<size_t>(_tattooSlot), creature_tattoo::Slot {});
 	}
 
 	ImGui::SeparatorText("Wounds and blood");

@@ -763,6 +763,11 @@ CreatureSkinArtLoader::result_type CreatureSkinArtLoader::operator()(FromDiskTag
 	};
 	auto art = std::make_shared<creature_skin::Art>();
 	auto symbols = rgb(paths.symbols, k_Size, k_Size);
+	// The designs that the game ships with, before the player's own pictures go into the sheet
+	for (uint32_t design = 0; design < art->shippedDesigns.size(); ++design)
+	{
+		art->shippedDesigns.at(design) = creature_tattoo::DesignFromAtlas(symbols, k_Size, design, paths.lowDetail);
+	}
 	for (uint32_t design = 0; design < paths.pictures.size(); ++design)
 	{
 		if (const auto& picture = paths.pictures.at(design); picture.has_value())

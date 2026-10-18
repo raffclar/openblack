@@ -12,10 +12,14 @@
 #include "TattooEditorSystem.h"
 
 #include <algorithm>
+#include <optional>
+#include <utility>
 #include <vector>
 
+#include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "Locator.h"
 
@@ -24,7 +28,7 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// The skins of the creatures in the registry, painted again by the skin system as their tattoos change
+/// The skins of the creatures in the registry, painted by the skin system
 class RegistrySkin final: public TattooEditorSystem::Skin
 {
 public:
@@ -38,19 +42,59 @@ public:
 		return tattoos != nullptr ? std::optional(tattoos->slots) : std::nullopt;
 	}
 
-	void Write(entt::entity creature, size_t slot, const creature_tattoo::Slot& tattoo) override
+	void Write(entt::entity creature, const creature_tattoo::Slots& slots) override
 	{
 		if (Locator::creatureSkinSystem::has_value())
 		{
-			Locator::creatureSkinSystem::value().SetTattoo(creature, slot, tattoo);
+			Locator::creatureSkinSystem::value().SetTattoos(creature, slots);
 		}
 	}
+
 	void WritePictures(entt::entity creature, std::vector<uint8_t> pictures) override
 	{
 		if (Locator::creatureSkinSystem::has_value())
 		{
 			Locator::creatureSkinSystem::value().SetTattooPictures(creature, std::move(pictures));
 		}
+	}
+
+	void Show(entt::entity shown, std::optional<creature_tattoo::Slots> slots) override
+	{
+		if (Locator::creatureSkinSystem::has_value())
+		{
+			Locator::creatureSkinSystem::value().ShowTattoos(shown, slots);
+		}
+	}
+
+	void RemakeMasks(entt::entity creature, creature_tattoo::Sheet sheet) override
+	{
+		if (Locator::creatureSkinSystem::has_value())
+		{
+			Locator::creatureSkinSystem::value().RemakeTattooMasks(creature, sheet);
+		}
+	}
+
+	void Paint(entt::entity creature) override
+	{
+		if (Locator::creatureSkinSystem::has_value())
+		{
+			Locator::creatureSkinSystem::value().PaintTattoos(creature);
+		}
+	}
+
+	[[nodiscard]] std::optional<entt::entity> CaveCopy(entt::entity creature) const override
+	{
+		if (!Locator::creatureCaveSystem::has_value() || !Locator::entitiesRegistry::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto copy = Locator::creatureCaveSystem::value().GetCaveCreature();
+		if (!copy.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto* of = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureCopy>(*copy);
+		return of != nullptr && of->creature == creature ? copy : std::nullopt;
 	}
 };
 } // namespace
@@ -70,10 +114,22 @@ void TattooEditorSystem::Open(entt::entity creature, const creature_tattoo_edito
 	_open = true;
 	_creature = creature;
 	_shown.reset();
+	_caveCopy = _skin->CaveCopy(creature);
 	_session = creature_tattoo_editor::Open(_skin->Read(creature).value_or(creature_tattoo::Slots {}));
 	_view = view;
 	_hovered.reset();
 	_hoveredPoint.reset();
+	_face.reset();
+	// The copy in the cave shows the tattoos being edited. The masks are made again with the player's own pictures.
+	if (_caveCopy.has_value())
+	{
+		_skin->Show(*_caveCopy, _session.slots);
+	}
+	_skin->RemakeMasks(creature, creature_tattoo::Sheet::OwnPictures);
+	if (const auto shown = Shown(); shown.has_value())
+	{
+		_skin->Paint(*shown);
+	}
 }
 
 void TattooEditorSystem::OpenFromMenu(std::optional<entt::entity> playerCreature, entt::entity shown,
@@ -82,25 +138,35 @@ void TattooEditorSystem::OpenFromMenu(std::optional<entt::entity> playerCreature
 	_open = true;
 	_creature = playerCreature;
 	_shown = shown;
+	_caveCopy.reset();
 	const auto slots = playerCreature.has_value() ? _skin->Read(*playerCreature) : std::nullopt;
 	_session = creature_tattoo_editor::Open(slots.value_or(creature_tattoo::Slots {}));
 	_view = view;
 	_hovered.reset();
 	_hoveredPoint.reset();
 	_face.reset();
-	// The creature that the menu shows wears the tattoos being edited from the start
-	for (size_t i = 0; i < _session.slots.size(); ++i)
+	// The creature that the menu shows wears the tattoos being edited from the start. Without a creature in the game,
+	// the masks stay as they were.
+	_skin->Show(shown, _session.slots);
+	if (playerCreature.has_value())
 	{
-		_skin->Write(shown, i, _session.slots.at(i));
+		_skin->RemakeMasks(*playerCreature, creature_tattoo::Sheet::OwnPictures);
 	}
-	_skin->WritePictures(shown, creature_tattoo::PicturesBlock(_session.slots, _pictures));
+	_skin->Paint(shown);
 }
 
 void TattooEditorSystem::Close()
 {
+	// The copy in the cave shows the creature's own tattoos again, painted with the masks as they are
+	if (_open && _caveCopy.has_value())
+	{
+		_skin->Show(*_caveCopy, std::nullopt);
+		_skin->Paint(*_caveCopy);
+	}
 	_open = false;
 	_creature.reset();
 	_shown.reset();
+	_caveCopy.reset();
 	_hovered.reset();
 	_hoveredPoint.reset();
 	_face.reset();
@@ -137,9 +203,17 @@ bool TattooEditorSystem::Drop(uint8_t design, const glm::u8vec3& colour)
 		return false;
 	}
 	const auto putOn = creature_tattoo_editor::Drop(_session, design, colour, _hovered);
-	Write(_session.slots);
-	// Each drop makes the creature's block of pictures again from its tattoos
-	WritePictures(_session.slots);
+	// Each end of a drag makes the creature's block of pictures again from its tattoos
+	if (_creature.has_value())
+	{
+		_skin->WritePictures(*_creature, creature_tattoo::PicturesBlock(_session.slots, _pictures));
+	}
+	Remake();
+	// The player's creature in the world is painted again too
+	if (_creature.has_value() && _creature != Shown())
+	{
+		_skin->Paint(*_creature);
+	}
 	if (putOn)
 	{
 		_face = creature_tattoo_editor::k_PutOnFace;
@@ -154,11 +228,11 @@ std::optional<creature_tattoo::Slot> TattooEditorSystem::Lift()
 		return std::nullopt;
 	}
 	auto lifted = creature_tattoo_editor::Lift(_session, *_hovered);
-	if (lifted.has_value())
-	{
-		Write(_session.slots);
-		_face = creature_tattoo_editor::k_LiftFace;
-	}
+	// A press on a place without a tattoo also changes the tattoos again and makes the creature sad. This occurs again
+	// each frame while the button stays down.
+	_session.changed = true;
+	Remake();
+	_face = creature_tattoo_editor::k_LiftFace;
 	return lifted;
 }
 
@@ -174,44 +248,39 @@ creature_tattoo_editor::Accept TattooEditorSystem::Ok(bool networkGame)
 
 void TattooEditorSystem::Cancel()
 {
-	if (IsOpen())
+	if (IsOpen() && _creature.has_value())
 	{
-		Write(_session.opened);
+		// The creature gets back its tattoos, but no skin is painted and the masks stay as they are
+		_skin->Write(*_creature, _session.opened);
 		// The game does not make the block of pictures again here (vanilla-bugs 379), and openblack fixes this
-		WritePictures(_session.opened);
+		_skin->WritePictures(*_creature, creature_tattoo::PicturesBlock(_session.opened, _pictures));
 	}
 	Close();
 }
 
-std::vector<entt::entity> TattooEditorSystem::Wearers() const
+void TattooEditorSystem::Remake()
 {
-	std::vector<entt::entity> wearers;
 	if (_creature.has_value())
 	{
-		wearers.push_back(*_creature);
+		_skin->Write(*_creature, _session.slots);
+		_skin->RemakeMasks(*_creature, creature_tattoo::Sheet::OwnPictures);
 	}
+	// Without a copy in the cave or a creature of the menu, the player's creature shows its own tattoos
+	if (const auto shown = _shown.has_value() ? _shown : _caveCopy; shown.has_value())
+	{
+		_skin->Show(*shown, _session.slots);
+	}
+	if (const auto shown = Shown(); shown.has_value())
+	{
+		_skin->Paint(*shown);
+	}
+}
+
+std::optional<entt::entity> TattooEditorSystem::Shown() const
+{
 	if (_shown.has_value())
 	{
-		wearers.push_back(*_shown);
+		return _shown;
 	}
-	return wearers;
-}
-
-void TattooEditorSystem::Write(const creature_tattoo::Slots& slots)
-{
-	for (const auto creature : Wearers())
-	{
-		for (size_t i = 0; i < slots.size(); ++i)
-		{
-			_skin->Write(creature, i, slots.at(i));
-		}
-	}
-}
-
-void TattooEditorSystem::WritePictures(const creature_tattoo::Slots& slots)
-{
-	for (const auto creature : Wearers())
-	{
-		_skin->WritePictures(creature, creature_tattoo::PicturesBlock(slots, _pictures));
-	}
+	return _caveCopy.has_value() ? _caveCopy : _creature;
 }
