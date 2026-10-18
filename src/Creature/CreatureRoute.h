@@ -192,7 +192,17 @@ struct Route
 
 /// A leg's length: an arc's round its circle, else straight
 [[nodiscard]] float LengthOf(const Leg& leg);
-/// Where along a leg a distance from its start is, and the heading there
+/// A place on a route and the heading there
+struct Placed
+{
+	glm::vec2 position;
+	GameHeading heading;
+};
+/// Where along a leg a distance from its start is, and the heading there, in the game's order of operations. Round an
+/// arc, the angle moves by the share of the arc that the distance is. A straight leg that is too short to measure gives
+/// nothing.
+[[nodiscard]] std::optional<Placed> PlaceAlong(const Leg& leg, float distance);
+/// The place and the heading of PlaceAlong, or the leg's start and direction on a leg that is too short
 [[nodiscard]] glm::vec2 PointAlong(const Leg& leg, float distance);
 [[nodiscard]] GameHeading HeadingAlong(const Leg& leg, float distance);
 

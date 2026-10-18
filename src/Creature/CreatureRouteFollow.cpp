@@ -192,7 +192,7 @@ void Follower::Succeed(size_t chosen, float joinAhead)
 		_route = {.legs = _searches.front().search.TakeBest(), .segment = 0, .travelled = 0.0f};
 		SetRounds(_route.legs, _obstacles);
 		_routeEnd = _route.End();
-		_position = _route.Position();
+		PlaceOnRoute();
 		_searches.clear();
 		_state = State::Walking;
 	}
@@ -340,8 +340,28 @@ Advanced Follower::Advance(float distance)
 	}
 	else
 	{
-		_position = _route.Position();
+		PlaceOnRoute();
 	}
 	_obstacles.SetWalker(_position);
-	return {.position = _position, .heading = _route.Heading(), .segmentChanged = changed, .finished = _route.Finished()};
+	return {.position = _position, .heading = _heading, .segmentChanged = changed, .finished = _route.Finished()};
+}
+
+void Follower::RestartLeg()
+{
+	_route.travelled = 0.0f;
+	PlaceOnRoute();
+	_obstacles.SetWalker(_position);
+}
+
+void Follower::PlaceOnRoute()
+{
+	if (_route.Finished())
+	{
+		return;
+	}
+	if (const auto placed = PlaceAlong(_route.legs[_route.segment], _route.travelled))
+	{
+		_position = placed->position;
+		_heading = placed->heading;
+	}
 }
