@@ -22,6 +22,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "CreatureRoute.h"
+
 /// How a creature lets go of what it holds: thrown at something, tossed away, lobbed or put down, and how the thing then
 /// flies until it comes to rest on the ground
 namespace openblack::creature_throw
@@ -190,5 +192,10 @@ struct ThrowStand
 /// from the map positions of the two. None when the creature stands right on the thing's centre, with no way to back away.
 [[nodiscard]] std::optional<ThrowStand> WhereToThrowFrom(glm::vec2 creature, glm::vec2 target, float height, float targetRadius,
                                                          float keep);
+/// The point that a creature backs away to for a throw. A point that the creature may stand on is used as it is. If not,
+/// it is the nearest place that it may stand on, when that is less than the valid point reach away. None when the search
+/// finds no place, or the place is too far: the move then fails (deviation 79: the game tests a point that the search
+/// did not write).
+[[nodiscard]] std::optional<glm::vec2> BackOffPoint(const creature_route::WalkableLand& land, glm::vec2 point);
 
 } // namespace openblack::creature_throw

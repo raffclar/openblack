@@ -10,6 +10,8 @@
 #include <cstdint>
 
 #include <bit>
+#include <utility>
+#include <vector>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -136,4 +138,46 @@ TEST(CreatureFilesOrder4, ALeaningThingKeepsItsAngles)
 	const auto rows = creature_obstacles::LeaningPlacement(0.3f, 0.2f, -0.1f, 1.0f);
 	const glm::mat3 rotation(rows[0], rows[1], rows[2]);
 	EXPECT_NEAR(creature_obstacles::YAngleOf(rotation), 0.3f, 1e-6f);
+}
+
+// Deviation 79, case 726: right on the thing's centre the way has no length, so there is no stand and the move fails
+TEST(CreatureFilesOrder4, ThrowingFromTheThingsCentreHasNoStand)
+{
+	const glm::vec2 centre {Quantised(1000.37f), Quantised(2000.91f)};
+	EXPECT_FALSE(creature_throw::WhereToThrowFrom(centre, centre, 15.3f, 4.1f, 2.7f).has_value());
+	EXPECT_FALSE(creature_throw::WhereToThrowFrom(centre, centre, 15.3f, 0.0f, 0.0f).has_value());
+}
+
+// Deviation 79, case 727: a point that it may stand on is kept
+TEST(CreatureFilesOrder4, TheBackOffPointIsKeptWhereItCanStand)
+{
+	const auto land = creature_route::WalkableLand::OfCells({});
+	const auto point = creature_throw::BackOffPoint(land, {1000.0f, 2000.0f});
+	ASSERT_TRUE(point.has_value());
+	EXPECT_EQ(*point, glm::vec2(1000.0f, 2000.0f));
+}
+
+// Deviation 79, case 727: a land with no place to stand gives no point, so the move fails
+TEST(CreatureFilesOrder4, TheBackOffPointFailsWhenTheSearchFindsNoPlace)
+{
+	const auto land = creature_route::WalkableLand::OfCells(std::vector<creature_route::Ground>(
+	    static_cast<size_t>(creature_route::k_CellsPerSide) * creature_route::k_CellsPerSide, creature_route::Ground::Blocked));
+	EXPECT_FALSE(creature_throw::BackOffPoint(land, {1000.0f, 2000.0f}).has_value());
+}
+
+// Deviation 79, case 727: a place found too far away gives no point either
+TEST(CreatureFilesOrder4, TheBackOffPointFailsWhenTheNearestPlaceIsTooFar)
+{
+	// A blocked square of cells about 100 units across: the nearest place to stand is more than the reach away
+	std::vector<creature_route::Ground> cells(
+	    static_cast<size_t>(creature_route::k_CellsPerSide) * creature_route::k_CellsPerSide, creature_route::Ground::Open);
+	for (int32_t z = 150; z < 170; ++z)
+	{
+		for (int32_t x = 150; x < 170; ++x)
+		{
+			cells[static_cast<size_t>(z) * creature_route::k_CellsPerSide + x] = creature_route::Ground::Blocked;
+		}
+	}
+	const auto land = creature_route::WalkableLand::OfCells(std::move(cells));
+	EXPECT_FALSE(creature_throw::BackOffPoint(land, {1600.0f, 1600.0f}).has_value());
 }

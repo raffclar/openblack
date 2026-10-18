@@ -134,15 +134,6 @@ glm::vec2 MapPosition(glm::vec2 point)
 	return map_coords::ToMetres(map_coords::FromMetres(point));
 }
 
-/// How far the nearest place to stand is from a point. Both are at a height of zero, and the game adds the square of z
-/// first.
-float NearestStandDistance(glm::vec2 point, glm::vec2 nearest)
-{
-	const float acrossX = point.x - nearest.x;
-	const float acrossZ = point.y - nearest.y;
-	return std::sqrt((acrossZ * acrossZ) + (acrossX * acrossX));
-}
-
 /// The map position of a point as a point, with the height of the land under it
 glm::vec3 MapPoint(glm::vec2 point)
 {
@@ -1075,17 +1066,13 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		// Backing away, where it can't stand it goes to the nearest place it can, if near enough
 		if (stand->kind == creature_throw::ThrowStand::Kind::BackOff)
 		{
-			const auto& land = locomotion.GetWalkableLand();
-			if (!land.IsValid(point, creature_route::k_DestinationClearance))
+			const auto standPoint = creature_throw::BackOffPoint(locomotion.GetWalkableLand(), point);
+			if (!standPoint.has_value())
 			{
-				const auto valid = land.NearestStandable(point);
-				if (!valid.has_value() || !(NearestStandDistance(point, *valid) < creature_route::k_ValidPointReach))
-				{
-					fail();
-					break;
-				}
-				point = *valid;
+				fail();
+				break;
 			}
+			point = *standPoint;
 		}
 		switch (locomotion.MoveTo(creature, point, KeptOrRun(*casting), stand->minDistance, stand->maxDistance))
 		{

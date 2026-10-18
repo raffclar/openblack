@@ -191,6 +191,7 @@ std::optional<creature_throw::ThrowStand> creature_throw::WhereToThrowFrom(glm::
 	const float furthest = height * k_ThrowReachHeights;
 	if (distance < nearest)
 	{
+		// Right on the thing's centre the way has no length, so the move fails (deviation 79)
 		if (distance <= 0.0f)
 		{
 			return std::nullopt;
@@ -209,4 +210,26 @@ std::optional<creature_throw::ThrowStand> creature_throw::WhereToThrowFrom(glm::
 		                   .maxDistance = furthest > nearest ? furthest : nearest + k_ThrowWalkUpSpare};
 	}
 	return ThrowStand {};
+}
+
+std::optional<glm::vec2> creature_throw::BackOffPoint(const creature_route::WalkableLand& land, glm::vec2 point)
+{
+	if (land.IsValid(point, creature_route::k_DestinationClearance))
+	{
+		return point;
+	}
+	const auto valid = land.NearestStandable(point);
+	if (!valid.has_value())
+	{
+		return std::nullopt;
+	}
+	// How far away the place is, with the square of z first
+	const float acrossX = point.x - valid->x;
+	const float acrossZ = point.y - valid->y;
+	const float away = std::sqrt((acrossZ * acrossZ) + (acrossX * acrossX));
+	if (!(away < creature_route::k_ValidPointReach))
+	{
+		return std::nullopt;
+	}
+	return valid;
 }
