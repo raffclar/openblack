@@ -269,6 +269,19 @@ void PlayerProfileSystem::CountLoad()
 	}
 }
 
+uint32_t PlayerProfileSystem::TakeLandAutosave(uint32_t land)
+{
+	auto* profile = CurrentProfile();
+	if (profile == nullptr)
+	{
+		return 0;
+	}
+	const auto count = profile->landAutosaves[land];
+	profile->landAutosaves[land] = count + 1;
+	Save();
+	return count;
+}
+
 void PlayerProfileSystem::Save() const
 {
 	if (_store.developer || !_store.folder.has_value())

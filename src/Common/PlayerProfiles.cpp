@@ -34,6 +34,7 @@ constexpr std::string_view k_ProfileKey = "profile";
 constexpr std::string_view k_SettingKey = "setting";
 constexpr std::string_view k_AlignmentKey = "alignment";
 constexpr std::string_view k_StatisticsKey = "statistics";
+constexpr std::string_view k_AutosavesKey = "autosaves";
 constexpr char k_Separator = '\t';
 
 char16_t FoldCase(char16_t c)
@@ -229,7 +230,8 @@ const Profile& Add(Profiles& profiles, std::u16string_view name, std::u16string_
 		                             .symbol = symbol,
 		                             .settings = {},
 		                             .alignment = 0.0,
-		                             .statistics = {}});
+		                             .statistics = {},
+		                             .landAutosaves = {}});
 		SortForTheList(profiles);
 		found = Find(profiles, given);
 	}
@@ -298,6 +300,10 @@ std::string Write(const Profiles& profiles)
 		text += std::format("{1}{0}{2}{0}{3}\n", k_Separator, k_AlignmentKey, profile.name, profile.alignment);
 		text += std::format("{1}{0}{2}{0}{3}{0}{4}{0}{5}\n", k_Separator, k_StatisticsKey, profile.name,
 		                    profile.statistics.secondsPlayed, profile.statistics.saves, profile.statistics.loads);
+		for (const auto& [land, count] : profile.landAutosaves)
+		{
+			text += std::format("{1}{0}{2}{0}{3}{0}{4}\n", k_Separator, k_AutosavesKey, profile.name, land, count);
+		}
 	}
 	return text;
 }
@@ -363,6 +369,20 @@ Profiles Read(std::string_view text)
 			}
 			continue;
 		}
+		if (key == k_AutosavesKey)
+		{
+			const auto owner = NextField(line);
+			const auto profile = std::ranges::find(profiles.profiles, owner, &Profile::name);
+			// The count is taken only when the land and the count can both be read
+			uint32_t land = 0;
+			uint32_t count = 0;
+			const auto landText = NextField(line);
+			if (profile != profiles.profiles.end() && ParseNumber(landText, land) && ParseNumber(line, count))
+			{
+				profile->landAutosaves[land] = count;
+			}
+			continue;
+		}
 		if (key != k_ProfileKey)
 		{
 			continue;
@@ -382,7 +402,8 @@ Profiles Read(std::string_view text)
 		                             .symbol = symbol,
 		                             .settings = {},
 		                             .alignment = 0.0,
-		                             .statistics = {}});
+		                             .statistics = {},
+		                             .landAutosaves = {}});
 	}
 	SortForTheList(profiles);
 	return profiles;

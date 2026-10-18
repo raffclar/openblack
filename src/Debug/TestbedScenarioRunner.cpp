@@ -2515,7 +2515,7 @@ void Runner::Give(const Command& command)
 			}
 			else
 			{
-				temple.Activate(room);
+				temple.ActivateAfterFrame(room);
 			}
 		}
 		Log(fmt::format("{:.1f}s: the player goes into temple room {}", _seconds, command.value));
@@ -2567,6 +2567,12 @@ void Runner::Give(const Command& command)
 		}
 		Log(fmt::format("{:.1f}s: {} slot {}: {}", _seconds, saving ? "save into" : "load from", slot,
 		                done ? "done" : "failed"));
+		return;
+	}
+	if (command.kind == Kind::QuickSave)
+	{
+		const bool done = Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().QuickSave();
+		Log(fmt::format("{:.1f}s: quick save: {}", _seconds, done ? "done" : "failed"));
 		return;
 	}
 	if (command.kind == Kind::EndGuidanceWaits)
@@ -3050,6 +3056,7 @@ void Runner::Give(const Command& command)
 	case Kind::ShowCustomMusicControls:
 	case Kind::SaveGame:
 	case Kind::LoadGame:
+	case Kind::QuickSave:
 	case Kind::StopScript:
 	case Kind::StartScriptMusic:
 	case Kind::RunText:

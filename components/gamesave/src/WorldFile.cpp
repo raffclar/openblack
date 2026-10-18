@@ -90,6 +90,8 @@ Chunk openblack::gamesave::ToChunk(const GameChunk& game)
 	PutText(writer, game.landscape);
 	writer.Put(game.knownLeashes);
 	writer.Put(game.creatureInTemple);
+	writer.Put(game.lastAutosaveTurn);
+	writer.Put(game.lastQuickSaveTurn);
 	return {.tag = k_GameTag, .bytes = writer.Take()};
 }
 
@@ -110,6 +112,12 @@ std::optional<GameChunk> openblack::gamesave::ReadGameChunk(std::span<const uint
 	if (reader.Failed())
 	{
 		return std::nullopt;
+	}
+	// A block from before the turns of the last autosave and quick save keeps them at zero
+	if (reader.Left() >= 2 * sizeof(uint32_t))
+	{
+		reader.Get(game.lastAutosaveTurn);
+		reader.Get(game.lastQuickSaveTurn);
 	}
 	return game;
 }

@@ -99,6 +99,8 @@ public:
 	[[nodiscard]] glm::vec2 GetWaterfallSlide() const override;
 	void Activate() override { Activate(TempleRoom::Main); }
 	void Activate(TempleRoom room) override;
+	void ActivateAfterFrame(TempleRoom room) override;
+	void FrameDrawn() override;
 	void EnterLockedRoom(TempleRoom room) override;
 	[[nodiscard]] bool TakeGameEnded() override { return _lock.TakeEnded(); }
 	void Deactivate() override;
@@ -113,6 +115,8 @@ private:
 	void BringBackDialogue();
 
 	bool _active {false};
+	/// The room that the player goes into after the frame that is drawn now
+	std::optional<TempleRoom> _activateAfterFrame;
 	/// The room the player last came into on this visit, whose help was asked for then
 	std::optional<TempleRoom> _enteredRoom;
 	bool _leaveRequested {false};

@@ -873,6 +873,9 @@ struct Command
 		/// Each icon of the player's worship sites holds a part of the charge of its miracle (amount, 0 to 1), as if the
 		/// worshippers charged it that far. Needs no creature.
 		FillSiteIcons,
+		/// The game saves into the quick save slot, as the quick save key does: a new picture of the screen and the
+		/// slot's own name. Needs no creature
+		QuickSave,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
