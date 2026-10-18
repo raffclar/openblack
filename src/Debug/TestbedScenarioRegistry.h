@@ -351,6 +351,8 @@ struct ObjectSetup
 	std::optional<Reaction> reaction;
 	/// A tree lies dead, as a land's script makes a dead tree, rather than standing and growing
 	bool dead {false};
+	/// The lean of a dead tree about x and z, in degrees, as a land's script gives it
+	glm::vec2 deadLeanDegrees {0.0f};
 };
 
 /// A particle effect played on the land
@@ -510,6 +512,9 @@ struct ScriptArgument
 		Marker,
 		Object,
 		Creature,
+		/// A position as three numbers: the point from the middle of the map, at the height above the land. Only a
+		/// native call takes it.
+		Position,
 	};
 	Kind kind {Kind::Number};
 	float number {0.0f};
@@ -883,6 +888,9 @@ struct Command
 		/// The scenario's object, a building going up, is finished at once, as when its builders put on the last of
 		/// it. Needs no creature.
 		FinishBuilding,
+		/// A script native (script, by its name) runs at once with its arguments in order (scriptArguments). A position
+		/// is three numbers. Needs no creature.
+		CallNative,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
