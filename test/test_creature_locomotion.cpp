@@ -12,10 +12,7 @@
 
 #include <bit>
 #include <numbers>
-<<<<<<< HEAD
-=======
 #include <optional>
->>>>>>> me/creature-files-order-3
 #include <vector>
 
 #include <glm/geometric.hpp>
