@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <memory>
 #include <optional>
 
@@ -79,9 +80,17 @@ struct AtmosphereFrame
 	/// The light of the air's sky from above on the screen, as the dome shows the sky (for the shade of the clouds)
 	glm::vec3 skyFromAbove {0.0f};
 	/// The curve of the world far away (world_curve.sh): xy the eye's x and z, z the radius of the flat cap, w the
-	/// world's radius; and xy the eye's x and z less the cap's middle
+	/// world's radius; and xy the eye's x and z less the cap's middle, z the eye's height over the curved world
 	glm::vec4 worldCurve {0.0f};
 	glm::vec4 worldCap {0.0f};
+	/// The rows of the turn from the frame that the camera works in to the world's frame (Camera::GetPlanetFrame), for
+	/// what has its place on the planet: the stars and the planet's weather
+	/// The direction towards the real sun, for the day and the night on the planet's ball (world_curve.sh)
+	glm::vec4 planetSun {0.0f, 1.0f, 0.0f, 0.0f};
+	/// The direction towards the real moon, and the share of the island's light that a full moon high up gives
+	glm::vec4 planetMoon {0.0f, -1.0f, 0.0f, 0.0f};
+	std::array<glm::vec4, 3> worldTurn {glm::vec4(1.0f, 0.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 0.0f),
+	                                    glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
 	/// The air's own up (atmosphere::AirFrame), and the light turned into the air's frame for the sky round the eye
 	glm::vec4 airUp {0.0f, 1.0f, 0.0f, 0.0f};
 	glm::vec4 skyViewLight {0.0f, 1.0f, 0.0f, 0.0f};

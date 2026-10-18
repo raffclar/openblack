@@ -414,6 +414,8 @@ private:
 	/// Binds a cap's corners as the vertices of the next draw; false when there is no room for them this frame
 	[[nodiscard]] static bool BindCap(const std::vector<partial_build_cap::CapVertex>& cap);
 	void DrawPass(const DrawSceneDesc& desc) const;
+	/// EXPERIMENT (not for merge): the island is out of sight over the horizon, or the camera is far round the planet
+	[[nodiscard]] static bool IslandHidden(const Camera& camera);
 	/// EXPERIMENT (not for merge): whether the view is under the sea this frame. When it is, the main scene is drawn into
 	/// the underwater target, with no sea, and the frame's underwater uniforms are kept.
 	bool BeginUnderwater(DrawSceneDesc& desc) const;

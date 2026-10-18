@@ -9,8 +9,60 @@
 
 // xy: the eye's x and z; z: the radius of the flat cap; w: the world's radius, 0 for a flat world
 uniform vec4 u_worldCurve;
-// xy: the eye's x and z less the middle of the flat cap; zw: unused
+// xy: the eye's x and z less the middle of the flat cap; z: the eye's height over the curved world; w: unused
 uniform vec4 u_worldCap;
+// The rows of the turn from the frame that the camera works in to the world's frame. It is not the identity only low
+// down far round the planet, where the frame is the frame of that place.
+uniform vec4 u_worldTurn[3];
+// xyz: the direction towards the real sun, for the day and the night on the planet's ball
+uniform vec4 u_planetSun;
+// xyz: the direction towards the real moon; w: the share of the island's light that it gives at its highest
+uniform vec4 u_planetMoon;
+
+// A direction in the camera's frame as a direction in the world's frame, for what has its place on the planet
+vec3 WorldDirection(vec3 dir)
+{
+	return vec3(dot(u_worldTurn[0].xyz, dir), dot(u_worldTurn[1].xyz, dir), dot(u_worldTurn[2].xyz, dir));
+}
+
+// Over this height the eye can be far round the planet, so the passes take heights and directions from the ball
+#define ATMOS_HIGH_EYE 20000.0f
+
+// The eye's height over the curved world. `heightOverSea` is the eye's y less the sea's level, which is the same near
+// the map. Far round the ball the eye can be under the sea's level and high over the ball.
+float WorldEyeHeight(float heightOverSea)
+{
+	return u_worldCurve.w > 0.0f ? u_worldCap.z : heightOverSea;
+}
+
+// The line from the middle of the world's ball to the eye, from the eye's height over the sea's level
+vec3 WorldMiddleToEye(float heightOverSea)
+{
+	return vec3(u_worldCap.x, heightOverSea + u_worldCurve.w, u_worldCap.y);
+}
+
+// The up of the world's ball at a point `fromEye` from the eye: the line from the ball's middle through the point.
+// Over a flat world it is straight up.
+vec3 WorldUpAt(vec3 fromEye, float heightOverSea)
+{
+	if (u_worldCurve.w <= 0.0f)
+	{
+		return vec3(0.0f, 1.0f, 0.0f);
+	}
+	return normalize(WorldMiddleToEye(heightOverSea) + fromEye);
+}
+
+// How much of the island's light lights a point of the ball with the up `up`, 0 to 1, from the height of the real sun
+// there and over the island. A point with the sun as high as over the island takes all of the light. On the night side
+// the moon gives a share of the light where it is up.
+float WorldLightShare(vec3 up)
+{
+	float here = smoothstep(-0.12f, 0.05f, dot(up, u_planetSun.xyz));
+	float overIsland = smoothstep(-0.12f, 0.05f, u_planetSun.y);
+	float sun = overIsland > 1e-3f ? min(here / overIsland, 1.0f) : here;
+	float moon = u_planetMoon.w * smoothstep(-0.05f, 0.3f, dot(up, u_planetMoon.xyz));
+	return max(sun, moon);
+}
 
 // The direction of the ray from the eye through a point of the screen (0 to 1). It comes from the view's turn alone,
 // not from two far points less the eye, so it keeps its precision when the eye is far from the world's middle.

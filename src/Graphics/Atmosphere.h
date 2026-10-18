@@ -371,7 +371,21 @@ inline constexpr float k_CapOnMapAbove = 200000.0f;
 /// The flat cap for an eye at `eye` across the ground and `heightOverSea` units over the sea, for a map that is
 /// `mapSize` units on each side. The cap moves by the eye's height over the ball under the map's middle, so an eye far
 /// round the planet (under the sea's level) is over the ball too.
-[[nodiscard]] WorldCap MapCap(glm::vec2 eye, float heightOverSea, float mapSize);
+///
+/// Low down, while the island is out of sight over the horizon (IslandOutOfView), the cap is small round the eye, so the
+/// open sea curves away as it does round the island. `islandFar` tells that the frame has no island near: the eye is
+/// far round the planet (see planet_nav::Anchor).
+[[nodiscard]] WorldCap MapCap(glm::vec2 eye, float heightOverSea, float mapSize, bool islandFar = false);
+
+/// The highest ground of an island over the sea, for the distance at which the island goes over the horizon
+inline constexpr float k_IslandTop = 400.0f;
+/// The radius of the cap round the eye while no island is in sight: half the map's diagonal
+inline constexpr float k_SeaCapRadius = 3620.4f;
+
+/// How far the island is out of sight for an eye low down, 0 to 1: 0 while the island's highest ground can be over the
+/// horizon, 1 a quarter of that distance farther. From the orbit view (k_CapOnMapAbove), where the cap stays on the map,
+/// it is 0.
+[[nodiscard]] float IslandOutOfView(glm::vec2 eye, float heightOverSea, float mapSize);
 
 /// The height of the eye over the ball under the map's middle, with no loss of the small terms
 [[nodiscard]] float HeightOverMapBall(glm::vec3 eye, float seaLevel, float mapSize);
@@ -406,6 +420,11 @@ struct AirFrame
 	float height {0.0f};
 };
 [[nodiscard]] AirFrame AirFrameFor(const WorldCap& cap, float heightOverSea);
+
+/// The height of the eye over the curved world, for a map that is `mapSize` units on each side. Near the map it is the
+/// eye's height over the sea's level. Far round the ball it is the height over the ball, also when the eye is under the
+/// sea's level.
+[[nodiscard]] float EyeOverWorld(glm::vec3 eye, float seaLevel, float mapSize, bool islandFar = false);
 
 /// A direction turned by the smallest turn that makes `up` point straight up
 [[nodiscard]] glm::vec3 TurnToUp(glm::vec3 up, glm::vec3 direction);

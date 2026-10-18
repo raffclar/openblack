@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
 
 #include "ECS/Components/Sky.h"
@@ -45,6 +46,9 @@ struct Inputs
 	/// EXPERIMENT (not for merge): with the water experiment on, the sun and the moon follow real paths over the sky.
 	/// The moon's phase sets how far east of the sun it is. Off, the sun and the moon are the original game's.
 	bool solarPath {false};
+	/// EXPERIMENT (not for merge): the turn from the world's frame to the frame that the camera works in. Far round the
+	/// planet the sun and the moon on their real paths stand where they stand over that place.
+	glm::quat observer {1.0f, 0.0f, 0.0f, 0.0f};
 };
 
 /// A 0xRRGGBB colour as 0 to 1

@@ -212,6 +212,12 @@ vec3 SkyIn(vec3 direction)
 	return u_uwSky.rgb * mix(1.05f, 0.8f, up);
 }
 
+// The sky seen in a direction over a horizon with its own up, as on the far ball of the sea
+vec3 SkyOver(vec3 direction, vec3 up)
+{
+	return u_uwSky.rgb * mix(1.05f, 0.8f, clamp(dot(direction, up), 0.0f, 1.0f));
+}
+
 // The reflection of the scene on the surface at p, along r, found by a march across the screen: 16 steps out to 150
 // units, the nearer more closely, then 4 steps to close in on the hit. The scene under the surface is not reflected.
 // alpha is how much of the hit to take: it fades at the screen's edges and far along the ray.
@@ -671,7 +677,10 @@ void main()
 	// Where the view's near plane is at this pixel, and whether it is under the surface: the line between the two
 	// sides is the surface cutting the view
 	vec3 nearPoint = eye + direction * max(u_uwSky.w, 0.1f) * 1.5f;
-	float underBy = SurfaceHeight(nearPoint.xz, t) - nearPoint.y;
+	// From high up the eye can be far round the planet, under the sea's level and high over the ball
+	float eyeHeight = WorldEyeHeight(eye.y - u_uwParams.z);
+	bool highEye = eyeHeight > ATMOS_HIGH_EYE;
+	float underBy = highEye ? -eyeHeight : SurfaceHeight(nearPoint.xz, t) - nearPoint.y;
 	float lineWidth = max(fwidth(underBy), 1e-4f);
 	bool under = underBy > 0.0f;
 
@@ -691,12 +700,12 @@ void main()
 	scatter += LightningInWater();
 	// Beyond the land's blocks nothing is drawn under the water: there the far floor of sand lies at the sea bed's
 	// deepest, lit by what light comes down to it
-	bool farFloor = sky && direction.y < 0.0f;
+	bool farFloor = sky && (direction.y < 0.0f || highEye);
 	vec3 floorColour = vec3(0.62f, 0.56f, 0.44f) *
 	                   (u_uwLightColour.rgb * UwTransmittance(160.0f / max(u_uwLight.y, 0.2f)) * 0.6f + scatter * 0.6f);
 	if (farFloor)
 	{
-		world = eye + direction * ((u_uwParams.z - 160.0f - eye.y) / direction.y);
+		world = highEye ? eye + direction * 1.0e8f : eye + direction * ((u_uwParams.z - 160.0f - eye.y) / direction.y);
 		sceneDistance = length(world - eye);
 	}
 	vec3 colour = scene;
@@ -791,7 +800,7 @@ void main()
 		float vignette = 1.0f - smoothstep(0.35f, 0.85f, length(centre * vec2(1.25f, 1.0f)));
 		colour *= mix(0.62f, 1.0f, vignette);
 	}
-	else if (direction.y < 0.0f)
+	else if (direction.y < 0.0f || highEye)
 	{
 		// The surface seen from above, where the ray meets it before the scene. The water's height there is the sea's
 		// level with the waves, higher where the water gets shallow, and the run of the waves up the beach. The
@@ -808,22 +817,27 @@ void main()
 		// sky like metal
 		float roughness = max(UwRoughness(slopeVariance), 0.17f) + 0.05f * smoothstep(25.0f, 160.0f, toSurface);
 		vec3 surfacePoint = eye + direction * toSurface;
+		// The far sea is a smooth ball, with its own up at each point. Far round the ball the point is not over the
+		// map, so the map's textures read the open sea there.
+		bool farBall = toSurface > UW_FAR_SEA;
+		vec3 seaUp = farBall ? WorldUpAt(direction * toSurface, eye.y - u_uwParams.z) : vec3(0.0f, 1.0f, 0.0f);
+		vec3 onMap = farBall && seaUp.y < 0.99f ? vec3(-1.0e6f, surfacePoint.y, -1.0e6f) : surfacePoint;
 		// The heights over the curved world's level at that point, and the slope with the curve of the far sea
-		float waterTop = surfacePoint.y + WorldDrop(surfacePoint.xz);
-		float waterDepth = waterTop - shore.w;
-		float lift = waterTop - u_uwParams.z;
-		surfaceSlope = toSurface > UW_FAR_SEA ? surfaceSlope : surfaceSlope - WorldDropSlope(surfacePoint.xz);
+		float waterTop = surfacePoint.y + WorldDrop(onMap.xz);
+		float waterDepth = farBall ? 1000.0f : waterTop - shore.w;
+		float lift = farBall ? 0.0f : waterTop - u_uwParams.z;
+		surfaceSlope = toSurface > UW_FAR_SEA ? surfaceSlope : surfaceSlope - WorldDropSlope(onMap.xz);
 		// Far away the chop and the white horses go, so the far sea from high up has no grain
 		float farSea = smoothstep(0.5f * UW_FAR_SEA, UW_FAR_SEA, toSurface);
 		chopShare *= 1.0f - farSea;
 		whitecapEnvelope *= 1.0f - farSea;
 		// No water shows inside a boat's hull
-		float insideBoat = UwInsideBoat(surfacePoint.xz);
+		float insideBoat = UwInsideBoat(onMap.xz);
 		if (toSurface > 0.0f && (toSurface < sceneDistance || farFloor) && insideBoat < 0.999f)
 		{
-			vec3 ring = FloaterRings(surfacePoint.xz, t);
+			vec3 ring = FloaterRings(onMap.xz, t);
 			// The filtered waves keep their slope far away: the roughness takes the waves that the pixel cannot show
-			vec3 strike = StrikeRing(surfacePoint.xz);
+			vec3 strike = StrikeRing(onMap.xz);
 			vec2 shownSlope = surfaceSlope + ring.xy + strike.xy;
 			// The slope of the chop of the wind, from all its octaves, found from three heights. The step between the
 			// heights grows with the distance, so far water stays smooth.
@@ -832,19 +846,20 @@ void main()
 				float chopStep = max(0.04f, 0.004f * toSurface);
 				// An octave shorter than a few steps fades out, so the steps do not alias it into noise
 				float chopPixel = max(FootprintOnWater(direction, toSurface).x, chopStep);
-				float chopHere = UwChop(surfacePoint.xz, t, UW_CHOP_SHADING, chopPixel);
-				float chopX = UwChop(surfacePoint.xz + vec2(chopStep, 0.0f), t, UW_CHOP_SHADING, chopPixel);
-				float chopZ = UwChop(surfacePoint.xz + vec2(0.0f, chopStep), t, UW_CHOP_SHADING, chopPixel);
+				float chopHere = UwChop(onMap.xz, t, UW_CHOP_SHADING, chopPixel);
+				float chopX = UwChop(onMap.xz + vec2(chopStep, 0.0f), t, UW_CHOP_SHADING, chopPixel);
+				float chopZ = UwChop(onMap.xz + vec2(0.0f, chopStep), t, UW_CHOP_SHADING, chopPixel);
 				shownSlope += vec2(chopX - chopHere, chopZ - chopHere) / chopStep * chopShare;
 			}
 			vec3 normal = u_uwSea.x > 0.5f ? normalize(vec3(-shownSlope.x, 1.0f, -shownSlope.y))
 			                               : UwSurfaceNormalOf(shownSlope, toSurface);
+			normal = farBall ? seaUp : normal;
 			// The small ripples on the waves, too small for the sum of waves: they break up the reflection near the eye,
 			// and far away they become roughness
 			float near = 1.0f - smoothstep(25.0f, 160.0f, toSurface);
 			if (near > 0.0f)
 			{
-				vec2 dq = surfacePoint.xz * 0.9f + vec2(t * 0.35f, t * 0.27f);
+				vec2 dq = onMap.xz * 0.9f + vec2(t * 0.35f, t * 0.27f);
 				float n0 = UwNoise(dq);
 				vec2 ripple = vec2(UwNoise(dq + vec2(0.15f, 0.0f)) - n0, UwNoise(dq + vec2(0.0f, 0.15f)) - n0) / 0.15f;
 				normal = normalize(normal + vec3(-ripple.x, 0.0f, -ripple.y) * 0.05f * near);
@@ -879,8 +894,8 @@ void main()
 			// The water takes the light out on its way down to the scene and back up to the surface, the red first
 			// Where the original game shows its sea, the water is never thinner than a layer of the sea's colour, so
 			// that the shallows a creature walks in look like water and not like wet ground
-			float originalLand = OriginalLandAt(surfacePoint.xz);
-			float down = max(u_uwParams.z - below.y, 0.0f);
+			float originalLand = OriginalLandAt(onMap.xz);
+			float down = farBall ? 160.0f : max(u_uwParams.z - below.y, 0.0f);
 			float path = min(length(below - surfacePoint), 400.0f);
 			// Deep, open water holds more fine matter than the clear shallows, so the sea bed fades sooner there and the
 			// light of the waves on the surface shows more
@@ -901,10 +916,10 @@ void main()
 
 			// The reflection: of the scene where the screen has it, else of the sky
 			vec3 reflected = reflect(direction, normal);
-			reflected.y = abs(reflected.y);
+			reflected -= 2.0f * min(dot(reflected, seaUp), 0.0f) * seaUp;
 			// The cube of the far scene is round a place near the land: the far sea from high up takes the sky's colour
 			vec3 mirror = u_uwSea.w > 0.5f && toSurface < UW_FAR_SEA ? EnvironmentReflection(surfacePoint, reflected, roughness)
-			                                                          : SkyIn(reflected);
+			                                                          : SkyOver(reflected, seaUp);
 			float screenShare = 0.0f;
 			if (u_uwFlags.x > 0.5f && toSurface < UW_FAR_SEA)
 			{
@@ -923,15 +938,15 @@ void main()
 			// the reflection, so the colour of the water always shows
 			float fresnel = min(pow(max(1.0f - facing, 0.0f), 3.0f), 0.5f);
 			// The clouds' and the hills' shadows take away the glint and some of the light in the water
-			float cloudShade = CloudShadeAt(surfacePoint.xz) * SunVisibilityAt(surfacePoint.xz);
+			float cloudShade = CloudShadeAt(onMap.xz) * SunVisibilityAt(onMap.xz);
 			water *= mix(0.8f, 1.0f, cloudShade);
 			// The light in the shade: under a cliff the water sees less of the sky, so its colour and the sky that it
 			// reflects are darker; over a lit beach the sand's light comes up through the shallows (EXPERIMENT, not for
 			// merge)
 			if (u_lightParams.y > 0.5f)
 			{
-				float open = SkyOpennessAt(surfacePoint.xz);
-				vec3 up = vec3(0.0f, 1.0f, 0.0f);
+				float open = SkyOpennessAt(onMap.xz);
+				vec3 up = seaUp;
 				vec3 shade = LightShadeTint(LightSkyAt(up) * open + LightBounceAt(surfacePoint, -up) * 0.5f);
 				water *= mix(vec3_splat(1.0f), shade, 1.0f - left * 0.5f);
 				mirror *= mix(1.0f, mix(0.55f, 1.0f, open), 1.0f - screenShare);
@@ -942,6 +957,13 @@ void main()
 			// The open sea: a deep blue-green body with a little light that comes through the faces of the waves, and a
 			// pale green-yellow on the tops of the waves, more on the higher tops and less far away
 			vec3 seaLight = u_uwLightColour.rgb * u_uwLightColour.w * cloudShade + u_uwSky.rgb * 0.35f;
+			// The night side of the ball has no sun or moon on its water. The island's light is the light over the island, so
+			// the far water takes its share of that light.
+			float lit = farBall ? WorldLightShare(seaUp) : 1.0f;
+			seaLight *= lit;
+			water *= lit;
+			mirror *= lit;
+			vec3 litColour = u_uwLightColour.rgb * lit;
 			float openWater = smoothstep(4.0f, 20.0f, u_uwParams.z - shore.w) * (1.0f - pond);
 			float wrap = pow(clamp(dot(normal, u_uwAbove.xyz) * 0.4f + 0.6f, 0.0f, 1.0f), 40.0f);
 			vec3 body = (UW_SEA_DEEP + UW_SEA_TOPS * 0.12f * wrap) * seaLight;
@@ -952,27 +974,27 @@ void main()
 			// The faces of the waves that turn to the light are lighter, and the faces that turn away are darker, as the
 			// sides of a lit hill are. This gives the waves their shape in the light.
 			vec3 toSun = u_uwAbove.xyz;
-			float turn = (dot(normal, toSun) - toSun.y) * u_uwLightColour.w * cloudShade;
+			float turn = (dot(normal, toSun) - dot(seaUp, toSun)) * u_uwLightColour.w * cloudShade;
 			water *= mix(1.0f, clamp(1.0f + 2.2f * turn, 0.62f, 1.6f), 1.0f - pond);
 			colour = mix(water, mirror, fresnel);
 			// A soft, warm light on the high faces that turn to the light
-			colour += u_uwLightColour.rgb * smoothstep(0.0f, 0.3f, turn) * waveLift * 0.1f * (1.0f - pond);
+			colour += litColour * smoothstep(0.0f, 0.3f, turn) * waveLift * 0.1f * (1.0f - pond);
 			// The light of the sun shines through the thin crests and comes out in the water's colour, most when the eye
 			// looks towards the sun
 			float shineThrough = pow(clamp(dot(direction, normalize(toSun + normal * 0.4f)), 0.0f, 1.0f), 4.0f);
-			colour += u_uwLightColour.rgb * u_uwLightColour.w * vec3(0.30f, 0.62f, 0.40f) * shineThrough *
+			colour += litColour * u_uwLightColour.w * vec3(0.30f, 0.62f, 0.40f) * shineThrough *
 			          (0.3f + 0.7f * waveLift * waveLift) * (1.0f - pond) * cloudShade * 0.6f;
 			// A broad soft sheen on the faces of the waves round the glint
-			colour += u_uwLightColour.rgb * u_uwLightColour.w * cloudShade * 0.2f *
+			colour += litColour * u_uwLightColour.w * cloudShade * 0.2f *
 			          pow(max(dot(reflected, toSun), 0.0f), 8.0f) * (1.0f - 0.5f * pond);
 			// The glint of the sun or the moon on the waves: none where the hills hide the light
 			float glint = u_uwSea.x > 0.5f ? min(SeaGlint(normal, -direction, u_uwAbove.xyz, roughness), 12.0f)
 			                               : pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f) * 3.0f;
-			float glintShade = CloudShadeAt(surfacePoint.xz) * SunLightAt(surfacePoint.xz);
-			colour += u_uwLightColour.rgb * glint * u_uwLightColour.w * glintShade;
+			float glintShade = CloudShadeAt(onMap.xz) * SunLightAt(onMap.xz);
+			colour += litColour * glint * u_uwLightColour.w * glintShade;
 			// A sharp highlight of the sun on each wave, which fades with the distance
 			float highlight = pow(max(dot(reflected, toSun), 0.0f), 60.0f) * (68.0f / (3.1415927f * 8.0f));
-			colour += u_uwLightColour.rgb * u_uwLightColour.w * glintShade * highlight * 0.5f *
+			colour += litColour * u_uwLightColour.w * glintShade * highlight * 0.5f *
 			          (1.0f - smoothstep(40.0f, 400.0f, toSurface)) * (1.0f - pond);
 			// The glint of the bolt, and the ring where a strike hit the sea
 			colour += LightningGlint(surfacePoint, normal, -direction, roughness) + CloudFlashOnWater(surfacePoint);
@@ -984,22 +1006,22 @@ void main()
 			{
 				// The foam of the shallows is less where the original game shows its land, so that the edge of the water
 				// does not draw a line that the original coast does not have
-				float foam = Foam(surfacePoint.xz, max(min(thickness, waterDepth), 0.0f), t) * (1.0f - originalLand);
+				float foam = Foam(onMap.xz, max(min(thickness, waterDepth), 0.0f), t) * (1.0f - originalLand);
 				// The shore wave breaks on its face as it comes in, from 20 units out to the edge of the water
 				float breaking = face * (1.0f - smoothstep(4.0f, 20.0f, shore.x)) * smoothstep(0.0f, 0.15f, waterDepth) *
 				                 (1.0f - cliff);
-				foam = max(foam, breaking * smoothstep(0.33f, 0.63f, UwFoamNoise(surfacePoint.xz * 2.6f + t * 0.3f)));
+				foam = max(foam, breaking * smoothstep(0.33f, 0.63f, UwFoamNoise(onMap.xz * 2.6f + t * 0.3f)));
 				// At the foot of a cliff: a thick band of boiling white water against the rock, and broad sheets of foam
 				// that each crash pushes out and that break up into patches and streaks as the current carries them
 				// away. The foam builds up between the waves, so it never clears at a cliff.
 				if (cliff > 0.01f)
 				{
 					vec2 shift;
-					vec2 flow = UwCurrent(vec3(surfacePoint.x, u_uwParams.z, surfacePoint.z), t, shift);
-					vec2 carried = surfacePoint.xz - shift - u_uwCurrent.xy * t;
+					vec2 flow = UwCurrent(vec3(onMap.x, u_uwParams.z, onMap.z), t, shift);
+					vec2 carried = onMap.xz - shift - u_uwCurrent.xy * t;
 					float boil = UwFoamNoise(carried * 1.4f - t * 0.5f);
 					float band = (1.0f - smoothstep(2.5f, 8.0f, shore.x)) * smoothstep(0.25f, 0.55f, boil);
-					float since = fract((u_uwPhase.x + UwNoise(surfacePoint.xz * 0.008f) * 1.2f) / 6.2831853f);
+					float since = fract((u_uwPhase.x + UwNoise(onMap.xz * 0.008f) * 1.2f) / 6.2831853f);
 					float front = 6.0f + since * (40.0f + 40.0f * u_uwWaves.y);
 					float push = smoothstep(front - 25.0f, front, shore.x) * (1.0f - smoothstep(front, front + 4.0f, shore.x));
 					float spread = 1.0f - smoothstep(8.0f, 35.0f + 15.0f * u_uwWaves.y, shore.x);
@@ -1008,10 +1030,10 @@ void main()
 					float strength = 0.7f + 0.3f * u_uwWaves.y + 0.15f * min(u_uwWaves.x, 2.0f);
 					foam = max(foam, clamp((band + sheets * 0.85f) * cliff * 1.4f, 0.0f, 1.0f) * strength + length(flow) * 0.0f);
 				}
-				foam = max(foam, ring.z * 0.6f * smoothstep(0.4f, 0.65f, UwFoamNoise(surfacePoint.xz * 3.0f)));
+				foam = max(foam, ring.z * 0.6f * smoothstep(0.4f, 0.65f, UwFoamNoise(onMap.xz * 3.0f)));
 				// The foam of the wakes and the splashes, and the water line on the hulls
-				foam = max(foam, max(UwWakeFoam(surfacePoint.xz, t), UwHullLine(surfacePoint.xz, t) * 0.6f));
-				foam = max(foam, RogueFoam(surfacePoint.xz, shore, t));
+				foam = max(foam, max(UwWakeFoam(onMap.xz, t), UwHullLine(onMap.xz, t) * 0.6f));
+				foam = max(foam, RogueFoam(onMap.xz, shore, t));
 				foam = max(foam, min(strike.z, 1.0f) * 0.5f);
 				if (u_uwFlags2.x > 0.5f && u_uwWaves.x > 0.0f)
 				{
@@ -1021,7 +1043,7 @@ void main()
 					vec4 seen = FootprintOnWater(direction, toSurface);
 					float capsShown = u_uwSea.x > 0.5f ? 1.0f - smoothstep(1.0f, 3.0f, max(seen.x * seen.w, seen.x)) : 1.0f;
 					float streaksShown = u_uwSea.x > 0.5f ? 1.0f - smoothstep(0.7f, 2.0f, UwFootprintAlong(seen, across)) : 1.0f;
-					vec2 q = surfacePoint.xz;
+					vec2 q = onMap.xz;
 					// The white horses: foam on the crests of the sea's own waves that break, which stays a short time
 					// after the crest (UwWhitecap). The foam breaks up into lace that the wind carries.
 					vec2 laceUv = vec2(dot(q, wind) * 0.45f - t * 0.5f, dot(q, across) * 1.1f);
@@ -1039,14 +1061,14 @@ void main()
 					foam = max(foam, (caps + streaks * (0.12f + 0.4f * u_uwWaves.y)) * nearCoast);
 				}
 				foam *= 1.0f - pond;
-				vec3 foamColour = u_uwLightColour.rgb * (0.4f + 0.6f * max(u_uwAbove.y, 0.0f)) + u_uwSky.rgb * 0.7f +
+				vec3 foamColour = litColour * (0.4f + 0.6f * max(u_uwAbove.y, 0.0f)) + u_uwSky.rgb * 0.7f +
 				                  scatter * 0.5f;
 				// The flash of the lightning lights the foam
 				foamColour += UW_FLASH_COLOUR * (u_uwStrike[1].x * 0.8f + u_uwStrike[0].w * 0.3f) * u_uwStrike[1].w;
 				if (u_uwFoam.z > 0.5f)
 				{
 					vec2 foamShift;
-					UwCurrent(vec3(surfacePoint.x, u_uwParams.z, surfacePoint.z), t, foamShift);
+					UwCurrent(vec3(onMap.x, u_uwParams.z, onMap.z), t, foamShift);
 					colour = VolumeFoam(colour, min(foamColour, vec3_splat(1.0f)), surfacePoint, direction, foam, toSurface * u_uwSea.z,
 					                    foamShift + u_uwCurrent.xy * t, u_uwSky.rgb, scatter, jitter);
 				}
@@ -1056,7 +1078,7 @@ void main()
 				}
 			}
 			// Where the original game shows its land over its sea, the land shows here too, as much as there
-			colour = u_uwFlags2.w > 0.5f ? UwWakeDebug(surfacePoint.xz) : colour;
+			colour = u_uwFlags2.w > 0.5f ? UwWakeDebug(onMap.xz) : colour;
 			colour = mix(colour, scene, max(originalLand, insideBoat));
 			if (max(originalLand, insideBoat) < 0.5f)
 			{

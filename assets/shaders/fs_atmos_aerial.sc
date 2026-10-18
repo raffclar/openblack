@@ -6,6 +6,7 @@ $input v_texcoord0, v_texcoord1
 #include "atmosphere.sh"
 #include "clouds_shadow.sh"
 #include "sun_visibility.sh"
+#include "world_curve.sh"
 
 // EXPERIMENT (not for merge): the haze's grid that follows the view, 32 cells across and down and 32 slices into the
 // view (see atmosphere::HazeAlong). Each texel sums the light that the air scatters towards the eye from the eye to its
@@ -38,7 +39,7 @@ void main()
 	vec2 uv = (cell + 0.5f) / ATMOS_AERIAL_CELLS;
 
 	vec3 eye = mul(u_invView, vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
-	vec3 dir = normalize(WorldAt(uv, 0.5f) - eye);
+	vec3 dir = ViewRayAt(uv);
 	float reach = AtmosSliceDistance(slice);
 	float steps = max(u_atmosAerial.y, 1.0f);
 	float stride = reach / steps;
@@ -46,6 +47,8 @@ void main()
 	float sea = u_atmosParams.w;
 	// The dust's glow is round the sun that the sky shows
 	float cosAngle = dot(dir, normalize(u_atmosGameLight.xyz));
+	// From high up the eye can be far round the planet: there the height and the light's height come from the ball
+	bool overBall = WorldEyeHeight(eye.y - sea) > ATMOS_HIGH_EYE;
 	vec3 light = vec3_splat(0.0f);
 	vec3 through = vec3_splat(1.0f);
 	for (int i = 0; i < 16; ++i)
@@ -55,14 +58,15 @@ void main()
 			break;
 		}
 		vec3 p = eye + dir * ((float(i) + 0.5f) * stride);
-		float altitude = max(p.y - sea, 0.0f) / ATMOS_UNITS_PER_KM;
+		float altitude = max((overBall ? WorldAltitude(p, sea) : p.y) - sea, 0.0f) / ATMOS_UNITS_PER_KM;
+		float lightY = overBall ? dot(WorldUpAt(p - eye, eye.y - sea), u_atmosLight.xyz) : u_atmosLight.y;
 		float lit = 1.0f;
 		if (u_atmosAerial.x > 0.5f)
 		{
 			lit = SunVisibilityAbove(p) * CloudShadeInAir(p, normalize(u_atmosGameLight.xyz), sea);
 		}
 		float scale = AtmosHazeScaleAt(altitude);
-		vec3 scattered = AtmosScatterAt(altitude, u_atmosLight.y, cosAngle, lit) * scale;
+		vec3 scattered = AtmosScatterAt(altitude, lightY, cosAngle, lit) * scale;
 		vec3 extinction = max(AtmosExtinction(altitude) * scale, vec3_splat(1e-7f));
 		vec3 dimmed = exp(-extinction * strideKm);
 		light += through * scattered * (1.0f - dimmed) / extinction;

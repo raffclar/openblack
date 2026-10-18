@@ -30,10 +30,10 @@ namespace openblack::planet_nav
 inline constexpr float k_OrbitFrom = 200000.0f;
 inline constexpr float k_OrbitFull = 400000.0f;
 
-/// Over the sea past the island, the camera can go across the ground this far from the map's middle for each unit of
-/// height over 20000, and at most k_FarSeaLimit. Low down it stays in the old disc of k_NearSeaRadius.
+/// Over the sea past the island, the camera can go across the ground at most k_FarSeaLimit from the map's middle. There
+/// the local camera keeps a precision of a few centimetres. Far round the planet (see Settle) the camera keeps to
+/// k_NearSeaRadius round the place where it came down.
 inline constexpr float k_NearSeaRadius = 20000.0f;
-inline constexpr float k_FarSeaSlope = 20.0f;
 inline constexpr float k_FarSeaLimit = 1.0e6f;
 
 /// The world's ball: its middle under the middle of the map, a planet's radius under the sea's level
@@ -108,9 +108,26 @@ struct Pose
 /// that the camera faces turns by the shortest turn.
 [[nodiscard]] Pose Blend(const Pose& ground, const Pose& orbit, float share);
 
-/// The turn of the world that is kept as the camera goes down: it gets smaller in step with the orbit share, and is
-/// gone when the share is 0. A climb does not make it larger.
-[[nodiscard]] glm::quat Unwind(const glm::quat& turn, float shareBefore, float shareNow);
+/// Where the camera comes down out of the orbit view. On the way down the turn of the world stays, so the camera comes
+/// down to the point under the middle of the screen. When the orbit share gets to 0, the camera settles there:
+///
+/// - Near the island (the point is at most k_FarSeaLimit from the map's middle across the ball), the local camera
+///   takes the world's camera as it is and the turn is gone. The camera's top then eases to the world's up.
+/// - Farther round the planet, the turn stays: the frame of that point is the camera's own frame, and the island is
+///   out of sight. The local camera moves to `spot`, k_AnchorSpotDistance from the map's middle, so that nothing of the
+///   island's maps is under it. The world's camera does not change.
+struct Settled
+{
+	Pose local;
+	glm::quat turn {1.0f, 0.0f, 0.0f, 0.0f};
+	/// The place of the local camera across the ground, far round the planet; none near the island
+	std::optional<glm::vec2> spot;
+};
+inline constexpr float k_AnchorSpotDistance = 70000.0f;
+[[nodiscard]] Settled Settle(const Ball& ball, const glm::quat& turn, const Pose& local);
+
+/// The distance across the ball from the map's middle to the point under the eye
+[[nodiscard]] float ArcFromMap(const Ball& ball, glm::vec3 eye);
 
 /// Where a ray from `eye` along `direction` meets the curved sea, as the distance along the ray; none when it does not
 using SeaDistance = std::function<std::optional<float>(glm::vec3 eye, glm::vec3 direction)>;
@@ -123,8 +140,10 @@ using SeaDistance = std::function<std::optional<float>(glm::vec3 eye, glm::vec3 
                                                      glm::vec3 ray);
 
 /// The distance along a ray from the eye to the curved sea as the frame draws it (the flat cap and the ball, see
-/// graphics::atmosphere::MapCap), for a map `mapSize` units on each side. None when the ray does not meet it.
-[[nodiscard]] std::optional<float> DrawnSeaDistance(glm::vec3 eye, glm::vec3 direction, float seaLevel, float mapSize);
+/// graphics::atmosphere::MapCap), for a map `mapSize` units on each side. `islandFar` tells that the frame is far
+/// round the planet (Settle). None when the ray does not meet it.
+[[nodiscard]] std::optional<float> DrawnSeaDistance(glm::vec3 eye, glm::vec3 direction, float seaLevel, float mapSize,
+                                                    bool islandFar = false);
 
 /// A line that the picks follow, from far out round the planet: it starts where it comes into the ball of `reach`
 /// round the map's middle (at the sea's level), so the line tests do not cross millions of cells. A line from inside
@@ -137,8 +156,7 @@ struct Line
 inline constexpr float k_PickReach = 30000.0f;
 [[nodiscard]] std::optional<Line> LineNearMap(glm::vec3 from, glm::vec3 to, glm::vec3 mapMiddle, float reach);
 
-/// How far across the ground from the map's middle the camera can go at a height over the sea. A camera that goes down
-/// past the edge moves back across the ground to it.
-[[nodiscard]] float FarSeaReach(float heightOverSea);
+/// The camera across the ground kept inside a disc of `radius` round `middle`; none when it is inside
+[[nodiscard]] std::optional<glm::vec2> KeepInsideDisc(glm::vec2 point, glm::vec2 middle, float radius);
 
 } // namespace openblack::planet_nav

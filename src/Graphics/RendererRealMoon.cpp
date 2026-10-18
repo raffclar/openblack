@@ -16,6 +16,7 @@
 
 #include <bgfx/bgfx.h>
 #include <glm/geometric.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <glm/vec4.hpp>
 
 #include "Camera/Camera.h"
@@ -64,8 +65,13 @@ void Renderer::DrawRealMoon(RenderPass viewId) const
 	// The moon's place and its face from the eye. A warm-up with no moon in the sky draws it at no size.
 	const glm::vec3 offset = placed ? moon->placement->offset : glm::vec3(0.0f, atmosphere::k_MoonDistance, 0.0f);
 	const glm::vec3 towards = glm::normalize(offset);
-	const glm::vec3 towardsSun = atmosphere::SunTowards(sky.GetClock().GetScriptTime());
-	const auto face = real_moon::FaceAxes(towards);
+	// EXPERIMENT (not for merge): far round the planet the moon shows its face as it shows over that place
+	const glm::quat planetFrame = Locator::camera::value().GetPlanetFrame();
+	const glm::vec3 towardsSun = glm::conjugate(planetFrame) * atmosphere::SunTowards(sky.GetClock().GetScriptTime());
+	auto face = real_moon::FaceAxes(planetFrame * towards);
+	face.east = glm::conjugate(planetFrame) * face.east;
+	face.north = glm::conjugate(planetFrame) * face.north;
+	face.toEye = glm::conjugate(planetFrame) * face.toEye;
 	const glm::vec3 centre = Locator::camera::value().GetOrigin() + offset;
 	const float extent = placed ? real_moon::Radius(atmosphere::k_MoonDistance) * real_moon::k_QuadRadii : 0.0f;
 

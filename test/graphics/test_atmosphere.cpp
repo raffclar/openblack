@@ -380,20 +380,76 @@ TEST(Atmosphere, TheFarWorldCurvesAwayAndTheHorizonGoesDownWithTheHeight)
 	EXPECT_FALSE(atmos::CurvedSeaDistance(middle, 30000.0f, glm::vec3(std::cos(0.05f), -std::sin(0.05f), 0.0f)).has_value());
 }
 
-TEST(Atmosphere, TheMapStaysFlatForEveryEye)
+TEST(Atmosphere, TheMapStaysFlatForEveryEyeThatCanSeeIt)
 {
 	constexpr float k_Map = 5120.0f;
 	constexpr std::array<glm::vec2, 4> k_Corners {{{0.0f, 0.0f}, {k_Map, 0.0f}, {0.0f, k_Map}, {k_Map, k_Map}}};
+	int seen = 0;
 	for (const float height : {50.0f, 30000.0f, 100000.0f, 1.0e6f, 9.0e6f})
 	{
 		for (const glm::vec2 eye : {glm::vec2(2560.0f), glm::vec2(-50000.0f, 9000.0f), glm::vec2(-3.8e6f, -3.8e6f)})
 		{
+			// The island over the horizon is not drawn, and the cap is then round the eye
+			if (atmos::IslandOutOfView(eye, height, k_Map) > 0.0f)
+			{
+				continue;
+			}
+			++seen;
 			const auto cap = atmos::MapCap(eye, height, k_Map);
 			for (const auto& point : k_Corners)
 			{
 				EXPECT_LT(atmos::WorldDrop(cap, point - eye), 0.01f) << height << " " << eye.x;
 			}
 		}
+	}
+	EXPECT_GE(seen, 12);
+}
+
+TEST(Atmosphere, WithTheIslandOverTheHorizonTheCapIsRoundTheEye)
+{
+	constexpr float k_Map = 5120.0f;
+	// Near the island and from high up the island is in sight
+	EXPECT_EQ(atmos::IslandOutOfView({2560.0f, 2560.0f}, 50.0f, k_Map), 0.0f);
+	EXPECT_EQ(atmos::IslandOutOfView({-50000.0f, 9000.0f}, 50.0f, k_Map), 0.0f);
+	EXPECT_EQ(atmos::IslandOutOfView({-3.8e6f, -3.8e6f}, 1.0e6f, k_Map), 0.0f);
+	// 600 km away, low down, it is over the horizon; 600 km up it shows again
+	const glm::vec2 far {600000.0f, 2560.0f};
+	EXPECT_EQ(atmos::IslandOutOfView(far, 50.0f, k_Map), 1.0f);
+	EXPECT_EQ(atmos::IslandOutOfView(far, 6.0e5f, k_Map), 0.0f);
+	const auto low = atmos::MapCap(far, 50.0f, k_Map);
+	EXPECT_EQ(low.eyeFromMiddle, glm::vec2(0.0f));
+	EXPECT_NEAR(low.radius, atmos::k_SeaCapRadius, 0.01f);
+	// The share grows with no step as the eye goes away from the island
+	float last = 0.0f;
+	for (float x = 2560.0f; x < 400000.0f; x += 2000.0f)
+	{
+		const float now = atmos::IslandOutOfView({x, 2560.0f}, 1000.0f, k_Map);
+		EXPECT_GE(now, last);
+		EXPECT_LT(now - last, 0.1f) << x;
+		last = now;
+	}
+	EXPECT_EQ(last, 1.0f);
+	// A frame far round the planet has no island near
+	const auto anchored = atmos::MapCap({70000.0f, 2560.0f}, 30000.0f, k_Map, true);
+	EXPECT_EQ(anchored.eyeFromMiddle, glm::vec2(0.0f));
+	EXPECT_NEAR(anchored.radius, atmos::k_SeaCapRadius, 0.01f);
+}
+
+TEST(Atmosphere, TheEyesHeightOverTheWorldHoldsFarRoundThePlanet)
+{
+	constexpr float k_Map = 5120.0f;
+	constexpr double k_Radius = atmos::k_WorldRadius;
+	// Near the map it is the height over the sea, also under the water
+	EXPECT_NEAR(atmos::EyeOverWorld({2600.0f, 37.0f, 2400.0f}, 0.0f, k_Map), 37.0f, 1e-3f);
+	EXPECT_NEAR(atmos::EyeOverWorld({2600.0f, -12.0f, 2400.0f}, 0.0f, k_Map), -12.0f, 1e-3f);
+	// 15000 km over the ball, 73 to 179 degrees round from the island: the eye is under the sea's level, or far under it
+	for (const double degrees : {73.0, 120.0, 179.0})
+	{
+		const double height = 1.4235e7;
+		const double angle = degrees * std::numbers::pi / 180.0;
+		const glm::vec3 eye {static_cast<float>(2560.0 + (k_Radius + height) * std::sin(angle)),
+		                     static_cast<float>(-k_Radius + (k_Radius + height) * std::cos(angle)), 2560.0f};
+		EXPECT_NEAR(atmos::EyeOverWorld(eye, 0.0f, k_Map), height, height * 1e-5) << degrees;
 	}
 }
 

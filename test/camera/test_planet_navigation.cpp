@@ -175,12 +175,41 @@ TEST(PlanetNavigation, BlendKeepsTheEyeAndTurnsTheView)
 	EXPECT_NEAR(glm::dot(half.up, Forward(half)), 0.0f, 1e-4f);
 }
 
-TEST(PlanetNavigation, UnwindShrinksTheTurnOnTheWayDown)
+TEST(PlanetNavigation, SettleNearTheIslandGivesTheWorldCameraToTheLocalCamera)
 {
-	const auto turn = glm::angleAxis(1.0f, glm::vec3(1.0f, 0.0f, 0.0f));
-	EXPECT_EQ(Unwind(turn, 0.5f, 0.8f), turn);
-	EXPECT_NEAR(glm::angle(Unwind(turn, 1.0f, 0.5f)), 0.5f, 1e-4f);
-	EXPECT_NEAR(glm::angle(Unwind(turn, 0.5f, 0.0f)), 0.0f, 1e-4f);
+	const auto ball = EarthBall();
+	// A turn of 5 degrees towards the east: the point under the eye is about 530 km from the island
+	const auto turn = glm::angleAxis(glm::radians(5.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+	const Pose local {.eye = {2560.0f, 150000.0f, 2560.0f}, .focus = {2560.0f, 0.0f, 2600.0f}};
+	const auto world = TurnAbout(ball, turn, local);
+	const auto settled = Settle(ball, turn, local);
+	EXPECT_FALSE(settled.spot.has_value());
+	EXPECT_NEAR(glm::angle(settled.turn), 0.0f, 1e-5f);
+	EXPECT_NEAR(glm::distance(settled.local.eye, world.eye), 0.0f, 1.0f);
+	EXPECT_NEAR(glm::distance(settled.local.focus, world.focus), 0.0f, 1.0f);
+	EXPECT_EQ(settled.local.up, glm::vec3(0.0f, 1.0f, 0.0f));
+	EXPECT_NEAR(ArcFromMap(ball, settled.local.eye), k_Radius * glm::radians(5.0f), 100.0f);
+}
+
+TEST(PlanetNavigation, SettleFarRoundThePlanetKeepsTheWorldCamera)
+{
+	const auto ball = EarthBall();
+	for (const float degrees : {20.0f, 73.0f, 120.0f, 179.9f})
+	{
+		const auto turn = glm::angleAxis(glm::radians(degrees), glm::normalize(glm::vec3(1.0f, 0.0f, -1.0f)));
+		const Pose local {.eye = {12560.0f, 150000.0f, 2560.0f}, .focus = {12560.0f, 0.0f, 2700.0f}};
+		const auto world = TurnAbout(ball, turn, local);
+		const auto settled = Settle(ball, turn, local);
+		ASSERT_TRUE(settled.spot.has_value()) << degrees;
+		// The local camera is at the spot, and the turn gives the same world's camera
+		EXPECT_NEAR(glm::distance(*settled.spot, k_Middle), k_AnchorSpotDistance, 1.0f) << degrees;
+		EXPECT_NEAR(ArcFromMap(ball, settled.local.eye), k_AnchorSpotDistance, 10.0f) << degrees;
+		const auto again = TurnAbout(ball, settled.turn, settled.local);
+		EXPECT_NEAR(glm::distance(again.eye, world.eye), 0.0f, 8.0f) << degrees;
+		EXPECT_NEAR(glm::distance(again.focus, world.focus), 0.0f, 8.0f) << degrees;
+		// The height over the ball does not change
+		EXPECT_NEAR(HeightOver(ball, settled.local.eye), HeightOver(ball, local.eye), 2.0f) << degrees;
+	}
 }
 
 TEST(PlanetNavigation, CurvedSeaDragOnAFlatSeaKeepsTheGripUnderTheCursor)
@@ -216,12 +245,13 @@ TEST(PlanetNavigation, CurvedSeaDragFollowsASeaThatMovesWithTheEye)
 	EXPECT_NEAR(hitX, gripped.x, 0.02f * std::abs(gripped.x - eye.x));
 }
 
-TEST(PlanetNavigation, FarSeaReachGrowsWithHeight)
+TEST(PlanetNavigation, KeepInsideDiscMovesThePointToTheEdge)
 {
-	EXPECT_EQ(FarSeaReach(0.0f), k_NearSeaRadius);
-	EXPECT_EQ(FarSeaReach(20000.0f), k_NearSeaRadius);
-	EXPECT_NEAR(FarSeaReach(30000.0f), k_NearSeaRadius + 10000.0f * k_FarSeaSlope, 1.0f);
-	EXPECT_EQ(FarSeaReach(1.0e8f), k_FarSeaLimit);
+	EXPECT_FALSE(KeepInsideDisc({10.0f, 0.0f}, {0.0f, 0.0f}, 20.0f).has_value());
+	const auto kept = KeepInsideDisc({0.0f, 50.0f}, {0.0f, 10.0f}, 20.0f);
+	ASSERT_TRUE(kept.has_value());
+	EXPECT_NEAR(kept->x, 0.0f, 1e-5f);
+	EXPECT_NEAR(kept->y, 30.0f, 1e-4f);
 }
 
 TEST(PlanetNavigation, PickLineStartsNearTheMap)

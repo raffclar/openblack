@@ -24,8 +24,6 @@ using namespace openblack;
 
 namespace
 {
-// Under this height the world's flat cap moves with the eye
-constexpr float k_CapStillAbove = 20000.0f;
 // The curved sea drag measures again this many times after the first move
 constexpr int k_DragRefines = 3;
 
@@ -183,19 +181,40 @@ planet_nav::Pose planet_nav::Blend(const Pose& ground, const Pose& orbit, float 
 	};
 }
 
-glm::quat planet_nav::Unwind(const glm::quat& turn, float shareBefore, float shareNow)
+float planet_nav::ArcFromMap(const Ball& ball, glm::vec3 eye)
 {
-	if (shareNow >= shareBefore)
+	const auto up = glm::normalize(FromCentre(ball, eye));
+	return static_cast<float>(std::acos(std::clamp(up.y, -1.0, 1.0)) * static_cast<double>(ball.radius));
+}
+
+planet_nav::Settled planet_nav::Settle(const Ball& ball, const glm::quat& turn, const Pose& local)
+{
+	constexpr glm::vec3 k_Up {0.0f, 1.0f, 0.0f};
+	const Pose world = TurnAbout(ball, turn, local);
+	if (ArcFromMap(ball, world.eye) <= k_FarSeaLimit)
 	{
-		return turn;
+		return {.local = {.eye = world.eye, .focus = world.focus, .up = k_Up}};
 	}
-	if (shareBefore <= 0.0f || shareNow <= 0.0f)
+	// The direction across the ground from the map's middle towards the point. Exactly opposite the island any direction
+	// will do: the local camera's own direction then.
+	const auto under = glm::normalize(FromCentre(ball, world.eye));
+	glm::dvec2 bearing {under.x, under.z};
+	if (glm::length(bearing) < 1e-9)
 	{
-		return glm::identity<glm::quat>();
+		bearing = glm::dvec2(FromCentre(ball, local.eye).x, FromCentre(ball, local.eye).z);
 	}
-	// The short way round
-	const glm::quat shortWay = turn.w < 0.0f ? -turn : turn;
-	return glm::normalize(glm::slerp(glm::identity<glm::quat>(), shortWay, shareNow / shareBefore));
+	bearing = glm::length(bearing) > 1e-12 ? glm::normalize(bearing) : glm::dvec2(1.0, 0.0);
+	const glm::dvec2 offset = bearing * static_cast<double>(k_AnchorSpotDistance);
+	const auto spotDirection = glm::normalize(glm::dvec3(offset.x, ball.radius, offset.y));
+	const auto localDirection = glm::normalize(FromCentre(ball, local.eye));
+	const glm::quat move = GreatCircleTurn(glm::vec3(localDirection), glm::vec3(spotDirection));
+	Pose moved = TurnAbout(ball, move, local);
+	moved.up = k_Up;
+	return {
+	    .local = moved,
+	    .turn = glm::normalize(turn * glm::conjugate(move)),
+	    .spot = glm::vec2(glm::dvec2(ball.centre.x, ball.centre.z) + offset),
+	};
 }
 
 std::optional<glm::vec2> planet_nav::CurvedSeaDrag(const SeaDistance& sea, glm::vec3 eyeAtGrip, glm::vec3 gripped,
@@ -222,11 +241,12 @@ std::optional<glm::vec2> planet_nav::CurvedSeaDrag(const SeaDistance& sea, glm::
 	return move;
 }
 
-std::optional<float> planet_nav::DrawnSeaDistance(glm::vec3 eye, glm::vec3 direction, float seaLevel, float mapSize)
+std::optional<float> planet_nav::DrawnSeaDistance(glm::vec3 eye, glm::vec3 direction, float seaLevel, float mapSize,
+                                                  bool islandFar)
 {
 	namespace atmosphere = graphics::atmosphere;
 	const float height = eye.y - seaLevel;
-	const auto cap = atmosphere::MapCap({eye.x, eye.z}, height, mapSize);
+	const auto cap = atmosphere::MapCap({eye.x, eye.z}, height, mapSize, islandFar);
 	return atmosphere::CurvedSeaDistance(cap, height, glm::normalize(direction));
 }
 
@@ -277,7 +297,13 @@ std::optional<glm::vec3> planet_nav::KeepUnderOrbitTop(const Ball& ball, glm::ve
 	return glm::vec3(glm::dvec3(ball.centre) + offset * (top / glm::length(offset)));
 }
 
-float planet_nav::FarSeaReach(float heightOverSea)
+std::optional<glm::vec2> planet_nav::KeepInsideDisc(glm::vec2 point, glm::vec2 middle, float radius)
 {
-	return std::clamp(k_NearSeaRadius + k_FarSeaSlope * (heightOverSea - k_CapStillAbove), k_NearSeaRadius, k_FarSeaLimit);
+	const glm::vec2 across = point - middle;
+	const float distance = glm::length(across);
+	if (!(distance > radius))
+	{
+		return std::nullopt;
+	}
+	return middle + across * (radius / distance);
 }

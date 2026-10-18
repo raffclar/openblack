@@ -62,6 +62,8 @@ public:
 	[[nodiscard]] HandCues GetHandCues() const final;
 	/// EXPERIMENT (not for merge): over the planet the camera goes round the world's ball, away from the land
 	[[nodiscard]] bool HeldInsideTheWorld() const final { return !_overPlanet; }
+	/// EXPERIMENT (not for merge): far round the planet the camera has the frame of the point where it came down
+	[[nodiscard]] glm::quat PlanetFrame() const final;
 
 private:
 	void UpdateCameraInterpolationValues(const Camera& camera);
@@ -144,7 +146,9 @@ private:
 	/// Changes the camera that the frame draws back to the local camera
 	void ToLocal(const planet_nav::Ball& ball);
 	/// Where the line through a point of the screen meets the curved sea, as the frame draws it, from the kept view
-	[[nodiscard]] static std::optional<glm::vec3> CurvedSeaUnder(const Camera& camera, glm::vec2 screenCoord);
+	[[nodiscard]] static std::optional<glm::vec3> CurvedSeaUnder(const Camera& camera, glm::vec2 screenCoord, bool islandFar);
+	/// The camera is low down far round the planet, in the frame of the point where it came down (planet_nav::Settle)
+	[[nodiscard]] bool IslandFar() const;
 	/// The hand grips the planet or the far sea as a drag starts; whether it did
 	bool GripPlanet(const Camera& camera);
 	/// A drag of the planet or the far sea; whether it was one
@@ -244,6 +248,10 @@ private:
 	float _orbitShare {0.0f};
 	/// The last frame gave the world's camera, not the local camera
 	bool _overPlanet {false};
+	/// Far round the planet: the place of the local camera across the ground where it came down (planet_nav::Settle)
+	std::optional<glm::vec2> _anchorSpot;
+	/// The last frame was far round the planet
+	bool _wasIslandFar {false};
 	/// The local camera as the last frame gave it, and the world's eye that the last frame gave for it. While the
 	/// camera's destination stays at that eye, the local camera comes back exactly, with no loss in the turn.
 	glm::vec3 _localOrigin {0.0f};

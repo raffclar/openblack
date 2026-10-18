@@ -22,9 +22,9 @@ namespace openblack::sky_frame
 namespace
 {
 /// EXPERIMENT (not for merge): the sun on its real path at an hour. None while it is too far under the horizon.
-std::optional<graphics::sun::Placement> SunOnPath(float scriptHour)
+std::optional<graphics::sun::Placement> SunOnPath(float scriptHour, const glm::quat& observer)
 {
-	const glm::vec3 towards = graphics::atmosphere::SunTowards(scriptHour);
+	const glm::vec3 towards = observer * graphics::atmosphere::SunTowards(scriptHour);
 	const float alpha = graphics::atmosphere::SunStrength(towards.y);
 	if (alpha <= 0.0f)
 	{
@@ -36,9 +36,9 @@ std::optional<graphics::sun::Placement> SunOnPath(float scriptHour)
 /// EXPERIMENT (not for merge): the moon on its real path, which its phase sets. Its light shows as the original game's
 /// moon shows at the same height. It has a place down to a little under the horizon, so that the moon that looks like
 /// the real moon can rise and set; its strength there is 0.
-std::optional<graphics::moon::Placement> MoonOnPath(float scriptHour, double monthFraction)
+std::optional<graphics::moon::Placement> MoonOnPath(float scriptHour, double monthFraction, const glm::quat& observer)
 {
-	const glm::vec3 towards = graphics::atmosphere::MoonTowards(scriptHour, monthFraction);
+	const glm::vec3 towards = observer * graphics::atmosphere::MoonTowards(scriptHour, monthFraction);
 	if (towards.y < k_MoonSetSine)
 	{
 		return std::nullopt;
@@ -86,7 +86,7 @@ void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::component
 		dome.overcast = inputs.landLight.overcast;
 	}
 
-	sun.placement = inputs.solarPath ? SunOnPath(inputs.scriptHour) : graphics::sun::Place(inputs.scriptHour);
+	sun.placement = inputs.solarPath ? SunOnPath(inputs.scriptHour, inputs.observer) : graphics::sun::Place(inputs.scriptHour);
 	sun.strength =
 	    sun.placement.has_value() ? sky_dome::ThroughOvercast(sun.placement->alpha, dome.overcast, inputs.fog) : 0.0f;
 
@@ -100,7 +100,8 @@ void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::component
 		monthFraction = MoonMonthFraction(moon, inputs.scriptHour);
 	}
 
-	moon.placement = inputs.solarPath ? MoonOnPath(inputs.scriptHour, monthFraction) : graphics::moon::Place(inputs.scriptHour);
+	moon.placement = inputs.solarPath ? MoonOnPath(inputs.scriptHour, monthFraction, inputs.observer)
+	                                  : graphics::moon::Place(inputs.scriptHour);
 	moon.colour = Colour(inputs.palette != nullptr ? LandLightTable::GetMoonColour(*inputs.palette, inputs.landLight.skyType,
 	                                                                               inputs.landLight.alignment)
 	                                               : 0xFFFFFFu);

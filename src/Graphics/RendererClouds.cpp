@@ -26,6 +26,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/OceanInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
@@ -182,7 +183,9 @@ void Renderer::BeginClouds(const DrawSceneDesc& desc) const
 	});
 	uniforms.flashes = cloud_lightning::Pack(std::span(flashLights).first(flashes.size()));
 	// From high up the clouds and their shadow reach farther, so the layer and the shadow have no edge round the eye
-	const float eyeHeight = eye.y - frame.params.z;
+	// EXPERIMENT (not for merge): the height over the curved world, also with the eye far round the planet
+	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+	const float eyeHeight = atmosphere::EyeOverWorld(eye, frame.params.z, mapSize, desc.camera->IsIslandFar());
 	const float window = clouds::ShadowWindowFor(eyeHeight);
 	uniforms.shadow = {clouds::ShadowOrigin({eye.x, eye.z}, window), window, k_ShadowStrength};
 	uniforms.layer.z = clouds::FarthestCloudFor(eyeHeight);
