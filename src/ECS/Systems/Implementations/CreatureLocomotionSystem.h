@@ -33,6 +33,8 @@ namespace openblack::ecs::systems
 class CreatureLocomotionSystem final: public CreatureLocomotionSystemInterface
 {
 public:
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	void ProcessTurn() override;
 	void Update(float turnFraction) override;
 

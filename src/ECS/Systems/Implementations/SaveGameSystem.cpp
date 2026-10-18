@@ -1043,7 +1043,7 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 		return false;
 	}
 	// The clock, the random numbers and the scripts go on from the saved turn once the land has started
-	if (!ecs::world_save::LoadRunningState(world, game.turn))
+	if (!ecs::world_save::LoadRunningState(reflection, world, game.turn))
 	{
 		SPDLOG_LOGGER_WARN(Log(), "A part of the running state of slot {} did not read", slot);
 	}

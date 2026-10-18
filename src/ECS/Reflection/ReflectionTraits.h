@@ -136,4 +136,9 @@ inline constexpr bool k_IsIndirect<std::unique_ptr<Type, Deleter>> = true;
 template <typename Type>
 inline constexpr bool k_IsIndirect<std::weak_ptr<Type>> = true;
 
+/// A value type that gives the values that it keeps to a visitor, in a fixed order, through its static member
+/// VisitSaved(self, visitor). The binary archive keeps such a value as these values. Private data stays private.
+template <typename Type>
+inline constexpr bool k_IsVisited = requires(Type& value) { Type::VisitSaved(value, [](auto & ...) {}); };
+
 } // namespace openblack::ecs::reflection::detail

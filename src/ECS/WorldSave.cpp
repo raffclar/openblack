@@ -12,10 +12,13 @@
 #include <cstddef>
 #include <cstdlib>
 
+#include <algorithm>
+#include <array>
 #include <exception>
 #include <random>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -34,6 +37,9 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/SavedStateInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
@@ -183,6 +189,63 @@ bool LoadCamera(std::span<const uint8_t> bytes)
 	return true;
 }
 
+template <typename Service>
+systems::SavedStateInterface* FindSystem()
+{
+	return Service::has_value() ? &Service::value() : nullptr;
+}
+
+/// The systems that keep running state of their own, by the names of their sections. A new system goes at the end. A
+/// load gives each system its state in this order.
+using SystemFinder = systems::SavedStateInterface* (*)();
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 2> k_SavedSystems {{
+    {"creatureLocomotion", &FindSystem<Locator::creatureLocomotionSystem>},
+    {"fire", &FindSystem<Locator::fireSystem>},
+}};
+
+gamesave::Chunk SystemsChunk(const entt::meta_ctx& reflection)
+{
+	std::vector<reflection::NamedSection> sections;
+	for (const auto& [name, find] : k_SavedSystems)
+	{
+		if (const auto* system = find(); system != nullptr)
+		{
+			reflection::BinaryWriter out(reflection);
+			out.SetPlace(name, "");
+			system->SaveState(out);
+			sections.push_back({.name = std::string(name), .bytes = std::move(out.Bytes())});
+		}
+	}
+	return {.tag = gamesave::k_SystemsTag, .bytes = reflection::SaveSections(sections)};
+}
+
+bool LoadSystems(const entt::meta_ctx& reflection, std::span<const uint8_t> bytes)
+{
+	const auto sections = reflection::LoadSections(bytes);
+	if (!sections.has_value())
+	{
+		return false;
+	}
+	bool read = true;
+	const reflection::EntityRemap identity;
+	for (const auto& [name, find] : k_SavedSystems)
+	{
+		auto* system = find();
+		const auto section = std::ranges::find(*sections, name, &reflection::NamedSection::name);
+		if (system == nullptr || section == sections->end())
+		{
+			continue;
+		}
+		reflection::BinaryReader in(reflection, section->bytes, identity);
+		if (!system->LoadState(in) || in.Failed() || in.Remaining() != 0)
+		{
+			SPDLOG_LOGGER_WARN(Log(), "The saved state of the system {} does not read", name);
+			read = false;
+		}
+	}
+	return read;
+}
+
 /// Lists what the archive did not keep or did not read, one line for each kind
 template <typename Range>
 void LogNames(std::string_view what, const Range& names)
@@ -222,6 +285,7 @@ std::vector<gamesave::Chunk> world_save::SaveWorld(const entt::meta_ctx& reflect
 	{
 		chunks.push_back({.tag = gamesave::k_ScriptObjectsTag, .bytes = Locator::scriptObjects::value().SaveTable()});
 	}
+	chunks.push_back(SystemsChunk(reflection));
 	SPDLOG_LOGGER_INFO(Log(), "The saved world keeps {} entities with {} components", summary.world.entities,
 	                   summary.world.components);
 	LogNames("components with no registration", summary.world.unregisteredComponents);
@@ -302,7 +366,7 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 	return result->report;
 }
 
-bool world_save::LoadRunningState(const gamesave::WorldFile& file, uint32_t turn)
+bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn)
 {
 	bool read = true;
 	if (const auto clock = gamesave::FindChunk(file, gamesave::k_ClockTag); clock.has_value())
@@ -333,6 +397,11 @@ bool world_save::LoadRunningState(const gamesave::WorldFile& file, uint32_t turn
 	{
 		SPDLOG_LOGGER_WARN(Log(), "The table of the scripts' objects in the saved world does not fit");
 		read = false;
+	}
+	// The systems take their running state last, with every entity and the clock back
+	if (const auto systems = gamesave::FindChunk(file, gamesave::k_SystemsTag); systems.has_value())
+	{
+		read = LoadSystems(reflection, *systems) && read;
 	}
 	return read;
 }

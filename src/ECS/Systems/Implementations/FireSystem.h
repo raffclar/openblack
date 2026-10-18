@@ -41,6 +41,8 @@ public:
 	void MarkBurnPoint() override;
 	void Update(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) override;
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 	void ApplyBurn(entt::entity object, float burn, std::optional<PlayerNames> player) override;
 	void SetTemperature(entt::entity object, float temperature, entt::entity source) override;

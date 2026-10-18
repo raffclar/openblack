@@ -413,6 +413,10 @@ void Save(BinaryWriter& out, const Type& value)
 	{
 		out.Unsupported(entt::type_id<Type>().name());
 	}
+	else if constexpr (detail::k_IsVisited<Type>)
+	{
+		Type::VisitSaved(value, [&out](const auto&... fields) { (Save(out, fields), ...); });
+	}
 	else if constexpr (std::is_class_v<Type>)
 	{
 		SaveRegistered(out, entt::meta_any {out.Context(), std::in_place_type<const Type&>, value});
@@ -623,11 +627,30 @@ void Load(BinaryReader& in, Type& value)
 	{
 		// The writer kept nothing for it
 	}
+	else if constexpr (detail::k_IsVisited<Type>)
+	{
+		Type::VisitSaved(value, [&in](auto&... fields) { (Load(in, fields), ...); });
+	}
 	else if constexpr (std::is_class_v<Type>)
 	{
 		entt::meta_any reference {in.Context(), std::in_place_type<Type&>, value};
 		LoadRegistered(in, reference);
 	}
+}
+
+/// A codec for a registered type that gives its values to a visitor (see detail::k_IsVisited)
+template <typename Type>
+    requires detail::k_IsVisited<Type>
+void SaveVisited(const Type& value, BinaryWriter& out)
+{
+	Save(out, value);
+}
+
+template <typename Type>
+    requires detail::k_IsVisited<Type>
+void LoadVisited(Type& value, BinaryReader& in)
+{
+	Load(in, value);
 }
 
 } // namespace openblack::ecs::reflection

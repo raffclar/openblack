@@ -46,7 +46,8 @@ struct SaveSummary
                                                                       const gamesave::WorldFile& file);
 
 /// After the land starts again: puts back the game clock at the turn, the streams of random numbers, the camera, the
-/// scripts and the table of the objects that they hold. Returns whether every block that the file has read.
-bool LoadRunningState(const gamesave::WorldFile& file, uint32_t turn);
+/// scripts, the table of the objects that they hold and the running state of the systems. Returns whether every block
+/// that the file has read.
+bool LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn);
 
 } // namespace openblack::ecs::world_save

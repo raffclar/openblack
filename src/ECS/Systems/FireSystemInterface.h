@@ -18,6 +18,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
 namespace openblack::particles::draw
@@ -32,7 +33,7 @@ namespace openblack::ecs::systems
 /// things; at their combustion temperature they burn, hurt themselves, heat what is round them and spread through a
 /// forest or a town as one blaze, while water, the rain and the villagers beating them cool them. Burning things are
 /// drawn with flames, steam as they cool and smoke as they go out, light the land round them and crackle near the camera.
-class FireSystemInterface
+class FireSystemInterface: public SavedStateInterface
 {
 public:
 	/// What the debug window shows of a fire

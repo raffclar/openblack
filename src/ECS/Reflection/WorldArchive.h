@@ -85,6 +85,21 @@ struct WorldLoadResult
 [[nodiscard]] std::optional<WorldLoadResult> LoadWorld(entt::registry& registry, const entt::meta_ctx& context,
                                                        std::span<const uint8_t> bytes, WorldLoadMode mode);
 
+/// A section of a block with a name, such as the running state of one system
+struct NamedSection
+{
+	std::string name;
+	std::vector<uint8_t> bytes;
+
+	bool operator==(const NamedSection&) const = default;
+};
+
+/// Writes sections with their names and lengths, so that a reader can skip a section that it does not know
+[[nodiscard]] std::vector<uint8_t> SaveSections(std::span<const NamedSection> sections);
+
+/// Reads the sections that SaveSections wrote. Returns nothing when the bytes have damage.
+[[nodiscard]] std::optional<std::vector<NamedSection>> LoadSections(std::span<const uint8_t> bytes);
+
 /// Writes one value with its registered fields, such as the context of a registry
 template <typename Type>
 [[nodiscard]] std::vector<uint8_t> SaveValue(const entt::meta_ctx& context, const Type& value,

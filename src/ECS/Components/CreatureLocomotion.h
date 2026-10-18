@@ -21,6 +21,7 @@
 #include "Common/GameHeading.h"
 #include "Creature/CreatureHeadLook.h"
 #include "Creature/CreatureLocomotion.h"
+#include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureRouteFollow.h"
 
@@ -71,6 +72,9 @@ struct CreatureLocomotion
 	bool ontoDestination {false};
 	/// What it walks round, the searches for its route and the route it follows
 	creature_route::Follower follower;
+	/// The creature as its route search saw it when the walk started. The search finds the things in its way from it.
+	/// None when the search finds only the land.
+	std::optional<creature_obstacles::Walker> routeWalker;
 	/// A new walk's first turn of searching, which searches further and notes what it meets
 	bool firstSearchTurn {false};
 	/// A route was found while it stood, and it sets off once it has got up
