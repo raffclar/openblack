@@ -22,10 +22,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
-#include "Common/GUtilsAngle.h"
-#include "Common/GUtilsDistance.h"
 #include "Common/X87Vector.h"
-#include "Creature/CreatureLocomotion.h"
 #include "Creature/CreaturePlayerAttention.h"
 
 using namespace openblack;
@@ -104,11 +101,11 @@ bool creature_cast_moves::SameDestination(glm::vec2 before, glm::vec2 now)
 	return (offset.x * offset.x) + (offset.y * offset.y) < k_SameDestinationSquared;
 }
 
-bool creature_cast_moves::HeadsFor(glm::vec2 creature, glm::vec2 point, float heading)
+bool creature_cast_moves::HeadsFor(glm::vec2 creature, glm::vec2 point, GameHeading heading)
 {
 	// The same test as a creature that follows the hand makes
 	return creature_player_attention::IsDirectionClose(map_coords::FromMetres(creature), map_coords::FromMetres(point),
-	                                                   static_cast<uint16_t>(gutils::ConvertScawenAngleToGameAngle(heading)));
+	                                                   heading.GameAngle());
 }
 
 bool creature_cast_moves::Arrived(float distance, float creatureRadius, float routeRadius, float keep)
@@ -121,12 +118,12 @@ float creature_cast_moves::GetAwayDistance(float keep, std::optional<float> thin
 	return keep + (thingRadius.has_value() ? *thingRadius * k_GetAwayRadii : 0.0f);
 }
 
-glm::vec3 creature_cast_moves::GetAwayPoint(const glm::vec3& creature, const glm::vec3& thing, float distance)
+glm::vec3 creature_cast_moves::GetAwayPoint(const glm::vec3& creature, const glm::vec3& thing, float apart, float distance)
 {
-	// The game measures how far apart they are with its map distance, and adds the squares of the way z, y, x
+	// The game adds the squares of the way z, y, x
 	const auto away = creature - thing;
 	glm::vec3 direction {1.0f, 0.0f, 0.0f};
-	if (gutils::GetDistanceInMetres(thing, creature) > 0.0001f)
+	if (apart > k_GetAwayApart)
 	{
 		direction = away;
 		if (away != glm::vec3(0.0f))
@@ -191,14 +188,16 @@ std::optional<glm::vec2> creature_cast_moves::FindClearArea(glm::vec2 point, flo
 	return best;
 }
 
-bool creature_cast_moves::Facing(glm::vec2 creature, float heading, glm::vec2 point)
+bool creature_cast_moves::Facing(glm::vec2 creature, GameHeading heading, glm::vec2 point)
 {
-	const auto offset = point - creature;
 	if (MapPointDistance(point, creature) < k_OnTopDistance)
 	{
 		return true;
 	}
-	const float off = creature_locomotion::WrapAngle(creature_locomotion::HeadingOf(offset) - heading);
+	// The way from the creature's map position to the point's, each made metres first
+	const auto offset =
+	    map_coords::ToMetres(map_coords::FromMetres(point)) - map_coords::ToMetres(map_coords::FromMetres(creature));
+	const float off = GameHeading::Of(offset.x, offset.y).TurnFrom(heading);
 	return !(std::abs(off) > k_FacingRadians);
 }
 

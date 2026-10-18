@@ -1196,6 +1196,9 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_oracle_casting_distance oracle/test_oracle_casting_distance.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_creature_heading oracle/test_oracle_creature_heading.cpp
+)
 # The data folder is found at run time (see oracle/OracleData.h), never compiled into an object: ctest sets the
 # environment variable for each test, and the file in the build folder serves a program started by hand from there
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
@@ -1218,6 +1221,7 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_lightning_spell_order
                      test_oracle_sway_ribbon
                      test_oracle_casting_distance
+                     test_oracle_creature_heading
 )
   set_tests_properties(
     ${oracle_test}
@@ -1276,3 +1280,5 @@ openblack_setup_and_add_test(test_lightning_spell_order test_lightning_spell_ord
 target_link_libraries(test_oracle_sway_ribbon PRIVATE psys)
 openblack_setup_and_add_test(test_header_overrides test_header_overrides.cpp)
 target_link_libraries(test_header_overrides PRIVATE pack)
+openblack_setup_and_add_test(test_game_heading test_game_heading.cpp)
+openblack_setup_and_add_test(test_hand_throw_speed test_hand_throw_speed.cpp)

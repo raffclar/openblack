@@ -22,6 +22,7 @@
 #include <LNDFile.h>
 #include <glm/geometric.hpp>
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
@@ -29,6 +30,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
+#include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
@@ -1586,11 +1588,14 @@ void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place
 	{
 		return;
 	}
-	// The leash is as long as the hand is from what it is tied to
+	// The leash is as long as the hand is from what it is tied to: from the map position of the thing, on the land
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto tied = *worn->tiedTo;
-	const auto lengths = leash_snap::LengthsOnLettingGo(*hand, registry.Get<const Transform>(tied).position,
-	                                                    object_measures::TwoDRadius(registry, tied));
+	const auto tiedAt = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(tied).position));
+	const auto tiedPoint = Locator::terrainSystem::has_value()
+	                           ? map_coords::ToWorld(Locator::terrainSystem::value(), tiedAt)
+	                           : glm::vec3(map_coords::ToMetres(tiedAt.x), 0.0f, map_coords::ToMetres(tiedAt.z));
+	const auto lengths = leash_snap::LengthsOnLettingGo(*hand, tiedPoint, object_measures::TwoDRadius(registry, tied));
 	worn->rope.slackLength = lengths.slack;
 	worn->rope.maxLength = lengths.max;
 	// And the creature goes to the place under the hand

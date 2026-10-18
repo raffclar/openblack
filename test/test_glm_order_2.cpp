@@ -177,9 +177,9 @@ TEST(GlmOrder2, GetAwayPointUsesOneShareOfTheLength)
 	const auto creature = thing + k_Odd;
 	const auto away = creature - thing;
 	const float share = 1.0f / std::sqrt(SquareSumZyx(away));
-	EXPECT_EQ(openblack::creature_cast_moves::GetAwayPoint(creature, thing, 7.0f), ((away * share) * 7.0f) + creature);
+	EXPECT_EQ(openblack::creature_cast_moves::GetAwayPoint(creature, thing, 1.0f, 7.0f), ((away * share) * 7.0f) + creature);
 	// Standing on the thing it goes along x
-	EXPECT_EQ(openblack::creature_cast_moves::GetAwayPoint(thing, thing, 7.0f), thing + glm::vec3(7.0f, 0.0f, 0.0f));
+	EXPECT_EQ(openblack::creature_cast_moves::GetAwayPoint(thing, thing, 0.0f, 7.0f), thing + glm::vec3(7.0f, 0.0f, 0.0f));
 }
 
 TEST(GlmOrder2, PointingAimSumsZThenXThenY)

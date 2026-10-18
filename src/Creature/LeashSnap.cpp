@@ -13,7 +13,7 @@
 
 #include <algorithm>
 
-#include <glm/geometric.hpp>
+#include "Common/X87Vector.h"
 
 using namespace openblack;
 using namespace openblack::leash_snap;
@@ -117,7 +117,8 @@ std::optional<float> leash_snap::TouchDepth(std::span<const ScreenPoint> points,
 
 creature_leash::Lengths leash_snap::LengthsOnLettingGo(const glm::vec3& hand, const glm::vec3& tied, float tiedRadius)
 {
-	const auto length = std::max(glm::distance(hand, tied), k_RadiusReach * tiedRadius);
+	// The game adds the squares from z to x
+	const auto length = std::max(x87::LengthZyx(hand - tied), k_RadiusReach * tiedRadius);
 	return {.slack = length * k_SlackShare, .max = length};
 }
 
