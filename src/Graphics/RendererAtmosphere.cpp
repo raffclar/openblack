@@ -48,6 +48,7 @@
 #include "Graphics/RealMoon.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
+#include "Graphics/Stars.h"
 #include "Graphics/Underwater.h"
 #include "Graphics/VertexBuffer.h"
 #include "Graphics/VolumetricClouds.h"
@@ -587,4 +588,34 @@ void Renderer::BindAirSky(const ShaderProgram& program) const
 	program.SetUniformValue("u_aurora", &_atmosphereFrame->aurora);
 	program.SetUniformValue("u_airPlanet", &_atmosphereFrame->airPlanet);
 	SetWorldCurve(program);
+	// The stars of the catalogue, and the moon's disc that hides them
+	if (program.HasUniform("u_stars"))
+	{
+		auto& textures = Locator::resources::value().GetTextures();
+		const bool shown =
+		    !Locator::underwaterSystem::has_value() || Locator::underwaterSystem::value().IsEffectOn(underwater::Effect::Stars);
+		const bool ready = shown && textures.Contains(stars::k_TextureId.value());
+		float rows = 1.0f;
+		if (ready)
+		{
+			const auto texture = textures.Handle(stars::k_TextureId.value());
+			rows = static_cast<float>(texture->GetResolution().y);
+			program.SetTextureSampler("s_stars", 9, *texture);
+		}
+		// The moon's light hides the faint stars
+		float moonLight = 0.0f;
+		if (Locator::skySystem::has_value())
+		{
+			const auto* moon =
+			    Locator::entitiesRegistry::value().TryGet<const ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+			if (moon != nullptr && moon->placement.has_value())
+			{
+				moonLight = stars::MoonLight(underwater::PhaseBrightness(moon->phase),
+				                             glm::normalize(moon->placement->offset).y, moon->clearSky);
+			}
+		}
+		const glm::vec4 starTexture {ready ? 1.0f : 0.0f, rows, moonLight, 0.0f};
+		program.SetUniformValue("u_stars", &starTexture);
+		program.SetUniformValue("u_starsMoon", &_atmosphereFrame->moonDisc);
+	}
 }

@@ -200,6 +200,11 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	{
 	};
 
+	/// EXPERIMENT (not for merge): the texture of the night sky's stars from the star catalogue file (graphics::stars)
+	struct FromStarCatalogueTag
+	{
+	};
+
 	[[nodiscard]] result_type operator()(FromPackTag, const std::string& name, const pack::G3DTexture& g3dTexture) const;
 	[[nodiscard]] result_type operator()(FromBitmapLayersTag, const std::string& name,
 	                                     std::span<const std::filesystem::path> layerPaths, uint16_t side) const;
@@ -209,6 +214,7 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	                                     graphics::texel_depth::Depth depth = graphics::texel_depth::Depth::Full) const;
 	[[nodiscard]] result_type operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
 	                                     const std::filesystem::path& alphaPath, uint16_t side) const;
+	[[nodiscard]] result_type operator()(FromStarCatalogueTag, const std::filesystem::path& cataloguePath) const;
 };
 
 struct L3DAnimLoader final: BaseLoader<L3DAnim>

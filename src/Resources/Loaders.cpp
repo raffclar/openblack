@@ -48,6 +48,7 @@
 #include "Common/StringUtils.h"
 #include "Common/Zip.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/Stars.h"
 #include "Graphics/Texture2D.h"
 #include "Help/AdvisorModel.h"
 #include "Locator.h"
@@ -259,6 +260,22 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std:
 	texture->Create(*side, *side, 1, channels == 3 ? graphics::TextureFormat::RGB8 : graphics::TextureFormat::R8,
 	                graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                bgfx::copy(data.data(), static_cast<uint32_t>(data.size())));
+	return texture;
+}
+
+Texture2DLoader::result_type Texture2DLoader::operator()(FromStarCatalogueTag, const std::filesystem::path& cataloguePath) const
+{
+	const auto stars = graphics::stars::ParseCatalogue(Locator::filesystem::value().ReadAll(cataloguePath));
+	if (!stars.has_value())
+	{
+		throw std::runtime_error("Unable to load the star catalogue " + cataloguePath.string());
+	}
+	const auto built = graphics::stars::BuildTexture(*stars);
+	auto texture = std::make_shared<graphics::Texture2D>("experiment/stars");
+	// The shader reads each texel at its middle, so the texture keeps exact values with no filter
+	texture->Create(built.width, built.height, 1, graphics::TextureFormat::RGBA32F, graphics::Wrapping::ClampEdge,
+	                graphics::Filter::Nearest,
+	                bgfx::copy(built.texels.data(), static_cast<uint32_t>(built.texels.size() * sizeof(built.texels[0]))));
 	return texture;
 }
 

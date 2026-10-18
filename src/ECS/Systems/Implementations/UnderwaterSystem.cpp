@@ -49,6 +49,7 @@
 #include "Graphics/Atmosphere.h"
 #include "Graphics/Cumulonimbus.h"
 #include "Graphics/RealMoon.h"
+#include "Graphics/Stars.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/Underwater.h"
 #include "Graphics/VolumetricFog.h"
@@ -524,6 +525,23 @@ void UnderwaterSystem::LoadSand()
 			try
 			{
 				textures.Load(graphics::real_moon::k_MapId.value(), resources::Texture2DLoader::FromDiskTag {}, moonMap);
+			}
+			catch (std::runtime_error& err)
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "{}", err.what());
+			}
+		}
+	}
+	// The catalogue of the night sky's stars, through the texture cache
+	{
+		auto& textures = Locator::resources::value().GetTextures();
+		const std::filesystem::path catalogue {graphics::stars::k_CataloguePath};
+		if (!textures.Contains(graphics::stars::k_TextureId.value()) && std::filesystem::exists(catalogue))
+		{
+			try
+			{
+				textures.Load(graphics::stars::k_TextureId.value(), resources::Texture2DLoader::FromStarCatalogueTag {},
+				              catalogue);
 			}
 			catch (std::runtime_error& err)
 			{

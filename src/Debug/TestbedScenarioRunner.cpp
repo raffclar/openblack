@@ -109,6 +109,7 @@
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/TeleportStone.h"
@@ -944,6 +945,16 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		}
 		underwater.SetAuroraChoice(environment.auroraStrength);
 		underwater.SetNoctilucentOverride(environment.noctilucent);
+	}
+	// EXPERIMENT (not for merge): the moon's phase from the scenario's date
+	if (environment.moonDate.has_value() && Locator::skySystem::has_value())
+	{
+		if (auto* moon =
+		        Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+		    moon != nullptr)
+		{
+			moon->dateOverride = environment.moonDate;
+		}
 	}
 	if (Locator::creaturePhysiologySystem::has_value())
 	{

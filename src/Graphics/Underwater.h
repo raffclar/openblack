@@ -221,6 +221,8 @@ enum class Effect : uint8_t
 	FogPockets,
 	/// The jellyfish that drift up through the deep water and glow (see underwater::jellyfish)
 	Jellyfish,
+	/// The stars of the night sky (see stars): when it is off, the sky has no stars
+	Stars,
 	_Count
 };
 
