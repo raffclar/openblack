@@ -1151,13 +1151,32 @@ std::vector<SaveGameSystem::Slot> SaveGameSystem::Slots() const
 		return slots;
 	}
 	const auto root = Locator::profileFolderSystem::value().GetFolder();
-	const auto land = LandNumber();
-	for (uint32_t slot = 0; slot < gamesave::k_SlotCount; ++slot)
+	const auto savedGames = *root / *player / gamesave::k_SavedGamesFolder;
+	// The room reads the folders in the order the system lists them
+	std::vector<std::string> names;
+	std::error_code error;
+	for (std::filesystem::directory_iterator it(savedGames, error), end; !error && it != end; it.increment(error))
 	{
-		const auto folder = *root / *player / gamesave::SlotFolder(slot, land);
-		// The room lists a slot only when its world file is beside its info file
-		if (!Locator::filesystem::value().Exists(folder / gamesave::WorldFileName(slot)) &&
-		    !Locator::filesystem::value().Exists(folder / gamesave::VanillaWorldFileName(slot)))
+		if (it->is_directory(error))
+		{
+			names.push_back(it->path().filename().string());
+		}
+	}
+	std::ranges::sort(names, gamesave::ListedBefore);
+	const auto land = LandNumber();
+	for (const auto& name : names)
+	{
+		const auto found = gamesave::RoomFolderOf(name, land);
+		if (!found.has_value())
+		{
+			continue;
+		}
+		const auto folder = savedGames / found->folder;
+		// The room lists a folder only when its world file is beside its info file. The number in the world file's
+		// name comes from the folder's name; the slot is the info file's.
+		const auto number = std::to_string(found->fileSlot);
+		if (!Locator::filesystem::value().Exists(folder / (number + ".obsav")) &&
+		    !Locator::filesystem::value().Exists(folder / (number + ".sav")))
 		{
 			continue;
 		}
@@ -1165,7 +1184,10 @@ std::vector<SaveGameSystem::Slot> SaveGameSystem::Slots() const
 		const auto info = bytes.has_value() ? gamesave::ReadSaveGameInfo(*bytes) : std::nullopt;
 		if (info.has_value())
 		{
-			slots.push_back({.slot = slot, .land = land, .date = info->date, .name = info->name});
+			const auto landFolder =
+			    found->folder.has_parent_path() ? gamesave::LeadingNumber(found->folder.filename().string()) : 0;
+			slots.push_back(
+			    {.slot = info->slot, .land = static_cast<uint32_t>(landFolder), .date = info->date, .name = info->name});
 		}
 	}
 	return slots;

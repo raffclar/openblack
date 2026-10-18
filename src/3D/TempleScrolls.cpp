@@ -439,12 +439,9 @@ void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices,
 
 TempleScrolls::Facts TempleScrolls::Facts::Mock()
 {
-	// TODO(raffclar): The saved games are made up until openblack keeps them. The temple fills in the other facts
-	// from the game: the statistics of the world, the challenges, the creature, the tips and the story history.
+	// The temple fills in the facts from the game: the statistics of the world, the challenges, the saved games, the
+	// creature, the tips and the story history
 	Facts facts;
-	facts.saveCount = 4;
-	facts.loadCount = 2;
-	facts.savedGames = {{u"04/10/2026 21:14", u"Land 1"}, {u"03/10/2026 18:02", u""}};
 	CreatureFacts creature;
 	creature.name = u"Ape";
 	creature.age = 3;

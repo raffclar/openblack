@@ -13,6 +13,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <ctime>
 
 #include <array>
 #include <unordered_map>
@@ -64,7 +65,9 @@
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
@@ -261,8 +264,25 @@ TempleScrolls::Facts GatherScrollFacts()
 		facts.challengesCompleted = listing.completed;
 		facts.challenges = std::move(listing.titles);
 	}
-	// The save game room's time played counts from the game's start, as the machine's clock is read
-	facts.timePlayed = std::chrono::seconds(machine_clock::Ticks() / 1000u);
+	// The save game room's scroll: the time the player played in all their games, how many times they saved and loaded
+	// in the room, and the saved games the room lists
+	if (Locator::playerProfileSystem::has_value())
+	{
+		auto& profiles = Locator::playerProfileSystem::value();
+		facts.timePlayed = std::chrono::seconds(profiles.TimePlayed(static_cast<int64_t>(std::time(nullptr))));
+		if (const auto profile = profiles.GetCurrentProfile(); profile.has_value())
+		{
+			facts.saveCount = static_cast<int32_t>(profile->statistics.saves);
+			facts.loadCount = static_cast<int32_t>(profile->statistics.loads);
+		}
+	}
+	if (Locator::saveGameSystem::has_value())
+	{
+		for (const auto& saved : Locator::saveGameSystem::value().Slots())
+		{
+			facts.savedGames.push_back({.date = saved.date, .name = saved.name});
+		}
+	}
 	// The creature's scrolls tell of the player's own creature, and are blank without one
 	if (Locator::creatureCaveSystem::has_value())
 	{

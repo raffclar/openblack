@@ -45,6 +45,24 @@ struct Settings
 	bool operator==(const Settings&) const = default;
 };
 
+/// What the save game room's scroll counts for the player: the seconds they played in the games that ended, and how
+/// many times they saved and loaded a game in the room
+struct Statistics
+{
+	uint32_t secondsPlayed {0};
+	uint32_t saves {0};
+	uint32_t loads {0};
+
+	bool operator==(const Statistics&) const = default;
+};
+
+/// The seconds played that the save game room shows: those kept with the profile, and those since the game started.
+/// The count is in whole seconds of the system clock and wraps as the game's 32-bit count does.
+[[nodiscard]] constexpr uint32_t TimePlayed(uint32_t secondsKept, int64_t gameStarted, int64_t now)
+{
+	return secondsKept - static_cast<uint32_t>(gameStarted) + static_cast<uint32_t>(now);
+}
+
 struct Profile
 {
 	/// The name the player typed, as UTF-8
@@ -60,6 +78,8 @@ struct Profile
 	/// How good or evil the player was when it was last kept as they played, from -1 to 1: a new game starts them there.
 	/// Neither good nor evil until one is kept
 	double alignment {0.0};
+	/// The time played and the saves and loads, which the game keeps as the game ends and with each other change
+	Statistics statistics;
 
 	bool operator==(const Profile&) const = default;
 };
@@ -135,8 +155,8 @@ void Edit(Profile& profile, std::u16string_view creatureName, int symbol);
 
 /// The profiles as they are kept on disk, UTF-8: one line naming the current profile, then a line for each profile with
 /// its name, its creature file, its symbol and its creature's name, then a line for each of its settings: the profile's
-/// name, the setting's and its value, then a line with the profile's name and the alignment kept; all separated by tabs
-/// (no name can hold a tab)
+/// name, the setting's and its value, then a line with the profile's name and the alignment kept, then a line with the
+/// profile's name, the seconds played, the saves and the loads; all separated by tabs (no name can hold a tab)
 [[nodiscard]] std::string Write(const Profiles& profiles);
 /// The profiles read back, in the list's order; lines that aren't understood are passed over, and settings not kept
 /// are the game's own

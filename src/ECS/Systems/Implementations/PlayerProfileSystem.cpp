@@ -230,6 +230,45 @@ void PlayerProfileSystem::SetCurrentAlignment(double alignment)
 	Save();
 }
 
+void PlayerProfileSystem::StartPlaying(int64_t now)
+{
+	_gameStarted = now;
+}
+
+void PlayerProfileSystem::StopPlaying(int64_t now)
+{
+	auto* profile = CurrentProfile();
+	if (profile == nullptr)
+	{
+		return;
+	}
+	profile->statistics.secondsPlayed = player_profiles::TimePlayed(profile->statistics.secondsPlayed, _gameStarted, now);
+	_gameStarted = now;
+	Save();
+}
+
+uint32_t PlayerProfileSystem::TimePlayed(int64_t now) const
+{
+	const auto* profile = player_profiles::Current(_profiles);
+	return player_profiles::TimePlayed(profile != nullptr ? profile->statistics.secondsPlayed : 0u, _gameStarted, now);
+}
+
+void PlayerProfileSystem::CountSave()
+{
+	if (auto* profile = CurrentProfile(); profile != nullptr)
+	{
+		++profile->statistics.saves;
+	}
+}
+
+void PlayerProfileSystem::CountLoad()
+{
+	if (auto* profile = CurrentProfile(); profile != nullptr)
+	{
+		++profile->statistics.loads;
+	}
+}
+
 void PlayerProfileSystem::Save() const
 {
 	if (_store.developer || !_store.folder.has_value())

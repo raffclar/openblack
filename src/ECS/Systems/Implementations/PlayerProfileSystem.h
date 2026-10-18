@@ -56,6 +56,11 @@ public:
 	void EditCurrentProfile(std::u16string_view creatureName, int symbol) final;
 	void SetCurrentSettings(const player_profiles::Settings& settings) final;
 	void SetCurrentAlignment(double alignment) final;
+	void StartPlaying(int64_t now) final;
+	void StopPlaying(int64_t now) final;
+	[[nodiscard]] uint32_t TimePlayed(int64_t now) const final;
+	void CountSave() final;
+	void CountLoad() final;
 
 	/// The computer's own: its account's name, and the milliseconds since it started
 	[[nodiscard]] static Machine ThisMachine();
@@ -67,6 +72,8 @@ private:
 	player_profiles::Store _store;
 	Machine _machine;
 	player_profiles::Profiles _profiles;
+	/// When the game started, by the system clock in seconds
+	int64_t _gameStarted {0};
 };
 
 } // namespace openblack::ecs::systems

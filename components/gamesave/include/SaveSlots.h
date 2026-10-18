@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -70,5 +71,27 @@ inline constexpr std::string_view k_InfoFileName = "SaveGame.inf";
 /// The world file of the slot in the game's own layout, and the file of the slot's script machine beside it
 [[nodiscard]] std::string VanillaWorldFileName(uint32_t slot);
 [[nodiscard]] std::string VanillaScriptFileName(uint32_t slot);
+
+/// A folder in "Saved Games" that the save game room reads as it comes up
+struct RoomFolder
+{
+	/// The folder, relative to "Saved Games": the folder found, or for an autosave, the previous land or the next land,
+	/// its folder for the land
+	std::filesystem::path folder;
+	/// The number in the names of the world file the room looks for in the folder, read from the start of the found
+	/// folder's name
+	int32_t fileSlot {0};
+};
+
+/// The number at the start of a folder's name, as the C runtime reads a whole number from text: spaces first, then a
+/// sign and the digits. Zero when there are no digits.
+[[nodiscard]] int32_t LeadingNumber(std::string_view name);
+/// The folder that the save game room reads for a folder that it finds in "Saved Games", in the land of that number.
+/// The folders of the autosaves go to the land's folder in them, the previous land's to the folder of the land before
+/// (only from the second land), and the next land's to the folder of the land after (only up to the fourth land). The
+/// folders "." and ".." give none.
+[[nodiscard]] std::optional<RoomFolder> RoomFolderOf(std::string_view name, uint32_t land);
+/// The order in which the system lists the folders of a folder: by their names, with the case of the letters ignored
+[[nodiscard]] bool ListedBefore(std::string_view a, std::string_view b);
 
 } // namespace openblack::gamesave
