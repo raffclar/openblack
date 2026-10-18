@@ -21,6 +21,19 @@ bool ZeroOrNaN(float x) noexcept
 	return x == 0.0f || std::isnan(x);
 }
 
+/// A double rounded to 24 bits of mantissa, to the nearest and to even at a tie, as the FPU at 24-bit precision rounds.
+/// The exponent stays as wide as the double's.
+double RoundTo24Bits(double value) noexcept
+{
+	if (value == 0.0 || !std::isfinite(value))
+	{
+		return value;
+	}
+	int exponent = 0;
+	const double mantissa = std::frexp(value, &exponent);
+	return std::ldexp(std::nearbyint(std::ldexp(mantissa, 24)), exponent - 24);
+}
+
 /// Particles' (u * k) * x, the other way round from the game's (u * x) * k
 float ParticleFloat(uint32_t u, float x) noexcept
 {
@@ -31,16 +44,22 @@ float ParticleFloat(uint32_t u, float x) noexcept
 }
 } // namespace
 
+float game_random::FloatOf(uint32_t u, float x) noexcept
+{
+	// Each product of a 16-bit draw and two floats is exact in a double. Each step then rounds to the 24 bits of the
+	// FPU, with the FPU's wide exponent.
+	double r = RoundTo24Bits(static_cast<double>(u) * static_cast<double>(x));
+	r = RoundTo24Bits(r * static_cast<double>(k_FloatRandScale));
+	return static_cast<float>(r);
+}
+
 float game_random::FloatRand(float x, uint32_t& seed) noexcept
 {
 	if (ZeroOrNaN(x))
 	{
 		return 0.0f;
 	}
-	float r = static_cast<float>(LHRand(k_FloatRandRange, seed));
-	r = r * x;
-	r = r * k_FloatRandScale;
-	return r;
+	return FloatOf(LHRand(k_FloatRandRange, seed), x);
 }
 
 float GameRandomInterface::GameFloatRange(float a, float b)

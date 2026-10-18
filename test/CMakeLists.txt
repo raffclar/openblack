@@ -1394,3 +1394,9 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_vortex_crossing_file test_vortex_crossing_file.cpp)
 openblack_setup_and_add_test(test_world_archive test_world_archive.cpp)
+openblack_setup_and_add_test(test_oracle_game_random oracle/test_oracle_game_random.cpp)
+set_tests_properties(
+  test_oracle_game_random
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

@@ -9,8 +9,10 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <deque>
+#include <iterator>
 #include <optional>
 #include <vector>
 
@@ -93,6 +95,9 @@ TEST(CreatureDesireSources, LookWeightsSpreadFurtherThanTraits)
 	EXPECT_FLOAT_EQ(traits.objectsLookWeight, 0.5f);
 	ASSERT_EQ(random.mosts.size(), 9u * 4u);
 	EXPECT_FLOAT_EQ(random.mosts.at(0), 2.0f * k_TraitSpread);
+	// The sixth trait spreads by up to 0.3 either way
+	EXPECT_FLOAT_EQ(random.mosts.at(5 * 4), 2.0f * k_SixthTraitSpread);
+	EXPECT_FLOAT_EQ(random.mosts.at(5 * 4), 0.6f);
 	EXPECT_FLOAT_EQ(random.mosts.at(6 * 4), 2.0f * k_LookWeightSpread);
 }
 
@@ -266,7 +271,7 @@ TEST(CreatureDesireSources, NewDesiresSpreadTheirSourcesAndGrowingTimes)
 	hunger.sources.push_back({.type = 14, .value = 0.5f, .threshold = 0.5f});
 	hunger.spreads.push_back({.value = 0.1f, .threshold = 0.2f});
 	// The most of each range
-	const auto most = [](float low, float high) { return high > low ? high : low; };
+	const auto most = [](float most) { return most; };
 	const auto desires = creature_desires::Create(setup, most);
 	const auto& made = desires[creature_desires::Desire::Hunger];
 	EXPECT_FLOAT_EQ(made.increaseSeconds, 120.0f);
@@ -274,10 +279,65 @@ TEST(CreatureDesireSources, NewDesiresSpreadTheirSourcesAndGrowingTimes)
 	EXPECT_FLOAT_EQ(made.sources.front().value, 0.6f);
 	EXPECT_FLOAT_EQ(made.sources.front().threshold, 0.7f);
 	// The middle of each range keeps the species' values
-	const auto middle = [](float low, float high) { return 0.5f * (low + high); };
+	const auto middle = [](float most) { return 0.5f * most; };
 	const auto kept = creature_desires::Create(setup, middle);
 	EXPECT_FLOAT_EQ(kept[creature_desires::Desire::Hunger].increaseSeconds, 100.0f);
 	EXPECT_FLOAT_EQ(kept[creature_desires::Desire::Hunger].sources.front().value, 0.5f);
+}
+
+TEST(CreatureDesireSources, NewDesiresDrawEachDecayAndGrowingTimeThenAllTheSources)
+{
+	std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> setup {};
+	// The other desires draw nothing: their ranges are 0
+	for (auto& desire : setup)
+	{
+		desire.increaseSeconds = 0.0f;
+	}
+	auto& hunger = setup.at(static_cast<size_t>(creature_desires::Desire::Hunger));
+	hunger.decayMin = 0.1f;
+	hunger.decayMax = 0.3f;
+	hunger.increaseSeconds = 100.0f;
+	hunger.sources.push_back({.type = 14, .value = 0.5f, .threshold = 0.5f});
+	hunger.spreads.push_back({.value = 0.1f, .threshold = 0.2f});
+	auto& anger = setup.at(static_cast<size_t>(creature_desires::Desire::Anger));
+	anger.decayMin = 0.5f;
+	anger.decayMax = 1.5f;
+	anger.increaseSeconds = 50.0f;
+	anger.sources.push_back({.type = 11, .value = 0.5f, .threshold = 0.5f});
+	anger.spreads.push_back({.value = 0.3f, .threshold = 0.4f});
+	ScriptedRandom random {.shares = {}};
+	static_cast<void>(creature_desires::Create(setup, random.Function()));
+	// A range of 0 draws nothing in the game, so the order of the other draws is what counts
+	std::vector<float> drawn;
+	std::ranges::copy_if(random.mosts, std::back_inserter(drawn), [](float most) { return most != 0.0f; });
+	const bool hungerFirst = creature_desires::Desire::Hunger < creature_desires::Desire::Anger;
+	const std::vector<float> hungerTimes {0.3f - 0.1f, 2.0f * (100.0f * k_IncreaseSpread)};
+	const std::vector<float> angerTimes {1.5f - 0.5f, 2.0f * (50.0f * k_IncreaseSpread)};
+	const std::vector<float> hungerSources {0.2f, 0.4f};
+	const std::vector<float> angerSources {0.6f, 0.8f};
+	std::vector<float> expected;
+	for (const auto* part : hungerFirst ? std::array {&hungerTimes, &angerTimes} : std::array {&angerTimes, &hungerTimes})
+	{
+		expected.insert(expected.end(), part->begin(), part->end());
+	}
+	for (const auto* part :
+	     hungerFirst ? std::array {&hungerSources, &angerSources} : std::array {&angerSources, &hungerSources})
+	{
+		expected.insert(expected.end(), part->begin(), part->end());
+	}
+	ASSERT_EQ(drawn.size(), expected.size());
+	for (size_t i = 0; i < drawn.size(); ++i)
+	{
+		EXPECT_FLOAT_EQ(drawn.at(i), expected.at(i)) << "draw " << i;
+	}
+}
+
+TEST(CreatureDesireSources, ASourceTakesTheSpreadOffTheDrawThenAddsTheValue)
+{
+	// (r - s) + v, as the game adds: with r = 0.3, s = 0.2 and v = 0.7 the order gives the bits of the game
+	const auto upTo = [](float) { return 0.3f; };
+	const float expected = (0.3f - 0.2f) + 0.7f;
+	EXPECT_EQ(SpreadSource(0.7f, 0.2f, upTo), expected);
 }
 
 TEST(CreatureDesireSources, SettingASourceIsNotedForTheMind)

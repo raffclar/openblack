@@ -13,7 +13,6 @@
 #include <random>
 #include <unordered_map>
 
-#include "Common/RandomNumberManager.h"
 #include "Creature/CreatureRoute.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "Enums.h"
@@ -74,8 +73,6 @@ private:
 	/// land.
 	std::optional<creature_route::WalkableLand> _land;
 	std::unordered_map<CreatureType, float> _bodyRadii;
-	/// Fidgets and running away distances are chosen at random, apart from the game's own random numbers
-	RandomStreamSource _random {RandomStream::CreatureLocomotion};
 };
 
 } // namespace openblack::ecs::systems

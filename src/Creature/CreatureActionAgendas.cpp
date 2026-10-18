@@ -335,13 +335,13 @@ std::vector<Step> creature_mind::LookAtHand()
 	         .gaze = Gaze {.hand = true}}};
 }
 
-std::vector<Step> creature_mind::SmileAt(uint32_t friendly, float height, float chance, const Random& random)
+std::vector<Step> creature_mind::SmileAt(uint32_t friendly, float height, float extraSeconds, const Random& random)
 {
 	const Gaze look {.object = friendly};
 	// It flutters its eyelids at the friend as it goes near and as it faces it
 	std::vector<Step> agenda {
 	    GoNear(friendly, k_SmileHeights * height, creature_face::Cue::Smile, look),
-	    FaceThing(friendly, k_SmileSeconds + (chance * k_SmileExtraSeconds), creature_face::Cue::Smile, look),
+	    FaceThing(friendly, extraSeconds + k_SmileSeconds, creature_face::Cue::Smile, look),
 	};
 	for (auto& step : agenda)
 	{
