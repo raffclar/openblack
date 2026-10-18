@@ -218,8 +218,8 @@ std::array<ToolTipInfo, ToolTips::k_Count> ReadToolTipsInfo()
 }
 
 /// atmos.raw's glow, which the tooltips' glow boxes are cut from, a ninth at a time
-constexpr std::array k_GlowU = {0.0f, 0.078125f, 0.16797f, 0.24609f};
-constexpr std::array k_GlowV = {0.25f, 0.32813f, 0.41797f, 0.49609f};
+constexpr std::array k_GlowU = {0.0f, 0.078125f, 0.16796875f, 0.24609375f};
+constexpr std::array k_GlowV = {0.25f, 0.328125f, 0.41796875f, 0.49609375f};
 /// atmos.raw's arrows about a tooltip's mouse
 struct ToolTipArrow
 {
@@ -1110,6 +1110,13 @@ void GameInterface::DrawDialogue(glm::u16vec2 resolution, int barPixels)
 	{
 		for (const auto& run : frame->runs)
 		{
+			// Under the word that a sung verse has reached, the glow that glides from word to word
+			if (_singAlongWord.has_value() && run.word != 0 && run.word == *_singAlongWord)
+			{
+				const float width = DialogueFont(run.font).first->GetWidth(run.text, run.size);
+				const auto box = _singAlong.Step({run.x, run.y}, width, run.size, _singAlongStepMs);
+				DrawGlow(glm::vec2(box.min), glm::vec2(box.max), help::sing_along::GlowColour(run.r, run.g, run.b, run.a));
+			}
 			DrawDialogueRun(run);
 		}
 	}

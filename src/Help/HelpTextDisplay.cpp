@@ -110,7 +110,7 @@ Measure MeasureText(const TextRegion& region, std::u16string_view text, float li
 
 /// Measures, places and draws the words of one entry; returns the measured height. The low byte of alpha is the colour
 /// alpha.
-float DrawEntryText(const TextRegion& region, std::u16string_view text, int vAlign, float yOffset, bool iconFlag,
+float DrawEntryText(const TextRegion& region, std::u16string_view text, int vAlign, float yOffset, bool newest,
                     float lineHeight, int alpha, float number, DrawState& state, const WidthFn& widthFn,
                     std::vector<TextRun>& runs)
 {
@@ -131,9 +131,9 @@ float DrawEntryText(const TextRegion& region, std::u16string_view text, int vAli
 	int pen = x0;
 	int line = 0;
 	Piece type = Piece::Word;
-	// Not drawn yet: while the missionaries' song plays, the newest text's word the script has reached gets a zoomed
-	// highlight box. The word counter is kept for it.
-	int wordIndex = 0;
+	// Each piece of the text counts as a word, also a piece that draws nothing. The newest text's runs keep their number,
+	// for the highlight of the word that a sung verse has reached.
+	int32_t wordIndex = 0;
 	Splitter splitter(text);
 	std::u16string word;
 	if (maxLines > 0)
@@ -158,7 +158,7 @@ float DrawEntryText(const TextRegion& region, std::u16string_view text, int vAli
 			{
 				pen = static_cast<int>(widthFn(state.font, u" ", lineHeight) + static_cast<float>(pen));
 			}
-			type = splitter.Next(word, state, iconFlag);
+			type = splitter.Next(word, state, newest);
 			if (type == Piece::Percent || type == Piece::Number)
 			{
 				word = FormatTextNumber(number, type == Piece::Percent);
@@ -190,13 +190,13 @@ float DrawEntryText(const TextRegion& region, std::u16string_view text, int vAli
 				    .a = static_cast<uint8_t>(alpha & 0xFF),
 				    .clipTop = static_cast<float>(region.top),
 				    .clipBottom = static_cast<float>(region.bottom),
+				    .word = newest ? wordIndex : 0,
 				};
 				runs.push_back(std::move(run));
 				pen = static_cast<int>(static_cast<float>(pen) + w);
 			}
 		} while (line < maxLines);
 	}
-	static_cast<void>(wordIndex);
 	return measure.height;
 }
 } // namespace
