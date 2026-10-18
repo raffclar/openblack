@@ -319,7 +319,9 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 	provider->Add({.name = "state",
 	               .description = "Where the camera is, what it looks at, its yaw, pitch (degrees below the horizon) and "
 	                              "distance, its field of view, what moves it, whether a camera path holds it, the mouse "
-	                              "hints (rotate, pitch, top) the cursor's place offers and what a drag has turned into",
+	                              "hints (rotate, pitch, top) the cursor's place offers and what a drag has turned into. "
+	                              "The places are in the world's frame, as camera.set takes them, also when the camera "
+	                              "is low far round the planet",
 	               .parameters = {},
 	               .kind = ResultKind::Object,
 	               .needsNear = false},
@@ -405,7 +407,9 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCameraProvider(Came
 	                   "unless override, which shows it there every frame over any camera until camera.release. "
 	                   "warnings (without override) say what will move it on at once: another camera than the "
 	                   "world's (creature, temple...), or the camera fence or height limit the land's script "
-	                   "set, which the world camera keeps to every frame",
+	                   "set, which the world camera keeps to every frame. The places are in the world's frame, as "
+	                   "camera.state gives them: a place low down far round the planet puts the camera in the frame of "
+	                   "that point, as the zoom down from the orbit does",
 	               .parameters = setParameters,
 	               .kind = ResultKind::Object,
 	               .needsNear = false,

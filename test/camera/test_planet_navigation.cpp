@@ -292,3 +292,34 @@ TEST(PlanetNavigation, OrbitZoomChangesTheHeightByAFactor)
 	EXPECT_NEAR(OrbitZoomHeight(1.0e6f, -60.0f), 0.8e6f, 10.0f);
 	EXPECT_GT(OrbitZoomHeight(1.0e6f, -600.0f), 0.0f);
 }
+
+TEST(PlanetNavigation, SettleWorldPoseOnlyFarAndLow)
+{
+	const auto ball = EarthBall();
+	// Near the island and high up the world's frame is the camera's frame
+	EXPECT_FALSE(SettleWorldPose(ball, {.eye = {3000.0f, 300.0f, 3000.0f}, .focus = {3100.0f, 0.0f, 3100.0f}}).has_value());
+	EXPECT_FALSE(SettleWorldPose(ball, {.eye = {2560.0f, 1.0e7f, 2560.0f}, .focus = {2560.0f, 0.0f, 2560.0f}}).has_value());
+	// Far round the planet and low down the camera settles in the frame of that point
+	const glm::quat round = glm::angleAxis(1.0f, glm::vec3(1.0f, 0.0f, 0.0f));
+	const Pose near {.eye = {2560.0f, 300.0f, 2560.0f}, .focus = {2560.0f, 0.0f, 3560.0f}};
+	const Pose world = TurnAbout(ball, round, near);
+	const auto settled = SettleWorldPose(ball, world);
+	ASSERT_TRUE(settled.has_value());
+	ASSERT_TRUE(settled->spot.has_value());
+	// The settled camera in the world's frame is the pose that was asked for
+	const auto back = TurnAbout(ball, settled->turn, settled->local);
+	EXPECT_LT(glm::distance(back.eye, world.eye), 2.0f);
+	EXPECT_LT(glm::distance(back.focus, world.focus), 2.0f);
+	EXPECT_LT(glm::distance(ToWorldFrame(ball, settled->turn, settled->local.eye), world.eye), 2.0f);
+}
+
+TEST(PlanetNavigation, TurnPointAboutKeepsTheDistanceToTheCentre)
+{
+	const glm::vec3 centre {2560.0f, -k_Radius, 2560.0f};
+	const glm::quat turn = glm::angleAxis(0.7f, glm::normalize(glm::vec3(1.0f, 0.2f, 0.4f)));
+	const glm::vec3 point {2560.0f, 200000.0f, 2560.0f};
+	const auto turned = TurnPointAbout(centre, turn, point);
+	EXPECT_NEAR(glm::distance(turned, centre), glm::distance(point, centre), 1.0f);
+	const auto back = TurnPointAbout(centre, glm::conjugate(turn), turned);
+	EXPECT_LT(glm::distance(back, point), 1.0f);
+}

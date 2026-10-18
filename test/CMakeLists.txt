@@ -1104,3 +1104,5 @@ openblack_setup_and_add_test(test_cloud_regions graphics/test_cloud_regions.cpp)
 openblack_setup_and_add_test(test_stars graphics/test_stars.cpp)
 # EXPERIMENT (not for merge): the clock of the sea
 openblack_setup_and_add_test(test_water_clock graphics/test_water_clock.cpp)
+# EXPERIMENT (not for merge): the light of each place on the planet by the height of its own sun
+openblack_setup_and_add_test(test_place_light graphics/test_place_light.cpp)

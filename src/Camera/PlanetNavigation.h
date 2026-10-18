@@ -126,6 +126,17 @@ struct Settled
 inline constexpr float k_AnchorSpotDistance = 70000.0f;
 [[nodiscard]] Settled Settle(const Ball& ball, const glm::quat& turn, const Pose& local);
 
+/// A camera that a command puts in the world's frame, as Settle puts it: far round the planet and under k_OrbitFrom,
+/// the local camera near the map with the frame of that point. None near the island or high up, where the world's frame
+/// is the camera's frame.
+[[nodiscard]] std::optional<Settled> SettleWorldPose(const Ball& ball, const Pose& world);
+
+/// A point turned about `centre` by `turn`, in doubles, so it keeps its precision far from the map
+[[nodiscard]] glm::vec3 TurnPointAbout(glm::vec3 centre, const glm::quat& turn, glm::vec3 point);
+
+/// A point turned about the ball's middle by `frame`: from the frame that the camera works in to the world's frame
+[[nodiscard]] glm::vec3 ToWorldFrame(const Ball& ball, const glm::quat& frame, glm::vec3 point);
+
 /// The distance across the ball from the map's middle to the point under the eye
 [[nodiscard]] float ArcFromMap(const Ball& ball, glm::vec3 eye);
 

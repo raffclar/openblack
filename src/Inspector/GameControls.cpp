@@ -30,6 +30,7 @@
 #include <LHVM.h>
 #include <SDL_keyboard.h>
 #include <bgfx/bgfx.h>
+#include <glm/gtc/quaternion.hpp>
 #include <glm/trigonometric.hpp>
 
 #include "3D/TempleInteriorInterface.h"
@@ -291,11 +292,12 @@ std::optional<CameraState> GameCamera::State() const
 		}
 		return "none";
 	};
+	// EXPERIMENT (not for merge): the state is in the world's frame, as camera.set takes it, also far round the planet
 	return CameraState {
-	    .origin = camera.GetOrigin(),
-	    .focus = camera.GetFocus(),
+	    .origin = camera.ToWorldFrame(camera.GetOrigin()),
+	    .focus = camera.ToWorldFrame(camera.GetFocus()),
 	    .rotation = glm::degrees(camera.GetRotation()),
-	    .forward = camera.GetForward(),
+	    .forward = camera.GetPlanetFrame() * camera.GetForward(),
 	    .horizontalFieldOfView = camera.GetHorizontalFieldOfView(),
 	    .verticalFieldOfView = camera.GetVerticalFieldOfView(),
 	    .lens = camera.GetLens(),
@@ -353,7 +355,8 @@ std::string GameCamera::Pin(const CameraPose& pose)
 	{
 		_own = camera.GetMotion();
 	}
-	camera.SetOrigin(pose.origin).SetFocus(pose.focus);
+	// EXPERIMENT (not for merge): the pose is in the world's frame; far round the planet the camera works in its own
+	camera.SetOrigin(camera.FromWorldFrame(pose.origin)).SetFocus(camera.FromWorldFrame(pose.focus));
 	return {};
 }
 

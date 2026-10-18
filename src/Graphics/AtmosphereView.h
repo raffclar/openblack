@@ -23,6 +23,7 @@
 #include "Graphics/Atmosphere.h"
 #include "Graphics/GlobalIllumination.h"
 #include "Graphics/GraphicsHandle.h"
+#include "Graphics/PlaceLight.h"
 #include "Graphics/Underwater.h"
 
 namespace openblack::graphics
@@ -89,6 +90,10 @@ struct AtmosphereFrame
 	glm::vec4 planetSun {0.0f, 1.0f, 0.0f, 0.0f};
 	/// The direction towards the real moon, and the share of the island's light that a full moon high up gives
 	glm::vec4 planetMoon {0.0f, -1.0f, 0.0f, 0.0f};
+	/// The light of each place on the ball by the height of its sun (place_light::Pack), and the moon's light there:
+	/// rgb its colour, w its full strength
+	std::array<glm::vec4, place_light::k_Knots * place_light::k_VectorsPerKnot> placeLight {};
+	glm::vec4 placeMoon {0.0f};
 	std::array<glm::vec4, 3> worldTurn {glm::vec4(1.0f, 0.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 0.0f),
 	                                    glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
 	/// The rows of the turn from the frame that the camera works in to the frame of the sky's sphere (celestial.sh): x
@@ -157,6 +162,11 @@ public:
 		global_illumination::ShL1 sky;
 	};
 	std::optional<SkyCache> cache;
+	/// How bright the air's light is on the screen at each sun height of the place light's table. It costs a march of the
+	/// air's light for each, so the renderer works out two of them a frame, in turn.
+	std::array<glm::vec3, place_light::k_Knots> placeScale {};
+	int nextPlaceScale {0};
+	bool placeScaleReady {false};
 	/// How wet the land is after rain, and the seconds of the last frame
 	float wetness {0.0f};
 	std::optional<float> lastSeconds;

@@ -212,10 +212,10 @@ vec3 SkyIn(vec3 direction)
 	return u_uwSky.rgb * mix(1.05f, 0.8f, up);
 }
 
-// The sky seen in a direction over a horizon with its own up, as on the far ball of the sea
-vec3 SkyOver(vec3 direction, vec3 up)
+// The sky of the colour `sky` seen in a direction over a horizon with its own up, as on the far ball of the sea
+vec3 SkyOver(vec3 direction, vec3 up, vec3 sky)
 {
-	return u_uwSky.rgb * mix(1.05f, 0.8f, clamp(dot(direction, up), 0.0f, 1.0f));
+	return sky * mix(1.05f, 0.8f, clamp(dot(direction, up), 0.0f, 1.0f));
 }
 
 // The reflection of the scene on the surface at p, along r, found by a march across the screen: 16 steps out to 150
@@ -822,6 +822,30 @@ void main()
 		bool farBall = toSurface > UW_FAR_SEA;
 		vec3 seaUp = farBall ? WorldUpAt(direction * toSurface, eye.y - u_uwParams.z) : vec3(0.0f, 1.0f, 0.0f);
 		vec3 onMap = farBall && seaUp.y < 0.99f ? vec3(-1.0e6f, surfacePoint.y, -1.0e6f) : surfacePoint;
+		// The light of the far ball is the light of its own sun height there: far round the planet the day side has
+		// the light of day while the island has its night. Near the island the far ball keeps the island's light.
+		vec3 lightHere = u_uwLightColour.rgb;
+		vec3 skyHere = u_uwSky.rgb;
+		vec3 scatterHere = scatter;
+		vec3 floorHere = floorColour;
+		vec3 aboveHere = u_uwAbove.xyz;
+		if (farBall)
+		{
+			vec3 placeWater;
+			vec3 placeSky;
+			vec3 placeCloud;
+			PlaceLightAt(seaUp, placeWater, placeSky, placeCloud);
+			float island = PlaceIslandShare(seaUp);
+			lightHere = mix(placeWater, lightHere, island);
+			skyHere = mix(placeSky, skyHere, island);
+			// The water's own colour, lit by the sky and the light as the island's (underwater::ScatterColour)
+			scatterHere = mix((placeSky * 0.5f + placeWater * 0.5f) * vec3(0.07f, 0.28f, 0.25f), scatterHere, island);
+			floorHere = vec3(0.62f, 0.56f, 0.44f) *
+			            (lightHere * UwTransmittance(160.0f / max(u_uwLight.y, 0.2f)) * 0.6f + scatterHere * 0.6f);
+			// The glint is of the sun where it is up there, else of the moon
+			vec3 placeAbove = dot(seaUp, u_planetSun.xyz) > -0.02f ? u_planetSun.xyz : u_planetMoon.xyz;
+			aboveHere = normalize(mix(placeAbove, aboveHere, island));
+		}
 		// The heights over the curved world's level at that point, and the slope with the curve of the far sea
 		float waterTop = surfacePoint.y + WorldDrop(onMap.xz);
 		float waterDepth = farBall ? 1000.0f : waterTop - shore.w;
@@ -873,7 +897,7 @@ void main()
 			// The scene under the surface, bent by the waves: the bend is less where the water is thin, and none
 			// where it would show what is above the water
 			vec3 below = world;
-			vec3 through = farFloor ? floorColour : scene;
+			vec3 through = farFloor ? floorHere : scene;
 			if (u_uwFlags.z > 0.5f)
 			{
 				float thin = clamp((sceneDistance - toSurface) / 6.0f, 0.0f, 1.0f);
@@ -901,7 +925,7 @@ void main()
 			// light of the waves on the surface shows more
 			float cloudy = 1.0f + 2.0f * smoothstep(6.0f, 25.0f, u_uwParams.z - shore.w);
 			vec3 left = UwTransmittance(max((path + down * 0.6f) * cloudy, (1.0f - originalLand) * UW_SHALLOWS_TINT));
-			vec3 water = through * left + scatter * (1.0f - left);
+			vec3 water = through * left + scatterHere * (1.0f - left);
 			if (pond > 0.0f)
 			{
 				vec3 pondLeft = exp(-u_uwPond[0].xyz * (path + down * 0.6f + 0.3f));
@@ -919,7 +943,7 @@ void main()
 			reflected -= 2.0f * min(dot(reflected, seaUp), 0.0f) * seaUp;
 			// The cube of the far scene is round a place near the land: the far sea from high up takes the sky's colour
 			vec3 mirror = u_uwSea.w > 0.5f && toSurface < UW_FAR_SEA ? EnvironmentReflection(surfacePoint, reflected, roughness)
-			                                                          : SkyOver(reflected, seaUp);
+			                                                          : SkyOver(reflected, seaUp, skyHere);
 			float screenShare = 0.0f;
 			if (u_uwFlags.x > 0.5f && toSurface < UW_FAR_SEA)
 			{
@@ -956,14 +980,8 @@ void main()
 			water = mix(water, water * vec3(0.85f, 1.05f, 0.92f), 0.6f * (1.0f - pond)) * mix(0.72f, 1.22f, waveLift);
 			// The open sea: a deep blue-green body with a little light that comes through the faces of the waves, and a
 			// pale green-yellow on the tops of the waves, more on the higher tops and less far away
-			vec3 seaLight = u_uwLightColour.rgb * u_uwLightColour.w * cloudShade + u_uwSky.rgb * 0.35f;
-			// The night side of the ball has no sun or moon on its water. The island's light is the light over the island, so
-			// the far water takes its share of that light.
-			float lit = farBall ? WorldLightShare(seaUp) : 1.0f;
-			seaLight *= lit;
-			water *= lit;
-			mirror *= lit;
-			vec3 litColour = u_uwLightColour.rgb * lit;
+			vec3 seaLight = lightHere * u_uwLightColour.w * cloudShade + skyHere * 0.35f;
+			vec3 litColour = lightHere;
 			float openWater = smoothstep(4.0f, 20.0f, u_uwParams.z - shore.w) * (1.0f - pond);
 			float wrap = pow(clamp(dot(normal, u_uwAbove.xyz) * 0.4f + 0.6f, 0.0f, 1.0f), 40.0f);
 			vec3 body = (UW_SEA_DEEP + UW_SEA_TOPS * 0.12f * wrap) * seaLight;
@@ -973,7 +991,7 @@ void main()
 			         (1.0f - pond);
 			// The faces of the waves that turn to the light are lighter, and the faces that turn away are darker, as the
 			// sides of a lit hill are. This gives the waves their shape in the light.
-			vec3 toSun = u_uwAbove.xyz;
+			vec3 toSun = aboveHere;
 			float turn = (dot(normal, toSun) - dot(seaUp, toSun)) * u_uwLightColour.w * cloudShade;
 			water *= mix(1.0f, clamp(1.0f + 2.2f * turn, 0.62f, 1.6f), 1.0f - pond);
 			colour = mix(water, mirror, fresnel);
@@ -988,8 +1006,8 @@ void main()
 			colour += litColour * u_uwLightColour.w * cloudShade * 0.2f *
 			          pow(max(dot(reflected, toSun), 0.0f), 8.0f) * (1.0f - 0.5f * pond);
 			// The glint of the sun or the moon on the waves: none where the hills hide the light
-			float glint = u_uwSea.x > 0.5f ? min(SeaGlint(normal, -direction, u_uwAbove.xyz, roughness), 12.0f)
-			                               : pow(max(dot(reflected, u_uwAbove.xyz), 0.0f), 300.0f) * 3.0f;
+			float glint = u_uwSea.x > 0.5f ? min(SeaGlint(normal, -direction, aboveHere, roughness), 12.0f)
+			                               : pow(max(dot(reflected, aboveHere), 0.0f), 300.0f) * 3.0f;
 			float glintShade = CloudShadeAt(onMap.xz) * SunLightAt(onMap.xz);
 			colour += litColour * glint * u_uwLightColour.w * glintShade;
 			// A sharp highlight of the sun on each wave, which fades with the distance

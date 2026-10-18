@@ -27,6 +27,7 @@
 #include "Graphics/Atmosphere.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
+#include "PlanetNavigation.h"
 #include "ReflectionXZCamera.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -406,31 +407,39 @@ void Camera::Update(std::chrono::microseconds dt)
 		const auto m1 = glm::zero<glm::vec3>();
 		// You have to normalize the velocity with the NEW duration
 		const auto durationSeconds = std::chrono::duration_cast<std::chrono::duration<float>>(updateInfo->duration);
-		SetOriginInterpolator(GetOrigin(), updateInfo->origin, GetOriginVelocity() * durationSeconds.count(), m1);
-		SetFocusInterpolator(GetFocus(), updateInfo->focus, GetFocusVelocity() * durationSeconds.count(), m1);
+		auto origin = GetOrigin();
+		auto originVelocity = GetOriginVelocity();
+		auto focus = GetFocus();
+		auto focusVelocity = GetFocusVelocity();
+		auto up = GetViewUp();
+		auto upVelocity =
+		    _upInterpolators.VelocityAt(GetInterpolatorT()) /
+		    std::max(std::chrono::duration_cast<std::chrono::duration<float>>(_interpolatorDuration).count(), 1e-6f);
+		// EXPERIMENT (not for merge): the frame changed. The camera's place and movement go into the new frame, so the
+		// movement continues and the view does not jump.
+		if (const auto& reframe = updateInfo->reframe; reframe.has_value())
+		{
+			origin = planet_nav::TurnPointAbout(reframe->centre, reframe->turn, origin);
+			focus = planet_nav::TurnPointAbout(reframe->centre, reframe->turn, focus);
+			originVelocity = reframe->turn * originVelocity;
+			focusVelocity = reframe->turn * focusVelocity;
+			up = glm::normalize(reframe->turn * up);
+			upVelocity = reframe->turn * upVelocity;
+		}
+		SetOriginInterpolator(origin, updateInfo->origin, originVelocity * durationSeconds.count(), m1);
+		SetFocusInterpolator(focus, updateInfo->focus, focusVelocity * durationSeconds.count(), m1);
 		// EXPERIMENT (not for merge): the top of the screen moves on the eye's clock. A top that does not change stays
 		// exactly the same, so the world's camera draws as before.
-		const auto up = GetViewUp();
 		if (up == updateInfo->up && _upInterpolators.p1 == updateInfo->up)
 		{
 			_upInterpolators = ZoomInterpolator3f(up);
 		}
 		else
 		{
-			const auto upVelocity =
-			    _upInterpolators.VelocityAt(GetInterpolatorT()) /
-			    std::max(std::chrono::duration_cast<std::chrono::duration<float>>(_interpolatorDuration).count(), 1e-6f);
 			_upInterpolators = ZoomInterpolator3f(up, updateInfo->up, upVelocity * durationSeconds.count(), m1);
 		}
 		SetInterpolatorDuration(updateInfo->duration);
 		SetInterpolatorTime(0us);
-		// EXPERIMENT (not for merge): the frame changed, so the camera is at its new place at once
-		if (updateInfo->jump)
-		{
-			SetOrigin(updateInfo->origin).SetFocus(updateInfo->focus);
-			_upInterpolators = ZoomInterpolator3f(updateInfo->up);
-			SetInterpolatorDuration(0us);
-		}
 	}
 	KeepInsideTheWorld();
 
