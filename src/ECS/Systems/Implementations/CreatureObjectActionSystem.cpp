@@ -76,6 +76,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MapCellResident.h"
@@ -546,6 +547,58 @@ void BringBackUp(entt::entity creature, entt::entity food)
 	}
 }
 
+/// The body takes in the food of a thing that it eats, and answers the energy that the food gave it
+float TakeInFood(entt::entity creature, std::optional<float> value)
+{
+	const auto energy = value.has_value() && Locator::creaturePhysiologySystem::has_value()
+	                        ? Locator::creaturePhysiologySystem::value().Eat(creature, *value)
+	                        : 0.0f;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} takes in food {}, energy {}", entt::to_integral(creature),
+	                    value.value_or(0.0f), energy);
+	return energy;
+}
+
+/// The creature swallows what it ate. A thing it can't swallow it brings back up. Otherwise the meal is counted, and
+/// the creature keeps it down or brings it up.
+void Swallow(entt::entity creature, CreatureObjectAction& action, std::optional<float> value)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto food = std::exchange(action.eaten, std::nullopt);
+	if (!food.has_value() || !registry.Valid(*food))
+	{
+		return;
+	}
+	registry.Remove<HiddenByState>(*food);
+	if (BringsBackUp(registry, *food))
+	{
+		BringBackUp(creature, *food);
+		return;
+	}
+	// A magic mushroom makes it high once it is done with what it is doing
+	if (IsMagicMushroom(registry, *food) && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().AteMagicMushroom(creature);
+	}
+	const auto meal = MealOf(registry, *food);
+	CountMushroom(registry, creature, meal);
+	Consume(registry, creature, *food);
+	const bool bringsUp =
+	    creature_object_actions::BringsMealBackUp(value.value_or(0.0f), meal.magicMushroom, meal.foodPile, meal.poisoned);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} swallows a thing of sort {}: food {}, brought up {}",
+	                    entt::to_integral(creature), meal.sort.value_or(0), value.value_or(0.0f), bringsUp);
+	auto* tallies = registry.TryGet<CreatureTallies>(creature);
+	creature_meals::CountMeal(tallies != nullptr ? tallies->meals : registry.Assign<CreatureTallies>(creature).meals, meal.sort,
+	                          !bringsUp);
+	if (bringsUp)
+	{
+		RefuseMeal(creature, meal);
+	}
+	else
+	{
+		KeepMealDown(creature, action.mealEnergy);
+	}
+}
+
 /// One of the creaks of a tree that a creature pulls from the land, picked at random
 entt::id_type TreeCreak();
 
@@ -826,6 +879,23 @@ void Fail(CreatureObjectAction& action, std::string reason,
 	action.failureKind = kind;
 }
 
+/// A person or an animal that a creature's hand closes on remembers what it did and goes into its state for the hand
+creature_object_actions::HoldStart IntoCreatureHand(ecs::Registry& registry, entt::entity object)
+{
+	const bool villager = registry.AllOf<Villager>(object);
+	const bool animal = registry.AllOf<Animal>(object) && Locator::animalSystem::has_value();
+	bool accepted = true;
+	if (villager)
+	{
+		accepted = ecs::villager_physics::IntoHand(object);
+	}
+	else if (animal)
+	{
+		Locator::animalSystem::value().IntoHand(object);
+	}
+	return creature_object_actions::HoldStartFor(villager || animal, registry.AllOf<Creature>(object), accepted);
+}
+
 /// The thing a creature catches is taken into its hand out of the air: it leaves the physics without going back on the
 /// map, and a person or animal is held
 void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity object, const CreatureObjectAction& action,
@@ -840,15 +910,11 @@ void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity obj
 	{
 		Locator::dynamicsSystem::value().RemoveObject(object, false, true);
 	}
+	IntoCreatureHand(registry, object);
 	if (registry.AllOf<Villager>(object))
 	{
-		ecs::villager_physics::IntoHand(object);
 		StopWalking(registry, object);
 		DrawInHand(registry, object);
-	}
-	else if (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value())
-	{
-		Locator::animalSystem::value().IntoHand(object);
 	}
 }
 
@@ -1585,6 +1651,11 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 			if (action.kind == Kind::Catch)
 			{
 				TurnToCatch(creature, action);
+			}
+			// As the eat animation starts, the body takes in the food of what the hand holds
+			if (action.kind == Kind::Eat && held != nullptr)
+			{
+				action.mealEnergy = TakeInFood(creature, FoodValueOf(held->object));
 			}
 		}
 	}
@@ -2381,11 +2452,12 @@ void CreatureObjectActionSystem::ProcessTurn()
 		return;
 	}
 
-	// What is held by a creature that is gone, or no longer holds it, falls
+	// What is held by a creature that is gone, or no longer holds it, falls. What left its hand to be eaten stays out of
+	// sight until the creature swallows it, as in the game also when the eat stops before the swallow.
 	std::vector<entt::entity> loose;
 	registry.Each<const HeldByCreature>([&](entt::entity entity, const HeldByCreature& by) {
 		const auto* held = registry.Valid(by.creature) ? registry.TryGet<const CreatureHeldObject>(by.creature) : nullptr;
-		if (held == nullptr || held->object != entity)
+		if ((held == nullptr || held->object != entity) && !registry.AllOf<HiddenByState>(entity))
 		{
 			loose.push_back(entity);
 		}
@@ -2529,6 +2601,11 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 				    Fail(action, "it was told to eat no thing");
 				    animation.slots.clear();
 				    return;
+			    }
+			    // The creature swallows what it ate as the eat animation ends
+			    if (action.kind == Kind::Eat)
+			    {
+				    Swallow(entity, action, action.eaten.has_value() ? FoodValueOf(*action.eaten) : std::nullopt);
 			    }
 			    action.status = Status::Done;
 		    }
@@ -2829,6 +2906,15 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			                                  .mirrored = action.mirrored,
 			                                  .bone = HandBone(*points, animation, action.mirrored)});
 			registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
+			// A person or an animal stops what it did and is held, from the ground or out of the air. One that cannot go
+			// into its state for the hand is let go where it is, and the pick-up fails.
+			if (IntoCreatureHand(registry, object) == creature_object_actions::HoldStart::Refused)
+			{
+				registry.Remove<CreatureHeldObject>(creature);
+				registry.Remove<HeldByCreature>(object);
+				Fail(action, "it cannot be held");
+				break;
+			}
 			const bool flying = Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().IsFlying(object);
 			// Whatever it is, it leaves the map's cells while the creature holds it
 			registry.Remove<MapCellResident, MapCellMover>(object);
@@ -2841,15 +2927,6 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			if (flying)
 			{
 				Locator::dynamicsSystem::value().RemoveObject(object, false, true);
-				// What its landing set, the creature's hand overrides: a person or animal is held
-				if (registry.AllOf<Villager>(object))
-				{
-					villager_physics::IntoHand(object);
-				}
-				else if (registry.AllOf<Animal>(object) && Locator::animalSystem::has_value())
-				{
-					Locator::animalSystem::value().IntoHand(object);
-				}
 			}
 			if (registry.AllOf<Villager>(object))
 			{
@@ -2926,52 +3003,18 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			{
 				break;
 			}
-			// Told only to eat, it takes in the food of what it holds, and what it holds is gone from its hand
+			// What it holds leaves its hand at the moment of eating. Told only to eat, with no thing given, it is gone.
+			// Otherwise it is out of sight until the creature swallows it as the animation ends.
+			registry.Remove<CreatureHeldObject>(creature);
 			if (!action.swallows)
 			{
-				const auto value = FoodValueOf(*held);
-				registry.Remove<CreatureHeldObject>(creature);
 				Consume(registry, creature, *held);
-				[[maybe_unused]] const auto gained = value.has_value() && Locator::creaturePhysiologySystem::has_value()
-				                                         ? Locator::creaturePhysiologySystem::value().Eat(creature, *value)
-				                                         : 0.0f;
-				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} takes in what it holds: food {}, energy {}",
-				                    entt::to_integral(creature), value.value_or(0.0f), gained);
+				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} takes in what it held, with no thing given",
+				                    entt::to_integral(creature));
 				break;
 			}
-			if (BringsBackUp(registry, *held))
-			{
-				BringBackUp(creature, *held);
-				break;
-			}
-			const auto value = FoodValueOf(*held);
-			// A magic mushroom makes it high once it is done with what it is doing
-			if (IsMagicMushroom(registry, *held) && Locator::creatureMindSystem::has_value())
-			{
-				Locator::creatureMindSystem::value().AteMagicMushroom(creature);
-			}
-			const auto meal = MealOf(registry, *held);
-			CountMushroom(registry, creature, meal);
-			registry.Remove<CreatureHeldObject>(creature);
-			Consume(registry, creature, *held);
-			const auto energy = value.has_value() && Locator::creaturePhysiologySystem::has_value()
-			                        ? Locator::creaturePhysiologySystem::value().Eat(creature, *value)
-			                        : 0.0f;
-			const bool bringsUp = creature_object_actions::BringsMealBackUp(value.value_or(0.0f), meal.magicMushroom,
-			                                                                meal.foodPile, meal.poisoned);
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} eats a thing of sort {}: food {}, brought up {}",
-			                    entt::to_integral(creature), meal.sort.value_or(0), value.value_or(0.0f), bringsUp);
-			auto* tallies = registry.TryGet<CreatureTallies>(creature);
-			creature_meals::CountMeal(tallies != nullptr ? tallies->meals : registry.Assign<CreatureTallies>(creature).meals,
-			                          meal.sort, !bringsUp);
-			if (bringsUp)
-			{
-				RefuseMeal(creature, meal);
-			}
-			else
-			{
-				KeepMealDown(creature, energy);
-			}
+			registry.AssignOrReplace<HiddenByState>(*held);
+			action.eaten = *held;
 			break;
 		}
 		case Kind::TakeFromHand:

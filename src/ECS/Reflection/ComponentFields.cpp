@@ -967,6 +967,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureObjectAction::catchTurned>("catchTurned")
 	    .Field<&components::CreatureObjectAction::catchHeight>("catchHeight")
 	    .Field<&components::CreatureObjectAction::swallows>("swallows")
+	    .Field<&components::CreatureObjectAction::eaten>("eaten")
+	    .Field<&components::CreatureObjectAction::mealEnergy>("mealEnergy")
 	    .Field<&components::CreatureObjectAction::failure>("failure")
 	    .Field<&components::CreatureObjectAction::failureKind>("failureKind");
 	Reflect<components::CreatureDroppedObject>(context).Field<&components::CreatureDroppedObject::object>("object");
