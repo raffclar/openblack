@@ -158,6 +158,11 @@ void main()
 		float moving = ShadowMoving(u_shadowMoving, world);
 		light = min(light, moving >= 0.0f ? moving : 1.0f);
 	}
+	// From high up the shadows of the land are smaller than a pixel, and the maps do not cover the far view. The
+	// shadows and the shade of the land go away as the eye climbs from 12000 to 25000 units.
+	vec3 eyeAt = mul(u_invView, vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
+	float high = smoothstep(12000.0f, 25000.0f, eyeAt.y);
+	light = mix(light, 1.0f, high);
 	// The light of the sky and of the land in the shade (EXPERIMENT, not for merge): the sky's light where the hills,
 	// the things round the point and its folds do not hide it, and the light that the lit land sends back. Without it
 	// the shade is a fixed part of the light.
@@ -171,6 +176,7 @@ void main()
 			vec3 eye = mul(u_invView, vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
 			open *= Occlusion(uv, length(world - eye));
 		}
+		open = mix(open, 1.0f, high);
 		ambient = LightShadeTint(LightSkyAt(n) * open + LightBounceAt(world, n));
 	}
 	// The direct light's share of the scene's light is u_shadowParams.y; the rest is the shade's
