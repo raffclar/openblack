@@ -994,7 +994,7 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 			{
 				if (const auto* belief = mindState->beliefs.Find(casting->target); belief != nullptr)
 				{
-					from = Flat(belief->place);
+					from = map_coords::ToMetres(belief->place);
 				}
 			}
 			const float apart = gutils::GetDistanceInMetres(from, here);
