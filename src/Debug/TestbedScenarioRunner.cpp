@@ -856,6 +856,15 @@ void Runner::Start(const Scenario& scenario)
 			}
 		}
 	}
+	if (scenario.townOwner.has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			registry.Get<ecs::components::Town>(town->second).owner = *scenario.townOwner;
+		}
+	}
 	if (scenario.townFeelingAboutCreatures.has_value())
 	{
 		auto& registry = Locator::entitiesRegistry::value();
