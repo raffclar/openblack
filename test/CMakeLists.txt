@@ -1285,3 +1285,4 @@ openblack_setup_and_add_test(test_hand_throw_speed test_hand_throw_speed.cpp)
 openblack_setup_and_add_test(
   test_object_tint graphics/test_object_tint.cpp
 )
+openblack_setup_and_add_test(test_sing_along help/test_sing_along.cpp)

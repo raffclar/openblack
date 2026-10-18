@@ -272,6 +272,7 @@
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
 #include "Help/HelpProfile.h"
+#include "Help/SingAlong.h"
 #include "Help/Spirits.h"
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
@@ -2589,6 +2590,18 @@ bool Game::Update() noexcept
 		    .skipKey = !demoPlaying && keys != nullptr && keys[SDL_SCANCODE_KP_ENTER] != 0,
 		});
 		_dialogueClick = false;
+		// While a script plays a sung verse, the newest text's word that the song has reached gets the glow
+		if (_interface)
+		{
+			std::optional<int32_t> word;
+			if (_gameMusic && help::sing_along::IsSungVerse(static_cast<int32_t>(_gameMusic->GetScriptType())))
+			{
+				word = _gameMusic->GetMusicLyrics().word;
+			}
+			_interface->SetSingAlong(
+			    word, help::sing_along::StepMilliseconds(inTemple, static_cast<int32_t>(clock.GetFrameRealTime().count()),
+			                                             static_cast<int32_t>(clock.GetFrameGameTime().count())));
+		}
 	}
 	// The gestures' hints fade while the advisors' words were drawn, and while shown their dots run and their collars
 	// turn, by the game's time
