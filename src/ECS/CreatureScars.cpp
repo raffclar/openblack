@@ -124,17 +124,10 @@ void creature_scars::BurnOnCatching(entt::entity creature)
 	const glm::vec3 groin = posedGroin.value_or(standing != nullptr ? standing->position : glm::vec3(0.0f));
 	auto& random = Locator::gameRandom::value();
 	const float reach = ShownSize(*body) * creature_marks::scar::k_BurnReachPerSize;
-	const float half = reach * 0.5f;
-	const float eighth = reach * 0.125f;
-	const float quarter = eighth + eighth;
 	for (int32_t i = 0; i < creature_marks::scar::k_CatchingBurnTries; ++i)
 	{
-		// Each try's point is drawn across, then up, then along. The draw is added to the groin first, then the half
-		// range comes off.
-		glm::vec3 from;
-		from.x = (random.GameFloatRand(quarter) + groin.x) - eighth;
-		from.y = (random.GameFloatRand(reach) + groin.y) - half;
-		from.z = (random.GameFloatRand(quarter) + groin.z) - eighth;
+		const auto from =
+		    creature_marks::scar::BurnFrom(groin, reach, [&random](float limit) { return random.GameFloatRand(limit); });
 		const auto direction = groin - from;
 		// The squares add y, x, then z
 		if (!(x87::Dot<x87::SumOrder::Yxz>(direction, direction) > creature_marks::scar::k_LeastReachSquared))

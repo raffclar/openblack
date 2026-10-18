@@ -211,7 +211,7 @@ TEST(CreatureStomp, AKickBreaksABuildingWithTwoBlows)
 	    .creature = {0.0f, 10.0f, 0.0f},
 	    .foot = {0.0f, 14.0f, -8.0f},
 	    .direction = {0.0f, 0.6f, -0.8f},
-	    .yaw = 0.0f,
+	    .heading = openblack::GameHeading(0.0f),
 	    .creatureSize = 1.0f,
 	    .buildingRadius = 10.0f,
 	    .sideDraw = 10,

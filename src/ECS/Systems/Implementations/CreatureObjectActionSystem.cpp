@@ -31,6 +31,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
@@ -40,6 +41,7 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureOwner.h"
@@ -614,9 +616,13 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 	const auto lean =
 	    creature_object_actions::LeanOf(height(at + glm::vec2(radius, 0.0f)), height(at - glm::vec2(radius, 0.0f)),
 	                                    height(at + glm::vec2(0.0f, radius)), height(at - glm::vec2(0.0f, radius)), radius);
-	const auto ahead = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-	const auto velocity =
-	    creature_object_actions::KickVelocity(glm::normalize(glm::xz(ahead)), lean, transform.scale.x, ShownSize(body));
+	// Its heading, or the way its rotation faces when it does not walk
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
+	const auto ahead = glm::xz(transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
+	const auto heading = walk != nullptr ? walk->heading : GameHeading::Of(ahead.x, ahead.y);
+	const auto forward = walk != nullptr ? creature_locomotion::DirectionOf(heading) : glm::normalize(ahead);
+	const auto direction = creature_object_actions::KickDirection(forward, lean, transform.scale.x);
+	const auto velocity = (ShownSize(body) * creature_object_actions::k_KickSpeedPerSize) * direction;
 	const auto* points = PointsOf(body);
 	const auto foot = points != nullptr && points->rightFoot < animation.boneMatrices.size()
 	                      ? glm::vec3(creature::PosedBone(points->rightFoot, animation.boneMatrices, PlacementOf(transform))[3])
@@ -637,17 +643,21 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 		const creature_stomp::BuildingKick kick {
 		    .creature = transform.position,
 		    .foot = foot,
-		    .direction = glm::length(velocity) > 0.0f ? glm::normalize(velocity) : glm::vec3(0.0f),
-		    // The angle whose sine is the way ahead along x and whose minus cosine is the way ahead along z
-		    .yaw = std::atan2(ahead.x, -ahead.z),
+		    .direction = direction,
+		    .heading = heading,
 		    .creatureSize = ShownSize(body),
 		    .buildingRadius = object_measures::TwoDRadius(registry, target),
 		    .sideDraw = side,
 		    .firstHeightDraw = first,
 		    .secondHeightDraw = second,
 		};
-		const auto middle = transform.position + ((foot - transform.position) * 0.5f);
-		const auto blows = creature_stomp::KickBlows(kick, height({middle.x, middle.z}));
+		// The land height is taken at the middle point turned to a map position
+		const auto middle = creature_stomp::KickMiddle(transform.position, foot);
+		const float land = Locator::terrainSystem::has_value()
+		                       ? Locator::terrainSystem::value().GetAltitude(map_coords::FtoL(middle.x * 65536.0f * 0.1f),
+		                                                                     map_coords::FtoL(middle.z * 65536.0f * 0.1f))
+		                       : 0.0f;
+		const auto blows = creature_stomp::KickBlows(kick, land);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} kicks building {}", entt::to_integral(creature),
 		                    entt::to_integral(target));
 		Locator::buildingDamageSystem::value().CreatureBlows(target, creature, blows);

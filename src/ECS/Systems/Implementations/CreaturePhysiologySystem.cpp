@@ -209,6 +209,16 @@ glm::vec3 AheadOf(const Transform& transform)
 	ahead.y = 0.0f;
 	return glm::length(ahead) > 0.0f ? glm::normalize(ahead) : glm::vec3(0.0f, 0.0f, -1.0f);
 }
+/// The heading of the creature as the game keeps it. When it has no walk, the heading of where its rotation faces.
+GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature, const Transform& transform)
+{
+	if (const auto* walk = registry.TryGet<const CreatureLocomotion>(creature); walk != nullptr)
+	{
+		return walk->heading;
+	}
+	const auto ahead = AheadOf(transform);
+	return GameHeading::Of(ahead.x, ahead.z);
+}
 /// Where the creature's groin is as its body is posed this frame; its feet when its species' bones aren't known
 glm::vec3 GroinOf(const ecs::Registry& registry, entt::entity creature, const Creature& self, const Transform& transform)
 {
@@ -433,10 +443,10 @@ void CreaturePhysiologySystem::LetOutWind(entt::entity creature)
 	}
 	const float size = ShownSize(*self);
 	// A cloud of grey dust moves out behind the creature
-	const auto ahead = AheadOf(*transform);
+	const auto heading = HeadingOf(registry, creature, *transform);
 	auto& random = Locator::gameRandom::value();
-	const auto velocities = creature_fart::PuffVelocities(glm::vec2(ahead.x, ahead.z), size,
-	                                                      [&random](float limit) { return random.GameFloatRand(limit); });
+	const auto velocities =
+	    creature_fart::PuffVelocities(heading, size, [&random](float limit) { return random.GameFloatRand(limit); });
 	if (Locator::dynamicsSystem::has_value())
 	{
 		for (const auto& velocity : velocities)
@@ -536,9 +546,8 @@ void CreaturePhysiologySystem::DropPooLump(entt::entity creature)
 	{
 		return;
 	}
-	const auto ahead = AheadOf(*transform);
-	const auto lump =
-	    physiology::PooLumpOf(GroinOf(registry, creature, *self, *transform), glm::vec2(ahead.x, ahead.z), ShownSize(*self));
+	const auto lump = physiology::PooLumpOf(GroinOf(registry, creature, *self, *transform),
+	                                        HeadingOf(registry, creature, *transform), ShownSize(*self));
 	const auto yaw = Locator::gameRandom::value().GameFloatRand(2.0f * std::numbers::pi_v<float>);
 	const auto entity =
 	    ecs::archetypes::MobileObjectArchetype::Create(lump.position, MobileObjectInfo::LumpOfPoo, yaw, lump.scale);

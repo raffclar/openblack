@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureObjectBeliefs.h"
 
 using namespace openblack;
@@ -192,7 +193,8 @@ bool creature_look::IsRecent(uint32_t noticedTurn, uint32_t turn, float turnsPer
 std::optional<WhileGoingPoint> creature_look::LookWhileGoing(WhileGoing& state, const WhileGoingInfo& info,
                                                              const WhileGoingView& view)
 {
-	const auto distance = glm::distance(view.position, view.place);
+	// The table distance between the two map positions
+	const auto distance = gutils::GetDistanceInMetres(view.position, view.place);
 	if (distance <= k_WhileGoingLeast)
 	{
 		return std::nullopt;

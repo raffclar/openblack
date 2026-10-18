@@ -12,6 +12,7 @@
 
 #include <array>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <string_view>
 
@@ -345,12 +346,16 @@ TEST(CreaturePhysiology, EatingFillsItUpFattensAndBuildsPoo)
 TEST(CreaturePhysiology, ThePooLumpIsThrownBackAlongTheGroundFromTheGroin)
 {
 	// Facing +x, shown at size 2, its groin 3 m up
-	const auto lump = PooLumpOf(glm::vec3(10.0f, 3.0f, 20.0f), glm::vec2(1.0f, 0.0f), 2.0f);
+	const auto lump = PooLumpOf(glm::vec3(10.0f, 3.0f, 20.0f), openblack::GameHeading(std::numbers::pi_v<float> / 2.0f), 2.0f);
 	EXPECT_EQ(lump.position, glm::vec3(10.0f, 3.0f, 20.0f));
-	EXPECT_EQ(lump.velocity, glm::vec3(-5.0f, 0.0f, 0.0f));
+	EXPECT_FLOAT_EQ(lump.velocity.x, -5.0f);
+	EXPECT_FLOAT_EQ(lump.velocity.y, 0.0f);
+	EXPECT_NEAR(lump.velocity.z, 0.0f, 1e-5f);
 	EXPECT_FLOAT_EQ(lump.scale, 3.0f);
-	// Facing -z: thrown towards +z at the same speed, whatever its size
-	EXPECT_EQ(PooLumpOf(glm::vec3(0.0f), glm::vec2(0.0f, -1.0f), 0.5f).velocity, glm::vec3(0.0f, 0.0f, 5.0f));
+	// Facing -z (heading 0): thrown towards +z at the same speed, whatever its size
+	const auto small = PooLumpOf(glm::vec3(0.0f), openblack::GameHeading(0.0f), 0.5f).velocity;
+	EXPECT_NEAR(small.x, 0.0f, 1e-5f);
+	EXPECT_FLOAT_EQ(small.z, 5.0f);
 }
 
 TEST(CreaturePhysiology, ShrunkInItsPenItUsesUpEnergyAsTheSizeItIsShownAt)

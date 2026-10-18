@@ -123,7 +123,7 @@ glm::vec2 creature_object_actions::LeanOf(float plusX, float minusX, float plusZ
 	return {lean(plusX, minusX), lean(plusZ, minusZ)};
 }
 
-glm::vec3 creature_object_actions::KickVelocity(glm::vec2 forward, glm::vec2 lean, float scale, float size)
+glm::vec3 creature_object_actions::KickDirection(glm::vec2 forward, glm::vec2 lean, float scale)
 {
 	// The game takes the creature's up row less its back row, from its turn, its lean and its scale. The forward way is
 	// (sine, -cosine) of the turn.
@@ -137,7 +137,12 @@ glm::vec3 creature_object_actions::KickVelocity(glm::vec2 forward, glm::vec2 lea
 	{
 		unit *= 1.0f / std::sqrt(squares);
 	}
-	return (size * k_KickSpeedPerSize) * unit;
+	return unit;
+}
+
+glm::vec3 creature_object_actions::KickVelocity(glm::vec2 forward, glm::vec2 lean, float scale, float size)
+{
+	return (size * k_KickSpeedPerSize) * KickDirection(forward, lean, scale);
 }
 
 bool creature_object_actions::ThrowOver(bool animationOver, bool waitsForLanding, bool thrownFlying)

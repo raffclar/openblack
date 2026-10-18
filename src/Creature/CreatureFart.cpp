@@ -9,6 +9,10 @@
 
 #include "CreatureFart.h"
 
+#include <numbers>
+
+#include "Common/X87.h"
+
 using namespace openblack;
 
 bool creature_fart::PlaysSquatLoop(const creature_layers::BodyAction& body)
@@ -29,19 +33,21 @@ bool creature_fart::CountTurn(uint32_t& turns)
 	return true;
 }
 
-std::array<glm::vec3, creature_fart::k_Puffs> creature_fart::PuffVelocities(glm::vec2 ahead, float shownSize,
+std::array<glm::vec3, creature_fart::k_Puffs> creature_fart::PuffVelocities(GameHeading heading, float shownSize,
                                                                             const FloatRandom& random)
 {
 	const float spread = shownSize * k_CloudSpeed;
+	// The back way is the heading plus a half turn. The FPU's wide sine and cosine go into the products
+	const float back = heading.Radians() + std::numbers::pi_v<float>;
+	const glm::vec2 move {x87::Mul(x87::Sin(back), spread), -x87::Mul(x87::Cos(back), spread)};
 	const float half = spread * 0.5f;
-	const glm::vec2 back = -ahead * spread;
 	std::array<glm::vec3, k_Puffs> velocities {};
 	for (auto& velocity : velocities)
 	{
 		const float z = random(spread) - half;
 		const float y = random(spread) - half;
 		const float x = random(spread) - half;
-		velocity = glm::vec3(x + back.x, y, z + back.y);
+		velocity = glm::vec3(x + move.x, y, z + move.y);
 	}
 	return velocities;
 }

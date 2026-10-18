@@ -807,8 +807,8 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 		// The ground below the point. A creature that moves within a few metres of the point does not look at it.
 		const glm::vec2 flat {gaze.point->x, gaze.point->z};
 		const auto* self = registry.TryGet<const Transform>(creature);
-		if (self == nullptr ||
-		    (moving && glm::distance(glm::vec2(self->position.x, self->position.z), flat) < k_NoLookWhileMovingWithin))
+		if (self == nullptr || (moving && gutils::GetDistanceInMetres(glm::vec2(self->position.x, self->position.z), flat) <
+		                                      k_NoLookWhileMovingWithin))
 		{
 			return std::nullopt;
 		}
@@ -825,8 +825,8 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 	const auto* self = registry.TryGet<const Transform>(creature);
 	const auto* held = registry.TryGet<const HeldByCreature>(thing);
 	if (!at.has_value() || self == nullptr || (held != nullptr && held->creature == creature) ||
-	    (moving &&
-	     glm::distance(glm::vec2(self->position.x, self->position.z), glm::vec2(at->x, at->z)) < k_NoLookWhileMovingWithin))
+	    (moving && gutils::GetDistanceInMetres(glm::vec2(self->position.x, self->position.z), glm::vec2(at->x, at->z)) <
+	                   k_NoLookWhileMovingWithin))
 	{
 		return std::nullopt;
 	}
@@ -978,7 +978,8 @@ std::optional<creature_mind::Senses::FollowedView> FollowedViewOf(const ecs::Reg
 		return std::nullopt;
 	}
 	const auto at = glm::xz(registry.Get<const Transform>(villager).position);
-	creature_mind::Senses::FollowedView view {.distance = glm::distance(at, glm::xz(from))};
+	// The table distance between the two map positions
+	creature_mind::Senses::FollowedView view {.distance = gutils::GetDistanceInMetres(at, glm::xz(from))};
 	// Interesting while its state now teaches a skill the creature does not know
 	const auto* action = registry.TryGet<const LivingAction>(villager);
 	if (action != nullptr && mind.learnt.has_value() && Locator::infoConstants::has_value())
@@ -1554,13 +1555,15 @@ void CountCompleted(entt::entity creature, CreatureMindState& mind, const creatu
 	Satisfied(creature, *mind.desires, tables->actions[mind.planner.current->action].name);
 }
 
-/// The town nearest a point along the ground, of any player or none
+/// The town nearest a point along the ground, of any player or none. The distance is the table distance between map
+/// positions
 entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point)
 {
 	entt::entity nearest = entt::null;
 	auto best = std::numeric_limits<float>::max();
 	registry.Each<const Town, const Transform>([&](entt::entity entity, const Town&, const Transform& at) {
-		const float distance = glm::distance(glm::vec2(at.position.x, at.position.z), glm::vec2(point.x, point.z));
+		// The table distance between the two map positions
+		const float distance = gutils::GetDistanceInMetres(point, at.position);
 		if (distance < best)
 		{
 			best = distance;

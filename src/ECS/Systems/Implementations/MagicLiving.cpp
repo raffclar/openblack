@@ -22,6 +22,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureRig.h"
@@ -281,7 +282,9 @@ void ChangeOpinion(entt::entity entity, const magic::EffectValues& values, const
 void Scar(entt::entity entity, glm::vec3 from, glm::vec3 groin, uint8_t kind, float harm)
 {
 	const auto direction = groin - from;
-	if (!(glm::dot(direction, direction) > creature_marks::scar::k_LeastReachSquared) || !Locator::gameRandom::has_value())
+	// The squares add z, y, then x
+	if (!(x87::Dot<x87::SumOrder::Zyx>(direction, direction) > creature_marks::scar::k_LeastReachSquared) ||
+	    !Locator::gameRandom::has_value())
 	{
 		return;
 	}
@@ -335,10 +338,8 @@ void CutAndScarred(entt::entity entity, float damage, const magic::EffectValues&
 	{
 		return;
 	}
-	auto from = groin;
-	from.x += random.GameFloatRand(reach * 0.25f) - reach * 0.125f;
-	from.y += random.GameFloatRand(reach) - reach * 0.5f;
-	from.z += random.GameFloatRand(reach * 0.25f) - reach * 0.125f;
+	const auto from =
+	    creature_marks::scar::BurnFrom(groin, reach, [&random](float limit) { return random.GameFloatRand(limit); });
 	Scar(entity, from, groin, kind, harm);
 }
 } // namespace
