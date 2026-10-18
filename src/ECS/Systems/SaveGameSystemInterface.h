@@ -101,6 +101,11 @@ public:
 	[[nodiscard]] virtual bool AnyPictureWaiting() const = 0;
 	/// Takes the pictures of the screen that are back, and writes the picture files with them
 	virtual void CollectPictures(const Screens& screens) = 0;
+	/// Shows the box of a save or a load at once, as a frame of its own: whether it loads, and whether it makes the
+	/// screen darker
+	using ShowBox = std::function<void(bool loading, bool darken)>;
+	/// The game gives the function that shows the box. Each save and each load shows the box before it starts.
+	virtual void SetShowBox(ShowBox /*show*/) {}
 };
 
 } // namespace openblack::ecs::systems

@@ -53,8 +53,12 @@ public:
 	void NewLand() override;
 	[[nodiscard]] bool AnyPictureWaiting() const override;
 	void CollectPictures(const Screens& screens) override;
+	void SetShowBox(ShowBox show) override { _showBox = std::move(show); }
 
 private:
+	/// Shows the box of a save or a load for a slot, when the game gave the function
+	void ShowSaveBox(uint32_t slot, bool loading) const;
+	ShowBox _showBox;
 	/// The world file in the game's layout that the creatures of the open land came from, as the file had it
 	struct VanillaOrigin
 	{

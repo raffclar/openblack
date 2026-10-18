@@ -1418,3 +1418,4 @@ openblack_setup_and_add_test(test_creature_load_after_draws test_creature_load_a
 openblack_setup_and_add_test(test_particle_save test_particle_save.cpp)
 target_link_libraries(test_particle_save PRIVATE psys)
 target_link_libraries(test_saved_system_state PRIVATE psys)
+openblack_setup_and_add_test(test_saving_box test_saving_box.cpp)

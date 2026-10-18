@@ -634,6 +634,10 @@ Game::~Game() noexcept
 	{
 		Locator::miracleFxSystem::value().SetInterface(nullptr);
 	}
+	if (Locator::saveGameSystem::has_value())
+	{
+		Locator::saveGameSystem::value().SetShowBox({});
+	}
 	_interface.reset();
 	_loadingScreen.reset();
 	// What the scripts asked of openblack that it can't do yet, for the natives to write next
@@ -3954,6 +3958,12 @@ bool Game::Initialize() noexcept
 		}
 		else
 		{
+			// Each save and each load shows its box first
+			if (Locator::saveGameSystem::has_value())
+			{
+				Locator::saveGameSystem::value().SetShowBox(
+				    [this](bool loading, bool darken) { ShowSavingBox(loading, darken); });
+			}
 			// The Game Statistics box takes the players' figures as it opens
 			_interface->GetMenu().SetStatisticsSource([] {
 				const auto local = Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer()
@@ -4337,6 +4347,25 @@ void Game::StartFightTools()
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The fight autopilot cannot start: {}", error);
 	}
+}
+
+void Game::ShowSavingBox(bool loading, bool darken)
+{
+	// A run that draws no frame shows no box
+	if (!_interface || !Locator::windowing::has_value() ||
+	    !sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount))
+	{
+		return;
+	}
+	_interface->DrawSavingBox(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), loading, darken);
+	// A picture asked for this frame shows the box, as the screen does
+	if (_requestScreenshot.has_value() && _requestScreenshot->first == _frameCount)
+	{
+		Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
+		_requestScreenshot.reset();
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The {} box shows at frame {}", loading ? "loading" : "saving", _frameCount);
+	Locator::rendererInterface::value().Frame();
 }
 
 bool Game::Run() noexcept
