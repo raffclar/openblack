@@ -41,6 +41,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -391,6 +392,19 @@ TEST_F(Reactions, AVillagerTooWeakToWalkTakesUpNoMiracle)
 	registry.Get<Villager>(_villagers[1]).life = 0.2f;
 	_reactions.Create(Miracle());
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::LookingAtObjectReaction);
+}
+
+TEST_F(Reactions, AVillagerCountedAtWorshipTakesUpNoMiracle)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The one right by the miracle is counted at worship; the next is only on its way to the site
+	registry.Assign<Worshipper>(_villagers[0], Worshipper {.atWorship = true});
+	registry.Assign<Worshipper>(_villagers[1], Worshipper {.onTheWay = true});
+	_reactions.Create(Miracle());
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	const auto* held = registry.TryGet<const LivingReaction>(_villagers[0]);
+	EXPECT_TRUE(held == nullptr || held->reaction == 0u);
 	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::LookingAtObjectReaction);
 }
 
@@ -1535,6 +1549,40 @@ TEST_F(Reactions, VillagersDanceRoundANewBuildingUnimpressedAndGoBackWhenItsReac
 		EXPECT_FALSE(registry.AllOf<Dancer>(villager));
 		EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
 	}
+	ASSERT_EQ(dances.ended.size(), 1u);
+	EXPECT_EQ(dances.ended.front(), dance);
+	Locator::reactionSystem::reset();
+	Locator::danceSystem::reset();
+}
+
+TEST_F(Reactions, ATownCelebratingWithoutACentreMakesOneEmptyDanceAndItsPeopleLook)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::danceSystem::emplace<OneGroupDances>();
+	auto& dances = static_cast<OneGroupDances&>(Locator::danceSystem::value());
+	_info->reaction.at(static_cast<size_t>(Reaction::ReactToTownCelebration)) =
+	    _info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell));
+	Locator::infoConstants::emplace(*_info);
+	registry.Assign<Transform>(_town, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	auto source = Miracle(Reaction::ReactToTownCelebration);
+	source.initiator = _town;
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	const auto id = reactions.Create(source);
+	// One dance about the town is made for the reaction, the dance about a person, with no owner
+	ASSERT_EQ(dances.made.size(), 1u);
+	EXPECT_EQ(dances.made.front(), DanceInfo::DanceAroundPerson);
+	const auto dance = reactions.Find(id)->dance;
+	ASSERT_TRUE(dance != entt::null);
+	EXPECT_TRUE(registry.Get<const Dance>(dance).owner == entt::null);
+	// The town's people in reach look at the town and do not join the dance
+	for (const auto villager : {_villagers[0], _villagers[1]})
+	{
+		EXPECT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+		EXPECT_FALSE(registry.AllOf<Dancer>(villager));
+	}
+	// The dance goes with the reaction
+	reactions.Remove(id);
 	ASSERT_EQ(dances.ended.size(), 1u);
 	EXPECT_EQ(dances.ended.front(), dance);
 	Locator::reactionSystem::reset();

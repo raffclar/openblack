@@ -230,3 +230,28 @@ TEST(VillagerRoutine, ARoamingSpotIsDrawnDistanceFirst)
 	EXPECT_FLOAT_EQ(random.limits[1], k_TwoPi);
 	EXPECT_NEAR(glm::distance(spot, from), k_TentRetryLeast, k_GridLeeway);
 }
+
+TEST(VillagerRoutine, ASittingVillagerGathersInAnEmergencyBeforeANeedOrAThought)
+{
+	int needChecks = 0;
+	FakeInts none;
+	EXPECT_EQ(ChillOutTimeUp(true, [&needChecks] { return ++needChecks > 0; }, none.Random()), ChillOut::GatherForEmergency);
+	EXPECT_EQ(needChecks, 0);
+	EXPECT_TRUE(none.limits.empty());
+}
+
+TEST(VillagerRoutine, ASittingVillagerAnswersANeedWithoutAThought)
+{
+	FakeInts none;
+	EXPECT_EQ(ChillOutTimeUp(false, [] { return true; }, none.Random()), ChillOut::Needed);
+	EXPECT_TRUE(none.limits.empty());
+}
+
+TEST(VillagerRoutine, ASittingVillagerThinksAgainOneTimeInTenElseSitsOn)
+{
+	FakeInts rethink {.answers = {0}};
+	EXPECT_EQ(ChillOutTimeUp(false, [] { return false; }, rethink.Random()), ChillOut::ThinkAgain);
+	EXPECT_EQ(rethink.limits, std::vector<uint32_t>({10}));
+	FakeInts sit {.answers = {9}};
+	EXPECT_EQ(ChillOutTimeUp(false, [] { return false; }, sit.Random()), ChillOut::SitOn);
+}
