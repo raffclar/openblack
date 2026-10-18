@@ -19,12 +19,8 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureHandGlow.h"
 #include "Creature/CreatureKiss.h"
-
-namespace openblack::creature_hand_glow
-{
-enum class Place : uint8_t;
-}
 
 namespace openblack::ecs::systems
 {
@@ -74,6 +70,10 @@ public:
 	/// A script gives a creature a creed power: a glow of a scale and a power at a place on its body, a power of 0 to
 	/// remove the glow. The creature hums while its glows have power (see creature_hand_glow::SetCreedPower).
 	virtual void SetCreedPower(entt::entity creature, creature_hand_glow::Place place, float scale, float power) = 0;
+	/// A saved game gives a loaded creature its creed powers, one for each place (see
+	/// creature_hand_glow::LoadCreedPowers). The creature hums while its glows have power.
+	virtual void LoadCreedPowers(entt::entity creature,
+	                             std::span<const creature_hand_glow::SavedPower, creature_hand_glow::k_PlaceCount> powers) = 0;
 	/// An animation event of a creature sets a creed glow, if the event is one that sets a glow. The hum does not
 	/// change.
 	virtual void PlayCreedEvent(entt::entity creature, int32_t event) = 0;

@@ -92,6 +92,33 @@ creature_hand_glow::Hum creature_hand_glow::SetCreedPower(Glows& glows, Place pl
 	return after ? Hum::Start : Hum::Stop;
 }
 
+creature_hand_glow::SavedPower creature_hand_glow::SavedPowerOf(const Glows& glows, Place place)
+{
+	const auto& glow = glows.at(static_cast<size_t>(place));
+	if (!glow.has_value())
+	{
+		return {};
+	}
+	return {.scale = glow->scale, .power = glow->power};
+}
+
+creature_hand_glow::Hum creature_hand_glow::LoadCreedPowers(Glows& glows, std::span<const SavedPower, k_PlaceCount> powers)
+{
+	const bool before = AnyActive(glows);
+	// The loaded creature is new, so it has no glows before it gets the saved powers
+	glows = {};
+	for (size_t place = 0; place < k_PlaceCount; ++place)
+	{
+		Set(glows, static_cast<Place>(place), powers[place].scale, powers[place].power);
+	}
+	const bool after = AnyActive(glows);
+	if (before == after)
+	{
+		return Hum::Unchanged;
+	}
+	return after ? Hum::Start : Hum::Stop;
+}
+
 std::optional<creature_hand_glow::CreedEvent> creature_hand_glow::CreedEventOf(int32_t event)
 {
 	if (event < k_FirstCreedEvent || event > k_LastCreedEvent)
