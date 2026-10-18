@@ -480,12 +480,14 @@ TEST_F(StormRulesTest, AStormAScriptEndsIsLaidAgainAtTheNextStep)
 	EXPECT_FLOAT_EQ(world.storms.back().fadeInSeconds, world.storms.front().fadeInSeconds);
 }
 
-TEST_F(StormRulesTest, CastLookingStraightDownTheStormBringsNoWind)
+TEST_F(StormRulesTest, CastLookingStraightDownTheStormHeadsAlongX)
 {
+	// The effect keeps a heading that is almost straight down as one along x, so the storm goes that way at its top
+	// speed
 	auto effect = Make(40.0f, {0.0f, -1.0f, 0.0f});
 	Run(*effect, 1.0f);
 	ASSERT_EQ(world.storms.size(), 1u);
-	EXPECT_EQ(world.storms.front().windX, 0);
+	EXPECT_EQ(world.storms.front().windX, 55);
 	EXPECT_EQ(world.storms.front().windZ, 0);
 }
 

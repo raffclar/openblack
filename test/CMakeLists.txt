@@ -1190,6 +1190,9 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_oracle_lightning_spell_order oracle/test_oracle_lightning_spell_order.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_sway_ribbon oracle/test_oracle_sway_ribbon.cpp
+)
 # The data folder is found at run time (see oracle/OracleData.h), never compiled into an object: ctest sets the
 # environment variable for each test, and the file in the build folder serves a program started by hand from there
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
@@ -1210,6 +1213,7 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_glm_order_7
                      test_oracle_held_frame_heading
                      test_oracle_lightning_spell_order
+                     test_oracle_sway_ribbon
 )
   set_tests_properties(
     ${oracle_test}
@@ -1265,3 +1269,4 @@ openblack_setup_and_add_test(
   test_held_frame_heading test_held_frame_heading.cpp
 )
 openblack_setup_and_add_test(test_lightning_spell_order test_lightning_spell_order.cpp)
+target_link_libraries(test_oracle_sway_ribbon PRIVATE psys)

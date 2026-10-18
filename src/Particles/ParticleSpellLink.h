@@ -9,10 +9,15 @@
 
 #pragma once
 
+#include <cstdint>
+
+#include <bit>
 #include <optional>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
+
+#include "Common/X87Vector.h"
 
 /// What a miracle and its particle effect tell each other: what the miracle gives the effect each step, the events the
 /// effect's rules send back (a particle landing, striking a target), and how far the miracle was powered up. The
@@ -108,5 +113,34 @@ public:
 	/// The radius its effect reaches, from its tables
 	[[nodiscard]] virtual float EffectRadius() const { return 5.0f; }
 };
+
+/// When the heading that an effect gets is shorter than the square root of this across the land, the effect points
+/// along x
+inline constexpr float k_LeastHeadingSquared = std::bit_cast<float>(0x38D1B717u);
+
+/// The heading that an effect keeps from what its miracle gives it each step: the part across the land only, not made
+/// one long. A heading that is almost straight up or down points along x.
+[[nodiscard]] constexpr glm::vec3 FlatHeading(glm::vec3 heading)
+{
+	heading.y = 0.0f;
+	if ((heading.z * heading.z) + (heading.x * heading.x) < k_LeastHeadingSquared)
+	{
+		heading.x = 1.0f;
+	}
+	return heading;
+}
+
+/// The heading from a creature's hands to the point that it casts at, made one long. The squares are added from z to
+/// x, and each part is multiplied by one over the length. When the two points are the same, the heading is zero.
+[[nodiscard]] inline glm::vec3 CastHeading(const glm::vec3& hands, const glm::vec3& target)
+{
+	const glm::vec3 way = target - hands;
+	if (way.x == 0.0f && way.y == 0.0f && way.z == 0.0f)
+	{
+		return way;
+	}
+	const float inverse = 1.0f / x87::LengthZyx(way);
+	return way * inverse;
+}
 
 } // namespace openblack::particles
