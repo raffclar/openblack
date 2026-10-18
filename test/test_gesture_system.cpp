@@ -141,3 +141,50 @@ TEST(GestureSystem, ANewLandKeepsThePathUntilTheCameraMoves)
 	drawn({300.0f, 80.0f, 900.0f}, 1);
 	EXPECT_LE(system.GetPath().Count(), 1u);
 }
+
+TEST(GestureSystem, ACameraThatLetsTheHandDrawKeepsThePathAsItMoves)
+{
+	GestureSystem system;
+	int step = 0;
+	const auto drawn = [&system, &step](glm::vec3 eye, bool letsDraw, int samples) {
+		for (int i = 0; i < samples; ++i, ++step)
+		{
+			auto frame = Frame(gesture::k_SampleSeconds);
+			frame.cursor = {100.0f + static_cast<float>(step * 20), 100.0f};
+			frame.view.cameraEye = eye;
+			frame.cameraLetsHandDraw = letsDraw;
+			system.Update(frame);
+		}
+	};
+	drawn({0.0f, 50.0f, 0.0f}, true, 3);
+	// The fight view or the creature's camera moves each frame: the path goes on
+	drawn({1.0f, 50.0f, 0.0f}, true, 1);
+	drawn({2.0f, 50.0f, 0.0f}, true, 1);
+	EXPECT_EQ(system.GetPath().Count(), 5u);
+	// Another camera that moves wipes it
+	drawn({3.0f, 50.0f, 0.0f}, false, 1);
+	EXPECT_EQ(system.GetPath().Count(), 1u);
+}
+
+TEST(GestureSystem, TheMoveButtonHeldInAFightWipesThePath)
+{
+	GestureSystem system;
+	int step = 0;
+	const auto drawn = [&system, &step](bool moveHeld, int samples) {
+		for (int i = 0; i < samples; ++i, ++step)
+		{
+			auto frame = Frame(gesture::k_SampleSeconds);
+			frame.cursor = {100.0f + static_cast<float>(step * 20), 100.0f};
+			frame.moveHeldInFight = moveHeld;
+			system.Update(frame);
+		}
+	};
+	drawn(false, 4);
+	EXPECT_EQ(system.GetPath().Count(), 4u);
+	// Held, the path is gone and nothing is added
+	drawn(true, 3);
+	EXPECT_TRUE(system.GetPath().Empty());
+	// Let go, a new path starts
+	drawn(false, 2);
+	EXPECT_EQ(system.GetPath().Count(), 2u);
+}

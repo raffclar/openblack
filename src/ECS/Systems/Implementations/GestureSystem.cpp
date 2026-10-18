@@ -306,13 +306,20 @@ void GestureSystem::Update(const Frame& frame)
 	_gesturing =
 	    seed.has_value() && ((seed->ready && !seed->cast && seed->canPowerUp) || seed->sizingGesture == GestureType::Circle);
 
-	// Moving the camera wipes the path being drawn, though not while the camera shakes. Only the camera of a creature
-	// fight in an arena, or one following a thing, would let the player draw on while it moves, and neither exists yet
+	// Moving the camera wipes the path being drawn, though not while the camera shakes. The fight view that shows a
+	// fight in its arena, and the camera that follows the creature, let the player draw on while they move.
 	const bool cameraMoved = _lastCameraEye.has_value() && *_lastCameraEye != frame.view.cameraEye;
 	_lastCameraEye = frame.view.cameraEye;
-	if (cameraMoved && !frame.cameraShaking)
+	if (cameraMoved && !frame.cameraShaking && !frame.cameraLetsHandDraw)
 	{
 		_recorder.Reset();
+	}
+
+	// While the hand directs the fight, the held Move button wipes the path, and no gesture is recognised
+	if (frame.moveHeldInFight)
+	{
+		ForgetPath();
+		return;
 	}
 
 	// The hand's path is only drawn over the world; a path drawn for the testbed goes on regardless

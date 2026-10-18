@@ -2132,15 +2132,21 @@ bool CreatureFightSystem::IsKnockedOut(entt::entity creature) const
 	return registry.Valid(creature) && registry.AllOf<CreatureKnockedOut>(creature);
 }
 
+bool CreatureFightSystem::IsCameraOnFightInArena() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	return _view.has_value() && !_view->lingerSeconds.has_value() && registry.Valid(_view->first) &&
+	       registry.Valid(_view->second);
+}
+
 std::optional<creature_fight_hud::Values> CreatureFightSystem::GetPanel() const
 {
 	// Shown while the camera watches a fight, the creature that made the arena first
-	const auto& registry = Locator::entitiesRegistry::value();
-	if (!_view.has_value() || _view->lingerSeconds.has_value() || !registry.Valid(_view->first) ||
-	    !registry.Valid(_view->second))
+	if (!IsCameraOnFightInArena())
 	{
 		return std::nullopt;
 	}
+	const auto& registry = Locator::entitiesRegistry::value();
 	const auto shown = std::optional(_view->first);
 	const auto opponent = _view->second;
 	creature_fight_hud::Values values;
