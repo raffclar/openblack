@@ -9,10 +9,12 @@
 
 #include "ShortcutKeys.h"
 
+#include <algorithm>
 #include <chrono>
 #include <optional>
 #include <stdexcept>
 
+#include <SDL_mouse.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
@@ -35,6 +37,7 @@
 #include "GameActionMapInterface.h"
 #include "Gui/VillagerLabels.h"
 #include "Help/HelpProfile.h"
+#include "Help/HelpQuery.h"
 #include "Locator.h"
 
 namespace openblack::input
@@ -106,6 +109,33 @@ void ToggleVillagerLabels(bool names, bool details)
 	}
 	context.villagerDetailsShown = !context.villagerDetailsShown;
 }
+/// Whether the press of an action came from the mouse: its mouse button is down, or the wheel turns the way it has
+bool PressedByMouse(const GameActionInterface& actions, BindableActionMap action)
+{
+	const auto bindings = actions.GetKeyBindings();
+	const auto binding = std::ranges::find(bindings, action, &KeyBinding::action);
+	if (binding == bindings.end())
+	{
+		return false;
+	}
+	const uint32_t buttons = actions.GetPointerButtons();
+	switch (binding->mouse)
+	{
+	case MouseInput::LeftButton:
+		return (buttons & SDL_BUTTON_LMASK) != 0;
+	case MouseInput::MiddleButton:
+		return (buttons & SDL_BUTTON_MMASK) != 0;
+	case MouseInput::RightButton:
+		return (buttons & SDL_BUTTON_RMASK) != 0;
+	case MouseInput::WheelUp:
+		return actions.GetMouseWheelDelta() > 0.0f;
+	case MouseInput::WheelDown:
+		return actions.GetMouseWheelDelta() < 0.0f;
+	case MouseInput::None:
+		break;
+	}
+	return false;
+}
 } // namespace
 
 void ShortcutKeys::Update()
@@ -132,7 +162,9 @@ void ShortcutKeys::Update()
 	// to the leash work, which read them themselves.
 
 	// The Help key asks the advisors about what is in the hand or under it
-	if (pressed(BindableActionMap::HELP) && Locator::helpMessageSystem::has_value())
+	if (pressed(BindableActionMap::HELP) && Locator::helpMessageSystem::has_value() &&
+	    help_query::HelpPressAsks(Locator::temple::has_value() && Locator::temple::value().Active(),
+	                              PressedByMouse(actions, BindableActionMap::HELP)))
 	{
 		Locator::helpMessageSystem::value().HelpQuery();
 	}

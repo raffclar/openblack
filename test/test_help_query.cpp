@@ -172,3 +172,11 @@ TEST(HelpQuery, LeashTextsAreTheirToolTips)
 	ASSERT_TRUE(std::holds_alternative<SayTexts>(answer));
 	EXPECT_EQ(std::get<SayTexts>(answer).texts.first, 0xECAu);
 }
+
+TEST(HelpQuery, InsideTheTempleOnlyAMousePressOfTheHelpKeyAsks)
+{
+	EXPECT_TRUE(help_query::HelpPressAsks(false, false));
+	EXPECT_TRUE(help_query::HelpPressAsks(false, true));
+	EXPECT_FALSE(help_query::HelpPressAsks(true, false));
+	EXPECT_TRUE(help_query::HelpPressAsks(true, true));
+}
