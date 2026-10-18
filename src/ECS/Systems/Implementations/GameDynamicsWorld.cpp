@@ -200,7 +200,8 @@ std::optional<audio::AnimEffectPlay> GameDynamicsWorld::PlayCollisionSound(std::
 		return std::nullopt;
 	}
 	auto& audio = Locator::audio::value();
-	const auto played = audio.PlayAnimEffect(std::string(k_CollisionBank), keys, owner, position);
+	const auto played =
+	    audio.PlayAnimEffect(std::string(k_CollisionBank), keys, owner, position, audio::CurrentSoundEffectConditions());
 	if (follows)
 	{
 		audio.SetEmitterFollows(played.emitter, audio::Follows::Owner);

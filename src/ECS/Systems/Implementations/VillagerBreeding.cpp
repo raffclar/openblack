@@ -329,7 +329,8 @@ void PlayCrecheSound(entt::entity creche)
 	if (Locator::audio::has_value())
 	{
 		Locator::audio::value().PlayAnimEffect(std::string(k_CrecheSoundBank), k_CrecheSound.ToArray(), creche,
-		                                       Entities().Get<const Transform>(creche).position);
+		                                       Entities().Get<const Transform>(creche).position,
+		                                       audio::CurrentSoundEffectConditions());
 	}
 }
 

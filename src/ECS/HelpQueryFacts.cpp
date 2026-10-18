@@ -17,15 +17,18 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Creature/CreatureAudio.h"
+#include "Creature/TempleLeashes.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
@@ -33,6 +36,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -139,6 +143,19 @@ Texts KindTexts(entt::entity thing)
 	{
 		constexpr size_t k_FireflyRow = 2;
 		return TextsOfRow(info.singleMapFixed.at(k_FireflyRow));
+	}
+	if (const auto* fireball = registry.TryGet<const MagicFireBall>(thing))
+	{
+		return RowTexts(info.magicFireBall, fireball->infoRow).value_or(k_None);
+	}
+	// A village centre's stone hand and a worship site's icon each have their row of the icons' table
+	if (registry.AllOf<TownCentreIcon>(thing))
+	{
+		return RowTexts(info.spellIcon, SpellIconInfo::TownCentre).value_or(k_None);
+	}
+	if (registry.AllOf<WorshipIcon>(thing))
+	{
+		return RowTexts(info.spellIcon, SpellIconInfo::Basic).value_or(k_None);
 	}
 	return k_None;
 }
@@ -257,6 +274,10 @@ Texts ecs::help_query_facts::TextsOf(entt::entity thing)
 			return TextsOfRow(magic::GetMagicEffectInfo(info, spell->magicType));
 		}
 		return k_None;
+	}
+	if (const auto* post = registry.TryGet<const LeashPost>(thing))
+	{
+		return help_query::LeashTexts(temple_leashes::ToolTipOf(post->type));
 	}
 	if (registry.AllOf<TempleEntrance>(thing))
 	{

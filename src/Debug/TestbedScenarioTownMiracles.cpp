@@ -103,4 +103,45 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
+	// The Help key on the things of a temple and a town that have their own texts
+	using Kind = Command::Kind;
+	all.push_back({
+	    .id = "advisors.help_key_leashes_and_hands",
+	    .name = "The Help key on the temple's leashes and a village centre's stone hands",
+	    .facet = Facet::Advisors,
+	    .description = "The town and temple of town.miracle_debug_given, its centre with the heal and water stone "
+	                   "hands. The player's tiger is taught the three leashes, which then hang in a row in front of the "
+	                   "camera. Put the hand over each leash and over a stone hand, and press F1.",
+	    .expected = "Over each leash the advisors say its name in the dialogue box, as its tooltip says it: Leash Of "
+	                "Aggression, Leash Of Learning, Leash Of Compassion. Over a stone hand they say the stone hand's own "
+	                "text. Over the temple they say the temple's text.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {6.0f, 8.0f, 0.0f}, .look = {6.0f, 4.0f, 30.0f}},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = {-30.0f, 10.0f}}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 0.5f, .leash = LeashType::Rope},
+	                 {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 0.5f, .leash = LeashType::Evil},
+	                 {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 0.5f, .leash = LeashType::Good},
+	                 {.kind = Kind::TakeOffLeash, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::HangLeashPosts, .creature = 0, .delaySeconds = 0.5f, .point = glm::vec2 {12.0f, 18.0f}}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "hand.tooltips_stone_hands",
+	    .name = "The hand over a village centre's stone hands",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given, its centre with the heal and water stone hands, "
+	                   "seen from near the centre. Put the hand over each stone hand.",
+	    .expected = "Over each stone hand the tooltip names the hand's miracle at once, in the words of the miracle's "
+	                "tooltip, with no mouse button drawn. Over the centre itself it shows the belief and the "
+	                "population as before.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {-25.0f, 8.0f, 25.0f}, .look = {-10.0f, 3.0f, 37.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
 }

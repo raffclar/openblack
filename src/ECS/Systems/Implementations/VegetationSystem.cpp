@@ -24,6 +24,7 @@
 
 #include "3D/L3DMesh.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/CreatureLocomotion.h"
@@ -160,6 +161,13 @@ void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
 	const auto camera = Locator::camera::value().GetOrigin();
 	const auto idleChance = TreeRustle::IdleChance(gameTime);
 	const auto bank = std::string(TreeRustle::k_Bank);
+	// The temple hides the land, so the game draws no tree there and no tree rustles. Elsewhere a rustle plays only as
+	// its sample allows, as the scripts' sound effects do.
+	const auto conditions = audio::CurrentSoundEffectConditions();
+	if (conditions.insideTemple)
+	{
+		return;
+	}
 
 	// The trees share a few meshes, whose heights are looked up once each
 	std::unordered_map<entt::id_type, float> meshHeights;
@@ -188,14 +196,15 @@ void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
 		if (const auto bend = GetBend(transform.position, height))
 		{
 			// The bend's sound measures its distance from the camera with the squares in another order than the idle's
-			audio.PlayAnimEffect(bank, TreeRustle::BendKeys(bend->amount).ToArray(), entity, transform.position,
+			audio.PlayAnimEffect(bank, TreeRustle::BendKeys(bend->amount).ToArray(), entity, transform.position, conditions,
 			                     openblack::audio::AnimEffectMeasure::AcrossFirst);
 		}
 		if (idleChance > 1 && TreeRustle::IsAmongTree(transform.position, height, camera) &&
 		    rng.NextValue<uint32_t>(0, idleChance - 1) == 1)
 		{
 			// The idle rustle stays with its tree. The rustle of a bend stays where it started.
-			const auto idle = audio.PlayAnimEffect(bank, TreeRustle::IdleKeys().ToArray(), entity, transform.position);
+			const auto idle =
+			    audio.PlayAnimEffect(bank, TreeRustle::IdleKeys().ToArray(), entity, transform.position, conditions);
 			audio.SetEmitterFollows(idle.emitter, audio::Follows::Owner);
 		}
 	});
