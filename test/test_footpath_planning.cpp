@@ -180,7 +180,7 @@ TEST(FootpathPlanning, LaidNodesReplaceThoseBetweenAndKeepTheHiddenOnes)
 {
 	const std::vector<planning::PlanNode> nodes {
 	    {.place = {0, 0}}, {.place = {1, 0}, .planned = true}, {.place = {2, 0}, .hidden = true},
-	    {.place = {3, 0}}, {.place = {4, 0}, .rejoin = true},  {.place = {5, 0}},
+	    {.place = {3, 0}}, {.place = {4, 0}, .marker = true},  {.place = {5, 0}},
 	    {.place = {6, 0}},
 	};
 	const std::array<glm::ivec2, 2> route {glm::ivec2 {10, 1}, glm::ivec2 {11, 1}};
@@ -189,9 +189,9 @@ TEST(FootpathPlanning, LaidNodesReplaceThoseBetweenAndKeepTheHiddenOnes)
 	    {.place = {0, 0}},
 	    {.place = {10, 1}, .planned = true},
 	    {.place = {11, 1}, .planned = true},
-	    {.place = {12, 1}, .planned = true, .rejoin = true},
+	    {.place = {12, 1}, .planned = true, .marker = true},
 	    {.place = {2, 0}, .hidden = true},
-	    {.place = {4, 0}, .rejoin = true},
+	    {.place = {4, 0}, .marker = true},
 	    {.place = {5, 0}},
 	    {.place = {6, 0}},
 	};
@@ -203,7 +203,7 @@ TEST(FootpathPlanning, ASettledPathKeepsOnlyItsHiddenNodesPlanned)
 	std::vector<planning::PlanNode> nodes {
 	    {.place = {0, 0}, .planned = true},
 	    {.place = {1, 0}, .planned = true, .hidden = true},
-	    {.place = {2, 0}, .planned = true, .rejoin = true},
+	    {.place = {2, 0}, .planned = true, .marker = true},
 	};
 	planning::Settle(nodes);
 	EXPECT_FALSE(nodes[0].planned);

@@ -2947,7 +2947,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::ecs::components::Footpath::Node::place>("place")
 	    .Field<&openblack::ecs::components::Footpath::Node::planned>("planned")
 	    .Field<&openblack::ecs::components::Footpath::Node::hidden>("hidden")
-	    .Field<&openblack::ecs::components::Footpath::Node::rejoin>("rejoin");
+	    .Field<&openblack::ecs::components::Footpath::Node::marker>("marker");
 	Reflect<openblack::ecs::components::HandGrab::Throw>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HandGrab::Throw::velocity>("velocity")
 	    .Field<&openblack::ecs::components::HandGrab::Throw::springVelocity>("springVelocity")

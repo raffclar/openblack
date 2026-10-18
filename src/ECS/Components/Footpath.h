@@ -37,8 +37,8 @@ struct Footpath
 		bool planned {false};
 		/// Under something put down on the path: walkers pass it by
 		bool hidden {false};
-		/// Where a path sent round something comes back to its old line: walkers pass it by
-		bool rejoin {false};
+		/// The place of the thing that a stretch of the path was sent round: walkers pass it by
+		bool marker {false};
 	};
 
 	std::vector<Node> nodes;

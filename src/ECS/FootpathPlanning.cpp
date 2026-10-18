@@ -133,17 +133,17 @@ std::vector<glm::ivec2> footpath_planning::RoutePlaces(std::span<const creature_
 }
 
 std::vector<PlanNode> footpath_planning::LayBetween(std::span<const PlanNode> nodes, size_t first, size_t last,
-                                                    std::span<const glm::ivec2> route, std::optional<glm::ivec2> rejoin)
+                                                    std::span<const glm::ivec2> route, std::optional<glm::ivec2> marker)
 {
 	std::vector<PlanNode> laid(nodes.begin(), nodes.begin() + static_cast<std::ptrdiff_t>(first + 1));
 	std::ranges::transform(route, std::back_inserter(laid),
 	                       [](glm::ivec2 place) { return PlanNode {.place = place, .planned = true}; });
-	if (rejoin.has_value())
+	if (marker.has_value())
 	{
-		laid.push_back({.place = *rejoin, .planned = true, .rejoin = true});
+		laid.push_back({.place = *marker, .planned = true, .marker = true});
 	}
 	std::ranges::copy_if(nodes.subspan(first + 1, last - first - 1), std::back_inserter(laid),
-	                     [](const PlanNode& node) { return node.hidden || node.rejoin; });
+	                     [](const PlanNode& node) { return node.hidden || node.marker; });
 	laid.insert(laid.end(), nodes.begin() + static_cast<std::ptrdiff_t>(last), nodes.end());
 	return laid;
 }
@@ -152,7 +152,7 @@ void footpath_planning::Settle(std::span<PlanNode> nodes)
 {
 	for (auto& node : nodes)
 	{
-		if (!node.hidden && !node.rejoin)
+		if (!node.hidden && !node.marker)
 		{
 			node.planned = false;
 		}

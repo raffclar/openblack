@@ -1111,7 +1111,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 						        nodes.push_back({{"place", {node.place.x, node.place.y}},
 						                         {"planned", node.planned},
 						                         {"hidden", node.hidden},
-						                         {"rejoin", node.rejoin}});
+						                         {"marker", node.marker}});
 					        }
 					        paths.push_back({{"id", ToId(path)}, {"nodes", std::move(nodes)}});
 				        }

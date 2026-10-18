@@ -62,16 +62,17 @@ struct PlanNode
 	bool planned {false};
 	/// Under something put down on the path
 	bool hidden {false};
-	/// Where a path sent round something comes back to its old line
-	bool rejoin {false};
+	/// The place of the thing that a stretch of the path was sent round
+	bool marker {false};
 
 	bool operator==(const PlanNode&) const = default;
 };
 
 /// A path with the nodes between two of its nodes laid again along a route: the nodes between that are hidden or are
-/// rejoins are kept, after the route, and the others go. The rejoin place, if given, comes right after the route.
+/// markers are kept, after the route, and the others go. The place of the thing that the stretch is sent round, if
+/// given, comes right after the route as a marker.
 [[nodiscard]] std::vector<PlanNode> LayBetween(std::span<const PlanNode> nodes, size_t first, size_t last,
-                                               std::span<const glm::ivec2> route, std::optional<glm::ivec2> rejoin);
+                                               std::span<const glm::ivec2> route, std::optional<glm::ivec2> marker);
 
 /// A path laid between two things is settled: no node of it that walkers use may be planned again
 void Settle(std::span<PlanNode> nodes);

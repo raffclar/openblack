@@ -208,7 +208,7 @@ std::vector<planning::PlanNode> PlanNodesOf(const Footpath& footpath)
 	std::vector<planning::PlanNode> nodes;
 	nodes.reserve(footpath.nodes.size());
 	std::ranges::transform(footpath.nodes, std::back_inserter(nodes), [](const Footpath::Node& node) {
-		return planning::PlanNode {.place = node.place, .planned = node.planned, .hidden = node.hidden, .rejoin = node.rejoin};
+		return planning::PlanNode {.place = node.place, .planned = node.planned, .hidden = node.hidden, .marker = node.marker};
 	});
 	return nodes;
 }
@@ -226,7 +226,7 @@ void SetNodes(Footpath& footpath, std::span<const planning::PlanNode> nodes)
 		                          .place = node.place,
 		                          .planned = node.planned,
 		                          .hidden = node.hidden,
-		                          .rejoin = node.rejoin});
+		                          .marker = node.marker});
 	}
 }
 
@@ -261,8 +261,20 @@ void AddFootpath(entt::entity thing, entt::entity footpath)
 	auto* link = registry.TryGet<FootpathLink>(thing);
 	if (link == nullptr)
 	{
-		link =
-		    &registry.Assign<FootpathLink>(thing, registry.Get<const Transform>(thing).position, std::vector<Footpath::Id> {});
+		// The link is where the thing stands; a dance, which has no body, has it where its paths end
+		glm::vec3 position {0.0f};
+		if (const auto* transform = registry.TryGet<const Transform>(thing))
+		{
+			position = transform->position;
+		}
+		else
+		{
+			const auto ground = planning::ToPoint(ArrivePlace(thing));
+			position = {ground.x,
+			            Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(ground) : 0.0f,
+			            ground.y};
+		}
+		link = &registry.Assign<FootpathLink>(thing, position, std::vector<Footpath::Id> {});
 	}
 	link->footpaths.insert(link->footpaths.begin(), static_cast<Footpath::Id>(footpath));
 	registry.SetDirty();
