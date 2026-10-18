@@ -83,6 +83,9 @@ private:
 	// Moving
 	/// Off to a goal at a height above the land there, in its kind's move state, into a final state once there
 	void SetupMoveTo(components::Animal& animal, glm::vec2 goal, float goalHeight, components::AnimalState finalState);
+	/// A goal in 16.16 map units must go to SetupMoveToFixed. Do not let it change to metres without a scale.
+	void SetupMoveTo(components::Animal& animal, glm::ivec2 goal, float goalHeight,
+	                 components::AnimalState finalState) = delete;
 	/// The same with a goal in 16.16 map units
 	void SetupMoveToFixed(components::Animal& animal, glm::ivec2 goal, float goalHeight, components::AnimalState finalState);
 	/// A turn's move towards its goal, climbing or sinking towards its goal's height: whether it arrived
@@ -113,6 +116,8 @@ private:
 	void GrazerDecide(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
 	/// Off wandering about its herd's leader, as far as its herd's reach
 	void GrazerStartWander(entt::entity entity, components::Animal& animal);
+	/// It keeps up with the flock that a script put it in: back into the flock's domain, or near its leader
+	void GrazerMoveInFlock(entt::entity entity, components::Animal& animal);
 	/// A straight step, steered afresh in each new cell; seeing to its needs first
 	void GrazerWander(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
 	/// Its needs: whether it set off to see to one
@@ -132,7 +137,7 @@ private:
 	static void SetGrazerSpeed(components::Animal& animal, uint16_t speed);
 	/// A turn's walk on the land towards its goal: whether it arrived
 	static bool GroundMoveTo(components::Animal& animal);
-	/// Where its herd's leader is, or the herd's home with no leader
+	/// Where its herd's leader is, an animal or a villager, or the herd's home with no leader
 	[[nodiscard]] glm::ivec2 HerdPosOf(entt::entity flock) const;
 	/// Whether a point is within the reach of an animal's herd's home: never for an animal with no herd
 	[[nodiscard]] bool WithinDomain(const components::Animal& animal, glm::ivec2 point) const;

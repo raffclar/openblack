@@ -918,6 +918,23 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .objects = {{.type = AnimalInfo::Cow, .offset = {8.0f, 0.0f}, .living = true}},
 	});
 
+	// A free crow and a free cow, each the leader of a flock or herd of its own. Each picks its next place about its
+	// home, in map units, and goes there.
+	all.push_back({
+	    .id = "animals.herd_new_leg",
+	    .name = "A flock's leader goes to new places about its home",
+	    .facet = Facet::Animals,
+	    .description = "A free crow and a free cow stand at the homes of their own flock and herd. The crow flies from "
+	                   "place to place at once. A cow stays 200 turns at one place before it leads its herd on.",
+	    .expected = "The crow flies to places about where it was put and stays over that area. The cow grazes, and later "
+	                "walks to a new place within 80 metres of where it was put. Neither goes off in a straight line out "
+	                "of the reach of its home.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-80.0f, -80.0f}, {80.0f, 80.0f}}},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Crow, .offset = {10.0f, 0.0f}, .living = true}},
+	});
+
 	all.push_back({
 	    .id = "needs.starving",
 	    .name = "Starving creature faints",

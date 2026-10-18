@@ -149,6 +149,41 @@ TEST(ScriptFlockRules, AFollowerKeepsWithinTheFlockDistanceOfTheLeader)
 	EXPECT_EQ(rules::MoveInFlock(Metres(20, 0), flock, std::ref(outside), any).result, 0u);
 }
 
+TEST(ScriptFlockRules, TheLivingsOwnPickChoosesThePoint)
+{
+	struct Asked
+	{
+		MapCoords centre;
+		float least;
+		float most;
+	};
+	std::vector<Asked> asked;
+	const auto pick = [&asked](const MapCoords& centre, float least, float most) {
+		asked.push_back({.centre = centre, .least = least, .most = most});
+		return centre;
+	};
+	// The leader picks a point within the domain about the flock's own place
+	const rules::FlockView leader {.place = Metres(0, 0), .domainRadius = 12, .flockDistance = 5, .isLeader = true};
+	const auto back = rules::MoveInFlock(Metres(30, 0), leader, pick);
+	ASSERT_EQ(asked.size(), 1u);
+	EXPECT_EQ(asked[0].centre, Metres(0, 0));
+	EXPECT_EQ(asked[0].least, 0.0f);
+	EXPECT_EQ(asked[0].most, 12.0f);
+	EXPECT_EQ(back.result, 0x23u);
+	EXPECT_EQ(back.goal, Metres(0, 0));
+	// A member picks a point within the flock distance of the leader, a villager who leads the sheep
+	const rules::FlockView member {.place = Metres(0, 0), .domainRadius = 12, .flockDistance = 5, .leader = Metres(3, 0)};
+	const auto follow = rules::MoveInFlock(Metres(30, 0), member, pick);
+	ASSERT_EQ(asked.size(), 2u);
+	EXPECT_EQ(asked[1].centre, Metres(3, 0));
+	EXPECT_EQ(asked[1].most, 5.0f);
+	EXPECT_EQ(follow.result, 0x23u);
+	EXPECT_EQ(follow.goal, Metres(3, 0));
+	// Within the domain, it picks nothing
+	EXPECT_EQ(rules::MoveInFlock(Metres(2, 0), member, pick).result, 1u);
+	EXPECT_EQ(asked.size(), 2u);
+}
+
 TEST(ScriptFlocks, NewcomersGoToTheFrontAndTheLeaderToTheBack)
 {
 	Registry registry;

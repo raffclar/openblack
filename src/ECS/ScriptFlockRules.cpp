@@ -87,20 +87,27 @@ bool script_flock_rules::WithinDomain(const MapCoords& point, const MapCoords& p
 script_flock_rules::FlockStep script_flock_rules::MoveInFlock(const MapCoords& position, const FlockView& flock,
                                                               const FloatRandom& random, const Accepts& accepts)
 {
+	return MoveInFlock(position, flock, [&random, &accepts](const MapCoords& centre, float least, float most) {
+		return CalcRandomPos(centre, least, most, random, accepts);
+	});
+}
+
+script_flock_rules::FlockStep script_flock_rules::MoveInFlock(const MapCoords& position, const FlockView& flock,
+                                                              const PickPos& pick)
+{
 	if (WithinDomain(position, flock.place, flock.domainRadius))
 	{
 		return {.result = 1};
 	}
 	if (flock.isLeader)
 	{
-		return {.result = 0x23,
-		        .goal = CalcRandomPos(flock.place, 0.0f, static_cast<float>(flock.domainRadius), random, accepts)};
+		return {.result = 0x23, .goal = pick(flock.place, 0.0f, static_cast<float>(flock.domainRadius))};
 	}
 	if (!(static_cast<float>(flock.flockDistance) < gutils::GetDistanceInMetres(flock.leader, position)))
 	{
 		return {.result = 0};
 	}
-	const auto goal = CalcRandomPos(flock.leader, 0.0f, static_cast<float>(flock.flockDistance), random, accepts);
+	const auto goal = pick(flock.leader, 0.0f, static_cast<float>(flock.flockDistance));
 	const bool leaderWithin = WithinDomain(flock.leader, flock.place, flock.domainRadius);
 	if (WithinDomain(goal, flock.place, flock.domainRadius) || !leaderWithin)
 	{

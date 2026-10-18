@@ -738,7 +738,7 @@ void AnimalSystem::DecideWhatToDo(entt::entity entity, Animal& animal)
 	// A follower picks a point near the leader, at its height, and then follows the flock
 	const auto& leader = registry.Get<const Animal>(leaderEntity);
 	const auto point = RandomPos(animal, leader.move.position, 0.0f, static_cast<float>(flockData->flockDistance));
-	SetupMoveTo(animal, point, leader.height, AnimalState::DecideWhatToDo);
+	SetupMoveToFixed(animal, point, leader.height, AnimalState::DecideWhatToDo);
 	SetSpeed(animal, 0);
 	SetState(animal, flockData->followState);
 }
@@ -762,7 +762,7 @@ void AnimalSystem::StartWander(entt::entity entity, Animal& animal)
 	// About its flock's own height (a temple's), or its kind's
 	const float base = animals::birds::BaseHeight(flockData->height, info.altitudeNormal);
 	const float goalHeight = base + info.altitudeMin < height && height < base + info.altitudeMax ? height : base;
-	SetupMoveTo(animal, point, goalHeight, AnimalState::DecideWhatToDo);
+	SetupMoveToFixed(animal, point, goalHeight, AnimalState::DecideWhatToDo);
 	SetState(animal, AnimalState::SpecialMoveToPos);
 	flockData->followState = AnimalState::FollowFlock;
 	flockData->followMode = k_FollowInFormation;
