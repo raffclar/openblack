@@ -42,6 +42,7 @@ public:
 	bool Tap(entt::entity icon, PlayerNames player) override;
 	[[nodiscard]] bool HasIconFor(PlayerNames player, SpellSeedType seed) const override;
 	[[nodiscard]] bool IsIcon(entt::entity entity) const override;
+	[[nodiscard]] std::optional<float> ShownCharge(entt::entity icon) const override;
 
 	[[nodiscard]] std::vector<magic::WorshipIconCharge> ChargesAt(entt::entity site) const override;
 	void ChargedAt(entt::entity site, std::span<const magic::WorshipIconCharge> charges) override;

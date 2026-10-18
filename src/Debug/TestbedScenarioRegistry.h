@@ -870,6 +870,9 @@ struct Command
 		/// A script releases the scenario's object (object) into the game, as RELEASE_FROM_SCRIPT does. A villager
 		/// that the script controls then decides what to do, and reacts again. Needs no creature.
 		ScriptRelease,
+		/// Each icon of the player's worship sites holds a part of the charge of its miracle (amount, 0 to 1), as if the
+		/// worshippers charged it that far. Needs no creature.
+		FillSiteIcons,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

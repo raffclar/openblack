@@ -709,6 +709,28 @@ bool SpellIconSystem::IsIcon(entt::entity entity) const
 	return registry.Valid(entity) && registry.AnyOf<TownCentreIcon, WorshipIcon>(entity);
 }
 
+std::optional<float> SpellIconSystem::ShownCharge(entt::entity icon) const
+{
+	auto& registry = Entities();
+	const auto* component = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+	if (component == nullptr)
+	{
+		return std::nullopt;
+	}
+	// The seed that the icon made counts only while a hand of the icon's player holds it
+	std::optional<float> heldSeedCharge;
+	const auto* site = registry.Valid(component->site) ? registry.TryGet<const WorshipSite>(component->site) : nullptr;
+	const auto held = Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetHeldSeed() : std::nullopt;
+	if (site != nullptr && held.has_value() && *held == component->seedOut && registry.Valid(*held))
+	{
+		if (const auto* seed = registry.TryGet<const SpellSeed>(*held); seed != nullptr && seed->player == site->player)
+		{
+			heldSeedCharge = seed->chantStore;
+		}
+	}
+	return icons::ShownCharge(component->store, icons::ShownRequired(Required(*component), heldSeedCharge));
+}
+
 std::vector<magic::WorshipIconCharge> SpellIconSystem::ChargesAt(entt::entity site) const
 {
 	auto& registry = Entities();

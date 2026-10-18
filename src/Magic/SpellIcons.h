@@ -109,6 +109,15 @@ enum class TapResult : uint8_t
 /// What is still needed to charge it full
 [[nodiscard]] float Need(const IconCharge& icon);
 
+/// The prayer power that a worship site's icon shows as the full charge of its miracle. While the player's hand holds
+/// the seed that the icon made, the charge of that seed comes off the full charge.
+[[nodiscard]] float ShownRequired(float required, std::optional<float> heldSeedCharge);
+
+/// The charge that a worship site's icon shows after the name of its miracle, in percent: the store over the full
+/// charge, times 100, in the precision of the game. None when the result is zero or not a number: the icon then shows
+/// only the name.
+[[nodiscard]] std::optional<float> ShownCharge(float store, float shownRequired);
+
 /// Whether its miracle may go into a hand: charged full, no seed of it out, and the hand ready for it
 [[nodiscard]] bool ReadyForHand(const IconCharge& icon, bool handReady);
 

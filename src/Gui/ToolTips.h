@@ -119,6 +119,9 @@ public:
 	/// A tooltip of words only, shown in another tooltip's words with a number written into them (as a town's flag shows
 	/// its own desire under the tooltip for a need); kept, as a numbered one, only while it is the one shown
 	void SubmitInWords(uint32_t index, uint32_t words, float number);
+	/// A tooltip of words only, forced to show at once, with a charge in percent after its words (as a worship site's
+	/// icon shows how full its miracle is). With no charge, the tooltip shows only its words.
+	void ForceWithCharge(uint32_t index, std::optional<float> charge);
 	/// Ends the turn: keeps the tooltip submitted, or one lingering after it was, and ends any other. The tooltip's
 	/// display time only runs down while the player may turn the camera: while a lesson takes turning away, a tooltip
 	/// shown keeps the others off, and isn't faded out for having been shown long enough.
@@ -139,6 +142,8 @@ public:
 		std::optional<double> second;
 		/// The tooltip whose words it shows instead of its own, for one given other words
 		std::optional<uint32_t> words;
+		/// The number is a charge in percent that comes after the words, not a number written into them
+		bool chargeAfterWords {false};
 	};
 	[[nodiscard]] std::optional<Shown> GetShown() const;
 
@@ -183,6 +188,7 @@ private:
 		double number;
 		std::optional<double> second;
 		std::optional<uint32_t> words;
+		bool chargeAfterWords {false};
 	};
 	std::optional<Numbered> _number;
 };
