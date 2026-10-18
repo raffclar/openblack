@@ -205,20 +205,27 @@ glm::vec3 HeadingVelocity(const glm::vec3& from, const glm::vec3& to, float spee
 	{
 		return glm::vec3(0.0f);
 	}
-	// The speed over the length is worked at the higher precision and rounded to a float, then each part is scaled by it
-	const double dx = delta.x;
-	const double dy = delta.y;
-	const double dz = delta.z;
-	const auto scale = static_cast<float>(static_cast<double>(speed) / std::sqrt(dx * dx + dy * dy + dz * dz));
+	// Each step rounds to a float, in the game's order: the squares of z and y, then the square of x, then the root
+	const float length = std::sqrt(((delta.z * delta.z) + (delta.y * delta.y)) + (delta.x * delta.x));
+	const float scale = speed / length;
 	return {scale * delta.x, delta.y * scale, delta.z * scale};
 }
 
 float HeadingSpin(float draw)
 {
-	// Worked at double precision and only then rounded to a float
-	constexpr double k_Middle = 100.0;
-	constexpr double k_Scale = 0.01;
-	return static_cast<float>((static_cast<double>(draw) - k_Middle) * k_Scale);
+	// Each step rounds to a float
+	return (draw - k_HeadingSpinMiddle) * k_HeadingSpinScale;
+}
+
+glm::vec3 TargetVelocity(const glm::vec3& from, const glm::vec3& to, float seconds)
+{
+	// Each step rounds to a float, in the game's order. The game takes away a zero from the two parts across the land.
+	const float inverse = 1.0f / seconds;
+	const float drop = ((seconds * seconds) * 0.5f) * k_TargetGravity;
+	const float x = (to.x - from.x) - 0.0f;
+	const float y = (to.y - from.y) - drop;
+	const float z = (to.z - from.z) - 0.0f;
+	return {x * inverse, y * inverse, z * inverse};
 }
 
 } // namespace openblack::script::property_rules
