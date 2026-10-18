@@ -81,9 +81,15 @@ struct HoldFrame
 /// The held seed's up, and the hand's: straight up, rolled back by the roll about the line from the hand to the camera,
 /// then pitched back by the pitch about the level line across it
 [[nodiscard]] glm::vec3 HeldUp(glm::vec3 camera, glm::vec3 hand, float roll, float pitch);
-/// The seed's axes for an up: its forward kept as level as it can be along the way the hand faces (the hand's level
-/// turn, about the vertical), its side across the two. The hand's own turn is these axes with its model turned upright.
-[[nodiscard]] glm::mat3 HeldBasis(const glm::mat3& levelTurn, glm::vec3 up);
+/// The hand's heading from the line of sight through the cursor: the angle about the vertical, 0 along -z and positive
+/// towards +x. When the line leans 0.01 or less both east-west and north-south, there is no new heading and the hand
+/// keeps the heading it had.
+[[nodiscard]] std::optional<float> HeadingOfSight(glm::vec3 lineOfSight);
+/// The level way that a held thing faces, from the hand's heading: half a turn from the heading, back towards the camera
+[[nodiscard]] glm::vec3 HeldFacing(float heading);
+/// The seed's axes for an up: its forward kept as level as it can be along the way the hand faces (see HeldFacing), its
+/// side across the two. The hand's own turn is these axes with its model turned upright.
+[[nodiscard]] glm::mat3 HeldBasis(glm::vec3 facing, glm::vec3 up);
 /// The seed model's turn in the hand: its axes, half a turn about its up for a right hand, then its own extra turn
 /// about its up
 [[nodiscard]] glm::mat3 SeedTurn(const glm::mat3& basis, float yRotate, bool rightHanded);
