@@ -162,7 +162,7 @@ struct ShellDraw
 	glm::vec2 textureFraction;
 };
 
-/// A light map frame stamped on the land's colours, centred on a point
+/// A frame of a light map stamped on the land, centred on a point 10 units past its particle along x and z
 struct LightStamp
 {
 	entt::id_type bitmap;
@@ -171,9 +171,12 @@ struct LightStamp
 	glm::vec3 centre;
 	/// 0..1
 	float strength;
-	/// It darkens the land rather than lighting it, as a cloud's shadow
+	/// It darkens the land's luminosity as a cloud's shadow does, and does not light the land's colours
 	bool shadow {false};
 };
+
+/// The strength of a particle's stamp from the alpha of its colour: alpha times the game's float for 1 / 255
+[[nodiscard]] float StampStrength(uint8_t alpha);
 
 enum class ItemKind : uint8_t
 {

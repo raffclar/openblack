@@ -236,10 +236,48 @@ TEST(LandShadeSystem, NoShadowsWithoutTheDetailOrRoomForThem)
 	world.system.Shade(frame);
 	EXPECT_EQ(world.system.ShadowCount(), 0u);
 	frame.cloudShadows = true;
-	frame.stampsBefore = land_shade::k_MostStamps;
+	frame.particleStamps.assign(land_shade::k_MostStamps - 1, std::nullopt);
+	frame.flashes = 1;
 	world.system.Shade(frame);
 	EXPECT_EQ(world.system.ShadowCount(), 0u);
 	EXPECT_EQ(CellOf(world.system.Land(), {0, 0}, 6, 2), k_Laid);
+}
+
+TEST(LandShadeSystem, AParticlesShadowDarkensTheLandWithoutTheCloudsDetail)
+{
+	World world;
+	const std::vector<uint8_t> black(4, 0);
+	auto frame = World::Day();
+	frame.cloudShadows = false;
+	frame.particleStamps.emplace_back(land_shade::ParticleShadow({60.0f, 0.0f, 30.0f}, black, 2, 1.0f));
+	world.system.Shade(frame);
+	EXPECT_EQ(world.system.ShadowCount(), 1u);
+	// Centred on (60, 30): its first texel is at (55, 25), the cell (5, 2)
+	EXPECT_EQ(CellOf(world.system.Land(), {0, 0}, 5, 2), land_shade::k_DarkestShadow);
+	EXPECT_EQ(CellOf(world.system.Land(), {0, 0}, 4, 2), k_Laid);
+	// It shows for one frame only
+	world.system.Shade(World::Day());
+	EXPECT_EQ(world.system.ShadowCount(), 0u);
+	EXPECT_EQ(CellOf(world.system.Land(), {0, 0}, 5, 2), k_Laid);
+}
+
+TEST(LandShadeSystem, TheParticlesStampsComeFirstAndLeaveTheCloudsNoRoom)
+{
+	World world;
+	world.AddCloud({50.0f, 10.0f}, 255);
+	const std::vector<uint8_t> black(4, 0);
+	auto frame = World::Day();
+	frame.particleStamps.assign(land_shade::k_MostStamps + 5, std::nullopt);
+	// A shadow past the list's room is not stamped
+	frame.particleStamps.back() = land_shade::ParticleShadow({60.0f, 0.0f, 30.0f}, black, 2, 1.0f);
+	world.system.Shade(frame);
+	EXPECT_EQ(world.system.ShadowCount(), 0u);
+	// A shadow in the last place is, and then there is no room for the cloud
+	frame.particleStamps.resize(land_shade::k_MostStamps);
+	frame.particleStamps.back() = land_shade::ParticleShadow({60.0f, 0.0f, 30.0f}, black, 2, 1.0f);
+	world.system.Shade(frame);
+	EXPECT_EQ(world.system.ShadowCount(), 1u);
+	EXPECT_EQ(CellOf(world.system.Land(), {0, 0}, 5, 2), land_shade::k_DarkestShadow);
 }
 
 TEST(LandShadeSystem, TheVillagesLightTheLandOnlyAtNight)

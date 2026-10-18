@@ -138,9 +138,11 @@ struct MistCreator final: Creator
 	/// Its shape comes from its atom's stretch
 	bool ratioFromMatrix {false};
 	float initialScaleMin {1.0f};
-	/// It darkens the land under it by its light map, as a cloud's shadow does
-	std::optional<entt::id_type> shadow;
-	int shadowPitch {1};
+	/// A light map that it stamps on the land under it: grey for a shadow that darkens the land's luminosity, as a
+	/// cloud's shadow does, else colours that light the land
+	std::optional<entt::id_type> lightMap;
+	int lightMapPitch {1};
+	bool shadowMap {false};
 
 	/// The atom's creator values: its shape and where its animation starts
 	void InitAtom(Effect& effect, Atom& atom) const override;

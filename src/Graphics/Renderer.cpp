@@ -4194,8 +4194,28 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 	        _landLightTable ? static_cast<uint8_t>((_landLightTable->GetTexels().back() >> 8u) & 0xFFu) : uint8_t {0xFF},
 	    .hand = std::nullopt,
 	    .scriptHour = Locator::skySystem::value().GetClock().GetScriptTime(),
-	    .stampsBefore = _particleFrame.lightStamps.size(),
+	    .particleStamps = {},
+	    .flashes = 0,
 	};
+	// The particles' light maps and shadows of the frame before, in the order they were drawn. A light map that cannot
+	// stamp takes no place.
+	frame.particleStamps.reserve(_landStamps.size());
+	for (const auto& light : _landStamps)
+	{
+		const auto texels = ParticleLightMapTexels(light.bitmap, light.frame);
+		if (texels.empty())
+		{
+			continue;
+		}
+		if (light.shadow)
+		{
+			frame.particleStamps.emplace_back(land_shade::ParticleShadow(light.centre, texels, light.pitch, light.strength));
+		}
+		else
+		{
+			frame.particleStamps.emplace_back(std::nullopt);
+		}
+	}
 	// The hand's light while the hand shows
 	if (drawDesc.drawHand && Locator::handSystem::has_value())
 	{
@@ -4210,7 +4230,7 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 	drawDesc.entities.Each<const ecs::components::Storm>([&frame](const ecs::components::Storm& storm) {
 		if (!storm.dead && storm.flash.active)
 		{
-			++frame.stampsBefore;
+			++frame.flashes;
 		}
 	});
 	auto& shade = Locator::landShadeSystem::value();
@@ -4625,13 +4645,18 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 	}
 	const glm::vec2 firstCell = island.GetExtent().minimum / LandIslandInterface::k_CellSize;
 	size_t stamps = 0;
+	// Each stamp takes a place in the game's list, also one with no strength
 	const auto stamp = [&](TextureHandle image, int32_t side, glm::vec2 corner, uint8_t strength,
 	                       land_colour_stamps::Combine combine) {
-		if (strength == 0 || stamps >= land_colour_stamps::k_MaxStamps)
+		if (stamps >= land_colour_stamps::k_MaxStamps)
 		{
 			return;
 		}
 		++stamps;
+		if (strength == 0)
+		{
+			return;
+		}
 		const auto placement = land_colour_stamps::Place(corner);
 		const auto origin = glm::vec2(placement.cell) - firstCell;
 		constexpr float k_LastCell = static_cast<float>(LandIslandInterface::k_MapCellsPerSide - 1);
@@ -4641,24 +4666,42 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 		{
 			return;
 		}
-		const bool shade = combine == land_colour_stamps::Combine::Shade;
-		const glm::vec4 u_landColourStamp {1.0f, static_cast<float>(strength), static_cast<float>(side), shade ? 1.0f : 0.0f};
+		const glm::vec4 u_landColourStamp {1.0f, static_cast<float>(strength), static_cast<float>(side), 0.0f};
 		const glm::vec4 u_landColourWeights {glm::vec2(placement.weight), 0.0f, 0.0f};
 		program.SetTextureSampler("s_texture", 0, image);
 		program.SetUniformValue("u_landColourStamp", &u_landColourStamp);
 		program.SetUniformValue("u_landColourWeights", &u_landColourWeights);
-		// An added stamp brightens the cells to at most white; another keeps the brighter colour; a shade multiplies them
+		// An added stamp brightens the cells to at most white; another keeps the brighter colour
 		const auto equation =
 		    combine == land_colour_stamps::Combine::Brighter ? BGFX_STATE_BLEND_EQUATION_MAX : BGFX_STATE_BLEND_EQUATION_ADD;
-		const auto blend = shade ? BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ZERO, BGFX_STATE_BLEND_SRC_COLOR)
-		                         : BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE);
 		SubmitLandQuad(viewId, program, from, to, from - origin, to - origin,
-		               BGFX_STATE_WRITE_RGB | blend | BGFX_STATE_BLEND_EQUATION(equation));
+		               BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
+		                   BGFX_STATE_BLEND_EQUATION(equation));
 	};
 
-	// Each storm's lightning glows on the ground around where it struck
+	// The particles' light maps of the frame before light the ground under them. Their shadows darken the land's
+	// luminosity (see DrawLandLuminosityPass) and only take a place here.
+	for (const auto& light : _landStamps)
+	{
+		if (ParticleLightMapTexels(light.bitmap, light.frame).empty())
+		{
+			continue;
+		}
+		if (light.shadow)
+		{
+			stamps = std::min(stamps + 1, land_colour_stamps::k_MaxStamps);
+			continue;
+		}
+		if (const auto* image = ParticleLightMap(light.bitmap, light.frame))
+		{
+			stamp(image->GetNativeHandle(), light.pitch, land_colour_stamps::CentredCorner(light.centre, light.pitch),
+			      land_colour_stamps::Strength(light.strength), land_colour_stamps::Combine::Add);
+		}
+	}
+
+	// Then each storm's lightning glows on the ground around where it struck, while its flash shows
 	drawDesc.entities.Each<const ecs::components::Storm>([&](const ecs::components::Storm& storm) {
-		if (storm.dead)
+		if (storm.dead || !storm.flash.active)
 		{
 			return;
 		}
@@ -4667,17 +4710,6 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 		      land_colour_stamps::CentredCorner(storm.flash.position, land_colour_stamps::k_LightningSide), strength,
 		      land_colour_stamps::Combine::Add);
 	});
-
-	// The particles' light maps light the ground under them
-	for (const auto& light : _particleFrame.lightStamps)
-	{
-		if (const auto* image = ParticleLightMap(light.bitmap, light.frame))
-		{
-			stamp(image->GetNativeHandle(), light.pitch, land_colour_stamps::CentredCorner(light.centre, light.pitch),
-			      land_colour_stamps::Strength(light.strength),
-			      light.shadow ? land_colour_stamps::Combine::Shade : land_colour_stamps::Combine::Add);
-		}
-	}
 }
 
 void Renderer::DrawLandAlphaPass(const DrawSceneDesc& drawDesc) const
