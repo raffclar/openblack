@@ -220,8 +220,6 @@ void DynamicsSystem::SaveState(reflection::BinaryWriter& out) const
 		}
 	}
 	reflection::Save(out, _soundPairs);
-	reflection::Save(out, _dust);
-	reflection::Save(out, _bloodPace);
 	reflection::Save(out, _hitObject);
 	reflection::Save(out, _objectWhichHit);
 }
@@ -275,8 +273,6 @@ bool DynamicsSystem::LoadState(reflection::BinaryReader& in)
 		links.push_back(std::move(link));
 	}
 	reflection::Load(in, _soundPairs);
-	reflection::Load(in, _dust);
-	reflection::Load(in, _bloodPace);
 	reflection::Load(in, _hitObject);
 	reflection::Load(in, _objectWhichHit);
 	if (in.Failed())

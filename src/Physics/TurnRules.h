@@ -123,48 +123,7 @@ struct CellRange
 /// the ground
 [[nodiscard]] CellRange WakeCells(glm::vec3 centre, glm::vec3 velocity, float radius);
 
-/// The kinds of puff the shared pool of puffs holds. Each kind has its own life, growth and frames.
-enum class PuffKind : uint8_t
-{
-	/// Dust that a landing, a footstep or a fart throws up. It lives one second.
-	Dust,
-	/// Dark smoke that rises off an evil creature. It lives two seconds.
-	Smoke,
-	/// A light mote that shows on a good creature. It lives two seconds and is added to what is behind it.
-	Mote,
-	/// The same mote, but its frames play in the opposite order
-	MoteReversed,
-	/// A drop of blood thrown by a blow. It falls until it meets the land, then slides on it, slowing, and lives three
-	/// seconds from each of those starts. It shows one of eight frames at random each time it is drawn, keeps its size,
-	/// and hides what is behind it.
-	Blood,
-};
-
-/// One of the puffs in the shared pool: dust, smoke or a mote
-struct DustPuff
-{
-	glm::vec3 position {0.0f};
-	glm::vec3 velocity {0.0f};
-	/// Its full size
-	float size {0.0f};
-	/// Seconds of game time it has lived
-	float age {0.0f};
-	/// Which of its sixteen looks it starts on
-	int32_t variant {0};
-	/// 0xAARRGGBB
-	uint32_t argb {0};
-	PuffKind kind {PuffKind::Dust};
-	/// A drop of blood that has met the land and slides on it
-	bool onLand {false};
-
-	/// Gives the values that a saved game keeps to a visitor
-	template <typename Self, typename Visitor>
-	static void VisitSaved(Self& self, Visitor&& visit)
-	{
-		visit(self.position, self.velocity, self.size, self.age, self.variant, self.argb, self.kind, self.onLand);
-	}
-};
-/// How many puffs a landing makes, the most there can be at once, and how long one lives
+/// How many puffs of dust a landing makes
 inline constexpr int32_t k_PuffsPerLanding = 6;
 /// The biggest a landing's puffs are, and their colours over land and over the sea
 inline constexpr float k_LargestPuff = 5.0f;
