@@ -46,6 +46,9 @@ struct AudioEmitter
 	float minDistance = 1.0f;
 	float maxDistance = 9999.0f;
 	float distanceScale = 0.3f;
+	/// The play settings that the bank header set when the sound started (bits of pack::AudioBankOverride). Later
+	/// changes of the volume or the playback rate do nothing when the header set them.
+	uint32_t headerSet {0};
 	audio::PlayType loop = audio::PlayType::Once;
 	audio::AudioStatus state = audio::AudioStatus::Initial;
 	/// Follows the music volume rather than the effect volume

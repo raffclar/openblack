@@ -522,6 +522,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::AudioEmitter::minDistance>("minDistance")
 	    .Field<&components::AudioEmitter::maxDistance>("maxDistance")
 	    .Field<&components::AudioEmitter::distanceScale>("distanceScale")
+	    .Field<&components::AudioEmitter::headerSet>("headerSet")
 	    .Field<&components::AudioEmitter::loop>("loop")
 	    .Field<&components::AudioEmitter::state>("state")
 	    .Field<&components::AudioEmitter::music>("music")

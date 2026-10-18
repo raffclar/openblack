@@ -443,6 +443,16 @@ void AtmosPlayer::PlayOneShot(const AtmosInfo& info)
 	PlaySample(*info.bank, *info.header, options);
 }
 
+uint32_t AtmosPlayer::NextPlayRandom()
+{
+	if (!_playSeeded)
+	{
+		Reseed();
+		_playSeeded = true;
+	}
+	return _random.Next();
+}
+
 VoiceBackend::Handle AtmosPlayer::PlaySample(Bank& bank, const pack::AudioBankSampleHeader& header, const PlayOptions& options)
 {
 	if (!_playSeeded)
