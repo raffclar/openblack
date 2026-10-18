@@ -527,6 +527,7 @@ void CloudClimate::Reset(const CloudWeather& weather)
 	_type = glm::vec2(weather.type);
 	_rain = glm::vec2(weather.rain);
 	_wind = weather.wind;
+	_choice = weather.choice;
 	_storms.clear();
 }
 
@@ -536,9 +537,15 @@ void CloudClimate::Step(float seconds, const CloudWeather& target, std::span<con
 	{
 		return;
 	}
-	_cover = EaseTwoStage(_cover, target.cover, seconds, k_BuildUpSeconds, k_CalmDownSeconds);
-	_type = EaseTwoStage(_type, target.type, seconds, k_BuildUpSeconds, k_CalmDownSeconds);
-	_rain = EaseTwoStage(_rain, target.rain, seconds, k_BuildUpSeconds, k_CalmDownSeconds);
+	// A new choice of cover is put at once, with the storms as they are now, so that the sky shows the choice at once
+	const bool snap = target.choice != _choice;
+	_choice = target.choice;
+	const auto ease = [seconds, snap](glm::vec2 stages, float towards) {
+		return snap ? glm::vec2(towards) : EaseTwoStage(stages, towards, seconds, k_BuildUpSeconds, k_CalmDownSeconds);
+	};
+	_cover = ease(_cover, target.cover);
+	_type = ease(_type, target.type);
+	_rain = ease(_rain, target.rain);
 	_wind += (target.wind - _wind) * (1.0f - std::exp(-seconds / k_WindSeconds));
 	// The wind moves the clouds by its travel in this frame
 	_drift += _wind * seconds;
@@ -564,16 +571,16 @@ void CloudClimate::Step(float seconds, const CloudWeather& target, std::span<con
 		found->innerRadius = storm.innerRadius;
 		found->outerRadius = storm.outerRadius;
 		found->alive = true;
-		found->strength = EaseTwoStage(found->strength, storm.strength, seconds, k_BuildUpSeconds, k_CalmDownSeconds);
-		found->rain = EaseTwoStage(found->rain, storm.rain, seconds, k_BuildUpSeconds, k_CalmDownSeconds);
+		found->strength = ease(found->strength, storm.strength);
+		found->rain = ease(found->rain, storm.rain);
 	}
 	float strongest = 0.0f;
 	for (auto& cell : _storms)
 	{
 		if (!cell.alive)
 		{
-			cell.strength = EaseTwoStage(cell.strength, 0.0f, seconds, k_BuildUpSeconds, k_CalmDownSeconds);
-			cell.rain = EaseTwoStage(cell.rain, 0.0f, seconds, k_BuildUpSeconds, k_CalmDownSeconds);
+			cell.strength = ease(cell.strength, 0.0f);
+			cell.rain = ease(cell.rain, 0.0f);
 		}
 		strongest = std::max(strongest, cell.strength.y);
 	}
@@ -585,7 +592,7 @@ void CloudClimate::Step(float seconds, const CloudWeather& target, std::span<con
 
 CloudWeather CloudClimate::Current() const
 {
-	return {.cover = _cover.y, .type = _type.y, .rain = _rain.y, .wind = _wind};
+	return {.cover = _cover.y, .type = _type.y, .rain = _rain.y, .wind = _wind, .choice = _choice};
 }
 
 CloudWeather volumetric_clouds::WeatherFor(float overcast, float rain, glm::vec2 cloudWind)
@@ -623,6 +630,7 @@ glm::vec3 volumetric_clouds::SunThroughAir(float elevation)
 CloudWeather volumetric_clouds::ChosenWeather(CoverChoice choice, const CloudWeather& weather)
 {
 	auto chosen = weather;
+	chosen.choice = choice;
 	switch (choice)
 	{
 	case CoverChoice::Clear:

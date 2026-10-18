@@ -77,6 +77,12 @@ constexpr glm::vec2 k_LakeCentre {static_cast<float>(k_LakeMinX + k_LakeMaxX) * 
                                   static_cast<float>(k_LakeMinZ + k_LakeMaxZ) * k_CellSize * 0.5f};
 constexpr glm::vec2 k_LakeHalfExtent {static_cast<float>(k_LakeMaxX - k_LakeMinX) * k_CellSize * 0.5f,
                                       static_cast<float>(k_LakeMaxZ - k_LakeMinZ) * k_CellSize * 0.5f};
+/// EXPERIMENT (not for merge): the deep sea, open water in the north-east corner of the map from these cells to the
+/// map's edges. It is far from what the other scenarios use. Away from its shore the experiment's sea bed goes down
+/// past the least depth of the deep-sea jellyfish.
+constexpr int k_DeepSeaMinX = 400;
+constexpr int k_DeepSeaMinZ = 400;
+
 /// The pond: a strip of shallows running diagonally to the north-west of the middle, beyond what the other scenarios
 /// use, whose middle runs along the map's corners from (224, 292) to (232, 300). The land is at the sea bed along the
 /// strip's middle, two corners wide, so that half of each cell there is at the sea bed while one of its corners is a

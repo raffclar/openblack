@@ -38,6 +38,13 @@ bool NearPond(int x, int z)
 	       along <= flat_land::k_PondLastSum + (2 * reach) + 2;
 }
 
+/// Within the deep sea or its shore, with a cell to spare
+bool NearDeepSea(int x, int z)
+{
+	const auto reach = flat_land::k_ShoreCells + 1;
+	return x >= flat_land::k_DeepSeaMinX - reach && z >= flat_land::k_DeepSeaMinZ - reach;
+}
+
 bool SameColour(flat_land::Colour a, flat_land::Colour b)
 {
 	return a.r == b.r && a.g == b.g && a.b == b.b;
@@ -75,7 +82,7 @@ TEST(FlatLand, AwayFromTheLakeEveryCellIsFlatDryLand)
 			{
 				const auto mapX = static_cast<int>(block.blockX) * 16 + x;
 				const auto mapZ = static_cast<int>(block.blockZ) * 16 + z;
-				if (NearLake(mapX, mapZ) || NearPond(mapX, mapZ))
+				if (NearLake(mapX, mapZ) || NearPond(mapX, mapZ) || NearDeepSea(mapX, mapZ))
 				{
 					continue;
 				}
@@ -111,6 +118,10 @@ TEST(FlatLand, TheLakeIsAHundredUnitsOfOpenWaterNorthOfTheMiddle)
 	{
 		for (int z = 0; z < flat_land::k_CellsPerSide; ++z)
 		{
+			if (x >= flat_land::k_DeepSeaMinX && z >= flat_land::k_DeepSeaMinZ)
+			{
+				continue;
+			}
 			const bool inLake = x >= flat_land::k_LakeMinX && x < flat_land::k_LakeMaxX && z >= flat_land::k_LakeMinZ &&
 			                    z < flat_land::k_LakeMaxZ;
 			const bool isOpen = flat_land::KindOf(x, z) == flat_land::CellKind::OpenWater;
@@ -309,4 +320,18 @@ TEST(FlatLand, LaysPatchesOfSandAndSnow)
 	// Away from the lake
 	EXPECT_EQ(flat_land::KindOf(flat_land::k_SandPatch.minX, flat_land::k_SandPatch.minZ), flat_land::CellKind::Land);
 	EXPECT_EQ(flat_land::KindOf(flat_land::k_SnowPatch.maxX - 1, flat_land::k_SnowPatch.maxZ - 1), flat_land::CellKind::Land);
+}
+
+TEST(FlatLand, TheDeepSeaIsOpenWaterInTheNorthEastCorner)
+{
+	EXPECT_EQ(flat_land::KindOf(flat_land::k_DeepSeaMinX, flat_land::k_DeepSeaMinZ), flat_land::CellKind::OpenWater);
+	EXPECT_EQ(flat_land::KindOf(flat_land::k_CellsPerSide - 1, flat_land::k_CellsPerSide - 1), flat_land::CellKind::OpenWater);
+	EXPECT_EQ(flat_land::Altitude(flat_land::k_CellsPerSide, flat_land::k_CellsPerSide), 0);
+	// Its shore climbs to the plane as the lake's does
+	EXPECT_EQ(flat_land::KindOf(flat_land::k_DeepSeaMinX - 1, flat_land::k_DeepSeaMinZ + 20), flat_land::CellKind::Shallows);
+	EXPECT_EQ(flat_land::Altitude(flat_land::k_DeepSeaMinX - flat_land::k_ShoreCells, flat_land::k_DeepSeaMinZ + 20),
+	          flat_land::k_Altitude);
+	// The middle of the map and the patches stay dry
+	EXPECT_EQ(flat_land::KindOf(256, 256), flat_land::CellKind::Land);
+	EXPECT_EQ(flat_land::KindOf(flat_land::k_DeepSeaMinX - flat_land::k_ShoreCells - 1, 500), flat_land::CellKind::Land);
 }
