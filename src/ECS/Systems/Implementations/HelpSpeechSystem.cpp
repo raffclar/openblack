@@ -14,11 +14,21 @@
 #include <utility>
 
 #include "Audio/AudioManagerInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
+
+namespace
+{
+/// The real time since the game started, in milliseconds
+uint32_t NowMs()
+{
+	return static_cast<uint32_t>(Locator::time::value().GetElapsedTime().count());
+}
+} // namespace
 
 void HelpSpeechSystem::SetTable(audio::HelpSpeechTable table)
 {
@@ -38,10 +48,15 @@ void HelpSpeechSystem::Say(uint32_t text, audio::SpeechVoice voice, std::optiona
 		return;
 	}
 	// Placed only when the script gives a position, and it stays there. The voice rules know the line by its voice.
-	const auto emitter = Locator::audio::value().StartSoundEffect(
+	auto& audio = Locator::audio::value();
+	const auto emitter = audio.StartSoundEffect(
 	    sample->sound,
 	    {.position = position, .voiceOwner = audio::VoiceOwner::Number, .ownerNumber = audio::OwnerNumberOf(voice)});
-	_voices.Add(voice, *sample, emitter);
+	const audio::SilentPlayback playback {
+	    .startMs = NowMs(),
+	    .lengthMs = Locator::resources::value().GetSounds().Handle(sample->sound)->duration * 1000.0f,
+	};
+	_voices.Add(voice, *sample, emitter, playback, audio.IsDeviceLost());
 }
 
 bool HelpSpeechSystem::IsSaying(uint32_t text, audio::SpeechVoice voice)
@@ -52,9 +67,12 @@ bool HelpSpeechSystem::IsSaying(uint32_t text, audio::SpeechVoice voice)
 		return false;
 	}
 	auto& audio = Locator::audio::value();
-	return _voices.IsSaying(voice, *sample, [&audio](entt::entity emitter) {
+	const bool lost = audio.IsDeviceLost();
+	const auto now = NowMs();
+	return _voices.IsSaying(voice, *sample, [&audio, lost, now](entt::entity emitter, const audio::SilentPlayback& playback) {
 		// Not yet started or paused with the game is still saying it
-		return audio.EmitterExists(emitter) && audio.GetStatus(emitter) != audio::AudioStatus::Stopped;
+		const bool sounding = audio.EmitterExists(emitter) && audio.GetStatus(emitter) != audio::AudioStatus::Stopped;
+		return audio::PlaysOn(sounding, lost, playback, now);
 	});
 }
 

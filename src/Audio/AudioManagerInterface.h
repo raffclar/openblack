@@ -116,6 +116,11 @@ class AudioManagerInterface
 public:
 	/// The game has a working sound device; the fallback without one plays nothing
 	[[nodiscard]] virtual bool IsInstalled() const = 0;
+	/// The machine lost the sound device after the game opened it. The game then continues as if the device is still
+	/// there, and plays no sound.
+	[[nodiscard]] virtual bool IsDeviceLost() const { return false; }
+	/// For tools only, not a rule of the game: the game acts as if the machine lost the sound device, or has it again
+	virtual void SimulateDeviceLoss(bool /*lost*/) {}
 	virtual void Stop() = 0;
 	virtual void Update() = 0;
 	/// The game's audio turn. Each 3D sound that follows moves to the point of its owner or to the listener. It stops

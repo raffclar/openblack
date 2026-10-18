@@ -22,6 +22,8 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "SilentPlayback.h"
+
 namespace openblack::audio
 {
 
@@ -113,11 +115,13 @@ constexpr uint32_t k_AdvisorOwnerNumber = 9996;
 class SpeechVoices
 {
 public:
-	/// A line started on a voice, playing as `emitter`
-	void Add(SpeechVoice voice, SpeechSample sample, entt::entity emitter);
-	/// Whether the voice is still saying the sample, by `isPlaying` of its sounds. Sounds that have finished are
-	/// forgotten.
-	[[nodiscard]] bool IsSaying(SpeechVoice voice, SpeechSample sample, const std::function<bool(entt::entity)>& isPlaying);
+	/// A line started on a voice, playing as `emitter` with the time of its sample. A line with no sound is kept only
+	/// when the machine lost the sound device: the game then continues as if the line plays.
+	void Add(SpeechVoice voice, SpeechSample sample, entt::entity emitter, SilentPlayback playback, bool deviceLost);
+	/// Whether the voice is still saying the sample, by `isPlaying` of each line's sound and time. Lines that have
+	/// finished are forgotten.
+	[[nodiscard]] bool IsSaying(SpeechVoice voice, SpeechSample sample,
+	                            const std::function<bool(entt::entity, const SilentPlayback&)>& isPlaying);
 	/// Stops what the voice is saying from a bank, by `stop` of each of its sounds
 	void Stop(SpeechVoice voice, SpeechBank bank, const std::function<void(entt::entity)>& stop);
 	void Clear() { _lines.clear(); }
@@ -129,6 +133,7 @@ private:
 		SpeechVoice voice;
 		SpeechSample sample;
 		entt::entity emitter;
+		SilentPlayback playback;
 	};
 	std::vector<Line> _lines;
 };

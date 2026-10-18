@@ -85,11 +85,11 @@ TEST(HelpSpeech, AVoiceSaysItsLineUntilTheSoundStops)
 	const auto first = static_cast<entt::entity>(5);
 	const auto second = static_cast<entt::entity>(6);
 	std::set<entt::entity> playing {first, second};
-	const auto isPlaying = [&playing](entt::entity emitter) { return playing.contains(emitter); };
+	const auto isPlaying = [&playing](entt::entity emitter, const SilentPlayback&) { return playing.contains(emitter); };
 
-	voices.Add(SpeechVoice::First, family, first);
-	voices.Add(SpeechVoice::Second, advisor, second);
-	voices.Add(SpeechVoice::First, advisor, entt::null);
+	voices.Add(SpeechVoice::First, family, first, {}, false);
+	voices.Add(SpeechVoice::Second, advisor, second, {}, false);
+	voices.Add(SpeechVoice::First, advisor, entt::null, {}, false);
 	EXPECT_EQ(voices.GetCount(), 2);
 
 	EXPECT_TRUE(voices.IsSaying(SpeechVoice::First, family, isPlaying));
@@ -102,5 +102,22 @@ TEST(HelpSpeech, AVoiceSaysItsLineUntilTheSoundStops)
 	EXPECT_FALSE(voices.IsSaying(SpeechVoice::First, family, isPlaying));
 	// Forgotten once finished, even if the emitter comes back for something else
 	playing.insert(first);
+	EXPECT_FALSE(voices.IsSaying(SpeechVoice::First, family, isPlaying));
+}
+
+TEST(HelpSpeech, WithTheDeviceLostAVoiceSaysItsLineForTheLengthOfItsSample)
+{
+	SpeechVoices voices;
+	const SpeechSample family {.bank = SpeechBank::Villagers, .sample = 1, .sound = 101};
+	uint32_t nowMs = 5000;
+	const auto isPlaying = [&nowMs](entt::entity, const SilentPlayback& playback) {
+		return PlaysOn(false, true, playback, nowMs);
+	};
+	// The lost device gives the line no sound; the game continues as if the line plays
+	voices.Add(SpeechVoice::First, family, entt::null, {.startMs = 5000, .lengthMs = 3000.0f}, true);
+	EXPECT_EQ(voices.GetCount(), 1);
+	nowMs = 7999;
+	EXPECT_TRUE(voices.IsSaying(SpeechVoice::First, family, isPlaying));
+	nowMs = 8000;
 	EXPECT_FALSE(voices.IsSaying(SpeechVoice::First, family, isPlaying));
 }

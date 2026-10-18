@@ -1225,5 +1225,23 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 		              });
 		              return QueryResult::Value(std::move(items));
 	              });
+	auto loseDevice = Query("lose_device",
+	                        "A debug tool, not a rule of the game: the game acts as if the machine lost its sound device "
+	                        "(lost true), or has it again (lost false); answers whether the device counts as lost",
+	                        {Parameter("lost", "boolean", "Whether the device counts as lost", true)});
+	loseDevice.writes = true;
+	provider->Add(std::move(loseDevice), [sources](const QueryContext& context) {
+		if (!sources.simulateDeviceLoss || !sources.deviceLost)
+		{
+			return QueryResult::Error("there is no audio");
+		}
+		const auto lost = context.params.find("lost");
+		if (lost == context.params.end() || !lost->is_boolean())
+		{
+			return QueryResult::Error("give lost as true or false");
+		}
+		sources.simulateDeviceLoss(lost->get<bool>());
+		return QueryResult::Value({{"device_lost", sources.deviceLost()}});
+	});
 	return provider;
 }
