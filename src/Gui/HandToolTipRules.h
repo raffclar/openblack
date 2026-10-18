@@ -132,6 +132,10 @@ enum class TapKind : uint8_t
 /// The tooltip over a scroll that a script put in the world: "Activate" before the script starts it, "Reminder" after
 [[nodiscard]] Offer ScrollOffer(bool started);
 
+/// Over a miracle icon in the player's influence, the hand names the icon's miracle at once, in the words of the
+/// miracle's own tooltip text, with no mouse button. A text that is not one of the game's tooltips shows nothing.
+[[nodiscard]] std::optional<Offer> SpellIconOffer(uint32_t miracleToolTipText);
+
 /// What the hand can do with the thing it holds, at the thing under the pointer
 enum class HeldUse : uint8_t
 {

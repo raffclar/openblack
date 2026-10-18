@@ -128,4 +128,20 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
+	all.push_back({
+	    .id = "hand.tooltips_stone_hands",
+	    .name = "The hand over a village centre's stone hands",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given, its centre with the heal and water stone hands, "
+	                   "seen from near the centre. Put the hand over each stone hand.",
+	    .expected = "Over each stone hand the tooltip names the hand's miracle at once, in the words of the miracle's "
+	                "tooltip, with no mouse button drawn. Over the centre itself it shows the belief and the "
+	                "population as before.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {-25.0f, 8.0f, 25.0f}, .look = {-10.0f, 3.0f, 37.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
 }

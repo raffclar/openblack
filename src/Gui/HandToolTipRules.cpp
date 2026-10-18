@@ -86,6 +86,16 @@ Offer ScrollOffer(bool started)
 	return {.index = started ? k_Reminder : k_Activate, .action = ToolTipAction::Apply};
 }
 
+std::optional<Offer> SpellIconOffer(uint32_t miracleToolTipText)
+{
+	constexpr uint32_t k_FirstToolTipText = 0xE73;
+	if (miracleToolTipText < k_FirstToolTipText || miracleToolTipText - k_FirstToolTipText >= ToolTips::k_Count)
+	{
+		return std::nullopt;
+	}
+	return Offer {.index = miracleToolTipText - k_FirstToolTipText};
+}
+
 std::optional<std::vector<Offer>> Holding(bool handInInfluence, HeldUse use, bool tree)
 {
 	if (!handInInfluence)
