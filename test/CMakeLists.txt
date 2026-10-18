@@ -1286,3 +1286,4 @@ openblack_setup_and_add_test(
   test_object_tint graphics/test_object_tint.cpp
 )
 openblack_setup_and_add_test(test_sing_along help/test_sing_along.cpp)
+openblack_setup_and_add_test(test_save_game_room temple/test_save_game_room.cpp)
