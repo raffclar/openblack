@@ -213,6 +213,11 @@ public:
 	[[nodiscard]] virtual glm::vec2 GetWaterfallSlide() const = 0;
 	virtual void Activate() = 0;
 	virtual void Activate(TempleRoom room) = 0;
+	/// The player asks with the mouse or a key to go into the temple at the room. The game takes a picture of the
+	/// frame that it draws now, for the pictures of the saved games. The player goes in after that frame.
+	virtual void ActivateAfterFrame(TempleRoom room) = 0;
+	/// The frame is drawn: the player goes into the temple if they asked to during the frame
+	virtual void FrameDrawn() = 0;
 	/// Takes the player to a room of the temple, from outside or from another room, and keeps them there, as the game
 	/// does with the save game room once the game is over: going to another room or out of the temple ends the game
 	virtual void EnterLockedRoom(TempleRoom room) = 0;

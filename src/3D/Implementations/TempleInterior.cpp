@@ -17,6 +17,7 @@
 
 #include <array>
 #include <unordered_map>
+#include <utility>
 
 #include <PackFile.h>
 #include <SDL_keyboard.h>
@@ -1366,11 +1367,12 @@ void TempleInterior::SetCurrentRoom(TempleRoom room)
 		{
 			_challengeRoom->Enter();
 		}
-		// Coming into the save game room, the room reads the saved games and writes its scroll again, and no picture is
-		// shown in high detail
+		// Coming into the save game room, the room reads the saved games and their pictures and writes its scroll again,
+		// and no picture is shown in high detail
 		if (room == TempleRoom::SaveGame && _saveGameRoom != nullptr)
 		{
 			_saveGameRoom->Enter();
+			_saveGameRoom->ReadSmallPictures(ReadSavedGamePicture);
 			ListSavedGames();
 			if (_scrolls != nullptr)
 			{
@@ -1690,6 +1692,28 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 	{
 		_leaveRequested = false;
 		Deactivate();
+	}
+}
+
+void TempleInterior::ActivateAfterFrame(TempleRoom room)
+{
+	if (_active || _activateAfterFrame.has_value() || !IsRoomAvailable(room))
+	{
+		return;
+	}
+	// The picture shows the land as the player sees it as they go in, from the frame that the game draws now
+	if (Locator::saveGameSystem::has_value())
+	{
+		Locator::saveGameSystem::value().TakeTemplePicture();
+	}
+	_activateAfterFrame = room;
+}
+
+void TempleInterior::FrameDrawn()
+{
+	if (const auto room = std::exchange(_activateAfterFrame, std::nullopt); room.has_value())
+	{
+		Activate(*room);
 	}
 }
 

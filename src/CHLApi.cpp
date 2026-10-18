@@ -31,6 +31,7 @@
 
 #include <LHVM.h>
 #include <LHVMTypes.h>
+#include <SaveSlots.h>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <glm/geometric.hpp>
@@ -199,6 +200,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -9205,9 +9207,15 @@ void ClearClippingWindow() // 438 CLEAR_CLIPPING_WINDOW
 
 void SaveGameInSlot() // 439 SAVE_GAME_IN_SLOT
 {
-	// const auto slot = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The game takes the whole part of the number as the slot, and saves into it as it does by itself. The game does
+	// not check the slot; openblack does not save into a slot that is not there.
+	const auto number = Popf();
+	if (!(number > -1.0f && number < static_cast<float>(openblack::gamesave::k_SlotCount)) ||
+	    !Locator::saveGameSystem::has_value())
+	{
+		return;
+	}
+	Locator::saveGameSystem::value().InstantSave(static_cast<uint32_t>(static_cast<int32_t>(number)));
 }
 
 void SetObjectCarrying() // 440 SET_OBJECT_CARRYING

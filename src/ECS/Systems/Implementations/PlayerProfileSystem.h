@@ -61,6 +61,7 @@ public:
 	[[nodiscard]] uint32_t TimePlayed(int64_t now) const final;
 	void CountSave() final;
 	void CountLoad() final;
+	uint32_t TakeLandAutosave(uint32_t land) final;
 
 	/// The computer's own: its account's name, and the milliseconds since it started
 	[[nodiscard]] static Machine ThisMachine();

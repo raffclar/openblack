@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -52,6 +53,15 @@ public:
 		std::optional<size_t> firstDifference;
 	};
 
+	/// How the system takes back the pictures of the screen that it asked the renderer for
+	struct Screens
+	{
+		/// The picture made under a name, once; none while it is not made
+		std::function<std::optional<std::vector<uint8_t>>(const std::string& name)> take;
+		/// Whether the renderer gave up the picture under a name
+		std::function<bool(const std::string& name)> failed;
+	};
+
 	virtual ~SaveGameSystemInterface() = default;
 
 	/// Saves the game into the slot with the name. Returns whether it wrote every file.
@@ -71,6 +81,26 @@ public:
 	/// After a load of a world file in the game's layout: the creatures of the file, and whether openblack writes their
 	/// records with the same bytes now
 	[[nodiscard]] virtual std::vector<VanillaCheck> CheckVanillaRecords() const = 0;
+
+	/// The player goes into the temple: the game takes a picture of the screen for the saves that come next
+	virtual void TakeTemplePicture() = 0;
+	/// A save that the game does by itself into the slot: a new picture of the screen, and the slot's own name. Returns
+	/// whether it wrote every file of the world.
+	virtual bool InstantSave(uint32_t slot) = 0;
+	/// The save as the player leaves the game, into the slot of the save on exit, when the rules let it. The game makes
+	/// the screen black before it saves, so the picture of this save is black.
+	virtual bool SaveOnExit() = 0;
+	/// The end of a game turn: the game autosaves when an autosave is due
+	virtual void EndTurn() = 0;
+	/// The keys of the quick save and the quick load. Returns whether the game saved or loaded.
+	virtual bool QuickSave() = 0;
+	virtual bool QuickLoad() = 0;
+	/// A new land starts: the turns go from zero again, so the turn of the last autosave does too
+	virtual void NewLand() = 0;
+	/// Whether a picture of the screen that the system asked for is not back yet
+	[[nodiscard]] virtual bool AnyPictureWaiting() const = 0;
+	/// Takes the pictures of the screen that are back, and writes the picture files with them
+	virtual void CollectPictures(const Screens& screens) = 0;
 };
 
 } // namespace openblack::ecs::systems

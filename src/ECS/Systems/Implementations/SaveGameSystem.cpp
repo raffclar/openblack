@@ -29,9 +29,11 @@
 #include <vector>
 
 #include <CreatureRecord.h>
+#include <InstantSaves.h>
 #include <LHVM.h>
 #include <MindFile.h>
 #include <SaveGameInfo.h>
+#include <SavePictureMaker.h>
 #include <SavePictures.h>
 #include <SaveSlots.h>
 #include <SavedObjects.h>
@@ -65,11 +67,13 @@
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
 #include "ECS/SaveGameFiles.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -78,6 +82,7 @@
 #include "ECS/ThingMapPlace.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Graphics/RendererInterface.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
 
@@ -728,6 +733,11 @@ bool IsOpenLand(std::string_view landscape)
 
 bool SaveGameSystem::Save(uint32_t slot, std::u16string_view name)
 {
+	return SaveSlot(slot, name, true);
+}
+
+bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putPicture)
+{
 	const auto player = PlayerFolder();
 	if (!gamesave::IsSlot(slot) || !player.has_value())
 	{
@@ -744,7 +754,9 @@ bool SaveGameSystem::Save(uint32_t slot, std::u16string_view name)
 	                          .turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u,
 	                          .landscape = {},
 	                          .knownLeashes = 0,
-	                          .creatureInTemple = 0};
+	                          .creatureInTemple = 0,
+	                          .lastAutosaveTurn = _lastAutosaveTurn,
+	                          .lastQuickSaveTurn = _lastQuickSaveTurn};
 	if (const auto* instance = Game::Instance(); instance != nullptr)
 	{
 		game.landscape = instance->GetLandPath().generic_string();
@@ -797,6 +809,11 @@ bool SaveGameSystem::Save(uint32_t slot, std::u16string_view name)
 	if (_vanilla.has_value() && _vanilla->land == land)
 	{
 		written = WriteVanilla(slot, slotFolder, saved, savedEntities) && written;
+	}
+	// The slot's pictures come from the temporary picture file, as the screen was when the game last took a picture
+	if (putPicture)
+	{
+		PutSlotPicture(slot);
 	}
 	const gamesave::SaveGameInfo info {.slot = slot, .date = DateNow(), .name = std::u16string(name)};
 	written = WriteFile(slotFolder, gamesave::k_InfoFileName, gamesave::Write(info)) && written;
@@ -969,6 +986,14 @@ bool SaveGameSystem::Load(uint32_t slot)
 		}
 	}
 	SPDLOG_LOGGER_INFO(Log(), "Loaded {} creatures from slot {}", restored, slot);
+	if (restored > 0)
+	{
+		// The next autosave and the next quick load come only after their full gap from the turn of the load
+		const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u;
+		_lastAutosaveTurn = turn;
+		_lastLoadTurn = turn;
+		_lastQuickSaveTurn = game->lastQuickSaveTurn;
+	}
 	return restored > 0;
 }
 
@@ -1249,4 +1274,225 @@ std::optional<std::vector<uint8_t>> SaveGameSystem::ReadPictureFile(std::string_
 		return std::nullopt;
 	}
 	return ReadFile(path);
+}
+
+namespace
+{
+/// The folder of the saved games' pictures, relative to the profile folder
+std::optional<std::filesystem::path> PicturesFolder()
+{
+	const auto player = PlayerFolder();
+	if (!player.has_value())
+	{
+		return std::nullopt;
+	}
+	return *player / gamesave::k_SavedGamesFolder / gamesave::k_PicturesFolder;
+}
+
+bool ScriptCutScene()
+{
+	if (!Locator::cinematicDirectorSystem::has_value())
+	{
+		return false;
+	}
+	const auto& director = Locator::cinematicDirectorSystem::value();
+	return director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
+}
+
+uint32_t TurnNow()
+{
+	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u;
+}
+
+bool GameOver()
+{
+	return Locator::entitiesRegistry::value().Context().gameOver;
+}
+
+/// The name of a save that the game does by itself into the slot
+std::u16string InstantName(uint32_t slot)
+{
+	const auto text = Locator::helpTextSystem::has_value()
+	                      ? Locator::helpTextSystem::value().GetWords(gamesave::k_SlotNameTexts.at(slot))
+	                      : std::u16string {};
+	return gamesave::InstantSaveName(text, LandNumber());
+}
+
+std::optional<std::span<const uint8_t>> View(const std::optional<std::vector<uint8_t>>& bytes)
+{
+	return bytes.has_value() ? std::optional<std::span<const uint8_t>>(*bytes) : std::nullopt;
+}
+} // namespace
+
+void SaveGameSystem::TakeTemplePicture()
+{
+	AskForPicture({});
+}
+
+bool SaveGameSystem::InstantSave(uint32_t slot)
+{
+	if (!gamesave::IsSlot(slot))
+	{
+		return false;
+	}
+	// The picture of the slot comes when the renderer gives back the picture of the screen
+	const bool written = SaveSlot(slot, InstantName(slot), false);
+	AskForPicture({slot});
+	return written;
+}
+
+bool SaveGameSystem::SaveOnExit()
+{
+	const auto* game = Game::Instance();
+	const auto& context = Locator::entitiesRegistry::value().Context();
+	// No save as the player leaves the testbed, the Gods' Playground, or a game that is over
+	if (game == nullptr || game->GetLandPath().empty() || game->GetLandPath() == "testbed" || context.gameOver ||
+	    LandNumber() == gamesave::k_PlaygroundLand)
+	{
+		return false;
+	}
+	// The game makes the screen black before it saves, so it takes a picture of a black screen
+	const std::vector<uint8_t> black(
+	    static_cast<size_t>(gamesave::k_ScreenPictureWidth) * gamesave::k_ScreenPictureHeight * gamesave::k_TexelSize, 0);
+	WriteTemporaryPicture(black);
+	return SaveSlot(gamesave::k_ExitSlot, InstantName(gamesave::k_ExitSlot), true);
+}
+
+void SaveGameSystem::EndTurn()
+{
+	bool autosaveOn = player_profiles::Settings {}.autoSave;
+	if (Locator::playerProfileSystem::has_value())
+	{
+		if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
+		{
+			autosaveOn = profile->settings.autoSave;
+		}
+	}
+	const gamesave::AutosaveState state {
+	    .autosaveOn = autosaveOn,
+	    .gameOver = GameOver(),
+	    .scriptCutScene = ScriptCutScene(),
+	    .paused = Locator::time::has_value() && Locator::time::value().IsPaused(),
+	    .land = LandNumber(),
+	    .turn = TurnNow(),
+	    .lastAutosaveTurn = _lastAutosaveTurn,
+	};
+	if (!gamesave::AutosaveDue(state))
+	{
+		return;
+	}
+	_lastAutosaveTurn = state.turn;
+	// The autosaves of each land go in turn into the three autosave slots
+	const auto count =
+	    Locator::playerProfileSystem::has_value() ? Locator::playerProfileSystem::value().TakeLandAutosave(state.land) : 0u;
+	SPDLOG_LOGGER_INFO(Log(), "Autosave at turn {} into slot {}", state.turn, gamesave::AutosaveSlot(count));
+	InstantSave(gamesave::AutosaveSlot(count));
+}
+
+bool SaveGameSystem::QuickSave()
+{
+	const auto turn = TurnNow();
+	if (!gamesave::QuickTurnAllowed(turn, _lastQuickSaveTurn, GameOver(), ScriptCutScene()))
+	{
+		return false;
+	}
+	_lastQuickSaveTurn = turn;
+	return InstantSave(gamesave::k_QuickSaveSlot);
+}
+
+bool SaveGameSystem::QuickLoad()
+{
+	if (!gamesave::QuickTurnAllowed(TurnNow(), _lastLoadTurn, GameOver(), ScriptCutScene()))
+	{
+		return false;
+	}
+	return Load(gamesave::k_QuickSaveSlot);
+}
+
+void SaveGameSystem::NewLand()
+{
+	_lastAutosaveTurn = 0;
+}
+
+bool SaveGameSystem::AnyPictureWaiting() const
+{
+	return !_waitingPictures.empty();
+}
+
+void SaveGameSystem::AskForPicture(std::vector<uint32_t> slots)
+{
+	if (!Locator::rendererInterface::has_value())
+	{
+		for (const auto slot : slots)
+		{
+			PutSlotPicture(slot);
+		}
+		return;
+	}
+	auto name = std::format("{}save-picture/{}", graphics::ScreenPictures::k_Prefix, _pictureRequests++);
+	Locator::rendererInterface::value().RequestScreenPicture(name, [](const graphics::ScreenView& screen) {
+		return gamesave::SampleScreen({.width = screen.width,
+		                               .height = screen.height,
+		                               .pitch = screen.pitch,
+		                               .bottomUp = screen.yflip,
+		                               .bgra = screen.bgra})
+		    .value_or(std::vector<uint8_t> {});
+	});
+	_waitingPictures.push_back({.name = std::move(name), .slots = std::move(slots)});
+}
+
+void SaveGameSystem::CollectPictures(const Screens& screens)
+{
+	while (!_waitingPictures.empty())
+	{
+		const auto& waiting = _waitingPictures.front();
+		auto picture = screens.take ? screens.take(waiting.name) : std::nullopt;
+		if (!picture.has_value())
+		{
+			// The pictures come back in the order that the system asked for them
+			if (!screens.failed || !screens.failed(waiting.name))
+			{
+				return;
+			}
+			SPDLOG_LOGGER_WARN(Log(), "The renderer gave up the picture of the screen {}", waiting.name);
+		}
+		else if (!picture->empty())
+		{
+			SPDLOG_LOGGER_INFO(Log(), "The picture of the screen {} is back for {} slots", waiting.name, waiting.slots.size());
+			WriteTemporaryPicture(*picture);
+		}
+		for (const auto slot : waiting.slots)
+		{
+			PutSlotPicture(slot);
+		}
+		_waitingPictures.erase(_waitingPictures.begin());
+	}
+}
+
+void SaveGameSystem::WriteTemporaryPicture(std::span<const uint8_t> screenPicture)
+{
+	const auto folder = PicturesFolder();
+	if (!folder.has_value())
+	{
+		return;
+	}
+	const auto old = ReadPictureFile(gamesave::k_TemporaryPictureFileName);
+	WriteFile(*folder, gamesave::k_TemporaryPictureFileName, gamesave::MakeTemporaryPicture(View(old), screenPicture));
+}
+
+void SaveGameSystem::PutSlotPicture(uint32_t slot)
+{
+	const auto folder = PicturesFolder();
+	if (!folder.has_value())
+	{
+		return;
+	}
+	const auto largeName = gamesave::LargePictureFileName(slot);
+	const auto smallName = gamesave::SmallPictureFileName(slot);
+	const auto temporary = ReadPictureFile(gamesave::k_TemporaryPictureFileName);
+	const auto large = ReadPictureFile(largeName);
+	const auto small = ReadPictureFile(smallName);
+	const auto files = gamesave::PutSlotPictures(View(temporary), View(large), View(small), slot);
+	WriteFile(*folder, largeName, files.large);
+	WriteFile(*folder, smallName, files.small);
 }
