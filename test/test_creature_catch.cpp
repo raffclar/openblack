@@ -151,3 +151,12 @@ TEST(CreatureCatch, StepMoveCarriesItsShareOfTheTravel)
 	EXPECT_NEAR(turned.x, 0.0f, 1e-6f);
 	EXPECT_FLOAT_EQ(turned.z, 4.0f);
 }
+
+// A catch waits while the body plays an action, and while the creature walks on to its stop or turns
+TEST(CreatureCatch, ItWaitsForTheBodyAndTheWalkToStop)
+{
+	EXPECT_FALSE(creature_catch::WaitsToStart(false, false));
+	EXPECT_TRUE(creature_catch::WaitsToStart(true, false));
+	EXPECT_TRUE(creature_catch::WaitsToStart(false, true));
+	EXPECT_TRUE(creature_catch::WaitsToStart(true, true));
+}

@@ -2420,7 +2420,7 @@ void CreatureFightSystem::ProcessStages()
 				if (locomotion != nullptr)
 				{
 					locomotion->StopAtOnce(entity);
-					locomotion->TurnToFace(entity, Flat(registry.Get<const Transform>(opponent).position));
+					locomotion->TurnToFaceAtOnce(entity, Flat(registry.Get<const Transform>(opponent).position));
 				}
 			}
 			else if (starter && (!moving(entity) || fighting->stageSeconds > k_ApproachSeconds))
@@ -2627,8 +2627,8 @@ void CreatureFightSystem::BeginDuel(entt::entity creature)
 		    Flat(registry.Get<const Transform>(opponent).position) - Flat(registry.Get<const Transform>(creature).position);
 		if (glm::length(towards) > 0.0f)
 		{
-			fighting.fighter.turning =
-			    Locator::creatureLocomotionSystem::value().TurnToHeading(creature, creature_locomotion::HeadingOf(towards));
+			fighting.fighter.turning = Locator::creatureLocomotionSystem::value().TurnToHeadingAtOnce(
+			    creature, creature_locomotion::HeadingOf(towards));
 		}
 	}
 }

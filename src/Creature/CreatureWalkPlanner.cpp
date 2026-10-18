@@ -203,6 +203,18 @@ float creature_walk_planner::StopAhead(float speed, float stillNeeded)
 	return stillNeeded > stop ? stillNeeded : stop;
 }
 
+int32_t creature_walk_planner::TurnMs(float pace, int32_t gameTurnMs)
+{
+	return map_coords::FtoL(pace * static_cast<float>(gameTurnMs));
+}
+
+int32_t creature_walk_planner::ClipStepMs(int32_t turnMs, float size)
+{
+	// The rate is found first, then it multiplies the milliseconds
+	const float rate = 1.6f - ((size * 0.5f) * 0.85f);
+	return map_coords::FtoL(rate * static_cast<float>(turnMs));
+}
+
 int32_t creature_walk_planner::WalkTimeAfterStep(int32_t stepTimeMs, int32_t stepMs, int32_t walkMs,
                                                  creature_locomotion::Side side)
 {

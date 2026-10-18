@@ -111,4 +111,11 @@ constexpr float k_LateArrival = 0.1f;
 /// game does (where the step ends is judged with only the sideways part turned round).
 [[nodiscard]] glm::vec3 StepMove(glm::vec3 travel, const glm::mat3& rotation, float modelScale, float stepMs, float durationMs,
                                  bool mirrored);
+/// Whether a catch waits before it starts. It waits while the body plays an action, and while the creature walks, turns
+/// or waits for its route. A creature that something stops as it walks thus slows to a stand before its catch.
+[[nodiscard]] constexpr bool WaitsToStart(bool bodyPlaysAction, bool moving)
+{
+	return bodyPlaysAction || moving;
+}
+
 } // namespace openblack::creature_catch

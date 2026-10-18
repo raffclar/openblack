@@ -351,9 +351,11 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 				mind->paused = true;
 				component.pausedMind = true;
 			}
+			// It stops as the game stops a walk: a walking creature walks on and slows to a stand. The freeze slows its
+			// steps and turns, but not its walk along the route.
 			if (Locator::creatureLocomotionSystem::has_value())
 			{
-				Locator::creatureLocomotionSystem::value().StopAtOnce(entity);
+				Locator::creatureLocomotionSystem::value().Stop(entity);
 			}
 			component.freeze = 0.0f;
 		}

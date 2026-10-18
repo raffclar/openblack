@@ -805,6 +805,19 @@ bool BodyBusy(const CreatureObjectAction* doing)
 	       (doing->status == Status::Running || doing->status == Status::Contact);
 }
 
+/// Whether a catch must wait before it starts. It waits while the body plays any action, and while the creature
+/// walks, turns or waits for its route. A stop lets a walking creature slow to a stand first.
+bool CatchWaits(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const bool bodyPlaysAction = BodyBusy(registry.TryGet<const CreatureObjectAction>(creature)) ||
+	                             (animation != nullptr && creature_layers::IsPlaying(animation->body));
+	const bool moving =
+	    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(creature);
+	return creature_catch::WaitsToStart(bodyPlaysAction, moving);
+}
+
 void Fail(CreatureObjectAction& action, std::string reason,
           creature_object_actions::Failure kind = creature_object_actions::Failure::Other)
 {
@@ -1178,9 +1191,10 @@ void TurnToCatch(entt::entity creature, const CreatureObjectAction& action)
 	const float bearing = BearingTo(transform, towards);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} starts its catch at ({:.1f}, {:.1f}), {:.2f} rad off the thing",
 	                    entt::to_integral(creature), transform.position.x, transform.position.z, bearing);
+	// The catch turns the creature itself, while its body plays the catch
 	if (bearing > creature_catch::k_TurnAngle)
 	{
-		Locator::creatureLocomotionSystem::value().TurnToFace(creature, glm::xz(towards));
+		Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature, glm::xz(towards));
 	}
 }
 
@@ -1589,8 +1603,9 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 bool CreatureObjectActionSystem::Catch(entt::entity creature, entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	// While its body acts out something else the catch waits, tried again each frame
-	if (BodyBusy(registry.TryGet<const CreatureObjectAction>(creature)))
+	// While its body acts out something else, or while it walks on to its stop or turns, the catch waits. The catch
+	// tries again each frame.
+	if (CatchWaits(creature))
 	{
 		registry.AssignOrReplace<PendingCatch>(creature, PendingCatch {.object = object});
 		return true;
@@ -1604,7 +1619,7 @@ void CreatureObjectActionSystem::StartPendingCatches()
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<std::pair<entt::entity, entt::entity>> due;
 	registry.Each<const PendingCatch>([&](entt::entity creature, const PendingCatch& pending) {
-		if (!BodyBusy(registry.TryGet<const CreatureObjectAction>(creature)))
+		if (!CatchWaits(creature))
 		{
 			due.emplace_back(creature, pending.object);
 		}
