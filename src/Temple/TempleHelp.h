@@ -65,6 +65,9 @@ void Leave(Scripts& scripts);
 /// The player clicks the door of a room that is not open to them. The help running stops and the help that tells
 /// them starts. The camera stays where it is.
 void RoomNotAvailable(Scripts& scripts);
+/// The player saved a game into an empty slot of the save game room: the help on loading starts. The help running does
+/// not stop first.
+void SavedIntoEmptySlot(Scripts& scripts);
 
 /// The dialogue of the world. The temple keeps it when the player enters and gives it back when the player leaves.
 class Dialogue

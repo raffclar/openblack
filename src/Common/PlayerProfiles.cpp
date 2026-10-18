@@ -33,6 +33,7 @@ constexpr std::string_view k_CurrentKey = "current";
 constexpr std::string_view k_ProfileKey = "profile";
 constexpr std::string_view k_SettingKey = "setting";
 constexpr std::string_view k_AlignmentKey = "alignment";
+constexpr std::string_view k_StatisticsKey = "statistics";
 constexpr char k_Separator = '\t';
 
 char16_t FoldCase(char16_t c)
@@ -227,7 +228,8 @@ const Profile& Add(Profiles& profiles, std::u16string_view name, std::u16string_
 		                             .creatureName = text,
 		                             .symbol = symbol,
 		                             .settings = {},
-		                             .alignment = 0.0});
+		                             .alignment = 0.0,
+		                             .statistics = {}});
 		SortForTheList(profiles);
 		found = Find(profiles, given);
 	}
@@ -294,6 +296,8 @@ std::string Write(const Profiles& profiles)
 			                    field.write(profile.settings));
 		}
 		text += std::format("{1}{0}{2}{0}{3}\n", k_Separator, k_AlignmentKey, profile.name, profile.alignment);
+		text += std::format("{1}{0}{2}{0}{3}{0}{4}{0}{5}\n", k_Separator, k_StatisticsKey, profile.name,
+		                    profile.statistics.secondsPlayed, profile.statistics.saves, profile.statistics.loads);
 	}
 	return text;
 }
@@ -344,6 +348,21 @@ Profiles Read(std::string_view text)
 			}
 			continue;
 		}
+		if (key == k_StatisticsKey)
+		{
+			const auto owner = NextField(line);
+			const auto profile = std::ranges::find(profiles.profiles, owner, &Profile::name);
+			// The counts are taken only when all three can be read
+			Statistics statistics;
+			const auto seconds = NextField(line);
+			const auto saves = NextField(line);
+			if (profile != profiles.profiles.end() && ParseNumber(seconds, statistics.secondsPlayed) &&
+			    ParseNumber(saves, statistics.saves) && ParseNumber(line, statistics.loads))
+			{
+				profile->statistics = statistics;
+			}
+			continue;
+		}
 		if (key != k_ProfileKey)
 		{
 			continue;
@@ -362,7 +381,8 @@ Profiles Read(std::string_view text)
 		                             .creatureName = std::string(line),
 		                             .symbol = symbol,
 		                             .settings = {},
-		                             .alignment = 0.0});
+		                             .alignment = 0.0,
+		                             .statistics = {}});
 	}
 	SortForTheList(profiles);
 	return profiles;

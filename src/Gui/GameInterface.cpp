@@ -74,6 +74,8 @@ namespace
 {
 /// The scripts the game's text is in, in the order the game reads them
 constexpr std::array k_TextScripts = {"InfoScript2.txt", "InfoScriptPatch2.txt", "InfoScriptMultiplayer2.txt"};
+/// The tooltip "Zoom In (%s)" of the save game room, which shows the name of a saved game
+constexpr uint32_t k_NamedZoomToolTip = 0xEE6 - 0xE73;
 /// The dialogs' font, the first of the game's fonts
 constexpr std::string_view k_Font = "j0";
 /// The good advisor's font and the evil one's: as in the original game, each advisor's dialogue lines are drawn in a
@@ -326,6 +328,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _storyHistoryBox(std::make_unique<StoryHistoryBox>(_texts, _font))
     , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
     , _newPlayerBox(std::make_unique<NewPlayerBox>(_texts, _font))
+    , _saveGameBoxes(std::make_unique<SaveGameBoxes>(_texts, _font))
     , _musicControls(std::make_unique<CustomMusicControls>(_font, _atmos.get()))
     , _toolTips(ReadToolTipsInfo())
 {
@@ -391,6 +394,38 @@ bool GameInterface::ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec
 		return true;
 	case SDL_KEYDOWN:
 		_newPlayerBox->KeyDown(event.key.keysym.sym);
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool GameInterface::ProcessSaveGameBoxesEvent(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_saveGameBoxes->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_saveGameBoxes->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		// Every control clicks as it is let go over, the texts too
+		if (event.button.button == SDL_BUTTON_LEFT &&
+		    _saveGameBoxes->MouseUp(_painter.ToDialog({event.button.x, event.button.y})))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_TEXTINPUT:
+		_saveGameBoxes->TextInput(ToUtf16(event.text.text));
+		return true;
+	case SDL_KEYDOWN:
+		_saveGameBoxes->KeyDown(event.key.keysym.sym);
 		return true;
 	default:
 		return false;
@@ -660,6 +695,10 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	{
 		return true;
 	}
+	if (_saveGameBoxes->IsActive())
+	{
+		return ProcessSaveGameBoxesEvent(event);
+	}
 	if (_tattooEditor->IsOpen() && Locator::tattooEditorSystem::has_value())
 	{
 		return ProcessTattooEditorEvent(event);
@@ -786,6 +825,7 @@ void GameInterface::Update(float deltaSeconds)
 	_skipBox->Update(deltaSeconds);
 	_storyHistoryBox->Update(deltaSeconds);
 	_newPlayerBox->Update(deltaSeconds);
+	_saveGameBoxes->Update(deltaSeconds);
 	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
 	_screenFade.Update(deltaSeconds);
@@ -833,8 +873,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	DrawTipBubble(resolution, mouse);
 	// The gestures' hints are drawn with the world too, over all of it
 	DrawGestureHints(resolution);
-	const bool menuOpen =
-	    (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() || _newPlayerBox->IsActive();
+	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
+	                      _newPlayerBox->IsActive() || _saveGameBoxes->IsActive();
 	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value());
 	// A cut scene leaves some of the interface off the screen
 	const auto& cinema = Locator::cinematicDirectorSystem::value();
@@ -908,6 +948,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_musicControls->Draw(_painter);
 		_canvas.SetOrigin(glm::vec2(0.0f));
 		_storyHistoryBox->Draw(_painter);
+		_saveGameBoxes->Draw(_painter);
 		if (_menu->IsVisible())
 		{
 			_menu->Draw(_painter);
@@ -1782,8 +1823,16 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	const auto worded =
 	    shown->number.has_value() ? std::optional(world_tooltip::Worded(shown->index, *shown->number)) : std::nullopt;
 	const auto words = _texts.Get(ToolTips::TextName(shown->words.value_or(worded.has_value() ? worded->words : shown->index)));
-	const std::u16string text =
+	std::u16string text =
 	    worded.has_value() ? world_tooltip::Compose(shown->index, words, worded->number, shown->second) : std::u16string(words);
+	// The save game room's named zoom shows the name of the last saved game the cursor was over
+	if (shown->index == k_NamedZoomToolTip)
+	{
+		if (const auto place = text.find(u"%s"); place != std::u16string::npos)
+		{
+			text.replace(place, 2, _toolTipName);
+		}
+	}
 	const glm::vec4 yellow {1.0f, 1.0f, 0.0f, alpha};
 	const glm::vec4 white {1.0f, 1.0f, 1.0f, alpha};
 	const glm::vec4 shadow {0.0f, 0.0f, 0.0f, alpha};

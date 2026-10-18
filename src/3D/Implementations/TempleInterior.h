@@ -13,6 +13,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include <glm/vec3.hpp>
@@ -25,6 +26,7 @@
 #include "3D/TempleMapSpells.h"
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
+#include "Temple/SaveGameRoomRules.h"
 #include "Temple/TempleHelp.h"
 #include "Temple/TemplePeople.h"
 #include "Temple/TempleRoomLock.h"
@@ -39,6 +41,7 @@ class CameraModel;
 class CreatureCaveEffects;
 class TempleCameraModel;
 class TempleChallengeRoom;
+class TempleSaveGameRoom;
 class TempleScrolls;
 class TempleSigns;
 
@@ -208,6 +211,25 @@ private:
 	void LeaveToReplayChallenge();
 	/// Moves on the challenge room's pictures and its close look's words
 	void UpdateChallengeRoom();
+	/// The save game room's pictures and buttons
+	std::unique_ptr<TempleSaveGameRoom> _saveGameRoom;
+	/// The question the save game room asks the player about a slot, until it is answered
+	struct SaveGameQuestion
+	{
+		temple::save_game_room::Click click;
+		uint32_t slot;
+	};
+	std::optional<SaveGameQuestion> _saveGameQuestion;
+	/// What the save game room's controls depend on now
+	[[nodiscard]] temple::save_game_room::View SaveGameRoomView() const;
+	/// Reads the saved games that the save game room lists again
+	void ListSavedGames();
+	/// Asks the player about a slot, as a click in the save game room asks
+	void AskAboutSlot(temple::save_game_room::Click click, uint32_t slot);
+	/// Acts on the player's answer to the save game room's question
+	void UpdateSaveGameRoom();
+	/// Saves the game into the slot with the name the player gave
+	void SaveIntoSlot(uint32_t slot, std::u16string_view name);
 	/// This frame's text in the rooms
 	std::vector<OrientedTextVertex> _text;
 	/// Whether the options room has opened the game's options

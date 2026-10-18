@@ -309,6 +309,50 @@ TEST(PlayerProfileSystem, PickingDeletingAndEditingProfilesIsKept)
 	EXPECT_EQ(profile->alignment, 0.75);
 }
 
+TEST(PlayerProfiles, TheTimePlayedIsTheTimeKeptAndTheTimeSinceTheGameStarted)
+{
+	EXPECT_EQ(TimePlayed(100, 1000, 1060), 160u);
+	// The count wraps as a 32-bit count does
+	EXPECT_EQ(TimePlayed(0xFFFFFFF0u, 0, 0x20), 0x10u);
+}
+
+TEST(PlayerProfiles, TheStatisticsAreKeptWithTheProfile)
+{
+	Profiles profiles;
+	Add(profiles, u"Ann", u"", "C1.erc", 0);
+	profiles.profiles.front().statistics = {.secondsPlayed = 3725, .saves = 4, .loads = 2};
+	const auto read = Read(Write(profiles));
+	ASSERT_EQ(read.profiles.size(), 1u);
+	EXPECT_EQ(read.profiles.front().statistics, (Statistics {.secondsPlayed = 3725, .saves = 4, .loads = 2}));
+	// A line that cannot be read leaves the counts at zero
+	const auto bad = Read("profile\tAnn\tC1.erc\t0\tAnn\nstatistics\tAnn\t5\tx\t1\n");
+	ASSERT_EQ(bad.profiles.size(), 1u);
+	EXPECT_EQ(bad.profiles.front().statistics, Statistics {});
+}
+
+TEST(PlayerProfileSystem, TheTimePlayedAndTheSavesAndLoadsAreKeptAsTheGameEnds)
+{
+	const ProfilesFolder folder("player_profiles_statistics");
+	const auto store = StoreIn(folder.Path());
+	ecs::systems::PlayerProfileSystem system(store, FakeMachine());
+	system.CreateProfile(u"Ann", 0);
+	system.StartPlaying(1000);
+	EXPECT_EQ(system.TimePlayed(1030), 30u);
+	system.CountSave();
+	system.CountSave();
+	system.CountLoad();
+	// The counts are kept only with the next change of the profile
+	{
+		ecs::systems::PlayerProfileSystem before(store, FakeMachine());
+		EXPECT_EQ(before.GetCurrentProfile()->statistics, Statistics {});
+	}
+	system.StopPlaying(1100);
+	ecs::systems::PlayerProfileSystem later(store, FakeMachine());
+	EXPECT_EQ(later.GetCurrentProfile()->statistics, (Statistics {.secondsPlayed = 100, .saves = 2, .loads = 1}));
+	later.StartPlaying(5000);
+	EXPECT_EQ(later.TimePlayed(5010), 110u);
+}
+
 TEST(PlayerProfileSystem, ADevelopersRunPlaysAsAProfileNeverKept)
 {
 	const ProfilesFolder folder("player_profiles_developer");

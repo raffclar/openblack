@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include <filesystem>
 #include <optional>
@@ -55,6 +56,16 @@ public:
 	virtual void SetCurrentSettings(const player_profiles::Settings& settings) = 0;
 	/// Keeps how good or evil the player is now with the profile played, for their next new game to start them there
 	virtual void SetCurrentAlignment(double alignment) = 0;
+
+	/// The game started at that time of the system clock, in seconds
+	virtual void StartPlaying(int64_t now) = 0;
+	/// The game ends at that time: the seconds played since it started are added to the profile played, which is kept
+	virtual void StopPlaying(int64_t now) = 0;
+	/// The seconds the player played, those kept with the profile and those since the game started
+	[[nodiscard]] virtual uint32_t TimePlayed(int64_t now) const = 0;
+	/// The player saved or loaded a game in the save game room. The profile keeps the count with its next change.
+	virtual void CountSave() = 0;
+	virtual void CountLoad() = 0;
 };
 
 } // namespace openblack::ecs::systems

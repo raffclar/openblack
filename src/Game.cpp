@@ -11,6 +11,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 
 #include <algorithm>
 #include <array>
@@ -640,6 +641,11 @@ Game::~Game() noexcept
 	}
 	// The game keeps the help record of the player when it closes
 	SaveHelpRecord();
+	// The profile keeps the time played as the game closes
+	if (Locator::playerProfileSystem::has_value())
+	{
+		Locator::playerProfileSystem::value().StopPlaying(static_cast<int64_t>(std::time(nullptr)));
+	}
 	ShutDownServices();
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
@@ -4337,6 +4343,11 @@ bool Game::Run() noexcept
 	if (_startupTimer.has_value())
 	{
 		_startupTimer->Step("first land");
+	}
+	// The time played that the save game room shows counts from here, by the system clock
+	if (Locator::playerProfileSystem::has_value())
+	{
+		Locator::playerProfileSystem::value().StartPlaying(static_cast<int64_t>(std::time(nullptr)));
 	}
 
 	auto& fileSystem = Locator::filesystem::value();

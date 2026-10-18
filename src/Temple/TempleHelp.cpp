@@ -154,6 +154,11 @@ void RoomNotAvailable(Scripts& scripts)
 	scripts.Start("CitadelWorldRoomNotAvailable");
 }
 
+void SavedIntoEmptySlot(Scripts& scripts)
+{
+	scripts.Start("CitadelSaveGameRoomLoadHelp");
+}
+
 std::optional<HeldDialogue> PutAwayDialogue(Scripts& scripts, Dialogue& dialogue)
 {
 	scripts.StopHelp();
