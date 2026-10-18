@@ -75,7 +75,9 @@ float maths::ThrowSpeedFromHand(float handSpeed, const ThrowSpeeds& speeds)
 
 maths::Launch maths::HandThrow(glm::vec3 handVelocity, float lift, const ThrowSpeeds& speeds)
 {
-	const float handSpeed = glm::length(handVelocity);
+	// The game adds the squares from z to x
+	const float handSpeed =
+	    std::sqrt(((handVelocity.z * handVelocity.z) + (handVelocity.y * handVelocity.y)) + (handVelocity.x * handVelocity.x));
 	if (handSpeed <= 0.0f)
 	{
 		return {};

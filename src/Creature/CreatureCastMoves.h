@@ -23,6 +23,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/SkeletalAnimation.h"
+#include "Common/GameHeading.h"
 
 // How a creature moves about something it acts on, such as a creature it casts a miracle at, as the game measures it.
 //
@@ -54,6 +55,8 @@ inline constexpr float k_FieldRadius = 5.0f;
 inline constexpr float k_ArrivalMargin = 1.1f;
 /// It is far enough away at the distance plus this many times the thing's radius
 inline constexpr float k_GetAwayRadii = 1.2f;
+/// It goes along +x when it is no farther than this from the thing
+inline constexpr float k_GetAwayApart = 0.0001f;
 /// It faces a thing within this angle of it, and is on top of it within this distance
 inline constexpr float k_FacingRadians = 0.3926991f;
 inline constexpr float k_OnTopDistance = 0.1f;
@@ -79,10 +82,10 @@ inline constexpr float k_ClearOfThings = 5.0f;
 /// than k_SameDestinationSquared. The creature does not ask again for the same place.
 inline constexpr float k_SameDestinationSquared = 0.01f;
 [[nodiscard]] bool SameDestination(glm::vec2 before, glm::vec2 now);
-/// Whether a creature at a point with a heading heads for another point near enough. The heading is the game's, 0
-/// facing -z and a quarter turn facing +x. The game compares game angles between map positions, and takes their
-/// difference without going round. A creature in the same cell of the land as the point also heads for it.
-[[nodiscard]] bool HeadsFor(glm::vec2 creature, glm::vec2 point, float heading);
+/// Whether a creature at a point with a heading heads for another point near enough. The game compares game angles
+/// between map positions, and takes their difference without going round. A creature in the same cell of the land as
+/// the point also heads for it.
+[[nodiscard]] bool HeadsFor(glm::vec2 creature, glm::vec2 point, GameHeading heading);
 /// Whether a creature walking up to a thing, so far away on the ground, has arrived
 [[nodiscard]] bool Arrived(float distance, float creatureRadius, float routeRadius, float keep);
 /// Going near a thing, the creature notes where it is every k_StallTurns turns of the step. On the last turn of each
@@ -119,8 +122,10 @@ enum class WalkStart : uint8_t
 
 /// How far from a thing a creature getting away from it must be
 [[nodiscard]] float GetAwayDistance(float keep, std::optional<float> thingRadius);
-/// Where it goes: that far from where it stands, straight away from the thing (x along when right on top of it)
-[[nodiscard]] glm::vec3 GetAwayPoint(const glm::vec3& creature, const glm::vec3& thing, float distance);
+/// Where it goes: that far from where it stands, straight away from the thing. The creature and the thing are their map
+/// positions as points, with the height of the land under them. `apart` is the map distance between them. When it is
+/// almost 0, the creature goes along +x.
+[[nodiscard]] glm::vec3 GetAwayPoint(const glm::vec3& creature, const glm::vec3& thing, float apart, float distance);
 
 /// A circle a thing on the land keeps creatures off, on the ground
 struct CollideCircle
@@ -172,8 +177,10 @@ using ClearCell = std::function<bool(int32_t x, int32_t z)>;
 /// The middle of the nearest area so wide about a point whose cells are clear, if any
 [[nodiscard]] std::optional<glm::vec2> FindClearArea(glm::vec2 point, float width, const ClearCell& clear);
 
-/// Whether a creature at a heading (radians, as the creatures' movement measures it) faces a point from where it stands
-[[nodiscard]] bool Facing(glm::vec2 creature, float heading, glm::vec2 point);
+/// Whether a creature with a heading faces a point from where it stands. The game takes the heading from the creature's
+/// map position to the point's, and the creature faces it when its own heading is near enough to it. A creature on top
+/// of the point faces it.
+[[nodiscard]] bool Facing(glm::vec2 creature, GameHeading heading, glm::vec2 point);
 /// The point a creature turns to so that its back is to a thing: as far from the creature as the thing, on the other
 /// side
 [[nodiscard]] glm::vec2 PointToFaceAwayFrom(glm::vec2 creature, glm::vec2 thing);

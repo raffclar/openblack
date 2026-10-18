@@ -39,7 +39,7 @@ TEST(OracleCastingDistance, HeadsForAsInTheGame)
 	{
 		const glm::vec2 creature {table->Float(row, *cx), table->Float(row, *cz)};
 		const glm::vec2 point {table->Float(row, *px), table->Float(row, *pz)};
-		const bool ours = creature_cast_moves::HeadsFor(creature, point, table->Float(row, *heading));
+		const bool ours = creature_cast_moves::HeadsFor(creature, point, GameHeading(table->Float(row, *heading)));
 		const bool game = table->Bits(row, *close) != 0;
 		if (ours != game)
 		{

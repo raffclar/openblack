@@ -25,10 +25,22 @@ namespace
 {
 /// The rope is divided into one more segment than it has masses
 constexpr float k_Segments = static_cast<float>(k_NodeCount + 1);
-/// Shorter than this, a direction is no direction
+/// A direction with a square length less than this is no direction
 constexpr float k_Degenerate = 1e-6f;
 /// How fast the texture repeats along the rope, per unit of length and the look's scale
 constexpr float k_UScale = 0.05f;
+
+/// A vector made one long, with its squares added in the given order: one over the length, then each part times that.
+/// A zero vector stays zero.
+template <x87::SumOrder Order>
+glm::vec3 UnitUnlessZero(const glm::vec3& v)
+{
+	if (v == glm::vec3(0.0f))
+	{
+		return v;
+	}
+	return v * (1.0f / x87::Length<Order>(v));
+}
 
 /// The pull of a spring from p towards a neighbour: none while the segment is no longer than its rest, so that the
 /// rope can go slack but not be squashed
@@ -174,30 +186,36 @@ Ribbon leash_rope::BuildRibbon(const Rope& rope, const glm::vec3& eye, const Gro
 {
 	Ribbon ribbon {};
 	float travelled = 0.0f;
+	const float halfWidth = rope.look.halfWidth;
 	for (size_t i = 0; i < k_PointCount; ++i)
 	{
 		const auto point = Point(rope, i);
-		if (i > 0)
-		{
-			travelled += glm::distance(point, Point(rope, i - 1));
-		}
-		// The rope's direction at a point is from the point before it to the point after it
-		auto tangent = Point(rope, std::min(i + 1, k_PointCount - 1)) - Point(rope, i == 0 ? 0 : i - 1);
-		if (glm::length(tangent) < k_Degenerate)
+		const auto before = Point(rope, i == 0 ? 0 : i - 1);
+		const auto after = Point(rope, std::min(i + 1, k_PointCount - 1));
+		// The line from the eye to the point, made one long
+		const auto fromEye = UnitUnlessZero<x87::SumOrder::Zyx>(point - eye);
+		travelled = x87::LengthZyx(point - before) + travelled;
+		// The rope's direction at a point is from the point before it to the point after it, made one long
+		auto tangent = after - before;
+		if (!(x87::Dot<x87::SumOrder::Xyz>(tangent, tangent) >= k_Degenerate))
 		{
 			tangent = glm::vec3(0.0f, 0.0f, 1.0f);
 		}
-		auto side = glm::cross(eye - point, tangent);
-		side = glm::length(side) < k_Degenerate ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::normalize(side);
-		side *= rope.look.halfWidth;
+		else
+		{
+			tangent = UnitUnlessZero<x87::SumOrder::Xyz>(tangent);
+		}
+		// Across the rope and the line from the eye. When the two are in line, the ribbon has no width there.
+		const glm::vec3 across {(fromEye.z * tangent.y) - (fromEye.y * tangent.z),
+		                        (tangent.z * fromEye.x) - (fromEye.z * tangent.x),
+		                        (fromEye.y * tangent.x) - (tangent.y * fromEye.x)};
+		const auto side = UnitUnlessZero<x87::SumOrder::Zxy>(across) * halfWidth;
 		const auto u = travelled * rope.look.uScale * k_UScale;
 		ribbon.rope.at(i * 2) = {.position = point + side, .uv = {u, rope.look.v1}, .alpha = 1.0f};
 		ribbon.rope.at((i * 2) + 1) = {.position = point - side, .uv = {u, rope.look.v0}, .alpha = 1.0f};
 
 		// The shadow lies flat, across the rope's direction over the land
-		auto flat = glm::vec3(-tangent.z, 0.0f, tangent.x);
-		flat = glm::length(flat) < k_Degenerate ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::normalize(flat);
-		flat *= rope.look.halfWidth;
+		const auto flat = UnitUnlessZero<x87::SumOrder::Zyx>(glm::vec3(0.0f - tangent.z, 0.0f, tangent.x)) * halfWidth;
 		const bool atEnd = i == 0 || i == k_PointCount - 1;
 		const auto alpha = atEnd ? 0.0f : static_cast<float>(k_ShadowAlpha) / 255.0f;
 		for (const auto& [corner, offset, v] : {std::tuple {0, flat, rope.look.v1}, std::tuple {1, -flat, rope.look.v0}})

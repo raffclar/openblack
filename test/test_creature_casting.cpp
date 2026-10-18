@@ -539,10 +539,13 @@ TEST(CreatureCastMoves, GettingAway)
 {
 	EXPECT_FLOAT_EQ(cast_moves::GetAwayDistance(20.0f, 5.0f), 26.0f);
 	EXPECT_FLOAT_EQ(cast_moves::GetAwayDistance(20.0f, std::nullopt), 20.0f);
-	const auto away = cast_moves::GetAwayPoint({10.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 26.0f);
+	const auto away = cast_moves::GetAwayPoint({10.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, 10.0f, 26.0f);
 	EXPECT_FLOAT_EQ(away.x, 36.0f);
-	const auto onTop = cast_moves::GetAwayPoint({10.0f, 0.0f, 10.0f}, {10.0f, 0.0f, 10.0f}, 5.0f);
+	const auto onTop = cast_moves::GetAwayPoint({10.0f, 0.0f, 10.0f}, {10.0f, 0.0f, 10.0f}, 0.0f, 5.0f);
 	EXPECT_FLOAT_EQ(onTop.x, 15.0f);
+	// No more than a ten-thousandth of a metre apart on the map, it goes along +x whatever the points are
+	const auto close = cast_moves::GetAwayPoint({10.0f, 0.0f, 10.0f}, {10.0f, 0.0f, 12.0f}, 0.0001f, 5.0f);
+	EXPECT_EQ(close, glm::vec3(15.0f, 0.0f, 10.0f));
 }
 
 TEST(CreatureCastMoves, ToTurnItsBackToAThingItFacesThePointOnTheOtherSide)
@@ -952,9 +955,9 @@ TEST(CreatureCastMoves, HeadsForComparesGameAnglesWithoutGoingRound)
 	const float justAboveZero = gutils::k_ScawenOffset + 10.5f / gutils::k_Angle3DToGame;
 	ASSERT_EQ(gutils::ConvertScawenAngleToGameAngle(justBelowZero), 2040u);
 	ASSERT_EQ(gutils::ConvertScawenAngleToGameAngle(justAboveZero), 10u);
-	EXPECT_TRUE(cast_moves::HeadsFor(creature, point, justAboveZero));
+	EXPECT_TRUE(cast_moves::HeadsFor(creature, point, GameHeading(justAboveZero)));
 	// Near angle 0 the difference does not go round the circle, so a close heading counts as far
-	EXPECT_FALSE(cast_moves::HeadsFor(creature, point, justBelowZero));
+	EXPECT_FALSE(cast_moves::HeadsFor(creature, point, GameHeading(justBelowZero)));
 	// In the same cell of the land, any heading heads for the point
-	EXPECT_TRUE(cast_moves::HeadsFor(creature, {5009.0f, 5001.0f}, justBelowZero));
+	EXPECT_TRUE(cast_moves::HeadsFor(creature, {5009.0f, 5001.0f}, GameHeading(justBelowZero)));
 }
