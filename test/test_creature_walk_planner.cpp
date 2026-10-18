@@ -177,3 +177,14 @@ TEST(CreatureWalkPlanner, FasterThanWalkingBlendsTheWalkAndTheRunInStep)
 	// Too slow, nothing changes
 	EXPECT_FALSE(BlendGait(0.0f, 10.0f, 20.0f, 0.0f, 0.1f, k_Stand, k_Walk, k_Run, 0, 0.0f).has_value());
 }
+
+TEST(CreatureWalkPlanner, ARouteFoundDuringAStepIsJoinedFromTheEndOfTheStep)
+{
+	// The step's whole move, with its height, at the creature's scale, less the part of it walked: 5 x 2 - 3
+	EXPECT_EQ(StepJoinAhead({3.0f, 0.0f, 4.0f}, 2.0f, 3.0f), 7.0f);
+	EXPECT_EQ(StepJoinAhead({2.0f, 3.0f, 6.0f}, 1.0f, 0.0f), 7.0f);
+	// Past the end of the step it is below 0, and the route is joined where the creature is
+	EXPECT_LT(StepJoinAhead({3.0f, 0.0f, 4.0f}, 1.0f, 6.0f), 0.0f);
+	// A turn on the spot joins from a little way ahead
+	EXPECT_EQ(k_TurnJoinAhead, 0.05f);
+}

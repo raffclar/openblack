@@ -34,7 +34,8 @@ constexpr uint32_t k_SignBit = 0x80000000u;
 constexpr float k_WalkPerSize = 8.0f;
 constexpr float k_RunPerSize = 20.0f;
 /// The size factor is size times this plus the offset
-constexpr float k_SizeSlope = 0.875f;
+constexpr float k_HalfSize = 0.5f;
+constexpr float k_SizeSlope = 1.75f;
 constexpr float k_SizeOffset = 0.25f;
 /// The arrival ring never reaches past the destination by less than this, and is never thinner than this
 constexpr float k_RingInside = 0.05f;
@@ -47,7 +48,8 @@ constexpr float k_TimeLimitPerUnitMs = 2.0f;
 
 Speeds creature_locomotion::SpeedsFor(float size)
 {
-	const auto factor = (k_SizeSlope * std::clamp(size, k_MinSize, k_MaxSize)) + k_SizeOffset;
+	// The speeds come from the size as it is given, before the size is kept within its limits
+	const auto factor = ((size * k_HalfSize) * k_SizeSlope) + k_SizeOffset;
 	return {.walk = k_WalkPerSize * factor, .run = k_RunPerSize * factor};
 }
 
@@ -88,24 +90,9 @@ GameHeading creature_locomotion::LerpHeading(GameHeading heading, GameHeading ta
 	return GameHeading(GameHeading::Wrap(eased));
 }
 
-Side creature_locomotion::SideOf(float angle)
-{
-	return angle < 0.0f ? Side::Right : Side::Left;
-}
-
 Side creature_locomotion::SpinSideOf(float angle)
 {
 	return angle <= 0.0f ? Side::Right : Side::Left;
-}
-
-Pair creature_locomotion::PairFor(size_t first, float angle)
-{
-	const auto turn = std::min(std::abs(angle), k_Pi);
-	if (turn < k_HalfPi)
-	{
-		return {.from = first, .to = first + 1, .weight = turn / k_HalfPi};
-	}
-	return {.from = first + 1, .to = first + 2, .weight = std::clamp((turn - k_HalfPi) / k_HalfPi, 0.0f, 1.0f)};
 }
 
 Pair creature_locomotion::SpinPairFor(size_t first, float angle)
@@ -118,27 +105,6 @@ Pair creature_locomotion::SpinPairFor(size_t first, float angle)
 		return {.from = first, .to = first + 1, .weight = turn * k_SpinShare};
 	}
 	return {.from = first + 1, .to = first + 2, .weight = (turn - k_HalfPi) * k_SpinShare};
-}
-
-Start creature_locomotion::ChooseStart(float angle, float distanceInMesh, const StartOptions& options)
-{
-	const auto side = SideOf(angle);
-	if (options.moving && options.stepStrides.has_value() &&
-	    std::ranges::all_of(*options.stepStrides, [distanceInMesh](float stride) { return distanceInMesh > stride; }))
-	{
-		const auto first = side == Side::Right ? animations::k_RightStep : animations::k_LeftStep;
-		return {.kind = Start::Kind::Step, .side = side, .animations = PairFor(first, angle)};
-	}
-	if (std::abs(angle) < k_WalkStraightAngle)
-	{
-		return {.kind = Start::Kind::Walk, .side = side, .animations = std::nullopt};
-	}
-	if (options.hasSpins)
-	{
-		const auto first = side == Side::Right ? animations::k_RightSpin : animations::k_LeftSpin;
-		return {.kind = Start::Kind::Turn, .side = side, .animations = SpinPairFor(first, angle)};
-	}
-	return {.kind = Start::Kind::Turn, .side = side, .animations = std::nullopt};
 }
 
 Ring creature_locomotion::MoveRing(float distance, float minDistance, float maxDistance)
