@@ -261,6 +261,35 @@ void AddCreatureCatch(std::vector<Scenario>& all)
 	});
 }
 
+void AddCreatureCatchWhileWalking(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "physics.creature_catch_while_walking",
+	    .name = "A walking creature that catches",
+	    .facet = Facet::Physics,
+	    .description = "A tiger walks north across the field. A villager is thrown high towards it from ahead while it "
+	                   "walks.",
+	    .expected = "The tiger does not stop dead. It walks on a short distance and slows to a stand. Only then does "
+	                "its catch start: it turns to the villager and catches it, or gives up when the villager has gone "
+	                "past or landed.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Field + glm::vec2 {-30.0f, -50.0f}, k_Field + glm::vec2 {30.0f, 70.0f}}},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Field + glm::vec2 {0.0f, -45.0f}, .facingDegrees = 180.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = k_Field + glm::vec2 {-10.0f, 60.0f}}},
+	    .commands = {{.kind = Command::Kind::WalkTo,
+	                  .creature = 0,
+	                  .delaySeconds = 0.5f,
+	                  .waitUntilFree = false,
+	                  .point = k_Field + glm::vec2 {0.0f, 90.0f}}},
+	    .throws = {{.object = 0,
+	                .from = k_Field + glm::vec2 {0.0f, 45.0f},
+	                .height = 20.0f,
+	                .velocity = {0.0f, 9.0f, -14.0f},
+	                .delaySeconds = 3.0f}},
+	});
+}
+
 void AddCreatureIgnoringReactions(std::vector<Scenario>& all)
 {
 	// The second tiger stands 40 units east of the first
@@ -432,6 +461,7 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddRockSplit(all);
 	AddCreatureHit(all);
 	AddCreatureCatch(all);
+	AddCreatureCatchWhileWalking(all);
 	AddCreatureIgnoringReactions(all);
 	AddCreatureWithForcedPlan(all);
 	AddSinking(all);

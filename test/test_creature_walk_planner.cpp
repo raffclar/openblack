@@ -208,3 +208,28 @@ TEST(CreatureWalkPlanner, AStopGoesOnForWhatTheTurnOrStepStillNeeds)
 	// A distance that is not a number does not count
 	EXPECT_EQ(StopAhead(12.0f, std::nanf("")), 6.0f);
 }
+
+// A frozen creature lives fewer whole milliseconds in a turn, and a bigger creature plays its animations more slowly
+TEST(CreatureWalkPlanner, TheTurnMillisecondsFollowThePaceAndTheSize)
+{
+	EXPECT_EQ(TurnMs(1.0f, 100), 100);
+	EXPECT_EQ(TurnMs(0.0f, 100), 0);
+	EXPECT_EQ(TurnMs(0.5f, 100), 50);
+	// Cut towards 0, not rounded
+	EXPECT_EQ(TurnMs(0.999f, 100), 99);
+	EXPECT_EQ(ClipStepMs(100, 0.05f), 157);
+	EXPECT_EQ(ClipStepMs(100, 1.0f), 117);
+	// Above a size of about 3.76 the rate is less than 0, as in the game
+	EXPECT_EQ(ClipStepMs(100, 4.0f), -10);
+	EXPECT_EQ(ClipStepMs(0, 1.0f), 0);
+	EXPECT_EQ(ClipStepMs(50, 1.0f), 58);
+}
+
+// A turn on the spot does not start while the creature moves, or while its body plays an action
+TEST(CreatureWalkPlanner, ATurnOnTheSpotWaitsForTheBodyAndTheWalk)
+{
+	EXPECT_TRUE(MayTurnOnTheSpot(false, false));
+	EXPECT_FALSE(MayTurnOnTheSpot(true, false));
+	EXPECT_FALSE(MayTurnOnTheSpot(false, true));
+	EXPECT_FALSE(MayTurnOnTheSpot(true, true));
+}

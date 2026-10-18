@@ -152,6 +152,21 @@ struct NextLeg
 /// distance.
 [[nodiscard]] float StopAhead(float speed, float stillNeeded);
 
+/// Whether a creature starts a turn on the spot that something tells it to start. It does not start while it walks,
+/// turns or waits for its route, and not while its body plays an action. The caller asks again on a later turn.
+[[nodiscard]] constexpr bool MayTurnOnTheSpot(bool moving, bool bodyPlaysAction)
+{
+	return !moving && !bodyPlaysAction;
+}
+
+/// The whole milliseconds that a creature lives in a game turn of some milliseconds, at a pace. A frozen creature has a
+/// pace below 1. The milliseconds are cut towards 0.
+[[nodiscard]] int32_t TurnMs(float pace, int32_t gameTurnMs);
+
+/// The whole milliseconds that the body's animations play in a turn of some milliseconds. A bigger creature plays
+/// them more slowly. The turn on the spot and the wait for a route use these milliseconds.
+[[nodiscard]] int32_t ClipStepMs(int32_t turnMs, float size);
+
 /// The walk animation's time when a step ends and the walk starts: the share of the step played, in the walk. After a
 /// left step the walk starts half a cycle on.
 [[nodiscard]] int32_t WalkTimeAfterStep(int32_t stepTimeMs, int32_t stepMs, int32_t walkMs, creature_locomotion::Side side);

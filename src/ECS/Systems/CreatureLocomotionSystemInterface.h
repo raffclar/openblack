@@ -71,14 +71,18 @@ public:
 	virtual MoveResult Follow(entt::entity creature, entt::entity target, float distance, Pace pace) = 0;
 	/// Runs away from a point, at a pace. It arrives anywhere within five times its height of the point that it runs to.
 	virtual MoveResult FleeFrom(entt::entity creature, glm::vec2 threat, Pace pace) = 0;
-	/// Stops (see Stop), then turns on the spot to face a point. While it moves or turns, it does not turn and gives
-	/// false. The caller must ask again on a later turn.
+	/// Stops (see Stop), then turns on the spot to face a point. While it moves or turns, or while its body plays an
+	/// action, it does not turn and gives false. The caller must ask again on a later turn.
 	virtual bool TurnToFace(entt::entity creature, glm::vec2 point) = 0;
 	/// Stops (see Stop), then turns on the spot to a heading, also when the turn is very small or none. While it moves
-	/// or turns, it does not turn and gives false.
+	/// or turns, or while its body plays an action, it does not turn and gives false.
 	virtual bool TurnToHeading(entt::entity creature, GameHeading heading) = 0;
-	/// Stops at once where it is, then turns on the spot to face a point
+	/// Stops at once where it is, then turns on the spot to face a point. An action that its body plays does not stop
+	/// the turn.
 	virtual bool TurnToFaceAtOnce(entt::entity creature, glm::vec2 point) = 0;
+	/// Stops at once where it is, then turns on the spot to a heading. An action that its body plays does not stop the
+	/// turn.
+	virtual bool TurnToHeadingAtOnce(entt::entity creature, GameHeading heading) = 0;
 	/// Stops as the game stops a walk. A creature on its way walks on and slows to a stand a short distance ahead. While
 	/// it waits for its route, it stands. A turn on the spot to face a point continues.
 	virtual void Stop(entt::entity creature) = 0;

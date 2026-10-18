@@ -52,6 +52,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -323,8 +324,10 @@ struct WalkTurn
 	/// The top speed that it is asked for
 	float topSpeed;
 	float breathPhase;
-	/// The milliseconds that a turn on the spot plays this turn
-	float spinMs;
+	/// The whole milliseconds that the creature lives this turn: fewer when it is frozen. A step plays them.
+	int32_t turnMs;
+	/// The whole milliseconds that its animations play this turn. A turn on the spot and the wait for a route use them.
+	int32_t spinMs;
 	/// What its legs played last turn, which they keep when it is too slow to move them
 	const std::vector<CreatureLocomotion::Track>& lastTracks;
 	/// The land where creatures can stand
@@ -528,7 +531,7 @@ void TurnStep(CreatureLocomotion& self, const WalkTurn& turn)
 {
 	auto& move = *self.move;
 	const auto from = move.timeMs;
-	move.timeMs = std::min(move.timeMs + turn.spinMs, move.durationMs);
+	move.timeMs = std::min(move.timeMs + static_cast<float>(turn.spinMs), move.durationMs);
 	if (move.animations.has_value())
 	{
 		// The spin's own root turns the body; its heading changes once the turn is over
@@ -581,7 +584,7 @@ void StepOff(CreatureLocomotion& self, const WalkTurn& turn)
 
 	const auto timeMs = static_cast<int32_t>(move.timeMs);
 	const auto stepMs = static_cast<int32_t>(move.durationMs);
-	const auto turnMs = static_cast<int32_t>(k_TurnMs);
+	const auto turnMs = turn.turnMs;
 	if (timeMs + turnMs >= stepMs)
 	{
 		// The step ends and the walk starts in the same turn, part way through its cycle
@@ -1045,19 +1048,8 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::FleeFrom(entt::en
 
 bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* self = registry.TryGet<const CreatureLocomotion>(creature);
-	if (self == nullptr)
-	{
-		return false;
-	}
-	const auto offset = point - PositionOf(*self);
-	if (glm::length(offset) <= k_Tiny)
-	{
-		return false;
-	}
-	// It always turns on the spot, also when it nearly faces the point already
-	return TurnToHeading(creature, locomotion::HeadingOf(offset));
+	const auto heading = HeadingToFace(creature, point);
+	return heading.has_value() && TurnToHeading(creature, *heading);
 }
 
 bool CreatureLocomotionSystem::TurnToFaceAtOnce(entt::entity creature, glm::vec2 point)
@@ -1067,21 +1059,77 @@ bool CreatureLocomotionSystem::TurnToFaceAtOnce(entt::entity creature, glm::vec2
 	{
 		Halt(*self);
 	}
-	return TurnToFace(creature, point);
+	const auto heading = HeadingToFace(creature, point);
+	return heading.has_value() && TurnToHeadingAtOnce(creature, *heading);
+}
+
+std::optional<GameHeading> CreatureLocomotionSystem::HeadingToFace(entt::entity creature, glm::vec2 point)
+{
+	const auto* self = Locator::entitiesRegistry::value().TryGet<const CreatureLocomotion>(creature);
+	if (self == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto offset = point - PositionOf(*self);
+	if (glm::length(offset) <= k_Tiny)
+	{
+		return std::nullopt;
+	}
+	// It always turns on the spot, also when it nearly faces the point already
+	return locomotion::HeadingOf(offset);
 }
 
 bool CreatureLocomotionSystem::TurnToHeading(entt::entity creature, GameHeading heading)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* self = registry.TryGet<CreatureLocomotion>(creature);
-	const auto* body = registry.TryGet<const Creature>(creature);
-	if (self == nullptr || body == nullptr || !self->started)
+	if (self == nullptr || !self->started)
 	{
 		return false;
 	}
-	// It stops first. While it is on its way or turns, the turn does not start: it walks on to its stop.
+	// It stops first. While it is on its way or turns, the turn does not start: it walks on to its stop. While its
+	// body plays an action, the turn does not start too.
 	Stop(creature);
-	if (IsMovingMotion(self->motion))
+	if (!planner::MayTurnOnTheSpot(IsMovingMotion(self->motion), PlaysBodyAction(creature)))
+	{
+		return false;
+	}
+	return StartTurnOnTheSpot(creature, heading);
+}
+
+bool CreatureLocomotionSystem::TurnToHeadingAtOnce(entt::entity creature, GameHeading heading)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* self = registry.TryGet<CreatureLocomotion>(creature);
+	if (self == nullptr || !self->started)
+	{
+		return false;
+	}
+	Halt(*self);
+	return StartTurnOnTheSpot(creature, heading);
+}
+
+bool CreatureLocomotionSystem::PlaysBodyAction(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	    animation != nullptr && creature_layers::IsPlaying(animation->body))
+	{
+		return true;
+	}
+	// An action with a thing, such as a throw or a catch, plays its animations on the body too
+	const auto* action = registry.TryGet<const CreatureObjectAction>(creature);
+	return action != nullptr && action->phase == CreatureObjectAction::Phase::Playing &&
+	       (action->status == creature_object_actions::Status::Running ||
+	        action->status == creature_object_actions::Status::Contact);
+}
+
+bool CreatureLocomotionSystem::StartTurnOnTheSpot(entt::entity creature, GameHeading heading)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* self = registry.TryGet<CreatureLocomotion>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (self == nullptr || body == nullptr)
 	{
 		return false;
 	}
@@ -1292,10 +1340,14 @@ void CreatureLocomotionSystem::ProcessTurn()
 		    self.fraction =
 		        locomotion::RequiredFraction(self.fraction, fractions.slow, needs != nullptr ? needs->needs.exhaustion : 0.0f,
 		                                     registry.AnyOf<InHand>(entity));
+		    // A frozen creature lives fewer milliseconds in each turn: its steps, turns and waits slow down. Its walk along
+		    // the route does not.
+		    const auto turnMs = planner::TurnMs(animation.playbackScale, static_cast<int32_t>(k_TurnMs));
 		    const WalkTurn walkTurn {.moves = moves,
 		                             .topSpeed = locomotion::TargetSpeed(self.fraction, self.speeds.run),
 		                             .breathPhase = animation.breathPhase,
-		                             .spinMs = k_TurnMs * creature_layers::BodyRate(ShownSize(creature), animation.realTime),
+		                             .turnMs = turnMs,
+		                             .spinMs = animation.realTime ? turnMs : planner::ClipStepMs(turnMs, ShownSize(creature)),
 		                             .lastTracks = lastTracks,
 		                             .land = land};
 
@@ -1320,11 +1372,10 @@ void CreatureLocomotionSystem::ProcessTurn()
 				    break;
 			    }
 			    {
-				    // The wait counts down at the rate that the body plays its clips
+				    // The wait counts down by the milliseconds that the animations play
 				    locomotion::FidgetWait wait {.ms = self.fidgetMs, .fidgeted = self.fidgeted};
-				    const auto turn = locomotion::WaitTurn(
-				        wait, k_TurnMs * creature_layers::BodyRate(ShownSize(creature), animation.realTime),
-				        !creature_layers::IsPlaying(animation.body), GameRand);
+				    const auto turn = locomotion::WaitTurn(wait, static_cast<float>(walkTurn.spinMs),
+				                                           !creature_layers::IsPlaying(animation.body), GameRand);
 				    self.fidgetMs = wait.ms;
 				    self.fidgeted = wait.fidgeted;
 				    if (turn.fidget == locomotion::Fidget::Puzzled)
@@ -1347,6 +1398,7 @@ void CreatureLocomotionSystem::ProcessTurn()
 			    if (!creature_layers::IsPlaying(animation.body))
 			    {
 				    self.motion = Motion::Planning;
+				    self.fidgetMs = k_FidgetMs;
 			    }
 			    break;
 		    case Motion::Turning:

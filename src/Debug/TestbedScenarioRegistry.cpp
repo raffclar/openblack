@@ -2797,6 +2797,38 @@ void AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	all.push_back({
+	    .id = "movement.turn_while_acting",
+	    .name = "Turn while acting",
+	    .facet = Facet::Movement,
+	    .description = "A tiger that stands plays an action. While it plays, it is told to turn to face a point to its "
+	                   "side, as the game's turn stages tell it. Then it plays the action again and turns back.",
+	    .expected = "It does not turn while it plays the action. The action plays to its end. Then it turns on the spot "
+	                "to face the point.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f)},
+	    .commands = {Play(Kind::PlayAction, 0, animations::k_Impress, 0.5f, false),
+	                 Go(Kind::TurnToFaceWhenStill, 0, {60.0f, 0.0f}, 0.3f, false),
+	                 Play(Kind::PlayAction, 0, animations::k_Impress, 10.0f, false),
+	                 Go(Kind::TurnToFaceWhenStill, 0, {0.0f, 60.0f}, 0.3f, false)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "movement.freeze_while_walking",
+	    .name = "Freeze while walking",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks towards a far point. On its way the player casts the freeze spell on it.",
+	    .expected = "It does not stop dead. It walks on a short distance and slows to a stand, while the ice grows on it. "
+	                "The freeze does not slow its walk to the stand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -90.0f}, 180.0f)},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze, .target = MiracleCast::Target::Creature, .delaySeconds = 4.0f}},
+	    .commands = {Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 0.5f)},
+	});
+
 	std::vector<ObjectSetup> copse;
 	for (int x = -2; x <= 2; ++x)
 	{
