@@ -1408,3 +1408,4 @@ set_tests_properties(
 openblack_setup_and_add_test(test_saved_system_state test_saved_system_state.cpp)
 openblack_setup_and_add_test(test_save_file_writer test_save_file_writer.cpp)
 target_link_libraries(test_saved_system_state PRIVATE edt)
+openblack_setup_and_add_test(test_dead_tree_lean test_dead_tree_lean.cpp)

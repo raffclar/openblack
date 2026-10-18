@@ -617,12 +617,11 @@ void FeatureScriptCommands::CreateTree(int32_t forestId, glm::vec3 position, Tre
 }
 
 void FeatureScriptCommands::CreateDeadTree(glm::vec3 position, [[maybe_unused]] const std::string& player, TreeInfo treeType,
-                                           float life, [[maybe_unused]] float xAngle, float yAngle,
-                                           [[maybe_unused]] float zAngle)
+                                           float life, float xAngle, float yAngle, float zAngle)
 {
-	// The fourth number is the dead tree's life; it is always made at its model's own size
-	// TODO: tilt the tree about x and z
-	const auto deadTree = DeadTreeArchetype::Create(position, treeType, yAngle, 1.0f);
+	// The fourth number is the life of the dead tree. The game always makes it at the size of its model. It turns the tree
+	// about y, then leans it about x and z.
+	const auto deadTree = DeadTreeArchetype::Create(position, treeType, xAngle, yAngle, zAngle, 1.0f);
 	ecs::world_objects::SetLife(deadTree, life);
 	LastObject() = deadTree;
 }
