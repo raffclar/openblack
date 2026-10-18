@@ -369,15 +369,32 @@ TEST(InstantSaves, TheGameBlockKeepsTheTurnsOfTheLastSaves)
 	                      .knownLeashes = 0,
 	                      .creatureInTemple = 0,
 	                      .lastAutosaveTurn = 7000,
-	                      .lastQuickSaveTurn = 8000};
+	                      .lastQuickSaveTurn = 8000,
+	                      .landscapeFile = {}};
 	const auto chunk = ToChunk(game);
 	EXPECT_EQ(ReadGameChunk(chunk.bytes), game);
-	// A block from before the two turns reads with zero for them
-	const auto older = std::span<const uint8_t>(chunk.bytes).first(chunk.bytes.size() - 8);
+	// A block from before the landscape file has the two turns at its end; one from before the two turns has neither
+	const size_t emptyText = sizeof(uint32_t);
+	const auto beforeLandscape = std::span<const uint8_t>(chunk.bytes).first(chunk.bytes.size() - emptyText);
+	EXPECT_EQ(ReadGameChunk(beforeLandscape), game);
+	const auto older = std::span<const uint8_t>(chunk.bytes).first(chunk.bytes.size() - emptyText - 8);
 	const auto read = ReadGameChunk(older);
 	ASSERT_TRUE(read.has_value());
 	EXPECT_EQ(read->lastAutosaveTurn, 0u);
 	EXPECT_EQ(read->turn, 9000u);
+}
+
+TEST(InstantSaves, TheGameBlockKeepsTheLandscapeFile)
+{
+	const GameChunk game {.land = 1,
+	                      .turn = 9000,
+	                      .landscape = "./Scripts/Land1.txt",
+	                      .knownLeashes = 0,
+	                      .creatureInTemple = 0,
+	                      .lastAutosaveTurn = 7000,
+	                      .lastQuickSaveTurn = 8000,
+	                      .landscapeFile = "./Data/Landscape/Land1.lnd"};
+	EXPECT_EQ(ReadGameChunk(ToChunk(game).bytes), game);
 }
 
 TEST(InstantSaves, TheProfileKeepsTheAutosavesOfEachLand)

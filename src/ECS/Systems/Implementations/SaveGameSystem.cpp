@@ -65,6 +65,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureBodyFile.h"
+#include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/SaveGameFiles.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -80,6 +81,7 @@
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/WorldSave.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Graphics/RendererInterface.h"
@@ -760,6 +762,7 @@ bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putP
 	if (const auto* instance = Game::Instance(); instance != nullptr)
 	{
 		game.landscape = instance->GetLandPath().generic_string();
+		game.landscapeFile = instance->GetLandscapePath().generic_string();
 	}
 	if (Locator::creatureCaveSystem::has_value())
 	{
@@ -802,6 +805,10 @@ bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putP
 	}
 	const auto chunks = gamesave::ToChunks(saved);
 	world.chunks.insert(world.chunks.end(), chunks.begin(), chunks.end());
+	// Then the whole world in openblack's own layout
+	ecs::world_save::SaveSummary summary;
+	const auto whole = ecs::world_save::SaveWorld(Reflection(), summary);
+	world.chunks.insert(world.chunks.end(), whole.begin(), whole.end());
 	written = WriteFile(slotFolder, gamesave::WorldFileName(slot), gamesave::Write(world)) && written;
 
 	// A game that came from a file of the game also goes back into that file's layout: the file as it was, with the
@@ -937,6 +944,11 @@ bool SaveGameSystem::Load(uint32_t slot)
 	}
 	const auto gameChunk = std::ranges::find(world->chunks, gamesave::k_GameTag, &gamesave::Chunk::tag);
 	const auto game = gameChunk != world->chunks.end() ? gamesave::ReadGameChunk(gameChunk->bytes) : std::nullopt;
+	// A save of the whole world loads its own land, whatever land is open
+	if (game.has_value() && ecs::world_save::HasWholeWorld(*world))
+	{
+		return LoadWholeWorld(slot, *world, *game);
+	}
 	if (!game.has_value() || game->land != land)
 	{
 		SPDLOG_LOGGER_WARN(Log(), "Slot {} keeps another land; only the creatures of the land that is open load", slot);
@@ -995,6 +1007,54 @@ bool SaveGameSystem::Load(uint32_t slot)
 		_lastQuickSaveTurn = game->lastQuickSaveTurn;
 	}
 	return restored > 0;
+}
+
+const entt::meta_ctx& SaveGameSystem::Reflection()
+{
+	if (!_reflection)
+	{
+		_reflection = std::make_unique<entt::meta_ctx>();
+		ecs::reflection::RegisterComponents(*_reflection);
+	}
+	return *_reflection;
+}
+
+bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game)
+{
+	auto* instance = Game::Instance();
+	if (instance == nullptr || game.landscapeFile.empty())
+	{
+		SPDLOG_LOGGER_WARN(Log(), "Slot {} keeps no landscape, so its world cannot load", slot);
+		return false;
+	}
+	const auto& reflection = Reflection();
+	// The scripts of the game that runs now stop before its entities go, so that they let go of those entities and not
+	// of the saved ones
+	if (Locator::vm::has_value())
+	{
+		Locator::vm::value().StopAllTasks();
+	}
+	const bool loaded = instance->LoadSavedLand(game.landscape, game.landscapeFile, [&reflection, &world]() {
+		return ecs::world_save::LoadEntities(reflection, world).has_value();
+	});
+	if (!loaded)
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The world of slot {} did not load", slot);
+		return false;
+	}
+	// The clock, the random numbers and the scripts go on from the saved turn once the land has started
+	if (!ecs::world_save::LoadRunningState(world, game.turn))
+	{
+		SPDLOG_LOGGER_WARN(Log(), "A part of the running state of slot {} did not read", slot);
+	}
+	// A load from a file of the game is not the origin of this world
+	_vanilla.reset();
+	// The next autosave and the next quick load come only after their full gap from the turn of the load
+	_lastAutosaveTurn = game.turn;
+	_lastLoadTurn = game.turn;
+	_lastQuickSaveTurn = game.lastQuickSaveTurn;
+	SPDLOG_LOGGER_INFO(Log(), "Loaded the whole world of slot {} at turn {}", slot, game.turn);
+	return true;
 }
 
 void SaveGameSystem::SetVanillaOrigin(uint32_t slot, uint32_t land, const std::filesystem::path& folder,

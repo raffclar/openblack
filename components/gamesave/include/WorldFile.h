@@ -23,14 +23,14 @@
 #include "SavedObjects.h"
 
 // openblack's own world file of a saved game. The original game writes the whole world as one stream of objects
-// without lengths. openblack does not write the whole world yet (deviation 46). openblack writes a version and then a
-// list of blocks. Each block has a name of four letters and a length, so that a reader can skip a block that it does
-// not know. The creatures and their leashes go in one block as a stream in the game's layout.
+// without lengths. openblack writes the world in a layout of its own (deviations 46 and 83): a version and then a list
+// of blocks. Each block has a name of four letters and a length, so that a reader can skip a block that it does not
+// know. The creatures and their leashes also go in one block as a stream in the game's layout.
 namespace openblack::gamesave
 {
 
 inline constexpr std::array<char, 4> k_WorldMagic {'O', 'B', 'S', 'V'};
-inline constexpr uint32_t k_WorldVersion = 2;
+inline constexpr uint32_t k_WorldVersion = 3;
 
 using Tag = std::array<char, 4>;
 inline constexpr Tag k_GameTag {'G', 'A', 'M', 'E'};
@@ -38,6 +38,18 @@ inline constexpr Tag k_GameTag {'G', 'A', 'M', 'E'};
 inline constexpr Tag k_ObjectsTag {'O', 'B', 'J', 'S'};
 /// The keys of the numbers in the stream, and the numbers that have no record
 inline constexpr Tag k_KeysTag {'K', 'E', 'Y', 'S'};
+/// Every entity of the world and every registered component of each entity
+inline constexpr Tag k_EntitiesTag {'E', 'C', 'S', 'W'};
+/// The values of the land that the registry keeps beside its entities
+inline constexpr Tag k_ContextTag {'R', 'C', 'T', 'X'};
+/// The game clock and the streams of random numbers
+inline constexpr Tag k_ClockTag {'T', 'I', 'M', 'E'};
+/// The camera
+inline constexpr Tag k_CameraTag {'C', 'A', 'M', 'R'};
+/// The scripts' program and its running state, as a script file of the game has them
+inline constexpr Tag k_ScriptTag {'L', 'H', 'V', 'M'};
+/// The table of the objects that the scripts hold
+inline constexpr Tag k_ScriptObjectsTag {'S', 'O', 'B', 'J'};
 
 struct Chunk
 {
@@ -58,6 +70,8 @@ struct WorldFile
 [[nodiscard]] std::vector<uint8_t> Write(const WorldFile& file);
 /// Reads the file, or nothing when it is not a world file or a block goes past the end
 [[nodiscard]] std::optional<WorldFile> ReadWorldFile(std::span<const uint8_t> bytes);
+/// The bytes of the first block with the tag, or none
+[[nodiscard]] std::optional<std::span<const uint8_t>> FindChunk(const WorldFile& file, const Tag& tag);
 
 /// The game's block: the land, the turn and what the game keeps of the local player's creature
 struct GameChunk
@@ -73,6 +87,8 @@ struct GameChunk
 	/// The turn of the last autosave and the turn of the last quick save
 	uint32_t lastAutosaveTurn {0};
 	uint32_t lastQuickSaveTurn {0};
+	/// The land's landscape file, which the game opened for the land; empty in a block from before the whole world
+	std::string landscapeFile;
 
 	bool operator==(const GameChunk&) const = default;
 };

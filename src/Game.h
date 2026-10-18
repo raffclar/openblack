@@ -255,6 +255,11 @@ public:
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures
 	void LoadTestbed() noexcept;
+	/// Loads a saved game: the saved land's landscape with no map script, then `restore` puts the saved entities in place
+	/// of the land's own. The systems then find their entities again and the land starts. Returns whether the landscape
+	/// loaded and `restore` gave true.
+	bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
+	                   const std::function<bool()>& restore) noexcept;
 	/// Starts a new game on the first land from scratch, as the game's new game does, the story's scripts starting
 	/// again; for developers and agents, `start` asks the start-of-game question or answers it at once
 	bool StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept;
@@ -481,7 +486,8 @@ private:
 	input::ShortcutKeys _shortcutKeys;
 	/// Which way the hand faces across the land, and its up, easing to the slope under it
 	glm::vec3 _handHeading {0.0f, 0.0f, 1.0f};
-	/// The same heading as an angle about the up axis, from -z towards +x, which turns the hand that holds a totem and the frame of a held thing
+	/// The same heading as an angle about the up axis, from -z towards +x, which turns the hand that holds a totem and the
+	/// frame of a held thing
 	float _handHeadingAngle {std::numbers::pi_v<float>};
 	Zoomer3 _handUp {glm::vec3(0.0f, 1.0f, 0.0f)};
 	/// How the hand stands facing along its heading on level land, from which it is stood on a slope or a creature's body

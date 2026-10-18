@@ -258,6 +258,7 @@
 #include "ECS/Heartbeat.h"
 #include "ECS/HighDetailRules.h"
 #include "ECS/PosedModel.h"
+#include "ECS/RegistryContext.h"
 #include "ECS/RewardRules.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/TownAggression.h"
@@ -2821,6 +2822,33 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_web_page::Picture::score>("score")
 	    .Field<&openblack::creature_web_page::Picture::age>("age")
 	    .Field<&openblack::creature_web_page::Picture::action>("action");
+	Reflect<openblack::ecs::RegistryContext>(context, ValueOnly {})
+	    .Field<&openblack::ecs::RegistryContext::scriptFootpaths>("scriptFootpaths")
+	    .Field<&openblack::ecs::RegistryContext::scriptThingMadeLast>("scriptThingMadeLast")
+	    .Field<&openblack::ecs::RegistryContext::streams>("streams")
+	    .Field<&openblack::ecs::RegistryContext::towns>("towns")
+	    .Field<&openblack::ecs::RegistryContext::villageLightFlames>("villageLightFlames")
+	    .Field<&openblack::ecs::RegistryContext::mapScriptGlobals>("mapScriptGlobals")
+	    .Field<&openblack::ecs::RegistryContext::nextHandRockTap>("nextHandRockTap")
+	    .Field<&openblack::ecs::RegistryContext::nextCreatureRockSmash>("nextCreatureRockSmash")
+	    .Field<&openblack::ecs::RegistryContext::scriptLetsTempleBeEntered>("scriptLetsTempleBeEntered")
+	    .Field<&openblack::ecs::RegistryContext::templeEntrancesTakeCursor>("templeEntrancesTakeCursor", {k_PlayerNamesNames})
+	    .Field<&openblack::ecs::RegistryContext::gameOver>("gameOver")
+	    .Field<&openblack::ecs::RegistryContext::skirmish>("skirmish")
+	    .Field<&openblack::ecs::RegistryContext::partnersAlwaysAgree>("partnersAlwaysAgree")
+	    .Field<&openblack::ecs::RegistryContext::nextHeartBeamSound>("nextHeartBeamSound")
+	    .Field<&openblack::ecs::RegistryContext::nextDamageBeamSound>("nextDamageBeamSound")
+	    .Field<&openblack::ecs::RegistryContext::creaturesMade>("creaturesMade")
+	    .Field<&openblack::ecs::RegistryContext::nextTownGained>("nextTownGained")
+	    .Field<&openblack::ecs::RegistryContext::landAvoid>("landAvoid")
+	    .Field<&openblack::ecs::RegistryContext::creatureBoneReach>("creatureBoneReach")
+	    .Field<&openblack::ecs::RegistryContext::namedVillagersUsed>("namedVillagersUsed")
+	    .Field<&openblack::ecs::RegistryContext::thingsMade>("thingsMade")
+	    .Field<&openblack::ecs::RegistryContext::villagerNamesShown>("villagerNamesShown")
+	    .Field<&openblack::ecs::RegistryContext::villagerDetailsShown>("villagerDetailsShown")
+	    .Field<&openblack::ecs::RegistryContext::impressiveMiracleCastTurn>("impressiveMiracleCastTurn")
+	    .Field<&openblack::ecs::RegistryContext::explorationMap>("explorationMap")
+	    .Field<&openblack::ecs::RegistryContext::globalStatistics>("globalStatistics");
 	Reflect<openblack::ecs::components::ChimneySmoke::Puff>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::position>("position")
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::velocity>("velocity")
@@ -2949,6 +2977,13 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<openblack::ecs::components::HandMorph::Skin>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HandMorph::Skin::id>("id")
 	    .Field<&openblack::ecs::components::HandMorph::Skin::texels>("texels");
+	Reflect<openblack::ecs::components::MapScriptGlobals>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::MapScriptGlobals::landNumber>("landNumber")
+	    .Field<&openblack::ecs::components::MapScriptGlobals::townInfluenceMultiplier>("townInfluenceMultiplier")
+	    .Field<&openblack::ecs::components::MapScriptGlobals::playerInfluenceMultiplier>("playerInfluenceMultiplier")
+	    .Field<&openblack::ecs::components::MapScriptGlobals::landBalance>("landBalance")
+	    .Field<&openblack::ecs::components::MapScriptGlobals::lostTownScale>("lostTownScale")
+	    .Field<&openblack::ecs::components::MapScriptGlobals::lastObject>("lastObject");
 	Reflect<openblack::ecs::components::Player::Cast>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Player::Cast::position>("position")
 	    .Field<&openblack::ecs::components::Player::Cast::type>("type")
@@ -2966,6 +3001,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<openblack::ecs::components::TownCreatureAttitude::Watched>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::TownCreatureAttitude::Watched::creature>("creature")
 	    .Field<&openblack::ecs::components::TownCreatureAttitude::Watched::feeling>("feeling");
+	Reflect<openblack::ecs::components::VillageLightFlames>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::VillageLightFlames::clock>("clock")
+	    .Field<&openblack::ecs::components::VillageLightFlames::starts>("starts");
 	Reflect<openblack::ecs::components::Vortex::Arrival>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Vortex::Arrival::town>("town")
 	    .Field<&openblack::ecs::components::Vortex::Arrival::gatheringPlace>("gatheringPlace")
@@ -3327,6 +3365,12 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::statistics::BuildingsBuilt::abodes>("abodes")
 	    .Field<&openblack::statistics::BuildingsBuilt::civic>("civic")
 	    .Field<&openblack::statistics::BuildingsBuilt::wonders>("wonders");
+	Reflect<openblack::statistics::GlobalFigures>(context, ValueOnly {})
+	    .Field<&openblack::statistics::GlobalFigures::linesOfCode>("linesOfCode")
+	    .Field<&openblack::statistics::GlobalFigures::maxFrameRate>("maxFrameRate")
+	    .Field<&openblack::statistics::GlobalFigures::minFrameRate>("minFrameRate")
+	    .Field<&openblack::statistics::GlobalFigures::townsAtStart>("townsAtStart")
+	    .Field<&openblack::statistics::GlobalFigures::townsCounted>("townsCounted");
 	Reflect<openblack::statistics::History>(context, ValueOnly {})
 	    .Field<&openblack::statistics::History::points>("points")
 	    .Field<&openblack::statistics::History::index>("index")

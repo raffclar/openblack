@@ -26,6 +26,7 @@ class CameraBookmarkSystem final: public CameraBookmarkSystemInterface
 {
 public:
 	bool Initialize() override;
+	void FindAfterLoad() override;
 	void Update(const std::chrono::microseconds& dt) const override;
 
 	[[nodiscard]] const std::array<entt::entity, 8>& GetBookmarks() const override { return _bookmarks; }

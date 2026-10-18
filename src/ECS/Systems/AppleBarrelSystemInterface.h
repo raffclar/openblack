@@ -33,6 +33,8 @@ public:
 
 	/// The barrel goes with the land; its worm carries on in its clip where it was
 	virtual void Reset() = 0;
+	/// After the load of a saved world: the system finds the barrel among the loaded entities, and its worm's place
+	virtual void FindAfterLoad() = 0;
 };
 
 } // namespace openblack::ecs::systems

@@ -42,6 +42,9 @@ SKIPPED = {
 
 SOURCES = ROOT / "src"
 
+# Values that no component holds but that the saved world keeps, registered with the types they hold
+VALUE_ROOTS = ["openblack::ecs::RegistryContext"]
+
 # Types with private data, registered by hand in src/ECS/Reflection/ComponentFieldsByHand.cpp, and the types their functions
 # give, which are registered here
 BY_HAND = {
@@ -506,6 +509,8 @@ def main():
             if member in members:
                 follow(type_text, component_scope + [name], full)
         component_fields[name] = registered_members(definition, members)
+    for root in VALUE_ROOTS:
+        pending.append((root, "the saved world"))
     while pending:
         held, holder = pending.pop()
         if held in component_names or held in values or held in refused:

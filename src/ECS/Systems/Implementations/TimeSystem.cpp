@@ -173,6 +173,28 @@ void TimeSystem::RestartTurns()
 	_turn = 0;
 }
 
+void TimeSystem::ResumeAtTurn(uint32_t turn, int32_t remainderMs)
+{
+	_turn = turn;
+	_turnsThisFrame = 0;
+	_lastFrameTurn = turn;
+	_turnRemainderMs = std::clamp(remainderMs, 0, k_MaxRemainderMs);
+	_visualMs = turn * k_TurnMs + static_cast<uint32_t>(_turnRemainderMs);
+	_frameGameMs = 0;
+	_turnFraction = static_cast<float>(_turnRemainderMs) * k_FractionPerMs;
+	// The timer stands at the saved turn and the time past it, and the frame clock counts on from there
+	const auto now = Ticks();
+	const auto running = _timer.speed != 0.0f;
+	_timer.Stop(now);
+	_timer.base = now;
+	_timer.elapsed = static_cast<int32_t>(_turn * k_TurnMs) + _turnRemainderMs;
+	if (running)
+	{
+		_timer.Start(now);
+	}
+	_lastFrameSample = _timer.Milliseconds(now);
+}
+
 bool TimeSystem::IsTurnDue()
 {
 	if (Stopped() || _turnsThisFrame >= k_MaxTurnsPerFrame)

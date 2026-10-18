@@ -406,14 +406,16 @@ public:
 		    .save = [](const void* value, BinaryWriter& out) { SaveFunction(*static_cast<const Type*>(value), out); },
 		    .load = [](void* value, BinaryReader& in) { LoadFunction(*static_cast<Type*>(value), in); },
 		};
+		// A new factory stands on the type itself, not on the last field that this one registered
+		entt::meta_factory<Type> type {*_context};
 		if (_component.has_value())
 		{
 			_component->codec = codec;
-			_factory.template custom<ComponentInfo>(*_component);
+			type.template custom<ComponentInfo>(*_component);
 		}
 		else
 		{
-			_factory.template custom<ValueInfo>(ValueInfo {.codec = codec});
+			type.template custom<ValueInfo>(ValueInfo {.codec = codec});
 		}
 		return *this;
 	}

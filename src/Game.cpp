@@ -4779,6 +4779,60 @@ void Game::LoadTestbed() noexcept
 	}
 }
 
+bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
+                         const std::function<bool()>& restore) noexcept
+{
+	const ecs::systems::InspectorLoading loading(landPath.filename().generic_string());
+	LoadTimer timer(fmt::format("saved land {}", landPath.stem().string()));
+	BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
+	PrepareNewLand(land_change::Kind::SavedGame);
+	_landPath = landPath;
+	RenderLoadingFrame();
+	try
+	{
+		LoadLandscape(landscape);
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The landscape {} of the saved game does not load: {}",
+		                    landscape.generic_string(), e.what());
+		EndLoadingScreen();
+		return false;
+	}
+	timer.Step("landscape");
+
+	// The saved world takes the place of every entity that the land made, the hand and the sky included. The players
+	// that go with them are forgotten.
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Reset();
+	Locator::playerSystem::value().RegisterPlayers();
+	const bool restored = restore();
+	timer.Step("saved world");
+
+	// The systems find their entities among the loaded ones, and the things go back into the map's cells
+	Locator::playerSystem::value().RegisterPlayers();
+	Locator::handSystem::value().FindAfterLoad();
+	Locator::skySystem::value().FindAfterLoad();
+	Locator::cameraBookmarkSystem::value().FindAfterLoad();
+	if (Locator::appleBarrelSystem::has_value())
+	{
+		Locator::appleBarrelSystem::value().FindAfterLoad();
+	}
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().FileResidents();
+	}
+	if (Locator::objectDrawListSystem::has_value())
+	{
+		Locator::objectDrawListSystem::value().Reset();
+	}
+	registry.SetDirty();
+	RenderLoadingFrame();
+	StartNewLand(land_change::Kind::SavedGame);
+	EndLoadingScreen();
+	return restored;
+}
+
 void Game::PrepareNewLand(land_change::Kind change)
 {
 	const bool toTestbed = change == land_change::Kind::Testbed;

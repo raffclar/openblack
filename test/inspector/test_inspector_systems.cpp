@@ -116,6 +116,7 @@ public:
 	[[nodiscard]] std::span<const entt::entity> GetOffBlocks() const override { return {}; }
 	void Sync() override {}
 	void Refile(entt::entity /*entity*/) override {}
+	void FileResidents() override {}
 
 	std::vector<entt::entity> contents;
 };

@@ -22,6 +22,7 @@
 
 #include <entt/entity/registry.hpp>
 #include <entt/meta/context.hpp>
+#include <entt/meta/resolve.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
@@ -131,7 +132,9 @@ void Register(entt::meta_ctx& context)
 	    .Field<&FakeWalker::steps>("steps");
 	Reflect<FakeTag> {context};
 	Reflect<FakeHidden>(context).Field<&FakeHidden::pointer>("pointer").Field<&FakeHidden::kept>("kept");
-	Reflect<FakeCounter>(context, ValueOnly {}).Codec<&FakeCounter::Save, &FakeCounter::Load>();
+	Reflect<FakeCounter>(context, ValueOnly {})
+	    .Property<&FakeCounter::Total, nullptr>("total")
+	    .Codec<&FakeCounter::Save, &FakeCounter::Load>();
 	Reflect<FakeCounted>(context).Field<&FakeCounted::counter>("counter");
 }
 
@@ -434,4 +437,39 @@ TEST(WorldArchive, ValuesOutsideTheRegistryRoundTrip)
 	FakeWalker read;
 	ASSERT_TRUE(LoadValue(context, bytes, read, EntityRemap {}));
 	EXPECT_EQ(read, walker);
+}
+
+TEST(WorldArchive, EveryComponentOfTheGameCanBeMadeForALoad)
+{
+	// A load makes each component with no arguments and then reads its fields into it
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	std::vector<std::string> refused;
+	for (auto&& [id, type] : entt::resolve(context))
+	{
+		const ComponentInfo* info = type.custom();
+		if (info != nullptr && info->storage != nullptr && !type.construct())
+		{
+			refused.push_back(ShortTypeName(type.info()));
+		}
+	}
+	EXPECT_TRUE(refused.empty()) << refused.front();
+}
+
+TEST(WorldArchive, ACodecKeepsTheFieldsOfItsType)
+{
+	entt::meta_ctx context;
+	Register(context);
+	const auto type = entt::resolve<FakeCounter>(context);
+	ASSERT_TRUE(type);
+	const ValueInfo* value = type.custom();
+	ASSERT_NE(value, nullptr);
+	EXPECT_NE(value->codec.save, nullptr);
+	bool found = false;
+	for (const auto& [id, data] : type.data())
+	{
+		const FieldInfo* info = data.custom();
+		found = found || (info != nullptr && info->name == "total");
+	}
+	EXPECT_TRUE(found);
 }

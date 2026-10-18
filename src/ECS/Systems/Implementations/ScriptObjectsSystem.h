@@ -42,6 +42,8 @@ public:
 	bool Disband(entt::entity container) override;
 	[[nodiscard]] std::vector<ScriptObjectPlace> Places() const override;
 	[[nodiscard]] uint32_t TimesFull() const override { return _timesFull; }
+	[[nodiscard]] std::vector<uint8_t> SaveTable() const override;
+	bool LoadTable(std::span<const uint8_t> bytes) override;
 
 private:
 	/// An object no script reference holds any more is let go of: a flock or dance a script controls is disbanded, and

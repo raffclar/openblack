@@ -29,6 +29,8 @@ enum class Kind
 	Skirmish,
 	/// The developers' testbed: a workbench outside the game, where nothing carries over
 	Testbed,
+	/// A saved game loads: the save gives the whole world, so nothing of the last land carries over and no script starts
+	SavedGame,
 };
 
 /// What becomes of the two advisors
@@ -98,6 +100,7 @@ struct Rules
 		        .helpTextsKept = false,
 		        .gameClockRunsOn = false};
 	case Kind::Testbed:
+	case Kind::SavedGame:
 		break;
 	}
 	return {.advisors = Advisors::Afresh,

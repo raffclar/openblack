@@ -224,6 +224,29 @@ void Save(BinaryWriter& out, const Type& value);
 template <typename Type>
 void Load(BinaryReader& in, Type& value);
 
+/// A codec that writes the bytes of the whole value, for a value type with private data that is plain and holds no
+/// entity. The archive keeps the size of the value, so that a value of another size fails the reader.
+template <typename Type>
+    requires std::is_trivially_copyable_v<Type>
+void SaveBytes(const Type& value, BinaryWriter& out)
+{
+	out.WriteSize(sizeof(Type));
+	out.WriteRaw(value);
+}
+
+template <typename Type>
+    requires std::is_trivially_copyable_v<Type>
+void LoadBytes(Type& value, BinaryReader& in)
+{
+	const auto size = in.ReadSize();
+	if (!size.has_value() || *size != sizeof(Type))
+	{
+		in.Fail();
+		return;
+	}
+	in.ReadRaw(value);
+}
+
 namespace detail
 {
 

@@ -209,3 +209,16 @@ void AppleBarrelSystem::Reset()
 {
 	_barrel = entt::null;
 }
+
+void AppleBarrelSystem::FindAfterLoad()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	_barrel = entt::null;
+	registry.Each<const AppleBarrel>([this, &registry](entt::entity entity, const AppleBarrel& barrel) {
+		_barrel = entity;
+		if (const auto* worm = registry.TryGet<const AppleBarrelWorm>(barrel.worm))
+		{
+			_wormPlace = worm->place;
+		}
+	});
+}
