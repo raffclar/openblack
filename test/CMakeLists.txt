@@ -1274,3 +1274,5 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_lightning_spell_order test_lightning_spell_order.cpp)
 target_link_libraries(test_oracle_sway_ribbon PRIVATE psys)
+openblack_setup_and_add_test(test_header_overrides test_header_overrides.cpp)
+target_link_libraries(test_header_overrides PRIVATE pack)

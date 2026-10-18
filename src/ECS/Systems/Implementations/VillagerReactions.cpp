@@ -30,6 +30,7 @@
 #include "3D/L3DMesh.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
+#include "Audio/HeaderOverrides.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -293,7 +294,8 @@ void BeliefVoiceOf(entt::entity source, entt::entity town, PlayerNames player, G
 	                             .pitchPercent = k_VoicePitch,
 	                             .voicePlayType = pack::AudioBankLoop::Once,
 	                             .minDistance = k_VoiceReach * k_VoiceNearShare,
-	                             .maxDistance = k_VoiceReach});
+	                             .maxDistance = k_VoiceReach,
+	                             .callerWins = audio::k_CallerDistancesWin});
 }
 /// The dance a new building's reaction is danced round, made as the first villager joins: the small or the large
 /// building dance by how wide the building is. Whether the villager joined a group of it (else it has no room); none
