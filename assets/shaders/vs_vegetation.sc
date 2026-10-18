@@ -17,7 +17,7 @@ uniform vec4 u_islandExtent;
 // blended over the four cells around it
 uniform vec4 u_shadeAt;
 // w 2 for a held tree mirrored in the sea: x the distance that sets its haze, y the grey of 1 that a fire on it scales
-// its light down to, 0 for none
+// its light down to, 0 for none, z the factor that brings its width back from the narrowing of a fire, 0 for none
 uniform vec4 u_fogAt;
 #ifdef USE_HEIGHT_MAP
 #include "land_altitude.sh"
@@ -32,10 +32,13 @@ void main()
 {
     uint modelIndex = uint(max(0, a_indices.x));
 
+    // A held tree mirrored in the sea shows at its whole width: the narrowing of a fire shows only in the hand
+    bool heldMirror = u_fogAt.w > 1.5;
+    float widthBack = heldMirror && u_fogAt.z > 0.0 ? u_fogAt.z : 1.0;
     mat4 model;
-    model[0] = i_data0;
+    model[0] = vec4(i_data0.xyz * widthBack, i_data0.w);
     model[1] = i_data1;
-    model[2] = i_data2;
+    model[2] = vec4(i_data2.xyz * widthBack, i_data2.w);
     model[3] = i_data3;
 
     // The tree's sway, or its bend away from the hand, is in its matrix (VegetationSystem)
@@ -55,7 +58,6 @@ void main()
     vec3 origin = instMul(model, vec4(0.0, 0.0, 0.0, 1.0)).xyz;
     // A tree held in the hand and mirrored in the sea takes the light that it kept in the hand: the land's light and
     // colour at its place on the map, blended over the four cells around it, and the haze of the kept distance
-    bool heldMirror = u_fogAt.w > 1.5;
     // A tree with a fire on it takes a grey instead, no brighter than the trees' brightness
     float grey = heldMirror ? u_fogAt.y : i_data4.x;
     float brightness = grey > 0.0 ? min(grey, u_landLight.y) : u_landLight.y;
@@ -88,8 +90,9 @@ void main()
             v_snowLight = ModelLightColour(SnowColour(colour), ModelLightFactor(a_normal, localLight));
         }
     }
-    // The alpha its foliage is cut away below while it burns, 0 for its own
-    v_color0 = vec4(colour / 255.0, i_data4.y);
+    // The alpha its foliage is cut away below while it burns, 0 for its own. The sea cuts a held tree's mirrored foliage
+    // at its own alpha: the thinning of a fire shows only in the hand.
+    v_color0 = vec4(colour / 255.0, heldMirror ? 0.0 : i_data4.y);
 
     v_texcoord0 = vec4(a_texcoord0, 0.0, 0.0);
     v_normal = a_normal;

@@ -1282,3 +1282,6 @@ openblack_setup_and_add_test(test_header_overrides test_header_overrides.cpp)
 target_link_libraries(test_header_overrides PRIVATE pack)
 openblack_setup_and_add_test(test_game_heading test_game_heading.cpp)
 openblack_setup_and_add_test(test_hand_throw_speed test_hand_throw_speed.cpp)
+openblack_setup_and_add_test(
+  test_object_tint graphics/test_object_tint.cpp
+)

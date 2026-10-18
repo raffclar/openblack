@@ -292,10 +292,10 @@ void main()
 #endif // USE_INSTANCING
 #ifdef USE_INSTANCING
 	// w: a colour added over it after its texture and light, 0xRRGGBB, as the heal lights the people it heals, which the
-	// instance gives as a negative x; a house's positive x is its windows' light
+	// instance gives as the whole part of a negative x; a house's positive x is its windows' light
 	if (u_window.x < 0.5f && i_data4.x < -0.5f)
 	{
-		v_snow.w = -i_data4.x;
+		v_snow.w = floor(-i_data4.x);
 	}
 	// A house glowing with heat while someone is home: 1 plus its glow, its windows lit by the 1
 	else if (u_window.x < 0.5f && i_data4.x > 1.5f)
@@ -395,11 +395,11 @@ void main()
 	// The texture is scaled (z, none when 0) then slid (xy) across the mesh
 	v_texcoord0.xy = v_texcoord0.xy * (u_uvOffset.z != 0.0 ? u_uvOffset.z : 1.0) + u_uvOffset.xy;
 #ifdef USE_INSTANCING
-	// A pile of grain's texture has flowed down it by a small negative x, as far as the pile is sunk (a glow added over
-	// an object is a larger negative x)
-	if (i_data4.x < 0.0f && i_data4.x >= -0.5f)
+	// A pile of grain's texture has flowed down it as far as the pile is sunk: the fraction of a negative x (its whole
+	// part is a colour added over it)
+	if (i_data4.x < 0.0f)
 	{
-		v_texcoord0.y -= i_data4.x;
+		v_texcoord0.y += -i_data4.x - floor(-i_data4.x);
 	}
 #endif // USE_INSTANCING
 	if (u_shine.x > 0.5f)
