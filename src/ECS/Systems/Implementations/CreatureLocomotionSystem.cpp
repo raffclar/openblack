@@ -84,6 +84,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -1080,6 +1081,11 @@ void CreatureLocomotionSystem::Place(entt::entity creature, glm::vec3 position)
 void CreatureLocomotionSystem::PlaceWithoutWalking(entt::entity creature, glm::vec3 position)
 {
 	Place(creature, position);
+	// The body keeps its last pose as both poses, at its old place, until its next turn
+	if (Locator::creatureAnimationSystem::has_value())
+	{
+		Locator::creatureAnimationSystem::value().HoldTurnPose(creature);
+	}
 	auto& registry = Locator::entitiesRegistry::value();
 	// The route starts again at the new place, and the walk or turn stops. A walk step of the plan is then complete.
 	if (auto* self = registry.TryGet<CreatureLocomotion>(creature))
@@ -1346,6 +1352,50 @@ void CreatureLocomotionSystem::ProcessTurn()
 	}
 }
 
+namespace
+{
+/// Places a creature and poses its legs a part of the way through the turn, 0 to 1. It is true when the place or the
+/// heading changed.
+bool ShowAt(CreatureLocomotion& self, Transform& transform, CreatureAnimation& animation, float f)
+{
+	const auto position = self.fromPosition + ((self.toPosition - self.fromPosition) * f);
+	const auto heading = GameHeading(self.fromHeading.Radians() + (self.toHeading.TurnFrom(self.fromHeading) * f));
+	const auto rotation = glm::mat3(glm::eulerAngleY(heading.Yaw()));
+	bool moved = false;
+	if (position != transform.position || rotation != transform.rotation)
+	{
+		transform.position = position;
+		transform.rotation = rotation;
+		moved = true;
+	}
+	animation.slots.clear();
+	for (const auto& track : self.tracks)
+	{
+		auto time = track.fromMs + (track.advanceMs * f);
+		if (track.breathing)
+		{
+			time = static_cast<float>(
+			    creature_animation::BreathTime(animation.breathPhase, static_cast<uint32_t>(std::max(track.durationMs, 1.0f))));
+		}
+		else if (track.looping)
+		{
+			time = track.durationMs > 0.0f ? std::fmod(time, track.durationMs) : 0.0f;
+		}
+		else
+		{
+			time = std::clamp(time, 0.0f, std::max(track.durationMs - 1.0f, 0.0f));
+		}
+		animation.slots.push_back({.animation = track.animation,
+		                           .timeMs = time,
+		                           .weight = track.weight,
+		                           .mirrored = false,
+		                           .blendedWith = track.blendedWith,
+		                           .blendWeight = track.blendWeight});
+	}
+	return moved;
+}
+} // namespace
+
 void CreatureLocomotionSystem::Update(float turnFraction)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1353,45 +1403,25 @@ void CreatureLocomotionSystem::Update(float turnFraction)
 	bool moved = false;
 	registry.Each<CreatureLocomotion, Transform, CreatureAnimation>(
 	    [&](CreatureLocomotion& self, Transform& transform, CreatureAnimation& animation) {
-		    if (!self.started)
+		    if (self.started && ShowAt(self, transform, animation, f))
 		    {
-			    return;
-		    }
-		    const auto position = self.fromPosition + ((self.toPosition - self.fromPosition) * f);
-		    const auto heading = GameHeading(self.fromHeading.Radians() + (self.toHeading.TurnFrom(self.fromHeading) * f));
-		    const auto rotation = glm::mat3(glm::eulerAngleY(heading.Yaw()));
-		    if (position != transform.position || rotation != transform.rotation)
-		    {
-			    transform.position = position;
-			    transform.rotation = rotation;
 			    moved = true;
-		    }
-		    animation.slots.clear();
-		    for (const auto& track : self.tracks)
-		    {
-			    auto time = track.fromMs + (track.advanceMs * f);
-			    if (track.breathing)
-			    {
-				    time = static_cast<float>(creature_animation::BreathTime(
-				        animation.breathPhase, static_cast<uint32_t>(std::max(track.durationMs, 1.0f))));
-			    }
-			    else if (track.looping)
-			    {
-				    time = track.durationMs > 0.0f ? std::fmod(time, track.durationMs) : 0.0f;
-			    }
-			    else
-			    {
-				    time = std::clamp(time, 0.0f, std::max(track.durationMs - 1.0f, 0.0f));
-			    }
-			    animation.slots.push_back({.animation = track.animation,
-			                               .timeMs = time,
-			                               .weight = track.weight,
-			                               .mirrored = false,
-			                               .blendedWith = track.blendedWith,
-			                               .blendWeight = track.blendWeight});
 		    }
 	    });
 	if (moved)
+	{
+		registry.SetDirty();
+	}
+}
+
+void CreatureLocomotionSystem::ShowTurnEnd(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* self = registry.TryGet<CreatureLocomotion>(creature);
+	auto* transform = registry.TryGet<Transform>(creature);
+	auto* animation = registry.TryGet<CreatureAnimation>(creature);
+	if (self != nullptr && transform != nullptr && animation != nullptr && self->started &&
+	    ShowAt(*self, *transform, *animation, 1.0f))
 	{
 		registry.SetDirty();
 	}

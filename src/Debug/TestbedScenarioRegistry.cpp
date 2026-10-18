@@ -6458,6 +6458,22 @@ void AddCombat(std::vector<Scenario>& all)
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
 	}
+
+	{
+		all.push_back({
+		    .id = "combat.turn_blend",
+		    .name = "Fighters move smoothly between game turns",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger starts a fight with the blue tiger to its east, and both fight by themselves. The "
+		                   "camera looks at the arena from the side.",
+		    .expected = "Each body takes a pose once a game turn, and each frame shows the body between its last two poses. "
+		                "A lunge or a step moves the body smoothly forward. The body does not move ahead between two turns "
+		                "and then jump back. A push apart also shows over one turn.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
 }
 
 void AddMind(std::vector<Scenario>& all)

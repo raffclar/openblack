@@ -35,8 +35,16 @@ public:
 	/// Once a game turn: the fatness each body shows follows its creature's a step
 	virtual void ProcessTurn() = 0;
 	/// Once a frame, by the game time, which stops while the game is paused: the bodies are reshaped where they have
-	/// changed enough, posed, and their eyes placed
+	/// changed enough, drawn between the poses of their last two game turns, and their eyes placed
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// A creature in the world takes its pose for this game turn now, at the end of its turn: its animations move on by
+	/// one turn, at the place and heading where its turn took it. A creature that has its pose for this turn keeps it.
+	virtual void PoseTurn(entt::entity creature) = 0;
+	/// At the end of each game turn, each creature in the world without a pose for this turn takes its pose
+	virtual void PoseTurns() = 0;
+	/// A creature that moves to a new place without a walk keeps its last pose as both poses. Thus the body does not
+	/// move back to the pose from two turns before.
+	virtual void HoldTurnPose(entt::entity creature) = 0;
 	/// Poses a copy of a creature's body some milliseconds on (see components::CreatureCopy): shaped as its creature is,
 	/// by its own animations, its eyes looking where its head does and blinking. Nothing happens to an entity that isn't
 	/// a copy, or whose creature is gone.

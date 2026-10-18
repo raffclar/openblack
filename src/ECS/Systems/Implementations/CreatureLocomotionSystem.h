@@ -35,6 +35,7 @@ class CreatureLocomotionSystem final: public CreatureLocomotionSystemInterface
 public:
 	void ProcessTurn() override;
 	void Update(float turnFraction) override;
+	void ShowTurnEnd(entt::entity creature) override;
 
 	MoveResult MoveTo(entt::entity creature, glm::vec2 point, Pace pace, float minDistance, float maxDistance) override;
 	MoveResult LeadTo(entt::entity creature, glm::vec2 point, float extraSpeed, float maxDistance) override;
