@@ -10,10 +10,13 @@
 
 SAMPLER2D(s_foam, 9);
 
-// The highest that the foam stands on the water, for a thickness of 1, in units
+// The highest that the foam stands on the water, for a thickness of 1, in units (underwater::k_FoamFullHeight)
 #define UW_FOAM_TALLEST 0.45f
+// How much of its height the foam of the shore keeps (underwater::k_ShoreFoamHeightScale): change them together
+#define UW_SHORE_FOAM_HEIGHT_SCALE 0.6666667f
 
-// The foam field at a point: x how thick the foam is, y how old, z how much air it holds, w how much the field shows
+// The foam field at a point: x how thick the foam is, y how old, z how much air it holds, w how much of the foam is
+// shore foam (0 to 1)
 vec4 FoamFieldAt(vec2 xz)
 {
 	vec2 uv = UwFoamUv(xz);
@@ -23,7 +26,7 @@ vec4 FoamFieldAt(vec2 xz)
 		return vec4_splat(0.0f);
 	}
 	vec4 field = texture2DLod(s_foam, uv, 0.0f);
-	return vec4(field.x * inside, field.y, field.z * inside, inside);
+	return vec4(field.x * inside, field.y, field.z * inside, field.w * inside);
 }
 
 // The lace of the foam, 0 to 1.5: lumps with gaps between them, from the noise `lumps`. More of the lace closes where
@@ -40,6 +43,12 @@ float FoamThicknessAt(vec2 xz, vec2 carried, float pixel)
 {
 	float field = FoamFieldAt(xz).x;
 	return field * FoamLace(field, UwFoamNoise((xz - carried) * 1.8f), pixel);
+}
+
+// How high the foam stands for a thickness of 1 at a point, in units: the shore foam stands lower
+float FoamTallestAt(vec2 xz)
+{
+	return UW_FOAM_TALLEST * mix(1.0f, UW_SHORE_FOAM_HEIGHT_SCALE, FoamFieldAt(xz).w);
 }
 
 // The bubbles in the foam, as cells: x the distance to the middle of the nearest cell, y to the middle of the second
@@ -109,7 +118,7 @@ vec3 VolumeFoam(vec3 water, vec3 thinColour, vec3 surfacePoint, vec3 direction, 
 	{
 		vec3 at = mix(top, surfacePoint, min((float(i) + jitter) / 7.5f, 1.0f));
 		float standing = FoamThicknessAt(at.xz, carried, pixel);
-		if (at.y - surfacePoint.y <= min(standing, 1.5f) * UW_FOAM_TALLEST)
+		if (at.y - surfacePoint.y <= min(standing, 1.5f) * FoamTallestAt(at.xz))
 		{
 			hit = at;
 			thickness = standing;
@@ -124,14 +133,15 @@ vec3 VolumeFoam(vec3 water, vec3 thinColour, vec3 surfacePoint, vec3 direction, 
 
 	// The slope of the top of the foam
 	float e = 0.4f;
+	float hitTallest = FoamTallestAt(hit.xz);
 	float dx = FoamThicknessAt(hit.xz + vec2(e, 0.0f), carried, pixel) - thickness;
 	float dz = FoamThicknessAt(hit.xz + vec2(0.0f, e), carried, pixel) - thickness;
-	vec3 normal = normalize(vec3(-dx * UW_FOAM_TALLEST / e, 1.0f, -dz * UW_FOAM_TALLEST / e));
+	vec3 normal = normalize(vec3(-dx * hitTallest / e, 1.0f, -dz * hitTallest / e));
 
 	vec3 towards = u_uwAbove.xyz;
 	vec3 light = u_uwLightColour.rgb * u_uwLightColour.w;
 	// Thicker foam towards the light throws a shadow on this point; the deep parts of thick foam get less light
-	float lean = UW_FOAM_TALLEST * thickness * 1.5f / max(towards.y, 0.15f);
+	float lean = hitTallest * thickness * 1.5f / max(towards.y, 0.15f);
 	float blocker = FoamThicknessAt(hit.xz + towards.xz * lean, carried, pixel);
 	float shadow = mix(0.6f, 1.0f, exp(-max(blocker - thickness, 0.0f) * 2.0f));
 	float hollow = mix(1.0f, 0.75f, smoothstep(0.6f, 1.8f, thickness));
