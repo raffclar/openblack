@@ -167,19 +167,33 @@ const GLivingInfo* LivingInfoOf(const ecs::Registry& registry, entt::entity enti
 	return nullptr;
 }
 
-/// Whether a reaction reaches a kind of living thing: villagers and creatures every kind; animals, so far, only things
-/// flying at them, fires, things to flee, creatures and hunters, all of which they flee
-// TODO(animals): the other reactions animals take up (those whose priority the animal doesn't zero) belong to the
-// animals' own behaviour, which openblack doesn't run yet
+/// Whether a reaction reaches a kind of living thing. Villagers and creatures take every kind. An animal gives every
+/// other kind the priority 0, so it takes only these kinds:
+/// - It flees a thing to flee, a miracle to flee, a creature, a fire, a falling tree and a hunter.
+/// - It flees a thing that flies at it when the thing is near.
+/// - It looks at a thing to look at.
+/// - It goes to food that interests it.
 bool Reaches(const ecs::Registry& registry, entt::entity entity, Reaction type)
 {
 	if (registry.AnyOf<Villager, Creature>(entity))
 	{
 		return true;
 	}
-	return (type == Reaction::ReactToFlyingObject || type == Reaction::ReactToFire || type == Reaction::FleeFromObject ||
-	        type == Reaction::ReactToCreature || type == Reaction::FleeFromPredator) &&
-	       registry.AllOf<Animal>(entity);
+	switch (type)
+	{
+	case Reaction::FleeFromObject:
+	case Reaction::LookAtObject:
+	case Reaction::FleeFromSpell:
+	case Reaction::ReactToCreature:
+	case Reaction::ReactToFood:
+	case Reaction::ReactToFlyingObject:
+	case Reaction::ReactToFire:
+	case Reaction::AvoidFallingTree:
+	case Reaction::FleeFromPredator:
+		return registry.AllOf<Animal>(entity);
+	default:
+		return false;
+	}
 }
 
 /// Whether a kind of living thing reacts to a kind of reaction at all, by its table's flags in the reactions' order
@@ -953,6 +967,16 @@ uint32_t ReactionSystem::PriorityTo(const Active& reaction, entt::entity living,
 		const auto kind = ecs::villager_disciple::FollowPriority(living, reaction.source.initiator, info->priority);
 		return villager_reaction::Priority(kind, Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
 	}
+	// An animal heeds food only when it is hungry and eats that kind of food
+	if (reaction.source.type == Reaction::ReactToFood && registry.AllOf<Animal>(living))
+	{
+		const auto kind =
+		    Locator::animalSystem::has_value()
+		        ? Locator::animalSystem::value().ReactToFoodPriority(living, reaction.source.initiator, info->priority)
+		        : 0u;
+		return villager_reaction::Priority(static_cast<uint8_t>(std::min<uint32_t>(kind, 255)),
+		                                   Reacts(*livingInfo, reaction.source.type), DistanceOf(*info), distance);
+	}
 	// A villager heeds food lying about only when it catches its eye
 	if (reaction.source.type == Reaction::ReactToFood && registry.AllOf<Villager>(living))
 	{
@@ -1257,8 +1281,9 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 			return;
 		}
 	}
-	// An animal flees a fire, a thing to flee or a creature at once, and takes up a flying thing's reaction only when the
-	// thing is near enough to flee
+	// An animal flees a fire, a thing to flee, a miracle to flee, a falling tree or a creature at once. It takes up a
+	// flying thing's reaction only when the thing is near enough to flee. It looks at a thing to look at, and it goes to
+	// food
 	if (registry.AllOf<Animal>(living))
 	{
 		// An animal that does not react now remembers its state. An animal that changes to the new reaction keeps the
@@ -1274,8 +1299,12 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		    ((source.type == Reaction::FleeFromPredator &&
 		      Locator::animalSystem::value().SetupFleeFromPredator(living, source.initiator)) ||
 		     ((source.type == Reaction::ReactToFire || source.type == Reaction::FleeFromObject ||
+		       source.type == Reaction::FleeFromSpell || source.type == Reaction::AvoidFallingTree ||
 		       source.type == Reaction::ReactToCreature) &&
 		      Locator::animalSystem::value().SetupFleeFromObject(living, source.initiator, source.type)) ||
+		     (source.type == Reaction::LookAtObject &&
+		      Locator::animalSystem::value().SetupLookAtObject(living, source.initiator)) ||
+		     (source.type == Reaction::ReactToFood && Locator::animalSystem::value().SetupGotoFood(living, source.initiator)) ||
 		     (source.type == Reaction::ReactToFlyingObject && entry != nullptr && entry->body != nullptr &&
 		      Locator::animalSystem::value().SetupReactToFlyingObject(living, source.initiator, entry->body->Speed())));
 		if (!flees)
