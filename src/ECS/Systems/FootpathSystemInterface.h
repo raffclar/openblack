@@ -42,9 +42,9 @@ public:
 	/// A thing that stays put comes onto the map: when the creatures' route rule makes them go round it, the paths go
 	/// round it from their next turn
 	virtual void ThingPut(entt::entity thing) = 0;
-	/// A thing that stays put leaves the map from where it stood: when the paths went round it, they stop going round it
-	/// on their next turn
-	virtual void ThingRemoved(entt::entity thing, glm::vec3 position) = 0;
+	/// A thing that stays put leaves the map from where it stood: when the paths went round it, or must go round it now,
+	/// they stop going round it on their next turn. Filed tells if the thing stood in map cells until now.
+	virtual void ThingRemoved(entt::entity thing, glm::vec3 position, bool filed) = 0;
 	/// The paths go round the things that came onto the map, and stop going round those that left it, in turn. A land's
 	/// things come onto the map before its footpaths load, so no path goes round them.
 	virtual void ProcessObstacleChanges() = 0;

@@ -26,7 +26,7 @@ public:
 	void TownJoinedSite(entt::entity site, entt::entity town) override;
 	void DanceMade(entt::entity dance, entt::entity town) override;
 	void ThingPut(entt::entity thing) override;
-	void ThingRemoved(entt::entity thing, glm::vec3 position) override;
+	void ThingRemoved(entt::entity thing, glm::vec3 position, bool filed) override;
 	void ProcessObstacleChanges() override;
 	void ProcessTurn() override;
 	[[nodiscard]] std::optional<std::vector<glm::ivec2>> PlanBetween(glm::ivec2 from, glm::ivec2 to) const override;

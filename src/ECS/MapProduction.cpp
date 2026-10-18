@@ -347,6 +347,7 @@ void MapProduction::TakeOut(entt::entity entity) const
 	{
 		return;
 	}
+	const bool filed = !resident->cells.empty();
 	for (const auto cell : resident->cells)
 	{
 		_lists.Remove(cell, entity);
@@ -355,7 +356,7 @@ void MapProduction::TakeOut(entt::entity entity) const
 	// A thing that stays put, going off the map, may bring the footpaths back from going round it
 	if (resident->placement != Placement::MobileFront && Locator::footpathSystem::has_value())
 	{
-		Locator::footpathSystem::value().ThingRemoved(entity, resident->filedAt);
+		Locator::footpathSystem::value().ThingRemoved(entity, resident->filedAt, filed);
 	}
 }
 

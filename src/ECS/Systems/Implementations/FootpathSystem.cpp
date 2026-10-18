@@ -515,23 +515,27 @@ void FootpathSystem::ThingPut(entt::entity thing)
 	context.footpathObstacleChanges.push_back(*change);
 }
 
-void FootpathSystem::ThingRemoved(entt::entity thing, glm::vec3 position)
+void FootpathSystem::ThingRemoved(entt::entity thing, glm::vec3 position, bool filed)
 {
 	auto& registry = Entities();
 	auto& context = registry.Context();
-	// Only a thing that the paths went round when it was put on the map; it is taken off once
+	// The thing as it is now; a thing that is going may not be whole any more, and then it is as it was put on the map
+	bool known = false;
+	const auto now = ObstacleOf(registry, thing, position, false, known);
 	const auto kept = context.footpathObstacles.find(thing);
 	if (kept == context.footpathObstacles.end())
 	{
+		// A thing that the paths did not go round when it came, but must go round now, such as a forest on fire
+		if (filed && now.has_value())
+		{
+			context.footpathObstacleChanges.push_back(*now);
+		}
 		return;
 	}
 	auto change = kept->second;
 	context.footpathObstacles.erase(kept);
 	change.put = false;
 	change.place = wall_hug::ToWhole(glm::xz(position));
-	// The thing as it is now; a thing that is going may not be whole any more, and then it is as it was put on the map
-	bool known = false;
-	const auto now = ObstacleOf(registry, thing, position, false, known);
 	if (known)
 	{
 		if (!now.has_value())
