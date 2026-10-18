@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 
-#include "Common/RandomNumberManager.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureIdleMind.h"
@@ -54,6 +54,7 @@ public:
 	[[nodiscard]] std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const override;
 	void RestoreMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind,
 	                 const std::optional<RestoredPlan>& plan) override;
+	void StartMind(entt::entity creature) override;
 	void ClearLearning(entt::entity creature) override;
 	void SeeSkill(const glm::vec3& point, size_t skill) override;
 	void SeeMiracle(const glm::vec3& point, size_t miracle) override;
@@ -148,8 +149,8 @@ public:
 	[[nodiscard]] static bool CanSteal(entt::entity creature, entt::entity thing);
 
 private:
-	/// Gives a creature its desires and what it has learnt, if it has none yet: the first time its mind thinks, or
-	/// sooner when it is told to do something before then
+	/// Gives a creature its desires and what it has learnt, if it has none yet: as it is made (StartMind), else the first
+	/// time that its mind thinks, or sooner when it gets an order before then
 	void SetUpMind(entt::entity creature, const components::Creature& body, components::CreatureMindState& mind);
 	/// Sets up what a creature has learnt the first time its mind thinks, from its mind file when it has one
 	void SetUpLearning(entt::entity creature, components::CreatureMindState& mind);
@@ -235,9 +236,8 @@ private:
 	/// The creature lets go of the thing that it holds because the next step needs empty hands: it puts the thing down,
 	/// or it tosses the thing away. Whether the let-go started (CreatureMindLearning.cpp)
 	bool LetGoOfHeld(entt::entity creature, components::CreatureMindState& mind, creature_mind::LetGo how);
-	/// Uniform random numbers from 0 to n - 1, and from 0 to 1
+	/// GameRand(range): a draw on the synced seed of the game from 0 to range - 1
 	uint32_t Random(uint32_t range);
-	float Chance();
 	/// What an agenda needs to know of the creature itself: the camera's position, whether it has a player, whether a
 	/// script controls it, its radius, and a chance for what varies
 	void Situate(entt::entity creature, creature_plan_actions::Situation& situation);
@@ -525,8 +525,8 @@ private:
 	void StepGesture(entt::entity creature);
 	/// A move of a dance that is not a gesture ends the arm's point
 	void EndDanceGesturePoint(entt::entity creature);
-	/// The minds choose at random, apart from the game's own random numbers
-	RandomStreamSource _random {RandomStream::CreatureMind};
+	/// The game's random numbers, which the minds draw on the synced seed
+	GameRandomSource _random;
 	/// The average of the feedback given to all creatures
 	float _averageFeedback {0.0f};
 	/// The creature whose plan the player orders while the plan is made, if any

@@ -1959,13 +1959,9 @@ void CreatureMindSystem::ProcessTurn()
 	{
 		ReceiveFeedback(entity, feedback);
 	}
-	const auto random = [this](uint32_t range) {
-		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	};
-	// The variety of faces moves on by the random numbers of the game
-	const auto gameRandom = [&random](uint32_t range) {
-		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : random(range);
-	};
+	const auto random = [this](uint32_t range) { return _random.GameRand(range); };
+	// The agendas, the faces and the sides draw on the same synced seed of the game
+	const auto& gameRandom = random;
 	const bool night = IsNight();
 	// The creatures passing out this turn, which are knocked out once every mind has thought
 	std::vector<entt::entity> passingOut;
@@ -2641,7 +2637,7 @@ bool CreatureMindSystem::PlayAction(entt::entity creature, size_t animation)
 	{
 		return false;
 	}
-	const auto played = creature_layers::PlayOnce(body->body, animation, std::bernoulli_distribution(0.5)(_random));
+	const auto played = creature_layers::PlayOnce(body->body, animation, _random.GameRand(2) == 1);
 	if (played.has_value())
 	{
 		body->body = *played;
@@ -2682,13 +2678,9 @@ std::optional<creature_face::Request> CreatureMindSystem::ShowFeeling(entt::enti
 	{
 		return std::nullopt;
 	}
-	const auto random = [this](uint32_t range) {
-		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	};
-	// The variety of faces moves on by the random numbers of the game
-	const auto gameRandom = [&random](uint32_t range) {
-		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : random(range);
-	};
+	const auto random = [this](uint32_t range) { return _random.GameRand(range); };
+	// The agendas, the faces and the sides draw on the same synced seed of the game
+	const auto& gameRandom = random;
 	const creature_mind::Senses senses {.feelings = FeelingsOf(*mind)};
 	const auto face = creature_mind::PullFace(mind->idle, cue, senses, random, gameRandom);
 	if (face.has_value())
@@ -2714,9 +2706,7 @@ bool CreatureMindSystem::SitDown(entt::entity creature)
 		    *creature_layers::PlaySequence(body->body, animations::k_StartSit, animations::k_Sit, animations::k_EndSit);
 		return true;
 	}
-	const auto random = [this](uint32_t range) {
-		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	};
+	const auto random = [this](uint32_t range) { return _random.GameRand(range); };
 	Abandon(*mind);
 	creature_mind::Plan(mind->idle, creature_mind::Activity::Told, {creature_mind::SitDown(random)});
 	return true;
@@ -3050,9 +3040,8 @@ bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity a
 
 bool CreatureMindSystem::Sleep(entt::entity creature)
 {
-	return Replan(creature, creature_mind::Activity::Sleep, creature_mind::Sleep([this](uint32_t range) {
-		              return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	              }));
+	return Replan(creature, creature_mind::Activity::Sleep,
+	              creature_mind::Sleep([this](uint32_t range) { return _random.GameRand(range); }));
 }
 
 bool CreatureMindSystem::Eat(entt::entity creature, std::optional<entt::entity> food)
@@ -3091,11 +3080,8 @@ bool CreatureMindSystem::Drink(entt::entity creature)
 
 bool CreatureMindSystem::Poo(entt::entity creature)
 {
-	return Replan(
-	    creature, creature_mind::Activity::Poo,
-	    creature_mind::Poo(
-	        [this](uint32_t range) { return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); },
-	        std::nullopt));
+	return Replan(creature, creature_mind::Activity::Poo,
+	              creature_mind::Poo([this](uint32_t range) { return _random.GameRand(range); }, std::nullopt));
 }
 
 bool CreatureMindSystem::Puke(entt::entity creature)

@@ -1408,3 +1408,10 @@ set_tests_properties(
 openblack_setup_and_add_test(test_saved_system_state test_saved_system_state.cpp)
 openblack_setup_and_add_test(test_save_file_writer test_save_file_writer.cpp)
 target_link_libraries(test_saved_system_state PRIVATE edt)
+openblack_setup_and_add_test(test_oracle_game_random oracle/test_oracle_game_random.cpp)
+set_tests_properties(
+  test_oracle_game_random
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_creature_load_after_draws test_creature_load_after_draws.cpp)

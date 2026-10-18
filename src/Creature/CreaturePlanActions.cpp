@@ -48,13 +48,6 @@ constexpr size_t k_Sneeze = 62;
 /// Gazing at the view lasts this long
 constexpr float k_GazeSeconds = 6.0f;
 
-/// A chance from 0 to 1 in fine steps, from the whole-number random
-float RandomFraction(const creature_mind::Random& random)
-{
-	constexpr uint32_t k_Steps = 1U << 24U;
-	return static_cast<float>(random(k_Steps)) / static_cast<float>(k_Steps);
-}
-
 constexpr std::array k_Executors {
     Executor {.action = "EatAfterExamining", .target = Target::Food, .build = Build::Eat, .activity = Activity::Eat},
     Executor {.action = "EatAlive", .target = Target::Food, .build = Build::EatAlive, .activity = Activity::Eat},
@@ -1123,8 +1116,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		{
 			return std::nullopt;
 		}
-		return creature_mind::TakeToyHome(*object, *situation.home, situation.height, random,
-		                                  [&random] { return RandomFraction(random); });
+		return creature_mind::TakeToyHome(*object, *situation.home, situation.height, random);
 	case Build::ThrowDie:
 		return creature_mind::ThrowDie(situation.handFull ? std::nullopt : object, *object, situation.position,
 		                               situation.height, random);
@@ -1237,7 +1229,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		}
 		return creature_mind::SleepAtHome(*situation.home, situation.height, random);
 	case Build::SmileAt:
-		return creature_mind::SmileAt(*object, situation.height, situation.chance, random);
+		return creature_mind::SmileAt(*object, situation.height, situation.smileExtraSeconds, random);
 	case Build::ShowOff:
 		return creature_mind::ShowImpressiveAnimation(object, situation.height, random);
 	case Build::WaveAt:
@@ -1550,8 +1542,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::HealItself(static_cast<uint32_t>(MagicType::Heal), situation.standing);
 	case Build::RestOnTheSpot:
 		return creature_mind::RestOnTheSpot(situation.self,
-		                                    creature_mind::k_RestOnTheSpotSeconds +
-		                                        (creature_mind::k_RestOnTheSpotExtraSeconds * RandomFraction(random)));
+		                                    creature_mind::FloatRand(random, creature_mind::k_RestOnTheSpotExtraSeconds) +
+		                                        creature_mind::k_RestOnTheSpotSeconds);
 	case Build::CastRestoreHealthInHand:
 		return creature_mind::CastRestoreHealthInHand(situation.heldOneShot->magicType, situation.self);
 	case Build::PickUpAndCastRestoreHealth:
@@ -1562,8 +1554,8 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		}
 		return creature_mind::PickUpAndCastRestoreHealth(
 		    situation.usedOneShot->magicType, situation.self, *situation.instrument, !situation.handFull,
-		    creature_mind::k_RestoreHealthWaitSeconds +
-		        (creature_mind::k_RestoreHealthWaitExtraSeconds * RandomFraction(random)));
+		    creature_mind::FloatRand(random, creature_mind::k_RestoreHealthWaitExtraSeconds) +
+		        creature_mind::k_RestoreHealthWaitSeconds);
 	case Build::GoHome:
 		return creature_mind::GoHome(*situation.home, situation.height);
 	case Build::RunHome:

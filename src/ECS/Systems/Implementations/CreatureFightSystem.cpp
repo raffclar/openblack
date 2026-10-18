@@ -2694,9 +2694,7 @@ void CreatureFightSystem::MeasureBlows(entt::entity creature)
 void CreatureFightSystem::DuelTurn(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto random = [this](uint32_t range) {
-		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	};
+	const auto random = [this](uint32_t range) { return _random.GameRand(range); };
 	{
 		auto* fighting = registry.TryGet<CreatureFighting>(entity);
 		if (fighting == nullptr || fighting->stage != CreatureFighting::Stage::Duel)
@@ -3341,9 +3339,7 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	// Every blow that lands wounds the skin, blocked or not: the column is drawn first, then the kind by the wound type
 	// that the attacker's species gives the blow
 	{
-		const auto random = [this](uint32_t range) {
-			return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-		};
+		const auto random = [this](uint32_t range) { return _random.GameRand(range); };
 		const auto column = static_cast<uint8_t>(random(creature_marks::k_CellsPerRow));
 		const auto* attackerRig = RigOf(body.species);
 		const auto woundType = attackerRig != nullptr && attackerRig->blowWoundTypes.has_value()
@@ -3357,13 +3353,7 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	if (Locator::liquidParticleSystem::has_value())
 	{
 		auto& liquids = Locator::liquidParticleSystem::value();
-		const auto draw = [this](int32_t range) {
-			if (Locator::gameRandom::has_value())
-			{
-				return static_cast<int32_t>(Locator::gameRandom::value().LocalRand(range));
-			}
-			return std::uniform_int_distribution<int32_t>(0, range - 1)(_random);
-		};
+		const auto draw = [this](int32_t range) { return static_cast<int32_t>(_random.LocalRand(range)); };
 		// Each axis of the spread is drawn z first, then y, then x
 		const auto spray = [&draw](const glm::vec3& along, float step) {
 			const auto z = draw(51);

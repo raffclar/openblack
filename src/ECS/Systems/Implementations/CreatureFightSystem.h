@@ -18,7 +18,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include "Common/RandomNumberManager.h"
+#include "Common/GameRandom.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -229,7 +229,8 @@ private:
 	std::optional<glm::vec3> _handSparkle;
 	/// The sparkles flicker at most 60 times a second
 	creature_fight::marks::Pace _marksPace;
-	RandomStreamSource _random {RandomStream::CreatureFight};
+	/// The game's random numbers: the fight draws on the synced seed, and the blood and the marks on the local seed
+	GameRandomSource _random;
 };
 
 } // namespace openblack::ecs::systems

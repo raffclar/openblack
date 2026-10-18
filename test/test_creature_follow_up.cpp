@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <deque>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -39,7 +42,7 @@ struct FakeRolls
 std::vector<Step> Slap(Feelings feelings, std::deque<uint32_t> rolls, float chance = 0.0f)
 {
 	FakeRolls fake {.rolls = std::move(rolls)};
-	return ShowSlapFeeling(feelings, fake.Function(), chance, 10);
+	return ShowSlapFeeling(feelings, fake.Function(), [chance](float most) { return chance * most; }, 10);
 }
 } // namespace
 
@@ -105,8 +108,24 @@ TEST(CreatureFollowUp, ASlapCanMakeItLookAtThePlayerForOneToTwoSeconds)
 TEST(CreatureFollowUp, ASlapRollsFourWaysFirst)
 {
 	FakeRolls fake {.rolls = {0, 1}};
-	static_cast<void>(ShowSlapFeeling({.compassion = 0.0f, .anger = 1.0f}, fake.Function(), 0.0f, 10));
+	static_cast<void>(ShowSlapFeeling({.compassion = 0.0f, .anger = 1.0f}, fake.Function(), [](float) { return 0.0f; }, 10));
 	EXPECT_EQ(fake.ranges, (std::vector<uint32_t> {4, 2}));
+}
+
+TEST(CreatureFollowUp, ASlapDrawsTheLookTimeOnlyAfterItChoosesTheLook)
+{
+	std::vector<float> mosts;
+	const auto upTo = [&mosts](float most) {
+		mosts.push_back(most);
+		return 0.0f;
+	};
+	FakeRolls sad {.rolls = {1}};
+	static_cast<void>(ShowSlapFeeling({}, sad.Function(), upTo, 10));
+	EXPECT_TRUE(mosts.empty());
+	FakeRolls look {.rolls = {3}};
+	static_cast<void>(ShowSlapFeeling({}, look.Function(), upTo, 10));
+	EXPECT_EQ(look.ranges, (std::vector<uint32_t> {4}));
+	EXPECT_EQ(mosts, (std::vector<float> {1.0f}));
 }
 
 TEST(CreatureFollowUp, AfterTheMealItEatsAliveWhatItAteFromItsHand)

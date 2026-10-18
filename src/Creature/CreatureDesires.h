@@ -184,11 +184,11 @@ struct DesireSetup
 	std::vector<Spread> spreads;
 };
 
-/// A creature's desires as it starts, by uniform(min, max): its decays picked in their ranges, the times its desires
-/// take to grow spread by up to a fifth either way, and its sources' starting values and thresholds spread by their
-/// spreads either way and kept from 0 to 1
-[[nodiscard]] Desires Create(const std::array<DesireSetup, k_DesireCount>& setup,
-                             const std::function<float(float, float)>& uniform);
+/// A creature's desires as it starts. upTo(x) is a draw from 0 to x (GameFloatRand in the game). The decays are in
+/// their ranges, the times that the desires take to grow spread by up to a fifth either way, and the starting values
+/// and thresholds of the sources spread by their spreads either way and kept from 0 to 1. The order of the draws is
+/// the order of the game: the decay and the growing time of each desire, then the sources of all the desires
+[[nodiscard]] Desires Create(const std::array<DesireSetup, k_DesireCount>& setup, const std::function<float(float)>& upTo);
 
 /// The desires a stage of a creature's growing up brings, and those it takes away
 struct PhaseDesires

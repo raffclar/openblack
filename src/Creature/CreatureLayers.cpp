@@ -250,7 +250,8 @@ float creature_layers::DanceMoveTime(const BodyAction& body, uint32_t duration)
 
 BodyAction creature_layers::Hurry(BodyAction body)
 {
-	if (IsPlaying(body))
+	// A faint, which lies where it fell, keeps its pace
+	if (IsPlaying(body) && !body.holdLoop)
 	{
 		body.hurried = true;
 	}

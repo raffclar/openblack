@@ -65,7 +65,7 @@ InnateTraits creature_desire_sources::SpreadTraits(const InnateTraits& species, 
 	traits.lethargy = SpreadTrait(species.lethargy, k_TraitSpread, upTo);
 	traits.friendliness = SpreadTrait(species.friendliness, k_TraitSpread, upTo);
 	traits.communicativeness = SpreadTrait(species.communicativeness, k_TraitSpread, upTo);
-	traits.sixth = SpreadTrait(species.sixth, k_TraitSpread, upTo);
+	traits.sixth = SpreadTrait(species.sixth, k_SixthTraitSpread, upTo);
 	traits.objectsLookWeight = SpreadTrait(species.objectsLookWeight, k_LookWeightSpread, upTo);
 	traits.mountainsLookWeight = SpreadTrait(species.mountainsLookWeight, k_LookWeightSpread, upTo);
 	traits.waterLookWeight = SpreadTrait(species.waterLookWeight, k_LookWeightSpread, upTo);
@@ -74,7 +74,8 @@ InnateTraits creature_desire_sources::SpreadTraits(const InnateTraits& species, 
 
 float creature_desire_sources::SpreadSource(float value, float spread, const UpTo& upTo)
 {
-	return Clamp01(value + upTo(2.0f * spread) - spread);
+	// The game takes the spread off the draw first, then adds the value
+	return Clamp01((upTo(2.0f * spread) - spread) + value);
 }
 
 float creature_desire_sources::SpreadIncreaseSeconds(float seconds, const UpTo& upTo)

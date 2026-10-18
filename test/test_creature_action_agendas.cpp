@@ -387,7 +387,7 @@ TEST(CreatureActionAgendas, AVillagerIsInterestingAtASkillTheCreatureDoesNotKnow
 // "force Guide CREATURE_SMILE_AT_FRIEND MyCreature" and "force MyCreature CREATURE_WAVE_AT_OBJECT Guide"
 TEST(CreatureActionAgendas, SmilingAndWavingGoNearAndFaceTheOther)
 {
-	const auto smile = SmileAt(5, 10.0f, 0.5f, AlwaysFirst);
+	const auto smile = SmileAt(5, 10.0f, 2.0f, AlwaysFirst);
 	ASSERT_EQ(smile.size(), 3);
 	EXPECT_FLOAT_EQ(smile[0].movement.maxDistance, 30.0f);
 	EXPECT_EQ(smile[0].face, creature_face::Cue::Smile);

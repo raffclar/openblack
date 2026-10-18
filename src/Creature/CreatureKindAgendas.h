@@ -64,9 +64,8 @@ constexpr uint32_t k_HappyAroundToyThrowLots = 2;
 
 /// Taking a toy home: picking it up and walking it to a place within five of home along each of the land's axes
 /// (offset by chance), until within the creature's height of it or five at most, then putting it down, eight times in
-/// ten, or else tossing it away; all with a look of compassion. randomFraction is a chance from 0 to 1.
-[[nodiscard]] std::vector<Step> TakeToyHome(uint32_t toy, glm::vec2 home, float height, const Random& random,
-                                            const std::function<float()>& randomFraction);
+/// ten, or else tossing it away; all with a look of compassion. The offsets are GameFloatRand draws.
+[[nodiscard]] std::vector<Step> TakeToyHome(uint32_t toy, glm::vec2 home, float height, const Random& random);
 constexpr float k_ToyHomeSpread = 10.0f;
 constexpr float k_ToyHomeNearest = 5.0f;
 constexpr uint32_t k_ToyPutDownLots = 10;
@@ -99,18 +98,18 @@ constexpr float k_RepairLife = 0.2f;
 
 /// Kicking a ball about: going up to it, turning to face it a tenth of a second, going right up to it again and kicking
 /// it, watching it; then a quarter of the time pointing at it a second, else waiting 0.4 to 1 second (in whole turns).
-/// It kicks it again after each, two times at the least, each time going on while the count is under two plus a chance
-/// of nought to two. At the end, half the time, a happy jump.
+/// Before each kick, the first included, it draws a count of two to four and kicks while the kicks are fewer. At the end,
+/// half the time, a happy jump.
 [[nodiscard]] std::vector<Step> KickBallAround(uint32_t ball, const Random& random);
 constexpr uint32_t k_LeastKicks = 2;
 constexpr uint32_t k_MoreKicksLots = 3;
 constexpr uint32_t k_PointAfterKickLots = 4;
 constexpr float k_FaceBallSeconds = 0.1f;
 constexpr float k_PointAtBallSeconds = 1.0f;
-/// The wait after a kick: 4 to 9 turns of a tenth of a second, all as likely
-constexpr uint32_t k_WaitAfterKickTurns = 4;
-constexpr uint32_t k_WaitAfterKickMoreTurns = 6;
-constexpr float k_KickTurnSeconds = 0.1f;
+/// The wait after a kick: 0.4 seconds and a float draw of up to 0.6 more, cut to whole game turns of a tenth of a second
+constexpr float k_WaitAfterKickSeconds = 0.4f;
+constexpr float k_WaitAfterKickExtraSeconds = 0.6f;
+constexpr float k_KickTurnsPerSecond = 10.0f;
 constexpr uint32_t k_HappyAfterKicksLots = 2;
 
 /// Getting high on a magic mushroom: unless it holds a mushroom, picking up the thing; then eating it. A magic

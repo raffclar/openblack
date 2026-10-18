@@ -15,7 +15,9 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureMorph.h"
+#include "Creature/CreaturePhysiology.h"
 #include "Creature/TemplePen.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -30,6 +32,7 @@
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Enums.h"
@@ -88,7 +91,16 @@ CreatureArchetype::Body CreatureArchetype::StartBody(CreatureType species)
 	{
 		return {};
 	}
-	return {.alignment = 0.0f, .fatness = info->startFatness, .strength = info->strength};
+	if (!Locator::gameRandom::has_value())
+	{
+		return {.alignment = 0.0f, .fatness = info->startFatness, .strength = info->strength};
+	}
+	// A new creature's body spreads the strength first, then the fatness, by the random numbers of the game
+	auto& random = Locator::gameRandom::value();
+	const auto upTo = [&random](float most) { return random.GameFloatRand(most); };
+	const auto strength = creature_physiology::SpreadStart(info->strength, upTo);
+	const auto fatness = creature_physiology::SpreadStart(info->startFatness, upTo);
+	return {.alignment = 0.0f, .fatness = fatness, .strength = strength};
 }
 
 void CreatureArchetype::ShowStrength(entt::entity creature)
@@ -159,6 +171,11 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	if (Locator::leashSystem::has_value())
 	{
 		Locator::leashSystem::value().ClaimOnArrival(entity);
+	}
+	// The creature gets its mind as it is made, after its body, as the game makes it
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().StartMind(entity);
 	}
 	return entity;
 }
