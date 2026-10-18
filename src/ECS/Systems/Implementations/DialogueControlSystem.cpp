@@ -11,7 +11,20 @@
 
 #include "DialogueControlSystem.h"
 
+#include "ECS/Reflection/BinaryArchive.h"
+
 using namespace openblack::ecs::systems;
+
+void DialogueControlSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _owner);
+}
+
+bool DialogueControlSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _owner);
+	return !in.Failed();
+}
 
 bool DialogueControlSystem::IsControlled(uint32_t wideScreenOwner) const
 {

@@ -18,10 +18,12 @@
 #include <glm/trigonometric.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "EngineConfig.h"
@@ -145,6 +147,32 @@ ScriptControlSystemInterface::Released ScriptControlSystem::TaskStopped(Camera& 
 		released.gameSpeed = true;
 	}
 	return released;
+}
+
+void ScriptControlSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _cameraOwner);
+	reflection::Save(out, _gameSpeedOwner);
+	reflection::Save(out, _cameraDetails);
+}
+
+bool ScriptControlSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _cameraOwner);
+	reflection::Load(in, _gameSpeedOwner);
+	reflection::Load(in, _cameraDetails);
+	// A script that held the camera holds it again, from where the camera is
+	if (_cameraOwner != 0 && Locator::camera::has_value() && Locator::terrainSystem::has_value())
+	{
+		auto& camera = Locator::camera::value();
+		if (GetScriptCamera(camera) == nullptr)
+		{
+			camera.SetModel(std::make_unique<ScriptCameraModel>(camera.GetOrigin(), camera.GetFocus(), [](float x, float z) {
+				return Locator::terrainSystem::value().GetHeightAt(glm::vec2(x, z));
+			}));
+		}
+	}
+	return !in.Failed();
 }
 
 void ScriptControlSystem::Reset()

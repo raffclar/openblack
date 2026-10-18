@@ -13,12 +13,13 @@
 #include <span>
 
 #include "3D/WaterRings.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::ecs::systems
 {
 
 /// The rings on the water where things splash (see water_rings)
-class WaterRingSystemInterface
+class WaterRingSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~WaterRingSystemInterface() = default;

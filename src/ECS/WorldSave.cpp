@@ -26,6 +26,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/CameraEdits.h"
+#include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
@@ -37,11 +38,20 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/DialogueControlSystemInterface.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SavedStateInterface.h"
+#include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WaterRingSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
 
@@ -198,9 +208,19 @@ systems::SavedStateInterface* FindSystem()
 /// The systems that keep running state of their own, by the names of their sections. A new system goes at the end. A
 /// load gives each system its state in this order.
 using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 2> k_SavedSystems {{
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 12> k_SavedSystems {{
     {"creatureLocomotion", &FindSystem<Locator::creatureLocomotionSystem>},
     {"fire", &FindSystem<Locator::fireSystem>},
+    {"weather", &FindSystem<Locator::weatherSystem>},
+    {"snow", &FindSystem<Locator::snowSystem>},
+    {"waterRings", &FindSystem<Locator::waterRingSystem>},
+    {"reactions", &FindSystem<Locator::reactionSystem>},
+    {"cinematicDirector", &FindSystem<Locator::cinematicDirectorSystem>},
+    {"dialogueControl", &FindSystem<Locator::dialogueControlSystem>},
+    {"scriptControl", &FindSystem<Locator::scriptControlSystem>},
+    {"scriptSwitches", &FindSystem<Locator::chlapi>},
+    {"creatureAudio", &FindSystem<Locator::creatureAudioSystem>},
+    {"dynamics", &FindSystem<Locator::dynamicsSystem>},
 }};
 
 gamesave::Chunk SystemsChunk(const entt::meta_ctx& reflection)
@@ -337,9 +357,9 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 			SPDLOG_LOGGER_WARN(Log(), "The context of the saved world does not read; the land keeps a new context");
 		}
 	}
-	// The physics and the hand do not keep their bodies and held things in a save: what was in flight or in the hand
-	// stays where it was
-	registry.Underlying().clear<components::InPhysics, components::InHand>();
+	// The hand does not keep what it holds in a save: what was in the hand stays where it was. The physics takes its
+	// bodies back with the running state of the systems.
+	registry.Underlying().clear<components::InHand>();
 	// A walk along a camera track takes its track again from the land's tracks, by its number
 	std::vector<entt::entity> lost;
 	for (auto&& [entity, path] : registry.Underlying().view<components::WalkPath>().each())

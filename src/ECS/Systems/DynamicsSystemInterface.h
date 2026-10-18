@@ -24,6 +24,7 @@
 #include <glm/vec3.hpp>
 
 #include "ECS/PhysicsEntry.h"
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Physics/Body.h"
 
 namespace openblack
@@ -161,7 +162,7 @@ public:
 
 /// The game's physics: thrown, dropped, knocked and pushed objects, simulated as the game simulates them in fixed steps
 /// once a game turn (see physics::Body)
-class DynamicsSystemInterface
+class DynamicsSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~DynamicsSystemInterface() = default;

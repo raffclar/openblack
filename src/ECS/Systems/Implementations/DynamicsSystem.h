@@ -47,6 +47,8 @@ namespace openblack::ecs::systems
 class DynamicsSystem final: public DynamicsSystemInterface
 {
 public:
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	/// The physics in the game's own world
 	DynamicsSystem();
 	/// The physics in a world of its own, as tests give it

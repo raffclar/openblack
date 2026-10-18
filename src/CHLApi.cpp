@@ -143,6 +143,7 @@
 #include "ECS/DiscipleRules.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
@@ -973,6 +974,21 @@ CHLApi::CHLApi()
 	InitFunctionsTable2();
 	InitFunctionsTable3();
 	InitFunctionsTable4();
+}
+
+void CHLApi::SaveState(ecs::reflection::BinaryWriter& out) const
+{
+	ecs::reflection::Save(out, _gameSoundOn);
+	ecs::reflection::Save(out, _highlightDrawOn);
+	ecs::reflection::Save(out, _scriptHelpOn);
+}
+
+bool CHLApi::LoadState(ecs::reflection::BinaryReader& in)
+{
+	ecs::reflection::Load(in, _gameSoundOn);
+	ecs::reflection::Load(in, _highlightDrawOn);
+	ecs::reflection::Load(in, _scriptHelpOn);
+	return !in.Failed();
 }
 
 void CHLApi::ResetSwitches()

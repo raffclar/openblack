@@ -43,6 +43,8 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Dances.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/Reflection/BinaryArchive.h"
+#include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
@@ -376,6 +378,28 @@ TEST_F(Reactions, VillagersInReachTakeUpANiceMiracleAndBelieveOnce)
 	EXPECT_FLOAT_EQ(town.belief.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)),
 	                std::min(belief, openblack::magic::town_belief::k_DefaultCap));
 	EXPECT_FLOAT_EQ(town.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)), 0.0f);
+}
+
+TEST_F(Reactions, TheReactionsGoingOnComeBackFromASave)
+{
+	namespace reflection = openblack::ecs::reflection;
+	entt::meta_ctx context;
+	reflection::RegisterComponents(context);
+	const auto id = _reactions.Create(Miracle());
+	ASSERT_TRUE(_reactions.Find(id).has_value());
+	reflection::BinaryWriter out(context);
+	_reactions.SaveState(out);
+	ecs::systems::ReactionSystem loaded;
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(context, out.Bytes(), identity);
+	ASSERT_TRUE(loaded.LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	reflection::BinaryWriter again(context);
+	loaded.SaveState(again);
+	EXPECT_EQ(again.Bytes(), out.Bytes());
+	ASSERT_TRUE(loaded.Find(id).has_value());
+	EXPECT_EQ(loaded.Find(id)->age, _reactions.Find(id)->age);
+	EXPECT_EQ(loaded.Find(id)->source.type, _reactions.Find(id)->source.type);
 }
 
 TEST_F(Reactions, AVillagerTooWeakToWalkTakesUpNoMiracle)

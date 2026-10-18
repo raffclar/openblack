@@ -18,13 +18,14 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Gui/ScriptTexts.h"
 
 namespace openblack::ecs::systems
 {
 
 /// What the scripts do to the picture for their cut scenes: fading it to a colour and back, and the cinema bars
-class CinematicDirectorSystemInterface
+class CinematicDirectorSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~CinematicDirectorSystemInterface() = default;

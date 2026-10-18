@@ -20,6 +20,7 @@
 
 #include "ECS/Components/Weather.h"
 #include "ECS/ScriptWeatherRules.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::ecs::systems
 {
@@ -71,7 +72,7 @@ struct ScriptStorm
 };
 
 /// The island's weather: climates breed storms that drift with the wind and bring rain, snow and wind
-class WeatherSystemInterface
+class WeatherSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~WeatherSystemInterface() = default;

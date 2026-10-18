@@ -65,6 +65,7 @@
 #include "ECS/FightWatchRules.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -1868,6 +1869,29 @@ void ReactionSystem::GiveTownBelief(entt::entity town, PlayerNames player, float
 	{
 		villager_reactions::ShowObjectBelief(from, town, player, amount, alignment, _voice, _turn);
 	}
+}
+
+void ReactionSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _reactions);
+	reflection::Save(out, _nextId);
+	reflection::Save(out, _cursor);
+	reflection::Save(out, _turn);
+	reflection::Save(out, _joins);
+	reflection::Save(out, _landBalances);
+	reflection::Save(out, _voice);
+}
+
+bool ReactionSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _reactions);
+	reflection::Load(in, _nextId);
+	reflection::Load(in, _cursor);
+	reflection::Load(in, _turn);
+	reflection::Load(in, _joins);
+	reflection::Load(in, _landBalances);
+	reflection::Load(in, _voice);
+	return !in.Failed();
 }
 
 void ReactionSystem::Reset()

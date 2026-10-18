@@ -92,8 +92,23 @@ private:
 		uint32_t a;
 		uint32_t b;
 		int32_t turns;
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.a, self.b, self.turns);
+		}
 	};
 	std::vector<Pair> _pairs;
+
+public:
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._pairs);
+	}
 };
 
 /// A range of the map's cells, both ends included
@@ -141,6 +156,13 @@ struct DustPuff
 	PuffKind kind {PuffKind::Dust};
 	/// A drop of blood that has met the land and slides on it
 	bool onLand {false};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.position, self.velocity, self.size, self.age, self.variant, self.argb, self.kind, self.onLand);
+	}
 };
 /// How many puffs a landing makes, the most there can be at once, and how long one lives
 inline constexpr int32_t k_PuffsPerLanding = 6;

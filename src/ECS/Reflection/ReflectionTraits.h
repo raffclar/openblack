@@ -13,6 +13,7 @@
 
 #include <array>
 #include <bitset>
+#include <chrono>
 #include <deque>
 #include <map>
 #include <memory>
@@ -135,6 +136,12 @@ template <typename Type, typename Deleter>
 inline constexpr bool k_IsIndirect<std::unique_ptr<Type, Deleter>> = true;
 template <typename Type>
 inline constexpr bool k_IsIndirect<std::weak_ptr<Type>> = true;
+
+/// A length of time, which the binary archive keeps as its count
+template <typename>
+inline constexpr bool k_IsDuration = false;
+template <typename Rep, typename Period>
+inline constexpr bool k_IsDuration<std::chrono::duration<Rep, Period>> = true;
 
 /// A value type that gives the values that it keeps to a visitor, in a fixed order, through its static member
 /// VisitSaved(self, visitor). The binary archive keeps such a value as these values. Private data stays private.

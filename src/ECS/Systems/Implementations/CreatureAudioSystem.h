@@ -21,6 +21,8 @@ namespace openblack::ecs::systems
 class CreatureAudioSystem final: public CreatureAudioSystemInterface
 {
 public:
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 	[[nodiscard]] bool IsMuted() const override { return _muted; }
 	void SetMuted(bool muted) override { _muted = muted; }

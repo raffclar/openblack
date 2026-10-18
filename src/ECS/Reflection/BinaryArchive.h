@@ -413,6 +413,10 @@ void Save(BinaryWriter& out, const Type& value)
 	{
 		out.Unsupported(entt::type_id<Type>().name());
 	}
+	else if constexpr (detail::k_IsDuration<Type>)
+	{
+		Save(out, value.count());
+	}
 	else if constexpr (detail::k_IsVisited<Type>)
 	{
 		Type::VisitSaved(value, [&out](const auto&... fields) { (Save(out, fields), ...); });
@@ -626,6 +630,12 @@ void Load(BinaryReader& in, Type& value)
 	else if constexpr (detail::k_IsIndirect<Type>)
 	{
 		// The writer kept nothing for it
+	}
+	else if constexpr (detail::k_IsDuration<Type>)
+	{
+		typename Type::rep count {};
+		Load(in, count);
+		value = Type(count);
 	}
 	else if constexpr (detail::k_IsVisited<Type>)
 	{

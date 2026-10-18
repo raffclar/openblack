@@ -27,6 +27,13 @@ struct Pace
 	std::chrono::duration<float, std::milli> sinceStep {0.0f};
 	/// The game time since the last step, which the next step moves the effect on by
 	std::chrono::milliseconds gameSinceStep {0};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.sinceStep, self.gameSinceStep);
+	}
 };
 
 /// The game time an effect moves on by after a frame of this real and game time; nothing on a frame it doesn't step
