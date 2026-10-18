@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <bit>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -182,4 +183,12 @@ TEST(LiquidParticleSystem, DropsTakeNewFramesAfterTheyMoveOnWhenTheFrameDrawsThe
 	// A frame that does not draw the drops leaves their frames
 	pool.UpdateFrame(0.01f, false);
 	EXPECT_EQ(random.draws, 3u);
+}
+
+TEST(LiquidParticles, AFramesMillisecondsAreTakenToSecondsAsTheGameTakesThem)
+{
+	// Times a thousandth in single precision, not divided by a thousand
+	EXPECT_EQ(std::bit_cast<uint32_t>(liquid_particles::FrameSeconds(33)), std::bit_cast<uint32_t>(33.0f * 0.001f));
+	EXPECT_NE(std::bit_cast<uint32_t>(liquid_particles::FrameSeconds(5)), std::bit_cast<uint32_t>(5.0f / 1000.0f));
+	EXPECT_EQ(liquid_particles::FrameSeconds(0), 0.0f);
 }

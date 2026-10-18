@@ -108,6 +108,13 @@ using AltitudeAt = std::function<float(int32_t x, int32_t z)>;
 
 /// The frame a new particle starts on. A drop of liquid starts on the first frame and draws no number. Any other kind
 /// draws one random number.
+/// The seconds that a frame steps the pool by, from the frame's whole milliseconds: the game time on the land, the real
+/// time in the temple
+[[nodiscard]] constexpr float FrameSeconds(int64_t milliseconds)
+{
+	return static_cast<float>(static_cast<int32_t>(milliseconds)) * std::bit_cast<float>(0x3A83126Fu);
+}
+
 [[nodiscard]] int32_t StartVariant(Kind kind, const CrtRandom& random);
 
 /// A distance in metres as the land's fixed point: times 65536, times a tenth, cut towards zero

@@ -1356,3 +1356,10 @@ openblack_setup_and_add_test(test_liquid_particles test_liquid_particles.cpp)
 openblack_setup_and_add_test(test_creature_puke test_creature_puke.cpp)
 openblack_setup_and_add_test(test_land_point_light test_land_point_light.cpp)
 target_link_libraries(test_liquid_particles PRIVATE psys)
+openblack_setup_and_add_test(test_oracle_land_shade oracle/test_oracle_land_shade.cpp)
+set_tests_properties(
+  test_oracle_land_shade
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_land_shade test_land_shade.cpp)

@@ -140,10 +140,6 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_land_luminosity
 #include "ShaderIncluder.h"
-#define SHADER_NAME fs_land_luminosity
-#include "ShaderIncluder.h"
-#define SHADER_NAME fs_land_shade
-#include "ShaderIncluder.h"
 #define SHADER_NAME fs_land_colour
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_sky_dome
@@ -214,7 +210,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 72> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 70> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -257,8 +253,6 @@ const std::array<bgfx::EmbeddedShader, 72> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_mist),            //
     BGFX_EMBEDDED_SHADER(fs_mist),            //
     BGFX_EMBEDDED_SHADER(vs_land_luminosity), //
-    BGFX_EMBEDDED_SHADER(fs_land_luminosity), //
-    BGFX_EMBEDDED_SHADER(fs_land_shade),      //
     BGFX_EMBEDDED_SHADER(fs_land_colour),     //
     BGFX_EMBEDDED_SHADER(fs_sky_dome),        //
     BGFX_EMBEDDED_SHADER(vs_creature_hair),   //
@@ -317,8 +311,6 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"LandAlphaInstanced", "vs_footprint_instanced", "fs_land_alpha"},
     ShaderDefinition {"Celestial", "vs_celestial", "fs_celestial"},
     ShaderDefinition {"Mist", "vs_mist", "fs_mist"},
-    ShaderDefinition {"LandLuminosity", "vs_land_luminosity", "fs_land_luminosity"},
-    ShaderDefinition {"LandShade", "vs_land_luminosity", "fs_land_shade"},
     ShaderDefinition {"LandColour", "vs_land_luminosity", "fs_land_colour"},
     ShaderDefinition {"SkyDome", "vs_land_luminosity", "fs_sky_dome"},
     ShaderDefinition {"CreatureHair", "vs_creature_hair", "fs_creature_hair"},

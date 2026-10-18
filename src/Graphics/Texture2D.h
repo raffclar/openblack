@@ -13,7 +13,10 @@
 
 #include <array>
 #include <optional>
+#include <span>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <glm/ext/vector_uint2_sized.hpp>
 
@@ -196,6 +199,11 @@ public:
 		return _alphaMask.has_value() ? &*_alphaMask : nullptr;
 	}
 
+	/// The texels of a small grey image that the game also reads itself, as the land's light and shadow stamps; empty
+	/// for other textures
+	void SetTexels(std::vector<uint8_t> texels) { _texels = std::move(texels); }
+	[[nodiscard]] std::span<const uint8_t> GetTexels() const { return _texels; }
+
 protected:
 	std::string _name;
 	TextureHandle _handle;
@@ -205,6 +213,7 @@ protected:
 	TextureFormat _format;
 	uint32_t _storageSize;
 	std::optional<tree_shadows::AlphaMask> _alphaMask;
+	std::vector<uint8_t> _texels;
 
 	friend FrameBuffer;
 };

@@ -25,6 +25,8 @@ namespace openblack::village_lights
 
 /// The image a village light stamps, 14 cells across
 inline constexpr entt::hashed_string k_VillageImageId = entt::hashed_string("raw/village_diffuse");
+/// The village light's image is this many texels across
+inline constexpr int32_t k_VillageImageSide = 14;
 /// The image the hand's light stamps, 12 cells across
 inline constexpr entt::hashed_string k_HandImageId = entt::hashed_string("raw/light_hand");
 /// A village light's image starts this far before it along x and z
@@ -48,6 +50,9 @@ inline constexpr int32_t k_WarmLevels = 48;
 
 /// The strength a stamp is drawn with, 0 to 255, from its intensity, 0 to 1, rounded down
 [[nodiscard]] int32_t Strength(float intensity);
+
+/// The strength of the village lights' stamps, 0 to 1, by their brightness from Intensity
+[[nodiscard]] float VillageBrightness(float intensity);
 
 /// The strength of the village lights' stamps, by their brightness from Intensity
 [[nodiscard]] int32_t VillageStrength(float intensity);

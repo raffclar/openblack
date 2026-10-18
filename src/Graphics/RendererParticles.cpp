@@ -159,11 +159,15 @@ void Renderer::CollectParticles() const
 		_particleFrame.Clear();
 		return;
 	}
-	// In the temple only its rooms' effects are drawn
+	// In the temple only its rooms' effects and the pool of drops, dust, smoke and motes are drawn
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	Locator::particleSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), _particleFrame, inTemple);
 	if (inTemple)
 	{
+		if (Locator::liquidParticleSystem::has_value())
+		{
+			Locator::liquidParticleSystem::value().CollectDrawFrame(_particleFrame);
+		}
 		return;
 	}
 	// What burns, among the other things that blend

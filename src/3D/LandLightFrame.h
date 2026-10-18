@@ -49,7 +49,8 @@ struct FrameLightTable
 [[nodiscard]] FrameLightTable FrameLandLightTable();
 
 /// The land's light of this frame at a point, as the game gives it to a thing that it makes there (0xAARRGGBB), dimmed by
-/// the distance haze at the point. The light comes from the luminosity of the land as it was laid.
+/// the distance haze at the point. The light comes from the luminosity of the land as it was laid: the game makes such
+/// things in a turn, and the shadows and the lights are on the land only while a frame is drawn (see land_shade).
 [[nodiscard]] uint32_t FrameLandLightAt(glm::vec3 point);
 
 } // namespace openblack
