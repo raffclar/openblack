@@ -542,6 +542,8 @@ private:
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
 	/// What sets how far from the camera the hand may hover this frame, without where it rests
 	[[nodiscard]] hand_feel::Hover HandHoverInputs(glm::vec3 eye) const;
+	/// The drawn size of the hand at a place, from its distance to the camera, larger on a creature
+	[[nodiscard]] float HandDrawnScale(glm::vec3 eye, glm::vec3 handPosition, bool holding) const;
 	/// A knock on a house: the hand's tap starts, waits while the hand holds something, and the houses' read-out runs
 	void UpdateHandKnock(const ecs::components::Transform& handTransform);
 	/// Loads the hand animations of Data/CTR/hh.hbn for the hand mesh

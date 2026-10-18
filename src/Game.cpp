@@ -2985,6 +2985,7 @@ bool Game::Update() noexcept
 				                 ? 0.0f
 				                 : Locator::handGrabSystem::value().GetOfferTurn()),
 				    // A thing the hand picked up isn't turned about for a right hand as a seed is
+				    .handScale = HandDrawnScale(camera.GetOrigin(), handTransform->position, heldThing.has_value()),
 				    .rightHanded = heldSeed.has_value() && config.rightHandedHand,
 				};
 				holdingSeed = _handHold.Pose(heldThing, holdFrame, _handAnimation.get(), *handTransform);
@@ -3124,12 +3125,8 @@ bool Game::Update() noexcept
 			// The hand keeps about the same size on screen however far away it is
 			if (auto* handTransform = registry.TryGet<ecs::components::Transform>(handEntity))
 			{
-				const auto distance =
-				    magic::hand_hold::DistanceFromView(camera.GetOrigin(), handTransform->position, heldThing.has_value());
 				// The game mirrors the mesh's left hand along its x axis to make a right hand
-				// Held to a creature, it is drawn larger with the creature's size
-				const auto scale =
-				    _handAnimation->ScaleAtDistance(distance) * (_handOnCreature.has_value() ? _handOnCreature->scale : 1.0f);
+				const auto scale = HandDrawnScale(camera.GetOrigin(), handTransform->position, heldThing.has_value());
 				handTransform->scale = glm::vec3(config.rightHandedHand ? -scale : scale, scale, scale);
 				// Showing it turns the camera as it drags the land, the hand is drawn a third of its height higher, the
 				// place it holds staying where it is
@@ -5867,6 +5864,13 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	                                            : eye + _handRayDirection * _handDistance;
 	_handCrossFade.Update(deltaSeconds);
 	handTransform.position = _handCrossFade.Apply(_handPosition);
+}
+
+float Game::HandDrawnScale(glm::vec3 eye, glm::vec3 handPosition, bool holding) const
+{
+	const auto distance = magic::hand_hold::DistanceFromView(eye, handPosition, holding);
+	// Held to a creature, it is drawn larger with the creature's size
+	return _handAnimation->ScaleAtDistance(distance) * (_handOnCreature.has_value() ? _handOnCreature->scale : 1.0f);
 }
 
 hand_feel::Hover Game::HandHoverInputs(glm::vec3 eye) const
