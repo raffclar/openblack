@@ -201,3 +201,18 @@ TEST(HandToolTips, OverTheLandTheHandCountsTheCameraOnTheLand)
 	EXPECT_FALSE(
 	    OverNothingHelpEvent({.tricons = k_RotateHint, .features = k_AllFeatures, .centreDistance = 100.0f}).has_value());
 }
+
+TEST(HandToolTips, AMiracleIconNamesItsMiracleWithNoMouse)
+{
+	// "Heal Miracle Increase" is the 79th of the game's tooltips
+	const auto offer = SpellIconOffer(0xE73 + 78);
+	ASSERT_TRUE(offer.has_value());
+	EXPECT_EQ(offer->index, 78u);
+	EXPECT_EQ(offer->action, ToolTipAction::None);
+	EXPECT_EQ(offer->arrows, ToolTipArrows::k_None);
+	// A text before or after the game's tooltips shows nothing
+	EXPECT_FALSE(SpellIconOffer(0).has_value());
+	EXPECT_FALSE(SpellIconOffer(0xE72).has_value());
+	EXPECT_FALSE(SpellIconOffer(0xE73 + 170).has_value());
+	EXPECT_TRUE(SpellIconOffer(0xE73 + 169).has_value());
+}

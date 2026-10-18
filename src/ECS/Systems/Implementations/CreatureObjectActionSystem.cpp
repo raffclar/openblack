@@ -33,6 +33,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
 #include "Common/X87Angle.h"
@@ -606,6 +607,7 @@ void PlayKickSound(const ecs::Registry& registry, entt::entity target, glm::vec3
 	}
 	const std::array<int32_t, 5> keys {0, 0, *object, 0, k_BeenKicked};
 	Locator::audio::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot,
+	                                       openblack::audio::CurrentSoundEffectConditions(),
 	                                       openblack::audio::AnimEffectMeasure::AcrossFirst);
 }
 

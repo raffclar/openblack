@@ -27,6 +27,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -40,6 +41,7 @@
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownHomes.h"
 #include "ECS/WorldObjects.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 
 namespace openblack::gui::hand_tooltip
@@ -195,6 +197,29 @@ std::optional<Offer> ScrollOf(entt::entity object)
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* highlight = registry.Valid(object) ? registry.TryGet<const ScriptHighlight>(object) : nullptr;
 	return highlight != nullptr ? std::optional(ScrollOffer(highlight->active)) : std::nullopt;
+}
+
+std::optional<Offer> SpellIconOf(entt::entity object)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object) || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	// A worship site's icon also writes its charge into the words: not done here
+	const auto* hand = registry.TryGet<const TownCentreIcon>(object);
+	if (hand == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto seed = hand->seed;
+	const auto& seeds = Locator::infoConstants::value().spellSeed;
+	const auto row = static_cast<size_t>(seed);
+	if (row >= seeds.size())
+	{
+		return std::nullopt;
+	}
+	return SpellIconOffer(static_cast<uint32_t>(seeds.at(row).tooltip));
 }
 
 HeldUse UseAt(entt::entity held, std::optional<entt::entity> target)
