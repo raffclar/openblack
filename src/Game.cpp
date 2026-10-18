@@ -71,6 +71,7 @@
 #include "Audio/ScriptSoundEffect.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Camera/CreatureCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/DoubleClickFlight.h"
 #include "Camera/FightCameraModel.h"
@@ -1096,6 +1097,15 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	             .cameraForward = camera.GetForward()},
 	    .cameraShaking = Locator::explosionSystem::has_value() && Locator::explosionSystem::value().IsShaking(),
 	};
+	// The fight view that shows a fight in its arena, and the camera of Creature Mode, let the hand draw on while they
+	// move
+	const auto& model = camera.GetModel();
+	const bool fights = Locator::creatureFightSystem::has_value();
+	frame.cameraLetsHandDraw = (dynamic_cast<const FightCameraModel*>(&model) != nullptr && fights &&
+	                            Locator::creatureFightSystem::value().IsCameraOnFightInArena()) ||
+	                           dynamic_cast<const CreatureCameraModel*>(&model) != nullptr;
+	frame.moveHeldInFight = fights && Locator::creatureFightSystem::value().DirectsFight() &&
+	                        Locator::gameActionSystem::value().Get(input::BindableActionMap::MOVE);
 	// The land or the sea under a point of the screen, as the interface takes it to be under the cursor
 	frame.view.landAt = [&camera, size](glm::vec2 pixel) -> std::optional<glm::vec3> {
 		if (!Locator::pickingSystem::has_value())
