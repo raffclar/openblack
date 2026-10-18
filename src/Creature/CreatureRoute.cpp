@@ -20,6 +20,9 @@
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
+#include "Common/X87.h"
+
 using namespace openblack;
 using namespace openblack::creature_route;
 
@@ -29,11 +32,21 @@ constexpr float k_Pi = std::numbers::pi_v<float>;
 /// Searching outwards for somewhere to stand: in this many directions, this much further each time
 constexpr int32_t k_SearchDirections = 16;
 constexpr float k_SearchStep = 0.5f;
+/// A sixteenth of a turn, as the game keeps it
+constexpr float k_SearchTurn = 0.39269909262657166f;
+/// The land's cells per unit, and half a cell in units
+constexpr float k_CellsPerUnit = 0.1f;
+constexpr float k_HalfCell = 5.0f;
 constexpr float k_ShortestLeg = 0.001f;
 
 bool Standable(Ground ground)
 {
 	return ground == Ground::Open || ground == Ground::Water;
+}
+
+bool OnLand(int32_t x, int32_t z)
+{
+	return x >= 0 && z >= 0 && x < k_CellsPerSide && z < k_CellsPerSide;
 }
 
 GameHeading HeadingBetween(glm::vec2 from, glm::vec2 to)
@@ -133,26 +146,33 @@ Ground WalkableLand::AtPoint(glm::vec2 point) const
 	return At(static_cast<int32_t>(std::floor(point.x / k_CellSize)), static_cast<int32_t>(std::floor(point.y / k_CellSize)));
 }
 
+WalkableLand WalkableLand::OfCells(std::vector<Ground> cells)
+{
+	WalkableLand land;
+	std::ranges::copy(cells | std::views::take(land._cells.size()), land._cells.begin());
+	return land;
+}
+
 bool WalkableLand::IsValid(glm::vec2 point, float radius) const
 {
-	const auto cx = static_cast<int32_t>(std::floor(point.x / k_CellSize));
-	const auto cz = static_cast<int32_t>(std::floor(point.y / k_CellSize));
-	if (!Standable(At(cx, cz)))
+	const auto cx = map_coords::FtoL(point.x * k_CellsPerUnit);
+	const auto cz = map_coords::FtoL(point.y * k_CellsPerUnit);
+	if (!OnLand(cx, cz) || !Standable(At(cx, cz)))
 	{
 		return false;
 	}
-	const auto reach = static_cast<int32_t>(std::ceil(radius / k_CellSize));
-	for (int32_t dz = -reach; dz <= reach; ++dz)
+	const float limit = radius * radius;
+	for (int32_t z = cz - 1; z <= cz + 1; ++z)
 	{
-		for (int32_t dx = -reach; dx <= reach; ++dx)
+		for (int32_t x = cx - 1; x <= cx + 1; ++x)
 		{
-			if (Standable(At(cx + dx, cz + dz)))
+			if (!OnLand(x, z) || Standable(At(x, z)))
 			{
 				continue;
 			}
-			const glm::vec2 centre {(static_cast<float>(cx + dx) + 0.5f) * k_CellSize,
-			                        (static_cast<float>(cz + dz) + 0.5f) * k_CellSize};
-			if (glm::distance(point, centre) < radius)
+			const float acrossX = ((static_cast<float>(x) * k_CellSize) + k_HalfCell) - point.x;
+			const float acrossZ = ((static_cast<float>(z) * k_CellSize) + k_HalfCell) - point.y;
+			if (limit > (acrossZ * acrossZ) + (acrossX * acrossX))
 			{
 				return false;
 			}
@@ -161,24 +181,31 @@ bool WalkableLand::IsValid(glm::vec2 point, float radius) const
 	return true;
 }
 
-std::optional<glm::vec2> WalkableLand::NearestValid(glm::vec2 point, float radius, float maxDistance) const
+std::optional<glm::vec2> WalkableLand::NearestStandable(glm::vec2 point) const
 {
-	if (IsValid(point, radius))
+	// The sines and cosines are made one time, each kept as a float, as the angle goes up by float steps
+	std::array<float, k_SearchDirections> sines {};
+	std::array<float, k_SearchDirections> cosines {};
+	float angle = 0.0f;
+	for (size_t i = 0; i < sines.size(); ++i)
 	{
-		return point;
+		sines.at(i) = x87::RoundToFloat(x87::Sin(angle));
+		cosines.at(i) = x87::RoundToFloat(x87::Cos(angle));
+		angle = angle + k_SearchTurn;
 	}
-	for (float distance = k_SearchStep; distance <= maxDistance; distance += k_SearchStep)
+	float distance = k_SearchStep;
+	do
 	{
-		for (int32_t i = 0; i < k_SearchDirections; ++i)
+		for (size_t i = 0; i < sines.size(); ++i)
 		{
-			const auto angle = 2.0f * k_Pi * static_cast<float>(i) / static_cast<float>(k_SearchDirections);
-			const auto candidate = point + (distance * glm::vec2(std::cos(angle), std::sin(angle)));
-			if (IsValid(candidate, radius))
+			const glm::vec2 candidate {(distance * cosines.at(i)) + point.x, (distance * sines.at(i)) + point.y};
+			if (IsValid(candidate, k_DestinationClearance))
 			{
 				return candidate;
 			}
 		}
-	}
+		distance = distance + k_SearchStep;
+	} while (distance < k_ValidPointSearch);
 	return std::nullopt;
 }
 

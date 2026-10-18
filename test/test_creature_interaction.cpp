@@ -174,11 +174,12 @@ TEST(CreatureReach, MaxReachIsTheFrontStretchedAsFarAsItGoes)
 	EXPECT_NEAR(creature_reach::Centre(FakeReach()).z, -4.0f, k_Tolerance);
 }
 
-TEST(CreatureThrow, FlightTimeIsTheTimeToFallTheDistance)
+TEST(CreatureThrow, FlightTimeIsTheTimeToFallTheDistanceAlongTheGround)
 {
-	EXPECT_NEAR(creature_throw::FlightTime(9.81f), 1.0f, k_Tolerance);
-	EXPECT_NEAR(creature_throw::FlightTime(4.0f * 9.81f), 2.0f, k_Tolerance);
-	EXPECT_EQ(creature_throw::FlightTime(-1.0f), 0.0f);
+	// The heights have no effect: only the distance along the ground counts
+	EXPECT_NEAR(creature_throw::FlightTime({0.0f, 50.0f, 0.0f}, {9.81f, 0.0f, 0.0f}), 1.0f, k_Tolerance);
+	EXPECT_NEAR(creature_throw::FlightTime({0.0f, 0.0f, 4.0f * 9.81f}, {0.0f, 7.0f, 0.0f}), 2.0f, k_Tolerance);
+	EXPECT_EQ(creature_throw::FlightTime({3.0f, 1.0f, 3.0f}, {3.0f, 9.0f, 3.0f}), 0.0f);
 }
 
 TEST(CreatureThrow, ToThrowIntoSomethingItBacksAwayWalksUpOrStaysPut)
@@ -215,7 +216,7 @@ TEST(CreatureThrow, TheReleaseVelocityLandsOnTheTarget)
 {
 	const glm::vec3 release {1.0f, 12.0f, -3.0f};
 	const glm::vec3 target {20.0f, 0.0f, -60.0f};
-	const auto seconds = creature_throw::FlightTime(glm::distance(release, target));
+	const auto seconds = creature_throw::FlightTime(release, target);
 	const auto velocity = creature_throw::ReleaseVelocity(target, release, seconds);
 	// Gravity's half g t squared is made up in the upward speed
 	EXPECT_NEAR(velocity.y, (target.y - release.y) / seconds + 0.5f * creature_throw::k_Gravity * seconds, k_Tolerance);

@@ -336,3 +336,11 @@ glm::vec2 creature_obstacles::PlacedOnLand(const PlacementRows& rows, const glm:
 	const float z = (((rows[1].z * point.y) + (rows[0].z * point.x)) + (rows[2].z * point.z)) + position.y;
 	return {x, z};
 }
+
+glm::vec3 creature_obstacles::PlacedInWorld(const PlacementRows& rows, const glm::vec3& point, const glm::vec3& position)
+{
+	const auto along = [&](int axis) {
+		return (((rows[1][axis] * point.y) + (rows[0][axis] * point.x)) + (rows[2][axis] * point.z)) + position[axis];
+	};
+	return {along(0), along(1), along(2)};
+}

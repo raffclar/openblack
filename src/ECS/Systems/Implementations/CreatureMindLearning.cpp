@@ -729,8 +729,7 @@ std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::R
 		const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
 		if (!land.IsValid(point, creature_route::k_DestinationClearance))
 		{
-			const auto valid =
-			    land.NearestValid(point, creature_route::k_DestinationClearance, creature_route::k_ValidPointSearch);
+			const auto valid = land.NearestStandable(point);
 			// The game measures the reach in three parts, with the squares added from z to x
 			standAt = valid.has_value() &&
 			                  x87::LengthZyx(shoal - glm::vec3(valid->x, 0.0f, valid->y)) < creature_route::k_ValidPointReach

@@ -1061,8 +1061,7 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 			const auto& land = locomotion.GetWalkableLand();
 			if (!land.IsValid(point, creature_route::k_DestinationClearance))
 			{
-				const auto valid =
-				    land.NearestValid(point, creature_route::k_DestinationClearance, creature_route::k_ValidPointSearch);
+				const auto valid = land.NearestStandable(point);
 				if (!valid.has_value() || glm::distance(*valid, point) >= creature_route::k_ValidPointReach)
 				{
 					fail();

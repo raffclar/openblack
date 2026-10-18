@@ -31,6 +31,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureLayers.h"
@@ -82,6 +83,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -131,14 +133,8 @@ uint32_t GameRand(uint32_t range)
 
 /// Following something, the walk is pointed anew once it has moved this far from where the walk heads
 constexpr float k_FollowRetarget = 1.0f;
-/// Running away, a creature goes up to this much further than its species' distance, and looks this far round the
-/// point for somewhere to stand
-constexpr uint32_t k_RunAwayExtra = 40;
-constexpr float k_RunAwaySearch = 30.0f;
 /// Arriving where it ran away to, anywhere within this
 constexpr float k_RunAwayArrival = 5.0f;
-/// Looking for somewhere to stand after straying off where it can
-constexpr float k_StraySearch = 1000.0f;
 /// Routes' corners are rounded at the creature's radius, and no tighter than this
 constexpr float k_MinCornerRadius = 6.0f;
 /// What is known of a species without the game's creature tables: the ape's speeds
@@ -760,7 +756,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 	{
 		if (!land.IsValid(position, route::k_Clearance))
 		{
-			if (const auto valid = land.NearestValid(position, route::k_Clearance, k_StraySearch))
+			if (const auto valid = land.NearestStandable(position))
 			{
 				position = *valid;
 				PlaceAt(self, position);
@@ -871,20 +867,27 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::FleeFrom(entt::en
 	{
 		return MoveResult::Busy;
 	}
-	const auto fractions = FractionsOf(body->species);
-	const auto distance =
-	    static_cast<float>(std::uniform_int_distribution<uint32_t>(0, k_RunAwayExtra - 1)(_random)) + fractions.runAway;
-	auto point = locomotion::RunAwayPoint(PositionOf(*self), threat, distance);
-	const auto& land = GetWalkableLand();
-	if (!land.IsValid(point, route::k_DestinationClearance))
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (transform == nullptr || !Locator::terrainSystem::has_value() || !Locator::gameRandom::has_value())
 	{
-		const auto valid = land.NearestValid(point, route::k_DestinationClearance, k_RunAwaySearch);
-		if (!valid.has_value())
-		{
-			return MoveResult::InvalidDestination;
-		}
-		point = *valid;
+		return MoveResult::InvalidDestination;
 	}
+	const auto fractions = FractionsOf(body->species);
+	const auto& island = Locator::terrainSystem::value();
+	const auto& land = GetWalkableLand();
+	const locomotion::RunAwayLand runAwayLand {
+	    .cellClear =
+	        [creature](int32_t x, int32_t z) {
+		        return Locator::creatureMindSystem::has_value() &&
+		               Locator::creatureMindSystem::value().IsCellClearFor(creature, x, z, false);
+	        },
+	    .ground = [&island](const map_coords::MapCoords& coords) { return island.GetAltitude(coords.x, coords.z); },
+	    .canStand = [&land](glm::vec2 at) { return land.IsValid(at, route::k_DestinationClearance); },
+	    .nearestStand = [&land](glm::vec2 at) { return land.NearestStandable(at); },
+	};
+	const auto draw = Locator::gameRandom::value().GameRand(locomotion::k_RunAwayExtra);
+	const auto point = glm::xz(locomotion::RunAwayPoint(map_coords::FromWorld(island, transform->position), threat, draw,
+	                                                    fractions.runAway, runAwayLand));
 	self->following.reset();
 	BreatheForWalk(creature, *body, fractions.run, fractions);
 	return StartMove(creature, *self, point, fractions.run, 0.0f, k_RunAwayArrival, false);
@@ -1199,7 +1202,7 @@ void CreatureLocomotionSystem::ProcessTurn()
 		    if ((self.motion == Motion::Walking || self.motion == Motion::Stepping) && self.destination.has_value() &&
 		        !land.IsValid(PositionOf(self), route::k_Clearance))
 		    {
-			    if (const auto valid = land.NearestValid(PositionOf(self), route::k_Clearance, k_StraySearch))
+			    if (const auto valid = land.NearestStandable(PositionOf(self)))
 			    {
 				    PlaceAt(self, *valid);
 				    self.fromPosition = self.toPosition;

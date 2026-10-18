@@ -18,6 +18,7 @@
 #include <glm/vec3.hpp>
 
 #include "Common/GameHeading.h"
+#include "Creature/CreatureObstacles.h"
 
 /// The rules for what a creature does with its feet and its body to the things round it: a stomp, a kick, and the
 /// spheres round the parts of its body that knock things about while it lies down, gets up, faints or fights.
@@ -225,6 +226,11 @@ struct VictimFacts
 /// squared, and the game compares it with the square of the reach.
 constexpr float k_KnockReachShare = 0.3f;
 [[nodiscard]] bool InReach(Victim victim, float groundDistanceSquared, float sphereRadius, float thingRadius);
+/// Whether a corner of a thing's model is in a sphere of the body. The corner goes through the thing's turn and scale
+/// as the game builds them. The squares of the distance are added from z to x and compared with the square of the
+/// radius.
+[[nodiscard]] bool CornerInSphere(const creature_obstacles::PlacementRows& rows, const glm::vec3& position,
+                                  const glm::vec3& corner, const glm::vec3& centre, float radius);
 /// The speed of a knocked thing is this number of times the move of the part
 constexpr float k_KnockSpeedPerMove = 7.0f;
 [[nodiscard]] glm::vec3 KnockVelocity(const glm::vec3& move);
