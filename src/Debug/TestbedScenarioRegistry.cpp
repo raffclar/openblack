@@ -1013,6 +1013,57 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "liquid.storm_shadow",
+	    .name = "Sick under a storm's shadow",
+	    .facet = Facet::Needs,
+	    .description = "Rain at noon, the clock standing still: the rain's storm stands over the middle of the map, where "
+	                   "a tiger is sick at once, and again eight seconds after each puke ends.",
+	    .expected = "The storm's shadow darkens a square of land about 400 units across round the middle of the map, "
+	                "darkest in its middle and soft at its edges, but never darker than the land's darkest warm level. "
+	                "Only the land in view is shaded. The drops take the light of the land where the tiger stands as "
+	                "the land was laid: the game makes them in a turn, when the shadows are not on the land.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .weather = Weather::Rain, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Act(Kind::Puke, 0, 0.5f), Act(Kind::Puke, 0, 8.0f, true)},
+	    .repeatFrom = 1,
+	});
+
+	all.push_back({
+	    .id = "liquid.village_light",
+	    .name = "Sick at night by a village light",
+	    .facet = Facet::Needs,
+	    .description = "Eleven at night, the clock standing still: a Norse gate with its two lanterns stands beside a "
+	                   "tiger, which is sick at once, and again eight seconds after each puke ends.",
+	    .expected = "Each lantern's light stamps a round patch of the land's warm levels round the lantern. The patch "
+	                "lights dark land, and lights bright land only where it outshines it. The hand's light does the "
+	                "same round the hand. The drops take the light of the land where the tiger stands as the land was "
+	                "laid: the game makes them in a turn, when the lights are not on the land.",
+	    .environment = {.hour = 23.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AnimatedStaticInfo::NorseGate, .offset = {30.0f, 20.0f}}},
+	    .commands = {Act(Kind::Puke, 0, 0.5f), Act(Kind::Puke, 0, 8.0f, true)},
+	    .repeatFrom = 1,
+	});
+
+	all.push_back({
+	    .id = "liquid.temple",
+	    .name = "The drops go on in the temple",
+	    .facet = Facet::Needs,
+	    .description = "The player has a temple west of the middle. A tiger is sick at once. Two seconds later the "
+	                   "player is put in the temple's main room while the drops are on the land.",
+	    .expected = "The world stops in the temple, but the drops do not: they step on by the time of the frames and "
+	                "are drawn there. The inspector's particles.liquid count falls to no drops within three seconds in "
+	                "the temple. When the player leaves the temple, no drops are left hanging in the air.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {Act(Kind::Puke, 0, 0.5f), {.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	all.push_back({
 	    .id = "needs.exhaustion",
 	    .name = "Exhaustion and fainting from running",
 	    .facet = Facet::Needs,
