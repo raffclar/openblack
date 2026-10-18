@@ -48,6 +48,8 @@ private:
 	static void StepSway();
 	/// Each creature whose body looks good or evil adds its motes or its smoke for this game turn
 	static void AddAlignmentMotes();
+	/// While the body of a creature plays the loop of the puke animation, twelve drops of sick come out of its lips
+	static void AddPukeDrops(entt::entity creature);
 
 	/// The eyes blink at random, apart from the game's own random numbers
 	RandomStreamSource _random {RandomStream::CreatureAnimation};

@@ -193,6 +193,7 @@ class ReactionSystemInterface;
 class TeleportSystemInterface;
 class VortexSystemInterface;
 class CreatureFizzSystemInterface;
+class LiquidParticleSystemInterface;
 class CreatureCarryOverSystemInterface;
 class SaveGameSystemInterface;
 class CreatureWebPageSystemInterface;
@@ -342,6 +343,7 @@ struct Locator
 	using teleportSystem = entt::locator<ecs::systems::TeleportSystemInterface>;
 	using vortexSystem = entt::locator<ecs::systems::VortexSystemInterface>;
 	using creatureFizzSystem = entt::locator<ecs::systems::CreatureFizzSystemInterface>;
+	using liquidParticleSystem = entt::locator<ecs::systems::LiquidParticleSystemInterface>;
 	using creatureCarryOverSystem = entt::locator<ecs::systems::CreatureCarryOverSystemInterface>;
 	using saveGameSystem = entt::locator<ecs::systems::SaveGameSystemInterface>;
 	using creatureWebPageSystem = entt::locator<ecs::systems::CreatureWebPageSystemInterface>;

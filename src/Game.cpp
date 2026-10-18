@@ -198,6 +198,7 @@
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -2435,10 +2436,15 @@ bool Game::Update() noexcept
 		Locator::fireflySystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count(),
 		                                       clock.GetTurnFraction());
 	}
-	// The moving bodies are drawn between their last two turns, and the dust their landings threw up flies and fades
+	// The moving bodies are drawn between their last two turns
 	if (Locator::dynamicsSystem::has_value())
 	{
-		Locator::dynamicsSystem::value().UpdateFrame(clock.GetTurnFraction(), std::chrono::duration<float>(gameTime).count());
+		Locator::dynamicsSystem::value().UpdateFrame(clock.GetTurnFraction());
+	}
+	// The drops, the dust, the smoke and the motes move on and fade
+	if (Locator::liquidParticleSystem::has_value())
+	{
+		Locator::liquidParticleSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count(), true);
 	}
 	{
 		// The fight animations play, blows land and the fighters move as their animations carry them
@@ -2467,11 +2473,6 @@ bool Game::Update() noexcept
 		// The creatures are drawn moving between the last two turns
 		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
 		Locator::creatureLocomotionSystem::value().Update(clock.GetTurnFraction());
-	}
-	{
-		// Drops of creatures' sick fly and fall
-		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
-		Locator::creaturePhysiologySystem::value().Update(std::chrono::duration<float>(gameTime).count());
 	}
 	{
 		// What they do with things plays on their bodies
@@ -4884,6 +4885,11 @@ void Game::PrepareNewLand(land_change::Kind change)
 	if (Locator::dynamicsSystem::has_value())
 	{
 		Locator::dynamicsSystem::value().ResetSimulation();
+	}
+	// Nor its drops, dust, smoke and motes
+	if (Locator::liquidParticleSystem::has_value())
+	{
+		Locator::liquidParticleSystem::value().Clear();
 	}
 	// Nor its broken buildings and their pieces
 	if (Locator::buildingDamageSystem::has_value())

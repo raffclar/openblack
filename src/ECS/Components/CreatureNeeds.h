@@ -51,11 +51,4 @@ struct CreatureNeeds
 	bool moving {false};
 };
 
-/// A drop of a creature's sick, flying until it lands and fades
-struct CreaturePukeDrop
-{
-	glm::vec3 velocity {0.0f};
-	float seconds {0.0f};
-};
-
 } // namespace openblack::ecs::components

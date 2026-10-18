@@ -34,6 +34,7 @@ public:
 	[[nodiscard]] GameRandomInterface* Random() override;
 	[[nodiscard]] int32_t SnowAt(glm::vec3 point) const override;
 	[[nodiscard]] uint32_t DustTint(uint32_t argb, int32_t snow) const override;
+	void AddDust(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb) override;
 	void PlaySound(std::span<const int32_t> keys, entt::entity building, glm::vec3 position) override;
 	[[nodiscard]] float LifeOf(entt::entity object) const override;
 	[[nodiscard]] const GObjectInfo* InfoOf(entt::entity object) const override;

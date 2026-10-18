@@ -46,6 +46,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
@@ -179,10 +180,10 @@ void Renderer::CollectParticles() const
 	{
 		Locator::rewardSystem::value().CollectDrawFrame(_particleFrame);
 	}
-	// The dust that thrown things throw up as they land
-	if (Locator::dynamicsSystem::has_value())
+	// The drops, the dust, the smoke and the motes
+	if (Locator::liquidParticleSystem::has_value())
 	{
-		Locator::dynamicsSystem::value().CollectDrawFrame(_particleFrame);
+		Locator::liquidParticleSystem::value().CollectDrawFrame(_particleFrame);
 	}
 	// The explorers' boat's wake
 	if (Locator::boatLaunchSystem::has_value())
@@ -604,9 +605,9 @@ void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) co
 	// The motes and the other puffs, and the stars, sorted by how far they are from the film's camera
 	auto& frame = _filmParticleFrame;
 	frame.Clear();
-	if (Locator::dynamicsSystem::has_value())
+	if (Locator::liquidParticleSystem::has_value())
 	{
-		Locator::dynamicsSystem::value().CollectDrawFrame(frame);
+		Locator::liquidParticleSystem::value().CollectDrawFrame(frame);
 	}
 	if (!film.stars.empty())
 	{

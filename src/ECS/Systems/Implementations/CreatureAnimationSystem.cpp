@@ -31,6 +31,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/LandLightFrame.h"
 #include "Audio/Sound.h"
 #include "Common/FramePace.h"
 #include "Common/GameRandom.h"
@@ -46,6 +47,7 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureProportions.h"
+#include "Creature/CreaturePuke.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSway.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -58,7 +60,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
@@ -801,20 +803,21 @@ void CreatureAnimationSystem::StepSway()
 
 void CreatureAnimationSystem::AddAlignmentMotes()
 {
-	if (!Locator::dynamicsSystem::has_value() || !Locator::gameRandom::has_value())
+	if (!Locator::liquidParticleSystem::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	auto& dynamics = Locator::dynamicsSystem::value();
+	auto& liquids = Locator::liquidParticleSystem::value();
 	auto& random = Locator::gameRandom::value();
 	const creature_alignment_motes::LocalRandom localRandom = [&random](int32_t n) { return random.LocalRand(n); };
 	// While the falling spell plays, no creature in the world makes motes
 	const bool fallingSpell = Locator::videoSystem::has_value() && Locator::videoSystem::value().HidesWorld();
 	// Each game turn, a creature whose body is to look good or evil makes motes or smoke near the bones of the pose of the
-	// turn before. Then it keeps the bones of this turn for the next turn.
+	// turn before. Then it keeps the bones of this turn for the next turn. Then a creature that pukes brings up its sick.
 	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
-	    [&](const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation, const Transform& transform) {
+	    [&](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation,
+	        const Transform& transform) {
 		    const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
 		    std::vector<glm::vec3> bones(animation.boneMatrices.size());
 		    for (uint32_t bone = 0; bone < bones.size(); ++bone)
@@ -830,10 +833,11 @@ void CreatureAnimationSystem::AddAlignmentMotes()
 			    for (const auto& puff : creature_alignment_motes::PuffsOf(
 			             alignment, ShownSize(creature), static_cast<uint32_t>(last.size()), bonePoint, localRandom))
 			    {
-				    dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+				    liquids.Add(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
 			    }
 		    }
 		    animation.lastTurnBones = std::move(bones);
+		    AddPukeDrops(entity);
 	    });
 }
 
@@ -1220,6 +1224,56 @@ const CreatureRig* RigOf(CreatureType species)
 }
 } // namespace
 
+void CreatureAnimationSystem::AddPukeDrops(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto body = FindBody(registry, creature);
+	if (animation == nullptr || transform == nullptr || !body.has_value() ||
+	    creature_layers::CurrentAnimation(animation->body) != creature_layers::animations::k_Puke)
+	{
+		return;
+	}
+	const auto* rig = RigOf(body->species);
+	const std::span<const glm::mat4> bones = animation->boneMatrices;
+	if (rig == nullptr)
+	{
+		return;
+	}
+	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	// The sick comes out of the point at the lips, else out of the head bone
+	glm::vec3 lips(0.0f);
+	if (rig->pukePoint.has_value())
+	{
+		const auto& point = *rig->pukePoint;
+		if (std::ranges::any_of(point.bones, [&bones](uint32_t bone) { return bone >= bones.size(); }))
+		{
+			return;
+		}
+		const auto triangle = creature::PosedTriangle(point.vertices, point.bones, body->morph->drawn, bones, placement,
+		                                              creature::k_SkinPointOrder);
+		lips = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], point.u, point.v).position;
+	}
+	else if (rig->actionPoints.has_value() && rig->actionPoints->head < bones.size())
+	{
+		lips = glm::vec3(creature::PosedBone(rig->actionPoints->head, bones, placement)[3]);
+	}
+	else
+	{
+		return;
+	}
+	// Each drop takes a shade of the land's light where the creature stands
+	const auto light = FrameLandLightAt(transform->position);
+	auto& random = Locator::gameRandom::value();
+	auto& liquids = Locator::liquidParticleSystem::value();
+	const auto size = creature_puke::DropSize(body->size);
+	for (const auto& drop : creature_puke::DropsOf(body->size, light, [&random](int32_t n) { return random.LocalRand(n); }))
+	{
+		liquids.Add(lips, drop.velocity, size, drop.argb, liquid_particles::Kind::Liquid);
+	}
+}
+
 void CreatureAnimationSystem::SetCreedPower(entt::entity creature, creature_hand_glow::Place place, float scale, float power)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1384,7 +1438,7 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(entt::ent
 
 void CreatureAnimationSystem::AddAlignmentMotesOf(entt::entity copy)
 {
-	if (!Locator::dynamicsSystem::has_value() || !Locator::gameRandom::has_value())
+	if (!Locator::liquidParticleSystem::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
@@ -1403,11 +1457,11 @@ void CreatureAnimationSystem::AddAlignmentMotesOf(entt::entity copy)
 	const creature_alignment_motes::BonePoint bonePoint = [animation, &placement](uint32_t bone) {
 		return glm::vec3(creature::PosedBone(bone, animation->boneMatrices, placement)[3]);
 	};
-	auto& dynamics = Locator::dynamicsSystem::value();
+	auto& liquids = Locator::liquidParticleSystem::value();
 	const auto bones = static_cast<uint32_t>(animation->boneMatrices.size());
 	for (const auto& puff :
 	     creature_alignment_motes::PuffsOf(body->morph->drawn.evilGood, body->size, bones, bonePoint, localRandom))
 	{
-		dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+		liquids.Add(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
 	}
 }

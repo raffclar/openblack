@@ -1516,7 +1516,6 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 		Satisfied(creature, desires, k_FartAction);
 		break;
 	case Effect::Puke:
-		physiology.Puke(creature);
 		Satisfied(creature, desires, k_PukeAction);
 		break;
 	case Effect::Slept:

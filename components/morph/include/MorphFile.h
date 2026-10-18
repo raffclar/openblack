@@ -311,6 +311,8 @@ protected:
 	std::optional<CreatureActionPoints> _creatureActionPoints;
 	/// The point on the body that kisses, when the file has one
 	std::optional<MeshIntersect> _creatureKissPoint;
+	/// The point on the body that sick comes out of, in creature files from version 18 on
+	std::optional<MeshIntersect> _creaturePukePoint;
 	std::vector<int32_t> _creatureTail;
 	uint32_t _creatureVersion {0};
 
@@ -375,6 +377,9 @@ public:
 	}
 	/// The point on the body that kisses, when the file has one. Without it, the creature kisses with its head bone.
 	[[nodiscard]] const std::optional<MeshIntersect>& GetCreatureKissPoint() const noexcept { return _creatureKissPoint; }
+	/// The point on the body, at the lips, that sick comes out of, when the file has one. Without it, the sick comes out of
+	/// the head bone.
+	[[nodiscard]] const std::optional<MeshIntersect>& GetCreaturePukePoint() const noexcept { return _creaturePukePoint; }
 	/// The last numbers of the creature block, which end with each bone's mirror bone (the bone on the other side of
 	/// the body), as many as the mesh has bones; and the block's version
 	[[nodiscard]] const std::vector<int32_t>& GetCreatureTail() const noexcept { return _creatureTail; }

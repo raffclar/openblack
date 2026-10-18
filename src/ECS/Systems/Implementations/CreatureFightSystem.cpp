@@ -101,6 +101,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -3198,10 +3199,10 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 		{
 			continue;
 		}
-		if (Locator::dynamicsSystem::has_value())
+		if (Locator::liquidParticleSystem::has_value())
 		{
-			Locator::dynamicsSystem::value().AddPuff(*at, glm::vec3(0.0f), fight::SwingPuffSize(size, special),
-			                                         fight::k_SwingPuffColour, physics::turn::PuffKind::Dust);
+			Locator::liquidParticleSystem::value().Add(*at, glm::vec3(0.0f), fight::SwingPuffSize(size, special),
+			                                           fight::k_SwingPuffColour, liquid_particles::Kind::Dust);
 		}
 		const auto from = worldBone(groin, time);
 		if (open && !landed.has_value() && from.has_value() && !bones.empty())
@@ -3281,9 +3282,9 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	}
 	const bool blocked = fight::IsBlocking(victim.state, victim.timeMs, DurationOf(opponent, fight::animations::k_StartBlock));
 	// Blood flies unless the victim blocks, then dust whether it blocks or not
-	if (Locator::dynamicsSystem::has_value())
+	if (Locator::liquidParticleSystem::has_value())
 	{
-		auto& dynamics = Locator::dynamicsSystem::value();
+		auto& liquids = Locator::liquidParticleSystem::value();
 		const auto draw = [this](int32_t range) {
 			if (Locator::gameRandom::has_value())
 			{
@@ -3305,15 +3306,15 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 			{
 				const auto velocity = spray(vector, step);
 				const auto colour = fight::k_BloodColours.at(static_cast<size_t>(draw(3)));
-				dynamics.AddPuff(point, velocity, ShownSize(opponentBody) * fight::k_BloodSizePerSize, colour,
-				                 physics::turn::PuffKind::Blood);
+				liquids.Add(point, velocity, ShownSize(opponentBody) * fight::k_BloodSizePerSize, colour,
+				            liquid_particles::Kind::Liquid);
 			}
 		}
 		for (int32_t i = 0; i < fight::k_BlowDustPuffs; ++i)
 		{
 			const auto velocity = spray(vector * fight::k_DustVectorShare, step * fight::k_DustSpreadShare);
-			dynamics.AddPuff(point, velocity, ShownSize(body) * fight::k_BlowDustSizePerSize, fight::k_BlowDustColour,
-			                 physics::turn::PuffKind::Dust);
+			liquids.Add(point, velocity, ShownSize(body) * fight::k_BlowDustSizePerSize, fight::k_BlowDustColour,
+			            liquid_particles::Kind::Dust);
 		}
 	}
 

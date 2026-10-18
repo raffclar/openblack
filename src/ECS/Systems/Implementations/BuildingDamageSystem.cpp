@@ -304,13 +304,13 @@ void ShedDustAndCheck(building_world::World& world, entt::entity piece)
 	for (size_t i = 1; i < corners.size(); ++i)
 	{
 		const auto velocity = SpreadVector(world, k_PieceDustSpeed);
-		if (auto* dynamics = world.Dynamics())
+		if (world.Dynamics() != nullptr)
 		{
 			// Where snow lies a puff grows by the snow's depth and takes on the land's colour
 			const auto at = transform.position + transform.rotation * corners[i];
 			const auto snow = world.SnowAt(at);
-			dynamics->AddPuff(at, velocity, k_PieceDustSize * (1.0f + static_cast<float>(snow) / 255.0f),
-			                  world.DustTint(k_PieceDustArgb, snow));
+			world.AddDust(at, velocity, k_PieceDustSize * (1.0f + static_cast<float>(snow) / 255.0f),
+			              world.DustTint(k_PieceDustArgb, snow));
 		}
 	}
 	if (physics::shapes::Fragment(triangles).tooThin)
