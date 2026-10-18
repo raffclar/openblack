@@ -962,11 +962,16 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldS
 		                  [&](entt::entity icon, const ecs::components::WorshipIcon& worship) {
 			                  if (worship.site == component->worshipSite && worship.site != entt::null)
 			                  {
+				                  Json seedsOut = Json::array();
+				                  for (const auto seed : worship.seedsOut)
+				                  {
+					                  seedsOut.push_back(Id(seed));
+				                  }
 				                  siteIcons.push_back(Json {{"id", ToId(icon)},
 				                                            {"seed", static_cast<int>(worship.seed)},
 				                                            {"charging", worship.charging},
 				                                            {"store", worship.store},
-				                                            {"seed_out", Id(worship.seedOut)}});
+				                                            {"seeds_out", std::move(seedsOut)}});
 			                  }
 		                  });
 		              result["site_icons"] = std::move(siteIcons);

@@ -167,6 +167,28 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "hand.worship_icon_seed_in_hand",
+	    .name = "A worship site's icon that charges while its seed is in the hand",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given. When the site has its heal icon, a tap puts the "
+	                   "heal miracle in the hand. The seed keeps 45% of its charge, and the heal icon charges again for "
+	                   "the hand. The battery of the site holds a full charge. Put the hand over the heal icon.",
+	    .expected = "Each turn the icon gives its share of prayer power to the seed in the hand, not to its own store. "
+	                "The icon stops when the seed is full: the seed shows its power-up effect once, and no second seed "
+	                "comes into the hand. Over the heal icon the tooltip shows only the name. The inspector shows the "
+	                "seed's charge go up to the full cost, and the icon's store stays at zero.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::ChargeIconWithSeedHeld,
+	                  .delaySeconds = 3.0f,
+	                  .value = static_cast<size_t>(SpellSeedType::Heal),
+	                  .amount = k_IconCharge}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
 	    .id = "advisors.help_key_in_temple",
 	    .name = "The Help key inside the temple",
 	    .facet = Facet::Advisors,

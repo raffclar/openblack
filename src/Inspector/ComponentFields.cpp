@@ -1772,7 +1772,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::WorshipIcon::charger>("charger")
 	    .Field<&components::WorshipIcon::chargeStartTurn>("chargeStartTurn")
 	    .Field<&components::WorshipIcon::store>("store")
-	    .Field<&components::WorshipIcon::seedOut>("seedOut");
+	    .Field<&components::WorshipIcon::seedsOut>("seedsOut");
 	Reflect<components::IconSeed>(context)
 	    .Field<&components::IconSeed::seed>("seed")
 	    .Field<&components::IconSeed::middle>("middle")

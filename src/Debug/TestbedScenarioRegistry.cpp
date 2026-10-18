@@ -8527,7 +8527,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
 	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::PlayFallingSpellFilm ||
 	       kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice || kind == Kind::FillSiteIcons ||
-	       IsPointerCommand(kind);
+	       kind == Kind::ChargeIconWithSeedHeld || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -8554,7 +8554,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 152> k_Names {
+	constexpr std::array<std::string_view, 153> k_Names {
 		    "walk to",
 		    "run to",
 		    "follow",
@@ -8707,6 +8707,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 		    "say a line",
 		    "play a guidance voice",
 		    "fill the worship site icons",
+		    "charge an icon with its seed in the hand",
 		};
 		return k_Names.at(static_cast<size_t>(kind));
 	}

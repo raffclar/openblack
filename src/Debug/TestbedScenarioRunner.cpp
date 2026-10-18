@@ -125,6 +125,7 @@
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
@@ -201,6 +202,7 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
@@ -1994,6 +1996,8 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		});
 		return fmt::format("{} icons filled to {:.0f}%", filled, command.amount * 100.0f);
 	}
+	case Kind::ChargeIconWithSeedHeld:
+		return ChargeIconWithSeedHeld(command);
 	case Kind::HandRelease:
 		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
 		{
@@ -2112,6 +2116,51 @@ std::string Runner::HandTapObject(size_t index)
 	const bool took =
 	    Locator::abodeKnockSystem::value().Tap(*object, transform != nullptr ? transform->position : glm::vec3(0.0f), true);
 	return took ? "knocked" : "it takes no knock";
+}
+
+std::string Runner::ChargeIconWithSeedHeld(const Command& command)
+{
+	if (!Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value() || !Locator::magicSystem::has_value() ||
+	    !Locator::worshipSiteSystem::has_value())
+	{
+		return "no miracles";
+	}
+	const auto& info = Locator::infoConstants::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto seedType = static_cast<SpellSeedType>(command.value);
+	std::optional<entt::entity> found;
+	registry.Each<const ecs::components::WorshipIcon>([&](entt::entity entity, const ecs::components::WorshipIcon& icon) {
+		const auto* site = registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+		if (!found.has_value() && site != nullptr && site->player == command.player && icon.seed == seedType)
+		{
+			found = entity;
+		}
+	});
+	if (!found.has_value())
+	{
+		return "no such icon";
+	}
+	auto& icon = registry.Get<ecs::components::WorshipIcon>(*found);
+	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, icon.seed), magic::k_BasePowerUpLevel);
+	const float cost = magic::GetChantsRequiredToCreate(info, type);
+	// The icon is charged full and a tap puts its miracle in the hand
+	icon.charging = false;
+	icon.store = cost;
+	Locator::spellIconSystem::value().Tap(*found, command.player);
+	const auto held = Locator::magicSystem::value().GetHeldSeed();
+	if (!held.has_value() || std::ranges::find(icon.seedsOut, *held) == icon.seedsOut.end())
+	{
+		return "the hand did not take the seed";
+	}
+	// The seed keeps only a part of its charge, and the icon charges again for the hand that holds the seed
+	auto& seed = registry.Get<ecs::components::SpellSeed>(*held);
+	seed.chantStore = cost * command.amount;
+	icon.charging = true;
+	icon.charger = command.player;
+	icon.powerUp = magic::k_BasePowerUpLevel;
+	icon.store = 0.0f;
+	Locator::worshipSiteSystem::value().ReturnChants(icon.site, cost);
+	return fmt::format("the seed in the hand holds {:.0f} of {:.0f}, and its icon charges", seed.chantStore, cost);
 }
 
 std::string Runner::HandTakeFireBall()
@@ -2393,7 +2442,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
-	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::FillSiteIcons)
+	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::FillSiteIcons ||
+	    command.kind == Kind::ChargeIconWithSeedHeld)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2990,6 +3040,7 @@ void Runner::Give(const Command& command)
 	case Kind::SayLine:
 	case Kind::PlayGuidanceVoice:
 	case Kind::FillSiteIcons:
+	case Kind::ChargeIconWithSeedHeld:
 	case Kind::RemoveObject:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:

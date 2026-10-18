@@ -162,6 +162,7 @@ private:
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
 	std::string HandTapObject(size_t index);
+	std::string ChargeIconWithSeedHeld(const Command& command);
 	/// Once the hand is over the fireball, it taps it, or presses the action button with a seed in it
 	void FinishTakingFireBall();
 	/// Draws a gesture through the gesture recogniser, across the middle of the screen

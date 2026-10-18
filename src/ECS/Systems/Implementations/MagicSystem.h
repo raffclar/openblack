@@ -170,6 +170,7 @@ public:
 	entt::entity TakeIconSeed(entt::entity site, SpellSeedType seed, int powerUp, float chants) override;
 	void DiscardHeldSeed() override;
 	void DeleteSeed(entt::entity seed) override;
+	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override;
 
 	void UpdateHand(const HandFrame& frame, float seconds) override;
 	bool TapFireBall(entt::entity ball) override;
@@ -326,6 +327,7 @@ private:
 	/// The gesture events since the last frame: the circle remembered, a power-up, the seed dropped
 	void TakeGestures();
 	void PowerUpHeldSeed(int level);
+	void ShowHeldSeedPowerUp(int level, int previous);
 	/// The hum of an armed seed, following the hand
 	void StartHoldLoop();
 	void StopHoldLoop();

@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <vector>
 
 #include <PackFile.h>
@@ -44,6 +45,7 @@
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
 #include "Magic/MiracleVisuals.h"
+#include "Magic/SpellSeedRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -481,11 +483,13 @@ void SpellIconSystem::Destroy(entt::entity icon)
 		{
 			std::erase(list->icons, icon);
 		}
-		// The seed made from it goes with it, from the hand or from the miracle it cast
-		if (const auto seed = component->seedOut;
-		    registry.Valid(seed) && registry.AllOf<SpellSeed>(seed) && Locator::magicSystem::has_value())
+		// The seeds made from it go with it, from the hand or from the miracles they cast
+		for (const auto seed : component->seedsOut)
 		{
-			Locator::magicSystem::value().DeleteSeed(seed);
+			if (registry.Valid(seed) && registry.AllOf<SpellSeed>(seed) && Locator::magicSystem::has_value())
+			{
+				Locator::magicSystem::value().DeleteSeed(seed);
+			}
 		}
 	}
 	registry.Destroy(icon);
@@ -543,14 +547,49 @@ float SpellIconSystem::Required(const WorshipIcon& icon) const
 	return magic::GetChantsRequiredToCreate(info, type);
 }
 
-icons::IconCharge SpellIconSystem::ChargeOf(const WorshipIcon& icon, PlayerNames tapping) const
+float SpellIconSystem::SeedCost(const SpellSeed& seed) const
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return 0.0f;
+	}
+	const auto& info = Locator::infoConstants::value();
+	return magic::GetChantsRequiredToCreate(
+	    info, magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, seed.seedType), seed.powerUp));
+}
+
+entt::entity SpellIconSystem::HeldSeedOf(const WorshipIcon& icon) const
 {
 	auto& registry = Entities();
+	const auto* site = registry.Valid(icon.site) ? registry.TryGet<const WorshipSite>(icon.site) : nullptr;
+	const auto held = Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetHeldSeed() : std::nullopt;
+	if (site == nullptr || !held.has_value() || !registry.Valid(*held) ||
+	    std::ranges::find(icon.seedsOut, *held) == icon.seedsOut.end())
+	{
+		return entt::null;
+	}
+	// Only a hand of the icon's player counts
+	const auto* seed = registry.TryGet<const SpellSeed>(*held);
+	return seed != nullptr && seed->player == site->player ? *held : entt::null;
+}
+
+float SpellIconSystem::RequiredNow(const WorshipIcon& icon, entt::entity heldSeed) const
+{
+	if (heldSeed == entt::null)
+	{
+		return Required(icon);
+	}
+	return magic::ChantNeeded(Required(icon), Entities().Get<const SpellSeed>(heldSeed).chantStore);
+}
+
+icons::IconCharge SpellIconSystem::ChargeOf(const WorshipIcon& icon, PlayerNames tapping) const
+{
+	const auto held = HeldSeedOf(icon);
 	return {.charging = icon.charging,
 	        .chargedByThisHand = icon.charging && icon.charger == tapping,
-	        .seedOut = registry.Valid(icon.seedOut) && registry.AllOf<SpellSeed>(icon.seedOut),
+	        .seedHeld = held != entt::null,
 	        .store = icon.store,
-	        .required = Required(icon)};
+	        .required = RequiredNow(icon, held)};
 }
 
 bool SpellIconSystem::GiveSeed(entt::entity icon)
@@ -569,7 +608,10 @@ bool SpellIconSystem::GiveSeed(entt::entity icon)
 		return false;
 	}
 	component.store -= carried;
-	component.seedOut = seed;
+	// Seeds made before that are gone no longer count as out
+	std::erase_if(component.seedsOut,
+	              [&registry](entt::entity out) { return !registry.Valid(out) || !registry.AllOf<SpellSeed>(out); });
+	component.seedsOut.push_back(seed);
 	return true;
 }
 
@@ -719,14 +761,9 @@ std::optional<float> SpellIconSystem::ShownCharge(entt::entity icon) const
 	}
 	// The seed that the icon made counts only while a hand of the icon's player holds it
 	std::optional<float> heldSeedCharge;
-	const auto* site = registry.Valid(component->site) ? registry.TryGet<const WorshipSite>(component->site) : nullptr;
-	const auto held = Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetHeldSeed() : std::nullopt;
-	if (site != nullptr && held.has_value() && *held == component->seedOut && registry.Valid(*held))
+	if (const auto held = HeldSeedOf(*component); held != entt::null)
 	{
-		if (const auto* seed = registry.TryGet<const SpellSeed>(*held); seed != nullptr && seed->player == site->player)
-		{
-			heldSeedCharge = seed->chantStore;
-		}
+		heldSeedCharge = registry.Get<const SpellSeed>(held).chantStore;
 	}
 	return icons::ShownCharge(component->store, icons::ShownRequired(Required(*component), heldSeedCharge));
 }
@@ -744,8 +781,14 @@ std::vector<magic::WorshipIconCharge> SpellIconSystem::ChargesAt(entt::entity si
 	{
 		const auto& component = registry.Get<const WorshipIcon>(icon);
 		const auto charge = ChargeOf(component, component.charger);
-		charges.push_back(
-		    {.charging = charge.charging, .seedOut = charge.seedOut, .required = charge.required, .store = charge.store});
+		const bool out = std::ranges::any_of(component.seedsOut, [&registry](entt::entity seed) {
+			return registry.Valid(seed) && registry.AllOf<SpellSeed>(seed);
+		});
+		charges.push_back({.charging = charge.charging,
+		                   .seedOut = out,
+		                   .seedHeld = charge.seedHeld,
+		                   .required = charge.required,
+		                   .store = charge.store});
 	}
 	return charges;
 }
@@ -768,15 +811,33 @@ void SpellIconSystem::ChargedAt(entt::entity site, std::span<const magic::Worshi
 		{
 			continue;
 		}
-		const auto charge = ChargeOf(component, component.charger);
-		if (icons::Need(charge) > 0.0f)
+		// The seed of it that a hand holds takes what the icon stored, up to what the seed still needs
+		const auto held = HeldSeedOf(component);
+		auto* heldSeed = held != entt::null ? &registry.Get<SpellSeed>(held) : nullptr;
+		const auto turn = icons::ChargingIconTurn(component.store, Required(component),
+		                                          heldSeed != nullptr ? std::optional(heldSeed->chantStore) : std::nullopt);
+		component.store = turn.store;
+		if (heldSeed != nullptr && turn.seedStore.has_value())
+		{
+			heldSeed->chantStore = *turn.seedStore;
+			heldSeed->power = magic::SeedPower(heldSeed->chantStore, SeedCost(*heldSeed));
+		}
+		if (!turn.full)
 		{
 			continue;
 		}
-		// Charged full: its miracle jumps into the hand that asked for it if that hand can take it, and the announcer
-		// names it to the player at this machine. Either way it stops charging.
-		if (!charge.seedOut)
+		// The charge is done. The held seed takes the power-up level of the charge. Else the miracle goes into the hand
+		// that asked for it if that hand can take it, and the announcer names it to the player at this machine.
+		if (heldSeed != nullptr)
 		{
+			if (Locator::magicSystem::has_value())
+			{
+				Locator::magicSystem::value().SetIconSeedPowerUp(held, component.powerUp);
+			}
+		}
+		else
+		{
+			const auto charge = ChargeOf(component, component.charger);
 			if (icons::ReadyForHand(charge, HandReady(component.charger)))
 			{
 				GiveSeed(made.at(i));

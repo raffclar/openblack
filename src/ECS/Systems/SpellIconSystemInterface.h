@@ -65,8 +65,9 @@ public:
 
 	/// A worship site's icons as its turn shares out its prayer power, in a fixed order
 	[[nodiscard]] virtual std::vector<magic::WorshipIconCharge> ChargesAt(entt::entity site) const = 0;
-	/// What the site's turn gave its icons, in the order ChargesAt gave them; an icon charged full sends its miracle to the
-	/// hand that asked for it
+	/// What the site's turn gave its icons, in the order ChargesAt gave them. Then each charging icon does its own turn, in
+	/// that order: it fills the seed of it that a hand holds, and when its charge is done it stops charging. A done icon
+	/// sets the power-up level of its held seed, or else sends its miracle to the hand that asked for it.
 	virtual void ChargedAt(entt::entity site, std::span<const magic::WorshipIconCharge> charges) = 0;
 
 	/// Once a frame: the seeds above the icons spin

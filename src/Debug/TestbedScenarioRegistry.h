@@ -858,6 +858,10 @@ struct Command
 		/// Each icon of the player's worship sites holds a part of the charge of its miracle (amount, 0 to 1), as if the
 		/// worshippers charged it that far. Needs no creature.
 		FillSiteIcons,
+		/// The player's worship site icon of a seed (value, a SpellSeedType) puts its miracle in the hand. The seed keeps
+		/// a part of its charge (amount, 0 to 1), and the icon charges again for the hand, as when the hand takes a seed
+		/// of an icon that charges. The battery of the site gets the full cost of the miracle. Needs no creature.
+		ChargeIconWithSeedHeld,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
