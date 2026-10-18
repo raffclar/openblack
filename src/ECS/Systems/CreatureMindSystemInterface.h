@@ -87,6 +87,9 @@ public:
 	/// creature keeps its examples and adds the examples of the file. The help gives the message of the new stage.
 	virtual void TakeUpMindFile(entt::entity /*creature*/, std::shared_ptr<const creaturemind::MindFileData> /*file*/) {}
 	/// Forgets everything learnt: the desires start again as the species' do, with no opinions or examples
+	/// Gives a new creature its desires, its traits and its learning at once, as the creature is made. The draws of the
+	/// random numbers then come in the order of the game
+	virtual void StartMind(entt::entity /*creature*/) {}
 	virtual void ClearLearning(entt::entity creature) = 0;
 	/// Creatures that can see the point watch an ordinary skill practised (by its row in the game's table), or a miracle
 	/// cast

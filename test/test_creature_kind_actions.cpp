@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <array>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -332,12 +333,18 @@ TEST(CreatureKindActions, KickingABallAboutKicksItTwiceAtTheLeast)
 
 TEST(CreatureKindActions, KickingABallAboutWaitsAndDrawsTheCountAfreshEachKick)
 {
-	// Answers in turn: no point (1), wait 4 + 5 turns, count 2 + 2 (go on); no point, wait 4, count 2 + 0 (stop at 2);
-	// no jump
-	const std::array<uint32_t, 7> answers {1, 5, 2, 1, 0, 0, 1};
+	// Draws in turn: the count 2 + 0 before the first kick; no point (1), the largest float wait (nearly 1 second, cut to
+	// 9 turns); the count 2 + 0 (go on at 1 kick); no point, the smallest wait (0.4 seconds, 4 turns); the count 2 + 0
+	// (stop at 2); no jump
+	const std::array<uint32_t, 8> answers {0, 1, 65534, 0, 1, 0, 0, 1};
+	std::vector<uint32_t> ranges;
 	size_t next = 0;
-	const auto agenda = KickBallAround(3, [&](uint32_t) { return answers.at(next++); });
+	const auto agenda = KickBallAround(3, [&](uint32_t range) {
+		ranges.push_back(range);
+		return answers.at(next++);
+	});
 	ASSERT_EQ(agenda.size(), 10u);
+	EXPECT_EQ(ranges, (std::vector<uint32_t> {3, 4, 0xFFFF, 3, 4, 0xFFFF, 3, 2}));
 	EXPECT_EQ(agenda[4].kind, Step::Kind::Wait);
 	EXPECT_FLOAT_EQ(agenda[4].seconds, 0.9f);
 	EXPECT_EQ(agenda[9].kind, Step::Kind::Wait);
@@ -418,21 +425,27 @@ TEST(CreatureKindActions, StrokingAToyPicksItUpAndStrokesIt)
 
 TEST(CreatureKindActions, TakingAToyHomePutsItDownNearHomeMostly)
 {
-	// Fractions 0 and 1 put it 5 short along x and 5 past along z; a draw of 2 or more out of 10 puts it down
-	std::array<float, 2> fractions {0.0f, 1.0f};
+	// The offsets are float draws of up to 10 less 5: a draw of 0 puts it 5 short along x, the largest draw nearly 5 past
+	// along z. Then a draw of 2 or more out of 10 puts it down.
+	std::array<uint32_t, 3> draws {0, 65534, 2};
+	std::vector<uint32_t> ranges;
 	size_t next = 0;
-	const auto agenda =
-	    TakeToyHome(5, {100.0f, 200.0f}, 8.0f, [](uint32_t) { return 2u; }, [&] { return fractions.at(next++); });
+	const auto random = [&](uint32_t range) {
+		ranges.push_back(range);
+		return draws.at(next++);
+	};
+	const auto agenda = TakeToyHome(5, {100.0f, 200.0f}, 8.0f, random);
 	ASSERT_EQ(agenda.size(), 3);
+	EXPECT_EQ(ranges, (std::vector<uint32_t> {0xFFFF, 0xFFFF, 10}));
 	EXPECT_EQ(agenda[0].order.kind, ObjectOrder::Kind::PickUp);
 	EXPECT_EQ(agenda[1].movement.kind, Movement::Kind::ToPoint);
-	EXPECT_EQ(agenda[1].movement.point, glm::vec2(95.0f, 205.0f));
+	EXPECT_FLOAT_EQ(agenda[1].movement.point.x, 95.0f);
+	EXPECT_NEAR(agenda[1].movement.point.y, 205.0f, 1e-3f);
 	EXPECT_FLOAT_EQ(agenda[1].movement.maxDistance, 5.0f);
 	EXPECT_EQ(agenda[2].order.kind, ObjectOrder::Kind::Discard);
 	EXPECT_EQ(agenda[2].order.animation, creature_throw::k_PutDown);
 	// A draw of 0 or 1 tosses it away; a creature shorter than 5 arrives within its height
-	next = 0;
-	const auto tossed = TakeToyHome(5, {0.0f, 0.0f}, 3.0f, [](uint32_t) { return 1u; }, [&] { return fractions.at(next++); });
+	const auto tossed = TakeToyHome(5, {0.0f, 0.0f}, 3.0f, [](uint32_t) { return 1u; });
 	EXPECT_EQ(tossed[2].order.animation, creature_throw::k_Discard);
 	EXPECT_FLOAT_EQ(tossed[1].movement.maxDistance, 3.0f);
 }

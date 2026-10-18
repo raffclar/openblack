@@ -2864,6 +2864,20 @@ void AddMovement(std::vector<Scenario>& all)
 	    .commands = {Go(Kind::WalkTo, 0, {0.0f, 90.0f}, 0.5f)},
 	});
 
+	all.push_back({
+	    .id = "appearance.body_spread",
+	    .name = "Three new tigers of one species",
+	    .facet = Facet::Appearance,
+	    .description = "Three tigers are made one after the other. Each new creature draws its strength and its fatness "
+	                   "from the random numbers of the game, as the game makes a creature.",
+	    .expected = "The three tigers are not all the same. Each one is a little stronger or weaker, and a little fatter "
+	                "or thinner, than the tiger of the species' table.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 20.0f, -60.0f}, .look = {0.0f, 8.0f, 0.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-20.0f, 0.0f}, 180.0f), Posed(CreatureType::Tiger, {0.0f, 0.0f}, 180.0f),
+	                  Posed(CreatureType::Tiger, {20.0f, 0.0f}, 180.0f)},
+	});
+
 	std::vector<ObjectSetup> copse;
 	for (int x = -2; x <= 2; ++x)
 	{

@@ -1165,12 +1165,7 @@ std::optional<uint32_t> mind_detail::LessonActivity(const creature_mind_tables::
 
 uint32_t CreatureMindSystem::Random(uint32_t range)
 {
-	return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-}
-
-float CreatureMindSystem::Chance()
-{
-	return std::uniform_real_distribution<float>(0.0f, 1.0f)(_random);
+	return _random.GameRand(range);
 }
 
 const creature_mind_tables::Tables* CreatureMindSystem::GetTables()
@@ -1182,18 +1177,25 @@ const creature_mind_tables::Tables* CreatureMindSystem::GetTables()
 	return _tables.has_value() ? &*_tables : nullptr;
 }
 
+void CreatureMindSystem::StartMind(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	auto* mind = registry.TryGet<CreatureMindState>(creature);
+	if (body != nullptr && mind != nullptr)
+	{
+		SetUpMind(creature, *body, *mind);
+	}
+}
+
 void CreatureMindSystem::SetUpMind(entt::entity creature, const Creature& body, CreatureMindState& mind)
 {
 	const bool made = !mind.desires.has_value();
 	if (made)
 	{
-		mind.desires = creature_desires::Create(SetupFor(body.species), [this](float low, float high) {
-			return high > low ? std::uniform_real_distribution<float>(low, high)(_random) : low;
-		});
+		mind.desires = creature_desires::Create(SetupFor(body.species), _random.GameFloat());
 		// It is born with its species' personality, spread at random
-		mind.innate = creature_desire_sources::SpreadTraits(InnateTraitsOf(body.species), [this](float most) {
-			return most > 0.0f ? std::uniform_real_distribution<float>(0.0f, most)(_random) : 0.0f;
-		});
+		mind.innate = creature_desire_sources::SpreadTraits(InnateTraitsOf(body.species), _random.GameFloat());
 	}
 	if (!mind.learnt.has_value())
 	{
@@ -1228,12 +1230,8 @@ void CreatureMindSystem::SetUpLearning(entt::entity creature, CreatureMindState&
 	{
 		creature_mind_model::TeachStartingLesson(*mind.learnt, tables->attributes.at(static_cast<size_t>(Desire::Hunger)));
 	}
-	mind.learnt->turnsSinceDone = creature_action_history::Fresh(actionCount, [this](uint32_t range) { return Random(range); });
 	// A new mind did each action a short time ago, picked at random for each
-	for (auto& turns : mind.learnt->turnsSinceDone)
-	{
-		turns = Random(creature_desire_sources::k_NewActionTurnsRange);
-	}
+	mind.learnt->turnsSinceDone = creature_action_history::Fresh(actionCount, [this](uint32_t range) { return Random(range); });
 	if (mind.resourceChecked)
 	{
 		return;
@@ -1287,8 +1285,7 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 		ApplyLoaded(creature, mind, creature_mind_model::FromFile(*file, *mind.desires, *mind.learnt), *file);
 		return;
 	}
-	const auto fresh =
-	    creature_desires::Create(SetupFor(body->species), [](float low, float high) { return 0.5f * (low + high); });
+	const auto fresh = creature_desires::Create(SetupFor(body->species), [](float most) { return 0.5f * most; });
 	auto knowledge = tables != nullptr ? creature_watching::StartKnowledge(tables->skills, tables->miracles)
 	                                   : creature_watching::Knowledge {};
 	auto freshLearnt = creature_mind_model::Fresh(
@@ -1704,23 +1701,23 @@ std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Targe
 	return creature_planner::ChooseUsed(candidates, distanceWeight, goal);
 }
 
-/// Draws the lengths of a look and of a sit from the random numbers of the game, as the agenda is made. A sit that has
-/// no place to sit draws nothing.
-void DrawAgendaLengths(const creature_plan_actions::Executor& executor, creature_plan_actions::Situation& situation)
+/// Draws the lengths of a look, of a smile and of a sit from the random numbers of the game, as the agenda is made. A
+/// sit that has no place to sit draws nothing.
+void DrawAgendaLengths(const creature_plan_actions::Executor& executor, creature_plan_actions::Situation& situation,
+                       const std::function<float(float)>& upTo)
 {
-	if (!Locator::gameRandom::has_value())
-	{
-		return;
-	}
-	auto& random = Locator::gameRandom::value();
 	if (executor.build == creature_plan_actions::Build::LookButDontApproach)
 	{
-		situation.lookExtraSeconds = random.GameFloatRand(creature_mind::k_LookButDontApproachExtraSeconds);
+		situation.lookExtraSeconds = upTo(creature_mind::k_LookButDontApproachExtraSeconds);
+	}
+	if (executor.build == creature_plan_actions::Build::SmileAt)
+	{
+		situation.smileExtraSeconds = upTo(creature_mind::k_SmileExtraSeconds);
 	}
 	if (executor.build == creature_plan_actions::Build::SitDown &&
 	    (situation.controlledByScript || situation.clearArea.has_value()))
 	{
-		situation.sitExtraSeconds = random.GameFloatRand(creature_emote::k_SitExtraSeconds);
+		situation.sitExtraSeconds = upTo(creature_emote::k_SitExtraSeconds);
 	}
 }
 
@@ -1915,10 +1912,6 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 		situated.clearArea = *clear;
 	}
 	SituateExploration(creature, *executor, situated);
-	if (executor->build == creature_plan_actions::Build::SmileAt)
-	{
-		situated.chance = Chance();
-	}
 	if (executor->build == creature_plan_actions::Build::DanceWithVillagers)
 	{
 		SituateDance(creature, *executor, point, situated);
@@ -1932,7 +1925,7 @@ CreatureMindSystem::PlanAgenda(entt::entity creature, uint32_t action, std::opti
 	{
 		situated.drink = DrinkPlaceOf(creature);
 	}
-	DrawAgendaLengths(*executor, situated);
+	DrawAgendaLengths(*executor, situated, _random.GameFloat());
 	auto agenda = creature_plan_actions::Agenda(
 	    *executor, AgendaThingOf(Locator::entitiesRegistry::value(), *executor, object), point, situated,
 	    [this](uint32_t range) { return Random(range); }, cast);
@@ -3209,7 +3202,7 @@ void CreatureMindSystem::DoFollowUp(entt::entity creature, CreatureMindState& mi
 		    .anger = mind.desires.has_value() ? (*mind.desires)[Desire::Anger].value : 0.0f,
 		};
 		auto agenda = creature_follow_up::ShowSlapFeeling(
-		    feelings, [this](uint32_t range) { return Random(range); }, Chance(),
+		    feelings, [this](uint32_t range) { return Random(range); }, _random.GameFloat(),
 		    static_cast<uint32_t>(std::lround(k_TurnsPerSecond)));
 		static_cast<void>(ForcePlan(creature, {.desire = Desire::ManifestState,
 		                                       .action = "CommunicateState",
@@ -3235,8 +3228,7 @@ void CreatureMindSystem::BecomeHigh(entt::entity creature)
 		const auto place = ClearAreaFor(registry, creature, position, creature_mind::k_HighSeatRadii * radius, false);
 		return place.has_value() ? std::optional(creature_mind::HighSeat {.place = *place, .radius = radius}) : std::nullopt;
 	};
-	auto agenda = creature_mind::BecomeHigh(
-	    findSeat, [this](uint32_t range) { return Random(range); }, [this](float most) { return Chance() * most; });
+	auto agenda = creature_mind::BecomeHigh(findSeat, [this](uint32_t range) { return Random(range); }, _random.GameFloat());
 	static_cast<void>(
 	    ForcePlan(creature, {.desire = Desire::GetHigh, .action = "GetHigh", .object = creature, .agenda = std::move(agenda)}));
 }
@@ -3282,7 +3274,8 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : transform->position;
 			agenda = creature_leash_orders::Hold(
 			    entt::to_integral(*plan.object), alreadyHeld, glm::vec2(eye.x, eye.z), playWith,
-			    creature_leash_orders::HoldSeconds(Chance() * creature_leash_orders::k_HoldExtraSeconds, k_TurnsPerSecond));
+			    creature_leash_orders::HoldSeconds(_random.GameFloatRand(creature_leash_orders::k_HoldExtraSeconds),
+			                                       k_TurnsPerSecond));
 		}
 		else if (plan.action == creature_leash_orders::k_ReflectionAction)
 		{
@@ -3317,7 +3310,6 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 				situation.camera = glm::vec2(eye.x, eye.z);
 			}
 			Situate(creature, situation);
-			situation.chance = Chance();
 			if (plan.instrument.has_value())
 			{
 				situation.instrument = entt::to_integral(*plan.instrument);
@@ -3372,7 +3364,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				SituateFriend(creature, *executor, *plan.object, situation);
 			}
-			DrawAgendaLengths(*executor, situation);
+			DrawAgendaLengths(*executor, situation, _random.GameFloat());
 			const auto actionIndex = creature_mind_tables::FindAction(*tables, plan.action);
 			const auto cast = creature_plan_actions::IsCast(*executor) && actionIndex.has_value()
 			                      ? CastInfoFor(creature, *actionIndex, plan.object)
@@ -4710,9 +4702,7 @@ void CreatureMindSystem::ClearLearning(entt::entity creature)
 	}
 	const auto name = mind->learnt.has_value() ? mind->learnt->name : std::u16string {};
 	Abandon(*mind);
-	mind->desires = creature_desires::Create(SetupFor(body->species), [this](float low, float high) {
-		return high > low ? std::uniform_real_distribution<float>(low, high)(_random) : low;
-	});
+	mind->desires = creature_desires::Create(SetupFor(body->species), _random.GameFloat());
 	mind->desiresPhase.reset();
 	mind->planner = {};
 	mind->pendingFile.reset();

@@ -400,7 +400,7 @@ void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 		return;
 	}
 	const auto size = cave_creature::SizeOf(body->size);
-	const auto coin = std::uniform_int_distribution<uint32_t>(0, 1)(_random) != 0;
+	const auto coin = _random.LocalRand(2) != 0;
 	const auto rest = cave_creature::RestFor(size, coin);
 	const auto position = cave_creature::StandsAt(*places, size, rest);
 	// It is put down facing the fire
@@ -410,11 +410,7 @@ void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 	registry.Assign<Transform>(copy, position, glm::mat3(glm::eulerAngleY(heading.Yaw())),
 	                           glm::vec3(archetypes::CreatureArchetype::DrawnScale(body->species, size)));
 	registry.Assign<CreatureCopy>(copy, creature, size);
-	// Its fidgets in the tattoo editor start 20 to 40 seconds away
-	cave_creature::State state {.rest = rest, .heading = heading};
-	cave_creature::StartIdle(state, [this](uint32_t range) {
-		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	});
+	const cave_creature::State state {.rest = rest, .heading = heading};
 	registry.Assign<CaveCreature>(copy, state, places->fire);
 	registry.Assign<CreatureAnimation>(copy);
 	registry.Assign<CreatureEyes>(copy);
@@ -455,9 +451,8 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 		return;
 	}
 	const auto frameMs = std::min(milliseconds, cave_creature::k_MaxFrameMs);
-	const cave_creature::Random random = [this](uint32_t range) {
-		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	};
+	// The copy has no creature of its own, so it draws on the local seed
+	const cave_creature::Random random = [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); };
 
 	// The camera is zoomed onto it while the tattoo editor is open on its creature, looking where the editor turns it
 	cave_creature::Frame frame {.fire = cave->light, .position = transform->position, .milliseconds = frameMs};

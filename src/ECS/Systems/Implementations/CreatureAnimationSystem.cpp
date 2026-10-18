@@ -955,14 +955,13 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    {
 			    return;
 		    }
-		    eyes->blink = creature_eyes::AdvanceBlink(eyes->blink, milliseconds, [this](uint32_t range) {
-			    return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-		    });
+		    eyes->blink = creature_eyes::AdvanceBlink(
+		        eyes->blink, milliseconds, [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
 		    eyes->drawn = {};
 		    if (rig != nullptr && rig->eyes.has_value())
 		    {
 			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, ShownSize(creature), milliseconds,
-			              [this](uint32_t range) { return std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); });
+			              [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
 		    }
 	    });
 
@@ -1003,8 +1002,7 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 		                             static_cast<int32_t>(std::lround(milliseconds)));
 		PoseBody(
 		    *animation, rig, morph->drawn, *transform, ShownSize(*creature), milliseconds * scale,
-		    milliseconds * scale / 1000.0f, look,
-		    [this](uint32_t range) { return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); },
+		    milliseconds * scale / 1000.0f, look, [this](uint32_t range) { return _random.GameRand(range); },
 		    HoldingHandOf(registry, entity));
 	}
 	if (animation->boneMatrices.empty())
@@ -1116,9 +1114,8 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	if (rig != nullptr)
 	{
 		PoseBody(*animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
-		         HeadLookOfCopy(*animation, *transform, creature->species, self->size), [this](uint32_t range) {
-			         return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-		         });
+		         HeadLookOfCopy(*animation, *transform, creature->species, self->size),
+		         [this](uint32_t range) { return _random.GameRand(range); });
 	}
 	if (animation->boneMatrices.size() != base->GetBoneMatrices().size())
 	{
@@ -1138,15 +1135,14 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	}
 	eyes->lookAt = animation->lookAt;
 	eyes->blink =
-	    creature_eyes::AdvanceBlink(eyes->blink, static_cast<int32_t>(std::lround(milliseconds)), [this](uint32_t range) {
-		    return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	    });
+	    creature_eyes::AdvanceBlink(eyes->blink, static_cast<int32_t>(std::lround(milliseconds)),
+	                                [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
 	eyes->drawn = {};
 	if (rig != nullptr && rig->eyes.has_value())
 	{
 		PlaceEyes(*eyes, *rig->eyes, morph->drawn, animation->boneMatrices, *transform, self->size,
 		          static_cast<int32_t>(std::lround(milliseconds)),
-		          [this](uint32_t range) { return std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); });
+		          [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
 	}
 }
 

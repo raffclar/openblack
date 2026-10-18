@@ -112,19 +112,23 @@ float creature_desires::SigmoidStep(float threshold, float value)
 	return gutils::SigmoidThreshold(threshold, value);
 }
 
-Desires creature_desires::Create(const std::array<DesireSetup, k_DesireCount>& setup,
-                                 const std::function<float(float, float)>& uniform)
+Desires creature_desires::Create(const std::array<DesireSetup, k_DesireCount>& setup, const std::function<float(float)>& upTo)
 {
 	Desires desires;
+	// The game draws the decay and the growing time of each desire first, then the sources of all the desires
 	for (size_t i = 0; i < k_DesireCount; ++i)
 	{
 		const auto& from = setup.at(i);
 		auto& desire = desires.desires.at(i);
 		desire.max = from.max;
-		desire.decay = uniform(from.decayMin, from.decayMax);
-		const auto upTo = [&uniform](float most) { return uniform(0.0f, most); };
+		desire.decay = upTo(from.decayMax - from.decayMin) + from.decayMin;
 		desire.increaseSeconds = creature_desire_sources::SpreadIncreaseSeconds(from.increaseSeconds, upTo);
 		desire.weight = from.weight;
+	}
+	for (size_t i = 0; i < k_DesireCount; ++i)
+	{
+		const auto& from = setup.at(i);
+		auto& desire = desires.desires.at(i);
 		for (size_t s = 0; s < from.sources.size(); ++s)
 		{
 			const auto& source = from.sources.at(s);

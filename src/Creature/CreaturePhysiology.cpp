@@ -36,6 +36,12 @@ float Clamp01(float value)
 }
 } // namespace
 
+float creature_physiology::SpreadStart(float value, const std::function<float(float)>& upTo)
+{
+	// The game adds the value to the draw first, then takes the spread off
+	return (upTo(2.0f * k_StartSpread) + value) - k_StartSpread;
+}
+
 Needs creature_physiology::Start(const Species& species)
 {
 	return {.age = 0,

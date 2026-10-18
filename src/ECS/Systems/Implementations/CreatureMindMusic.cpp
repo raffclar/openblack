@@ -18,9 +18,11 @@
 #include "Camera/Camera.h"
 #include "Creature/CreatureFollowUp.h"
 #include "Creature/CreatureHelp.h"
+#include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMusicReaction.h"
 #include "CreatureMindSystem.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
@@ -38,6 +40,11 @@ void CreatureMindSystem::ReactToMusic(entt::entity creature, float mood)
 	if (mind == nullptr || body == nullptr)
 	{
 		return;
+	}
+	// The action that its body plays ends at two times the usual speed
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+	{
+		animation->body = creature_layers::Hurry(animation->body);
 	}
 	const auto random = [this](uint32_t range) { return Random(range); };
 	// It is made to look or point at the camera, or to be sad, and the reaction's steps take the place of the plan's
