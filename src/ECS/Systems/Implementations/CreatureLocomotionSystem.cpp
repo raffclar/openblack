@@ -119,8 +119,6 @@ constexpr int32_t k_TurnSearchSteps = 16;
 /// A route costing more than this much a unit of the straight distance, and this much besides, is given up
 constexpr float k_CostPerUnit = 2.0f;
 constexpr float k_BaseCost = 5000.0f;
-/// Turning on the spot as a route is joined while walking, the join is searched from this far ahead
-constexpr float k_TurningJoinAhead = 0.05f;
 /// A new destination this close to the current one carries on the same walk
 constexpr float k_SameDestination = 0.1f;
 /// Waiting for a route, a puzzled face is held this long
@@ -328,7 +326,22 @@ struct WalkTurn
 	float spinMs;
 	/// What its legs played last turn, which they keep when it is too slow to move them
 	const std::vector<CreatureLocomotion::Track>& lastTracks;
+	/// The land where creatures can stand
+	const route::WalkableLand& land;
+	/// Set when a step or the walk puts the creature where it cannot stand. It is put back after its move this turn.
+	mutable bool strayed {false};
 };
+
+/// Whether the creature can stand where its step or walk put it this turn. When it cannot, the turn notes it.
+bool CheckStand(const CreatureLocomotion& self, const WalkTurn& turn)
+{
+	if (turn.land.IsValid(PositionOf(self), route::k_Clearance))
+	{
+		return true;
+	}
+	turn.strayed = true;
+	return false;
+}
 
 /// A step or a turn on the spot: its two animations, blended keyframe by keyframe into one. The step's blend plays
 /// over the step's length, so its time is scaled to the blend's own length.
@@ -433,11 +446,11 @@ float JoinAhead(const CreatureLocomotion& self)
 {
 	if (self.motion == Motion::Turning)
 	{
-		return k_TurningJoinAhead;
+		return planner::k_TurnJoinAhead;
 	}
 	if (self.motion == Motion::Stepping && self.move.has_value())
 	{
-		return (glm::length(self.move->displacement) * self.scale) - self.follower.GetRoute().travelled;
+		return planner::StepJoinAhead(self.move->displacement, self.scale, self.follower.GetRoute().travelled);
 	}
 	return 0.0f;
 }
@@ -480,7 +493,7 @@ void StartLeg(CreatureLocomotion& self, const WalkTurn& turn, bool playNow)
 		    .animations = start.steps,
 		    .timeMs = 0.0f,
 		    .durationMs = static_cast<float>(start.stepMs),
-		    .displacement = {start.stepDisplacement.x, start.stepDisplacement.z},
+		    .displacement = start.stepDisplacement,
 		    .blendDurationMs = turn.moves.PairDuration(*start.steps),
 		    .side = start.side,
 		    .routeHeading = start.heading,
@@ -589,8 +602,12 @@ void StepOff(CreatureLocomotion& self, const WalkTurn& turn)
 	}
 	// The creature stands where the route was at the start of this turn; the step's move then takes the route on
 	PlaceAt(self, follower.GetPosition());
+	if (!CheckStand(self, turn))
+	{
+		return;
+	}
 	self.speed =
-	    planner::StepSpeed(glm::vec3(move.displacement.x, 0.0f, move.displacement.y), turnMs, self.scale, stepMs, self.heading);
+	    planner::StepSpeed(glm::vec3(move.displacement.x, 0.0f, move.displacement.z), turnMs, self.scale, stepMs, self.heading);
 	self.distance = planner::TurnDistance(self.speed);
 	if (follower.Advance(self.distance).finished)
 	{
@@ -643,10 +660,12 @@ void Walk(CreatureLocomotion& self, const WalkTurn& turn)
 			follower.RestartLeg();
 		}
 		Restart(self, turn);
+		CheckStand(self, turn);
 		return;
 	}
 	PlaceAt(self, follower.GetPosition());
 	self.heading = follower.GetHeading();
+	CheckStand(self, turn);
 
 	const auto stand = ClipOf(turn.moves, locomotion::animations::k_Stand);
 	const auto walk = ClipOf(turn.moves, locomotion::animations::k_Walk);
@@ -1012,9 +1031,8 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::FleeFrom(entt::en
 bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	auto* self = registry.TryGet<CreatureLocomotion>(creature);
-	const auto* body = registry.TryGet<const Creature>(creature);
-	if (self == nullptr || body == nullptr || !self->started)
+	const auto* self = registry.TryGet<const CreatureLocomotion>(creature);
+	if (self == nullptr)
 	{
 		return false;
 	}
@@ -1023,30 +1041,8 @@ bool CreatureLocomotionSystem::TurnToFace(entt::entity creature, glm::vec2 point
 	{
 		return false;
 	}
-	ClearWalk(*self);
-	self->following.reset();
-	self->facingOnly = true;
-	self->targetHeading = locomotion::HeadingOf(offset);
-	const auto angle = self->targetHeading.TurnFrom(self->heading);
-	const auto moves = MovesOf(body->species);
-	const auto firstSpin = locomotion::SideOf(angle) == locomotion::Side::Right ? locomotion::animations::k_RightSpin
-	                                                                            : locomotion::animations::k_LeftSpin;
-	const auto start = locomotion::ChooseStart(
-	    angle, 0.0f, {.stepStrides = std::nullopt, .hasSpins = moves.HasAll(firstSpin), .moving = false});
-	if (start.kind != locomotion::Start::Kind::Turn)
-	{
-		// Nearly facing it already
-		self->heading = self->targetHeading;
-		self->facingOnly = false;
-		return true;
-	}
-	self->motion = Motion::Turning;
-	self->move =
-	    CreatureLocomotion::Move {.animations = start.animations,
-	                              .timeMs = 0.0f,
-	                              .durationMs = start.animations.has_value() ? moves.PairDuration(*start.animations)
-	                                                                         : moves.Duration(locomotion::animations::k_Stand)};
-	return true;
+	// It always turns on the spot, also when it nearly faces the point already
+	return TurnToHeading(creature, locomotion::HeadingOf(offset));
 }
 
 bool CreatureLocomotionSystem::TurnToHeading(entt::entity creature, GameHeading heading)
@@ -1237,7 +1233,8 @@ void CreatureLocomotionSystem::ProcessTurn()
 		                             .topSpeed = locomotion::TargetSpeed(self.fraction, self.speeds.run),
 		                             .breathPhase = animation.breathPhase,
 		                             .spinMs = k_TurnMs * creature_layers::BodyRate(ShownSize(creature), animation.realTime),
-		                             .lastTracks = lastTracks};
+		                             .lastTracks = lastTracks,
+		                             .land = land};
 
 		    switch (self.motion)
 		    {
@@ -1300,18 +1297,19 @@ void CreatureLocomotionSystem::ProcessTurn()
 			    break;
 		    }
 
-		    // Strayed somewhere it can't stand, it is put back where it can and sets off again
-		    if ((self.motion == Motion::Walking || self.motion == Motion::Stepping) && self.destination.has_value() &&
-		        !land.IsValid(PositionOf(self), route::k_Clearance))
+		    // A step or the walk put it somewhere it cannot stand: it is put back where it can, or stays where it is when
+		    // there is no such place, and sets off again. When it cannot set off again, it cannot find a route.
+		    if (walkTurn.strayed && self.destination.has_value())
 		    {
-			    if (const auto valid = land.NearestStandable(PositionOf(self)))
+			    PlaceAt(self, land.NearestStandable(PositionOf(self)).value_or(PositionOf(self)));
+			    self.fromPosition = self.toPosition;
+			    const auto destination = *self.destination;
+			    const auto ring = self.ring;
+			    ClearWalk(self);
+			    if (StartMove(entity, self, destination, self.fraction, ring.min, ring.max, self.ontoDestination) !=
+			        MoveResult::Started)
 			    {
-				    PlaceAt(self, *valid);
-				    self.fromPosition = self.toPosition;
-				    const auto destination = *self.destination;
-				    const auto ring = self.ring;
-				    ClearWalk(self);
-				    StartMove(entity, self, destination, self.fraction, ring.min, ring.max, self.ontoDestination);
+				    self.failed = true;
 			    }
 		    }
 		    self.toHeading = self.headingSnaps ? self.fromHeading : self.heading;

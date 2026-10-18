@@ -101,9 +101,9 @@ struct CreatureLocomotion
 		std::optional<creature_locomotion::Pair> animations;
 		float timeMs;
 		float durationMs;
-		/// A step: where the blend takes the root over the step, across the ground in mesh units, and the blend's own
-		/// length, over which its frames spread
-		glm::vec2 displacement {0.0f};
+		/// A step: where the blend takes the root over the step in mesh units, and the blend's own length, over which its
+		/// frames spread
+		glm::vec3 displacement {0.0f};
 		float blendDurationMs {0.0f};
 		/// A step: the side of the steps, and the route's heading at the last turn
 		creature_locomotion::Side side {creature_locomotion::Side::Right};

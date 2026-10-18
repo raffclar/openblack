@@ -51,6 +51,8 @@ constexpr float k_LeastLookAhead = std::bit_cast<float>(0x3C23D70Au);
 constexpr float k_StillSpeed = std::bit_cast<float>(0x38D1B717u);
 /// The steps measure their move in units a turn: this many turns make a second
 constexpr float k_TurnsPerSecond = 10.0f;
+/// A route found while the creature turns on the spot is joined from this far ahead along its route
+constexpr float k_TurnJoinAhead = std::bit_cast<float>(0x3D4CCCCDu);
 
 /// What the creature's walk does this turn
 enum class Phase : uint8_t
@@ -140,6 +142,10 @@ struct NextLeg
 
 /// The speed of a step this turn: the part of the step's move that one turn plays, as a speed along the route
 [[nodiscard]] float StepSpeed(const glm::vec3& displacement, int32_t turnMs, float scale, int32_t stepMs, GameHeading heading);
+
+/// How far ahead along its route a route found during a step is joined from: the length of the step's whole move
+/// (with its height) at the creature's scale, less how far along the route the step went
+[[nodiscard]] float StepJoinAhead(const glm::vec3& displacement, float scale, float travelled);
 
 /// The walk animation's time when a step ends and the walk starts: the share of the step played, in the walk. After a
 /// left step the walk starts half a cycle on.
