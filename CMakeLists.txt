@@ -250,7 +250,7 @@ function (openblack_check_deterministic_fp)
   set(flags
       "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${CMAKE_CXX_FLAGS_DEBUG}"
   )
-  foreach (target openblack_lib openblack)
+  foreach (target openblack_lib openblack_systems openblack)
     if (TARGET ${target})
       get_target_property(options ${target} COMPILE_OPTIONS)
       if (options)

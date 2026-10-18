@@ -17,6 +17,15 @@ if (APPLE)
   list(APPEND OPENBLACK_SOURCES "${OPENBLACK_OBJC_SOURCES}")
 endif ()
 
+# The systems are a static library of their own. The Debug objects of all sources together are bigger than the 4 GB that
+# the librarian can hold in one library file, as every object has its own copy of the debug information.
+set(OPENBLACK_ALL_SOURCES ${OPENBLACK_SOURCES})
+set(OPENBLACK_SYSTEM_SOURCES ${OPENBLACK_SOURCES})
+list(FILTER OPENBLACK_SYSTEM_SOURCES INCLUDE REGEX "/ECS/Systems/")
+if (NOT ANDROID)
+  list(REMOVE_ITEM OPENBLACK_SOURCES ${OPENBLACK_SYSTEM_SOURCES})
+endif ()
+
 set(OPENBLACK_RC ${CMAKE_SOURCE_DIR}/assets/resource/icon/openblack.rc)
 
 file(GLOB OPENBLACK_IMGUI_VS_SHADERS
@@ -232,15 +241,6 @@ if (OPENBLACK_INSPECTOR)
     openblack_lib PRIVATE OPENBLACK_BUILD_TYPE="$<CONFIG>"
   )
 endif ()
-# The reflection of every component in one file has more sections than a usual object file can keep. Its debug build
-# keeps the debug information in the program database, not in the object, so the debug library stays under the 4 GB
-# that the librarian can hold.
-if (MSVC)
-  set_source_files_properties(
-    ECS/Reflection/ComponentFields.cpp
-    PROPERTIES COMPILE_OPTIONS "/bigobj;$<$<CONFIG:Debug>:/Zi>"
-  )
-endif ()
 
 # The library's headers do their maths left-handed in radians, so everything that includes them must too: glm's inline
 # functions built either way in one program would leave the linker to pick one at random
@@ -320,11 +320,34 @@ target_compile_options(
   PUBLIC "$<IF:$<CXX_COMPILER_ID:MSVC>,/fp:precise,-ffp-contract=off>"
 )
 
+# The systems library is built with the same options as the game's library: it takes each build property of that
+# library, so a property added above reaches both. The two libraries use each other's symbols, which static libraries
+# may do.
+if (NOT ANDROID)
+  add_library(openblack_systems STATIC ${OPENBLACK_SYSTEM_SOURCES})
+  foreach (
+    property
+    COMPILE_DEFINITIONS
+    COMPILE_OPTIONS
+    INCLUDE_DIRECTORIES
+    LINK_LIBRARIES
+    LINKER_LANGUAGE
+    CXX_CLANG_TIDY
+  )
+    get_target_property(value openblack_lib ${property})
+    if (value)
+      set_property(TARGET openblack_systems PROPERTY ${property} "${value}")
+    endif ()
+  endforeach ()
+  target_link_libraries(openblack_lib PUBLIC openblack_systems)
+  target_link_libraries(openblack_systems PUBLIC openblack_lib)
+endif ()
+
 set_property(
   DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT openblack
 )
 source_group(
-  TREE ${CMAKE_CURRENT_LIST_DIR} FILES ${OPENBLACK_SOURCES}
+  TREE ${CMAKE_CURRENT_LIST_DIR} FILES ${OPENBLACK_ALL_SOURCES}
                                        ${OPENBLACK_HEADERS}
 )
 
