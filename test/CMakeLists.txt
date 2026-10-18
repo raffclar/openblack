@@ -1301,3 +1301,12 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_land_shade test_land_shade.cpp)
+openblack_setup_and_add_test(
+  test_oracle_land_shade_particle oracle/test_oracle_land_shade_particle.cpp
+)
+set_tests_properties(
+  test_oracle_land_shade_particle
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+target_link_libraries(test_oracle_land_shade_particle PRIVATE psys)

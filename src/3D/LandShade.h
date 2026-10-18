@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "3D/LandPointLight.h"
 
@@ -42,7 +43,7 @@ inline constexpr int32_t k_MapCells = 512;
 /// A shadow never takes a cell below this luminosity
 inline constexpr uint8_t k_DarkestShadow = 48;
 /// The game keeps at most this many stamps of light and shadow on the land in a frame. The particles' light maps and
-/// the flashes of lightning come first, then the sky's clouds, then the storms.
+/// shadows come first, then the flashes of lightning, then the sky's clouds, then the storms.
 inline constexpr size_t k_MostStamps = 200;
 /// A sky cloud's shadow image and a storm's are this many texels across
 inline constexpr int32_t k_ShadowSide = 40;
@@ -112,6 +113,8 @@ struct Shadow
 [[nodiscard]] float CloudStrength(uint32_t alpha);
 /// The first texel of a shadow centred on a point: back by half its side, less half a cell
 [[nodiscard]] glm::vec2 Centred(glm::vec2 centre, int32_t side);
+/// A particle's shadow: its image centred on a point, as strong as the particle's stamp
+[[nodiscard]] Shadow ParticleShadow(glm::vec3 centre, std::span<const uint8_t> image, int32_t side, float strength);
 
 /// Where a shadow falls: its first cell, the weights of 255 that its image is blended with along x and z, how many
 /// cells it covers past its first one along x and z, the texel of its image at its first cell, and whether it is on the

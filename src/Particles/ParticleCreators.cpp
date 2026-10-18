@@ -129,14 +129,17 @@ std::unique_ptr<Creator> MakeMist(const psys::ParticleObject& object, CreatorRes
 	creator->ratioFromMatrix = object.Bool("TakeRatioFromMatrix", false);
 	creator->initialScaleMin = object.Float("InitialScaleMin", 1.0f);
 	creator->numFrames = 1;
-	// A shadow map is one byte a texel, how much light it lets through
+	// A shadow map is one byte a texel, how much light it lets through; another light map is three, a colour
 	if (const auto file = object.String("TextureFileName");
-	    resources != nullptr && object.Bool("LoadLightMap", false) && object.Bool("IsShadowMap", false) && Named(file))
+	    resources != nullptr && object.Bool("LoadLightMap", false) && Named(file))
 	{
-		creator->shadowPitch = std::max(1, object.Int("Pitch", 1));
+		creator->shadowMap = object.Bool("IsShadowMap", false);
+		creator->lightMapPitch = std::max(1, object.Int("Pitch", 1));
 		const int framesInFile = std::max(1, object.Int("NumFramesInFile", 1));
 		const int framesInUse = std::clamp(object.Int("NumFramesInUse", 1), 1, framesInFile);
-		creator->shadow = resources->LightMap(file, creator->shadowPitch, k_ShadowMapChannels, framesInFile, framesInUse);
+		creator->lightMap =
+		    resources->LightMap(file, creator->lightMapPitch, creator->shadowMap ? k_ShadowMapChannels : k_LightMapChannels,
+		                        framesInFile, framesInUse);
 	}
 	return creator;
 }
