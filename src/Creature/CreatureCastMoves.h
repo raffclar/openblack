@@ -73,6 +73,16 @@ inline constexpr float k_ClearOfThings = 5.0f;
 /// What walking up to a thing keeps clear of: its radius less some of the creature's own, by how tall each is; a tree's
 /// is only a little of its radius
 [[nodiscard]] float RoutePlanRadius(float radius, float height, bool tree, float creatureHeight, float creatureRadius);
+/// How far apart two points on the land are, each made a map position first, with a true square root
+[[nodiscard]] float MapPointDistance(glm::vec2 a, glm::vec2 b);
+/// Whether two places that a creature walks to are the same place: the square of the distance between them is less
+/// than k_SameDestinationSquared. The creature does not ask again for the same place.
+inline constexpr float k_SameDestinationSquared = 0.01f;
+[[nodiscard]] bool SameDestination(glm::vec2 before, glm::vec2 now);
+/// Whether a creature at a point with a heading heads for another point near enough. The heading is the game's, 0
+/// facing -z and a quarter turn facing +x. The game compares game angles between map positions, and takes their
+/// difference without going round. A creature in the same cell of the land as the point also heads for it.
+[[nodiscard]] bool HeadsFor(glm::vec2 creature, glm::vec2 point, float heading);
 /// Whether a creature walking up to a thing, so far away on the ground, has arrived
 [[nodiscard]] bool Arrived(float distance, float creatureRadius, float routeRadius, float keep);
 /// Going near a thing, the creature notes where it is every k_StallTurns turns of the step. On the last turn of each

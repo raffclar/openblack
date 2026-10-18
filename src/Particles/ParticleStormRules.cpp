@@ -569,8 +569,7 @@ private:
 	{
 		swirl.radius = params.maxRadius;
 		// It heads the way it was cast at its top speed
-		const auto heading = Heading(effect);
-		swirl.velocity = heading != glm::vec3(0.0f) ? x87::Scaled<x87::SumOrder::Zyx>(heading, maxSpeed) : glm::vec3(0.0f);
+		swirl.velocity = storm::SwirlVelocity(Heading(effect), maxSpeed);
 		const auto* spriteCreator = effect.FindCreator(creator);
 		for (int i = 0; i < count; ++i)
 		{

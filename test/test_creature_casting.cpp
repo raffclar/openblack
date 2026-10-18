@@ -19,6 +19,7 @@
 #include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
 
+#include "Common/GUtilsAngle.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureGiving.h"
@@ -927,4 +928,33 @@ TEST(CreatureCastAgenda, TheAmusingSpellIsACastAtACreatureThatSeemsFriendly)
 	const auto agenda = creature_plan_actions::Agenda(*amuse, 7u, {}, {}, Always(1), cast);
 	ASSERT_TRUE(agenda.has_value());
 	EXPECT_EQ(agenda->back().cast.magicType, 33u);
+}
+
+TEST(CreatureCastMoves, OnTopMeasuresBetweenMapPositions)
+{
+	// A tenth of a metre becomes 655 map units, which is a little less than a tenth of a metre
+	EXPECT_LT(cast_moves::MapPointDistance({0.0f, 0.0f}, {0.1f, 0.0f}), cast_moves::k_OnTopDistance);
+	EXPECT_FLOAT_EQ(cast_moves::MapPointDistance({0.0f, 0.0f}, {30.0f, 40.0f}), 50.0f);
+}
+
+TEST(CreatureCastMoves, SameDestinationComparesTheSquareOfTheDistance)
+{
+	EXPECT_TRUE(cast_moves::SameDestination({10.0f, 10.0f}, {10.05f, 10.05f}));
+	EXPECT_FALSE(cast_moves::SameDestination({10.0f, 10.0f}, {10.1f, 10.0f}));
+}
+
+TEST(CreatureCastMoves, HeadsForComparesGameAnglesWithoutGoingRound)
+{
+	const glm::vec2 creature {5005.0f, 5005.0f};
+	// A point a little round from +x, which is game angle 0
+	const glm::vec2 point {5105.0f, 5006.5f};
+	const float justBelowZero = gutils::k_ScawenOffset - 8.5f / gutils::k_Angle3DToGame;
+	const float justAboveZero = gutils::k_ScawenOffset + 10.5f / gutils::k_Angle3DToGame;
+	ASSERT_EQ(gutils::ConvertScawenAngleToGameAngle(justBelowZero), 2040u);
+	ASSERT_EQ(gutils::ConvertScawenAngleToGameAngle(justAboveZero), 10u);
+	EXPECT_TRUE(cast_moves::HeadsFor(creature, point, justAboveZero));
+	// Near angle 0 the difference does not go round the circle, so a close heading counts as far
+	EXPECT_FALSE(cast_moves::HeadsFor(creature, point, justBelowZero));
+	// In the same cell of the land, any heading heads for the point
+	EXPECT_TRUE(cast_moves::HeadsFor(creature, {5009.0f, 5001.0f}, justBelowZero));
 }

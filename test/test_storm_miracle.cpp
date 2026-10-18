@@ -8,8 +8,10 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
+#include <bit>
 #include <memory>
 #include <numbers>
 #include <set>
@@ -563,4 +565,20 @@ TEST_F(StormRulesTest, AfterFiveSecondsTheStormDriftsWithTheWindAndTakesTheMirac
 	EXPECT_GT(spell.moved->x, origin.x + 1.0f);
 	EXPECT_NEAR(spell.moved->z, origin.z, k_Epsilon);
 	EXPECT_NEAR(world.storms.front().centre.x, spell.moved->x, 2.0f);
+}
+
+TEST(StormMiracle, SwirlVelocityAddsTheSquaresFromZToX)
+{
+	// With these parts the sum from x to z rounds one unit up, and two parts of the velocity change
+	const glm::vec3 heading {std::bit_cast<float>(0x425F0619u), std::bit_cast<float>(0x4242410Bu),
+	                         std::bit_cast<float>(0x4104AFB8u)};
+	const auto velocity = storm::SwirlVelocity(heading, 55.0f);
+	EXPECT_EQ(std::bit_cast<uint32_t>(velocity.x), 0x4224DC8Cu);
+	EXPECT_EQ(std::bit_cast<uint32_t>(velocity.y), 0x420F9839u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(velocity.z), 0x40C42A93u);
+}
+
+TEST(StormMiracle, SwirlVelocityOfNoHeadingIsNone)
+{
+	EXPECT_EQ(storm::SwirlVelocity(glm::vec3(0.0f), 55.0f), glm::vec3(0.0f));
 }
