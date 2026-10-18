@@ -140,6 +140,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Graphics/Atmosphere.h"
 #include "Graphics/BoneBudget.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
@@ -5711,10 +5712,30 @@ void Renderer::DrawScene(const DrawSceneDesc& requestedDesc) const noexcept
 	EndUnderwater(drawDesc);
 }
 
+bool Renderer::IslandHidden(const Camera& camera)
+{
+	if (!underwater_boundary::Off() || !Locator::underwaterSystem::has_value())
+	{
+		return false;
+	}
+	if (camera.IsIslandFar())
+	{
+		return true;
+	}
+	constexpr float k_HiddenFrom = 0.5f;
+	const auto eye = camera.GetOrigin();
+	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+	const float sea = Locator::underwaterSystem::value().GetSeaLevel();
+	return atmosphere::IslandOutOfView({eye.x, eye.z}, eye.y - sea, mapSize) > k_HiddenFrom;
+}
+
 void Renderer::DrawPass(const DrawSceneDesc& desc) const
 {
 	const auto& meshManager = Locator::resources::value().GetMeshes();
 	auto& profiler = Locator::profiler::value();
+	// EXPERIMENT (not for merge): the island is not drawn while it is over the horizon or far round the planet. Only the
+	// hand of the island's things is drawn then.
+	const bool islandHidden = desc.camera != nullptr && IslandHidden(*desc.camera);
 
 	// The sky is drawn first, in its own pass into the same target, in the order the game draws it: the dome, the sun
 	// and the moon. The scene's pass then draws everything else over it.
@@ -5912,7 +5933,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		// Below High detail the sea doesn't mirror the land
 		const bool landShown =
 		    desc.viewId != RenderPass::Reflection || detail_level::For(Locator::config::value().detailLevel).landReflection;
-		if (desc.drawIsland && landShown)
+		if (desc.drawIsland && landShown && !islandHidden)
 		{
 			auto& island = Locator::terrainSystem::value();
 			auto islandExtent = glm::vec4(island.GetExtent().minimum, island.GetExtent().maximum);
@@ -6162,7 +6183,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			                               const AnimalBoneGroup* posedGroup = nullptr) {
 				// A mesh with none of its things placed this frame, such as the temple's leashes before a creature wears
 				// one, has nothing to draw
-				if (count == 0)
+				if (count == 0 || (islandHidden && meshId != ecs::components::Hand::k_MeshId))
 				{
 					return;
 				}
@@ -7123,7 +7144,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			                                                               : Profiler::Stage::MainPassDrawVegetation);
 			const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
 
-			if (desc.drawVegetation)
+			if (desc.drawVegetation && !islandHidden)
 			{
 				L3DMeshSubmitDesc submitDesc = {};
 				submitDesc.viewId = desc.viewId;
@@ -7207,7 +7228,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			    profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawSprites
 			                                                               : Profiler::Stage::MainPassDrawSprites);
 
-			if (desc.drawSprites)
+			if (desc.drawSprites && !islandHidden)
 			{
 				using namespace ecs::components;
 

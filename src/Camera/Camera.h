@@ -72,6 +72,14 @@ public:
 	/// EXPERIMENT (not for merge): the direction of the top of the screen, a unit vector. It is the world's up, except
 	/// for the camera over the planet.
 	[[nodiscard]] glm::vec3 GetViewUp(Interpolation interpolation = Interpolation::Current) const;
+	/// EXPERIMENT (not for merge): the turn from the frame that the camera works in to the world's frame
+	/// (CameraModel::PlanetFrame). It is the identity except low down far round the planet.
+	[[nodiscard]] glm::quat GetPlanetFrame() const
+	{
+		return _model != nullptr ? _model->PlanetFrame() : glm::identity<glm::quat>();
+	}
+	/// EXPERIMENT (not for merge): the camera works in the frame of a point far round the planet, where no island is near
+	[[nodiscard]] bool IsIslandFar() const { return GetPlanetFrame() != glm::identity<glm::quat>(); }
 	[[nodiscard]] glm::vec3 GetFocusVelocity(Interpolation interpolation = Interpolation::Current) const;
 
 	/// Get rotation as euler angles in radians

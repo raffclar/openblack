@@ -23,16 +23,18 @@ vec4 AtmosHazeAlong(vec2 uv, vec3 eye, vec3 dir, float range, float sunHeight)
 	// has the colour of the sky above it, so the line between them does not show. The air is thinner high up, so a path
 	// from a high eye down to the sea holds less haze than a path along the sea.
 	float sea = u_atmosParams.w;
-	float fromHeight = (eye.y - sea) / ATMOS_UNITS_PER_KM;
+	float eyeHeight = WorldEyeHeight(eye.y - sea);
+	float fromHeight = eyeHeight / ATMOS_UNITS_PER_KM;
 	vec3 end = eye + dir * range;
-	float toHeight = (end.y + WorldDrop(end.xz) - sea) / ATMOS_UNITS_PER_KM;
+	// From high up the eye can be far round the planet, where the ball's height holds and the drop under the eye does not
+	float toHeight = ((eyeHeight > ATMOS_HIGH_EYE ? WorldAltitude(end, sea) : end.y + WorldDrop(end.xz)) - sea) / ATMOS_UNITS_PER_KM;
 	float farther = max(range - AtmosSliceDistance(ATMOS_AERIAL_SLICES - 1.0f), 0.0f) / ATMOS_UNITS_PER_KM *
 	                AtmosMeanExtinction(fromHeight, toHeight);
 	float hidden = 1.0f - exp(-farther);
 	// The sky over the sea's horizon in this direction: the horizon goes down under the eye's level as the eye climbs.
 	// From high up a ray down to the sea goes through all of the air, and the air's light along that ray is its haze.
 	float horizonY = WorldHorizonY(eye.y - sea);
-	float fromAbove = smoothstep(2000.0f, 20000.0f, eye.y - sea);
+	float fromAbove = smoothstep(2000.0f, 20000.0f, eyeHeight);
 	vec3 hazeDir = normalize(vec3(dir.x, mix(max(dir.y, horizonY), dir.y, fromAbove), dir.z));
 	vec3 horizonSky = AtmosSkyOnScreen(hazeDir, sunHeight);
 	// A thick haze has the colour of the sky at the horizon, as the dome shows it. A thin haze near the eye keeps the

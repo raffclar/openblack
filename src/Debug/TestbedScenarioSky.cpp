@@ -293,4 +293,34 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {-300000.0f, 1.5e7f, -300000.0f}, .look = {0.0f, 0.0f, 0.0f}},
 	    .objects = TreesToTheEast(),
 	});
+	// EXPERIMENT (not for merge): the planet from far round it, where the eye is under the sea's level
+	all.push_back({
+	    .id = "space.far_side",
+	    .name = "The planet from its far side",
+	    .facet = Facet::Sky,
+	    .description = "Noon with the clock stopped. The camera is 15000 km over the planet, 150 degrees round from the "
+	                   "island over the north pole, and looks at the planet's middle. The eye is far under the sea's "
+	                   "level. Drag the planet with the hand to turn it, and turn the wheel to go down to the point under "
+	                   "the middle of the screen.",
+	    .expected = "The whole planet shows: the sea ball, the clouds from the planet's weather map, the air's thin limb "
+	                "and the night side, which is dark with faint clouds in the moon's light. The sun is behind the "
+	                "planet, so its glare shows only past the limb. Under the water the view is not blue. The wheel "
+	                "takes the camera down to the open sea at that point, where it is night, with no island in sight.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {7173000.0f, -2.361e7f, 7173000.0f}, .look = {2560.0f, -6046079.0f, 2560.0f}},
+	    .objects = TreesToTheEast(),
+	});
+	// EXPERIMENT (not for merge): the camera low over the open sea far from the island
+	all.push_back({
+	    .id = "space.far_sea",
+	    .name = "The open sea 600 km from the island",
+	    .facet = Facet::Sky,
+	    .description = "Noon with the clock stopped. The camera is 300 units over the open sea, 600 km north of the island, "
+	                   "and looks along the sea.",
+	    .expected = "No island shows: it is far over the horizon. The sea curves away to its own horizon as round the "
+	                "island, and the waves near the eye are sharp, with no noise.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {426824.0f, 300.0f, 426824.0f}, .look = {428238.0f, 0.0f, 428238.0f}},
+	    .objects = TreesToTheEast(),
+	});
 }

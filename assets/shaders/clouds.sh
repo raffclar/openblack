@@ -194,19 +194,6 @@ float CloudAltitude(vec3 p)
 	return WorldAltitude(p, u_cloudLayer.w);
 }
 
-// The planet's weather at a point, as the clouds drift over the planet. The point's height over the sea moves it out
-// from the planet's middle; the map is the same from every height.
-vec4 CloudPlanetAt(vec3 p)
-{
-	if (u_cloudPlanet.w < 0.5f)
-	{
-		return vec4(0.5f, 0.5f, 0.0f, 0.5f);
-	}
-	vec2 q = p.xz - u_cloudDrift.xy - u_cloudPlanet.xy;
-	vec3 fromMiddle = vec3(q.x, p.y - u_cloudLayer.w + u_cloudLayer.y, q.y);
-	return textureCubeLod(s_cloudPlanet, normalize(fromMiddle), 0.0f);
-}
-
 // How much the planet's map changes the cover at a place, as a share of the cover over the island. Over the island it
 // is 1, so the game's weather there stays as it is. Clear areas of the map have almost no cloud.
 float CloudPlanetShare(float planetCover)
@@ -251,14 +238,16 @@ float CloudOpenRing(float field)
 // The result: x the cover before the cells cut it, y the type of cloud, z the size of the cells (0 small, 1 large), w
 // how much the cells line up in streets along the wind. `cells`: xy how far the slow field moves the cells, z how much
 // of the pattern is open cells, w how much of the region's own weather shows (0 near the island).
-vec4 CloudRegionAt(vec2 xz, out vec4 cells)
+//
+// The region comes from `fromMiddle`, the line from the planet's middle to the point as the clouds drift, and from
+// `fromIsland`, the distance from the island across the ground.
+vec4 CloudRegionFrom(vec3 fromMiddle, float fromIsland, out vec4 cells)
 {
-	vec4 planet = CloudPlanetAt(vec3(xz.x, u_cloudLayer.w, xz.y));
-	float share = smoothstep(CLOUD_KEEP_NEAR, CLOUD_KEEP_FAR, length(xz - u_cloudPlanet.xy)) * step(0.5f, u_cloudPlanet.w);
+	vec3 onSphere = WorldDirection(normalize(fromMiddle));
+	vec4 planet = u_cloudPlanet.w < 0.5f ? vec4(0.5f, 0.5f, 0.0f, 0.5f) : textureCubeLod(s_cloudPlanet, onSphere, 0.0f);
+	float share = smoothstep(CLOUD_KEEP_NEAR, CLOUD_KEEP_FAR, fromIsland) * step(0.5f, u_cloudPlanet.w);
 	// Two reads of the base noise on the planet's sphere. Each read has its own size and turned axes, so that their tiles
 	// never line up and no grid shows from space.
-	vec2 q = xz - u_cloudDrift.xy - u_cloudPlanet.xy;
-	vec3 onSphere = normalize(vec3(q.x, u_cloudLayer.y, q.y));
 	vec3 a = vec3(dot(onSphere, vec3(0.5038f, -0.3163f, 0.8038f)), dot(onSphere, vec3(0.5839f, 0.8104f, -0.0471f)),
 	              dot(onSphere, vec3(-0.6366f, 0.4931f, 0.593f)));
 	vec3 b = vec3(dot(onSphere, vec3(0.2511f, -0.7364f, -0.6282f)), dot(onSphere, vec3(0.2122f, -0.5914f, 0.778f)),
@@ -286,6 +275,24 @@ vec4 CloudRegionAt(vec2 xz, out vec4 cells)
 	// The slow field moves the cells by about a kilometre. Near the eye all the cells move together, so their shapes stay.
 	cells = vec4((vec2(large.a, large.g) - CLOUD_CELLULAR_MEAN) * (1200.0f / CLOUD_CELLULAR_SPREAD), open, share);
 	return vec4(cover, type, size, streets);
+}
+
+// The weather of the region round a point across the land (CloudRegionFrom)
+vec4 CloudRegionAt(vec2 xz, out vec4 cells)
+{
+	vec2 q = xz - u_cloudDrift.xy - u_cloudPlanet.xy;
+	return CloudRegionFrom(vec3(q.x, u_cloudLayer.y, q.y), length(xz - u_cloudPlanet.xy), cells);
+}
+
+// The weather of the region at a point on the planet's ball, from any side of the ball (CloudRegionFrom). The point
+// takes the place on the weather map in its own direction from the planet's middle.
+vec4 CloudRegionOnBall(vec3 p, out vec4 cells)
+{
+	vec2 q = p.xz - u_cloudDrift.xy - u_cloudPlanet.xy;
+	vec3 fromMiddle = vec3(q.x, p.y - u_cloudLayer.w + u_cloudLayer.y, q.y);
+	// The island is on the upper side of the ball only
+	float fromIsland = fromMiddle.y > 0.0f ? length(p.xz - u_cloudPlanet.xy) : 1e9f;
+	return CloudRegionFrom(fromMiddle, fromIsland, cells);
 }
 
 // The width of the cells of a region, in world units (cloud_regions::CellWidth)
@@ -1075,6 +1082,29 @@ vec4 MarchCloudVolume(vec3 eye, vec3 dir, float limit, float jitter, int steps, 
 	return vec4(colour, transmittance);
 }
 
+// The weather at a point on the planet's ball with the up `up` there (CloudWeatherIn). The cells come from three
+// flat views of the ball, each along one axis and weighted by how near the up is to that axis. Thus the cells keep their
+// shape on every side of the ball. Over the island's side only the view from above counts, as on the flat land.
+float CloudWeatherOnBall(vec3 p, vec3 up, vec4 region, vec4 cells, float pixel, out float type, out float rain)
+{
+	vec3 w = abs(up);
+	w = w * w;
+	w = w * w;
+	w = w * w;
+	w /= w.x + w.y + w.z;
+	float fromAbove = CloudWeatherIn(up.y > 0.0f ? p.xz : p.xz + 1.0e7f, region, cells, pixel, type, rain);
+	if (w.y > 0.999f)
+	{
+		return fromAbove;
+	}
+	// Each side has its own place in the noise, so that the cells on opposite sides do not repeat
+	float sideType;
+	float sideRain;
+	float alongX = CloudWeatherIn(p.zy + (up.x > 0.0f ? 2.0e7f : -2.0e7f), region, cells, pixel, sideType, sideRain);
+	float alongZ = CloudWeatherIn(p.xy + (up.z > 0.0f ? 3.0e7f : -3.0e7f), region, cells, pixel, sideType, sideRain);
+	return fromAbove * w.y + alongX * w.x + alongZ * w.z;
+}
+
 // From high up a cloud is less than a pixel deep, so the layer is a thin sheet: its cover where the ray meets the middle
 // of the layer, lit by the sun and the sky
 vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
@@ -1093,13 +1123,14 @@ vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
 	// The large weather systems and the regions come from the same map as the volume's clouds. The cells cut out of the
 	// cover leave about this share of the sky under cloud.
 	vec4 cells;
-	vec4 region = CloudRegionAt(p.xz, cells);
+	vec4 region = CloudRegionOnBall(p, cells);
 	// A pixel far away covers many cells of cloud: there the sheet shows the mean cover of the region, so the far
 	// layer has no grain. Small cells go into the mean nearer than large cells.
 	float pixel = t * CLOUD_PIXEL_ANGLE;
 	float fine = 1.0f - smoothstep(0.25f, 0.9f, pixel / CloudCellWidth(region, cells));
 	float mean = clamp(region.x - 0.05f, 0.0f, 1.0f) * smoothstep(0.0f, 0.05f, u_cloudCover.x);
-	float cover = fine > 0.0f ? mix(mean, CloudWeatherIn(p.xz, region, cells, pixel, type, rain), fine) : mean;
+	vec3 up = WorldUpAt(p - eye, eye.y - u_cloudLayer.w);
+	float cover = fine > 0.0f ? mix(mean, CloudWeatherOnBall(p, up, region, cells, pixel, type, rain), fine) : mean;
 	// The anvils of the thunderstorm cells show over the layer
 	if (CloudHasCells())
 	{
@@ -1111,7 +1142,11 @@ vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
 	float thick = smoothstep(0.15f, 0.8f, region.x) * mix(0.7f, 1.0f, region.y);
 	float shown = smoothstep(0.05f, 0.6f, cover) * mix(0.75f, 1.0f, thick);
 	vec3 sun = u_cloudLightColour.rgb * u_cloudLightColour.w;
-	vec3 colour = (sun * (0.25f + 0.75f * clamp(u_cloudLight.y * 3.0f, 0.0f, 1.0f)) * 0.9f + sky * 0.6f) * mix(0.85f, 1.05f, thick);
+	// The light's height over the sheet's own horizon: the night side of the planet has no sun on its clouds
+	float lightUp = dot(up, u_cloudLight.xyz);
+	float day = WorldLightShare(up);
+	vec3 colour = (sun * (0.25f + 0.75f * clamp(lightUp * 3.0f, 0.0f, 1.0f)) * 0.9f * day + sky * 0.6f * day) *
+	              mix(0.85f, 1.05f, thick);
 	depth = t;
 	return vec4(colour * shown, 1.0f - shown);
 }
@@ -1120,7 +1155,7 @@ vec4 CloudSheet(vec3 eye, vec3 dir, float limit, vec3 sky, out float depth)
 // one sample and has no grain far away.
 vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool detail, vec3 sky, out float depth)
 {
-	float fromAbove = smoothstep(CLOUD_SHEET_LOW, CLOUD_SHEET_HIGH, eye.y - u_cloudLayer.w);
+	float fromAbove = smoothstep(CLOUD_SHEET_LOW, CLOUD_SHEET_HIGH, WorldEyeHeight(eye.y - u_cloudLayer.w));
 	float sheetDepth;
 	vec4 sheet = fromAbove > 0.0f ? CloudSheet(eye, dir, limit, sky, sheetDepth) : vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	if (fromAbove >= 1.0f)
@@ -1141,8 +1176,11 @@ vec4 MarchClouds(vec3 eye, vec3 dir, float limit, float jitter, int steps, bool 
 // over the land holds less haze than one near the sea.
 float CloudHaze(vec3 eye, vec3 dir, float depth)
 {
-	float low = max(eye.y - u_cloudLayer.w, 0.0f) / CLOUD_HAZE_HEIGHT;
-	float high = max(eye.y + dir.y * depth - u_cloudLayer.w, 0.0f) / CLOUD_HAZE_HEIGHT;
+	float eyeHeight = WorldEyeHeight(eye.y - u_cloudLayer.w);
+	float low = max(eyeHeight, 0.0f) / CLOUD_HAZE_HEIGHT;
+	// From high up the eye can be far round the planet: the height of the far end comes from the ball
+	float farEnd = eyeHeight > ATMOS_HIGH_EYE ? WorldAltitude(eye + dir * depth, u_cloudLayer.w) : eye.y + dir.y * depth;
+	float high = max(farEnd - u_cloudLayer.w, 0.0f) / CLOUD_HAZE_HEIGHT;
 	float rise = high - low;
 	float meanAir = abs(rise) > 1e-3f ? (exp(-low) - exp(-high)) / rise : exp(-low);
 	return 1.0f - exp(-depth * meanAir / CLOUD_HAZE_REACH);
@@ -1200,7 +1238,7 @@ bool CloudOnDome(vec3 dir, float reach)
 float CloudNearestAlong(vec3 dir)
 {
 	float lowest = u_cloudLayer.x - CLOUD_LOWEST_DROP - 60.0f;
-	float below = lowest - u_cloudEye.y;
+	float below = lowest - (u_cloudLayer.w + WorldEyeHeight(u_cloudEye.y - u_cloudLayer.w));
 	if (below <= 0.0f)
 	{
 		return 0.0f;

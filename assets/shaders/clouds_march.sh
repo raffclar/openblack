@@ -53,7 +53,7 @@ void main()
 	float scene = CloudSceneDistance(uv, nearest);
 	float limit = scene;
 	// Above the water, the water's surface hides what is under it
-	if (u_cloudEye.w > 0.5f && dir.y < 0.0f)
+	if (u_cloudEye.w > 0.5f)
 	{
 		float toSea = CurvedSeaDistance(eye.y - u_cloudLayer.w, dir);
 		limit = toSea >= 0.0f ? min(limit, toSea) : limit;

@@ -26,7 +26,7 @@ uniform vec4 u_skyAtmos;
 float RayLimit(vec2 uv, vec3 dir)
 {
 	float scene = CloudSceneDistance(uv, texture2DLod(s_sceneDepth, uv, 0.0f).r);
-	if (u_cloudEye.w > 0.5f && dir.y < 0.0f)
+	if (u_cloudEye.w > 0.5f)
 	{
 		float toSea = CurvedSeaDistance(u_cloudEye.y - u_cloudLayer.w, dir);
 		scene = toSea >= 0.0f ? min(scene, toSea) : scene;

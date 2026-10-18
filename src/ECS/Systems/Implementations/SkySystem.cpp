@@ -16,6 +16,7 @@
 #include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
 #include "3D/SkyFrame.h"
+#include "Camera/Camera.h"
 #include "Common/MachineClock.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
@@ -64,6 +65,13 @@ void SkySystem::KeepForNextLand()
 	};
 }
 
+glm::quat SkySystem::Observer()
+{
+	// EXPERIMENT (not for merge): far round the planet the sky is the sky over that place
+	return Locator::camera::has_value() ? glm::conjugate(Locator::camera::value().GetPlanetFrame())
+	                                    : glm::identity<glm::quat>();
+}
+
 void SkySystem::ProcessTurn()
 {
 	GetClock().ProcessTurn();
@@ -94,6 +102,7 @@ void SkySystem::UpdateFrame(bool skyDrawn)
 	        .palette = palette,
 	        .fog = graphics::detail_level::Fog(Locator::config::value().detailLevel),
 	        .solarPath = Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled(),
+	        .observer = Observer(),
 	    },
 	    dome, registry.Get<Sun>(_entities.sun), registry.Get<Moon>(_entities.moon));
 	sky_frame::AdvanceDome(dome, GetCurrentSkyType(), skyDrawn);
@@ -112,7 +121,7 @@ float SkySystem::GetCurrentSkyType() const
 	// path
 	if (Locator::underwaterSystem::has_value() && Locator::underwaterSystem::value().IsEnabled())
 	{
-		return graphics::atmosphere::SkyTypeFromSun(graphics::atmosphere::SunTowards(clock.GetScriptTime()).y);
+		return graphics::atmosphere::SkyTypeFromSun((Observer() * graphics::atmosphere::SunTowards(clock.GetScriptTime())).y);
 	}
 	return clock.SkyType(clock.GetVisualTime());
 }

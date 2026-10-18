@@ -97,7 +97,10 @@ underwater::WaterLight SkyLights(const glm::vec3& eye)
 			               graphics::atmosphere::MoonThroughAir(towardsMoon.y);
 		}
 		// The night sky gives a faint light from above when the moon is weak or down
-		const float glow = graphics::atmosphere::NightGlow(graphics::atmosphere::SunTowards(sky.GetClock().GetScriptTime()).y);
+		const glm::quat observer = Locator::camera::has_value() ? glm::conjugate(Locator::camera::value().GetPlanetFrame())
+		                                                        : glm::identity<glm::quat>();
+		const float glow =
+		    graphics::atmosphere::NightGlow((observer * graphics::atmosphere::SunTowards(sky.GetClock().GetScriptTime())).y);
 		const float strength = std::max(moonStrength, glow);
 		if (strength > 0.0f)
 		{
@@ -145,7 +148,10 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	// The game's sun stands a few kilometres away: from high up its direction is taken from near the land
 	const auto light = SkyLights(atmosphere::LightEye(eye, seaLevel));
 	const glm::vec3 skyColour = glm::vec3(_haze[1]) / 255.0f;
-	const float eyeDepth = underwater::EyeDepth(eye.y, seaLevel);
+	// EXPERIMENT (not for merge): the eye's height over the curved sea, right also far round the planet
+	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+	const float overWorld = atmosphere::EyeOverWorld(eye, seaLevel, mapSize, desc.camera->IsIslandFar());
+	const float eyeDepth = underwater::EyeDepth(overWorld, 0.0f);
 	const auto scatter = underwater::AmbientAtDepth(underwater::ScatterColour(skyColour, light), eyeDepth);
 	const float time = system.GetSeconds();
 	const float lightShows = glm::length(light.colour) > 0.0f ? 1.0f : 0.0f;
@@ -166,9 +172,9 @@ bool Renderer::BeginUnderwater(DrawSceneDesc& desc) const
 	frame.flags = {on(Effect::Reflections), on(Effect::Foam), on(Effect::Refraction), on(Effect::Shafts)};
 	frame.above = {light.aboveTowards, on(Effect::Caustics)};
 	frame.motes = on(Effect::Motes) > 0.5f;
-	frame.eyeNearOrUnder = underwater::IsActive(eye.y, seaLevel);
+	frame.eyeNearOrUnder = underwater::IsActive(seaLevel + overWorld, seaLevel);
 	// The eye's w says whether the eye is under the surface
-	frame.eye.w = eye.y < seaLevel ? 1.0f : 0.0f;
+	frame.eye.w = overWorld < 0.0f ? 1.0f : 0.0f;
 	const auto& waves = system.GetWaves();
 	frame.waves = {on(Effect::Waves) < 0.5f ? 0.0f : waves.scale, waves.storm, waves.windAngle,
 	               on(Effect::Waves) < 0.5f ? 0.0f : waves.swash};

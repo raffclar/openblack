@@ -55,8 +55,15 @@ void main()
 	// its full distance, also past the grid's far end. Thus its fog eases to the sky's share with the distance and does
 	// not change in a step where the sea passes the grid's far end. A ray over the horizon does not meet the sea.
 	float sea = u_fogAmbient.w;
+	// The fog lies low over the land and the sea: an eye high over the curved world sees none of it. Far round the planet
+	// the eye's own level is not the sea's horizon.
+	if (WorldEyeHeight(eye.y - sea) > ATMOS_HIGH_EYE)
+	{
+		gl_FragColor = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		return;
+	}
 	bool onSea = false;
-	if (eye.y > sea && dir.y < 0.0f)
+	if (WorldEyeHeight(eye.y - sea) > 0.0f)
 	{
 		float toSea = CurvedSeaDistance(eye.y - sea, dir);
 		if (toSea >= 0.0f && (sky || toSea < range))

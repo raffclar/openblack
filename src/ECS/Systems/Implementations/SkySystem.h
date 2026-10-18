@@ -11,6 +11,8 @@
 
 #include <optional>
 
+#include <glm/gtc/quaternion.hpp>
+
 #include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -42,6 +44,8 @@ public:
 	[[nodiscard]] entt::entity GetMoon() const override { return _entities.moon; }
 
 private:
+	/// EXPERIMENT (not for merge): the turn from the world's frame to the frame that the camera works in
+	[[nodiscard]] static glm::quat Observer();
 	/// The sky's components while the registry is emptied between lands
 	struct Kept
 	{

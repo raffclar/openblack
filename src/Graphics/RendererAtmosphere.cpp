@@ -16,6 +16,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <numbers>
 #include <vector>
@@ -24,6 +25,9 @@
 #include <bgfx/bgfx.h>
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_access.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec4.hpp>
 
 #include "3D/L3DMesh.h"
@@ -136,7 +140,7 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	// The world curves away past a flat cap that holds the map, and the sea's horizon goes down as the eye climbs. The
 	// air works in the frame of the same ball, so from space the air's planet and the sea are one ball.
 	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
-	const auto cap = atmos::MapCap({eye.x, eye.z}, eye.y - seaLevel, mapSize);
+	const auto cap = atmos::MapCap({eye.x, eye.z}, eye.y - seaLevel, mapSize, desc.camera->IsIslandFar());
 	const auto airFrame = atmos::AirFrameFor(cap, eye.y - seaLevel);
 	const float altitude = atmos::AltitudeOf(airFrame.height);
 	const glm::vec3 gameLight =
@@ -151,8 +155,11 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		hour = sky.GetClock().GetScriptTime();
 		moon = Locator::entitiesRegistry::value().TryGet<const ecs::components::Moon>(sky.GetMoon());
 	}
-	const glm::vec3 sunTowards = atmos::SunTowards(hour);
-	const glm::vec3 moonTowards = moon != nullptr ? sky_frame::MoonTowards(*moon, hour) : -sunTowards;
+	// Far round the planet the sun, the moon and the magnetic pole are where they are over that place
+	const glm::quat planetFrame = desc.camera->GetPlanetFrame();
+	const glm::quat observer = glm::conjugate(planetFrame);
+	const glm::vec3 sunTowards = observer * atmos::SunTowards(hour);
+	const glm::vec3 moonTowards = moon != nullptr ? observer * sky_frame::MoonTowards(*moon, hour) : -sunTowards;
 	const glm::vec3 sunFromEye = glm::normalize((sunTowards * atmos::k_SunDistance) - atmos::LightEye(eye, seaLevel));
 	const float moonShare = atmos::AirMoonShare(sunTowards.y);
 	const glm::vec3 towardsLight =
@@ -234,7 +241,7 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 	atmosphere.sunColour = {glm::vec3(frame.lightColour) * atmosphere.lightTint, 0.0f};
 	atmosphere.sky = cache.sky;
 	atmosphere.worldCurve = {eye.x, eye.z, cap.radius, atmos::k_WorldRadius};
-	atmosphere.worldCap = {cap.eyeFromMiddle, 0.0f, 0.0f};
+	atmosphere.worldCap = {cap.eyeFromMiddle, airFrame.height, 0.0f};
 	// The sky above the air and the aurora, round the middle of the world's ball. The aurora's night runs from noon to
 	// noon, so that one night keeps one strength.
 	const int night = (moon != nullptr ? moon->passedDays : 0) - (hour < 12.0f ? 1 : 0);
@@ -247,7 +254,14 @@ void Renderer::BeginAtmosphere(const DrawSceneDesc& desc) const
 		noctilucent = atmos::NoctilucentStrength((date / graphics::moon::k_SecondsPerDay) + days, atmos::DayOfYear(date, days));
 	}
 	atmosphere.airSun = {sunTowards, noctilucent};
-	atmosphere.aurora = {atmos::MagneticPole(), atmos::AuroraTonight(night, system.GetAuroraChoice())};
+	atmosphere.aurora = {observer * atmos::MagneticPole(), atmos::AuroraTonight(night, system.GetAuroraChoice())};
+	const glm::mat3 turn = glm::mat3_cast(planetFrame);
+	atmosphere.planetSun = {sunTowards, 0.0f};
+	// The moon lights the night side of the ball with a share of the island's light, by its phase
+	constexpr float k_MoonShare = 0.35f;
+	atmosphere.planetMoon = {moonTowards, moon != nullptr ? k_MoonShare * underwater::PhaseBrightness(moon->phase) : 0.0f};
+	atmosphere.worldTurn = {glm::vec4(glm::row(turn, 0), 0.0f), glm::vec4(glm::row(turn, 1), 0.0f),
+	                        glm::vec4(glm::row(turn, 2), 0.0f)};
 	atmosphere.airPlanet = {eye.x - cap.eyeFromMiddle.x, seaLevel - atmos::k_WorldRadius, eye.z - cap.eyeFromMiddle.y, seconds};
 	if (moon != nullptr && moon->placement.has_value())
 	{
@@ -460,6 +474,7 @@ void Renderer::DrawHaze(const DrawSceneDesc& desc, const FrameBuffer& sceneTarge
 		const glm::vec4 aerial {full ? 1.0f : 0.0f, full ? k_FullSteps : k_ReducedSteps, 0.0f, 0.0f};
 		aerialProgram->SetUniformValue("u_atmosAerial", &aerial);
 		aerialProgram->SetUniformValue("u_atmosGameLight", &atmosphere.sunDisc);
+		SetWorldCurve(*aerialProgram);
 		BindScreenTriangle();
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 		aerialProgram->Submit(pass);
@@ -531,6 +546,23 @@ void Renderer::SetWorldCurve(const ShaderProgram& program) const
 	if (program.HasUniform("u_worldCap"))
 	{
 		program.SetUniformValue("u_worldCap", _atmosphereFrame.has_value() ? &_atmosphereFrame->worldCap : &flat);
+	}
+	if (program.HasUniform("u_planetSun"))
+	{
+		const glm::vec4 up {0.0f, 1.0f, 0.0f, 0.0f};
+		program.SetUniformValue("u_planetSun", _atmosphereFrame.has_value() ? &_atmosphereFrame->planetSun : &up);
+	}
+	if (program.HasUniform("u_planetMoon"))
+	{
+		const glm::vec4 none {0.0f, -1.0f, 0.0f, 0.0f};
+		program.SetUniformValue("u_planetMoon", _atmosphereFrame.has_value() ? &_atmosphereFrame->planetMoon : &none);
+	}
+	if (program.HasUniform("u_worldTurn"))
+	{
+		static constexpr std::array<glm::vec4, 3> k_Same {glm::vec4(1.0f, 0.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 0.0f),
+		                                                  glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
+		const auto& turn = _atmosphereFrame.has_value() ? _atmosphereFrame->worldTurn : k_Same;
+		program.SetUniformArray("u_worldTurn", turn.data(), static_cast<uint16_t>(turn.size()));
 	}
 }
 

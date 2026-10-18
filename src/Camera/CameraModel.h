@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 
+#include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
 
 #include "CameraDrag.h"
@@ -41,6 +42,8 @@ public:
 		std::chrono::microseconds duration;
 		/// EXPERIMENT (not for merge): the direction of the top of the screen, the world's up except over the planet
 		glm::vec3 up {0.0f, 1.0f, 0.0f};
+		/// EXPERIMENT (not for merge): the camera takes the place at once, with no movement to it
+		bool jump {false};
 	};
 
 	struct FlightPath
@@ -93,6 +96,9 @@ public:
 	/// Whether where the camera goes is kept within the world's ball round the middle of the map, as for every camera of
 	/// the game
 	[[nodiscard]] virtual bool HeldInsideTheWorld() const { return true; }
+	/// EXPERIMENT (not for merge): the turn from the frame that the camera works in to the world's frame. It is not the
+	/// identity only while the camera is low down far round the planet (planet_nav::Settle).
+	[[nodiscard]] virtual glm::quat PlanetFrame() const { return glm::identity<glm::quat>(); }
 	/// What the camera does with the mouse, which the hand shows: the hints the cursor's place offers, and what a
 	/// drag of the land has turned into
 	[[nodiscard]] virtual HandCues GetHandCues() const { return {}; }

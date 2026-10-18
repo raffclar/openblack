@@ -24,6 +24,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/UnderwaterBoundary.h"
 #include "ECS/Systems/UnderwaterSystemInterface.h"
+#include "Graphics/Atmosphere.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "ReflectionXZCamera.h"
@@ -112,14 +113,24 @@ camera_drawn::Pose Camera::DrawnPose(Interpolation interpolation) const
 		pose = camera_drawn::Separate(pose);
 		if (_model != nullptr && _model->HeldInsideTheWorld() && Locator::terrainSystem::has_value())
 		{
-			// EXPERIMENT (not for merge): under the sea, above the sea bed
+			// EXPERIMENT (not for merge): under the sea, above the sea bed. An eye high over the curved world is far round
+			// the planet, where it can be under the sea's level with no land or sea bed near it.
 			const auto point = glm::xz(pose.eye);
 			auto floor = Locator::terrainSystem::value().GetHeightAt(point);
+			bool high = false;
 			if (Locator::underwaterSystem::has_value())
 			{
+				const float sea = Locator::underwaterSystem::value().GetSeaLevel();
 				floor = Locator::underwaterSystem::value().FloorAt(point, floor);
+				const float mapSize =
+				    static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+				high = underwater_boundary::Off() && graphics::atmosphere::EyeOverWorld(pose.eye, sea, mapSize, IsIslandFar()) >
+				                                         graphics::atmosphere::k_CapFollowsEyeBelow;
 			}
-			pose = camera_drawn::AboveLand(pose, floor);
+			if (!high)
+			{
+				pose = camera_drawn::AboveLand(pose, floor);
+			}
 		}
 	}
 	// The shake moves the eye and the focus after these limits
@@ -413,6 +424,13 @@ void Camera::Update(std::chrono::microseconds dt)
 		}
 		SetInterpolatorDuration(updateInfo->duration);
 		SetInterpolatorTime(0us);
+		// EXPERIMENT (not for merge): the frame changed, so the camera is at its new place at once
+		if (updateInfo->jump)
+		{
+			SetOrigin(updateInfo->origin).SetFocus(updateInfo->focus);
+			_upInterpolators = ZoomInterpolator3f(updateInfo->up);
+			SetInterpolatorDuration(0us);
+		}
 	}
 	KeepInsideTheWorld();
 

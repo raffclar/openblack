@@ -357,11 +357,12 @@ vec3 AirSkyColour(vec3 eye, vec3 dir, float sunHeight, vec2 pixel)
 	float altitude = u_atmosParams.z;
 	// Where the air is dark, small stars show. Above the air they are brighter, and they show to the limb.
 	float dark = 1.0f - smoothstep(0.02f, 0.12f, dot(air, luma));
-	vec3 cell = floor(dir * 260.0f);
+	vec3 starDir = WorldDirection(dir);
+	vec3 cell = floor(starDir * 260.0f);
 	vec3 q = fract(cell * vec3(0.1031f, 0.1030f, 0.0973f));
 	q += dot(q, q.yzx + 33.33f);
 	vec3 h = fract((q.xxy + q.yzz) * q.zyx);
-	vec3 star = cell + 0.2f + 0.6f * h - dir * 260.0f;
+	vec3 star = cell + 0.2f + 0.6f * h - starDir * 260.0f;
 	float glint = h.x > 0.985f ? smoothstep(0.06f, 0.0f, dot(star, star)) * (0.4f + 0.6f * h.y) : 0.0f;
 	// The stars show over the limb of the world's ball, in the air's own frame
 	float ballRadius = ATMOS_GROUND_RADIUS + max(altitude, 0.0f);

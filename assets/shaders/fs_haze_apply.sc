@@ -43,6 +43,12 @@ vec3 WorldAt(vec2 uv, float depth)
 // sky is there. Off the screen the sun is taken as open.
 float SunOpen(vec3 eye)
 {
+	// From high up the planet's ball can hide the sun
+	float sea = u_atmosParams.w;
+	if (WorldEyeHeight(eye.y - sea) > ATMOS_HIGH_EYE && CurvedSeaDistance(eye.y - sea, normalize(u_hazeSun.xyz)) > 0.0f)
+	{
+		return 0.0f;
+	}
 	vec4 clip = mul(u_viewProj, vec4(eye + u_hazeSun.xyz * 10000.0f, 1.0f));
 	if (clip.w <= 0.0f)
 	{
@@ -98,7 +104,7 @@ void main()
 	// Above the water, the water's surface is where the scene is. The far sea curves away with the world, and a ray over
 	// the horizon does not meet it.
 	float sea = u_atmosParams.w;
-	if (eye.y > sea && dir.y < 0.0f)
+	if (WorldEyeHeight(eye.y - sea) > 0.0f)
 	{
 		float toSea = CurvedSeaDistance(eye.y - sea, dir);
 		if (toSea >= 0.0f && toSea < range)

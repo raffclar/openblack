@@ -46,6 +46,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "Graphics/Atmosphere.h"
 #include "Graphics/Cumulonimbus.h"
 #include "Graphics/RealMoon.h"
 #include "Graphics/Texture2D.h"
@@ -93,7 +94,11 @@ void UnderwaterSystem::Update(std::chrono::milliseconds frameRealTime)
 	// change takes about a third of a second each way, so nothing clicks at the surface.
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
-	_eyeDepth = _enabled && !inTemple ? graphics::underwater::EyeDepth(eye.y, _seaLevel) : 0.0f;
+	// EXPERIMENT (not for merge): the depth under the curved sea, so that an eye far round the planet is not under it
+	const float mapSize = static_cast<float>(LandIslandInterface::k_MapCellsPerSide) * LandIslandInterface::k_CellSize;
+	const bool islandFar = Locator::camera::has_value() && Locator::camera::value().IsIslandFar();
+	const float overWorld = graphics::atmosphere::EyeOverWorld(eye, _seaLevel, mapSize, islandFar);
+	_eyeDepth = _enabled && !inTemple ? graphics::underwater::EyeDepth(overWorld, 0.0f) : 0.0f;
 	_eyeUnder = _eyeDepth > 0.0f;
 	constexpr float k_DuckUnder = 0.3f;
 	constexpr float k_DuckPerSecond = 2.5f;

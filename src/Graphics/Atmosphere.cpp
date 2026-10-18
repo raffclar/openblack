@@ -632,14 +632,48 @@ float atmosphere::HeightOverMapBall(glm::vec3 eye, float seaLevel, float mapSize
 	return static_cast<float>(squared / (std::sqrt(glm::dot(across, across) + (height + radius) * (height + radius)) + radius));
 }
 
-atmosphere::WorldCap atmosphere::MapCap(glm::vec2 eye, float heightOverSea, float mapSize)
+namespace
+{
+// The share of k_CapOnMapAbove from which a cap round an eye with no island in sight moves back to the map
+constexpr float k_OrbitCapFrom = 0.9f;
+
+// How much the cap follows the eye: all of it low down, none from high up, where it is on the map's middle
+float CapFollowsEye(glm::vec2 eye, float heightOverSea, float mapSize)
+{
+	const float overBall = atmosphere::HeightOverMapBall({eye.x, heightOverSea, eye.y}, 0.0f, mapSize);
+	return 1.0f - Smoothstep(atmosphere::k_CapFollowsEyeBelow, atmosphere::k_CapOnMapAbove, std::max(heightOverSea, overBall));
+}
+} // namespace
+
+float atmosphere::IslandOutOfView(glm::vec2 eye, float heightOverSea, float mapSize)
+{
+	const glm::dvec2 mapMiddle {0.5 * mapSize};
+	const double halfDiagonal = 0.5 * std::numbers::sqrt2 * mapSize;
+	const double across = std::max(glm::length(glm::dvec2(eye) - mapMiddle) - halfDiagonal, 0.0);
+	// The distance to the horizon from the eye, and from the island's highest ground on the other side of it
+	const double radius = k_WorldRadius;
+	const double height = std::max(static_cast<double>(heightOverSea), 0.0);
+	const double sight = std::sqrt(height * (2.0 * radius + height)) + std::sqrt(k_IslandTop * (2.0 * radius + k_IslandTop));
+	const auto out = static_cast<float>(std::clamp((across - sight) / (0.25 * sight), 0.0, 1.0));
+	// Under the orbit view the camera is over its own patch of sea. From the orbit view the cap stays on the map.
+	const float overBall = HeightOverMapBall({eye.x, heightOverSea, eye.y}, 0.0f, mapSize);
+	const float underOrbit =
+	    1.0f - Smoothstep(k_OrbitCapFrom * k_CapOnMapAbove, k_CapOnMapAbove, std::max(heightOverSea, overBall));
+	return out * out * (3.0f - 2.0f * out) * underOrbit;
+}
+
+atmosphere::WorldCap atmosphere::MapCap(glm::vec2 eye, float heightOverSea, float mapSize, bool islandFar)
 {
 	const glm::vec2 mapMiddle {0.5f * mapSize};
-	const float overBall = HeightOverMapBall({eye.x, heightOverSea, eye.y}, 0.0f, mapSize);
-	const float followsEye = 1.0f - Smoothstep(k_CapFollowsEyeBelow, k_CapOnMapAbove, std::max(heightOverSea, overBall));
-	const glm::vec2 middle = glm::mix(mapMiddle, eye, followsEye);
+	const float followsEye = CapFollowsEye(eye, heightOverSea, mapSize);
+	glm::vec2 middle = glm::mix(mapMiddle, eye, followsEye);
 	const glm::vec2 far {std::max(middle.x, mapSize - middle.x), std::max(middle.y, mapSize - middle.y)};
-	return {.eyeFromMiddle = eye - middle, .radius = glm::length(far)};
+	float radius = glm::length(far);
+	// With no island in sight the cap is small round the eye
+	const float out = islandFar ? 1.0f : IslandOutOfView(eye, heightOverSea, mapSize);
+	middle = glm::mix(middle, eye, out);
+	radius = glm::mix(radius, k_SeaCapRadius, out);
+	return {.eyeFromMiddle = eye - middle, .radius = radius};
 }
 
 atmosphere::WorldSection atmosphere::SectionToward(const WorldCap& cap, glm::vec2 across)
@@ -783,6 +817,12 @@ atmosphere::AirFrame atmosphere::AirFrameFor(const WorldCap& cap, float heightOv
 	// distance - R, with no loss of the small terms
 	const float height = (across + (heightOverSea * (heightOverSea + (2.0f * k_WorldRadius)))) / (distance + k_WorldRadius);
 	return {.up = fromMiddle / distance, .height = height};
+}
+
+float atmosphere::EyeOverWorld(glm::vec3 eye, float seaLevel, float mapSize, bool islandFar)
+{
+	const float heightOverSea = eye.y - seaLevel;
+	return AirFrameFor(MapCap({eye.x, eye.z}, heightOverSea, mapSize, islandFar), heightOverSea).height;
 }
 
 glm::vec3 atmosphere::TurnToUp(glm::vec3 up, glm::vec3 direction)
