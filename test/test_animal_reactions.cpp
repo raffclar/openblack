@@ -127,3 +127,22 @@ TEST(AnimalReactions, AnAnimalThatLooksTurnsByAStepOnTheShorterSide)
 	// Behind by more than half a turn: forwards, round through 0
 	EXPECT_EQ(animals::LookTowards(1900, 100, animals::k_LookTurnStep), (1900 + 0x80) & 0x7FF);
 }
+
+TEST(AnimalReactions, TheReactionStatesAreTheTablesFleeLookFollowInspectFoodWoodBallWatchAndHunterRows)
+{
+	for (uint8_t state = 0; state < 60; ++state)
+	{
+		const bool reaction = (state >= 6 && state <= 9) || (state >= 19 && state <= 22) || state == 25 || state == 26 ||
+		                      state == 30 || state == 49;
+		EXPECT_EQ(animals::IsReactionState(state), reaction) << static_cast<int>(state);
+	}
+}
+
+TEST(AnimalReactions, OnlyWanderSleepLairAndSeekFoodHaveAStartOfTheirOwn)
+{
+	for (size_t state = 0; state < 60; ++state)
+	{
+		const bool ownStart = state == 32 || state == 35 || state == 51 || state == 52;
+		EXPECT_EQ(animals::StateHasOwnStart(state), ownStart) << state;
+	}
+}

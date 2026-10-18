@@ -301,16 +301,12 @@ bool AnimalSystem::SetScriptState(entt::entity entity, LivingStates state)
 	{
 		return false;
 	}
-	AnimalState next {};
-	switch (state)
+	// The state is a row of the table of the animals' states. The rows that have a start of their own (wandering, sleep,
+	// a lair and a search for food) are not done, and no land's script gives one of them to an animal.
+	const auto gameState = static_cast<size_t>(state);
+	const auto next = AnimalStateOfGame(gameState);
+	if (!next.has_value() || animals::StateHasOwnStart(gameState))
 	{
-	case LivingStates::LivingInScript:
-		next = AnimalState::InScript;
-		break;
-	case LivingStates::LivingMoveInFlock:
-		next = AnimalState::MoveInFlock;
-		break;
-	default:
 		return false;
 	}
 	// Only an animal out in the world takes it: not one held in a hand, carried off or flying through the air
@@ -318,8 +314,20 @@ bool AnimalSystem::SetScriptState(entt::entity entity, LivingStates state)
 	{
 		return true;
 	}
+	// It remembers the state that it ends in, as before a reaction. An animal that reacts and goes into a state that is
+	// not a reaction stops the reaction, and keeps the new state
+	RememberStateBeforeReaction(entity);
+	if (animals::IsReactionState(static_cast<uint8_t>(GameStateOf(animal->state))) &&
+	    !animals::IsReactionState(static_cast<uint8_t>(gameState)))
+	{
+		if (Locator::reactionSystem::has_value())
+		{
+			Locator::reactionSystem::value().StopReacting(entity);
+		}
+		StopReaction(entity, false);
+	}
 	// The state starts afresh, a land bird choosing its flying clip again, and its count of turns starts at none
-	SetTopState(*animal, next);
+	SetTopState(*animal, *next);
 	animal->turnsUntilStateChange = 0;
 	return true;
 }

@@ -94,6 +94,21 @@ struct ReactionFacts
 /// is not in the table gives the empty state (0).
 [[nodiscard]] uint8_t StateAfterReacting(uint8_t stateBefore, std::span<const GAnimalStateTableInfo> table);
 
+/// Whether a state, by its number in the game's animal state table, is the state of a reaction: fleeing (6), looking
+/// (7), following (8), inspecting (9), going to food or wood and arriving (19 to 22), going to a ball and arriving (25
+/// and 26), watching what it fled (30) and fleeing a hunter (49). An animal leaves its reaction when it leaves one
+[[nodiscard]] constexpr bool IsReactionState(uint8_t gameState)
+{
+	return (gameState >= 6 && gameState <= 9) || (gameState >= 19 && gameState <= 22) || gameState == 25 || gameState == 26 ||
+	       gameState == 30 || gameState == 49;
+}
+/// Whether a state, by its number in the game's animal state table, has a start of its own: wandering (32), sleep (35),
+/// hiding in a lair (51) and looking for food (52)
+[[nodiscard]] constexpr bool StateHasOwnStart(size_t gameState)
+{
+	return gameState == 32 || gameState == 35 || gameState == 51 || gameState == 52;
+}
+
 /// What decides whether food interests an animal
 struct FoodInterest
 {

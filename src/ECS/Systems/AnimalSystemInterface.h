@@ -73,8 +73,8 @@ public:
 	virtual void JoinFlock(entt::entity animal, entt::entity flock) = 0;
 	/// An animal leaves its flock, which goes once it has no one left
 	virtual void LeaveFlock([[maybe_unused]] entt::entity animal) {}
-	/// A script sets what an animal does: held still, or going about with its flock. False for anything else, which
-	/// openblack's animals can't do yet.
+	/// A script sets the state of an animal by its number in the game's animal state table, for example held still or
+	/// with its flock. False for a state that openblack does not have, or a state with a start of its own.
 	virtual bool SetScriptState(entt::entity animal, LivingStates state) = 0;
 	/// A script sends an animal to a point on the land, where it is held still for the script; one already there is held
 	/// at once. One held in a hand, carried off or flying through the air isn't sent.
