@@ -119,14 +119,14 @@ glm::vec3 cave_creature::StandsAt(const Places& places, float size, Rest rest)
 	        places.seat.z + ((places.back.z - places.seat.z) * along)};
 }
 
-float cave_creature::HeadingTowards(const glm::vec3& from, const glm::vec3& to)
+GameHeading cave_creature::HeadingTowards(const glm::vec3& from, const glm::vec3& to)
 {
 	return creature_locomotion::HeadingOf(glm::vec2(to.x - from.x, to.z - from.z));
 }
 
-bool cave_creature::MustTurn(float heading, float wanted)
+bool cave_creature::MustTurn(GameHeading heading, GameHeading wanted)
 {
-	return std::abs(wanted - heading) >= k_FacingWithin;
+	return std::abs(wanted.Radians() - heading.Radians()) >= k_FacingWithin;
 }
 
 glm::vec3 cave_creature::PointerPoint(const glm::vec3& eye, const glm::vec3& onNearPlane, float nearDistance)
@@ -167,7 +167,7 @@ void cave_creature::InEditor(State& state, Body& body, const Frame& frame, const
 	Fidget(state, body, frame, random);
 }
 
-std::optional<float> cave_creature::Step(State& state, Body& body, const Frame& frame, const Random& random)
+std::optional<GameHeading> cave_creature::Step(State& state, Body& body, const Frame& frame, const Random& random)
 {
 	if (!frame.zoomed)
 	{
@@ -200,7 +200,7 @@ std::optional<float> cave_creature::Step(State& state, Body& body, const Frame& 
 	state.zoomed = frame.zoomed;
 
 	// A turn waits until the body is free
-	std::optional<float> turn;
+	std::optional<GameHeading> turn;
 	if (state.wantedHeading.has_value() && !Busy(state, body))
 	{
 		turn = state.wantedHeading;

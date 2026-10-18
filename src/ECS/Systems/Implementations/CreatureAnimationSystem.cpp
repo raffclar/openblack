@@ -338,9 +338,9 @@ void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimati
 	// A body that turns on the spot leans along the heading that the turn has reached
 	if (animation.sway.turnHeading.has_value())
 	{
-		const float heading = *animation.sway.turnHeading;
-		side = glm::vec3(std::cos(heading), 0.0f, -std::sin(heading));
-		front = glm::vec3(std::sin(heading), 0.0f, std::cos(heading));
+		const float heading = animation.sway.turnHeading->Radians();
+		side = glm::vec3(std::cos(heading), 0.0f, std::sin(heading));
+		front = glm::vec3(-std::sin(heading), 0.0f, std::cos(heading));
 	}
 	const auto lean = [&](uint32_t clip, float amount) {
 		if (std::abs(amount) <= creature_sway::k_DrawnLean)
@@ -369,7 +369,7 @@ struct HeadLook
 	/// The point that the head turns to, or none to turn back to straight ahead
 	std::optional<glm::vec3> target;
 	/// The heading that the body shows
-	float facing {0.0f};
+	GameHeading facing {};
 	/// How fast the head speeds up as it turns, in radians a second each second
 	float acceleration {k_DefaultHeadTurnRate};
 };
@@ -703,11 +703,12 @@ HeadLook HeadLookOf(ecs::Registry& registry, entt::entity entity, CreatureAnimat
 	    .facing = creature_locomotion::HeadingOf(glm::vec2(ahead.x, ahead.z)),
 	    .acceleration = HeadAcceleration(creature.species, ShownSize(creature)),
 	};
-	// Part way through a turn to face a point, the body shows a heading between its start and its end
-	if (facts.pose == Pose::TurningToFace && walk != nullptr && walk->move.has_value())
+	// Part way through a spin to face a point, the head turns from the heading that the spin has reached
+	if (facts.pose == Pose::TurningToFace && walk != nullptr && walk->move.has_value() && walk->move->animations.has_value() &&
+	    walk->move->durationMs > 0.0f)
 	{
-		look.facing = creature_locomotion::LerpHeading(walk->move->startHeading, walk->targetHeading, walk->move->timeMs,
-		                                               walk->move->durationMs);
+		look.facing =
+		    creature_sway::TurnHeading(walk->heading, walk->targetHeading, walk->move->timeMs, walk->move->durationMs);
 	}
 	switch (creature_head_look::AimOf(facts))
 	{

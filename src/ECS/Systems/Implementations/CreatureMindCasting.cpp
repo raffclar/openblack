@@ -122,7 +122,7 @@ GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature, cons
 {
 	if (const auto* moving = registry.TryGet<const CreatureLocomotion>(creature); moving != nullptr && moving->started)
 	{
-		return GameHeading::FromYaw(moving->heading);
+		return moving->heading;
 	}
 	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 	return GameHeading::Of(ahead.x, ahead.z);
@@ -987,14 +987,24 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 			}
 			const float far =
 			    cast_moves::GetAwayDistance(casting->keep, object_measures::TwoDRadius(registry, casting->target));
-			const float apart = gutils::GetDistanceInMetres(Flat(*at), here);
+			// It gets away from where it believes the thing is: where it last came across the thing. Without a belief
+			// about the thing, it uses where the thing is now.
+			auto from = Flat(*at);
+			if (const auto* mindState = registry.TryGet<const CreatureMindState>(creature); mindState != nullptr)
+			{
+				if (const auto* belief = mindState->beliefs.Find(casting->target); belief != nullptr)
+				{
+					from = Flat(belief->place);
+				}
+			}
+			const float apart = gutils::GetDistanceInMetres(from, here);
 			if (!(apart < far))
 			{
 				done();
 				break;
 			}
 			// The game works from the map positions of both, and the area it clears is about a map position too
-			const auto away = cast_moves::GetAwayPoint(MapPoint(here), MapPoint(Flat(*at)), apart, far);
+			const auto away = cast_moves::GetAwayPoint(MapPoint(here), MapPoint(from), apart, far);
 			const auto clear =
 			    cast_moves::FindClearArea(map_coords::ToMetres(map_coords::FromMetres(Flat(away))),
 			                              object_measures::Height(registry, creature), [&](int32_t x, int32_t z) {
@@ -1093,8 +1103,9 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 				casting->phase = 1;
 				break;
 			}
+			// It stops and turns to the heading from its map position to the thing's
 			locomotion.Stop(creature);
-			if (locomotion.TurnToFace(creature, target))
+			if (locomotion.TurnToHeading(creature, cast_moves::HeadingTo(here, target)))
 			{
 				casting->phase = 1;
 			}
@@ -1119,7 +1130,7 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		{
 			if (!facing)
 			{
-				locomotion.TurnToFace(creature, target);
+				locomotion.TurnToHeading(creature, cast_moves::HeadingTo(here, target));
 				break;
 			}
 			casting->holdTurns = static_cast<uint32_t>(casting->settleSeconds * k_TurnsPerSecond);
@@ -1134,7 +1145,7 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		--casting->holdTurns;
 		if (!facing)
 		{
-			locomotion.TurnToFace(creature, target);
+			locomotion.TurnToHeading(creature, cast_moves::HeadingTo(here, target));
 		}
 		break;
 	}
@@ -1150,7 +1161,7 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 			}
 			// It stops and starts to turn. If it cannot turn yet, it tries again on the next turn
 			locomotion.Stop(creature);
-			if (locomotion.TurnToFace(creature, cast_moves::PointToFaceAwayFrom(here, Flat(*at))))
+			if (locomotion.TurnToHeading(creature, cast_moves::HeadingAwayFrom(here, Flat(*at))))
 			{
 				casting->phase = 1;
 			}

@@ -10,12 +10,12 @@
 #include "CreatureLocomotion.h"
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
+#include <bit>
 
 #include <glm/geometric.hpp>
-
-#include "Common/X87Angle.h"
 
 using namespace openblack;
 using namespace openblack::creature_locomotion;
@@ -24,6 +24,9 @@ namespace
 {
 constexpr float k_Pi = std::numbers::pi_v<float>;
 constexpr float k_HalfPi = k_Pi / 2.0f;
+/// The share of a quarter turn that one radian is, which the spin blend multiplies by
+constexpr float k_SpinShare = std::bit_cast<float>(0x3F22F983u);
+constexpr uint32_t k_SignBit = 0x80000000u;
 /// Walking speed is this many units a second for each unit of the size factor, running this many
 constexpr float k_WalkPerSize = 8.0f;
 constexpr float k_RunPerSize = 20.0f;
@@ -101,34 +104,25 @@ float creature_locomotion::Accelerate(float speed, float target, float seconds)
 	return speed;
 }
 
-float creature_locomotion::WrapAngle(float angle)
+GameHeading creature_locomotion::HeadingOf(glm::vec2 direction)
 {
-	angle = std::fmod(angle + k_Pi, 2.0f * k_Pi);
-	if (angle < 0.0f)
-	{
-		angle += 2.0f * k_Pi;
-	}
-	return angle - k_Pi;
+	return GameHeading::Of(direction.x, direction.y);
 }
 
-float creature_locomotion::HeadingOf(glm::vec2 direction)
+glm::vec2 creature_locomotion::DirectionOf(GameHeading heading)
 {
-	// The game's heading routine. Its headings turn the other way round, so the direction is mirrored in x
-	return static_cast<float>(x87::GameHeadingOf(-direction.x, direction.y));
+	return {std::sin(heading.Radians()), -std::cos(heading.Radians())};
 }
 
-glm::vec2 creature_locomotion::DirectionOf(float heading)
-{
-	return {-std::sin(heading), -std::cos(heading)};
-}
-
-float creature_locomotion::LerpHeading(float heading, float target, float timeMs, float durationMs)
+GameHeading creature_locomotion::LerpHeading(GameHeading heading, GameHeading target, float timeMs, float durationMs)
 {
 	if (durationMs <= 0.0f || timeMs >= durationMs)
 	{
 		return target;
 	}
-	return WrapAngle(heading + (WrapAngle(target - heading) * std::max(timeMs, 0.0f) / durationMs));
+	// The gap is wrapped once, scaled by the time and then divided by the length, and the result is wrapped once more
+	const auto eased = ((target.TurnFrom(heading) * std::max(timeMs, 0.0f)) / durationMs) + heading.Radians();
+	return GameHeading(GameHeading::Wrap(eased));
 }
 
 Gait creature_locomotion::BlendGait(float speed, const Speeds& speeds, float distance, float scale, const Cycle& stand,
@@ -172,12 +166,12 @@ Gait creature_locomotion::BlendGait(float speed, const Speeds& speeds, float dis
 
 Side creature_locomotion::SideOf(float angle)
 {
-	return angle > 0.0f ? Side::Right : Side::Left;
+	return angle < 0.0f ? Side::Right : Side::Left;
 }
 
 Side creature_locomotion::SpinSideOf(float angle)
 {
-	return angle >= 0.0f ? Side::Right : Side::Left;
+	return angle <= 0.0f ? Side::Right : Side::Left;
 }
 
 Pair creature_locomotion::PairFor(size_t first, float angle)
@@ -188,6 +182,18 @@ Pair creature_locomotion::PairFor(size_t first, float angle)
 		return {.from = first, .to = first + 1, .weight = turn / k_HalfPi};
 	}
 	return {.from = first + 1, .to = first + 2, .weight = std::clamp((turn - k_HalfPi) / k_HalfPi, 0.0f, 1.0f)};
+}
+
+Pair creature_locomotion::SpinPairFor(size_t first, float angle)
+{
+	// A turn of 0 or less changes its sign, so that a turn of +0 becomes -0 as in the game. The sign bit is flipped
+	// directly: an optimising compiler can make the plain negation an absolute value.
+	const auto turn = angle <= 0.0f ? std::bit_cast<float>(std::bit_cast<uint32_t>(angle) ^ k_SignBit) : angle;
+	if (turn < k_HalfPi)
+	{
+		return {.from = first, .to = first + 1, .weight = turn * k_SpinShare};
+	}
+	return {.from = first + 1, .to = first + 2, .weight = (turn - k_HalfPi) * k_SpinShare};
 }
 
 Start creature_locomotion::ChooseStart(float angle, float distanceInMesh, const StartOptions& options)
@@ -206,7 +212,7 @@ Start creature_locomotion::ChooseStart(float angle, float distanceInMesh, const 
 	if (options.hasSpins)
 	{
 		const auto first = side == Side::Right ? animations::k_RightSpin : animations::k_LeftSpin;
-		return {.kind = Start::Kind::Turn, .side = side, .animations = PairFor(first, angle)};
+		return {.kind = Start::Kind::Turn, .side = side, .animations = SpinPairFor(first, angle)};
 	}
 	return {.kind = Start::Kind::Turn, .side = side, .animations = std::nullopt};
 }

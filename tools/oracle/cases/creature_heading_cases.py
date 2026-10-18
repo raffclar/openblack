@@ -13,6 +13,9 @@
 - creature_facing.txt: whether a creature at a map position with a heading faces another map position (the turn to face
   stage of a creature that turns to a thing). The game returns 2 when the creature faces the thing or stands on top
   of it, and 0 when it must turn.
+- creature_turn_heading.txt: the heading that a creature turns to, in the first turn of the stage that turns it to face
+  a thing (stage 0) and of the stage that turns its back to a thing (stage 1). The start of the turn records the
+  heading that the stage gives it.
 
 Usage: python tools/oracle/cases/creature_heading_cases.py [output folder]   (default: test/oracle/data)
 The random inputs come from a fixed seed, so a second run gives the same file (except the date line).
@@ -34,6 +37,9 @@ ROOT = Path(__file__).resolve().parents[3]
 # The functions (BW1W120, runblack.exe 1.20)
 WRAP = 0x7FAAF0  # cdecl (float angle), returns ST0
 TURN_TO_FACE_STAGE = 0x5013B0  # thiscall on the creature, no arguments, returns EAX
+TURN_TO_FACE_START = 0x5012D0  # thiscall on the creature: the first turn of the turn to face stage
+TURN_AWAY_STAGE = 0x503080  # thiscall on the creature: the turn its back to a thing stage
+NO_TURN = 0xFFFFFFFF
 START_TURN = 0x4F00E0  # thiscall (heading), RET 4: starts a turn; stubbed
 TURNS_PER_SECOND = 0xD01A38  # the game's turn length divisor that the facing branch reads
 FIXED_PER_METRE = 0x45CCCCCD  # 6553.6f
@@ -86,6 +92,56 @@ class Facing:
         return result.eax
 
 
+class TurnHeading:
+    COLUMNS = ["stage", "creature_x", "creature_z", "point_x", "point_z", "turn_heading"]
+
+    def __init__(self, oracle: Oracle):
+        o = self.o = oracle
+        self.record = o.alloc(0x10)
+        # The start of the turn keeps the heading that it gets: mov eax, [esp + 4]; mov [record], eax; xor eax, eax;
+        # ret 4
+        o.write(START_TURN, bytes([0x8B, 0x44, 0x24, 0x04, 0xA3]) + struct.pack("<I", self.record) +
+                bytes([0x33, 0xC0, 0xC2, 0x04, 0x00]))
+        self.creature = o.alloc(0x200)
+        self.body = o.alloc(0x20)
+        self.model = o.alloc(0x49A0)
+        self.mind = o.alloc(0x1C00)
+        self.sub_action = o.alloc(0x40)
+        self.thing = o.alloc(0x40)
+        o.write_u32(self.creature + 0x160, self.body)
+        o.write_u32(self.creature + 0x164, self.mind)
+        o.write_u32(self.body + 0x58, self.model)
+        o.write_u32(self.mind + 0xFDC, self.sub_action)
+        o.write_u32(self.sub_action + 0x30, self.thing)
+
+    def run(self, stage: int, cx: int, cz: int, px: int, pz: int) -> int:
+        o = self.o
+        o.write_u32(self.record, NO_TURN)
+        o.write(self.creature + 0x14, struct.pack("<iif", to_fixed(cx), to_fixed(cz), 0.0))
+        o.write(self.thing + 0x14, struct.pack("<iif", to_fixed(px), to_fixed(pz), 0.0))
+        o.call(TURN_TO_FACE_START if stage == 0 else TURN_AWAY_STAGE, this=self.creature)
+        return o.read_u32(self.record)[0]
+
+
+def turn_heading_cases(rng: random.Random) -> list[tuple[int, int, int, int, int]]:
+    rows = []
+    for stage in (0, 1):
+        for _ in range(750):
+            cx = rng.uniform(10.0, 5110.0)
+            cz = rng.uniform(10.0, 5110.0)
+            reach = rng.choice([rng.uniform(0.0, 0.2), rng.uniform(0.0, 12.0), rng.uniform(5.0, 300.0)])
+            angle = rng.uniform(-math.pi, math.pi)
+            rows.append((stage, f2u(cx), f2u(cz), f2u(cx + reach * math.cos(angle)), f2u(cz + reach * math.sin(angle))))
+        # Along the map axes and the diagonals, where the game's angle changes from one part of the circle to the next
+        for _ in range(250):
+            cx = rng.uniform(1000.0, 4000.0)
+            cz = rng.uniform(1000.0, 4000.0)
+            reach = rng.uniform(1.0, 200.0)
+            dx, dz = rng.choice([(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)])
+            rows.append((stage, f2u(cx), f2u(cz), f2u(cx + reach * dx), f2u(cz + reach * dz)))
+    return rows
+
+
 def facing_cases(rng: random.Random) -> list[tuple[int, int, int, int, int]]:
     rows = []
     for _ in range(1500):
@@ -133,6 +189,16 @@ def main() -> None:
                           "truncated; result is EAX: 2 faces or on top, 0 must turn."],
                          Facing.COLUMNS, rows)
         print(f"creature_facing: {n} rows, {sum(1 for r in rows if r[-1] == 2)} facing")
+        turns = TurnHeading(oracle)
+        rows = [[*case, turns.run(*case)] for case in turn_heading_cases(rng)]
+        n = write_pinned(out / "creature_turn_heading.txt", "The heading that a creature turns to, to face a thing or turn away",
+                         ["Function: stage 0 is the first turn of the turn to face stage, stage 1 the turn its back to",
+                          "a thing stage, thiscall on the creature (map position at +0x14), the thing's map position",
+                          "at +0x14. The start of the turn is replaced by code that keeps its heading argument.",
+                          "Inputs are float bits of metres, made map positions by a float product with 6553.6f,",
+                          "truncated; turn_heading is the float bits of the heading, FFFFFFFF when there is no turn."],
+                         TurnHeading.COLUMNS, rows)
+        print(f"creature_turn_heading: {n} rows, {sum(1 for r in rows if r[-1] == NO_TURN)} without a turn")
 
 
 if __name__ == "__main__":

@@ -16,6 +16,8 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 
+#include "Common/GameHeading.h"
+
 namespace openblack::creature_route
 {
 class WalkableLand;
@@ -70,7 +72,7 @@ public:
 	/// Turns on the spot to face a point
 	virtual bool TurnToFace(entt::entity creature, glm::vec2 point) = 0;
 	/// Turns on the spot to a heading, also when the turn is very small or none
-	virtual bool TurnToHeading(entt::entity creature, float heading) = 0;
+	virtual bool TurnToHeading(entt::entity creature, GameHeading heading) = 0;
 	/// Stops where it is
 	virtual void Stop(entt::entity creature) = 0;
 	/// Sets the speed that it keeps back to its walk speed, as when it stops what it does

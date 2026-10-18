@@ -42,6 +42,7 @@
 #include "Camera/Camera.h"
 #include "Camera/CameraZones.h"
 #include "Common/EventManager.h"
+#include "Common/GameHeading.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "Creature/BonusCreatures.h"
@@ -236,6 +237,15 @@
 #include "Temple/TemplePeople.h"
 #include "Windowing/WindowingInterface.h"
 #include "WorldProviders.h"
+
+namespace openblack
+{
+/// A heading is written to the inspector as its radians
+void to_json(inspector::Json& json, const GameHeading& heading)
+{
+	json = heading.Radians();
+}
+} // namespace openblack
 
 using namespace openblack;
 using namespace openblack::inspector;

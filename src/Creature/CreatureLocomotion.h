@@ -19,13 +19,15 @@
 
 #include <glm/vec2.hpp>
 
+#include "Common/GameHeading.h"
+
 /// How a creature walks and runs, once a game turn. Its speed follows a requested fraction of its top speed, speeding up
 /// and slowing down at a steady rate, slower uphill. The distance it covers drives its walk and run animations, blended
 /// by how fast it goes, so its feet keep to the ground. Before setting off, and at corners too sharp to walk round, it
 /// stops and either steps off towards its way, walks straight on when nearly facing it, or turns on the spot.
 ///
-/// Headings are angles about the vertical axis: a creature with heading h faces (-sin h, -cos h) on the x, z plane, as
-/// a body rotated by h about y does, its meshes looking along their -z axis.
+/// Headings are kept as the game keeps them (see GameHeading): a creature with heading h faces (sin h, -cos h) on the
+/// x, z plane.
 namespace openblack::creature_locomotion
 {
 /// The places of the moving animations in the creature spec file
@@ -90,14 +92,13 @@ struct Speeds
 /// the stop and corner caps slow it.
 [[nodiscard]] float Accelerate(float speed, float target, float seconds);
 
-/// An angle brought within -pi to pi
-[[nodiscard]] float WrapAngle(float angle);
-/// The heading a direction on the x, z plane faces, 0 for a direction too short to turn to
-[[nodiscard]] float HeadingOf(glm::vec2 direction);
+/// The heading a direction on the x, z plane faces, as the game calculates it, 0 for a direction too short to turn to
+[[nodiscard]] GameHeading HeadingOf(glm::vec2 direction);
 /// The direction on the x, z plane a heading faces
-[[nodiscard]] glm::vec2 DirectionOf(float heading);
-/// Turning without animations: the heading eases round to the target by how far through the turn it is
-[[nodiscard]] float LerpHeading(float heading, float target, float timeMs, float durationMs);
+[[nodiscard]] glm::vec2 DirectionOf(GameHeading heading);
+/// Turning on the spot without animations, one step a game turn: the heading closes the part of the gap to the target
+/// that the time before the step gives, from where it is now. At the end of the turn it is the target.
+[[nodiscard]] GameHeading LerpHeading(GameHeading heading, GameHeading target, float timeMs, float durationMs);
 
 /// An animation cycle's length and the distance its root moves over it, in mesh units
 struct Cycle
@@ -136,7 +137,8 @@ enum class Side : uint8_t
 	Left,
 };
 
-/// Which side a target is on: an angle turning towards the creature's right is positive
+/// Which side a target is on, from the turn to it (GameHeading::TurnFrom): a turn towards the creature's right is
+/// negative
 [[nodiscard]] Side SideOf(float angle);
 /// The side of the spins for a turn on the spot to a heading. A turn of none uses the spins to the right.
 [[nodiscard]] Side SpinSideOf(float angle);
@@ -151,6 +153,9 @@ struct Pair
 /// The pair showing an angle, from the side's first animation: up to 90 degrees between 0 and 90, beyond it between 90
 /// and 180
 [[nodiscard]] Pair PairFor(size_t first, float angle);
+/// The pair of spins that shows a turn on the spot, as the game blends them: the turn made positive, then between the
+/// 0 and 90 degree spins below a quarter turn, else between the 90 and 180 degree spins
+[[nodiscard]] Pair SpinPairFor(size_t first, float angle);
 
 /// How a creature sets off towards a point, or turns to face one
 struct Start

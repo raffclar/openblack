@@ -75,8 +75,8 @@ constexpr float k_DepthLimit = 0.8f;
 [[nodiscard]] glm::vec3 Centre(const Points& points);
 
 /// How far the hand gets with the front pair stretched to the furthest depth, measured straight rather than along the
-/// ground
-[[nodiscard]] float StraightReach(const Points& points);
+/// ground, for a creature drawn at a scale. Each corner's weight is scaled before it multiplies the corner.
+[[nodiscard]] float StraightReach(const Points& points, float scale);
 
 /// A handful a creature takes from a pile appears this share of its straight reach from it, towards the pile
 constexpr float k_HandfulShare = 0.95f;

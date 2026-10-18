@@ -101,8 +101,10 @@ struct HeldPose
 /// - Its up axis is the hand's third axis, and its forward axis is the opposite of the hand's second axis.
 /// - In the other hand, its up axis and its forward axis change their direction.
 /// Its origin is the hang distance below the middle of the finger ends, along its up axis. A negative hang puts it
-/// above.
-[[nodiscard]] HeldPose HeldPlacement(const glm::mat3& hand, const glm::vec3& fingerEnds, bool mirrored, float hang);
+/// above. Each axis of the hand is made a unit vector by the 3D engine's inverse square root. The up axis is scaled by
+/// the thing's scale before it is made the hang distance long again.
+[[nodiscard]] HeldPose HeldPlacement(const glm::mat3& hand, const glm::vec3& fingerEnds, bool mirrored, float hang,
+                                     float thingScale);
 
 /// Where a released thing starts. It keeps the turn that it had in the hand. A thing let go of (tossed or put down)
 /// starts where it hangs. A thrown thing starts with its origin at the finger ends.

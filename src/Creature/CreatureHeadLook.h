@@ -17,6 +17,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/GameHeading.h"
+
 /// The rule that turns a creature's head. Each frame the head turns towards a target or back to straight ahead. What the
 /// body does decides if the head can turn at all: many actions keep the head straight.
 namespace openblack::creature_head_look
@@ -90,7 +92,7 @@ struct Angles
 };
 /// The angles that turn the head from the eyes towards a target, given the heading that the body faces. The head turns
 /// sideways only when the direction to the target is not on a map axis.
-[[nodiscard]] Angles AnglesTowards(const glm::vec3& eyes, float facing, const glm::vec3& target);
+[[nodiscard]] Angles AnglesTowards(const glm::vec3& eyes, GameHeading facing, const glm::vec3& target);
 
 /// How fast the head speeds up as it turns, in radians a second each second: the species' rate, slower for bigger
 /// creatures as their animations are

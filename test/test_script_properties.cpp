@@ -171,20 +171,20 @@ TEST(ScriptProperties, BeliefForAPlayer)
 
 TEST(ScriptProperties, ACreaturesHeadingIsTheWayItFacesAcrossTheLand)
 {
-	// A creature with a heading walks towards (-sin, -cos); a living thing at an angle faces (cos, sin)
+	// A creature with a heading walks towards (sin, -cos); a living thing at an angle faces (cos, sin)
 	for (const float heading : {0.0f, 0.5f, 1.5707964f, 2.0f, 3.1415927f, -1.0f, 5.5f})
 	{
-		const float angle = CreatureHeadingToLivingAngle(heading);
+		const float angle = CreatureHeadingToLivingAngle(openblack::GameHeading(heading));
 		EXPECT_GE(angle, 0.0f);
 		EXPECT_LT(angle, 2.0f * glm::pi<float>());
-		EXPECT_NEAR(std::cos(angle), -std::sin(heading), 1e-5f);
+		EXPECT_NEAR(std::cos(angle), std::sin(heading), 1e-5f);
 		EXPECT_NEAR(std::sin(angle), -std::cos(heading), 1e-5f);
-		const float back = LivingAngleToCreatureHeading(angle);
+		const float back = LivingAngleToCreatureHeading(angle).Radians();
 		EXPECT_NEAR(std::sin(back), std::sin(heading), 1e-5f);
 		EXPECT_NEAR(std::cos(back), std::cos(heading), 1e-5f);
 	}
 	// Facing +x is no angle at all
-	EXPECT_NEAR(CreatureHeadingToLivingAngle(-glm::half_pi<float>()), 0.0f, 1e-6f);
+	EXPECT_NEAR(CreatureHeadingToLivingAngle(openblack::GameHeading(glm::half_pi<float>())), 0.0f, 1e-6f);
 }
 
 TEST(ScriptProperties, MovingIsAcrossTheLandInWholeMapUnits)

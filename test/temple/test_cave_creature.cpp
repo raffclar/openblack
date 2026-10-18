@@ -105,7 +105,7 @@ TEST(CaveCreature, ASleeperLiesDownAndLooksAtNothing)
 TEST(CaveCreature, NotFacingTheFireItGetsUpThenTurns)
 {
 	auto state = FacingTheFire();
-	state.heading += 0.5f;
+	state.heading = openblack::GameHeading(state.heading.Radians() + 0.5f);
 	Body body;
 	body.body = *creature_layers::PlaySequence(body.body, animations::k_StartSit, animations::k_Sit, animations::k_EndSit);
 	body.body.phase = creature_layers::BodyAction::Phase::Loop;
@@ -117,27 +117,32 @@ TEST(CaveCreature, NotFacingTheFireItGetsUpThenTurns)
 	body.body = {};
 	const auto turn = Step(state, body, NotZoomed(), Draws({}));
 	ASSERT_TRUE(turn.has_value());
-	EXPECT_FLOAT_EQ(*turn, HeadingTowards(k_Places.seat, k_Places.fire));
+	EXPECT_FLOAT_EQ(turn->Radians(), HeadingTowards(k_Places.seat, k_Places.fire).Radians());
 	EXPECT_FALSE(state.wantedHeading.has_value());
 }
 
 TEST(CaveCreature, AHairOffIsFacing)
 {
-	EXPECT_FALSE(MustTurn(1.0f, 1.0099f));
-	EXPECT_TRUE(MustTurn(1.0f, 1.0101f));
+	EXPECT_FALSE(MustTurn(openblack::GameHeading(1.0f), openblack::GameHeading(1.0099f)));
+	EXPECT_TRUE(MustTurn(openblack::GameHeading(1.0f), openblack::GameHeading(1.0101f)));
 }
 
 TEST(CaveCreature, ATurnEndsFacingTheNewWay)
 {
-	State state {.heading = 0.0f};
-	state.turn = State::Turn {
-	    .from = 0.0f, .to = 1.0f, .timeMs = 0.0f, .durationMs = 100.0f, .spin = 3, .blendedWith = 4, .blendWeight = 0.5f};
+	State state {.heading = openblack::GameHeading(0.0f)};
+	state.turn = State::Turn {.from = openblack::GameHeading(0.0f),
+	                          .to = openblack::GameHeading(1.0f),
+	                          .timeMs = 0.0f,
+	                          .durationMs = 100.0f,
+	                          .spin = 3,
+	                          .blendedWith = 4,
+	                          .blendWeight = 0.5f};
 	Body body;
 	EXPECT_TRUE(Busy(state, body));
 	AdvanceTurn(state, 60.0f);
-	EXPECT_FLOAT_EQ(state.heading, 0.0f);
+	EXPECT_FLOAT_EQ(state.heading.Radians(), 0.0f);
 	AdvanceTurn(state, 40.0f);
-	EXPECT_FLOAT_EQ(state.heading, 1.0f);
+	EXPECT_FLOAT_EQ(state.heading.Radians(), 1.0f);
 	EXPECT_FALSE(state.turn.has_value());
 	EXPECT_FALSE(Busy(state, body));
 }
@@ -149,7 +154,7 @@ TEST(CaveCreature, ZoomedOntoItTurnsToTheCamera)
 	const auto frame = Zoomed();
 	const auto turn = Step(state, body, frame, Draws({}));
 	ASSERT_TRUE(turn.has_value());
-	EXPECT_FLOAT_EQ(*turn, HeadingTowards(frame.focus, frame.eye));
+	EXPECT_FLOAT_EQ(turn->Radians(), HeadingTowards(frame.focus, frame.eye).Radians());
 	EXPECT_TRUE(state.zoomed);
 	// Only as the zoom starts
 	EXPECT_FALSE(Step(state, body, frame, Draws({})).has_value());

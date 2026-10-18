@@ -40,6 +40,8 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "Common/GameHeading.h"
+
 /// The components' fields, registered once with EnTT's reflection so that the inspector can write any registered
 /// component out as JSON, set its fields by name with their types checked, and add it to an entity, all without knowing
 /// its type. Components that aren't registered are still listed by name.
@@ -96,8 +98,8 @@ template <typename Type>
 [[nodiscard]] constexpr bool Decodable()
 {
 	if constexpr (std::is_same_v<Type, bool> || std::is_arithmetic_v<Type> || std::is_enum_v<Type> ||
-	              std::is_same_v<Type, std::string> || std::is_same_v<Type, entt::entity> || k_IsGlmVector<Type> ||
-	              k_IsGlmMatrix<Type> || k_IsBitset<Type>)
+	              std::is_same_v<Type, GameHeading> || std::is_same_v<Type, std::string> ||
+	              std::is_same_v<Type, entt::entity> || k_IsGlmVector<Type> || k_IsGlmMatrix<Type> || k_IsBitset<Type>)
 	{
 		return true;
 	}
@@ -145,6 +147,11 @@ template <typename Type>
 	if constexpr (std::is_same_v<Type, float>)
 	{
 		return Json(detail::Shortest(value));
+	}
+	else if constexpr (std::is_same_v<Type, GameHeading>)
+	{
+		// A heading is written as its radians
+		return Json(detail::Shortest(value.Radians()));
 	}
 	else if constexpr (std::is_same_v<Type, bool> || std::is_arithmetic_v<Type> || std::is_same_v<Type, std::string>)
 	{
@@ -267,6 +274,14 @@ template <typename Type>
 		else
 		{
 			error = "needs a whole number, not " + detail::Describe(json);
+		}
+	}
+	else if constexpr (std::is_same_v<Type, GameHeading>)
+	{
+		// A heading is read as its radians
+		if (const auto radians = Decode<float>(json, error); radians.has_value())
+		{
+			return GameHeading(*radians);
 		}
 	}
 	else if constexpr (std::is_floating_point_v<Type>)

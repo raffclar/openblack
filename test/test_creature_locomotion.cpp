@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <bit>
 #include <numbers>
 #include <vector>
 
@@ -134,15 +135,15 @@ TEST(CreatureLocomotion, HeadingsFaceTheWayTheyPoint)
 {
 	for (const float heading : {0.0f, 1.0f, -2.0f, 3.0f})
 	{
-		EXPECT_NEAR(HeadingOf(DirectionOf(heading)), heading, k_Tolerance);
+		EXPECT_NEAR(HeadingOf(DirectionOf(GameHeading(heading))).Radians(), heading, k_Tolerance);
 	}
-	// Heading 0 looks along -z, as the meshes do
-	EXPECT_NEAR(DirectionOf(0.0f).y, -1.0f, k_Tolerance);
-	EXPECT_NEAR(WrapAngle(Degrees(270.0f)), Degrees(-90.0f), k_Tolerance);
-	EXPECT_NEAR(WrapAngle(Degrees(-190.0f)), Degrees(170.0f), k_Tolerance);
+	// Heading 0 looks along -z, as the meshes do, and a quarter turn looks along +x
+	EXPECT_NEAR(DirectionOf(GameHeading()).y, -1.0f, k_Tolerance);
+	EXPECT_NEAR(DirectionOf(GameHeading(k_Pi / 2.0f)).x, 1.0f, k_Tolerance);
 	// Halfway round the short way, through 180 degrees
-	EXPECT_NEAR(std::abs(LerpHeading(Degrees(170.0f), Degrees(-170.0f), 500.0f, 1000.0f)), k_Pi, k_Tolerance);
-	EXPECT_NEAR(LerpHeading(0.0f, 1.0f, 2000.0f, 1000.0f), 1.0f, k_Tolerance);
+	EXPECT_NEAR(std::abs(LerpHeading(GameHeading(Degrees(170.0f)), GameHeading(Degrees(-170.0f)), 500.0f, 1000.0f).Radians()),
+	            k_Pi, k_Tolerance);
+	EXPECT_NEAR(LerpHeading(GameHeading(0.0f), GameHeading(1.0f), 2000.0f, 1000.0f).Radians(), 1.0f, k_Tolerance);
 }
 
 TEST(CreatureLocomotion, SlowerThanWalkingBlendsStandAndWalk)
@@ -205,18 +206,18 @@ TEST(CreatureLocomotion, AnglesPickTheirPairOfAnimations)
 TEST(CreatureLocomotion, StartsByStepWalkOrTurn)
 {
 	const StartOptions steps {.stepStrides = std::array {46.0f, 42.0f, 40.0f}, .hasSpins = true, .moving = true};
-	// Far enough for every step: it steps off, right for positive angles
-	const auto step = ChooseStart(Degrees(100.0f), 50.0f, steps);
+	// Far enough for every step: it steps off, right for negative angles
+	const auto step = ChooseStart(Degrees(-100.0f), 50.0f, steps);
 	EXPECT_EQ(step.kind, Start::Kind::Step);
 	EXPECT_EQ(step.side, Side::Right);
 	ASSERT_TRUE(step.animations.has_value());
 	EXPECT_EQ(step.animations->from, animations::k_RightStep + 1);
-	const auto left = ChooseStart(Degrees(-30.0f), 50.0f, steps);
+	const auto left = ChooseStart(Degrees(30.0f), 50.0f, steps);
 	EXPECT_EQ(left.side, Side::Left);
 	EXPECT_EQ(left.animations->from, animations::k_LeftStep);
 	// Too close for a step: nearly facing it walks straight on, otherwise turns on the spot
 	EXPECT_EQ(ChooseStart(Degrees(10.0f), 45.0f, steps).kind, Start::Kind::Walk);
-	const auto turn = ChooseStart(Degrees(-60.0f), 45.0f, steps);
+	const auto turn = ChooseStart(Degrees(60.0f), 45.0f, steps);
 	EXPECT_EQ(turn.kind, Start::Kind::Turn);
 	EXPECT_EQ(turn.animations->from, animations::k_LeftSpin);
 	// Without spins the turn has no animations
@@ -255,21 +256,46 @@ TEST(CreatureLocomotion, RunsAwayFromTheThreat)
 TEST(CreatureLocomotion, ATurnOnTheSpotOfNoneUsesTheSpinsToTheRight)
 {
 	EXPECT_EQ(SpinSideOf(0.0f), Side::Right);
-	EXPECT_EQ(SpinSideOf(0.5f), Side::Right);
-	EXPECT_EQ(SpinSideOf(-0.5f), Side::Left);
+	EXPECT_EQ(SpinSideOf(-0.5f), Side::Right);
+	EXPECT_EQ(SpinSideOf(0.5f), Side::Left);
+}
+
+TEST(CreatureLocomotion, TheSpinBlendMultipliesTheTurnByTheShareOfAQuarterTurn)
+{
+	// The game makes the turn positive, then multiplies by its float of 2 / pi, after it takes away a quarter turn
+	// beyond a quarter turn. It does not divide by a quarter turn.
+	constexpr float k_Share = std::bit_cast<float>(0x3F22F983u);
+	constexpr float k_Quarter = std::bit_cast<float>(0x3FC90FDBu);
+	for (const float angle : {0.0f, -0.3f, 0.3f, 1.2f, -1.5707963f, 1.5707964f, 2.5f, -3.1415927f, 3.1415927f})
+	{
+		const auto pair = SpinPairFor(animations::k_RightSpin, angle);
+		const float turn = angle <= 0.0f ? std::bit_cast<float>(std::bit_cast<uint32_t>(angle) ^ 0x80000000u) : angle;
+		const float expected = turn < k_Quarter ? turn * k_Share : (turn - k_Quarter) * k_Share;
+		EXPECT_EQ(std::bit_cast<uint32_t>(pair.weight), std::bit_cast<uint32_t>(expected)) << angle;
+		EXPECT_EQ(pair.from, turn < k_Quarter ? animations::k_RightSpin : animations::k_RightSpin + 1) << angle;
+	}
+	// A turn of +0 is made -0, as the game changes the sign of every turn of 0 or less
+	EXPECT_EQ(std::bit_cast<uint32_t>(SpinPairFor(animations::k_RightSpin, 0.0f).weight), 0x80000000u);
 }
 
 TEST(CreatureLocomotion, ATurnWithoutSpinsClosesTheGapByTheShareOfTheTimeBeforeEachStep)
 {
 	// From 0 to 1 over 300 ms in steps of 100 ms: no change, then a third, then two thirds of what is left
-	auto heading = 0.0f;
-	heading = LerpHeading(heading, 1.0f, 0.0f, 300.0f);
-	EXPECT_NEAR(heading, 0.0f, k_Tolerance);
-	heading = LerpHeading(heading, 1.0f, 100.0f, 300.0f);
-	EXPECT_NEAR(heading, 1.0f / 3.0f, k_Tolerance);
-	heading = LerpHeading(heading, 1.0f, 200.0f, 300.0f);
-	EXPECT_NEAR(heading, (1.0f / 3.0f) + ((2.0f / 3.0f) * (2.0f / 3.0f)), k_Tolerance);
-	EXPECT_NEAR(LerpHeading(heading, 1.0f, 300.0f, 300.0f), 1.0f, k_Tolerance);
+	const GameHeading target(1.0f);
+	auto heading = GameHeading(0.0f);
+	heading = LerpHeading(heading, target, 0.0f, 300.0f);
+	EXPECT_NEAR(heading.Radians(), 0.0f, k_Tolerance);
+	heading = LerpHeading(heading, target, 100.0f, 300.0f);
+	EXPECT_NEAR(heading.Radians(), 1.0f / 3.0f, k_Tolerance);
+	heading = LerpHeading(heading, target, 200.0f, 300.0f);
+	EXPECT_NEAR(heading.Radians(), (1.0f / 3.0f) + ((2.0f / 3.0f) * (2.0f / 3.0f)), k_Tolerance);
+	EXPECT_NEAR(LerpHeading(heading, target, 300.0f, 300.0f).Radians(), 1.0f, k_Tolerance);
+	// The step is the gap wrapped once, times the time, over the length, plus the heading, all as floats, wrapped once
+	const GameHeading from(3.0f);
+	const GameHeading to(-3.0f);
+	const float gap = GameHeading::Wrap(to.Radians() - from.Radians());
+	const float expected = GameHeading::Wrap(((gap * 100.0f) / 300.0f) + from.Radians());
+	EXPECT_EQ(std::bit_cast<uint32_t>(LerpHeading(from, to, 100.0f, 300.0f).Radians()), std::bit_cast<uint32_t>(expected));
 }
 
 // While it waits for its route, the creature fidgets when the wait falls below zero. The wait counts down by the body's

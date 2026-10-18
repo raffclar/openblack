@@ -12,6 +12,8 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
+#include <numbers>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -548,11 +550,14 @@ TEST(CreatureCastMoves, GettingAway)
 	EXPECT_EQ(close, glm::vec3(15.0f, 0.0f, 10.0f));
 }
 
-TEST(CreatureCastMoves, ToTurnItsBackToAThingItFacesThePointOnTheOtherSide)
+TEST(CreatureCastMoves, ToTurnItsBackToAThingItTurnsAHalfTurnFromIt)
 {
-	const auto point = cast_moves::PointToFaceAwayFrom({10.0f, 20.0f}, {13.0f, 16.0f});
-	EXPECT_FLOAT_EQ(point.x, 7.0f);
-	EXPECT_FLOAT_EQ(point.y, 24.0f);
+	// The thing is on +x: the heading to it is a quarter turn, and the heading away is three quarter turns, not wrapped
+	const auto to = cast_moves::HeadingTo({10.0f, 20.0f}, {13.0f, 20.0f});
+	EXPECT_FLOAT_EQ(to.Radians(), std::numbers::pi_v<float> / 2.0f);
+	const auto away = cast_moves::HeadingAwayFrom({10.0f, 20.0f}, {13.0f, 20.0f});
+	EXPECT_FLOAT_EQ(away.Radians(), 1.5f * std::numbers::pi_v<float>);
+	EXPECT_GT(away.Radians(), std::numbers::pi_v<float>);
 }
 
 TEST(CreatureCastMoves, TheNearestClearAreaIsTheMiddleOfAClearSquare)
@@ -597,6 +602,12 @@ TEST(CreatureCastMoves, ABallIsMeasuredThroughTheAirFromTheCellsMiddle)
 	EXPECT_FALSE(cast_moves::BlocksCell(cast_moves::CollideSphere {.centre = {15.0f, 20.0f, 5.0f}, .radius = 3.0f}, 1, 0));
 	// Just within reach through the air: 6 up and 0 across, less a radius of 1.5, is less than 5
 	EXPECT_TRUE(cast_moves::BlocksCell(cast_moves::CollideSphere {.centre = {15.0f, 6.0f, 5.0f}, .radius = 1.5f}, 1, 0));
+	// The game adds the squares from z to x. With these bits the sum in that order is a little longer than from x to z,
+	// and the ball is just out of reach
+	const cast_moves::CollideSphere edge {
+	    .centre = {std::bit_cast<float>(0x4171B0DAu), std::bit_cast<float>(0x4096C8DAu), std::bit_cast<float>(0xC089E74Au)},
+	    .radius = std::bit_cast<float>(0x40ADE834u)};
+	EXPECT_FALSE(cast_moves::BlocksCell(edge, 1, 0));
 }
 
 TEST(CreatureCastMoves, AWorshipSitesTenBallsStandAlongItsModelAtTheirHeights)
