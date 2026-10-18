@@ -1047,3 +1047,43 @@ TEST(CreatureFight, EnteringAStateEndsTheTurnOfTheStart)
 	Enter(fighter, State::Stance);
 	EXPECT_FALSE(fighter.turning);
 }
+
+TEST(CreatureFight, AFightAnimationMovesOnByWholeMillisecondsEachTurn)
+{
+	// Steps play at 0.9 of the fight speed, other moves at 0.6, and the fraction of a millisecond goes
+	EXPECT_EQ(TurnAdvance(PlaybackSpeed(animations::k_StepForward, 1.0f), 100), 99);
+	EXPECT_EQ(TurnAdvance(PlaybackSpeed(animations::k_FirstAttack, 1.0f), 100), 66);
+	EXPECT_EQ(TurnAdvance(0.0f, 100), 0);
+}
+
+TEST(CreatureFight, AnActionMovesTheCreatureByTheTurnsShareOfItsRootTravel)
+{
+	const float speed = PlaybackSpeed(animations::k_FirstAttack, 1.0f);
+	// Facing along the heading 0, ahead is -z
+	const auto ahead = TurnRootMove(glm::vec2(0.0f, -30.0f), speed, 100, 2.0f, 660, 0.0f);
+	EXPECT_NEAR(ahead.x, 0.0f, 1e-6f);
+	EXPECT_NEAR(ahead.y, -6.0f, 1e-4f);
+	// A quarter turn turns the move to +x
+	const auto turned = TurnRootMove(glm::vec2(0.0f, -30.0f), speed, 100, 2.0f, 660, glm::half_pi<float>());
+	EXPECT_NEAR(turned.x, 6.0f, 1e-4f);
+	EXPECT_NEAR(turned.y, 0.0f, 1e-4f);
+	EXPECT_EQ(TurnRootMove(glm::vec2(5.0f), speed, 100, 2.0f, 0, 0.0f), glm::vec2(0.0f));
+}
+
+TEST(CreatureFight, TheRootMoveRoundsEachStepToAFloatInTheGamesOrder)
+{
+	const float speed = PlaybackSpeed(animations::k_FirstAttack, 1.0f);
+	const float heading = 0.8f;
+	const glm::vec2 travel {3.25f, -47.5f};
+	const auto move = TurnRootMove(travel, speed, 100, 1.37f, 733, heading);
+	// The share: the speed times the milliseconds, times the scale, over the length, each step a float
+	const float share = ((speed * 100.0f) * 1.37f) / 733.0f;
+	const float across = travel.x * share;
+	const float along = travel.y * share;
+	const auto sine = static_cast<float>(std::sin(static_cast<double>(heading)));
+	const auto cosine = static_cast<float>(std::cos(static_cast<double>(heading)));
+	const float x = (-sine * along) + (across * cosine);
+	const float z = (along * cosine) + (across * sine);
+	EXPECT_EQ(std::bit_cast<uint32_t>(move.x), std::bit_cast<uint32_t>(x));
+	EXPECT_EQ(std::bit_cast<uint32_t>(move.y), std::bit_cast<uint32_t>(z));
+}

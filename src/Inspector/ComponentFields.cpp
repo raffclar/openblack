@@ -663,6 +663,9 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureAnimation::pair>("pair")
 	    .Field<&components::CreatureAnimation::mirror>("mirror")
 	    .Field<&components::CreatureAnimation::boneMatrices>("boneMatrices")
+	    .Field<&components::CreatureAnimation::olderTurnPose>("olderTurnPose")
+	    .Field<&components::CreatureAnimation::newerTurnPose>("newerTurnPose")
+	    .Field<&components::CreatureAnimation::posedThisTurn>("posedThisTurn")
 	    .Field<&components::CreatureAnimation::lastTurnBones>("lastTurnBones");
 	Reflect<components::CreatureEyes>(context)
 	    .Field<&components::CreatureEyes::mode>("mode")
@@ -723,8 +726,6 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&components::CreatureFighting::measured>("measured")
 	    .Field<&components::CreatureFighting::blowTestFromMs>("blowTestFromMs")
 	    .Field<&components::CreatureFighting::blowTestAnimation>("blowTestAnimation")
-	    .Field<&components::CreatureFighting::movedShare>("movedShare")
-	    .Field<&components::CreatureFighting::lastTurnBones>("lastTurnBones")
 	    .Field<&components::CreatureFighting::stageSeconds>("stageSeconds")
 	    .Field<&components::CreatureFighting::faceSeconds>("faceSeconds")
 	    .Field<&components::CreatureFighting::played>("played")

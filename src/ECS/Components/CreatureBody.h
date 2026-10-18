@@ -109,8 +109,14 @@ struct CreatureAnimation
 	/// Each bone's mirror bone, for playing actions left to right
 	std::vector<uint32_t> mirror;
 
-	/// The bones' matrices in the mesh's space as posed this frame, which the body is drawn with
+	/// The bones' matrices in the mesh's space as drawn this frame. A creature in the world is drawn between the poses of
+	/// its last two game turns.
 	std::vector<glm::mat4> boneMatrices;
+	/// The bones' matrices in the world as posed at the end of each of the last two game turns, the older pose first
+	std::vector<glm::mat4> olderTurnPose;
+	std::vector<glm::mat4> newerTurnPose;
+	/// The body has its pose for this game turn already
+	bool posedThisTurn {false};
 	/// Where each bone was in the world at the end of the last game turn. The alignment motes of a turn start at the
 	/// bones of the pose of the turn before.
 	std::vector<glm::vec3> lastTurnBones;

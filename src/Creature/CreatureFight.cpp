@@ -739,6 +739,28 @@ float creature_fight::PlaybackSpeed(size_t animation, float actionSpeed)
 	return k_FightSpeed * (IsStep(animation) ? k_StepSpeedShare : k_OtherSpeedShare) * actionSpeed;
 }
 
+int32_t creature_fight::TurnAdvance(float speed, int32_t turnMs)
+{
+	return static_cast<int32_t>(x87::Mul(speed, static_cast<double>(turnMs)));
+}
+
+glm::vec2 creature_fight::TurnRootMove(glm::vec2 travel, float speed, int32_t turnMs, float scale, int32_t durationMs,
+                                       float heading)
+{
+	if (durationMs <= 0)
+	{
+		return glm::vec2(0.0f);
+	}
+	const auto share = x87::Div(x87::Mul(x87::Mul(speed, static_cast<double>(turnMs)), scale), static_cast<double>(durationMs));
+	const auto across = x87::Mul(travel.x, share);
+	const auto along = x87::Mul(travel.y, share);
+	// The direction is kept as floats
+	const auto sine = x87::RoundToFloat(x87::Sin(heading));
+	const auto cosine = x87::RoundToFloat(x87::Cos(heading));
+	return {x87::Add(x87::Mul(-sine, along), x87::Mul(across, cosine)),
+	        x87::Add(x87::Mul(along, cosine), x87::Mul(across, sine))};
+}
+
 std::string_view creature_fight::Name(State state)
 {
 	switch (state)
