@@ -100,6 +100,42 @@ TEST(OracleGlmOrder5, APointOnASkinnedMesh)
 	EXPECT_EQ(different, 0U);
 }
 
+// The point that kisses (the kiss distance and the burst of light in the film) is a skin point, as the eyes are. This
+// runs the function for a triangle of the body that those callers use, with the order for a skin point.
+TEST(OracleGlmOrder5, TheKissPointOnAPosedBody)
+{
+	const auto table = oracle::Table::Load("skin_point.txt");
+	ASSERT_TRUE(table.has_value());
+	size_t different = 0;
+	for (size_t index = 0; index < table->Rows(); ++index)
+	{
+		const Row row {*table, index};
+		std::array<glm::mat4, 3> bones {};
+		std::array<glm::vec3, 3> local {};
+		for (size_t b = 0; b < 3; ++b)
+		{
+			const size_t base = 12 * b;
+			bones.at(b) =
+			    glm::mat4 {glm::vec4(row.Indexed("bone", base), 0.0f), glm::vec4(row.Indexed("bone", base + 3), 0.0f),
+			               glm::vec4(row.Indexed("bone", base + 6), 0.0f), glm::vec4(row.Indexed("bone", base + 9), 1.0f)};
+			local.at(b) = row.Indexed("t", 3 * b);
+		}
+		// All the meshes have the same vertex, thus the blend of the body does not move it
+		std::array<std::array<glm::vec3, 3>, creature::CreatureRig::k_MeshCount> vertices {};
+		vertices.fill(local);
+		const auto triangle = creature::PosedTriangle(vertices, {0, 1, 2}, creature_morph::Morph {}, bones, glm::mat4(1.0f),
+		                                              creature::k_SkinPointOrder);
+		const auto point = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], row.F("s"), row.F("t"));
+		std::string text;
+		if (!SameBits(row, {"px", "py", "pz"}, {point.position.x, point.position.y, point.position.z}, text) &&
+		    ++different <= 20)
+		{
+			ADD_FAILURE() << "row " << index << ":" << text;
+		}
+	}
+	EXPECT_EQ(different, 0U);
+}
+
 TEST(OracleGlmOrder5, TheEnginesInverseOfAMatrix)
 {
 	const auto table = oracle::Table::Load("engine_inverse.txt");
