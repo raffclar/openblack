@@ -87,6 +87,7 @@
 #include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -3163,4 +3164,115 @@ std::vector<MagicSystemInterface::DispenserInfo> MagicSystem::GetDispensers() co
 		    });
 	    });
 	return result;
+}
+
+// The running state in a saved game (deviation 83)
+
+void MagicSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	// The miracles go in the order that they are processed. Each one makes its link to its effect again at the load.
+	reflection::Save(out, std::vector<entt::entity>(_spells.begin(), _spells.end()));
+	reflection::Save(out, _creatureCasts);
+	reflection::Save(out, _creatureBeams);
+	reflection::Save(out, _world.PuttingOutFire());
+	reflection::Save(out, _grid);
+	reflection::Save(out, _handVelocity);
+	reflection::Save(out, _lastHandPosition);
+	out.WriteRaw(_handSpin);
+	reflection::Save(out, _spinningSeed);
+	reflection::Save(out, _handEffectPoint);
+	reflection::Save(out, _handScale);
+	reflection::Save(out, _handAtStep);
+	reflection::Save(out, _held);
+	out.WriteRaw(_input);
+	reflection::Save(out, _actionDown);
+	out.WriteRaw(_fireBallPress);
+	reflection::Save(out, _holdLoop != entt::null);
+	out.WriteRaw(_pour);
+	reflection::Save(out, _rainWatchers);
+	out.WriteRaw(_circle);
+	reflection::Save(out, _turn);
+	reflection::Save(out, _lastHandResult);
+	reflection::Save(out, _ignoreInfluence);
+}
+
+bool MagicSystem::LoadState(reflection::BinaryReader& in)
+{
+	std::vector<entt::entity> spells;
+	reflection::Load(in, spells);
+	reflection::Load(in, _creatureCasts);
+	reflection::Load(in, _creatureBeams);
+	std::unordered_map<entt::entity, uint32_t> watchers;
+	reflection::Load(in, watchers);
+	_world.RestorePuttingOutFire(std::move(watchers));
+	reflection::Load(in, _grid);
+	reflection::Load(in, _handVelocity);
+	reflection::Load(in, _lastHandPosition);
+	in.ReadRaw(_handSpin);
+	reflection::Load(in, _spinningSeed);
+	reflection::Load(in, _handEffectPoint);
+	reflection::Load(in, _handScale);
+	reflection::Load(in, _handAtStep);
+	reflection::Load(in, _held);
+	in.ReadRaw(_input);
+	reflection::Load(in, _actionDown);
+	in.ReadRaw(_fireBallPress);
+	bool holdLoop = false;
+	reflection::Load(in, holdLoop);
+	in.ReadRaw(_pour);
+	reflection::Load(in, _rainWatchers);
+	in.ReadRaw(_circle);
+	reflection::Load(in, _turn);
+	reflection::Load(in, _lastHandResult);
+	reflection::Load(in, _ignoreInfluence);
+	if (in.Failed())
+	{
+		return false;
+	}
+	// Each miracle links to its effect again, and the effect finds its miracle with no new event
+	_spells.clear();
+	_links.clear();
+	if (spells.empty() && !_held.has_value())
+	{
+		if (holdLoop)
+		{
+			StartHoldLoop();
+		}
+		return true;
+	}
+	auto& registry = EntityRegistry();
+	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	for (const auto entity : spells)
+	{
+		const auto* spell = registry.Valid(entity) ? registry.TryGet<const Spell>(entity) : nullptr;
+		if (spell == nullptr)
+		{
+			continue;
+		}
+		auto link = std::make_unique<SpellLink>(*this, entity);
+		if (particles != nullptr && spell->effect != ParticleSystemInterface::k_NoEffect)
+		{
+			particles->RestoreSink(spell->effect, link.get());
+		}
+		_links.insert_or_assign(entity, std::move(link));
+		_spells.push_back(entity);
+	}
+	if (_held.has_value())
+	{
+		const auto* seed = registry.Valid(*_held) ? registry.TryGet<const SpellSeed>(*_held) : nullptr;
+		if (seed == nullptr)
+		{
+			_held.reset();
+		}
+		else if (particles != nullptr && seed->handEffect != ParticleSystemInterface::k_NoEffect)
+		{
+			particles->RestoreSink(seed->handEffect, _handEffectLink.get());
+		}
+	}
+	// The hum of an armed seed plays again
+	if (holdLoop)
+	{
+		StartHoldLoop();
+	}
+	return true;
 }

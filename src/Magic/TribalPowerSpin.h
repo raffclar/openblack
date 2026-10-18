@@ -75,6 +75,13 @@ public:
 	int down {2};
 	float trail {0.2f};
 
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.down, self.trail, self._text, self._samples, self._head, self._count, self._owed);
+	}
+
 private:
 	std::u16string _text;
 	std::array<Sample, k_SampleCount> _samples {};
@@ -110,6 +117,13 @@ public:
 	[[nodiscard]] float Age() const { return _age; }
 	[[nodiscard]] glm::u8vec4 Colour() const { return _colour; }
 	[[nodiscard]] const Spin& GetSpin() const { return _spin; }
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._spin, self._position, self._colour, self._held, self._age);
+	}
 
 private:
 	Spin _spin;

@@ -37,6 +37,8 @@ public:
 	void ProcessTurn() override;
 	void Update(float seconds) override;
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	void ShieldStruck(entt::entity spell, bool destroyed) override;
 	[[nodiscard]] bool HasObject(entt::entity spell) const override;
 	[[nodiscard]] std::vector<Avoid> CreatureAvoids(PlayerNames creaturePlayer, bool scripted) const override;
@@ -62,6 +64,13 @@ private:
 		float radius {0.0f};
 		uint32_t firstReacted {0};
 		std::vector<entt::entity> reacting;
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.object, self.type, self.radius, self.firstReacted, self.reacting);
+		}
 	};
 	/// A reaction to a shield is made: it is spread to the villagers about it at once, out to its table's reach
 	uint32_t CreateReaction(entt::entity object, Reaction type, glm::vec3 position, float multiplier);

@@ -13,7 +13,11 @@
 
 #include <algorithm>
 #include <chrono>
+#include <memory>
 #include <ranges>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include <EnumHeader.h>
 #include <LNDFile.h>
@@ -38,6 +42,7 @@
 #include "Common/StringUtils.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AudioEmitter.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/MagicShield.h"
@@ -52,6 +57,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptSpotVisuals.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -64,7 +70,10 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Particles/GestureTrail.h"
+#include "Particles/LightSheet.h"
 #include "Particles/LightningMaths.h"
+#include "Particles/ParticleArchiveValues.h"
 #include "Particles/ParticleClassRegistry.h"
 #include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleSoundRelease.h"
@@ -1530,4 +1539,306 @@ std::vector<std::string> ParticleSystem::GetFileNames() const
 	const auto [first, last] = std::ranges::unique(names);
 	names.erase(first, last);
 	return names;
+}
+
+namespace
+{
+
+/// The numbers of the live things of a list of weak holds, in the order of the list
+template <typename Type>
+void WriteLive(particles::EffectWriter& out, const std::vector<std::weak_ptr<Type>>& list)
+{
+	std::vector<std::shared_ptr<Type>> live;
+	for (const auto& weak : list)
+	{
+		if (auto item = weak.lock())
+		{
+			live.push_back(std::move(item));
+		}
+	}
+	out.Out().WriteSize(live.size());
+	for (const auto& item : live)
+	{
+		out.WriteShared(item);
+	}
+}
+
+template <typename Type>
+void ReadLive(particles::EffectReader& in, std::vector<std::weak_ptr<Type>>& list)
+{
+	list.clear();
+	const auto size = in.In().ReadSize();
+	for (size_t i = 0; size.has_value() && i < *size && !in.Failed(); ++i)
+	{
+		if (auto item = in.ReadShared<Type>())
+		{
+			list.push_back(item);
+		}
+	}
+}
+
+} // namespace
+
+void GameParticleWorld::NumberShared(particles::SharedTables& tables) const
+{
+	for (const auto& sound : _sounds)
+	{
+		tables.sounds.Add(sound.link);
+	}
+	for (const auto& weak : _bolts)
+	{
+		tables.bolts.Add(weak.lock());
+	}
+	for (const auto& weak : _shields)
+	{
+		tables.shields.Add(weak.lock());
+	}
+	for (const auto& weak : _lightSheets)
+	{
+		tables.sheets.Add(weak.lock());
+	}
+	for (const auto& trail : _gestureTrails)
+	{
+		tables.trails.Add(trail);
+	}
+}
+
+void GameParticleWorld::SaveState(particles::EffectWriter& out) const
+{
+	out.WriteValue(_claimed);
+	out.WriteValue(_arcsWaiting);
+	out.WritePlainList(_beliefSprites);
+	out.Out().WriteSize(_gestureTrails.size());
+	for (const auto& trail : _gestureTrails)
+	{
+		out.WriteShared(trail);
+	}
+	WriteLive(out, _lightSheets);
+	out.WriteValue(_arcsWanted);
+	WriteLive(out, _bolts);
+	out.WriteValue(_boltOrder);
+	// A sound goes with what plays it again after the load; the audio's own emitter does not
+	out.Out().WriteSize(_sounds.size());
+	for (const auto& sound : _sounds)
+	{
+		out.WriteShared(sound.link);
+		out.WriteValue(sound.owner);
+		out.WriteValue(sound.letGo);
+		out.WritePlain(sound.fade);
+		out.WriteValue(sound.wait);
+	}
+	out.WriteValue(_rainStorms);
+	out.WriteValue(_nextRainStorm);
+	WriteLive(out, _shields);
+	for (const auto& queue : _objectEffects.Queues())
+	{
+		out.WritePlainList(queue);
+	}
+}
+
+bool GameParticleWorld::LoadState(particles::EffectReader& in)
+{
+	in.ReadValue(_claimed);
+	in.ReadValue(_arcsWaiting);
+	in.ReadPlainList(_beliefSprites);
+	_gestureTrails.clear();
+	const auto trails = in.In().ReadSize();
+	for (size_t i = 0; trails.has_value() && i < *trails && !in.Failed(); ++i)
+	{
+		if (auto trail = in.ReadShared<particles::GestureTrail>())
+		{
+			_gestureTrails.push_back(std::move(trail));
+		}
+	}
+	ReadLive(in, _lightSheets);
+	in.ReadValue(_arcsWanted);
+	ReadLive(in, _bolts);
+	in.ReadValue(_boltOrder);
+	_sounds.clear();
+	const auto sounds = in.In().ReadSize();
+	for (size_t i = 0; sounds.has_value() && i < *sounds && !in.Failed(); ++i)
+	{
+		PlayingSound sound;
+		sound.link = in.ReadShared<particles::ParticleSoundLink>();
+		in.ReadValue(sound.owner);
+		in.ReadValue(sound.letGo);
+		in.ReadPlain(sound.fade);
+		in.ReadValue(sound.wait);
+		// A sound that its particle let go of was dying away: it ends with the load
+		if (!sound.link || sound.letGo || (sound.link->atom == nullptr && sound.wait <= 0.0f))
+		{
+			Forget(sound);
+			continue;
+		}
+		_sounds.push_back(std::move(sound));
+	}
+	in.ReadValue(_rainStorms);
+	in.ReadValue(_nextRainStorm);
+	ReadLive(in, _shields);
+	std::array<std::vector<particles::ExplodeRecord>, 2> queues;
+	for (auto& queue : queues)
+	{
+		in.ReadPlainList(queue);
+	}
+	_objectEffects.RestoreQueues(std::move(queues));
+	if (in.Failed())
+	{
+		return false;
+	}
+	// The sounds that the particles keep play again from where their particles are
+	for (auto& sound : _sounds)
+	{
+		if (sound.wait <= 0.0f)
+		{
+			Play(sound);
+		}
+	}
+	return true;
+}
+
+void ParticleSystem::RestoreSink(EffectId id, particles::SpellSink* sink)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->effect->RestoreSink(sink);
+	}
+}
+
+void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _nextId);
+	reflection::Save(out, _paused);
+	reflection::Save(out, _explodeObject);
+	reflection::Save(out, _stormBolts);
+	reflection::Save(out, _pendingStormBolts);
+	reflection::Save(out, _gestureTrails);
+	reflection::Save(out, _gestureChain);
+	reflection::Save(out, _handManaPath);
+	reflection::Save(out, _beliefWanted);
+	reflection::Save(out, _chainScrollPace);
+
+	// The effects and the world go into writers of their own first, so that the tables have every shared thing in them
+	// when they are written
+	particles::SharedTables tables;
+	_world.NumberShared(tables);
+	reflection::BinaryWriter effectBytes(out.Context());
+	particles::EffectWriter effects(effectBytes, tables);
+	effectBytes.WriteSize(_effects.size());
+	for (const auto& running : _effects)
+	{
+		reflection::Save(effectBytes, running.id);
+		reflection::Save(effectBytes, running.file);
+		reflection::Save(effectBytes, running.effect->IsSynced());
+		reflection::Save(effectBytes, running.ownedBySpell);
+		reflection::Save(effectBytes, running.everyFrame);
+		reflection::Save(effectBytes, running.inTemple);
+		reflection::Save(effectBytes, running.turnsLeft);
+		reflection::Save(effectBytes, running.owner);
+		reflection::Save(effectBytes, running.path);
+		reflection::Save(effectBytes, running.drawOffset);
+		const auto at = effectBytes.BeginLength();
+		running.effect->Save(effects);
+		effectBytes.EndLength(at);
+	}
+	reflection::BinaryWriter worldBytes(out.Context());
+	particles::EffectWriter world(worldBytes, tables);
+	_world.SaveState(world);
+	for (const auto* writer : {&effectBytes, &worldBytes})
+	{
+		for (const auto& unsaved : writer->Unsaved())
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: the save does not keep {} ({})", unsaved.place, unsaved.type);
+		}
+	}
+
+	particles::EffectWriter tableWriter(out, tables);
+	particles::SaveSharedTables(tableWriter);
+	out.Write(effectBytes.Bytes());
+	out.Write(worldBytes.Bytes());
+}
+
+bool ParticleSystem::LoadState(reflection::BinaryReader& in)
+{
+	if (!Locator::gameRandom::has_value() || !Locator::resources::has_value())
+	{
+		return false;
+	}
+	reflection::Load(in, _nextId);
+	reflection::Load(in, _paused);
+	reflection::Load(in, _explodeObject);
+	reflection::Load(in, _stormBolts);
+	reflection::Load(in, _pendingStormBolts);
+	reflection::Load(in, _gestureTrails);
+	reflection::Load(in, _gestureChain);
+	reflection::Load(in, _handManaPath);
+	reflection::Load(in, _beliefWanted);
+	reflection::Load(in, _chainScrollPace);
+
+	particles::SharedTables tables;
+	particles::EffectReader reader(in, tables);
+	particles::LoadSharedTables(reader);
+	_effects.clear();
+	const auto count = in.ReadSize();
+	for (size_t i = 0; count.has_value() && i < *count && !in.Failed(); ++i)
+	{
+		Running running;
+		bool synced = true;
+		reflection::Load(in, running.id);
+		reflection::Load(in, running.file);
+		reflection::Load(in, synced);
+		reflection::Load(in, running.ownedBySpell);
+		reflection::Load(in, running.everyFrame);
+		reflection::Load(in, running.inTemple);
+		reflection::Load(in, running.turnsLeft);
+		reflection::Load(in, running.owner);
+		reflection::Load(in, running.path);
+		reflection::Load(in, running.drawOffset);
+		const auto length = in.ReadSize();
+		if (!length.has_value())
+		{
+			return false;
+		}
+		const auto end = in.Position() + *length;
+		const auto data = LoadFile(running.file);
+		if (data)
+		{
+			// The effect is made from its file as at its start, then takes the state it had
+			running.effect = std::make_unique<particles::Effect>(
+			    data, particles::EffectServices {_classes, _world, Locator::gameRandom::value(), _noise}, glm::vec3(0.0f), 1.0f,
+			    synced);
+			if (running.effect->Load(reader) && in.Position() == end)
+			{
+				ResolveTextures(*running.effect);
+				_effects.push_back(std::move(running));
+				continue;
+			}
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: the saved effect {} does not read", running.file);
+			return false;
+		}
+		// An effect whose file is gone is left out
+		if (in.Position() > end)
+		{
+			return false;
+		}
+		[[maybe_unused]] const auto skipped = in.Take(end - in.Position());
+	}
+	if (in.Failed() || !_world.LoadState(reader))
+	{
+		return false;
+	}
+	// A thing that a particle carries holds the same record as the particle again
+	if (Locator::entitiesRegistry::has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		for (const auto& carried : tables.carried.items)
+		{
+			if (auto* holder = registry.Valid(carried->object)
+			                       ? registry.TryGet<ecs::components::CarriedByTornado>(carried->object)
+			                       : nullptr)
+			{
+				holder->carried = carried;
+			}
+		}
+	}
+	return !in.Failed();
 }

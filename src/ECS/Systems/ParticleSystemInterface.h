@@ -23,6 +23,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Particles/ManaPathMaths.h"
 #include "Particles/ParticleDrawFrame.h"
@@ -42,7 +43,7 @@ namespace openblack::ecs::systems
 
 /// The running particle effects: those miracles own and step themselves, the spot visuals scripts and the game place for
 /// a time, and any other effect, stepped once a game turn. What they draw is gathered between the turns.
-class ParticleSystemInterface
+class ParticleSystemInterface: public SavedStateInterface
 {
 public:
 	/// A running effect, by a number that is never reused
@@ -168,6 +169,8 @@ public:
 	virtual void ScrollChains(std::chrono::milliseconds /*frameRealTime*/, std::chrono::milliseconds /*frameGameTime*/) {}
 	/// The effect stops making particles and fades out as its file has it, or goes at once
 	virtual void CloseDown(EffectId id) = 0;
+	/// Puts back the miracle behind an effect after a load, with no event to the miracle
+	virtual void RestoreSink(EffectId /*id*/, particles::SpellSink* /*sink*/) {}
 	virtual void Delete(EffectId id) = 0;
 	[[nodiscard]] virtual bool IsRunning(EffectId id) const = 0;
 	[[nodiscard]] virtual particles::Effect* Find(EffectId id) = 0;

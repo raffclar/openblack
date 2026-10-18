@@ -44,6 +44,7 @@
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
@@ -60,6 +61,10 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
@@ -255,8 +260,13 @@ systems::SavedStateInterface* FindSystem()
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
 using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 25> k_SavedSystems {{
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 30> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
+    {"particles", &FindSystem<Locator::particleSystem>},
+    {"magic", &FindSystem<Locator::magicSystem>},
+    {"magicShield", &FindSystem<Locator::magicShieldSystem>},
+    {"miracleFx", &FindSystem<Locator::miracleFxSystem>},
+    {"cameraPath", &FindSystem<Locator::cameraPathSystem>},
     {"creatureLocomotion", &FindSystem<Locator::creatureLocomotionSystem>},
     {"fire", &FindSystem<Locator::fireSystem>},
     {"weather", &FindSystem<Locator::weatherSystem>},
@@ -342,6 +352,19 @@ void LogNames(std::string_view what, const Range& names)
 	SPDLOG_LOGGER_INFO(Log(), "The saved world: {} {}: {}", names.size(), what, joined);
 }
 
+/// What the archive of the entities kept, and what it did not keep. The writer's thread logs it.
+void LogWorldReport(const reflection::WorldSaveReport& report)
+{
+	SPDLOG_LOGGER_INFO(Log(), "The saved world keeps {} entities with {} components", report.entities, report.components);
+	LogNames("components with no registration", report.unregisteredComponents);
+	std::vector<std::string> unsaved;
+	for (const auto& value : report.unsavedValues)
+	{
+		unsaved.push_back(value.place + " (" + value.type + ")");
+	}
+	LogNames("values that the archive cannot keep", unsaved);
+}
+
 } // namespace
 
 std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary)
@@ -362,7 +385,14 @@ std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx
 		return PendingChunk {
 		    .tag = tag, .bytes = [made = std::make_shared<const std::vector<uint8_t>>(std::move(bytes))]() { return *made; }};
 	};
-	timed(ready(gamesave::k_EntitiesTag, reflection::SaveWorld(registry.Underlying(), reflection, &summary.world)));
+	// The entities and their components are copied now, and the writer encodes the copy on its own thread
+	timed({.tag = gamesave::k_EntitiesTag,
+	       .bytes = [snapshot = reflection::SnapshotWorld(registry.Underlying(), reflection), context = &reflection]() {
+		       reflection::WorldSaveReport report;
+		       auto bytes = reflection::SaveWorld(*snapshot, *context, &report);
+		       LogWorldReport(report);
+		       return bytes;
+	       }});
 	timed(ready(gamesave::k_ContextTag, reflection::SaveValue(reflection, registry.Context(), &summary.context)));
 	timed(ClockChunk());
 	if (Locator::camera::has_value())
@@ -388,14 +418,7 @@ std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx
 	const auto systems = SystemsChunk(reflection);
 	timed(ready(systems.tag, systems.bytes));
 	SPDLOG_LOGGER_INFO(Log(), "The saved world's blocks took (ms):{}", times);
-	SPDLOG_LOGGER_INFO(Log(), "The saved world keeps {} entities with {} components", summary.world.entities,
-	                   summary.world.components);
-	LogNames("components with no registration", summary.world.unregisteredComponents);
 	std::vector<std::string> unsaved;
-	for (const auto& value : summary.world.unsavedValues)
-	{
-		unsaved.push_back(value.place + " (" + value.type + ")");
-	}
 	for (const auto& value : summary.context)
 	{
 		unsaved.push_back("context " + value.place + " (" + value.type + ")");

@@ -43,6 +43,7 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -541,6 +542,21 @@ std::vector<MagicShieldSystemInterface::DomeDraw> MagicShieldSystem::GetDomes(fl
 		                 .scale = from.scale + ((dome.pose.scale - from.scale) * fraction)});
 	});
 	return domes;
+}
+
+void MagicShieldSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _objects);
+	reflection::Save(out, _reactions);
+	reflection::Save(out, _cursor);
+}
+
+bool MagicShieldSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _objects);
+	reflection::Load(in, _reactions);
+	reflection::Load(in, _cursor);
+	return !in.Failed();
 }
 
 void MagicShieldSystem::Reset()

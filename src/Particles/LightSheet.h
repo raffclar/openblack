@@ -114,6 +114,14 @@ public:
 	[[nodiscard]] size_t Points() const { return _points.size(); }
 	[[nodiscard]] const std::vector<float>& Heights() const { return _heights; }
 
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._points, self._pulsed, self._strengths, self._heights, self._rgb, self._spread, self._hidden, self._height,
+		      self._shiftSeconds, self._strength, self._time, self._sinceShift, self._slide, self._middle);
+	}
+
 private:
 	void UpdatePulsed(float seconds);
 	void BuildPulsed(std::vector<Vertex>& vertices, std::vector<uint32_t>& triangles);

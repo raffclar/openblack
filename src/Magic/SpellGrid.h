@@ -38,6 +38,13 @@ public:
 	[[nodiscard]] uint8_t At(glm::vec2 xz) const;
 	void Clear();
 
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._cells);
+	}
+
 private:
 	std::array<std::array<uint8_t, k_Side>, k_Side> _cells {};
 };

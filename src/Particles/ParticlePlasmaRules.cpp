@@ -25,6 +25,7 @@
 #include <ParticleFile.h>
 
 #include "BeamMaths.h"
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleDrawFrame.h"
 #include "PlasmaCommand.h"
@@ -40,6 +41,17 @@ constexpr float k_PlasmaLinger = 0.2f;
 class Plasma final: public Modifier
 {
 public:
+	void SaveHeld(const AtomRuleData& data, EffectWriter& out) const override
+	{
+		out.WritePlain(*std::static_pointer_cast<const PlasmaCommand>(data.held));
+	}
+	void LoadHeld(AtomRuleData& data, EffectReader& in) const override
+	{
+		auto held = std::make_shared<PlasmaCommand>();
+		in.ReadPlain(*held);
+		data.held = std::move(held);
+	}
+
 	explicit Plasma(const ParticleObject& object)
 	    : creator(object.String("PCreator"))
 	    , chainCreator(object.String("ChainCreator"))

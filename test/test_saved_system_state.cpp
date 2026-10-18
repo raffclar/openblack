@@ -15,6 +15,7 @@
 #include <cstdint>
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <entt/meta/context.hpp>
@@ -27,6 +28,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
+#include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
 #include "ECS/Systems/Implementations/CreatureAudioSystem.h"
 #include "ECS/Systems/Implementations/CreatureHelpSystem.h"
@@ -40,6 +42,9 @@
 #include "ECS/Systems/Implementations/HelpMessageSystem.h"
 #include "ECS/Systems/Implementations/HelpTextSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
+#include "ECS/Systems/Implementations/MagicShieldSystem.h"
+#include "ECS/Systems/Implementations/MagicSystem.h"
+#include "ECS/Systems/Implementations/MiracleFxSystem.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/TeleportSystem.h"
@@ -241,4 +246,58 @@ TEST(SavedSystemState, TheScriptsCameraComesBackAsItWas)
 	EXPECT_EQ(bytes(loaded), savedBytes);
 	EXPECT_EQ(loaded.GetTargetOrigin(), saved.GetTargetOrigin());
 	EXPECT_FALSE(loaded.Arrived());
+}
+
+TEST(SavedSystemState, TheMagicSystemsHandAndListsComeBack)
+{
+	MagicSystem saved;
+	saved.SetIgnoreInfluence(true);
+	MagicSystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_TRUE(loaded.IsIgnoringInfluence());
+	EXPECT_FALSE(loaded.GetHeldSeed().has_value());
+}
+
+TEST(SavedSystemState, TheShieldsObjectsAndTheirReactionsComeBack)
+{
+	const auto spell = static_cast<entt::entity>(3);
+	const auto dome = static_cast<entt::entity>(4);
+	// The bytes as the shield system writes them: each shield miracle's object, the reactions, and the next to spread
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, std::unordered_map<entt::entity, entt::entity> {{spell, dome}});
+	out.WriteSize(1);
+	reflection::Save(out, uint32_t {7});
+	reflection::Save(out, dome);
+	reflection::Save(out, static_cast<Reaction>(1));
+	reflection::Save(out, 25.0f);
+	reflection::Save(out, uint32_t {100});
+	reflection::Save(out, std::vector<entt::entity> {static_cast<entt::entity>(9)});
+	reflection::Save(out, size_t {0});
+	MagicShieldSystem loaded;
+	LoadInto(loaded, out.Bytes());
+	EXPECT_TRUE(loaded.HasObject(spell));
+	EXPECT_FALSE(loaded.HasObject(dome));
+}
+
+TEST(SavedSystemState, TheTribesNamesThatSpinComeBackWithTheRingOfTheHand)
+{
+	MiracleFxSystem saved;
+	saved.TribalPowerColumn(Tribe::CELTIC, {1.0f, 2.0f, 3.0f}, PlayerNames::PLAYER_TWO);
+	saved.StartTribalPowerRing(Tribe::NORSE);
+	MiracleFxSystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	// The ring is the hand's ring again: stopping it in both leaves the same names
+	saved.StopTribalPowerRing();
+	loaded.StopTribalPowerRing();
+	EXPECT_EQ(StateOf(loaded), StateOf(saved));
+}
+
+TEST(SavedSystemState, ThePauseOfTheCameraPathComesBack)
+{
+	CameraPathSystem saved;
+	saved.Pause();
+	CameraPathSystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_TRUE(loaded.IsPaused());
+	EXPECT_FALSE(loaded.HoldsCamera());
 }

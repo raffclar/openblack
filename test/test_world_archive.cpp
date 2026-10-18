@@ -10,13 +10,16 @@
 #include <cstdint>
 #include <cstring>
 
+#include <algorithm>
 #include <array>
 #include <bitset>
+#include <future>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -645,4 +648,42 @@ TEST(WorldArchive, SectionsKeepTheirNamesAndBytes)
 	auto longer = bytes;
 	longer.push_back(0);
 	EXPECT_FALSE(LoadSections(longer).has_value());
+}
+
+TEST(WorldArchive, ASnapshotGivesTheSameBytesAsTheRegistryWhateverChangesAfterIt)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry original;
+	Populate(original);
+	WorldSaveReport direct;
+	const auto bytes = SaveWorld(original, context, &direct);
+	const auto snapshot = SnapshotWorld(original, context);
+
+	// A component that shares a value the game changes is encoded at once; the others are copies
+	const auto storage = [&snapshot](std::string_view name) {
+		return std::ranges::find(snapshot->storages, name, &WorldSnapshot::Storage::name);
+	};
+	ASSERT_NE(storage("FakeHidden"), snapshot->storages.end());
+	EXPECT_FALSE(storage("FakeHidden")->copy.has_value());
+	ASSERT_NE(storage("FakeWalker"), snapshot->storages.end());
+	EXPECT_TRUE(storage("FakeWalker")->copy.has_value());
+
+	// The writer encodes the snapshot on its own thread while the game changes and destroys what it copied
+	auto encoded = std::async(std::launch::async, [&snapshot, &context]() {
+		WorldSaveReport report;
+		auto made = SaveWorld(*snapshot, context, &report);
+		return std::make_pair(std::move(made), report);
+	});
+	for (auto&& [entity, walker] : original.view<FakeWalker>().each())
+	{
+		walker = {};
+	}
+	original.clear();
+	const auto [fromSnapshot, report] = encoded.get();
+	EXPECT_EQ(fromSnapshot, bytes);
+	EXPECT_EQ(report.entities, direct.entities);
+	EXPECT_EQ(report.components, direct.components);
+	EXPECT_EQ(report.unregisteredComponents, direct.unregisteredComponents);
+	EXPECT_EQ(report.unsavedValues, direct.unsavedValues);
 }
