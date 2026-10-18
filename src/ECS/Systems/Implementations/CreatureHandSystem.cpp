@@ -103,7 +103,8 @@ const CreatureRig::ActionPoints* PointsOf(const Creature& creature)
 	return rig.actionPoints.has_value() ? &*rig.actionPoints : nullptr;
 }
 
-/// Where each part of the body a stroke can land on is this frame, in the world
+/// Where each part of the body a stroke can land on is, in the world, as the body is posed at the end of its newest game
+/// turn
 std::optional<std::array<glm::vec3, feedback::k_BodyPartCount>>
 PartsOf(const Creature& creature, const CreatureAnimation& animation, const Transform& transform)
 {
@@ -112,8 +113,9 @@ PartsOf(const Creature& creature, const CreatureAnimation& animation, const Tran
 	{
 		return std::nullopt;
 	}
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-	const auto at = [&](uint32_t bone) { return glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]); };
+	const auto pose = creature::TurnPose(animation.newerTurnPose, animation.boneMatrices,
+	                                     creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
+	const auto at = [&](uint32_t bone) { return glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3]); };
 	const auto mirror = [&](uint32_t bone) { return bone < animation.mirror.size() ? animation.mirror[bone] : bone; };
 	return std::array<glm::vec3, feedback::k_BodyPartCount> {
 	    at(points->head),

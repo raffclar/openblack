@@ -15,6 +15,7 @@
 #include <glm/mat4x4.hpp>
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureRig.h"
 #include "Creature/CreatureTurnPose.h"
 
 using namespace openblack;
@@ -88,4 +89,31 @@ TEST(CreatureTurnPose, BonesInTheWorldGoBackToTheSpaceOfTheMesh)
 			}
 		}
 	}
+}
+
+TEST(CreatureTurnPose, GameRulesReadTheNewestTurnPoseInTheWorld)
+{
+	const auto placement = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 0.0f, -4.0f));
+	const std::vector drawn {glm::mat4(1.0f), glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 1.0f, 0.0f))};
+	const std::vector newer {glm::translate(glm::mat4(1.0f), glm::vec3(11.0f, 0.0f, -4.0f)),
+	                         glm::translate(glm::mat4(1.0f), glm::vec3(11.0f, 2.0f, -4.0f))};
+	const auto pose = creature::TurnPose(newer, drawn, placement);
+	EXPECT_EQ(pose.bones.data(), newer.data());
+	EXPECT_EQ(pose.placement, glm::mat4(1.0f));
+	EXPECT_EQ(glm::vec3(creature::PosedBone(1, pose.bones, pose.placement)[3]), glm::vec3(11.0f, 2.0f, -4.0f));
+}
+
+TEST(CreatureTurnPose, WithoutATurnPoseForEachBoneGameRulesReadTheDrawnPose)
+{
+	const auto placement = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 0.0f, -4.0f));
+	const std::vector drawn {glm::mat4(1.0f), glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 1.0f, 0.0f))};
+	// Before the first turn ends there is no turn pose
+	const auto first = creature::TurnPose({}, drawn, placement);
+	EXPECT_EQ(first.bones.data(), drawn.data());
+	EXPECT_EQ(first.placement, placement);
+	// A turn pose for another skeleton is not read
+	const std::vector other {glm::mat4(1.0f)};
+	const auto rebuilt = creature::TurnPose(other, drawn, placement);
+	EXPECT_EQ(rebuilt.bones.data(), drawn.data());
+	EXPECT_EQ(glm::vec3(creature::PosedBone(1, rebuilt.bones, rebuilt.placement)[3]), glm::vec3(10.0f, 1.0f, -4.0f));
 }

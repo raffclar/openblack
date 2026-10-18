@@ -48,7 +48,8 @@ ecs::Registry& Entities()
 	return Locator::entitiesRegistry::value();
 }
 
-/// Where a creature's left and right hands are, as it is posed now; none when it has no hands
+/// Where a creature's left and right hands are, as it is posed at the end of its newest game turn; none when it has
+/// no hands
 std::optional<std::pair<glm::vec3, glm::vec3>> HandBonesOf(entt::entity creature)
 {
 	const auto& registry = Entities();
@@ -67,13 +68,14 @@ std::optional<std::pair<glm::vec3, glm::vec3>> HandBonesOf(entt::entity creature
 	}
 	const auto right = rigs.Handle(rigId)->actionPoints->rightHand;
 	const auto left = right < animation->mirror.size() ? animation->mirror[right] : right;
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	return std::pair {glm::vec3(creature::PosedBone(left, animation->boneMatrices, placement)[3]),
-	                  glm::vec3(creature::PosedBone(right, animation->boneMatrices, placement)[3])};
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	return std::pair {glm::vec3(creature::PosedBone(left, pose.bones, pose.placement)[3]),
+	                  glm::vec3(creature::PosedBone(right, pose.bones, pose.placement)[3])};
 }
 
-/// Where a creature holds its hands: between its right hand and the left, as it is posed now; where it stands when it
-/// has no hands to hold
+/// Where a creature holds its hands: between its right hand and the left, as it is posed at the end of its newest
+/// game turn; where it stands when it has no hands to hold
 glm::vec3 HandsOf(entt::entity creature)
 {
 	const auto& registry = Entities();
@@ -93,9 +95,10 @@ glm::vec3 HandsOf(entt::entity creature)
 	}
 	const auto right = rigs.Handle(rigId)->actionPoints->rightHand;
 	const auto left = right < animation->mirror.size() ? animation->mirror[right] : right;
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	const auto rightAt = glm::vec3(creature::PosedBone(right, animation->boneMatrices, placement)[3]);
-	const auto leftAt = glm::vec3(creature::PosedBone(left, animation->boneMatrices, placement)[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	const auto rightAt = glm::vec3(creature::PosedBone(right, pose.bones, pose.placement)[3]);
+	const auto leftAt = glm::vec3(creature::PosedBone(left, pose.bones, pose.placement)[3]);
 	return (rightAt + leftAt) * 0.5f;
 }
 

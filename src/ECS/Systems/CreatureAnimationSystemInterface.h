@@ -86,10 +86,10 @@ public:
 	/// change.
 	virtual void PlayCreedEvent(entt::entity creature, int32_t event) = 0;
 	/// The middle of a creature's or a copy's groin bone and its lips (the point that kisses, else its head bone), as its
-	/// body is posed now, in the world. Nothing when it has no pose or no such bones.
+	/// body is posed at the end of its newest game turn, in the world. Nothing when it has no pose or no such bones.
 	[[nodiscard]] virtual std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity creature) = 0;
 	/// A copy of a creature makes its motes or its smoke once, as a creature does each game turn, from the bones of its
-	/// pose now and the alignment that its body shows
+	/// newest turn pose and the alignment that its body shows
 	virtual void AddAlignmentMotesOf(entt::entity copy) = 0;
 };
 

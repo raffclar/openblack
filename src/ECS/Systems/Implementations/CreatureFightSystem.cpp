@@ -335,14 +335,16 @@ void SetEyes(ecs::Registry& registry, entt::entity creature, creature_eyes::Mode
 	}
 }
 
-/// The bones of a creature as the ellipsoids that fight blows strike, as its body is posed now
+/// The bones of a creature as the ellipsoids that fight blows strike, as its body is posed at the end of its newest
+/// game turn
 std::vector<physics::Ellipsoid> BonesOf(entt::entity creature)
 {
 	return Locator::dynamicsSystem::has_value() ? Locator::dynamicsSystem::value().CreatureSkeleton(creature)
 	                                            : std::vector<physics::Ellipsoid> {};
 }
 
-/// How high a creature's head is over the land under it, as its body is posed now; none without a posed head
+/// How high a creature's head is over the land under it, as its body is posed at the end of its newest game turn; none
+/// without a posed head
 std::optional<float> HeadHeightOf(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -354,8 +356,9 @@ std::optional<float> HeadHeightOf(const ecs::Registry& registry, entt::entity cr
 	{
 		return std::nullopt;
 	}
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	const auto head = glm::vec3(creature::PosedBone(rig->actionPoints->head, animation->boneMatrices, placement)[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	const auto head = glm::vec3(creature::PosedBone(rig->actionPoints->head, pose.bones, pose.placement)[3]);
 	return head.y - GroundAt(Flat(head));
 }
 
@@ -781,12 +784,13 @@ float ForwardExtentOf(const ecs::Registry& registry, entt::entity creature)
 		std::ranges::transform(animation->lastTurnBones, lastTurn.begin(), [](const glm::vec3& bone) { return Flat(bone); });
 		return fight::ForwardExtentFromLastTurn(lastTurn, Flat(locomotion->toPosition), locomotion->heading.Radians());
 	}
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
 	std::vector<glm::vec2> bones;
-	bones.reserve(animation->boneMatrices.size());
-	for (const auto& bone : animation->boneMatrices)
+	bones.reserve(pose.bones.size());
+	for (const auto& bone : pose.bones)
 	{
-		bones.push_back(Flat(glm::vec3(placement * bone[3])) - Flat(transform->position));
+		bones.push_back(Flat(glm::vec3(pose.placement * bone[3])) - Flat(transform->position));
 	}
 	return fight::ForwardExtent(bones, creature_locomotion::DirectionOf(locomotion->heading));
 }
@@ -2179,11 +2183,9 @@ void CreatureFightSystem::ProcessTurn()
 		{
 			continue;
 		}
-		// Only an action that was under way as the turn started tests its blow. An action that the duel starts in this
-		// turn makes its first test in the next turn.
-		const bool striking = fighting->fighter.state == fight::State::Action;
-		const auto action = fighting->fighter.animation;
-		StepAnimation(entity);
+		// Only an action that moves on in the step tests its blow. An action that the duel starts in this turn makes its
+		// first test in the next turn.
+		const auto step = StepAnimation(entity);
 		fighting = registry.TryGet<const CreatureFighting>(entity);
 		if (fighting == nullptr)
 		{
@@ -2193,7 +2195,7 @@ void CreatureFightSystem::ProcessTurn()
 		{
 			DuelTurn(entity);
 		}
-		BlowTurn(entity, striking, action);
+		BlowTurn(entity, step);
 		// The body takes its pose for the turn at the end of its own turn, before the other fighter makes its turn
 		if (Locator::creatureAnimationSystem::has_value())
 		{
@@ -3016,7 +3018,7 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 	NoteActions();
 }
 
-void CreatureFightSystem::StepAnimation(entt::entity entity)
+std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimation(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	constexpr auto k_StepMs = static_cast<int32_t>(k_TurnMilliseconds);
@@ -3025,18 +3027,48 @@ void CreatureFightSystem::StepAnimation(entt::entity entity)
 	auto* animation = registry.TryGet<CreatureAnimation>(entity);
 	if (fighting == nullptr || locomotion == nullptr || animation == nullptr || fighting->fighter.state == fight::State::Idle)
 	{
-		return;
+		return std::nullopt;
 	}
-	auto& fighter = fighting->fighter;
 	const auto& body = registry.Get<const Creature>(entity);
 	const bool hasOpponent = fighting->stage == CreatureFighting::Stage::Duel && InDuel(registry, fighting->opponent);
 	// While it turns on the spot in its start, the turn's own animation plays, and the start animation waits
-	if (fighter.state == fight::State::Start && fighter.turning)
+	if (fighting->fighter.state == fight::State::Start && fighting->fighter.turning)
 	{
-		return;
+		return std::nullopt;
 	}
-	const auto duration = DurationOf(entity, fighter.animation);
-	const auto speed = fight::PlaybackSpeed(fighter.animation, fighter.speed);
+	auto duration = DurationOf(entity, fighting->fighter.animation);
+	auto speed = fight::PlaybackSpeed(fighting->fighter.animation, fighting->fighter.speed);
+
+	// An action or a reel in a block whose animation reaches its end in this turn ends before it moves on: it makes no
+	// root move. The reel goes back to the block. The action goes back to its stance, also when the fight is called off
+	// (it finishes from its stance in the next turn). The next move that the player put in the queue starts at once and
+	// moves on in this turn. The computer chooses its next move in its stance.
+	const auto endingState = fighting->fighter.state;
+	if ((endingState == fight::State::Action || endingState == fight::State::BlockRecoil) &&
+	    fight::ActionEnds(fighting->fighter.timeMs, fight::TurnAdvance(speed, k_StepMs), duration))
+	{
+		fight::Enter(fighting->fighter, fight::AfterAnimation(endingState, hasOpponent));
+		if (endingState == fight::State::Action && fighting->fighter.control != fight::Control::Computer &&
+		    !fighting->fighter.queue.Empty())
+		{
+			CheckQueue(entity);
+		}
+		fighting = registry.TryGet<CreatureFighting>(entity);
+		if (fighting == nullptr)
+		{
+			return std::nullopt;
+		}
+		if (fighting->fighter.state != fight::State::Action)
+		{
+			Show(*animation, fighting->fighter, fighting->fighter.queue.HasWaiting(),
+			     DurationOf(entity, fighting->fighter.animation));
+			return std::nullopt;
+		}
+		duration = DurationOf(entity, fighting->fighter.animation);
+		speed = fight::PlaybackSpeed(fighting->fighter.animation, fighting->fighter.speed);
+	}
+	auto& fighter = fighting->fighter;
+	const auto fromMs = static_cast<int32_t>(fighter.timeMs);
 
 	// An action carries the creature as far as its animation's root moves in the turn, before the animation moves on.
 	// Only the reel in a block stops at the range.
@@ -3077,7 +3109,7 @@ void CreatureFightSystem::StepAnimation(entt::entity entity)
 			current.spell.reset();
 			fight::Enter(current, *next);
 			Show(*animation, current, false, DurationOf(entity, current.animation));
-			return;
+			return std::nullopt;
 		}
 	}
 	if (done)
@@ -3099,7 +3131,7 @@ void CreatureFightSystem::StepAnimation(entt::entity entity)
 			fighting = registry.TryGet<CreatureFighting>(entity);
 			if (fighting == nullptr)
 			{
-				return;
+				return std::nullopt;
 			}
 		}
 		const auto next = fight::AfterAnimation(current.state, hasOpponent);
@@ -3114,29 +3146,30 @@ void CreatureFightSystem::StepAnimation(entt::entity entity)
 			if (next == fight::State::Idle)
 			{
 				animation->body = {};
-				return;
+				return std::nullopt;
 			}
 		}
 	}
 	Show(*animation, current, current.queue.HasWaiting(), DurationOf(entity, current.animation));
+	if (current.state != fight::State::Action)
+	{
+		return std::nullopt;
+	}
+	return ActionStep {.animation = current.animation, .fromMs = fromMs};
 }
 
-void CreatureFightSystem::BlowTurn(entt::entity entity, bool wasInAction, size_t actionAtStart)
+void CreatureFightSystem::BlowTurn(entt::entity entity, std::optional<ActionStep> step)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	auto& fighting = registry.Get<CreatureFighting>(entity);
+	const auto& fighting = registry.Get<const CreatureFighting>(entity);
 	const auto& fighter = fighting.fighter;
-	const bool striking = wasInAction && fighter.animation == actionAtStart &&
+	const bool striking = step.has_value() && fighter.animation == step->animation &&
 	                      fighting.stage == CreatureFighting::Stage::Duel && fighter.state == fight::State::Action &&
 	                      fight::IsAttack(fighter.animation) && InDuel(registry, fighting.opponent);
-	// The tests start where the animation was at the last turn, or at its start when it began since
-	const bool same = fighting.blowTestAnimation == fighter.animation && fighter.timeMs >= fighting.blowTestFromMs;
-	const auto from = same ? static_cast<int32_t>(fighting.blowTestFromMs) : 0;
-	fighting.blowTestFromMs = fighter.timeMs;
-	fighting.blowTestAnimation = fighter.animation;
 	if (striking)
 	{
-		TestBlow(entity, from);
+		// The tests start where the animation was before it moved on in this turn
+		TestBlow(entity, step->fromMs);
 		if (registry.Valid(entity) && registry.AllOf<CreatureFighting>(entity))
 		{
 			PushApartOnBlow(registry, entity, registry.Get<const CreatureFighting>(entity).opponent);

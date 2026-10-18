@@ -1087,3 +1087,16 @@ TEST(CreatureFight, TheRootMoveRoundsEachStepToAFloatInTheGamesOrder)
 	EXPECT_EQ(std::bit_cast<uint32_t>(move.x), std::bit_cast<uint32_t>(x));
 	EXPECT_EQ(std::bit_cast<uint32_t>(move.y), std::bit_cast<uint32_t>(z));
 }
+
+TEST(CreatureFight, AnActionEndsBeforeItMovesOnWhenTheTurnWouldReachItsEnd)
+{
+	// The animation would stop short of its end: the action moves on
+	EXPECT_FALSE(ActionEnds(900.0f, 99, 1000.0f));
+	// The animation would reach its end, or go past it: the action ends before it moves on
+	EXPECT_TRUE(ActionEnds(901.0f, 99, 1000.0f));
+	EXPECT_TRUE(ActionEnds(950.0f, 99, 1000.0f));
+	// The first turn of a short action is also its last
+	EXPECT_TRUE(ActionEnds(0.0f, TurnAdvance(PlaybackSpeed(animations::k_StepForward, 1.0f), 100), 99.0f));
+	// An action without an animation ends at once
+	EXPECT_TRUE(ActionEnds(0.0f, 99, 0.0f));
+}

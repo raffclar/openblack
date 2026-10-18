@@ -10,6 +10,7 @@
 #include "CreatureScars.h"
 
 #include <optional>
+#include <vector>
 
 #include <glm/geometric.hpp>
 
@@ -18,6 +19,7 @@
 #include "Common/GameRandom.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/CreatureTurnPose.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/Mesh.h"
@@ -60,8 +62,9 @@ std::optional<glm::vec3> PosedPointOf(entt::entity creature, uint32_t creature::
 	{
 		return std::nullopt;
 	}
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	return glm::vec3(creature::PosedBone(bone, animation->boneMatrices, placement)[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	return glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3]);
 }
 } // namespace
 
@@ -90,9 +93,18 @@ void creature_scars::MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 
 	{
 		return;
 	}
+	// The line meets the skin as the body is posed at the end of its newest game turn
 	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	const auto hit = posed_model::NearestSkinHit(registry, creature, *meshes.Handle(mesh->id), placement, from,
-	                                             glm::normalize(groin - from));
+	const auto& model = *meshes.Handle(mesh->id);
+	const auto drawn = posed_model::BonesOf(registry, creature, model);
+	std::vector<glm::mat4> bones(drawn.begin(), drawn.end());
+	if (const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	    animation != nullptr && !animation->newerTurnPose.empty() && animation->newerTurnPose.size() == bones.size())
+	{
+		creature_turn_pose::ToMesh(animation->newerTurnPose, placement, bones);
+	}
+	const auto hit =
+	    posed_model::NearestSkinHit(registry, creature, model, placement, bones, from, glm::normalize(groin - from));
 	if (!hit.has_value())
 	{
 		return;

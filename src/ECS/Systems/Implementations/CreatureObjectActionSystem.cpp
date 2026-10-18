@@ -187,7 +187,8 @@ float BearingTo(const Transform& transform, const glm::vec3& target)
 	return std::acos(std::clamp(glm::dot(ahead, glm::normalize(towards)), -1.0f, 1.0f));
 }
 
-/// Where the creature's head bone is as posed now, or its position when its species has no head bone
+/// Where the creature's head bone is as posed at the end of its newest game turn, or its position when its species has
+/// no head bone
 glm::vec3 HeadOf(entt::entity creature, const Transform& transform, const Creature& body)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -197,7 +198,8 @@ glm::vec3 HeadOf(entt::entity creature, const Transform& transform, const Creatu
 	{
 		return transform.position;
 	}
-	return glm::vec3(creature::PosedBone(points->head, animation->boneMatrices, PlacementOf(transform))[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices, PlacementOf(transform));
+	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
 }
 
 /// The hand a creature acts with: the right, or its mirror
@@ -206,34 +208,45 @@ uint32_t HandBone(const CreatureRig::ActionPoints& points, const CreatureAnimati
 	return mirrored && points.rightHand < animation.mirror.size() ? animation.mirror[points.rightHand] : points.rightHand;
 }
 
-/// Where the middle of the finger ends of a hand is, as the body is posed this frame. A held thing sits there, and the
-/// hand lets go of it there.
-glm::vec3 FingerEndsOf(uint32_t hand, const CreatureAnimation& animation, const glm::mat4& placement)
+/// The pose drawn this frame, with the creature's placement
+creature::RulePose DrawnPoseOf(const CreatureAnimation& animation, const Transform& transform)
+{
+	return {.bones = animation.boneMatrices, .placement = PlacementOf(transform)};
+}
+
+/// The pose at the end of the newest game turn, which game rules read
+creature::RulePose TurnPoseOf(const CreatureAnimation& animation, const Transform& transform)
+{
+	return creature::TurnPose(animation.newerTurnPose, animation.boneMatrices, PlacementOf(transform));
+}
+
+/// Where the middle of the finger ends of a hand is, in a pose of the body. A held thing sits there, and the hand lets go
+/// of it there.
+glm::vec3 FingerEndsOf(uint32_t hand, const CreatureAnimation& animation, const creature::RulePose& pose)
 {
 	const auto bones = creature_throw::TossPointBones(animation.skeleton.parents, hand);
 	if (bones.empty())
 	{
-		return glm::vec3(creature::PosedBone(hand, animation.boneMatrices, placement)[3]);
+		return glm::vec3(creature::PosedBone(hand, pose.bones, pose.placement)[3]);
 	}
 	glm::vec3 sum(0.0f);
 	for (const auto bone : bones)
 	{
-		sum += glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
+		sum += glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3]);
 	}
 	return sum / static_cast<float>(bones.size());
 }
 
-/// Where a held thing is and how it turns, from the hand that holds it as the body is posed this frame
-creature_throw::HeldPose HeldPoseOf(const CreatureHeldObject& held, const Transform& transform,
-                                    const CreatureAnimation& animation)
+/// Where a held thing is and how it turns, from the hand that holds it in a pose of the body
+creature_throw::HeldPose HeldPoseOf(const CreatureHeldObject& held, const CreatureAnimation& animation,
+                                    const creature::RulePose& pose)
 {
-	const auto placement = PlacementOf(transform);
-	const auto hand = creature::PosedBone(held.bone, animation.boneMatrices, placement);
+	const auto hand = creature::PosedBone(held.bone, pose.bones, pose.placement);
 	const auto hang = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().HangOf(held.object) : 0.0f;
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* thing = registry.Valid(held.object) ? registry.TryGet<const Transform>(held.object) : nullptr;
 	const float thingScale = thing != nullptr ? thing->scale.x : 1.0f;
-	return creature_throw::HeldPlacement(glm::mat3(hand), FingerEndsOf(held.bone, animation, placement), held.mirrored, hang,
+	return creature_throw::HeldPlacement(glm::mat3(hand), FingerEndsOf(held.bone, animation, pose), held.mirrored, hang,
 	                                     thingScale);
 }
 
@@ -1783,7 +1796,8 @@ std::optional<glm::vec3> CreatureObjectActionSystem::GetPointingHand(entt::entit
 	{
 		return std::nullopt;
 	}
-	return glm::vec3(creature::PosedBone(hand, animation->boneMatrices, PlacementOf(*transform))[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices, PlacementOf(*transform));
+	return glm::vec3(creature::PosedBone(hand, pose.bones, pose.placement)[3]);
 }
 
 void CreatureObjectActionSystem::Cancel(entt::entity creature)
@@ -1813,15 +1827,16 @@ void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3&
 		return;
 	}
 	const auto object = held->object;
-	// The thing keeps the turn that it has in the hand as the body is posed now. Let go, it starts where it hangs, as
-	// it is drawn. Thrown, it starts with its origin at the finger ends.
+	// The thing keeps the turn that it has in the hand as the body is posed at the end of its newest game turn. Let go,
+	// it starts where it hangs in that pose. Thrown, it starts with its origin at the finger ends.
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	auto pose =
-	    transform != nullptr && animation != nullptr ? std::optional(HeldPoseOf(*held, *transform, *animation)) : std::nullopt;
+	auto pose = transform != nullptr && animation != nullptr
+	                ? std::optional(HeldPoseOf(*held, *animation, TurnPoseOf(*animation, *transform)))
+	                : std::nullopt;
 	if (pose.has_value())
 	{
-		pose = creature_throw::ReleaseStart(*pose, FingerEndsOf(held->bone, *animation, PlacementOf(*transform)),
+		pose = creature_throw::ReleaseStart(*pose, FingerEndsOf(held->bone, *animation, TurnPoseOf(*animation, *transform)),
 		                                    from == ReleaseFrom::FingerEnds);
 	}
 	registry.Remove<CreatureHeldObject>(creature);
@@ -2673,12 +2688,12 @@ void Trample(ecs::Registry& registry)
 			    }
 			    return;
 		    }
-		    const auto placement = PlacementOf(transform);
+		    const auto pose = creature::TurnPose(animation.newerTurnPose, animation.boneMatrices, PlacementOf(transform));
 		    const auto bones = PartBones(*points, animation);
 		    const auto at = [&](size_t part) {
 			    const auto bone = bones.at(part);
 			    return bone < animation.boneMatrices.size()
-			               ? glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3])
+			               ? glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3])
 			               : transform.position;
 		    };
 		    const auto size = ShownSize(body);
@@ -2737,7 +2752,8 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 	auto& registry = Locator::entitiesRegistry::value();
 	Trample(registry);
 
-	// The moments things are taken hold of and let go of, with the hand where the body was posed this frame
+	// The moments things are taken hold of and let go of, with the hand where the body was posed at the end of its
+	// newest game turn
 	struct Moment
 	{
 		entt::entity creature;
@@ -2764,7 +2780,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			continue;
 		}
 		const auto handPosition =
-		    FingerEndsOf(HandBone(*points, animation, action.mirrored), animation, PlacementOf(transform));
+		    FingerEndsOf(HandBone(*points, animation, action.mirrored), animation, TurnPoseOf(animation, transform));
 		switch (action.kind)
 		{
 		case Kind::PickUp:
@@ -2960,7 +2976,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			    return;
 		    }
 		    // It turns with the hand bone and hangs below the finger ends by its own distance
-		    const auto pose = HeldPoseOf(held, transform, animation);
+		    const auto pose = HeldPoseOf(held, animation, DrawnPoseOf(animation, transform));
 		    at->rotation = pose.rotation;
 		    at->position = pose.position;
 		    moved = true;

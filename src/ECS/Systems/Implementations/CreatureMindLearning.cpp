@@ -4766,8 +4766,9 @@ glm::vec3 mind_detail::HeadPoint(const ecs::Registry& registry, entt::entity cre
 	{
 		return fallback;
 	}
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-	return glm::vec3(creature::PosedBone(points->head, animation->boneMatrices, placement)[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
+	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
 }
 
 void CreatureMindSystem::WatchSkill(entt::entity creature, size_t skill)

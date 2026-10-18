@@ -612,8 +612,9 @@ glm::vec3 PosedHead(const ecs::Registry& registry, entt::entity creature)
 	{
 		return eyes;
 	}
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-	return glm::vec3(creature::PosedBone(points->head, animation->boneMatrices, placement)[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
+	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
 }
 
 /// How fast the head of a species speeds up as it turns, at a size
@@ -1462,12 +1463,15 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(entt::ent
 		return std::nullopt;
 	}
 	const auto* rig = RigOf(body->species);
-	const std::span<const glm::mat4> bones = animation->boneMatrices;
+	// The points are read as the body is posed at the end of its newest game turn
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	const auto bones = pose.bones;
+	const auto& placement = pose.placement;
 	if (rig == nullptr || !rig->actionPoints.has_value() || rig->actionPoints->groin >= bones.size())
 	{
 		return std::nullopt;
 	}
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
 	const auto groin = glm::vec3(creature::PosedBone(rig->actionPoints->groin, bones, placement)[3]);
 	// The lips are the point on the body that kisses, else the head bone
 	glm::vec3 lips(0.0f);
@@ -1511,9 +1515,10 @@ void CreatureAnimationSystem::AddAlignmentMotesOf(entt::entity copy)
 	}
 	auto& random = Locator::gameRandom::value();
 	const creature_alignment_motes::LocalRandom localRandom = [&random](int32_t n) { return random.LocalRand(n); };
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	const creature_alignment_motes::BonePoint bonePoint = [animation, &placement](uint32_t bone) {
-		return glm::vec3(creature::PosedBone(bone, animation->boneMatrices, placement)[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	const creature_alignment_motes::BonePoint bonePoint = [&pose](uint32_t bone) {
+		return glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3]);
 	};
 	auto& dynamics = Locator::dynamicsSystem::value();
 	const auto bones = static_cast<uint32_t>(animation->boneMatrices.size());
