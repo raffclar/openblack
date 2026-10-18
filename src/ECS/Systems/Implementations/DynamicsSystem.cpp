@@ -61,13 +61,12 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "GameDynamicsWorld.h"
 #include "InfoConstants.h"
 #include "Locator.h"
-#include "Particles/ParticleDrawFrame.h"
-#include "Particles/ParticleEffect.h"
 #include "Physics/BodyShapes.h"
 #include "Physics/ObjectRules.h"
 #include "Physics/PairRules.h"
@@ -82,9 +81,6 @@ using physics_classes::BodyKind;
 
 namespace
 {
-/// The puffs of dust are drawn from this sheet, eight frames a row
-constexpr entt::hashed_string k_DustSheet = entt::hashed_string("raw/blobs");
-constexpr entt::hashed_string k_DustSheetAlpha = entt::hashed_string("raw/blobsa");
 /// The list grows by this many slots at a time
 constexpr size_t k_SlotsPerGrowth = 16;
 /// A raise smaller than this is not one
@@ -96,37 +92,6 @@ constexpr glm::vec3 k_Up(0.0f, 1.0f, 0.0f);
 uint32_t Id(entt::entity object)
 {
 	return object == entt::null ? 0u : entt::to_integral(object) + 1u;
-}
-
-/// The dust's sprites
-particles::Creator MakeDustCreator()
-{
-	particles::Creator dust;
-	dust.kind = particles::Creator::Kind::Sprite;
-	dust.className = "PhysicsDust";
-	dust.texture = "blobs";
-	dust.spritesPerRow = 8;
-	dust.numFrames = 64;
-	dust.additive = false;
-	return dust;
-}
-
-/// The motes' sprites: the dust's sheet, added to what is behind them
-particles::Creator MakeMoteCreator()
-{
-	auto mote = MakeDustCreator();
-	mote.className = "CreatureMote";
-	mote.additive = true;
-	return mote;
-}
-
-/// The blood's sprites: the dust's sheet, kept where its alpha passes the test, writing depth
-particles::Creator MakeBloodCreator()
-{
-	auto blood = MakeDustCreator();
-	blood.className = "BlowBlood";
-	blood.alphaTest = true;
-	return blood;
 }
 
 /// Upright axes with the same heading across the ground as the given ones
@@ -189,9 +154,6 @@ DynamicsSystem::DynamicsSystem()
 DynamicsSystem::DynamicsSystem(std::unique_ptr<dynamics::World> world)
     : _world(std::move(world))
     , _hooks(std::make_unique<PhysicsClassHooks>())
-    , _dustCreator(MakeDustCreator())
-    , _moteCreator(MakeMoteCreator())
-    , _bloodCreator(MakeBloodCreator())
 {
 }
 
@@ -258,8 +220,6 @@ void DynamicsSystem::SaveState(reflection::BinaryWriter& out) const
 		}
 	}
 	reflection::Save(out, _soundPairs);
-	reflection::Save(out, _dust);
-	reflection::Save(out, _bloodPace);
 	reflection::Save(out, _hitObject);
 	reflection::Save(out, _objectWhichHit);
 }
@@ -313,8 +273,6 @@ bool DynamicsSystem::LoadState(reflection::BinaryReader& in)
 		links.push_back(std::move(link));
 	}
 	reflection::Load(in, _soundPairs);
-	reflection::Load(in, _dust);
-	reflection::Load(in, _bloodPace);
 	reflection::Load(in, _hitObject);
 	reflection::Load(in, _objectWhichHit);
 	if (in.Failed())
@@ -368,7 +326,6 @@ void DynamicsSystem::ResetSimulation()
 	_capacity = 0;
 	_inTurnUpdate = false;
 	_soundPairs.Clear();
-	_dust.clear();
 	_creatureBoxes.clear();
 	_hitObject = entt::null;
 	_objectWhichHit = entt::null;
@@ -645,13 +602,14 @@ std::vector<physics::Ellipsoid> DynamicsSystem::CreatureSkeleton(entt::entity cr
 		boxes =
 		    _creatureBoxes.emplace(meshId, physics::shapes::BoneBoxes(positions, bones, animation->boneMatrices.size())).first;
 	}
-	// Placed by the bones as they are posed now
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	// Placed by the bones as the body is posed at the end of its newest game turn
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
 	std::vector<physics::Ellipsoid> skeleton;
 	skeleton.reserve(animation->boneMatrices.size());
 	for (uint32_t bone = 0; bone < animation->boneMatrices.size(); ++bone)
 	{
-		const auto posed = creature::PosedBone(bone, animation->boneMatrices, placement);
+		const auto posed = creature::PosedBone(bone, pose.bones, pose.placement);
 		const auto box = bone < boxes->second.size() ? boxes->second[bone] : physics::shapes::BoneBox {};
 		skeleton.push_back({.boxMin = box.min, .boxMax = box.max, .localToWorld = posed, .worldToLocal = glm::inverse(posed)});
 	}
@@ -1158,7 +1116,7 @@ void DynamicsSystem::BeginTurn()
 			entry.body->density += turn::k_CorpseSoaking;
 		}
 		entry.body->BeginTurn();
-		// A creature's skeleton is hit as it is posed now
+		// A creature's skeleton is hit as it is posed at the end of its newest game turn
 		if (Entities().AllOf<Creature>(entry.entity))
 		{
 			if (auto skeleton = CreatureSkeleton(entry.entity); !skeleton.empty())
@@ -1551,23 +1509,6 @@ void DynamicsSystem::AttemptCollisionSound(PhysicsEntry& entry)
 	_soundPairs.Add(Id(hitter), Id(hit));
 }
 
-void DynamicsSystem::AddPuff(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb)
-{
-	AddPuff(position, velocity, size, argb, turn::PuffKind::Dust);
-}
-
-void DynamicsSystem::AddPuff(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb, turn::PuffKind kind)
-{
-	// Only a puff there is room for is made, and only then is its look drawn
-	if (_dust.size() >= turn::k_MostPuffs)
-	{
-		return;
-	}
-	auto* random = _world->Random();
-	const auto variant = random != nullptr ? random->CrtRand() & 15 : 0;
-	_dust.push_back({.position = position, .velocity = velocity, .size = size, .variant = variant, .argb = argb, .kind = kind});
-}
-
 void DynamicsSystem::AddLandingDust(glm::vec3 centre, float radius, uint32_t argb)
 {
 	auto* random = _world->Random();
@@ -1581,19 +1522,15 @@ void DynamicsSystem::AddLandingDust(glm::vec3 centre, float radius, uint32_t arg
 		const float z = speed();
 		const float y = speed();
 		const float x = speed();
-		if (_dust.size() >= turn::k_MostPuffs)
+		if (Locator::liquidParticleSystem::has_value())
 		{
-			continue;
+			Locator::liquidParticleSystem::value().Add(centre, glm::vec3(x, y, z), turn::LandingPuffSize(radius), argb,
+			                                           liquid_particles::Kind::Dust);
 		}
-		_dust.push_back({.position = centre,
-		                 .velocity = glm::vec3(x, y, z),
-		                 .size = turn::LandingPuffSize(radius),
-		                 .variant = random != nullptr ? random->CrtRand() & 15 : 0,
-		                 .argb = argb});
 	}
 }
 
-void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
+void DynamicsSystem::UpdateFrame(float turnFraction)
 {
 	auto& registry = Entities();
 	bool drawn = false;
@@ -1629,71 +1566,8 @@ void DynamicsSystem::UpdateFrame(float turnFraction, float gameSeconds)
 		registry.AssignOrReplace<PhysicsDrawPose>(entry->entity, PhysicsDrawPose {.axes = pose.axes, .origin = pose.origin});
 		drawn = true;
 	}
-	AdvanceDust(gameSeconds, true);
 	if (drawn)
 	{
 		registry.SetDirty();
 	}
-}
-
-void DynamicsSystem::AdvancePuffs(float seconds)
-{
-	// The frame's own step already gave the drops of blood their frames
-	AdvanceDust(seconds, false);
-}
-
-void DynamicsSystem::AdvanceDust(float seconds, bool redrawBlood)
-{
-	auto* random = _world->Random();
-	const auto draw = [random]() { return random != nullptr ? static_cast<int32_t>(random->CrtRand()) : 0; };
-	const auto landHeight = [this](glm::vec2 xz) { return _ground != nullptr ? _ground->HeightAt(xz) : 0.0f; };
-	// A drop of blood shows another of its frames at random each time the game drew it: at most 60 times a second
-	const bool redraw =
-	    redrawBlood && Locator::time::has_value() && frame_pace::Due(_bloodPace, Locator::time::value().GetFrameRealTime());
-	std::erase_if(_dust, [&](turn::DustPuff& puff) {
-		if (puff.kind != turn::PuffKind::Blood)
-		{
-			return !turn::AdvanceDustPuff(puff, seconds);
-		}
-		if (redraw)
-		{
-			puff.variant = draw();
-		}
-		return !turn::AdvanceBloodDrop(puff, seconds, landHeight, draw);
-	});
-}
-
-void DynamicsSystem::CollectDrawFrame(particles::draw::Frame& frame) const
-{
-	if (_dust.empty())
-	{
-		return;
-	}
-	const particles::draw::Sources sources {
-	    .textures = [](std::string_view /*texture*/) -> std::optional<std::pair<entt::id_type, entt::id_type>> {
-		    return std::pair {k_DustSheet.value(), k_DustSheetAlpha.value()};
-	    },
-	    .playerColour = {},
-	    .random = {},
-	};
-	particles::Effect::DrawWalk walk;
-	for (const auto& puff : _dust)
-	{
-		walk.steps.push_back({.chain = false, .index = static_cast<uint32_t>(walk.atoms.size())});
-		walk.atoms.push_back({
-		    .creator = puff.kind == turn::PuffKind::Blood ? &_bloodCreator
-		               : turn::IsAdditive(puff.kind)      ? &_moteCreator
-		                                                  : &_dustCreator,
-		    .position = puff.position,
-		    .rotation = glm::mat3(1.0f),
-		    .scale = turn::DustPuffSize(puff),
-		    .stretch = 1.0f,
-		    .alpha = static_cast<float>(puff.argb >> 24u),
-		    .frame = static_cast<float>(turn::DustPuffFrame(puff)),
-		    .rgb = {static_cast<uint8_t>((puff.argb >> 16u) & 0xFFu), static_cast<uint8_t>((puff.argb >> 8u) & 0xFFu),
-		            static_cast<uint8_t>(puff.argb & 0xFFu)},
-		});
-	}
-	particles::draw::AddEffect(frame, walk, particles::draw::DrawPath::Sorted, _dust.front().position,
-	                           particles::draw::k_NeutralPlayer, sources);
 }

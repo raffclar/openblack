@@ -60,6 +60,15 @@ float ReadSpeedFactor(float readSpeed)
 	return x87::Add(value, 0.2);
 }
 
+std::optional<DialogueVoice> VoiceFor(bool sampleKnown, bool advisorsBank, bool soundDeviceWorks)
+{
+	if (!sampleKnown || !soundDeviceWorks)
+	{
+		return std::nullopt;
+	}
+	return DialogueVoice {.advisorsBank = advisorsBank};
+}
+
 DialogueText::DialogueText(int screenHeight, bool biggerText, Settings settings, Queries queries, Hooks hooks)
     : _settings(settings)
     , _queries(std::move(queries))

@@ -204,6 +204,14 @@ TEST(CreatureLayers, ABodyThatStandsIsNotHurried)
 	EXPECT_FALSE(Hurry({}).hurried);
 }
 
+TEST(CreatureLayers, AFaintKeepsItsPaceWhenHurried)
+{
+	// The game ends only the actions and statics rapidly: a faint that lies where it fell keeps its pace
+	auto faint = *PlaySequence({}, animations::k_Faint, animations::k_Faint, animations::k_GetUp);
+	faint.holdLoop = true;
+	EXPECT_FALSE(Hurry(faint).hurried);
+}
+
 TEST(CreatureLayers, ABodyTimedByWhatPlaysItStaysWherePut)
 {
 	// A fight sets its fighter's move at the move's own time each frame; the frame mustn't move it on as well, or the

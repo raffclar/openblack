@@ -124,6 +124,8 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
@@ -200,6 +202,7 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
@@ -395,7 +398,7 @@ void KeepDebugWindowsOffTheMouse(bool off)
 bool HasPoint(Kind kind)
 {
 	return kind == Kind::WalkTo || kind == Kind::RunTo || kind == Kind::FleeFrom || kind == Kind::TurnToFace ||
-	       kind == Kind::ThrowAt || kind == Kind::PointAt;
+	       kind == Kind::ThrowAt || kind == Kind::PointAt || kind == Kind::TurnToFaceWhenStill;
 }
 
 std::string_view Started(bool started)
@@ -590,6 +593,10 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	{
 		Locator::livingActionSystem::value().VillagerSetScriptState(entity, VillagerStates::InScript);
 	}
+	if (object.scriptControlled && registry.AllOf<ecs::components::Villager>(entity))
+	{
+		registry.AssignOrReplace<ecs::components::ScriptControlled>(entity);
+	}
 	if (object.disciple != VillagerDisciple::None && registry.AllOf<ecs::components::Villager>(entity))
 	{
 		ecs::villager_disciple::SetType(entity, object.disciple);
@@ -731,6 +738,7 @@ void Runner::Start(const Scenario& scenario)
 	_globes.clear();
 	_temples.clear();
 	_throwsDue.clear();
+	_turnsAsked.clear();
 	for (const auto& setup : scenario.throws)
 	{
 		_throwsDue.emplace_back(setup.delaySeconds);
@@ -854,6 +862,15 @@ void Runner::Start(const Scenario& scenario)
 			{
 				magic::town_belief::SetInPlayer(impression->belief, PlayerNames::PLAYER_ONE, *scenario.townBeliefInPlayer);
 			}
+		}
+	}
+	if (scenario.townOwner.has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			registry.Get<ecs::components::Town>(town->second).owner = *scenario.townOwner;
 		}
 	}
 	if (scenario.townFeelingAboutCreatures.has_value())
@@ -1510,9 +1527,15 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 		if (Locator::creatureSkinSystem::has_value())
 		{
 			auto& skins = Locator::creatureSkinSystem::value();
-			for (size_t slot = 0; slot < setup.tattoos.size(); ++slot)
+			// The tattoos go on as the end of a drag in the tattoo editor puts them on
+			if (!setup.tattoos.empty())
 			{
-				skins.SetTattoo(entity, slot, setup.tattoos[slot]);
+				creature_tattoo::Slots slots {};
+				std::copy_n(setup.tattoos.begin(), std::min(setup.tattoos.size(), slots.size()), slots.begin());
+				const auto pictures = Locator::tattooEditorSystem::has_value()
+				                          ? Locator::tattooEditorSystem::value().GetPictures()
+				                          : creature_tattoo::Pictures {};
+				skins.PutOnTattoos(entity, slots, pictures);
 			}
 			for (const auto& wound : setup.wounds)
 			{
@@ -1841,6 +1864,27 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return HandTakeFireBall();
 	case Kind::HandTapObject:
 		return HandTapObject(command.object);
+	case Kind::ScriptRelease:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value() || !Locator::scriptObjects::has_value())
+		{
+			return "nothing to release";
+		}
+		Locator::scriptObjects::value().ReleaseFromScript(*object);
+		return Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptControlled>(*object) ? "still controlled"
+		                                                                                            : "released";
+	}
+	case Kind::FinishBuilding:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value())
+		{
+			return "nothing to finish";
+		}
+		ecs::construction::SetBuilt(*object, 1.0f);
+		return "finished";
+	}
 	case Kind::RemoveObject:
 	{
 		const auto object = ObjectAt(command.object);
@@ -1971,6 +2015,30 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		                   guidance::k_VoicePitch, command.ctrl ? ", placed" : ", heard everywhere",
 		                   started == entt::null ? ", not started" : "");
 	}
+	case Kind::FillSiteIcons:
+	{
+		if (!Locator::infoConstants::has_value())
+		{
+			return "no info";
+		}
+		const auto& info = Locator::infoConstants::value();
+		auto& registry = Locator::entitiesRegistry::value();
+		size_t filled = 0;
+		registry.Each<ecs::components::WorshipIcon>([&](ecs::components::WorshipIcon& icon) {
+			const auto* site =
+			    registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+			if (site == nullptr || site->player != command.player || icon.seed == SpellSeedType::None)
+			{
+				return;
+			}
+			const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, icon.seed), icon.powerUp);
+			icon.store = magic::GetChantsRequiredToCreate(info, type) * command.amount;
+			++filled;
+		});
+		return fmt::format("{} icons filled to {:.0f}%", filled, command.amount * 100.0f);
+	}
+	case Kind::ChargeIconWithSeedHeld:
+		return ChargeIconWithSeedHeld(command);
 	case Kind::HandRelease:
 		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
 		{
@@ -2089,6 +2157,51 @@ std::string Runner::HandTapObject(size_t index)
 	const bool took =
 	    Locator::abodeKnockSystem::value().Tap(*object, transform != nullptr ? transform->position : glm::vec3(0.0f), true);
 	return took ? "knocked" : "it takes no knock";
+}
+
+std::string Runner::ChargeIconWithSeedHeld(const Command& command)
+{
+	if (!Locator::infoConstants::has_value() || !Locator::spellIconSystem::has_value() || !Locator::magicSystem::has_value() ||
+	    !Locator::worshipSiteSystem::has_value())
+	{
+		return "no miracles";
+	}
+	const auto& info = Locator::infoConstants::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto seedType = static_cast<SpellSeedType>(command.value);
+	std::optional<entt::entity> found;
+	registry.Each<const ecs::components::WorshipIcon>([&](entt::entity entity, const ecs::components::WorshipIcon& icon) {
+		const auto* site = registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+		if (!found.has_value() && site != nullptr && site->player == command.player && icon.seed == seedType)
+		{
+			found = entity;
+		}
+	});
+	if (!found.has_value())
+	{
+		return "no such icon";
+	}
+	auto& icon = registry.Get<ecs::components::WorshipIcon>(*found);
+	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, icon.seed), magic::k_BasePowerUpLevel);
+	const float cost = magic::GetChantsRequiredToCreate(info, type);
+	// The icon is charged full and a tap puts its miracle in the hand
+	icon.charging = false;
+	icon.store = cost;
+	Locator::spellIconSystem::value().Tap(*found, command.player);
+	const auto held = Locator::magicSystem::value().GetHeldSeed();
+	if (!held.has_value() || std::ranges::find(icon.seedsOut, *held) == icon.seedsOut.end())
+	{
+		return "the hand did not take the seed";
+	}
+	// The seed keeps only a part of its charge, and the icon charges again for the hand that holds the seed
+	auto& seed = registry.Get<ecs::components::SpellSeed>(*held);
+	seed.chantStore = cost * command.amount;
+	icon.charging = true;
+	icon.charger = command.player;
+	icon.powerUp = magic::k_BasePowerUpLevel;
+	icon.store = 0.0f;
+	Locator::worshipSiteSystem::value().ReturnChants(icon.site, cost);
+	return fmt::format("the seed in the hand holds {:.0f} of {:.0f}, and its icon charges", seed.chantStore, cost);
 }
 
 std::string Runner::HandTakeFireBall()
@@ -2370,7 +2483,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
-	    command.kind == Kind::PlayGuidanceVoice)
+	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
+	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2778,7 +2892,7 @@ void Runner::Give(const Command& command)
 		}
 		break;
 	case Kind::FleeFrom:
-		result = MoveResultName(locomotion.FleeFrom(*entity, point));
+		result = MoveResultName(locomotion.FleeFrom(*entity, point, Pace::Run));
 		break;
 	case Kind::TurnToFace:
 		result = locomotion.TurnToFace(*entity, point) ? "turning" : "can't";
@@ -2788,6 +2902,20 @@ void Runner::Give(const Command& command)
 		break;
 	case Kind::Stop:
 		locomotion.Stop(*entity);
+		break;
+	case Kind::StopAtOnce:
+		locomotion.StopAtOnce(*entity);
+		break;
+	case Kind::TurnToFaceWhenStill:
+		if (locomotion.TurnToFace(*entity, point))
+		{
+			result = "turning";
+		}
+		else
+		{
+			_turnsAsked.emplace_back(*entity, point);
+			result = "waits until it stands";
+		}
 		break;
 	case Kind::ScriptPlace:
 		locomotion.PlaceWithoutWalking(*entity, {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y});
@@ -2972,7 +3100,11 @@ void Runner::Give(const Command& command)
 	case Kind::AttachObjectScriptSound:
 	case Kind::SayLine:
 	case Kind::PlayGuidanceVoice:
+	case Kind::ScriptRelease:
+	case Kind::FillSiteIcons:
+	case Kind::ChargeIconWithSeedHeld:
 	case Kind::RemoveObject:
+	case Kind::FinishBuilding:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
@@ -3013,6 +3145,7 @@ void Runner::Give(const Command& command)
 	case Kind::PointerOnCaveCreature:
 	case Kind::PointerOnCreature:
 	case Kind::PointerOnAltar:
+	case Kind::PointerOnRope:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:
@@ -3406,6 +3539,7 @@ void Runner::Update(float seconds)
 	UpdateRewards();
 	UpdateMiracles(seconds);
 	UpdateVillagerWalks();
+	UpdateTurnsAsked();
 	UpdateThrows();
 	WatchGesture();
 	FinishTakingFireBall();
@@ -3424,6 +3558,21 @@ void Runner::Update(float seconds)
 	{
 		Give(_scenario->commands[index]);
 	}
+}
+
+void Runner::UpdateTurnsAsked()
+{
+	if (!Locator::creatureLocomotionSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		_turnsAsked.clear();
+		return;
+	}
+	auto& locomotion = Locator::creatureLocomotionSystem::value();
+	const auto& registry = Locator::entitiesRegistry::value();
+	// A turn asked for again starts once the creature stands. A creature that is gone asks no more.
+	std::erase_if(_turnsAsked, [&](const std::pair<entt::entity, glm::vec2>& asked) {
+		return !registry.Valid(asked.first) || locomotion.TurnToFace(asked.first, asked.second);
+	});
 }
 
 void Runner::UpdateThrows()
@@ -4124,6 +4273,49 @@ std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size) const
 	return glm::ivec2(glm::round(glm::vec2(screen)));
 }
 
+std::optional<glm::ivec2> Runner::RopeOnScreen(size_t creature, glm::vec2 size) const
+{
+	const auto entity = CreatureAt(creature);
+	if (!entity.has_value() || !Locator::camera::has_value() || !Locator::leashSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
+	if (leash == nullptr || !leash->worn.has_value())
+	{
+		return std::nullopt;
+	}
+	// The rope runs from the collar to the thing it is tied to, and it sags below the straight line between them. The
+	// points of the straight line are tried from its middle out, away from the collar and the thing. Below each point
+	// on the screen, the first pixel that touches the rope is taken.
+	const auto& camera = Locator::camera::value();
+	const auto& rope = leash->worn->rope;
+	auto& leashes = Locator::leashSystem::value();
+	constexpr int k_Steps = 16;
+	constexpr int k_MostPixelsBelow = 200;
+	for (int tried = 0; tried < k_Steps - 1; ++tried)
+	{
+		const int step = (k_Steps / 2) + ((tried % 2 == 0) ? tried / 2 : -((tried + 1) / 2));
+		const auto point = rope.end + (rope.start - rope.end) * (static_cast<float>(step) / static_cast<float>(k_Steps));
+		glm::vec3 screen;
+		if (!camera.ProjectWorldToScreen(point, {0.0f, 0.0f, size.x, size.y}, screen))
+		{
+			continue;
+		}
+		const auto pixel = glm::ivec2(glm::round(glm::vec2(screen)));
+		for (int below = 0; below < k_MostPixelsBelow; ++below)
+		{
+			const ecs::systems::LeashSystemInterface::RopeFrame frame {
+			    .viewProjection = camera.GetViewProjectionMatrix(), .screenSize = size, .cursor = pixel + glm::ivec2(0, below)};
+			if (leashes.RopeUnderCursor(PlayerNames::PLAYER_ONE, frame).has_value())
+			{
+				return frame.cursor;
+			}
+		}
+	}
+	return std::nullopt;
+}
+
 std::optional<glm::ivec2> Runner::CaveCreatureOnScreen(glm::vec2 size)
 {
 	if (!Locator::creatureCaveSystem::has_value() || !Locator::camera::has_value())
@@ -4233,6 +4425,20 @@ std::string Runner::GivePointerCommand(const Command& command)
 		}
 		const auto moved = *to - pointer.position;
 		pointer.position = *to;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerOnRope:
+	{
+		const auto to = RopeOnScreen(command.creature, size);
+		if (!to.has_value())
+		{
+			return "no tied rope on the screen";
+		}
+		const auto moved = *to - pointer.position;
+		pointer.position = *to;
+		_framesSincePointerMoved = 0;
 		actions.SetScriptedPointer(pointer);
 		PushMotion(pointer, moved);
 		break;
@@ -4654,6 +4860,7 @@ std::string Runner::RecordChallenge(const Command& command) const
 	snapshot.challenge = static_cast<uint32_t>(command.value);
 	snapshot.reminderScript = "";
 	snapshot.success = command.amount;
+	snapshot.alignment = command.alignment;
 	snapshot.position = position;
 	snapshot.focus = focus;
 	snapshot.quest = command.ctrl;

@@ -14,6 +14,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/GUtilsDistance.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureLayers.h"
 
@@ -24,10 +25,11 @@ std::optional<glm::vec2> creature_drink::NearestWaterPoint(glm::vec2 from, std::
 {
 	std::optional<glm::vec2> nearest;
 	float best = std::numeric_limits<float>::max();
-	// The game looks at the point that the land made last first, and keeps a point only when it is strictly nearer
+	// The game looks at the point that the land made last first, and keeps a point only when it is strictly nearer. The
+	// distance is the table distance between the two map positions
 	for (const auto& point : points | std::views::reverse)
 	{
-		const auto distance = glm::distance(from, point);
+		const auto distance = gutils::GetDistanceInMetres(point, from);
 		if (distance < k_WaterPointRange && distance < best)
 		{
 			best = distance;

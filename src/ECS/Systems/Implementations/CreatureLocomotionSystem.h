@@ -13,7 +13,6 @@
 #include <random>
 #include <unordered_map>
 
-#include "Common/RandomNumberManager.h"
 #include "Creature/CreatureRoute.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "Enums.h"
@@ -37,15 +36,19 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 	void ProcessTurn() override;
 	void Update(float turnFraction) override;
+	void ShowTurnEnd(entt::entity creature) override;
 
 	MoveResult MoveTo(entt::entity creature, glm::vec2 point, Pace pace, float minDistance, float maxDistance) override;
 	MoveResult LeadTo(entt::entity creature, glm::vec2 point, float extraSpeed, float maxDistance) override;
 	MoveResult MoveToObject(entt::entity creature, entt::entity target, Pace pace, float extra) override;
 	MoveResult Follow(entt::entity creature, entt::entity target, float distance, Pace pace) override;
-	MoveResult FleeFrom(entt::entity creature, glm::vec2 threat) override;
+	MoveResult FleeFrom(entt::entity creature, glm::vec2 threat, Pace pace) override;
 	bool TurnToFace(entt::entity creature, glm::vec2 point) override;
 	bool TurnToHeading(entt::entity creature, GameHeading heading) override;
+	bool TurnToFaceAtOnce(entt::entity creature, glm::vec2 point) override;
+	bool TurnToHeadingAtOnce(entt::entity creature, GameHeading heading) override;
 	void Stop(entt::entity creature) override;
+	void StopAtOnce(entt::entity creature) override;
 	void ResetPace(entt::entity creature) override;
 	void Place(entt::entity creature, glm::vec3 position) override;
 	void PlaceWithoutWalking(entt::entity creature, glm::vec3 position) override;
@@ -54,18 +57,24 @@ public:
 	[[nodiscard]] std::vector<creature_route::Circle> ThingCirclesIn(entt::entity creature, glm::ivec2 cell) override;
 
 private:
+	/// The heading to face a point from where the creature is, or none when the point is where it is
+	[[nodiscard]] static std::optional<GameHeading> HeadingToFace(entt::entity creature, glm::vec2 point);
+	/// Whether its body plays an action, as an action from its mind or an action with a thing
+	[[nodiscard]] bool PlaysBodyAction(entt::entity creature) const;
+	/// Its walk stops, and it turns on the spot to the heading
+	bool StartTurnOnTheSpot(entt::entity creature, GameHeading heading);
 	/// Starts a move for a fraction of top speed, the creature's state already gathered, to a point or up to a thing
 	MoveResult StartMove(entt::entity creature, components::CreatureLocomotion& locomotion, glm::vec2 point, float fraction,
 	                     float minDistance, float maxDistance, bool ontoDestination);
 	/// How far round its middle a species' body reaches at a drawn scale of one, worked out once
 	float BodyRadius(CreatureType species);
+	/// Sets the breath of a creature that stops back to its resting period
+	static void BreatheAtRest(entt::entity creature);
 
 	/// Where creatures can walk, sorted from the land the first time it is wanted. The system is made anew with each
 	/// land.
 	std::optional<creature_route::WalkableLand> _land;
 	std::unordered_map<CreatureType, float> _bodyRadii;
-	/// Fidgets and running away distances are chosen at random, apart from the game's own random numbers
-	RandomStreamSource _random {RandomStream::CreatureLocomotion};
 };
 
 } // namespace openblack::ecs::systems

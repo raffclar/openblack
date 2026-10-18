@@ -41,6 +41,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -107,7 +108,7 @@ public:
 class OneGroupDances final: public ecs::systems::DanceSystemInterface
 {
 public:
-	entt::entity Create(DanceInfo type, const glm::vec3&, entt::entity owner, uint32_t, bool) override
+	entt::entity Create(DanceInfo type, const glm::vec3&, entt::entity owner, uint32_t, bool, entt::entity) override
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto dance = registry.Create();
@@ -190,9 +191,30 @@ public:
 	[[nodiscard]] std::optional<bool> BirdCanBePickedUpByCreature(entt::entity) const override { return std::nullopt; }
 	[[nodiscard]] bool CanBeStompedOnByCreature(entt::entity, float) const override { return false; }
 	void StopReaction(entt::entity, bool resetState) override { stops.push_back(resetState); }
+	[[nodiscard]] bool IsAvailableForReaction(entt::entity) const override { return available; }
+	bool SetupLookAtObject(entt::entity, entt::entity object) override
+	{
+		lookedAt.push_back(object);
+		return true;
+	}
+	bool SetupGotoFood(entt::entity, entt::entity food) override
+	{
+		wentTo.push_back(food);
+		return true;
+	}
+	[[nodiscard]] uint32_t ReactToFoodPriority(entt::entity, entt::entity, uint32_t tablePriority) const override
+	{
+		return foodInterests ? tablePriority : 0;
+	}
 
 	/// For each end of a reaction, whether the animal goes into the state after the reaction
 	std::vector<bool> stops;
+	/// Whether the animal may take up a reaction, and whether food interests it
+	bool available {false};
+	bool foodInterests {false};
+	/// The things that the animal looked at and the food that it went to
+	std::vector<entt::entity> lookedAt;
+	std::vector<entt::entity> wentTo;
 };
 } // namespace
 
@@ -213,9 +235,9 @@ protected:
 		Locator::entitiesMap::emplace<MapProduction>();
 		Locator::livingActionSystem::emplace<ecs::systems::LivingActionSystem>();
 		_info = std::make_unique<InfoConstants>();
-		for (const auto type :
-		     {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield, Reaction::FleeFromObject,
-		      Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed, Reaction::ReactToNewBuilding})
+		for (const auto type : {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield,
+		                        Reaction::FleeFromObject, Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed,
+		                        Reaction::ReactToNewBuilding, Reaction::LookAtObject, Reaction::ReactToFood})
 		{
 			auto& reaction = _info->reaction.at(static_cast<size_t>(type));
 			reaction.priority = type == Reaction::FleeFromSpell ? 150 : 120;
@@ -389,6 +411,8 @@ TEST_F(Reactions, TheReactionsGoingOnComeBackFromASave)
 	ASSERT_TRUE(_reactions.Find(id).has_value());
 	reflection::BinaryWriter out(context);
 	_reactions.SaveState(out);
+	// Every value of the reactions goes in, with the things that react to each
+	EXPECT_TRUE(out.Unsaved().empty());
 	ecs::systems::ReactionSystem loaded;
 	const reflection::EntityRemap identity;
 	reflection::BinaryReader in(context, out.Bytes(), identity);
@@ -415,6 +439,19 @@ TEST_F(Reactions, AVillagerTooWeakToWalkTakesUpNoMiracle)
 	registry.Get<Villager>(_villagers[1]).life = 0.2f;
 	_reactions.Create(Miracle());
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::LookingAtObjectReaction);
+}
+
+TEST_F(Reactions, AVillagerCountedAtWorshipTakesUpNoMiracle)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The one right by the miracle is counted at worship; the next is only on its way to the site
+	registry.Assign<Worshipper>(_villagers[0], Worshipper {.atWorship = true});
+	registry.Assign<Worshipper>(_villagers[1], Worshipper {.onTheWay = true});
+	_reactions.Create(Miracle());
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	const auto* held = registry.TryGet<const LivingReaction>(_villagers[0]);
+	EXPECT_TRUE(held == nullptr || held->reaction == 0u);
 	EXPECT_EQ(StateOf(_villagers[1]), VillagerStates::LookingAtObjectReaction);
 }
 
@@ -1565,6 +1602,40 @@ TEST_F(Reactions, VillagersDanceRoundANewBuildingUnimpressedAndGoBackWhenItsReac
 	Locator::danceSystem::reset();
 }
 
+TEST_F(Reactions, ATownCelebratingWithoutACentreMakesOneEmptyDanceAndItsPeopleLook)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::danceSystem::emplace<OneGroupDances>();
+	auto& dances = static_cast<OneGroupDances&>(Locator::danceSystem::value());
+	_info->reaction.at(static_cast<size_t>(Reaction::ReactToTownCelebration)) =
+	    _info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell));
+	Locator::infoConstants::emplace(*_info);
+	registry.Assign<Transform>(_town, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	auto source = Miracle(Reaction::ReactToTownCelebration);
+	source.initiator = _town;
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	const auto id = reactions.Create(source);
+	// One dance about the town is made for the reaction, the dance about a person, with no owner
+	ASSERT_EQ(dances.made.size(), 1u);
+	EXPECT_EQ(dances.made.front(), DanceInfo::DanceAroundPerson);
+	const auto dance = reactions.Find(id)->dance;
+	ASSERT_TRUE(dance != entt::null);
+	EXPECT_TRUE(registry.Get<const Dance>(dance).owner == entt::null);
+	// The town's people in reach look at the town and do not join the dance
+	for (const auto villager : {_villagers[0], _villagers[1]})
+	{
+		EXPECT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+		EXPECT_FALSE(registry.AllOf<Dancer>(villager));
+	}
+	// The dance goes with the reaction
+	reactions.Remove(id);
+	ASSERT_EQ(dances.ended.size(), 1u);
+	EXPECT_EQ(dances.ended.front(), dance);
+	Locator::reactionSystem::reset();
+	Locator::danceSystem::reset();
+}
+
 TEST(ReactionRules, OnlyAnOrdinaryVillagerHeedsItsOwnTownCelebratingWithoutACentre)
 {
 	using magic::villager_reaction::CelebrationWatch;
@@ -1763,4 +1834,66 @@ TEST(DiscipleGlow, TheFrameComesFromTheMillisecondsIntoTheHalfSecond)
 	EXPECT_EQ(ecs::villager_disciple::GlowFrame(100), 3u);
 	EXPECT_EQ(ecs::villager_disciple::GlowFrame(1400), 12u);
 	EXPECT_EQ(ecs::villager_disciple::GlowFrame(99), 2u);
+}
+
+TEST(VillagerAvailability, AVillagerThatAScriptControlsReactsAgainWhenTheScriptReleasesIt)
+{
+	magic::villager_reaction::Availability facts {.stateLetsItReact = true, .life = 0.8f, .crawlLife = 0.1f};
+	ASSERT_TRUE(magic::villager_reaction::Available(facts, Reaction::FleeFromObject));
+	// The script takes control: the villager takes up no reaction, also not food
+	facts.scriptControlled = true;
+	EXPECT_FALSE(magic::villager_reaction::Available(facts, Reaction::FleeFromObject));
+	EXPECT_FALSE(magic::villager_reaction::Available(facts, Reaction::ReactToFood));
+	// The script releases it: it reacts again
+	facts.scriptControlled = false;
+	EXPECT_TRUE(magic::villager_reaction::Available(facts, Reaction::FleeFromObject));
+}
+
+TEST(VillagerAvailability, AWeakVillagerReactsOnlyToFoodAndADyingOneToNothing)
+{
+	magic::villager_reaction::Availability facts {.stateLetsItReact = true, .life = 0.1f, .crawlLife = 0.1f};
+	EXPECT_FALSE(magic::villager_reaction::Available(facts, Reaction::FleeFromObject));
+	EXPECT_TRUE(magic::villager_reaction::Available(facts, Reaction::ReactToFood));
+	facts.life = 0.5f;
+	facts.dyingNow = true;
+	EXPECT_FALSE(magic::villager_reaction::Available(facts, Reaction::ReactToFood));
+	facts.dyingNow = false;
+	facts.stateLetsItReact = false;
+	EXPECT_FALSE(magic::villager_reaction::Available(facts, Reaction::ReactToFood));
+}
+
+TEST_F(Reactions, AnAnimalLooksAtAThingToLookAt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactToEverything(_info->animal.at(static_cast<size_t>(AnimalInfo::Cow)));
+	Locator::infoConstants::emplace(*_info);
+	auto& animals = static_cast<FakeAnimals&>(Locator::animalSystem::emplace<FakeAnimals>());
+	animals.available = true;
+	const auto cow = registry.Create();
+	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	Locator::entitiesMap::value().Sync();
+	_reactions.Create(Miracle(Reaction::LookAtObject));
+	EXPECT_EQ(animals.lookedAt, std::vector<entt::entity> {static_cast<entt::entity>(1000)});
+	EXPECT_EQ(registry.Get<const LivingReaction>(cow).type, Reaction::LookAtObject);
+	Locator::animalSystem::reset();
+}
+
+TEST_F(Reactions, AnAnimalGoesOnlyToFoodThatInterestsIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactToEverything(_info->animal.at(static_cast<size_t>(AnimalInfo::Cow)));
+	Locator::infoConstants::emplace(*_info);
+	auto& animals = static_cast<FakeAnimals&>(Locator::animalSystem::emplace<FakeAnimals>());
+	animals.available = true;
+	const auto cow = registry.Create();
+	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	Locator::entitiesMap::value().Sync();
+	_reactions.Create(Miracle(Reaction::ReactToFood));
+	EXPECT_TRUE(animals.wentTo.empty());
+	animals.foodInterests = true;
+	_reactions.Create(Miracle(Reaction::ReactToFood));
+	EXPECT_EQ(animals.wentTo, std::vector<entt::entity> {static_cast<entt::entity>(1000)});
+	Locator::animalSystem::reset();
 }

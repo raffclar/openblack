@@ -471,7 +471,7 @@ bool ArtefactSystem::JoinDance(entt::entity object, TownArtefact& artefact, entt
 		// Its dance is chosen by how wide it is, made where it stands, lasting the dance's length
 		const auto type = rules::DanceForRadius(world_objects::SizeOf(object).radius);
 		const auto& info = Locator::infoConstants::value().dance.at(static_cast<size_t>(type));
-		artefact.dance = Locator::danceSystem::value().Create(type, position, object, info.duration, false);
+		artefact.dance = Locator::danceSystem::value().Create(type, position, object, info.duration, false, entt::null);
 	}
 	auto* dance = DanceOf(artefact);
 	if (dance == nullptr)

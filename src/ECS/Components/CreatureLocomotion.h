@@ -99,20 +99,23 @@ struct CreatureLocomotion
 	std::optional<entt::entity> following;
 	float followDistance {0.0f};
 
-	/// A turn on the spot or a step: the two animations blended, how far through it is and how long it lasts, where
-	/// it takes the root in mesh units, and the heading and route heading it started at
+	/// A turn on the spot or a step: the two animations blended, how far through it is and how long it lasts
 	struct Move
 	{
 		std::optional<creature_locomotion::Pair> animations;
 		float timeMs;
 		float durationMs;
-		glm::vec2 displacement;
-		GameHeading startHeading;
-		GameHeading startRouteHeading;
+		/// A step: where the blend takes the root over the step in mesh units, and the blend's own length, over which its
+		/// frames spread
+		glm::vec3 displacement {0.0f};
+		float blendDurationMs {0.0f};
+		/// A step: the side of the steps, and the route's heading at the last turn
+		creature_locomotion::Side side {creature_locomotion::Side::Right};
+		GameHeading routeHeading {};
 	};
 	std::optional<Move> move;
-	/// The walk animation's time, which the run keeps in step with
-	float walkTimeMs {0.0f};
+	/// The walk animation's time in whole milliseconds, which the run keeps in step with
+	int32_t walkTimeMs {0};
 	/// How far it moved this turn
 	float distance {0.0f};
 

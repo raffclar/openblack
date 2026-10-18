@@ -132,6 +132,25 @@ struct VillagerInHandWatch
 /// across the land, against the reaction's reach
 [[nodiscard]] bool KeepsWaitingForMate(float distance, float reach);
 
+/// The facts that decide whether a villager is free to take up a reaction
+struct Availability
+{
+	/// The state that the villager goes to lets it react, and it is not a state that stops all reactions
+	bool stateLetsItReact {false};
+	/// The villager dies now
+	bool dyingNow {false};
+	/// A script controls the villager
+	bool scriptControlled {false};
+	/// The life of the villager, and the life below which it crawls with its wounds
+	float life {0.0f};
+	float crawlLife {0.0f};
+};
+
+/// Whether a villager is free to take up a reaction of a type. A villager that a script controls takes up no reaction.
+/// When the script releases it, it reacts again. A villager with its life at the crawl life or below reacts only to
+/// food.
+[[nodiscard]] bool Available(const Availability& facts, openblack::Reaction type);
+
 /// The kinds of reaction a villager has taken up lately and when
 class Memory
 {

@@ -98,11 +98,14 @@ enum class ThingKind : uint8_t
 	Fixed,
 };
 
-/// A circle a thing covers on the ground, centre (x, z) and radius in metres
+/// A ball that a thing keeps creatures off: its centre across the land (x, z), the height of its centre, and its radius
+/// in metres. Most balls have their centres at a height of zero. The balls of a worship site keep their height in the
+/// world.
 struct GroundCircle
 {
 	glm::vec2 centre;
 	float radius;
+	float height {0.0f};
 };
 
 /// A thing standing in a land cell, as the arena's search sees it
@@ -121,7 +124,7 @@ struct ThingInCell
 
 /// Whether a thing in a land cell keeps an arena off it, for a creature of a size (its shown size): a temple always;
 /// living things, things without a model, and buildings or things that can be thrown about no taller than 15 times the
-/// creature's size never; anything else when one of its circles comes within 5 m of the cell's middle
+/// creature's size never; anything else when one of its balls comes within 5 m of the cell's middle at a height of zero
 [[nodiscard]] bool KeepsArenaOff(const ThingInCell& thing, float creatureSize, glm::ivec2 cell);
 
 /// The ring's points round an arena, each on the land's height there; the last closes the ring on the first

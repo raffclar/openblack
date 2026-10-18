@@ -99,6 +99,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/Map.h"
@@ -176,6 +177,45 @@ openblack::creature_object_actions::Kind HandsKindOf(openblack::creature_mind::O
 	default:
 		return Kind::Keep;
 	}
+}
+
+/// A thing as a target to throw at: where it stands, how tall it is, and how it moves. A creature goes on along its
+/// heading. A villager goes on by the step of its walk while its state is not a final state.
+openblack::creature_throw::ThrowTarget ThrowTargetOf(const openblack::ecs::Registry& registry, entt::entity thing,
+                                                     const glm::vec3& standing)
+{
+	using namespace openblack;
+	using namespace openblack::ecs::components;
+	using Target = creature_throw::ThrowTarget;
+	Target target {.kind = Target::Kind::Thing,
+	               .mapPosition = {map_coords::ToFixed(standing.x), map_coords::ToFixed(standing.z)},
+	               .height = ecs::systems::object_measures::Height(registry, thing)};
+	if (const auto* walk = registry.TryGet<const CreatureLocomotion>(thing);
+	    walk != nullptr && registry.AllOf<Creature, Transform>(thing))
+	{
+		const auto& transform = registry.Get<const Transform>(thing);
+		const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+		target.kind = Target::Kind::Creature;
+		target.position = transform.position;
+		target.heading = walk->started ? walk->heading.Radians() : GameHeading::Of(ahead.x, ahead.z).Radians();
+		target.speed = walk->speed;
+	}
+	else if (registry.AllOf<Villager>(thing))
+	{
+		target.kind = Target::Kind::Villager;
+		if (const auto* hug = registry.TryGet<const WallHug>(thing))
+		{
+			target.step = hug->step;
+		}
+		if (const auto* action = registry.TryGet<const LivingAction>(thing);
+		    action != nullptr && Locator::infoConstants::has_value())
+		{
+			const auto top = action->states.at(static_cast<size_t>(LivingAction::Index::Top));
+			const auto& table = Locator::infoConstants::value().villagerStateTable;
+			target.walking = top < table.size() && table.at(top).isFinalState == 0;
+		}
+	}
+	return target;
 }
 } // namespace
 using creature_desires::Desire;
@@ -427,7 +467,7 @@ creature_desire_sources::State SourceStateOf(entt::entity entity, const Creature
 	// without a home here, the sources of going home keep their own values
 	if (const auto home = ecs::creature_home::HomeOf(registry, entity); home.has_value() && transform != nullptr)
 	{
-		state.homeDistance = glm::distance(glm::xz(transform->position), glm::xz(*home));
+		state.homeDistance = gutils::GetDistanceInMetres(glm::xz(transform->position), glm::xz(*home));
 	}
 	if (Locator::infoConstants::has_value())
 	{
@@ -519,7 +559,8 @@ std::optional<glm::vec3> LookWhileGoing(entt::entity entity, const Creature& cre
 	const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
 	const auto ahead = -(transform.rotation * glm::vec3(0.0f, 0.0f, 1.0f));
 	// The direction the body faces, as the game keeps it: a quarter turn on from the map's
-	const auto heading = walk != nullptr && walk->started ? walk->heading.Radians() : std::atan2(ahead.x, -ahead.z);
+	const auto heading =
+	    walk != nullptr && walk->started ? walk->heading.Radians() : GameHeading::Of(ahead.x, ahead.z).Radians();
 	const auto groundAt = [](glm::vec2 at) {
 		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
 	};
@@ -691,7 +732,7 @@ bool Move(entt::entity creature, const creature_mind::Commands& commands)
 		}
 		break;
 	case Kind::FleeFrom:
-		locomotion.FleeFrom(creature, move.point);
+		locomotion.FleeFrom(creature, move.point, pace);
 		break;
 	case Kind::TurnToFace:
 		locomotion.TurnToFace(creature, move.point);
@@ -807,8 +848,8 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 		// The ground below the point. A creature that moves within a few metres of the point does not look at it.
 		const glm::vec2 flat {gaze.point->x, gaze.point->z};
 		const auto* self = registry.TryGet<const Transform>(creature);
-		if (self == nullptr ||
-		    (moving && glm::distance(glm::vec2(self->position.x, self->position.z), flat) < k_NoLookWhileMovingWithin))
+		if (self == nullptr || (moving && gutils::GetDistanceInMetres(glm::vec2(self->position.x, self->position.z), flat) <
+		                                      k_NoLookWhileMovingWithin))
 		{
 			return std::nullopt;
 		}
@@ -825,8 +866,8 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 	const auto* self = registry.TryGet<const Transform>(creature);
 	const auto* held = registry.TryGet<const HeldByCreature>(thing);
 	if (!at.has_value() || self == nullptr || (held != nullptr && held->creature == creature) ||
-	    (moving &&
-	     glm::distance(glm::vec2(self->position.x, self->position.z), glm::vec2(at->x, at->z)) < k_NoLookWhileMovingWithin))
+	    (moving && gutils::GetDistanceInMetres(glm::vec2(self->position.x, self->position.z), glm::vec2(at->x, at->z)) <
+	                   k_NoLookWhileMovingWithin))
 	{
 		return std::nullopt;
 	}
@@ -978,7 +1019,8 @@ std::optional<creature_mind::Senses::FollowedView> FollowedViewOf(const ecs::Reg
 		return std::nullopt;
 	}
 	const auto at = glm::xz(registry.Get<const Transform>(villager).position);
-	creature_mind::Senses::FollowedView view {.distance = glm::distance(at, glm::xz(from))};
+	// The table distance between the two map positions
+	creature_mind::Senses::FollowedView view {.distance = gutils::GetDistanceInMetres(at, glm::xz(from))};
 	// Interesting while its state now teaches a skill the creature does not know
 	const auto* action = registry.TryGet<const LivingAction>(villager);
 	if (action != nullptr && mind.learnt.has_value() && Locator::infoConstants::has_value())
@@ -1072,8 +1114,9 @@ std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registr
 	const auto eye = Locator::camera::value().GetOrigin();
 	const glm::vec2 point {eye.x, eye.z};
 	const auto offset = point - glm::vec2(transform->position.x, transform->position.z);
+	// How far away the camera is: the game's table distance along the ground
 	return creature_mind::Senses::CameraView {
-	    .distance = glm::distance(eye, transform->position),
+	    .distance = gutils::GetDistance(transform->position, eye),
 	    .groundDistance = glm::length(offset),
 	    .point = point,
 	    .turn = creature_locomotion::HeadingOf(offset).TurnFrom(self->heading),
@@ -1101,10 +1144,11 @@ std::pair<std::optional<glm::vec3>, bool> CameraFocusOf(const ecs::Registry& reg
 	const auto focus = Locator::camera::value().GetFocus();
 	const auto from = map_coords::FromMetres(glm::vec2(transform->position.x, transform->position.z));
 	const auto to = map_coords::FromMetres(glm::vec2(focus.x, focus.z));
-	// The way the body faces, as the game turns it: a quarter turn on from the map's
+	// The way the body faces: its heading, or the way its rotation faces before it walks
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
 	const auto ahead = -(transform->rotation * glm::vec3(0.0f, 0.0f, 1.0f));
-	const auto facing = static_cast<int32_t>(gutils::ConvertScawenAngleToGameAngle(
-	    static_cast<float>(std::atan2(static_cast<double>(ahead.x), -static_cast<double>(ahead.z)))));
+	const auto heading = walk != nullptr && walk->started ? walk->heading : GameHeading::Of(ahead.x, ahead.z);
+	const auto facing = static_cast<int32_t>(gutils::ConvertScawenAngleToGameAngle(heading.Radians()));
 	// The game takes the difference of the two angles with no wrap at a full turn
 	const auto apart = std::abs(facing - static_cast<int32_t>(gutils::GetAngleFromXZ(from, to)));
 	const bool inView =
@@ -1170,8 +1214,7 @@ std::optional<creature_player_attention::FollowHandView> FollowHandViewOf(const 
 	view.distance = gutils::GetDistanceInMetres(at, handAt);
 	view.reach = creature_player_attention::FollowHandReach(object_measures::TwoDRadius(registry, creature));
 	view.bodyPlaying = bodyPlaying;
-	view.directionClose = creature_player_attention::IsDirectionClose(
-	    at, handAt, creature_player_attention::GameAngleOf(creature_locomotion::DirectionOf(self->heading)));
+	view.directionClose = creature_player_attention::IsDirectionClose(at, handAt, self->heading.GameAngle());
 	return view;
 }
 
@@ -1201,9 +1244,10 @@ WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const Cr
 	}
 	const auto targetOf = [transform, self](glm::vec3 point) {
 		const auto offset = glm::vec2(point.x, point.z) - glm::vec2(transform->position.x, transform->position.z);
+		// The distance is the length along the ground
 		return creature_player_attention::WatchPlayerView::Target {
 		    .point = {point.x, point.z},
-		    .distance = glm::distance(point, transform->position),
+		    .distance = glm::length(offset),
 		    .turn = creature_locomotion::HeadingOf(offset).TurnFrom(self->heading),
 		};
 	};
@@ -1517,7 +1561,6 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 		Satisfied(creature, desires, k_FartAction);
 		break;
 	case Effect::Puke:
-		physiology.Puke(creature);
 		Satisfied(creature, desires, k_PukeAction);
 		break;
 	case Effect::Slept:
@@ -1552,13 +1595,15 @@ void CountCompleted(entt::entity creature, CreatureMindState& mind, const creatu
 	Satisfied(creature, *mind.desires, tables->actions[mind.planner.current->action].name);
 }
 
-/// The town nearest a point along the ground, of any player or none
+/// The town nearest a point along the ground, of any player or none. The distance is the table distance between map
+/// positions
 entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point)
 {
 	entt::entity nearest = entt::null;
 	auto best = std::numeric_limits<float>::max();
 	registry.Each<const Town, const Transform>([&](entt::entity entity, const Town&, const Transform& at) {
-		const float distance = glm::distance(glm::vec2(at.position.x, at.position.z), glm::vec2(point.x, point.z));
+		// The table distance between the two map positions
+		const float distance = gutils::GetDistanceInMetres(point, at.position);
 		if (distance < best)
 		{
 			best = distance;
@@ -1722,9 +1767,15 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		{
 			const auto* held = registry.TryGet<const HeldByCreature>(*object);
 			const auto place = held != nullptr && registry.Valid(held->creature) ? held->creature : *object;
-			if (const auto* at = registry.TryGet<const Transform>(place))
+			const auto* at = registry.TryGet<const Transform>(place);
+			const auto* self = registry.TryGet<const Transform>(creature);
+			if (at != nullptr && self != nullptr && Locator::terrainSystem::has_value())
 			{
-				hands.Throw(creature, at->position);
+				// The game aims ahead of a thing that moves, by the time that the throw takes to get there
+				const auto& island = Locator::terrainSystem::value();
+				const auto aim = creature_throw::AimAt(self->position, ThrowTargetOf(registry, *object, at->position),
+				                                       [&island](int32_t x, int32_t z) { return island.GetAltitude(x, z); });
+				hands.ThrowAimed(creature, aim.point, aim.seconds);
 				break;
 			}
 		}
@@ -1789,7 +1840,7 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		}
 		const glm::vec2 at {store->position.x, store->position.z};
 		const auto height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(at) : 0.0f;
-		const auto flight = creature_throw::FlightTime(glm::distance(at, glm::vec2(self->position.x, self->position.z)));
+		const auto flight = creature_throw::FlightTime(self->position, {at.x, height, at.y});
 		hands.ThrowTaking(creature, {at.x, height, at.y}, flight);
 		break;
 	}
@@ -1908,13 +1959,9 @@ void CreatureMindSystem::ProcessTurn()
 	{
 		ReceiveFeedback(entity, feedback);
 	}
-	const auto random = [this](uint32_t range) {
-		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	};
-	// The variety of faces moves on by the random numbers of the game
-	const auto gameRandom = [&random](uint32_t range) {
-		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : random(range);
-	};
+	const auto random = [this](uint32_t range) { return _random.GameRand(range); };
+	// The agendas, the faces and the sides draw on the same synced seed of the game
+	const auto& gameRandom = random;
 	const bool night = IsNight();
 	// The creatures passing out this turn, which are knocked out once every mind has thought
 	std::vector<entt::entity> passingOut;
@@ -2590,7 +2637,7 @@ bool CreatureMindSystem::PlayAction(entt::entity creature, size_t animation)
 	{
 		return false;
 	}
-	const auto played = creature_layers::PlayOnce(body->body, animation, std::bernoulli_distribution(0.5)(_random));
+	const auto played = creature_layers::PlayOnce(body->body, animation, _random.GameRand(2) == 1);
 	if (played.has_value())
 	{
 		body->body = *played;
@@ -2631,13 +2678,9 @@ std::optional<creature_face::Request> CreatureMindSystem::ShowFeeling(entt::enti
 	{
 		return std::nullopt;
 	}
-	const auto random = [this](uint32_t range) {
-		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	};
-	// The variety of faces moves on by the random numbers of the game
-	const auto gameRandom = [&random](uint32_t range) {
-		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : random(range);
-	};
+	const auto random = [this](uint32_t range) { return _random.GameRand(range); };
+	// The agendas, the faces and the sides draw on the same synced seed of the game
+	const auto& gameRandom = random;
 	const creature_mind::Senses senses {.feelings = FeelingsOf(*mind)};
 	const auto face = creature_mind::PullFace(mind->idle, cue, senses, random, gameRandom);
 	if (face.has_value())
@@ -2663,9 +2706,7 @@ bool CreatureMindSystem::SitDown(entt::entity creature)
 		    *creature_layers::PlaySequence(body->body, animations::k_StartSit, animations::k_Sit, animations::k_EndSit);
 		return true;
 	}
-	const auto random = [this](uint32_t range) {
-		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	};
+	const auto random = [this](uint32_t range) { return _random.GameRand(range); };
 	Abandon(*mind);
 	creature_mind::Plan(mind->idle, creature_mind::Activity::Told, {creature_mind::SitDown(random)});
 	return true;
@@ -2805,7 +2846,7 @@ void CreatureMindSystem::HandTookHold(entt::entity creature)
 	if (Locator::creatureLocomotionSystem::has_value() && Locator::camera::has_value())
 	{
 		const auto eye = Locator::camera::value().GetOrigin();
-		Locator::creatureLocomotionSystem::value().TurnToFace(creature, glm::vec2(eye.x, eye.z));
+		Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature, glm::vec2(eye.x, eye.z));
 	}
 	mind->showDesireOnHold = true;
 }
@@ -2885,7 +2926,7 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	}
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
-		Locator::creatureLocomotionSystem::value().Stop(creature);
+		Locator::creatureLocomotionSystem::value().StopAtOnce(creature);
 	}
 	mind->idle.agenda.clear();
 	mind->idle.step = 0;
@@ -2905,7 +2946,7 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 		if (Locator::creatureLocomotionSystem::has_value() && Locator::camera::has_value())
 		{
 			const auto eye = Locator::camera::value().GetOrigin();
-			Locator::creatureLocomotionSystem::value().TurnToFace(creature, glm::vec2(eye.x, eye.z));
+			Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature, glm::vec2(eye.x, eye.z));
 		}
 		return;
 	}
@@ -2960,7 +3001,7 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 	}
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
-		Locator::creatureLocomotionSystem::value().Stop(creature);
+		Locator::creatureLocomotionSystem::value().StopAtOnce(creature);
 	}
 	body->body = *played;
 	// Only the body is taken: the mind goes on with what it was doing once the action has played, as its agenda waits for
@@ -2999,9 +3040,8 @@ bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity a
 
 bool CreatureMindSystem::Sleep(entt::entity creature)
 {
-	return Replan(creature, creature_mind::Activity::Sleep, creature_mind::Sleep([this](uint32_t range) {
-		              return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	              }));
+	return Replan(creature, creature_mind::Activity::Sleep,
+	              creature_mind::Sleep([this](uint32_t range) { return _random.GameRand(range); }));
 }
 
 bool CreatureMindSystem::Eat(entt::entity creature, std::optional<entt::entity> food)
@@ -3040,11 +3080,8 @@ bool CreatureMindSystem::Drink(entt::entity creature)
 
 bool CreatureMindSystem::Poo(entt::entity creature)
 {
-	return Replan(
-	    creature, creature_mind::Activity::Poo,
-	    creature_mind::Poo(
-	        [this](uint32_t range) { return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); },
-	        std::nullopt));
+	return Replan(creature, creature_mind::Activity::Poo,
+	              creature_mind::Poo([this](uint32_t range) { return _random.GameRand(range); }, std::nullopt));
 }
 
 bool CreatureMindSystem::Puke(entt::entity creature)

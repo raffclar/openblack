@@ -59,11 +59,15 @@ public:
 	[[nodiscard]] virtual bool HasIconFor(PlayerNames player, SpellSeedType seed) const = 0;
 	/// Whether something is an icon or a stone hand
 	[[nodiscard]] virtual bool IsIcon(entt::entity entity) const = 0;
+	/// The charge that a worship site's icon shows after the name of its miracle, in percent. None for a thing that is
+	/// not such an icon, and for an icon whose charge is zero.
+	[[nodiscard]] virtual std::optional<float> ShownCharge(entt::entity icon) const = 0;
 
 	/// A worship site's icons as its turn shares out its prayer power, in a fixed order
 	[[nodiscard]] virtual std::vector<magic::WorshipIconCharge> ChargesAt(entt::entity site) const = 0;
-	/// What the site's turn gave its icons, in the order ChargesAt gave them; an icon charged full sends its miracle to the
-	/// hand that asked for it
+	/// What the site's turn gave its icons, in the order ChargesAt gave them. Then each charging icon does its own turn, in
+	/// that order: it fills the seed of it that a hand holds, and when its charge is done it stops charging. A done icon
+	/// sets the power-up level of its held seed, or else sends its miracle to the hand that asked for it.
 	virtual void ChargedAt(entt::entity site, std::span<const magic::WorshipIconCharge> charges) = 0;
 
 	/// Once a frame: the seeds above the icons spin

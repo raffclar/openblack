@@ -86,9 +86,10 @@ struct IconCharge
 	bool charging {false};
 	/// The hand charging it is the one tapping
 	bool chargedByThisHand {false};
-	/// A seed made from it is out, in a hand or cast
-	bool seedOut {false};
-	/// What it has stored, and what its miracle needs
+	/// A hand of its player holds a seed made from it
+	bool seedHeld {false};
+	/// What it has stored, and what its miracle needs. While a hand holds its seed, required is what that seed still
+	/// needs.
 	float store {0.0f};
 	float required {0.0f};
 };
@@ -106,14 +107,41 @@ enum class TapResult : uint8_t
 	StartedCharge,
 };
 
-/// What is still needed to charge it full
+/// What is still needed to charge it full. While a hand holds its seed, this is what that seed still needs.
 [[nodiscard]] float Need(const IconCharge& icon);
 
-/// Whether its miracle may go into a hand: charged full, no seed of it out, and the hand ready for it
+/// The result of the own turn of a charging icon
+struct IconTurn
+{
+	/// What the icon has stored after the turn
+	float store {0.0f};
+	/// What the held seed holds after the turn, none when no hand holds a seed made from the icon
+	std::optional<float> seedStore;
+	/// The icon has done its charge: it stops charging
+	bool full {false};
+};
+
+/// The own turn of a charging icon, after its site gave it its share:
+/// 1. When a hand of its player holds a seed made from it, the icon moves its store into that seed. It moves no more
+///    than the seed still needs.
+/// 2. The icon has done its charge when nothing more is needed: by the held seed, or else by the icon itself.
+/// required is what the miracle at the power-up level of the charge costs. heldSeedStore is what the held seed holds.
+[[nodiscard]] IconTurn ChargingIconTurn(float store, float required, std::optional<float> heldSeedStore);
+
+/// The prayer power that a worship site's icon shows as the full charge of its miracle. While the player's hand holds
+/// the seed that the icon made, the charge of that seed comes off the full charge.
+[[nodiscard]] float ShownRequired(float required, std::optional<float> heldSeedCharge);
+
+/// The charge that a worship site's icon shows after the name of its miracle, in percent: the store over the full
+/// charge, times 100, in the precision of the game. None when the result is zero or not a number: the icon then shows
+/// only the name.
+[[nodiscard]] std::optional<float> ShownCharge(float store, float shownRequired);
+
+/// Whether its miracle may go into a hand: charged full, no hand holds a seed of it, and the hand ready for it
 [[nodiscard]] bool ReadyForHand(const IconCharge& icon, bool handReady);
 
-/// Whether a tap may start it charging: not charging, no seed of it out, its miracle enabled for the hand's player, and
-/// either on a worship site or with something stored
+/// Whether a tap may start it charging: not charging, no hand holds a seed of it, its miracle enabled for the hand's
+/// player, and either on a worship site or with something stored. A seed of it that is out of the hand does not stop it.
 [[nodiscard]] bool MayStartCharge(const IconCharge& icon, bool magicEnabled, bool onSite);
 
 /// An icon or a stone hand works only when it has more than this part of its life

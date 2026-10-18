@@ -34,6 +34,7 @@ public:
 		CreaturePhysiologyUpdate,
 		CreatureLocomotionUpdate,
 		CreatureAnimationUpdate,
+		CreatureTurnPose,
 		CreatureHairUpdate,
 		CreatureSkinUpdate,
 		CreatureAudioUpdate,
@@ -105,6 +106,7 @@ public:
 	    "Creature Physiology",  //
 	    "Creature Locomotion",  //
 	    "Creature Animation",   //
+	    "Creature Turn Pose",   //
 	    "Creature Hair",        //
 	    "Creature Skin",        //
 	    "Creature Audio",       //

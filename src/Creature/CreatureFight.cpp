@@ -115,6 +115,25 @@ float creature_fight::ForwardExtent(std::span<const glm::vec2> bones, glm::vec2 
 	return extent;
 }
 
+float creature_fight::ForwardExtentFromLastTurn(std::span<const glm::vec2> bones, glm::vec2 at, float heading)
+{
+	// The direction is kept as floats, and each difference, product and sum is rounded to a float in this order
+	const auto ahead = x87::RoundToFloat(x87::Sin(heading));
+	const auto across = x87::RoundToFloat(-x87::Cos(heading));
+	float extent = 0.0f;
+	for (const auto& bone : bones)
+	{
+		const auto x = x87::Sub(bone.x, at.x);
+		const auto z = x87::Sub(bone.y, at.y);
+		const auto reach = x87::Add(x87::Mul(x, ahead), x87::Mul(across, z));
+		if (extent <= reach)
+		{
+			extent = reach;
+		}
+	}
+	return extent;
+}
+
 creature_fight::PullApart creature_fight::PullApartOf(const Arena& arena, glm::vec2 first, glm::vec2 second, glm::vec2 forward,
                                                       float extents)
 {
@@ -720,6 +739,28 @@ float creature_fight::PlaybackSpeed(size_t animation, float actionSpeed)
 	return k_FightSpeed * (IsStep(animation) ? k_StepSpeedShare : k_OtherSpeedShare) * actionSpeed;
 }
 
+int32_t creature_fight::TurnAdvance(float speed, int32_t turnMs)
+{
+	return static_cast<int32_t>(x87::Mul(speed, static_cast<double>(turnMs)));
+}
+
+glm::vec2 creature_fight::TurnRootMove(glm::vec2 travel, float speed, int32_t turnMs, float scale, int32_t durationMs,
+                                       float heading)
+{
+	if (durationMs <= 0)
+	{
+		return glm::vec2(0.0f);
+	}
+	const auto share = x87::Div(x87::Mul(x87::Mul(speed, static_cast<double>(turnMs)), scale), static_cast<double>(durationMs));
+	const auto across = x87::Mul(travel.x, share);
+	const auto along = x87::Mul(travel.y, share);
+	// The direction is kept as floats
+	const auto sine = x87::RoundToFloat(x87::Sin(heading));
+	const auto cosine = x87::RoundToFloat(x87::Cos(heading));
+	return {x87::Add(x87::Mul(-sine, along), x87::Mul(across, cosine)),
+	        x87::Add(x87::Mul(along, cosine), x87::Mul(across, sine))};
+}
+
 std::string_view creature_fight::Name(State state)
 {
 	switch (state)
@@ -860,6 +901,11 @@ bool creature_fight::StateDone(State state, float animationMs, float durationMs,
 		return stateMs > k_CastHoldMs;
 	}
 	return durationMs <= 0.0f || animationMs >= durationMs;
+}
+
+bool creature_fight::ActionEnds(float animationMs, int32_t advanceMs, float durationMs)
+{
+	return durationMs <= 0.0f || static_cast<int32_t>(animationMs) + advanceMs >= static_cast<int32_t>(durationMs);
 }
 
 bool creature_fight::IsBlocking(State state, float timeMs, float startBlockDurationMs)

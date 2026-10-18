@@ -82,6 +82,10 @@ public:
 
 	/// Starts afresh for a walk from a point, keeping clear of things by a margin
 	void Reset(glm::vec2 walker, float margin, Gatherer gatherer = {});
+	/// Starts afresh for a route that no one walks, such as a footpath: no circle is left out or shrunk for a walker
+	void ResetWithoutWalker(float margin, Gatherer gatherer = {});
+	/// Circles that hold either point (the square of the distance is less than the square of the radius) are left out
+	void LeaveOutCirclesHolding(glm::vec2 first, glm::vec2 second);
 	/// Forgets every circle, keeping how blocks are gathered
 	void Clear();
 	/// Sets what fills a block the first time that a search reaches it. A load of a saved game sets it again, because a
@@ -89,12 +93,13 @@ public:
 	void SetGatherer(Gatherer gatherer) { _gatherer = std::move(gatherer); }
 	/// Where the creature walking is now: circles added later are kept clear of it
 	void SetWalker(glm::vec2 walker) { _walker = walker; }
-	[[nodiscard]] glm::vec2 GetWalker() const { return _walker; }
+	[[nodiscard]] glm::vec2 GetWalker() const { return _walker.value_or(glm::vec2(0.0f)); }
 	[[nodiscard]] float GetMargin() const { return _margin; }
 
-	/// Adds a circle. One about a point within a tenth of the walker is left out and one the walker stands in reaches
-	/// just to it; one inside a circle already kept is left out, and one already kept wholly inside the new one is put out
-	/// of use. The land's circles are kept once at each centre. Returns whether it was kept.
+	/// Adds a circle. One that holds a point given to LeaveOutCirclesHolding is left out. One about a point within a
+	/// tenth of the walker is left out and one the walker stands in reaches just to it; one inside a circle already kept
+	/// is left out, and one already kept wholly inside the new one is put out of use. The land's circles are kept once
+	/// at each centre. Returns whether it was kept.
 	bool Add(std::optional<uint32_t> thing, glm::vec2 centre, float radius);
 	/// Whether a thing's circles are already filed in the block of a cell
 	[[nodiscard]] bool BlockHas(uint32_t thing, glm::ivec2 cell) const;
@@ -118,7 +123,9 @@ private:
 	void Gather(int32_t x, int32_t z);
 	[[nodiscard]] size_t BlockIndex(int32_t x, int32_t z) const;
 
-	glm::vec2 _walker {0.0f};
+	std::optional<glm::vec2> _walker;
+	/// Circles that hold these points are left out
+	std::array<std::optional<glm::vec2>, 2> _leftOutAround;
 	float _margin {0.0f};
 	Gatherer _gatherer;
 	std::vector<Obstacle> _obstacles;
@@ -263,6 +270,7 @@ public:
 	}
 };
 
-/// The land's circles round a cell: one at the centre of each of the cell and its eight neighbours that is blocked
-void AddLandCircles(const WalkableLand& land, glm::ivec2 cell, Obstacles& obstacles);
+/// The land's circles round a cell: one at the centre of each of the cell and its eight neighbours that is blocked, and
+/// that has water when the water is to be gone round too (a route that no one walks, such as a footpath's)
+void AddLandCircles(const WalkableLand& land, glm::ivec2 cell, Obstacles& obstacles, bool roundWater = false);
 } // namespace openblack::creature_route

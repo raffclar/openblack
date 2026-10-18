@@ -63,11 +63,6 @@ bool creature_player_attention::IsHandMoving(const HandSpeed& speed)
 	return glm::length(speed.velocity) > 0.0f;
 }
 
-uint16_t creature_player_attention::GameAngleOf(glm::vec2 direction)
-{
-	return static_cast<uint16_t>(gutils::ConvertAngle3DToGame(std::atan2(direction.y, direction.x)));
-}
-
 bool creature_player_attention::IsDirectionClose(const map_coords::MapCoords& creature, const map_coords::MapCoords& point,
                                                  uint16_t heading)
 {

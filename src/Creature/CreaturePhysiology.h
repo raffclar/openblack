@@ -11,11 +11,14 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 #include <string_view>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+
+#include "Common/GameHeading.h"
 
 /// A creature's body as time passes: it ages, grows while it stands still, uses up its energy and burns fat once
 /// hungry, tires from moving, gets thirsty, warms or cools by how far the weather is from what its species likes, and
@@ -25,6 +28,12 @@
 /// Everything here works a game turn at a time, from the species' rates in the game's creature tables.
 namespace openblack::creature_physiology
 {
+/// A new creature's strength and fatness each spread by up to this either way, with no limit to 0 to 1
+constexpr float k_StartSpread = 0.1f;
+/// A new creature's strength or fatness from its species' value. upTo(x) is a draw from 0 to x (GameFloatRand in the
+/// game). The game draws the strength first, then the fatness
+[[nodiscard]] float SpreadStart(float value, const std::function<float(float)>& upTo);
+
 /// Growth is this many times faster while the plan is to sleep at home or by a thing
 constexpr float k_SleepGrowthFactor = 3.0f;
 /// The slowest a creature ever grows, in size a game turn
@@ -225,8 +234,9 @@ struct PooLump
 	glm::vec3 velocity;
 	float scale;
 };
-/// The lump of a creature whose groin is at a point, facing a way on the land (x, z, of length 1), at a shown size
-[[nodiscard]] PooLump PooLumpOf(glm::vec3 groin, glm::vec2 ahead, float shownSize);
+/// The lump of a creature whose groin is at a point, with a heading, at a shown size. The lump goes along the heading
+/// turned by a half turn
+[[nodiscard]] PooLump PooLumpOf(glm::vec3 groin, GameHeading heading, float shownSize);
 
 /// One game turn sitting down: it sheds a fifth of the exhaustion it would asleep
 void SitTurn(Needs& needs, const Species& species);

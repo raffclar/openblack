@@ -1017,6 +1017,10 @@ struct Commands
 /// random(n) is a whole number from 0 to n - 1
 using Random = std::function<uint32_t(uint32_t)>;
 
+/// GameFloatRand(most) made from the whole number draw: 0 for a most of 0 or NaN with no draw, else (u * most) * k with
+/// u = random(0xFFFF), k about 1/65535. The game's float draw moves the seed as a whole number draw does.
+[[nodiscard]] float FloatRand(const Random& random, float most);
+
 /// Fluttering its eyelids, the creature blinks every 0.625 to 1.875 seconds
 constexpr int32_t k_FlutterBlinkIntervalMs = 1250;
 
@@ -1103,8 +1107,6 @@ struct PooBy
 [[nodiscard]] std::vector<Step> ApproachAndEmote(uint32_t object, size_t animation);
 /// Turning to face something and watching it for some seconds
 [[nodiscard]] std::vector<Step> LookAt(glm::vec2 point, float seconds);
-/// Running away from a point
-[[nodiscard]] std::vector<Step> RunFrom(glm::vec2 point);
 /// The creature walks up to a thing and stomps on it, with an angry face. Its head looks at the thing as it walks.
 [[nodiscard]] std::vector<Step> DestroyThing(uint32_t object);
 /// Waiting a while, looking about

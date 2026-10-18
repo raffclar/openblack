@@ -46,6 +46,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
@@ -153,16 +154,22 @@ glm::mat3 FacingCamera(glm::mat3 axes, const glm::vec3& position, const glm::vec
 void Renderer::CollectParticles() const
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::ParticlesGather);
+	// The light maps and shadows of the frame that ended stamp the land in this frame
+	_landStamps.swap(_particleFrame.lightStamps);
 	if (!Locator::particleSystem::has_value() || !Locator::time::has_value())
 	{
 		_particleFrame.Clear();
 		return;
 	}
-	// In the temple only its rooms' effects are drawn
+	// In the temple only its rooms' effects and the pool of drops, dust, smoke and motes are drawn
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	Locator::particleSystem::value().CollectDrawFrame(Locator::time::value().GetTurnFraction(), _particleFrame, inTemple);
 	if (inTemple)
 	{
+		if (Locator::liquidParticleSystem::has_value())
+		{
+			Locator::liquidParticleSystem::value().CollectDrawFrame(_particleFrame);
+		}
 		return;
 	}
 	// What burns, among the other things that blend
@@ -179,10 +186,10 @@ void Renderer::CollectParticles() const
 	{
 		Locator::rewardSystem::value().CollectDrawFrame(_particleFrame);
 	}
-	// The dust that thrown things throw up as they land
-	if (Locator::dynamicsSystem::has_value())
+	// The drops, the dust, the smoke and the motes
+	if (Locator::liquidParticleSystem::has_value())
 	{
-		Locator::dynamicsSystem::value().CollectDrawFrame(_particleFrame);
+		Locator::liquidParticleSystem::value().CollectDrawFrame(_particleFrame);
 	}
 	// The explorers' boat's wake
 	if (Locator::boatLaunchSystem::has_value())
@@ -198,17 +205,12 @@ const Texture2D* Renderer::ParticleLightMap(entt::id_type bitmap, int frame) con
 	{
 		return found->second.get();
 	}
-	auto& bitmaps = Locator::resources::value().GetParticleBitmaps();
-	if (!bitmaps.Contains(bitmap))
+	const auto texels = ParticleLightMapTexels(bitmap, frame);
+	if (texels.empty())
 	{
 		return nullptr;
 	}
-	const auto& stacked = *bitmaps.Handle(bitmap);
-	const auto texels = stacked.Frame(frame);
-	if ((stacked.channels != 3 && stacked.channels != 1) || texels.empty())
-	{
-		return nullptr;
-	}
+	const auto& stacked = *Locator::resources::value().GetParticleBitmaps().Handle(bitmap);
 	// A shadow map's one byte a texel is spread over red, green and blue
 	std::vector<uint8_t> rgb;
 	if (stacked.channels == 1)
@@ -225,6 +227,21 @@ const Texture2D* Renderer::ParticleLightMap(entt::id_type bitmap, int frame) con
 	texture->CreateWithinFrame(side, side, 1, TextureFormat::RGB8, Wrapping::ClampEdge, Filter::Nearest,
 	                           bgfx::copy(image.data(), static_cast<uint32_t>(image.size())));
 	return _particleLightMaps.emplace(key, std::move(texture)).first->second.get();
+}
+
+std::span<const uint8_t> Renderer::ParticleLightMapTexels(entt::id_type bitmap, int frame) const
+{
+	auto& bitmaps = Locator::resources::value().GetParticleBitmaps();
+	if (!bitmaps.Contains(bitmap))
+	{
+		return {};
+	}
+	const auto& stacked = *bitmaps.Handle(bitmap);
+	if (stacked.channels != 3 && stacked.channels != 1)
+	{
+		return {};
+	}
+	return stacked.Frame(frame);
 }
 
 void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw::MistDraw& mist, uint32_t depth) const
@@ -604,9 +621,9 @@ void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) co
 	// The motes and the other puffs, and the stars, sorted by how far they are from the film's camera
 	auto& frame = _filmParticleFrame;
 	frame.Clear();
-	if (Locator::dynamicsSystem::has_value())
+	if (Locator::liquidParticleSystem::has_value())
 	{
-		Locator::dynamicsSystem::value().CollectDrawFrame(frame);
+		Locator::liquidParticleSystem::value().CollectDrawFrame(frame);
 	}
 	if (!film.stars.empty())
 	{

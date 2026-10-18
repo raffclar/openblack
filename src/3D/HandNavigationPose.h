@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 
 #include <optional>
@@ -74,12 +75,39 @@ enum class Pose : uint8_t
 	return std::nullopt;
 }
 
-/// Offering to turn the camera, the hand stands up towards where the camera looks, leaning up by four tenths of the way
+/// How far up the hand leans when it stands towards the camera's focus, as a share of the distance to the focus
+constexpr float k_FocusLean = 0.3f;
+
+/// Offering to turn the camera, the hand stands up towards where the camera looks, leaning up by three tenths of the
+/// distance. The squares are added y, x, z. At the focus itself there is no way to stand, and the up is zero.
 [[nodiscard]] inline glm::vec3 UpTowardsFocus(glm::vec3 from, glm::vec3 focus)
 {
-	auto towards = focus - from;
-	towards.y += glm::length(towards) * 0.4f;
-	return glm::length(towards) > 0.0f ? glm::normalize(towards) : glm::vec3(0.0f, 1.0f, 0.0f);
+	const glm::vec3 towards {focus.x - from.x, focus.y - from.y, focus.z - from.z};
+	const float xx = towards.x * towards.x;
+	const float zz = towards.z * towards.z;
+	const float lean = std::sqrt((towards.y * towards.y + xx) + zz) * k_FocusLean + towards.y;
+	if (towards.x == 0.0f && lean == 0.0f && towards.z == 0.0f)
+	{
+		return {towards.x, lean, towards.z};
+	}
+	const float share = 1.0f / std::sqrt((lean * lean + xx) + zz);
+	return {share * towards.x, share * lean, towards.z * share};
+}
+
+/// While the camera turns by the ring around the middle of the screen, the hand stands towards the focus in the same
+/// way, but the game adds the squares y, z, x. Only a hand that holds a thing takes this up, through its eased up.
+[[nodiscard]] inline glm::vec3 UpTowardsFocusOnRing(glm::vec3 from, glm::vec3 focus)
+{
+	const glm::vec3 towards {focus.x - from.x, focus.y - from.y, focus.z - from.z};
+	const float xx = towards.x * towards.x;
+	const float zz = towards.z * towards.z;
+	const float lean = std::sqrt((towards.y * towards.y + zz) + xx) * k_FocusLean + towards.y;
+	if (towards.x == 0.0f && lean == 0.0f && towards.z == 0.0f)
+	{
+		return {towards.x, lean, towards.z};
+	}
+	const float share = 1.0f / std::sqrt((lean * lean + zz) + xx);
+	return {share * towards.x, share * lean, towards.z * share};
 }
 
 /// Showing that it turns the camera while it drags the land, the hand is drawn this share of its height higher

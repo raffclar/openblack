@@ -1823,8 +1823,16 @@ void GameInterface::DrawToolTip(glm::u16vec2 resolution)
 	const auto worded =
 	    shown->number.has_value() ? std::optional(world_tooltip::Worded(shown->index, *shown->number)) : std::nullopt;
 	const auto words = _texts.Get(ToolTips::TextName(shown->words.value_or(worded.has_value() ? worded->words : shown->index)));
-	std::u16string text =
-	    worded.has_value() ? world_tooltip::Compose(shown->index, words, worded->number, shown->second) : std::u16string(words);
+	std::u16string text;
+	if (shown->chargeAfterWords && shown->number.has_value())
+	{
+		text = world_tooltip::WithCharge(words, *shown->number);
+	}
+	else
+	{
+		text = worded.has_value() ? world_tooltip::Compose(shown->index, words, worded->number, shown->second)
+		                          : std::u16string(words);
+	}
 	// The save game room's named zoom shows the name of the last saved game the cursor was over
 	if (shown->index == k_NamedZoomToolTip)
 	{

@@ -15,7 +15,9 @@
 
 #include <glm/geometric.hpp>
 
+#include "3D/MapCoords.h"
 #include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87.h"
 #include "Common/X87Vector.h"
 
 using namespace openblack;
@@ -26,9 +28,52 @@ namespace
 constexpr float k_Tiny = 1e-4f;
 } // namespace
 
-float creature_throw::FlightTime(float distance)
+float creature_throw::FlightTime(const glm::vec3& creature, const glm::vec3& target)
 {
-	return std::sqrt(std::max(distance, 0.0f) / k_Gravity);
+	const float acrossX = creature.x - target.x;
+	const float acrossZ = creature.z - target.z;
+	const float distance = std::sqrt((acrossZ * acrossZ) + (acrossX * acrossX));
+	return std::sqrt(distance * k_FlightTimePerUnit);
+}
+
+glm::vec3 creature_throw::PlaceIn(const ThrowTarget& target, float seconds, const MapAltitude& altitude)
+{
+	if (target.kind == ThrowTarget::Kind::Creature)
+	{
+		// A creature goes on along its heading at its speed. The ground comes from the map position of that place, and
+		// the game aims at the full height of the creature.
+		const float distance = target.speed * seconds;
+		const float acrossX = x87::Mul(x87::Sin(target.heading), distance);
+		const float acrossZ = -x87::Mul(x87::Cos(target.heading), distance);
+		const float x = acrossX + target.position.x;
+		const float z = acrossZ + target.position.z;
+		const auto mapX = map_coords::FtoL((x * 65536.0f) * 0.1f);
+		const auto mapZ = map_coords::FtoL((z * 65536.0f) * 0.1f);
+		return {x, altitude(mapX, mapZ) + target.height, z};
+	}
+	// Anything else is aimed at the middle of its height over the ground where it stands
+	glm::vec3 place {map_coords::ToMetres(target.mapPosition.x),
+	                 altitude(target.mapPosition.x, target.mapPosition.y) + (target.height * 0.5f),
+	                 map_coords::ToMetres(target.mapPosition.y)};
+	if (target.kind == ThrowTarget::Kind::Villager && target.walking)
+	{
+		// A villager goes on by its step for each whole turn in the time. The height does not change.
+		constexpr float k_MetresPerStepUnit = 1.0f / 65536.0f;
+		const auto turns = static_cast<float>(map_coords::FtoL(static_cast<float>(k_LeadTurnsPerSecond) * seconds));
+		const float stepX = (static_cast<float>(target.step.x) * 10.0f) * k_MetresPerStepUnit;
+		const float stepZ = (static_cast<float>(target.step.y) * 10.0f) * k_MetresPerStepUnit;
+		place.x = (turns * stepX) + place.x;
+		place.z = (turns * stepZ) + place.z;
+	}
+	return place;
+}
+
+ThrowAim creature_throw::AimAt(const glm::vec3& creature, const ThrowTarget& target, const MapAltitude& altitude)
+{
+	const glm::vec3 standing {map_coords::ToMetres(target.mapPosition.x), 0.0f, map_coords::ToMetres(target.mapPosition.y)};
+	const float first = FlightTime(creature, standing);
+	const float second = FlightTime(creature, PlaceIn(target, first, altitude));
+	return {.point = PlaceIn(target, second, altitude), .seconds = second};
 }
 
 glm::vec3 creature_throw::ReleaseVelocity(const glm::vec3& target, const glm::vec3& release, float seconds)
@@ -137,22 +182,27 @@ glm::vec3 creature_throw::TossVelocity(const glm::vec3& handVelocity, bool mirro
 std::optional<creature_throw::ThrowStand> creature_throw::WhereToThrowFrom(glm::vec2 creature, glm::vec2 target, float height,
                                                                            float targetRadius, float keep)
 {
-	const float distance = glm::distance(creature, target);
-	const float nearest = keep + targetRadius + k_ThrowStandHeights * height;
-	const float furthest = k_ThrowReachHeights * height;
+	// The way from the creature to the thing, and its length with the square of z first
+	const float acrossX = target.x - creature.x;
+	const float acrossZ = target.y - creature.y;
+	const float distance = std::sqrt((acrossZ * acrossZ) + (acrossX * acrossX));
+	const float twoHeights = height + height;
+	const float nearest = (keep + targetRadius) + twoHeights;
+	const float furthest = height * k_ThrowReachHeights;
 	if (distance < nearest)
 	{
+		// Right on the thing's centre the way has no length, so the move fails (deviation 79)
 		if (distance <= 0.0f)
 		{
 			return std::nullopt;
 		}
 		// Back along the line from the thing to where it stands, to the nearest it may stand
 		return ThrowStand {.kind = ThrowStand::Kind::BackOff,
-		                   .point = target - (target - creature) * (nearest / distance),
+		                   .point = {target.x - ((nearest * acrossX) / distance), target.y - ((nearest * acrossZ) / distance)},
 		                   .minDistance = 0.0f,
-		                   .maxDistance = k_ThrowBackOffHeights * height};
+		                   .maxDistance = twoHeights};
 	}
-	if (distance > furthest)
+	if (!(distance <= furthest))
 	{
 		return ThrowStand {.kind = ThrowStand::Kind::WalkUp,
 		                   .point = target,
@@ -160,4 +210,26 @@ std::optional<creature_throw::ThrowStand> creature_throw::WhereToThrowFrom(glm::
 		                   .maxDistance = furthest > nearest ? furthest : nearest + k_ThrowWalkUpSpare};
 	}
 	return ThrowStand {};
+}
+
+std::optional<glm::vec2> creature_throw::BackOffPoint(const creature_route::WalkableLand& land, glm::vec2 point)
+{
+	if (land.IsValid(point, creature_route::k_DestinationClearance))
+	{
+		return point;
+	}
+	const auto valid = land.NearestStandable(point);
+	if (!valid.has_value())
+	{
+		return std::nullopt;
+	}
+	// How far away the place is, with the square of z first
+	const float acrossX = point.x - valid->x;
+	const float acrossZ = point.y - valid->y;
+	const float away = std::sqrt((acrossZ * acrossZ) + (acrossX * acrossX));
+	if (!(away < creature_route::k_ValidPointReach))
+	{
+		return std::nullopt;
+	}
+	return valid;
 }

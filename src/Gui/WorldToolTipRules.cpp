@@ -98,6 +98,19 @@ std::u16string Compose(uint32_t index, std::u16string_view words, double first, 
 	return fixed_format::WithNumbers(words, values);
 }
 
+std::u16string WithCharge(std::u16string_view words, double charge)
+{
+	constexpr int k_Width = 3;
+	std::u16string text(words);
+	text.push_back(u' ');
+	for (const char c : fixed_format::Fixed(charge, k_Width, 0))
+	{
+		text.push_back(static_cast<char16_t>(c));
+	}
+	text.push_back(u'%');
+	return text;
+}
+
 std::optional<glm::ivec2> HandOnScreen(const glm::mat4& worldToClip, float nearClip, glm::vec3 hand, glm::ivec2 screen)
 {
 	const auto clip = worldToClip * glm::vec4(hand, 1.0f);

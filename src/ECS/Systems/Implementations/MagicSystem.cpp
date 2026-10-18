@@ -2801,6 +2801,13 @@ void MagicSystem::PowerUpHeldSeed(int level)
 	const int previous = seed.powerUp;
 	seed.powerUp = level;
 	seed.power = magic::SeedPower(seed.chantStore, cost);
+	ShowHeldSeedPowerUp(level, previous);
+	_lastHandResult = HandResult::PoweredUp;
+}
+
+void MagicSystem::ShowHeldSeedPowerUp(int level, int previous)
+{
+	auto& seed = EntityRegistry().Get<SpellSeed>(*_held);
 	// Its in-hand effect starts afresh at the new level, shown once the seed is ready
 	StopHandEffect(seed);
 	StartHandEffect(*_held);
@@ -2810,7 +2817,32 @@ void MagicSystem::PowerUpHeldSeed(int level)
 	{
 		Locator::miracleFxSystem::value().SeedInHand(level, previous);
 	}
-	_lastHandResult = HandResult::PoweredUp;
+}
+
+void MagicSystem::SetIconSeedPowerUp(entt::entity entity, int powerUp)
+{
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(entity) || !registry.AllOf<SpellSeed>(entity))
+	{
+		return;
+	}
+	auto& seed = registry.Get<SpellSeed>(entity);
+	const int previous = seed.powerUp;
+	seed.powerUp = powerUp;
+	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Info(), seed.seedType), powerUp);
+	const float cost = magic::GetChantsRequiredToCreate(Info(), type);
+	// What the seed holds past the cost of the new level goes back to the battery of its worship site
+	const float spare = -magic::ChantNeeded(cost, seed.chantStore);
+	if (spare > 0.0f && registry.Valid(seed.worshipSite) && Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().ReturnChants(seed.worshipSite, spare);
+		seed.chantStore = seed.chantStore - spare;
+	}
+	seed.power = magic::SeedPower(seed.chantStore, cost);
+	if (_held == entity)
+	{
+		ShowHeldSeedPowerUp(powerUp, previous);
+	}
 }
 
 void MagicSystem::TakeGestures()

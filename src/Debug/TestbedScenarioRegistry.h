@@ -315,6 +315,9 @@ struct ObjectSetup
 	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes. An animal
 	/// is made as a land's script makes one, and the script controls it.
 	bool inScript {false};
+	/// A villager is under the control of a script, as a script controls a villager that it moves: it takes up no
+	/// reaction until the script releases it
+	bool scriptControlled {false};
 	/// A villager is the named person of this row in the game's table of named people, whose name the Show Villager
 	/// Names key shows
 	std::optional<uint8_t> nameRow;
@@ -785,6 +788,9 @@ struct Command
 		/// The pointer moves onto the middle of the foot of the scenario's town's worship site altar on the screen, as the
 		/// mouse moves it. Needs no creature
 		PointerOnAltar,
+		/// The pointer moves onto the rope of the leash of the creature, tied to a thing, a quarter of the way from the
+		/// thing, as the mouse moves it
+		PointerOnRope,
 		/// The creature fizzes to a share (amount: 0 in sight, 1 out of sight) over some milliseconds (value), as a
 		/// script's fade does. It stays at that share.
 		SetFizz,
@@ -855,9 +861,28 @@ struct Command
 		/// everywhere, or with ctrl from the point (from the middle of the map) on the land, heard as far as radius with
 		/// the distances of a placed guidance voice. Needs no creature.
 		PlayGuidanceVoice,
+		/// The creature stops at once where it is, as a new body action or a placement stops it. The Stop command stops
+		/// it as the game stops a walk.
+		StopAtOnce,
+		/// The creature turns to face the point (from the middle of the map) as the game's turn stages tell it to. While it
+		/// walks to its stop, the turn does not start, and the command asks again each frame until the turn starts.
+		TurnToFaceWhenStill,
+		/// A script releases the scenario's object (object) into the game, as RELEASE_FROM_SCRIPT does. A villager
+		/// that the script controls then decides what to do, and reacts again. Needs no creature.
+		ScriptRelease,
+		/// Each icon of the player's worship sites holds a part of the charge of its miracle (amount, 0 to 1), as if the
+		/// worshippers charged it that far. Needs no creature.
+		FillSiteIcons,
 		/// The game saves into the quick save slot, as the quick save key does: a new picture of the screen and the
 		/// slot's own name. Needs no creature
 		QuickSave,
+		/// The player's worship site icon of a seed (value, a SpellSeedType) puts its miracle in the hand. The seed keeps
+		/// a part of its charge (amount, 0 to 1), and the icon charges again for the hand, as when the hand takes a seed
+		/// of an icon that charges. The battery of the site gets the full cost of the miracle. Needs no creature.
+		ChargeIconWithSeedHeld,
+		/// The scenario's object, a building going up, is finished at once, as when its builders put on the last of
+		/// it. Needs no creature.
+		FinishBuilding,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -911,7 +936,8 @@ struct Command
 	std::optional<size_t> atCreature;
 	/// The creature that a script's action uses, in place of the object (with), by its place in the scenario's creatures
 	std::optional<size_t> usesCreature;
-	/// The player's alignment jumped to, from -1 (evil) to 1 (good)
+	/// The player's alignment jumped to, from -1 (evil) to 1 (good). For a recorded challenge, the alignment of the
+	/// challenge, which moves the player's alignment on each record after the first.
 	float alignment {0.0f};
 	/// What an advisor is told: to come out of its corner, or to appear in a puff of smoke; to go home, or to vanish; to
 	/// cling to or fly to a point on the screen (point, from 0 to 1 across and down); to point at that point on the
@@ -1069,6 +1095,8 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town feels so about each of the scenario's creatures from the start, as if
 	/// the creature had just shown it, rather than first seeing them as it plays
 	std::optional<ecs::creature_attitude::Attitude> townFeelingAboutCreatures;
+	/// A testbed set-up step: the scenario's town belongs to this player from the start, rather than to the player
+	std::optional<PlayerNames> townOwner;
 	/// A crowd spawned a batch a frame, after the creatures and objects above; the runner measures the frames once it
 	/// is all there
 	std::optional<Crowd> crowd;

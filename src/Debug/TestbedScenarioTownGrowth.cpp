@@ -438,6 +438,30 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                "they stand. Thirty seconds after the tiger last frightened the town its fear lapses into "
 	                "indifference and they go back to what they were doing.");
 
+	// A town with no centre won over by the player
+	all.push_back({
+	    .id = "villagers.town_celebration",
+	    .name = "Villagers of a town with no centre won over",
+	    .facet = Facet::Objects,
+	    .description = "A neutral village of six by its hut, with no village centre. The town believes in the player so "
+	                   "much from the start that the player wins it at its first turn of belief.",
+	    .expected = "As the player wins the town, fireworks and the player's symbols rise from the town, and the town makes "
+	                "its celebration. The villagers within reach take it up and turn to look at the town until their time "
+	                "with it ends, then go back to what they were doing. The town's dance is made about the town (the "
+	                "inspector's game entities show one Dance with no owner), but no villager joins it, as in the game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 25.0f}, {10.0f, 55.0f}}, .distance = 0.7f},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-10.0f, 40.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-2.0f, 34.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {-4.0f, 46.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 40.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 30.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {-14.0f, 50.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-18.0f, 34.0f}, .joinTown = true}},
+	    .townBeliefInPlayer = 1000.0f,
+	    .townOwner = PlayerNames::NEUTRAL,
+	});
+
 	// Animals near a creature
 	all.push_back({
 	    .id = "animals.flee_creature",
@@ -513,6 +537,60 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticFishermanMale, .offset = {32.0f, 0.0f}, .yawDegrees = 0.0f},
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {42.0f, 0.0f}, .yawDegrees = 0.0f},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {52.0f, 0.0f}, .yawDegrees = 0.0f}},
+	});
+
+	// A villager under the control of a script takes up no reaction until the script releases it
+	all.push_back({
+	    .id = "villagers.script_release_reacts",
+	    .name = "A villager that a script releases reacts again",
+	    .facet = Facet::Objects,
+	    .description = "A cart in the middle of open land makes a reaction to look at it, of the kind a miracle makes. Two "
+	                   "villagers stand 6 metres east of it. A script controls the north one. Eight seconds in, the "
+	                   "script releases it, as RELEASE_FROM_SCRIPT does.",
+	    .expected = "The south villager takes the reaction up and turns to watch the cart. The north villager does not "
+	                "watch the cart while the script controls it. When the script releases it, it has no town, so it "
+	                "starts as a vagrant. Then it takes the reaction up and turns to watch the cart too.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-4.0f, -8.0f}, {10.0f, 8.0f}}, .distance = 0.5f},
+	    .objects =
+	        {{.type = MobileObjectInfo::Cart, .offset = {0.0f, 0.0f}, .reaction = Reaction::LookAtSpell},
+	         {.type = VillagerInfo::CelticFarmerMale, .offset = {6.0f, -3.0f}, .yawDegrees = 0.0f},
+	         {.type = VillagerInfo::CelticForesterMale, .offset = {6.0f, 3.0f}, .yawDegrees = 0.0f, .scriptControlled = true}},
+	    .commands = {{.kind = Command::Kind::ScriptRelease, .delaySeconds = 8.0f, .object = 2}},
+	});
+
+	// The three things that a villager does when a script releases it
+	all.push_back({
+	    .id = "villagers.script_release_outcomes",
+	    .name = "What a villager does when a script releases it",
+	    .facet = Facet::Objects,
+	    .description = "A town has a town centre and a hut. A script controls three villagers that stand in a line east of "
+	                   "the hut. The north villager belongs to the town. The middle villager has no town. The south "
+	                   "villager belongs to the town and has no life. Four seconds in, the script releases all three.",
+	    .expected = "Before the release, the three villagers stand still. After the release, the north villager decides "
+	                "at once what to do in its town, and goes to sit in the town. The middle villager starts as a vagrant. "
+	                "The town is near, so the vagrant joins the town and also goes to sit there. The south villager "
+	                "dies, falls and lies dead.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-14.0f, -10.0f}, {14.0f, 10.0f}}, .distance = 0.6f},
+	    .objects =
+	        {{.type = AbodeInfo::CelticTownCentre, .offset = {-10.0f, 0.0f}},
+	         {.type = AbodeInfo::CelticHut, .offset = {0.0f, 0.0f}, .yawDegrees = 90.0f},
+	         {.type = VillagerInfo::CelticFarmerMale,
+	          .offset = {8.0f, -4.0f},
+	          .yawDegrees = 0.0f,
+	          .joinTown = true,
+	          .scriptControlled = true},
+	         {.type = VillagerInfo::CelticForesterMale, .offset = {8.0f, 0.0f}, .yawDegrees = 0.0f, .scriptControlled = true},
+	         {.type = VillagerInfo::CelticHousewifeFemale,
+	          .offset = {8.0f, 4.0f},
+	          .yawDegrees = 0.0f,
+	          .joinTown = true,
+	          .life = 0.0f,
+	          .scriptControlled = true}},
+	    .commands = {{.kind = Command::Kind::ScriptRelease, .delaySeconds = 4.0f, .object = 2},
+	                 {.kind = Command::Kind::ScriptRelease, .delaySeconds = 0.0f, .object = 3},
+	                 {.kind = Command::Kind::ScriptRelease, .delaySeconds = 0.0f, .object = 4}},
 	});
 
 	// Villagers watching a thing that the hand then takes up

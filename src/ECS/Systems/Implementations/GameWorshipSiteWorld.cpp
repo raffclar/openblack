@@ -185,7 +185,7 @@ magic::WorshipBatteryRules GameWorshipSiteWorld::ChantRules(Tribe tribe, PlayerN
 
 entt::entity GameWorshipSiteWorld::MakeDance(DanceInfo dance, glm::vec3 position, entt::entity site)
 {
-	return Locator::danceSystem::has_value() ? Locator::danceSystem::value().Create(dance, position, site, 0, false)
+	return Locator::danceSystem::has_value() ? Locator::danceSystem::value().Create(dance, position, site, 0, false, entt::null)
 	                                         : entt::null;
 }
 

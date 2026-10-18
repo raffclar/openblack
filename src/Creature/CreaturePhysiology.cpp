@@ -12,7 +12,9 @@
 #include <cmath>
 
 #include <algorithm>
+#include <numbers>
 
+#include "Common/X87.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureMorph.h"
 
@@ -33,6 +35,12 @@ float Clamp01(float value)
 	return std::clamp(value, 0.0f, 1.0f);
 }
 } // namespace
+
+float creature_physiology::SpreadStart(float value, const std::function<float(float)>& upTo)
+{
+	// The game adds the value to the draw first, then takes the spread off
+	return (upTo(2.0f * k_StartSpread) + value) - k_StartSpread;
+}
 
 Needs creature_physiology::Start(const Species& species)
 {
@@ -239,13 +247,15 @@ void creature_physiology::Poo(Needs& needs)
 	needs.poo = 0.0f;
 }
 
-PooLump creature_physiology::PooLumpOf(glm::vec3 groin, glm::vec2 ahead, float shownSize)
+PooLump creature_physiology::PooLumpOf(glm::vec3 groin, GameHeading heading, float shownSize)
 {
 	constexpr float k_Scale = 1.5f;
 	constexpr float k_Speed = 5.0f;
+	// The FPU's wide sine and cosine of the back way go into the products
+	const float back = heading.Radians() + std::numbers::pi_v<float>;
 	return {
 	    .position = groin,
-	    .velocity = glm::vec3(-ahead.x * k_Speed, 0.0f, -ahead.y * k_Speed),
+	    .velocity = glm::vec3(x87::Mul(x87::Sin(back), k_Speed), 0.0f, x87::Mul(x87::Cos(back), -k_Speed)),
 	    .scale = k_Scale * shownSize,
 	};
 }

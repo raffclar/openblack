@@ -133,7 +133,6 @@ public:
 		++ended;
 		return object;
 	}
-	void AddPuff(glm::vec3 /*position*/, glm::vec3 /*velocity*/, float /*size*/, uint32_t /*argb*/) override { ++puffs; }
 
 	/// A rock flying with a speed, its body a cube of two metres across weighing ten
 	PhysicsEntry& AddRock(entt::entity rock, glm::vec3 centre, glm::vec3 velocity, std::optional<PlayerNames> player)
@@ -160,7 +159,6 @@ public:
 	std::vector<Launched> launched;
 	std::vector<entt::entity> rocks;
 	int ended {0};
-	int puffs {0};
 };
 
 /// A flat land at the sea's level, the house's model a wall of 8 by 2 squares of 2 metres about its middle, and records of what
@@ -168,6 +166,8 @@ public:
 class FakeWorld final: public building_world::World
 {
 public:
+	/// How many puffs of dust the pieces threw up
+	int puffs {0};
 	struct Effect
 	{
 		entt::entity object;
@@ -213,6 +213,7 @@ public:
 	[[nodiscard]] GameRandomInterface* Random() override { return &random; }
 	[[nodiscard]] int32_t SnowAt(glm::vec3 /*point*/) const override { return 0; }
 	[[nodiscard]] uint32_t DustTint(uint32_t argb, int32_t /*snow*/) const override { return argb; }
+	void AddDust(glm::vec3 /*position*/, glm::vec3 /*velocity*/, float /*size*/, uint32_t /*argb*/) override { ++puffs; }
 	void PlaySound(std::span<const int32_t> keys, entt::entity building, glm::vec3 /*position*/) override
 	{
 		EXPECT_EQ(building, house);

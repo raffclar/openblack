@@ -101,6 +101,7 @@ struct RunFrom
 /// Running away: one time in two a frightened start with wide eyes, then the run with a frightened face, looking back
 /// at what it runs from in turns, then one time in two another frightened start. A run from a thing also opens the
 /// eyes wide. When the run stops further from what it ran from than the run-away distance, the run sees to the desire.
+/// The creature runs from a thing at its run speed. From the player's hand, it keeps the speed that it had last.
 [[nodiscard]] std::vector<Step> RunAway(const RunFrom& from, const Random& random);
 /// Whether a run away stopped far enough from what it ran from to see to the desire: further than the run-away
 /// distance of the species, measured across the land

@@ -49,10 +49,15 @@ int32_t Strength(float intensity)
 	return static_cast<int32_t>(intensity * 255.0f);
 }
 
+float VillageBrightness(float intensity)
+{
+	// The brightness is taken to 0 to 1 in single precision
+	return intensity * k_InverseByte;
+}
+
 int32_t VillageStrength(float intensity)
 {
-	// The brightness is taken to 0 to 1 in single precision first
-	return Strength(intensity * k_InverseByte);
+	return Strength(VillageBrightness(intensity));
 }
 
 Placement Place(glm::vec2 xz)

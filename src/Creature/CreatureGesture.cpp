@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Common/X87.h"
+
 using namespace openblack;
 
 glm::vec3 creature_gesture::SamplePath(std::span<const glm::vec3> points, float share)
@@ -33,13 +35,21 @@ glm::vec3 creature_gesture::SamplePath(std::span<const glm::vec3> points, float 
 	return from + ((to - from) * fraction);
 }
 
-glm::vec3 creature_gesture::HandTarget(glm::vec3 head, glm::vec2 facing, float radius, glm::vec3 shapePoint)
+glm::vec3 creature_gesture::HandTarget(glm::vec3 head, GameHeading heading, float radius, glm::vec3 shapePoint)
 {
-	const auto ahead = facing * (k_AheadRadii * radius);
-	const glm::vec2 side {facing.y, -facing.x};
+	// The point ahead: the FPU's sine and cosine of the heading times two radii, each product rounded
+	const auto angle = static_cast<double>(heading.Radians());
+	const auto aheadReach = radius + radius;
+	const glm::vec3 ahead {x87::Mul(x87::Sin(angle), aheadReach) + head.x, head.y,
+	                       -x87::Mul(x87::Cos(angle), aheadReach) + head.z};
+	// The side is a quarter turn back from the heading, as long as the size
 	const auto size = radius * k_SizePerRadius;
-	const auto across = side * (size * shapePoint.x);
-	return {head.x + ahead.x + across.x, head.y + (size * (1.0f - shapePoint.z)), head.z + ahead.y + across.y};
+	const auto sideAngle = static_cast<double>(heading.Radians() - k_QuarterTurn);
+	const auto sideX = x87::Mul(x87::Sin(sideAngle), size);
+	const auto sideZ = -x87::Mul(x87::Cos(sideAngle), size);
+	const auto up = size * (1.0f - shapePoint.z);
+	// The game adds the side and then a lift with zero parts across
+	return {((sideX * shapePoint.x) + ahead.x) + 0.0f, (0.0f + ahead.y) + up, ((sideZ * shapePoint.x) + ahead.z) + 0.0f};
 }
 
 float creature_gesture::SharePerTurn(float length, float referenceLength)

@@ -221,6 +221,27 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "footpaths.house_built_in_play",
+	    .name = "A house finished in play gets its footpath",
+	    .facet = Facet::Movement,
+	    .description = "The lake-shore town's built storage pit and a hut nine tenths built, 60 m apart, with a big rock "
+	                   "on the straight line between their doors. The Footpaths debug lines show the footpaths. After "
+	                   "three seconds the hut is finished, as when its builders put on the last of it.",
+	    .expected = "No footpath shows at first. When the hut is finished, a footpath from the pit's door to the hut's "
+	                "door shows at once. It goes round the rock: nodes in an arc about the rock, a tenth of a half turn "
+	                "apart. It does not go round the hut or the pit, because their circles hold the path's ends.",
+	    .environment = {.dispenserGrid = false, .drawFootpaths = true},
+	    .framing = OverTheFootpaths(),
+	    .objects = {{.type = AbodeInfo::NorseHut,
+	                 .offset = k_ShoreFarm + glm::vec2(-30.0f, -60.0f),
+	                 .yawDegrees = 180.0f,
+	                 .built = 0.9f},
+	                {.type = AbodeInfo::NorseStoragePit, .offset = k_ShoreFarm + glm::vec2(25.0f, -30.0f)},
+	                {.type = MobileStaticInfo::RockChalk, .offset = k_ShoreFarm + glm::vec2(-3.5f, -54.0f), .scale = 3.0f}},
+	    .commands = {{.kind = Kind::FinishBuilding, .delaySeconds = 3.0f, .object = 0}},
+	});
+
+	all.push_back({
 	    .id = "hand.fish_farm",
 	    .name = "A fish farm's shoal",
 	    .facet = Facet::Hand,

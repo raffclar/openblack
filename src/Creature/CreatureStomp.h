@@ -17,6 +17,9 @@
 
 #include <glm/vec3.hpp>
 
+#include "Common/GameHeading.h"
+#include "Creature/CreatureObstacles.h"
+
 /// The rules for what a creature does with its feet and its body to the things round it: a stomp, a kick, and the
 /// spheres round the parts of its body that knock things about while it lies down, gets up, faints or fights.
 namespace openblack::creature_stomp
@@ -111,8 +114,8 @@ struct BuildingKick
 	/// Where the foot of the kick is, and the way the kick goes (a length of 1)
 	glm::vec3 foot {0.0f};
 	glm::vec3 direction {0.0f};
-	/// The way that the creature faces, in radians
-	float yaw {0.0f};
+	/// The heading of the creature
+	GameHeading heading {};
 	float creatureSize {0.0f};
 	/// The radius of the building on the ground
 	float buildingRadius {0.0f};
@@ -120,6 +123,8 @@ struct BuildingKick
 	uint32_t firstHeightDraw {0};
 	uint32_t secondHeightDraw {0};
 };
+/// The middle between the creature and the foot of its kick
+[[nodiscard]] glm::vec3 KickMiddle(glm::vec3 creature, glm::vec3 foot);
 /// A kick breaks a building with two blows, both at the middle between the creature and its foot. The first goes the
 /// way of the kick, the second goes sideways from the way the creature faces. Each lands at a random height above the
 /// land, not higher than the reach of the blow of the creature. The land height is the height of the land at that
@@ -217,13 +222,20 @@ struct VictimFacts
 };
 [[nodiscard]] Victim VictimOf(const VictimFacts& facts);
 /// A villager, an animal or a thing goes when its distance on the ground is less than three tenths of the sphere radius
-/// added to its own radius. A building breaks when its distance is less than the two radii added.
+/// added to its own radius. A building breaks when its distance is less than the two radii added. The distance comes
+/// squared, and the game compares it with the square of the reach.
 constexpr float k_KnockReachShare = 0.3f;
-[[nodiscard]] bool InReach(Victim victim, float groundDistance, float sphereRadius, float thingRadius);
+[[nodiscard]] bool InReach(Victim victim, float groundDistanceSquared, float sphereRadius, float thingRadius);
+/// Whether a corner of a thing's model is in a sphere of the body. The corner goes through the thing's turn and scale
+/// as the game builds them. The squares of the distance are added from z to x and compared with the square of the
+/// radius.
+[[nodiscard]] bool CornerInSphere(const creature_obstacles::PlacementRows& rows, const glm::vec3& position,
+                                  const glm::vec3& corner, const glm::vec3& centre, float radius);
 /// The speed of a knocked thing is this number of times the move of the part
 constexpr float k_KnockSpeedPerMove = 7.0f;
 [[nodiscard]] glm::vec3 KnockVelocity(const glm::vec3& move);
-/// The blow on a building goes the way the part moved, at this speed
-constexpr float k_TrampleBlowSpeed = 4.0f;
+/// The blow on a building goes the way the part moved, at the length of the move times this scale, times this share
+constexpr float k_TrampleBlowPerMove = 10.0f;
+constexpr float k_TrampleBlowShare = 0.4f;
 [[nodiscard]] Blow TrampleBlow(const glm::vec3& point, const glm::vec3& move, float sphereRadius);
 } // namespace openblack::creature_stomp

@@ -31,17 +31,22 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Angle.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureOwner.h"
 #include "Creature/CreaturePointing.h"
 #include "Creature/CreatureReach.h"
@@ -187,7 +192,8 @@ float BearingTo(const Transform& transform, const glm::vec3& target)
 	return std::acos(std::clamp(glm::dot(ahead, glm::normalize(towards)), -1.0f, 1.0f));
 }
 
-/// Where the creature's head bone is as posed now, or its position when its species has no head bone
+/// Where the creature's head bone is as posed at the end of its newest game turn, or its position when its species has
+/// no head bone
 glm::vec3 HeadOf(entt::entity creature, const Transform& transform, const Creature& body)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -197,7 +203,8 @@ glm::vec3 HeadOf(entt::entity creature, const Transform& transform, const Creatu
 	{
 		return transform.position;
 	}
-	return glm::vec3(creature::PosedBone(points->head, animation->boneMatrices, PlacementOf(transform))[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices, PlacementOf(transform));
+	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
 }
 
 /// The hand a creature acts with: the right, or its mirror
@@ -206,34 +213,45 @@ uint32_t HandBone(const CreatureRig::ActionPoints& points, const CreatureAnimati
 	return mirrored && points.rightHand < animation.mirror.size() ? animation.mirror[points.rightHand] : points.rightHand;
 }
 
-/// Where the middle of the finger ends of a hand is, as the body is posed this frame. A held thing sits there, and the
-/// hand lets go of it there.
-glm::vec3 FingerEndsOf(uint32_t hand, const CreatureAnimation& animation, const glm::mat4& placement)
+/// The pose drawn this frame, with the creature's placement
+creature::RulePose DrawnPoseOf(const CreatureAnimation& animation, const Transform& transform)
+{
+	return {.bones = animation.boneMatrices, .placement = PlacementOf(transform)};
+}
+
+/// The pose at the end of the newest game turn, which game rules read
+creature::RulePose TurnPoseOf(const CreatureAnimation& animation, const Transform& transform)
+{
+	return creature::TurnPose(animation.newerTurnPose, animation.boneMatrices, PlacementOf(transform));
+}
+
+/// Where the middle of the finger ends of a hand is, in a pose of the body. A held thing sits there, and the hand lets go
+/// of it there.
+glm::vec3 FingerEndsOf(uint32_t hand, const CreatureAnimation& animation, const creature::RulePose& pose)
 {
 	const auto bones = creature_throw::TossPointBones(animation.skeleton.parents, hand);
 	if (bones.empty())
 	{
-		return glm::vec3(creature::PosedBone(hand, animation.boneMatrices, placement)[3]);
+		return glm::vec3(creature::PosedBone(hand, pose.bones, pose.placement)[3]);
 	}
 	glm::vec3 sum(0.0f);
 	for (const auto bone : bones)
 	{
-		sum += glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
+		sum += glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3]);
 	}
 	return sum / static_cast<float>(bones.size());
 }
 
-/// Where a held thing is and how it turns, from the hand that holds it as the body is posed this frame
-creature_throw::HeldPose HeldPoseOf(const CreatureHeldObject& held, const Transform& transform,
-                                    const CreatureAnimation& animation)
+/// Where a held thing is and how it turns, from the hand that holds it in a pose of the body
+creature_throw::HeldPose HeldPoseOf(const CreatureHeldObject& held, const CreatureAnimation& animation,
+                                    const creature::RulePose& pose)
 {
-	const auto placement = PlacementOf(transform);
-	const auto hand = creature::PosedBone(held.bone, animation.boneMatrices, placement);
+	const auto hand = creature::PosedBone(held.bone, pose.bones, pose.placement);
 	const auto hang = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().HangOf(held.object) : 0.0f;
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* thing = registry.Valid(held.object) ? registry.TryGet<const Transform>(held.object) : nullptr;
 	const float thingScale = thing != nullptr ? thing->scale.x : 1.0f;
-	return creature_throw::HeldPlacement(glm::mat3(hand), FingerEndsOf(held.bone, animation, placement), held.mirrored, hang,
+	return creature_throw::HeldPlacement(glm::mat3(hand), FingerEndsOf(held.bone, animation, pose), held.mirrored, hang,
 	                                     thingScale);
 }
 
@@ -589,6 +607,7 @@ void PlayKickSound(const ecs::Registry& registry, entt::entity target, glm::vec3
 	}
 	const std::array<int32_t, 5> keys {0, 0, *object, 0, k_BeenKicked};
 	Locator::audio::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot,
+	                                       openblack::audio::CurrentSoundEffectConditions(),
 	                                       openblack::audio::AnimEffectMeasure::AcrossFirst);
 }
 
@@ -614,9 +633,13 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 	const auto lean =
 	    creature_object_actions::LeanOf(height(at + glm::vec2(radius, 0.0f)), height(at - glm::vec2(radius, 0.0f)),
 	                                    height(at + glm::vec2(0.0f, radius)), height(at - glm::vec2(0.0f, radius)), radius);
-	const auto ahead = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-	const auto velocity =
-	    creature_object_actions::KickVelocity(glm::normalize(glm::xz(ahead)), lean, transform.scale.x, ShownSize(body));
+	// Its heading, or the way its rotation faces when it does not walk
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
+	const auto ahead = glm::xz(transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
+	const auto heading = walk != nullptr ? walk->heading : GameHeading::Of(ahead.x, ahead.y);
+	const auto forward = walk != nullptr ? creature_locomotion::DirectionOf(heading) : glm::normalize(ahead);
+	const auto direction = creature_object_actions::KickDirection(forward, lean, transform.scale.x);
+	const auto velocity = (ShownSize(body) * creature_object_actions::k_KickSpeedPerSize) * direction;
 	const auto* points = PointsOf(body);
 	const auto foot = points != nullptr && points->rightFoot < animation.boneMatrices.size()
 	                      ? glm::vec3(creature::PosedBone(points->rightFoot, animation.boneMatrices, PlacementOf(transform))[3])
@@ -637,17 +660,21 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 		const creature_stomp::BuildingKick kick {
 		    .creature = transform.position,
 		    .foot = foot,
-		    .direction = glm::length(velocity) > 0.0f ? glm::normalize(velocity) : glm::vec3(0.0f),
-		    // The angle whose sine is the way ahead along x and whose minus cosine is the way ahead along z
-		    .yaw = std::atan2(ahead.x, -ahead.z),
+		    .direction = direction,
+		    .heading = heading,
 		    .creatureSize = ShownSize(body),
 		    .buildingRadius = object_measures::TwoDRadius(registry, target),
 		    .sideDraw = side,
 		    .firstHeightDraw = first,
 		    .secondHeightDraw = second,
 		};
-		const auto middle = transform.position + ((foot - transform.position) * 0.5f);
-		const auto blows = creature_stomp::KickBlows(kick, height({middle.x, middle.z}));
+		// The land height is taken at the middle point turned to a map position
+		const auto middle = creature_stomp::KickMiddle(transform.position, foot);
+		const float land = Locator::terrainSystem::has_value()
+		                       ? Locator::terrainSystem::value().GetAltitude(map_coords::FtoL(middle.x * 65536.0f * 0.1f),
+		                                                                     map_coords::FtoL(middle.z * 65536.0f * 0.1f))
+		                       : 0.0f;
+		const auto blows = creature_stomp::KickBlows(kick, land);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} kicks building {}", entt::to_integral(creature),
 		                    entt::to_integral(target));
 		Locator::buildingDamageSystem::value().CreatureBlows(target, creature, blows);
@@ -757,7 +784,7 @@ void BeginPlaying(entt::entity creature, CreatureObjectAction& action, CreatureA
 {
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
-		Locator::creatureLocomotionSystem::value().Stop(creature);
+		Locator::creatureLocomotionSystem::value().StopAtOnce(creature);
 	}
 	animation.body = {};
 	action.phase = Phase::Playing;
@@ -776,6 +803,19 @@ bool BodyBusy(const CreatureObjectAction* doing)
 {
 	return doing != nullptr && doing->phase == Phase::Playing &&
 	       (doing->status == Status::Running || doing->status == Status::Contact);
+}
+
+/// Whether a catch must wait before it starts. It waits while the body plays any action, and while the creature
+/// walks, turns or waits for its route. A stop lets a walking creature slow to a stand first.
+bool CatchWaits(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const bool bodyPlaysAction = BodyBusy(registry.TryGet<const CreatureObjectAction>(creature)) ||
+	                             (animation != nullptr && creature_layers::IsPlaying(animation->body));
+	const bool moving =
+	    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(creature);
+	return creature_catch::WaitsToStart(bodyPlaysAction, moving);
 }
 
 void Fail(CreatureObjectAction& action, std::string reason,
@@ -990,7 +1030,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		if (action.kind == Kind::Throw)
 		{
 			action.flightSeconds =
-			    action.givenFlightSeconds.value_or(creature_throw::FlightTime(glm::distance(transform.position, action.point)));
+			    action.givenFlightSeconds.value_or(creature_throw::FlightTime(transform.position, action.point));
 			const auto weights = ThrowWeights(creature, transform, *points, action.point);
 			const std::array<size_t, 2> animations {creature_throw::k_HurlFlat, creature_throw::k_HurlHigh};
 			SetSlots(action, animations, weights);
@@ -1151,9 +1191,10 @@ void TurnToCatch(entt::entity creature, const CreatureObjectAction& action)
 	const float bearing = BearingTo(transform, towards);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} starts its catch at ({:.1f}, {:.1f}), {:.2f} rad off the thing",
 	                    entt::to_integral(creature), transform.position.x, transform.position.z, bearing);
+	// The catch turns the creature itself, while its body plays the catch
 	if (bearing > creature_catch::k_TurnAngle)
 	{
-		Locator::creatureLocomotionSystem::value().TurnToFace(creature, glm::xz(towards));
+		Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature, glm::xz(towards));
 	}
 }
 
@@ -1222,8 +1263,7 @@ void StepFrame(ecs::Registry& registry, entt::entity creature, CreatureAnimation
 		{
 			// TODO(physics): the game also puts the creature at height 0 when it moves it here; what its placing does
 			// with that height wasn't traced, so the height is kept
-			if (const auto valid = land.NearestValid(glm::xz(position), creature_catch::k_StepSearchClearance,
-			                                         creature_catch::k_StepSearchDistance))
+			if (const auto valid = land.NearestStandable(glm::xz(position)))
 			{
 				position.x = valid->x;
 				position.z = valid->y;
@@ -1563,8 +1603,9 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 bool CreatureObjectActionSystem::Catch(entt::entity creature, entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	// While its body acts out something else the catch waits, tried again each frame
-	if (BodyBusy(registry.TryGet<const CreatureObjectAction>(creature)))
+	// While its body acts out something else, or while it walks on to its stop or turns, the catch waits. The catch
+	// tries again each frame.
+	if (CatchWaits(creature))
 	{
 		registry.AssignOrReplace<PendingCatch>(creature, PendingCatch {.object = object});
 		return true;
@@ -1578,7 +1619,7 @@ void CreatureObjectActionSystem::StartPendingCatches()
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<std::pair<entt::entity, entt::entity>> due;
 	registry.Each<const PendingCatch>([&](entt::entity creature, const PendingCatch& pending) {
-		if (!BodyBusy(registry.TryGet<const CreatureObjectAction>(creature)))
+		if (!CatchWaits(creature))
 		{
 			due.emplace_back(creature, pending.object);
 		}
@@ -1704,6 +1745,13 @@ bool CreatureObjectActionSystem::ThrowTaking(entt::entity creature, const glm::v
 	return Start(creature, std::move(action));
 }
 
+bool CreatureObjectActionSystem::ThrowAimed(entt::entity creature, const glm::vec3& target, float flightSeconds)
+{
+	CreatureObjectAction action {.kind = Kind::Throw, .point = target};
+	action.givenFlightSeconds = flightSeconds;
+	return Start(creature, std::move(action));
+}
+
 bool CreatureObjectActionSystem::Destroy(entt::entity creature, entt::entity target)
 {
 	return Start(creature, {.kind = Kind::Destroy, .target = target});
@@ -1783,7 +1831,8 @@ std::optional<glm::vec3> CreatureObjectActionSystem::GetPointingHand(entt::entit
 	{
 		return std::nullopt;
 	}
-	return glm::vec3(creature::PosedBone(hand, animation->boneMatrices, PlacementOf(*transform))[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices, PlacementOf(*transform));
+	return glm::vec3(creature::PosedBone(hand, pose.bones, pose.placement)[3]);
 }
 
 void CreatureObjectActionSystem::Cancel(entt::entity creature)
@@ -1813,15 +1862,16 @@ void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3&
 		return;
 	}
 	const auto object = held->object;
-	// The thing keeps the turn that it has in the hand as the body is posed now. Let go, it starts where it hangs, as
-	// it is drawn. Thrown, it starts with its origin at the finger ends.
+	// The thing keeps the turn that it has in the hand as the body is posed at the end of its newest game turn. Let go,
+	// it starts where it hangs in that pose. Thrown, it starts with its origin at the finger ends.
 	const auto* transform = registry.TryGet<const Transform>(creature);
 	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	auto pose =
-	    transform != nullptr && animation != nullptr ? std::optional(HeldPoseOf(*held, *transform, *animation)) : std::nullopt;
+	auto pose = transform != nullptr && animation != nullptr
+	                ? std::optional(HeldPoseOf(*held, *animation, TurnPoseOf(*animation, *transform)))
+	                : std::nullopt;
 	if (pose.has_value())
 	{
-		pose = creature_throw::ReleaseStart(*pose, FingerEndsOf(held->bone, *animation, PlacementOf(*transform)),
+		pose = creature_throw::ReleaseStart(*pose, FingerEndsOf(held->bone, *animation, TurnPoseOf(*animation, *transform)),
 		                                    from == ReleaseFrom::FingerEnds);
 	}
 	registry.Remove<CreatureHeldObject>(creature);
@@ -2551,24 +2601,21 @@ bool ModelTouches(const ecs::Registry& registry, entt::entity thing, glm::vec3 c
 	{
 		return false;
 	}
-	const auto limit = radius * radius;
-	for (const auto& subMesh : model.GetSubMeshes())
-	{
-		if ((subMesh->GetFlags().lodMask & 1U) == 0)
+	// Things that can move or lean build their turn from three angles and scale it after; the others turn upright only
+	const auto rows = [&] {
+		if (registry.AnyOf<MobileStatic, MobileObject, Pot, Ball>(thing))
 		{
-			continue;
+			const auto angles = x87::GameAnglesYxz(at->rotation[0], at->rotation[2]);
+			return creature_obstacles::LeaningPlacement(angles.y, angles.x, angles.z, at->scale.x);
 		}
-		for (const auto& corner : subMesh->GetSurface().positions)
-		{
-			const auto world = at->position + (at->rotation * (at->scale * corner));
-			const auto away = world - centre;
-			if (glm::dot(away, away) < limit)
-			{
-				return true;
-			}
-		}
-	}
-	return false;
+		return creature_obstacles::UprightPlacement(creature_obstacles::YAngleOf(at->rotation), at->scale.x);
+	}();
+	return std::ranges::any_of(model.GetSubMeshes(), [&](const auto& subMesh) {
+		return (subMesh->GetFlags().lodMask & 1U) != 0 &&
+		       std::ranges::any_of(subMesh->GetSurface().positions, [&](const glm::vec3& corner) {
+			       return creature_stomp::CornerInSphere(rows, at->position, corner, centre, radius);
+		       });
+	});
 }
 
 /// What a sphere of the body does to a thing in its cell
@@ -2608,8 +2655,9 @@ void KnockAbout(ecs::Registry& registry, entt::entity creature, const Creature& 
 		using creature_stomp::Victim;
 		const auto victim = VictimOf(registry, thing);
 		const auto& at = registry.Get<const Transform>(thing);
-		const auto distance = glm::distance(glm::xz(at.position), glm::xz(point));
-		if (!creature_stomp::InReach(victim, distance, sphereRadius, object_measures::TwoDRadius(registry, thing)))
+		const auto ground = glm::xz(at.position) - glm::xz(point);
+		const auto distanceSquared = (ground.x * ground.x) + (ground.y * ground.y);
+		if (!creature_stomp::InReach(victim, distanceSquared, sphereRadius, object_measures::TwoDRadius(registry, thing)))
 		{
 			continue;
 		}
@@ -2673,12 +2721,12 @@ void Trample(ecs::Registry& registry)
 			    }
 			    return;
 		    }
-		    const auto placement = PlacementOf(transform);
+		    const auto pose = creature::TurnPose(animation.newerTurnPose, animation.boneMatrices, PlacementOf(transform));
 		    const auto bones = PartBones(*points, animation);
 		    const auto at = [&](size_t part) {
 			    const auto bone = bones.at(part);
 			    return bone < animation.boneMatrices.size()
-			               ? glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3])
+			               ? glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3])
 			               : transform.position;
 		    };
 		    const auto size = ShownSize(body);
@@ -2737,7 +2785,8 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 	auto& registry = Locator::entitiesRegistry::value();
 	Trample(registry);
 
-	// The moments things are taken hold of and let go of, with the hand where the body was posed this frame
+	// The moments things are taken hold of and let go of, with the hand where the body was posed at the end of its
+	// newest game turn
 	struct Moment
 	{
 		entt::entity creature;
@@ -2764,7 +2813,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			continue;
 		}
 		const auto handPosition =
-		    FingerEndsOf(HandBone(*points, animation, action.mirrored), animation, PlacementOf(transform));
+		    FingerEndsOf(HandBone(*points, animation, action.mirrored), animation, TurnPoseOf(animation, transform));
 		switch (action.kind)
 		{
 		case Kind::PickUp:
@@ -2960,7 +3009,7 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			    return;
 		    }
 		    // It turns with the hand bone and hangs below the finger ends by its own distance
-		    const auto pose = HeldPoseOf(held, transform, animation);
+		    const auto pose = HeldPoseOf(held, animation, DrawnPoseOf(animation, transform));
 		    at->rotation = pose.rotation;
 		    at->position = pose.position;
 		    moved = true;

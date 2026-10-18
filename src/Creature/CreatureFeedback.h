@@ -281,6 +281,9 @@ struct HandUpGlide
 /// The point on the line of sight at a distance from the camera. The game divides the distance by the length of the
 /// way one time and multiplies each part of the way by that share. With no way, the point is the camera.
 [[nodiscard]] glm::vec3 PointOnSight(const glm::vec3& camera, const glm::vec3& lineOfSight, float distance);
+/// The way of the line of sight as the game uses it to find the creature's skin: the point one unit along the line,
+/// less the camera. The two subtractions can make it differ from the unit way in the last bits.
+[[nodiscard]] glm::vec3 SightWay(const glm::vec3& camera, const glm::vec3& lineOfSight);
 
 /// Held by the hand, the creature looks at the hand, at a point a little nearer the camera than it; with the hand near
 /// its middle it looks at the camera instead. Shares of its height.

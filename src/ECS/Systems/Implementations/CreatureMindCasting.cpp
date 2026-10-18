@@ -128,6 +128,12 @@ GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature, cons
 	return GameHeading::Of(ahead.x, ahead.z);
 }
 
+/// The map position of a point across the land
+glm::vec2 MapPosition(glm::vec2 point)
+{
+	return map_coords::ToMetres(map_coords::FromMetres(point));
+}
+
 /// The map position of a point as a point, with the height of the land under it
 glm::vec3 MapPoint(glm::vec2 point)
 {
@@ -151,7 +157,8 @@ std::vector<cast_moves::CollideSphere> CollideSpheres(const ecs::Registry& regis
 	}
 	if (registry.AllOf<WorshipSite>(entity))
 	{
-		const auto spheres = cast_moves::WorshipSiteSpheres(transform->position, transform->rotation, transform->scale.x);
+		const auto spheres = cast_moves::WorshipSiteSpheres(
+		    transform->position, creature_obstacles::YAngleOf(transform->rotation), transform->scale.x);
 		return {spheres.begin(), spheres.end()};
 	}
 	if (!registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, SpellDispenser, TeleportStone, WorshipAltar, Vortex,
@@ -1041,9 +1048,10 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 			fail();
 			break;
 		}
-		const auto stand =
-		    creature_throw::WhereToThrowFrom(here, Flat(*at), object_measures::Height(registry, creature),
-		                                     object_measures::TwoDRadius(registry, casting->target), casting->keep);
+		// The game works from the map positions of the creature and of the thing
+		const auto stand = creature_throw::WhereToThrowFrom(
+		    MapPosition(here), MapPosition(Flat(*at)), object_measures::Height(registry, creature),
+		    object_measures::TwoDRadius(registry, casting->target), casting->keep);
 		if (!stand.has_value())
 		{
 			fail();
@@ -1058,18 +1066,13 @@ void CreatureMindSystem::StepSubMove(entt::entity creature, bool animating)
 		// Backing away, where it can't stand it goes to the nearest place it can, if near enough
 		if (stand->kind == creature_throw::ThrowStand::Kind::BackOff)
 		{
-			const auto& land = locomotion.GetWalkableLand();
-			if (!land.IsValid(point, creature_route::k_DestinationClearance))
+			const auto standPoint = creature_throw::BackOffPoint(locomotion.GetWalkableLand(), point);
+			if (!standPoint.has_value())
 			{
-				const auto valid =
-				    land.NearestValid(point, creature_route::k_DestinationClearance, creature_route::k_ValidPointSearch);
-				if (!valid.has_value() || glm::distance(*valid, point) >= creature_route::k_ValidPointReach)
-				{
-					fail();
-					break;
-				}
-				point = *valid;
+				fail();
+				break;
 			}
+			point = *standPoint;
 		}
 		switch (locomotion.MoveTo(creature, point, KeptOrRun(*casting), stand->minDistance, stand->maxDistance))
 		{

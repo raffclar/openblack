@@ -53,10 +53,16 @@ using WorshipBattery = ecs::components::WorshipChants;
 struct WorshipIconCharge
 {
 	bool charging {false}; ///< it is charging a seed for the hand
-	bool seedOut {false};  ///< its seed is out of it, in the hand or cast
-	float required {0.0f}; ///< what its seed needs to be charged full
-	float store {0.0f};    ///< what it has been charged so far
+	bool seedOut {false};  ///< a seed made from it is still out, in a hand or cast
+	bool seedHeld {false}; ///< a hand of its player holds a seed made from it
+	/// What its seed needs to be charged full. While a hand holds its seed, this is what that seed still needs.
+	float required {0.0f};
+	float store {0.0f}; ///< what it has been charged so far
 };
+
+/// What a worship site's icon still needs this turn. While a hand holds its seed, the icon fills that seed, so the need is
+/// what the seed still needs and the store of the icon does not count.
+[[nodiscard]] float IconNeed(const WorshipIconCharge& icon);
 
 /// What the dancers chant each turn at full intensity
 [[nodiscard]] float WorshipCapacity(const WorshipBatteryRules& rules, uint32_t dancers);
@@ -93,14 +99,19 @@ void UpdateWorshipStrain(WorshipBattery& site, const WorshipBatteryRules& rules,
 /// dancers chanted at that intensity to the battery less what was drawn, and opens the next turn
 void EndWorshipTurn(WorshipBattery& site, const WorshipBatteryRules& rules, uint32_t dancers);
 
-/// A share of prayer power goes into an icon's store, filling it no higher than it needs. Returns what the site is
-/// charged for it: the whole share, or when the share overfills the icon only the part that overflows, as the game
-/// reckons it.
+/// A share of prayer power goes into an icon's store, filling it no higher than its required value. Returns what the
+/// site is charged for it: the whole share, or when the share overfills the icon only the part that overflows, as the
+/// game reckons it.
 float AddToIconStore(WorshipIconCharge& icon, float share);
 
-/// The site's whole turn, before any miracle's upkeep is drawn: how strained it was, its charging icons each given an
-/// even share when the dancers keep up, then the end of the turn. Returns the prayer power drawn, for the player's
-/// statistics.
+/// The start of the site's turn: how strained it was, and its charging icons each given an even share when the dancers
+/// keep up. Returns the prayer power drawn, for the player's statistics. Each icon then does its own turn, before
+/// EndWorshipTurn.
+float ChargeWorshipIcons(WorshipBattery& site, const WorshipBatteryRules& rules, uint32_t dancers,
+                         std::span<WorshipIconCharge> icons);
+
+/// The site's whole turn, before any miracle's upkeep is drawn: ChargeWorshipIcons, then EndWorshipTurn. Returns the
+/// prayer power drawn, for the player's statistics.
 float ProcessWorshipTurn(WorshipBattery& site, const WorshipBatteryRules& rules, uint32_t dancers,
                          std::span<WorshipIconCharge> icons);
 

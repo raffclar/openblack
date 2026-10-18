@@ -71,8 +71,9 @@ struct WorshipIcon
 	uint32_t chargeStartTurn {0};
 	/// The prayer power it has stored for its miracle
 	float store {0.0f};
-	/// The seed made from it while that is out, in a hand or cast
-	entt::entity seedOut {entt::null};
+	/// The seeds made from it that are still out, in a hand or cast. It can make a new seed while an old one is out of the
+	/// hand.
+	std::vector<entt::entity> seedsOut;
 };
 
 /// The miracle's seed spinning above an icon's palm, as a globe's spins

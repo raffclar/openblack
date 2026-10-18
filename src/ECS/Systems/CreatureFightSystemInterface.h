@@ -162,6 +162,9 @@ public:
 	/// Once a frame: the sparkles marking the player's queued moves flicker on and are handed to the particles to draw,
 	/// seen from the camera
 	virtual void DrawMarks(float /*realMs*/, const glm::vec3& /*eye*/) {}
+	/// While a press on a body is held, the last drawing finds the point on the opponent's body that the hand goes
+	/// to. The hand takes the point once, and the next drawing finds it again.
+	virtual std::optional<glm::vec3> TakeHandSparkle() { return std::nullopt; }
 
 	/// Whether a creature in a fight is blocking now
 	[[nodiscard]] virtual bool IsBlocking(entt::entity /*creature*/) const { return false; }

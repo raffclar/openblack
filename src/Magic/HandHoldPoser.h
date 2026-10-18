@@ -67,12 +67,14 @@ public:
 		glm::ivec2 cursor {0};
 		glm::vec3 camera {0.0f};
 		/// The hand's heading about the vertical, from the line of sight through the cursor (see
-		/// hand_hold::HeadingOfSight)
+		/// hand_orientation::HeadingAngle)
 		float heading {0.0f};
 		/// The hand model's turn upright
 		glm::mat3 modelCorrection {1.0f};
 		/// How far a pour tips the hand
 		float tilt {0.0f};
+		/// The drawn size of the hand, which the frame of the held thing is multiplied by
+		float handScale {1.0f};
 		bool rightHanded {false};
 	};
 	/// Poses the hand holding the seed, if it holds one: its animation, its turn and the seed. Whether it holds one; the

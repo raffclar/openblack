@@ -61,6 +61,7 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
@@ -260,13 +261,14 @@ systems::SavedStateInterface* FindSystem()
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
 using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 30> k_SavedSystems {{
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 31> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindSystem<Locator::particleSystem>},
     {"magic", &FindSystem<Locator::magicSystem>},
     {"magicShield", &FindSystem<Locator::magicShieldSystem>},
     {"miracleFx", &FindSystem<Locator::miracleFxSystem>},
     {"cameraPath", &FindSystem<Locator::cameraPathSystem>},
+    {"liquidParticles", &FindSystem<Locator::liquidParticleSystem>},
     {"creatureLocomotion", &FindSystem<Locator::creatureLocomotionSystem>},
     {"fire", &FindSystem<Locator::fireSystem>},
     {"weather", &FindSystem<Locator::weatherSystem>},

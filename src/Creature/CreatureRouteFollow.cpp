@@ -192,7 +192,7 @@ void Follower::Succeed(size_t chosen, float joinAhead)
 		_route = {.legs = _searches.front().search.TakeBest(), .segment = 0, .travelled = 0.0f};
 		SetRounds(_route.legs, _obstacles);
 		_routeEnd = _route.End();
-		_position = _route.Position();
+		PlaceOnRoute();
 		_searches.clear();
 		_state = State::Walking;
 	}
@@ -251,7 +251,6 @@ void Follower::Join(size_t chosen, float joinAhead)
 		stepAhead = true;
 	}
 	current.from = _position;
-	const auto currentCost = current.cost;
 	_route.travelled = 0.0f;
 	if (_route.segment > 0)
 	{
@@ -265,9 +264,11 @@ void Follower::Join(size_t chosen, float joinAhead)
 	{
 		const auto index = *next;
 		next = index + 1 < legs.size() ? std::optional<size_t>(index + 1) : std::nullopt;
-		Search join(
-		    _obstacles, {.point = joinFrom},
-		    {.point = legs[index].to, .arriveWithin = k_JoinArrival, .mostCost = legs[index].cost - currentCost + length});
+		// The cost allowed counts from the leg that the creature is on now, which is the first leg of the route after a
+		// join. The length stays that of the leg before the first join.
+		const auto mostCost = (legs[index].cost - legs[_route.segment].cost) + length;
+		Search join(_obstacles, {.point = joinFrom},
+		            {.point = legs[index].to, .arriveWithin = k_JoinArrival, .mostCost = mostCost});
 		for (int32_t step = 0; step < k_JoinSteps && join.GetStatus() == Search::Status::Searching; ++step)
 		{
 			join.Step(_obstacles);
@@ -340,8 +341,50 @@ Advanced Follower::Advance(float distance)
 	}
 	else
 	{
-		_position = _route.Position();
+		PlaceOnRoute();
 	}
 	_obstacles.SetWalker(_position);
-	return {.position = _position, .heading = _route.Heading(), .segmentChanged = changed, .finished = _route.Finished()};
+	return {.position = _position, .heading = _heading, .segmentChanged = changed, .finished = _route.Finished()};
+}
+
+void Follower::RestartLeg()
+{
+	_route.travelled = 0.0f;
+	PlaceOnRoute();
+	_obstacles.SetWalker(_position);
+}
+
+void Follower::Stop(float ahead)
+{
+	switch (_state)
+	{
+	case State::Planning:
+		_searches.clear();
+		_pending = false;
+		_route = {};
+		_state = State::Standing;
+		return;
+	case State::Walking:
+	case State::Replanning:
+		_searches.clear();
+		_pending = false;
+		_state = State::Walking;
+		_routeEnd = EndAhead(_route, ahead);
+		return;
+	default:
+		return;
+	}
+}
+
+void Follower::PlaceOnRoute()
+{
+	if (_route.Finished())
+	{
+		return;
+	}
+	if (const auto placed = PlaceAlong(_route.legs[_route.segment], _route.travelled))
+	{
+		_position = placed->position;
+		_heading = placed->heading;
+	}
 }

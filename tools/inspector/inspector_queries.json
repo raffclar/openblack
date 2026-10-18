@@ -322,6 +322,12 @@
   "query": "particles.emitters"
  },
  {
+  "description": "The pool of liquid particles (drops of blood and sick, dust, smoke, motes): the count of each kind and the drops that lie on the land",
+  "kind": "object",
+  "parameters": [],
+  "query": "particles.liquid"
+ },
+ {
   "description": "How many bodies the physics has: flying, resting and in water",
   "kind": "object",
   "parameters": [],
@@ -499,6 +505,18 @@
    }
   ],
   "query": "map.cell"
+ },
+ {
+  "description": "The land's shading of the last drawn frame: the clouds' shadows and the lights cast, the blocks they changed and those in view, and the shaded luminosity of the corners of a point's cell",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "A point on the land, [x, z] or [x, y, z]",
+    "name": "position",
+    "type": "point"
+   }
+  ],
+  "query": "map.shade"
  },
  {
   "description": "The towns: number, owner, buildings and people without a home",
@@ -983,6 +1001,20 @@
   "query": "audio.sounds"
  },
  {
+  "description": "A debug tool, not a rule of the game: the game acts as if the machine lost its sound device (lost true), or has it again (lost false); answers whether the device counts as lost",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Whether the device counts as lost",
+    "name": "lost",
+    "required": true,
+    "type": "boolean"
+   }
+  ],
+  "query": "audio.lose_device",
+  "writes": true
+ },
+ {
   "description": "The engine's settings: what is drawn, the display and the camera's clip",
   "kind": "object",
   "parameters": [],
@@ -1165,6 +1197,28 @@
   "kind": "object",
   "parameters": [],
   "query": "living.abode_sounds"
+ },
+ {
+  "description": "The footpaths: how many there are and how many are being found; with an id, the paths that lead from that thing; with from and to (metres), the nodes of a path the game would lay at once between them",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "A thing's entity id",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] in metres",
+    "name": "from",
+    "type": "point"
+   },
+   {
+    "description": "[x, z] in metres",
+    "name": "to",
+    "type": "point"
+   }
+  ],
+  "query": "living.footpaths"
  },
  {
   "description": "A field's crop as it is drawn: its tint, height and sway",
@@ -1643,7 +1697,7 @@
     "type": "array"
    },
    {
-    "description": "walk (the default), run, or face to turn on the spot towards the point",
+    "description": "walk (the default), run, face to turn on the spot towards the point, stop to stop as the game stops a walk (the point is not used), or stop_at_once to stop dead",
     "name": "pace",
     "type": "string"
    }

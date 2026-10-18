@@ -98,6 +98,8 @@ public:
 	[[nodiscard]] virtual int32_t SnowAt(glm::vec3 point) const = 0;
 	/// Dust of a colour as it looks where snow lies so deep
 	[[nodiscard]] virtual uint32_t DustTint(uint32_t argb, int32_t snow) const = 0;
+	/// A puff of dust in the liquid particles, at a point with a speed, a size and a colour (0xAARRGGBB)
+	virtual void AddDust(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb) = 0;
 	/// A sound of the buildings' bank, as an animation's sound effect is played, on a building where it stands
 	virtual void PlaySound(std::span<const int32_t> keys, entt::entity building, glm::vec3 position) = 0;
 

@@ -33,6 +33,8 @@ enum class Feel : uint8_t
 	AtPosition,
 	/// The hand feels its model's triangles along the line of sight
 	OnModel,
+	/// A miracle's icon: the hand rests nearer than the icon by its own standard height, and turns to the land
+	AtIcon,
 };
 
 /// What the hand needs to know of the thing picked
@@ -47,6 +49,8 @@ struct Picked
 	bool animatedStatic {false};
 	/// A vortex, or the thing the hand holds
 	bool ignored {false};
+	/// The icon of a miracle that a town offers
+	bool spellIcon {false};
 };
 [[nodiscard]] Feel FeelOf(const Picked& picked);
 
@@ -119,6 +123,10 @@ struct Hover
 	/// Where the hand rests on or before the thing under the cursor; none over the land, or over a thing it doesn't
 	/// rest on
 	std::optional<glm::vec3> restOnThing;
+	/// How much nearer to the camera than its resting point the hand stays (see k_IconGap)
+	float restNearer {0.0f};
+	/// How far along the line of sight the help's text bubble is, when the bubble has the cursor: the hand eases to it
+	std::optional<float> bubbleDistance;
 	/// The cursor's point at the furthest the hand may be, which it eases to when it rests on no thing
 	std::optional<glm::vec3> cursorPoint;
 	/// The hand's height at its size
@@ -146,13 +154,27 @@ struct HoverDistances
 /// The way the hand stands up, one long, its squares added z, y, x; no way stays none
 [[nodiscard]] glm::vec3 UnitUp(glm::vec3 up);
 
+/// The way the hand stands up while a pour tips the miracle it holds: straight up, turned by the tilt about the line
+/// from the hand to the camera. The line is made unit with its squares added x, z, y, unless it has no length.
+[[nodiscard]] glm::vec3 PourUp(glm::vec3 camera, glm::vec3 hand, float tilt);
+
+/// How much nearer than a miracle's icon the hand rests: the hand's standard height
+inline constexpr float k_IconGap = 3.2f;
+
 /// How long the hand's hover takes to ease away from the camera, and towards it
 inline constexpr float k_HoverEaseOutSeconds = 0.28f;
 inline constexpr float k_HoverEaseInSeconds = 0.1f;
+/// How long the hand's hover takes to ease away from the camera while the camera watches a fight or the hand offers
+/// what it holds to a creature
+inline constexpr float k_HoverSlowEaseOutSeconds = 2.0f;
+/// While the hover moves towards the camera at this speed or faster, it eases away again at the usual time
+inline constexpr float k_HoverSlowEaseSpeedLimit = -1.0f;
 
 /// The hand's hover moved on a frame towards the distance it aims at: out slowly, in quickly, and never nearer than a
-/// unit. While the hand pulls something out of the ground the pull places the hand and its hover is left as it was, so
-/// once the thing comes free the hand eases on from the distance it hovered at when it took hold.
-void EaseHover(Zoomer& hover, float target, float seconds, bool pulling);
+/// unit. While the camera watches a fight or the hand offers what it holds to a creature, it eases out more slowly,
+/// unless it already moves in quickly. While the hand pulls something out of the ground the pull places the hand and
+/// its hover is left as it was, so once the thing comes free the hand eases on from the distance it hovered at when it
+/// took hold.
+void EaseHover(Zoomer& hover, float target, float seconds, bool pulling, bool slowOut = false);
 
 } // namespace openblack::hand_feel

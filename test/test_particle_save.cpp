@@ -184,6 +184,7 @@ protected:
 		EffectWriter tableWriter(tableBytes, tables);
 		SaveSharedTables(tableWriter);
 		EXPECT_TRUE(effectBytes.Unsaved().empty());
+		EXPECT_TRUE(tableBytes.Unsaved().empty());
 		return {.effects = std::move(effectBytes.Bytes()), .tables = std::move(tableBytes.Bytes())};
 	}
 

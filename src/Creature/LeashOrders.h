@@ -156,8 +156,6 @@ constexpr float k_SleepExhaustion = 0.1f;
 constexpr float k_MaxSleepArrival = 5.0f;
 /// Carrying something, it throws it at the place from within this many times its own height
 constexpr float k_ThrowReachHeights = 8.0f;
-/// The farthest a place counts as reachable when the nearest point it can stand at is looked for
-constexpr float k_NearestReachableSearch = 1000.0f;
 /// It is told which desire it acts on when sent farther than this
 constexpr float k_TellDesireDistance = 40.0f;
 

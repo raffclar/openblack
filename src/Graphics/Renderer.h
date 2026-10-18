@@ -256,6 +256,8 @@ private:
 	[[nodiscard]] const VolumeGlowShell* GlowShellOf(entt::id_type mesh, uint32_t subMesh) const;
 	/// A frame of a particle light map as a texture of its colours, made when first stamped
 	[[nodiscard]] const Texture2D* ParticleLightMap(entt::id_type bitmap, int frame) const;
+	/// The texels of a frame of a particle light map, of grey or colour; none for a light map that cannot stamp
+	[[nodiscard]] std::span<const uint8_t> ParticleLightMapTexels(entt::id_type bitmap, int frame) const;
 	/// The border of the players' influence, in the main view
 	void DrawInfluenceBorder(const DrawSceneDesc& desc) const;
 	/// The ripples the hand makes crossing a border, each in its place among what blends, in the main view
@@ -566,10 +568,13 @@ private:
 	mutable std::unique_ptr<LandLightTable> _landLightTable;
 	/// The sea's ripple, moving on with the frames the sea's rows are drawn in while the game's time goes on
 	mutable sea_rows::Ripple _seaRipple;
-	/// The land's luminosity this frame, sized to the land's
-	mutable std::unique_ptr<FrameBuffer> _landLuminosityFrameBuffer;
-	/// What shades the land this frame: the clouds' shadows and the lights at night
-	mutable std::unique_ptr<FrameBuffer> _landShadeFrameBuffer;
+	/// The land's luminosity of this frame and of the frame before, a copy of the shaded land (see land_shade) sized to
+	/// the land's. Each frame changes the other one and keeps the rows it changed: the next frame changes those too.
+	mutable std::array<std::unique_ptr<Texture2D>, 2> _landLuminosity;
+	mutable size_t _landLuminosityNow {0};
+	mutable glm::u16vec2 _landLuminosityRowsBefore {0};
+	/// The land's luminosity of the frame before
+	[[nodiscard]] const Texture2D& GetLandLuminosityBefore() const;
 	/// The land cells' colours this frame, sized to the land's
 	mutable std::unique_ptr<FrameBuffer> _landColourFrameBuffer;
 	/// The sky's dome for each alignment, one above the other, kept from frame to frame
@@ -674,13 +679,11 @@ private:
 	/// took it on that frame.
 	struct LightOfFrameBefore
 	{
-		/// Copies of the land light table, the land's luminosity and the land cells' colours of the frame before
+		/// Copies of the land light table and the land cells' colours of the frame before
 		std::optional<TextureHandle> landLight;
-		std::optional<TextureHandle> luminosity;
 		std::optional<TextureHandle> colour;
-		glm::u16vec2 luminositySize {0};
 		glm::u16vec2 colourSize {0};
-		/// The luminosity and the colours were copied at the start of this frame
+		/// The colours were copied at the start of this frame
 		bool texturesKept {false};
 		hand_reflection::FrameBefore<std::array<glm::vec4, 2>> haze;
 		hand_reflection::FrameBefore<float> treeBrightness;
@@ -700,6 +703,9 @@ private:
 	std::unique_ptr<Mesh> _plane;
 	/// What the particle effects draw this frame, and the order of the pass being drawn, kept for their room
 	mutable particles::draw::Frame _particleFrame;
+	/// The light maps and shadows that the particles drew in the frame before: the game stamps them on the land at the
+	/// start of the next frame
+	mutable std::vector<particles::draw::LightStamp> _landStamps;
 	mutable std::vector<particles::draw::Command> _particleCommands;
 	mutable std::vector<uint32_t> _particleSpriteOrder;
 	mutable std::vector<particles::draw::Command> _particleBeforeLandCommands;

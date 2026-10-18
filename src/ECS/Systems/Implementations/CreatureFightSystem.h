@@ -9,11 +9,16 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
+#include <optional>
 #include <random>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 
-#include "Common/RandomNumberManager.h"
+#include "Common/GameRandom.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -72,6 +77,7 @@ public:
 	bool GestureSpecialMove() override;
 	bool GestureSpell(MagicType type) override;
 	void DrawMarks(float realMs, const glm::vec3& eye) override;
+	std::optional<glm::vec3> TakeHandSparkle() override { return std::exchange(_handSparkle, std::nullopt); }
 
 	[[nodiscard]] bool IsBlocking(entt::entity creature) const override;
 	void Recoil(entt::entity creature) override;
@@ -97,7 +103,21 @@ private:
 	/// duel, the duel's moves, and the creatures knocked out
 	void StartFightsFromMinds();
 	void ProcessStages();
-	void ProcessDuels();
+	/// A fighter's turn in the duel: it faces its opponent, keeps in the arena, moves apart from its opponent and
+	/// chooses or makes its next move
+	void DuelTurn(entt::entity creature);
+	/// The action that moved on in a fighter's turn, and where its animation was before it moved on
+	struct ActionStep
+	{
+		size_t animation;
+		int32_t fromMs;
+	};
+	/// A fighter's animation moves on by one game turn. An action (or a reel in a block) whose animation reaches its end
+	/// in the turn ends first: the fighter goes back to its stance (or its block), and a move that the player put in the
+	/// queue starts at once. An action first
+	/// moves the creature as far as its animation's root moves in the turn. Other states go to their next state when the
+	/// animation ends. Returns the action that moved on, if one did.
+	std::optional<ActionStep> StepAnimation(entt::entity creature);
 	void ProcessKnockedOut();
 	/// Makes the move at the front of a fighter's queue, if it can
 	void CheckQueue(entt::entity creature);
@@ -105,9 +125,9 @@ private:
 	/// The spell a fighter casts as its cast's start ends: an attacking one at the opponent, a defending one on itself
 	void CastFightSpell(entt::entity creature, MagicType type, entt::entity opponent);
 	void AttemptBlow(entt::entity creature, creature_fight::Band band, float speed);
-	/// A fighter's action landing on its opponent this frame, if it does
-	/// Each game turn: the blows that are landing are tested along their swing since the last turn
-	void ProcessBlows();
+	/// A fighter's blow in its turn: tested along its swing in the turn, then the two bodies move apart when they overlap.
+	/// Only a blow that moved on in the fighter's step of the turn is tested.
+	void BlowTurn(entt::entity creature, std::optional<ActionStep> step);
 	/// A blow tested from where its animation was at the last turn: it marks its swing and, where it meets the
 	/// opponent's body, lands there
 	void TestBlow(entt::entity creature, int32_t fromMs);
@@ -205,9 +225,12 @@ private:
 	bool _fightExit {true};
 	/// A press on a body is held: the sparkle added last charges
 	bool _markHeld {false};
+	/// The point on the opponent's body that the hand goes to, from the last drawing
+	std::optional<glm::vec3> _handSparkle;
 	/// The sparkles flicker at most 60 times a second
 	creature_fight::marks::Pace _marksPace;
-	RandomStreamSource _random {RandomStream::CreatureFight};
+	/// The game's random numbers: the fight draws on the synced seed, and the blood and the marks on the local seed
+	GameRandomSource _random;
 };
 
 } // namespace openblack::ecs::systems

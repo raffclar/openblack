@@ -197,7 +197,7 @@ TEST(GlmOrder7, AHeldThingTurnedAboutItsUp)
 	for (const auto& c : k_SeedTurnCases)
 	{
 		const glm::mat3 basis(Vec(c.x), Vec(c.up), Vec(c.z));
-		const auto turned = magic::hand_hold::SeedTurn(basis, std::bit_cast<float>(c.turn), false);
+		const auto turned = magic::hand_hold::SeedTurn(basis, std::bit_cast<float>(c.turn));
 		ExpectBits(turned[0], c.turnedX);
 		ExpectBits(turned[1], c.turnedUp);
 		ExpectBits(turned[2], c.turnedZ);

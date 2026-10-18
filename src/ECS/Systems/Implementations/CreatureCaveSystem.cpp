@@ -55,6 +55,7 @@
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/TattooSites.h"
+#include "Gui/GameInterface.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
@@ -322,7 +323,12 @@ bool CreatureCaveSystem::ApplyTattoo(uint8_t site, uint8_t design, glm::u8vec3 c
 	{
 		return false;
 	}
-	Locator::creatureSkinSystem::value().SetTattoo(*creature, edit->slot, edit->tattoo);
+	// The tattoo goes on as the end of a drag in the tattoo editor puts it on
+	auto slots = tattoos->slots;
+	slots.at(edit->slot) = edit->tattoo;
+	const auto pictures = Locator::tattooEditorSystem::has_value() ? Locator::tattooEditorSystem::value().GetPictures()
+	                                                               : creature_tattoo::Pictures {};
+	Locator::creatureSkinSystem::value().PutOnTattoos(*creature, slots, pictures);
 	return true;
 }
 
@@ -343,7 +349,12 @@ bool CreatureCaveSystem::RemoveTattoo(uint8_t site)
 	{
 		return false;
 	}
-	Locator::creatureSkinSystem::value().SetTattoo(*creature, edit->slot, edit->tattoo);
+	// The tattoo goes on as the end of a drag in the tattoo editor puts it on
+	auto slots = tattoos->slots;
+	slots.at(edit->slot) = edit->tattoo;
+	const auto pictures = Locator::tattooEditorSystem::has_value() ? Locator::tattooEditorSystem::value().GetPictures()
+	                                                               : creature_tattoo::Pictures {};
+	Locator::creatureSkinSystem::value().PutOnTattoos(*creature, slots, pictures);
 	return true;
 }
 
@@ -389,7 +400,7 @@ void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 		return;
 	}
 	const auto size = cave_creature::SizeOf(body->size);
-	const auto coin = std::uniform_int_distribution<uint32_t>(0, 1)(_random) != 0;
+	const auto coin = _random.LocalRand(2) != 0;
 	const auto rest = cave_creature::RestFor(size, coin);
 	const auto position = cave_creature::StandsAt(*places, size, rest);
 	// It is put down facing the fire
@@ -399,16 +410,15 @@ void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 	registry.Assign<Transform>(copy, position, glm::mat3(glm::eulerAngleY(heading.Yaw())),
 	                           glm::vec3(archetypes::CreatureArchetype::DrawnScale(body->species, size)));
 	registry.Assign<CreatureCopy>(copy, creature, size);
-	// Its fidgets in the tattoo editor start 20 to 40 seconds away
-	cave_creature::State state {.rest = rest, .heading = heading};
-	cave_creature::StartIdle(state, [this](uint32_t range) {
-		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	});
+	const cave_creature::State state {.rest = rest, .heading = heading};
 	registry.Assign<CaveCreature>(copy, state, places->fire);
 	registry.Assign<CreatureAnimation>(copy);
 	registry.Assign<CreatureEyes>(copy);
 	// It has hair of its own, which starts straight out from the roots
 	registry.Assign<CreatureHair>(copy);
+	// It has a skin of its own, painted when it is made and at the times that the tattoo editor paints it
+	registry.Assign<CreatureTattoos>(copy);
+	registry.Assign<CreatureSkin>(copy);
 	_caveCreature = copy;
 }
 
@@ -441,9 +451,8 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 		return;
 	}
 	const auto frameMs = std::min(milliseconds, cave_creature::k_MaxFrameMs);
-	const cave_creature::Random random = [this](uint32_t range) {
-		return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	};
+	// The copy has no creature of its own, so it draws on the local seed
+	const cave_creature::Random random = [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); };
 
 	// The camera is zoomed onto it while the tattoo editor is open on its creature, looking where the editor turns it
 	cave_creature::Frame frame {.fire = cave->light, .position = transform->position, .milliseconds = frameMs};
@@ -461,6 +470,12 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 		const auto& actions = Locator::gameActionSystem::value();
 		frame.buttonHeld = actions.GetAny(BindableActionMap::MOVE, BindableActionMap::ACTION);
 		frame.leftHeld = actions.Get(BindableActionMap::MOVE);
+		// The tattoo editor takes the mouse's buttons from the game's actions while it is open, and keeps them itself
+		if (frame.zoomed && _interface != nullptr)
+		{
+			frame.buttonHeld = _interface->IsTattooEditorButtonHeld();
+			frame.leftHeld = _interface->IsTattooEditorLeftHeld();
+		}
 		mouse = glm::ivec2(actions.GetMousePosition());
 		if (Locator::camera::has_value() && Locator::windowing::has_value())
 		{

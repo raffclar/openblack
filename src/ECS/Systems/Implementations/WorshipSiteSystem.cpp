@@ -44,6 +44,7 @@
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/WorshipSites.h"
 #include "ECS/WorshipperRules.h"
@@ -382,15 +383,17 @@ void WorshipSiteSystem::ProcessChants()
 			}
 			const auto& component = registry.Get<const WorshipSite>(site);
 			auto& chants = registry.Get<WorshipChants>(site);
-			// Its charging icons share what the dancers chant, and those charged full send their miracles to the hand
+			// Its charging icons share what the dancers chant. Then each icon does its own turn before the site's turn
+			// ends, because a seed powered up at an icon gives what it does not need back to the battery.
 			auto icons = Locator::spellIconSystem::has_value() ? Locator::spellIconSystem::value().ChargesAt(site)
 			                                                   : std::vector<magic::WorshipIconCharge> {};
-			const float drawn =
-			    magic::ProcessWorshipTurn(chants, _world->ChantRules(component.tribe, component.player), Dancers(site), icons);
+			const auto rules = _world->ChantRules(component.tribe, component.player);
+			const float drawn = magic::ChargeWorshipIcons(chants, rules, Dancers(site), icons);
 			if (Locator::spellIconSystem::has_value())
 			{
 				Locator::spellIconSystem::value().ChargedAt(site, icons);
 			}
+			magic::EndWorshipTurn(chants, rules, Dancers(site));
 			// The artefacts put down by it are powered up as its turn ends, every thousand turns
 			_world->PowerUpArtefacts(site, Dancers(site));
 			CountChantsUsed(site, drawn);
@@ -733,7 +736,7 @@ void WorshipSiteSystem::AddTown(entt::entity site, entt::entity town)
 		}
 	}
 	// A town with a storage pit, built or planned, is linked to the site by a footpath from its pit to the site's gate.
-	// The site keeps the link; finding the footpath's way between them isn't done yet, so it holds none.
+	// The site keeps the link. Unless one of its paths already comes from the pit, the path is found over the next turns.
 	const auto& abodes = registry.Get<const Town>(town).abodes;
 	const bool hasPit = std::ranges::any_of(
 	    abodes, [&registry](entt::entity abode) { return registry.Valid(abode) && registry.AllOf<StoragePit>(abode); });
@@ -744,6 +747,10 @@ void WorshipSiteSystem::AddTown(entt::entity site, entt::entity town)
 		                    _world->SitePoint(ws::k_PlacePoint).value_or(glm::vec3(0.0f)));
 		registry.Assign<FootpathLink>(site, glm::vec3(gate.x, _world->LandHeightAt(gate), gate.y),
 		                              std::vector<Footpath::Id> {});
+	}
+	if (hasPit && Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().TownJoinedSite(site, town);
 	}
 	auto& towns = registry.Get<WorshipSite>(site).towns;
 	towns.insert(towns.begin(), town);

@@ -101,6 +101,10 @@ public:
 	[[nodiscard]] static float SizeAtDistance(float distanceFromCamera);
 	/// The scale of the hand mesh for a distance from the camera
 	[[nodiscard]] float ScaleAtDistance(float distanceFromCamera) const;
+	/// The scale of the hand mesh for a hand size: the standard height divided by the rest height first, then times the
+	/// size, as the game multiplies them. The hand's own size factor, which the game keeps at one, changes nothing.
+	[[nodiscard]] static float DrawnScale(float restHeight, float size);
+	[[nodiscard]] float DrawnScale(float size) const { return DrawnScale(_restHeight, size); }
 	/// Returns the height that sets the size of the hand. This is the distance from the lowest to the highest rest
 	/// bone. The origin of the hand counts as a bone.
 	[[nodiscard]] static float RestHeight(std::span<const glm::mat4> restMatrices);

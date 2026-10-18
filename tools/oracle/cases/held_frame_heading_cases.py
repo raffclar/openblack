@@ -13,6 +13,7 @@
   and whether the hand takes it (the line must lean more than 0.01 east-west or north-south)
 - held_frame.txt: the frame of a thing the hand holds, from the hand's heading itself and the up (the game's own sine
   and cosine of the heading plus a half turn)
+- held_frame_scaled.txt: the same frame multiplied by the hand's drawn size, for hands of many sizes, mirrored or not
 
 Usage: python tools/oracle/cases/held_frame_heading_cases.py [output folder]   (default: test/oracle/data)
 The random inputs come from a fixed seed, so a second run gives the same files (except the date line).
@@ -43,6 +44,7 @@ HAND_SCALE_DIVISOR = 0x8C
 HAND_SCALE = 0x90
 HAND_SIZE = 0x4834
 HAND_MIRROR = 0x484C
+HAND_DRAWN = 0x94
 
 # The least lean the hand turns to (the double that holds the float 0.01)
 LEAST_LEAN = float(np.float32(0.01))
@@ -117,19 +119,64 @@ def frame_cases(oracle: Oracle, rng: random.Random, headings: list[int]) -> list
     return rows
 
 
+def scaled_frame_cases(oracle: Oracle, rng: random.Random, headings: list[int]) -> list[list[int]]:
+    o = oracle
+    hand = o.object(0x4900, {HAND_SCALE_DIVISOR: 1.0, HAND_SCALE: 1.0, HAND_SIZE: 1.0, HAND_MIRROR: 0})
+    o.write_f32(SIZE_SCALE, 3.2)
+    out = o.alloc(0x30)
+    position = o.alloc(0x10)
+    up = o.alloc(0x10)
+    pi_f = F(math.pi)
+    chosen = [bits(F(rng.uniform(-math.pi, math.pi))) for _ in range(600)]
+    # The headings where a part of the frame is zero
+    for v in (F(0.0), pi_f, -pi_f, F(pi_f / F(2.0)), -F(pi_f / F(2.0))):
+        chosen += [bits(v)] * 8
+    chosen += headings[:400]
+    rows = []
+    for heading in chosen:
+        roll = rng.random()
+        if roll < 0.6:
+            up_values = unit([F(rng.uniform(-0.5, 0.5)), F(1.0), F(rng.uniform(-0.5, 0.5))])
+        elif roll < 0.8:
+            up_values = unit([F(0.0), F(1.0), F(rng.uniform(-0.5, 0.5))])
+        else:
+            up_values = [F(0.0), F(1.0), F(0.0)]
+        divisor = F(rng.uniform(0.5, 6.0))
+        size = F(rng.uniform(0.2, 2.5))
+        scale = F(rng.choice([1.0, rng.uniform(0.5, 3.0)]))
+        mirror = rng.randrange(2)
+        o.write_u32(hand + HAND_SCALE_DIVISOR, bits(divisor))
+        o.write_u32(hand + HAND_SIZE, bits(size))
+        o.write_u32(hand + HAND_SCALE, bits(scale))
+        o.write_u32(hand + HAND_MIRROR, mirror)
+        o.write_u32(hand + HAND_HEADING, heading)
+        o.write_u32(position, *[bits(v) for v in [F(1.0), F(2.0), F(3.0)]])
+        o.write_u32(up, *[bits(v) for v in up_values])
+        o.call(HELD_FRAME, this=hand, args=[out, position, up])
+        drawn = o.read_f32_bits(hand + HAND_DRAWN, 1)
+        rows.append([heading] + [bits(v) for v in up_values] + [bits(divisor), bits(size), bits(scale), mirror] + drawn
+                    + o.read_f32_bits(out, 9))
+    return rows
+
+
 def main() -> int:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "test" / "oracle" / "data"
     rng = random.Random(0x46C7)
     with Oracle() as oracle:
         headings = heading_cases(oracle, rng)
         frames = frame_cases(oracle, rng, [row[4] for row in headings if row[3] == 1])
+        scaled = scaled_frame_cases(oracle, rng, [row[4] for row in headings if row[3] == 1][600:])
     write_pinned(out / "held_heading.txt", "The hand's heading from the line of sight through the cursor",
                  ["the line in; whether the hand takes a new heading (a lean over 0.01 in x or z) and the heading out"],
                  ["x", "y", "z", "takes", "heading"], headings)
     write_pinned(out / "held_frame.txt", "The frame of a thing the hand holds, from the hand's heading and the up",
                  ["the heading and the up in; the three rows out (hand scale 1, not mirrored)"],
                  ["heading", "ux", "uy", "uz"] + [f"r{i}" for i in range(9)], frames)
-    print(f"held_heading {len(headings)}, held_frame {len(frames)}")
+    write_pinned(out / "held_frame_scaled.txt", "The frame of a thing the hand holds, times the hand's drawn size",
+                 ["the heading, the up and the hand's size fields in (size scale 3.2); the drawn size and the rows out"],
+                 ["heading", "ux", "uy", "uz", "divisor", "size", "scale", "mirror", "drawn"] + [f"r{i}" for i in range(9)],
+                 scaled)
+    print(f"held_heading {len(headings)}, held_frame {len(frames)}, held_frame_scaled {len(scaled)}")
     return 0
 
 

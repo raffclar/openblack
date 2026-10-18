@@ -15,6 +15,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Matrix.h"
 #include "Common/X87Vector.h"
 
 using namespace openblack;
@@ -26,6 +27,9 @@ constexpr float k_TowardsCamera = 0.25f;
 constexpr float k_Upwards = 0.5f;
 /// Holding something, the hand is kept out from the face by this share of the held thing's radius
 constexpr float k_HeldShare = 0.5f;
+/// The order of the sums when the game turns the straight up: x and y add the products of x, z, then y; z adds y, x,
+/// then z
+constexpr x87::AxisOrders k_PourUpOrder {{{0, 2, 1}, {0, 2, 1}, {1, 0, 2}}};
 
 /// The vector made one long with its squares added in the given order; a vector of no length stays as it is
 template <x87::SumOrder Order>
@@ -44,6 +48,10 @@ hand_feel::Feel hand_feel::FeelOf(const Picked& picked)
 	if (picked.ignored)
 	{
 		return Feel::Nothing;
+	}
+	if (picked.spellIcon)
+	{
+		return Feel::AtIcon;
 	}
 	if (picked.living)
 	{
@@ -157,8 +165,17 @@ hand_feel::HoverDistances hand_feel::HoverDistancesOf(const Hover& hover)
 {
 	const float limit = HoverLimit(hover);
 	// The hand eases to the distance of the point it rests at, or else of the cursor's point at the limit
+	// Over the help's text bubble it eases to the bubble's distance
 	const auto at = hover.restOnThing.has_value() ? hover.restOnThing : hover.cursorPoint;
-	const float target = at.has_value() ? x87::Distance<x87::SumOrder::Xzy>(hover.camera, *at) : limit;
+	float target = limit;
+	if (hover.bubbleDistance.has_value())
+	{
+		target = *hover.bubbleDistance;
+	}
+	else if (at.has_value())
+	{
+		target = x87::Distance<x87::SumOrder::Xzy>(hover.camera, *at) - hover.restNearer;
+	}
 	return {.target = std::max(target, 1.0f), .limit = limit};
 }
 
@@ -167,13 +184,25 @@ glm::vec3 hand_feel::UnitUp(glm::vec3 up)
 	return Unit<x87::SumOrder::Zyx>(up);
 }
 
-void hand_feel::EaseHover(Zoomer& hover, float target, float seconds, bool pulling)
+glm::vec3 hand_feel::PourUp(glm::vec3 camera, glm::vec3 hand, float tilt)
+{
+	const auto axis = Unit<x87::SumOrder::Xzy>(camera - hand);
+	return x87::TransformPoint(x87::TurnAbout(axis, tilt), glm::vec3(0.0f, 1.0f, 0.0f), k_PourUpOrder);
+}
+
+void hand_feel::EaseHover(Zoomer& hover, float target, float seconds, bool pulling, bool slowOut)
 {
 	if (pulling)
 	{
 		return;
 	}
-	hover.SetDestination(target, hover.GetValue() <= target ? k_HoverEaseOutSeconds : k_HoverEaseInSeconds);
+	auto easeSeconds = k_HoverEaseInSeconds;
+	if (hover.GetValue() <= target)
+	{
+		easeSeconds =
+		    slowOut && !(hover.GetSpeed() <= k_HoverSlowEaseSpeedLimit) ? k_HoverSlowEaseOutSeconds : k_HoverEaseOutSeconds;
+	}
+	hover.SetDestination(target, easeSeconds);
 	hover.Update(seconds);
 	if (hover.GetValue() < 1.0f)
 	{

@@ -544,7 +544,7 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 		{
 			continue;
 		}
-		// It stops where it is, and is made to play by catching the thing: what it was doing fails
+		// It stops as the game stops a walk, and the game makes it catch the thing: what it was doing fails
 		world.StopCreature(creature);
 		if (!world.ForceCatch(creature, object))
 		{

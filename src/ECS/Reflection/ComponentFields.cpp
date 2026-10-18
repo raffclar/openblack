@@ -79,6 +79,7 @@
 #include "Creature/TempleLeashes.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Alignment.h"
+#include "ECS/Components/AlignmentHistory.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AppleBarrel.h"
@@ -438,13 +439,16 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::Alignment>(context)
 	    .Field<&components::Alignment::value>("value")
 	    .Field<&components::Alignment::pending>("pending");
+	Reflect<components::AlignmentHistory>(context)
+	    .Field<&components::AlignmentHistory::totals>("totals")
+	    .Field<&components::AlignmentHistory::counts>("counts");
 	Reflect<components::Animal>(context)
 	    .Field<&components::Animal::type>("type")
 	    .Field<&components::Animal::owner>("owner")
 	    .Field<&components::Animal::flock>("flock")
 	    .Field<&components::Animal::town>("town")
-	    .Field<&components::Animal::fleeing>("fleeing")
-	    .Field<&components::Animal::fleeReaction>("fleeReaction")
+	    .Field<&components::Animal::reactingTo>("reactingTo")
+	    .Field<&components::Animal::reaction>("reaction")
 	    .Field<&components::Animal::state>("state")
 	    .Field<&components::Animal::finalState>("finalState")
 	    .Field<&components::Animal::afterClip>("afterClip")
@@ -666,6 +670,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureAnimation::pair>("pair")
 	    .Field<&components::CreatureAnimation::mirror>("mirror")
 	    .Field<&components::CreatureAnimation::boneMatrices>("boneMatrices")
+	    .Field<&components::CreatureAnimation::olderTurnPose>("olderTurnPose")
+	    .Field<&components::CreatureAnimation::newerTurnPose>("newerTurnPose")
+	    .Field<&components::CreatureAnimation::posedThisTurn>("posedThisTurn")
 	    .Field<&components::CreatureAnimation::lastTurnBones>("lastTurnBones");
 	Reflect<components::CreatureEyes>(context)
 	    .Field<&components::CreatureEyes::mode>("mode")
@@ -724,9 +731,6 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureFighting::reaches>("reaches")
 	    .Field<&components::CreatureFighting::hitTimesMs>("hitTimesMs")
 	    .Field<&components::CreatureFighting::measured>("measured")
-	    .Field<&components::CreatureFighting::blowTestFromMs>("blowTestFromMs")
-	    .Field<&components::CreatureFighting::blowTestAnimation>("blowTestAnimation")
-	    .Field<&components::CreatureFighting::movedShare>("movedShare")
 	    .Field<&components::CreatureFighting::stageSeconds>("stageSeconds")
 	    .Field<&components::CreatureFighting::faceSeconds>("faceSeconds")
 	    .Field<&components::CreatureFighting::played>("played")
@@ -930,9 +934,6 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureNeeds::faint>("faint")
 	    .Field<&components::CreatureNeeds::carriedWeight>("carriedWeight")
 	    .Field<&components::CreatureNeeds::moving>("moving");
-	Reflect<components::CreaturePukeDrop>(context)
-	    .Field<&components::CreaturePukeDrop::velocity>("velocity")
-	    .Field<&components::CreaturePukeDrop::seconds>("seconds");
 	Reflect<components::CreatureObjectAction>(context)
 	    .Field<&components::CreatureObjectAction::kind>("kind")
 	    .Field<&components::CreatureObjectAction::phase>("phase")
@@ -992,7 +993,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::CreatureTattoos>(context)
 	    .Field<&components::CreatureTattoos::slots>("slots")
 	    .Field<&components::CreatureTattoos::pictures>("pictures")
+	    .Field<&components::CreatureTattoos::shown>("shown")
 	    .Field<&components::CreatureTattoos::revision>("revision");
+	Reflect<components::TattooMasks>(context).Field<&components::TattooMasks::masks>("masks");
 	Reflect<components::CreatureMarks>(context)
 	    .Field<&components::CreatureMarks::marks>("marks")
 	    .Field<&components::CreatureMarks::revision>("revision");
@@ -1252,6 +1255,11 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::FootpathWalk::towardsStart>("towardsStart")
 	    .Field<&components::FootpathWalk::node>("node")
 	    .Field<&components::FootpathWalk::then>("then");
+	Reflect<components::FootpathFinder>(context)
+	    .Field<&components::FootpathFinder::from>("from")
+	    .Field<&components::FootpathFinder::to>("to")
+	    .Field<&components::FootpathFinder::footpath>("footpath")
+	    .Field<&components::FootpathFinder::plan>("plan");
 	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::wood>(
 	    "wood");
 	Reflect<components::Forest>(context).Field<&components::Forest::type>("type");
@@ -1776,7 +1784,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::WorshipIcon::charger>("charger")
 	    .Field<&components::WorshipIcon::chargeStartTurn>("chargeStartTurn")
 	    .Field<&components::WorshipIcon::store>("store")
-	    .Field<&components::WorshipIcon::seedOut>("seedOut");
+	    .Field<&components::WorshipIcon::seedsOut>("seedsOut");
 	Reflect<components::IconSeed>(context)
 	    .Field<&components::IconSeed::seed>("seed")
 	    .Field<&components::IconSeed::middle>("middle")
@@ -2800,7 +2808,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_sway::Sway::upperOffset>("upperOffset")
 	    .Field<&openblack::creature_sway::Sway::active>("active")
 	    .Field<&openblack::creature_sway::Sway::turnSeconds>("turnSeconds")
-	    .Field<&openblack::creature_sway::Sway::turnHeading>("turnHeading");
+	    .Field<&openblack::creature_sway::Sway::heading>("heading");
+	Reflect<openblack::creature_tattoo::Mask>(context, ValueOnly {})
+	    .Field<&openblack::creature_tattoo::Mask::size>("size")
+	    .Field<&openblack::creature_tattoo::Mask::levels>("levels");
 	Reflect<openblack::creature_tattoo::Slot>(context, ValueOnly {})
 	    .Field<&openblack::creature_tattoo::Slot::design>("design")
 	    .Field<&openblack::creature_tattoo::Slot::site>("site")
@@ -3061,8 +3072,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::timeMs>("timeMs")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::durationMs>("durationMs")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::displacement>("displacement")
-	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::startHeading>("startHeading")
-	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::startRouteHeading>("startRouteHeading");
+	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::blendDurationMs>("blendDurationMs")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::side>("side")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::routeHeading>("routeHeading");
 	Reflect<openblack::ecs::components::CreatureLocomotion::Track>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::animation>("animation")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::fromMs>("fromMs")
@@ -3102,7 +3114,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::DrawnIntoVortex::Flight::rotation>("rotation");
 	Reflect<openblack::ecs::components::Footpath::Node>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Footpath::Node::position>("position")
-	    .Field<&openblack::ecs::components::Footpath::Node::place>("place");
+	    .Field<&openblack::ecs::components::Footpath::Node::place>("place")
+	    .Field<&openblack::ecs::components::Footpath::Node::planned>("planned")
+	    .Field<&openblack::ecs::components::Footpath::Node::hidden>("hidden")
+	    .Field<&openblack::ecs::components::Footpath::Node::marker>("marker");
 	Reflect<openblack::ecs::components::HandGrab::Throw>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HandGrab::Throw::velocity>("velocity")
 	    .Field<&openblack::ecs::components::HandGrab::Throw::springVelocity>("springVelocity")
@@ -3288,6 +3303,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::fire::graphic::Graphic::smokeAccumulator>("smokeAccumulator")
 	    .Field<&openblack::fire::graphic::Graphic::smokeCount>("smokeCount")
 	    .Field<&openblack::fire::graphic::Graphic::smokePoint>("smokePoint")
+	    .Field<&openblack::fire::graphic::Graphic::smokeBone>("smokeBone")
 	    .Field<&openblack::fire::graphic::Graphic::smoke>("smoke")
 	    .Field<&openblack::fire::graphic::Graphic::drawnTurn>("drawnTurn")
 	    .Field<&openblack::fire::graphic::Graphic::drawnFraction>("drawnFraction");
@@ -3299,6 +3315,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::fire::graphic::Kinds::followsLand>("followsLand");
 	Reflect<openblack::fire::graphic::Sprite>(context, ValueOnly {})
 	    .Field<&openblack::fire::graphic::Sprite::position>("position")
+	    .Field<&openblack::fire::graphic::Sprite::bone>("bone")
 	    .Field<&openblack::fire::graphic::Sprite::scale>("scale")
 	    .Field<&openblack::fire::graphic::Sprite::age>("age")
 	    .Field<&openblack::fire::graphic::Sprite::alpha>("alpha")

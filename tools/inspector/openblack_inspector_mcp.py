@@ -598,6 +598,15 @@ TOOLS = [
         "params": ["position", "cell"],
     },
     {
+        "name": "map_shade",
+        "description": "The land's shading of the last drawn frame: the clouds' shadows and the lights cast, the "
+                       "blocks they changed and those in view, and the shaded luminosity of the corners of a point's "
+                       "cell.",
+        "inputSchema": schema({"position": {"type": "array", "items": {"type": "number"}}, **SHAPING}),
+        "query": "map.shade",
+        "params": ["position"],
+    },
+    {
         "name": "town_homes",
         "description": "A town's buildings with who lives in each (town ids from town.list).",
         "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}, ["id"]),
@@ -640,6 +649,13 @@ TOOLS = [
         "inputSchema": schema({"owner": {"type": "integer"}, **SHAPING}, ["owner"]),
         "query": "particles.emitters",
         "params": ["owner"],
+    },
+    {
+        "name": "particles_liquid",
+        "description": "The pool of liquid particles (drops of blood and sick, dust, smoke, motes): the count of each "
+                       "kind and the drops that lie on the land.",
+        "inputSchema": schema(SHAPING),
+        "query": "particles.liquid",
     },
     {
         "name": "camera_state",

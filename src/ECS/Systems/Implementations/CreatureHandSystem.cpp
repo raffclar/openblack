@@ -30,6 +30,7 @@
 #include "Camera/CreatureInteractCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
+#include "Common/X87.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
@@ -103,7 +104,8 @@ const CreatureRig::ActionPoints* PointsOf(const Creature& creature)
 	return rig.actionPoints.has_value() ? &*rig.actionPoints : nullptr;
 }
 
-/// Where each part of the body a stroke can land on is this frame, in the world
+/// Where each part of the body a stroke can land on is, in the world, as the body is posed at the end of its newest game
+/// turn
 std::optional<std::array<glm::vec3, feedback::k_BodyPartCount>>
 PartsOf(const Creature& creature, const CreatureAnimation& animation, const Transform& transform)
 {
@@ -112,8 +114,9 @@ PartsOf(const Creature& creature, const CreatureAnimation& animation, const Tran
 	{
 		return std::nullopt;
 	}
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-	const auto at = [&](uint32_t bone) { return glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]); };
+	const auto pose = creature::TurnPose(animation.newerTurnPose, animation.boneMatrices,
+	                                     creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
+	const auto at = [&](uint32_t bone) { return glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3]); };
 	const auto mirror = [&](uint32_t bone) { return bone < animation.mirror.size() ? animation.mirror[bone] : bone; };
 	return std::array<glm::vec3, feedback::k_BodyPartCount> {
 	    at(points->head),
@@ -207,7 +210,7 @@ std::optional<glm::vec3> DirectionThrough(glm::vec2 cursor)
 	glm::vec3 origin;
 	glm::vec3 direction;
 	Locator::camera::value().DeprojectScreenToWorld(cursor / glm::vec2(screenSize), origin, direction);
-	return glm::length(direction) > 0.0f ? std::optional(glm::normalize(direction)) : std::nullopt;
+	return glm::length(direction) > 0.0f ? std::optional(direction) : std::nullopt;
 }
 
 /// What the hand needs to know about a creature to take hold of it; none for what isn't a creature
@@ -407,7 +410,7 @@ void CreatureHandSystem::Bruise(entt::entity creature, const glm::vec3& rayOrigi
 	// hit on the slapped one's skin; only a bruise on the slapped creature itself is drawn here (docs/vanilla-bugs.md)
 	if (*own == creature)
 	{
-		creature_scars::MarkAlong(creature, rayOrigin, rayOrigin + rayDirection, 0, column);
+		creature_scars::MarkAlong(creature, rayOrigin, rayDirection, 0, column);
 	}
 }
 
@@ -434,8 +437,9 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	const auto ms = seconds * 1000.0f;
 	const auto height = feedback::k_HeightAtSizeOne * ShownSize(creature);
 	const auto centre = transform.position + glm::vec3(0.0f, height * 0.5f, 0.0f);
-	// The hand is drawn larger on a bigger creature, by the square root of its size
-	const auto handScale = std::sqrt(std::max(ShownSize(creature), 0.0f));
+	// The hand is drawn larger on a bigger creature, by its size to the power of a half, as the game's power makes it
+	const auto shownSize = ShownSize(creature);
+	const auto handScale = shownSize > 0.0f ? x87::Pow(shownSize, 0.5) : 0.0f;
 
 	// The camera follows the creature, until the player has no creature
 	if (_cameraModel != nullptr)
@@ -464,8 +468,8 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	}
 
 	// The hand stays on the line of sight through the cursor, at a distance from the camera that eases to the body
-	const auto sight = glm::normalize(rayDirection);
 	const auto camera = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : rayOrigin;
+	const auto sight = feedback::SightWay(camera, rayDirection);
 	const auto parts = PartsOf(creature, animation, transform);
 	const auto middle = parts.has_value() ? parts->at(static_cast<size_t>(feedback::BodyPart::Groin)) : centre;
 	if (!contact->distanceStarted)
@@ -486,7 +490,7 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 		const auto between = feedback::SecondTryCursor(cursorPixel, contact->frameCursor.value_or(cursorPixel));
 		if (const auto direction = DirectionThrough(glm::vec2(between)))
 		{
-			hit = SkinAlong(creatureEntity, transform, camera, *direction);
+			hit = SkinAlong(creatureEntity, transform, camera, feedback::SightWay(camera, *direction));
 		}
 	}
 	const bool onBody = hit.has_value();
@@ -498,11 +502,11 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	const auto step = feedback::Pace(contact->sinceStepMs, ms);
 	if (step.has_value() && *step > 0.0f)
 	{
-		const auto lastDirection = DirectionThrough(contact->lastCursor).value_or(sight);
+		const auto lastDirection = DirectionThrough(contact->lastCursor).value_or(rayDirection);
 		slapped =
 		    Step(*contact, {.shownAt = contact->shownAt.value_or(feedback::PointOnSight(camera, rayDirection, handDistance)),
 		                    .here = feedback::PointOnSight(camera, rayDirection, handDistance),
-		                    .before = camera + (lastDirection * handDistance),
+		                    .before = feedback::PointOnSight(camera, lastDirection, handDistance),
 		                    .touch = touch,
 		                    .cursor = cursor,
 		                    .screenWidth = screenWidth,

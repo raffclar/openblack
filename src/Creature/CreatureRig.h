@@ -149,6 +149,9 @@ struct CreatureRig
 		float v;
 	};
 	std::optional<KissPoint> kissPoint;
+	/// The point on the body at the lips that sick comes out of, as the point that kisses. None when the file has no such
+	/// point. Then the sick comes out of the head bone.
+	std::optional<KissPoint> pukePoint;
 	/// The moment of the high and the low kiss animations when the lips meet, in milliseconds from their starts
 	std::optional<float> kissMs;
 	/// The type of wound each of its twelve fight blows leaves, in the order of the blow animations, when its file gives
@@ -218,6 +221,19 @@ PosedTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCoun
 /// The world matrix of a bone as posed this frame, the creature's placement included; the placement alone for a bone
 /// the pose lacks
 [[nodiscard]] glm::mat4 PosedBone(uint32_t bone, std::span<const glm::mat4> boneMatrices, const glm::mat4& placement);
+
+/// A pose that game rules read, and the placement that puts it in the world
+struct RulePose
+{
+	std::span<const glm::mat4> bones;
+	glm::mat4 placement;
+};
+
+/// The pose that game rules read: hit shapes, contacts and body points. It is the pose of the newest game turn, which
+/// is in the world already, when that pose has one matrix for each drawn bone. Else it is the pose drawn this frame,
+/// with the creature's placement.
+[[nodiscard]] RulePose TurnPose(std::span<const glm::mat4> newerTurnPose, std::span<const glm::mat4> boneMatrices,
+                                const glm::mat4& placement);
 
 /// Where each bone was in the world at the end of the last game turn, as the game's effects on a creature read them.
 /// Before the first turn ends (no bones kept, or not one for each bone of the pose), the bones of this frame are the

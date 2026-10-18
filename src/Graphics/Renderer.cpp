@@ -66,7 +66,6 @@
 #include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleMap.h"
-#include "3D/VillageLights.h"
 #include "3D/WaterRings.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
@@ -129,6 +128,7 @@
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/LandShadeSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
@@ -629,8 +629,10 @@ Renderer::~Renderer() noexcept
 	{
 		bgfx::destroy(toBgfx(*_readBackTexture));
 	}
-	_landLuminosityFrameBuffer.reset();
-	_landShadeFrameBuffer.reset();
+	for (auto& texture : _landLuminosity)
+	{
+		texture.reset();
+	}
 	_landColourFrameBuffer.reset();
 	_skyDomeFrameBuffer.reset();
 	if (_lightningGlowTexture)
@@ -1398,7 +1400,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				const bool before = desc.heldMirror.has_value() && _before.texturesKept;
 				if (before)
 				{
-					program->SetTextureSampler("s_landLuminosity", 6, *_before.luminosity);
+					program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosityBefore());
 					program->SetTextureSampler("s_landColour", 8, *_before.colour);
 				}
 				else
@@ -4156,172 +4158,120 @@ void SubmitLandQuad(bgfx::ViewId viewId, const ShaderProgram& program, glm::vec2
 
 const Texture2D& Renderer::GetLandLuminosity() const
 {
-	if (_landLuminosityFrameBuffer)
+	if (_landLuminosity.at(_landLuminosityNow))
 	{
-		return _landLuminosityFrameBuffer->GetColorAttachment();
+		return *_landLuminosity.at(_landLuminosityNow);
 	}
 	return Locator::terrainSystem::value().GetLuminosityMap();
 }
 
+const Texture2D& Renderer::GetLandLuminosityBefore() const
+{
+	if (_landLuminosity.at(_landLuminosityNow ^ 1u))
+	{
+		return *_landLuminosity.at(_landLuminosityNow ^ 1u);
+	}
+	return GetLandLuminosity();
+}
+
 void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 {
-	if (!drawDesc.drawIsland || !Locator::terrainSystem::has_value())
+	if (!drawDesc.drawIsland || !Locator::terrainSystem::has_value() || !Locator::landShadeSystem::has_value())
 	{
 		return;
 	}
-	const auto& island = Locator::terrainSystem::value();
-	const auto& luminosity = island.GetLuminosityMap();
-	const auto size = luminosity.GetResolution();
-	if (!FitsLand(_landLuminosityFrameBuffer, size))
-	{
-		_landLuminosityFrameBuffer =
-		    std::make_unique<FrameBuffer>("LandLuminosity", size.x, size.y, graphics::TextureFormat::R8);
-	}
-	if (!FitsLand(_landShadeFrameBuffer, size))
-	{
-		_landShadeFrameBuffer = std::make_unique<FrameBuffer>("LandShade", size.x, size.y, graphics::TextureFormat::RGBA8);
-	}
-	const auto w = static_cast<float>(size.x);
-	const auto h = static_cast<float>(size.y);
-	const auto setUpView = [&size](RenderPass pass, const FrameBuffer& frameBuffer) {
-		return SetUpLandView(pass, frameBuffer, size);
+	// What the frame shades the land with: the land light table is still the one of the frame before
+	const auto& camera = *drawDesc.camera;
+	const auto detail = Locator::config::value().detailLevel;
+	ecs::systems::LandShadeFrame frame {
+	    .viewProjection = camera.GetViewProjectionMatrix(),
+	    .nearPlane = camera.GetNearClip(),
+	    .landReflection = detail_level::For(detail).landReflection,
+	    .cloudShadows = detail_level::CloudShadows(detail),
+	    .skyAlpha = clouds::Colour(Locator::alignmentSystem::value().GetSkyAlignment(), 0xFFFFFF) >> 24u,
+	    .landColour = _landLightTable ? _landLightTable->GetLandColour() : 0xFFFFFFu,
+	    .fullLightGreen =
+	        _landLightTable ? static_cast<uint8_t>((_landLightTable->GetTexels().back() >> 8u) & 0xFFu) : uint8_t {0xFF},
+	    .hand = std::nullopt,
+	    .scriptHour = Locator::skySystem::value().GetClock().GetScriptTime(),
+	    .particleStamps = {},
+	    .flashes = 0,
 	};
-	const auto& submitQuad = SubmitLandQuad;
-
-	// What shades each cell this frame: the darkest of the clouds' shadows over it in red, from white, and the brightest
-	// of the lights in alpha, from none
-	const auto shadeView = setUpView(RenderPass::LandShade, *_landShadeFrameBuffer);
-	bgfx::setViewClear(shadeView, BGFX_CLEAR_COLOR, 0xFF000000);
-	const auto& shadeProgram = *_shaderManager->GetShader("LandShade");
-	const auto& textures = Locator::resources::value().GetTextures();
-	const glm::vec2 firstCell = island.GetExtent().minimum / LandIslandInterface::k_CellSize;
-
-	// The clouds' shadows: each of the 40 by 40 cells under a cloud, from its corner, takes the darker of its luminosity
-	// and the shadow's, by the cloud's alpha
-	const auto shadowId = entt::hashed_string("raw/sclouds");
-	if (detail_level::CloudShadows(Locator::config::value().detailLevel) && textures.Contains(shadowId.value()))
+	// The particles' light maps and shadows of the frame before, in the order they were drawn. A light map that cannot
+	// stamp takes no place.
+	frame.particleStamps.reserve(_landStamps.size());
+	for (const auto& light : _landStamps)
 	{
-		const auto shadow = textures.Handle(shadowId.value());
-		constexpr float k_ShadowCells = 40.0f;
-		const auto skyColour = clouds::Colour(Locator::alignmentSystem::value().GetSkyAlignment(), 0xFFFFFF);
-		drawDesc.entities.Each<const ecs::components::Cloud, const ecs::components::Mist, const ecs::components::Transform>(
-		    [&](const ecs::components::Cloud& /*unused*/, const ecs::components::Mist& mist,
-		        const ecs::components::Transform& transform) {
-			    const auto alpha = ((mist.colour >> 24u) * (skyColour >> 24u)) / 255u;
-			    if (alpha == 0)
-			    {
-				    return;
-			    }
-			    // A texel's middle falls on each cell's corner
-			    const glm::vec2 corner =
-			        glm::vec2(transform.position.x, transform.position.z) / LandIslandInterface::k_CellSize - firstCell + 0.5f;
-			    const float half = 0.5f / k_ShadowCells;
-			    const glm::vec4 u_landShade {0.0f, static_cast<float>(alpha), 0.0f, 0.0f};
-			    shadeProgram.SetTextureSampler("s_texture", 0, *shadow);
-			    shadeProgram.SetUniformValue("u_landShade", &u_landShade);
-			    submitQuad(shadeView, shadeProgram, corner, corner + (k_ShadowCells - 1.0f), glm::vec2(half),
-			               glm::vec2(1.0f - half),
-			               BGFX_STATE_WRITE_R | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
-			                   BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN));
-		    });
-	}
-
-	// A storm with clouds of its own darkens the land under it by its shade and strength, its shadow centred on it
-	const auto stormShadowId = entt::hashed_string("raw/sstorm");
-	if (detail_level::CloudShadows(Locator::config::value().detailLevel) && textures.Contains(stormShadowId.value()))
-	{
-		const auto shadow = textures.Handle(stormShadowId.value());
-		constexpr auto k_ShadowCells = static_cast<float>(storm_clouds::k_ShadowCells);
-		drawDesc.entities.Each<const ecs::components::Storm>([&](const ecs::components::Storm& storm) {
-			if (storm_clouds::Wanted(storm.cloudCount) == 0)
-			{
-				return;
-			}
-			const auto alpha = storm_clouds::ShadowAlpha(storm.cloudShade, storm.currentStrength);
-			if (!alpha.has_value())
-			{
-				return;
-			}
-			// A texel's middle falls on each cell's corner
-			const auto corner = storm_clouds::ShadowCorner({storm.currentPosition.x, storm.currentPosition.z}) /
-			                        LandIslandInterface::k_CellSize -
-			                    firstCell + 0.5f;
-			const float half = 0.5f / k_ShadowCells;
-			const glm::vec4 u_landShade {0.0f, static_cast<float>(*alpha), 0.0f, 0.0f};
-			shadeProgram.SetTextureSampler("s_texture", 0, *shadow);
-			shadeProgram.SetUniformValue("u_landShade", &u_landShade);
-			submitQuad(shadeView, shadeProgram, corner, corner + (k_ShadowCells - 1.0f), glm::vec2(half),
-			           glm::vec2(1.0f - half),
-			           BGFX_STATE_WRITE_R | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
-			               BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN));
-		});
-	}
-
-	// The lights, once the land is dark enough: each stamps its image of brightness, a texel a cell from the cell its
-	// point falls in, up to the second to last cell of the map
-	const auto landColour = _landLightTable ? _landLightTable->GetLandColour() : 0xFFFFFFu;
-	const auto stamp = [&](entt::id_type imageId, glm::vec2 xz, int32_t strength) {
-		if (strength <= 0 || !textures.Contains(imageId))
+		const auto texels = ParticleLightMapTexels(light.bitmap, light.frame);
+		if (texels.empty())
 		{
-			return;
+			continue;
 		}
-		const auto image = textures.Handle(imageId);
-		const auto side = static_cast<float>(image->GetResolution().x);
-		const auto placement = village_lights::Place(xz);
-		const auto origin = glm::vec2(placement.cell) - firstCell;
-		constexpr float k_LastCell = static_cast<float>(LandIslandInterface::k_MapCellsPerSide - 1);
-		const auto from = glm::max(origin, -firstCell);
-		const auto to = glm::min(origin + (side - 1.0f), k_LastCell - firstCell);
-		if (glm::any(glm::greaterThanEqual(from, to)))
+		if (light.shadow)
 		{
-			return;
+			frame.particleStamps.emplace_back(land_shade::ParticleShadow(light.centre, texels, light.pitch, light.strength));
 		}
-		const glm::vec4 u_landShade {1.0f, static_cast<float>(strength), side, 0.0f};
-		const glm::vec4 u_landStamp {glm::vec2(placement.weight), 0.0f, 0.0f};
-		shadeProgram.SetTextureSampler("s_texture", 0, *image);
-		shadeProgram.SetUniformValue("u_landShade", &u_landShade);
-		shadeProgram.SetUniformValue("u_landStamp", &u_landStamp);
-		submitQuad(shadeView, shadeProgram, from, to, from - origin, to - origin,
-		           BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
-		               BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MAX));
-	};
-	if (village_lights::IsDark(landColour))
-	{
-		// The hand's light, from the corner of its image, while the hand shows
-		if (drawDesc.drawHand && Locator::handSystem::has_value())
+		else
 		{
-			const auto hand = Locator::handSystem::value()
-			                      .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
-			if (const auto* transform = drawDesc.entities.TryGet<ecs::components::Transform>(hand); transform != nullptr)
-			{
-				stamp(village_lights::k_HandImageId.value(), HandLight::GetOrigin(transform->position),
-				      village_lights::Strength(HandLight::GetStrength(landColour)));
-			}
+			frame.particleStamps.emplace_back(std::nullopt);
 		}
-		// The villages' lights by the hour, each from a little before it where it has flickered to
-		const auto intensity = village_lights::Intensity(Locator::skySystem::value().GetClock().GetScriptTime());
-		const auto strength = village_lights::VillageStrength(intensity);
-		drawDesc.entities.Each<const ecs::components::VillageLight, const ecs::components::Transform>(
-		    [&](const ecs::components::VillageLight& light, const ecs::components::Transform& transform) {
-			    const glm::vec2 corner {(transform.position.x - village_lights::k_VillageReach) + light.flicker.x,
-			                            (transform.position.z - village_lights::k_VillageReach) + light.flicker.y};
-			    stamp(village_lights::k_VillageImageId.value(), corner, strength);
-		    });
 	}
+	// The hand's light while the hand shows
+	if (drawDesc.drawHand && Locator::handSystem::has_value())
+	{
+		const auto hand =
+		    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+		if (const auto* transform = drawDesc.entities.TryGet<ecs::components::Transform>(hand); transform != nullptr)
+		{
+			frame.hand = transform->position;
+		}
+	}
+	// Each storm's flash of lightning takes a stamp while it shows
+	drawDesc.entities.Each<const ecs::components::Storm>([&frame](const ecs::components::Storm& storm) {
+		if (!storm.dead && storm.flash.active)
+		{
+			++frame.flashes;
+		}
+	});
+	auto& shade = Locator::landShadeSystem::value();
+	shade.Shade(frame);
 
-	// The luminosity as the land was laid, under its shade
-	const auto luminosityView = setUpView(RenderPass::LandLuminosity, *_landLuminosityFrameBuffer);
-	const auto& luminosityProgram = *_shaderManager->GetShader("LandLuminosity");
-	uint8_t fullLightGreen = 0xFF;
-	if (_landLightTable)
+	// The GPU's copy: a new land fills both textures, after that each frame changes the rows that this frame or the
+	// frame before changed
+	const auto map = shade.Map();
+	if (map.size.x == 0 || map.size.y == 0 || map.texels.size() < static_cast<size_t>(map.size.x) * map.size.y)
 	{
-		fullLightGreen = static_cast<uint8_t>((_landLightTable->GetTexels().back() >> 8u) & 0xFFu);
+		return;
 	}
-	const glm::vec4 u_landLuminosity {static_cast<float>(village_lights::Threshold(fullLightGreen)), 0.0f, 0.0f, 0.0f};
-	luminosityProgram.SetTextureSampler("s_texture", 0, luminosity);
-	luminosityProgram.SetTextureSampler("s_shade", 1, _landShadeFrameBuffer->GetColorAttachment());
-	luminosityProgram.SetUniformValue("u_landLuminosity", &u_landLuminosity);
-	submitQuad(luminosityView, luminosityProgram, {0.0f, 0.0f}, {w, h}, {0.0f, 0.0f}, {1.0f, 1.0f}, BGFX_STATE_WRITE_R);
+	if (!_landLuminosity[0] || _landLuminosity[0]->GetResolution() != map.size)
+	{
+		for (auto& texture : _landLuminosity)
+		{
+			texture = std::make_unique<Texture2D>("LandLuminosity");
+			texture->CreateWithinFrame(map.size.x, map.size.y, 1, TextureFormat::R8, Wrapping::Repeat, Filter::Linear, nullptr);
+			texture->Update(map.texels.data(), static_cast<uint32_t>(map.texels.size()));
+		}
+		_landLuminosityNow = 0;
+		_landLuminosityRowsBefore = {0, 0};
+		return;
+	}
+	_landLuminosityNow ^= 1u;
+	glm::u16vec2 rows {map.firstChangedRow, map.lastChangedRow};
+	if (_landLuminosityRowsBefore.x < _landLuminosityRowsBefore.y)
+	{
+		rows = rows.x < rows.y
+		           ? glm::u16vec2(std::min(rows.x, _landLuminosityRowsBefore.x), std::max(rows.y, _landLuminosityRowsBefore.y))
+		           : _landLuminosityRowsBefore;
+	}
+	_landLuminosityRowsBefore = {map.firstChangedRow, map.lastChangedRow};
+	if (rows.x < rows.y)
+	{
+		const auto first = static_cast<size_t>(rows.x) * map.size.x;
+		const auto count = static_cast<uint16_t>(rows.y - rows.x);
+		_landLuminosity.at(_landLuminosityNow)
+		    ->UpdateLayerRegion(0, {0, rows.x}, {map.size.x, count}, map.texels.data() + first,
+		                        static_cast<uint32_t>(static_cast<size_t>(count) * map.size.x));
+	}
 }
 
 const Texture2D& Renderer::GetLandColour() const
@@ -4695,13 +4645,18 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 	}
 	const glm::vec2 firstCell = island.GetExtent().minimum / LandIslandInterface::k_CellSize;
 	size_t stamps = 0;
+	// Each stamp takes a place in the game's list, also one with no strength
 	const auto stamp = [&](TextureHandle image, int32_t side, glm::vec2 corner, uint8_t strength,
 	                       land_colour_stamps::Combine combine) {
-		if (strength == 0 || stamps >= land_colour_stamps::k_MaxStamps)
+		if (stamps >= land_colour_stamps::k_MaxStamps)
 		{
 			return;
 		}
 		++stamps;
+		if (strength == 0)
+		{
+			return;
+		}
 		const auto placement = land_colour_stamps::Place(corner);
 		const auto origin = glm::vec2(placement.cell) - firstCell;
 		constexpr float k_LastCell = static_cast<float>(LandIslandInterface::k_MapCellsPerSide - 1);
@@ -4711,24 +4666,42 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 		{
 			return;
 		}
-		const bool shade = combine == land_colour_stamps::Combine::Shade;
-		const glm::vec4 u_landColourStamp {1.0f, static_cast<float>(strength), static_cast<float>(side), shade ? 1.0f : 0.0f};
+		const glm::vec4 u_landColourStamp {1.0f, static_cast<float>(strength), static_cast<float>(side), 0.0f};
 		const glm::vec4 u_landColourWeights {glm::vec2(placement.weight), 0.0f, 0.0f};
 		program.SetTextureSampler("s_texture", 0, image);
 		program.SetUniformValue("u_landColourStamp", &u_landColourStamp);
 		program.SetUniformValue("u_landColourWeights", &u_landColourWeights);
-		// An added stamp brightens the cells to at most white; another keeps the brighter colour; a shade multiplies them
+		// An added stamp brightens the cells to at most white; another keeps the brighter colour
 		const auto equation =
 		    combine == land_colour_stamps::Combine::Brighter ? BGFX_STATE_BLEND_EQUATION_MAX : BGFX_STATE_BLEND_EQUATION_ADD;
-		const auto blend = shade ? BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ZERO, BGFX_STATE_BLEND_SRC_COLOR)
-		                         : BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE);
 		SubmitLandQuad(viewId, program, from, to, from - origin, to - origin,
-		               BGFX_STATE_WRITE_RGB | blend | BGFX_STATE_BLEND_EQUATION(equation));
+		               BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
+		                   BGFX_STATE_BLEND_EQUATION(equation));
 	};
 
-	// Each storm's lightning glows on the ground around where it struck
+	// The particles' light maps of the frame before light the ground under them. Their shadows darken the land's
+	// luminosity (see DrawLandLuminosityPass) and only take a place here.
+	for (const auto& light : _landStamps)
+	{
+		if (ParticleLightMapTexels(light.bitmap, light.frame).empty())
+		{
+			continue;
+		}
+		if (light.shadow)
+		{
+			stamps = std::min(stamps + 1, land_colour_stamps::k_MaxStamps);
+			continue;
+		}
+		if (const auto* image = ParticleLightMap(light.bitmap, light.frame))
+		{
+			stamp(image->GetNativeHandle(), light.pitch, land_colour_stamps::CentredCorner(light.centre, light.pitch),
+			      land_colour_stamps::Strength(light.strength), land_colour_stamps::Combine::Add);
+		}
+	}
+
+	// Then each storm's lightning glows on the ground around where it struck, while its flash shows
 	drawDesc.entities.Each<const ecs::components::Storm>([&](const ecs::components::Storm& storm) {
-		if (storm.dead)
+		if (storm.dead || !storm.flash.active)
 		{
 			return;
 		}
@@ -4737,17 +4710,6 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 		      land_colour_stamps::CentredCorner(storm.flash.position, land_colour_stamps::k_LightningSide), strength,
 		      land_colour_stamps::Combine::Add);
 	});
-
-	// The particles' light maps light the ground under them
-	for (const auto& light : _particleFrame.lightStamps)
-	{
-		if (const auto* image = ParticleLightMap(light.bitmap, light.frame))
-		{
-			stamp(image->GetNativeHandle(), light.pitch, land_colour_stamps::CentredCorner(light.centre, light.pitch),
-			      land_colour_stamps::Strength(light.strength),
-			      light.shadow ? land_colour_stamps::Combine::Shade : land_colour_stamps::Combine::Add);
-		}
-	}
 }
 
 void Renderer::DrawLandAlphaPass(const DrawSceneDesc& drawDesc) const
@@ -4910,7 +4872,7 @@ void Renderer::KeepLightOfFrameBefore() const
 	// them
 	_before.texturesKept = false;
 	const bool blits = (bgfx::getCaps()->supported & BGFX_CAPS_TEXTURE_BLIT) != 0;
-	if (!blits || !_landLuminosityFrameBuffer || !_landColourFrameBuffer)
+	if (!blits || !_landColourFrameBuffer)
 	{
 		return;
 	}
@@ -4931,15 +4893,13 @@ void Renderer::KeepLightOfFrameBefore() const
 		bgfx::blit(static_cast<bgfx::ViewId>(RenderPass::LandShade), toBgfx(*to), 0, 0,
 		           toBgfx(from.GetColorAttachment().GetNativeHandle()));
 	};
-	copy(*_landLuminosityFrameBuffer, _before.luminosity, _before.luminositySize, bgfx::TextureFormat::R8,
-	     "Land Luminosity Before");
 	copy(*_landColourFrameBuffer, _before.colour, _before.colourSize, bgfx::TextureFormat::RGBA8, "Land Colour Before");
 	_before.texturesKept = true;
 }
 
 void Renderer::ReleaseLightOfFrameBefore() const
 {
-	for (auto* texture : {&_before.landLight, &_before.luminosity, &_before.colour})
+	for (auto* texture : {&_before.landLight, &_before.colour})
 	{
 		if (texture->has_value())
 		{
@@ -6602,7 +6562,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					    .skins = {},
 					    .blendSeams = Locator::config::value().blendCreatureSeams,
 					};
-					if (const auto skins = _creatureSkins.find(entity); skins != _creatureSkins.end())
+					// A copy with a skin of its own, as the Creature Cave's copy has, shows that skin
+					auto skins = copy ? _creatureSkins.find(poser) : _creatureSkins.end();
+					if (skins == _creatureSkins.end())
+					{
+						skins = _creatureSkins.find(entity);
+					}
+					if (skins != _creatureSkins.end())
 					{
 						targets->skins = skins->second.drawn;
 					}

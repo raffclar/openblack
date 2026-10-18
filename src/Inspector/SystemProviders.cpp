@@ -826,6 +826,40 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeMapProvider(MapSour
 		    }
 		    return QueryResult::Value(std::move(items));
 	    });
+	provider->Add(
+	    Query("shade",
+	          "The land's shading of the last drawn frame: the clouds' shadows and the lights cast, the blocks "
+	          "they changed and those in view, and the shaded luminosity of the corners of a point's cell",
+	          {Parameter("position", "point", "A point on the land, [x, z] or [x, y, z]", false)}, ResultKind::Object),
+	    [sources](const QueryContext& context) {
+		    const auto* shade = sources.shade ? sources.shade() : nullptr;
+		    if (shade == nullptr)
+		    {
+			    return QueryResult::Error("there is no land shading");
+		    }
+		    const auto& land = shade->Land();
+		    const auto blocks = land.Blocks();
+		    const auto inView = std::ranges::count_if(blocks, [&land](glm::ivec2 block) { return land.InView(block); });
+		    Json result = {{"shadows", shade->ShadowCount()},
+		                   {"lights", shade->LightCount()},
+		                   {"blocks", blocks.size()},
+		                   {"blocksInView", inView},
+		                   {"blocksChanged", land.Changed().size()}};
+		    if (const auto position = context.params.find("position"); position != context.params.end())
+		    {
+			    if (const auto point = ReadPoint(*position); point.has_value())
+			    {
+				    constexpr double k_CellSize = 10.0;
+				    const auto x = static_cast<int32_t>(std::floor((*point)[0] / k_CellSize));
+				    const auto z = static_cast<int32_t>(std::floor((*point)[2] / k_CellSize));
+				    result["cell"] = {x, z};
+				    const auto corners = land.CornersAt(x, z);
+				    result["corners"] =
+				        corners.has_value() ? Json {(*corners)[0], (*corners)[1], (*corners)[2], (*corners)[3]} : Json(nullptr);
+			    }
+		    }
+		    return QueryResult::Value(std::move(result));
+	    });
 	return provider;
 }
 
@@ -962,11 +996,16 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldS
 		                  [&](entt::entity icon, const ecs::components::WorshipIcon& worship) {
 			                  if (worship.site == component->worshipSite && worship.site != entt::null)
 			                  {
+				                  Json seedsOut = Json::array();
+				                  for (const auto seed : worship.seedsOut)
+				                  {
+					                  seedsOut.push_back(Id(seed));
+				                  }
 				                  siteIcons.push_back(Json {{"id", ToId(icon)},
 				                                            {"seed", static_cast<int>(worship.seed)},
 				                                            {"charging", worship.charging},
 				                                            {"store", worship.store},
-				                                            {"seed_out", Id(worship.seedOut)}});
+				                                            {"seeds_out", std::move(seedsOut)}});
 			                  }
 		                  });
 		              result["site_icons"] = std::move(siteIcons);
@@ -1186,5 +1225,23 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 		              });
 		              return QueryResult::Value(std::move(items));
 	              });
+	auto loseDevice = Query("lose_device",
+	                        "A debug tool, not a rule of the game: the game acts as if the machine lost its sound device "
+	                        "(lost true), or has it again (lost false); answers whether the device counts as lost",
+	                        {Parameter("lost", "boolean", "Whether the device counts as lost", true)});
+	loseDevice.writes = true;
+	provider->Add(std::move(loseDevice), [sources](const QueryContext& context) {
+		if (!sources.simulateDeviceLoss || !sources.deviceLost)
+		{
+			return QueryResult::Error("there is no audio");
+		}
+		const auto lost = context.params.find("lost");
+		if (lost == context.params.end() || !lost->is_boolean())
+		{
+			return QueryResult::Error("give lost as true or false");
+		}
+		sources.simulateDeviceLoss(lost->get<bool>());
+		return QueryResult::Value({{"device_lost", sources.deviceLost()}});
+	});
 	return provider;
 }

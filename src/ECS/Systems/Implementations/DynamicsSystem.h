@@ -15,12 +15,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "Common/FramePace.h"
 #include "Common/MachineClock.h"
 #include "ECS/DynamicsWorld.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
-#include "Particles/ParticleEffect.h"
 #include "Physics/BodyShapes.h"
 #include "Physics/TurnRules.h"
 
@@ -58,8 +56,7 @@ public:
 	void ResetSimulation() override;
 	void SetClassHooks(std::unique_ptr<PhysicsClassHooks> hooks) override;
 	void ProcessTurn() override;
-	void UpdateFrame(float turnFraction, float gameSeconds) override;
-	void CollectDrawFrame(particles::draw::Frame& frame) const override;
+	void UpdateFrame(float turnFraction) override;
 
 	PhysicsStarted InitialisePhysics(entt::entity object, const PhysicsStart& start) override;
 	PhysicsStarted StartPhysicsAsObject(entt::entity object, const PhysicsStart& start) override;
@@ -136,11 +133,6 @@ private:
 	void AttemptCollisionSound(PhysicsEntry& entry);
 	void AddLandingDust(glm::vec3 centre, float radius, uint32_t argb);
 
-public:
-	void AddPuff(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb) override;
-	void AddPuff(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb, physics::turn::PuffKind kind) override;
-	void AdvancePuffs(float seconds) override;
-
 private:
 	[[nodiscard]] PhysicsClassHooks& Hooks();
 
@@ -156,19 +148,10 @@ private:
 	/// While the physics runs its turn, bodies aren't taken out of it from outside
 	bool _inTurnUpdate {false};
 	physics::turn::SoundPairs _soundPairs;
-	/// The puffs live, grow and move on by some seconds; the drops of blood show new frames when told to
-	void AdvanceDust(float seconds, bool redrawBlood);
-	std::vector<physics::turn::DustPuff> _dust;
 	/// Each creature model's bones' boxes, by the model, worked out once
 	std::unordered_map<entt::id_type, std::vector<physics::shapes::BoneBox>> _creatureBoxes;
 	/// The machine's milliseconds as the game reads them, which pick the fly-by whoosh
 	std::function<uint64_t()> _ticks {[]() { return static_cast<uint64_t>(machine_clock::Ticks()); }};
-	/// What the dust's puffs are drawn as
-	particles::Creator _dustCreator;
-	/// What the motes are drawn as: the same sheet, added to what is behind them
-	particles::Creator _moteCreator;
-	particles::Creator _bloodCreator;
-	frame_pace::Pace _bloodPace;
 	entt::entity _hitObject {entt::null};
 	entt::entity _objectWhichHit {entt::null};
 };

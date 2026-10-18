@@ -44,7 +44,6 @@
 #include "ECS/Components/CreatureSquat.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -52,6 +51,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -74,21 +74,6 @@ constexpr float k_TurnsPerSecond = 1.0f / std::chrono::duration<float>(TimeSyste
 constexpr uint32_t k_GrownUpPhase = 13;
 /// The time scale can't run more than this many turns of the body in a game turn
 constexpr float k_MaxTimeScale = 3600.0f;
-
-/// Sick comes out as this many drops from the creature's mouth, about this high and this far ahead for its size, flung
-/// forwards and up, a little to either side, and lies on the land a while before it is gone
-constexpr int k_PukeDrops = 12;
-constexpr float k_MouthHeight = 9.0f;
-constexpr float k_MouthAhead = 3.0f;
-constexpr float k_PukeSpeed = 5.0f;
-constexpr float k_PukeSpread = 2.0f;
-constexpr float k_PukeDropScale = 0.5f;
-constexpr float k_PukeSeconds = 4.0f;
-constexpr float k_PukeFadeSeconds = 1.5f;
-constexpr float k_Gravity = 9.81f;
-/// The sick drops are a frame of the land effects' sprite sheet, in greenish colours
-constexpr entt::hashed_string k_PukeSpriteSheet = entt::hashed_string("raw/S_SpriteSheet3a");
-constexpr float k_PukeSheetCell = 1.0f / 8.0f;
 
 const GCreatureInfo* SpeciesInfo(CreatureType species)
 {
@@ -151,11 +136,6 @@ float TemperatureAt(const glm::vec3& position)
 	return static_cast<float>(Locator::weatherSystem::value().GetWeather(position).temperature);
 }
 
-float HeightAt(glm::vec2 point)
-{
-	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
-}
-
 bool IsMoving(const CreatureLocomotion* locomotion)
 {
 	using Motion = CreatureLocomotion::Motion;
@@ -210,7 +190,18 @@ glm::vec3 AheadOf(const Transform& transform)
 	ahead.y = 0.0f;
 	return glm::length(ahead) > 0.0f ? glm::normalize(ahead) : glm::vec3(0.0f, 0.0f, -1.0f);
 }
-/// Where the creature's groin is as its body is posed this frame; its feet when its species' bones aren't known
+/// The heading of the creature as the game keeps it. When it has no walk, the heading of where its rotation faces.
+GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature, const Transform& transform)
+{
+	if (const auto* walk = registry.TryGet<const CreatureLocomotion>(creature); walk != nullptr)
+	{
+		return walk->heading;
+	}
+	const auto ahead = AheadOf(transform);
+	return GameHeading::Of(ahead.x, ahead.z);
+}
+/// Where the creature's groin is as its body is posed at the end of its newest game turn; its feet when its species' bones
+/// aren't known
 glm::vec3 GroinOf(const ecs::Registry& registry, entt::entity creature, const Creature& self, const Transform& transform)
 {
 	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
@@ -224,9 +215,10 @@ glm::vec3 GroinOf(const ecs::Registry& registry, entt::entity creature, const Cr
 	{
 		return transform.position;
 	}
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
 	const auto groin = rigs.Handle(rigId)->actionPoints->groin;
-	return glm::vec3(creature::PosedBone(groin, animation->boneMatrices, placement)[3]);
+	return glm::vec3(creature::PosedBone(groin, pose.bones, pose.placement)[3]);
 }
 /// The name of the action that the creature's plan carries out, none without a plan
 std::optional<std::string_view> PlanActionOf(const ecs::Registry& registry, entt::entity creature)
@@ -348,39 +340,6 @@ void CreaturePhysiologySystem::ProcessTurn()
 	StepSquats();
 }
 
-void CreaturePhysiologySystem::Update(float seconds)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> gone;
-	registry.Each<CreaturePukeDrop, Sprite, Transform>(
-	    [&](entt::entity entity, CreaturePukeDrop& drop, Sprite& sprite, Transform& transform) {
-		    drop.seconds += seconds;
-		    if (drop.seconds >= k_PukeSeconds)
-		    {
-			    gone.push_back(entity);
-			    return;
-		    }
-		    const auto ground = HeightAt(glm::vec2(transform.position.x, transform.position.z));
-		    if (transform.position.y > ground)
-		    {
-			    drop.velocity.y -= k_Gravity * seconds;
-			    transform.position += drop.velocity * seconds;
-			    transform.position.y = std::max(transform.position.y, ground);
-		    }
-		    // It lies where it landed, fading at the end
-		    const auto left = k_PukeSeconds - drop.seconds;
-		    sprite.tint.a = std::clamp(left / k_PukeFadeSeconds, 0.0f, 1.0f);
-	    });
-	for (const auto entity : gone)
-	{
-		registry.Destroy(entity);
-	}
-	if (!gone.empty() || registry.Size<CreaturePukeDrop>() > 0)
-	{
-		registry.SetDirty();
-	}
-}
-
 void CreaturePhysiologySystem::StepSquats()
 {
 	if (!Locator::creatureMindSystem::has_value())
@@ -449,16 +408,16 @@ void CreaturePhysiologySystem::LetOutWind(entt::entity creature)
 	}
 	const float size = ShownSize(*self);
 	// A cloud of grey dust moves out behind the creature
-	const auto ahead = AheadOf(*transform);
+	const auto heading = HeadingOf(registry, creature, *transform);
 	auto& random = Locator::gameRandom::value();
-	const auto velocities = creature_fart::PuffVelocities(glm::vec2(ahead.x, ahead.z), size,
-	                                                      [&random](float limit) { return random.GameFloatRand(limit); });
-	if (Locator::dynamicsSystem::has_value())
+	const auto velocities =
+	    creature_fart::PuffVelocities(heading, size, [&random](float limit) { return random.GameFloatRand(limit); });
+	if (Locator::liquidParticleSystem::has_value())
 	{
 		for (const auto& velocity : velocities)
 		{
-			Locator::dynamicsSystem::value().AddPuff(transform->position, velocity, size * creature_fart::k_PuffSize,
-			                                         creature_fart::k_PuffColour);
+			Locator::liquidParticleSystem::value().Add(transform->position, velocity, size * creature_fart::k_PuffSize,
+			                                           creature_fart::k_PuffColour, liquid_particles::Kind::Dust);
 		}
 	}
 	// A new white smoke starts at the groin. It replaces the last smoke of the creature
@@ -552,9 +511,8 @@ void CreaturePhysiologySystem::DropPooLump(entt::entity creature)
 	{
 		return;
 	}
-	const auto ahead = AheadOf(*transform);
-	const auto lump =
-	    physiology::PooLumpOf(GroinOf(registry, creature, *self, *transform), glm::vec2(ahead.x, ahead.z), ShownSize(*self));
+	const auto lump = physiology::PooLumpOf(GroinOf(registry, creature, *self, *transform),
+	                                        HeadingOf(registry, creature, *transform), ShownSize(*self));
 	const auto yaw = Locator::gameRandom::value().GameFloatRand(2.0f * std::numbers::pi_v<float>);
 	const auto entity =
 	    ecs::archetypes::MobileObjectArchetype::Create(lump.position, MobileObjectInfo::LumpOfPoo, yaw, lump.scale);
@@ -569,41 +527,6 @@ void CreaturePhysiologySystem::EmptyBowels(entt::entity creature)
 	if (auto* needs = Locator::entitiesRegistry::value().TryGet<CreatureNeeds>(creature); needs != nullptr)
 	{
 		physiology::Poo(needs->needs);
-	}
-}
-
-void CreaturePhysiologySystem::Puke(entt::entity creature)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* self = registry.TryGet<const Creature>(creature);
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	if (self == nullptr || transform == nullptr || !Locator::resources::has_value())
-	{
-		return;
-	}
-	auto& textures = Locator::resources::value().GetTextures();
-	if (!textures.Contains(k_PukeSpriteSheet.value()))
-	{
-		return;
-	}
-	const auto texture = textures.Handle(k_PukeSpriteSheet.value());
-	const auto ahead = AheadOf(*transform);
-	const glm::vec3 side {ahead.z, 0.0f, -ahead.x};
-	const auto mouth = transform->position + (ahead * (k_MouthAhead * ShownSize(*self))) +
-	                   glm::vec3(0.0f, k_MouthHeight * ShownSize(*self), 0.0f);
-	std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
-	std::uniform_real_distribution<float> green(0.4f, 0.9f);
-	for (int i = 0; i < k_PukeDrops; ++i)
-	{
-		const auto entity = registry.Create();
-		const auto velocity = (ahead * (k_PukeSpeed * ShownSize(*self))) +
-		                      (side * (unit(_random) * k_PukeSpread * ShownSize(*self))) +
-		                      glm::vec3(0.0f, (1.0f + (0.5f * unit(_random))) * k_PukeSpeed * ShownSize(*self) * 0.5f, 0.0f);
-		const auto g = green(_random);
-		registry.Assign<CreaturePukeDrop>(entity, velocity, 0.0f);
-		registry.Assign<Sprite>(entity, texture->GetNativeHandle(), glm::vec2(0.0f), glm::vec2(k_PukeSheetCell),
-		                        glm::vec4(g * 0.6f, g, g * 0.2f, 1.0f), false);
-		registry.Assign<Transform>(entity, mouth, glm::mat3(1.0f), glm::vec3(k_PukeDropScale * ShownSize(*self)));
 	}
 }
 

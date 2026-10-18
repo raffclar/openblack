@@ -232,10 +232,13 @@ if (OPENBLACK_INSPECTOR)
     openblack_lib PRIVATE OPENBLACK_BUILD_TYPE="$<CONFIG>"
   )
 endif ()
-# The reflection of every component in one file has more sections than a usual object file can keep
+# The reflection of every component in one file has more sections than a usual object file can keep. Its debug build
+# keeps the debug information in the program database, not in the object, so the debug library stays under the 4 GB
+# that the librarian can hold.
 if (MSVC)
   set_source_files_properties(
-    ECS/Reflection/ComponentFields.cpp PROPERTIES COMPILE_OPTIONS /bigobj
+    ECS/Reflection/ComponentFields.cpp
+    PROPERTIES COMPILE_OPTIONS "/bigobj;$<$<CONFIG:Debug>:/Zi>"
   )
 endif ()
 

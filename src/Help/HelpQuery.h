@@ -137,4 +137,16 @@ constexpr uint32_t k_FoodPileText = 2872;
 /// A miracle seed's texts: its miracle's, each of the two falling back to the seed object's when the miracle has none
 [[nodiscard]] Texts SeedTexts(Texts miracle, Texts object);
 
+/// A leash hanging at the temple tells what its tooltip tells, by the tooltip's place among the game's tooltips
+[[nodiscard]] Texts LeashTexts(uint32_t toolTip);
+
+/// Whether a press of the Help key asks the advisors. Inside the temple, the temple takes the presses of the keyboard and
+/// does nothing with the Help key. A press of a mouse button that has the Help key always asks.
+[[nodiscard]] constexpr bool HelpPressAsks(bool inTemple, bool byMouse)
+{
+	return !inTemple || byMouse;
+}
+/// The text of the first of the game's tooltips
+constexpr uint32_t k_FirstToolTipText = 0xE73;
+
 } // namespace openblack::help_query

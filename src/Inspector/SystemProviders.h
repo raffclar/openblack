@@ -24,6 +24,7 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureDecisionTree.h"
+#include "ECS/Systems/LandShadeSystemInterface.h"
 #include "EntityDescription.h"
 
 namespace openblack::creature_desires
@@ -126,9 +127,12 @@ struct MapSources
 {
 	WorldSources world;
 	std::function<const ecs::MapInterface*()> map;
+	std::function<const ecs::systems::LandShadeSystemInterface*()> shade;
 };
 
 ///   map.cell  {position | cell}         what stands in a cell, as a search meets it
+///   map.shade [position]                the land's shading of the last frame: shadows, lights, the blocks they
+///                                       changed, and the shaded luminosity of a cell's corners
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeMapProvider(MapSources sources);
 
 // The towns
@@ -203,10 +207,15 @@ struct AudioSources
 {
 	WorldSources world;
 	std::function<std::optional<AudioState>()> state;
+	/// For tools: the game acts as if the machine lost the sound device (true), or has it again (false)
+	std::function<void(bool lost)> simulateDeviceLoss;
+	/// The machine lost the sound device, or a tool acts as if it did
+	std::function<bool()> deviceLost;
 };
 
 ///   audio.state                          the volumes, the music, how many sounds play and where they're heard from
 ///   audio.sounds near, radius            the sounds playing about a point, nearest first
+///   audio.lose_device lost               (writes) act as if the machine lost the sound device, or has it again
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeAudioProvider(AudioSources sources);
 
 } // namespace openblack::inspector

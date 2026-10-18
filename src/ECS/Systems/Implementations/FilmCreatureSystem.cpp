@@ -34,6 +34,7 @@
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -238,9 +239,9 @@ void FilmCreatureSystem::Update(int32_t filmMs, std::chrono::steady_clock::time_
 	}
 
 	// The motes, and the other puffs, live by the real time while the film pauses the game
-	if (stepMs > 0 && Locator::dynamicsSystem::has_value())
+	if (stepMs > 0 && Locator::liquidParticleSystem::has_value())
 	{
-		Locator::dynamicsSystem::value().AdvancePuffs(static_cast<float>(stepMs) * 0.001f);
+		Locator::liquidParticleSystem::value().UpdateFrame(static_cast<float>(stepMs) * 0.001f, false);
 	}
 
 	// The burst of light is round the middle of the copy's body, when that is in front of the camera

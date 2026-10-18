@@ -73,6 +73,7 @@
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/FireflySystem.h"
 #include "ECS/Systems/Implementations/FishFarmSystem.h"
+#include "ECS/Systems/Implementations/FootpathSystem.h"
 #include "ECS/Systems/Implementations/FootprintSystem.h"
 #include "ECS/Systems/Implementations/ForestSystem.h"
 #include "ECS/Systems/Implementations/GestureSystem.h"
@@ -87,6 +88,8 @@
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/IntroSystem.h"
+#include "ECS/Systems/Implementations/LandShadeSystem.h"
+#include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
 #include "ECS/Systems/Implementations/SaveGameSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
@@ -213,6 +216,7 @@ using openblack::ecs::systems::FieldSystem;
 using openblack::ecs::systems::FilmCreatureSystem;
 using openblack::ecs::systems::FireflySystem;
 using openblack::ecs::systems::FishFarmSystem;
+using openblack::ecs::systems::FootpathSystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
 using openblack::ecs::systems::GestureEventsInterface;
@@ -229,7 +233,9 @@ using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::IntroSystem;
+using openblack::ecs::systems::LandShadeSystem;
 using openblack::ecs::systems::LeashSystem;
+using openblack::ecs::systems::LiquidParticleSystem;
 using openblack::ecs::systems::LivingActionSystem;
 using openblack::ecs::systems::MagicShieldSystem;
 using openblack::ecs::systems::MagicSystem;
@@ -380,6 +386,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::creatureObjectActionSystem::emplace<CreatureObjectActionSystem>();
 	Locator::creatureHandSystem::emplace<CreatureHandSystem>();
 	Locator::footprintSystem::emplace<FootprintSystem>();
+	Locator::footpathSystem::emplace<FootpathSystem>();
 	Locator::editorSystem::emplace<EditorSystem>();
 	Locator::creatureSkinSystem::emplace<CreatureSkinSystem>();
 	Locator::creaturePenSystem::emplace<CreaturePenSystem>();
@@ -420,6 +427,8 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::teleportSystem::emplace<TeleportSystem>();
 	Locator::vortexSystem::emplace<VortexSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
+	Locator::liquidParticleSystem::emplace<LiquidParticleSystem>();
+	Locator::landShadeSystem::emplace<LandShadeSystem>();
 	// The player's creature is kept under their profile's file
 	Locator::creatureCarryOverSystem::emplace<CreatureCarryOverSystem>(
 	    profiles.creatureMinds, []() { return Locator::playerProfileSystem::value().CreatureFile(); });
@@ -604,6 +613,7 @@ void openblack::ShutDownServices()
 	Locator::creatureSkinSystem::reset();
 	Locator::creatureHairSystem::reset();
 	Locator::footprintSystem::reset();
+	Locator::footpathSystem::reset();
 	Locator::creatureAudioSystem::reset();
 	Locator::creatureObjectActionSystem::reset();
 	Locator::creatureHandSystem::reset();
@@ -631,6 +641,8 @@ void openblack::ShutDownServices()
 	Locator::teleportSystem::reset();
 	Locator::vortexSystem::reset();
 	Locator::creatureFizzSystem::reset();
+	Locator::liquidParticleSystem::reset();
+	Locator::landShadeSystem::reset();
 	Locator::creatureWebPageSystem::reset();
 	Locator::creatureCarryOverSystem::reset();
 	Locator::saveGameSystem::reset();

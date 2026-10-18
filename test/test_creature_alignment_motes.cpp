@@ -18,12 +18,12 @@
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureAlignmentMotes.h"
-#include "Physics/TurnRules.h"
+#include "Particles/LiquidParticles.h"
 
 using namespace openblack;
 using namespace openblack::creature_alignment_motes;
-using physics::turn::DustPuff;
-using physics::turn::PuffKind;
+using liquid_particles::Kind;
+using liquid_particles::Particle;
 
 namespace
 {
@@ -79,12 +79,12 @@ TEST(CreatureAlignmentMotes, AGoodBodyMakesThreeStillPaleMotesNearRandomBones)
 	EXPECT_FLOAT_EQ(puffs[0].size, 10.0f);
 	// Alpha 0.5 x 32 = 16
 	EXPECT_EQ(puffs[0].argb, 0x10FF9090u);
-	EXPECT_EQ(puffs[0].kind, PuffKind::Mote);
+	EXPECT_EQ(puffs[0].kind, Kind::Mote);
 	EXPECT_EQ(puffs[1].position, BoneAt(7));
 	EXPECT_EQ(puffs[1].argb, 0x10FF90FFu);
-	EXPECT_EQ(puffs[1].kind, PuffKind::MoteReversed);
+	EXPECT_EQ(puffs[1].kind, Kind::MoteReversed);
 	EXPECT_EQ(puffs[2].argb, 0x109090FFu);
-	EXPECT_EQ(puffs[2].kind, PuffKind::Mote);
+	EXPECT_EQ(puffs[2].kind, Kind::Mote);
 }
 
 TEST(CreatureAlignmentMotes, AnEvilBodyMakesThreeDarkRisingPuffs)
@@ -101,7 +101,7 @@ TEST(CreatureAlignmentMotes, AnEvilBodyMakesThreeDarkRisingPuffs)
 	EXPECT_FLOAT_EQ(puffs[0].size, 3.0f);
 	// Alpha 1 x 72 = 0x48
 	EXPECT_EQ(puffs[0].argb, 0x48300000u);
-	EXPECT_EQ(puffs[0].kind, PuffKind::Smoke);
+	EXPECT_EQ(puffs[0].kind, Kind::Smoke);
 	EXPECT_EQ(puffs[1].argb, 0x48303000u);
 	EXPECT_EQ(puffs[2].argb, 0x48300030u);
 }
@@ -119,39 +119,39 @@ TEST(CreatureAlignmentMotes, TheAlphaDropsItsFraction)
 
 TEST(CreatureAlignmentMotes, SmokeGrowsAndShrinksOverTwoSeconds)
 {
-	DustPuff puff {.size = 4.0f, .variant = 3, .kind = PuffKind::Smoke};
-	EXPECT_FLOAT_EQ(physics::turn::DustPuffSize(puff), 0.0f);
+	Particle puff {.size = 4.0f, .variant = 3, .kind = Kind::Smoke};
+	EXPECT_FLOAT_EQ(liquid_particles::DrawnSize(puff), 0.0f);
 	puff.age = 0.125f;
-	EXPECT_NEAR(physics::turn::DustPuffSize(puff), 4.0f * (1.875f / 2.0f) * 0.5f, 1e-5f);
+	EXPECT_NEAR(liquid_particles::DrawnSize(puff), 4.0f * (1.875f / 2.0f) * 0.5f, 1e-5f);
 	puff.age = 1.0f;
-	EXPECT_NEAR(physics::turn::DustPuffSize(puff), 2.0f, 1e-5f);
-	EXPECT_EQ(physics::turn::DustPuffFrame(puff), 16 + 5);
+	EXPECT_NEAR(liquid_particles::DrawnSize(puff), 2.0f, 1e-5f);
+	EXPECT_EQ(liquid_particles::Frame(puff), 16 + 5);
 	// It rises with its speed and lives two seconds
 	puff.velocity = glm::vec3(0.0f, 2.0f, 0.0f);
-	EXPECT_TRUE(physics::turn::AdvanceDustPuff(puff, 0.5f));
+	EXPECT_TRUE(liquid_particles::Step(puff, 0.5f, {}, {}));
 	EXPECT_FLOAT_EQ(puff.position.y, 1.0f);
 	// At an age of exactly two seconds it stays, and it goes only after that
-	EXPECT_TRUE(physics::turn::AdvanceDustPuff(puff, 0.5f));
-	EXPECT_FALSE(physics::turn::AdvanceDustPuff(puff, 0.0625f));
+	EXPECT_TRUE(liquid_particles::Step(puff, 0.5f, {}, {}));
+	EXPECT_FALSE(liquid_particles::Step(puff, 0.0625f, {}, {}));
 }
 
 TEST(CreatureAlignmentMotes, AMotePulsesWhileItFadesAndPlaysItsFramesQuickly)
 {
-	DustPuff mote {.size = 5.0f, .variant = 14, .kind = PuffKind::Mote};
-	EXPECT_FLOAT_EQ(physics::turn::DustPuffSize(mote), 0.0f);
+	Particle mote {.size = 5.0f, .variant = 14, .kind = Kind::Mote};
+	EXPECT_FLOAT_EQ(liquid_particles::DrawnSize(mote), 0.0f);
 	mote.age = 0.125f;
 	const float growing = (std::sin(0.125f * glm::two_pi<float>()) + 2.0f) * 0.33f * 5.0f * (1.875f * 0.5f) * 0.5f;
-	EXPECT_NEAR(physics::turn::DustPuffSize(mote), growing, 1e-5f);
-	EXPECT_EQ(physics::turn::DustPuffFrame(mote), (14 + 1) & 15);
+	EXPECT_NEAR(liquid_particles::DrawnSize(mote), growing, 1e-5f);
+	EXPECT_EQ(liquid_particles::Frame(mote), (14 + 1) & 15);
 	mote.age = 1.5f;
 	const float fading = (std::sin(1.5f * glm::two_pi<float>()) + 2.0f) * 0.33f * 5.0f * 0.25f;
-	EXPECT_NEAR(physics::turn::DustPuffSize(mote), fading, 1e-5f);
-	EXPECT_EQ(physics::turn::DustPuffFrame(mote), (14 + 12) & 15);
+	EXPECT_NEAR(liquid_particles::DrawnSize(mote), fading, 1e-5f);
+	EXPECT_EQ(liquid_particles::Frame(mote), (14 + 12) & 15);
 	// The other kind plays the same frames from the other end
-	mote.kind = PuffKind::MoteReversed;
-	EXPECT_EQ(physics::turn::DustPuffFrame(mote), 15 - ((14 + 12) & 15));
-	EXPECT_TRUE(physics::turn::IsAdditive(mote.kind));
-	EXPECT_FALSE(physics::turn::IsAdditive(PuffKind::Smoke));
-	EXPECT_FLOAT_EQ(physics::turn::PuffLife(PuffKind::Mote), 2.0f);
-	EXPECT_FLOAT_EQ(physics::turn::PuffLife(PuffKind::Dust), 1.0f);
+	mote.kind = Kind::MoteReversed;
+	EXPECT_EQ(liquid_particles::Frame(mote), 15 - ((14 + 12) & 15));
+	EXPECT_TRUE(liquid_particles::IsAdditive(mote.kind));
+	EXPECT_FALSE(liquid_particles::IsAdditive(Kind::Smoke));
+	EXPECT_FLOAT_EQ(liquid_particles::Life(Kind::Mote), 2.0f);
+	EXPECT_FLOAT_EQ(liquid_particles::Life(Kind::Dust), 1.0f);
 }

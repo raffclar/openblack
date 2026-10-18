@@ -35,8 +35,16 @@ public:
 	/// Once a game turn: the fatness each body shows follows its creature's a step
 	virtual void ProcessTurn() = 0;
 	/// Once a frame, by the game time, which stops while the game is paused: the bodies are reshaped where they have
-	/// changed enough, posed, and their eyes placed
+	/// changed enough, drawn between the poses of their last two game turns, and their eyes placed
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// A creature in the world takes its pose for this game turn now, at the end of its turn: its animations move on by
+	/// one turn, at the place and heading where its turn took it. A creature that has its pose for this turn keeps it.
+	virtual void PoseTurn(entt::entity creature) = 0;
+	/// At the end of each game turn, each creature in the world without a pose for this turn takes its pose
+	virtual void PoseTurns() = 0;
+	/// A creature that moves to a new place without a walk keeps its last pose as both poses. Thus the body does not
+	/// move back to the pose from two turns before.
+	virtual void HoldTurnPose(entt::entity creature) = 0;
 	/// Poses a copy of a creature's body some milliseconds on (see components::CreatureCopy): shaped as its creature is,
 	/// by its own animations, its eyes looking where its head does and blinking. Nothing happens to an entity that isn't
 	/// a copy, or whose creature is gone.
@@ -78,10 +86,10 @@ public:
 	/// change.
 	virtual void PlayCreedEvent(entt::entity creature, int32_t event) = 0;
 	/// The middle of a creature's or a copy's groin bone and its lips (the point that kisses, else its head bone), as its
-	/// body is posed now, in the world. Nothing when it has no pose or no such bones.
+	/// body is posed at the end of its newest game turn, in the world. Nothing when it has no pose or no such bones.
 	[[nodiscard]] virtual std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity creature) = 0;
 	/// A copy of a creature makes its motes or its smoke once, as a creature does each game turn, from the bones of its
-	/// pose now and the alignment that its body shows
+	/// newest turn pose and the alignment that its body shows
 	virtual void AddAlignmentMotesOf(entt::entity copy) = 0;
 };
 

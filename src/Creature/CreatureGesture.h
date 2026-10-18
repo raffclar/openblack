@@ -13,8 +13,9 @@
 
 #include <span>
 
-#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+
+#include "Common/GameHeading.h"
 
 /// How a creature draws a gesture in the air. It points with its arm, and the point moves along the gesture's shape on
 /// a flat upright square in front of its head. A glowing chain follows its hand. A gesture as long as the circle takes
@@ -32,6 +33,8 @@ inline constexpr uint32_t k_HoldTurns = 8;
 inline constexpr float k_AheadRadii = 2.0f;
 /// The side of the square is this many times the creature's radius
 inline constexpr float k_SizePerRadius = 1.3f;
+/// A quarter turn, as the game keeps it
+inline constexpr float k_QuarterTurn = 1.5707964f;
 
 /// The point of a shape a share of the way along it, from 0 to 1. The shape is its points evenly along its length; the
 /// point is on the straight line between the two points either side.
@@ -39,7 +42,7 @@ inline constexpr float k_SizePerRadius = 1.3f;
 
 /// Where the creature points for a point of the shape. The shape's x goes to the creature's left side from a point
 /// ahead of its head, and the shape's z goes up from the height of its head.
-[[nodiscard]] glm::vec3 HandTarget(glm::vec3 head, glm::vec2 facing, float radius, glm::vec3 shapePoint);
+[[nodiscard]] glm::vec3 HandTarget(glm::vec3 head, GameHeading heading, float radius, glm::vec3 shapePoint);
 
 /// The share of the shape that the creature draws in one turn, by the length of the shape and of the circle
 [[nodiscard]] float SharePerTurn(float length, float referenceLength);

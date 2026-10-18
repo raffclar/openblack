@@ -82,15 +82,14 @@ float FireMargin(const Thing& thing)
 	return thing.hasFire ? k_FireMargin : 0.0f;
 }
 
-/// The outline of a model's box: one circle at its middle, or a row along a long box
-std::vector<Circle> BoxCircles(const Thing& thing, const Walker& walker)
+/// The outline of a model's box: one circle at its middle, or a row along a long box. The margin and the fire margin
+/// are added one after the other.
+std::vector<Circle> BoxCircles(const Thing& thing, float margin, float fire)
 {
-	// The margin and the fire margin are added one after the other
-	const auto margin = walker.radius - (RadiusShare(thing.height, walker.height) * walker.radius);
-	const auto fire = FireMargin(thing);
 	// The middle of the box goes through the thing's turn and scale as the game builds them
-	const auto rows = thing.placement == Placement::Leaning ? LeaningPlacement(thing.yAngle, 0.0f, 0.0f, thing.scale)
-	                                                        : UprightPlacement(thing.yAngle, thing.scale);
+	const auto rows = thing.placement == Placement::Leaning
+	                      ? LeaningPlacement(thing.yAngle, thing.xAngle, thing.zAngle, thing.scale)
+	                      : UprightPlacement(thing.yAngle, thing.scale);
 	const auto centre = PlacedOnLand(rows, thing.boxCentre, thing.position);
 	auto sizeX = ((thing.boxHalfSize.x * thing.scale) + margin) + fire;
 	auto sizeZ = ((thing.boxHalfSize.z * thing.scale) + margin) + fire;
@@ -212,7 +211,7 @@ std::vector<Circle> creature_obstacles::CirclesOf(const Thing& thing, const Walk
 	switch (thing.shape)
 	{
 	case Shape::ModelBox:
-		return BoxCircles(thing, walker);
+		return BoxCircles(thing, walker.radius - (RadiusShare(thing.height, walker.height) * walker.radius), FireMargin(thing));
 	case Shape::AtPlace:
 	case Shape::Trunk:
 		return {{.centre = thing.position, .radius = Clamped(ReachRadius(thing, walker) + walker.radius + FireMargin(thing))}};
@@ -222,6 +221,48 @@ std::vector<Circle> creature_obstacles::CirclesOf(const Thing& thing, const Walk
 		return TempleCircles(thing.position, thing.yAngle, thing.playerAlignment, thing.worshipSites);
 	case Shape::Creature:
 		return {{.centre = thing.position, .radius = (thing.width + walker.radius) * k_CreatureWidening}};
+	}
+	return {};
+}
+
+bool creature_obstacles::MustAvoidWithoutWalker(const Thing& thing)
+{
+	switch (thing.avoidance)
+	{
+	case Avoidance::Always:
+	case Avoidance::Building:
+	case Avoidance::Object:
+	case Avoidance::Tree:
+	case Avoidance::VortexOutOfTheLand:
+		return true;
+	case Avoidance::Forest:
+		return thing.burning;
+	case Avoidance::Never:
+	case Avoidance::Burning:
+	case Avoidance::BurningUnlessScripted:
+	case Avoidance::Creature:
+	case Avoidance::Shield:
+		return false;
+	}
+	return false;
+}
+
+std::vector<Circle> creature_obstacles::CirclesWithoutWalker(const Thing& thing, float margin)
+{
+	switch (thing.shape)
+	{
+	case Shape::ModelBox:
+		return BoxCircles(thing, margin, 0.0f);
+	case Shape::AtPlace:
+		return {{.centre = thing.position, .radius = Clamped(thing.width + margin)}};
+	case Shape::Trunk:
+		return {{.centre = thing.position, .radius = Clamped(std::min(thing.width * k_TrunkShare, k_MostTrunk) + margin)}};
+	case Shape::Scenery:
+		return {{.centre = thing.position, .radius = x87::LengthZyx(thing.boxHalfSize) * k_SceneryShare}};
+	case Shape::Temple:
+		return TempleCircles(thing.position, thing.yAngle, thing.playerAlignment, {});
+	case Shape::Creature:
+		return {};
 	}
 	return {};
 }
@@ -307,7 +348,7 @@ float creature_obstacles::BodyRadius(std::span<const glm::mat4> boneMatrices)
 
 float creature_obstacles::YAngleOf(const glm::mat3& rotation)
 {
-	return std::atan2(rotation[0].z, rotation[0].x);
+	return x87::GameAnglesYxz(rotation[0], rotation[2]).y;
 }
 
 PlacementRows creature_obstacles::UprightPlacement(float yAngle, float scale)
@@ -335,4 +376,12 @@ glm::vec2 creature_obstacles::PlacedOnLand(const PlacementRows& rows, const glm:
 	const float x = (((rows[1].x * point.y) + (rows[0].x * point.x)) + (rows[2].x * point.z)) + position.x;
 	const float z = (((rows[1].z * point.y) + (rows[0].z * point.x)) + (rows[2].z * point.z)) + position.y;
 	return {x, z};
+}
+
+glm::vec3 creature_obstacles::PlacedInWorld(const PlacementRows& rows, const glm::vec3& point, const glm::vec3& position)
+{
+	const auto along = [&](int axis) {
+		return (((rows[1][axis] * point.y) + (rows[0][axis] * point.x)) + (rows[2][axis] * point.z)) + position[axis];
+	};
+	return {along(0), along(1), along(2)};
 }

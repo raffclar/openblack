@@ -137,6 +137,9 @@ struct Thing
 	PlayerNames owner;
 	/// How the game builds its turn and scale, which moves the middle of its model's box
 	Placement placement {Placement::Upright};
+	/// A thing that can lean: how far it leans about x and about z (radians)
+	float xAngle {0.0f};
+	float zAngle {0.0f};
 };
 
 /// Anything burning is kept this much further off
@@ -169,6 +172,15 @@ constexpr float k_TeleportStoneWidth = 6.0f;
 /// The circles the creature plans its route round, for a thing it must avoid
 [[nodiscard]] std::vector<creature_route::Circle> CirclesOf(const Thing& thing, const Walker& walker);
 
+/// Whether a route that no creature walks, such as a footpath's, goes round the thing: buildings, trees, the temple,
+/// animated scenery, a vortex out of the land and anything else fixed or lying on the land always; a forest only while
+/// it burns; never villagers, animals, other creatures, fields, crops, dead trees, piles of food, fragments, shields or
+/// the things a creature never goes round
+[[nodiscard]] bool MustAvoidWithoutWalker(const Thing& thing);
+/// The circles such a route goes round, for a thing it must avoid: as a creature's with the whole margin added and no
+/// share of a creature's radius taken off, no fire margin, and no circles over the temple's worship sites
+[[nodiscard]] std::vector<creature_route::Circle> CirclesWithoutWalker(const Thing& thing, float margin);
+
 /// The temple's circles, the same whatever its model and size: a wide one over its middle; seven spokes of small circles
 /// round it, the first two longer with their ends bent towards each other, the other five longer the better its player
 /// (two circles for the most evil, three for the middling, four for the good); and, beyond each spoke after the first, a
@@ -180,7 +192,7 @@ constexpr float k_TeleportStoneWidth = 6.0f;
 /// across the ground, at the start of its stand
 [[nodiscard]] float BodyRadius(std::span<const glm::mat4> boneMatrices);
 
-/// The way a thing's model's x axis points across the land, from its rotation
+/// The way a thing's model's x axis points across the land, from its rotation: the game's angle about the upright axis
 [[nodiscard]] float YAngleOf(const glm::mat3& rotation);
 
 /// The turn and scale of a thing that turns about the upright axis only. The wide cosine and sine of the angle are
@@ -192,5 +204,7 @@ constexpr float k_TeleportStoneWidth = 6.0f;
 /// Where a point of a model goes on the land, through the rows and the position. Each part adds the y, x and z terms
 /// in that order, then the position.
 [[nodiscard]] glm::vec2 PlacedOnLand(const PlacementRows& rows, const glm::vec3& point, glm::vec2 position);
+/// Where a point of a model goes in the world, through the rows and the position, each part in the same order
+[[nodiscard]] glm::vec3 PlacedInWorld(const PlacementRows& rows, const glm::vec3& point, const glm::vec3& position);
 
 } // namespace openblack::creature_obstacles

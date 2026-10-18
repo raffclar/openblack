@@ -13,7 +13,7 @@
 #include <span>
 
 #include "Common/FramePace.h"
-#include "Common/RandomNumberManager.h"
+#include "Common/GameRandom.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -28,6 +28,9 @@ class CreatureAnimationSystem final: public CreatureAnimationSystemInterface
 public:
 	void ProcessTurn() override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
+	void PoseTurn(entt::entity creature) override;
+	void PoseTurns() override;
+	void HoldTurnPose(entt::entity creature) override;
 	void PoseCopy(entt::entity copy, float milliseconds) override;
 	[[nodiscard]] std::optional<glm::vec3> BoneInAnimation(entt::entity creature, size_t animation, float timeMs, uint32_t bone,
 	                                                       bool mirrored) override;
@@ -50,11 +53,16 @@ private:
 	static void StepSway();
 	/// Each creature whose body looks good or evil adds its motes or its smoke for this game turn
 	static void AddAlignmentMotes();
+	/// The creature's animations move on by some milliseconds, and the body takes a new pose where the creature is. The
+	/// pose of the last turn becomes the older pose.
+	void PoseForTurn(entt::entity entity, float milliseconds);
 	/// The creature starts or stops its creed hum after a change to its glows
 	static void ApplyHum(entt::entity creature, creature_hand_glow::Hum hum);
+	/// While the body of a creature plays the loop of the puke animation, twelve drops of sick come out of its lips
+	static void AddPukeDrops(entt::entity creature);
 
-	/// The eyes blink at random, apart from the game's own random numbers
-	RandomStreamSource _random {RandomStream::CreatureAnimation};
+	/// The game's random numbers: the blinks and the eye movements draw on the local seed, the dance moves on the synced seed
+	GameRandomSource _random;
 	/// When the breaths move towards their target periods
 	frame_pace::Pace _breathPace;
 };

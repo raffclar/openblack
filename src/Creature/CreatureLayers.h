@@ -188,7 +188,7 @@ struct BodyAction
 /// to fill the length of the move.
 [[nodiscard]] float DanceMoveTime(const BodyAction& body, uint32_t duration);
 /// The action that the body plays continues at two times the usual speed until the body stands again. A catch and a
-/// gift from the hand do this when they start. A body that stands does not change.
+/// gift from the hand do this when they start. A body that stands does not change, and a faint keeps its pace.
 [[nodiscard]] BodyAction Hurry(BodyAction body);
 /// The body some milliseconds on, given how long the animation it plays now lasts, or nothing when the species has no
 /// such animation. Each animation starts from its beginning, without blending into the last. A body timed by what plays it

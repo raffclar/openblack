@@ -61,8 +61,10 @@ struct InnateTraits
 	float waterLookWeight {0.0f};
 };
 
-/// A trait is spread by up to this either way, and a look weight by up to the second
+/// The first five traits spread by up to this either way, the sixth by up to the second, and a look weight by up to the
+/// third
 constexpr float k_TraitSpread = 0.1f;
+constexpr float k_SixthTraitSpread = 0.3f;
 constexpr float k_LookWeightSpread = 0.4f;
 
 /// A value spread by up to `spread` either way and then held between 0 and 1, as the game does it: the spread value is
@@ -77,8 +79,6 @@ constexpr float k_LookWeightSpread = 0.4f;
 /// The time a desire takes to grow is spread by up to a fifth either way
 constexpr float k_IncreaseSpread = 0.2f;
 [[nodiscard]] float SpreadIncreaseSeconds(float seconds, const UpTo& upTo);
-/// A new creature starts each action this many turns or fewer, at random, since it last did it
-constexpr uint32_t k_NewActionTurnsRange = 120;
 
 /// How much attention the player pays the creature, counted in game turns
 struct Attention

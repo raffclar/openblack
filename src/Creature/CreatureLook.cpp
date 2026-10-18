@@ -15,10 +15,13 @@
 #include <array>
 #include <numbers>
 
+#include <glm/ext/vector_int2.hpp>
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureObjectBeliefs.h"
 
 using namespace openblack;
@@ -192,12 +195,15 @@ bool creature_look::IsRecent(uint32_t noticedTurn, uint32_t turn, float turnsPer
 std::optional<WhileGoingPoint> creature_look::LookWhileGoing(WhileGoing& state, const WhileGoingInfo& info,
                                                              const WhileGoingView& view)
 {
-	const auto distance = glm::distance(view.position, view.place);
+	// The table distance between the two map positions
+	const auto distance = gutils::GetDistanceInMetres(view.position, view.place);
 	if (distance <= k_WhileGoingLeast)
 	{
 		return std::nullopt;
 	}
-	const WhileGoingPoint place {.at = view.place};
+	// The game keeps the point of the look as a map position
+	const auto onMap = [](glm::vec2 at) { return map_coords::ToMetres(map_coords::FromMetres(at)); };
+	const WhileGoingPoint place {.at = onMap(view.place)};
 	if (distance <= info.placeRange)
 	{
 		return place;
@@ -211,11 +217,11 @@ std::optional<WhileGoingPoint> creature_look::LookWhileGoing(WhileGoing& state, 
 		// What it watches comes first. Then the last moving thing that it noticed, if it noticed the thing recently.
 		if (view.watched.has_value())
 		{
-			point = {.at = glm::vec2(view.watched->x, view.watched->z), .height = view.watched->y};
+			point = {.at = onMap(glm::vec2(view.watched->x, view.watched->z)), .height = view.watched->y};
 		}
 		else if (view.mover.has_value() && IsRecent(view.moverTurn, view.turn, view.turnsPerSecond))
 		{
-			point = {.at = glm::vec2(view.mover->x, view.mover->z), .height = view.mover->y};
+			point = {.at = onMap(glm::vec2(view.mover->x, view.mover->z)), .height = view.mover->y};
 		}
 		break;
 	case WhileGoing::Look::Sweep:
@@ -232,8 +238,11 @@ std::optional<WhileGoingPoint> creature_look::LookWhileGoing(WhileGoing& state, 
 			}
 		}
 		const auto angle = static_cast<uint16_t>(gutils::ConvertScawenAngleToGameAngle(view.heading + state.sweepAngle));
-		point = {.at = view.position + glm::vec2(gutils::GetXByAngle(angle, state.sweepDistance),
-		                                         gutils::GetZByAngle(angle, state.sweepDistance))};
+		// The step goes from the creature's map position, and the game makes the sum a map position again
+		const auto from = onMap(view.position);
+		const glm::ivec2 to {map_coords::ToFixedGUtils(from.x + gutils::GetXByAngle(angle, state.sweepDistance)),
+		                     map_coords::ToFixedGUtils(from.y + gutils::GetZByAngle(angle, state.sweepDistance))};
+		point = {.at = {map_coords::ToMetres(to.x), map_coords::ToMetres(to.y)}};
 		break;
 	}
 	}

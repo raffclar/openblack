@@ -68,6 +68,7 @@
 #include "Creature/CreatureSwap.h"
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
+#include "ECS/AlignmentHistory.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -80,6 +81,7 @@
 #include "ECS/ChallengePictures.h"
 #include "ECS/ChallengeRecords.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/AlignmentHistory.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/CarriedByTornado.h"
@@ -1314,7 +1316,11 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 			{
 				CreatureCarriesOutScriptPlay(member);
 			}
-			// TODO(opening): animals in a group
+			else if (registry.Valid(member) && registry.AllOf<ecs::components::Animal>(member) &&
+			         Locator::animalSystem::has_value() && state >= 0)
+			{
+				static_cast<void>(Locator::animalSystem::value().SetScriptState(member, static_cast<LivingStates>(state)));
+			}
 		}
 		return;
 	}
@@ -1335,8 +1341,19 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 		CreatureCarriesOutScriptPlay(object);
 		return;
 	}
-	// TODO(opening): animals
-	NotImplemented();
+	// An animal takes the state of its own table
+	if (registry.AllOf<ecs::components::Animal>(object) && Locator::animalSystem::has_value())
+	{
+		if (state < 0 || !Locator::animalSystem::value().SetScriptState(object, static_cast<LivingStates>(state)))
+		{
+			if (const auto logger = spdlog::get("scripting"))
+			{
+				SPDLOG_LOGGER_WARN(logger, "SET_SCRIPT_STATE: animal state {} is not done", state);
+			}
+		}
+		return;
+	}
+	ScriptMessage("Object not living for set state");
 }
 
 void SetScriptStatePos() // 018 SET_SCRIPT_STATE_POS
@@ -3491,8 +3508,8 @@ void DanceCreate() // 054 DANCE_CREATE
 	const auto type = Pop().intVal;
 	const auto centre = PopObject();
 	// What it is danced about may be nothing
-	const auto dance = Locator::danceSystem::value().Create(static_cast<DanceInfo>(type), position, centre,
-	                                                        static_cast<uint32_t>(map_coords::FtoL(duration)), true);
+	const auto dance = Locator::danceSystem::value().Create(
+	    static_cast<DanceInfo>(type), position, centre, static_cast<uint32_t>(map_coords::FtoL(duration)), true, entt::null);
 	if (dance == entt::null)
 	{
 		ScriptMessage("Dance not created");
@@ -3651,6 +3668,20 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 	const auto change =
 	    ecs::challenge_records::AlignmentChange(alignment.GetPlayerAlignment(player), *outcome.alignment,
 	                                            Locator::infoConstants::value().player.maxScriptAlignmentChange);
+	// The totals of the alignment changes count the change before the alignment takes it
+	if (Locator::playerSystem::has_value())
+	{
+		const auto playerEntity = Locator::playerSystem::value().GetPlayer(player);
+		if (registry.Valid(playerEntity))
+		{
+			auto* history = registry.TryGet<ecs::components::AlignmentHistory>(playerEntity);
+			if (history == nullptr)
+			{
+				history = &registry.Assign<ecs::components::AlignmentHistory>(playerEntity);
+			}
+			ecs::alignment_history::Add(*history, ecs::components::AlignmentCause::Script, change, 1.0f);
+		}
+	}
 	alignment.AddPlayerAlignment(player, change);
 }
 

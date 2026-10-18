@@ -100,9 +100,10 @@ constexpr float k_PointAtFlyingSeconds = 2.0f;
 [[nodiscard]] std::vector<Step> LookAtHand();
 constexpr uint32_t k_LookAtHandTurns = 15;
 
-/// Smiling at a friend: going near it (three times its height away) and facing it four seconds and up to four more,
-/// smiling at it with fluttering eyelids; then half the time a happy jump
-[[nodiscard]] std::vector<Step> SmileAt(uint32_t friendly, float height, float chance, const Random& random);
+/// Smiling at a friend: going near it (three times its height away) and facing it four seconds and extraSeconds more,
+/// smiling at it with fluttering eyelids; then half the time a happy jump. The caller draws extraSeconds as
+/// GameFloatRand(k_SmileExtraSeconds) before the agenda
+[[nodiscard]] std::vector<Step> SmileAt(uint32_t friendly, float height, float extraSeconds, const Random& random);
 constexpr float k_SmileHeights = 3.0f;
 constexpr float k_SmileSeconds = 4.0f;
 constexpr float k_SmileExtraSeconds = 4.0f;

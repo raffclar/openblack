@@ -23,6 +23,7 @@
 #include "3D/WaterRings.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "Particles/LiquidParticles.h"
 
 /// Providers of the world's passing things: the sky's moon, and the splashes and particle effects
 namespace openblack::inspector
@@ -66,15 +67,20 @@ using ParticleEffectInfo = ecs::systems::ParticleSystemInterface::EffectInfo;
 /// The running particle effects that follow an object as list items
 [[nodiscard]] Json EmitterItems(std::span<const ParticleEffectInfo> effects, entt::entity owner);
 
+/// The pool of liquid particles: how many there are of each kind, and how many drops lie on the land
+[[nodiscard]] Json LiquidSummary(std::span<const liquid_particles::Particle> particles);
+
 struct ParticleSources
 {
 	std::function<std::span<const water_rings::Ring>()> rings;
 	std::function<std::vector<ParticleEffectInfo>()> effects;
+	std::function<std::span<const liquid_particles::Particle>()> liquids;
 };
 
 ///   particles.splash   near, radius          the splashes within the radius, nearest first, with their state
 ///   particles.effects  {file?} [near, radius] the running particle effects
 ///   particles.emitters {owner}               the effects that follow an object
+///   particles.liquid                         the pool of liquid particles: counts by kind, drops on the land
 class ParticlesProvider final: public ProviderInterface
 {
 public:

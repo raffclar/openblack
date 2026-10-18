@@ -21,12 +21,14 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -192,6 +194,14 @@ DynamicsSystemInterface* GameBuildingDamageWorld::Dynamics()
 	return Locator::dynamicsSystem::has_value() ? &Locator::dynamicsSystem::value() : nullptr;
 }
 
+void GameBuildingDamageWorld::AddDust(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb)
+{
+	if (Locator::liquidParticleSystem::has_value())
+	{
+		Locator::liquidParticleSystem::value().Add(position, velocity, size, argb, liquid_particles::Kind::Dust);
+	}
+}
+
 GameRandomInterface* GameBuildingDamageWorld::Random()
 {
 	return Locator::gameRandom::has_value() ? &Locator::gameRandom::value() : nullptr;
@@ -211,7 +221,8 @@ void GameBuildingDamageWorld::PlaySound(std::span<const int32_t> keys, entt::ent
 {
 	if (Locator::audio::has_value())
 	{
-		Locator::audio::value().PlayAnimEffect(std::string(k_BuildingSoundBank), keys, building, position);
+		Locator::audio::value().PlayAnimEffect(std::string(k_BuildingSoundBank), keys, building, position,
+		                                       audio::CurrentSoundEffectConditions());
 	}
 }
 

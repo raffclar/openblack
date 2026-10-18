@@ -67,14 +67,19 @@ public:
 	/// of land joined up side by side is open and the rest cut off, and open cells with water in them or none at all
 	/// are water
 	[[nodiscard]] static WalkableLand Build(const CornerHeight& height, const CellWater& water);
+	/// A land with the sorts given cell by cell, row after row of x; any cell not given is open
+	[[nodiscard]] static WalkableLand OfCells(std::vector<Ground> cells);
 
 	[[nodiscard]] Ground At(int32_t x, int32_t z) const;
 	[[nodiscard]] Ground AtPoint(glm::vec2 point) const;
-	/// Whether a creature may stand at a point: its cell is open or water, and no cell it may not stand on has its
-	/// centre within the radius
+	/// Whether a creature may stand at a point: its cell is open or water, and no cell next to it that it may not stand
+	/// on has its centre within the radius. The cell is the point times a tenth, truncated. A cell next to it that is off
+	/// the land does not count. The squares of the distance and the radius are compared.
 	[[nodiscard]] bool IsValid(glm::vec2 point, float radius) const;
-	/// The nearest point where a creature may stand, searching outwards in 16 directions half a unit at a time
-	[[nodiscard]] std::optional<glm::vec2> NearestValid(glm::vec2 point, float radius, float maxDistance) const;
+	/// The game's search for a place to stand near a point, at the destination clearance. It does not try the point
+	/// itself. It goes out from half a unit to 999.5 units, half a unit at a time. At each distance it tries 16
+	/// directions in turn, the first along x and then a sixteenth of a turn towards z each time.
+	[[nodiscard]] std::optional<glm::vec2> NearestStandable(glm::vec2 point) const;
 
 private:
 	std::vector<Ground> _cells;
@@ -187,7 +192,17 @@ struct Route
 
 /// A leg's length: an arc's round its circle, else straight
 [[nodiscard]] float LengthOf(const Leg& leg);
-/// Where along a leg a distance from its start is, and the heading there
+/// A place on a route and the heading there
+struct Placed
+{
+	glm::vec2 position;
+	GameHeading heading;
+};
+/// Where along a leg a distance from its start is, and the heading there, in the game's order of operations. Round an
+/// arc, the angle moves by the share of the arc that the distance is. A straight leg that is too short to measure gives
+/// nothing.
+[[nodiscard]] std::optional<Placed> PlaceAlong(const Leg& leg, float distance);
+/// The place and the heading of PlaceAlong, or the leg's start and direction on a leg that is too short
 [[nodiscard]] glm::vec2 PointAlong(const Leg& leg, float distance);
 [[nodiscard]] GameHeading HeadingAlong(const Leg& leg, float distance);
 
@@ -201,4 +216,8 @@ struct Advanced
 };
 /// Moves a distance along the route
 Advanced Advance(Route& route, float distance);
+/// Ends the route a distance ahead of the creature, as a creature does when something tells it to stop. The leg that it
+/// is on ends there when more than that distance is left of the leg. No leg after it is walked. Gives the new end of
+/// the route.
+glm::vec2 EndAhead(Route& route, float ahead);
 } // namespace openblack::creature_route

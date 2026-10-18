@@ -333,8 +333,8 @@ void GameParticleWorld::Play(PlayingSound& sound) const
 	}
 	const std::array<int32_t, 5> keys {sound.link->sound.size, sound.link->sound.alignment, k_SoundObject,
 	                                   sound.link->sound.surface, action->second};
-	const auto result =
-	    Locator::audio::value().PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner, sound.link->position);
+	const auto result = Locator::audio::value().PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner,
+	                                                           sound.link->position, audio::CurrentSoundEffectConditions());
 	if (result.emitter != entt::null)
 	{
 		sound.emitter = result.emitter;

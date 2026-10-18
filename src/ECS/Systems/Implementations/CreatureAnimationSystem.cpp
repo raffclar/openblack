@@ -31,9 +31,11 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/LandLightFrame.h"
 #include "Audio/Sound.h"
 #include "Common/FramePace.h"
 #include "Common/GameRandom.h"
+#include "Common/X87.h"
 #include "Creature/CreatureAlignmentMotes.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureEyes.h"
@@ -46,8 +48,10 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureProportions.h"
+#include "Creature/CreaturePuke.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSway.h"
+#include "Creature/CreatureTurnPose.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -58,7 +62,8 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
@@ -335,12 +340,15 @@ void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimati
 	}
 	auto side = glm::normalize(transform.rotation[0]);
 	auto front = glm::normalize(transform.rotation[2]);
-	// A body that turns on the spot leans along the heading that the turn has reached
-	if (animation.sway.turnHeading.has_value())
+	// The body leans along its heading, or the heading that a turn on the spot has reached: the FPU's cosine and sine,
+	// each rounded to a float
+	if (animation.sway.heading.has_value())
 	{
-		const float heading = animation.sway.turnHeading->Radians();
-		side = glm::vec3(std::cos(heading), 0.0f, std::sin(heading));
-		front = glm::vec3(-std::sin(heading), 0.0f, std::cos(heading));
+		const auto heading = static_cast<double>(animation.sway.heading->Radians());
+		const auto cosine = x87::RoundToFloat(x87::Cos(heading));
+		const auto sine = x87::RoundToFloat(x87::Sin(heading));
+		side = glm::vec3(cosine, 0.0f, sine);
+		front = glm::vec3(-sine, 0.0f, cosine);
 	}
 	const auto lean = [&](uint32_t clip, float amount) {
 		if (std::abs(amount) <= creature_sway::k_DrawnLean)
@@ -357,8 +365,9 @@ void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimati
 	     {std::tuple {animation.sway.lowerOffset, creature_sway::k_LowerSide, creature_sway::k_LowerFrontBack},
 	      std::tuple {animation.sway.upperOffset, creature_sway::k_UpperSide, creature_sway::k_UpperFrontBack}})
 	{
-		lean(sideClip, glm::dot(offset, side));
-		lean(frontClip, glm::dot(offset, front));
+		// Only the parts on the ground count, each lean the two products added
+		lean(sideClip, (side.x * offset.x) + (side.z * offset.z));
+		lean(frontClip, (front.z * offset.z) + (front.x * offset.x));
 	}
 }
 
@@ -610,8 +619,9 @@ glm::vec3 PosedHead(const ecs::Registry& registry, entt::entity creature)
 	{
 		return eyes;
 	}
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-	return glm::vec3(creature::PosedBone(points->head, animation->boneMatrices, placement)[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
+	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
 }
 
 /// How fast the head of a species speeds up as it turns, at a size
@@ -789,33 +799,38 @@ void CreatureAnimationSystem::StepSway()
 		    auto& sway = animation.sway;
 		    sway.turnSeconds = creature_sway::TurnSeconds(animation.playbackScale);
 		    creature_sway::Step(sway, sway.turnSeconds, MassOf(creature, &morph));
-		    sway.turnHeading.reset();
+		    sway.heading.reset();
 		    const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
 		    if (walk != nullptr && walk->motion == CreatureLocomotion::Motion::Turning && walk->move.has_value() &&
 		        walk->move->animations.has_value() && walk->move->durationMs > 0.0f)
 		    {
-			    sway.turnHeading =
+			    sway.heading =
 			        creature_sway::TurnHeading(walk->heading, walk->targetHeading, walk->move->timeMs, walk->move->durationMs);
+		    }
+		    else if (walk != nullptr)
+		    {
+			    sway.heading = walk->heading;
 		    }
 	    });
 }
 
 void CreatureAnimationSystem::AddAlignmentMotes()
 {
-	if (!Locator::dynamicsSystem::has_value() || !Locator::gameRandom::has_value())
+	if (!Locator::liquidParticleSystem::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	auto& dynamics = Locator::dynamicsSystem::value();
+	auto& liquids = Locator::liquidParticleSystem::value();
 	auto& random = Locator::gameRandom::value();
 	const creature_alignment_motes::LocalRandom localRandom = [&random](int32_t n) { return random.LocalRand(n); };
 	// While the falling spell plays, no creature in the world makes motes
 	const bool fallingSpell = Locator::videoSystem::has_value() && Locator::videoSystem::value().HidesWorld();
 	// Each game turn, a creature whose body is to look good or evil makes motes or smoke near the bones of the pose of the
-	// turn before. Then it keeps the bones of this turn for the next turn.
+	// turn before. The body takes the pose of this turn after the motes. Then a creature that pukes brings up its sick.
 	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
-	    [&](const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation, const Transform& transform) {
+	    [&](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation,
+	        const Transform& transform) {
 		    const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
 		    std::vector<glm::vec3> bones(animation.boneMatrices.size());
 		    for (uint32_t bone = 0; bone < bones.size(); ++bone)
@@ -831,10 +846,10 @@ void CreatureAnimationSystem::AddAlignmentMotes()
 			    for (const auto& puff : creature_alignment_motes::PuffsOf(
 			             alignment, ShownSize(creature), static_cast<uint32_t>(last.size()), bonePoint, localRandom))
 			    {
-				    dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+				    liquids.Add(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
 			    }
 		    }
-		    animation.lastTurnBones = std::move(bones);
+		    AddPukeDrops(entity);
 	    });
 }
 
@@ -849,6 +864,9 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 	// The breath moves towards its target period one step a frame, at most 60 times a second
 	const bool breathSteps = frame_pace::Due(_breathPace, std::chrono::milliseconds {milliseconds});
 	constexpr auto k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
+	// The body is drawn between the poses of the last two game turns, by the part of the turn that has passed
+	const auto weight =
+	    creature_turn_pose::DrawWeight(Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 1.0f);
 
 	registry.Each<const Creature, CreatureMorph, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, CreatureMorph& morph, CreatureAnimation& animation,
@@ -910,16 +928,22 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    animation.breathPhase =
 		        creature_animation::AdvanceBreath(animation.breathPhase, seconds * scale, animation.breathPeriod);
 
-		    if (rig != nullptr)
+		    // Before its first game turn, the body takes its first pose now, and the animations do not move on
+		    if (animation.newerTurnPose.empty() || animation.newerTurnPose.size() != animation.skeleton.parents.size())
 		    {
-			    const auto look = HeadLookOf(registry, entity, animation, rig, morph.drawn, transform, creature, milliseconds);
-			    PoseBody(
-			        animation, *rig, morph.drawn, transform, ShownSize(creature), gameTime.count() * scale, seconds * scale,
-			        look,
-			        [this](uint32_t range) {
-				        return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-			        },
-			        HoldingHandOf(registry, entity));
+			    animation.olderTurnPose.clear();
+			    animation.newerTurnPose.clear();
+			    PoseForTurn(entity, 0.0f);
+		    }
+		    if (!animation.newerTurnPose.empty() && animation.olderTurnPose.size() == animation.newerTurnPose.size() &&
+		        transform.scale.x != 0.0f && transform.scale.y != 0.0f && transform.scale.z != 0.0f)
+		    {
+			    std::vector<glm::mat4> drawn(animation.newerTurnPose.size());
+			    creature_turn_pose::Blend(animation.olderTurnPose, animation.newerTurnPose, weight, drawn);
+			    animation.boneMatrices.resize(drawn.size());
+			    creature_turn_pose::ToMesh(drawn,
+			                               creature::PlacementMatrix(transform.position, transform.rotation, transform.scale),
+			                               animation.boneMatrices);
 		    }
 		    if (animation.boneMatrices.size() != base->GetBoneMatrices().size())
 		    {
@@ -931,14 +955,13 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    {
 			    return;
 		    }
-		    eyes->blink = creature_eyes::AdvanceBlink(eyes->blink, milliseconds, [this](uint32_t range) {
-			    return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-		    });
+		    eyes->blink = creature_eyes::AdvanceBlink(
+		        eyes->blink, milliseconds, [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
 		    eyes->drawn = {};
 		    if (rig != nullptr && rig->eyes.has_value())
 		    {
 			    PlaceEyes(*eyes, *rig->eyes, morph.drawn, animation.boneMatrices, transform, ShownSize(creature), milliseconds,
-			              [this](uint32_t range) { return std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); });
+			              [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
 		    }
 	    });
 
@@ -954,6 +977,87 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		const auto slideMs = frame_pace::Step(glows.slidePace, realTime, realTime);
 		const auto turnMs = frame_pace::Step(glows.turnPace, realTime, std::chrono::milliseconds(milliseconds));
 		PlaceHandGlows(entity, static_cast<int32_t>(slideMs.count()), static_cast<int32_t>(turnMs.count()));
+	}
+}
+
+void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float milliseconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* creature = registry.TryGet<const Creature>(entity);
+	const auto* morph = registry.TryGet<const CreatureMorph>(entity);
+	auto* animation = registry.TryGet<CreatureAnimation>(entity);
+	const auto* transform = registry.TryGet<const Transform>(entity);
+	if (creature == nullptr || morph == nullptr || animation == nullptr || transform == nullptr || animation->skeleton.Empty())
+	{
+		return;
+	}
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(creature->species);
+	if (rigs.Contains(rigId))
+	{
+		const auto& rig = *rigs.Handle(rigId);
+		// A frozen creature plays slower, down to not at all
+		const float scale = animation->playbackScale;
+		const auto look = HeadLookOf(registry, entity, *animation, &rig, morph->drawn, *transform, *creature,
+		                             static_cast<int32_t>(std::lround(milliseconds)));
+		PoseBody(
+		    *animation, rig, morph->drawn, *transform, ShownSize(*creature), milliseconds * scale,
+		    milliseconds * scale / 1000.0f, look, [this](uint32_t range) { return _random.GameRand(range); },
+		    HoldingHandOf(registry, entity));
+	}
+	if (animation->boneMatrices.empty())
+	{
+		return;
+	}
+	// The pose of the last turn becomes the older pose. The first pose is both poses.
+	auto pose = creature_turn_pose::ToWorld(
+	    animation->boneMatrices, creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	animation->olderTurnPose = animation->newerTurnPose.empty() ? pose : std::move(animation->newerTurnPose);
+	animation->newerTurnPose = std::move(pose);
+	animation->lastTurnBones.resize(animation->newerTurnPose.size());
+	std::ranges::transform(animation->newerTurnPose, animation->lastTurnBones.begin(),
+	                       [](const glm::mat4& bone) { return glm::vec3(bone[3]); });
+	animation->posedThisTurn = true;
+}
+
+void CreatureAnimationSystem::PoseTurn(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* animation = registry.TryGet<CreatureAnimation>(creature);
+	if (animation == nullptr || animation->posedThisTurn)
+	{
+		return;
+	}
+	// The body takes its pose where its turn took it
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		Locator::creatureLocomotionSystem::value().ShowTurnEnd(creature);
+	}
+	constexpr auto k_TurnMs = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
+	PoseForTurn(creature, k_TurnMs);
+}
+
+void CreatureAnimationSystem::PoseTurns()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> creatures;
+	registry.Each<const Creature, CreatureAnimation>(
+	    [&creatures](entt::entity entity, const Creature& /*creature*/, CreatureAnimation& /*animation*/) {
+		    creatures.push_back(entity);
+	    });
+	for (const auto entity : creatures)
+	{
+		PoseTurn(entity);
+	}
+	registry.Each<CreatureAnimation>([](CreatureAnimation& animation) { animation.posedThisTurn = false; });
+}
+
+void CreatureAnimationSystem::HoldTurnPose(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature); animation != nullptr)
+	{
+		animation->olderTurnPose = animation->newerTurnPose;
 	}
 }
 
@@ -1010,9 +1114,8 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	if (rig != nullptr)
 	{
 		PoseBody(*animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
-		         HeadLookOfCopy(*animation, *transform, creature->species, self->size), [this](uint32_t range) {
-			         return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-		         });
+		         HeadLookOfCopy(*animation, *transform, creature->species, self->size),
+		         [this](uint32_t range) { return _random.GameRand(range); });
 	}
 	if (animation->boneMatrices.size() != base->GetBoneMatrices().size())
 	{
@@ -1032,15 +1135,14 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	}
 	eyes->lookAt = animation->lookAt;
 	eyes->blink =
-	    creature_eyes::AdvanceBlink(eyes->blink, static_cast<int32_t>(std::lround(milliseconds)), [this](uint32_t range) {
-		    return range == 0 ? 0u : std::uniform_int_distribution<uint32_t>(0, range - 1)(_random);
-	    });
+	    creature_eyes::AdvanceBlink(eyes->blink, static_cast<int32_t>(std::lround(milliseconds)),
+	                                [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
 	eyes->drawn = {};
 	if (rig != nullptr && rig->eyes.has_value())
 	{
 		PlaceEyes(*eyes, *rig->eyes, morph->drawn, animation->boneMatrices, *transform, self->size,
 		          static_cast<int32_t>(std::lround(milliseconds)),
-		          [this](uint32_t range) { return std::uniform_int_distribution<uint32_t>(0, range - 1)(_random); });
+		          [this](uint32_t range) { return _random.LocalRand(static_cast<int32_t>(range)); });
 	}
 }
 
@@ -1221,6 +1323,56 @@ const CreatureRig* RigOf(CreatureType species)
 }
 } // namespace
 
+void CreatureAnimationSystem::AddPukeDrops(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	const auto body = FindBody(registry, creature);
+	if (animation == nullptr || transform == nullptr || !body.has_value() ||
+	    creature_layers::CurrentAnimation(animation->body) != creature_layers::animations::k_Puke)
+	{
+		return;
+	}
+	const auto* rig = RigOf(body->species);
+	const std::span<const glm::mat4> bones = animation->boneMatrices;
+	if (rig == nullptr)
+	{
+		return;
+	}
+	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	// The sick comes out of the point at the lips, else out of the head bone
+	glm::vec3 lips(0.0f);
+	if (rig->pukePoint.has_value())
+	{
+		const auto& point = *rig->pukePoint;
+		if (std::ranges::any_of(point.bones, [&bones](uint32_t bone) { return bone >= bones.size(); }))
+		{
+			return;
+		}
+		const auto triangle = creature::PosedTriangle(point.vertices, point.bones, body->morph->drawn, bones, placement,
+		                                              creature::k_SkinPointOrder);
+		lips = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], point.u, point.v).position;
+	}
+	else if (rig->actionPoints.has_value() && rig->actionPoints->head < bones.size())
+	{
+		lips = glm::vec3(creature::PosedBone(rig->actionPoints->head, bones, placement)[3]);
+	}
+	else
+	{
+		return;
+	}
+	// Each drop takes a shade of the land's light where the creature stands
+	const auto light = FrameLandLightAt(transform->position);
+	auto& random = Locator::gameRandom::value();
+	auto& liquids = Locator::liquidParticleSystem::value();
+	const auto size = creature_puke::DropSize(body->size);
+	for (const auto& drop : creature_puke::DropsOf(body->size, light, [&random](int32_t n) { return random.LocalRand(n); }))
+	{
+		liquids.Add(lips, drop.velocity, size, drop.argb, liquid_particles::Kind::Liquid);
+	}
+}
+
 void CreatureAnimationSystem::SetCreedPower(entt::entity creature, creature_hand_glow::Place place, float scale, float power)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1370,12 +1522,15 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(entt::ent
 		return std::nullopt;
 	}
 	const auto* rig = RigOf(body->species);
-	const std::span<const glm::mat4> bones = animation->boneMatrices;
+	// The points are read as the body is posed at the end of its newest game turn
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	const auto bones = pose.bones;
+	const auto& placement = pose.placement;
 	if (rig == nullptr || !rig->actionPoints.has_value() || rig->actionPoints->groin >= bones.size())
 	{
 		return std::nullopt;
 	}
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
 	const auto groin = glm::vec3(creature::PosedBone(rig->actionPoints->groin, bones, placement)[3]);
 	// The lips are the point on the body that kisses, else the head bone
 	glm::vec3 lips(0.0f);
@@ -1404,7 +1559,7 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(entt::ent
 
 void CreatureAnimationSystem::AddAlignmentMotesOf(entt::entity copy)
 {
-	if (!Locator::dynamicsSystem::has_value() || !Locator::gameRandom::has_value())
+	if (!Locator::liquidParticleSystem::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
@@ -1419,15 +1574,16 @@ void CreatureAnimationSystem::AddAlignmentMotesOf(entt::entity copy)
 	}
 	auto& random = Locator::gameRandom::value();
 	const creature_alignment_motes::LocalRandom localRandom = [&random](int32_t n) { return random.LocalRand(n); };
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	const creature_alignment_motes::BonePoint bonePoint = [animation, &placement](uint32_t bone) {
-		return glm::vec3(creature::PosedBone(bone, animation->boneMatrices, placement)[3]);
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	const creature_alignment_motes::BonePoint bonePoint = [&pose](uint32_t bone) {
+		return glm::vec3(creature::PosedBone(bone, pose.bones, pose.placement)[3]);
 	};
-	auto& dynamics = Locator::dynamicsSystem::value();
+	auto& liquids = Locator::liquidParticleSystem::value();
 	const auto bones = static_cast<uint32_t>(animation->boneMatrices.size());
 	for (const auto& puff :
 	     creature_alignment_motes::PuffsOf(body->morph->drawn.evilGood, body->size, bones, bonePoint, localRandom))
 	{
-		dynamics.AddPuff(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+		liquids.Add(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
 	}
 }

@@ -9,10 +9,13 @@
 
 #include <cmath>
 
+#include <optional>
+
 #include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/HandOrientation.h"
 #include "Magic/HandHoldPose.h"
 
 using namespace openblack::magic::hand_hold;
@@ -20,6 +23,16 @@ using namespace openblack::magic::hand_hold;
 namespace
 {
 constexpr float k_Near = 1e-6f;
+
+/// The hand's heading from a line of sight, when the line leans enough across the land to give one
+std::optional<float> HeadingOfSight(glm::vec3 line)
+{
+	if (!openblack::hand_orientation::LeansAcrossLand(line))
+	{
+		return std::nullopt;
+	}
+	return openblack::hand_orientation::HeadingAngle(line);
+}
 
 /// The level part of a line, made unit
 glm::vec3 Level(glm::vec3 line)

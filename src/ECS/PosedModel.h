@@ -72,6 +72,11 @@ struct SkinHit
 [[nodiscard]] std::optional<SkinHit> NearestSkinHit(const ecs::Registry& registry, entt::entity entity,
                                                     const graphics::L3DMesh& mesh, const glm::mat4& model, glm::vec3 origin,
                                                     glm::vec3 direction, bool behindAllowed = false);
+/// The same, with the model placed by the given bones (in the model's space) and not by the bones it is drawn with
+[[nodiscard]] std::optional<SkinHit> NearestSkinHit(const ecs::Registry& registry, entt::entity entity,
+                                                    const graphics::L3DMesh& mesh, const glm::mat4& model,
+                                                    std::span<const glm::mat4> bones, glm::vec3 origin, glm::vec3 direction,
+                                                    bool behindAllowed = false);
 /// A point kept on a model's skin, which moves with it as it is posed: a triangle of a submesh, by its first index, and
 /// how far along its first side (s) and third side (t) from its first corner
 struct SkinPoint

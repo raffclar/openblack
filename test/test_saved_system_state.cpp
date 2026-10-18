@@ -42,6 +42,7 @@
 #include "ECS/Systems/Implementations/HelpMessageSystem.h"
 #include "ECS/Systems/Implementations/HelpTextSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
+#include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
 #include "ECS/Systems/Implementations/MagicSystem.h"
 #include "ECS/Systems/Implementations/MiracleFxSystem.h"
@@ -74,6 +75,11 @@ std::vector<uint8_t> StateOf(const SavedStateInterface& system)
 {
 	reflection::BinaryWriter out(Context());
 	system.SaveState(out);
+	// Every value goes in: none is left out as a value the archive cannot keep
+	for (const auto& unsaved : out.Unsaved())
+	{
+		ADD_FAILURE() << "not kept: " << unsaved.place << " (" << unsaved.type << ")";
+	}
 	return std::move(out.Bytes());
 }
 
@@ -300,4 +306,30 @@ TEST(SavedSystemState, ThePauseOfTheCameraPathComesBack)
 	LoadInto(loaded, StateOf(saved));
 	EXPECT_TRUE(loaded.IsPaused());
 	EXPECT_FALSE(loaded.HoldsCamera());
+}
+
+TEST(SavedSystemState, TheDropsTheDustAndTheMotesComeBack)
+{
+	const auto sources = []() {
+		return LiquidParticleSystem::Sources {.random = []() { return 7; },
+		                                      .altitude = [](int32_t /*x*/, int32_t /*z*/) { return 0.0f; },
+		                                      .drawDue = [](frame_pace::Pace& /*pace*/) { return true; }};
+	};
+	LiquidParticleSystem saved(sources());
+	saved.Add({1.0f, 20.0f, 3.0f}, {0.0f, 1.0f, 0.0f}, 2.0f, 0xFF800000u, liquid_particles::Kind::Liquid);
+	saved.Add({4.0f, 5.0f, 6.0f}, {1.0f, 0.0f, 0.0f}, 1.0f, 0x80FFFFFFu, liquid_particles::Kind::Dust);
+	saved.UpdateFrame(0.1f, true);
+	LiquidParticleSystem loaded(sources());
+	LoadInto(loaded, StateOf(saved));
+	ASSERT_EQ(loaded.Particles().size(), saved.Particles().size());
+	for (size_t i = 0; i < saved.Particles().size(); ++i)
+	{
+		EXPECT_EQ(loaded.Particles()[i].position, saved.Particles()[i].position);
+		EXPECT_EQ(loaded.Particles()[i].age, saved.Particles()[i].age);
+		EXPECT_EQ(loaded.Particles()[i].kind, saved.Particles()[i].kind);
+	}
+	// Both carry on the same
+	saved.UpdateFrame(0.1f, true);
+	loaded.UpdateFrame(0.1f, true);
+	EXPECT_EQ(StateOf(loaded), StateOf(saved));
 }

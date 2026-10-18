@@ -16,6 +16,9 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87.h"
+#include "Common/X87Vector.h"
+
 using namespace openblack;
 using namespace openblack::creature_stomp;
 
@@ -97,14 +100,19 @@ float creature_stomp::KickHitStrength(float kickerHeight, float otherHeight)
 	return (ratio + 1.0f) * k_KickHitShare;
 }
 
+glm::vec3 creature_stomp::KickMiddle(glm::vec3 creature, glm::vec3 foot)
+{
+	return ((foot - creature) * 0.5f) + creature;
+}
+
 std::array<Blow, 2> creature_stomp::KickBlows(const BuildingKick& kick, float landHeight)
 {
-	auto middle = kick.creature + ((kick.foot - kick.creature) * 0.5f);
+	auto middle = KickMiddle(kick.creature, kick.foot);
 	middle.y = std::max(middle.y, landHeight);
 	const auto reach = kick.creatureSize * k_BlowReachPerSize;
 	const auto above = std::min(middle.y - landHeight, reach);
 	const auto side = (static_cast<float>(kick.sideDraw) - static_cast<float>(k_SideMiddle)) * k_SideStep;
-	const auto angle = (side * (std::numbers::pi_v<float> / 2.0f)) + kick.yaw;
+	const auto angle = (side * (std::numbers::pi_v<float> / 2.0f)) + kick.heading.Radians();
 	const auto blowReach = std::min(kick.buildingRadius * k_KickReachShare, reach);
 	const auto at = [&](uint32_t draw) {
 		return glm::vec3 {middle.x, landHeight + (above * (static_cast<float>(draw) * k_HeightStep)), middle.z};
@@ -112,7 +120,8 @@ std::array<Blow, 2> creature_stomp::KickBlows(const BuildingKick& kick, float la
 	return {
 	    Blow {.point = at(kick.firstHeightDraw), .velocity = kick.direction * k_KickBlowSpeed, .reach = blowReach},
 	    Blow {.point = at(kick.secondHeightDraw),
-	          .velocity = {k_KickBlowSpeed * std::sin(angle), 0.0f, -k_KickBlowSpeed * std::cos(angle)},
+	          // The FPU's wide sine and cosine go into the products
+	          .velocity = {x87::Mul(x87::Sin(angle), k_KickBlowSpeed), 0.0f, x87::Mul(x87::Cos(angle), -k_KickBlowSpeed)},
 	          .reach = blowReach},
 	};
 }
@@ -173,7 +182,8 @@ bool creature_stomp::MovedEnough(const glm::vec3& from, const glm::vec3& to, flo
 {
 	const auto move = to - from;
 	const auto limit = creatureSize * k_MoveShare;
-	return glm::dot(move, move) > limit * limit;
+	// The squares add x, z, then y
+	return x87::Dot<x87::SumOrder::Xzy>(move, move) > limit * limit;
 }
 
 Victim creature_stomp::VictimOf(const VictimFacts& facts)
@@ -197,17 +207,19 @@ Victim creature_stomp::VictimOf(const VictimFacts& facts)
 	return facts.canFly && !facts.immovable ? Victim::Thing : Victim::None;
 }
 
-bool creature_stomp::InReach(Victim victim, float groundDistance, float sphereRadius, float thingRadius)
+bool creature_stomp::InReach(Victim victim, float groundDistanceSquared, float sphereRadius, float thingRadius)
 {
+	// The game compares the squares, with no square root
+	const auto within = [groundDistanceSquared](float reach) { return groundDistanceSquared < reach * reach; };
 	switch (victim)
 	{
 	case Victim::None:
 		return false;
 	case Victim::Building:
-		return groundDistance < sphereRadius + thingRadius;
+		return within(thingRadius + sphereRadius);
 	case Victim::Living:
 	case Victim::Thing:
-		return groundDistance < (sphereRadius * k_KnockReachShare) + thingRadius;
+		return within(thingRadius + (sphereRadius * k_KnockReachShare));
 	}
 	return false;
 }
@@ -219,7 +231,21 @@ glm::vec3 creature_stomp::KnockVelocity(const glm::vec3& move)
 
 Blow creature_stomp::TrampleBlow(const glm::vec3& point, const glm::vec3& move, float sphereRadius)
 {
-	const auto length = glm::length(move);
-	const auto way = length > 0.0f ? move / length : glm::vec3(0.0f);
-	return {.point = point, .velocity = way * k_TrampleBlowSpeed, .reach = sphereRadius};
+	// The length adds the squares of x, z, then y. The speed is the length times the move's scale and share, so a move
+	// of no length gives no speed.
+	if (move == glm::vec3(0.0f))
+	{
+		return {.point = point, .velocity = glm::vec3(0.0f), .reach = sphereRadius};
+	}
+	const float length = x87::Length<x87::SumOrder::Xzy>(move);
+	const auto way = move * (1.0f / length);
+	const auto speed = (length * k_TrampleBlowPerMove) * k_TrampleBlowShare;
+	return {.point = point, .velocity = way * speed, .reach = sphereRadius};
+}
+
+bool creature_stomp::CornerInSphere(const creature_obstacles::PlacementRows& rows, const glm::vec3& position,
+                                    const glm::vec3& corner, const glm::vec3& centre, float radius)
+{
+	const auto away = creature_obstacles::PlacedInWorld(rows, corner, position) - centre;
+	return x87::DotZyx(away, away) < radius * radius;
 }

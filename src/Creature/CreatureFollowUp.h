@@ -84,9 +84,11 @@ struct Feelings
 /// - it is sad;
 /// - it cries;
 /// - it looks at the player for one to two seconds, with darting eyes and a sad face.
-/// The random function gives a whole number below its argument. The chance is from 0 to 1.
+/// The random function gives a whole number below its argument. The upTo function gives a float from 0 to its argument,
+/// and only the look at the player draws it, after the choice.
 [[nodiscard]] std::vector<creature_mind::Step> ShowSlapFeeling(const Feelings& feelings,
-                                                               const std::function<uint32_t(uint32_t)>& random, float chance,
+                                                               const std::function<uint32_t(uint32_t)>& random,
+                                                               const std::function<float(float)>& upTo,
                                                                uint32_t turnsPerSecond);
 
 /// The action that the creature does again after the meal: the action that it was stroked for, but it eats a thing alive

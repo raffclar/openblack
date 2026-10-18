@@ -758,7 +758,7 @@ void CreatureMindSystem::LookAtLand(entt::entity entity, const Creature& creatur
 			continue;
 		}
 		const auto watched = WatchedPlace(registry, mind.look);
-		const auto watchedDistance = watched.has_value() ? glm::distance(*watched, from) : 0.0f;
+		const auto watchedDistance = watched.has_value() ? gutils::GetDistanceInMetres(*watched, from) : 0.0f;
 		creature_look::ConsiderLand(mind.look,
 		                            {.sight = sight, .place = *place, .distance = gutils::GetDistanceInMetres(*place, from)},
 		                            watchedDistance, range, weights, k_TurnsPerSecond);
@@ -786,7 +786,7 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 		const auto coords = map_coords::FromMetres(at);
 		const bool inView =
 		    creature_look::InView(looking, facing, gutils::GetAngleFromXZ(from, coords), map_coords::Cell(coords) == centre);
-		return std::pair {inView, glm::distance(at, glm::xz(transform.position))};
+		return std::pair {inView, gutils::GetDistanceInMetres(from, coords)};
 	};
 	const auto view = [&](entt::entity thing) { return viewOf(glm::xz(PlaceOf(registry, thing))); };
 	for (const auto cell : beliefs::NextCells(mind.sweep, centre, ShownSize(creature)))

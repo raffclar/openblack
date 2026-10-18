@@ -133,6 +133,9 @@ constexpr float k_MostLean = 0.3f;
 [[nodiscard]] glm::vec2 LeanOf(float plusX, float minusX, float plusZ, float minusZ, float radius);
 /// How a thing it kicks starts to fly: half up and half ahead of the creature, the ahead part tipped up or down with the
 /// creature's lean, at the kick's speed for its size. The scale is the creature's drawn scale
+/// The way of a kick, of length 1: half up and half ahead of the creature, the ahead part tipped up or down with the
+/// creature's lean. A zero way stays zero. The scale is the creature's drawn scale
+[[nodiscard]] glm::vec3 KickDirection(glm::vec2 forward, glm::vec2 lean, float scale);
 [[nodiscard]] glm::vec3 KickVelocity(glm::vec2 forward, glm::vec2 lean, float scale, float size);
 
 /// Whether a throw is over: its animation has played out, and, thrown into a store, what it threw has stopped flying

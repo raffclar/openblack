@@ -12,8 +12,10 @@
 
 #include <array>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -345,12 +347,16 @@ TEST(CreaturePhysiology, EatingFillsItUpFattensAndBuildsPoo)
 TEST(CreaturePhysiology, ThePooLumpIsThrownBackAlongTheGroundFromTheGroin)
 {
 	// Facing +x, shown at size 2, its groin 3 m up
-	const auto lump = PooLumpOf(glm::vec3(10.0f, 3.0f, 20.0f), glm::vec2(1.0f, 0.0f), 2.0f);
+	const auto lump = PooLumpOf(glm::vec3(10.0f, 3.0f, 20.0f), openblack::GameHeading(std::numbers::pi_v<float> / 2.0f), 2.0f);
 	EXPECT_EQ(lump.position, glm::vec3(10.0f, 3.0f, 20.0f));
-	EXPECT_EQ(lump.velocity, glm::vec3(-5.0f, 0.0f, 0.0f));
+	EXPECT_FLOAT_EQ(lump.velocity.x, -5.0f);
+	EXPECT_FLOAT_EQ(lump.velocity.y, 0.0f);
+	EXPECT_NEAR(lump.velocity.z, 0.0f, 1e-5f);
 	EXPECT_FLOAT_EQ(lump.scale, 3.0f);
-	// Facing -z: thrown towards +z at the same speed, whatever its size
-	EXPECT_EQ(PooLumpOf(glm::vec3(0.0f), glm::vec2(0.0f, -1.0f), 0.5f).velocity, glm::vec3(0.0f, 0.0f, 5.0f));
+	// Facing -z (heading 0): thrown towards +z at the same speed, whatever its size
+	const auto small = PooLumpOf(glm::vec3(0.0f), openblack::GameHeading(0.0f), 0.5f).velocity;
+	EXPECT_NEAR(small.x, 0.0f, 1e-5f);
+	EXPECT_FLOAT_EQ(small.z, 5.0f);
 }
 
 TEST(CreaturePhysiology, ShrunkInItsPenItUsesUpEnergyAsTheSizeItIsShownAt)
@@ -476,7 +482,7 @@ TEST(CreaturePhysiology, LeftAloneItsBodyDrivesItsHungerThirstAndPoo)
 	need(Desire::Hunger, sources::k_HungerFromLowEnergy);
 	need(Desire::Water, sources::k_WaterFromDehydration);
 	need(Desire::Poo, sources::k_PooFromAmountOfPoo);
-	auto desires = creature_desires::Create(setup, [](float low, float) { return low; });
+	auto desires = creature_desires::Create(setup, [](float) { return 0.0f; });
 	for (const auto desire : {Desire::Hunger, Desire::Water, Desire::Poo})
 	{
 		desires[desire].activated = true;
@@ -591,4 +597,19 @@ TEST(CreaturePhysiology, AFastGrowthTripleIsAppliedAfterTheSlowestGrowth)
 	Needs needs;
 	needs.age = 2;
 	EXPECT_FLOAT_EQ(Growth(needs, species, true, 10.0f), k_SleepGrowthFactor * k_MinGrowth);
+}
+
+TEST(CreaturePhysiology, ANewBodyAddsTheDrawThenTakesTheSpreadOff)
+{
+	// The strength and the fatness each draw up to 0.2: (r + v) - 0.1, with no limit to 0 to 1
+	std::vector<float> mosts;
+	const auto upTo = [&mosts](float most) {
+		mosts.push_back(most);
+		return 0.05f;
+	};
+	const float expected = (0.05f + 0.02f) - 0.1f;
+	EXPECT_EQ(creature_physiology::SpreadStart(0.02f, upTo), expected);
+	EXPECT_LT(expected, 0.0f);
+	ASSERT_EQ(mosts.size(), 1u);
+	EXPECT_FLOAT_EQ(mosts.front(), 0.2f);
 }

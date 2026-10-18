@@ -55,13 +55,14 @@ void Fidget(State& state, Body& body, const Frame& frame, const Random& random)
 			switch (random(3))
 			{
 			case 0:
-				if (const auto once = creature_layers::PlayOnce(body.body, animations::k_Impress, false))
+				// The start draws the side first, also when the body is busy
+				if (const auto once = creature_layers::PlayOnce(body.body, animations::k_Impress, random(2) == 1))
 				{
 					body.body = *once;
 				}
 				break;
 			case 1:
-				if (const auto once = creature_layers::PlayOnce(body.body, animations::k_Scratch, false))
+				if (const auto once = creature_layers::PlayOnce(body.body, animations::k_Scratch, random(2) == 1))
 				{
 					body.body = *once;
 				}
@@ -189,9 +190,10 @@ std::optional<GameHeading> cave_creature::Step(State& state, Body& body, const F
 	}
 	else
 	{
-		// As the camera zooms onto it, it gets up and turns to face the camera
+		// As the camera zooms onto it, it gets up and turns to face the camera. The fidgets of the editor start again
 		if (!state.zoomed)
 		{
+			StartIdle(state, random);
 			body.body = creature_layers::EndLoop(body.body);
 			state.wantedHeading = HeadingTowards(frame.focus, frame.eye);
 		}

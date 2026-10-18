@@ -157,3 +157,26 @@ TEST(HelpQuery, FeaturePileAndSeedTexts)
 	EXPECT_EQ(seed.first, 2711u);
 	EXPECT_EQ(seed.last, 5961u);
 }
+
+TEST(HelpQuery, LeashTextsAreTheirToolTips)
+{
+	// The leashes of aggression, compassion and learning tell their tooltips' texts
+	const auto aggression = LeashTexts(85);
+	EXPECT_EQ(aggression.first, 0xEC8u);
+	EXPECT_EQ(aggression.last, 0xEC8u);
+	EXPECT_EQ(LeashTexts(86).first, 0xEC9u);
+	EXPECT_EQ(LeashTexts(87).last, 0xECAu);
+	// A leash's answer is said as it is, not as a set
+	help_query::Thing leash {.texts = LeashTexts(87)};
+	const auto answer = About(leash);
+	ASSERT_TRUE(std::holds_alternative<SayTexts>(answer));
+	EXPECT_EQ(std::get<SayTexts>(answer).texts.first, 0xECAu);
+}
+
+TEST(HelpQuery, InsideTheTempleOnlyAMousePressOfTheHelpKeyAsks)
+{
+	EXPECT_TRUE(help_query::HelpPressAsks(false, false));
+	EXPECT_TRUE(help_query::HelpPressAsks(false, true));
+	EXPECT_FALSE(help_query::HelpPressAsks(true, false));
+	EXPECT_TRUE(help_query::HelpPressAsks(true, true));
+}

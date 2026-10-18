@@ -157,8 +157,17 @@ float GroundAt(glm::vec2 point)
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
 }
 
-/// Where the leash meets the creature: its collar bone as posed this frame, or high on its body when it has none
-glm::vec3 CollarPoint(const Registry& registry, entt::entity entity)
+/// Which pose of the body the collar point comes from
+enum class CollarPose
+{
+	/// The body as the game draws it in this frame. The rope follows this pose in each frame.
+	Drawn,
+	/// The body at the end of its newest game turn. The rope starts from this pose when the leash goes on.
+	Turn,
+};
+
+/// Where the leash meets the creature: its collar bone in a pose of the body, or high on its body when it has none
+glm::vec3 CollarPoint(const Registry& registry, entt::entity entity, CollarPose pose = CollarPose::Drawn)
 {
 	const auto& transform = registry.Get<const Transform>(entity);
 	const auto& creature = registry.Get<const Creature>(entity);
@@ -176,7 +185,10 @@ glm::vec3 CollarPoint(const Registry& registry, entt::entity entity)
 		return fallback;
 	}
 	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-	return glm::vec3(creature::PosedBone(*bone, animation->boneMatrices, placement)[3]);
+	const auto posed = pose == CollarPose::Turn
+	                       ? creature::TurnPose(animation->newerTurnPose, animation->boneMatrices, placement)
+	                       : creature::RulePose {.bones = animation->boneMatrices, .placement = placement};
+	return glm::vec3(creature::PosedBone(*bone, posed.bones, posed.placement)[3]);
 }
 
 float ObjectHeight(const Registry& registry, entt::entity entity)
@@ -1420,54 +1432,56 @@ void LeashSystem::Update(float seconds)
 	UpdatePosts(seconds);
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto hand = HandPoint();
-	registry.Each<CreatureLeash, const Creature, const Transform>([&](entt::entity entity, CreatureLeash& leashes,
-	                                                                  const Creature& /*creature*/,
-	                                                                  const Transform& /*transform*/) {
-		if (!leashes.worn.has_value())
-		{
-			return;
-		}
-		auto& worn = *leashes.worn;
-		std::optional<glm::vec3> start;
-		if (worn.tiedTo.has_value() && registry.Valid(*worn.tiedTo) &&
-		    registry.TryGet<const Transform>(*worn.tiedTo) != nullptr)
-		{
-			start = TiedPoint(registry, *worn.tiedTo);
-		}
-		else
-		{
-			start = hand;
-		}
-		if (!start.has_value())
-		{
-			// The hand is off the land: the rope keeps its last place
-			return;
-		}
-		const auto end = CollarPoint(registry, entity);
-		// Held in the hand, its length follows the creature's size
-		if (!worn.tiedTo.has_value() || !worn.ropeStarted)
-		{
-			const auto lengths = LengthsOf(registry, entity, worn);
-			worn.rope.slackLength = lengths.slack;
-			worn.rope.maxLength = lengths.max;
-		}
-		// The rope runs from the collar to the hand or the tied thing, so its tension is the stretch at the collar
-		if (!worn.ropeStarted)
-		{
-			worn.rope = leash_rope::Create(end, *start, worn.rope.slackLength, worn.rope.maxLength, leash::LookFor(worn.type));
-			worn.ropeStarted = true;
-			return;
-		}
-		worn.rope.look = leash::LookFor(worn.type);
-		leash_rope::Step(worn.rope, end, *start, seconds, GroundAt);
-		// The hand holding the rope of the tied leash: its two ropes run from the collar and from what it is tied to
-		// to the hand
-		if (worn.held.has_value() && hand.has_value() && worn.tiedTo.has_value())
-		{
-			leash_rope::Step(worn.held->toCollar, end, *hand, seconds, GroundAt);
-			leash_rope::Step(worn.held->toTied, registry.Get<const Transform>(*worn.tiedTo).position, *hand, seconds, GroundAt);
-		}
-	});
+	registry.Each<CreatureLeash, const Creature, const Transform>(
+	    [&](entt::entity entity, CreatureLeash& leashes, const Creature& /*creature*/, const Transform& /*transform*/) {
+		    if (!leashes.worn.has_value())
+		    {
+			    return;
+		    }
+		    auto& worn = *leashes.worn;
+		    std::optional<glm::vec3> start;
+		    if (worn.tiedTo.has_value() && registry.Valid(*worn.tiedTo) &&
+		        registry.TryGet<const Transform>(*worn.tiedTo) != nullptr)
+		    {
+			    start = TiedPoint(registry, *worn.tiedTo);
+		    }
+		    else
+		    {
+			    start = hand;
+		    }
+		    if (!start.has_value())
+		    {
+			    // The hand is off the land: the rope keeps its last place
+			    return;
+		    }
+		    const auto end = CollarPoint(registry, entity);
+		    // Held in the hand, its length follows the creature's size
+		    if (!worn.tiedTo.has_value() || !worn.ropeStarted)
+		    {
+			    const auto lengths = LengthsOf(registry, entity, worn);
+			    worn.rope.slackLength = lengths.slack;
+			    worn.rope.maxLength = lengths.max;
+		    }
+		    // The rope runs from the collar to the hand or the tied thing, so its tension is the stretch at the collar. A new
+		    // rope starts straight from the collar where the body was at the end of its newest game turn. It then moves on
+		    // in the same frame, as each rope does.
+		    if (!worn.ropeStarted)
+		    {
+			    worn.rope = leash_rope::Create(CollarPoint(registry, entity, CollarPose::Turn), *start, worn.rope.slackLength,
+			                                   worn.rope.maxLength, leash::LookFor(worn.type));
+			    worn.ropeStarted = true;
+		    }
+		    worn.rope.look = leash::LookFor(worn.type);
+		    leash_rope::Step(worn.rope, end, *start, seconds, GroundAt);
+		    // The hand holding the rope of the tied leash: its two ropes run from the collar and from what it is tied to
+		    // to the hand
+		    if (worn.held.has_value() && hand.has_value() && worn.tiedTo.has_value())
+		    {
+			    leash_rope::Step(worn.held->toCollar, end, *hand, seconds, GroundAt);
+			    leash_rope::Step(worn.held->toTied, registry.Get<const Transform>(*worn.tiedTo).position, *hand, seconds,
+			                     GroundAt);
+		    }
+	    });
 	// Untied while the hand held its rope, the hand lets go of it
 	if (_ropeHand == leash_snap::Hand::Holding && HeldLeash(k_LocalPlayer) == nullptr)
 	{
@@ -1866,7 +1880,7 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		placeReachable = walkable.IsValid(at, creature_route::k_DestinationClearance);
 		if (!placeReachable)
 		{
-			reachable = walkable.NearestValid(at, creature_route::k_DestinationClearance, orders::k_NearestReachableSearch);
+			reachable = walkable.NearestStandable(at);
 		}
 	}
 	const auto home = CitadelHome(registry, creature);

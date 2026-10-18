@@ -211,7 +211,7 @@ TEST(CreatureStomp, AKickBreaksABuildingWithTwoBlows)
 	    .creature = {0.0f, 10.0f, 0.0f},
 	    .foot = {0.0f, 14.0f, -8.0f},
 	    .direction = {0.0f, 0.6f, -0.8f},
-	    .yaw = 0.0f,
+	    .heading = openblack::GameHeading(0.0f),
 	    .creatureSize = 1.0f,
 	    .buildingRadius = 10.0f,
 	    .sideDraw = 10,
@@ -277,13 +277,15 @@ TEST(CreatureStomp, WhatTheSpheresKnockAbout)
 	// Only a part that moved further than three quarters of the size of the creature knocks
 	EXPECT_FALSE(stomp::MovedEnough({0.0f, 0.0f, 0.0f}, {0.75f, 0.0f, 0.0f}, 1.0f));
 	EXPECT_TRUE(stomp::MovedEnough({0.0f, 0.0f, 0.0f}, {0.76f, 0.0f, 0.0f}, 1.0f));
-	// The living and things within 0.3 of the sphere and their radius; buildings within both radii
-	EXPECT_TRUE(stomp::InReach(Victim::Living, 1.9f, 3.0f, 1.0f));
-	EXPECT_FALSE(stomp::InReach(Victim::Living, 1.9f, 2.0f, 1.0f));
-	EXPECT_TRUE(stomp::InReach(Victim::Building, 3.9f, 3.0f, 1.0f));
+	// The living and things within 0.3 of the sphere and their radius; buildings within both radii. The distance comes
+	// squared.
+	EXPECT_TRUE(stomp::InReach(Victim::Living, 1.9f * 1.9f, 3.0f, 1.0f));
+	EXPECT_FALSE(stomp::InReach(Victim::Living, 1.9f * 1.9f, 2.0f, 1.0f));
+	EXPECT_TRUE(stomp::InReach(Victim::Building, 3.9f * 3.9f, 3.0f, 1.0f));
 	EXPECT_EQ(stomp::KnockVelocity({1.0f, 0.0f, -2.0f}), glm::vec3(7.0f, 0.0f, -14.0f));
 	const auto blow = stomp::TrampleBlow({1.0f, 2.0f, 3.0f}, {0.0f, 0.0f, -2.0f}, 1.5f);
-	EXPECT_EQ(blow.velocity, glm::vec3(0.0f, 0.0f, -4.0f));
+	// The way of the move at its length times 10 times 0.4
+	EXPECT_EQ(blow.velocity, glm::vec3(0.0f, 0.0f, -8.0f));
 	EXPECT_FLOAT_EQ(blow.reach, 1.5f);
 }
 

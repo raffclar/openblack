@@ -44,6 +44,13 @@ struct Sample
 	float radius {0.0f};
 	float angle {0.0f};
 	int alpha {0};
+
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.position, self.axis, self.radius, self.angle, self.alpha);
+	}
 };
 
 /// A letter to draw: laid out in a frame whose first axis it runs along and whose down axis it hangs down

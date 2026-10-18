@@ -23,6 +23,7 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 
 #include "BenchmarkRecorder.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -133,6 +134,8 @@ private:
 	void UpdateVillagerWalks();
 	/// The scenario's objects thrown when their throws are due
 	void UpdateThrows();
+	/// Asks again for the turns that did not start while their creatures walked to a stop
+	void UpdateTurnsAsked();
 	/// Casts the scenario's miracle of that index; the running miracle, or none
 	entt::entity CastMiracle(size_t index);
 	void UpdateParticles(float seconds);
@@ -162,6 +165,7 @@ private:
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
 	std::string HandTapObject(size_t index);
+	std::string ChargeIconWithSeedHeld(const Command& command);
 	/// Once the hand is over the fireball, it taps it, or presses the action button with a seed in it
 	void FinishTakingFireBall();
 	/// Draws a gesture through the gesture recogniser, across the middle of the screen
@@ -180,6 +184,7 @@ private:
 	[[nodiscard]] std::optional<glm::ivec2> OpponentOnScreen(size_t creature, glm::vec2 size) const;
 	/// The middle of the body of a creature on the screen
 	[[nodiscard]] static std::optional<glm::ivec2> BodyOnScreen(entt::entity creature, glm::vec2 size);
+	[[nodiscard]] std::optional<glm::ivec2> RopeOnScreen(size_t creature, glm::vec2 size) const;
 	/// Where the middle of the foot of the scenario's town's worship site altar is on the screen
 	[[nodiscard]] std::optional<glm::ivec2> AltarOnScreen(glm::vec2 size) const;
 	/// A pixel over the body of the creature in the Creature Cave, as the cave finds it under the pointer, on a screen
@@ -229,6 +234,8 @@ private:
 	std::vector<entt::entity> _temples;
 	/// When each of the scenario's throws is next due, in seconds; none once done
 	std::vector<std::optional<float>> _throwsDue;
+	/// The turns to face a point that wait until their creatures stand
+	std::vector<std::pair<entt::entity, glm::vec2>> _turnsAsked;
 	/// For each object, when it next walks, whether it next walks out or back, and whether it has been dropped yet; and
 	/// the walk it is on: where to and the game turn it set off, until it gets there
 	struct ObjectWalk

@@ -257,7 +257,15 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std:
 		                bgfx::copy(packed.data(), static_cast<uint32_t>(packed.size() * sizeof(packed[0]))));
 		return texture;
 	}
+	// The small grey images that the game also reads itself keep their texels as the file has them
+	constexpr uint16_t k_LargestKeptSide = 64;
+	std::vector<uint8_t> kept;
+	if (channels == 1 && *side <= k_LargestKeptSide)
+	{
+		kept.assign(data.begin(), data.end());
+	}
 	graphics::texel_depth::Reduce(data, depth);
+	texture->SetTexels(std::move(kept));
 	texture->Create(*side, *side, 1, channels == 3 ? graphics::TextureFormat::RGB8 : graphics::TextureFormat::R8,
 	                graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                bgfx::copy(data.data(), static_cast<uint32_t>(data.size())));
@@ -687,10 +695,11 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 		rig->kissMs = static_cast<float>(points->kissTime);
 	}
 
-	// The eyes, the hair and the point that kisses sit on triangles of the meshes
+	// The eyes, the hair, the point that kisses and the point that sick comes out of sit on triangles of the meshes
 	const auto& eyes = file.GetCreatureEyes();
 	const auto& kiss = file.GetCreatureKissPoint();
-	if (eyes.has_value() || !file.GetHairGroups().empty() || kiss.has_value())
+	const auto& puke = file.GetCreaturePukePoint();
+	if (eyes.has_value() || !file.GetHairGroups().empty() || kiss.has_value() || puke.has_value())
 	{
 		auto& fileSystem = Locator::filesystem::value();
 		std::array<std::optional<l3d::L3DFile>, CreatureRig::k_MeshCount> meshes;
@@ -720,6 +729,14 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 				    .vertices = triangle->vertices, .bones = triangle->bones, .u = kiss->u, .v = kiss->v};
 			}
 		}
+		if (puke.has_value())
+		{
+			if (const auto triangle = TriangleInMeshes(*puke, meshes))
+			{
+				rig->pukePoint = CreatureRig::KissPoint {
+				    .vertices = triangle->vertices, .bones = triangle->bones, .u = puke->u, .v = puke->v};
+			}
+		}
 	}
 	return rig;
 }
@@ -746,6 +763,11 @@ CreatureSkinArtLoader::result_type CreatureSkinArtLoader::operator()(FromDiskTag
 	};
 	auto art = std::make_shared<creature_skin::Art>();
 	auto symbols = rgb(paths.symbols, k_Size, k_Size);
+	// The designs that the game ships with, before the player's own pictures go into the sheet
+	for (uint32_t design = 0; design < art->shippedDesigns.size(); ++design)
+	{
+		art->shippedDesigns.at(design) = creature_tattoo::DesignFromAtlas(symbols, k_Size, design, paths.lowDetail);
+	}
 	for (uint32_t design = 0; design < paths.pictures.size(); ++design)
 	{
 		if (const auto& picture = paths.pictures.at(design); picture.has_value())

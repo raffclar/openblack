@@ -152,7 +152,12 @@ float magic::AddToIconStore(WorshipIconCharge& icon, float share)
 	return share;
 }
 
-float magic::ProcessWorshipTurn(WorshipBattery& site, const WorshipBatteryRules& rules, uint32_t dancers,
+float magic::IconNeed(const WorshipIconCharge& icon)
+{
+	return icon.seedHeld ? icon.required : icon.required - icon.store;
+}
+
+float magic::ChargeWorshipIcons(WorshipBattery& site, const WorshipBatteryRules& rules, uint32_t dancers,
                                 std::span<WorshipIconCharge> icons)
 {
 	float drawn = 0.0f;
@@ -164,7 +169,7 @@ float magic::ProcessWorshipTurn(WorshipBattery& site, const WorshipBatteryRules&
 		bool seedsOut = false;
 		for (const auto& icon : icons)
 		{
-			const float need = icon.required - icon.store;
+			const float need = IconNeed(icon);
 			if (icon.charging && need > 0.0f)
 			{
 				++charging;
@@ -177,7 +182,7 @@ float magic::ProcessWorshipTurn(WorshipBattery& site, const WorshipBatteryRules&
 		{
 			for (auto& icon : icons)
 			{
-				if (icon.charging && icon.required - icon.store > 0.0f)
+				if (icon.charging && IconNeed(icon) > 0.0f)
 				{
 					const float charged = AddToIconStore(icon, share);
 					if (!site.infinite)
@@ -188,6 +193,13 @@ float magic::ProcessWorshipTurn(WorshipBattery& site, const WorshipBatteryRules&
 			}
 		}
 	}
+	return drawn;
+}
+
+float magic::ProcessWorshipTurn(WorshipBattery& site, const WorshipBatteryRules& rules, uint32_t dancers,
+                                std::span<WorshipIconCharge> icons)
+{
+	const float drawn = ChargeWorshipIcons(site, rules, dancers, icons);
 	EndWorshipTurn(site, rules, dancers);
 	return drawn;
 }

@@ -26,6 +26,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
+#include "ECS/ScriptFlockRules.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
 
@@ -148,6 +149,11 @@ glm::ivec2 AnimalSystem::HerdPosOf(entt::entity flock) const
 	{
 		return data->move.position;
 	}
+	// A villager that leads the flock, as a shepherd that a script made its leader
+	if (registry.Valid(leader) && registry.AllOf<Transform>(leader))
+	{
+		return WalkerPosition(leader);
+	}
 	const auto* herd = registry.TryGet<const Flock>(flock);
 	return herd != nullptr ? glm::ivec2(herd->place.x, herd->place.z) : glm::ivec2(0);
 }
@@ -253,7 +259,7 @@ bool AnimalSystem::KeepLeaderWithinDomain(entt::entity entity, Animal& animal)
 	}
 	const auto goal = RandomPos(animal, glm::ivec2(herd->place.x, herd->place.z), static_cast<float>(info.domainInnerRadius),
 	                            static_cast<float>(herd->domainRadius));
-	SetupMoveTo(animal, goal, 0.0f, AnimalState::DecideWhatToDo);
+	SetupMoveToFixed(animal, goal, 0.0f, AnimalState::DecideWhatToDo);
 	herd->turnsOnLeg = 0;
 	return true;
 }
@@ -276,7 +282,7 @@ bool AnimalSystem::KeepMemberWithinFlockArea(entt::entity /*entity*/, Animal& an
 	const auto goal = RandomPos(animal, leader, 0.0f, distance);
 	if (WithinDomain(animal, goal) || !WithinDomain(animal, leader))
 	{
-		SetupMoveTo(animal, goal, 0.0f, AnimalState::DecideWhatToDo);
+		SetupMoveToFixed(animal, goal, 0.0f, AnimalState::DecideWhatToDo);
 	}
 	return true;
 }
@@ -371,6 +377,32 @@ void AnimalSystem::GrazerStartWander(entt::entity entity, Animal& animal)
 	}
 	SetNewWander(entity, animal, centre, static_cast<int32_t>(InfoOf(animal.type).domainInnerRadius),
 	             herd != nullptr ? herd->domainRadius : 0);
+}
+
+void AnimalSystem::GrazerMoveInFlock(entt::entity entity, Animal& animal)
+{
+	const auto* herd = EntityRegistry().TryGet<const Flock>(animal.flock);
+	// With no flock, it does nothing
+	if (herd == nullptr)
+	{
+		return;
+	}
+	const auto leader = HerdPosOf(animal.flock);
+	const script_flock_rules::FlockView view {.place = herd->place,
+	                                          .domainRadius = herd->domainRadius,
+	                                          .flockDistance = herd->flockDistance,
+	                                          .isLeader = LeaderOf(animal.flock) == entity,
+	                                          .leader = {.x = leader.x, .z = leader.y}};
+	const auto pick = [this, &animal](const map_coords::MapCoords& centre, float least, float most) {
+		const auto point = RandomPos(animal, glm::ivec2(centre.x, centre.z), least, most);
+		return map_coords::MapCoords {.x = point.x, .z = point.y};
+	};
+	const map_coords::MapCoords here {.x = animal.move.position.x, .z = animal.move.position.y};
+	// It walks there, and keeps up with its flock again when it arrives
+	if (const auto step = script_flock_rules::MoveInFlock(here, view, pick); step.goal.has_value())
+	{
+		SetupMoveToFixed(animal, glm::ivec2(step.goal->x, step.goal->z), 0.0f, AnimalState::MoveInFlock);
+	}
 }
 
 void AnimalSystem::GrazerWander(entt::entity entity, Animal& animal, Grazer& grazer)
@@ -530,8 +562,8 @@ void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& graze
 			SetScale(entity, grazers::GrownScale(transform.scale.x, age, info.ageToScale.values, Random));
 		}
 	}
-	// Fleeing what it reacts to comes before its own ways
-	if (Flee(entity, animal))
+	// Its reaction comes before its own ways
+	if (Flee(entity, animal) || LookOrGoToFood(entity, animal))
 	{
 		return;
 	}
@@ -541,8 +573,10 @@ void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& graze
 		GrazerDecide(entity, animal, grazer);
 		break;
 	case AnimalState::StartWander:
-	case AnimalState::MoveInFlock:
 		GrazerStartWander(entity, animal);
+		break;
+	case AnimalState::MoveInFlock:
+		GrazerMoveInFlock(entity, animal);
 		break;
 	case AnimalState::Wander:
 		GrazerWander(entity, animal, grazer);

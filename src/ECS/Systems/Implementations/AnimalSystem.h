@@ -74,6 +74,9 @@ public:
 	[[nodiscard]] std::optional<uint8_t> TopGameStateOf(entt::entity animal) const override;
 	bool SetupReactToFlyingObject(entt::entity animal, entt::entity object, float speed) override;
 	void RememberStateBeforeReaction(entt::entity animal) override;
+	bool SetupLookAtObject(entt::entity animal, entt::entity object) override;
+	bool SetupGotoFood(entt::entity animal, entt::entity food) override;
+	[[nodiscard]] uint32_t ReactToFoodPriority(entt::entity animal, entt::entity food, uint32_t tablePriority) const override;
 	void StopReaction(entt::entity animal, bool resetState) override;
 
 	[[nodiscard]] bool IsFrighteningToCreature(entt::entity animal) const override;
@@ -85,6 +88,9 @@ private:
 	// Moving
 	/// Off to a goal at a height above the land there, in its kind's move state, into a final state once there
 	void SetupMoveTo(components::Animal& animal, glm::vec2 goal, float goalHeight, components::AnimalState finalState);
+	/// A goal in 16.16 map units must go to SetupMoveToFixed. Do not let it change to metres without a scale.
+	void SetupMoveTo(components::Animal& animal, glm::ivec2 goal, float goalHeight,
+	                 components::AnimalState finalState) = delete;
 	/// The same with a goal in 16.16 map units
 	void SetupMoveToFixed(components::Animal& animal, glm::ivec2 goal, float goalHeight, components::AnimalState finalState);
 	/// A turn's move towards its goal, climbing or sinking towards its goal's height: whether it arrived
@@ -115,6 +121,8 @@ private:
 	void GrazerDecide(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
 	/// Off wandering about its herd's leader, as far as its herd's reach
 	void GrazerStartWander(entt::entity entity, components::Animal& animal);
+	/// It keeps up with the flock that a script put it in: back into the flock's domain, or near its leader
+	void GrazerMoveInFlock(entt::entity entity, components::Animal& animal);
 	/// A straight step, steered afresh in each new cell; seeing to its needs first
 	void GrazerWander(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
 	/// Its needs: whether it set off to see to one
@@ -134,7 +142,7 @@ private:
 	static void SetGrazerSpeed(components::Animal& animal, uint16_t speed);
 	/// A turn's walk on the land towards its goal: whether it arrived
 	static bool GroundMoveTo(components::Animal& animal);
-	/// Where its herd's leader is, or the herd's home with no leader
+	/// Where its herd's leader is, an animal or a villager, or the herd's home with no leader
 	[[nodiscard]] glm::ivec2 HerdPosOf(entt::entity flock) const;
 	/// Whether a point is within the reach of an animal's herd's home: never for an animal with no herd
 	[[nodiscard]] bool WithinDomain(const components::Animal& animal, glm::ivec2 point) const;
@@ -146,6 +154,10 @@ private:
 	// Fleeing what it reacts to, for any animal on the land
 	/// A turn of its flight or its watching; whether it was fleeing at all
 	bool Flee(entt::entity entity, components::Animal& animal);
+	/// A turn of a reaction that does not flee: it looks at a thing, or it goes to food. Whether it had such a reaction
+	bool LookOrGoToFood(entt::entity entity, components::Animal& animal);
+	/// It turns towards the thing of its reaction, or stops the reaction when the thing is too far
+	void LookAtThing(entt::entity entity, components::Animal& animal);
 	/// A step away from the hunter it fled, at its fleeing speed; it goes on fleeing the hunter as any other thing
 	void FleeFromPredator(entt::entity entity, components::Animal& animal);
 	/// It stops being frightened: the reaction is let go and it decides again

@@ -49,6 +49,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DanceSystemInterface.h"
@@ -297,6 +298,35 @@ void BeliefVoiceOf(entt::entity source, entt::entity town, PlayerNames player, G
 	                             .maxDistance = k_VoiceReach,
 	                             .callerWins = audio::k_CallerDistancesWin});
 }
+/// A town's celebration with no town centre makes one dance about the town, the dance about a person, as the first
+/// villager takes it up. No villager joins this dance: only a script can put dancers in it.
+void MakeTownCelebrationDance(uint32_t reactionId)
+{
+	auto& registry = EntityRegistry();
+	if (!Locator::reactionSystem::has_value() || !Locator::danceSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	auto& reactions = Locator::reactionSystem::value();
+	const auto reaction = reactions.Find(reactionId);
+	if (!reaction.has_value() || (reaction->dance != entt::null && registry.Valid(reaction->dance)))
+	{
+		return;
+	}
+	const auto town = reaction->source.initiator;
+	if (!registry.Valid(town) || !registry.AllOf<Transform>(town))
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value().dance.at(static_cast<size_t>(DanceInfo::DanceAroundPerson));
+	const auto dance = Locator::danceSystem::value().Create(
+	    DanceInfo::DanceAroundPerson, registry.Get<const Transform>(town).position, entt::null, info.duration, false, town);
+	if (dance != entt::null)
+	{
+		reactions.SetDance(reactionId, dance);
+	}
+}
+
 /// The dance a new building's reaction is danced round, made as the first villager joins: the small or the large
 /// building dance by how wide the building is. Whether the villager joined a group of it (else it has no room); none
 /// when there is no dance to join.
@@ -324,8 +354,9 @@ std::optional<bool> JoinNewBuildingDance(entt::entity villager, uint32_t reactio
 		const auto type = object_measures::TwoDRadius(registry, building) < k_LargeBuildingRadius ? DanceInfo::BuildingSmall
 		                                                                                          : DanceInfo::BuildingLarge;
 		const auto& info = Locator::infoConstants::value().dance.at(static_cast<size_t>(type));
+		// The dance's footpath comes from the storage pit of the first dancer's town
 		dance = Locator::danceSystem::value().Create(type, registry.Get<const Transform>(building).position, building,
-		                                             info.duration, false);
+		                                             info.duration, false, registry.Get<const Villager>(villager).town);
 		if (dance == entt::null)
 		{
 			return std::nullopt;
@@ -345,12 +376,14 @@ bool villager_reactions::Available(entt::entity villager, Reaction type)
 	{
 		return false;
 	}
-	// Judged by the state it is to end up in, which must let it react, and not be dying, dead or past reacting
-	const auto state = FinalStateOf(*action);
-	if (StateInfo(state).availableForReaction == 0)
+	// A villager that its worship site counts as a worshipper does not react
+	if (const auto* worshipper = registry.TryGet<const Worshipper>(villager); worshipper != nullptr && worshipper->atWorship)
 	{
 		return false;
 	}
+	// Judged by the state it is to end up in, which must let it react, and not be dying, dead or past reacting
+	const auto state = FinalStateOf(*action);
+	bool stateLetsItReact = StateInfo(state).availableForReaction != 0;
 	switch (state)
 	{
 	case VillagerStates::InDance:
@@ -361,20 +394,21 @@ bool villager_reactions::Available(entt::entity villager, Reaction type)
 	case VillagerStates::Downed:
 	case VillagerStates::BeingEaten:
 	case VillagerStates::WaitForAnimation:
-		return false;
+		stateLetsItReact = false;
+		break;
 	default:
 		break;
 	}
-	// Nor dying where it is now
+	// Nor dying where it is now, nor under the control of a script, and too weak to react to anything but food
 	const auto now = StateOf(*action, LivingAction::Index::Top);
-	if (now == VillagerStates::SetDying || now == VillagerStates::Dying)
-	{
-		return false;
-	}
-	// Too weak to react to anything but food
-	// TODO(raffclar): the game also keeps a villager scripts control, one on a structure and two flags whose meaning is
-	// unknown from reacting; none of them is modelled
-	return type == Reaction::ReactToFood || component->life > InfoOf(*component).lifeWhenCrawlsWounded;
+	// TODO(raffclar): the game also keeps these villagers from reacting: one on a structure and one in a football match.
+	// openblack has no structures or football yet.
+	return magic::villager_reaction::Available({.stateLetsItReact = stateLetsItReact,
+	                                            .dyingNow = now == VillagerStates::SetDying || now == VillagerStates::Dying,
+	                                            .scriptControlled = registry.AllOf<ScriptControlled>(villager),
+	                                            .life = component->life,
+	                                            .crawlLife = InfoOf(*component).lifeWhenCrawlsWounded},
+	                                           type);
 }
 
 villager_reactions::Taken villager_reactions::Start(entt::entity villager, Reaction type, LivingReaction& state,
@@ -512,9 +546,8 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 		SetTop(*action, VillagerStates::ReactToBreeder);
 		break;
 	case Reaction::ReactToTownCelebration:
-		// Its own town celebrating with no town centre, it looks at the town
-		// TODO(villager-social): the game also makes an empty dance about the town (the dance about a person). A dance
-		// does not get dancers by itself: only a script or a villager that joins it puts dancers in it.
+		// Its own town celebrating with no town centre, it looks at the town. The first one makes the town's dance.
+		MakeTownCelebrationDance(state.reaction);
 		SetTop(*action, VillagerStates::LookingAtObjectReaction);
 		break;
 	case Reaction::ReactToDeath:

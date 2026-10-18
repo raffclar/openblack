@@ -25,6 +25,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureFriendship.h"
 #include "Creature/CreatureHelp.h"
@@ -384,7 +385,7 @@ std::optional<creature_plan_actions::Situation::FoodPile> NearestBelievedField(c
 	return nearest;
 }
 
-/// Where the head bone of the creature is in the world, as its body is posed now
+/// Where the head bone of the creature is in the world, as its body is posed at the end of its newest game turn
 std::optional<glm::vec3> HeadOf(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* self = registry.TryGet<const Creature>(creature);
@@ -400,8 +401,9 @@ std::optional<glm::vec3> HeadOf(const ecs::Registry& registry, entt::entity crea
 	{
 		return std::nullopt;
 	}
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	return glm::vec3(creature::PosedBone(points->head, body->boneMatrices, placement)[3]);
+	const auto pose = creature::TurnPose(body->newerTurnPose, body->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
 }
 } // namespace
 
@@ -483,7 +485,8 @@ void CreatureMindSystem::SituateFriend(entt::entity creature, const creature_pla
 	};
 	const auto selfPoint = glm::vec2(self->position.x, self->position.z);
 	// It sees the friend when the friend is near, or near for the height of the friend
-	situation.seesFriend = creature_mind::CanSee(glm::distance(self->position, at->position), situation.friendly->height);
+	situation.seesFriend =
+	    creature_mind::CanSee(x87::Distance<x87::SumOrder::Zyx>(at->position, self->position), situation.friendly->height);
 	switch (executor.build)
 	{
 	case Build::SitWithFriend:

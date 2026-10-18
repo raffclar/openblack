@@ -14,7 +14,7 @@
 
 #include <glm/vec2.hpp>
 
-#include "Common/RandomNumberManager.h"
+#include "Common/GameRandom.h"
 #include "Creature/CaveCreature.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 
@@ -76,8 +76,8 @@ private:
 	bool _caveMade {false};
 	std::optional<entt::entity> _caveCreature;
 	std::vector<creature_tattoo_editor::SiteOnScreen> _tattooSitesOnScreen;
-	/// The copy's coin tosses and fidgets are its own, apart from the game's random numbers
-	RandomStreamSource _random {RandomStream::CreatureAnimation};
+	/// The game's random numbers. The copy draws its coin tosses and fidgets on the local seed
+	GameRandomSource _random;
 };
 
 } // namespace openblack::ecs::systems

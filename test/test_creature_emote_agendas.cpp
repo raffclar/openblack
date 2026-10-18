@@ -188,10 +188,13 @@ TEST(CreatureEmoteAgendas, RunningAwayStartsFrightenedOneTimeInTwoAndLooksBack)
 	EXPECT_TRUE(both[1].gaze->runningAway);
 	EXPECT_EQ(both[1].gaze->object, 5u);
 	EXPECT_EQ(both[1].heldEyes, creature_mind::Eyes::Wide);
+	// From a thing it runs; from the hand it keeps the speed that it had
+	EXPECT_TRUE(both[1].movement.run);
 	const auto fromHand = RunAway({.point = {10.0f, 0.0f}}, Draws({1, 1}));
 	ASSERT_EQ(fromHand.size(), 1u);
 	EXPECT_TRUE(fromHand[0].gaze->hand);
 	EXPECT_FALSE(fromHand[0].heldEyes.has_value());
+	EXPECT_FALSE(fromHand[0].movement.run);
 }
 
 TEST(CreatureEmoteAgendas, TheRunLooksAheadThenBackInTurns)

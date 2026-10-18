@@ -1285,12 +1285,136 @@ openblack_setup_and_add_test(test_hand_throw_speed test_hand_throw_speed.cpp)
 openblack_setup_and_add_test(
   test_object_tint graphics/test_object_tint.cpp
 )
+openblack_setup_and_add_test(test_creature_files_order test_creature_files_order.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_files_order oracle/test_oracle_creature_files_order.cpp
+)
+set_tests_properties(
+  test_oracle_creature_files_order
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_creature_files_order_3 test_creature_files_order_3.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_files_order_3 oracle/test_oracle_creature_files_order_3.cpp
+)
+set_tests_properties(
+  test_oracle_creature_files_order_3
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_creature_files_order_4 test_creature_files_order_4.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_files_order_4 oracle/test_oracle_creature_files_order_4.cpp
+)
+set_tests_properties(
+  test_oracle_creature_files_order_4
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_creature_walk_planner test_creature_walk_planner.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_walk_planner oracle/test_oracle_creature_walk_planner.cpp
+)
+set_tests_properties(
+  test_oracle_creature_walk_planner
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_creature_walk_planner_2 oracle/test_oracle_creature_walk_planner_2.cpp
+)
+set_tests_properties(
+  test_oracle_creature_walk_planner_2
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_creature_turn_pose test_creature_turn_pose.cpp)
+openblack_setup_and_add_test(
+  test_oracle_turn_pose oracle/test_oracle_turn_pose.cpp
+)
+set_tests_properties(
+  test_oracle_turn_pose
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_hand_feel_rest_2 oracle/test_oracle_hand_feel_rest_2.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_feel_rest_2 hand/test_hand_feel_rest_2.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_liquid_particles oracle/test_oracle_liquid_particles.cpp
+)
+set_tests_properties(
+  test_oracle_liquid_particles
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_liquid_particles test_liquid_particles.cpp)
+openblack_setup_and_add_test(test_creature_puke test_creature_puke.cpp)
+openblack_setup_and_add_test(test_land_point_light test_land_point_light.cpp)
+target_link_libraries(test_liquid_particles PRIVATE psys)
+openblack_setup_and_add_test(test_oracle_land_shade oracle/test_oracle_land_shade.cpp)
+set_tests_properties(
+  test_oracle_land_shade
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_land_shade test_land_shade.cpp)
+openblack_setup_and_add_test(
+  test_oracle_land_shade_particle oracle/test_oracle_land_shade_particle.cpp
+)
+set_tests_properties(
+  test_oracle_land_shade_particle
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+target_link_libraries(test_oracle_land_shade_particle PRIVATE psys)
 openblack_setup_and_add_test(test_sing_along help/test_sing_along.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_walk_planner_3 oracle/test_oracle_creature_walk_planner_3.cpp
+)
+set_tests_properties(
+  test_oracle_creature_walk_planner_3
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
 openblack_setup_and_add_test(test_save_game_room temple/test_save_game_room.cpp)
 openblack_setup_and_add_test(test_instant_saves test_instant_saves.cpp)
+openblack_setup_and_add_test(test_alignment_history test_alignment_history.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_walk_planner_4 oracle/test_oracle_creature_walk_planner_4.cpp
+)
+set_tests_properties(
+  test_oracle_creature_walk_planner_4
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_vortex_crossing_file test_vortex_crossing_file.cpp)
 openblack_setup_and_add_test(test_world_archive test_world_archive.cpp)
+openblack_setup_and_add_test(test_help_without_sound test_help_without_sound.cpp)
+target_link_libraries(test_help_without_sound PRIVATE pack lnd)
+openblack_setup_and_add_test(test_footpath_planning test_footpath_planning.cpp)
+openblack_setup_and_add_test(
+  test_oracle_footpath_planning oracle/test_oracle_footpath_planning.cpp
+)
+set_tests_properties(
+  test_oracle_footpath_planning
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
 openblack_setup_and_add_test(test_saved_system_state test_saved_system_state.cpp)
 openblack_setup_and_add_test(test_save_file_writer test_save_file_writer.cpp)
 target_link_libraries(test_saved_system_state PRIVATE edt)
+openblack_setup_and_add_test(test_oracle_game_random oracle/test_oracle_game_random.cpp)
+set_tests_properties(
+  test_oracle_game_random
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_creature_load_after_draws test_creature_load_after_draws.cpp)
 openblack_setup_and_add_test(test_particle_save test_particle_save.cpp)
 target_link_libraries(test_particle_save PRIVATE psys)
+target_link_libraries(test_saved_system_state PRIVATE psys)

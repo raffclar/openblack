@@ -218,6 +218,14 @@ std::optional<posed_model::SkinHit> posed_model::NearestSkinHit(const ecs::Regis
                                                                 const graphics::L3DMesh& mesh, const glm::mat4& model,
                                                                 glm::vec3 origin, glm::vec3 direction, bool behindAllowed)
 {
+	return NearestSkinHit(registry, entity, mesh, model, BonesOf(registry, entity, mesh), origin, direction, behindAllowed);
+}
+
+std::optional<posed_model::SkinHit> posed_model::NearestSkinHit(const ecs::Registry& registry, entt::entity entity,
+                                                                const graphics::L3DMesh& mesh, const glm::mat4& model,
+                                                                std::span<const glm::mat4> bones, glm::vec3 origin,
+                                                                glm::vec3 direction, bool behindAllowed)
+{
 	std::optional<SkinHit> nearest;
 	std::vector<glm::vec3> placed;
 	const auto& skinOrder = mesh.GetSkinOrder();
@@ -229,7 +237,7 @@ std::optional<posed_model::SkinHit> posed_model::NearestSkinHit(const ecs::Regis
 		{
 			continue;
 		}
-		Place(registry, entity, mesh, s, model, placed);
+		Place(registry, entity, mesh, s, model, bones, placed);
 		const auto& geometry = subMesh.GetBodyGeometry();
 		const auto hit = screen_pick::NearestSkinIntersection(placed, geometry.indices, origin, direction, behindAllowed);
 		if (!hit.has_value() || (nearest.has_value() && !(hit->distance < nearest->hit.distance)))

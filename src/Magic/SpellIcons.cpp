@@ -9,6 +9,8 @@
 
 #include "SpellIcons.h"
 
+#include <cmath>
+
 #include <algorithm>
 
 namespace openblack::magic::spell_icons
@@ -132,17 +134,54 @@ std::vector<SpellSeedType> SiteSeeds(std::span<const std::vector<SpellSeedType>>
 
 float Need(const IconCharge& icon)
 {
-	return icon.required - icon.store;
+	return icon.seedHeld ? icon.required : icon.required - icon.store;
+}
+
+IconTurn ChargingIconTurn(float store, float required, std::optional<float> heldSeedStore)
+{
+	IconTurn turn {.store = store, .seedStore = heldSeedStore};
+	if (heldSeedStore.has_value())
+	{
+		// The held seed takes the smaller of what it still needs and what the icon stored
+		const float seedNeed = required - *heldSeedStore;
+		if (seedNeed > 0.0f)
+		{
+			const float moved = seedNeed < store ? seedNeed : store;
+			turn.seedStore = *heldSeedStore + moved;
+			turn.store = store - moved;
+		}
+	}
+	// A need that is not a number also ends the charge
+	const float need = heldSeedStore.has_value() ? required - *turn.seedStore : required - turn.store;
+	turn.full = !(need > 0.0f);
+	return turn;
+}
+
+float ShownRequired(float required, std::optional<float> heldSeedCharge)
+{
+	return heldSeedCharge.has_value() ? required - *heldSeedCharge : required;
+}
+
+std::optional<float> ShownCharge(float store, float shownRequired)
+{
+	constexpr float k_Percent = 100.0f;
+	const float charge = (store / shownRequired) * k_Percent;
+	// A charge that is not a number compares as equal to zero, so it also shows only the name
+	if (std::isnan(charge) || charge == 0.0f)
+	{
+		return std::nullopt;
+	}
+	return charge;
 }
 
 bool ReadyForHand(const IconCharge& icon, bool handReady)
 {
-	return Need(icon) <= 0.0f && !icon.seedOut && handReady;
+	return Need(icon) <= 0.0f && !icon.seedHeld && handReady;
 }
 
 bool MayStartCharge(const IconCharge& icon, bool magicEnabled, bool onSite)
 {
-	return !icon.charging && !icon.seedOut && magicEnabled && (onSite || icon.store != 0.0f);
+	return !icon.charging && !icon.seedHeld && magicEnabled && (onSite || icon.store != 0.0f);
 }
 
 bool Functional(float life, bool built)

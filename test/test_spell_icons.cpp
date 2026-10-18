@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -143,17 +144,84 @@ TEST(SpellIcons, TappingAgainWhileItChargesCallsItOffForTheHandCharging)
 	EXPECT_EQ(Tap(other, true, true, true), TapResult::Nothing);
 }
 
-TEST(SpellIcons, AChargedMiracleGoesIntoAReadyHandUnlessASeedOfItIsOut)
+TEST(SpellIcons, AChargedMiracleGoesIntoAReadyHandUnlessAHandHoldsASeedOfIt)
 {
 	const IconCharge charged {.store = 500.0f, .required = 500.0f};
 	EXPECT_TRUE(ReadyForHand(charged, true));
 	EXPECT_EQ(Tap(charged, true, true, true), TapResult::PutInHand);
 	// With the hand busy the charged miracle waits, and the tap does nothing
 	EXPECT_EQ(Tap(charged, false, true, true), TapResult::Nothing);
-	auto out = charged;
-	out.seedOut = true;
-	EXPECT_FALSE(ReadyForHand(out, true));
-	EXPECT_EQ(Tap(out, true, true, true), TapResult::Nothing);
+	auto held = charged;
+	held.seedHeld = true;
+	EXPECT_FALSE(ReadyForHand(held, true));
+	EXPECT_EQ(Tap(held, true, true, true), TapResult::Nothing);
+}
+
+TEST(SpellIcons, OnlyAHeldSeedOfItStopsANewCharge)
+{
+	// A seed of it that is out of the hand, as one that cast a miracle, does not stop a new charge
+	const IconCharge idle {.required = 500.0f};
+	EXPECT_TRUE(MayStartCharge(idle, true, true));
+	auto held = idle;
+	held.seedHeld = true;
+	EXPECT_FALSE(MayStartCharge(held, true, true));
+}
+
+TEST(SpellIcons, WithItsSeedHeldTheNeedIsWhatTheSeedStillNeeds)
+{
+	// The required value then is what the held seed still needs, and the store of the icon does not count
+	const IconCharge free {.store = 100.0f, .required = 500.0f};
+	EXPECT_EQ(Need(free), 400.0f);
+	auto held = free;
+	held.seedHeld = true;
+	EXPECT_EQ(Need(held), 500.0f);
+}
+
+TEST(SpellIcons, AChargingIconWithoutAHeldSeedIsDoneWhenItsStoreIsFull)
+{
+	const auto part = ChargingIconTurn(300.0f, 500.0f, std::nullopt);
+	EXPECT_EQ(part.store, 300.0f);
+	EXPECT_FALSE(part.seedStore.has_value());
+	EXPECT_FALSE(part.full);
+	EXPECT_TRUE(ChargingIconTurn(500.0f, 500.0f, std::nullopt).full);
+}
+
+TEST(SpellIcons, AChargingIconMovesItsStoreIntoTheHeldSeedUpToWhatTheSeedNeeds)
+{
+	// The seed holds 200 of 500: it takes all 120 that the icon stored, and the charge continues
+	const auto some = ChargingIconTurn(120.0f, 500.0f, 200.0f);
+	EXPECT_EQ(some.store, 0.0f);
+	ASSERT_TRUE(some.seedStore.has_value());
+	EXPECT_EQ(*some.seedStore, 320.0f);
+	EXPECT_FALSE(some.full);
+	// The seed needs only 100 more of the 250 stored: it takes 100, the icon keeps 150, and the charge is done
+	const auto done = ChargingIconTurn(250.0f, 500.0f, 400.0f);
+	EXPECT_EQ(done.store, 150.0f);
+	EXPECT_EQ(*done.seedStore, 500.0f);
+	EXPECT_TRUE(done.full);
+}
+
+TEST(SpellIcons, AHeldSeedThatIsAlreadyFullTakesNothingAndEndsTheCharge)
+{
+	// This is how the icon whose full seed is in the hand stops at once
+	const auto full = ChargingIconTurn(80.0f, 500.0f, 500.0f);
+	EXPECT_EQ(full.store, 80.0f);
+	EXPECT_EQ(*full.seedStore, 500.0f);
+	EXPECT_TRUE(full.full);
+	// A seed that holds more than the cost also takes nothing
+	const auto over = ChargingIconTurn(80.0f, 500.0f, 600.0f);
+	EXPECT_EQ(over.store, 80.0f);
+	EXPECT_EQ(*over.seedStore, 600.0f);
+	EXPECT_TRUE(over.full);
+}
+
+TEST(SpellIcons, ANeedThatIsNotANumberEndsTheCharge)
+{
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	EXPECT_TRUE(ChargingIconTurn(0.0f, nan, std::nullopt).full);
+	const auto held = ChargingIconTurn(50.0f, nan, 0.0f);
+	EXPECT_EQ(held.store, 50.0f);
+	EXPECT_TRUE(held.full);
 }
 
 TEST(SpellIcons, TheClickRisesWithTheHandAndStopsAtTheSixth)
@@ -194,4 +262,23 @@ TEST(SpellIcons, AnIconWorksWhenBuiltWithMoreThanThreeQuartersOfItsLife)
 	EXPECT_FALSE(Functional(0.75f, true));
 	EXPECT_FALSE(Functional(0.5f, true));
 	EXPECT_FALSE(Functional(1.0f, false));
+}
+
+TEST(SpellIcons, AWorshipIconShowsItsStoreAsAPercentOfItsMiracle)
+{
+	// A quarter of the charge shows as 25, worked out in float as store over need, then times 100
+	ASSERT_TRUE(ShownCharge(250.0f, 1000.0f).has_value());
+	EXPECT_EQ(*ShownCharge(250.0f, 1000.0f), 25.0f);
+	EXPECT_EQ(*ShownCharge(1.0f, 3.0f), (1.0f / 3.0f) * 100.0f);
+	// An empty icon, or one with no charge to show at all, shows only the name
+	EXPECT_FALSE(ShownCharge(0.0f, 1000.0f).has_value());
+	EXPECT_FALSE(ShownCharge(0.0f, 0.0f).has_value());
+}
+
+TEST(SpellIcons, TheSeedInTheHandTakesItsChargeOffTheNeedThatTheIconShows)
+{
+	EXPECT_EQ(ShownRequired(1000.0f, std::nullopt), 1000.0f);
+	EXPECT_EQ(ShownRequired(1000.0f, 600.0f), 400.0f);
+	// The icon charges what the held seed still needs: 100 of the 400 left shows as 25
+	EXPECT_EQ(*ShownCharge(100.0f, ShownRequired(1000.0f, 600.0f)), 25.0f);
 }

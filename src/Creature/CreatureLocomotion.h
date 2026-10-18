@@ -18,7 +18,9 @@
 #include <optional>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Common/GameHeading.h"
 
 /// How a creature walks and runs, once a game turn. Its speed follows a requested fraction of its top speed, speeding up
@@ -44,25 +46,10 @@ constexpr size_t k_RightStep = 10;
 constexpr size_t k_LeftStep = 13;
 } // namespace animations
 
-/// Speeding up and slowing down, in units a second each second
-constexpr float k_Acceleration = 12.0f;
-/// The slowest a moving creature is allowed to go
-constexpr float k_MinSpeed = 0.1f;
 /// Running flat out, a creature goes this much faster than its running speed
 constexpr float k_TopSpeedMargin = 1.1f;
-/// A route turning this far from the way the creature faces makes it stop and start again
-constexpr float k_CornerAngle = std::numbers::pi_v<float> / 6.0f;
-/// Starting off, a creature this nearly facing its way walks straight on
-constexpr float k_WalkStraightAngle = std::numbers::pi_v<float> / 12.0f;
-/// The slope ahead slows the creature down by this much per unit of rise over its radius, within these limits
-constexpr float k_SlopeSlowing = 0.6f;
-constexpr float k_MinSlopeFactor = 0.3f;
-constexpr float k_MaxSlopeFactor = 1.1f;
 /// A creature this exhausted only goes slowly
 constexpr float k_ExhaustedAt = 0.8f;
-/// The smallest and largest sizes speeds are worked out for
-constexpr float k_MinSize = 0.05f;
-constexpr float k_MaxSize = 4.0f;
 
 /// How fast a creature of a size walks and runs, in units a second
 struct Speeds
@@ -70,7 +57,8 @@ struct Speeds
 	float walk;
 	float run;
 };
-/// Walking is 8 and running 20 units a second for each unit of 0.875 size + 0.25
+/// Walking is 8 and running 20 units a second for each unit of 0.875 size + 0.25. The size is not kept within its
+/// limits for this.
 [[nodiscard]] Speeds SpeedsFor(float size);
 
 /// The speed a creature heads for when asked for a fraction of its top speed
@@ -81,17 +69,6 @@ struct Speeds
 /// its slow fraction. It keeps that fraction after it recovers, until a new action or a run sets a different speed.
 [[nodiscard]] float RequiredFraction(float kept, float slowFraction, float exhaustion, bool held);
 
-/// The fastest it may go so as to stop in the distance left
-[[nodiscard]] float StopCap(float remaining);
-/// The fastest it may go so as to reach a corner at the speed allowed there, given as a squared speed in units of the
-/// deceleration
-[[nodiscard]] float CornerCap(float remaining, float cornerAllowance);
-/// How the slope ahead changes the speed: slower uphill, a little faster downhill
-[[nodiscard]] float SlopeFactor(float altitudeAhead, float altitude, float radius);
-/// The speed after some seconds of speeding up towards the target. It never slows down towards a lower target: only
-/// the stop and corner caps slow it.
-[[nodiscard]] float Accelerate(float speed, float target, float seconds);
-
 /// The heading a direction on the x, z plane faces, as the game calculates it, 0 for a direction too short to turn to
 [[nodiscard]] GameHeading HeadingOf(glm::vec2 direction);
 /// The direction on the x, z plane a heading faces
@@ -100,46 +77,12 @@ struct Speeds
 /// that the time before the step gives, from where it is now. At the end of the turn it is the target.
 [[nodiscard]] GameHeading LerpHeading(GameHeading heading, GameHeading target, float timeMs, float durationMs);
 
-/// An animation cycle's length and the distance its root moves over it, in mesh units
-struct Cycle
-{
-	float durationMs;
-	float stride;
-};
-
-/// An animation played in the blend, its time and its weight
-struct Slot
-{
-	size_t animation;
-	float timeMs;
-	float weight;
-};
-
-/// The walk and run blend for one turn
-struct Gait
-{
-	/// Below walking speed the stand and the walk, above it the run and the walk
-	std::array<Slot, 2> slots;
-	/// The walk's time after this turn, and how far it moved on in milliseconds
-	float walkTimeMs;
-	float walkAdvanceMs;
-};
-
-/// Blends standing into walking below walking speed, and walking into running above it, by how fast the creature goes.
-/// The walk moves on by the distance covered over the blend's stride, so the feet keep to the ground; the run keeps in
-/// step with the walk. Weights stay within 0 and 1 even when the creature goes faster than its running speed.
-[[nodiscard]] Gait BlendGait(float speed, const Speeds& speeds, float distance, float scale, const Cycle& stand,
-                             const Cycle& walk, const Cycle& run, float walkTimeMs, float breathPhase);
-
 enum class Side : uint8_t
 {
 	Right,
 	Left,
 };
 
-/// Which side a target is on, from the turn to it (GameHeading::TurnFrom): a turn towards the creature's right is
-/// negative
-[[nodiscard]] Side SideOf(float angle);
 /// The side of the spins for a turn on the spot to a heading. A turn of none uses the spins to the right.
 [[nodiscard]] Side SpinSideOf(float angle);
 
@@ -150,44 +93,9 @@ struct Pair
 	size_t to;
 	float weight;
 };
-/// The pair showing an angle, from the side's first animation: up to 90 degrees between 0 and 90, beyond it between 90
-/// and 180
-[[nodiscard]] Pair PairFor(size_t first, float angle);
 /// The pair of spins that shows a turn on the spot, as the game blends them: the turn made positive, then between the
 /// 0 and 90 degree spins below a quarter turn, else between the 90 and 180 degree spins
 [[nodiscard]] Pair SpinPairFor(size_t first, float angle);
-
-/// How a creature sets off towards a point, or turns to face one
-struct Start
-{
-	enum class Kind : uint8_t
-	{
-		/// Stepping off sideways or backwards into a walk
-		Step,
-		/// Walking straight on
-		Walk,
-		/// Turning on the spot first, by the spin animations when there are any
-		Turn,
-	};
-	Kind kind;
-	Side side;
-	std::optional<Pair> animations;
-};
-
-/// What the creature has to start with
-struct StartOptions
-{
-	/// The strides of the side's 0, 90 and 180 degree steps in mesh units, when the species has all three
-	std::optional<std::array<float, 3>> stepStrides;
-	/// Whether the species has the side's spins
-	bool hasSpins {false};
-	/// Whether it may step or walk off at all, rather than only turn to face the point
-	bool moving {true};
-};
-
-/// Steps when it has the steps and the point is further than every one of them takes it; else walks straight on when
-/// nearly facing the point; else turns on the spot
-[[nodiscard]] Start ChooseStart(float angle, float distanceInMesh, const StartOptions& options);
 
 /// The distances around a destination that count as arriving: anywhere from min to max
 struct Ring
@@ -203,9 +111,6 @@ struct Ring
 [[nodiscard]] bool Arrived(float distance, const Ring& ring);
 /// How long a walk of a distance is given before it is given up on, in milliseconds
 [[nodiscard]] float TimeLimitMs(float distance);
-/// Running away from a threat: a distance further along the way from the threat to the creature
-[[nodiscard]] glm::vec2 RunAwayPoint(glm::vec2 creature, glm::vec2 threat, float distance);
-
 /// Fidgets while the creature waits for its route: the first comes after this long, a look about is followed by a
 /// longer wait, and after a confused clip the wait starts again at the first length
 constexpr float k_FidgetMs = 3000.0f;
@@ -236,4 +141,38 @@ using Random = std::function<uint32_t(uint32_t)>;
 /// the creature fidgets. The first fidget is a look about. The game's random numbers choose each later fidget from the
 /// three, and then the side of the confused clip. The confused clip needs a free body, else nothing plays.
 [[nodiscard]] FidgetTurn WaitTurn(FidgetWait& wait, float stepMs, bool bodyFree, const Random& gameRandom);
+
+/// A creature that runs away goes this far plus a random number of units below k_RunAwayExtra
+constexpr uint32_t k_RunAwayExtra = 40;
+/// A creature that runs away arrives anywhere within this many times its height of the point that it runs to
+constexpr float k_RunAwayArrivalHeights = 5.0f;
+/// The height of a creature of size 1
+constexpr float k_RunAwayHeightOfSizeOne = 15.0f;
+/// The cells that the search for a clear cell tries, out from the cell it aims at
+constexpr int32_t k_RunAwaySearchCells = 1600;
+/// The nearest place to stand is used only nearer than this to the point that the run aims at
+constexpr float k_RunAwayStandReach = 30.0f;
+
+/// What the run away needs to know of the land
+struct RunAwayLand
+{
+	/// Whether the creature may go to a cell of the map
+	std::function<bool(int32_t x, int32_t z)> cellClear;
+	/// The height of the ground at a map position
+	std::function<float(const map_coords::MapCoords& coords)> ground;
+	/// Whether the creature may stand at a point on the land
+	std::function<bool(glm::vec2 point)> canStand;
+	/// The nearest place to stand near a point, if there is one
+	std::function<std::optional<glm::vec2>(glm::vec2 point)> nearestStand;
+};
+
+/// The point that a creature runs to from a threat, as the game finds it:
+/// 1. The distance is the random draw plus the species' run away distance.
+/// 2. The way is from the threat to the corner of the creature's cell, made one unit long. Too short, it is along x.
+/// 3. The run aims at the cell that the distance along the way gets to. The creature keeps its place in the cell.
+/// 4. A spiral of cells out from that cell gives the first clear cell. The point is its corner, on the ground.
+/// 5. With no clear cell, the point is the creature's own place.
+/// 6. Where the creature may not stand at the point, the nearest place to stand is used if it is near enough.
+[[nodiscard]] glm::vec3 RunAwayPoint(const map_coords::MapCoords& creature, glm::vec2 threat, uint32_t draw,
+                                     float runAwayDistance, const RunAwayLand& land);
 } // namespace openblack::creature_locomotion

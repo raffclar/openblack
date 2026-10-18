@@ -13,6 +13,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureLayers.h"
 
@@ -132,7 +133,7 @@ FollowCameraAction creature_emote::FollowCameraTurn(const FollowCameraView& view
 		return view.focusAhead ? FollowCameraAction::Continue : FollowCameraAction::MoveAgain;
 	}
 	const glm::vec2 focus {view.focus->x, view.focus->z};
-	if (glm::distance(view.position, focus) < reach)
+	if (gutils::GetDistanceInMetres(view.position, focus) < reach)
 	{
 		return FollowCameraAction::Done;
 	}
@@ -151,7 +152,7 @@ std::vector<Step> creature_emote::RunAway(const RunFrom& from, const Random& ran
 		agenda.push_back(FrightenedStart());
 	}
 	Step run {.kind = Step::Kind::Move,
-	          .movement = {.kind = Movement::Kind::FleeFrom, .point = from.point, .run = true},
+	          .movement = {.kind = Movement::Kind::FleeFrom, .point = from.point, .run = from.object.has_value()},
 	          .effect = Effect::RanAway,
 	          .face = Cue::Fear,
 	          .gaze = Gaze {.object = from.object, .hand = !from.object.has_value(), .runningAway = true}};

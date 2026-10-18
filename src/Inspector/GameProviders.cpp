@@ -73,6 +73,7 @@
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/Footpath.h"
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
@@ -145,6 +146,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -163,6 +165,7 @@
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -304,6 +307,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"villageLightSystem", "living.villages"},
     LocatorCoverage {"abodeSoundSystem", "living.abode_sounds"},
     LocatorCoverage {"fieldSystem", "living.field"},
+    LocatorCoverage {"footpathSystem", "living.footpaths"},
     LocatorCoverage {"animalSystem", "living.animal"},
     LocatorCoverage {"snowSystem", "land.snow"},
     LocatorCoverage {"snowfallSystem", "land.precipitation"},
@@ -349,6 +353,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"saveGameSystem", "saves.slots"},
     LocatorCoverage {"creaturePenSystem", "creatures.systems"},
     LocatorCoverage {"creatureFizzSystem", "creatures.systems"},
+    LocatorCoverage {"liquidParticleSystem", "particles.liquid"},
+    LocatorCoverage {"landShadeSystem", "map.shade"},
     LocatorCoverage {"creatureWebPageSystem", "creatures.systems"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tattooMenuSystem", "creatures.systems"},
@@ -1053,6 +1059,67 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	                                     [](const ecs::systems::AbodeSoundSystemInterface& sounds, const QueryContext& /*c*/) {
 		                                     return Json {{"sounds", sounds.GetSoundCount()}};
 	                                     }));
+	provider->Add(
+	    Query("footpaths",
+	          "The footpaths: how many there are and how many are being found; with an id, the paths that lead from that "
+	          "thing; with from and to (metres), the nodes of a path the game would lay at once between them",
+	          {{.name = "id", .type = "integer", .description = "A thing's entity id", .required = false},
+	           {.name = "from", .type = "point", .description = "[x, z] in metres", .required = false},
+	           {.name = "to", .type = "point", .description = "[x, z] in metres", .required = false}}),
+	    Serve<Locator::footpathSystem>(
+	        "the footpaths", [](const ecs::systems::FootpathSystemInterface& footpaths, const QueryContext& context) {
+		        const auto* registry = Registry();
+		        Json result {{"footpaths", CountOf<Footpath>(*registry)}, {"finders", CountOf<FootpathFinder>(*registry)}};
+		        const auto from = context.params.find("from");
+		        const auto to = context.params.find("to");
+		        if (from != context.params.end() && to != context.params.end())
+		        {
+			        const auto a = ReadPoint(*from);
+			        const auto b = ReadPoint(*to);
+			        if (!a.has_value() || !b.has_value())
+			        {
+				        return QueryResult::Error("from and to must be points");
+			        }
+			        const auto whole = [](const auto& point) {
+				        return glm::ivec2(map_coords::ToFixed(static_cast<float>(point[0])),
+				                          map_coords::ToFixed(static_cast<float>(point[2])));
+			        };
+			        const auto planned = footpaths.PlanBetween(whole(*a), whole(*b));
+			        Json nodes = Json::array();
+			        for (const auto& place : planned.value_or(std::vector<glm::ivec2> {}))
+			        {
+				        nodes.push_back({map_coords::ToMetres(place.x), map_coords::ToMetres(place.y)});
+			        }
+			        result["planned"] = planned.has_value() ? nodes : Json(nullptr);
+		        }
+		        if (const auto entity = EntityParam(context.params))
+		        {
+			        Json paths = Json::array();
+			        if (const auto* link = registry->TryGet<const FootpathLink>(*entity))
+			        {
+				        for (const auto id : link->footpaths)
+				        {
+					        const auto path = static_cast<entt::entity>(id);
+					        const auto* footpath = registry->Valid(path) ? registry->TryGet<const Footpath>(path) : nullptr;
+					        if (footpath == nullptr)
+					        {
+						        continue;
+					        }
+					        Json nodes = Json::array();
+					        for (const auto& node : footpath->nodes)
+					        {
+						        nodes.push_back({{"place", {node.place.x, node.place.y}},
+						                         {"planned", node.planned},
+						                         {"hidden", node.hidden},
+						                         {"marker", node.marker}});
+					        }
+					        paths.push_back({{"id", ToId(path)}, {"nodes", std::move(nodes)}});
+				        }
+			        }
+			        result["paths"] = std::move(paths);
+		        }
+		        return QueryResult::Value(std::move(result));
+	        }));
 	provider->Add(
 	    Query("field", "A field's crop as it is drawn: its tint, height and sway", {IdParameter("The field's entity id")}),
 	    Serve<Locator::fieldSystem>(
@@ -2995,7 +3062,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 	                   {.name = "point", .type = "array", .description = "[x, z] on the land", .required = true},
 	                   {.name = "pace",
 	                    .type = "string",
-	                    .description = "walk (the default), run, or face to turn on the spot towards the point",
+	                    .description = "walk (the default), run, face to turn on the spot towards the point, stop to stop "
+	                                   "as the game stops a walk (the point is not used), or stop_at_once to stop dead",
 	                    .required = false}});
 	move.writes = true;
 	provider->Add(std::move(move), [](const QueryContext& context) {
@@ -3020,9 +3088,21 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		{
 			return QueryResult::Value({{"result", locomotion.TurnToFace(*creature, target) ? "started" : "refused"}});
 		}
+		if (pace == "stop" || pace == "stop_at_once")
+		{
+			if (pace == "stop")
+			{
+				locomotion.Stop(*creature);
+			}
+			else
+			{
+				locomotion.StopAtOnce(*creature);
+			}
+			return QueryResult::Value({{"result", "stopped"}});
+		}
 		if (pace != "walk" && pace != "run")
 		{
-			return QueryResult::Error("pace is walk, run or face");
+			return QueryResult::Error("pace is walk, run, face, stop or stop_at_once");
 		}
 		using Locomotion = ecs::systems::CreatureLocomotionSystemInterface;
 		constexpr std::array<std::string_view, 3> k_Results {"invalid_destination", "busy", "started"};
@@ -3648,6 +3728,13 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    }
 		    return Locator::particleSystem::value().GetEffects();
 	    },
+	    .liquids = []() -> std::span<const liquid_particles::Particle> {
+		    if (!Locator::liquidParticleSystem::has_value())
+		    {
+			    return {};
+		    }
+		    return Locator::liquidParticleSystem::value().Particles();
+	    },
 	}));
 
 	inspector.Add(MakePhysicsProvider({.bodies = &Bodies}));
@@ -3679,6 +3766,9 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	    .world = World(),
 	    .map = []() -> const ecs::MapInterface* {
 		    return Locator::entitiesMap::has_value() ? &Locator::entitiesMap::value() : nullptr;
+	    },
+	    .shade = []() -> const ecs::systems::LandShadeSystemInterface* {
+		    return Locator::landShadeSystem::has_value() ? &Locator::landShadeSystem::value() : nullptr;
 	    },
 	}));
 	inspector.Add(MakeTownProvider(World()));
@@ -3769,6 +3859,14 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    }
 		    return state;
 	    },
+	    .simulateDeviceLoss =
+	        [](bool lost) {
+		        if (Locator::audio::has_value())
+		        {
+			        Locator::audio::value().SimulateDeviceLoss(lost);
+		        }
+	        },
+	    .deviceLost = []() { return Locator::audio::has_value() && Locator::audio::value().IsDeviceLost(); },
 	}));
 
 	inspector.Add(EngineProvider());
