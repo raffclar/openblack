@@ -51,11 +51,23 @@ struct Kinds
 	bool followsLand {false};
 };
 
+/// A point of an object's model. On a model that the game draws bone by bone, such as a creature's body, it also keeps
+/// the bone that carries it.
+struct Anchor
+{
+	/// The point in the model's frame
+	glm::vec3 point {0.0f};
+	/// The bone that carries the point. The point is at this bone as the body is drawn in each frame.
+	std::optional<uint32_t> bone;
+};
+
 /// A flame, a puff of steam or of smoke
 struct Sprite
 {
 	/// A flame's point in its object's model; a puff's in the world
 	glm::vec3 position {0.0f};
+	/// The bone that carries a flame on a model that the game draws bone by bone
+	std::optional<uint32_t> bone;
 	/// Half its width
 	float scale {1.0f};
 	float age {0.0f};
@@ -88,7 +100,9 @@ struct Graphic
 	std::optional<uint32_t> smokeStart;
 	float smokeAccumulator {0.0f};
 	int smokeCount {0};
+	/// The point where each puff of smoke starts, and the bone that carries it
 	glm::vec3 smokePoint {0.0f};
+	std::optional<uint32_t> smokeBone;
 	std::vector<Sprite> smoke;
 
 	/// The turn it was last drawn on, none before it first is, and how much of it burned then
@@ -124,9 +138,9 @@ struct Inputs
 struct Sampler
 {
 	/// A random point on its model, in the model's frame; none without a model
-	std::function<std::optional<glm::vec3>()> localPoint;
-	/// A point of its model in the world
-	std::function<glm::vec3(const glm::vec3&)> toWorld;
+	std::function<std::optional<Anchor>()> localPoint;
+	/// A point of its model in the world now
+	std::function<glm::vec3(const Anchor&)> toWorld;
 	/// A random number up to a value, on this machine's own stream
 	std::function<float(float)> random;
 };

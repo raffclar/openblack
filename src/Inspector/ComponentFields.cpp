@@ -3119,6 +3119,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::fire::graphic::Graphic::smokeAccumulator>("smokeAccumulator")
 	    .Field<&openblack::fire::graphic::Graphic::smokeCount>("smokeCount")
 	    .Field<&openblack::fire::graphic::Graphic::smokePoint>("smokePoint")
+	    .Field<&openblack::fire::graphic::Graphic::smokeBone>("smokeBone")
 	    .Field<&openblack::fire::graphic::Graphic::smoke>("smoke")
 	    .Field<&openblack::fire::graphic::Graphic::drawnTurn>("drawnTurn")
 	    .Field<&openblack::fire::graphic::Graphic::drawnFraction>("drawnFraction");
@@ -3130,6 +3131,7 @@ void openblack::inspector::reflection::RegisterComponentFields(entt::meta_ctx& c
 	    .Field<&openblack::fire::graphic::Kinds::followsLand>("followsLand");
 	Reflect<openblack::fire::graphic::Sprite>(context, ValueOnly {})
 	    .Field<&openblack::fire::graphic::Sprite::position>("position")
+	    .Field<&openblack::fire::graphic::Sprite::bone>("bone")
 	    .Field<&openblack::fire::graphic::Sprite::scale>("scale")
 	    .Field<&openblack::fire::graphic::Sprite::age>("age")
 	    .Field<&openblack::fire::graphic::Sprite::alpha>("alpha")
