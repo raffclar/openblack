@@ -9,14 +9,15 @@
 
 #pragma once
 
-#include <fstream>
 #include <memory>
 #include <optional>
-#include <unordered_set>
 #include <vector>
+
+#include <entt/signal/sigh.hpp>
 
 #include "3D/MapCoords.h"
 #include "ECS/Systems/VortexSystemInterface.h"
+#include "Magic/VortexCrossingFile.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -75,6 +76,8 @@ private:
 	void StartCrossingFile(entt::entity vortex);
 	/// The line of a thing taken, relative to the vortex
 	void WriteCrossing(const components::Vortex& vortex, entt::entity thing);
+	/// When the vortex that writes the crossing file goes, the file closes
+	void OnVortexGone(entt::registry& registry, entt::entity vortex);
 	/// Whatever a vortex was drawing in whose particle has gone, with the vortex or at its middle, goes too
 	static void RemoveTheTaken();
 	/// A creature it reaches sparkles away once near the middle, if it may be taken
@@ -88,12 +91,10 @@ private:
 	static void LevelGround(components::Vortex& vortex, float amount);
 
 	std::vector<GroundMark> _groundMarks;
-	/// The crossing file, written by the vortex that last started leading away while it lasts
-	std::ofstream _crossing;
-	entt::entity _crossingVortex {entt::null};
-	/// What the file has been written for already: each thing is written once, and a static thing's fellows standing
-	/// just where it stood count as written with it
-	std::unordered_set<entt::entity> _written;
+	/// The crossing file, written by the vortex that last started to lead away while that vortex is in the world
+	vortex::CrossingFile _crossing;
+	/// Tells the crossing file when a vortex goes, also when the land clears all its things
+	entt::scoped_connection _vortexGone;
 };
 
 } // namespace openblack::ecs::systems
