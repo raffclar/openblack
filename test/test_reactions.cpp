@@ -189,9 +189,30 @@ public:
 	[[nodiscard]] std::optional<bool> BirdCanBePickedUpByCreature(entt::entity) const override { return std::nullopt; }
 	[[nodiscard]] bool CanBeStompedOnByCreature(entt::entity, float) const override { return false; }
 	void StopReaction(entt::entity, bool resetState) override { stops.push_back(resetState); }
+	[[nodiscard]] bool IsAvailableForReaction(entt::entity) const override { return available; }
+	bool SetupLookAtObject(entt::entity, entt::entity object) override
+	{
+		lookedAt.push_back(object);
+		return true;
+	}
+	bool SetupGotoFood(entt::entity, entt::entity food) override
+	{
+		wentTo.push_back(food);
+		return true;
+	}
+	[[nodiscard]] uint32_t ReactToFoodPriority(entt::entity, entt::entity, uint32_t tablePriority) const override
+	{
+		return foodInterests ? tablePriority : 0;
+	}
 
 	/// For each end of a reaction, whether the animal goes into the state after the reaction
 	std::vector<bool> stops;
+	/// Whether the animal may take up a reaction, and whether food interests it
+	bool available {false};
+	bool foodInterests {false};
+	/// The things that the animal looked at and the food that it went to
+	std::vector<entt::entity> lookedAt;
+	std::vector<entt::entity> wentTo;
 };
 } // namespace
 
@@ -212,9 +233,9 @@ protected:
 		Locator::entitiesMap::emplace<MapProduction>();
 		Locator::livingActionSystem::emplace<ecs::systems::LivingActionSystem>();
 		_info = std::make_unique<InfoConstants>();
-		for (const auto type :
-		     {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield, Reaction::FleeFromObject,
-		      Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed, Reaction::ReactToNewBuilding})
+		for (const auto type : {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield,
+		                        Reaction::FleeFromObject, Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed,
+		                        Reaction::ReactToNewBuilding, Reaction::LookAtObject, Reaction::ReactToFood})
 		{
 			auto& reaction = _info->reaction.at(static_cast<size_t>(type));
 			reaction.priority = type == Reaction::FleeFromSpell ? 150 : 120;
@@ -1787,4 +1808,40 @@ TEST(DiscipleGlow, TheFrameComesFromTheMillisecondsIntoTheHalfSecond)
 	EXPECT_EQ(ecs::villager_disciple::GlowFrame(100), 3u);
 	EXPECT_EQ(ecs::villager_disciple::GlowFrame(1400), 12u);
 	EXPECT_EQ(ecs::villager_disciple::GlowFrame(99), 2u);
+}
+
+TEST_F(Reactions, AnAnimalLooksAtAThingToLookAt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactToEverything(_info->animal.at(static_cast<size_t>(AnimalInfo::Cow)));
+	Locator::infoConstants::emplace(*_info);
+	auto& animals = static_cast<FakeAnimals&>(Locator::animalSystem::emplace<FakeAnimals>());
+	animals.available = true;
+	const auto cow = registry.Create();
+	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	Locator::entitiesMap::value().Sync();
+	_reactions.Create(Miracle(Reaction::LookAtObject));
+	EXPECT_EQ(animals.lookedAt, std::vector<entt::entity> {static_cast<entt::entity>(1000)});
+	EXPECT_EQ(registry.Get<const LivingReaction>(cow).type, Reaction::LookAtObject);
+	Locator::animalSystem::reset();
+}
+
+TEST_F(Reactions, AnAnimalGoesOnlyToFoodThatInterestsIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactToEverything(_info->animal.at(static_cast<size_t>(AnimalInfo::Cow)));
+	Locator::infoConstants::emplace(*_info);
+	auto& animals = static_cast<FakeAnimals&>(Locator::animalSystem::emplace<FakeAnimals>());
+	animals.available = true;
+	const auto cow = registry.Create();
+	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	Locator::entitiesMap::value().Sync();
+	_reactions.Create(Miracle(Reaction::ReactToFood));
+	EXPECT_TRUE(animals.wentTo.empty());
+	animals.foodInterests = true;
+	_reactions.Create(Miracle(Reaction::ReactToFood));
+	EXPECT_EQ(animals.wentTo, std::vector<entt::entity> {static_cast<entt::entity>(1000)});
+	Locator::animalSystem::reset();
 }

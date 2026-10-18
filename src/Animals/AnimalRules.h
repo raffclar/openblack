@@ -94,6 +94,35 @@ struct ReactionFacts
 /// is not in the table gives the empty state (0).
 [[nodiscard]] uint8_t StateAfterReacting(uint8_t stateBefore, std::span<const GAnimalStateTableInfo> table);
 
+/// What decides whether food interests an animal
+struct FoodInterest
+{
+	/// The food is in the world and nothing takes it away now
+	bool available {false};
+	/// The physics moves the food now
+	bool inPhysics {false};
+	/// The hunger of the kind of animal at which it looks for food. A kind with 0 never looks for food
+	uint32_t hungerLimit {0};
+	/// How hungry the animal is now
+	int16_t hunger {0};
+	/// The kinds of food that the kind of animal eats, and the kinds of the food
+	FoodType eats {FoodType::None};
+	FoodType food {FoodType::None};
+};
+/// Whether food interests an animal. The food must be available and out of the physics. The animal must have a hunger
+/// limit, be at that limit or more, and eat a kind of the food
+[[nodiscard]] bool InterestedInFood(const FoodInterest& facts);
+
+/// The priority of a reaction to food for an animal: the table priority when the food holds some food, is not farther
+/// than the furthest distance of the reaction and interests the animal; else 0
+[[nodiscard]] uint32_t FoodPriority(bool holdsFood, float distance, float furthest, bool interested, uint32_t tablePriority);
+
+/// The largest turn of an animal to a thing that it looks at, in game angles each turn
+inline constexpr uint16_t k_LookTurnStep = 0x80;
+/// The angle that an animal faces after a turn to a thing that it looks at. Nearer than the step, it faces the thing.
+/// Else it turns by the step, on the shorter side
+[[nodiscard]] uint16_t LookTowards(uint16_t facing, uint16_t target, uint16_t step);
+
 /// Whether a kind of animal frightens a creature. Bats, the bats of the evil flock and vultures frighten a creature.
 /// Lions, tigers, leopards, wolves and the wolves that a spell makes also frighten a creature.
 /// The lion and the cow of the puzzles do not frighten a creature.

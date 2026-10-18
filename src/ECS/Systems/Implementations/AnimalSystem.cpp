@@ -63,12 +63,15 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
+#include "ECS/VillagerRoutine.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ReactionRules.h"
+#include "ObjectMeasures.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
@@ -572,8 +575,8 @@ void AnimalSystem::ProcessTurn()
 		{
 			++animal.hunger;
 		}
-		// Fleeing what it reacts to comes before its own ways
-		if (Flee(entity, animal))
+		// Its reaction comes before its own ways
+		if (Flee(entity, animal) || LookOrGoToFood(entity, animal))
 		{
 			continue;
 		}
@@ -1778,8 +1781,8 @@ bool AnimalSystem::SetupFleeFromObject(entt::entity entity, entt::entity object,
 		return false;
 	}
 	// It takes up the flee whatever the object; with the object gone its next step gives the flee up
-	animal->fleeing = object;
-	animal->fleeReaction = reaction;
+	animal->reactingTo = object;
+	animal->reaction = reaction;
 	SetState(*animal, AnimalState::FleeingFromObject);
 	return true;
 }
@@ -1791,8 +1794,8 @@ bool AnimalSystem::SetupFleeFromPredator(entt::entity entity, entt::entity preda
 	{
 		return false;
 	}
-	animal->fleeing = predator;
-	animal->fleeReaction = Reaction::FleeFromPredator;
+	animal->reactingTo = predator;
+	animal->reaction = Reaction::FleeFromPredator;
 	SetTopState(*animal, AnimalState::FleeingFromPredator);
 	return true;
 }
@@ -1831,7 +1834,7 @@ void AnimalSystem::GiveUpReaction(entt::entity entity)
 void AnimalSystem::FleeFromPredator(entt::entity entity, Animal& animal)
 {
 	auto& registry = EntityRegistry();
-	const auto hunter = animal.fleeing;
+	const auto hunter = animal.reactingTo;
 	const auto* at = hunter != entt::null && registry.Valid(hunter) ? registry.TryGet<const Transform>(hunter) : nullptr;
 	const auto& here = registry.Get<const Transform>(entity).position;
 	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(Reaction::FleeFromPredator));
@@ -1894,8 +1897,8 @@ bool AnimalSystem::SetupReactToFlyingObject(entt::entity entity, entt::entity ob
 	{
 		return false;
 	}
-	animal->fleeing = object;
-	animal->fleeReaction = Reaction::ReactToFlyingObject;
+	animal->reactingTo = object;
+	animal->reaction = Reaction::ReactToFlyingObject;
 	SetState(*animal, AnimalState::FleeingFromObject);
 	return true;
 }
@@ -1909,6 +1912,136 @@ void AnimalSystem::RememberStateBeforeReaction(entt::entity entity)
 	}
 }
 
+bool AnimalSystem::SetupLookAtObject(entt::entity entity, entt::entity object)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return false;
+	}
+	animal->reactingTo = object;
+	animal->reaction = Reaction::LookAtObject;
+	SetTopState(*animal, AnimalState::LookingAtObject);
+	return true;
+}
+
+bool AnimalSystem::SetupGotoFood(entt::entity entity, entt::entity food)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	if (animal == nullptr)
+	{
+		return false;
+	}
+	animal->reactingTo = food;
+	animal->reaction = Reaction::ReactToFood;
+	SetTopState(*animal, AnimalState::GotoFood);
+	return true;
+}
+
+uint32_t AnimalSystem::ReactToFoodPriority(entt::entity entity, entt::entity food, uint32_t tablePriority) const
+{
+	const auto& registry = EntityRegistry();
+	const auto* animal = registry.TryGet<const Animal>(entity);
+	const auto* here = registry.TryGet<const Transform>(entity);
+	const auto* there = food != entt::null && registry.Valid(food) ? registry.TryGet<const Transform>(food) : nullptr;
+	if (animal == nullptr || here == nullptr || there == nullptr)
+	{
+		return 0;
+	}
+	// The game does not take food that the physics moves
+	if (registry.AllOf<InPhysics>(food))
+	{
+		return 0;
+	}
+	const bool holdsFood = Locator::resourceStoreSystem::has_value() &&
+	                       Locator::resourceStoreSystem::value().GetResource(food, ResourceType::Food) != 0;
+	const auto& reactionInfo = Locator::infoConstants::value().reaction.at(static_cast<size_t>(Reaction::ReactToFood));
+	const auto& info = InfoOf(animal->type);
+	const auto* grazer = registry.TryGet<const Grazer>(entity);
+	const auto* foodInfo = world_objects::InfoOf(food);
+	// TODO(animals): the game also passes over food with a flag of its own whose meaning is unknown
+	const bool interested = animals::InterestedInFood({
+	    .available = true,
+	    .inPhysics = false,
+	    .hungerLimit = info.hunger,
+	    .hunger = grazer != nullptr ? grazer->needs.hunger : static_cast<int16_t>(animal->hunger),
+	    .eats = info.needsFoodTypes,
+	    .food = foodInfo != nullptr ? foodInfo->foodType : FoodType::None,
+	});
+	return animals::FoodPriority(holdsFood, gutils::GetDistanceInMetres(here->position, there->position),
+	                             reactionInfo.maxDistanceToRunAwayFromObject, interested, tablePriority);
+}
+
+bool AnimalSystem::LookOrGoToFood(entt::entity entity, Animal& animal)
+{
+	auto& registry = EntityRegistry();
+	switch (animal.state)
+	{
+	case AnimalState::LookingAtObject:
+		LookAtThing(entity, animal);
+		return true;
+	case AnimalState::GotoFood:
+	{
+		// It goes to the edge of the food on its own side. With the food gone it stops the reaction
+		const auto food = animal.reactingTo;
+		const auto* there = food != entt::null && registry.Valid(food) ? registry.TryGet<const Transform>(food) : nullptr;
+		if (there == nullptr)
+		{
+			GiveUpReaction(entity);
+			return true;
+		}
+		const auto at = Xz(there->position);
+		const auto here = Metres(animal.move.position);
+		const float angle = gutils::Get3DAngleFromXZ(at, here);
+		const float gap = object_measures::TwoDRadius(registry, food) + object_measures::TwoDRadius(registry, entity);
+		SetupMoveTo(animal, villager_routine::Polar(at, angle, gap), 0.0f, AnimalState::ArrivesAtFood);
+		return true;
+	}
+	case AnimalState::ArrivesAtFood:
+		GiveUpReaction(entity);
+		return true;
+	case AnimalState::MoveToPos:
+		// A grazer moves to the food by its own move; another animal moves here
+		if (animal.finalState != AnimalState::ArrivesAtFood || registry.AllOf<Grazer>(entity))
+		{
+			return false;
+		}
+		if (MoveTo3D(animal))
+		{
+			SetTopState(animal, animal.finalState);
+		}
+		return true;
+	default:
+		return false;
+	}
+}
+
+void AnimalSystem::LookAtThing(entt::entity entity, Animal& animal)
+{
+	auto& registry = EntityRegistry();
+	// With no thing, because the reaction is gone, it stays in its state and does nothing
+	if (animal.reactingTo == entt::null)
+	{
+		return;
+	}
+	const auto* there = registry.Valid(animal.reactingTo) ? registry.TryGet<const Transform>(animal.reactingTo) : nullptr;
+	if (there == nullptr)
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(animal.reaction));
+	const auto& here = registry.Get<const Transform>(entity).position;
+	if (info.maxDistanceToRunAwayFromObject < gutils::GetDistanceInMetres(here, there->position))
+	{
+		GiveUpReaction(entity);
+		return;
+	}
+	const auto target = gutils::GetAngleFromXZ(map_coords::MapCoords {.x = animal.move.position.x, .z = animal.move.position.y},
+	                                           map_coords::FromMetres(Xz(there->position)));
+	animal.move.angle = animals::LookTowards(animal.move.angle, target, animals::k_LookTurnStep);
+	SyncWorld(animal);
+}
+
 void AnimalSystem::StopReaction(entt::entity entity, bool resetState)
 {
 	auto* animal = EntityRegistry().TryGet<Animal>(entity);
@@ -1916,7 +2049,7 @@ void AnimalSystem::StopReaction(entt::entity entity, bool resetState)
 	{
 		return;
 	}
-	animal->fleeing = entt::null;
+	animal->reactingTo = entt::null;
 	if (!resetState)
 	{
 		return;
@@ -1960,12 +2093,12 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 		return true;
 	}
 	// With no thing to flee, because its reaction is gone, it stays in its state and does nothing
-	if (animal.fleeing == entt::null)
+	if (animal.reactingTo == entt::null)
 	{
 		return true;
 	}
-	const auto* at = registry.Valid(animal.fleeing) ? registry.TryGet<const Transform>(animal.fleeing) : nullptr;
-	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(animal.fleeReaction));
+	const auto* at = registry.Valid(animal.reactingTo) ? registry.TryGet<const Transform>(animal.reactingTo) : nullptr;
+	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(animal.reaction));
 	// When the thing that it flees is gone, it gives up the reaction
 	if (at == nullptr)
 	{
@@ -1975,16 +2108,13 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 	auto& transform = registry.Get<Transform>(entity);
 	const auto& here = transform.position;
 	const float distance = living::MapDistance(here, at->position);
-	// Watching, it gives up once the thing is beyond the reaction's furthest
+	// It watches the thing as it looks at any thing: it turns to the thing, and it stops once the thing is too far
 	if (animal.state == AnimalState::FleeingAndLookingAtObject)
 	{
-		if (!(distance <= info.maxDistanceToRunAwayFromObject))
-		{
-			GiveUpReaction(entity);
-		}
+		LookAtThing(entity, animal);
 		return true;
 	}
-	const glm::vec3 velocity = FledThingMovement(animal.fleeing);
+	const glm::vec3 velocity = FledThingMovement(animal.reactingTo);
 	const bool coming = magic::ComingTowards(here, at->position, velocity);
 	switch (living::FleeFromObject(distance, info.minDistanceToRunAwayFromObject, info.maxDistanceToRunAwayFromObject, coming))
 	{

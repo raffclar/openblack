@@ -530,8 +530,8 @@ void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& graze
 			SetScale(entity, grazers::GrownScale(transform.scale.x, age, info.ageToScale.values, Random));
 		}
 	}
-	// Fleeing what it reacts to comes before its own ways
-	if (Flee(entity, animal))
+	// Its reaction comes before its own ways
+	if (Flee(entity, animal) || LookOrGoToFood(entity, animal))
 	{
 		return;
 	}

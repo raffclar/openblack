@@ -155,6 +155,18 @@ public:
 	{
 		return false;
 	}
+	/// An animal takes up a reaction to look at a thing: it stands and turns to the thing. False when it is not an animal
+	virtual bool SetupLookAtObject([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity object) { return false; }
+	/// An animal takes up a reaction to food: it goes to the food and then stops the reaction. False when it is not an
+	/// animal
+	virtual bool SetupGotoFood([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity food) { return false; }
+	/// The priority of a reaction to food for an animal. The table priority applies only when the food interests the
+	/// animal, holds food and is near enough. Else the priority is 0
+	[[nodiscard]] virtual uint32_t ReactToFoodPriority([[maybe_unused]] entt::entity animal, [[maybe_unused]] entt::entity food,
+	                                                   [[maybe_unused]] uint32_t tablePriority) const
+	{
+		return 0;
+	}
 	/// An animal that does not react now remembers its state before it takes up a reaction
 	virtual void RememberStateBeforeReaction([[maybe_unused]] entt::entity animal) {}
 	/// An animal's reaction ends, and the animal forgets what it fled. When `resetState` is true, the animal goes into

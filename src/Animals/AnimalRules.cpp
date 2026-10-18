@@ -10,6 +10,7 @@
 #include "AnimalRules.h"
 
 #include <cmath>
+#include <cstdlib>
 
 #include <algorithm>
 #include <numbers>
@@ -200,6 +201,45 @@ glm::vec3 animals::DeadBodySmokePlace(const glm::vec3& position, float heading, 
 {
 	const float out = height * 0.5f;
 	return position + glm::vec3(std::cos(heading) * out, 0.0f, std::sin(heading) * out);
+}
+
+bool animals::InterestedInFood(const FoodInterest& facts)
+{
+	if (!facts.available || facts.inPhysics || facts.hungerLimit == 0)
+	{
+		return false;
+	}
+	// The game compares the limit and the hunger as signed numbers
+	if (static_cast<int32_t>(facts.hungerLimit) > static_cast<int32_t>(facts.hunger))
+	{
+		return false;
+	}
+	return (static_cast<uint32_t>(facts.eats) & static_cast<uint32_t>(facts.food)) != 0;
+}
+
+uint32_t animals::FoodPriority(bool holdsFood, float distance, float furthest, bool interested, uint32_t tablePriority)
+{
+	if (!holdsFood || !(distance <= furthest))
+	{
+		return 0;
+	}
+	return interested ? tablePriority : 0;
+}
+
+uint16_t animals::LookTowards(uint16_t facing, uint16_t target, uint16_t step)
+{
+	constexpr int32_t k_HalfTurn = 0x400;
+	constexpr int32_t k_AngleMask = 0x7FF;
+	const int32_t difference = static_cast<int32_t>(target) - static_cast<int32_t>(facing);
+	const int32_t size = std::abs(difference);
+	if (size < static_cast<int32_t>(step))
+	{
+		return target;
+	}
+	// It turns forwards when the target is ahead by less than half a turn, or behind by more than half a turn
+	const bool forwards = difference > 0 ? difference < k_HalfTurn : size >= k_HalfTurn;
+	const int32_t change = forwards ? static_cast<int32_t>(step) : -static_cast<int32_t>(step);
+	return static_cast<uint16_t>((static_cast<int32_t>(facing) + change) & k_AngleMask);
 }
 
 uint8_t animals::StateAfterReacting(uint8_t stateBefore, std::span<const GAnimalStateTableInfo> table)

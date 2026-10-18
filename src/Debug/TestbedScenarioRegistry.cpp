@@ -918,6 +918,22 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .objects = {{.type = AnimalInfo::Cow, .offset = {8.0f, 0.0f}, .living = true}},
 	});
 
+	// A cart that makes a reaction to look at it, with two cows near it
+	all.push_back({
+	    .id = "animals.cows_look_at_cart",
+	    .name = "Cows look at a thing to look at",
+	    .facet = Facet::Animals,
+	    .description = "A cart in open land makes a reaction to look at it, of the kind a thing that came to rest makes. "
+	                   "Two free cows stand 8 and 16 metres east of it.",
+	    .expected = "Each cow stops and stands. It turns to the cart a little at a time until it faces the cart. When "
+	                "its reaction ends, it goes back to what it did before.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-4.0f, -8.0f}, {20.0f, 8.0f}}, .distance = 0.6f},
+	    .objects = {{.type = MobileObjectInfo::Cart, .offset = {0.0f, 0.0f}, .reaction = Reaction::LookAtObject},
+	                {.type = AnimalInfo::Cow, .offset = {8.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {16.0f, 0.0f}, .living = true}},
+	});
+
 	all.push_back({
 	    .id = "needs.starving",
 	    .name = "Starving creature faints",
