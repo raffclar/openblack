@@ -32,11 +32,13 @@
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureRig.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -304,8 +306,9 @@ const graphics::L3DMesh* MeshOf(entt::entity object)
 }
 
 /// A random point of a random triangle of the model's first detail, in its own frame; a random bone's place, as the
-/// bones are posed now, for a model moved by bones. A tree's flames keep to its middle half.
-std::optional<glm::vec3> RandomPointOn(entt::entity object)
+/// bones are posed now, for a model moved by bones. A tree's flames keep to its middle half. On a creature's body, the
+/// point also keeps its bone: the game draws the body bone by bone, and the point stays at that bone.
+std::optional<fire::graphic::Anchor> RandomPointOn(entt::entity object)
 {
 	const auto* mesh = MeshOf(object);
 	if (mesh == nullptr || !Locator::gameRandom::has_value())
@@ -316,8 +319,13 @@ std::optional<glm::vec3> RandomPointOn(entt::entity object)
 	if (mesh->IsBoned() && !mesh->GetBoneMatrices().empty())
 	{
 		const auto bones = ecs::posed_model::BonesOf(Entities(), object, *mesh);
-		const auto bone = random.LocalRand(static_cast<int32_t>(bones.size()));
-		return glm::vec3(bones[std::min<size_t>(static_cast<size_t>(bone), bones.size() - 1)][3]);
+		const auto bone =
+		    std::min<size_t>(static_cast<size_t>(random.LocalRand(static_cast<int32_t>(bones.size()))), bones.size() - 1);
+		const bool drawnByBones = Entities().AllOf<Creature, CreatureAnimation>(object);
+		return fire::graphic::Anchor {
+		    .point = glm::vec3(bones[bone][3]),
+		    .bone = drawnByBones ? std::optional(static_cast<uint32_t>(bone)) : std::nullopt,
+		};
 	}
 	size_t triangles = 0;
 	const auto firstDetail = [](const graphics::L3DSubMesh& subMesh) { return (subMesh.GetFlags().lodMask & 1u) != 0; };
@@ -330,7 +338,7 @@ std::optional<glm::vec3> RandomPointOn(entt::entity object)
 	}
 	if (triangles == 0)
 	{
-		return mesh->GetBoundingBox().Center();
+		return fire::graphic::Anchor {.point = mesh->GetBoundingBox().Center()};
 	}
 	auto pick = static_cast<size_t>(random.LocalRand(static_cast<int32_t>(triangles)));
 	float a = random.LocalFloatRand(1.0f);
@@ -359,7 +367,7 @@ std::optional<glm::vec3> RandomPointOn(entt::entity object)
 		{
 			point *= 0.5f;
 		}
-		return point;
+		return fire::graphic::Anchor {.point = point};
 	}
 	return std::nullopt;
 }
@@ -368,6 +376,24 @@ glm::vec3 ToWorld(entt::entity object, const glm::vec3& local)
 {
 	const auto* transform = Entities().TryGet<const Transform>(object);
 	return transform != nullptr ? transform->position + transform->rotation * (transform->scale * local) : local;
+}
+
+/// Where a point of an object's model is in the world now. A point that a bone carries is at that bone of the body as
+/// the game draws it in this frame.
+glm::vec3 ToWorld(entt::entity object, const fire::graphic::Anchor& anchor)
+{
+	const auto& registry = Entities();
+	if (anchor.bone.has_value())
+	{
+		const auto* transform = registry.TryGet<const Transform>(object);
+		const auto* animation = registry.TryGet<const CreatureAnimation>(object);
+		if (transform != nullptr && animation != nullptr && *anchor.bone < animation->boneMatrices.size())
+		{
+			const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+			return glm::vec3(creature::PosedBone(*anchor.bone, animation->boneMatrices, placement)[3]);
+		}
+	}
+	return ToWorld(object, anchor.point);
 }
 
 /// The creators the fires' sprites are drawn with
@@ -1680,7 +1706,7 @@ void FireSystem::Update(std::chrono::milliseconds frameRealTime, std::chrono::mi
 		    };
 		    const fire::graphic::Sampler sampler {
 		        .localPoint = [object] { return RandomPointOn(object); },
-		        .toWorld = [object](const glm::vec3& local) { return ToWorld(object, local); },
+		        .toWorld = [object](const fire::graphic::Anchor& anchor) { return ToWorld(object, anchor); },
 		        .random = [random](float range) { return random != nullptr ? random->LocalFloatRand(range) : 0.0f; },
 		    };
 		    if (fire::graphic::Update(look.graphic, inputs, seconds, sampler) && Locator::audio::has_value())
@@ -1739,7 +1765,8 @@ void FireSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& fr
 		};
 		for (const auto& flame : graphic.flames)
 		{
-			auto position = ToWorld(object, flame.position);
+			// A flame on a creature stays at its bone as the body moves
+			auto position = ToWorld(object, {.point = flame.position, .bone = flame.bone});
 			if (graphic.kinds.followsLand)
 			{
 				// The flames rise and fall with the land under them

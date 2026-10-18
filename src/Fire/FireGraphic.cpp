@@ -98,9 +98,9 @@ void UpdateFlames(Graphic& graphic, const Inputs& inputs, float seconds, const S
 	while (static_cast<float>(graphic.flameCount) < graphic.flameAccumulator)
 	{
 		++graphic.flameCount;
-		if (const auto point = sampler.localPoint ? sampler.localPoint() : std::nullopt)
+		if (const auto anchor = sampler.localPoint ? sampler.localPoint() : std::nullopt)
 		{
-			graphic.flames.push_back({.position = *point});
+			graphic.flames.push_back({.position = anchor->point, .bone = anchor->bone});
 		}
 	}
 	const float fadeOut = 1.0f / (k_FlameLife - k_FlameFadeIn);
@@ -143,9 +143,9 @@ bool UpdateSteam(Graphic& graphic, const Inputs& inputs, float seconds, const Sa
 		while (static_cast<float>(graphic.steamCount) < graphic.steamAccumulator)
 		{
 			++graphic.steamCount;
-			if (const auto point = sampler.localPoint ? sampler.localPoint() : std::nullopt)
+			if (const auto anchor = sampler.localPoint ? sampler.localPoint() : std::nullopt)
 			{
-				graphic.steam.push_back(NewPuff(graphic, sampler.toWorld(*point), sampler));
+				graphic.steam.push_back(NewPuff(graphic, sampler.toWorld(*anchor), sampler));
 			}
 		}
 	}
@@ -162,7 +162,9 @@ void UpdateSmoke(Graphic& graphic, const Inputs& inputs, float seconds, const Sa
 			graphic.smokeStart = inputs.turn;
 			graphic.smokeCount = 0;
 			graphic.smokeAccumulator = 0.0f;
-			graphic.smokePoint = sampler.localPoint ? sampler.localPoint().value_or(glm::vec3(0.0f)) : glm::vec3(0.0f);
+			const auto anchor = sampler.localPoint ? sampler.localPoint().value_or(Anchor {}) : Anchor {};
+			graphic.smokePoint = anchor.point;
+			graphic.smokeBone = anchor.bone;
 		}
 	}
 	else if (inputs.turn > *graphic.smokeStart + k_PuffTurns)
@@ -175,7 +177,9 @@ void UpdateSmoke(Graphic& graphic, const Inputs& inputs, float seconds, const Sa
 		while (static_cast<float>(graphic.smokeCount) < graphic.smokeAccumulator)
 		{
 			++graphic.smokeCount;
-			graphic.smoke.push_back(NewPuff(graphic, sampler.toWorld(graphic.smokePoint), sampler));
+			// Each puff starts where the smoke's point is now: on a moving body, the bone carries it
+			graphic.smoke.push_back(
+			    NewPuff(graphic, sampler.toWorld({.point = graphic.smokePoint, .bone = graphic.smokeBone}), sampler));
 		}
 	}
 	UpdatePuffs(graphic.smoke, seconds, k_SmokeAlpha, k_SmokeRise, inputs.wind);

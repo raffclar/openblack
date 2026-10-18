@@ -6802,6 +6802,35 @@ void AddCombat(std::vector<Scenario>& all)
 		                 Fight(Kind::FightBlow, 0, k_Mid, 0.1f, 0.0f), Fight(Kind::FightBlow, 0, k_Mid, 0.1f, 0.0f)},
 		    .repeatFrom = 1,
 		});
+		all.push_back({
+		    .id = "appearance.burning_body_flames",
+		    .name = "Flames stay on the limbs of a burning creature",
+		    .facet = Facet::Appearance,
+		    .description = "A tiger of no player stands north of the middle, short of the testbed's lake, and catches "
+		                   "fire. The camera follows it closely.",
+		    .expected = "It runs to the lake. Each flame stays on one part of the body: a flame on a leg moves with "
+		                "the leg in each frame. The flames do not stay behind at the place where the limb was.",
+		    .framing = {.shot = Shot::Follow, .distance = 1.4f},
+		    .creatures = {CreatureSetup {
+		        .species = CreatureType::Tiger, .offset = {0.0f, 60.0f}, .owner = PlayerNames::NEUTRAL}},
+		    .commands = {{.kind = Kind::SetAlight, .creature = 0, .delaySeconds = 1.0f}},
+		});
+		all.push_back({
+		    .id = "leash.rope_starts_at_collar",
+		    .name = "A new leash rope starts at the collar",
+		    .facet = Facet::Leash,
+		    .description = "A tiger walks to the west. While it walks, it goes on the learning leash, then the leash "
+		                   "comes off. The leash goes on again three times.",
+		    .expected = "Each time the leash goes on, the rope starts straight from the collar to the hand. The rope "
+		                "then follows the collar in each frame. It does not start at a point away from the body.",
+		    .framing = {.shot = Shot::Follow, .distance = 1.4f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 40.0f})},
+		    .commands = {Go(Kind::WalkTo, 0, {-80.0f, 40.0f}, 1.0f, false), Leash(0, LeashType::Rope, 1.0f),
+		                 Act(Kind::TakeOffLeash, 0, 2.0f), Leash(0, LeashType::Rope, 1.0f),
+		                 Act(Kind::TakeOffLeash, 0, 2.0f), Leash(0, LeashType::Rope, 1.0f),
+		                 Act(Kind::TakeOffLeash, 0, 2.0f), Leash(0, LeashType::Rope, 1.0f)},
+		    .repeatFrom = 0,
+		});
 	}
 }
 

@@ -213,8 +213,8 @@ TEST(FireGraphic, FlamesGrowInByTheFireAndFadeOver4Seconds)
 	look.maxFlames = 7;
 	look.localScale = 2.0f;
 	const graphic::Sampler sampler {
-	    .localPoint = [] { return std::optional(glm::vec3(1.0f)); },
-	    .toWorld = [](const glm::vec3& p) { return p; },
+	    .localPoint = [] { return std::optional(graphic::Anchor {.point = glm::vec3(1.0f)}); },
+	    .toWorld = [](const graphic::Anchor& a) { return a.point; },
 	    .random = [](float range) { return range * 0.5f; },
 	};
 	// Catching adds half its flames at once
@@ -234,8 +234,8 @@ TEST(FireGraphic, SteamHissesOnceAsAHotFireIsCooledAndPuffsForThirtyTurns)
 	graphic::Graphic look;
 	look.localScale = 1.0f;
 	const graphic::Sampler sampler {
-	    .localPoint = [] { return std::optional(glm::vec3(0.0f)); },
-	    .toWorld = [](const glm::vec3& p) { return p; },
+	    .localPoint = [] { return std::optional(graphic::Anchor {}); },
+	    .toWorld = [](const graphic::Anchor& a) { return a.point; },
 	    .random = [](float range) { return range * 0.5f; },
 	};
 	EXPECT_TRUE(graphic::Update(look, {.temperature = 200.0f, .flags = k_Cooling, .turn = 10}, 0.0f, sampler));
@@ -256,8 +256,8 @@ TEST(FireGraphic, AGraphicLongUndrawnCatchesUpByAFlamesLife)
 	look.maxFlames = 7;
 	look.localScale = 1.0f;
 	const graphic::Sampler sampler {
-	    .localPoint = [] { return std::optional(glm::vec3(0.0f)); },
-	    .toWorld = [](const glm::vec3& p) { return p; },
+	    .localPoint = [] { return std::optional(graphic::Anchor {}); },
+	    .toWorld = [](const graphic::Anchor& a) { return a.point; },
 	    .random = [](float range) { return range * 0.5f; },
 	};
 	(void)graphic::Update(look, {.fraction = 0.5f, .temperature = 300.0f, .turn = 100}, 0.0f, sampler);
@@ -272,6 +272,34 @@ TEST(FireGraphic, AGraphicLongUndrawnCatchesUpByAFlamesLife)
 	const auto before = look.flames.size();
 	(void)graphic::Update(look, {.fraction = 0.7f, .temperature = 300.0f, .turn = 140}, 0.0f, sampler);
 	EXPECT_EQ(look.flames.size(), before);
+}
+
+TEST(FireGraphic, FlamesAndSmokeOnABodyStayAtTheirBone)
+{
+	graphic::Graphic look;
+	look.maxFlames = 2;
+	look.localScale = 1.0f;
+	// The body moves: the bone is at a new place in each frame
+	glm::vec3 boneNow(1.0f, 2.0f, 3.0f);
+	const graphic::Sampler sampler {
+	    .localPoint = [] { return std::optional(graphic::Anchor {.point = glm::vec3(9.0f), .bone = 5u}); },
+	    .toWorld = [&boneNow](const graphic::Anchor& a) { return a.bone == std::optional(5u) ? boneNow : a.point; },
+	    .random = [](float range) { return range * 0.5f; },
+	};
+	(void)graphic::Update(look, {.fraction = 1.0f, .temperature = 300.0f, .flags = k_JustIgnited}, 0.0f, sampler);
+	ASSERT_FALSE(look.flames.empty());
+	EXPECT_EQ(look.flames.front().bone, std::optional(5u));
+
+	// The smoke keeps its bone, and each puff starts where the bone is at the time
+	(void)graphic::Update(look, {.temperature = 20.0f, .flags = k_JustExtinguished, .turn = 50}, 0.0f, sampler);
+	EXPECT_EQ(look.smokeBone, std::optional(5u));
+	(void)graphic::Update(look, {.temperature = 20.0f, .turn = 51}, 0.25f, sampler);
+	ASSERT_EQ(look.smoke.size(), 1u);
+	boneNow = glm::vec3(-4.0f, 0.0f, 6.0f);
+	(void)graphic::Update(look, {.temperature = 20.0f, .turn = 52}, 0.25f, sampler);
+	ASSERT_EQ(look.smoke.size(), 2u);
+	EXPECT_NEAR(look.smoke.back().position.x, -4.0f, 0.5f);
+	EXPECT_NEAR(look.smoke.front().position.x, 1.0f, 0.5f);
 }
 
 TEST(WaterRules, AFieldIsSownAtOnceThenRipensWithEachDrop)
