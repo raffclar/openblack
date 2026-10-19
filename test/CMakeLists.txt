@@ -1462,6 +1462,14 @@ openblack_setup_and_add_test(test_saved_sounds test_saved_sounds.cpp)
 target_link_libraries(test_saved_sounds PRIVATE pack lnd)
 openblack_setup_and_add_test(test_safe_save_files test_safe_save_files.cpp)
 openblack_setup_and_add_test(test_save_problem_box gui/test_save_problem_box.cpp)
-openblack_setup_and_add_test(test_game_session test_game_session.cpp)
 openblack_setup_and_add_test(test_creature_script_control test_creature_script_control.cpp)
+openblack_setup_and_add_test(
+  test_oracle_town_children_desire oracle/test_oracle_town_children_desire.cpp
+)
+set_tests_properties(
+  test_oracle_town_children_desire
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_game_session test_game_session.cpp)
 openblack_setup_and_add_test(test_logo_effect gui/test_logo_effect.cpp)
