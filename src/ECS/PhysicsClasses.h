@@ -80,8 +80,6 @@ struct ClassFacts
 	std::optional<float> fixedMass;
 	/// Moved by bones: drawn turned a quarter about its up axis from its body
 	bool animated {false};
-	/// Turned by the physics only about its up axis: it stands upright wherever it comes to rest
-	bool upright {false};
 	/// A script holds it where it is: it is never thrown, dropped or knocked into flight
 	bool immovable {false};
 	/// Its body moves: a villager's, an animal's, a tree's and a building piece's always do; a model's only when its object

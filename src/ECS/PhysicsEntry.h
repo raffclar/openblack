@@ -71,8 +71,6 @@ struct PhysicsEntry
 	bool checksPoints {true};
 	/// Of its object's kind: moved by bones, drawn turned a quarter from its body
 	bool animated {false};
-	/// Of its object's kind: it takes only its body's heading and stands upright
-	bool upright {false};
 
 	[[nodiscard]] bool Has(Flags flag) const { return (flags & flag) != 0; }
 	[[nodiscard]] bool IsFlying() const { return body != nullptr && !body->resting; }

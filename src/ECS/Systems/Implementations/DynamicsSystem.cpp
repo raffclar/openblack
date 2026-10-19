@@ -58,6 +58,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/PhysicsGround.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
@@ -92,12 +93,6 @@ constexpr glm::vec3 k_Up(0.0f, 1.0f, 0.0f);
 uint32_t Id(entt::entity object)
 {
 	return object == entt::null ? 0u : entt::to_integral(object) + 1u;
-}
-
-/// Upright axes with the same heading across the ground as the given ones
-glm::mat3 UprightAxes(const glm::mat3& axes)
-{
-	return physics::objects::HeadingOnly(axes);
 }
 
 } // namespace
@@ -206,7 +201,8 @@ void DynamicsSystem::SaveState(reflection::BinaryWriter& out) const
 		reflection::Save(out, entry->flags);
 		reflection::Save(out, entry->checksPoints);
 		reflection::Save(out, entry->animated);
-		reflection::Save(out, entry->upright);
+		// The saves keep a place here for a flag that the physics no longer uses, thus older saves still load
+		reflection::Save(out, false);
 		reflection::Save(out, placeOf(entryPlaces, entry->hitBy));
 		reflection::Save(out, entry->body != nullptr);
 		if (entry->body != nullptr)
@@ -253,7 +249,8 @@ bool DynamicsSystem::LoadState(reflection::BinaryReader& in)
 		reflection::Load(in, entry->flags);
 		reflection::Load(in, entry->checksPoints);
 		reflection::Load(in, entry->animated);
-		reflection::Load(in, entry->upright);
+		bool unused = false;
+		reflection::Load(in, unused);
 		reflection::Load(in, link.hitBy);
 		reflection::Load(in, hasBody);
 		if (hasBody)
@@ -858,13 +855,15 @@ void DynamicsSystem::SyncObject(const PhysicsEntry& entry, Place place)
 		return;
 	}
 	const auto& body = *entry.body;
-	auto axes = body.Axes();
-	if (entry.upright)
+	// The thing takes the angles of its body and its turn is made again from them. A thing that does not lean keeps only
+	// its angle about y and stands upright.
+	const auto taken = ecs::placed_turn::TurnFromBody(body.Axes(), ecs::placed_turn::CanLean(registry, entry.entity));
+	transform->rotation = entry.animated ? physics::QuarterTurned(taken.turn) : taken.turn;
+	// A living thing keeps its own heading, thus only the other things keep the angles
+	if (!registry.AnyOf<Villager, Animal, Creature>(entry.entity))
 	{
-		// A living thing, a tree or a feature takes only its heading and stands upright
-		axes = UprightAxes(axes);
+		ecs::placed_turn::KeepAngles(registry, entry.entity, taken.angles);
 	}
-	transform->rotation = entry.animated ? physics::QuarterTurned(axes) : axes;
 	switch (place)
 	{
 	case Place::Origin:
@@ -889,7 +888,6 @@ void DynamicsSystem::TakeKind(PhysicsEntry& entry, const physics_classes::ClassF
 {
 	entry.checksPoints = facts.checksPoints;
 	entry.animated = facts.animated;
-	entry.upright = facts.upright;
 }
 
 void DynamicsSystem::SettleOnLand(PhysicsEntry& entry, bool noPullDown, bool alignToSlope)

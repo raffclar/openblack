@@ -15,6 +15,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -68,5 +69,7 @@ entt::entity PotArchetype::CreateEmpty(const glm::vec3& position, float yAngleRa
 		registry.Assign<ResourcePile>(entity);
 	}
 
+	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
 	return entity;
 }

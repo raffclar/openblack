@@ -273,7 +273,6 @@ physics_classes::ClassFacts ClassifyKind(const Registry& registry, entt::entity 
 		        .canBecomePhysicsObject = inputs.villagerReachable,
 		        .interacts = true,
 		        .animated = true,
-		        .upright = true,
 		        .dynamic = true};
 	}
 	if (registry.AllOf<Animal>(entity))
@@ -283,7 +282,6 @@ physics_classes::ClassFacts ClassifyKind(const Registry& registry, entt::entity 
 		        .canBecomePhysicsObject = true,
 		        .interacts = true,
 		        .animated = true,
-		        .upright = true,
 		        .dynamic = true};
 	}
 	if (registry.AllOf<Tree>(entity))
@@ -293,7 +291,6 @@ physics_classes::ClassFacts ClassifyKind(const Registry& registry, entt::entity 
 		        .row = MaterialRow::Tree,
 		        .canBecomePhysicsObject = true,
 		        .rooted = true,
-		        .upright = true,
 		        .dynamic = true,
 		        .unclampedMass = true};
 	}

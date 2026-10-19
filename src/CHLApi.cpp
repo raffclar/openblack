@@ -1857,10 +1857,9 @@ void GetProperty() // 021 GET_PROPERTY
 		}
 		if (prop != script::ObjectPropertyType::Angle)
 		{
-			// Only the things that may lean have a lean; everything else stands upright
-			const auto angles = script::property_rules::PlacedAngles(transform->rotation);
-			const float lean = !CanLean(object) ? 0.0f : prop == script::ObjectPropertyType::XAngle ? angles.x : angles.z;
-			Pushf(script::property_rules::AngleToScript(lean));
+			// The thing's kept angles, as it got them. A thing that does not lean has no lean.
+			const auto angles = ecs::placed_turn::AnglesOf(registry, object);
+			Pushf(script::property_rules::AngleToScript(prop == script::ObjectPropertyType::XAngle ? angles.x : angles.z));
 			return;
 		}
 		if (IsLivingThing(object))
@@ -1868,7 +1867,7 @@ void GetProperty() // 021 GET_PROPERTY
 			Pushf(script::property_rules::AngleToScript(LivingAngleOf(object, *transform)));
 			return;
 		}
-		Pushf(script::property_rules::AngleToScript(script::property_rules::PlacedAngles(transform->rotation).y));
+		Pushf(script::property_rules::AngleToScript(ecs::placed_turn::AnglesOf(registry, object).y));
 		return;
 	}
 	case script::ObjectPropertyType::Strength:
@@ -2046,15 +2045,10 @@ void SetProperty() // 022 SET_PROPERTY
 			return;
 		}
 		const float radians = script::property_rules::AngleFromScript(value);
-		auto angles = script::property_rules::PlacedAngles(transform->rotation);
-		if (!CanLean(object))
+		// Only its turn is its own: a lean asked for changes nothing
+		if (!CanLean(object) && prop != script::ObjectPropertyType::Angle)
 		{
-			// Only its turn is its own: a lean asked for changes nothing
-			if (prop != script::ObjectPropertyType::Angle)
-			{
-				return;
-			}
-			angles = {.x = 0.0f, .y = angles.y, .z = 0.0f};
+			return;
 		}
 		if (IsLivingThing(object))
 		{
@@ -2065,11 +2059,12 @@ void SetProperty() // 022 SET_PROPERTY
 			}
 			return;
 		}
+		// The other angles stay as the thing has them
+		auto angles = ecs::placed_turn::AnglesOf(registry, object);
 		(prop == script::ObjectPropertyType::Angle    ? angles.y
 		 : prop == script::ObjectPropertyType::XAngle ? angles.x
 		                                              : angles.z) = radians;
-		transform->rotation = script::property_rules::PlacedRotation(angles);
-		registry.SetDirty();
+		ecs::placed_turn::SetAngles(registry, object, angles);
 		return;
 	}
 	case script::ObjectPropertyType::Strength:
@@ -2741,14 +2736,9 @@ static void FacePoint(entt::entity object, glm::vec3 point)
 		TurnLivingThing(object, *transform, angle);
 		return;
 	}
-	auto angles = script::property_rules::PlacedAngles(transform->rotation);
-	if (!CanLean(object))
-	{
-		angles = {.x = 0.0f, .y = angles.y, .z = 0.0f};
-	}
+	auto angles = ecs::placed_turn::AnglesOf(registry, object);
 	angles.y = angle;
-	transform->rotation = script::property_rules::PlacedRotation(angles);
-	registry.SetDirty();
+	ecs::placed_turn::SetAngles(registry, object, angles);
 }
 
 void SetFocus() // 034 SET_FOCUS

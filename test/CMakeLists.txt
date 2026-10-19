@@ -1487,3 +1487,11 @@ openblack_setup_and_add_test(test_creature_lead test_creature_lead.cpp)
 openblack_setup_and_add_test(test_l3d_skin_texels test_l3d_skin_texels.cpp)
 openblack_setup_and_add_test(test_town_food_pace test_town_food_pace.cpp)
 openblack_setup_and_add_test(test_editor_creature_move test_editor_creature_move.cpp)
+openblack_setup_and_add_test(
+  test_oracle_physics_angles oracle/test_oracle_physics_angles.cpp
+)
+set_tests_properties(
+  test_oracle_physics_angles
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
