@@ -225,3 +225,13 @@ TEST(SafeSaveFiles, ThePreviousAndNextLandsLoadFromTheirOwnLandsFolders)
 	EXPECT_FALSE(gamesave::SaveBeforeRoomLoad(15).has_value());
 	EXPECT_FALSE(gamesave::SaveBeforeRoomLoad(19).has_value());
 }
+
+TEST(SafeSaveFiles, ASaveBeforeALoadAlwaysStartsTheHelpOnLoading)
+{
+	using gamesave::RoomSave;
+	using gamesave::RoomSaveStartsLoadHelp;
+	EXPECT_TRUE(RoomSaveStartsLoadHelp(RoomSave::Chosen, false));
+	EXPECT_FALSE(RoomSaveStartsLoadHelp(RoomSave::Chosen, true));
+	EXPECT_TRUE(RoomSaveStartsLoadHelp(RoomSave::BeforeLoad, false));
+	EXPECT_TRUE(RoomSaveStartsLoadHelp(RoomSave::BeforeLoad, true));
+}

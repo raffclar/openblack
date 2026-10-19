@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include <InstantSaves.h>
 #include <PackFile.h>
 #include <SDL_keyboard.h>
 #include <SaveSlots.h>
@@ -524,15 +525,17 @@ void TempleInterior::UpdateSaveGameRoom()
 		boxes.AskName(_saveGameRoom->SaveName(question.slot).value_or(std::u16string_view()));
 		return;
 	case Click::AskName:
-		SaveIntoSlot(question.slot, boxes.GetName());
+		SaveIntoSlot(question.slot, boxes.GetName(), gamesave::RoomSave::Chosen);
 		return;
 	case Click::AskLoad:
-		// Before a load of the previous land or the next land, the game saves the land that is open into the other of the
-		// two slots, so that the player can come back to it
-		if (const auto before = gamesave::SaveBeforeRoomLoad(question.slot);
-		    before.has_value() && Locator::saveGameSystem::has_value())
+		// Before a load of the previous land or the next land, the room saves the land that is open into the other of the
+		// two slots, so that the player can come back to it. The save has the name of that slot.
+		if (const auto before = gamesave::SaveBeforeRoomLoad(question.slot); before.has_value())
 		{
-			Locator::saveGameSystem::value().InstantSave(*before);
+			const auto name = Locator::helpTextSystem::has_value()
+			                      ? Locator::helpTextSystem::value().GetWords(gamesave::k_SlotNameTexts.at(*before))
+			                      : std::u16string {};
+			SaveIntoSlot(*before, name, gamesave::RoomSave::BeforeLoad);
 		}
 		if (Locator::playerProfileSystem::has_value())
 		{
@@ -563,13 +566,13 @@ void TempleInterior::UpdateSaveGameRoom()
 	}
 }
 
-void TempleInterior::SaveIntoSlot(uint32_t slot, std::u16string_view name)
+void TempleInterior::SaveIntoSlot(uint32_t slot, std::u16string_view name, gamesave::RoomSave why)
 {
 	if (!Locator::saveGameSystem::has_value() || _saveGameRoom == nullptr)
 	{
 		return;
 	}
-	const bool newSave = !_saveGameRoom->HasSave(slot);
+	const bool startsLoadHelp = gamesave::RoomSaveStartsLoadHelp(why, _saveGameRoom->HasSave(slot));
 	// A save that fails is not listed and not counted
 	if (!Locator::saveGameSystem::value().Save(slot, name))
 	{
@@ -586,8 +589,8 @@ void TempleInterior::SaveIntoSlot(uint32_t slot, std::u16string_view name)
 	{
 		_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
 	}
-	// A save into an empty slot starts the help on loading
-	if (newSave)
+	// A save into an empty slot, or a save before a load, starts the help on loading
+	if (startsLoadHelp)
 	{
 		temple_help::GameScripts scripts;
 		temple_help::SavedIntoEmptySlot(scripts);

@@ -58,6 +58,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
@@ -262,6 +263,23 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	if (registry.AllOf<Ball>(object))
 	{
 		return &info.ball;
+	}
+	return nullptr;
+}
+
+const GObjectInfo* world_objects::HelpInfoOf(entt::entity object)
+{
+	if (const auto* kind = InfoOf(object))
+	{
+		return kind;
+	}
+	if (!Locator::infoConstants::has_value() || !Locator::entitiesRegistry::value().Valid(object))
+	{
+		return nullptr;
+	}
+	if (Locator::entitiesRegistry::value().AllOf<Vortex>(object))
+	{
+		return Row(Locator::infoConstants::value().mobileStatic, MobileStaticInfo::Vortex);
 	}
 	return nullptr;
 }
