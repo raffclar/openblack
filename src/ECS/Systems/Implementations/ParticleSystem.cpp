@@ -1617,7 +1617,7 @@ void GameParticleWorld::SaveState(particles::EffectWriter& out) const
 	out.WriteValue(_arcsWanted);
 	WriteLive(out, _bolts);
 	out.WriteValue(_boltOrder);
-	// A sound goes with what plays it again after the load; the audio's own emitter does not
+	// A sound goes with the particle that keeps its record; the audio's own emitter does not
 	out.Out().WriteSize(_sounds.size());
 	for (const auto& sound : _sounds)
 	{
@@ -1685,14 +1685,9 @@ bool GameParticleWorld::LoadState(particles::EffectReader& in)
 	{
 		return false;
 	}
-	// The sounds that the particles keep play again from where their particles are
-	for (auto& sound : _sounds)
-	{
-		if (sound.wait <= 0.0f)
-		{
-			Play(sound);
-		}
-	}
+	// A load stops every sound. A particle keeps the record of its sound, so its rules do not start the sound again,
+	// and the sound stays silent while the particle lives. A sound that waits to travel to the listener plays when it
+	// arrives.
 	return true;
 }
 
