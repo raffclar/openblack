@@ -30,6 +30,8 @@
 #include <glm/trigonometric.hpp>
 
 #include "3D/DayNightClock.h"
+#include "3D/L3DMesh.h"
+#include "3D/L3DSubMesh.h"
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/OceanInterface.h"
@@ -2125,6 +2127,26 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 
 // The temple
 
+// The name of a submesh of a temple room's mesh, or null when the room or the submesh is not known
+Json TempleSubMeshName(TempleRoom room, std::optional<uint32_t> subMesh)
+{
+	constexpr std::array<std::string_view, 7> k_RoomMeshes {"challenge", "creature", "credits", "main",
+	                                                        "multi",     "options",  "savegame"};
+	const auto index = static_cast<size_t>(room);
+	if (!subMesh.has_value() || index >= k_RoomMeshes.size() || !Locator::resources::has_value())
+	{
+		return nullptr;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto id = entt::hashed_string(("temple/interior/" + std::string(k_RoomMeshes[index]) + "_l3d").c_str()).value();
+	if (!meshes.Contains(id))
+	{
+		return nullptr;
+	}
+	const auto& subMeshes = meshes.Handle(id)->GetSubMeshes();
+	return *subMesh < subMeshes.size() ? Json(subMeshes[*subMesh]->GetName()) : Json(nullptr);
+}
+
 std::unique_ptr<ProviderInterface> TempleProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("temple");
@@ -2144,7 +2166,8 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 	    }));
 	provider->Add(Query("interior", "The temple's inside: whether the player is in it, the room, the visits, the "
 	                                "worshippers walking about it (how many came in, and where those drawn are), the "
-	                                "seeds of the miracles over the map and how the map shows the influence"),
+	                                "seeds of the miracles over the map, how the map shows the influence and what the cursor "
+	                                "is over (the room, its submesh and the submesh's name)"),
 	              Serve<Locator::temple>("the temple", [](const TempleInteriorInterface& temple, const QueryContext& /*c*/) {
 		              const auto transition = temple.GetTransitionRoom();
 		              Json drawn = Json::array();
@@ -2161,7 +2184,18 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 			                               {"phial_frame", seed.phialFrame}});
 		              }
 		              const auto influence = temple.GetMapInfluence();
+		              // What the cursor is over: the room, its submesh and the submesh's name, so that a tool can find a
+		              // room's pictures, buttons and doors when it moves the pointer
+		              Json cursor = nullptr;
+		              if (const auto hit = temple.GetCursorHit(); hit.has_value())
+		              {
+			              cursor = Json {{"point", Point(hit->point)},
+			                             {"room", static_cast<int>(hit->room)},
+			                             {"sub_mesh", hit->subMesh.has_value() ? Json(*hit->subMesh) : Json(nullptr)},
+			                             {"name", TempleSubMeshName(hit->room, hit->subMesh)}};
+		              }
 		              return Json {
+		                  {"cursor", std::move(cursor)},
 		                  {"map_spell_seeds", std::move(seeds)},
 		                  {"map_influence", influence.has_value()
 		                                        ? Json {{"offset", Point(influence->offset)}, {"scale", influence->scale}}
