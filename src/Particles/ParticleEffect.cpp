@@ -9,16 +9,25 @@
 
 #include "ParticleEffect.h"
 
+#include <cstring>
+
 #include <algorithm>
 #include <iterator>
 #include <ranges>
+#include <string>
+#include <typeinfo>
 
 #include <glm/matrix.hpp>
 
 #include "Common/GameRandom.h"
+#include "GestureTrail.h"
+#include "LightSheet.h"
+#include "ParticleArchiveValues.h"
+#include "ParticleBlast.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleCreators.h"
 #include "ParticleMaths.h"
+#include "ParticleSurfaces.h"
 
 using namespace openblack;
 using namespace openblack::particles;
@@ -877,4 +886,748 @@ std::optional<glm::vec3> Effect::TakeTargetPosition()
 	const auto position = _targetPositions.back();
 	_targetPositions.pop_back();
 	return position;
+}
+
+namespace
+{
+
+/// The kinds of the things in the tables, in the order that the tables go into a save
+template <typename Type>
+void SaveItems(EffectWriter& out, const SharedTable<Type>& table, auto&& write)
+{
+	out.Out().WriteSize(table.items.size());
+	for (const auto& item : table.items)
+	{
+		write(*item);
+	}
+}
+
+template <typename Type>
+void LoadItems(EffectReader& in, SharedTable<Type>& table, auto&& read)
+{
+	table.items.clear();
+	table.numbers.clear();
+	const auto size = in.In().ReadSize();
+	if (!size.has_value())
+	{
+		return;
+	}
+	for (size_t i = 0; i < *size && !in.Failed(); ++i)
+	{
+		auto item = std::make_shared<Type>();
+		read(*item);
+		table.Add(item);
+	}
+}
+
+void SaveSound(EffectWriter& out, const ParticleSound& sound)
+{
+	out.WriteValue(sound.action.sound);
+	out.WriteValue(sound.action.looping);
+	out.WriteValue(sound.action.onlyOne);
+	out.WriteValue(sound.action.softRelease);
+	out.WriteValue(sound.action.useSurface);
+	out.WriteValue(sound.size);
+	out.WriteValue(sound.travelsAtSoundSpeed);
+	out.WriteValue(sound.onLand);
+	out.WriteValue(sound.surface);
+	out.WriteValue(sound.alignment);
+}
+
+void LoadSound(EffectReader& in, ParticleSound& sound)
+{
+	in.ReadValue(sound.action.sound);
+	in.ReadValue(sound.action.looping);
+	in.ReadValue(sound.action.onlyOne);
+	in.ReadValue(sound.action.softRelease);
+	in.ReadValue(sound.action.useSurface);
+	in.ReadValue(sound.size);
+	in.ReadValue(sound.travelsAtSoundSpeed);
+	in.ReadValue(sound.onLand);
+	in.ReadValue(sound.surface);
+	in.ReadValue(sound.alignment);
+}
+
+void SaveMesh(EffectWriter& out, const surface::Mesh& mesh)
+{
+	out.WritePlainList(mesh.vertices);
+	out.WritePlainList(mesh.indices);
+	out.WritePlainList(mesh.normals);
+}
+
+void LoadMesh(EffectReader& in, surface::Mesh& mesh)
+{
+	in.ReadPlainList(mesh.vertices);
+	in.ReadPlainList(mesh.indices);
+	in.ReadPlainList(mesh.normals);
+}
+
+} // namespace
+
+void EffectWriter::Write(bool value)
+{
+	ecs::reflection::Save(*_out, value);
+}
+void EffectWriter::Write(int32_t value)
+{
+	_out->WriteRaw(value);
+}
+void EffectWriter::Write(uint32_t value)
+{
+	_out->WriteRaw(value);
+}
+void EffectWriter::Write(uint64_t value)
+{
+	_out->WriteRaw(value);
+}
+void EffectWriter::Write(float value)
+{
+	_out->WriteRaw(value);
+}
+void EffectWriter::Write(glm::vec3 value)
+{
+	ecs::reflection::Save(*_out, value);
+}
+void EffectWriter::Write(entt::entity value)
+{
+	_out->WriteRaw(value);
+}
+void EffectWriter::WriteSize(size_t size)
+{
+	_out->WriteSize(size);
+}
+void EffectWriter::WriteBytes(const void* bytes, size_t size)
+{
+	_out->Write({static_cast<const uint8_t*>(bytes), size});
+}
+
+bool EffectReader::Failed() const
+{
+	return _in->Failed();
+}
+void EffectReader::Read(bool& value)
+{
+	ecs::reflection::Load(*_in, value);
+}
+void EffectReader::Read(int32_t& value)
+{
+	_in->ReadRaw(value);
+}
+void EffectReader::Read(uint32_t& value)
+{
+	_in->ReadRaw(value);
+}
+void EffectReader::Read(uint64_t& value)
+{
+	_in->ReadRaw(value);
+}
+void EffectReader::Read(float& value)
+{
+	_in->ReadRaw(value);
+}
+void EffectReader::Read(glm::vec3& value)
+{
+	ecs::reflection::Load(*_in, value);
+}
+void EffectReader::Read(entt::entity& value)
+{
+	ecs::reflection::Load(*_in, value);
+}
+std::optional<size_t> EffectReader::ReadSize()
+{
+	return _in->ReadSize();
+}
+bool EffectReader::ReadBytes(void* bytes, size_t size)
+{
+	const auto taken = _in->Take(size);
+	if (!taken.has_value())
+	{
+		return false;
+	}
+	std::memcpy(bytes, taken->data(), size);
+	return true;
+}
+
+void openblack::particles::SaveSharedTables(EffectWriter& out)
+{
+	auto& tables = out.Tables();
+	// A bolt links to the bolts it meets: those go in the table too, before the table is written
+	for (size_t i = 0; i < tables.bolts.items.size(); ++i)
+	{
+		const auto bolt = tables.bolts.items[i];
+		tables.bolts.Add(bolt->linkedTo.lock());
+		tables.bolts.Add(bolt->linkedFrom.lock());
+	}
+	SaveItems(out, tables.sounds, [&out](const ParticleSoundLink& link) {
+		SaveSound(out, link.sound);
+		out.WriteValue(link.position);
+		out.WriteValue(link.fadeStep);
+	});
+	SaveItems(out, tables.bolts, [&out, &tables](const BoltShare& bolt) {
+		out.WriteValue(bolt.order);
+		out.WriteValue(bolt.origin);
+		out.WriteValue(bolt.centroid);
+		out.WriteValue(bolt.heading);
+		out.WriteValue(bolt.hasTargets);
+		out.Out().WriteRaw(tables.bolts.Add(bolt.linkedTo.lock()));
+		out.Out().WriteRaw(tables.bolts.Add(bolt.linkedFrom.lock()));
+		out.WriteValue(bolt.meeting);
+	});
+	SaveItems(out, tables.shields, [&out](const ShieldSphere& shield) {
+		out.WriteValue(shield.centre);
+		out.WriteValue(shield.radius);
+		out.WriteValue(shield.spell);
+		out.WriteValue(shield.impacts);
+	});
+	SaveItems(out, tables.sheets, [&out](const LightSheet& sheet) { out.WriteValue(sheet); });
+	SaveItems(out, tables.carried, [&out](const CarriedObject& carried) {
+		out.WriteValue(carried.object);
+		out.WriteValue(carried.carrier);
+		out.WriteValue(carried.position);
+		out.WriteValue(carried.rotation);
+	});
+	SaveItems(out, tables.trails, [&out](const GestureTrail& trail) {
+		out.WriteValue(trail.drawn);
+		out.WriteValue(trail.ideal);
+	});
+}
+
+void openblack::particles::LoadSharedTables(EffectReader& in)
+{
+	auto& tables = in.Tables();
+	LoadItems(in, tables.sounds, [&in](ParticleSoundLink& link) {
+		LoadSound(in, link.sound);
+		in.ReadValue(link.position);
+		in.ReadValue(link.fadeStep);
+	});
+	// The links between the bolts are numbers until every bolt is there
+	std::vector<std::pair<uint32_t, uint32_t>> links;
+	LoadItems(in, tables.bolts, [&in, &links](BoltShare& bolt) {
+		in.ReadValue(bolt.order);
+		in.ReadValue(bolt.origin);
+		in.ReadValue(bolt.centroid);
+		in.ReadValue(bolt.heading);
+		in.ReadValue(bolt.hasTargets);
+		auto& link = links.emplace_back();
+		in.ReadPlain(link.first);
+		in.ReadPlain(link.second);
+		in.ReadValue(bolt.meeting);
+	});
+	for (size_t i = 0; i < links.size() && i < tables.bolts.items.size(); ++i)
+	{
+		tables.bolts.items[i]->linkedTo = tables.bolts.At(links[i].first);
+		tables.bolts.items[i]->linkedFrom = tables.bolts.At(links[i].second);
+	}
+	LoadItems(in, tables.shields, [&in](ShieldSphere& shield) {
+		in.ReadValue(shield.centre);
+		in.ReadValue(shield.radius);
+		in.ReadValue(shield.spell);
+		in.ReadValue(shield.impacts);
+	});
+	LoadItems(in, tables.sheets, [&in](LightSheet& sheet) { in.ReadValue(sheet); });
+	LoadItems(in, tables.carried, [&in](CarriedObject& carried) {
+		in.ReadValue(carried.object);
+		in.ReadValue(carried.carrier);
+		in.ReadValue(carried.position);
+		in.ReadValue(carried.rotation);
+	});
+	LoadItems(in, tables.trails, [&in](GestureTrail& trail) {
+		in.ReadValue(trail.drawn);
+		in.ReadValue(trail.ideal);
+	});
+}
+
+void Modifier::SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const
+{
+	out.Out().SetPlace("particle rule", typeid(*this).name());
+	out.Out().Unsupported(slot.data.type().name());
+}
+
+void Modifier::SaveHeld(const AtomRuleData& /*data*/, EffectWriter& out) const
+{
+	out.Out().SetPlace("particle rule held", typeid(*this).name());
+	out.Out().Unsupported("held");
+}
+
+int Effect::ModifierNumber(const Modifier* modifier) const
+{
+	const auto found = std::ranges::find_if(_modifiers, [modifier](const auto& owned) { return owned.get() == modifier; });
+	return found != _modifiers.end() ? static_cast<int>(found - _modifiers.begin()) : -1;
+}
+
+const Modifier* Effect::ModifierAt(int number) const
+{
+	return number >= 0 && number < static_cast<int>(_modifiers.size()) ? _modifiers[static_cast<size_t>(number)].get()
+	                                                                   : nullptr;
+}
+
+void Effect::Save(EffectWriter& out) const
+{
+	out.StartEffect(*this);
+	out.WriteValue(_origin);
+	out.WriteValue(_magnitude);
+	out.WriteValue(_age);
+	out.WriteValue(_closeAge);
+	out.WriteValue(_dt);
+	out.WriteValue(_firstStepTwice);
+	out.WriteValue(_closing);
+	out.WriteValue(_atomCount);
+	out.WriteValue(_player);
+	out.WriteValue(_globalAlpha);
+	out.WriteValue(_hidden);
+	out.WriteValue(_direction);
+	out.WritePlain(_info);
+	out.WriteValue(_targets);
+	out.WriteValue(_targetPositions);
+	out.WritePlainList(_plasma);
+	out.WritePlainList(_manaPathSparks);
+	out.WriteValue(_floatValues);
+	out.Out().WriteSize(_roots.size());
+	for (const auto& root : _roots)
+	{
+		SaveStructure(*root, out);
+	}
+	for (const auto& root : _roots)
+	{
+		SaveRuleState(*root, out);
+	}
+}
+
+bool Effect::Load(EffectReader& in)
+{
+	in.StartEffect(*this);
+	in.ReadValue(_origin);
+	in.ReadValue(_magnitude);
+	in.ReadValue(_age);
+	in.ReadValue(_closeAge);
+	in.ReadValue(_dt);
+	in.ReadValue(_firstStepTwice);
+	in.ReadValue(_closing);
+	in.ReadValue(_atomCount);
+	in.ReadValue(_player);
+	in.ReadValue(_globalAlpha);
+	in.ReadValue(_hidden);
+	in.ReadValue(_direction);
+	in.ReadPlain(_info);
+	in.ReadValue(_targets);
+	in.ReadValue(_targetPositions);
+	in.ReadPlainList(_plasma);
+	in.ReadPlainList(_manaPathSparks);
+	in.ReadValue(_floatValues);
+	_roots.clear();
+	const auto roots = in.In().ReadSize();
+	if (!roots.has_value())
+	{
+		return false;
+	}
+	for (size_t i = 0; i < *roots && !in.Failed(); ++i)
+	{
+		auto root = LoadStructure(in, nullptr);
+		if (!root)
+		{
+			return false;
+		}
+		_roots.push_back(std::move(root));
+	}
+	for (const auto& root : _roots)
+	{
+		LoadRuleState(*root, in);
+	}
+	return !in.Failed();
+}
+
+void Effect::SaveSubtree(const Collection& collection, EffectWriter& out) const
+{
+	SaveStructure(collection, out);
+	SaveRuleState(collection, out);
+}
+
+std::unique_ptr<Collection> Effect::LoadSubtree(EffectReader& in, Atom* parent)
+{
+	auto collection = LoadStructure(in, parent);
+	if (collection)
+	{
+		LoadRuleState(*collection, in);
+	}
+	return collection;
+}
+
+void Effect::SaveStructure(const Collection& collection, EffectWriter& out) const
+{
+	out.NumberCollection(&collection);
+	out.WriteValue(collection.group);
+	out.WriteValue(collection.birth);
+	out.WriteValue(collection.alpha);
+	out.WriteValue(collection.emitting);
+	out.WriteValue(collection.interpolated);
+	out.WriteValue(collection.hierarchy);
+	out.WriteValue(collection.textureRepeats);
+	out.WriteValue(collection.textureSpeed);
+	out.WriteValue(collection.textureScroll);
+	out.Out().WriteSize(collection.modifiers.size());
+	for (const auto& slot : collection.modifiers)
+	{
+		out.WriteValue(ModifierNumber(slot.modifier));
+		out.WriteValue(slot.attached);
+		out.WritePlain(slot.emitter);
+		out.WriteValue(slot.state);
+		out.WriteValue(slot.extra);
+		out.WriteValue(slot.first);
+	}
+	out.Out().WriteSize(collection.atoms.size());
+	for (const auto& owned : collection.atoms)
+	{
+		const auto& atom = *owned;
+		out.NumberAtom(&atom);
+		// A creator goes by its name in the file
+		std::string creator;
+		if (atom.creator != nullptr)
+		{
+			const auto found =
+			    std::ranges::find_if(_creators, [&atom](const auto& entry) { return entry.second.get() == atom.creator; });
+			if (found != _creators.end())
+			{
+				creator = found->first;
+			}
+		}
+		out.WriteValue(creator);
+		out.WriteValue(atom.position);
+		out.WriteValue(atom.velocity);
+		out.WriteValue(atom.rotation);
+		out.WriteValue(atom.baseScale);
+		out.WriteValue(atom.ruleScale);
+		out.WriteValue(atom.stretch);
+		out.WriteValue(atom.rgba);
+		out.WriteValue(atom.specular);
+		out.WriteValue(atom.birth);
+		out.WriteValue(atom.visible);
+		out.WriteValue(atom.frame);
+		out.WriteValue(atom.frameRate);
+		out.WriteValue(atom.playAnim);
+		out.WriteValue(atom.gravity);
+		out.WriteValue(atom.creatorValue);
+		out.WriteValue(atom.random);
+		out.WriteValue(atom.player);
+		out.WriteValue(atom.deflected);
+		out.WriteValue(atom.drawWeight);
+		out.WritePlain(atom.previous);
+		out.WritePlain(atom.current);
+		out.WriteValue(atom.drawn);
+		out.WriteValue(atom.steps);
+		out.WriteValue(atom.drawOnFirstUpdate);
+		out.WriteValue(atom.drawOffset);
+		out.WriteValue(atom.drawOffsetFrom);
+		out.Out().WriteSize(atom.sounds.size());
+		for (const auto& sound : atom.sounds)
+		{
+			out.WriteShared(sound);
+		}
+		out.WriteShared(atom.carried);
+		out.WriteValue(atom.fragment != nullptr);
+		if (atom.fragment != nullptr)
+		{
+			out.WriteValue(atom.fragment->mesh);
+			out.WriteValue(atom.fragment->positions);
+			out.WriteValue(atom.fragment->uvs);
+			out.WriteValue(atom.fragment->normals);
+			out.WriteValue(atom.fragment->skins);
+		}
+		out.WriteValue(atom.surface != nullptr);
+		if (atom.surface != nullptr)
+		{
+			SaveMesh(out, atom.surface->still);
+			SaveMesh(out, atom.surface->mesh);
+			out.WriteValue(atom.surface->uvPrevious);
+			out.WriteValue(atom.surface->uvLast);
+			out.WriteValue(atom.surface->uvCurrent);
+		}
+		out.WriteValue(atom.objectGlow.has_value());
+		if (atom.objectGlow.has_value())
+		{
+			out.WritePlain(*atom.objectGlow);
+		}
+		out.WriteValue(atom.shower != nullptr);
+		if (atom.shower != nullptr)
+		{
+			out.WriteValue(atom.shower->object);
+			out.WriteValue(atom.shower->sparks.has_value());
+			if (atom.shower->sparks.has_value())
+			{
+				out.WritePlain(*atom.shower->sparks);
+			}
+			out.WritePlain(atom.shower->clock);
+		}
+		out.Out().WriteSize(atom.subCollections.size());
+		for (const auto& sub : atom.subCollections)
+		{
+			SaveStructure(*sub, out);
+		}
+	}
+}
+
+std::unique_ptr<Collection> Effect::LoadStructure(EffectReader& in, Atom* parent)
+{
+	auto collection = std::make_unique<Collection>();
+	in.NumberCollection(collection.get());
+	collection->parent = parent;
+	in.ReadValue(collection->group);
+	in.ReadValue(collection->birth);
+	in.ReadValue(collection->alpha);
+	in.ReadValue(collection->emitting);
+	in.ReadValue(collection->interpolated);
+	in.ReadValue(collection->hierarchy);
+	in.ReadValue(collection->textureRepeats);
+	in.ReadValue(collection->textureSpeed);
+	in.ReadValue(collection->textureScroll);
+	if (collection->group < 0 || collection->group >= static_cast<int>(k_GroupCount))
+	{
+		in.In().Fail();
+		return nullptr;
+	}
+	const auto slots = in.In().ReadSize();
+	if (!slots.has_value())
+	{
+		return nullptr;
+	}
+	for (size_t i = 0; i < *slots && !in.Failed(); ++i)
+	{
+		auto& slot = collection->modifiers.emplace_back();
+		int number = -1;
+		in.ReadValue(number);
+		slot.modifier = ModifierAt(number);
+		in.ReadValue(slot.attached);
+		in.ReadPlain(slot.emitter);
+		in.ReadValue(slot.state);
+		in.ReadValue(slot.extra);
+		in.ReadValue(slot.first);
+		if (slot.modifier == nullptr)
+		{
+			// The file of the effect changed since the save
+			in.In().Fail();
+			return nullptr;
+		}
+	}
+	const auto atoms = in.In().ReadSize();
+	if (!atoms.has_value())
+	{
+		return nullptr;
+	}
+	for (size_t i = 0; i < *atoms && !in.Failed(); ++i)
+	{
+		auto& atom = *collection->atoms.emplace_back(std::make_unique<Atom>());
+		in.NumberAtom(&atom);
+		atom.collection = collection.get();
+		std::string creator;
+		in.ReadValue(creator);
+		atom.creator = creator.empty() ? nullptr : FindCreator(creator);
+		in.ReadValue(atom.position);
+		in.ReadValue(atom.velocity);
+		in.ReadValue(atom.rotation);
+		in.ReadValue(atom.baseScale);
+		in.ReadValue(atom.ruleScale);
+		in.ReadValue(atom.stretch);
+		in.ReadValue(atom.rgba);
+		in.ReadValue(atom.specular);
+		in.ReadValue(atom.birth);
+		in.ReadValue(atom.visible);
+		in.ReadValue(atom.frame);
+		in.ReadValue(atom.frameRate);
+		in.ReadValue(atom.playAnim);
+		in.ReadValue(atom.gravity);
+		in.ReadValue(atom.creatorValue);
+		in.ReadValue(atom.random);
+		in.ReadValue(atom.player);
+		in.ReadValue(atom.deflected);
+		in.ReadValue(atom.drawWeight);
+		in.ReadPlain(atom.previous);
+		in.ReadPlain(atom.current);
+		in.ReadValue(atom.drawn);
+		in.ReadValue(atom.steps);
+		in.ReadValue(atom.drawOnFirstUpdate);
+		in.ReadValue(atom.drawOffset);
+		in.ReadValue(atom.drawOffsetFrom);
+		const auto sounds = in.In().ReadSize();
+		for (size_t s = 0; sounds.has_value() && s < *sounds && !in.Failed(); ++s)
+		{
+			if (auto sound = in.ReadShared<ParticleSoundLink>())
+			{
+				sound->atom = &atom;
+				atom.sounds.push_back(std::move(sound));
+			}
+		}
+		atom.carried = in.ReadShared<CarriedObject>();
+		if (atom.carried)
+		{
+			atom.carried->atom = &atom;
+		}
+		bool has = false;
+		in.ReadValue(has);
+		if (has)
+		{
+			auto fragment = std::make_shared<blast::MeshFragment>();
+			in.ReadValue(fragment->mesh);
+			in.ReadValue(fragment->positions);
+			in.ReadValue(fragment->uvs);
+			in.ReadValue(fragment->normals);
+			in.ReadValue(fragment->skins);
+			atom.fragment = std::move(fragment);
+		}
+		in.ReadValue(has);
+		if (has)
+		{
+			atom.surface = std::make_shared<SurfaceInstance>();
+			LoadMesh(in, atom.surface->still);
+			LoadMesh(in, atom.surface->mesh);
+			in.ReadValue(atom.surface->uvPrevious);
+			in.ReadValue(atom.surface->uvLast);
+			in.ReadValue(atom.surface->uvCurrent);
+		}
+		in.ReadValue(has);
+		if (has)
+		{
+			in.ReadPlain(atom.objectGlow.emplace());
+		}
+		in.ReadValue(has);
+		if (has)
+		{
+			atom.shower = std::make_shared<ObjectShower>();
+			in.ReadValue(atom.shower->object);
+			in.ReadValue(has);
+			if (has)
+			{
+				in.ReadPlain(atom.shower->sparks.emplace());
+			}
+			in.ReadPlain(atom.shower->clock);
+		}
+		const auto subs = in.In().ReadSize();
+		for (size_t s = 0; subs.has_value() && s < *subs && !in.Failed(); ++s)
+		{
+			auto sub = LoadStructure(in, &atom);
+			if (!sub)
+			{
+				return nullptr;
+			}
+			atom.subCollections.push_back(std::move(sub));
+		}
+	}
+	return in.Failed() ? nullptr : std::move(collection);
+}
+
+void Effect::SaveRuleState(const Collection& collection, EffectWriter& out) const
+{
+	for (const auto& slot : collection.modifiers)
+	{
+		out.WriteValue(slot.data.has_value());
+		if (slot.data.has_value())
+		{
+			// Each rule's state goes with its length, so that a rule that keeps nothing of it leaves the rest readable
+			const auto at = out.Out().BeginLength();
+			slot.modifier->SaveSlotData(slot, out);
+			out.Out().EndLength(at);
+		}
+	}
+	for (const auto& atom : collection.atoms)
+	{
+		out.Out().WriteSize(atom->data.size());
+		// In the order of the rules, so that the same effect always gives the same bytes
+		std::vector<std::pair<int, const AtomRuleData*>> entries;
+		for (const auto& [modifier, data] : atom->data)
+		{
+			entries.emplace_back(ModifierNumber(modifier), &data);
+		}
+		std::ranges::sort(entries, {}, &std::pair<int, const AtomRuleData*>::first);
+		for (const auto& [number, data] : entries)
+		{
+			out.WriteValue(number);
+			out.WriteValue(data->started);
+			out.WriteValue(data->object);
+			out.WriteValue(data->a);
+			out.WriteValue(data->b);
+			out.WriteValue(data->held != nullptr);
+			if (data->held != nullptr)
+			{
+				const auto at = out.Out().BeginLength();
+				if (const auto* modifier = ModifierAt(number))
+				{
+					modifier->SaveHeld(*data, out);
+				}
+				out.Out().EndLength(at);
+			}
+		}
+		for (const auto& sub : atom->subCollections)
+		{
+			SaveRuleState(*sub, out);
+		}
+	}
+}
+
+void Effect::LoadRuleState(Collection& collection, EffectReader& in)
+{
+	// A rule that keeps nothing of its state skips the bytes of it
+	const auto skipTo = [&in](size_t end) {
+		if (!in.Failed() && in.In().Position() <= end)
+		{
+			[[maybe_unused]] const auto skipped = in.In().Take(end - in.In().Position());
+		}
+		else
+		{
+			in.In().Fail();
+		}
+	};
+	for (auto& slot : collection.modifiers)
+	{
+		bool has = false;
+		in.ReadValue(has);
+		if (!has)
+		{
+			continue;
+		}
+		const auto length = in.In().ReadSize();
+		if (!length.has_value())
+		{
+			return;
+		}
+		const auto end = in.In().Position() + *length;
+		slot.modifier->LoadSlotData(slot, in);
+		skipTo(end);
+	}
+	for (auto& atom : collection.atoms)
+	{
+		const auto count = in.In().ReadSize();
+		for (size_t i = 0; count.has_value() && i < *count && !in.Failed(); ++i)
+		{
+			int number = -1;
+			in.ReadValue(number);
+			const auto* modifier = ModifierAt(number);
+			AtomRuleData data;
+			in.ReadValue(data.started);
+			in.ReadValue(data.object);
+			in.ReadValue(data.a);
+			in.ReadValue(data.b);
+			bool held = false;
+			in.ReadValue(held);
+			if (held)
+			{
+				const auto length = in.In().ReadSize();
+				if (!length.has_value())
+				{
+					return;
+				}
+				const auto end = in.In().Position() + *length;
+				if (modifier != nullptr)
+				{
+					modifier->LoadHeld(data, in);
+				}
+				skipTo(end);
+			}
+			if (modifier != nullptr)
+			{
+				atom->data.insert_or_assign(modifier, std::move(data));
+			}
+		}
+		for (auto& sub : atom->subCollections)
+		{
+			LoadRuleState(*sub, in);
+		}
+	}
 }

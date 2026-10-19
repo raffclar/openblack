@@ -411,6 +411,8 @@ TEST_F(Reactions, TheReactionsGoingOnComeBackFromASave)
 	ASSERT_TRUE(_reactions.Find(id).has_value());
 	reflection::BinaryWriter out(context);
 	_reactions.SaveState(out);
+	// Every value of the reactions goes in, with the things that react to each
+	EXPECT_TRUE(out.Unsaved().empty());
 	ecs::systems::ReactionSystem loaded;
 	const reflection::EntityRemap identity;
 	reflection::BinaryReader in(context, out.Bytes(), identity);

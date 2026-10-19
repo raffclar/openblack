@@ -7758,6 +7758,31 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "saves.miracles_back",
+	    .name = "Save and load: a shield and a fireball in flight come back",
+	    .facet = Facet::Miracles,
+	    .description = "A shield over a content tiger. 4 seconds after the start a hand throws a fireball at the shield. "
+	                   "4.6 seconds after the start the game saves into slot 0. 3 seconds after the save the game loads "
+	                   "slot 0.",
+	    .expected = "At the save the box shows \"Saving...\" on a grey band across the middle of a darker screen. At the "
+	                "load the box shows \"Loading...\". After the load the shield stands with its vapour. The fireball "
+	                "continues its flight from where it was at the save, bounces off the shield with a spark and burns "
+	                "out. The log shows no section that does not read and no value that the save does not keep.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, -5.0f}, {0.0f, 70.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 40.0f})},
+	    .miracles = {{.type = MagicType::Shield, .point = {0.0f, 40.0f}, .delaySeconds = 0.5f},
+	                 {.type = MagicType::Fireball,
+	                  .point = {0.0f, 40.0f},
+	                  .handOffset = {0.0f, -5.0f},
+	                  .handHeight = 10.0f,
+	                  .throwVelocity = {0.0f, 4.0f, 40.0f},
+	                  .delaySeconds = 4.0f}},
+	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 4.6f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "mind.hand_free_pick_up",
 	    .name = "Put down a thing before a pick-up",
 	    .facet = Facet::Mind,

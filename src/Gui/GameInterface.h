@@ -100,6 +100,8 @@ public:
 	/// The open dialogs and, over them, the pointer at the mouse. The pointer also shows over the debug windows, which
 	/// hide the hand, and is drawn over them.
 	void Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow);
+	/// The box that shows while the game saves or loads, drawn alone as a frame of its own over the last picture
+	void DrawSavingBox(glm::u16vec2 resolution, bool loading, bool darken);
 
 	[[nodiscard]] GameMenu& GetMenu() noexcept { return *_menu; }
 	/// Whether the advisors' words were drawn at the last frame drawn, which the gestures' hints fade out for

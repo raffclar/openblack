@@ -35,6 +35,7 @@
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
 #include "LightningMaths.h"
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMiracleMaths.h"
 #include "ParticleShields.h"
@@ -119,6 +120,52 @@ glm::vec3 TipOf(const Effect& effect, const BoltTarget& target)
 class Lightning final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		const auto& bolt = std::any_cast<const Bolt&>(slot.data);
+		out.Write(bolt.origin);
+		out.Write(bolt.searchOrigin);
+		out.Write(bolt.centroid);
+		out.Write(bolt.heading);
+		out.Write(bolt.built);
+		out.Write(bolt.life);
+		out.Write(bolt.centroidDistance);
+		out.Write(bolt.forkScale);
+		out.WritePlainList(bolt.targets);
+		out.Write(bolt.firstCount.has_value());
+		out.Write(static_cast<uint64_t>(bolt.firstCount.value_or(0)));
+		out.WriteAtom(bolt.root);
+		out.WriteAtom(bolt.glowJoint);
+		out.WriteShared(bolt.share);
+	}
+	/// The bolt shows itself to the other bolts again as this effect's
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		Bolt bolt;
+		in.Read(bolt.origin);
+		in.Read(bolt.searchOrigin);
+		in.Read(bolt.centroid);
+		in.Read(bolt.heading);
+		in.Read(bolt.built);
+		in.Read(bolt.life);
+		in.Read(bolt.centroidDistance);
+		in.Read(bolt.forkScale);
+		in.ReadPlainList(bolt.targets);
+		bool counted = false;
+		uint64_t count = 0;
+		in.Read(counted);
+		in.Read(count);
+		bolt.firstCount = counted ? std::optional(static_cast<size_t>(count)) : std::nullopt;
+		bolt.root = in.ReadAtom();
+		bolt.glowJoint = in.ReadAtom();
+		bolt.share = in.ReadShared<BoltShare>();
+		if (bolt.share)
+		{
+			bolt.share->owner = &in.CurrentEffect();
+		}
+		slot.data = std::move(bolt);
+	}
+
 	explicit Lightning(const ParticleObject& object)
 	    : creator(object.String("PCreator"))
 	    , lightMapCreator(object.String("PCreatorLightMapAtom"))

@@ -22,6 +22,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMaths.h"
 
@@ -146,6 +147,17 @@ public:
 class MultiPickup final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		out.WritePlain(std::any_cast<const State&>(slot.data));
+	}
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		State state;
+		in.ReadPlain(state);
+		slot.data = state;
+	}
+
 	explicit MultiPickup(const ParticleObject& object)
 	    : _creator(object.String("PCreator"))
 	    , _nextGroups(object.IntArray("NextGroups"))

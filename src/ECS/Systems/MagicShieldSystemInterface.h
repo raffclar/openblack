@@ -18,6 +18,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -28,7 +29,7 @@ namespace openblack::ecs::systems
 /// spins and bobs, and stops what is thrown at it. While a shield stands no other player has influence under it, the
 /// people about it shelter under it, and other players' creatures walk round it. Once its miracle lets go the spiritual
 /// shield's goes at once, the dome fades away.
-class MagicShieldSystemInterface
+class MagicShieldSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~MagicShieldSystemInterface() = default;

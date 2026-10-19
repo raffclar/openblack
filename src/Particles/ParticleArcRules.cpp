@@ -23,6 +23,7 @@
 #include <glm/geometric.hpp>
 
 #include "LightningMaths.h"
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 
 using namespace openblack::particles;
@@ -53,6 +54,31 @@ using Arcs = std::unordered_map<const Atom*, Arc>;
 class ObjectArcer final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		WriteAtomMap(out, std::any_cast<const Arcs&>(slot.data), [&out](const Arc& arc) {
+			out.WritePlainList(arc.points);
+			out.WritePlain(arc.ends);
+			out.Write(arc.ticks);
+		});
+	}
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		Arcs arcs;
+		ReadAtomMap(in, arcs, [&in](Arc& arc) {
+			in.ReadPlainList(arc.points);
+			in.ReadPlain(arc.ends);
+			in.Read(arc.ticks);
+		});
+		slot.data = std::move(arcs);
+	}
+	/// The arc counts among the live arcs again after a load
+	void SaveHeld(const AtomRuleData& /*data*/, EffectWriter& /*out*/) const override {}
+	void LoadHeld(AtomRuleData& data, EffectReader& in) const override
+	{
+		data.held = in.CurrentEffect().Services().world.HoldArc();
+	}
+
 	explicit ObjectArcer(const ParticleObject& object)
 	    : creator(object.String("PCreator"))
 	    , chainCreator(object.String("ChainCreator"))

@@ -24,6 +24,7 @@
 
 #include <ParticleFile.h>
 
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleSounds.h"
 #include "TornadoMaths.h"
@@ -101,6 +102,17 @@ struct FlyingData
 class Tornado final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		out.WritePlain(std::any_cast<const TornadoState&>(slot.data));
+	}
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		TornadoState state;
+		in.ReadPlain(state);
+		slot.data = state;
+	}
+
 	explicit Tornado(const ParticleObject& object)
 	    : topHeight(object.Float("TopHeight", 100.0f))
 	    , fadeOutTime(object.Float("FadeOutTime", 3.0f))

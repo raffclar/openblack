@@ -19,6 +19,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Common/GameRandom.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Particles/ParticleDrawFrame.h"
@@ -170,4 +171,45 @@ void LiquidParticleSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 void LiquidParticleSystem::Clear()
 {
 	_pool.clear();
+}
+
+void LiquidParticleSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	// The drops, the dust and the motes in the order of the pool, and the pace of the frames that draw them
+	out.WriteSize(_pool.size());
+	for (const auto& particle : _pool)
+	{
+		reflection::Save(out, particle.position);
+		reflection::Save(out, particle.velocity);
+		reflection::Save(out, particle.size);
+		reflection::Save(out, particle.age);
+		reflection::Save(out, particle.variant);
+		reflection::Save(out, particle.argb);
+		reflection::Save(out, particle.kind);
+		reflection::Save(out, particle.onLand);
+	}
+	reflection::Save(out, _drawPace);
+}
+
+bool LiquidParticleSystem::LoadState(reflection::BinaryReader& in)
+{
+	const auto count = in.ReadSize();
+	if (!count.has_value() || *count > liquid_particles::k_MostParticles)
+	{
+		return false;
+	}
+	_pool.assign(*count, {});
+	for (auto& particle : _pool)
+	{
+		reflection::Load(in, particle.position);
+		reflection::Load(in, particle.velocity);
+		reflection::Load(in, particle.size);
+		reflection::Load(in, particle.age);
+		reflection::Load(in, particle.variant);
+		reflection::Load(in, particle.argb);
+		reflection::Load(in, particle.kind);
+		reflection::Load(in, particle.onLand);
+	}
+	reflection::Load(in, _drawPace);
+	return !in.Failed() && _pool.size() <= liquid_particles::k_MostParticles;
 }
