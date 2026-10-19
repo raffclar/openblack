@@ -752,6 +752,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::CreatureKnockedOut>(context)
 	    .Field<&components::CreatureKnockedOut::stage>("stage")
 	    .Field<&components::CreatureKnockedOut::seconds>("seconds")
+	    .Field<&components::CreatureKnockedOut::layStill>("layStill")
 	    .Field<&components::CreatureKnockedOut::fainting>("fainting")
 	    .Field<&components::CreatureKnockedOut::handsChecked>("handsChecked")
 	    .Field<&components::CreatureKnockedOut::rest>("rest")

@@ -142,7 +142,7 @@
   "writes": true
  },
  {
-  "description": "Moves a thing as the game's tools do; answers where it is and its map cell",
+  "description": "Moves a thing as the game's tools do (a creature as the game moves one without a walk, on the land at the point's map position); answers where it is and its map cell",
   "kind": "object",
   "parameters": [
    {

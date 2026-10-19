@@ -604,13 +604,18 @@ void MoveTo(entt::entity entity, glm::vec3 position)
 	}
 	if (auto* locomotion = registry.TryGet<CreatureLocomotion>(entity))
 	{
+		// A creature goes there at once without a walk, as the game moves one. Its route starts again at the new place,
+		// its walk, turn, body action and head look stop, and its body is not blended from the old place.
 		if (Locator::creatureLocomotionSystem::has_value())
 		{
-			Locator::creatureLocomotionSystem::value().StopAtOnce(entity);
+			Locator::creatureLocomotionSystem::value().PlaceWithoutWalking(entity, position);
 		}
-		// The creature is placed between where it was and is going each frame, so both are where it is put
-		locomotion->fromPosition = position;
-		locomotion->toPosition = position;
+		else
+		{
+			// The creature is placed between where it was and is going each frame, so both are where it is put
+			locomotion->fromPosition = position;
+			locomotion->toPosition = position;
+		}
 	}
 	registry.SetDirty();
 }

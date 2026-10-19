@@ -3847,12 +3847,21 @@ void CreatureFightSystem::ProcessKnockedOut()
 		auto* needs = registry.TryGet<CreatureNeeds>(entity);
 		auto& animation = registry.Get<CreatureAnimation>(entity);
 		const auto& body = registry.Get<const Creature>(entity);
-		knockedOut.seconds += k_TurnSeconds;
-		// It counts the time that it lies only from when it lies still
-		if (knockedOut.stage == CreatureKnockedOut::Stage::Lying &&
-		    (knockedOut.fainting || !creature_layers::IsLooping(animation.body)))
+		const fight::FaintBody faintBody {.faintStarted = !knockedOut.fainting,
+		                                  .acts = creature_layers::IsPlaying(animation.body),
+		                                  .lies = creature_layers::IsLooping(animation.body)};
+		if (knockedOut.stage == CreatureKnockedOut::Stage::Lying)
 		{
-			knockedOut.seconds = -creature_mind::k_FaintWaitTurnsLate * k_TurnSeconds;
+			// It counts the time that it lies only from when it lies still for the first time. A script that moves it
+			// after that stands its body, but the time goes on.
+			const auto wait = fight::LyingTurn({.seconds = knockedOut.seconds, .started = knockedOut.layStill}, faintBody,
+			                                   k_TurnSeconds, -creature_mind::k_FaintWaitTurnsLate * k_TurnSeconds);
+			knockedOut.seconds = wait.seconds;
+			knockedOut.layStill = wait.started;
+		}
+		else if (knockedOut.stage != CreatureKnockedOut::Stage::Waiting || fight::WaitTurnCounts(faintBody))
+		{
+			knockedOut.seconds += k_TurnSeconds;
 		}
 		const auto next = [&knockedOut, entity](CreatureKnockedOut::Stage stage) {
 			fight_transcript::Note(entity, "knocked_out", [&] {

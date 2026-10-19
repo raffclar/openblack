@@ -15,6 +15,7 @@
 #include <array>
 #include <utility>
 
+#include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -31,6 +32,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerWorship.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "Editor/EditorEntities.h"
 #include "Locator.h"
@@ -169,7 +171,19 @@ std::string GameWorldEdit::Move(entt::entity entity, glm::vec3 position)
 		// Put where it is asked, it stops flying
 		Locator::dynamicsSystem::value().RemoveObject(entity, false, false);
 	}
+	// A creature goes to the map position of the point, on the land there, as the game moves one without a walk
+	const bool creature = registry.AllOf<Creature>(entity);
+	const auto place = map_coords::FromMetres({position.x, position.z});
+	if (creature)
+	{
+		const auto placed = map_coords::ToMetres(place);
+		position = {placed.x, editor::LandHeight(placed), placed.y};
+	}
 	editor::MoveTo(entity, position);
+	if (creature)
+	{
+		ecs::thing_map_place::Keep(registry, entity, place);
+	}
 	if (Locator::entitiesMap::has_value())
 	{
 		Locator::entitiesMap::value().Refile(entity);
