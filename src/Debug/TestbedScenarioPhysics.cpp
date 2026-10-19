@@ -111,7 +111,9 @@ void AddThrownAngles(std::vector<Scenario>& all)
 	    .name = "A thrown rock takes the angles of its body",
 	    .facet = Facet::Physics,
 	    .description = "A rock is thrown across the field every eight seconds, from the west towards the middle. North of "
-	                   "the middle a boulder leans 120 degrees about x and turns 250 degrees about the vertical.",
+	                   "the middle a boulder leans 120 degrees about x and turns 250 degrees about the vertical. Thus the "
+	                   "boulder is upside "
+	                   "down, and most of it is under the land.",
 	    .expected = "The rock flies, lands, rolls and comes to rest as before. Each turn the rock takes the angles of its "
 	                "body and gets its turn again from them. The boulder keeps the angles that it got: the inspector "
 	                "shows 120 and 250 degrees in its turn angles, not other angles of the same turn.",
