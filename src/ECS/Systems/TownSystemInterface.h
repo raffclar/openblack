@@ -73,6 +73,8 @@ public:
 	{
 		BlocksTown,
 		AnyObject,
+		/// Anything fixed, trees too: for a town's temporary pile
+		AnyFixed,
 	};
 	/// Whether nothing of the kind stands within a radius of a point, the things' own sizes counted, the cells about it
 	/// looked at in a spiral; the thing ignored doesn't count
@@ -83,6 +85,18 @@ public:
 	                                                             ClearAreaFilter filter, entt::entity ignore) const = 0;
 	/// Where a town's people gather: worked out once, between its buildings or near one
 	virtual glm::vec2 GetCongregationPos(entt::entity town) = 0;
+	/// A town's temporary pile for a resource, and its edge nearest a point
+	struct TemporaryStore
+	{
+		entt::entity pile;
+		glm::vec2 edge;
+	};
+	/// The temporary pile in which a town with no storage pit that works keeps a resource. A pile that has gone is made
+	/// again, empty, at a clear place near the town's gathering place. None for a resource with no pile.
+	virtual std::optional<TemporaryStore> TemporaryStorePile(entt::entity town, glm::vec2 from, ResourceType type) = 0;
+	/// The town has a new storage pit that works, or has lost its storage pit: it lets go of its temporary piles. An empty
+	/// pile is removed, and a pile that holds something becomes an ordinary pile with its reaction.
+	virtual void SetStoragePit(entt::entity town) = 0;
 	/// A new building standing on a town's gathering place moves it
 	virtual void BuildingCreated(entt::entity town, glm::vec2 position, float radius) = 0;
 

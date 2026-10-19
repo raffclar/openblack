@@ -72,6 +72,10 @@ uint32_t DropOffAtStoragePit(components::LivingAction& action, std::optional<ent
 uint32_t ArrivesAtStoragePitForResource(components::LivingAction& action, ResourceType type, uint32_t amount,
                                         VillagerStates arrive, VillagerStates fail);
 
+/// Where the villager takes or leaves a resource: its storage pit's door when the pit works; with no town, where it
+/// stands; else at the edge of its town's temporary pile of the resource, nearest the villager, which is made if missing
+glm::vec2 ResourceDropoffPos(entt::entity villager, ResourceType type);
+
 /// Turns the villager towards a point by at most a step of the game's angles; whether it now faces it
 bool FaceTowards(entt::entity villager, glm::vec2 point, int32_t step);
 /// Whether the villager is a builder disciple, offered sites even when no builder is wanted

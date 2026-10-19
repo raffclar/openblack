@@ -67,6 +67,7 @@
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerWorkRules.h"
@@ -944,8 +945,8 @@ void ForestSystem::AssignForestsToTowns()
 	const float reach = Locator::infoConstants::value().town.maxDistanceForTownForest;
 	const auto forests = LandForests();
 	registry.Each<const Town>([&](entt::entity townEntity, const Town& town) {
-		// Measured from the town's storage pit. (The game makes a town without one a temporary pile for wood beside its
-		// meeting place and measures from that; openblack's towns have no meeting place yet, so such a town lists none.)
+		// Measured from the town's storage pit; a town without one is given its temporary pile for wood beside its
+		// gathering place, and measures from that pile's edge nearest the town
 		std::optional<glm::vec3> from;
 		registry.Each<const StoragePit, const Abode, const Transform>(
 		    [&](entt::entity, const StoragePit&, const Abode& abode, const Transform& at) {
@@ -954,6 +955,16 @@ void ForestSystem::AssignForestsToTowns()
 				    from = at.position;
 			    }
 		    });
+		if (!from.has_value() && Locator::townSystem::has_value())
+		{
+			const auto& centre = registry.Get<const Transform>(townEntity).position;
+			if (const auto store =
+			        Locator::townSystem::value().TemporaryStorePile(townEntity, glm::xz(centre), ResourceType::Wood);
+			    store.has_value())
+			{
+				from = glm::vec3(store->edge.x, 0.0f, store->edge.y);
+			}
+		}
 		auto& listed = registry.AssignOrReplace<TownForests>(townEntity);
 		if (!from.has_value())
 		{

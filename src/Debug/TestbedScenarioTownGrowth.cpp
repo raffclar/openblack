@@ -832,4 +832,25 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                 .villagerAge = 12u}},
 	    .townBeliefInPlayer = 1.0f,
 	});
+	// A town with no storage pit and two villagers carrying wood
+	all.push_back({
+	    .id = "town.temporary_wood_pile",
+	    .name = "A town without a storage pit keeping its wood in a temporary pile",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and three huts but no storage pit, and two "
+	                   "foresters of the town, each carrying 300 wood, in front of the huts. Best watched at game speed 4.",
+	    .expected = "Each forester decides to take its wood to the town's store. With no storage pit the town makes an "
+	                "empty pile of magic wood five metres from its gathering place, at a place clear of fixed things "
+	                "(the inspector's Town temporaryStores). Each forester walks to the edge of the pile nearest it and "
+	                "leaves all its wood there; the pile rises as it fills to 600 wood.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Centre, k_Hut, k_PlannedHuts[0]}, .distance = 0.6f},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	                {.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f},
+	                {.type = AbodeInfo::CelticHut, .offset = k_PlannedHuts[0], .yawDegrees = 180.0f},
+	                {.type = AbodeInfo::CelticHut, .offset = k_PlannedHuts[2], .yawDegrees = 180.0f},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {0.0f, 20.0f}, .joinTown = true, .woodHeld = 300},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {4.0f, 20.0f}, .joinTown = true, .woodHeld = 300}},
+	    .townBeliefInPlayer = 1.0f,
+	});
 }

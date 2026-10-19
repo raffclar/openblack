@@ -23,21 +23,28 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/AbodeNeglectRules.h"
+#include "ECS/Archetypes/PotArchetype.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
@@ -61,6 +68,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TemporaryStoreRules.h"
 #include "ECS/TownCentreParts.h"
 #include "ECS/TownEmpty.h"
 #include "ECS/TownHomes.h"
@@ -70,6 +78,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/ResourcePiles.h"
 #include "Magic/TownBelief.h"
 #include "VillagerBreeding.h"
 #include "VillagerCreatureReactions.h"
@@ -112,6 +121,25 @@ void TownSystem::OnAbodeGone(entt::registry& registry, entt::entity abode)
 	for (auto [entity, town] : registry.view<Town>().each())
 	{
 		std::erase(town.abodes, abode);
+	}
+	// A storage pit that goes makes its town let go of any temporary piles it keeps
+	const auto* data = registry.try_get<const Abode>(abode);
+	if (data == nullptr || !registry.all_of<StoragePit>(abode))
+	{
+		return;
+	}
+	const auto& towns = _registry->Context().towns;
+	const auto town = towns.find(data->townId);
+	if (town == towns.end() || !registry.valid(town->second))
+	{
+		return;
+	}
+	const auto* component = registry.try_get<const Town>(town->second);
+	if (component != nullptr && std::ranges::any_of(component->temporaryStores, [&registry](entt::entity pile) {
+		    return pile != entt::null && registry.valid(pile);
+	    }))
+	{
+		SetStoragePit(town->second);
 	}
 }
 
@@ -369,6 +397,108 @@ void TownSystem::StartEmptyTownTimerIfEmpty(entt::entity town)
 	}
 }
 
+std::optional<TownSystemInterface::TemporaryStore> TownSystem::TemporaryStorePile(entt::entity town, glm::vec2 from,
+                                                                                  ResourceType type)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto slot = temporary_store::SlotOf(type);
+	if (!slot.has_value() || town == entt::null || !registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return std::nullopt;
+	}
+	auto pile = registry.Get<const Town>(town).temporaryStores.at(*slot);
+	if (pile == entt::null || !registry.Valid(pile))
+	{
+		// A new empty pile near the gathering place, the wood a little to one side, at a place clear of fixed things
+		auto coords = map_coords::FromMetres(GetCongregationPos(town));
+		coords += gutils::GetPosFromAngle(0.0f, temporary_store::OffsetOf(type));
+		const auto wanted = map_coords::ToMetres(coords);
+		const auto place = FindClearArea(wanted, temporary_store::k_ClearSearch, temporary_store::k_ClearStep,
+		                                 temporary_store::k_ClearRadius, ClearAreaFilter::AnyFixed, entt::null)
+		                       .value_or(wanted);
+		const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(place) : 0.0f;
+		pile = archetypes::PotArchetype::CreateEmpty({place.x, height, place.y}, 0.0f, temporary_store::PileOf(type));
+		if (pile == entt::null)
+		{
+			return std::nullopt;
+		}
+		// A miracle's pile of the neutral player, drawn at a miracle pile's size
+		registry.Get<Transform>(pile).scale =
+		    glm::vec3(type == ResourceType::Food ? magic::piles::k_MagicFoodScale : magic::piles::k_MagicWoodScale);
+		registry.Assign<MagicPile>(pile, type, PlayerNames::NEUTRAL);
+		registry.Get<Town>(town).temporaryStores.at(*slot) = pile;
+	}
+	return TemporaryStore {.pile = pile, .edge = construction::NearestEdgeToPos(pile, from)};
+}
+
+void TownSystem::SetStoragePit(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* component = town != entt::null && registry.Valid(town) ? registry.TryGet<Town>(town) : nullptr;
+	if (component == nullptr)
+	{
+		return;
+	}
+	for (size_t slot = 0; slot < temporary_store::k_Kinds; ++slot)
+	{
+		const auto pile = std::exchange(component->temporaryStores.at(slot), entt::null);
+		const auto* pot = pile != entt::null && registry.Valid(pile) ? registry.TryGet<const Pot>(pile) : nullptr;
+		switch (temporary_store::OnNewStoragePit(pot != nullptr, pot != nullptr ? pot->amount : 0))
+		{
+		case temporary_store::NewPitStep::None:
+			break;
+		case temporary_store::NewPitStep::Remove:
+			world_objects::Remove(pile);
+			break;
+		case temporary_store::NewPitStep::Release:
+		{
+			// It calls those about to come for it, as a pile of the neutral player
+			const auto reaction = Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type)).associatedReaction;
+			if (reaction != Reaction::None && Locator::reactionSystem::has_value())
+			{
+				Locator::reactionSystem::value().Create({.initiator = pile,
+				                                         .type = reaction,
+				                                         .player = PlayerNames::NEUTRAL,
+				                                         .position = registry.Get<const Transform>(pile).position});
+			}
+			break;
+		}
+		}
+		component = registry.TryGet<Town>(town);
+		if (component == nullptr)
+		{
+			return;
+		}
+	}
+}
+
+void TownSystem::TemporaryStoresTurn(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto pit = construction::StoragePitOf(town);
+	const bool pitWorks = pit.has_value() && villager_home::IsFunctional(*pit);
+	for (size_t slot = 0; slot < temporary_store::k_Kinds; ++slot)
+	{
+		const auto pile = registry.Get<const Town>(town).temporaryStores.at(slot);
+		if (pile == entt::null)
+		{
+			continue;
+		}
+		const auto* pot = registry.Valid(pile) ? registry.TryGet<const Pot>(pile) : nullptr;
+		switch (temporary_store::AtTownTurn(pot != nullptr, pot != nullptr ? pot->amount : 0, pitWorks))
+		{
+		case temporary_store::TurnStep::Keep:
+			continue;
+		case temporary_store::TurnStep::Remove:
+			world_objects::Remove(pile);
+			break;
+		case temporary_store::TurnStep::Forget:
+			break;
+		}
+		registry.Get<Town>(town).temporaryStores.at(slot) = entt::null;
+	}
+}
+
 void TownSystem::SetTownEmpty(entt::entity town)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -406,6 +536,10 @@ bool Blocks(const Registry& registry, entt::entity thing, TownSystemInterface::C
 	if (filter == TownSystemInterface::ClearAreaFilter::AnyObject)
 	{
 		return true;
+	}
+	if (filter == TownSystemInterface::ClearAreaFilter::AnyFixed)
+	{
+		return registry.AllOf<Fixed>(thing);
 	}
 	// Of the things that stay put, all but trees
 	return registry.AllOf<Fixed>(thing) && !registry.AllOf<Tree>(thing);
@@ -729,6 +863,11 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 	}
 	// Then it judges the creatures it watches
 	ecs::villager_creature::TownTurn(townEntity, turn);
+	// It forgets its temporary piles that have gone, and removes the empty ones once its storage pit works
+	if (registry.Valid(townEntity))
+	{
+		TemporaryStoresTurn(townEntity);
+	}
 	// The missionaries preaching in it follow their villagers, or stop
 	villager_disciple_work::ProcessMissionaries(townEntity);
 	if (!registry.Valid(townEntity))

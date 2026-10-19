@@ -77,6 +77,8 @@ struct Town
 	/// The turns left before the town becomes empty, counted down from the time its last person left; 0 when no
 	/// countdown runs
 	uint32_t emptyTownTimer {0};
+	/// The temporary piles of food and wood it keeps while it has no storage pit that works, none until one is wanted
+	std::array<entt::entity, 2> temporaryStores {entt::null, entt::null};
 };
 
 } // namespace openblack::ecs::components
