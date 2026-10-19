@@ -53,6 +53,11 @@ glm::vec3 apple_barrel::WormSpot(const glm::vec3& barrel, const glm::vec3& model
 	return barrel + modelPoint;
 }
 
+glm::vec2 apple_barrel::WormLightOffset(const glm::vec3& barrel, const glm::vec3& worm)
+{
+	return {barrel.x - worm.x, barrel.z - worm.z};
+}
+
 uint32_t apple_barrel::StepWorm(uint32_t place, uint32_t elapsed, uint32_t playTime, bool looping)
 {
 	if (playTime == 0)
