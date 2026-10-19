@@ -69,6 +69,17 @@ inline constexpr std::string_view k_InfoFileName = "SaveGame.inf";
 /// The slot that the game saves the land that is open into before a load of the slot from the save game room: the next
 /// land's slot before a load of the previous land, the previous land's slot before a load of the next land
 [[nodiscard]] std::optional<uint32_t> SaveBeforeRoomLoad(uint32_t slot);
+/// Why the save game room writes a save
+enum class RoomSave
+{
+	/// The player chose the slot and gave the name
+	Chosen,
+	/// The room saves the land that is open before a load of the previous land or the next land
+	BeforeLoad,
+};
+/// Whether a good save from the save game room starts the help on loading. A save into an empty slot starts it. A save
+/// before a load always starts it, also when the slot has a save.
+[[nodiscard]] bool RoomSaveStartsLoadHelp(RoomSave why, bool slotHasSave);
 /// The folder of the slot's mind files, relative to the player's folder
 [[nodiscard]] std::filesystem::path MindFolder(uint32_t slot, uint32_t land);
 /// The mind file of the creature at that place in the game's list of creatures
