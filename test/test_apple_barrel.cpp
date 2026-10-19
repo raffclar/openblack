@@ -15,6 +15,7 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <gtest/gtest.h>
 
+#include "Graphics/MeshDetail.h"
 #include "Scenery/AppleBarrelRules.h"
 
 using namespace openblack;
@@ -103,4 +104,26 @@ TEST(AppleBarrel, AClipWithNoPlayTimeStaysAtItsStart)
 {
 	EXPECT_EQ(apple_barrel::StepWorm(10, 16, 0, true), 0U);
 	EXPECT_EQ(apple_barrel::StepWorm(10, 16, 0, false), 0U);
+}
+
+TEST(AppleBarrel, TheWormTakesTheLightOfTheBarrelsPlace)
+{
+	EXPECT_EQ(apple_barrel::WormLightOffset(glm::vec3(10.0f, 20.0f, 30.0f), glm::vec3(9.5f, 21.0f, 30.25f)),
+	          glm::vec2(0.5f, -0.25f));
+	EXPECT_EQ(apple_barrel::WormLightOffset(glm::vec3(4.0f), glm::vec3(4.0f)), glm::vec2(0.0f));
+}
+
+TEST(AppleBarrel, TheWormStaysInViewTwiceAsFarAsAThingOfItsSize)
+{
+	// A model of the worm's size, at the highest model detail
+	constexpr float k_Radius = 0.02f;
+	constexpr float k_ModelDetail = 0.5f;
+	const float plain = graphics::mesh_detail::Reach(0.0f, k_Radius, k_ModelDetail);
+	const float worm = graphics::mesh_detail::Reach(apple_barrel::k_WormImportance, k_Radius, k_ModelDetail);
+	EXPECT_FLOAT_EQ(worm, 2.0f * plain);
+	// Two and a half metres into the view, a thing of its size is gone, but the worm fades and is still drawn
+	EXPECT_FALSE(graphics::mesh_detail::Choose(2.5f, plain, true).mesh.has_value());
+	const auto choice = graphics::mesh_detail::Choose(2.5f, worm, true);
+	EXPECT_TRUE(choice.mesh.has_value());
+	EXPECT_TRUE(choice.alpha.has_value());
 }
