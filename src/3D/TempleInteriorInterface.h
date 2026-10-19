@@ -108,6 +108,13 @@ struct TempleSubMeshGlow
 	glm::vec3 colour;
 };
 
+/// Where the camera of the world is and where it looks
+struct OutsideCamera
+{
+	glm::vec3 origin {0.0f};
+	glm::vec3 focus {0.0f};
+};
+
 /// A save keeps the dialogue of the world that the temple keeps while the player is inside (see SaveState)
 class TempleInteriorInterface: public ecs::systems::SavedStateInterface
 {
@@ -115,6 +122,9 @@ public:
 	virtual ~TempleInteriorInterface() = default;
 
 	[[nodiscard]] virtual bool Active() const = 0;
+	/// The camera of the world, which stays where the player left it while the player is inside. A save keeps this
+	/// camera. None while the player is outside.
+	[[nodiscard]] virtual std::optional<OutsideCamera> GetOutsideCamera() const = 0;
 	[[nodiscard]] virtual glm::vec3 GetPosition() const = 0;
 	/// The room the player is in. The temple draws it, and the main room when it is another.
 	[[nodiscard]] virtual TempleRoom GetCurrentRoom() const = 0;

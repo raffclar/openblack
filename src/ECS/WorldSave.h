@@ -20,6 +20,7 @@
 #include <entt/entity/fwd.hpp>
 #include <entt/meta/context.hpp>
 
+#include "3D/TempleInteriorInterface.h"
 #include "ECS/Reflection/WorldArchive.h"
 
 /// The whole world of a saved game in openblack's own layout (deviation 83): the entities and their components, the
@@ -53,6 +54,10 @@ struct PendingChunk
 /// Returns nothing when the blocks do not read.
 [[nodiscard]] std::optional<reflection::WorldLoadReport> LoadEntities(const entt::meta_ctx& reflection,
                                                                       const gamesave::WorldFile& file);
+
+/// The camera that a save keeps: the camera of the world. Inside the temple that is the camera that the player left
+/// outside, not the camera of the temple's rooms.
+[[nodiscard]] OutsideCamera CameraToSave(const std::optional<OutsideCamera>& outside, const OutsideCamera& current);
 
 /// Forgets what the game does not keep in a save. After a load the creature wants again the actions that the area that
 /// holds it refused. The rooms of the temple go, because the temple makes them when the player goes into it.

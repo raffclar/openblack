@@ -246,8 +246,11 @@ gamesave::Chunk CameraChunk()
 	const entt::meta_ctx context;
 	reflection::BinaryWriter out(context);
 	const auto& camera = Locator::camera::value();
-	reflection::Save(out, camera.GetOrigin());
-	reflection::Save(out, camera.GetFocus());
+	const auto saved =
+	    world_save::CameraToSave(Locator::temple::has_value() ? Locator::temple::value().GetOutsideCamera() : std::nullopt,
+	                             {.origin = camera.GetOrigin(), .focus = camera.GetFocus()});
+	reflection::Save(out, saved.origin);
+	reflection::Save(out, saved.focus);
 	return {.tag = gamesave::k_CameraTag, .bytes = std::move(out.Bytes())};
 }
 
@@ -560,6 +563,11 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 	LogNames("fields that did not read", result->report.damagedFields);
 	LogNames("components that the load could not add", result->report.refusedComponents);
 	return result->report;
+}
+
+OutsideCamera world_save::CameraToSave(const std::optional<OutsideCamera>& outside, const OutsideCamera& current)
+{
+	return outside.value_or(current);
 }
 
 void world_save::ForgetUnsavedState(entt::registry& registry)

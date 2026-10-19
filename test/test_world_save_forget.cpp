@@ -56,3 +56,17 @@ TEST(WorldSaveForget, ALoadRemovesTheRoomsOfTheTempleAndKeepsTheLand)
 		EXPECT_TRUE(registry.valid(villager));
 	}
 }
+
+// Inside the temple the camera of the world stays where the player left it. A save keeps that camera, so a load puts
+// the player back outside the temple.
+TEST(WorldSaveForget, ASaveInsideTheTempleKeepsTheCameraOfTheWorld)
+{
+	const OutsideCamera temple {.origin = {10.0f, 2.0f, 10.0f}, .focus = {11.0f, 2.0f, 10.0f}};
+	const OutsideCamera world {.origin = {1900.0f, 60.0f, 2500.0f}, .focus = {1910.0f, 30.0f, 2520.0f}};
+	const auto inside = ecs::world_save::CameraToSave(world, temple);
+	EXPECT_EQ(inside.origin, world.origin);
+	EXPECT_EQ(inside.focus, world.focus);
+	const auto outside = ecs::world_save::CameraToSave(std::nullopt, world);
+	EXPECT_EQ(outside.origin, world.origin);
+	EXPECT_EQ(outside.focus, world.focus);
+}
