@@ -108,6 +108,12 @@ bool creature_dance::DanceGoesOn(std::optional<uint32_t> startedBy, uint32_t age
 	return agendaUnderway && startedBy == agenda;
 }
 
+bool creature_dance::DecidesWhenReleased(VillagerStates top)
+{
+	return top == VillagerStates::InHand || top == VillagerStates::WorshippingCreature ||
+	       top == VillagerStates::ControlledByCreature;
+}
+
 bool creature_dance::MayDanceToImpress(uint32_t lastType, uint32_t lastTurn, uint32_t turn)
 {
 	return MayDanceAgain(k_ImpressDanceType, lastType, lastTurn, turn);

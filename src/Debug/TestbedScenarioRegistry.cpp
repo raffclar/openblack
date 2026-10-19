@@ -466,6 +466,25 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.thirst_kept_at_home",
+	    .name = "Thirsty creature kept far from water",
+	    .facet = Facet::Needs,
+	    .description = "A parched tiger starts north of the middle, short of the testbed's lake, with its desire for "
+	                   "water as strong as it gets. It is kept within 20 units of where it stands, as a young creature "
+	                   "is kept near its home.",
+	    .expected = "It does not walk to the lake. Each plan whose walk leaves the area fails as it starts, and the "
+	                "creature does not want that action again while the area holds it. It stays near where it stands.",
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {0.0f, 60.0f},
+	        .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.95f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Water, .fraction = 1.0f}},
+	    }},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.1f, .radius = 20.0f}},
+	});
+
+	all.push_back({
 	    .id = "needs.on_fire_drinks",
 	    .name = "A creature on fire goes to the sea",
 	    .facet = Facet::Needs,
