@@ -14,12 +14,15 @@
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/MapCells.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
@@ -124,4 +127,40 @@ TEST_F(MapProductionFiling, ASavedGameKeepsTheOrderOfTheThingsInACell)
 	reflection::BinaryWriter again(context);
 	map.SaveState(again);
 	EXPECT_EQ(again.Bytes(), out.Bytes());
+}
+
+TEST_F(MapProductionFiling, AFieldIsInEachCellItsOutlineCoversAndLeavesThemWhenGone)
+{
+	// A field is a building: it goes into the front of the fixed things of each cell that its model's outline covers,
+	// and so a search of any of those cells finds it. Here the outline is a circle of 4.88 units in the middle of a cell,
+	// as a field of wheat has: the circle of each of the four cells beside it touches it, the cells at the corners not.
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 place {505.0f, 0.0f, 505.0f};
+	Locator::entitiesMap::reset();
+	Locator::entitiesMap::emplace<MapProduction>([place](const Registry& /*registry*/, entt::entity /*entity*/) {
+		return std::optional(map_cells::OutlineOfBox(place, glm::mat3(1.0f), 1.0f, glm::vec3(0.0f), {4.88f, 1.0f, 4.88f}));
+	});
+	auto& map = Locator::entitiesMap::value();
+	const auto field = registry.Create();
+	registry.Assign<Transform>(field, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Abode>(field, AbodeNumber::Field, 0u, 0u, 0u);
+	registry.Assign<Field>(field);
+	map.Sync();
+	ASSERT_TRUE(registry.AllOf<MapCellResident>(field));
+	const auto middle = map_coords::CellOf(place);
+	for (const auto offset : {glm::ivec2 {0, 0}, glm::ivec2 {-1, 0}, glm::ivec2 {1, 0}, glm::ivec2 {0, -1}, glm::ivec2 {0, 1}})
+	{
+		const auto cell = middle + offset;
+		const auto inCell = map.GetAllInCell(cell);
+		ASSERT_FALSE(inCell.empty());
+		EXPECT_EQ(inCell.front(), field);
+	}
+	for (const auto offset : {glm::ivec2 {-1, -1}, glm::ivec2 {1, 1}, glm::ivec2 {-1, 1}, glm::ivec2 {1, -1}})
+	{
+		const auto cell = middle + offset;
+		EXPECT_TRUE(map.GetAllInCell(cell).empty());
+	}
+	registry.Destroy(field);
+	EXPECT_TRUE(map.GetAllInCell(middle).empty());
+	EXPECT_TRUE(map.GetAllInCell(middle + glm::ivec2 {1, 0}).empty());
 }
