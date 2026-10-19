@@ -98,6 +98,9 @@ public:
 	virtual void PlaceWithoutWalking(entt::entity creature, glm::vec3 position) = 0;
 	/// Whether it is planning a route, turning or on its way
 	[[nodiscard]] virtual bool IsMoving(entt::entity creature) const = 0;
+	/// The fraction of its top speed that the creature keeps for its next walk. A creature with no speed yet has its
+	/// walk fraction. 0 for a thing that is not a creature.
+	[[nodiscard]] virtual float KeptFraction(entt::entity creature) const = 0;
 
 	/// Where the creatures can walk on this land
 	[[nodiscard]] virtual const creature_route::WalkableLand& GetWalkableLand() = 0;

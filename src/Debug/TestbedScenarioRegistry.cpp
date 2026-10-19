@@ -7582,6 +7582,39 @@ void AddMind(std::vector<Scenario>& all)
 	}
 
 	all.push_back({
+	    .id = "mind.pick_up_running_sheep",
+	    .name = "The creature walks to a sheep that runs and picks it up",
+	    .facet = Facet::Mind,
+	    .description = "A tiger and a sheep 15 m in front of it. After one second the sheep runs away from the tiger. "
+	                   "Then the script tells the tiger to pick up the sheep and look at it.",
+	    .expected = "On each turn the tiger aims at the place where the sheep will be when it gets there, not at the "
+	                "place where the sheep is. When the sheep stops, the tiger walks up to it, reaches to where the "
+	                "sheep will be at the moment of the hold, and picks it up.",
+	    .framing = {.shot = Shot::Follow, .distance = 3.0f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AnimalInfo::Sheep, .offset = {15.0f, 0.0f}, .living = true}},
+	    .commands = {{.kind = Kind::AnimalFlees, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Kind::DoAction, .delaySeconds = 0.5f, .object = 0, .action = "ExamineByPickingUp"}},
+	});
+
+	all.push_back({
+	    .id = "mind.pick_up_walking_villager",
+	    .name = "The creature walks to a villager that walks past and picks it up",
+	    .facet = Facet::Mind,
+	    .description = "A tiger. A villager 30 m in front of it and 20 m to the side walks across in front of the tiger, "
+	                   "to 40 m on the other side. The script tells the tiger to pick up the villager and look at it.",
+	    .expected = "The tiger walks to a place ahead of the villager on the villager's way, and aims again on each "
+	                "turn. It reaches to where the villager will be at the moment of the hold, and picks it up.",
+	    .framing = {.shot = Shot::Follow, .distance = 3.0f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {30.0f, 20.0f},
+	                 .walkTo = glm::vec2 {30.0f, -40.0f},
+	                 .walkAfterSeconds = 0.5f}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "ExamineByPickingUp"}},
+	});
+
+	all.push_back({
 	    .id = "mind.mimic",
 	    .name = "Mimic the player",
 	    .facet = Facet::Mind,
@@ -9503,7 +9536,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 162> k_Names {
+	constexpr std::array<std::string_view, 163> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9666,6 +9699,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "charge an icon with its seed in the hand",
 	    "finish the building",
 	    "call a script native",
+	    "animal flees",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

@@ -46,6 +46,7 @@
 #include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureLead.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreatureObjectActions.h"
@@ -342,11 +343,11 @@ std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const 
 	return reach;
 }
 
-/// How far the hand or foot gets in the reaching animations, measured once in the model's own size, the first time it
-/// is wanted, and scaled as the creature is drawn. None before the creature is posed.
+/// Where the hand or foot gets to in the reaching animations, measured once in the model's own size, the first time it
+/// is wanted. None before the creature is posed.
 template <typename Kept>
-std::optional<float> KeptStraightReach(entt::entity creature, ReachWith with,
-                                       const std::array<size_t, creature_reach::k_CornerCount>& animations)
+std::optional<creature_reach::Points> KeptReachPoints(entt::entity creature, ReachWith with,
+                                                      const std::array<size_t, creature_reach::k_CornerCount>& animations)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(creature))
@@ -360,7 +361,7 @@ std::optional<float> KeptStraightReach(entt::entity creature, ReachWith with,
 	}
 	if (const auto* kept = registry.TryGet<const Kept>(creature))
 	{
-		return creature_reach::StraightReach(kept->points, transform->scale.x);
+		return kept->points;
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const auto* points = body != nullptr ? PointsOf(*body) : nullptr;
@@ -377,7 +378,21 @@ std::optional<float> KeptStraightReach(entt::entity creature, ReachWith with,
 		return std::nullopt;
 	}
 	registry.AssignOrReplace<Kept>(creature, Kept {.points = *reach});
-	return creature_reach::StraightReach(*reach, transform->scale.x);
+	return *reach;
+}
+
+/// How far the hand or foot gets in the reaching animations, scaled as the creature is drawn. None before the creature
+/// is posed.
+template <typename Kept>
+std::optional<float> KeptStraightReach(entt::entity creature, ReachWith with,
+                                       const std::array<size_t, creature_reach::k_CornerCount>& animations)
+{
+	const auto points = KeptReachPoints<Kept>(creature, with, animations);
+	if (!points.has_value())
+	{
+		return std::nullopt;
+	}
+	return creature_reach::StraightReach(*points, Locator::entitiesRegistry::value().Get<const Transform>(creature).scale.x);
 }
 
 float DurationOf(entt::entity creature, size_t animation)
@@ -1061,6 +1076,147 @@ float AboveGround(const glm::vec3& point)
 	                                                             map_coords::FtoL(point.z * 65536.0f * 0.1f));
 }
 
+/// A villager or an animal as a thing that a creature aims ahead of. None for anything else.
+std::optional<creature_lead::Living> LivingOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (const auto* animal = registry.TryGet<const Animal>(thing))
+	{
+		// The animal's place at the end of its last turn, not the place where it is drawn between two turns
+		return creature_lead::Living {.mapPosition = animal->move.position,
+		                              .height = animal->position.y,
+		                              .speed = animal->move.speed,
+		                              .gameAngle = animal->move.angle,
+		                              .moved = glm::xz(animal->position) != glm::xz(animal->previousPosition)};
+	}
+	const auto* transform = registry.TryGet<const Transform>(thing);
+	if (!registry.AllOf<Villager>(thing) || transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	creature_lead::Living living {
+	    .mapPosition = {map_coords::ToFixed(transform->position.x), map_coords::ToFixed(transform->position.z)},
+	    .height = transform->position.y};
+	if (const auto* hug = registry.TryGet<const WallHug>(thing))
+	{
+		// The walk keeps the map position while the villager stays where the walk put it
+		if (hug->placedAt == glm::xz(transform->position))
+		{
+			living.mapPosition = hug->position;
+		}
+		living.speed = static_cast<uint16_t>(std::clamp(static_cast<int32_t>(GetSpeedStateOf(hug->speed)), 0, 0xFFFF));
+		living.gameAngle = hug->gameAngle;
+	}
+	if (const auto* pose = registry.TryGet<const VillagerPose>(thing))
+	{
+		living.moved = pose->movedLastTurn;
+	}
+	return living;
+}
+
+/// The place where a creature aims at a thing: ahead of a villager or an animal that moved, after some seconds, and
+/// the place of anything else
+glm::vec3 AimAt(const std::optional<creature_lead::Living>& living, const glm::vec3& place, float seconds)
+{
+	return living.has_value() && living->moved ? creature_lead::WhereAfter(*living, seconds) : place;
+}
+
+/// Where a creature walks to, to get a thing in reach: ahead of a villager or an animal that moves, by the time of the
+/// walk at the speed it keeps, and to the place of anything else
+glm::vec3 WalkAim(entt::entity creature, const Creature& body, const Transform& transform,
+                  const std::optional<creature_lead::Living>& living, const glm::vec3& place)
+{
+	if (!living.has_value() || !living->moved)
+	{
+		return place;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
+	const float fraction = Locator::creatureLocomotionSystem::value().KeptFraction(creature);
+	// A creature with no speed has no time for a walk, so it aims at the place
+	if (walk == nullptr || !(walk->speeds.run * fraction > 0.0f))
+	{
+		return place;
+	}
+	return creature_lead::WalkTo(
+	    {.position = transform.position, .size = ShownSize(body), .runSpeed = walk->speeds.run, .fraction = fraction}, *living);
+}
+
+/// On its way to a thing to pick up or stomp on, on each turn the creature aims again:
+/// - It cannot see the thing: it walks near to it, as it does when it stands.
+/// - The thing is nearer along the ground than the middle of its reach: it walks on, and reaches when it stands. A
+///   pick-up of a thing that is too high stops.
+/// - Else it walks to where the thing will be. The walk continues when that place is not 10 cm or more away from
+///   the place that it walks to.
+void AimWhileMoving(entt::entity creature, CreatureObjectAction& action, const Creature& body, const Transform& transform)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* at = action.target.has_value() && registry.Valid(*action.target)
+	                     ? registry.TryGet<const Transform>(*action.target)
+	                     : nullptr;
+	if (at == nullptr)
+	{
+		return;
+	}
+	const bool pickingUp = action.kind == Kind::PickUp;
+	const auto points = pickingUp
+	                        ? KeptReachPoints<PickUpReach>(creature, ReachWith::FingerEnds, creature_reach::k_PickUpAnimations)
+	                        : KeptReachPoints<StompReach>(creature, ReachWith::Foot, creature_reach::k_DestroyAnimations);
+	if (!points.has_value())
+	{
+		return;
+	}
+	const auto living = LivingOf(registry, *action.target);
+	const auto place = living.has_value() ? creature_lead::PlaceOf(*living) : at->position;
+	const float dx = place.x - transform.position.x;
+	const float dz = place.z - transform.position.z;
+	const float flatDistance = std::sqrt((dx * dx) + (dz * dz));
+	const bool seen = creature_mind::CanSee(x87::Distance<x87::SumOrder::Zyx>(place, transform.position),
+	                                        object_measures::Height(registry, *action.target));
+	auto destination = glm::xz(place);
+	float stopShort = 0.0f;
+	if (!seen)
+	{
+		stopShort = creature_object_actions::NearWalkDistance(object_measures::TwoDRadius(registry, creature),
+		                                                      object_measures::TwoDRadius(registry, *action.target));
+		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+		const auto* belief = mind != nullptr && pickingUp ? mind->beliefs.Find(*action.target) : nullptr;
+		if (belief != nullptr)
+		{
+			destination = map_coords::ToMetres(belief->place);
+		}
+	}
+	else if (flatDistance < creature_reach::MovingReach(*points, transform.scale.x))
+	{
+		if (pickingUp &&
+		    creature_object_actions::TooHighToPickUp(std::abs(AboveGround(place) - AboveGround(transform.position)),
+		                                             gutils::GetDistanceInMetres(glm::xz(transform.position), glm::xz(place))))
+		{
+			Fail(action, "it is too high");
+		}
+		return;
+	}
+	else
+	{
+		stopShort = creature_reach::StraightReach(*points, transform.scale.x);
+		destination = glm::xz(WalkAim(creature, body, transform, living, place));
+	}
+	using MoveResult = CreatureLocomotionSystemInterface::MoveResult;
+	// The walk keeps the pace that the creature has
+	const auto result = Locator::creatureLocomotionSystem::value().MoveTo(
+	    creature, destination, CreatureLocomotionSystemInterface::Pace::Keep, stopShort, 0.0f);
+	if (result == MoveResult::InvalidDestination)
+	{
+		// The action fails, and the creature stops its walk
+		Locator::creatureLocomotionSystem::value().Stop(creature);
+		Fail(action, "navigation failed", creature_object_actions::Failure::NoWay);
+		return;
+	}
+	if (result == MoveResult::Started)
+	{
+		action.walked = true;
+	}
+}
+
 void Approach(entt::entity creature, CreatureObjectAction& action, const Creature& body, const Transform& transform,
               CreatureAnimation& animation, const CreatureHeldObject* held)
 {
@@ -1085,6 +1241,11 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	}
 	if (locomotion.IsMoving(creature))
 	{
+		// On its way to a thing to pick up or stomp on, it aims at the thing again on each turn
+		if (action.kind == Kind::PickUp || action.kind == Kind::Destroy)
+		{
+			AimWhileMoving(creature, action, body, transform);
+		}
 		return;
 	}
 	const auto* points = PointsOf(body);
@@ -1194,10 +1355,15 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	}
 	// The reach is measured from the way the creature faces now, which the drawn body catches up with only over a turn
 	const auto facing = AsFacing(registry, creature, transform);
+	// A villager or an animal that moves is reached for where it will be when the hand or foot gets there
+	const auto living = LivingOf(registry, *action.target);
+	const auto place = living.has_value() ? creature_lead::PlaceOf(*living) : at->position;
+	const auto reachPoint =
+	    AimAt(living, place, creature_lead::ReachSeconds(ShownSize(body), static_cast<int32_t>(action.eventMs)));
 	// After the turn to get the thing in reach, it reaches at once
 	if (std::exchange(action.turnedToReach, false))
 	{
-		BeginReaching(creature, action, animation, ReachFor(*action.reach, ToLocal(facing, at->position)));
+		BeginReaching(creature, action, animation, ReachFor(*action.reach, ToLocal(facing, reachPoint)));
 		return;
 	}
 	const bool pickingUp = action.kind == Kind::PickUp;
@@ -1209,11 +1375,12 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		// Not posed yet: it tries again next turn
 		return;
 	}
-	const auto reach = ReachFor(*action.reach, ToLocal(facing, at->position));
-	const float dx = at->position.x - transform.position.x;
-	const float dz = at->position.z - transform.position.z;
+	// The test of the reach takes the place where the thing is now
+	const auto reach = ReachFor(*action.reach, ToLocal(facing, place));
+	const float dx = place.x - transform.position.x;
+	const float dz = place.z - transform.position.z;
 	const float flatDistance = std::sqrt((dx * dx) + (dz * dz));
-	const bool seen = creature_mind::CanSee(x87::Distance<x87::SumOrder::Zyx>(at->position, transform.position),
+	const bool seen = creature_mind::CanSee(x87::Distance<x87::SumOrder::Zyx>(place, transform.position),
 	                                        object_measures::Height(registry, *action.target));
 	using Step = creature_object_actions::ApproachStep;
 	const auto step = creature_object_actions::NextApproachStep(seen, flatDistance, *straight, reach.blend.inRange);
@@ -1228,22 +1395,24 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 			return;
 		}
 		// A thing outside the corners of its reach makes it turn first, so that the middle of its reach lies on the
-		// thing. Then it reaches.
-		if (!reach.blend.inRange &&
-		    locomotion.TurnToFace(creature, FacingToReach(facing, *action.reach, at->position, reach.mirrored)))
+		// place where it reaches for the thing. Then it reaches.
+		const auto aimed = ReachFor(*action.reach, ToLocal(facing, reachPoint));
+		if (!aimed.blend.inRange &&
+		    locomotion.TurnToFace(creature, FacingToReach(facing, *action.reach, reachPoint, aimed.mirrored)))
 		{
 			action.turnedToReach = true;
 			return;
 		}
-		BeginReaching(creature, action, animation, reach);
+		BeginReaching(creature, action, animation, aimed);
 		return;
 	}
-	// Out of reach, it walks to the thing again and stops short of it. Not yet seen, a pick-up walks to where the
-	// creature believes the thing is, and stops further away.
-	auto destination = glm::xz(at->position);
+	// Out of reach, it walks to the thing again and stops short of it. It walks to where a villager or an animal that
+	// moves will be. Not yet seen, a pick-up walks to where the creature believes the thing is, and stops further away.
+	auto destination = glm::xz(WalkAim(creature, body, transform, living, place));
 	float stopShort = *straight;
 	if (step == Step::WalkNear)
 	{
+		destination = glm::xz(place);
 		stopShort = creature_object_actions::NearWalkDistance(object_measures::TwoDRadius(registry, creature),
 		                                                      object_measures::TwoDRadius(registry, *action.target));
 		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
@@ -1255,8 +1424,9 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	}
 	++action.attempts;
 	using MoveResult = CreatureLocomotionSystemInterface::MoveResult;
+	// The walk keeps the pace that the creature has
 	const auto result =
-	    locomotion.MoveTo(creature, destination, CreatureLocomotionSystemInterface::Pace::Walk, stopShort, 0.0f);
+	    locomotion.MoveTo(creature, destination, CreatureLocomotionSystemInterface::Pace::Keep, stopShort, 0.0f);
 	switch (creature_cast_moves::WalkStartOf(result == MoveResult::Started, result != MoveResult::InvalidDestination))
 	{
 	case creature_cast_moves::WalkStart::Walking:
@@ -2630,7 +2800,13 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 				    animation.slots.clear();
 				    return;
 			    }
-			    const auto local = ToLocal(AsFacing(registry, entity, transform), at->position);
+			    // It reaches for where a villager or an animal that moves will be at the moment of the hold. The time
+			    // left is in whole milliseconds.
+			    const auto living = LivingOf(registry, *action.target);
+			    const auto place = living.has_value() ? creature_lead::PlaceOf(*living) : at->position;
+			    const auto msLeft = static_cast<int32_t>(action.eventMs) - static_cast<int32_t>(action.timeMs);
+			    const auto aim = AimAt(living, place, creature_lead::ReachSeconds(ShownSize(body), msLeft));
+			    const auto local = ToLocal(AsFacing(registry, entity, transform), aim);
 			    const auto reach =
 			        creature_reach::Solve(action.mirrored ? creature_reach::Mirrored(*action.reach) : *action.reach, local);
 			    if (!reach.inRange)
