@@ -158,6 +158,9 @@ public:
 	/// What the logo effect draws over its sky and its dots in a frame
 	struct LogoEffectOverlay
 	{
+		/// The whole window, and the effect's own 4:3 screen in it
+		glm::u16vec2 resolution;
+		glm::ivec2 origin;
 		logo_effect::Screen screen;
 		std::u16string_view text;
 		/// The Lionhead logo shows its trademark sign
@@ -176,7 +179,7 @@ public:
 	[[nodiscard]] const graphics::Texture2D* GetLogoDotTexture() const noexcept { return _gatheringText.get(); }
 	/// The logo effect's text, the sponsor's logo, the trademark sign and the fade to black, in the effect's overlay pass
 	void DrawLogoEffectOverlay(const LogoEffectOverlay& overlay);
-	/// The logo effect's picture on the screen, in the screen's 4:3 box, black round it
+	/// The logo effect's picture over the whole window
 	void DrawLogoEffectPicture(glm::u16vec2 resolution, const graphics::Texture2D& picture);
 	/// The menu greets the player by their profile's name and shows its creature's name and symbol
 	/// The menu as the player's profile has it: greeting them, with their creature's name, symbol and options

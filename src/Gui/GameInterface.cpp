@@ -475,9 +475,11 @@ void GameInterface::ReleaseLogoEffect()
 
 void GameInterface::DrawLogoEffectOverlay(const LogoEffectOverlay& overlay)
 {
-	const auto size = glm::u16vec2(overlay.screen.width, overlay.screen.height);
+	const auto size = overlay.resolution;
 	_logoCanvas.Begin(size);
 	_logoPainter.Begin(size);
+	// The text and the logos are placed on the effect's own 4:3 screen in the middle of the window
+	_logoCanvas.SetOrigin(glm::vec2(overlay.origin));
 	const auto textShare = static_cast<float>(overlay.textAlpha) / 255.0f;
 	// The text under the logo, centred
 	const auto titleSize = logo_effect::TitleSize(overlay.screen);
@@ -509,7 +511,8 @@ void GameInterface::DrawLogoEffectOverlay(const LogoEffectOverlay& overlay)
 			    glm::vec4(k_TradeMarkGrey, k_TradeMarkGrey, k_TradeMarkGrey, static_cast<float>(overlay.logoAlpha) / 255.0f));
 		}
 	}
-	// The screen goes black over all of it
+	// The whole window goes black over all of it
+	_logoCanvas.SetOrigin(glm::vec2(0.0f));
 	if (overlay.fade > 0)
 	{
 		_logoCanvas.DrawQuad(glm::vec2(0.0f), glm::vec2(size), glm::vec2(0.0f), glm::vec2(1.0f),
@@ -520,9 +523,8 @@ void GameInterface::DrawLogoEffectOverlay(const LogoEffectOverlay& overlay)
 
 void GameInterface::DrawLogoEffectPicture(glm::u16vec2 resolution, const graphics::Texture2D& picture)
 {
-	const auto box = FitInside(k_FourByThree, resolution.x, resolution.y);
-	const auto min = glm::vec2(static_cast<float>(box.x), static_cast<float>(box.y));
-	const auto max = min + glm::vec2(static_cast<float>(box.width), static_cast<float>(box.height));
+	const auto min = glm::vec2(0.0f);
+	const auto max = glm::vec2(resolution);
 	// A picture that the graphics card drew has its first row at the bottom on some backends
 	const bool flipped = bgfx::getCaps()->originBottomLeft;
 	_canvas.Begin(resolution);

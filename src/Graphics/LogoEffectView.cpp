@@ -16,7 +16,6 @@
 
 #include <L3DFile.h>
 #include <bgfx/bgfx.h>
-#include <glm/geometric.hpp>
 #include <glm/mat4x4.hpp>
 
 #include "Graphics/RenderPass.h"
@@ -71,7 +70,7 @@ const bgfx::VertexLayout& Layout()
 		view[0][axis] = direction.x;
 		view[1][axis] = direction.y;
 		view[2][axis] = direction.z;
-		view[3][axis] = -glm::dot(direction, scene.position);
+		view[3][axis] = scene.offset[axis];
 	}
 	return view;
 }
@@ -83,6 +82,8 @@ const bgfx::VertexLayout& Layout()
 	projection[0][0] = scene.clipScaleX;
 	projection[1][1] = scene.clipScaleY;
 	projection[2][3] = 1.0f;
+	projection[2][0] = scene.clipShift.x;
+	projection[2][1] = scene.clipShift.y;
 	if (bgfx::getCaps()->homogeneousDepth)
 	{
 		projection[2][2] = 1.0f;

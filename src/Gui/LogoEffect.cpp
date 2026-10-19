@@ -16,7 +16,7 @@
 #include <bit>
 #include <numbers>
 
-#include <glm/geometric.hpp>
+#include <glm/vector_relational.hpp>
 
 #include "Common/CrtQsort.h"
 #include "Common/X87.h"
@@ -41,9 +41,11 @@ constexpr float k_Spring = std::bit_cast<float>(0x412028F6u);       // 10.01
 constexpr float k_SmallestSize = std::bit_cast<float>(0x38D1B717u); // 0.0001
 constexpr float k_FullTurn = std::bit_cast<float>(0x40C90FDBu);     // 2 pi
 constexpr float k_Pi = std::bit_cast<float>(0x40490FDBu);
-constexpr float k_TitleSize = std::bit_cast<float>(0x3D4CCCCDu);    // 0.05
-constexpr float k_FiveSevenths = std::bit_cast<float>(0x3F36DB6Eu); // 5 / 7
-constexpr float k_SponsorScale = std::bit_cast<float>(0x3AA3D70Au); // 1 / 800
+/// A direction this near to straight up or down moves a little to the side
+constexpr double k_Vertical = std::bit_cast<double>(0x3F1A36E2E0000000ull); // 0.0001
+constexpr float k_TitleSize = std::bit_cast<float>(0x3D4CCCCDu);            // 0.05
+constexpr float k_FiveSevenths = std::bit_cast<float>(0x3F36DB6Eu);         // 5 / 7
+constexpr float k_SponsorScale = std::bit_cast<float>(0x3AA3D70Au);         // 1 / 800
 // The rates of the camera's turns, kept as doubles by the game
 constexpr double k_TurnRateX = std::bit_cast<double>(0x3FD68FE260B2C83Full);
 constexpr double k_TurnRateY = std::bit_cast<double>(0x3FD125C3DEE78184ull);
@@ -118,10 +120,14 @@ int32_t ClampPush(int32_t value)
 
 Lens LensOf(float viewAcross, float nearClip, Screen screen)
 {
+	return LensOf(viewAcross, nearClip, static_cast<float>(screen.width) / static_cast<float>(screen.height));
+}
+
+Lens LensOf(float viewAcross, float nearClip, float aspect)
+{
 	const auto tanHalf = x87::Tan(viewAcross * 0.5f);
-	const auto aspect = static_cast<float>(screen.width) / static_cast<float>(screen.height);
 	const auto extentX = x87::Mul(tanHalf, nearClip);
-	const auto clipScaleX = x87::RoundToFloat(1.0 / tanHalf);
+	const auto clipScaleX = x87::Div(1.0, tanHalf);
 	return {.extentX = extentX,
 	        .extentY = extentX / aspect,
 	        .nearClip = nearClip,
@@ -131,10 +137,65 @@ Lens LensOf(float viewAcross, float nearClip, Screen screen)
 
 View LookAt(glm::vec3 position, glm::vec3 focus)
 {
+	// The direction to the focus, made one long
+	auto x = focus.x - position.x;
+	auto y = focus.y - position.y;
+	auto z = focus.z - position.z;
+	bool normalise = true;
+	if (x87::Less(std::abs(x), k_Vertical) && x87::Less(std::abs(z), k_Vertical))
+	{
+		x = x > 0.0f ? k_SmallestSize : -k_SmallestSize;
+	}
+	else if (x == 0.0f && y == 0.0f && z == 0.0f)
+	{
+		normalise = false;
+	}
+	if (normalise)
+	{
+		const auto inverse = 1.0f / std::sqrt(((z * z) + (y * y)) + (x * x));
+		x = x * inverse;
+		y = inverse * y;
+		z = inverse * z;
+	}
+	const glm::vec3 forward {x, y, z};
+	// The world's up, less its part along the direction, made one long
 	constexpr glm::vec3 k_Up {0.0f, 1.0f, 0.0f};
-	const auto forward = glm::normalize(focus - position);
-	const auto right = glm::normalize(glm::cross(k_Up, forward));
-	return {.position = position, .right = right, .up = glm::cross(forward, right), .forward = forward};
+	const auto along = ((k_Up.z * forward.z) + (k_Up.y * forward.y)) + (k_Up.x * forward.x);
+	glm::vec3 up {k_Up.x - (along * forward.x), k_Up.y - (along * forward.y), k_Up.z - (along * forward.z)};
+	if (up.x != 0.0f || up.y != 0.0f || up.z != 0.0f)
+	{
+		const auto inverse = 1.0f / std::sqrt(((up.z * up.z) + (up.y * up.y)) + (up.x * up.x));
+		up = {up.x * inverse, up.y * inverse, up.z * inverse};
+	}
+	const glm::vec3 right {(up.y * forward.z) - (up.z * forward.y), (up.z * forward.x) - (up.x * forward.z),
+	                       (up.x * forward.y) - (up.y * forward.x)};
+	// The world's origin as the camera sees it
+	const auto offset = [&position](glm::vec3 axis) {
+		return ((-(axis.x * position.x)) - (axis.y * position.y)) - (axis.z * position.z);
+	};
+	return {.position = position,
+	        .right = right,
+	        .up = up,
+	        .forward = forward,
+	        .offset = {offset(right), offset(up), offset(forward)}};
+}
+
+glm::vec3 ToCamera(const View& view, glm::vec3 point)
+{
+	const auto axis = [&point](glm::vec3 direction, float offset) {
+		return (((direction.y * point.y) + (direction.z * point.z)) + (direction.x * point.x)) + offset;
+	};
+	return {axis(view.right, view.offset.x), axis(view.up, view.offset.y), axis(view.forward, view.offset.z)};
+}
+
+ClipMatrix ClipMatrixOf(const View& view, const Lens& lens)
+{
+	const auto row = [](glm::vec3 axis, float offset, float scale) {
+		return std::array {axis.x * scale, axis.y * scale, axis.z * scale, offset * scale};
+	};
+	return {.across = row(view.right, view.offset.x, lens.clipScaleX),
+	        .up = row(view.up, view.offset.y, lens.clipScaleY),
+	        .depth = {view.forward.x, view.forward.y, view.forward.z, view.offset.z}};
 }
 
 glm::vec3 ScreenToWorld(const View& view, const Lens& lens, Screen screen, glm::ivec2 pixel, float depth)
@@ -159,14 +220,22 @@ glm::vec3 ScreenToWorld(const View& view, const Lens& lens, Screen screen, glm::
 
 std::optional<Projected> WorldToScreen(const View& view, const Lens& lens, Screen screen, glm::vec3 point)
 {
-	const auto relative = point - view.position;
-	const auto depth = glm::dot(view.forward, relative);
-	if (depth < lens.nearClip)
+	return Project(ClipMatrixOf(view, lens), lens.nearClip, screen, point);
+}
+
+std::optional<Projected> Project(const ClipMatrix& matrix, float nearClip, Screen screen, glm::vec3 point)
+{
+	// Each row: x, then z, then y, then the offset
+	const auto apply = [&point](const std::array<float, 4>& row) {
+		return (((row[0] * point.x) + (row[2] * point.z)) + (row[1] * point.y)) + row[3];
+	};
+	const auto clipX = apply(matrix.across);
+	const auto clipY = apply(matrix.up);
+	const auto depth = apply(matrix.depth);
+	if (depth < nearClip)
 	{
 		return std::nullopt;
 	}
-	const auto clipX = glm::dot(view.right, relative) * lens.clipScaleX;
-	const auto clipY = glm::dot(view.up, relative) * lens.clipScaleY;
 	const auto inverse = 1.0f / depth;
 	const auto halfX = static_cast<float>(screen.width) * 0.5f;
 	const auto halfY = static_cast<float>(screen.height) * 0.5f;
@@ -217,7 +286,7 @@ std::optional<Picture> LionheadLogo(std::span<const uint8_t> file)
 
 std::optional<std::array<glm::vec3, 4>> DotCorners(const Dot& dot, const View& view, float nearClip)
 {
-	if (glm::dot(view.forward, dot.position - view.position) <= nearClip)
+	if (ToCamera(view, dot.position).z <= nearClip)
 	{
 		return std::nullopt;
 	}
@@ -302,8 +371,9 @@ bool EndsAt(float time)
 	return !(FlightAt(time) > -2.0f);
 }
 
-Effect::Effect(const Picture& picture, Screen screen, const Lens& lens, const Random& random)
+Effect::Effect(const Picture& picture, Screen screen, const Lens& lens, const Random& random, std::optional<Box> visible)
     : _screen(screen)
+    , _visible(visible.value_or(Box {.min = {0, 0}, .max = {screen.width, screen.height}}))
 {
 	const auto view = LookAt(k_LogoPosition, glm::vec3(0.0f));
 	_dots.reserve(k_DotCount);
@@ -448,7 +518,9 @@ void Effect::Push(const View& view, const Lens& lens, const Input& input, float 
 	for (auto& dot : _dots)
 	{
 		const auto projected = WorldToScreen(view, lens, _screen, dot.position);
-		if (!projected.has_value() || !projected->onScreen)
+		// The game moves the dots on its screen; here every dot that shows on the window
+		if (!projected.has_value() || glm::any(glm::lessThan(projected->pixel, _visible.min)) ||
+		    glm::any(glm::greaterThanEqual(projected->pixel, _visible.max)))
 		{
 			continue;
 		}

@@ -54,9 +54,13 @@ public:
 		glm::vec3 right;
 		glm::vec3 up;
 		glm::vec3 forward;
+		/// The world's origin in the camera's axes
+		glm::vec3 offset;
 		/// The scales from a point in front of the camera to the clip space, across and up
 		float clipScaleX;
 		float clipScaleY;
+		/// Where the middle of the effect's own screen is in the clip space of the picture, which can be wider
+		glm::vec2 clipShift;
 		float nearClip;
 		/// The sky sphere's colour: alpha, red, green and blue
 		uint32_t skyColour;

@@ -472,7 +472,18 @@ void Game::PlayLogoEffect()
 	const auto resolution = static_cast<glm::u16vec2>(Locator::windowing::value().GetSize());
 	const auto box = gui::FitInside(gui::k_FourByThree, resolution.x, resolution.y);
 	const logo_effect::Screen screen {.width = box.width, .height = box.height};
-	auto view = graphics::LogoEffectView::Create(glm::u16vec2(screen.width, screen.height), *files.Handle(k_LogoSkyId.value()));
+	// The effect is laid out on a 4:3 screen in the middle of the window, as the game laid it out on its screen. Its
+	// picture covers the whole window, so the sky and the dots continue past the 4:3 screen.
+	const glm::ivec2 origin {box.x, box.y};
+	const logo_effect::Box visible {.min = -origin, .max = glm::ivec2(resolution) - origin};
+	const glm::vec2 clipFit {static_cast<float>(box.width) / static_cast<float>(resolution.x),
+	                         static_cast<float>(box.height) / static_cast<float>(resolution.y)};
+	const glm::vec2 clipShift {
+	    (((static_cast<float>(box.x) + (static_cast<float>(box.width) * 0.5f)) * 2.0f) / static_cast<float>(resolution.x)) -
+	        1.0f,
+	    1.0f - (((static_cast<float>(box.y) + (static_cast<float>(box.height) * 0.5f)) * 2.0f) /
+	            static_cast<float>(resolution.y))};
+	auto view = graphics::LogoEffectView::Create(resolution, *files.Handle(k_LogoSkyId.value()));
 	if (!view)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The logo effect cannot start: its sky has no sphere");
@@ -484,7 +495,8 @@ void Game::PlayLogoEffect()
 	const auto& camera = Locator::camera::value();
 	const logo_effect::Random random = [](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); };
 	// The dots are placed with the game camera's lens as it is now
-	logo_effect::Effect effect(*picture, screen, logo_effect::LensOf(camera.GetLens(), camera.GetNearClip(), screen), random);
+	logo_effect::Effect effect(*picture, screen, logo_effect::LensOf(camera.GetLens(), camera.GetNearClip(), screen), random,
+	                           visible);
 	auto& audio = Locator::audio::value();
 	const auto sound = static_cast<entt::id_type>(audio::SoundId::Logo);
 	audio.PlaySoundEffect(sound, std::nullopt);
@@ -530,15 +542,19 @@ void Game::PlayLogoEffect()
 			            .right = frame.view.right,
 			            .up = frame.view.up,
 			            .forward = frame.view.forward,
-			            .clipScaleX = frame.lens.clipScaleX,
-			            .clipScaleY = frame.lens.clipScaleY,
+			            .offset = frame.view.offset,
+			            .clipScaleX = frame.lens.clipScaleX * clipFit.x,
+			            .clipScaleY = frame.lens.clipScaleY * clipFit.y,
+			            .clipShift = clipShift,
 			            .nearClip = frame.lens.nearClip,
 			            .skyColour = frame.skyColour,
 			            .dots = dots,
 			            .dotUvMin = logo_effect::k_DotUvMin,
 			            .dotUvMax = logo_effect::k_DotUvMax,
 			            .dotTexture = dotTexture});
-			_interface->DrawLogoEffectOverlay({.screen = screen,
+			_interface->DrawLogoEffectOverlay({.resolution = resolution,
+			                                   .origin = origin,
+			                                   .screen = screen,
 			                                   .text = picture->text,
 			                                   .tradeMark = picture->lionhead,
 			                                   .sponsor = sponsor,
@@ -548,8 +564,9 @@ void Game::PlayLogoEffect()
 			_interface->DrawLogoEffectPicture(size, view->GetPicture());
 		});
 	}
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The logo effect ends at time {:.3f} ({})", effect.GetTime(),
-	                   effect.Ended() ? "its end" : (input.startup.key ? "a key" : "a mouse button or the window"));
+	SPDLOG_LOGGER_INFO(
+	    spdlog::get("game"), "The logo effect ends at time {:.3f} ({})", effect.GetTime(),
+	    effect.Ended() ? "its end" : (input.startup.key ? "a key" : (input.startup.mouse ? "a mouse button" : "the window")));
 	view.reset();
 	_interface->ReleaseLogoEffect();
 	// The screen stays black while a mouse button is held

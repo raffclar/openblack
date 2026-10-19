@@ -59,6 +59,13 @@ struct Screen
 	int32_t height;
 };
 
+/// A box of the screen, from its top left pixel to past its bottom right pixel
+struct Box
+{
+	glm::ivec2 min;
+	glm::ivec2 max;
+};
+
 /// How the camera sees: its near plane's half width and half height (with the near distance), and the scale from a
 /// point in front of the camera to the clip space
 struct Lens
@@ -74,6 +81,8 @@ struct Lens
 
 /// The lens for a view across the width of the screen (in radians), a near distance and a screen
 [[nodiscard]] Lens LensOf(float viewAcross, float nearClip, Screen screen);
+/// The same for a screen's width over its height
+[[nodiscard]] Lens LensOf(float viewAcross, float nearClip, float aspect);
 
 /// Where a camera is and where it looks: its position and its axes in the world
 struct View
@@ -82,10 +91,26 @@ struct View
 	glm::vec3 right;
 	glm::vec3 up;
 	glm::vec3 forward;
+	/// The world's origin in the camera's axes: right, up and forward
+	glm::vec3 offset;
 };
 
-/// A camera at a position that looks at a focus, the world's up kept up
+/// A camera at a position that looks at a focus, the world's up kept up, as the game computes it in single precision.
+/// When the camera looks almost straight up or down, the game moves the direction a little to the side.
 [[nodiscard]] View LookAt(glm::vec3 position, glm::vec3 focus);
+
+/// A point of the world in the camera's axes, in the game's order of the sums
+[[nodiscard]] glm::vec3 ToCamera(const View& view, glm::vec3 point);
+
+/// The 4 by 3 matrix that takes a point of the world to the clip space: its across, up and depth rows, each with its
+/// offset last. The game multiplies the camera's axes by the lens' scales one time and keeps the products.
+struct ClipMatrix
+{
+	std::array<float, 4> across;
+	std::array<float, 4> up;
+	std::array<float, 4> depth;
+};
+[[nodiscard]] ClipMatrix ClipMatrixOf(const View& view, const Lens& lens);
 
 /// The point of the world at a depth in front of the camera, under a pixel of the screen
 [[nodiscard]] glm::vec3 ScreenToWorld(const View& view, const Lens& lens, Screen screen, glm::ivec2 pixel, float depth);
@@ -99,6 +124,8 @@ struct Projected
 	bool onScreen;
 };
 
+/// The pixel of a point of the world through a clip matrix, none for a point nearer to the camera than the near plane
+[[nodiscard]] std::optional<Projected> Project(const ClipMatrix& matrix, float nearClip, Screen screen, glm::vec3 point);
 /// The pixel of a point of the world, none for a point nearer to the camera than the near plane
 [[nodiscard]] std::optional<Projected> WorldToScreen(const View& view, const Lens& lens, Screen screen, glm::vec3 point);
 
@@ -195,7 +222,9 @@ class Effect
 {
 public:
 	/// The dots on the screen of the picture, at random depths. lens is the game camera's lens: the dots are placed with it.
-	Effect(const Picture& picture, Screen screen, const Lens& lens, const Random& random);
+	/// The mouse moves the dots that show in the visible box, in pixels of the screen; by default the screen itself.
+	Effect(const Picture& picture, Screen screen, const Lens& lens, const Random& random,
+	       std::optional<Box> visible = std::nullopt);
 
 	/// The next frame. The random numbers turn each dot's picture.
 	Frame Step(const Input& input, const Random& random);
@@ -211,6 +240,7 @@ private:
 	void Push(const View& view, const Lens& lens, const Input& input, float seconds);
 
 	Screen _screen;
+	Box _visible;
 	std::vector<Dot> _dots;
 	/// Where each dot goes back to
 	std::vector<glm::vec3> _homes;
@@ -238,12 +268,6 @@ struct TextPlace
 /// The trademark sign at the top right of the Lionhead logo
 [[nodiscard]] TextPlace TradeMarkPlace(Screen screen);
 
-/// A box of the screen, from its top left pixel to past its bottom right pixel
-struct Box
-{
-	glm::ivec2 min;
-	glm::ivec2 max;
-};
 /// The sponsor's logo at the bottom left of the screen and its label above it
 struct SponsorBoxes
 {
