@@ -6473,6 +6473,26 @@ void AddCombat(std::vector<Scenario>& all)
 	                 Go(Kind::WalkTo, 0, {90.0f, 30.0f}, 0.5f, false),
 	                 Act(Kind::KnockOut, 0, 1.0f, true)},
 	});
+	all.push_back({
+	    .id = "combat.script_moves_knocked_out",
+	    .name = "A script moves a creature that lies knocked out",
+	    .facet = Facet::Combat,
+	    .description = "A worn tiger, life 0.6 and exhaustion 0.7, is given a home where it stands and is knocked out "
+	                   "there as a fight's loser is. Six seconds later, while it lies still, a script puts it 40 units "
+	                   "to the east with SET_POSITION.",
+	    .expected = "It shows at the new place at once, and its body stands there, as the game's move stands it. It "
+	                "stays knocked out for the same time as in combat.faint_recovery, counted from when it first lay "
+	                "still. Then it is taken home, waits there, rests and gets up. It does not stay knocked out for ever.",
+	    .framing = {.shot = Shot::Overview, .include = {{40.0f, 0.0f}, {-20.0f, 0.0f}}, .distance = 0.6f},
+	    .creatures = {worn},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.5f, .radius = 400.0f},
+	                 Act(Kind::KnockOut, 0, 1.0f, false),
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 6.0f,
+	                  .script = "SET_POSITION",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Creature, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {40.0f, 0.0f}}}}},
+	});
 
 	{
 		constexpr float k_HurtLife = 0.3f;

@@ -388,6 +388,34 @@ constexpr float k_GetUpLife = 0.4f;
 constexpr float k_RestedExhaustion = 0.3f;
 [[nodiscard]] bool NeedsRest(float life, float exhaustion);
 
+/// The wait of a knocked-out creature that lies where it fell
+struct FaintWait
+{
+	float seconds {0.0f};
+	/// The creature lay still in its faint at least one time. Then its wait started.
+	bool started {false};
+};
+/// What the body of a knocked-out creature does in a turn
+struct FaintBody
+{
+	/// The faint is on the body. Before it starts, the creature checks its hands.
+	bool faintStarted {false};
+	/// The body plays an action, such as the fall of the faint or a get-up
+	bool acts {false};
+	/// The body lies still in the loop of its faint
+	bool lies {false};
+};
+/// Whether a turn counts in the wait of a knocked-out creature. The wait stops while the body plays an action that is
+/// not the loop of the faint. A body that stands with no action, as after a script moves the creature, does not stop it.
+[[nodiscard]] constexpr bool WaitTurnCounts(const FaintBody& body)
+{
+	return !body.acts || body.lies;
+}
+/// The wait after one turn of a knocked-out creature that lies where it fell. Before the creature lies still in its
+/// faint for the first time, the wait has not started and its seconds are notStartedSeconds. After that, the wait counts
+/// each turn that WaitTurnCounts lets it count, also when something moves the creature and its body stands.
+[[nodiscard]] FaintWait LyingTurn(FaintWait wait, const FaintBody& body, float turnSeconds, float notStartedSeconds);
+
 // Blows
 
 constexpr float k_HighDamage = 0.05f;

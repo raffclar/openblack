@@ -340,6 +340,40 @@ TEST(CreatureFight, HealthStaminaAndLife)
 	EXPECT_FALSE(NeedsRest(0.4f, 0.3f));
 }
 
+TEST(CreatureFight, TheWaitOfAFaintStartsWhenTheBodyFirstLiesStill)
+{
+	constexpr float k_Turn = 0.1f;
+	constexpr float k_NotStarted = -0.3f;
+	const FaintBody falling {.faintStarted = true, .acts = true, .lies = false};
+	const FaintBody lying {.faintStarted = true, .acts = true, .lies = true};
+	const FaintBody standing {.faintStarted = true, .acts = false, .lies = false};
+
+	// Before the faint starts, and while it falls, the wait does not start
+	auto wait = LyingTurn({}, {.faintStarted = false, .acts = false, .lies = false}, k_Turn, k_NotStarted);
+	EXPECT_FALSE(wait.started);
+	EXPECT_FLOAT_EQ(wait.seconds, k_NotStarted);
+	wait = LyingTurn(wait, falling, k_Turn, k_NotStarted);
+	EXPECT_FALSE(wait.started);
+	EXPECT_FLOAT_EQ(wait.seconds, k_NotStarted);
+	// A body that a script stands before it lies still never starts the wait
+	EXPECT_FALSE(LyingTurn(wait, standing, k_Turn, k_NotStarted).started);
+	// It lies still: the wait starts and counts
+	wait = LyingTurn(wait, lying, k_Turn, k_NotStarted);
+	EXPECT_TRUE(wait.started);
+	EXPECT_FLOAT_EQ(wait.seconds, k_NotStarted + k_Turn);
+	// Moved by a script, the body stands, and the wait goes on
+	const auto moved = LyingTurn(wait, standing, k_Turn, k_NotStarted);
+	EXPECT_TRUE(moved.started);
+	EXPECT_FLOAT_EQ(moved.seconds, wait.seconds + k_Turn);
+	// While the body plays an action that is not the lie, the wait stops
+	const auto paused = LyingTurn(wait, falling, k_Turn, k_NotStarted);
+	EXPECT_TRUE(paused.started);
+	EXPECT_FLOAT_EQ(paused.seconds, wait.seconds);
+	EXPECT_TRUE(WaitTurnCounts(standing));
+	EXPECT_TRUE(WaitTurnCounts(lying));
+	EXPECT_FALSE(WaitTurnCounts(falling));
+}
+
 TEST(CreatureFight, DamageFollowsTheFormula)
 {
 	// Even creatures at normal speed: high 0.05, middle and low 0.03
