@@ -295,3 +295,22 @@ void SoundTagSystem::DetachObjectSound(entt::entity entity, entt::id_type sound)
 		registry.Remove<SoundTag>(entity);
 	}
 }
+
+void SoundTagSystem::ForgetSavedSounds()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> gone;
+	registry.Each<SoundTag>([&gone](entt::entity entity, SoundTag& tag) {
+		if (tag.point || tag.owner != entt::null)
+		{
+			gone.push_back(entity);
+			return;
+		}
+		tag.emitter = entt::null;
+		tag.turns = 0;
+	});
+	for (const auto entity : gone)
+	{
+		registry.Destroy(entity);
+	}
+}

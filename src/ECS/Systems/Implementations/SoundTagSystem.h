@@ -40,6 +40,7 @@ public:
 	entt::entity CreatePointSound(entt::id_type sound, const glm::vec3& position, bool delayed) override;
 	entt::entity AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops) override;
 	void DetachObjectSound(entt::entity entity, entt::id_type sound) override;
+	void ForgetSavedSounds() override;
 
 private:
 	/// Whether a tag's sound is heard if it starts now

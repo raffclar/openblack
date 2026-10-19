@@ -65,6 +65,7 @@ public:
 	void PauseEmitter(entt::entity emitter) override;
 	void StopEmitter(entt::entity emitter) override;
 	void DestroyEmitter(entt::entity emitter) override;
+	void ForgetSavedEmitters() override;
 	entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
 	                           entt::entity owner) override;
 	[[nodiscard]] bool EmitterExists(entt::entity emitter) override;

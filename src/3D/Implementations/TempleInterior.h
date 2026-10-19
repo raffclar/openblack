@@ -105,6 +105,12 @@ public:
 	[[nodiscard]] bool TakeGameEnded() override { return _lock.TakeEnded(); }
 	void Deactivate() override;
 	void CloseForNewLand() override;
+	void ShowHelpAfterLoad() override { BringBackDialogue(); }
+	/// A save keeps the dialogue that the temple keeps for the world while the player is inside: its owner, its last six
+	/// texts and the click waits of the newest
+	void SaveState(ecs::reflection::BinaryWriter& out) const override;
+	/// A load gives the temple the kept dialogue back, to give back to the world in ShowHelpAfterLoad
+	bool LoadState(ecs::reflection::BinaryReader& in) override;
 
 private:
 	/// Takes down what the temple made for the visit and gives the camera and drawing back to the island

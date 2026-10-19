@@ -21,6 +21,7 @@
 
 #include "3D/FlatLand.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Audio/GameMusic.h"
 #include "Audio/Sound.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFace.h"
@@ -7780,6 +7781,35 @@ void AddMind(std::vector<Scenario>& all)
 	                  .delaySeconds = 4.0f}},
 	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 4.6f, .value = 0},
 	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
+	});
+
+	// A save while sounds, script music and an advisor's line play: a load brings back only what the game keeps
+	all.push_back({
+	    .id = "saves.sounds_music_help_back",
+	    .name = "Save and load: the sounds, the music and the help text",
+	    .facet = Facet::Audio,
+	    .description = "The player's giant ape gets the full creed power and hums. A script attaches the village bell "
+	                   "sound to a ball. A script starts the music of the chosen creature. A script shows a help text "
+	                   "that the good advisor says. While the advisor talks, the game saves into slot 0. 3 seconds "
+	                   "after the save the game loads slot 0.",
+	    .expected = "After the load no sound that played at the save continues. The hum of the ape starts again. The "
+	                "bell of the ball does not start again. The help text shows again with its full reading time, and "
+	                "the advisor does not say it again. No music plays: the script's music counts as playing, as in "
+	                "the game, until a script stops it or starts other music.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 0.0f}, {40.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::GiantApe, {-20.0f, 10.0f}, 90.0f)},
+	    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {10.0f, -10.0f}}},
+	    .commands = {Command {.kind = Kind::GiveCreedPower, .delaySeconds = 1.0f, .value = 3, .amount = 1.0f},
+	                 Command {.kind = Kind::AttachObjectScriptSound,
+	                          .delaySeconds = 1.0f,
+	                          .value = static_cast<size_t>(audio::SoundId::G_VillageBell)},
+	                 Command {.kind = Kind::StartScriptMusic,
+	                          .delaySeconds = 0.5f,
+	                          .value = static_cast<size_t>(audio::MusicType::ScriptCreatureChosen)},
+	                 Command {.kind = Kind::RunText, .delaySeconds = 1.0f, .value = 1009},
+	                 Command {.kind = Kind::SaveGame, .delaySeconds = 1.5f, .value = 0},
+	                 Command {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
 	});
 
 	all.push_back({

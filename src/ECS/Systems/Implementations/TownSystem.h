@@ -69,6 +69,8 @@ public:
 	[[nodiscard]] bool DesiresChanged(entt::entity town) const override;
 	void ClaimTown(entt::entity town, PlayerNames player) override;
 	void UpdateFrame(float gameSeconds) override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
 	/// A building or a person gone from the world leaves its town's lists

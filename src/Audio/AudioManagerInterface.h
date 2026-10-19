@@ -132,6 +132,9 @@ public:
 	virtual void PauseEmitter(entt::entity emitter) = 0;
 	virtual void StopEmitter(entt::entity emitter) = 0;
 	virtual void DestroyEmitter(entt::entity emitter) = 0;
+	/// A saved game has loaded. The sounds that played at the save do not come back: each emitter that the save kept
+	/// goes, and no sound of its own is stopped, because the sounds stopped as the last land went.
+	virtual void ForgetSavedEmitters() {}
 	/// An emitter for a loaded sound, ready to play. With a world position it is 3D audio sounding from there,
 	/// otherwise 2D audio centred on the listener. Repeat loops it forever, otherwise the bank header's loop count
 	/// applies. It gets a voice by the restart play type for its owner, unless its bank header gives another.

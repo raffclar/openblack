@@ -57,6 +57,7 @@
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -1872,6 +1873,40 @@ void TempleInterior::CloseForNewLand()
 	_heldDialogue.reset();
 	Close();
 	_leaveTo.reset();
+}
+
+void TempleInterior::SaveState(ecs::reflection::BinaryWriter& out) const
+{
+	using ecs::reflection::Save;
+	Save(out, _heldDialogue.has_value());
+	if (_heldDialogue.has_value())
+	{
+		Save(out, _heldDialogue->owner);
+		Save(out, _heldDialogue->text.texts);
+		Save(out, _heldDialogue->text.waitClick);
+		Save(out, _heldDialogue->text.noClick);
+	}
+}
+
+bool TempleInterior::LoadState(ecs::reflection::BinaryReader& in)
+{
+	using ecs::reflection::Load;
+	bool held = false;
+	Load(in, held);
+	temple_help::HeldDialogue dialogue;
+	if (held)
+	{
+		Load(in, dialogue.owner);
+		Load(in, dialogue.text.texts);
+		Load(in, dialogue.text.waitClick);
+		Load(in, dialogue.text.noClick);
+	}
+	if (in.Failed())
+	{
+		return false;
+	}
+	_heldDialogue = held ? std::optional(dialogue) : std::nullopt;
+	return true;
 }
 
 void TempleInterior::BringBackDialogue()
