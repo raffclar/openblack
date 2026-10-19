@@ -24,6 +24,7 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureDecisionTree.h"
+#include "ECS/Systems/FixedOutlineSystemInterface.h"
 #include "ECS/Systems/LandShadeSystemInterface.h"
 #include "EntityDescription.h"
 
@@ -128,9 +129,11 @@ struct MapSources
 	WorldSources world;
 	std::function<const ecs::MapInterface*()> map;
 	std::function<const ecs::systems::LandShadeSystemInterface*()> shade;
+	std::function<const ecs::systems::FixedOutlineSystemInterface*()> outlines;
 };
 
 ///   map.cell  {position | cell}         what stands in a cell, as a search meets it
+///   map.free  {position}              whether a place is free of the fixed things, and the outlines in its cell
 ///   map.shade [position]                the land's shading of the last frame: shadows, lights, the blocks they
 ///                                       changed, and the shaded luminosity of a cell's corners
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeMapProvider(MapSources sources);

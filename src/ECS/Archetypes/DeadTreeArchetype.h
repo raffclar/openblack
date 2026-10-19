@@ -23,6 +23,9 @@ public:
 	/// The ground a dead tree covers as an obstacle follows how it lies, once it has come to rest
 	static void FitObstacle(entt::entity deadTree);
 	static entt::entity Create(const glm::vec3& position, TreeInfo type, float yAngleRadians, float scale);
+	/// A dead tree that a land script makes: it leans about z and x, then turns about the vertical, as a mobile static does
+	static entt::entity Create(const glm::vec3& position, TreeInfo type, float xAngleRadians, float yAngleRadians,
+	                           float zAngleRadians, float scale);
 	/// A dead tree of a kind drawn with a model of its own, turned as given: the log a villager lets fall
 	static entt::entity Create(const glm::vec3& position, TreeInfo type, const glm::mat3& rotation, float scale, MeshId model);
 	DeadTreeArchetype() = delete;

@@ -17,6 +17,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Magic/CastInput.h"
 #include "Magic/HandMotion.h"
@@ -45,7 +46,7 @@ namespace openblack::ecs::systems
 /// the flocks; the storms and shields at the circle drawn) or placed on pressing (heal, forest, teleport, the beam
 /// explosion, the creature spells on a creature). The hand must be in the player's influence. The gestures drawn reach
 /// it through the gesture events: a circle, a power-up, a scribble or a shake, which drops the seed.
-class MagicSystemInterface
+class MagicSystemInterface: public SavedStateInterface
 {
 public:
 	/// What a frame tells the miracles about the player's hand

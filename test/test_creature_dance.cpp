@@ -436,3 +436,14 @@ TEST(CreatureDance, TheGestureMoveDrawsItsGestureAndOtherMovesStopThePoint)
 	EXPECT_TRUE(dance.endPoint);
 	EXPECT_FALSE(dance.gesture.has_value());
 }
+
+// When the creature stops what it does, a called villager that is in the hand, dances for the creature or is under its
+// control decides what to do. Any other villager only leaves the list.
+TEST(CreatureDance, StoppedDancersDecideWhatToDo)
+{
+	EXPECT_TRUE(creature_dance::DecidesWhenReleased(VillagerStates::InHand));
+	EXPECT_TRUE(creature_dance::DecidesWhenReleased(VillagerStates::WorshippingCreature));
+	EXPECT_TRUE(creature_dance::DecidesWhenReleased(VillagerStates::ControlledByCreature));
+	EXPECT_FALSE(creature_dance::DecidesWhenReleased(VillagerStates::MoveToPos));
+	EXPECT_FALSE(creature_dance::DecidesWhenReleased(VillagerStates::DecideWhatToDo));
+}

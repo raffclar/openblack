@@ -15,6 +15,7 @@
 
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Particles/LiquidParticles.h"
 
 namespace openblack::particles::draw
@@ -27,7 +28,7 @@ namespace openblack::ecs::systems
 
 /// The one shared pool of liquid particles (rules in liquid_particles): drops of blood and sick, and the dust, smoke
 /// and motes that landings, footsteps, blows and creatures make
-class LiquidParticleSystemInterface
+class LiquidParticleSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~LiquidParticleSystemInterface() = default;

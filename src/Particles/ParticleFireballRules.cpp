@@ -27,6 +27,7 @@
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/X87.h"
+#include "ParticleArchive.h"
 #include "ParticleBlast.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMiracleMaths.h"
@@ -553,6 +554,22 @@ public:
 class Trail final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		const auto& history = std::any_cast<const History&>(slot.data);
+		out.WritePlainList(history.samples);
+		out.Write(history.count);
+		out.Write(history.head);
+	}
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		History history;
+		in.ReadPlainList(history.samples);
+		in.Read(history.count);
+		in.Read(history.head);
+		slot.data = std::move(history);
+	}
+
 	explicit Trail(const ParticleObject& object)
 	    : creator(object.String("PCreator"))
 	    , nextGroups(object.IntArray("NextGroups"))

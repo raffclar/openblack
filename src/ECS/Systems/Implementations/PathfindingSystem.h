@@ -22,5 +22,7 @@ class PathfindingSystem final: public PathfindingSystemInterface
 public:
 	void Update() override;
 	void ProcessLookahead() override;
+	void LookAgain(entt::entity walker) override;
+	void WalkTo(entt::entity walker, glm::ivec2 goal) override;
 };
 } // namespace openblack::ecs::systems

@@ -3035,6 +3035,11 @@ bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity a
 	RestEyes(registry, creature, registry.TryGet<CreatureEyes>(creature));
 	Abandon(*mind);
 	creature_mind::Plan(mind->idle, activity, std::move(agenda));
+	// The area that holds the creature refused a walk of the new agenda: the creature stops and its plan fails
+	if (std::exchange(mind->agendaRefused, false))
+	{
+		GiveUp(mind->idle);
+	}
 	return true;
 }
 

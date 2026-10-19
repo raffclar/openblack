@@ -11,14 +11,21 @@
 
 #include "CameraPathSystem.h"
 
+#include <cctype>
+
 #include <algorithm>
+#include <exception>
+#include <memory>
+#include <string>
 
 #include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
 #include "Camera/Camera.h"
 #include "Camera/CameraPathControl.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Locator.h"
 #include "Resources/Resources.h"
@@ -30,6 +37,7 @@ using namespace openblack::ecs::components;
 void CameraPathSystem::Start(entt::id_type id)
 {
 	_path = Locator::resources::value().GetCameraPaths().Handle(id);
+	_pathId = id;
 	if (!_path)
 	{
 		return;
@@ -180,4 +188,90 @@ void CameraPathSystem::Update(const std::chrono::microseconds& dt)
 	{
 		Stop();
 	}
+}
+
+void CameraPathSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _pathId);
+	reflection::Save(out, static_cast<bool>(_path));
+	reflection::Save(out, _elapsed);
+	reflection::Save(out, _state);
+	reflection::Save(out, _placed.has_value());
+	if (!_placed.has_value())
+	{
+		return;
+	}
+	// A placed path goes by the name of its file, which the load reads again
+	reflection::Save(out, _placed->path->GetDebugName());
+	reflection::Save(out, _placed->placement);
+	reflection::Save(out, _placed->pauseSeconds);
+	reflection::Save(out, _placed->speedUp);
+	reflection::Save(out, _placed->animationMs);
+	reflection::Save(out, _placed->spell);
+	reflection::Save(out, _placed->seconds);
+	reflection::Save(out, _placed->origin);
+	reflection::Save(out, _placed->focus);
+}
+
+bool CameraPathSystem::LoadState(reflection::BinaryReader& in)
+{
+	bool hasPath = false;
+	bool placed = false;
+	reflection::Load(in, _pathId);
+	reflection::Load(in, hasPath);
+	reflection::Load(in, _elapsed);
+	reflection::Load(in, _state);
+	reflection::Load(in, placed);
+	_path = hasPath && Locator::resources::has_value() ? Locator::resources::value().GetCameraPaths().Handle(_pathId)
+	                                                   : entt::resource<CameraPath>();
+	_placed.reset();
+	if (!placed)
+	{
+		return !in.Failed();
+	}
+	std::string file;
+	Placed loaded {.path = nullptr, .placement = glm::mat4(1.0f), .pauseSeconds = 0.0f, .speedUp = 1.0f, .animationMs = 0.0f};
+	reflection::Load(in, file);
+	reflection::Load(in, loaded.placement);
+	reflection::Load(in, loaded.pauseSeconds);
+	reflection::Load(in, loaded.speedUp);
+	reflection::Load(in, loaded.animationMs);
+	reflection::Load(in, loaded.spell);
+	reflection::Load(in, loaded.seconds);
+	reflection::Load(in, loaded.origin);
+	reflection::Load(in, loaded.focus);
+	if (in.Failed())
+	{
+		return false;
+	}
+	// The file name is as the effect file gives it, under the data folder of the game
+	if (Locator::filesystem::has_value())
+	{
+		std::string name = file;
+		std::ranges::replace(name, '\\', '/');
+		if (name.starts_with("./"))
+		{
+			name.erase(0, 2);
+		}
+		if (name.size() >= 5 && std::equal(name.begin(), name.begin() + 5, "data/",
+		                                   [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == b; }))
+		{
+			name.erase(0, 5);
+		}
+		auto& fileSystem = Locator::filesystem::value();
+		auto path = std::make_unique<CameraPath>(file);
+		try
+		{
+			if (path->LoadFromFile(fileSystem.FindPath(fileSystem.GetPath<filesystem::Path::Data>() / name)))
+			{
+				loaded.path = std::move(path);
+				_placed = std::move(loaded);
+			}
+		}
+		catch (const std::exception& error)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The saved camera path {} does not load: {}", file, error.what());
+		}
+	}
+	return true;
 }

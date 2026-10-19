@@ -21,11 +21,12 @@
 namespace openblack::ecs::systems
 {
 
-/// The saved games of the current player. A slot keeps the land, the turn and the creatures: each creature's record in
-/// the game's layout, its mind file and its player's leash on it. A save is not complete yet: the towns, the villagers,
-/// the story and the scripts are not in it. A load puts the creatures of the land that is open back as the save keeps
-/// them. A slot of the game itself (its world file in the game's layout) loads its creatures too. A save after such a
-/// load also writes the game's file again, with the creatures as openblack has them.
+/// The saved games of the current player. A slot keeps the whole world in openblack's own layout, and each creature's
+/// record in the game's layout, its mind file and its player's leash on it. A save writes its world files to temporary
+/// files first, and they take the place of the old files only when every write is complete. A load puts the whole world
+/// of the slot in place of the land that is open. A slot of the game itself (its world file in the game's layout) loads
+/// its creatures into the land that is open. A save after such a load also writes the game's file again, with the
+/// creatures as openblack has them.
 class SaveGameSystemInterface
 {
 public:
@@ -101,6 +102,18 @@ public:
 	[[nodiscard]] virtual bool AnyPictureWaiting() const = 0;
 	/// Takes the pictures of the screen that are back, and writes the picture files with them
 	virtual void CollectPictures(const Screens& screens) = 0;
+	/// Shows the box of a save or a load at once, as a frame of its own: whether it loads, and whether it makes the
+	/// screen darker
+	using ShowBox = std::function<void(bool loading, bool darken)>;
+	/// The game gives the function that shows the box. Each save and each load shows the box before it starts.
+	virtual void SetShowBox(ShowBox /*show*/) {}
+	/// Tells the player that a save did not write its world files completely
+	using ReportProblem = std::function<void()>;
+	/// The game gives the function that tells the player
+	virtual void SetReportProblem(ReportProblem /*report*/) {}
+	/// Once a frame, on the game's thread: the player is told of the saves whose world files did not write completely
+	/// since the last frame
+	virtual void ReportWriteProblems() {}
 };
 
 } // namespace openblack::ecs::systems

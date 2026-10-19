@@ -35,12 +35,16 @@ constexpr float k_RejoinReach = 0.03f;
 constexpr int32_t k_Jitter = 0x1000;
 
 using Places = std::span<const glm::ivec2>;
+/// For each node, whether walkers pass it by (non-zero): a node hidden under something put on the path, or the place of
+/// what a stretch of the path was sent round. Empty when walkers pass no node by.
+using PassedBy = std::span<const uint8_t>;
 
 /// A path as the walk sees it
 struct Path
 {
 	Places nodes;
 	bool walkable {true};
+	PassedBy passedBy;
 };
 
 /// Where a villager joins a path: which path, which way along it and the node it walks to first
@@ -65,12 +69,13 @@ struct StoreRoute
 	bool operator==(const StoreRoute&) const = default;
 };
 
-/// The node after one along a path, going one way; none at the path's end
-[[nodiscard]] std::optional<uint32_t> NextNode(Places nodes, uint32_t node, bool towardsStart);
+/// The node after one along a path, going one way, past the nodes that walkers pass by; none at the path's end
+[[nodiscard]] std::optional<uint32_t> NextNode(Places nodes, uint32_t node, bool towardsStart, PassedBy passedBy = PassedBy());
 
-/// The node a villager standing somewhere walks to first: the node nearest it, or the one after that when the villager
-/// is already nearer to that one than the nearest node is
-[[nodiscard]] std::optional<uint32_t> NearestNode(Places nodes, glm::ivec2 from, bool towardsStart);
+/// The node a villager standing somewhere walks to first: of the nodes that walkers do not pass by, the node nearest it,
+/// or the one after that when the villager is already nearer to that one than the nearest node is
+[[nodiscard]] std::optional<uint32_t> NearestNode(Places nodes, glm::ivec2 from, bool towardsStart,
+                                                  PassedBy passedBy = PassedBy());
 
 /// The path a villager joins to go somewhere: of the paths, the one with a node nearest the villager, within the reach
 /// (strictly). Each path is walked towards whichever of its ends is nearer the goal.
@@ -94,17 +99,17 @@ struct Leg
 
 	bool operator==(const Leg&) const = default;
 };
-[[nodiscard]] std::optional<Leg> NextLeg(Places nodes, uint32_t node, bool towardsStart);
+[[nodiscard]] std::optional<Leg> NextLeg(Places nodes, uint32_t node, bool towardsStart, PassedBy passedBy = PassedBy());
 
 /// A walker that lost its node carries on from the node nearest it if it stands on it (within the rejoin reach): the
 /// node after that one, none otherwise
-[[nodiscard]] std::optional<uint32_t> Rejoin(Places nodes, glm::ivec2 from, bool towardsStart);
+[[nodiscard]] std::optional<uint32_t> Rejoin(Places nodes, glm::ivec2 from, bool towardsStart, PassedBy passedBy = PassedBy());
 
 /// The path a walker goes on along after the first: walked away from whichever end is nearer it
 [[nodiscard]] bool OnwardTowardsStart(Places nodes, glm::ivec2 from);
 /// Its first node to walk to: the one after the end it starts from (the end itself when the path has one node), none
 /// for a path with no nodes
-[[nodiscard]] std::optional<uint32_t> OnwardFirstNode(Places nodes, bool towardsStart);
+[[nodiscard]] std::optional<uint32_t> OnwardFirstNode(Places nodes, bool towardsStart, PassedBy passedBy = PassedBy());
 
 /// A node on the way, moved by two draws in [0, 0x2000): x first, then z
 [[nodiscard]] glm::ivec2 Jittered(glm::ivec2 place, uint32_t drawX, uint32_t drawZ);

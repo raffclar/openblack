@@ -61,6 +61,8 @@ class ParticleClassRegistry;
 class ObjectEffectsInterface;
 class LightSheet;
 struct GestureTrail;
+class EffectWriter;
+class EffectReader;
 namespace blast
 {
 struct MeshFragment;
@@ -751,6 +753,16 @@ public:
 	virtual bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const;
 	/// Runs on one atom; false removes the atom
 	virtual bool ModifyAtom(Effect& /*effect*/, Atom& /*atom*/, Collection::Slot& /*slot*/) const { return true; }
+
+	/// Writes the further state that the rule keeps in a slot's data. The save calls it only when the data has a value.
+	/// A rule that keeps such state writes it; the default records that the save cannot keep it.
+	virtual void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const;
+	/// Reads what SaveSlotData wrote. The default keeps the data empty, so that the rule starts it again.
+	virtual void LoadSlotData(Collection::Slot& /*slot*/, EffectReader& /*in*/) const {}
+	/// Writes what the rule holds for one atom (AtomRuleData::held). The save calls it only when the rule holds a thing.
+	virtual void SaveHeld(const AtomRuleData& data, EffectWriter& out) const;
+	/// Reads what SaveHeld wrote. The default holds nothing.
+	virtual void LoadHeld(AtomRuleData& /*data*/, EffectReader& /*in*/) const {}
 };
 
 /// A running effect
@@ -958,6 +970,18 @@ public:
 	[[nodiscard]] size_t AtomCount() const { return _atomCount; }
 	[[nodiscard]] size_t CollectionCount() const;
 
+	/// Its random numbers come from the stream that every machine of the game shares
+	[[nodiscard]] bool IsSynced() const { return _synced; }
+	/// Puts back the miracle behind it after a load, with no event to the miracle
+	void RestoreSink(SpellSink* sink) { _sink = sink; }
+	/// Writes the running state of the effect: its values, its collections and atoms, and the state of its rules
+	void Save(EffectWriter& out) const;
+	/// Reads what Save wrote into an effect just made from the same file, in place of its first collections
+	bool Load(EffectReader& in);
+	/// A collection that a rule keeps outside the tree of the effect, with everything under it and the state of its rules
+	void SaveSubtree(const Collection& collection, EffectWriter& out) const;
+	[[nodiscard]] std::unique_ptr<Collection> LoadSubtree(EffectReader& in, Atom* parent);
+
 private:
 	void StepOnce(float dt);
 	void CreateCollection(int group, Atom* parent, std::vector<std::unique_ptr<Collection>>& into);
@@ -968,6 +992,13 @@ private:
 	[[nodiscard]] std::optional<DrawAtom> Interpolate(const Atom& atom, float t, bool interpolated) const;
 	[[nodiscard]] bool AnyCreatorLeft(const Collection& collection) const;
 	void UpdateFloatProviders();
+	// The parts of a save
+	void SaveStructure(const Collection& collection, EffectWriter& out) const;
+	void SaveRuleState(const Collection& collection, EffectWriter& out) const;
+	[[nodiscard]] std::unique_ptr<Collection> LoadStructure(EffectReader& in, Atom* parent);
+	void LoadRuleState(Collection& collection, EffectReader& in);
+	[[nodiscard]] int ModifierNumber(const Modifier* modifier) const;
+	[[nodiscard]] const Modifier* ModifierAt(int number) const;
 
 	std::shared_ptr<const psys::ParticleFile> _file;
 	EffectServices _services;

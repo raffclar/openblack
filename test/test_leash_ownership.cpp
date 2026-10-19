@@ -243,6 +243,8 @@ TEST(CreatureHand, TheHandHoldsOnlyItsOwnPlayersCreature)
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Ogre}, k_Hand));
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .asleep = true}, k_Hand));
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .frozen = true}, k_Hand));
+	// Nor one out cold in a faint
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .fainting = true}, k_Hand));
 }
 
 TEST(CreatureHand, TheInteractTipIsForTheOwnCreatureAnywhereAndOthersInTheInfluence)

@@ -400,3 +400,21 @@ bool creature_object_actions::MayCatchKind(const KindFacts& kind, const PickUpFa
 {
 	return kind.holdable && MayBeCaught(facts);
 }
+
+creature_object_actions::EatenThingEnd creature_object_actions::EatenThingEndFor(bool eatGoesOn, bool creatureExists)
+{
+	if (!creatureExists)
+	{
+		return EatenThingEnd::Fall;
+	}
+	return eatGoesOn ? EatenThingEnd::Wait : EatenThingEnd::Swallow;
+}
+
+creature_object_actions::HoldStart creature_object_actions::HoldStartFor(bool living, bool creature, bool acceptsHandState)
+{
+	if (!living || creature)
+	{
+		return HoldStart::NoChange;
+	}
+	return acceptsHandState ? HoldStart::IntoHandState : HoldStart::Refused;
+}

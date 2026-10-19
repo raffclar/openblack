@@ -634,6 +634,11 @@ Game::~Game() noexcept
 	{
 		Locator::miracleFxSystem::value().SetInterface(nullptr);
 	}
+	if (Locator::saveGameSystem::has_value())
+	{
+		Locator::saveGameSystem::value().SetShowBox({});
+		Locator::saveGameSystem::value().SetReportProblem({});
+	}
 	_interface.reset();
 	_loadingScreen.reset();
 	// What the scripts asked of openblack that it can't do yet, for the natives to write next
@@ -3954,6 +3959,14 @@ bool Game::Initialize() noexcept
 		}
 		else
 		{
+			// Each save and each load shows its box first
+			if (Locator::saveGameSystem::has_value())
+			{
+				Locator::saveGameSystem::value().SetShowBox(
+				    [this](bool loading, bool darken) { ShowSavingBox(loading, darken); });
+				// A save that did not write its world files completely is told to the player in a box
+				Locator::saveGameSystem::value().SetReportProblem([this]() { _interface->ShowSaveProblem(); });
+			}
 			// The Game Statistics box takes the players' figures as it opens
 			_interface->GetMenu().SetStatisticsSource([] {
 				const auto local = Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer()
@@ -4339,6 +4352,25 @@ void Game::StartFightTools()
 	}
 }
 
+void Game::ShowSavingBox(bool loading, bool darken)
+{
+	// A run that draws no frame shows no box
+	if (!_interface || !Locator::windowing::has_value() ||
+	    !sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount))
+	{
+		return;
+	}
+	_interface->DrawSavingBox(static_cast<glm::u16vec2>(Locator::windowing::value().GetSize()), loading, darken);
+	// A picture asked for this frame shows the box, as the screen does
+	if (_requestScreenshot.has_value() && _requestScreenshot->first == _frameCount)
+	{
+		Locator::rendererInterface::value().RequestScreenshot(_requestScreenshot->second);
+		_requestScreenshot.reset();
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The {} box shows at frame {}", loading ? "loading" : "saving", _frameCount);
+	Locator::rendererInterface::value().Frame();
+}
+
 bool Game::Run() noexcept
 {
 	auto& config = Locator::config::value();
@@ -4567,6 +4599,8 @@ bool Game::Run() noexcept
 			Locator::saveGameSystem::value().CollectPictures(
 			    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
 			     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
+			// The saves whose world files did not write completely are told to the player
+			Locator::saveGameSystem::value().ReportWriteProblems();
 		}
 		// The player goes into the temple after the frame that the game took the picture of
 		if (Locator::temple::has_value())
@@ -4686,6 +4720,13 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	}
 
 	timer.Step("map script");
+	// The game puts each thing on the map as the script makes it, before the footpaths load: the things go into their
+	// map cells now, and no footpath goes round them
+	Locator::entitiesMap::value().Sync();
+	if (Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().ProcessObstacleChanges();
+	}
 	// Each released map comes with an optional .fot file which contains the footpath information for the map
 	const auto stem = string_utils::LowerCase(path.stem().generic_string());
 	const auto fotPath = fileSystem.GetPath<filesystem::Path::Landscape>() / fmt::format("{}.fot", stem);

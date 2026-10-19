@@ -145,6 +145,7 @@
 #include "ECS/DiscipleRules.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
@@ -1270,10 +1271,21 @@ void GameThingClicked() // 016 GAME_THING_CLICKED
 		Pushb(false);
 		return;
 	}
-	const auto* clicked = LocalHandClicked();
-	// TODO(script-natives): a clicked challenge highlight is saved to the instant save slot first, once highlights and
-	// saves exist
-	Pushb(clicked != nullptr && hand_click::IsThingClicked(*clicked, object));
+	auto* clicked = LocalHandClicked();
+	const bool isClicked = clicked != nullptr && hand_click::IsThingClicked(*clicked, object);
+	// A clicked scroll of leaving the land through its vortex first saves the land into the previous land's slot. The
+	// click is forgotten while the game saves, so the save does not keep it, and then the scroll is clicked again on
+	// this turn.
+	const auto* highlight = Locator::entitiesRegistry::value().TryGet<const ecs::components::ScriptHighlight>(object);
+	if (isClicked && highlight != nullptr &&
+	    ecs::script_highlights::SavesPreviousLandOnClick(highlight->kind, highlight->scriptId) &&
+	    Locator::saveGameSystem::has_value())
+	{
+		hand_click::ClearThing(*clicked);
+		Locator::saveGameSystem::value().InstantSave(gamesave::k_PreviousLandSlot);
+		hand_click::ClickThing(*clicked, object, Locator::time::value().GetTurn());
+	}
+	Pushb(isClicked);
 }
 
 static bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing);
@@ -1589,8 +1601,7 @@ static void TurnLivingThing(entt::entity object, Transform& transform, float ang
 /// Whether a thing may lean, so that its angles across and forward are its own; the others always stand upright
 static bool CanLean(entt::entity object)
 {
-	return Locator::entitiesRegistry::value()
-	    .AnyOf<ecs::components::MobileStatic, ecs::components::MobileObject, ecs::components::Pot>(object);
+	return ecs::placed_turn::CanLean(Locator::entitiesRegistry::value(), object);
 }
 
 /// Whether a script holds the thing while it owns the widescreen bars
@@ -5186,9 +5197,28 @@ void SetCameraZone() // 142 SET_CAMERA_ZONE
 
 void GetObjectState() // 143 GET_OBJECT_STATE
 {
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing invalid");
+		Pushi(0);
+		return;
+	}
+	// A villager or an animal gives the game's number of the state that it is in for itself
+	if (const auto state = FinalGameStateOf(registry, object))
+	{
+		Pushi(*state);
+		return;
+	}
+	// A creature is a living thing that keeps no such state, so it gives 0
+	if (registry.AllOf<ecs::components::Creature>(object))
+	{
+		Pushi(0);
+		return;
+	}
+	// The game also gives the state of a puzzle game. openblack makes no puzzle games, so this is the only other case.
+	ScriptMessage("Thing not a known type for function");
 	Pushi(0);
 }
 
@@ -5567,11 +5597,54 @@ void SetOnFire() // 175 SET_ON_FIRE
 
 void SetTarget() // 176 SET_TARGET
 {
-	// const auto time = Popf();
-	// const auto position = PopVec();
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The thing flies with no air drag and gets to the place after the time
+	const auto seconds = Popf();
+	const auto place = PopVec();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	const bool valid = object != entt::null && registry.Valid(object);
+	if (!valid)
+	{
+		ScriptMessage("Thing not valid");
+	}
+	// A time of zero or less, or a time that is not a number, is not a time
+	const bool timeValid = seconds > 0.0f;
+	if (!timeValid)
+	{
+		ScriptMessage("Invalid time");
+	}
+	if (!valid || !timeValid || !IsWorldObject(object) || !Locator::dynamicsSystem::has_value())
+	{
+		return;
+	}
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (transform == nullptr)
+	{
+		return;
+	}
+	const auto velocity = script::property_rules::TargetVelocity(transform->position, place, seconds);
+	// The game takes the three draws of the spin before it looks at the physics, so it also takes them for a flying thing
+	auto& random = Locator::gameRandom::value();
+	glm::vec3 spin;
+	spin.x = script::property_rules::HeadingSpin(random.GameFloatRand(script::property_rules::k_HeadingSpinDraw));
+	spin.y = script::property_rules::HeadingSpin(random.GameFloatRand(script::property_rules::k_HeadingSpinDraw));
+	spin.z = script::property_rules::HeadingSpin(random.GameFloatRand(script::property_rules::k_HeadingSpinDraw));
+	auto& dynamics = Locator::dynamicsSystem::value();
+	if (registry.AllOf<ecs::components::InPhysics>(object))
+	{
+		// A thing that flies already only changes its velocity
+		if (auto* entry = dynamics.Find(object); entry != nullptr && entry->body != nullptr)
+		{
+			entry->body->velocity = velocity;
+			entry->body->SetDrag(0.0f);
+		}
+		return;
+	}
+	const auto started = dynamics.InitialisePhysics(object, {.velocity = velocity, .spin = spin});
+	if (started.entry != nullptr && started.entry->body != nullptr)
+	{
+		started.entry->body->SetDrag(0.0f);
+	}
 }
 
 void WalkPath() // 177 WALK_PATH
@@ -5761,6 +5834,11 @@ void DetachObjectLeash() // 187 DETACH_OBJECT_LEASH
 	{
 		Locator::leashSystem::value().TakeOff(creature);
 		return;
+	}
+	// It also forgets the actions that the area that held it refused
+	if (auto* mind = registry.TryGet<ecs::components::CreatureMindState>(creature))
+	{
+		mind->leftAreaActions.clear();
 	}
 	if (auto* leash = registry.TryGet<ecs::components::CreatureLeash>(creature))
 	{

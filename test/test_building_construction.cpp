@@ -154,6 +154,25 @@ TEST(BuildingConstruction, FinishedMusicWaitsOnNoScript)
 	EXPECT_FALSE(PlaysFinishedMusic(music));
 }
 
+TEST(BuildingConstruction, AFinishedTempleSavesForTheLocalPlayerOnEveryLand)
+{
+	const auto temple = FinishedTemple {.localPlayers = true, .scriptCutScene = false, .scriptMusic = true, .landNumber = 1};
+	EXPECT_TRUE(SavesOnFinish(temple)) << "the first land and the script's music do not stop the save";
+	auto other = temple;
+	other.localPlayers = false;
+	EXPECT_FALSE(SavesOnFinish(other));
+	auto cutScene = temple;
+	cutScene.scriptCutScene = true;
+	EXPECT_FALSE(SavesOnFinish(cutScene));
+	auto skirmish = temple;
+	skirmish.skirmish = true;
+	EXPECT_FALSE(SavesOnFinish(skirmish));
+	EXPECT_FALSE(PlaysFinishedMusic(skirmish)) << "the music does not wait on a skirmish, the first land stops it";
+	skirmish.landNumber = 2;
+	skirmish.scriptMusic = false;
+	EXPECT_TRUE(PlaysFinishedMusic(skirmish));
+}
+
 TEST(BuildingConstruction, OnlyTheArksDryDockOfTheFeaturesIsDrawnGoingUp)
 {
 	EXPECT_TRUE(FeatureDrawnGoingUp(openblack::FeatureInfo::ArkDryDock));

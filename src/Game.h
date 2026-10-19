@@ -259,8 +259,8 @@ public:
 	/// out creatures
 	void LoadTestbed() noexcept;
 	/// Loads a saved game: the saved land's landscape with no map script (the flat land for the testbed), then `restore`
-	/// puts the saved entities in place of the land's own. The systems then find their entities again and the land starts. Returns whether the landscape
-	/// loaded and `restore` gave true.
+	/// puts the saved entities in place of the land's own. The systems then find their entities again and the land starts.
+	/// Returns whether the landscape loaded and `restore` gave true.
 	bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
 	                   const std::function<bool()>& restore) noexcept;
 	/// Starts a new game on the first land from scratch, as the game's new game does, the story's scripts starting
@@ -611,6 +611,8 @@ private:
 	void PickUnderCursor(float seconds);
 	/// The pick's last step, once the frame's interface is drawn
 	void ResolveScreenShapes();
+	/// The box of a save or a load, drawn and shown at once as a frame of its own over the last picture
+	void ShowSavingBox(bool loading, bool darken);
 	/// Whether the hand hovers over a thing: a one-shot bubble, or anything with a model that the cursor picks
 	[[nodiscard]] bool HandOverThing() const;
 	/// Whether a front-end box shows over the game: the game's menu, the question at the start of a new game, or the

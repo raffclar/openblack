@@ -12,6 +12,7 @@
 #include <array>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "Particles/ParticleBlast.h"
@@ -51,6 +52,9 @@ public:
 
 	/// A new land: nothing waits to break
 	void Reset();
+	/// The models that wait to break, for a save
+	[[nodiscard]] const std::array<std::vector<particles::ExplodeRecord>, 2>& Queues() const { return _queues; }
+	void RestoreQueues(std::array<std::vector<particles::ExplodeRecord>, 2> queues) { _queues = std::move(queues); }
 
 private:
 	std::array<std::vector<particles::ExplodeRecord>, 2> _queues;

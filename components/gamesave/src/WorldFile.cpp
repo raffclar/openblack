@@ -47,6 +47,10 @@ std::vector<uint8_t> openblack::gamesave::Write(const WorldFile& file)
 	ByteWriter writer;
 	writer.Put(k_WorldMagic);
 	writer.Put(file.version);
+	if (file.version >= k_AttemptsVersion)
+	{
+		writer.Put(file.attempts);
+	}
 	writer.Put(static_cast<uint32_t>(file.chunks.size()));
 	for (const auto& chunk : file.chunks)
 	{
@@ -63,7 +67,11 @@ std::optional<WorldFile> openblack::gamesave::ReadWorldFile(std::span<const uint
 	Tag magic {};
 	WorldFile file;
 	uint32_t count = 0;
-	if (!reader.Get(magic) || magic != k_WorldMagic || !reader.Get(file.version) || !reader.Get(count))
+	if (!reader.Get(magic) || magic != k_WorldMagic || !reader.Get(file.version))
+	{
+		return std::nullopt;
+	}
+	if ((file.version >= k_AttemptsVersion && !reader.Get(file.attempts)) || !reader.Get(count))
 	{
 		return std::nullopt;
 	}
@@ -80,6 +88,33 @@ std::optional<WorldFile> openblack::gamesave::ReadWorldFile(std::span<const uint
 		file.chunks.push_back(std::move(chunk));
 	}
 	return file;
+}
+
+std::optional<uint32_t> openblack::gamesave::ReadAttempts(std::span<const uint8_t> bytes)
+{
+	ByteReader reader(bytes);
+	Tag magic {};
+	uint32_t version = 0;
+	if (!reader.Get(magic) || magic != k_WorldMagic || !reader.Get(version))
+	{
+		return std::nullopt;
+	}
+	uint32_t attempts = 0;
+	if (version >= k_AttemptsVersion && !reader.Get(attempts))
+	{
+		return std::nullopt;
+	}
+	return attempts;
+}
+
+std::array<uint8_t, sizeof(uint32_t)> openblack::gamesave::AttemptsBytes(uint32_t attempts)
+{
+	ByteWriter writer;
+	writer.Put(attempts);
+	const auto bytes = writer.Take();
+	std::array<uint8_t, sizeof(uint32_t)> result {};
+	std::ranges::copy(bytes, result.begin());
+	return result;
 }
 
 Chunk openblack::gamesave::ToChunk(const GameChunk& game)

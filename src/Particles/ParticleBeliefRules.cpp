@@ -26,6 +26,7 @@
 #include <ParticleFile.h>
 
 #include "Common/X87Vector.h"
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleCreators.h"
 #include "ParticleSounds.h"
@@ -186,6 +187,17 @@ town_belief::Params ReadParams(const ParticleObject& object)
 class TownCentreBeliefRule final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		out.Write(std::any_cast<entt::entity>(slot.data));
+	}
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		auto target = entt::entity {entt::null};
+		in.Read(target);
+		slot.data = target;
+	}
+
 	explicit TownCentreBeliefRule(const ParticleObject& object)
 	    : params(ReadParams(object))
 	    , nextGroups(object.IntArray("NextGroups"))

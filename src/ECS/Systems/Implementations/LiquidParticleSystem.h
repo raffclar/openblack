@@ -43,6 +43,8 @@ public:
 	void UpdateFrame(float seconds, bool drawsDrops) override;
 	void CollectDrawFrame(particles::draw::Frame& frame) const override;
 	void Clear() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	[[nodiscard]] std::span<const liquid_particles::Particle> Particles() const override { return _pool; }
 
 private:

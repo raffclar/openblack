@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <bit>
 #include <optional>
 #include <span>
 
@@ -96,10 +97,10 @@ struct Angles
 	float y {0.0f};
 	float z {0.0f};
 };
-/// The angles of a thing placed the way it faces. A thing that doesn't lean keeps its whole turn, past a quarter either
-/// way.
+/// The angles of a thing placed the way it faces, as the game finds them from its turn. A thing that does not lean keeps
+/// its whole turn, past a quarter either way.
 [[nodiscard]] Angles PlacedAngles(const glm::mat3& rotation);
-/// The way a thing placed at these angles faces
+/// The way a thing placed at these angles faces: the game's turn about z, then about x, then about y
 [[nodiscard]] glm::mat3 PlacedRotation(const Angles& angles);
 
 /// A living thing's angle as the scripts take it is the way it faces across the land, in radians from +x towards +z.
@@ -150,5 +151,15 @@ struct PlayerPlace
 [[nodiscard]] float HeadingSpin(float draw);
 /// The largest draw each axis of that spin takes
 constexpr float k_HeadingSpinDraw = 200.0f;
+/// The value that the spin takes away from the draw
+constexpr float k_HeadingSpinMiddle = 100.0f;
+/// The part of the draw that the spin keeps (the bits of the game's 0.01)
+inline constexpr float k_HeadingSpinScale = std::bit_cast<float>(0x3C23D70Au);
+
+/// The fall of a thing that a script throws at a place, in metres a second each second (the bits of the game's -9.81)
+inline constexpr float k_TargetGravity = std::bit_cast<float>(0xC11CF5C3u);
+/// The velocity that a script throws a thing at so that it gets to a place after a time, with no air drag: the
+/// distance across the land in that time, and the height with the fall in that time added
+[[nodiscard]] glm::vec3 TargetVelocity(const glm::vec3& from, const glm::vec3& to, float seconds);
 
 } // namespace openblack::script::property_rules

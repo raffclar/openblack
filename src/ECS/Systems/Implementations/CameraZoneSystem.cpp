@@ -23,6 +23,7 @@
 
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -145,5 +146,56 @@ bool CameraZoneSystem::SetZones(std::string_view fileName)
 	_zones = FromFile(cache.Handle(id)->GetZones());
 	_fileName = name;
 	PlaceForceField();
+	return true;
+}
+
+void CameraZoneSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _fileName);
+	reflection::Save(out, _zones.exclusionsOn);
+	reflection::Save(out, _zones.fenceOn);
+	reflection::Save(out, _zones.useMaxAltitude);
+	reflection::Save(out, _zones.useHeightAboveLand);
+	reflection::Save(out, _zones.maxAltitude);
+	reflection::Save(out, _zones.heightAboveLand);
+	reflection::Save(out, _zones.fence);
+	reflection::Save(out, _zones.exclusions.size());
+	for (const auto& exclusion : _zones.exclusions)
+	{
+		reflection::Save(out, exclusion.position);
+		reflection::Save(out, exclusion.radius);
+		reflection::Save(out, exclusion.height);
+		reflection::Save(out, exclusion.kind);
+	}
+}
+
+bool CameraZoneSystem::LoadState(reflection::BinaryReader& in)
+{
+	std::string fileName;
+	camera_zones::Zones zones;
+	reflection::Load(in, fileName);
+	reflection::Load(in, zones.exclusionsOn);
+	reflection::Load(in, zones.fenceOn);
+	reflection::Load(in, zones.useMaxAltitude);
+	reflection::Load(in, zones.useHeightAboveLand);
+	reflection::Load(in, zones.maxAltitude);
+	reflection::Load(in, zones.heightAboveLand);
+	reflection::Load(in, zones.fence);
+	size_t count = 0;
+	reflection::Load(in, count);
+	for (size_t i = 0; i < count && !in.Failed(); ++i)
+	{
+		auto& exclusion = zones.exclusions.emplace_back();
+		reflection::Load(in, exclusion.position);
+		reflection::Load(in, exclusion.radius);
+		reflection::Load(in, exclusion.height);
+		reflection::Load(in, exclusion.kind);
+	}
+	if (in.Failed())
+	{
+		return false;
+	}
+	_fileName = std::move(fileName);
+	_zones = std::move(zones);
 	return true;
 }

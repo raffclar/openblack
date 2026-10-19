@@ -100,6 +100,8 @@ public:
 	/// The open dialogs and, over them, the pointer at the mouse. The pointer also shows over the debug windows, which
 	/// hide the hand, and is drawn over them.
 	void Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow);
+	/// The box that shows while the game saves or loads, drawn alone as a frame of its own over the last picture
+	void DrawSavingBox(glm::u16vec2 resolution, bool loading, bool darken);
 
 	[[nodiscard]] GameMenu& GetMenu() noexcept { return *_menu; }
 	/// Whether the advisors' words were drawn at the last frame drawn, which the gestures' hints fade out for
@@ -142,6 +144,8 @@ public:
 	[[nodiscard]] NewPlayerBox& GetNewPlayerBox() noexcept { return *_newPlayerBox; }
 	/// The save game room's question and name box, over the temple
 	[[nodiscard]] SaveGameBoxes& GetSaveGameBoxes() noexcept { return *_saveGameBoxes; }
+	/// A save did not write its world files completely: the box tells the player "An error has occurred!" with an OK
+	void ShowSaveProblem();
 	/// The save game room's boxes take the mouse and the keyboard while one is up; true when they took the event
 	bool ProcessSaveGameBoxesEvent(const SDL_Event& event);
 	/// The name of a saved game that the named zoom tooltip shows. The tooltip keeps the last name given.

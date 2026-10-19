@@ -13,7 +13,9 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <array>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -273,12 +275,98 @@ struct ValueOnly
 {
 };
 
+/// The rows of a storage copied in the order of the archive (see SnapshotWorld): the entities, and the components in
+/// the same order. A component with no data has no values.
+struct StorageCopy
+{
+	std::vector<entt::entity> rows;
+	std::shared_ptr<const void> values;
+	const void* (*at)(const void* values, size_t row) {nullptr};
+};
+
+namespace detail
+{
+/// Whether a value shares something that it does not own alone and that can change: a shared pointer to a value that is
+/// not const, in the value or in what it holds
+template <typename Type>
+struct SharesMutable: std::false_type
+{
+};
+template <typename Held>
+struct SharesMutable<std::shared_ptr<Held>>: std::bool_constant<!std::is_const_v<Held>>
+{
+};
+template <typename Held>
+struct SharesMutable<std::weak_ptr<Held>>: std::true_type
+{
+};
+template <typename Held>
+struct SharesMutable<std::optional<Held>>: SharesMutable<Held>
+{
+};
+template <typename Held, typename Allocator>
+struct SharesMutable<std::vector<Held, Allocator>>: SharesMutable<Held>
+{
+};
+template <typename Held, size_t Size>
+struct SharesMutable<std::array<Held, Size>>: SharesMutable<Held>
+{
+};
+template <typename First, typename Second>
+struct SharesMutable<std::pair<First, Second>>: std::disjunction<SharesMutable<First>, SharesMutable<Second>>
+{
+};
+template <template <typename...> typename Container, typename Key, typename Value, typename... Rest>
+    requires requires { typename Container<Key, Value, Rest...>::mapped_type; }
+struct SharesMutable<Container<Key, Value, Rest...>>: SharesMutable<Value>
+{
+};
+
+/// The rows of a storage of a component, copied
+template <typename Type>
+[[nodiscard]] StorageCopy CopyRows(const entt::sparse_set& storage)
+{
+	StorageCopy copy;
+	copy.rows.reserve(storage.size());
+	auto values = std::make_shared<std::vector<Type>>();
+	if constexpr (!std::is_empty_v<Type>)
+	{
+		values->reserve(storage.size());
+	}
+	// In the order of the archive: the order of the storage from its end
+	for (auto it = storage.rbegin(); it != storage.rend(); ++it)
+	{
+		const auto entity = *it;
+		if (entity == entt::tombstone)
+		{
+			continue;
+		}
+		copy.rows.push_back(entity);
+		if constexpr (!std::is_empty_v<Type>)
+		{
+			values->push_back(*static_cast<const Type*>(storage.value(entity)));
+		}
+	}
+	if constexpr (!std::is_empty_v<Type>)
+	{
+		copy.values = std::move(values);
+		copy.at = [](const void* all, size_t row) -> const void* {
+			return &(*static_cast<const std::vector<Type>*>(all))[row];
+		};
+	}
+	return copy;
+}
+} // namespace detail
+
 /// What is kept with each registered component: its storage in a registry, made if there is none yet, and the codec of
 /// a component that has one
 struct ComponentInfo
 {
 	entt::sparse_set& (*storage)(entt::registry& registry) {nullptr};
 	TypeCodec codec;
+	/// Copies the rows of a storage, for a writer on another thread to encode; none for a component that cannot be
+	/// copied, or that shares values which the game's thread changes
+	StorageCopy (*copy)(const entt::sparse_set& storage) {nullptr};
 };
 
 /// Registers a component and its fields by name: Reflect<Transform>(context).Field<&Transform::position>("position")
@@ -292,8 +380,13 @@ public:
 	    , _component(ComponentInfo {
 	          .storage = [](entt::registry& registry) -> entt::sparse_set& { return registry.storage<Type>(); },
 	          .codec = {},
+	          .copy = nullptr,
 	      })
 	{
+		if constexpr (std::is_copy_constructible_v<Type>)
+		{
+			_component->copy = &detail::CopyRows<Type>;
+		}
 		_factory.template custom<ComponentInfo>(*_component);
 	}
 
@@ -355,6 +448,11 @@ public:
 #endif
 		_factory.template custom<FieldInfo>(std::move(info));
 		detail::RegisterValue<Value>(*_context);
+		if constexpr (detail::SharesMutable<Value>::value)
+		{
+			// The game's thread encodes this component itself
+			NoCopy();
+		}
 		return *this;
 	}
 
@@ -418,7 +516,9 @@ public:
 		entt::meta_factory<Type> type {*_context};
 		if (_component.has_value())
 		{
+			// A codec may read more than the value, so the game's thread encodes the component itself
 			_component->codec = codec;
+			_component->copy = nullptr;
 			type.template custom<ComponentInfo>(*_component);
 		}
 		else
@@ -429,6 +529,16 @@ public:
 	}
 
 private:
+	/// The component is encoded on the game's thread, not copied for the writer
+	void NoCopy()
+	{
+		if (_component.has_value() && _component->copy != nullptr)
+		{
+			_component->copy = nullptr;
+			entt::meta_factory<Type> {*_context}.template custom<ComponentInfo>(*_component);
+		}
+	}
+
 	entt::meta_ctx* _context;
 	entt::meta_factory<Type> _factory;
 	/// The information of a component, which a codec adds to; none for a value type

@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -26,6 +27,7 @@
 
 #include "ECS/Registry.h"
 #include "ECS/SaveFileWriter.h"
+#include "ECS/SaveGameFiles.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -53,8 +55,14 @@ public:
 	void NewLand() override;
 	[[nodiscard]] bool AnyPictureWaiting() const override;
 	void CollectPictures(const Screens& screens) override;
+	void SetShowBox(ShowBox show) override { _showBox = std::move(show); }
+	void SetReportProblem(ReportProblem report) override { _reportProblem = std::move(report); }
+	void ReportWriteProblems() override;
 
 private:
+	/// Shows the box of a save or a load for a slot, when the game gave the function
+	void ShowSaveBox(uint32_t slot, bool loading) const;
+	ShowBox _showBox;
 	/// The world file in the game's layout that the creatures of the open land came from, as the file had it
 	struct VanillaOrigin
 	{
@@ -90,8 +98,16 @@ private:
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);
-	bool WriteVanilla(uint32_t slot, const std::filesystem::path& slotFolder, std::span<const gamesave::SavedCreature> saved,
-	                  std::span<const entt::entity> entities);
+	/// The files in the game's layout of a save of a game that came from such a file: the world file and the script file
+	[[nodiscard]] std::vector<ecs::save_files::SaveFile> VanillaFiles(uint32_t slot, const std::filesystem::path& slotFolder,
+	                                                                  std::span<const gamesave::SavedCreature> saved,
+	                                                                  std::span<const entt::entity> entities);
+	/// Gives the writer the world files of a save, which it writes through their temporary files. A write that does not
+	/// complete is told to the player on the game's thread.
+	void QueueWorldFiles(std::function<std::vector<ecs::save_files::SaveFile>()> files);
+	/// A load that the game refuses, or that stops after the land cleared: the land that is open starts again as a new
+	/// game, from its own script
+	void StartLandAgain() const;
 	void SetVanillaOrigin(uint32_t slot, uint32_t land, const std::filesystem::path& folder,
 	                      const std::optional<std::vector<uint8_t>>& bytes);
 	void KeepVanillaRecord(ecs::Registry& registry, entt::entity entity, uint32_t number,
@@ -106,6 +122,10 @@ private:
 	void FlushWrites() const;
 	[[nodiscard]] ecs::save_files::BackgroundWriter& Writer() const;
 
+	ReportProblem _reportProblem;
+	/// The saves whose world files the writer did not write completely, and that the player is not told of yet. The
+	/// writer's thread counts them.
+	std::shared_ptr<std::atomic<uint32_t>> _writeProblems {std::make_shared<std::atomic<uint32_t>>(0)};
 	std::unique_ptr<entt::meta_ctx> _reflection;
 	/// Writes the files of each save on a thread of its own
 	mutable std::unique_ptr<ecs::save_files::BackgroundWriter> _writer;

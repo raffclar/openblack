@@ -139,6 +139,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureReactionNotice.h"
+#include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -166,6 +167,7 @@
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -810,6 +812,15 @@ void Runner::Start(const Scenario& scenario)
 		ecs::archetypes::SharkArchetype::Create({at.x, 0.0f, at.y}, 1.0f);
 	}
 	PlaceHighlights(scenario, _middle);
+	// As on a land, the things are on the map before the footpaths come, so no footpath goes round them
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Sync();
+	}
+	if (Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().ProcessObstacleChanges();
+	}
 	PlaceFootpaths(scenario, _middle);
 	if (!scenario.landScript.empty())
 	{
@@ -1268,7 +1279,9 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    if (object.dead)
 				    {
-					    return ecs::archetypes::DeadTreeArchetype::Create(position, type, yaw, object.scale);
+					    return ecs::archetypes::DeadTreeArchetype::Create(position, type, glm::radians(object.leanDegrees.x),
+					                                                      yaw, glm::radians(object.leanDegrees.y),
+					                                                      object.scale);
 				    }
 				    return ecs::archetypes::TreeArchetype::Create(object.forest, position, type, true, yaw,
 				                                                  object.fullSize.value_or(object.scale), object.scale);
@@ -1330,7 +1343,9 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 				    {
 					    return ecs::archetypes::StreetLanternArchetype::Create(position, type);
 				    }
-				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f, 0.0f, yaw, 0.0f, object.scale);
+				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f,
+				                                                          glm::radians(object.leanDegrees.x), yaw,
+				                                                          glm::radians(object.leanDegrees.y), object.scale);
 			    }
 			    else if constexpr (std::is_same_v<T, AnimatedStaticInfo>)
 			    {
@@ -2065,6 +2080,89 @@ std::string Runner::StopScript(const Command& command)
 	return fmt::format("stopped {} tasks of {}; the object is {}in a script", stopped, command.script, inScript ? "" : "not ");
 }
 
+std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argument)
+{
+	// A number, or an object that the scripts' table knows, or a marker made for it
+	std::optional<entt::entity> object;
+	switch (argument.kind)
+	{
+	case ScriptArgument::Kind::Number:
+		return lhvm::VMValue(argument.number);
+	case ScriptArgument::Kind::Marker:
+	{
+		const auto& land = Locator::terrainSystem::value();
+		const auto point = MapPoint(_middle, argument.point);
+		const auto marker =
+		    ecs::archetypes::ScriptMarkerArchetype::Create({point.x, land.GetHeightAt(point) + argument.height, point.y});
+		Locator::scriptObjects::value().Register(marker, true);
+		return lhvm::VMValue(static_cast<uint32_t>(marker));
+	}
+	case ScriptArgument::Kind::Object:
+		object = ObjectAt(argument.index);
+		break;
+	case ScriptArgument::Kind::Creature:
+		object = CreatureAt(argument.index);
+		break;
+	case ScriptArgument::Kind::Position:
+		// A position is three values, which only a native call gives
+		return std::nullopt;
+	}
+	if (!object.has_value())
+	{
+		return std::nullopt;
+	}
+	Locator::scriptObjects::value().Register(*object, false);
+	return lhvm::VMValue(static_cast<uint32_t>(*object));
+}
+
+std::string Runner::CallNative(const Command& command)
+{
+	if (!Locator::vm::has_value() || !Locator::scriptObjects::has_value())
+	{
+		return "no script machine";
+	}
+	auto& vm = Locator::vm::value();
+	const auto* functions = vm.GetFunctions();
+	if (functions == nullptr)
+	{
+		return "no natives";
+	}
+	const auto found =
+	    std::ranges::find_if(*functions, [&command](const auto& function) { return function.name == command.script; });
+	if (found == functions->end())
+	{
+		return fmt::format("no native {}", command.script);
+	}
+	std::vector<lhvm::NativeArgument> arguments;
+	for (const auto& argument : command.scriptArguments)
+	{
+		if (argument.kind == ScriptArgument::Kind::Position)
+		{
+			const auto point = MapPoint(_middle, argument.point);
+			const float height = Locator::terrainSystem::value().GetHeightAt(point) + argument.height;
+			for (const float part : {point.x, height, point.y})
+			{
+				arguments.emplace_back(std::pair(lhvm::VMValue(part), lhvm::DataType::Float));
+			}
+			continue;
+		}
+		const auto given = ScriptValueOf(argument);
+		if (!given.has_value())
+		{
+			return "an argument names nothing of the scenario's";
+		}
+		const auto type = argument.kind == ScriptArgument::Kind::Number ? lhvm::DataType::Float : lhvm::DataType::Object;
+		arguments.emplace_back(std::pair(*given, type));
+	}
+	std::vector<std::pair<lhvm::VMValue, lhvm::DataType>> results;
+	const auto id = static_cast<uint32_t>(std::distance(functions->begin(), found));
+	if (!vm.CallNative(id, arguments, results))
+	{
+		return fmt::format("{} could not run now", command.script);
+	}
+	return fmt::format("{} ran and gave back {} values", command.script, results.size());
+}
+
 std::string Runner::RunScript(const Command& command)
 {
 	if (!Locator::vm::has_value() || !Locator::scriptObjects::has_value())
@@ -2076,36 +2174,7 @@ std::string Runner::RunScript(const Command& command)
 	{
 		return fmt::format("no script {}", command.script);
 	}
-	// What a script is handed: a number, or an object the scripts' table knows of, a marker made for it
-	const auto& land = Locator::terrainSystem::value();
-	const auto value = [this, &land](const ScriptArgument& argument) -> std::optional<lhvm::VMValue> {
-		std::optional<entt::entity> object;
-		switch (argument.kind)
-		{
-		case ScriptArgument::Kind::Number:
-			return lhvm::VMValue(argument.number);
-		case ScriptArgument::Kind::Marker:
-		{
-			const auto point = MapPoint(_middle, argument.point);
-			const auto marker =
-			    ecs::archetypes::ScriptMarkerArchetype::Create({point.x, land.GetHeightAt(point) + argument.height, point.y});
-			Locator::scriptObjects::value().Register(marker, true);
-			return lhvm::VMValue(static_cast<uint32_t>(marker));
-		}
-		case ScriptArgument::Kind::Object:
-			object = ObjectAt(argument.index);
-			break;
-		case ScriptArgument::Kind::Creature:
-			object = CreatureAt(argument.index);
-			break;
-		}
-		if (!object.has_value())
-		{
-			return std::nullopt;
-		}
-		Locator::scriptObjects::value().Register(*object, false);
-		return lhvm::VMValue(static_cast<uint32_t>(*object));
-	};
+	const auto value = [this](const ScriptArgument& argument) { return ScriptValueOf(argument); };
 	const auto type = [](const ScriptArgument& argument) {
 		return argument.kind == ScriptArgument::Kind::Number ? lhvm::DataType::Float : lhvm::DataType::Object;
 	};
@@ -2501,6 +2570,11 @@ void Runner::Give(const Command& command)
 	if (command.kind == Kind::RunScript)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), RunScript(command)));
+		return;
+	}
+	if (command.kind == Kind::CallNative)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), CallNative(command)));
 		return;
 	}
 	if (command.kind == Kind::StopScript)

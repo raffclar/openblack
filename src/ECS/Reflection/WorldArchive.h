@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <memory>
 #include <optional>
 #include <set>
 #include <span>
@@ -23,6 +24,7 @@
 #include <entt/meta/context.hpp>
 
 #include "BinaryArchive.h"
+#include "ComponentReflection.h"
 
 /// The archive of a whole world: every entity of a registry and every registered component of each entity. The archive
 /// keeps the entities with their versions and the list of free entities, so that a load into an empty registry gives
@@ -78,6 +80,35 @@ struct WorldLoadResult
 
 /// Writes every entity of the registry and every registered component of each entity
 [[nodiscard]] std::vector<uint8_t> SaveWorld(const entt::registry& registry, const entt::meta_ctx& context,
+                                             WorldSaveReport* report = nullptr);
+
+/// The entities and the components of a registry as the game's thread took them, for a writer on another thread to
+/// encode while the game goes on. Each component that can be copied safely is copied; the game's thread encodes the
+/// others at once.
+struct WorldSnapshot
+{
+	struct Storage
+	{
+		std::string name;
+		entt::meta_type type;
+		/// The copied rows, or the block of the storage that the game's thread already encoded
+		std::optional<StorageCopy> copy;
+		std::vector<uint8_t> encoded;
+		uint32_t encodedRows {0};
+	};
+	std::vector<entt::entity> entities;
+	size_t inUse {0};
+	std::vector<Storage> storages;
+	std::vector<std::string> unregisteredComponents;
+	std::set<UnsavedValue> unsavedValues;
+};
+
+/// Takes a snapshot of the registry on the game's thread
+[[nodiscard]] std::shared_ptr<const WorldSnapshot> SnapshotWorld(const entt::registry& registry, const entt::meta_ctx& context);
+
+/// Writes a snapshot as SaveWorld writes the registry, with the same bytes. Any thread can call it while the registry
+/// changes.
+[[nodiscard]] std::vector<uint8_t> SaveWorld(const WorldSnapshot& snapshot, const entt::meta_ctx& context,
                                              WorldSaveReport* report = nullptr);
 
 /// Reads an archive of a world into the registry. Returns nothing when the bytes are not an archive of a world, when the

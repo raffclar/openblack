@@ -24,6 +24,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "ParticleArchive.h"
 #include "ParticleBlast.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMaths.h"
@@ -170,6 +171,36 @@ struct ExplosionState
 class Explosion final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		const auto& state = std::any_cast<const ExplosionState&>(slot.data);
+		out.Write(state.beamStarted);
+		out.Write(state.beam);
+		out.Write(state.started);
+		out.Write(state.cancelled);
+		out.Write(state.closed);
+		out.Write(state.smoked);
+		out.Write(state.front);
+		out.WritePlainList(state.wave);
+		out.Write(state.exploded);
+		out.Write(state.removed);
+	}
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		ExplosionState state;
+		in.Read(state.beamStarted);
+		in.Read(state.beam);
+		in.Read(state.started);
+		in.Read(state.cancelled);
+		in.Read(state.closed);
+		in.Read(state.smoked);
+		in.Read(state.front);
+		in.ReadPlainList(state.wave);
+		in.Read(state.exploded);
+		in.Read(state.removed);
+		slot.data = std::move(state);
+	}
+
 	explicit Explosion(const ParticleObject& object)
 	    : rules({
 	          .maxObjectsToDelete = object.Int("MaxObjectsToDelete", 20),

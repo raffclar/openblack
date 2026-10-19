@@ -75,6 +75,22 @@ TEST(LeashRules, Confinement)
 	EXPECT_TRUE(IsConfined(12.0f, true, true));
 }
 
+TEST(LeashRules, TheAreaRefusesAWalkPastItsRadius)
+{
+	constexpr AgendaArea k_Home {.radius = 10.0f, .centre = {100.0f, 200.0f}};
+	EXPECT_TRUE(RefusesWalk(k_Home, {106.0f, 208.1f}));
+	// At the radius or nearer, the walk goes ahead
+	EXPECT_FALSE(RefusesWalk(k_Home, {106.0f, 208.0f}));
+	EXPECT_FALSE(RefusesWalk(k_Home, {100.0f, 200.0f}));
+	// No area holds it, or it is on a leash that does not work
+	EXPECT_FALSE(RefusesWalk({.radius = 0.0f}, {50.0f, 50.0f}));
+	EXPECT_FALSE(RefusesWalk({.radius = 10.0f, .leashed = true, .leashWorks = false}, {50.0f, 50.0f}));
+	// It walks back into the area, a script controls it, or it goes to a teleport stone
+	EXPECT_FALSE(RefusesWalk({.radius = 10.0f, .walkingBack = true}, {50.0f, 50.0f}));
+	EXPECT_FALSE(RefusesWalk({.radius = 10.0f, .scriptControlled = true}, {50.0f, 50.0f}));
+	EXPECT_FALSE(RefusesWalk({.radius = 10.0f, .toTeleport = true}, {50.0f, 50.0f}));
+}
+
 TEST(LeashRules, WalksBackWhenFurtherThanTheRadius)
 {
 	constexpr Confinement k_Out {.radius = 77.0f, .leashed = true, .distance = 80.0f};

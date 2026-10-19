@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 
 #include "Creature/CreatureIdleMind.h"
+#include "Enums.h"
 
 /// A creature dances with the villagers of a town to impress them. It goes to a villager and summons the people of
 /// the villager's town. Then it makes a dance in a clear place, sends the people to their places and dances with them.
@@ -75,6 +76,10 @@ constexpr uint32_t k_TurnsBetweenStories = 450;
 /// Whether a creature's dance that dances continues: it continues while the agenda that started it continues, through
 /// all of its steps. It stops when that agenda ends, when the creature gives it up, or when a new agenda replaces it.
 [[nodiscard]] bool DanceGoesOn(std::optional<uint32_t> startedBy, uint32_t agenda, bool agendaUnderway);
+
+/// When the creature stops what it does, the villagers that it called to dance leave its list. A villager that is in
+/// the hand, that dances for the creature or that the creature controls stops its dance and decides what to do.
+[[nodiscard]] bool DecidesWhenReleased(VillagerStates top);
 
 /// Whether a creature may dance to impress villagers: its last such dance was of another kind, and more than 200
 /// turns ago

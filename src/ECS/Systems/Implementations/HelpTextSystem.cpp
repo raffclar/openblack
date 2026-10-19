@@ -280,6 +280,8 @@ bool HelpTextSystem::LoadState(reflection::BinaryReader& in)
 		reflection::Load(in, dialogue);
 		const auto now = Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetElapsedTime().count()) : 0;
 		dialogue.ShiftRealTime(now - savedNow);
+		// The box does not come back as it was: it is made again from the kept texts once every system has loaded
+		dialogue.EmptyBox();
 	}
 	reflection::Load(in, _storyHistory);
 	return !in.Failed();

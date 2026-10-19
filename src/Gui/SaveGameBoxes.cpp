@@ -78,12 +78,23 @@ SaveGameBoxes::SaveGameBoxes(const TextDatabase& texts, const GameFont& font)
 
 SaveGameBoxes::~SaveGameBoxes() = default;
 
+SaveGameBoxes::Question& SaveGameBoxes::Show(std::u16string text)
+{
+	auto& shown = _question.emplace();
+	shown.text = text;
+	shown.textControl = &shown.answers.Add<StaticText>(k_Question, std::move(text), StaticText::Layout::Wrapped);
+	shown.textControl->takesClicks = true;
+	_answer.reset();
+	_holdingFade.Reset(0.0f);
+	_holdingFade.SetDestination(1.0f, k_FadeInSeconds);
+	_questionFade.Reset(0.0f);
+	_questionFade.SetDestination(1.0f, k_FadeInSeconds);
+	return shown;
+}
+
 void SaveGameBoxes::Ask(std::u16string question)
 {
-	auto& asked = _question.emplace();
-	asked.text = question;
-	asked.textControl = &asked.answers.Add<StaticText>(k_Question, std::move(question), StaticText::Layout::Wrapped);
-	asked.textControl->takesClicks = true;
+	auto& asked = Show(std::move(question));
 	asked.answers
 	    .Add<BigButton>(_font, k_YesPosition, k_ArrowSize, Text(_texts, k_YesText), BigButton::LabelSide::Right,
 	                    BigButton::Look::LeftArrow)
@@ -92,11 +103,15 @@ void SaveGameBoxes::Ask(std::u16string question)
 	    .Add<BigButton>(_font, k_NoPosition, k_ArrowSize, Text(_texts, k_NoText), BigButton::LabelSide::Left,
 	                    BigButton::Look::RightArrow)
 	    .onClick = [this] { Answered(Answer::No); };
-	_answer.reset();
-	_holdingFade.Reset(0.0f);
-	_holdingFade.SetDestination(1.0f, k_FadeInSeconds);
-	_questionFade.Reset(0.0f);
-	_questionFade.SetDestination(1.0f, k_FadeInSeconds);
+}
+
+void SaveGameBoxes::Tell(std::u16string message)
+{
+	auto& told = Show(std::move(message));
+	told.message = true;
+	told.answers.Add<Button>(k_MessageOk, Text(_texts, k_OkText), DialogPainter::k_MidTextSize).onClick = [this] {
+		Answered(Answer::Ok);
+	};
 }
 
 void SaveGameBoxes::AskName(std::u16string_view name)
@@ -184,6 +199,10 @@ bool SaveGameBoxes::MouseUp(glm::ivec2 point)
 
 void SaveGameBoxes::TextInput(std::u16string_view text)
 {
+	if (_question.has_value() && _question->message)
+	{
+		return;
+	}
 	if (_question.has_value())
 	{
 		// The first letters of the words "yes" and "no" answer the question, unless they are the same
@@ -212,6 +231,15 @@ void SaveGameBoxes::TextInput(std::u16string_view text)
 
 void SaveGameBoxes::KeyDown(int key)
 {
+	if (_question.has_value() && _question->message)
+	{
+		// A message's OK answers Return and Escape
+		if (IsReturn(key) || key == SDLK_ESCAPE)
+		{
+			Answered(Answer::Ok);
+		}
+		return;
+	}
 	if (_question.has_value() || !_nameActive)
 	{
 		// The question takes neither Return nor Escape

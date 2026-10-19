@@ -23,6 +23,7 @@
 #include "AudioManagerInterface.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/X87Vector.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "Locator.h"
 
 using namespace openblack::audio;
@@ -215,6 +216,63 @@ void GameMusic::Reset()
 	_attached.clear();
 }
 
+void GameMusic::SaveState(ecs::reflection::BinaryWriter& out) const
+{
+	using ecs::reflection::Save;
+	out.WriteSize(_attached.size());
+	for (const auto& music : _attached)
+	{
+		Save(out, music.thing);
+		Save(out, music.type);
+	}
+	Save(out, _scriptType);
+	Save(out, _scriptStarted);
+	Save(out, _rememberedTown);
+	Save(out, _alignmentMusicEnabled);
+	Save(out, _lyrics.line);
+	Save(out, _lyrics.word);
+}
+
+bool GameMusic::LoadState(ecs::reflection::BinaryReader& in)
+{
+	using ecs::reflection::Load;
+	const auto count = in.ReadSize();
+	if (!count.has_value())
+	{
+		return false;
+	}
+	std::vector<AttachedMusic> attached(*count);
+	for (auto& music : attached)
+	{
+		Load(in, music.thing);
+		Load(in, music.type);
+	}
+	MusicType scriptType {MusicType::None};
+	bool scriptStarted {false};
+	std::optional<uint32_t> rememberedTown;
+	bool alignmentMusicEnabled {true};
+	MusicLyrics lyrics;
+	Load(in, scriptType);
+	Load(in, scriptStarted);
+	Load(in, rememberedTown);
+	Load(in, alignmentMusicEnabled);
+	Load(in, lyrics.line);
+	Load(in, lyrics.word);
+	if (in.Failed())
+	{
+		return false;
+	}
+	// The order of the attached music stays: the most recently attached first
+	_attached = std::move(attached);
+	_scriptType = scriptType;
+	// The flag stays as saved, so music that played at the save counts as playing, though no music plays
+	_scriptStarted = scriptStarted;
+	_rememberedTown = rememberedTown;
+	_alignmentMusicEnabled = alignmentMusicEnabled;
+	_lyrics = lyrics;
+	return true;
+}
+
 float GameMusic::AttachedMusicRange(float bankMaxDistance)
 {
 	return bankMaxDistance < 0.0f ? k_AttachedMusicDefaultRange : bankMaxDistance;
@@ -351,7 +409,14 @@ void GameMusic::ProcessTurn(const TurnInputs& inputs)
 
 void GameMusic::ProcessMusic(const TurnInputs& inputs)
 {
-	if (ProcessCitadel(inputs) || ProcessScript())
+	if (ProcessCitadel(inputs))
+	{
+		// The script's music stops counting as playing, so it starts again from its beginning after the citadel
+		_scriptStarted = false;
+		_landType = MusicType::None;
+		return;
+	}
+	if (ProcessScript())
 	{
 		_landType = MusicType::None;
 		return;

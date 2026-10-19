@@ -51,6 +51,7 @@
 #include "Gui/CinemaBars.h"
 #include "Gui/CinemaHides.h"
 #include "Gui/GlyphTexture.h"
+#include "Gui/SavingBox.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/ScriptTexts.h"
 #include "Gui/WorldToolTipRules.h"
@@ -74,6 +75,8 @@ namespace
 {
 /// The scripts the game's text is in, in the order the game reads them
 constexpr std::array k_TextScripts = {"InfoScript2.txt", "InfoScriptPatch2.txt", "InfoScriptMultiplayer2.txt"};
+/// What the game tells the player when a save did not write its world files completely
+constexpr std::string_view k_SaveProblemText = "HELP_TEXT_DIALOG_ERRORHASOCCURED";
 /// The tooltip "Zoom In (%s)" of the save game room, which shows the name of a saved game
 constexpr uint32_t k_NamedZoomToolTip = 0xEE6 - 0xE73;
 /// The dialogs' font, the first of the game's fonts
@@ -398,6 +401,11 @@ bool GameInterface::ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec
 	default:
 		return false;
 	}
+}
+
+void GameInterface::ShowSaveProblem()
+{
+	_saveGameBoxes->Tell(std::u16string(_texts.Get(k_SaveProblemText)));
 }
 
 bool GameInterface::ProcessSaveGameBoxesEvent(const SDL_Event& event)
@@ -857,6 +865,14 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 	}
 	_tattooEditor->Update(deltaSeconds, editor, palette, _leftButtonDown);
 	_menu->SetCovered(_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
+}
+
+void GameInterface::DrawSavingBox(glm::u16vec2 resolution, bool loading, bool darken)
+{
+	_canvas.Begin(resolution);
+	_painter.Begin(resolution);
+	saving_box::Draw(_painter, resolution, _texts.Get(loading ? saving_box::k_LoadingText : saving_box::k_SavingText), darken);
+	_canvas.End();
 }
 
 void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow)

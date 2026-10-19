@@ -623,6 +623,8 @@ void LeashSystem::TakeOff(entt::entity creature)
 		mind->leash.miracleSightingWeight = leash::MiracleSightingWeight(false);
 		// The leash no longer leads what the creature does
 		mind->ledByLeash = false;
+		// It forgets the actions that the area that held it refused
+		mind->leftAreaActions.clear();
 	}
 	// Off any leash but the learning leash, the desire it made dominant lets go
 	if (leash::TakingOffEndsDominantDesire(leashes->selected) && Locator::creatureMindSystem::has_value())

@@ -53,6 +53,8 @@ public:
 	                  float animationMs, entt::entity spell) override;
 	[[nodiscard]] bool HoldsCamera() const override { return _placed.has_value(); }
 	void HandlePlayerControl(const PlayerControl& control) override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
 	/// A path placed in the world that the camera follows
@@ -75,6 +77,8 @@ private:
 	std::optional<Placed> _placed;
 
 	entt::resource<CameraPath> _path;
+	/// The id of the path in the resource cache
+	entt::id_type _pathId {0};
 	/// How far along the path the camera is
 	std::chrono::microseconds _elapsed {0};
 	CameraPathState _state {CameraPathState::STOPPED};

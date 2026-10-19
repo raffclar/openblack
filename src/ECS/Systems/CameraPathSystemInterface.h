@@ -17,6 +17,8 @@
 #include <entt/fwd.hpp>
 #include <glm/mat4x4.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
+
 namespace openblack
 {
 class CameraPath;
@@ -25,7 +27,7 @@ class CameraPath;
 namespace openblack::ecs::systems
 {
 
-class CameraPathSystemInterface
+class CameraPathSystemInterface: public SavedStateInterface
 {
 public:
 	virtual void Start(entt::id_type id) = 0;
