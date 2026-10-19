@@ -131,6 +131,10 @@ template <class T>
 [[nodiscard]] const GMagicInfo& GetMagicInfoFromPowerUpLevel(const InfoConstants& info, const GSpellSeedInfo& seed,
                                                              int powerUpLevel);
 
+/// The text that the hand shows when it takes the seed, and again when the seed gets a new power-up level. It is the
+/// tooltip text of the miracle that the seed casts at that level, for example "Water Miracle Increase".
+[[nodiscard]] uint32_t GetHeldToolTipText(const InfoConstants& info, const GSpellSeedInfo& seed, int powerUpLevel);
+
 /// The gesture that powers a seed up to a magic type, and the level it reaches
 struct PowerUpStep
 {

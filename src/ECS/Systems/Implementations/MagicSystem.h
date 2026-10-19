@@ -175,6 +175,7 @@ public:
 	void DiscardHeldSeed() override;
 	void DeleteSeed(entt::entity seed) override;
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override;
+	[[nodiscard]] std::optional<uint32_t> TakeHeldMiracleToolTip() override;
 
 	void UpdateHand(const HandFrame& frame, float seconds) override;
 	bool TapFireBall(entt::entity ball) override;
@@ -334,6 +335,8 @@ private:
 	void TakeGestures();
 	void PowerUpHeldSeed(int level);
 	void ShowHeldSeedPowerUp(int level, int previous);
+	/// Keep the tooltip text of the held seed's miracle at its power-up level, for the hand to show next
+	void AnnounceHeldMiracle(const components::SpellSeed& seed);
 	/// The hum of an armed seed, following the hand
 	void StartHoldLoop();
 	void StopHoldLoop();
@@ -439,6 +442,8 @@ private:
 	/// Game turns since the land started
 	uint32_t _turn {0};
 	HandResult _lastHandResult {HandResult::None};
+	/// The tooltip text of the held miracle that the hand did not show yet
+	std::optional<uint32_t> _heldMiracleToolTip;
 	bool _ignoreInfluence {false};
 	/// The hand as a testbed scenario puts it, in place of the mouse
 	std::optional<HandFrame> _driven;

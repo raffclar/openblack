@@ -97,6 +97,24 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "hand.tooltips_held_miracle",
+	    .name = "The name of the miracle in the hand",
+	    .facet = Facet::Hand,
+	    .description = "A storm seed comes from the player's worship into the hand. The hand draws the inverse spiral, "
+	                   "then the spiral.",
+	    .expected = "When the seed comes into the hand, the tooltip \"Storm Miracle\" shows at once. The inverse spiral "
+	                "gives \"Storm Miracle Increase\" and the spiral gives \"Storm Miracle Extreme\". Each name shows with "
+	                "no mouse button, before the other tooltips of the hand come back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::SummonSeed,
+	                  .delaySeconds = k_DrawSeconds,
+	                  .value = static_cast<size_t>(SpellSeedType::Storm)},
+	                 Draw(GestureType::InverseSpiral, 1.0f),
+	                 Draw(GestureType::Spiral)},
+	});
+
+	all.push_back({
 	    .id = "miracles.gesture_scribble_cancel",
 	    .name = "Cancel a held miracle with a scribble",
 	    .facet = Facet::Miracles,

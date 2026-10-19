@@ -233,6 +233,12 @@ const GMagicInfo& magic::GetMagicInfoFromPowerUpLevel(const InfoConstants& info,
 	return GetMagicInfo(info, type != MagicType::None ? type : seed.magicTypes[0]);
 }
 
+uint32_t magic::GetHeldToolTipText(const InfoConstants& info, const GSpellSeedInfo& seed, int powerUpLevel)
+{
+	const auto& record = GetMagicInfoFromPowerUpLevel(info, seed, powerUpLevel);
+	return static_cast<uint32_t>(GetMagicEffectInfo(info, record.magicType).toolTipsEnum);
+}
+
 PowerUpStep magic::GetPowerUpGesture(const GSpellSeedInfo& seed, MagicType type)
 {
 	if (seed.magicTypes[0] == type)

@@ -182,6 +182,23 @@ TEST(MagicTables, powerUpLevels)
 	EXPECT_EQ(plain.level, k_BasePowerUpLevel);
 }
 
+TEST(MagicTables, theHeldSeedShowsTheTextOfItsMiracleAtItsLevel)
+{
+	auto info = MakeTables();
+	auto& water = info->spellSeed.at(static_cast<size_t>(SpellSeedType::Water));
+	water.magicTypes = {MagicType::Water, MagicType::WaterPowerUpOne, MagicType::None, MagicType::None};
+	info->magicEffect.at(static_cast<size_t>(MagicType::Water)).toolTipsEnum = static_cast<HelpText>(3760);
+	info->magicEffect.at(static_cast<size_t>(MagicType::WaterPowerUpOne)).toolTipsEnum = static_cast<HelpText>(3776);
+	// The plain miracle, then the power-up ("Water Miracle Increase")
+	EXPECT_EQ(GetHeldToolTipText(*info, water, k_BasePowerUpLevel), 3760U);
+	EXPECT_EQ(GetHeldToolTipText(*info, water, 0), 3776U);
+	// A level with no miracle shows the text of the plain miracle
+	EXPECT_EQ(GetHeldToolTipText(*info, water, 1), 3760U);
+	// The text comes from the effect that the magic record names, not from the place of the record
+	info->magicWater.at(1).magicType = MagicType::Water;
+	EXPECT_EQ(GetHeldToolTipText(*info, water, 0), 3760U);
+}
+
 TEST(MagicTables, seedLookups)
 {
 	auto info = MakeTables();
