@@ -93,8 +93,9 @@ private:
 	[[nodiscard]] static float CreatureTakenDistance();
 	/// The land under a vortex is levelled as far as an amount: its heights are read the first time
 	static void LevelGround(components::Vortex& vortex, float amount);
-	/// A load gives the land back from its file. Each loaded vortex levels the land again as far as it did at the save.
-	static void LevelAgainAfterLoad();
+	/// A load gives the land back from its file. Each loaded vortex levels the land again as far as it did at the save,
+	/// and makes its swirl, its effect over the land and its glow again. It keeps the effect that carries things in.
+	static void StartAgainAfterLoad();
 
 	std::vector<GroundMark> _groundMarks;
 	/// The crossing file, written by the vortex that last started to lead away while that vortex is in the world
