@@ -9367,6 +9367,38 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	                 .yawDegrees = 45.0f,
 	                 .leanDegrees = {25.0f, -15.0f}}},
 	});
+
+	// Two rows of small pines along the path of a low throw. The camera stands as for the hand's throw.
+	std::vector<ObjectSetup> bendTrees {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}};
+	for (int row = 0; row < 10; ++row)
+	{
+		const float along = 6.0f + static_cast<float>(row) * 3.0f;
+		bendTrees.push_back({.type = TreeInfo::Pine, .offset = {along, -2.0f}, .scale = 0.5f});
+		bendTrees.push_back({.type = TreeInfo::Pine, .offset = {along, 2.0f}, .scale = 0.5f});
+	}
+	all.push_back({
+	    .id = "nature.trees_bend_round_a_thrown_rock",
+	    .name = "Trees bend away from a rock that flies between them",
+	    .facet = Facet::Nature,
+	    .description = "The hand takes a rock and throws it low between two rows of small pines. Then the rock comes to "
+	                   "rest.",
+	    .expected = "While the rock flies, the pines near it lean away from it, more when the rock is near. A pine that "
+	                "the rock passes stands straight again when the rock is out of its reach. When the rock comes to "
+	                "rest among the pines, the pines in its reach stay bent away from it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = bendTrees,
+	    .commands =
+	        {// Takes the rock under the middle of the screen
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
+	         // Makes ready low on the screen and sweeps a little up, so that the throw stays low
+	         {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.45f, 0.7f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.15f}, .amount = 0.3f},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
+	});
 }
 
 void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)

@@ -31,6 +31,8 @@ struct Tree
 	bool madeToGrow {false};
 	/// Made by its land as not part of the scenery
 	bool nonScenic {false};
+	/// The slot of the last bend point that marked it, 0 for none (see Nature/TreeBend.h)
+	uint8_t bendSlot {0};
 };
 
 } // namespace openblack::ecs::components

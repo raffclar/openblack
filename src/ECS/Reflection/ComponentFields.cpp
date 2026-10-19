@@ -2016,7 +2016,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Tree::maxSize>("maxSize")
 	    .Field<&components::Tree::growthCountdown>("growthCountdown")
 	    .Field<&components::Tree::madeToGrow>("madeToGrow")
-	    .Field<&components::Tree::nonScenic>("nonScenic");
+	    .Field<&components::Tree::nonScenic>("nonScenic")
+	    .Field<&components::Tree::bendSlot>("bendSlot");
 	Reflect<components::TurnAngles>(context)
 	    .Field<&components::TurnAngles::angles>("angles")
 	    .Field<&components::TurnAngles::turn>("turn");
