@@ -29,7 +29,8 @@ enum class Kind
 	Skirmish,
 	/// The developers' testbed: a workbench outside the game, where nothing carries over
 	Testbed,
-	/// A saved game loads: the save gives the whole world, so nothing of the last land carries over and no script starts
+	/// A saved game loads: the save gives the whole world, so nothing of the last land carries over and no script starts.
+	/// Each load starts a game as the profile picked now, and the player starts as good or evil as their profile keeps.
 	SavedGame,
 };
 
@@ -99,8 +100,16 @@ struct Rules
 		        .gameStarts = true,
 		        .helpTextsKept = false,
 		        .gameClockRunsOn = false};
-	case Kind::Testbed:
 	case Kind::SavedGame:
+		return {.advisors = Advisors::Afresh,
+		        .scriptScreenKept = false,
+		        .heartbeatsCarried = false,
+		        .playersCarried = false,
+		        .alignmentFromProfile = true,
+		        .gameStarts = true,
+		        .helpTextsKept = false,
+		        .gameClockRunsOn = false};
+	case Kind::Testbed:
 		break;
 	}
 	return {.advisors = Advisors::Afresh,

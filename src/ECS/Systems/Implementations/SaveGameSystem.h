@@ -48,7 +48,8 @@ public:
 	[[nodiscard]] std::vector<VanillaCheck> CheckVanillaRecords() const override;
 	void TakeTemplePicture() override;
 	bool InstantSave(uint32_t slot) override;
-	bool SaveOnExit() override;
+	bool SaveOnExit(bool quitting) override;
+	[[nodiscard]] bool HasExitSave() const override;
 	void EndTurn() override;
 	bool QuickSave() override;
 	bool QuickLoad() override;

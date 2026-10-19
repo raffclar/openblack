@@ -30,6 +30,7 @@
 #include <MorphFile.h>
 #include <PackFile.h>
 #include <SDL.h>
+#include <SaveSlots.h>
 #include <bgfx/bgfx.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -544,6 +545,8 @@ Game::Game(Arguments&& args) noexcept
     , _preIntro(args.preIntro)
     , _skipLogos(args.skipLogos)
     , _newGameStart(args.newGameStart)
+    , _newGameAsked(args.newGame)
+    , _continueAsked(args.continueGame)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
@@ -2420,10 +2423,11 @@ bool Game::Update() noexcept
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		UpdateTattooMenu(std::chrono::duration<float, std::milli>(deltaTime).count());
-		if (std::exchange(_restartRequested, false))
+		if (const auto end = std::exchange(_gameEndAsked, std::nullopt); end.has_value())
 		{
-			RestartForProfile();
+			EndGame(*end);
 		}
+		StartNextGameWhenSaved();
 	}
 	GripLandscapeEffect::Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 
@@ -4385,6 +4389,7 @@ bool Game::Run() noexcept
 {
 	auto& config = Locator::config::value();
 
+	auto start = game_session::Start::NewGame;
 	if (_startTestbed)
 	{
 		LoadTestbed();
@@ -4392,9 +4397,19 @@ bool Game::Run() noexcept
 	else
 	{
 		// A first start: the new player is asked their name before the first land; closing the window meanwhile ends
-		// the game at its first frame
+		// the game at its first frame. A first start always starts a new game.
+		const bool hadProfile = HasPlayerProfiles();
 		AskForNewPlayer();
-		if (!LoadMap(_startMap, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame))
+		// A plain start continues from the save on exit of the player. The continue loads the save once the scripts are
+		// ready, because the save keeps the state of the scripts.
+		start = game_session::FirstStart({.hadProfile = hadProfile,
+		                                  .developerRun = _automatedRun,
+		                                  .newGameAsked = _newGameAsked,
+		                                  .continueAsked = _continueAsked});
+		start = game_session::Resolve(start,
+		                              Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().HasExitSave());
+		if (start == game_session::Start::NewGame &&
+		    !LoadMap(_startMap, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame))
 		{
 			return false;
 		}
@@ -4440,7 +4455,8 @@ bool Game::Run() noexcept
 			// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock. A
 			// playground starts as the playground menu starts one: the scripts are made ready, but no story begins and
 			// the start-of-game question isn't asked
-			if (!_startTestbed && new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish))
+			if (!_startTestbed && start == game_session::Start::NewGame &&
+			    new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish))
 			{
 				StartStoryScripts();
 			}
@@ -4457,6 +4473,16 @@ bool Game::Run() noexcept
 		                    (fileSystem.GetGamePath() / challengePath).generic_string());
 		return false;
 	}
+	// A continue loads the save on exit, or starts a new game when it cannot
+	bool continued = false;
+	if (start == game_session::Start::Continue)
+	{
+		continued = ContinueGame();
+		if (_landPath.empty())
+		{
+			return false;
+		}
+	}
 	if (_startupTimer.has_value())
 	{
 		_startupTimer->Step("story scripts");
@@ -4466,7 +4492,11 @@ bool Game::Run() noexcept
 
 	SizeSceneToWindow();
 
-	Game::SetTime(config.timeOfDay);
+	// A saved game keeps its own time of day
+	if (!continued)
+	{
+		Game::SetTime(config.timeOfDay);
+	}
 	Locator::time::value().Start();
 
 	if (_playVideo == "intro")
@@ -4506,6 +4536,11 @@ bool Game::Run() noexcept
 		}
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: every resource loaded in {:.0f} ms",
 		                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
+	}
+	// A game that continued from the save on exit starts under the menu
+	if (game_session::ShowsMenuOnStart(start, continued))
+	{
+		ShowMenuOnStart();
 	}
 	_frameCount = 0;
 	auto lastTime = std::chrono::high_resolution_clock::now();
@@ -4678,10 +4713,7 @@ bool Game::Run() noexcept
 	}
 
 	// As the player leaves the game, the game saves it into the slot of the save on exit
-	if (Locator::saveGameSystem::has_value())
-	{
-		Locator::saveGameSystem::value().SaveOnExit();
-	}
+	SaveAsGameEnds(game_session::End::Quit, true);
 	// As the game ends, the player's creature is written to their files as it is now
 	if (Locator::creatureCarryOverSystem::has_value())
 	{
@@ -4946,11 +4978,51 @@ bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::files
 	{
 		Locator::objectDrawListSystem::value().Reset();
 	}
+	RemakeModelsAfterLoad();
 	registry.SetDirty();
+	// Each load starts a game: the player is as good or evil as their profile keeps them, not as the save keeps them
+	if (land_change::RulesFor(land_change::Kind::SavedGame).alignmentFromProfile)
+	{
+		SetPlayerAlignmentFromProfile();
+	}
 	RenderLoadingFrame();
 	StartNewLand(land_change::Kind::SavedGame);
 	EndLoadingScreen();
 	return restored;
+}
+
+void Game::RemakeModelsAfterLoad()
+{
+	// The game made some models while it played: the worship sites' with their temple's skin, the
+	// broken buildings' and the models of things in high detail. A load in a game that did not make them makes them again.
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().RemakeModelsAfterLoad();
+	}
+	if (Locator::buildingDamageSystem::has_value())
+	{
+		Locator::buildingDamageSystem::value().RemakeModelsAfterLoad();
+	}
+	if (Locator::highDetailSystem::has_value())
+	{
+		Locator::highDetailSystem::value().RemakeModelsAfterLoad();
+	}
+	// The log tells of the models that are still not there, so that the code that makes each one can make it again too
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	size_t missing = 0;
+	entt::id_type first = 0;
+	Locator::entitiesRegistry::value().Each<const ecs::components::Mesh>([&](const ecs::components::Mesh& mesh) {
+		if (!meshes.Contains(mesh.id))
+		{
+			first = missing == 0 ? mesh.id : first;
+			++missing;
+		}
+	});
+	if (missing > 0)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "After the load, {} things have a model that is not there, the first {}",
+		                   missing, first);
+	}
 }
 
 void Game::PrepareNewLand(land_change::Kind change)
@@ -5172,13 +5244,21 @@ void Game::StartPlayerAtProfileAlignment()
 	{
 		return;
 	}
+	SetPlayerAlignmentFromProfile();
+	// The player's statistics note the alignment they start the game at
+	auto& players = Locator::playerSystem::value();
+	player_statistics::Made(players.GetPlayer(players.GetLocalPlayer()));
+}
+
+void Game::SetPlayerAlignmentFromProfile()
+{
+	if (!Locator::playerProfileSystem::has_value() || !Locator::playerSystem::has_value())
+	{
+		return;
+	}
 	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
 	const auto alignment = profile_alignment::Starting(profile.has_value() ? profile->alignment : 0.0);
-	auto& players = Locator::playerSystem::value();
-	const auto local = players.GetLocalPlayer();
-	Locator::alignmentSystem::value().SetPlayerAlignment(local, alignment);
-	// The player's statistics note the alignment they start the game at
-	player_statistics::Made(players.GetPlayer(local));
+	Locator::alignmentSystem::value().SetPlayerAlignment(Locator::playerSystem::value().GetLocalPlayer(), alignment);
 }
 
 void Game::KeepAlignmentInProfile()
@@ -5403,7 +5483,7 @@ void Game::HandleInterfaceAction()
 	}
 
 	// The menu pauses the game while it is open
-	if (const auto pause = _menuPause.Follow(_interface->GetMenu().IsOpen(), IsPaused()); pause.has_value())
+	if (const auto pause = _menuPause.Follow(_interface->GetMenu().IsOpen()); pause.has_value())
 	{
 		Locator::time::value().SetPaused(*pause);
 		if (!_menuPause.IsHeld())
@@ -5453,11 +5533,11 @@ void Game::HandleInterfaceAction()
 	}
 	case Action::StartNewGame:
 	case Action::Restart:
-		// Starting again as the profile picked carries on from its last automatic save, and with none, which openblack
-		// can't make yet, starts a new game, as Start a New Game does
-		// The land is loaded again between frames, not while the input is handled
+		// This game ends. Start a New Game starts a new game on the first land. A restart as the profile picked continues
+		// from the save on exit of that profile, or starts a new game when it has none. The land changes between frames,
+		// not while the game reads the input.
 		_interface->GetMenu().Close();
-		_restartRequested = true;
+		_gameEndAsked = action == Action::StartNewGame ? game_session::End::NewGame : game_session::End::Continue;
 		break;
 	case Action::EditTattoo:
 		// The profile is kept first, then the editor shows the profile's creature over the menu
@@ -5676,19 +5756,169 @@ void Game::AskForAnotherPlayer(bool canCancel)
 	                                     [&profiles](std::u16string_view name) { return profiles.CheckNewName(name); });
 }
 
-void Game::RestartForProfile()
+void Game::EndGame(game_session::End end)
 {
-	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
-	if (profile.has_value())
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ends: {}",
+	                   end == game_session::End::NewGame ? "a new game starts" : "the game continues as the profile picked");
+	SaveAsGameEnds(end, false);
+	// The next game has no previous profile until the Players page opens again
+	if (_interface)
+	{
+		_interface->GetMenu().ForgetPreviousProfile();
+	}
+	_gameEnding = end;
+}
+
+void Game::StartNextGameWhenSaved()
+{
+	// The save on exit takes the picture of the last frame of the game that ended. The next game starts after it.
+	if (!_gameEnding.has_value() ||
+	    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting()))
+	{
+		return;
+	}
+	const auto end = *std::exchange(_gameEnding, std::nullopt);
+	auto& profiles = Locator::playerProfileSystem::value();
+	if (const auto picked = std::exchange(_profileAfterSave, std::nullopt); picked.has_value())
+	{
+		profiles.SelectProfile(*picked);
+	}
+	const auto profile = profiles.GetCurrentProfile();
+	if (profile.has_value() && _interface)
 	{
 		_interface->SetPlayerProfile(gui::ToUtf16(profile->name), gui::ToUtf16(profile->creatureName), profile->symbol,
 		                             profile->settings);
 		RefreshPlayersPage();
 	}
-	if (!StartNewGame(std::nullopt))
+	switch (game_session::NextStart(end).value_or(game_session::Start::NewGame))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game could not start again");
+	case game_session::Start::Continue:
+		ContinueFromExitSave();
+		break;
+	case game_session::Start::NewGame:
+		if (!StartNewGame(std::nullopt))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The new game could not start");
+		}
+		break;
+	case game_session::Start::SavedGame:
+	case game_session::Start::Online:
+	case game_session::Start::Skirmish:
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "This start of a game is not available yet");
+		break;
 	}
+}
+
+game_session::ExitSave Game::ExitSaveAsGameEnds(game_session::End end) const
+{
+	const auto& context = Locator::entitiesRegistry::value().Context();
+	game_session::ExitSaveFacts facts {
+	    .end = end,
+	    .gameOver = context.gameOver,
+	    // openblack's games are all single player
+	    .multiplayer = false,
+	    .skirmish = context.skirmish,
+	    .godsPlayground = context.mapScriptGlobals.landNumber == escape_key::k_GodsPlaygroundLand,
+	    .previousProfile = std::nullopt,
+	    .currentProfile = {},
+	    .previousExists = false,
+	};
+	if (_interface)
+	{
+		facts.previousProfile = _interface->GetMenu().GetPreviousProfile();
+	}
+	if (Locator::playerProfileSystem::has_value())
+	{
+		const auto& profiles = Locator::playerProfileSystem::value();
+		if (const auto profile = profiles.GetCurrentProfile(); profile.has_value())
+		{
+			facts.currentProfile = gui::ToUtf16(profile->name);
+		}
+		facts.previousExists = facts.previousProfile.has_value() &&
+		                       player_profiles::Find(profiles.GetProfiles(), *facts.previousProfile) != nullptr;
+	}
+	return game_session::ExitSaveFor(facts);
+}
+
+bool Game::SaveAsGameEnds(game_session::End end, bool quitting)
+{
+	if (!Locator::saveGameSystem::has_value())
+	{
+		return false;
+	}
+	auto& saves = Locator::saveGameSystem::value();
+	switch (ExitSaveAsGameEnds(end))
+	{
+	case game_session::ExitSave::None:
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ends with no save on exit");
+		return false;
+	case game_session::ExitSave::Current:
+		return saves.SaveOnExit(quitting);
+	case game_session::ExitSave::Previous:
+		break;
+	}
+	// The save goes to the profile that the player played before they picked another one. The game plays as that
+	// profile while it saves, and then plays as the profile picked again.
+	auto& profiles = Locator::playerProfileSystem::value();
+	const auto picked = profiles.GetCurrentProfile();
+	const auto previous = _interface->GetMenu().GetPreviousProfile();
+	if (!picked.has_value() || !previous.has_value() || !profiles.SelectProfile(*previous))
+	{
+		return false;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The save on exit goes to the profile played before");
+	const bool saved = saves.SaveOnExit(quitting);
+	if (quitting)
+	{
+		profiles.SelectProfile(gui::ToUtf16(picked->name));
+	}
+	else
+	{
+		// The picture of the save comes back after the next frame, into the folder of the previous profile
+		_profileAfterSave = gui::ToUtf16(picked->name);
+	}
+	return saved;
+}
+
+bool Game::ContinueGame()
+{
+	auto& saves = Locator::saveGameSystem::value();
+	if (saves.HasExitSave() && saves.Load(gamesave::k_ExitSlot))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game continues from the save on exit");
+		return true;
+	}
+	// With no save on exit, or a load that did not happen, a new game starts on the first land
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "No save on exit loaded: a new game starts");
+	if (!StartNewGame(_newGameStart))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The new game could not start");
+	}
+	return false;
+}
+
+bool Game::ContinueFromExitSave() noexcept
+{
+	if (!ContinueGame())
+	{
+		return false;
+	}
+	ShowMenuOnStart();
+	return true;
+}
+
+void Game::ShowMenuOnStart()
+{
+	if (!_interface)
+	{
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The menu shows over the game that continued");
+	_interface->OpenMenu();
+	// The menu reads the profile's own pictures again as it opens
+	ReadTattooPictures();
+	// The menu pauses the game while it is open
+	HandleInterfaceAction();
 }
 
 void Game::ApplyPlayerSettings(const player_profiles::Settings& settings)

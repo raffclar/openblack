@@ -154,6 +154,19 @@ void HighDetailSystem::Release(entt::entity thing)
 	registry.SetDirty();
 }
 
+void HighDetailSystem::RemakeModelsAfterLoad()
+{
+	// Each thing in high detail goes back to its usual model and takes its detailed model again
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> things;
+	registry.Each<const HighDetail>([&things](entt::entity thing, const HighDetail&) { things.push_back(thing); });
+	for (const auto thing : things)
+	{
+		Release(thing);
+		Make(thing);
+	}
+}
+
 bool HighDetailSystem::Order(entt::entity thing, rules::ThingSpecial special, bool on)
 {
 	auto& registry = Locator::entitiesRegistry::value();

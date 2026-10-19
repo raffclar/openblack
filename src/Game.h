@@ -36,6 +36,7 @@
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
+#include "GameSession.h"
 #include "Graphics/UploadPacer.h"
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
@@ -168,6 +169,10 @@ struct Arguments
 	bool preIntro {false};
 	/// Leave out the logo pictures at start-up
 	bool skipLogos {false};
+	/// Start a new game rather than continue from the save on exit
+	bool newGame {false};
+	/// Start as a plain start does, a run of a developer or a tool too: continue from the save on exit
+	bool continueGame {false};
 	/// For developers and agents: how a new game on the first land starts, asked the start-of-game question whatever
 	/// the player's profiles, or with it answered at once; as the game decides when none
 	std::optional<new_game_choice::NewGameStart> newGameStart;
@@ -266,6 +271,9 @@ public:
 	/// Starts a new game on the first land from scratch, as the game's new game does, the story's scripts starting
 	/// again; for developers and agents, `start` asks the start-of-game question or answers it at once
 	bool StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept;
+	/// Starts the game as a plain start of the program does: the save on exit of the profile loads, and the menu shows
+	/// over it. With no save on exit, a new game starts. Returns whether the save loaded.
+	bool ContinueFromExitSave() noexcept;
 
 	void SetTime(float time) noexcept;
 	/// How many times longer a turn takes: 2 is half speed
@@ -376,6 +384,8 @@ private:
 	/// outside the game: nothing is carried onto it or off it, so each testbed load starts as the first one after launch
 	/// does.
 	void PrepareNewLand(land_change::Kind change);
+	/// After a load, the models that the game made as it played are made again for the loaded things
+	void RemakeModelsAfterLoad();
 	/// What every land starts with once its landscape is loaded: the sky's clock, a player and the land's physics
 	void SetUpLandscape();
 	/// Starts the game clock, the atmosphere's sounds and the music on the new land. The story moving on keeps the game's
@@ -383,6 +393,8 @@ private:
 	void StartNewLand(land_change::Kind change);
 	/// A new game's player starts as good or evil as their profile last kept them
 	void StartPlayerAtProfileAlignment();
+	/// The player is as good or evil as their profile keeps them, as each game starts
+	void SetPlayerAlignmentFromProfile();
 	/// Every so often as they play, the player's alignment is kept with their profile for their next new game
 	void KeepAlignmentInProfile();
 
@@ -403,6 +415,9 @@ private:
 	bool _preIntro {false};
 	bool _skipLogos {false};
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
+	/// The command line asked for a new game, or to continue as a plain start does
+	bool _newGameAsked {false};
+	bool _continueAsked {false};
 	/// The screens drawn as the game starts and while a land loads, none without a window
 	std::unique_ptr<gui::LoadingScreen> _loadingScreen;
 	/// What is drawn at the loading's redraw points, nothing while not loading
@@ -599,8 +614,22 @@ private:
 	void LoadCreatureSkinArt();
 	/// The new player's box over the game, from the Players page
 	void AskForAnotherPlayer(bool canCancel);
-	/// The game starts again as the profile played
-	void RestartForProfile();
+	/// The menu ended this game. The save on exit goes to its profile, and the next game starts once the save has its
+	/// picture.
+	void EndGame(game_session::End end);
+	/// Once a frame, after the pictures of the saves came back: the next game starts when the game that ended has its
+	/// save on exit complete
+	void StartNextGameWhenSaved();
+	/// The profile that the save on exit goes to as this game ends
+	[[nodiscard]] game_session::ExitSave ExitSaveAsGameEnds(game_session::End end) const;
+	/// The save on exit into the profile that the rules give. With the previous profile, the game plays as it while it
+	/// saves, and keeps the profile picked in _profileAfterSave. Returns whether the game saved.
+	bool SaveAsGameEnds(game_session::End end, bool quitting);
+	/// A game starts as a continue: the save on exit of the profile loads, and the menu shows over it. With no save on
+	/// exit that the game can open, or a load that fails, a new game starts. Returns whether a land is open.
+	bool ContinueGame();
+	/// The menu shows over a game that continued, which pauses the game, as Escape opens it
+	void ShowMenuOnStart();
 	/// Escape in play with no dialog open: the menu opens, unless a script's cut scene is on, and a help script holding
 	/// the dialogue stops
 	void HandleEscapeInPlay(uint16_t keyModifiers);
@@ -669,8 +698,13 @@ private:
 	std::filesystem::path _landPath;
 	/// The pause that the menu holds while it is open
 	gui::MenuPause _menuPause;
-	/// The menu asked for the game to start again as the profile played
-	bool _restartRequested {false};
+	/// The menu asked for this game to end and the next one to start: a new game, or a continue as the profile played
+	std::optional<game_session::End> _gameEndAsked;
+	/// The game ends and waits for the picture of its save on exit before the next game starts
+	std::optional<game_session::End> _gameEnding;
+	/// While the save on exit goes to the previous profile: the profile that the player picked, played again once the
+	/// save is complete
+	std::optional<std::u16string> _profileAfterSave;
 	/// When the menu last closed, on the computer's clock
 	std::optional<std::chrono::steady_clock::time_point> _menuClosedAt;
 };

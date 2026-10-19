@@ -726,6 +726,30 @@ void BuildingDamageSystem::ProcessTurn()
 	}
 }
 
+void BuildingDamageSystem::RemakeModelsAfterLoad()
+{
+	auto& world = *_world;
+	auto& registry = world.Entities();
+	// The broken buildings and their loose pieces get their models again from the damage that the save keeps
+	std::vector<entt::entity> broken;
+	registry.Each<BuildingDamage>([&broken](entt::entity building, const BuildingDamage& damage) {
+		if (damage.drawMesh != 0)
+		{
+			broken.push_back(building);
+		}
+	});
+	for (const auto building : broken)
+	{
+		RedrawBuilding(world, building, registry.Get<BuildingDamage>(building));
+	}
+	std::vector<entt::entity> pieces;
+	registry.Each<BuildingPiece>([&pieces](entt::entity piece, const BuildingPiece&) { pieces.push_back(piece); });
+	for (const auto piece : pieces)
+	{
+		DrawPiece(world, piece);
+	}
+}
+
 std::optional<float> BuildingDamageSystem::PartialShare(entt::entity building) const
 {
 	const auto& world = *_world;
