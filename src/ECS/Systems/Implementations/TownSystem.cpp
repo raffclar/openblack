@@ -45,6 +45,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/Map.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -791,6 +792,25 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 			particles.SetPlayer(fountain, static_cast<int>(player));
 		}
 	}
+}
+
+void TownSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _beliefSymbols);
+}
+
+bool TownSystem::LoadState(reflection::BinaryReader& in)
+{
+	// The effects of the symbols come back with the particles, so each village centre keeps its own effect and does not
+	// start another
+	std::unordered_map<entt::entity, uint32_t> symbols;
+	reflection::Load(in, symbols);
+	if (in.Failed())
+	{
+		return false;
+	}
+	_beliefSymbols = std::move(symbols);
+	return true;
 }
 
 void TownSystem::UpdateFrame(float gameSeconds)

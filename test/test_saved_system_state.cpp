@@ -50,6 +50,7 @@
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/TeleportSystem.h"
+#include "ECS/Systems/Implementations/TownSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/SavedStateInterface.h"
@@ -356,4 +357,14 @@ TEST(SavedSystemState, TheMusicThatTheScriptsChoseComesBack)
 	EXPECT_EQ(loaded.GetMusicLyrics().word, 2);
 	// No music plays after the load until a game turn picks it
 	EXPECT_EQ(loaded.GetPlaying(), audio::MusicType::None);
+}
+
+TEST(SavedSystemState, EachVillageCentreKeepsTheEffectOfItsSymbols)
+{
+	const std::unordered_map<entt::entity, uint32_t> symbols {{static_cast<entt::entity>(5), 9u},
+	                                                          {static_cast<entt::entity>(12), 31u}};
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, symbols);
+	TownSystem towns;
+	LoadInto(towns, out.Bytes());
 }
