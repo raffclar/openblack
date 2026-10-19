@@ -9399,6 +9399,30 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.15f}, .amount = 0.3f},
 	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
+
+	// Two rows of pines with a lane between them. The player's creature walks along the lane and back.
+	std::vector<ObjectSetup> lanePines;
+	for (int row = 0; row < 10; ++row)
+	{
+		const float along = static_cast<float>(row) * 3.0f;
+		lanePines.push_back({.type = TreeInfo::Pine, .offset = {along, -4.5f}});
+		lanePines.push_back({.type = TreeInfo::Pine, .offset = {along, 4.5f}});
+	}
+	all.push_back({
+	    .id = "nature.trees_bend_round_the_creature",
+	    .name = "Trees bend away from the player's creature",
+	    .facet = Facet::Nature,
+	    .description = "The player's tiger walks along a lane between two rows of pines, then walks back.",
+	    .expected = "The pines near the tiger lean away from it, more when the tiger is near, and crash about. When the "
+	                "tiger has gone by, they stand straight again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-12.0f, -12.0f}, {40.0f, 12.0f}}},
+	    .creatures = {CreatureSetup {
+	        .label = "yours", .species = CreatureType::Tiger, .offset = {-10.0f, 0.0f}, .owner = PlayerNames::PLAYER_ONE}},
+	    .objects = lanePines,
+	    .commands = {{.kind = Kind::WalkTo, .creature = 0, .delaySeconds = 1.0f, .point = {40.0f, 0.0f}},
+	                 {.kind = Kind::WalkTo, .creature = 0, .delaySeconds = 8.0f, .point = {-10.0f, 0.0f}}},
+	});
 }
 
 void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
