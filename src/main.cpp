@@ -74,6 +74,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("dynamic-tree-shadows", "Trees cast their shadows as they are drawn each frame, swaying with them, rather than baked into the land as the game does.")
 		("pre-intro", "Play the pre-intro film at start-up, as the game does on a first run.")
 		("skip-logos", "Leave out the logo pictures at start-up.")
+		("logo-effect", "For developers and tools: play the logo effect before the first game, as a plain start does. A developer's or a tool's run otherwise leaves it out.")
 		("new-game", "Start a new game on the first land, as the game's own new game option does, rather than continue from the save on exit.")
 		("continue", "For developers and tools: start as a plain start does, a run of a developer too. The save on exit of the profile loads, with the menu over it, or a new game starts when there is none. A developer's or a tool's run otherwise starts a new game.")
 		("skip-opening", "For developers: start the new game with the start-of-game question answered, the story then going as it does for that answer: creature (straight to choosing a creature, the opening skipped), story (all of the first land's creature tutorial skipped too), old (keep the old creature; story when the profile has none), cow (debug: skip the creature choice, the Cow is the player's creature), normal; or ask, to be asked it as every new game is.", cxxopts::value<std::string>())
@@ -282,6 +283,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.playVideo = result["play-video"].as<std::string>();
 		args.preIntro = result.count("pre-intro") != 0;
 		args.skipLogos = result.count("skip-logos") != 0;
+		args.logoEffect = result.count("logo-effect") != 0;
 		args.newGame = result.count("new-game") != 0;
 		args.continueGame = result.count("continue") != 0;
 		if (result.count("profile-folder") != 0)

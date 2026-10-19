@@ -271,6 +271,7 @@
 #include "Gui/HandToolTips.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/ScreenFit.h"
+#include "Gui/StartupRules.h"
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandBlend.h"
 #include "Hand/HandFeel.h"
@@ -544,6 +545,7 @@ Game::Game(Arguments&& args) noexcept
     , _playVideo(args.playVideo)
     , _preIntro(args.preIntro)
     , _skipLogos(args.skipLogos)
+    , _logoEffectAsked(args.logoEffect)
     , _newGameStart(args.newGameStart)
     , _newGameAsked(args.newGame)
     , _continueAsked(args.continueGame)
@@ -4526,6 +4528,11 @@ bool Game::Run() noexcept
 		}
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: every resource loaded in {:.0f} ms",
 		                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
+	}
+	// The first game of the program starts with the logo effect and its sound, before the menu shows
+	if (startup::PlaysLogoEffect(_automatedRun, _logoEffectAsked, false))
+	{
+		PlayLogoEffect();
 	}
 	// A game that continued from the save on exit starts under the menu
 	if (game_session::ShowsMenuOnStart(start, continued))

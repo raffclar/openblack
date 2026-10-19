@@ -169,6 +169,8 @@ struct Arguments
 	bool preIntro {false};
 	/// Leave out the logo pictures at start-up
 	bool skipLogos {false};
+	/// Play the logo effect of the first game, a run of a developer or a tool too
+	bool logoEffect {false};
 	/// Start a new game rather than continue from the save on exit
 	bool newGame {false};
 	/// Start as a plain start does, a run of a developer or a tool too: continue from the save on exit
@@ -274,6 +276,9 @@ public:
 	/// Starts the game as a plain start of the program does: the save on exit of the profile loads, and the menu shows
 	/// over it. With no save on exit, a new game starts. Returns whether the save loaded.
 	bool ContinueFromExitSave() noexcept;
+	/// The logo effect of the first game of the program, in its own loop with its sound, until it ends, a key or a mouse
+	/// button. Then black frames while a mouse button is held.
+	void PlayLogoEffect();
 
 	void SetTime(float time) noexcept;
 	/// How many times longer a turn takes: 2 is half speed
@@ -414,6 +419,7 @@ private:
 	std::string _playVideo;
 	bool _preIntro {false};
 	bool _skipLogos {false};
+	bool _logoEffectAsked {false};
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
 	/// The command line asked for a new game, or to continue as a plain start does
 	bool _newGameAsked {false};

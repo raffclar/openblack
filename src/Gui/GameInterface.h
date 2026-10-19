@@ -32,6 +32,7 @@
 #include "GameMenu.h"
 #include "Hand/HandTricons.h"
 #include "Help/SingAlong.h"
+#include "LogoEffect.h"
 #include "MenuBackdrop.h"
 #include "NewPlayerBox.h"
 #include "SaveGameBoxes.h"
@@ -154,6 +155,29 @@ public:
 	/// black of an alpha
 	void DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, float frameMilliseconds,
 	                         uint8_t black);
+	/// What the logo effect draws over its sky and its dots in a frame
+	struct LogoEffectOverlay
+	{
+		logo_effect::Screen screen;
+		std::u16string_view text;
+		/// The Lionhead logo shows its trademark sign
+		bool tradeMark;
+		/// The processor makes the game show the sponsor's logo
+		bool sponsor;
+		uint8_t textAlpha;
+		uint8_t logoAlpha;
+		uint8_t fade;
+	};
+	/// Reads the sponsor's logo and its label for the logo effect
+	void PrepareLogoEffect();
+	/// Lets the sponsor's logo go once the logo effect is done
+	void ReleaseLogoEffect();
+	/// The texture of the logo effect's dots: the text texture
+	[[nodiscard]] const graphics::Texture2D* GetLogoDotTexture() const noexcept { return _gatheringText.get(); }
+	/// The logo effect's text, the sponsor's logo, the trademark sign and the fade to black, in the effect's overlay pass
+	void DrawLogoEffectOverlay(const LogoEffectOverlay& overlay);
+	/// The logo effect's picture on the screen, in the screen's 4:3 box, black round it
+	void DrawLogoEffectPicture(glm::u16vec2 resolution, const graphics::Texture2D& picture);
 	/// The menu greets the player by their profile's name and shows its creature's name and symbol
 	/// The menu as the player's profile has it: greeting them, with their creature's name, symbol and options
 	/// The front end's swirling backdrop over the screen's 4:3 box, the swirls turning by the frame's milliseconds
@@ -366,8 +390,13 @@ private:
 	Canvas _menuCreatureCanvas {graphics::RenderPass::MenuCreatureOverlay};
 	/// The fades over the falling spell's film and the creature that the film shows
 	Canvas _filmOverlayCanvas {graphics::RenderPass::FilmOverlay};
+	/// What the logo effect draws over its sky and its dots
+	Canvas _logoCanvas {graphics::RenderPass::LogoEffectOverlay};
 	DialogPainter _painter;
 	DialogPainter _menuCreaturePainter;
+	DialogPainter _logoPainter;
+	std::unique_ptr<graphics::Texture2D> _sponsorLogo;
+	std::unique_ptr<graphics::Texture2D> _sponsorLabel;
 	std::unique_ptr<GameMenu> _menu;
 	/// Made once and kept, so that the answer picked stays picked
 	std::unique_ptr<SkipBox> _skipBox;

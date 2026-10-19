@@ -884,6 +884,9 @@ struct Command
 		/// The game continues as a plain start of the program does: the save on exit of the profile (slot 20) loads,
 		/// and the menu shows over the paused game. Needs no creature.
 		ContinueGame,
+		/// The logo effect of the first start plays, with its sound, as before the first game of the program. Needs no
+		/// creature.
+		PlayLogoEffect,
 		/// The player's worship site icon of a seed (value, a SpellSeedType) puts its miracle in the hand. The seed keeps
 		/// a part of its charge (amount, 0 to 1), and the icon charges again for the hand, as when the hand takes a seed
 		/// of an icon that charges. The battery of the site gets the full cost of the miracle. Needs no creature.
