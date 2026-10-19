@@ -214,6 +214,9 @@ private:
 	/// A script makes a creature pick a fight with another: it asks, and they fight if the other agrees; either way the
 	/// script's order is carried out
 	bool FightForScript(entt::entity creature, entt::entity opponent);
+	/// A script takes control of the creature. The creature stops a fight, gets up when it lies knocked out, and stops
+	/// what its hands do, such as a walk to a thing to pick up.
+	void StopForScript(entt::entity creature);
 	/// Learns what feedback teaches, from what the creature did lately
 	void LearnFromFeedback(entt::entity creature, components::CreatureMindState& mind, float feedback);
 	/// The creature has taken a thing the hand gave it: its desires choose what it does with it

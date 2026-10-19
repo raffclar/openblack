@@ -34,6 +34,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAnimation.h"
+#include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureObstacles.h"
@@ -122,8 +123,6 @@ constexpr int32_t k_TurnSearchSteps = 16;
 /// A route costing more than this much a unit of the straight distance, and this much besides, is given up
 constexpr float k_CostPerUnit = 2.0f;
 constexpr float k_BaseCost = 5000.0f;
-/// A new destination this close to the current one carries on the same walk
-constexpr float k_SameDestination = 0.1f;
 /// Waiting for a route, a puzzled face is held this long
 constexpr float k_PuzzledMs = 2000.0f;
 constexpr size_t k_PuzzledFace = creature_layers::animations::k_FirstFace + 6;
@@ -914,7 +913,7 @@ CreatureLocomotionSystem::MoveResult CreatureLocomotionSystem::StartMove(entt::e
 	self.gaveUp.reset();
 	self.facingOnly = false;
 	if (IsMovingMotion(self.motion) && self.destination.has_value() &&
-	    glm::distance(*self.destination, point) <= k_SameDestination)
+	    creature_cast_moves::SameDestination(*self.destination, point))
 	{
 		return MoveResult::Started;
 	}
