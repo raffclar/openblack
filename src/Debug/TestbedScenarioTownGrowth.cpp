@@ -782,4 +782,34 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Hut, k_Fields[1]}, .distance = 0.6f},
 	    .objects = std::move(hungry),
 	});
+	// A town whose one person dies
+	all.push_back({
+	    .id = "town.empty_after_last_death",
+	    .name = "A town that its last person leaves",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's, believing 1 in the player, with a village centre, a storage "
+	                   "pit and one hut, and one villager of the town, nearly dead, in front of the hut. Three "
+	                   "seconds in, a fireball hits the villager.",
+	    .expected = "The villager dies, and the town has nobody left: its emptyTownTimer in the inspector's Town is 50. "
+	                "It goes down by one each town turn. At 0 the town becomes empty: it believes in every player what "
+	                "it keeps for the neutral player, and it goes back to the neutral player (owner NEUTRAL), so it is "
+	                "no longer the player's town.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Centre, k_Hut}, .distance = 0.6f},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit},
+	                {.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f},
+	                {.type = VillagerInfo::CelticForesterMale,
+	                 .offset = k_Hut - glm::vec2(0.0f, 10.0f),
+	                 .joinTown = true,
+	                 .homeIn = 2,
+	                 .life = 0.02f}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = k_Hut - glm::vec2(0.0f, 10.0f),
+	                  .handOffset = k_Hut - glm::vec2(0.0f, 20.0f),
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 3.0f}},
+	    .townBeliefInPlayer = 1.0f,
+	});
 }

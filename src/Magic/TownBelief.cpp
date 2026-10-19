@@ -172,3 +172,16 @@ void magic::town_belief::TakeTown(Belief& town, PlayerNames player, float amount
 	}
 	Set(town, player, most + amount);
 }
+
+void magic::town_belief::ResetForEmptyTown(Belief& town, std::span<const DesireDecay, k_DesireCount> table)
+{
+	town.belief.fill(0.0f);
+	town.pending.fill(0.0f);
+	town.cap.fill(k_DefaultCap);
+	town.belief.at(static_cast<size_t>(PlayerNames::NEUTRAL)) = town.neutral;
+	ResetDesireLevels(town, table);
+	for (size_t p = 0; p < k_PlayerCount; ++p)
+	{
+		Set(town, static_cast<PlayerNames>(p), town.neutral);
+	}
+}

@@ -76,6 +76,12 @@ private:
 	/// A building or a person gone from the world leaves its town's lists
 	void OnAbodeGone(entt::registry& registry, entt::entity abode);
 	void OnVillagerGone(entt::registry& registry, entt::entity villager);
+	/// The people of a town
+	[[nodiscard]] static uint32_t PopulationOf(entt::entity town);
+	/// A person has left the town: with nobody left, its countdown to an empty town starts
+	static void StartEmptyTownTimerIfEmpty(entt::entity town);
+	/// The town stayed empty: its belief starts over and it goes back to the neutral player
+	void SetTownEmpty(entt::entity town);
 
 	Registry* _registry {nullptr};
 	std::vector<entt::connection> _connections;

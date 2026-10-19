@@ -12,6 +12,7 @@
 #include "TownSystem.h"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <optional>
 #include <tuple>
@@ -33,6 +34,7 @@
 #include "ECS/Components/Breeding.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -60,6 +62,7 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownCentreParts.h"
+#include "ECS/TownEmpty.h"
 #include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
 #include "ECS/TownTurnOrder.h"
@@ -67,6 +70,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/TownBelief.h"
 #include "VillagerBreeding.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDiscipleWork.h"
@@ -113,6 +117,16 @@ void TownSystem::OnAbodeGone(entt::registry& registry, entt::entity abode)
 
 void TownSystem::OnVillagerGone(entt::registry& registry, entt::entity villager)
 {
+	// One taken from the world while still in a town leaves it, which can leave the town with nobody
+	if (const auto* gone = registry.try_get<const Villager>(villager);
+	    gone != nullptr && gone->town != entt::null && registry.valid(gone->town))
+	{
+		if (auto* town = registry.try_get<Town>(gone->town))
+		{
+			const auto others = PopulationOf(gone->town) - 1;
+			town->emptyTownTimer = town_empty::AfterLeaving(town->emptyTownTimer, others);
+		}
+	}
 	for (auto [entity, town] : registry.view<Town>().each())
 	{
 		std::erase(town.homelessVillagers, villager);
@@ -313,6 +327,7 @@ void TownSystem::RemoveDeadVillager(entt::entity villager)
 	// A death changes what its town wants
 	MarkDesiresChanged(town);
 	town_homes::RemoveDeadVillager(registry, villager);
+	StartEmptyTownTimerIfEmpty(town);
 }
 
 void TownSystem::RemoveVillager(entt::entity villager)
@@ -325,10 +340,57 @@ void TownSystem::RemoveVillager(entt::entity villager)
 	}
 	// Worship first, while its town is still known
 	ecs::villager_worship::LeaveTown(villager);
+	const auto town = person->town;
 	town_homes::RemoveVillagerFromTown(registry, GameHomes(), villager);
-	// TODO(town-script-natives): when nobody is left the game starts the town's empty-town countdown, which openblack
-	// doesn't keep
+	StartEmptyTownTimerIfEmpty(town);
 	registry.Get<Villager>(villager).mother = entt::null;
+}
+
+uint32_t TownSystem::PopulationOf(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	uint32_t people = 0;
+	registry.Each<const Villager>([&people, town](const Villager& villager) {
+		if (villager.town == town)
+		{
+			++people;
+		}
+	});
+	return people;
+}
+
+void TownSystem::StartEmptyTownTimerIfEmpty(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* component = town != entt::null && registry.Valid(town) ? registry.TryGet<Town>(town) : nullptr)
+	{
+		// The last person to leave starts the countdown to an empty town
+		component->emptyTownTimer = town_empty::AfterLeaving(component->emptyTownTimer, PopulationOf(town));
+	}
+}
+
+void TownSystem::SetTownEmpty(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* impression = registry.TryGet<TownImpression>(town))
+	{
+		// It starts over in belief: it believes in every player what it keeps for the neutral player, and nothing bores
+		// it
+		const auto& desires = Locator::infoConstants::value().townDesire;
+		std::array<magic::town_belief::DesireDecay, magic::town_belief::k_DesireCount> table {};
+		std::ranges::transform(desires, table.begin(), [](const GTownDesireInfo& row) {
+			return magic::town_belief::DesireDecay {.toBelief = row.desireToBeliefScale,
+			                                        .levelAfterGain = row.desireAffectsBeliefAfter,
+			                                        .levelFall = row.desireToBeliefThresholdDecay};
+		});
+		magic::town_belief::ResetForEmptyTown(impression->belief, table);
+		impression->boredom.clear();
+	}
+	// A town of a player goes back to the neutral player
+	if (registry.Get<const Town>(town).owner != PlayerNames::NEUTRAL)
+	{
+		ClaimTown(town, PlayerNames::NEUTRAL);
+	}
 }
 
 std::vector<entt::entity> TownSystem::ChildrenOf(entt::entity town, entt::entity mother) const
@@ -676,9 +738,20 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 	// A mark of changed wants that has been up a whole turn comes down
 	auto& marked = registry.Get<Town>(townEntity);
 	disciple_work::EndTownTurn(marked.desiresChanged, marked.desiresChangedLastTurn);
+	// A town that its last person left becomes empty after its countdown, unless people came back first
+	if (marked.emptyTownTimer != 0 &&
+	    town_empty::Turn(marked.emptyTownTimer, marked.emptyTownTimer > 1 ? PopulationOf(townEntity) : 0))
+	{
+		SetTownEmpty(townEntity);
+	}
+	if (!registry.Valid(townEntity))
+	{
+		return;
+	}
+	auto& shuffled = registry.Get<Town>(townEntity);
 	// Now and then it evens out its homes, moving a man for a woman between two, or one villager
 	const auto every = Locator::infoConstants::value().town.shuffleVillagersEvery;
-	if (town_homes::EvenOutDue(marked.id, turn, every))
+	if (town_homes::EvenOutDue(shuffled.id, turn, every))
 	{
 		town_homes::EvenOutHomes(registry, GameHomes(), townEntity);
 	}

@@ -1935,7 +1935,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Town::desiresChanged>("desiresChanged")
 	    .Field<&components::Town::desiresChangedLastTurn>("desiresChangedLastTurn")
 	    .Field<&components::Town::planned>("planned")
-	    .Field<&components::Town::askedToBuildTurn>("askedToBuildTurn");
+	    .Field<&components::Town::askedToBuildTurn>("askedToBuildTurn")
+	    .Field<&components::Town::emptyTownTimer>("emptyTownTimer");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")
