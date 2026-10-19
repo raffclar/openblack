@@ -45,6 +45,7 @@ public:
 	entt::entity DebugAllowSite(entt::entity town, bool anyLand) override;
 	void RemoveSites(entt::entity temple) override;
 	void UpdateTurn() override;
+	void RemakeModelsAfterLoad() override;
 	void ProcessChants() override;
 	void SetDancers(entt::entity site, uint32_t dancers) override;
 	[[nodiscard]] uint32_t Dancers(entt::entity site) const override;

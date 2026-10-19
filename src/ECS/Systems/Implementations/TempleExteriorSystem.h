@@ -31,6 +31,7 @@ class TempleExteriorSystem final: public TempleExteriorSystemInterface
 {
 public:
 	void UpdateTurn() override;
+	void RemakeModelsAfterLoad() override;
 
 private:
 	/// Blends the temple's own mesh from the four about its size and alignment, and its texture between

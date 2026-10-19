@@ -112,6 +112,20 @@ void TempleExteriorSystem::UpdateTurn()
 	    });
 }
 
+void TempleExteriorSystem::RemakeModelsAfterLoad()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	// Each temple gets its own model again, blended for the look that the save keeps
+	registry.Each<const Temple, TempleExterior, Mesh>(
+	    [&meshes](const entt::entity entity, const Temple& temple, TempleExterior& exterior, Mesh& mesh) {
+		    if (!meshes.Contains(mesh.id))
+		    {
+			    Morph(entity, mesh, exterior, temple.owner);
+		    }
+	    });
+}
+
 void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleExterior& exterior, PlayerNames owner)
 {
 	using namespace TempleExteriorMorph;

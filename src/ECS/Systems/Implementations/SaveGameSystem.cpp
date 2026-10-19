@@ -1027,8 +1027,8 @@ bool SaveGameSystem::Load(uint32_t slot)
 	{
 		return false;
 	}
-	// The box shows first, as a frame of its own, and stays on the screen while the game loads
-	ShowSaveBox(slot, true);
+	// Each load starts a new game, which shows the tips screen while it loads. The game shows its loading box only
+	// outside the start of a game, so a load never shows it.
 	const auto land = LandNumber();
 	const auto root = Locator::profileFolderSystem::value().GetFolder();
 	// The previous land's save is in the folder of the land before, the next land's in the folder of the land after
@@ -1554,15 +1554,22 @@ bool SaveGameSystem::InstantSave(uint32_t slot)
 	return written;
 }
 
-bool SaveGameSystem::SaveOnExit()
+bool SaveGameSystem::SaveOnExit(bool quitting)
 {
 	const auto* game = Game::Instance();
 	const auto& context = Locator::entitiesRegistry::value().Context();
-	// No save as the player leaves the testbed, the Gods' Playground, or a game that is over
+	// No save as the player leaves the testbed, the Gods' Playground, a skirmish, or a game that is over
 	if (game == nullptr || game->GetLandPath().empty() || game->GetLandPath() == "testbed" || context.gameOver ||
-	    LandNumber() == gamesave::k_PlaygroundLand)
+	    context.skirmish || LandNumber() == gamesave::k_PlaygroundLand)
 	{
 		return false;
+	}
+	if (!quitting)
+	{
+		// Another game starts next. The picture is the screen of the last frame of this game.
+		const bool written = SaveSlot(gamesave::k_ExitSlot, InstantName(gamesave::k_ExitSlot), false);
+		AskForPicture({gamesave::k_ExitSlot});
+		return written;
 	}
 	// The game makes the screen black before it saves, so it takes a picture of a black screen
 	const std::vector<uint8_t> black(
@@ -1572,6 +1579,37 @@ bool SaveGameSystem::SaveOnExit()
 	const bool written = SaveSlot(gamesave::k_ExitSlot, InstantName(gamesave::k_ExitSlot), true);
 	FlushWrites();
 	return written;
+}
+
+bool SaveGameSystem::HasExitSave() const
+{
+	FlushWrites();
+	const auto player = PlayerFolder();
+	if (!player.has_value() || !Locator::filesystem::has_value())
+	{
+		return false;
+	}
+	const auto root = Locator::profileFolderSystem::value().GetFolder();
+	if (!root.has_value())
+	{
+		return false;
+	}
+	// The slot of the save on exit has one folder for all the lands
+	const auto path =
+	    *root / *player / gamesave::SlotFolder(gamesave::k_ExitSlot, 0) / gamesave::WorldFileName(gamesave::k_ExitSlot);
+	auto& files = Locator::filesystem::value();
+	if (!files.Exists(path))
+	{
+		return false;
+	}
+	try
+	{
+		return files.Open(path, openblack::filesystem::Stream::Mode::Read) != nullptr;
+	}
+	catch (const std::exception&)
+	{
+		return false;
+	}
 }
 
 void SaveGameSystem::EndTurn()

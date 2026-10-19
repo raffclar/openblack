@@ -364,6 +364,14 @@ void WorshipSiteSystem::UpdateTurn()
 	// The sites' dances go on with every other dance, in the dances' own turn
 }
 
+void WorshipSiteSystem::RemakeModelsAfterLoad()
+{
+	// Each site wears the skin of its temple's model again
+	auto& registry = _world->Entities();
+	registry.Each<const WorshipSite, Mesh>(
+	    [this](const WorshipSite& site, Mesh& mesh) { mesh.id = _world->SiteMesh(site.temple); });
+}
+
 void WorshipSiteSystem::ProcessChants()
 {
 	auto& registry = _world->Entities();

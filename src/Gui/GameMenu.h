@@ -182,6 +182,11 @@ public:
 	/// The player has picked another profile or lost the one played, so leaving the page starts the game again
 	[[nodiscard]] bool IsRestartPending() const noexcept { return _mustRestart || _currentPlayer != _originalPlayer; }
 	[[nodiscard]] const List& GetPlayers() const noexcept { return *_players; }
+	/// The profile played as the Players page last opened in this game. None when the page did not open. The save on
+	/// exit goes to this profile when the player picked another one.
+	[[nodiscard]] const std::optional<std::u16string>& GetPreviousProfile() const noexcept { return _previousProfile; }
+	/// A game ends: the next game has no previous profile until the Players page opens again
+	void ForgetPreviousProfile() noexcept { _previousProfile.reset(); }
 	/// The Players page's arrow: Back, or Restart once leaving the page starts the game again
 	[[nodiscard]] const std::u16string& GetPlayersBackLabel() const noexcept { return _playersBack->label; }
 	/// Where the Players page's square buttons are: Create New Player, Delete Player, Edit Tattoo and Start a New Game
@@ -288,6 +293,8 @@ private:
 	std::optional<size_t> _originalPlayer;
 	/// The profile the game was started as was deleted: leaving the page starts the game again
 	bool _mustRestart {false};
+	/// The profile played as the Players page last opened. A deletion does not change it.
+	std::optional<std::u16string> _previousProfile;
 	bool _tattooAvailable {false};
 	bool _covered {false};
 	std::optional<size_t> _pickedPlayer;

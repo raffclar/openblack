@@ -58,6 +58,9 @@ public:
 
 	/// Every game turn: each site wears its temple's look as it is now
 	virtual void UpdateTurn() = 0;
+	/// After a load: the models that the game made for these things while it played are made again. A save keeps the
+	/// names of these models but not the models, and the game that loads it may not have them.
+	virtual void RemakeModelsAfterLoad() {}
 
 	// Prayer power
 
