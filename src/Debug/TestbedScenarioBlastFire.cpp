@@ -180,6 +180,32 @@ void AddFire(std::vector<Scenario>& all)
 	                  .delaySeconds = 2.0f}},
 	});
 
+	// Six cows close together. A fireball rolls into them.
+	std::vector<ObjectSetup> cows;
+	for (int i = 0; i < 6; ++i)
+	{
+		cows.push_back({.type = AnimalInfo::Cow,
+		                .offset = {static_cast<float>(i % 3) * 3.0f - 3.0f, 40.0f + static_cast<float>(i / 3) * 3.0f}});
+	}
+	all.push_back({
+	    .id = "animals.fireball_cows",
+	    .name = "Fireball at a herd of cows",
+	    .facet = Facet::Miracles,
+	    .description = "A fireball thrown low into six cows that stand close together.",
+	    .expected = "The cows that the fire reaches catch and burn. The others run from the fire. A cow that burns until "
+	                "it has no life left falls, plays its dying clip and lies dead. After a time its body goes in a puff "
+	                "of grey smoke.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 25.0f}, {15.0f, 55.0f}}},
+	    .objects = cows,
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {0.0f, 41.5f},
+	                  .handOffset = {0.0f, 32.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 0.0f, 8.0f},
+	                  .delaySeconds = 2.0f}},
+	});
+
 	all.push_back({
 	    .id = "miracles.fireball_building",
 	    .name = "Fireball at a hut",
