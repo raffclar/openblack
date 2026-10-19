@@ -1199,7 +1199,7 @@
   "query": "living.abode_sounds"
  },
  {
-  "description": "The footpaths: how many there are and how many are being found; with an id, the paths that lead from that thing; with from and to (metres), the nodes of a path the game would lay at once between them",
+  "description": "The footpaths: how many there are and how many are being found; with an id, the paths that lead from that thing and the villagers walking them; with from and to (metres), the nodes of a path the game would lay at once between them",
   "kind": "object",
   "parameters": [
    {

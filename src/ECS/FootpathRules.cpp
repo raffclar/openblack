@@ -43,9 +43,15 @@ float DistanceSq(glm::ivec2 a, glm::ivec2 b)
 	return gutils::GetMetresDistanceSq(Coords(a), Coords(b));
 }
 
+/// Whether walkers pass a node by
+bool IsPassedBy(footpath_rules::PassedBy passedBy, size_t node)
+{
+	return node < passedBy.size() && passedBy[node] != 0;
+}
+
 } // namespace
 
-std::optional<uint32_t> footpath_rules::NextNode(Places nodes, uint32_t node, bool towardsStart)
+std::optional<uint32_t> footpath_rules::NextNode(Places nodes, uint32_t node, bool towardsStart, PassedBy passedBy)
 {
 	if (towardsStart)
 	{
@@ -53,21 +59,35 @@ std::optional<uint32_t> footpath_rules::NextNode(Places nodes, uint32_t node, bo
 		{
 			return std::nullopt;
 		}
-		return node - 1;
-	}
-	if (static_cast<size_t>(node) + 1 >= nodes.size())
-	{
+		for (auto i = node; i-- > 0;)
+		{
+			if (!IsPassedBy(passedBy, i))
+			{
+				return i;
+			}
+		}
 		return std::nullopt;
 	}
-	return node + 1;
+	for (auto i = static_cast<size_t>(node) + 1; i < nodes.size(); ++i)
+	{
+		if (!IsPassedBy(passedBy, i))
+		{
+			return static_cast<uint32_t>(i);
+		}
+	}
+	return std::nullopt;
 }
 
-std::optional<uint32_t> footpath_rules::NearestNode(Places nodes, glm::ivec2 from, bool towardsStart)
+std::optional<uint32_t> footpath_rules::NearestNode(Places nodes, glm::ivec2 from, bool towardsStart, PassedBy passedBy)
 {
 	std::optional<uint32_t> nearest;
 	float best = k_NoNodeYet;
 	for (uint32_t i = 0; i < nodes.size(); ++i)
 	{
+		if (IsPassedBy(passedBy, i))
+		{
+			continue;
+		}
 		const float distance = Distance(nodes[i], from);
 		if (distance < best)
 		{
@@ -80,7 +100,7 @@ std::optional<uint32_t> footpath_rules::NearestNode(Places nodes, glm::ivec2 fro
 		return std::nullopt;
 	}
 	// A villager already past the nearest node, nearer the next one than that node is, goes straight on to the next
-	if (const auto next = NextNode(nodes, *nearest, towardsStart); next.has_value())
+	if (const auto next = NextNode(nodes, *nearest, towardsStart, passedBy); next.has_value())
 	{
 		const float villagerToNext = Distance(nodes[*next], from);
 		const float nearestToNext = Distance(nodes[*next], nodes[*nearest]);
@@ -106,7 +126,7 @@ std::optional<footpath_rules::Join> footpath_rules::NearestPathTo(std::span<cons
 		const float firstToGoal = Distance(path.nodes.front(), to);
 		const float lastToGoal = Distance(path.nodes.back(), to);
 		const bool towardsStart = lastToGoal > firstToGoal;
-		const auto node = NearestNode(path.nodes, from, towardsStart);
+		const auto node = NearestNode(path.nodes, from, towardsStart, path.passedBy);
 		if (!node.has_value())
 		{
 			continue;
@@ -163,24 +183,24 @@ std::optional<footpath_rules::StoreRoute> footpath_rules::RouteThroughStore(std:
 	return StoreRoute {.toStore = *toStore, .onward = onward->path};
 }
 
-std::optional<footpath_rules::Leg> footpath_rules::NextLeg(Places nodes, uint32_t node, bool towardsStart)
+std::optional<footpath_rules::Leg> footpath_rules::NextLeg(Places nodes, uint32_t node, bool towardsStart, PassedBy passedBy)
 {
-	const auto next = NextNode(nodes, node, towardsStart);
+	const auto next = NextNode(nodes, node, towardsStart, passedBy);
 	if (!next.has_value())
 	{
 		return std::nullopt;
 	}
-	return Leg {.node = *next, .jitter = NextNode(nodes, *next, towardsStart).has_value()};
+	return Leg {.node = *next, .jitter = NextNode(nodes, *next, towardsStart, passedBy).has_value()};
 }
 
-std::optional<uint32_t> footpath_rules::Rejoin(Places nodes, glm::ivec2 from, bool towardsStart)
+std::optional<uint32_t> footpath_rules::Rejoin(Places nodes, glm::ivec2 from, bool towardsStart, PassedBy passedBy)
 {
-	const auto nearest = NearestNode(nodes, from, towardsStart);
+	const auto nearest = NearestNode(nodes, from, towardsStart, passedBy);
 	if (!nearest.has_value() || Distance(nodes[*nearest], from) > k_RejoinReach)
 	{
 		return std::nullopt;
 	}
-	return NextNode(nodes, *nearest, towardsStart);
+	return NextNode(nodes, *nearest, towardsStart, passedBy);
 }
 
 bool footpath_rules::OnwardTowardsStart(Places nodes, glm::ivec2 from)
@@ -192,14 +212,14 @@ bool footpath_rules::OnwardTowardsStart(Places nodes, glm::ivec2 from)
 	return DistanceSq(nodes.front(), from) > DistanceSq(nodes.back(), from);
 }
 
-std::optional<uint32_t> footpath_rules::OnwardFirstNode(Places nodes, bool towardsStart)
+std::optional<uint32_t> footpath_rules::OnwardFirstNode(Places nodes, bool towardsStart, PassedBy passedBy)
 {
 	if (nodes.empty())
 	{
 		return std::nullopt;
 	}
 	const auto end = towardsStart ? static_cast<uint32_t>(nodes.size() - 1) : 0u;
-	return NextNode(nodes, end, towardsStart).value_or(end);
+	return NextNode(nodes, end, towardsStart, passedBy).value_or(end);
 }
 
 glm::ivec2 footpath_rules::Jittered(glm::ivec2 place, uint32_t drawX, uint32_t drawZ)

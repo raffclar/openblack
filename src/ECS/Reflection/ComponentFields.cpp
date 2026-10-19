@@ -1260,6 +1260,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::FootpathFinder::to>("to")
 	    .Field<&components::FootpathFinder::footpath>("footpath")
 	    .Field<&components::FootpathFinder::plan>("plan");
+	Reflect<components::FootpathObstacleChange>(context)
+	    .Field<&components::FootpathObstacleChange::put>("put")
+	    .Field<&components::FootpathObstacleChange::radius>("radius")
+	    .Field<&components::FootpathObstacleChange::place>("place");
 	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::wood>(
 	    "wood");
 	Reflect<components::Forest>(context).Field<&components::Forest::type>("type");
@@ -2969,6 +2973,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<openblack::ecs::RegistryContext>(context, ValueOnly {})
 	    .Field<&openblack::ecs::RegistryContext::scriptFootpaths>("scriptFootpaths")
 	    .Field<&openblack::ecs::RegistryContext::scriptThingMadeLast>("scriptThingMadeLast")
+	    .Field<&openblack::ecs::RegistryContext::footpathObstacleChanges>("footpathObstacleChanges")
+	    .Field<&openblack::ecs::RegistryContext::footpathObstacles>("footpathObstacles")
 	    .Field<&openblack::ecs::RegistryContext::streams>("streams")
 	    .Field<&openblack::ecs::RegistryContext::towns>("towns")
 	    .Field<&openblack::ecs::RegistryContext::villageLightFlames>("villageLightFlames")

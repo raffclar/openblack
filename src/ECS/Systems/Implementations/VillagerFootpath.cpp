@@ -11,6 +11,8 @@
 
 #include "VillagerFootpath.h"
 
+#include <algorithm>
+#include <iterator>
 #include <limits>
 #include <vector>
 
@@ -127,12 +129,23 @@ glm::ivec2 ArrivePlace(entt::entity building)
 	return wall_hug::ToWhole(glm::xz(registry.Get<const Transform>(building).position));
 }
 
+/// For each node of a path, whether walkers pass it by
+std::vector<uint8_t> PassedByOf(const Footpath& footpath)
+{
+	std::vector<uint8_t> passedBy;
+	passedBy.reserve(footpath.nodes.size());
+	std::ranges::transform(footpath.nodes, std::back_inserter(passedBy),
+	                       [](const Footpath::Node& node) { return static_cast<uint8_t>(node.hidden || node.marker ? 1 : 0); });
+	return passedBy;
+}
+
 /// The building's footpaths as the rules see them; the entities alongside, in the same order
 struct PathsOf
 {
 	std::vector<footpath_rules::Path> paths;
 	std::vector<entt::entity> entities;
 	std::vector<std::vector<glm::ivec2>> places;
+	std::vector<std::vector<uint8_t>> passedBy;
 };
 
 PathsOf FootpathsOf(entt::entity building)
@@ -159,30 +172,41 @@ PathsOf FootpathsOf(entt::entity building)
 		{
 			places.push_back(node.place);
 		}
+		result.passedBy.push_back(PassedByOf(*footpath));
 		result.entities.push_back(entity);
 	}
 	result.paths.reserve(result.places.size());
 	for (size_t i = 0; i < result.places.size(); ++i)
 	{
-		result.paths.push_back(
-		    {.nodes = result.places[i], .walkable = registry.Get<const Footpath>(result.entities[i]).walkable});
+		result.paths.push_back({.nodes = result.places[i],
+		                        .walkable = registry.Get<const Footpath>(result.entities[i]).walkable,
+		                        .passedBy = result.passedBy[i]});
 	}
 	return result;
 }
 
-std::vector<glm::ivec2> PlacesOf(entt::entity footpath)
+/// A path's nodes as the walk sees them: their places, and which ones walkers pass by
+struct PathNodes
 {
 	std::vector<glm::ivec2> places;
+	std::vector<uint8_t> passedBy;
+};
+
+PathNodes NodesOf(entt::entity footpath)
+{
+	PathNodes nodes;
 	const auto& registry = Entities();
 	if (footpath == entt::null || !registry.Valid(footpath) || !registry.AllOf<Footpath>(footpath))
 	{
-		return places;
+		return nodes;
 	}
-	for (const auto& node : registry.Get<const Footpath>(footpath).nodes)
+	const auto& path = registry.Get<const Footpath>(footpath);
+	for (const auto& node : path.nodes)
 	{
-		places.push_back(node.place);
+		nodes.places.push_back(node.place);
 	}
-	return places;
+	nodes.passedBy = PassedByOf(path);
+	return nodes;
 }
 
 /// The villager joins a path at a node and sets off for it, going round what stands in its way; on the path it walks
@@ -194,10 +218,11 @@ bool SetupMoveOnFootpath(LivingAction& action, entt::entity footpath, bool towar
 	const auto villager = registry.ToEntity(action);
 	auto& walk = registry.AssignOrReplace<FootpathWalk>(villager);
 	walk = FootpathWalk {.footpath = footpath, .towardsStart = towardsStart};
-	const auto places = PlacesOf(footpath);
+	const auto nodes = NodesOf(footpath);
+	const auto& places = nodes.places;
 	if (!node.has_value())
 	{
-		node = footpath_rules::NearestNode(places, villager_home::WalkPosition(villager), towardsStart);
+		node = footpath_rules::NearestNode(places, villager_home::WalkPosition(villager), towardsStart, nodes.passedBy);
 	}
 	if (!node.has_value())
 	{
@@ -294,17 +319,18 @@ uint32_t villager_footpath::MoveOnPath(LivingAction& action)
 		return 0;
 	}
 	const auto here = villager_home::WalkPosition(villager);
-	auto places = PlacesOf(walk->footpath);
+	auto nodes = NodesOf(walk->footpath);
+	const auto& places = nodes.places;
 	// On to the next node; the nodes on the way are walked to a little to one side, the last one exactly
 	std::optional<footpath_rules::Leg> leg;
 	if (walk->node.has_value())
 	{
-		leg = footpath_rules::NextLeg(places, *walk->node, walk->towardsStart);
+		leg = footpath_rules::NextLeg(places, *walk->node, walk->towardsStart, nodes.passedBy);
 	}
-	else if (const auto next = footpath_rules::Rejoin(places, here, walk->towardsStart); next.has_value())
+	else if (const auto next = footpath_rules::Rejoin(places, here, walk->towardsStart, nodes.passedBy); next.has_value())
 	{
-		leg = footpath_rules::Leg {.node = *next,
-		                           .jitter = footpath_rules::NextNode(places, *next, walk->towardsStart).has_value()};
+		leg = footpath_rules::Leg {
+		    .node = *next, .jitter = footpath_rules::NextNode(places, *next, walk->towardsStart, nodes.passedBy).has_value()};
 	}
 	if (leg.has_value())
 	{
@@ -325,9 +351,9 @@ uint32_t villager_footpath::MoveOnPath(LivingAction& action)
 	{
 		walk->footpath = walk->then;
 		walk->then = entt::null;
-		places = PlacesOf(walk->footpath);
+		nodes = NodesOf(walk->footpath);
 		walk->towardsStart = footpath_rules::OnwardTowardsStart(places, here);
-		walk->node = footpath_rules::OnwardFirstNode(places, walk->towardsStart);
+		walk->node = footpath_rules::OnwardFirstNode(places, walk->towardsStart, nodes.passedBy);
 		if (walk->node.has_value())
 		{
 			villager_home::SetupMobileMoveTo(action, ToMetres(places.at(*walk->node)), villager_home::WalkWay::StraightThrough);
