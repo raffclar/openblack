@@ -145,6 +145,7 @@
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
+#include "ECS/Components/FixedOutline.h"
 #include "ECS/Components/FloatingNumber.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/FlockSpell.h"
@@ -257,6 +258,7 @@
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureAttitudeRules.h"
+#include "ECS/FixedOutlines.h"
 #include "ECS/Heartbeat.h"
 #include "ECS/HighDetailRules.h"
 #include "ECS/PosedModel.h"
@@ -1212,6 +1214,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::Fixed>(context)
 	    .Field<&components::Fixed::boundingCenter>("boundingCenter")
 	    .Field<&components::Fixed::boundingRadius>("boundingRadius");
+	Reflect<components::FixedOutline>(context).Field<&components::FixedOutline::outline>("outline");
 	Reflect<components::FloatingNumber>(context)
 	    .Field<&components::FloatingNumber::text>("text")
 	    .Field<&components::FloatingNumber::position>("position")
@@ -3183,6 +3186,13 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::creature_attitude::Feeling::attitude>("attitude")
 	    .Field<&openblack::ecs::creature_attitude::Feeling::shownTurn>("shownTurn")
 	    .Field<&openblack::ecs::creature_attitude::Feeling::lapsedTurn>("lapsedTurn");
+	Reflect<openblack::ecs::fixed_outlines::Circle>(context, ValueOnly {})
+	    .Field<&openblack::ecs::fixed_outlines::Circle::centre>("centre")
+	    .Field<&openblack::ecs::fixed_outlines::Circle::radius>("radius")
+	    .Field<&openblack::ecs::fixed_outlines::Circle::radiusSquared>("radiusSquared");
+	Reflect<openblack::ecs::fixed_outlines::Outline>(context, ValueOnly {})
+	    .Field<&openblack::ecs::fixed_outlines::Outline::bounds>("bounds")
+	    .Field<&openblack::ecs::fixed_outlines::Outline::parts>("parts");
 	Reflect<openblack::ecs::heartbeat::State>(context, ValueOnly {})
 	    .Field<&openblack::ecs::heartbeat::State::stress>("stress")
 	    .Field<&openblack::ecs::heartbeat::State::rate>("rate")

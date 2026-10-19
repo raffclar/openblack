@@ -11,6 +11,8 @@
 // the bank and the water's edge towards their average, and closing again; and the volcano's mouth, which leaves the land
 // as it is
 
+#include <string_view>
+
 #include "3D/FlatLand.h"
 #include "TestbedScenarioRegistry.h"
 
@@ -28,6 +30,13 @@ constexpr glm::vec2 k_OnTheBank = k_Lake - glm::vec2(0.0f, flat_land::k_LakeHalf
 constexpr glm::vec2 k_AboveTheBank = k_OnTheBank + glm::vec2(80.0f, -80.0f);
 /// Out on the plane, where the land is already flat
 constexpr glm::vec2 k_OnThePlane {-120.0f, 60.0f};
+/// Pots and trees on a hut 40 m east of the plane's place, and clear of it. The last tree is half a metre from the tree
+/// before it, in the same cell.
+constexpr std::string_view k_PotPlaceScript = R"(CREATE_POT("-80.00,60.00", 12, 0, 1000)
+CREATE_POT("-80.00,40.00", 12, 0, 1000)
+CREATE_NEW_TREE(-1, "-80.00,60.00", 5, 1, 0.000000, 1.000000, 1.000000)
+CREATE_NEW_TREE(-1, "-84.00,84.00", 5, 1, 0.000000, 1.000000, 1.000000)
+CREATE_NEW_TREE(-1, "-84.50,84.00", 5, 1, 0.000000, 1.000000, 1.000000))";
 
 /// A thing thrown east from where it lies, 6 m up, at 25 m a second and 6 m a second upwards: from 60 m west of a
 /// vortex it reaches the vortex's cylinder in about 1.6 seconds, about 3 m above the land
@@ -327,5 +336,27 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f,
 	                  .waitUntilFree = true,
 	                  .point = k_OnThePlane + glm::vec2(0.0f, -70.0f)}},
+	});
+
+	all.push_back({
+	    .id = "story.pot_place_free_of_buildings",
+	    .name = "A land's script makes pots and trees only clear of buildings",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "A hut stands on the flat plane. Lines of a land's script then make a pot in the middle of the hut "
+	        "and a pot 20 m to one side of it, a tree in the middle of the hut and a tree 24 m to the other "
+	        "side, and a second tree half a metre from that tree in the same cell. A crossing pot that a vortex writes "
+	        "comes back through the same lines.",
+	    .expected =
+	        "Only the pot to the side of the hut and the first tree away from it are made. The game makes a tree, a pot "
+	        "or an object from a land's script only where a circle of half a unit touches no outline of a fixed "
+	        "thing in its cell (or on water): the hut's outline stops the pot and the tree on it, and the first "
+	        "tree's small trunk circle stops the second tree. map.free tells the same for each place.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x + 10.0f, 40.0f, k_OnThePlane.y - 50.0f},
+	                .look = {k_OnThePlane.x + 40.0f, 0.0f, k_OnThePlane.y}},
+	    .objects = {{.type = AbodeInfo::NorseHut, .offset = k_OnThePlane + glm::vec2(40.0f, 0.0f), .yawDegrees = 90.0f}},
+	    .landScript = k_PotPlaceScript,
 	});
 }
