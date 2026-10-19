@@ -729,6 +729,48 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.hungry_kept_at_home",
+	    .name = "Starving creature kept at home",
+	    .facet = Facet::Needs,
+	    .description = "A starving tiger with its hunger desire as strong as it gets. A script keeps it within 10 units of "
+	                   "where it stands. A pig stands inside the area and a cow stands far outside it.",
+	    .expected = "It chooses only food that it believes is inside the area. It walks to the pig, picks it up and eats "
+	                "it. It does not walk to the cow.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.05f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 1.0f}},
+	    }},
+	    .objects = {{.type = AnimalInfo::Pig, .offset = {0.0f, -6.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {30.0f, -60.0f}, .living = true}},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.1f, .radius = 10.0f}},
+	});
+
+	all.push_back({
+	    .id = "needs.toy_in_creche",
+	    .name = "Playful creature and a toy inside a creche",
+	    .facet = Facet::Needs,
+	    .description = "A young tiger, playful and hungry, at the stage of the first land's food lesson. A Norse creche "
+	                   "stands in front of it, with a cuddly toy at the middle of the creche. The creche, its turn and "
+	                   "the toy are as on the first land. A pig stands to the side.",
+	    .expected = "It chooses to stroke the toy. It walks to the edge of the creche, out of reach of the toy, and stays "
+	                "there. Its walk ends at once on each turn and the plan does not end until the creature faints from "
+	                "hunger. The hunger plan cannot take its place. The game does the same (vanilla-bugs row 389).",
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -60.0f}, {20.0f, 10.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .size = 0.25f,
+	        .phase = 9u,
+	        .needs = {.energy = 0.3f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Play, .fraction = 1.0f}, {.desire = Desire::Hunger, .fraction = 0.9f}},
+	    }},
+	    .objects = {{.type = AbodeInfo::NorseCreche, .offset = {0.0f, -40.0f}, .yawDegrees = 281.15f},
+	                {.type = MobileStaticInfo::ToyCuddly, .offset = {1.35f, -39.21f}, .scale = 0.381f},
+	                {.type = AnimalInfo::Pig, .offset = {40.0f, -10.0f}, .living = true}},
+	});
+
+	all.push_back({
 	    .id = "needs.fresh_eats_villager",
 	    .name = "Hungry new creature eats a villager",
 	    .facet = Facet::Needs,
