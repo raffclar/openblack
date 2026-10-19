@@ -1893,6 +1893,12 @@ void TempleInterior::SaveState(ecs::reflection::BinaryWriter& out) const
 		Save(out, _heldDialogue->text.waitClick);
 		Save(out, _heldDialogue->text.noClick);
 	}
+	// Then whether the rooms are open, and what the map in the main room's pool shows
+	Save(out, _roomsOpened);
+	for (size_t i = 0; i < TempleToggles::k_Count; ++i)
+	{
+		Save(out, _toggles.IsShown(static_cast<TempleToggles::Display>(i)));
+	}
 }
 
 bool TempleInterior::LoadState(ecs::reflection::BinaryReader& in)
@@ -1908,11 +1914,31 @@ bool TempleInterior::LoadState(ecs::reflection::BinaryReader& in)
 		Load(in, dialogue.text.waitClick);
 		Load(in, dialogue.text.noClick);
 	}
+	bool roomsOpened = _roomsOpened;
+	std::array<bool, TempleToggles::k_Count> shown {};
+	for (size_t i = 0; i < shown.size(); ++i)
+	{
+		shown.at(i) = _toggles.IsShown(static_cast<TempleToggles::Display>(i));
+	}
+	// A save made before the rooms were kept has none of these
+	if (in.Remaining() > 0)
+	{
+		Load(in, roomsOpened);
+		for (auto& each : shown)
+		{
+			Load(in, each);
+		}
+	}
 	if (in.Failed())
 	{
 		return false;
 	}
 	_heldDialogue = held ? std::optional(dialogue) : std::nullopt;
+	_roomsOpened = roomsOpened;
+	for (size_t i = 0; i < shown.size(); ++i)
+	{
+		_toggles.SetShown(static_cast<TempleToggles::Display>(i), shown.at(i));
+	}
 	return true;
 }
 

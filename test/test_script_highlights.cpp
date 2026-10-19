@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include <entt/meta/context.hpp>
 #include <glm/gtc/constants.hpp>
 #include <gtest/gtest.h>
 
@@ -25,6 +26,7 @@
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/ScriptHighlightWorld.h"
@@ -648,4 +650,26 @@ TEST(ScriptHighlights, AScrollOfLeavingThroughTheVortexSavesThePreviousLand)
 	}
 	EXPECT_FALSE(SavesPreviousLandOnClick(HighlightInfo::Gold, 57));
 	EXPECT_FALSE(SavesPreviousLandOnClick(HighlightInfo::Silver, 0));
+}
+
+TEST(ScriptHighlights, ASaveKeepsTheTipsRead)
+{
+	auto [world, system] = Make();
+	const auto sign = system->Create(k_Sign, {0.0f, 0.0f, 0.0f}, 0);
+	system->SetProperties(sign, 4127, 3);
+	EXPECT_TRUE(system->Tap(sign, true));
+	const auto other = system->Create(k_Sign, {5.0f, 0.0f, 0.0f}, 0);
+	system->SetProperties(other, 4130, 0);
+	EXPECT_TRUE(system->Tap(other, true));
+	const entt::meta_ctx context;
+	openblack::ecs::reflection::BinaryWriter out(context);
+	system->SaveState(out);
+	auto [loadedWorld, loaded] = Make();
+	const openblack::ecs::reflection::EntityRemap identity;
+	openblack::ecs::reflection::BinaryReader in(context, out.Bytes(), identity);
+	ASSERT_TRUE(loaded->LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_TRUE(loaded->GetTipsRead().Has(4127, 3));
+	EXPECT_TRUE(loaded->GetTipsRead().Has(4130, 0));
+	EXPECT_FALSE(loaded->GetTipsRead().Has(4127, 0));
 }

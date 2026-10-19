@@ -35,6 +35,10 @@ public:
 	bool SetZones(std::string_view fileName) override;
 	[[nodiscard]] const camera_zones::Zones& GetZones() const override { return _zones; }
 	[[nodiscard]] const std::string& GetFileName() const override { return _fileName; }
+	/// A save keeps the zones as the scripts last set them: the fence, the height limits, the places the camera is kept
+	/// out of and their switches
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	void FenceHit(const glm::vec3& origin, const glm::vec3& listener) override;
 	[[nodiscard]] const particles::LightSheet& GetForceField() const override { return *_forceField; }
 	[[nodiscard]] uint32_t GetFenceHits() const override { return _fenceHits; }

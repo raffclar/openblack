@@ -15,13 +15,14 @@
 #include <glm/vec3.hpp>
 
 #include "ECS/ScriptHighlightRules.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::ecs::systems
 {
 
 /// The scrolls and signs scripts put up to mark challenges and give tips: how they stand, spin, glint and glow, start,
 /// and answer the hand's tap; the beat they pulse to together, and the tips the player has read
-class ScriptHighlightSystemInterface
+class ScriptHighlightSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~ScriptHighlightSystemInterface() = default;
