@@ -1477,3 +1477,12 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_game_session test_game_session.cpp)
 openblack_setup_and_add_test(test_logo_effect gui/test_logo_effect.cpp)
+openblack_setup_and_add_test(
+  test_oracle_villager_food oracle/test_oracle_villager_food.cpp
+)
+set_tests_properties(
+  test_oracle_villager_food
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_town_food_pace test_town_food_pace.cpp)
