@@ -22,6 +22,8 @@
 
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "Audio/AudioManager.h"
 #include "Audio/AudioPlayerInterface.h"
@@ -80,7 +82,14 @@ private:
 class SavedSounds: public ::testing::Test
 {
 protected:
-	void SetUp() override { Locator::entitiesRegistry::emplace<ecs::Registry>(); }
+	void SetUp() override
+	{
+		if (spdlog::get("audio") == nullptr)
+		{
+			spdlog::create<spdlog::sinks::null_sink_st>("audio");
+		}
+		Locator::entitiesRegistry::emplace<ecs::Registry>();
+	}
 	void TearDown() override { Locator::entitiesRegistry::reset(); }
 };
 } // namespace
