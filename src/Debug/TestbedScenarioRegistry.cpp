@@ -6932,6 +6932,30 @@ void AddCombat(std::vector<Scenario>& all)
 		    .repeatFrom = 1,
 		});
 		all.push_back({
+		    .id = "combat.own_end_tests",
+		    .name = "The next fight state plays in the turn that the last one ends",
+		    .facet = Facet::Combat,
+		    .description = "The player's red tiger knows Heal and fights a blue tiger that fights by itself. The red tiger "
+		                   "blocks, then gets a blow in the middle, then Heal. Then the debug tools stop the fight.",
+		    .expected =
+		        "The start of the fight plays by the span of the turn and ends when the span gets to its end. "
+		        "When the start, the start or end of the block, or the start, hold or end of the cast ends, the "
+		        "next state moves on in the same turn. The next move starts in the turn that the block ends. The finish "
+		        "ends when the span gets to its end, a little before its last frame. The original game does the "
+		        "same.",
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.5f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.3f)},
+		    .commands = {{.kind = Kind::KnowMiracle,
+		                  .creature = 0,
+		                  .delaySeconds = 0.5f,
+		                  .value = static_cast<size_t>(MagicType::Heal)},
+		                 Fight(Kind::StartFight, 0, 1, 0.5f),
+		                 Fight(Kind::FightBlock, 0, 0, 14.0f),
+		                 Fight(Kind::FightBlow, 0, k_Mid, 3.0f, 0.0f),
+		                 Fight(Kind::FightSpell, 0, static_cast<size_t>(MagicType::Heal), 5.0f),
+		                 Fight(Kind::FightAbort, 0, 0, 6.0f)},
+		});
+		all.push_back({
 		    .id = "appearance.burning_body_flames",
 		    .name = "Flames stay on the limbs of a burning creature",
 		    .facet = Facet::Appearance,

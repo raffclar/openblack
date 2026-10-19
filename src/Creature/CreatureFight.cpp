@@ -908,6 +908,43 @@ bool creature_fight::ActionEnds(float animationMs, int32_t advanceMs, float dura
 	return durationMs <= 0.0f || static_cast<int32_t>(animationMs) + advanceMs >= static_cast<int32_t>(durationMs);
 }
 
+bool creature_fight::EndsByOwnTest(State state)
+{
+	switch (state)
+	{
+	case State::Start:
+	case State::Finish:
+	case State::BlockStart:
+	case State::BlockEnd:
+	case State::CastStart:
+	case State::Cast:
+	case State::CastEnd:
+		return true;
+	default:
+		return false;
+	}
+}
+
+int32_t creature_fight::StateAdvanceMs(State state, float speed, int32_t turnMs, int32_t spanMs)
+{
+	return state == State::Start ? spanMs : TurnAdvance(speed, turnMs);
+}
+
+int32_t creature_fight::EndTestMs(State state, float speed, int32_t turnMs, int32_t spanMs)
+{
+	return state == State::Start || state == State::Finish ? spanMs : TurnAdvance(speed, turnMs);
+}
+
+bool creature_fight::OwnTestEnds(State state, float animationMs, int32_t testMs, float durationMs, float stateMs,
+                                 int32_t turnMs)
+{
+	if (state == State::Cast)
+	{
+		return static_cast<int32_t>(stateMs) + turnMs > k_CastHoldMs;
+	}
+	return durationMs <= 0.0f || static_cast<int32_t>(animationMs) + testMs >= static_cast<int32_t>(durationMs);
+}
+
 bool creature_fight::IsBlocking(State state, float timeMs, float startBlockDurationMs)
 {
 	const auto half = startBlockDurationMs * 0.5f;

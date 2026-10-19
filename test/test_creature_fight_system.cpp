@@ -32,6 +32,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -887,4 +888,117 @@ TEST_F(CreatureFightSystemTest, AFaintStopsAWalkThatStartedAfterTheKnockOut)
 	          creature_layers::BodyAction::Kind::Sequence);
 	EXPECT_EQ(legs.stopped, (std::vector<entt::entity> {second, second}));
 	Locator::creatureLocomotionSystem::reset();
+}
+
+namespace
+{
+/// Every animation lasts one second; the fakes pose nothing
+class SecondLongAnimations final: public ecs::systems::CreatureAnimationSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void Update(std::chrono::duration<float, std::milli>) override {}
+	void PoseTurn(entt::entity) override {}
+	void PoseTurns() override {}
+	void HoldTurnPose(entt::entity) override {}
+	void PoseCopy(entt::entity, float) override {}
+	[[nodiscard]] std::optional<glm::vec3> BoneInAnimation(entt::entity, size_t, float, uint32_t, bool) override
+	{
+		return std::nullopt;
+	}
+	[[nodiscard]] std::optional<glm::vec3> MiddleOfBonesInAnimation(entt::entity, size_t, float,
+	                                                                std::span<const uint32_t>) override
+	{
+		return std::nullopt;
+	}
+	[[nodiscard]] std::optional<float> AnimationDuration(entt::entity, size_t) override { return 1000.0f; }
+	[[nodiscard]] std::optional<glm::vec3> AnimationTravel(entt::entity, size_t) override { return std::nullopt; }
+	[[nodiscard]] std::optional<creature_kiss::KissPoints> KissPointsOf(entt::entity) override { return std::nullopt; }
+	void KickSway(entt::entity, glm::vec3, glm::vec3) override {}
+	void PlaceHandGlows(entt::entity, int32_t, int32_t) override {}
+	void SetCreedPower(entt::entity, creature_hand_glow::Place, float, float) override {}
+	void LoadCreedPowers(entt::entity,
+	                     std::span<const creature_hand_glow::SavedPower, creature_hand_glow::k_PlaceCount>) override
+	{
+	}
+	void PlayCreedEvent(entt::entity, int32_t) override {}
+	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity) override { return std::nullopt; }
+	void AddAlignmentMotesOf(entt::entity) override {}
+};
+
+/// Both fighters are in a state, and only scripts would move them
+void PutInStates(Registry& registry, entt::entity first, fight::State firstState, entt::entity second)
+{
+	for (const auto& [self, state] : {std::pair(first, firstState), std::pair(second, fight::State::Stance)})
+	{
+		auto& fighter = registry.Get<CreatureFighting>(self).fighter;
+		fight::Enter(fighter, state);
+		fighter.control = fight::Control::None;
+	}
+}
+} // namespace
+
+// The start ends when its time and the span of the turn reach its end, before it moves on. The stance that comes after
+// it moves on in the same turn.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheStartEndsByTheSpanAndTheStanceMovesOnInTheSameTurn)
+{
+	Locator::creatureAnimationSystem::emplace<SecondLongAnimations>();
+	auto& registry = Locator::entitiesRegistry::value();
+	PutInStates(registry, first, fight::State::Start, second);
+	auto& fighter = registry.Get<CreatureFighting>(first).fighter;
+	// A creature of size 1: a span of 117 ms in a turn of 100 ms
+	const auto span = fight::TestSpanMs(100.0f, ShownSize(registry.Get<const Creature>(first)), false);
+	fighter.timeMs = static_cast<float>(1000 - span - 1);
+	fights.ProcessTurn();
+	// The start plays on by the span
+	EXPECT_EQ(fighter.state, fight::State::Start);
+	EXPECT_EQ(fighter.timeMs, static_cast<float>(1000 - 1));
+	fighter.timeMs = static_cast<float>(1000 - span);
+	fights.ProcessTurn();
+	EXPECT_EQ(fighter.state, fight::State::Stance);
+	EXPECT_EQ(fighter.timeMs,
+	          static_cast<float>(fight::TurnAdvance(fight::PlaybackSpeed(fight::animations::k_Stance, 1.0f), 100)));
+	Locator::creatureAnimationSystem::reset();
+}
+
+// The casting pose ends at the start of the turn after it began. The end of the cast moves on in the same turn.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheEndOfACastMovesOnInTheTurnThatThePoseEnds)
+{
+	Locator::creatureAnimationSystem::emplace<SecondLongAnimations>();
+	auto& registry = Locator::entitiesRegistry::value();
+	PutInStates(registry, first, fight::State::CastStart, second);
+	auto& fighter = registry.Get<CreatureFighting>(first).fighter;
+	const auto advance = fight::TurnAdvance(fight::PlaybackSpeed(fight::animations::k_StartCast, 1.0f), 100);
+	fighter.timeMs = static_cast<float>(1000 - advance);
+	fights.ProcessTurn();
+	// The start of the cast ends; the pose begins and moves on
+	EXPECT_EQ(fighter.state, fight::State::Cast);
+	EXPECT_EQ(fighter.timeMs, static_cast<float>(advance));
+	fights.ProcessTurn();
+	EXPECT_EQ(fighter.state, fight::State::CastEnd);
+	EXPECT_EQ(fighter.timeMs, static_cast<float>(advance));
+	Locator::creatureAnimationSystem::reset();
+}
+
+// A fight called off finishes from the stance at once, and the finish moves on in the same turn. The finish plays at
+// the fight's speed and ends when its time and the span reach its end.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheFinishMovesOnAtOnceAndEndsByTheSpan)
+{
+	Locator::creatureAnimationSystem::emplace<SecondLongAnimations>();
+	auto& registry = Locator::entitiesRegistry::value();
+	PutInStates(registry, first, fight::State::Stance, second);
+	auto& fighter = registry.Get<CreatureFighting>(first).fighter;
+	fighter.stopping = true;
+	fights.ProcessTurn();
+	const auto advance = fight::TurnAdvance(fight::PlaybackSpeed(fight::animations::k_Finish, 1.0f), 100);
+	EXPECT_EQ(fighter.state, fight::State::Finish);
+	EXPECT_EQ(fighter.timeMs, static_cast<float>(advance));
+	const auto span = fight::TestSpanMs(100.0f, ShownSize(registry.Get<const Creature>(first)), false);
+	fighter.timeMs = static_cast<float>(1000 - span);
+	fights.ProcessTurn();
+	EXPECT_EQ(fighter.state, fight::State::Idle);
+	Locator::creatureAnimationSystem::reset();
 }
