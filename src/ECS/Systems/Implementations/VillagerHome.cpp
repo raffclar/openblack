@@ -707,36 +707,21 @@ std::optional<glm::vec2> GetPosOutsideMyHouse(entt::entity villager)
 	                           FloatRandom());
 }
 
-/// The town a vagrant can join: the nearest within reach, of its own tribe
+/// The town a vagrant can join: the nearest town within reach of any tribe, but only when that town is of its own
+/// tribe. A nearer town of another tribe stops it from joining a farther town of its own tribe.
 entt::entity NearbyTownToJoin(entt::entity villager)
 {
 	auto& registry = WorldRegistry();
 	const auto& transform = registry.Get<const Transform>(villager);
 	const auto& person = registry.Get<const Villager>(villager);
-	// The game looks only at the towns of the villager's tribe as it searches
-	// TODO(villagers): the town's own tribe; openblack's towns don't keep one yet, so its first resident's is used
-	const auto ofItsTribe = [&registry, &person](entt::entity town) {
-		const auto* data = registry.TryGet<const Town>(town);
-		if (data == nullptr)
-		{
-			return false;
-		}
-		for (const auto abode : data->abodes)
-		{
-			if (const auto* building = registry.TryGet<const Abode>(abode); building != nullptr)
-			{
-				for (const auto other : building->inhabitants)
-				{
-					if (const auto* resident = registry.TryGet<const Villager>(other); resident != nullptr)
-					{
-						return resident->tribe == person.tribe;
-					}
-				}
-			}
-		}
-		return false;
-	};
-	return Locator::townSystem::value().NearestTown(glm::xz(transform.position), routine::k_VagrantTownSearch, ofItsTribe);
+	const auto town = Locator::townSystem::value().NearestTown(glm::xz(transform.position), routine::k_VagrantTownSearch,
+	                                                           [](entt::entity) { return true; });
+	if (town == entt::null)
+	{
+		return entt::null;
+	}
+	const auto* tribe = registry.TryGet<const Tribe>(town);
+	return tribe != nullptr && *tribe == person.tribe ? town : entt::null;
 }
 } // namespace
 
