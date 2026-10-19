@@ -37,22 +37,23 @@ public:
 	[[nodiscard]] std::optional<entt::entity> RouteStoneFor(PlayerNames player, glm::vec3 worshipper, glm::vec3 site,
 	                                                        float maxDistance) const override;
 	bool RouteWorshipper(entt::entity villager, glm::vec3 site) override;
+	bool StartCarry(entt::entity creature) override;
+	bool CarryTurn(entt::entity creature) override;
+	void StopControl(entt::entity creature) override;
 	void ProcessTurn() override;
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
-	/// A turn of a creature the stone carries: fading out, coming out of the far stone, fading back in, walking on
-	void Carry(entt::entity creature);
 	/// A villager or creature going somewhere turns aside into a stone
 	void ReactTo(entt::entity stone, entt::entity living, glm::vec3 destination);
 	/// The stones of miracles that have closed down or gone go
 	void RemoveOrphans();
 	/// Travellers that went or stopped heading for the stone are dropped from it
 	void PruneTravellers();
-	/// The creatures heading for a stone that reached it jump, and those that jumped walk on
-	void MoveCreatures();
+	/// The stone no longer controls a creature whose plan has no step of the teleport left
+	void DropCreatures();
 
 	uint32_t _nextSerial {0};
 };

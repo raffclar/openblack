@@ -535,6 +535,15 @@ struct Step
 		/// that the step starts. Then the step is done on a turn when the body of the object plays no action and does
 		/// not move.
 		WaitForFree,
+		/// Asking the step's object, a teleport stone, for a jump to another stone, as the step starts. When the stone
+		/// refuses the jump, the rest of the agenda is given up. When the stone takes the creature, a new plan replaces
+		/// the agenda. The step starts also while the body plays an action.
+		Teleport,
+		/// The stone carries the creature to the far stone: as the step starts and on each turn after it, the stone moves
+		/// the creature on. The step is done when the creature is back in sight at the far stone.
+		Transported,
+		/// The stone no longer controls the creature. The step is done as it starts.
+		StopTeleportControl,
 	};
 	Kind kind {Kind::Wait};
 	float seconds {0.0f};
@@ -944,6 +953,18 @@ struct Commands
 	bool healItself {false};
 	/// A rock to break in two, by its entity's number
 	std::optional<uint32_t> shatter;
+	/// A teleport stone to ask for a jump, by its entity's number
+	std::optional<uint32_t> teleport;
+	/// The stone that carries the creature starts to carry it, or moves it on by one turn
+	enum class Carry : uint8_t
+	{
+		None,
+		Start,
+		Turn,
+	};
+	Carry carry {Carry::None};
+	/// The stone no longer controls the creature
+	bool stopTeleportControl {false};
 	/// A fight to start with another creature, by its entity's number
 	std::optional<uint32_t> startFight;
 	/// Sitting down this turn, it rests a little
@@ -1127,6 +1148,9 @@ void Plan(IdleMind& mind, Activity activity, std::vector<Step> agenda);
                                                              const Random& random, const Random& gameRandom);
 /// The world carried out a dance stage that the mind ordered: the step is done, or the rest of the agenda is no use
 void DanceOrderDone(IdleMind& mind, bool done);
+/// The stone that carried the creature has put it back in sight at the far stone: the step that it carries the creature
+/// in is done
+void CarryDone(IdleMind& mind);
 /// What the head looks at while the step lasts. A step that picks a thing up, or goes near a thing, looks at that
 /// thing as the creature walks, unless the step gives a look of its own. Without a look, the head looks about.
 [[nodiscard]] std::optional<Gaze> LookOf(const Step& step);

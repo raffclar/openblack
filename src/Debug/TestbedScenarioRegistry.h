@@ -902,6 +902,9 @@ struct Command
 		/// The testbed holds the search for the creature's route (value 1), so that it waits for its route, or lets the
 		/// search go on (value 0)
 		HoldRouteSearch,
+		/// The player's teleport stone nearest to the point goes at once, with its pool, as when its miracle ends. Needs
+		/// no creature.
+		RemoveTeleportStone,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -937,6 +937,9 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::WaitForStill:
 	case Step::Kind::WaitForFree:
 	case Step::Kind::ApplyDesire:
+	case Step::Kind::Teleport:
+	case Step::Kind::Transported:
+	case Step::Kind::StopTeleportControl:
 		break;
 	}
 	return HandsNeed::Any;
@@ -1145,6 +1148,14 @@ void creature_mind::DanceOrderDone(IdleMind& mind, bool done)
 	}
 }
 
+void creature_mind::CarryDone(IdleMind& mind)
+{
+	if (mind.step < mind.agenda.size() && mind.agenda[mind.step].kind == Step::Kind::Transported && mind.stepStarted)
+	{
+		FinishStep(mind);
+	}
+}
+
 namespace
 {
 /// A turn of following the camera's point of focus
@@ -1322,9 +1333,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			return commands;
 		}
 		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it, and a
-		// faint starts at once. A step that tries to start its clip tries again on each turn.
+		// faint starts at once. The steps of a teleport also start at once. A step that tries to start its clip tries
+		// again on each turn.
+		const bool teleportStep = step.kind == Step::Kind::Teleport || step.kind == Step::Kind::Transported ||
+		                          step.kind == Step::Kind::StopTeleportControl;
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
-		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && bodyBusy)
+		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && !teleportStep && bodyBusy)
 		{
 			if (TriesToStartClip(step, senses))
 			{
@@ -1578,6 +1592,17 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		case Step::Kind::WaitForFree:
 			// The count of turns starts on the next turn
 			mind.watchTurns = 0;
+			break;
+		case Step::Kind::Teleport:
+			// The step does not end by itself: a refused jump gives up the agenda, and a jump gives a new plan
+			commands.teleport = step.object;
+			break;
+		case Step::Kind::Transported:
+			commands.carry = Commands::Carry::Start;
+			break;
+		case Step::Kind::StopTeleportControl:
+			commands.stopTeleportControl = true;
+			FinishStep(mind);
 			break;
 		case Step::Kind::Apply:
 			commands.effect = step.effect;
@@ -1908,6 +1933,12 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		FinishStep(mind);
 		break;
 	case Step::Kind::ApplyDesire:
+	case Step::Kind::Teleport:
+	case Step::Kind::StopTeleportControl:
+		break;
+	case Step::Kind::Transported:
+		// The world tells the mind when the carry is done (see CarryDone)
+		commands.carry = Commands::Carry::Turn;
 		break;
 	case Step::Kind::Kiss:
 		if (!senses.bodyBusy)
