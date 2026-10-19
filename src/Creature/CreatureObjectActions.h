@@ -108,18 +108,30 @@ enum class Failure : uint8_t
 [[nodiscard]] bool RefusesAloud(Failure failure);
 
 /// What a creature that walks up to a thing to pick it up or stomp on it does on a turn when it stands still. It
-/// continues until the thing is in reach or the action fails: there is no limit to the walks.
+/// continues until the thing is in reach or the action fails: there is no limit to the walks. It never turns in place
+/// to get the thing in reach.
 enum class ApproachStep : uint8_t
 {
 	/// The thing is in reach: the animations start
 	Begin,
-	/// Near enough, it only turns so that the thing lies where its reach is middling. It turns one time after each
-	/// walk, then it walks again: the game never turns in place to get a thing in reach.
-	Turn,
-	/// It walks again to the thing
-	Walk,
+	/// It cannot see the thing yet: it walks near to the thing, and stops at twice their two radii from it
+	WalkNear,
+	/// It sees the thing out of reach: it walks to the thing, and stops at its straight reach from it
+	WalkInReach,
 };
-[[nodiscard]] ApproachStep NextApproachStep(bool inReach, bool nearEnoughToTurn, bool turnedSinceWalk);
+/// The next step from what the creature finds now:
+/// - seen: the thing is less than ten metres away, or less than fifty times its height (creature_mind::CanSee);
+/// - flatDistance: the distance along the ground from the creature to the thing;
+/// - straightReach: how far the hand or foot gets in the reaching animations (creature_reach::StraightReach);
+/// - inRange: the thing lies where the reaching animations get to (creature_reach::Blend::inRange).
+[[nodiscard]] ApproachStep NextApproachStep(bool seen, float flatDistance, float straightReach, bool inRange);
+/// How far from the thing the walk near to it stops: twice the creature's radius and the thing's radius added
+[[nodiscard]] float NearWalkDistance(float creatureRadius, float thingRadius);
+/// A thing higher than this above the creature, in metres, can be too high to pick up
+constexpr float k_MostPickUpRise = 5.0f;
+/// Whether a thing in reach is too high to pick up: the difference of the heights of the two above the ground is
+/// more than k_MostPickUpRise and more than the distance between them. The pick-up then stops.
+[[nodiscard]] bool TooHighToPickUp(float rise, float distance);
 
 /// The kicking animation
 constexpr size_t k_KickAnimation = 117;

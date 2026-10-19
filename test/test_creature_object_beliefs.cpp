@@ -408,13 +408,32 @@ TEST(CreatureObjectBeliefs, AWalkUpToAThingContinuesUntilTheThingIsInReach)
 {
 	using openblack::creature_object_actions::ApproachStep;
 	using openblack::creature_object_actions::NextApproachStep;
-	EXPECT_EQ(NextApproachStep(true, false, false), ApproachStep::Begin);
-	EXPECT_EQ(NextApproachStep(true, true, true), ApproachStep::Begin);
-	EXPECT_EQ(NextApproachStep(false, true, false), ApproachStep::Turn);
-	// A turn that did not get the thing in reach is followed by a walk, never by a second turn
-	EXPECT_EQ(NextApproachStep(false, true, true), ApproachStep::Walk);
-	// Out of reach, it walks again, however many times it walked before: there is no step that gives up
-	EXPECT_EQ(NextApproachStep(false, false, false), ApproachStep::Walk);
+	// Not seen yet, it walks near to the thing first, whatever its reach
+	EXPECT_EQ(NextApproachStep(false, 30.0f, 2.5f, false), ApproachStep::WalkNear);
+	EXPECT_EQ(NextApproachStep(false, 1.0f, 2.5f, true), ApproachStep::WalkNear);
+	// Seen, it begins when the thing is nearer than its straight reach, or where its reaching animations get to
+	EXPECT_EQ(NextApproachStep(true, 2.4f, 2.5f, false), ApproachStep::Begin);
+	EXPECT_EQ(NextApproachStep(true, 2.6f, 2.5f, true), ApproachStep::Begin);
+	// Out of reach, it walks again, however many times it walked before: there is no turn and no step that gives up
+	EXPECT_EQ(NextApproachStep(true, 2.5f, 2.5f, false), ApproachStep::WalkInReach);
+	EXPECT_EQ(NextApproachStep(true, 9.0f, 2.5f, false), ApproachStep::WalkInReach);
+}
+
+TEST(CreatureObjectBeliefs, AWalkNearAThingStopsAtTwiceTheRadii)
+{
+	using openblack::creature_object_actions::NearWalkDistance;
+	EXPECT_FLOAT_EQ(NearWalkDistance(1.25f, 0.75f), 4.0f);
+	EXPECT_FLOAT_EQ(NearWalkDistance(0.0f, 0.0f), 0.0f);
+}
+
+TEST(CreatureObjectBeliefs, AThingHighAboveTheCreatureIsNotPickedUp)
+{
+	using openblack::creature_object_actions::TooHighToPickUp;
+	// Too high only when the rise is more than 5 m and more than the distance between them
+	EXPECT_TRUE(TooHighToPickUp(6.0f, 2.0f));
+	EXPECT_FALSE(TooHighToPickUp(6.0f, 7.0f));
+	EXPECT_FALSE(TooHighToPickUp(5.0f, 2.0f));
+	EXPECT_FALSE(TooHighToPickUp(4.0f, 1.0f));
 }
 
 TEST(CreatureObjectBeliefs, ABeliefKeepsTheAttributesItLastTookIn)

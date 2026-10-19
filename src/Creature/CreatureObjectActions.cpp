@@ -99,14 +99,25 @@ bool creature_object_actions::LeavesThingAlone(Kind kind, Failure failure)
 	return walksToThing && failure != Failure::Other;
 }
 
-creature_object_actions::ApproachStep creature_object_actions::NextApproachStep(bool inReach, bool nearEnoughToTurn,
-                                                                                bool turnedSinceWalk)
+creature_object_actions::ApproachStep creature_object_actions::NextApproachStep(bool seen, float flatDistance,
+                                                                                float straightReach, bool inRange)
 {
-	if (inReach)
+	if (!seen)
 	{
-		return ApproachStep::Begin;
+		return ApproachStep::WalkNear;
 	}
-	return nearEnoughToTurn && !turnedSinceWalk ? ApproachStep::Turn : ApproachStep::Walk;
+	return flatDistance < straightReach || inRange ? ApproachStep::Begin : ApproachStep::WalkInReach;
+}
+
+float creature_object_actions::NearWalkDistance(float creatureRadius, float thingRadius)
+{
+	const float radii = creatureRadius + thingRadius;
+	return radii + radii;
+}
+
+bool creature_object_actions::TooHighToPickUp(float rise, float distance)
+{
+	return distance < rise && rise > k_MostPickUpRise;
 }
 
 bool creature_object_actions::RefusesAloud(Failure failure)
