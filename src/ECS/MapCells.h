@@ -165,14 +165,20 @@ private:
 	{
 		std::vector<entt::entity> fixed;
 		std::vector<entt::entity> mobile;
+		/// True when the cell is in the list of the used cells
+		bool used {false};
 	};
+
+	/// Adds the cell to the list of the used cells, once only
+	void MarkUsed(uint32_t cell);
 
 	[[nodiscard]] glm::ivec2 CellAt(uint32_t cell) const;
 
 	uint32_t _cellsPerSide;
 	std::vector<Cell> _cells;
 	BlockLists _blocks;
-	/// The cells that have had anything in them, the only ones there is anything to clear
+	/// The cells that have had anything in them, the only ones there is anything to clear. Each cell is in it once, in
+	/// the order that the cells took their first things.
 	std::vector<uint32_t> _used;
 };
 
