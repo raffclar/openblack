@@ -54,6 +54,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FixedOutlineSystemInterface.h"
 #include "ECS/ThingModel.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -333,6 +334,11 @@ void MapProduction::File(entt::entity entity, const Kind& kind) const
 	if (kind.moves && !_registry->AllOf<MapCellMover>(entity))
 	{
 		_registry->Assign<MapCellMover>(entity);
+	}
+	// A thing that stays put gets its outline on the ground each time it goes into the cells
+	if (kind.placement != Placement::MobileFront && Locator::fixedOutlineSystem::has_value())
+	{
+		Locator::fixedOutlineSystem::value().Insert(entity);
 	}
 }
 

@@ -102,6 +102,7 @@
 #include "ECS/Systems/Implementations/ComputerPlayerSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
+#include "ECS/Systems/Implementations/FixedOutlineSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -216,6 +217,7 @@ using openblack::ecs::systems::FieldSystem;
 using openblack::ecs::systems::FilmCreatureSystem;
 using openblack::ecs::systems::FireflySystem;
 using openblack::ecs::systems::FishFarmSystem;
+using openblack::ecs::systems::FixedOutlineSystem;
 using openblack::ecs::systems::FootpathSystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
@@ -426,6 +428,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::reactionSystem::emplace<ReactionSystem>();
 	Locator::teleportSystem::emplace<TeleportSystem>();
 	Locator::vortexSystem::emplace<VortexSystem>();
+	Locator::fixedOutlineSystem::emplace<FixedOutlineSystem>();
 	Locator::creatureFizzSystem::emplace<CreatureFizzSystem>();
 	Locator::liquidParticleSystem::emplace<LiquidParticleSystem>();
 	Locator::landShadeSystem::emplace<LandShadeSystem>();
@@ -640,6 +643,7 @@ void openblack::ShutDownServices()
 	Locator::reactionSystem::reset();
 	Locator::teleportSystem::reset();
 	Locator::vortexSystem::reset();
+	Locator::fixedOutlineSystem::reset();
 	Locator::creatureFizzSystem::reset();
 	Locator::liquidParticleSystem::reset();
 	Locator::landShadeSystem::reset();

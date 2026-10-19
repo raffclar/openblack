@@ -61,6 +61,7 @@
 #include "ECS/StoreRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/FixedOutlineSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
@@ -101,8 +102,6 @@ constexpr uint32_t k_TreeAddingDistances = 5;
 constexpr float k_AddedTreeFullSize = 0.8f;
 constexpr float k_AddedTreeFullSizeMore = 0.4f;
 constexpr float k_AddedTreeStartSize = 0.1f;
-/// The circle round its spot that must be clear of what is fixed there
-constexpr float k_AddedTreeClearance = 0.5f;
 /// A forest's spreading roll is drawn below this (and 2000 added)
 constexpr float k_SpreadRoll = 1000.0f;
 
@@ -160,32 +159,11 @@ bool ValidPlaceForTree(glm::vec3 point)
 	return std::ranges::none_of(fixed, [&registry](entt::entity entity) { return IsMultiCellFixed(registry, entity); });
 }
 
-/// Where a tree may be added beside another: anywhere but on land where a small circle round the spot touches
-/// something fixed in the spot's cell. In the water, and off the map, is no hindrance.
-bool FreeForAddedTree(glm::vec3 point)
+/// Where a tree may be added beside another: anywhere but on land where a small circle round the spot touches the
+/// outline of a fixed thing in the spot's cell. In the water, and off the map, is no hindrance.
+bool FreeForAddedTree(const map_coords::MapCoords& spot)
 {
-	if (!Locator::terrainSystem::has_value() || !Locator::entitiesMap::has_value())
-	{
-		return true;
-	}
-	const auto cell = CellOf(point);
-	if (!cell.has_value())
-	{
-		return true;
-	}
-	const auto* land = Locator::terrainSystem::value().FindCell(*cell);
-	if (land == nullptr || land->properties.hasWater != 0)
-	{
-		return true;
-	}
-	// Each fixed object's obstacle circle stands for its outline here
-	const auto& registry = EntityRegistry();
-	const auto& fixed = Locator::entitiesMap::value().GetFixedInGridCell(point);
-	return std::ranges::none_of(fixed, [&registry, point](entt::entity entity) {
-		const auto* obstacle = registry.TryGet<const Fixed>(entity);
-		return obstacle != nullptr &&
-		       glm::distance(glm::xz(point), obstacle->boundingCenter) < obstacle->boundingRadius + k_AddedTreeClearance;
-	});
+	return !Locator::fixedOutlineSystem::has_value() || Locator::fixedOutlineSystem::value().IsOkToCreateAt(spot);
 }
 
 /// The ground's material at a point, as the trees see it: deep snow is snow whatever lies under it
@@ -506,7 +484,7 @@ std::optional<entt::entity> ForestSystem::PlantBeside(entt::entity tree)
 			const auto spot = base + gutils::GetPosFromAngle(angle, static_cast<float>(distance));
 			const glm::vec2 xz = map_coords::ToMetres(spot);
 			const glm::vec3 point(xz.x, land.GetHeightAt(xz) + spot.altitude, xz.y);
-			if (FreeForAddedTree(point))
+			if (FreeForAddedTree(spot))
 			{
 				_lastTreeAddedTurn = turn;
 				// The way it faces is drawn before its full size

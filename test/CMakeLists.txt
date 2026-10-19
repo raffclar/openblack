@@ -1415,3 +1415,12 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_creature_load_after_draws test_creature_load_after_draws.cpp)
+openblack_setup_and_add_test(test_fixed_outlines test_fixed_outlines.cpp)
+openblack_setup_and_add_test(
+  test_oracle_fixed_outlines oracle/test_oracle_fixed_outlines.cpp
+)
+set_tests_properties(
+  test_oracle_fixed_outlines
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

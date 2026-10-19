@@ -507,6 +507,19 @@
   "query": "map.cell"
  },
  {
+  "description": "Whether the game makes a tree, a pot or an object at a place: a circle of half a unit there touches no outline of a fixed thing in the cell, or the place is water; and those outlines",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The place, [x, z] or [x, y, z]",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   }
+  ],
+  "query": "map.free"
+ },
+ {
   "description": "The land's shading of the last drawn frame: the clouds' shadows and the lights cast, the blocks they changed and those in view, and the shaded luminosity of the corners of a point's cell",
   "kind": "object",
   "parameters": [
