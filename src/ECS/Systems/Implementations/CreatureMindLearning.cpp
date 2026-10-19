@@ -3835,6 +3835,10 @@ void CreatureMindSystem::SituateHome(entt::entity creature, creature_plan_action
 		situation.home = glm::vec2(home->x, home->z);
 		situation.homeDistance = gutils::GetDistanceInMetres(situation.position, *situation.home);
 	}
+	if (const auto home = ecs::creature_home::HomeOnMapOf(registry, creature))
+	{
+		situation.homeCellDistance = creature_plan_actions::HomeCellDistance(map_coords::FromMetres(situation.position), *home);
+	}
 	// The heart of its player's temple is the temple itself, on the ground
 	registry.Each<const Temple, const Transform>([&](entt::entity temple, const Temple& building, const Transform& place) {
 		if (building.owner != body->owner || situation.templeHeart.has_value())

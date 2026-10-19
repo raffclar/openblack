@@ -83,6 +83,10 @@ Scenario TwoFriends(std::string_view id, std::string_view name, std::string_view
 
 void testbed_scenarios::AddFriendActionScenarios(std::vector<Scenario>& all)
 {
+	all.push_back(TwoFriends("friends.wave_at_creature", "Wave at another creature", "WaveAtObject",
+	                         "The tiger walks with a smile until it is within three and a half times its height of the "
+	                         "lion. It faces the lion for 1.4 seconds and waves at it. Only a creature can be the thing of "
+	                         "this wave when the tiger does the action again."));
 	all.push_back(TwoFriends("friends.kiss", "Kiss a friend", "KissFriend",
 	                         "The tiger asks the lion to be its friend. The two walk to the two sides of the point halfway "
 	                         "between them and turn to face each other. Each kisses the other. The taller one bends down "

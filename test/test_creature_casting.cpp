@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -969,4 +970,35 @@ TEST(CreatureCastMoves, HeadsForComparesGameAnglesWithoutGoingRound)
 	EXPECT_FALSE(cast_moves::HeadsFor(creature, point, GameHeading(justBelowZero)));
 	// In the same cell of the land, any heading heads for the point
 	EXPECT_TRUE(cast_moves::HeadsFor(creature, {5009.0f, 5001.0f}, GameHeading(justBelowZero)));
+}
+
+// Far from its home, the creature casts the teleport miracle at itself, as it casts a helpful miracle
+TEST(CreatureCastAgenda, FarFromItsHomeTheCreatureCastsTheTeleportAtItself)
+{
+	namespace plan_actions = openblack::creature_plan_actions;
+	const auto* teleport = plan_actions::For("ExploreAndCastTeleport");
+	ASSERT_NE(teleport, nullptr);
+	EXPECT_EQ(teleport->build, plan_actions::Build::CastTeleportFromAfar);
+	EXPECT_EQ(teleport->target, plan_actions::Target::None);
+	EXPECT_TRUE(plan_actions::IsCast(*teleport));
+	// Only farther than 150 metres from the middle of its home's cell, and never without a home
+	plan_actions::Situation situation;
+	EXPECT_FALSE(plan_actions::Possible(*teleport, situation));
+	situation.homeCellDistance = 150.0f;
+	EXPECT_FALSE(plan_actions::Possible(*teleport, situation));
+	situation.homeCellDistance = std::nextafter(150.0f, 200.0f);
+	EXPECT_TRUE(plan_actions::Possible(*teleport, situation));
+	// The game measures from the middle of the home's cell, so the place of the home in its cell does not count
+	const map_coords::MapCoords home {.x = (40 << 16) + 3, .z = (60 << 16) + 0xFFF0};
+	const map_coords::MapCoords sameCell {.x = (40 << 16) + 0x8000, .z = (60 << 16) + 0x8000};
+	EXPECT_FLOAT_EQ(plan_actions::HomeCellDistance(sameCell, home), 0.0f);
+	// The agenda is the one of a helpful miracle, cast at the creature itself
+	const plan_actions::CastInfo cast {.magicType = 12, .height = 15.0f};
+	const auto agenda = plan_actions::Agenda(*teleport, 7u, {}, situation, Always(1), cast);
+	ASSERT_TRUE(agenda.has_value());
+	const auto helpful = CastAt(CastStyle::Helpful, 12, 0, 7, 15.0f, Always(1));
+	ASSERT_EQ(agenda->size(), helpful.size());
+	EXPECT_EQ(agenda->back().kind, Step::Kind::Cast);
+	EXPECT_EQ(agenda->back().cast.magicType, 12u);
+	EXPECT_EQ(agenda->back().cast.object, std::optional<uint32_t>(7u));
 }
