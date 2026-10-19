@@ -137,6 +137,8 @@ struct CreatureKnockedOut
 	};
 	Stage stage {Stage::Lying};
 	float seconds {0.0f};
+	/// It lay still in its faint at least one time, so the time that it lies counts
+	bool layStill {false};
 	/// The faint is still to start on the body. It starts on the next turn that the knock-out is looked after: then the
 	/// side of the faint is chosen, and those near it react as to a death.
 	bool fainting {true};

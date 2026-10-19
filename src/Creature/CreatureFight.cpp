@@ -546,6 +546,17 @@ bool creature_fight::NeedsRest(float life, float exhaustion)
 	return !(exhaustion <= k_RestedExhaustion && life >= k_GetUpLife);
 }
 
+creature_fight::FaintWait creature_fight::LyingTurn(FaintWait wait, const FaintBody& body, float turnSeconds,
+                                                    float notStartedSeconds)
+{
+	// The fall of the faint ends only when the body lies still in its loop
+	if (!wait.started && !(body.faintStarted && body.lies))
+	{
+		return {.seconds = notStartedSeconds, .started = false};
+	}
+	return {.seconds = WaitTurnCounts(body) ? wait.seconds + turnSeconds : wait.seconds, .started = true};
+}
+
 float creature_fight::DamageFactor(const Blow& blow)
 {
 	// Strength runs from weak to strong as -1 to 1 here

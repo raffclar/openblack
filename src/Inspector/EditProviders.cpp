@@ -139,7 +139,10 @@ std::vector<QueryDescription> EditProvider::Describe() const
 	            .type = "number",
 	            .description = "The angle it faces about the up axis, in degrees",
 	            .required = false}}),
-	    Write("move", "Moves a thing as the game's tools do; answers where it is and its map cell", {IdParameter(), position}),
+	    Write("move",
+	          "Moves a thing as the game's tools do (a creature as the game moves one without a walk, on the land at the "
+	          "point's map position); answers where it is and its map cell",
+	          {IdParameter(), position}),
 	    Write("turn", "Turns a thing about the up axis by an angle",
 	          {IdParameter(),
 	           {.name = "yaw", .type = "number", .description = "The angle to turn by, in degrees", .required = true}}),
