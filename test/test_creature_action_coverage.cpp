@@ -73,12 +73,12 @@ constexpr std::array<std::string_view, 27> k_ScriptActions {
 
 // The actions that nothing in the game starts: no desire list, no copy of a deed, no script and no part of the game
 // itself. The creature must not do them.
-constexpr std::array<std::string_view, 26> k_ActionsThatNeverStart {
-    "PutOutFire",      "DestroyAggressor", "SleepAtPos",        "RunToObject",    "HelpBuildHouse",   "BuildHome",
-    "RunAwayFromPos",  "WatchTelly",       "HurlObjectInHand",  "StealSpell",     "StealScaffolding", "SteaSpellSeed",
-    "StealAnimal",     "StealVillager",    "GestureFullCircle", "GestureStar",    "GestureSpiral",    "GestureSquareWave",
-    "GestureScribble", "GestureSquare",    "GestureTriangle",   "GestureS-Shape", "GestureV-Ball",    "GestureMoon",
-    "GestureHeart",    "GestureBowTie",
+constexpr std::array<std::string_view, 28> k_ActionsThatNeverStart {
+    "PutOutFire",      "DestroyAggressor", "SleepAtPos",        "RunToObject",          "HelpBuildHouse",   "BuildHome",
+    "RunAwayFromPos",  "WatchTelly",       "HurlObjectInHand",  "StealSpell",           "StealScaffolding", "SteaSpellSeed",
+    "StealAnimal",     "StealVillager",    "GestureFullCircle", "GestureStar",          "GestureSpiral",    "GestureSquareWave",
+    "GestureScribble", "GestureSquare",    "GestureTriangle",   "GestureS-Shape",       "GestureV-Ball",    "GestureMoon",
+    "GestureHeart",    "GestureBowTie",    "CastTeleport",      "CastTeleportAndUseIt",
 };
 } // namespace
 
