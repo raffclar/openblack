@@ -17,6 +17,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureRouteFollow.h"
 #include "Creature/CreatureRouteSearch.h"
@@ -498,4 +499,53 @@ TEST(CreatureRouteSearch, AStopOnTheWayWalksOnToANearEnd)
 	EXPECT_TRUE(advanced.finished);
 	EXPECT_EQ(follower.GetState(), Follower::State::Standing);
 	EXPECT_NEAR(glm::distance(follower.GetPosition(), from), 3.0f, 1e-3f);
+}
+
+TEST(CreatureRouteSearch, AWalkToASmallRockStopsAtTheStraightReachOutsideTheRock)
+{
+	// A small rock between a fence and a house in a village, as a young tiger 20 m away keeps clear of them
+	const glm::vec2 tiger {1836.9f, 2766.6f};
+	const glm::vec2 rock {1856.93f, 2766.55f};
+	// The circles join the search as it reaches their cells, as the game gathers them
+	const auto layout = [] {
+		struct Placed
+		{
+			uint32_t thing;
+			glm::vec2 centre;
+			float radius;
+		};
+		const std::vector<Placed> placed {{1272u, {1856.93f, 2766.55f}, 1.0984f},
+		                                  {121u, {1861.8606f, 2765.0974f}, 5.9344f},
+		                                  {1271u, {1860.9711f, 2771.4771f}, 0.8538f},
+		                                  {1271u, {1860.1989f, 2770.4890f}, 0.8538f},
+		                                  {1270u, {1860.19f, 2760.24f}, 1.0984f}};
+		Obstacles obstacles;
+		obstacles.Reset({1836.9f, 2766.6f}, 2.0f, [placed](glm::ivec2 cell, Obstacles& into) {
+			for (const auto& one : placed)
+			{
+				if (glm::ivec2(one.centre / 10.0f) == cell)
+				{
+					into.Add(one.thing, one.centre, one.radius);
+				}
+			}
+		});
+		return obstacles;
+	};
+	const float distance = glm::distance(tiger, rock);
+	const float mostCost = (2.0f * distance) + 5000.0f;
+
+	// It stops at its straight reach from the rock, and the rock's own circle is smaller than that
+	const auto ring = creature_locomotion::MoveRing(distance, 2.5419f, 0.0f);
+	auto obstacles = layout();
+	Search search(obstacles, {.point = tiger},
+	              {.point = rock, .stopShort = ring.min, .arriveWithin = ring.max, .mostCost = mostCost});
+	ASSERT_EQ(Finish(search, obstacles), Search::Status::Found);
+	EXPECT_LE(search.GetBest().size(), 3u);
+	EXPECT_NEAR(glm::distance(search.GetBest().back().to, rock), 2.5419f, 0.01f);
+
+	// A walk that must get nearer than the rock's own circle ends on that circle, out of the arrival ring
+	auto inside = layout();
+	Search tooNear(inside, {.point = tiger}, {.point = rock, .stopShort = 0.5f, .arriveWithin = 0.84f, .mostCost = mostCost});
+	ASSERT_EQ(Finish(tooNear, inside), Search::Status::Found);
+	EXPECT_NEAR(glm::distance(tooNear.GetBest().back().to, rock), 1.0984f, 0.01f);
 }
