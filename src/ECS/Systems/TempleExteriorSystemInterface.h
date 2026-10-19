@@ -24,6 +24,8 @@ public:
 	/// Each turn also lets a player's temple entrances take the cursor from the first turn a temple of theirs stands fully
 	/// built
 	virtual void UpdateTurn() = 0;
+	/// After a load of a saved game: makes each temple's blended mesh again for the look that the save kept
+	virtual void FindAfterLoad() = 0;
 };
 
 } // namespace openblack::ecs::systems

@@ -8,8 +8,10 @@
  *******************************************************************************/
 
 #include <numeric>
+#include <optional>
 #include <vector>
 
+#include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/TempleExteriorMorph.h"
@@ -100,4 +102,16 @@ TEST(TempleExteriorMorph, TexelsBlendByChannelKeepingTheFirstsAlpha)
 	// Halfway, 15 by 128 over 255 is 7 in each
 	BlendTexels(from, to, 128, blended);
 	EXPECT_EQ(blended[0], 0xF777);
+}
+
+// The mesh is blended again when the look changes, before its first blend, and when its blended mesh is not loaded, as
+// after a load of a saved game that keeps the look
+TEST(TempleExteriorMorph, TheMeshIsBlendedAgainWhenItIsNotLoaded)
+{
+	const glm::vec2 look {0.2f, 0.5f};
+	EXPECT_TRUE(NeedsBlend(std::nullopt, look, false));
+	EXPECT_TRUE(NeedsBlend(std::nullopt, look, true));
+	EXPECT_TRUE(NeedsBlend(glm::vec2 {0.1f, 0.5f}, look, true));
+	EXPECT_FALSE(NeedsBlend(look, look, true));
+	EXPECT_TRUE(NeedsBlend(look, look, false));
 }
