@@ -3157,9 +3157,9 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		return QueryResult::Value({{"result", k_Results.at(static_cast<size_t>(result))}});
 	});
 	provider->Add(Query("route",
-	                    "A creature's walk in full: where it is going, the state of its walk, the route it follows (its legs, "
-	                    "straight or round a circle, and points along it) and the circles it walks round (each grown by "
-	                    "its own reach)",
+	                    "A creature's walk in full: where it is going, how far short of it it stops and how near it must get, "
+	                    "the state of its walk, the route it follows (its legs, straight or round a circle, and points "
+	                    "along it) and the circles it walks round (each grown by its own reach)",
 	                    {IdParameter("The creature")}),
 	              [](const QueryContext& context) {
 		              const auto* registry = Registry();
@@ -3204,6 +3204,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		              return QueryResult::Value({{"destination", Optional(locomotion->destination)},
 		                                         {"motion", static_cast<int>(locomotion->motion)},
 		                                         {"radius", locomotion->radius},
+		                                         {"stop_short", locomotion->ring.min},
+		                                         {"arrive_within", locomotion->ring.max},
 		                                         {"failed", locomotion->failed},
 		                                         {"state", static_cast<int>(locomotion->follower.GetState())},
 		                                         {"segment", route.segment},

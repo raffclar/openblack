@@ -7559,6 +7559,28 @@ void AddMind(std::vector<Scenario>& all)
 		});
 	}
 
+	{
+		// A small rock between a fence and a hut in a village, 20 m from a young tiger of the size it has on the first land
+		auto smallTiger = Content(CreatureType::Tiger, {0.0f, 0.0f});
+		smallTiger.size = 0.26f;
+		all.push_back({
+		    .id = "mind.pick_up_small_rock_by_hut",
+		    .name = "The creature picks up a small rock between a fence and a hut",
+		    .facet = Facet::Mind,
+		    .description = "A young tiger. A small rock lies 20 m from it, between a short fence, a second rock and a hut. "
+		                   "The script tells the tiger to pick up the small rock and look at it.",
+		    .expected = "The tiger walks round to the small rock and stops at the length of its arm from it. It picks the "
+		                "rock up at once. It does not walk again and again beside the rock.",
+		    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+		    .creatures = {smallTiger},
+		    .objects = {{.type = MobileStaticInfo::Rock, .offset = {20.0f, 0.0f}, .scale = 0.267f},
+		                {.type = MobileStaticInfo::CeltFenceShort, .offset = {22.5f, 3.0f}, .yawDegrees = 45.0f},
+		                {.type = MobileStaticInfo::Rock, .offset = {23.3f, -6.3f}, .scale = 0.267f},
+		                {.type = AbodeInfo::CelticShackX, .offset = {28.0f, 2.7f}}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .object = 0, .action = "ExamineByPickingUp"}},
+		});
+	}
+
 	all.push_back({
 	    .id = "mind.mimic",
 	    .name = "Mimic the player",
