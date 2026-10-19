@@ -57,6 +57,9 @@ public:
 	virtual void ForgetHitter(entt::entity rock) = 0;
 	/// Every game turn: pieces whose building has gone forget it, and pieces whose time has run out go
 	virtual void ProcessTurn() = 0;
+	/// After a load: the models that the game made for these things while it played are made again. A save keeps the
+	/// names of these models but not the models, and the game that loads it may not have them.
+	virtual void RemakeModelsAfterLoad() {}
 	/// The model an object is drawn with in place of its own: a broken building's broken model; its own otherwise
 	[[nodiscard]] virtual entt::id_type DrawnMesh(entt::entity object, entt::id_type own) const = 0;
 	/// How much of a broken or unfinished building is drawn standing over what is left of it, none for one drawn whole

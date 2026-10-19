@@ -27,6 +27,7 @@ public:
 	bool ReleaseAll() override;
 	bool Order(entt::entity thing, high_detail_rules::ThingSpecial special, bool on) override;
 	void Update() override;
+	void RemakeModelsAfterLoad() override;
 	void PlaceEyes(uint32_t frameGameMs, const glm::mat4& viewProjection) override;
 
 private:

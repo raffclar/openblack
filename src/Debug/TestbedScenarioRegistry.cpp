@@ -7858,6 +7858,23 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "frontend.continue_with_menu",
+	    .name = "Start-up: continue from the save on exit",
+	    .facet = Facet::Story,
+	    .description = "Two oaks stand on the testbed. 2 seconds after the start the game saves into the slot of the "
+	                   "save on exit (slot 20). 1 second later the game continues as a plain start of the program "
+	                   "does.",
+	    .expected = "The tips screen shows while slot 20 loads. Then the menu fades in over the testbed as it was "
+	                "saved, with the profile's name above its buttons, and the game is paused under it. The hand is "
+	                "hidden and the menu's pointer shows. Continue Game closes the menu, and the game runs again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -20.0f}, {20.0f, 20.0f}}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {6.0f, 0.0f}}, {.type = TreeInfo::Oak, .offset = {-8.0f, 3.0f}}},
+	    .commands = {Command {.kind = Kind::SaveGame, .delaySeconds = 2.0f, .value = 20},
+	                 Command {.kind = Kind::ContinueGame, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "mind.hand_free_pick_up",
 	    .name = "Put down a thing before a pick-up",
 	    .facet = Facet::Mind,
@@ -9417,10 +9434,10 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
-	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::PlayFallingSpellFilm ||
-	       kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease ||
-	       kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding ||
-	       kind == Kind::CallNative || IsPointerCommand(kind);
+	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame ||
+	       kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
+	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
+	       kind == Kind::FinishBuilding || kind == Kind::CallNative || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -9447,7 +9464,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 160> k_Names {
+	constexpr std::array<std::string_view, 161> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9605,6 +9622,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "script release",
 	    "fill the worship site icons",
 	    "quick save",
+	    "continue the game",
 	    "charge an icon with its seed in the hand",
 	    "finish the building",
 	    "call a script native",
