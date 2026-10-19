@@ -145,6 +145,7 @@
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Fixed.h"
+#include "ECS/Components/FixedOutline.h"
 #include "ECS/Components/FloatingNumber.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/FlockSpell.h"
@@ -257,6 +258,7 @@
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureAttitudeRules.h"
+#include "ECS/FixedOutlines.h"
 #include "ECS/Heartbeat.h"
 #include "ECS/HighDetailRules.h"
 #include "ECS/PosedModel.h"
@@ -708,6 +710,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureDance::dance>("dance")
 	    .Field<&components::CreatureDance::startedBy>("startedBy")
 	    .Field<&components::CreatureDance::dancers>("dancers")
+	    .Field<&components::CreatureDance::calledBy>("calledBy")
 	    .Field<&components::CreatureDance::lastPlaces>("lastPlaces")
 	    .Field<&components::CreatureDance::lastImpressiveTurn>("lastImpressiveTurn")
 	    .Field<&components::CreatureDance::lastImpressiveType>("lastImpressiveType");
@@ -896,6 +899,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureMindState::stepTurns>("stepTurns")
 	    .Field<&components::CreatureMindState::agendaTurns>("agendaTurns")
 	    .Field<&components::CreatureMindState::agendaTurnsSerial>("agendaTurnsSerial")
+	    .Field<&components::CreatureMindState::leftAreaActions>("leftAreaActions")
+	    .Field<&components::CreatureMindState::agendaRefused>("agendaRefused")
 	    .Field<&components::CreatureMindState::paceSerial>("paceSerial")
 	    .Field<&components::CreatureMindState::planActions>("planActions")
 	    .Field<&components::CreatureMindState::plannedActions>("plannedActions", {k_CreatureDesiresDesireNames})
@@ -969,6 +974,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureObjectAction::catchTurned>("catchTurned")
 	    .Field<&components::CreatureObjectAction::catchHeight>("catchHeight")
 	    .Field<&components::CreatureObjectAction::swallows>("swallows")
+	    .Field<&components::CreatureObjectAction::eaten>("eaten")
+	    .Field<&components::CreatureObjectAction::mealEnergy>("mealEnergy")
 	    .Field<&components::CreatureObjectAction::failure>("failure")
 	    .Field<&components::CreatureObjectAction::failureKind>("failureKind");
 	Reflect<components::CreatureDroppedObject>(context).Field<&components::CreatureDroppedObject::object>("object");
@@ -1207,6 +1214,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::Fixed>(context)
 	    .Field<&components::Fixed::boundingCenter>("boundingCenter")
 	    .Field<&components::Fixed::boundingRadius>("boundingRadius");
+	Reflect<components::FixedOutline>(context).Field<&components::FixedOutline::outline>("outline");
 	Reflect<components::FloatingNumber>(context)
 	    .Field<&components::FloatingNumber::text>("text")
 	    .Field<&components::FloatingNumber::position>("position")
@@ -1260,6 +1268,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::FootpathFinder::to>("to")
 	    .Field<&components::FootpathFinder::footpath>("footpath")
 	    .Field<&components::FootpathFinder::plan>("plan");
+	Reflect<components::FootpathObstacleChange>(context)
+	    .Field<&components::FootpathObstacleChange::put>("put")
+	    .Field<&components::FootpathObstacleChange::radius>("radius")
+	    .Field<&components::FootpathObstacleChange::place>("place");
 	Reflect<components::BigForest>(context).Field<&components::BigForest::type>("type").Field<&components::BigForest::wood>(
 	    "wood");
 	Reflect<components::Forest>(context).Field<&components::Forest::type>("type");
@@ -2969,6 +2981,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<openblack::ecs::RegistryContext>(context, ValueOnly {})
 	    .Field<&openblack::ecs::RegistryContext::scriptFootpaths>("scriptFootpaths")
 	    .Field<&openblack::ecs::RegistryContext::scriptThingMadeLast>("scriptThingMadeLast")
+	    .Field<&openblack::ecs::RegistryContext::footpathObstacleChanges>("footpathObstacleChanges")
+	    .Field<&openblack::ecs::RegistryContext::footpathObstacles>("footpathObstacles")
 	    .Field<&openblack::ecs::RegistryContext::streams>("streams")
 	    .Field<&openblack::ecs::RegistryContext::towns>("towns")
 	    .Field<&openblack::ecs::RegistryContext::villageLightFlames>("villageLightFlames")
@@ -3172,6 +3186,13 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::creature_attitude::Feeling::attitude>("attitude")
 	    .Field<&openblack::ecs::creature_attitude::Feeling::shownTurn>("shownTurn")
 	    .Field<&openblack::ecs::creature_attitude::Feeling::lapsedTurn>("lapsedTurn");
+	Reflect<openblack::ecs::fixed_outlines::Circle>(context, ValueOnly {})
+	    .Field<&openblack::ecs::fixed_outlines::Circle::centre>("centre")
+	    .Field<&openblack::ecs::fixed_outlines::Circle::radius>("radius")
+	    .Field<&openblack::ecs::fixed_outlines::Circle::radiusSquared>("radiusSquared");
+	Reflect<openblack::ecs::fixed_outlines::Outline>(context, ValueOnly {})
+	    .Field<&openblack::ecs::fixed_outlines::Outline::bounds>("bounds")
+	    .Field<&openblack::ecs::fixed_outlines::Outline::parts>("parts");
 	Reflect<openblack::ecs::heartbeat::State>(context, ValueOnly {})
 	    .Field<&openblack::ecs::heartbeat::State::stress>("stress")
 	    .Field<&openblack::ecs::heartbeat::State::rate>("rate")

@@ -1415,10 +1415,49 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_creature_load_after_draws test_creature_load_after_draws.cpp)
+openblack_setup_and_add_test(
+  test_footpath_obstacles test_footpath_obstacles.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_footpath_obstacles oracle/test_oracle_footpath_obstacles.cpp
+)
+set_tests_properties(
+  test_oracle_footpath_obstacles
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_creature_area_walk oracle/test_oracle_creature_area_walk.cpp
+)
+set_tests_properties(
+  test_oracle_creature_area_walk
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_world_save_forget test_world_save_forget.cpp)
+openblack_setup_and_add_test(test_dead_tree_lean test_dead_tree_lean.cpp)
 openblack_setup_and_add_test(test_particle_save test_particle_save.cpp)
 target_link_libraries(test_particle_save PRIVATE psys)
 target_link_libraries(test_saved_system_state PRIVATE psys)
 openblack_setup_and_add_test(test_saving_box test_saving_box.cpp)
+openblack_setup_and_add_test(test_placed_turn test_placed_turn.cpp)
+openblack_setup_and_add_test(
+  test_oracle_placed_turn oracle/test_oracle_placed_turn.cpp
+)
+set_tests_properties(
+  test_oracle_placed_turn
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_fixed_outlines test_fixed_outlines.cpp)
+openblack_setup_and_add_test(
+  test_oracle_fixed_outlines oracle/test_oracle_fixed_outlines.cpp
+)
+set_tests_properties(
+  test_oracle_fixed_outlines
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
 openblack_setup_and_add_test(test_saved_sounds test_saved_sounds.cpp)
 target_link_libraries(test_saved_sounds PRIVATE pack lnd)
 openblack_setup_and_add_test(test_safe_save_files test_safe_save_files.cpp)

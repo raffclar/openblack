@@ -11,6 +11,7 @@
 
 #include <array>
 
+#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
 #include "Common/X87.h"
@@ -98,6 +99,31 @@ inline constexpr double k_HalfTurn = static_cast<double>(3.1415927f);
 	};
 }
 
+/// The game's turn of a placed thing by its three angles, as a matrix. The angles are radians about the x, y and z axes.
+/// The game turns the thing about z first, then about x, then about y. Each column is one row of the game's turn, so
+/// the matrix moves the model's axes to where the game puts them. Mobile statics, mobile objects, rocks and dead trees
+/// use this turn. A thing that does not lean uses it with no x and z angle.
+[[nodiscard]] inline glm::mat3 GameTurnMatrix(float xAngle, float yAngle, float zAngle)
+{
+	const auto rows = GameTurnYxz(yAngle, xAngle, zAngle);
+	return {rows[0], rows[1], rows[2]};
+}
+
+/// The game's turn of a placed thing with its scale in it. The game multiplies each value of the turn by the scale and
+/// keeps the product as a float.
+[[nodiscard]] inline glm::mat3 GameTurnMatrixScaled(float xAngle, float yAngle, float zAngle, float scale)
+{
+	auto matrix = GameTurnMatrix(xAngle, yAngle, zAngle);
+	for (glm::length_t column = 0; column < 3; ++column)
+	{
+		for (glm::length_t row = 0; row < 3; ++row)
+		{
+			matrix[column][row] = scale * matrix[column][row];
+		}
+	}
+	return matrix;
+}
+
 /// The game's angles of a turn, taken off one at a time: the angle about y from the third row, then the angle about x
 /// from that row turned back by y, then the angle about z from the first row turned back by y and x. `first` and
 /// `third` are the rows of where the model's x and z axes go. The result is (x, y, z), each rounded to a float as the
@@ -117,6 +143,13 @@ inline constexpr double k_HalfTurn = static_cast<double>(3.1415927f);
 	const float lift = Mul(sinX, firstZ) + (cosX * first.y);
 	const double z = GameAtan2(-lift, firstX);
 	return {RoundToFloat(x), RoundToFloat(y), RoundToFloat(z)};
+}
+
+/// The game's angles of a turn that `GameTurnMatrix` makes, as (x, y, z). The angle about y has the full range. The angle
+/// about x stays between a quarter turn either way.
+[[nodiscard]] inline glm::vec3 GameTurnMatrixAngles(const glm::mat3& turn)
+{
+	return GameAnglesYxz(turn[0], turn[2]);
 }
 
 } // namespace openblack::x87

@@ -9,9 +9,8 @@
 
 #include "FeatureArchetype.h"
 
-#include <glm/gtx/euler_angles.hpp>
-
 #include "3D/L3DMesh.h"
+#include "Common/X87Angle.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Mesh.h"
@@ -33,7 +32,8 @@ entt::entity FeatureArchetype::Create(const glm::vec3& position, FeatureInfo typ
 
 	const auto& info = Locator::infoConstants::value().feature.at(static_cast<size_t>(type));
 
-	const auto& transform = registry.Assign<Transform>(entity, position, glm::eulerAngleY(-yAngleRadians), glm::vec3(scale));
+	const auto& transform =
+	    registry.Assign<Transform>(entity, position, x87::GameTurnMatrix(0.0f, yAngleRadians, 0.0f), glm::vec3(scale));
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.meshId, transform);
 	registry.Assign<Fixed>(entity, point, radius);
 	registry.Assign<Feature>(entity, type);

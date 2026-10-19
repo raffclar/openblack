@@ -353,6 +353,18 @@ TEST(CreatureActionAgendas, LookedOverKindsAreFarLessInteresting)
 	EXPECT_FLOAT_EQ(CuriosityShare(true, true), 1.0f);
 }
 
+// Curiosity and play make some things more useful to act on. The other desires do not.
+TEST(CreatureActionAgendas, CuriosityAndPlayMultiplyUsefulness)
+{
+	using creature_desires::Desire;
+	EXPECT_EQ(DesireMultiplier(Desire::Curiosity, {.doingSomethingInteresting = true}), 5.0f);
+	EXPECT_EQ(DesireMultiplier(Desire::Curiosity, {.toy = true}), 1.0f);
+	EXPECT_EQ(DesireMultiplier(Desire::Play, {.toy = true}), 3.0f);
+	EXPECT_EQ(DesireMultiplier(Desire::Play, {.playingFootball = true, .toy = true}), 5.0f);
+	EXPECT_EQ(DesireMultiplier(Desire::Play, {.doingSomethingInteresting = true}), 1.0f);
+	EXPECT_EQ(DesireMultiplier(Desire::Anger, {.doingSomethingInteresting = true, .playingFootball = true, .toy = true}), 1.0f);
+}
+
 // Only objects can be of a kind that the creature examined: towns, forests, temples, miracles, flocks and mists are
 // not objects
 TEST(CreatureActionAgendas, OnlyObjectsHaveTheirKindLookedOver)

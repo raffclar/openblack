@@ -13,10 +13,8 @@ using namespace openblack;
 
 bool creature_hand::TakesHold(const Holdable& creature)
 {
-	// The game also keeps the hand off a creature part way into one particular action of its own; that action isn't
-	// known here
 	return creature.owner != PlayerNames::NEUTRAL && creature.species != CreatureType::Ogre && !creature.asleep &&
-	       !creature.frozen && !creature.scriptControlled;
+	       !creature.frozen && !creature.scriptControlled && !creature.fainting;
 }
 
 bool creature_hand::MayHold(const Holdable& creature, PlayerNames handPlayer)

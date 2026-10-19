@@ -27,9 +27,12 @@ struct CreatureDance
 	entt::entity dance {entt::null};
 	/// The agenda, by its count, that started the dance last; none before the creature started one
 	std::optional<uint32_t> startedBy;
-	/// The villagers it called to dance with it, the last called first. A villager stays on the list after the dance
-	/// stops. It leaves the list only when the hand takes it, when it flies or when it dies.
+	/// The villagers it called to dance with it, the last called first. They leave the list when the creature stops
+	/// what it does (see creature_dance::DecidesWhenReleased), and a villager leaves it when the hand takes it, when it
+	/// flies or when it dies.
 	std::vector<entt::entity> dancers;
+	/// The agenda, by its count, that called the villagers on the list
+	std::optional<uint32_t> calledBy;
 	/// Where each dancer of the dance stood in the last turn, to tell which still move
 	struct Place
 	{

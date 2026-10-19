@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include <LHVM.h>
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
@@ -161,6 +162,10 @@ private:
 	[[nodiscard]] std::string PlayBoatFilm(const Command& command) const;
 	/// Starts a land's script as another script's call starts it; what came of that
 	[[nodiscard]] std::string RunScript(const Command& command);
+	/// Runs a script native with the command's arguments, and tells what it gave back
+	[[nodiscard]] std::string CallNative(const Command& command);
+	/// The value that a script gets for an argument: a number, or an object that the scripts' table knows
+	[[nodiscard]] std::optional<lhvm::VMValue> ScriptValueOf(const ScriptArgument& argument);
 	[[nodiscard]] std::string StopScript(const Command& command);
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();

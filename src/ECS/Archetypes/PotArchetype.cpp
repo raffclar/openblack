@@ -9,8 +9,7 @@
 
 #include "PotArchetype.h"
 
-#include <glm/gtx/euler_angles.hpp>
-
+#include "Common/X87Angle.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Pot.h"
@@ -55,7 +54,7 @@ entt::entity PotArchetype::CreateEmpty(const glm::vec3& position, float yAngleRa
 
 	const auto& info = Locator::infoConstants::value().pot.at(static_cast<size_t>(type));
 
-	registry.Assign<Transform>(entity, position, glm::mat3(glm::eulerAngleY(-yAngleRadians)), glm::vec3(1.0f));
+	registry.Assign<Transform>(entity, position, x87::GameTurnMatrix(0.0f, yAngleRadians, 0.0f), glm::vec3(1.0f));
 	registry.Assign<Pot>(entity, 0u, info.maxAmountInPot, type);
 	const auto resourceId = resources::HashIdentifier(info.meshId);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(1));

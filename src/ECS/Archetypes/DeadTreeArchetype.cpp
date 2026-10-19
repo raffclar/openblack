@@ -9,8 +9,9 @@
 
 #include "DeadTreeArchetype.h"
 
-#include <glm/gtx/euler_angles.hpp>
+#include <glm/mat3x3.hpp>
 
+#include "Common/X87Angle.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Mesh.h"
@@ -30,7 +31,17 @@ entt::entity DeadTreeArchetype::Create(const glm::vec3& position, TreeInfo type,
 {
 	// An uprooted tree keeps the mesh of the tree it was
 	const auto& info = Locator::infoConstants::value().tree.at(static_cast<size_t>(type));
-	const auto entity = Create(position, type, glm::mat3(glm::eulerAngleY(-yAngleRadians)), scale, info.normal);
+	const auto entity = Create(position, type, x87::GameTurnMatrix(0.0f, yAngleRadians, 0.0f), scale, info.normal);
+	Locator::entitiesRegistry::value().Get<DeadTree>(entity).model.reset();
+	return entity;
+}
+
+entt::entity DeadTreeArchetype::Create(const glm::vec3& position, TreeInfo type, float xAngleRadians, float yAngleRadians,
+                                       float zAngleRadians, float scale)
+{
+	const auto& info = Locator::infoConstants::value().tree.at(static_cast<size_t>(type));
+	const auto entity =
+	    Create(position, type, x87::GameTurnMatrix(xAngleRadians, yAngleRadians, zAngleRadians), scale, info.normal);
 	Locator::entitiesRegistry::value().Get<DeadTree>(entity).model.reset();
 	return entity;
 }

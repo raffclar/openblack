@@ -16,6 +16,8 @@
 #include <optional>
 #include <vector>
 
+#include <glm/vec2.hpp>
+
 #include "Creature/CreatureDesires.h"
 #include "Creature/LeashRope.h"
 #include "Enums.h"
@@ -142,6 +144,28 @@ constexpr float k_HomeRange = 140.0f;
 constexpr float k_HomeConfinement = 12.0f;
 /// Kept within an area: a radius is set, unless it is on a leash that doesn't work
 [[nodiscard]] bool IsConfined(float radius, bool leashed, bool leashWorks);
+
+/// What decides whether the area that holds the creature refuses a walk of a new agenda
+struct AgendaArea
+{
+	float radius {0.0f};
+	bool leashed {false};
+	bool leashWorks {true};
+	/// The centre of the area, on the ground
+	glm::vec2 centre {0.0f};
+	/// The creature walks back into the area
+	bool walkingBack {false};
+	bool scriptControlled {false};
+	/// The plan takes the creature to a teleport stone
+	bool toTeleport {false};
+};
+/// A new agenda cannot walk to a point that is further than the radius from the centre of the area that holds the
+/// creature. The area does not refuse a walk in these conditions:
+/// - the area does not hold the creature
+/// - the creature walks back into the area, a script controls it, or its plan takes it to a teleport stone
+/// When the area refuses a walk, the creature gives up the plan, and its action fails. While the area holds the
+/// creature, the creature does not want that action. It forgets the failure when a leash comes off it.
+[[nodiscard]] bool RefusesWalk(const AgendaArea& area, glm::vec2 destination);
 
 /// Leashed to another creature on the aggression leash, the other gets angry too within eight times the leashed
 /// creature's height

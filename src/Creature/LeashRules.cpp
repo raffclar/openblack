@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Common/X87.h"
+
 using namespace openblack;
 using namespace openblack::creature_leash;
 using creature_desires::Desire;
@@ -134,6 +136,19 @@ bool creature_leash::FreeOfHome(float distanceFromHome, bool playerHasTemple)
 bool creature_leash::IsConfined(float radius, bool leashed, bool leashWorks)
 {
 	return radius > 0.0f && !(leashed && !leashWorks);
+}
+
+bool creature_leash::RefusesWalk(const AgendaArea& area, glm::vec2 destination)
+{
+	if (!IsConfined(area.radius, area.leashed, area.leashWorks) || area.walkingBack || area.scriptControlled || area.toTeleport)
+	{
+		return false;
+	}
+	// Each step rounds to a float, in the order of the game: the square of the north-south distance comes first
+	const float across = x87::Sub(destination.x, area.centre.x);
+	const float along = x87::Sub(destination.y, area.centre.y);
+	const float distance = x87::Sqrt(x87::Add(x87::Mul(along, along), x87::Mul(across, across)));
+	return distance > area.radius;
 }
 
 bool creature_leash::WalksBack(const Confinement& confinement)

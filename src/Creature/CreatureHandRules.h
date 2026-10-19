@@ -29,10 +29,12 @@ struct Holdable
 	bool frozen {false};
 	/// Under a script's control
 	bool scriptControlled {false};
+	/// Out cold in a faint, until it comes round
+	bool fainting {false};
 };
 
-/// Whether a creature lets a hand take hold of it at all: one belonging to a player, not an ogre, not asleep, frozen or
-/// under a script's control
+/// Whether a creature lets a hand take hold of it at all: one belonging to a player, not an ogre, not asleep, frozen,
+/// out cold in a faint or under a script's control
 [[nodiscard]] bool TakesHold(const Holdable& creature);
 /// Whether a player's hand may take hold of a creature to stroke and slap it: only the player's own creature, wherever
 /// it is, and only while it takes hold at all

@@ -467,6 +467,25 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.thirst_kept_at_home",
+	    .name = "Thirsty creature kept far from water",
+	    .facet = Facet::Needs,
+	    .description = "A parched tiger starts north of the middle, short of the testbed's lake, with its desire for "
+	                   "water as strong as it gets. It is kept within 20 units of where it stands, as a young creature "
+	                   "is kept near its home.",
+	    .expected = "It does not walk to the lake. Each plan whose walk leaves the area fails as it starts, and the "
+	                "creature does not want that action again while the area holds it. It stays near where it stands.",
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {0.0f, 60.0f},
+	        .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.95f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Water, .fraction = 1.0f}},
+	    }},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.1f, .radius = 20.0f}},
+	});
+
+	all.push_back({
 	    .id = "needs.on_fire_drinks",
 	    .name = "A creature on fire goes to the sea",
 	    .facet = Facet::Needs,
@@ -4640,6 +4659,38 @@ void AddObjects(std::vector<Scenario>& all)
 	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
 	    .commands = giving,
 	    .hand = offering,
+	});
+
+	all.push_back({
+	    .id = "creature.give_villager_eaten",
+	    .name = "Giving a villager to a hungry creature",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a villager and, held in front of a hungry tiger, gives her to it.",
+	    .expected = "The tiger reaches out with its take clip and takes her; in its hand she plays her scared stiff clip. "
+	                "It looks her over the first time it is given a villager, then plays its eat clip: at the moment of "
+	                "the bite she is gone from its hand, and it swallows her as the clip ends. Then she dies and its "
+	                "hunger falls.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungryThinking},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
+	all.push_back({
+	    .id = "creature.give_villager_by_hand",
+	    .name = "Giving a villager by hand",
+	    .facet = Facet::Objects,
+	    .description = "A tiger that isn't hungry stands with a villager in front of it. The player picks her up with the "
+	                   "hand, holds her in front of the tiger and holds the Action button down to give her.",
+	    .expected = "In the hand she plays her scared stiff clip. The hand turns her a quarter round to offer her; the "
+	                "tiger turns to the camera, reaches out with its take clip and takes her at the moment of the take; "
+	                "in its hand she keeps her scared stiff clip while it looks her over or does what its desires say.",
+	    .environment = {.dispenserGrid = false, .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {curious},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
 	});
 
 	// The pictures for the creature's web page: the camera looks at the tiger, and each action played once has its
@@ -8945,6 +8996,79 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 }
 
+/// Land 1's script natives and land script commands that the lane land1-script-stubs completed
+void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	all.push_back({
+	    .id = "script.set_target_throw",
+	    .name = "A script throws a villager to get to a place in a time",
+	    .facet = Facet::Story,
+	    .description = "A villager stands in the middle. After one second, SET_TARGET throws the villager to a point "
+	                   "20 metres east and 10 metres north, 5 metres above the land, in 3 seconds. The magic mushroom "
+	                   "challenge of Land 1 throws its actor at the camera in this way.",
+	    .expected = "The villager tumbles up in an arc with no air drag and gets to the point after 3 seconds. Then it "
+	                "falls to the land. The log tells that SET_TARGET ran and gave back no values.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {30.0f, 20.0f}}},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_TARGET",
+	                  .scriptArguments = {{.kind = Argument::Kind::Object, .index = 0},
+	                                      {.kind = Argument::Kind::Position, .point = {20.0f, 10.0f}, .height = 5.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 3.0f}}}},
+	});
+
+	// The leans of the three dead trees of Land 1, in degrees about x and z, and one tree with a large lean
+	all.push_back({
+	    .id = "nature.dead_tree_lean",
+	    .name = "Dead trees from a land script lean about x and z",
+	    .facet = Facet::Nature,
+	    .description = "Four dead trees in a row from the west. The first three have the kinds and the leans of the three "
+	                   "dead trees on Land 1. The last tree leans 20 degrees about x and 10 degrees about z, so that the "
+	                   "direction of the lean is clear.",
+	    .expected = "The first three trees lean by a few degrees, each in its own direction. The last tree leans "
+	                "clearly. The turn about the vertical comes first, then the lean about x, then the lean about z.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -8.0f}, {25.0f, 8.0f}}},
+	    .objects = {{.type = TreeInfo::Pine, .offset = {-18.0f, 0.0f}, .dead = true, .leanDegrees = {-0.4544f, -3.1648f}},
+	                {.type = TreeInfo::ConiferA, .offset = {-6.0f, 0.0f}, .dead = true, .leanDegrees = {2.2700f, 0.0694f}},
+	                {.type = TreeInfo::ConiferA, .offset = {6.0f, 0.0f}, .dead = true, .leanDegrees = {-0.4841f, 1.8931f}},
+	                {.type = TreeInfo::ConiferA, .offset = {18.0f, 0.0f}, .dead = true, .leanDegrees = {20.0f, 10.0f}}},
+	});
+
+	// Mobile statics that a land script turns and leans: the lean follows the way each one faces
+	all.push_back({
+	    .id = "nature.mobile_static_lean",
+	    .name = "Mobile statics from a land script lean and turn in the game's order",
+	    .facet = Facet::Nature,
+	    .description = "Four mobile statics in a row from the west, each turned 45 degrees about the vertical. The first "
+	                   "fence leans 30 degrees about x. The second fence leans 30 degrees about z. The long rock and the "
+	                   "totem lean about x and z.",
+	    .expected = "Each thing leans in the direction that it faces after its turn, not along the axes of the map. The "
+	                "first fence tips forward along its facing. The second fence tips to its side.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -8.0f}, {25.0f, 8.0f}}},
+	    .objects = {{.type = MobileStaticInfo::CeltFenceTall,
+	                 .offset = {-18.0f, 0.0f},
+	                 .yawDegrees = 45.0f,
+	                 .leanDegrees = {30.0f, 0.0f}},
+	                {.type = MobileStaticInfo::CeltFenceTall,
+	                 .offset = {-6.0f, 0.0f},
+	                 .yawDegrees = 45.0f,
+	                 .leanDegrees = {0.0f, 30.0f}},
+	                {.type = MobileStaticInfo::LongrockSandstone,
+	                 .offset = {6.0f, 0.0f},
+	                 .yawDegrees = 45.0f,
+	                 .leanDegrees = {20.0f, 20.0f}},
+	                {.type = MobileStaticInfo::GateTotemApe,
+	                 .offset = {18.0f, 0.0f},
+	                 .yawDegrees = 45.0f,
+	                 .leanDegrees = {25.0f, -15.0f}}},
+	});
+}
+
 void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 {
 	// Children of each age from 1 to 12 in a row, then a grown up, all held still by a script
@@ -9133,6 +9257,7 @@ std::vector<Scenario> Build()
 	AddTownMiracleScenarios(all);
 	AddCreatureExplorationScenarios(all);
 	AddScriptTaskRelease(all);
+	AddLandOneScriptStubScenarios(all);
 	AddSwayAndFrightScenarios(all);
 	return all;
 }
@@ -9193,6 +9318,7 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 		case ScriptArgument::Kind::Number:
 			return true;
 		case ScriptArgument::Kind::Marker:
+		case ScriptArgument::Kind::Position:
 			return ValidOffset(argument.point);
 		case ScriptArgument::Kind::Object:
 			return argument.index < scenario.objects.size();
@@ -9273,7 +9399,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::PlayFallingSpellFilm ||
 	       kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease ||
 	       kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding ||
-	       IsPointerCommand(kind);
+	       kind == Kind::CallNative || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -9300,7 +9426,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 159> k_Names {
+	constexpr std::array<std::string_view, 160> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9460,6 +9586,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "quick save",
 	    "charge an icon with its seed in the hand",
 	    "finish the building",
+	    "call a script native",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -9719,7 +9846,7 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		{
 			problems.push_back(fmt::format("{}: {}", what, problem));
 		}
-		if (command.kind == Kind::RunScript && !ScriptArgumentsFit(command, scenario))
+		if ((command.kind == Kind::RunScript || command.kind == Kind::CallNative) && !ScriptArgumentsFit(command, scenario))
 		{
 			problems.push_back(fmt::format("{}: runs no script, or hands it what the scenario hasn't", what));
 		}

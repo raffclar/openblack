@@ -44,6 +44,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureHandGlows.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -529,6 +530,8 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 			SPDLOG_LOGGER_WARN(Log(), "The context of the saved world does not read; the land keeps a new context");
 		}
 	}
+	// Things the save does not keep go back to their start
+	ForgetUnsavedState(registry.Underlying());
 	// What the hand holds stays in the hand: the hand's grab and the held thing are components. The physics takes its
 	// bodies back with the running state of the systems.
 	// A walk along a camera track takes its track again from the land's tracks, by its number
@@ -556,6 +559,14 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 	LogNames("fields that did not read", result->report.damagedFields);
 	LogNames("components that the load could not add", result->report.refusedComponents);
 	return result->report;
+}
+
+void world_save::ForgetUnsavedState(entt::registry& registry)
+{
+	registry.view<components::CreatureMindState>().each([](components::CreatureMindState& mind) {
+		mind.leftAreaActions.clear();
+		mind.agendaRefused = false;
+	});
 }
 
 bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn)
