@@ -7601,15 +7601,15 @@ void AddMind(std::vector<Scenario>& all)
 	    .id = "mind.pick_up_walking_villager",
 	    .name = "The creature walks to a villager that walks past and picks it up",
 	    .facet = Facet::Mind,
-	    .description = "A tiger. A villager 20 m in front of it and 15 m to the side walks across in front of the tiger, "
-	                   "to 30 m on the other side. The script tells the tiger to pick up the villager and look at it.",
+	    .description = "A tiger. A villager 30 m in front of it and 20 m to the side walks across in front of the tiger, "
+	                   "to 40 m on the other side. The script tells the tiger to pick up the villager and look at it.",
 	    .expected = "The tiger walks to a place ahead of the villager on the villager's way, and aims again on each "
 	                "turn. It reaches to where the villager will be at the moment of the hold, and picks it up.",
 	    .framing = {.shot = Shot::Follow, .distance = 3.0f},
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale,
-	                 .offset = {20.0f, 15.0f},
-	                 .walkTo = glm::vec2 {20.0f, -30.0f},
+	                 .offset = {30.0f, 20.0f},
+	                 .walkTo = glm::vec2 {30.0f, -40.0f},
 	                 .walkAfterSeconds = 0.5f}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "ExamineByPickingUp"}},
 	});
