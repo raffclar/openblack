@@ -25,6 +25,7 @@
 #include "Graphics/Mesh.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/TreeShadows.h"
+#include "L3DSkinTexels.h"
 #include "L3DSubMesh.h"
 #include "ScreenPick.h"
 
@@ -212,6 +213,9 @@ public:
 	                                          bool withoutJoints = false, std::span<const uint32_t> hidden = {}) const;
 
 private:
+	/// Keeps the masks of the solid texels of a skin, for picks and tree shadows
+	void KnowSkinMasks(SkinId skin, std::span<const uint16_t> texels);
+
 	l3d::L3DMeshFlags _flags;
 	std::string _debugName;
 	bool _dynamic;
@@ -223,6 +227,8 @@ private:
 	const L3DMesh* _skinSource {nullptr};
 	std::unordered_map<SkinId, screen_pick::AlphaMask> _skinMasks;
 	std::unordered_map<SkinId, graphics::tree_shadows::AlphaMask> _skinAlpha;
+	/// How the skins' texels go into their textures, by the model's flags
+	l3d_skin::Layout _skinLayout {l3d_skin::Layout::Argb4444};
 	std::vector<Footprint> _footprints; ///< If ContainsLandscapeFeature() is true
 	std::optional<BonePoint> _firstBonePoint;
 	std::vector<BoneFrame> _boneFrames;
