@@ -812,4 +812,24 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                  .delaySeconds = 3.0f}},
 	    .townBeliefInPlayer = 1.0f,
 	});
+	// A child of the town about to grow up
+	all.push_back({
+	    .id = "villagers.grow_up_dust",
+	    .name = "A child growing up in a puff of dust",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a storage pit, and one girl of the town "
+	                   "aged 12, with no home, in front of the pit. Best watched at game speed 4.",
+	    .expected = "About 1500 turns in (150 seconds at game speed 1), the girl grows up. She takes on the grown up "
+	                "housewife's model as she goes on from the change, and a small puff of brown dust goes up half her "
+	                "height out in front of her. It fades in about a second and a half.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-30.0f, 8.0f, 12.0f}, .look = {-30.0f, 1.0f, 22.0f}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = k_Pit - glm::vec2(0.0f, 8.0f),
+	                 .joinTown = true,
+	                 .villagerAge = 12u}},
+	    .townBeliefInPlayer = 1.0f,
+	});
 }

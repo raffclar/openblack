@@ -53,6 +53,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerNeeds.h"
 #include "ECS/VillagerRoutine.h"
@@ -1415,7 +1416,7 @@ uint32_t villager_home::LookForBetterHome(LivingAction& action)
 	return 0;
 }
 
-void villager_home::TakeOnTribe(entt::entity villager, Tribe tribe, [[maybe_unused]] bool showEffect)
+void villager_home::TakeOnTribe(entt::entity villager, Tribe tribe, bool showEffect)
 {
 	auto& registry = WorldRegistry();
 	auto& person = registry.Get<Villager>(villager);
@@ -1431,8 +1432,6 @@ void villager_home::TakeOnTribe(entt::entity villager, Tribe tribe, [[maybe_unus
 	}
 	// It becomes the same kind of villager of the new tribe, wearing that tribe's models: a child its child model at
 	// every distance, an adult its kind's model for each distance
-	// TODO(villager-life-cycle): a white puff of smoke goes up as it changes when `showEffect` (the game's smoke puff isn't
-	// in openblack yet; the dying villager's skeleton swap needs the same)
 	const auto& info = infos.at(row);
 	person.tribe = tribe;
 	const bool child = person.lifeStage == Villager::LifeStage::Child;
@@ -1448,6 +1447,11 @@ void villager_home::TakeOnTribe(entt::entity villager, Tribe tribe, [[maybe_unus
 		          : std::array {high, resources::HashIdentifier(info.stdDetail), resources::HashIdentifier(info.lowDetail)};
 	}
 	registry.SetDirty();
+	// A puff of brown dust goes up as it changes, half the height of its new model out along its facing
+	if (showEffect)
+	{
+		villager_after_death::SmokePuff(villager, dust_puff::Kind::Dust);
+	}
 }
 
 uint32_t villager_home::GoHomeAndChange(LivingAction& action)
@@ -1479,7 +1483,7 @@ bool villager_home::ExitGoHomeAndChange(LivingAction& action, VillagerStates nex
 	const auto villager = EntityOf(action);
 	const auto& table = Locator::infoConstants::value().villagerStateTable;
 	const auto& nextInfo = table.at(static_cast<size_t>(next));
-	// Going on to a state of its own (not a walk, nor this state again) it takes on its town's tribe, in a puff of smoke
+	// Going on to a state of its own (not a walk, nor this state again) it takes on its town's tribe, in a puff of dust
 	// unless it goes indoors
 	if (next != VillagerStates::GoHomeAndChange && nextInfo.isFinalState != 0)
 	{

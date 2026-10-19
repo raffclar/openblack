@@ -258,7 +258,7 @@ void villager_after_death::TellThoseAbout(entt::entity villager)
 	                                         .playerless = true});
 }
 
-void villager_after_death::SmokePuff(entt::entity villager)
+void villager_after_death::SmokePuff(entt::entity villager, dust_puff::Kind kind)
 {
 	auto& registry = Entities();
 	const auto* transform = registry.TryGet<const Transform>(villager);
@@ -275,7 +275,7 @@ void villager_after_death::SmokePuff(entt::entity villager)
 	const auto* wallHug = registry.TryGet<const WallHug>(villager);
 	const float heading = wallHug != nullptr ? wallHug->yAngle : 0.0f;
 	Locator::explosionSystem::value().AddSmoke(animals::DeadBodySmokePlace(transform->position, heading, height),
-	                                           k_BodySmokeSize, dust_puff::Kind::Smoke);
+	                                           k_BodySmokeSize, kind);
 }
 
 void villager_after_death::SoulRises(entt::entity villager)

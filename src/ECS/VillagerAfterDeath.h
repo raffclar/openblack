@@ -15,6 +15,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Blast/DustPuff.h"
 #include "Enums.h"
 
 /// What a villager's death does to the world about it, in the order the death goes: the players here hear of it, its
@@ -41,8 +42,9 @@ void LeaveWorship(entt::entity villager, entt::entity town);
 /// The people about a villager are told of its death as it begins to fall (never of a death at home)
 void TellThoseAbout(entt::entity villager);
 
-/// A white puff of smoke a little out from the body along its facing, as the flesh goes and again as the body goes
-void SmokePuff(entt::entity villager);
+/// A puff of the kind a little out from the villager along its facing, half its height out: grey smoke as the flesh of
+/// the body goes and again as the body goes, brown dust as a villager takes on the models of a new tribe
+void SmokePuff(entt::entity villager, dust_puff::Kind kind);
 /// The villager's soul rises from its body, unless it lies on the sea
 void SoulRises(entt::entity villager);
 /// The souls move on by so many milliseconds of the game's clock, posed by their clips, and go as their clips end

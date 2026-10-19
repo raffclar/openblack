@@ -1142,7 +1142,7 @@ uint32_t villager_fire::Dead(LivingAction& action)
 		if (mesh != nullptr && mesh->id != skeletonModel)
 		{
 			// The flesh goes in a puff of smoke, and the soul rises
-			villager_after_death::SmokePuff(villager);
+			villager_after_death::SmokePuff(villager, dust_puff::Kind::Smoke);
 			villager_after_death::SoulRises(villager);
 			mesh->id = skeletonModel;
 			if (auto* detail = registry.TryGet<DetailMeshes>(villager))
@@ -1156,7 +1156,7 @@ uint32_t villager_fire::Dead(LivingAction& action)
 		if (death->turnsLeft-- == 0)
 		{
 			// It goes in a puff of smoke
-			villager_after_death::SmokePuff(villager);
+			villager_after_death::SmokePuff(villager, dust_puff::Kind::Smoke);
 			world_objects::Remove(villager);
 			return 5;
 		}
