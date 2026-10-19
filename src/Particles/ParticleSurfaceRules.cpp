@@ -104,6 +104,8 @@ public:
 		creator.lit = object.Bool("UseLighting", true);
 	}
 
+	[[nodiscard]] const Creator* OwnCreator() const override { return &_creator; }
+
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
 	{
 		if (slot.first)

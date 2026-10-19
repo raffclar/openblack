@@ -9,12 +9,16 @@
 
 #include "ParticleEffect.h"
 
+#include <charconv>
 #include <cstring>
 
 #include <algorithm>
 #include <iterator>
+#include <optional>
 #include <ranges>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <typeinfo>
 
 #include <glm/matrix.hpp>
@@ -70,6 +74,53 @@ bool IsDrawn(const Atom& atom)
 bool IsCreatorClass(std::string_view className)
 {
 	return className.starts_with("Particle") && className.find("Creator") != std::string_view::npos;
+}
+
+/// The creator of the one rule of a collection that keeps a surface creator of its own, none when no rule or more than
+/// one rule keeps one
+const Creator* SurfaceCreatorOf(const Collection& collection)
+{
+	const Creator* found = nullptr;
+	for (const auto& slot : collection.modifiers)
+	{
+		const auto* own = slot.modifier != nullptr ? slot.modifier->OwnCreator() : nullptr;
+		if (own == nullptr || own->kind != Creator::Kind::Surface || own == found)
+		{
+			continue;
+		}
+		if (found != nullptr)
+		{
+			return nullptr;
+		}
+		found = own;
+	}
+	return found;
+}
+
+/// A save names the creator that a rule keeps by the number of the rule. No object of a file has a name with this
+/// start.
+constexpr std::string_view k_RuleCreatorPrefix = "#rule ";
+
+std::string RuleCreatorName(int rule)
+{
+	return std::string(k_RuleCreatorPrefix) + std::to_string(rule);
+}
+
+/// The number of the rule that a saved name gives, if the name is the name of a creator that a rule keeps
+std::optional<int> RuleCreatorNumber(std::string_view name)
+{
+	if (!name.starts_with(k_RuleCreatorPrefix))
+	{
+		return std::nullopt;
+	}
+	name.remove_prefix(k_RuleCreatorPrefix.size());
+	int rule = -1;
+	const auto [end, error] = std::from_chars(name.data(), name.data() + name.size(), rule);
+	if (error != std::errc {} || end != name.data() + name.size())
+	{
+		return std::nullopt;
+	}
+	return rule;
 }
 } // namespace
 
@@ -1289,6 +1340,12 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 			{
 				creator = found->first;
 			}
+			else if (const auto rule = std::ranges::find_if(
+			             _modifiers, [&atom](const auto& modifier) { return modifier->OwnCreator() == atom.creator; });
+			         rule != _modifiers.end())
+			{
+				creator = RuleCreatorName(static_cast<int>(rule - _modifiers.begin()));
+			}
 		}
 		out.WriteValue(creator);
 		out.WriteValue(atom.position);
@@ -1419,7 +1476,15 @@ std::unique_ptr<Collection> Effect::LoadStructure(EffectReader& in, Atom* parent
 		atom.collection = collection.get();
 		std::string creator;
 		in.ReadValue(creator);
-		atom.creator = creator.empty() ? nullptr : FindCreator(creator);
+		if (const auto rule = RuleCreatorNumber(creator); rule.has_value())
+		{
+			const auto* modifier = ModifierAt(*rule);
+			atom.creator = modifier != nullptr ? modifier->OwnCreator() : nullptr;
+		}
+		else
+		{
+			atom.creator = creator.empty() ? nullptr : FindCreator(creator);
+		}
 		in.ReadValue(atom.position);
 		in.ReadValue(atom.velocity);
 		in.ReadValue(atom.rotation);
@@ -1481,6 +1546,12 @@ std::unique_ptr<Collection> Effect::LoadStructure(EffectReader& in, Atom* parent
 			in.ReadValue(atom.surface->uvPrevious);
 			in.ReadValue(atom.surface->uvLast);
 			in.ReadValue(atom.surface->uvCurrent);
+			// A save from before the rule's creator had a name keeps no creator for the surface. The one surface rule
+			// of the collection made it.
+			if (atom.creator == nullptr)
+			{
+				atom.creator = SurfaceCreatorOf(*collection);
+			}
 		}
 		in.ReadValue(has);
 		if (has)
