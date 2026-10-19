@@ -145,6 +145,7 @@
 #include "ECS/DiscipleRules.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
@@ -1589,8 +1590,7 @@ static void TurnLivingThing(entt::entity object, Transform& transform, float ang
 /// Whether a thing may lean, so that its angles across and forward are its own; the others always stand upright
 static bool CanLean(entt::entity object)
 {
-	return Locator::entitiesRegistry::value()
-	    .AnyOf<ecs::components::MobileStatic, ecs::components::MobileObject, ecs::components::Pot>(object);
+	return ecs::placed_turn::CanLean(Locator::entitiesRegistry::value(), object);
 }
 
 /// Whether a script holds the thing while it owns the widescreen bars

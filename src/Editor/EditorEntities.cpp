@@ -44,6 +44,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -622,7 +623,10 @@ void Turn(entt::entity entity, float radians)
 	{
 		return;
 	}
-	transform->rotation = YawRotation(radians) * transform->rotation;
+	// A thing that can lean keeps its leans, and turns about the upright axis by the game's turn
+	transform->rotation = ecs::placed_turn::CanLean(registry, entity)
+	                          ? ecs::placed_turn::TurnedAboutUpright(transform->rotation, radians)
+	                          : YawRotation(radians) * transform->rotation;
 	if (auto* locomotion = registry.TryGet<CreatureLocomotion>(entity))
 	{
 		const auto heading = GameHeading::FromYaw(YawOf(transform->rotation));

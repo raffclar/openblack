@@ -351,8 +351,8 @@ struct ObjectSetup
 	std::optional<Reaction> reaction;
 	/// A tree lies dead, as a land's script makes a dead tree, rather than standing and growing
 	bool dead {false};
-	/// The lean of a dead tree about x and z, in degrees, as a land's script gives it
-	glm::vec2 deadLeanDegrees {0.0f};
+	/// The lean of a dead tree or a mobile static about x and z, in degrees, as a land's script gives it
+	glm::vec2 leanDegrees {0.0f};
 };
 
 /// A particle effect played on the land
