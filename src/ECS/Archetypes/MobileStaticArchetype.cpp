@@ -9,9 +9,8 @@
 
 #include "MobileStaticArchetype.h"
 
-#include <glm/gtx/euler_angles.hpp>
-
 #include "AbodeArchetype.h"
+#include "Common/X87Angle.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Transform.h"
@@ -36,7 +35,7 @@ entt::entity MobileStaticArchetype::Create(const glm::vec3& position, MobileStat
 
 	glm::vec3 offset(0.0f, altitude, 0.0f);
 
-	registry.Assign<Transform>(entity, position + offset, glm::eulerAngleXYZ(-xAngleRadians, -yAngleRadians, -zAngleRadians),
+	registry.Assign<Transform>(entity, position + offset, x87::GameTurnMatrix(xAngleRadians, yAngleRadians, zAngleRadians),
 	                           glm::vec3(scale));
 	registry.Assign<Mobile>(entity);
 	registry.Assign<MobileStatic>(entity, type);

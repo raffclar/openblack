@@ -14,9 +14,8 @@
 #include <algorithm>
 #include <numbers>
 
-#include <glm/gtx/euler_angles.hpp>
-
 #include "3D/MapCoords.h"
+#include "Common/X87Angle.h"
 
 namespace openblack::script::property_rules
 {
@@ -111,22 +110,14 @@ float CreatureSizeForHeight(float height)
 
 Angles PlacedAngles(const glm::mat3& rotation)
 {
-	// Upright: only turned about the upright axis, which is read whole
-	constexpr float k_Upright = 1e-6f;
-	if (std::abs(rotation[1][1] - 1.0f) < k_Upright)
-	{
-		return {.x = 0.0f, .y = -std::atan2(rotation[2][0], rotation[0][0]), .z = 0.0f};
-	}
-	float x = 0.0f;
-	float y = 0.0f;
-	float z = 0.0f;
-	glm::extractEulerAngleXYZ(glm::mat4(rotation), x, y, z);
-	return {.x = -x, .y = -y, .z = -z};
+	// The game finds the angles in the reverse order of its turn. Thus the angle about the upright axis has its full range.
+	const auto angles = x87::GameTurnMatrixAngles(rotation);
+	return {.x = angles.x, .y = angles.y, .z = angles.z};
 }
 
 glm::mat3 PlacedRotation(const Angles& angles)
 {
-	return glm::mat3(glm::eulerAngleXYZ(-angles.x, -angles.y, -angles.z));
+	return x87::GameTurnMatrix(angles.x, angles.y, angles.z);
 }
 
 float CreatureHeadingToLivingAngle(GameHeading heading)

@@ -97,10 +97,10 @@ struct Angles
 	float y {0.0f};
 	float z {0.0f};
 };
-/// The angles of a thing placed the way it faces. A thing that doesn't lean keeps its whole turn, past a quarter either
-/// way.
+/// The angles of a thing placed the way it faces, as the game finds them from its turn. A thing that does not lean keeps
+/// its whole turn, past a quarter either way.
 [[nodiscard]] Angles PlacedAngles(const glm::mat3& rotation);
-/// The way a thing placed at these angles faces
+/// The way a thing placed at these angles faces: the game's turn about z, then about x, then about y
 [[nodiscard]] glm::mat3 PlacedRotation(const Angles& angles);
 
 /// A living thing's angle as the scripts take it is the way it faces across the land, in radians from +x towards +z.
