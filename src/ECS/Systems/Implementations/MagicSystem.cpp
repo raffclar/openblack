@@ -18,6 +18,7 @@
 #include <limits>
 #include <numbers>
 #include <optional>
+#include <utility>
 
 #include <LNDFile.h>
 #include <entt/core/hashed_string.hpp>
@@ -1971,7 +1972,8 @@ entt::entity MagicSystem::GiveSeedToHand(PlayerNames player, SpellSeedType seedT
 	{
 		Locator::miracleFxSystem::value().StartTribalPowerRing(*tribe);
 	}
-	// The hand takes it with its bands and bracelets
+	// The hand shows the name of the miracle, then takes it with its bands and bracelets
+	AnnounceHeldMiracle(seed);
 	if (Locator::miracleFxSystem::has_value())
 	{
 		Locator::miracleFxSystem::value().SeedInHand(powerUp, powerUp);
@@ -2055,6 +2057,8 @@ bool MagicSystem::TapGlobe(entt::entity orb)
 		return false;
 	}
 	registry.Get<SpellSeed>(seed).fromGlobe = true;
+	// The hand takes the globe itself, and a globe does not show the name of its miracle
+	_heldMiracleToolTip.reset();
 	// The pop is heard where the hand took it
 	if (Locator::audio::has_value())
 	{
@@ -2812,11 +2816,22 @@ void MagicSystem::ShowHeldSeedPowerUp(int level, int previous)
 	StopHandEffect(seed);
 	StartHandEffect(*_held);
 	ShowHeldSeed();
-	// A bracelet more, bands flying on and the announcer
+	// The hand shows the name of the miracle at the new level, then a bracelet more, bands flying on and the announcer
+	AnnounceHeldMiracle(seed);
 	if (Locator::miracleFxSystem::has_value())
 	{
 		Locator::miracleFxSystem::value().SeedInHand(level, previous);
 	}
+}
+
+void MagicSystem::AnnounceHeldMiracle(const SpellSeed& seed)
+{
+	_heldMiracleToolTip = magic::GetHeldToolTipText(Info(), magic::GetSpellSeedInfo(Info(), seed.seedType), seed.powerUp);
+}
+
+std::optional<uint32_t> MagicSystem::TakeHeldMiracleToolTip()
+{
+	return std::exchange(_heldMiracleToolTip, std::nullopt);
 }
 
 void MagicSystem::SetIconSeedPowerUp(entt::entity entity, int powerUp)
