@@ -238,6 +238,8 @@ private:
 	void DrawHandMiracleBands(const DrawSceneDesc& desc) const;
 	/// A tribe's power behind a miracle: its name's letters spinning round the hand or rising where it was cast
 	void DrawTribalPower(const DrawSceneDesc& desc) const;
+	/// The words of the game's pause and speed, after the rest of the scene
+	void DrawPauseText(const DrawSceneDesc& desc) const;
 	/// A piece of a broken model: its triangles placed by its atom, a draw for each skin
 	void DrawParticleFragment(const DrawSceneDesc& desc, const particles::draw::FragmentDraw& fragment, uint32_t depth) const;
 	/// A glowing shell over an object's model, by the object as it is drawn this frame

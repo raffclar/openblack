@@ -240,6 +240,8 @@ public:
 	bool GameLogicLoop() noexcept;
 	/// The game's music, for a turn of the world or of the temple
 	void ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel);
+	/// The paused, slower and quicker words at the top of the screen, a frame on by the real time
+	void UpdatePauseText();
 	/// The audio of a turn inside the temple, while the world is paused
 	void ProcessTempleAudioTurn();
 	/// The keys that take the player into the temple's rooms, from outside it or within

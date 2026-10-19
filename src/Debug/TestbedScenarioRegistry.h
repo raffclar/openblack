@@ -107,6 +107,8 @@ enum class Facet : uint8_t
 	Story,
 	/// The tutorial's lessons: the hand's demonstrations and the help texts that go with them
 	Tutorial,
+	/// The interface over the game: the words at the top of the screen while it is paused, slower or quicker
+	Interface,
 
 	_Count
 };
@@ -902,6 +904,11 @@ struct Command
 		/// The testbed holds the search for the creature's route (value 1), so that it waits for its route, or lets the
 		/// search go on (value 0)
 		HoldRouteSearch,
+		/// The game pauses (value 1) or continues (value 0), as the pause key does. Needs no creature.
+		PauseGame,
+		/// The game's speed changes to the amount, as the speed keys or a script change it: 1 is normal. Needs no
+		/// creature.
+		SetGameSpeed,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
