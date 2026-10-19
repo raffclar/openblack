@@ -77,6 +77,9 @@ constexpr float k_DepthLimit = 0.8f;
 /// How far the hand gets with the front pair stretched to the furthest depth, measured straight rather than along the
 /// ground, for a creature drawn at a scale. Each corner's weight is scaled before it multiplies the corner.
 [[nodiscard]] float StraightReach(const Points& points, float scale);
+/// How far ahead the middle of the corners is, for a creature drawn at a scale. A creature on its way to a thing has the
+/// thing in reach when the thing is nearer than this along the ground.
+[[nodiscard]] float MovingReach(const Points& points, float scale);
 
 /// A handful a creature takes from a pile appears this share of its straight reach from it, towards the pile
 constexpr float k_HandfulShare = 0.95f;

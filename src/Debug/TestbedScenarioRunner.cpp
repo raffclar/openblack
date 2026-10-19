@@ -2897,6 +2897,15 @@ void Runner::Give(const Command& command)
 		             ? "playing"
 		             : "can't";
 		break;
+	case Kind::AnimalFlees:
+	{
+		const auto animal = ObjectAt(command.object);
+		result = animal.has_value() && Locator::animalSystem::has_value() &&
+		                 Locator::animalSystem::value().SetupFleeFromObject(*animal, *entity, Reaction::FleeFromObject)
+		             ? "flees"
+		             : "can't";
+		break;
+	}
 	case Kind::DoAction:
 	{
 		const auto* tables = minds.GetTables();

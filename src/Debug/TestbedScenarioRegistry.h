@@ -897,6 +897,8 @@ struct Command
 		/// A script native (script, by its name) runs at once with its arguments in order (scriptArguments). A position
 		/// is three numbers. Needs no creature.
 		CallNative,
+		/// The scenario's object, an animal, runs away from the creature at once, as an animal runs away from a fire
+		AnimalFlees,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

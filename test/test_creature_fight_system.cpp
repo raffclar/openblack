@@ -173,6 +173,7 @@ public:
 	void Place(entt::entity, glm::vec3) override {}
 	void PlaceWithoutWalking(entt::entity, glm::vec3) override {}
 	[[nodiscard]] bool IsMoving(entt::entity) const override { return false; }
+	[[nodiscard]] float KeptFraction(entt::entity) const override { return 0.0f; }
 	[[nodiscard]] const creature_route::WalkableLand& GetWalkableLand() override
 	{
 		throw std::logic_error("the fights do not ask for the walkable land");
