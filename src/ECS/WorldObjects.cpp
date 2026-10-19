@@ -19,6 +19,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "Animals/FishFarmRules.h"
+#include "ECS/AbodeKnock.h"
 #include "ECS/AbodeSurroundings.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
@@ -132,7 +133,6 @@ const GObjectInfo* Row(const Array& rows, Index index)
 	return i < rows.size() ? &rows[i] : nullptr;
 }
 
-/// The people at home in a building come out and decide again what to do
 /// A building hurt below its full life brings everyone inside out, as a knock does. One that stops working through it
 /// calls an emergency in its town when it is the town's storage pit or village centre.
 void BuildingHurt(entt::entity abode, float before, float after)
@@ -148,10 +148,9 @@ void BuildingHurt(entt::entity abode, float before, float after)
 	{
 		return;
 	}
-	const float stops = info->thresholdForStopBeingFunctional;
-	const bool causesEmergency = info->abodeType == AbodeType::StoragePit || info->abodeType == AbodeType::TownCentre;
 	// TODO(villagers): a building that stops working is also marked so for its owner (the building phase)
-	if (before > stops && after <= stops && causesEmergency && Locator::townSystem::has_value())
+	if (abode_knock::HurtCallsEmergency(info->abodeType, before, after, info->thresholdForStopBeingFunctional) &&
+	    Locator::townSystem::has_value())
 	{
 		const auto& towns = registry.Context().towns;
 		if (const auto town = towns.find(registry.Get<const Abode>(abode).townId);
@@ -613,7 +612,7 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
 	                                                : registry.Assign<ObjectLife>(object, ObjectLife {.life = before});
 	life.life = std::max(life.life - damage, 0.0f);
-	if (registry.AllOf<Abode>(object) && life.life < 1.0f)
+	if (registry.AllOf<Abode>(object) && abode_knock::HurtBringsPeopleOut(life.life))
 	{
 		// Its people come out of a building left under its full life, however little it lost
 		BuildingHurt(object, before, life.life);
