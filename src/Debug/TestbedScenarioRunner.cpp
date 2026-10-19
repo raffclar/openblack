@@ -1279,9 +1279,9 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    if (object.dead)
 				    {
-					    return ecs::archetypes::DeadTreeArchetype::Create(position, type,
-					                                                      glm::radians(object.deadLeanDegrees.x), yaw,
-					                                                      glm::radians(object.deadLeanDegrees.y), object.scale);
+					    return ecs::archetypes::DeadTreeArchetype::Create(position, type, glm::radians(object.leanDegrees.x),
+					                                                      yaw, glm::radians(object.leanDegrees.y),
+					                                                      object.scale);
 				    }
 				    return ecs::archetypes::TreeArchetype::Create(object.forest, position, type, true, yaw,
 				                                                  object.fullSize.value_or(object.scale), object.scale);
@@ -1343,7 +1343,9 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 				    {
 					    return ecs::archetypes::StreetLanternArchetype::Create(position, type);
 				    }
-				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f, 0.0f, yaw, 0.0f, object.scale);
+				    return ecs::archetypes::MobileStaticArchetype::Create(position, type, 0.0f,
+				                                                          glm::radians(object.leanDegrees.x), yaw,
+				                                                          glm::radians(object.leanDegrees.y), object.scale);
 			    }
 			    else if constexpr (std::is_same_v<T, AnimatedStaticInfo>)
 			    {

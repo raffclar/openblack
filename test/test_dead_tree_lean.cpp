@@ -14,15 +14,12 @@
 #include <gtest/gtest.h>
 
 #include "Common/X87Angle.h"
-#include "ECS/Archetypes/DeadTreeArchetype.h"
-
-using openblack::ecs::archetypes::DeadTreeArchetype;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(DeadTreeLean, AnUprightTreeTurnsAsBefore)
 {
 	// With no lean, the land script's dead tree turns about the vertical as a dead tree that the game drops
-	const auto rotation = DeadTreeArchetype::LandScriptRotation(0.0f, 0.7f, 0.0f);
+	const auto rotation = openblack::x87::GameTurnMatrix(0.0f, 0.7f, 0.0f);
 	const auto upright = glm::mat3(glm::eulerAngleY(-0.7f));
 	for (glm::length_t c = 0; c < 3; ++c)
 	{
@@ -40,7 +37,7 @@ TEST(DeadTreeLean, TheTreeLeansAboutXAndZ)
 	constexpr float k_X = 0.039619f;
 	constexpr float k_Y = -0.000025f;
 	constexpr float k_Z = 0.001211f;
-	const auto rotation = DeadTreeArchetype::LandScriptRotation(k_X, k_Y, k_Z);
+	const auto rotation = openblack::x87::GameTurnMatrix(k_X, k_Y, k_Z);
 	const auto rows = openblack::x87::GameTurnYxz(k_Y, k_X, k_Z);
 	for (glm::length_t c = 0; c < 3; ++c)
 	{
