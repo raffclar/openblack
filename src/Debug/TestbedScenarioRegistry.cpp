@@ -8888,10 +8888,40 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	                "clearly. The turn about the vertical comes first, then the lean about x, then the lean about z.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -8.0f}, {25.0f, 8.0f}}},
-	    .objects = {{.type = TreeInfo::Pine, .offset = {-18.0f, 0.0f}, .dead = true, .deadLeanDegrees = {-0.4544f, -3.1648f}},
-	                {.type = TreeInfo::ConiferA, .offset = {-6.0f, 0.0f}, .dead = true, .deadLeanDegrees = {2.2700f, 0.0694f}},
-	                {.type = TreeInfo::ConiferA, .offset = {6.0f, 0.0f}, .dead = true, .deadLeanDegrees = {-0.4841f, 1.8931f}},
-	                {.type = TreeInfo::ConiferA, .offset = {18.0f, 0.0f}, .dead = true, .deadLeanDegrees = {20.0f, 10.0f}}},
+	    .objects = {{.type = TreeInfo::Pine, .offset = {-18.0f, 0.0f}, .dead = true, .leanDegrees = {-0.4544f, -3.1648f}},
+	                {.type = TreeInfo::ConiferA, .offset = {-6.0f, 0.0f}, .dead = true, .leanDegrees = {2.2700f, 0.0694f}},
+	                {.type = TreeInfo::ConiferA, .offset = {6.0f, 0.0f}, .dead = true, .leanDegrees = {-0.4841f, 1.8931f}},
+	                {.type = TreeInfo::ConiferA, .offset = {18.0f, 0.0f}, .dead = true, .leanDegrees = {20.0f, 10.0f}}},
+	});
+
+	// Mobile statics that a land script turns and leans: the lean follows the way each one faces
+	all.push_back({
+	    .id = "nature.mobile_static_lean",
+	    .name = "Mobile statics from a land script lean and turn in the game's order",
+	    .facet = Facet::Nature,
+	    .description = "Four mobile statics in a row from the west, each turned 45 degrees about the vertical. The first "
+	                   "fence leans 30 degrees about x. The second fence leans 30 degrees about z. The long rock and the "
+	                   "totem lean about x and z.",
+	    .expected = "Each thing leans in the direction that it faces after its turn, not along the axes of the map. The "
+	                "first fence tips forward along its facing. The second fence tips to its side.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -8.0f}, {25.0f, 8.0f}}},
+	    .objects = {{.type = MobileStaticInfo::CeltFenceTall,
+	                 .offset = {-18.0f, 0.0f},
+	                 .yawDegrees = 45.0f,
+	                 .leanDegrees = {30.0f, 0.0f}},
+	                {.type = MobileStaticInfo::CeltFenceTall,
+	                 .offset = {-6.0f, 0.0f},
+	                 .yawDegrees = 45.0f,
+	                 .leanDegrees = {0.0f, 30.0f}},
+	                {.type = MobileStaticInfo::LongrockSandstone,
+	                 .offset = {6.0f, 0.0f},
+	                 .yawDegrees = 45.0f,
+	                 .leanDegrees = {20.0f, 20.0f}},
+	                {.type = MobileStaticInfo::GateTotemApe,
+	                 .offset = {18.0f, 0.0f},
+	                 .yawDegrees = 45.0f,
+	                 .leanDegrees = {25.0f, -15.0f}}},
 	});
 }
 
