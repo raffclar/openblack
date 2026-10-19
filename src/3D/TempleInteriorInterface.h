@@ -23,6 +23,7 @@
 #include "3D/TempleLight.h"
 #include "3D/TempleMap.h"
 #include "3D/TempleMapSpells.h"
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Graphics/GraphicsHandle.h"
 
@@ -107,7 +108,8 @@ struct TempleSubMeshGlow
 	glm::vec3 colour;
 };
 
-class TempleInteriorInterface
+/// A save keeps the dialogue of the world that the temple keeps while the player is inside (see SaveState)
+class TempleInteriorInterface: public ecs::systems::SavedStateInterface
 {
 public:
 	virtual ~TempleInteriorInterface() = default;
@@ -227,5 +229,8 @@ public:
 	/// Closes the temple at once as its land goes, before the land's entities do: everything its rooms made goes with
 	/// it, and the island's camera and drawing come back, without the walk out to the island
 	virtual void CloseForNewLand() = 0;
+	/// After a load of a saved game: the temple gives back the dialogue that the save kept for it, if nobody has the
+	/// dialogue now. Then, kept or not, the box shows its texts again and the newest starts its reading time again.
+	virtual void ShowHelpAfterLoad() = 0;
 };
 } // namespace openblack

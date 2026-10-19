@@ -32,12 +32,18 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/CameraEdits.h"
+#include "3D/TempleInteriorInterface.h"
+#include "Audio/AudioManagerInterface.h"
+#include "Audio/GameMusic.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "Creature/CreatureHandGlow.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
+#include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -46,6 +52,7 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -71,10 +78,12 @@
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
+#include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "Game.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
 
@@ -252,16 +261,60 @@ bool LoadCamera(std::span<const uint8_t> bytes)
 	return true;
 }
 
+/// The sounds that played at the save do not come back, as the game keeps no sound in its saves. The objects' own sounds
+/// start again on the next turn, and a creature whose creed powers glow hums again, as a creature that the game loads
+/// gets its creed powers one by one.
+void ForgetSavedSounds(Registry& registry)
+{
+	if (Locator::audio::has_value())
+	{
+		Locator::audio::value().ForgetSavedEmitters();
+	}
+	if (!Locator::soundTagSystem::has_value())
+	{
+		return;
+	}
+	Locator::soundTagSystem::value().ForgetSavedSounds();
+	if (!Locator::creatureAnimationSystem::has_value())
+	{
+		return;
+	}
+	using creature_hand_glow::k_PlaceCount;
+	std::vector<std::pair<entt::entity, std::array<creature_hand_glow::SavedPower, k_PlaceCount>>> creatures;
+	registry.Underlying().view<const components::Creature, components::CreatureHandGlows>().each(
+	    [&creatures](entt::entity entity, const components::Creature&, components::CreatureHandGlows& glows) {
+		    std::array<creature_hand_glow::SavedPower, k_PlaceCount> powers {};
+		    for (size_t place = 0; place < k_PlaceCount; ++place)
+		    {
+			    powers.at(place) = creature_hand_glow::SavedPowerOf(glows.glows, static_cast<creature_hand_glow::Place>(place));
+		    }
+		    // The loaded creature has no glows before it gets its powers
+		    glows.glows = {};
+		    creatures.emplace_back(entity, powers);
+	    });
+	for (const auto& [entity, powers] : creatures)
+	{
+		Locator::creatureAnimationSystem::value().LoadCreedPowers(entity, powers);
+	}
+}
+
 template <typename Service>
 systems::SavedStateInterface* FindSystem()
 {
 	return Service::has_value() ? &Service::value() : nullptr;
 }
 
+/// The game's music, which the game keeps for as long as it runs
+systems::SavedStateInterface* FindGameMusic()
+{
+	auto* game = Game::Instance();
+	return game != nullptr ? game->GetGameMusic() : nullptr;
+}
+
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
 using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 31> k_SavedSystems {{
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 33> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindSystem<Locator::particleSystem>},
     {"magic", &FindSystem<Locator::magicSystem>},
@@ -280,8 +333,10 @@ constexpr std::array<std::pair<std::string_view, SystemFinder>, 31> k_SavedSyste
     {"scriptControl", &FindSystem<Locator::scriptControlSystem>},
     {"scriptSwitches", &FindSystem<Locator::chlapi>},
     {"creatureAudio", &FindSystem<Locator::creatureAudioSystem>},
+    {"music", &FindGameMusic},
     {"dynamics", &FindSystem<Locator::dynamicsSystem>},
     {"helpText", &FindSystem<Locator::helpTextSystem>},
+    {"temple", &FindSystem<Locator::temple>},
     {"forest", &FindSystem<Locator::forestSystem>},
     {"teleport", &FindSystem<Locator::teleportSystem>},
     {"animals", &FindSystem<Locator::animalSystem>},
@@ -483,6 +538,7 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 		arena.ring = archetypes::ArenaArchetype::MakeRing(arena.place, arena.radius);
 		arena.ring->SetHidden(!arena.fightOn);
 	}
+	ForgetSavedSounds(registry);
 	SPDLOG_LOGGER_INFO(Log(), "Loaded the saved world: {} entities with {} components", result->report.entities,
 	                   result->report.components);
 	LogNames("components that this build does not know", result->report.unknownComponents);
@@ -528,6 +584,16 @@ bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesa
 	if (const auto systems = gamesave::FindChunk(file, gamesave::k_SystemsTag); systems.has_value())
 	{
 		read = LoadSystems(reflection, *systems) && read;
+	}
+	// The help shows its kept texts again, and the temple gives back the dialogue it kept, as the game does once every
+	// part of a saved game has loaded
+	if (Locator::temple::has_value())
+	{
+		Locator::temple::value().ShowHelpAfterLoad();
+	}
+	else if (Locator::helpTextSystem::has_value())
+	{
+		Locator::helpTextSystem::value().ShowTextAgain();
 	}
 	return read;
 }
