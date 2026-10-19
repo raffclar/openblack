@@ -304,6 +304,11 @@ const GObjectInfo* world_objects::EffectInfoOf(entt::entity object)
 	{
 		return Row(info.flowers, flowers->type);
 	}
+	// An animal takes heat and catches fire by the row of its kind
+	if (const auto* animal = registry.TryGet<const Animal>(object))
+	{
+		return Row(info.animal, animal->type);
+	}
 	// A worship site has the row of its tribe
 	if (const auto* site = registry.TryGet<const WorshipSite>(object))
 	{
