@@ -37,6 +37,9 @@ public:
 	/// Each frame: they are all drawn as usual again once no script holds the cinema bars. When this releases one or
 	/// more of them, the land's draw list is made again on the next frame.
 	virtual void Update() = 0;
+	/// After a load: the models that the game made for these things while it played are made again. A save keeps the
+	/// names of these models but not the models, and the game that loads it may not have them.
+	virtual void RemakeModelsAfterLoad() {}
 	/// Each frame, after the villagers in view get their poses: the eyes of those in view blink and turn. They move by
 	/// the game time of the frame, in whole milliseconds. Then the system puts the eyes on the heads.
 	virtual void PlaceEyes(uint32_t frameGameMs, const glm::mat4& viewProjection) = 0;

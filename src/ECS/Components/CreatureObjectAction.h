@@ -71,8 +71,8 @@ struct CreatureObjectAction
 	uint32_t attempts {0};
 	/// Whether it has started a walk to get in reach
 	bool walked {false};
-	/// Whether it turned to get in reach since its last walk
-	bool turnedSinceWalk {false};
+	/// Whether it turned to get the thing in reach, and reaches when the turn ends
+	bool turnedToReach {false};
 	/// Whether it waited one turn after its walk stopped because it was shut in, for the mind to clear the way
 	bool waitedForWay {false};
 	/// Throwing: how long the throw is to take to get there
@@ -146,6 +146,13 @@ struct CatchHands
 /// Where the creature's hand gets in its pick-up animations, at the model's own size: measured the first time it is
 /// wanted and never again, whatever its shape becomes
 struct PickUpReach
+{
+	creature_reach::Points points {};
+};
+
+/// Where the creature's foot gets in its stomp animations, at the model's own size: measured the first time it is wanted
+/// and never again, whatever its shape becomes
+struct StompReach
 {
 	creature_reach::Points points {};
 };

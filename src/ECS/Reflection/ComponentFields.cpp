@@ -965,7 +965,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
 	    .Field<&components::CreatureObjectAction::walked>("walked")
-	    .Field<&components::CreatureObjectAction::turnedSinceWalk>("turnedSinceWalk")
+	    .Field<&components::CreatureObjectAction::turnedToReach>("turnedToReach")
 	    .Field<&components::CreatureObjectAction::waitedForWay>("waitedForWay")
 	    .Field<&components::CreatureObjectAction::flightSeconds>("flightSeconds")
 	    .Field<&components::CreatureObjectAction::givenFlightSeconds>("givenFlightSeconds")
@@ -988,6 +988,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::PendingCatch>(context).Field<&components::PendingCatch::object>("object");
 	Reflect<components::CatchHands>(context).Field<&components::CatchHands::hands>("hands");
 	Reflect<components::PickUpReach>(context).Field<&components::PickUpReach::points>("points");
+	Reflect<components::StompReach>(context).Field<&components::StompReach::points>("points");
 	Reflect<components::TossHandVelocity>(context).Field<&components::TossHandVelocity::velocity>("velocity");
 	Reflect<components::HeldByCreature>(context).Field<&components::HeldByCreature::creature>("creature");
 	Reflect<components::CreaturePartner>(context)

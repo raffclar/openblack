@@ -53,17 +53,22 @@ TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)
 	}
 }
 
-TEST(LandChange, OnlyANewGameStartsThePlayerAtTheirProfilesAlignment)
+TEST(LandChange, ANewGameOrALoadStartsThePlayerAtTheirProfilesAlignment)
 {
 	EXPECT_TRUE(RulesFor(Kind::NewGame).alignmentFromProfile);
 	EXPECT_TRUE(RulesFor(Kind::Skirmish).alignmentFromProfile);
+	// Each load starts a game, which takes the alignment of the profile, not the alignment of the save
+	EXPECT_TRUE(RulesFor(Kind::SavedGame).alignmentFromProfile);
+	EXPECT_FALSE(RulesFor(Kind::Story).alignmentFromProfile);
 	EXPECT_FALSE(RulesFor(Kind::Testbed).alignmentFromProfile);
 }
 
-TEST(LandChange, OnlyANewGameIsPlayedAsTheProfilePickedNow)
+TEST(LandChange, ANewGameOrALoadIsPlayedAsTheProfilePickedNow)
 {
 	EXPECT_TRUE(RulesFor(Kind::NewGame).gameStarts);
 	EXPECT_TRUE(RulesFor(Kind::Skirmish).gameStarts);
+	EXPECT_TRUE(RulesFor(Kind::SavedGame).gameStarts);
+	EXPECT_FALSE(RulesFor(Kind::SavedGame).playersCarried);
 	EXPECT_FALSE(RulesFor(Kind::Story).gameStarts);
 	EXPECT_FALSE(RulesFor(Kind::FreshScripts).gameStarts);
 	EXPECT_FALSE(RulesFor(Kind::Testbed).gameStarts);

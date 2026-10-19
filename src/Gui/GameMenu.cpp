@@ -845,6 +845,7 @@ void GameMenu::ShowPage(Page page)
 		_originalPlayer = _currentPlayer;
 		_originalName = _currentPlayer.has_value() ? _playerNames.at(*_currentPlayer) : std::u16string {};
 		_mustRestart = false;
+		_previousProfile = _originalName;
 		UpdatePlayersPage();
 	}
 	_page = page;

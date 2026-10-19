@@ -2710,6 +2710,14 @@ void Runner::Give(const Command& command)
 		                done ? "done" : "failed"));
 		return;
 	}
+	if (command.kind == Kind::ContinueGame)
+	{
+		auto* game = Game::Instance();
+		const bool loaded = game != nullptr && game->ContinueFromExitSave();
+		Log(fmt::format("{:.1f}s: continue from the save on exit: {}", _seconds,
+		                loaded ? "loaded, the menu shows" : "a new game"));
+		return;
+	}
 	if (command.kind == Kind::QuickSave)
 	{
 		const bool done = Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().QuickSave();
@@ -3206,6 +3214,7 @@ void Runner::Give(const Command& command)
 	case Kind::SaveGame:
 	case Kind::LoadGame:
 	case Kind::QuickSave:
+	case Kind::ContinueGame:
 	case Kind::StopScript:
 	case Kind::StartScriptMusic:
 	case Kind::RunText:

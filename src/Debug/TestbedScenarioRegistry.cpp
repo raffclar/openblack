@@ -7617,6 +7617,28 @@ void AddMind(std::vector<Scenario>& all)
 		});
 	}
 
+	{
+		// A small rock between a fence and a hut in a village, 20 m from a young tiger of the size it has on the first land
+		auto smallTiger = Content(CreatureType::Tiger, {0.0f, 0.0f});
+		smallTiger.size = 0.26f;
+		all.push_back({
+		    .id = "mind.pick_up_small_rock_by_hut",
+		    .name = "The creature picks up a small rock between a fence and a hut",
+		    .facet = Facet::Mind,
+		    .description = "A young tiger. A small rock lies 20 m from it, between a short fence, a second rock and a hut. "
+		                   "The script tells the tiger to pick up the small rock and look at it.",
+		    .expected = "The tiger walks round to the small rock and stops at the length of its arm from it. It picks the "
+		                "rock up at once. It does not walk again and again beside the rock.",
+		    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+		    .creatures = {smallTiger},
+		    .objects = {{.type = MobileStaticInfo::Rock, .offset = {20.0f, 0.0f}, .scale = 0.267f},
+		                {.type = MobileStaticInfo::CeltFenceShort, .offset = {22.5f, 3.0f}, .yawDegrees = 45.0f},
+		                {.type = MobileStaticInfo::Rock, .offset = {23.3f, -6.3f}, .scale = 0.267f},
+		                {.type = AbodeInfo::CelticShackX, .offset = {28.0f, 2.7f}}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .object = 0, .action = "ExamineByPickingUp"}},
+		});
+	}
+
 	all.push_back({
 	    .id = "mind.mimic",
 	    .name = "Mimic the player",
@@ -7913,6 +7935,23 @@ void AddMind(std::vector<Scenario>& all)
 	    .vortices = {{.type = VortexType::In, .offset = {0.0f, 0.0f}, .delaySeconds = 0.5f}},
 	    .commands = {Command {.kind = Kind::SaveGame, .delaySeconds = 4.0f, .value = 0},
 	                 Command {.kind = Kind::LoadGame, .delaySeconds = 6.0f, .value = 0}},
+	});
+
+	all.push_back({
+	    .id = "frontend.continue_with_menu",
+	    .name = "Start-up: continue from the save on exit",
+	    .facet = Facet::Story,
+	    .description = "Two oaks stand on the testbed. 2 seconds after the start the game saves into the slot of the "
+	                   "save on exit (slot 20). 1 second later the game continues as a plain start of the program "
+	                   "does.",
+	    .expected = "The tips screen shows while slot 20 loads. Then the menu fades in over the testbed as it was "
+	                "saved, with the profile's name above its buttons, and the game is paused under it. The hand is "
+	                "hidden and the menu's pointer shows. Continue Game closes the menu, and the game runs again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -20.0f}, {20.0f, 20.0f}}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {6.0f, 0.0f}}, {.type = TreeInfo::Oak, .offset = {-8.0f, 3.0f}}},
+	    .commands = {Command {.kind = Kind::SaveGame, .delaySeconds = 2.0f, .value = 20},
+	                 Command {.kind = Kind::ContinueGame, .delaySeconds = 1.0f}},
 	});
 
 	all.push_back({
@@ -9475,10 +9514,10 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
-	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::PlayFallingSpellFilm ||
-	       kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease ||
-	       kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding ||
-	       kind == Kind::CallNative || IsPointerCommand(kind);
+	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame ||
+	       kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
+	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
+	       kind == Kind::FinishBuilding || kind == Kind::CallNative || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -9663,6 +9702,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "script release",
 	    "fill the worship site icons",
 	    "quick save",
+	    "continue the game",
 	    "charge an icon with its seed in the hand",
 	    "finish the building",
 	    "call a script native",

@@ -88,9 +88,13 @@ public:
 	/// A save that the game does by itself into the slot: a new picture of the screen, and the slot's own name. Returns
 	/// whether it wrote every file of the world.
 	virtual bool InstantSave(uint32_t slot) = 0;
-	/// The save as the player leaves the game, into the slot of the save on exit, when the rules let it. The game makes
-	/// the screen black before it saves, so the picture of this save is black.
-	virtual bool SaveOnExit() = 0;
+	/// The save as a game ends, into the slot of the save on exit, when the rules let it. When the player quits, the game
+	/// makes the screen black before it saves, so the picture of this save is black. When another game starts after this
+	/// one, the picture is the screen of the last frame.
+	virtual bool SaveOnExit(bool quitting) = 0;
+	/// Whether the save on exit of the current player is there and the game can open its world file. A plain start of
+	/// the program continues from it.
+	[[nodiscard]] virtual bool HasExitSave() const = 0;
 	/// The end of a game turn: the game autosaves when an autosave is due
 	virtual void EndTurn() = 0;
 	/// The keys of the quick save and the quick load. Returns whether the game saved or loaded.

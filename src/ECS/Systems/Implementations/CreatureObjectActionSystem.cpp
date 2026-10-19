@@ -35,12 +35,15 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/X87.h"
 #include "Common/X87Angle.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureGiving.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
@@ -147,12 +150,6 @@ constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface
 constexpr glm::vec3 k_MeshBack {0.0f, 0.0f, 1.0f};
 /// Turning to face what it throws at or points at, it tries this many times
 constexpr uint32_t k_TurnAttempts = 2;
-/// Walking up to something it walks to within this share of the distance to the middle of its reach, and stops no
-/// nearer than this share of it
-constexpr float k_ApproachFar = 1.0f;
-constexpr float k_ApproachNear = 0.6f;
-/// Near enough to reach once turned: within this share of the distance to the middle of its reach, either way
-constexpr float k_TurnInReachShare = 0.5f;
 /// Nothing smaller than this counts as a distance
 constexpr float k_Tiny = 1e-4f;
 
@@ -343,6 +340,44 @@ std::optional<creature_reach::Points> MeasureReach(entt::entity creature, const 
 		reach.at(i) = *hand;
 	}
 	return reach;
+}
+
+/// How far the hand or foot gets in the reaching animations, measured once in the model's own size, the first time it
+/// is wanted, and scaled as the creature is drawn. None before the creature is posed.
+template <typename Kept>
+std::optional<float> KeptStraightReach(entt::entity creature, ReachWith with,
+                                       const std::array<size_t, creature_reach::k_CornerCount>& animations)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return std::nullopt;
+	}
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	if (const auto* kept = registry.TryGet<const Kept>(creature))
+	{
+		return creature_reach::StraightReach(kept->points, transform->scale.x);
+	}
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* points = body != nullptr ? PointsOf(*body) : nullptr;
+	if (points == nullptr || !Locator::creatureAnimationSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	auto unscaled = *transform;
+	unscaled.scale = glm::vec3(1.0f);
+	const auto timeMs = with == ReachWith::FingerEnds ? points->pickUpMs : points->destroyMs;
+	const auto reach = MeasureReach(creature, unscaled, *points, with, animations, timeMs);
+	if (!reach.has_value())
+	{
+		return std::nullopt;
+	}
+	registry.AssignOrReplace<Kept>(creature, Kept {.points = *reach});
+	return creature_reach::StraightReach(*reach, transform->scale.x);
 }
 
 float DurationOf(entt::entity creature, size_t animation)
@@ -965,43 +1000,24 @@ void SetPointing(CreatureObjectAction& action, const Transform& transform, const
 	SetSlots(action, creature_pointing::k_Animations, weights);
 }
 
-/// A vector along the ground turned by an angle
-glm::vec2 Turned(glm::vec2 v, float angle)
-{
-	const auto c = std::cos(angle);
-	const auto s = std::sin(angle);
-	return {(v.x * c) - (v.y * s), (v.x * s) + (v.y * c)};
-}
-
-/// The point to turn to face so that a target lies in the direction of the middle of the reach, on whichever side
-/// needs the smaller turn
-glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points& reach, const glm::vec3& target)
+/// The point to turn to face so that a target lies in the direction of the middle of the reach. The middle is on the
+/// side of the hand that reaches for the target.
+glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points& reach, const glm::vec3& target, bool mirrored)
 {
 	const auto from = glm::xz(transform.position);
 	const auto towards = glm::xz(target) - from;
 	const auto centre = creature_reach::Centre(reach);
-	const glm::vec2 ahead {0.0f, -1.0f};
-	const auto aheadInWorld = glm::xz(transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
-	std::optional<glm::vec2> best;
-	float bestTurn = 0.0f;
-	for (const auto side : {1.0f, -1.0f})
+	const glm::vec2 middle {mirrored ? -centre.x : centre.x, centre.z};
+	if (glm::length(middle) < k_Tiny)
 	{
-		const glm::vec2 middle {centre.x * side, centre.z};
-		if (glm::length(middle) < k_Tiny)
-		{
-			continue;
-		}
-		// How far round from ahead the middle of the reach is, and so which way to face for it to lie on the target
-		const auto offset = std::atan2((ahead.x * middle.y) - (ahead.y * middle.x), glm::dot(ahead, middle));
-		const auto facing = Turned(towards, -offset);
-		const auto turn = std::acos(std::clamp(glm::dot(glm::normalize(facing), glm::normalize(aheadInWorld)), -1.0f, 1.0f));
-		if (!best.has_value() || turn < bestTurn)
-		{
-			best = facing;
-			bestTurn = turn;
-		}
+		return glm::xz(target);
 	}
-	return from + best.value_or(towards);
+	// How far round from ahead the middle of the reach is, and so which way to face for it to lie on the target
+	const glm::vec2 ahead {0.0f, -1.0f};
+	const auto offset = std::atan2((ahead.x * middle.y) - (ahead.y * middle.x), glm::dot(ahead, middle));
+	const auto c = std::cos(-offset);
+	const auto s = std::sin(-offset);
+	return from + glm::vec2((towards.x * c) - (towards.y * s), (towards.x * s) + (towards.y * c));
 }
 
 /// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off
@@ -1012,6 +1028,39 @@ bool OnTheMap(const ecs::Registry& registry, entt::entity thing)
 }
 
 /// One game turn of walking or turning up to what the creature acts on
+/// Where the creature stands and faces now: the heading its walking last reached, which the drawn body only catches up
+/// with over the turn, so that a catch weighs the thing against the way the creature has finished turning
+Transform AsFacing(const ecs::Registry& registry, entt::entity creature, const Transform& transform)
+{
+	auto facing = transform;
+	if (const auto* walking = registry.TryGet<const CreatureLocomotion>(creature); walking != nullptr && walking->started)
+	{
+		facing.rotation = glm::mat3(glm::eulerAngleY(walking->heading.Yaw()));
+	}
+	return facing;
+}
+
+/// The reaching animations start, weighted by where the thing lies between the corners of the reach
+void BeginReaching(entt::entity creature, CreatureObjectAction& action, CreatureAnimation& animation, const Reach& reach)
+{
+	const auto& animations =
+	    action.kind == Kind::PickUp ? creature_reach::k_PickUpAnimations : creature_reach::k_DestroyAnimations;
+	SetSlots(action, animations, reach.blend.weights);
+	action.mirrored = reach.mirrored;
+	BeginPlaying(creature, action, animation);
+}
+
+/// How high a point is above the land under it
+float AboveGround(const glm::vec3& point)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return point.y;
+	}
+	return point.y - Locator::terrainSystem::value().GetAltitude(map_coords::FtoL(point.x * 65536.0f * 0.1f),
+	                                                             map_coords::FtoL(point.z * 65536.0f * 0.1f));
+}
+
 void Approach(entt::entity creature, CreatureObjectAction& action, const Creature& body, const Transform& transform,
               CreatureAnimation& animation, const CreatureHeldObject* held)
 {
@@ -1143,40 +1192,74 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		}
 		action.maxReach = creature_reach::MaxReach(*action.reach);
 	}
-	const auto local = ToLocal(transform, at->position);
-	const auto reach = ReachFor(*action.reach, local);
-	const auto centre = creature_reach::Centre(*action.reach);
-	const auto ideal = std::max(glm::length(glm::vec2(centre.x, centre.z)), k_Tiny);
-	const auto distance = glm::length(glm::vec2(local.x, local.z));
-	// It continues until the thing is in reach or the action fails, with no limit to its walks
-	switch (creature_object_actions::NextApproachStep(
-	    reach.blend.inRange, std::abs(distance - ideal) <= ideal * k_TurnInReachShare, action.turnedSinceWalk))
+	// The reach is measured from the way the creature faces now, which the drawn body catches up with only over a turn
+	const auto facing = AsFacing(registry, creature, transform);
+	// After the turn to get the thing in reach, it reaches at once
+	if (std::exchange(action.turnedToReach, false))
 	{
-	case creature_object_actions::ApproachStep::Begin:
-	{
-		const auto& animations =
-		    action.kind == Kind::PickUp ? creature_reach::k_PickUpAnimations : creature_reach::k_DestroyAnimations;
-		SetSlots(action, animations, reach.blend.weights);
-		action.mirrored = reach.mirrored;
-		BeginPlaying(creature, action, animation);
+		BeginReaching(creature, action, animation, ReachFor(*action.reach, ToLocal(facing, at->position)));
 		return;
 	}
-	case creature_object_actions::ApproachStep::Turn:
-		++action.attempts;
-		action.turnedSinceWalk = true;
-		locomotion.TurnToFace(creature, FacingToReach(transform, *action.reach, at->position));
+	const bool pickingUp = action.kind == Kind::PickUp;
+	const auto straight =
+	    pickingUp ? KeptStraightReach<PickUpReach>(creature, ReachWith::FingerEnds, creature_reach::k_PickUpAnimations)
+	              : KeptStraightReach<StompReach>(creature, ReachWith::Foot, creature_reach::k_DestroyAnimations);
+	if (!straight.has_value())
+	{
+		// Not posed yet: it tries again next turn
 		return;
-	case creature_object_actions::ApproachStep::Walk:
-		break;
+	}
+	const auto reach = ReachFor(*action.reach, ToLocal(facing, at->position));
+	const float dx = at->position.x - transform.position.x;
+	const float dz = at->position.z - transform.position.z;
+	const float flatDistance = std::sqrt((dx * dx) + (dz * dz));
+	const bool seen = creature_mind::CanSee(x87::Distance<x87::SumOrder::Zyx>(at->position, transform.position),
+	                                        object_measures::Height(registry, *action.target));
+	using Step = creature_object_actions::ApproachStep;
+	const auto step = creature_object_actions::NextApproachStep(seen, flatDistance, *straight, reach.blend.inRange);
+	if (step == Step::Begin)
+	{
+		// A thing in reach that is high above the creature stops the pick-up
+		if (pickingUp && creature_object_actions::TooHighToPickUp(
+		                     std::abs(AboveGround(at->position) - AboveGround(transform.position)),
+		                     gutils::GetDistanceInMetres(glm::xz(transform.position), glm::xz(at->position))))
+		{
+			Fail(action, "it is too high");
+			return;
+		}
+		// A thing outside the corners of its reach makes it turn first, so that the middle of its reach lies on the
+		// thing. Then it reaches.
+		if (!reach.blend.inRange &&
+		    locomotion.TurnToFace(creature, FacingToReach(facing, *action.reach, at->position, reach.mirrored)))
+		{
+			action.turnedToReach = true;
+			return;
+		}
+		BeginReaching(creature, action, animation, reach);
+		return;
+	}
+	// Out of reach, it walks to the thing again and stops short of it. Not yet seen, a pick-up walks to where the
+	// creature believes the thing is, and stops further away.
+	auto destination = glm::xz(at->position);
+	float stopShort = *straight;
+	if (step == Step::WalkNear)
+	{
+		stopShort = creature_object_actions::NearWalkDistance(object_measures::TwoDRadius(registry, creature),
+		                                                      object_measures::TwoDRadius(registry, *action.target));
+		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+		const auto* belief = mind != nullptr && pickingUp ? mind->beliefs.Find(*action.target) : nullptr;
+		if (belief != nullptr)
+		{
+			destination = map_coords::ToMetres(belief->place);
+		}
 	}
 	++action.attempts;
 	using MoveResult = CreatureLocomotionSystemInterface::MoveResult;
-	const auto result = locomotion.MoveTo(creature, glm::xz(at->position), CreatureLocomotionSystemInterface::Pace::Walk,
-	                                      ideal * k_ApproachNear, ideal * k_ApproachFar);
+	const auto result =
+	    locomotion.MoveTo(creature, destination, CreatureLocomotionSystemInterface::Pace::Walk, stopShort, 0.0f);
 	switch (creature_cast_moves::WalkStartOf(result == MoveResult::Started, result != MoveResult::InvalidDestination))
 	{
 	case creature_cast_moves::WalkStart::Walking:
-		action.turnedSinceWalk = false;
 		break;
 	case creature_cast_moves::WalkStart::TryAgain:
 		// The creature cannot walk now: it asks again on the next turn
@@ -1295,18 +1378,6 @@ bool StepAccepted(entt::entity creature, const Transform& transform, bool mirror
 	    locomotion.GetWalkableLand(), creature_route::StepBlock(end), glm::xz(transform.position),
 	    [&locomotion, creature](glm::ivec2 cell) { return locomotion.ThingCirclesIn(creature, cell); });
 	return !creature_route::InsideAny(glm::xz(end), circles);
-}
-
-/// Where the creature stands and faces now: the heading its walking last reached, which the drawn body only catches up
-/// with over the turn, so that a catch weighs the thing against the way the creature has finished turning
-Transform AsFacing(const ecs::Registry& registry, entt::entity creature, const Transform& transform)
-{
-	auto facing = transform;
-	if (const auto* walking = registry.TryGet<const CreatureLocomotion>(creature); walking != nullptr && walking->started)
-	{
-		facing.rotation = glm::mat3(glm::eulerAngleY(walking->heading.Yaw()));
-	}
-	return facing;
 }
 
 /// A frame of the side step: the creature is carried by its share of the step's travel, put back on ground it may stand on
@@ -2426,37 +2497,7 @@ bool CreatureObjectActionSystem::CanKick(entt::entity creature, entt::entity tar
 
 std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entity creature) const
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(creature))
-	{
-		return std::nullopt;
-	}
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	if (transform == nullptr)
-	{
-		return std::nullopt;
-	}
-	// Measured once in the model's own size, the first time it is wanted, and scaled as the creature is drawn
-	if (const auto* kept = registry.TryGet<const PickUpReach>(creature))
-	{
-		return creature_reach::StraightReach(kept->points, transform->scale.x);
-	}
-	const auto* body = registry.TryGet<const Creature>(creature);
-	const auto* points = body != nullptr ? PointsOf(*body) : nullptr;
-	if (points == nullptr || !Locator::creatureAnimationSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	auto unscaled = *transform;
-	unscaled.scale = glm::vec3(1.0f);
-	const auto reach =
-	    MeasureReach(creature, unscaled, *points, ReachWith::FingerEnds, creature_reach::k_PickUpAnimations, points->pickUpMs);
-	if (!reach.has_value())
-	{
-		return std::nullopt;
-	}
-	registry.AssignOrReplace<PickUpReach>(creature, PickUpReach {.points = *reach});
-	return creature_reach::StraightReach(*reach, transform->scale.x);
+	return KeptStraightReach<PickUpReach>(creature, ReachWith::FingerEnds, creature_reach::k_PickUpAnimations);
 }
 
 void CreatureObjectActionSystem::ProcessTurn()
@@ -2589,7 +2630,7 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 				    animation.slots.clear();
 				    return;
 			    }
-			    const auto local = ToLocal(transform, at->position);
+			    const auto local = ToLocal(AsFacing(registry, entity, transform), at->position);
 			    const auto reach =
 			        creature_reach::Solve(action.mirrored ? creature_reach::Mirrored(*action.reach) : *action.reach, local);
 			    if (!reach.inRange)
