@@ -552,6 +552,8 @@ constexpr float k_CongregationClear = 10.0f;
 /// Failing that it is near a building, this far and up to as far again
 constexpr float k_CongregationNearLeast = 10.0f;
 constexpr float k_CongregationNearRange = 10.0f;
+/// With fewer buildings than this, the gathering place counts the town's planned buildings too
+constexpr size_t k_CongregationLeastBuildings = 3;
 /// A new building this close to the gathering place, past its own size, moves it
 constexpr float k_CongregationBuildingGap = 7.5f;
 } // namespace
@@ -618,7 +620,6 @@ glm::vec2 TownSystem::GetCongregationPos(entt::entity townEntity)
 	}
 	const auto& infos = Locator::infoConstants::value().abode;
 	// The town's buildings other than fields, in the order the town keeps them
-	// TODO(villagers): a town with fewer than three counts its planned buildings too; openblack has none yet
 	std::vector<glm::vec2> buildings;
 	for (const auto abode : town.abodes)
 	{
@@ -629,6 +630,17 @@ glm::vec2 TownSystem::GetCongregationPos(entt::entity townEntity)
 			continue;
 		}
 		buildings.emplace_back(transform->position.x, transform->position.z);
+	}
+	// A town with fewer than three counts its planned buildings too
+	if (buildings.size() < k_CongregationLeastBuildings)
+	{
+		for (const auto planned : town.planned)
+		{
+			if (const auto* transform = registry.Valid(planned) ? registry.TryGet<const Transform>(planned) : nullptr)
+			{
+				buildings.emplace_back(transform->position.x, transform->position.z);
+			}
+		}
 	}
 	std::optional<glm::vec2> found;
 	const auto& townTransform = registry.Get<const Transform>(townEntity);

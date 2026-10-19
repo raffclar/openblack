@@ -1028,7 +1028,7 @@ uint32_t villager_worship::GotoStoragePitForWorshipSupplies(LivingAction& action
 	{
 		return 0;
 	}
-	// TODO(villagers): to the edge of the pit's food nearest it; the pit's door for now
+	// It walks to the edge of the pit's food nearest it, which for a storage pit is the pit's door
 	MoveOnPathsTo(action, *pit, villager_home::ArrivePosition(*pit), VillagerStates::ArrivesAtStoragePitForWorshipSupplies);
 	return 1;
 }
