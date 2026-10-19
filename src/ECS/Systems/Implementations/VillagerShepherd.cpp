@@ -630,7 +630,8 @@ uint32_t villager_shepherd::ShepherdFetchStray(LivingAction& /*action*/)
 
 bool villager_shepherd::ExitShepherding(LivingAction& action, VillagerStates next)
 {
-	if (IsShepherdingState(next))
+	const bool nextIsFinal = Locator::infoConstants::value().villagerStateTable.at(static_cast<size_t>(next)).isFinalState != 0;
+	if (!rules::LeavesShepherding(IsShepherdingState(next), nextIsFinal))
 	{
 		return false;
 	}

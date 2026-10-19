@@ -626,6 +626,29 @@ TEST(ScriptObjectsSystem, DisbandingLetsEveryMemberGo)
 	EXPECT_FALSE(system->Disband(rock));
 }
 
+TEST(ScriptObjectsSystem, AMemberThatLeftItsFlockBeforeTheDisbandKeepsItsReference)
+{
+	// The temple builders of the first land: each builder that the script attaches keeps a reference while in the flock.
+	// A builder that herded a flock when the script took it leaves the script's flock at once, as in the game.
+	auto [world, system] = MakeSystem();
+	const auto builder = world->Add(5, {.kind = Kind::Villager, .controlled = true});
+	const auto shepherd = world->Add(6, {.kind = Kind::Villager, .controlled = true});
+	const auto flock = world->Add(4, {.container = Container::Flock, .members = {builder}});
+	system->AddReference(builder);
+	system->AddReference(shepherd);
+	EXPECT_TRUE(system->Disband(flock));
+	system->ReleaseUnreferenced();
+	// The builder goes back into the game. The shepherd keeps its reference, so it stays in the script and under its
+	// control, and it does not go back to its town.
+	EXPECT_FALSE(world->objects.at(builder).inScript);
+	EXPECT_FALSE(world->objects.at(builder).controlled);
+	EXPECT_TRUE(world->objects.at(shepherd).inScript);
+	EXPECT_TRUE(world->objects.at(shepherd).controlled);
+	ASSERT_EQ(system->Places().size(), 1U);
+	EXPECT_EQ(system->Places().front().object, shepherd);
+	EXPECT_EQ(system->Places().front().references, 1);
+}
+
 TEST(ScriptObjectsSystem, AnObjectLetGoOfStaysInAScriptUntilTheScriptsTurnEnds)
 {
 	auto [world, system] = MakeSystem();

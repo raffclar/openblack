@@ -24,6 +24,11 @@ namespace
 constexpr int32_t k_CoastCells = 999999;
 } // namespace
 
+bool shepherd_rules::LeavesShepherding(bool nextIsShepherding, bool nextIsFinal)
+{
+	return !nextIsShepherding && nextIsFinal;
+}
+
 std::optional<shepherd_rules::FlockChoice> shepherd_rules::ChooseBestFlock(std::span<const FlockCandidate> flocks)
 {
 	std::optional<FlockChoice> best;
