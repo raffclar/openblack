@@ -113,6 +113,7 @@
 #include "ECS/Systems/Implementations/MusicMoodSystem.h"
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
+#include "ECS/Systems/Implementations/PauseTextSystem.h"
 #include "ECS/Systems/Implementations/PickingSystem.h"
 #include "ECS/Systems/Implementations/PlayerProfileSystem.h"
 #include "ECS/Systems/Implementations/PlayerSystem.h"
@@ -247,6 +248,7 @@ using openblack::ecs::systems::MusicMoodSystem;
 using openblack::ecs::systems::ObjectDrawListSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
+using openblack::ecs::systems::PauseTextSystem;
 using openblack::ecs::systems::PickingSystem;
 using openblack::ecs::systems::PlayerProfileSystem;
 using openblack::ecs::systems::PlayerSystem;
@@ -455,6 +457,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	                              [](GestureEventsInterface* /*unowned*/) {});
 	Locator::magicSystem::emplace<MagicSystem>();
 	Locator::miracleFxSystem::emplace<MiracleFxSystem>();
+	Locator::pauseTextSystem::emplace<PauseTextSystem>();
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
 	Locator::rewardSystem::emplace<ecs::systems::RewardSystem>();
@@ -632,6 +635,7 @@ void openblack::ShutDownServices()
 	Locator::heartbeatSystem::reset();
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
+	Locator::pauseTextSystem::reset();
 	Locator::fireSystem::reset();
 	Locator::explosionSystem::reset();
 	Locator::rewardSystem::reset();

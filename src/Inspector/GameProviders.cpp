@@ -18,6 +18,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
@@ -177,6 +178,7 @@
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
+#include "ECS/Systems/PauseTextSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -373,6 +375,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"appleBarrelSystem", "living.apple_barrel"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
+    LocatorCoverage {"pauseTextSystem", "view.pause_text"},
     LocatorCoverage {"fireSystem", "magic.fires"},
     LocatorCoverage {"explosionSystem", "magic.state"},
     LocatorCoverage {"rewardSystem", "living.rewards"},
@@ -2337,6 +2340,26 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 std::unique_ptr<ProviderInterface> ViewProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("view");
+	provider->Add(Query("pause_text", "The words of the pause and the speed: which words show (paused, slower, faster or "
+	                                  "none), their fade made smooth, and the turn of their letters"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = {{"shown", false}};
+		              if (!Locator::pauseTextSystem::has_value())
+		              {
+			              return QueryResult::Value(std::move(result));
+		              }
+		              if (const auto shown = Locator::pauseTextSystem::value().GetShown())
+		              {
+			              constexpr std::array<std::string_view, 3> k_Kinds {"paused", "slower", "faster"};
+			              result["shown"] = true;
+			              result["kind"] = shown->kind == gui::pause_text::Kind::None
+			                                   ? std::string_view("none")
+			                                   : k_Kinds.at(static_cast<size_t>(shown->kind));
+			              result["eased"] = shown->eased;
+			              result["turn"] = shown->turn;
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, its "
 	                             "creature and its effects, and whether films and 16-bit colour are on"),
 	              [](const QueryContext& /*c*/) {

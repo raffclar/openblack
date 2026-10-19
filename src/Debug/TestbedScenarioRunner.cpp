@@ -1891,6 +1891,12 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptControlled>(*object) ? "still controlled"
 		                                                                                            : "released";
 	}
+	case Kind::PauseGame:
+		Locator::time::value().SetPaused(command.value != 0);
+		return command.value != 0 ? "paused" : "running";
+	case Kind::SetGameSpeed:
+		Locator::time::value().SetSpeed(command.amount);
+		return fmt::format("speed {}", command.amount);
 	case Kind::FinishBuilding:
 	{
 		const auto object = ObjectAt(command.object);
@@ -2554,7 +2560,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
-	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding)
+	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
+	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3212,6 +3219,8 @@ void Runner::Give(const Command& command)
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:
+	case Kind::PauseGame:
+	case Kind::SetGameSpeed:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
