@@ -12,7 +12,9 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <optional>
@@ -414,4 +416,76 @@ TEST_F(ParticleSaveTest, ARuleStateOfAnotherFileIsSkippedAndTheLoadFailsCleanly)
 	reflection::BinaryReader in(Context(), bytes.effects, identity);
 	EffectReader reader(in, tables);
 	EXPECT_FALSE(other->Load(reader));
+}
+
+namespace
+{
+/// A surface turned round the vertical, made by its rule at the start of the effect
+std::string SurfaceEffect()
+{
+	return Header() + Object("ZR_SurfRevol", "Surface0",
+	                         "PROPERTY Group INTEGER 0\nPROPERTY FunctionIndex INTEGER 2\nPROPERTY NumU INTEGER 6\n"
+	                         "PROPERTY NumV INTEGER 4\nPROPERTY ColorA INTEGER 255\nPROPERTY SpeedV FLOAT 1\n"
+	                         "PROPERTY TextureFileName STRING .\\Data\\Textures\\S_Teleport_Stars.raw\n");
+}
+
+/// The surfaces that an effect draws
+size_t SurfacesDrawn(const Effect& effect)
+{
+	Effect::DrawWalk walk;
+	effect.Walk(1.0f, walk);
+	return static_cast<size_t>(std::ranges::count_if(walk.atoms, [](const auto& atom) {
+		return atom.creator != nullptr && atom.creator->kind == Creator::Kind::Surface && atom.surface != nullptr;
+	}));
+}
+
+/// Removes the name of the creator that the rule keeps from saved bytes, as a save from before the name had it
+std::vector<uint8_t> WithoutRuleCreatorName(std::vector<uint8_t> bytes)
+{
+	const std::string name = "#rule 0";
+	std::vector<uint8_t> entry(sizeof(uint32_t));
+	const auto length = static_cast<uint32_t>(name.size());
+	std::memcpy(entry.data(), &length, sizeof(length));
+	entry.insert(entry.end(), name.begin(), name.end());
+	const auto found = std::ranges::search(bytes, entry);
+	EXPECT_FALSE(found.empty());
+	const std::vector<uint8_t> empty(sizeof(uint32_t), 0);
+	const auto at = bytes.erase(found.begin(), found.end());
+	bytes.insert(at, empty.begin(), empty.end());
+	return bytes;
+}
+} // namespace
+
+TEST_F(ParticleSaveTest, ASurfaceOfItsRuleComesBackDrawnAndTurnsOnAsBefore)
+{
+	const auto text = SurfaceEffect();
+	auto saved = Make(text);
+	for (int i = 0; i < 4; ++i)
+	{
+		saved->Step(k_Step);
+	}
+	ASSERT_EQ(SurfacesDrawn(*saved), 1u);
+	const auto bytes = Save(*saved);
+	auto loaded = Make(text);
+	Load(bytes, *loaded);
+	EXPECT_EQ(SurfacesDrawn(*loaded), 1u);
+	EXPECT_EQ(Drawn(*loaded), Drawn(*saved));
+	ExpectSameSteps(*saved, *loaded, 5);
+	EXPECT_EQ(SurfacesDrawn(*loaded), 1u);
+}
+
+TEST_F(ParticleSaveTest, ASurfaceInASaveFromBeforeItsCreatorHadANameIsDrawnAgain)
+{
+	const auto text = SurfaceEffect();
+	auto saved = Make(text);
+	for (int i = 0; i < 4; ++i)
+	{
+		saved->Step(k_Step);
+	}
+	auto bytes = Save(*saved);
+	bytes.effects = WithoutRuleCreatorName(std::move(bytes.effects));
+	auto loaded = Make(text);
+	Load(bytes, *loaded);
+	EXPECT_EQ(SurfacesDrawn(*loaded), 1u);
+	EXPECT_EQ(Drawn(*loaded), Drawn(*saved));
 }

@@ -749,6 +749,9 @@ public:
 	[[nodiscard]] virtual bool Unported() const { return false; }
 	/// It keeps an effect with no atoms alive until the effect closes down, waiting for something to act on
 	[[nodiscard]] virtual bool KeepsAlive() const { return false; }
+	/// The creator of the atoms that the rule makes, when the rule keeps the creator itself and the effect does not. A
+	/// save names an atom of such a creator by the rule, so that the load gives the atom the same creator.
+	[[nodiscard]] virtual const Creator* OwnCreator() const { return nullptr; }
 	/// Runs on the collection; false lets the rule go from it. By default it runs on each atom whose condition holds.
 	virtual bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const;
 	/// Runs on one atom; false removes the atom
