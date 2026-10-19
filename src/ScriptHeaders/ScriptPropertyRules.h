@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <bit>
 #include <optional>
 #include <span>
 
@@ -150,5 +151,15 @@ struct PlayerPlace
 [[nodiscard]] float HeadingSpin(float draw);
 /// The largest draw each axis of that spin takes
 constexpr float k_HeadingSpinDraw = 200.0f;
+/// The value that the spin takes away from the draw
+constexpr float k_HeadingSpinMiddle = 100.0f;
+/// The part of the draw that the spin keeps (the bits of the game's 0.01)
+inline constexpr float k_HeadingSpinScale = std::bit_cast<float>(0x3C23D70Au);
+
+/// The fall of a thing that a script throws at a place, in metres a second each second (the bits of the game's -9.81)
+inline constexpr float k_TargetGravity = std::bit_cast<float>(0xC11CF5C3u);
+/// The velocity that a script throws a thing at so that it gets to a place after a time, with no air drag: the
+/// distance across the land in that time, and the height with the fall in that time added
+[[nodiscard]] glm::vec3 TargetVelocity(const glm::vec3& from, const glm::vec3& to, float seconds);
 
 } // namespace openblack::script::property_rules

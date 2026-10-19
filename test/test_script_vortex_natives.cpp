@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <algorithm>
+#include <bit>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -332,4 +335,64 @@ TEST(ScriptHeading, TheTumbleIsMinusOneToOne)
 	EXPECT_FLOAT_EQ(HeadingSpin(0.0f), -1.0f);
 	EXPECT_FLOAT_EQ(HeadingSpin(100.0f), 0.0f);
 	EXPECT_FLOAT_EQ(HeadingSpin(200.0f), 1.0f);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ScriptHeading, TheTumbleRoundsEachStepToAFloat)
+{
+	// The draw less 100 rounds to a float before the multiplication by the float 0.01
+	EXPECT_EQ(std::bit_cast<uint32_t>(HeadingSpin(37.3f)), 0xBF208312u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(HeadingSpin(3.3f)), 0xBF778D4Fu);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ScriptTarget, TheThrowGetsToThePlaceInTheTime)
+{
+	const auto velocity = TargetVelocity({10.0f, 2.0f, 20.0f}, {14.0f, 2.0f, 26.0f}, 2.0f);
+	EXPECT_EQ(velocity.x, 2.0f);
+	EXPECT_EQ(velocity.z, 3.0f);
+	// Level with the place, it goes up at half the fall in the time, so that it comes back down at the place
+	EXPECT_EQ(velocity.y, -k_TargetGravity);
+	// The gravity is the bits of the game's constant
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_TargetGravity), 0xC11CF5C3u);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptVortexNatives, AThingIsThrownToGetToTheTarget)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = registry.Create();
+	registry.Assign<ecs::components::Transform>(villager, glm::vec3(10.0f, 2.0f, 20.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	Call("SET_TARGET", {Object(villager), Float(14.0f), Float(2.0f), Float(26.0f), Float(2.0f)});
+	const auto& dynamics = static_cast<FakeThrowDynamics&>(Locator::dynamicsSystem::value());
+	ASSERT_EQ(dynamics.thrown, villager);
+	ASSERT_TRUE(dynamics.started.has_value());
+	EXPECT_EQ(dynamics.started->velocity, TargetVelocity({10.0f, 2.0f, 20.0f}, {14.0f, 2.0f, 26.0f}, 2.0f));
+	EXPECT_EQ(static_cast<FakeGameRandom&>(Locator::gameRandom::value()).draws, 3);
+	EXPECT_FLOAT_EQ(dynamics.started->spin.z, -0.5f);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptVortexNatives, AThrowNeedsATimeAboveZero)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = registry.Create();
+	registry.Assign<ecs::components::Transform>(villager, glm::vec3(10.0f, 2.0f, 20.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	Call("SET_TARGET", {Object(villager), Float(14.0f), Float(2.0f), Float(26.0f), Float(0.0f)});
+	const auto& dynamics = static_cast<FakeThrowDynamics&>(Locator::dynamicsSystem::value());
+	EXPECT_EQ(dynamics.thrown, entt::entity {entt::null});
+	EXPECT_EQ(static_cast<FakeGameRandom&>(Locator::gameRandom::value()).draws, 0);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptVortexNatives, ACreatureAndAnUnknownThingHaveNoState)
+{
+	const auto creature = MakeCreature(CreatureType::Ogre);
+	const auto rock = Locator::entitiesRegistry::value().Create();
+	for (const auto thing : {creature, rock})
+	{
+		const auto results = Call("GET_OBJECT_STATE", {Object(thing)});
+		ASSERT_EQ(results.size(), 1u);
+		EXPECT_EQ(results.front().first.intVal, 0);
+	}
 }
