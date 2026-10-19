@@ -308,6 +308,34 @@ struct KindFacts
 /// Whether a creature may catch the thing flying past
 [[nodiscard]] bool MayCatchKind(const KindFacts& kind, const PickUpFacts& facts);
 
+/// What happens to the living state of a thing at the moment a creature's hand closes on it
+enum class HoldStart : uint8_t
+{
+	/// The thing has no living state of its own: it is only held
+	NoChange,
+	/// A person or an animal remembers what it did and goes into its state for the hand
+	IntoHandState,
+	/// It cannot go into its state for the hand: the hand lets it go and the take fails
+	Refused,
+};
+/// The change to the living state of a thing as a creature picks it up, catches it or takes it from the player's hand.
+/// A creature held by another creature keeps its own state.
+[[nodiscard]] HoldStart HoldStartFor(bool living, bool creature, bool acceptsHandState);
+
+/// What happens to a thing that left a creature's hand at the bite of an eat, when the eat ends
+enum class EatenThingEnd : uint8_t
+{
+	/// It is still to be swallowed as the eat animation ends
+	Wait,
+	/// The eat ended or stopped: the creature swallows it now
+	Swallow,
+	/// The creature is gone: the thing comes back into sight and falls
+	Fall,
+};
+/// The end of a thing between the bite and the swallow. The game left such a thing out of sight for good when the eat
+/// stopped early; openblack swallows it as the eat would have (deviations list).
+[[nodiscard]] EatenThingEnd EatenThingEndFor(bool eatGoesOn, bool creatureExists);
+
 /// How long a creature that brought its food back up isn't hungry for
 constexpr float k_NotHungryAfterBringingUpSeconds = 20.0f;
 

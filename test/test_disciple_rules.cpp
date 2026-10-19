@@ -49,6 +49,13 @@ NearFacts TheirBuilding(NearKind kind)
 }
 } // namespace
 
+TEST(DiscipleRules, OnlyTheGodsHandShowsAHeldVillagerWork)
+{
+	EXPECT_TRUE(LooksForWorkWhileHeld(false));
+	// In a creature's hand it looks at nothing about it and keeps the work it has
+	EXPECT_FALSE(LooksForWorkWhileHeld(true));
+}
+
 TEST(DiscipleRules, InterestFallsAwayToNothingBySixMetres)
 {
 	// Touching, a thing draws as much as its kind

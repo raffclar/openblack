@@ -31,6 +31,7 @@
 #include "Common/GameRandom.h"
 #include "Creature/CreatureDeeds.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
@@ -787,7 +788,7 @@ uint32_t villager_disciple::InHand(LivingAction& action)
 	const auto villager = EntityOf(action);
 	auto& registry = Entities();
 	auto* held = registry.TryGet<DiscipleHeld>(villager);
-	if (held == nullptr)
+	if (held == nullptr || !disciple::LooksForWorkWhileHeld(registry.AllOf<HeldByCreature>(villager)))
 	{
 		return 1;
 	}

@@ -285,6 +285,32 @@ TEST(CreatureObjectActions, AThrowIntoAStoreIsOverOnlyOnceTheThingHasComeDown)
 	EXPECT_TRUE(creature_object_actions::ThrowOver(true, true, false));
 }
 
+TEST(CreatureObjectActions, APersonOrAnimalInACreaturesHandGoesIntoItsStateForTheHand)
+{
+	using creature_object_actions::HoldStart;
+	using creature_object_actions::HoldStartFor;
+	// A villager or an animal picked up from the ground, caught or taken from the player's hand is held
+	EXPECT_EQ(HoldStartFor(true, false, true), HoldStart::IntoHandState);
+	// One whose state does not let it go into the hand is let go, and the take fails
+	EXPECT_EQ(HoldStartFor(true, false, false), HoldStart::Refused);
+	// A thing with no living state, and a creature held by another creature, keep what they have
+	EXPECT_EQ(HoldStartFor(false, false, false), HoldStart::NoChange);
+	EXPECT_EQ(HoldStartFor(true, true, false), HoldStart::NoChange);
+}
+
+TEST(CreatureObjectActions, AThingLeftOutOfSightByAStoppedEatIsSwallowedOrFalls)
+{
+	using creature_object_actions::EatenThingEnd;
+	using creature_object_actions::EatenThingEndFor;
+	// Between the bite and the end of the eat, the thing waits out of sight
+	EXPECT_EQ(EatenThingEndFor(true, true), EatenThingEnd::Wait);
+	// The eat stopped early: the creature swallows it at once
+	EXPECT_EQ(EatenThingEndFor(false, true), EatenThingEnd::Swallow);
+	// The creature is gone: the thing comes back into sight and falls
+	EXPECT_EQ(EatenThingEndFor(false, false), EatenThingEnd::Fall);
+	EXPECT_EQ(EatenThingEndFor(true, false), EatenThingEnd::Fall);
+}
+
 TEST(CreatureObjectActions, ACreatureBringsBackUpWhatCantBeEaten)
 {
 	EXPECT_FALSE(creature_object_actions::BringsBackUp(false, false));

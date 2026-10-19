@@ -4641,6 +4641,38 @@ void AddObjects(std::vector<Scenario>& all)
 	    .hand = offering,
 	});
 
+	all.push_back({
+	    .id = "creature.give_villager_eaten",
+	    .name = "Giving a villager to a hungry creature",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a villager and, held in front of a hungry tiger, gives her to it.",
+	    .expected = "The tiger reaches out with its take clip and takes her; in its hand she plays her scared stiff clip. "
+	                "It looks her over the first time it is given a villager, then plays its eat clip: at the moment of "
+	                "the bite she is gone from its hand, and it swallows her as the clip ends. Then she dies and its "
+	                "hunger falls.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungryThinking},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
+	all.push_back({
+	    .id = "creature.give_villager_by_hand",
+	    .name = "Giving a villager by hand",
+	    .facet = Facet::Objects,
+	    .description = "A tiger that isn't hungry stands with a villager in front of it. The player picks her up with the "
+	                   "hand, holds her in front of the tiger and holds the Action button down to give her.",
+	    .expected = "In the hand she plays her scared stiff clip. The hand turns her a quarter round to offer her; the "
+	                "tiger turns to the camera, reaches out with its take clip and takes her at the moment of the take; "
+	                "in its hand she keeps her scared stiff clip while it looks her over or does what its desires say.",
+	    .environment = {.dispenserGrid = false, .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {curious},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
+	});
+
 	// The pictures for the creature's web page: the camera looks at the tiger, and each action played once has its
 	// moment halfway through. The first picture can come once more than ten seconds of the game went by.
 	all.push_back({
