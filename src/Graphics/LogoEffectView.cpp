@@ -13,11 +13,13 @@
 
 #include <algorithm>
 #include <iterator>
+#include <span>
 
 #include <L3DFile.h>
 #include <bgfx/bgfx.h>
 #include <glm/mat4x4.hpp>
 
+#include "3D/L3DSkinFormat.h"
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/ShaderManager.h"
@@ -134,8 +136,31 @@ std::unique_ptr<LogoEffectView> LogoEffectView::Create(glm::u16vec2 size, const 
 		return nullptr;
 	}
 	auto texture = std::make_unique<Texture2D>("LogoEffectSky");
-	texture->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormat::BGRA4, Wrapping::Repeat,
-	                Filter::Linear, bgfx::copy(skin->texels.data(), static_cast<uint32_t>(sizeof(skin->texels))));
+	const auto texels = std::span(reinterpret_cast<const uint16_t*>(skin->texels.data()), skin->texels.size());
+	const auto flags = static_cast<uint32_t>(sky.GetHeader().flags);
+	if (!l3d_skin::HasOpaqueSkins(flags))
+	{
+		texture->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormat::BGRA4, Wrapping::Repeat,
+		                Filter::Linear, bgfx::copy(skin->texels.data(), static_cast<uint32_t>(sizeof(skin->texels))));
+	}
+	else if ((bgfx::getCaps()->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0)
+	{
+		// The sky's skin: 5 bits for each colour, opaque
+		const auto* memory = bgfx::alloc(static_cast<uint32_t>(texels.size() * sizeof(uint16_t)));
+		std::ranges::transform(texels, reinterpret_cast<uint16_t*>(memory->data), l3d_skin::OpaqueTexel);
+		texture->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormat::BGR5A1, Wrapping::Repeat,
+		                Filter::Linear, memory);
+	}
+	else
+	{
+		const auto* memory = bgfx::alloc(static_cast<uint32_t>(texels.size() * 4));
+		for (size_t i = 0; i < texels.size(); ++i)
+		{
+			std::ranges::copy(l3d_skin::OpaqueTexelBytes(texels[i]), memory->data + (i * 4));
+		}
+		texture->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormat::RGBA8, Wrapping::Repeat,
+		                Filter::Linear, memory);
+	}
 	return std::unique_ptr<LogoEffectView>(
 	    new LogoEffectView(size, std::move(skyVertices), std::move(skyIndices), std::move(texture)));
 }

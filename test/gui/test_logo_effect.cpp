@@ -17,6 +17,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/L3DSkinFormat.h"
 #include "Common/CrtQsort.h"
 #include "Gui/LogoEffect.h"
 #include "Gui/StartupRules.h"
@@ -299,4 +300,19 @@ TEST(LogoEffect, WhoSeesIt)
 	EXPECT_FALSE(GoesOn(true, false, false));
 	EXPECT_FALSE(GoesOn(false, true, false));
 	EXPECT_FALSE(GoesOn(false, false, true));
+}
+
+TEST(LogoEffect, TheSkySkinIsOpaqueAndFiveBitsAColour)
+{
+	EXPECT_TRUE(l3d_skin::HasOpaqueSkins(0x2000U | 0x10000U | 0x20000U | 0x80000U));
+	EXPECT_FALSE(l3d_skin::HasOpaqueSkins(0x2000U));
+	// A grey of 5-bit level 12 in each colour
+	constexpr uint16_t k_Grey = (12U << 10U) | (12U << 5U) | 12U;
+	EXPECT_EQ(l3d_skin::OpaqueTexel(k_Grey), 0x8000U | k_Grey);
+	const auto bytes = l3d_skin::OpaqueTexelBytes(k_Grey);
+	EXPECT_EQ(bytes[0], 99);
+	EXPECT_EQ(bytes[1], 99);
+	EXPECT_EQ(bytes[2], 99);
+	EXPECT_EQ(bytes[3], 255);
+	EXPECT_EQ(l3d_skin::OpaqueTexelBytes(0x7FFFU)[0], 255);
 }
