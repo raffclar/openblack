@@ -326,6 +326,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _atmos(std::move(atmos))
     , _painter(_canvas, _font, *_atlas, *_fontTexture)
     , _menuCreaturePainter(_menuCreatureCanvas, _font, *_atlas, *_fontTexture)
+    , _logoPainter(_logoCanvas, _font, *_atlas, *_fontTexture)
     , _menu(std::make_unique<GameMenu>(_texts, _font, playerName, std::move(settings)))
     , _skipBox(std::make_unique<SkipBox>(_texts, _font, DialogPainter::k_MidTextSize))
     , _storyHistoryBox(std::make_unique<StoryHistoryBox>(_texts, _font))
@@ -458,6 +459,78 @@ void GameInterface::DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mous
 	}
 	_canvas.End();
 	_pointerCanvas.End();
+}
+
+void GameInterface::PrepareLogoEffect()
+{
+	_sponsorLogo = LoadTexture("p4");
+	_sponsorLabel = LoadTexture("p4t");
+}
+
+void GameInterface::ReleaseLogoEffect()
+{
+	_sponsorLogo.reset();
+	_sponsorLabel.reset();
+}
+
+void GameInterface::DrawLogoEffectOverlay(const LogoEffectOverlay& overlay)
+{
+	const auto size = overlay.resolution;
+	_logoCanvas.Begin(size);
+	_logoPainter.Begin(size);
+	// The text and the logos are placed on the effect's own 4:3 screen in the middle of the window
+	_logoCanvas.SetOrigin(glm::vec2(overlay.origin));
+	const auto textShare = static_cast<float>(overlay.textAlpha) / 255.0f;
+	// The text under the logo, centred
+	const auto titleSize = logo_effect::TitleSize(overlay.screen);
+	const auto title = logo_effect::TitlePlace(overlay.screen, _font.GetWidth(overlay.text, titleSize));
+	_logoPainter.DrawString(title.position, overlay.text, title.size, glm::vec4(1.0f, 1.0f, 1.0f, textShare));
+	if (overlay.textAlpha > 0)
+	{
+		if (overlay.sponsor && _sponsorLogo && _sponsorLabel)
+		{
+			// The logo over a see-through grey box, and its label over a black shadow a pixel down and right
+			const auto boxes = logo_effect::SponsorPlaces(overlay.screen);
+			const auto greyAlpha = static_cast<float>((128 * overlay.textAlpha) >> 8) / 255.0f;
+			constexpr float k_Grey = 128.0f / 255.0f;
+			_logoCanvas.DrawQuad(glm::vec2(boxes.logo.min), glm::vec2(boxes.logo.max), glm::vec2(0.0f), glm::vec2(1.0f),
+			                     glm::vec4(k_Grey, k_Grey, k_Grey, greyAlpha), nullptr);
+			_logoCanvas.DrawQuad(glm::vec2(boxes.logo.min), glm::vec2(boxes.logo.max), glm::vec2(0.0f), glm::vec2(1.0f),
+			                     glm::vec4(1.0f, 1.0f, 1.0f, textShare), _sponsorLogo.get());
+			_logoCanvas.DrawQuad(glm::vec2(boxes.label.min + 1), glm::vec2(boxes.label.max + 1), glm::vec2(0.0f),
+			                     glm::vec2(1.0f), glm::vec4(0.0f, 0.0f, 0.0f, textShare), _sponsorLabel.get());
+			_logoCanvas.DrawQuad(glm::vec2(boxes.label.min), glm::vec2(boxes.label.max), glm::vec2(0.0f), glm::vec2(1.0f),
+			                     glm::vec4(1.0f, 1.0f, 1.0f, textShare), _sponsorLabel.get());
+		}
+		if (overlay.tradeMark)
+		{
+			constexpr float k_TradeMarkGrey = 200.0f / 255.0f;
+			const auto place = logo_effect::TradeMarkPlace(overlay.screen);
+			_logoPainter.DrawString(
+			    place.position, logo_effect::k_TradeMark, place.size,
+			    glm::vec4(k_TradeMarkGrey, k_TradeMarkGrey, k_TradeMarkGrey, static_cast<float>(overlay.logoAlpha) / 255.0f));
+		}
+	}
+	// The whole window goes black over all of it
+	_logoCanvas.SetOrigin(glm::vec2(0.0f));
+	if (overlay.fade > 0)
+	{
+		_logoCanvas.DrawQuad(glm::vec2(0.0f), glm::vec2(size), glm::vec2(0.0f), glm::vec2(1.0f),
+		                     glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(overlay.fade) / 255.0f), nullptr);
+	}
+	_logoCanvas.End();
+}
+
+void GameInterface::DrawLogoEffectPicture(glm::u16vec2 resolution, const graphics::Texture2D& picture)
+{
+	const auto min = glm::vec2(0.0f);
+	const auto max = glm::vec2(resolution);
+	// A picture that the graphics card drew has its first row at the bottom on some backends
+	const bool flipped = bgfx::getCaps()->originBottomLeft;
+	_canvas.Begin(resolution);
+	_canvas.DrawQuad(min, max, glm::vec2(0.0f, flipped ? 1.0f : 0.0f), glm::vec2(1.0f, flipped ? 0.0f : 1.0f), glm::vec4(1.0f),
+	                 &picture);
+	_canvas.End();
 }
 
 void GameInterface::DrawMenuBackdrop(glm::u16vec2 resolution, float frameMilliseconds)

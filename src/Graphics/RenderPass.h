@@ -63,6 +63,10 @@ enum class RenderPass : uint8_t
 	CinemaBars,
 	/// The advisors near the screen, drawn over the whole scene with its depth cleared
 	Advisors,
+	/// The logo effect at the first start: its sky and its dots, drawn into a picture that keeps the last frame
+	LogoEffect,
+	/// The logo effect's text, the sponsor's logo and the fade to black, over its sky and its dots in the same picture
+	LogoEffectOverlay,
 	Interface,
 	/// The player's creature in the falling spell's film, over the film's picture, seen by the film's camera, with the
 	/// depth cleared
@@ -110,6 +114,8 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Gesture Hints Pass",          //
     "Cinema Bars Pass",            //
     "Advisors Pass",               //
+    "Logo Effect Pass",            //
+    "Logo Effect Overlay Pass",    //
     "Interface Pass",              //
     "Film Creature Pass",          //
     "Film Overlay Pass",           //

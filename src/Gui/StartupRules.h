@@ -83,6 +83,13 @@ private:
 	return requested || !hasProfiles;
 }
 
+/// Whether the first game of the program plays the logo effect: a plain start does. A developer's or a tool's run plays it
+/// only when asked, and a multiplayer game never does.
+[[nodiscard]] constexpr bool PlaysLogoEffect(bool developerRun, bool asked, bool multiplayer) noexcept
+{
+	return !multiplayer && (!developerRun || asked);
+}
+
 /// The pre-intro shows each of its frames once, and stops after its last or on a key
 [[nodiscard]] constexpr bool PreIntroGoesOn(int32_t framesShown, int32_t frameCount, bool keyPressed) noexcept
 {

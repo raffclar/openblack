@@ -7897,6 +7897,22 @@ void AddMind(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "frontend.logo_effect",
+	    .name = "Start-up: the logo effect",
+	    .facet = Facet::Story,
+	    .description = "One second after the start the logo effect of the first start plays, with its sound, as before "
+	                   "the first game of the program.",
+	    .expected = "The screen fades from black to a sky sphere. Dots float at random depths and the camera turns round "
+	                "them. The camera comes back, and the dots make the Lionhead logo, with TM at its top right. The "
+	                "dots leave trails. Then the camera flies through the logo and the screen goes black after about 33 "
+	                "seconds. A key ends it at once. On a processor of family 15 with SSE2 (all recent AMD processors) "
+	                "the sponsor's logo shows at the bottom left.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -20.0f}, {20.0f, 20.0f}}},
+	    .commands = {Command {.kind = Kind::PlayLogoEffect, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "mind.hand_free_pick_up",
 	    .name = "Put down a thing before a pick-up",
 	    .facet = Facet::Mind,
@@ -9457,9 +9473,10 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
 	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame ||
-	       kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
-	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
-	       kind == Kind::FinishBuilding || kind == Kind::CallNative || IsPointerCommand(kind);
+	       kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine ||
+	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
+	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -9486,7 +9503,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 161> k_Names {
+	constexpr std::array<std::string_view, 162> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9645,6 +9662,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "fill the worship site icons",
 	    "quick save",
 	    "continue the game",
+	    "play the logo effect",
 	    "charge an icon with its seed in the hand",
 	    "finish the building",
 	    "call a script native",

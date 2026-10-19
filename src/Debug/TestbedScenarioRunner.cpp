@@ -2709,6 +2709,15 @@ void Runner::Give(const Command& command)
 		                done ? "done" : "failed"));
 		return;
 	}
+	if (command.kind == Kind::PlayLogoEffect)
+	{
+		if (auto* game = Game::Instance(); game != nullptr)
+		{
+			game->PlayLogoEffect();
+		}
+		Log(fmt::format("{:.1f}s: the logo effect played", _seconds));
+		return;
+	}
 	if (command.kind == Kind::ContinueGame)
 	{
 		auto* game = Game::Instance();
@@ -3208,6 +3217,7 @@ void Runner::Give(const Command& command)
 	case Kind::LoadGame:
 	case Kind::QuickSave:
 	case Kind::ContinueGame:
+	case Kind::PlayLogoEffect:
 	case Kind::StopScript:
 	case Kind::StartScriptMusic:
 	case Kind::RunText:
