@@ -560,7 +560,6 @@ entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3&
 		return entt::null;
 	}
 	const auto made = script::create_rules::ScriptVillagerOf(child, infos.at(subtype).grownUpAge);
-	// TODO(opening): the game makes one of its special villagers instead, now and then, when one fits
 	const auto villager =
 	    VillagerArchetype::Create(position, position, static_cast<VillagerInfo>(subtype), made.age,
 	                              made.joinsTown ? VillagerArchetype::Joins::NearestTown : VillagerArchetype::Joins::Nobody);
