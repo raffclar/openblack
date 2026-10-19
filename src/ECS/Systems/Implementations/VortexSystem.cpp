@@ -747,6 +747,7 @@ bool VortexSystem::LoadState(reflection::BinaryReader& in)
 	{
 		return false;
 	}
+	LevelAgainAfterLoad();
 	const auto path = CrossingFilePath();
 	if (!path.has_value())
 	{
@@ -765,6 +766,23 @@ bool VortexSystem::LoadState(reflection::BinaryReader& in)
 		_vortexGone = Locator::entitiesRegistry::value().OnDestroy<Vortex>().connect<&VortexSystem::OnVortexGone>(*this);
 	}
 	return true;
+}
+
+void VortexSystem::LevelAgainAfterLoad()
+{
+	bool levelled = false;
+	Locator::entitiesRegistry::value().Each<Vortex>([&levelled](Vortex& vortex) {
+		if (const auto amount = vortex::LevelAfterLoad(vortex.type, vortex.levelApplied, vortex.groundHeights.size()))
+		{
+			// The things about the vortex came back where they were on the levelled land, so none of them moves
+			LevelGround(vortex, *amount);
+			levelled = true;
+		}
+	});
+	if (levelled)
+	{
+		Locator::terrainSystem::value().CommitAltitudeChanges();
+	}
 }
 
 void VortexSystem::ReadCrossingFile(Vortex& vortex)
