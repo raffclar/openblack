@@ -45,6 +45,8 @@ struct CreatureLocomotion
 		/// Stepping off sideways or backwards into a walk
 		Stepping,
 		Walking,
+		/// Pointing at the route ahead while it waits for its route: its first fidget
+		Pointing,
 	};
 	Motion motion {Motion::Standing};
 	/// Whether its heading has been read from where it faces
@@ -79,6 +81,8 @@ struct CreatureLocomotion
 	bool firstSearchTurn {false};
 	/// A route was found while it stood, and it sets off once it has got up
 	bool routeReady {false};
+	/// For testbed scenarios only: the search for its route makes no steps while this is set
+	bool searchHeld {false};
 	/// Whether the last move failed: nowhere to stand there, or no way there
 	bool failed {false};
 	/// The first turn of the search stopped far short of the destination: the destination, and the things that the
@@ -124,6 +128,22 @@ struct CreatureLocomotion
 	bool fidgeted {false};
 	/// Where its head looks while it waits for its route
 	creature_head_look::RouteLook routeLook {};
+	/// The point at the route ahead, its first fidget while it waits for its route. A route found while it points waits
+	/// until the point is over.
+	struct RoutePoint
+	{
+		/// Where the arm points
+		glm::vec3 point {0.0f};
+		/// The time of the four pointing animations
+		float timeMs {0.0f};
+		/// It faces the point, after a turn on the spot when the point was too far round
+		bool ready {false};
+		/// It points with its left arm
+		bool mirrored {false};
+		/// The point ends: the arm plays to the end of the animations
+		bool ending {false};
+	};
+	std::optional<RoutePoint> routePoint;
 
 	/// Where it was at the start of this turn and where it is at its end, drawn between them
 	glm::vec3 fromPosition {0.0f};
@@ -148,6 +168,8 @@ struct CreatureLocomotion
 		/// A turn's or step's pair: the animation blended keyframe by keyframe towards this one by blendWeight
 		std::optional<size_t> blendedWith {};
 		float blendWeight {0.0f};
+		/// Played left to right
+		bool mirrored {false};
 	};
 	std::vector<Track> tracks;
 };

@@ -822,6 +822,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureLocomotion::routeWalker>("routeWalker")
 	    .Field<&components::CreatureLocomotion::firstSearchTurn>("firstSearchTurn")
 	    .Field<&components::CreatureLocomotion::routeReady>("routeReady")
+	    .Field<&components::CreatureLocomotion::searchHeld>("searchHeld")
 	    .Field<&components::CreatureLocomotion::failed>("failed")
 	    .Field<&components::CreatureLocomotion::gaveUp>("gaveUp")
 	    .Field<&components::CreatureLocomotion::clearingWay>("clearingWay")
@@ -834,6 +835,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureLocomotion::fidgetMs>("fidgetMs")
 	    .Field<&components::CreatureLocomotion::fidgeted>("fidgeted")
 	    .Field<&components::CreatureLocomotion::routeLook>("routeLook")
+	    .Field<&components::CreatureLocomotion::routePoint>("routePoint")
 	    .Field<&components::CreatureLocomotion::fromPosition>("fromPosition")
 	    .Field<&components::CreatureLocomotion::toPosition>("toPosition")
 	    .Field<&components::CreatureLocomotion::fromHeading>("fromHeading")
@@ -3089,6 +3091,12 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::blendDurationMs>("blendDurationMs")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::side>("side")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Move::routeHeading>("routeHeading");
+	Reflect<openblack::ecs::components::CreatureLocomotion::RoutePoint>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureLocomotion::RoutePoint::point>("point")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::RoutePoint::timeMs>("timeMs")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::RoutePoint::ready>("ready")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::RoutePoint::mirrored>("mirrored")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::RoutePoint::ending>("ending");
 	Reflect<openblack::ecs::components::CreatureLocomotion::Track>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::animation>("animation")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::fromMs>("fromMs")
@@ -3098,7 +3106,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::looping>("looping")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::breathing>("breathing")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::blendedWith>("blendedWith")
-	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::blendWeight>("blendWeight");
+	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::blendWeight>("blendWeight")
+	    .Field<&openblack::ecs::components::CreatureLocomotion::Track::mirrored>("mirrored");
 	Reflect<openblack::ecs::components::CreatureMindState::ActionUnderway>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureMindState::ActionUnderway::serial>("serial")
 	    .Field<&openblack::ecs::components::CreatureMindState::ActionUnderway::action>("action");

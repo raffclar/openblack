@@ -38,6 +38,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureObstacles.h"
+#include "Creature/CreaturePointing.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRouteFollow.h"
 #include "Creature/CreatureRouteSearch.h"
@@ -295,6 +296,7 @@ void SetIdle(CreatureLocomotion& self)
 	self.speed = 0.0f;
 	self.move.reset();
 	self.tracks.clear();
+	self.routePoint.reset();
 }
 
 void ClearWalk(CreatureLocomotion& self)
@@ -807,6 +809,157 @@ void Halt(CreatureLocomotion& self)
 {
 	ClearWalk(self);
 	self.following.reset();
+}
+
+/// Where the head of the creature is in the pose of its newest game turn
+glm::vec3 HeadAt(const Moves& moves, const CreatureAnimation& animation, const Transform& transform)
+{
+	const auto* points = moves.rig != nullptr && moves.rig->actionPoints.has_value() ? &*moves.rig->actionPoints : nullptr;
+	if (points == nullptr || points->head >= animation.boneMatrices.size())
+	{
+		return transform.position;
+	}
+	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	const auto pose = creature::TurnPose(animation.newerTurnPose, animation.boneMatrices, placement);
+	return glm::vec3(creature::PosedBone(points->head, pose.bones, pose.placement)[3]);
+}
+
+/// The hand that holds a thing, when the creature holds one: true for the left hand
+std::optional<bool> HeldInLeft(entt::entity creature)
+{
+	const auto* held = Locator::entitiesRegistry::value().TryGet<const CreatureHeldObject>(creature);
+	return held != nullptr ? std::optional(held->mirrored) : std::nullopt;
+}
+
+/// The look ahead along the search for the route: the point where the search has got to, at most once in a while
+void StepRouteLook(CreatureLocomotion& self, int32_t stepMs)
+{
+	if (!self.destination.has_value())
+	{
+		return;
+	}
+	self.routeLook = creature_head_look::StepRouteLook(
+	    self.routeLook, stepMs, {.searchHead = self.follower.GetSearchHead(), .destination = *self.destination}, HeightAt);
+}
+
+/// The first fidget while the creature waits for its route: it points at the route ahead. It turns on the spot first
+/// when the point is too far round from its head. Nothing happens when the species has no pointing animations.
+void StartRoutePoint(entt::entity creature, CreatureLocomotion& self, const WalkTurn& turn, const CreatureAnimation& animation,
+                     const Transform& transform)
+{
+	StepRouteLook(self, turn.spinMs);
+	if (!std::ranges::all_of(creature_pointing::k_Animations, [&turn](size_t clip) { return turn.moves.Has(clip); }))
+	{
+		return;
+	}
+	CreatureLocomotion::RoutePoint routePoint {.point = self.routeLook.point};
+	const auto head = HeadAt(turn.moves, animation, transform);
+	const auto angle = creature_pointing::TurnAngle(head, self.heading, routePoint.point);
+	if (std::abs(angle) >= creature_pointing::k_TurnLimit)
+	{
+		BeginTurn(self, turn.moves, GameHeading::Of(routePoint.point.x - head.x, routePoint.point.z - head.z));
+	}
+	else
+	{
+		routePoint.ready = true;
+		routePoint.mirrored = creature_pointing::PointsWithLeft(angle, HeldInLeft(creature));
+	}
+	self.motion = Motion::Pointing;
+	self.routePoint = routePoint;
+}
+
+/// One turn of the arm that points at the route: it turns on the spot until it faces the point, then the four pointing
+/// animations blend by where the point is from the top of the creature
+void AimRoutePoint(entt::entity creature, CreatureLocomotion& self, const WalkTurn& turn, float size)
+{
+	auto& routePoint = *self.routePoint;
+	bool turned = false;
+	if (!routePoint.ready)
+	{
+		auto& move = *self.move;
+		const auto from = move.timeMs;
+		move.timeMs = std::min(move.timeMs + static_cast<float>(turn.spinMs), move.durationMs);
+		if (move.timeMs < move.durationMs)
+		{
+			if (move.animations.has_value())
+			{
+				// The spin's own root turns the body; its heading changes once the turn is over
+				TrackPair(self, from, move.timeMs - from);
+			}
+			else
+			{
+				self.heading = locomotion::LerpHeading(self.heading, self.targetHeading, from, move.durationMs);
+			}
+			return;
+		}
+		// It faces the point: the arm starts to point in the same turn, at the new heading
+		self.heading = self.targetHeading;
+		self.fromHeading = self.heading;
+		self.move.reset();
+		routePoint.ready = true;
+		routePoint.timeMs = 0.0f;
+		turned = true;
+	}
+	const auto position = self.toPosition;
+	const auto origin = position + glm::vec3(0.0f, creature_pointing::k_OriginHeightPerSize * size, 0.0f);
+	const auto aim = creature_pointing::AimAt(origin, self.heading, routePoint.point);
+	if (turned)
+	{
+		routePoint.mirrored = creature_pointing::PointsWithLeftAfterTurn(aim, HeldInLeft(creature));
+	}
+	const auto weights = creature_pointing::Weights(aim, routePoint.mirrored);
+	const auto pointMs =
+	    turn.moves.rig != nullptr && turn.moves.rig->actionPoints.has_value() ? turn.moves.rig->actionPoints->pointMs : 0.0f;
+	const auto from = routePoint.timeMs;
+	routePoint.timeMs =
+	    creature_pointing::RoutePointTime(from, turn.spinMs, pointMs, routePoint.ending,
+	                                      static_cast<int32_t>(turn.moves.Duration(creature_pointing::k_Animations.front())));
+	self.tracks.clear();
+	for (size_t i = 0; i < creature_pointing::k_Animations.size(); ++i)
+	{
+		const auto clip = creature_pointing::k_Animations.at(i);
+		self.tracks.push_back({.animation = clip,
+		                       .fromMs = from,
+		                       .advanceMs = std::max(routePoint.timeMs - from, 0.0f),
+		                       .durationMs = turn.moves.Duration(clip),
+		                       .weight = weights.at(i),
+		                       .looping = false,
+		                       .breathing = false,
+		                       .mirrored = routePoint.mirrored});
+	}
+}
+
+/// One turn of the point at the route. While it points, the wait for its next fidget counts down by the clip step,
+/// and the point ends below zero. Each turn the creature looks ahead along the search again and points there. Once the
+/// point ends and the arm gets to the end of its animations, it waits for its route again.
+void RoutePointTurn(entt::entity creature, CreatureLocomotion& self, const WalkTurn& turn, float size)
+{
+	auto& routePoint = *self.routePoint;
+	if (!routePoint.ending)
+	{
+		self.fidgetMs -= static_cast<float>(turn.spinMs);
+		if (self.fidgetMs < 0.0f)
+		{
+			routePoint.ending = true;
+		}
+		else
+		{
+			StepRouteLook(self, turn.spinMs);
+			routePoint.point = self.routeLook.point;
+		}
+	}
+	else if (creature_pointing::RoutePointOver(routePoint.ready, routePoint.ending, routePoint.timeMs, turn.spinMs,
+	                                           turn.moves.Duration(creature_pointing::k_Animations.at(2))))
+	{
+		self.motion = Motion::Planning;
+		self.routePoint.reset();
+		self.tracks.clear();
+		self.fidgetMs = locomotion::k_FidgetMs;
+		// The head looks ahead along the search again at once
+		self.routeLook.countdownMs = 0;
+		return;
+	}
+	AimRoutePoint(creature, self, turn, size);
 }
 } // namespace
 
@@ -1323,13 +1476,13 @@ void CreatureLocomotionSystem::ProcessTurn()
 			           self.follower.GetState() == route::Follower::State::Planning;
 		    };
 		    const bool wasStanding = standing();
-		    if (self.follower.IsSearching())
+		    if (self.follower.IsSearching() && !self.searchHeld)
 		    {
 			    const auto first = std::exchange(self.firstSearchTurn, false);
 			    switch (self.follower.Update(first ? k_FirstTurnSearchSteps : k_TurnSearchSteps, first, JoinAhead(self)))
 			    {
 			    case route::Follower::Outcome::Found:
-				    if (self.motion == Motion::Planning || self.motion == Motion::Confused)
+				    if (self.motion == Motion::Planning || self.motion == Motion::Confused || self.motion == Motion::Pointing)
 				    {
 					    self.routeReady = true;
 				    }
@@ -1411,7 +1564,21 @@ void CreatureLocomotionSystem::ProcessTurn()
 						    self.motion = Motion::Confused;
 					    }
 				    }
+				    else if (turn.fidget == locomotion::Fidget::LookAbout)
+				    {
+					    // It points at the route ahead, from this turn on
+					    StartRoutePoint(entity, self, walkTurn, animation, transform);
+					    if (self.motion == Motion::Pointing)
+					    {
+						    StepRouteLook(self, walkTurn.spinMs);
+						    self.routePoint->point = self.routeLook.point;
+						    AimRoutePoint(entity, self, walkTurn, ShownSize(creature));
+					    }
+				    }
 			    }
+			    break;
+		    case Motion::Pointing:
+			    RoutePointTurn(entity, self, walkTurn, ShownSize(creature));
 			    break;
 		    case Motion::Confused:
 			    if (!creature_layers::IsPlaying(animation.body))
@@ -1435,6 +1602,11 @@ void CreatureLocomotionSystem::ProcessTurn()
 		    {
 			    StandPose(self, moves);
 			    Arrive(self);
+		    }
+		    // A stop while it pointed at the route ends the point
+		    if (self.motion == Motion::Pointing && self.follower.GetState() == route::Follower::State::Standing)
+		    {
+			    self.routePoint->ending = true;
 		    }
 
 		    // A step or the walk put it somewhere it cannot stand: it is put back where it can, or stays where it is when
@@ -1522,7 +1694,7 @@ bool ShowAt(CreatureLocomotion& self, Transform& transform, CreatureAnimation& a
 		animation.slots.push_back({.animation = track.animation,
 		                           .timeMs = time,
 		                           .weight = track.weight,
-		                           .mirrored = false,
+		                           .mirrored = track.mirrored,
 		                           .blendedWith = track.blendedWith,
 		                           .blendWeight = track.blendWeight});
 	}

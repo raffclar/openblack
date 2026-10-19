@@ -891,6 +891,9 @@ struct Command
 		/// A script native (script, by its name) runs at once with its arguments in order (scriptArguments). A position
 		/// is three numbers. Needs no creature.
 		CallNative,
+		/// The testbed holds the search for the creature's route (value 1), so that it waits for its route, or lets the
+		/// search go on (value 0)
+		HoldRouteSearch,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

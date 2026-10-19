@@ -101,8 +101,8 @@ std::string AnimationLabel(size_t animation)
 
 std::string_view MotionName(CreatureLocomotion::Motion motion)
 {
-	constexpr std::array<std::string_view, 6> k_Names {"Standing", "Planning a route", "Confused",
-	                                                   "Turning",  "Stepping off",     "Walking"};
+	constexpr std::array<std::string_view, 7> k_Names {
+	    "Standing", "Planning a route", "Confused", "Turning", "Stepping off", "Walking", "Pointing at the route"};
 	return k_Names.at(static_cast<size_t>(motion));
 }
 

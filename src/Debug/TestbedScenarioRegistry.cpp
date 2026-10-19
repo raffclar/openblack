@@ -2710,6 +2710,40 @@ void AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A pocket of tall conifers, open behind the tiger, with the destination beyond its far end, makes the search for
+	// the route take long
+	std::vector<ObjectSetup> pocket;
+	for (int i = 0; i <= 40; ++i)
+	{
+		const auto along = -100.0f + (static_cast<float>(i) * 5.0f);
+		pocket.push_back({.type = TreeInfo::Conifer, .offset = {along, 40.0f}, .scale = 1.5f});
+		const auto back = 40.0f - (static_cast<float>(i) * 5.0f);
+		pocket.push_back({.type = TreeInfo::Conifer, .offset = {-100.0f, back}, .scale = 1.5f});
+		pocket.push_back({.type = TreeInfo::Conifer, .offset = {100.0f, back}, .scale = 1.5f});
+	}
+	all.push_back({
+	    .id = "movement.point_at_route",
+	    .name = "Point at the route while it waits for it",
+	    .facet = Facet::Movement,
+	    .description = "A small tiger stands in a pocket of tall conifers that is open behind it. It is told to walk to "
+	                   "a point beyond the far end of the pocket. The search for its route takes long.",
+	    .expected = "While it waits for its route, its first fidget is a point at the route ahead. It turns on the spot "
+	                "first when the point is far round. The arm stays up at the point for about six seconds, then comes "
+	                "down to the end of the animation. Then it waits again.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {0.0f, 0.0f},
+	                                 .facingDegrees = 90.0f,
+	                                 .size = 0.6f,
+	                                 .needs = Content(),
+	                                 .hold = true,
+	                                 .pauseMind = true}},
+	    .objects = pocket,
+	    .commands = {{.kind = Kind::HoldRouteSearch, .creature = 0, .delaySeconds = 1.0f, .value = 1},
+	                 Go(Kind::WalkTo, 0, {0.0f, 100.0f}, 0.0f),
+	                 {.kind = Kind::HoldRouteSearch, .creature = 0, .delaySeconds = 14.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "movement.walk_step_off",
 	    .name = "Step off into the walk",
@@ -9471,7 +9505,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 160> k_Names {
+	constexpr std::array<std::string_view, 161> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9632,6 +9666,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "charge an icon with its seed in the hand",
 	    "finish the building",
 	    "call a script native",
+	    "hold the route search",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
