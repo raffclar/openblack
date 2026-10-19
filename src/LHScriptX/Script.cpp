@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <ranges>
+#include <string_view>
 
 #include <entt/signal/sigh.hpp>
 #include <glm/vec2.hpp>
@@ -32,6 +33,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/FootpathRules.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FixedOutlineSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "FeatureScriptCommands.h"
 #include "Lexer.h"
@@ -281,6 +283,23 @@ void RunAndKeepMapPlaces(const ScriptCommandParameters& parameters, Run&& run)
 		}
 	}
 }
+
+/// The commands that make their thing only at a place free of the fixed things, or on water
+constexpr std::array<std::string_view, 4> k_PlaceTestedCommands {"CREATE_TREE", "CREATE_NEW_TREE", "CREATE_POT",
+                                                                 "CREATE_MOBILEOBJECT"};
+
+/// Whether the game refuses to run a command because the command's place is not free of the fixed things. The test
+/// comes before anything else that the command does, so a refused command makes nothing and keeps the last thing made.
+bool PlaceRefused(std::string_view identifier, const ScriptCommandParameters& parameters)
+{
+	if (std::ranges::find(k_PlaceTestedCommands, identifier) == k_PlaceTestedCommands.end() ||
+	    !Locator::fixedOutlineSystem::has_value())
+	{
+		return false;
+	}
+	const auto place = std::ranges::find_if(parameters, [](const auto& p) { return p.GetMapPlace().has_value(); });
+	return place != parameters.end() && !Locator::fixedOutlineSystem::value().IsOkToCreateAt(*place->GetMapPlace());
+}
 } // namespace
 
 void Script::RunCommand(const std::string& identifier, const std::vector<Token>& args)
@@ -339,6 +358,19 @@ void Script::RunCommand(const std::string& identifier, const std::vector<Token>&
 		{
 			throw std::runtime_error("Invalid script argument type");
 		}
+	}
+
+	if (PlaceRefused(identifier, parameters))
+	{
+		if (const auto logger = spdlog::get("scripting"); logger != nullptr)
+		{
+			[[maybe_unused]] const auto place =
+			    std::ranges::find_if(parameters, [](const auto& p) { return p.GetMapPlace().has_value(); });
+			SPDLOG_LOGGER_DEBUG(logger, "LHScriptX: {} at ({:.2f}, {:.2f}) refused: its place is not free of fixed things",
+			                    identifier, map_coords::ToMetres(place->GetMapPlace()->x),
+			                    map_coords::ToMetres(place->GetMapPlace()->z));
+		}
+		return;
 	}
 
 	RunAndKeepMapPlaces(parameters, [&]() {

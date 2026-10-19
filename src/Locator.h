@@ -193,6 +193,7 @@ class GestureEventsInterface;
 class ReactionSystemInterface;
 class TeleportSystemInterface;
 class VortexSystemInterface;
+class FixedOutlineSystemInterface;
 class CreatureFizzSystemInterface;
 class LiquidParticleSystemInterface;
 class LandShadeSystemInterface;
@@ -345,6 +346,7 @@ struct Locator
 	using reactionSystem = entt::locator<ecs::systems::ReactionSystemInterface>;
 	using teleportSystem = entt::locator<ecs::systems::TeleportSystemInterface>;
 	using vortexSystem = entt::locator<ecs::systems::VortexSystemInterface>;
+	using fixedOutlineSystem = entt::locator<ecs::systems::FixedOutlineSystemInterface>;
 	using creatureFizzSystem = entt::locator<ecs::systems::CreatureFizzSystemInterface>;
 	using liquidParticleSystem = entt::locator<ecs::systems::LiquidParticleSystemInterface>;
 	using landShadeSystem = entt::locator<ecs::systems::LandShadeSystemInterface>;

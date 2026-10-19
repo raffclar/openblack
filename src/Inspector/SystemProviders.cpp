@@ -19,6 +19,7 @@
 
 #include <InspectorQuery.h>
 
+#include "3D/MapCoords.h"
 #include "Audio/Sound.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
@@ -29,6 +30,7 @@
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/FixedOutline.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/SpellIcon.h"
@@ -825,6 +827,55 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeMapProvider(MapSour
 			    items.push_back(Listed(*registry, Info(sources.world), entity));
 		    }
 		    return QueryResult::Value(std::move(items));
+	    });
+	provider->Add(
+	    Query("free",
+	          "Whether the game makes a tree, a pot or an object at a place: a circle of half a unit there touches no "
+	          "outline of a fixed thing in the cell, or the place is water; and those outlines",
+	          {Parameter("position", "point", "The place, [x, z] or [x, y, z]", true)}, ResultKind::Object),
+	    [sources](const QueryContext& context) {
+		    const auto* registry = Registry(sources.world);
+		    const auto* map = sources.map ? sources.map() : nullptr;
+		    const auto* outlines = sources.outlines ? sources.outlines() : nullptr;
+		    if (registry == nullptr || map == nullptr || outlines == nullptr)
+		    {
+			    return QueryResult::Error("there is no map: no land is loaded");
+		    }
+		    const auto position = context.params.find("position");
+		    const auto point = position != context.params.end() ? ReadPoint(*position) : std::nullopt;
+		    if (!point.has_value())
+		    {
+			    return QueryResult::Error("give position [x, z]");
+		    }
+		    const auto place = map_coords::FromMetres({static_cast<float>((*point)[0]), static_cast<float>((*point)[2])});
+		    const auto toJson = [](const ecs::fixed_outlines::Circle& circle) {
+			    return Json {{"centre", {circle.centre.x, circle.centre.y}}, {"radius", circle.radius}};
+		    };
+		    Json things = Json::array();
+		    const auto cell = map_coords::Cell(place);
+		    if (map_coords::InBounds(place))
+		    {
+			    for (const auto entity : map->GetFixedInGridCell(ecs::MapInterface::CellId(cell.x, cell.y)))
+			    {
+				    const auto* outline = registry->TryGet<const ecs::components::FixedOutline>(entity);
+				    if (outline == nullptr)
+				    {
+					    continue;
+				    }
+				    Json parts = Json::array();
+				    for (const auto& part : outline->outline.parts)
+				    {
+					    parts.push_back(toJson(part));
+				    }
+				    things.push_back(
+				        {{"id", ToId(entity)}, {"bounds", toJson(outline->outline.bounds)}, {"parts", std::move(parts)}});
+			    }
+		    }
+		    return QueryResult::Value({{"cell", {cell.x, cell.y}},
+		                               {"collidesWithFixed", outlines->CollidesWithFixed(place)},
+		                               {"water", outlines->IsWater(place)},
+		                               {"okToCreate", outlines->IsOkToCreateAt(place)},
+		                               {"outlines", std::move(things)}});
 	    });
 	provider->Add(
 	    Query("shade",
