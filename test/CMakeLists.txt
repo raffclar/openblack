@@ -1107,15 +1107,15 @@ openblack_setup_and_add_test(test_sim_checks test_sim_checks.cpp)
 openblack_setup_and_add_test(
   test_clocked_audio_player audio/test_clocked_audio_player.cpp
 )
-  add_test(NAME test_sim_report
-           COMMAND ${Python3_EXECUTABLE}
-                   ${CMAKE_SOURCE_DIR}/tools/sim/test_sim_report.py
-  )
+add_test(NAME test_sim_report
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_sim_report.py
+)
 openblack_setup_and_add_test(test_creature_kiss test_creature_kiss.cpp)
-  add_test(NAME test_sim_run_training
-           COMMAND ${Python3_EXECUTABLE}
-                   ${CMAKE_SOURCE_DIR}/tools/sim/test_sim_run.py
-  )
+add_test(NAME test_sim_run_training
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_sim_run.py
+)
 openblack_setup_and_add_test(
   test_abode_surroundings test_abode_surroundings.cpp
 )
