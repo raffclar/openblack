@@ -59,6 +59,7 @@
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRestAndHome.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/CreatureWalkPlanner.h"
 #include "Creature/FightMarks.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
 #include "ECS/Components/Abode.h"
@@ -2747,14 +2748,6 @@ void CreatureFightSystem::DuelTurn(entt::entity entity)
 			}
 		}
 		const bool computer = fighter.control == fight::Control::Computer;
-		// In its start, the turn on the spot ends before the start animation plays
-		if (fighter.state == fight::State::Start && fighter.turning &&
-		    !(Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity)))
-		{
-			fighter.turning = false;
-			fighter.timeMs = 0.0f;
-			fighter.stateMs = 0.0f;
-		}
 		const bool stance = fighter.state == fight::State::Stance;
 		const bool moving = fighter.state == fight::State::Action && !fight::IsAttack(fighter.animation);
 		if (fight::FacesOpponentEachTurn(fighter.state, fighter.animation, fighter.turning))
@@ -3066,10 +3059,18 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 	}
 	const auto& body = registry.Get<const Creature>(entity);
 	const bool hasOpponent = fighting->stage == CreatureFighting::Stage::Duel && InDuel(registry, fighting->opponent);
-	// While it turns on the spot in its start, the turn's own animation plays, and the start animation waits
+	// While it turns on the spot in its start, the turn's own animation plays, and the start animation waits. When the
+	// turn ends, the start animation plays from its beginning in the same turn.
 	if (fighting->fighter.state == fight::State::Start && fighting->fighter.turning)
 	{
-		return std::nullopt;
+		if (fighting->stage != CreatureFighting::Stage::Duel ||
+		    (Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(entity)))
+		{
+			return std::nullopt;
+		}
+		fighting->fighter.turning = false;
+		fighting->fighter.timeMs = 0.0f;
+		fighting->fighter.stateMs = 0.0f;
 	}
 	auto duration = DurationOf(entity, fighting->fighter.animation);
 	auto speed = fight::PlaybackSpeed(fighting->fighter.animation, fighting->fighter.speed);
@@ -3102,6 +3103,72 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 		duration = DurationOf(entity, fighting->fighter.animation);
 		speed = fight::PlaybackSpeed(fighting->fighter.animation, fighting->fighter.speed);
 	}
+
+	// The start, the finish, and the start and end of a block or a cast test their end before their animation moves on.
+	// A fighter that was called off moves on from its stance, its block or its cast at once. The next state then makes
+	// its turn at once: its animation moves on in the same turn.
+	const auto spanMs = fight::TestSpanMs(k_TurnMs, ShownSize(body), animation->realTime);
+	bool entered = false;
+	{
+		auto& current = fighting->fighter;
+		const auto ending = current.state;
+		const bool ends = fight::EndsByOwnTest(ending) &&
+		                  fight::OwnTestEnds(ending, current.timeMs, fight::EndTestMs(ending, speed, k_StepMs, spanMs),
+		                                     duration, current.stateMs, k_StepMs);
+		auto next = current.stopping ? fight::StopTransition(ending, ends) : std::nullopt;
+		if (!next.has_value() && ends)
+		{
+			next = fight::AfterAnimation(ending, hasOpponent);
+		}
+		if (next.has_value())
+		{
+			// The casting pose over, the creature lets go of the miracle: one that lasts only while held stops
+			if (ending == fight::State::Cast && Locator::magicSystem::has_value())
+			{
+				Locator::magicSystem::value().ReleaseCreatureCast(entity);
+				const auto* why = current.stopping ? "called_off" : "cast_over";
+				fight_transcript::Note(entity, "spell_release", [entity, why] {
+					return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)}, {"why", why}};
+				});
+			}
+			// As the start of a cast ends, still facing its opponent, the spell is cast: an attacking one at the
+			// opponent, a defending one on itself. A fighter that was called off casts nothing.
+			if (current.stopping)
+			{
+				current.spell.reset();
+			}
+			else if (ending == fight::State::CastStart && current.spell.has_value() && hasOpponent)
+			{
+				CastFightSpell(entity, static_cast<MagicType>(*current.spell), fighting->opponent);
+				fighting = registry.TryGet<CreatureFighting>(entity);
+				if (fighting == nullptr)
+				{
+					return std::nullopt;
+				}
+				fighting->fighter.spell.reset();
+			}
+			fight::Enter(fighting->fighter, *next);
+			if (*next == fight::State::Idle)
+			{
+				animation->body = {};
+				return std::nullopt;
+			}
+			// At the end of a block or a cast, the next move that the player put in the queue starts at once
+			if ((ending == fight::State::BlockEnd || ending == fight::State::CastEnd) && *next == fight::State::Stance &&
+			    fighting->fighter.control != fight::Control::Computer && !fighting->fighter.queue.Empty())
+			{
+				CheckQueue(entity);
+				fighting = registry.TryGet<CreatureFighting>(entity);
+				if (fighting == nullptr)
+				{
+					return std::nullopt;
+				}
+			}
+			entered = true;
+			duration = DurationOf(entity, fighting->fighter.animation);
+			speed = fight::PlaybackSpeed(fighting->fighter.animation, fighting->fighter.speed);
+		}
+	}
 	auto& fighter = fighting->fighter;
 	const auto fromMs = static_cast<int32_t>(fighter.timeMs);
 
@@ -3124,51 +3191,30 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 			locomotion->toPosition.y = GroundAt(Flat(locomotion->toPosition));
 		}
 	}
-	fighter.timeMs += static_cast<float>(fight::TurnAdvance(speed, k_StepMs));
-	fighter.stateMs += static_cast<float>(k_StepMs);
-
-	auto& current = fighting->fighter;
-	const bool done = fight::StateDone(current.state, current.timeMs, duration, current.stateMs);
-	// Called off, it winds down: the move under way plays out, then it finishes and stands
-	if (current.stopping)
+	if (fight::EndsByOwnTest(fighter.state))
 	{
-		if (const auto next = fight::StopTransition(current.state, done))
+		// Its animation goes round once at most and never stops at its end. The state ends only by its own test.
+		const auto durationMs = static_cast<int32_t>(duration);
+		fighter.timeMs = durationMs > 0 ? static_cast<float>(creature_walk_planner::AdvanceLoop(
+		                                      static_cast<int32_t>(fighter.timeMs),
+		                                      fight::StateAdvanceMs(fighter.state, speed, k_StepMs, spanMs), durationMs))
+		                                : 0.0f;
+		if (!entered)
 		{
-			if (current.state == fight::State::Cast && Locator::magicSystem::has_value())
-			{
-				Locator::magicSystem::value().ReleaseCreatureCast(entity);
-				fight_transcript::Note(entity, "spell_release", [entity] {
-					return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)}, {"why", "called_off"}};
-				});
-			}
-			current.spell.reset();
-			fight::Enter(current, *next);
-			Show(*animation, current, false, DurationOf(entity, current.animation));
-			return std::nullopt;
+			fighter.stateMs += static_cast<float>(k_StepMs);
 		}
 	}
-	if (done)
+	else
 	{
-		// The casting pose over, the creature lets go of the miracle: one that lasts only while held stops
-		if (current.state == fight::State::Cast && Locator::magicSystem::has_value())
-		{
-			Locator::magicSystem::value().ReleaseCreatureCast(entity);
-			fight_transcript::Note(entity, "spell_release", [entity] {
-				return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)}, {"why", "cast_over"}};
-			});
-		}
-		// As the start of a cast ends, still facing its opponent, the spell is cast: an attacking one at the opponent, a
-		// defending one on itself
-		if (current.state == fight::State::CastStart && current.spell.has_value() && hasOpponent)
-		{
-			CastFightSpell(entity, static_cast<MagicType>(*current.spell), fighting->opponent);
-			current.spell.reset();
-			fighting = registry.TryGet<CreatureFighting>(entity);
-			if (fighting == nullptr)
-			{
-				return std::nullopt;
-			}
-		}
+		fighter.timeMs += static_cast<float>(fight::TurnAdvance(speed, k_StepMs));
+		fighter.stateMs += static_cast<float>(k_StepMs);
+	}
+
+	auto& current = fighting->fighter;
+	// Another state moves on once its animation has played through
+	if (!entered && !fight::EndsByOwnTest(current.state) &&
+	    fight::StateDone(current.state, current.timeMs, duration, current.stateMs))
+	{
 		const auto next = fight::AfterAnimation(current.state, hasOpponent);
 		if (next == current.state && fight::Loops(current.state))
 		{

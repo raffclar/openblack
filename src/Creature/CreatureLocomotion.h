@@ -76,6 +76,17 @@ struct Speeds
 /// Turning on the spot without animations, one step a game turn: the heading closes the part of the gap to the target
 /// that the time before the step gives, from where it is now. At the end of the turn it is the target.
 [[nodiscard]] GameHeading LerpHeading(GameHeading heading, GameHeading target, float timeMs, float durationMs);
+/// The headings that the body is drawn between over a turn, and whether its heading snaps at the end of the turn
+struct DrawnTurn
+{
+	GameHeading from;
+	GameHeading to;
+	bool snaps {false};
+};
+/// The drawn turn after a stop at once. A turn on the spot that ended in this turn keeps the last part of its spin, which
+/// turns the body to the new heading, and the body snaps to the new heading after the turn. The stop removes that part.
+/// Thus the body is drawn at the new heading at once. Else the drawn turn does not change.
+[[nodiscard]] DrawnTurn DrawnAfterStop(const DrawnTurn& drawn, GameHeading heading);
 
 enum class Side : uint8_t
 {

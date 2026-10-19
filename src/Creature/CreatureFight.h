@@ -511,6 +511,20 @@ constexpr float k_CastHoldMs = 2.0f;
 /// Whether an action, or a reel in a block, ends in this turn: its animation would reach its end when it moves on by the
 /// turn's advance. One that ends does not move on: it makes no root move and no blow test in the turn.
 [[nodiscard]] bool ActionEnds(float animationMs, int32_t advanceMs, float durationMs);
+/// Whether a state tests its own end at the start of a turn, before its animation moves on: the start, the finish, the
+/// start and the end of a block, and the start, the hold and the end of a cast. When such a state ends, the next state
+/// makes its turn at once: its animation moves on in the same turn.
+[[nodiscard]] bool EndsByOwnTest(State state);
+/// How far the animation of a state moves on in one game turn. The start moves on by the span of the turn (see
+/// TestSpanMs). Every other state moves on by the turn's advance at its speed.
+[[nodiscard]] int32_t StateAdvanceMs(State state, float speed, int32_t turnMs, int32_t spanMs);
+/// The time that a state adds to the time of its animation when it tests its end. The start and the finish add the span
+/// of the turn. The others add the advance of their animation in the turn.
+[[nodiscard]] int32_t EndTestMs(State state, float speed, int32_t turnMs, int32_t spanMs);
+/// Whether a state that tests its own end ends in this turn. The casting pose ends when its time, with the time of this
+/// turn, is more than a moment. Each other state ends when the time of its animation and its test time reach the
+/// duration, in whole milliseconds.
+[[nodiscard]] bool OwnTestEnds(State state, float animationMs, int32_t testMs, float durationMs, float stateMs, int32_t turnMs);
 /// Whether the creature is blocking: while blocking, once half way into starting to block, and until half way out of
 /// it again
 [[nodiscard]] bool IsBlocking(State state, float timeMs, float startBlockDurationMs);

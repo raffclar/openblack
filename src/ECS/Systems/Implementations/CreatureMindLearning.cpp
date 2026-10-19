@@ -2775,22 +2775,26 @@ std::vector<creature_planner::ObjectCandidate> CreatureMindSystem::ShownParts(en
                                                                               const ChosenActivity& activity)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto suits = [&](entt::entity part) {
-		return SuitsDesire(creature, mind, desire, part) && ObjectToActOnUsefulness(creature, mind, desire, part) > 0.0f;
-	};
-	if (suits(thing))
-	{
-		return {GoalWorth(creature, mind, desire, thing, activity)};
-	}
-	std::vector<creature_planner::ObjectCandidate> parts;
-	for (const auto& belief : mind.beliefs.PartsOf(activity.whole))
-	{
-		const auto part = ActedThingOf(registry, belief.thing);
-		if (part.has_value() && *part != creature && registry.Valid(*part) && suits(*part))
+	const auto members = [&] {
+		std::vector<uint32_t> found;
+		for (const auto& belief : mind.beliefs.PartsOf(activity.whole))
 		{
-			parts.push_back(GoalWorth(creature, mind, desire, *part, activity));
+			const auto part = ActedThingOf(registry, belief.thing);
+			if (part.has_value() && *part != creature && registry.Valid(*part))
+			{
+				found.push_back(entt::to_integral(*part));
+			}
 		}
-	}
+		return found;
+	};
+	const auto found = creature_planner::ShownThingsToActOn(entt::to_integral(thing), members, [&](uint32_t id) {
+		const auto part = static_cast<entt::entity>(id);
+		return SuitsDesire(creature, mind, desire, part) && ObjectToActOnUsefulness(creature, mind, desire, part) > 0.0f;
+	});
+	std::vector<creature_planner::ObjectCandidate> parts;
+	std::ranges::transform(found, std::back_inserter(parts), [&](uint32_t id) {
+		return GoalWorth(creature, mind, desire, static_cast<entt::entity>(id), activity);
+	});
 	return parts;
 }
 
@@ -2798,25 +2802,30 @@ std::vector<creature_planner::ObjectCandidate>
 CreatureMindSystem::ShownThingsWithoutWhole(entt::entity creature, CreatureMindState& mind, Desire desire, entt::entity thing)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto suits = [&](entt::entity found) {
+	const auto suits = [&](uint32_t id) {
+		const auto found = static_cast<entt::entity>(id);
 		return registry.Valid(found) && found != creature && SuitsDesire(creature, mind, desire, found) &&
 		       ObjectToActOnUsefulness(creature, mind, desire, found) > 0.0f;
 	};
-	if (suits(thing))
-	{
-		return {GoalWorth(creature, mind, desire, thing, std::nullopt)};
-	}
-	std::vector<creature_planner::ObjectCandidate> parts;
-	if (const auto whole = WholeOfShownThing(creature, mind, thing))
-	{
-		for (const auto& belief : mind.beliefs.PartsOf(*whole))
+	const auto members = [&] {
+		std::vector<uint32_t> found;
+		if (const auto whole = WholeOfShownThing(creature, mind, thing))
 		{
-			if (const auto part = ActedThingOf(registry, belief.thing); part.has_value() && suits(*part))
+			for (const auto& belief : mind.beliefs.PartsOf(*whole))
 			{
-				parts.push_back(GoalWorth(creature, mind, desire, *part, std::nullopt));
+				if (const auto part = ActedThingOf(registry, belief.thing))
+				{
+					found.push_back(entt::to_integral(*part));
+				}
 			}
 		}
-	}
+		return found;
+	};
+	const auto found = creature_planner::ShownThingsToActOn(entt::to_integral(thing), members, suits);
+	std::vector<creature_planner::ObjectCandidate> parts;
+	std::ranges::transform(found, std::back_inserter(parts), [&](uint32_t id) {
+		return GoalWorth(creature, mind, desire, static_cast<entt::entity>(id), std::nullopt);
+	});
 	return parts;
 }
 
@@ -3030,9 +3039,12 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		std::optional<ChosenActivity> activity;
 		std::vector<creature_planner::ObjectCandidate> parts;
 		const bool aboutSomething = tables->rules.at(d).aboutSomething;
-		if (aboutSomething && (!leashTarget.has_value() || desire == Desire::Compassion))
+		if (aboutSomething)
 		{
-			activity = ChooseActivity(creature, mind, desire);
+			// The thing shown on the leash makes every desire, compassion too, about the whole thing that the shown thing
+			// is part of
+			activity = leashTarget.has_value() ? ShownActivity(creature, mind, desire, *leashTarget)
+			                                   : ChooseActivity(creature, mind, desire);
 			// Compassion does what the town desire that it helps with asks for. Compassion for a creature has no action
 			if (desire == Desire::Compassion && activity.has_value() &&
 			    !creature_activity::CompassionHasActions(activity->kind))
@@ -3049,29 +3061,26 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 				townActions = TownCompassionActions(registry, creature, mind, activity->whole, *tables, random);
 				actions = townActions;
 			}
-			parts = PartsToActOn(creature, mind, desire, *activity);
-			// Anger chooses the part to act on before the action: the part that is most useful to act on
-			if (desire == Desire::Anger)
+			if (leashTarget.has_value())
 			{
-				std::vector<float> partWorth;
-				std::ranges::transform(parts, std::back_inserter(partWorth), &creature_planner::ObjectCandidate::usefulness);
-				const auto chosen = creature_activity::MostUseful(partWorth);
-				parts =
-				    chosen.has_value() ? std::vector {parts.at(*chosen)} : std::vector<creature_planner::ObjectCandidate> {};
+				// The plan acts on the shown thing when it suits the desire and is of use, else on the first part of the
+				// whole thing that is
+				parts = ShownParts(creature, mind, desire, *leashTarget, *activity);
 			}
-		}
-		else if (aboutSomething)
-		{
-			// The thing shown on the leash makes the desire about the whole thing that the shown thing is part of. The
-			// plan acts on the shown thing when it suits the desire and is of use, else on the first part of the whole
-			// thing that is.
-			activity = ShownActivity(creature, mind, desire, *leashTarget);
-			if (!activity.has_value())
+			else
 			{
-				mind.planner.best.at(d).reset();
-				continue;
+				parts = PartsToActOn(creature, mind, desire, *activity);
+				// Anger chooses the part to act on before the action: the part that is most useful to act on
+				if (desire == Desire::Anger)
+				{
+					std::vector<float> partWorth;
+					std::ranges::transform(parts, std::back_inserter(partWorth),
+					                       &creature_planner::ObjectCandidate::usefulness);
+					const auto chosen = creature_activity::MostUseful(partWorth);
+					parts = chosen.has_value() ? std::vector {parts.at(*chosen)}
+					                           : std::vector<creature_planner::ObjectCandidate> {};
+				}
 			}
-			parts = ShownParts(creature, mind, desire, *leashTarget, *activity);
 		}
 		else if (leashTarget.has_value())
 		{
@@ -3142,7 +3151,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 				       !(executor->notWhatItHolds && heldByItself(thing));
 			};
 			std::vector<creature_planner::ObjectCandidate> found;
-			if (leashTarget.has_value() && desire != Desire::Compassion && (activity.has_value() || !aboutSomething))
+			if (leashTarget.has_value())
 			{
 				// The first of the shown parts that the action can act on
 				const auto first = std::ranges::find_if(parts, [&](const creature_planner::ObjectCandidate& part) {
@@ -3150,14 +3159,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 				});
 				return first != parts.end() ? std::optional(*first) : std::nullopt;
 			}
-			if (leashTarget.has_value())
-			{
-				if (suits(*leashTarget) && (!activity.has_value() || BelongsTo(*leashTarget) == activity->whole))
-				{
-					found.push_back(worth(*leashTarget));
-				}
-			}
-			else if (activity.has_value())
+			if (activity.has_value())
 			{
 				std::ranges::copy_if(parts, std::back_inserter(found), [&](const creature_planner::ObjectCandidate& part) {
 					return suits(static_cast<entt::entity>(part.id));
@@ -3175,7 +3177,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		};
 		// A desire about a whole thing finds the action before the part, but anger finds the part first
 		auto order = creature_planner::PlanOrder::ActionFirst;
-		if (leashTarget.has_value() && desire != Desire::Compassion && (activity.has_value() || !aboutSomething))
+		if (leashTarget.has_value())
 		{
 			order = creature_planner::PlanOrder::PartThenAction;
 		}

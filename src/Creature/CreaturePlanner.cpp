@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <vector>
 
 using namespace openblack;
@@ -326,6 +327,19 @@ bool creature_planner::TestsThingActedOn(Desire desire)
 	// By the desires' numbers in the game's tables
 	constexpr std::array<size_t, 15> k_Testing {0, 1, 2, 3, 5, 6, 7, 8, 13, 16, 23, 31, 32, 34, 37};
 	return std::ranges::find(k_Testing, static_cast<size_t>(desire)) != k_Testing.end();
+}
+
+std::vector<uint32_t> creature_planner::ShownThingsToActOn(uint32_t shown,
+                                                           const std::function<std::vector<uint32_t>()>& members,
+                                                           const std::function<bool(uint32_t)>& suitsDesire)
+{
+	if (suitsDesire(shown))
+	{
+		return {shown};
+	}
+	std::vector<uint32_t> found;
+	std::ranges::copy_if(members(), std::back_inserter(found), suitsDesire);
+	return found;
 }
 
 std::optional<UsedChoice> creature_planner::ChooseUsed(std::span<const UsedCandidate> objects, float distanceWeight,

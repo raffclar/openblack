@@ -19,6 +19,7 @@
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
+#include "Creature/CreatureWalkPlanner.h"
 
 using namespace openblack;
 
@@ -44,6 +45,11 @@ float creature_pointing::Wrap(float angle)
 
 creature_pointing::Aim creature_pointing::AimAt(glm::vec3 origin, glm::vec2 facing, glm::vec3 target)
 {
+	return AimAt(origin, GameHeading(AngleOf(facing)), target);
+}
+
+creature_pointing::Aim creature_pointing::AimAt(glm::vec3 origin, GameHeading heading, glm::vec3 target)
+{
 	// The game adds the squares z, x, y, and keeps the heading to the target wide into the subtraction
 	const auto offset = target - origin;
 	const auto distance = x87::Length<x87::SumOrder::Zxy>(offset);
@@ -51,15 +57,20 @@ creature_pointing::Aim creature_pointing::AimAt(glm::vec3 origin, glm::vec2 faci
 	{
 		return {};
 	}
-	const auto across = Wrap(x87::Sub(AngleOf(facing), x87::GameHeadingOf(offset.x, offset.z)));
+	const auto across = Wrap(x87::Sub(heading.Radians(), x87::GameHeadingOf(offset.x, offset.z)));
 	return {.across = std::clamp(across, -k_AcrossLimit, k_AcrossLimit),
 	        .rise = std::clamp(offset.y / distance, -k_RiseLimit, k_RiseLimit)};
 }
 
 float creature_pointing::TurnAngle(glm::vec3 head, glm::vec2 facing, glm::vec3 target)
 {
+	return TurnAngle(head, GameHeading(AngleOf(facing)), target);
+}
+
+float creature_pointing::TurnAngle(glm::vec3 head, GameHeading heading, glm::vec3 target)
+{
 	// The heading to the target stays wide into the subtraction
-	return Wrap(x87::Sub(x87::GameHeadingOf(target.x - head.x, target.z - head.z), AngleOf(facing)));
+	return Wrap(x87::Sub(x87::GameHeadingOf(target.x - head.x, target.z - head.z), heading.Radians()));
 }
 
 bool creature_pointing::PointsWithLeft(float turnAngle, std::optional<bool> heldInLeft)
@@ -86,6 +97,20 @@ std::array<float, 4> creature_pointing::Weights(const Aim& aim, bool left)
 	const auto right = (across + k_AcrossLimit) * k_AcrossScale;
 	const auto high = aim.rise + k_RiseLimit;
 	return {(1.0f - right) * (1.0f - high), right * (1.0f - high), (1.0f - right) * high, right * high};
+}
+
+float creature_pointing::RoutePointTime(float timeMs, int32_t stepMs, float pointMs, bool ending, int32_t durationMs)
+{
+	if (!ending && timeMs >= pointMs)
+	{
+		return timeMs;
+	}
+	return static_cast<float>(creature_walk_planner::AdvanceLoop(static_cast<int32_t>(timeMs), stepMs, durationMs));
+}
+
+bool creature_pointing::RoutePointOver(bool ready, bool ending, float timeMs, int32_t stepMs, float endDurationMs)
+{
+	return ready && ending && static_cast<int32_t>(timeMs) + stepMs >= static_cast<int32_t>(endDurationMs);
 }
 
 float creature_pointing::AdvanceTime(float timeMs, float stepMs, float pointMs, bool ending)

@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <array>
 
 #include <gtest/gtest.h>
@@ -97,6 +99,41 @@ TEST(CreaturePointing, TheTimeHoldsAtThePointUntilThePointEnds)
 	EXPECT_FLOAT_EQ(AdvanceTime(480.0f, 40.0f, 500.0f, false), 520.0f);
 	EXPECT_FLOAT_EQ(AdvanceTime(520.0f, 40.0f, 500.0f, false), 520.0f);
 	EXPECT_FLOAT_EQ(AdvanceTime(520.0f, 40.0f, 500.0f, true), 560.0f);
+}
+
+// The point at the route: the arm moves on by the clip step until it is at the moment of the point or past it, and
+// round the animation once at most when the point ends
+TEST(CreaturePointing, ThePointAtTheRouteHoldsThenPlaysToItsEnd)
+{
+	using namespace creature_pointing;
+	EXPECT_FLOAT_EQ(RoutePointTime(100.0f, 117, 500.0f, false, 1000), 217.0f);
+	EXPECT_FLOAT_EQ(RoutePointTime(480.0f, 117, 500.0f, false, 1000), 597.0f);
+	EXPECT_FLOAT_EQ(RoutePointTime(597.0f, 117, 500.0f, false, 1000), 597.0f);
+	EXPECT_FLOAT_EQ(RoutePointTime(597.0f, 117, 500.0f, true, 1000), 714.0f);
+	// Past the end it goes round once, and never stops at the end
+	EXPECT_FLOAT_EQ(RoutePointTime(950.0f, 117, 500.0f, true, 1000), 67.0f);
+	EXPECT_FLOAT_EQ(RoutePointTime(883.0f, 117, 500.0f, true, 1000), 0.0f);
+	// The point is over when the arm with the step gets to the end of the animation, once it faces the point
+	EXPECT_FALSE(RoutePointOver(true, true, 882.0f, 117, 1000.0f));
+	EXPECT_TRUE(RoutePointOver(true, true, 883.0f, 117, 1000.0f));
+	EXPECT_FALSE(RoutePointOver(false, true, 990.0f, 117, 1000.0f));
+	EXPECT_FALSE(RoutePointOver(true, false, 990.0f, 117, 1000.0f));
+}
+
+// The aim and the turn from the heading as the game keeps it agree with the aim from the way the creature faces
+TEST(CreaturePointing, TheAimFromAHeading)
+{
+	using namespace creature_pointing;
+	const glm::vec3 origin {0.0f, 15.0f, 0.0f};
+	const glm::vec3 target {10.0f, 20.0f, -30.0f};
+	const auto heading = GameHeading(0.3f);
+	const glm::vec2 facing {std::sin(0.3f), -std::cos(0.3f)};
+	const auto byHeading = AimAt(origin, heading, target);
+	const auto byFacing = AimAt(origin, facing, target);
+	EXPECT_NEAR(byHeading.across, byFacing.across, k_Near);
+	EXPECT_FLOAT_EQ(byHeading.rise, byFacing.rise);
+	EXPECT_NEAR(TurnAngle(origin, heading, target), TurnAngle(origin, facing, target), k_Near);
+	EXPECT_NEAR(TurnAngle(origin, heading, target), -byHeading.across, k_Near);
 }
 
 // The game's angles: 0 along -z, a quarter turn along +x, and one full turn at most to bring an angle back
