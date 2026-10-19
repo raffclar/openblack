@@ -107,6 +107,48 @@ TEST(MapCells, ALongBoxIsARowOfCirclesItsWidthAcross)
 	EXPECT_NEAR(turned.row.front().centre.y, 184.0f, 1e-4f);
 }
 
+TEST(MapCells, ASavedGameKeepsEachCellOnceHoweverOftenAThingWalksThroughIt)
+{
+	// A villager walks between two cells many times
+	CellLists lists(8);
+	const auto first = *lists.IndexOf({2, 3});
+	const auto second = *lists.IndexOf({2, 4});
+	lists.Insert(first, E(7), Placement::FixedBack);
+	for (int step = 0; step < 1000; ++step)
+	{
+		lists.Insert(first, E(1), Placement::MobileFront);
+		lists.Remove(first, E(1));
+		lists.Insert(second, E(1), Placement::MobileFront);
+		lists.Remove(second, E(1));
+	}
+	lists.Insert(second, E(1), Placement::MobileFront);
+
+	const auto saved = lists.SavedCells();
+	ASSERT_EQ(saved.size(), 2u);
+	EXPECT_EQ(saved[0].cell, first);
+	EXPECT_EQ(saved[0].fixed, std::vector<entt::entity> {E(7)});
+	EXPECT_TRUE(saved[0].mobile.empty());
+	EXPECT_EQ(saved[1].cell, second);
+	EXPECT_EQ(saved[1].mobile, std::vector<entt::entity> {E(1)});
+}
+
+TEST(MapCells, ALoadOfAnOlderSaveWithACellManyTimesKeepsTheCellOnce)
+{
+	CellLists lists(8);
+	const auto cell = *lists.IndexOf({5, 5});
+	const std::vector<CellLists::SavedCell> older {
+	    {.cell = cell, .fixed = {E(3)}, .mobile = {}},
+	    {.cell = cell, .fixed = {E(3)}, .mobile = {}},
+	    {.cell = cell, .fixed = {E(3)}, .mobile = {}},
+	};
+	ASSERT_TRUE(lists.RestoreCells(older));
+
+	const auto saved = lists.SavedCells();
+	ASSERT_EQ(saved.size(), 1u);
+	EXPECT_EQ(saved[0].fixed, std::vector<entt::entity> {E(3)});
+	EXPECT_EQ(ToVector(lists.Fixed(cell)), std::vector<entt::entity> {E(3)});
+}
+
 TEST(MapCells, ABuildingCoversTheCellsItsOutlineTouchesXByX)
 {
 	// A round building of radius 5 in the middle of cell (10, 10): it and the cells beside it, whose circles of 7.1

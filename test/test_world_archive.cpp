@@ -687,3 +687,39 @@ TEST(WorldArchive, ASnapshotGivesTheSameBytesAsTheRegistryWhateverChangesAfterIt
 	EXPECT_EQ(report.unregisteredComponents, direct.unregisteredComponents);
 	EXPECT_EQ(report.unsavedValues, direct.unsavedValues);
 }
+
+// A save from the save room has the rooms of the temple as well as the land. It keeps every entity and component that
+// a quick save of the same land keeps.
+TEST(WorldArchive, ASaveWithTheTempleOpenKeepsEveryEntityOfAQuickSave)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry land;
+	Populate(land);
+	for (int i = 0; i < 58; ++i)
+	{
+		land.emplace<FakeTag>(land.create());
+	}
+	const auto quick = SnapshotWorld(land, context);
+	entt::registry fromQuick;
+	ASSERT_TRUE(LoadWorld(fromQuick, context, SaveWorld(*quick, context), WorldLoadMode::Exact).has_value());
+
+	// The player goes into the temple: the rooms are entities of the same registry
+	for (int i = 0; i < 810; ++i)
+	{
+		land.emplace<FakeSpot>(land.create());
+	}
+	const auto inTemple = SnapshotWorld(land, context);
+	entt::registry fromTemple;
+	ASSERT_TRUE(LoadWorld(fromTemple, context, SaveWorld(*inTemple, context), WorldLoadMode::Exact).has_value());
+
+	EXPECT_EQ(fromTemple.view<FakeTag>().size(), fromQuick.view<FakeTag>().size());
+	EXPECT_EQ(fromTemple.view<FakeTag>().size(), land.view<FakeTag>().size());
+	EXPECT_EQ(fromTemple.view<FakeWalker>().size(), fromQuick.view<FakeWalker>().size());
+	EXPECT_EQ(fromTemple.view<FakeCounted>().size(), fromQuick.view<FakeCounted>().size());
+	for (const auto entity : fromQuick.view<FakeTag>())
+	{
+		EXPECT_TRUE(fromTemple.valid(entity));
+		EXPECT_TRUE(fromTemple.all_of<FakeTag>(entity));
+	}
+}

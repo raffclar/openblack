@@ -1824,6 +1824,16 @@ void TempleInterior::EnterLockedRoom(TempleRoom room)
 	}
 }
 
+std::optional<OutsideCamera> TempleInterior::GetOutsideCamera() const
+{
+	if (!_active)
+	{
+		return std::nullopt;
+	}
+	return OutsideCamera {.origin = _playerPositionOutside,
+	                      .focus = _playerPositionOutside + glm::quat(_playerRotationOutside) * glm::vec3(0.0f, 0.0f, 1.0f)};
+}
+
 void TempleInterior::Deactivate()
 {
 	if (!_active)
