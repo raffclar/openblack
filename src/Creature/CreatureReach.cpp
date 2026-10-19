@@ -118,6 +118,18 @@ float creature_reach::StraightReach(const Points& points, float scale)
 	return x87::LengthZyx(furthest);
 }
 
+float creature_reach::MovingReach(const Points& points, float scale)
+{
+	// Ahead is towards minus z. The depths of the corners are taken off one at a time, in corner order.
+	constexpr float k_Quarter = 0.25f;
+	float sum = 0.0f;
+	for (const auto& corner : points)
+	{
+		sum = sum - (scale * corner.z);
+	}
+	return sum * k_Quarter;
+}
+
 glm::vec2 creature_reach::HandfulPoint(glm::vec2 creature, glm::vec2 pile, float reach)
 {
 	const auto toPile = pile - creature;

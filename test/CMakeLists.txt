@@ -1463,3 +1463,10 @@ target_link_libraries(test_saved_sounds PRIVATE pack lnd)
 openblack_setup_and_add_test(test_safe_save_files test_safe_save_files.cpp)
 openblack_setup_and_add_test(test_save_problem_box gui/test_save_problem_box.cpp)
 openblack_setup_and_add_test(test_creature_script_control test_creature_script_control.cpp)
+openblack_setup_and_add_test(test_creature_lead test_creature_lead.cpp)
+openblack_setup_and_add_test(test_oracle_walk_lead oracle/test_oracle_walk_lead.cpp)
+set_tests_properties(
+  test_oracle_walk_lead
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

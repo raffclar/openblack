@@ -1256,6 +1256,18 @@ void CreatureLocomotionSystem::ResetPace(entt::entity creature)
 	}
 }
 
+float CreatureLocomotionSystem::KeptFraction(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* self = registry.TryGet<const CreatureLocomotion>(creature);
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (self == nullptr || body == nullptr)
+	{
+		return 0.0f;
+	}
+	return locomotion::KeptFraction(self->fraction, FractionsOf(body->species).walk);
+}
+
 bool CreatureLocomotionSystem::IsMoving(entt::entity creature) const
 {
 	const auto* self = Locator::entitiesRegistry::value().TryGet<const CreatureLocomotion>(creature);
