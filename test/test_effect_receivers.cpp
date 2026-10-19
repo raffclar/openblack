@@ -18,6 +18,7 @@
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
 #include "ECS/StreetLanternRules.h"
 #include "ECS/WorldObjects.h"
@@ -118,4 +119,24 @@ TEST(StreetLanternRules, NoLanternWithinHalfAMetreOfAStatic)
 	EXPECT_TRUE(
 	    ecs::street_lanterns::Refused(k_At, std::array {glm::vec3(108.0f, 0.0f, 100.0f), glm::vec3(99.8f, 0.0f, 99.8f)}));
 	EXPECT_FALSE(ecs::street_lanterns::Refused(k_At, {}));
+}
+
+TEST_F(EffectReceivers, OnlyTheHelpReadsTheRowOfTheVortex)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto vortex = Made();
+	registry.Assign<Vortex>(vortex);
+	_info->mobileStatic.at(static_cast<size_t>(MobileStaticInfo::Vortex)).helpStartEnum = static_cast<HelpText>(2917);
+	Locator::infoConstants::emplace(*_info);
+	const auto& row = Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(MobileStaticInfo::Vortex));
+	EXPECT_EQ(ecs::world_objects::HelpInfoOf(vortex), &row);
+	EXPECT_EQ(ecs::world_objects::HelpInfoOf(vortex)->helpStartEnum, static_cast<HelpText>(2917));
+	// Miracles, heat and the other users of the rows do not know the vortex
+	EXPECT_EQ(ecs::world_objects::InfoOf(vortex), nullptr);
+	EXPECT_EQ(ecs::world_objects::EffectInfoOf(vortex), nullptr);
+	// A thing with a row of its own gives that row to the help too
+	const auto ball = Made();
+	registry.Assign<Ball>(ball);
+	EXPECT_EQ(ecs::world_objects::HelpInfoOf(ball), &Locator::infoConstants::value().ball);
+	EXPECT_EQ(ecs::world_objects::HelpInfoOf(Made()), nullptr);
 }

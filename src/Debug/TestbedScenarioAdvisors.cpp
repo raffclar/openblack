@@ -254,4 +254,17 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	                {.type = PotInfo::HandFood, .offset = {22.0f, 10.0f}}},
 	    .highlights = {{.kind = 0, .offset = {30.0f, 10.0f}}},
 	});
+	// A vortex that leads away, for the Help key
+	all.push_back({
+	    .id = "advisors.help_key_vortex",
+	    .name = "The Help key on a vortex",
+	    .facet = Facet::Advisors,
+	    .description = "A vortex that leads away from the land opens in front of the camera. Put the hand over the "
+	                   "vortex and press F1.",
+	    .expected = "The advisors say the vortex's own help text in the dialogue box, the text of its row in the table "
+	                "of static things. They do not say a remark of the set for things of no interest.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -25.0f}, {25.0f, 25.0f}}},
+	    .vortices = {{.type = VortexType::In, .offset = {0.0f, 0.0f}, .delaySeconds = 0.5f}},
+	});
 }

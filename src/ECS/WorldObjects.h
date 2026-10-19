@@ -42,6 +42,9 @@ namespace openblack::ecs::world_objects
 /// The table row that sets how an object takes the effects of miracles and heat: the row of its kind, and also the rows
 /// of flowers, worship sites and the temple's heart
 [[nodiscard]] const GObjectInfo* EffectInfoOf(entt::entity object);
+/// The table row that the help reads for the texts of an object: the row of its kind, and also the row of the vortex
+/// between the lands in the table of static things. The other users of the rows do not know the vortex.
+[[nodiscard]] const GObjectInfo* HelpInfoOf(entt::entity object);
 /// A building's own row, found by its number and model
 [[nodiscard]] const GAbodeInfo* AbodeInfoOf(entt::entity object);
 

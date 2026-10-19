@@ -6841,7 +6841,7 @@ help::script_help_text::Texts ObjectHelpTexts(entt::entity object)
 		}
 		return texts;
 	}
-	if (const auto* kind = ecs::world_objects::InfoOf(object); kind != nullptr)
+	if (const auto* kind = ecs::world_objects::HelpInfoOf(object); kind != nullptr)
 	{
 		texts.kind = kind->helpStartEnum;
 	}
