@@ -85,11 +85,61 @@ bool FileSystemInterface::MakeFolder(const std::filesystem::path& path)
 
 bool FileSystemInterface::WriteAll(const std::filesystem::path& path, std::span<const uint8_t> bytes)
 {
+	return WriteFile(path, bytes) == WriteResult::Written;
+}
+
+FileSystemInterface::WriteResult FileSystemInterface::WriteFile(const std::filesystem::path& path,
+                                                                std::span<const uint8_t> bytes)
+{
+	if (InGameFolder(path))
+	{
+		return WriteResult::NotOpened;
+	}
+	std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+	if (!stream.is_open())
+	{
+		return WriteResult::NotOpened;
+	}
+	stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	stream.close();
+	return stream ? WriteResult::Written : WriteResult::Incomplete;
+}
+
+bool FileSystemInterface::WriteAt(const std::filesystem::path& path, uint64_t offset, std::span<const uint8_t> bytes)
+{
 	if (InGameFolder(path))
 	{
 		return false;
 	}
-	std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+	// Opened to read and write, the file keeps its bytes and is not made when it is not there
+	std::fstream stream(path, std::ios::binary | std::ios::in | std::ios::out);
+	if (!stream.is_open())
+	{
+		return false;
+	}
+	stream.seekp(static_cast<std::streamoff>(offset));
 	stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	stream.close();
 	return static_cast<bool>(stream);
+}
+
+bool FileSystemInterface::Rename(const std::filesystem::path& from, const std::filesystem::path& to)
+{
+	if (InGameFolder(from) || InGameFolder(to))
+	{
+		return false;
+	}
+	std::error_code error;
+	std::filesystem::rename(from, to, error);
+	return !error;
+}
+
+bool FileSystemInterface::Remove(const std::filesystem::path& path)
+{
+	if (InGameFolder(path))
+	{
+		return false;
+	}
+	std::error_code error;
+	return std::filesystem::remove(path, error);
 }

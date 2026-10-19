@@ -637,6 +637,7 @@ Game::~Game() noexcept
 	if (Locator::saveGameSystem::has_value())
 	{
 		Locator::saveGameSystem::value().SetShowBox({});
+		Locator::saveGameSystem::value().SetReportProblem({});
 	}
 	_interface.reset();
 	_loadingScreen.reset();
@@ -3963,6 +3964,8 @@ bool Game::Initialize() noexcept
 			{
 				Locator::saveGameSystem::value().SetShowBox(
 				    [this](bool loading, bool darken) { ShowSavingBox(loading, darken); });
+				// A save that did not write its world files completely is told to the player in a box
+				Locator::saveGameSystem::value().SetReportProblem([this]() { _interface->ShowSaveProblem(); });
 			}
 			// The Game Statistics box takes the players' figures as it opens
 			_interface->GetMenu().SetStatisticsSource([] {
@@ -4596,6 +4599,8 @@ bool Game::Run() noexcept
 			Locator::saveGameSystem::value().CollectPictures(
 			    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
 			     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
+			// The saves whose world files did not write completely are told to the player
+			Locator::saveGameSystem::value().ReportWriteProblems();
 		}
 		// The player goes into the temple after the frame that the game took the picture of
 		if (Locator::temple::has_value())

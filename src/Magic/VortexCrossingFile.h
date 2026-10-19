@@ -41,6 +41,21 @@ public:
 		return true;
 	}
 
+	/// Open the file at the path again for the vortex, as after a load. The lines in the file stay, and the next text goes
+	/// after them. The file does not know the things written before. Returns false when the file is not there.
+	bool Resume(entt::entity owner, const std::filesystem::path& path)
+	{
+		Close();
+		_file.open(path, std::ios::in | std::ios::out | std::ios::binary);
+		if (!_file.is_open())
+		{
+			return false;
+		}
+		_file.seekp(0, std::ios::end);
+		_owner = owner;
+		return true;
+	}
+
 	/// Add the text to the end of the file. The text goes to the disk at once.
 	void Write(std::string_view text)
 	{

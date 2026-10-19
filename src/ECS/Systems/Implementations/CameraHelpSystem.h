@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -23,6 +24,28 @@ class CameraHelpSystem final: public CameraHelpSystemInterface
 public:
 	[[nodiscard]] const camera_help::CameraHelp& Get() const final { return _help; }
 	[[nodiscard]] camera_help::CameraHelp& Get() final { return _help; }
+
+	/// A save keeps what the camera lets the player do and its automatic pitch, and no more
+	void SaveState(reflection::BinaryWriter& out) const final
+	{
+		reflection::Save(out, _help.features);
+		reflection::Save(out, _help.autoPitch);
+		reflection::Save(out, _help.autoPitchHeight);
+	}
+
+	bool LoadState(reflection::BinaryReader& in) final
+	{
+		auto help = _help;
+		reflection::Load(in, help.features);
+		reflection::Load(in, help.autoPitch);
+		reflection::Load(in, help.autoPitchHeight);
+		if (in.Failed())
+		{
+			return false;
+		}
+		_help = help;
+		return true;
+	}
 
 private:
 	camera_help::CameraHelp _help;

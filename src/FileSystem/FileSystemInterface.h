@@ -133,6 +133,26 @@ public:
 	/// Writes the bytes to the file at the exact path, in place of its contents. The game only reads its own folder,
 	/// thus this writes nothing there. Returns true when it wrote all the bytes.
 	virtual bool WriteAll(const std::filesystem::path& path, std::span<const uint8_t> bytes);
+	/// How far a write of a file got
+	enum class WriteResult : uint8_t
+	{
+		/// Every byte is in the file
+		Written,
+		/// The file did not open, so nothing changed
+		NotOpened,
+		/// The file opened, but not every byte went in
+		Incomplete,
+	};
+	/// Writes the bytes to the file at the exact path, in place of its contents, as WriteAll does, and tells how far it
+	/// got
+	virtual WriteResult WriteFile(const std::filesystem::path& path, std::span<const uint8_t> bytes);
+	/// Writes the bytes over those of the file at the exact path, from a place counted from its start. The file must be
+	/// there already; its other bytes stay. Returns true when it wrote all the bytes.
+	virtual bool WriteAt(const std::filesystem::path& path, uint64_t offset, std::span<const uint8_t> bytes);
+	/// Gives a file a new path in the same folder or another. Returns true when the file has the new path.
+	virtual bool Rename(const std::filesystem::path& from, const std::filesystem::path& to);
+	/// Removes a file. Returns true when the file was there and is gone.
+	virtual bool Remove(const std::filesystem::path& path);
 	/// True when the path is in the game's folder
 	[[nodiscard]] bool InGameFolder(const std::filesystem::path& path) const;
 };

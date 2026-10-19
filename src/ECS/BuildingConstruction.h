@@ -110,10 +110,15 @@ struct FinishedTemple
 	/// A script has music set to play, playing or about to
 	bool scriptMusic;
 	int32_t landNumber;
+	/// The game is a skirmish on a playground land
+	bool skirmish;
 };
 
 /// A temple finished plays its music for the player at this machine, unless a script has the cinema bars in or music of
 /// its own, and not on the first land
 [[nodiscard]] bool PlaysFinishedMusic(const FinishedTemple& temple);
+/// A temple finished saves the game into the slot of the save on exit for the player at this machine, unless a script
+/// has the cinema bars in or the game is a skirmish. The land does not matter.
+[[nodiscard]] bool SavesOnFinish(const FinishedTemple& temple);
 
 } // namespace openblack::building_construction

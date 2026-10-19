@@ -144,6 +144,8 @@ public:
 	[[nodiscard]] NewPlayerBox& GetNewPlayerBox() noexcept { return *_newPlayerBox; }
 	/// The save game room's question and name box, over the temple
 	[[nodiscard]] SaveGameBoxes& GetSaveGameBoxes() noexcept { return *_saveGameBoxes; }
+	/// A save did not write its world files completely: the box tells the player "An error has occurred!" with an OK
+	void ShowSaveProblem();
 	/// The save game room's boxes take the mouse and the keyboard while one is up; true when they took the event
 	bool ProcessSaveGameBoxesEvent(const SDL_Event& event);
 	/// The name of a saved game that the named zoom tooltip shows. The tooltip keeps the last name given.

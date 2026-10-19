@@ -52,6 +52,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/LandFollowers.h"
 #include "ECS/Map.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
@@ -699,6 +700,71 @@ void VortexSystem::WriteCrossing(const Vortex& vortex, entt::entity thing)
 			}
 		}
 	}
+}
+
+namespace
+{
+/// The crossing file in the player's saved games, none without a player
+std::optional<std::filesystem::path> CrossingFilePath()
+{
+	if (!Locator::playerProfileSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto folder = Locator::playerProfileSystem::value().SavedGamesFolder();
+	return folder.has_value() ? std::optional(*folder / k_CrossingFile) : std::nullopt;
+}
+} // namespace
+
+void VortexSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	// The game copies the crossing file into the save while a vortex that leads away writes it or a vortex that leads
+	// into the land has read it
+	const bool writing = _crossing.IsOpen();
+	bool read = false;
+	Locator::entitiesRegistry::value().Each<const Vortex>(
+	    [&read](const Vortex& vortex) { read = read || vortex.type == VortexType::Out; });
+	std::optional<std::vector<uint8_t>> copy;
+	if (const auto path = CrossingFilePath(); (writing || read) && path.has_value())
+	{
+		std::ifstream file(*path, std::ios::binary);
+		copy = file.is_open() ? std::optional(std::vector<uint8_t>(std::istreambuf_iterator<char>(file), {})) : std::nullopt;
+	}
+	reflection::Save(out, writing);
+	reflection::Save(out, writing ? _crossing.Owner() : entt::entity {entt::null});
+	reflection::Save(out, copy);
+}
+
+bool VortexSystem::LoadState(reflection::BinaryReader& in)
+{
+	bool writing = false;
+	auto owner = entt::entity {entt::null};
+	std::optional<std::vector<uint8_t>> copy;
+	reflection::Load(in, writing);
+	reflection::Load(in, owner);
+	reflection::Load(in, copy);
+	if (in.Failed())
+	{
+		return false;
+	}
+	const auto path = CrossingFilePath();
+	if (!path.has_value())
+	{
+		return true;
+	}
+	// The copy takes the place of the crossing file
+	if (copy.has_value())
+	{
+		std::ofstream file(*path, std::ios::binary | std::ios::trunc);
+		file.write(reinterpret_cast<const char*>(copy->data()), static_cast<std::streamsize>(copy->size()));
+	}
+	// The vortex that wrote the file opens it again and writes after its lines. The things it wrote before are not
+	// known, so the vortex can write a thing again.
+	if (writing && Locator::entitiesRegistry::value().Valid(owner) && _crossing.Resume(owner, *path) && !_vortexGone)
+	{
+		_vortexGone = Locator::entitiesRegistry::value().OnDestroy<Vortex>().connect<&VortexSystem::OnVortexGone>(*this);
+	}
+	return true;
 }
 
 void VortexSystem::ReadCrossingFile(Vortex& vortex)

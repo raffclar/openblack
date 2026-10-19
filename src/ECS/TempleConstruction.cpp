@@ -13,6 +13,7 @@
 
 #include <vector>
 
+#include <SaveSlots.h>
 #include <entt/core/hashed_string.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtx/transform.hpp>
@@ -56,6 +57,7 @@
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -133,13 +135,10 @@ std::optional<int32_t> TownOf(entt::entity building)
 }
 
 /// A temple finished plays its music for the player at this machine
-void PlayFinishedMusic(PlayerNames owner)
+/// A temple finished plays its music and saves the game, as the rules let it
+void TempleFinished(PlayerNames owner)
 {
 	auto* music = Game::Instance() != nullptr ? Game::Instance()->GetGameMusic() : nullptr;
-	if (music == nullptr)
-	{
-		return;
-	}
 	const bool local = Locator::playerSystem::has_value() && Locator::playerSystem::value().GetLocalPlayer() == owner;
 	bool cutScene = false;
 	if (Locator::cinematicDirectorSystem::has_value())
@@ -150,12 +149,18 @@ void PlayFinishedMusic(PlayerNames owner)
 	const auto temple = building_construction::FinishedTemple {
 	    .localPlayers = local,
 	    .scriptCutScene = cutScene,
-	    .scriptMusic = music->GetScriptType() != audio::MusicType::None,
+	    .scriptMusic = music != nullptr && music->GetScriptType() != audio::MusicType::None,
 	    .landNumber = Entities().Context().mapScriptGlobals.landNumber,
+	    .skirmish = Entities().Context().skirmish,
 	};
-	if (building_construction::PlaysFinishedMusic(temple))
+	if (music != nullptr && building_construction::PlaysFinishedMusic(temple))
 	{
 		music->StartScriptMusic(k_FinishedTempleMusic);
+	}
+	// Then the game saves itself into the slot of the save on exit
+	if (building_construction::SavesOnFinish(temple) && Locator::saveGameSystem::has_value())
+	{
+		Locator::saveGameSystem::value().InstantSave(gamesave::k_ExitSlot);
 	}
 }
 
@@ -309,7 +314,7 @@ void Finish(entt::entity building)
 		{
 			Locator::worshipSiteSystem::value().TempleBuilt(building);
 		}
-		PlayFinishedMusic(registry.Get<const Temple>(building).owner);
+		TempleFinished(registry.Get<const Temple>(building).owner);
 	}
 	else
 	{

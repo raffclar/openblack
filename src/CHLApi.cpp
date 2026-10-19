@@ -1271,10 +1271,21 @@ void GameThingClicked() // 016 GAME_THING_CLICKED
 		Pushb(false);
 		return;
 	}
-	const auto* clicked = LocalHandClicked();
-	// TODO(script-natives): a clicked challenge highlight is saved to the instant save slot first, once highlights and
-	// saves exist
-	Pushb(clicked != nullptr && hand_click::IsThingClicked(*clicked, object));
+	auto* clicked = LocalHandClicked();
+	const bool isClicked = clicked != nullptr && hand_click::IsThingClicked(*clicked, object);
+	// A clicked scroll of leaving the land through its vortex first saves the land into the previous land's slot. The
+	// click is forgotten while the game saves, so the save does not keep it, and then the scroll is clicked again on
+	// this turn.
+	const auto* highlight = Locator::entitiesRegistry::value().TryGet<const ecs::components::ScriptHighlight>(object);
+	if (isClicked && highlight != nullptr &&
+	    ecs::script_highlights::SavesPreviousLandOnClick(highlight->kind, highlight->scriptId) &&
+	    Locator::saveGameSystem::has_value())
+	{
+		hand_click::ClearThing(*clicked);
+		Locator::saveGameSystem::value().InstantSave(gamesave::k_PreviousLandSlot);
+		hand_click::ClickThing(*clicked, object, Locator::time::value().GetTurn());
+	}
+	Pushb(isClicked);
 }
 
 static bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing);
