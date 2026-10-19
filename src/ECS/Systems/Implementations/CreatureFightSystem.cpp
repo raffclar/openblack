@@ -2081,6 +2081,12 @@ void CreatureFightSystem::StartFaint(entt::entity creature)
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
+	// The faint also stops a walk at once. Between the knock-out and this turn, an action of the hands can start a new
+	// walk to its thing. If the walk stays, the creature gets up to follow it and the faint does not end.
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		Locator::creatureLocomotionSystem::value().StopAtOnce(creature);
+	}
 	// The faint cuts what the body plays at once. The game's random numbers choose its side, one time in two the left
 	// side.
 	auto& animation = registry.Get<CreatureAnimation>(creature);

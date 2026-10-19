@@ -4956,6 +4956,10 @@ bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::files
 	{
 		Locator::appleBarrelSystem::value().FindAfterLoad();
 	}
+	if (Locator::templeExteriorSystem::has_value())
+	{
+		Locator::templeExteriorSystem::value().FindAfterLoad();
+	}
 	if (Locator::entitiesMap::has_value())
 	{
 		Locator::entitiesMap::value().FileResidents();
@@ -4979,12 +4983,8 @@ bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::files
 
 void Game::RemakeModelsAfterLoad()
 {
-	// The game made some models while it played: the temples' own, the worship sites' with their temple's skin, the
+	// The game made some models while it played: the worship sites' with their temple's skin, the
 	// broken buildings' and the models of things in high detail. A load in a game that did not make them makes them again.
-	if (Locator::templeExteriorSystem::has_value())
-	{
-		Locator::templeExteriorSystem::value().RemakeModelsAfterLoad();
-	}
 	if (Locator::worshipSiteSystem::has_value())
 	{
 		Locator::worshipSiteSystem::value().RemakeModelsAfterLoad();

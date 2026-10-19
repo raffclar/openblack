@@ -27,6 +27,11 @@ constexpr float k_SizeShort = 0.9999f;
 constexpr float k_TextureWeight = 510.0f;
 } // namespace
 
+bool NeedsBlend(std::optional<glm::vec2> blendedFor, glm::vec2 look, bool meshLoaded)
+{
+	return !meshLoaded || blendedFor != look;
+}
+
 float Step(float current, float target)
 {
 	if (std::abs(current - target) <= k_Near)

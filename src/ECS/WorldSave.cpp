@@ -45,6 +45,7 @@
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -245,8 +246,11 @@ gamesave::Chunk CameraChunk()
 	const entt::meta_ctx context;
 	reflection::BinaryWriter out(context);
 	const auto& camera = Locator::camera::value();
-	reflection::Save(out, camera.GetOrigin());
-	reflection::Save(out, camera.GetFocus());
+	const auto saved =
+	    world_save::CameraToSave(Locator::temple::has_value() ? Locator::temple::value().GetOutsideCamera() : std::nullopt,
+	                             {.origin = camera.GetOrigin(), .focus = camera.GetFocus()});
+	reflection::Save(out, saved.origin);
+	reflection::Save(out, saved.focus);
 	return {.tag = gamesave::k_CameraTag, .bytes = std::move(out.Bytes())};
 }
 
@@ -561,12 +565,21 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 	return result->report;
 }
 
+OutsideCamera world_save::CameraToSave(const std::optional<OutsideCamera>& outside, const OutsideCamera& current)
+{
+	return outside.value_or(current);
+}
+
 void world_save::ForgetUnsavedState(entt::registry& registry)
 {
 	registry.view<components::CreatureMindState>().each([](components::CreatureMindState& mind) {
 		mind.leftAreaActions.clear();
 		mind.agendaRefused = false;
 	});
+	// The rooms of the temple are not a part of the land. A save from inside the temple has them, so the load removes
+	// them. The temple makes them again when the player goes into it.
+	const auto rooms = registry.view<const components::TempleInteriorPart>();
+	registry.destroy(rooms.begin(), rooms.end());
 }
 
 bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn)

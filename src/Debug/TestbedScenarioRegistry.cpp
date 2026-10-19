@@ -7538,6 +7538,27 @@ void AddMind(std::vector<Scenario>& all)
 		});
 	}
 
+	{
+		// A far rock to pick up, and a near ball to look at
+		auto tiger = Content(CreatureType::Tiger, {0.0f, 0.0f});
+		tiger.phase = 13;
+		all.push_back({
+		    .id = "mind.script_action_stops_walk",
+		    .name = "A script action stops a walk to a thing",
+		    .facet = Facet::Mind,
+		    .description = "A grown-up tiger. The script tells it to throw a rock 150 m away. After four seconds, while "
+		                   "the tiger walks to the rock, the script tells it to look at a ball near it.",
+		    .expected = "The tiger walks to the rock. When the second order comes, it stops at once and turns to look at "
+		                "the ball. It does not walk on to the rock.",
+		    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+		    .creatures = {tiger},
+		    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, -150.0f}},
+		                {.type = MobileStaticInfo::ToyBall, .offset = {25.0f, 10.0f}}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .object = 0, .action = "ThrowAround"},
+		                 {.kind = Kind::DoAction, .delaySeconds = 4.0f, .object = 1, .action = "LookButDontApproach"}},
+		});
+	}
+
 	all.push_back({
 	    .id = "mind.mimic",
 	    .name = "Mimic the player",

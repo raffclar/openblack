@@ -24,9 +24,8 @@ public:
 	/// Each turn also lets a player's temple entrances take the cursor from the first turn a temple of theirs stands fully
 	/// built
 	virtual void UpdateTurn() = 0;
-	/// After a load: the models that the game made for these things while it played are made again. A save keeps the
-	/// names of these models but not the models, and the game that loads it may not have them.
-	virtual void RemakeModelsAfterLoad() {}
+	/// After a load of a saved game: makes each temple's blended mesh again for the look that the save kept
+	virtual void FindAfterLoad() = 0;
 };
 
 } // namespace openblack::ecs::systems

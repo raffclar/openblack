@@ -57,6 +57,7 @@ public:
 	[[nodiscard]] TempleRoom GetCurrentRoom() const override { return _currentRoom; }
 	void SetCurrentRoom(TempleRoom room) override;
 	bool ReleaseOutsideScriptCamera() override;
+	[[nodiscard]] std::optional<OutsideCamera> GetOutsideCamera() const override;
 	[[nodiscard]] std::optional<TempleRoom> GetTransitionRoom() const override { return _transitionRoom; }
 	void SetTransitionRoom(std::optional<TempleRoom> room) override { _transitionRoom = room; }
 	void GoToRoom(TempleRoom room) override;
