@@ -11,8 +11,18 @@
 
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <thread>
+#include <utility>
+
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+#include <intrin.h>
+#elif defined(__x86_64__) || defined(__i386__)
+#include <cpuid.h>
+#endif
 
 #include <L3DFile.h>
 #include <SDL.h>
@@ -21,6 +31,9 @@
 
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/MusicPlayer.h"
+#include "Audio/Sound.h"
+#include "Camera/Camera.h"
+#include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/UserData.h"
 #include "Creature/CreatureRig.h"
@@ -39,16 +52,19 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Graphics/LogoEffectView.h"
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/LoadingScreenRules.h"
+#include "Gui/LogoEffect.h"
 #include "Gui/MenuBackdrop.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
+#include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
 #include "Video/StillPicture.h"
 #include "Video/VideoRules.h"
@@ -117,6 +133,108 @@ StartupInput TakeStartupInput(Game& game)
 uint32_t Milliseconds()
 {
 	return SDL_GetTicks();
+}
+
+constexpr std::string_view k_LionheadLogo = "Data/lhlogo.raw";
+constexpr std::string_view k_LogoSky = "Data/D_SKY.l3d";
+constexpr entt::hashed_string k_LogoSkyId = entt::hashed_string("logo/d_sky");
+/// The player's own logo, in the temporary folder of the system
+constexpr std::string_view k_UserLogo = "userlogo.raw";
+
+/// What the player did during a frame of the logo effect
+struct LogoInput
+{
+	StartupInput startup;
+	glm::ivec2 mouseMove {0, 0};
+	int32_t wheel {0};
+};
+
+/// Takes the window's events for a frame of the logo effect, with the movement of the mouse and the turns of the wheel
+LogoInput TakeLogoInput(Game& game)
+{
+	LogoInput input;
+	SDL_Event event;
+	while (SDL_PollEvent(&event) != 0)
+	{
+		if (event.type == SDL_QUIT)
+		{
+			input.startup.quit = true;
+		}
+		else if (event.type == SDL_KEYDOWN)
+		{
+			input.startup.key = true;
+		}
+		else if (event.type == SDL_MOUSEMOTION)
+		{
+			input.mouseMove += glm::ivec2(event.motion.xrel, event.motion.yrel);
+		}
+		else if (event.type == SDL_MOUSEWHEEL)
+		{
+			// The game counts 120 for each notch, positive away from the player
+			constexpr int32_t k_WheelNotch = 120;
+			const auto notches = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y;
+			input.wheel += notches * k_WheelNotch;
+		}
+	}
+	const auto buttons = SDL_GetMouseState(nullptr, nullptr);
+	input.startup.mouse = (buttons & (SDL_BUTTON(SDL_BUTTON_LEFT) | SDL_BUTTON(SDL_BUTTON_RIGHT))) != 0;
+	if (input.startup.quit)
+	{
+		game.RequestQuit();
+	}
+	return input;
+}
+
+/// The version word and the feature word of the processor, none where the processor cannot tell them
+std::optional<std::pair<uint32_t, uint32_t>> ProcessorWords()
+{
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+	std::array<int, 4> words {};
+	__cpuid(words.data(), 1);
+	return std::pair {static_cast<uint32_t>(words[0]), static_cast<uint32_t>(words[3])};
+#elif defined(__x86_64__) || defined(__i386__)
+	unsigned int a = 0;
+	unsigned int b = 0;
+	unsigned int c = 0;
+	unsigned int d = 0;
+	if (__get_cpuid(1, &a, &b, &c, &d) == 0)
+	{
+		return std::nullopt;
+	}
+	return std::pair {static_cast<uint32_t>(a), static_cast<uint32_t>(d)};
+#else
+	return std::nullopt;
+#endif
+}
+
+/// The picture of the logo effect: on one start in four, the player's own logo if there is one, else the Lionhead logo
+std::optional<logo_effect::Picture> LogoPicture()
+{
+	// The time since the computer started, as the game reads it
+	const auto uptime =
+	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch());
+	if (logo_effect::TriesUserLogo(static_cast<uint64_t>(uptime.count())))
+	{
+		std::error_code error;
+		const auto folder = std::filesystem::temp_directory_path(error);
+		if (!error)
+		{
+			std::ifstream file(folder / k_UserLogo, std::ios::binary);
+			const std::vector<uint8_t> bytes {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+			if (auto picture = logo_effect::ReadUserLogo(bytes); picture.has_value())
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The logo effect shows the player's own logo");
+				return picture;
+			}
+		}
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	const auto path = std::filesystem::path(k_LionheadLogo);
+	if (!fileSystem.Exists(path))
+	{
+		return std::nullopt;
+	}
+	return logo_effect::LionheadLogo(fileSystem.ReadAll(path));
 }
 } // namespace
 
@@ -321,6 +439,143 @@ void Game::PlayLogoScreens()
 		}
 	}
 	TakeStartupInput(*this);
+}
+
+void Game::PlayLogoEffect()
+{
+	if (!_interface || !Locator::windowing::has_value() || Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
+	{
+		return;
+	}
+	const auto picture = LogoPicture();
+	auto& files = Locator::resources::value().GetL3DFiles();
+	if (!files.Contains(k_LogoSkyId.value()))
+	{
+		try
+		{
+			files.Load(k_LogoSkyId.value(), resources::L3DFileLoader::FromDiskTag {}, std::filesystem::path(k_LogoSky));
+		}
+		catch (const std::exception& error)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The logo effect has no sky: {}", error.what());
+		}
+	}
+	if (!picture.has_value() || !files.Contains(k_LogoSkyId.value()))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The logo effect cannot start: {} is missing",
+		                    picture.has_value() ? k_LogoSky : k_LionheadLogo);
+		return;
+	}
+	// Tools wait while the effect plays
+	const ecs::systems::InspectorLoading playing("logo effect");
+	FollowWindowSize();
+	const auto resolution = static_cast<glm::u16vec2>(Locator::windowing::value().GetSize());
+	const auto box = gui::FitInside(gui::k_FourByThree, resolution.x, resolution.y);
+	const logo_effect::Screen screen {.width = box.width, .height = box.height};
+	// The effect is laid out on a 4:3 screen in the middle of the window, as the game laid it out on its screen. Its
+	// picture covers the whole window, so the sky and the dots continue past the 4:3 screen.
+	const glm::ivec2 origin {box.x, box.y};
+	const logo_effect::Box visible {.min = -origin, .max = glm::ivec2(resolution) - origin};
+	const glm::vec2 clipFit {static_cast<float>(box.width) / static_cast<float>(resolution.x),
+	                         static_cast<float>(box.height) / static_cast<float>(resolution.y)};
+	const glm::vec2 clipShift {
+	    (((static_cast<float>(box.x) + (static_cast<float>(box.width) * 0.5f)) * 2.0f) / static_cast<float>(resolution.x)) -
+	        1.0f,
+	    1.0f - (((static_cast<float>(box.y) + (static_cast<float>(box.height) * 0.5f)) * 2.0f) /
+	            static_cast<float>(resolution.y))};
+	auto view = graphics::LogoEffectView::Create(resolution, *files.Handle(k_LogoSkyId.value()));
+	if (!view)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The logo effect cannot start: its sky has no sphere");
+		return;
+	}
+	const auto words = ProcessorWords();
+	const bool sponsor = words.has_value() && logo_effect::ShowsSponsorLogo(words->first, words->second);
+	_interface->PrepareLogoEffect();
+	const auto& camera = Locator::camera::value();
+	const logo_effect::Random random = [](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); };
+	// The dots are placed with the game camera's lens as it is now
+	logo_effect::Effect effect(*picture, screen, logo_effect::LensOf(camera.GetLens(), camera.GetNearClip(), screen), random,
+	                           visible);
+	auto& audio = Locator::audio::value();
+	const auto sound = static_cast<entt::id_type>(audio::SoundId::Logo);
+	audio.PlaySoundEffect(sound, std::nullopt);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The logo effect starts ({}x{}, the sponsor's logo {})", screen.width,
+	                   screen.height, sponsor ? "shows" : "does not show");
+
+	std::vector<graphics::LogoEffectView::Dot> dots;
+	dots.reserve(logo_effect::k_DotCount);
+	TakeLogoInput(*this);
+	auto last = Milliseconds();
+	LogoInput input;
+	while (logo_effect::GoesOn(input.startup.mouse, effect.Ended(), input.startup.key) && !_quitRequested)
+	{
+		// One frame for each refresh of a 60 Hz screen at most
+		auto now = Milliseconds();
+		while (static_cast<float>(now - last) < logo_effect::k_FrameMilliseconds)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			now = Milliseconds();
+		}
+		const auto milliseconds = std::max(1, static_cast<int32_t>(now - last));
+		last = now;
+		input = TakeLogoInput(*this);
+		glm::ivec2 pointer {0, 0};
+		SDL_GetMouseState(&pointer.x, &pointer.y);
+		const auto frame = effect.Step({.milliseconds = milliseconds,
+		                                .pointer = pointer - glm::ivec2(box.x, box.y),
+		                                .mouseMove = input.mouseMove,
+		                                .wheel = input.wheel,
+		                                .viewAcross = camera.GetLens()},
+		                               random);
+		dots.clear();
+		for (const auto& dot : effect.GetDots())
+		{
+			if (const auto corners = logo_effect::DotCorners(dot, frame.view, frame.lens.nearClip); corners.has_value())
+			{
+				dots.push_back({.corners = *corners, .argb = dot.colour, .additive = dot.additive});
+			}
+		}
+		const auto* dotTexture = _interface->GetLogoDotTexture();
+		PresentStartupFrame([&](glm::u16vec2 size) {
+			view->Draw({.position = frame.view.position,
+			            .right = frame.view.right,
+			            .up = frame.view.up,
+			            .forward = frame.view.forward,
+			            .offset = frame.view.offset,
+			            .clipScaleX = frame.lens.clipScaleX * clipFit.x,
+			            .clipScaleY = frame.lens.clipScaleY * clipFit.y,
+			            .clipShift = clipShift,
+			            .nearClip = frame.lens.nearClip,
+			            .skyColour = frame.skyColour,
+			            .dots = dots,
+			            .dotUvMin = logo_effect::k_DotUvMin,
+			            .dotUvMax = logo_effect::k_DotUvMax,
+			            .dotTexture = dotTexture});
+			_interface->DrawLogoEffectOverlay({.resolution = resolution,
+			                                   .origin = origin,
+			                                   .screen = screen,
+			                                   .text = picture->text,
+			                                   .tradeMark = picture->lionhead,
+			                                   .sponsor = sponsor,
+			                                   .textAlpha = frame.textAlpha,
+			                                   .logoAlpha = frame.logoAlpha,
+			                                   .fade = frame.fade});
+			_interface->DrawLogoEffectPicture(size, view->GetPicture());
+		});
+	}
+	SPDLOG_LOGGER_INFO(
+	    spdlog::get("game"), "The logo effect ends at time {:.3f} ({})", effect.GetTime(),
+	    effect.Ended() ? "its end" : (input.startup.key ? "a key" : (input.startup.mouse ? "a mouse button" : "the window")));
+	view.reset();
+	_interface->ReleaseLogoEffect();
+	// The screen stays black while a mouse button is held
+	while (input.startup.mouse && !_quitRequested)
+	{
+		PresentStartupFrame([](glm::u16vec2 /*size*/) {});
+		input = TakeLogoInput(*this);
+	}
+	audio.StopSoundEffect(sound);
 }
 
 void Game::PlayPreIntro()
