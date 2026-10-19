@@ -62,6 +62,8 @@ public:
 	virtual bool EndGameSpeed(uint32_t task) = 0;
 	/// Whether the task may set the game's speed: only the one with it
 	[[nodiscard]] virtual bool MaySetGameSpeed(uint32_t task) const = 0;
+	/// The task with the game's speed, 0 for none
+	[[nodiscard]] virtual uint32_t GetGameSpeedOwner() const = 0;
 
 	/// What a stopped task gave back
 	struct Released

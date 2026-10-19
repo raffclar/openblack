@@ -7219,6 +7219,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawInfluenceRipples(desc);
 			// The mists blend over the rest, the farthest first
 			DrawMists(desc);
+			DrawPauseText(desc);
 
 			// The game mirrors the hand in the sea while the hand shows, wherever it is: in one flat grey, with no light
 			// and no glow, and only its front faces. Its texture alone gives its alpha.

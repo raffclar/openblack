@@ -107,6 +107,8 @@ enum class Facet : uint8_t
 	Story,
 	/// The tutorial's lessons: the hand's demonstrations and the help texts that go with them
 	Tutorial,
+	/// The interface over the game: the words at the top of the screen while it is paused, slower or quicker
+	Interface,
 
 	_Count
 };
@@ -899,6 +901,11 @@ struct Command
 		CallNative,
 		/// The scenario's object, an animal, runs away from the creature at once, as an animal runs away from a fire
 		AnimalFlees,
+		/// The game pauses (value 1) or continues (value 0), as the pause key does. Needs no creature.
+		PauseGame,
+		/// The game's speed changes to the amount, as the speed keys or a script change it: 1 is normal. Needs no
+		/// creature.
+		SetGameSpeed,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

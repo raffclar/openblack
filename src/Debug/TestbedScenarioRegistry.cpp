@@ -3485,6 +3485,33 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.pause_text",
+	    .name = "The words of the pause",
+	    .facet = Facet::Interface,
+	    .description = "After a second the game pauses, as the pause key does. Press P to continue the game, and P "
+	                   "again to pause it.",
+	    .expected = "Game Paused shows in white at the top middle of the screen. The words fade in as they move away, "
+	                "and each letter turns a little after the letter before it. When the game continues, the words fade "
+	                "out as they come nearer. The menu (Escape) hides the words at once.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
+	    .id = "interface.speed_text",
+	    .name = "The words of the game's speed",
+	    .facet = Facet::Interface,
+	    .description = "After a second the game goes at half speed, as Alt and 1 does. Six seconds later it goes at "
+	                   "twice the speed, as Alt and 2 does. Six seconds later it goes at the normal speed again.",
+	    .expected = "Slow Down Time shows in white at the top middle of the screen, as Game Paused does. Then it fades "
+	                "out, and Speed Up Time fades in. At the normal speed the words fade out and nothing shows.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SetGameSpeed, .delaySeconds = 1.0f, .amount = 0.5f},
+	                 {.kind = Kind::SetGameSpeed, .delaySeconds = 3.0f, .amount = 2.0f},
+	                 {.kind = Kind::SetGameSpeed, .delaySeconds = 12.0f, .amount = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "temple.save_room_pictures",
 	    .name = "The save game room shows the picture of a quick save",
 	    .facet = Facet::Story,
@@ -9509,15 +9536,16 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
-	       IsPointerCommand(kind);
+	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
-	    "Idle",      "Expressions",   "Senses",  "Needs",  "Growth",  "Appearance", "Light",     "Movement", "Footprints",
-	    "Audio",     "Objects",       "Hand",    "Leash",  "Combat",  "Mind",       "Particles", "Editor",   "Miracles",
-	    "Benchmark", "Creature Mode", "Physics", "Nature", "Animals", "Sky",        "Advisors",  "Story",    "Tutorial",
+	    "Idle",     "Expressions", "Senses", "Needs",    "Growth",    "Appearance",    "Light",
+	    "Movement", "Footprints",  "Audio",  "Objects",  "Hand",      "Leash",         "Combat",
+	    "Mind",     "Particles",   "Editor", "Miracles", "Benchmark", "Creature Mode", "Physics",
+	    "Nature",   "Animals",     "Sky",    "Advisors", "Story",     "Tutorial",      "Interface",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -9536,7 +9564,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 163> k_Names {
+	constexpr std::array<std::string_view, 165> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9700,6 +9728,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "finish the building",
 	    "call a script native",
 	    "animal flees",
+	    "pause the game",
+	    "set the game's speed",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

@@ -213,6 +213,7 @@
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
+#include "ECS/Systems/PauseTextSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -639,6 +640,10 @@ Game::~Game() noexcept
 	{
 		Locator::miracleFxSystem::value().SetInterface(nullptr);
 	}
+	if (Locator::pauseTextSystem::has_value())
+	{
+		Locator::pauseTextSystem::value().SetInterface(nullptr);
+	}
 	if (Locator::saveGameSystem::has_value())
 	{
 		Locator::saveGameSystem::value().SetShowBox({});
@@ -951,6 +956,16 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		case SDLK_6:
 		case SDLK_7:
 		case SDLK_8:
+			// Alt and 1 halves the game's speed, to half of normal at the least. Alt and 2 doubles it, to twice
+			// normal at the most. Shift or Ctrl with the key goes before Alt.
+			if ((event.key.keysym.sym == SDLK_1 || event.key.keysym.sym == SDLK_2) &&
+			    (event.key.keysym.mod & (KMOD_SHIFT | KMOD_CTRL)) == 0 && (event.key.keysym.mod & KMOD_ALT) != 0)
+			{
+				auto& clock = Locator::time::value();
+				clock.SetSpeed(event.key.keysym.sym == SDLK_1 ? std::max(clock.GetSpeed() * 0.5f, 0.5f)
+				                                              : std::min(clock.GetSpeed() + clock.GetSpeed(), 2.0f));
+				break;
+			}
 			// The camera's bookmarks aren't for the player while a script has the cinema bars in
 			if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive() ||
 			    !Locator::cameraBookmarkSystem::value().IsEnabled())
@@ -2114,6 +2129,30 @@ bool Game::GameLogicLoop() noexcept
 	return false;
 }
 
+void Game::UpdatePauseText()
+{
+	if (!Locator::pauseTextSystem::has_value() || !_interface)
+	{
+		return;
+	}
+	const auto& clock = Locator::time::value();
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool scriptHasSpeed =
+	    Locator::scriptControlSystem::has_value() && Locator::scriptControlSystem::value().GetGameSpeedOwner() != 0;
+	Locator::pauseTextSystem::value().Update(
+	    {
+	        .paused = clock.IsPaused(),
+	        .speed = clock.GetSpeed(),
+	        .started = true,
+	        .insideTemple = inTemple,
+	        .scriptHasSpeed = scriptHasSpeed,
+	        .editing = false,
+	        .videoPlaying = Locator::videoSystem::value().IsPlaying(),
+	        .boxWithBackground = _interface->IsBoxWithBackgroundActive(),
+	    },
+	    static_cast<uint32_t>(clock.GetFrameRealTime().count()));
+}
+
 void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 {
 	// The game picks the music for the turn
@@ -2457,6 +2496,8 @@ bool Game::Update() noexcept
 	clock.UpdateFrame();
 	// A full-screen video decodes the frames due by the real clock, fades, and ends
 	Locator::videoSystem::value().Update(std::chrono::steady_clock::now());
+	// The words of the pause and the speed, after the frame's keys, turns and video
+	UpdatePauseText();
 	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
 	Locator::alignmentSystem::value().Update(gameTime);
 	{
@@ -4000,6 +4041,10 @@ bool Game::Initialize() noexcept
 			if (Locator::miracleFxSystem::has_value())
 			{
 				Locator::miracleFxSystem::value().SetInterface(_interface.get());
+			}
+			if (Locator::pauseTextSystem::has_value())
+			{
+				Locator::pauseTextSystem::value().SetInterface(_interface.get());
 			}
 		}
 	}

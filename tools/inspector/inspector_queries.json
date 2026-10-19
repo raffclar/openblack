@@ -1583,6 +1583,12 @@
   "query": "temple.villagers"
  },
  {
+  "description": "The words of the pause and the speed: which words show (paused, slower, faster or none), their fade made smooth, and the turn of their letters",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.pause_text"
+ },
+ {
   "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, its creature and its effects, and whether films and 16-bit colour are on",
   "kind": "object",
   "parameters": [],

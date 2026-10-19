@@ -29,6 +29,7 @@ public:
 	void StartGameSpeed(uint32_t task) override;
 	bool EndGameSpeed(uint32_t task) override;
 	[[nodiscard]] bool MaySetGameSpeed(uint32_t task) const override { return _gameSpeedOwner == task; }
+	[[nodiscard]] uint32_t GetGameSpeedOwner() const override { return _gameSpeedOwner; }
 
 	Released TaskStopped(Camera& camera, uint32_t task) override;
 
