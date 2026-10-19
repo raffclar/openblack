@@ -7,12 +7,17 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
+
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/DetailMeshes.h"
+#include "ECS/Components/DrawImportance.h"
 #include "ECS/Components/GroundMark.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
@@ -105,4 +110,42 @@ TEST(ObjectDetail, MostThingsFadeButSomeAreKeptInView)
 	const auto cow = registry.Create();
 	registry.Assign<Animal>(cow).type = openblack::AnimalInfo::Cow;
 	EXPECT_TRUE(object_detail::Disappears(registry, cow, false));
+}
+
+TEST(ObjectDetail, AThingHasTheImportanceItWasMadeWith)
+{
+	openblack::ecs::Registry registry;
+	const auto rock = registry.Create();
+	EXPECT_EQ(object_detail::Importance(registry, rock), 0.0f);
+	const auto deadTree = registry.Create();
+	registry.Assign<DrawImportance>(deadTree, DrawImportance {.importance = object_detail::k_DeadTreeImportance});
+	EXPECT_EQ(object_detail::Importance(registry, deadTree), 1.0f);
+	const auto villager = registry.Create();
+	registry.Assign<DetailMeshes>(villager, DetailMeshes {.meshes = {}, .importance = 0.025f});
+	EXPECT_EQ(object_detail::Importance(registry, villager), 0.025f);
+}
+
+TEST(ObjectDetail, AThingThatAVortexCarriesAwayKeepsItsDetailAndDoesNotFade)
+{
+	openblack::ecs::Registry registry;
+	const auto vortex = registry.Create();
+	for (const bool villager : {false, true})
+	{
+		const auto thing = registry.Create();
+		if (villager)
+		{
+			registry.Assign<DetailMeshes>(thing, DetailMeshes {.meshes = {}, .importance = 0.025f});
+		}
+		// Handed to the vortex's effect, but not yet carried
+		registry.Assign<DrawnIntoVortex>(thing, DrawnIntoVortex {.vortex = vortex, .flight = std::nullopt});
+		EXPECT_NE(object_detail::Importance(registry, thing), object_detail::k_CarriedByVortexImportance);
+		EXPECT_TRUE(object_detail::Disappears(registry, thing, false));
+		registry.Assign<CarriedByTornado>(thing);
+		EXPECT_EQ(object_detail::Importance(registry, thing), 10.0f);
+		EXPECT_FALSE(object_detail::Disappears(registry, thing, false));
+	}
+	// A tornado's catch keeps its own importance
+	const auto caught = registry.Create();
+	registry.Assign<CarriedByTornado>(caught);
+	EXPECT_EQ(object_detail::Importance(registry, caught), 0.0f);
 }

@@ -36,4 +36,14 @@ namespace openblack::ecs::object_detail
 /// however far it is. `townCentre` says it is a village centre.
 [[nodiscard]] bool Disappears(const Registry& registry, entt::entity entity, bool townCentre);
 
+/// The importance of a thing that a vortex carries to the next land. The thing then keeps its high meshes further off.
+inline constexpr float k_CarriedByVortexImportance = 10.0f;
+/// The importance of a dead tree
+inline constexpr float k_DeadTreeImportance = 1.0f;
+
+/// How important it is to keep a thing in detail: its distance bands reach further by this much and one. A thing that a
+/// vortex carries to the next land has the vortex importance. Another thing has the importance it got when it was made:
+/// a villager's comes from its age. A thing with no importance has 0.
+[[nodiscard]] float Importance(const Registry& registry, entt::entity entity);
+
 } // namespace openblack::ecs::object_detail
