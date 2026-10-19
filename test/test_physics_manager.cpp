@@ -290,7 +290,6 @@ TEST_F(PhysicsClassesTest, LivingThings)
 	EXPECT_EQ(facts.row, MaterialRow::Villager);
 	EXPECT_TRUE(facts.canBecomePhysicsObject);
 	EXPECT_TRUE(facts.animated);
-	EXPECT_TRUE(facts.upright);
 	EXPECT_TRUE(facts.dynamic);
 	// One that can't be reached can't fly, but its body still moves when it stands in the way
 	EXPECT_FALSE(Classify(villager, {.villagerReachable = false}).canBecomePhysicsObject);

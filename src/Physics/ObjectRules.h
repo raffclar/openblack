@@ -95,9 +95,6 @@ inline constexpr int k_ReplantVisualTurns = 50;
 /// A replanted tree throws up a brown puff of dust this big
 inline constexpr float k_ReplantSmokeSize = 1.0f;
 
-/// A turned thing's axes stood upright, keeping only its heading: what stands upright takes from a body
-[[nodiscard]] glm::mat3 HeadingOnly(const glm::mat3& axes);
-
 /// A rock knocked harder than this many times its own weight wears away
 inline constexpr float k_RockWearG = 4.0f;
 /// Only a rock taller than this wears away, and only a rock this tall can be broken by tapping it

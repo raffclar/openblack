@@ -70,18 +70,6 @@ std::optional<float> objects::RockWear(float g, float height, bool struckByRock)
 	return (g - k_RockWearG) * k_RockWearPerG;
 }
 
-glm::mat3 objects::HeadingOnly(const glm::mat3& axes)
-{
-	glm::vec3 forward(axes[2].x, 0.0f, axes[2].z);
-	const float length = glm::length(forward);
-	forward = length > 0.0f ? forward / length : glm::vec3(0.0f, 0.0f, 1.0f);
-	glm::mat3 upright;
-	upright[1] = glm::vec3(0.0f, 1.0f, 0.0f);
-	upright[2] = forward;
-	upright[0] = glm::cross(upright[1], upright[2]);
-	return upright;
-}
-
 bool objects::RockBreaksWhenTapped(float height)
 {
 	return height > k_RockLeastHeight;

@@ -15,6 +15,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/MobileStaticRules.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "InfoConstants.h"
@@ -53,5 +54,8 @@ entt::entity MobileStaticArchetype::Create(const glm::vec3& position, MobileStat
 		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::Bonfire, position + offset, -1, entity, 1.0f);
 	}
 
+	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity,
+	                             glm::vec3(xAngleRadians, yAngleRadians, zAngleRadians));
 	return entity;
 }

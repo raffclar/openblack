@@ -17,6 +17,7 @@
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Unlit.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "InfoConstants.h"
@@ -53,5 +54,7 @@ entt::entity BigForestArchetype::Create(const glm::vec3& position, BigForestInfo
 		Locator::forestSystem::value().MakeLandForest(std::nullopt, position, entity, false);
 	}
 
+	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
 	return entity;
 }

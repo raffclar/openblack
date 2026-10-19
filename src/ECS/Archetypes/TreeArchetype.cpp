@@ -22,6 +22,7 @@
 #include "ECS/Components/Swayable.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "InfoConstants.h"
@@ -71,5 +72,7 @@ entt::entity TreeArchetype::Create(uint32_t forestId, const glm::vec3& position,
 	const auto swaySlot = static_cast<int32_t>(std::trunc((yAngleRadians * 8.0f / glm::pi<float>()) + 0.5f)) & 0xF;
 	registry.Assign<Swayable>(entity, static_cast<uint8_t>(swaySlot));
 
+	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
 	return entity;
 }

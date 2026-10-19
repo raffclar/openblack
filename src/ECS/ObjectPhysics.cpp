@@ -58,6 +58,7 @@
 #include "ECS/NearestSearch.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PhysicsGround.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
@@ -474,15 +475,15 @@ void object_physics::SplitRock(systems::DynamicsSystemInterface& dynamics, entt:
 		velocity = entry->body->velocity;
 		spin = entry->body->angularMomentum * objects::k_RockHalfSpin;
 	}
-	const auto heading = objects::HeadingOnly(transform.rotation);
+	// The halves take the angle about y of the rock, with no lean
+	const float yAngle = placed_turn::AnglesOf(registry, rock).y;
 	// The halves are made about the rock's own map position, at its altitude
 	auto at = ecs::thing_map_place::Of(registry, rock);
 	at.altitude = map_coords::FromWorld(land, transform.position).altitude;
 	for (const auto& place : {at + offset, at - offset})
 	{
 		const auto half =
-		    archetypes::MobileStaticArchetype::Create(map_coords::ToWorld(land, place), type, 0.0f, 0.0f, 0.0f, 0.0f, scale);
-		registry.Get<Transform>(half).rotation = heading;
+		    archetypes::MobileStaticArchetype::Create(map_coords::ToWorld(land, place), type, 0.0f, 0.0f, yAngle, 0.0f, scale);
 		// Each half keeps its exact map position until its body moves it
 		ecs::thing_map_place::Keep(registry, half, place);
 		registry.AssignOrReplace<ObjectLife>(half, ObjectLife {.life = 1.0f});

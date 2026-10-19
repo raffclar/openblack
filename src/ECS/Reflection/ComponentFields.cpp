@@ -239,6 +239,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/TurnAngles.h"
 #include "ECS/Components/UndrawnPickModel.h"
 #include "ECS/Components/Unlit.h"
 #include "ECS/Components/Velocity.h"
@@ -2009,6 +2010,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Tree::growthCountdown>("growthCountdown")
 	    .Field<&components::Tree::madeToGrow>("madeToGrow")
 	    .Field<&components::Tree::nonScenic>("nonScenic");
+	Reflect<components::TurnAngles>(context)
+	    .Field<&components::TurnAngles::angles>("angles")
+	    .Field<&components::TurnAngles::turn>("turn");
 	Reflect<components::UndrawnPickModel>(context)
 	    .Field<&components::UndrawnPickModel::mesh>("mesh")
 	    .Field<&components::UndrawnPickModel::drawnWith>("drawnWith")

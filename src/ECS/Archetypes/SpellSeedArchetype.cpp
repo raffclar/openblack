@@ -17,6 +17,7 @@
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -85,5 +86,7 @@ entt::entity SpellDispenserArchetype::Create(const glm::vec3& position, MagicTyp
 	registry.Assign<SpellDispenser>(entity, SpellDispenser {.magicType = magicType,
 	                                                        .timer = {.tick = 0, .period = period, .active = period != 0},
 	                                                        .building = building});
+	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
 	return entity;
 }

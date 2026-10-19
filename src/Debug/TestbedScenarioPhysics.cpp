@@ -104,6 +104,28 @@ void AddOneThrow(std::vector<Scenario>& all)
 	});
 }
 
+void AddThrownAngles(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "physics.thrown_rock_angles",
+	    .name = "A thrown rock takes the angles of its body",
+	    .facet = Facet::Physics,
+	    .description = "A rock is thrown across the field every eight seconds, from the west towards the middle. North of "
+	                   "the middle a boulder leans 120 degrees about x and turns 250 degrees about the vertical.",
+	    .expected = "The rock flies, lands, rolls and comes to rest as before. Each turn the rock takes the angles of its "
+	                "body and gets its turn again from them. The boulder keeps the angles that it got: the inspector "
+	                "shows 120 and 250 degrees in its turn angles, not other angles of the same turn.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Field - glm::vec2 {40.0f}, k_Field + glm::vec2 {40.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = k_Field},
+	                {.type = MobileStaticInfo::Boulder1Chalk,
+	                 .offset = k_Field + glm::vec2 {0.0f, 15.0f},
+	                 .yawDegrees = 250.0f,
+	                 .leanDegrees = {120.0f, 0.0f}}},
+	    .throws = {Inward(0, std::numbers::pi_v<float>, 1.0f, 8.0f)},
+	});
+}
+
 void AddCrowdThrow(std::vector<Scenario>& all)
 {
 	constexpr size_t k_Count = 60;
@@ -456,6 +478,7 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 {
 	AddIdleField(all);
 	AddOneThrow(all);
+	AddThrownAngles(all);
 	AddCrowdThrow(all);
 	AddBuildingBreak(all);
 	AddRockSplit(all);

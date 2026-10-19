@@ -33,6 +33,7 @@
 #include "ECS/Creches.h"
 #include "ECS/DrinkingWater.h"
 #include "ECS/Graveyards.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/ShepherdRules.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
@@ -119,6 +120,8 @@ entt::entity AbodeArchetype::CreatePlan(uint32_t townId, const glm::vec3& positi
 	registry.Get<Town>(registry.Context().towns.at(townId)).planned.push_back(entity);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Town {} plans building {} at {}", townId, static_cast<int>(type),
 	                    glm::to_string(position));
+	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
 	return entity;
 }
 
@@ -257,5 +260,7 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	// A building puts up the things it has round itself, built or not
 	abode_surroundings::Create(entity);
 
+	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
 	return entity;
 }
