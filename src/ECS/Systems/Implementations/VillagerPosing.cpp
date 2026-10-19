@@ -38,6 +38,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerDrawRules.h"
+#include "Graphics/MeshDetail.h"
 #include "Graphics/ViewFrustum.h"
 #include "InfoConstants.h"
 #include "LivingActionSystem.h"
@@ -220,7 +221,7 @@ void LivingActionSystem::PoseVillagersInView(const glm::mat4& viewProjection)
 		    const float scale = std::max({transform.scale.x, transform.scale.y, transform.scale.z});
 		    const auto centre =
 		        DrawnPosition(transform.position, &pose) + (transform.rotation * (box.Center() * transform.scale));
-		    const float radius = (glm::length(box.Size()) * 0.5f * scale) + k_ViewMargin;
+		    const float radius = (openblack::graphics::mesh_detail::HalfDiagonal(box.Size()) * scale) + k_ViewMargin;
 		    const bool seen = registry.AnyOf<InPhysics, InHand>(entity)
 		                          ? graphics::view_frustum::SeesSphereOrReflection(view, centre, radius)
 		                          : graphics::view_frustum::SeesSphere(view, centre, radius);

@@ -35,6 +35,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/TreeRustle.h"
+#include "Graphics/MeshDetail.h"
 #include "Locator.h"
 #include "Nature/TreeBend.h"
 #include "Resources/ResourcesInterface.h"
@@ -115,7 +116,8 @@ void VegetationSystem::UpdateBendPoints(bool handShown)
 				heldModel = nature::tree_bend::HeldModel {
 				    .position = transform->position,
 				    .scale = transform->scale.y,
-				    .halfDiagonal = glm::length(meshes.Handle(mesh->id)->GetBoundingBox().Size()) * 0.5f,
+				    .halfDiagonal =
+				        openblack::graphics::mesh_detail::HalfDiagonal(meshes.Handle(mesh->id)->GetBoundingBox().Size()),
 				};
 			}
 		}

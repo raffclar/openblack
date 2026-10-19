@@ -55,6 +55,7 @@
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/TattooSites.h"
+#include "Graphics/MeshDetail.h"
 #include "Gui/GameInterface.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
@@ -659,7 +660,7 @@ bool CreatureCaveSystem::CursorOverCaveCreature(const screen_pick::View& view) c
 	const auto box = mesh->GetBoundingBox();
 	const float scale = glm::length(glm::vec3(model[0]));
 	if (!screen_pick::CursorOverSphere(view, glm::vec3(model * glm::vec4(box.Center(), 1.0f)),
-	                                   glm::length(box.Size() * 0.5f) * scale, glm::vec3(model[3])))
+	                                   openblack::graphics::mesh_detail::HalfDiagonal(box.Size()) * scale, glm::vec3(model[3])))
 	{
 		return false;
 	}

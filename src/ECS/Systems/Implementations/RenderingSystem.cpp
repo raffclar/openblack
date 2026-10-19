@@ -44,7 +44,6 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DetailMeshes.h"
-#include "ECS/Components/DrawImportance.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
@@ -624,9 +623,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			                              : drawnMesh;
 			    if (const auto& box = MeshBox(bounding); box.has_value())
 			    {
-				    const auto* importance = registry.TryGet<const DrawImportance>(entity);
-				    const float drawImportance =
-				        detail != nullptr ? detail->importance : (importance != nullptr ? importance->importance : 0.0f);
+				    const float drawImportance = object_detail::Importance(registry, entity);
 				    const auto choice = ChooseDetail(
 				        *box, drawImportance, modelMatrix, transform.scale.x,
 				        [&registry, entity] {
@@ -1601,7 +1598,7 @@ void RenderingSystem::NoteKept(ObjectDrawListSystemInterface& drawList, const Re
 		if (const auto& box = MeshBox(boxMesh); box.has_value())
 		{
 			const auto centre = glm::vec3(model * glm::vec4(box->Center(), 1.0f));
-			const float radius = std::abs(scale) * glm::length(box->Size() * 0.5f);
+			const float radius = std::abs(scale) * graphics::mesh_detail::HalfDiagonal(box->Size());
 			onScreen = object_draw_list::SphereOnScreen(*drawList.GetView(), glm::vec3(model[3]), centre, radius);
 		}
 	}

@@ -12,8 +12,11 @@
 #include "Animals/BirdRules.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/DetailMeshes.h"
+#include "ECS/Components/DrawImportance.h"
 #include "ECS/Components/GroundMark.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
@@ -33,6 +36,17 @@ namespace openblack::ecs::object_detail
 {
 
 using namespace components;
+
+namespace
+{
+
+/// Whether a vortex that leads away carries the thing to the next land
+bool CarriedByVortex(const Registry& registry, entt::entity entity)
+{
+	return registry.AllOf<DrawnIntoVortex, CarriedByTornado>(entity);
+}
+
+} // namespace
 
 bool Banded(const Registry& registry, entt::entity entity)
 {
@@ -54,7 +68,8 @@ bool BandedNow(const Registry& registry, entt::entity entity)
 
 bool Disappears(const Registry& registry, entt::entity entity, bool townCentre)
 {
-	if (townCentre || registry.AnyOf<NeverFades, InPhysics, Ball, Vortex, ScriptHighlight>(entity))
+	if (townCentre || registry.AnyOf<NeverFades, InPhysics, Ball, Vortex, ScriptHighlight>(entity) ||
+	    CarriedByVortex(registry, entity))
 	{
 		return false;
 	}
@@ -66,6 +81,20 @@ bool Disappears(const Registry& registry, entt::entity entity, bool townCentre)
 	}
 	const auto* animal = registry.TryGet<const Animal>(entity);
 	return animal == nullptr || !animals::birds::IsBird(animal->type);
+}
+
+float Importance(const Registry& registry, entt::entity entity)
+{
+	if (CarriedByVortex(registry, entity))
+	{
+		return k_CarriedByVortexImportance;
+	}
+	if (const auto* detail = registry.TryGet<const DetailMeshes>(entity); detail != nullptr)
+	{
+		return detail->importance;
+	}
+	const auto* importance = registry.TryGet<const DrawImportance>(entity);
+	return importance != nullptr ? importance->importance : 0.0f;
 }
 
 } // namespace openblack::ecs::object_detail

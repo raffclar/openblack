@@ -225,3 +225,10 @@ TEST(MeshDetail, PaperTurnsWithTheCameraHeading)
 	const auto moved = mesh_detail::PaperMatrix(position, 1.0f, {500.0f, 0.0f, 3.0f}, {510.0f, 0.0f, 3.0f});
 	EXPECT_NEAR(moved[2].x, across[2].x, 1e-5f);
 }
+
+TEST(MeshDetail, TheHalfDiagonalIsHalfTheDiagonalOfTheBox)
+{
+	// Halves of 3, 4 and 12 give a half diagonal of 6.5
+	EXPECT_EQ(mesh_detail::HalfDiagonal({3.0f, 4.0f, 12.0f}), 6.5f);
+	EXPECT_EQ(mesh_detail::ScaledRadius({3.0f, 4.0f, 12.0f}, 2.0f), 13.0f);
+}

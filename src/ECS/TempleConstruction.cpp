@@ -67,6 +67,7 @@
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
 #include "Game.h"
+#include "Graphics/MeshDetail.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/VillagerReactionRules.h"
@@ -587,7 +588,7 @@ building_site::Places PlacesRound(entt::entity building)
 	const auto box = model.GetBoundingBox();
 	const auto matrix = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
 	// The model's reach is its box's half diagonal, scaled
-	const float reach = transform.scale.x * glm::length(box.Size()) * 0.5f;
+	const float reach = transform.scale.x * openblack::graphics::mesh_detail::HalfDiagonal(box.Size());
 	// TODO(temple-builders): football pitches put their places on a circle (building_site::CirclePlaces)
 	return building_site::OutlinePlaces(triangles, matrix, box.Center(), reach);
 }
