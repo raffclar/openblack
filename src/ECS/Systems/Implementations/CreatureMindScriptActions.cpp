@@ -57,12 +57,9 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	// something, until the land changes
 	registry.Context().partnersAlwaysAgree = true;
 	// The script takes control of it first, so the action's agenda is made for a creature under a script's control. It
-	// takes it from a fight or from lying knocked out too.
+	// takes it from a fight, from lying knocked out and from what its hands do too.
 	registry.AssignOrReplace<ScriptControlled>(creature);
-	if (Locator::creatureFightSystem::has_value())
-	{
-		Locator::creatureFightSystem::value().TakeForScript(creature);
-	}
+	StopForScript(creature);
 	// It comes across the thing to act on, and the thing to use
 	auto& mind = registry.Get<CreatureMindState>(creature);
 	ComeAcross(creature, mind, target);
@@ -98,6 +95,21 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 		}
 	}
 	return true;
+}
+
+void CreatureMindSystem::StopForScript(entt::entity creature)
+{
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().TakeForScript(creature);
+	}
+	// The step that the creature does stops as a failure. Thus a walk to a thing that the hands act on also stops, and
+	// does not start again on the next turn.
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
 }
 
 bool CreatureMindSystem::IsLyingDead(entt::entity creature)
