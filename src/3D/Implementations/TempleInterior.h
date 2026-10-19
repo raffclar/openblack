@@ -16,6 +16,7 @@
 #include <string_view>
 #include <vector>
 
+#include <SaveSlots.h>
 #include <glm/vec3.hpp>
 
 #include "3D/CreatureCaveTrophies.h"
@@ -238,8 +239,8 @@ private:
 	void AskAboutSlot(temple::save_game_room::Click click, uint32_t slot);
 	/// Acts on the player's answer to the save game room's question
 	void UpdateSaveGameRoom();
-	/// Saves the game into the slot with the name the player gave
-	void SaveIntoSlot(uint32_t slot, std::u16string_view name);
+	/// Saves the game into the slot with the name, as the save game room saves
+	void SaveIntoSlot(uint32_t slot, std::u16string_view name, gamesave::RoomSave why);
 	/// This frame's text in the rooms
 	std::vector<OrientedTextVertex> _text;
 	/// Whether the options room has opened the game's options

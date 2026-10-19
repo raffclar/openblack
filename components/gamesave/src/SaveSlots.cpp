@@ -47,6 +47,11 @@ std::optional<uint32_t> openblack::gamesave::SaveBeforeRoomLoad(uint32_t slot)
 	return std::nullopt;
 }
 
+bool openblack::gamesave::RoomSaveStartsLoadHelp(RoomSave why, bool slotHasSave)
+{
+	return why == RoomSave::BeforeLoad || !slotHasSave;
+}
+
 std::filesystem::path openblack::gamesave::MindFolder(uint32_t slot, uint32_t land)
 {
 	auto folder = std::filesystem::path(k_SavedGamesFolder) / std::to_string(slot);

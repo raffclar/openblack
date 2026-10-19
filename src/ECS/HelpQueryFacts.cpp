@@ -96,7 +96,7 @@ Texts KindTexts(entt::entity thing)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& info = Locator::infoConstants::value();
-	if (const auto* row = ecs::world_objects::InfoOf(thing); row != nullptr)
+	if (const auto* row = ecs::world_objects::HelpInfoOf(thing); row != nullptr)
 	{
 		return TextsOfRow(*row);
 	}
