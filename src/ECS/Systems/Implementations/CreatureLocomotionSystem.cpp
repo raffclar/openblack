@@ -807,6 +807,13 @@ bool IsOnItsWay(const CreatureLocomotion& self)
 /// Stops it at once where it is, as a new body action or a placement does
 void Halt(CreatureLocomotion& self)
 {
+	// A turn on the spot that ended in this turn has turned the body: without the rest of its spin, the body shows at
+	// the new heading at once
+	const auto drawn =
+	    locomotion::DrawnAfterStop({.from = self.fromHeading, .to = self.toHeading, .snaps = self.headingSnaps}, self.heading);
+	self.fromHeading = drawn.from;
+	self.toHeading = drawn.to;
+	self.headingSnaps = drawn.snaps;
 	ClearWalk(self);
 	self.following.reset();
 }
