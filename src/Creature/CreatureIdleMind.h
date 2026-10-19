@@ -611,6 +611,8 @@ struct IdleMind
 	bool stepStarted {false};
 	float stepSeconds {0.0f};
 	bool sitEnding {false};
+	/// The creature lay still in the faint of this step at least one time. Then the wait of the faint started.
+	bool faintLay {false};
 	/// Seconds until the step's face is pulled again, and the count that varies the faces it pulls
 	float faceSeconds {0.0f};
 	/// It stopped what it did: its eyes look as a rested creature's eyes do again (see Commands::restEyes)
