@@ -296,7 +296,8 @@ TOOLS = [
     },
     {
         "name": "edit_move",
-        "description": "Moves a thing as the game's tools do and refiles it in the map; answers its place and cell.",
+        "description": "Moves a thing as the game's tools do and refiles it in the map (a creature as the game moves one without a "
+                       "walk: on the land at the map position, its walk, look and pose reset); answers its place and cell.",
         "inputSchema": schema({"id": {"type": "integer"},
                                "position": {"type": "array", "items": {"type": "number"},
                                             "description": "[x, z] on the land, or [x, y, z]"}},
