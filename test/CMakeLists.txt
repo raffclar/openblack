@@ -1514,3 +1514,5 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+
+openblack_setup_and_add_test(test_creature_agenda_area test_creature_agenda_area.cpp)

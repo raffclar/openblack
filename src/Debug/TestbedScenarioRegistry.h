@@ -909,6 +909,9 @@ struct Command
 		/// The game's speed changes to the amount, as the speed keys or a script change it: 1 is normal. Needs no
 		/// creature.
 		SetGameSpeed,
+		/// A plan is forced on the creature, as an order from its player: the action by its name (action), done to the
+		/// creature itself. The action's own agenda starts.
+		ForceAction,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

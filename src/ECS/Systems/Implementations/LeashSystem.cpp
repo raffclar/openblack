@@ -1307,7 +1307,8 @@ void LeashSystem::WalkBack(entt::entity creature)
 	walk.gaze = creature_mind::Gaze {.point = glm::vec3(centre.x, 0.0f, centre.y), .whileGoing = true};
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} walks back to ({:.1f}, {:.1f}), {:.1f} away",
 	                   entt::to_integral(creature), centre.x, centre.y, distance);
-	Force(creature, {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = std::vector {walk}});
+	Force(creature,
+	      {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = std::vector {walk}, .walksBack = true});
 	// While the leash is on, the leash leads the walk back
 	if (auto* led = MindOf(registry, creature))
 	{
@@ -1967,7 +1968,8 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		const auto wait = orders::RunWaitSeconds(extra, k_TurnsPerSecond);
 		taken = Force(creature, {.desire = Desire::ObeyPlayer,
 		                         .action = orders::k_MoveAction,
-		                         .agenda = orders::MoveTo(order.point, order.arrival, order.runAndWait, wait)});
+		                         .agenda = orders::MoveTo(order.point, order.arrival, order.runAndWait, wait),
+		                         .walksBack = true});
 		// Sent far, it says which desire it acts on
 		if (gutils::GetDistanceInMetres(at, position) > orders::k_TellDesireDistance)
 		{
@@ -1977,15 +1979,17 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	}
 	case Kind::PutDownAt:
 		PromptKnown(creature, creature_help::Prompt::DropAtFeet);
-		taken = Force(
-		    creature,
-		    {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = orders::PutDownAt(order.point, height)});
+		taken = Force(creature, {.desire = Desire::ObeyPlayer,
+		                         .action = orders::k_MoveAction,
+		                         .agenda = orders::PutDownAt(order.point, height),
+		                         .walksBack = true});
 		break;
 	case Kind::ThrowAt:
 		PromptKnown(creature, creature_help::Prompt::DropAtFeet);
-		taken = Force(
-		    creature,
-		    {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = orders::ThrowAt(order.point, height)});
+		taken = Force(creature, {.desire = Desire::ObeyPlayer,
+		                         .action = orders::k_MoveAction,
+		                         .agenda = orders::ThrowAt(order.point, height),
+		                         .walksBack = true});
 		break;
 	case Kind::Inaccessible:
 	case Kind::ActOnField:
