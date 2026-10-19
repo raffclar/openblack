@@ -18,6 +18,7 @@
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -74,5 +75,7 @@ entt::entity AnimatedStaticArchetype::Create(const glm::vec3& position, Animated
 		CreateNorseGateLanterns(entity, transform);
 	}
 
+	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
 	return entity;
 }

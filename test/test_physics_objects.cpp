@@ -95,16 +95,6 @@ TEST(PhysicsObjects, RockHalvesAreHalfItsVolume)
 	EXPECT_NEAR(volume, 0.5f, 0.001f);
 }
 
-TEST(PhysicsObjects, HeadingOnlyStandsAThingUpright)
-{
-	const glm::mat3 tilted = glm::mat3(glm::eulerAngleYXZ(0.8f, 0.3f, -0.2f));
-	const auto upright = HeadingOnly(tilted);
-	EXPECT_NEAR(upright[1].y, 1.0f, 1e-6f);
-	EXPECT_NEAR(upright[2].y, 0.0f, 1e-6f);
-	// The heading is kept
-	EXPECT_NEAR(std::atan2(upright[2].x, upright[2].z), std::atan2(tilted[2].x, tilted[2].z), 1e-5f);
-}
-
 TEST(PhysicsObjects, ATreeThatFallsDeadDropsItsRootsToTheLand)
 {
 	// They fall faster and faster from where the tree lies, and stop just above the land

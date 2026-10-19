@@ -17,6 +17,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Unlit.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -33,6 +34,8 @@ entt::entity DeadTreeArchetype::Create(const glm::vec3& position, TreeInfo type,
 	const auto& info = Locator::infoConstants::value().tree.at(static_cast<size_t>(type));
 	const auto entity = Create(position, type, x87::GameTurnMatrix(0.0f, yAngleRadians, 0.0f), scale, info.normal);
 	Locator::entitiesRegistry::value().Get<DeadTree>(entity).model.reset();
+	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
 	return entity;
 }
 
@@ -43,6 +46,9 @@ entt::entity DeadTreeArchetype::Create(const glm::vec3& position, TreeInfo type,
 	const auto entity =
 	    Create(position, type, x87::GameTurnMatrix(xAngleRadians, yAngleRadians, zAngleRadians), scale, info.normal);
 	Locator::entitiesRegistry::value().Get<DeadTree>(entity).model.reset();
+	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity,
+	                             glm::vec3(xAngleRadians, yAngleRadians, zAngleRadians));
 	return entity;
 }
 

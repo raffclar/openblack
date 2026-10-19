@@ -629,9 +629,15 @@ void Turn(entt::entity entity, float radians)
 		return;
 	}
 	// A thing that can lean keeps its leans, and turns about the upright axis by the game's turn
-	transform->rotation = ecs::placed_turn::CanLean(registry, entity)
-	                          ? ecs::placed_turn::TurnedAboutUpright(transform->rotation, radians)
-	                          : YawRotation(radians) * transform->rotation;
+	if (ecs::placed_turn::CanLean(registry, entity))
+	{
+		ecs::placed_turn::SetAngles(
+		    registry, entity, ecs::placed_turn::TurnedAboutUpright(ecs::placed_turn::AnglesOf(registry, entity), radians));
+	}
+	else
+	{
+		transform->rotation = YawRotation(radians) * transform->rotation;
+	}
 	if (auto* locomotion = registry.TryGet<CreatureLocomotion>(entity))
 	{
 		const auto heading = GameHeading::FromYaw(YawOf(transform->rotation));
