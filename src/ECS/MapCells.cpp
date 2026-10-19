@@ -130,11 +130,8 @@ std::optional<uint32_t> CellLists::IndexOf(glm::ivec2 cell) const
 
 void CellLists::Insert(uint32_t cell, entt::entity entity, Placement placement)
 {
+	MarkUsed(cell);
 	auto& lists = _cells.at(cell);
-	if (lists.fixed.empty() && lists.mobile.empty())
-	{
-		_used.push_back(cell);
-	}
 	switch (placement)
 	{
 	case Placement::FixedFront:
@@ -148,6 +145,17 @@ void CellLists::Insert(uint32_t cell, entt::entity entity, Placement placement)
 		break;
 	}
 	_blocks.Insert(CellAt(cell), entity);
+}
+
+void CellLists::MarkUsed(uint32_t cell)
+{
+	// A cell that becomes empty and then takes a thing again stays in its first place in the list
+	auto& lists = _cells.at(cell);
+	if (!lists.used)
+	{
+		lists.used = true;
+		_used.push_back(cell);
+	}
 }
 
 void CellLists::Remove(uint32_t cell, entt::entity entity)
@@ -205,13 +213,13 @@ bool CellLists::RestoreCells(std::span<const SavedCell> cells)
 	}
 	for (const auto cell : _used)
 	{
-		_cells.at(cell).fixed.clear();
-		_cells.at(cell).mobile.clear();
+		_cells.at(cell) = {};
 	}
 	_used.clear();
+	// An older save can have a cell more than one time, each time with the same lists.
 	for (const auto& saved : cells)
 	{
-		_used.push_back(saved.cell);
+		MarkUsed(saved.cell);
 		_cells.at(saved.cell).fixed = saved.fixed;
 		_cells.at(saved.cell).mobile = saved.mobile;
 	}
@@ -222,8 +230,7 @@ void CellLists::Clear()
 {
 	for (const auto cell : _used)
 	{
-		_cells.at(cell).fixed.clear();
-		_cells.at(cell).mobile.clear();
+		_cells.at(cell) = {};
 	}
 	_used.clear();
 	_blocks.Clear();
