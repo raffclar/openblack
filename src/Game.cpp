@@ -1474,6 +1474,16 @@ void Game::ProcessHandToolTipTurn()
 	// The shown tooltip's display time runs down only while the player may turn the camera
 	const bool displayTimeRuns = !Locator::cameraHelpSystem::has_value() ||
 	                             (Locator::cameraHelpSystem::value().Get().features & camera_help::feature::k_Rotate) != 0;
+	// When the hand takes a miracle, or the miracle in the hand gets a new power-up level, the hand shows its name at once
+	if (const auto text =
+	        Locator::magicSystem::has_value() ? Locator::magicSystem::value().TakeHeldMiracleToolTip() : std::nullopt;
+	    text.has_value())
+	{
+		if (const auto index = gui::world_tooltip::ToolTipOfText(*text); index.has_value())
+		{
+			toolTips.Force(*index, 0.0f);
+		}
+	}
 	// As the player's own totem moves on the screen, the hand shows the share it is held at, over anything else
 	if (const auto tip = Locator::villageTotemSystem::has_value()
 	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(PlayerNames::PLAYER_ONE)

@@ -234,6 +234,9 @@ public:
 	/// An icon that charged a seed held in a hand sets the power-up level of that seed. When the seed holds more than the
 	/// miracle at that level costs, the seed gives the rest back to its worship site.
 	virtual void SetIconSeedPowerUp(entt::entity /*seed*/, int /*powerUp*/) {}
+	/// The tooltip text of the miracle in the hand, once after the hand takes a seed or the seed gets a new power-up
+	/// level. The hand shows this text at once, over the other tooltips. None when there is no new text.
+	[[nodiscard]] virtual std::optional<uint32_t> TakeHeldMiracleToolTip() { return std::nullopt; }
 	/// The hand drops the miracle it holds, as a scribble or a shake does: what was started is called off and what the
 	/// seed still holds goes back to the player's worship
 	virtual void DiscardHeldSeed() = 0;
