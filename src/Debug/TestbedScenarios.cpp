@@ -75,8 +75,8 @@ std::string_view SpeciesName(CreatureType species)
 
 std::string_view MotionName(CreatureLocomotion::Motion motion)
 {
-	constexpr std::array<std::string_view, 6> k_Names {"standing", "planning",     "confused",
-	                                                   "turning",  "stepping off", "walking"};
+	constexpr std::array<std::string_view, 7> k_Names {
+	    "standing", "planning", "confused", "turning", "stepping off", "walking", "pointing at the route"};
 	return k_Names.at(static_cast<size_t>(motion));
 }
 

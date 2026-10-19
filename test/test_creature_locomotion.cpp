@@ -258,3 +258,19 @@ TEST(CreatureLocomotion, TheWaitForARouteFidgetsWithTheGamesDraws)
 	EXPECT_EQ(ranges.size(), 4u);
 	EXPECT_FLOAT_EQ(wait.ms, k_FidgetMs);
 }
+
+// A stop at once in the turn that a turn on the spot ended shows the body at its new heading at once, not at the old
+// heading without the spin
+TEST(CreatureLocomotion, AStopAfterATurnShowsTheNewHeadingAtOnce)
+{
+	const DrawnTurn ended {.from = GameHeading(-1.5f), .to = GameHeading(-1.5f), .snaps = true};
+	const auto stopped = DrawnAfterStop(ended, GameHeading(1.5f));
+	EXPECT_EQ(stopped.from, GameHeading(1.5f));
+	EXPECT_EQ(stopped.to, GameHeading(1.5f));
+	EXPECT_FALSE(stopped.snaps);
+	// Any other turn is drawn as it was
+	const DrawnTurn walking {.from = GameHeading(0.2f), .to = GameHeading(0.3f), .snaps = false};
+	const auto kept = DrawnAfterStop(walking, GameHeading(0.3f));
+	EXPECT_EQ(kept.from, GameHeading(0.2f));
+	EXPECT_EQ(kept.to, GameHeading(0.3f));
+}

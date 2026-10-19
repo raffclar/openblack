@@ -9,11 +9,15 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <array>
 #include <optional>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+
+#include "Common/GameHeading.h"
 
 /// How a creature points. It blends four animations: low to the left, low to the right, high to the left and high to
 /// the right. How far to the side and how high the target is give the weights. The arm rises to the species' moment of
@@ -46,11 +50,15 @@ struct Aim
 };
 /// The aim at a target from a point, for a creature that faces a way on the land. Each part stops at its limit.
 [[nodiscard]] Aim AimAt(glm::vec3 origin, glm::vec2 facing, glm::vec3 target);
+/// The aim at a target from a point, for a creature with a heading as the game keeps it
+[[nodiscard]] Aim AimAt(glm::vec3 origin, GameHeading heading, glm::vec3 target);
 
 /// The creature turns to face the target before it points when the target is this far round from its head (radians)
 inline constexpr float k_TurnLimit = 0.4712389409542084f;
 /// How far round the target is from the way the creature faces, as seen from its head
 [[nodiscard]] float TurnAngle(glm::vec3 head, glm::vec2 facing, glm::vec3 target);
+/// How far round the target is from the heading of the creature, as the game keeps it, as seen from its head
+[[nodiscard]] float TurnAngle(glm::vec3 head, GameHeading heading, glm::vec3 target);
 
 /// Whether the creature points with its left arm, chosen as it starts to point. A creature that holds something
 /// points with the free hand. A creature that did not turn first uses its left arm when the turn angle is more than 0.
@@ -65,4 +73,12 @@ inline constexpr float k_TurnLimit = 0.4712389409542084f;
 /// The time in the animations after a step. While the creature points, the time moves on until it gets to the
 /// moment of the point, and stays there. When the point ends, the time moves on freely.
 [[nodiscard]] float AdvanceTime(float timeMs, float stepMs, float pointMs, bool ending);
+
+/// The point at the route ahead: the first fidget of a creature that waits for its route. The arm moves on by the clip
+/// step of the turn, round the first animation once at most and never at its end. While the creature points, the arm
+/// stops when it is at the moment of the point or past it. When the point ends, the arm moves on freely.
+[[nodiscard]] float RoutePointTime(float timeMs, int32_t stepMs, float pointMs, bool ending, int32_t durationMs);
+/// Whether the point at the route is over in this turn: the creature faces the point, the point ends, and the time of the
+/// arm with the clip step of the turn gets to the end of the high animation to the left, in whole milliseconds
+[[nodiscard]] bool RoutePointOver(bool ready, bool ending, float timeMs, int32_t stepMs, float endDurationMs);
 } // namespace openblack::creature_pointing

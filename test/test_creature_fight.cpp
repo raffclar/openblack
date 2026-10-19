@@ -1100,3 +1100,51 @@ TEST(CreatureFight, AnActionEndsBeforeItMovesOnWhenTheTurnWouldReachItsEnd)
 	// An action without an animation ends at once
 	EXPECT_TRUE(ActionEnds(0.0f, 99, 0.0f));
 }
+
+TEST(CreatureFight, TheStatesThatTestTheirOwnEnd)
+{
+	for (const auto state :
+	     {State::Start, State::Finish, State::BlockStart, State::BlockEnd, State::CastStart, State::Cast, State::CastEnd})
+	{
+		EXPECT_TRUE(EndsByOwnTest(state));
+	}
+	for (const auto state : {State::Idle, State::Stance, State::Action, State::Block, State::BlockRecoil, State::Faint,
+	                         State::GetUp, State::Lying})
+	{
+		EXPECT_FALSE(EndsByOwnTest(state));
+	}
+}
+
+TEST(CreatureFight, TheStartPlaysByTheSpanOfTheTurnAndTheFinishTestsByIt)
+{
+	// A creature of size 1 in a turn of 100 ms: a span of 117 ms; the fight's other animations move on 66 ms
+	const auto span = TestSpanMs(100.0f, 1.0f, false);
+	ASSERT_EQ(span, 117);
+	const auto speed = PlaybackSpeed(animations::k_Start, 1.0f);
+	ASSERT_EQ(TurnAdvance(speed, 100), 66);
+	EXPECT_EQ(StateAdvanceMs(State::Start, speed, 100, span), 117);
+	EXPECT_EQ(EndTestMs(State::Start, speed, 100, span), 117);
+	// The finish plays at the fight's speed but tests its end by the span
+	EXPECT_EQ(StateAdvanceMs(State::Finish, speed, 100, span), 66);
+	EXPECT_EQ(EndTestMs(State::Finish, speed, 100, span), 117);
+	for (const auto state : {State::BlockStart, State::BlockEnd, State::CastStart, State::CastEnd})
+	{
+		EXPECT_EQ(StateAdvanceMs(state, speed, 100, span), 66);
+		EXPECT_EQ(EndTestMs(state, speed, 100, span), 66);
+	}
+}
+
+TEST(CreatureFight, AStateEndsByItsOwnTestBeforeItsAnimationMovesOn)
+{
+	// The animation time and the test time reach the duration, in whole milliseconds
+	EXPECT_FALSE(OwnTestEnds(State::Finish, 882.0f, 117, 1000.0f, 0.0f, 100));
+	EXPECT_TRUE(OwnTestEnds(State::Finish, 883.0f, 117, 1000.0f, 0.0f, 100));
+	EXPECT_TRUE(OwnTestEnds(State::BlockStart, 934.9f, 66, 1000.0f, 0.0f, 100));
+	EXPECT_FALSE(OwnTestEnds(State::BlockStart, 933.9f, 66, 1000.0f, 0.0f, 100));
+	// No animation: it ends at once
+	EXPECT_TRUE(OwnTestEnds(State::CastEnd, 0.0f, 66, 0.0f, 0.0f, 100));
+	// The casting pose adds the time of the turn to its own time, and ends past a moment
+	EXPECT_TRUE(OwnTestEnds(State::Cast, 0.0f, 66, 1000.0f, 0.0f, 100));
+	EXPECT_FALSE(OwnTestEnds(State::Cast, 0.0f, 66, 1000.0f, 0.0f, 2));
+	EXPECT_TRUE(OwnTestEnds(State::Cast, 0.0f, 66, 1000.0f, 1.0f, 2));
+}

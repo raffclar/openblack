@@ -899,6 +899,9 @@ struct Command
 		CallNative,
 		/// The scenario's object, an animal, runs away from the creature at once, as an animal runs away from a fire
 		AnimalFlees,
+		/// The testbed holds the search for the creature's route (value 1), so that it waits for its route, or lets the
+		/// search go on (value 0)
+		HoldRouteSearch,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

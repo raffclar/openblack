@@ -639,6 +639,27 @@ TEST(CreaturePlanner, DesireForAThingShownOnTheLeash)
 	EXPECT_FALSE(creature_planner::TestsThingActedOn(Desire::Hunger));
 }
 
+TEST(CreaturePlanner, AThingShownOnTheLeashMustSuitTheDesire)
+{
+	// Things 1 and 3 suit the desire; things 2 and 4 do not
+	const auto suits = [](uint32_t id) { return id % 2 == 1; };
+	int membersFound = 0;
+	const auto members = [&membersFound] {
+		++membersFound;
+		return std::vector<uint32_t> {4, 3, 2, 1};
+	};
+	// A shown thing that suits is the only thing, and the members are not looked at
+	EXPECT_EQ(creature_planner::ShownThingsToActOn(1, members, suits), std::vector<uint32_t> {1});
+	EXPECT_EQ(membersFound, 0);
+	// A shown thing that does not suit is never acted on, also when an action could act on it. The members that suit
+	// come in their order.
+	EXPECT_EQ(creature_planner::ShownThingsToActOn(2, members, suits), (std::vector<uint32_t> {3, 1}));
+	EXPECT_EQ(membersFound, 1);
+	// No member suits: nothing
+	const auto none = [] { return std::vector<uint32_t> {2, 4}; };
+	EXPECT_TRUE(creature_planner::ShownThingsToActOn(4, none, suits).empty());
+}
+
 TEST(CreaturePlanner, OpinionBreaksTies)
 {
 	const std::vector<creature_planner::ActionCandidate> actions {{.action = 1, .opinion = 1.0f, .turnsSinceDone = 0},

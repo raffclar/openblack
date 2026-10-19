@@ -79,6 +79,15 @@ glm::vec2 creature_locomotion::DirectionOf(GameHeading heading)
 	return {x87::RoundToFloat(x87::Sin(heading.Radians())), -x87::RoundToFloat(x87::Cos(heading.Radians()))};
 }
 
+creature_locomotion::DrawnTurn creature_locomotion::DrawnAfterStop(const DrawnTurn& drawn, GameHeading heading)
+{
+	if (!drawn.snaps)
+	{
+		return drawn;
+	}
+	return {.from = heading, .to = heading, .snaps = false};
+}
+
 GameHeading creature_locomotion::LerpHeading(GameHeading heading, GameHeading target, float timeMs, float durationMs)
 {
 	if (durationMs <= 0.0f || timeMs >= durationMs)

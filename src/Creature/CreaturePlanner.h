@@ -197,6 +197,12 @@ constexpr float k_ShownThingShare = 0.1f;
 [[nodiscard]] bool TestsThingActedOn(creature_desires::Desire desire);
 /// A thing shown on the leash gets at most this many tries for a desire with a plan
 constexpr size_t k_ShownThingTries = 40;
+/// The things that the plan of a desire can act on, for a thing shown on the leash. The shown thing must suit the desire
+/// (the desire's own test of a thing, and a usefulness more than zero), for every desire. If it suits, it is the only
+/// thing. If not, each member of the whole thing that it is part of that suits the desire, in the order of the members.
+/// The members are found only when the shown thing does not suit.
+[[nodiscard]] std::vector<uint32_t> ShownThingsToActOn(uint32_t shown, const std::function<std::vector<uint32_t>()>& members,
+                                                       const std::function<bool(uint32_t)>& suitsDesire);
 
 /// Something a planned action could use
 struct UsedCandidate

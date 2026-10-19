@@ -101,6 +101,7 @@
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureTallies.h"
@@ -3005,6 +3006,12 @@ void Runner::Give(const Command& command)
 		break;
 	case Kind::StopAtOnce:
 		locomotion.StopAtOnce(*entity);
+		break;
+	case Kind::HoldRouteSearch:
+		if (auto* walk = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureLocomotion>(*entity))
+		{
+			walk->searchHeld = command.value != 0;
+		}
 		break;
 	case Kind::TurnToFaceWhenStill:
 		if (locomotion.TurnToFace(*entity, point))
