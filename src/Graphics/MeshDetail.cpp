@@ -16,6 +16,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/X87Vector.h"
+
 namespace openblack::graphics::mesh_detail
 {
 
@@ -24,9 +26,14 @@ float ViewDepth(const glm::vec3& point, const glm::vec3& eye, const glm::vec3& f
 	return glm::dot(point - eye, forward);
 }
 
+float HalfDiagonal(const glm::vec3& boxSize) noexcept
+{
+	return x87::LengthZyx(boxSize * 0.5f);
+}
+
 float ScaledRadius(const glm::vec3& boxSize, float scale) noexcept
 {
-	return glm::length(boxSize) * 0.5f * scale;
+	return scale * HalfDiagonal(boxSize);
 }
 
 float Reach(float importance, float scaledRadius, float modelDetail) noexcept

@@ -26,6 +26,7 @@
 #include "Graphics/Texture2D.h"
 #include "Graphics/VertexBuffer.h"
 #include "L3DMesh.h"
+#include "MeshBounds.h"
 #include "VertexBlend.h"
 
 using namespace openblack::graphics;
@@ -440,29 +441,26 @@ void L3DSubMesh::BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex)
 	_boundingBox.minima = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
 	if (_flags.hasBones)
 	{
-		// Each group of vertices is placed by its bone in the pose the model rests in. The groups run on over the
-		// vertices of every primitive in turn, as the game bounds each primitive by its own groups.
-		uint32_t vertexOffset = 0;
-		for (const auto& group : vertexGroupSpans)
+		// The engine puts the bones in their rest pose. Then it moves each group of vertices of a primitive by its
+		// bone. The groups of a primitive start at its first vertex. A vertex outside the groups does not change the box.
+		const auto pose = mesh_bounds::RestPose(boneSpans);
+		uint32_t primitiveVertex = 0;
+		uint32_t groupIndex = 0;
+		for (const auto& primitive : primitiveSpan)
 		{
-			auto matrix = glm::identity<glm::mat4>();
-			for (uint32_t parent = group.boneIndex; parent != std::numeric_limits<uint32_t>::max();
-			     parent = boneSpans[parent].parent)
+			uint32_t vertex = primitiveVertex;
+			for (uint32_t g = 0; g < primitive.numGroups && groupIndex < vertexGroupSpans.size(); ++g, ++groupIndex)
 			{
-				const auto& bone = boneSpans[parent];
-				const auto orientation = glm::make_mat3(bone.orientation.data());
-				const auto translation = glm::make_vec3(&bone.position.x) * orientation;
-				const auto local = glm::translate(glm::mat4(orientation), translation);
-				matrix = local * matrix;
+				const auto& group = vertexGroupSpans[groupIndex];
+				const auto bone = group.boneIndex < pose.size() ? pose[group.boneIndex] : glm::mat4(1.0f);
+				for (uint32_t j = 0; j < group.vertexCount && vertex < verticesSpan.size(); ++j, ++vertex)
+				{
+					const auto position = mesh_bounds::OnBone(bone, glm::make_vec3(&verticesSpan[vertex].position.x));
+					_boundingBox.maxima = glm::max(_boundingBox.maxima, position);
+					_boundingBox.minima = glm::min(_boundingBox.minima, position);
+				}
 			}
-			for (uint32_t j = 0; j < group.vertexCount && vertexOffset + j < verticesSpan.size(); ++j)
-			{
-				const auto& vertex = verticesSpan[vertexOffset + j];
-				const auto position = glm::xyz(matrix * glm::vec4(glm::make_vec3(&vertex.position.x), 1.0f));
-				_boundingBox.maxima = glm::max(_boundingBox.maxima, position);
-				_boundingBox.minima = glm::min(_boundingBox.minima, position);
-			}
-			vertexOffset += group.vertexCount;
+			primitiveVertex += primitive.numVertices;
 		}
 	}
 	else

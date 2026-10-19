@@ -248,4 +248,18 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	    // The town belongs to the player at the start, so its pit carries the barrel
 	    .townBeliefInPlayer = 1000.0f,
 	});
+	all.push_back({
+	    .id = "nature.dead_tree_fade",
+	    .name = "A dead tree stays in view further than a live tree",
+	    .facet = Facet::Nature,
+	    .description = "A live conifer on the left and a dead conifer of the same model on the right, 20 m apart. The "
+	                   "camera is about 400 m from them.",
+	    .expected = "At the highest model detail, the live tree fades out from 356 m into the view and it is gone from "
+	                "711 m. At 400 m it is partly see-through. The dead tree fades out from 433 m and it is gone from "
+	                "867 m. At 400 m it is solid. Move the camera away: the live tree goes first.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 150.0f, -380.0f}, .look = {0.0f, 8.0f, 0.0f}},
+	    .objects = {{.type = TreeInfo::ConiferA, .offset = {-10.0f, 0.0f}},
+	                {.type = TreeInfo::ConiferA, .offset = {10.0f, 0.0f}, .dead = true}},
+	});
 }

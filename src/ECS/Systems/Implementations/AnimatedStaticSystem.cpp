@@ -33,6 +33,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "Graphics/MeshDetail.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -321,6 +322,6 @@ bool AnimatedStaticSystem::OnScreen(const object_draw_list::View& view, const Tr
 	}
 	const auto box = meshes.Handle(mesh.id)->GetBoundingBox();
 	const auto centre = transform.position + (transform.rotation * (transform.scale * box.Center()));
-	const float radius = std::abs(transform.scale.x) * glm::length(box.Size() * 0.5f);
+	const float radius = std::abs(transform.scale.x) * openblack::graphics::mesh_detail::HalfDiagonal(box.Size());
 	return object_draw_list::SphereOnScreen(view, transform.position, centre, radius);
 }
