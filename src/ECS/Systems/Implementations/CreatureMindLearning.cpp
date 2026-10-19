@@ -3528,11 +3528,8 @@ bool CreatureMindSystem::CarryOutForScript(entt::entity creature, std::vector<cr
 	{
 		return false;
 	}
-	// The script takes it from a fight or from lying knocked out first
-	if (Locator::creatureFightSystem::has_value())
-	{
-		Locator::creatureFightSystem::value().TakeForScript(creature);
-	}
+	// The script takes it from a fight, from lying knocked out and from what its hands do first
+	StopForScript(creature);
 	if (!Replan(creature, creature_mind::Activity::Told, std::move(agenda)))
 	{
 		return false;
