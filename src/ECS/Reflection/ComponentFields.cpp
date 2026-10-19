@@ -2973,6 +2973,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<openblack::ecs::RegistryContext>(context, ValueOnly {})
 	    .Field<&openblack::ecs::RegistryContext::scriptFootpaths>("scriptFootpaths")
 	    .Field<&openblack::ecs::RegistryContext::scriptThingMadeLast>("scriptThingMadeLast")
+	    .Field<&openblack::ecs::RegistryContext::footpathObstacleChanges>("footpathObstacleChanges")
+	    .Field<&openblack::ecs::RegistryContext::footpathObstacles>("footpathObstacles")
 	    .Field<&openblack::ecs::RegistryContext::streams>("streams")
 	    .Field<&openblack::ecs::RegistryContext::towns>("towns")
 	    .Field<&openblack::ecs::RegistryContext::villageLightFlames>("villageLightFlames")
