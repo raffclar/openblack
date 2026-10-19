@@ -1436,3 +1436,7 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_world_save_forget test_world_save_forget.cpp)
 openblack_setup_and_add_test(test_dead_tree_lean test_dead_tree_lean.cpp)
+openblack_setup_and_add_test(test_particle_save test_particle_save.cpp)
+target_link_libraries(test_particle_save PRIVATE psys)
+target_link_libraries(test_saved_system_state PRIVATE psys)
+openblack_setup_and_add_test(test_saving_box test_saving_box.cpp)

@@ -13,9 +13,13 @@
 
 #include <algorithm>
 #include <map>
+#include <memory>
+#include <span>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <entt/entity/registry.hpp>
@@ -80,11 +84,14 @@ struct ComponentStorage
 	entt::meta_type type;
 };
 
-void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSaveReport& report)
+/// Writes the block of one component: its name, its fields, and its rows, each row with the entity and the value
+template <typename RowValue>
+uint32_t WriteRows(BinaryWriter& out, std::string_view name, const entt::meta_type& type, std::span<const entt::entity> rows,
+                   RowValue&& valueOf)
 {
-	const auto* codec = ComponentCodec(component.type);
-	const auto fields = KeptFields(component.type);
-	WriteName(out, component.name);
+	const auto* codec = ComponentCodec(type);
+	const auto fields = KeptFields(type);
+	WriteName(out, name);
 	const auto length = out.BeginLength();
 	if (codec != nullptr)
 	{
@@ -99,24 +106,15 @@ void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSav
 			WriteName(out, field.info->name);
 		}
 	}
-	const auto& storage = *component.storage;
 	const auto rowsAt = out.BeginLength();
-	uint32_t rows = 0;
-	// The rows go in the order of the storage, so that a load gives the same order to the systems that go through it
-	for (auto it = storage.rbegin(); it != storage.rend(); ++it)
+	for (size_t row = 0; row < rows.size(); ++row)
 	{
-		const auto entity = *it;
-		if (entity == entt::tombstone)
-		{
-			continue;
-		}
-		++rows;
-		out.WriteRaw(entity);
-		const void* value = storage.value(entity);
+		out.WriteRaw(rows[row]);
+		const void* value = valueOf(row);
 		if (codec != nullptr)
 		{
 			const auto at = out.BeginLength();
-			out.SetPlace(component.name, k_WholeComponent);
+			out.SetPlace(name, k_WholeComponent);
 			codec->save(value, out);
 			out.EndLength(at);
 			continue;
@@ -124,49 +122,53 @@ void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSav
 		for (const auto& field : fields)
 		{
 			const auto at = out.BeginLength();
-			out.SetPlace(component.name, field.info->name);
+			out.SetPlace(name, field.info->name);
 			if (field.info->saveFrom != nullptr)
 			{
 				field.info->saveFrom(value, out);
 			}
 			else
 			{
-				auto instance = component.type.from_void(value);
+				auto instance = type.from_void(value);
 				field.info->save(field.data.get(instance), out);
 			}
 			out.EndLength(at);
 		}
 	}
 	// The count of the rows takes the place of the length that BeginLength put
-	std::memcpy(out.Bytes().data() + rowsAt, &rows, sizeof(rows));
+	const auto count = static_cast<uint32_t>(rows.size());
+	std::memcpy(out.Bytes().data() + rowsAt, &count, sizeof(count));
 	out.EndLength(length);
-	report.components += rows;
+	return count;
 }
 
-} // namespace
-
-std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const entt::registry& registry, const entt::meta_ctx& context,
-                                                           WorldSaveReport* report)
+/// The live rows of a storage, in the order of the storage from its end, so that a load gives the same order to the
+/// systems that go through it
+[[nodiscard]] std::vector<entt::entity> LiveRows(const entt::sparse_set& storage)
 {
-	WorldSaveReport local;
-	auto& summary = report != nullptr ? *report : local;
-	BinaryWriter out(context);
-	out.Write({reinterpret_cast<const uint8_t*>(k_WorldArchiveMagic.data()), k_WorldArchiveMagic.size()});
-	out.WriteRaw(k_WorldArchiveVersion);
-
-	// The entities as the registry keeps them: the live entities first, then the free entities in the order that the
-	// registry uses them again
-	const auto* entities = registry.storage<entt::entity>();
-	const auto count = entities != nullptr ? entities->size() : 0;
-	out.WriteSize(count);
-	out.WriteSize(entities != nullptr ? entities->free_list() : 0);
-	for (size_t i = 0; i < count; ++i)
+	std::vector<entt::entity> rows;
+	rows.reserve(storage.size());
+	for (auto it = storage.rbegin(); it != storage.rend(); ++it)
 	{
-		out.WriteRaw(entities->data()[i]);
+		if (*it != entt::tombstone)
+		{
+			rows.push_back(*it);
+		}
 	}
-	summary.entities = entities != nullptr ? entities->free_list() : 0;
+	return rows;
+}
 
-	// The components by their names, so that the same world always gives the same bytes
+void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSaveReport& report)
+{
+	const auto rows = LiveRows(*component.storage);
+	report.components +=
+	    WriteRows(out, component.name, component.type, rows, [&](size_t row) { return component.storage->value(rows[row]); });
+}
+
+/// The registered components of a registry, by their names, so that the same world always gives the same bytes
+[[nodiscard]] std::vector<ComponentStorage> RegisteredStorages(const entt::registry& registry, const entt::meta_ctx& context,
+                                                               std::vector<std::string>& unregistered)
+{
 	std::vector<ComponentStorage> components;
 	for (const auto& [id, storage] : registry.storage())
 	{
@@ -180,18 +182,115 @@ std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const entt::registry&
 		// A storage with a name of its own is not the storage of the component
 		if (component == nullptr || id != info.hash())
 		{
-			summary.unregisteredComponents.push_back(ShortTypeName(info));
+			unregistered.push_back(ShortTypeName(info));
 			continue;
 		}
 		components.push_back({.name = ShortTypeName(info), .storage = &storage, .type = type});
 	}
 	std::ranges::sort(components, {}, &ComponentStorage::name);
-	std::ranges::sort(summary.unregisteredComponents);
+	std::ranges::sort(unregistered);
+	return components;
+}
+
+void WriteHeader(BinaryWriter& out)
+{
+	out.Write({reinterpret_cast<const uint8_t*>(k_WorldArchiveMagic.data()), k_WorldArchiveMagic.size()});
+	out.WriteRaw(k_WorldArchiveVersion);
+}
+
+} // namespace
+
+std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const entt::registry& registry, const entt::meta_ctx& context,
+                                                           WorldSaveReport* report)
+{
+	WorldSaveReport local;
+	auto& summary = report != nullptr ? *report : local;
+	BinaryWriter out(context);
+	WriteHeader(out);
+
+	// The entities as the registry keeps them: the live entities first, then the free entities in the order that the
+	// registry uses them again
+	const auto* entities = registry.storage<entt::entity>();
+	const auto count = entities != nullptr ? entities->size() : 0;
+	out.WriteSize(count);
+	out.WriteSize(entities != nullptr ? entities->free_list() : 0);
+	for (size_t i = 0; i < count; ++i)
+	{
+		out.WriteRaw(entities->data()[i]);
+	}
+	summary.entities = entities != nullptr ? entities->free_list() : 0;
+
+	const auto components = RegisteredStorages(registry, context, summary.unregisteredComponents);
 	out.WriteSize(components.size());
 	for (const auto& component : components)
 	{
 		WriteStorage(out, component, summary);
 	}
+	summary.unsavedValues.insert(out.Unsaved().begin(), out.Unsaved().end());
+	return std::move(out.Bytes());
+}
+
+std::shared_ptr<const WorldSnapshot> openblack::ecs::reflection::SnapshotWorld(const entt::registry& registry,
+                                                                               const entt::meta_ctx& context)
+{
+	auto snapshot = std::make_shared<WorldSnapshot>();
+	if (const auto* entities = registry.storage<entt::entity>(); entities != nullptr)
+	{
+		snapshot->entities.assign(entities->data(), entities->data() + entities->size());
+		snapshot->inUse = entities->free_list();
+	}
+	for (const auto& component : RegisteredStorages(registry, context, snapshot->unregisteredComponents))
+	{
+		auto& storage = snapshot->storages.emplace_back();
+		storage.name = component.name;
+		storage.type = component.type;
+		const ComponentInfo* info = component.type.custom();
+		if (info->copy != nullptr)
+		{
+			storage.copy = info->copy(*component.storage);
+			continue;
+		}
+		// A component that cannot be copied safely is encoded now
+		BinaryWriter out(context);
+		WorldSaveReport rows;
+		WriteStorage(out, component, rows);
+		storage.encoded = std::move(out.Bytes());
+		storage.encodedRows = static_cast<uint32_t>(rows.components);
+		snapshot->unsavedValues.insert(out.Unsaved().begin(), out.Unsaved().end());
+	}
+	return snapshot;
+}
+
+std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const WorldSnapshot& snapshot, const entt::meta_ctx& context,
+                                                           WorldSaveReport* report)
+{
+	WorldSaveReport local;
+	auto& summary = report != nullptr ? *report : local;
+	BinaryWriter out(context);
+	WriteHeader(out);
+	out.WriteSize(snapshot.entities.size());
+	out.WriteSize(snapshot.inUse);
+	for (const auto entity : snapshot.entities)
+	{
+		out.WriteRaw(entity);
+	}
+	summary.entities = snapshot.inUse;
+	summary.unregisteredComponents = snapshot.unregisteredComponents;
+	out.WriteSize(snapshot.storages.size());
+	for (const auto& storage : snapshot.storages)
+	{
+		if (!storage.copy.has_value())
+		{
+			out.Write(storage.encoded);
+			summary.components += storage.encodedRows;
+			continue;
+		}
+		const auto& copy = *storage.copy;
+		summary.components += WriteRows(out, storage.name, storage.type, copy.rows, [&copy](size_t row) -> const void* {
+			return copy.at != nullptr ? copy.at(copy.values.get(), row) : nullptr;
+		});
+	}
+	summary.unsavedValues = snapshot.unsavedValues;
 	summary.unsavedValues.insert(out.Unsaved().begin(), out.Unsaved().end());
 	return std::move(out.Bytes());
 }

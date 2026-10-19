@@ -16,6 +16,7 @@
 #include <optional>
 #include <span>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -72,6 +73,9 @@ public:
 	/// Once a game turn: the flames burn down, and the objects are filed by their cells afresh when next asked for
 	void ProcessTurn();
 	void Reset();
+	/// The reactions of the people that watch the miracles put out fires, for a save
+	[[nodiscard]] const std::unordered_map<entt::entity, uint32_t>& PuttingOutFire() const { return _puttingOutFire; }
+	void RestorePuttingOutFire(std::unordered_map<entt::entity, uint32_t> watchers) { _puttingOutFire = std::move(watchers); }
 
 private:
 	/// The objects an effect may reach in a square of the map's cells, as the cells keep them
@@ -205,6 +209,8 @@ public:
 	void ProcessTurn() override;
 	void Update(float seconds) override;
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 	void SetIgnoreInfluence(bool ignore) override { _ignoreInfluence = ignore; }
 	void SetTribalPower(PlayerNames player, Tribe tribe, float power) override;

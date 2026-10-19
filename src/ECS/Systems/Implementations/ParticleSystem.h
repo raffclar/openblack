@@ -37,6 +37,13 @@
 #error "ECS System implementations should only be included in Locator.cpp"
 #endif
 
+namespace openblack::particles
+{
+class EffectWriter;
+class EffectReader;
+struct SharedTables;
+} // namespace openblack::particles
+
 namespace openblack::ecs::systems
 {
 
@@ -126,6 +133,11 @@ public:
 	void ProcessGlows();
 	[[nodiscard]] size_t SoundCount() const { return _sounds.size(); }
 	void Reset();
+	/// The things that the world shares with the effects go first in the tables of a save, in the order of the world
+	void NumberShared(particles::SharedTables& tables) const;
+	/// The running state of the world: its lists, and the sounds that the particles keep
+	void SaveState(particles::EffectWriter& out) const;
+	bool LoadState(particles::EffectReader& in);
 
 private:
 	/// A sound a particle started, and what plays it
@@ -231,12 +243,15 @@ public:
 	void UpdateFrame(float gameSeconds, const HandFrame& hand) override;
 	void ScrollChains(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) override;
 	void CloseDown(EffectId id) override;
+	void RestoreSink(EffectId id, particles::SpellSink* sink) override;
 	void Delete(EffectId id) override;
 	[[nodiscard]] bool IsRunning(EffectId id) const override;
 	[[nodiscard]] particles::Effect* Find(EffectId id) override;
 
 	void ProcessTurn() override;
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 	void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const override;
 	[[nodiscard]] DrawStats GetDrawStats() const override { return _drawStats; }

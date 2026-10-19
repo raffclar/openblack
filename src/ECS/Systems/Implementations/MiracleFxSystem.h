@@ -37,6 +37,8 @@ public:
 	void SeedLeftHand() override;
 	void SeedShakenOff() override;
 	void Reset() override;
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	void SetInterface(const gui::GameInterface* interface) override { _interface = interface; }
 	void StartTribalPowerRing(Tribe tribe) override;
 	void StopTribalPowerRing() override;

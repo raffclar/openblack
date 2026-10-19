@@ -37,6 +37,13 @@ public:
 	/// its end. A path of fewer than three points always gives its first point, as the game's does.
 	[[nodiscard]] glm::vec3 At(float fraction) const;
 
+	/// Gives the values that a saved game keeps to a visitor
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self._points, self._distances);
+	}
+
 private:
 	void Measure();
 

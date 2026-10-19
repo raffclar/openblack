@@ -21,6 +21,7 @@
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
 
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMiracleMaths.h"
 #include "ParticleShields.h"
@@ -65,6 +66,21 @@ glm::vec3 LastMove(const Atom& atom)
 class AddDefensiveSphere final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		out.WriteShared(std::any_cast<const std::shared_ptr<ShieldSphere>&>(slot.data));
+	}
+	/// The shield is the effect's again after a load
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		auto shield = in.ReadShared<ShieldSphere>();
+		if (shield)
+		{
+			shield->owner = &in.CurrentEffect();
+		}
+		slot.data = std::move(shield);
+	}
+
 	explicit AddDefensiveSphere(const ParticleObject& object)
 	    : radius(object.String("SphereRadius"))
 	{
@@ -322,6 +338,17 @@ public:
 class AtomsAtTarget final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		out.Write(std::any_cast<entt::entity>(slot.data));
+	}
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		auto target = entt::entity {entt::null};
+		in.Read(target);
+		slot.data = target;
+	}
+
 	explicit AtomsAtTarget(const ParticleObject& object)
 	    : creator(object.String("PCreator"))
 	    , nextGroups(object.IntArray("NextGroups"))

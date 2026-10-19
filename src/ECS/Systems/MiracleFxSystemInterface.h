@@ -15,6 +15,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/OrientedText.h"
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
 namespace openblack::gui
@@ -34,7 +35,7 @@ namespace openblack::ecs::systems
 /// spinning inside each with its effect, the rings round the extreme ones), the hand holding a miracle (its bands,
 /// bracelets and glow) and the piles of food and wood rising and sinking for what they hold. The miracles' system tells it when
 /// a miracle comes to the hand, powers up, or leaves it.
-class MiracleFxSystemInterface
+class MiracleFxSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~MiracleFxSystemInterface() = default;

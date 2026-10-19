@@ -51,6 +51,7 @@
 #include "Gui/CinemaBars.h"
 #include "Gui/CinemaHides.h"
 #include "Gui/GlyphTexture.h"
+#include "Gui/SavingBox.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/ScriptTexts.h"
 #include "Gui/WorldToolTipRules.h"
@@ -857,6 +858,14 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 	}
 	_tattooEditor->Update(deltaSeconds, editor, palette, _leftButtonDown);
 	_menu->SetCovered(_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
+}
+
+void GameInterface::DrawSavingBox(glm::u16vec2 resolution, bool loading, bool darken)
+{
+	_canvas.Begin(resolution);
+	_painter.Begin(resolution);
+	saving_box::Draw(_painter, resolution, _texts.Get(loading ? saving_box::k_LoadingText : saving_box::k_SavingText), darken);
+	_canvas.End();
 }
 
 void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, bool overDebugWindow)

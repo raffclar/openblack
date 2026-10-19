@@ -23,6 +23,7 @@
 
 #include <ParticleFile.h>
 
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleEffect.h"
 
@@ -113,6 +114,17 @@ struct EmitterState
 class EmitFromParentAtom final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		out.WritePlain(std::any_cast<const EmitterState&>(slot.data));
+	}
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		EmitterState state;
+		in.ReadPlain(state);
+		slot.data = state;
+	}
+
 	explicit EmitFromParentAtom(const ParticleObject& object)
 	    : _creator(object.String("PCreator"))
 	    , _nextGroups(object.IntArray("NextGroups"))

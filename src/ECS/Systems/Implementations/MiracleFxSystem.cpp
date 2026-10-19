@@ -38,6 +38,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -382,4 +383,37 @@ void MiracleFxSystem::Reset()
 			*fx = {};
 		}
 	}
+}
+
+void MiracleFxSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _holderEffects);
+	// The tribes' names that spin in the world, and which of them rings the hand
+	out.WriteSize(_runners.size());
+	for (const auto& runner : _runners)
+	{
+		reflection::Save(out, *runner);
+		reflection::Save(out, runner.get() == _ring);
+	}
+}
+
+bool MiracleFxSystem::LoadState(reflection::BinaryReader& in)
+{
+	reflection::Load(in, _holderEffects);
+	_runners.clear();
+	_ring = nullptr;
+	const auto count = in.ReadSize();
+	for (size_t i = 0; count.has_value() && i < *count && !in.Failed(); ++i)
+	{
+		auto runner = std::make_unique<magic::tribal_spin::Runner>(u"", glm::vec3(0.0f), glm::u8vec4(0), false);
+		reflection::Load(in, *runner);
+		bool ring = false;
+		reflection::Load(in, ring);
+		if (ring)
+		{
+			_ring = runner.get();
+		}
+		_runners.push_back(std::move(runner));
+	}
+	return !in.Failed();
 }

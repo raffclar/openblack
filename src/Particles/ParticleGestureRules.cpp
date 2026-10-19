@@ -23,6 +23,7 @@
 
 #include "GestureTrail.h"
 #include "LightSheet.h"
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 
 using namespace openblack::particles;
@@ -62,6 +63,37 @@ using TrailAtoms = std::unordered_map<const Atom*, TrailAtom>;
 class GesturingRecognised final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		WriteAtomMap(out, std::any_cast<const TrailAtoms&>(slot.data), [&out](const TrailAtom& trail) {
+			out.WriteShared(trail.trail);
+			out.WriteShared(trail.sheet);
+			out.Write(trail.started);
+			out.Write(trail.startAge);
+			out.Write(trail.scale);
+			out.Write(trail.boxMin);
+			out.Write(trail.boxMax);
+			out.Write(trail.colour);
+			out.WritePlainList(trail.order);
+		});
+	}
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		TrailAtoms trails;
+		ReadAtomMap(in, trails, [&in](TrailAtom& trail) {
+			trail.trail = in.ReadShared<GestureTrail>();
+			trail.sheet = in.ReadShared<LightSheet>();
+			in.Read(trail.started);
+			in.Read(trail.startAge);
+			in.Read(trail.scale);
+			in.Read(trail.boxMin);
+			in.Read(trail.boxMax);
+			in.Read(trail.colour);
+			in.ReadPlainList(trail.order);
+		});
+		slot.data = std::move(trails);
+	}
+
 	explicit GesturingRecognised(const ParticleObject& object)
 	    : creator(object.String("PCreator"))
 	    , spriteCreator(object.String("SpriteCreator"))
@@ -357,6 +389,20 @@ struct ChainState
 class ChainGesture final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		const auto& state = std::any_cast<const ChainState&>(slot.data);
+		out.Write(state.gesturing);
+		WriteAtomMap(out, state.atoms, [&out](const ChainAtom& atom) { out.WritePlain(atom); });
+	}
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		ChainState state;
+		in.Read(state.gesturing);
+		ReadAtomMap(in, state.atoms, [&in](ChainAtom& atom) { in.ReadPlain(atom); });
+		slot.data = std::move(state);
+	}
+
 	/// A chain the hand has stopped drawing goes this long after
 	static constexpr float k_LeftSeconds = 5.0f;
 

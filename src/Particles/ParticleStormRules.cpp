@@ -28,6 +28,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/X87Vector.h"
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleShields.h"
 #include "ParticleSounds.h"
@@ -75,6 +76,8 @@ public:
 
 	/// False once the weather has ended the storm
 	[[nodiscard]] bool Move(glm::vec3 centre) const { return _world.MoveRainStorm(_storm, centre); }
+	/// The number that the world knows the storm by
+	[[nodiscard]] uint32_t Id() const { return _storm; }
 
 private:
 	ParticleWorldInterface& _world;
@@ -127,6 +130,66 @@ void WriteCloud(AtomRuleData& data, const CloudData& cloud)
 class CloudGather final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		const auto& gathering = *std::any_cast<const std::shared_ptr<Gathering>&>(slot.data);
+		out.Write(gathering.rate);
+		out.Write(gathering.due);
+		out.Write(gathering.made);
+		out.Write(gathering.direction);
+		out.Write(gathering.lightning);
+		out.Write(gathering.nextStrike);
+		out.Write(gathering.strikeEnds);
+		out.WriteAtom(gathering.boltCloud);
+		// The bolt's collection waits outside the tree while no cloud carries it
+		out.Write(gathering.spareBolt != nullptr);
+		if (gathering.spareBolt)
+		{
+			out.CurrentEffect().SaveSubtree(*gathering.spareBolt, out);
+		}
+		const bool spare = gathering.bolt != nullptr && gathering.bolt == gathering.spareBolt.get();
+		out.Write(spare);
+		out.WriteCollection(spare ? nullptr : gathering.bolt);
+		out.Write(gathering.ownsStorm);
+		out.Write(gathering.storm != nullptr);
+		out.Write(gathering.storm != nullptr ? gathering.storm->Id() : 0U);
+	}
+	/// The storm's weather is this gathering's again after a load
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		auto gathering = std::make_shared<Gathering>();
+		in.Read(gathering->rate);
+		in.Read(gathering->due);
+		in.Read(gathering->made);
+		in.Read(gathering->direction);
+		in.Read(gathering->lightning);
+		in.Read(gathering->nextStrike);
+		in.Read(gathering->strikeEnds);
+		gathering->boltCloud = in.ReadAtom();
+		bool has = false;
+		in.Read(has);
+		if (has)
+		{
+			gathering->spareBolt = in.CurrentEffect().LoadSubtree(in, nullptr);
+		}
+		bool spare = false;
+		in.Read(spare);
+		gathering->bolt = in.ReadCollection();
+		if (spare)
+		{
+			gathering->bolt = gathering->spareBolt.get();
+		}
+		in.Read(gathering->ownsStorm);
+		in.Read(has);
+		uint32_t storm = 0;
+		in.Read(storm);
+		if (has && storm != 0)
+		{
+			gathering->storm = std::make_shared<RainStormLease>(in.CurrentEffect().Services().world, storm);
+		}
+		slot.data = std::move(gathering);
+	}
+
 	explicit CloudGather(const ParticleObject& object)
 	    : creator(object.String("PCreator"))
 	    , numAtoms(object.Int("NumAtoms", 10))
@@ -498,6 +561,17 @@ struct Swirl
 class StormCast final: public Modifier
 {
 public:
+	void SaveSlotData(const Collection::Slot& slot, EffectWriter& out) const override
+	{
+		out.WritePlain(std::any_cast<const Swirl&>(slot.data));
+	}
+	void LoadSlotData(Collection::Slot& slot, EffectReader& in) const override
+	{
+		Swirl swirl;
+		in.ReadPlain(swirl);
+		slot.data = swirl;
+	}
+
 	explicit StormCast(const ParticleObject& object)
 	    : creator(object.String("PCreator"))
 	    , nextGroups(object.IntArray("NextGroups"))

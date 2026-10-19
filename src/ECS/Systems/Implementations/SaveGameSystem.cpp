@@ -85,6 +85,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Graphics/RendererInterface.h"
+#include "Gui/SavingBox.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
 
@@ -727,6 +728,14 @@ ecs::save_files::BackgroundWriter& SaveGameSystem::Writer() const
 	return *_writer;
 }
 
+void SaveGameSystem::ShowSaveBox(uint32_t slot, bool loading) const
+{
+	if (_showBox)
+	{
+		_showBox(loading, gui::saving_box::DarkensScreen(slot));
+	}
+}
+
 void SaveGameSystem::FlushWrites() const
 {
 	if (_writer)
@@ -765,6 +774,8 @@ bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putP
 		SPDLOG_LOGGER_WARN(Log(), "The game cannot save into slot {}: no slot or no player folder", slot);
 		return false;
 	}
+	// The box shows first, as a frame of its own, and stays on the screen while the game saves
+	ShowSaveBox(slot, false);
 	const auto started = std::chrono::steady_clock::now();
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto land = LandNumber();
@@ -968,6 +979,8 @@ bool SaveGameSystem::Load(uint32_t slot)
 	{
 		return false;
 	}
+	// The box shows first, as a frame of its own, and stays on the screen while the game loads
+	ShowSaveBox(slot, true);
 	const auto land = LandNumber();
 	const auto root = Locator::profileFolderSystem::value().GetFolder();
 	const auto slotFolder = *root / *player / gamesave::SlotFolder(slot, land);

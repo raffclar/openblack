@@ -23,6 +23,7 @@
 #include <ParticleFile.h>
 
 #include "ManaPathMaths.h"
+#include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMaths.h"
 
@@ -37,6 +38,17 @@ constexpr size_t k_MostSparks = 100;
 class ManaPath final: public Modifier
 {
 public:
+	void SaveHeld(const AtomRuleData& data, EffectWriter& out) const override
+	{
+		out.WritePlain(*std::static_pointer_cast<const mana_path::Path>(data.held));
+	}
+	void LoadHeld(AtomRuleData& data, EffectReader& in) const override
+	{
+		auto held = std::make_shared<mana_path::Path>();
+		in.ReadPlain(*held);
+		data.held = std::move(held);
+	}
+
 	explicit ManaPath(const ParticleObject& object)
 	    : creator(object.String("PCreator"))
 	    , nextGroups(object.IntArray("NextGroups"))
