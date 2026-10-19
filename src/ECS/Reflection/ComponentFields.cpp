@@ -2602,6 +2602,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_mind::IdleMind::stepStarted>("stepStarted")
 	    .Field<&openblack::creature_mind::IdleMind::stepSeconds>("stepSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::sitEnding>("sitEnding")
+	    .Field<&openblack::creature_mind::IdleMind::faintLay>("faintLay")
 	    .Field<&openblack::creature_mind::IdleMind::faceSeconds>("faceSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::eyesToClear>("eyesToClear")
 	    .Field<&openblack::creature_mind::IdleMind::faceVariety>("faceVariety")

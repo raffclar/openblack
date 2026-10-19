@@ -1355,6 +1355,92 @@ TEST(CreatureNeedsMind, FaintedItLiesFourSecondsASizeAndEightMoreThenComesRound)
 	          static_cast<int>((creature_mind::k_FaintSecondsPerSize + creature_mind::k_FaintExtraSeconds) * k_TurnsPerSecond));
 }
 
+TEST(CreatureNeedsMind, AnActionOnTheBodyOfAFaintedCreatureStopsTheWaitAndDoesNotStartItAgain)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Faint, creature_mind::Faint(1.0f));
+	FakeBody body;
+	auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
+	body.Obey(commands, 1);
+	// For ten turns after the creature lies still, the body plays a different action, as when a script moves it
+	constexpr int k_FirstActionTurn = 20;
+	constexpr int k_ActionTurns = 10;
+	std::optional<int> cameRound;
+	for (int turn = 1; turn < 400 && !cameRound; ++turn)
+	{
+		auto senses = body.Senses();
+		if (turn >= k_FirstActionTurn && turn < k_FirstActionTurn + k_ActionTurns)
+		{
+			senses.bodyBusy = true;
+			senses.bodyLooping = false;
+		}
+		commands = creature_mind::Think(mind, senses, Always(1));
+		if (commands.effect == creature_mind::Effect::CameRound)
+		{
+			cameRound = turn;
+		}
+		body.Obey(commands, 1);
+	}
+	ASSERT_TRUE(cameRound.has_value());
+	EXPECT_EQ(*cameRound,
+	          static_cast<int>((creature_mind::k_FaintSecondsPerSize + creature_mind::k_FaintExtraSeconds) * k_TurnsPerSecond) +
+	              k_ActionTurns);
+}
+
+TEST(CreatureNeedsMind, AFaintedCreatureThatIsMovedAfterItLiesStillComesRoundWhenItsWaitEnds)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Faint, creature_mind::Faint(1.0f));
+	FakeBody body;
+	auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
+	body.Obey(commands, 1);
+	// From this turn on, the body stands with no action, as after a script moves the creature
+	constexpr int k_MoveTurn = 20;
+	std::optional<int> cameRound;
+	std::optional<int> ended;
+	for (int turn = 1; turn < 400 && !ended; ++turn)
+	{
+		auto senses = body.Senses();
+		if (turn >= k_MoveTurn)
+		{
+			senses.bodyBusy = false;
+			senses.bodyLooping = false;
+		}
+		commands = creature_mind::Think(mind, senses, Always(1));
+		if (commands.effect == creature_mind::Effect::CameRound)
+		{
+			cameRound = turn;
+		}
+		if (mind.step >= mind.agenda.size())
+		{
+			ended = turn;
+		}
+		body.Obey(commands, 1);
+	}
+	const auto waitTurns =
+	    static_cast<int>((creature_mind::k_FaintSecondsPerSize + creature_mind::k_FaintExtraSeconds) * k_TurnsPerSecond);
+	ASSERT_TRUE(cameRound.has_value());
+	EXPECT_EQ(*cameRound, waitTurns);
+	ASSERT_TRUE(ended.has_value());
+	EXPECT_EQ(*ended, waitTurns + 1);
+}
+
+TEST(CreatureNeedsMind, AFaintedCreatureThatIsMovedBeforeItLiesStillStaysFainted)
+{
+	creature_mind::IdleMind mind;
+	creature_mind::Plan(mind, creature_mind::Activity::Faint, creature_mind::Faint(1.0f));
+	FakeBody body;
+	auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
+	// The body stands with no action before it lies still, as when a script moves the creature as it falls
+	for (int turn = 1; turn < 2000; ++turn)
+	{
+		commands = creature_mind::Think(mind, {.seconds = k_Turn}, Always(1));
+		ASSERT_NE(commands.effect, creature_mind::Effect::CameRound);
+	}
+	EXPECT_LT(mind.step, mind.agenda.size());
+	EXPECT_FALSE(mind.faintLay);
+}
+
 TEST(CreatureIdleMind, PickingUpOrGoingNearLooksAtTheThing)
 {
 	using creature_mind::Step;
