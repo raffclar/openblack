@@ -24,6 +24,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AppleBarrel.h"
+#include "ECS/Components/DrawImportance.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
@@ -182,7 +183,9 @@ void AppleBarrelSystem::Update(std::chrono::milliseconds frameGameTime)
 		const auto worm = registry.Create();
 		registry.Assign<Transform>(worm, wormSpot, glm::mat3(1.0f), glm::vec3(1.0f));
 		registry.Assign<Mesh>(worm, k_WormModel, static_cast<int8_t>(0), static_cast<int8_t>(0));
-		registry.Assign<AppleBarrelWorm>(worm);
+		registry.Assign<AppleBarrelWorm>(worm, _barrel);
+		// The worm is very small. Thus it stays in view to a larger distance than its size alone gives.
+		registry.Assign<DrawImportance>(worm, apple_barrel::k_WormImportance);
 		registry.Assign<AnimatedStaticPose>(worm);
 		registry.Assign<AppleBarrel>(_barrel, *store, worm);
 	}

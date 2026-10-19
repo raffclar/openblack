@@ -31,6 +31,9 @@ namespace openblack::apple_barrel
 constexpr float k_FarthestStore = 99990.0f;
 /// With no temple the pits are measured from this place on the land instead
 constexpr glm::vec2 k_NoTemplePlace {256.0f, 256.0f};
+/// How important it is to keep the worm in view. The worm is very small, and its distance bands reach twice as far as
+/// those of a thing with no importance. The barrel has no importance.
+constexpr float k_WormImportance = 1.0f;
 
 /// Where the pits are measured from: the player's temple, or a fixed place on the land when they have none
 [[nodiscard]] glm::vec2 MeasuredFrom(std::optional<glm::vec2> temple);
@@ -45,6 +48,9 @@ constexpr glm::vec2 k_NoTemplePlace {256.0f, 256.0f};
 
 /// Where the worm sits: the barrel's model's point for it, the barrel standing unturned at its own size
 [[nodiscard]] glm::vec3 WormSpot(const glm::vec3& barrel, const glm::vec3& modelPoint);
+
+/// The offset on the ground from the worm to the barrel: the worm takes the light of the land at the barrel's place
+[[nodiscard]] glm::vec2 WormLightOffset(const glm::vec3& barrel, const glm::vec3& worm);
 
 /// The worm's place in its clip after so many milliseconds of the game's clock: a looping clip comes round again, any
 /// other stops a millisecond short of its end

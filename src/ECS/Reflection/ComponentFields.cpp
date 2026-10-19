@@ -135,6 +135,7 @@
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/DrawImportance.h"
 #include "ECS/Components/DrinkWaypoint.h"
 #include "ECS/Components/DrinkingWater.h"
 #include "ECS/Components/FallingRoots.h"
@@ -515,7 +516,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::AppleBarrel>(context)
 	    .Field<&components::AppleBarrel::store>("store")
 	    .Field<&components::AppleBarrel::worm>("worm");
-	Reflect<components::AppleBarrelWorm>(context).Field<&components::AppleBarrelWorm::place>("place");
+	Reflect<components::AppleBarrelWorm>(context)
+	    .Field<&components::AppleBarrelWorm::barrel>("barrel")
+	    .Field<&components::AppleBarrelWorm::place>("place");
 	Reflect<components::AtHome>(context).Field<&components::AtHome::beenToBed>("beenToBed");
 	Reflect<components::AudioEmitter>(context)
 	    .Field<&components::AudioEmitter::sourceId>("sourceId")
@@ -1135,6 +1138,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::DiscipleMark>(context)
 	    .Field<&components::DiscipleMark::villager>("villager")
 	    .Field<&components::DiscipleMark::symbol>("symbol");
+	Reflect<components::DrawImportance>(context).Field<&components::DrawImportance::importance>("importance");
 	Reflect<components::DrinkWaypoint>(context).Field<&components::DrinkWaypoint::number>("number");
 	Reflect<components::DrinkingWater>(context).Field<&components::DrinkingWater::place>("place");
 	Reflect<components::DropsRoots> {context};

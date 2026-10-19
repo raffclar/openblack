@@ -33,6 +33,9 @@ constexpr size_t k_Action = 3;
 constexpr glm::vec2 k_Tree {0.0f, 30.0f};
 /// The village the fireflies come to
 constexpr glm::vec2 k_Village {0.0f, 60.0f};
+/// The storage pit that carries the apple barrel, and the barrel at the pit's edge on the side the pit faces (east)
+constexpr glm::vec2 k_Store {0.0f, 40.0f};
+constexpr glm::vec2 k_Barrel = k_Store + glm::vec2(15.45f, 0.0f);
 /// The evening, once the sky has darkened past dusk, and the morning, once it has brightened past dawn
 constexpr float k_Evening = 18.0f;
 constexpr float k_Morning = 10.0f;
@@ -224,5 +227,25 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = k_Action},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = k_Action}},
 	    .fireflyRewards = {{"HEAL", 1.0f}},
+	});
+	all.push_back({
+	    .id = "nature.apple_barrel_worm",
+	    .name = "The worm on the apple barrel",
+	    .facet = Facet::Nature,
+	    .description = "The player's town of two villagers and its Norse storage pit, the camera near the apple barrel at "
+	                   "the pit's eastern edge, looking at the apple on the barrel.",
+	    .expected = "A small worm comes out of the apple on the barrel and wriggles without a stop. The worm is very "
+	                "small, 3 cm high. At the highest model detail, it fades out from 3.1 m into the view and it is gone "
+	                "from 6.2 m. A thing of its size with no importance is gone from 3.1 m. The barrel and the apple stay "
+	                "in view to a much larger distance.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Barrel.x, 1.5f, k_Barrel.y - 1.2f}, .look = {k_Barrel.x, 1.0f, k_Barrel.y}},
+	    .objects = {{.type = AbodeInfo::NorseStoragePit, .offset = k_Store},
+	                {.type = VillagerInfo::NorseFarmerMale, .offset = k_Store + glm::vec2(-12.0f, -6.0f), .joinTown = true},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_Store + glm::vec2(-10.0f, 8.0f),
+	                 .joinTown = true}},
+	    // The town belongs to the player at the start, so its pit carries the barrel
+	    .townBeliefInPlayer = 1000.0f,
 	});
 }
