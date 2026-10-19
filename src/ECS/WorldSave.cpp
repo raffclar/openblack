@@ -45,6 +45,7 @@
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -567,6 +568,10 @@ void world_save::ForgetUnsavedState(entt::registry& registry)
 		mind.leftAreaActions.clear();
 		mind.agendaRefused = false;
 	});
+	// The rooms of the temple are not a part of the land. A save from inside the temple has them, so the load removes
+	// them. The temple makes them again when the player goes into it.
+	const auto rooms = registry.view<const components::TempleInteriorPart>();
+	registry.destroy(rooms.begin(), rooms.end());
 }
 
 bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn)

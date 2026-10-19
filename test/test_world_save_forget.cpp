@@ -13,6 +13,8 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Temple.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/WorldSave.h"
 
 using namespace openblack;
@@ -30,4 +32,27 @@ TEST(WorldSaveForget, ALoadForgetsTheRefusedWalks)
 	ecs::world_save::ForgetUnsavedState(registry);
 	EXPECT_TRUE(registry.get<CreatureMindState>(creature).leftAreaActions.empty());
 	EXPECT_FALSE(registry.get<CreatureMindState>(creature).agendaRefused);
+}
+
+// A save from the save room has the rooms of the temple. The load removes them and keeps every thing of the land.
+TEST(WorldSaveForget, ALoadRemovesTheRoomsOfTheTempleAndKeepsTheLand)
+{
+	entt::registry registry;
+	std::vector<entt::entity> villagers;
+	for (int i = 0; i < 58; ++i)
+	{
+		villagers.push_back(registry.create());
+		registry.emplace<ecs::components::Villager>(villagers.back());
+	}
+	for (int i = 0; i < 810; ++i)
+	{
+		registry.emplace<ecs::components::TempleInteriorPart>(registry.create(), TempleRoom::Main);
+	}
+	ecs::world_save::ForgetUnsavedState(registry);
+	EXPECT_TRUE(registry.view<ecs::components::TempleInteriorPart>().empty());
+	EXPECT_EQ(registry.view<ecs::components::Villager>().size(), villagers.size());
+	for (const auto villager : villagers)
+	{
+		EXPECT_TRUE(registry.valid(villager));
+	}
 }
