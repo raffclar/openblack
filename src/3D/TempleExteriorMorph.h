@@ -12,8 +12,11 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 #include <span>
 #include <string>
+
+#include <glm/vec2.hpp>
 
 namespace openblack::TempleExteriorMorph
 {
@@ -27,6 +30,10 @@ constexpr uint32_t k_Stages = 5;
 constexpr float k_Step = 0.016f;
 constexpr float k_Near = 0.001f;
 [[nodiscard]] float Step(float current, float target);
+
+/// Whether the temple's mesh is to be blended again: its look changed, it was never blended, or its mesh is not loaded.
+/// A loaded game keeps the look that the mesh was blended for, but the blended mesh itself is made again.
+[[nodiscard]] bool NeedsBlend(std::optional<glm::vec2> blendedFor, glm::vec2 look, bool meshLoaded);
 
 /// One of the meshes a temple's is blended from, and how much of it
 struct Corner

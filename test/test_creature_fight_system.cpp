@@ -11,6 +11,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,6 +21,7 @@
 
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureRoute.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
@@ -30,6 +32,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -146,6 +149,37 @@ public:
 	/// What the checks of the hands before a faint do in turn, then Free
 	std::vector<creature_mind::HandsCheck> hands;
 	size_t handChecks {0};
+};
+
+/// Legs that do nothing but count the creatures that they stop at once
+class StoppingLegs final: public ecs::systems::CreatureLocomotionSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void Update(float) override {}
+	void ShowTurnEnd(entt::entity) override {}
+	MoveResult MoveTo(entt::entity, glm::vec2, Pace, float, float) override { return MoveResult::Busy; }
+	MoveResult LeadTo(entt::entity, glm::vec2, float, float) override { return MoveResult::Busy; }
+	MoveResult MoveToObject(entt::entity, entt::entity, Pace, float) override { return MoveResult::Busy; }
+	MoveResult Follow(entt::entity, entt::entity, float, Pace) override { return MoveResult::Busy; }
+	MoveResult FleeFrom(entt::entity, glm::vec2, Pace) override { return MoveResult::Busy; }
+	bool TurnToFace(entt::entity, glm::vec2) override { return false; }
+	bool TurnToHeading(entt::entity, GameHeading) override { return false; }
+	bool TurnToFaceAtOnce(entt::entity, glm::vec2) override { return false; }
+	bool TurnToHeadingAtOnce(entt::entity, GameHeading) override { return false; }
+	void Stop(entt::entity) override {}
+	void StopAtOnce(entt::entity creature) override { stopped.push_back(creature); }
+	void ResetPace(entt::entity) override {}
+	void Place(entt::entity, glm::vec3) override {}
+	void PlaceWithoutWalking(entt::entity, glm::vec3) override {}
+	[[nodiscard]] bool IsMoving(entt::entity) const override { return false; }
+	[[nodiscard]] const creature_route::WalkableLand& GetWalkableLand() override
+	{
+		throw std::logic_error("the fights do not ask for the walkable land");
+	}
+	[[nodiscard]] std::vector<creature_route::Circle> ThingCirclesIn(entt::entity, glm::ivec2) override { return {}; }
+
+	std::vector<entt::entity> stopped;
 };
 
 /// The game's random numbers: they give the numbers in the list in turn, then 0, and count the draws of each range
@@ -836,4 +870,21 @@ TEST_F(CreatureFightSystemTest, AKnockedOutCreatureCountsItsTimeFromWhenItLiesSt
 	fights.ProcessTurn();
 	EXPECT_GT(knockedOut.seconds, first);
 	EXPECT_EQ(knockedOut.stage, CreatureKnockedOut::Stage::Lying);
+}
+
+// The faint stops a walk at once as it starts on the body. An action of the hands can start a walk between the
+// knock-out and the faint: if the walk stayed, the creature would get up to follow it and never be taken home.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AFaintStopsAWalkThatStartedAfterTheKnockOut)
+{
+	auto& legs = static_cast<StoppingLegs&>(Locator::creatureLocomotionSystem::emplace<StoppingLegs>());
+	fights.ForceFaint(second);
+	// The knock-out stops the walk that the creature had
+	ASSERT_EQ(legs.stopped, (std::vector<entt::entity> {second}));
+	// The faint starts on the next turn and stops the walk again
+	fights.ProcessTurn();
+	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const CreatureAnimation>(second).body.kind,
+	          creature_layers::BodyAction::Kind::Sequence);
+	EXPECT_EQ(legs.stopped, (std::vector<entt::entity> {second, second}));
+	Locator::creatureLocomotionSystem::reset();
 }

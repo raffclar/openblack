@@ -97,7 +97,9 @@ void TempleExteriorSystem::UpdateTurn()
 		    exterior.alignment = TempleExteriorMorph::Step(exterior.alignment, exterior.alignmentTarget);
 		    exterior.size = TempleExteriorMorph::Step(exterior.size, exterior.sizeTarget);
 		    const glm::vec2 look {exterior.size, exterior.alignment};
-		    if (exterior.morphed != look)
+		    // A loaded game has the look but not the blended mesh, which is made again
+		    const bool meshLoaded = Locator::resources::value().GetMeshes().Contains(mesh.id);
+		    if (TempleExteriorMorph::NeedsBlend(exterior.morphed, look, meshLoaded))
 		    {
 			    Morph(entity, mesh, exterior, temple.owner);
 			    exterior.morphed = look;
@@ -109,6 +111,22 @@ void TempleExteriorSystem::UpdateTurn()
 		    const auto* temple = registry.Valid(entrance.temple) ? registry.TryGet<const Temple>(entrance.temple) : nullptr;
 		    pick.takesCursor =
 		        temple != nullptr && registry.Context().templeEntrancesTakeCursor[static_cast<size_t>(temple->owner)];
+	    });
+}
+
+void TempleExteriorSystem::FindAfterLoad()
+{
+	// The save keeps the look that each temple's mesh was blended for, but not the blended mesh. The mesh is made again
+	// before the first frame is drawn, with no step toward the targets.
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	registry.Each<const Temple, const TempleExterior, Mesh>(
+	    [&meshes](const entt::entity entity, const Temple& temple, const TempleExterior& exterior, Mesh& mesh) {
+		    if (exterior.morphed.has_value() &&
+		        TempleExteriorMorph::NeedsBlend(exterior.morphed, *exterior.morphed, meshes.Contains(mesh.id)))
+		    {
+			    Morph(entity, mesh, exterior, temple.owner);
+		    }
 	    });
 }
 

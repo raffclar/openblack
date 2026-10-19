@@ -4924,6 +4924,10 @@ bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::files
 	{
 		Locator::appleBarrelSystem::value().FindAfterLoad();
 	}
+	if (Locator::templeExteriorSystem::has_value())
+	{
+		Locator::templeExteriorSystem::value().FindAfterLoad();
+	}
 	if (Locator::entitiesMap::has_value())
 	{
 		Locator::entitiesMap::value().FileResidents();
