@@ -114,6 +114,11 @@ struct Choice
 /// some it can take. A child, or one otherwise refused, takes up only worship, and only a child that. With nothing
 /// offering, it goes back to the work it had when it was picked up.
 [[nodiscard]] Choice ChooseWhileHeld(std::span<const NearFacts> ordered, const HeldFacts& held, VillagerDisciple atPickUp);
+/// Only a villager in the player's hand looks for work about it. In a creature's hand it keeps the work it has.
+[[nodiscard]] constexpr bool LooksForWorkWhileHeld(bool inCreaturesHand)
+{
+	return !inCreaturesHand;
+}
 
 /// The work a villager is taken to have had as it is picked up: a missionary picked up has given up preaching
 [[nodiscard]] VillagerDisciple AtPickUp(VillagerDisciple current);

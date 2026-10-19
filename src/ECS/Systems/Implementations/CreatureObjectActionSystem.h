@@ -83,6 +83,8 @@ private:
 	[[nodiscard]] creature_object_actions::PickUpFacts PickUpFactsOf(entt::entity creature, entt::entity object) const;
 	/// Catches made to wait while a creature's body acted out something else start once it is free
 	void StartPendingCatches();
+	/// An eat that stops between the bite and the swallow: the creature swallows what left its hand at once
+	void SwallowStoppedEat(entt::entity creature);
 	/// Starts an action on the creature in place of any it was doing, or records why it can't
 	bool Start(entt::entity creature, components::CreatureObjectAction action);
 	/// Where a released thing starts: where it hangs in the hand, or with its origin at the finger ends as a throw does

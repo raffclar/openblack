@@ -36,8 +36,9 @@ namespace openblack::ecs::villager_physics
 /// A villager starts to fly: it remembers what it was doing, unless it was in a hand. Whether it flies: a state it
 /// can't leave keeps it on the ground.
 bool StartFlying(entt::entity villager);
-/// A villager is taken into a hand, the player's or a creature's: it remembers what it was doing and is held
-void IntoHand(entt::entity villager);
+/// A villager is taken into a hand, the player's or a creature's: it remembers what it was doing and is held. Answers
+/// false when its state does not let it go into the hand.
+bool IntoHand(entt::entity villager);
 /// A villager's body came to rest, or it was let go without a body: it stands up facing the way its fall leaves it, and
 /// lands, drowns or dies where it came down. Called once it is back in the map.
 void Land(PhysicsEntry* entry, entt::entity villager);

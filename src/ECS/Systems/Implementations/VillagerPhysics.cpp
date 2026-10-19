@@ -191,18 +191,19 @@ bool villager_physics::StartFlying(entt::entity villager)
 	return true;
 }
 
-void villager_physics::IntoHand(entt::entity villager)
+bool villager_physics::IntoHand(entt::entity villager)
 {
 	// Taken in the middle of a kiss, its partner lets it go and decides afresh
 	ecs::villager_breeding::LetPartnerGo(villager);
 	auto* action = Entities().TryGet<LivingAction>(villager);
 	if (action == nullptr || !Locator::livingActionSystem::has_value())
 	{
-		return;
+		return true;
 	}
 	villager_memory::StorePreviousState(*action);
 	villager_disciple::PickedUp(villager);
 	SetTopState(*action, VillagerStates::InHand);
+	return TopState(*action) == VillagerStates::InHand;
 }
 
 void villager_physics::Land(PhysicsEntry* entry, entt::entity villager)

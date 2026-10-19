@@ -103,6 +103,11 @@ struct CreatureObjectAction
 	/// When it is told only to eat, with no thing given, it takes in the food of what it holds and does none of these.
 	/// Then the eat fails when the animation ends.
 	bool swallows {true};
+	/// Eating: what left its hand at the moment of eating, out of sight, until it swallows it as the animation ends
+	std::optional<entt::entity> eaten;
+	/// Eating: the energy that the food gave the body as the animation started, which its hunger falls by once it keeps
+	/// the meal down
+	float mealEnergy {0.0f};
 	/// Why it gave up, when it did
 	std::string failure;
 	/// The cause of the failure that the mind acts on
