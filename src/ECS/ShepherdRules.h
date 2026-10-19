@@ -80,6 +80,11 @@ struct FlockChoice
 };
 [[nodiscard]] std::optional<FlockChoice> ChooseBestFlock(std::span<const FlockCandidate> flocks);
 
+/// A shepherd lets go of its flock when it goes to a final state that is not shepherd work. A state that it passes
+/// through, such as a walk, keeps the flock. The flock that it lets go of is the flock that it points at. When a script
+/// attaches the shepherd to the script's flock, that flock is the script's flock, and the shepherd leaves it at once.
+[[nodiscard]] bool LeavesShepherding(bool nextIsShepherding, bool nextIsFinal);
+
 /// What the shepherd does with its flock after looking it over
 enum class FlockDecision : uint8_t
 {

@@ -177,3 +177,14 @@ TEST(ShepherdRules, ACoastNearerThanTheRiverIsTaken)
 	const auto none = [](const MapCoords& /*at*/) { return false; };
 	EXPECT_FALSE(rules::NearestDrinkingWater(from, river, none, 50.0f).has_value());
 }
+
+TEST(ShepherdRules, AShepherdLetsGoOfItsFlockOnlyForAnotherFinalState)
+{
+	// A final state that is not shepherd work: the shepherd lets go of its flock
+	EXPECT_TRUE(rules::LeavesShepherding(false, true));
+	// A walk or another state that it passes through: it keeps the flock
+	EXPECT_FALSE(rules::LeavesShepherding(false, false));
+	// More shepherd work: it keeps the flock
+	EXPECT_FALSE(rules::LeavesShepherding(true, true));
+	EXPECT_FALSE(rules::LeavesShepherding(true, false));
+}
