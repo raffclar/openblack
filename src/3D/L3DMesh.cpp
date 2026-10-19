@@ -31,6 +31,32 @@
 using namespace openblack;
 using namespace openblack::graphics;
 
+namespace
+{
+/// The layout of the skins of a model with these flags, on this device
+l3d_skin::Layout SkinLayoutOf(uint32_t flags)
+{
+	const auto* caps = bgfx::getCaps();
+	const bool has1555 = caps != nullptr && (caps->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0;
+	return l3d_skin::LayoutOf(flags, has1555);
+}
+
+/// The texture format that keeps texels of this layout
+TextureFormat TextureFormatOf(l3d_skin::Layout layout)
+{
+	switch (layout)
+	{
+	case l3d_skin::Layout::Argb1555:
+		return TextureFormat::BGR5A1;
+	case l3d_skin::Layout::Rgba8:
+		return TextureFormat::RGBA8;
+	case l3d_skin::Layout::Argb4444:
+		break;
+	}
+	return TextureFormat::BGRA4;
+}
+} // namespace
+
 L3DMesh::L3DMesh(std::string debugName, bool dynamic) noexcept
     : _flags(static_cast<l3d::L3DMeshFlags>(0))
     , _debugName(std::move(debugName))
@@ -58,6 +84,16 @@ bool L3DMesh::LoadMade(const L3DMesh& skinSource, std::span<const std::vector<L3
 	return !_subMeshes.empty();
 }
 
+void L3DMesh::KnowSkinMasks(SkinId skin, std::span<const uint16_t> texels)
+{
+	// An opaque skin is solid at each texel
+	const auto solid =
+	    l3d_skin::HasOpaqueSkins(GetFlags()) ? l3d_skin::SolidAlphaTexels(texels.size()) : std::vector<uint16_t> {};
+	const auto alpha = solid.empty() ? texels : std::span<const uint16_t>(solid);
+	_skinMasks[skin] = screen_pick::MaskOf(alpha, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
+	_skinAlpha[skin] = tree_shadows::MaskOf(alpha, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
+}
+
 bool L3DMesh::LoadWithSkinsOf(const l3d::L3DFile& l3d, const L3DMesh& skinSource) noexcept
 {
 	_skinSource = &skinSource;
@@ -70,20 +106,21 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 
 	_flags = static_cast<l3d::L3DMeshFlags>(l3d.GetHeader().flags);
 	_nameData = l3d.GetNameData();
+	_skinLayout = SkinLayoutOf(GetFlags());
 	for (const auto& skin : l3d.GetSkins())
 	{
 		_skinOrder.push_back(skin.id);
 		const auto texels = std::span(reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size());
-		_skinMasks[skin.id] = screen_pick::MaskOf(texels, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
-		_skinAlpha[skin.id] = tree_shadows::MaskOf(texels, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
+		KnowSkinMasks(skin.id, texels);
 		_skins[skin.id] = std::make_unique<Texture2D>(_debugName.c_str());
-		const auto size = static_cast<uint32_t>(skin.texels.size() * sizeof(skin.texels[0]));
+		const auto bytes = l3d_skin::TexelsIn(_skinLayout, texels);
+		const auto size = static_cast<uint32_t>(bytes.size());
 		// bgfx only lets a texture created without texels have them changed
-		_skins[skin.id]->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormat::BGRA4, Wrapping::Repeat,
-		                        Filter::Linear, _dynamic ? nullptr : bgfx::copy(skin.texels.data(), size));
+		_skins[skin.id]->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormatOf(_skinLayout),
+		                        Wrapping::Repeat, Filter::Linear, _dynamic ? nullptr : bgfx::copy(bytes.data(), size));
 		if (_dynamic)
 		{
-			_skins[skin.id]->Update(skin.texels.data(), size);
+			_skins[skin.id]->Update(bytes.data(), size);
 		}
 	}
 
@@ -354,11 +391,20 @@ void L3DMesh::UpdateSkin(SkinId skin, std::span<const uint16_t> texels) noexcept
 	assert(_dynamic);
 	if (const auto found = _skins.find(skin); found != _skins.end())
 	{
-		found->second->Update(texels.data(), static_cast<uint32_t>(texels.size_bytes()));
+		const auto bytes = l3d_skin::TexelsIn(_skinLayout, texels);
+		found->second->Update(bytes.data(), static_cast<uint32_t>(bytes.size()));
 	}
 	if (const auto found = _skinAlpha.find(skin); found != _skinAlpha.end())
 	{
-		found->second = tree_shadows::MaskOf(texels, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
+		if (l3d_skin::HasOpaqueSkins(GetFlags()))
+		{
+			found->second = tree_shadows::MaskOf(l3d_skin::SolidAlphaTexels(texels.size()), l3d::L3DTexture::k_Width,
+			                                     l3d::L3DTexture::k_Height);
+		}
+		else
+		{
+			found->second = tree_shadows::MaskOf(texels, l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height);
+		}
 	}
 }
 
