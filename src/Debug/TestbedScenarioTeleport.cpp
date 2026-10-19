@@ -38,7 +38,7 @@ constexpr float k_LeashBefore = 0.5f;
 /// A creature told to go to the goal from here passes the first stone after a walk of some 35
 constexpr glm::vec2 k_FarStart {-70.0f, 2.0f};
 /// The second stone goes this long after the scenario starts, while the creature walks to the first stone
-constexpr float k_RemoveStoneAfter = 8.0f;
+constexpr float k_RemoveStoneAfter = 9.0f;
 /// A body that wants nothing: full, rested, watered, comfortable
 constexpr NeedOverrides k_Content {
     .energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f, .warmth = 0.0f};
@@ -143,7 +143,7 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	                   "second stone goes.",
 	    .expected = "The tiger turns aside into the near stone, curious: it walks to the stone with a puzzled face. Within "
 	                "5 m of the stone it asks for the jump, but with no other stone the stone refuses it. The tiger does "
-	                "not jump and does not wait: its plan stops there, and it decides what to do next.",
+	                "not jump and does not wait: its plan stops there. Then the leash takes it back towards the hand.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_StoneA, k_StoneB, k_FarStart, k_Goal}, .distance = 0.8f},
 	    .creatures = {{.label = "traveller",
@@ -164,8 +164,11 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	                  .handHeight = 12.0f,
 	                  .delaySeconds = 3.0f,
 	                  .byHand = true}},
-	    .commands = {{.kind = Command::Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope},
-	                 {.kind = Command::Kind::LeashOrderAt, .creature = 0, .delaySeconds = k_WalkAfter - 1.0f, .point = k_Goal},
+	    .commands = {{.kind = Command::Kind::PutOnLeash,
+	                  .creature = 0,
+	                  .delaySeconds = k_WalkAfter - k_LeashBefore,
+	                  .leash = LeashType::Rope},
+	                 {.kind = Command::Kind::LeashOrderAt, .creature = 0, .delaySeconds = k_LeashBefore, .point = k_Goal},
 	                 {.kind = Command::Kind::RemoveTeleportStone,
 	                  .delaySeconds = k_RemoveStoneAfter - k_WalkAfter,
 	                  .point = k_StoneB}},
