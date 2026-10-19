@@ -1480,3 +1480,4 @@ set_tests_properties(
 openblack_setup_and_add_test(test_game_session test_game_session.cpp)
 openblack_setup_and_add_test(test_logo_effect gui/test_logo_effect.cpp)
 openblack_setup_and_add_test(test_creature_lead test_creature_lead.cpp)
+openblack_setup_and_add_test(test_l3d_skin_texels test_l3d_skin_texels.cpp)

@@ -38,6 +38,10 @@ CREATE_NEW_TREE(-1, "-80.00,60.00", 5, 1, 0.000000, 1.000000, 1.000000)
 CREATE_NEW_TREE(-1, "-84.00,84.00", 5, 1, 0.000000, 1.000000, 1.000000)
 CREATE_NEW_TREE(-1, "-84.50,84.00", 5, 1, 0.000000, 1.000000, 1.000000))";
 
+/// Lines of a land's script that make a pot in the middle of the field below and a pot 12 m to one side of it
+constexpr std::string_view k_PotOnFieldScript = R"(CREATE_POT("-120.00,20.00", 12, 0, 1000)
+CREATE_POT("-120.00,8.00", 12, 0, 1000))";
+
 /// A thing thrown east from where it lies, 6 m up, at 25 m a second and 6 m a second upwards: from 60 m west of a
 /// vortex it reaches the vortex's cylinder in about 1.6 seconds, about 3 m above the land
 ThrowSetup ThrownIn(size_t object, glm::vec2 from, float delaySeconds)
@@ -358,5 +362,22 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                .look = {k_OnThePlane.x + 40.0f, 0.0f, k_OnThePlane.y}},
 	    .objects = {{.type = AbodeInfo::NorseHut, .offset = k_OnThePlane + glm::vec2(40.0f, 0.0f), .yawDegrees = 90.0f}},
 	    .landScript = k_PotPlaceScript,
+	});
+
+	all.push_back({
+	    .id = "story.pot_refused_on_field",
+	    .name = "A land's script makes no pot on a field",
+	    .facet = Facet::Miracles,
+	    .description = "A field of wheat lies on the flat plane. Lines of a land's script then make a pot in the middle "
+	                   "of the field and a pot 12 m to one side of it.",
+	    .expected = "Only the pot to the side of the field is made. A field stands in each map cell that its outline "
+	                "covers, as the other buildings do, so map.cell at the field gives the field, and the place test "
+	                "finds the outline of the field's model under the first pot. map.free tells the same for each place.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 20.0f, 30.0f, k_OnThePlane.y - 80.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y - 46.0f}},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = k_OnThePlane + glm::vec2(0.0f, -40.0f)}},
+	    .landScript = k_PotOnFieldScript,
 	});
 }
