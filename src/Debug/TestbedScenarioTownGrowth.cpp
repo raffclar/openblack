@@ -219,6 +219,47 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {36.0f, 6.0f}}},
 	});
 
+	// A fed town with a working crèche at night: each couple goes home, and the woman of each falls pregnant at bed time
+	std::vector<ObjectSetup> breeding {
+	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	    {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = k_PitStock, .storedWood = k_PitStock},
+	    {.type = AbodeInfo::CelticCreche, .offset = k_NearlyBuiltCreche},
+	};
+	constexpr size_t k_FirstBreedingHut = 3;
+	for (const auto& place : k_PlannedHuts)
+	{
+		breeding.push_back({.type = AbodeInfo::CelticHut, .offset = place, .yawDegrees = 180.0f});
+	}
+	for (size_t i = 0; i < k_PlannedHuts.size(); ++i)
+	{
+		const auto hut = k_FirstBreedingHut + i;
+		const auto place = k_PlannedHuts.at(i);
+		breeding.push_back({.type = VillagerInfo::CelticForesterMale,
+		                    .offset = place + glm::vec2 {-2.0f, 15.0f},
+		                    .joinTown = true,
+		                    .homeIn = hut});
+		breeding.push_back({.type = VillagerInfo::CelticHousewifeFemale,
+		                    .offset = place + glm::vec2 {2.0f, 15.0f},
+		                    .joinTown = true,
+		                    .homeIn = hut});
+	}
+	all.push_back({
+	    .id = "villagers.bedtime_breeding",
+	    .name = "Couples making children at bed time",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town at night with a village centre, a full storage pit, a working crèche and three "
+	                   "huts. A couple of the town stands outside each hut, which is their home. The town has food and "
+	                   "room for children, so it wants children past the point that makes its villagers act. The clock "
+	                   "runs. Best watched at game speed 4 with the villagers' state labels on.",
+	    .expected = "The town wants sleep most, so each couple goes into its hut. At the first bed time of the stay, with "
+	                "the man at home, the woman falls pregnant (the P: marker shows). A pregnant woman stays in, and her "
+	                "pregnancy runs out about five times faster at home. Then she comes out and gives birth beside the "
+	                "hut, with a baby's cry. The child, a year old, follows her and lives in her hut.",
+	    .environment = {.hour = 22.0f, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_PlannedHuts.front(), k_PlannedHuts.back(), k_Pit}, .distance = 0.6f},
+	    .objects = std::move(breeding),
+	});
+
 	// A town's people come across a creature standing still on the edge of their village
 	all.push_back({
 	    .id = "villagers.creature_curious",
